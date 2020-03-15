@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/fatih/color"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -64,6 +65,8 @@ tests:
 }
 
 func TestConditionCheckAll(t *testing.T) {
+	color.NoColor = true
+
 	conds := ConditionsMap{
 		"content_equals": ContentEqualsCondition("foo bar"),
 		"metadata_equals": &MetadataEqualsCondition{
@@ -83,10 +86,10 @@ func TestConditionCheckAll(t *testing.T) {
 	if exp, act := 2, len(errs); exp != act {
 		t.Fatalf("Wrong count of errors: %v != %v", act, exp)
 	}
-	if exp, act := "content_equals: content mismatch, expected 'foo bar', got 'nope'", errs[0].Error(); exp != act {
+	if exp, act := "content_equals: content mismatch\n  expected: foo bar\n  received: nope", errs[0].Error(); exp != act {
 		t.Errorf("Wrong error: %v != %v", act, exp)
 	}
-	if exp, act := "metadata_equals: metadata key 'foo' mismatch, expected 'bar', got ''", errs[1].Error(); exp != act {
+	if exp, act := "metadata_equals: metadata key 'foo' mismatch\n  expected: bar\n  received: ", errs[1].Error(); exp != act {
 		t.Errorf("Wrong error: %v != %v", act, exp)
 	}
 
@@ -96,7 +99,7 @@ func TestConditionCheckAll(t *testing.T) {
 	if exp, act := 1, len(errs); exp != act {
 		t.Fatalf("Wrong count of errors: %v != %v", act, exp)
 	}
-	if exp, act := "metadata_equals: metadata key 'foo' mismatch, expected 'bar', got 'wrong'", errs[0].Error(); exp != act {
+	if exp, act := "metadata_equals: metadata key 'foo' mismatch\n  expected: bar\n  received: wrong", errs[0].Error(); exp != act {
 		t.Errorf("Wrong error: %v != %v", act, exp)
 	}
 
@@ -106,12 +109,14 @@ func TestConditionCheckAll(t *testing.T) {
 	if exp, act := 1, len(errs); exp != act {
 		t.Fatalf("Wrong count of errors: %v != %v", act, exp)
 	}
-	if exp, act := "content_equals: content mismatch, expected 'foo bar', got 'wrong'", errs[0].Error(); exp != act {
+	if exp, act := "content_equals: content mismatch\n  expected: foo bar\n  received: wrong", errs[0].Error(); exp != act {
 		t.Errorf("Wrong error: %v != %v", act, exp)
 	}
 }
 
 func TestContentCondition(t *testing.T) {
+	color.NoColor = true
+
 	cond := ContentEqualsCondition("foo bar")
 
 	type testCase struct {
@@ -129,7 +134,7 @@ func TestContentCondition(t *testing.T) {
 		{
 			name:     "negative 1",
 			input:    "foo",
-			expected: errors.New("content mismatch, expected 'foo bar', got 'foo'"),
+			expected: errors.New("content mismatch\n  expected: foo bar\n  received: foo"),
 		},
 	}
 
@@ -155,6 +160,7 @@ func TestContentCondition(t *testing.T) {
 }
 
 func TestContentMatchesCondition(t *testing.T) {
+	color.NoColor = true
 
 	matchPattern := "^foo [a-z]+ bar$"
 	cond := ContentMatchesCondition(matchPattern)
@@ -174,12 +180,12 @@ func TestContentMatchesCondition(t *testing.T) {
 		{
 			name:     "negative 1",
 			input:    "foo",
-			expected: fmt.Errorf("content mismatch, expected '%s', got 'foo'", matchPattern),
+			expected: fmt.Errorf("pattern mismatch\n   pattern: %s\n  received: foo", matchPattern),
 		},
 		{
 			name:     "negative 2",
 			input:    "foo & bar",
-			expected: fmt.Errorf("content mismatch, expected '%s', got 'foo & bar'", matchPattern),
+			expected: fmt.Errorf("pattern mismatch\n   pattern: %s\n  received: foo & bar", matchPattern),
 		},
 	}
 
@@ -205,6 +211,8 @@ func TestContentMatchesCondition(t *testing.T) {
 }
 
 func TestMetadataEqualsCondition(t *testing.T) {
+	color.NoColor = true
+
 	cond := MetadataEqualsCondition{
 		"foo": "bar",
 	}
@@ -226,14 +234,14 @@ func TestMetadataEqualsCondition(t *testing.T) {
 		{
 			name:     "negative 1",
 			input:    map[string]string{},
-			expected: errors.New("metadata key 'foo' mismatch, expected 'bar', got ''"),
+			expected: errors.New("metadata key 'foo' mismatch\n  expected: bar\n  received: "),
 		},
 		{
 			name: "negative 2",
 			input: map[string]string{
 				"foo": "not bar",
 			},
-			expected: errors.New("metadata key 'foo' mismatch, expected 'bar', got 'not bar'"),
+			expected: errors.New("metadata key 'foo' mismatch\n  expected: bar\n  received: not bar"),
 		},
 	}
 

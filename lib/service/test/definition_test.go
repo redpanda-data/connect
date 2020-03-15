@@ -4,9 +4,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/fatih/color"
 )
 
 func TestDefinitionFail(t *testing.T) {
+	color.NoColor = true
+
 	testDir, err := initTestFiles(map[string]string{
 		"config1.yaml": `
 pipeline:
@@ -69,15 +73,17 @@ pipeline:
 	if exp, act := 2, len(failures); exp != act {
 		t.Fatalf("Wrong count of failures: %v != %v", act, exp)
 	}
-	if exp, act := "foo test 1 [line 10]: batch 0 message 0: content_equals: content mismatch, expected 'FOO BAR baz', got 'FOO BAR BAZ'", failures[0].String(); exp != act {
+	if exp, act := "foo test 1 [line 10]: batch 0 message 0: content_equals: content mismatch\n  expected: FOO BAR baz\n  received: FOO BAR BAZ", failures[0].String(); exp != act {
 		t.Errorf("Mismatched fail message: %v != %v", act, exp)
 	}
-	if exp, act := "foo test 1 [line 10]: batch 0 message 1: metadata_equals: metadata key 'key1' mismatch, expected 'value3', got 'value2'", failures[1].String(); exp != act {
+	if exp, act := "foo test 1 [line 10]: batch 0 message 1: metadata_equals: metadata key 'key1' mismatch\n  expected: value3\n  received: value2", failures[1].String(); exp != act {
 		t.Errorf("Mismatched fail message: %v != %v", act, exp)
 	}
 }
 
 func TestDefinitionParallel(t *testing.T) {
+	color.NoColor = true
+
 	testDir, err := initTestFiles(map[string]string{
 		"config1.yaml": `
 pipeline:
@@ -152,10 +158,10 @@ pipeline:
 	if exp, act := 2, len(failures); exp != act {
 		t.Fatalf("Wrong count of failures: %v != %v", act, exp)
 	}
-	if exp, act := "foo test 1 [line 10]: batch 0 message 0: content_equals: content mismatch, expected 'FOO BAR baz', got 'FOO BAR BAZ'", failures[0].String(); exp != act {
+	if exp, act := "foo test 1 [line 10]: batch 0 message 0: content_equals: content mismatch\n  expected: FOO BAR baz\n  received: FOO BAR BAZ", failures[0].String(); exp != act {
 		t.Errorf("Mismatched fail message: %v != %v", act, exp)
 	}
-	if exp, act := "foo test 2 [line 20]: batch 0 message 0: metadata_equals: metadata key 'key1' mismatch, expected 'value3', got 'value2'", failures[1].String(); exp != act {
+	if exp, act := "foo test 2 [line 20]: batch 0 message 0: metadata_equals: metadata key 'key1' mismatch\n  expected: value3\n  received: value2", failures[1].String(); exp != act {
 		t.Errorf("Mismatched fail message: %v != %v", act, exp)
 	}
 }

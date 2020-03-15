@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/fatih/color"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -23,6 +24,8 @@ func (m mockProvider) Provide(ptr string, env map[string]string) ([]types.Proces
 }
 
 func TestCase(t *testing.T) {
+	color.NoColor = true
+
 	provider := mockProvider{}
 
 	procConf := processor.NewConfig()
@@ -103,7 +106,7 @@ output_batches:
 				{
 					Name:     "negative 1",
 					TestLine: 2,
-					Reason:   "batch 0 message 0: content_equals: content mismatch, expected 'foo baz', got 'foo bar'",
+					Reason:   "batch 0 message 0: content_equals: content mismatch\n  expected: foo baz\n  received: foo bar",
 				},
 			},
 		},
@@ -127,12 +130,12 @@ output_batches:
 				{
 					Name:     "negative 2",
 					TestLine: 2,
-					Reason:   "batch 0 message 1: content_equals: content mismatch, expected 'bar baz', got 'foo baz'",
+					Reason:   "batch 0 message 1: content_equals: content mismatch\n  expected: bar baz\n  received: foo baz",
 				},
 				{
 					Name:     "negative 2",
 					TestLine: 2,
-					Reason:   "batch 0 message 1: metadata_equals: metadata key 'foo' mismatch, expected 'bar', got 'baz'",
+					Reason:   "batch 0 message 1: metadata_equals: metadata key 'foo' mismatch\n  expected: bar\n  received: baz",
 				},
 			},
 		},
