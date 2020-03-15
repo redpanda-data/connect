@@ -84,7 +84,7 @@ type ContentEqualsCondition string
 // Check this condition against a message part.
 func (c ContentEqualsCondition) Check(p types.Part) error {
 	if exp, act := string(c), string(p.Get()); exp != act {
-		return fmt.Errorf("content mismatch, expected '%v', got '%v'", exp, act)
+		return fmt.Errorf("content mismatch\n  expected: %v\n  received: %v", blue(exp), red(act))
 	}
 	return nil
 }
@@ -99,7 +99,7 @@ type ContentMatchesCondition string
 func (c ContentMatchesCondition) Check(p types.Part) error {
 	re := regexp.MustCompile(string(c))
 	if !re.MatchString(string(p.Get())) {
-		return fmt.Errorf("content mismatch, expected '%v', got '%v'", string(c), string(p.Get()))
+		return fmt.Errorf("pattern mismatch\n   pattern: %v\n  received: %v", blue(string(c)), red(string(p.Get())))
 	}
 	return nil
 }
@@ -114,7 +114,7 @@ type MetadataEqualsCondition map[string]string
 func (m MetadataEqualsCondition) Check(p types.Part) error {
 	for k, v := range m {
 		if exp, act := v, p.Metadata().Get(k); exp != act {
-			return fmt.Errorf("metadata key '%v' mismatch, expected '%v', got '%v'", k, exp, act)
+			return fmt.Errorf("metadata key '%v' mismatch\n  expected: %v\n  received: %v", k, blue(exp), red(act))
 		}
 	}
 	return nil

@@ -1,0 +1,7 @@
+pipeline:
+  processors:
+    - awk:
+        program: |
+          {
+            json_set_int("result", json_get("result") + metadata_get("foo") + metadata_get("bar"));
+          }

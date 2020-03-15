@@ -1,0 +1,15 @@
+parallel: true
+tests:
+  - name: Example test case 1
+    environment: {}
+    target_processors: /pipeline/processors
+    input_batch:
+      - content: '{"result":10}'
+        metadata:
+            foo: "5"
+            bar: "7"
+    output_batches:
+      - - content_equals: '{"result":22}'
+          metadata_equals:
+              foo: "5"
+              bar: "7"

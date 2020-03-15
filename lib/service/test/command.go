@@ -9,8 +9,15 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/lib/config"
+	"github.com/fatih/color"
 	yaml "gopkg.in/yaml.v3"
 )
+
+//------------------------------------------------------------------------------
+
+var green = color.New(color.FgGreen).SprintFunc()
+var red = color.New(color.FgRed).SprintFunc()
+var blue = color.New(color.FgBlue).SprintFunc()
 
 //------------------------------------------------------------------------------
 
@@ -141,38 +148,69 @@ func Run(path, testSuffix string, lint bool) bool {
 		return false
 	}
 
-	failed := false
+	if len(targets) == 0 {
+		fmt.Println("No tests were found")
+		return false
+	}
+
+	type failedTarget struct {
+		target string
+		lints  []string
+		cases  []CaseFailure
+	}
+	fails := []failedTarget{}
+
 	for _, target := range targets {
 		var lints []string
-		var fails []CaseFailure
+		var failCases []CaseFailure
 		if lint {
 			if lints, err = lintTarget(target, testSuffix); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to execute test target '%v': %v\n", target, err)
 				return false
 			}
 		}
-		if fails, err = testTarget(target, testSuffix); err != nil {
+		if failCases, err = testTarget(target, testSuffix); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to execute test target '%v': %v\n", target, err)
 			return false
 		}
-		if len(lints) > 0 || len(fails) > 0 {
-			failed = true
-			fmt.Printf("Test '%v' failed\n", target)
-			for _, lint := range lints {
-				fmt.Printf("  Lint: %v\n", lint)
-			}
-			if len(fails) > 0 {
-				fmt.Printf("  %v [line %v]:\n", fails[0].Name, fails[0].TestLine)
-				for _, fail := range fails {
-					fmt.Printf("    %v\n", fail.Reason)
-				}
-			}
+		if len(lints) > 0 || len(failCases) > 0 {
+			fails = append(fails, failedTarget{
+				target: target,
+				lints:  lints,
+				cases:  failCases,
+			})
+			fmt.Printf("Test '%v' %v\n", target, red("failed"))
 		} else {
-			fmt.Printf("Test '%v' succeeded\n", target)
+			fmt.Printf("Test '%v' %v\n", target, green("succeeded"))
 		}
 	}
-
-	if failed {
+	if len(fails) > 0 {
+		fmt.Printf("\nFailures:\n\n")
+		for i, fail := range fails {
+			if i > 0 {
+				fmt.Println("")
+			}
+			fmt.Printf("--- %v ---\n\n", fail.target)
+			for _, lint := range fail.lints {
+				fmt.Printf("Lint: %v\n", lint)
+			}
+			if len(fail.cases) > 0 {
+				if len(fail.lints) > 0 {
+					fmt.Println("")
+				}
+				var namePrev string
+				for i, fail := range fail.cases {
+					if namePrev != fail.Name {
+						if i > 0 {
+							fmt.Println("")
+						}
+						fmt.Printf("%v [line %v]:\n", fail.Name, fail.TestLine)
+						namePrev = fail.Name
+					}
+					fmt.Println(fail.Reason)
+				}
+			}
+		}
 		return false
 	}
 	return true

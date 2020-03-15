@@ -81,17 +81,3 @@ services:
     image: cybermaggedon/hadoop
     hostname: localhost
     ports: ["9000:9000", "50075:50075", "50070:50070", "50010:50010"]
-  benthos-in:
-    image: jeffail/benthos
-    volumes:
-      - $GOPATH/src/github.com/Jeffail/benthos/config/test/smoke_in.yaml:/benthos.yaml
-    command: -c /benthos.yaml
-    ports:
-      - "4195:4195"
-  benthos-out:
-    image: jeffail/benthos
-    volumes:
-      - $GOPATH/src/github.com/Jeffail/benthos/config/test/smoke_out.yaml:/benthos.yaml
-    command: -c /benthos.yaml
-    ports:
-      - "4196:4196"

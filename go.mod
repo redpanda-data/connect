@@ -25,6 +25,7 @@ require (
 	github.com/eapache/go-resiliency v1.2.0 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.2.0
 	github.com/edsrzf/mmap-go v1.0.0
+	github.com/fatih/color v1.9.0
 	github.com/frankban/quicktest v1.4.2 // indirect
 	github.com/go-redis/redis v6.15.6+incompatible
 	github.com/go-sql-driver/mysql v1.5.0
