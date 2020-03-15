@@ -15,22 +15,23 @@ import (
 
 func TestFunctionVarDetection(t *testing.T) {
 	tests := map[string]bool{
-		"foo ${!foo_bar} baz":                       true,
-		"foo ${!foo_bar} baz ${!foo_baz}":           true,
-		"foo $!foo} baz $!but_not_this}":            false,
-		"foo ${!baz ${!or_this":                     false,
-		"foo ${baz} ${or_this}":                     false,
-		"nothing $ here boss {!}":                   false,
-		"foo ${!foo_bar:arg1} baz":                  true,
-		"foo ${!foo_bar:} baz":                      false,
-		"foo ${!foo_bar:arg1} baz ${!foo_baz:arg2}": true,
-		"foo $!foo:arg2} baz $!but_not_this:}":      false,
-		"nothing $ here boss {!:argnope}":           false,
-		"foo ${{!foo_bar}} baz":                     true,
-		"foo ${{!foo_bar:default}} baz":             true,
-		"foo ${{!foo_bar:default} baz":              false,
-		"foo {{!foo_bar:default}} baz":              false,
-		"foo {{!}} baz":                             false,
+		"foo ${!foo_bar} baz":                          true,
+		"foo ${!foo_bar} baz ${!foo_baz}":              true,
+		"foo $!foo} baz $!but_not_this}":               false,
+		"foo ${!baz ${!or_this":                        false,
+		"foo ${baz} ${or_this}":                        false,
+		"nothing $ here boss {!}":                      false,
+		"foo ${!foo_bar:arg1} baz":                     true,
+		"foo ${!foo_bar:} baz":                         false,
+		"foo ${!foo_bar:arg1} baz ${!foo_baz:arg2}":    true,
+		"foo $!foo:arg2} baz $!but_not_this:}":         false,
+		"nothing $ here boss {!:argnope}":              false,
+		"foo ${{!foo_bar}} baz":                        true,
+		"foo ${{!foo_bar:default}} baz":                true,
+		"foo ${{!foo_bar:default} baz":                 false,
+		"foo {{!foo_bar:default}} baz":                 false,
+		"foo {{!}} baz":                                false,
+		"foo ${!foo_bar:arg1,} baz ${!foo_baz:arg2,5}": true,
 	}
 
 	for in, exp := range tests {
@@ -45,6 +46,7 @@ func TestMetadataFunction(t *testing.T) {
 	msg := message.New([][]byte{[]byte("foo")})
 	msg.Get(0).Metadata().Set("foo", "bar")
 	msg.Get(0).Metadata().Set("baz", "qux")
+	msg.Get(0).Metadata().Set("duck,1", "quack")
 
 	act := string(ReplaceFunctionVariables(
 		msg, []byte(`foo ${!metadata:foo} baz`),
@@ -64,6 +66,13 @@ func TestMetadataFunction(t *testing.T) {
 		msg, []byte(`foo ${!metadata} bar`),
 	))
 	if exp := `foo  bar`; act != exp {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	act = string(ReplaceFunctionVariables(
+		msg, []byte(`foo ${!metadata:duck,1,} baz`),
+	))
+	if exp := "foo quack baz"; act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
@@ -281,6 +290,30 @@ func TestJSONFunction(t *testing.T) {
 				`{"foo":{"bar":false}}`,
 			},
 			arg:    "foo ${!json_field:foo.bar} baz",
+			result: `foo false baz`,
+		},
+		{
+			name: "json func 8",
+			input: []string{
+				`{"foo":{"bar,1":false}}`,
+			},
+			arg:    "foo ${!json_field:foo.bar,1,} baz",
+			result: `foo false baz`,
+		},
+		{
+			name: "json func 9",
+			input: []string{
+				`{"foo":{"bar,1,":false}}`,
+			},
+			arg:    "foo ${!json_field:foo.bar,1,,} baz",
+			result: `foo false baz`,
+		},
+		{
+			name: "json func 10",
+			input: []string{
+				`{"foo":{"bar,1,test":false}}`,
+			},
+			arg:    "foo ${!json_field:foo.bar,1,test,} baz",
 			result: `foo false baz`,
 		},
 	}

@@ -27,21 +27,21 @@ type Message interface {
 //------------------------------------------------------------------------------
 
 func jsonFieldFunction(msg Message, index int, arg string) []byte {
-	args := strings.Split(arg, ",")
 	part := index
-	if len(args) == 2 {
-		partB, err := strconv.ParseInt(args[1], 10, 64)
+	if argIndex := strings.LastIndex(arg, ","); argIndex > 0 && len(arg) > argIndex {
+		partB, err := strconv.ParseInt(arg[argIndex+1:], 10, 64)
 		if err == nil {
 			part = int(partB)
 		}
+		arg = arg[:argIndex]
 	}
 	jPart, err := msg.Get(part).JSON()
 	if err != nil {
 		return []byte("null")
 	}
 	gPart := gabs.Wrap(jPart)
-	if len(args) > 0 {
-		gPart = gPart.Path(args[0])
+	if len(arg) > 0 {
+		gPart = gPart.Path(arg)
 	}
 	switch t := gPart.Data().(type) {
 	case string:
@@ -53,19 +53,19 @@ func jsonFieldFunction(msg Message, index int, arg string) []byte {
 }
 
 func metadataFunction(msg Message, index int, arg string) []byte {
-	if len(arg) == 0 {
-		return []byte("")
-	}
-	args := strings.Split(arg, ",")
 	part := index
-	if len(args) == 2 {
-		partB, err := strconv.ParseInt(args[1], 10, 64)
+	if argIndex := strings.LastIndex(arg, ","); argIndex > 0 && len(arg) > argIndex {
+		partB, err := strconv.ParseInt(arg[argIndex+1:], 10, 64)
 		if err == nil {
 			part = int(partB)
 		}
+		arg = arg[:argIndex]
+	}
+	if len(arg) == 0 {
+		return []byte("")
 	}
 	meta := msg.Get(part).Metadata()
-	return []byte(meta.Get(args[0]))
+	return []byte(meta.Get(arg))
 }
 
 func metadataMapFunction(msg Message, index int, arg string) []byte {
