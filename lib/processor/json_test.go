@@ -1496,7 +1496,19 @@ func BenchmarkJSONMove(b *testing.B) {
 	conf.AWK.Codec = "json"
 	conf.AWK.Program = "{ print foo }"
 
+	confRaw := NewConfig()
+
+	confRaw.JSON.Parts = []int{0}
+	confRaw.JSON.Operator = "move"
+	confRaw.JSON.Path = "foo.bar"
+	confRaw.JSON.Value = rawJSONValue(`baz`)
+
 	jSet, err := NewJSON(conf, nil, tLog, tStats)
+	if err != nil {
+		b.Fatalf("Error for test '%v': %v", "bench", err)
+	}
+
+	jSetNew, err := NewJSON(confRaw, nil, tLog, tStats)
 	if err != nil {
 		b.Fatalf("Error for test '%v': %v", "bench", err)
 	}
@@ -1516,8 +1528,9 @@ func BenchmarkJSONMove(b *testing.B) {
 		name string
 		tp   Type
 	}{
-		{"awk", aSet},
-		{"json", jSet},
+		{"awk-init", aSet},
+		{"json-with-interpolations", jSet},
+		{"json-no-interpolations", jSetNew},
 	}
 
 	for k, v := range metadata {
