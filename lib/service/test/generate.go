@@ -21,6 +21,9 @@ func isBenthosConfig(path string) (bool, error) {
 		if _, exists := fields["pipeline"]; exists {
 			return true, nil
 		}
+		if _, exists := fields["resources"]; exists {
+			return true, nil
+		}
 	}
 	return false, nil
 }
