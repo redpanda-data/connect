@@ -129,7 +129,7 @@ func (k *Kinesis) getIter() error {
 			if err.Error() == request.ErrCodeResponseTimeout {
 				return types.ErrTimeout
 			}
-			return err
+			return fmt.Errorf("failed to access dynamodb table '%s': %w", k.conf.DynamoDBTable, err)
 		}
 		if seqAttr := resp.Item["sequence"]; seqAttr != nil {
 			if seqAttr.S != nil {

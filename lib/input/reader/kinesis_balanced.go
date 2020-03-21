@@ -97,9 +97,6 @@ func NewKinesisBalanced(
 	if !consumer.conf.StartFromOldest {
 		kc.ShardIteratorType = "LATEST"
 	}
-	if consumer.conf.DynamoDBTable != "" {
-		kc.TableName = consumer.conf.DynamoDBTable
-	}
 	if consumer.conf.DynamoDBBillingMode != "" {
 		kc.DynamoBillingMode = &consumer.conf.DynamoDBBillingMode
 	}
@@ -210,7 +207,6 @@ func (k *KinesisBalanced) CloseAsync() {
 // WaitForClose will block until either the reader is closed or a specified
 // timeout occurs.
 func (k *KinesisBalanced) WaitForClose(time.Duration) error {
-	k.kc.Shutdown()
 	return nil
 }
 
