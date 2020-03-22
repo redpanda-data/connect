@@ -17,6 +17,7 @@ import (
 
 var green = color.New(color.FgGreen).SprintFunc()
 var red = color.New(color.FgRed).SprintFunc()
+var yellow = color.New(color.FgYellow).SprintFunc()
 var blue = color.New(color.FgBlue).SprintFunc()
 
 //------------------------------------------------------------------------------
@@ -140,16 +141,28 @@ func resolveTestPath(path string) (string, bool) {
 // config file, a config files test definition file, a directory, or the
 // wildcard pattern './...'.
 func Run(path, testSuffix string, lint bool) bool {
-	var recurse bool
-	path, recurse = resolveTestPath(path)
-	targets, err := getTestTargets(path, testSuffix, recurse)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to obtain test targets: %v\n", err)
-		return false
+	return RunAll([]string{path}, testSuffix, lint)
+}
+
+// RunAll executes the test command for a slice of paths. The path can either be
+// a config file, a config files test definition file, a directory, or the
+// wildcard pattern './...'.
+func RunAll(paths []string, testSuffix string, lint bool) bool {
+	var targets []string
+
+	for _, path := range paths {
+		var recurse bool
+		path, recurse = resolveTestPath(path)
+		lTargets, err := getTestTargets(path, testSuffix, recurse)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to obtain test targets: %v\n", err)
+			return false
+		}
+		targets = append(targets, lTargets...)
 	}
 
 	if len(targets) == 0 {
-		fmt.Println("No tests were found")
+		fmt.Printf("%v\n", yellow("No tests were found"))
 		return false
 	}
 
@@ -160,6 +173,7 @@ func Run(path, testSuffix string, lint bool) bool {
 	}
 	fails := []failedTarget{}
 
+	var err error
 	for _, target := range targets {
 		var lints []string
 		var failCases []CaseFailure

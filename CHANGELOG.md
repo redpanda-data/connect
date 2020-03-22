@@ -12,6 +12,12 @@ All notable changes to this project will be documented in this file.
 - New `contains_any` and `contains_any_cs` operators added to the `text`
   condition.
 
+### Changed
+
+- Benthos now runs in strict mode, but this can be disabled with `--chilled`.
+- The Benthos CLI has been revamped, the old flags are still supported but are
+  deprecated.
+
 ### Fixed
 
 - Outputs that resolve function interpolations now correctly resolve the

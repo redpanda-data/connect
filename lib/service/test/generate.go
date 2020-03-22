@@ -96,9 +96,19 @@ func generateDefinitions(targetPath, testSuffix string, recurse bool) error {
 // Generate executes the generate-tests command for a specified path. The path
 // can either be a config file, a directory, or the special pattern './...'.
 func Generate(path, testSuffix string) error {
-	var recurse bool
-	path, recurse = resolveTestPath(path)
-	return generateDefinitions(path, testSuffix, recurse)
+	return GenerateAll([]string{path}, testSuffix)
+}
+
+// GenerateAll executes the generate-tests command for a specified paths.
+func GenerateAll(paths []string, testSuffix string) error {
+	for _, path := range paths {
+		var recurse bool
+		path, recurse = resolveTestPath(path)
+		if err := generateDefinitions(path, testSuffix, recurse); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------
