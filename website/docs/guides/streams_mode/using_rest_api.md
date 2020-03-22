@@ -2,7 +2,7 @@
 title: Streams Via REST API
 ---
 
-By using the Benthos `--streams` mode REST API you can dynamically control which
+By using the Benthos `streams` mode REST API you can dynamically control which
 streams are active at runtime. The full spec for the Benthos streams mode REST
 API can be [found here][http-interface].
 
@@ -15,7 +15,7 @@ will still work).
 Start by running Benthos in streams mode:
 
 ```bash
-$ benthos --streams
+$ benthos streams
 ```
 
 On a separate terminal we can add our first stream `foo` by `POST`ing a JSON or

@@ -2,7 +2,7 @@
 title: Streams API
 ---
 
-When Benthos is run in `--streams` mode it will open up an HTTP REST API for
+When Benthos is run in `streams` mode it will open up an HTTP REST API for
 creating and managing independent streams of data instead of creating a single
 stream.
 

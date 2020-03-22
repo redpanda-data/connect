@@ -2,13 +2,12 @@
 title: Streams Via Config Files
 ---
 
-When running Benthos in `--streams` mode it's possible to create streams with
-their own static configurations by setting the `--streams-dir` flag to a
-directory containing a config file for each stream (`/benthos/streams` by
-default).
+When running Benthos in `streams` mode it's possible to create streams with
+their own static configurations, simply list files and directories:
 
-Note that stream configs loaded in this way can benefit from
-[interpolation][interpolation].
+```sh
+benthos streams ./foo.yaml ./configs
+```
 
 ## Walkthrough
 
@@ -58,7 +57,7 @@ EOF
 Run Benthos in streams mode, pointing to our directory of streams:
 
 ``` bash
-$ benthos --streams --streams-dir ./streams
+$ benthos streams ./streams
 ```
 
 On a separate terminal you can query the set of streams loaded:

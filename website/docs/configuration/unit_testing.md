@@ -4,7 +4,7 @@ title: Unit Testing
 
 EXPERIMENTAL: The tooling outlined on this document are experimental and therefore subject to change outside of major version releases.
 
-The Benthos service offers a command `benthos --test ./...` for running unit tests on sections of a configuration file. This makes it easy to protect your config files from regressions over time.
+The Benthos service offers a command `benthos test ./...` for running unit tests on sections of a configuration file. This makes it easy to protect your config files from regressions over time.
 
 ## Contents
 
@@ -37,7 +37,7 @@ output:
     path: "${!metadata:kafka_topic}/${!json_field:message.id}.json"
 ```
 
-In order to write unit tests for this config we must accompany it with a file of the same name and extension, but suffixed with `_benthos_test`, which in this case would be `foo_benthos_test.yaml`. We can generate an example definition for this config with `benthos --gen-test ./foo.yaml`:
+In order to write unit tests for this config we must accompany it with a file of the same name and extension, but suffixed with `_benthos_test`, which in this case would be `foo_benthos_test.yaml`. We can generate an example definition for this config with `benthos test --generate ./foo.yaml`:
 
 ```yaml
 parallel: true
@@ -100,14 +100,8 @@ Checks a map of metadata keys to values against the metadata stored in the messa
 
 ## Running Tests
 
-Executing tests for a specific config can be done by pointing the command flag `--test` at either the config to be tested or its test definition, e.g. `benthos --test ./config.yaml` and `benthos --test ./config_benthos_test.yaml` are equivalent.
+Executing tests for a specific config can be done by pointing the subcommand `test` at either the config to be tested or its test definition, e.g. `benthos test ./config.yaml` and `benthos test ./config_benthos_test.yaml` are equivalent.
 
-In order to execute all tests of a directory simply point `--test` to that directory, e.g. `benthos --test ./foo` will execute all tests found in the directory `foo`. In order to walk a directory tree and execute all tests found you can use the shortcut `./...`, e.g. `benthos --test ./...` will execute all tests found in the current directory, any child directories, and so on.
-
-### Linting
-
-Benthos has a linter that can be executed on a config file with `--lint`, it's possible to run this linter as well as your tests on config files by including the flag, e.g. `benthos --lint --test ./config.yaml` will both lint and test the config file `./config.yaml`. If the linting stage fails then the process exits with status 1 similar to if a test had failed.
-
-Note that when combining the flags `--lint` and `--test` the linting will _only_ be executed on config files accompanied with a test definition. This is in order to avoid linting files unrelated to Benthos execution during directory walking.
+In order to execute all tests of a directory simply point `test` to that directory, e.g. `benthos test ./foo` will execute all tests found in the directory `foo`. In order to walk a directory tree and execute all tests found you can use the shortcut `./...`, e.g. `benthos test ./...` will execute all tests found in the current directory, any child directories, and so on.
 
 [json-pointer]: https://tools.ietf.org/html/rfc6901

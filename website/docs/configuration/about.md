@@ -265,75 +265,22 @@ output:
 
 In order to make this process easier Benthos is able to generate usable
 configuration examples for any types, and you can do this from the binary using
-the `--example` flag in combination with `--print-yaml` or `--print-json`. If,
-for example, we wanted to generate a config with a websocket input, a Kafka
+the `create` subcommand.
+
+If, for example, we wanted to generate a config with a websocket input, a Kafka
 output and a JMESPath processor in the middle, we could do it with the following
 command:
 
 ```yaml
-benthos --print-yaml --example websocket,kafka,jmespath
+benthos create websocket/jmespath/kafka
 ```
+
+> If you need a gentle reminder as to which components Benthos offers you can see those as well with `benthos list`.
 
 All of these generated configuration examples also include other useful config
 sections such as `metrics`, `logging`, etc with sensible defaults.
 
-### Printing Every Field
-
-The format of a Benthos config file naturally exposes all of the options for a
-section when it's printed with all default values. For example, in a fictional
-section `foo`, which has type options `bar`, `baz` and `qux`, if you were to
-print the entire default `foo` section of a config it would look something like
-this:
-
-```yaml
-foo:
-  type: bar
-  bar:
-    field1: default_value
-    field2: 2
-  baz:
-    field3: another_default_value
-  qux:
-    field4: false
-```
-
-Which tells you that section `foo` supports the three object types `bar`, `baz`
-and `qux`, and defaults to type `bar`. It also shows you the fields that each
-section has, and their default values.
-
-The Benthos binary is able to print a JSON or YAML config file containing every
-section in this format with the commands `benthos --print-yaml --all` and
-`benthos --print-json --all`. This can be extremely useful for quick and dirty
-config discovery when the full repo isn't at hand.
-
-As a user you could create a new config file with:
-
-```sh
-benthos --print-yaml --all > conf.yaml
-```
-
-And simply delete all lines for sections you aren't interested in, then you are
-left with the full set of fields you want.
-
-Alternatively, using tools such as [jq][jq] you can extract specific type
-fields:
-
-```sh
-# Get a list of all input types:
-benthos --print-json --all | jq '.input | keys'
-
-# Get all Kafka input fields:
-benthos --print-json --all | jq '.input.kafka'
-
-# Get all AMQP output fields:
-benthos --print-json --all | jq '.output.amqp'
-
-# Get a list of all processor types:
-benthos --print-json --all | jq '.pipeline.processors[0] | keys'
-
-# Get all JSON processor fields:
-benthos --print-json --all | jq '.pipeline.processors[0].json'
-```
+For more information read the output from `benthos create --help`.
 
 ## Help With Debugging
 
@@ -349,67 +296,46 @@ echoing.
 
 ### Linting
 
-Benthos has a lint command (`--lint`) that, after parsing a config file, will
-print any errors it detects.
-
-The main goal of the linter is to expose instances where fields within a
-provided config are valid JSON or YAML but don't actually affect the behaviour
-of Benthos. These are useful for pointing out typos in object keys or the use of
-deprecated fields.
+If you attempt to run a config that has linting errors Benthos will print the
+errors and halt execution. If, however, you want to test your configs before
+deployment you can do so with the `lint` subcommand:
 
 For example, imagine we have a config `foo.yaml`, where we intend to read from
 AMQP, but there is a typo in our config struct:
 
 ```yaml
 input:
-  type: amqp
-  amqq:
+  type: amqp_0_9
+  amqq_0_9:
     url: amqp://guest:guest@rabbitmqserver:5672/
 ```
 
-This config is parse successfully, and Benthos will simply ignore the `amqq` key
-and run using default values for the `amqp` input. This is therefore an easy
-error to miss, but if we use the linter it will immediately report the problem:
+We can catch this error before attempting to run the config:
 
 ```sh
-$ benthos -c ./foo.yaml --lint
-input: Key 'amqq' found but is ignored
+$ benthos lint ./foo.yaml
+./foo.yaml: input: Key 'amqq_0_9' found but is ignored
 ```
 
-Which points us to exactly where the problem is.
+For more information read the output from `benthos lint --help`.
 
 ### Echoing
 
 Echoing is where Benthos can print back your configuration _after_ it has been
-parsed. It is done with the `--print-yaml` and `--print-json` commands, which
-print the Benthos configuration in YAML and JSON format respectively. Since this
-is done _after_ parsing and applying your config it is able to show you exactly
-how your config was interpretted:
+parsed. It is done with the `echo` subcommand, which is able to show you a
+normalised version of your config, allowing you to see how it was interpreted:
 
 ```sh
-benthos -c ./your-config.yaml --print-yaml
+benthos -c ./your-config.yaml echo
 ```
 
 You can check the output of the above command to see if certain sections are
 missing or fields are incorrect, which allows you to pinpoint typos in the
 config.
 
-If your configuration is complex, and the behaviour that you notice implies a
-certain section is at fault, then you can drill down into that section by using
-tools such as [jq][jq]:
-
-```sh
-# Check the second processor config
-benthos -c ./your-config.yaml --print-json | jq '.pipeline.processors[1]'
-
-# Check the condition of a filter processor
-benthos -c ./your-config.yaml --print-json | jq '.pipeline.processors[0].filter'
-```
-
 [processors]: /docs/components/processors/about
 [conditions]: /docs/components/conditions/about
 [config-interp]: /docs/configuration/interpolation
 [config.testing]: /docs/configuration/unit_testing
 [json-references]: https://tools.ietf.org/html/draft-pbryan-zyp-json-ref-03
-[jq]: https://stedolan.github.io/jq/
 [components]: /docs/components/about

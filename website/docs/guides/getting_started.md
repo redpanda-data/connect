@@ -47,7 +47,7 @@ A Benthos stream pipeline is configured with a single
 [config file][configuration], you can generate a fresh one with:
 
 ```shell
-benthos --print-yaml > config.yaml
+benthos create > config.yaml
 ```
 
 The main sections that make up a config are `input`, `pipeline` and `output`.

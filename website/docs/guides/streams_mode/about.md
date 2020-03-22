@@ -9,7 +9,7 @@ processor pipelines and an output. Under normal use a Benthos instance is a
 single stream, and these components are configured within the service config
 file.
 
-Alternatively, Benthos can be run in `--streams` mode, where a single running
+Alternatively, Benthos can be run in `streams` mode, where a single running
 Benthos instance is able to run multiple entirely isolated streams. Adding
 streams in this mode can be done in two ways:
 
@@ -40,7 +40,7 @@ resources:
 ```
 
 ```sh
-benthos --streams -c ./config.yaml
+benthos -c ./config.yaml streams
 ```
 
 This means it is not currently possible to modify resources dynamically. If this
@@ -50,7 +50,7 @@ is blocking you from using streams mode then consider
 ## Metrics
 
 Metrics from all streams are aggregated and exposed via the method specified in
-[the config][metrics] of the Benthos instance running in `--streams` mode, with
+[the config][metrics] of the Benthos instance running in `streams` mode, with
 their metrics prefixed by their respective stream name.
 
 For example, a Benthos instance running in streams mode with the configured
