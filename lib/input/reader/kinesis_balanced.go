@@ -76,10 +76,12 @@ func NewKinesisBalanced(
 	log log.Modular,
 	stats metrics.Type,
 ) (*KinesisBalanced, error) {
+	records := make(chan *gokini.Records)
 	consumer := &KinesisBalanced{
-		conf:  conf,
-		log:   log,
-		stats: stats,
+		conf:    conf,
+		log:     log,
+		stats:   stats,
+		records: records,
 	}
 	sess, err := conf.GetSession()
 	if err != nil {
