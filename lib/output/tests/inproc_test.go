@@ -1,4 +1,4 @@
-package output
+package tests
 
 import (
 	"testing"
@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -18,11 +19,11 @@ func TestInproc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conf := NewConfig()
+	conf := output.NewConfig()
 	conf.Inproc = "foo"
 
-	var ip Type
-	if ip, err = NewInproc(conf, mgr, log.Noop(), metrics.Noop()); err != nil {
+	var ip output.Type
+	if ip, err = output.NewInproc(conf, mgr, log.Noop(), metrics.Noop()); err != nil {
 		t.Fatal(err)
 	}
 

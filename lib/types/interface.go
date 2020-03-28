@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"net/http"
 	"time"
 )
@@ -79,6 +80,10 @@ type Manager interface {
 	// RegisterEndpoint registers a server wide HTTP endpoint.
 	RegisterEndpoint(path, desc string, h http.HandlerFunc)
 
+	// GetInput attempts to find a service wide input by its name.
+	// TODO: V4 Add this
+	// GetInput(name string) (Input, error)
+
 	// GetCache attempts to find a service wide cache by its name.
 	GetCache(name string) (Cache, error)
 
@@ -91,6 +96,10 @@ type Manager interface {
 
 	// GetRateLimit attempts to find a service wide rate limit by its name.
 	GetRateLimit(name string) (RateLimit, error)
+
+	// GetOutput attempts to find a service wide output by its name.
+	// TODO: V4 Add this
+	// GetOutput(name string) (OutputWriter, error)
 
 	// GetPlugin attempts to find a service wide resource plugin by its name.
 	GetPlugin(name string) (interface{}, error)
@@ -140,6 +149,14 @@ type Consumer interface {
 }
 
 //------------------------------------------------------------------------------
+
+// OutputWriter is a non-channel based output interface.
+type OutputWriter interface {
+	Closable
+
+	// Write a transaction to an output.
+	Write(context.Context, Transaction) error
+}
 
 // Output is a closable Consumer.
 type Output interface {

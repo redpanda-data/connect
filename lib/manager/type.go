@@ -8,8 +8,10 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/condition"
+	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -27,9 +29,11 @@ type APIReg interface {
 
 // Config contains all configuration fields for a Benthos service manager.
 type Config struct {
-	Caches     map[string]cache.Config     `json:"caches" yaml:"caches"`
+	Inputs     map[string]input.Config     `json:"inputs" yaml:"inputs"`
 	Conditions map[string]condition.Config `json:"conditions" yaml:"conditions"`
 	Processors map[string]processor.Config `json:"processors" yaml:"processors"`
+	Outputs    map[string]output.Config    `json:"outputs" yaml:"outputs"`
+	Caches     map[string]cache.Config     `json:"caches" yaml:"caches"`
 	RateLimits map[string]ratelimit.Config `json:"rate_limits" yaml:"rate_limits"`
 	Plugins    map[string]PluginConfig     `json:"plugins,omitempty" yaml:"plugins,omitempty"`
 }
@@ -37,9 +41,11 @@ type Config struct {
 // NewConfig returns a Config with default values.
 func NewConfig() Config {
 	return Config{
-		Caches:     map[string]cache.Config{},
+		Inputs:     map[string]input.Config{},
 		Conditions: map[string]condition.Config{},
 		Processors: map[string]processor.Config{},
+		Outputs:    map[string]output.Config{},
+		Caches:     map[string]cache.Config{},
 		RateLimits: map[string]ratelimit.Config{},
 		Plugins:    map[string]PluginConfig{},
 	}
@@ -48,14 +54,20 @@ func NewConfig() Config {
 // AddExamples inserts example caches and conditions if none exist in the
 // config.
 func AddExamples(c *Config) {
-	if len(c.Caches) == 0 {
-		c.Caches["example"] = cache.NewConfig()
+	if len(c.Inputs) == 0 {
+		c.Inputs["example"] = input.NewConfig()
 	}
 	if len(c.Conditions) == 0 {
 		c.Conditions["example"] = condition.NewConfig()
 	}
 	if len(c.Processors) == 0 {
 		c.Processors["example"] = processor.NewConfig()
+	}
+	if len(c.Outputs) == 0 {
+		c.Outputs["example"] = output.NewConfig()
+	}
+	if len(c.Caches) == 0 {
+		c.Caches["example"] = cache.NewConfig()
 	}
 	if len(c.RateLimits) == 0 {
 		c.RateLimits["example"] = ratelimit.NewConfig()
@@ -67,6 +79,13 @@ func AddExamples(c *Config) {
 // SanitiseConfig creates a sanitised version of a manager config.
 func SanitiseConfig(conf Config) (interface{}, error) {
 	var err error
+
+	inputs := map[string]interface{}{}
+	for k, v := range conf.Inputs {
+		if inputs[k], err = input.SanitiseConfig(v); err != nil {
+			return nil, err
+		}
+	}
 
 	caches := map[string]interface{}{}
 	for k, v := range conf.Caches {
@@ -85,6 +104,13 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 	processors := map[string]interface{}{}
 	for k, v := range conf.Processors {
 		if processors[k], err = processor.SanitiseConfig(v); err != nil {
+			return nil, err
+		}
+	}
+
+	outputs := map[string]interface{}{}
+	for k, v := range conf.Outputs {
+		if outputs[k], err = output.SanitiseConfig(v); err != nil {
 			return nil, err
 		}
 	}
@@ -111,9 +137,11 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 	}
 
 	m := map[string]interface{}{
-		"caches":      caches,
+		"inputs":      inputs,
 		"conditions":  conditions,
 		"processors":  processors,
+		"outputs":     outputs,
+		"caches":      caches,
 		"rate_limits": rateLimits,
 	}
 	if len(plugins) > 0 {
@@ -130,9 +158,11 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 // as caches and labelled conditions.
 type Type struct {
 	apiReg     APIReg
+	inputs     map[string]types.Input
 	caches     map[string]types.Cache
 	conditions map[string]types.Condition
 	processors map[string]types.Processor
+	outputs    map[string]types.OutputWriter
 	rateLimits map[string]types.RateLimit
 	plugins    map[string]interface{}
 
@@ -150,21 +180,35 @@ func New(
 ) (*Type, error) {
 	t := &Type{
 		apiReg:     apiReg,
+		inputs:     map[string]types.Input{},
 		caches:     map[string]types.Cache{},
 		conditions: map[string]types.Condition{},
 		processors: map[string]types.Processor{},
+		outputs:    map[string]types.OutputWriter{},
 		rateLimits: map[string]types.RateLimit{},
 		plugins:    map[string]interface{}{},
 		pipes:      map[string]<-chan types.Transaction{},
 	}
 
-	// Sometimes cache resources might refer to other cache resources. When they
-	// are constructed they will check with the manager to ensure the resource
-	// they point to is valid, but not use the cache. Since we cannot guarantee
-	// an order of initialisation we create placeholder caches during
-	// construction.
+	// Sometimes resources of a type might refer to other resources of the same
+	// type. When they are constructed they will check with the manager to
+	// ensure the resource they point to is valid, but not keep the reference.
+	// Since we cannot guarantee an order of initialisation we create
+	// placeholders during construction.
+	for k := range conf.Inputs {
+		t.inputs[k] = nil
+	}
 	for k := range conf.Caches {
 		t.caches[k] = nil
+	}
+	for k := range conf.Conditions {
+		t.conditions[k] = nil
+	}
+	for k := range conf.Processors {
+		t.processors[k] = nil
+	}
+	for k := range conf.Outputs {
+		t.outputs[k] = nil
 	}
 
 	for k, conf := range conf.Caches {
@@ -178,15 +222,6 @@ func New(
 		t.caches[k] = newCache
 	}
 
-	// Sometimes condition resources might refer to other condition resources.
-	// When they are constructed they will check with the manager to ensure the
-	// resource they point to is valid, but not use the condition. Since we
-	// cannot guarantee an order of initialisation we create placeholder
-	// conditions during construction.
-	for k := range conf.Conditions {
-		t.conditions[k] = nil
-	}
-
 	// TODO: Prevent recursive conditions.
 	for k, newConf := range conf.Conditions {
 		newCond, err := condition.New(newConf, t, log.NewModule(".resource.condition."+k), metrics.Namespaced(stats, "resource.condition."+k))
@@ -198,15 +233,6 @@ func New(
 		}
 
 		t.conditions[k] = newCond
-	}
-
-	// Sometimes processor resources might refer to other processor resources.
-	// When they are constructed they will check with the manager to ensure the
-	// resource they point to is valid, but not use the processor. Since we
-	// cannot guarantee an order of initialisation we create placeholder
-	// processors during construction.
-	for k := range conf.Processors {
-		t.processors[k] = nil
 	}
 
 	// TODO: Prevent recursive processors.
@@ -248,9 +274,8 @@ func New(
 		t.plugins[k] = newP
 	}
 
-	// Note: Caches, conditions and rate limits are considered READONLY from
-	// this point onwards and are therefore NOT protected by mutexes or
-	// channels.
+	// Note: Resources are considered READONLY from this point onwards and are
+	// therefore NOT protected by mutexes or channels.
 
 	return t, nil
 }
@@ -260,6 +285,14 @@ func New(
 // RegisterEndpoint registers a server wide HTTP endpoint.
 func (t *Type) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
 	t.apiReg.RegisterEndpoint(path, desc, h)
+}
+
+// GetInput attempts to find a service wide input by its name.
+func (t *Type) GetInput(name string) (types.Input, error) {
+	if c, exists := t.inputs[name]; exists {
+		return c, nil
+	}
+	return nil, types.ErrInputNotFound
 }
 
 // GetCache attempts to find a service wide cache by its name.
@@ -321,6 +354,14 @@ func (t *Type) GetRateLimit(name string) (types.RateLimit, error) {
 	return nil, types.ErrRateLimitNotFound
 }
 
+// GetOutput attempts to find a service wide output by its name.
+func (t *Type) GetOutput(name string) (types.OutputWriter, error) {
+	if c, exists := t.outputs[name]; exists {
+		return c, nil
+	}
+	return nil, types.ErrOutputNotFound
+}
+
 // GetPlugin attempts to find a service wide resource plugin by its name.
 func (t *Type) GetPlugin(name string) (interface{}, error) {
 	if pl, exists := t.plugins[name]; exists {
@@ -334,6 +375,9 @@ func (t *Type) GetPlugin(name string) (interface{}, error) {
 // CloseAsync triggers the shut down of all resource types that implement the
 // lifetime interface types.Closable.
 func (t *Type) CloseAsync() {
+	for _, c := range t.inputs {
+		c.CloseAsync()
+	}
 	for _, c := range t.caches {
 		c.CloseAsync()
 	}
@@ -353,12 +397,20 @@ func (t *Type) CloseAsync() {
 	for _, c := range t.rateLimits {
 		c.CloseAsync()
 	}
+	for _, c := range t.outputs {
+		c.CloseAsync()
+	}
 }
 
 // WaitForClose blocks until either all closable resource types are shut down or
 // a timeout occurs.
 func (t *Type) WaitForClose(timeout time.Duration) error {
 	timesOut := time.Now().Add(timeout)
+	for k, c := range t.inputs {
+		if err := c.WaitForClose(time.Until(timesOut)); err != nil {
+			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
+		}
+	}
 	for k, c := range t.caches {
 		if err := c.WaitForClose(time.Until(timesOut)); err != nil {
 			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
@@ -377,6 +429,11 @@ func (t *Type) WaitForClose(timeout time.Duration) error {
 		}
 	}
 	for k, c := range t.rateLimits {
+		if err := c.WaitForClose(time.Until(timesOut)); err != nil {
+			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
+		}
+	}
+	for k, c := range t.outputs {
 		if err := c.WaitForClose(time.Until(timesOut)); err != nil {
 			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
 		}

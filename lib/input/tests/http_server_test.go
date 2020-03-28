@@ -1,4 +1,4 @@
-package input
+package tests
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -41,10 +42,10 @@ func TestHTTPBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conf := NewConfig()
+	conf := input.NewConfig()
 	conf.HTTPServer.Path = "/testpost"
 
-	h, err := NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
+	h, err := input.NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,10 +156,10 @@ func TestHTTPBadRequests(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conf := NewConfig()
+	conf := input.NewConfig()
 	conf.HTTPServer.Path = "/testpost"
 
-	h, err := NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
+	h, err := input.NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,11 +191,11 @@ func TestHTTPTimeout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conf := NewConfig()
+	conf := input.NewConfig()
 	conf.HTTPServer.Path = "/testpost"
 	conf.HTTPServer.Timeout = "1ms"
 
-	h, err := NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
+	h, err := input.NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,11 +239,11 @@ func TestHTTPRateLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conf := NewConfig()
+	conf := input.NewConfig()
 	conf.HTTPServer.Path = "/testpost"
 	conf.HTTPServer.RateLimit = "foorl"
 
-	h, err := NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
+	h, err := input.NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -305,10 +306,10 @@ func TestHTTPServerWebsockets(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conf := NewConfig()
+	conf := input.NewConfig()
 	conf.HTTPServer.WSPath = "/testws"
 
-	h, err := NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
+	h, err := input.NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -402,13 +403,13 @@ func TestHTTPServerWSRateLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conf := NewConfig()
+	conf := input.NewConfig()
 	conf.HTTPServer.WSPath = "/testws"
 	conf.HTTPServer.WSWelcomeMessage = "test welcome"
 	conf.HTTPServer.WSRateLimitMessage = "test rate limited"
 	conf.HTTPServer.RateLimit = "foorl"
 
-	h, err := NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
+	h, err := input.NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -483,12 +484,12 @@ func TestHTTPSyncResponseHeaders(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conf := NewConfig()
+	conf := input.NewConfig()
 	conf.HTTPServer.Path = "/testpost"
 	conf.HTTPServer.Response.Headers["Content-Type"] = "application/json"
 	conf.HTTPServer.Response.Headers["foo"] = "${!json_field:field1}"
 
-	h, err := NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
+	h, err := input.NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

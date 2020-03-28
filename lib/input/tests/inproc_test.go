@@ -1,9 +1,10 @@
-package input
+package tests
 
 import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -22,11 +23,11 @@ func TestInprocDryRun(t *testing.T) {
 
 	mgr.SetPipe("foo", make(chan types.Transaction))
 
-	conf := NewConfig()
+	conf := input.NewConfig()
 	conf.Inproc = "foo"
 
-	var ip Type
-	if ip, err = NewInproc(conf, mgr, log.Noop(), metrics.Noop()); err != nil {
+	var ip input.Type
+	if ip, err = input.NewInproc(conf, mgr, log.Noop(), metrics.Noop()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -46,11 +47,11 @@ func TestInprocDryRunNoConn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conf := NewConfig()
+	conf := input.NewConfig()
 	conf.Inproc = "foo"
 
-	var ip Type
-	if ip, err = NewInproc(conf, mgr, log.Noop(), metrics.Noop()); err != nil {
+	var ip input.Type
+	if ip, err = input.NewInproc(conf, mgr, log.Noop(), metrics.Noop()); err != nil {
 		t.Fatal(err)
 	}
 

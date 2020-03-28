@@ -95,6 +95,8 @@ This document lists any resource plugins that this flavour of Benthos offers.
 ` + "``` yaml" + `
 caches: {}
 conditions: {}
+inputs: {}
+outputs: {}
 plugins:
   example:
     type: bar
@@ -112,6 +114,8 @@ This is a bar plugin.
 ` + "``` yaml" + `
 caches: {}
 conditions: {}
+inputs: {}
+outputs: {}
 plugins:
   example:
     type: foo

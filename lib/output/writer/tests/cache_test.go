@@ -1,4 +1,4 @@
-package writer
+package tests
 
 import (
 	"fmt"
@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/output/writer"
 )
 
 func TestCacheBasic(t *testing.T) {
@@ -20,11 +21,11 @@ func TestCacheBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cacheConf := NewCacheConfig()
+	cacheConf := writer.NewCacheConfig()
 	cacheConf.Target = "foo"
 	cacheConf.Key = "${!json_field:key}"
 
-	c, err := NewCache(cacheConf, mgr, log.Noop(), metrics.Noop())
+	c, err := writer.NewCache(cacheConf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,11 +64,11 @@ func TestCacheBatches(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cacheConf := NewCacheConfig()
+	cacheConf := writer.NewCacheConfig()
 	cacheConf.Target = "foo"
 	cacheConf.Key = "${!json_field:key}"
 
-	c, err := NewCache(cacheConf, mgr, log.Noop(), metrics.Noop())
+	c, err := writer.NewCache(cacheConf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

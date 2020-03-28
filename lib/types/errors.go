@@ -41,10 +41,12 @@ var (
 
 // Manager errors
 var (
+	ErrInputNotFound     = errors.New("input not found")
 	ErrCacheNotFound     = errors.New("cache not found")
 	ErrConditionNotFound = errors.New("condition not found")
 	ErrProcessorNotFound = errors.New("processor not found")
 	ErrRateLimitNotFound = errors.New("rate limit not found")
+	ErrOutputNotFound    = errors.New("output not found")
 	ErrPluginNotFound    = errors.New("plugin not found")
 	ErrKeyAlreadyExists  = errors.New("key already exists")
 	ErrKeyNotFound       = errors.New("key does not exist")
