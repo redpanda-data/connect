@@ -13,7 +13,6 @@ require (
 	github.com/aws/aws-lambda-go v1.13.3
 	github.com/aws/aws-sdk-go v1.28.1
 	github.com/benhoyt/goawk v1.6.0
-	github.com/boltdb/bolt v1.3.1
 	github.com/bradfitz/gomemcache v0.0.0-20190913173617-a41fca850d0b
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/clbanning/mxj v1.8.4
@@ -89,7 +88,7 @@ require (
 	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d // indirect
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
-	golang.org/x/sys v0.0.0-20200113162924-86b910548bc1 // indirect
+	golang.org/x/sys v0.0.0-20200327173247-9dae0f8f5775 // indirect
 	golang.org/x/tools v0.0.0-20200305224536-de023d59a5d1 // indirect
 	google.golang.org/genproto v0.0.0-20200113173426-e1de0a7b01eb // indirect
 	gopkg.in/jcmturner/gokrb5.v7 v7.3.0 // indirect
