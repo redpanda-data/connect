@@ -211,6 +211,17 @@ func New(
 		t.outputs[k] = nil
 	}
 
+	for k, conf := range conf.Inputs {
+		newInput, err := input.New(conf, t, log.NewModule(".resource.input."+k), metrics.Namespaced(stats, "resource.input."+k))
+		if err != nil {
+			return nil, fmt.Errorf(
+				"failed to create input resource '%v' of type '%v': %v",
+				k, conf.Type, err,
+			)
+		}
+		t.inputs[k] = newInput
+	}
+
 	for k, conf := range conf.Caches {
 		newCache, err := cache.New(conf, t, log.NewModule(".resource.cache."+k), metrics.Namespaced(stats, "resource.cache."+k))
 		if err != nil {
@@ -257,6 +268,19 @@ func New(
 			)
 		}
 		t.rateLimits[k] = newRL
+	}
+
+	for k, conf := range conf.Outputs {
+		newOutput, err := output.New(conf, t, log.NewModule(".resource.output."+k), metrics.Namespaced(stats, "resource.output."+k))
+		if err == nil {
+			t.outputs[k], err = wrapOutput(newOutput)
+		}
+		if err != nil {
+			return nil, fmt.Errorf(
+				"failed to create output resource '%v' of type '%v': %v",
+				k, conf.Type, err,
+			)
+		}
 	}
 
 	for k, conf := range conf.Plugins {

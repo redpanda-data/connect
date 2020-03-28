@@ -70,7 +70,7 @@ type Resource struct {
 	mErrNotFound metrics.StatCounter
 }
 
-// NewResource returns a resource condition.
+// NewResource returns a resource processor.
 func NewResource(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
@@ -102,7 +102,7 @@ func (r *Resource) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	proc, err := r.mgr.GetProcessor(r.name)
 	r.mCount.Incr(1)
 	if err != nil {
-		r.log.Debugf("Failed to obtain condition resource '%v': %v", r.name, err)
+		r.log.Debugf("Failed to obtain processor resource '%v': %v", r.name, err)
 		r.mErrNotFound.Incr(1)
 		r.mErr.Incr(1)
 		return nil, response.NewError(err)

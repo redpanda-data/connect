@@ -221,7 +221,7 @@ func Run() {
 				cli.ShowAppHelp(c)
 				os.Exit(1)
 			}
-			cmdService(c.String("config"), !c.Bool("chilled"), false, nil)
+			os.Exit(cmdService(c.String("config"), !c.Bool("chilled"), false, nil))
 			return nil
 		},
 		Commands: []*cli.Command{
@@ -308,7 +308,7 @@ func Run() {
    For more information check out the docs at:
    https://benthos.dev/docs/guides/streams_mode/about`[4:],
 				Action: func(c *cli.Context) error {
-					cmdService(c.String("config"), !c.Bool("chilled"), true, c.Args().Slice())
+					os.Exit(cmdService(c.String("config"), !c.Bool("chilled"), true, c.Args().Slice()))
 					return nil
 				},
 			},
@@ -420,7 +420,7 @@ func Run() {
 		}
 
 		deprecatedExecute(*configPath, testSuffix)
-		cmdService(*configPath, false, false, nil)
+		os.Exit(cmdService(*configPath, false, false, nil))
 		return nil
 	}
 

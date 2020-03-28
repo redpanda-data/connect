@@ -154,8 +154,12 @@ type Consumer interface {
 type OutputWriter interface {
 	Closable
 
-	// Write a transaction to an output.
-	Write(context.Context, Transaction) error
+	// WriteTransaction attempts to write a transaction to an output.
+	WriteTransaction(context.Context, Transaction) error
+
+	// Connected returns a boolean indicating whether this output is currently
+	// connected to its target.
+	Connected() bool
 }
 
 // Output is a closable Consumer.

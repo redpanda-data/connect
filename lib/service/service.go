@@ -111,14 +111,14 @@ func cmdService(
 	strict bool,
 	streamsMode bool,
 	streamsConfigs []string,
-) {
+) int {
 	lints := readConfig(confPath)
 	if strict && len(lints) > 0 {
 		for _, lint := range lints {
 			fmt.Fprintln(os.Stderr, lint)
 		}
 		fmt.Println("Shutting down due to linter errors, to prevent shutdown run Benthos with --chilled")
-		os.Exit(1)
+		return 1
 	}
 
 	// Logging and stats aggregation.
@@ -158,7 +158,7 @@ func cmdService(
 	var trac tracer.Type
 	if trac, err = tracer.New(conf.Tracer); err != nil {
 		logger.Errorf("Failed to initialise tracer: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 	defer trac.Close()
 
@@ -170,18 +170,18 @@ func cmdService(
 	var httpServer *api.Type
 	if httpServer, err = api.New(Version, DateBuilt, conf.HTTP, sanConf, logger, stats); err != nil {
 		logger.Errorf("Failed to initialise API: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	// Create resource manager.
 	manager, err := manager.New(conf.Manager, httpServer, logger, stats)
 	if err != nil {
 		logger.Errorf("Failed to create resource: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 	if err = onManagerInit(manager, logger, stats); err != nil {
 		logger.Errorf("Failed to initialise manager: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	var dataStream stoppableStreams
@@ -198,12 +198,12 @@ func cmdService(
 		streamConfs := map[string]stream.Config{}
 		var streamLints []string
 		for _, path := range streamsConfigs {
-			if lints, err := strmmgr.LoadStreamConfigsFromPath(path, testSuffix, streamConfs); err != nil {
+			lints, err := strmmgr.LoadStreamConfigsFromPath(path, testSuffix, streamConfs)
+			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to load stream configs: %v\n", err)
-				os.Exit(1)
-			} else {
-				streamLints = append(streamLints, lints...)
+				return 1
 			}
+			streamLints = append(streamLints, lints...)
 		}
 
 		if strict && len(streamLints) > 0 {
@@ -211,7 +211,7 @@ func cmdService(
 				fmt.Fprintln(os.Stderr, lint)
 			}
 			fmt.Println("Shutting down due to linter errors, to prevent shutdown run Benthos with --chilled")
-			os.Exit(1)
+			return 1
 		} else if len(streamLints) > 0 {
 			lintlog := logger.NewModule(".linter")
 			for _, lint := range streamLints {
@@ -223,7 +223,7 @@ func cmdService(
 		for id, conf := range streamConfs {
 			if err = streamMgr.Create(id, conf); err != nil {
 				logger.Errorf("Failed to create stream (%v): %v\n", id, err)
-				os.Exit(1)
+				return 1
 			}
 		}
 		logger.Infoln("Launching benthos in streams mode, use CTRL+C to close.")
@@ -238,7 +238,7 @@ func cmdService(
 			}),
 		); err != nil {
 			logger.Errorf("Service closing due to: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 		logger.Infoln("Launching a benthos instance, use CTRL+C to close.")
 	}
@@ -262,7 +262,7 @@ func cmdService(
 		var err error
 		if exitTimeout, err = time.ParseDuration(tout); err != nil {
 			logger.Errorf("Failed to parse shutdown timeout period string: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 	}
 
@@ -314,7 +314,7 @@ func cmdService(
 	case <-httpServerClosedChan:
 		logger.Infoln("HTTP Server has terminated. Shutting down the service.")
 	}
-	os.Exit(0)
+	return 0
 }
 
 //------------------------------------------------------------------------------

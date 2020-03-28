@@ -86,6 +86,7 @@ const (
 	TypeRedisList       = "redis_list"
 	TypeRedisPubSub     = "redis_pubsub"
 	TypeRedisStreams    = "redis_streams"
+	TypeResource        = "resource"
 	TypeS3              = "s3"
 	TypeSQS             = "sqs"
 	TypeSTDIN           = "stdin"
@@ -128,6 +129,7 @@ type Config struct {
 	RedisList       reader.RedisListConfig       `json:"redis_list" yaml:"redis_list"`
 	RedisPubSub     reader.RedisPubSubConfig     `json:"redis_pubsub" yaml:"redis_pubsub"`
 	RedisStreams    reader.RedisStreamsConfig    `json:"redis_streams" yaml:"redis_streams"`
+	Resource        string                       `json:"resource" yaml:"resource"`
 	S3              reader.AmazonS3Config        `json:"s3" yaml:"s3"`
 	SQS             reader.AmazonSQSConfig       `json:"sqs" yaml:"sqs"`
 	STDIN           STDINConfig                  `json:"stdin" yaml:"stdin"`
@@ -170,6 +172,7 @@ func NewConfig() Config {
 		RedisList:       reader.NewRedisListConfig(),
 		RedisPubSub:     reader.NewRedisPubSubConfig(),
 		RedisStreams:    reader.NewRedisStreamsConfig(),
+		Resource:        "",
 		S3:              reader.NewAmazonS3Config(),
 		SQS:             reader.NewAmazonSQSConfig(),
 		STDIN:           NewSTDINConfig(),
