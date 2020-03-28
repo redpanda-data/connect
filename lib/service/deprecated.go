@@ -353,7 +353,7 @@ config with a websocket input and output and a jmespath processor.`[1:],
 	return nil, false
 }
 
-func deprecatedExecute(conf *config.Type, lints []string, testSuffix string) {
+func deprecatedExecute(configPath string, testSuffix string) {
 	fmt.Fprintln(os.Stderr, "Running with deprecated CLI flags, use --help to see an up to date summary.")
 
 	if len(depFlags.runTests) > 0 {
@@ -365,12 +365,14 @@ func deprecatedExecute(conf *config.Type, lints []string, testSuffix string) {
 	}
 
 	if depFlags.lintConfig {
+		lints := readConfig(configPath)
 		cmdDeprecatedLintConfig(lints)
 	}
 
 	// If the user wants the configuration to be printed we do so and then exit.
 	if depFlags.showConfigJSON || depFlags.showConfigYAML {
-		cmdDeprecatedPrintConfig(conf, depFlags.examples, depFlags.showAll, depFlags.showConfigJSON)
+		readConfig(configPath)
+		cmdDeprecatedPrintConfig(&conf, depFlags.examples, depFlags.showAll, depFlags.showConfigJSON)
 	}
 
 	// If we only want to print our inputs or outputs we should exit afterwards
@@ -399,6 +401,10 @@ func deprecatedExecute(conf *config.Type, lints []string, testSuffix string) {
 	}
 
 	if depFlags.streamsMode {
-		cmdServiceChilled(conf, lints, depFlags.streamsMode, depFlags.streamsDir)
+		dirs := []string{}
+		if len(depFlags.streamsDir) > 0 {
+			dirs = append(dirs, depFlags.streamsDir)
+		}
+		cmdService(configPath, depFlags.strictConfig, depFlags.streamsMode, dirs)
 	}
 }

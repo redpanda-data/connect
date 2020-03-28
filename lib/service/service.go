@@ -23,6 +23,31 @@ import (
 
 //------------------------------------------------------------------------------
 
+var conf = config.New()
+var testSuffix = "_benthos_test"
+
+// OptSetServiceName creates an opt func that allows the default service name
+// config fields such as metrics and logging prefixes to be overridden.
+func OptSetServiceName(name string) func() {
+	return func() {
+		testSuffix = fmt.Sprintf("_%v_test", name)
+		conf.HTTP.RootPath = "/" + name
+		conf.Logger.Prefix = name
+		conf.Logger.StaticFields["@service"] = name
+		conf.Metrics.HTTP.Prefix = name
+		conf.Metrics.Prometheus.Prefix = name
+		conf.Metrics.Statsd.Prefix = name
+	}
+}
+
+// OptOverrideConfigDefaults creates an opt func that allows the provided func
+// to override config struct default values before the user config is parsed.
+func OptOverrideConfigDefaults(fn func(c *config.Type)) func() {
+	return func() {
+		fn(&conf)
+	}
+}
+
 type stoppableStreams interface {
 	Stop(timeout time.Duration) error
 }
@@ -47,35 +72,64 @@ func OptOnManagerInit(fn ManagerInitFunc) func() {
 
 //------------------------------------------------------------------------------
 
+func readConfig(path string) (lints []string) {
+	// A list of default config paths to check for if not explicitly defined
+	defaultPaths := []string{
+		"/benthos.yaml",
+		"/etc/benthos/config.yaml",
+		"/etc/benthos.yaml",
+	}
+
+	if len(path) > 0 {
+		var err error
+		if lints, err = config.Read(path, true, &conf); err != nil {
+			fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		// Iterate default config paths
+		for _, path := range defaultPaths {
+			if _, err := os.Stat(path); err == nil {
+				fmt.Fprintf(os.Stderr, "Config file not specified, reading from %v\n", path)
+
+				if lints, err = config.Read(path, true, &conf); err != nil {
+					fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
+					os.Exit(1)
+				}
+				break
+			}
+		}
+	}
+
+	return
+}
+
+//------------------------------------------------------------------------------
+
 func cmdService(
-	config *config.Type,
-	lints []string,
+	confPath string,
+	strict bool,
 	streamsMode bool,
-	streamsDir string,
+	streamsConfigs []string,
 ) {
-	if len(lints) > 0 {
+	lints := readConfig(confPath)
+	if strict && len(lints) > 0 {
 		for _, lint := range lints {
 			fmt.Fprintln(os.Stderr, lint)
 		}
 		fmt.Println("Shutting down due to linter errors, to prevent shutdown run Benthos with --chilled")
 		os.Exit(1)
 	}
-	cmdServiceChilled(config, nil, streamsMode, streamsDir)
-}
 
-func cmdServiceChilled(
-	config *config.Type,
-	lints []string,
-	streamsMode bool,
-	streamsDir string,
-) {
 	// Logging and stats aggregation.
 	var logger log.Modular
-	// Note: Only log to Stderr if one of our outputs is stdout.
-	if config.Output.Type == "stdout" {
-		logger = log.New(os.Stderr, config.Logger)
+
+	// Note: Only log to Stderr if our output is stdout, brokers aren't counted
+	// here as this is only a special circumstance for very basic use cases.
+	if !streamsMode && conf.Output.Type == "stdout" {
+		logger = log.New(os.Stderr, conf.Logger)
 	} else {
-		logger = log.New(os.Stdout, config.Logger)
+		logger = log.New(os.Stdout, conf.Logger)
 	}
 
 	if len(lints) > 0 {
@@ -88,11 +142,11 @@ func cmdServiceChilled(
 	// Create our metrics type.
 	var err error
 	var stats metrics.Type
-	stats, err = metrics.New(config.Metrics, metrics.OptSetLogger(logger))
+	stats, err = metrics.New(conf.Metrics, metrics.OptSetLogger(logger))
 	for err != nil {
 		logger.Errorf("Failed to connect to metrics aggregator: %v\n", err)
 		<-time.After(time.Second)
-		stats, err = metrics.New(config.Metrics, metrics.OptSetLogger(logger))
+		stats, err = metrics.New(conf.Metrics, metrics.OptSetLogger(logger))
 	}
 	defer func() {
 		if sCloseErr := stats.Close(); sCloseErr != nil {
@@ -102,25 +156,25 @@ func cmdServiceChilled(
 
 	// Create our tracer type.
 	var trac tracer.Type
-	if trac, err = tracer.New(config.Tracer); err != nil {
+	if trac, err = tracer.New(conf.Tracer); err != nil {
 		logger.Errorf("Failed to initialise tracer: %v\n", err)
 		os.Exit(1)
 	}
 	defer trac.Close()
 
 	// Create HTTP API with a sanitised service config.
-	sanConf, err := config.Sanitised()
+	sanConf, err := conf.Sanitised()
 	if err != nil {
 		logger.Warnf("Failed to generate sanitised config: %v\n", err)
 	}
 	var httpServer *api.Type
-	if httpServer, err = api.New(Version, DateBuilt, config.HTTP, sanConf, logger, stats); err != nil {
+	if httpServer, err = api.New(Version, DateBuilt, conf.HTTP, sanConf, logger, stats); err != nil {
 		logger.Errorf("Failed to initialise API: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Create resource manager.
-	manager, err := manager.New(config.Manager, httpServer, logger, stats)
+	manager, err := manager.New(conf.Manager, httpServer, logger, stats)
 	if err != nil {
 		logger.Errorf("Failed to create resource: %v\n", err)
 		os.Exit(1)
@@ -141,13 +195,30 @@ func cmdServiceChilled(
 			strmmgr.OptSetManager(manager),
 			strmmgr.OptSetStats(stats),
 		)
-		var streamConfs map[string]stream.Config
-		if len(streamsDir) > 0 {
-			if streamConfs, err = strmmgr.LoadStreamConfigsFromDirectory(true, streamsDir); err != nil {
-				logger.Errorf("Failed to load stream configs: %v\n", err)
+		streamConfs := map[string]stream.Config{}
+		var streamLints []string
+		for _, path := range streamsConfigs {
+			if lints, err := strmmgr.LoadStreamConfigsFromPath(path, testSuffix, streamConfs); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to load stream configs: %v\n", err)
 				os.Exit(1)
+			} else {
+				streamLints = append(streamLints, lints...)
 			}
 		}
+
+		if strict && len(streamLints) > 0 {
+			for _, lint := range streamLints {
+				fmt.Fprintln(os.Stderr, lint)
+			}
+			fmt.Println("Shutting down due to linter errors, to prevent shutdown run Benthos with --chilled")
+			os.Exit(1)
+		} else if len(streamLints) > 0 {
+			lintlog := logger.NewModule(".linter")
+			for _, lint := range streamLints {
+				lintlog.Infoln(lint)
+			}
+		}
+
 		dataStream = streamMgr
 		for id, conf := range streamConfs {
 			if err = streamMgr.Create(id, conf); err != nil {
@@ -156,12 +227,9 @@ func cmdServiceChilled(
 			}
 		}
 		logger.Infoln("Launching benthos in streams mode, use CTRL+C to close.")
-		if lStreams := len(streamConfs); lStreams > 0 {
-			logger.Infof("Created %v streams from directory: %v\n", lStreams, streamsDir)
-		}
 	} else {
 		if dataStream, err = stream.New(
-			config.Config,
+			conf.Config,
 			stream.OptSetLogger(logger),
 			stream.OptSetStats(stats),
 			stream.OptSetManager(manager),
@@ -180,7 +248,7 @@ func cmdServiceChilled(
 	go func() {
 		logger.Infof(
 			"Listening for HTTP requests at: %v\n",
-			"http://"+config.HTTP.Address,
+			"http://"+conf.HTTP.Address,
 		)
 		httpErr := httpServer.ListenAndServe()
 		if httpErr != nil && httpErr != http.ErrServerClosed {
@@ -190,7 +258,7 @@ func cmdServiceChilled(
 	}()
 
 	var exitTimeout time.Duration
-	if tout := config.SystemCloseTimeout; len(tout) > 0 {
+	if tout := conf.SystemCloseTimeout; len(tout) > 0 {
 		var err error
 		if exitTimeout, err = time.ParseDuration(tout); err != nil {
 			logger.Errorf("Failed to parse shutdown timeout period string: %v\n", err)

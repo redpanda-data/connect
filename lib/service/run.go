@@ -32,31 +32,6 @@ var (
 
 //------------------------------------------------------------------------------
 
-var conf = config.New()
-var testSuffix = "_benthos_test"
-
-// OptSetServiceName creates an opt func that allows the default service name
-// config fields such as metrics and logging prefixes to be overridden.
-func OptSetServiceName(name string) func() {
-	return func() {
-		testSuffix = fmt.Sprintf("_%v_test", name)
-		conf.HTTP.RootPath = "/" + name
-		conf.Logger.Prefix = name
-		conf.Logger.StaticFields["@service"] = name
-		conf.Metrics.HTTP.Prefix = name
-		conf.Metrics.Prometheus.Prefix = name
-		conf.Metrics.Statsd.Prefix = name
-	}
-}
-
-// OptOverrideConfigDefaults creates an opt func that allows the provided func
-// to override config struct default values before the user config is parsed.
-func OptOverrideConfigDefaults(fn func(c *config.Type)) func() {
-	return func() {
-		fn(&conf)
-	}
-}
-
 // OptSetVersionStamp creates an opt func for setting the version and date built
 // stamps that Benthos returns via --version and the /version endpoint. The
 // traditional way of setting these values is via the build flags:
@@ -74,38 +49,6 @@ func OptSetVersionStamp(version, dateBuilt string) func() {
 func cmdVersion(version, dateBuild string) {
 	fmt.Printf("Version: %v\nDate: %v\n", Version, DateBuilt)
 	os.Exit(0)
-}
-
-func readConfig(path string) (lints []string) {
-	// A list of default config paths to check for if not explicitly defined
-	defaultPaths := []string{
-		"/benthos.yaml",
-		"/etc/benthos/config.yaml",
-		"/etc/benthos.yaml",
-	}
-
-	if len(path) > 0 {
-		var err error
-		if lints, err = config.Read(path, true, &conf); err != nil {
-			fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
-			os.Exit(1)
-		}
-	} else {
-		// Iterate default config paths
-		for _, path := range defaultPaths {
-			if _, err := os.Stat(path); err == nil {
-				fmt.Fprintf(os.Stderr, "Config file not specified, reading from %v\n", path)
-
-				if lints, err = config.Read(path, true, &conf); err != nil {
-					fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
-					os.Exit(1)
-				}
-				break
-			}
-		}
-	}
-
-	return
 }
 
 //------------------------------------------------------------------------------
@@ -273,12 +216,12 @@ func Run() {
 			if c.Bool("version") {
 				cmdVersion(Version, DateBuilt)
 			}
-			lints := readConfig(c.String("config"))
-			if c.Bool("chilled") {
-				cmdServiceChilled(&conf, lints, false, "")
-			} else {
-				cmdService(&conf, lints, false, "")
+			if c.Args().Len() > 0 {
+				fmt.Fprintf(os.Stderr, "Unrecognised command: %v\n", c.Args().First())
+				cli.ShowAppHelp(c)
+				os.Exit(1)
 			}
+			cmdService(c.String("config"), !c.Bool("chilled"), false, nil)
 			return nil
 		},
 		Commands: []*cli.Command{
@@ -321,19 +264,25 @@ func Run() {
 					if conf := c.String("config"); len(conf) > 0 {
 						targets = append(targets, conf)
 					}
-					var lints []string
+					var pathLints []string
 					for _, target := range targets {
 						if len(target) == 0 {
 							continue
 						}
-						for _, l := range readConfig(target) {
-							lints = append(lints, target+": "+l)
+						var conf = config.New()
+						lints, err := config.Read(target, true, &conf)
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
+							os.Exit(1)
+						}
+						for _, l := range lints {
+							pathLints = append(pathLints, target+": "+l)
 						}
 					}
-					if len(lints) == 0 {
+					if len(pathLints) == 0 {
 						os.Exit(0)
 					}
-					for _, lint := range lints {
+					for _, lint := range pathLints {
 						fmt.Fprintln(os.Stderr, lint)
 					}
 					os.Exit(1)
@@ -348,7 +297,7 @@ func Run() {
    single process and can be created, updated and removed via REST HTTP
    endpoints.
 
-   benthos streams ./path/to/stream/configs
+   benthos streams ./path/to/stream/configs ./and/some/more
    benthos -c ./root_config.yaml streams ./path/to/stream/configs
    benthos -c ./root_config.yaml streams
 
@@ -359,12 +308,7 @@ func Run() {
    For more information check out the docs at:
    https://benthos.dev/docs/guides/streams_mode/about`[4:],
 				Action: func(c *cli.Context) error {
-					lints := readConfig(c.String("config"))
-					if c.Bool("chilled") {
-						cmdServiceChilled(&conf, lints, true, c.Args().First())
-					} else {
-						cmdService(&conf, lints, true, c.Args().First())
-					}
+					cmdService(c.String("config"), !c.Bool("chilled"), true, c.Args().Slice())
 					return nil
 				},
 			},
@@ -475,9 +419,8 @@ func Run() {
 			cmdVersion(Version, DateBuilt)
 		}
 
-		lints := readConfig(*configPath)
-		deprecatedExecute(&conf, lints, testSuffix)
-		cmdServiceChilled(&conf, lints, false, "")
+		deprecatedExecute(*configPath, testSuffix)
+		cmdService(*configPath, false, false, nil)
 		return nil
 	}
 
