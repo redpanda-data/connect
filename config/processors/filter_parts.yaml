@@ -30,6 +30,8 @@ output:
 resources:
   caches: {}
   conditions: {}
+  inputs: {}
+  outputs: {}
   processors: {}
   rate_limits: {}
 logger:

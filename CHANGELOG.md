@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
   `topic`.
 - New `contains_any` and `contains_any_cs` operators added to the `text`
   condition.
+- Support for input and output `resource` types.
 
 ### Changed
 
@@ -22,6 +23,7 @@ All notable changes to this project will be documented in this file.
 
 - Outputs that resolve function interpolations now correctly resolve the
   `batch_size` function.
+- The `kinesis_balanced` input now correctly establishes connections.
 
 ## 3.11.0 - 2020-03-08
 

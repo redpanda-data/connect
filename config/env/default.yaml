@@ -300,6 +300,7 @@ input:
         - ${INPUT_REDIS_STREAMS_STREAMS:benthos_stream}
         timeout: ${INPUT_REDIS_STREAMS_TIMEOUT:1s}
         url: ${INPUT_REDIS_STREAMS_URL:tcp://localhost:6379}
+      resource: ${INPUT_RESOURCE}
       s3:
         bucket: ${INPUT_S3_BUCKET}
         credentials:
@@ -876,6 +877,7 @@ output:
         max_length: ${OUTPUT_REDIS_STREAMS_MAX_LENGTH:0}
         stream: ${OUTPUT_REDIS_STREAMS_STREAM:benthos_stream}
         url: ${OUTPUT_REDIS_STREAMS_URL:tcp://localhost:6379}
+      resource: ${OUTPUT_RESOURCE}
       s3:
         bucket: ${OUTPUT_S3_BUCKET}
         content_encoding: ${OUTPUT_S3_CONTENT_ENCODING}

@@ -281,6 +281,7 @@ INPUT_REDIS_STREAMS_START_FROM_OLDEST                = true
 INPUT_REDIS_STREAMS_STREAMS                          = benthos_stream
 INPUT_REDIS_STREAMS_TIMEOUT                          = 1s
 INPUT_REDIS_STREAMS_URL                              = tcp://localhost:6379
+INPUT_RESOURCE
 INPUT_S3_BUCKET
 INPUT_S3_CREDENTIALS_ID
 INPUT_S3_CREDENTIALS_PROFILE
@@ -735,6 +736,7 @@ OUTPUT_REDIS_STREAMS_MAX_IN_FLIGHT                    = 1
 OUTPUT_REDIS_STREAMS_MAX_LENGTH                       = 0
 OUTPUT_REDIS_STREAMS_STREAM                           = benthos_stream
 OUTPUT_REDIS_STREAMS_URL                              = tcp://localhost:6379
+OUTPUT_RESOURCE
 OUTPUT_S3_BUCKET
 OUTPUT_S3_CONTENT_ENCODING
 OUTPUT_S3_CONTENT_TYPE                                = application/octet-stream

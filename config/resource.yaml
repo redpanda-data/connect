@@ -5,27 +5,17 @@ http:
   root_path: /benthos
   debug_endpoints: false
 input:
-  type: stdin
-  stdin:
-    delimiter: ""
-    max_buffer: 1e+06
-    multipart: false
+  type: resource
+  resource: ""
 buffer:
   type: none
   none: {}
 pipeline:
-  processors:
-  - type: text
-    text:
-      arg: ""
-      operator: trim_space
-      parts: []
-      value: ""
+  processors: []
   threads: 1
 output:
-  type: stdout
-  stdout:
-    delimiter: ""
+  type: resource
+  resource: ""
 resources:
   caches: {}
   conditions: {}
