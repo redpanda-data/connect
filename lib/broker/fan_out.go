@@ -1,7 +1,8 @@
 package broker
 
 import (
-	"sync/atomic"
+	"context"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -9,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
+	"golang.org/x/sync/errgroup"
 )
 
 //------------------------------------------------------------------------------
@@ -16,46 +18,37 @@ import (
 // FanOut is a broker that implements types.Consumer and broadcasts each message
 // out to an array of outputs.
 type FanOut struct {
-	running int32
-
 	logger log.Modular
 	stats  metrics.Type
 
-	throt *throttle.Type
-
 	transactions <-chan types.Transaction
 
-	outputTsChans  []chan types.Transaction
-	outputResChans []chan types.Response
-	outputs        []types.Output
-	outputNs       []int
+	outputTsChans []chan types.Transaction
+	outputs       []types.Output
 
+	ctx        context.Context
+	close      func()
 	closedChan chan struct{}
-	closeChan  chan struct{}
 }
 
 // NewFanOut creates a new FanOut type by providing outputs.
 func NewFanOut(
 	outputs []types.Output, logger log.Modular, stats metrics.Type,
 ) (*FanOut, error) {
+	ctx, done := context.WithCancel(context.Background())
 	o := &FanOut{
-		running:      1,
 		stats:        stats,
 		logger:       logger,
 		transactions: nil,
 		outputs:      outputs,
-		outputNs:     []int{},
 		closedChan:   make(chan struct{}),
-		closeChan:    make(chan struct{}),
+		ctx:          ctx,
+		close:        done,
 	}
-	o.throt = throttle.New(throttle.OptCloseChan(o.closeChan))
 
 	o.outputTsChans = make([]chan types.Transaction, len(o.outputs))
-	o.outputResChans = make([]chan types.Response, len(o.outputs))
 	for i := range o.outputTsChans {
-		o.outputNs = append(o.outputNs, i)
 		o.outputTsChans[i] = make(chan types.Transaction)
-		o.outputResChans[i] = make(chan types.Response)
 		if err := o.outputs[i].Consume(o.outputTsChans[i]); err != nil {
 			return nil, err
 		}
@@ -91,7 +84,10 @@ func (o *FanOut) Connected() bool {
 
 // loop is an internal loop that brokers incoming messages to many outputs.
 func (o *FanOut) loop() {
+	wg := sync.WaitGroup{}
+
 	defer func() {
+		wg.Wait()
 		for _, c := range o.outputTsChans {
 			close(c)
 		}
@@ -104,54 +100,92 @@ func (o *FanOut) loop() {
 		mMsgsSnt   = o.stats.GetCounter("messages.sent")
 	)
 
-	for atomic.LoadInt32(&o.running) == 1 {
+	// This gets locked if an outbound message is running in an error loop for
+	// an output. It prevents consuming new messages until the error is
+	// resolved.
+	var errMut sync.RWMutex
+	for {
 		var ts types.Transaction
 		var open bool
 
+		errMut.Lock()
+		errMut.Unlock()
 		select {
 		case ts, open = <-o.transactions:
 			if !open {
 				return
 			}
-		case <-o.closeChan:
+		case <-o.ctx.Done():
 			return
 		}
 		mMsgsRcvd.Incr(1)
 
-		outputTargets := o.outputNs
-		for len(outputTargets) > 0 {
-			for _, i := range outputTargets {
-				msgCopy := ts.Payload.Copy()
-				select {
-				case o.outputTsChans[i] <- types.NewTransaction(msgCopy, o.outputResChans[i]):
-				case <-o.closeChan:
-					return
-				}
-			}
-			newTargets := []int{}
-			for _, i := range outputTargets {
-				select {
-				case res := <-o.outputResChans[i]:
-					if res.Error() != nil {
-						newTargets = append(newTargets, i)
-						o.logger.Errorf("Failed to dispatch fan out message: %v\n", res.Error())
-						mOutputErr.Incr(1)
-						if !o.throt.Retry() {
-							return
+		wg.Add(1)
+		bp, received := context.WithCancel(context.Background())
+		go func() {
+			defer wg.Done()
+
+			var owg errgroup.Group
+			for target := range o.outputTsChans {
+				msgCopy, i := ts.Payload.Copy(), target
+				owg.Go(func() error {
+					throt := throttle.New(throttle.OptCloseChan(o.ctx.Done()))
+					resChan := make(chan types.Response)
+					failed := false
+
+					// Try until success or shutdown.
+					for {
+						select {
+						case o.outputTsChans[i] <- types.NewTransaction(msgCopy, resChan):
+							received()
+						case <-o.ctx.Done():
+							return types.ErrTypeClosed
 						}
-					} else {
-						o.throt.Reset()
-						mMsgsSnt.Incr(1)
+						select {
+						case res := <-resChan:
+							if res.Error() != nil {
+								// Once an output returns an error we block
+								// incoming messages until the problem is
+								// resolved.
+								//
+								// We claim a read lock so that other outbound
+								// messages are also able to retry.
+								if !failed {
+									errMut.RLock()
+									defer errMut.RUnlock()
+									failed = true
+								}
+								o.logger.Errorf("Failed to dispatch fan out message to output '%v': %v\n", i, res.Error())
+								mOutputErr.Incr(1)
+								if !throt.Retry() {
+									return types.ErrTypeClosed
+								}
+							} else {
+								mMsgsSnt.Incr(1)
+								return nil
+							}
+						case <-o.ctx.Done():
+							return types.ErrTypeClosed
+						}
 					}
-				case <-o.closeChan:
+				})
+			}
+
+			if owg.Wait() == nil {
+				select {
+				case ts.ResponseChan <- response.NewAck():
+				case <-o.ctx.Done():
 					return
 				}
 			}
-			outputTargets = newTargets
-		}
+		}()
+
+		// Block until one output has accepted our message or the service is
+		// closing. This ensures we preserve back pressure when outputs are
+		// saturated.
 		select {
-		case ts.ResponseChan <- response.NewAck():
-		case <-o.closeChan:
+		case <-bp.Done():
+		case <-o.ctx.Done():
 			return
 		}
 	}
@@ -159,9 +193,7 @@ func (o *FanOut) loop() {
 
 // CloseAsync shuts down the FanOut broker and stops processing requests.
 func (o *FanOut) CloseAsync() {
-	if atomic.CompareAndSwapInt32(&o.running, 1, 0) {
-		close(o.closeChan)
-	}
+	o.close()
 }
 
 // WaitForClose blocks until the FanOut broker has closed down.
