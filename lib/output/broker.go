@@ -49,14 +49,7 @@ output:
   # Processors applied to messages sent to all brokered outputs.
   processors:
   - type: some_processor
-` + "```" + `
-
-## Batching
-
-It's possible to configure a [batch policy](/docs/configuration/batching#batch-policy) with a
-broker using the ` + "`batching`" + ` fields, allowing you to create batches
-after your processing stages. Some inputs do not support broker based batching
-and specify this in their documentation.`,
+` + "```" + ``,
 		Footnotes: `
 ## Patterns
 
@@ -92,18 +85,7 @@ potentially disproportionate message allocations to those outputs. Each message
 is sent to a single output, which is determined by allowing outputs to claim
 messages as soon as they are able to process them. This results in certain
 faster outputs potentially processing more messages at the cost of slower
-outputs.
-
-### ` + "`try`" + `
-
-The try pattern attempts to send each message to only one output, starting from
-the first output on the list. If an output attempt fails then the broker
-attempts to send to the next output in the list and so on.
-
-This pattern is useful for triggering events in the case where certain output
-targets have broken. For example, if you had an output type ` + "`http_client`" + `
-but wished to reroute messages whenever the endpoint becomes unreachable you
-could use a try broker.`,
+outputs.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldAdvanced("copies", "The number of copies of each configured output to spawn."),
 			docs.FieldCommon("pattern", "The brokering pattern to use.").HasOptions(

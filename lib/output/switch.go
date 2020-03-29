@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
+	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -34,13 +35,56 @@ func init() {
 	Constructors[TypeSwitch] = TypeSpec{
 		constructor: NewSwitch,
 		Summary: `
-The switch output type allows you to configure multiple conditional output
-targets by listing child outputs paired with conditions.`,
+The switch output type allows you to route messages to different outputs based
+on their contents.`,
 		Description: `
 When [batching messages at the input level](/docs/configuration/batching/)
 conditional logic is applied across the entire batch. In order to multiplex per
-message of a batch use the ` + "[`broker`](/docs/components/outputs/broker)" + `
-output with the pattern ` + "`fan_out`" + `.
+message of a batch use ` + "[broker based multiplexing](/docs/components/outputs/about#broker-multiplexing)" + `.`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldAdvanced(
+				"retry_until_success", `
+If a selected output fails to send a message this field determines whether it is
+reattempted indefinitely. If set to false the error is instead propagated back
+to the input level.
+
+If a message can be routed to >1 outputs it is usually best to set this to true
+in order to avoid duplicate messages being routed to an output.`,
+			),
+			docs.FieldCommon(
+				"outputs", `
+A list of switch cases, each consisting of an [output](/docs/components/outputs/about),
+a [condition](/docs/components/conditions/about) and a field fallthrough,
+indicating whether the next case should also be tested if the current resolves
+to true.`,
+				[]interface{}{
+					map[string]interface{}{
+						"fallthrough": false,
+						"output": map[string]interface{}{
+							"cache": map[string]interface{}{
+								"target": "foo",
+								"key":    "${!json_field:id}",
+							},
+						},
+						"condition": map[string]interface{}{
+							"jmespath": map[string]interface{}{
+								"query": "contains(urls, 'http://benthos.dev')",
+							},
+						},
+					},
+					map[string]interface{}{
+						"output": map[string]interface{}{
+							"s3": map[string]interface{}{
+								"bucket": "bar",
+								"path":   "${!json_field:id}",
+							},
+						},
+					},
+				},
+			),
+		},
+		Footnotes: `
+## Examples
 
 In the following example, messages containing "foo" will be sent to both the
 ` + "`foo`" + ` and ` + "`baz`" + ` outputs. Messages containing "bar" will be

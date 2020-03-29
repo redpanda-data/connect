@@ -1,4 +1,4 @@
-FROM golang:1.14 AS build
+FROM golang:1.14.1 AS build
 
 RUN useradd -u 10001 benthos
 

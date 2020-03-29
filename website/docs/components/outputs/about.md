@@ -19,25 +19,97 @@ output:
        query: '{ message: @, meta: { link_count: length(links) } }'
 ```
 
-### Back Pressure
+## Back Pressure
 
 Benthos outputs apply back pressure to components upstream. This means if your output target starts blocking traffic Benthos will gracefully stop consuming until the issue is resolved.
 
-### Retries
+## Retries
 
 When a Benthos output fails to send a message the error is propagated back up to the input, where depending on the protocol it will either be pushed back to the source as a Noack (e.g. AMQP) or will be reattempted indefinitely with the commit withheld until success (e.g. Kafka).
 
 It's possible to instead have Benthos indefinitely retry an output until success with a [`retry`][output.retry] output. Some other outputs, such as the [`broker`][output.broker], might also retry indefinitely depending on their configuration.
 
-### Multiplexing Outputs
+## Dead Letter Queues
 
-It is possible to perform content based multiplexing of messages to specific outputs either by using the [`switch`][output.switch] output, or a [`broker`][output.broker] with the `fan_out` pattern and a [filter processor][processor.filter_parts] on each output, which is a processor that drops messages if the condition does not pass. Conditions are content aware logical operators that can be combined using boolean logic.
+It's possible to create fallback outputs for when an output target fails using a [`try`][output.try] output:
 
-For more information regarding conditions, including a full list of available conditions please [read the docs here][conditions].
+```yaml
+output:
+  try:
+  - sqs:
+      url: https://sqs.us-west-2.amazonaws.com/TODO/TODO
+      max_in_flight: 20
 
-### Dead Letter Queues
+  - http_client:
+      url: http://backup:1234/dlq
+      verb: POST
+```
 
-It's possible to create fallback outputs for when an output target fails using a [`try`][output.try] output.
+## Multiplexing Outputs
+
+There are a few different ways of multiplexing in Benthos, here's a quick run through:
+
+### Interpolation Multiplexing
+
+The easiest form of multiplexing is by using [field interpolation][interpolation]:
+
+```yaml
+output:
+  kafka:
+    addresses: [ TODO:6379 ]
+    topic: ${!metadata:target_topic}
+```
+
+Although this form of multiplexing is limited as it doesn't support different output types, and only some output fields support interpolation.
+
+### Switch Multiplexing
+
+It is possible to perform content based multiplexing of messages to specific outputs by using the [`switch`][output.switch] output:
+
+```yaml
+output:
+  switch:
+    outputs:
+    - condition:
+        jmespath:
+          query: contains(urls, 'http://benthos.dev')
+      output:
+        cache:
+          target: foo
+          key: ${!json_field:id}
+      fallthrough: false
+    - output:
+        s3:
+          bucket: bar
+          path: ${!json_field:id}
+```
+
+For each output case you are able to specify a [condition][conditions] to determine whether a message should be routed to it.
+
+### Broker Multiplexing
+
+An alternative way to multiplex is to use a [`broker`][output.broker] with the `fan_out` pattern and a [filter processor][processor.filter_parts] on each output, which is a processor that drops messages if the condition does not pass:
+
+```yaml
+output:
+  broker:
+    pattern: fan_out
+    outputs:
+    - cache:
+        target: foo
+        key: ${!json_field:id}
+      processors:
+      - filter_parts:
+          jmespath:
+            query: "contains(urls, 'http://benthos.dev')"
+    - s3:
+        bucket: bar
+        path: ${!json_field:id}
+      processors:
+      - filter_parts:
+          jmespath:
+            query: "!contains(urls, 'http://benthos.dev')"
+```
 
 import ComponentSelect from '@theme/ComponentSelect';
 
@@ -50,3 +122,4 @@ import ComponentSelect from '@theme/ComponentSelect';
 [output.switch]: /docs/components/outputs/switch
 [output.retry]: /docs/components/outputs/retry
 [output.try]: /docs/components/outputs/try
+[interpolation]: /docs/configuration/interpolation

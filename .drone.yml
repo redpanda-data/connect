@@ -9,7 +9,7 @@ steps:
   - git fetch origin gh-pages
 
 - name: test
-  image: golang:1.14
+  image: golang:1.14.1
   environment:
     GOPATH: /drone
     GO111MODULE: on
@@ -18,7 +18,7 @@ steps:
     - make test
 
 - name: release
-  image: golang:1.14
+  image: golang:1.14.1
   environment:
     GITHUB_TOKEN:
       from_secret: github_token

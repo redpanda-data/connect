@@ -11,21 +11,91 @@ type: output
 -->
 
 
-The switch output type allows you to configure multiple conditional output
-targets by listing child outputs paired with conditions.
+The switch output type allows you to route messages to different outputs based
+on their contents.
+
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
 
 ```yaml
-# Config fields, showing default values
+# Common config fields, showing default values
 output:
   switch:
     outputs: []
-    retry_until_success: true
 ```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+# All config fields, showing default values
+output:
+  switch:
+    retry_until_success: true
+    outputs: []
+```
+
+</TabItem>
+</Tabs>
 
 When [batching messages at the input level](/docs/configuration/batching/)
 conditional logic is applied across the entire batch. In order to multiplex per
-message of a batch use the [`broker`](/docs/components/outputs/broker)
-output with the pattern `fan_out`.
+message of a batch use [broker based multiplexing](/docs/components/outputs/about#broker-multiplexing).
+
+## Fields
+
+### `retry_until_success`
+
+If a selected output fails to send a message this field determines whether it is
+reattempted indefinitely. If set to false the error is instead propagated back
+to the input level.
+
+If a message can be routed to >1 outputs it is usually best to set this to true
+in order to avoid duplicate messages being routed to an output.
+
+
+Type: `bool`  
+Default: `true`  
+
+### `outputs`
+
+A list of switch cases, each consisting of an [output](/docs/components/outputs/about),
+a [condition](/docs/components/conditions/about) and a field fallthrough,
+indicating whether the next case should also be tested if the current resolves
+to true.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+outputs:
+- condition:
+    jmespath:
+      query: contains(urls, 'http://benthos.dev')
+  fallthrough: false
+  output:
+    cache:
+      key: ${!json_field:id}
+      target: foo
+- output:
+    s3:
+      bucket: bar
+      path: ${!json_field:id}
+```
+
+## Examples
 
 In the following example, messages containing "foo" will be sent to both the
 `foo` and `baz` outputs. Messages containing "bar" will be
@@ -79,5 +149,4 @@ output returns an error the switch output also returns an error by setting
 `retry_until_success` to `false`. This allows you to
 wrap the switch with a `try` broker, but care must be taken to ensure
 duplicate messages aren't introduced during error conditions.
-
 
