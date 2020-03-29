@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.12.0 - TBD
+
 ### Added
 
 - The `gcp_pubsub` output now supports function interpolation on the field
@@ -12,6 +14,8 @@ All notable changes to this project will be documented in this file.
 - New `contains_any` and `contains_any_cs` operators added to the `text`
   condition.
 - Support for input and output `resource` types.
+- The `broker` and `switch` output types now allow async messages and batching
+  within child outputs.
 
 ### Changed
 
