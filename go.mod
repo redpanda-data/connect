@@ -47,6 +47,8 @@ require (
 	github.com/linkedin/goavro/v2 v2.9.7
 	github.com/mailru/easyjson v0.7.0 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.2
+	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
+	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/nats-io/jwt v0.3.2 // indirect
 	github.com/nats-io/nats-streaming-server v0.16.1-0.20190905144423-ed7405a40a25 // indirect
 	github.com/nats-io/nats.go v1.9.1
@@ -60,10 +62,9 @@ require (
 	github.com/opencontainers/runc v0.1.1 // indirect
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/ory/dockertest v3.3.4+incompatible
-	github.com/patrobinson/gokini v0.0.7
+	github.com/patrobinson/gokini v0.1.0
 	github.com/pebbe/zmq4 v1.0.0
 	github.com/pierrec/lz4 v2.4.0+incompatible // indirect
-	github.com/pkg/errors v0.9.0 // indirect
 	github.com/prometheus/client_golang v1.3.0
 	github.com/prometheus/common v0.8.0 // indirect
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
