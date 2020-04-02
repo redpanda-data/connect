@@ -103,7 +103,7 @@ func (r *RedisList) ConnectWithContext(ctx context.Context) error {
 		// We'll strip the leading '/'
 		redisDB, err = strconv.Atoi(r.url.Path[1:])
 		if err != nil {
-			return fmt.Errorf("Invalid Redis DB, can't parse '%s'", r.url.Path)
+			return fmt.Errorf("invalid Redis DB, can't parse '%s'", r.url.Path)
 		}
 	}
 
