@@ -279,7 +279,7 @@ input:
       redis_list:
         key: ${INPUT_REDIS_LIST_KEY:benthos_list}
         timeout: ${INPUT_REDIS_LIST_TIMEOUT:5s}
-        url: ${INPUT_REDIS_LIST_URL:tcp://localhost:6379}
+        url: ${INPUT_REDIS_LIST_URL:tcp://localhost:6379/0}
       redis_pubsub:
         channels:
         - ${INPUT_REDIS_PUBSUB_CHANNELS:benthos_chan}

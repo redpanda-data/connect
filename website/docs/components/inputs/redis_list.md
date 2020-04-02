@@ -29,7 +29,7 @@ import TabItem from '@theme/TabItem';
 # Common config fields, showing default values
 input:
   redis_list:
-    url: tcp://localhost:6379
+    url: tcp://localhost:6379/0
     key: benthos_list
 ```
 
@@ -40,7 +40,7 @@ input:
 # All config fields, showing default values
 input:
   redis_list:
-    url: tcp://localhost:6379
+    url: tcp://localhost:6379/0
     key: benthos_list
     timeout: 5s
 ```
@@ -52,16 +52,16 @@ input:
 
 ### `url`
 
-The URL of a Redis server to connect to.
+The URL of a Redis server to connect to. Database is optional and is supplied as the URL path.
 
 
-Type: `string`  
-Default: `"tcp://localhost:6379"`  
+Type: `string`
+Default: `"tcp://localhost:6379/0"`
 
 ```yaml
 # Examples
 
-url: tcp://localhost:6379
+url: tcp://localhost:6379/0
 ```
 
 ### `key`

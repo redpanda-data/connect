@@ -9,7 +9,7 @@ input:
   redis_list:
     key: benthos_list
     timeout: 5s
-    url: tcp://localhost:6379
+    url: tcp://localhost:6379/0
 buffer:
   type: none
   none: {}
