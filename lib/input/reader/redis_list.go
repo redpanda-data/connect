@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
 
@@ -26,7 +27,7 @@ type RedisListConfig struct {
 // NewRedisListConfig creates a new RedisListConfig with default values.
 func NewRedisListConfig() RedisListConfig {
 	return RedisListConfig{
-		URL:     "tcp://localhost:6379",
+		URL:     "tcp://localhost:6379/0",
 		Key:     "benthos_list",
 		Timeout: "5s",
 	}
@@ -93,9 +94,23 @@ func (r *RedisList) ConnectWithContext(ctx context.Context) error {
 	if r.url.User != nil {
 		pass, _ = r.url.User.Password()
 	}
+
+	// We default to Redis DB 0 for backward compatibilitiy, but if it's
+	// specified in the URL, we'll use the specified one instead.
+	var redisDB int
+	if len(r.url.Path) > 1 {
+		var err error
+		// We'll strip the leading '/'
+		redisDB, err = strconv.Atoi(r.url.Path[1:])
+		if err != nil {
+			return fmt.Errorf("Invalid Redis DB, can't parse '%s'", r.url.Path)
+		}
+	}
+
 	client := redis.NewClient(&redis.Options{
 		Addr:     r.url.Host,
 		Network:  r.url.Scheme,
+		DB:       redisDB,
 		Password: pass,
 	})
 
