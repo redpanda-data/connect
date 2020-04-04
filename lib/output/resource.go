@@ -84,6 +84,8 @@ type Resource struct {
 
 	ctx  context.Context
 	done func()
+
+	mErrNotFound metrics.StatCounter
 }
 
 // NewResource returns a resource output.
@@ -102,11 +104,13 @@ func NewResource(
 
 	ctx, done := context.WithCancel(context.Background())
 	return &Resource{
-		mgr:  outputProvider,
-		name: conf.Resource,
-		log:  log,
-		ctx:  ctx,
-		done: done,
+		mgr:          outputProvider,
+		name:         conf.Resource,
+		log:          log,
+		stats:        stats,
+		ctx:          ctx,
+		done:         done,
+		mErrNotFound: stats.GetCounter("error_not_found"),
 	}, nil
 }
 
@@ -115,8 +119,7 @@ func NewResource(
 func (r *Resource) loop() {
 	// Metrics paths
 	var (
-		mCount       = r.stats.GetCounter("count")
-		mErrNotFound = r.stats.GetCounter("error_not_found")
+		mCount = r.stats.GetCounter("count")
 	)
 
 	var ts *types.Transaction
@@ -137,7 +140,7 @@ func (r *Resource) loop() {
 		out, err := r.mgr.GetOutput(r.name)
 		if err != nil {
 			r.log.Debugf("Failed to obtain output resource '%v': %v", r.name, err)
-			mErrNotFound.Incr(1)
+			r.mErrNotFound.Incr(1)
 			select {
 			case <-time.After(time.Second):
 			case <-r.ctx.Done():
