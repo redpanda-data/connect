@@ -370,13 +370,14 @@ func BenchmarkBasicFanOut(b *testing.B) {
 	content := [][]byte{[]byte("hello world")}
 	rChanSlice := make([]chan<- types.Response, nOutputs)
 
+	b.ReportAllocs()
 	b.StartTimer()
 
 	for i := 0; i < nMsgs; i++ {
 		readChan <- types.NewTransaction(message.New(content), resChan)
 		for j := 0; j < nOutputs; j++ {
 			ts := <-mockOutputs[j].TChan
-			rChanSlice[i] = ts.ResponseChan
+			rChanSlice[j] = ts.ResponseChan
 		}
 		for j := 0; j < nOutputs; j++ {
 			rChanSlice[j] <- response.NewAck()

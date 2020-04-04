@@ -75,10 +75,10 @@ type outputProvider interface {
 
 // Resource is a processor that returns the result of a output resource.
 type Resource struct {
-	mgr          outputProvider
-	name         string
-	log          log.Modular
-	mErrNotFound metrics.StatCounter
+	mgr   outputProvider
+	name  string
+	log   log.Modular
+	stats metrics.Type
 
 	transactions <-chan types.Transaction
 
@@ -102,18 +102,23 @@ func NewResource(
 
 	ctx, done := context.WithCancel(context.Background())
 	return &Resource{
-		mgr:          outputProvider,
-		name:         conf.Resource,
-		log:          log,
-		mErrNotFound: stats.GetCounter("error_not_found"),
-		ctx:          ctx,
-		done:         done,
+		mgr:  outputProvider,
+		name: conf.Resource,
+		log:  log,
+		ctx:  ctx,
+		done: done,
 	}, nil
 }
 
 //------------------------------------------------------------------------------
 
 func (r *Resource) loop() {
+	// Metrics paths
+	var (
+		mCount       = r.stats.GetCounter("count")
+		mErrNotFound = r.stats.GetCounter("error_not_found")
+	)
+
 	var ts *types.Transaction
 	for {
 		if ts == nil {
@@ -128,10 +133,11 @@ func (r *Resource) loop() {
 				return
 			}
 		}
+		mCount.Incr(1)
 		out, err := r.mgr.GetOutput(r.name)
 		if err != nil {
 			r.log.Debugf("Failed to obtain output resource '%v': %v", r.name, err)
-			r.mErrNotFound.Incr(1)
+			mErrNotFound.Incr(1)
 			select {
 			case <-time.After(time.Second):
 			case <-r.ctx.Done():
