@@ -28,8 +28,12 @@ interpolations as described [here](/docs/configuration/interpolation#functions).
 
 // NewFiles creates a new Files output type.
 func NewFiles(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	f, err := writer.NewFiles(conf.Files, log, stats)
+	if err != nil {
+		return nil, err
+	}
 	return NewWriter(
-		TypeFiles, writer.NewFiles(conf.Files, log, stats), log, stats,
+		TypeFiles, f, log, stats,
 	)
 }
 

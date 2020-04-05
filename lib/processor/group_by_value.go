@@ -1,15 +1,16 @@
 package processor
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	olog "github.com/opentracing/opentracing-go/log"
 )
@@ -85,7 +86,7 @@ type GroupByValue struct {
 	log   log.Modular
 	stats metrics.Type
 
-	value *text.InterpolatedString
+	value expression.Type
 
 	mCount     metrics.StatCounter
 	mGroups    metrics.StatGauge
@@ -97,11 +98,15 @@ type GroupByValue struct {
 func NewGroupByValue(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
+	value, err := expression.New(conf.GroupByValue.Value)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse value expression: %v", err)
+	}
 	return &GroupByValue{
 		log:   log,
 		stats: stats,
 
-		value: text.NewInterpolatedString(conf.GroupByValue.Value),
+		value: value,
 
 		mCount:     stats.GetCounter("count"),
 		mGroups:    stats.GetGauge("groups"),
@@ -127,7 +132,7 @@ func (g *GroupByValue) ProcessMessage(msg types.Message) ([]types.Message, types
 	spans := tracing.CreateChildSpans(TypeGroupByValue, msg)
 
 	msg.Iter(func(i int, p types.Part) error {
-		v := g.value.Get(message.Lock(msg, i))
+		v := g.value.String(i, msg)
 		spans[i].LogFields(
 			olog.String("event", "grouped"),
 			olog.String("type", v),

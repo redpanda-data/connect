@@ -7,13 +7,13 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kinesis"
@@ -80,8 +80,8 @@ type Kinesis struct {
 
 	backoffCtor  func() backoff.BackOff
 	endpoint     *string
-	hashKey      *text.InterpolatedString
-	partitionKey *text.InterpolatedString
+	hashKey      expression.Type
+	partitionKey expression.Type
 	streamName   *string
 
 	log   log.Modular
@@ -109,12 +109,15 @@ func NewKinesis(
 		stats:           stats,
 		mPartsThrottled: stats.GetCounter("parts.send.throttled"),
 		mThrottled:      stats.GetCounter("send.throttled"),
-		hashKey:         text.NewInterpolatedString(conf.HashKey),
-		partitionKey:    text.NewInterpolatedString(conf.PartitionKey),
 		streamName:      aws.String(conf.Stream),
 	}
-
 	var err error
+	if k.hashKey, err = expression.New(conf.HashKey); err != nil {
+		return nil, fmt.Errorf("failed to parse hash key expression: %v", err)
+	}
+	if k.partitionKey, err = expression.New(conf.PartitionKey); err != nil {
+		return nil, fmt.Errorf("failed to parse partition key expression: %v", err)
+	}
 	if k.backoffCtor, err = conf.Config.GetCtor(); err != nil {
 		return nil, err
 	}
@@ -134,7 +137,7 @@ func (a *Kinesis) toRecords(msg types.Message) ([]*kinesis.PutRecordsRequestEntr
 	err := msg.Iter(func(i int, p types.Part) error {
 		entry := kinesis.PutRecordsRequestEntry{
 			Data:         p.Get(),
-			PartitionKey: aws.String(a.partitionKey.GetFor(msg, i)),
+			PartitionKey: aws.String(a.partitionKey.String(i, msg)),
 		}
 
 		if len(entry.Data) > mebibyte {
@@ -142,7 +145,7 @@ func (a *Kinesis) toRecords(msg types.Message) ([]*kinesis.PutRecordsRequestEntr
 			return types.ErrMessageTooLarge
 		}
 
-		if hashKey := a.hashKey.GetFor(msg, i); hashKey != "" {
+		if hashKey := a.hashKey.String(i, msg); hashKey != "" {
 			entry.ExplicitHashKey = aws.String(hashKey)
 		}
 

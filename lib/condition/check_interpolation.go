@@ -3,12 +3,13 @@ package condition
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
@@ -114,7 +115,7 @@ type CheckInterpolation struct {
 	stats metrics.Type
 
 	child Type
-	value *text.InterpolatedBytes
+	value expression.Type
 
 	mCount metrics.StatCounter
 	mTrue  metrics.StatCounter
@@ -134,12 +135,17 @@ func NewCheckInterpolation(
 		return nil, err
 	}
 
+	value, err := expression.New(conf.CheckInterpolation.Value)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse interpolation value: %v", err)
+	}
+
 	return &CheckInterpolation{
 		conf:  conf.CheckInterpolation,
 		log:   log,
 		stats: stats,
 		child: child,
-		value: text.NewInterpolatedBytes([]byte(conf.CheckInterpolation.Value)),
+		value: value,
 
 		mCount: stats.GetCounter("count"),
 		mTrue:  stats.GetCounter("true"),
@@ -154,7 +160,7 @@ func (c *CheckInterpolation) Check(msg types.Message) bool {
 	c.mCount.Incr(1)
 
 	payload := message.New(nil)
-	payload.Append(msg.Get(0).Copy().Set(c.value.Get(msg)))
+	payload.Append(msg.Get(0).Copy().Set(c.value.Bytes(0, msg)))
 
 	res := c.child.Check(payload)
 	if res {

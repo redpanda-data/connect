@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/opentracing/opentracing-go"
 )
@@ -113,7 +113,7 @@ func getNumberOperator(opStr string) (numberOperator, error) {
 type Number struct {
 	parts []int
 
-	interpolatedValue *text.InterpolatedString
+	interpolatedValue expression.Type
 	value             float64
 	operator          numberOperator
 
@@ -146,11 +146,7 @@ func NewNumber(
 	var err error
 	switch t := conf.Number.Value.(type) {
 	case string:
-		if text.ContainsFunctionVariables([]byte(t)) {
-			n.interpolatedValue = text.NewInterpolatedString(t)
-		} else {
-			n.value, err = strconv.ParseFloat(t, 64)
-		}
+		n.interpolatedValue, err = expression.New(t)
 	case float64:
 		n.value = t
 	case int:
@@ -178,24 +174,18 @@ func (n *Number) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	n.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	value := n.value
-	if n.interpolatedValue != nil {
-		interpStr := n.interpolatedValue.Get(msg)
-		var err error
-		if value, err = strconv.ParseFloat(interpStr, 64); err != nil {
-			n.log.Errorf("Failed to parse interpolated value '%v' into float: %v\n", interpStr, err)
-			newMsg.Iter(func(i int, p types.Part) error {
-				FlagErr(p, err)
-				return nil
-			})
-
-			n.mBatchSent.Incr(1)
-			n.mSent.Incr(int64(newMsg.Len()))
-			return []types.Message{newMsg}, nil
-		}
-	}
-
 	proc := func(index int, span opentracing.Span, part types.Part) error {
+		value := n.value
+		if n.interpolatedValue != nil {
+			interpStr := n.interpolatedValue.String(index, msg)
+			var err error
+			if value, err = strconv.ParseFloat(interpStr, 64); err != nil {
+				n.mErr.Incr(1)
+				n.log.Debugf("Failed to parse interpolated value into float: %v\n", err)
+				return fmt.Errorf("failed to parse interpolated value '%v' into float: %v", interpStr, err)
+			}
+		}
+
 		data, err := strconv.ParseFloat(string(part.Get()), 64)
 		if err != nil {
 			n.mErr.Incr(1)

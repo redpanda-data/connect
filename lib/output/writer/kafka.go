@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -15,7 +16,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/hash/murmur2"
 	"github.com/Jeffail/benthos/v3/lib/util/kafka/sasl"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Shopify/sarama"
 	"github.com/cenkalti/backoff"
@@ -92,8 +92,8 @@ type Kafka struct {
 
 	mDroppedMaxBytes metrics.StatCounter
 
-	key   *text.InterpolatedBytes
-	topic *text.InterpolatedString
+	key   expression.Type
+	topic expression.Type
 
 	producer    sarama.SyncProducer
 	compression sarama.CompressionCodec
@@ -125,10 +125,15 @@ func NewKafka(conf KafkaConfig, mgr types.Manager, log log.Modular, stats metric
 		stats: stats,
 
 		conf:        conf,
-		key:         text.NewInterpolatedBytes([]byte(conf.Key)),
-		topic:       text.NewInterpolatedString(conf.Topic),
 		compression: compression,
 		partitioner: partitioner,
+	}
+
+	if k.key, err = expression.New(conf.Key); err != nil {
+		return nil, fmt.Errorf("failed to parse key expression: %v", err)
+	}
+	if k.topic, err = expression.New(conf.Topic); err != nil {
+		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
 
 	if tout := conf.Timeout; len(tout) > 0 {
@@ -289,9 +294,9 @@ func (k *Kafka) Write(msg types.Message) error {
 
 	msgs := []*sarama.ProducerMessage{}
 	msg.Iter(func(i int, p types.Part) error {
-		key := k.key.GetFor(msg, i)
+		key := k.key.Bytes(i, msg)
 		nextMsg := &sarama.ProducerMessage{
-			Topic:   k.topic.GetFor(msg, i),
+			Topic:   k.topic.String(i, msg),
 			Value:   sarama.ByteEncoder(p.Get()),
 			Headers: buildHeaders(version, p),
 		}

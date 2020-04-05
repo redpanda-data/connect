@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/streadway/amqp"
 )
@@ -63,7 +63,7 @@ func NewAMQPConfig() AMQPConfig {
 
 // AMQP is an output type that serves AMQP messages.
 type AMQP struct {
-	key *text.InterpolatedString
+	key expression.Type
 
 	log   log.Modular
 	stats metrics.Type
@@ -84,17 +84,19 @@ type AMQP struct {
 // NewAMQP creates a new AMQP writer type.
 func NewAMQP(conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error) {
 	a := AMQP{
-		key:          text.NewInterpolatedString(conf.BindingKey),
 		log:          log,
 		stats:        stats,
 		conf:         conf,
 		deliveryMode: amqp.Transient,
 	}
+	var err error
+	if a.key, err = expression.New(conf.BindingKey); err != nil {
+		return nil, fmt.Errorf("failed to parse binding key expression: %v", err)
+	}
 	if conf.Persistent {
 		a.deliveryMode = amqp.Persistent
 	}
 	if conf.TLS.Enabled {
-		var err error
 		if a.tlsConf, err = conf.TLS.Get(); err != nil {
 			return nil, err
 		}
@@ -205,7 +207,7 @@ func (a *AMQP) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	bindingKey := strings.Replace(a.key.Get(msg), "/", ".", -1)
+	bindingKey := strings.Replace(a.key.String(0, msg), "/", ".", -1)
 
 	return msg.Iter(func(i int, p types.Part) error {
 		headers := amqp.Table{}

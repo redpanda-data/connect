@@ -2,14 +2,15 @@ package writer
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/nats-io/nats.go"
 )
 
@@ -42,15 +43,18 @@ type NATS struct {
 
 	urls       string
 	conf       NATSConfig
-	subjectStr *text.InterpolatedString
+	subjectStr expression.Type
 }
 
 // NewNATS creates a new NATS output type.
 func NewNATS(conf NATSConfig, log log.Modular, stats metrics.Type) (*NATS, error) {
 	n := NATS{
-		log:        log,
-		conf:       conf,
-		subjectStr: text.NewInterpolatedString(conf.Subject),
+		log:  log,
+		conf: conf,
+	}
+	var err error
+	if n.subjectStr, err = expression.New(conf.Subject); err != nil {
+		return nil, fmt.Errorf("failed to parse subject expression: %v", err)
 	}
 	n.urls = strings.Join(conf.URLs, ",")
 
@@ -97,7 +101,7 @@ func (n *NATS) Write(msg types.Message) error {
 	}
 
 	return msg.Iter(func(i int, p types.Part) error {
-		subject := n.subjectStr.GetFor(msg, i)
+		subject := n.subjectStr.String(i, msg)
 		n.log.Debugf("Writing NATS message to topic %s", subject)
 		err := conn.Publish(subject, p.Get())
 		if err == nats.ErrConnectionClosed {

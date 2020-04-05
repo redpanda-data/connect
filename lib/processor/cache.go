@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/opentracing/opentracing-go"
 )
@@ -132,8 +131,8 @@ type Cache struct {
 
 	parts []int
 
-	key   *text.InterpolatedString
-	value *text.InterpolatedBytes
+	key   expression.Type
+	value expression.Type
 
 	cache    types.Cache
 	operator cacheOperator
@@ -159,6 +158,16 @@ func NewCache(
 		return nil, err
 	}
 
+	key, err := expression.New(conf.Cache.Key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse key expression: %v", err)
+	}
+
+	value, err := expression.New(conf.Cache.Value)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse value expression: %v", err)
+	}
+
 	return &Cache{
 		conf:  conf,
 		log:   log,
@@ -166,8 +175,8 @@ func NewCache(
 
 		parts: conf.Cache.Parts,
 
-		key:   text.NewInterpolatedString(conf.Cache.Key),
-		value: text.NewInterpolatedBytes([]byte(conf.Cache.Value)),
+		key:   key,
+		value: value,
 
 		cache:    c,
 		operator: op,
@@ -235,8 +244,8 @@ func (c *Cache) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 	newMsg := msg.Copy()
 
 	proc := func(index int, span opentracing.Span, part types.Part) error {
-		key := c.key.Get(message.Lock(newMsg, index))
-		value := c.value.Get(message.Lock(newMsg, index))
+		key := c.key.String(index, newMsg)
+		value := c.value.Bytes(index, newMsg)
 
 		result, useResult, err := c.operator(key, value)
 		if err != nil {

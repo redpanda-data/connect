@@ -137,13 +137,11 @@ func TestLogWithFields(t *testing.T) {
 	if exp, act := []string{"info message"}, logMock.infos; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong log output: %v != %v", act, exp)
 	}
-	if exp, act := 2, len(logMock.fields); exp != act {
+	t.Logf("Checking %v\n", logMock.fields)
+	if exp, act := 1, len(logMock.fields); exp != act {
 		t.Fatalf("Wrong count of fields: %v != %v", act, exp)
 	}
-	if exp, act := map[string]string{"static": "foo"}, logMock.fields[0]; !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong field output: %v != %v", act, exp)
-	}
-	if exp, act := map[string]string{"dynamic": "with fields"}, logMock.fields[1]; !reflect.DeepEqual(exp, act) {
+	if exp, act := map[string]string{"dynamic": "with fields", "static": "foo"}, logMock.fields[0]; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong field output: %v != %v", act, exp)
 	}
 
@@ -160,16 +158,14 @@ func TestLogWithFields(t *testing.T) {
 	if exp, act := []string{"info message", "info message 2"}, logMock.infos; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong log output: %v != %v", act, exp)
 	}
-	if exp, act := 3, len(logMock.fields); exp != act {
+	t.Logf("Checking %v\n", logMock.fields)
+	if exp, act := 2, len(logMock.fields); exp != act {
 		t.Fatalf("Wrong count of fields: %v != %v", act, exp)
 	}
-	if exp, act := map[string]string{"static": "foo"}, logMock.fields[0]; !reflect.DeepEqual(exp, act) {
+	if exp, act := map[string]string{"dynamic": "with fields", "static": "foo"}, logMock.fields[0]; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong field output: %v != %v", act, exp)
 	}
-	if exp, act := map[string]string{"dynamic": "with fields"}, logMock.fields[1]; !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong field output: %v != %v", act, exp)
-	}
-	if exp, act := map[string]string{"dynamic": "with fields 2"}, logMock.fields[2]; !reflect.DeepEqual(exp, act) {
+	if exp, act := map[string]string{"dynamic": "with fields 2", "static": "foo"}, logMock.fields[1]; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong field output: %v != %v", act, exp)
 	}
 }

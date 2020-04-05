@@ -8,13 +8,13 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
@@ -74,7 +74,7 @@ type DynamoDB struct {
 
 	table          *string
 	ttl            time.Duration
-	strColumns     map[string]*text.InterpolatedString
+	strColumns     map[string]expression.Type
 	jsonMapColumns map[string]string
 }
 
@@ -94,14 +94,16 @@ func NewDynamoDB(
 		stats:          stats,
 		table:          aws.String(conf.Table),
 		backoff:        boff,
-		strColumns:     map[string]*text.InterpolatedString{},
+		strColumns:     map[string]expression.Type{},
 		jsonMapColumns: map[string]string{},
 	}
 	if len(conf.StringColumns) == 0 && len(conf.JSONMapColumns) == 0 {
 		return nil, errors.New("you must provide at least one column")
 	}
 	for k, v := range conf.StringColumns {
-		db.strColumns[k] = text.NewInterpolatedString(v)
+		if db.strColumns[k], err = expression.New(v); err != nil {
+			return nil, fmt.Errorf("failed to parse column '%v' expression: %v", k, err)
+		}
 	}
 	for k, v := range conf.JSONMapColumns {
 		if v == "." {
@@ -228,7 +230,7 @@ func (d *DynamoDB) WriteWithContext(ctx context.Context, msg types.Message) erro
 			}
 		}
 		for k, v := range d.strColumns {
-			s := v.GetFor(msg, i)
+			s := v.String(i, msg)
 			items[k] = &dynamodb.AttributeValue{
 				S: &s,
 			}

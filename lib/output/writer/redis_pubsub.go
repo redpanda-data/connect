@@ -2,14 +2,15 @@ package writer
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/go-redis/redis"
 )
 
@@ -41,7 +42,7 @@ type RedisPubSub struct {
 
 	url        *url.URL
 	conf       RedisPubSubConfig
-	channelStr *text.InterpolatedString
+	channelStr expression.Type
 
 	client  *redis.Client
 	connMut sync.RWMutex
@@ -54,18 +55,18 @@ func NewRedisPubSub(
 	stats metrics.Type,
 ) (*RedisPubSub, error) {
 	r := &RedisPubSub{
-		log:        log,
-		stats:      stats,
-		conf:       conf,
-		channelStr: text.NewInterpolatedString(conf.Channel),
+		log:   log,
+		stats: stats,
+		conf:  conf,
 	}
-
 	var err error
+	if r.channelStr, err = expression.New(conf.Channel); err != nil {
+		return nil, fmt.Errorf("failed to parse channel expression: %v", err)
+	}
 	r.url, err = url.Parse(conf.URL)
 	if err != nil {
 		return nil, err
 	}
-
 	return r, nil
 }
 
@@ -120,7 +121,7 @@ func (r *RedisPubSub) Write(msg types.Message) error {
 	}
 
 	return msg.Iter(func(i int, p types.Part) error {
-		channel := r.channelStr.GetFor(msg, i)
+		channel := r.channelStr.String(i, msg)
 		if err := client.Publish(channel, p.Get()).Err(); err != nil {
 			r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)

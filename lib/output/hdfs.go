@@ -38,13 +38,17 @@ batched messages the interpolations are performed per message part.`,
 
 // NewHDFS creates a new HDFS output type.
 func NewHDFS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+	h, err := writer.NewHDFS(conf.HDFS, log, stats)
+	if err != nil {
+		return nil, err
+	}
 	if conf.HDFS.MaxInFlight == 1 {
 		return NewWriter(
-			TypeHDFS, writer.NewHDFS(conf.HDFS, log, stats), log, stats,
+			TypeHDFS, h, log, stats,
 		)
 	}
 	return NewAsyncWriter(
-		TypeHDFS, conf.HDFS.MaxInFlight, writer.NewHDFS(conf.HDFS, log, stats), log, stats,
+		TypeHDFS, conf.HDFS.MaxInFlight, h, log, stats,
 	)
 }
 

@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/opentracing/opentracing-go"
@@ -796,10 +796,10 @@ func getOperator(opStr string, path []string, value json.RawMessage) (jsonOperat
 
 // JSON is a processor that performs an operation on a JSON payload.
 type JSON struct {
-	parts       []int
-	interpolate bool
-	valueBytes  rawJSONValue
-	operator    jsonOperator
+	parts []int
+
+	value    expression.Type
+	operator jsonOperator
 
 	conf  Config
 	log   log.Modular
@@ -817,13 +817,18 @@ type JSON struct {
 func NewJSON(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
+	value, err := expression.New(string(conf.JSON.Value))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse value expression: %v", err)
+	}
+
 	j := &JSON{
 		parts: conf.JSON.Parts,
 		conf:  conf,
 		log:   log,
 		stats: stats,
 
-		valueBytes: conf.JSON.Value,
+		value: value,
 
 		mCount:     stats.GetCounter("count"),
 		mErrJSONP:  stats.GetCounter("error.json_parse"),
@@ -833,15 +838,12 @@ func NewJSON(
 		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 
-	j.interpolate = text.ContainsFunctionVariables(j.valueBytes)
-
 	splitPath := gabs.DotPathToSlice(conf.JSON.Path)
 	if len(conf.JSON.Path) == 0 || conf.JSON.Path == "." {
 		splitPath = []string{}
 	}
 
-	var err error
-	if j.operator, err = getOperator(conf.JSON.Operator, splitPath, json.RawMessage(j.valueBytes)); err != nil {
+	if j.operator, err = getOperator(conf.JSON.Operator, splitPath, json.RawMessage(j.value.Bytes(0, message.New(nil)))); err != nil {
 		return nil, err
 	}
 	return j, nil
@@ -855,12 +857,8 @@ func (p *JSON) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	p.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	valueBytes := p.valueBytes
-	if p.interpolate {
-		valueBytes = text.ReplaceFunctionVariablesEscaped(msg, valueBytes)
-	}
-
 	proc := func(index int, span opentracing.Span, part types.Part) error {
+		valueBytes := p.value.BytesEscapedLegacy(index, newMsg)
 		jsonPart, err := part.JSON()
 		if err == nil {
 			jsonPart, err = message.CopyJSON(jsonPart)

@@ -2,17 +2,16 @@ package processor
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	olog "github.com/opentracing/opentracing-go/log"
 
@@ -122,11 +121,10 @@ type SQL struct {
 	conf     SQLConfig
 	db       *sql.DB
 	dbMux    sync.Mutex
-	args     []*text.InterpolatedString
+	args     []expression.Type
 	resCodec sqlResultCodec
 
-	queryStr *text.InterpolatedString
-	query    *sql.Stmt
+	query *sql.Stmt
 
 	closeChan  chan struct{}
 	closedChan chan struct{}
@@ -150,9 +148,13 @@ func NewSQL(
 	if db, err = sql.Open(conf.SQL.Driver, conf.SQL.DSN); err != nil {
 		return nil, err
 	}
-	var args []*text.InterpolatedString
-	for _, v := range conf.SQL.Args {
-		args = append(args, text.NewInterpolatedString(v))
+	var args []expression.Type
+	for i, v := range conf.SQL.Args {
+		expr, err := expression.New(v)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse arg %v expression: %v", i, err)
+		}
+		args = append(args, expr)
 	}
 	s := &SQL{
 		log:        log,
@@ -160,7 +162,6 @@ func NewSQL(
 		conf:       conf.SQL,
 		db:         db,
 		args:       args,
-		queryStr:   text.NewInterpolatedString(""),
 		resCodec:   resCodec,
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
@@ -245,26 +246,13 @@ func strToSQLResultCodec(codec string) (sqlResultCodec, error) {
 
 //------------------------------------------------------------------------------
 
-func (s *SQL) doExecute(query string, args ...interface{}) error {
-	if s.query != nil {
-		_, err := s.query.Exec(args...)
-		return err
-	}
-	if len(query) == 0 {
-		return errors.New("query string is empty")
-	}
-	_, err := s.db.Exec(query, args...)
+func (s *SQL) doExecute(args ...interface{}) error {
+	_, err := s.query.Exec(args...)
 	return err
 }
 
-func (s *SQL) doQuery(query string, args ...interface{}) (*sql.Rows, error) {
-	if s.query != nil {
-		return s.query.Query(args...)
-	}
-	if len(query) == 0 {
-		return nil, errors.New("query string is empty")
-	}
-	return s.db.Query(query, args...)
+func (s *SQL) doQuery(args ...interface{}) (*sql.Rows, error) {
+	return s.query.Query(args...)
 }
 
 // ProcessMessage logs an event and returns the message unchanged.
@@ -276,16 +264,16 @@ func (s *SQL) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 
 	args := make([]interface{}, len(s.args))
 	for i, v := range s.args {
-		args[i] = v.Get(result)
+		args[i] = v.String(0, result)
 	}
 	var err error
 	if s.resCodec == nil {
-		if err = s.doExecute(s.queryStr.Get(result), args...); err != nil {
+		if err = s.doExecute(args...); err != nil {
 			err = fmt.Errorf("failed to execute query: %v", err)
 		}
 	} else {
 		var rows *sql.Rows
-		if rows, err = s.doQuery(s.queryStr.Get(result), args...); err == nil {
+		if rows, err = s.doQuery(args...); err == nil {
 			defer rows.Close()
 			if err = s.resCodec(rows, result); err != nil {
 				err = fmt.Errorf("failed to apply result codec: %v", err)

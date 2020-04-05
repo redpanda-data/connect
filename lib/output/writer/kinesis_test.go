@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -56,10 +56,11 @@ func TestKinesisWriteSinglePartMessage(t *testing.T) {
 				return &kinesis.PutRecordsOutput{}, nil
 			},
 		},
-		log:          log.Noop(),
-		partitionKey: text.NewInterpolatedString("${!json_field:id}"),
-		hashKey:      text.NewInterpolatedString(""),
+		log: log.Noop(),
 	}
+
+	k.partitionKey, _ = expression.New("${!json_field:id}")
+	k.hashKey, _ = expression.New("")
 
 	msg := message.New(nil)
 	part := message.NewPart([]byte(`{"foo":"bar","id":123}`))
@@ -98,10 +99,11 @@ func TestKinesisWriteMultiPartMessage(t *testing.T) {
 				return &kinesis.PutRecordsOutput{}, nil
 			},
 		},
-		log:          log.Noop(),
-		partitionKey: text.NewInterpolatedString("${!json_field:id}"),
-		hashKey:      text.NewInterpolatedString(""),
+		log: log.Noop(),
 	}
+
+	k.partitionKey, _ = expression.New("${!json_field:id}")
+	k.hashKey, _ = expression.New("")
 
 	msg := message.New(nil)
 	for _, p := range parts {
@@ -130,10 +132,11 @@ func TestKinesisWriteChunk(t *testing.T) {
 				return &kinesis.PutRecordsOutput{}, nil
 			},
 		},
-		log:          log.Noop(),
-		partitionKey: text.NewInterpolatedString("${!json_field:id}"),
-		hashKey:      text.NewInterpolatedString(""),
+		log: log.Noop(),
 	}
+
+	k.partitionKey, _ = expression.New("${!json_field:id}")
+	k.hashKey, _ = expression.New("")
 
 	msg := message.New(nil)
 	for i := 0; i < n; i++ {
@@ -195,9 +198,10 @@ func TestKinesisWriteChunkWithThrottling(t *testing.T) {
 		mPartsThrottled:  mPartsThrottled,
 		mPartsThrottledF: mPartsThrottledF,
 		log:              log.Noop(),
-		partitionKey:     text.NewInterpolatedString("${!json_field:id}"),
-		hashKey:          text.NewInterpolatedString(""),
 	}
+
+	k.partitionKey, _ = expression.New("${!json_field:id}")
+	k.hashKey, _ = expression.New("")
 
 	msg := message.New(nil)
 	for i := 0; i < n; i++ {
@@ -238,10 +242,11 @@ func TestKinesisWriteError(t *testing.T) {
 				return nil, errors.New("blah")
 			},
 		},
-		log:          log.Noop(),
-		partitionKey: text.NewInterpolatedString("${!json_field:id}"),
-		hashKey:      text.NewInterpolatedString(""),
+		log: log.Noop(),
 	}
+
+	k.partitionKey, _ = expression.New("${!json_field:id}")
+	k.hashKey, _ = expression.New("")
 
 	msg := message.New(nil)
 	msg.Append(message.NewPart([]byte(`{"foo":"bar"}`)))
@@ -288,9 +293,10 @@ func TestKinesisWriteMessageThrottling(t *testing.T) {
 		mPartsThrottled:  mPartsThrottled,
 		mPartsThrottledF: mPartsThrottledF,
 		log:              log.Noop(),
-		partitionKey:     text.NewInterpolatedString("${!json_field:id}"),
-		hashKey:          text.NewInterpolatedString(""),
 	}
+
+	k.partitionKey, _ = expression.New("${!json_field:id}")
+	k.hashKey, _ = expression.New("")
 
 	msg := message.New(nil)
 	msg.Append(message.NewPart([]byte(`{"foo":"bar","id":123}`)))
@@ -336,9 +342,10 @@ func TestKinesisWriteBackoffMaxRetriesExceeded(t *testing.T) {
 		mPartsThrottled:  mPartsThrottled,
 		mPartsThrottledF: mPartsThrottledF,
 		log:              log.Noop(),
-		partitionKey:     text.NewInterpolatedString("${!json_field:id}"),
-		hashKey:          text.NewInterpolatedString(""),
 	}
+
+	k.partitionKey, _ = expression.New("${!json_field:id}")
+	k.hashKey, _ = expression.New("")
 
 	msg := message.New(nil)
 	msg.Append(message.NewPart([]byte(`{"foo":"bar","id":123}`)))

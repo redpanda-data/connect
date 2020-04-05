@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"cloud.google.com/go/pubsub"
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 )
 
 //------------------------------------------------------------------------------
@@ -40,7 +40,7 @@ type GCPPubSub struct {
 
 	client *pubsub.Client
 
-	topicID  *text.InterpolatedString
+	topicID  expression.Type
 	topics   map[string]*pubsub.Topic
 	topicMut sync.Mutex
 
@@ -60,12 +60,16 @@ func NewGCPPubSub(
 	if err != nil {
 		return nil, err
 	}
+	topic, err := expression.New(conf.TopicID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
+	}
 	return &GCPPubSub{
 		conf:    conf,
 		log:     log,
 		client:  client,
 		stats:   stats,
-		topicID: text.NewInterpolatedString(conf.TopicID),
+		topicID: topic,
 	}, nil
 }
 
@@ -120,7 +124,7 @@ func (c *GCPPubSub) WriteWithContext(ctx context.Context, msg types.Message) err
 	topics := make([]*pubsub.Topic, msg.Len())
 	if err := msg.Iter(func(i int, _ types.Part) error {
 		var tErr error
-		topics[i], tErr = c.getTopic(ctx, c.topicID.GetFor(msg, i))
+		topics[i], tErr = c.getTopic(ctx, c.topicID.String(i, msg))
 		return tErr
 	}); err != nil {
 		return err

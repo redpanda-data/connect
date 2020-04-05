@@ -14,12 +14,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/opentracing/opentracing-go"
@@ -78,9 +78,9 @@ type Type struct {
 	dropOn    map[int]struct{}
 	successOn map[int]struct{}
 
-	url     *text.InterpolatedString
-	headers map[string]*text.InterpolatedString
-	host    *text.InterpolatedString
+	url     expression.Type
+	headers map[string]expression.Type
+	host    expression.Type
 
 	conf          Config
 	retryThrottle *throttle.Type
@@ -109,8 +109,12 @@ type Type struct {
 
 // New creates a new Type.
 func New(conf Config, opts ...func(*Type)) (*Type, error) {
+	urlStr, err := expression.New(conf.URL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse URL expression: %v", err)
+	}
 	h := Type{
-		url:       text.NewInterpolatedString(conf.URL),
+		url:       urlStr,
 		conf:      conf,
 		log:       log.Noop(),
 		stats:     metrics.Noop(),
@@ -118,7 +122,7 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		backoffOn: map[int]struct{}{},
 		dropOn:    map[int]struct{}{},
 		successOn: map[int]struct{}{},
-		headers:   map[string]*text.InterpolatedString{},
+		headers:   map[string]expression.Type{},
 		host:      nil,
 	}
 
@@ -151,9 +155,13 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 
 	for k, v := range conf.Headers {
 		if strings.ToLower(k) == "host" {
-			h.host = text.NewInterpolatedString(v)
+			if h.host, err = expression.New(v); err != nil {
+				return nil, fmt.Errorf("failed to parse header 'host' expression: %v", err)
+			}
 		} else {
-			h.headers[k] = text.NewInterpolatedString(v)
+			if h.headers[k], err = expression.New(v); err != nil {
+				return nil, fmt.Errorf("failed to parse header '%v' expression: %v", k, err)
+			}
 		}
 	}
 
@@ -292,15 +300,15 @@ func (h *Type) waitForAccess() bool {
 
 // CreateRequest creates an HTTP request out of a single message.
 func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
-	url := h.url.Get(msg)
+	url := h.url.String(0, msg)
 
 	if msg == nil || msg.Len() == 0 {
 		if req, err = http.NewRequest(h.conf.Verb, url, nil); err == nil {
 			for k, v := range h.headers {
-				req.Header.Add(k, v.Get(msg))
+				req.Header.Add(k, v.String(0, msg))
 			}
 			if h.host != nil {
-				req.Host = h.host.Get(msg)
+				req.Host = h.host.String(0, msg)
 			}
 		}
 	} else if msg.Len() == 1 {
@@ -310,10 +318,10 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 		}
 		if req, err = http.NewRequest(h.conf.Verb, url, body); err == nil {
 			for k, v := range h.headers {
-				req.Header.Add(k, v.Get(msg))
+				req.Header.Add(k, v.String(0, msg))
 			}
 			if h.host != nil {
-				req.Host = h.host.Get(msg)
+				req.Host = h.host.String(0, msg)
 			}
 		}
 	} else {
@@ -323,7 +331,7 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 		for i := 0; i < msg.Len() && err == nil; i++ {
 			contentType := "application/octet-stream"
 			if v, exists := h.headers["Content-Type"]; exists {
-				contentType = v.Get(msg)
+				contentType = v.String(i, msg)
 			}
 			var part io.Writer
 			if part, err = writer.CreatePart(textproto.MIMEHeader{
@@ -337,10 +345,10 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 		if err == nil {
 			if req, err = http.NewRequest(h.conf.Verb, url, body); err == nil {
 				for k, v := range h.headers {
-					req.Header.Add(k, v.Get(msg))
+					req.Header.Add(k, v.String(0, msg))
 				}
 				if h.host != nil {
-					req.Host = h.host.Get(msg)
+					req.Host = h.host.String(0, msg)
 				}
 				req.Header.Del("Content-Type")
 				req.Header.Add("Content-Type", writer.FormDataContentType())

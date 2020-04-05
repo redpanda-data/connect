@@ -2,14 +2,15 @@ package writer
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
@@ -48,7 +49,7 @@ type MQTT struct {
 
 	urls  []string
 	conf  MQTTConfig
-	topic *text.InterpolatedString
+	topic expression.Type
 
 	client  mqtt.Client
 	connMut sync.RWMutex
@@ -64,8 +65,11 @@ func NewMQTT(
 		log:   log,
 		stats: stats,
 		conf:  conf,
+	}
 
-		topic: text.NewInterpolatedString(conf.Topic),
+	var err error
+	if m.topic, err = expression.New(conf.Topic); err != nil {
+		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
 
 	for _, u := range conf.URLs {
@@ -143,7 +147,7 @@ func (m *MQTT) Write(msg types.Message) error {
 	}
 
 	return msg.Iter(func(i int, p types.Part) error {
-		mtok := client.Publish(m.topic.GetFor(msg, i), byte(m.conf.QoS), false, p.Get())
+		mtok := client.Publish(m.topic.String(i, msg), byte(m.conf.QoS), false, p.Get())
 		mtok.Wait()
 		return mtok.Error()
 	})

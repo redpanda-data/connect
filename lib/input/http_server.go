@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/metadata"
@@ -23,7 +24,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	httputil "github.com/Jeffail/benthos/v3/lib/util/http"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/gorilla/websocket"
@@ -181,7 +181,7 @@ type HTTPServer struct {
 	server  *http.Server
 	timeout time.Duration
 
-	responseHeaders map[string]*text.InterpolatedString
+	responseHeaders map[string]expression.Type
 
 	transactions chan types.Transaction
 
@@ -241,7 +241,7 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		ratelimit:       ratelimit,
 		server:          server,
 		timeout:         timeout,
-		responseHeaders: map[string]*text.InterpolatedString{},
+		responseHeaders: map[string]expression.Type{},
 		transactions:    make(chan types.Transaction),
 		closeChan:       make(chan struct{}),
 		closedChan:      make(chan struct{}),
@@ -261,8 +261,11 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		mAsyncSucc:     stats.GetCounter("send.async_success"),
 	}
 
+	var err error
 	for k, v := range h.conf.HTTPServer.Response.Headers {
-		h.responseHeaders[k] = text.NewInterpolatedString(v)
+		if h.responseHeaders[k], err = expression.New(v); err != nil {
+			return nil, fmt.Errorf("failed to parse response header '%v' expression: %v", k, err)
+		}
 	}
 
 	postHdlr := httputil.GzipHandler(h.postHandler)
@@ -452,7 +455,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if responseMsg.Len() != 0 {
 		for k, v := range h.responseHeaders {
-			w.Header().Set(k, v.Get(responseMsg))
+			w.Header().Set(k, v.String(0, responseMsg))
 		}
 	}
 	if plen := responseMsg.Len(); plen == 1 {
@@ -471,7 +474,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 
 			mimeHeader := textproto.MIMEHeader{}
 			if customContentTypeExists {
-				mimeHeader.Set("Content-Type", customContentType.Get(message.Lock(responseMsg, i)))
+				mimeHeader.Set("Content-Type", customContentType.String(i, responseMsg))
 			} else {
 				mimeHeader.Set("Content-Type", http.DetectContentType(payload))
 			}

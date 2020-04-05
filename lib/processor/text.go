@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/opentracing/opentracing-go"
@@ -344,10 +344,9 @@ func getTextOperator(opStr string, arg string) (textOperator, error) {
 
 // Text is a processor that performs a text based operation on a payload.
 type Text struct {
-	parts       []int
-	interpolate bool
-	valueBytes  []byte
-	operator    textOperator
+	parts    []int
+	value    expression.Type
+	operator textOperator
 
 	conf  Config
 	log   log.Modular
@@ -363,13 +362,18 @@ type Text struct {
 func NewText(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
+	value, err := expression.New(conf.Text.Value)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse value expression: %v", err)
+	}
+
 	t := &Text{
 		parts: conf.Text.Parts,
 		conf:  conf,
 		log:   log,
 		stats: stats,
 
-		valueBytes: []byte(conf.Text.Value),
+		value: value,
 
 		mCount:     stats.GetCounter("count"),
 		mErr:       stats.GetCounter("error"),
@@ -377,9 +381,6 @@ func NewText(
 		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 
-	t.interpolate = text.ContainsFunctionVariables(t.valueBytes)
-
-	var err error
 	if t.operator, err = getTextOperator(conf.Text.Operator, conf.Text.Arg); err != nil {
 		return nil, err
 	}
@@ -394,12 +395,8 @@ func (t *Text) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	t.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	valueBytes := t.valueBytes
-	if t.interpolate {
-		valueBytes = text.ReplaceFunctionVariables(msg, valueBytes)
-	}
-
 	proc := func(index int, span opentracing.Span, part types.Part) error {
+		valueBytes := t.value.BytesLegacy(index, msg)
 		data := part.Get()
 		var err error
 		if data, err = t.operator(data, valueBytes); err != nil {

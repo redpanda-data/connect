@@ -5,11 +5,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
@@ -64,9 +64,7 @@ type Sleep struct {
 	log   log.Modular
 	stats metrics.Type
 
-	duration       time.Duration
-	isInterpolated bool
-	durationStr    *text.InterpolatedString
+	durationStr expression.Type
 
 	mCount     metrics.StatCounter
 	mErr       metrics.StatCounter
@@ -78,26 +76,22 @@ type Sleep struct {
 func NewSleep(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
+	durationStr, err := expression.New(conf.Sleep.Duration)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse duration expression: %v", err)
+	}
 	t := &Sleep{
 		closeChan: make(chan struct{}),
 		conf:      conf,
 		log:       log,
 		stats:     stats,
 
-		durationStr:    text.NewInterpolatedString(conf.Sleep.Duration),
-		isInterpolated: text.ContainsFunctionVariables([]byte(conf.Sleep.Duration)),
+		durationStr: durationStr,
 
 		mCount:     stats.GetCounter("count"),
 		mErr:       stats.GetCounter("error"),
 		mSent:      stats.GetCounter("sent"),
 		mBatchSent: stats.GetCounter("batch.sent"),
-	}
-
-	if !t.isInterpolated {
-		var err error
-		if t.duration, err = time.ParseDuration(conf.Sleep.Duration); err != nil {
-			return nil, fmt.Errorf("failed to parse duration: %v", err)
-		}
 	}
 	return t, nil
 }
@@ -116,13 +110,10 @@ func (s *Sleep) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 		}
 	}()
 
-	period := s.duration
-	if s.isInterpolated {
-		var err error
-		if period, err = time.ParseDuration(s.durationStr.Get(msg)); err != nil {
-			s.log.Errorf("Failed to parse duration: %v\n", err)
-			s.mErr.Incr(1)
-		}
+	period, err := time.ParseDuration(s.durationStr.String(0, msg))
+	if err != nil {
+		s.log.Errorf("Failed to parse duration: %v\n", err)
+		s.mErr.Incr(1)
 	}
 	select {
 	case <-time.After(period):

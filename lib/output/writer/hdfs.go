@@ -2,13 +2,14 @@ package writer
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/colinmarc/hdfs"
 )
 
@@ -41,8 +42,7 @@ func NewHDFSConfig() HDFSConfig {
 type HDFS struct {
 	conf HDFSConfig
 
-	pathBytes       []byte
-	interpolatePath bool
+	path expression.Type
 
 	client *hdfs.Client
 
@@ -55,16 +55,17 @@ func NewHDFS(
 	conf HDFSConfig,
 	log log.Modular,
 	stats metrics.Type,
-) *HDFS {
-	pathBytes := []byte(conf.Path)
-	interpolatePath := text.ContainsFunctionVariables(pathBytes)
-	return &HDFS{
-		conf:            conf,
-		pathBytes:       pathBytes,
-		interpolatePath: interpolatePath,
-		log:             log,
-		stats:           stats,
+) (*HDFS, error) {
+	path, err := expression.New(conf.Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}
+	return &HDFS{
+		conf:  conf,
+		path:  path,
+		log:   log,
+		stats: stats,
+	}, nil
 }
 
 // ConnectWithContext attempts to establish a connection to the target HDFS
@@ -106,10 +107,7 @@ func (h *HDFS) Write(msg types.Message) error {
 	}
 
 	return msg.Iter(func(i int, p types.Part) error {
-		path := h.conf.Path
-		if h.interpolatePath {
-			path = string(text.ReplaceFunctionVariablesFor(msg, i, h.pathBytes))
-		}
+		path := h.path.String(i, msg)
 		filePath := filepath.Join(h.conf.Directory, path)
 
 		err := h.client.MkdirAll(h.conf.Directory, 0644)

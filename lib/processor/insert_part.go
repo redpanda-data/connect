@@ -1,13 +1,14 @@
 package processor
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
@@ -59,8 +60,7 @@ func NewInsertPartConfig() InsertPartConfig {
 // InsertPart is a processor that inserts a new message part at a specific
 // index.
 type InsertPart struct {
-	interpolate bool
-	part        []byte
+	part expression.Type
 
 	conf  Config
 	log   log.Modular
@@ -75,14 +75,16 @@ type InsertPart struct {
 func NewInsertPart(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	part := []byte(conf.InsertPart.Content)
-	interpolate := text.ContainsFunctionVariables(part)
+	part, err := expression.New(conf.InsertPart.Content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse content expression: %v", err)
+	}
 	return &InsertPart{
-		part:        part,
-		interpolate: interpolate,
-		conf:        conf,
-		log:         log,
-		stats:       stats,
+		part: part,
+
+		conf:  conf,
+		log:   log,
+		stats: stats,
 
 		mCount:     stats.GetCounter("count"),
 		mSent:      stats.GetCounter("sent"),
@@ -97,13 +99,7 @@ func NewInsertPart(
 func (p *InsertPart) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
 
-	var newPartBytes []byte
-	if p.interpolate {
-		newPartBytes = text.ReplaceFunctionVariables(msg, p.part)
-	} else {
-		newPartBytes = p.part
-	}
-
+	newPartBytes := p.part.Bytes(0, msg)
 	index := p.conf.InsertPart.Index
 	msgLen := msg.Len()
 	if index < 0 {

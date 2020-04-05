@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
@@ -87,8 +87,8 @@ func NewLogConfig() LogConfig {
 type Log struct {
 	log     log.Modular
 	level   string
-	message *text.InterpolatedString
-	fields  map[string]*text.InterpolatedString
+	message expression.Type
+	fields  map[string]expression.Type
 	printFn func(logger log.Modular, msg string)
 }
 
@@ -96,26 +96,23 @@ type Log struct {
 func NewLog(
 	conf Config, mgr types.Manager, logger log.Modular, stats metrics.Type,
 ) (Type, error) {
+	message, err := expression.New(conf.Log.Message)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse message expression: %v", err)
+	}
 	l := &Log{
 		log:     logger,
 		level:   conf.Log.Level,
-		fields:  map[string]*text.InterpolatedString{},
-		message: text.NewInterpolatedString(conf.Log.Message),
+		fields:  map[string]expression.Type{},
+		message: message,
 	}
 	if len(conf.Log.Fields) > 0 {
-		staticFields := map[string]string{}
 		for k, v := range conf.Log.Fields {
-			if text.ContainsFunctionVariables([]byte(v)) {
-				l.fields[k] = text.NewInterpolatedString(v)
-			} else {
-				staticFields[k] = v
+			if l.fields[k], err = expression.New(v); err != nil {
+				return nil, fmt.Errorf("failed to parse field '%v' expression: %v", k, err)
 			}
 		}
-		if len(staticFields) > 0 {
-			l.log = log.WithFields(l.log, staticFields)
-		}
 	}
-	var err error
 	if l.printFn, err = l.levelToLogFn(l.level); err != nil {
 		return nil, err
 	}
@@ -158,12 +155,12 @@ func (l *Log) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 	if len(l.fields) > 0 {
 		interpFields := make(map[string]string, len(l.fields))
 		for k, vi := range l.fields {
-			interpFields[k] = vi.Get(msg)
+			interpFields[k] = vi.String(0, msg)
 		}
 		targetLog = log.WithFields(targetLog, interpFields)
 	}
 	msgs := [1]types.Message{msg}
-	l.printFn(targetLog, l.message.Get(msg))
+	l.printFn(targetLog, l.message.String(0, msg))
 	return msgs[:], nil
 }
 

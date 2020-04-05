@@ -94,14 +94,3 @@ func TestSleepInterpolated(t *testing.T) {
 		t.Errorf("Message didn't take long enough")
 	}
 }
-
-func TestSleepBadDuration(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = TypeSleep
-	conf.Sleep.Duration = "1gfdfgfdns"
-
-	_, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err == nil {
-		t.Error("Expected error from bad duration")
-	}
-}

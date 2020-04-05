@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/opentracing/opentracing-go"
 )
@@ -159,8 +159,8 @@ func getMetadataOperator(opStr string) (metadataOperator, error) {
 // Metadata is a processor that performs an operation on the Metadata of a
 // message.
 type Metadata struct {
-	value *text.InterpolatedString
-	key   *text.InterpolatedString
+	value expression.Type
+	key   expression.Type
 
 	operator metadataOperator
 
@@ -180,6 +180,14 @@ type Metadata struct {
 func NewMetadata(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
+	value, err := expression.New(conf.Metadata.Value)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse value expression: %v", err)
+	}
+	key, err := expression.New(conf.Metadata.Key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse key expression: %v", err)
+	}
 	m := &Metadata{
 		conf:  conf,
 		log:   log,
@@ -187,8 +195,8 @@ func NewMetadata(
 
 		parts: conf.Metadata.Parts,
 
-		value: text.NewInterpolatedString(conf.Metadata.Value),
-		key:   text.NewInterpolatedString(conf.Metadata.Key),
+		value: value,
+		key:   key,
 
 		mCount:     stats.GetCounter("count"),
 		mErr:       stats.GetCounter("error"),
@@ -196,7 +204,6 @@ func NewMetadata(
 		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 
-	var err error
 	if m.operator, err = getMetadataOperator(conf.Metadata.Operator); err != nil {
 		return nil, err
 	}
@@ -211,10 +218,10 @@ func (p *Metadata) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	p.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	key := p.key.Get(msg)
-	value := p.value.Get(msg)
-
 	proc := func(index int, span opentracing.Span, part types.Part) error {
+		key := p.key.StringLegacy(index, msg)
+		value := p.value.StringLegacy(index, msg)
+
 		if err := p.operator(part.Metadata(), key, value); err != nil {
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to apply operator: %v\n", err)

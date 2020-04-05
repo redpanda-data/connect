@@ -10,13 +10,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
@@ -76,8 +76,8 @@ type AmazonSQS struct {
 
 	backoffCtor func() backoff.BackOff
 
-	groupID  *text.InterpolatedString
-	dedupeID *text.InterpolatedString
+	groupID  expression.Type
+	dedupeID expression.Type
 
 	closer    sync.Once
 	closeChan chan struct{}
@@ -99,14 +99,18 @@ func NewAmazonSQS(
 		closeChan: make(chan struct{}),
 	}
 
+	var err error
 	if id := conf.MessageGroupID; len(id) > 0 {
-		s.groupID = text.NewInterpolatedString(id)
+		if s.groupID, err = expression.New(id); err != nil {
+			return nil, fmt.Errorf("failed to parse group ID expression: %v", err)
+		}
 	}
 	if id := conf.MessageDeduplicationID; len(id) > 0 {
-		s.dedupeID = text.NewInterpolatedString(id)
+		if s.dedupeID, err = expression.New(id); err != nil {
+			return nil, fmt.Errorf("failed to parse dedupe ID expression: %v", err)
+		}
 	}
 
-	var err error
 	if s.backoffCtor, err = conf.Config.GetCtor(); err != nil {
 		return nil, err
 	}
@@ -178,10 +182,10 @@ func (a *AmazonSQS) getSQSAttributes(msg types.Message, i int) sqsAttributes {
 
 	var groupID, dedupeID *string
 	if a.groupID != nil {
-		groupID = aws.String(a.groupID.GetFor(msg, i))
+		groupID = aws.String(a.groupID.String(i, msg))
 	}
 	if a.dedupeID != nil {
-		dedupeID = aws.String(a.dedupeID.GetFor(msg, i))
+		dedupeID = aws.String(a.dedupeID.String(i, msg))
 	}
 
 	return sqsAttributes{

@@ -215,18 +215,6 @@ func TestNumberBadContent(t *testing.T) {
 	})
 }
 
-func TestNumberBadValue(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = TypeNumber
-	conf.Number.Value = "nah"
-	conf.Number.Operator = "add"
-
-	_, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err == nil {
-		t.Error("Expected error from bad value")
-	}
-}
-
 func TestNumberBadInterpolatedValue(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = TypeNumber

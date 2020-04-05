@@ -3,15 +3,16 @@ package writer
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"io/ioutil"
 	llog "log"
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	nsq "github.com/nsqio/go-nsq"
 )
@@ -44,7 +45,7 @@ func NewNSQConfig() NSQConfig {
 type NSQ struct {
 	log log.Modular
 
-	topicStr *text.InterpolatedString
+	topicStr expression.Type
 
 	tlsConf  *tls.Config
 	connMut  sync.RWMutex
@@ -56,12 +57,14 @@ type NSQ struct {
 // NewNSQ creates a new NSQ output type.
 func NewNSQ(conf NSQConfig, log log.Modular, stats metrics.Type) (*NSQ, error) {
 	n := NSQ{
-		log:      log,
-		conf:     conf,
-		topicStr: text.NewInterpolatedString(conf.Topic),
+		log:  log,
+		conf: conf,
+	}
+	var err error
+	if n.topicStr, err = expression.New(conf.Topic); err != nil {
+		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
 	if conf.TLS.Enabled {
-		var err error
 		if n.tlsConf, err = conf.TLS.Get(); err != nil {
 			return nil, err
 		}
@@ -119,7 +122,7 @@ func (n *NSQ) Write(msg types.Message) error {
 	}
 
 	return msg.Iter(func(i int, p types.Part) error {
-		return prod.Publish(n.topicStr.GetFor(msg, i), p.Get())
+		return prod.Publish(n.topicStr.String(i, msg), p.Get())
 	})
 }
 

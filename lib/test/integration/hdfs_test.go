@@ -102,9 +102,12 @@ func testHDFSReaderBasic(hosts []string, user string, t *testing.T) {
 	wconf.Directory = "/"
 	wconf.Path = "${!count:files}-benthos_test.txt"
 
-	w := writer.NewHDFS(wconf, log.Noop(), metrics.Noop())
+	w, err := writer.NewHDFS(wconf, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	if err := w.Connect(); err != nil {
+	if err = w.Connect(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -175,9 +178,12 @@ func testHDFSReaderParallelWriters(hosts []string, user string, t *testing.T) {
 	wconf.Directory = "/subdir"
 	wconf.Path = "${!count:files2}-benthos_test.txt"
 
-	w := writer.NewHDFS(wconf, log.Noop(), metrics.Noop())
+	w, err := writer.NewHDFS(wconf, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	if err := w.Connect(); err != nil {
+	if err = w.Connect(); err != nil {
 		t.Fatal(err)
 	}
 

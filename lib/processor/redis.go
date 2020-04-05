@@ -6,11 +6,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/go-redis/redis"
 	"github.com/opentracing/opentracing-go"
@@ -99,7 +98,7 @@ type Redis struct {
 	log   log.Modular
 	stats metrics.Type
 
-	key *text.InterpolatedString
+	key expression.Type
 
 	operator    redisOperator
 	client      *redis.Client
@@ -138,13 +137,18 @@ func NewRedis(
 		Password: pass,
 	})
 
+	key, err := expression.New(conf.Redis.Key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse key expression: %v", err)
+	}
+
 	r := &Redis{
 		parts: conf.Redis.Parts,
 		conf:  conf,
 		log:   log,
 		stats: stats,
 
-		key: text.NewInterpolatedString(conf.Redis.Key),
+		key: key,
 
 		retryPeriod: retryPeriod,
 		client:      client,
@@ -219,7 +223,7 @@ func (r *Redis) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 	newMsg := msg.Copy()
 
 	proc := func(index int, span opentracing.Span, part types.Part) error {
-		key := r.key.Get(message.Lock(newMsg, index))
+		key := r.key.String(index, newMsg)
 		res, err := r.operator(r, key, part.Get())
 		if err != nil {
 			r.mErr.Incr(1)

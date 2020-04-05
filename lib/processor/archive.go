@@ -8,13 +8,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	olog "github.com/opentracing/opentracing-go/log"
 )
@@ -239,8 +239,7 @@ type Archive struct {
 	conf    ArchiveConfig
 	archive archiveFunc
 
-	pathBytes       []byte
-	interpolatePath bool
+	path expression.Type
 
 	mCount     metrics.StatCounter
 	mErr       metrics.StatCounter
@@ -256,21 +255,21 @@ type Archive struct {
 func NewArchive(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	pathBytes := []byte(conf.Archive.Path)
-	interpolatePath := text.ContainsFunctionVariables(pathBytes)
-
+	path, err := expression.New(conf.Archive.Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse path expression: %v", err)
+	}
 	archiver, err := strToArchiver(conf.Archive.Format)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Archive{
-		conf:            conf.Archive,
-		pathBytes:       pathBytes,
-		interpolatePath: interpolatePath,
-		archive:         archiver,
-		log:             log,
-		stats:           stats,
+		conf:    conf.Archive,
+		path:    path,
+		archive: archiver,
+		log:     log,
+		stats:   stats,
 
 		mCount:     stats.GetCounter("count"),
 		mErr:       stats.GetCounter("error"),
@@ -309,12 +308,8 @@ func (f fakeInfo) Sys() interface{} {
 
 func (d *Archive) createHeaderFunc(msg types.Message) func(int, types.Part) os.FileInfo {
 	return func(index int, body types.Part) os.FileInfo {
-		path := d.conf.Path
-		if d.interpolatePath {
-			path = string(text.ReplaceFunctionVariables(message.Lock(msg, index), d.pathBytes))
-		}
 		return fakeInfo{
-			name: path,
+			name: d.path.String(index, msg),
 			size: int64(len(body.Get())),
 			mode: 0666,
 		}

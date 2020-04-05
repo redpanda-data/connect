@@ -2,15 +2,16 @@ package writer
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 )
 
 //------------------------------------------------------------------------------
@@ -34,7 +35,7 @@ func NewFilesConfig() FilesConfig {
 type Files struct {
 	conf FilesConfig
 
-	path *text.InterpolatedString
+	path expression.Type
 
 	log   log.Modular
 	stats metrics.Type
@@ -45,13 +46,17 @@ func NewFiles(
 	conf FilesConfig,
 	log log.Modular,
 	stats metrics.Type,
-) *Files {
+) (*Files, error) {
+	path, err := expression.New(conf.Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse path expression: %v", err)
+	}
 	return &Files{
 		conf:  conf,
-		path:  text.NewInterpolatedString(conf.Path),
+		path:  path,
 		log:   log,
 		stats: stats,
-	}
+	}, nil
 }
 
 // ConnectWithContext is a noop.
@@ -73,7 +78,7 @@ func (f *Files) WriteWithContext(ctx context.Context, msg types.Message) error {
 // Write attempts to write message contents to a directory as files.
 func (f *Files) Write(msg types.Message) error {
 	return msg.Iter(func(i int, p types.Part) error {
-		path := f.path.GetFor(msg, i)
+		path := f.path.String(i, msg)
 
 		err := os.MkdirAll(filepath.Dir(path), os.FileMode(0777))
 		if err != nil {

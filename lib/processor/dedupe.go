@@ -6,12 +6,12 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/OneOfOne/xxhash"
 	olog "github.com/opentracing/opentracing-go/log"
@@ -148,8 +148,7 @@ type Dedupe struct {
 	log   log.Modular
 	stats metrics.Type
 
-	keyBytes       []byte
-	interpolateKey bool
+	key expression.Type
 
 	cache      types.Cache
 	hasherFunc hasherFunc
@@ -177,16 +176,17 @@ func NewDedupe(
 		return nil, err
 	}
 
-	keyBytes := []byte(conf.Dedupe.Key)
-	interpolateKey := text.ContainsFunctionVariables(keyBytes)
+	key, err := expression.New(conf.Dedupe.Key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse key expression: %v", err)
+	}
 
 	return &Dedupe{
 		conf:  conf,
 		log:   log,
 		stats: stats,
 
-		keyBytes:       keyBytes,
-		interpolateKey: interpolateKey,
+		key: key,
 
 		cache:      c,
 		hasherFunc: hFunc,
@@ -218,10 +218,7 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		}
 	}()
 
-	key := d.keyBytes
-	if len(key) > 0 && d.interpolateKey {
-		key = text.ReplaceFunctionVariables(msg, key)
-	}
+	key := d.key.Bytes(0, msg)
 	if len(key) > 0 {
 		hasher.Write(key)
 		extractedHash = true

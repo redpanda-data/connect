@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -14,7 +15,6 @@ import (
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/cenkalti/backoff"
 	"github.com/olivere/elastic"
 	aws "github.com/olivere/elastic/aws/v4"
@@ -94,9 +94,9 @@ type Elasticsearch struct {
 	backoff backoff.BackOff
 	timeout time.Duration
 
-	idStr             *text.InterpolatedString
-	indexStr          *text.InterpolatedString
-	pipelineStr       *text.InterpolatedString
+	idStr             expression.Type
+	indexStr          expression.Type
+	pipelineStr       expression.Type
 	interpolatedIndex bool
 
 	eJSONErr metrics.StatCounter
@@ -107,16 +107,23 @@ type Elasticsearch struct {
 // NewElasticsearch creates a new Elasticsearch writer type.
 func NewElasticsearch(conf ElasticsearchConfig, log log.Modular, stats metrics.Type) (*Elasticsearch, error) {
 	e := Elasticsearch{
-		log:               log,
-		stats:             stats,
-		conf:              conf,
-		sniff:             conf.Sniff,
-		healthcheck:       conf.Healthcheck,
-		idStr:             text.NewInterpolatedString(conf.ID),
-		indexStr:          text.NewInterpolatedString(conf.Index),
-		pipelineStr:       text.NewInterpolatedString(conf.Pipeline),
-		interpolatedIndex: text.ContainsFunctionVariables([]byte(conf.Index)),
-		eJSONErr:          stats.GetCounter("error.json"),
+		log:         log,
+		stats:       stats,
+		conf:        conf,
+		sniff:       conf.Sniff,
+		healthcheck: conf.Healthcheck,
+		eJSONErr:    stats.GetCounter("error.json"),
+	}
+
+	var err error
+	if e.idStr, err = expression.New(conf.ID); err != nil {
+		return nil, fmt.Errorf("failed to parse id expression: %v", err)
+	}
+	if e.indexStr, err = expression.New(conf.Index); err != nil {
+		return nil, fmt.Errorf("failed to parse index expression: %v", err)
+	}
+	if e.pipelineStr, err = expression.New(conf.Pipeline); err != nil {
+		return nil, fmt.Errorf("failed to parse pipeline expression: %v", err)
 	}
 
 	for _, u := range conf.URLs {
@@ -134,7 +141,6 @@ func NewElasticsearch(conf ElasticsearchConfig, log log.Modular, stats metrics.T
 		}
 	}
 
-	var err error
 	if e.backoff, err = conf.Config.Get(); err != nil {
 		return nil, err
 	}
@@ -217,12 +223,12 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 	}
 
 	if msg.Len() == 1 {
-		index := e.indexStr.Get(msg)
+		index := e.indexStr.String(0, msg)
 		_, err := e.client.Index().
 			Index(index).
-			Pipeline(e.pipelineStr.Get(msg)).
+			Pipeline(e.pipelineStr.String(0, msg)).
 			Type(e.conf.Type).
-			Id(e.idStr.Get(msg)).
+			Id(e.idStr.String(0, msg)).
 			BodyString(string(msg.Get(0).Get())).
 			Do(context.Background())
 		if err == nil {
@@ -242,9 +248,9 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 			e.log.Errorf("Failed to marshal message into JSON document: %v\n", ierr)
 			return nil
 		}
-		requests[e.idStr.GetFor(msg, i)] = &pendingBulkIndex{
-			Index:    e.indexStr.GetFor(msg, i),
-			Pipeline: e.pipelineStr.GetFor(msg, i),
+		requests[e.idStr.String(i, msg)] = &pendingBulkIndex{
+			Index:    e.indexStr.String(i, msg),
+			Pipeline: e.pipelineStr.String(i, msg),
 			Type:     e.conf.Type,
 			Doc:      jObj,
 		}

@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 )
 
 //------------------------------------------------------------------------------
@@ -36,7 +36,7 @@ func NewCacheConfig() CacheConfig {
 type Cache struct {
 	conf CacheConfig
 
-	key   *text.InterpolatedString
+	key   expression.Type
 	cache types.Cache
 
 	log   log.Modular
@@ -54,9 +54,13 @@ func NewCache(
 	if err != nil {
 		return nil, fmt.Errorf("failed to obtain cache '%v': %v", conf.Target, err)
 	}
+	key, err := expression.New(conf.Key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse key expression: %v", err)
+	}
 	return &Cache{
 		conf:  conf,
-		key:   text.NewInterpolatedString(conf.Key),
+		key:   key,
 		cache: cache,
 		log:   log,
 		stats: stats,
@@ -82,11 +86,11 @@ func (c *Cache) WriteWithContext(ctx context.Context, msg types.Message) error {
 // Write attempts to write message contents to a target Cache.
 func (c *Cache) Write(msg types.Message) error {
 	if msg.Len() == 1 {
-		return c.cache.Set(c.key.Get(msg), msg.Get(0).Get())
+		return c.cache.Set(c.key.String(0, msg), msg.Get(0).Get())
 	}
 	items := map[string][]byte{}
 	msg.Iter(func(i int, p types.Part) error {
-		items[c.key.GetFor(msg, i)] = p.Get()
+		items[c.key.String(i, msg)] = p.Get()
 		return nil
 	})
 	if len(items) > 0 {

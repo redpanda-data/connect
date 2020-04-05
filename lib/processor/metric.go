@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
@@ -130,8 +130,7 @@ type Metric struct {
 	log   log.Modular
 	stats metrics.Type
 
-	interpolateValue bool
-
+	value  expression.Type
 	labels labels
 
 	mCounter metrics.StatCounter
@@ -147,16 +146,12 @@ type Metric struct {
 
 type labels []label
 type label struct {
-	name             string
-	value            string
-	interpolateValue bool
+	name  string
+	value expression.Type
 }
 
 func (l *label) val(msg types.Message) string {
-	if l.interpolateValue {
-		return string(text.ReplaceFunctionVariables(msg, []byte(l.value)))
-	}
-	return l.value
+	return l.value.String(0, msg)
 }
 
 func (l labels) names() []string {
@@ -179,11 +174,16 @@ func (l labels) values(msg types.Message) []string {
 func NewMetric(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
+	value, err := expression.New(conf.Metric.Value)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse value expression: %v", err)
+	}
+
 	m := &Metric{
-		conf:             conf,
-		log:              log,
-		stats:            stats,
-		interpolateValue: text.ContainsFunctionVariables([]byte(conf.Metric.Value)),
+		conf:  conf,
+		log:   log,
+		stats: stats,
+		value: value,
 	}
 
 	if len(conf.Metric.Path) == 0 {
@@ -197,11 +197,13 @@ func NewMetric(
 	sort.Strings(labelNames)
 
 	for _, n := range labelNames {
-		v := conf.Metric.Labels[n]
+		v, err := expression.New(conf.Metric.Labels[n])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse label '%v' expression: %v", n, err)
+		}
 		m.labels = append(m.labels, label{
-			name:             n,
-			value:            v,
-			interpolateValue: text.ContainsFunctionVariables([]byte(v)),
+			name:  n,
+			value: v,
 		})
 	}
 
@@ -319,11 +321,7 @@ func (m *Metric) handleTimer(val string, msg types.Message) error {
 
 // ProcessMessage applies the processor to a message
 func (m *Metric) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	value := m.conf.Metric.Value
-	if m.interpolateValue {
-		value = string(text.ReplaceFunctionVariables(msg, []byte(m.conf.Metric.Value)))
-	}
-
+	value := m.value.String(0, msg)
 	if err := m.handler(value, msg); err != nil {
 		m.log.Errorf("Handler error: %v\n", err)
 	}

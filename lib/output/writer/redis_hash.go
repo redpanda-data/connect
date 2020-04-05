@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/expression"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/go-redis/redis"
 )
 
@@ -50,8 +50,8 @@ type RedisHash struct {
 	url  *url.URL
 	conf RedisHashConfig
 
-	keyStr *text.InterpolatedString
-	fields map[string]*text.InterpolatedString
+	keyStr expression.Type
+	fields map[string]expression.Type
 
 	client  *redis.Client
 	connMut sync.RWMutex
@@ -67,19 +67,24 @@ func NewRedisHash(
 		log:    log,
 		stats:  stats,
 		conf:   conf,
-		keyStr: text.NewInterpolatedString(conf.Key),
-		fields: map[string]*text.InterpolatedString{},
+		fields: map[string]expression.Type{},
+	}
+
+	var err error
+	if r.keyStr, err = expression.New(conf.Key); err != nil {
+		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
 
 	for k, v := range conf.Fields {
-		r.fields[k] = text.NewInterpolatedString(v)
+		if r.fields[k], err = expression.New(v); err != nil {
+			return nil, fmt.Errorf("failed to parse field '%v' expression: %v", k, err)
+		}
 	}
 
 	if !conf.WalkMetadata && !conf.WalkJSONObject && len(conf.Fields) == 0 {
 		return nil, errors.New("at least one mechanism for setting fields must be enabled")
 	}
 
-	var err error
 	r.url, err = url.Parse(conf.URL)
 	if err != nil {
 		return nil, err
@@ -157,7 +162,7 @@ func (r *RedisHash) Write(msg types.Message) error {
 	}
 
 	return msg.Iter(func(i int, p types.Part) error {
-		key := r.keyStr.GetFor(msg, i)
+		key := r.keyStr.String(i, msg)
 		fields := map[string]interface{}{}
 		if r.conf.WalkMetadata {
 			p.Metadata().Iter(func(k, v string) error {
@@ -173,7 +178,7 @@ func (r *RedisHash) Write(msg types.Message) error {
 			}
 		}
 		for k, v := range r.fields {
-			fields[k] = v.GetFor(msg, i)
+			fields[k] = v.String(i, msg)
 		}
 		if err := client.HMSet(key, fields).Err(); err != nil {
 			r.disconnect()
