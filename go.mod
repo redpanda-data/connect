@@ -47,8 +47,6 @@ require (
 	github.com/linkedin/goavro/v2 v2.9.7
 	github.com/mailru/easyjson v0.7.0 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.2
-	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/nats-io/jwt v0.3.2 // indirect
 	github.com/nats-io/nats-streaming-server v0.16.1-0.20190905144423-ed7405a40a25 // indirect
 	github.com/nats-io/nats.go v1.9.1
