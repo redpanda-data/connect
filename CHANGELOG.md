@@ -17,6 +17,8 @@ All notable changes to this project will be documented in this file.
 - The `broker` and `switch` output types now allow async messages and batching
   within child outputs.
 - Field `schema_path` added to the `avro` processor.
+- The `redis` cache, `redis_list` inputs and outputs now support selecting a
+  database with the URL path.
 
 ### Changed
 
