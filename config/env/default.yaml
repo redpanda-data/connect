@@ -398,6 +398,7 @@ pipeline:
       encoding: ${PROCESSOR_AVRO_ENCODING:textual}
       operator: ${PROCESSOR_AVRO_OPERATOR:to_json}
       schema: ${PROCESSOR_AVRO_SCHEMA}
+      schema_path: ${PROCESSOR_AVRO_SCHEMA_PATH}
     awk:
       codec: ${PROCESSOR_AWK_CODEC:text}
       program: ${PROCESSOR_AWK_PROGRAM:BEGIN { x = 0 } { print $0, x; x++ }}

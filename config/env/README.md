@@ -369,6 +369,7 @@ PROCESSOR_ARCHIVE_PATH                               = ${!count:files}-${!timest
 PROCESSOR_AVRO_ENCODING                              = textual
 PROCESSOR_AVRO_OPERATOR                              = to_json
 PROCESSOR_AVRO_SCHEMA
+PROCESSOR_AVRO_SCHEMA_PATH
 PROCESSOR_AWK_CODEC                                  = text
 PROCESSOR_AWK_PROGRAM                                = BEGIN { x = 0 } { print $0, x; x++ }
 PROCESSOR_BATCH_BYTE_SIZE                            = 0

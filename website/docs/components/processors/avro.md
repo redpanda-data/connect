@@ -31,6 +31,7 @@ avro:
   operator: to_json
   encoding: textual
   schema: ""
+  schema_path: ""
 ```
 
 </TabItem>
@@ -42,6 +43,7 @@ avro:
   operator: to_json
   encoding: textual
   schema: ""
+  schema_path: ""
   parts: []
 ```
 
@@ -87,6 +89,14 @@ Options: `textual`, `binary`, `single`.
 ### `schema`
 
 A full Avro schema to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `schema_path`
+
+The path of a schema document to apply. Use either this or the `schema` field.
 
 
 Type: `string`  
