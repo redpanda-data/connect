@@ -2,7 +2,9 @@ package writer
 
 import (
 	"context"
+	"fmt"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
 
@@ -82,9 +84,23 @@ func (r *RedisList) Connect() error {
 	if r.url.User != nil {
 		pass, _ = r.url.User.Password()
 	}
+
+	// We default to Redis DB 0 for backward compatibilitiy, but if it's
+	// specified in the URL, we'll use the specified one instead.
+	var redisDB int
+	if len(r.url.Path) > 1 {
+		var err error
+		// We'll strip the leading '/'
+		redisDB, err = strconv.Atoi(r.url.Path[1:])
+		if err != nil {
+			return fmt.Errorf("invalid Redis DB, can't parse '%s'", r.url.Path)
+		}
+	}
+
 	client := redis.NewClient(&redis.Options{
 		Addr:     r.url.Host,
 		Network:  r.url.Scheme,
+		DB:       redisDB,
 		Password: pass,
 	})
 
