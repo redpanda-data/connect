@@ -21,6 +21,7 @@ pipeline:
       operator: to_json
       parts: []
       schema: ""
+      schema_path: ""
   threads: 1
 output:
   type: stdout

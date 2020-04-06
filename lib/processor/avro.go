@@ -2,7 +2,11 @@ package processor
 
 import (
 	"fmt"
+	"io/ioutil"
+	"strings"
 	"time"
+
+	"net/http"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -39,6 +43,7 @@ specified encoding.`,
 			docs.FieldCommon("operator", "The [operator](#operators) to execute").HasOptions("to_json", "from_json"),
 			docs.FieldCommon("encoding", "An Avro encoding format to use for conversions to and from a schema.").HasOptions("textual", "binary", "single"),
 			docs.FieldCommon("schema", "A full Avro schema to use."),
+			docs.FieldCommon("schema_path", "The path of a schema document to apply. Use either this or the `schema` field."),
 			partsFieldSpec,
 		},
 	}
@@ -48,19 +53,21 @@ specified encoding.`,
 
 // AvroConfig contains configuration fields for the Avro processor.
 type AvroConfig struct {
-	Parts    []int  `json:"parts" yaml:"parts"`
-	Operator string `json:"operator" yaml:"operator"`
-	Encoding string `json:"encoding" yaml:"encoding"`
-	Schema   string `json:"schema" yaml:"schema"`
+	Parts      []int  `json:"parts" yaml:"parts"`
+	Operator   string `json:"operator" yaml:"operator"`
+	Encoding   string `json:"encoding" yaml:"encoding"`
+	Schema     string `json:"schema" yaml:"schema"`
+	SchemaPath string `json:"schema_path" yaml:"schema_path"`
 }
 
 // NewAvroConfig returns a AvroConfig with default values.
 func NewAvroConfig() AvroConfig {
 	return AvroConfig{
-		Parts:    []int{},
-		Operator: "to_json",
-		Encoding: "textual",
-		Schema:   "",
+		Parts:      []int{},
+		Operator:   "to_json",
+		Encoding:   "textual",
+		Schema:     "",
+		SchemaPath: "",
 	}
 }
 
@@ -162,6 +169,28 @@ func strToAvroOperator(opStr, encoding string, codec *goavro.Codec) (avroOperato
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
 
+func loadSchema(schemaPath string) (string, error) {
+	t := &http.Transport{}
+	t.RegisterProtocol("file", http.NewFileTransport(http.Dir("/")))
+	c := &http.Client{Transport: t}
+
+	response, err := c.Get(schemaPath)
+
+	if err != nil {
+		return "", err
+	}
+
+	defer response.Body.Close()
+
+	body, err := ioutil.ReadAll(response.Body)
+
+	if err != nil {
+		return "", err
+	}
+
+	return string(body), nil
+}
+
 //------------------------------------------------------------------------------
 
 // Avro is a processor that performs an operation on an Avro payload.
@@ -194,8 +223,23 @@ func NewAvro(
 		mSent:      stats.GetCounter("sent"),
 		mBatchSent: stats.GetCounter("batch.sent"),
 	}
+	var schema string
+	var err error
 
-	codec, err := goavro.NewCodec(conf.Avro.Schema)
+	if schemaPath := conf.Avro.SchemaPath; schemaPath != "" {
+		if !(strings.HasPrefix(schemaPath, "file://") || strings.HasPrefix(schemaPath, "http://")) {
+			return nil, fmt.Errorf("invalid schema_path provided, must start with file:// or http://")
+		}
+
+		schema, err = loadSchema(schemaPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load Avro schema definition: %v", err)
+		}
+	} else {
+		schema = conf.Avro.Schema
+	}
+
+	codec, err := goavro.NewCodec(schema)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse schema: %v", err)
 	}
