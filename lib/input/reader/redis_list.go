@@ -27,7 +27,7 @@ type RedisListConfig struct {
 // NewRedisListConfig creates a new RedisListConfig with default values.
 func NewRedisListConfig() RedisListConfig {
 	return RedisListConfig{
-		URL:     "tcp://localhost:6379/0",
+		URL:     "tcp://localhost:6379",
 		Key:     "benthos_list",
 		Timeout: "5s",
 	}
