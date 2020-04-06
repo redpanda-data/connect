@@ -18,7 +18,10 @@ Pushes messages onto the end of a Redis list (which is created if it doesn't
 already exist) using the RPUSH command.`,
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("url", "The URL of a Redis server to connect to.", "tcp://localhost:6379"),
+			docs.FieldCommon("url",
+				"The URL of a Redis server to connect to. Database is optional and is supplied as the URL path.",
+				"tcp://localhost:6379",
+			),
 			docs.FieldCommon("key", "The key of a Redis list."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		},

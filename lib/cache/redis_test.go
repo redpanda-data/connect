@@ -27,7 +27,7 @@ func TestRedisIntegration(t *testing.T) {
 		t.Fatalf("Could not start resource: %s", err)
 	}
 
-	url := fmt.Sprintf("tcp://localhost:%v", resource.GetPort("6379/tcp"))
+	url := fmt.Sprintf("tcp://localhost:%v/1", resource.GetPort("6379/tcp"))
 
 	if err = pool.Retry(func() error {
 		conf := NewConfig()

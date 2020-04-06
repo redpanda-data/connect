@@ -52,7 +52,7 @@ input:
 
 ### `url`
 
-The URL of a Redis server to connect to.
+The URL of a Redis server to connect to. Database is optional and is supplied as the URL path.
 
 
 Type: `string`  

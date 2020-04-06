@@ -3,6 +3,7 @@ package cache
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -121,9 +122,23 @@ func NewRedis(
 	if url.User != nil {
 		pass, _ = url.User.Password()
 	}
+
+	// We default to Redis DB 0 for backward compatibilitiy, but if it's
+	// specified in the URL, we'll use the specified one instead.
+	var redisDB int
+	if len(url.Path) > 1 {
+		var err error
+		// We'll strip the leading '/'
+		redisDB, err = strconv.Atoi(url.Path[1:])
+		if err != nil {
+			return nil, fmt.Errorf("invalid Redis DB, can't parse '%s'", url.Path)
+		}
+	}
+
 	client := redis.NewClient(&redis.Options{
 		Addr:     url.Host,
 		Network:  url.Scheme,
+		DB:       redisDB,
 		Password: pass,
 	})
 

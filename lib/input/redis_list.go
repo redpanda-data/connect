@@ -16,7 +16,10 @@ func init() {
 		Summary: `
 Pops messages from the beginning of a Redis list using the BLPop command.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("url", "The URL of a Redis server to connect to.", "tcp://localhost:6379"),
+			docs.FieldCommon("url",
+				"The URL of a Redis server to connect to. Database is optional and is supplied as the URL path.",
+				"tcp://localhost:6379",
+			),
 			docs.FieldCommon("key", "The key of a list to read from."),
 			docs.FieldAdvanced("timeout", "The length of time to poll for new messages before reattempting."),
 		},
