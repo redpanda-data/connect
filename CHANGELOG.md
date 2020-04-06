@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - Support for input and output `resource` types.
 - The `broker` and `switch` output types now allow async messages and batching
   within child outputs.
+- Field `schema_path` added to the `avro` processor.
 
 ### Changed
 
