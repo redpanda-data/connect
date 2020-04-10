@@ -67,9 +67,7 @@ func NewGCPPubSub(
 	log log.Modular,
 	stats metrics.Type,
 ) (*GCPPubSub, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	defer cancel()
-	client, err := pubsub.NewClient(ctx, conf.ProjectID)
+	client, err := pubsub.NewClient(context.Background(), conf.ProjectID)
 	if err != nil {
 		return nil, err
 	}
