@@ -359,40 +359,31 @@ func (o *Switch) loop() {
 		close(o.closedChan)
 	}()
 
-	// This gets locked if an outbound message is running in an error loop for
-	// an output. It prevents consuming new messages until the error is
-	// resolved.
-	var errMut sync.RWMutex
-	for {
-		var ts types.Transaction
-		var open bool
+	sendLoop := func() {
+		defer wg.Done()
+		for {
+			var ts types.Transaction
+			var open bool
 
-		errMut.Lock()
-		errMut.Unlock()
-		select {
-		case ts, open = <-o.transactions:
-			if !open {
+			select {
+			case ts, open = <-o.transactions:
+				if !open {
+					return
+				}
+			case <-o.ctx.Done():
 				return
 			}
-		case <-o.ctx.Done():
-			return
-		}
-		mMsgRcvd.Incr(1)
+			mMsgRcvd.Incr(1)
 
-		var outputTargets []int
-		for i, oCond := range o.conditions {
-			if oCond.Check(ts.Payload) {
-				outputTargets = append(outputTargets, i)
-				if !o.fallthroughs[i] {
-					break
+			var outputTargets []int
+			for i, oCond := range o.conditions {
+				if oCond.Check(ts.Payload) {
+					outputTargets = append(outputTargets, i)
+					if !o.fallthroughs[i] {
+						break
+					}
 				}
 			}
-		}
-
-		wg.Add(1)
-		bp, received := context.WithCancel(context.Background())
-		go func() {
-			defer wg.Done()
 
 			var owg errgroup.Group
 			for _, target := range outputTargets {
@@ -400,13 +391,11 @@ func (o *Switch) loop() {
 				owg.Go(func() error {
 					throt := throttle.New(throttle.OptCloseChan(o.ctx.Done()))
 					resChan := make(chan types.Response)
-					failed := false
 
 					// Try until success or shutdown.
 					for {
 						select {
 						case o.outputTsChans[i] <- types.NewTransaction(msgCopy, resChan):
-							received()
 						case <-o.ctx.Done():
 							return types.ErrTypeClosed
 						}
@@ -414,17 +403,6 @@ func (o *Switch) loop() {
 						case res := <-resChan:
 							if res.Error() != nil {
 								if o.retryUntilSuccess {
-									// Once an output returns an error we block
-									// incoming messages until the problem is
-									// resolved.
-									//
-									// We claim a read lock so that other outbound
-									// messages are also able to retry.
-									if !failed {
-										errMut.RLock()
-										defer errMut.RUnlock()
-										failed = true
-									}
 									o.logger.Errorf("Failed to dispatch switch message: %v\n", res.Error())
 									mOutputErr.Incr(1)
 									if !throt.Retry() {
@@ -453,16 +431,13 @@ func (o *Switch) loop() {
 			case <-o.ctx.Done():
 				return
 			}
-		}()
-
-		// Block until one output has accepted our message or the service is
-		// closing. This ensures we preserve back pressure when outputs are
-		// saturated.
-		select {
-		case <-bp.Done():
-		case <-o.ctx.Done():
-			return
 		}
+	}
+
+	// Max in flight
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go sendLoop()
 	}
 }
 

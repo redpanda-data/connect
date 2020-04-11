@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -104,6 +105,60 @@ func TestBasicFanOut(t *testing.T) {
 	if err := oTM.WaitForClose(time.Second * 5); err != nil {
 		t.Error(err)
 	}
+}
+
+func TestFanOutBackPressure(t *testing.T) {
+	mockOne := MockOutputType{}
+	mockTwo := MockOutputType{}
+
+	outputs := []types.Output{&mockOne, &mockTwo}
+	readChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
+
+	oTM, err := NewFanOut(outputs, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = oTM.Consume(readChan); err != nil {
+		t.Fatal(err)
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	doneChan := make(chan struct{})
+	go func() {
+		defer wg.Done()
+		// Consume as fast as possible from mock one
+		for {
+			select {
+			case ts := <-mockOne.TChan:
+				select {
+				case ts.ResponseChan <- response.NewAck():
+				case <-doneChan:
+					return
+				}
+			case <-doneChan:
+				return
+			}
+		}
+	}()
+
+	i := 0
+bpLoop:
+	for ; i < 1000; i++ {
+		select {
+		case readChan <- types.NewTransaction(message.New([][]byte{[]byte("hello world")}), resChan):
+		case <-time.After(time.Millisecond * 200):
+			break bpLoop
+		}
+	}
+	if i > 500 {
+		t.Error("We shouldn't be capable of dumping this many messages into a blocked broker")
+	}
+
+	close(readChan)
+	close(doneChan)
+	wg.Wait()
 }
 
 func TestFanOutAtLeastOnce(t *testing.T) {

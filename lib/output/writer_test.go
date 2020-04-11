@@ -381,6 +381,7 @@ func TestWriterCanReconnect(t *testing.T) {
 }
 
 func TestWriterCantReconnect(t *testing.T) {
+	t.Skip("Takes too long!")
 	t.Parallel()
 
 	writerImpl := newMockWriter()
@@ -390,8 +391,7 @@ func TestWriterCantReconnect(t *testing.T) {
 		log.New(os.Stdout, logConfig), metrics.DudType{},
 	)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	msgChan := make(chan types.Transaction)

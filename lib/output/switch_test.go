@@ -765,4 +765,66 @@ func TestSwitchShutDownFromSend(t *testing.T) {
 	}
 }
 
+func TestSwitchBackPressure(t *testing.T) {
+	t.Parallel()
+
+	mockOutputs := []*MockOutputType{{}, {}}
+
+	conf := NewConfig()
+	for i := 0; i < len(mockOutputs); i++ {
+		outConf := NewSwitchConfigOutput()
+		outConf.Fallthrough = true
+		conf.Switch.Outputs = append(conf.Switch.Outputs, outConf)
+	}
+
+	readChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
+
+	s, err := newSwitch(conf, mockOutputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = s.Consume(readChan); err != nil {
+		t.Fatal(err)
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	doneChan := make(chan struct{})
+	go func() {
+		defer wg.Done()
+		// Consume as fast as possible from mock one
+		for {
+			select {
+			case ts := <-mockOutputs[0].TChan:
+				select {
+				case ts.ResponseChan <- response.NewAck():
+				case <-doneChan:
+					return
+				}
+			case <-doneChan:
+				return
+			}
+		}
+	}()
+
+	i := 0
+bpLoop:
+	for ; i < 1000; i++ {
+		select {
+		case readChan <- types.NewTransaction(message.New([][]byte{[]byte("hello world")}), resChan):
+		case <-time.After(time.Millisecond * 200):
+			break bpLoop
+		}
+	}
+	if i > 500 {
+		t.Error("We shouldn't be capable of dumping this many messages into a blocked broker")
+	}
+
+	close(readChan)
+	close(doneChan)
+	wg.Wait()
+}
+
 //------------------------------------------------------------------------------

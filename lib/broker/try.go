@@ -1,10 +1,10 @@
 package broker
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -17,8 +17,6 @@ import (
 // message to a single output, but on failure will attempt the next output in
 // the list.
 type Try struct {
-	running int32
-
 	stats         metrics.Type
 	outputsPrefix string
 
@@ -27,20 +25,22 @@ type Try struct {
 	outputTsChans []chan types.Transaction
 	outputs       []types.Output
 
+	ctx        context.Context
+	close      func()
 	closedChan chan struct{}
-	closeChan  chan struct{}
 }
 
 // NewTry creates a new Try type by providing consumers.
 func NewTry(outputs []types.Output, stats metrics.Type) (*Try, error) {
+	ctx, done := context.WithCancel(context.Background())
 	t := &Try{
-		running:       1,
 		stats:         stats,
 		outputsPrefix: "broker.outputs",
 		transactions:  nil,
 		outputs:       outputs,
 		closedChan:    make(chan struct{}),
-		closeChan:     make(chan struct{}),
+		ctx:           ctx,
+		close:         done,
 	}
 	if len(outputs) == 0 {
 		return nil, errors.New("missing outputs")
@@ -89,53 +89,54 @@ func (t *Try) Connected() bool {
 
 // loop is an internal loop that brokers incoming messages to many outputs.
 func (t *Try) loop() {
-	wg := sync.WaitGroup{}
+	var (
+		wg        = sync.WaitGroup{}
+		mMsgsRcvd = t.stats.GetCounter("count")
+		mErrs     = []metrics.StatCounter{}
+	)
 
 	defer func() {
 		wg.Wait()
-
 		for _, c := range t.outputTsChans {
 			close(c)
 		}
 		close(t.closedChan)
 	}()
 
-	var (
-		mMsgsRcvd = t.stats.GetCounter("count")
-		mErrs     = []metrics.StatCounter{}
-	)
 	for i := range t.outputs {
 		mErrs = append(mErrs, t.stats.GetCounter(fmt.Sprintf("%v.%v.failed", t.outputsPrefix, i)))
 	}
 
-	var open bool
-	for atomic.LoadInt32(&t.running) == 1 {
-		var tran types.Transaction
-		select {
-		case tran, open = <-t.transactions:
-			if !open {
+	sendLoop := func() {
+		defer wg.Done()
+		for {
+			var open bool
+			var tran types.Transaction
+
+			select {
+			case tran, open = <-t.transactions:
+				if !open {
+					return
+				}
+			case <-t.ctx.Done():
 				return
 			}
-		case <-t.closeChan:
-			return
-		}
-		mMsgsRcvd.Incr(1)
+			mMsgsRcvd.Incr(1)
 
-		rChan := make(chan types.Response)
-		select {
-		case t.outputTsChans[0] <- types.NewTransaction(tran.Payload, rChan):
-		case <-t.closeChan:
-			return
-		}
+			rChan := make(chan types.Response)
+			select {
+			case t.outputTsChans[0] <- types.NewTransaction(tran.Payload, rChan):
+			case <-t.ctx.Done():
+				return
+			}
 
-		go func(ts types.Transaction, resChan chan types.Response) {
 			var res types.Response
 			var lOpen bool
 
 		triesLoop:
 			for i := 1; i <= len(t.outputTsChans); i++ {
 				select {
-				case res, lOpen = <-resChan:
+				case res, lOpen = <-rChan:
 					if !lOpen {
 						return
 					}
@@ -144,32 +145,36 @@ func (t *Try) loop() {
 					} else {
 						break triesLoop
 					}
-				case <-t.closeChan:
+				case <-t.ctx.Done():
 					return
 				}
 
 				if i < len(t.outputTsChans) {
 					select {
-					case t.outputTsChans[i] <- types.NewTransaction(ts.Payload, resChan):
-					case <-t.closeChan:
+					case t.outputTsChans[i] <- types.NewTransaction(tran.Payload, rChan):
+					case <-t.ctx.Done():
 						return
 					}
 				}
 			}
 			select {
-			case ts.ResponseChan <- res:
-			case <-t.closeChan:
+			case tran.ResponseChan <- res:
+			case <-t.ctx.Done():
 				return
 			}
-		}(tran, rChan)
+		}
+	}
+
+	// Max in flight
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go sendLoop()
 	}
 }
 
 // CloseAsync shuts down the Try broker and stops processing requests.
 func (t *Try) CloseAsync() {
-	if atomic.CompareAndSwapInt32(&t.running, 1, 0) {
-		close(t.closeChan)
-	}
+	t.close()
 }
 
 // WaitForClose blocks until the Try broker has closed down.

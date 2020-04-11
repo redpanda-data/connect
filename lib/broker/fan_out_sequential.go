@@ -85,7 +85,12 @@ func (o *FanOutSequential) Connected() bool {
 
 // loop is an internal loop that brokers incoming messages to many outputs.
 func (o *FanOutSequential) loop() {
-	wg := sync.WaitGroup{}
+	var (
+		wg         = sync.WaitGroup{}
+		mMsgsRcvd  = o.stats.GetCounter("messages.received")
+		mOutputErr = o.stats.GetCounter("error")
+		mMsgsSnt   = o.stats.GetCounter("messages.sent")
+	)
 
 	defer func() {
 		wg.Wait()
@@ -95,67 +100,39 @@ func (o *FanOutSequential) loop() {
 		close(o.closedChan)
 	}()
 
-	var (
-		mMsgsRcvd  = o.stats.GetCounter("messages.received")
-		mOutputErr = o.stats.GetCounter("error")
-		mMsgsSnt   = o.stats.GetCounter("messages.sent")
-	)
+	sendLoop := func() {
+		defer wg.Done()
+		for {
+			var ts types.Transaction
+			var open bool
 
-	// This gets locked if an outbound message is running in an error loop for
-	// an output. It prevents consuming new messages until the error is
-	// resolved.
-	var errMut sync.RWMutex
-	for {
-		var ts types.Transaction
-		var open bool
-
-		errMut.Lock()
-		errMut.Unlock()
-		select {
-		case ts, open = <-o.transactions:
-			if !open {
+			select {
+			case ts, open = <-o.transactions:
+				if !open {
+					return
+				}
+			case <-o.ctx.Done():
 				return
 			}
-		case <-o.ctx.Done():
-			return
-		}
-		mMsgsRcvd.Incr(1)
-
-		wg.Add(1)
-		bp, received := context.WithCancel(context.Background())
-		go func() {
-			defer wg.Done()
+			mMsgsRcvd.Incr(1)
 
 			for i := range o.outputTsChans {
 				msgCopy := ts.Payload.Copy()
 
 				throt := throttle.New(throttle.OptCloseChan(o.ctx.Done()))
 				resChan := make(chan types.Response)
-				failed := false
 
 				// Try until success or shutdown.
 			sendLoop:
 				for {
 					select {
 					case o.outputTsChans[i] <- types.NewTransaction(msgCopy, resChan):
-						received()
 					case <-o.ctx.Done():
 						return
 					}
 					select {
 					case res := <-resChan:
 						if res.Error() != nil {
-							// Once an output returns an error we block
-							// incoming messages until the problem is
-							// resolved.
-							//
-							// We claim a read lock so that other outbound
-							// messages are also able to retry.
-							if !failed {
-								errMut.RLock()
-								defer errMut.RUnlock()
-								failed = true
-							}
 							o.logger.Errorf("Failed to dispatch fan out message to output '%v': %v\n", i, res.Error())
 							mOutputErr.Incr(1)
 							if !throt.Retry() {
@@ -176,16 +153,13 @@ func (o *FanOutSequential) loop() {
 			case <-o.ctx.Done():
 				return
 			}
-		}()
-
-		// Block until one output has accepted our message or the service is
-		// closing. This ensures we preserve back pressure when outputs are
-		// saturated.
-		select {
-		case <-bp.Done():
-		case <-o.ctx.Done():
-			return
 		}
+	}
+
+	// Max in flight
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go sendLoop()
 	}
 }
 
