@@ -31,6 +31,7 @@ All notable changes to this project will be documented in this file.
 - Outputs that resolve function interpolations now correctly resolve the
   `batch_size` function.
 - The `kinesis_balanced` input now correctly establishes connections.
+- Fixed an auth transport issue with the `gcp_pubsub` input and output. 
 
 ## 3.11.0 - 2020-03-08
 
