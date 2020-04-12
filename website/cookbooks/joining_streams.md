@@ -85,10 +85,8 @@ In this example I'm targeting Redis, but you can choose any of the supported
 ```yaml
 input:
   kafka_balanced:
-    addresses:
-    - TODO
-    topics:
-    - articles
+    addresses: [ TODO ]
+    topics: [ articles ]
     consumer_group: benthos_articles_group
 
 pipeline:
@@ -101,8 +99,8 @@ pipeline:
   - cache:
       operator: set
       cache: hydration_cache
-      key: "${!json_field:article.id}"
-      value: "${!content}"
+      key: '${!json("article.id"}'
+      value: '${!content()}'
 
 # Drop all articles after they are cached.
 output:
@@ -131,10 +129,8 @@ control over how results are mapped back into the document.
 ```yaml
 input:
   kafka_balanced:
-    addresses:
-    - TODO
-    topics:
-    - comments
+    addresses: [ TODO ]
+    topics: [ comments ]
     consumer_group: benthos_comments_group
 
 pipeline:
@@ -147,7 +143,7 @@ pipeline:
       - cache:
           operator: get
           cache: hydration_cache
-          key: "${!json_field:parent_id}"
+          key: '${!json("parent_id"}'
       postmap:
         # We only need the article section of our parent document.
         article: article
@@ -162,8 +158,8 @@ pipeline:
       - cache:
           operator: set
           cache: hydration_cache
-          key: "${!json_field:comment.id}"
-          value: "${!content}"
+          key: '${!json("comment.id")}'
+          value: '${!content()}'
       postmap_optional:
         # Dummy map since we don't need to map the result back.
         foo: will.never.exist
@@ -171,8 +167,7 @@ pipeline:
 # Send resulting documents to our hydrated topic.
 output:
   kafka:
-    addresses:
-    - TODO
+    addresses: [ TODO ]
     topic: comments_hydrated
 
 resources:
@@ -211,36 +206,23 @@ input:
   broker:
     inputs:
     - kafka_balanced:
-        addresses:
-        - TODO
-        topics:
-        - comments
+        addresses: [ TODO ]
+        topics: [ comments ]
         consumer_group: benthos_comments_group
 
     - kafka_balanced:
-        addresses:
-        - TODO
-        topics:
-        - comments_retry
+        addresses: [ TODO ]
+        topics: [ comments_retry ]
         consumer_group: benthos_comments_group
 
       processors:
       - for_each:
-        # Calcuate time until next retry attempt.
-        - awk:
-            program: |
-             {
-               delay_for = 3600 - (timestamp_unix() - metadata_get("last_attempted"));
-               if ( delay_for < 0 )
-                 delay_for = 0;
-               metadata_set("delay_for_s", delay_for);
-             }
-        # And sleep for that duration. This sleep blocks the topic
-        # 'comments_retry' but NOT 'comments', because both topics are consumed
-        # independently and these processors only apply to the 'comments_retry'
-        # input.
+        # Calculate time until next retry attempt and sleep for that duration.
+        # This sleep blocks the topic 'comments_retry' but NOT 'comments',
+        # because both topics are consumed independently and these processors
+        # only apply to the 'comments_retry' input.
         - sleep:
-            duration: "${!metadata:delay_for_s}s"
+            duration: '${! 3600 - ( timestamp_unix() - meta("last_attempted") ) }s'
 
 pipeline:
   processors:
@@ -270,14 +252,13 @@ pipeline:
     - metadata:
         operator: set
         key: last_attempted
-        value: ${!timestamp_unix}
+        value: ${!timestamp_unix()}
 
 # Send resulting documents either to our hydrated topic or the retry topic.
 output:
   kafka:
-    addresses:
-    - TODO
-    topic: ${!metadata:output_topic}
+    addresses: [ TODO ]
+    topic: '${!meta("output_topic")}'
 
 resources:
   caches:

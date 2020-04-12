@@ -77,10 +77,8 @@ document we will use the [`process_map`][procmap-proc] processor, with a child
 ```yaml
 input:
   kafka_balanced:
-    addresses:
-    - TODO
-    topics:
-    - articles
+    addresses: [ TODO ]
+    topics: [ articles ]
     consumer_group: benthos_articles_group
     batching:
       count: 20 # Tune this to set the size of our document batches.
@@ -102,8 +100,7 @@ pipeline:
 
 output:
   kafka:
-    addresses:
-    - TODO
+    addresses: [ TODO ]
     topic: comments_hydrated
 ```
 
@@ -310,10 +307,8 @@ final pipeline configuration look like this:
 ``` yaml
 input:
   kafka_balanced:
-    addresses:
-    - TODO
-    topics:
-    - articles
+    addresses: [ TODO ]
+    topics: [ articles ]
     consumer_group: benthos_articles_group
     batching:
       count: 20 # Tune this to set the size of our document batches.
@@ -366,8 +361,8 @@ pipeline:
   - catch:
     - log:
         fields:
-          content: "${!content}"
-        message: "Enrichments failed due to: ${!error}"
+          content: "${!content()}"
+        message: "Enrichments failed due to: ${!error()}"
 
   - json:
       operator: delete
@@ -375,8 +370,7 @@ pipeline:
 
 output:
   kafka:
-    addresses:
-    - TODO
+    addresses: [ TODO ]
     topic: comments_hydrated
 ```
 

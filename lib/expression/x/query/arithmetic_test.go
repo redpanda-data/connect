@@ -40,6 +40,20 @@ func TestArithmetic(t *testing.T) {
 				{content: `{"foo":5,"bar":12}`},
 			},
 		},
+		"subtract two ints": {
+			input:  `json("foo") - 5`,
+			output: `0`,
+			messages: []easyMsg{
+				{content: `{"foo":5,"bar":12}`},
+			},
+		},
+		"subtract two ints 2": {
+			input:  `json("foo") - 7`,
+			output: `-2`,
+			messages: []easyMsg{
+				{content: `{"foo":5,"bar":12}`},
+			},
+		},
 		"two ints and a string": {
 			input:  `json("foo") + json("bar") + meta("baz")`,
 			output: `17`,

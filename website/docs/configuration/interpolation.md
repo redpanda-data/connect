@@ -2,188 +2,127 @@
 title: Interpolation
 ---
 
-Benthos is able to perform string interpolation on your config files. There are
-two types of expression for this; functions and environment variables.
+Benthos allows you to dynamically set config fields with environment variables anywhere within a config file using the syntax `${<variable-name>}` (or `${<variable-name>:<default-value>}` in order to specify a default value). This is useful for setting environment specific fields such as addresses:
 
-Environment variables are resolved and interpolated into the config only once at
-start up.
-
-Functions are resolved each time they are used. However, only certain fields in
-a config will actually support and interpolate these expressions
-(`insert_part.contents`, for example). If you aren't sure that a field in a
-config section supports functions you should read its respective documentation.
-
-## Environment Variables
-
-You can use environment variables to replace Benthos config values using
-`${variable-name}` or `${variable-name:default-value}` syntax.
-
-### Escaping
-
-If a literal string is required that matches this pattern (`${foo}`) you can
-escape it with double brackets. For example, the string `${{foo}}` is read as
-the literal `${foo}`.
-
-## Example
-
-Let's say you plan to bridge a Kafka deployment to a RabbitMQ exchange but we
-want to resolve the addresses of these respective services after deployment
-using environment variables. In this case we can replace the broker list in a
-Kafka config section with an environment variable, and do the same with the
-RabbitMQ URL:
-
-``` yaml
+```yaml
 input:
   kafka_balanced:
-    addresses:
-    - ${KAFKA_BROKERS}
+    addresses: [ "${BROKERS}" ]
     consumer_group: benthos_bridge_consumer
-    topics:
-    - haha_business
-output:
-  amqp:
-    url: amqp://${RABBITMQ}/
-    exchange: kafka_bridge
-    exchange_type: direct
-    key: benthos-key
+    topics: [ "haha_business" ]
 ```
 
-We can now write multiple brokers into `KAFKA_BROKERS` by separating them with
-commas, Benthos will automatically split them. We can now run with our
-environment variables:
-
-``` sh
-KAFKA_BROKERS="foo:9092,bar:9092" \
-	RABBITMQ="baz:5672" \
-	benthos -c ./our_config.yaml
+```sh
+BROKERS="foo:9092,bar:9092" benthos -c ./config.yaml
 ```
+
+If a literal string is required that matches this pattern (`${foo}`) you can escape it with double brackets. For example, the string `${{foo}}` is read as the literal `${foo}`.
 
 ## Functions
 
-Some string fields within a Benthos config support function interpolations,
-these are context specific functions that are executed every time the string is
-used. To find out if a field supports function interpolation refer to its
-documentation.
+Some Benthos fields also support function interpolations, which are much more powerful expressions that allow you to extract fields of messages and perform arithmetic. The syntax of a function interpolation is `${!<expression>}`, where the contents are a logical expression including a range of functions. For example, with the following config:
 
-The syntax for functions is `${!function-name}`, or `${!function-name:arg}` if
-the function takes an argument, where `function-name` should be replaced with a
-valid function.
+```yaml
+output:
+  kafka:
+    addresses: [ "TODO:6379" ]
+    topic: 'dope-${!json("topic")}'
+```
 
-If a literal string is required that matches this pattern (`${!foo}`) then,
-similarly to environment variables, you can escape it with double brackets. For
-example, the string `${{!foo}}` would be read as the literal `${!foo}`.
+A message with the contents `{"topic":"foo","message":"hello world"}` would be routed to the Kafka topic `dope-foo`.
 
-Benthos supports the following functions:
+If a literal string is required that matches this pattern (`${!foo}`) then, similar to environment variables, you can escape it with double brackets. For example, the string `${{!foo}}` would be read as the literal `${!foo}`.
 
-### `content`
+Interpolation function expressions support arithmetic and boolean operators, there are some [examples of this below](#examples).
 
-Resolves to the content of a message part. The message referred to will depend
-on the context of where the function is called.
+### `content()`
 
-When applied to a batch of message parts this function targets the first message
-part by default. It is possible to specify a target part index with an integer
-argument, e.g. `${!content:2}` would print the contents of the third message
-part.
+Returns the full contents of a message.
 
-### `error`
+### `content_from(int)`
 
-If an error has occurred during the processing of a message part this function
-resolves to the reported cause of the error. For more information about error
+Returns the full contents of a message at a particular index of a batch. This allows you to mutate a message with the contents of another.
+
+### `error()`
+
+If an error has occurred during the processing of a message this function returns the reported cause of the error. For more information about error
 handling patterns read [here][error_handling].
 
-When applied to a batch of message parts this function targets the first message
-part by default. It is possible to specify a target part index with an integer
-argument, e.g. `${!error:2}` would print the error of the third message part.
+### `error_from(int)`
 
-### `batch_size`
+Returns the error of a message at a particular index of a batch.
 
-Resolves to the size of a message batch.
+### `batch_size()`
 
-### `json_field`
+Returns the size of the message batch.
 
-Resolves to the value of a JSON field within the message payload located by a
-[dot path][field_paths] specified as an argument. The message referred to will
-depend on the context of where the function is called. With a message containing
-`{"foo":{"bar":"hello world"}}` the function `${!json_field:foo.bar}` would
-resolve to `hello world`.
+### `json(string)`
 
-When applied to a batch of message parts this function targets the first message
-part by default. It is possible to specify a target part by following the path
-with a comma and part number, e.g. `${!json_field:foo.bar,2}` would target the
-field `foo.bar` within the third message part in the batch.
+Returns the value of a field within a JSON message located by a [dot path][field_paths] argument. For example, with a message `{"foo":{"bar":"hello world"}}` the function `${!json("foo.bar")}` would return `hello world`.
 
-### `metadata`
+The parameter is optional and if omitted the entire JSON payload is returned.
 
-Resolves to the value of a metadata key within the message payload. The message
-referred to will depend on the context of where the function is called.
-If a message contains the metadata key/value pair `foo: bar` the function
-`${!metadata:foo}` would resolve to `bar`.
+### `json_from(int, string)`
 
-When applied to a batch of message parts this function targets the first message
-part by default. It is possible to specify a target part by following the key
-with a comma and part number, e.g. `${!metadata:foo,2}` would target the
-key `foo` within the third message part in the batch.
+Returns a value from a JSON message at a particular index of a batch.
 
-Message metadata can be modified using the
-[metadata processor][metadata_processor].
+### `meta(string)`
 
-### `metadata_json_object`
+Returns the value of a metadata key from a message identified by a key. Message metadata can be modified using the [metadata processor][meta_proc].
 
-Resolves to all metadata key/value pairs of a payload as a JSON object. The
-message referred to will depend on the context of where the function is called.
+The parameter is optional and if omitted the entire metadata contents are returned as a JSON object.
 
-When applied to a batch of message parts this function targets the first message
-part by default. It is possible to specify a target part with an integer
-argument e.g. `${!metadata_json_object:2}` would target the metadata of the
-third message part in the batch.
+### `meta_from(int, string)`
 
-Message metadata can be modified using the
-[metadata processor][metadata_processor].
+Returns a metadata value from a message at a particular index of a batch.
 
-### `uuid_v4`
+### `uuid_v4()`
 
-Generates a new RFC-4122 UUID each time it is invoked and prints a string
-representation.
+Generates a new RFC-4122 UUID each time it is invoked and prints a string representation.
 
-### `timestamp_unix_nano`
+### `timestamp_unix_nano()`
 
-Resolves to the current unix timestamp in nanoseconds. E.g.
-`foo ${!timestamp_unix_nano} bar` prints `foo 1517412152475689615 bar`.
+Resolves to the current unix timestamp in nanoseconds. E.g. `foo ${!timestamp_unix_nano()} bar` prints `foo 1517412152475689615 bar`.
 
-### `timestamp_unix`
+### `timestamp_unix(int)`
 
-Resolves to the current unix timestamp in seconds. E.g.
-`foo ${!timestamp_unix} bar` prints `foo 1517412152 bar`. You can add fractional
-precision up to the nanosecond by specifying the precision as an argument, e.g.
-`${!timestamp_unix:3}` for millisecond precision.
+Resolves to the current unix timestamp in seconds. E.g. `foo ${!timestamp_unix()} bar` prints `foo 1517412152 bar`. You can add fractional precision up to the nanosecond by specifying the precision as an argument, e.g. `${!timestamp_unix(3)}` for millisecond precision.
 
-### `timestamp`
+### `timestamp(string)`
 
-Prints the current time in a custom format specified by the argument. The format
-is defined by showing how the reference time, defined to be
+Prints the current time in a custom format specified by the argument. The format is defined by showing how the reference time, defined to be
 `Mon Jan 2 15:04:05 -0700 MST 2006` would be displayed if it were the value.
 
-A fractional second is represented by adding a period and zeros to the end of
-the seconds section of layout string, as in `15:04:05.000` to format a time
-stamp with millisecond precision.
+A fractional second is represented by adding a period and zeros to the end of the seconds section of layout string, as in `15:04:05.000` to format a time stamp with millisecond precision.
 
-### `timestamp_utc`
+### `timestamp_utc(string)`
 
-The equivalent of `timestamp` except the time is printed as UTC instead of the
-local timezone.
+The equivalent of `timestamp` except the time is printed as UTC instead of the local timezone.
 
-### `count`
+### `count(string)`
 
-The `count` function is a counter starting at 1 which increments after each time
-it is called. Count takes an argument which is an identifier for the counter,
-allowing you to specify multiple unique counters in your configuration.
+The `count` function is a counter starting at 1 which increments after each time it is called. Count takes an argument which is an identifier for the counter, allowing you to specify multiple unique counters in your configuration.
 
-### `hostname`
+### `hostname()`
 
-Resolves to the hostname of the machine running Benthos. E.g.
-`foo ${!hostname} bar` might resolve to `foo glados bar`.
+Resolves to the hostname of the machine running Benthos. E.g. `foo ${!hostname()} bar` might resolve to `foo glados bar`.
+
+## Examples
+
+### Delayed Processing
+
+We have a stream of JSON documents each with a unix timestamp field `doc.received_at` which is set when our platform receives it. We wish to only process messages an hour _after_ they were received. We can achieve this by running the `sleep` processor using an interpolation function to calculate the seconds needed to wait for:
+
+```yaml
+pipeline:
+  processors:
+  - sleep:
+      duration: '${! 3600 - ( timestamp_unix() - json("doc.created_at") ) }s'
+```
+
+If the calculated result is less than or equal to zero the processor does not sleep at all. If the value of `doc.created_at` is a string Benthos will make a best attempt to parse it as a number.
 
 [env_var_config]: https://github.com/Jeffail/benthos/blob/master/config/env/default.yaml
 [error_handling]: /docs/configuration/error_handling
 [field_paths]: /docs/configuration/field_paths
-[metadata processor]: /docs/components/processors/metadata
+[meta_proc]: /docs/components/processors/metadata
