@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -113,7 +113,7 @@ func getNumberOperator(opStr string) (numberOperator, error) {
 type Number struct {
 	parts []int
 
-	interpolatedValue expression.Type
+	interpolatedValue field.Expression
 	value             float64
 	operator          numberOperator
 
@@ -146,7 +146,7 @@ func NewNumber(
 	var err error
 	switch t := conf.Number.Value.(type) {
 	case string:
-		n.interpolatedValue, err = expression.New(t)
+		n.interpolatedValue, err = field.New(t)
 	case float64:
 		n.value = t
 	case int:

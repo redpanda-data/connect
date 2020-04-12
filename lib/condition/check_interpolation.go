@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -115,7 +115,7 @@ type CheckInterpolation struct {
 	stats metrics.Type
 
 	child Type
-	value expression.Type
+	value field.Expression
 
 	mCount metrics.StatCounter
 	mTrue  metrics.StatCounter
@@ -135,7 +135,7 @@ func NewCheckInterpolation(
 		return nil, err
 	}
 
-	value, err := expression.New(conf.CheckInterpolation.Value)
+	value, err := field.New(conf.CheckInterpolation.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse interpolation value: %v", err)
 	}

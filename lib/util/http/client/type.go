@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -78,9 +78,9 @@ type Type struct {
 	dropOn    map[int]struct{}
 	successOn map[int]struct{}
 
-	url     expression.Type
-	headers map[string]expression.Type
-	host    expression.Type
+	url     field.Expression
+	headers map[string]field.Expression
+	host    field.Expression
 
 	conf          Config
 	retryThrottle *throttle.Type
@@ -109,7 +109,7 @@ type Type struct {
 
 // New creates a new Type.
 func New(conf Config, opts ...func(*Type)) (*Type, error) {
-	urlStr, err := expression.New(conf.URL)
+	urlStr, err := field.New(conf.URL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse URL expression: %v", err)
 	}
@@ -122,7 +122,7 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		backoffOn: map[int]struct{}{},
 		dropOn:    map[int]struct{}{},
 		successOn: map[int]struct{}{},
-		headers:   map[string]expression.Type{},
+		headers:   map[string]field.Expression{},
 		host:      nil,
 	}
 
@@ -155,11 +155,11 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 
 	for k, v := range conf.Headers {
 		if strings.ToLower(k) == "host" {
-			if h.host, err = expression.New(v); err != nil {
+			if h.host, err = field.New(v); err != nil {
 				return nil, fmt.Errorf("failed to parse header 'host' expression: %v", err)
 			}
 		} else {
-			if h.headers[k], err = expression.New(v); err != nil {
+			if h.headers[k], err = field.New(v); err != nil {
 				return nil, fmt.Errorf("failed to parse header '%v' expression: %v", k, err)
 			}
 		}

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -345,7 +345,7 @@ func getTextOperator(opStr string, arg string) (textOperator, error) {
 // Text is a processor that performs a text based operation on a payload.
 type Text struct {
 	parts    []int
-	value    expression.Type
+	value    field.Expression
 	operator textOperator
 
 	conf  Config
@@ -362,7 +362,7 @@ type Text struct {
 func NewText(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	value, err := expression.New(conf.Text.Value)
+	value, err := field.New(conf.Text.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}

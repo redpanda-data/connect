@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -63,7 +63,7 @@ func NewAMQPConfig() AMQPConfig {
 
 // AMQP is an output type that serves AMQP messages.
 type AMQP struct {
-	key expression.Type
+	key field.Expression
 
 	log   log.Modular
 	stats metrics.Type
@@ -90,7 +90,7 @@ func NewAMQP(conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error
 		deliveryMode: amqp.Transient,
 	}
 	var err error
-	if a.key, err = expression.New(conf.BindingKey); err != nil {
+	if a.key, err = field.New(conf.BindingKey); err != nil {
 		return nil, fmt.Errorf("failed to parse binding key expression: %v", err)
 	}
 	if conf.Persistent {

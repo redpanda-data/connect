@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -55,10 +55,10 @@ func NewAmazonS3Config() AmazonS3Config {
 type AmazonS3 struct {
 	conf AmazonS3Config
 
-	path            expression.Type
-	contentType     expression.Type
-	contentEncoding expression.Type
-	storageClass    expression.Type
+	path            field.Expression
+	contentType     field.Expression
+	contentEncoding field.Expression
+	storageClass    field.Expression
 
 	session  *session.Session
 	uploader *s3manager.Uploader
@@ -88,16 +88,16 @@ func NewAmazonS3(
 		timeout: timeout,
 	}
 	var err error
-	if a.path, err = expression.New(conf.Path); err != nil {
+	if a.path, err = field.New(conf.Path); err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}
-	if a.contentType, err = expression.New(conf.ContentType); err != nil {
+	if a.contentType, err = field.New(conf.ContentType); err != nil {
 		return nil, fmt.Errorf("failed to parse content type expression: %v", err)
 	}
-	if a.contentEncoding, err = expression.New(conf.ContentEncoding); err != nil {
+	if a.contentEncoding, err = field.New(conf.ContentEncoding); err != nil {
 		return nil, fmt.Errorf("failed to parse content encoding expression: %v", err)
 	}
-	if a.storageClass, err = expression.New(conf.StorageClass); err != nil {
+	if a.storageClass, err = field.New(conf.StorageClass); err != nil {
 		return nil, fmt.Errorf("failed to parse storage class expression: %v", err)
 	}
 	return a, nil

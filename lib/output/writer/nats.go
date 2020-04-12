@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -43,7 +43,7 @@ type NATS struct {
 
 	urls       string
 	conf       NATSConfig
-	subjectStr expression.Type
+	subjectStr field.Expression
 }
 
 // NewNATS creates a new NATS output type.
@@ -53,7 +53,7 @@ func NewNATS(conf NATSConfig, log log.Modular, stats metrics.Type) (*NATS, error
 		conf: conf,
 	}
 	var err error
-	if n.subjectStr, err = expression.New(conf.Subject); err != nil {
+	if n.subjectStr, err = field.New(conf.Subject); err != nil {
 		return nil, fmt.Errorf("failed to parse subject expression: %v", err)
 	}
 	n.urls = strings.Join(conf.URLs, ",")

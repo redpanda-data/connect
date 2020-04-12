@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -76,8 +76,8 @@ type AmazonSQS struct {
 
 	backoffCtor func() backoff.BackOff
 
-	groupID  expression.Type
-	dedupeID expression.Type
+	groupID  field.Expression
+	dedupeID field.Expression
 
 	closer    sync.Once
 	closeChan chan struct{}
@@ -101,12 +101,12 @@ func NewAmazonSQS(
 
 	var err error
 	if id := conf.MessageGroupID; len(id) > 0 {
-		if s.groupID, err = expression.New(id); err != nil {
+		if s.groupID, err = field.New(id); err != nil {
 			return nil, fmt.Errorf("failed to parse group ID expression: %v", err)
 		}
 	}
 	if id := conf.MessageDeduplicationID; len(id) > 0 {
-		if s.dedupeID, err = expression.New(id); err != nil {
+		if s.dedupeID, err = field.New(id); err != nil {
 			return nil, fmt.Errorf("failed to parse dedupe ID expression: %v", err)
 		}
 	}

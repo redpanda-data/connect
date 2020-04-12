@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -92,8 +92,8 @@ type Kafka struct {
 
 	mDroppedMaxBytes metrics.StatCounter
 
-	key   expression.Type
-	topic expression.Type
+	key   field.Expression
+	topic field.Expression
 
 	producer    sarama.SyncProducer
 	compression sarama.CompressionCodec
@@ -129,10 +129,10 @@ func NewKafka(conf KafkaConfig, mgr types.Manager, log log.Modular, stats metric
 		partitioner: partitioner,
 	}
 
-	if k.key, err = expression.New(conf.Key); err != nil {
+	if k.key, err = field.New(conf.Key); err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
-	if k.topic, err = expression.New(conf.Topic); err != nil {
+	if k.topic, err = field.New(conf.Topic); err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
 

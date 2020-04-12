@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -64,7 +64,7 @@ type Sleep struct {
 	log   log.Modular
 	stats metrics.Type
 
-	durationStr expression.Type
+	durationStr field.Expression
 
 	mCount     metrics.StatCounter
 	mErr       metrics.StatCounter
@@ -76,7 +76,7 @@ type Sleep struct {
 func NewSleep(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	durationStr, err := expression.New(conf.Sleep.Duration)
+	durationStr, err := field.New(conf.Sleep.Duration)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse duration expression: %v", err)
 	}

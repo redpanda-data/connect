@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
@@ -239,7 +239,7 @@ type Archive struct {
 	conf    ArchiveConfig
 	archive archiveFunc
 
-	path expression.Type
+	path field.Expression
 
 	mCount     metrics.StatCounter
 	mErr       metrics.StatCounter
@@ -255,7 +255,7 @@ type Archive struct {
 func NewArchive(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	path, err := expression.New(conf.Archive.Path)
+	path, err := field.New(conf.Archive.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}

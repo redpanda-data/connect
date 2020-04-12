@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
@@ -86,7 +86,7 @@ type GroupByValue struct {
 	log   log.Modular
 	stats metrics.Type
 
-	value expression.Type
+	value field.Expression
 
 	mCount     metrics.StatCounter
 	mGroups    metrics.StatGauge
@@ -98,7 +98,7 @@ type GroupByValue struct {
 func NewGroupByValue(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	value, err := expression.New(conf.GroupByValue.Value)
+	value, err := field.New(conf.GroupByValue.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}

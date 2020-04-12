@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -131,8 +131,8 @@ type Cache struct {
 
 	parts []int
 
-	key   expression.Type
-	value expression.Type
+	key   field.Expression
+	value field.Expression
 
 	cache    types.Cache
 	operator cacheOperator
@@ -158,12 +158,12 @@ func NewCache(
 		return nil, err
 	}
 
-	key, err := expression.New(conf.Cache.Key)
+	key, err := field.New(conf.Cache.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
 
-	value, err := expression.New(conf.Cache.Value)
+	value, err := field.New(conf.Cache.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}

@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -98,7 +98,7 @@ type Redis struct {
 	log   log.Modular
 	stats metrics.Type
 
-	key expression.Type
+	key field.Expression
 
 	operator    redisOperator
 	client      *redis.Client
@@ -137,7 +137,7 @@ func NewRedis(
 		Password: pass,
 	})
 
-	key, err := expression.New(conf.Redis.Key)
+	key, err := field.New(conf.Redis.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}

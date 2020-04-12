@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -80,8 +80,8 @@ type Kinesis struct {
 
 	backoffCtor  func() backoff.BackOff
 	endpoint     *string
-	hashKey      expression.Type
-	partitionKey expression.Type
+	hashKey      field.Expression
+	partitionKey field.Expression
 	streamName   *string
 
 	log   log.Modular
@@ -112,10 +112,10 @@ func NewKinesis(
 		streamName:      aws.String(conf.Stream),
 	}
 	var err error
-	if k.hashKey, err = expression.New(conf.HashKey); err != nil {
+	if k.hashKey, err = field.New(conf.HashKey); err != nil {
 		return nil, fmt.Errorf("failed to parse hash key expression: %v", err)
 	}
-	if k.partitionKey, err = expression.New(conf.PartitionKey); err != nil {
+	if k.partitionKey, err = field.New(conf.PartitionKey); err != nil {
 		return nil, fmt.Errorf("failed to parse partition key expression: %v", err)
 	}
 	if k.backoffCtor, err = conf.Config.GetCtor(); err != nil {

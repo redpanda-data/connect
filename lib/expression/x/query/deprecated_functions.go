@@ -1,4 +1,4 @@
-package expression
+package query
 
 import (
 	"encoding/json"
@@ -15,42 +15,21 @@ import (
 
 //------------------------------------------------------------------------------
 
-func deprecatedFunction(input []rune) parserResult {
-	var targetFunc, arg string
-
-	for i := 0; i < len(input); i++ {
-		if input[i] == ':' {
-			targetFunc = string(input[:i])
-			arg = string(input[i+1:])
-		}
-	}
-	if len(targetFunc) == 0 {
-		targetFunc = string(input)
-	}
-
-	ftor, exists := deprecatedFunctions[targetFunc]
-	if !exists {
-		return parserResult{
-			// Make no suggestions, we want users to move off of these functions
-			Err:       expectedErr{},
-			Remaining: input,
-		}
-	}
-	return parserResult{
-		Result:    dynamicResolver(ftor(arg)),
-		Err:       nil,
-		Remaining: nil,
-	}
+func wrapDeprecatedFunction(d deprecatedFunction) Function {
+	return closureFn(func(i int, m Message, legacy bool) (interface{}, error) {
+		return d(i, m, legacy), nil
+	})
 }
 
-//------------------------------------------------------------------------------
+type deprecatedFunction func(int, Message, bool) []byte
 
-func jsonFieldFunction(arg string) dynamicResolverFunc {
-	return func(i int, msg Message, escaped, legacy bool) []byte {
+func jsonFieldFunction(arg string) deprecatedFunction {
+	return func(i int, msg Message, legacy bool) []byte {
 		part := 0
 		if !legacy {
 			part = i
 		}
+		arg := arg
 		if argIndex := strings.LastIndex(arg, ","); argIndex > 0 && len(arg) > argIndex {
 			partB, err := strconv.ParseInt(arg[argIndex+1:], 10, 64)
 			if err == nil {
@@ -76,12 +55,13 @@ func jsonFieldFunction(arg string) dynamicResolverFunc {
 	}
 }
 
-func metadataFunction(arg string) dynamicResolverFunc {
-	return func(i int, msg Message, escaped, legacy bool) []byte {
+func deprecatedMetadataFunction(arg string) deprecatedFunction {
+	return func(i int, msg Message, legacy bool) []byte {
 		part := 0
 		if !legacy {
 			part = i
 		}
+		arg := arg
 		if argIndex := strings.LastIndex(arg, ","); argIndex > 0 && len(arg) > argIndex {
 			partB, err := strconv.ParseInt(arg[argIndex+1:], 10, 64)
 			if err == nil {
@@ -97,8 +77,8 @@ func metadataFunction(arg string) dynamicResolverFunc {
 	}
 }
 
-func metadataMapFunction(arg string) dynamicResolverFunc {
-	return func(i int, msg Message, escaped, legacy bool) []byte {
+func deprecatedMetadataMapFunction(arg string) deprecatedFunction {
+	return func(i int, msg Message, legacy bool) []byte {
 		part := 0
 		if !legacy {
 			part = i
@@ -122,8 +102,8 @@ func metadataMapFunction(arg string) dynamicResolverFunc {
 	}
 }
 
-func errorFunction(arg string) dynamicResolverFunc {
-	return func(i int, msg Message, escaped, legacy bool) []byte {
+func deprecatedErrorFunction(arg string) deprecatedFunction {
+	return func(i int, msg Message, legacy bool) []byte {
 		part := 0
 		if !legacy {
 			part = i
@@ -139,8 +119,8 @@ func errorFunction(arg string) dynamicResolverFunc {
 	}
 }
 
-func contentFunction(arg string) dynamicResolverFunc {
-	return func(i int, msg Message, escaped, legacy bool) []byte {
+func deprecatedContentFunction(arg string) deprecatedFunction {
+	return func(i int, msg Message, legacy bool) []byte {
 		part := 0
 		if !legacy {
 			part = i
@@ -157,17 +137,17 @@ func contentFunction(arg string) dynamicResolverFunc {
 
 //------------------------------------------------------------------------------
 
-var counters = map[string]uint64{}
+var counters = map[string]int64{}
 var countersMux = &sync.Mutex{}
 
-var deprecatedFunctions = map[string]func(arg string) dynamicResolverFunc{
-	"timestamp_unix_nano": func(arg string) dynamicResolverFunc {
-		return func(_ int, _ Message, _, _ bool) []byte {
+var deprecatedFunctions = map[string]func(arg string) deprecatedFunction{
+	"timestamp_unix_nano": func(arg string) deprecatedFunction {
+		return func(_ int, _ Message, _ bool) []byte {
 			return []byte(strconv.FormatInt(time.Now().UnixNano(), 10))
 		}
 	},
-	"timestamp_unix": func(arg string) dynamicResolverFunc {
-		return func(_ int, _ Message, _, _ bool) []byte {
+	"timestamp_unix": func(arg string) deprecatedFunction {
+		return func(_ int, _ Message, _ bool) []byte {
 			tNow := time.Now()
 			precision, _ := strconv.ParseInt(arg, 10, 64)
 			tStr := strconv.FormatInt(tNow.Unix(), 10)
@@ -181,39 +161,39 @@ var deprecatedFunctions = map[string]func(arg string) dynamicResolverFunc{
 			return []byte(tStr)
 		}
 	},
-	"timestamp": func(arg string) dynamicResolverFunc {
-		return func(_ int, _ Message, _, _ bool) []byte {
-			if len(arg) == 0 {
-				arg = "Mon Jan 2 15:04:05 -0700 MST 2006"
-			}
+	"timestamp": func(arg string) deprecatedFunction {
+		if len(arg) == 0 {
+			arg = "Mon Jan 2 15:04:05 -0700 MST 2006"
+		}
+		return func(_ int, _ Message, _ bool) []byte {
 			return []byte(time.Now().Format(arg))
 		}
 	},
-	"timestamp_utc": func(arg string) dynamicResolverFunc {
-		return func(_ int, _ Message, _, _ bool) []byte {
-			if len(arg) == 0 {
-				arg = "Mon Jan 2 15:04:05 -0700 MST 2006"
-			}
+	"timestamp_utc": func(arg string) deprecatedFunction {
+		if len(arg) == 0 {
+			arg = "Mon Jan 2 15:04:05 -0700 MST 2006"
+		}
+		return func(_ int, _ Message, _ bool) []byte {
 			return []byte(time.Now().In(time.UTC).Format(arg))
 		}
 	},
-	"hostname": func(_ string) dynamicResolverFunc {
-		return func(_ int, _ Message, _, _ bool) []byte {
+	"hostname": func(_ string) deprecatedFunction {
+		return func(_ int, _ Message, _ bool) []byte {
 			hn, _ := os.Hostname()
 			return []byte(hn)
 		}
 	},
-	"echo": func(arg string) dynamicResolverFunc {
-		return func(_ int, _ Message, _, _ bool) []byte {
+	"echo": func(arg string) deprecatedFunction {
+		return func(_ int, _ Message, _ bool) []byte {
 			return []byte(arg)
 		}
 	},
-	"count": func(arg string) dynamicResolverFunc {
-		return func(_ int, _ Message, _, _ bool) []byte {
+	"count": func(arg string) deprecatedFunction {
+		return func(_ int, _ Message, _ bool) []byte {
 			countersMux.Lock()
 			defer countersMux.Unlock()
 
-			var count uint64
+			var count int64
 			var exists bool
 
 			if count, exists = counters[arg]; exists {
@@ -223,21 +203,21 @@ var deprecatedFunctions = map[string]func(arg string) dynamicResolverFunc{
 			}
 			counters[arg] = count
 
-			return []byte(strconv.FormatUint(count, 10))
+			return []byte(strconv.FormatInt(count, 10))
 		}
 	},
-	"error":                errorFunction,
-	"content":              contentFunction,
+	"error":                deprecatedErrorFunction,
+	"content":              deprecatedContentFunction,
 	"json_field":           jsonFieldFunction,
-	"metadata":             metadataFunction,
-	"metadata_json_object": metadataMapFunction,
-	"batch_size": func(_ string) dynamicResolverFunc {
-		return func(_ int, m Message, _, _ bool) []byte {
+	"metadata":             deprecatedMetadataFunction,
+	"metadata_json_object": deprecatedMetadataMapFunction,
+	"batch_size": func(_ string) deprecatedFunction {
+		return func(_ int, m Message, _ bool) []byte {
 			return strconv.AppendInt(nil, int64(m.Len()), 10)
 		}
 	},
-	"uuid_v4": func(_ string) dynamicResolverFunc {
-		return func(_ int, _ Message, _, _ bool) []byte {
+	"uuid_v4": func(_ string) deprecatedFunction {
+		return func(_ int, _ Message, _ bool) []byte {
 			u4, err := uuid.NewV4()
 			if err != nil {
 				panic(err)

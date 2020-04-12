@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -87,8 +87,8 @@ func NewLogConfig() LogConfig {
 type Log struct {
 	log     log.Modular
 	level   string
-	message expression.Type
-	fields  map[string]expression.Type
+	message field.Expression
+	fields  map[string]field.Expression
 	printFn func(logger log.Modular, msg string)
 }
 
@@ -96,19 +96,19 @@ type Log struct {
 func NewLog(
 	conf Config, mgr types.Manager, logger log.Modular, stats metrics.Type,
 ) (Type, error) {
-	message, err := expression.New(conf.Log.Message)
+	message, err := field.New(conf.Log.Message)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse message expression: %v", err)
 	}
 	l := &Log{
 		log:     logger,
 		level:   conf.Log.Level,
-		fields:  map[string]expression.Type{},
+		fields:  map[string]field.Expression{},
 		message: message,
 	}
 	if len(conf.Log.Fields) > 0 {
 		for k, v := range conf.Log.Fields {
-			if l.fields[k], err = expression.New(v); err != nil {
+			if l.fields[k], err = field.New(v); err != nil {
 				return nil, fmt.Errorf("failed to parse field '%v' expression: %v", k, err)
 			}
 		}

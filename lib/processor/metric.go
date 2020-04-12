@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -130,7 +130,7 @@ type Metric struct {
 	log   log.Modular
 	stats metrics.Type
 
-	value  expression.Type
+	value  field.Expression
 	labels labels
 
 	mCounter metrics.StatCounter
@@ -147,7 +147,7 @@ type Metric struct {
 type labels []label
 type label struct {
 	name  string
-	value expression.Type
+	value field.Expression
 }
 
 func (l *label) val(msg types.Message) string {
@@ -174,7 +174,7 @@ func (l labels) values(msg types.Message) []string {
 func NewMetric(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	value, err := expression.New(conf.Metric.Value)
+	value, err := field.New(conf.Metric.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}
@@ -197,7 +197,7 @@ func NewMetric(
 	sort.Strings(labelNames)
 
 	for _, n := range labelNames {
-		v, err := expression.New(conf.Metric.Labels[n])
+		v, err := field.New(conf.Metric.Labels[n])
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse label '%v' expression: %v", n, err)
 		}

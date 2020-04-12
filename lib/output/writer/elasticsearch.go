@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -94,9 +94,9 @@ type Elasticsearch struct {
 	backoff backoff.BackOff
 	timeout time.Duration
 
-	idStr             expression.Type
-	indexStr          expression.Type
-	pipelineStr       expression.Type
+	idStr             field.Expression
+	indexStr          field.Expression
+	pipelineStr       field.Expression
 	interpolatedIndex bool
 
 	eJSONErr metrics.StatCounter
@@ -116,13 +116,13 @@ func NewElasticsearch(conf ElasticsearchConfig, log log.Modular, stats metrics.T
 	}
 
 	var err error
-	if e.idStr, err = expression.New(conf.ID); err != nil {
+	if e.idStr, err = field.New(conf.ID); err != nil {
 		return nil, fmt.Errorf("failed to parse id expression: %v", err)
 	}
-	if e.indexStr, err = expression.New(conf.Index); err != nil {
+	if e.indexStr, err = field.New(conf.Index); err != nil {
 		return nil, fmt.Errorf("failed to parse index expression: %v", err)
 	}
-	if e.pipelineStr, err = expression.New(conf.Pipeline); err != nil {
+	if e.pipelineStr, err = field.New(conf.Pipeline); err != nil {
 		return nil, fmt.Errorf("failed to parse pipeline expression: %v", err)
 	}
 

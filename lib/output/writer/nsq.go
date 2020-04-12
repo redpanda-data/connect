@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -45,7 +45,7 @@ func NewNSQConfig() NSQConfig {
 type NSQ struct {
 	log log.Modular
 
-	topicStr expression.Type
+	topicStr field.Expression
 
 	tlsConf  *tls.Config
 	connMut  sync.RWMutex
@@ -61,7 +61,7 @@ func NewNSQ(conf NSQConfig, log log.Modular, stats metrics.Type) (*NSQ, error) {
 		conf: conf,
 	}
 	var err error
-	if n.topicStr, err = expression.New(conf.Topic); err != nil {
+	if n.topicStr, err = field.New(conf.Topic); err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
 	if conf.TLS.Enabled {

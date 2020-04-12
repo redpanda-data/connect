@@ -1,4 +1,4 @@
-package expression
+package field
 
 import (
 	"testing"
@@ -18,7 +18,7 @@ func TestStaticExpressionOptimization(t *testing.T) {
 
 	for k, v := range tests {
 		t.Run(k, func(t *testing.T) {
-			e, err := Parse(k)
+			e, err := parse(k)
 			_ = assert.NoError(t, err) &&
 				assert.Equal(t, v, e.static) &&
 				assert.Equal(t, 0, len(e.resolvers)) &&
@@ -39,31 +39,31 @@ func TestExpressionParserErrors(t *testing.T) {
 	}{
 		"bad function": {
 			input: `static string ${!not a function} hello world`,
-			err:   `failed to parse expression at char 14: unrecognised function 'not a function', expected one of: [json json_from]`,
+			err:   `failed to parse expression: char 17: unrecognised function 'not a function', expected one of: [batch_size content content_from count error error_from hostname json json_from meta meta_from timestamp timestamp_unix timestamp_unix_nano timestamp_utc uuid_v4]`,
 		},
 		"bad function 2": {
 			input: `static string ${!not_a_function()} hello world`,
-			err:   `failed to parse expression at char 14: unrecognised function 'not_a_function', expected one of: [json json_from]`,
+			err:   `failed to parse expression: char 17: unrecognised function 'not_a_function', expected one of: [batch_size content content_from count error error_from hostname json json_from meta meta_from timestamp timestamp_unix timestamp_unix_nano timestamp_utc uuid_v4]`,
 		},
 		"bad args": {
-			input: `foo ${!json(foo) whats this?} bar`,
-			err:   `failed to parse expression at char 4: unexpected expression after function: ' whats this?'`,
+			input: `foo ${!json("foo") whats this?} bar`,
+			err:   `failed to parse expression: char 19: unexpected contents at end of expression: whats this?`,
 		},
 		"bad args 2": {
-			input: `foo ${!json(foo} bar`,
-			err:   `failed to parse expression at char 4: failed to parse function arguments: unexpected end of input`,
+			input: `foo ${!json("foo} bar`,
+			err:   `failed to parse expression: char 12: failed to parse function arguments: expected one of: [boolean number quoted-string]`,
 		},
 		"bad args 3": {
 			input: `foo ${!json(} bar`,
-			err:   `failed to parse expression at char 4: failed to parse function arguments: unexpected end of input`,
+			err:   `failed to parse expression: char 12: failed to parse function arguments: unexpected end of input`,
 		},
 		"bad args 4": {
 			input: `foo ${!json_from(0,} bar`,
-			err:   `failed to parse expression at char 4: failed to parse function arguments: unexpected end of input`,
+			err:   `failed to parse expression: char 19: failed to parse function arguments: unexpected end of input`,
 		},
 		"bad args 5": {
 			input: `foo ${!json} bar`,
-			err:   `failed to parse expression at char 4: expected params '()' after function: 'json'`,
+			err:   `failed to parse expression: char 11: expected params '()' after function: 'json'`,
 		},
 	}
 
@@ -71,7 +71,7 @@ func TestExpressionParserErrors(t *testing.T) {
 		test := test
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			_, err := Parse(test.input)
+			_, err := parse(test.input)
 			_ = assert.Error(t, err) &&
 				assert.Equal(t, test.err, err.Error())
 		})
@@ -157,14 +157,14 @@ func TestExpressions(t *testing.T) {
 			},
 		},
 		"json function 2": {
-			input:  `${!json(foo)}`,
+			input:  `${!json("foo")}`,
 			output: `bar`,
 			messages: []easyMsg{
 				{content: `{"foo":"bar"}`},
 			},
 		},
 		"json function 3": {
-			input:  `${!json(foo)}`,
+			input:  `${!json("foo")}`,
 			output: `bar`,
 			index:  1,
 			messages: []easyMsg{
@@ -173,7 +173,7 @@ func TestExpressions(t *testing.T) {
 			},
 		},
 		"json function 4": {
-			input:   `${!json(foo)}`,
+			input:   `${!json("foo")}`,
 			output:  `{\"bar\":\"baz\"}`,
 			index:   0,
 			escaped: true,
@@ -182,7 +182,7 @@ func TestExpressions(t *testing.T) {
 			},
 		},
 		"json_from function": {
-			input:  `${!json_from(1, foo)}`,
+			input:  `${!json_from(1, "foo")}`,
 			output: `bar`,
 			messages: []easyMsg{
 				{content: `not json`},
@@ -190,7 +190,7 @@ func TestExpressions(t *testing.T) {
 			},
 		},
 		"json_from function 2": {
-			input:  `${!json_from(0, foo)}`,
+			input:  `${!json_from(0, "foo")}`,
 			output: `null`,
 			messages: []easyMsg{
 				{content: `not json`},
@@ -198,7 +198,7 @@ func TestExpressions(t *testing.T) {
 			},
 		},
 		"json_from function 3": {
-			input:  `${!json_from(-1, foo)}`,
+			input:  `${!json_from(-1, "foo")}`,
 			output: `bar`,
 			messages: []easyMsg{
 				{content: `not json`},
@@ -223,7 +223,7 @@ func TestExpressions(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, err := Parse(test.input)
+			e, err := parse(test.input)
 			if !assert.NoError(t, err) {
 				return
 			}

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -798,7 +798,7 @@ func getOperator(opStr string, path []string, value json.RawMessage) (jsonOperat
 type JSON struct {
 	parts []int
 
-	value    expression.Type
+	value    field.Expression
 	operator jsonOperator
 
 	conf  Config
@@ -817,7 +817,7 @@ type JSON struct {
 func NewJSON(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	value, err := expression.New(string(conf.JSON.Value))
+	value, err := field.New(string(conf.JSON.Value))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}

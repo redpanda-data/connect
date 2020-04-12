@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -36,7 +36,7 @@ func NewCacheConfig() CacheConfig {
 type Cache struct {
 	conf CacheConfig
 
-	key   expression.Type
+	key   field.Expression
 	cache types.Cache
 
 	log   log.Modular
@@ -54,7 +54,7 @@ func NewCache(
 	if err != nil {
 		return nil, fmt.Errorf("failed to obtain cache '%v': %v", conf.Target, err)
 	}
-	key, err := expression.New(conf.Key)
+	key, err := field.New(conf.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}

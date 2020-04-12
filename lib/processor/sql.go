@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
@@ -121,7 +121,7 @@ type SQL struct {
 	conf     SQLConfig
 	db       *sql.DB
 	dbMux    sync.Mutex
-	args     []expression.Type
+	args     []field.Expression
 	resCodec sqlResultCodec
 
 	query *sql.Stmt
@@ -148,9 +148,9 @@ func NewSQL(
 	if db, err = sql.Open(conf.SQL.Driver, conf.SQL.DSN); err != nil {
 		return nil, err
 	}
-	var args []expression.Type
+	var args []field.Expression
 	for i, v := range conf.SQL.Args {
-		expr, err := expression.New(v)
+		expr, err := field.New(v)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse arg %v expression: %v", i, err)
 		}

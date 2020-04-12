@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -35,7 +35,7 @@ func NewFilesConfig() FilesConfig {
 type Files struct {
 	conf FilesConfig
 
-	path expression.Type
+	path field.Expression
 
 	log   log.Modular
 	stats metrics.Type
@@ -47,7 +47,7 @@ func NewFiles(
 	log log.Modular,
 	stats metrics.Type,
 ) (*Files, error) {
-	path, err := expression.New(conf.Path)
+	path, err := field.New(conf.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}

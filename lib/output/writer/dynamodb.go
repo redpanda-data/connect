@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -74,7 +74,7 @@ type DynamoDB struct {
 
 	table          *string
 	ttl            time.Duration
-	strColumns     map[string]expression.Type
+	strColumns     map[string]field.Expression
 	jsonMapColumns map[string]string
 }
 
@@ -94,14 +94,14 @@ func NewDynamoDB(
 		stats:          stats,
 		table:          aws.String(conf.Table),
 		backoff:        boff,
-		strColumns:     map[string]expression.Type{},
+		strColumns:     map[string]field.Expression{},
 		jsonMapColumns: map[string]string{},
 	}
 	if len(conf.StringColumns) == 0 && len(conf.JSONMapColumns) == 0 {
 		return nil, errors.New("you must provide at least one column")
 	}
 	for k, v := range conf.StringColumns {
-		if db.strColumns[k], err = expression.New(v); err != nil {
+		if db.strColumns[k], err = field.New(v); err != nil {
 			return nil, fmt.Errorf("failed to parse column '%v' expression: %v", k, err)
 		}
 	}

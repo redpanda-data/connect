@@ -1,6 +1,10 @@
-package expression
+package field
 
-import "strconv"
+import (
+	"strconv"
+
+	"github.com/Jeffail/benthos/v3/lib/expression/x/query"
+)
 
 //------------------------------------------------------------------------------
 
@@ -23,19 +27,20 @@ func (s staticResolver) ResolveBytes(index int, msg Message, escaped, legacy boo
 
 //------------------------------------------------------------------------------
 
-type dynamicResolverFunc func(index int, msg Message, escaped, legacy bool) []byte
-
-type dynamicResolver dynamicResolverFunc
-
-func (f dynamicResolver) ResolveString(index int, msg Message, escaped, legacy bool) string {
-	return string(f.ResolveBytes(index, msg, escaped, legacy))
+type queryResolver struct {
+	fn query.Function
 }
 
-func (f dynamicResolver) ResolveBytes(index int, msg Message, escaped, legacy bool) []byte {
+func (q queryResolver) ResolveString(index int, msg Message, escaped, legacy bool) string {
+	return q.fn.ToString(index, msg, legacy)
+}
+
+func (q queryResolver) ResolveBytes(index int, msg Message, escaped, legacy bool) []byte {
+	bs := q.fn.ToBytes(index, msg, legacy)
 	if escaped {
-		return escapeBytes(f(index, msg, escaped, legacy))
+		bs = escapeBytes(bs)
 	}
-	return f(index, msg, escaped, legacy)
+	return bs
 }
 
 func escapeBytes(in []byte) []byte {

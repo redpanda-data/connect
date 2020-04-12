@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -148,7 +148,7 @@ type Dedupe struct {
 	log   log.Modular
 	stats metrics.Type
 
-	key expression.Type
+	key field.Expression
 
 	cache      types.Cache
 	hasherFunc hasherFunc
@@ -176,7 +176,7 @@ func NewDedupe(
 		return nil, err
 	}
 
-	key, err := expression.New(conf.Dedupe.Key)
+	key, err := field.New(conf.Dedupe.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}

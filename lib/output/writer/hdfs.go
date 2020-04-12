@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -42,7 +42,7 @@ func NewHDFSConfig() HDFSConfig {
 type HDFS struct {
 	conf HDFSConfig
 
-	path expression.Type
+	path field.Expression
 
 	client *hdfs.Client
 
@@ -56,7 +56,7 @@ func NewHDFS(
 	log log.Modular,
 	stats metrics.Type,
 ) (*HDFS, error) {
-	path, err := expression.New(conf.Path)
+	path, err := field.New(conf.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -159,8 +159,8 @@ func getMetadataOperator(opStr string) (metadataOperator, error) {
 // Metadata is a processor that performs an operation on the Metadata of a
 // message.
 type Metadata struct {
-	value expression.Type
-	key   expression.Type
+	value field.Expression
+	key   field.Expression
 
 	operator metadataOperator
 
@@ -180,11 +180,11 @@ type Metadata struct {
 func NewMetadata(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	value, err := expression.New(conf.Metadata.Value)
+	value, err := field.New(conf.Metadata.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}
-	key, err := expression.New(conf.Metadata.Key)
+	key, err := field.New(conf.Metadata.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}

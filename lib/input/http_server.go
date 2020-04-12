@@ -15,7 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/metadata"
@@ -181,7 +181,7 @@ type HTTPServer struct {
 	server  *http.Server
 	timeout time.Duration
 
-	responseHeaders map[string]expression.Type
+	responseHeaders map[string]field.Expression
 
 	transactions chan types.Transaction
 
@@ -241,7 +241,7 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		ratelimit:       ratelimit,
 		server:          server,
 		timeout:         timeout,
-		responseHeaders: map[string]expression.Type{},
+		responseHeaders: map[string]field.Expression{},
 		transactions:    make(chan types.Transaction),
 		closeChan:       make(chan struct{}),
 		closedChan:      make(chan struct{}),
@@ -263,7 +263,7 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 
 	var err error
 	for k, v := range h.conf.HTTPServer.Response.Headers {
-		if h.responseHeaders[k], err = expression.New(v); err != nil {
+		if h.responseHeaders[k], err = field.New(v); err != nil {
 			return nil, fmt.Errorf("failed to parse response header '%v' expression: %v", k, err)
 		}
 	}

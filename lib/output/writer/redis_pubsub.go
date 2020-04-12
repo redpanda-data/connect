@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -42,7 +42,7 @@ type RedisPubSub struct {
 
 	url        *url.URL
 	conf       RedisPubSubConfig
-	channelStr expression.Type
+	channelStr field.Expression
 
 	client  *redis.Client
 	connMut sync.RWMutex
@@ -60,7 +60,7 @@ func NewRedisPubSub(
 		conf:  conf,
 	}
 	var err error
-	if r.channelStr, err = expression.New(conf.Channel); err != nil {
+	if r.channelStr, err = field.New(conf.Channel); err != nil {
 		return nil, fmt.Errorf("failed to parse channel expression: %v", err)
 	}
 	r.url, err = url.Parse(conf.URL)

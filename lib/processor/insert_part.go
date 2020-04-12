@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -60,7 +60,7 @@ func NewInsertPartConfig() InsertPartConfig {
 // InsertPart is a processor that inserts a new message part at a specific
 // index.
 type InsertPart struct {
-	part expression.Type
+	part field.Expression
 
 	conf  Config
 	log   log.Modular
@@ -75,7 +75,7 @@ type InsertPart struct {
 func NewInsertPart(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	part, err := expression.New(conf.InsertPart.Content)
+	part, err := field.New(conf.InsertPart.Content)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse content expression: %v", err)
 	}

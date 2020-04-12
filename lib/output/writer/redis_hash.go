@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -50,8 +50,8 @@ type RedisHash struct {
 	url  *url.URL
 	conf RedisHashConfig
 
-	keyStr expression.Type
-	fields map[string]expression.Type
+	keyStr field.Expression
+	fields map[string]field.Expression
 
 	client  *redis.Client
 	connMut sync.RWMutex
@@ -67,16 +67,16 @@ func NewRedisHash(
 		log:    log,
 		stats:  stats,
 		conf:   conf,
-		fields: map[string]expression.Type{},
+		fields: map[string]field.Expression{},
 	}
 
 	var err error
-	if r.keyStr, err = expression.New(conf.Key); err != nil {
+	if r.keyStr, err = field.New(conf.Key); err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
 
 	for k, v := range conf.Fields {
-		if r.fields[k], err = expression.New(v); err != nil {
+		if r.fields[k], err = field.New(v); err != nil {
 			return nil, fmt.Errorf("failed to parse field '%v' expression: %v", k, err)
 		}
 	}

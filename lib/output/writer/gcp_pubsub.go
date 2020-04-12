@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/pubsub"
-	"github.com/Jeffail/benthos/v3/lib/expression"
+	"github.com/Jeffail/benthos/v3/lib/expression/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -40,7 +40,7 @@ type GCPPubSub struct {
 
 	client *pubsub.Client
 
-	topicID  expression.Type
+	topicID  field.Expression
 	topics   map[string]*pubsub.Topic
 	topicMut sync.Mutex
 
@@ -58,7 +58,7 @@ func NewGCPPubSub(
 	if err != nil {
 		return nil, err
 	}
-	topic, err := expression.New(conf.TopicID)
+	topic, err := field.New(conf.TopicID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
