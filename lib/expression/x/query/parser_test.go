@@ -85,6 +85,14 @@ func TestFunctionParserLimits(t *testing.T) {
 			input:     `json("foo") + meta("bar")`,
 			remaining: ``,
 		},
+		"space before": {
+			input:     `   json("foo") + meta("bar")`,
+			remaining: ``,
+		},
+		"space before 2": {
+			input:     `   json("foo")   +    meta("bar")`,
+			remaining: ``,
+		},
 		"extra text": {
 			input:     `json("foo") and this`,
 			remaining: `and this`,

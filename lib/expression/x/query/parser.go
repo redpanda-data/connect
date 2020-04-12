@@ -44,9 +44,7 @@ func Parse(input []rune) parser.Result {
 		functionParser(),
 	)
 
-	res := parser.Result{
-		Remaining: input,
-	}
+	res := parser.SpacesAndTabs()(input)
 	for {
 		i := len(input) - len(res.Remaining)
 		res = nextSegment(res.Remaining)
