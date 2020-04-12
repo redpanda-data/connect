@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Vastly improved function interpolations, including better batch handling and
+  arithmetic operators.
 - The `gcp_pubsub` output now supports function interpolation on the field
   `topic`.
 - New `contains_any` and `contains_any_cs` operators added to the `text`
