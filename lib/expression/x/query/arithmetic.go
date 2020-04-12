@@ -22,6 +22,8 @@ const (
 	arithmeticLt
 	arithmeticGte
 	arithmeticLte
+	arithmeticAnd
+	arithmeticOr
 )
 
 func arithmeticOpParser() parser.Type {
@@ -30,6 +32,8 @@ func arithmeticOpParser() parser.Type {
 		parser.Char('-'),
 		parser.Char('/'),
 		parser.Char('*'),
+		parser.Match("&&"),
+		parser.Match("||"),
 		parser.Match("=="),
 		parser.Match("!="),
 		parser.Match(">="),
@@ -55,6 +59,10 @@ func arithmeticOpParser() parser.Type {
 			res.Result = arithmeticEq
 		case "!=":
 			res.Result = arithmeticNeq
+		case "&&":
+			res.Result = arithmeticAnd
+		case "||":
+			res.Result = arithmeticOr
 		case ">":
 			res.Result = arithmeticGt
 		case "<":
@@ -83,6 +91,16 @@ func getNumber(v interface{}) (float64, error) {
 		return strconv.ParseFloat(t, 64)
 	}
 	return 0, fmt.Errorf("function returned non-numerical type: %T", v)
+}
+
+func restrictForComparison(v interface{}) interface{} {
+	switch t := v.(type) {
+	case int64:
+		return float64(t)
+	case []byte:
+		return string(t)
+	}
+	return v
 }
 
 func add(fns []Function) Function {
@@ -200,7 +218,7 @@ func multiply(lhs, rhs Function) Function {
 	})
 }
 
-func compare(lhs, rhs Function, op arithmeticOp) (Function, error) {
+func compareFloat(lhs, rhs Function, op arithmeticOp) (Function, error) {
 	var opFn func(lhs, rhs float64) bool
 	switch op {
 	case arithmeticEq:
@@ -253,6 +271,70 @@ func compare(lhs, rhs Function, op arithmeticOp) (Function, error) {
 	}), nil
 }
 
+func compareGeneric(lhs, rhs Function, op arithmeticOp) (Function, error) {
+	var opFn func(lhs, rhs interface{}) bool
+	switch op {
+	case arithmeticEq:
+		opFn = func(lhs, rhs interface{}) bool {
+			return lhs == rhs
+		}
+	case arithmeticNeq:
+		opFn = func(lhs, rhs interface{}) bool {
+			return lhs != rhs
+		}
+	default:
+		return nil, fmt.Errorf("operator not supported: %v", op)
+	}
+	return closureFn(func(i int, msg Message, legacy bool) (interface{}, error) {
+		var lhsV, rhsV interface{}
+		var err error
+		if lhsV, err = lhs.Exec(i, msg, legacy); err == nil {
+			rhsV, err = rhs.Exec(i, msg, legacy)
+		}
+		if err != nil {
+			return nil, err
+		}
+		lhsV = restrictForComparison(lhsV)
+		rhsV = restrictForComparison(rhsV)
+		return opFn(lhsV, rhsV), nil
+	}), nil
+}
+
+func logicalBool(lhs, rhs Function, op arithmeticOp) (Function, error) {
+	var opFn func(lhs, rhs bool) bool
+	switch op {
+	case arithmeticAnd:
+		opFn = func(lhs, rhs bool) bool {
+			return lhs && rhs
+		}
+	case arithmeticOr:
+		opFn = func(lhs, rhs bool) bool {
+			return lhs || rhs
+		}
+	default:
+		return nil, fmt.Errorf("operator not supported: %v", op)
+	}
+	return closureFn(func(i int, msg Message, legacy bool) (interface{}, error) {
+		var lhsV, rhsV bool
+		var err error
+
+		if leftV, tmpErr := lhs.Exec(i, msg, legacy); tmpErr == nil {
+			lhsV, _ = leftV.(bool)
+		} else {
+			err = tmpErr
+		}
+		if rightV, tmpErr := rhs.Exec(i, msg, legacy); tmpErr == nil {
+			rhsV, _ = rightV.(bool)
+		} else {
+			err = tmpErr
+		}
+		if err != nil {
+			return nil, err
+		}
+		return opFn(lhsV, rhsV), nil
+	}), nil
+}
+
 func resolveArithmetic(fns []Function, ops []arithmeticOp) (Function, error) {
 	if len(fns) == 1 && len(ops) == 0 {
 		return fns[0], nil
@@ -288,9 +370,29 @@ func resolveArithmetic(fns []Function, ops []arithmeticOp) (Function, error) {
 			addPile = append(addPile, fns[i+1])
 		case arithmeticSub:
 			subPile = append(subPile, fns[i+1])
+		case arithmeticAnd,
+			arithmeticOr:
+			var rhs Function
+			lhs, err := resolveArithmetic(fns[:i+1], ops[:i])
+			if err == nil {
+				rhs, err = resolveArithmetic(fns[i+1:], ops[i+1:])
+			}
+			if err != nil {
+				return nil, err
+			}
+			return logicalBool(lhs, rhs, op)
 		case arithmeticEq,
-			arithmeticNeq,
-			arithmeticGt,
+			arithmeticNeq:
+			var rhs Function
+			lhs, err := resolveArithmetic(fns[:i+1], ops[:i])
+			if err == nil {
+				rhs, err = resolveArithmetic(fns[i+1:], ops[i+1:])
+			}
+			if err != nil {
+				return nil, err
+			}
+			return compareGeneric(lhs, rhs, op)
+		case arithmeticGt,
 			arithmeticGte,
 			arithmeticLt,
 			arithmeticLte:
@@ -302,7 +404,7 @@ func resolveArithmetic(fns []Function, ops []arithmeticOp) (Function, error) {
 			if err != nil {
 				return nil, err
 			}
-			return compare(lhs, rhs, op)
+			return compareFloat(lhs, rhs, op)
 		}
 	}
 

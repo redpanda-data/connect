@@ -71,6 +71,20 @@ func TestFunctions(t *testing.T) {
 				{content: `{"foo":"bar"}`},
 			},
 		},
+		"json function 4": {
+			input:  `json("foo") && (json("bar") > 2)`,
+			output: `true`,
+			messages: []easyMsg{
+				{content: `{"foo":true,"bar":3}`},
+			},
+		},
+		"json function 5": {
+			input:  `json("foo") && (json("bar") > 2)`,
+			output: `false`,
+			messages: []easyMsg{
+				{content: `{"foo":true,"bar":1}`},
+			},
+		},
 		"json_from function": {
 			input:  `json_from(1, "foo")`,
 			output: `bar`,
