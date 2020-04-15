@@ -59,7 +59,6 @@ type KinesisBalanced struct {
 
 	session *session.Session
 
-	lastSequence  *string
 	lastSequences map[string]*string
 	namespace     string
 
