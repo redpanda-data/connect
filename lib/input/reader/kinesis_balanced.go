@@ -4,7 +4,6 @@ package reader
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -60,8 +59,8 @@ type KinesisBalanced struct {
 
 	session *session.Session
 
-	lastSequence *string
-	namespace    string
+	lastSequences map[string]*string
+	namespace     string
 
 	log     log.Modular
 	stats   metrics.Type
@@ -142,7 +141,7 @@ func (k *KinesisBalanced) ReadWithContext(ctx context.Context) (types.Message, A
 		return nil, nil, types.ErrTimeout
 	}
 	if record == nil {
-		return nil, nil, fmt.Errorf("shard '%s' has closed", k.shardID)
+		return nil, nil, types.ErrTimeout
 	}
 
 	part := message.NewPart(record.Data)
@@ -152,7 +151,7 @@ func (k *KinesisBalanced) ReadWithContext(ctx context.Context) (types.Message, A
 	msg.Append(part)
 
 	return msg, func(rctx context.Context, res types.Response) error {
-		return k.kc.Checkpoint(k.shardID, record.SequenceNumber)
+		return k.kc.Checkpoint(record.ShardID, record.SequenceNumber)
 	}, nil
 }
 
@@ -162,9 +161,9 @@ func (k *KinesisBalanced) Read() (types.Message, error) {
 
 	record := <-k.records
 	if record == nil {
-		return nil, fmt.Errorf("shard '%s' has closed", k.shardID)
+		return nil, types.ErrTimeout
 	}
-	k.lastSequence = &record.SequenceNumber
+	k.lastSequences[record.ShardID] = &record.SequenceNumber
 	{
 		part := message.NewPart(record.Data)
 		k.setMetadata(record, part)
@@ -176,7 +175,7 @@ batchLoop:
 		select {
 		case record := <-k.records:
 			if record != nil {
-				k.lastSequence = &record.SequenceNumber
+				k.lastSequences[record.ShardID] = &record.SequenceNumber
 				part := message.NewPart(record.Data)
 				k.setMetadata(record, part)
 				msg.Append(part)
@@ -195,8 +194,14 @@ batchLoop:
 // Acknowledge confirms whether or not our unacknowledged messages have been
 // successfully propagated or not.
 func (k *KinesisBalanced) Acknowledge(err error) error {
-	if err == nil && k.lastSequence != nil {
-		return k.kc.Checkpoint(k.shardID, *k.lastSequence)
+	if err == nil && k.lastSequences != nil {
+		for shard, sequence := range k.lastSequences {
+			err := k.kc.Checkpoint(shard, *sequence)
+			if err != nil {
+				return err
+			}
+			delete(k.lastSequences, shard)
+		}
 	}
 	return nil
 }
@@ -214,7 +219,6 @@ func (k *KinesisBalanced) WaitForClose(time.Duration) error {
 
 // Init is required by the KinesisConsumer interface
 func (k *KinesisBalanced) Init(shardID string) error {
-	k.shardID = shardID
 	return nil
 }
 
