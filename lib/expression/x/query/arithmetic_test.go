@@ -210,6 +210,20 @@ func TestArithmetic(t *testing.T) {
 			output:   `true`,
 			messages: []easyMsg{{}},
 		},
+		"coalesce json": {
+			input:  `json("foo") | json("bar")`,
+			output: `from_bar`,
+			messages: []easyMsg{
+				{content: `{"foo":null,"bar":"from_bar"}`},
+			},
+		},
+		"coalesce json 2": {
+			input:  `json("foo") | "notthis"`,
+			output: `from_foo`,
+			messages: []easyMsg{
+				{content: `{"foo":"from_foo"}`},
+			},
+		},
 	}
 
 	for name, test := range tests {
@@ -232,9 +246,15 @@ func TestArithmetic(t *testing.T) {
 			if !assert.NoError(t, err) {
 				return
 			}
-			res := e.ToString(test.index, msg, false)
+			res := e.ToString(FunctionContext{
+				Index: test.index,
+				Msg:   msg,
+			})
 			assert.Equal(t, test.output, res)
-			res = string(e.ToBytes(test.index, msg, false))
+			res = string(e.ToBytes(FunctionContext{
+				Index: test.index,
+				Msg:   msg,
+			}))
 			assert.Equal(t, test.output, res)
 		})
 	}
@@ -280,9 +300,12 @@ func TestArithmeticLiterals(t *testing.T) {
 		if !assert.NoError(t, err) {
 			return
 		}
-		res := e.ToString(0, msg, false)
+		res := e.ToString(FunctionContext{
+			Index: 0,
+			Msg:   msg,
+		})
 		assert.Equal(t, v, res, k)
-		res = string(e.ToBytes(0, msg, false))
+		res = string(e.ToBytes(FunctionContext{Msg: msg}))
 		assert.Equal(t, v, res, k)
 	}
 }

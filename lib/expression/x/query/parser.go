@@ -14,19 +14,27 @@ type Message interface {
 	Len() int
 }
 
+// FunctionContext provides access to a root message, its index within the batch, and
+type FunctionContext struct {
+	Value  *interface{}
+	Index  int
+	Msg    Message
+	Legacy bool
+}
+
 // Function takes a set of contextual parameters and returns the result of the
 // query.
 type Function interface {
 	// Execute this function for a message of a batch.
-	Exec(index int, msg Message, legacy bool) (interface{}, error)
+	Exec(ctx FunctionContext) (interface{}, error)
 
 	// Execute this function for a message of a batch and return the result
 	// marshalled into a byte slice.
-	ToBytes(index int, msg Message, legacy bool) []byte
+	ToBytes(ctx FunctionContext) []byte
 
 	// Execute this function for a message of a batch and return the result
 	// marshalled into a string.
-	ToString(index int, msg Message, legacy bool) string
+	ToString(ctx FunctionContext) string
 }
 
 //------------------------------------------------------------------------------
@@ -41,6 +49,7 @@ func Parse(input []rune) parser.Result {
 	closeBracket := parser.Char(')')
 	nextSegment := parser.AnyOf(
 		openBracket,
+		literalParser(),
 		functionParser(),
 	)
 

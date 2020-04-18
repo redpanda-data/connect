@@ -39,11 +39,11 @@ func TestExpressionParserErrors(t *testing.T) {
 	}{
 		"bad function": {
 			input: `static string ${!not a function} hello world`,
-			err:   `failed to parse expression: char 17: unrecognised function 'not a function', expected one of: [batch_size content content_from count error error_from hostname json json_from meta meta_from timestamp timestamp_unix timestamp_unix_nano timestamp_utc uuid_v4]`,
+			err:   `failed to parse expression: char 17: unrecognised function 'not a function', expected one of: [batch_size content count error field hostname json meta timestamp timestamp_unix timestamp_unix_nano timestamp_utc uuid_v4]`,
 		},
 		"bad function 2": {
 			input: `static string ${!not_a_function()} hello world`,
-			err:   `failed to parse expression: char 17: unrecognised function 'not_a_function', expected one of: [batch_size content content_from count error error_from hostname json json_from meta meta_from timestamp timestamp_unix timestamp_unix_nano timestamp_utc uuid_v4]`,
+			err:   `failed to parse expression: char 17: unrecognised function 'not_a_function', expected one of: [batch_size content count error field hostname json meta timestamp timestamp_unix timestamp_unix_nano timestamp_utc uuid_v4]`,
 		},
 		"bad args": {
 			input: `foo ${!json("foo") whats this?} bar`,
@@ -58,8 +58,8 @@ func TestExpressionParserErrors(t *testing.T) {
 			err:   `failed to parse expression: char 12: failed to parse function arguments: unexpected end of input`,
 		},
 		"bad args 4": {
-			input: `foo ${!json_from(0,} bar`,
-			err:   `failed to parse expression: char 19: failed to parse function arguments: unexpected end of input`,
+			input: `foo ${!json(0,} bar`,
+			err:   `failed to parse expression: char 14: failed to parse function arguments: unexpected end of input`,
 		},
 		"bad args 5": {
 			input: `foo ${!json} bar`,
@@ -182,7 +182,7 @@ func TestExpressions(t *testing.T) {
 			},
 		},
 		"json_from function": {
-			input:  `${!json_from(1, "foo")}`,
+			input:  `${!json("foo").from(1)}`,
 			output: `bar`,
 			messages: []easyMsg{
 				{content: `not json`},
@@ -190,7 +190,7 @@ func TestExpressions(t *testing.T) {
 			},
 		},
 		"json_from function 2": {
-			input:  `${!json_from(0, "foo")}`,
+			input:  `${!json("foo").from(0)}`,
 			output: `null`,
 			messages: []easyMsg{
 				{content: `not json`},
@@ -198,7 +198,7 @@ func TestExpressions(t *testing.T) {
 			},
 		},
 		"json_from function 3": {
-			input:  `${!json_from(-1, "foo")}`,
+			input:  `${!json("foo").from(-1)}`,
 			output: `bar`,
 			messages: []easyMsg{
 				{content: `not json`},

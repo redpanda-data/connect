@@ -16,8 +16,8 @@ import (
 //------------------------------------------------------------------------------
 
 func wrapDeprecatedFunction(d deprecatedFunction) Function {
-	return closureFn(func(i int, m Message, legacy bool) (interface{}, error) {
-		return d(i, m, legacy), nil
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		return d(ctx.Index, ctx.Msg, ctx.Legacy), nil
 	})
 }
 

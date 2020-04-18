@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strconv"
@@ -151,6 +152,30 @@ func InSet(set ...rune) Type {
 	})
 }
 
+// InRange parses any number of characters between two runes inclusive.
+func InRange(lower, upper rune) Type {
+	return NotEnd(func(input []rune) Result {
+		i := 0
+		for ; i < len(input); i++ {
+			if input[i] < lower || input[i] > upper {
+				if i == 0 {
+					return Result{
+						Err:       ExpectedError{fmt.Sprintf("range(%c - %c)", lower, upper)},
+						Remaining: input,
+					}
+				}
+				break
+			}
+		}
+
+		return Result{
+			Result:    string(input[:i]),
+			Err:       nil,
+			Remaining: input[i:],
+		}
+	})
+}
+
 // SpacesAndTabs parses any number of space or tab characters.
 func SpacesAndTabs() Type {
 	inSet := InSet(' ', '\t')
@@ -189,7 +214,8 @@ func Match(str string) Type {
 // Number parses any number of numerical characters into either an int64 or, if
 // the number contains float characters, a float64.
 func Number() Type {
-	digitSet := InSet([]rune("0123456789.")...)
+	digitSet := InSet([]rune("0123456789")...)
+	dot := Char('.')
 	minus := Char('-')
 	return func(input []rune) Result {
 		var negative bool
@@ -206,6 +232,12 @@ func Number() Type {
 			return res
 		}
 		resStr := res.Result.(string)
+		if resTest := dot(res.Remaining); resTest.Err == nil {
+			if resTest = digitSet(resTest.Remaining); resTest.Err == nil {
+				resStr = resStr + "." + resTest.Result.(string)
+				res = resTest
+			}
+		}
 		if strings.Contains(resStr, ".") {
 			f, err := strconv.ParseFloat(resStr, 64)
 			if err != nil {
@@ -247,6 +279,77 @@ func Boolean() Type {
 			res.Err = ExpectedError{"boolean"}
 		}
 		return res
+	}
+}
+
+// CamelCase parses any number of characters of a camel case string. This parser
+// is very strict and does not support double underscores, prefix or suffix
+// underscores.
+func CamelCase() Type {
+	parser := AnyOf(
+		InRange('a', 'z'),
+		InRange('0', '9'),
+		Char('_'),
+	)
+	return func(input []rune) Result {
+		partials := []string{}
+		res := Result{
+			Remaining: input,
+		}
+		var i int
+		for {
+			i = len(input) - len(res.Remaining)
+			if res = parser(res.Remaining); res.Err != nil {
+				break
+			}
+			next := res.Result.(string)
+			if next == "_" {
+				if len(partials) == 0 {
+					return Result{
+						Remaining: input,
+						Err: PositionalError{
+							Position: i,
+							Err:      errors.New("unexpected prefixed underscore"),
+						},
+					}
+				} else if partials[len(partials)-1] == "_" {
+					return Result{
+						Remaining: input,
+						Err: PositionalError{
+							Position: i,
+							Err:      errors.New("unexpected double underscore"),
+						},
+					}
+				}
+			}
+			partials = append(partials, next)
+		}
+		if len(partials) == 0 {
+			return Result{
+				Remaining: input,
+				Err: PositionalError{
+					Position: i,
+					Err:      res.Err,
+				},
+			}
+		}
+		if partials[len(partials)-1] == "_" {
+			return Result{
+				Remaining: input,
+				Err: PositionalError{
+					Position: i,
+					Err:      errors.New("unexpected suffixed underscore"),
+				},
+			}
+		}
+		var buf bytes.Buffer
+		for _, p := range partials {
+			buf.WriteString(p)
+		}
+		return Result{
+			Result:    buf.String(),
+			Remaining: res.Remaining,
+		}
 	}
 }
 

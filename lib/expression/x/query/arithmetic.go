@@ -2,7 +2,6 @@ package query
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/Jeffail/benthos/v3/lib/expression/x/parser"
 )
@@ -24,6 +23,7 @@ const (
 	arithmeticLte
 	arithmeticAnd
 	arithmeticOr
+	arithmeticPipe
 )
 
 func arithmeticOpParser() parser.Type {
@@ -40,6 +40,7 @@ func arithmeticOpParser() parser.Type {
 		parser.Match("<="),
 		parser.Char('>'),
 		parser.Char('<'),
+		parser.Char('|'),
 	)
 	return func(input []rune) parser.Result {
 		res := opParser(input)
@@ -71,6 +72,8 @@ func arithmeticOpParser() parser.Type {
 			res.Result = arithmeticGte
 		case "<=":
 			res.Result = arithmeticLte
+		case "|":
+			res.Result = arithmeticPipe
 		default:
 			return parser.Result{
 				Remaining: input,
@@ -79,18 +82,6 @@ func arithmeticOpParser() parser.Type {
 		}
 		return res
 	}
-}
-
-func getNumber(v interface{}) (float64, error) {
-	switch t := v.(type) {
-	case int64:
-		return float64(t), nil
-	case float64:
-		return t, nil
-	case string:
-		return strconv.ParseFloat(t, 64)
-	}
-	return 0, fmt.Errorf("function returned non-numerical type: %T", v)
 }
 
 func restrictForComparison(v interface{}) interface{} {
@@ -104,15 +95,15 @@ func restrictForComparison(v interface{}) interface{} {
 }
 
 func add(fns []Function) Function {
-	return closureFn(func(i int, msg Message, legacy bool) (interface{}, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		var total float64
 		var err error
 
 		for _, fn := range fns {
 			var nextF float64
-			next, tmpErr := fn.Exec(i, msg, legacy)
+			next, tmpErr := fn.Exec(ctx)
 			if tmpErr == nil {
-				nextF, tmpErr = getNumber(next)
+				nextF, tmpErr = iGetNumber(next)
 			}
 			if tmpErr != nil {
 				err = tmpErr
@@ -132,18 +123,18 @@ func add(fns []Function) Function {
 }
 
 func sub(lhs, rhs Function) Function {
-	return closureFn(func(i int, msg Message, legacy bool) (interface{}, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		var total float64
 		var err error
 
-		if leftV, tmpErr := lhs.Exec(i, msg, legacy); tmpErr == nil {
-			total, err = getNumber(leftV)
+		if leftV, tmpErr := lhs.Exec(ctx); tmpErr == nil {
+			total, err = iGetNumber(leftV)
 		} else {
 			err = tmpErr
 		}
-		if rightV, tmpErr := rhs.Exec(i, msg, legacy); tmpErr == nil {
+		if rightV, tmpErr := rhs.Exec(ctx); tmpErr == nil {
 			var toSub float64
-			if toSub, tmpErr = getNumber(rightV); tmpErr != nil {
+			if toSub, tmpErr = iGetNumber(rightV); tmpErr != nil {
 				err = tmpErr
 			} else {
 				total -= toSub
@@ -163,18 +154,18 @@ func sub(lhs, rhs Function) Function {
 }
 
 func divide(lhs, rhs Function) Function {
-	return closureFn(func(i int, msg Message, legacy bool) (interface{}, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		var result float64
 		var err error
 
-		if leftV, tmpErr := lhs.Exec(i, msg, legacy); tmpErr == nil {
-			result, err = getNumber(leftV)
+		if leftV, tmpErr := lhs.Exec(ctx); tmpErr == nil {
+			result, err = iGetNumber(leftV)
 		} else {
 			err = tmpErr
 		}
-		if rightV, tmpErr := rhs.Exec(i, msg, legacy); tmpErr == nil {
+		if rightV, tmpErr := rhs.Exec(ctx); tmpErr == nil {
 			var denom float64
-			if denom, tmpErr = getNumber(rightV); tmpErr != nil {
+			if denom, tmpErr = iGetNumber(rightV); tmpErr != nil {
 				err = tmpErr
 			} else {
 				result = result / denom
@@ -191,18 +182,18 @@ func divide(lhs, rhs Function) Function {
 }
 
 func multiply(lhs, rhs Function) Function {
-	return closureFn(func(i int, msg Message, legacy bool) (interface{}, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		var result float64
 		var err error
 
-		if leftV, tmpErr := lhs.Exec(i, msg, legacy); tmpErr == nil {
-			result, err = getNumber(leftV)
+		if leftV, tmpErr := lhs.Exec(ctx); tmpErr == nil {
+			result, err = iGetNumber(leftV)
 		} else {
 			err = tmpErr
 		}
-		if rightV, tmpErr := rhs.Exec(i, msg, legacy); tmpErr == nil {
+		if rightV, tmpErr := rhs.Exec(ctx); tmpErr == nil {
 			var denom float64
-			if denom, tmpErr = getNumber(rightV); tmpErr != nil {
+			if denom, tmpErr = iGetNumber(rightV); tmpErr != nil {
 				err = tmpErr
 			} else {
 				result = result * denom
@@ -248,17 +239,17 @@ func compareFloat(lhs, rhs Function, op arithmeticOp) (Function, error) {
 	default:
 		return nil, fmt.Errorf("operator not supported: %v", op)
 	}
-	return closureFn(func(i int, msg Message, legacy bool) (interface{}, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		var lhsV, rhsV float64
 		var err error
 
-		if leftV, tmpErr := lhs.Exec(i, msg, legacy); tmpErr == nil {
-			lhsV, err = getNumber(leftV)
+		if leftV, tmpErr := lhs.Exec(ctx); tmpErr == nil {
+			lhsV, err = iGetNumber(leftV)
 		} else {
 			err = tmpErr
 		}
-		if rightV, tmpErr := rhs.Exec(i, msg, legacy); tmpErr == nil {
-			if rhsV, tmpErr = getNumber(rightV); tmpErr != nil {
+		if rightV, tmpErr := rhs.Exec(ctx); tmpErr == nil {
+			if rhsV, tmpErr = iGetNumber(rightV); tmpErr != nil {
 				err = tmpErr
 			}
 		} else {
@@ -269,6 +260,16 @@ func compareFloat(lhs, rhs Function, op arithmeticOp) (Function, error) {
 		}
 		return opFn(lhsV, rhsV), nil
 	}), nil
+}
+
+func coalesce(lhs, rhs Function) Function {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		lhsV, err := lhs.Exec(ctx)
+		if err == nil && lhsV != nil {
+			return lhsV, nil
+		}
+		return rhs.Exec(ctx)
+	})
 }
 
 func compareGeneric(lhs, rhs Function, op arithmeticOp) (Function, error) {
@@ -285,11 +286,11 @@ func compareGeneric(lhs, rhs Function, op arithmeticOp) (Function, error) {
 	default:
 		return nil, fmt.Errorf("operator not supported: %v", op)
 	}
-	return closureFn(func(i int, msg Message, legacy bool) (interface{}, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		var lhsV, rhsV interface{}
 		var err error
-		if lhsV, err = lhs.Exec(i, msg, legacy); err == nil {
-			rhsV, err = rhs.Exec(i, msg, legacy)
+		if lhsV, err = lhs.Exec(ctx); err == nil {
+			rhsV, err = rhs.Exec(ctx)
 		}
 		if err != nil {
 			return nil, err
@@ -314,16 +315,16 @@ func logicalBool(lhs, rhs Function, op arithmeticOp) (Function, error) {
 	default:
 		return nil, fmt.Errorf("operator not supported: %v", op)
 	}
-	return closureFn(func(i int, msg Message, legacy bool) (interface{}, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		var lhsV, rhsV bool
 		var err error
 
-		if leftV, tmpErr := lhs.Exec(i, msg, legacy); tmpErr == nil {
+		if leftV, tmpErr := lhs.Exec(ctx); tmpErr == nil {
 			lhsV, _ = leftV.(bool)
 		} else {
 			err = tmpErr
 		}
-		if rightV, tmpErr := rhs.Exec(i, msg, legacy); tmpErr == nil {
+		if rightV, tmpErr := rhs.Exec(ctx); tmpErr == nil {
 			rhsV, _ = rightV.(bool)
 		} else {
 			err = tmpErr
@@ -405,6 +406,16 @@ func resolveArithmetic(fns []Function, ops []arithmeticOp) (Function, error) {
 				return nil, err
 			}
 			return compareFloat(lhs, rhs, op)
+		case arithmeticPipe:
+			var rhs Function
+			lhs, err := resolveArithmetic(fns[:i+1], ops[:i])
+			if err == nil {
+				rhs, err = resolveArithmetic(fns[i+1:], ops[i+1:])
+			}
+			if err != nil {
+				return nil, err
+			}
+			return coalesce(lhs, rhs), nil
 		}
 	}
 

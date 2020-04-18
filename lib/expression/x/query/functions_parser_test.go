@@ -25,6 +25,7 @@ func TestFunctions(t *testing.T) {
 		input    string
 		output   string
 		messages []easyMsg
+		value    *interface{}
 		index    int
 	}{
 		"literal function": {
@@ -86,7 +87,7 @@ func TestFunctions(t *testing.T) {
 			},
 		},
 		"json_from function": {
-			input:  `json_from(1, "foo")`,
+			input:  `json("foo").from(1)`,
 			output: `bar`,
 			messages: []easyMsg{
 				{content: `not json`},
@@ -94,7 +95,7 @@ func TestFunctions(t *testing.T) {
 			},
 		},
 		"json_from function 2": {
-			input:  `json_from(0, "foo")`,
+			input:  `json("foo").from(0)`,
 			output: `null`,
 			messages: []easyMsg{
 				{content: `not json`},
@@ -102,7 +103,7 @@ func TestFunctions(t *testing.T) {
 			},
 		},
 		"json_from function 3": {
-			input:  `json_from(-1, "foo")`,
+			input:  `json("foo").from(-1)`,
 			output: `bar`,
 			messages: []easyMsg{
 				{content: `not json`},
@@ -168,7 +169,7 @@ func TestFunctions(t *testing.T) {
 			},
 		},
 		"metadata 5": {
-			input:  `meta_from(1, "foo")`,
+			input:  `meta("foo").from(1)`,
 			output: "bar",
 			index:  0,
 			messages: []easyMsg{
@@ -198,7 +199,7 @@ func TestFunctions(t *testing.T) {
 			},
 		},
 		"metadata 7": {
-			input:  `meta_from(1)`,
+			input:  `meta().from(1)`,
 			output: `{}`,
 			messages: []easyMsg{
 				{
@@ -211,7 +212,7 @@ func TestFunctions(t *testing.T) {
 			},
 		},
 		"metadata 8": {
-			input:  `meta_from(1)`,
+			input:  `meta().from(1)`,
 			output: `{"baz":"qux","duck,1":"quack","foo":"bar"}`,
 			messages: []easyMsg{
 				{},
@@ -234,7 +235,7 @@ func TestFunctions(t *testing.T) {
 			},
 		},
 		"error function 2": {
-			input:  `error_from(1)`,
+			input:  `error().from(1)`,
 			output: ``,
 			messages: []easyMsg{
 				{meta: map[string]string{
@@ -243,7 +244,7 @@ func TestFunctions(t *testing.T) {
 			},
 		},
 		"error function 3": {
-			input:  `error_from(1)`,
+			input:  `error().from(1)`,
 			output: `test error`,
 			messages: []easyMsg{
 				{},
@@ -273,7 +274,7 @@ func TestFunctions(t *testing.T) {
 			},
 		},
 		"content function 2": {
-			input:  `content_from(1)`,
+			input:  `content().from(1)`,
 			output: `barbaz`,
 			index:  0,
 			messages: []easyMsg{
@@ -304,6 +305,36 @@ func TestFunctions(t *testing.T) {
 				{},
 			},
 		},
+		"field no context": {
+			input:  `field()`,
+			output: `null`,
+		},
+		"field root": {
+			input:  `field()`,
+			output: `test`,
+			value: func() *interface{} {
+				var v interface{} = "test"
+				return &v
+			}(),
+		},
+		"field root null": {
+			input:  `field()`,
+			output: `null`,
+			value: func() *interface{} {
+				var v interface{} = nil
+				return &v
+			}(),
+		},
+		"field map": {
+			input:  `field("foo")`,
+			output: `hello world`,
+			value: func() *interface{} {
+				var v interface{} = map[string]interface{}{
+					"foo": "hello world",
+				}
+				return &v
+			}(),
+		},
 	}
 
 	for name, test := range tests {
@@ -326,9 +357,15 @@ func TestFunctions(t *testing.T) {
 			if !assert.NoError(t, err) {
 				return
 			}
-			res := e.ToString(test.index, msg, false)
+			res := e.ToString(FunctionContext{
+				Index: test.index, Msg: msg,
+				Value: test.value,
+			})
 			assert.Equal(t, test.output, res)
-			res = string(e.ToBytes(test.index, msg, false))
+			res = string(e.ToBytes(FunctionContext{
+				Index: test.index, Msg: msg,
+				Value: test.value,
+			}))
 			assert.Equal(t, test.output, res)
 		})
 	}
@@ -353,7 +390,9 @@ func TestCountersFunction(t *testing.T) {
 		if !assert.NoError(t, err) {
 			continue
 		}
-		res := e.ToString(0, message.New(nil), false)
+		res := e.ToString(FunctionContext{
+			Msg: message.New(nil),
+		})
 		assert.Equal(t, test[1], res)
 	}
 }
@@ -366,7 +405,9 @@ func TestUUIDV4Function(t *testing.T) {
 		if !assert.NoError(t, err) {
 			continue
 		}
-		res := e.ToString(0, message.New(nil), false)
+		res := e.ToString(FunctionContext{
+			Msg: message.New(nil),
+		})
 		if _, exists := results[res]; exists {
 			t.Errorf("Duplicate UUID generated: %v", res)
 		}
@@ -381,7 +422,7 @@ func TestTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp := e.ToString(0, message.New(nil), false)
+	tStamp := e.ToString(FunctionContext{Msg: message.New(nil)})
 
 	nanoseconds, err := strconv.ParseInt(tStamp, 10, 64)
 	if err != nil {
@@ -398,7 +439,7 @@ func TestTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp = e.ToString(0, message.New(nil), false)
+	tStamp = e.ToString(FunctionContext{Msg: message.New(nil)})
 
 	seconds, err := strconv.ParseInt(tStamp, 10, 64)
 	if err != nil {
@@ -415,7 +456,7 @@ func TestTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp = e.ToString(0, message.New(nil), false)
+	tStamp = e.ToString(FunctionContext{Msg: message.New(nil)})
 
 	var secondsF float64
 	secondsF, err = strconv.ParseFloat(tStamp, 64)
@@ -433,7 +474,7 @@ func TestTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp = e.ToString(0, message.New(nil), false)
+	tStamp = e.ToString(FunctionContext{Msg: message.New(nil)})
 
 	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
 	if err != nil {
@@ -449,7 +490,7 @@ func TestTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp = e.ToString(0, message.New(nil), false)
+	tStamp = e.ToString(FunctionContext{Msg: message.New(nil)})
 
 	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
 	if err != nil {

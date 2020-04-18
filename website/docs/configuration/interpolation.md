@@ -18,9 +18,9 @@ BROKERS="foo:9092,bar:9092" benthos -c ./config.yaml
 
 If a literal string is required that matches this pattern (`${foo}`) you can escape it with double brackets. For example, the string `${{foo}}` is read as the literal `${foo}`.
 
-## Functions
+## Dynamic Queries
 
-Some Benthos fields also support function interpolations, which are much more powerful expressions that allow you to extract fields of messages and perform arithmetic. The syntax of a function interpolation is `${!<expression>}`, where the contents are a logical expression including a range of functions. For example, with the following config:
+Some Benthos fields also support function interpolations, which are much more powerful expressions that allow you to query the contents of messages and perform arithmetic. The syntax of a function interpolation is `${!<expression>}`, where the contents are a logical expression including a range of functions. For example, with the following config:
 
 ```yaml
 output:
@@ -35,22 +35,16 @@ If a literal string is required that matches this pattern (`${!foo}`) then, simi
 
 Interpolation function expressions support arithmetic and boolean operators, there are some [examples of this below](#examples).
 
+## Functions
+
 ### `content()`
 
 Returns the full contents of a message.
-
-### `content_from(int)`
-
-Returns the full contents of a message at a particular index of a batch. This allows you to mutate a message with the contents of another.
 
 ### `error()`
 
 If an error has occurred during the processing of a message this function returns the reported cause of the error. For more information about error
 handling patterns read [here][error_handling].
-
-### `error_from(int)`
-
-Returns the error of a message at a particular index of a batch.
 
 ### `batch_size()`
 
@@ -62,19 +56,11 @@ Returns the value of a field within a JSON message located by a [dot path][field
 
 The parameter is optional and if omitted the entire JSON payload is returned.
 
-### `json_from(int, string)`
-
-Returns a value from a JSON message at a particular index of a batch.
-
 ### `meta(string)`
 
 Returns the value of a metadata key from a message identified by a key. Message metadata can be modified using the [metadata processor][meta_proc].
 
 The parameter is optional and if omitted the entire metadata contents are returned as a JSON object.
-
-### `meta_from(int, string)`
-
-Returns a metadata value from a message at a particular index of a batch.
 
 ### `uuid_v4()`
 
@@ -106,6 +92,16 @@ The `count` function is a counter starting at 1 which increments after each time
 ### `hostname()`
 
 Resolves to the hostname of the machine running Benthos. E.g. `foo ${!hostname()} bar` might resolve to `foo glados bar`.
+
+## Methods
+
+Methods mutate the behaviour or result of a function (or literal).
+
+### `from(int)`
+
+Execute a function from the context of another message in the batch. This allows you to mutate events based on the contents of other messages.
+
+For example, `json("foo").from(1)` would extract the contents of the JSON field `foo` specifically from message index `1` of a batch.
 
 ## Examples
 

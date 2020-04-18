@@ -299,14 +299,24 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 				return
 			}
 
-			res := e.ToString(test.index, msg, test.legacy)
-			res2 := string(e.ToBytes(test.index, msg, test.legacy))
+			res := e.ToString(FunctionContext{
+				Index:  test.index,
+				Msg:    msg,
+				Legacy: test.legacy,
+			})
+			res2 := string(e.ToBytes(FunctionContext{
+				Index:  test.index,
+				Msg:    msg,
+				Legacy: test.legacy,
+			}))
 
 			assert.Equal(t, test.output, res)
 			assert.Equal(t, test.output, res2)
 		})
 	}
 }
+
+var emptyCtx = FunctionContext{Msg: message.New(nil)}
 
 func TestDeprecatedCountersFunction(t *testing.T) {
 	tests := [][2]string{
@@ -327,7 +337,7 @@ func TestDeprecatedCountersFunction(t *testing.T) {
 		if !assert.NoError(t, err) {
 			continue
 		}
-		res := e.ToString(0, message.New(nil), false)
+		res := e.ToString(emptyCtx)
 		assert.Equal(t, test[1], res)
 	}
 }
@@ -340,7 +350,7 @@ func TestDeprecatedUUIDV4Function(t *testing.T) {
 		if !assert.NoError(t, err) {
 			continue
 		}
-		res := e.ToString(0, message.New(nil), false)
+		res := e.ToString(emptyCtx)
 		if _, exists := results[res]; exists {
 			t.Errorf("Duplicate UUID generated: %v", res)
 		}
@@ -355,7 +365,7 @@ func TestDeprecatedTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp := e.ToString(0, message.New(nil), false)
+	tStamp := e.ToString(emptyCtx)
 
 	nanoseconds, err := strconv.ParseInt(tStamp, 10, 64)
 	if err != nil {
@@ -372,7 +382,7 @@ func TestDeprecatedTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp = e.ToString(0, message.New(nil), false)
+	tStamp = e.ToString(emptyCtx)
 
 	seconds, err := strconv.ParseInt(tStamp, 10, 64)
 	if err != nil {
@@ -389,7 +399,7 @@ func TestDeprecatedTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp = e.ToString(0, message.New(nil), false)
+	tStamp = e.ToString(emptyCtx)
 
 	var secondsF float64
 	secondsF, err = strconv.ParseFloat(tStamp, 64)
@@ -407,7 +417,7 @@ func TestDeprecatedTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp = e.ToString(0, message.New(nil), false)
+	tStamp = e.ToString(emptyCtx)
 
 	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
 	if err != nil {
@@ -423,7 +433,7 @@ func TestDeprecatedTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp = e.ToString(0, message.New(nil), false)
+	tStamp = e.ToString(emptyCtx)
 
 	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
 	if err != nil {

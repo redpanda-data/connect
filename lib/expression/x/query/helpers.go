@@ -3,20 +3,31 @@ package query
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/Jeffail/gabs/v2"
 )
 
 //------------------------------------------------------------------------------
 
+func iGetNumber(v interface{}) (float64, error) {
+	switch t := v.(type) {
+	case int64:
+		return float64(t), nil
+	case uint64:
+		return float64(t), nil
+	case float64:
+		return t, nil
+	case string:
+		return strconv.ParseFloat(t, 64)
+	}
+	return 0, fmt.Errorf("function returned non-numerical type: %T", v)
+}
+
 func iSanitize(i interface{}) interface{} {
 	switch t := i.(type) {
-	case string, []byte, int64, uint64, float64, bool:
+	case string, []byte, int64, uint64, float64, bool, []interface{}, map[string]interface{}:
 		return i
-	case map[string]interface{}:
-		return gabs.Wrap(t).String()
-	case []interface{}:
-		return gabs.Wrap(t).String()
 	case json.RawMessage:
 		return []byte(t)
 	case json.Number:

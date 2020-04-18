@@ -13,11 +13,11 @@ func TestFunctionParserErrors(t *testing.T) {
 	}{
 		"bad function": {
 			input: `not a function`,
-			err:   `char 0: unrecognised function 'not a function', expected one of: [batch_size content content_from count error error_from hostname json json_from meta meta_from timestamp timestamp_unix timestamp_unix_nano timestamp_utc uuid_v4]`,
+			err:   `char 0: unrecognised function 'not', expected one of: [batch_size content count error field hostname json meta timestamp timestamp_unix timestamp_unix_nano timestamp_utc uuid_v4]`,
 		},
 		"bad function 2": {
 			input: `not_a_function()`,
-			err:   `char 0: unrecognised function 'not_a_function', expected one of: [batch_size content content_from count error error_from hostname json json_from meta meta_from timestamp timestamp_unix timestamp_unix_nano timestamp_utc uuid_v4]`,
+			err:   `char 0: unrecognised function 'not_a_function', expected one of: [batch_size content count error field hostname json meta timestamp timestamp_unix timestamp_unix_nano timestamp_utc uuid_v4]`,
 		},
 		"bad args 2": {
 			input: `json("foo`,
@@ -28,8 +28,8 @@ func TestFunctionParserErrors(t *testing.T) {
 			err:   `char 5: failed to parse function arguments: unexpected end of input`,
 		},
 		"bad args 4": {
-			input: `json_from(0,`,
-			err:   `char 12: failed to parse function arguments: unexpected end of input`,
+			input: `json(0,`,
+			err:   `char 7: failed to parse function arguments: unexpected end of input`,
 		},
 		"bad args 5": {
 			input: `json`,
@@ -41,11 +41,15 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"bad args 7": {
 			input: `json(5)`,
-			err:   `char 0: expected string param, received int64`,
+			err:   `char 4: expected string param, received int64`,
 		},
 		"bad args 8": {
 			input: `json(false)`,
-			err:   `char 0: expected string param, received bool`,
+			err:   `char 4: expected string param, received bool`,
+		},
+		"bad args 9": {
+			input: `json(json("foo"))`,
+			err:   `char 5: failed to parse function arguments: expected one of: [boolean number quoted-string]`,
 		},
 		"bad operators": {
 			input: `json("foo") + `,
@@ -62,6 +66,30 @@ func TestFunctionParserErrors(t *testing.T) {
 		"bad expression 3": {
 			input: `(json("foo") + meta("bar") `,
 			err:   `char 27: unexpected end of input`,
+		},
+		"bad method": {
+			input: `json("foo").nope()`,
+			err:   `char 12: unrecognised method 'nope', expected one of: [from from_all map or sum]`,
+		},
+		"bad method args": {
+			input: `json("foo").from`,
+			err:   `char 12: expected params '()' after method: 'from'`,
+		},
+		"bad method args 2": {
+			input: `json("foo").from(`,
+			err:   `char 17: failed to parse method arguments: unexpected end of input`,
+		},
+		"bad method args 3": {
+			input: `json("foo").from()`,
+			err:   `char 16: expected one argument, received: 0`,
+		},
+		"bad method args 4": {
+			input: `json("foo").from("nah")`,
+			err:   `char 16: expected int param, received string`,
+		},
+		"bad map args": {
+			input: `json("foo").map()`,
+			err:   `char 15: expected one argument, received: 0`,
 		},
 	}
 

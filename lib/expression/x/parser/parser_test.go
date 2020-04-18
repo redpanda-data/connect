@@ -147,6 +147,121 @@ func TestInSet(t *testing.T) {
 	}
 }
 
+func TestInRange(t *testing.T) {
+	parser := InRange('a', 'c')
+
+	tests := map[string]struct {
+		input     string
+		result    interface{}
+		remaining string
+		err       error
+	}{
+		"empty input": {
+			err: errors.New("unexpected end of input"),
+		},
+		"only a char": {
+			input:     "a",
+			result:    "a",
+			remaining: "",
+		},
+		"lots of the set": {
+			input:     "abcabc",
+			remaining: "",
+			result:    "abcabc",
+		},
+		"lots of the set and some": {
+			input:     "abcabc and this",
+			remaining: " and this",
+			result:    "abcabc",
+		},
+		"not in the set": {
+			input:     "n",
+			remaining: "n",
+			err:       ExpectedError{"range(a - c)"},
+		},
+		"lots not in the set": {
+			input:     "nononono",
+			remaining: "nononono",
+			err:       ExpectedError{"range(a - c)"},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			res := parser([]rune(test.input))
+			_ = assert.Equal(t, test.err, res.Err, "Error") &&
+				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+		})
+	}
+}
+
+func TestCamelCase(t *testing.T) {
+	parser := CamelCase()
+
+	tests := map[string]struct {
+		input     string
+		result    interface{}
+		remaining string
+		err       string
+	}{
+		"empty input": {
+			err: `char 0: unexpected end of input`,
+		},
+		"only a char": {
+			input:     "a",
+			result:    "a",
+			remaining: "",
+		},
+		"lots of the set": {
+			input:     "a1c_a2c",
+			remaining: "",
+			result:    "a1c_a2c",
+		},
+		"lots of the set and some": {
+			input:     "abc_abc and this",
+			remaining: " and this",
+			result:    "abc_abc",
+		},
+		"not in the set": {
+			input:     "N",
+			remaining: "N",
+			err:       `char 0: expected one of: [range(a - z) range(0 - 9) _]`,
+		},
+		"lots not in the set": {
+			input:     "NONONONO",
+			remaining: "NONONONO",
+			err:       `char 0: expected one of: [range(a - z) range(0 - 9) _]`,
+		},
+		"prefix underscore": {
+			input:     "_foobar baz",
+			remaining: "_foobar baz",
+			err:       `char 0: unexpected prefixed underscore`,
+		},
+		"suffix underscore": {
+			input:     "foo_bar_ baz",
+			remaining: "foo_bar_ baz",
+			err:       `char 8: unexpected suffixed underscore`,
+		},
+		"double underscore": {
+			input:     "foo_bar__baz",
+			remaining: "foo_bar__baz",
+			err:       `char 8: unexpected double underscore`,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			res := parser([]rune(test.input))
+			if res.Err != nil || len(test.err) > 0 {
+				assert.Equal(t, test.err, res.Err.Error(), "Error")
+			}
+			assert.Equal(t, test.result, res.Result, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+		})
+	}
+}
+
 func TestMatch(t *testing.T) {
 	str := Match("abc")
 
@@ -232,6 +347,11 @@ func TestNumber(t *testing.T) {
 			input:     "0.123 foo",
 			result:    float64(0.123),
 			remaining: " foo",
+		},
+		"float number 3": {
+			input:     "1.23.0 notthis",
+			result:    float64(1.23),
+			remaining: ".0 notthis",
 		},
 		"not a number": {
 			input:     "hello",

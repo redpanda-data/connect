@@ -32,11 +32,19 @@ type queryResolver struct {
 }
 
 func (q queryResolver) ResolveString(index int, msg Message, escaped, legacy bool) string {
-	return q.fn.ToString(index, msg, legacy)
+	return q.fn.ToString(query.FunctionContext{
+		Index:  index,
+		Msg:    msg,
+		Legacy: legacy,
+	})
 }
 
 func (q queryResolver) ResolveBytes(index int, msg Message, escaped, legacy bool) []byte {
-	bs := q.fn.ToBytes(index, msg, legacy)
+	bs := q.fn.ToBytes(query.FunctionContext{
+		Index:  index,
+		Msg:    msg,
+		Legacy: legacy,
+	})
 	if escaped {
 		bs = escapeBytes(bs)
 	}
