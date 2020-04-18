@@ -299,7 +299,12 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 func extractMessageFromRequest(r *http.Request) (types.Message, error) {
 	msg := message.New(nil)
 
-	mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	contentType := r.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	mediaType, params, err := mime.ParseMediaType(contentType)
 	if err != nil {
 		return nil, err
 	}

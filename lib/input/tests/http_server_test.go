@@ -144,6 +144,50 @@ func TestHTTPBasic(t *testing.T) {
 		}
 	}
 
+	//Test requests without content-type
+	client := &http.Client{}
+
+	for i := 0; i < nTestLoops; i++ {
+		testStr := fmt.Sprintf("test%v", i)
+		testResponse := fmt.Sprintf("response%v", i)
+		// Send it as single part
+		go func(input, output string) {
+			req, err := http.NewRequest(
+				"POST", server.URL+"/testpost", bytes.NewBuffer([]byte(input)))
+
+			res, err := client.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			} else if res.StatusCode != 200 {
+				t.Fatalf("Wrong error code returned: %v", res.StatusCode)
+			}
+			resBytes, err := ioutil.ReadAll(res.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if exp, act := output, string(resBytes); exp != act {
+				t.Errorf("Wrong sync response: %v != %v", act, exp)
+			}
+		}(testStr, testResponse)
+
+		var ts types.Transaction
+		select {
+		case ts = <-h.TransactionChan():
+			if res := string(ts.Payload.Get(0).Get()); res != testStr {
+				t.Errorf("Wrong result, %v != %v", ts.Payload, res)
+			}
+			ts.Payload.Get(0).Set([]byte(testResponse))
+			roundtrip.SetAsResponse(ts.Payload)
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for message")
+		}
+		select {
+		case ts.ResponseChan <- response.NewAck():
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for response")
+		}
+	}
+
 	h.CloseAsync()
 }
 
