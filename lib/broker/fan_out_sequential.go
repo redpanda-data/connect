@@ -22,6 +22,7 @@ type FanOutSequential struct {
 	logger log.Modular
 	stats  metrics.Type
 
+	maxInFlight  int
 	transactions <-chan types.Transaction
 
 	outputTsChans []chan types.Transaction
@@ -38,6 +39,7 @@ func NewFanOutSequential(
 ) (*FanOutSequential, error) {
 	ctx, done := context.WithCancel(context.Background())
 	o := &FanOutSequential{
+		maxInFlight:  1,
 		stats:        stats,
 		logger:       logger,
 		transactions: nil,
@@ -55,6 +57,16 @@ func NewFanOutSequential(
 		}
 	}
 	return o, nil
+}
+
+// WithMaxInFlight sets the maximum number of in-flight messages this broker
+// supports. This must be set before calling Consume.
+func (o *FanOutSequential) WithMaxInFlight(i int) *FanOutSequential {
+	if i < 1 {
+		i = 1
+	}
+	o.maxInFlight = i
+	return o
 }
 
 //------------------------------------------------------------------------------
@@ -157,7 +169,7 @@ func (o *FanOutSequential) loop() {
 	}
 
 	// Max in flight
-	for i := 0; i < 50; i++ {
+	for i := 0; i < o.maxInFlight; i++ {
 		wg.Add(1)
 		go sendLoop()
 	}

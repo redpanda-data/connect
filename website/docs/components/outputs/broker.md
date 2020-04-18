@@ -47,6 +47,7 @@ output:
   broker:
     copies: 1
     pattern: fan_out
+    max_in_flight: 1
     outputs: []
     batching:
       count: 1
@@ -101,6 +102,14 @@ The brokering pattern to use.
 Type: `string`  
 Default: `"fan_out"`  
 Options: `fan_out`, `fan_out_sequential`, `round_robin`, `greedy`, `try`.
+
+### `max_in_flight`
+
+The maximum number of messages to dispatch at any given time. Only relevant for `fan_out`, `fan_out_sequential` brokers.
+
+
+Type: `number`  
+Default: `1`  
 
 ### `outputs`
 

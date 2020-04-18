@@ -309,6 +309,7 @@ func TestTryAllFailParallel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	oTM = oTM.WithMaxInFlight(50)
 	if err = oTM.Consume(readChan); err != nil {
 		t.Fatal(err)
 	}

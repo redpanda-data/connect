@@ -21,6 +21,7 @@ All notable changes to this project will be documented in this file.
 - Field `schema_path` added to the `avro` processor.
 - The `redis` cache, `redis_list` inputs and outputs now support selecting a
   database with the URL path.
+- New field `max_in_flight` added to the `broker` output.
 
 ### Changed
 

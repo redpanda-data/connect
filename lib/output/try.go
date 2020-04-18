@@ -101,7 +101,7 @@ func NewTry(
 	if t, err = broker.NewTry(outputs, stats); err != nil {
 		return nil, err
 	}
-
+	t.WithMaxInFlight(50)
 	t.WithOutputMetricsPrefix("try.outputs")
 	return WrapWithPipelines(t, pipelines...)
 }

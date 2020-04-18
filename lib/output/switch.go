@@ -238,6 +238,7 @@ type Switch struct {
 	logger log.Modular
 	stats  metrics.Type
 
+	maxInFlight  int
 	transactions <-chan types.Transaction
 
 	retryUntilSuccess bool
@@ -268,6 +269,7 @@ func NewSwitch(
 	o := &Switch{
 		stats:             stats,
 		logger:            logger,
+		maxInFlight:       1,
 		transactions:      nil,
 		outputs:           make([]types.Output, lOutputs),
 		conditions:        make([]types.Condition, lOutputs),
@@ -435,7 +437,7 @@ func (o *Switch) loop() {
 	}
 
 	// Max in flight
-	for i := 0; i < 50; i++ {
+	for i := 0; i < o.maxInFlight; i++ {
 		wg.Add(1)
 		go sendLoop()
 	}

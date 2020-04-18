@@ -35,6 +35,7 @@ output:
       period: ""
       processors: []
     copies: 1
+    max_in_flight: 1
     outputs: []
     pattern: fan_out
 resources:

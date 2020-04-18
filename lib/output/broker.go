@@ -91,6 +91,10 @@ outputs.`,
 			docs.FieldCommon("pattern", "The brokering pattern to use.").HasOptions(
 				"fan_out", "fan_out_sequential", "round_robin", "greedy", "try",
 			),
+			docs.FieldAdvanced(
+				"max_in_flight",
+				"The maximum number of messages to dispatch at any given time. Only relevant for `fan_out`, `fan_out_sequential` brokers.",
+			),
 			docs.FieldCommon("outputs", "A list of child outputs to broker."),
 			batch.FieldSpec(),
 		},
@@ -109,10 +113,11 @@ outputs.`,
 				return nil, err
 			}
 			return map[string]interface{}{
-				"copies":   conf.Broker.Copies,
-				"pattern":  conf.Broker.Pattern,
-				"outputs":  outSlice,
-				"batching": batchSanit,
+				"copies":        conf.Broker.Copies,
+				"pattern":       conf.Broker.Pattern,
+				"max_in_flight": conf.Broker.MaxInFlight,
+				"outputs":       outSlice,
+				"batching":      batchSanit,
 			}, nil
 		},
 	}
@@ -122,10 +127,11 @@ outputs.`,
 
 // BrokerConfig contains configuration fields for the Broker output type.
 type BrokerConfig struct {
-	Copies   int                `json:"copies" yaml:"copies"`
-	Pattern  string             `json:"pattern" yaml:"pattern"`
-	Outputs  brokerOutputList   `json:"outputs" yaml:"outputs"`
-	Batching batch.PolicyConfig `json:"batching" yaml:"batching"`
+	Copies      int                `json:"copies" yaml:"copies"`
+	Pattern     string             `json:"pattern" yaml:"pattern"`
+	MaxInFlight int                `json:"max_in_flight" yaml:"max_in_flight"`
+	Outputs     brokerOutputList   `json:"outputs" yaml:"outputs"`
+	Batching    batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewBrokerConfig creates a new BrokerConfig with default values.
@@ -133,10 +139,11 @@ func NewBrokerConfig() BrokerConfig {
 	batching := batch.NewPolicyConfig()
 	batching.Count = 1
 	return BrokerConfig{
-		Copies:   1,
-		Pattern:  "fan_out",
-		Outputs:  brokerOutputList{},
-		Batching: batching,
+		Copies:      1,
+		Pattern:     "fan_out",
+		MaxInFlight: 1,
+		Outputs:     brokerOutputList{},
+		Batching:    batching,
 	}
 }
 
@@ -202,9 +209,15 @@ func NewBroker(
 	var b Type
 	switch conf.Broker.Pattern {
 	case "fan_out":
-		b, err = broker.NewFanOut(outputs, log, stats)
+		var bTmp *broker.FanOut
+		if bTmp, err = broker.NewFanOut(outputs, log, stats); err == nil {
+			b = bTmp.WithMaxInFlight(conf.Broker.MaxInFlight)
+		}
 	case "fan_out_sequential":
-		b, err = broker.NewFanOutSequential(outputs, log, stats)
+		var bTmp *broker.FanOutSequential
+		if bTmp, err = broker.NewFanOutSequential(outputs, log, stats); err == nil {
+			b = bTmp.WithMaxInFlight(conf.Broker.MaxInFlight)
+		}
 	case "round_robin":
 		b, err = broker.NewRoundRobin(outputs, stats)
 	case "greedy":

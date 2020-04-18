@@ -20,6 +20,7 @@ type Try struct {
 	stats         metrics.Type
 	outputsPrefix string
 
+	maxInFlight  int
 	transactions <-chan types.Transaction
 
 	outputTsChans []chan types.Transaction
@@ -34,6 +35,7 @@ type Try struct {
 func NewTry(outputs []types.Output, stats metrics.Type) (*Try, error) {
 	ctx, done := context.WithCancel(context.Background())
 	t := &Try{
+		maxInFlight:   1,
 		stats:         stats,
 		outputsPrefix: "broker.outputs",
 		transactions:  nil,
@@ -57,10 +59,21 @@ func NewTry(outputs []types.Output, stats metrics.Type) (*Try, error) {
 
 //------------------------------------------------------------------------------
 
+// WithMaxInFlight sets the maximum number of in-flight messages this broker
+// supports. This must be set before calling Consume.
+func (t *Try) WithMaxInFlight(i int) *Try {
+	if i < 1 {
+		i = 1
+	}
+	t.maxInFlight = i
+	return t
+}
+
 // WithOutputMetricsPrefix changes the prefix used for counter metrics showing
 // errors of an output.
-func (t *Try) WithOutputMetricsPrefix(prefix string) {
+func (t *Try) WithOutputMetricsPrefix(prefix string) *Try {
 	t.outputsPrefix = prefix
+	return t
 }
 
 // Consume assigns a new messages channel for the broker to read.
@@ -166,7 +179,7 @@ func (t *Try) loop() {
 	}
 
 	// Max in flight
-	for i := 0; i < 50; i++ {
+	for i := 0; i < t.maxInFlight; i++ {
 		wg.Add(1)
 		go sendLoop()
 	}
