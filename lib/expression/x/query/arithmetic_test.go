@@ -242,7 +242,7 @@ func TestArithmetic(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, err := tryParse(test.input)
+			e, err := tryParse(test.input, false)
 			if !assert.NoError(t, err) {
 				return
 			}
@@ -296,7 +296,7 @@ func TestArithmeticLiterals(t *testing.T) {
 
 	for k, v := range tests {
 		msg := message.New(nil)
-		e, err := tryParse(k)
+		e, err := tryParse(k, false)
 		if !assert.NoError(t, err) {
 			return
 		}

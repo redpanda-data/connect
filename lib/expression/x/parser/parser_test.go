@@ -196,6 +196,144 @@ func TestInRange(t *testing.T) {
 	}
 }
 
+func TestAnyOfErrors(t *testing.T) {
+	tests := map[string]struct {
+		resultErrs []error
+		err        string
+	}{
+		"One parser fails": {
+			resultErrs: []error{
+				PositionalError{
+					Position: 5,
+					Err:      ExpectedError{"foo"},
+				},
+			},
+			err: `char 5: expected: foo`,
+		},
+		"Two parsers fail": {
+			resultErrs: []error{
+				PositionalError{
+					Position: 5,
+					Err:      ExpectedError{"foo"},
+				},
+				PositionalError{
+					Position: 5,
+					Err:      ExpectedError{"bar"},
+				},
+			},
+			err: `char 5: expected one of: [foo bar]`,
+		},
+		"Two parsers fail 2": {
+			resultErrs: []error{
+				PositionalError{
+					Position: 5,
+					Err:      ExpectedError{"bar"},
+				},
+				ExpectedError{"foo"},
+			},
+			err: `char 5: expected: bar`,
+		},
+		"Two parsers fail 3": {
+			resultErrs: []error{
+				ExpectedError{"foo"},
+				PositionalError{
+					Position: 5,
+					Err:      ExpectedError{"bar"},
+				},
+			},
+			err: `char 5: expected: bar`,
+		},
+		"Two parsers fail 4": {
+			resultErrs: []error{
+				PositionalError{
+					Position: 5,
+					Err:      ExpectedError{"foo"},
+				},
+				PositionalError{
+					Position: 8,
+					Err:      ExpectedError{"bar"},
+				},
+			},
+			err: `char 8: expected: bar`,
+		},
+		"Two parsers fail 5": {
+			resultErrs: []error{
+				PositionalError{
+					Position: 8,
+					Err:      ExpectedError{"bar"},
+				},
+				PositionalError{
+					Position: 5,
+					Err:      ExpectedError{"foo"},
+				},
+			},
+			err: `char 8: expected: bar`,
+		},
+		"Fatal parsers fail": {
+			resultErrs: []error{
+				errors.New("this is a real error"),
+				PositionalError{
+					Position: 5,
+					Err:      ExpectedError{"foo"},
+				},
+			},
+			err: `this is a real error`,
+		},
+		"Fatal parsers fail 2": {
+			resultErrs: []error{
+				PositionalError{
+					Position: 0,
+					Err:      errors.New("this is a real error"),
+				},
+				PositionalError{
+					Position: 5,
+					Err:      ExpectedError{"foo"},
+				},
+			},
+			err: `char 0: this is a real error`,
+		},
+		"Fatal parsers fail 3": {
+			resultErrs: []error{
+				PositionalError{
+					Position: 5,
+					Err:      ExpectedError{"foo"},
+				},
+				errors.New("this is a real error"),
+			},
+			err: `this is a real error`,
+		},
+		"Fatal parsers fail 4": {
+			resultErrs: []error{
+				PositionalError{
+					Position: 5,
+					Err:      ExpectedError{"foo"},
+				},
+				PositionalError{
+					Position: 0,
+					Err:      errors.New("this is a real error"),
+				},
+			},
+			err: `char 0: this is a real error`,
+		},
+	}
+
+	for name, test := range tests {
+		childParsers := []Type{}
+		for _, err := range test.resultErrs {
+			err := err
+			childParsers = append(childParsers, func([]rune) Result {
+				return Result{
+					Err: err,
+				}
+			})
+		}
+		t.Run(name, func(t *testing.T) {
+			res := AnyOf(childParsers...)([]rune("foobar"))
+			assert.Equal(t, test.err, res.Err.Error(), "Error")
+		})
+	}
+}
+
 func TestCamelCase(t *testing.T) {
 	parser := CamelCase()
 

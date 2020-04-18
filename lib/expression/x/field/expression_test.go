@@ -39,7 +39,7 @@ func TestExpressionParserErrors(t *testing.T) {
 	}{
 		"bad function": {
 			input: `static string ${!not a function} hello world`,
-			err:   `failed to parse expression: char 17: unrecognised function 'not a function', expected one of: [batch_size content count error field hostname json meta timestamp timestamp_unix timestamp_unix_nano timestamp_utc uuid_v4]`,
+			err:   `failed to parse expression: char 20: failed to parse function arguments: expected: (`,
 		},
 		"bad function 2": {
 			input: `static string ${!not_a_function()} hello world`,
@@ -63,7 +63,7 @@ func TestExpressionParserErrors(t *testing.T) {
 		},
 		"bad args 5": {
 			input: `foo ${!json} bar`,
-			err:   `failed to parse expression: char 11: expected params '()' after function: 'json'`,
+			err:   `failed to parse expression: char 11: expected: function-parameters`,
 		},
 	}
 

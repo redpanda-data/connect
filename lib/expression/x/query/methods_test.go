@@ -185,7 +185,7 @@ func TestMethods(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, err := tryParse(test.input)
+			e, err := tryParse(test.input, false)
 			require.NoError(t, err)
 			res := e.ToString(FunctionContext{
 				Index: test.index,

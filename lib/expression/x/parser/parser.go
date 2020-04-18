@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"golang.org/x/xerrors"
 )
 
 //------------------------------------------------------------------------------
@@ -16,7 +18,18 @@ type ExpectedError []string
 
 // Error returns a human readable error string.
 func (e ExpectedError) Error() string {
-	return fmt.Sprintf("expected one of: %v", []string(e))
+	seen := map[string]struct{}{}
+	var dedupeStack []string
+	for _, s := range e {
+		if _, exists := seen[string(s)]; !exists {
+			dedupeStack = append(dedupeStack, s)
+			seen[string(s)] = struct{}{}
+		}
+	}
+	if len(dedupeStack) == 1 {
+		return fmt.Sprintf("expected: %v", dedupeStack[0])
+	}
+	return fmt.Sprintf("expected one of: %v", dedupeStack)
 }
 
 // PositionalError represents an error that has occurred at a particular
@@ -29,6 +42,11 @@ type PositionalError struct {
 // Error returns a human readable error string.
 func (e PositionalError) Error() string {
 	return fmt.Sprintf("char %v: %v", e.Position, e.Err)
+}
+
+// Unwrap returns the underlying error.
+func (e PositionalError) Unwrap() error {
+	return e.Err
 }
 
 // Expand the underlying error with more context.
@@ -48,6 +66,55 @@ func ErrAtPosition(i int, err error) PositionalError {
 		Position: i,
 		Err:      err,
 	}
+}
+
+//------------------------------------------------------------------------------
+
+func selectErr(errLeft, errRight error, into *error) bool {
+	var expLeft, expRight ExpectedError
+
+	if errLeft == nil {
+		*into = errRight
+		return xerrors.As(errRight, &expRight)
+	}
+
+	// Errors that aren't wrapping ExpectedError are considered fatal.
+	if !xerrors.As(errLeft, &expLeft) {
+		*into = errLeft
+		return false
+	}
+	if !xerrors.As(errRight, &expRight) {
+		*into = errRight
+		return false
+	}
+
+	// If either are positional then we take the furthest position.
+	var posLeft, posRight PositionalError
+	if xerrors.As(errLeft, &posLeft) && posLeft.Position > 0 {
+		if xerrors.As(errRight, &posRight) && posRight.Position > 0 {
+			if posLeft.Position == posRight.Position {
+				expLeft = append(expLeft, expRight...)
+				posLeft.Err = expLeft
+				*into = posLeft
+			} else if posLeft.Position > posRight.Position {
+				*into = errLeft
+			} else {
+				*into = errRight
+			}
+			return true
+		}
+		*into = errLeft
+		return true
+	}
+	if xerrors.As(errRight, &posRight) && posRight.Position > 0 {
+		*into = errRight
+		return true
+	}
+
+	// Otherwise, just return combined expected.
+	expLeft = append(expLeft, expRight...)
+	*into = expLeft
+	return true
 }
 
 //------------------------------------------------------------------------------
@@ -413,29 +480,19 @@ func Newline() Type {
 // Otherwise, the result is returned.
 func AnyOf(Types ...Type) Type {
 	return func(input []rune) Result {
-		var expectedStack ExpectedError
+		var err error
 	tryParsers:
 		for _, p := range Types {
 			res := p(input)
 			if res.Err != nil {
-				switch t := res.Err.(type) {
-				case ExpectedError:
-					expectedStack = append(expectedStack, t...)
+				if selectErr(err, res.Err, &err) {
 					continue tryParsers
 				}
 			}
 			return res
 		}
-		seen := map[string]struct{}{}
-		var dedupeStack ExpectedError
-		for _, s := range expectedStack {
-			if _, exists := seen[string(s)]; !exists {
-				dedupeStack = append(dedupeStack, s)
-				seen[string(s)] = struct{}{}
-			}
-		}
 		return Result{
-			Err:       dedupeStack,
+			Err:       err,
 			Remaining: input,
 		}
 	}

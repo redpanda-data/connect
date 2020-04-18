@@ -137,6 +137,31 @@ func contentFunction(...interface{}) (Function, error) {
 	}), nil
 }
 
+func fieldFunction(args ...interface{}) (Function, error) {
+	if len(args) > 1 {
+		return nil, fmt.Errorf("expected one or zero arguments, received: %v", len(args))
+	}
+	var path string
+	if len(args) > 0 {
+		var ok bool
+		if path, ok = args[0].(string); !ok {
+			return nil, fmt.Errorf("expected string param, received %T", args[0])
+		}
+	}
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		if ctx.Value == nil {
+			return nil, &ErrRecoverable{
+				Recovered: nil,
+				Err:       errors.New("context was undefined"),
+			}
+		}
+		if len(path) == 0 {
+			return *ctx.Value, nil
+		}
+		return gabs.Wrap(*ctx.Value).Path(path).Data(), nil
+	}), nil
+}
+
 //------------------------------------------------------------------------------
 
 var functions = map[string]func(args ...interface{}) (Function, error){
@@ -144,30 +169,7 @@ var functions = map[string]func(args ...interface{}) (Function, error){
 	"meta":    metadataFunction,
 	"error":   errorFunction,
 	"content": contentFunction,
-	"field": func(args ...interface{}) (Function, error) {
-		if len(args) > 1 {
-			return nil, fmt.Errorf("expected one or zero arguments, received: %v", len(args))
-		}
-		var path string
-		if len(args) > 0 {
-			var ok bool
-			if path, ok = args[0].(string); !ok {
-				return nil, fmt.Errorf("expected string param, received %T", args[0])
-			}
-		}
-		return closureFn(func(ctx FunctionContext) (interface{}, error) {
-			if ctx.Value == nil {
-				return nil, &ErrRecoverable{
-					Recovered: nil,
-					Err:       errors.New("context was empty"),
-				}
-			}
-			if len(path) == 0 {
-				return *ctx.Value, nil
-			}
-			return gabs.Wrap(*ctx.Value).Path(path).Data(), nil
-		}), nil
-	},
+	"field":   fieldFunction,
 	"count": func(args ...interface{}) (Function, error) {
 		if len(args) != 1 {
 			return nil, errors.New("expected one parameter")

@@ -22,11 +22,12 @@ func TestFunctions(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		input    string
-		output   string
-		messages []easyMsg
-		value    *interface{}
-		index    int
+		input      string
+		deprecated bool
+		output     string
+		messages   []easyMsg
+		value      *interface{}
+		index      int
 	}{
 		"literal function": {
 			input:    `5`,
@@ -335,6 +336,67 @@ func TestFunctions(t *testing.T) {
 				return &v
 			}(),
 		},
+		"field literal": {
+			input:  `this.foo.bar`,
+			output: `hello world`,
+			value: func() *interface{} {
+				var v interface{} = map[string]interface{}{
+					"foo": map[string]interface{}{
+						"bar": "hello world",
+					},
+				}
+				return &v
+			}(),
+		},
+		"field literal 2": {
+			input:  `json().map(this.foo.bar)`,
+			output: `hello world`,
+			messages: []easyMsg{
+				{content: `{"foo":{"bar":"hello world"}}`},
+			},
+		},
+		"field literal 3": {
+			input:  `json().map(this.foo.bar)`,
+			output: `null`,
+			messages: []easyMsg{
+				{content: `{"foo":{"baz":"hello world"}}`},
+			},
+		},
+		"field literal 4": {
+			input:  `json("foo").map(this.bar | this.baz)`,
+			output: `hello world`,
+			messages: []easyMsg{
+				{content: `{"foo":{"baz":"hello world"}}`},
+			},
+		},
+		"map literal": {
+			input:  `json().foo`,
+			output: `hello world`,
+			messages: []easyMsg{
+				{content: `{"foo":"hello world"}`},
+			},
+		},
+		"map literal 2": {
+			input:  `json().foo.bar`,
+			output: `hello world`,
+			messages: []easyMsg{
+				{content: `{"foo":{"bar":"hello world"}}`},
+			},
+		},
+		"map literal 3": {
+			input:  `json().foo.bar`,
+			output: `null`,
+			messages: []easyMsg{
+				{content: `{"foo":{"baz":"hello world"}}`},
+			},
+		},
+		"map literal 4": {
+			input:  `json("foo").(this.bar | this.baz)`,
+			output: `hello world`,
+			messages: []easyMsg{
+				{content: `{"foo":{"baz":"hello world"}}`},
+			},
+		},
 	}
 
 	for name, test := range tests {
@@ -353,7 +415,7 @@ func TestFunctions(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, err := tryParse(test.input)
+			e, err := tryParse(test.input, test.deprecated)
 			if !assert.NoError(t, err) {
 				return
 			}
@@ -386,7 +448,7 @@ func TestCountersFunction(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		e, err := tryParse(test[0])
+		e, err := tryParse(test[0], false)
 		if !assert.NoError(t, err) {
 			continue
 		}
@@ -401,7 +463,7 @@ func TestUUIDV4Function(t *testing.T) {
 	results := map[string]struct{}{}
 
 	for i := 0; i < 100; i++ {
-		e, err := tryParse("uuid_v4()")
+		e, err := tryParse("uuid_v4()", false)
 		if !assert.NoError(t, err) {
 			continue
 		}
@@ -418,7 +480,7 @@ func TestUUIDV4Function(t *testing.T) {
 func TestTimestamps(t *testing.T) {
 	now := time.Now()
 
-	e, err := tryParse("timestamp_unix_nano()")
+	e, err := tryParse("timestamp_unix_nano()", false)
 	if !assert.NoError(t, err) {
 		return
 	}
@@ -435,7 +497,7 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = tryParse("timestamp_unix()")
+	e, err = tryParse("timestamp_unix()", false)
 	if !assert.NoError(t, err) {
 		return
 	}
@@ -452,7 +514,7 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = tryParse("timestamp_unix(10)")
+	e, err = tryParse("timestamp_unix(10)", false)
 	if !assert.NoError(t, err) {
 		return
 	}
@@ -470,7 +532,7 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = tryParse("timestamp()")
+	e, err = tryParse("timestamp()", false)
 	if !assert.NoError(t, err) {
 		return
 	}
@@ -486,7 +548,7 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = tryParse("timestamp_utc()")
+	e, err = tryParse("timestamp_utc()", false)
 	if !assert.NoError(t, err) {
 		return
 	}

@@ -3,25 +3,29 @@ package query
 import (
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/lib/expression/x/parser"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestFunctionParserErrors(t *testing.T) {
 	tests := map[string]struct {
-		input string
-		err   string
+		input      string
+		err        string
+		deprecated bool
 	}{
 		"bad function": {
-			input: `not a function`,
-			err:   `char 0: unrecognised function 'not', expected one of: [batch_size content count error field hostname json meta timestamp timestamp_unix timestamp_unix_nano timestamp_utc uuid_v4]`,
+			input:      `not a function`,
+			deprecated: true,
+			err:        `char 3: failed to parse function arguments: expected: (`,
 		},
 		"bad function 2": {
 			input: `not_a_function()`,
 			err:   `char 0: unrecognised function 'not_a_function', expected one of: [batch_size content count error field hostname json meta timestamp timestamp_unix timestamp_unix_nano timestamp_utc uuid_v4]`,
 		},
 		"bad args 2": {
-			input: `json("foo`,
-			err:   `char 5: failed to parse function arguments: expected one of: [boolean number quoted-string]`,
+			input:      `json("foo`,
+			deprecated: true,
+			err:        `char 5: failed to parse function arguments: expected one of: [boolean number quoted-string]`,
 		},
 		"bad args 3": {
 			input: `json(`,
@@ -32,12 +36,14 @@ func TestFunctionParserErrors(t *testing.T) {
 			err:   `char 7: failed to parse function arguments: unexpected end of input`,
 		},
 		"bad args 5": {
-			input: `json`,
-			err:   `char 4: expected params '()' after function: 'json'`,
+			input:      `json`,
+			deprecated: true,
+			err:        `char 4: expected: function-parameters`,
 		},
 		"bad args 6": {
-			input: `json(foo)`,
-			err:   `char 5: failed to parse function arguments: expected one of: [boolean number quoted-string]`,
+			input:      `json(foo)`,
+			deprecated: true,
+			err:        `char 5: failed to parse function arguments: expected one of: [boolean number quoted-string]`,
 		},
 		"bad args 7": {
 			input: `json(5)`,
@@ -48,8 +54,9 @@ func TestFunctionParserErrors(t *testing.T) {
 			err:   `char 4: expected string param, received bool`,
 		},
 		"bad args 9": {
-			input: `json(json("foo"))`,
-			err:   `char 5: failed to parse function arguments: expected one of: [boolean number quoted-string]`,
+			input:      `json(json("foo"))`,
+			deprecated: true,
+			err:        `char 5: failed to parse function arguments: expected one of: [boolean number quoted-string]`,
 		},
 		"bad operators": {
 			input: `json("foo") + `,
@@ -66,14 +73,6 @@ func TestFunctionParserErrors(t *testing.T) {
 		"bad expression 3": {
 			input: `(json("foo") + meta("bar") `,
 			err:   `char 27: unexpected end of input`,
-		},
-		"bad method": {
-			input: `json("foo").nope()`,
-			err:   `char 12: unrecognised method 'nope', expected one of: [from from_all map or sum]`,
-		},
-		"bad method args": {
-			input: `json("foo").from`,
-			err:   `char 12: expected params '()' after method: 'from'`,
 		},
 		"bad method args 2": {
 			input: `json("foo").from(`,
@@ -97,7 +96,7 @@ func TestFunctionParserErrors(t *testing.T) {
 		test := test
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			_, err := tryParse(test.input)
+			_, err := tryParse(test.input, test.deprecated)
 			_ = assert.Error(t, err) &&
 				assert.Equal(t, test.err, err.Error())
 		})
@@ -106,8 +105,9 @@ func TestFunctionParserErrors(t *testing.T) {
 
 func TestFunctionParserLimits(t *testing.T) {
 	tests := map[string]struct {
-		input     string
-		remaining string
+		input      string
+		remaining  string
+		deprecated bool
 	}{
 		"nothing": {
 			input:     `json("foo") + meta("bar")`,
@@ -153,6 +153,10 @@ func TestFunctionParserLimits(t *testing.T) {
 			input:     `json("foo")) + json("bar")`,
 			remaining: `) + json("bar")`,
 		},
+		"path literals": {
+			input:     `this.foo bar baz`,
+			remaining: `bar baz`,
+		},
 	}
 
 	for name, test := range tests {
@@ -160,7 +164,12 @@ func TestFunctionParserLimits(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			res := Parse([]rune(test.input))
+			var res parser.Result
+			if test.deprecated {
+				res = ParseDeprecated([]rune(test.input))
+			} else {
+				res = Parse([]rune(test.input))
+			}
 			_ = assert.NoError(t, res.Err) &&
 				assert.Equal(t, test.remaining, string(res.Remaining))
 		})

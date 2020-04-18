@@ -30,7 +30,7 @@ func aFunction(input []rune) parser.Result {
 	i := 3
 	for ; i < len(input); i++ {
 		if input[i] == '}' {
-			res := query.Parse(input[3:i])
+			res := query.ParseDeprecated(input[3:i])
 			if res.Err == nil {
 				if len(res.Remaining) > 0 {
 					return parser.Result{
@@ -44,7 +44,10 @@ func aFunction(input []rune) parser.Result {
 				res.Remaining = input[i+1:]
 				res.Result = queryResolver{fn: res.Result.(query.Function)}
 			} else {
-				res.Err = parser.ErrAtPosition(3, res.Err)
+				res.Err = parser.ErrAtPosition(3, res.Err).Expand(func(err error) error {
+					// Scrap underlying expected error.
+					return fmt.Errorf("%v", err.Error())
+				})
 				res.Remaining = input
 			}
 			return res

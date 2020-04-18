@@ -37,91 +37,121 @@ type Function interface {
 	ToString(ctx FunctionContext) string
 }
 
-//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------'
 
-// Parse an input into a query.Function.
-func Parse(input []rune) parser.Result {
-	var fns []Function
-	var ops []arithmeticOp
-
+func createParser(deprecated, allowRootFieldLiteral bool) parser.Type {
 	opParser := arithmeticOpParser()
 	openBracket := parser.Char('(')
 	closeBracket := parser.Char(')')
-	nextSegment := parser.AnyOf(
+
+	segmentParsers := []parser.Type{
 		openBracket,
 		literalParser(),
-		functionParser(),
-	)
+	}
+	if !deprecated && !allowRootFieldLiteral {
+		segmentParsers = append(segmentParsers, fieldLiteralParser(nil, allowRootFieldLiteral))
+	}
+	segmentParsers = append(segmentParsers, functionParser())
+	if !deprecated && allowRootFieldLiteral {
+		segmentParsers = append(segmentParsers, fieldLiteralParser(nil, allowRootFieldLiteral))
+	}
+	nextSegment := parser.AnyOf(segmentParsers...)
 
-	res := parser.SpacesAndTabs()(input)
-	for {
-		i := len(input) - len(res.Remaining)
-		res = nextSegment(res.Remaining)
-		if res.Err != nil {
-			res.Err = parser.ErrAtPosition(i, res.Err)
-			if i == 0 {
-				resDeprecated := parseDeprecatedFunction(input)
-				if resDeprecated.Err == nil {
-					return resDeprecated
+	return func(input []rune) parser.Result {
+		var fns []Function
+		var ops []arithmeticOp
+
+		res := parser.SpacesAndTabs()(input)
+		for {
+			i := len(input) - len(res.Remaining)
+			res = nextSegment(res.Remaining)
+			if res.Err != nil {
+				res.Err = parser.ErrAtPosition(i, res.Err)
+				res.Remaining = input
+				if i == 0 && deprecated {
+					resDeprecated := parseDeprecatedFunction(input)
+					if resDeprecated.Err == nil {
+						return resDeprecated
+					}
+				}
+				return res
+			}
+			switch t := res.Result.(type) {
+			case Function:
+				fns = append(fns, t)
+			case string:
+				// ASSUMPTION: Must be open bracket
+				res = parser.SpacesAndTabs()(res.Remaining)
+				i = len(input) - len(res.Remaining)
+				res = Parse(res.Remaining)
+				if res.Err != nil {
+					res.Err = parser.ErrAtPosition(i, res.Err)
+					res.Remaining = input
+					return res
+				}
+				fns = append(fns, res.Result.(Function))
+				res = parser.SpacesAndTabs()(res.Remaining)
+				i = len(input) - len(res.Remaining)
+				res = closeBracket(res.Remaining)
+				if res.Err != nil {
+					res.Err = parser.ErrAtPosition(i, res.Err)
+					res.Remaining = input
+					return res
 				}
 			}
-			return res
-		}
-		switch t := res.Result.(type) {
-		case Function:
-			fns = append(fns, t)
-		case string:
-			// ASSUMPTION: Must be open bracket
+
 			res = parser.SpacesAndTabs()(res.Remaining)
-			i = len(input) - len(res.Remaining)
-			res = Parse(res.Remaining)
-			if res.Err != nil {
-				res.Err = parser.ErrAtPosition(i, res.Err)
-				return res
+			if len(res.Remaining) == 0 {
+				break
 			}
-			fns = append(fns, res.Result.(Function))
+
+			i = len(input) - len(res.Remaining)
+			res = opParser(res.Remaining)
+			if res.Err != nil {
+				if len(fns) == 0 {
+					res.Err = parser.ErrAtPosition(i, res.Err)
+					res.Remaining = input
+					return res
+				}
+				break
+			}
+			ops = append(ops, res.Result.(arithmeticOp))
 			res = parser.SpacesAndTabs()(res.Remaining)
-			i = len(input) - len(res.Remaining)
-			res = closeBracket(res.Remaining)
-			if res.Err != nil {
-				res.Err = parser.ErrAtPosition(i, res.Err)
-				return res
+		}
+
+		fn, err := resolveArithmetic(fns, ops)
+		if err != nil {
+			return parser.Result{
+				Err:       err,
+				Remaining: input,
 			}
 		}
-
-		res = parser.SpacesAndTabs()(res.Remaining)
-		if len(res.Remaining) == 0 {
-			break
-		}
-
-		i = len(input) - len(res.Remaining)
-		res = opParser(res.Remaining)
-		if res.Err != nil {
-			if len(fns) == 0 {
-				res.Err = parser.ErrAtPosition(i, res.Err)
-				return res
-			}
-			break
-		}
-		ops = append(ops, res.Result.(arithmeticOp))
-		res = parser.SpacesAndTabs()(res.Remaining)
-	}
-
-	fn, err := resolveArithmetic(fns, ops)
-	if err != nil {
 		return parser.Result{
-			Err:       err,
-			Remaining: input,
+			Result:    fn,
+			Remaining: res.Remaining,
 		}
-	}
-	return parser.Result{
-		Result:    fn,
-		Remaining: res.Remaining,
 	}
 }
 
-func tryParse(expr string) (Function, error) {
-	res := Parse([]rune(expr))
+// Parse parses an input into a query.Function.
+func Parse(input []rune) parser.Result {
+	return createParser(false, false)(input)
+}
+
+// ParseDeprecated parses an input into a query.Function, but permits deprecated
+// function interpolations. In order to support old functions this parser does
+// not include field literals.
+func ParseDeprecated(input []rune) parser.Result {
+	return createParser(true, false)(input)
+}
+
+func tryParse(expr string, deprecated bool) (Function, error) {
+	var res parser.Result
+	if deprecated {
+		res = ParseDeprecated([]rune(expr))
+	} else {
+		res = Parse([]rune(expr))
+	}
 	if res.Err != nil {
 		return nil, res.Err
 	}

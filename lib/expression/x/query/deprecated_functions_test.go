@@ -294,7 +294,7 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, err := tryParse(test.input)
+			e, err := tryParse(test.input, true)
 			if !assert.NoError(t, err) {
 				return
 			}
@@ -333,7 +333,7 @@ func TestDeprecatedCountersFunction(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		e, err := tryParse(test[0])
+		e, err := tryParse(test[0], true)
 		if !assert.NoError(t, err) {
 			continue
 		}
@@ -346,7 +346,7 @@ func TestDeprecatedUUIDV4Function(t *testing.T) {
 	results := map[string]struct{}{}
 
 	for i := 0; i < 100; i++ {
-		e, err := tryParse("uuid_v4")
+		e, err := tryParse("uuid_v4", true)
 		if !assert.NoError(t, err) {
 			continue
 		}
@@ -361,7 +361,7 @@ func TestDeprecatedUUIDV4Function(t *testing.T) {
 func TestDeprecatedTimestamps(t *testing.T) {
 	now := time.Now()
 
-	e, err := tryParse("timestamp_unix_nano")
+	e, err := tryParse("timestamp_unix_nano", true)
 	if !assert.NoError(t, err) {
 		return
 	}
@@ -378,7 +378,7 @@ func TestDeprecatedTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = tryParse("timestamp_unix")
+	e, err = tryParse("timestamp_unix", true)
 	if !assert.NoError(t, err) {
 		return
 	}
@@ -395,7 +395,7 @@ func TestDeprecatedTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = tryParse("timestamp_unix:10")
+	e, err = tryParse("timestamp_unix:10", true)
 	if !assert.NoError(t, err) {
 		return
 	}
@@ -413,7 +413,7 @@ func TestDeprecatedTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = tryParse("timestamp")
+	e, err = tryParse("timestamp", true)
 	if !assert.NoError(t, err) {
 		return
 	}
@@ -429,7 +429,7 @@ func TestDeprecatedTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = tryParse("timestamp_utc")
+	e, err = tryParse("timestamp_utc", true)
 	if !assert.NoError(t, err) {
 		return
 	}
