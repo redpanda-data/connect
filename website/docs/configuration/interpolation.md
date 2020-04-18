@@ -103,6 +103,24 @@ Execute a function from the context of another message in the batch. This allows
 
 For example, `json("foo").from(1)` would extract the contents of the JSON field `foo` specifically from message index `1` of a batch.
 
+### `from_all()`
+
+Execute a function for all messages of the batch, and return an array of all results.
+
+For example, `json("foo").from_all()` would extract the contents of the JSON field `foo` from all messages and return an array of the values.
+
+### `map(function)`
+
+Apply a function to the result of another function, allowing you to perform mappings on the result.
+
+### `or(function)`
+
+If the result of the target function fails or resolves to `null`, performs the argument function and returns the result of that instead.'
+
+### `sum()`
+
+Sum the numerical values of an array.
+
 ## Examples
 
 ### Delayed Processing

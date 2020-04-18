@@ -397,6 +397,13 @@ func TestFunctions(t *testing.T) {
 				{content: `{"foo":{"baz":"hello world"}}`},
 			},
 		},
+		"map literal 5": {
+			input:  `json().foo.bar nah`,
+			output: `test`,
+			messages: []easyMsg{
+				{content: `{"foo":{"bar":"test"}}`},
+			},
+		},
 	}
 
 	for name, test := range tests {
