@@ -27,13 +27,14 @@ All notable changes to this project will be documented in this file.
 - Benthos now runs in strict mode, but this can be disabled with `--chilled`.
 - The Benthos CLI has been revamped, the old flags are still supported but are
   deprecated.
+- The `http_server` input now accepts requests without a content-type header.
 
 ### Fixed
 
 - Outputs that resolve function interpolations now correctly resolve the
   `batch_size` function.
 - The `kinesis_balanced` input now correctly establishes connections.
-- Fixed an auth transport issue with the `gcp_pubsub` input and output. 
+- Fixed an auth transport issue with the `gcp_pubsub` input and output.
 
 ## 3.11.0 - 2020-03-08
 

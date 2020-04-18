@@ -22,7 +22,10 @@ func init() {
 Use a Redis instance as a cache. The expiration can be set to zero or an empty
 string in order to set no expiration.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("url", "The URL of the target Redis server."),
+			docs.FieldCommon(
+				"url", "The URL of the target Redis server. Database is optional and is supplied as the URL path.",
+				"tcp://localhost:6379", "tcp://localhost:6379/1",
+			),
 			docs.FieldCommon("prefix", "An optional string to prefix item keys with in order to prevent collisions with similar services."),
 			docs.FieldCommon("expiration", "An optional period after which cached items will expire."),
 			docs.FieldAdvanced("retries", "The maximum number of retry attempts to make before abandoning a request."),
@@ -123,7 +126,7 @@ func NewRedis(
 		pass, _ = url.User.Password()
 	}
 
-	// We default to Redis DB 0 for backward compatibilitiy, but if it's
+	// We default to Redis DB 0 for backward compatibility, but if it's
 	// specified in the URL, we'll use the specified one instead.
 	var redisDB int
 	if len(url.Path) > 1 {

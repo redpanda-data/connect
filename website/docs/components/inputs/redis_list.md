@@ -62,6 +62,8 @@ Default: `"tcp://localhost:6379"`
 # Examples
 
 url: tcp://localhost:6379
+
+url: tcp://localhost:6379/1
 ```
 
 ### `key`

@@ -20,7 +20,7 @@ already exist) using the RPUSH command.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("url",
 				"The URL of a Redis server to connect to. Database is optional and is supplied as the URL path.",
-				"tcp://localhost:6379",
+				"tcp://localhost:6379", "tcp://localhost:6379/1",
 			),
 			docs.FieldCommon("key", "The key of a Redis list."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),

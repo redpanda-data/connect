@@ -54,11 +54,19 @@ redis:
 
 ### `url`
 
-The URL of the target Redis server.
+The URL of the target Redis server. Database is optional and is supplied as the URL path.
 
 
 Type: `string`  
 Default: `"tcp://localhost:6379"`  
+
+```yaml
+# Examples
+
+url: tcp://localhost:6379
+
+url: tcp://localhost:6379/1
+```
 
 ### `prefix`
 
