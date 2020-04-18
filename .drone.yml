@@ -6,7 +6,6 @@ steps:
   image: docker:git
   commands:
   - git fetch --tags
-  - git fetch origin gh-pages
 
 - name: test
   image: golang:1.14.1
