@@ -18,9 +18,9 @@ BROKERS="foo:9092,bar:9092" benthos -c ./config.yaml
 
 If a literal string is required that matches this pattern (`${foo}`) you can escape it with double brackets. For example, the string `${{foo}}` is read as the literal `${foo}`.
 
-## Dynamic Queries
+## Bloblang Queries
 
-Some Benthos fields also support function interpolations, which are much more powerful expressions that allow you to query the contents of messages and perform arithmetic. The syntax of a function interpolation is `${!<expression>}`, where the contents are a logical expression including a range of functions. For example, with the following config:
+Some Benthos fields also support Bloblang function interpolations, which are much more powerful expressions that allow you to query the contents of messages and perform arithmetic. The syntax of a function interpolation is `${!<bloblang expression>}`, where the contents are a logical expression including a range of functions. For example, with the following config:
 
 ```yaml
 output:
@@ -33,7 +33,7 @@ A message with the contents `{"topic":"foo","message":"hello world"}` would be r
 
 If a literal string is required that matches this pattern (`${!foo}`) then, similar to environment variables, you can escape it with double brackets. For example, the string `${{!foo}}` would be read as the literal `${!foo}`.
 
-Interpolation function expressions support arithmetic and boolean operators, there are some [examples of this below](#examples).
+Bloblang supports arithmetic, boolean operators, coalesce and mapping expressions, there are some [examples of this below](#examples).
 
 ## Functions
 
@@ -119,9 +119,30 @@ If the result of the target function fails or resolves to `null`, performs the a
 
 ### `sum()`
 
-Sum the numerical values of an array.
+Sum the numerical values of an array. E.g. `json("foo").from_all().sum()` extracts the value of `foo` from all messages of a batch and adds them.
 
 ## Examples
+
+### Coalesce and Mapping
+
+Bloblang supports coalesce and mapping, which makes it easy to extract values from slightly varying data structures:
+
+```yaml
+pipeline:
+  processors:
+  - json:
+      operator: set
+      path: result
+      value: '${! json().foo.(a | b | c).baz }'
+```
+
+Here's a map of inputs to resulting values:
+
+```
+{"foo":{"a":{"baz":"from_a"},"c":{"baz":"from_c"}}} -> from_a
+{"foo":{"b":{"baz":"from_b"},"c":{"baz":"from_c"}}} -> from_b
+{"foo":{"b":null,"c":{"baz":"from_c"}}}             -> from_c
+```
 
 ### Delayed Processing
 
