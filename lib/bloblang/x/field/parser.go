@@ -3,8 +3,8 @@ package field
 import (
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/lib/expression/x/parser"
-	"github.com/Jeffail/benthos/v3/lib/expression/x/query"
+	"github.com/Jeffail/benthos/v3/lib/bloblang/x/parser"
+	"github.com/Jeffail/benthos/v3/lib/bloblang/x/query"
 )
 
 //------------------------------------------------------------------------------

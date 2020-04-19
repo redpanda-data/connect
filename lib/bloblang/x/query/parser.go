@@ -1,7 +1,7 @@
 package query
 
 import (
-	"github.com/Jeffail/benthos/v3/lib/expression/x/parser"
+	"github.com/Jeffail/benthos/v3/lib/bloblang/x/parser"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
