@@ -149,27 +149,34 @@ func fieldLiteralParser(ctxFn Function, allowRoot bool) parser.Type {
 			return res
 		}
 
-		var i int
 		for {
-			i = len(input) - len(res.Remaining)
 			if res = fieldPathParser(res.Remaining); res.Err != nil {
 				break
 			}
 			partials = append(partials, res.Result.(string))
 		}
-		if len(partials) == 0 {
+		if len(partials) == 0 || (len(partials) == 1 && partials[0] == ".") {
+			if res.Err == nil {
+				res.Err = parser.ExpectedError{"field-path"}
+			}
 			return parser.Result{
 				Remaining: input,
-				Err: parser.PositionalError{
-					Position: i,
-					Err:      res.Err,
-				},
+				Err:       res.Err,
 			}
 		}
+
+		// TODO: If next token is bracket open we should backtrack.
+		if partials[len(partials)-1] == "." {
+			// Do not consume last period of path.
+			partials = partials[:len(partials)-1]
+			res.Remaining = input[len(input)-len(res.Remaining)-1:]
+		}
+
 		var buf bytes.Buffer
 		for _, p := range partials {
 			buf.WriteString(p)
 		}
+
 		fn, err := fieldFunction(buf.String())
 		if err == nil && ctxFn != nil {
 			fn, err = mapMethod(ctxFn, fn)

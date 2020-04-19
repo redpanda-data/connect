@@ -1,0 +1,5 @@
+pipeline:
+  processors:
+    - text:
+        operator: set
+        value: '${!json().foo.(bar | fallback | fallback_two).baz}'

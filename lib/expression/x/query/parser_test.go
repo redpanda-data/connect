@@ -184,6 +184,10 @@ func TestFunctionParserLimits(t *testing.T) {
 			input:     `this.foo bar baz`,
 			remaining: `bar baz`,
 		},
+		"path literals 2": {
+			input:     `this.foo. bar baz`,
+			remaining: `. bar baz`,
+		},
 	}
 
 	for name, test := range tests {
