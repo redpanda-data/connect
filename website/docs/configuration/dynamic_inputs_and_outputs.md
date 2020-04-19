@@ -31,7 +31,7 @@ naturally the uptime will be set to `stopped`.
 }
 ```
 
-### `/input/{input_label}`
+### `/inputs/{input_label}`
 
 GET returns the configuration of the input idenfified by `input_label`.
 
@@ -57,7 +57,7 @@ terminated naturally the uptime will be set to `stopped`.
 }
 ```
 
-### `/output/{output_label}`
+### `/outputs/{output_label}`
 
 GET returns the configuration of the output idenfified by `output_label`.
 
@@ -77,7 +77,7 @@ platform data, e.g. a cron job can be created to send hourly curl requests that
 adds a dynamic input to read a file of sample data:
 
 ``` sh
-curl http://localhost:4195/input/read_sample -d @- << EOF
+curl http://localhost:4195/inputs/read_sample -d @- << EOF
 {
 	"file": {
 		"path": "/tmp/line_delim_sample_data.txt"
