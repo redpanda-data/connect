@@ -144,14 +144,9 @@ func fieldLiteralParser(ctxFn Function, allowRoot bool) parser.Type {
 	return func(input []rune) parser.Result {
 		partials := []string{}
 
-		res := parser.Result{
-			Remaining: input,
-		}
-		if !allowRoot {
-			res = thisParser(input)
-			if res.Err != nil {
-				return res
-			}
+		res := thisParser(input)
+		if !allowRoot && res.Err != nil {
+			return res
 		}
 
 		var i int
@@ -210,7 +205,7 @@ func parseFunctionTail(fn Function) parser.Type {
 		if _, isStr := res.Result.(string); isStr {
 			res = parser.SpacesAndTabs()(res.Remaining)
 			i := len(input) - len(res.Remaining)
-			res = Parse(res.Remaining)
+			res = createParser(false, true)(res.Remaining)
 			if res.Err != nil {
 				res.Err = parser.ErrAtPosition(i, res.Err)
 				res.Remaining = input
@@ -225,10 +220,9 @@ func parseFunctionTail(fn Function) parser.Type {
 				res.Remaining = input
 				return res
 			}
-			res := parser.Result{
-				Remaining: input,
+			if res.Result, res.Err = mapMethod(fn, mapFn); res.Err != nil {
+				res.Remaining = input
 			}
-			res.Result, res.Err = mapMethod(fn, mapFn)
 			return res
 		}
 		return res

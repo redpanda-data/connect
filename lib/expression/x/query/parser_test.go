@@ -111,11 +111,11 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"gibberish": {
 			input: `json("foo").(=)`,
-			err:   `char 13: expected one of: [( boolean number quoted-string this. range(a - z) range(0 - 9) _]`,
+			err:   `char 13: expected one of: [( boolean number quoted-string range(a - z) range(0 - 9) _ range(A - Z) range(* - .) ~]`,
 		},
 		"gibberish 2": {
 			input: `json("foo").(1 + )`,
-			err:   `char 17: expected one of: [( boolean number quoted-string this. range(a - z) range(0 - 9) _]`,
+			err:   `char 17: expected one of: [( boolean number quoted-string range(a - z) range(0 - 9) _ range(A - Z) range(* - .) ~]`,
 		},
 	}
 
