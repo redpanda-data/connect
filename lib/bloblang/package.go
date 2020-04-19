@@ -1,3 +1,3 @@
-// Package expression implements a Benthos dynamic field expression and the
+// Package bloblang implements a language for mapping within Benthos and the
 // parser combinators for parsing them.
-package expression
+package bloblang
