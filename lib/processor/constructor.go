@@ -95,6 +95,7 @@ const (
 	TypeHTTP         = "http"
 	TypeInsertPart   = "insert_part"
 	TypeJMESPath     = "jmespath"
+	TypeJQ           = "jq"
 	TypeJSON         = "json"
 	TypeJSONSchema   = "json_schema"
 	TypeLambda       = "lambda"
@@ -159,6 +160,7 @@ type Config struct {
 	HTTP         HTTPConfig         `json:"http" yaml:"http"`
 	InsertPart   InsertPartConfig   `json:"insert_part" yaml:"insert_part"`
 	JMESPath     JMESPathConfig     `json:"jmespath" yaml:"jmespath"`
+	JQ           JQConfig           `json:"jq" yaml:"jq"`
 	JSON         JSONConfig         `json:"json" yaml:"json"`
 	JSONSchema   JSONSchemaConfig   `json:"json_schema" yaml:"json_schema"`
 	Lambda       LambdaConfig       `json:"lambda" yaml:"lambda"`
@@ -222,6 +224,7 @@ func NewConfig() Config {
 		HTTP:         NewHTTPConfig(),
 		InsertPart:   NewInsertPartConfig(),
 		JMESPath:     NewJMESPathConfig(),
+		JQ:           NewJQConfig(),
 		JSON:         NewJSONConfig(),
 		JSONSchema:   NewJSONSchemaConfig(),
 		Lambda:       NewLambdaConfig(),

@@ -40,6 +40,7 @@ require (
 	github.com/hashicorp/go-uuid v1.0.2 // indirect
 	github.com/hashicorp/golang-lru v0.5.3 // indirect
 	github.com/influxdata/go-syslog/v3 v3.0.0
+	github.com/itchyny/gojq v0.10.0
 	github.com/jcmturner/gofork v1.0.0 // indirect
 	github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
@@ -74,7 +75,7 @@ require (
 	github.com/smira/go-statsd v1.3.1
 	github.com/spf13/cast v1.3.1
 	github.com/streadway/amqp v0.0.0-20200108173154-1c71cc93ed71
-	github.com/stretchr/testify v1.4.0
+	github.com/stretchr/testify v1.5.0
 	github.com/trivago/grok v1.0.0
 	github.com/trivago/tgo v1.0.5 // indirect
 	github.com/uber/jaeger-client-go v2.21.1+incompatible
@@ -88,12 +89,11 @@ require (
 	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d // indirect
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
-	golang.org/x/sys v0.0.0-20200327173247-9dae0f8f5775 // indirect
 	golang.org/x/tools v0.0.0-20200305224536-de023d59a5d1 // indirect
 	golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543
 	google.golang.org/genproto v0.0.0-20200113173426-e1de0a7b01eb // indirect
 	gopkg.in/jcmturner/gokrb5.v7 v7.3.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20191120175047-4206685974f2
+	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c
 	gotest.tools v2.2.0+incompatible // indirect
 	nanomsg.org/go-mangos v1.4.0
 )
