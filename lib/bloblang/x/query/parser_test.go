@@ -86,12 +86,12 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"bad method": {
 			input: `json("foo").not_a_thing()`,
-			err:   `char 12: unrecognised method 'not_a_thing', expected one of: [from from_all map or sum]`,
+			err:   `char 12: unrecognised method 'not_a_thing', expected one of: [catch for_each from from_all map or sum]`,
 		},
 		"bad method 2": {
 			input:      `json("foo").not_a_thing()`,
 			deprecated: true,
-			err:        `char 12: unrecognised method 'not_a_thing', expected one of: [from from_all map or sum]`,
+			err:        `char 12: unrecognised method 'not_a_thing', expected one of: [catch for_each from from_all map or sum]`,
 		},
 		"bad method args 2": {
 			input: `json("foo").from(`,
@@ -111,11 +111,11 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"gibberish": {
 			input: `json("foo").(=)`,
-			err:   `char 13: expected one of: [( boolean number quoted-string range(a - z) range(0 - 9) _ range(A - Z) range(* - .) ~]`,
+			err:   `char 13: expected one of: [( boolean number quoted-string range(a - z) range(A - Z) range(0 - 9) range(* - -) _ ~]`,
 		},
 		"gibberish 2": {
 			input: `json("foo").(1 + )`,
-			err:   `char 17: expected one of: [( boolean number quoted-string range(a - z) range(0 - 9) _ range(A - Z) range(* - .) ~]`,
+			err:   `char 17: expected one of: [( boolean number quoted-string range(a - z) range(A - Z) range(0 - 9) range(* - -) _ ~]`,
 		},
 	}
 
@@ -185,8 +185,28 @@ func TestFunctionParserLimits(t *testing.T) {
 			remaining: `bar baz`,
 		},
 		"path literals 2": {
-			input:     `this.foo. bar baz`,
+			input:     `this.foo . bar baz`,
 			remaining: `. bar baz`,
+		},
+		"brackets at root": {
+			input:     `(json().foo | "fallback").from_all()`,
+			remaining: ``,
+		},
+		"brackets after root": {
+			input:     `this.root.(json().foo | "fallback").from_all()`,
+			remaining: ``,
+		},
+		"brackets after root 2": {
+			input:     `this.root.(json().foo | "fallback").from_all().bar.baz`,
+			remaining: ``,
+		},
+		"this at root": {
+			input:     `this.foo.bar and then this`,
+			remaining: `and then this`,
+		},
+		"path literal at root": {
+			input:     `foo.bar and then this`,
+			remaining: `and then this`,
 		},
 	}
 

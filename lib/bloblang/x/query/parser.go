@@ -39,23 +39,23 @@ type Function interface {
 
 //------------------------------------------------------------------------------'
 
-func createParser(deprecated, allowRootFieldLiteral bool) parser.Type {
+func createParser(deprecated bool) parser.Type {
 	opParser := arithmeticOpParser()
 	openBracket := parser.Char('(')
 	closeBracket := parser.Char(')')
 
-	segmentParsers := []parser.Type{
+	fieldVersusFunction := functionParser()
+	if !deprecated {
+		fieldVersusFunction = parser.BestMatch(
+			fieldLiteralParser(nil, true, true),
+			fieldVersusFunction,
+		)
+	}
+	nextSegment := parser.AnyOf(
 		openBracket,
 		literalParser(),
-	}
-	if !deprecated && !allowRootFieldLiteral {
-		segmentParsers = append(segmentParsers, fieldLiteralParser(nil, allowRootFieldLiteral))
-	}
-	segmentParsers = append(segmentParsers, functionParser())
-	if !deprecated && allowRootFieldLiteral {
-		segmentParsers = append(segmentParsers, fieldLiteralParser(nil, allowRootFieldLiteral))
-	}
-	nextSegment := parser.AnyOf(segmentParsers...)
+		fieldVersusFunction,
+	)
 
 	return func(input []rune) parser.Result {
 		var fns []Function
@@ -89,7 +89,8 @@ func createParser(deprecated, allowRootFieldLiteral bool) parser.Type {
 					res.Remaining = input
 					return res
 				}
-				fns = append(fns, res.Result.(Function))
+
+				bracketFn := res.Result.(Function)
 				res = parser.SpacesAndTabs()(res.Remaining)
 				i = len(input) - len(res.Remaining)
 				res = closeBracket(res.Remaining)
@@ -98,6 +99,24 @@ func createParser(deprecated, allowRootFieldLiteral bool) parser.Type {
 					res.Remaining = input
 					return res
 				}
+
+			bracketTails:
+				for {
+					res = parser.Char('.')(res.Remaining)
+					if res.Err != nil {
+						break bracketTails
+					}
+
+					i = len(input) - len(res.Remaining)
+					res = parseFunctionTail(bracketFn)(res.Remaining)
+					if res.Err != nil {
+						res.Err = parser.ErrAtPosition(i, res.Err)
+						res.Remaining = input
+						return res
+					}
+					bracketFn = res.Result.(Function)
+				}
+				fns = append(fns, bracketFn)
 			}
 
 			res = parser.SpacesAndTabs()(res.Remaining)
@@ -135,14 +154,14 @@ func createParser(deprecated, allowRootFieldLiteral bool) parser.Type {
 
 // Parse parses an input into a query.Function.
 func Parse(input []rune) parser.Result {
-	return createParser(false, false)(input)
+	return createParser(false)(input)
 }
 
 // ParseDeprecated parses an input into a query.Function, but permits deprecated
 // function interpolations. In order to support old functions this parser does
 // not include field literals.
 func ParseDeprecated(input []rune) parser.Result {
-	return createParser(true, false)(input)
+	return createParser(true)(input)
 }
 
 func tryParse(expr string, deprecated bool) (Function, error) {

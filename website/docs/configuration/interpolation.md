@@ -97,6 +97,14 @@ Resolves to the hostname of the machine running Benthos. E.g. `foo ${!hostname()
 
 Methods mutate the behaviour or result of a function (or literal).
 
+### `catch(function)`
+
+If the result of the target function fails (due to incorrect types, failed parsing, etc) the argument is returned instead.
+
+### `for_each(function)`
+
+Apply a function to each element of an array and replace the element with the result.
+
 ### `from(int)`
 
 Execute a function from the context of another message in the batch. This allows you to mutate events based on the contents of other messages.
@@ -115,7 +123,7 @@ Apply a function to the result of another function, allowing you to perform mapp
 
 ### `or(function)`
 
-If the result of the target function fails or resolves to `null`, performs the argument function and returns the result of that instead.'
+If the result of the target function fails or resolves to `null`, returns the argument instead.
 
 ### `sum()`
 

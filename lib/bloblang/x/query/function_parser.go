@@ -60,7 +60,7 @@ func functionArgsParser(allowFunctions bool) parser.Type {
 		parser.QuotedString(),
 	}
 	if allowFunctions {
-		paramTypes = append(paramTypes, Parse)
+		paramTypes = append(paramTypes, createParser(false))
 	}
 
 	parseParam := parser.AnyOf(paramTypes...)
@@ -131,53 +131,60 @@ func literalParser() parser.Type {
 	}
 }
 
-func fieldLiteralParser(ctxFn Function, allowRoot bool) parser.Type {
-	thisParser := parser.Match("this.")
+func fieldLiteralParser(ctxFn Function, allowRoot, supportThis bool) parser.Type {
+	thisParser := parser.Match("this")
 	fieldPathParser := parser.AnyOf(
 		parser.InRange('a', 'z'),
 		parser.InRange('A', 'Z'),
 		parser.InRange('0', '9'),
-		parser.InRange('*', '.'),
+		parser.InRange('*', '-'),
 		parser.Char('_'),
 		parser.Char('~'),
 	)
 	return func(input []rune) parser.Result {
-		partials := []string{}
-
-		res := thisParser(input)
-		if !allowRoot && res.Err != nil {
-			return res
+		res := parser.Result{
+			Remaining: input,
 		}
 
-		for {
-			if res = fieldPathParser(res.Remaining); res.Err != nil {
-				break
-			}
-			partials = append(partials, res.Result.(string))
-		}
-		if len(partials) == 0 || (len(partials) == 1 && partials[0] == ".") {
+		var fn Function
+		var err error
+
+		if supportThis {
+			res = thisParser(res.Remaining)
 			if res.Err == nil {
-				res.Err = parser.ExpectedError{"field-path"}
+				if res = parser.Char('.')(res.Remaining); res.Err != nil {
+					fn, err = fieldFunction()
+				}
+			} else if !allowRoot {
+				return res
 			}
-			return parser.Result{
-				Remaining: input,
-				Err:       res.Err,
+		}
+		if fn == nil && err == nil {
+			partials := []string{}
+			for {
+				if res = fieldPathParser(res.Remaining); res.Err != nil {
+					break
+				}
+				partials = append(partials, res.Result.(string))
 			}
+			if len(partials) == 0 {
+				if res.Err == nil {
+					res.Err = parser.ExpectedError{"field-path"}
+				}
+				return parser.Result{
+					Remaining: input,
+					Err:       res.Err,
+				}
+			}
+
+			var buf bytes.Buffer
+			for _, p := range partials {
+				buf.WriteString(p)
+			}
+
+			fn, err = fieldFunction(buf.String())
 		}
 
-		// TODO: If next token is bracket open we should backtrack.
-		if partials[len(partials)-1] == "." {
-			// Do not consume last period of path.
-			partials = partials[:len(partials)-1]
-			res.Remaining = input[len(input)-len(res.Remaining)-1:]
-		}
-
-		var buf bytes.Buffer
-		for _, p := range partials {
-			buf.WriteString(p)
-		}
-
-		fn, err := fieldFunction(buf.String())
 		if err == nil && ctxFn != nil {
 			fn, err = mapMethod(ctxFn, fn)
 		}
@@ -187,6 +194,23 @@ func fieldLiteralParser(ctxFn Function, allowRoot bool) parser.Type {
 				Err:       err,
 			}
 		}
+
+		for {
+			res = parser.Char('.')(res.Remaining)
+			if res.Err != nil {
+				break
+			}
+
+			i := len(input) - len(res.Remaining)
+			res = parseFunctionTail(fn)(res.Remaining)
+			if res.Err != nil {
+				res.Err = parser.ErrAtPosition(i, res.Err)
+				res.Remaining = input
+				return res
+			}
+			fn = res.Result.(Function)
+		}
+
 		return parser.Result{
 			Remaining: res.Remaining,
 			Result:    fn,
@@ -201,7 +225,7 @@ func parseFunctionTail(fn Function) parser.Type {
 	tailRootParser := parser.AnyOf(
 		openBracket,
 		parseMethod(fn),
-		fieldLiteralParser(fn, true),
+		fieldLiteralParser(fn, true, false),
 	)
 
 	return func(input []rune) parser.Result {
@@ -212,7 +236,7 @@ func parseFunctionTail(fn Function) parser.Type {
 		if _, isStr := res.Result.(string); isStr {
 			res = parser.SpacesAndTabs()(res.Remaining)
 			i := len(input) - len(res.Remaining)
-			res = createParser(false, true)(res.Remaining)
+			res = Parse(res.Remaining)
 			if res.Err != nil {
 				res.Err = parser.ErrAtPosition(i, res.Err)
 				res.Remaining = input
@@ -240,7 +264,7 @@ func parseMethod(fn Function) parser.Type {
 	argsParser := functionArgsParser(true)
 
 	return func(input []rune) parser.Result {
-		res := parser.CamelCase()(input)
+		res := parser.SnakeCase()(input)
 		if res.Err != nil {
 			return res
 		}
@@ -299,7 +323,7 @@ func functionParser() parser.Type {
 		var targetFunc string
 		var args []interface{}
 
-		res := parser.CamelCase()(input)
+		res := parser.SnakeCase()(input)
 		if res.Err != nil {
 			return res
 		}

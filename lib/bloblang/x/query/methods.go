@@ -2,6 +2,8 @@ package query
 
 import (
 	"fmt"
+
+	"golang.org/x/xerrors"
 )
 
 //------------------------------------------------------------------------------
@@ -46,10 +48,75 @@ func mapMethod(target Function, args ...interface{}) (Function, error) {
 	}), nil
 }
 
+func forEachMethod(target Function, args ...interface{}) (Function, error) {
+	if len(args) != 1 {
+		return nil, fmt.Errorf("expected one argument, received: %v", len(args))
+	}
+	mapFn, ok := args[0].(Function)
+	if !ok {
+		return nil, fmt.Errorf("expected function param, received %T", args[0])
+	}
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		res, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		resSlice, ok := res.([]interface{})
+		if !ok {
+			return nil, &ErrRecoverable{
+				Recovered: res,
+				Err:       fmt.Errorf("expected array, found: %T", res),
+			}
+		}
+		newSlice := make([]interface{}, len(resSlice))
+		for i, v := range resSlice {
+			ctx.Value = &v
+			var newV interface{}
+			if newV, err = mapFn.Exec(ctx); err != nil {
+				if recover, ok := err.(*ErrRecoverable); ok {
+					newSlice[i] = recover.Recovered
+					err = xerrors.Errorf("failed to process element %v: %w", i, recover.Err)
+				} else {
+					return nil, err
+				}
+			}
+			newSlice[i] = newV
+		}
+		if err != nil {
+			return nil, &ErrRecoverable{
+				Recovered: newSlice,
+				Err:       err,
+			}
+		}
+		return newSlice, nil
+	}), nil
+}
+
 //------------------------------------------------------------------------------
 
 var methods = map[string]func(target Function, args ...interface{}) (Function, error){
-	"map": mapMethod,
+	"catch": func(fn Function, args ...interface{}) (Function, error) {
+		if len(args) != 1 {
+			return nil, fmt.Errorf("expected one argument, received: %v", len(args))
+		}
+		var catchFn Function
+		switch t := args[0].(type) {
+		case uint64, int64, float64, string, []byte, bool:
+			catchFn = literalFunction(t)
+		case Function:
+			catchFn = t
+		default:
+			return nil, fmt.Errorf("expected function or literal param, received %T", args[0])
+		}
+		return closureFn(func(ctx FunctionContext) (interface{}, error) {
+			res, err := fn.Exec(ctx)
+			if err != nil {
+				res, err = catchFn.Exec(ctx)
+			}
+			return res, err
+		}), nil
+	},
+	"for_each": forEachMethod,
 	"from": func(target Function, args ...interface{}) (Function, error) {
 		if len(args) != 1 {
 			return nil, fmt.Errorf("expected one argument, received: %v", len(args))
@@ -89,6 +156,7 @@ var methods = map[string]func(target Function, args ...interface{}) (Function, e
 			return values, nil
 		}), nil
 	},
+	"map": mapMethod,
 	"or": func(fn Function, args ...interface{}) (Function, error) {
 		if len(args) != 1 {
 			return nil, fmt.Errorf("expected one argument, received: %v", len(args))

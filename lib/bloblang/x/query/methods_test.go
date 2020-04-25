@@ -54,6 +54,54 @@ func TestMethods(t *testing.T) {
 				{content: `not even json`},
 			},
 		},
+		"json from all/or 2": {
+			input:  `(json().foo | "fallback").from_all()`,
+			output: `["a","fallback","c","fallback"]`,
+			messages: []easyMsg{
+				{content: `{"foo":"a"}`},
+				{content: `{}`},
+				{content: `{"foo":"c"}`},
+				{content: `not even json`},
+			},
+		},
+		"json from all/or 3": {
+			input:  `json().foo.or("fallback").from_all()`,
+			output: `["a","fallback","c","fallback"]`,
+			messages: []easyMsg{
+				{content: `{"foo":"a"}`},
+				{content: `{}`},
+				{content: `{"foo":"c"}`},
+				{content: `not even json`},
+			},
+		},
+		"json catch": {
+			input:  `json().catch("nope")`,
+			output: `nope`,
+			messages: []easyMsg{
+				{content: `this %$#% isnt json`},
+			},
+		},
+		"json catch 2": {
+			input:  `json().catch("nope")`,
+			output: `null`,
+			messages: []easyMsg{
+				{content: `null`},
+			},
+		},
+		"json catch 3": {
+			input:  `json("foo").catch("nope")`,
+			output: `null`,
+			messages: []easyMsg{
+				{content: `{"foo":null}`},
+			},
+		},
+		"json catch 4": {
+			input:  `json("foo").catch("nope")`,
+			output: `yep`,
+			messages: []easyMsg{
+				{content: `{"foo":"yep"}`},
+			},
+		},
 		"meta from all": {
 			input:  `meta("foo").from_all()`,
 			output: `["bar","","baz"]`,
@@ -102,6 +150,41 @@ func TestMethods(t *testing.T) {
 				{meta: map[string]string{"bar": "yep"}},
 				{meta: map[string]string{"bar": "nope"}},
 				{meta: map[string]string{"foo": "from foo 2", "bar": "yep"}},
+			},
+		},
+		"for each": {
+			input:  `json("foo").for_each(this + 10)`,
+			output: `[11,12,12]`,
+			messages: []easyMsg{
+				{content: `{"foo":[1,2,2]}`},
+			},
+		},
+		"for each inner map": {
+			input:  `json("foo").for_each((this.bar + 10) | "woops")`,
+			output: `[11,"woops",12]`,
+			messages: []easyMsg{
+				{content: `{"foo":[{"bar":1},2,{"bar":2}]}`},
+			},
+		},
+		"for each some errors": {
+			input:  `json("foo").for_each((this + 10) | "failed")`,
+			output: `[11,12,"failed",12]`,
+			messages: []easyMsg{
+				{content: `{"foo":[1,2,"nope",2]}`},
+			},
+		},
+		"for each uncaught errors": {
+			input:  `json("foo").for_each(this + 10)`,
+			output: `[11,12,null,12]`,
+			messages: []easyMsg{
+				{content: `{"foo":[1,2,"nope",2]}`},
+			},
+		},
+		"for each not an array": {
+			input:  `json("foo").for_each(this + 10)`,
+			output: `not an array`,
+			messages: []easyMsg{
+				{content: `{"foo":"not an array"}`},
 			},
 		},
 		"test sum standard array": {

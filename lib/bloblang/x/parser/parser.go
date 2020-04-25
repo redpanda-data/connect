@@ -349,10 +349,10 @@ func Boolean() Type {
 	}
 }
 
-// CamelCase parses any number of characters of a camel case string. This parser
+// SnakeCase parses any number of characters of a camel case string. This parser
 // is very strict and does not support double underscores, prefix or suffix
 // underscores.
-func CamelCase() Type {
+func SnakeCase() Type {
 	parser := AnyOf(
 		InRange('a', 'z'),
 		InRange('0', '9'),
@@ -476,8 +476,8 @@ func Newline() Type {
 }
 
 // AnyOf accepts one or more parsers and tries them in order against an input.
-// If a parser returns an ExpectedErroror then the next parser is tried and so on.
-// Otherwise, the result is returned.
+// If a parser returns an ExpectedError then the next parser is tried and so
+// on. Otherwise, the result is returned.
 func AnyOf(Types ...Type) Type {
 	return func(input []rune) Result {
 		var err error
@@ -495,6 +495,60 @@ func AnyOf(Types ...Type) Type {
 			Err:       err,
 			Remaining: input,
 		}
+	}
+}
+
+func bestMatch(input []rune, left, right Result) (Result, bool) {
+	matchedLeft := len(input) - len(left.Remaining)
+	matchedRight := len(input) - len(right.Remaining)
+	exp := ExpectedError{}
+	pos := PositionalError{}
+	if left.Err != nil {
+		if !xerrors.As(left.Err, &exp) {
+			return left, false
+		}
+		if xerrors.As(left.Err, &pos) {
+			matchedLeft = pos.Position
+		}
+	}
+	if right.Err != nil {
+		if !xerrors.As(right.Err, &exp) {
+			return right, false
+		}
+		if xerrors.As(right.Err, &pos) {
+			matchedRight = pos.Position
+		}
+	}
+	if matchedRight > matchedLeft {
+		return right, true
+	}
+	return left, true
+}
+
+// BestMatch accepts one or more parsers and tries them all against an input.
+// If any parser returns a non ExpectedError error then it is returned. If all
+// parsers return either a result or an ExpectedError then the parser that got
+// further through the input will have its result returned. This means that an
+// error may be returned even if a parser was successful.
+//
+// For example, given two parsers, A searching for 'aa', and B searching for
+// 'aaaa', if the input 'aaab' were provided then an error from parser B would
+// be returned, as although the input didn't match, it matched more of parser B
+// than parser A.
+func BestMatch(parsers ...Type) Type {
+	if len(parsers) == 1 {
+		return parsers[0]
+	}
+	return func(input []rune) Result {
+		res := parsers[0](input)
+		for _, p := range parsers[1:] {
+			resTmp := p(input)
+			var cont bool
+			if res, cont = bestMatch(input, res, resTmp); !cont {
+				return res
+			}
+		}
+		return res
 	}
 }
 

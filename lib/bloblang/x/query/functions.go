@@ -141,12 +141,13 @@ func fieldFunction(args ...interface{}) (Function, error) {
 	if len(args) > 1 {
 		return nil, fmt.Errorf("expected one or zero arguments, received: %v", len(args))
 	}
-	var path string
+	var pathSegments []string
 	if len(args) > 0 {
-		var ok bool
-		if path, ok = args[0].(string); !ok {
+		path, ok := args[0].(string)
+		if !ok {
 			return nil, fmt.Errorf("expected string param, received %T", args[0])
 		}
+		pathSegments = gabs.DotPathToSlice(path)
 	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		if ctx.Value == nil {
@@ -155,10 +156,10 @@ func fieldFunction(args ...interface{}) (Function, error) {
 				Err:       errors.New("context was undefined"),
 			}
 		}
-		if len(path) == 0 {
+		if len(pathSegments) == 0 {
 			return *ctx.Value, nil
 		}
-		return gabs.Wrap(*ctx.Value).Path(path).Data(), nil
+		return gabs.Wrap(*ctx.Value).S(pathSegments...).Data(), nil
 	}), nil
 }
 

@@ -334,8 +334,129 @@ func TestAnyOfErrors(t *testing.T) {
 	}
 }
 
-func TestCamelCase(t *testing.T) {
-	parser := CamelCase()
+func TestBestMatch(t *testing.T) {
+	tests := map[string]struct {
+		inputResults []Result
+		result       Result
+	}{
+		"Three parsers fail": {
+			inputResults: []Result{
+				{
+					Err: PositionalError{
+						Position: 5,
+						Err:      ExpectedError{"foo"},
+					},
+					Remaining: []rune("foobar"),
+				},
+				{
+					Err: PositionalError{
+						Position: 3,
+						Err:      ExpectedError{"bar"},
+					},
+					Remaining: []rune("foobar"),
+				},
+				{
+					Err: PositionalError{
+						Position: 4,
+						Err:      ExpectedError{"bar"},
+					},
+					Remaining: []rune("foobar"),
+				},
+			},
+			result: Result{
+				Err: PositionalError{
+					Position: 5,
+					Err:      ExpectedError{"foo"},
+				},
+				Remaining: []rune("foobar"),
+			},
+		},
+		"One parser succeeds": {
+			inputResults: []Result{
+				{
+					Err: PositionalError{
+						Position: 5,
+						Err:      ExpectedError{"foo"},
+					},
+					Remaining: []rune("foobar"),
+				},
+				{
+					Result:    "test",
+					Remaining: []rune("bar"),
+				},
+			},
+			result: Result{
+				Err: PositionalError{
+					Position: 5,
+					Err:      ExpectedError{"foo"},
+				},
+				Remaining: []rune("foobar"),
+			},
+		},
+		"One parser succeeds 2": {
+			inputResults: []Result{
+				{
+					Err: PositionalError{
+						Position: 4,
+						Err:      ExpectedError{"foo"},
+					},
+					Remaining: []rune("foobar"),
+				},
+				{
+					Result:    "test",
+					Remaining: []rune("r"),
+				},
+			},
+			result: Result{
+				Result:    "test",
+				Remaining: []rune("r"),
+			},
+		},
+		"Three parsers fail one severe": {
+			inputResults: []Result{
+				{
+					Err: PositionalError{
+						Position: 5,
+						Err:      ExpectedError{"foo"},
+					},
+					Remaining: []rune("foobar"),
+				},
+				{
+					Err:       errors.New("this is a real error"),
+					Remaining: []rune("foobar"),
+				},
+				{
+					Err: PositionalError{
+						Position: 4,
+						Err:      ExpectedError{"bar"},
+					},
+					Remaining: []rune("foobar"),
+				},
+			},
+			result: Result{
+				Err:       errors.New("this is a real error"),
+				Remaining: []rune("foobar"),
+			},
+		},
+	}
+
+	for name, test := range tests {
+		childParsers := []Type{}
+		for _, res := range test.inputResults {
+			res := res
+			childParsers = append(childParsers, func([]rune) Result {
+				return res
+			})
+		}
+		t.Run(name, func(t *testing.T) {
+			res := BestMatch(childParsers...)([]rune("foobar"))
+			assert.Equal(t, test.result, res)
+		})
+	}
+}
+
+func TestSnakeCase(t *testing.T) {
+	parser := SnakeCase()
 
 	tests := map[string]struct {
 		input     string
