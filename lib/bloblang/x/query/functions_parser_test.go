@@ -49,6 +49,16 @@ func TestFunctions(t *testing.T) {
 			output:   `false`,
 			messages: []easyMsg{{}},
 		},
+		"literal function 5": {
+			input:    `null`,
+			output:   `null`,
+			messages: []easyMsg{{}},
+		},
+		"literal function 6": {
+			input:    `null | "a string"`,
+			output:   `a string`,
+			messages: []easyMsg{{}},
+		},
 		"json function": {
 			input:  `json()`,
 			output: `{"foo":"bar"}`,

@@ -116,11 +116,23 @@ func functionArgsParser(allowFunctions bool) parser.Type {
 	}
 }
 
+func nullParser() parser.Type {
+	nullMatch := parser.Match("null")
+	return func(input []rune) parser.Result {
+		res := nullMatch(input)
+		if res.Err == nil {
+			res.Result = nil
+		}
+		return res
+	}
+}
+
 func literalParser() parser.Type {
 	parseLiteral := parser.AnyOf(
 		parser.Boolean(),
 		parser.Number(),
 		parser.QuotedString(),
+		nullParser(),
 	)
 	return func(input []rune) parser.Result {
 		res := parseLiteral(input)
