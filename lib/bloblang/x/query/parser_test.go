@@ -25,7 +25,7 @@ func TestFunctionParserErrors(t *testing.T) {
 		"bad args 2": {
 			input:      `json("foo`,
 			deprecated: true,
-			err:        `char 5: failed to parse function arguments: expected one of: [boolean number quoted-string]`,
+			err:        `char 5: failed to parse function arguments: expected one of: [boolean number quoted-string ( null range(a - z) range(A - Z) range(0 - 9) range(* - -) _ ~]`,
 		},
 		"bad args 3": {
 			input: `json(`,
@@ -40,11 +40,6 @@ func TestFunctionParserErrors(t *testing.T) {
 			deprecated: true,
 			err:        `char 4: expected: function-parameters`,
 		},
-		"bad args 6": {
-			input:      `json(foo)`,
-			deprecated: true,
-			err:        `char 5: failed to parse function arguments: expected one of: [boolean number quoted-string]`,
-		},
 		"bad args 7": {
 			input: `json(5)`,
 			err:   `char 4: expected string param, received int64`,
@@ -52,21 +47,6 @@ func TestFunctionParserErrors(t *testing.T) {
 		"bad args 8": {
 			input: `json(false)`,
 			err:   `char 4: expected string param, received bool`,
-		},
-		"bad args 9": {
-			input:      `json(json("foo"))`,
-			deprecated: true,
-			err:        `char 5: failed to parse function arguments: expected one of: [boolean number quoted-string]`,
-		},
-		"bad args 10": {
-			input:      `json(json("foo"))`,
-			deprecated: false,
-			err:        `char 5: failed to parse function arguments: expected one of: [boolean number quoted-string]`,
-		},
-		"bad args 11": {
-			input:      `json(foo)`,
-			deprecated: false,
-			err:        `char 5: failed to parse function arguments: expected one of: [boolean number quoted-string]`,
 		},
 		"bad operators": {
 			input: `json("foo") + `,

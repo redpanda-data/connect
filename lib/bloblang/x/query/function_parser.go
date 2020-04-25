@@ -59,11 +59,6 @@ func functionArgsParser(allowFunctions bool) parser.Type {
 		parser.Number(),
 		parser.QuotedString(),
 	}
-	if allowFunctions {
-		paramTypes = append(paramTypes, createParser(false))
-	}
-
-	parseParam := parser.AnyOf(paramTypes...)
 	parseStart := parser.Char('(')
 	parseEnd := parser.Char(')')
 	parseNext := parser.AnyOf(
@@ -72,6 +67,11 @@ func functionArgsParser(allowFunctions bool) parser.Type {
 	)
 
 	return func(input []rune) parser.Result {
+		if allowFunctions {
+			paramTypes = append(paramTypes, createParser(false))
+		}
+		parseParam := parser.AnyOf(paramTypes...)
+
 		res := parseStart(input)
 		if res.Err != nil {
 			return res
@@ -329,7 +329,7 @@ func parseMethod(fn Function) parser.Type {
 }
 
 func functionParser() parser.Type {
-	argsParser := functionArgsParser(false)
+	argsParser := functionArgsParser(true)
 
 	return func(input []rune) parser.Result {
 		var targetFunc string

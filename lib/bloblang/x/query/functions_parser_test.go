@@ -97,6 +97,25 @@ func TestFunctions(t *testing.T) {
 				{content: `{"foo":true,"bar":1}`},
 			},
 		},
+		"json function dynamic arg": {
+			input:  `json(meta("path"))`,
+			output: `this`,
+			messages: []easyMsg{
+				{
+					content: `{"foo":{"bar":"this"}}`,
+					meta: map[string]string{
+						"path": "foo.bar",
+					},
+				},
+			},
+		},
+		"json function dynamic arg 2": {
+			input:  `json(json("path"))`,
+			output: `this`,
+			messages: []easyMsg{
+				{content: `{"path":"foo.bar","foo":{"bar":"this"}}`},
+			},
+		},
 		"json_from function": {
 			input:  `json("foo").from(1)`,
 			output: `bar`,

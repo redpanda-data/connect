@@ -63,18 +63,79 @@ func literalFunction(v interface{}) Function {
 	})
 }
 
-func jsonFunction(args ...interface{}) (Function, error) {
-	var argPath string
-	if len(args) > 1 {
+//------------------------------------------------------------------------------
+
+func getIntArg(args ...interface{}) (func(ctx FunctionContext) (int64, error), error) {
+	var intArgFn func(ctx FunctionContext) (int64, error)
+	if len(args) != 1 {
 		return nil, fmt.Errorf("expected one or zero arguments, received: %v", len(args))
 	}
-	if len(args) == 1 {
-		var ok bool
-		if argPath, ok = args[0].(string); !ok {
-			return nil, fmt.Errorf("expected string param, received %T", args[0])
+	switch t := args[0].(type) {
+	case int64:
+		intArgFn = func(ctx FunctionContext) (int64, error) { return t, nil }
+	case float64:
+		intArgFn = func(ctx FunctionContext) (int64, error) { return int64(t), nil }
+	case Function:
+		intArgFn = func(ctx FunctionContext) (int64, error) {
+			res, err := t.Exec(ctx)
+			if err != nil {
+				return 0, err
+			}
+			switch t2 := res.(type) {
+			case float64:
+				return int64(t2), nil
+			case int64:
+				return t2, nil
+			}
+			return 0, fmt.Errorf("expected int param, received %T", res)
 		}
+	default:
+		return nil, fmt.Errorf("expected int param, received %T", args[0])
+	}
+	return intArgFn, nil
+}
+
+func getStringArgOrEmpty(args ...interface{}) (func(ctx FunctionContext) (string, error), error) {
+	if len(args) == 0 {
+		return func(ctx FunctionContext) (string, error) { return "", nil }, nil
+	}
+	var strArgFn func(ctx FunctionContext) (string, error)
+	if len(args) != 1 {
+		return nil, fmt.Errorf("expected one or zero arguments, received: %v", len(args))
+	}
+	switch t := args[0].(type) {
+	case string:
+		strArgFn = func(ctx FunctionContext) (string, error) { return t, nil }
+	case Function:
+		strArgFn = func(ctx FunctionContext) (string, error) {
+			res, err := t.Exec(ctx)
+			if err != nil {
+				return "", err
+			}
+			if str, ok := res.(string); ok {
+				return str, nil
+			}
+			return "", fmt.Errorf("expected string param, received %T", res)
+		}
+	default:
+		return nil, fmt.Errorf("expected string param, received %T", args[0])
+	}
+	return strArgFn, nil
+}
+
+func jsonFunction(args ...interface{}) (Function, error) {
+	strFn, err := getStringArgOrEmpty(args...)
+	if err != nil {
+		return nil, err
 	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		argPath, err := strFn(ctx)
+		if err != nil {
+			return nil, &ErrRecoverable{
+				Recovered: nil,
+				Err:       err,
+			}
+		}
 		jPart, err := ctx.Msg.Get(ctx.Index).JSON()
 		if err != nil {
 			return nil, &ErrRecoverable{
@@ -91,18 +152,19 @@ func jsonFunction(args ...interface{}) (Function, error) {
 }
 
 func metadataFunction(args ...interface{}) (Function, error) {
-	var field string
-	if len(args) > 1 {
-		return nil, fmt.Errorf("expected one or zero arguments, received: %v", len(args))
+	strFn, err := getStringArgOrEmpty(args...)
+	if err != nil {
+		return nil, err
 	}
-	if len(args) == 1 {
-		var ok bool
-		if field, ok = args[0].(string); !ok {
-			return nil, fmt.Errorf("expected string param, received %T", args[0])
-		}
-	}
-	if len(field) > 0 {
+	if len(args) > 0 {
 		return closureFn(func(ctx FunctionContext) (interface{}, error) {
+			field, err := strFn(ctx)
+			if err != nil {
+				return nil, &ErrRecoverable{
+					Recovered: "",
+					Err:       err,
+				}
+			}
 			v := ctx.Msg.Get(ctx.Index).Metadata().Get(field)
 			if len(v) == 0 {
 				return nil, &ErrRecoverable{
@@ -141,13 +203,9 @@ func fieldFunction(args ...interface{}) (Function, error) {
 	if len(args) > 1 {
 		return nil, fmt.Errorf("expected one or zero arguments, received: %v", len(args))
 	}
-	var pathSegments []string
-	if len(args) > 0 {
-		path, ok := args[0].(string)
-		if !ok {
-			return nil, fmt.Errorf("expected string param, received %T", args[0])
-		}
-		pathSegments = gabs.DotPathToSlice(path)
+	strFn, err := getStringArgOrEmpty(args...)
+	if err != nil {
+		return nil, err
 	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		if ctx.Value == nil {
@@ -156,10 +214,17 @@ func fieldFunction(args ...interface{}) (Function, error) {
 				Err:       errors.New("context was undefined"),
 			}
 		}
-		if len(pathSegments) == 0 {
+		path, err := strFn(ctx)
+		if err != nil {
+			return nil, &ErrRecoverable{
+				Recovered: nil,
+				Err:       err,
+			}
+		}
+		if len(path) == 0 {
 			return *ctx.Value, nil
 		}
-		return gabs.Wrap(*ctx.Value).S(pathSegments...).Data(), nil
+		return gabs.Wrap(*ctx.Value).Path(path).Data(), nil
 	}), nil
 }
 
@@ -175,12 +240,19 @@ var functions = map[string]func(args ...interface{}) (Function, error){
 		if len(args) != 1 {
 			return nil, errors.New("expected one parameter")
 		}
-		name, ok := args[0].(string)
-		if !ok {
-			return nil, fmt.Errorf("expected string param, received %T", args[0])
+		strFn, err := getStringArgOrEmpty(args...)
+		if err != nil {
+			return nil, err
 		}
+		return closureFn(func(ctx FunctionContext) (interface{}, error) {
+			name, err := strFn(ctx)
+			if err != nil {
+				return nil, &ErrRecoverable{
+					Recovered: int64(0),
+					Err:       err,
+				}
+			}
 
-		return closureFn(func(_ FunctionContext) (interface{}, error) {
 			countersMux.Lock()
 			defer countersMux.Unlock()
 
