@@ -1,0 +1,170 @@
+package query
+
+import (
+	"testing"
+
+	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestExpressions(t *testing.T) {
+	type easyMsg struct {
+		content string
+		meta    map[string]string
+	}
+
+	tests := map[string]struct {
+		input      string
+		deprecated bool
+		output     string
+		messages   []easyMsg
+		value      *interface{}
+		index      int
+	}{
+		"match literals": {
+			input: `match "string literal"
+  this == "string literal" => "first"
+  this != "string literal" => "second"
+  _ => "third"`,
+			output:   `first`,
+			messages: []easyMsg{},
+		},
+		"match literals 2": {
+			input: `match "string literal"
+  this != "string literal" => "first"
+  this == "string literal" => "second"
+  _ => "third"`,
+			output:   `second`,
+			messages: []easyMsg{},
+		},
+		"match literals 3": {
+			input: `match "string literal"
+  this != "string literal" => "first"
+  this == "nope" => "second"
+  _ => "third"`,
+			output:   `third`,
+			messages: []easyMsg{},
+		},
+		"match function": {
+			input: `match json("foo")
+  this > 10 =>  this + 1
+  this > 5 => this + 2
+  _ => this + 3`,
+			output: `9`,
+			messages: []easyMsg{
+				{content: `{"foo":7}`},
+			},
+		},
+		"match function 2": {
+			input: `match json("foo")
+  this > 10 =>  this + 1
+  this > 5 => this + 2
+  _ => this + 3`,
+			output: `16`,
+			messages: []easyMsg{
+				{content: `{"foo":15}`},
+			},
+		},
+		"match function 3": {
+			input: `match json("foo")
+  this > 10 =>  this + 1
+  this > 5 => this + 2
+  _ => this + 3`,
+			output: `5`,
+			messages: []easyMsg{
+				{content: `{"foo":2}`},
+			},
+		},
+		"match empty": {
+			input: `match ""
+  json().foo > 5 => json().foo
+  json().bar > 5 => "bigbar"
+  _ => json().baz`,
+			output: `6`,
+			messages: []easyMsg{
+				{content: `{"foo":6,"bar":3,"baz":"isbaz"}`},
+			},
+		},
+		"match empty 2": {
+			input: `match ""
+  json().foo > 5 => "bigfoo"
+  json().bar > 5 => "bigbar"
+  _ => json().baz`,
+			output: `bigbar`,
+			messages: []easyMsg{
+				{content: `{"foo":2,"bar":7,"baz":"isbaz"}`},
+			},
+		},
+		"match empty 3": {
+			input: `match ""
+  json().foo > 5 => "bigfoo"
+  json().bar > 5 => "bigbar"
+  _ => json().baz`,
+			output: `isbaz`,
+			messages: []easyMsg{
+				{content: `{"foo":2,"bar":"not a number","baz":"isbaz"}`},
+			},
+		},
+		"match function in braces": {
+			input: `(match json("foo")
+  this > 10 =>  this + 1
+  this > 5 => this + 2
+  _ => this + 3)`,
+			output: `9`,
+			messages: []easyMsg{
+				{content: `{"foo":7}`},
+			},
+		},
+		"match function in braces 2": {
+			input: `(match (json("foo"))
+  (this > 10) => (this + 1)
+  (this > 5) => (this + 2)
+  _ => (this + 3))`,
+			output: `9`,
+			messages: []easyMsg{
+				{content: `{"foo":7}`},
+			},
+		},
+		"no matches": {
+			input: `match "value"
+  this == "not this value" => "yep"`,
+			output: ``,
+			messages: []easyMsg{
+				{content: `{"foo":6,"bar":3,"baz":"isbaz"}`},
+			},
+		},
+	}
+
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			msg := message.New(nil)
+			for _, m := range test.messages {
+				part := message.NewPart([]byte(m.content))
+				if m.meta != nil {
+					for k, v := range m.meta {
+						part.Metadata().Set(k, v)
+					}
+				}
+				msg.Append(part)
+			}
+
+			e, err := tryParse(test.input, test.deprecated)
+			if !assert.NoError(t, err) {
+				return
+			}
+			res := e.ToString(FunctionContext{
+				Index: test.index, Msg: msg,
+				Value: test.value,
+			})
+			assert.Equal(t, test.output, res)
+			res = string(e.ToBytes(FunctionContext{
+				Index: test.index, Msg: msg,
+				Value: test.value,
+			}))
+			assert.Equal(t, test.output, res)
+		})
+	}
+}

@@ -35,6 +35,19 @@ If a literal string is required that matches this pattern (`${!foo}`) then, simi
 
 Bloblang supports arithmetic, boolean operators, coalesce and mapping expressions, there are some [examples of this below](#examples).
 
+## Expressions
+
+### Pattern Matching
+
+A `match` expression allows you to perform pattern matching on values:
+
+```
+match json().type
+  this == "article" => json().article
+  this == "comment" => json().comment
+  _ => json()
+```
+
 ## Functions
 
 ### `content()`

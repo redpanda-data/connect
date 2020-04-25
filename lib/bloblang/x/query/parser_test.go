@@ -117,6 +117,14 @@ func TestFunctionParserErrors(t *testing.T) {
 			input: `json("foo").(1 + )`,
 			err:   `char 17: expected one of: [( boolean number quoted-string range(a - z) range(A - Z) range(0 - 9) range(* - -) _ ~]`,
 		},
+		"bad match": {
+			input: `match json("foo")`,
+			err:   `char 17: unexpected end of input`,
+		},
+		"bad match 2": {
+			input: `match json("foo") what is this?`,
+			err:   `char 18: expected: line-break`,
+		},
 	}
 
 	for name, test := range tests {

@@ -48,6 +48,7 @@ func createParser(deprecated bool) parser.Type {
 	if !deprecated {
 		fieldVersusFunction = parser.BestMatch(
 			fieldLiteralParser(nil, true, true),
+			matchExpressionParser(),
 			fieldVersusFunction,
 		)
 	}
