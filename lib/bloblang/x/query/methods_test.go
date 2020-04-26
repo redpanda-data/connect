@@ -175,9 +175,27 @@ func TestMethods(t *testing.T) {
 		},
 		"for each uncaught errors": {
 			input:  `json("foo").for_each(this + 10)`,
-			output: `[11,12,null,12]`,
+			output: `[11,12,10,12]`,
 			messages: []easyMsg{
 				{content: `{"foo":[1,2,"nope",2]}`},
+			},
+		},
+		"for each delete some elements": {
+			input: `json("foo").for_each(
+	match this
+		this < 10 => deleted()
+		_ => this - 10
+)`,
+			output: `[1,2,3]`,
+			messages: []easyMsg{
+				{content: `{"foo":[11,12,7,13]}`},
+			},
+		},
+		"for each delete all elements for some reason": {
+			input:  `json("foo").for_each(deleted())`,
+			output: `[]`,
+			messages: []easyMsg{
+				{content: `{"foo":[11,12,7,13]}`},
 			},
 		},
 		"for each not an array": {

@@ -475,6 +475,31 @@ func Newline() Type {
 	}
 }
 
+// Discard the result of a child parser, regardless of the result. This has the
+// effect of running the parser and returning only Remaining.
+func Discard(parser Type) Type {
+	return func(input []rune) Result {
+		res := parser(input)
+		res.Result = nil
+		res.Err = nil
+		return res
+	}
+}
+
+// DiscardAll the results of a child parser, applied until it fails. This has
+// the effect of running the parser and returning only Remaining.
+func DiscardAll(parser Type) Type {
+	return func(input []rune) Result {
+		res := parser(input)
+		for res.Err == nil {
+			res = parser(res.Remaining)
+		}
+		res.Result = nil
+		res.Err = nil
+		return res
+	}
+}
+
 // AnyOf accepts one or more parsers and tries them in order against an input.
 // If a parser returns an ExpectedError then the next parser is tried and so
 // on. Otherwise, the result is returned.

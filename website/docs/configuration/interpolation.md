@@ -54,6 +54,20 @@ match json().type
 
 Returns the full contents of a message.
 
+### `deleted()`
+
+This is a special function indicating that the mapping target should be deleted. For example, it can be used to remove elements of an array within `for_each`:
+
+```
+json("foo").for_each(
+  match this
+    this < 10 => deleted()
+    _ => this - 10
+)
+```
+
+Given the input message `{"foo":[11,12,7,13]}` the above mapping would result in `[1,2,3]`.
+
 ### `error()`
 
 If an error has occurred during the processing of a message this function returns the reported cause of the error. For more information about error

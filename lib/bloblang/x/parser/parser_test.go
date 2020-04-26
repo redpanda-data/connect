@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNotEnd(t *testing.T) {
@@ -571,6 +572,98 @@ func TestMatch(t *testing.T) {
 			_ = assert.Equal(t, test.err, res.Err, "Error") &&
 				assert.Equal(t, test.result, res.Result, "Result") &&
 				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+		})
+	}
+}
+
+func TestDiscard(t *testing.T) {
+	parser := Discard(Match("abc"))
+
+	tests := map[string]struct {
+		input     string
+		remaining string
+	}{
+		"empty input": {},
+		"smaller than string": {
+			input:     "ab",
+			remaining: "ab",
+		},
+		"only string": {
+			input:     "abc",
+			remaining: "",
+		},
+		"lots of the string": {
+			input:     "abcabc",
+			remaining: "abc",
+		},
+		"lots of the string and some": {
+			input:     "abcabc and this",
+			remaining: "abc and this",
+		},
+		"not in the string": {
+			input:     "n",
+			remaining: "n",
+		},
+		"lots not in the set": {
+			input:     "nononono",
+			remaining: "nononono",
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			res := parser([]rune(test.input))
+			require.NoError(t, res.Err)
+			assert.Nil(t, res.Result)
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+		})
+	}
+}
+
+func TestDiscardAll(t *testing.T) {
+	parser := DiscardAll(Match("abc"))
+
+	tests := map[string]struct {
+		input     string
+		remaining string
+	}{
+		"empty input": {},
+		"smaller than string": {
+			input:     "ab",
+			remaining: "ab",
+		},
+		"only string": {
+			input:     "abc",
+			remaining: "",
+		},
+		"lots of the string": {
+			input:     "abcabc",
+			remaining: "",
+		},
+		"lots of the string broken": {
+			input:     "abcabc abc and this",
+			remaining: " abc and this",
+		},
+		"lots of the string and some": {
+			input:     "abcabc and this",
+			remaining: " and this",
+		},
+		"not in the string": {
+			input:     "n",
+			remaining: "n",
+		},
+		"lots not in the set": {
+			input:     "nononono",
+			remaining: "nononono",
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			res := parser([]rune(test.input))
+			require.NoError(t, res.Err)
+			assert.Nil(t, res.Result)
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }

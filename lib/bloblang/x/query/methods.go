@@ -68,19 +68,21 @@ func forEachMethod(target Function, args ...interface{}) (Function, error) {
 				Err:       fmt.Errorf("expected array, found: %T", res),
 			}
 		}
-		newSlice := make([]interface{}, len(resSlice))
+		newSlice := make([]interface{}, 0, len(resSlice))
 		for i, v := range resSlice {
 			ctx.Value = &v
 			var newV interface{}
 			if newV, err = mapFn.Exec(ctx); err != nil {
 				if recover, ok := err.(*ErrRecoverable); ok {
-					newSlice[i] = recover.Recovered
+					newV = recover.Recovered
 					err = xerrors.Errorf("failed to process element %v: %w", i, recover.Err)
 				} else {
 					return nil, err
 				}
 			}
-			newSlice[i] = newV
+			if _, isDelete := newV.(Delete); !isDelete {
+				newSlice = append(newSlice, newV)
+			}
 		}
 		if err != nil {
 			return nil, &ErrRecoverable{

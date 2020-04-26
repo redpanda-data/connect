@@ -71,6 +71,12 @@ func functionArgsParser(allowFunctions bool) parser.Type {
 		parser.Char(')'),
 		parser.Char(','),
 	)
+	whitespace := parser.DiscardAll(
+		parser.AnyOf(
+			parser.Char('\n'),
+			parser.SpacesAndTabs(),
+		),
+	)
 
 	return func(input []rune) parser.Result {
 		if allowFunctions {
@@ -90,7 +96,7 @@ func functionArgsParser(allowFunctions bool) parser.Type {
 		}
 
 		for {
-			res = parser.SpacesAndTabs()(res.Remaining)
+			res = whitespace(res.Remaining)
 			i := len(input) - len(res.Remaining)
 			res = parseParam(res.Remaining)
 			if res.Err != nil {
@@ -100,7 +106,7 @@ func functionArgsParser(allowFunctions bool) parser.Type {
 			}
 			params = append(params, res.Result)
 
-			res = parser.SpacesAndTabs()(res.Remaining)
+			res = whitespace(res.Remaining)
 			i = len(input) - len(res.Remaining)
 			res = parseNext(res.Remaining)
 			if res.Err != nil {

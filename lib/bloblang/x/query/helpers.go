@@ -12,7 +12,7 @@ import (
 
 // Delete is a special type that serializes to `null` but indicates a target
 // should be deleted.
-type Delete interface{}
+type Delete *struct{}
 
 func iGetNumber(v interface{}) (float64, error) {
 	switch t := v.(type) {
