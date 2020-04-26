@@ -103,7 +103,7 @@ func add(fns []Function) Function {
 			var nextF float64
 			next, tmpErr := fn.Exec(ctx)
 			if tmpErr == nil {
-				nextF, tmpErr = iGetNumber(next)
+				nextF, tmpErr = IGetNumber(next)
 			}
 			if tmpErr != nil {
 				err = tmpErr
@@ -128,13 +128,13 @@ func sub(lhs, rhs Function) Function {
 		var err error
 
 		if leftV, tmpErr := lhs.Exec(ctx); tmpErr == nil {
-			total, err = iGetNumber(leftV)
+			total, err = IGetNumber(leftV)
 		} else {
 			err = tmpErr
 		}
 		if rightV, tmpErr := rhs.Exec(ctx); tmpErr == nil {
 			var toSub float64
-			if toSub, tmpErr = iGetNumber(rightV); tmpErr != nil {
+			if toSub, tmpErr = IGetNumber(rightV); tmpErr != nil {
 				err = tmpErr
 			} else {
 				total -= toSub
@@ -159,13 +159,13 @@ func divide(lhs, rhs Function) Function {
 		var err error
 
 		if leftV, tmpErr := lhs.Exec(ctx); tmpErr == nil {
-			result, err = iGetNumber(leftV)
+			result, err = IGetNumber(leftV)
 		} else {
 			err = tmpErr
 		}
 		if rightV, tmpErr := rhs.Exec(ctx); tmpErr == nil {
 			var denom float64
-			if denom, tmpErr = iGetNumber(rightV); tmpErr != nil {
+			if denom, tmpErr = IGetNumber(rightV); tmpErr != nil {
 				err = tmpErr
 			} else {
 				result = result / denom
@@ -187,13 +187,13 @@ func multiply(lhs, rhs Function) Function {
 		var err error
 
 		if leftV, tmpErr := lhs.Exec(ctx); tmpErr == nil {
-			result, err = iGetNumber(leftV)
+			result, err = IGetNumber(leftV)
 		} else {
 			err = tmpErr
 		}
 		if rightV, tmpErr := rhs.Exec(ctx); tmpErr == nil {
 			var denom float64
-			if denom, tmpErr = iGetNumber(rightV); tmpErr != nil {
+			if denom, tmpErr = IGetNumber(rightV); tmpErr != nil {
 				err = tmpErr
 			} else {
 				result = result * denom
@@ -244,12 +244,12 @@ func compareFloat(lhs, rhs Function, op arithmeticOp) (Function, error) {
 		var err error
 
 		if leftV, tmpErr := lhs.Exec(ctx); tmpErr == nil {
-			lhsV, err = iGetNumber(leftV)
+			lhsV, err = IGetNumber(leftV)
 		} else {
 			err = tmpErr
 		}
 		if rightV, tmpErr := rhs.Exec(ctx); tmpErr == nil {
-			if rhsV, tmpErr = iGetNumber(rightV); tmpErr != nil {
+			if rhsV, tmpErr = IGetNumber(rightV); tmpErr != nil {
 				err = tmpErr
 			}
 		} else {

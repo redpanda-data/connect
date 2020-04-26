@@ -199,7 +199,7 @@ var methods = map[string]func(target Function, args ...interface{}) (Function, e
 			case []interface{}:
 				var total float64
 				for _, v := range t {
-					n, nErr := iGetNumber(v)
+					n, nErr := IGetNumber(v)
 					if nErr != nil {
 						err = fmt.Errorf("unexpected type in array, expected number, found: %T", v)
 					} else {

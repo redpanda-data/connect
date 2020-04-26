@@ -14,7 +14,9 @@ import (
 // should be deleted.
 type Delete *struct{}
 
-func iGetNumber(v interface{}) (float64, error) {
+// IGetNumber takes a boxed value and attempts to extract a number (float64)
+// from it.
+func IGetNumber(v interface{}) (float64, error) {
 	switch t := v.(type) {
 	case int64:
 		return float64(t), nil
@@ -28,7 +30,10 @@ func iGetNumber(v interface{}) (float64, error) {
 	return 0, fmt.Errorf("function returned non-numerical type: %T", v)
 }
 
-func iSanitize(i interface{}) interface{} {
+// ISanitize takes a boxed value of any type and attempts to convert it into one
+// of the following types: string, []byte, int64, uint64, float64, bool,
+// []interface{}, map[string]interface{}, Delete.
+func ISanitize(i interface{}) interface{} {
 	switch t := i.(type) {
 	case string, []byte, int64, uint64, float64, bool, []interface{}, map[string]interface{}, Delete:
 		return i
@@ -57,7 +62,9 @@ func iSanitize(i interface{}) interface{} {
 	return nil
 }
 
-func iToBytes(i interface{}) []byte {
+// IToBytes takes a boxed value of any type and attempts to convert it into a
+// byte slice.
+func IToBytes(i interface{}) []byte {
 	switch t := i.(type) {
 	case string:
 		return []byte(t)
@@ -77,7 +84,9 @@ func iToBytes(i interface{}) []byte {
 	return gabs.Wrap(i).Bytes()
 }
 
-func iToString(i interface{}) string {
+// IToString takes a boxed value of any type and attempts to convert it into a
+// string.
+func IToString(i interface{}) string {
 	switch t := i.(type) {
 	case string:
 		return t

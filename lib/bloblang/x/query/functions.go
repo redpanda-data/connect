@@ -37,22 +37,22 @@ func (f closureFn) ToBytes(ctx FunctionContext) []byte {
 	v, err := f(ctx)
 	if err != nil {
 		if rec, ok := err.(*ErrRecoverable); ok {
-			return iToBytes(rec.Recovered)
+			return IToBytes(rec.Recovered)
 		}
 		return nil
 	}
-	return iToBytes(v)
+	return IToBytes(v)
 }
 
 func (f closureFn) ToString(ctx FunctionContext) string {
 	v, err := f(ctx)
 	if err != nil {
 		if rec, ok := err.(*ErrRecoverable); ok {
-			return iToString(rec.Recovered)
+			return IToString(rec.Recovered)
 		}
 		return ""
 	}
-	return iToString(v)
+	return IToString(v)
 }
 
 //------------------------------------------------------------------------------
@@ -147,7 +147,7 @@ func jsonFunction(args ...interface{}) (Function, error) {
 		if len(argPath) > 0 {
 			gPart = gPart.Path(argPath)
 		}
-		return iSanitize(gPart.Data()), nil
+		return ISanitize(gPart.Data()), nil
 	}), nil
 }
 

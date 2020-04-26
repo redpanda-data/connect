@@ -184,14 +184,14 @@ func fieldLiteralParser(ctxFn Function, allowRoot, supportThis bool) parser.Type
 			}
 		}
 		if fn == nil && err == nil {
-			partials := []string{}
+			var buf bytes.Buffer
 			for {
 				if res = fieldPathParser(res.Remaining); res.Err != nil {
 					break
 				}
-				partials = append(partials, res.Result.(string))
+				buf.WriteString(res.Result.(string))
 			}
-			if len(partials) == 0 {
+			if buf.Len() == 0 {
 				if res.Err == nil {
 					res.Err = parser.ExpectedError{"field-path"}
 				}
@@ -200,12 +200,6 @@ func fieldLiteralParser(ctxFn Function, allowRoot, supportThis bool) parser.Type
 					Err:       res.Err,
 				}
 			}
-
-			var buf bytes.Buffer
-			for _, p := range partials {
-				buf.WriteString(p)
-			}
-
 			fn, err = fieldFunction(buf.String())
 		}
 
