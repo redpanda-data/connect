@@ -10,6 +10,10 @@ import (
 
 //------------------------------------------------------------------------------
 
+// Delete is a special type that serializes to `null` but indicates a target
+// should be deleted.
+type Delete interface{}
+
 func iGetNumber(v interface{}) (float64, error) {
 	switch t := v.(type) {
 	case int64:
@@ -26,7 +30,7 @@ func iGetNumber(v interface{}) (float64, error) {
 
 func iSanitize(i interface{}) interface{} {
 	switch t := i.(type) {
-	case string, []byte, int64, uint64, float64, bool, []interface{}, map[string]interface{}:
+	case string, []byte, int64, uint64, float64, bool, []interface{}, map[string]interface{}, Delete:
 		return i
 	case json.RawMessage:
 		return []byte(t)
@@ -43,7 +47,7 @@ func iSanitize(i interface{}) interface{} {
 	case int32:
 		return int64(t)
 	case uint32:
-		return uint32(t)
+		return uint64(t)
 	case uint:
 		return uint64(t)
 	case float32:

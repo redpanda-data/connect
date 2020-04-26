@@ -7,14 +7,29 @@ import (
 func matchCaseParser() parser.Type {
 	section := parser.Match("=>")
 	whitespace := parser.SpacesAndTabs()
+	linebreak := lineBreak()
 
 	return func(input []rune) parser.Result {
-		res := parser.AnyOf(
+		res := whitespace(input)
+		i := len(input) - len(res.Remaining)
+		if res = linebreak(res.Remaining); res.Err != nil {
+			return parser.Result{
+				Err:       parser.ErrAtPosition(i, res.Err),
+				Remaining: input,
+			}
+		}
+		res = whitespace(res.Remaining)
+		i = len(input) - len(res.Remaining)
+
+		res = parser.AnyOf(
 			parser.Match("_ "),
 			createParser(false),
-		)(input)
+		)(res.Remaining)
 		if res.Err != nil {
-			return res
+			return parser.Result{
+				Err:       parser.ErrAtPosition(i, res.Err),
+				Remaining: input,
+			}
 		}
 
 		var caseFn Function
@@ -26,7 +41,7 @@ func matchCaseParser() parser.Type {
 		}
 
 		res = whitespace(res.Remaining)
-		i := len(input) - len(res.Remaining)
+		i = len(input) - len(res.Remaining)
 		if res = section(res.Remaining); res.Err != nil {
 			return parser.Result{
 				Err:       parser.ErrAtPosition(i, res.Err),
@@ -69,7 +84,6 @@ func lineBreak() parser.Type {
 func matchExpressionParser() parser.Type {
 	matchWord := parser.Match("match")
 	whitespace := parser.SpacesAndTabs()
-	linebreak := lineBreak()
 	caseParser := matchCaseParser()
 
 	return func(input []rune) parser.Result {
@@ -92,16 +106,8 @@ func matchExpressionParser() parser.Type {
 
 	caseLoop:
 		for {
-			res = whitespace(res.Remaining)
 			i = len(input) - len(res.Remaining)
-			if res = linebreak(res.Remaining); res.Err == nil {
-				res = whitespace(res.Remaining)
-				i = len(input) - len(res.Remaining)
-				if res = caseParser(res.Remaining); res.Err == nil {
-					cases = append(cases, res.Result.(matchCase))
-				}
-			}
-			if res.Err != nil {
+			if res = caseParser(res.Remaining); res.Err != nil {
 				if len(cases) == 0 {
 					return parser.Result{
 						Err:       parser.ErrAtPosition(i, res.Err),
@@ -110,6 +116,7 @@ func matchExpressionParser() parser.Type {
 				}
 				break caseLoop
 			}
+			cases = append(cases, res.Result.(matchCase))
 		}
 
 		res.Err = nil

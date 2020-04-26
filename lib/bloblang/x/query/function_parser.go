@@ -14,12 +14,15 @@ import (
 type badFunctionErr string
 
 func (e badFunctionErr) Error() string {
-	exp := []string{}
-	for k := range functions {
-		exp = append(exp, k)
-	}
-	sort.Strings(exp)
-	return fmt.Sprintf("unrecognised function '%v', expected one of: %v", string(e), exp)
+	/*
+		exp := []string{}
+		for k := range functions {
+			exp = append(exp, k)
+		}
+		sort.Strings(exp)
+		return fmt.Sprintf("unrecognised function '%v', expected one of: %v", string(e), exp)
+	*/
+	return fmt.Sprintf("unrecognised function '%v'", string(e))
 }
 
 func (e badFunctionErr) ToExpectedErr() parser.ExpectedError {
@@ -34,12 +37,15 @@ func (e badFunctionErr) ToExpectedErr() parser.ExpectedError {
 type badMethodErr string
 
 func (e badMethodErr) Error() string {
-	exp := []string{}
-	for k := range methods {
-		exp = append(exp, k)
-	}
-	sort.Strings(exp)
-	return fmt.Sprintf("unrecognised method '%v', expected one of: %v", string(e), exp)
+	/*
+		exp := []string{}
+		for k := range methods {
+			exp = append(exp, k)
+		}
+		sort.Strings(exp)
+		return fmt.Sprintf("unrecognised method '%v', expected one of: %v", string(e), exp)
+	*/
+	return fmt.Sprintf("unrecognised method '%v'", string(e))
 }
 
 func (e badMethodErr) ToExpectedErr() parser.ExpectedError {

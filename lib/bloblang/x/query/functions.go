@@ -235,7 +235,10 @@ var functions = map[string]func(args ...interface{}) (Function, error){
 	"meta":    metadataFunction,
 	"error":   errorFunction,
 	"content": contentFunction,
-	"field":   fieldFunction,
+	"deleted": func(...interface{}) (Function, error) {
+		return literalFunction(Delete(nil)), nil
+	},
+	"field": fieldFunction,
 	"count": func(args ...interface{}) (Function, error) {
 		if len(args) != 1 {
 			return nil, errors.New("expected one parameter")
