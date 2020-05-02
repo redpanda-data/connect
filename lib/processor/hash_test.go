@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"crypto/hmac"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -22,6 +23,144 @@ func TestHashBadAlgo(t *testing.T) {
 	_, err := NewHash(conf, nil, log.Noop(), metrics.Noop())
 	if err == nil {
 		t.Error("Expected error from bad algo")
+	}
+}
+
+func TestHashHMACSha1(t *testing.T) {
+	conf := NewConfig()
+	conf.Hash.Algorithm = "hmac-sha1"
+	conf.Hash.Key = "c5f68503-b723-488e-9be0-7b024ba91e20"
+
+	input := [][]byte{
+		[]byte("hello world first part"),
+		[]byte("hello world second part"),
+		[]byte("third part"),
+		[]byte("fourth"),
+		[]byte("5"),
+	}
+
+	exp := [][]byte{}
+
+	for i := range input {
+		h := hmac.New(sha1.New, []byte(conf.Hash.Key))
+		h.Write(input[i])
+		exp = append(exp, h.Sum(nil))
+	}
+
+	if reflect.DeepEqual(input, exp) {
+		t.Fatal("Input and exp output are the same")
+	}
+
+	proc, err := NewHash(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New(input))
+	if len(msgs) != 1 {
+		t.Error("Hash failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	for i, part := range message.GetAllBytes(msgs[0]) {
+		if !hmac.Equal(part, exp[i]) {
+			t.Errorf("Unexpected output for input (%s): %s != %s", input[i], part, exp[i])
+		}
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
+func TestHashHMACSha256(t *testing.T) {
+	conf := NewConfig()
+	conf.Hash.Algorithm = "hmac-sha256"
+	conf.Hash.Key = "c5f68503-b723-488e-9be0-7b024ba91e20"
+
+	input := [][]byte{
+		[]byte("hello world first part"),
+		[]byte("hello world second part"),
+		[]byte("third part"),
+		[]byte("fourth"),
+		[]byte("5"),
+	}
+
+	exp := [][]byte{}
+
+	for i := range input {
+		h := hmac.New(sha256.New, []byte(conf.Hash.Key))
+		h.Write(input[i])
+		exp = append(exp, h.Sum(nil))
+	}
+
+	if reflect.DeepEqual(input, exp) {
+		t.Fatal("Input and exp output are the same")
+	}
+
+	proc, err := NewHash(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New(input))
+	if len(msgs) != 1 {
+		t.Error("Hash failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	for i, part := range message.GetAllBytes(msgs[0]) {
+		if !hmac.Equal(part, exp[i]) {
+			t.Errorf("Unexpected output for input (%s): %s != %s", input[i], part, exp[i])
+		}
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
+func TestHashHMACSha512(t *testing.T) {
+	conf := NewConfig()
+	conf.Hash.Algorithm = "hmac-sha512"
+	conf.Hash.Key = "c5f68503-b723-488e-9be0-7b024ba91e20"
+
+	input := [][]byte{
+		[]byte("hello world first part"),
+		[]byte("hello world second part"),
+		[]byte("third part"),
+		[]byte("fourth"),
+		[]byte("5"),
+	}
+
+	exp := [][]byte{}
+
+	for i := range input {
+		h := hmac.New(sha512.New, []byte(conf.Hash.Key))
+		h.Write(input[i])
+		exp = append(exp, h.Sum(nil))
+	}
+
+	if reflect.DeepEqual(input, exp) {
+		t.Fatal("Input and exp output are the same")
+	}
+
+	proc, err := NewHash(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New(input))
+	if len(msgs) != 1 {
+		t.Error("Hash failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	for i, part := range message.GetAllBytes(msgs[0]) {
+		if !hmac.Equal(part, exp[i]) {
+			t.Errorf("Unexpected output for input (%s): %s != %s", input[i], part, exp[i])
+		}
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
 	}
 }
 

@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"crypto/hmac"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -38,7 +39,8 @@ process_field:
       algorithm: sha256
 ` + "```" + ``,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("algorithm", "The hash algorithm to use.").HasOptions("sha256", "sha512", "sha1", "xxhash64"),
+			docs.FieldCommon("algorithm", "The hash algorithm to use.").HasOptions("sha256", "sha512", "sha1", "xxhash64", "hmac-sha1", "hmac-sha256", "hmac-sha512"),
+			docs.FieldCommon("key", "key used for HMAC algorithms"),
 			partsFieldSpec,
 		},
 	}
@@ -50,6 +52,7 @@ process_field:
 type HashConfig struct {
 	Parts     []int  `json:"parts" yaml:"parts"`
 	Algorithm string `json:"algorithm" yaml:"algorithm"`
+	Key       string `json:"key" yaml:"key"`
 }
 
 // NewHashConfig returns a HashConfig with default values.
@@ -63,6 +66,30 @@ func NewHashConfig() HashConfig {
 //------------------------------------------------------------------------------
 
 type hashFunc func(bytes []byte) ([]byte, error)
+
+func hmacsha1Hash(key string) hashFunc {
+	return func(b []byte) ([]byte, error) {
+		hasher := hmac.New(sha1.New, []byte(key))
+		hasher.Write(b)
+		return hasher.Sum(nil), nil
+	}
+}
+
+func hmacsha256Hash(key string) hashFunc {
+	return func(b []byte) ([]byte, error) {
+		hasher := hmac.New(sha256.New, []byte(key))
+		hasher.Write(b)
+		return hasher.Sum(nil), nil
+	}
+}
+
+func hmacsha512Hash(key string) hashFunc {
+	return func(b []byte) ([]byte, error) {
+		hasher := hmac.New(sha512.New, []byte(key))
+		hasher.Write(b)
+		return hasher.Sum(nil), nil
+	}
+}
 
 func sha1Hash(b []byte) ([]byte, error) {
 	hasher := sha1.New()
@@ -88,8 +115,14 @@ func xxhash64Hash(b []byte) ([]byte, error) {
 	return []byte(strconv.FormatUint(h.Sum64(), 10)), nil
 }
 
-func strToHashr(str string) (hashFunc, error) {
-	switch str {
+func strToHashr(conf HashConfig) (hashFunc, error) {
+	switch conf.Algorithm {
+	case "hmac-sha1":
+		return hmacsha1Hash(conf.Key), nil
+	case "hmac-sha256":
+		return hmacsha256Hash(conf.Key), nil
+	case "hmac-sha512":
+		return hmacsha512Hash(conf.Key), nil
 	case "sha1":
 		return sha1Hash, nil
 	case "sha256":
@@ -99,7 +132,7 @@ func strToHashr(str string) (hashFunc, error) {
 	case "xxhash64":
 		return xxhash64Hash, nil
 	}
-	return nil, fmt.Errorf("hash algorithm not recognised: %v", str)
+	return nil, fmt.Errorf("hash algorithm not recognised: %v", conf.Algorithm)
 }
 
 //------------------------------------------------------------------------------
@@ -123,7 +156,7 @@ type Hash struct {
 func NewHash(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	cor, err := strToHashr(conf.Hash.Algorithm)
+	cor, err := strToHashr(conf.Hash)
 	if err != nil {
 		return nil, err
 	}

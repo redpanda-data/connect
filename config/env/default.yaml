@@ -475,6 +475,7 @@ pipeline:
       value: ${PROCESSOR_GROUP_BY_VALUE_VALUE:${!metadata:example}}
     hash:
       algorithm: ${PROCESSOR_HASH_ALGORITHM:sha256}
+      key: ${PROCESSOR_HASH_KEY}
     hash_sample:
       parts:
       - ${PROCESSOR_HASH_SAMPLE_PARTS:0}
