@@ -89,7 +89,7 @@ require (
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d // indirect
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20200327173247-9dae0f8f5775 // indirect
-	golang.org/x/tools v0.0.0-20200305224536-de023d59a5d1 // indirect
+	golang.org/x/tools v0.0.0-20200501205727-542909fd9944 // indirect
 	golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543
 	google.golang.org/genproto v0.0.0-20200113173426-e1de0a7b01eb // indirect
 	gopkg.in/jcmturner/gokrb5.v7 v7.3.0 // indirect

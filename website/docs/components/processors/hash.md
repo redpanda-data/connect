@@ -29,6 +29,7 @@ import TabItem from '@theme/TabItem';
 # Common config fields, showing default values
 hash:
   algorithm: sha256
+  key: ""
 ```
 
 </TabItem>
@@ -38,6 +39,7 @@ hash:
 # All config fields, showing default values
 hash:
   algorithm: sha256
+  key: ""
   parts: []
 ```
 
@@ -66,7 +68,15 @@ The hash algorithm to use.
 
 Type: `string`  
 Default: `"sha256"`  
-Options: `sha256`, `sha512`, `sha1`, `xxhash64`.
+Options: `sha256`, `sha512`, `sha1`, `xxhash64`, `hmac-sha1`, `hmac-sha256`, `hmac-sha512`.
+
+### `key`
+
+key used for HMAC algorithms
+
+
+Type: `string`  
+Default: `""`  
 
 ### `parts`
 

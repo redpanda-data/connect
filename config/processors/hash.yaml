@@ -18,6 +18,7 @@ pipeline:
   - type: hash
     hash:
       algorithm: sha256
+      key: ""
       parts: []
   threads: 1
 output:
