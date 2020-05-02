@@ -349,6 +349,144 @@ func Boolean() Type {
 	}
 }
 
+// Null parses a null literal value.
+func Null() Type {
+	nullMatch := Match("null")
+	return func(input []rune) Result {
+		res := nullMatch(input)
+		if res.Err == nil {
+			res.Result = nil
+		}
+		return res
+	}
+}
+
+// Array parses an array literal.
+func Array() Type {
+	open, comma, close := Char('['), Char(','), Char(']')
+	whitespace := DiscardAll(
+		AnyOf(
+			Newline(),
+			SpacesAndTabs(),
+		),
+	)
+	return func(input []rune) Result {
+		res := open(input)
+		if res.Err != nil {
+			if _, ok := res.Err.(ExpectedError); ok {
+				res.Err = ExpectedError{"array"}
+			}
+			return res
+		}
+
+		var values []interface{}
+		for {
+			res = whitespace(res.Remaining)
+			if res = close(res.Remaining); res.Err == nil {
+				return Result{
+					Result:    values,
+					Remaining: res.Remaining,
+				}
+			}
+
+			res = whitespace(res.Remaining)
+			i := len(input) - len(res.Remaining)
+			if len(values) > 0 {
+				if res = comma(res.Remaining); res.Err != nil {
+					return Result{
+						Err:       ErrAtPosition(i, res.Err),
+						Remaining: input,
+					}
+				}
+				// TODO: Maybe allow trailing commas
+			}
+
+			res = whitespace(res.Remaining)
+			i = len(input) - len(res.Remaining)
+			if res = LiteralValue()(res.Remaining); res.Err != nil {
+				return Result{
+					Err:       ErrAtPosition(i, res.Err),
+					Remaining: input,
+				}
+			}
+			values = append(values, res.Result)
+		}
+	}
+}
+
+// Object parses an object literal.
+func Object() Type {
+	open, comma, close := Char('{'), Char(','), Char('}')
+	whitespace := DiscardAll(
+		AnyOf(
+			Newline(),
+			SpacesAndTabs(),
+		),
+	)
+	return func(input []rune) Result {
+		res := open(input)
+		if res.Err != nil {
+			if _, ok := res.Err.(ExpectedError); ok {
+				res.Err = ExpectedError{"object"}
+			}
+			return res
+		}
+
+		values := map[string]interface{}{}
+		for {
+			res = whitespace(res.Remaining)
+			if res = close(res.Remaining); res.Err == nil {
+				return Result{
+					Result:    values,
+					Remaining: res.Remaining,
+				}
+			}
+
+			res = whitespace(res.Remaining)
+			i := len(input) - len(res.Remaining)
+			if len(values) > 0 {
+				if res = comma(res.Remaining); res.Err != nil {
+					return Result{
+						Err:       ErrAtPosition(i, res.Err),
+						Remaining: input,
+					}
+				}
+				// TODO: Maybe allow trailing commas
+			}
+
+			res = whitespace(res.Remaining)
+			i = len(input) - len(res.Remaining)
+			if res = Sequence(
+				QuotedString(),
+				Discard(SpacesAndTabs()),
+				Char(':'),
+				Discard(whitespace),
+				LiteralValue(),
+			)(res.Remaining); res.Err != nil {
+				return Result{
+					Err:       ErrAtPosition(i, res.Err),
+					Remaining: input,
+				}
+			}
+			slice := res.Result.([]interface{})
+			values[slice[0].(string)] = slice[4]
+		}
+	}
+}
+
+// LiteralValue parses a literal bool, number, quoted string, null value, array
+// of literal values, or object.
+func LiteralValue() Type {
+	return AnyOf(
+		Boolean(),
+		Number(),
+		QuotedString(),
+		Null(),
+		Array(),
+		Object(),
+	)
+}
+
 // SnakeCase parses any number of characters of a camel case string. This parser
 // is very strict and does not support double underscores, prefix or suffix
 // underscores.
@@ -468,10 +606,59 @@ func Newline() Type {
 		if res.Err != nil {
 			if _, ok := res.Err.(ExpectedError); ok {
 				// Override potentially confused expected list.
-				res.Err = ExpectedError{"line break"}
+				res.Err = ExpectedError{"line-break"}
 			}
 		}
 		return res
+	}
+}
+
+// AllOf applies a parser until it fails, and returns a slice containing all
+// results. If the parser does not succeed at least once an error is returned.
+func AllOf(parser Type) Type {
+	return func(input []rune) Result {
+		res := parser(input)
+		if res.Err != nil {
+			return res
+		}
+		results := []interface{}{res.Result}
+		for {
+			if res = parser(res.Remaining); res.Err != nil {
+				return Result{
+					Result:    results,
+					Remaining: res.Remaining,
+				}
+			}
+			results = append(results, res.Result)
+		}
+	}
+}
+
+// JoinStrings applies a parser that returns a slice of strings and joins them
+// into a single string.
+
+// Sequence applies a sequence of parsers and returns either a slice of the
+// results or an error if any parser fails.
+func Sequence(parsers ...Type) Type {
+	return func(input []rune) Result {
+		results := make([]interface{}, 0, len(parsers))
+		res := Result{
+			Remaining: input,
+		}
+		for _, p := range parsers {
+			i := len(input) - len(res.Remaining)
+			if res = p(res.Remaining); res.Err != nil {
+				return Result{
+					Err:       ErrAtPosition(i, res.Err),
+					Remaining: input,
+				}
+			}
+			results = append(results, res.Result)
+		}
+		return Result{
+			Result:    results,
+			Remaining: res.Remaining,
+		}
 	}
 }
 

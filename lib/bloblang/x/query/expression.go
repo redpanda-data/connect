@@ -35,6 +35,9 @@ func matchFunction(contextFn Function, cases []matchCase) Function {
 		if caseErr != nil {
 			return nil, caseErr
 		}
-		return nil, errors.New("no expressions matched")
+		return nil, &ErrRecoverable{
+			Recovered: Nothing(nil),
+			Err:       errors.New("no expressions matched"),
+		}
 	})
 }

@@ -75,6 +75,7 @@ func functionArgsParser(allowFunctions bool) parser.Type {
 		parser.AnyOf(
 			parser.Char('\n'),
 			parser.SpacesAndTabs(),
+			CommentParser(),
 		),
 	)
 
@@ -128,24 +129,8 @@ func functionArgsParser(allowFunctions bool) parser.Type {
 	}
 }
 
-func nullParser() parser.Type {
-	nullMatch := parser.Match("null")
-	return func(input []rune) parser.Result {
-		res := nullMatch(input)
-		if res.Err == nil {
-			res.Result = nil
-		}
-		return res
-	}
-}
-
 func literalParser() parser.Type {
-	parseLiteral := parser.AnyOf(
-		parser.Boolean(),
-		parser.Number(),
-		parser.QuotedString(),
-		nullParser(),
-	)
+	parseLiteral := parser.LiteralValue()
 	return func(input []rune) parser.Result {
 		res := parseLiteral(input)
 		if res.Err == nil {
@@ -246,13 +231,21 @@ func parseFunctionTail(fn Function) parser.Type {
 		fieldLiteralParser(fn, true, false),
 	)
 
+	whitespace := parser.DiscardAll(
+		parser.AnyOf(
+			parser.Char('\n'),
+			parser.SpacesAndTabs(),
+			CommentParser(),
+		),
+	)
+
 	return func(input []rune) parser.Result {
 		res := tailRootParser(input)
 		if res.Err != nil {
 			return res
 		}
 		if _, isStr := res.Result.(string); isStr {
-			res = parser.SpacesAndTabs()(res.Remaining)
+			res = whitespace(res.Remaining)
 			i := len(input) - len(res.Remaining)
 			res = Parse(res.Remaining)
 			if res.Err != nil {
@@ -261,7 +254,7 @@ func parseFunctionTail(fn Function) parser.Type {
 				return res
 			}
 			mapFn := res.Result.(Function)
-			res = parser.SpacesAndTabs()(res.Remaining)
+			res = whitespace(res.Remaining)
 			i = len(input) - len(res.Remaining)
 			res = closeBracket(res.Remaining)
 			if res.Err != nil {

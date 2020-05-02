@@ -128,7 +128,7 @@ func TestExpressions(t *testing.T) {
 		"no matches": {
 			input: `match "value"
   this == "not this value" => "yep"`,
-			output: ``,
+			output: `null`,
 			messages: []easyMsg{
 				{content: `{"foo":6,"bar":3,"baz":"isbaz"}`},
 			},

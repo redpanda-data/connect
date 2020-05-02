@@ -74,6 +74,16 @@ func TestMethods(t *testing.T) {
 				{content: `not even json`},
 			},
 		},
+		"deleted to or": {
+			input:    `deleted().or("fallback")`,
+			output:   `fallback`,
+			messages: []easyMsg{{}},
+		},
+		"nothing to or": {
+			input:    `nothing().or("fallback")`,
+			output:   `fallback`,
+			messages: []easyMsg{{}},
+		},
 		"json catch": {
 			input:  `json().catch("nope")`,
 			output: `nope`,

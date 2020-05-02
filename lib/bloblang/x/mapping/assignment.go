@@ -2,6 +2,7 @@ package mapping
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/Jeffail/benthos/v3/lib/bloblang/x/query"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -43,14 +44,32 @@ func (v *varAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 //------------------------------------------------------------------------------
 
 type metaAssignment struct {
-	Key string
+	Key *string
 }
 
 func (v *metaAssignment) Apply(value interface{}, ctx AssignmentContext) error {
-	if _, deleted := value.(query.Delete); deleted {
-		ctx.Meta.Delete(v.Key)
+	_, deleted := value.(query.Delete)
+	if v.Key == nil {
+		if deleted {
+			ctx.Meta.Iter(func(k, _ string) error {
+				ctx.Meta.Delete(k)
+				return nil
+			})
+		} else {
+			if m, ok := value.(map[string]interface{}); ok {
+				for k, v := range m {
+					ctx.Meta.Set(k, query.IToString(v))
+				}
+			} else {
+				return fmt.Errorf("setting root meta object requires object value, received: %T", value)
+			}
+		}
+		return nil
+	}
+	if deleted {
+		ctx.Meta.Delete(*v.Key)
 	} else {
-		ctx.Meta.Set(v.Key, query.IToString(value))
+		ctx.Meta.Set(*v.Key, query.IToString(value))
 	}
 	return nil
 }
@@ -63,11 +82,17 @@ type jsonAssignment struct {
 
 func (v *jsonAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 	_, deleted := value.(query.Delete)
+	if !deleted {
+		value = query.IClone(value)
+	}
 	if len(v.Path) == 0 {
 		if deleted {
 			return errors.New("cannot delete root of document")
 		}
 		ctx.Value = &value
+	}
+	if *ctx.Value == nil {
+		*ctx.Value = map[string]interface{}{}
 	}
 	gObj := gabs.Wrap(*ctx.Value)
 	if deleted {
@@ -75,6 +100,7 @@ func (v *jsonAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 	} else {
 		gObj.Set(value, v.Path...)
 	}
+	*ctx.Value = gObj.Data()
 	return nil
 }
 

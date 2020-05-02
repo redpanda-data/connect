@@ -522,6 +522,114 @@ func TestSnakeCase(t *testing.T) {
 	}
 }
 
+func TestSequence(t *testing.T) {
+	parser := Sequence(Match("abc"), Match("def"))
+
+	tests := map[string]struct {
+		input     string
+		result    interface{}
+		remaining string
+		err       error
+	}{
+		"empty input": {
+			err: ErrAtPosition(0, errors.New("unexpected end of input")),
+		},
+		"smaller than string": {
+			input:     "ab",
+			remaining: "ab",
+			err:       ErrAtPosition(0, ExpectedError{"abc"}),
+		},
+		"matches first": {
+			input:     "abcNo",
+			remaining: "abcNo",
+			err:       ErrAtPosition(3, ExpectedError{"def"}),
+		},
+		"matches some of second": {
+			input:     "abcdeNo",
+			remaining: "abcdeNo",
+			err:       ErrAtPosition(3, ExpectedError{"def"}),
+		},
+		"matches all": {
+			input:     "abcdef",
+			remaining: "",
+			result:    []interface{}{"abc", "def"},
+		},
+		"matches some": {
+			input:     "abcdef and this",
+			remaining: " and this",
+			result:    []interface{}{"abc", "def"},
+		},
+		"matches only one": {
+			input:     "abcdefabcdef",
+			remaining: "abcdef",
+			result:    []interface{}{"abc", "def"},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			res := parser([]rune(test.input))
+			_ = assert.Equal(t, test.err, res.Err, "Error") &&
+				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+		})
+	}
+}
+
+func TestAllOf(t *testing.T) {
+	parser := AllOf(Match("abc"))
+
+	tests := map[string]struct {
+		input     string
+		result    interface{}
+		remaining string
+		err       error
+	}{
+		"empty input": {
+			err: errors.New("unexpected end of input"),
+		},
+		"smaller than string": {
+			input:     "ab",
+			remaining: "ab",
+			err:       ExpectedError{"abc"},
+		},
+		"matches first": {
+			input:     "abcNo",
+			remaining: "No",
+			result:    []interface{}{"abc"},
+		},
+		"matches some of second": {
+			input:     "abcabNo",
+			remaining: "abNo",
+			result:    []interface{}{"abc"},
+		},
+		"matches all": {
+			input:     "abcabc",
+			remaining: "",
+			result:    []interface{}{"abc", "abc"},
+		},
+		"matches some": {
+			input:     "abcabc and this",
+			remaining: " and this",
+			result:    []interface{}{"abc", "abc"},
+		},
+		"matches all of these": {
+			input:     "abcabcabcabcdef and this",
+			remaining: "def and this",
+			result:    []interface{}{"abc", "abc", "abc", "abc"},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			res := parser([]rune(test.input))
+			_ = assert.Equal(t, test.err, res.Err, "Error") &&
+				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+		})
+	}
+}
+
 func TestMatch(t *testing.T) {
 	str := Match("abc")
 
@@ -825,6 +933,150 @@ func TestQuotedString(t *testing.T) {
 	}
 }
 
+func TestArray(t *testing.T) {
+	p := LiteralValue()
+
+	tests := map[string]struct {
+		input     string
+		result    interface{}
+		remaining string
+		err       error
+	}{
+		"empty input": {
+			err: errors.New("unexpected end of input"),
+		},
+		"empty array": {
+			input:     "[] and this",
+			result:    []interface{}(nil),
+			remaining: " and this",
+		},
+		"empty array with whitespace": {
+			input:     "[ \t] and this",
+			result:    []interface{}(nil),
+			remaining: " and this",
+		},
+		"single element array": {
+			input:     `[ "foo" ] and this`,
+			result:    []interface{}{"foo"},
+			remaining: " and this",
+		},
+		"tailing comma array": {
+			input:     `[ "foo", ] and this`,
+			err:       ErrAtPosition(9, ExpectedError{"boolean", "number", "quoted-string", "null", "array", "object"}),
+			remaining: `[ "foo", ] and this`,
+		},
+		"random stuff array": {
+			input:     `[ "foo", whats this ] and this`,
+			err:       ErrAtPosition(9, ExpectedError{"boolean", "number", "quoted-string", "null", "array", "object"}),
+			remaining: `[ "foo", whats this ] and this`,
+		},
+		"random stuff array 2": {
+			input:     `[ "foo" whats this ] and this`,
+			err:       ErrAtPosition(8, ExpectedError{","}),
+			remaining: `[ "foo" whats this ] and this`,
+		},
+		"multiple elements array": {
+			input:     `[ "foo", false,5.2] and this`,
+			result:    []interface{}{"foo", false, float64(5.2)},
+			remaining: " and this",
+		},
+		"multiple elements array line broken": {
+			input: `[
+	"foo",
+	null,
+	"bar",
+	[true,false]
+] and this`,
+			result:    []interface{}{"foo", nil, "bar", []interface{}{true, false}},
+			remaining: " and this",
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			res := p([]rune(test.input))
+			_ = assert.Equal(t, test.err, res.Err, "Error") &&
+				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+		})
+	}
+}
+
+func TestObject(t *testing.T) {
+	p := LiteralValue()
+
+	tests := map[string]struct {
+		input     string
+		result    interface{}
+		remaining string
+		err       error
+	}{
+		"empty input": {
+			err: errors.New("unexpected end of input"),
+		},
+		"empty object": {
+			input:     "{} and this",
+			result:    map[string]interface{}{},
+			remaining: " and this",
+		},
+		"empty object with whitespace": {
+			input:     "{ \t} and this",
+			result:    map[string]interface{}{},
+			remaining: " and this",
+		},
+		"single value object": {
+			input:     `{"foo":"bar"} and this`,
+			result:    map[string]interface{}{"foo": "bar"},
+			remaining: " and this",
+		},
+		"tailing comma object": {
+			input:     `{ "foo": } and this`,
+			err:       ErrAtPosition(9, ExpectedError{"boolean", "number", "quoted-string", "null", "array", "object"}),
+			remaining: `{ "foo": } and this`,
+		},
+		"random stuff object": {
+			input:     `{ "foo": whats this } and this`,
+			err:       ErrAtPosition(9, ExpectedError{"boolean", "number", "quoted-string", "null", "array", "object"}),
+			remaining: `{ "foo": whats this } and this`,
+		},
+		"multiple values random stuff object": {
+			input:     `{ "foo":true "bar":5.2 } and this`,
+			err:       ErrAtPosition(13, ExpectedError{","}),
+			remaining: `{ "foo":true "bar":5.2 } and this`,
+		},
+		"multiple values object": {
+			input:     `{ "foo":true, "bar":5.2 } and this`,
+			result:    map[string]interface{}{"foo": true, "bar": 5.2},
+			remaining: " and this",
+		},
+		"multiple values object line broken": {
+			input: `{
+	"foo":2  ,
+	"bar":     null,
+	"baz":
+		"three",
+	"quz":   [true,false]
+} and this`,
+			result: map[string]interface{}{
+				"foo": int64(2),
+				"bar": nil,
+				"baz": "three",
+				"quz": []interface{}{true, false},
+			},
+			remaining: " and this",
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			res := p([]rune(test.input))
+			_ = assert.Equal(t, test.err, res.Err, "Error") &&
+				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+		})
+	}
+}
+
 func TestSpacesAndTabs(t *testing.T) {
 	inSet := SpacesAndTabs()
 
@@ -894,7 +1146,7 @@ func TestNewline(t *testing.T) {
 		"only a carriage return": {
 			input:     "\r",
 			remaining: "\r",
-			err:       ExpectedError{"line break"},
+			err:       ExpectedError{"line-break"},
 		},
 		"a carriage return line feed": {
 			input:     "\r\n",
@@ -909,7 +1161,7 @@ func TestNewline(t *testing.T) {
 		"lots not in the set": {
 			input:     "nononono",
 			remaining: "nononono",
-			err:       ExpectedError{"line break"},
+			err:       ExpectedError{"line-break"},
 		},
 	}
 

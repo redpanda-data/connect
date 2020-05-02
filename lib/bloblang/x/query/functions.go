@@ -228,6 +228,38 @@ func fieldFunction(args ...interface{}) (Function, error) {
 	}), nil
 }
 
+func varFunction(args ...interface{}) (Function, error) {
+	if len(args) != 1 {
+		return nil, fmt.Errorf("expected one argument, received: %v", len(args))
+	}
+	strFn, err := getStringArgOrEmpty(args...)
+	if err != nil {
+		return nil, err
+	}
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		if ctx.Vars == nil {
+			return nil, &ErrRecoverable{
+				Recovered: nil,
+				Err:       errors.New("variables were undefined"),
+			}
+		}
+		name, err := strFn(ctx)
+		if err != nil {
+			return nil, &ErrRecoverable{
+				Recovered: nil,
+				Err:       err,
+			}
+		}
+		if res, ok := ctx.Vars[name]; ok {
+			return res, nil
+		}
+		return nil, &ErrRecoverable{
+			Recovered: nil,
+			Err:       fmt.Errorf("variable '%v' undefined", name),
+		}
+	}), nil
+}
+
 //------------------------------------------------------------------------------
 
 var functions = map[string]func(args ...interface{}) (Function, error){
@@ -238,7 +270,11 @@ var functions = map[string]func(args ...interface{}) (Function, error){
 	"deleted": func(...interface{}) (Function, error) {
 		return literalFunction(Delete(nil)), nil
 	},
+	"nothing": func(...interface{}) (Function, error) {
+		return literalFunction(Nothing(nil)), nil
+	},
 	"field": fieldFunction,
+	"var":   varFunction,
 	"count": func(args ...interface{}) (Function, error) {
 		if len(args) != 1 {
 			return nil, errors.New("expected one parameter")

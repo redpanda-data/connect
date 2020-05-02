@@ -25,7 +25,7 @@ func TestFunctionParserErrors(t *testing.T) {
 		"bad args 2": {
 			input:      `json("foo`,
 			deprecated: true,
-			err:        `char 5: failed to parse function arguments: expected one of: [boolean number quoted-string ( null range(a - z) range(A - Z) range(0 - 9) range(* - -) _ ~]`,
+			err:        `char 5: failed to parse function arguments: expected one of: [boolean number quoted-string ( null array object range(a - z) range(A - Z) range(0 - 9) range(* - -) _ ~]`,
 		},
 		"bad args 3": {
 			input: `json(`,
@@ -91,11 +91,11 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"gibberish": {
 			input: `json("foo").(=)`,
-			err:   `char 13: expected one of: [( boolean number quoted-string null range(a - z) range(A - Z) range(0 - 9) range(* - -) _ ~]`,
+			err:   `char 13: expected one of: [( boolean number quoted-string null array object range(a - z) range(A - Z) range(0 - 9) range(* - -) _ ~]`,
 		},
 		"gibberish 2": {
 			input: `json("foo").(1 + )`,
-			err:   `char 17: expected one of: [( boolean number quoted-string null range(a - z) range(A - Z) range(0 - 9) range(* - -) _ ~]`,
+			err:   `char 17: expected one of: [( boolean number quoted-string null array object range(a - z) range(A - Z) range(0 - 9) range(* - -) _ ~]`,
 		},
 		"bad match": {
 			input: `match json("foo")`,
@@ -135,6 +135,10 @@ func TestFunctionParserLimits(t *testing.T) {
 		"space before 2": {
 			input:     `   json("foo")   +    meta("bar")`,
 			remaining: ``,
+		},
+		"unfinished comment": {
+			input:     `json("foo") + meta("bar") # Here's a comment`,
+			remaining: `# Here's a comment`,
 		},
 		"extra text": {
 			input:     `json("foo") and this`,
@@ -202,6 +206,12 @@ func TestFunctionParserLimits(t *testing.T) {
 	5 > 10 => "or this"
 not this`,
 			remaining: "\nnot this",
+		},
+		"operators and line breaks": {
+			input: `(5 * 8) +
+	6 -
+	5 and also this`,
+			remaining: "and also this",
 		},
 	}
 

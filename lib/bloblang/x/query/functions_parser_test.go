@@ -467,6 +467,21 @@ func TestFunctions(t *testing.T) {
 				{content: `{"foo":{"bar":"from_bar"},"baz":"and not this"}`},
 			},
 		},
+		"map literal with comments": {
+			input: `json(
+	"foo" # Here's a thing
+).(
+	bar | # And look at this thing
+	baz |
+	quz
+).from_all() # And this`,
+			output: `["from_baz","from_quz","from_bar"]`,
+			messages: []easyMsg{
+				{content: `{"foo":{"baz":"from_baz"},"quz":"not this"}`},
+				{content: `{"foo":{"quz":"from_quz"}}`},
+				{content: `{"foo":{"bar":"from_bar"},"baz":"and not this"}`},
+			},
+		},
 	}
 
 	for name, test := range tests {

@@ -51,7 +51,7 @@ func TestExpressionParserErrors(t *testing.T) {
 		},
 		"bad args 2": {
 			input: `foo ${!json("foo} bar`,
-			err:   `failed to parse expression: char 12: failed to parse function arguments: expected one of: [boolean number quoted-string ( null range(a - z) range(A - Z) range(0 - 9) range(* - -) _ ~]`,
+			err:   `failed to parse expression: char 12: failed to parse function arguments: expected one of: [boolean number quoted-string ( null array object range(a - z) range(A - Z) range(0 - 9) range(* - -) _ ~]`,
 		},
 		"bad args 3": {
 			input: `foo ${!json(} bar`,

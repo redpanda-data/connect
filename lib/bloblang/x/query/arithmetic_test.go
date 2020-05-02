@@ -224,6 +224,16 @@ func TestArithmetic(t *testing.T) {
 				{content: `{"foo":"from_foo"}`},
 			},
 		},
+		"coalesce deleted": {
+			input:    `deleted() | "this"`,
+			output:   `this`,
+			messages: []easyMsg{{}},
+		},
+		"coalesce nothing": {
+			input:    `nothing() | "this"`,
+			output:   `this`,
+			messages: []easyMsg{{}},
+		},
 	}
 
 	for name, test := range tests {

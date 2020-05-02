@@ -1,6 +1,8 @@
 package query
 
 import (
+	"bytes"
+
 	"github.com/Jeffail/benthos/v3/lib/bloblang/x/parser"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -17,6 +19,7 @@ type Message interface {
 // FunctionContext provides access to a root message, its index within the batch, and
 type FunctionContext struct {
 	Value  *interface{}
+	Vars   map[string]interface{}
 	Index  int
 	Msg    Message
 	Legacy bool
@@ -37,7 +40,39 @@ type Function interface {
 	ToString(ctx FunctionContext) string
 }
 
-//------------------------------------------------------------------------------'
+//------------------------------------------------------------------------------
+
+func joinStrings(p parser.Type) parser.Type {
+	return func(input []rune) parser.Result {
+		res := p(input)
+		if res.Err != nil {
+			return res
+		}
+
+		var buf bytes.Buffer
+		for _, v := range res.Result.([]interface{}) {
+			buf.WriteString(v.(string))
+		}
+		res.Result = buf.String()
+		return res
+	}
+}
+
+// CommentParser parses a comment (followed by a line break).
+func CommentParser() parser.Type {
+	p := joinStrings(
+		parser.Sequence(
+			parser.Char('#'),
+			joinStrings(
+				parser.AllOf(parser.NotChar('\n')),
+			),
+			parser.Newline(),
+		),
+	)
+	return func(input []rune) parser.Result {
+		return p(input)
+	}
+}
 
 func createParser(deprecated bool) parser.Type {
 	opParser := arithmeticOpParser()
@@ -56,6 +91,14 @@ func createParser(deprecated bool) parser.Type {
 		openBracket,
 		literalParser(),
 		fieldVersusFunction,
+	)
+
+	whitespace := parser.DiscardAll(
+		parser.AnyOf(
+			parser.Char('\n'),
+			parser.SpacesAndTabs(),
+			CommentParser(),
+		),
 	)
 
 	return func(input []rune) parser.Result {
@@ -82,7 +125,7 @@ func createParser(deprecated bool) parser.Type {
 				fns = append(fns, t)
 			case string:
 				// ASSUMPTION: Must be open bracket
-				res = parser.SpacesAndTabs()(res.Remaining)
+				res = whitespace(res.Remaining)
 				i = len(input) - len(res.Remaining)
 				res = Parse(res.Remaining)
 				if res.Err != nil {
@@ -92,7 +135,7 @@ func createParser(deprecated bool) parser.Type {
 				}
 
 				bracketFn := res.Result.(Function)
-				res = parser.SpacesAndTabs()(res.Remaining)
+				res = whitespace(res.Remaining)
 				i = len(input) - len(res.Remaining)
 				res = closeBracket(res.Remaining)
 				if res.Err != nil {
@@ -136,7 +179,7 @@ func createParser(deprecated bool) parser.Type {
 				break
 			}
 			ops = append(ops, res.Result.(arithmeticOp))
-			res = parser.SpacesAndTabs()(res.Remaining)
+			res = whitespace(res.Remaining)
 		}
 
 		fn, err := resolveArithmetic(fns, ops)

@@ -174,7 +174,7 @@ var methods = map[string]func(target Function, args ...interface{}) (Function, e
 		}
 		return closureFn(func(ctx FunctionContext) (interface{}, error) {
 			res, err := fn.Exec(ctx)
-			if err != nil || res == nil {
+			if err != nil || IIsNull(res) {
 				res, err = orFn.Exec(ctx)
 			}
 			return res, err

@@ -265,7 +265,7 @@ func compareFloat(lhs, rhs Function, op arithmeticOp) (Function, error) {
 func coalesce(lhs, rhs Function) Function {
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		lhsV, err := lhs.Exec(ctx)
-		if err == nil && lhsV != nil {
+		if err == nil && !IIsNull(lhsV) {
 			return lhsV, nil
 		}
 		return rhs.Exec(ctx)
