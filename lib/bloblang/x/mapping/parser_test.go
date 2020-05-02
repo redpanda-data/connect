@@ -16,12 +16,12 @@ func TestMappingErrors(t *testing.T) {
 	}{
 		"no mappings": {
 			mapping: ``,
-			err:     `failed to parse mapping: char 0: expected: target-path`,
+			err:     `failed to parse mapping: char 0: unexpected end of input`,
 		},
 		"no mappings 2": {
 			mapping: `
    `,
-			err: `failed to parse mapping: char 4: expected: target-path`,
+			err: `failed to parse mapping: char 4: unexpected end of input`,
 		},
 		"double mapping": {
 			mapping: `foo = bar bar = baz`,
@@ -37,7 +37,7 @@ func TestMappingErrors(t *testing.T) {
 		},
 		"bad variable assign": {
 			mapping: `let = blah`,
-			err:     `failed to parse mapping: char 4: expected: target-path`,
+			err:     `failed to parse mapping: char 4: required: variable-name`,
 		},
 	}
 
@@ -160,6 +160,21 @@ bar.baz = var("bar baz")`,
 			output: []part{
 				{Content: `{"bar":{"baz":"test1"}}`},
 			},
+		},
+		"map json root": {
+			mapping: `root = {
+  "foo": "this is a literal map"
+}`,
+			input:  []part{{Content: `{"zed":"gone"}`}},
+			output: []part{{Content: `{"foo":"this is a literal map"}`}},
+		},
+		"map json root 2": {
+			mapping: `root = {
+  "foo": "this is a literal map"
+}
+bar = "this is another thing"`,
+			input:  []part{{Content: `{"zed":"gone"}`}},
+			output: []part{{Content: `{"bar":"this is another thing","foo":"this is a literal map"}`}},
 		},
 	}
 

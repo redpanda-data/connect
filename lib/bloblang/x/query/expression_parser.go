@@ -5,121 +5,100 @@ import (
 )
 
 func matchCaseParser() parser.Type {
-	section := parser.Match("=>")
 	whitespace := parser.SpacesAndTabs()
-	linebreak := lineBreak()
+	p := parser.Sequence(
+		parser.InterceptExpectedError(
+			parser.AnyOf(
+				parser.Match("_ "),
+				createParser(false),
+			),
+			"match-case",
+		),
+		parser.Optional(whitespace),
+		parser.Match("=> "),
+		parser.Optional(whitespace),
+		createParser(false),
+	)
 
 	return func(input []rune) parser.Result {
-		res := whitespace(input)
-		i := len(input) - len(res.Remaining)
-		if res = linebreak(res.Remaining); res.Err != nil {
-			return parser.Result{
-				Err:       parser.ErrAtPosition(i, res.Err),
-				Remaining: input,
-			}
-		}
-		res = whitespace(res.Remaining)
-		i = len(input) - len(res.Remaining)
-
-		res = parser.AnyOf(
-			parser.Match("_ "),
-			createParser(false),
-		)(res.Remaining)
+		res := p(input)
 		if res.Err != nil {
-			return parser.Result{
-				Err:       parser.ErrAtPosition(i, res.Err),
-				Remaining: input,
-			}
+			return res
 		}
+
+		seqSlice := res.Result.([]interface{})
 
 		var caseFn Function
-		switch t := res.Result.(type) {
+		switch t := seqSlice[0].(type) {
 		case Function:
 			caseFn = t
 		case string:
 			caseFn = literalFunction(true)
 		}
 
-		res = whitespace(res.Remaining)
-		i = len(input) - len(res.Remaining)
-		if res = section(res.Remaining); res.Err != nil {
-			return parser.Result{
-				Err:       parser.ErrAtPosition(i, res.Err),
-				Remaining: input,
-			}
-		}
-
-		res = whitespace(res.Remaining)
-		i = len(input) - len(res.Remaining)
-		if res = createParser(false)(res.Remaining); res.Err != nil {
-			return parser.Result{
-				Err:       parser.ErrAtPosition(i, res.Err),
-				Remaining: input,
-			}
-		}
-
 		return parser.Result{
 			Result: matchCase{
 				caseFn:  caseFn,
-				queryFn: res.Result.(Function),
+				queryFn: seqSlice[4].(Function),
 			},
 			Remaining: res.Remaining,
 		}
 	}
 }
 
-func lineBreak() parser.Type {
-	lb := parser.Char('\n')
-	return func(input []rune) parser.Result {
-		res := lb(input)
-		if res.Err != nil {
-			if _, ok := res.Err.(parser.ExpectedError); ok {
-				res.Err = parser.ExpectedError{"line-break"}
-			}
-		}
-		return res
-	}
-}
-
 func matchExpressionParser() parser.Type {
-	matchWord := parser.Match("match")
-	whitespace := parser.SpacesAndTabs()
-	caseParser := matchCaseParser()
+	whitespace := parser.DiscardAll(
+		parser.AnyOf(
+			parser.SpacesAndTabs(),
+			parser.NewlineAllowComment(),
+		),
+	)
 
 	return func(input []rune) parser.Result {
-		res := whitespace(input)
-		if res = matchWord(res.Remaining); res.Err != nil {
+		res := parser.Sequence(
+			parser.Match("match"),
+			parser.Discard(parser.SpacesAndTabs()),
+			parser.Optional(createParser(false)),
+			whitespace,
+			parser.DelimitedPattern(
+				parser.Sequence(
+					parser.Char('{'),
+					whitespace,
+				),
+				matchCaseParser(),
+				parser.Sequence(
+					parser.Discard(parser.SpacesAndTabs()),
+					parser.NewlineAllowComment(),
+					whitespace,
+				),
+				parser.Sequence(
+					whitespace,
+					parser.Char('}'),
+				),
+				true,
+			),
+		)(input)
+		if res.Err != nil {
 			return res
 		}
-		res = whitespace(res.Remaining)
 
-		i := len(input) - len(res.Remaining)
-		if res = createParser(false)(res.Remaining); res.Err != nil {
-			return parser.Result{
-				Err:       parser.ErrAtPosition(i, res.Err),
-				Remaining: input,
-			}
-		}
-
-		contextFn := res.Result.(Function)
-		cases := []matchCase{}
-
-	caseLoop:
-		for {
-			i = len(input) - len(res.Remaining)
-			if res = caseParser(res.Remaining); res.Err != nil {
-				if len(cases) == 0 {
-					return parser.Result{
-						Err:       parser.ErrAtPosition(i, res.Err),
-						Remaining: input,
-					}
+		seqSlice := res.Result.([]interface{})
+		contextFn, ok := seqSlice[2].(Function)
+		if !ok {
+			contextFn = closureFn(func(ctx FunctionContext) (interface{}, error) {
+				var value interface{}
+				if ctx.Value != nil {
+					value = *ctx.Value
 				}
-				break caseLoop
-			}
-			cases = append(cases, res.Result.(matchCase))
+				return value, nil
+			})
 		}
 
-		res.Err = nil
+		cases := []matchCase{}
+		for _, caseVal := range seqSlice[4].([]interface{}) {
+			cases = append(cases, caseVal.(matchCase))
+		}
+
 		res.Result = matchFunction(contextFn, cases)
 		return res
 	}

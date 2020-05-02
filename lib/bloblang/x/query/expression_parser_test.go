@@ -22,115 +22,134 @@ func TestExpressions(t *testing.T) {
 		index      int
 	}{
 		"match literals": {
-			input: `match "string literal"
+			input: `match "string literal" {
   this == "string literal" => "first"
   this != "string literal" => "second"
-  _ => "third"`,
+  _ => "third"
+  
+} `,
 			output:   `first`,
 			messages: []easyMsg{},
 		},
 		"match literals 2": {
 			input: `match "string literal"
+{
   this != "string literal" => "first"
   this == "string literal" => "second"
-  _ => "third"`,
+  _ => "third" }`,
 			output:   `second`,
 			messages: []easyMsg{},
 		},
 		"match literals 3": {
-			input: `match "string literal"
+			input: `match "string literal" {
   this != "string literal" => "first"
   this == "nope" => "second"
-  _ => "third"`,
+  _ => "third"
+}`,
 			output:   `third`,
 			messages: []easyMsg{},
 		},
 		"match function": {
-			input: `match json("foo")
+			input: `match json("foo") {
   this > 10 =>  this + 1
   this > 5 => this + 2
-  _ => this + 3`,
+  _ => this + 3
+  }`,
 			output: `9`,
 			messages: []easyMsg{
 				{content: `{"foo":7}`},
 			},
 		},
 		"match function 2": {
-			input: `match json("foo")
+			input: `match json("foo") {
   this > 10 =>  this + 1
   this > 5 => this + 2
-  _ => this + 3`,
+  _ => this + 3 }`,
 			output: `16`,
 			messages: []easyMsg{
 				{content: `{"foo":15}`},
 			},
 		},
 		"match function 3": {
-			input: `match json("foo")
+			input: `match json("foo") {
   this > 10 =>  this + 1
   this > 5 => this + 2
-  _ => this + 3`,
+  _ => this + 3
+}`,
 			output: `5`,
 			messages: []easyMsg{
 				{content: `{"foo":2}`},
 			},
 		},
 		"match empty": {
-			input: `match ""
+			input: `match "" {
   json().foo > 5 => json().foo
   json().bar > 5 => "bigbar"
-  _ => json().baz`,
+  _ => json().baz
+}`,
 			output: `6`,
 			messages: []easyMsg{
 				{content: `{"foo":6,"bar":3,"baz":"isbaz"}`},
 			},
 		},
 		"match empty 2": {
-			input: `match ""
+			input: `match "" {
   json().foo > 5 => "bigfoo"
   json().bar > 5 => "bigbar"
-  _ => json().baz`,
+  _ => json().baz }`,
 			output: `bigbar`,
 			messages: []easyMsg{
 				{content: `{"foo":2,"bar":7,"baz":"isbaz"}`},
 			},
 		},
 		"match empty 3": {
-			input: `match ""
+			input: `match "" {
   json().foo > 5 => "bigfoo"
   json().bar > 5 => "bigbar"
-  _ => json().baz`,
+  _ => json().baz }`,
 			output: `isbaz`,
 			messages: []easyMsg{
 				{content: `{"foo":2,"bar":"not a number","baz":"isbaz"}`},
 			},
 		},
 		"match function in braces": {
-			input: `(match json("foo")
+			input: `(match json("foo") {
   this > 10 =>  this + 1
   this > 5 => this + 2
-  _ => this + 3)`,
+  _ => this + 3 })`,
 			output: `9`,
 			messages: []easyMsg{
 				{content: `{"foo":7}`},
 			},
 		},
 		"match function in braces 2": {
-			input: `(match (json("foo"))
+			input: `(match (json("foo")) {
   (this > 10) => (this + 1)
   (this > 5) => (this + 2)
-  _ => (this + 3))`,
+  _ => (this + 3) })`,
 			output: `9`,
 			messages: []easyMsg{
 				{content: `{"foo":7}`},
 			},
 		},
 		"no matches": {
-			input: `match "value"
-  this == "not this value" => "yep"`,
+			input: `match "value" {
+  this == "not this value" => "yep"
+}`,
 			output: `null`,
 			messages: []easyMsg{
 				{content: `{"foo":6,"bar":3,"baz":"isbaz"}`},
+			},
+		},
+		"match function no expression": {
+			input: `match {
+  json("foo") > 10 =>  json("foo") + 1
+  json("foo") > 5 =>  json("foo") + 2
+  _ => "nope"
+  }`,
+			output: `9`,
+			messages: []easyMsg{
+				{content: `{"foo":7}`},
 			},
 		},
 	}

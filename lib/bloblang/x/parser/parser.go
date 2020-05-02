@@ -12,6 +12,12 @@ import (
 
 //------------------------------------------------------------------------------
 
+var (
+	// ErrEndOfInput is returned when a character is expected but the input has
+	// run out.
+	ErrEndOfInput = errors.New("unexpected end of input")
+)
+
 // ExpectedError represents a parser error where one of a list of possible
 // tokens was expected but not found.
 type ExpectedError []string
@@ -30,6 +36,26 @@ func (e ExpectedError) Error() string {
 		return fmt.Sprintf("expected: %v", dedupeStack[0])
 	}
 	return fmt.Sprintf("expected one of: %v", dedupeStack)
+}
+
+// ExpectedFatalError represents a parser error where one of a list of possible
+// tokens was expected but not found, and this is a fatal error.
+type ExpectedFatalError []string
+
+// Error returns a human readable error string.
+func (e ExpectedFatalError) Error() string {
+	seen := map[string]struct{}{}
+	var dedupeStack []string
+	for _, s := range e {
+		if _, exists := seen[string(s)]; !exists {
+			dedupeStack = append(dedupeStack, s)
+			seen[string(s)] = struct{}{}
+		}
+	}
+	if len(dedupeStack) == 1 {
+		return fmt.Sprintf("required: %v", dedupeStack[0])
+	}
+	return fmt.Sprintf("required one of: %v", dedupeStack)
 }
 
 // PositionalError represents an error that has occurred at a particular
@@ -137,7 +163,7 @@ func NotEnd(p Type) Type {
 		if len(input) == 0 {
 			return Result{
 				Result:    nil,
-				Err:       errors.New("unexpected end of input"),
+				Err:       ErrEndOfInput,
 				Remaining: input,
 			}
 		}
@@ -361,56 +387,43 @@ func Null() Type {
 	}
 }
 
+// Nothing parses nothing.
+func Nothing() Type {
+	return func(input []rune) Result {
+		return Result{
+			Result:    nil,
+			Remaining: input,
+		}
+	}
+}
+
 // Array parses an array literal.
 func Array() Type {
 	open, comma, close := Char('['), Char(','), Char(']')
 	whitespace := DiscardAll(
 		AnyOf(
-			Newline(),
+			NewlineAllowComment(),
 			SpacesAndTabs(),
 		),
 	)
 	return func(input []rune) Result {
-		res := open(input)
-		if res.Err != nil {
-			if _, ok := res.Err.(ExpectedError); ok {
-				res.Err = ExpectedError{"array"}
-			}
-			return res
-		}
-
-		var values []interface{}
-		for {
-			res = whitespace(res.Remaining)
-			if res = close(res.Remaining); res.Err == nil {
-				return Result{
-					Result:    values,
-					Remaining: res.Remaining,
-				}
-			}
-
-			res = whitespace(res.Remaining)
-			i := len(input) - len(res.Remaining)
-			if len(values) > 0 {
-				if res = comma(res.Remaining); res.Err != nil {
-					return Result{
-						Err:       ErrAtPosition(i, res.Err),
-						Remaining: input,
-					}
-				}
-				// TODO: Maybe allow trailing commas
-			}
-
-			res = whitespace(res.Remaining)
-			i = len(input) - len(res.Remaining)
-			if res = LiteralValue()(res.Remaining); res.Err != nil {
-				return Result{
-					Err:       ErrAtPosition(i, res.Err),
-					Remaining: input,
-				}
-			}
-			values = append(values, res.Result)
-		}
+		return DelimitedPattern(
+			InterceptExpectedError(Sequence(
+				open,
+				whitespace,
+			), "array"),
+			LiteralValue(),
+			Sequence(
+				Discard(SpacesAndTabs()),
+				comma,
+				whitespace,
+			),
+			Sequence(
+				whitespace,
+				close,
+			),
+			false,
+		)(input)
 	}
 }
 
@@ -419,58 +432,47 @@ func Object() Type {
 	open, comma, close := Char('{'), Char(','), Char('}')
 	whitespace := DiscardAll(
 		AnyOf(
-			Newline(),
+			NewlineAllowComment(),
 			SpacesAndTabs(),
 		),
 	)
+
 	return func(input []rune) Result {
-		res := open(input)
-		if res.Err != nil {
-			if _, ok := res.Err.(ExpectedError); ok {
-				res.Err = ExpectedError{"object"}
-			}
-			return res
-		}
-
-		values := map[string]interface{}{}
-		for {
-			res = whitespace(res.Remaining)
-			if res = close(res.Remaining); res.Err == nil {
-				return Result{
-					Result:    values,
-					Remaining: res.Remaining,
-				}
-			}
-
-			res = whitespace(res.Remaining)
-			i := len(input) - len(res.Remaining)
-			if len(values) > 0 {
-				if res = comma(res.Remaining); res.Err != nil {
-					return Result{
-						Err:       ErrAtPosition(i, res.Err),
-						Remaining: input,
-					}
-				}
-				// TODO: Maybe allow trailing commas
-			}
-
-			res = whitespace(res.Remaining)
-			i = len(input) - len(res.Remaining)
-			if res = Sequence(
+		res := DelimitedPattern(
+			InterceptExpectedError(Sequence(
+				open,
+				whitespace,
+			), "object"),
+			Sequence(
 				QuotedString(),
 				Discard(SpacesAndTabs()),
 				Char(':'),
 				Discard(whitespace),
 				LiteralValue(),
-			)(res.Remaining); res.Err != nil {
-				return Result{
-					Err:       ErrAtPosition(i, res.Err),
-					Remaining: input,
-				}
-			}
-			slice := res.Result.([]interface{})
+			),
+			Sequence(
+				Discard(SpacesAndTabs()),
+				comma,
+				whitespace,
+			),
+			Sequence(
+				whitespace,
+				close,
+			),
+			false,
+		)(input)
+		if res.Err != nil {
+			return res
+		}
+
+		values := map[string]interface{}{}
+		for _, sequenceValue := range res.Result.([]interface{}) {
+			slice := sequenceValue.([]interface{})
 			values[slice[0].(string)] = slice[4]
 		}
+
+		res.Result = values
+		return res
 	}
 }
 
@@ -485,6 +487,47 @@ func LiteralValue() Type {
 		Array(),
 		Object(),
 	)
+}
+
+// JoinStringSliceResult wraps a parser that returns a []interface{} of
+// exclusively string values and returns a result of a joined string of all the
+// elements.
+//
+// Warning! If the result is not a []interface{}, or if an element is not a
+// string, then this parser returns a zero value instead.
+func JoinStringSliceResult(p Type) Type {
+	return func(input []rune) Result {
+		res := p(input)
+		if res.Err != nil {
+			return res
+		}
+
+		var buf bytes.Buffer
+		slice, _ := res.Result.([]interface{})
+
+		for _, v := range slice {
+			str, _ := v.(string)
+			buf.WriteString(str)
+		}
+		res.Result = buf.String()
+		return res
+	}
+}
+
+// Comment parses a # comment (always followed by a line break).
+func Comment() Type {
+	p := JoinStringSliceResult(
+		Sequence(
+			Char('#'),
+			JoinStringSliceResult(
+				AllOf(NotChar('\n')),
+			),
+			Newline(),
+		),
+	)
+	return func(input []rune) Result {
+		return p(input)
+	}
 }
 
 // SnakeCase parses any number of characters of a camel case string. This parser
@@ -598,9 +641,25 @@ func QuotedString() Type {
 	})
 }
 
-// Newline parses a single character and expects it to match a line break.
+// Newline parses a line break or carriage return + line break.
 func Newline() Type {
 	nl := AnyOf(Match("\r\n"), Char('\n'))
+	return func(input []rune) Result {
+		res := nl(input)
+		if res.Err != nil {
+			if _, ok := res.Err.(ExpectedError); ok {
+				// Override potentially confused expected list.
+				res.Err = ExpectedError{"line-break"}
+			}
+		}
+		return res
+	}
+}
+
+// NewlineAllowComment parses an optional comment followed by a mandatory line
+// break or carriage return + line break.
+func NewlineAllowComment() Type {
+	nl := AnyOf(Comment(), Match("\r\n"), Char('\n'))
 	return func(input []rune) Result {
 		res := nl(input)
 		if res.Err != nil {
@@ -634,8 +693,65 @@ func AllOf(parser Type) Type {
 	}
 }
 
-// JoinStrings applies a parser that returns a slice of strings and joins them
-// into a single string.
+// DelimitedPattern attempts to parse zero or more primary parsers in between an
+// start and stop parser, where after the first parse a delimiter is expected.
+// Parsing is stopped only once an explicit stop parser is successful.
+//
+// If allowTrailing is set to false and a delimiter is parsed but a subsequent
+// primary parse fails then an error is returned.
+//
+// Only the results of the primary parser are returned, the results of the
+// start, delimiter and stop parsers are discarded.
+func DelimitedPattern(start, primary, delimiter, stop Type, allowTrailing bool) Type {
+	return func(input []rune) Result {
+		res := start(input)
+		if res.Err != nil {
+			return res
+		}
+
+		results := []interface{}{}
+		i := len(input) - len(res.Remaining)
+		if res = primary(res.Remaining); res.Err != nil {
+			if resStop := stop(res.Remaining); resStop.Err == nil {
+				resStop.Result = results
+				return resStop
+			}
+			return Result{
+				Err:       ErrAtPosition(i, res.Err),
+				Remaining: input,
+			}
+		}
+		results = append(results, res.Result)
+
+		for {
+			i = len(input) - len(res.Remaining)
+			if res = delimiter(res.Remaining); res.Err != nil {
+				if resStop := stop(res.Remaining); resStop.Err == nil {
+					resStop.Result = results
+					return resStop
+				}
+				return Result{
+					Err:       ErrAtPosition(i, res.Err),
+					Remaining: input,
+				}
+			}
+			i = len(input) - len(res.Remaining)
+			if res = primary(res.Remaining); res.Err != nil {
+				if allowTrailing {
+					if resStop := stop(res.Remaining); resStop.Err == nil {
+						resStop.Result = results
+						return resStop
+					}
+				}
+				return Result{
+					Err:       ErrAtPosition(i, res.Err),
+					Remaining: input,
+				}
+			}
+			results = append(results, res.Result)
+		}
+	}
+}
 
 // Sequence applies a sequence of parsers and returns either a slice of the
 // results or an error if any parser fails.
@@ -662,6 +778,21 @@ func Sequence(parsers ...Type) Type {
 	}
 }
 
+// Optional applies a child parser and if it returns an ExpectedError or
+// ErrEndOfInput then it is cleared and a nil result is returned instead. Any
+// other form of error will be returned unchanged.
+func Optional(parser Type) Type {
+	return func(input []rune) Result {
+		res := parser(input)
+		if res.Err != nil {
+			if exp := ExpectedError(nil); xerrors.As(res.Err, &exp) || xerrors.Is(res.Err, ErrEndOfInput) {
+				res.Err = nil
+			}
+		}
+		return res
+	}
+}
+
 // Discard the result of a child parser, regardless of the result. This has the
 // effect of running the parser and returning only Remaining.
 func Discard(parser Type) Type {
@@ -683,6 +814,59 @@ func DiscardAll(parser Type) Type {
 		}
 		res.Result = nil
 		res.Err = nil
+		return res
+	}
+}
+
+// MustBe applies a parser and if the result is an ExpectedError converts it
+// into a fatal error in order to prevent fallback parsers during AnyOf.
+func MustBe(parser Type) Type {
+	replaceErr := func(err *error) {
+		var exp ExpectedError
+		if xerrors.As(*err, &exp) {
+			*err = ExpectedFatalError(exp)
+		}
+	}
+	return func(input []rune) Result {
+		res := parser(input)
+		if res.Err != nil {
+			var positional PositionalError
+			if xerrors.As(res.Err, &positional) {
+				replaceErr(&positional.Err)
+				res.Err = positional
+			} else {
+				replaceErr(&res.Err)
+			}
+		}
+		return res
+	}
+}
+
+// InterceptExpectedError applies a parser and if an ExpectedError
+// (or ExpectedFatalError) is returned its contents are replaced with the
+// provided list. This is useful for providing better context to users.
+func InterceptExpectedError(parser Type, expected ...string) Type {
+	replaceErr := func(err *error) {
+		var exp ExpectedError
+		if xerrors.As(*err, &exp) {
+			*err = ExpectedError(expected)
+		}
+		var expFatal ExpectedFatalError
+		if xerrors.As(*err, &expFatal) {
+			*err = ExpectedFatalError(expected)
+		}
+	}
+	return func(input []rune) Result {
+		res := parser(input)
+		if res.Err != nil {
+			var positional PositionalError
+			if xerrors.As(res.Err, &positional) {
+				replaceErr(&positional.Err)
+				res.Err = positional
+			} else {
+				replaceErr(&res.Err)
+			}
+		}
 		return res
 	}
 }

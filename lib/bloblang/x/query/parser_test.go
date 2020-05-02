@@ -103,7 +103,7 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"bad match 2": {
 			input: `match json("foo") what is this?`,
-			err:   `char 18: expected: line-break`,
+			err:   `char 18: expected: {`,
 		},
 	}
 
@@ -201,9 +201,10 @@ func TestFunctionParserLimits(t *testing.T) {
 			remaining: `and then this`,
 		},
 		"match expression": {
-			input: `match null
+			input: `match null {
 	"foo" == "bar" => "baz"
 	5 > 10 => "or this"
+}
 not this`,
 			remaining: "\nnot this",
 		},

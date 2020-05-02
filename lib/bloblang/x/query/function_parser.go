@@ -60,72 +60,43 @@ func (e badMethodErr) ToExpectedErr() parser.ExpectedError {
 //------------------------------------------------------------------------------
 
 func functionArgsParser(allowFunctions bool) parser.Type {
+	open, comma, close := parser.Char('('), parser.Char(','), parser.Char(')')
+	whitespace := parser.DiscardAll(
+		parser.AnyOf(
+			parser.SpacesAndTabs(),
+			parser.NewlineAllowComment(),
+		),
+	)
+
 	paramTypes := []parser.Type{
 		parser.Boolean(),
 		parser.Number(),
 		parser.QuotedString(),
 	}
-	parseStart := parser.Char('(')
-	parseEnd := parser.Char(')')
-	parseNext := parser.AnyOf(
-		parser.Char(')'),
-		parser.Char(','),
-	)
-	whitespace := parser.DiscardAll(
-		parser.AnyOf(
-			parser.Char('\n'),
-			parser.SpacesAndTabs(),
-			CommentParser(),
-		),
-	)
 
 	return func(input []rune) parser.Result {
+		tmpParamTypes := paramTypes
 		if allowFunctions {
-			paramTypes = append(paramTypes, createParser(false))
+			tmpParamTypes = append([]parser.Type{}, paramTypes...)
+			tmpParamTypes = append(tmpParamTypes, createParser(false))
 		}
-		parseParam := parser.AnyOf(paramTypes...)
-
-		res := parseStart(input)
-		if res.Err != nil {
-			return res
-		}
-
-		var params []interface{}
-		if earlyExit := parseEnd(res.Remaining); earlyExit.Err == nil {
-			earlyExit.Result = params
-			return earlyExit
-		}
-
-		for {
-			res = whitespace(res.Remaining)
-			i := len(input) - len(res.Remaining)
-			res = parseParam(res.Remaining)
-			if res.Err != nil {
-				res.Err = parser.ErrAtPosition(i, res.Err)
-				res.Remaining = input
-				return res
-			}
-			params = append(params, res.Result)
-
-			res = whitespace(res.Remaining)
-			i = len(input) - len(res.Remaining)
-			res = parseNext(res.Remaining)
-			if res.Err != nil {
-				res.Err = parser.ErrAtPosition(i, res.Err)
-				res.Remaining = input
-				return res
-			}
-
-			if ")" == res.Result.(string) {
-				break
-			}
-		}
-
-		return parser.Result{
-			Result:    params,
-			Err:       nil,
-			Remaining: res.Remaining,
-		}
+		return parser.DelimitedPattern(
+			parser.Sequence(
+				open,
+				whitespace,
+			),
+			parser.AnyOf(tmpParamTypes...),
+			parser.Sequence(
+				parser.Discard(parser.SpacesAndTabs()),
+				comma,
+				whitespace,
+			),
+			parser.Sequence(
+				whitespace,
+				close,
+			),
+			false,
+		)(input)
 	}
 }
 
@@ -140,7 +111,7 @@ func literalParser() parser.Type {
 	}
 }
 
-func fieldLiteralParser(ctxFn Function, allowRoot, supportThis bool) parser.Type {
+func fieldLiteralParser(ctxFn Function, supportThis bool) parser.Type {
 	thisParser := parser.Match("this")
 	fieldPathParser := parser.AnyOf(
 		parser.InRange('a', 'z'),
@@ -164,8 +135,6 @@ func fieldLiteralParser(ctxFn Function, allowRoot, supportThis bool) parser.Type
 				if res = parser.Char('.')(res.Remaining); res.Err != nil {
 					fn, err = fieldFunction()
 				}
-			} else if !allowRoot {
-				return res
 			}
 		}
 		if fn == nil && err == nil {
@@ -225,47 +194,27 @@ func parseFunctionTail(fn Function) parser.Type {
 	openBracket := parser.Char('(')
 	closeBracket := parser.Char(')')
 
-	tailRootParser := parser.AnyOf(
-		openBracket,
-		parseMethod(fn),
-		fieldLiteralParser(fn, true, false),
-	)
-
 	whitespace := parser.DiscardAll(
 		parser.AnyOf(
-			parser.Char('\n'),
 			parser.SpacesAndTabs(),
-			CommentParser(),
+			parser.NewlineAllowComment(),
 		),
 	)
 
 	return func(input []rune) parser.Result {
-		res := tailRootParser(input)
-		if res.Err != nil {
-			return res
-		}
-		if _, isStr := res.Result.(string); isStr {
-			res = whitespace(res.Remaining)
-			i := len(input) - len(res.Remaining)
-			res = Parse(res.Remaining)
-			if res.Err != nil {
-				res.Err = parser.ErrAtPosition(i, res.Err)
-				res.Remaining = input
-				return res
-			}
-			mapFn := res.Result.(Function)
-			res = whitespace(res.Remaining)
-			i = len(input) - len(res.Remaining)
-			res = closeBracket(res.Remaining)
-			if res.Err != nil {
-				res.Err = parser.ErrAtPosition(i, res.Err)
-				res.Remaining = input
-				return res
-			}
-			if res.Result, res.Err = mapMethod(fn, mapFn); res.Err != nil {
-				res.Remaining = input
-			}
-			return res
+		res := parser.AnyOf(
+			parser.Sequence(
+				parser.InterceptExpectedError(openBracket, "method"),
+				whitespace,
+				Parse,
+				whitespace,
+				closeBracket,
+			),
+			parseMethod(fn),
+			fieldLiteralParser(fn, false),
+		)(input)
+		if seqSlice, isSlice := res.Result.([]interface{}); isSlice {
+			res.Result, res.Err = mapMethod(fn, seqSlice[2].(Function))
 		}
 		return res
 	}

@@ -630,6 +630,312 @@ func TestAllOf(t *testing.T) {
 	}
 }
 
+func TestDelimitedPattern(t *testing.T) {
+	parser := DelimitedPattern(Char('#'), Match("abc"), Char(','), Char('!'), false)
+
+	tests := map[string]struct {
+		input     string
+		result    interface{}
+		remaining string
+		err       error
+	}{
+		"empty input": {
+			err: errors.New("unexpected end of input"),
+		},
+		"no start": {
+			input:     "ab",
+			remaining: "ab",
+			err:       ExpectedError{"#"},
+		},
+		"smaller than string": {
+			input:     "#ab",
+			remaining: "#ab",
+			err:       ErrAtPosition(1, ExpectedError{"abc"}),
+		},
+		"matches first": {
+			input:     "#abc!No",
+			remaining: "No",
+			result:    []interface{}{"abc"},
+		},
+		"matches some of second": {
+			input:     "#abc,abNo",
+			remaining: "#abc,abNo",
+			err:       ErrAtPosition(5, ExpectedError{"abc"}),
+		},
+		"matches not stopped": {
+			input:     "#abc,abcNo",
+			remaining: "#abc,abcNo",
+			err:       ErrAtPosition(8, ExpectedError{","}),
+		},
+		"matches all": {
+			input:     "#abc,abc!",
+			remaining: "",
+			result:    []interface{}{"abc", "abc"},
+		},
+		"matches some": {
+			input:     "#abc,abc! and this",
+			remaining: " and this",
+			result:    []interface{}{"abc", "abc"},
+		},
+		"matches all of these": {
+			input:     "#abc,abc,abc,abc!def and this",
+			remaining: "def and this",
+			result:    []interface{}{"abc", "abc", "abc", "abc"},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			res := parser([]rune(test.input))
+			_ = assert.Equal(t, test.err, res.Err, "Error") &&
+				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+		})
+	}
+}
+
+func TestDelimitedPatternAllowTrailing(t *testing.T) {
+	parser := DelimitedPattern(Char('#'), Match("abc"), Char(','), Char('!'), true)
+
+	tests := map[string]struct {
+		input     string
+		result    interface{}
+		remaining string
+		err       error
+	}{
+		"empty input": {
+			err: errors.New("unexpected end of input"),
+		},
+		"no start": {
+			input:     "ab",
+			remaining: "ab",
+			err:       ExpectedError{"#"},
+		},
+		"smaller than string": {
+			input:     "#ab",
+			remaining: "#ab",
+			err:       ErrAtPosition(1, ExpectedError{"abc"}),
+		},
+		"matches first": {
+			input:     "#abc!No",
+			remaining: "No",
+			result:    []interface{}{"abc"},
+		},
+		"matches first trailing": {
+			input:     "#abc,!No",
+			remaining: "No",
+			result:    []interface{}{"abc"},
+		},
+		"matches some of second": {
+			input:     "#abc,abNo",
+			remaining: "#abc,abNo",
+			err:       ErrAtPosition(5, ExpectedError{"abc"}),
+		},
+		"matches not stopped": {
+			input:     "#abc,abcNo",
+			remaining: "#abc,abcNo",
+			err:       ErrAtPosition(8, ExpectedError{","}),
+		},
+		"matches all": {
+			input:     "#abc,abc!",
+			remaining: "",
+			result:    []interface{}{"abc", "abc"},
+		},
+		"matches all trailing": {
+			input:     "#abc,abc,!",
+			remaining: "",
+			result:    []interface{}{"abc", "abc"},
+		},
+		"matches some": {
+			input:     "#abc,abc! and this",
+			remaining: " and this",
+			result:    []interface{}{"abc", "abc"},
+		},
+		"matches all of these": {
+			input:     "#abc,abc,abc,abc!def and this",
+			remaining: "def and this",
+			result:    []interface{}{"abc", "abc", "abc", "abc"},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			res := parser([]rune(test.input))
+			_ = assert.Equal(t, test.err, res.Err, "Error") &&
+				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+		})
+	}
+}
+
+func TestMustBe(t *testing.T) {
+	tests := map[string]struct {
+		inputRes  Result
+		outputRes Result
+	}{
+		"No error": {
+			inputRes: Result{
+				Result:    "foo",
+				Remaining: []rune("foobar"),
+			},
+			outputRes: Result{
+				Result:    "foo",
+				Remaining: []rune("foobar"),
+			},
+		},
+		"Real error": {
+			inputRes: Result{
+				Err:       errors.New("testerr"),
+				Remaining: []rune("foobar"),
+			},
+			outputRes: Result{
+				Err:       errors.New("testerr"),
+				Remaining: []rune("foobar"),
+			},
+		},
+		"Expected error": {
+			inputRes: Result{
+				Err:       ExpectedError{"testerr"},
+				Remaining: []rune("foobar"),
+			},
+			outputRes: Result{
+				Err:       ExpectedFatalError{"testerr"},
+				Remaining: []rune("foobar"),
+			},
+		},
+		"Expected already fatal error": {
+			inputRes: Result{
+				Err:       ExpectedFatalError{"testerr"},
+				Remaining: []rune("foobar"),
+			},
+			outputRes: Result{
+				Err:       ExpectedFatalError{"testerr"},
+				Remaining: []rune("foobar"),
+			},
+		},
+		"Expected and positioned error": {
+			inputRes: Result{
+				Err:       ErrAtPosition(10, ExpectedError{"testerr"}),
+				Remaining: []rune("foobar"),
+			},
+			outputRes: Result{
+				Err:       ErrAtPosition(10, ExpectedFatalError{"testerr"}),
+				Remaining: []rune("foobar"),
+			},
+		},
+		"Fatal and positioned error": {
+			inputRes: Result{
+				Err:       ErrAtPosition(10, errors.New("testerr")),
+				Remaining: []rune("foobar"),
+			},
+			outputRes: Result{
+				Err:       ErrAtPosition(10, errors.New("testerr")),
+				Remaining: []rune("foobar"),
+			},
+		},
+	}
+
+	for name, test := range tests {
+		test := test
+		childParser := func([]rune) Result {
+			return test.inputRes
+		}
+		t.Run(name, func(t *testing.T) {
+			res := MustBe(childParser)([]rune("foobar"))
+			assert.Equal(t, test.outputRes, res)
+		})
+	}
+}
+
+func TestInterceptExpectedError(t *testing.T) {
+	tests := map[string]struct {
+		inputRes  Result
+		outputRes Result
+	}{
+		"No error": {
+			inputRes: Result{
+				Result:    "foo",
+				Remaining: []rune("foobar"),
+			},
+			outputRes: Result{
+				Result:    "foo",
+				Remaining: []rune("foobar"),
+			},
+		},
+		"Real error": {
+			inputRes: Result{
+				Err:       errors.New("testerr"),
+				Remaining: []rune("foobar"),
+			},
+			outputRes: Result{
+				Err:       errors.New("testerr"),
+				Remaining: []rune("foobar"),
+			},
+		},
+		"Expected error": {
+			inputRes: Result{
+				Err:       ExpectedError{"testerr"},
+				Remaining: []rune("foobar"),
+			},
+			outputRes: Result{
+				Err:       ExpectedError{"foobar"},
+				Remaining: []rune("foobar"),
+			},
+		},
+		"Expected and positioned error": {
+			inputRes: Result{
+				Err:       ErrAtPosition(10, ExpectedError{"testerr"}),
+				Remaining: []rune("foobar"),
+			},
+			outputRes: Result{
+				Err:       ErrAtPosition(10, ExpectedError{"foobar"}),
+				Remaining: []rune("foobar"),
+			},
+		},
+		"Expected fatal error": {
+			inputRes: Result{
+				Err:       ExpectedFatalError{"testerr"},
+				Remaining: []rune("foobar"),
+			},
+			outputRes: Result{
+				Err:       ExpectedFatalError{"foobar"},
+				Remaining: []rune("foobar"),
+			},
+		},
+		"Expected fatal and positioned error": {
+			inputRes: Result{
+				Err:       ErrAtPosition(10, ExpectedFatalError{"testerr"}),
+				Remaining: []rune("foobar"),
+			},
+			outputRes: Result{
+				Err:       ErrAtPosition(10, ExpectedFatalError{"foobar"}),
+				Remaining: []rune("foobar"),
+			},
+		},
+		"Fatal and positioned error": {
+			inputRes: Result{
+				Err:       ErrAtPosition(10, errors.New("testerr")),
+				Remaining: []rune("foobar"),
+			},
+			outputRes: Result{
+				Err:       ErrAtPosition(10, errors.New("testerr")),
+				Remaining: []rune("foobar"),
+			},
+		},
+	}
+
+	for name, test := range tests {
+		test := test
+		childParser := func([]rune) Result {
+			return test.inputRes
+		}
+		t.Run(name, func(t *testing.T) {
+			res := InterceptExpectedError(childParser, "foobar")([]rune("foobar"))
+			assert.Equal(t, test.outputRes, res)
+		})
+	}
+}
+
 func TestMatch(t *testing.T) {
 	str := Match("abc")
 
@@ -771,6 +1077,50 @@ func TestDiscardAll(t *testing.T) {
 			res := parser([]rune(test.input))
 			require.NoError(t, res.Err)
 			assert.Nil(t, res.Result)
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+		})
+	}
+}
+
+func TestOptional(t *testing.T) {
+	parser := Optional(
+		Sequence(
+			Match("abc"),
+			Match("def"),
+		),
+	)
+
+	tests := map[string]struct {
+		input     string
+		result    interface{}
+		remaining string
+		err       error
+	}{
+		"empty input": {},
+		"smaller than string": {
+			input:     "ab",
+			remaining: "ab",
+		},
+		"only first string": {
+			input:     "abc",
+			remaining: "abc",
+		},
+		"bit of second string": {
+			input:     "abcde",
+			remaining: "abcde",
+		},
+		"full string": {
+			input:     "abcdef",
+			remaining: "",
+			result:    []interface{}{"abc", "def"},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			res := parser([]rune(test.input))
+			assert.Equal(t, test.err, res.Err)
+			assert.Equal(t, test.result, res.Result)
 			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
@@ -947,12 +1297,12 @@ func TestArray(t *testing.T) {
 		},
 		"empty array": {
 			input:     "[] and this",
-			result:    []interface{}(nil),
+			result:    []interface{}{},
 			remaining: " and this",
 		},
 		"empty array with whitespace": {
 			input:     "[ \t] and this",
-			result:    []interface{}(nil),
+			result:    []interface{}{},
 			remaining: " and this",
 		},
 		"single element array": {
@@ -986,6 +1336,17 @@ func TestArray(t *testing.T) {
 	null,
 	"bar",
 	[true,false]
+] and this`,
+			result:    []interface{}{"foo", nil, "bar", []interface{}{true, false}},
+			remaining: " and this",
+		},
+		"multiple elements array comments": {
+			input: `[
+	"foo", # this is a thing
+	null,
+# the following lines are things
+	"bar",
+	[true,false] # and this
 ] and this`,
 			result:    []interface{}{"foo", nil, "bar", []interface{}{true, false}},
 			remaining: " and this",
@@ -1056,6 +1417,23 @@ func TestObject(t *testing.T) {
 	"baz":
 		"three",
 	"quz":   [true,false]
+} and this`,
+			result: map[string]interface{}{
+				"foo": int64(2),
+				"bar": nil,
+				"baz": "three",
+				"quz": []interface{}{true, false},
+			},
+			remaining: " and this",
+		},
+		"multiple values object with comments": {
+			input: `{ # start of object
+	"foo":2  , # heres a thing
+	"bar":     null,
+# now these things are crazy
+	"baz":
+		"three",
+	"quz":   [true,false] # woah!
 } and this`,
 			result: map[string]interface{}{
 				"foo": int64(2),

@@ -192,9 +192,10 @@ func TestMethods(t *testing.T) {
 		},
 		"for each delete some elements": {
 			input: `json("foo").for_each(
-	match this
+	match this {
 		this < 10 => deleted()
 		_ => this - 10
+	}
 )`,
 			output: `[1,2,3]`,
 			messages: []easyMsg{

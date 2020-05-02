@@ -1,8 +1,6 @@
 package query
 
 import (
-	"bytes"
-
 	"github.com/Jeffail/benthos/v3/lib/bloblang/x/parser"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -42,38 +40,6 @@ type Function interface {
 
 //------------------------------------------------------------------------------
 
-func joinStrings(p parser.Type) parser.Type {
-	return func(input []rune) parser.Result {
-		res := p(input)
-		if res.Err != nil {
-			return res
-		}
-
-		var buf bytes.Buffer
-		for _, v := range res.Result.([]interface{}) {
-			buf.WriteString(v.(string))
-		}
-		res.Result = buf.String()
-		return res
-	}
-}
-
-// CommentParser parses a comment (followed by a line break).
-func CommentParser() parser.Type {
-	p := joinStrings(
-		parser.Sequence(
-			parser.Char('#'),
-			joinStrings(
-				parser.AllOf(parser.NotChar('\n')),
-			),
-			parser.Newline(),
-		),
-	)
-	return func(input []rune) parser.Result {
-		return p(input)
-	}
-}
-
 func createParser(deprecated bool) parser.Type {
 	opParser := arithmeticOpParser()
 	openBracket := parser.Char('(')
@@ -82,7 +48,7 @@ func createParser(deprecated bool) parser.Type {
 	fieldVersusFunction := functionParser()
 	if !deprecated {
 		fieldVersusFunction = parser.BestMatch(
-			fieldLiteralParser(nil, true, true),
+			fieldLiteralParser(nil, true),
 			matchExpressionParser(),
 			fieldVersusFunction,
 		)
@@ -95,9 +61,8 @@ func createParser(deprecated bool) parser.Type {
 
 	whitespace := parser.DiscardAll(
 		parser.AnyOf(
-			parser.Char('\n'),
 			parser.SpacesAndTabs(),
-			CommentParser(),
+			parser.NewlineAllowComment(),
 		),
 	)
 

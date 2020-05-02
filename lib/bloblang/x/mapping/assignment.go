@@ -89,7 +89,7 @@ func (v *jsonAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 		if deleted {
 			return errors.New("cannot delete root of document")
 		}
-		ctx.Value = &value
+		*ctx.Value = value
 	}
 	if *ctx.Value == nil {
 		*ctx.Value = map[string]interface{}{}

@@ -1,10 +1,7 @@
 package mapping
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/Jeffail/benthos/v3/lib/bloblang/x/parser"
 	"github.com/Jeffail/benthos/v3/lib/bloblang/x/query"
@@ -82,11 +79,22 @@ func NewExecutor(mapping string) (*Executor, error) {
 	if res.Err != nil {
 		return nil, xerrors.Errorf("failed to parse mapping: %w", res.Err)
 	}
+	executor := res.Result.(*Executor)
+
+	// Remove all trailing whitespace and comments.
+	res = parser.DiscardAll(
+		parser.AnyOf(
+			parser.NewlineAllowComment(),
+			parser.SpacesAndTabs(),
+		),
+	)(res.Remaining)
+
+	// And if there's content remaining report it as an error.
 	if len(res.Remaining) > 0 {
 		i := len(mapping) - len(res.Remaining)
 		return nil, parser.ErrAtPosition(i, fmt.Errorf("unexpected content at the end of mapping: %v", string(res.Remaining)))
 	}
-	return res.Result.(*Executor), nil
+	return executor, nil
 }
 
 //------------------------------------------------------------------------------'
@@ -94,44 +102,37 @@ func NewExecutor(mapping string) (*Executor, error) {
 // ParseExecutor implements parser.Type and parses an input into a bloblang
 // mapping executor. Returns an *Executor unless a parsing error occurs.
 func ParseExecutor(input []rune) parser.Result {
-	var statements []mappingStatement
-	stmtParse := statementParser()
+	newline := parser.NewlineAllowComment()
 	whitespace := parser.SpacesAndTabs()
-	nl := parser.AnyOf(
-		parser.Char('\n'),
-		query.CommentParser(),
+	allWhitespace := parser.DiscardAll(parser.AnyOf(whitespace, newline))
+
+	statement := parser.AnyOf(
+		letStatementParser(),
+		metaStatementParser(),
+		plainMappingStatementParser(),
 	)
-	whitespaceGobbler := parser.DiscardAll(parser.AnyOf(whitespace, nl))
 
-	res := whitespaceGobbler(input)
-
-	i := len(input) - len(res.Remaining)
-	res = stmtParse(res.Remaining)
-
-statementLoop:
-	for res.Err == nil {
-		statements = append(statements, res.Result.(mappingStatement))
-
-		res = whitespace(res.Remaining)
-		i = len(input) - len(res.Remaining)
-		if res = nl(res.Remaining); res.Err == nil {
-			res = whitespaceGobbler(res.Remaining)
-			i = len(input) - len(res.Remaining)
-			if len(res.Remaining) == 0 {
-				break statementLoop
-			}
-			res = stmtParse(res.Remaining)
-		}
+	res := parser.Sequence(
+		allWhitespace,
+		statement,
+	)(input)
+	if res.Err != nil {
+		return res
 	}
-	if len(statements) == 0 {
-		if res.Err == nil {
-			res.Err = errors.New("no mapping statements were parsed")
-		} else {
-			res.Err = parser.ErrAtPosition(i, res.Err)
-		}
-		return parser.Result{
-			Err:       res.Err,
-			Remaining: input,
+	statements := []mappingStatement{
+		res.Result.([]interface{})[1].(mappingStatement),
+	}
+
+	if res = parser.AllOf(parser.Sequence(
+		parser.Discard(whitespace),
+		newline,
+		allWhitespace,
+		statement,
+	))(res.Remaining); res.Err == nil {
+		resSlice := res.Result.([]interface{})
+		for _, seq := range resSlice {
+			seqSlice := seq.([]interface{})
+			statements = append(statements, seqSlice[3].(mappingStatement))
 		}
 	}
 
@@ -144,118 +145,127 @@ statementLoop:
 //------------------------------------------------------------------------------
 
 func pathLiteralParser() parser.Type {
-	// TODO: Parse root.foo.bar
-	fieldPathParser := parser.AnyOf(
-		parser.InRange('a', 'z'),
-		parser.InRange('A', 'Z'),
-		parser.InRange('0', '9'),
-		parser.InRange('*', '-'),
-		parser.Char('.'),
-		parser.Char('_'),
-		parser.Char('~'),
+	return parser.JoinStringSliceResult(
+		parser.AllOf(
+			parser.AnyOf(
+				parser.InRange('a', 'z'),
+				parser.InRange('A', 'Z'),
+				parser.InRange('0', '9'),
+				parser.InRange('*', '-'),
+				parser.Char('.'),
+				parser.Char('_'),
+				parser.Char('~'),
+			),
+		),
+	)
+}
+
+func letStatementParser() parser.Type {
+	p := parser.Sequence(
+		parser.Match("let"),
+		parser.SpacesAndTabs(),
+		// Prevents a missing path from being captured by the next parser
+		parser.MustBe(
+			parser.InterceptExpectedError(
+				parser.AnyOf(
+					parser.QuotedString(),
+					pathLiteralParser(),
+				),
+				"variable-name",
+			),
+		),
+		parser.SpacesAndTabs(),
+		parser.Char('='),
+		parser.SpacesAndTabs(),
+		query.Parse,
 	)
 
 	return func(input []rune) parser.Result {
-		var buf bytes.Buffer
-		res := parser.Result{
-			Remaining: input,
-		}
-		for {
-			if res = fieldPathParser(res.Remaining); res.Err != nil {
-				break
-			}
-			buf.WriteString(res.Result.(string))
-		}
-		if buf.Len() == 0 {
+		res := p(input)
+		if res.Err != nil {
 			return res
 		}
+		resSlice := res.Result.([]interface{})
 		return parser.Result{
-			Result:    buf.String(),
+			Result: mappingStatement{
+				assignment: &varAssignment{
+					Name: resSlice[2].(string),
+				},
+				query: resSlice[6].(query.Function),
+			},
 			Remaining: res.Remaining,
 		}
 	}
 }
 
-func statementParser() parser.Type {
-	let := parser.Match("let ")
-	meta := parser.Match("meta ")
-
-	literal := parser.QuotedString()
-	path := pathLiteralParser()
-	eq := parser.Char('=')
-	whitespace := parser.SpacesAndTabs()
+func metaStatementParser() parser.Type {
+	p := parser.Sequence(
+		parser.Match("meta"),
+		parser.SpacesAndTabs(),
+		parser.Optional(parser.AnyOf(
+			parser.QuotedString(),
+			pathLiteralParser(),
+		)),
+		parser.Optional(parser.SpacesAndTabs()),
+		parser.Char('='),
+		parser.SpacesAndTabs(),
+		query.Parse,
+	)
 
 	return func(input []rune) parser.Result {
-		var assignmentCat, assignmentTarget string
-		var targetSet bool
-
-		res := parser.AnyOf(let, meta)(input)
-		if res.Err == nil {
-			assignmentCat = strings.TrimSpace(res.Result.(string))
-		}
-		res = whitespace(res.Remaining)
-		i := len(input) - len(res.Remaining)
-		if res = parser.AnyOf(literal, path)(res.Remaining); res.Err == nil {
-			assignmentTarget = res.Result.(string)
-			targetSet = true
-		}
-
-		var statement mappingStatement
-		switch assignmentCat {
-		case "let":
-			if !targetSet {
-				return parser.Result{
-					Err: parser.ErrAtPosition(i, parser.ExpectedError{
-						"target-path",
-					}),
-					Remaining: input,
-				}
-			}
-			statement.assignment = &varAssignment{
-				Name: assignmentTarget,
-			}
-		case "meta":
-			metaAssignment := &metaAssignment{}
-			if targetSet {
-				metaAssignment.Key = &assignmentTarget
-			}
-			statement.assignment = metaAssignment
-		default:
-			if !targetSet {
-				return parser.Result{
-					Err: parser.ErrAtPosition(i, parser.ExpectedError{
-						"target-path",
-					}),
-					Remaining: input,
-				}
-			}
-			statement.assignment = &jsonAssignment{
-				Path: gabs.DotPathToSlice(assignmentTarget),
-			}
-		}
-
-		res = whitespace(res.Remaining)
-		i = len(input) - len(res.Remaining)
-		if res = eq(res.Remaining); res.Err != nil {
-			return parser.Result{
-				Err:       parser.ErrAtPosition(i, res.Err),
-				Remaining: input,
-			}
-		}
-
-		res = whitespace(res.Remaining)
-		i = len(input) - len(res.Remaining)
-		res = query.Parse(res.Remaining)
+		res := p(input)
 		if res.Err != nil {
-			return parser.Result{
-				Err:       parser.ErrAtPosition(i, res.Err),
-				Remaining: input,
-			}
+			return res
+		}
+		resSlice := res.Result.([]interface{})
+
+		var keyPtr *string
+		if key, set := resSlice[2].(string); set {
+			keyPtr = &key
 		}
 
-		statement.query = res.Result.(query.Function)
 		return parser.Result{
-			Result:    statement,
+			Result: mappingStatement{
+				assignment: &metaAssignment{Key: keyPtr},
+				query:      resSlice[6].(query.Function),
+			},
+			Remaining: res.Remaining,
+		}
+	}
+}
+
+func plainMappingStatementParser() parser.Type {
+	p := parser.Sequence(
+		parser.InterceptExpectedError(
+			parser.AnyOf(
+				parser.QuotedString(),
+				pathLiteralParser(),
+			),
+			"target-path",
+		),
+		parser.SpacesAndTabs(),
+		parser.Char('='),
+		parser.SpacesAndTabs(),
+		query.Parse,
+	)
+
+	return func(input []rune) parser.Result {
+		res := p(input)
+		if res.Err != nil {
+			return res
+		}
+		resSlice := res.Result.([]interface{})
+		path := gabs.DotPathToSlice(resSlice[0].(string))
+		if len(path) > 0 && path[0] == "root" {
+			path = path[1:]
+		}
+		return parser.Result{
+			Result: mappingStatement{
+				assignment: &jsonAssignment{
+					Path: path,
+				},
+				query: resSlice[4].(query.Function),
+			},
 			Remaining: res.Remaining,
 		}
 	}
