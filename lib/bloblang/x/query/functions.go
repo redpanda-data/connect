@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
+	"golang.org/x/xerrors"
 )
 
 //------------------------------------------------------------------------------
@@ -65,77 +66,108 @@ func literalFunction(v interface{}) Function {
 
 //------------------------------------------------------------------------------
 
-func getIntArg(args ...interface{}) (func(ctx FunctionContext) (int64, error), error) {
-	var intArgFn func(ctx FunctionContext) (int64, error)
-	if len(args) != 1 {
-		return nil, fmt.Errorf("expected one or zero arguments, received: %v", len(args))
-	}
-	switch t := args[0].(type) {
-	case int64:
-		intArgFn = func(ctx FunctionContext) (int64, error) { return t, nil }
-	case float64:
-		intArgFn = func(ctx FunctionContext) (int64, error) { return int64(t), nil }
-	case Function:
-		intArgFn = func(ctx FunctionContext) (int64, error) {
-			res, err := t.Exec(ctx)
-			if err != nil {
-				return 0, err
+func withDynamicArgs(args []interface{}, fn functionCtor) Function {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		dynArgs := make([]interface{}, 0, len(args))
+		for i, dArg := range args {
+			if fArg, isDyn := dArg.(Function); isDyn {
+				res, err := fArg.Exec(ctx)
+				if err != nil {
+					return nil, xerrors.Errorf("failed to extract input arg %v: %w", i, err)
+				}
+				dynArgs = append(dynArgs, res)
+			} else {
+				dynArgs = append(dynArgs, dArg)
 			}
-			switch t2 := res.(type) {
-			case float64:
-				return int64(t2), nil
-			case int64:
-				return t2, nil
-			}
-			return 0, fmt.Errorf("expected int param, received %T", res)
 		}
-	default:
-		return nil, fmt.Errorf("expected int param, received %T", args[0])
-	}
-	return intArgFn, nil
+		dynFunc, err := fn(dynArgs...)
+		if err != nil {
+			return nil, err
+		}
+		return dynFunc.Exec(ctx)
+	})
 }
 
-func getStringArgOrEmpty(args ...interface{}) (func(ctx FunctionContext) (string, error), error) {
-	if len(args) == 0 {
-		return func(ctx FunctionContext) (string, error) { return "", nil }, nil
-	}
-	var strArgFn func(ctx FunctionContext) (string, error)
-	if len(args) != 1 {
-		return nil, fmt.Errorf("expected one or zero arguments, received: %v", len(args))
-	}
-	switch t := args[0].(type) {
-	case string:
-		strArgFn = func(ctx FunctionContext) (string, error) { return t, nil }
-	case Function:
-		strArgFn = func(ctx FunctionContext) (string, error) {
-			res, err := t.Exec(ctx)
-			if err != nil {
-				return "", err
+func enableDynamicArgs(fn functionCtor) functionCtor {
+	return func(args ...interface{}) (Function, error) {
+		for _, arg := range args {
+			if _, isDyn := arg.(Function); isDyn {
+				return withDynamicArgs(args, fn), nil
 			}
-			if str, ok := res.(string); ok {
-				return str, nil
-			}
-			return "", fmt.Errorf("expected string param, received %T", res)
 		}
-	default:
-		return nil, fmt.Errorf("expected string param, received %T", args[0])
+		return fn(args...)
 	}
-	return strArgFn, nil
 }
+
+//------------------------------------------------------------------------------
+
+type argCheckFn func(args []interface{}) error
+
+func checkArgs(fn functionCtor, checks ...argCheckFn) functionCtor {
+	return func(args ...interface{}) (Function, error) {
+		for _, check := range checks {
+			if err := check(args); err != nil {
+				return nil, err
+			}
+		}
+		return fn(args...)
+	}
+}
+
+func expectOneOrZeroArgs() argCheckFn {
+	return func(args []interface{}) error {
+		if len(args) > 1 {
+			return fmt.Errorf("expected one or zero parameters, received: %v", len(args))
+		}
+		return nil
+	}
+}
+
+func expectNArgs(i int) argCheckFn {
+	return func(args []interface{}) error {
+		if len(args) != i {
+			return fmt.Errorf("expected %v parameters, received: %v", i, len(args))
+		}
+		return nil
+	}
+}
+
+func expectStringArg(i int) argCheckFn {
+	return func(args []interface{}) error {
+		if len(args) <= i {
+			return nil
+		}
+		if _, isStr := args[i].(string); !isStr {
+			return fmt.Errorf("expected string param, received %T", args[i])
+		}
+		return nil
+	}
+}
+
+func expectIntArg(i int) argCheckFn {
+	return func(args []interface{}) error {
+		if len(args) <= i {
+			return nil
+		}
+		switch t := args[i].(type) {
+		case int64:
+		case float64:
+			args[i] = int64(t)
+		default:
+			return fmt.Errorf("expected string param, received %T", args[i])
+		}
+		return nil
+	}
+}
+
+//------------------------------------------------------------------------------
 
 func jsonFunction(args ...interface{}) (Function, error) {
-	strFn, err := getStringArgOrEmpty(args...)
-	if err != nil {
-		return nil, err
+	var argPath []string
+	if len(args) > 0 {
+		argPath = gabs.DotPathToSlice(args[0].(string))
 	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		argPath, err := strFn(ctx)
-		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: nil,
-				Err:       err,
-			}
-		}
 		jPart, err := ctx.Msg.Get(ctx.Index).JSON()
 		if err != nil {
 			return nil, &ErrRecoverable{
@@ -145,26 +177,16 @@ func jsonFunction(args ...interface{}) (Function, error) {
 		}
 		gPart := gabs.Wrap(jPart)
 		if len(argPath) > 0 {
-			gPart = gPart.Path(argPath)
+			gPart = gPart.Search(argPath...)
 		}
 		return ISanitize(gPart.Data()), nil
 	}), nil
 }
 
 func metadataFunction(args ...interface{}) (Function, error) {
-	strFn, err := getStringArgOrEmpty(args...)
-	if err != nil {
-		return nil, err
-	}
 	if len(args) > 0 {
 		return closureFn(func(ctx FunctionContext) (interface{}, error) {
-			field, err := strFn(ctx)
-			if err != nil {
-				return nil, &ErrRecoverable{
-					Recovered: "",
-					Err:       err,
-				}
-			}
+			field := args[0].(string)
 			v := ctx.Msg.Get(ctx.Index).Metadata().Get(field)
 			if len(v) == 0 {
 				return nil, &ErrRecoverable{
@@ -200,13 +222,6 @@ func contentFunction(...interface{}) (Function, error) {
 }
 
 func fieldFunction(args ...interface{}) (Function, error) {
-	if len(args) > 1 {
-		return nil, fmt.Errorf("expected one or zero arguments, received: %v", len(args))
-	}
-	strFn, err := getStringArgOrEmpty(args...)
-	if err != nil {
-		return nil, err
-	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		if ctx.Value == nil {
 			return nil, &ErrRecoverable{
@@ -214,28 +229,15 @@ func fieldFunction(args ...interface{}) (Function, error) {
 				Err:       errors.New("context was undefined"),
 			}
 		}
-		path, err := strFn(ctx)
-		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: nil,
-				Err:       err,
-			}
-		}
-		if len(path) == 0 {
+		if len(args) == 0 {
 			return *ctx.Value, nil
 		}
+		path := args[0].(string)
 		return gabs.Wrap(*ctx.Value).Path(path).Data(), nil
 	}), nil
 }
 
 func varFunction(args ...interface{}) (Function, error) {
-	if len(args) != 1 {
-		return nil, fmt.Errorf("expected one argument, received: %v", len(args))
-	}
-	strFn, err := getStringArgOrEmpty(args...)
-	if err != nil {
-		return nil, err
-	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		if ctx.Vars == nil {
 			return nil, &ErrRecoverable{
@@ -243,13 +245,7 @@ func varFunction(args ...interface{}) (Function, error) {
 				Err:       errors.New("variables were undefined"),
 			}
 		}
-		name, err := strFn(ctx)
-		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: nil,
-				Err:       err,
-			}
-		}
+		name := args[0].(string)
 		if res, ok := ctx.Vars[name]; ok {
 			return res, nil
 		}
@@ -262,9 +258,19 @@ func varFunction(args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var functions = map[string]func(args ...interface{}) (Function, error){
-	"json":    jsonFunction,
-	"meta":    metadataFunction,
+type functionCtor func(args ...interface{}) (Function, error)
+
+var functions = map[string]functionCtor{
+	"json": enableDynamicArgs(checkArgs(
+		jsonFunction,
+		expectOneOrZeroArgs(),
+		expectStringArg(0),
+	)),
+	"meta": enableDynamicArgs(checkArgs(
+		metadataFunction,
+		expectOneOrZeroArgs(),
+		expectStringArg(0),
+	)),
 	"error":   errorFunction,
 	"content": contentFunction,
 	"deleted": func(...interface{}) (Function, error) {
@@ -273,24 +279,19 @@ var functions = map[string]func(args ...interface{}) (Function, error){
 	"nothing": func(...interface{}) (Function, error) {
 		return literalFunction(Nothing(nil)), nil
 	},
-	"field": fieldFunction,
-	"var":   varFunction,
-	"count": func(args ...interface{}) (Function, error) {
-		if len(args) != 1 {
-			return nil, errors.New("expected one parameter")
-		}
-		strFn, err := getStringArgOrEmpty(args...)
-		if err != nil {
-			return nil, err
-		}
+	"field": enableDynamicArgs(checkArgs(
+		fieldFunction,
+		expectOneOrZeroArgs(),
+		expectStringArg(0),
+	)),
+	"var": enableDynamicArgs(checkArgs(
+		varFunction,
+		expectNArgs(1),
+		expectStringArg(0),
+	)),
+	"count": enableDynamicArgs(checkArgs(func(args ...interface{}) (Function, error) {
 		return closureFn(func(ctx FunctionContext) (interface{}, error) {
-			name, err := strFn(ctx)
-			if err != nil {
-				return nil, &ErrRecoverable{
-					Recovered: int64(0),
-					Err:       err,
-				}
-			}
+			name := args[0].(string)
 
 			countersMux.Lock()
 			defer countersMux.Unlock()
@@ -307,7 +308,7 @@ var functions = map[string]func(args ...interface{}) (Function, error){
 
 			return count, nil
 		}), nil
-	},
+	}, expectNArgs(1), expectStringArg(0))),
 	"timestamp_unix": func(...interface{}) (Function, error) {
 		return closureFn(func(_ FunctionContext) (interface{}, error) {
 			return time.Now().Unix(), nil
@@ -318,30 +319,24 @@ var functions = map[string]func(args ...interface{}) (Function, error){
 			return time.Now().UnixNano(), nil
 		}), nil
 	},
-	"timestamp": func(args ...interface{}) (Function, error) {
+	"timestamp": enableDynamicArgs(checkArgs(func(args ...interface{}) (Function, error) {
 		format := "Mon Jan 2 15:04:05 -0700 MST 2006"
 		if len(args) > 0 {
-			var ok bool
-			if format, ok = args[0].(string); !ok {
-				return nil, fmt.Errorf("expected string param, received %T", args[0])
-			}
+			format = args[0].(string)
 		}
 		return closureFn(func(_ FunctionContext) (interface{}, error) {
 			return time.Now().Format(format), nil
 		}), nil
-	},
-	"timestamp_utc": func(args ...interface{}) (Function, error) {
+	}, expectStringArg(0))),
+	"timestamp_utc": enableDynamicArgs(checkArgs(func(args ...interface{}) (Function, error) {
 		format := "Mon Jan 2 15:04:05 -0700 MST 2006"
 		if len(args) > 0 {
-			var ok bool
-			if format, ok = args[0].(string); !ok {
-				return nil, fmt.Errorf("expected string param, received %T", args[0])
-			}
+			format = args[0].(string)
 		}
 		return closureFn(func(_ FunctionContext) (interface{}, error) {
 			return time.Now().In(time.UTC).Format(format), nil
 		}), nil
-	},
+	}, expectStringArg(0))),
 	"hostname": func(...interface{}) (Function, error) {
 		return closureFn(func(_ FunctionContext) (interface{}, error) {
 			hn, err := os.Hostname()
