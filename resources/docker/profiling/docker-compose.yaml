@@ -5,14 +5,6 @@ volumes:
  grafana_data: {}
 
 services:
-  benthos:
-    image: jeffail/benthos
-    volumes:
-      - ./benthos.yaml:/benthos.yaml
-      - ./sample_data.txt:/sample_data.txt
-    ports:
-      - 4195:4195
-
   jaeger:
     image: jaegertracing/all-in-one
     ports:
@@ -31,6 +23,11 @@ services:
       - '--web.console.templates=/usr/share/prometheus/consoles'
     ports:
       - 9090:9090
+
+  pushgateway:
+    image: prom/pushgateway
+    ports:
+      - 9091:9091
 
   grafana:
     image: grafana/grafana

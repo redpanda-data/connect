@@ -3,41 +3,71 @@ http:
   debug_endpoints: true
 
 input:
-  broker:
-    copies: 1
-    inputs:
-    - type: http_server
-    - read_until:
-        input:
-          file:
-            path: /sample_data.txt
-        restart_input: true
-        condition:
-          static: false
-
-buffer:
-  type: none
+  read_until:
+    input:
+      file:
+        path: ./sample_data.jsonl
+        max_buffer: 10000000
+    restart_input: true
+    condition:
+      static: false
 
 pipeline:
-  threads: 1
+  threads: 20
   processors:
-  - type: compress
+    # TODO: Swap with proc2 and see the difference in metrics dashboards.
+    - resource: proc1
 
 output:
-  broker:
-    pattern: greedy
-    copies: 1
-    outputs:
-    - type: drop
+  type: drop
 
-logger:
-  prefix: service
-  level: INFO
+resources:
+  processors:
+    proc1:
+      awk:
+        codec: none
+        program: |
+          {
+            json_set("foo.first.bar.baz", "first_value")
+            json_set("foo.second.bar.baz", "second_value")
+            json_set("foo.third.bar.baz", json_get("foo.baz"))
+            json_delete("foo.bar")
+          }
+
+    proc2:
+      for_each:
+      - json:
+          operator: set
+          path: foo.first.bar.baz
+          value: "first_value"
+      - json:
+          operator: set
+          path: foo.second.bar.baz
+          value: "second_value"
+      - json:
+          operator: copy
+          path: foo.baz
+          value: foo.third.bar.baz
+      - json:
+          operator: delete
+          path: foo.bar
+
+    proc3:
+      bloblang:
+        mapping: |
+          root = this
+          foo.first.bar.baz = "first_value"
+          foo.second.bar.baz = "second_value"
+          foo.third.bar.baz = foo.baz
+          foo.bar = deleted()
 
 metrics:
   prometheus:
     prefix: benthos
+    push_interval: 1s
+    push_job_name: benthos_push
+    push_url: "http://localhost:9091"
 
 tracer:
   jaeger:
-    agent_address: 'jaeger:6831'
+    agent_address: 'localhost:6831'
