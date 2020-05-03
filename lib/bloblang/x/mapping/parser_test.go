@@ -130,7 +130,7 @@ meta "bar baz" = "test1"`,
 			},
 			output: []part{
 				{
-					Content: `{}`,
+					Content: `{"foo":{"bar":"baz"}}`,
 					Meta: map[string]string{
 						"bar":     "baz",
 						"bar baz": "test1",
@@ -175,6 +175,22 @@ bar.baz = var("bar baz")`,
 bar = "this is another thing"`,
 			input:  []part{{Content: `{"zed":"gone"}`}},
 			output: []part{{Content: `{"bar":"this is another thing","foo":"this is a literal map"}`}},
+		},
+		"test mapping metadata without json": {
+			mapping: `meta foo = "foo"
+meta bar = 5 + 2`,
+			input: []part{
+				{Content: `this isn't json`},
+			},
+			output: []part{
+				{
+					Content: `this isn't json`,
+					Meta: map[string]string{
+						"foo": "foo",
+						"bar": "7",
+					},
+				},
+			},
 		},
 	}
 

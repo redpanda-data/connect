@@ -75,6 +75,7 @@ const (
 	TypeAvro         = "avro"
 	TypeAWK          = "awk"
 	TypeBatch        = "batch"
+	TypeBloblang     = "bloblang"
 	TypeBoundsCheck  = "bounds_check"
 	TypeCache        = "cache"
 	TypeCatch        = "catch"
@@ -139,6 +140,7 @@ type Config struct {
 	Avro         AvroConfig         `json:"avro" yaml:"avro"`
 	AWK          AWKConfig          `json:"awk" yaml:"awk"`
 	Batch        BatchConfig        `json:"batch" yaml:"batch"`
+	Bloblang     BloblangConfig     `json:"bloblang" yaml:"bloblang"`
 	BoundsCheck  BoundsCheckConfig  `json:"bounds_check" yaml:"bounds_check"`
 	Cache        CacheConfig        `json:"cache" yaml:"cache"`
 	Catch        CatchConfig        `json:"catch" yaml:"catch"`
@@ -202,6 +204,7 @@ func NewConfig() Config {
 		Avro:         NewAvroConfig(),
 		AWK:          NewAWKConfig(),
 		Batch:        NewBatchConfig(),
+		Bloblang:     NewBloblangConfig(),
 		BoundsCheck:  NewBoundsCheckConfig(),
 		Cache:        NewCacheConfig(),
 		Catch:        NewCatchConfig(),

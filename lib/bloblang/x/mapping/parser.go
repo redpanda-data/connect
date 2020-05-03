@@ -42,15 +42,16 @@ type Executor struct {
 func (e *Executor) MapPart(index int, msg Message) error {
 	vars := map[string]interface{}{}
 	meta := msg.Get(index).Metadata()
-	jObj, err := msg.Get(index).JSON()
-	if err != nil {
-		return xerrors.Errorf("failed to parse message as JSON: %w", err)
+
+	var valuePtr *interface{}
+	if jObj, err := msg.Get(index).JSON(); err == nil {
+		valuePtr = &jObj
 	}
 
-	var newObj interface{} = map[string]interface{}{}
+	var newObj interface{} = query.Nothing(nil)
 	for i, stmt := range e.statements {
 		res, err := stmt.query.Exec(query.FunctionContext{
-			Value: &jObj,
+			Value: valuePtr,
 			Vars:  vars,
 			Index: index,
 			Msg:   msg,
@@ -66,8 +67,11 @@ func (e *Executor) MapPart(index int, msg Message) error {
 			return xerrors.Errorf("failed to assign mapping result %v: %v", i, err)
 		}
 	}
-	if err = msg.Get(index).SetJSON(newObj); err != nil {
-		return xerrors.Errorf("failed to set result of mapping: %w", err)
+
+	if _, notMapped := newObj.(query.Nothing); !notMapped {
+		if err := msg.Get(index).SetJSON(newObj); err != nil {
+			return xerrors.Errorf("failed to set result of mapping: %w", err)
+		}
 	}
 	return nil
 }

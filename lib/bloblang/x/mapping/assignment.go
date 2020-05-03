@@ -91,7 +91,7 @@ func (v *jsonAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 		}
 		*ctx.Value = value
 	}
-	if *ctx.Value == nil {
+	if _, isNothing := (*ctx.Value).(query.Nothing); isNothing || *ctx.Value == nil {
 		*ctx.Value = map[string]interface{}{}
 	}
 	gObj := gabs.Wrap(*ctx.Value)
