@@ -2,8 +2,6 @@ package query
 
 import (
 	"fmt"
-
-	"github.com/Jeffail/benthos/v3/lib/bloblang/x/parser"
 )
 
 //------------------------------------------------------------------------------
@@ -25,64 +23,6 @@ const (
 	arithmeticOr
 	arithmeticPipe
 )
-
-func arithmeticOpParser() parser.Type {
-	opParser := parser.AnyOf(
-		parser.Char('+'),
-		parser.Char('-'),
-		parser.Char('/'),
-		parser.Char('*'),
-		parser.Match("&&"),
-		parser.Match("||"),
-		parser.Match("=="),
-		parser.Match("!="),
-		parser.Match(">="),
-		parser.Match("<="),
-		parser.Char('>'),
-		parser.Char('<'),
-		parser.Char('|'),
-	)
-	return func(input []rune) parser.Result {
-		res := opParser(input)
-		if res.Err != nil {
-			return res
-		}
-		switch res.Result.(string) {
-		case "+":
-			res.Result = arithmeticAdd
-		case "-":
-			res.Result = arithmeticSub
-		case "/":
-			res.Result = arithmeticDiv
-		case "*":
-			res.Result = arithmeticMul
-		case "==":
-			res.Result = arithmeticEq
-		case "!=":
-			res.Result = arithmeticNeq
-		case "&&":
-			res.Result = arithmeticAnd
-		case "||":
-			res.Result = arithmeticOr
-		case ">":
-			res.Result = arithmeticGt
-		case "<":
-			res.Result = arithmeticLt
-		case ">=":
-			res.Result = arithmeticGte
-		case "<=":
-			res.Result = arithmeticLte
-		case "|":
-			res.Result = arithmeticPipe
-		default:
-			return parser.Result{
-				Remaining: input,
-				Err:       fmt.Errorf("operator not recognized: %v", res.Result),
-			}
-		}
-		return res
-	}
-}
 
 func restrictForComparison(v interface{}) interface{} {
 	switch t := v.(type) {
@@ -341,7 +281,7 @@ func resolveArithmetic(fns []Function, ops []arithmeticOp) (Function, error) {
 		return fns[0], nil
 	}
 	if len(fns) != (len(ops) + 1) {
-		return nil, fmt.Errorf("mismatch of functions to arithmetic operators")
+		return nil, fmt.Errorf("mismatch of functions (%v) to arithmetic operators (%v)", len(fns), len(ops))
 	}
 
 	// First pass to resolve division and multiplication

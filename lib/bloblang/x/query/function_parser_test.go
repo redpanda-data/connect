@@ -398,6 +398,24 @@ func TestFunctions(t *testing.T) {
 				{content: `{"foo":{"baz":"hello world"}}`},
 			},
 		},
+		"field literal root": {
+			input:  `this`,
+			output: `test`,
+			value: func() *interface{} {
+				var v interface{} = "test"
+				return &v
+			}(),
+		},
+		"field literal root 2": {
+			input:  `this.foo`,
+			output: `test`,
+			value: func() *interface{} {
+				var v interface{} = map[string]interface{}{
+					"foo": "test",
+				}
+				return &v
+			}(),
+		},
 		"map literal": {
 			input:  `json().foo`,
 			output: `hello world`,

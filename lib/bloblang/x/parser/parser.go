@@ -12,12 +12,6 @@ import (
 
 //------------------------------------------------------------------------------
 
-var (
-	// ErrEndOfInput is returned when a character is expected but the input has
-	// run out.
-	ErrEndOfInput = errors.New("unexpected end of input")
-)
-
 // ExpectedError represents a parser error where one of a list of possible
 // tokens was expected but not found.
 type ExpectedError []string
@@ -158,12 +152,14 @@ type Type func([]rune) Result
 //------------------------------------------------------------------------------
 
 // NotEnd parses zero characters from an input and expects it to not have ended.
-func NotEnd(p Type) Type {
+// An ExpectedError must be provided which provides the error returned on empty
+// input.
+func NotEnd(p Type, exp ExpectedError) Type {
 	return func(input []rune) Result {
 		if len(input) == 0 {
 			return Result{
 				Result:    nil,
-				Err:       ErrEndOfInput,
+				Err:       exp,
 				Remaining: input,
 			}
 		}
@@ -173,11 +169,12 @@ func NotEnd(p Type) Type {
 
 // Char parses a single character and expects it to match one candidate.
 func Char(c rune) Type {
+	exp := ExpectedError{string(c)}
 	return NotEnd(func(input []rune) Result {
 		if input[0] != c {
 			return Result{
 				Result:    nil,
-				Err:       ExpectedError{string(c)},
+				Err:       exp,
 				Remaining: input,
 			}
 		}
@@ -186,16 +183,17 @@ func Char(c rune) Type {
 			Err:       nil,
 			Remaining: input[1:],
 		}
-	})
+	}, exp)
 }
 
 // NotChar parses any number of characters until they match a single candidate.
 func NotChar(c rune) Type {
+	exp := ExpectedError{"not " + string(c)}
 	return NotEnd(func(input []rune) Result {
 		if input[0] == c {
 			return Result{
 				Result:    nil,
-				Err:       ExpectedError{"not " + string(c)},
+				Err:       exp,
 				Remaining: input,
 			}
 		}
@@ -214,7 +212,7 @@ func NotChar(c rune) Type {
 			Err:       nil,
 			Remaining: nil,
 		}
-	})
+	}, exp)
 }
 
 // InSet parses any number of characters within a set of runes.
@@ -223,13 +221,14 @@ func InSet(set ...rune) Type {
 	for _, r := range set {
 		setMap[r] = struct{}{}
 	}
+	exp := ExpectedError{fmt.Sprintf("chars(%v)", string(set))}
 	return NotEnd(func(input []rune) Result {
 		i := 0
 		for ; i < len(input); i++ {
 			if _, exists := setMap[input[i]]; !exists {
 				if i == 0 {
 					return Result{
-						Err:       ExpectedError{fmt.Sprintf("chars(%v)", string(set))},
+						Err:       exp,
 						Remaining: input,
 					}
 				}
@@ -242,18 +241,19 @@ func InSet(set ...rune) Type {
 			Err:       nil,
 			Remaining: input[i:],
 		}
-	})
+	}, exp)
 }
 
 // InRange parses any number of characters between two runes inclusive.
 func InRange(lower, upper rune) Type {
+	exp := ExpectedError{fmt.Sprintf("range(%c - %c)", lower, upper)}
 	return NotEnd(func(input []rune) Result {
 		i := 0
 		for ; i < len(input); i++ {
 			if input[i] < lower || input[i] > upper {
 				if i == 0 {
 					return Result{
-						Err:       ExpectedError{fmt.Sprintf("range(%c - %c)", lower, upper)},
+						Err:       exp,
 						Remaining: input,
 					}
 				}
@@ -266,7 +266,7 @@ func InRange(lower, upper rune) Type {
 			Err:       nil,
 			Remaining: input[i:],
 		}
-	})
+	}, exp)
 }
 
 // SpacesAndTabs parses any number of space or tab characters.
@@ -286,12 +286,13 @@ func SpacesAndTabs() Type {
 
 // Match parses a single instance of a string.
 func Match(str string) Type {
+	exp := ExpectedError{str}
 	return NotEnd(func(input []rune) Result {
 		for i, c := range str {
 			if len(input) <= i || input[i] != c {
 				return Result{
 					Result:    nil,
-					Err:       ExpectedError{str},
+					Err:       exp,
 					Remaining: input,
 				}
 			}
@@ -301,7 +302,7 @@ func Match(str string) Type {
 			Err:       nil,
 			Remaining: input[len(str):],
 		}
-	})
+	}, exp)
 }
 
 // Number parses any number of numerical characters into either an int64 or, if
@@ -387,16 +388,6 @@ func Null() Type {
 	}
 }
 
-// Nothing parses nothing.
-func Nothing() Type {
-	return func(input []rune) Result {
-		return Result{
-			Result:    nil,
-			Remaining: input,
-		}
-	}
-}
-
 // Array parses an array literal.
 func Array() Type {
 	open, comma, close := Char('['), Char(','), Char(']')
@@ -422,7 +413,7 @@ func Array() Type {
 				whitespace,
 				close,
 			),
-			false,
+			false, false,
 		)(input)
 	}
 }
@@ -459,7 +450,7 @@ func Object() Type {
 				whitespace,
 				close,
 			),
-			false,
+			false, false,
 		)(input)
 		if res.Err != nil {
 			return res
@@ -604,11 +595,12 @@ func SnakeCase() Type {
 // QuotedString parses a single instance of a quoted string. The result is the
 // inner contents unescaped.
 func QuotedString() Type {
+	exp := ExpectedError{"quoted-string"}
 	return NotEnd(func(input []rune) Result {
 		if input[0] != '"' {
 			return Result{
 				Result:    nil,
-				Err:       ExpectedError{"quoted-string"},
+				Err:       exp,
 				Remaining: input,
 			}
 		}
@@ -638,7 +630,7 @@ func QuotedString() Type {
 			Err:       ExpectedError{"quoted-string"},
 			Remaining: input,
 		}
-	})
+	}, exp)
 }
 
 // Newline parses a line break or carriage return + line break.
@@ -701,8 +693,13 @@ func AllOf(parser Type) Type {
 // primary parse fails then an error is returned.
 //
 // Only the results of the primary parser are returned, the results of the
-// start, delimiter and stop parsers are discarded.
-func DelimitedPattern(start, primary, delimiter, stop Type, allowTrailing bool) Type {
+// start, delimiter and stop parsers are discarded. If returnDelimiters is set
+// to true then two slices are returned, the first element being a slice of
+// primary results and the second element being the delimiter results.
+func DelimitedPattern(
+	start, primary, delimiter, stop Type,
+	allowTrailing, returnDelimiters bool,
+) Type {
 	return func(input []rune) Result {
 		res := start(input)
 		if res.Err != nil {
@@ -710,10 +707,19 @@ func DelimitedPattern(start, primary, delimiter, stop Type, allowTrailing bool) 
 		}
 
 		results := []interface{}{}
+		delims := []interface{}{}
+		mkRes := func() interface{} {
+			if returnDelimiters {
+				return []interface{}{
+					results, delims,
+				}
+			}
+			return results
+		}
 		i := len(input) - len(res.Remaining)
 		if res = primary(res.Remaining); res.Err != nil {
 			if resStop := stop(res.Remaining); resStop.Err == nil {
-				resStop.Result = results
+				resStop.Result = mkRes()
 				return resStop
 			}
 			return Result{
@@ -727,7 +733,7 @@ func DelimitedPattern(start, primary, delimiter, stop Type, allowTrailing bool) 
 			i = len(input) - len(res.Remaining)
 			if res = delimiter(res.Remaining); res.Err != nil {
 				if resStop := stop(res.Remaining); resStop.Err == nil {
-					resStop.Result = results
+					resStop.Result = mkRes()
 					return resStop
 				}
 				return Result{
@@ -735,14 +741,54 @@ func DelimitedPattern(start, primary, delimiter, stop Type, allowTrailing bool) 
 					Remaining: input,
 				}
 			}
+			delims = append(delims, res.Result)
 			i = len(input) - len(res.Remaining)
 			if res = primary(res.Remaining); res.Err != nil {
 				if allowTrailing {
 					if resStop := stop(res.Remaining); resStop.Err == nil {
-						resStop.Result = results
+						resStop.Result = mkRes()
 						return resStop
 					}
 				}
+				return Result{
+					Err:       ErrAtPosition(i, res.Err),
+					Remaining: input,
+				}
+			}
+			results = append(results, res.Result)
+		}
+	}
+}
+
+// Delimited attempts to parse one or more primary parsers, where after the
+// first parse a delimiter is expected. Parsing is stopped only once a delimiter
+// parse is not successful.
+//
+// Two slices are returned, the first element being a slice of primary results
+// and the second element being the delimiter results.
+func Delimited(primary, delimiter Type) Type {
+	return func(input []rune) Result {
+		results := []interface{}{}
+		delims := []interface{}{}
+
+		res := primary(input)
+		if res.Err != nil {
+			return res
+		}
+		results = append(results, res.Result)
+
+		for {
+			if res = delimiter(res.Remaining); res.Err != nil {
+				return Result{
+					Result: []interface{}{
+						results, delims,
+					},
+					Remaining: res.Remaining,
+				}
+			}
+			delims = append(delims, res.Result)
+			i := len(input) - len(res.Remaining)
+			if res = primary(res.Remaining); res.Err != nil {
 				return Result{
 					Err:       ErrAtPosition(i, res.Err),
 					Remaining: input,
@@ -778,14 +824,14 @@ func Sequence(parsers ...Type) Type {
 	}
 }
 
-// Optional applies a child parser and if it returns an ExpectedError or
-// ErrEndOfInput then it is cleared and a nil result is returned instead. Any
-// other form of error will be returned unchanged.
+// Optional applies a child parser and if it returns an ExpectedError then it is
+// cleared and a nil result is returned instead. Any other form of error will be
+// returned unchanged.
 func Optional(parser Type) Type {
 	return func(input []rune) Result {
 		res := parser(input)
 		if res.Err != nil {
-			if exp := ExpectedError(nil); xerrors.As(res.Err, &exp) || xerrors.Is(res.Err, ErrEndOfInput) {
+			if exp := ExpectedError(nil); xerrors.As(res.Err, &exp) {
 				res.Err = nil
 			}
 		}

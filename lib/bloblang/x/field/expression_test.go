@@ -39,7 +39,7 @@ func TestExpressionParserErrors(t *testing.T) {
 	}{
 		"bad function": {
 			input: `static string ${!not a function} hello world`,
-			err:   `failed to parse expression: char 20: failed to parse function arguments: expected: (`,
+			err:   `failed to parse expression: char 20: expected: function-parameters`,
 		},
 		"bad function 2": {
 			input: `static string ${!not_a_function()} hello world`,
@@ -51,15 +51,15 @@ func TestExpressionParserErrors(t *testing.T) {
 		},
 		"bad args 2": {
 			input: `foo ${!json("foo} bar`,
-			err:   `failed to parse expression: char 12: failed to parse function arguments: expected one of: [boolean number quoted-string ( null array object range(a - z) range(A - Z) range(0 - 9) range(* - -) _ ~]`,
+			err:   `failed to parse expression: char 12: required one of: [boolean number quoted-string match function null array object field-path]`,
 		},
 		"bad args 3": {
 			input: `foo ${!json(} bar`,
-			err:   `failed to parse expression: char 12: failed to parse function arguments: unexpected end of input`,
+			err:   `failed to parse expression: char 12: required one of: [boolean number quoted-string match function null array object field-path]`,
 		},
 		"bad args 4": {
 			input: `foo ${!json(0,} bar`,
-			err:   `failed to parse expression: char 14: failed to parse function arguments: unexpected end of input`,
+			err:   `failed to parse expression: char 14: required one of: [boolean number quoted-string match function null array object field-path]`,
 		},
 		"bad args 5": {
 			input: `foo ${!json} bar`,
@@ -174,6 +174,15 @@ func TestExpressions(t *testing.T) {
 		},
 		"json function 4": {
 			input:   `${!json("foo")}`,
+			output:  `{\"bar\":\"baz\"}`,
+			index:   0,
+			escaped: true,
+			messages: []easyMsg{
+				{content: `{"foo":{"bar":"baz"}}`},
+			},
+		},
+		"json function 5": {
+			input:   `${!json("foo")   }`,
 			output:  `{\"bar\":\"baz\"}`,
 			index:   0,
 			escaped: true,

@@ -10,14 +10,14 @@ func matchCaseParser() parser.Type {
 		parser.InterceptExpectedError(
 			parser.AnyOf(
 				parser.Match("_ "),
-				createParser(false),
+				Parse,
 			),
 			"match-case",
 		),
 		parser.Optional(whitespace),
 		parser.Match("=> "),
 		parser.Optional(whitespace),
-		createParser(false),
+		Parse,
 	)
 
 	return func(input []rune) parser.Result {
@@ -58,24 +58,26 @@ func matchExpressionParser() parser.Type {
 		res := parser.Sequence(
 			parser.Match("match"),
 			parser.Discard(parser.SpacesAndTabs()),
-			parser.Optional(createParser(false)),
+			parser.Optional(Parse),
 			whitespace,
-			parser.DelimitedPattern(
-				parser.Sequence(
-					parser.Char('{'),
-					whitespace,
+			parser.MustBe(
+				parser.DelimitedPattern(
+					parser.Sequence(
+						parser.Char('{'),
+						whitespace,
+					),
+					matchCaseParser(),
+					parser.Sequence(
+						parser.Discard(parser.SpacesAndTabs()),
+						parser.NewlineAllowComment(),
+						whitespace,
+					),
+					parser.Sequence(
+						whitespace,
+						parser.Char('}'),
+					),
+					true, false,
 				),
-				matchCaseParser(),
-				parser.Sequence(
-					parser.Discard(parser.SpacesAndTabs()),
-					parser.NewlineAllowComment(),
-					whitespace,
-				),
-				parser.Sequence(
-					whitespace,
-					parser.Char('}'),
-				),
-				true,
 			),
 		)(input)
 		if res.Err != nil {
@@ -100,6 +102,32 @@ func matchExpressionParser() parser.Type {
 		}
 
 		res.Result = matchFunction(contextFn, cases)
+		return res
+	}
+}
+
+func bracketsExpressionParser() parser.Type {
+	whitespace := parser.DiscardAll(
+		parser.AnyOf(
+			parser.SpacesAndTabs(),
+			parser.NewlineAllowComment(),
+		),
+	)
+	return func(input []rune) parser.Result {
+		res := parser.Sequence(
+			parser.InterceptExpectedError(
+				parser.Char('('),
+				"function",
+			),
+			whitespace,
+			Parse,
+			whitespace,
+			parser.Char(')'),
+		)(input)
+		if res.Err != nil {
+			return res
+		}
+		res.Result = res.Result.([]interface{})[2]
 		return res
 	}
 }

@@ -12,9 +12,9 @@ func TestNotEnd(t *testing.T) {
 	errInner := errors.New("test err")
 	notEnd := NotEnd(func([]rune) Result {
 		return Result{Err: errInner}
-	})
+	}, ExpectedError{"foobar"})
 	assert.Equal(t, errInner, notEnd([]rune("foo")).Err)
-	assert.Equal(t, "unexpected end of input", notEnd([]rune("")).Err.Error())
+	assert.Equal(t, "expected: foobar", notEnd([]rune("")).Err.Error())
 }
 
 func TestChar(t *testing.T) {
@@ -27,7 +27,7 @@ func TestChar(t *testing.T) {
 		err       error
 	}{
 		"empty input": {
-			err: errors.New("unexpected end of input"),
+			err: ExpectedError{"x"},
 		},
 		"only the char": {
 			input:  "x",
@@ -65,7 +65,7 @@ func TestNotChar(t *testing.T) {
 		err       error
 	}{
 		"empty input": {
-			err: errors.New("unexpected end of input"),
+			err: ExpectedError{"not x"},
 		},
 		"only the char": {
 			input:     "x",
@@ -109,7 +109,7 @@ func TestInSet(t *testing.T) {
 		err       error
 	}{
 		"empty input": {
-			err: errors.New("unexpected end of input"),
+			err: ExpectedError{"chars(abc)"},
 		},
 		"only a char": {
 			input:     "a",
@@ -158,7 +158,7 @@ func TestInRange(t *testing.T) {
 		err       error
 	}{
 		"empty input": {
-			err: errors.New("unexpected end of input"),
+			err: ExpectedError{"range(a - c)"},
 		},
 		"only a char": {
 			input:     "a",
@@ -466,7 +466,7 @@ func TestSnakeCase(t *testing.T) {
 		err       string
 	}{
 		"empty input": {
-			err: `char 0: unexpected end of input`,
+			err: `char 0: expected one of: [range(a - z) range(0 - 9) _]`,
 		},
 		"only a char": {
 			input:     "a",
@@ -532,7 +532,7 @@ func TestSequence(t *testing.T) {
 		err       error
 	}{
 		"empty input": {
-			err: ErrAtPosition(0, errors.New("unexpected end of input")),
+			err: ErrAtPosition(0, ExpectedError{"abc"}),
 		},
 		"smaller than string": {
 			input:     "ab",
@@ -586,7 +586,7 @@ func TestAllOf(t *testing.T) {
 		err       error
 	}{
 		"empty input": {
-			err: errors.New("unexpected end of input"),
+			err: ExpectedError{"abc"},
 		},
 		"smaller than string": {
 			input:     "ab",
@@ -631,7 +631,7 @@ func TestAllOf(t *testing.T) {
 }
 
 func TestDelimitedPattern(t *testing.T) {
-	parser := DelimitedPattern(Char('#'), Match("abc"), Char(','), Char('!'), false)
+	parser := DelimitedPattern(Char('#'), Match("abc"), Char(','), Char('!'), false, false)
 
 	tests := map[string]struct {
 		input     string
@@ -640,7 +640,7 @@ func TestDelimitedPattern(t *testing.T) {
 		err       error
 	}{
 		"empty input": {
-			err: errors.New("unexpected end of input"),
+			err: ExpectedError{"#"},
 		},
 		"no start": {
 			input:     "ab",
@@ -695,7 +695,7 @@ func TestDelimitedPattern(t *testing.T) {
 }
 
 func TestDelimitedPatternAllowTrailing(t *testing.T) {
-	parser := DelimitedPattern(Char('#'), Match("abc"), Char(','), Char('!'), true)
+	parser := DelimitedPattern(Char('#'), Match("abc"), Char(','), Char('!'), true, false)
 
 	tests := map[string]struct {
 		input     string
@@ -704,7 +704,7 @@ func TestDelimitedPatternAllowTrailing(t *testing.T) {
 		err       error
 	}{
 		"empty input": {
-			err: errors.New("unexpected end of input"),
+			err: ExpectedError{"#"},
 		},
 		"no start": {
 			input:     "ab",
@@ -946,7 +946,7 @@ func TestMatch(t *testing.T) {
 		err       error
 	}{
 		"empty input": {
-			err: errors.New("unexpected end of input"),
+			err: ExpectedError{"abc"},
 		},
 		"smaller than string": {
 			input:     "ab",
@@ -1136,7 +1136,7 @@ func TestNumber(t *testing.T) {
 		err       error
 	}{
 		"empty input": {
-			err: errors.New("unexpected end of input"),
+			err: ExpectedError{"number"},
 		},
 		"just digits": {
 			input:     "123",
@@ -1190,7 +1190,7 @@ func TestBoolean(t *testing.T) {
 		err       error
 	}{
 		"empty input": {
-			err: errors.New("unexpected end of input"),
+			err: ExpectedError{"boolean"},
 		},
 		"just bool": {
 			input:     "true",
@@ -1239,7 +1239,7 @@ func TestQuotedString(t *testing.T) {
 		err       error
 	}{
 		"empty input": {
-			err: errors.New("unexpected end of input"),
+			err: ExpectedError{"quoted-string"},
 		},
 		"only quote": {
 			input:     `"foo"`,
@@ -1293,7 +1293,7 @@ func TestArray(t *testing.T) {
 		err       error
 	}{
 		"empty input": {
-			err: errors.New("unexpected end of input"),
+			err: ExpectedError{"boolean", "number", "quoted-string", "null", "array", "object"},
 		},
 		"empty array": {
 			input:     "[] and this",
@@ -1373,7 +1373,7 @@ func TestObject(t *testing.T) {
 		err       error
 	}{
 		"empty input": {
-			err: errors.New("unexpected end of input"),
+			err: ExpectedError{"boolean", "number", "quoted-string", "null", "array", "object"},
 		},
 		"empty object": {
 			input:     "{} and this",
@@ -1465,7 +1465,7 @@ func TestSpacesAndTabs(t *testing.T) {
 		err       error
 	}{
 		"empty input": {
-			err: errors.New("unexpected end of input"),
+			err: ExpectedError{"whitespace"},
 		},
 		"only a char": {
 			input:     " ",
@@ -1514,7 +1514,7 @@ func TestNewline(t *testing.T) {
 		err       error
 	}{
 		"empty input": {
-			err: errors.New("unexpected end of input"),
+			err: ExpectedError{"line-break"},
 		},
 		"only a line feed": {
 			input:     "\n",
@@ -1567,7 +1567,7 @@ func TestAnyOf(t *testing.T) {
 		err       error
 	}{
 		"empty input": {
-			err: errors.New("unexpected end of input"),
+			err: ExpectedError{"a", "b", "c"},
 		},
 		"only a char": {
 			input:     "a",

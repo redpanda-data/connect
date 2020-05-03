@@ -1,12 +1,10 @@
 package query
 
 import (
-	"bytes"
 	"fmt"
 	"sort"
 
 	"github.com/Jeffail/benthos/v3/lib/bloblang/x/parser"
-	"golang.org/x/xerrors"
 )
 
 //------------------------------------------------------------------------------
@@ -14,14 +12,6 @@ import (
 type badFunctionErr string
 
 func (e badFunctionErr) Error() string {
-	/*
-		exp := []string{}
-		for k := range functions {
-			exp = append(exp, k)
-		}
-		sort.Strings(exp)
-		return fmt.Sprintf("unrecognised function '%v', expected one of: %v", string(e), exp)
-	*/
 	return fmt.Sprintf("unrecognised function '%v'", string(e))
 }
 
@@ -37,14 +27,6 @@ func (e badFunctionErr) ToExpectedErr() parser.ExpectedError {
 type badMethodErr string
 
 func (e badMethodErr) Error() string {
-	/*
-		exp := []string{}
-		for k := range methods {
-			exp = append(exp, k)
-		}
-		sort.Strings(exp)
-		return fmt.Sprintf("unrecognised method '%v', expected one of: %v", string(e), exp)
-	*/
 	return fmt.Sprintf("unrecognised method '%v'", string(e))
 }
 
@@ -78,14 +60,17 @@ func functionArgsParser(allowFunctions bool) parser.Type {
 		tmpParamTypes := paramTypes
 		if allowFunctions {
 			tmpParamTypes = append([]parser.Type{}, paramTypes...)
-			tmpParamTypes = append(tmpParamTypes, createParser(false))
+			tmpParamTypes = append(tmpParamTypes, Parse)
 		}
 		return parser.DelimitedPattern(
-			parser.Sequence(
-				open,
-				whitespace,
+			parser.InterceptExpectedError(
+				parser.Sequence(
+					open,
+					whitespace,
+				),
+				"function-parameters",
 			),
-			parser.AnyOf(tmpParamTypes...),
+			parser.MustBe(parser.AnyOf(tmpParamTypes...)),
 			parser.Sequence(
 				parser.Discard(parser.SpacesAndTabs()),
 				comma,
@@ -95,12 +80,12 @@ func functionArgsParser(allowFunctions bool) parser.Type {
 				whitespace,
 				close,
 			),
-			false,
+			false, false,
 		)(input)
 	}
 }
 
-func literalParser() parser.Type {
+func literalValueParser() parser.Type {
 	parseLiteral := parser.LiteralValue()
 	return func(input []rune) parser.Result {
 		res := parseLiteral(input)
@@ -108,85 +93,6 @@ func literalParser() parser.Type {
 			res.Result = literalFunction(res.Result)
 		}
 		return res
-	}
-}
-
-func fieldLiteralParser(ctxFn Function, supportThis bool) parser.Type {
-	thisParser := parser.Match("this")
-	fieldPathParser := parser.AnyOf(
-		parser.InRange('a', 'z'),
-		parser.InRange('A', 'Z'),
-		parser.InRange('0', '9'),
-		parser.InRange('*', '-'),
-		parser.Char('_'),
-		parser.Char('~'),
-	)
-	return func(input []rune) parser.Result {
-		res := parser.Result{
-			Remaining: input,
-		}
-
-		var fn Function
-		var err error
-
-		if supportThis {
-			res = thisParser(res.Remaining)
-			if res.Err == nil {
-				if res = parser.Char('.')(res.Remaining); res.Err != nil {
-					fn, err = fieldFunction()
-				}
-			}
-		}
-		if fn == nil && err == nil {
-			var buf bytes.Buffer
-			for {
-				if res = fieldPathParser(res.Remaining); res.Err != nil {
-					break
-				}
-				buf.WriteString(res.Result.(string))
-			}
-			if buf.Len() == 0 {
-				if res.Err == nil {
-					res.Err = parser.ExpectedError{"field-path"}
-				}
-				return parser.Result{
-					Remaining: input,
-					Err:       res.Err,
-				}
-			}
-			fn, err = fieldFunction(buf.String())
-		}
-
-		if err == nil && ctxFn != nil {
-			fn, err = mapMethod(ctxFn, fn)
-		}
-		if err != nil {
-			return parser.Result{
-				Remaining: input,
-				Err:       err,
-			}
-		}
-
-		for {
-			res = parser.Char('.')(res.Remaining)
-			if res.Err != nil {
-				break
-			}
-
-			i := len(input) - len(res.Remaining)
-			res = parseFunctionTail(fn)(res.Remaining)
-			if res.Err != nil {
-				res.Err = parser.ErrAtPosition(i, res.Err)
-				res.Remaining = input
-				return res
-			}
-			fn = res.Result.(Function)
-		}
-
-		return parser.Result{
-			Remaining: res.Remaining,
-			Result:    fn,
-		}
 	}
 }
 
@@ -210,8 +116,8 @@ func parseFunctionTail(fn Function) parser.Type {
 				whitespace,
 				closeBracket,
 			),
-			parseMethod(fn),
-			fieldLiteralParser(fn, false),
+			methodParser(fn),
+			fieldLiteralMapParser(fn),
 		)(input)
 		if seqSlice, isSlice := res.Result.([]interface{}); isSlice {
 			res.Result, res.Err = mapMethod(fn, seqSlice[2].(Function))
@@ -220,40 +126,161 @@ func parseFunctionTail(fn Function) parser.Type {
 	}
 }
 
-func parseMethod(fn Function) parser.Type {
-	argsParser := functionArgsParser(true)
+func parseWithTails(fnParser parser.Type) parser.Type {
+	delim := parser.Sequence(
+		parser.Char('.'),
+		parser.Discard(
+			parser.Sequence(
+				parser.NewlineAllowComment(),
+				parser.SpacesAndTabs(),
+			),
+		),
+	)
 
 	return func(input []rune) parser.Result {
-		res := parser.SnakeCase()(input)
+		res := fnParser(input)
 		if res.Err != nil {
 			return res
 		}
 
-		targetMethod := res.Result.(string)
-		if len(res.Remaining) == 0 {
-			return parser.Result{
-				Err: parser.ErrAtPosition(
-					len(input),
-					parser.ExpectedError{"method-parameters"},
-				),
-				Remaining: input,
+		fn := res.Result.(Function)
+		for {
+			if res = delim(res.Remaining); res.Err != nil {
+				return parser.Result{
+					Result:    fn,
+					Remaining: res.Remaining,
+				}
 			}
+			i := len(input) - len(res.Remaining)
+			if res = parser.MustBe(parseFunctionTail(fn))(res.Remaining); res.Err != nil {
+				return parser.Result{
+					Err:       parser.ErrAtPosition(i, res.Err),
+					Remaining: res.Remaining,
+				}
+			}
+			fn = res.Result.(Function)
 		}
+	}
+}
 
-		i := len(input) - len(res.Remaining)
-		res = argsParser(res.Remaining)
+func fieldLiteralMapParser(ctxFn Function) parser.Type {
+	fieldPathParser := parser.JoinStringSliceResult(
+		parser.InterceptExpectedError(
+			parser.AllOf(
+				parser.AnyOf(
+					parser.InRange('a', 'z'),
+					parser.InRange('A', 'Z'),
+					parser.InRange('0', '9'),
+					parser.InRange('*', '-'),
+					parser.Char('_'),
+					parser.Char('~'),
+				),
+			),
+			"field-path",
+		),
+	)
+
+	return func(input []rune) parser.Result {
+		res := fieldPathParser(input)
 		if res.Err != nil {
+			return res
+		}
+
+		fn, err := fieldFunction(res.Result.(string))
+		if err == nil {
+			fn, err = mapMethod(ctxFn, fn)
+		}
+		if err != nil {
 			return parser.Result{
-				Err: parser.ErrAtPosition(i, res.Err).Expand(
-					func(err error) error {
-						return xerrors.Errorf("failed to parse method arguments: %w", err)
-					},
-				),
 				Remaining: input,
+				Err:       err,
 			}
 		}
-		args := res.Result.([]interface{})
 
+		return parser.Result{
+			Remaining: res.Remaining,
+			Result:    fn,
+		}
+	}
+}
+
+func fieldLiteralRootParser() parser.Type {
+	fieldPathParser := parser.InterceptExpectedError(
+		parser.AnyOf(
+			parser.Sequence(
+				parser.Discard(
+					parser.Match("this."),
+				),
+				parser.JoinStringSliceResult(
+					parser.AllOf(
+						parser.AnyOf(
+							parser.InRange('a', 'z'),
+							parser.InRange('A', 'Z'),
+							parser.InRange('0', '9'),
+							parser.InRange('*', '-'),
+							parser.Char('_'),
+							parser.Char('~'),
+						),
+					),
+				),
+			),
+			parser.Match("this"),
+		),
+		"field-path",
+	)
+
+	return func(input []rune) parser.Result {
+		res := fieldPathParser(input)
+		if res.Err != nil {
+			return res
+		}
+
+		var fn Function
+		var err error
+
+		switch t := res.Result.(type) {
+		case []interface{}:
+			path := t[1].(string)
+			if path == "this" {
+				fn, err = fieldFunction()
+			} else {
+				fn, err = fieldFunction(path)
+			}
+		default:
+			fn, err = fieldFunction()
+		}
+		if err != nil {
+			return parser.Result{
+				Remaining: input,
+				Err:       err,
+			}
+		}
+
+		return parser.Result{
+			Remaining: res.Remaining,
+			Result:    fn,
+		}
+	}
+}
+
+func methodParser(fn Function) parser.Type {
+	p := parser.Sequence(
+		parser.InterceptExpectedError(
+			parser.SnakeCase(),
+			"method",
+		),
+		functionArgsParser(true),
+	)
+
+	return func(input []rune) parser.Result {
+		res := p(input)
+		if res.Err != nil {
+			return res
+		}
+
+		seqSlice := res.Result.([]interface{})
+
+		targetMethod := seqSlice[0].(string)
 		mtor, exists := methods[targetMethod]
 		if !exists {
 			return parser.Result{
@@ -262,10 +289,11 @@ func parseMethod(fn Function) parser.Type {
 			}
 		}
 
+		args := seqSlice[1].([]interface{})
 		method, err := mtor(fn, args...)
 		if err != nil {
 			return parser.Result{
-				Err:       parser.ErrAtPosition(i, err),
+				Err:       err,
 				Remaining: input,
 			}
 		}
@@ -277,42 +305,24 @@ func parseMethod(fn Function) parser.Type {
 }
 
 func functionParser() parser.Type {
-	argsParser := functionArgsParser(true)
+	p := parser.Sequence(
+		parser.InterceptExpectedError(
+			parser.SnakeCase(),
+			"function",
+		),
+		functionArgsParser(true),
+	)
 
 	return func(input []rune) parser.Result {
-		var targetFunc string
-		var args []interface{}
-
-		res := parser.SnakeCase()(input)
+		res := p(input)
 		if res.Err != nil {
 			return res
 		}
-		targetFunc = res.Result.(string)
-		if len(res.Remaining) == 0 {
-			return parser.Result{
-				Err: parser.ErrAtPosition(
-					len(input),
-					parser.ExpectedError{"function-parameters"},
-				),
-				Remaining: input,
-			}
-		}
 
-		i := len(input) - len(res.Remaining)
-		res = argsParser(res.Remaining)
-		if res.Err != nil {
-			return parser.Result{
-				Err: parser.ErrAtPosition(i, res.Err).Expand(
-					func(err error) error {
-						return xerrors.Errorf("failed to parse function arguments: %w", err)
-					},
-				),
-				Remaining: input,
-			}
-		}
-		args = res.Result.([]interface{})
+		seqSlice := res.Result.([]interface{})
 
-		ftor, exists := functions[targetFunc]
+		targetFunc := seqSlice[0].(string)
+		ctor, exists := functions[targetFunc]
 		if !exists {
 			return parser.Result{
 				Err:       badFunctionErr(targetFunc),
@@ -320,32 +330,16 @@ func functionParser() parser.Type {
 			}
 		}
 
-		fnResolver, err := ftor(args...)
+		args := seqSlice[1].([]interface{})
+		fn, err := ctor(args...)
 		if err != nil {
 			return parser.Result{
-				Err:       parser.ErrAtPosition(i, err),
+				Err:       err,
 				Remaining: input,
 			}
 		}
-
-		for {
-			res = parser.Char('.')(res.Remaining)
-			if res.Err != nil {
-				break
-			}
-
-			i = len(input) - len(res.Remaining)
-			res = parseFunctionTail(fnResolver)(res.Remaining)
-			if res.Err != nil {
-				res.Err = parser.ErrAtPosition(i, res.Err)
-				res.Remaining = input
-				return res
-			}
-			fnResolver = res.Result.(Function)
-		}
-
 		return parser.Result{
-			Result:    fnResolver,
+			Result:    fn,
 			Remaining: res.Remaining,
 		}
 	}

@@ -16,12 +16,12 @@ func TestMappingErrors(t *testing.T) {
 	}{
 		"no mappings": {
 			mapping: ``,
-			err:     `failed to parse mapping: char 0: unexpected end of input`,
+			err:     `failed to parse mapping: char 0: expected one of: [let meta target-path]`,
 		},
 		"no mappings 2": {
 			mapping: `
    `,
-			err: `failed to parse mapping: char 4: unexpected end of input`,
+			err: `failed to parse mapping: char 4: expected one of: [let meta target-path]`,
 		},
 		"double mapping": {
 			mapping: `foo = bar bar = baz`,
@@ -33,7 +33,7 @@ func TestMappingErrors(t *testing.T) {
 		},
 		"bad query": {
 			mapping: `foo = blah.`,
-			err:     `failed to parse mapping: char 11: unexpected end of input`,
+			err:     `failed to parse mapping: char 11: required one of: [method field-path]`,
 		},
 		"bad variable assign": {
 			mapping: `let = blah`,

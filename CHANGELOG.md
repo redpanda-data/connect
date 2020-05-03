@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New HMAC algorithms added to `hash` processor.
+
 ## 3.12.0 - 2020-04-19
 
 ### Added

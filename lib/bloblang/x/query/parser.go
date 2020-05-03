@@ -40,137 +40,45 @@ type Function interface {
 
 //------------------------------------------------------------------------------
 
-func createParser(deprecated bool) parser.Type {
-	opParser := arithmeticOpParser()
-	openBracket := parser.Char('(')
-	closeBracket := parser.Char(')')
-
-	fieldVersusFunction := functionParser()
-	if !deprecated {
-		fieldVersusFunction = parser.BestMatch(
-			fieldLiteralParser(nil, true),
-			matchExpressionParser(),
-			fieldVersusFunction,
-		)
-	}
-	nextSegment := parser.AnyOf(
-		openBracket,
-		literalParser(),
-		fieldVersusFunction,
-	)
-
-	whitespace := parser.DiscardAll(
-		parser.AnyOf(
-			parser.SpacesAndTabs(),
-			parser.NewlineAllowComment(),
-		),
-	)
-
-	return func(input []rune) parser.Result {
-		var fns []Function
-		var ops []arithmeticOp
-
-		res := parser.SpacesAndTabs()(input)
-		for {
-			i := len(input) - len(res.Remaining)
-			res = nextSegment(res.Remaining)
-			if res.Err != nil {
-				res.Err = parser.ErrAtPosition(i, res.Err)
-				res.Remaining = input
-				if i == 0 && deprecated {
-					resDeprecated := parseDeprecatedFunction(input)
-					if resDeprecated.Err == nil {
-						return resDeprecated
-					}
-				}
-				return res
-			}
-			switch t := res.Result.(type) {
-			case Function:
-				fns = append(fns, t)
-			case string:
-				// ASSUMPTION: Must be open bracket
-				res = whitespace(res.Remaining)
-				i = len(input) - len(res.Remaining)
-				res = Parse(res.Remaining)
-				if res.Err != nil {
-					res.Err = parser.ErrAtPosition(i, res.Err)
-					res.Remaining = input
-					return res
-				}
-
-				bracketFn := res.Result.(Function)
-				res = whitespace(res.Remaining)
-				i = len(input) - len(res.Remaining)
-				res = closeBracket(res.Remaining)
-				if res.Err != nil {
-					res.Err = parser.ErrAtPosition(i, res.Err)
-					res.Remaining = input
-					return res
-				}
-
-			bracketTails:
-				for {
-					res = parser.Char('.')(res.Remaining)
-					if res.Err != nil {
-						break bracketTails
-					}
-
-					i = len(input) - len(res.Remaining)
-					res = parseFunctionTail(bracketFn)(res.Remaining)
-					if res.Err != nil {
-						res.Err = parser.ErrAtPosition(i, res.Err)
-						res.Remaining = input
-						return res
-					}
-					bracketFn = res.Result.(Function)
-				}
-				fns = append(fns, bracketFn)
-			}
-
-			res = parser.SpacesAndTabs()(res.Remaining)
-			if len(res.Remaining) == 0 {
-				break
-			}
-
-			i = len(input) - len(res.Remaining)
-			res = opParser(res.Remaining)
-			if res.Err != nil {
-				if len(fns) == 0 {
-					res.Err = parser.ErrAtPosition(i, res.Err)
-					res.Remaining = input
-					return res
-				}
-				break
-			}
-			ops = append(ops, res.Result.(arithmeticOp))
-			res = whitespace(res.Remaining)
-		}
-
-		fn, err := resolveArithmetic(fns, ops)
-		if err != nil {
-			return parser.Result{
-				Err:       err,
-				Remaining: input,
-			}
-		}
-		return parser.Result{
-			Result:    fn,
-			Remaining: res.Remaining,
-		}
-	}
-}
-
 // Parse parses an input into a query.Function.
 func Parse(input []rune) parser.Result {
-	return createParser(false)(input)
+	rootParser := parser.AnyOf(
+		matchExpressionParser(),
+		parseWithTails(bracketsExpressionParser()),
+		parseWithTails(literalValueParser()),
+		parseWithTails(functionParser()),
+		parseWithTails(fieldLiteralRootParser()),
+	)
+	res := parser.SpacesAndTabs()(input)
+	i := len(input) - len(res.Remaining)
+	if res = arithmeticParser(rootParser)(res.Remaining); res.Err != nil {
+		res.Err = parser.ErrAtPosition(i, res.Err)
+	}
+	return res
 }
 
 // ParseDeprecated parses an input into a query.Function, but permits deprecated
 // function interpolations. In order to support old functions this parser does
 // not include field literals.
 func ParseDeprecated(input []rune) parser.Result {
-	return createParser(true)(input)
+	rootParser := parser.AnyOf(
+		matchExpressionParser(),
+		parseWithTails(bracketsExpressionParser()),
+		parseWithTails(literalValueParser()),
+		parseWithTails(functionParser()),
+		parseDeprecatedFunction,
+	)
+	res := arithmeticParser(rootParser)(input)
+	if res.Err != nil {
+		return res
+	}
+
+	result := res.Result
+	res = parser.SpacesAndTabs()(res.Remaining)
+	return parser.Result{
+		Result:    result,
+		Remaining: res.Remaining,
+	}
 }
 
 func tryParse(expr string, deprecated bool) (Function, error) {
