@@ -13,7 +13,7 @@ import (
 // stat are thread safe.
 type LocalStat struct {
 	Value           *int64
-	labelsAndValues map[string]string
+	labelsAndValues *sync.Map
 }
 
 // Incr increments a metric by an amount.
@@ -42,7 +42,7 @@ func (l *LocalStat) Set(value int64) error {
 
 func (l *LocalStat) setLabelsAndValues(ls, vs []string) *LocalStat {
 	for i, k := range ls {
-		l.labelsAndValues[k] = vs[i]
+		l.labelsAndValues.Store(k, vs[i])
 	}
 	return l
 }
@@ -52,14 +52,14 @@ func (l *LocalStat) setLabelsAndValues(ls, vs []string) *LocalStat {
 //
 // This is mostly useful in tests for custom processors.
 func (l *LocalStat) HasLabelWithValue(k, v string) bool {
-	label := l.labelsAndValues[k]
-	return v == label
+	labelI, ok := l.labelsAndValues.Load(k)
+	return ok && v == labelI.(string)
 }
 
 func newLocalStat(c int64) *LocalStat {
 	return &LocalStat{
 		Value:           &c,
-		labelsAndValues: make(map[string]string),
+		labelsAndValues: &sync.Map{},
 	}
 }
 
@@ -118,9 +118,10 @@ func (l *Local) GetCountersWithLabels() map[string]LocalStat {
 		o := l.flatCounters[k]
 		cv := atomic.LoadInt64(o.Value)
 		ls := *newLocalStat(cv)
-		for k, v := range o.labelsAndValues {
-			ls.labelsAndValues[k] = v
-		}
+		o.labelsAndValues.Range(func(key, value interface{}) bool {
+			ls.labelsAndValues.Store(key, value)
+			return true
+		})
 		localFlatCounters[k] = ls
 	}
 	l.Unlock()
@@ -162,9 +163,10 @@ func (l *Local) GetTimingsWithLabels() map[string]LocalStat {
 		o := l.flatTimings[k]
 		cv := atomic.LoadInt64(o.Value)
 		ls := *newLocalStat(cv)
-		for k, v := range o.labelsAndValues {
-			ls.labelsAndValues[k] = v
-		}
+		o.labelsAndValues.Range(func(key, value interface{}) bool {
+			ls.labelsAndValues.Store(key, value)
+			return true
+		})
 		localFlatTimings[k] = ls
 	}
 	l.Unlock()

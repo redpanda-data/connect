@@ -9,6 +9,11 @@ All notable changes to this project will be documented in this file.
 
 - New HMAC algorithms added to `hash` processor.
 
+### Fixed
+
+- Prevented a crash that might occur with high-concurrent access of
+  `http_server` metrics with labels.
+
 ## 3.12.0 - 2020-04-19
 
 ### Added

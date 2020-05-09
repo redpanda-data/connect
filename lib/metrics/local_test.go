@@ -1,6 +1,13 @@
 package metrics
 
-import "testing"
+import (
+	"context"
+	"errors"
+	"fmt"
+	"testing"
+
+	"golang.org/x/sync/errgroup"
+)
 
 func TestCounter(t *testing.T) {
 	path := "testing.label"
@@ -86,6 +93,51 @@ func TestCounterWithLabelsAndValues(t *testing.T) {
 
 	if c.HasLabelWithValue(label, "unknown") {
 		t.Fatal("counter has label with value unknown")
+	}
+}
+
+func TestCounterWithLabelsAndValuesConcurrent(t *testing.T) {
+	path := "testing.label"
+	local := NewLocal()
+	label := "tested"
+	counter := local.GetCounterVec(path, []string{label})
+	value := "true"
+
+	counter.With(value).Incr(1)
+
+	wg, _ := errgroup.WithContext(context.Background())
+	wg.Go(func() error {
+		for i := 0; i < 1000; i++ {
+			if err := counter.With(value).Incr(1); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	wg.Go(func() error {
+		for i := 0; i < 1000; i++ {
+			counters := local.GetCountersWithLabels()
+			c, ok := counters[path]
+			if !ok {
+				return errors.New("did not find counter for path")
+			}
+
+			if !c.HasLabelWithValue(label, value) {
+				return fmt.Errorf("counter does not have label with value %s - %#v", value, c)
+			}
+
+			if c.HasLabelWithValue(label, "unknown") {
+				return errors.New("counter has label with value unknown")
+			}
+			if err := counter.With(value).Incr(1); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	if err := wg.Wait(); err != nil {
+		t.Error(err)
 	}
 }
 
