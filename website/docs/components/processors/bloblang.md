@@ -11,72 +11,17 @@ type: processor
 -->
 
 
-WARNING: This processor is considered experimental and therefore subject to
-change outside of major version releases.
+BETA: This a beta component and therefore subject to change outside of major
+version releases. Consult the changelog for changes before upgrading.
 
 Executes a [Bloblang](/docs/guides/bloblang/about) mapping on messages.
 
-
-import Tabs from '@theme/Tabs';
-
-<Tabs defaultValue="common" values={[
-  { label: 'Common', value: 'common', },
-  { label: 'Advanced', value: 'advanced', },
-]}>
-
-import TabItem from '@theme/TabItem';
-
-<TabItem value="common">
-
 ```yaml
-# Common config fields, showing default values
-bloblang:
-  mapping: ""
+# Config fields, showing default values
+bloblang: ""
 ```
-
-</TabItem>
-<TabItem value="advanced">
-
-```yaml
-# All config fields, showing default values
-bloblang:
-  mapping: ""
-  parts: []
-```
-
-</TabItem>
-</Tabs>
 
 For more information about Bloblang
 [check out the docs](/docs/guides/bloblang/about).
 
-Check out the [examples section](#examples) in order to see how this processor
-can be used.
-
-## Fields
-
-### `mapping`
-
-The Bloblang mapping to apply
-
-
-Type: `string`  
-Default: `""`  
-
-### `parts`
-
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
-
-
-Type: `array`  
-Default: `[]`  
-
-## Examples
-
-TODO
 

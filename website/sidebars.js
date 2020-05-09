@@ -91,6 +91,15 @@ module.exports = {
       label: 'Guides',
       items: [
         'guides/getting_started',
+        {
+          type: 'category',
+          label: 'Bloblang',
+          items: [
+            'guides/bloblang/about',
+            'guides/bloblang/functions',
+            'guides/bloblang/methods',
+          ],
+        },
         'guides/monitoring',
         'guides/performance_tuning',
         'guides/sync_responses',

@@ -22,6 +22,7 @@ pipeline:
         all: {}
         and: []
         any: {}
+        bloblang: ""
         bounds_check:
           max_part_size: 1.073741824e+09
           max_parts: 100

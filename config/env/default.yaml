@@ -406,6 +406,7 @@ pipeline:
     batch:
       byte_size: ${PROCESSOR_BATCH_BYTE_SIZE:0}
       condition:
+        bloblang: ${PROCESSOR_BATCH_CONDITION_BLOBLANG}
         bounds_check:
           max_part_size: ${PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MAX_PART_SIZE:1073741824}
           max_parts: ${PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MAX_PARTS:100}
@@ -447,8 +448,7 @@ pipeline:
         type: ${PROCESSOR_BATCH_CONDITION_TYPE:static}
       count: ${PROCESSOR_BATCH_COUNT:0}
       period: ${PROCESSOR_BATCH_PERIOD}
-    bloblang:
-      mapping: ${PROCESSOR_BLOBLANG_MAPPING}
+    bloblang: ${PROCESSOR_BLOBLANG}
     bounds_check:
       max_part_size: ${PROCESSOR_BOUNDS_CHECK_MAX_PART_SIZE:1073741824}
       max_parts: ${PROCESSOR_BOUNDS_CHECK_MAX_PARTS:100}
