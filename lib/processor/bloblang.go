@@ -17,20 +17,13 @@ func init() {
 	Constructors[TypeBloblang] = TypeSpec{
 		constructor: NewBloblang,
 		Summary: `
-WARNING: This processor is considered experimental and therefore subject to
-change outside of major version releases.
+BETA: This a beta component and therefore subject to change outside of major
+version releases. Consult the changelog for changes before upgrading.
 
 Executes a [Bloblang](/docs/guides/bloblang/about) mapping on messages.`,
 		Description: `
 For more information about Bloblang
-[check out the docs](/docs/guides/bloblang/about).
-
-Check out the [examples section](#examples) in order to see how this processor
-can be used.`,
-		Footnotes: `
-## Examples
-
-TODO`,
+[check out the docs](/docs/guides/bloblang/about).`,
 	}
 }
 
@@ -48,8 +41,6 @@ func NewBloblangConfig() BloblangConfig {
 
 // Bloblang is a processor that performs a Bloblang mapping.
 type Bloblang struct {
-	parts []int
-
 	exec *mapping.Executor
 
 	log   log.Modular
@@ -94,7 +85,7 @@ func (b *Bloblang) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	proc := func(index int, span opentracing.Span, part types.Part) error {
 		if err := b.exec.MapPart(index, newMsg); err != nil {
 			b.mErr.Incr(1)
-			b.log.Debugf("Mapping failed: %v\n", err)
+			b.log.Errorf("%v\n", err)
 			return err
 		}
 		return nil

@@ -1,8 +1,6 @@
 package query
 
 import (
-	"errors"
-
 	"golang.org/x/xerrors"
 )
 
@@ -35,9 +33,6 @@ func matchFunction(contextFn Function, cases []matchCase) Function {
 		if caseErr != nil {
 			return nil, caseErr
 		}
-		return nil, &ErrRecoverable{
-			Recovered: Nothing(nil),
-			Err:       errors.New("no expressions matched"),
-		}
+		return Nothing(nil), nil
 	})
 }

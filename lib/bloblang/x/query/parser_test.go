@@ -79,7 +79,7 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"bad method args 3": {
 			input: `json("foo").from()`,
-			err:   `char 12: expected one argument, received: 0`,
+			err:   `char 12: expected 1 parameters, received: 0`,
 		},
 		"bad method args 4": {
 			input: `json("foo").from("nah")`,
@@ -87,7 +87,7 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"bad map args": {
 			input: `json("foo").map()`,
-			err:   `char 12: expected one argument, received: 0`,
+			err:   `char 12: expected 1 parameters, received: 0`,
 		},
 		"gibberish": {
 			input: `json("foo").(=)`,

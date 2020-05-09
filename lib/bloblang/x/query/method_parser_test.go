@@ -279,6 +279,16 @@ func TestMethods(t *testing.T) {
 				{content: `{"foo":{"bar":"3"}}`},
 			},
 		},
+		"test string method": {
+			input:    `5.string() == "5"`,
+			output:   `true`,
+			messages: []easyMsg{{}},
+		},
+		"test number method": {
+			input:    `"5".number() == 5`,
+			output:   `true`,
+			messages: []easyMsg{{}},
+		},
 	}
 
 	for name, test := range tests {
@@ -309,6 +319,53 @@ func TestMethods(t *testing.T) {
 				Msg:   msg,
 			}))
 			assert.Equal(t, test.output, res)
+		})
+	}
+}
+
+func TestMethodErrors(t *testing.T) {
+	type easyMsg struct {
+		content string
+		meta    map[string]string
+	}
+
+	tests := map[string]struct {
+		input    string
+		errStr   string
+		messages []easyMsg
+		index    int
+	}{
+		"literal function": {
+			input:    `"not a number".number()`,
+			errStr:   "strconv.ParseFloat: parsing \"not a number\": invalid syntax",
+			messages: []easyMsg{{}},
+		},
+	}
+
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			msg := message.New(nil)
+			for _, m := range test.messages {
+				part := message.NewPart([]byte(m.content))
+				if m.meta != nil {
+					for k, v := range m.meta {
+						part.Metadata().Set(k, v)
+					}
+				}
+				msg.Append(part)
+			}
+
+			e, err := tryParse(test.input, false)
+			require.NoError(t, err)
+
+			_, err = e.Exec(FunctionContext{
+				Index: test.index,
+				Msg:   msg,
+			})
+			assert.EqualError(t, err, test.errStr)
 		})
 	}
 }

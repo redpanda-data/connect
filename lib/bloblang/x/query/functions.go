@@ -9,51 +9,24 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
-	"golang.org/x/xerrors"
 )
 
 //------------------------------------------------------------------------------
 
-// ErrRecoverable represents a function execution error that can optionally be
-// recovered into a zero-value.
-type ErrRecoverable struct {
-	Recovered interface{}
-	Err       error
-}
-
-// Error implements the standard error interface.
-func (e *ErrRecoverable) Error() string {
-	return e.Err.Error()
-}
-
-//------------------------------------------------------------------------------
-
-type closureFn func(ctx FunctionContext) (interface{}, error)
-
-func (f closureFn) Exec(ctx FunctionContext) (interface{}, error) {
-	return f(ctx)
-}
-
-func (f closureFn) ToBytes(ctx FunctionContext) []byte {
-	v, err := f(ctx)
-	if err != nil {
-		if rec, ok := err.(*ErrRecoverable); ok {
-			return IToBytes(rec.Recovered)
+func fieldFunction(args ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		if ctx.Value == nil {
+			return nil, &ErrRecoverable{
+				Recovered: nil,
+				Err:       errors.New("context was undefined"),
+			}
 		}
-		return nil
-	}
-	return IToBytes(v)
-}
-
-func (f closureFn) ToString(ctx FunctionContext) string {
-	v, err := f(ctx)
-	if err != nil {
-		if rec, ok := err.(*ErrRecoverable); ok {
-			return IToString(rec.Recovered)
+		if len(args) == 0 {
+			return *ctx.Value, nil
 		}
-		return ""
-	}
-	return IToString(v)
+		path := args[0].(string)
+		return gabs.Wrap(*ctx.Value).Path(path).Data(), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
@@ -66,101 +39,99 @@ func literalFunction(v interface{}) Function {
 
 //------------------------------------------------------------------------------
 
-func withDynamicArgs(args []interface{}, fn functionCtor) Function {
+var _ = RegisterFunction("batch_index", false, func(...interface{}) (Function, error) {
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		dynArgs := make([]interface{}, 0, len(args))
-		for i, dArg := range args {
-			if fArg, isDyn := dArg.(Function); isDyn {
-				res, err := fArg.Exec(ctx)
-				if err != nil {
-					return nil, xerrors.Errorf("failed to extract input arg %v: %w", i, err)
-				}
-				dynArgs = append(dynArgs, res)
-			} else {
-				dynArgs = append(dynArgs, dArg)
-			}
+		return int64(ctx.Index), nil
+	}), nil
+})
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterFunction("batch_size", false, func(...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		return int64(ctx.Msg.Len()), nil
+	}), nil
+})
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterFunction("content", false, contentFunction)
+
+func contentFunction(...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		return ctx.Msg.Get(ctx.Index).Get(), nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterFunction(
+	"count", true, countFunction,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
+
+func countFunction(args ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		name := args[0].(string)
+
+		countersMux.Lock()
+		defer countersMux.Unlock()
+
+		var count int64
+		var exists bool
+
+		if count, exists = counters[name]; exists {
+			count++
+		} else {
+			count = 1
 		}
-		dynFunc, err := fn(dynArgs...)
+		counters[name] = count
+
+		return count, nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterFunction("deleted", false, func(...interface{}) (Function, error) {
+	return literalFunction(Delete(nil)), nil
+})
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterFunction("error", false, errorFunction)
+
+func errorFunction(...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		return ctx.Msg.Get(ctx.Index).Metadata().Get(types.FailFlagKey), nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterFunction("hostname", false, hostnameFunction)
+
+func hostnameFunction(...interface{}) (Function, error) {
+	return closureFn(func(_ FunctionContext) (interface{}, error) {
+		hn, err := os.Hostname()
 		if err != nil {
-			return nil, err
-		}
-		return dynFunc.Exec(ctx)
-	})
-}
-
-func enableDynamicArgs(fn functionCtor) functionCtor {
-	return func(args ...interface{}) (Function, error) {
-		for _, arg := range args {
-			if _, isDyn := arg.(Function); isDyn {
-				return withDynamicArgs(args, fn), nil
+			return nil, &ErrRecoverable{
+				Recovered: "",
+				Err:       err,
 			}
 		}
-		return fn(args...)
-	}
+		return hn, err
+	}), nil
 }
 
 //------------------------------------------------------------------------------
 
-type argCheckFn func(args []interface{}) error
-
-func checkArgs(fn functionCtor, checks ...argCheckFn) functionCtor {
-	return func(args ...interface{}) (Function, error) {
-		for _, check := range checks {
-			if err := check(args); err != nil {
-				return nil, err
-			}
-		}
-		return fn(args...)
-	}
-}
-
-func expectOneOrZeroArgs() argCheckFn {
-	return func(args []interface{}) error {
-		if len(args) > 1 {
-			return fmt.Errorf("expected one or zero parameters, received: %v", len(args))
-		}
-		return nil
-	}
-}
-
-func expectNArgs(i int) argCheckFn {
-	return func(args []interface{}) error {
-		if len(args) != i {
-			return fmt.Errorf("expected %v parameters, received: %v", i, len(args))
-		}
-		return nil
-	}
-}
-
-func expectStringArg(i int) argCheckFn {
-	return func(args []interface{}) error {
-		if len(args) <= i {
-			return nil
-		}
-		if _, isStr := args[i].(string); !isStr {
-			return fmt.Errorf("expected string param, received %T", args[i])
-		}
-		return nil
-	}
-}
-
-func expectIntArg(i int) argCheckFn {
-	return func(args []interface{}) error {
-		if len(args) <= i {
-			return nil
-		}
-		switch t := args[i].(type) {
-		case int64:
-		case float64:
-			args[i] = int64(t)
-		default:
-			return fmt.Errorf("expected string param, received %T", args[i])
-		}
-		return nil
-	}
-}
-
-//------------------------------------------------------------------------------
+var _ = RegisterFunction(
+	"json", true, jsonFunction,
+	ExpectOneOrZeroArgs(),
+	ExpectStringArg(0),
+)
 
 func jsonFunction(args ...interface{}) (Function, error) {
 	var argPath []string
@@ -182,6 +153,14 @@ func jsonFunction(args ...interface{}) (Function, error) {
 		return ISanitize(gPart.Data()), nil
 	}), nil
 }
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterFunction(
+	"meta", true, metadataFunction,
+	ExpectOneOrZeroArgs(),
+	ExpectStringArg(0),
+)
 
 func metadataFunction(args ...interface{}) (Function, error) {
 	if len(args) > 0 {
@@ -209,33 +188,67 @@ func metadataFunction(args ...interface{}) (Function, error) {
 	}), nil
 }
 
-func errorFunction(...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		return ctx.Msg.Get(ctx.Index).Metadata().Get(types.FailFlagKey), nil
+//------------------------------------------------------------------------------
+
+var _ = RegisterFunction("nothing", false, func(...interface{}) (Function, error) {
+	return literalFunction(Nothing(nil)), nil
+})
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterFunction("timestamp_unix", false, func(...interface{}) (Function, error) {
+	return closureFn(func(_ FunctionContext) (interface{}, error) {
+		return time.Now().Unix(), nil
+	}), nil
+})
+
+var _ = RegisterFunction("timestamp_unix_nano", false, func(...interface{}) (Function, error) {
+	return closureFn(func(_ FunctionContext) (interface{}, error) {
+		return time.Now().UnixNano(), nil
+	}), nil
+})
+
+var _ = RegisterFunction("timestamp", true, func(args ...interface{}) (Function, error) {
+	format := "Mon Jan 2 15:04:05 -0700 MST 2006"
+	if len(args) > 0 {
+		format = args[0].(string)
+	}
+	return closureFn(func(_ FunctionContext) (interface{}, error) {
+		return time.Now().Format(format), nil
+	}), nil
+}, ExpectOneOrZeroArgs(), ExpectStringArg(0))
+
+var _ = RegisterFunction("timestamp_utc", true, func(args ...interface{}) (Function, error) {
+	format := "Mon Jan 2 15:04:05 -0700 MST 2006"
+	if len(args) > 0 {
+		format = args[0].(string)
+	}
+	return closureFn(func(_ FunctionContext) (interface{}, error) {
+		return time.Now().In(time.UTC).Format(format), nil
+	}), nil
+}, ExpectOneOrZeroArgs(), ExpectStringArg(0))
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterFunction("uuid_v4", false, uuidFunction)
+
+func uuidFunction(...interface{}) (Function, error) {
+	return closureFn(func(_ FunctionContext) (interface{}, error) {
+		u4, err := uuid.NewV4()
+		if err != nil {
+			panic(err)
+		}
+		return u4.String(), nil
 	}), nil
 }
 
-func contentFunction(...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		return ctx.Msg.Get(ctx.Index).Get(), nil
-	}), nil
-}
+//------------------------------------------------------------------------------
 
-func fieldFunction(args ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		if ctx.Value == nil {
-			return nil, &ErrRecoverable{
-				Recovered: nil,
-				Err:       errors.New("context was undefined"),
-			}
-		}
-		if len(args) == 0 {
-			return *ctx.Value, nil
-		}
-		path := args[0].(string)
-		return gabs.Wrap(*ctx.Value).Path(path).Data(), nil
-	}), nil
-}
+var _ = RegisterFunction(
+	"var", true, varFunction,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
 
 func varFunction(args ...interface{}) (Function, error) {
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
@@ -254,115 +267,6 @@ func varFunction(args ...interface{}) (Function, error) {
 			Err:       fmt.Errorf("variable '%v' undefined", name),
 		}
 	}), nil
-}
-
-//------------------------------------------------------------------------------
-
-type functionCtor func(args ...interface{}) (Function, error)
-
-var functions = map[string]functionCtor{
-	"json": enableDynamicArgs(checkArgs(
-		jsonFunction,
-		expectOneOrZeroArgs(),
-		expectStringArg(0),
-	)),
-	"meta": enableDynamicArgs(checkArgs(
-		metadataFunction,
-		expectOneOrZeroArgs(),
-		expectStringArg(0),
-	)),
-	"error":   errorFunction,
-	"content": contentFunction,
-	"deleted": func(...interface{}) (Function, error) {
-		return literalFunction(Delete(nil)), nil
-	},
-	"nothing": func(...interface{}) (Function, error) {
-		return literalFunction(Nothing(nil)), nil
-	},
-	"var": enableDynamicArgs(checkArgs(
-		varFunction,
-		expectNArgs(1),
-		expectStringArg(0),
-	)),
-	"count": enableDynamicArgs(checkArgs(func(args ...interface{}) (Function, error) {
-		return closureFn(func(ctx FunctionContext) (interface{}, error) {
-			name := args[0].(string)
-
-			countersMux.Lock()
-			defer countersMux.Unlock()
-
-			var count int64
-			var exists bool
-
-			if count, exists = counters[name]; exists {
-				count++
-			} else {
-				count = 1
-			}
-			counters[name] = count
-
-			return count, nil
-		}), nil
-	}, expectNArgs(1), expectStringArg(0))),
-	"timestamp_unix": func(...interface{}) (Function, error) {
-		return closureFn(func(_ FunctionContext) (interface{}, error) {
-			return time.Now().Unix(), nil
-		}), nil
-	},
-	"timestamp_unix_nano": func(...interface{}) (Function, error) {
-		return closureFn(func(_ FunctionContext) (interface{}, error) {
-			return time.Now().UnixNano(), nil
-		}), nil
-	},
-	"timestamp": enableDynamicArgs(checkArgs(func(args ...interface{}) (Function, error) {
-		format := "Mon Jan 2 15:04:05 -0700 MST 2006"
-		if len(args) > 0 {
-			format = args[0].(string)
-		}
-		return closureFn(func(_ FunctionContext) (interface{}, error) {
-			return time.Now().Format(format), nil
-		}), nil
-	}, expectStringArg(0))),
-	"timestamp_utc": enableDynamicArgs(checkArgs(func(args ...interface{}) (Function, error) {
-		format := "Mon Jan 2 15:04:05 -0700 MST 2006"
-		if len(args) > 0 {
-			format = args[0].(string)
-		}
-		return closureFn(func(_ FunctionContext) (interface{}, error) {
-			return time.Now().In(time.UTC).Format(format), nil
-		}), nil
-	}, expectStringArg(0))),
-	"hostname": func(...interface{}) (Function, error) {
-		return closureFn(func(_ FunctionContext) (interface{}, error) {
-			hn, err := os.Hostname()
-			if err != nil {
-				return nil, &ErrRecoverable{
-					Recovered: "",
-					Err:       err,
-				}
-			}
-			return hn, err
-		}), nil
-	},
-	"batch_index": func(...interface{}) (Function, error) {
-		return closureFn(func(ctx FunctionContext) (interface{}, error) {
-			return int64(ctx.Index), nil
-		}), nil
-	},
-	"batch_size": func(...interface{}) (Function, error) {
-		return closureFn(func(ctx FunctionContext) (interface{}, error) {
-			return int64(ctx.Msg.Len()), nil
-		}), nil
-	},
-	"uuid_v4": func(...interface{}) (Function, error) {
-		return closureFn(func(_ FunctionContext) (interface{}, error) {
-			u4, err := uuid.NewV4()
-			if err != nil {
-				panic(err)
-			}
-			return u4.String(), nil
-		}), nil
-	},
 }
 
 //------------------------------------------------------------------------------

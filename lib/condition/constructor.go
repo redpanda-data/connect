@@ -43,6 +43,7 @@ var (
 	TypeAll                = "all"
 	TypeAnd                = "and"
 	TypeAny                = "any"
+	TypeBloblang           = "bloblang"
 	TypeBoundsCheck        = "bounds_check"
 	TypeCheckField         = "check_field"
 	TypeCheckInterpolation = "check_interpolation"
@@ -69,6 +70,7 @@ type Config struct {
 	All                AllConfig                `json:"all" yaml:"all"`
 	And                AndConfig                `json:"and" yaml:"and"`
 	Any                AnyConfig                `json:"any" yaml:"any"`
+	Bloblang           BloblangConfig           `json:"bloblang" yaml:"bloblang"`
 	BoundsCheck        BoundsCheckConfig        `json:"bounds_check" yaml:"bounds_check"`
 	CheckField         CheckFieldConfig         `json:"check_field" yaml:"check_field"`
 	CheckInterpolation CheckInterpolationConfig `json:"check_interpolation" yaml:"check_interpolation"`
@@ -93,6 +95,7 @@ func NewConfig() Config {
 	return Config{
 		Type:               "text",
 		And:                NewAndConfig(),
+		Bloblang:           NewBloblangConfig(),
 		BoundsCheck:        NewBoundsCheckConfig(),
 		CheckField:         NewCheckFieldConfig(),
 		CheckInterpolation: NewCheckInterpolationConfig(),

@@ -1,6 +1,10 @@
 package mapping
 
 import (
+	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -10,22 +14,44 @@ import (
 )
 
 func TestMappingErrors(t *testing.T) {
+	dir, err := ioutil.TempDir("", "benthos_mapping_errors")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(dir)
+	})
+
+	badMapFile := filepath.Join(dir, "bad_map.blobl")
+	noMapsFile := filepath.Join(dir, "no_maps.blobl")
+	goodMapFile := filepath.Join(dir, "good_map.blobl")
+
+	require.NoError(t, ioutil.WriteFile(badMapFile, []byte(`not a map bruh`), 0777))
+	require.NoError(t, ioutil.WriteFile(noMapsFile, []byte(`foo = "this is valid but has no maps"`), 0777))
+	require.NoError(t, ioutil.WriteFile(goodMapFile, []byte(`map foo { foo = "this is valid" }`), 0777))
+
 	tests := map[string]struct {
 		mapping string
 		err     string
 	}{
 		"no mappings": {
 			mapping: ``,
-			err:     `failed to parse mapping: line 1 char 1: expected one of: [map let meta target-path]`,
+			err:     `failed to parse mapping: line 1 char 1: expected one of: [import map let meta target-path]`,
 		},
 		"no mappings 2": {
 			mapping: `
    `,
-			err: `failed to parse mapping: line 2 char 4: expected one of: [map let meta target-path]`,
+			err: `failed to parse mapping: line 2 char 4: expected one of: [import map let meta target-path]`,
 		},
 		"double mapping": {
 			mapping: `foo = bar bar = baz`,
 			err:     `failed to parse mapping: line 1 char 11: expected: line-break`,
+		},
+		"double mapping line breaks": {
+			mapping: `
+
+foo = bar bar = baz
+
+`,
+			err: `failed to parse mapping: line 3 char 11: expected: line-break`,
 		},
 		"double mapping line 2": {
 			mapping: `let a = "a"
@@ -44,18 +70,18 @@ foo = bar bar = baz
 		},
 		"bad char": {
 			mapping: `!foo = bar`,
-			err:     `failed to parse mapping: line 1 char 1: expected one of: [map let meta target-path]`,
+			err:     `failed to parse mapping: line 1 char 1: expected one of: [import map let meta target-path]`,
 		},
 		"bad char 2": {
 			mapping: `let foo = bar
 !foo = bar`,
-			err: `failed to parse mapping: line 2 char 1: expected one of: [map let meta target-path]`,
+			err: `failed to parse mapping: line 2 char 1: expected one of: [import map let meta target-path]`,
 		},
 		"bad char 3": {
 			mapping: `let foo = bar
 !foo = bar
 this = that`,
-			err: `failed to parse mapping: line 2 char 1: expected one of: [map let meta target-path]`,
+			err: `failed to parse mapping: line 2 char 1: expected one of: [import map let meta target-path]`,
 		},
 		"bad query": {
 			mapping: `foo = blah.`,
@@ -82,6 +108,32 @@ foo = bar.apply("foo")`,
 foo = bar.apply("foo")`,
 			err: `failed to parse mapping: line 1 char 5: required: map-name`,
 		},
+		"no file import": {
+			mapping: `import "this file doesnt exist (i hope)"
+
+foo = bar.apply("from_import")`,
+			err: `failed to parse mapping: line 1 char 1: failed to read import: open this file doesnt exist (i hope): no such file or directory`,
+		},
+		"bad file import": {
+			mapping: fmt.Sprintf(`import "%v"
+
+foo = bar.apply("from_import")`, badMapFile),
+			err: fmt.Sprintf(`failed to parse mapping: line 1 char 1: failed to parse import '%v': line 1 char 5: expected: =`, badMapFile),
+		},
+		"no maps file import": {
+			mapping: fmt.Sprintf(`import "%v"
+
+foo = bar.apply("from_import")`, noMapsFile),
+			err: fmt.Sprintf(`failed to parse mapping: line 1 char 1: no maps to import from '%v'`, noMapsFile),
+		},
+		"colliding maps file import": {
+			mapping: fmt.Sprintf(`map "foo" { this = that }			
+
+import "%v"
+
+foo = bar.apply("foo")`, goodMapFile),
+			err: fmt.Sprintf(`failed to parse mapping: line 3 char 1: map name collisions from import '%v': [foo]`, goodMapFile),
+		},
 	}
 
 	for name, test := range tests {
@@ -95,6 +147,18 @@ foo = bar.apply("foo")`,
 }
 
 func TestMappings(t *testing.T) {
+	dir, err := ioutil.TempDir("", "benthos_mapping")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(dir)
+	})
+
+	goodMapFile := filepath.Join(dir, "foo_map.blobl")
+	require.NoError(t, ioutil.WriteFile(goodMapFile, []byte(`map foo {
+  foo = "this is valid"
+  nested = this
+}`), 0777))
+
 	type part struct {
 		Content string
 		Meta    map[string]string
@@ -316,6 +380,7 @@ root = this.apply("foo")`,
 }
 map bar {
   meta "bar applied" = "true"
+  static = "this is valid"
   bar = this
 }
 root = this.apply("foo")`,
@@ -324,12 +389,23 @@ root = this.apply("foo")`,
 			},
 			output: []part{
 				{
-					Content: `{"foo":{"bar":{"outter":{"inner":"hello world"}}}}`,
+					Content: `{"foo":{"bar":{"outter":{"inner":"hello world"}},"static":"this is valid"}}`,
 					Meta: map[string]string{
 						"foo applied": `true`,
 						"bar applied": `true`,
 					},
 				},
+			},
+		},
+		"test imported map": {
+			mapping: fmt.Sprintf(`import "%v"
+
+root = this.apply("foo")`, goodMapFile),
+			input: []part{
+				{Content: `{"outter":{"inner":"hello world"}}`},
+			},
+			output: []part{
+				{Content: `{"foo":"this is valid","nested":{"outter":{"inner":"hello world"}}}`},
 			},
 		},
 	}
