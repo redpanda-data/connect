@@ -18,6 +18,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 //------------------------------------------------------------------------------
@@ -121,6 +123,7 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 			t.Error(err)
 			return
 		}
+		w.Header().Add("fooheader", "foovalue")
 		w.Write([]byte("echo: "))
 		w.Write(b)
 	}))
@@ -142,21 +145,14 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 		testMsg := message.New([][]byte{[]byte(testStr)})
 		roundtrip.AddResultStore(testMsg, resultStore)
 
-		if err = h.Write(testMsg); err != nil {
-			t.Error(err)
-		}
-
+		require.NoError(t, h.Write(testMsg))
 		resMsgs := resultStore.Get()
-		if len(resMsgs) != 1 {
-			t.Fatalf("Wrong count of result msgs: %v != 1", len(resMsgs))
-		}
+		require.Len(t, resMsgs, 1)
+
 		resMsg := resMsgs[0]
-		if resMsg.Len() != 1 {
-			t.Fatalf("Wrong # parts: %v != %v", resMsg.Len(), 1)
-		}
-		if exp, actual := "echo: "+testStr, string(resMsg.Get(0).Get()); exp != actual {
-			t.Fatalf("Wrong result, %v != %v", exp, actual)
-		}
+		require.Equal(t, 1, resMsg.Len())
+		assert.Equal(t, "echo: "+testStr, string(resMsg.Get(0).Get()))
+		assert.Equal(t, "", resMsg.Get(0).Metadata().Get("fooheader"))
 	}
 
 	h.CloseAsync()
@@ -165,6 +161,53 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 	}
 }
 
+func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
+	nTestLoops := 1000
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		w.Header().Add("fooheader", "foovalue")
+		w.Write([]byte("echo: "))
+		w.Write(b)
+	}))
+	defer ts.Close()
+
+	conf := NewHTTPClientConfig()
+	conf.URL = ts.URL + "/testpost"
+	conf.PropagateResponse = true
+	conf.CopyResponseHeaders = true
+
+	h, err := NewHTTPClient(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < nTestLoops; i++ {
+		testStr := fmt.Sprintf("test%v", i)
+
+		resultStore := roundtrip.NewResultStore()
+		testMsg := message.New([][]byte{[]byte(testStr)})
+		roundtrip.AddResultStore(testMsg, resultStore)
+
+		require.NoError(t, h.Write(testMsg))
+		resMsgs := resultStore.Get()
+		require.Len(t, resMsgs, 1)
+
+		resMsg := resMsgs[0]
+		require.Equal(t, 1, resMsg.Len())
+		assert.Equal(t, "echo: "+testStr, string(resMsg.Get(0).Get()))
+		assert.Equal(t, "foovalue", resMsg.Get(0).Metadata().Get("fooheader"))
+	}
+
+	h.CloseAsync()
+	if err = h.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
 func TestHTTPClientMultipart(t *testing.T) {
 	nTestLoops := 1000
 

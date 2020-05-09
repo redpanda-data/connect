@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 
 - Prevented a crash that might occur with high-concurrent access of
   `http_server` metrics with labels.
+- The `http_client` output now respects the `copy_response_headers` field.
 
 ## 3.12.0 - 2020-04-19
 
