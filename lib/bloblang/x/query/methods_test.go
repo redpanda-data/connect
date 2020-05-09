@@ -259,14 +259,14 @@ func TestMethods(t *testing.T) {
 			},
 		},
 		"test map json": {
-			input:  `json("foo").map(field("bar"))`,
+			input:  `json("foo").map(bar)`,
 			output: `yep`,
 			messages: []easyMsg{
 				{content: `{"foo":{"bar":"yep"}}`},
 			},
 		},
 		"test map json 2": {
-			input:  `json("foo").map(field("bar") + 10)`,
+			input:  `json("foo").map(bar + 10)`,
 			output: `13`,
 			messages: []easyMsg{
 				{content: `{"foo":{"bar":"3"}}`},
@@ -308,6 +308,128 @@ func TestMethods(t *testing.T) {
 				Index: test.index,
 				Msg:   msg,
 			}))
+			assert.Equal(t, test.output, res)
+		})
+	}
+}
+
+func TestMethodMaps(t *testing.T) {
+	type easyMsg struct {
+		content string
+		meta    map[string]string
+	}
+
+	tests := map[string]struct {
+		input    string
+		output   interface{}
+		err      string
+		maps     map[string]Function
+		messages []easyMsg
+		index    int
+	}{
+		"no maps": {
+			input:    `"foo".apply("nope")`,
+			err:      "no maps were found",
+			messages: []easyMsg{{}},
+		},
+		"map not exist": {
+			input:    `"foo".apply("nope")`,
+			err:      "map nope was not found",
+			maps:     map[string]Function{},
+			messages: []easyMsg{{}},
+		},
+		"map static": {
+			input:  `"foo".apply("foo")`,
+			output: "hello world",
+			maps: map[string]Function{
+				"foo": literalFunction("hello world"),
+			},
+			messages: []easyMsg{{}},
+		},
+		"map context": {
+			input:  `json().apply("foo")`,
+			output: "this value",
+			maps: map[string]Function{
+				"foo": func() Function {
+					f, _ := fieldFunction("foo")
+					return f
+				}(),
+			},
+			messages: []easyMsg{{
+				content: `{"foo":"this value"}`,
+			}},
+		},
+		"map dynamic": {
+			input:  `json().apply(meta("dyn_map"))`,
+			output: "this value",
+			maps: map[string]Function{
+				"foo": func() Function {
+					f, _ := fieldFunction("foo")
+					return f
+				}(),
+				"bar": func() Function {
+					f, _ := fieldFunction("bar")
+					return f
+				}(),
+			},
+			messages: []easyMsg{{
+				content: `{"foo":"this value","bar":"and this value"}`,
+				meta: map[string]string{
+					"dyn_map": "foo",
+				},
+			}},
+		},
+		"map dynamic 2": {
+			input:  `json().apply(meta("dyn_map"))`,
+			output: "and this value",
+			maps: map[string]Function{
+				"foo": func() Function {
+					f, _ := fieldFunction("foo")
+					return f
+				}(),
+				"bar": func() Function {
+					f, _ := fieldFunction("bar")
+					return f
+				}(),
+			},
+			messages: []easyMsg{{
+				content: `{"foo":"this value","bar":"and this value"}`,
+				meta: map[string]string{
+					"dyn_map": "bar",
+				},
+			}},
+		},
+	}
+
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			msg := message.New(nil)
+			for _, m := range test.messages {
+				part := message.NewPart([]byte(m.content))
+				if m.meta != nil {
+					for k, v := range m.meta {
+						part.Metadata().Set(k, v)
+					}
+				}
+				msg.Append(part)
+			}
+
+			e, err := tryParse(test.input, false)
+			require.NoError(t, err)
+
+			res, err := e.Exec(FunctionContext{
+				Maps:  test.maps,
+				Index: test.index,
+				Msg:   msg,
+			})
+			if len(test.err) > 0 {
+				require.EqualError(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+			}
 			assert.Equal(t, test.output, res)
 		})
 	}

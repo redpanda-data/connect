@@ -284,7 +284,7 @@ func resolveArithmetic(fns []Function, ops []arithmeticOp) (Function, error) {
 		return nil, fmt.Errorf("mismatch of functions (%v) to arithmetic operators (%v)", len(fns), len(ops))
 	}
 
-	// First pass to resolve division and multiplication
+	// First pass to resolve division, multiplication and coalesce
 	fnsNew, opsNew := []Function{fns[0]}, []arithmeticOp{}
 	for i, op := range ops {
 		switch op {
@@ -292,6 +292,8 @@ func resolveArithmetic(fns []Function, ops []arithmeticOp) (Function, error) {
 			fnsNew[len(fnsNew)-1] = multiply(fnsNew[len(fnsNew)-1], fns[i+1])
 		case arithmeticDiv:
 			fnsNew[len(fnsNew)-1] = divide(fnsNew[len(fnsNew)-1], fns[i+1])
+		case arithmeticPipe:
+			fnsNew[len(fnsNew)-1] = coalesce(fnsNew[len(fnsNew)-1], fns[i+1])
 		default:
 			fnsNew = append(fnsNew, fns[i+1])
 			opsNew = append(opsNew, op)
@@ -302,68 +304,71 @@ func resolveArithmetic(fns []Function, ops []arithmeticOp) (Function, error) {
 		return fns[0], nil
 	}
 
-	// Next, resolve additions and subtractions
-	var addPile, subPile []Function
-	addPile = append(addPile, fns[0])
+	// Second pass to resolve addition and subtraction
+	fnsNew, opsNew = []Function{fns[0]}, []arithmeticOp{}
 	for i, op := range ops {
 		switch op {
 		case arithmeticAdd:
-			addPile = append(addPile, fns[i+1])
+			fnsNew[len(fnsNew)-1] = add([]Function{fnsNew[len(fnsNew)-1], fns[i+1]})
 		case arithmeticSub:
-			subPile = append(subPile, fns[i+1])
-		case arithmeticAnd,
-			arithmeticOr:
-			var rhs Function
-			lhs, err := resolveArithmetic(fns[:i+1], ops[:i])
-			if err == nil {
-				rhs, err = resolveArithmetic(fns[i+1:], ops[i+1:])
-			}
-			if err != nil {
-				return nil, err
-			}
-			return logicalBool(lhs, rhs, op)
+			fnsNew[len(fnsNew)-1] = sub(fnsNew[len(fnsNew)-1], fns[i+1])
+		default:
+			fnsNew = append(fnsNew, fns[i+1])
+			opsNew = append(opsNew, op)
+		}
+	}
+	fns, ops = fnsNew, opsNew
+	if len(fns) == 1 {
+		return fns[0], nil
+	}
+
+	// Third pass for numerical comparison
+	var err error
+	fnsNew, opsNew = []Function{fns[0]}, []arithmeticOp{}
+	for i, op := range ops {
+		switch op {
 		case arithmeticEq,
 			arithmeticNeq:
-			var rhs Function
-			lhs, err := resolveArithmetic(fns[:i+1], ops[:i])
-			if err == nil {
-				rhs, err = resolveArithmetic(fns[i+1:], ops[i+1:])
-			}
-			if err != nil {
+			if fnsNew[len(fnsNew)-1], err = compareGeneric(fnsNew[len(fnsNew)-1], fns[i+1], op); err != nil {
 				return nil, err
 			}
-			return compareGeneric(lhs, rhs, op)
 		case arithmeticGt,
 			arithmeticGte,
 			arithmeticLt,
 			arithmeticLte:
-			var rhs Function
-			lhs, err := resolveArithmetic(fns[:i+1], ops[:i])
-			if err == nil {
-				rhs, err = resolveArithmetic(fns[i+1:], ops[i+1:])
-			}
-			if err != nil {
+			if fnsNew[len(fnsNew)-1], err = compareFloat(fnsNew[len(fnsNew)-1], fns[i+1], op); err != nil {
 				return nil, err
 			}
-			return compareFloat(lhs, rhs, op)
-		case arithmeticPipe:
-			var rhs Function
-			lhs, err := resolveArithmetic(fns[:i+1], ops[:i])
-			if err == nil {
-				rhs, err = resolveArithmetic(fns[i+1:], ops[i+1:])
-			}
-			if err != nil {
-				return nil, err
-			}
-			return coalesce(lhs, rhs), nil
+		default:
+			fnsNew = append(fnsNew, fns[i+1])
+			opsNew = append(opsNew, op)
 		}
 	}
-
-	fn := add(addPile)
-	if len(subPile) > 0 {
-		fn = sub(fn, add(subPile))
+	fns, ops = fnsNew, opsNew
+	if len(fns) == 1 {
+		return fns[0], nil
 	}
-	return fn, nil
+
+	// Fourth pass for boolean operators
+	fnsNew, opsNew = []Function{fns[0]}, []arithmeticOp{}
+	for i, op := range ops {
+		switch op {
+		case arithmeticAnd,
+			arithmeticOr:
+			if fnsNew[len(fnsNew)-1], err = logicalBool(fnsNew[len(fnsNew)-1], fns[i+1], op); err != nil {
+				return nil, err
+			}
+		default:
+			fnsNew = append(fnsNew, fns[i+1])
+			opsNew = append(opsNew, op)
+		}
+	}
+	fns, ops = fnsNew, opsNew
+	if len(fns) == 1 {
+		return fns[0], nil
+	}
+
+	return nil, fmt.Errorf("unresolved arithmetic operators (%v)", ops)
 }
 
 //------------------------------------------------------------------------------

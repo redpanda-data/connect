@@ -17,6 +17,7 @@ type Message interface {
 // FunctionContext provides access to a root message, its index within the batch, and
 type FunctionContext struct {
 	Value  *interface{}
+	Maps   map[string]Function
 	Vars   map[string]interface{}
 	Index  int
 	Msg    Message
@@ -42,13 +43,13 @@ type Function interface {
 
 // Parse parses an input into a query.Function.
 func Parse(input []rune) parser.Result {
-	rootParser := parser.AnyOf(
+	rootParser := parseWithTails(parser.AnyOf(
 		matchExpressionParser(),
-		parseWithTails(bracketsExpressionParser()),
-		parseWithTails(literalValueParser()),
-		parseWithTails(functionParser()),
-		parseWithTails(fieldLiteralRootParser()),
-	)
+		bracketsExpressionParser(),
+		literalValueParser(),
+		functionParser(),
+		fieldLiteralRootParser(),
+	))
 	res := parser.SpacesAndTabs()(input)
 	i := len(input) - len(res.Remaining)
 	if res = arithmeticParser(rootParser)(res.Remaining); res.Err != nil {

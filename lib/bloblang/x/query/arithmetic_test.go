@@ -210,6 +210,16 @@ func TestArithmetic(t *testing.T) {
 			output:   `true`,
 			messages: []easyMsg{{}},
 		},
+		"compare ints 9": {
+			input:    `8 > 3 * 5`,
+			output:   `false`,
+			messages: []easyMsg{{}},
+		},
+		"compare ints chained boolean": {
+			input:    `8 > 3 && 1 < 4`,
+			output:   `true`,
+			messages: []easyMsg{{}},
+		},
 		"coalesce json": {
 			input:  `json("foo") | json("bar")`,
 			output: `from_bar`,

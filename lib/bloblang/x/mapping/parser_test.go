@@ -16,28 +16,71 @@ func TestMappingErrors(t *testing.T) {
 	}{
 		"no mappings": {
 			mapping: ``,
-			err:     `failed to parse mapping: char 0: expected one of: [let meta target-path]`,
+			err:     `failed to parse mapping: line 1 char 1: expected one of: [map let meta target-path]`,
 		},
 		"no mappings 2": {
 			mapping: `
    `,
-			err: `failed to parse mapping: char 4: expected one of: [let meta target-path]`,
+			err: `failed to parse mapping: line 2 char 4: expected one of: [map let meta target-path]`,
 		},
 		"double mapping": {
 			mapping: `foo = bar bar = baz`,
-			err:     `char 10: unexpected content at the end of mapping: bar = baz`,
+			err:     `failed to parse mapping: line 1 char 11: expected: line-break`,
+		},
+		"double mapping line 2": {
+			mapping: `let a = "a"
+foo = bar bar = baz`,
+			err: `failed to parse mapping: line 2 char 11: expected: line-break`,
+		},
+		"double mapping line 3": {
+			mapping: `let a = "a"
+foo = bar bar = baz
+	let a = "a"`,
+			err: "failed to parse mapping: line 2 char 11: expected: line-break",
 		},
 		"bad mapping": {
 			mapping: `foo wat bar`,
-			err:     `failed to parse mapping: char 4: expected: =`,
+			err:     `failed to parse mapping: line 1 char 5: expected: =`,
+		},
+		"bad char": {
+			mapping: `!foo = bar`,
+			err:     `failed to parse mapping: line 1 char 1: expected one of: [map let meta target-path]`,
+		},
+		"bad char 2": {
+			mapping: `let foo = bar
+!foo = bar`,
+			err: `failed to parse mapping: line 2 char 1: expected one of: [map let meta target-path]`,
+		},
+		"bad char 3": {
+			mapping: `let foo = bar
+!foo = bar
+this = that`,
+			err: `failed to parse mapping: line 2 char 1: expected one of: [map let meta target-path]`,
 		},
 		"bad query": {
 			mapping: `foo = blah.`,
-			err:     `failed to parse mapping: char 11: required one of: [method field-path]`,
+			err:     `failed to parse mapping: line 1 char 12: required one of: [method field-path]`,
 		},
 		"bad variable assign": {
 			mapping: `let = blah`,
-			err:     `failed to parse mapping: char 4: required: variable-name`,
+			err:     `failed to parse mapping: line 1 char 5: required: variable-name`,
+		},
+		"double map definition": {
+			mapping: `map foo {
+  foo = bar
+}
+map foo {
+  foo = bar
+}
+foo = bar.apply("foo")`,
+			err: `failed to parse mapping: line 4 char 1: map name collision: foo`,
+		},
+		"no name map definition": {
+			mapping: `map {
+  foo = bar
+}
+foo = bar.apply("foo")`,
+			err: `failed to parse mapping: line 1 char 5: required: map-name`,
 		},
 	}
 
@@ -188,6 +231,103 @@ meta bar = 5 + 2`,
 					Meta: map[string]string{
 						"foo": "foo",
 						"bar": "7",
+					},
+				},
+			},
+		},
+		"field called root": {
+			mapping: `root.root = "not set at root"`,
+			input: []part{
+				{Content: `this isn't json`},
+			},
+			output: []part{
+				{Content: `{"root":"not set at root"}`},
+			},
+		},
+		"quoted paths": {
+			mapping: `
+meta "foo bar" = "hello world"
+"root.bar baz.test" = 5 + 2`,
+			input: []part{
+				{Content: `this isn't json`},
+			},
+			output: []part{
+				{
+					Content: `{"bar baz":{"test":7}}`,
+					Meta: map[string]string{
+						"foo bar": "hello world",
+					},
+				},
+			},
+		},
+		"test mapping raw content": {
+			mapping: `meta content = content()
+foo = "static"`,
+			input: []part{
+				{Content: `hello world`},
+			},
+			output: []part{
+				{
+					Content: `{"foo":"static"}`,
+					Meta: map[string]string{
+						"content": `hello world`,
+					},
+				},
+			},
+		},
+		"test mapping raw json content": {
+			mapping: `meta content = content()
+foo = "static"`,
+			input: []part{
+				{Content: `{"foo":{"bar":"baz"}}`},
+			},
+			output: []part{
+				{
+					Content: `{"foo":"static"}`,
+					Meta: map[string]string{
+						"content": `{"foo":{"bar":"baz"}}`,
+					},
+				},
+			},
+		},
+		"test maps": {
+			mapping: `map foo {
+  meta "map applied" = "true"
+  foo = "static foo"
+  bar = this
+}
+root = this.apply("foo")`,
+			input: []part{
+				{Content: `{"outter":{"inner":"hello world"}}`},
+			},
+			output: []part{
+				{
+					Content: `{"bar":{"outter":{"inner":"hello world"}},"foo":"static foo"}`,
+					Meta: map[string]string{
+						"map applied": `true`,
+					},
+				},
+			},
+		},
+		"test nested maps": {
+			mapping: `map foo {
+  meta "foo applied" = "true"
+  foo = this.apply("bar")
+}
+map bar {
+  meta "bar applied" = "true"
+  bar = this
+}
+root = this.apply("foo")`,
+			input: []part{
+				{Content: `{"outter":{"inner":"hello world"}}`},
+			},
+			output: []part{
+				{
+					Content: `{"foo":{"bar":{"outter":{"inner":"hello world"}}}}`,
+					Meta: map[string]string{
+						"foo applied": `true`,
+						"bar applied": `true`,
 					},
 				},
 			},

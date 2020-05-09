@@ -321,6 +321,30 @@ func TestFunctions(t *testing.T) {
 				{content: `barbaz`},
 			},
 		},
+		"batch index": {
+			input:  `batch_index()`,
+			output: `1`,
+			index:  1,
+			messages: []easyMsg{
+				{}, {},
+			},
+		},
+		"batch index 2": {
+			input:  `batch_index()`,
+			output: `0`,
+			index:  0,
+			messages: []easyMsg{
+				{}, {},
+			},
+		},
+		"batch index 3": {
+			input:  `batch_index().from(1)`,
+			output: `1`,
+			index:  0,
+			messages: []easyMsg{
+				{}, {},
+			},
+		},
 		"batch size": {
 			input:  `batch_size()`,
 			output: `2`,
@@ -336,11 +360,11 @@ func TestFunctions(t *testing.T) {
 			},
 		},
 		"field no context": {
-			input:  `field()`,
+			input:  `this`,
 			output: `null`,
 		},
 		"field root": {
-			input:  `field()`,
+			input:  `this`,
 			output: `test`,
 			value: func() *interface{} {
 				var v interface{} = "test"
@@ -348,7 +372,7 @@ func TestFunctions(t *testing.T) {
 			}(),
 		},
 		"field root null": {
-			input:  `field()`,
+			input:  `this`,
 			output: `null`,
 			value: func() *interface{} {
 				var v interface{} = nil
@@ -356,7 +380,7 @@ func TestFunctions(t *testing.T) {
 			}(),
 		},
 		"field map": {
-			input:  `field("foo")`,
+			input:  `this.foo`,
 			output: `hello world`,
 			value: func() *interface{} {
 				var v interface{} = map[string]interface{}{

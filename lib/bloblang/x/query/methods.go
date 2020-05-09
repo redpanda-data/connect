@@ -1,6 +1,7 @@
 package query
 
 import (
+	"errors"
 	"fmt"
 
 	"golang.org/x/xerrors"
@@ -26,6 +27,52 @@ func (f *fromMethod) ToBytes(ctx FunctionContext) []byte {
 func (f *fromMethod) ToString(ctx FunctionContext) string {
 	ctx.Index = f.index
 	return f.target.ToString(ctx)
+}
+
+//------------------------------------------------------------------------------
+
+func methodWithDynamicArgs(args []interface{}, target Function, ctor methodCtor) Function {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		dynArgs := make([]interface{}, 0, len(args))
+		for i, dArg := range args {
+			if fArg, isDyn := dArg.(Function); isDyn {
+				res, err := fArg.Exec(ctx)
+				if err != nil {
+					return nil, xerrors.Errorf("failed to extract input arg %v: %w", i, err)
+				}
+				dynArgs = append(dynArgs, res)
+			} else {
+				dynArgs = append(dynArgs, dArg)
+			}
+		}
+		dynFunc, err := ctor(target, dynArgs...)
+		if err != nil {
+			return nil, err
+		}
+		return dynFunc.Exec(ctx)
+	})
+}
+
+func enableMethodDynamicArgs(fn methodCtor) methodCtor {
+	return func(target Function, args ...interface{}) (Function, error) {
+		for _, arg := range args {
+			if _, isDyn := arg.(Function); isDyn {
+				return methodWithDynamicArgs(args, target, fn), nil
+			}
+		}
+		return fn(target, args...)
+	}
+}
+
+func checkMethodArgs(fn methodCtor, checks ...argCheckFn) methodCtor {
+	return func(target Function, args ...interface{}) (Function, error) {
+		for _, check := range checks {
+			if err := check(args); err != nil {
+				return nil, err
+			}
+		}
+		return fn(target, args...)
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -96,7 +143,41 @@ func forEachMethod(target Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var methods = map[string]func(target Function, args ...interface{}) (Function, error){
+type methodCtor func(target Function, args ...interface{}) (Function, error)
+
+var methods = map[string]methodCtor{
+	"apply": enableMethodDynamicArgs(checkMethodArgs(
+		func(target Function, args ...interface{}) (Function, error) {
+			targetMap := args[0].(string)
+			return closureFn(func(ctx FunctionContext) (interface{}, error) {
+				res, err := target.Exec(ctx)
+				if err != nil {
+					return nil, err
+				}
+				ctx.Value = &res
+
+				if ctx.Maps == nil {
+					return nil, &ErrRecoverable{
+						Err:       errors.New("no maps were found"),
+						Recovered: res,
+					}
+				}
+				m, ok := ctx.Maps[targetMap]
+				if !ok {
+					return nil, &ErrRecoverable{
+						Err:       fmt.Errorf("map %v was not found", targetMap),
+						Recovered: res,
+					}
+				}
+
+				// ISOLATED VARIABLES
+				ctx.Vars = map[string]interface{}{}
+				return m.Exec(ctx)
+			}), nil
+		},
+		expectNArgs(1),
+		expectStringArg(0),
+	)),
 	"catch": func(fn Function, args ...interface{}) (Function, error) {
 		if len(args) != 1 {
 			return nil, fmt.Errorf("expected one argument, received: %v", len(args))

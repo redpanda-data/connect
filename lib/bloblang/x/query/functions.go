@@ -279,11 +279,6 @@ var functions = map[string]functionCtor{
 	"nothing": func(...interface{}) (Function, error) {
 		return literalFunction(Nothing(nil)), nil
 	},
-	"field": enableDynamicArgs(checkArgs(
-		fieldFunction,
-		expectOneOrZeroArgs(),
-		expectStringArg(0),
-	)),
 	"var": enableDynamicArgs(checkArgs(
 		varFunction,
 		expectNArgs(1),
@@ -349,9 +344,14 @@ var functions = map[string]functionCtor{
 			return hn, err
 		}), nil
 	},
+	"batch_index": func(...interface{}) (Function, error) {
+		return closureFn(func(ctx FunctionContext) (interface{}, error) {
+			return int64(ctx.Index), nil
+		}), nil
+	},
 	"batch_size": func(...interface{}) (Function, error) {
 		return closureFn(func(ctx FunctionContext) (interface{}, error) {
-			return ctx.Msg.Len(), nil
+			return int64(ctx.Msg.Len()), nil
 		}), nil
 	},
 	"uuid_v4": func(...interface{}) (Function, error) {

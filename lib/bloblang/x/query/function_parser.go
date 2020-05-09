@@ -206,25 +206,17 @@ func fieldLiteralMapParser(ctxFn Function) parser.Type {
 
 func fieldLiteralRootParser() parser.Type {
 	fieldPathParser := parser.InterceptExpectedError(
-		parser.AnyOf(
-			parser.Sequence(
-				parser.Discard(
-					parser.Match("this."),
-				),
-				parser.JoinStringSliceResult(
-					parser.AllOf(
-						parser.AnyOf(
-							parser.InRange('a', 'z'),
-							parser.InRange('A', 'Z'),
-							parser.InRange('0', '9'),
-							parser.InRange('*', '-'),
-							parser.Char('_'),
-							parser.Char('~'),
-						),
-					),
+		parser.JoinStringSliceResult(
+			parser.AllOf(
+				parser.AnyOf(
+					parser.InRange('a', 'z'),
+					parser.InRange('A', 'Z'),
+					parser.InRange('0', '9'),
+					parser.InRange('*', '-'),
+					parser.Char('_'),
+					parser.Char('~'),
 				),
 			),
-			parser.Match("this"),
 		),
 		"field-path",
 	)
@@ -238,16 +230,11 @@ func fieldLiteralRootParser() parser.Type {
 		var fn Function
 		var err error
 
-		switch t := res.Result.(type) {
-		case []interface{}:
-			path := t[1].(string)
-			if path == "this" {
-				fn, err = fieldFunction()
-			} else {
-				fn, err = fieldFunction(path)
-			}
-		default:
+		path := res.Result.(string)
+		if path == "this" {
 			fn, err = fieldFunction()
+		} else {
+			fn, err = fieldFunction(path)
 		}
 		if err != nil {
 			return parser.Result{

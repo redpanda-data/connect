@@ -7,7 +7,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/opentracing/opentracing-go"
 	"golang.org/x/xerrors"
 )
@@ -28,10 +27,6 @@ For more information about Bloblang
 
 Check out the [examples section](#examples) in order to see how this processor
 can be used.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("mapping", "The Bloblang mapping to apply"),
-			partsFieldSpec,
-		},
 		Footnotes: `
 ## Examples
 
@@ -42,17 +37,11 @@ TODO`,
 //------------------------------------------------------------------------------
 
 // BloblangConfig contains configuration fields for the Bloblang processor.
-type BloblangConfig struct {
-	Parts   []int  `json:"parts" yaml:"parts"`
-	Mapping string `json:"mapping" yaml:"mapping"`
-}
+type BloblangConfig string
 
 // NewBloblangConfig returns a BloblangConfig with default values.
 func NewBloblangConfig() BloblangConfig {
-	return BloblangConfig{
-		Parts:   []int{},
-		Mapping: "",
-	}
+	return ""
 }
 
 //------------------------------------------------------------------------------
@@ -76,14 +65,13 @@ type Bloblang struct {
 func NewBloblang(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	exec, err := mapping.NewExecutor(conf.Bloblang.Mapping)
+	exec, err := mapping.NewExecutor(string(conf.Bloblang))
 	if err != nil {
 		return nil, xerrors.Errorf("failed to parse mapping: %w", err)
 	}
 
 	return &Bloblang{
-		parts: conf.Bloblang.Parts,
-		exec:  exec,
+		exec: exec,
 
 		log:   log,
 		stats: stats,
@@ -112,7 +100,7 @@ func (b *Bloblang) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 		return nil
 	}
 
-	IteratePartsWithSpan(TypeBloblang, b.parts, newMsg, proc)
+	IteratePartsWithSpan(TypeBloblang, nil, newMsg, proc)
 
 	b.mBatchSent.Incr(1)
 	b.mSent.Incr(int64(newMsg.Len()))
