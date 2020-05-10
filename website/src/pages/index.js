@@ -33,7 +33,7 @@ pipeline:
 output:
   s3:
     bucket: TODO
-    path: "\${! meta("kafka_topic") }/\${! json("message.id") }.json"`,
+    path: \${! meta("kafka_topic") }/\${! json("message.id") }.json`,
   },
   {
     label: 'Multiplexing',

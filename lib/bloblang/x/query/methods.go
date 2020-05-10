@@ -162,6 +162,38 @@ func fromAllMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"length", false, lengthMethod,
+	ExpectNArgs(0),
+)
+
+func lengthMethod(target Function, _ ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		var length int64
+		switch t := v.(type) {
+		case string:
+			length = int64(len(t))
+		case []interface{}:
+			length = int64(len(t))
+		case map[string]interface{}:
+			length = int64(len(t))
+		default:
+			return nil, &ErrRecoverable{
+				Recovered: length,
+				Err:       fmt.Errorf("expected string, array or object value, received %T", v),
+			}
+		}
+		return length, nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"lowercase", false, lowercaseMethod,
 	ExpectNArgs(0),
 )

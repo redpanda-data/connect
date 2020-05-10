@@ -395,6 +395,21 @@ func TestMethods(t *testing.T) {
 				meta:    map[string]string{"foo": "bar"},
 			}},
 		},
+		"test length string": {
+			input:    `json("foo").length()`,
+			output:   `5`,
+			messages: []easyMsg{{content: `{"foo":"hello"}`}},
+		},
+		"test length array": {
+			input:    `json("foo").length()`,
+			output:   `3`,
+			messages: []easyMsg{{content: `{"foo":["foo","bar","baz"]}`}},
+		},
+		"test length object": {
+			input:    `json("foo").length()`,
+			output:   `3`,
+			messages: []easyMsg{{content: `{"foo":{"foo":1,"bar":2,"baz":3}}`}},
+		},
 	}
 
 	for name, test := range tests {

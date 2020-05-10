@@ -82,6 +82,10 @@ nested_json = this.string()
 
 ## Object and Array Stuff
 
+### `length()`
+
+Returns the length of a string, array or object.
+
 ### `map_each(function)`
 
 #### On arrays
