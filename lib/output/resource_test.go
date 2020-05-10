@@ -109,14 +109,23 @@ func TestResourceProc(t *testing.T) {
 		t.Error("Timed out")
 	}
 
+	var resTs types.Transaction
+	for i := 0; i < 10; i++ {
+		out.tsMut.Lock()
+		resTs = out.ts
+		out.tsMut.Unlock()
+		if resTs.Payload != nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
 	p.CloseAsync()
 	assert.NoError(t, p.WaitForClose(time.Second))
 
-	out.tsMut.Lock()
-	defer out.tsMut.Unlock()
-	_ = assert.NotNil(t, out.ts.Payload) &&
-		assert.Equal(t, 1, out.ts.Payload.Len()) &&
-		assert.Equal(t, []byte("foo"), out.ts.Payload.Get(0).Get())
+	_ = assert.NotNil(t, resTs.Payload) &&
+		assert.Equal(t, 1, resTs.Payload.Len()) &&
+		assert.Equal(t, []byte("foo"), resTs.Payload.Get(0).Get())
 }
 
 func TestResourceBadName(t *testing.T) {
