@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 type fakeWriter struct {
 	connected bool
 	ts        types.Transaction
+	tsMut     sync.Mutex
 	err       error
 }
 
@@ -25,7 +27,9 @@ func (f *fakeWriter) Connected() bool {
 }
 
 func (f *fakeWriter) WriteTransaction(ctx context.Context, ts types.Transaction) error {
+	f.tsMut.Lock()
 	f.ts = ts
+	f.tsMut.Unlock()
 	return f.err
 }
 
@@ -108,6 +112,8 @@ func TestResourceProc(t *testing.T) {
 	p.CloseAsync()
 	assert.NoError(t, p.WaitForClose(time.Second))
 
+	out.tsMut.Lock()
+	defer out.tsMut.Unlock()
 	_ = assert.NotNil(t, out.ts.Payload) &&
 		assert.Equal(t, 1, out.ts.Payload.Len()) &&
 		assert.Equal(t, []byte("foo"), out.ts.Payload.Get(0).Get())
