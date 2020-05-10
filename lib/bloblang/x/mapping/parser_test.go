@@ -354,6 +354,15 @@ foo = "static"`,
 				},
 			},
 		},
+		"test mapping to string": {
+			mapping: `root = "static string"`,
+			input: []part{
+				{Content: `{"this":"is a json doc"}`},
+			},
+			output: []part{
+				{Content: `static string`},
+			},
+		},
 		"test maps": {
 			mapping: `map foo {
   meta "map applied" = "true"

@@ -79,8 +79,15 @@ func (e *Executor) MapPart(index int, msg Message) error {
 	}
 
 	if _, notMapped := newObj.(query.Nothing); !notMapped {
-		if err := msg.Get(index).SetJSON(newObj); err != nil {
-			return xerrors.Errorf("failed to set result of mapping: %w", err)
+		switch t := newObj.(type) {
+		case string:
+			msg.Get(index).Set([]byte(t))
+		case []byte:
+			msg.Get(index).Set(t)
+		default:
+			if err := msg.Get(index).SetJSON(newObj); err != nil {
+				return xerrors.Errorf("failed to set result of mapping: %w", err)
+			}
 		}
 	}
 	return nil
