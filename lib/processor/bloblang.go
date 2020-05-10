@@ -24,6 +24,50 @@ Executes a [Bloblang](/docs/guides/bloblang/about) mapping on messages.`,
 		Description: `
 For more information about Bloblang
 [check out the docs](/docs/guides/bloblang/about).`,
+		Footnotes: `
+## Examples
+
+Given JSON documents containing an array of fans:
+
+` + "```json" + `
+{
+  "id":"foo",
+  "description":"a show about foo",
+  "fans":[
+    {"name":"bev","obsession":0.57},
+    {"name":"grace","obsession":0.21},
+    {"name":"ali","obsession":0.89},
+    {"name":"vic","obsession":0.43}
+  ]
+}
+` + "```" + `
+
+We can reduce the fans to only those with an obsession score above 0.5 with this
+mapping:
+
+` + "```yaml" + `
+pipeline:
+  processors:
+  - bloblang: |
+      root = this
+      fans = fans.map_each(match {
+        this.obsession > 0.5 => this
+        _ => deleted()
+      })
+` + "```" + `
+
+Giving us:
+
+` + "```json" + `
+{
+  "id":"foo",
+  "description":"a show about foo",
+  "fans":[
+    {"name":"bev","obsession":0.57},
+    {"name":"ali","obsession":0.89}
+  ]
+}
+` + "```" + ``,
 	}
 }
 

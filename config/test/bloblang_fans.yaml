@@ -1,0 +1,8 @@
+pipeline:
+  processors:
+  - bloblang: |
+      root = this
+      fans = fans.map_each(match {
+        this.obsession > 0.5 => this
+        _ => deleted()
+      })
