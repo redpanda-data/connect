@@ -5,9 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.13.0 - 2020-05-10
+
 ### Added
 
 - New HMAC algorithms added to `hash` processor.
+- New (BETA) `bloblang` processor.
+- New (BETA) `bloblang` condition.
 
 ### Fixed
 

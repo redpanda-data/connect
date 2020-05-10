@@ -162,36 +162,36 @@ func TestMethods(t *testing.T) {
 				{meta: map[string]string{"foo": "from foo 2", "bar": "yep"}},
 			},
 		},
-		"for each": {
-			input:  `json("foo").for_each(this + 10)`,
+		"map each": {
+			input:  `json("foo").map_each(this + 10)`,
 			output: `[11,12,12]`,
 			messages: []easyMsg{
 				{content: `{"foo":[1,2,2]}`},
 			},
 		},
-		"for each inner map": {
-			input:  `json("foo").for_each((this.bar + 10) | "woops")`,
+		"map each inner map": {
+			input:  `json("foo").map_each((this.bar + 10) | "woops")`,
 			output: `[11,"woops",12]`,
 			messages: []easyMsg{
 				{content: `{"foo":[{"bar":1},2,{"bar":2}]}`},
 			},
 		},
-		"for each some errors": {
-			input:  `json("foo").for_each((this + 10) | "failed")`,
+		"map each some errors": {
+			input:  `json("foo").map_each((this + 10) | "failed")`,
 			output: `[11,12,"failed",12]`,
 			messages: []easyMsg{
 				{content: `{"foo":[1,2,"nope",2]}`},
 			},
 		},
-		"for each uncaught errors": {
-			input:  `json("foo").for_each(this + 10)`,
+		"map each uncaught errors": {
+			input:  `json("foo").map_each(this + 10)`,
 			output: `[11,12,10,12]`,
 			messages: []easyMsg{
 				{content: `{"foo":[1,2,"nope",2]}`},
 			},
 		},
-		"for each delete some elements": {
-			input: `json("foo").for_each(
+		"map each delete some elements": {
+			input: `json("foo").map_each(
 	match this {
 		this < 10 => deleted()
 		_ => this - 10
@@ -202,18 +202,44 @@ func TestMethods(t *testing.T) {
 				{content: `{"foo":[11,12,7,13]}`},
 			},
 		},
-		"for each delete all elements for some reason": {
-			input:  `json("foo").for_each(deleted())`,
+		"map each delete all elements for some reason": {
+			input:  `json("foo").map_each(deleted())`,
 			output: `[]`,
 			messages: []easyMsg{
 				{content: `{"foo":[11,12,7,13]}`},
 			},
 		},
-		"for each not an array": {
-			input:  `json("foo").for_each(this + 10)`,
+		"map each not an array": {
+			input:  `json("foo").map_each(this + 10)`,
 			output: `not an array`,
 			messages: []easyMsg{
 				{content: `{"foo":"not an array"}`},
+			},
+		},
+		"map each object": {
+			input:  `json("foo").map_each(value + 10)`,
+			output: `{"a":11,"b":12,"c":12}`,
+			messages: []easyMsg{
+				{content: `{"foo":{"a":1,"b":2,"c":2}}`},
+			},
+		},
+		"map each object delete some elements": {
+			input: `json("foo").map_each(
+	match {
+		value < 10 => deleted()
+		_ => value - 10
+	}
+)`,
+			output: `{"a":1,"b":2,"d":3}`,
+			messages: []easyMsg{
+				{content: `{"foo":{"a":11,"b":12,"c":7,"d":13}}`},
+			},
+		},
+		"map each object delete all elements": {
+			input:  `json("foo").map_each(deleted())`,
+			output: `{}`,
+			messages: []easyMsg{
+				{content: `{"foo":{"a":11,"b":12,"c":7,"d":13}}`},
 			},
 		},
 		"test sum standard array": {
@@ -288,6 +314,46 @@ func TestMethods(t *testing.T) {
 			input:    `"5".number() == 5`,
 			output:   `true`,
 			messages: []easyMsg{{}},
+		},
+		"test uppercase method": {
+			input:    `"foobar".uppercase()`,
+			output:   `FOOBAR`,
+			messages: []easyMsg{{}},
+		},
+		"test uppercase method recovered": {
+			input:    `["foo"].uppercase()`,
+			output:   `["FOO"]`,
+			messages: []easyMsg{{}},
+		},
+		"test lowercase method": {
+			input:    `"FOOBAR".lowercase()`,
+			output:   `foobar`,
+			messages: []easyMsg{{}},
+		},
+		"test lowercase method recovered": {
+			input:    `["FOO"].lowercase()`,
+			output:   `["foo"]`,
+			messages: []easyMsg{{}},
+		},
+		"test format method": {
+			input:    `"foo %v bar".format("test")`,
+			output:   `foo test bar`,
+			messages: []easyMsg{{}},
+		},
+		"test format method 2": {
+			input:  `"foo %v bar".format(meta("foo"))`,
+			output: `foo test bar`,
+			messages: []easyMsg{{
+				meta: map[string]string{"foo": "test"},
+			}},
+		},
+		"test format method 3": {
+			input:  `json().("foo %v, %v, %v bar".format(value, meta("foo"), 3))`,
+			output: `foo yup, bar, 3 bar`,
+			messages: []easyMsg{{
+				content: `{"value":"yup"}`,
+				meta:    map[string]string{"foo": "bar"},
+			}},
 		},
 	}
 

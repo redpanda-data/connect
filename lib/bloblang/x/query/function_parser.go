@@ -201,7 +201,7 @@ func fieldLiteralRootParser() parser.Type {
 					parser.InRange('a', 'z'),
 					parser.InRange('A', 'Z'),
 					parser.InRange('0', '9'),
-					parser.InRange('*', '-'),
+					parser.InRange('*', '+'),
 					parser.Char('_'),
 					parser.Char('~'),
 				),

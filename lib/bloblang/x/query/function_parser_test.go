@@ -116,6 +116,13 @@ func TestFunctions(t *testing.T) {
 				{content: `{"path":"foo.bar","foo":{"bar":"this"}}`},
 			},
 		},
+		"json function dynamic arg 3": {
+			input:  `json().(json(path))`,
+			output: `this`,
+			messages: []easyMsg{
+				{content: `{"path":"foo","foo":"this"}`},
+			},
+		},
 		"json_from function": {
 			input:  `json("foo").from(1)`,
 			output: `bar`,
@@ -420,6 +427,13 @@ func TestFunctions(t *testing.T) {
 			output: `hello world`,
 			messages: []easyMsg{
 				{content: `{"foo":{"baz":"hello world"}}`},
+			},
+		},
+		"field literal 5": {
+			input:  `json().(foo)`,
+			output: `hello world`,
+			messages: []easyMsg{
+				{content: `{"foo":"hello world"}`},
 			},
 		},
 		"field literal root": {

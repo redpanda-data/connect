@@ -31,7 +31,17 @@ root.new_doc.content = this.thing.doc.message
 # Out: {"new_doc":{"content":"hello world","id":"wat1","type":"yo"}}
 ```
 
-Set and reference metadata values:
+The newly mapped document starts off empty, if you wish to begin your mapping with a full copy of the input object then start your map by assigning it to the root:
+
+```coffee
+root = this
+foo = "added value"
+
+# In:  {"id":"wat1","message":"hello world"}
+# Out: {"id":"wat1","message":"hello world","foo":"added value"}
+```
+
+You can also use Bloblang to set and reference metadata values:
 
 ```coffee
 # Delete all existing metadata

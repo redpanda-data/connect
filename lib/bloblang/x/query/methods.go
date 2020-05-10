@@ -3,6 +3,7 @@ package query
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"golang.org/x/xerrors"
 )
@@ -73,56 +74,6 @@ func catchMethod(fn Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"for_each", false, forEachMethod,
-	ExpectNArgs(1),
-)
-
-func forEachMethod(target Function, args ...interface{}) (Function, error) {
-	mapFn, ok := args[0].(Function)
-	if !ok {
-		return nil, fmt.Errorf("expected function param, received %T", args[0])
-	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		res, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
-		resSlice, ok := res.([]interface{})
-		if !ok {
-			return nil, &ErrRecoverable{
-				Recovered: res,
-				Err:       fmt.Errorf("expected array, found: %T", res),
-			}
-		}
-		newSlice := make([]interface{}, 0, len(resSlice))
-		for i, v := range resSlice {
-			ctx.Value = &v
-			var newV interface{}
-			if newV, err = mapFn.Exec(ctx); err != nil {
-				if recover, ok := err.(*ErrRecoverable); ok {
-					newV = recover.Recovered
-					err = xerrors.Errorf("failed to process element %v: %w", i, recover.Err)
-				} else {
-					return nil, err
-				}
-			}
-			if _, isDelete := newV.(Delete); !isDelete {
-				newSlice = append(newSlice, newV)
-			}
-		}
-		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: newSlice,
-				Err:       err,
-			}
-		}
-		return newSlice, nil
-	}), nil
-}
-
-//------------------------------------------------------------------------------
-
-var _ = RegisterMethod(
 	"from", false, func(target Function, args ...interface{}) (Function, error) {
 		i64 := args[0].(int64)
 		return &fromMethod{
@@ -152,6 +103,26 @@ func (f *fromMethod) ToBytes(ctx FunctionContext) []byte {
 func (f *fromMethod) ToString(ctx FunctionContext) string {
 	ctx.Index = f.index
 	return f.target.ToString(ctx)
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"format", true, formatMethod,
+)
+
+func formatMethod(target Function, args ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		vStr, ok := v.(string)
+		if !ok {
+			return nil, fmt.Errorf("expected string value, received %T", v)
+		}
+		return fmt.Sprintf(vStr, args...), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
@@ -191,6 +162,33 @@ func fromAllMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"lowercase", false, lowercaseMethod,
+	ExpectNArgs(0),
+)
+
+func lowercaseMethod(target Function, _ ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, &ErrRecoverable{
+				Recovered: "",
+				Err:       err,
+			}
+		}
+		vStr, ok := v.(string)
+		if !ok {
+			return nil, &ErrRecoverable{
+				Recovered: strings.ToLower(IToString(v)),
+				Err:       fmt.Errorf("expected string value, received %T", v),
+			}
+		}
+		return strings.ToLower(vStr), nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"map", false, mapMethod,
 	ExpectNArgs(1),
 )
@@ -207,6 +205,82 @@ func mapMethod(target Function, args ...interface{}) (Function, error) {
 		}
 		ctx.Value = &res
 		return mapFn.Exec(ctx)
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"map_each", false, mapEachMethod,
+	ExpectNArgs(1),
+)
+
+func mapEachMethod(target Function, args ...interface{}) (Function, error) {
+	mapFn, ok := args[0].(Function)
+	if !ok {
+		return nil, fmt.Errorf("expected function param, received %T", args[0])
+	}
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		res, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		var resValue interface{}
+		switch t := res.(type) {
+		case []interface{}:
+			newSlice := make([]interface{}, 0, len(t))
+			for i, v := range t {
+				ctx.Value = &v
+				newV, mapErr := mapFn.Exec(ctx)
+				if mapErr != nil {
+					if recover, ok := mapErr.(*ErrRecoverable); ok {
+						newV = recover.Recovered
+						err = xerrors.Errorf("failed to process element %v: %w", i, recover.Err)
+					} else {
+						return nil, mapErr
+					}
+				}
+				if _, isDelete := newV.(Delete); !isDelete {
+					newSlice = append(newSlice, newV)
+				}
+			}
+			resValue = newSlice
+		case map[string]interface{}:
+			newMap := make(map[string]interface{}, len(t))
+			for k, v := range t {
+				var ctxMap interface{} = map[string]interface{}{
+					"key":   k,
+					"value": v,
+				}
+				ctx.Value = &ctxMap
+				newV, mapErr := mapFn.Exec(ctx)
+				if mapErr != nil {
+					if recover, ok := mapErr.(*ErrRecoverable); ok {
+						newV = recover.Recovered
+						err = xerrors.Errorf("failed to process element %v: %w", k, recover.Err)
+					} else {
+						return nil, mapErr
+					}
+				}
+				if _, isDelete := newV.(Delete); !isDelete {
+					newMap[k] = newV
+				}
+			}
+			resValue = newMap
+		default:
+			return nil, &ErrRecoverable{
+				Recovered: res,
+				Err:       fmt.Errorf("expected array, found: %T", res),
+			}
+		}
+		if err != nil {
+			return nil, &ErrRecoverable{
+				Recovered: resValue,
+				Err:       err,
+			}
+		}
+		return resValue, nil
 	}), nil
 }
 
@@ -253,6 +327,33 @@ func stringMethod(target Function, _ ...interface{}) (Function, error) {
 			}
 		}
 		return IToString(v), nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"uppercase", false, uppercaseMethod,
+	ExpectNArgs(0),
+)
+
+func uppercaseMethod(target Function, _ ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, &ErrRecoverable{
+				Recovered: "",
+				Err:       err,
+			}
+		}
+		vStr, ok := v.(string)
+		if !ok {
+			return nil, &ErrRecoverable{
+				Recovered: strings.ToUpper(IToString(v)),
+				Err:       fmt.Errorf("expected string value, received %T", v),
+			}
+		}
+		return strings.ToUpper(vStr), nil
 	}), nil
 }
 
