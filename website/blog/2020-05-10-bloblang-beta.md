@@ -15,7 +15,7 @@ keywords: [
 tags: [ "Bloblang" ]
 ---
 
-As of this weekend (and Benthos v3.13) you can now use a [`bloblang` processor](/docs/components/processors/bloblang) and complementary [condition](/docs/components/conditions/bloblang). These components are in a beta phase, which means that based on feedback the mapping language might change in minor ways in upcoming minor releases.
+As of this weekend (and [Benthos v3.13](https://github.com/Jeffail/benthos/releases/tag/v3.13.0)) you can now use a [`bloblang` processor](/docs/components/processors/bloblang) and complementary [condition](/docs/components/conditions/bloblang). These components are in a beta phase, which means that based on feedback the mapping language might change in minor ways in upcoming minor releases.
 
 <!--truncate-->
 
