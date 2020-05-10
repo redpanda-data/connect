@@ -24,7 +24,7 @@ type CacheConfig struct {
 func NewCacheConfig() CacheConfig {
 	return CacheConfig{
 		Target:      "",
-		Key:         "${!count:items}-${!timestamp_unix_nano}",
+		Key:         `${!count("items")}-${!timestamp_unix_nano()}`,
 		MaxInFlight: 1,
 	}
 }

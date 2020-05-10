@@ -26,7 +26,7 @@ For example, you could use this to test against the size of a message batch:
 
 ``` yaml
 check_interpolation:
-  value: ${!batch_size}
+  value: ${! batch_size() }
   condition:
     number:
       operator: greater_than
@@ -47,11 +47,11 @@ Default: `""`
 ```yaml
 # Examples
 
-value: ${!json_field:doc.title}
+value: ${! json("doc.title") }
 
-value: ${!metadata:kafka_topic}
+value: ${! meta("kafka_topic") }
 
-value: ${!json_field:doc.id}-${!metadata:kafka_key}
+value: ${! json("doc.id") }-${! meta("kafka_key") }
 ```
 
 ### `condition`

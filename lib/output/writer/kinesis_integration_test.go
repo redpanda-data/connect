@@ -54,7 +54,7 @@ func TestKinesisIntegration(t *testing.T) {
 	endpoint := fmt.Sprintf("http://localhost:%d", port)
 	config := KinesisConfig{
 		Stream:       "foo",
-		PartitionKey: "${!json_field:id}",
+		PartitionKey: "${!json(\"id\")}",
 	}
 	config.Region = "us-east-1"
 	config.Endpoint = endpoint

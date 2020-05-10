@@ -77,7 +77,7 @@ pipeline:
     - json:
         operator: set
         path: common_foo
-        value: "${!json_field:body.source_id,-1}"
+        value: "${! json("body.source_id").from(-1) }"
 ```
 
 You can also avoid this behaviour with the [`for_each` processor][proc_for_each].
@@ -88,7 +88,7 @@ There's a vast number of processors that specialise in operations across batches
 pipeline:
   processors:
   - group_by_value:
-      value: ${!metadata:kafka_partition}
+      value: ${! meta("kafka_partition") }
   - archive:
       format: tar
   - compress:
@@ -97,7 +97,7 @@ pipeline:
 output:
   s3:
     bucket: TODO
-    path: docs/${!metadata:kafka_partition}/${!count:files}-${!timestamp_unix_nano}.tar.gz
+    path: docs/${! meta("kafka_partition") }/${! count("files") }-${! timestamp_unix_nano() }.tar.gz
 ```
 
 For more examples of batched (or windowed) processing check out [this document][windowing].

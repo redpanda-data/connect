@@ -68,7 +68,7 @@ add a JSON field to your payload with the cardinality of their target sets with:
       - redis:
           url: TODO
           operator: scard
-          key: ${!metadata:set_key}
+          key: ${! meta("set_key") }
  ```
 
 

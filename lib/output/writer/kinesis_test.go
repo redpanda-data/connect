@@ -59,7 +59,7 @@ func TestKinesisWriteSinglePartMessage(t *testing.T) {
 		log: log.Noop(),
 	}
 
-	k.partitionKey, _ = field.New("${!json_field:id}")
+	k.partitionKey, _ = field.New("${!json(\"id\")}")
 	k.hashKey, _ = field.New("")
 
 	msg := message.New(nil)
@@ -102,7 +102,7 @@ func TestKinesisWriteMultiPartMessage(t *testing.T) {
 		log: log.Noop(),
 	}
 
-	k.partitionKey, _ = field.New("${!json_field:id}")
+	k.partitionKey, _ = field.New("${!json(\"id\")}")
 	k.hashKey, _ = field.New("")
 
 	msg := message.New(nil)
@@ -135,7 +135,7 @@ func TestKinesisWriteChunk(t *testing.T) {
 		log: log.Noop(),
 	}
 
-	k.partitionKey, _ = field.New("${!json_field:id}")
+	k.partitionKey, _ = field.New("${!json(\"id\")}")
 	k.hashKey, _ = field.New("")
 
 	msg := message.New(nil)
@@ -200,7 +200,7 @@ func TestKinesisWriteChunkWithThrottling(t *testing.T) {
 		log:              log.Noop(),
 	}
 
-	k.partitionKey, _ = field.New("${!json_field:id}")
+	k.partitionKey, _ = field.New("${!json(\"id\")}")
 	k.hashKey, _ = field.New("")
 
 	msg := message.New(nil)
@@ -245,7 +245,7 @@ func TestKinesisWriteError(t *testing.T) {
 		log: log.Noop(),
 	}
 
-	k.partitionKey, _ = field.New("${!json_field:id}")
+	k.partitionKey, _ = field.New("${!json(\"id\")}")
 	k.hashKey, _ = field.New("")
 
 	msg := message.New(nil)
@@ -295,7 +295,7 @@ func TestKinesisWriteMessageThrottling(t *testing.T) {
 		log:              log.Noop(),
 	}
 
-	k.partitionKey, _ = field.New("${!json_field:id}")
+	k.partitionKey, _ = field.New("${!json(\"id\")}")
 	k.hashKey, _ = field.New("")
 
 	msg := message.New(nil)
@@ -344,7 +344,7 @@ func TestKinesisWriteBackoffMaxRetriesExceeded(t *testing.T) {
 		log:              log.Noop(),
 	}
 
-	k.partitionKey, _ = field.New("${!json_field:id}")
+	k.partitionKey, _ = field.New("${!json(\"id\")}")
 	k.hashKey, _ = field.New("")
 
 	msg := message.New(nil)

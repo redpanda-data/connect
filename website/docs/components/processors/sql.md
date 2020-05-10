@@ -39,9 +39,9 @@ for_each:
     dsn: foouser:foopassword@tcp(localhost:3306)/foodb
     query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
     args:
-    - ${!json_field:document.foo}
-    - ${!json_field:document.bar}
-    - ${!metadata:kafka_topic}
+    - ${! json("document.foo") }
+    - ${! json("document.bar") }
+    - ${! meta("kafka_topic") }
 ```
 
 ## Drivers

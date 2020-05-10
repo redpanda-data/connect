@@ -27,7 +27,7 @@ func TestCheckInterpolationString(t *testing.T) {
 		},
 		{
 			name:  "batch size 1",
-			value: "${!batch_size}",
+			value: "${! batch_size() }",
 			arg:   "1",
 			payload: [][]byte{
 				[]byte("foobar"),
@@ -36,7 +36,7 @@ func TestCheckInterpolationString(t *testing.T) {
 		},
 		{
 			name:  "batch size not 1",
-			value: "${!batch_size}",
+			value: "${! batch_size() }",
 			arg:   "1",
 			payload: [][]byte{
 				[]byte("foobar"),
@@ -46,7 +46,7 @@ func TestCheckInterpolationString(t *testing.T) {
 		},
 		{
 			name:  "batch size 2",
-			value: "${!batch_size}",
+			value: "${! batch_size() }",
 			arg:   "2",
 			payload: [][]byte{
 				[]byte("foobar"),
@@ -56,7 +56,7 @@ func TestCheckInterpolationString(t *testing.T) {
 		},
 		{
 			name:  "two interps",
-			value: "${!batch_size}-${!json_field:id}",
+			value: `${! batch_size() }-${! json("id") }`,
 			arg:   "1-foo",
 			payload: [][]byte{
 				[]byte(`{"id":"foo"}`),

@@ -366,7 +366,7 @@ BUFFER_MEMORY_LIMIT = 524288000
 PROCESSOR_THREADS                                    = 1
 PROCESSOR_TYPE                                       = noop
 PROCESSOR_ARCHIVE_FORMAT                             = binary
-PROCESSOR_ARCHIVE_PATH                               = ${!count:files}-${!timestamp_unix_nano}.txt
+PROCESSOR_ARCHIVE_PATH                               = ${!count("files")}-${!timestamp_unix_nano()}.txt
 PROCESSOR_AVRO_ENCODING                              = textual
 PROCESSOR_AVRO_OPERATOR                              = to_json
 PROCESSOR_AVRO_SCHEMA
@@ -424,7 +424,7 @@ PROCESSOR_GROK_NAMED_CAPTURES_ONLY                   = true
 PROCESSOR_GROK_OUTPUT_FORMAT                         = json
 PROCESSOR_GROK_REMOVE_EMPTY_VALUES                   = true
 PROCESSOR_GROK_USE_DEFAULT_PATTERNS                  = true
-PROCESSOR_GROUP_BY_VALUE_VALUE                       = ${!metadata:example}
+PROCESSOR_GROUP_BY_VALUE_VALUE                       = ${! meta("example") }
 PROCESSOR_HASH_ALGORITHM                             = sha256
 PROCESSOR_HASH_KEY
 PROCESSOR_HASH_SAMPLE_PARTS                          = 0
@@ -480,7 +480,7 @@ PROCESSOR_LOG_MESSAGE
 PROCESSOR_MERGE_JSON_RETAIN_PARTS                    = false
 PROCESSOR_METADATA_KEY                               = example
 PROCESSOR_METADATA_OPERATOR                          = set
-PROCESSOR_METADATA_VALUE                             = ${!hostname}
+PROCESSOR_METADATA_VALUE                             = ${!hostname()}
 PROCESSOR_METRIC_PATH
 PROCESSOR_METRIC_TYPE                                = counter
 PROCESSOR_METRIC_VALUE
@@ -553,7 +553,7 @@ OUTPUT_AMQP_TLS_ENABLED                               = false
 OUTPUT_AMQP_TLS_ROOT_CAS_FILE
 OUTPUT_AMQP_TLS_SKIP_CERT_VERIFY                      = false
 OUTPUT_AMQP_URL                                       = amqp://guest:guest@localhost:5672/
-OUTPUT_CACHE_KEY                                      = ${!count:items}-${!timestamp_unix_nano}
+OUTPUT_CACHE_KEY                                      = ${!count("items")}-${!timestamp_unix_nano()}
 OUTPUT_CACHE_MAX_IN_FLIGHT                            = 1
 OUTPUT_CACHE_TARGET
 OUTPUT_DYNAMIC_PREFIX
@@ -577,7 +577,7 @@ OUTPUT_ELASTICSEARCH_BATCHING_BYTE_SIZE               = 0
 OUTPUT_ELASTICSEARCH_BATCHING_COUNT                   = 1
 OUTPUT_ELASTICSEARCH_BATCHING_PERIOD
 OUTPUT_ELASTICSEARCH_HEALTHCHECK                      = true
-OUTPUT_ELASTICSEARCH_ID                               = ${!count:elastic_ids}-${!timestamp_unix}
+OUTPUT_ELASTICSEARCH_ID                               = ${!count("elastic_ids")}-${!timestamp_unix()}
 OUTPUT_ELASTICSEARCH_INDEX                            = benthos_index
 OUTPUT_ELASTICSEARCH_MAX_IN_FLIGHT                    = 1
 OUTPUT_ELASTICSEARCH_MAX_RETRIES                      = 0
@@ -586,7 +586,7 @@ OUTPUT_ELASTICSEARCH_SNIFF                            = true
 OUTPUT_ELASTICSEARCH_TIMEOUT                          = 5s
 OUTPUT_ELASTICSEARCH_TYPE                             = doc
 OUTPUT_ELASTICSEARCH_URLS                             = http://localhost:9200
-OUTPUT_FILES_PATH                                     = ${!count:files}-${!timestamp_unix_nano}.txt
+OUTPUT_FILES_PATH                                     = ${!count("files")}-${!timestamp_unix_nano()}.txt
 OUTPUT_FILE_DELIMITER
 OUTPUT_FILE_PATH
 OUTPUT_GCP_PUBSUB_MAX_IN_FLIGHT                       = 1
@@ -595,7 +595,7 @@ OUTPUT_GCP_PUBSUB_TOPIC
 OUTPUT_HDFS_DIRECTORY
 OUTPUT_HDFS_HOSTS                                     = localhost:9000
 OUTPUT_HDFS_MAX_IN_FLIGHT                             = 1
-OUTPUT_HDFS_PATH                                      = ${!count:files}-${!timestamp_unix_nano}.txt
+OUTPUT_HDFS_PATH                                      = ${!count("files")}-${!timestamp_unix_nano()}.txt
 OUTPUT_HDFS_USER                                      = benthos_hdfs
 OUTPUT_HTTP_CLIENT_BACKOFF_ON                         = 429
 OUTPUT_HTTP_CLIENT_BASIC_AUTH_ENABLED                 = false
@@ -754,7 +754,7 @@ OUTPUT_S3_ENDPOINT
 OUTPUT_S3_FORCE_PATH_STYLE_URLS                       = false
 OUTPUT_S3_KMS_KEY_ID
 OUTPUT_S3_MAX_IN_FLIGHT                               = 1
-OUTPUT_S3_PATH                                        = ${!count:files}-${!timestamp_unix_nano}.txt
+OUTPUT_S3_PATH                                        = ${!count("files")}-${!timestamp_unix_nano()}.txt
 OUTPUT_S3_REGION                                      = eu-west-1
 OUTPUT_S3_STORAGE_CLASS                               = STANDARD
 OUTPUT_S3_TIMEOUT                                     = 5s

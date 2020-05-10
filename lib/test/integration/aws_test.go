@@ -157,7 +157,7 @@ func testS3Streams(t *testing.T, endpoint, sqsEndpoint, sqsURL, bucket string) {
 	outconf.Region = "eu-west-1"
 	outconf.Bucket = bucket
 	outconf.ForcePathStyleURLs = true
-	outconf.Path = "${!count:s3uploaddownload}.txt"
+	outconf.Path = `${!count("s3uploaddownload")}.txt`
 
 	outputCtr := func() (mOutput writer.Type, err error) {
 		if mOutput, err = writer.NewAmazonS3(outconf, log.Noop(), metrics.Noop()); err != nil {
@@ -336,7 +336,7 @@ func testSQSFIFOSinglePart(t *testing.T, endpoint, url string) {
 	outConf.Credentials.Token = "xxxxx"
 	outConf.Region = "eu-west-1"
 	outConf.MessageGroupID = "foogroup"
-	outConf.MessageDeduplicationID = "${!json_field:id}"
+	outConf.MessageDeduplicationID = `${!json("id")}`
 
 	inConf := reader.NewAmazonSQSConfig()
 	inConf.URL = url
@@ -437,7 +437,7 @@ func testS3UploadDownload(t *testing.T, endpoint, bucket string) {
 	outconf.Region = "eu-west-1"
 	outconf.Bucket = bucket
 	outconf.ForcePathStyleURLs = true
-	outconf.Path = "${!count:s3uploaddownload}.txt"
+	outconf.Path = `${!count("s3uploaddownload")}.txt`
 
 	mOutput, err := writer.NewAmazonS3(outconf, log.Noop(), metrics.Noop())
 	if err != nil {

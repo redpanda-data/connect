@@ -32,6 +32,14 @@ func TestBloblangCheck(t *testing.T) {
 			want: false,
 		},
 		{
+			name:  "bool result neg spaces",
+			query: `  foo   == "bar"`,
+			arg: [][]byte{
+				[]byte(`{"foo":"baz"}`),
+			},
+			want: false,
+		},
+		{
 			name:  "str result neg",
 			query: "foo",
 			arg: [][]byte{

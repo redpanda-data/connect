@@ -77,7 +77,7 @@ func TestSleep200Millisecond(t *testing.T) {
 func TestSleepInterpolated(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = TypeSleep
-	conf.Sleep.Duration = "${!json_field:foo}ms"
+	conf.Sleep.Duration = "${!json(\"foo\")}ms"
 
 	slp, err := New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {

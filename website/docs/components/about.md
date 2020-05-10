@@ -32,7 +32,7 @@ pipeline:
 output:
   s3:
     bucket: TODO
-    path: "${!metadata:kafka_topic}/${!json_field:message.id}.json"
+    path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
 ```
 
 These are the main components within Benthos and they provide the majority of
@@ -92,7 +92,7 @@ pipeline:
     - dedupe: # This is another processor
         cache: baz_cache # This is a reference to a cache
         hash: xxhash
-        key: ${json_field:id}
+        key: ${! json("id") }
 
 resources:
   rate_limits:

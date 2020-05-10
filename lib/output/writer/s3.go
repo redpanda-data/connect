@@ -38,7 +38,7 @@ func NewAmazonS3Config() AmazonS3Config {
 		Config:             sess.NewConfig(),
 		Bucket:             "",
 		ForcePathStyleURLs: false,
-		Path:               "${!count:files}-${!timestamp_unix_nano}.txt",
+		Path:               `${!count("files")}-${!timestamp_unix_nano()}.txt`,
 		ContentType:        "application/octet-stream",
 		ContentEncoding:    "",
 		StorageClass:       "STANDARD",

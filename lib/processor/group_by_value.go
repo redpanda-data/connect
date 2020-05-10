@@ -40,7 +40,7 @@ could achieve that with the following:
 pipeline:
   processors:
   - group_by_value:
-      value: ${!metadata:kafka_key}
+      value: ${! meta("kafka_key") }
   - archive:
       format: tar
   - compress:
@@ -48,12 +48,12 @@ pipeline:
 output:
   s3:
     bucket: TODO
-    path: docs/${!metadata:kafka_key}/${!count:files}-${!timestamp_unix_nano}.tar.gz
+    path: docs/${! meta("kafka_key") }/${! count("files") }-${! timestamp_unix_nano() }.tar.gz
 ` + "```" + ``,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(
 				"value", "The interpolated string to group based on.",
-				"${!metadata:kafka_key}", "${!json_field:foo.bar}-${!metadata:baz}",
+				"${! meta(\"kafka_key\") }", "${! json(\"foo.bar\") }-${! meta(\"baz\") }",
 			).SupportsInterpolation(false),
 		},
 		UsesBatches: true,
@@ -73,7 +73,7 @@ type GroupByValueConfig struct {
 // NewGroupByValueConfig returns a GroupByValueConfig with default values.
 func NewGroupByValueConfig() GroupByValueConfig {
 	return GroupByValueConfig{
-		Value: "${!metadata:example}",
+		Value: "${! meta(\"example\") }",
 	}
 }
 

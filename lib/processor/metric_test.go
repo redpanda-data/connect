@@ -68,7 +68,7 @@ func TestMetricCounter(t *testing.T) {
 	conf.Type = "metric"
 	conf.Metric.Type = "counter"
 	conf.Metric.Path = "foo.bar"
-	conf.Metric.Value = "${!json_field:foo.bar}"
+	conf.Metric.Value = "${!json(\"foo.bar\")}"
 
 	proc, err := New(conf, nil, log.Noop(), metrics.WrapFlat(mockStats))
 	if err != nil {
@@ -122,7 +122,7 @@ func TestMetricCounterParts(t *testing.T) {
 	conf.Type = "metric"
 	conf.Metric.Type = "counter_parts"
 	conf.Metric.Path = "foo.bar"
-	conf.Metric.Value = "${!json_field:foo.bar}"
+	conf.Metric.Value = "${!json(\"foo.bar\")}"
 
 	proc, err := New(conf, nil, log.Noop(), metrics.WrapFlat(mockStats))
 	if err != nil {
@@ -176,7 +176,7 @@ func TestMetricCounterBy(t *testing.T) {
 	conf.Type = "metric"
 	conf.Metric.Type = "counter_by"
 	conf.Metric.Path = "foo.bar"
-	conf.Metric.Value = "${!json_field:foo.bar}"
+	conf.Metric.Value = "${!json(\"foo.bar\")}"
 
 	proc, err := New(conf, nil, log.Noop(), metrics.WrapFlat(mockStats))
 	if err != nil {
@@ -232,7 +232,7 @@ func TestMetricGauge(t *testing.T) {
 	conf.Type = "metric"
 	conf.Metric.Type = "gauge"
 	conf.Metric.Path = "foo.bar"
-	conf.Metric.Value = "${!json_field:foo.bar}"
+	conf.Metric.Value = "${!json(\"foo.bar\")}"
 
 	proc, err := New(conf, nil, log.Noop(), metrics.WrapFlat(mockStats))
 	if err != nil {
@@ -288,7 +288,7 @@ func TestMetricTiming(t *testing.T) {
 	conf.Type = "metric"
 	conf.Metric.Type = "timing"
 	conf.Metric.Path = "foo.bar"
-	conf.Metric.Value = "${!json_field:foo.bar}"
+	conf.Metric.Value = "${!json(\"foo.bar\")}"
 
 	proc, err := New(conf, nil, log.Noop(), metrics.WrapFlat(mockStats))
 	if err != nil {
@@ -344,9 +344,9 @@ func TestMetricCounterLabels(t *testing.T) {
 	conf.Type = "metric"
 	conf.Metric.Type = "counter"
 	conf.Metric.Path = "foo.bar"
-	conf.Metric.Value = "${!json_field:foo.bar}"
+	conf.Metric.Value = "${!json(\"foo.bar\")}"
 	conf.Metric.Labels = map[string]string{
-		"batch_size": "${!batch_size}",
+		"batch_size": "${!batch_size()}",
 	}
 
 	proc, err := New(conf, nil, log.Noop(), metrics.WrapFlat(mockStats))
@@ -401,9 +401,9 @@ func TestMetricCounterPartsLabels(t *testing.T) {
 	conf.Type = "metric"
 	conf.Metric.Type = "counter_parts"
 	conf.Metric.Path = "foo.bar"
-	conf.Metric.Value = "${!json_field:foo.bar}"
+	conf.Metric.Value = "${!json(\"foo.bar\")}"
 	conf.Metric.Labels = map[string]string{
-		"batch_size": "${!batch_size}",
+		"batch_size": "${!batch_size()}",
 	}
 
 	proc, err := New(conf, nil, log.Noop(), metrics.WrapFlat(mockStats))
@@ -458,9 +458,9 @@ func TestMetricCounterByLabels(t *testing.T) {
 	conf.Type = "metric"
 	conf.Metric.Type = "counter_by"
 	conf.Metric.Path = "foo.bar"
-	conf.Metric.Value = "${!json_field:foo.bar}"
+	conf.Metric.Value = "${!json(\"foo.bar\")}"
 	conf.Metric.Labels = map[string]string{
-		"batch_size": "${!batch_size}",
+		"batch_size": "${!batch_size()}",
 	}
 
 	proc, err := New(conf, nil, log.Noop(), metrics.WrapFlat(mockStats))
@@ -517,9 +517,9 @@ func TestMetricGaugeLabels(t *testing.T) {
 	conf.Type = "metric"
 	conf.Metric.Type = "gauge"
 	conf.Metric.Path = "foo.bar"
-	conf.Metric.Value = "${!json_field:foo.bar}"
+	conf.Metric.Value = "${!json(\"foo.bar\")}"
 	conf.Metric.Labels = map[string]string{
-		"batch_size": "${!batch_size}",
+		"batch_size": "${!batch_size()}",
 	}
 
 	proc, err := New(conf, nil, log.Noop(), metrics.WrapFlat(mockStats))
@@ -576,9 +576,9 @@ func TestMetricTimingLabels(t *testing.T) {
 	conf.Type = "metric"
 	conf.Metric.Type = "timing"
 	conf.Metric.Path = "foo.bar"
-	conf.Metric.Value = "${!json_field:foo.bar}"
+	conf.Metric.Value = "${!json(\"foo.bar\")}"
 	conf.Metric.Labels = map[string]string{
-		"batch_size": "${!batch_size}",
+		"batch_size": "${!batch_size()}",
 	}
 
 	proc, err := New(conf, nil, log.Noop(), metrics.WrapFlat(mockStats))

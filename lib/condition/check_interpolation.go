@@ -27,7 +27,7 @@ For example, you could use this to test against the size of a message batch:
 
 ` + "``` yaml" + `
 check_interpolation:
-  value: ${!batch_size}
+  value: ${! batch_size() }
   condition:
     number:
       operator: greater_than
@@ -49,9 +49,9 @@ check_interpolation:
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(
 				"value", "The value to check against the child condition.",
-				"${!json_field:doc.title}",
-				"${!metadata:kafka_topic}",
-				"${!json_field:doc.id}-${!metadata:kafka_key}",
+				`${! json("doc.title") }`,
+				`${! meta("kafka_topic") }`,
+				`${! json("doc.id") }-${! meta("kafka_key") }`,
 			).SupportsInterpolation(true),
 			docs.FieldCommon("condition", "A child condition to test the field contents against."),
 		},

@@ -33,7 +33,7 @@ output:
     urls:
     - http://localhost:9200
     index: benthos_index
-    id: ${!count:elastic_ids}-${!timestamp_unix}
+    id: ${!count("elastic_ids")}-${!timestamp_unix()}
     type: doc
     max_in_flight: 1
     batching:
@@ -53,7 +53,7 @@ output:
     - http://localhost:9200
     index: benthos_index
     pipeline: ""
-    id: ${!count:elastic_ids}-${!timestamp_unix}
+    id: ${!count("elastic_ids")}-${!timestamp_unix()}
     type: doc
     sniff: true
     healthcheck: true
@@ -154,7 +154,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"${!count:elastic_ids}-${!timestamp_unix}"`  
+Default: `"${!count(\"elastic_ids\")}-${!timestamp_unix()}"`  
 
 ### `type`
 

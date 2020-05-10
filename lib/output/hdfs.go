@@ -27,7 +27,7 @@ batched messages the interpolations are performed per message part.`,
 			docs.FieldCommon("directory", "A directory to store message files within. If the directory does not exist it will be created."),
 			docs.FieldCommon(
 				"path", "The path to upload messages as, interpolation functions should be used in order to generate unique file paths.",
-				"${!count:files}-${!timestamp_unix_nano}.txt",
+				`${!count("files")}-${!timestamp_unix_nano()}.txt`,
 			).SupportsInterpolation(false),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		},

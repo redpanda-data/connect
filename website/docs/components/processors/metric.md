@@ -30,7 +30,7 @@ for_each:
 - metric:
     type: counter_by
     path: count.custom.field
-    value: ${!json_field:field.some.value}
+    value: ${!json("field.some.value")}
 ```
 
 The `path` field should be a dot separated path of the metric to be
@@ -72,8 +72,8 @@ Default: `{}`
 # Examples
 
 labels:
-  topic: ${!metadata:kafka_topic}
-  type: ${!json_field:doc.type}
+  topic: ${!meta("kafka_topic")}
+  type: ${!json("doc.type")}
 ```
 
 ### `value`
@@ -109,7 +109,7 @@ For example, the following configuration will increment the value of the
 metric:
   type: counter_by
   path: count.custom.field
-  value: ${!json_field:field.some.value}
+  value: ${!json("field.some.value")}
 ```
 
 ### `gauge`
@@ -124,7 +124,7 @@ For example, the following configuration will set the value of the
 metric:
   type: gauge
   path: gauge.custom.field
-  value: ${!json_field:field.some.value}
+  value: ${!json("field.some.value")}
 ```
 
 ### `timing`

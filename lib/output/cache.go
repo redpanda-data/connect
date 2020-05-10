@@ -39,7 +39,7 @@ The ` + "`target`" + ` field must point to a configured cache like follows:
 output:
   cache:
     target: foo
-    key: ${!json_field:document.id}
+    key: ${!json("document.id")}
 
 resources:
   caches:
@@ -57,9 +57,9 @@ When sending batched messages the interpolations are performed per message part.
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("target", "The target cache to store messages in."),
 			docs.FieldCommon("key", "The key to store messages by, function interpolation should be used in order to derive a unique key for each message.",
-				"${!count:items}-${!timestamp_unix_nano}",
-				"${!json_field:doc.id}",
-				"${!metadata:kafka_key}",
+				`${!count("items")}-${!timestamp_unix_nano()}`,
+				`${!json("doc.id")}`,
+				`${!meta("kafka_key")}`,
 			).SupportsInterpolation(false),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		},

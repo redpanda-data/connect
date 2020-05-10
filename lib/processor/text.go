@@ -36,7 +36,7 @@ for each message of the batch place it within a
 for_each:
 - text:
     operator: set
-    value: ${!json_field:document.content}
+    value: ${!json("document.content")}
 ` + "```" + ``,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("operator", "A text based [operation](#operators) to execute.").HasOptions(

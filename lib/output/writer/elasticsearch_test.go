@@ -115,7 +115,7 @@ func TestElasticIntegration(t *testing.T) {
 func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
 	conf := NewElasticsearchConfig()
 	conf.Index = "does_not_exist"
-	conf.ID = "foo-${!count:noIndexTest}"
+	conf.ID = "foo-${!count(\"noIndexTest\")}"
 	conf.URLs = urls
 	conf.MaxRetries = 1
 	conf.Backoff.MaxElapsedTime = "1s"
@@ -167,7 +167,7 @@ func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
 func testElasticParallelWrites(urls []string, client *elastic.Client, t *testing.T) {
 	conf := NewElasticsearchConfig()
 	conf.Index = "new_index_parallel_writes"
-	conf.ID = "${!json_field:key}"
+	conf.ID = "${!json(\"key\")}"
 	conf.URLs = urls
 	conf.MaxRetries = 1
 	conf.Backoff.MaxElapsedTime = "1s"
@@ -272,7 +272,7 @@ func testElasticErrorHandling(urls []string, client *elastic.Client, t *testing.
 func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
 	conf := NewElasticsearchConfig()
 	conf.Index = "test_conn_index"
-	conf.ID = "foo-${!count:foo}"
+	conf.ID = "foo-${!count(\"foo\")}"
 	conf.URLs = urls
 	conf.Type = "_doc"
 	conf.Sniff = false
@@ -334,8 +334,8 @@ func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
 
 func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *testing.T) {
 	conf := NewElasticsearchConfig()
-	conf.Index = "${!metadata:index}"
-	conf.ID = "bar-${!count:bar}"
+	conf.Index = "${!meta(\"index\")}"
+	conf.ID = "bar-${!count(\"bar\")}"
 	conf.URLs = urls
 	conf.Type = "_doc"
 	conf.Sniff = false
@@ -399,8 +399,8 @@ func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *tes
 
 func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
 	conf := NewElasticsearchConfig()
-	conf.Index = "${!metadata:index}"
-	conf.ID = "bar-${!count:bar}"
+	conf.Index = "${!meta(\"index\")}"
+	conf.ID = "bar-${!count(\"bar\")}"
 	conf.URLs = urls
 	conf.Sniff = false
 	conf.Type = "_doc"

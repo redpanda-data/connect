@@ -19,7 +19,7 @@ per message.
 ```yaml
 # Config fields, showing default values
 group_by_value:
-  value: ${!metadata:example}
+  value: ${! meta("example") }
 ```
 
 This allows you to group messages using arbitrary fields within their content or
@@ -38,14 +38,14 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"${!metadata:example}"`  
+Default: `"${! meta(\"example\") }"`  
 
 ```yaml
 # Examples
 
-value: ${!metadata:kafka_key}
+value: ${! meta("kafka_key") }
 
-value: ${!json_field:foo.bar}-${!metadata:baz}
+value: ${! json("foo.bar") }-${! meta("baz") }
 ```
 
 ## Examples
@@ -58,7 +58,7 @@ could achieve that with the following:
 pipeline:
   processors:
   - group_by_value:
-      value: ${!metadata:kafka_key}
+      value: ${! meta("kafka_key") }
   - archive:
       format: tar
   - compress:
@@ -66,6 +66,6 @@ pipeline:
 output:
   s3:
     bucket: TODO
-    path: docs/${!metadata:kafka_key}/${!count:files}-${!timestamp_unix_nano}.tar.gz
+    path: docs/${! meta("kafka_key") }/${! count("files") }-${! timestamp_unix_nano() }.tar.gz
 ```
 

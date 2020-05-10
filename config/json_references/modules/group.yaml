@@ -7,4 +7,4 @@ pipeline:
   processors:
   - type: group_by_value
     group_by_value:
-      value: ${!json_field:document.type}
+      value: ${!json("document.type")}

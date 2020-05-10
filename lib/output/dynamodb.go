@@ -29,10 +29,10 @@ fields within the document payload or metadata like follows:
 
 ` + "``` yaml" + `
 string_columns:
-  id: ${!json_field:id}
-  title: ${!json_field:body.title}
-  topic: ${!metadata:kafka_topic}
-  full_content: ${!content}
+  id: ${!json("id")}
+  title: ${!json("body.title")}
+  topic: ${!meta("kafka_topic")}
+  full_content: ${!content()}
 ` + "```" + `
 
 The field ` + "`json_map_columns`" + ` is a map of column names to json paths,
@@ -73,10 +73,10 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldCommon("table", "The table to store messages in."),
 			docs.FieldCommon("string_columns", "A map of column keys to string values to store.",
 				map[string]string{
-					"id":           "${!json_field:id}",
-					"title":        "${!json_field:body.title}",
-					"topic":        "${!metadata:kafka_topic}",
-					"full_content": "${!content}",
+					"id":           "${!json(\"id\")}",
+					"title":        "${!json(\"body.title\")}",
+					"topic":        "${!meta(\"kafka_topic\")}",
+					"full_content": "${!content()}",
 				},
 			).SupportsInterpolation(false),
 			docs.FieldCommon("json_map_columns", "A map of column keys to [field paths](/docs/configuration/field_paths) pointing to value data within messages.",

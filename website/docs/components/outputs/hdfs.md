@@ -21,7 +21,7 @@ output:
     - localhost:9000
     user: benthos_hdfs
     directory: ""
-    path: ${!count:files}-${!timestamp_unix_nano}.txt
+    path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     max_in_flight: 1
 ```
 
@@ -75,12 +75,12 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"${!count:files}-${!timestamp_unix_nano}.txt"`  
+Default: `"${!count(\"files\")}-${!timestamp_unix_nano()}.txt"`  
 
 ```yaml
 # Examples
 
-path: ${!count:files}-${!timestamp_unix_nano}.txt
+path: ${!count("files")}-${!timestamp_unix_nano()}.txt
 ```
 
 ### `max_in_flight`

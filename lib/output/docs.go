@@ -65,7 +65,7 @@ An output config section looks like this:
 output:
   s3:
     bucket: TODO
-    path: "${!metadata:kafka_topic}/${!json_field:message.id}.json"
+    path: "${!meta(\"kafka_topic\")}/${!json(\"message.id\")}.json"
 
   # Optional list of processing steps
   processors:

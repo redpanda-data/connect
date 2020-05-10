@@ -14,7 +14,7 @@ import (
 func TestGroupByValueBasic(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = TypeGroupByValue
-	conf.GroupByValue.Value = "${!json_field:foo}"
+	conf.GroupByValue.Value = "${!json(\"foo\")}"
 
 	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {

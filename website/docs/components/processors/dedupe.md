@@ -69,7 +69,7 @@ path `id` within the message contents:
 ``` yaml
 dedupe:
   cache: foocache
-  key: ${!metadata:kafka_key}-${!json_field:id}
+  key: ${! meta("kafka_key") }-${! json("id") }
 ```
 
 Caches should be configured as a resource, for more information check out the

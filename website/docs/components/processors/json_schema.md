@@ -120,7 +120,7 @@ pipeline:
   - catch:
     - log:
         level: ERROR
-        message: "Schema validation failed due to: ${!error}"
+        message: "Schema validation failed due to: ${!error()}"
 ```
 
 If a payload being processed looked like:

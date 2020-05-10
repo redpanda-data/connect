@@ -23,8 +23,8 @@ func TestCacheSet(t *testing.T) {
 	}
 
 	conf := NewConfig()
-	conf.Cache.Key = "${!json_field:key}"
-	conf.Cache.Value = "${!json_field:value}"
+	conf.Cache.Key = "${!json(\"key\")}"
+	conf.Cache.Value = "${!json(\"value\")}"
 	conf.Cache.Cache = "foocache"
 	proc, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -80,8 +80,8 @@ func TestCacheSetParts(t *testing.T) {
 	}
 
 	conf := NewConfig()
-	conf.Cache.Key = "${!json_field:key}"
-	conf.Cache.Value = "${!json_field:value}"
+	conf.Cache.Key = "${!json(\"key\")}"
+	conf.Cache.Value = "${!json(\"value\")}"
 	conf.Cache.Cache = "foocache"
 	conf.Cache.Parts = []int{0, 1}
 	proc, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())
@@ -138,8 +138,8 @@ func TestCacheAdd(t *testing.T) {
 	}
 
 	conf := NewConfig()
-	conf.Cache.Key = "${!json_field:key}"
-	conf.Cache.Value = "${!json_field:value}"
+	conf.Cache.Key = "${!json(\"key\")}"
+	conf.Cache.Value = "${!json(\"value\")}"
 	conf.Cache.Cache = "foocache"
 	conf.Cache.Operator = "add"
 	proc, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())
@@ -209,7 +209,7 @@ func TestCacheGet(t *testing.T) {
 	memCache.Set("2", []byte("foo 2"))
 
 	conf := NewConfig()
-	conf.Cache.Key = "${!json_field:key}"
+	conf.Cache.Key = "${!json(\"key\")}"
 	conf.Cache.Cache = "foocache"
 	conf.Cache.Operator = "get"
 	proc, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())
@@ -269,7 +269,7 @@ func TestCacheDelete(t *testing.T) {
 	memCache.Set("3", []byte("foo 3"))
 
 	conf := NewConfig()
-	conf.Cache.Key = "${!json_field:key}"
+	conf.Cache.Key = "${!json(\"key\")}"
 	conf.Cache.Cache = "foocache"
 	conf.Cache.Operator = "delete"
 	proc, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())

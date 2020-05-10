@@ -31,7 +31,7 @@ for_each:
 - metric:
     type: counter_by
     path: count.custom.field
-    value: ${!json_field:field.some.value}
+    value: ${!json("field.some.value")}
 ` + "```" + `
 
 The ` + "`path`" + ` field should be a dot separated path of the metric to be
@@ -47,8 +47,8 @@ specific type.`,
 			docs.FieldCommon(
 				"labels", "A map of label names and values that can be used to enrich metrics with aggregators such as Prometheus.",
 				map[string]string{
-					"type":  "${!json_field:doc.type}",
-					"topic": "${!metadata:kafka_topic}",
+					"type":  "${!json(\"doc.type\")}",
+					"topic": "${!meta(\"kafka_topic\")}",
 				},
 			).SupportsInterpolation(true),
 			docs.FieldCommon("value", "For some metric types specifies a value to set, increment.").SupportsInterpolation(true),
@@ -78,7 +78,7 @@ For example, the following configuration will increment the value of the
 metric:
   type: counter_by
   path: count.custom.field
-  value: ${!json_field:field.some.value}
+  value: ${!json("field.some.value")}
 ` + "```" + `
 
 ### ` + "`gauge`" + `
@@ -93,7 +93,7 @@ For example, the following configuration will set the value of the
 metric:
   type: gauge
   path: gauge.custom.field
-  value: ${!json_field:field.some.value}
+  value: ${!json("field.some.value")}
 ` + "```" + `
 
 ### ` + "`timing`" + `

@@ -67,7 +67,7 @@ func TestLogBadLevel(t *testing.T) {
 func TestLogLevelTrace(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = TypeLog
-	conf.Log.Message = "${!json_field:foo}"
+	conf.Log.Message = "${!json(\"foo\")}"
 
 	logMock := &mockLog{}
 
@@ -110,10 +110,10 @@ func TestLogLevelTrace(t *testing.T) {
 func TestLogWithFields(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = TypeLog
-	conf.Log.Message = "${!json_field:foo}"
+	conf.Log.Message = "${!json(\"foo\")}"
 	conf.Log.Fields = map[string]string{
 		"static":  "foo",
-		"dynamic": "${!json_field:bar}",
+		"dynamic": "${!json(\"bar\")}",
 	}
 
 	logMock := &mockLog{}

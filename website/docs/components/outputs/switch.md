@@ -87,12 +87,12 @@ outputs:
   fallthrough: false
   output:
     cache:
-      key: ${!json_field:id}
+      key: ${!json("id")}
       target: foo
 - output:
     s3:
       bucket: bar
-      path: ${!json_field:id}
+      path: ${!json("id")}
 ```
 
 ## Examples

@@ -25,6 +25,46 @@ func TestMethods(t *testing.T) {
 			output:   `5`,
 			messages: []easyMsg{{}},
 		},
+		"json from": {
+			input:  `json("foo").from(0)`,
+			output: `1`,
+			messages: []easyMsg{
+				{content: `{"foo":1}`},
+				{content: `{"foo":2}`},
+				{content: `{"foo":3}`},
+				{content: `{"foo":4}`},
+			},
+		},
+		"json from 2": {
+			input:  `json("foo").from(1)`,
+			output: `2`,
+			messages: []easyMsg{
+				{content: `{"foo":1}`},
+				{content: `{"foo":2}`},
+				{content: `{"foo":3}`},
+				{content: `{"foo":4}`},
+			},
+		},
+		"json from 3": {
+			input:  `json("foo").from(-1)`,
+			output: `4`,
+			messages: []easyMsg{
+				{content: `{"foo":1}`},
+				{content: `{"foo":2}`},
+				{content: `{"foo":3}`},
+				{content: `{"foo":4}`},
+			},
+		},
+		"json from 4": {
+			input:  `json("foo").from(-2)`,
+			output: `3`,
+			messages: []easyMsg{
+				{content: `{"foo":1}`},
+				{content: `{"foo":2}`},
+				{content: `{"foo":3}`},
+				{content: `{"foo":4}`},
+			},
+		},
 		"json from all": {
 			input:  `json("foo").from_all()`,
 			output: `["a","b","c"]`,

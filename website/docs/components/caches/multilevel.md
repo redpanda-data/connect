@@ -36,11 +36,11 @@ pipeline:
           - cache:
               cache: leveled
               operator: get
-              key: ${!json_field:key}
+              key: ${! json("key") }
           - catch:
             - text:
                 operator: set
-                value: '{"err":"${!error}"}'
+                value: '{"err":"${! error() }"}'
         postmap:
           result: .
 

@@ -35,11 +35,11 @@ names to interpolated values, also evaluated per message of a batch:
 ```yaml
 redis_hash:
   url: tcp://localhost:6379
-  key: ${!json_field:id}
+  key: ${!json("id")}
   fields:
-    topic: ${!metadata:kafka_topic}
-    partition: ${!metadata:kafka_partition}
-    content: ${!json_field:document.text}
+    topic: ${!meta("kafka_topic")}
+    partition: ${!meta("kafka_partition")}
+    content: ${!json("document.text")}
 ```
 
 If the field `walk_metadata` is set to `true` then Benthos
@@ -92,11 +92,11 @@ Default: `""`
 ```yaml
 # Examples
 
-key: ${!metadata:kafka_key}
+key: ${!meta("kafka_key")}
 
-key: ${!json_field:doc.id}
+key: ${!json("doc.id")}
 
-key: ${!count:msgs}
+key: ${!count("msgs")}
 ```
 
 ### `walk_metadata`

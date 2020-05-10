@@ -17,7 +17,7 @@ Writes each individual message to a new file.
 # Config fields, showing default values
 output:
   files:
-    path: ${!count:files}-${!timestamp_unix_nano}.txt
+    path: ${!count("files")}-${!timestamp_unix_nano()}.txt
 ```
 
 In order for each message to create a new file the path must use function
@@ -32,6 +32,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"${!count:files}-${!timestamp_unix_nano}.txt"`  
+Default: `"${!count(\"files\")}-${!timestamp_unix_nano()}.txt"`  
 
 

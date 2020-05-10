@@ -30,7 +30,7 @@ func NewHDFSConfig() HDFSConfig {
 		Hosts:       []string{"localhost:9000"},
 		User:        "benthos_hdfs",
 		Directory:   "",
-		Path:        "${!count:files}-${!timestamp_unix_nano}.txt",
+		Path:        `${!count("files")}-${!timestamp_unix_nano()}.txt`,
 		MaxInFlight: 1,
 	}
 }

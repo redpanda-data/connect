@@ -254,7 +254,7 @@ func TestProcessFieldDiscardWithMetadata(t *testing.T) {
 	procConf.Type = TypeMetadata
 	procConf.Metadata.Operator = "set"
 	procConf.Metadata.Key = "foo"
-	procConf.Metadata.Value = "${!content}"
+	procConf.Metadata.Value = "${!content()}"
 	conf.ProcessField.Processors = append(conf.ProcessField.Processors, procConf)
 
 	procConf = NewConfig()
@@ -284,7 +284,7 @@ func TestProcessFieldDiscardWithMetadata(t *testing.T) {
 	if exp, act := "encode me", msg[0].Get(0).Metadata().Get("foo"); exp != act {
 		t.Errorf("Unexpected metadata value: %v != %v", act, exp)
 	}
-	if exp, act := "encode me", msg[0].Get(1).Metadata().Get("foo"); exp != act {
+	if exp, act := "encode me too", msg[0].Get(1).Metadata().Get("foo"); exp != act {
 		t.Errorf("Unexpected metadata value: %v != %v", act, exp)
 	}
 }
@@ -300,7 +300,7 @@ func TestProcessFieldDiscardMisaligned(t *testing.T) {
 	procConf.Type = TypeMetadata
 	procConf.Metadata.Operator = "set"
 	procConf.Metadata.Key = "foo"
-	procConf.Metadata.Value = "${!content}"
+	procConf.Metadata.Value = "${!content()}"
 	conf.ProcessField.Processors = append(conf.ProcessField.Processors, procConf)
 
 	procConf = NewConfig()

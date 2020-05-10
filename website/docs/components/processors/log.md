@@ -36,7 +36,7 @@ following config:
 for_each:
 - log:
     level: DEBUG
-    message: "field: ${!json_field:foo.bar}, part: ${!metadata:kafka_partition}"
+    message: 'field: ${! json("foo.bar") }, part: ${! meta("kafka_partition") }'
 ```
 
 The `level` field determines the log level of the printed events and
@@ -54,8 +54,8 @@ log:
   level: DEBUG
   message: "foo"
   fields:
-    id: "${!json_field:id}"
-    kafka_topic: "${!metadata:kafka_topic}"
+    id: '${! json("id") }'
+    kafka_topic: '${! meta("kafka_topic") }'
 ```
 
 ## Fields

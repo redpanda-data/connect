@@ -68,7 +68,7 @@ func TestNumberBasic(t *testing.T) {
 		{
 			name:     "add interpolated string 1",
 			operator: "add",
-			value:    "${!batch_size}",
+			value:    "${!batch_size()}",
 			input: []string{
 				"6", "10.1",
 			},
@@ -123,7 +123,7 @@ func TestNumberBasic(t *testing.T) {
 		{
 			name:     "subtract interpolated string 1",
 			operator: "subtract",
-			value:    "${!batch_size}",
+			value:    "${!batch_size()}",
 			input: []string{
 				"6", "10.1",
 			},
@@ -218,7 +218,7 @@ func TestNumberBadContent(t *testing.T) {
 func TestNumberBadInterpolatedValue(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = TypeNumber
-	conf.Number.Value = "${!batch_size} but this is never a number"
+	conf.Number.Value = "${!batch_size()} but this is never a number"
 	conf.Number.Operator = "add"
 
 	proc, err := New(conf, nil, log.Noop(), metrics.Noop())

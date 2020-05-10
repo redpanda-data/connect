@@ -11,7 +11,7 @@ An output config section looks like this:
 output:
   s3:
     bucket: TODO
-    path: "${!metadata:kafka_topic}/${!json_field:message.id}.json"
+    path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
 
   # Optional list of processing steps
   processors:
@@ -57,7 +57,7 @@ The easiest form of multiplexing is by using [field interpolation][interpolation
 output:
   kafka:
     addresses: [ TODO:6379 ]
-    topic: ${!metadata:target_topic}
+    topic: ${! meta("target_topic") }
 ```
 
 Although this form of multiplexing is limited as it doesn't support different output types, and only some output fields support interpolation.
@@ -76,12 +76,12 @@ output:
       output:
         cache:
           target: foo
-          key: ${!json_field:id}
+          key: ${! json("id") }
       fallthrough: false
     - output:
         s3:
           bucket: bar
-          path: ${!json_field:id}
+          path: ${! json("id") }
 ```
 
 For each output case you are able to specify a [condition][conditions] to determine whether a message should be routed to it.
@@ -97,14 +97,14 @@ output:
     outputs:
     - cache:
         target: foo
-        key: ${!json_field:id}
+        key: ${! json("id") }
       processors:
       - filter_parts:
           jmespath:
             query: "contains(urls, 'http://benthos.dev')"
     - s3:
         bucket: bar
-        path: ${!json_field:id}
+        path: ${! json("id") }
       processors:
       - filter_parts:
           jmespath:

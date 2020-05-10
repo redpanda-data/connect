@@ -28,7 +28,7 @@ each message of a batch place it within a
 ``` yaml
 for_each:
 - sleep:
-    duration: ${!metadata:sleep_for}
+    duration: ${! meta("sleep_for") }
 ```
 
 ## Fields

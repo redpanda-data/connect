@@ -68,7 +68,7 @@ For example, we can break our window out into groups based on the messages Kafka
 pipeline:
   processors:
   - group_by_value:
-      value: ${!metadata:kafka_key}
+      value: ${! meta("kafka_key") }
 ```
 
 ## Aggregating
@@ -91,7 +91,7 @@ pipeline:
       parts: [ 0 ] # Only bother running this for the first message.
       operator: set
       path: doc.count
-      value: ${!batch_size}
+      value: ${! batch_size() }
 
   # Drop all messages except the first.
   - select_parts:
@@ -162,7 +162,7 @@ pipeline:
       parts: [ 0 ] # Only inject into the first message.
       operator: set
       path: doc.count
-      value: ${!json_field:doc.count,-1}
+      value: ${! json("doc.count").from(-1) }
 
   # Using interpolation above results in a string, so we parse that back into a
   # number.

@@ -20,7 +20,7 @@ pipeline:
       key: example
       operator: set
       parts: []
-      value: ${!hostname}
+      value: ${!hostname()}
   threads: 1
 output:
   type: stdout

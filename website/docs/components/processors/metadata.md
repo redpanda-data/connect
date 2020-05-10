@@ -31,7 +31,7 @@ import TabItem from '@theme/TabItem';
 metadata:
   operator: set
   key: example
-  value: ${!hostname}
+  value: ${!hostname()}
 ```
 
 </TabItem>
@@ -42,7 +42,7 @@ metadata:
 metadata:
   operator: set
   key: example
-  value: ${!hostname}
+  value: ${!hostname()}
   parts: []
 ```
 
@@ -67,7 +67,7 @@ for_each:
 - metadata:
     operator: set
     key: foo
-    value: ${!json_field:document.foo}
+    value: ${! json("document.foo") }
 ```
 
 ## Operators
@@ -118,7 +118,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"${!hostname}"`  
+Default: `"${!hostname()}"`  
 
 ### `parts`
 

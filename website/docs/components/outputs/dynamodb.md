@@ -88,10 +88,10 @@ fields within the document payload or metadata like follows:
 
 ``` yaml
 string_columns:
-  id: ${!json_field:id}
-  title: ${!json_field:body.title}
-  topic: ${!metadata:kafka_topic}
-  full_content: ${!content}
+  id: ${!json("id")}
+  title: ${!json("body.title")}
+  topic: ${!meta("kafka_topic")}
+  full_content: ${!content()}
 ```
 
 The field `json_map_columns` is a map of column names to json paths,
@@ -157,10 +157,10 @@ Default: `{}`
 # Examples
 
 string_columns:
-  full_content: ${!content}
-  id: ${!json_field:id}
-  title: ${!json_field:body.title}
-  topic: ${!metadata:kafka_topic}
+  full_content: ${!content()}
+  id: ${!json("id")}
+  title: ${!json("body.title")}
+  topic: ${!meta("kafka_topic")}
 ```
 
 ### `json_map_columns`

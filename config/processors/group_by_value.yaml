@@ -17,7 +17,7 @@ pipeline:
   processors:
   - type: group_by_value
     group_by_value:
-      value: ${!metadata:example}
+      value: ${! meta("example") }
   threads: 1
 output:
   type: stdout

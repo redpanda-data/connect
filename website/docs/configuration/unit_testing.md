@@ -34,7 +34,7 @@ pipeline:
 output:
   s3:
     bucket: TODO
-    path: "${!metadata:kafka_topic}/${!json_field:message.id}.json"
+    path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
 ```
 
 In order to write unit tests for this config we must accompany it with a file of the same name and extension, but suffixed with `_benthos_test`, which in this case would be `foo_benthos_test.yaml`. We can generate an example definition for this config with `benthos test --generate ./foo.yaml`:

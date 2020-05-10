@@ -394,7 +394,7 @@ pipeline:
   processors:
   - archive:
       format: ${PROCESSOR_ARCHIVE_FORMAT:binary}
-      path: ${PROCESSOR_ARCHIVE_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
+      path: ${PROCESSOR_ARCHIVE_PATH:${!count("files")}-${!timestamp_unix_nano()}.txt}
     avro:
       encoding: ${PROCESSOR_AVRO_ENCODING:textual}
       operator: ${PROCESSOR_AVRO_OPERATOR:to_json}
@@ -474,7 +474,7 @@ pipeline:
       remove_empty_values: ${PROCESSOR_GROK_REMOVE_EMPTY_VALUES:true}
       use_default_patterns: ${PROCESSOR_GROK_USE_DEFAULT_PATTERNS:true}
     group_by_value:
-      value: ${PROCESSOR_GROUP_BY_VALUE_VALUE:${!metadata:example}}
+      value: ${PROCESSOR_GROUP_BY_VALUE_VALUE:${! meta("example") }}
     hash:
       algorithm: ${PROCESSOR_HASH_ALGORITHM:sha256}
       key: ${PROCESSOR_HASH_KEY}
@@ -549,7 +549,7 @@ pipeline:
     metadata:
       key: ${PROCESSOR_METADATA_KEY:example}
       operator: ${PROCESSOR_METADATA_OPERATOR:set}
-      value: ${PROCESSOR_METADATA_VALUE:${!hostname}}
+      value: ${PROCESSOR_METADATA_VALUE:${!hostname()}}
     metric:
       path: ${PROCESSOR_METRIC_PATH}
       type: ${PROCESSOR_METRIC_TYPE:counter}
@@ -645,7 +645,7 @@ output:
           skip_cert_verify: ${OUTPUT_AMQP_0_9_TLS_SKIP_CERT_VERIFY:false}
         url: ${OUTPUT_AMQP_0_9_URL:amqp://guest:guest@localhost:5672/}
       cache:
-        key: ${OUTPUT_CACHE_KEY:${!count:items}-${!timestamp_unix_nano}}
+        key: ${OUTPUT_CACHE_KEY:${!count("items")}-${!timestamp_unix_nano()}}
         max_in_flight: ${OUTPUT_CACHE_MAX_IN_FLIGHT:1}
         target: ${OUTPUT_CACHE_TARGET}
       dynamic:
@@ -676,7 +676,7 @@ output:
           count: ${OUTPUT_ELASTICSEARCH_BATCHING_COUNT:1}
           period: ${OUTPUT_ELASTICSEARCH_BATCHING_PERIOD}
         healthcheck: ${OUTPUT_ELASTICSEARCH_HEALTHCHECK:true}
-        id: ${OUTPUT_ELASTICSEARCH_ID:${!count:elastic_ids}-${!timestamp_unix}}
+        id: ${OUTPUT_ELASTICSEARCH_ID:${!count("elastic_ids")}-${!timestamp_unix()}}
         index: ${OUTPUT_ELASTICSEARCH_INDEX:benthos_index}
         max_in_flight: ${OUTPUT_ELASTICSEARCH_MAX_IN_FLIGHT:1}
         max_retries: ${OUTPUT_ELASTICSEARCH_MAX_RETRIES:0}
@@ -690,7 +690,7 @@ output:
         delimiter: ${OUTPUT_FILE_DELIMITER}
         path: ${OUTPUT_FILE_PATH}
       files:
-        path: ${OUTPUT_FILES_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
+        path: ${OUTPUT_FILES_PATH:${!count("files")}-${!timestamp_unix_nano()}.txt}
       gcp_pubsub:
         max_in_flight: ${OUTPUT_GCP_PUBSUB_MAX_IN_FLIGHT:1}
         project: ${OUTPUT_GCP_PUBSUB_PROJECT}
@@ -700,7 +700,7 @@ output:
         hosts:
         - ${OUTPUT_HDFS_HOSTS:localhost:9000}
         max_in_flight: ${OUTPUT_HDFS_MAX_IN_FLIGHT:1}
-        path: ${OUTPUT_HDFS_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
+        path: ${OUTPUT_HDFS_PATH:${!count("files")}-${!timestamp_unix_nano()}.txt}
         user: ${OUTPUT_HDFS_USER:benthos_hdfs}
       http_client:
         backoff_on:
@@ -897,7 +897,7 @@ output:
         force_path_style_urls: ${OUTPUT_S3_FORCE_PATH_STYLE_URLS:false}
         kms_key_id: ${OUTPUT_S3_KMS_KEY_ID}
         max_in_flight: ${OUTPUT_S3_MAX_IN_FLIGHT:1}
-        path: ${OUTPUT_S3_PATH:${!count:files}-${!timestamp_unix_nano}.txt}
+        path: ${OUTPUT_S3_PATH:${!count("files")}-${!timestamp_unix_nano()}.txt}
         region: ${OUTPUT_S3_REGION:eu-west-1}
         storage_class: ${OUTPUT_S3_STORAGE_CLASS:STANDARD}
         timeout: ${OUTPUT_S3_TIMEOUT:5s}

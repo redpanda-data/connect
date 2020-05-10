@@ -33,9 +33,9 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldCommon("bucket", "The bucket to upload messages to."),
 			docs.FieldCommon(
 				"path", "The path of each message to upload.",
-				"${!count:files}-${!timestamp_unix_nano}.txt",
-				"${!metadata:kafka_key}.json",
-				"${!json_field:doc.namespace}/${!json_field:doc.id}.json",
+				`${!count("files")}-${!timestamp_unix_nano()}.txt`,
+				`${!meta("kafka_key")}.json`,
+				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
 			).SupportsInterpolation(false),
 			docs.FieldCommon("content_type", "The content type to set for each object.").SupportsInterpolation(false),
 			docs.FieldAdvanced("content_encoding", "An optional content encoding to set for each object.").SupportsInterpolation(false),

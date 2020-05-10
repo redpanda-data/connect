@@ -24,7 +24,7 @@ type FilesConfig struct {
 // NewFilesConfig creates a new Config with default values.
 func NewFilesConfig() FilesConfig {
 	return FilesConfig{
-		Path: "${!count:files}-${!timestamp_unix_nano}.txt",
+		Path: `${!count("files")}-${!timestamp_unix_nano()}.txt`,
 	}
 }
 

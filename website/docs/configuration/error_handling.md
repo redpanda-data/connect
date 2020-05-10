@@ -65,7 +65,7 @@ For example, when catching failed processors you can [`log`][log] the messages:
 ```yaml
   - catch:
     - log:
-        message: "Processing failed due to: ${!error}"
+        message: "Processing failed due to: ${!error()}"
 ```
 
 Or perhaps augment the message payload with the error message:
@@ -75,7 +75,7 @@ Or perhaps augment the message payload with the error message:
     - json:
         operator: set
         path: meta.error
-        value: ${!error}
+        value: ${!error()}
 ```
 
 ## Attempt Until Success

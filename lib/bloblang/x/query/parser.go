@@ -69,9 +69,16 @@ func ParseDeprecated(input []rune) parser.Result {
 		parseWithTails(functionParser()),
 		parseDeprecatedFunction,
 	)
-	res := arithmeticParser(rootParser)(input)
+
+	res := parser.SpacesAndTabs()(input)
+
+	i := len(input) - len(res.Remaining)
+	res = arithmeticParser(rootParser)(res.Remaining)
 	if res.Err != nil {
-		return res
+		return parser.Result{
+			Err:       parser.ErrAtPosition(i, res.Err),
+			Remaining: input,
+		}
 	}
 
 	result := res.Result

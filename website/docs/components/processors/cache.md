@@ -147,7 +147,7 @@ condition:
 - cache:
     cache: TODO
     operator: add
-    key: "${!json_field:message.id}"
+    key: '${!json("message.id")}'
     value: "storeme"
 - filter_parts:
     type: processor_failed
@@ -164,7 +164,7 @@ using the [`process_map`](/docs/components/processors/process_map) processor:
     - cache:
         cache: TODO
         operator: get
-        key: "${!json_field:message.document_id}"
+        key: '${!json("message.document_id")}'
     postmap:
       message.document: .
 ```

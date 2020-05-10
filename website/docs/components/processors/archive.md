@@ -18,7 +18,7 @@ selected archive [format](#formats).
 # Config fields, showing default values
 archive:
   format: binary
-  path: ${!count:files}-${!timestamp_unix_nano}.txt
+  path: ${!count("files")}-${!timestamp_unix_nano()}.txt
 ```
 
 Some archive formats (such as tar, zip) treat each archive item (message part)
@@ -52,14 +52,14 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"${!count:files}-${!timestamp_unix_nano}.txt"`  
+Default: `"${!count(\"files\")}-${!timestamp_unix_nano()}.txt"`  
 
 ```yaml
 # Examples
 
-path: ${!count:files}-${!timestamp_unix_nano}.txt
+path: ${!count("files")}-${!timestamp_unix_nano()}.txt
 
-path: ${!metadata:kafka_key}-${!json_field:id}.json
+path: ${!meta("kafka_key")}-${!json("id")}.json
 ```
 
 ## Formats
@@ -105,6 +105,6 @@ this:
 ```yaml
 archive:
   format: tar
-  path: ${!json_field:doc.id}.json
+  path: ${!json("doc.id")}.json
 ```
 

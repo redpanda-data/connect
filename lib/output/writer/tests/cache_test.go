@@ -23,7 +23,7 @@ func TestCacheBasic(t *testing.T) {
 
 	cacheConf := writer.NewCacheConfig()
 	cacheConf.Target = "foo"
-	cacheConf.Key = "${!json_field:key}"
+	cacheConf.Key = "${!json(\"key\")}"
 
 	c, err := writer.NewCache(cacheConf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -66,7 +66,7 @@ func TestCacheBatches(t *testing.T) {
 
 	cacheConf := writer.NewCacheConfig()
 	cacheConf.Target = "foo"
-	cacheConf.Key = "${!json_field:key}"
+	cacheConf.Key = "${!json(\"key\")}"
 
 	c, err := writer.NewCache(cacheConf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {

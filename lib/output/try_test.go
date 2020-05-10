@@ -26,17 +26,17 @@ func TestTryOutputBasic(t *testing.T) {
 	outOne.HTTPClient.URL = "http://localhost:11111111/badurl"
 	outOne.HTTPClient.NumRetries = 1
 	outOne.HTTPClient.Retry = "1ms"
-	outTwo.Files.Path = filepath.Join(dir, "two", "bar-${!count:tofoo}-${!count:tobar}.txt")
+	outTwo.Files.Path = filepath.Join(dir, "two", "bar-${!count(\"tofoo\")}-${!count(\"tobar\")}.txt")
 	outThree.File.Path = "/dev/null"
 
 	procOne, procTwo, procThree := processor.NewConfig(), processor.NewConfig(), processor.NewConfig()
 	procOne.Type, procTwo.Type, procThree.Type = processor.TypeText, processor.TypeText, processor.TypeText
 	procOne.Text.Operator = "prepend"
-	procOne.Text.Value = "this-should-never-appear ${!count:tofoo}"
+	procOne.Text.Value = "this-should-never-appear ${!count(\"tofoo\")}"
 	procTwo.Text.Operator = "prepend"
 	procTwo.Text.Value = "two-"
 	procThree.Text.Operator = "prepend"
-	procThree.Text.Value = "this-should-never-appear ${!count:tobar}"
+	procThree.Text.Value = "this-should-never-appear ${!count(\"tobar\")}"
 
 	outOne.Processors = append(outOne.Processors, procOne)
 	outTwo.Processors = append(outTwo.Processors, procTwo)

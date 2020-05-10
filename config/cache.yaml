@@ -19,7 +19,7 @@ pipeline:
 output:
   type: cache
   cache:
-    key: ${!count:items}-${!timestamp_unix_nano}
+    key: ${!count("items")}-${!timestamp_unix_nano()}
     max_in_flight: 1
     target: ""
 resources:

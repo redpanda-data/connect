@@ -22,7 +22,7 @@ pipeline:
   - metadata:
       operator: set
       key: time
-      value: ${!json_field:event.timestamp}
+      value: ${! json("event.timestamp") }
 ```
 
 If there are lots of metadata fields you want to copy out of the payload then listing several `metadata` processors might be a bit of a pain. In that case you can shorten your config with the [`awk` processor][proc-awk], which provides a `metadata_set` function:
@@ -47,7 +47,7 @@ Metadata values can be referenced in any field that supports [interpolation func
 output:
   kafka:
     addresses: [ TODO ]
-    topic: ${!metadata:target_topic}
+    topic: ${! meta("target_topic") }
 ```
 
 Benthos also allows you to conditionally process messages based on their metadata with the [`metadata` condition][cond-meta] and processors such as [`switch`][proc-switch]:

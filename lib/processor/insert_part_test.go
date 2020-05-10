@@ -184,7 +184,7 @@ func TestInsertPart(t *testing.T) {
 
 func TestInsertPartInterpolation(t *testing.T) {
 	conf := NewConfig()
-	conf.InsertPart.Content = "hello ${!hostname} world"
+	conf.InsertPart.Content = "hello ${!hostname()} world"
 
 	hostname, _ := os.Hostname()
 

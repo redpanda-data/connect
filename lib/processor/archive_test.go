@@ -31,7 +31,7 @@ func TestArchiveBadAlgo(t *testing.T) {
 func TestArchiveTar(t *testing.T) {
 	conf := NewConfig()
 	conf.Archive.Format = "tar"
-	conf.Archive.Path = "foo-${!metadata:path}"
+	conf.Archive.Path = "foo-${!meta(\"path\")}"
 
 	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 

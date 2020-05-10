@@ -130,7 +130,7 @@ func TestDedupeInterpolation(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Dedupe.Cache = "foocache"
-	conf.Dedupe.Key = "${!json_field:id}${!json_field:never.exists}"
+	conf.Dedupe.Key = "${! json(\"id\") }${! json(\"never.exists\") }"
 	conf.Dedupe.DropOnCacheErr = false
 	proc, err1 := NewDedupe(conf, mgr, log.Noop(), metrics.Noop())
 	if err1 != nil {

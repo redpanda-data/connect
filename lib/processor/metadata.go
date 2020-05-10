@@ -40,7 +40,7 @@ for_each:
 - metadata:
     operator: set
     key: foo
-    value: ${!json_field:document.foo}
+    value: ${! json("document.foo") }
 ` + "```" + `
 
 ## Operators
@@ -88,7 +88,7 @@ func NewMetadataConfig() MetadataConfig {
 		Parts:    []int{},
 		Operator: "set",
 		Key:      "example",
-		Value:    `${!hostname}`,
+		Value:    `${!hostname()}`,
 	}
 }
 

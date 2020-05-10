@@ -96,15 +96,15 @@ Default: `""`
 
 value: foo
 
-value: ${!metadata:kafka_key}
+value: ${!meta("kafka_key")}
 
 value: false
 
 value: 10
 
 value:
-  key: ${!metadata:kafka_key}
-  topic: ${!metadata:kafka_topic}
+  key: ${!meta("kafka_key")}
+  topic: ${!meta("kafka_topic")}
 ```
 
 ### `parts`

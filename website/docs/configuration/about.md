@@ -36,7 +36,7 @@ output:
   type: s3
   s3:
     bucket: TODO
-    path: "${!metadata:kafka_topic}/${!json_field:message.id}.json"
+    path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
 ```
 
 </TabItem>
@@ -67,7 +67,7 @@ output:
   type: s3
   s3:
     bucket: TODO
-    path: "${!metadata:kafka_topic}/${!json_field:message.id}.json"
+    path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
 
 resources:
   caches: {}
@@ -130,7 +130,7 @@ pipeline:
 output:
   s3:
     bucket: TODO
-    path: "${!metadata:kafka_topic}/${!json_field:message.id}.json"
+    path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
 ```
 
 ## Customising Your Configuration
@@ -181,7 +181,7 @@ pipeline:
   processors:
   - cache:
       operator: get
-      key: ${!json_field:id}
+      key: ${! json("id") }
       cache: objects
 ```
 
@@ -209,7 +209,7 @@ pipeline:
 
   - cache:
       operator: get
-      key: ${!json_field:id}
+      key: ${! json("id") }
       cache: objects
 ```
 

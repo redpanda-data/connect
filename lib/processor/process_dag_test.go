@@ -113,7 +113,7 @@ func TestProcessDAGParallel(t *testing.T) {
 	procConf.Type = TypeMetadata
 	procConf.Metadata.Operator = "set"
 	procConf.Metadata.Key = "A"
-	procConf.Metadata.Value = "foo: ${!json_field:foo}"
+	procConf.Metadata.Value = "foo: ${!json(\"foo\")}"
 
 	fooConf := NewProcessMapConfig()
 	fooConf.Conditions = []condition.Config{condConf}
@@ -130,7 +130,7 @@ func TestProcessDAGParallel(t *testing.T) {
 	procConf.Type = TypeMetadata
 	procConf.Metadata.Operator = "set"
 	procConf.Metadata.Key = "A"
-	procConf.Metadata.Value = "bar: ${!json_field:bar}"
+	procConf.Metadata.Value = "bar: ${!json(\"bar\")}"
 
 	barConf := NewProcessMapConfig()
 	barConf.Conditions = []condition.Config{condConf}
@@ -147,7 +147,7 @@ func TestProcessDAGParallel(t *testing.T) {
 	procConf.Type = TypeMetadata
 	procConf.Metadata.Operator = "set"
 	procConf.Metadata.Key = "B"
-	procConf.Metadata.Value = "${!metadata:A}"
+	procConf.Metadata.Value = "${!meta(\"A\")}"
 
 	bazConf := NewProcessMapConfig()
 	bazConf.Conditions = []condition.Config{condConf}
@@ -164,7 +164,7 @@ func TestProcessDAGParallel(t *testing.T) {
 	procConf.Type = TypeMetadata
 	procConf.Metadata.Operator = "set"
 	procConf.Metadata.Key = "B"
-	procConf.Metadata.Value = "${!metadata:A}"
+	procConf.Metadata.Value = "${!meta(\"A\")}"
 
 	quxConf := NewProcessMapConfig()
 	quxConf.Conditions = []condition.Config{condConf}

@@ -63,7 +63,7 @@ process_field:
   processors:
   - number:
       operator: subtract
-      value: "${!timestamp_unix}"
+      value: "${!timestamp_unix()}"
 ```
 
 Value interpolations are resolved once per message batch, in order to resolve it

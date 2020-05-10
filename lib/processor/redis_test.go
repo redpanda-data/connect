@@ -70,7 +70,7 @@ func testRedisSAdd(t *testing.T, client *redis.Client, url string) {
 	conf.Type = TypeRedis
 	conf.Redis.URL = url
 	conf.Redis.Operator = "sadd"
-	conf.Redis.Key = "${!metadata:key}"
+	conf.Redis.Key = "${! meta(\"key\") }"
 
 	r, err := NewRedis(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -131,7 +131,7 @@ func testRedisSCard(t *testing.T, client *redis.Client, url string) {
 	conf.Type = TypeRedis
 	conf.Redis.URL = url
 	conf.Redis.Operator = "scard"
-	conf.Redis.Key = "${!content}"
+	conf.Redis.Key = "${!content()}"
 
 	r, err := NewRedis(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {

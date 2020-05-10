@@ -42,7 +42,7 @@ of the batch.`,
 			docs.FieldCommon("format", "The archiving [format](#formats) to apply.").HasOptions("tar", "zip", "binary", "lines", "json_array"),
 			docs.FieldCommon(
 				"path", "The path to set for each message in the archive (when applicable).",
-				"${!count:files}-${!timestamp_unix_nano}.txt", "${!metadata:kafka_key}-${!json_field:id}.json",
+				"${!count(\"files\")}-${!timestamp_unix_nano()}.txt", "${!meta(\"kafka_key\")}-${!json(\"id\")}.json",
 			).SupportsInterpolation(false),
 		},
 		Footnotes: `
@@ -89,7 +89,7 @@ this:
 ` + "```yaml" + `
 archive:
   format: tar
-  path: ${!json_field:doc.id}.json
+  path: ${!json("doc.id")}.json
 ` + "```" + ``,
 	}
 }
@@ -106,7 +106,7 @@ type ArchiveConfig struct {
 func NewArchiveConfig() ArchiveConfig {
 	return ArchiveConfig{
 		Format: "binary",
-		Path:   "${!count:files}-${!timestamp_unix_nano}.txt",
+		Path:   `${!count("files")}-${!timestamp_unix_nano()}.txt`,
 	}
 }
 

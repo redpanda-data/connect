@@ -26,7 +26,7 @@ Some Benthos fields also support [Bloblang][bloblang] function interpolations, w
 output:
   kafka:
     addresses: [ "TODO:6379" ]
-    topic: 'dope-${!json("topic")}'
+    topic: 'dope-${! json("topic") }'
 ```
 
 A message with the contents `{"topic":"foo","message":"hello world"}` would be routed to the Kafka topic `dope-foo`.

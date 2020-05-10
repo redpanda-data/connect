@@ -26,11 +26,11 @@ names to interpolated values, also evaluated per message of a batch:
 ` + "```yaml" + `
 redis_hash:
   url: tcp://localhost:6379
-  key: ${!json_field:id}
+  key: ${!json("id")}
   fields:
-    topic: ${!metadata:kafka_topic}
-    partition: ${!metadata:kafka_partition}
-    content: ${!json_field:document.text}
+    topic: ${!meta("kafka_topic")}
+    partition: ${!meta("kafka_partition")}
+    content: ${!json("document.text")}
 ` + "```" + `
 
 If the field ` + "`walk_metadata`" + ` is set to ` + "`true`" + ` then Benthos
@@ -53,7 +53,7 @@ Where latter stages will overwrite matching field names of a former stage.`,
 			docs.FieldCommon("url", "The URL of a Redis server to connect to.", "tcp://localhost:6379"),
 			docs.FieldCommon(
 				"key", "The key for each message, function interpolations should be used to create a unique key per message.",
-				"${!metadata:kafka_key}", "${!json_field:doc.id}", "${!count:msgs}",
+				"${!meta(\"kafka_key\")}", "${!json(\"doc.id\")}", "${!count(\"msgs\")}",
 			).SupportsInterpolation(false),
 			docs.FieldCommon("walk_metadata", "Whether all metadata fields of messages should be walked and added to the list of hash fields to set."),
 			docs.FieldCommon("walk_json_object", "Whether to walk each message as a JSON object and add each key/value pair to the list of hash fields to set."),

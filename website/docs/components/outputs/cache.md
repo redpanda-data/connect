@@ -18,7 +18,7 @@ Stores each message in a [cache](/docs/components/caches/about).
 output:
   cache:
     target: ""
-    key: ${!count:items}-${!timestamp_unix_nano}
+    key: ${!count("items")}-${!timestamp_unix_nano()}
     max_in_flight: 1
 ```
 
@@ -39,7 +39,7 @@ The `target` field must point to a configured cache like follows:
 output:
   cache:
     target: foo
-    key: ${!json_field:document.id}
+    key: ${!json("document.id")}
 
 resources:
   caches:
@@ -77,16 +77,16 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"${!count:items}-${!timestamp_unix_nano}"`  
+Default: `"${!count(\"items\")}-${!timestamp_unix_nano()}"`  
 
 ```yaml
 # Examples
 
-key: ${!count:items}-${!timestamp_unix_nano}
+key: ${!count("items")}-${!timestamp_unix_nano()}
 
-key: ${!json_field:doc.id}
+key: ${!json("doc.id")}
 
-key: ${!metadata:kafka_key}
+key: ${!meta("kafka_key")}
 ```
 
 ### `max_in_flight`

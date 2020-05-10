@@ -59,7 +59,7 @@ for each message of the batch place it within a
 for_each:
 - text:
     operator: set
-    value: ${!json_field:document.content}
+    value: ${!json("document.content")}
 ```
 
 ## Fields

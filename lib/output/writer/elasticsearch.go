@@ -63,7 +63,7 @@ func NewElasticsearchConfig() ElasticsearchConfig {
 		URLs:        []string{"http://localhost:9200"},
 		Sniff:       true,
 		Healthcheck: true,
-		ID:          "${!count:elastic_ids}-${!timestamp_unix}",
+		ID:          `${!count("elastic_ids")}-${!timestamp_unix()}`,
 		Index:       "benthos_index",
 		Pipeline:    "",
 		Type:        "doc",

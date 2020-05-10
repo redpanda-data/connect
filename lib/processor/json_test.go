@@ -986,14 +986,14 @@ func TestJSONSet(t *testing.T) {
 		{
 			name:   "set interpolate 1",
 			path:   "foo",
-			value:  `{"baz":"${!json_field:bar}"}`,
+			value:  `{"baz":"${!json("bar")}"}`,
 			input:  `{"foo":2,"bar":"hello world this is a string"}`,
 			output: `{"bar":"hello world this is a string","foo":{"baz":"hello world this is a string"}}`,
 		},
 		{
 			name:   "set interpolate 2",
 			path:   ".",
-			value:  `{"${!json_field:key}":{"value":"${!json_field:value}"}}`,
+			value:  `{"${!json("key")}":{"value":"${!json("value")}"}}`,
 			input:  `{"key":"dynamic","value":{"foo":"bar"}}`,
 			output: `{"dynamic":{"value":"{\"foo\":\"bar\"}"}}`,
 		},
@@ -1028,7 +1028,7 @@ func TestJSONSet(t *testing.T) {
 		{
 			name:   "set unicode 3",
 			path:   "foo.bar",
-			value:  `{"value":"${!json_field:foo.bar.baz}"}`,
+			value:  `{"value":"${!json("foo.bar.baz")}"}`,
 			input:  `{"foo":{"bar":{"baz":"foo 🦄 bar"}}}`,
 			output: `{"foo":{"bar":{"value":"foo 🦄 bar"}}}`,
 		},

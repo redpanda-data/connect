@@ -18,7 +18,7 @@ pipeline:
   - type: archive
     archive:
       format: binary
-      path: ${!count:files}-${!timestamp_unix_nano}.txt
+      path: ${!count("files")}-${!timestamp_unix_nano()}.txt
   threads: 1
 output:
   type: stdout

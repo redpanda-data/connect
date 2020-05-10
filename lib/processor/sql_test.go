@@ -76,9 +76,9 @@ func testSQLPostgres(t *testing.T, dsn string) {
 	conf.SQL.DSN = dsn
 	conf.SQL.Query = "INSERT INTO footable (foo, bar, baz) VALUES ($1, $2, $3);"
 	conf.SQL.Args = []string{
-		"${!json_field:foo,1}",
-		"${!json_field:bar,1}",
-		"${!json_field:baz,1}",
+		"${! json(\"foo\").from(1) }",
+		"${! json(\"bar\").from(1) }",
+		"${! json(\"baz\").from(1) }",
 	}
 
 	s, err := NewSQL(conf, nil, log.Noop(), metrics.Noop())
@@ -107,7 +107,7 @@ func testSQLPostgres(t *testing.T, dsn string) {
 
 	conf.SQL.Query = "SELECT * FROM footable WHERE foo = $1;"
 	conf.SQL.Args = []string{
-		"${!json_field:foo,1}",
+		"${! json(\"foo\").from(1) }",
 	}
 	conf.SQL.ResultCodec = "json_array"
 	s, err = NewSQL(conf, nil, log.Noop(), metrics.Noop())
@@ -196,9 +196,9 @@ func testSQLMySQL(t *testing.T, dsn string) {
 	conf.SQL.DSN = dsn
 	conf.SQL.Query = "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
 	conf.SQL.Args = []string{
-		"${!json_field:foo,1}",
-		"${!json_field:bar,1}",
-		"${!json_field:baz,1}",
+		"${! json(\"foo\").from(1) }",
+		"${! json(\"bar\").from(1) }",
+		"${! json(\"baz\").from(1) }",
 	}
 
 	s, err := NewSQL(conf, nil, log.Noop(), metrics.Noop())
@@ -227,7 +227,7 @@ func testSQLMySQL(t *testing.T, dsn string) {
 
 	conf.SQL.Query = "SELECT * FROM footable WHERE foo = ?;"
 	conf.SQL.Args = []string{
-		"${!json_field:foo,1}",
+		"${! json(\"foo\").from(1) }",
 	}
 	conf.SQL.ResultCodec = "json_array"
 	s, err = NewSQL(conf, nil, log.Noop(), metrics.Noop())

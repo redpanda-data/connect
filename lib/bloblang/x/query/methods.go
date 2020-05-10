@@ -74,6 +74,26 @@ func catchMethod(fn Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"format", true, formatMethod,
+)
+
+func formatMethod(target Function, args ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		vStr, ok := v.(string)
+		if !ok {
+			return nil, fmt.Errorf("expected string value, received %T", v)
+		}
+		return fmt.Sprintf(vStr, args...), nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"from", false, func(target Function, args ...interface{}) (Function, error) {
 		i64 := args[0].(int64)
 		return &fromMethod{
@@ -103,26 +123,6 @@ func (f *fromMethod) ToBytes(ctx FunctionContext) []byte {
 func (f *fromMethod) ToString(ctx FunctionContext) string {
 	ctx.Index = f.index
 	return f.target.ToString(ctx)
-}
-
-//------------------------------------------------------------------------------
-
-var _ = RegisterMethod(
-	"format", true, formatMethod,
-)
-
-func formatMethod(target Function, args ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
-		vStr, ok := v.(string)
-		if !ok {
-			return nil, fmt.Errorf("expected string value, received %T", v)
-		}
-		return fmt.Sprintf(vStr, args...), nil
-	}), nil
 }
 
 //------------------------------------------------------------------------------

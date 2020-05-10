@@ -46,7 +46,7 @@ You can test a number condition against the size of a message batch with:
 
 ` + "``` yaml" + `
 check_interpolation:
-  value: ${!batch_size}
+  value: ${!batch_size()}
   condition:
     number:
       operator: greater_than

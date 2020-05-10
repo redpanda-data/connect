@@ -63,7 +63,7 @@ to true.`,
 						"output": map[string]interface{}{
 							"cache": map[string]interface{}{
 								"target": "foo",
-								"key":    "${!json_field:id}",
+								"key":    "${!json(\"id\")}",
 							},
 						},
 						"condition": map[string]interface{}{
@@ -76,7 +76,7 @@ to true.`,
 						"output": map[string]interface{}{
 							"s3": map[string]interface{}{
 								"bucket": "bar",
-								"path":   "${!json_field:id}",
+								"path":   "${!json(\"id\")}",
 							},
 						},
 					},
