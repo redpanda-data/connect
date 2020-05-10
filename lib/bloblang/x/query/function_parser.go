@@ -85,17 +85,6 @@ func functionArgsParser(allowFunctions bool) parser.Type {
 	}
 }
 
-func literalValueParser() parser.Type {
-	parseLiteral := parser.LiteralValue()
-	return func(input []rune) parser.Result {
-		res := parseLiteral(input)
-		if res.Err == nil {
-			res.Result = literalFunction(res.Result)
-		}
-		return res
-	}
-}
-
 func parseFunctionTail(fn Function) parser.Type {
 	openBracket := parser.Char('(')
 	closeBracket := parser.Char(')')
