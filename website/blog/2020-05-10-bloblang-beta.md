@@ -76,10 +76,11 @@ pipeline:
       }
 ```
 
-My ultimate intention is to completely eradicate the need for a `json`, `metadata` and `text` processor, as well as a range of others. However, I'll need as much help as possible to get the language right, so please consider testing and feeding back ([Github issues][gh.issues], or [Gitter][gitter]) for the good of blobkind.
+My ultimate intention is to completely eradicate the need for a `json`, `metadata` and `text` processor, as well as a range of others. However, I'll need as much help as possible to get the language right, so please consider testing and feeding back on [Github][gh.issues], the [Gitter channel][gitter], or event @ me [on Twitter][twitter] for the good of blobkind.
 
 [processor.bloblang]: /docs/components/processors/bloblang
 [condition.bloblang]: /docs/components/conditions/bloblang
 [post.sneak_peek]: /blog/2020/04/18/sneak-peek-at-bloblang
-[gh.issues]: https://github.com/Jeffail/benthos/issues
+[gh.issues]: https://github.com/Jeffail/benthos/issues/439/
 [gitter]: https://gitter.im/jeffail-benthos/community
+[twitter]: https://twitter.com/Jeffail
