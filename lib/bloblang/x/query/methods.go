@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Jeffail/gabs/v2"
 	"golang.org/x/xerrors"
 )
 
@@ -68,6 +69,26 @@ func catchMethod(fn Function, args ...interface{}) (Function, error) {
 			res, err = catchFn.Exec(ctx)
 		}
 		return res, err
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"exists", true, existsMethod,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
+
+func existsMethod(target Function, args ...interface{}) (Function, error) {
+	pathStr := args[0].(string)
+	path := gabs.DotPathToSlice(pathStr)
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return gabs.Wrap(v).Exists(path...), nil
 	}), nil
 }
 
@@ -156,6 +177,26 @@ func fromAllMethod(target Function, _ ...interface{}) (Function, error) {
 			}
 		}
 		return values, nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"get", true, getMethod,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
+
+func getMethod(target Function, args ...interface{}) (Function, error) {
+	pathStr := args[0].(string)
+	path := gabs.DotPathToSlice(pathStr)
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return gabs.Wrap(v).S(path...).Data(), nil
 	}), nil
 }
 

@@ -82,6 +82,37 @@ nested_json = this.string()
 
 ## Object and Array Stuff
 
+### `exists(string)`
+
+Checks that a field, identified via a [dot path][field_paths], exists in an object.
+
+```coffee
+result = foo.exists("bar.baz")
+
+# In:  {"foo":{"bar":{"baz":"yep, I exist"}}}
+# Out: {"result":true}
+
+# In:  {"foo":{"bar":{}}}
+# Out: {"result":false}
+
+# In:  {"foo":{}}
+# Out: {"result":false}
+```
+
+### `get(string)`
+
+Extract a field value, identified via a [dot path][field_paths], from an object.
+
+```coffee
+result = foo.get(target)
+
+# In:  {"foo":{"bar":"from bar","baz":"from baz"},"target":"bar"}
+# Out: {"result":"from bar"}
+
+# In:  {"foo":{"bar":"from bar","baz":"from baz"},"target":"baz"}
+# Out: {"result":"from baz"}
+```
+
 ### `length()`
 
 Returns the length of a string, array or object.

@@ -16,7 +16,7 @@ keywords: [
 tags: [ "Bloblang" ]
 ---
 
-For the last few weekends I've been dipping my toes in a mapping language design that I'm calling Bloblang. Bloblang is specifically designed for data queries and (eventually) structural data mappings. In Benthos version 3.12, which I'm planning to release today, you can play around with a limited feature set of Bloblang by using it in [function interpolations][function-interpolations].
+For the last few weekends I've been dipping my toes in a mapping language design that I'm calling Bloblang. Bloblang is specifically designed for data queries and (eventually) structural data mappings. In Benthos version 3.12, which I'm planning to release today, you can play around with a limited feature set of Bloblang by using it in [function interpolations](/docs/configuration/interpolation).
 
 <!--truncate-->
 

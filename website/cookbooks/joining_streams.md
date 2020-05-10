@@ -99,7 +99,7 @@ pipeline:
   - cache:
       operator: set
       cache: hydration_cache
-      key: '${!json("article.id"}'
+      key: '${!json("article.id")}'
       value: '${!content()}'
 
 # Drop all articles after they are cached.
@@ -143,7 +143,7 @@ pipeline:
       - cache:
           operator: get
           cache: hydration_cache
-          key: '${!json("parent_id"}'
+          key: '${!json("parent_id")}'
       postmap:
         # We only need the article section of our parent document.
         article: article

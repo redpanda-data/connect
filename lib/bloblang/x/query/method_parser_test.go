@@ -410,6 +410,41 @@ func TestMethods(t *testing.T) {
 			output:   `3`,
 			messages: []easyMsg{{content: `{"foo":{"foo":1,"bar":2,"baz":3}}`}},
 		},
+		"test get": {
+			input:    `json().get("foo")`,
+			output:   `bar`,
+			messages: []easyMsg{{content: `{"foo":"bar"}`}},
+		},
+		"test get 2": {
+			input:    `json().get("foo")`,
+			output:   `null`,
+			messages: []easyMsg{{content: `{"nope":"bar"}`}},
+		},
+		"test get 3": {
+			input:    `json().get("foo.bar")`,
+			output:   `baz`,
+			messages: []easyMsg{{content: `{"foo":{"bar":"baz"}}`}},
+		},
+		"test exists": {
+			input:    `json().exists("foo")`,
+			output:   `true`,
+			messages: []easyMsg{{content: `{"foo":"bar"}`}},
+		},
+		"test exists 2": {
+			input:    `json().exists("foo")`,
+			output:   `false`,
+			messages: []easyMsg{{content: `{"nope":"bar"}`}},
+		},
+		"test exists 3": {
+			input:    `json().exists("foo.bar")`,
+			output:   `true`,
+			messages: []easyMsg{{content: `{"foo":{"bar":"baz"}}`}},
+		},
+		"test exists 4": {
+			input:    `json().exists("foo.bar")`,
+			output:   `false`,
+			messages: []easyMsg{{content: `{"foo":{"nope":"baz"}}`}},
+		},
 	}
 
 	for name, test := range tests {
