@@ -2,9 +2,9 @@ package processor
 
 import (
 	"bytes"
+	"encoding/ascii85"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/ascii85"
 	"os"
 	"reflect"
 	"testing"

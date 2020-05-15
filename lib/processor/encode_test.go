@@ -2,9 +2,9 @@ package processor
 
 import (
 	"bytes"
+	"encoding/ascii85"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/ascii85"
 	"os"
 	"reflect"
 	"testing"
@@ -178,7 +178,7 @@ func TestEncodeZ85(t *testing.T) {
 		enc := make([]byte, z85.EncodedLen(len(input[i])))
 		_, err := z85.Encode(enc, input[i])
 		if err != nil {
-		  t.Fatal("Failed to encode z85 input")
+			t.Fatal("Failed to encode z85 input")
 		}
 		exp = append(exp, enc)
 	}
@@ -218,10 +218,10 @@ func TestEncodeZ85(t *testing.T) {
 		t.Errorf("Expected to process a message")
 	}
 	msgs[0].Iter(func(i int, p types.Part) error {
-		if len(input[i]) % 4 == 0 && HasFailed(p) {
+		if len(input[i])%4 == 0 && HasFailed(p) {
 			t.Errorf("Unexpected fail flag on part %d", i)
-		} else if len(input[i]) % 4 != 0 && !HasFailed(p) {
-		  t.Errorf("Expected fail flag on part %d", i)
+		} else if len(input[i])%4 != 0 && !HasFailed(p) {
+			t.Errorf("Expected fail flag on part %d", i)
 		}
 		return nil
 	})

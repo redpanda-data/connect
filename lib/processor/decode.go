@@ -2,9 +2,9 @@ package processor
 
 import (
 	"bytes"
+	"encoding/ascii85"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/ascii85"
 	"fmt"
 	"io/ioutil"
 	"time"
@@ -70,7 +70,7 @@ func ascii85Decode(b []byte) ([]byte, error) {
 func z85Decode(b []byte) ([]byte, error) {
 	dec := make([]byte, z85.DecodedLen(len(b)))
 	if _, err := z85.Decode(dec, b); err != nil {
-	  return nil, err
+		return nil, err
 	}
 	return dec, nil
 }
