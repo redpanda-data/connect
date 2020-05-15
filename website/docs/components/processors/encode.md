@@ -53,7 +53,7 @@ The decoding scheme to use.
 
 Type: `string`  
 Default: `"base64"`  
-Options: `hex`, `base64`.
+Options: `hex`, `base64`, `ascii85`, `z85`.
 
 ### `parts`
 
