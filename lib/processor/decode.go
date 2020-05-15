@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/ascii85"
 	"fmt"
 	"io/ioutil"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/opentracing/opentracing-go"
+	"github.com/tilinna/z85"
 )
 
 //------------------------------------------------------------------------------
@@ -24,7 +26,7 @@ func init() {
 		Summary: `
 Decodes messages according to the selected scheme.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("scheme", "The decoding scheme to use.").HasOptions("hex", "base64"),
+			docs.FieldCommon("scheme", "The decoding scheme to use.").HasOptions("hex", "base64", "ascii85", "z85"),
 			partsFieldSpec,
 		},
 	}
@@ -60,12 +62,29 @@ func hexDecode(b []byte) ([]byte, error) {
 	return ioutil.ReadAll(e)
 }
 
+func ascii85Decode(b []byte) ([]byte, error) {
+	e := ascii85.NewDecoder(bytes.NewReader(b))
+	return ioutil.ReadAll(e)
+}
+
+func z85Decode(b []byte) ([]byte, error) {
+	dec := make([]byte, z85.DecodedLen(len(b)))
+	if _, err := z85.Decode(dec, b); err != nil {
+	  return nil, err
+	}
+	return dec, nil
+}
+
 func strToDecoder(str string) (decodeFunc, error) {
 	switch str {
 	case "base64":
 		return base64Decode, nil
 	case "hex":
 		return hexDecode, nil
+	case "ascii85":
+		return ascii85Decode, nil
+	case "z85":
+		return z85Decode, nil
 	}
 	return nil, fmt.Errorf("decode scheme not recognised: %v", str)
 }
