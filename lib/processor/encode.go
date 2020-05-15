@@ -82,10 +82,6 @@ func ascii85Encode(b []byte) ([]byte, error) {
 }
 
 func z85Encode(b []byte) ([]byte, error) {
-	// length must be a multiple of 4 bytes
-	if len(b) % 4 != 0 {
-	  return nil, z85.ErrLength
-	}
 	enc := make([]byte, z85.EncodedLen(len(b)))
 	if _, err := z85.Encode(enc, b); err != nil {
 		return nil, err
