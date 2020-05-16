@@ -299,12 +299,12 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 				return
 			}
 
-			res := e.ToString(FunctionContext{
+			res := ExecToString(e, FunctionContext{
 				Index:  test.index,
 				Msg:    msg,
 				Legacy: test.legacy,
 			})
-			res2 := string(e.ToBytes(FunctionContext{
+			res2 := string(ExecToBytes(e, FunctionContext{
 				Index:  test.index,
 				Msg:    msg,
 				Legacy: test.legacy,
@@ -337,7 +337,7 @@ func TestDeprecatedCountersFunction(t *testing.T) {
 		if !assert.NoError(t, err) {
 			continue
 		}
-		res := e.ToString(emptyCtx)
+		res := ExecToString(e, emptyCtx)
 		assert.Equal(t, test[1], res)
 	}
 }
@@ -350,7 +350,7 @@ func TestDeprecatedUUIDV4Function(t *testing.T) {
 		if !assert.NoError(t, err) {
 			continue
 		}
-		res := e.ToString(emptyCtx)
+		res := ExecToString(e, emptyCtx)
 		if _, exists := results[res]; exists {
 			t.Errorf("Duplicate UUID generated: %v", res)
 		}
@@ -365,7 +365,7 @@ func TestDeprecatedTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp := e.ToString(emptyCtx)
+	tStamp := ExecToString(e, emptyCtx)
 
 	nanoseconds, err := strconv.ParseInt(tStamp, 10, 64)
 	if err != nil {
@@ -382,7 +382,7 @@ func TestDeprecatedTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp = e.ToString(emptyCtx)
+	tStamp = ExecToString(e, emptyCtx)
 
 	seconds, err := strconv.ParseInt(tStamp, 10, 64)
 	if err != nil {
@@ -399,7 +399,7 @@ func TestDeprecatedTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp = e.ToString(emptyCtx)
+	tStamp = ExecToString(e, emptyCtx)
 
 	var secondsF float64
 	secondsF, err = strconv.ParseFloat(tStamp, 64)
@@ -417,7 +417,7 @@ func TestDeprecatedTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp = e.ToString(emptyCtx)
+	tStamp = ExecToString(e, emptyCtx)
 
 	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
 	if err != nil {
@@ -433,7 +433,7 @@ func TestDeprecatedTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp = e.ToString(emptyCtx)
+	tStamp = ExecToString(e, emptyCtx)
 
 	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
 	if err != nil {

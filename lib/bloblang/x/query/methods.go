@@ -1,6 +1,7 @@
 package query
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strings"
@@ -56,7 +57,7 @@ var _ = RegisterMethod(
 func catchMethod(fn Function, args ...interface{}) (Function, error) {
 	var catchFn Function
 	switch t := args[0].(type) {
-	case uint64, int64, float64, string, []byte, bool:
+	case uint64, int64, float64, string, []byte, bool, []interface{}, map[string]interface{}:
 		catchFn = literalFunction(t)
 	case Function:
 		catchFn = t
@@ -141,11 +142,14 @@ func formatMethod(target Function, args ...interface{}) (Function, error) {
 		if err != nil {
 			return nil, err
 		}
-		vStr, ok := v.(string)
-		if !ok {
+		switch t := v.(type) {
+		case string:
+			return fmt.Sprintf(t, args...), nil
+		case []byte:
+			return fmt.Sprintf(string(t), args...), nil
+		default:
 			return nil, fmt.Errorf("expected string value, received %T", v)
 		}
-		return fmt.Sprintf(vStr, args...), nil
 	}), nil
 }
 
@@ -171,16 +175,6 @@ type fromMethod struct {
 func (f *fromMethod) Exec(ctx FunctionContext) (interface{}, error) {
 	ctx.Index = f.index
 	return f.target.Exec(ctx)
-}
-
-func (f *fromMethod) ToBytes(ctx FunctionContext) []byte {
-	ctx.Index = f.index
-	return f.target.ToBytes(ctx)
-}
-
-func (f *fromMethod) ToString(ctx FunctionContext) string {
-	ctx.Index = f.index
-	return f.target.ToString(ctx)
 }
 
 //------------------------------------------------------------------------------
@@ -255,6 +249,8 @@ func lengthMethod(target Function, _ ...interface{}) (Function, error) {
 		switch t := v.(type) {
 		case string:
 			length = int64(len(t))
+		case []byte:
+			length = int64(len(t))
 		case []interface{}:
 			length = int64(len(t))
 		case map[string]interface{}:
@@ -285,14 +281,17 @@ func lowercaseMethod(target Function, _ ...interface{}) (Function, error) {
 				Err:       err,
 			}
 		}
-		vStr, ok := v.(string)
-		if !ok {
+		switch t := v.(type) {
+		case string:
+			return strings.ToLower(t), nil
+		case []byte:
+			return bytes.ToLower(t), nil
+		default:
 			return nil, &ErrRecoverable{
 				Recovered: strings.ToLower(IToString(v)),
 				Err:       fmt.Errorf("expected string value, received %T", v),
 			}
 		}
-		return strings.ToLower(vStr), nil
 	}), nil
 }
 
@@ -402,9 +401,12 @@ var _ = RegisterMethod(
 )
 
 func mergeMethod(target Function, args ...interface{}) (Function, error) {
-	mapFn, ok := args[0].(Function)
-	if !ok {
-		return nil, fmt.Errorf("expected function param, received %T", args[0])
+	var mapFn Function
+	switch t := args[0].(type) {
+	case Function:
+		mapFn = t
+	default:
+		mapFn = literalFunction(t)
 	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		mergeInto, err := target.Exec(ctx)
@@ -417,9 +419,23 @@ func mergeMethod(target Function, args ...interface{}) (Function, error) {
 			return nil, err
 		}
 
-		gObj := gabs.New()
-		if err = gObj.Merge(gabs.Wrap(mergeInto)); err == nil {
-			err = gObj.Merge(gabs.Wrap(mergeFrom))
+		if root, isArray := mergeInto.([]interface{}); isArray {
+			if rhs, isAlsoArray := mergeFrom.([]interface{}); isAlsoArray {
+				return append(root, rhs...), nil
+			}
+			return append(root, mergeFrom), nil
+		}
+
+		if _, isObject := mergeInto.(map[string]interface{}); !isObject {
+			return nil, &ErrRecoverable{
+				Recovered: mergeInto,
+				Err:       fmt.Errorf("expected object or array target, received %T", mergeInto),
+			}
+		}
+
+		root := gabs.New()
+		if err = root.Merge(gabs.Wrap(mergeInto)); err == nil {
+			err = root.Merge(gabs.Wrap(mergeFrom))
 		}
 		if err != nil {
 			return nil, &ErrRecoverable{
@@ -427,7 +443,7 @@ func mergeMethod(target Function, args ...interface{}) (Function, error) {
 				Err:       err,
 			}
 		}
-		return gObj.Data(), nil
+		return root.Data(), nil
 	}), nil
 }
 
@@ -441,7 +457,7 @@ var _ = RegisterMethod(
 func orMethod(fn Function, args ...interface{}) (Function, error) {
 	var orFn Function
 	switch t := args[0].(type) {
-	case uint64, int64, float64, string, []byte, bool:
+	case uint64, int64, float64, string, []byte, bool, []interface{}, map[string]interface{}:
 		orFn = literalFunction(t)
 	case Function:
 		orFn = t
@@ -487,19 +503,23 @@ var _ = RegisterMethod(
 
 func substrMethod(target Function, args ...interface{}) (Function, error) {
 	sub := args[0].(string)
+	bsub := []byte(sub)
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
 		}
-		str, ok := v.(string)
-		if !ok {
+		switch t := v.(type) {
+		case string:
+			return strings.Contains(t, sub), nil
+		case []byte:
+			return bytes.Contains(t, bsub), nil
+		default:
 			return nil, &ErrRecoverable{
 				Recovered: false,
 				Err:       fmt.Errorf("expected string target, found %T", v),
 			}
 		}
-		return strings.Contains(str, sub), nil
 	}), nil
 }
 
@@ -519,14 +539,17 @@ func uppercaseMethod(target Function, _ ...interface{}) (Function, error) {
 				Err:       err,
 			}
 		}
-		vStr, ok := v.(string)
-		if !ok {
+		switch t := v.(type) {
+		case string:
+			return strings.ToUpper(t), nil
+		case []byte:
+			return bytes.ToUpper(t), nil
+		default:
 			return nil, &ErrRecoverable{
 				Recovered: strings.ToUpper(IToString(v)),
 				Err:       fmt.Errorf("expected string value, received %T", v),
 			}
 		}
-		return strings.ToUpper(vStr), nil
 	}), nil
 }
 

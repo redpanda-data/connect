@@ -31,10 +31,16 @@ func fieldFunction(args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
+type literal struct {
+	Value interface{}
+}
+
+func (l *literal) Exec(ctx FunctionContext) (interface{}, error) {
+	return l.Value, nil
+}
+
 func literalFunction(v interface{}) Function {
-	return closureFn(func(_ FunctionContext) (interface{}, error) {
-		return v, nil
-	})
+	return &literal{v}
 }
 
 //------------------------------------------------------------------------------

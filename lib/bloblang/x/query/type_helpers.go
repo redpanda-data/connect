@@ -28,6 +28,8 @@ func IGetNumber(v interface{}) (float64, error) {
 		return float64(t), nil
 	case float64:
 		return t, nil
+	case []byte:
+		return strconv.ParseFloat(string(t), 64)
 	case string:
 		return strconv.ParseFloat(t, 64)
 	}

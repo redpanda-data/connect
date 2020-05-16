@@ -5,9 +5,12 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/bloblang/x/mapping"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/opentracing/opentracing-go"
+	olog "github.com/opentracing/opentracing-go/log"
 	"golang.org/x/xerrors"
 )
 
@@ -124,18 +127,42 @@ func NewBloblang(
 // resulting messages or a response to be sent back to the message source.
 func (b *Bloblang) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	b.mCount.Incr(1)
-	newMsg := msg.Copy()
 
-	proc := func(index int, span opentracing.Span, part types.Part) error {
-		if err := b.exec.MapPart(index, newMsg); err != nil {
+	newParts := make([]types.Part, 0, msg.Len())
+
+	msg.Iter(func(i int, part types.Part) error {
+		span := tracing.GetSpan(part)
+		if span == nil {
+			span = opentracing.StartSpan(TypeBloblang)
+		} else {
+			span = opentracing.StartSpan(
+				TypeBloblang,
+				opentracing.ChildOf(span.Context()),
+			)
+		}
+
+		p, err := b.exec.MapPart(i, msg)
+		if err != nil {
+			p = part.Copy()
 			b.mErr.Incr(1)
 			b.log.Errorf("%v\n", err)
-			return err
+			FlagErr(p, err)
+			span.SetTag("error", true)
+			span.LogFields(
+				olog.String("event", "error"),
+				olog.String("type", err.Error()),
+			)
+		}
+
+		span.Finish()
+		if err != nil || p != nil {
+			newParts = append(newParts, p)
 		}
 		return nil
-	}
+	})
 
-	IteratePartsWithSpan(TypeBloblang, nil, newMsg, proc)
+	newMsg := message.New(nil)
+	newMsg.SetAll(newParts)
 
 	b.mBatchSent.Incr(1)
 	b.mSent.Incr(int64(newMsg.Len()))

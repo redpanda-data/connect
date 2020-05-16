@@ -79,6 +79,20 @@ func TestMethods(t *testing.T) {
 				"third":  []interface{}{float64(3), float64(6), float64(3)},
 			},
 		},
+		"check merge arrays": {
+			input: `[].merge("foo")`,
+			messages: []easyMsg{
+				{content: `{}`},
+			},
+			output: []interface{}{"foo"},
+		},
+		"check merge arrays 2": {
+			input: `["foo"].merge(["bar","baz"])`,
+			messages: []easyMsg{
+				{content: `{}`},
+			},
+			output: []interface{}{"foo", "bar", "baz"},
+		},
 		"check contains array": {
 			input:    `json().contains("foo")`,
 			messages: []easyMsg{{content: `["nope","foo","bar"]`}},

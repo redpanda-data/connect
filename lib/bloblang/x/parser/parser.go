@@ -2,7 +2,6 @@ package parser
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -546,18 +545,12 @@ func SnakeCase() Type {
 				if len(partials) == 0 {
 					return Result{
 						Remaining: input,
-						Err: PositionalError{
-							Position: i,
-							Err:      errors.New("unexpected prefixed underscore"),
-						},
+						Err:       ExpectedError{"snake-case"},
 					}
 				} else if partials[len(partials)-1] == "_" {
 					return Result{
 						Remaining: input,
-						Err: PositionalError{
-							Position: i,
-							Err:      errors.New("unexpected double underscore"),
-						},
+						Err:       ExpectedError{"snake-case"},
 					}
 				}
 			}
@@ -575,10 +568,7 @@ func SnakeCase() Type {
 		if partials[len(partials)-1] == "_" {
 			return Result{
 				Remaining: input,
-				Err: PositionalError{
-					Position: i,
-					Err:      errors.New("unexpected suffixed underscore"),
-				},
+				Err:       ExpectedError{"snake-case"},
 			}
 		}
 		var buf bytes.Buffer

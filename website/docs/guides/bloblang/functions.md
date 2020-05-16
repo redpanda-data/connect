@@ -79,7 +79,7 @@ The path parameter is optional and if omitted the entire JSON payload is returne
 
 ### `meta(string)`
 
-Returns the value of a metadata key from a message identified by a key. Message metadata can be modified using the [metadata processor][meta_proc].
+Returns the value of a metadata key from a message identified by a key. Values are extracted from the referenced input message and therefore do NOT reflect changes made from within the map.
 
 The parameter is optional and if omitted the entire metadata contents are returned as a JSON object.
 

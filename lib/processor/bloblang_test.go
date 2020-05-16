@@ -71,6 +71,35 @@ func TestBloblangCrossfire(t *testing.T) {
 	assert.Equal(t, "new meta", resPartTwo.Metadata().Get("baz"))
 }
 
+func TestBloblangFiltering(t *testing.T) {
+	msg := message.New([][]byte{
+		[]byte(`{"foo":{"delete":true}}`),
+		[]byte(`{"foo":{"dont":"delete me"}}`),
+		[]byte(`{"bar":{"delete":true}}`),
+		[]byte(`{"bar":{"dont":"delete me"}}`),
+	})
+
+	conf := NewConfig()
+	conf.Bloblang = `
+	root = match {
+		(foo | bar).delete == true => deleted(),
+	}
+	`
+	proc, err := NewBloblang(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	outMsgs, res := proc.ProcessMessage(msg)
+	require.Nil(t, res)
+	require.Len(t, outMsgs, 1)
+	require.Equal(t, 2, outMsgs[0].Len())
+	assert.Equal(t, ``, outMsgs[0].Get(0).Metadata().Get(FailFlagKey))
+	assert.Equal(t, ``, outMsgs[0].Get(1).Metadata().Get(FailFlagKey))
+	assert.Equal(t, `{"foo":{"dont":"delete me"}}`, string(outMsgs[0].Get(0).Get()))
+	assert.Equal(t, `{"bar":{"dont":"delete me"}}`, string(outMsgs[0].Get(1).Get()))
+}
+
 func TestBloblangJSONError(t *testing.T) {
 	msg := message.New([][]byte{
 		[]byte(`this is not valid json`),

@@ -1,6 +1,7 @@
 package mapping
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"strings"
@@ -41,14 +42,17 @@ type Executor struct {
 // mapping context. Returns an error if any stage of the mapping fails to
 // execute.
 //
-// Note that the message is mutated in situ and therefore the contents may be
-// modified even if an error is returned.
-func (e *Executor) MapPart(index int, msg Message) error {
+// A resulting mapped message part is returned, unless the mapping results in a
+// query.Delete value, in which case nil is returned and the part should be
+// discarded.
+func (e *Executor) MapPart(index int, msg Message) (types.Part, error) {
 	vars := map[string]interface{}{}
-	meta := msg.Get(index).Metadata()
+
+	part := msg.Get(index).Copy()
+	meta := part.Metadata()
 
 	var valuePtr *interface{}
-	if jObj, err := msg.Get(index).JSON(); err == nil {
+	if jObj, err := part.JSON(); err == nil {
 		valuePtr = &jObj
 	}
 
@@ -62,7 +66,7 @@ func (e *Executor) MapPart(index int, msg Message) error {
 			Msg:   msg,
 		})
 		if err != nil {
-			return xerrors.Errorf("failed to execute mapping assignment at line %v: %v", stmt.line, err)
+			return nil, xerrors.Errorf("failed to execute mapping assignment at line %v: %v", stmt.line, err)
 		}
 		if _, isNothing := res.(query.Nothing); isNothing {
 			// Skip assignment entirely
@@ -74,29 +78,33 @@ func (e *Executor) MapPart(index int, msg Message) error {
 			Meta:  meta,
 			Value: &newObj,
 		}); err != nil {
-			return xerrors.Errorf("failed to assign mapping result at line %v: %v", stmt.line, err)
+			return nil, xerrors.Errorf("failed to assign mapping result at line %v: %v", stmt.line, err)
 		}
 	}
 
-	if _, notMapped := newObj.(query.Nothing); !notMapped {
+	switch newObj.(type) {
+	case query.Delete:
+		// Return nil (filter the message part)
+		return nil, nil
+	case query.Nothing:
+		// Do not change the original contents
+	default:
 		switch t := newObj.(type) {
 		case string:
-			msg.Get(index).Set([]byte(t))
+			part.Set([]byte(t))
 		case []byte:
-			msg.Get(index).Set(t)
+			part.Set(t)
 		default:
-			if err := msg.Get(index).SetJSON(newObj); err != nil {
-				return xerrors.Errorf("failed to set result of mapping: %w", err)
+			if err := part.SetJSON(newObj); err != nil {
+				return nil, xerrors.Errorf("failed to set result of mapping: %w", err)
 			}
 		}
 	}
-	return nil
+	return part, nil
 }
 
 // Exec this function with a context struct.
 func (e *Executor) Exec(ctx query.FunctionContext) (interface{}, error) {
-	meta := ctx.Msg.Get(ctx.Index).Metadata()
-
 	var newObj interface{} = query.Nothing(nil)
 	for _, stmt := range e.statements {
 		res, err := stmt.query.Exec(ctx)
@@ -108,9 +116,9 @@ func (e *Executor) Exec(ctx query.FunctionContext) (interface{}, error) {
 			continue
 		}
 		if err = stmt.assignment.Apply(res, AssignmentContext{
-			Maps:  e.maps,
-			Vars:  ctx.Vars,
-			Meta:  meta,
+			Maps: e.maps,
+			Vars: ctx.Vars,
+			// Meta: meta, Prevented for now due to .from(int)
 			Value: &newObj,
 		}); err != nil {
 			return nil, xerrors.Errorf("failed to assign mapping result at line %v: %v", stmt.line, err)
@@ -212,7 +220,7 @@ func parseExecutor(input []rune) parser.Result {
 		importParser(maps),
 		mapParser(maps),
 		letStatementParser(),
-		metaStatementParser(),
+		metaStatementParser(false),
 		plainMappingStatementParser(),
 	)
 
@@ -392,7 +400,7 @@ func mapParser(maps map[string]query.Function) parser.Type {
 			),
 			parser.AnyOf(
 				letStatementParser(),
-				metaStatementParser(),
+				metaStatementParser(true), // Prevented for now due to .from(int)
 				plainMappingStatementParser(),
 			),
 			parser.Sequence(
@@ -477,7 +485,7 @@ func letStatementParser() parser.Type {
 	}
 }
 
-func metaStatementParser() parser.Type {
+func metaStatementParser(disabled bool) parser.Type {
 	p := parser.Sequence(
 		parser.Match("meta"),
 		parser.SpacesAndTabs(),
@@ -495,6 +503,12 @@ func metaStatementParser() parser.Type {
 		res := p(input)
 		if res.Err != nil {
 			return res
+		}
+		if disabled {
+			return parser.Result{
+				Err:       errors.New("setting meta fields from within a map is not allowed"),
+				Remaining: input,
+			}
 		}
 		resSlice := res.Result.([]interface{})
 

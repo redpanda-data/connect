@@ -1,7 +1,6 @@
 package mapping
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/lib/bloblang/x/query"
@@ -87,9 +86,6 @@ func (v *jsonAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 		value = query.IClone(value)
 	}
 	if len(v.Path) == 0 {
-		if deleted {
-			return errors.New("cannot delete root of document")
-		}
 		*ctx.Value = value
 	}
 	if _, isNothing := (*ctx.Value).(query.Nothing); isNothing || *ctx.Value == nil {

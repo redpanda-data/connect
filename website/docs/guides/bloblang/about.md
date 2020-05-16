@@ -8,9 +8,7 @@ Bloblang, or blobl for short (pronounced "blobble"), is a language designed spec
 
 Bloblang is available as a [mapping processor][blobl.proc], as a [condition][blobl.cond], and it's also possible to use blobl queries in [function interpolations][blobl.interp].
 
-## Core Language
-
-### Assignment
+## Assignment
 
 An assignment consists of a left-hand-side assignment target and a right-hand-side mapping query.
 
@@ -50,11 +48,11 @@ meta = deleted()
 # Set a metadata value
 meta bar = "hello world"
 
-# Reference a metadata value
-new_doc.bar = meta("bar")
+# Reference a metadata value from the input message
+new_doc.bar = meta("kafka_topic")
 ```
 
-### Coalesce
+## Coalesce
 
 The pipe operator (`|`) used within brackets allows you to coalesce values within a path:
 
@@ -71,7 +69,7 @@ new_doc.type = thing.(article | comment | this).type
 # Out: {"new_doc":{"type":"baz"}}
 ```
 
-### Literals and Arithmetic
+## Literals and Arithmetic
 
 Bloblang supports number, boolean, string, null, array and object literals:
 
@@ -87,7 +85,7 @@ root = [
 # Out: [7,false,"string",null,{"first":11,"second":{"foo":"bar"}}]
 ```
 
-### Comments
+## Comments
 
 You might've already spotted, comments are started with a hash (`#`) and end with a line break:
 
@@ -95,7 +93,7 @@ You might've already spotted, comments are started with a hash (`#`) and end wit
 root = some.value # And now this is a comment
 ```
 
-### Boolean Logic and Arithmetic
+## Boolean Logic and Arithmetic
 
 Bloblang supports a range of boolean operators `>`, `>=`, `==`, `<`, `<=`, `&&`, `||` and arithmetic operators `+`, `-`, `*`, `/`:
 
@@ -110,7 +108,7 @@ multiplied = number * 7
 # Out: {"is_big":true,"multiplied":1050}
 ```
 
-### Pattern Matching
+## Pattern Matching
 
 A `match` expression allows you to perform conditional mappings on a value using boolean logic:
 
@@ -131,7 +129,17 @@ new_doc = match doc {
 # Out: {"new_doc":{"type":"neither","content":"some other stuff unchanged"}}
 ```
 
-The match context can be unset, and the catch-all case can also be omitted:
+Match cases can specify a literal value for simple comparison:
+
+```coffee
+root = this
+type = match type { "doc" => "document", "art" => "article", _ => this }
+
+# In:  {"type":"doc","foo":"bar"}
+# Out: {"type":"document","foo":"bar"}
+```
+
+The match context can also be left unset, and the catch-all case can also be omitted:
 
 ```coffee
 new_doc = match {
@@ -145,7 +153,7 @@ new_doc = match {
 
 If no case matches then the mapping is skipped entirely, hence we would end up with the original document in this case.
 
-### Functions
+## Functions
 
 Functions can be placed anywhere and allow you to extract information from your environment, generate values, or access data from the underlying message being mapped:
 
@@ -157,7 +165,7 @@ doc.host = hostname()
 
 You can find a full list of functions in [this doc][blobl.functions].
 
-### Methods
+## Methods
 
 Methods provide most of the power in Bloblang as they allow you to augment values by chaining them:
 
@@ -173,7 +181,7 @@ doc.reduced_nums = thing.nums.for_each(
 
 You can find a full list of methods in [this doc][blobl.methods].
 
-### Maps
+## Maps
 
 It's possible to declare reusable maps for common operations:
 
@@ -197,6 +205,17 @@ import "./common_maps.blobl"
 
 foo = value_one.apply("things")
 bar = value_two.apply("things")
+```
+
+## Filtering
+
+By assigning the root of a mapped document to the `deleted()` function you can delete a message entirely:
+
+```coffee
+# Filter all messages that have fewer than 10 URLs.
+root = match {
+  doc.urls.length() < 10 => deleted()
+}
 ```
 
 [field_paths]: /docs/configuration/field_paths

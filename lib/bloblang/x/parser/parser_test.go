@@ -496,17 +496,17 @@ func TestSnakeCase(t *testing.T) {
 		"prefix underscore": {
 			input:     "_foobar baz",
 			remaining: "_foobar baz",
-			err:       `char 0: unexpected prefixed underscore`,
+			err:       `expected: snake-case`,
 		},
 		"suffix underscore": {
 			input:     "foo_bar_ baz",
 			remaining: "foo_bar_ baz",
-			err:       `char 8: unexpected suffixed underscore`,
+			err:       `expected: snake-case`,
 		},
 		"double underscore": {
 			input:     "foo_bar__baz",
 			remaining: "foo_bar__baz",
-			err:       `char 8: unexpected double underscore`,
+			err:       `expected: snake-case`,
 		},
 	}
 

@@ -15,28 +15,6 @@ func (f closureFn) Exec(ctx FunctionContext) (interface{}, error) {
 	return f(ctx)
 }
 
-func (f closureFn) ToBytes(ctx FunctionContext) []byte {
-	v, err := f(ctx)
-	if err != nil {
-		if rec, ok := err.(*ErrRecoverable); ok {
-			return IToBytes(rec.Recovered)
-		}
-		return nil
-	}
-	return IToBytes(v)
-}
-
-func (f closureFn) ToString(ctx FunctionContext) string {
-	v, err := f(ctx)
-	if err != nil {
-		if rec, ok := err.(*ErrRecoverable); ok {
-			return IToString(rec.Recovered)
-		}
-		return ""
-	}
-	return IToString(v)
-}
-
 //------------------------------------------------------------------------------
 
 func withDynamicArgs(args []interface{}, fn FunctionCtor) Function {
@@ -108,13 +86,19 @@ func ExpectNArgs(i int) ArgCheckFn {
 	}
 }
 
-// ExpectStringArg returns an error if an argument i is not a string type.
+// ExpectStringArg returns an error if an argument i is not a string type (or a
+// byte slice that can be converted).
 func ExpectStringArg(i int) ArgCheckFn {
 	return func(args []interface{}) error {
 		if len(args) <= i {
 			return nil
 		}
-		if _, isStr := args[i].(string); !isStr {
+		switch t := args[i].(type) {
+		case string:
+		case []byte:
+			// Allow byte slice value here but cast it.
+			args[i] = string(t)
+		default:
 			return fmt.Errorf("expected string param, received %T", args[i])
 		}
 		return nil

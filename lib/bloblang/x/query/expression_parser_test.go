@@ -49,6 +49,33 @@ func TestExpressions(t *testing.T) {
 			output:   `third`,
 			messages: []easyMsg{},
 		},
+		"match literals 4": {
+			input: `match "foo" {
+  "foo" => "first"
+  "bar" => "second"
+  _ => "third"
+}`,
+			output:   `first`,
+			messages: []easyMsg{},
+		},
+		"match literals 5": {
+			input: `match "bar" {
+  "foo" => "first"
+  "bar" => "second"
+  _ => "third"
+}`,
+			output:   `second`,
+			messages: []easyMsg{},
+		},
+		"match literals 6": {
+			input: `match "baz" {
+  "foo" => "first"
+  "bar" => "second"
+  _ => "third"
+}`,
+			output:   `third`,
+			messages: []easyMsg{},
+		},
 		"match function": {
 			input: `match json("foo") {
   this > 10 =>  this + 1
@@ -152,6 +179,25 @@ func TestExpressions(t *testing.T) {
 				{content: `{"foo":7}`},
 			},
 		},
+		"match with commas": {
+			input: `match "bar" {
+  "foo" => "first",
+  "bar" => "second",
+  _ => "third",
+}`,
+			output:   `second`,
+			messages: []easyMsg{},
+		},
+		"match with commas 2": {
+			input:    `match "bar" { "foo" => "first", "bar" => "second", _ => "third" }`,
+			output:   `second`,
+			messages: []easyMsg{},
+		},
+		"match with commas 3": {
+			input:    `match "bar" {"foo"=>"first","bar"=>"second",_=>"third"}`,
+			output:   `second`,
+			messages: []easyMsg{},
+		},
 	}
 
 	for name, test := range tests {
@@ -174,12 +220,12 @@ func TestExpressions(t *testing.T) {
 			if !assert.NoError(t, err) {
 				return
 			}
-			res := e.ToString(FunctionContext{
+			res := ExecToString(e, FunctionContext{
 				Index: test.index, Msg: msg,
 				Value: test.value,
 			})
 			assert.Equal(t, test.output, res)
-			res = string(e.ToBytes(FunctionContext{
+			res = string(ExecToBytes(e, FunctionContext{
 				Index: test.index, Msg: msg,
 				Value: test.value,
 			}))

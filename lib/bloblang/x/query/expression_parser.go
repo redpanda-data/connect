@@ -6,16 +6,26 @@ import (
 
 func matchCaseParser() parser.Type {
 	whitespace := parser.SpacesAndTabs()
+
 	p := parser.Sequence(
-		parser.InterceptExpectedError(
-			parser.AnyOf(
-				parser.Match("_ "),
-				Parse,
+		parser.AnyOf(
+			parser.Sequence(
+				parser.InterceptExpectedError(
+					parser.Char('_'),
+					"match-case",
+				),
+				parser.Optional(whitespace),
+				parser.Match("=>"),
 			),
-			"match-case",
+			parser.Sequence(
+				parser.InterceptExpectedError(
+					Parse,
+					"match-case",
+				),
+				parser.Optional(whitespace),
+				parser.Match("=>"),
+			),
 		),
-		parser.Optional(whitespace),
-		parser.Match("=> "),
 		parser.Optional(whitespace),
 		Parse,
 	)
@@ -29,9 +39,18 @@ func matchCaseParser() parser.Type {
 		seqSlice := res.Result.([]interface{})
 
 		var caseFn Function
-		switch t := seqSlice[0].(type) {
+		switch t := seqSlice[0].([]interface{})[0].(type) {
 		case Function:
-			caseFn = t
+			if lit, isLiteral := t.(*literal); isLiteral {
+				caseFn = closureFn(func(ctx FunctionContext) (interface{}, error) {
+					if ctx.Value == nil {
+						return false, nil
+					}
+					return *ctx.Value == lit.Value, nil
+				})
+			} else {
+				caseFn = t
+			}
 		case string:
 			caseFn = literalFunction(true)
 		}
@@ -39,7 +58,7 @@ func matchCaseParser() parser.Type {
 		return parser.Result{
 			Result: matchCase{
 				caseFn:  caseFn,
-				queryFn: seqSlice[4].(Function),
+				queryFn: seqSlice[2].(Function),
 			},
 			Remaining: res.Remaining,
 		}
@@ -69,7 +88,10 @@ func matchExpressionParser() parser.Type {
 					matchCaseParser(),
 					parser.Sequence(
 						parser.Discard(parser.SpacesAndTabs()),
-						parser.NewlineAllowComment(),
+						parser.AnyOf(
+							parser.Char(','),
+							parser.NewlineAllowComment(),
+						),
 						whitespace,
 					),
 					parser.Sequence(

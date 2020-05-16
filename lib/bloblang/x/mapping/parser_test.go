@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -101,6 +100,13 @@ map foo {
 foo = bar.apply("foo")`,
 			err: `failed to parse mapping: line 4 char 1: map name collision: foo`,
 		},
+		"map contains meta assignment": {
+			mapping: `map foo {
+  meta foo = "bar"
+}
+foo = bar.apply("foo")`,
+			err: `failed to parse mapping: line 2 char 3: setting meta fields from within a map is not allowed`,
+		},
 		"no name map definition": {
 			mapping: `map {
   foo = bar
@@ -168,14 +174,14 @@ func TestMappings(t *testing.T) {
 		index   int
 		input   []part
 		mapping string
-		output  []part
+		output  part
 	}{
 		"simple json map": {
 			mapping: `foo = foo + 2
 bar = "test1"
 zed = deleted()`,
 			input:  []part{{Content: `{"foo":10,"zed":"gone"}`}},
-			output: []part{{Content: `{"bar":"test1","foo":12}`}},
+			output: part{Content: `{"bar":"test1","foo":12}`},
 		},
 		"simple json map 2": {
 			mapping: `
@@ -186,7 +192,7 @@ bar = "test1"
 zed = deleted()
 `,
 			input:  []part{{Content: `{"foo":10,"zed":"gone"}`}},
-			output: []part{{Content: `{"bar":"test1","foo":12}`}},
+			output: part{Content: `{"bar":"test1","foo":12}`},
 		},
 		"simple json map 3": {
 			mapping: `  
@@ -197,7 +203,7 @@ zed = deleted()
 zed = deleted()   
   `,
 			input:  []part{{Content: `{"foo":10,"zed":"gone"}`}},
-			output: []part{{Content: `{"bar":"test1","foo":12}`}},
+			output: part{Content: `{"bar":"test1","foo":12}`},
 		},
 		"simple json map with comments": {
 			mapping: `
@@ -210,22 +216,24 @@ bar = "test1"         # And one here
 zed = deleted()
 `,
 			input:  []part{{Content: `{"foo":10,"zed":"gone"}`}},
-			output: []part{{Content: `{"bar":"test1","foo":12}`}},
+			output: part{Content: `{"bar":"test1","foo":12}`},
 		},
 		"test mapping metadata and json": {
 			mapping: `meta foo = foo
-meta "bar baz" = "test1"
 bar.baz = meta("bar baz")
 meta "bar baz" = deleted()`,
 			input: []part{
-				{Content: `{"foo":"bar"}`},
-			},
-			output: []part{
 				{
-					Content: `{"bar":{"baz":"test1"}}`,
+					Content: `{"foo":"bar"}`,
 					Meta: map[string]string{
-						"foo": "bar",
+						"bar baz": "test1",
 					},
+				},
+			},
+			output: part{
+				Content: `{"bar":{"baz":"test1"}}`,
+				Meta: map[string]string{
+					"foo": "bar",
 				},
 			},
 		},
@@ -235,26 +243,28 @@ meta "bar baz" = "test1"`,
 			input: []part{
 				{Content: `{"foo":{"bar":"baz"}}`},
 			},
-			output: []part{
-				{
-					Content: `{"foo":{"bar":"baz"}}`,
-					Meta: map[string]string{
-						"bar":     "baz",
-						"bar baz": "test1",
-					},
+			output: part{
+				Content: `{"foo":{"bar":"baz"}}`,
+				Meta: map[string]string{
+					"bar":     "baz",
+					"bar baz": "test1",
 				},
 			},
 		},
 		"test mapping delete and json": {
 			mapping: `meta foo = foo
-meta "bar baz" = "test1"
 bar.baz = meta("bar baz")
 meta = deleted()`,
 			input: []part{
-				{Content: `{"foo":"bar"}`},
+				{
+					Content: `{"foo":"bar"}`,
+					Meta: map[string]string{
+						"bar baz": "test1",
+					},
+				},
 			},
-			output: []part{
-				{Content: `{"bar":{"baz":"test1"}}`},
+			output: part{
+				Content: `{"bar":{"baz":"test1"}}`,
 			},
 		},
 		"test variables and json": {
@@ -264,8 +274,8 @@ bar.baz = var("bar baz")`,
 			input: []part{
 				{Content: `{"foo":"bar"}`},
 			},
-			output: []part{
-				{Content: `{"bar":{"baz":"test1"}}`},
+			output: part{
+				Content: `{"bar":{"baz":"test1"}}`,
 			},
 		},
 		"map json root": {
@@ -273,7 +283,7 @@ bar.baz = var("bar baz")`,
   "foo": "this is a literal map"
 }`,
 			input:  []part{{Content: `{"zed":"gone"}`}},
-			output: []part{{Content: `{"foo":"this is a literal map"}`}},
+			output: part{Content: `{"foo":"this is a literal map"}`},
 		},
 		"map json root 2": {
 			mapping: `root = {
@@ -281,7 +291,7 @@ bar.baz = var("bar baz")`,
 }
 bar = "this is another thing"`,
 			input:  []part{{Content: `{"zed":"gone"}`}},
-			output: []part{{Content: `{"bar":"this is another thing","foo":"this is a literal map"}`}},
+			output: part{Content: `{"bar":"this is another thing","foo":"this is a literal map"}`},
 		},
 		"test mapping metadata without json": {
 			mapping: `meta foo = "foo"
@@ -289,13 +299,11 @@ meta bar = 5 + 2`,
 			input: []part{
 				{Content: `this isn't json`},
 			},
-			output: []part{
-				{
-					Content: `this isn't json`,
-					Meta: map[string]string{
-						"foo": "foo",
-						"bar": "7",
-					},
+			output: part{
+				Content: `this isn't json`,
+				Meta: map[string]string{
+					"foo": "foo",
+					"bar": "7",
 				},
 			},
 		},
@@ -304,8 +312,8 @@ meta bar = 5 + 2`,
 			input: []part{
 				{Content: `this isn't json`},
 			},
-			output: []part{
-				{Content: `{"root":"not set at root"}`},
+			output: part{
+				Content: `{"root":"not set at root"}`,
 			},
 		},
 		"quoted paths": {
@@ -315,12 +323,10 @@ meta "foo bar" = "hello world"
 			input: []part{
 				{Content: `this isn't json`},
 			},
-			output: []part{
-				{
-					Content: `{"bar baz":{"test":7}}`,
-					Meta: map[string]string{
-						"foo bar": "hello world",
-					},
+			output: part{
+				Content: `{"bar baz":{"test":7}}`,
+				Meta: map[string]string{
+					"foo bar": "hello world",
 				},
 			},
 		},
@@ -330,12 +336,10 @@ foo = "static"`,
 			input: []part{
 				{Content: `hello world`},
 			},
-			output: []part{
-				{
-					Content: `{"foo":"static"}`,
-					Meta: map[string]string{
-						"content": `hello world`,
-					},
+			output: part{
+				Content: `{"foo":"static"}`,
+				Meta: map[string]string{
+					"content": `hello world`,
 				},
 			},
 		},
@@ -345,12 +349,10 @@ foo = "static"`,
 			input: []part{
 				{Content: `{"foo":{"bar":"baz"}}`},
 			},
-			output: []part{
-				{
-					Content: `{"foo":"static"}`,
-					Meta: map[string]string{
-						"content": `{"foo":{"bar":"baz"}}`,
-					},
+			output: part{
+				Content: `{"foo":"static"}`,
+				Meta: map[string]string{
+					"content": `{"foo":{"bar":"baz"}}`,
 				},
 			},
 		},
@@ -359,51 +361,42 @@ foo = "static"`,
 			input: []part{
 				{Content: `{"this":"is a json doc"}`},
 			},
-			output: []part{
-				{Content: `static string`},
+			output: part{
+				Content: `static string`,
 			},
 		},
 		"test maps": {
 			mapping: `map foo {
-  meta "map applied" = "true"
   foo = "static foo"
   bar = this
+  applied = ["foo"]
 }
 root = this.apply("foo")`,
 			input: []part{
 				{Content: `{"outter":{"inner":"hello world"}}`},
 			},
-			output: []part{
-				{
-					Content: `{"bar":{"outter":{"inner":"hello world"}},"foo":"static foo"}`,
-					Meta: map[string]string{
-						"map applied": `true`,
-					},
-				},
+			output: part{
+				Content: `{"applied":["foo"],"bar":{"outter":{"inner":"hello world"}},"foo":"static foo"}`,
 			},
 		},
 		"test nested maps": {
 			mapping: `map foo {
-  meta "foo applied" = "true"
-  foo = this.apply("bar")
+  let tmp = this.apply("bar")
+  foo = var("tmp")
+  applied = var("tmp").applied.merge("foo")
+  foo.applied = deleted()
 }
 map bar {
-  meta "bar applied" = "true"
   static = "this is valid"
   bar = this
+  applied = ["bar"]
 }
 root = this.apply("foo")`,
 			input: []part{
 				{Content: `{"outter":{"inner":"hello world"}}`},
 			},
-			output: []part{
-				{
-					Content: `{"foo":{"bar":{"outter":{"inner":"hello world"}},"static":"this is valid"}}`,
-					Meta: map[string]string{
-						"foo applied": `true`,
-						"bar applied": `true`,
-					},
-				},
+			output: part{
+				Content: `{"applied":["bar","foo"],"foo":{"bar":{"outter":{"inner":"hello world"}},"static":"this is valid"}}`,
 			},
 		},
 		"test imported map": {
@@ -413,8 +406,8 @@ root = this.apply("foo")`, goodMapFile),
 			input: []part{
 				{Content: `{"outter":{"inner":"hello world"}}`},
 			},
-			output: []part{
-				{Content: `{"foo":"this is valid","nested":{"outter":{"inner":"hello world"}}}`},
+			output: part{
+				Content: `{"foo":"this is valid","nested":{"outter":{"inner":"hello world"}}}`,
 			},
 		},
 	}
@@ -430,35 +423,26 @@ root = this.apply("foo")`, goodMapFile),
 				}
 				msg.Append(part)
 			}
-			for i, o := range test.output {
-				if o.Meta == nil {
-					o.Meta = map[string]string{}
-					test.output[i] = o
-				}
+			if test.output.Meta == nil {
+				test.output.Meta = map[string]string{}
 			}
 
 			exec, err := NewExecutor(test.mapping)
 			require.NoError(t, err)
 
-			err = exec.MapPart(test.index, msg)
+			resPart, err := exec.MapPart(test.index, msg)
 			require.NoError(t, err)
 
-			resParts := []part{}
-			msg.Iter(func(i int, p types.Part) error {
-				newPart := part{
-					Content: string(p.Get()),
-					Meta:    map[string]string{},
-				}
-				p.Metadata().Iter(func(k, v string) error {
-					newPart.Meta[k] = v
-					return nil
-				})
-
-				resParts = append(resParts, newPart)
+			newPart := part{
+				Content: string(resPart.Get()),
+				Meta:    map[string]string{},
+			}
+			resPart.Metadata().Iter(func(k, v string) error {
+				newPart.Meta[k] = v
 				return nil
 			})
 
-			assert.Equal(t, test.output, resParts)
+			assert.Equal(t, test.output, newPart)
 		})
 	}
 }

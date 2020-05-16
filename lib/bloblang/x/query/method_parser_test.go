@@ -465,15 +465,10 @@ func TestMethodParser(t *testing.T) {
 
 			e, err := tryParse(test.input, false)
 			require.NoError(t, err)
-			res := e.ToString(FunctionContext{
+			res := ExecToString(e, FunctionContext{
 				Index: test.index,
 				Msg:   msg,
 			})
-			assert.Equal(t, test.output, res)
-			res = string(e.ToBytes(FunctionContext{
-				Index: test.index,
-				Msg:   msg,
-			}))
 			assert.Equal(t, test.output, res)
 		})
 	}

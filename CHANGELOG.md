@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Bloblang BETA Changes
+
+- The `meta` function no longer reflects changes made within the map itself.
+- Extracing data from other messages of a batch using `from` no longer reflects
+  changes made within a map.
+- Meta assignments are no longer allowed within named maps.
+- Assigning `deleted()` to `root` now filters out a message entirely.
+- Lots of new methods and goodies.
+
 ## 3.13.0 - 2020-05-10
 
 ### Added

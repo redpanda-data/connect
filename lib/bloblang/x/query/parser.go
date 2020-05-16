@@ -29,14 +29,30 @@ type FunctionContext struct {
 type Function interface {
 	// Execute this function for a message of a batch.
 	Exec(ctx FunctionContext) (interface{}, error)
+}
 
-	// Execute this function for a message of a batch and return the result
-	// marshalled into a byte slice.
-	ToBytes(ctx FunctionContext) []byte
+// ExecToString returns a string from a function exection.
+func ExecToString(fn Function, ctx FunctionContext) string {
+	v, err := fn.Exec(ctx)
+	if err != nil {
+		if rec, ok := err.(*ErrRecoverable); ok {
+			return IToString(rec.Recovered)
+		}
+		return ""
+	}
+	return IToString(v)
+}
 
-	// Execute this function for a message of a batch and return the result
-	// marshalled into a string.
-	ToString(ctx FunctionContext) string
+// ExecToBytes returns a byte slice from a function exection.
+func ExecToBytes(fn Function, ctx FunctionContext) []byte {
+	v, err := fn.Exec(ctx)
+	if err != nil {
+		if rec, ok := err.(*ErrRecoverable); ok {
+			return IToBytes(rec.Recovered)
+		}
+		return nil
+	}
+	return IToBytes(v)
 }
 
 //------------------------------------------------------------------------------
