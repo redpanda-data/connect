@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMethods(t *testing.T) {
+func TestMethodParser(t *testing.T) {
 	type easyMsg struct {
 		content string
 		meta    map[string]string

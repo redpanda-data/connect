@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"sort"
 
 	"golang.org/x/xerrors"
 )
@@ -74,5 +75,15 @@ func RegisterMethod(name string, allowDynamicArgs bool, ctor MethodCtor, checks 
 }
 
 var methods = map[string]MethodCtor{}
+
+// ListMethods returns a slice of method names, sorted alphabetically.
+func ListMethods() []string {
+	methodNames := make([]string, 0, len(methods))
+	for k := range methods {
+		methodNames = append(methodNames, k)
+	}
+	sort.Strings(methodNames)
+	return methodNames
+}
 
 //------------------------------------------------------------------------------

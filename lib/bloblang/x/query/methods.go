@@ -75,6 +75,43 @@ func catchMethod(fn Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"contains", true, containsMethod,
+	ExpectNArgs(1),
+)
+
+func containsMethod(target Function, args ...interface{}) (Function, error) {
+	compareRight := args[0]
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		switch t := v.(type) {
+		case []interface{}:
+			for _, compareLeft := range t {
+				if compareRight == compareLeft {
+					return true, nil
+				}
+			}
+		case map[string]interface{}:
+			for _, compareLeft := range t {
+				if compareRight == compareLeft {
+					return true, nil
+				}
+			}
+		default:
+			return nil, &ErrRecoverable{
+				Recovered: false,
+				Err:       fmt.Errorf("expected map or array target, found %T", v),
+			}
+		}
+		return false, nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"exists", true, existsMethod,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
@@ -360,6 +397,43 @@ func mapEachMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"merge", false, mergeMethod,
+	ExpectNArgs(1),
+)
+
+func mergeMethod(target Function, args ...interface{}) (Function, error) {
+	mapFn, ok := args[0].(Function)
+	if !ok {
+		return nil, fmt.Errorf("expected function param, received %T", args[0])
+	}
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		mergeInto, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		mergeFrom, err := mapFn.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		gObj := gabs.New()
+		if err = gObj.Merge(gabs.Wrap(mergeInto)); err == nil {
+			err = gObj.Merge(gabs.Wrap(mergeFrom))
+		}
+		if err != nil {
+			return nil, &ErrRecoverable{
+				Recovered: mergeInto,
+				Err:       err,
+			}
+		}
+		return gObj.Data(), nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"or", false, orMethod,
 	ExpectNArgs(1),
 )
@@ -400,6 +474,32 @@ func stringMethod(target Function, _ ...interface{}) (Function, error) {
 			}
 		}
 		return IToString(v), nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"substr", true, substrMethod,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
+
+func substrMethod(target Function, args ...interface{}) (Function, error) {
+	sub := args[0].(string)
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		str, ok := v.(string)
+		if !ok {
+			return nil, &ErrRecoverable{
+				Recovered: false,
+				Err:       fmt.Errorf("expected string target, found %T", v),
+			}
+		}
+		return strings.Contains(str, sub), nil
 	}), nil
 }
 

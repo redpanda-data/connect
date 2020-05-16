@@ -4,20 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/lib/buffer"
-	"github.com/Jeffail/benthos/v3/lib/cache"
-	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/service/test"
-	"github.com/Jeffail/benthos/v3/lib/tracer"
 	uconfig "github.com/Jeffail/benthos/v3/lib/util/config"
 	"github.com/urfave/cli/v2"
 )
@@ -123,56 +116,6 @@ func addExpression(conf *config.Type, expression string) error {
 		}
 	}
 	return nil
-}
-
-func printComponents() {
-	components := []string{}
-	printAll := func(title string) {
-		fmt.Printf("%v:\n", title)
-		sort.Strings(components)
-		for _, t := range components {
-			fmt.Printf("  - %v\n", t)
-		}
-		fmt.Println("")
-		components = nil
-	}
-
-	for t := range input.Constructors {
-		components = append(components, t)
-	}
-	printAll("Inputs")
-	for t := range processor.Constructors {
-		components = append(components, t)
-	}
-	printAll("Processors")
-	for t := range condition.Constructors {
-		components = append(components, t)
-	}
-	printAll("Conditions")
-	for t := range output.Constructors {
-		components = append(components, t)
-	}
-	printAll("Outputs")
-	for t := range cache.Constructors {
-		components = append(components, t)
-	}
-	printAll("Caches")
-	for t := range ratelimit.Constructors {
-		components = append(components, t)
-	}
-	printAll("Rate Limits")
-	for t := range buffer.Constructors {
-		components = append(components, t)
-	}
-	printAll("Buffers")
-	for t := range metrics.Constructors {
-		components = append(components, t)
-	}
-	printAll("Metrics")
-	for t := range tracer.Constructors {
-		components = append(components, t)
-	}
-	printAll("Tracers")
 }
 
 //------------------------------------------------------------------------------
@@ -315,8 +258,22 @@ func Run() {
 			{
 				Name:  "list",
 				Usage: "List all Benthos component types",
+				Description: `
+   If any component types are explicitly listed then only types of those
+   components will be shown.
+
+   benthos list
+   benthos list inputs output
+   benthos list rate-limits buffers`[4:],
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "format",
+						Value: "text",
+						Usage: "Print the component list in a specific format. Options are text or json.",
+					},
+				},
 				Action: func(c *cli.Context) error {
-					printComponents()
+					listComponents(c)
 					os.Exit(0)
 					return nil
 				},

@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"sort"
 
 	"golang.org/x/xerrors"
 )
@@ -159,5 +160,15 @@ func RegisterFunction(name string, allowDynamicArgs bool, ctor FunctionCtor, che
 }
 
 var functions = map[string]FunctionCtor{}
+
+// ListFunctions returns a slice of function names, sorted alphabetically.
+func ListFunctions() []string {
+	functionNames := make([]string, 0, len(functions))
+	for k := range functions {
+		functionNames = append(functionNames, k)
+	}
+	sort.Strings(functionNames)
+	return functionNames
+}
 
 //------------------------------------------------------------------------------

@@ -82,6 +82,20 @@ nested_json = this.string()
 
 ## Object and Array Stuff
 
+### `contains(arg)`
+
+Checks whether an array contains an element matching the argument, or an object contains a value matching the argument, and returns a boolean result.
+
+```coffee
+has_foo = thing.contains("foo")
+
+# In:  {"thing":["this","foo","that"]}
+# Out: {"has_foo":true}
+
+# In:  {"thing":["this","bar","that"]}
+# Out: {"has_foo":false}
+```
+
 ### `exists(string)`
 
 Checks that a field, identified via a [dot path][field_paths], exists in an object.
@@ -146,6 +160,14 @@ new_dict = dict.map_each(value.uppercase())
 # out: {"new_dict":{"foo":"HELLO","bar":"WORLD"}}
 ```
 
+### `merge(object)`
+
+Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the result will be an array containing both values, where values that are already arrays will be expanded into the resulting array.
+
+```coffee
+root = this.apply("foo").merge(this.apply("bar"))
+```
+
 ### `sum()`
 
 Sum the numerical values of an array. E.g. `json("foo").from_all().sum()` extracts the value of `foo` from all messages of a batch and adds them.
@@ -173,6 +195,20 @@ foo = "%s(%v): %v".format(name, age, fingers)
 ### `lowercase()`
 
 Convert a string value into lowercase.
+
+### `substr(string)`
+
+Checks whether a string contains a string within it and returns a boolean result.
+
+```coffee
+has_foo = thing.substr("foo")
+
+# In:  {"thing":"this foo that"}
+# Out: {"has_foo":true}
+
+# In:  {"thing":"this bar that"}
+# Out: {"has_foo":false}
+```
 
 ### `uppercase()`
 
