@@ -12,7 +12,7 @@ doc.received_at = timestamp_unix()
 doc.host = hostname()
 ```
 
-### `batch_index()`
+### `batch_index`
 
 Returns the index of the mapped message within a batch. This is useful for applying maps only on certain messages of a batch:
 
@@ -23,19 +23,34 @@ root = match {
 }
 ```
 
-### `batch_size()`
+### `batch_size`
 
 Returns the size of the message batch.
 
-### `content()`
+```coffee
+foo = batch_size()
+```
+
+### `content`
 
 Returns the full raw contents of the mapping target message as a string.
 
-### `count(string)`
+```coffee
+doc = content()
+
+# In:  {"foo":"bar"}
+# Out: {"doc":"{\"foo\":\"bar\"}"}
+```
+
+### `count`
 
 The `count` function is a counter starting at 1 which increments after each time it is called. Count takes an argument which is an identifier for the counter, allowing you to specify multiple unique counters in your configuration.
 
-### `deleted()`
+```coffee
+doc.id = count("documents")
+```
+
+### `deleted`
 
 This is a special function indicating that the mapping target should be deleted. For example, it can be used to remove elements of an array within `for_each`:
 
@@ -51,7 +66,7 @@ new_nums = nums.for_each(
 # out: {"new_nums":[1,7]}
 ```
 
-### `error()`
+### `error`
 
 If an error has occurred during the processing of a message this function returns the reported cause of the error. For more information about error
 handling patterns read [here][error_handling].
@@ -60,11 +75,15 @@ handling patterns read [here][error_handling].
 doc.error = error()
 ```
 
-### `hostname()`
+### `hostname`
 
 Resolves to the hostname of the machine running Benthos.
 
-### `json(string)`
+```coffee
+thing.host = hostname()
+```
+
+### `json`
 
 Returns the value of a field within a JSON message located by a [dot path][field_paths] argument. This function always targets the entire source JSON document regardless of the mapping context.
 
@@ -77,34 +96,58 @@ mapped = json("foo.bar")
 
 The path parameter is optional and if omitted the entire JSON payload is returned.
 
-### `meta(string)`
+### `meta`
 
 Returns the value of a metadata key from a message identified by a key. Values are extracted from the referenced input message and therefore do NOT reflect changes made from within the map.
 
 The parameter is optional and if omitted the entire metadata contents are returned as a JSON object.
 
-### `timestamp(string)`
+```coffee
+topic = meta("kafka_topic")
+```
+
+### `timestamp`
 
 Prints the current time in a custom format specified by the argument. The format is defined by showing how the reference time, defined to be
 `Mon Jan 2 15:04:05 -0700 MST 2006` would be displayed if it were the value.
 
 A fractional second is represented by adding a period and zeros to the end of the seconds section of layout string, as in `15:04:05.000` to format a time stamp with millisecond precision.
 
-### `timestamp_unix(int)`
+```coffee
+received_at = timestamp("15:04:05")
+```
+
+### `timestamp_unix`
 
 Resolves to the current unix timestamp in seconds. You can add fractional precision up to the nanosecond by specifying the precision as an argument, e.g. `timestamp_unix(3)` for millisecond precision.
 
-### `timestamp_unix_nano()`
+```coffee
+received_at = timestamp_unix()
+```
+
+### `timestamp_unix_nano`
 
 Resolves to the current unix timestamp in nanoseconds.
 
-### `timestamp_utc(string)`
+```coffee
+received_at = timestamp_unix_nano()
+```
+
+### `timestamp_utc`
 
 The equivalent of `timestamp` except the time is printed as UTC instead of the local timezone.
 
-### `uuid_v4()`
+```coffee
+received_at = timestamp_utc("15:04:05")
+```
+
+### `uuid_v4`
 
 Generates a new RFC-4122 UUID each time it is invoked and prints a string representation.
+
+```coffee
+id = uuid_v4()
+```
 
 [error_handling]: /docs/configuration/error_handling
 [field_paths]: /docs/configuration/field_paths

@@ -1,6 +1,7 @@
 package query
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 
@@ -63,6 +64,16 @@ func checkArgs(fn FunctionCtor, checks ...ArgCheckFn) FunctionCtor {
 			}
 		}
 		return fn(args...)
+	}
+}
+
+// ExpectAtLeastOneArg returns an error unless >0 arguments are specified.
+func ExpectAtLeastOneArg() ArgCheckFn {
+	return func(args []interface{}) error {
+		if len(args) == 0 {
+			return errors.New("expected at least one parameter, received none")
+		}
+		return nil
 	}
 }
 

@@ -51,9 +51,9 @@ func functionArgsParser(allowFunctions bool) parser.Type {
 	)
 
 	paramTypes := []parser.Type{
-		parser.Boolean(),
-		parser.Number(),
-		parser.QuotedString(),
+		parseLiteralWithTails(parser.Boolean()),
+		parseLiteralWithTails(parser.Number()),
+		parseLiteralWithTails(parser.QuotedString()),
 	}
 
 	return func(input []rune) parser.Result {
@@ -112,6 +112,51 @@ func parseFunctionTail(fn Function) parser.Type {
 			res.Payload, res.Err = mapMethod(fn, seqSlice[2].(Function))
 		}
 		return res
+	}
+}
+
+func parseLiteralWithTails(litParser parser.Type) parser.Type {
+	delim := parser.Sequence(
+		parser.Char('.'),
+		parser.Discard(
+			parser.Sequence(
+				parser.NewlineAllowComment(),
+				parser.SpacesAndTabs(),
+			),
+		),
+	)
+
+	return func(input []rune) parser.Result {
+		res := litParser(input)
+		if res.Err != nil {
+			return res
+		}
+
+		lit := res.Payload
+		var fn Function
+		for {
+			if res = delim(res.Remaining); res.Err != nil {
+				var payload interface{} = lit
+				if fn != nil {
+					payload = fn
+				}
+				return parser.Result{
+					Payload:   payload,
+					Remaining: res.Remaining,
+				}
+			}
+			if fn == nil {
+				fn = literalFunction(lit)
+			}
+			i := len(input) - len(res.Remaining)
+			if res = parser.MustBe(parseFunctionTail(fn))(res.Remaining); res.Err != nil {
+				return parser.Result{
+					Err:       parser.ErrAtPosition(i, res.Err),
+					Remaining: res.Remaining,
+				}
+			}
+			fn = res.Payload.(Function)
+		}
 	}
 }
 

@@ -88,18 +88,20 @@ func TestFunctions(t *testing.T) {
 			e, err := tryParse(test.input, false)
 			require.NoError(t, err)
 
-			res, err := e.Exec(FunctionContext{
-				Vars:  test.vars,
-				Maps:  map[string]Function{},
-				Index: test.index,
-				Msg:   msg,
-			})
-			if len(test.err) > 0 {
-				require.EqualError(t, err, test.err)
-			} else {
-				require.NoError(t, err)
+			for i := 0; i < 10; i++ {
+				res, err := e.Exec(FunctionContext{
+					Vars:  test.vars,
+					Maps:  map[string]Function{},
+					Index: test.index,
+					Msg:   msg,
+				})
+				if len(test.err) > 0 {
+					require.EqualError(t, err, test.err)
+				} else {
+					require.NoError(t, err)
+				}
+				assert.Equal(t, test.output, res)
 			}
-			assert.Equal(t, test.output, res)
 
 			// Ensure nothing changed
 			for i, m := range test.messages {

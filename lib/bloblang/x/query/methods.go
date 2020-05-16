@@ -4,11 +4,33 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/Jeffail/gabs/v2"
 	"golang.org/x/xerrors"
 )
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"append", true, appendMethod,
+	ExpectAtLeastOneArg(),
+)
+
+func appendMethod(target Function, args ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		res, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		arr, ok := res.([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("expected array target, found %T", res)
+		}
+		return append(arr, args...), nil
+	}), nil
+}
 
 //------------------------------------------------------------------------------
 
@@ -82,12 +104,18 @@ var _ = RegisterMethod(
 
 func containsMethod(target Function, args ...interface{}) (Function, error) {
 	compareRight := args[0]
+	sub := IToString(args[0])
+	bsub := IToBytes(args[0])
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
 		}
 		switch t := v.(type) {
+		case string:
+			return strings.Contains(t, sub), nil
+		case []byte:
+			return bytes.Contains(t, bsub), nil
 		case []interface{}:
 			for _, compareLeft := range t {
 				if compareRight == compareLeft {
@@ -103,10 +131,38 @@ func containsMethod(target Function, args ...interface{}) (Function, error) {
 		default:
 			return nil, &ErrRecoverable{
 				Recovered: false,
-				Err:       fmt.Errorf("expected map or array target, found %T", v),
+				Err:       fmt.Errorf("expected string, array or map target, found %T", v),
 			}
 		}
 		return false, nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"enumerated", false, enumerateMethod,
+	ExpectNArgs(0),
+)
+
+func enumerateMethod(target Function, args ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		res, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		arr, ok := res.([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("expected array target, found %T", res)
+		}
+		enumerated := make([]interface{}, 0, len(arr))
+		for i, ele := range arr {
+			enumerated = append(enumerated, map[string]interface{}{
+				"index": int64(i),
+				"value": ele,
+			})
+		}
+		return enumerated, nil
 	}), nil
 }
 
@@ -133,23 +189,63 @@ func existsMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"format", true, formatMethod,
+	"fold", false, foldMethod,
+	ExpectNArgs(2),
 )
 
-func formatMethod(target Function, args ...interface{}) (Function, error) {
+func foldMethod(target Function, args ...interface{}) (Function, error) {
+	var foldTallyStart interface{}
+	switch t := args[0].(type) {
+	case *literal:
+		foldTallyStart = t.Value
+	default:
+		foldTallyStart = t
+	}
+	foldFn, ok := args[1].(Function)
+	if !ok {
+		return nil, fmt.Errorf("expected function param, received %T", args[1])
+	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
+		res, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
 		}
-		switch t := v.(type) {
-		case string:
-			return fmt.Sprintf(t, args...), nil
-		case []byte:
-			return fmt.Sprintf(string(t), args...), nil
-		default:
-			return nil, fmt.Errorf("expected string value, received %T", v)
+
+		resArray, ok := res.([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("expected array, found: %T", res)
 		}
+
+		var tally interface{}
+		switch t := foldTallyStart.(type) {
+		case Function:
+			if tally, err = t.Exec(ctx); err != nil {
+				return nil, fmt.Errorf("failed to extract tally initial value: %w", err)
+			}
+		default:
+			tally = IClone(foldTallyStart)
+		}
+
+		tmpObj := map[string]interface{}{
+			"tally": struct{}{},
+			"value": struct{}{},
+		}
+
+		for _, v := range resArray {
+			tmpObj["tally"] = tally
+			tmpObj["value"] = v
+
+			var tmpVal interface{} = tmpObj
+			ctx.Value = &tmpVal
+
+			newV, mapErr := foldFn.Exec(ctx)
+			if mapErr != nil {
+				return nil, mapErr
+			}
+
+			tally = newV
+		}
+		return tally, nil
 	}), nil
 }
 
@@ -251,6 +347,30 @@ func getMethodCtor(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"keys", false, keysMethod,
+	ExpectNArgs(0),
+)
+
+func keysMethod(target Function, args ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if m, ok := v.(map[string]interface{}); ok {
+			keys := make([]interface{}, 0, len(m))
+			for k := range m {
+				keys = append(keys, k)
+			}
+			return keys, nil
+		}
+		return nil, fmt.Errorf("expected map, found %T", v)
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"length", false, lengthMethod,
 	ExpectNArgs(0),
 )
@@ -279,36 +399,6 @@ func lengthMethod(target Function, _ ...interface{}) (Function, error) {
 			}
 		}
 		return length, nil
-	}), nil
-}
-
-//------------------------------------------------------------------------------
-
-var _ = RegisterMethod(
-	"lowercase", false, lowercaseMethod,
-	ExpectNArgs(0),
-)
-
-func lowercaseMethod(target Function, _ ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: "",
-				Err:       err,
-			}
-		}
-		switch t := v.(type) {
-		case string:
-			return strings.ToLower(t), nil
-		case []byte:
-			return bytes.ToLower(t), nil
-		default:
-			return nil, &ErrRecoverable{
-				Recovered: strings.ToLower(IToString(v)),
-				Err:       fmt.Errorf("expected string value, received %T", v),
-			}
-		}
 	}), nil
 }
 
@@ -467,6 +557,33 @@ func mergeMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"number", false, numberMethod,
+	ExpectNArgs(0),
+)
+
+func numberMethod(target Function, _ ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, &ErrRecoverable{
+				Recovered: 0,
+				Err:       err,
+			}
+		}
+		f, err := IGetNumber(v)
+		if err != nil {
+			return nil, &ErrRecoverable{
+				Recovered: float64(0),
+				Err:       err,
+			}
+		}
+		return f, nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"or", false, orMethod,
 	ExpectNArgs(1),
 )
@@ -493,107 +610,39 @@ func orMethod(fn Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"string", false, stringMethod,
+	"sort", false, sortMethod,
 	ExpectNArgs(0),
 )
 
-func stringMethod(target Function, _ ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: "",
-				Err:       err,
-			}
-		}
-		return IToString(v), nil
-	}), nil
-}
-
-//------------------------------------------------------------------------------
-
-var _ = RegisterMethod(
-	"substr", true, substrMethod,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
-)
-
-func substrMethod(target Function, args ...interface{}) (Function, error) {
-	sub := args[0].(string)
-	bsub := []byte(sub)
+func sortMethod(target Function, args ...interface{}) (Function, error) {
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
 		}
-		switch t := v.(type) {
-		case string:
-			return strings.Contains(t, sub), nil
-		case []byte:
-			return bytes.Contains(t, bsub), nil
-		default:
-			return nil, &ErrRecoverable{
-				Recovered: false,
-				Err:       fmt.Errorf("expected string target, found %T", v),
+		if m, ok := v.([]interface{}); ok {
+			values := make([]interface{}, 0, len(m))
+			for _, e := range m {
+				values = append(values, e)
 			}
+			// TODO: Solve this with ICompare or something.
+			sort.Slice(values, func(i, j int) bool {
+				switch iV := values[i].(type) {
+				case string:
+					jStr, _ := values[j].(string)
+					return iV < jStr
+				case float64:
+					jFlt, _ := values[j].(float64)
+					return iV < jFlt
+				case int64:
+					jInt, _ := values[j].(int64)
+					return iV < jInt
+				}
+				return false
+			})
+			return values, nil
 		}
-	}), nil
-}
-
-//------------------------------------------------------------------------------
-
-var _ = RegisterMethod(
-	"uppercase", false, uppercaseMethod,
-	ExpectNArgs(0),
-)
-
-func uppercaseMethod(target Function, _ ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: "",
-				Err:       err,
-			}
-		}
-		switch t := v.(type) {
-		case string:
-			return strings.ToUpper(t), nil
-		case []byte:
-			return bytes.ToUpper(t), nil
-		default:
-			return nil, &ErrRecoverable{
-				Recovered: strings.ToUpper(IToString(v)),
-				Err:       fmt.Errorf("expected string value, received %T", v),
-			}
-		}
-	}), nil
-}
-
-//------------------------------------------------------------------------------
-
-var _ = RegisterMethod(
-	"number", false, numberMethod,
-	ExpectNArgs(0),
-)
-
-func numberMethod(target Function, _ ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: 0,
-				Err:       err,
-			}
-		}
-		f, err := IGetNumber(v)
-		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: float64(0),
-				Err:       err,
-			}
-		}
-		return f, nil
+		return nil, fmt.Errorf("expected array, found %T", v)
 	}), nil
 }
 
@@ -638,6 +687,30 @@ func sumMethod(target Function, _ ...interface{}) (Function, error) {
 			Recovered: int64(0),
 			Err:       fmt.Errorf("expected array value, received %T", v),
 		}
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"values", false, valuesMethod,
+	ExpectNArgs(0),
+)
+
+func valuesMethod(target Function, args ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if m, ok := v.(map[string]interface{}); ok {
+			values := make([]interface{}, 0, len(m))
+			for _, e := range m {
+				values = append(values, e)
+			}
+			return values, nil
+		}
+		return nil, fmt.Errorf("expected map, found %T", v)
 	}), nil
 }
 
