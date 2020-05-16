@@ -7,20 +7,20 @@ import (
 func dynamicArrayParser() parser.Type {
 	open, comma, close := parser.Char('['), parser.Char(','), parser.Char(']')
 	whitespace := parser.DiscardAll(
-		parser.AnyOf(
+		parser.OneOf(
 			parser.NewlineAllowComment(),
 			parser.SpacesAndTabs(),
 		),
 	)
 	return func(input []rune) parser.Result {
 		res := parser.DelimitedPattern(
-			parser.InterceptExpectedError(parser.Sequence(
+			parser.Expect(parser.Sequence(
 				open,
 				whitespace,
 			), "array"),
-			parser.AnyOf(
+			parser.OneOf(
 				dynamicLiteralValueParser(),
-				parser.InterceptExpectedError(Parse, "object"),
+				parser.Expect(Parse, "object"),
 			),
 			parser.Sequence(
 				parser.Discard(parser.SpacesAndTabs()),
@@ -38,7 +38,7 @@ func dynamicArrayParser() parser.Type {
 		}
 
 		isDynamic := false
-		values := res.Result.([]interface{})
+		values := res.Payload.([]interface{})
 		for _, v := range values {
 			if _, isFunction := v.(Function); isFunction {
 				isDynamic = true
@@ -48,7 +48,7 @@ func dynamicArrayParser() parser.Type {
 			return res
 		}
 
-		res.Result = closureFn(func(ctx FunctionContext) (interface{}, error) {
+		res.Payload = closureFn(func(ctx FunctionContext) (interface{}, error) {
 			dynArray := make([]interface{}, len(values))
 			var err error
 			for i, v := range values {
@@ -81,7 +81,7 @@ func dynamicArrayParser() parser.Type {
 func dynamicObjectParser() parser.Type {
 	open, comma, close := parser.Char('{'), parser.Char(','), parser.Char('}')
 	whitespace := parser.DiscardAll(
-		parser.AnyOf(
+		parser.OneOf(
 			parser.NewlineAllowComment(),
 			parser.SpacesAndTabs(),
 		),
@@ -89,7 +89,7 @@ func dynamicObjectParser() parser.Type {
 
 	return func(input []rune) parser.Result {
 		res := parser.DelimitedPattern(
-			parser.InterceptExpectedError(parser.Sequence(
+			parser.Expect(parser.Sequence(
 				open,
 				whitespace,
 			), "object"),
@@ -98,9 +98,9 @@ func dynamicObjectParser() parser.Type {
 				parser.Discard(parser.SpacesAndTabs()),
 				parser.Char(':'),
 				parser.Discard(whitespace),
-				parser.AnyOf(
+				parser.OneOf(
 					dynamicLiteralValueParser(),
-					parser.InterceptExpectedError(Parse, "object"),
+					parser.Expect(Parse, "object"),
 				),
 			),
 			parser.Sequence(
@@ -120,7 +120,7 @@ func dynamicObjectParser() parser.Type {
 
 		isDynamic := false
 		values := map[string]interface{}{}
-		for _, sequenceValue := range res.Result.([]interface{}) {
+		for _, sequenceValue := range res.Payload.([]interface{}) {
 			slice := sequenceValue.([]interface{})
 			values[slice[0].(string)] = slice[4]
 			if _, isFunction := slice[4].(Function); isFunction {
@@ -128,11 +128,11 @@ func dynamicObjectParser() parser.Type {
 			}
 		}
 		if !isDynamic {
-			res.Result = values
+			res.Payload = values
 			return res
 		}
 
-		res.Result = closureFn(func(ctx FunctionContext) (interface{}, error) {
+		res.Payload = closureFn(func(ctx FunctionContext) (interface{}, error) {
 			dynMap := make(map[string]interface{}, len(values))
 			var err error
 			for k, v := range values {
@@ -163,7 +163,7 @@ func dynamicObjectParser() parser.Type {
 }
 
 func dynamicLiteralValueParser() parser.Type {
-	return parser.AnyOf(
+	return parser.OneOf(
 		parser.Boolean(),
 		parser.Number(),
 		parser.QuotedString(),
@@ -182,11 +182,11 @@ func literalValueParser() parser.Type {
 			return res
 		}
 
-		if _, isFunction := res.Result.(Function); isFunction {
+		if _, isFunction := res.Payload.(Function); isFunction {
 			return res
 		}
 
-		res.Result = literalFunction(res.Result)
+		res.Payload = literalFunction(res.Payload)
 		return res
 	}
 }

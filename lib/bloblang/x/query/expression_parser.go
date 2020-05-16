@@ -8,22 +8,22 @@ func matchCaseParser() parser.Type {
 	whitespace := parser.SpacesAndTabs()
 
 	p := parser.Sequence(
-		parser.AnyOf(
+		parser.OneOf(
 			parser.Sequence(
-				parser.InterceptExpectedError(
+				parser.Expect(
 					parser.Char('_'),
 					"match-case",
 				),
 				parser.Optional(whitespace),
-				parser.Match("=>"),
+				parser.Term("=>"),
 			),
 			parser.Sequence(
-				parser.InterceptExpectedError(
+				parser.Expect(
 					Parse,
 					"match-case",
 				),
 				parser.Optional(whitespace),
-				parser.Match("=>"),
+				parser.Term("=>"),
 			),
 		),
 		parser.Optional(whitespace),
@@ -36,7 +36,7 @@ func matchCaseParser() parser.Type {
 			return res
 		}
 
-		seqSlice := res.Result.([]interface{})
+		seqSlice := res.Payload.([]interface{})
 
 		var caseFn Function
 		switch t := seqSlice[0].([]interface{})[0].(type) {
@@ -56,7 +56,7 @@ func matchCaseParser() parser.Type {
 		}
 
 		return parser.Result{
-			Result: matchCase{
+			Payload: matchCase{
 				caseFn:  caseFn,
 				queryFn: seqSlice[2].(Function),
 			},
@@ -67,7 +67,7 @@ func matchCaseParser() parser.Type {
 
 func matchExpressionParser() parser.Type {
 	whitespace := parser.DiscardAll(
-		parser.AnyOf(
+		parser.OneOf(
 			parser.SpacesAndTabs(),
 			parser.NewlineAllowComment(),
 		),
@@ -75,7 +75,7 @@ func matchExpressionParser() parser.Type {
 
 	return func(input []rune) parser.Result {
 		res := parser.Sequence(
-			parser.Match("match"),
+			parser.Term("match"),
 			parser.Discard(parser.SpacesAndTabs()),
 			parser.Optional(Parse),
 			whitespace,
@@ -88,7 +88,7 @@ func matchExpressionParser() parser.Type {
 					matchCaseParser(),
 					parser.Sequence(
 						parser.Discard(parser.SpacesAndTabs()),
-						parser.AnyOf(
+						parser.OneOf(
 							parser.Char(','),
 							parser.NewlineAllowComment(),
 						),
@@ -106,7 +106,7 @@ func matchExpressionParser() parser.Type {
 			return res
 		}
 
-		seqSlice := res.Result.([]interface{})
+		seqSlice := res.Payload.([]interface{})
 		contextFn, ok := seqSlice[2].(Function)
 		if !ok {
 			contextFn = closureFn(func(ctx FunctionContext) (interface{}, error) {
@@ -123,21 +123,21 @@ func matchExpressionParser() parser.Type {
 			cases = append(cases, caseVal.(matchCase))
 		}
 
-		res.Result = matchFunction(contextFn, cases)
+		res.Payload = matchFunction(contextFn, cases)
 		return res
 	}
 }
 
 func bracketsExpressionParser() parser.Type {
 	whitespace := parser.DiscardAll(
-		parser.AnyOf(
+		parser.OneOf(
 			parser.SpacesAndTabs(),
 			parser.NewlineAllowComment(),
 		),
 	)
 	return func(input []rune) parser.Result {
 		res := parser.Sequence(
-			parser.InterceptExpectedError(
+			parser.Expect(
 				parser.Char('('),
 				"function",
 			),
@@ -149,7 +149,7 @@ func bracketsExpressionParser() parser.Type {
 		if res.Err != nil {
 			return res
 		}
-		res.Result = res.Result.([]interface{})[2]
+		res.Payload = res.Payload.([]interface{})[2]
 		return res
 	}
 }

@@ -59,11 +59,12 @@ func ExecToBytes(fn Function, ctx FunctionContext) []byte {
 
 // Parse parses an input into a query.Function.
 func Parse(input []rune) parser.Result {
-	rootParser := parseWithTails(parser.AnyOf(
+	rootParser := parseWithTails(parser.OneOf(
 		matchExpressionParser(),
 		bracketsExpressionParser(),
 		literalValueParser(),
 		functionParser(),
+		variableLiteralParser(),
 		fieldLiteralRootParser(),
 	))
 	res := parser.SpacesAndTabs()(input)
@@ -78,7 +79,7 @@ func Parse(input []rune) parser.Result {
 // function interpolations. In order to support old functions this parser does
 // not include field literals.
 func ParseDeprecated(input []rune) parser.Result {
-	rootParser := parser.AnyOf(
+	rootParser := parser.OneOf(
 		matchExpressionParser(),
 		parseWithTails(bracketsExpressionParser()),
 		parseWithTails(literalValueParser()),
@@ -97,10 +98,10 @@ func ParseDeprecated(input []rune) parser.Result {
 		}
 	}
 
-	result := res.Result
+	result := res.Payload
 	res = parser.SpacesAndTabs()(res.Remaining)
 	return parser.Result{
-		Result:    result,
+		Payload:   result,
 		Remaining: res.Remaining,
 	}
 }
@@ -115,7 +116,7 @@ func tryParse(expr string, deprecated bool) (Function, error) {
 	if res.Err != nil {
 		return nil, res.Err
 	}
-	return res.Result.(Function), nil
+	return res.Payload.(Function), nil
 }
 
 //------------------------------------------------------------------------------

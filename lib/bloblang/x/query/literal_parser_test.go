@@ -94,8 +94,8 @@ func TestLiteralParser(t *testing.T) {
 
 			res := Parse([]rune(test.mapping))
 			require.NoError(t, res.Err)
-			require.Implements(t, (*Function)(nil), res.Result)
-			q := res.Result.(Function)
+			require.Implements(t, (*Function)(nil), res.Payload)
+			q := res.Payload.(Function)
 
 			result, err := q.Exec(FunctionContext{
 				Index: 0, Msg: message.New(nil),

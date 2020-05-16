@@ -49,7 +49,7 @@ func TestChar(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := char([]rune(test.input))
 			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.result, res.Payload, "Result") &&
 				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
@@ -93,7 +93,7 @@ func TestNotChar(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := char([]rune(test.input))
 			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.result, res.Payload, "Result") &&
 				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
@@ -142,7 +142,7 @@ func TestInSet(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := inSet([]rune(test.input))
 			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.result, res.Payload, "Result") &&
 				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
@@ -191,7 +191,7 @@ func TestInRange(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := parser([]rune(test.input))
 			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.result, res.Payload, "Result") &&
 				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
@@ -329,7 +329,7 @@ func TestAnyOfErrors(t *testing.T) {
 			})
 		}
 		t.Run(name, func(t *testing.T) {
-			res := AnyOf(childParsers...)([]rune("foobar"))
+			res := OneOf(childParsers...)([]rune("foobar"))
 			assert.Equal(t, test.err, res.Err.Error(), "Error")
 		})
 	}
@@ -382,7 +382,7 @@ func TestBestMatch(t *testing.T) {
 					Remaining: []rune("foobar"),
 				},
 				{
-					Result:    "test",
+					Payload:   "test",
 					Remaining: []rune("bar"),
 				},
 			},
@@ -404,12 +404,12 @@ func TestBestMatch(t *testing.T) {
 					Remaining: []rune("foobar"),
 				},
 				{
-					Result:    "test",
+					Payload:   "test",
 					Remaining: []rune("r"),
 				},
 			},
 			result: Result{
-				Result:    "test",
+				Payload:   "test",
 				Remaining: []rune("r"),
 			},
 		},
@@ -516,14 +516,14 @@ func TestSnakeCase(t *testing.T) {
 			if res.Err != nil || len(test.err) > 0 {
 				assert.Equal(t, test.err, res.Err.Error(), "Error")
 			}
-			assert.Equal(t, test.result, res.Result, "Result")
+			assert.Equal(t, test.result, res.Payload, "Result")
 			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
 
 func TestSequence(t *testing.T) {
-	parser := Sequence(Match("abc"), Match("def"))
+	parser := Sequence(Term("abc"), Term("def"))
 
 	tests := map[string]struct {
 		input     string
@@ -570,14 +570,14 @@ func TestSequence(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := parser([]rune(test.input))
 			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.result, res.Payload, "Result") &&
 				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
 
 func TestAllOf(t *testing.T) {
-	parser := AllOf(Match("abc"))
+	parser := UntilFail(Term("abc"))
 
 	tests := map[string]struct {
 		input     string
@@ -624,14 +624,14 @@ func TestAllOf(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := parser([]rune(test.input))
 			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.result, res.Payload, "Result") &&
 				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
 
 func TestDelimitedPattern(t *testing.T) {
-	parser := DelimitedPattern(Char('#'), Match("abc"), Char(','), Char('!'), false, false)
+	parser := DelimitedPattern(Char('#'), Term("abc"), Char(','), Char('!'), false, false)
 
 	tests := map[string]struct {
 		input     string
@@ -688,14 +688,14 @@ func TestDelimitedPattern(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := parser([]rune(test.input))
 			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.result, res.Payload, "Result") &&
 				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
 
 func TestDelimitedPatternAllowTrailing(t *testing.T) {
-	parser := DelimitedPattern(Char('#'), Match("abc"), Char(','), Char('!'), true, false)
+	parser := DelimitedPattern(Char('#'), Term("abc"), Char(','), Char('!'), true, false)
 
 	tests := map[string]struct {
 		input     string
@@ -762,7 +762,7 @@ func TestDelimitedPatternAllowTrailing(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := parser([]rune(test.input))
 			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.result, res.Payload, "Result") &&
 				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
@@ -775,11 +775,11 @@ func TestMustBe(t *testing.T) {
 	}{
 		"No error": {
 			inputRes: Result{
-				Result:    "foo",
+				Payload:   "foo",
 				Remaining: []rune("foobar"),
 			},
 			outputRes: Result{
-				Result:    "foo",
+				Payload:   "foo",
 				Remaining: []rune("foobar"),
 			},
 		},
@@ -854,11 +854,11 @@ func TestInterceptExpectedError(t *testing.T) {
 	}{
 		"No error": {
 			inputRes: Result{
-				Result:    "foo",
+				Payload:   "foo",
 				Remaining: []rune("foobar"),
 			},
 			outputRes: Result{
-				Result:    "foo",
+				Payload:   "foo",
 				Remaining: []rune("foobar"),
 			},
 		},
@@ -930,14 +930,14 @@ func TestInterceptExpectedError(t *testing.T) {
 			return test.inputRes
 		}
 		t.Run(name, func(t *testing.T) {
-			res := InterceptExpectedError(childParser, "foobar")([]rune("foobar"))
+			res := Expect(childParser, "foobar")([]rune("foobar"))
 			assert.Equal(t, test.outputRes, res)
 		})
 	}
 }
 
 func TestMatch(t *testing.T) {
-	str := Match("abc")
+	str := Term("abc")
 
 	tests := map[string]struct {
 		input     string
@@ -984,14 +984,14 @@ func TestMatch(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := str([]rune(test.input))
 			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.result, res.Payload, "Result") &&
 				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
 
 func TestDiscard(t *testing.T) {
-	parser := Discard(Match("abc"))
+	parser := Discard(Term("abc"))
 
 	tests := map[string]struct {
 		input     string
@@ -1028,14 +1028,14 @@ func TestDiscard(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := parser([]rune(test.input))
 			require.NoError(t, res.Err)
-			assert.Nil(t, res.Result)
+			assert.Nil(t, res.Payload)
 			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
 
 func TestDiscardAll(t *testing.T) {
-	parser := DiscardAll(Match("abc"))
+	parser := DiscardAll(Term("abc"))
 
 	tests := map[string]struct {
 		input     string
@@ -1076,7 +1076,7 @@ func TestDiscardAll(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := parser([]rune(test.input))
 			require.NoError(t, res.Err)
-			assert.Nil(t, res.Result)
+			assert.Nil(t, res.Payload)
 			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
@@ -1085,8 +1085,8 @@ func TestDiscardAll(t *testing.T) {
 func TestOptional(t *testing.T) {
 	parser := Optional(
 		Sequence(
-			Match("abc"),
-			Match("def"),
+			Term("abc"),
+			Term("def"),
 		),
 	)
 
@@ -1120,7 +1120,7 @@ func TestOptional(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := parser([]rune(test.input))
 			assert.Equal(t, test.err, res.Err)
-			assert.Equal(t, test.result, res.Result)
+			assert.Equal(t, test.result, res.Payload)
 			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
@@ -1174,7 +1174,7 @@ func TestNumber(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := p([]rune(test.input))
 			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.result, res.Payload, "Result") &&
 				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
@@ -1223,7 +1223,7 @@ func TestBoolean(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := p([]rune(test.input))
 			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.result, res.Payload, "Result") &&
 				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
@@ -1277,7 +1277,7 @@ func TestQuotedString(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := str([]rune(test.input))
 			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.result, res.Payload, "Result") &&
 				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
@@ -1357,7 +1357,7 @@ func TestArray(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := p([]rune(test.input))
 			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.result, res.Payload, "Result") &&
 				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
@@ -1449,7 +1449,7 @@ func TestObject(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := p([]rune(test.input))
 			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.result, res.Payload, "Result") &&
 				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
@@ -1498,7 +1498,7 @@ func TestSpacesAndTabs(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := inSet([]rune(test.input))
 			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.result, res.Payload, "Result") &&
 				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
@@ -1526,14 +1526,9 @@ func TestNewline(t *testing.T) {
 			remaining: "\r",
 			err:       ExpectedError{"line-break"},
 		},
-		"a carriage return line feed": {
-			input:     "\r\n",
-			result:    "\r\n",
-			remaining: "",
-		},
-		"a carriage return line feed plus": {
-			input:     "\r\n foo",
-			result:    "\r\n",
+		"a line feed plus": {
+			input:     "\n foo",
+			result:    "\n",
 			remaining: " foo",
 		},
 		"lots not in the set": {
@@ -1547,14 +1542,14 @@ func TestNewline(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := inSet([]rune(test.input))
 			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.result, res.Payload, "Result") &&
 				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
 
 func TestAnyOf(t *testing.T) {
-	anyOf := AnyOf(
+	anyOf := OneOf(
 		Char('a'),
 		Char('b'),
 		Char('c'),
@@ -1620,7 +1615,7 @@ func TestAnyOf(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := anyOf([]rune(test.input))
 			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Result, "Result") &&
+				assert.Equal(t, test.result, res.Payload, "Result") &&
 				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}

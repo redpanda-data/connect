@@ -19,7 +19,7 @@ Map a new document by using [dot paths][field_paths]:
 let foo = "yo"
 
 new_doc.id = thing.id
-new_doc.type = var("foo") # Reference a variable
+new_doc.type = $foo # Reference a variable with $
 
 # Keyword `root` refers to the root of the mapped document
 # Keyword `this` refers to the root of the query context

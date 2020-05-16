@@ -9,17 +9,17 @@ import (
 //------------------------------------------------------------------------------
 
 func arithmeticOpParser() parser.Type {
-	opParser := parser.AnyOf(
+	opParser := parser.OneOf(
 		parser.Char('+'),
 		parser.Char('-'),
 		parser.Char('/'),
 		parser.Char('*'),
-		parser.Match("&&"),
-		parser.Match("||"),
-		parser.Match("=="),
-		parser.Match("!="),
-		parser.Match(">="),
-		parser.Match("<="),
+		parser.Term("&&"),
+		parser.Term("||"),
+		parser.Term("=="),
+		parser.Term("!="),
+		parser.Term(">="),
+		parser.Term("<="),
 		parser.Char('>'),
 		parser.Char('<'),
 		parser.Char('|'),
@@ -29,37 +29,37 @@ func arithmeticOpParser() parser.Type {
 		if res.Err != nil {
 			return res
 		}
-		switch res.Result.(string) {
+		switch res.Payload.(string) {
 		case "+":
-			res.Result = arithmeticAdd
+			res.Payload = arithmeticAdd
 		case "-":
-			res.Result = arithmeticSub
+			res.Payload = arithmeticSub
 		case "/":
-			res.Result = arithmeticDiv
+			res.Payload = arithmeticDiv
 		case "*":
-			res.Result = arithmeticMul
+			res.Payload = arithmeticMul
 		case "==":
-			res.Result = arithmeticEq
+			res.Payload = arithmeticEq
 		case "!=":
-			res.Result = arithmeticNeq
+			res.Payload = arithmeticNeq
 		case "&&":
-			res.Result = arithmeticAnd
+			res.Payload = arithmeticAnd
 		case "||":
-			res.Result = arithmeticOr
+			res.Payload = arithmeticOr
 		case ">":
-			res.Result = arithmeticGt
+			res.Payload = arithmeticGt
 		case "<":
-			res.Result = arithmeticLt
+			res.Payload = arithmeticLt
 		case ">=":
-			res.Result = arithmeticGte
+			res.Payload = arithmeticGte
 		case "<=":
-			res.Result = arithmeticLte
+			res.Payload = arithmeticLte
 		case "|":
-			res.Result = arithmeticPipe
+			res.Payload = arithmeticPipe
 		default:
 			return parser.Result{
 				Remaining: input,
-				Err:       fmt.Errorf("operator not recognized: %v", res.Result),
+				Err:       fmt.Errorf("operator not recognized: %v", res.Payload),
 			}
 		}
 		return res
@@ -68,7 +68,7 @@ func arithmeticOpParser() parser.Type {
 
 func arithmeticParser(fnParser parser.Type) parser.Type {
 	whitespace := parser.DiscardAll(
-		parser.AnyOf(
+		parser.OneOf(
 			parser.SpacesAndTabs(),
 			parser.NewlineAllowComment(),
 		),
@@ -91,7 +91,7 @@ func arithmeticParser(fnParser parser.Type) parser.Type {
 			return res
 		}
 
-		seqSlice := res.Result.([]interface{})
+		seqSlice := res.Payload.([]interface{})
 		for _, fn := range seqSlice[0].([]interface{}) {
 			fns = append(fns, fn.(Function))
 		}
@@ -107,7 +107,7 @@ func arithmeticParser(fnParser parser.Type) parser.Type {
 			}
 		}
 		return parser.Result{
-			Result:    fn,
+			Payload:   fn,
 			Remaining: res.Remaining,
 		}
 	}

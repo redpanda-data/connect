@@ -74,7 +74,7 @@ func NewBloblang(
 	}
 
 	return &Bloblang{
-		fn: res.Result.(query.Function),
+		fn: res.Payload.(query.Function),
 
 		log: log,
 

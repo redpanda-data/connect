@@ -44,7 +44,7 @@ func (e badMethodErr) ToExpectedErr() parser.ExpectedError {
 func functionArgsParser(allowFunctions bool) parser.Type {
 	open, comma, close := parser.Char('('), parser.Char(','), parser.Char(')')
 	whitespace := parser.DiscardAll(
-		parser.AnyOf(
+		parser.OneOf(
 			parser.SpacesAndTabs(),
 			parser.NewlineAllowComment(),
 		),
@@ -63,14 +63,14 @@ func functionArgsParser(allowFunctions bool) parser.Type {
 			tmpParamTypes = append(tmpParamTypes, Parse)
 		}
 		return parser.DelimitedPattern(
-			parser.InterceptExpectedError(
+			parser.Expect(
 				parser.Sequence(
 					open,
 					whitespace,
 				),
 				"function-parameters",
 			),
-			parser.MustBe(parser.AnyOf(tmpParamTypes...)),
+			parser.MustBe(parser.OneOf(tmpParamTypes...)),
 			parser.Sequence(
 				parser.Discard(parser.SpacesAndTabs()),
 				comma,
@@ -90,16 +90,16 @@ func parseFunctionTail(fn Function) parser.Type {
 	closeBracket := parser.Char(')')
 
 	whitespace := parser.DiscardAll(
-		parser.AnyOf(
+		parser.OneOf(
 			parser.SpacesAndTabs(),
 			parser.NewlineAllowComment(),
 		),
 	)
 
 	return func(input []rune) parser.Result {
-		res := parser.AnyOf(
+		res := parser.OneOf(
 			parser.Sequence(
-				parser.InterceptExpectedError(openBracket, "method"),
+				parser.Expect(openBracket, "method"),
 				whitespace,
 				Parse,
 				whitespace,
@@ -108,8 +108,8 @@ func parseFunctionTail(fn Function) parser.Type {
 			methodParser(fn),
 			fieldLiteralMapParser(fn),
 		)(input)
-		if seqSlice, isSlice := res.Result.([]interface{}); isSlice {
-			res.Result, res.Err = mapMethod(fn, seqSlice[2].(Function))
+		if seqSlice, isSlice := res.Payload.([]interface{}); isSlice {
+			res.Payload, res.Err = mapMethod(fn, seqSlice[2].(Function))
 		}
 		return res
 	}
@@ -132,11 +132,11 @@ func parseWithTails(fnParser parser.Type) parser.Type {
 			return res
 		}
 
-		fn := res.Result.(Function)
+		fn := res.Payload.(Function)
 		for {
 			if res = delim(res.Remaining); res.Err != nil {
 				return parser.Result{
-					Result:    fn,
+					Payload:   fn,
 					Remaining: res.Remaining,
 				}
 			}
@@ -147,20 +147,20 @@ func parseWithTails(fnParser parser.Type) parser.Type {
 					Remaining: res.Remaining,
 				}
 			}
-			fn = res.Result.(Function)
+			fn = res.Payload.(Function)
 		}
 	}
 }
 
 func fieldLiteralMapParser(ctxFn Function) parser.Type {
-	fieldPathParser := parser.JoinStringSliceResult(
-		parser.InterceptExpectedError(
-			parser.AllOf(
-				parser.AnyOf(
+	fieldPathParser := parser.JoinStringPayloads(
+		parser.Expect(
+			parser.UntilFail(
+				parser.OneOf(
 					parser.InRange('a', 'z'),
 					parser.InRange('A', 'Z'),
 					parser.InRange('0', '9'),
-					parser.InRange('*', '-'),
+					parser.InRange('*', '+'),
 					parser.Char('_'),
 					parser.Char('~'),
 				),
@@ -175,10 +175,7 @@ func fieldLiteralMapParser(ctxFn Function) parser.Type {
 			return res
 		}
 
-		fn, err := fieldFunction(res.Result.(string))
-		if err == nil {
-			fn, err = mapMethod(ctxFn, fn)
-		}
+		fn, err := getMethodCtor(ctxFn, res.Payload.(string))
 		if err != nil {
 			return parser.Result{
 				Remaining: input,
@@ -188,16 +185,60 @@ func fieldLiteralMapParser(ctxFn Function) parser.Type {
 
 		return parser.Result{
 			Remaining: res.Remaining,
-			Result:    fn,
+			Payload:   fn,
+		}
+	}
+}
+
+func variableLiteralParser() parser.Type {
+	varPathParser := parser.Expect(
+		parser.Sequence(
+			parser.Char('$'),
+			parser.JoinStringPayloads(
+				parser.UntilFail(
+					parser.OneOf(
+						parser.InRange('a', 'z'),
+						parser.InRange('A', 'Z'),
+						parser.InRange('0', '9'),
+						parser.Char('_'),
+						parser.Char('-'),
+					),
+				),
+			),
+		),
+		"variable-path",
+	)
+
+	return func(input []rune) parser.Result {
+		res := varPathParser(input)
+		if res.Err != nil {
+			return res
+		}
+
+		var fn Function
+		var err error
+
+		path := res.Payload.([]interface{})[1].(string)
+		fn, err = varFunction(path)
+		if err != nil {
+			return parser.Result{
+				Remaining: input,
+				Err:       err,
+			}
+		}
+
+		return parser.Result{
+			Remaining: res.Remaining,
+			Payload:   fn,
 		}
 	}
 }
 
 func fieldLiteralRootParser() parser.Type {
-	fieldPathParser := parser.InterceptExpectedError(
-		parser.JoinStringSliceResult(
-			parser.AllOf(
-				parser.AnyOf(
+	fieldPathParser := parser.Expect(
+		parser.JoinStringPayloads(
+			parser.UntilFail(
+				parser.OneOf(
 					parser.InRange('a', 'z'),
 					parser.InRange('A', 'Z'),
 					parser.InRange('0', '9'),
@@ -219,11 +260,11 @@ func fieldLiteralRootParser() parser.Type {
 		var fn Function
 		var err error
 
-		path := res.Result.(string)
+		path := res.Payload.(string)
 		if path == "this" {
-			fn, err = fieldFunction()
+			fn, err = fieldFunctionCtor()
 		} else {
-			fn, err = fieldFunction(path)
+			fn, err = fieldFunctionCtor(path)
 		}
 		if err != nil {
 			return parser.Result{
@@ -234,14 +275,14 @@ func fieldLiteralRootParser() parser.Type {
 
 		return parser.Result{
 			Remaining: res.Remaining,
-			Result:    fn,
+			Payload:   fn,
 		}
 	}
 }
 
 func methodParser(fn Function) parser.Type {
 	p := parser.Sequence(
-		parser.InterceptExpectedError(
+		parser.Expect(
 			parser.SnakeCase(),
 			"method",
 		),
@@ -254,7 +295,7 @@ func methodParser(fn Function) parser.Type {
 			return res
 		}
 
-		seqSlice := res.Result.([]interface{})
+		seqSlice := res.Payload.([]interface{})
 
 		targetMethod := seqSlice[0].(string)
 		mtor, exists := methods[targetMethod]
@@ -274,7 +315,7 @@ func methodParser(fn Function) parser.Type {
 			}
 		}
 		return parser.Result{
-			Result:    method,
+			Payload:   method,
 			Remaining: res.Remaining,
 		}
 	}
@@ -282,7 +323,7 @@ func methodParser(fn Function) parser.Type {
 
 func functionParser() parser.Type {
 	p := parser.Sequence(
-		parser.InterceptExpectedError(
+		parser.Expect(
 			parser.SnakeCase(),
 			"function",
 		),
@@ -295,7 +336,7 @@ func functionParser() parser.Type {
 			return res
 		}
 
-		seqSlice := res.Result.([]interface{})
+		seqSlice := res.Payload.([]interface{})
 
 		targetFunc := seqSlice[0].(string)
 		ctor, exists := functions[targetFunc]
@@ -315,7 +356,7 @@ func functionParser() parser.Type {
 			}
 		}
 		return parser.Result{
-			Result:    fn,
+			Payload:   fn,
 			Remaining: res.Remaining,
 		}
 	}
@@ -345,7 +386,7 @@ func parseDeprecatedFunction(input []rune) parser.Result {
 		}
 	}
 	return parser.Result{
-		Result:    wrapDeprecatedFunction(ftor(arg)),
+		Payload:   wrapDeprecatedFunction(ftor(arg)),
 		Err:       nil,
 		Remaining: nil,
 	}

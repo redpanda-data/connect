@@ -13,20 +13,29 @@ import (
 
 //------------------------------------------------------------------------------
 
-func fieldFunction(args ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		if ctx.Value == nil {
-			return nil, &ErrRecoverable{
-				Recovered: nil,
-				Err:       errors.New("context was undefined"),
-			}
+type fieldFunction struct {
+	path []string
+}
+
+func (g *fieldFunction) Exec(ctx FunctionContext) (interface{}, error) {
+	if ctx.Value == nil {
+		return nil, &ErrRecoverable{
+			Recovered: nil,
+			Err:       errors.New("context was undefined"),
 		}
-		if len(args) == 0 {
-			return *ctx.Value, nil
-		}
-		path := args[0].(string)
-		return gabs.Wrap(*ctx.Value).Path(path).Data(), nil
-	}), nil
+	}
+	if len(g.path) == 0 {
+		return *ctx.Value, nil
+	}
+	return gabs.Wrap(*ctx.Value).S(g.path...).Data(), nil
+}
+
+func fieldFunctionCtor(args ...interface{}) (Function, error) {
+	var path []string
+	if len(args) > 0 {
+		path = gabs.DotPathToSlice(args[0].(string))
+	}
+	return &fieldFunction{path}, nil
 }
 
 //------------------------------------------------------------------------------

@@ -140,7 +140,7 @@ func selectErr(errLeft, errRight error, into *error) bool {
 
 // Result represents the result of a parser given an input.
 type Result struct {
-	Result    interface{}
+	Payload   interface{}
 	Err       error
 	Remaining []rune
 }
@@ -157,7 +157,7 @@ func NotEnd(p Type, exp ExpectedError) Type {
 	return func(input []rune) Result {
 		if len(input) == 0 {
 			return Result{
-				Result:    nil,
+				Payload:   nil,
 				Err:       exp,
 				Remaining: input,
 			}
@@ -172,13 +172,13 @@ func Char(c rune) Type {
 	return NotEnd(func(input []rune) Result {
 		if input[0] != c {
 			return Result{
-				Result:    nil,
+				Payload:   nil,
 				Err:       exp,
 				Remaining: input,
 			}
 		}
 		return Result{
-			Result:    string(c),
+			Payload:   string(c),
 			Err:       nil,
 			Remaining: input[1:],
 		}
@@ -191,7 +191,7 @@ func NotChar(c rune) Type {
 	return NotEnd(func(input []rune) Result {
 		if input[0] == c {
 			return Result{
-				Result:    nil,
+				Payload:   nil,
 				Err:       exp,
 				Remaining: input,
 			}
@@ -200,14 +200,14 @@ func NotChar(c rune) Type {
 		for ; i < len(input); i++ {
 			if input[i] == c {
 				return Result{
-					Result:    string(input[:i]),
+					Payload:   string(input[:i]),
 					Err:       nil,
 					Remaining: input[i:],
 				}
 			}
 		}
 		return Result{
-			Result:    string(input),
+			Payload:   string(input),
 			Err:       nil,
 			Remaining: nil,
 		}
@@ -236,7 +236,7 @@ func InSet(set ...rune) Type {
 		}
 
 		return Result{
-			Result:    string(input[:i]),
+			Payload:   string(input[:i]),
 			Err:       nil,
 			Remaining: input[i:],
 		}
@@ -261,7 +261,7 @@ func InRange(lower, upper rune) Type {
 		}
 
 		return Result{
-			Result:    string(input[:i]),
+			Payload:   string(input[:i]),
 			Err:       nil,
 			Remaining: input[i:],
 		}
@@ -270,34 +270,24 @@ func InRange(lower, upper rune) Type {
 
 // SpacesAndTabs parses any number of space or tab characters.
 func SpacesAndTabs() Type {
-	inSet := InSet(' ', '\t')
-	return func(input []rune) Result {
-		res := inSet(input)
-		if res.Err != nil {
-			if _, ok := res.Err.(ExpectedError); ok {
-				// Override potentially confused expected list.
-				res.Err = ExpectedError{"whitespace"}
-			}
-		}
-		return res
-	}
+	return Expect(InSet(' ', '\t'), "whitespace")
 }
 
-// Match parses a single instance of a string.
-func Match(str string) Type {
+// Term parses a single instance of a string.
+func Term(str string) Type {
 	exp := ExpectedError{str}
 	return NotEnd(func(input []rune) Result {
 		for i, c := range str {
 			if len(input) <= i || input[i] != c {
 				return Result{
-					Result:    nil,
+					Payload:   nil,
 					Err:       exp,
 					Remaining: input,
 				}
 			}
 		}
 		return Result{
-			Result:    str,
+			Payload:   str,
 			Err:       nil,
 			Remaining: input[len(str):],
 		}
@@ -324,10 +314,10 @@ func Number() Type {
 			}
 			return res
 		}
-		resStr := res.Result.(string)
+		resStr := res.Payload.(string)
 		if resTest := dot(res.Remaining); resTest.Err == nil {
 			if resTest = digitSet(resTest.Remaining); resTest.Err == nil {
-				resStr = resStr + "." + resTest.Result.(string)
+				resStr = resStr + "." + resTest.Payload.(string)
 				res = resTest
 			}
 		}
@@ -342,7 +332,7 @@ func Number() Type {
 			if negative {
 				f = -f
 			}
-			res.Result = f
+			res.Payload = f
 		} else {
 			i, err := strconv.ParseInt(resStr, 10, 64)
 			if err != nil {
@@ -354,7 +344,7 @@ func Number() Type {
 			if negative {
 				i = -i
 			}
-			res.Result = i
+			res.Payload = i
 		}
 		return res
 	}
@@ -362,11 +352,11 @@ func Number() Type {
 
 // Boolean parses either 'true' or 'false' into a boolean value.
 func Boolean() Type {
-	parser := AnyOf(Match("true"), Match("false"))
+	parser := OneOf(Term("true"), Term("false"))
 	return func(input []rune) Result {
 		res := parser(input)
 		if res.Err == nil {
-			res.Result = res.Result.(string) == "true"
+			res.Payload = res.Payload.(string) == "true"
 		} else if _, ok := res.Err.(ExpectedError); ok {
 			// Override potentially confused expected list.
 			res.Err = ExpectedError{"boolean"}
@@ -377,11 +367,11 @@ func Boolean() Type {
 
 // Null parses a null literal value.
 func Null() Type {
-	nullMatch := Match("null")
+	nullMatch := Term("null")
 	return func(input []rune) Result {
 		res := nullMatch(input)
 		if res.Err == nil {
-			res.Result = nil
+			res.Payload = nil
 		}
 		return res
 	}
@@ -391,14 +381,14 @@ func Null() Type {
 func Array() Type {
 	open, comma, close := Char('['), Char(','), Char(']')
 	whitespace := DiscardAll(
-		AnyOf(
+		OneOf(
 			NewlineAllowComment(),
 			SpacesAndTabs(),
 		),
 	)
 	return func(input []rune) Result {
 		return DelimitedPattern(
-			InterceptExpectedError(Sequence(
+			Expect(Sequence(
 				open,
 				whitespace,
 			), "array"),
@@ -421,7 +411,7 @@ func Array() Type {
 func Object() Type {
 	open, comma, close := Char('{'), Char(','), Char('}')
 	whitespace := DiscardAll(
-		AnyOf(
+		OneOf(
 			NewlineAllowComment(),
 			SpacesAndTabs(),
 		),
@@ -429,7 +419,7 @@ func Object() Type {
 
 	return func(input []rune) Result {
 		res := DelimitedPattern(
-			InterceptExpectedError(Sequence(
+			Expect(Sequence(
 				open,
 				whitespace,
 			), "object"),
@@ -456,12 +446,12 @@ func Object() Type {
 		}
 
 		values := map[string]interface{}{}
-		for _, sequenceValue := range res.Result.([]interface{}) {
+		for _, sequenceValue := range res.Payload.([]interface{}) {
 			slice := sequenceValue.([]interface{})
 			values[slice[0].(string)] = slice[4]
 		}
 
-		res.Result = values
+		res.Payload = values
 		return res
 	}
 }
@@ -469,7 +459,7 @@ func Object() Type {
 // LiteralValue parses a literal bool, number, quoted string, null value, array
 // of literal values, or object.
 func LiteralValue() Type {
-	return AnyOf(
+	return OneOf(
 		Boolean(),
 		Number(),
 		QuotedString(),
@@ -479,13 +469,12 @@ func LiteralValue() Type {
 	)
 }
 
-// JoinStringSliceResult wraps a parser that returns a []interface{} of
-// exclusively string values and returns a result of a joined string of all the
-// elements.
+// JoinStringPayloads wraps a parser that returns a []interface{} of exclusively
+// string values and returns a result of a joined string of all the elements.
 //
 // Warning! If the result is not a []interface{}, or if an element is not a
 // string, then this parser returns a zero value instead.
-func JoinStringSliceResult(p Type) Type {
+func JoinStringPayloads(p Type) Type {
 	return func(input []rune) Result {
 		res := p(input)
 		if res.Err != nil {
@@ -493,24 +482,24 @@ func JoinStringSliceResult(p Type) Type {
 		}
 
 		var buf bytes.Buffer
-		slice, _ := res.Result.([]interface{})
+		slice, _ := res.Payload.([]interface{})
 
 		for _, v := range slice {
 			str, _ := v.(string)
 			buf.WriteString(str)
 		}
-		res.Result = buf.String()
+		res.Payload = buf.String()
 		return res
 	}
 }
 
 // Comment parses a # comment (always followed by a line break).
 func Comment() Type {
-	p := JoinStringSliceResult(
+	p := JoinStringPayloads(
 		Sequence(
 			Char('#'),
-			JoinStringSliceResult(
-				AllOf(NotChar('\n')),
+			JoinStringPayloads(
+				UntilFail(NotChar('\n')),
 			),
 			Newline(),
 		),
@@ -524,7 +513,7 @@ func Comment() Type {
 // is very strict and does not support double underscores, prefix or suffix
 // underscores.
 func SnakeCase() Type {
-	parser := AnyOf(
+	parser := OneOf(
 		InRange('a', 'z'),
 		InRange('0', '9'),
 		Char('_'),
@@ -540,7 +529,7 @@ func SnakeCase() Type {
 			if res = parser(res.Remaining); res.Err != nil {
 				break
 			}
-			next := res.Result.(string)
+			next := res.Payload.(string)
 			if next == "_" {
 				if len(partials) == 0 {
 					return Result{
@@ -576,7 +565,7 @@ func SnakeCase() Type {
 			buf.WriteString(p)
 		}
 		return Result{
-			Result:    buf.String(),
+			Payload:   buf.String(),
 			Remaining: res.Remaining,
 		}
 	}
@@ -589,7 +578,7 @@ func QuotedString() Type {
 	return NotEnd(func(input []rune) Result {
 		if input[0] != '"' {
 			return Result{
-				Result:    nil,
+				Payload:   nil,
 				Err:       exp,
 				Remaining: input,
 			}
@@ -606,7 +595,7 @@ func QuotedString() Type {
 					}
 				}
 				return Result{
-					Result:    unquoted,
+					Payload:   unquoted,
 					Remaining: input[i+1:],
 				}
 			}
@@ -623,54 +612,34 @@ func QuotedString() Type {
 	}, exp)
 }
 
-// Newline parses a line break or carriage return + line break.
+// Newline parses a line break.
 func Newline() Type {
-	nl := AnyOf(Match("\r\n"), Char('\n'))
-	return func(input []rune) Result {
-		res := nl(input)
-		if res.Err != nil {
-			if _, ok := res.Err.(ExpectedError); ok {
-				// Override potentially confused expected list.
-				res.Err = ExpectedError{"line-break"}
-			}
-		}
-		return res
-	}
+	return Expect(Char('\n'), "line-break")
 }
 
 // NewlineAllowComment parses an optional comment followed by a mandatory line
-// break or carriage return + line break.
+// break.
 func NewlineAllowComment() Type {
-	nl := AnyOf(Comment(), Match("\r\n"), Char('\n'))
-	return func(input []rune) Result {
-		res := nl(input)
-		if res.Err != nil {
-			if _, ok := res.Err.(ExpectedError); ok {
-				// Override potentially confused expected list.
-				res.Err = ExpectedError{"line-break"}
-			}
-		}
-		return res
-	}
+	return Expect(OneOf(Comment(), Char('\n')), "line-break")
 }
 
-// AllOf applies a parser until it fails, and returns a slice containing all
+// UntilFail applies a parser until it fails, and returns a slice containing all
 // results. If the parser does not succeed at least once an error is returned.
-func AllOf(parser Type) Type {
+func UntilFail(parser Type) Type {
 	return func(input []rune) Result {
 		res := parser(input)
 		if res.Err != nil {
 			return res
 		}
-		results := []interface{}{res.Result}
+		results := []interface{}{res.Payload}
 		for {
 			if res = parser(res.Remaining); res.Err != nil {
 				return Result{
-					Result:    results,
+					Payload:   results,
 					Remaining: res.Remaining,
 				}
 			}
-			results = append(results, res.Result)
+			results = append(results, res.Payload)
 		}
 	}
 }
@@ -709,7 +678,7 @@ func DelimitedPattern(
 		i := len(input) - len(res.Remaining)
 		if res = primary(res.Remaining); res.Err != nil {
 			if resStop := stop(res.Remaining); resStop.Err == nil {
-				resStop.Result = mkRes()
+				resStop.Payload = mkRes()
 				return resStop
 			}
 			return Result{
@@ -717,13 +686,13 @@ func DelimitedPattern(
 				Remaining: input,
 			}
 		}
-		results = append(results, res.Result)
+		results = append(results, res.Payload)
 
 		for {
 			i = len(input) - len(res.Remaining)
 			if res = delimiter(res.Remaining); res.Err != nil {
 				if resStop := stop(res.Remaining); resStop.Err == nil {
-					resStop.Result = mkRes()
+					resStop.Payload = mkRes()
 					return resStop
 				}
 				return Result{
@@ -731,12 +700,12 @@ func DelimitedPattern(
 					Remaining: input,
 				}
 			}
-			delims = append(delims, res.Result)
+			delims = append(delims, res.Payload)
 			i = len(input) - len(res.Remaining)
 			if res = primary(res.Remaining); res.Err != nil {
 				if allowTrailing {
 					if resStop := stop(res.Remaining); resStop.Err == nil {
-						resStop.Result = mkRes()
+						resStop.Payload = mkRes()
 						return resStop
 					}
 				}
@@ -745,7 +714,7 @@ func DelimitedPattern(
 					Remaining: input,
 				}
 			}
-			results = append(results, res.Result)
+			results = append(results, res.Payload)
 		}
 	}
 }
@@ -765,18 +734,18 @@ func Delimited(primary, delimiter Type) Type {
 		if res.Err != nil {
 			return res
 		}
-		results = append(results, res.Result)
+		results = append(results, res.Payload)
 
 		for {
 			if res = delimiter(res.Remaining); res.Err != nil {
 				return Result{
-					Result: []interface{}{
+					Payload: []interface{}{
 						results, delims,
 					},
 					Remaining: res.Remaining,
 				}
 			}
-			delims = append(delims, res.Result)
+			delims = append(delims, res.Payload)
 			i := len(input) - len(res.Remaining)
 			if res = primary(res.Remaining); res.Err != nil {
 				return Result{
@@ -784,7 +753,7 @@ func Delimited(primary, delimiter Type) Type {
 					Remaining: input,
 				}
 			}
-			results = append(results, res.Result)
+			results = append(results, res.Payload)
 		}
 	}
 }
@@ -805,10 +774,10 @@ func Sequence(parsers ...Type) Type {
 					Remaining: input,
 				}
 			}
-			results = append(results, res.Result)
+			results = append(results, res.Payload)
 		}
 		return Result{
-			Result:    results,
+			Payload:   results,
 			Remaining: res.Remaining,
 		}
 	}
@@ -834,7 +803,7 @@ func Optional(parser Type) Type {
 func Discard(parser Type) Type {
 	return func(input []rune) Result {
 		res := parser(input)
-		res.Result = nil
+		res.Payload = nil
 		res.Err = nil
 		return res
 	}
@@ -848,7 +817,7 @@ func DiscardAll(parser Type) Type {
 		for res.Err == nil {
 			res = parser(res.Remaining)
 		}
-		res.Result = nil
+		res.Payload = nil
 		res.Err = nil
 		return res
 	}
@@ -878,10 +847,10 @@ func MustBe(parser Type) Type {
 	}
 }
 
-// InterceptExpectedError applies a parser and if an ExpectedError
-// (or ExpectedFatalError) is returned its contents are replaced with the
-// provided list. This is useful for providing better context to users.
-func InterceptExpectedError(parser Type, expected ...string) Type {
+// Expect applies a parser and if an ExpectedError (or ExpectedFatalError) is
+// returned its contents are replaced with the provided list. This is useful for
+// providing better context to users.
+func Expect(parser Type, expected ...string) Type {
 	replaceErr := func(err *error) {
 		var exp ExpectedError
 		if xerrors.As(*err, &exp) {
@@ -907,10 +876,10 @@ func InterceptExpectedError(parser Type, expected ...string) Type {
 	}
 }
 
-// AnyOf accepts one or more parsers and tries them in order against an input.
+// OneOf accepts one or more parsers and tries them in order against an input.
 // If a parser returns an ExpectedError then the next parser is tried and so
 // on. Otherwise, the result is returned.
-func AnyOf(Types ...Type) Type {
+func OneOf(Types ...Type) Type {
 	return func(input []rune) Result {
 		var err error
 	tryParsers:

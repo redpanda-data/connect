@@ -559,7 +559,7 @@ func TestMethodMaps(t *testing.T) {
 			output: "this value",
 			maps: map[string]Function{
 				"foo": func() Function {
-					f, _ := fieldFunction("foo")
+					f, _ := fieldFunctionCtor("foo")
 					return f
 				}(),
 			},
@@ -572,11 +572,11 @@ func TestMethodMaps(t *testing.T) {
 			output: "this value",
 			maps: map[string]Function{
 				"foo": func() Function {
-					f, _ := fieldFunction("foo")
+					f, _ := fieldFunctionCtor("foo")
 					return f
 				}(),
 				"bar": func() Function {
-					f, _ := fieldFunction("bar")
+					f, _ := fieldFunctionCtor("bar")
 					return f
 				}(),
 			},
@@ -592,11 +592,11 @@ func TestMethodMaps(t *testing.T) {
 			output: "and this value",
 			maps: map[string]Function{
 				"foo": func() Function {
-					f, _ := fieldFunction("foo")
+					f, _ := fieldFunctionCtor("foo")
 					return f
 				}(),
 				"bar": func() Function {
-					f, _ := fieldFunction("bar")
+					f, _ := fieldFunctionCtor("bar")
 					return f
 				}(),
 			},

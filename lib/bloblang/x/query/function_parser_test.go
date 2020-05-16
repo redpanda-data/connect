@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestFunctions(t *testing.T) {
+func TestFunctionQueries(t *testing.T) {
 	hostname, _ := os.Hostname()
 
 	type easyMsg struct {

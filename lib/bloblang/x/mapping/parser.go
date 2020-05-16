@@ -66,7 +66,7 @@ func (e *Executor) MapPart(index int, msg Message) (types.Part, error) {
 			Msg:   msg,
 		})
 		if err != nil {
-			return nil, xerrors.Errorf("failed to execute mapping assignment at line %v: %v", stmt.line, err)
+			return nil, xerrors.Errorf("failed to execute mapping assignment at line %v: %v", stmt.line+1, err)
 		}
 		if _, isNothing := res.(query.Nothing); isNothing {
 			// Skip assignment entirely
@@ -78,7 +78,7 @@ func (e *Executor) MapPart(index int, msg Message) (types.Part, error) {
 			Meta:  meta,
 			Value: &newObj,
 		}); err != nil {
-			return nil, xerrors.Errorf("failed to assign mapping result at line %v: %v", stmt.line, err)
+			return nil, xerrors.Errorf("failed to assign mapping result at line %v: %v", stmt.line+1, err)
 		}
 	}
 
@@ -162,7 +162,7 @@ func NewExecutor(mapping string) (*Executor, error) {
 		return nil, xerrors.Errorf("failed to parse mapping: %w", res.Err)
 	}
 
-	return res.Result.(*Executor), nil
+	return res.Payload.(*Executor), nil
 }
 
 //------------------------------------------------------------------------------'
@@ -214,9 +214,9 @@ func parseExecutor(input []rune) parser.Result {
 
 	newline := parser.NewlineAllowComment()
 	whitespace := parser.SpacesAndTabs()
-	allWhitespace := parser.DiscardAll(parser.AnyOf(whitespace, newline))
+	allWhitespace := parser.DiscardAll(parser.OneOf(whitespace, newline))
 
-	statement := parser.AnyOf(
+	statement := parser.OneOf(
 		importParser(maps),
 		mapParser(maps),
 		letStatementParser(),
@@ -232,7 +232,7 @@ func parseExecutor(input []rune) parser.Result {
 		res.Err = wrapParserErr(lineIndexes, parser.ErrAtPosition(i, res.Err))
 		return res
 	}
-	if mStmt, ok := res.Result.(mappingStatement); ok {
+	if mStmt, ok := res.Payload.(mappingStatement); ok {
 		mStmt.line, _ = getLineCol(lineIndexes, i)
 		statements = append(statements, mStmt)
 	}
@@ -263,7 +263,7 @@ func parseExecutor(input []rune) parser.Result {
 				Remaining: input,
 			}
 		}
-		if mStmt, ok := res.Result.(mappingStatement); ok {
+		if mStmt, ok := res.Payload.(mappingStatement); ok {
 			mStmt.line, _ = getLineCol(lineIndexes, i)
 			statements = append(statements, mStmt)
 		}
@@ -271,7 +271,7 @@ func parseExecutor(input []rune) parser.Result {
 
 	return parser.Result{
 		Remaining: res.Remaining,
-		Result: &Executor{
+		Payload: &Executor{
 			maps, statements,
 		},
 	}
@@ -280,9 +280,9 @@ func parseExecutor(input []rune) parser.Result {
 //------------------------------------------------------------------------------
 
 func varNameParser() parser.Type {
-	return parser.JoinStringSliceResult(
-		parser.AllOf(
-			parser.AnyOf(
+	return parser.JoinStringPayloads(
+		parser.UntilFail(
+			parser.OneOf(
 				parser.InRange('a', 'z'),
 				parser.InRange('A', 'Z'),
 				parser.InRange('0', '9'),
@@ -294,13 +294,13 @@ func varNameParser() parser.Type {
 }
 
 func pathLiteralParser() parser.Type {
-	return parser.JoinStringSliceResult(
-		parser.AllOf(
-			parser.AnyOf(
+	return parser.JoinStringPayloads(
+		parser.UntilFail(
+			parser.OneOf(
 				parser.InRange('a', 'z'),
 				parser.InRange('A', 'Z'),
 				parser.InRange('0', '9'),
-				parser.InRange('*', '-'),
+				parser.InRange('*', '+'),
 				parser.Char('.'),
 				parser.Char('_'),
 				parser.Char('~'),
@@ -311,10 +311,10 @@ func pathLiteralParser() parser.Type {
 
 func importParser(maps map[string]query.Function) parser.Type {
 	p := parser.Sequence(
-		parser.Match("import"),
+		parser.Term("import"),
 		parser.SpacesAndTabs(),
 		parser.MustBe(
-			parser.InterceptExpectedError(
+			parser.Expect(
 				parser.QuotedString(),
 				"file-path",
 			),
@@ -327,7 +327,7 @@ func importParser(maps map[string]query.Function) parser.Type {
 			return res
 		}
 
-		filepath := res.Result.([]interface{})[2].(string)
+		filepath := res.Payload.([]interface{})[2].(string)
 		contents, err := ioutil.ReadFile(filepath)
 		if err != nil {
 			return parser.Result{
@@ -344,7 +344,7 @@ func importParser(maps map[string]query.Function) parser.Type {
 			}
 		}
 
-		exec := execRes.Result.(*Executor)
+		exec := execRes.Payload.(*Executor)
 		if len(exec.maps) == 0 {
 			return parser.Result{
 				Err:       xerrors.Errorf("no maps to import from '%v'", filepath),
@@ -368,7 +368,7 @@ func importParser(maps map[string]query.Function) parser.Type {
 		}
 
 		return parser.Result{
-			Result:    filepath,
+			Payload:   filepath,
 			Remaining: res.Remaining,
 		}
 	}
@@ -377,15 +377,15 @@ func importParser(maps map[string]query.Function) parser.Type {
 func mapParser(maps map[string]query.Function) parser.Type {
 	newline := parser.NewlineAllowComment()
 	whitespace := parser.SpacesAndTabs()
-	allWhitespace := parser.DiscardAll(parser.AnyOf(whitespace, newline))
+	allWhitespace := parser.DiscardAll(parser.OneOf(whitespace, newline))
 
 	p := parser.Sequence(
-		parser.Match("map"),
+		parser.Term("map"),
 		whitespace,
 		// Prevents a missing path from being captured by the next parser
 		parser.MustBe(
-			parser.InterceptExpectedError(
-				parser.AnyOf(
+			parser.Expect(
+				parser.OneOf(
 					parser.QuotedString(),
 					varNameParser(),
 				),
@@ -398,7 +398,7 @@ func mapParser(maps map[string]query.Function) parser.Type {
 				parser.Char('{'),
 				allWhitespace,
 			),
-			parser.AnyOf(
+			parser.OneOf(
 				letStatementParser(),
 				metaStatementParser(true), // Prevented for now due to .from(int)
 				plainMappingStatementParser(),
@@ -422,7 +422,7 @@ func mapParser(maps map[string]query.Function) parser.Type {
 			return res
 		}
 
-		seqSlice := res.Result.([]interface{})
+		seqSlice := res.Payload.([]interface{})
 		ident := seqSlice[2].(string)
 		stmtSlice := seqSlice[4].([]interface{})
 
@@ -441,7 +441,7 @@ func mapParser(maps map[string]query.Function) parser.Type {
 		maps[ident] = &Executor{maps, statements}
 
 		return parser.Result{
-			Result:    ident,
+			Payload:   ident,
 			Remaining: res.Remaining,
 		}
 	}
@@ -449,12 +449,12 @@ func mapParser(maps map[string]query.Function) parser.Type {
 
 func letStatementParser() parser.Type {
 	p := parser.Sequence(
-		parser.Match("let"),
+		parser.Term("let"),
 		parser.SpacesAndTabs(),
 		// Prevents a missing path from being captured by the next parser
 		parser.MustBe(
-			parser.InterceptExpectedError(
-				parser.AnyOf(
+			parser.Expect(
+				parser.OneOf(
 					parser.QuotedString(),
 					varNameParser(),
 				),
@@ -472,9 +472,9 @@ func letStatementParser() parser.Type {
 		if res.Err != nil {
 			return res
 		}
-		resSlice := res.Result.([]interface{})
+		resSlice := res.Payload.([]interface{})
 		return parser.Result{
-			Result: mappingStatement{
+			Payload: mappingStatement{
 				assignment: &varAssignment{
 					Name: resSlice[2].(string),
 				},
@@ -487,9 +487,9 @@ func letStatementParser() parser.Type {
 
 func metaStatementParser(disabled bool) parser.Type {
 	p := parser.Sequence(
-		parser.Match("meta"),
+		parser.Term("meta"),
 		parser.SpacesAndTabs(),
-		parser.Optional(parser.AnyOf(
+		parser.Optional(parser.OneOf(
 			parser.QuotedString(),
 			pathLiteralParser(),
 		)),
@@ -510,7 +510,7 @@ func metaStatementParser(disabled bool) parser.Type {
 				Remaining: input,
 			}
 		}
-		resSlice := res.Result.([]interface{})
+		resSlice := res.Payload.([]interface{})
 
 		var keyPtr *string
 		if key, set := resSlice[2].(string); set {
@@ -518,7 +518,7 @@ func metaStatementParser(disabled bool) parser.Type {
 		}
 
 		return parser.Result{
-			Result: mappingStatement{
+			Payload: mappingStatement{
 				assignment: &metaAssignment{Key: keyPtr},
 				query:      resSlice[6].(query.Function),
 			},
@@ -529,8 +529,8 @@ func metaStatementParser(disabled bool) parser.Type {
 
 func plainMappingStatementParser() parser.Type {
 	p := parser.Sequence(
-		parser.InterceptExpectedError(
-			parser.AnyOf(
+		parser.Expect(
+			parser.OneOf(
 				parser.QuotedString(),
 				pathLiteralParser(),
 			),
@@ -547,13 +547,13 @@ func plainMappingStatementParser() parser.Type {
 		if res.Err != nil {
 			return res
 		}
-		resSlice := res.Result.([]interface{})
+		resSlice := res.Payload.([]interface{})
 		path := gabs.DotPathToSlice(resSlice[0].(string))
 		if len(path) > 0 && path[0] == "root" {
 			path = path[1:]
 		}
 		return parser.Result{
-			Result: mappingStatement{
+			Payload: mappingStatement{
 				assignment: &jsonAssignment{
 					Path: path,
 				},

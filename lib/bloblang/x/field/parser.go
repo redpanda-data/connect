@@ -12,8 +12,8 @@ import (
 func intoStaticResolver(p parser.Type) parser.Type {
 	return func(input []rune) parser.Result {
 		res := p(input)
-		if str, ok := res.Result.(string); ok {
-			res.Result = staticResolver(str)
+		if str, ok := res.Payload.(string); ok {
+			res.Payload = staticResolver(str)
 		}
 		return res
 	}
@@ -22,7 +22,7 @@ func intoStaticResolver(p parser.Type) parser.Type {
 func aFunction(input []rune) parser.Result {
 	if len(input) < 3 || input[0] != '$' || input[1] != '{' || input[2] != '!' {
 		return parser.Result{
-			Result:    nil,
+			Payload:   nil,
 			Err:       parser.ExpectedError{"${!"},
 			Remaining: input,
 		}
@@ -42,7 +42,7 @@ func aFunction(input []rune) parser.Result {
 					}
 				}
 				res.Remaining = input[i+1:]
-				res.Result = queryResolver{fn: res.Result.(query.Function)}
+				res.Payload = queryResolver{fn: res.Payload.(query.Function)}
 			} else {
 				res.Err = parser.ErrAtPosition(3, res.Err).Expand(func(err error) error {
 					// Scrap underlying expected error.
@@ -54,7 +54,7 @@ func aFunction(input []rune) parser.Result {
 		}
 	}
 	return parser.Result{
-		Result:    staticResolver(string(input)),
+		Payload:   staticResolver(string(input)),
 		Err:       nil,
 		Remaining: nil,
 	}
@@ -63,7 +63,7 @@ func aFunction(input []rune) parser.Result {
 func escapedBlock(input []rune) parser.Result {
 	if len(input) < 4 || input[0] != '$' || input[1] != '{' || input[2] != '{' || input[3] != '!' {
 		return parser.Result{
-			Result:    nil,
+			Payload:   nil,
 			Err:       parser.ExpectedError{"${{!"},
 			Remaining: input,
 		}
@@ -72,14 +72,14 @@ func escapedBlock(input []rune) parser.Result {
 	for ; i < len(input)-1; i++ {
 		if input[i] == '}' && input[i+1] == '}' {
 			return parser.Result{
-				Result:    staticResolver("${!" + string(input[4:i]) + "}"),
+				Payload:   staticResolver("${!" + string(input[4:i]) + "}"),
 				Err:       nil,
 				Remaining: input[i+2:],
 			}
 		}
 	}
 	return parser.Result{
-		Result:    staticResolver(string(input)),
+		Payload:   staticResolver(string(input)),
 		Err:       nil,
 		Remaining: nil,
 	}
@@ -90,7 +90,7 @@ func escapedBlock(input []rune) parser.Result {
 func parse(expr string) (*expression, error) {
 	var resolvers []resolver
 
-	p := parser.AnyOf(
+	p := parser.OneOf(
 		escapedBlock,
 		aFunction,
 		intoStaticResolver(parser.Char('$')),
@@ -106,7 +106,7 @@ func parse(expr string) (*expression, error) {
 		}
 		i = len(remaining) - len(res.Remaining)
 		remaining = res.Remaining
-		resolvers = append(resolvers, res.Result.(resolver))
+		resolvers = append(resolvers, res.Payload.(resolver))
 	}
 
 	return buildExpression(resolvers), nil

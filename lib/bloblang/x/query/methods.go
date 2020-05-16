@@ -214,21 +214,38 @@ func fromAllMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"get", true, getMethod,
+	"get", true, getMethodCtor,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
 )
 
-func getMethod(target Function, args ...interface{}) (Function, error) {
-	pathStr := args[0].(string)
-	path := gabs.DotPathToSlice(pathStr)
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return gabs.Wrap(v).S(path...).Data(), nil
-	}), nil
+type getMethod struct {
+	fn   Function
+	path []string
+}
+
+func (g *getMethod) Exec(ctx FunctionContext) (interface{}, error) {
+	v, err := g.fn.Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return gabs.Wrap(v).S(g.path...).Data(), nil
+}
+
+func getMethodCtor(target Function, args ...interface{}) (Function, error) {
+	path := gabs.DotPathToSlice(args[0].(string))
+	switch t := target.(type) {
+	case *getMethod:
+		t.path = append(t.path, path...)
+		return t, nil
+	case *fieldFunction:
+		t.path = append(t.path, path...)
+		return t, nil
+	}
+	return &getMethod{
+		fn:   target,
+		path: path,
+	}, nil
 }
 
 //------------------------------------------------------------------------------
