@@ -26,6 +26,63 @@ func TestMethods(t *testing.T) {
 		messages []easyMsg
 		index    int
 	}{
+		"check url escape query": {
+			input:  `"foo & bar".escape_url_query()`,
+			output: "foo+%26+bar",
+		},
+		"check url escape query bytes": {
+			input: `content().escape_url_query()`,
+			messages: []easyMsg{
+				{content: `foo & bar`},
+			},
+			output: "foo+%26+bar",
+		},
+		"check url unescape query": {
+			input:  `"foo+%26+bar".unescape_url_query()`,
+			output: "foo & bar",
+		},
+		"check url unescape query bytes": {
+			input: `content().unescape_url_query()`,
+			messages: []easyMsg{
+				{content: `foo+%26+bar`},
+			},
+			output: "foo & bar",
+		},
+		"check flatten": {
+			input: `json().flatten()`,
+			messages: []easyMsg{
+				{content: `["foo",["bar","baz"],"buz"]`},
+			},
+			output: []interface{}{
+				"foo", "bar", "baz", "buz",
+			},
+		},
+		"check flatten 2": {
+			input: `json().flatten()`,
+			messages: []easyMsg{
+				{content: `[]`},
+			},
+			output: []interface{}{},
+		},
+		"check flatten 3": {
+			input: `json().flatten()`,
+			messages: []easyMsg{
+				{content: `["foo","bar","baz","buz"]`},
+			},
+			output: []interface{}{
+				"foo", "bar", "baz", "buz",
+			},
+		},
+		"check collapse": {
+			input: `json().collapse()`,
+			messages: []easyMsg{
+				{content: `{"foo":[{"bar":"1"},{"bar":"2"}]}`},
+			},
+			output: map[string]interface{}{
+				"foo.0.bar": "1",
+				"foo.1.bar": "2",
+			},
+		},
 		"check sha1 hash": {
 			input:  `"hello world".hash("sha1").encode("hex")`,
 			output: `2aae6c35c94fcfb415dbe95f408b9ce91ee846ed`,

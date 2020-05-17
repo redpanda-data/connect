@@ -101,6 +101,17 @@ foo = foo.append("and", "this")
 # Out: {"foo":["bar","baz","and","this"]}
 ```
 
+### `collapse`
+
+Collapse an array or object into an object of key/value pairs for each field, where the key is the full path of the structured field in dot path notation.
+
+```coffee
+result = this.collapse()
+
+# In:  {"foo":[{"bar":"1"},{"bar":"2"}]}
+# Out: {"result":{"foo.0.bar":"1","foo.1.bar":"2"}}
+```
+
 ### `contains`
 
 Checks whether a string contains a substring, an array contains an element matching the argument, or an object contains a value matching the argument, and returns a boolean result.
@@ -147,6 +158,17 @@ result = foo.exists("bar.baz")
 
 # In:  {"foo":{}}
 # Out: {"result":false}
+```
+
+### `flatten`
+
+Iterates an array and any element that is itself an array is removed and has its elements inserted directly in the resulting array.
+
+```coffee
+result = this.flatten()
+
+# In:  ["foo",["bar","baz"],"buz"]
+# Out: {"result":["foo","bar","baz","buz"]}
 ```
 
 ### `fold`
@@ -297,6 +319,17 @@ encoded = value.encode("hex")
 
 # In:  {"value":"hello world"}
 # Out: {"encoded":"68656c6c6f20776f726c64"}
+```
+
+### `escape_url_query`
+
+Escapes a string so that it can be safely placed within a URL query.
+
+```coffee
+escaped = value.escape_url_query()
+
+# In:  {"value":"foo & bar"}
+# Out: {"escaped":"foo+%26+bar"}
 ```
 
 ### `decode`
@@ -455,6 +488,17 @@ description = description.trim()
 
 # In:  {"title":"!!!watch out!?","description":"  something happened and its amazing! "}
 # Out: {"title":"watch out","description":"something happened and its amazing!"}
+```
+
+### `unescape_url_query`
+
+Expands escape sequences from a URL query string.
+
+```coffee
+unescaped = value.unescape_url_query()
+
+# In:  {"value":"foo+%26+bar"}
+# Out: {"unescaped":"foo & bar"}
 ```
 
 ### `unquote`

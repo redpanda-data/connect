@@ -98,6 +98,23 @@ func catchMethod(fn Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"collapse", false, collapseMethod,
+	ExpectNArgs(0),
+)
+
+func collapseMethod(target Function, args ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return gabs.Wrap(v).Flatten()
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"contains", true, containsMethod,
 	ExpectNArgs(1),
 )
@@ -183,6 +200,36 @@ func existsMethod(target Function, args ...interface{}) (Function, error) {
 			return nil, err
 		}
 		return gabs.Wrap(v).Exists(path...), nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"flatten", false, flattenMethod,
+	ExpectNArgs(0),
+)
+
+func flattenMethod(target Function, args ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		array, isArray := v.([]interface{})
+		if !isArray {
+			return nil, fmt.Errorf("expected array, received %T", v)
+		}
+		result := make([]interface{}, 0, len(array))
+		for _, child := range array {
+			switch t := child.(type) {
+			case []interface{}:
+				result = append(result, t...)
+			default:
+				result = append(result, t)
+			}
+		}
+		return result, nil
 	}), nil
 }
 

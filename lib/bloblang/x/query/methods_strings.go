@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -157,6 +158,32 @@ func encodeMethod(target Function, args ...interface{}) (Function, error) {
 			res, err = schemeFn([]byte(t))
 		case []byte:
 			res, err = schemeFn(t)
+		default:
+			err = fmt.Errorf("expected string value, received %T", v)
+		}
+		return res, err
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"escape_url_query", false, escapeURLQueryMethod,
+	ExpectNArgs(0),
+)
+
+func escapeURLQueryMethod(target Function, args ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var res string
+		switch t := v.(type) {
+		case string:
+			res = url.QueryEscape(t)
+		case []byte:
+			res = url.QueryEscape(string(t))
 		default:
 			err = fmt.Errorf("expected string value, received %T", v)
 		}
@@ -600,6 +627,32 @@ func trimMethod(target Function, args ...interface{}) (Function, error) {
 			return bytes.Trim(t, cutset), nil
 		}
 		return nil, fmt.Errorf("expected string value, received %T", v)
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"unescape_url_query", false, unescapeURLQueryMethod,
+	ExpectNArgs(0),
+)
+
+func unescapeURLQueryMethod(target Function, args ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var res string
+		switch t := v.(type) {
+		case string:
+			res, err = url.QueryUnescape(t)
+		case []byte:
+			res, err = url.QueryUnescape(string(t))
+		default:
+			err = fmt.Errorf("expected string value, received %T", v)
+		}
+		return res, err
 	}), nil
 }
 
