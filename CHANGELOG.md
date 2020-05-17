@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.14.0 - 2020-05-17
+
 ### Added
 
 - New `ascii85` and `z85` options have been added to the `encode` and `decode`
@@ -13,7 +15,7 @@ All notable changes to this project will be documented in this file.
 ### Bloblang BETA Changes
 
 - The `meta` function no longer reflects changes made within the map itself.
-- Extracing data from other messages of a batch using `from` no longer reflects
+- Extracting data from other messages of a batch using `from` no longer reflects
   changes made within a map.
 - Meta assignments are no longer allowed within named maps.
 - Assigning `deleted()` to `root` now filters out a message entirely.
