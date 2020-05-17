@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `ascii85` and `z85` options have been added to the `encode` and `decode`
+  processors.
+
 ### Bloblang BETA Changes
 
 - The `meta` function no longer reflects changes made within the map itself.

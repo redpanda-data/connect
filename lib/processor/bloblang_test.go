@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -69,6 +70,39 @@ func TestBloblangCrossfire(t *testing.T) {
 	assert.Equal(t, "orig1", resPartTwo.Metadata().Get("foo"))
 	assert.Equal(t, "orig2", resPartTwo.Metadata().Get("bar"))
 	assert.Equal(t, "new meta", resPartTwo.Metadata().Get("baz"))
+}
+
+type testKeyType int
+
+const testFooKey testKeyType = iota
+
+func TestBloblangContext(t *testing.T) {
+	msg := message.New(nil)
+
+	part := message.NewPart([]byte(`{"foo":{"bar":{"baz":"original value"}}}`))
+	part.Metadata().Set("foo", "orig1")
+	part.Metadata().Set("bar", "orig2")
+
+	key, val := testFooKey, "bar"
+	msg.Append(message.WithContext(context.WithValue(context.Background(), key, val), part))
+
+	conf := NewConfig()
+	conf.Bloblang = `result = foo.bar.baz.uppercase()`
+	proc, err := NewBloblang(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	outMsgs, res := proc.ProcessMessage(msg)
+	require.Nil(t, res)
+	require.Len(t, outMsgs, 1)
+
+	resPart := outMsgs[0].Get(0)
+
+	assert.Equal(t, `{"result":"ORIGINAL VALUE"}`, string(resPart.Get()))
+	assert.Equal(t, "orig1", resPart.Metadata().Get("foo"))
+	assert.Equal(t, "orig2", resPart.Metadata().Get("bar"))
+	assert.Equal(t, val, message.GetContext(resPart).Value(key))
 }
 
 func TestBloblangFiltering(t *testing.T) {
