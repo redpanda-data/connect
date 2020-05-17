@@ -288,6 +288,30 @@ title = title.capitalize()
 # Out: {"title":"The Foo Bar"}
 ```
 
+### `encode`
+
+Encodes a string or byte array target according to a chosen scheme and returns a string result. Available schemes are: `base64`, `hex`, `ascii85`, `z85`.
+
+```coffee
+encoded = value.encode("hex")
+
+# In:  {"value":"hello world"}
+# Out: {"encoded":"68656c6c6f20776f726c64"}
+```
+
+### `decode`
+
+Decodes an encoded string target according to a chosen scheme and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][method.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.
+
+Available schemes are: `base64`, `hex`, `ascii85`, `z85`.
+
+```coffee
+decoded = value.decode("hex").string()
+
+# In:  {"value":"68656c6c6f20776f726c64"}
+# Out: {"decoded":"hello world"}
+```
+
 ### `format`
 
 Use a value string as a format specifier in order to produce a new string, using any number of provided arguments.
@@ -304,6 +328,22 @@ foo = template.format(arg1, arg2)
 
 # In:  {"template":"%s -> %s","arg1":"foo","arg2":"bar"}
 # Out: {"foo":"foo -> bar"}
+```
+
+### `hash`
+
+Hashes a string or byte array according to a chosen algorithm and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][method.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.
+
+Available algorithms are: `hmac-sha1`, `hmac-sha256`, `hmac-sha512`, `sha1`, `sha256`, `sha512`, `xxhash64`.
+
+The following algorithms require a key, which is specified as a second argument: `hmac-sha1`, `hmac-sha256`, `hmac-sha512`.
+
+```coffee
+h1 = value.hash("sha1").encode("hex")
+h2 = value.hash("hmac-sha1","static-key").encode("hex")
+
+# In:  {"value":"hello world"}
+# Out: {"h1":"2aae6c35c94fcfb415dbe95f408b9ce91ee846ed","h2":"d87e5f068fa08fe90bb95bc7c8344cb809179d76"}
 ```
 
 ### `lowercase`

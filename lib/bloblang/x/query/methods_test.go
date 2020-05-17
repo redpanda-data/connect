@@ -26,6 +26,77 @@ func TestMethods(t *testing.T) {
 		messages []easyMsg
 		index    int
 	}{
+		"check sha1 hash": {
+			input:  `"hello world".hash("sha1").encode("hex")`,
+			output: `2aae6c35c94fcfb415dbe95f408b9ce91ee846ed`,
+		},
+		"check hmac sha1 hash": {
+			input:  `"hello world".hash("hmac-sha1","static-key").encode("hex")`,
+			output: `d87e5f068fa08fe90bb95bc7c8344cb809179d76`,
+		},
+		"check hmac sha1 hash 2": {
+			input:  `"hello world".hash("hmac-sha1","foo").encode("hex")`,
+			output: `20224529cc42a39bacc96459f6ead9d17da7f128`,
+		},
+		"check sha256 hash": {
+			input:  `"hello world".hash("sha256").encode("hex")`,
+			output: `b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9`,
+		},
+		"check hmac sha256 hash": {
+			input:  `"hello world".hash("hmac-sha256","static-key").encode("hex")`,
+			output: `b1cdce8b2add1f96135b2506f8ab748ae8ef15c49c0320357a6d168c42e20746`,
+		},
+		"check sha512 hash": {
+			input:  `"hello world".hash("sha512").encode("hex")`,
+			output: `309ecc489c12d6eb4cc40f50c902f2b4d0ed77ee511a7c7a9bcd3ca86d4cd86f989dd35bc5ff499670da34255b45b0cfd830e81f605dcf7dc5542e93ae9cd76f`,
+		},
+		"check hmac sha512 hash": {
+			input:  `"hello world".hash("hmac-sha512","static-key").encode("hex")`,
+			output: `fd5d5ed60b96e820ebaace4fed962a401adefd3e89c51a374f0bb7f49ed02892af8bc8591628dcbc8b5f065df6bb06588cba95d488c1c8b88faa7cbe08e4558d`,
+		},
+		"check xxhash64 hash": {
+			input:  `"hello world".hash("xxhash64").string()`,
+			output: `5020219685658847592`,
+		},
+		"check hex encode": {
+			input:  `"hello world".encode("hex")`,
+			output: `68656c6c6f20776f726c64`,
+		},
+		"check hex decode": {
+			input:  `"68656c6c6f20776f726c64".decode("hex").string()`,
+			output: `hello world`,
+		},
+		"check base64 encode": {
+			input:  `"hello world".encode("base64")`,
+			output: `aGVsbG8gd29ybGQ=`,
+		},
+		"check base64 decode": {
+			input:  `"aGVsbG8gd29ybGQ=".decode("base64").string()`,
+			output: `hello world`,
+		},
+		"check z85 encode": {
+			input:  `"hello world!".encode("z85")`,
+			output: `xK#0@zY<mxA+]nf`,
+		},
+		"check z85 decode": {
+			input:  `"xK#0@zY<mxA+]nf".decode("z85").string()`,
+			output: `hello world!`,
+		},
+		"check ascii85 encode": {
+			input:  `"hello world!".encode("ascii85")`,
+			output: `BOu!rD]j7BEbo80`,
+		},
+		"check ascii85 decode": {
+			input:  `"BOu!rD]j7BEbo80".decode("ascii85").string()`,
+			output: `hello world!`,
+		},
+		"check hex encode bytes": {
+			input: `content().encode("hex")`,
+			messages: []easyMsg{
+				{content: `hello world`},
+			},
+			output: `68656c6c6f20776f726c64`,
+		},
 		"check strip html": {
 			input:  `"<p>the plain <strong>old text</strong></p>".strip_html()`,
 			output: `the plain old text`,

@@ -2,13 +2,23 @@ package query
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha1"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/ascii85"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/OneOfOne/xxhash"
 	"github.com/microcosm-cc/bluemonday"
+	"github.com/tilinna/z85"
 )
 
 //------------------------------------------------------------------------------
@@ -37,6 +47,126 @@ func capitalizeMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"decode", true, decodeMethod,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
+
+func decodeMethod(target Function, args ...interface{}) (Function, error) {
+	var schemeFn func([]byte) ([]byte, error)
+	switch args[0].(string) {
+	case "base64":
+		schemeFn = func(b []byte) ([]byte, error) {
+			e := base64.NewDecoder(base64.StdEncoding, bytes.NewReader(b))
+			return ioutil.ReadAll(e)
+		}
+	case "hex":
+		schemeFn = func(b []byte) ([]byte, error) {
+			e := hex.NewDecoder(bytes.NewReader(b))
+			return ioutil.ReadAll(e)
+		}
+	case "ascii85":
+		schemeFn = func(b []byte) ([]byte, error) {
+			e := ascii85.NewDecoder(bytes.NewReader(b))
+			return ioutil.ReadAll(e)
+		}
+	case "z85":
+		schemeFn = func(b []byte) ([]byte, error) {
+			dec := make([]byte, z85.DecodedLen(len(b)))
+			if _, err := z85.Decode(dec, b); err != nil {
+				return nil, err
+			}
+			return dec, nil
+		}
+	}
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var res []byte
+		switch t := v.(type) {
+		case string:
+			res, err = schemeFn([]byte(t))
+		case []byte:
+			res, err = schemeFn(t)
+		default:
+			err = fmt.Errorf("expected string value, received %T", v)
+		}
+		return res, err
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"encode", true, encodeMethod,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
+
+func encodeMethod(target Function, args ...interface{}) (Function, error) {
+	var schemeFn func([]byte) (string, error)
+	switch args[0].(string) {
+	case "base64":
+		schemeFn = func(b []byte) (string, error) {
+			var buf bytes.Buffer
+			e := base64.NewEncoder(base64.StdEncoding, &buf)
+			e.Write(b)
+			e.Close()
+			return buf.String(), nil
+		}
+	case "hex":
+		schemeFn = func(b []byte) (string, error) {
+			var buf bytes.Buffer
+			e := hex.NewEncoder(&buf)
+			if _, err := e.Write(b); err != nil {
+				return "", err
+			}
+			return buf.String(), nil
+		}
+	case "ascii85":
+		schemeFn = func(b []byte) (string, error) {
+			if len(b)%4 != 0 {
+				return "", z85.ErrLength
+			}
+			var buf bytes.Buffer
+			e := ascii85.NewEncoder(&buf)
+			if _, err := e.Write(b); err != nil {
+				return "", err
+			}
+			return buf.String(), nil
+		}
+	case "z85":
+		schemeFn = func(b []byte) (string, error) {
+			enc := make([]byte, z85.EncodedLen(len(b)))
+			if _, err := z85.Encode(enc, b); err != nil {
+				return "", err
+			}
+			return string(enc), nil
+		}
+	}
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var res string
+		switch t := v.(type) {
+		case string:
+			res, err = schemeFn([]byte(t))
+		case []byte:
+			res, err = schemeFn(t)
+		default:
+			err = fmt.Errorf("expected string value, received %T", v)
+		}
+		return res, err
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"format", true, formatMethod,
 )
 
@@ -54,6 +184,92 @@ func formatMethod(target Function, args ...interface{}) (Function, error) {
 		default:
 			return nil, fmt.Errorf("expected string value, received %T", v)
 		}
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"hash", true, hashMethod,
+	ExpectStringArg(0),
+	ExpectStringArg(1),
+)
+
+func hashMethod(target Function, args ...interface{}) (Function, error) {
+	var key []byte
+	if len(args) > 1 {
+		key = []byte(args[1].(string))
+	}
+	var hashFn func([]byte) ([]byte, error)
+	switch args[0].(string) {
+	case "hmac-sha1":
+		if len(key) == 0 {
+			return nil, fmt.Errorf("hash algorithm %v requires a key argument", args[0].(string))
+		}
+		hashFn = func(b []byte) ([]byte, error) {
+			hasher := hmac.New(sha1.New, key)
+			hasher.Write(b)
+			return hasher.Sum(nil), nil
+		}
+	case "hmac-sha256":
+		if len(key) == 0 {
+			return nil, fmt.Errorf("hash algorithm %v requires a key argument", args[0].(string))
+		}
+		hashFn = func(b []byte) ([]byte, error) {
+			hasher := hmac.New(sha256.New, key)
+			hasher.Write(b)
+			return hasher.Sum(nil), nil
+		}
+	case "hmac-sha512":
+		if len(key) == 0 {
+			return nil, fmt.Errorf("hash algorithm %v requires a key argument", args[0].(string))
+		}
+		hashFn = func(b []byte) ([]byte, error) {
+			hasher := hmac.New(sha512.New, key)
+			hasher.Write(b)
+			return hasher.Sum(nil), nil
+		}
+	case "sha1":
+		hashFn = func(b []byte) ([]byte, error) {
+			hasher := sha1.New()
+			hasher.Write(b)
+			return hasher.Sum(nil), nil
+		}
+	case "sha256":
+		hashFn = func(b []byte) ([]byte, error) {
+			hasher := sha256.New()
+			hasher.Write(b)
+			return hasher.Sum(nil), nil
+		}
+	case "sha512":
+		hashFn = func(b []byte) ([]byte, error) {
+			hasher := sha512.New()
+			hasher.Write(b)
+			return hasher.Sum(nil), nil
+		}
+	case "xxhash64":
+		hashFn = func(b []byte) ([]byte, error) {
+			h := xxhash.New64()
+			h.Write(b)
+			return []byte(strconv.FormatUint(h.Sum64(), 10)), nil
+		}
+	}
+
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var res []byte
+		switch t := v.(type) {
+		case string:
+			res, err = hashFn([]byte(t))
+		case []byte:
+			res, err = hashFn(t)
+		default:
+			err = fmt.Errorf("expected string value, received %T", v)
+		}
+		return res, err
 	}), nil
 }
 

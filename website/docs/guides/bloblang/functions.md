@@ -33,10 +33,10 @@ foo = batch_size()
 
 ### `content`
 
-Returns the full raw contents of the mapping target message as a string.
+Returns the full raw contents of the mapping target message as a byte array. When mapping to a JSON field the value should be encoded using the method [`encode`][methods.encode], or cast to a string directly using the method [`string`][methods.string], otherwise it will be base64 encoded by default.
 
 ```coffee
-doc = content()
+doc = content().string()
 
 # In:  {"foo":"bar"}
 # Out: {"doc":"{\"foo\":\"bar\"}"}
@@ -152,3 +152,5 @@ id = uuid_v4()
 [error_handling]: /docs/configuration/error_handling
 [field_paths]: /docs/configuration/field_paths
 [meta_proc]: /docs/components/processors/metadata
+[methods.encode]: /docs/guides/bloblang/methods#encode
+[methods.string]: /docs/guides/bloblang/methods#string
