@@ -2,6 +2,7 @@ package processor
 
 import (
 	"bytes"
+	"encoding/ascii85"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/opentracing/opentracing-go"
+	"github.com/tilinna/z85"
 )
 
 //------------------------------------------------------------------------------
@@ -23,7 +25,7 @@ func init() {
 		Summary: `
 Encodes messages according to the selected scheme.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("scheme", "The decoding scheme to use.").HasOptions("hex", "base64"),
+			docs.FieldCommon("scheme", "The decoding scheme to use.").HasOptions("hex", "base64", "ascii85", "z85"),
 			partsFieldSpec,
 		},
 	}
@@ -69,12 +71,34 @@ func hexEncode(b []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+func ascii85Encode(b []byte) ([]byte, error) {
+	var buf bytes.Buffer
+
+	e := ascii85.NewEncoder(&buf)
+	if _, err := e.Write(b); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func z85Encode(b []byte) ([]byte, error) {
+	enc := make([]byte, z85.EncodedLen(len(b)))
+	if _, err := z85.Encode(enc, b); err != nil {
+		return nil, err
+	}
+	return enc, nil
+}
+
 func strToEncoder(str string) (encodeFunc, error) {
 	switch str {
 	case "base64":
 		return base64Encode, nil
 	case "hex":
 		return hexEncode, nil
+	case "ascii85":
+		return ascii85Encode, nil
+	case "z85":
+		return z85Encode, nil
 	}
 	return nil, fmt.Errorf("encode scheme not recognised: %v", str)
 }

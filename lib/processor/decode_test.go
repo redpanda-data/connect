@@ -2,6 +2,7 @@ package processor
 
 import (
 	"bytes"
+	"encoding/ascii85"
 	"encoding/base64"
 	"encoding/hex"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/tilinna/z85"
 )
 
 func TestDecodeBadAlgo(t *testing.T) {
@@ -92,6 +94,93 @@ func TestDecodeHex(t *testing.T) {
 		zw.Write(exp[i])
 
 		input = append(input, buf.Bytes())
+	}
+
+	if reflect.DeepEqual(input, exp) {
+		t.Fatal("Input and exp output are the same")
+	}
+
+	proc, err := NewDecode(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New(input))
+	if len(msgs) != 1 {
+		t.Error("Decode failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
+func TestDecodeAscii85(t *testing.T) {
+	conf := NewConfig()
+	conf.Decode.Scheme = "ascii85"
+
+	exp := [][]byte{
+		[]byte("hello world first part"),
+		[]byte("hello world second part"),
+		[]byte("third part"),
+		[]byte("fourth"),
+		[]byte("5"),
+	}
+
+	input := [][]byte{}
+
+	for i := range exp {
+		var buf bytes.Buffer
+
+		zw := ascii85.NewEncoder(&buf)
+		zw.Write(exp[i])
+		zw.Close()
+
+		input = append(input, buf.Bytes())
+	}
+
+	if reflect.DeepEqual(input, exp) {
+		t.Fatal("Input and exp output are the same")
+	}
+
+	proc, err := NewDecode(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New(input))
+	if len(msgs) != 1 {
+		t.Error("Decode failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
+func TestDecodeZ85(t *testing.T) {
+	conf := NewConfig()
+	conf.Decode.Scheme = "z85"
+
+	exp := [][]byte{
+		[]byte("hello world first part!!"),
+		[]byte("hello world second p"),
+		[]byte("third part abcde"),
+		[]byte("fourth part!"),
+		[]byte("five"),
+	}
+
+	input := [][]byte{}
+
+	for i := range exp {
+		enc := make([]byte, z85.EncodedLen(len(exp[i])))
+		_, err := z85.Encode(enc, exp[i])
+		if err != nil {
+			t.Fatalf("Failed to prep example %d: %s", i, err)
+		}
+		input = append(input, enc)
 	}
 
 	if reflect.DeepEqual(input, exp) {

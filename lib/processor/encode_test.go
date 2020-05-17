@@ -2,6 +2,7 @@ package processor
 
 import (
 	"bytes"
+	"encoding/ascii85"
 	"encoding/base64"
 	"encoding/hex"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/tilinna/z85"
 )
 
 func TestEncodeBadAlgo(t *testing.T) {
@@ -112,6 +115,116 @@ func TestEncodeHex(t *testing.T) {
 	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected output: %s != %s", act, exp)
 	}
+}
+
+func TestEncodeAscii85(t *testing.T) {
+	conf := NewConfig()
+	conf.Encode.Scheme = "ascii85"
+
+	input := [][]byte{
+		[]byte("hello world first part"),
+		[]byte("hello world second part"),
+		[]byte("third part"),
+		[]byte("fourth"),
+		[]byte("5"),
+	}
+
+	exp := [][]byte{}
+
+	for i := range input {
+		var buf bytes.Buffer
+
+		zw := ascii85.NewEncoder(&buf)
+		zw.Write(input[i])
+
+		exp = append(exp, buf.Bytes())
+	}
+
+	if reflect.DeepEqual(input, exp) {
+		t.Fatal("Input and exp output are the same")
+	}
+
+	proc, err := NewEncode(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New(input))
+	if len(msgs) != 1 {
+		t.Error("Encode failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
+func TestEncodeZ85(t *testing.T) {
+	conf := NewConfig()
+	conf.Encode.Scheme = "z85"
+
+	input := [][]byte{
+		[]byte("hello world first part!!"),
+		[]byte("hello world second p"),
+		[]byte("third part abcde"),
+		[]byte("fourth part!"),
+		[]byte("five"),
+	}
+
+	exp := [][]byte{}
+
+	for i := range input {
+		enc := make([]byte, z85.EncodedLen(len(input[i])))
+		_, err := z85.Encode(enc, input[i])
+		if err != nil {
+			t.Fatal("Failed to encode z85 input")
+		}
+		exp = append(exp, enc)
+	}
+
+	if reflect.DeepEqual(input, exp) {
+		t.Fatal("Input and exp output are the same")
+	}
+
+	//proc, err := NewEncode(conf, nil, log.Noop(), metrics.Noop())
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "DEBUG"})
+	proc, err := NewEncode(conf, nil, testLog, metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New(input))
+	if len(msgs) != 1 {
+		t.Error("Encode failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+
+	// make sure an attempt to encode a byte array that is
+	// not divisible by four fails
+	input = [][]byte{
+		[]byte("12345"),
+		[]byte("1234"),
+		[]byte("123"),
+		[]byte("12"),
+		[]byte("1"),
+	}
+	msgs, res = proc.ProcessMessage(message.New(input))
+	if len(msgs) != 1 {
+		t.Errorf("Expected to process a message")
+	}
+	msgs[0].Iter(func(i int, p types.Part) error {
+		if len(input[i])%4 == 0 && HasFailed(p) {
+			t.Errorf("Unexpected fail flag on part %d", i)
+		} else if len(input[i])%4 != 0 && !HasFailed(p) {
+			t.Errorf("Expected fail flag on part %d", i)
+		}
+		return nil
+	})
 }
 
 func TestEncodeIndexBounds(t *testing.T) {
