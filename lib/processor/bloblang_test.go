@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -132,6 +133,26 @@ func TestBloblangFiltering(t *testing.T) {
 	assert.Equal(t, ``, outMsgs[0].Get(1).Metadata().Get(FailFlagKey))
 	assert.Equal(t, `{"foo":{"dont":"delete me"}}`, string(outMsgs[0].Get(0).Get()))
 	assert.Equal(t, `{"bar":{"dont":"delete me"}}`, string(outMsgs[0].Get(1).Get()))
+}
+
+func TestBloblangFilterAll(t *testing.T) {
+	msg := message.New([][]byte{
+		[]byte(`{"foo":{"delete":true}}`),
+		[]byte(`{"foo":{"dont":"delete me"}}`),
+		[]byte(`{"bar":{"delete":true}}`),
+		[]byte(`{"bar":{"dont":"delete me"}}`),
+	})
+
+	conf := NewConfig()
+	conf.Bloblang = `root = deleted()`
+	proc, err := NewBloblang(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	outMsgs, res := proc.ProcessMessage(msg)
+	assert.Empty(t, outMsgs)
+	assert.Equal(t, response.NewAck(), res)
 }
 
 func TestBloblangJSONError(t *testing.T) {

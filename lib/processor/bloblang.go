@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/opentracing/opentracing-go"
 	olog "github.com/opentracing/opentracing-go/log"
@@ -97,6 +98,7 @@ type Bloblang struct {
 	mErr       metrics.StatCounter
 	mSent      metrics.StatCounter
 	mBatchSent metrics.StatCounter
+	mDropped   metrics.StatCounter
 }
 
 // NewBloblang returns a Bloblang processor.
@@ -118,6 +120,7 @@ func NewBloblang(
 		mErr:       stats.GetCounter("error"),
 		mSent:      stats.GetCounter("sent"),
 		mBatchSent: stats.GetCounter("batch.sent"),
+		mDropped:   stats.GetCounter("dropped"),
 	}, nil
 }
 
@@ -155,11 +158,17 @@ func (b *Bloblang) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 		}
 
 		span.Finish()
-		if err != nil || p != nil {
+		if p != nil {
 			newParts = append(newParts, p)
+		} else {
+			b.mDropped.Incr(1)
 		}
 		return nil
 	})
+
+	if len(newParts) == 0 {
+		return nil, response.NewAck()
+	}
 
 	newMsg := message.New(nil)
 	newMsg.SetAll(newParts)
