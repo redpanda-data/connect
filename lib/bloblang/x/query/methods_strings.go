@@ -5,8 +5,34 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
+
+	"github.com/microcosm-cc/bluemonday"
 )
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"capitalize", false, capitalizeMethod,
+	ExpectNArgs(0),
+)
+
+func capitalizeMethod(target Function, _ ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		switch t := v.(type) {
+		case string:
+			return strings.Title(t), nil
+		case []byte:
+			return bytes.Title(t), nil
+		}
+		return nil, fmt.Errorf("expected string value, received %T", v)
+	}), nil
+}
 
 //------------------------------------------------------------------------------
 
@@ -94,6 +120,58 @@ func parseJSONMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"quote", false, quoteMethod,
+	ExpectNArgs(0),
+)
+
+func quoteMethod(target Function, _ ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		switch t := v.(type) {
+		case string:
+			return strconv.Quote(t), nil
+		case []byte:
+			return strconv.Quote(string(t)), nil
+		}
+		return nil, fmt.Errorf("expected string value, received %T", v)
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"replace", true, replaceMethod,
+	ExpectNArgs(2),
+	ExpectStringArg(0),
+	ExpectStringArg(1),
+)
+
+func replaceMethod(target Function, args ...interface{}) (Function, error) {
+	match := args[0].(string)
+	matchB := []byte(match)
+	with := args[1].(string)
+	withB := []byte(with)
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		switch t := v.(type) {
+		case string:
+			return strings.ReplaceAll(t, match, with), nil
+		case []byte:
+			return bytes.ReplaceAll(t, matchB, withB), nil
+		}
+		return nil, fmt.Errorf("expected string value, received %T", v)
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"re_match", true, regexpMatchMethod,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
@@ -159,6 +237,42 @@ func regexpReplaceMethod(target Function, args ...interface{}) (Function, error)
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"split", true, splitMethod,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
+
+func splitMethod(target Function, args ...interface{}) (Function, error) {
+	delim := args[0].(string)
+	delimB := []byte(delim)
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		switch t := v.(type) {
+		case string:
+			bits := strings.Split(t, delim)
+			vals := make([]interface{}, 0, len(bits))
+			for _, b := range bits {
+				vals = append(vals, b)
+			}
+			return vals, nil
+		case []byte:
+			bits := bytes.Split(t, delimB)
+			vals := make([]interface{}, 0, len(bits))
+			for _, b := range bits {
+				vals = append(vals, b)
+			}
+			return vals, nil
+		}
+		return nil, fmt.Errorf("expected string value, received %T", v)
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"slice", true, sliceMethod,
 	ExpectAtLeastOneArg(),
 	ExpectIntArg(0),
@@ -212,6 +326,87 @@ func stringMethod(target Function, _ ...interface{}) (Function, error) {
 			}
 		}
 		return IToString(v), nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"strip_html", false, stripHTMLMethod,
+	ExpectNArgs(0),
+)
+
+func stripHTMLMethod(target Function, _ ...interface{}) (Function, error) {
+	p := bluemonday.NewPolicy()
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		switch t := v.(type) {
+		case string:
+			return p.Sanitize(t), nil
+		case []byte:
+			return p.SanitizeBytes(t), nil
+		}
+		return nil, fmt.Errorf("expected string value, received %T", v)
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"trim", true, trimMethod,
+	ExpectOneOrZeroArgs(),
+	ExpectStringArg(0),
+)
+
+func trimMethod(target Function, args ...interface{}) (Function, error) {
+	var cutset string
+	if len(args) > 0 {
+		cutset = args[0].(string)
+	}
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		switch t := v.(type) {
+		case string:
+			if len(cutset) == 0 {
+				return strings.TrimSpace(t), nil
+			}
+			return strings.Trim(t, cutset), nil
+		case []byte:
+			if len(cutset) == 0 {
+				return bytes.TrimSpace(t), nil
+			}
+			return bytes.Trim(t, cutset), nil
+		}
+		return nil, fmt.Errorf("expected string value, received %T", v)
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"unquote", false, unquoteMethod,
+	ExpectNArgs(0),
+)
+
+func unquoteMethod(target Function, _ ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		switch t := v.(type) {
+		case string:
+			return strconv.Unquote(t)
+		case []byte:
+			return strconv.Unquote(string(t))
+		}
+		return nil, fmt.Errorf("expected string value, received %T", v)
 	}), nil
 }
 

@@ -8,6 +8,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var linebreakStr = `foo
+bar
+baz`
+
 func TestMethods(t *testing.T) {
 	type easyMsg struct {
 		content string
@@ -16,11 +20,110 @@ func TestMethods(t *testing.T) {
 
 	tests := map[string]struct {
 		input    string
+		value    *interface{}
 		output   interface{}
 		err      string
 		messages []easyMsg
 		index    int
 	}{
+		"check strip html": {
+			input:  `"<p>the plain <strong>old text</strong></p>".strip_html()`,
+			output: `the plain old text`,
+		},
+		"check strip html bytes": {
+			input: `content().strip_html()`,
+			messages: []easyMsg{
+				{content: `<p>the plain <strong>old text</strong></p>`},
+			},
+			output: []byte(`the plain old text`),
+		},
+		"check quote": {
+			input: `this.quote()`,
+			value: func() *interface{} {
+				var s interface{} = linebreakStr
+				return &s
+			}(),
+			output: `"foo\nbar\nbaz"`,
+		},
+		"check quote bytes": {
+			input: `this.quote()`,
+			value: func() *interface{} {
+				var s interface{} = []byte(linebreakStr)
+				return &s
+			}(),
+			output: `"foo\nbar\nbaz"`,
+		},
+		"check unquote": {
+			input: `this.unquote()`,
+			value: func() *interface{} {
+				var s interface{} = "\"foo\\nbar\\nbaz\""
+				return &s
+			}(),
+			output: linebreakStr,
+		},
+		"check unquote bytes": {
+			input: `this.unquote()`,
+			value: func() *interface{} {
+				var s interface{} = []byte("\"foo\\nbar\\nbaz\"")
+				return &s
+			}(),
+			output: linebreakStr,
+		},
+		"check replace": {
+			input:  `"The foo ate my homework".replace("foo","dog")`,
+			output: "The dog ate my homework",
+		},
+		"check replace bytes": {
+			input: `content().replace("foo","dog")`,
+			messages: []easyMsg{
+				{content: `The foo ate my homework`},
+			},
+			output: []byte("The dog ate my homework"),
+		},
+		"check trim": {
+			input:  `" the foo bar   ".trim()`,
+			output: "the foo bar",
+		},
+		"check trim 2": {
+			input:  `"!!?!the foo bar!".trim("!?")`,
+			output: "the foo bar",
+		},
+		"check trim bytes": {
+			input: `content().trim()`,
+			messages: []easyMsg{
+				{content: `  the foo bar  `},
+			},
+			output: []byte("the foo bar"),
+		},
+		"check trim bytes 2": {
+			input: `content().trim("!?")`,
+			messages: []easyMsg{
+				{content: `!!?!the foo bar!`},
+			},
+			output: []byte("the foo bar"),
+		},
+		"check capitalize": {
+			input:  `"the foo bar".capitalize()`,
+			output: "The Foo Bar",
+		},
+		"check capitalize bytes": {
+			input: `content().capitalize()`,
+			messages: []easyMsg{
+				{content: `the foo bar`},
+			},
+			output: []byte("The Foo Bar"),
+		},
+		"check split": {
+			input:  `"foo,bar,baz".split(",")`,
+			output: []interface{}{"foo", "bar", "baz"},
+		},
+		"check split bytes": {
+			input: `content().split(",")`,
+			messages: []easyMsg{
+				{content: `foo,bar,baz,`},
+			},
+			output: []interface{}{[]byte("foo"), []byte("bar"), []byte("baz"), []byte("")},
+		},
 		"check slice": {
 			input:  `"foo bar baz".slice(0, 3)`,
 			output: "foo",
@@ -333,6 +436,7 @@ func TestMethods(t *testing.T) {
 
 			for i := 0; i < 10; i++ {
 				res, err := e.Exec(FunctionContext{
+					Value: test.value,
 					Maps:  map[string]Function{},
 					Index: test.index,
 					Msg:   msg,
@@ -342,7 +446,9 @@ func TestMethods(t *testing.T) {
 				} else {
 					require.NoError(t, err)
 				}
-				assert.Equal(t, test.output, res)
+				if !assert.Equal(t, test.output, res) {
+					break
+				}
 			}
 
 			// Ensure nothing changed

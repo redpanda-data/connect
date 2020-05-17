@@ -277,6 +277,17 @@ foo_vals = foo.values()
 
 ## String Stuff
 
+### `capitalize`
+
+Takes a string value and returns a copy with all Unicode letters that begin words mapped to their Unicode title case.
+
+```coffee
+title = title.capitalize()
+
+# In:  {"title":"the foo bar"}
+# Out: {"title":"The Foo Bar"}
+```
+
 ### `format`
 
 Use a value string as a format specifier in order to produce a new string, using any number of provided arguments.
@@ -312,6 +323,25 @@ doc = doc.parse_json()
 
 # In:  {"doc":"{\"foo\":\"bar\"}"}
 # Out: {"doc":{"foo":"bar"}}
+```
+
+### `quote`
+
+Quotes a target string using escape sequences (`\t`, `\n`, `\xFF`, `\u0100`) for control characters and non-printable characters.
+
+```coffee
+quoted = thing.quote()
+```
+
+### `replace`
+
+Replaces all occurrences of the first argument in a target string with the second argument.
+
+```coffee
+new_value = value.replace("foo","dog")
+
+# In:  {"value":"The foo ate my homework"}
+# Out: {"new_value":"The dog ate my homework"}
 ```
 
 ### `re_match`
@@ -351,6 +381,48 @@ end = value.slice(8)
 
 # In:  {"value":"foo bar baz"}
 # Out: {"beginning":"foo","end":"baz"}
+```
+
+### `split`
+
+Split a string value into an array of strings by splitting it on a string separator.
+
+```coffee
+new_value = value.split(",")
+
+# In:  {"value":"foo,bar,baz"}
+# Out: {"new_value":["foo","bar","baz"]}
+```
+
+### `strip_html`
+
+Attempts to remove all HTML tags from a target string.
+
+```coffee
+stripped = value.strip_html()
+
+# In:  {"value":"<p>the plain <strong>old text</strong></p>"}
+# Out: {"stripped":"the plain old text"}
+```
+
+### `trim`
+
+Remove all leading and trailing characters from a string that are contained within an argument cutset. If no arguments are provided then whitespace is removed.
+
+```coffee
+title = title.trim("!?")
+description = description.trim()
+
+# In:  {"title":"!!!watch out!?","description":"  something happened and its amazing! "}
+# Out: {"title":"watch out","description":"something happened and its amazing!"}
+```
+
+### `unquote`
+
+Unquotes a target string, expanding any escape sequences (`\t`, `\n`, `\xFF`, `\u0100`) for control characters and non-printable characters.
+
+```coffee
+unquoted = target.unquote()
 ```
 
 ### `uppercase`
