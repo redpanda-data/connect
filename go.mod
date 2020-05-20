@@ -26,7 +26,7 @@ require (
 	github.com/edsrzf/mmap-go v1.0.0
 	github.com/fatih/color v1.9.0
 	github.com/frankban/quicktest v1.4.2 // indirect
-	github.com/go-redis/redis v6.15.6+incompatible
+	github.com/go-redis/redis/v7 v7.2.0
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gofrs/uuid v3.2.0+incompatible
 	github.com/gogo/protobuf v1.3.1 // indirect
@@ -54,8 +54,6 @@ require (
 	github.com/nats-io/stan.go v0.6.0
 	github.com/nsqio/go-nsq v1.0.8
 	github.com/olivere/elastic v6.2.27+incompatible
-	github.com/onsi/ginkgo v1.7.0 // indirect
-	github.com/onsi/gomega v1.4.3 // indirect
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/opencontainers/runc v0.1.1 // indirect
