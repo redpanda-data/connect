@@ -304,6 +304,7 @@ func (r *RedisStreams) read() (pendingRedisStreamMsg, error) {
 			if !exists {
 				continue
 			}
+			delete(xmsg.Values, r.conf.BodyKey)
 
 			var bodyBytes []byte
 			switch t := body.(type) {
