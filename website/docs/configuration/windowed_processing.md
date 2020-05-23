@@ -73,13 +73,11 @@ pipeline:
 
 ## Aggregating
 
-The main purpose of windowing messages is so they can be aggregated into a single message that summarises the window. For this purpose we have lots of options within Benthos, but for this guide we'll cover a select few.
+The main purpose of windowing messages is so they can be aggregated into a single message that summarises the window. For this purpose we have lots of options within Benthos, but for this guide we'll cover a select few, where each example uses [Bloblang][bloblang].
 
 ### Flat Counter
 
-The easiest aggregation to perform is simply counting how many messages were within the window. In Benthos you can extract that value with the [interpolation function][interpolation] `batch_size`, which allows us to insert the value into the first message of our group and then remove all other messages.
-
-Here's an example using the [`json`][json-proc] and [`select_parts`][select-parts-proc] processors, where we inject it as a new field in an existing JSON document:
+The easiest aggregation to perform is simply counting how many messages were within the window. This is easy to do with the [`bloblang` processor][processors.bloblang] using the [`batch_size` function][bloblang.functions.batch_size]:
 
 ```yaml
 pipeline:
@@ -87,105 +85,86 @@ pipeline:
   # TODO: Paste group processor here if you want it.
 
   # Set the value of doc.count to the batch size.
-  - json:
-      parts: [ 0 ] # Only bother running this for the first message.
-      operator: set
-      path: doc.count
-      value: ${! batch_size() }
+  - bloblang: |
+      root = this
+      doc.count = batch_size()
 
-  # Drop all messages except the first.
-  - select_parts:
-      parts: [ 0 ]
+      # Drop all documents except the first.
+      root = match {
+        batch_index() > 0 => deleted()
+      }
 ```
-
-But you can just as easily inject a `batch_size` value using processors such as [`text`][text-proc] when working with unstructured data.
 
 ### Real Counter
 
-If you have a group of structured documents containing numeric values that you wish to count then it gets slightly trickier. For brevity we're going to assume our messages are JSON documents of the format:
+If you have a group of structured documents containing numeric values that you wish to count then that's also pretty easy with Bloblang. For brevity we're going to assume our messages are JSON documents of the format:
 
 ```json
 {"doc":{"count":5,"contents":"foobar"}}
 ```
 
-We can simply merge all of the JSON documents and fold the values of `doc.count`:
+And that we only wish to preserve the first message of the batch. We can do this by extracting the `doc.count` value of each document into an array with the method [`from_all`][bloblang.methods.from_all] and adding them with the method [`sum`][bloblang.methods.sum]:
 
 ```yaml
 pipeline:
   processors:
   # TODO: Paste group processor here if you want it.
 
-  # Create a new document by merging all documents of the batch. This results in
-  # all leaves of the document being converted into arrays.
-  - merge_json:
-      retain_parts: false
+  - bloblang: |
+      root = this
+      doc.count = json("doc.count").from_all().sum()
 
-  # Fold the counts array of the merged doc.
-  - json:
-      operator: fold_number_array
-      path: doc.count
+      # Drop all documents except the first.
+      root = match {
+        batch_index() > 0 => deleted()
+      }
 ```
 
-This results in a document containing all values of the group in arrays, except the count which we explicitly folded:
+This results in a document containing our aggregated count, along with the rest of the first document of the batch:
 
 ```json
 {
   "doc": {
     "count": 243,
-    "contents": ["foobar","another value","and another"]
+    "contents": "foobar"
   }
 }
 ```
 
-We can easily structure the resulting document with a [`jmespath` processor][jmespath-proc] in order to reduce its size. If, however, we needed to preserve the exact structure of the first message, without contamination from other documents of the group, then we can do that with a slightly longer configuration:
+### Custom Folding
+
+Bloblang also has a method [`fold`][bloblang.methods.fold] which allows you to write custom folding logic for your values. Here's an example where we implement a max function for our counts:
 
 ```yaml
 pipeline:
   processors:
   # TODO: Paste group processor here if you want it.
 
-  # Create a new document by merging all documents of the batch, and append the
-  # result to the end of the batch.
-  - merge_json:
-      retain_parts: true
+  - bloblang: |
+      root = this
+      doc.max = json("doc.count").from_all().fold(0, match {
+        tally < value => value
+        _ => tally
+      })
 
-  # Fold the counts array of the merged doc.
-  - json:
-      parts: [ -1 ] # Only calculate for last message (the merged one)
-      operator: fold_number_array
-      path: doc.count
-
-  # Inject the folded value from the last message into the first. This is
-  # possible because interpolation functions are resolved batch wide, so we can
-  # specify an optional message index after our path.
-  - json:
-      parts: [ 0 ] # Only inject into the first message.
-      operator: set
-      path: doc.count
-      value: ${! json("doc.count").from(-1) }
-
-  # Using interpolation above results in a string, so we parse that back into a
-  # number.
-  - process_field:
-      parts: [ 0 ] 
-      path: doc.count
-      result_type: float
-
-  # Drop all messages except the first.
-  - select_parts:
-      parts: [ 0 ]
+      # Drop all documents except the first.
+      root = match {
+        batch_index() > 0 => deleted()
+      }
 ```
 
-It ain't pretty, but it gets the job done.
+[Bloblang][bloblang] is very powerful, and by using [`from`][bloblang.methods.from] and [`from_all`][bloblang.methods.from_all] it's possible to perform a wide range of batch-wide processing.
 
-[interpolation]: /docs/configuration/interpolation
 [batching]: /docs/configuration/batching
 [batching-policy]: /docs/configuration/batching#batch-policy
 [processors]: /docs/components/processors/about
-[jmespath-proc]: /docs/components/processors/jmespath
-[json-proc]: /docs/components/processors/json
-[text-proc]: /docs/components/processors/text
-[select-parts-proc]: /docs/components/processors/select_parts
+[bloblang]: /docs/guides/bloblang/about
+[bloblang.functions.batch_size]: /docs/guides/bloblang/functions#batch_size
+[bloblang.methods.from_all]: /docs/guides/bloblang/methods#from_all
+[bloblang.methods.from]: /docs/guides/bloblang/methods#from
+[bloblang.methods.sum]: /docs/guides/bloblang/methods#sum
+[bloblang.methods.fold]: /docs/guides/bloblang/methods#fold
+[processors.bloblang]: /docs/components/processors/bloblang
 [group-by-proc]: /docs/components/processors/group_by
 [group-by-value-proc]: /docs/components/processors/group_by_value
 [inputs]: /docs/components/inputs/about

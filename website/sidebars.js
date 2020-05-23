@@ -98,6 +98,7 @@ module.exports = {
             'guides/bloblang/about',
             'guides/bloblang/functions',
             'guides/bloblang/methods',
+            'guides/bloblang/advanced',
           ],
         },
         'guides/monitoring',

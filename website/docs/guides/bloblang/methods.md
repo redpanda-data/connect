@@ -334,7 +334,7 @@ escaped = value.escape_url_query()
 
 ### `decode`
 
-Decodes an encoded string target according to a chosen scheme and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][method.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.
+Decodes an encoded string target according to a chosen scheme and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.
 
 Available schemes are: `base64`, `hex`, `ascii85`, `z85`.
 
@@ -518,3 +518,5 @@ foo = foo.uppercase()
 ```
 
 [field_paths]: /docs/configuration/field_paths
+[methods.encode]: #encode
+[methods.string]: #string

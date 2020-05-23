@@ -1,0 +1,14 @@
+pipeline:
+  processors:
+  - bloblang: |
+      root = this
+      doc.count = json("doc.count").from_all().sum()
+      doc.max = json("doc.count").from_all().fold(0, match {
+        tally < value => value
+        _ => tally
+      })
+
+      # Drop all documents except the first.
+      root = match {
+        batch_index() > 0 => deleted()
+      }

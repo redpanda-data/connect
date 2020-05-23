@@ -11,7 +11,9 @@ type: processor
 -->
 
 
-Performs mutation [operations](#operators) on JSON payloads.
+DEPRECATED: This processor is now deprecated, and the new
+[bloblang processor](/docs/components/processors/bloblang) should be used
+instead.
 
 
 import Tabs from '@theme/Tabs';
@@ -85,7 +87,6 @@ path: some_array.0.id
 ### `value`
 
 A value to use with the chosen operator (sometimes not applicable). This is a generic field that can be any type.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
 
 
 Type: `string`  
@@ -96,15 +97,15 @@ Default: `""`
 
 value: foo
 
-value: ${!meta("kafka_key")}
+value: ${!metadata:kafka_key}
 
 value: false
 
 value: 10
 
 value:
-  key: ${!meta("kafka_key")}
-  topic: ${!meta("kafka_topic")}
+  key: ${!metadata:kafka_key}
+  topic: ${!metadata:kafka_topic}
 ```
 
 ### `parts`

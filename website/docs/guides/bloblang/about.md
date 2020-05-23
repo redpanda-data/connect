@@ -15,14 +15,12 @@ An assignment consists of a left-hand-side assignment target and a right-hand-si
 Map a new document by using [dot paths][field_paths]:
 
 ```coffee
-# Set a temporary variable
-let foo = "yo"
-
 new_doc.id = thing.id
-new_doc.type = $foo # Reference a variable with $
+new_doc.type = "yo"
 
 # Keyword `root` refers to the root of the mapped document
 # Keyword `this` refers to the root of the query context
+# Both are optional
 root.new_doc.content = this.thing.doc.message
 
 # In:  {"thing":{"id":"wat1","doc":{"title":"wut","message":"hello world"}}}
@@ -37,6 +35,15 @@ foo = "added value"
 
 # In:  {"id":"wat1","message":"hello world"}
 # Out: {"id":"wat1","message":"hello world","foo":"added value"}
+```
+
+Variables help with value reuse:
+
+```coffee
+# Set a temporary variable
+let foo = "yo"
+
+new_doc.type = $foo # Reference a variable with $
 ```
 
 You can also use Bloblang to set and reference metadata values:

@@ -23,12 +23,15 @@ func init() {
 	Constructors[TypeJSON] = TypeSpec{
 		constructor: NewJSON,
 		Summary: `
-Performs mutation [operations](#operators) on JSON payloads.`,
+DEPRECATED: This processor is now deprecated, and the new
+[bloblang processor](/docs/components/processors/bloblang) should be used
+instead.`,
 		Description: `
 This processor is useful for applying high performance mutations on JSON data.
 For more advanced mapping use cases take a look at the
 ` + "[`jmespath` processor](/docs/components/processors/jmespath)" + `, and also
 the ` + "[`awk` processor](/docs/components/processors/awk)" + `.`,
+		Deprecated: true,
 		Footnotes: `
 ## Operators
 
@@ -200,9 +203,9 @@ and the contents of the ` + "`value`" + ` field to be strings.`,
 			docs.FieldCommon(
 				"value",
 				"A value to use with the chosen operator (sometimes not applicable). This is a generic field that can be any type.",
-				"foo", "${!meta(\"kafka_key\")}", false, 10,
-				map[string]interface{}{"topic": "${!meta(\"kafka_topic\")}", "key": "${!meta(\"kafka_key\")}"},
-			).SupportsInterpolation(false),
+				"foo", "${!metadata:kafka_key}", false, 10,
+				map[string]interface{}{"topic": "${!metadata:kafka_topic}", "key": "${!metadata:kafka_key}"},
+			),
 			partsFieldSpec,
 		},
 	}
