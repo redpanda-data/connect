@@ -31,6 +31,8 @@ For more information about Bloblang
 		Footnotes: `
 ## Examples
 
+### Mapping
+
 Given JSON documents containing an array of fans:
 
 ` + "```json" + `
@@ -71,6 +73,43 @@ Giving us:
     {"name":"ali","obsession":0.89}
   ]
 }
+` + "```" + `
+
+### Parsing CSV
+
+Bloblang can be used to parse some basic CSV files, given files of the following
+format:
+
+` + "```" + `
+foo,bar,baz
+1,2,3
+7,11,23
+89,23,2
+` + "```" + `
+
+We can write a parser that does cool things like calculating the sum of each
+line:
+
+` + "```yaml" + `
+pipeline:
+  processors:
+  - bloblang: |
+      root = content().string().split("\n").enumerated().map_each(match {
+        index == 0 => deleted() # Drop the first line
+        _ => match value.trim() {
+          this.length() == 0 => deleted() # Drop empty lines
+          _ => this.split(",")            # Split the remaining by comma
+        }
+      }).map_each(
+        # Then do something cool like sum each row
+        this.map_each(this.trim().number(0)).sum()
+      )
+` + "```" + `
+
+To give an output like this:
+
+` + "```json" + `
+[6,41,114]
 ` + "```" + ``,
 	}
 }

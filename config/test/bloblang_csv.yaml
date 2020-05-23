@@ -1,0 +1,13 @@
+pipeline:
+  processors:
+  - bloblang: |
+      root = content().string().split("\n").enumerated().map_each(match {
+        index == 0 => deleted() # Drop the first line
+        _ => match value.trim() {
+          this.length() == 0 => deleted() # Drop empty lines
+          _ => this.split(",")            # Split the remaining by comma
+        }
+      }).map_each(
+        # Then do something cool like sum each row
+        this.map_each(this.trim().number(0)).sum()
+      )
