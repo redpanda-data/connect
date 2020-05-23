@@ -25,13 +25,29 @@ type cachedConfig struct {
 type ProcessorsProvider struct {
 	targetPath    string
 	cachedConfigs map[string]cachedConfig
+
+	logger log.Modular
 }
 
 // NewProcessorsProvider returns a new processors provider aimed at a filepath.
-func NewProcessorsProvider(targetPath string) *ProcessorsProvider {
-	return &ProcessorsProvider{
+func NewProcessorsProvider(targetPath string, opts ...func(*ProcessorsProvider)) *ProcessorsProvider {
+	p := &ProcessorsProvider{
 		targetPath:    targetPath,
 		cachedConfigs: map[string]cachedConfig{},
+		logger:        log.Noop(),
+	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
+}
+
+//------------------------------------------------------------------------------
+
+// OptProcessorsProviderSetLogger sets the logger used by tested components.
+func OptProcessorsProviderSetLogger(logger log.Modular) func(*ProcessorsProvider) {
+	return func(p *ProcessorsProvider) {
+		p.logger = logger
 	}
 }
 
@@ -51,14 +67,14 @@ func (p *ProcessorsProvider) Provide(jsonPtr string, environment map[string]stri
 //------------------------------------------------------------------------------
 
 func (p *ProcessorsProvider) initProcs(confs cachedConfig) ([]types.Processor, error) {
-	mgr, err := manager.New(confs.mgr, types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(confs.mgr, types.NoopMgr(), p.logger, metrics.Noop())
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialise resources: %v", err)
 	}
 
 	procs := make([]types.Processor, len(confs.procs))
 	for i, conf := range confs.procs {
-		if procs[i], err = processor.New(conf, mgr, log.Noop(), metrics.Noop()); err != nil {
+		if procs[i], err = processor.New(conf, mgr, p.logger, metrics.Noop()); err != nil {
 			return nil, fmt.Errorf("failed to initialise processor index '%v': %v", i, err)
 		}
 	}

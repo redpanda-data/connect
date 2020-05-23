@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/lib/config"
+	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/fatih/color"
 	yaml "gopkg.in/yaml.v3"
 )
@@ -97,7 +98,7 @@ func getTestTargets(targetPath, testSuffix string, recurse bool) ([]string, erro
 }
 
 // Executes a test definition and either returns fails or returns an error.
-func testTarget(path, testSuffix string) ([]CaseFailure, error) {
+func testTarget(path, testSuffix string, logger log.Modular) ([]CaseFailure, error) {
 	confPath, _ := getBothPaths(path, testSuffix)
 	var definition Definition
 	defBytes, err := ioutil.ReadFile(path)
@@ -107,7 +108,7 @@ func testTarget(path, testSuffix string) ([]CaseFailure, error) {
 	if err := yaml.Unmarshal(defBytes, &definition); err != nil {
 		return nil, fmt.Errorf("failed to parse test definition '%v': %v", path, err)
 	}
-	return definition.Execute(confPath)
+	return definition.ExecuteWithLogger(confPath, logger)
 }
 
 // Lints the config target of a test definition and either returns linting
@@ -148,6 +149,17 @@ func Run(path, testSuffix string, lint bool) bool {
 // a config file, a config files test definition file, a directory, or the
 // wildcard pattern './...'.
 func RunAll(paths []string, testSuffix string, lint bool) bool {
+	return runAll(paths, testSuffix, lint, log.Noop())
+}
+
+// RunAllWithLogger executes the test command for a slice of paths. The path can
+// either be a config file, a config files test definition file, a directory, or
+// the wildcard pattern './...'.
+func RunAllWithLogger(paths []string, testSuffix string, lint bool, logger log.Modular) bool {
+	return runAll(paths, testSuffix, lint, logger)
+}
+
+func runAll(paths []string, testSuffix string, lint bool, logger log.Modular) bool {
 	var targets []string
 
 	for _, path := range paths {
@@ -183,7 +195,7 @@ func RunAll(paths []string, testSuffix string, lint bool) bool {
 				return false
 			}
 		}
-		if failCases, err = testTarget(target, testSuffix); err != nil {
+		if failCases, err = testTarget(target, testSuffix, logger); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to execute test target '%v': %v\n", target, err)
 			return false
 		}

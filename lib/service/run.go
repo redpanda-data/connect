@@ -8,6 +8,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/input"
+	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/service/test"
@@ -331,6 +332,11 @@ func Run() {
 						Value: false,
 						Usage: "instead of testing, detect untested Benthos configs and generate test definitions for them.",
 					},
+					&cli.StringFlag{
+						Name:  "log",
+						Value: "",
+						Usage: "allow components to write logs at a provided level to stdout.",
+					},
 				},
 				Action: func(c *cli.Context) error {
 					if c.Bool("generate") {
@@ -342,8 +348,17 @@ func Run() {
 						}
 						os.Exit(0)
 					}
-					if test.RunAll(c.Args().Slice(), testSuffix, true) {
-						os.Exit(0)
+					if logLevel := c.String("log"); len(logLevel) > 0 {
+						logConf := log.NewConfig()
+						logConf.LogLevel = logLevel
+						logger := log.New(os.Stdout, logConf)
+						if test.RunAllWithLogger(c.Args().Slice(), testSuffix, true, logger) {
+							os.Exit(0)
+						}
+					} else {
+						if test.RunAll(c.Args().Slice(), testSuffix, true) {
+							os.Exit(0)
+						}
 					}
 					os.Exit(1)
 					return nil
