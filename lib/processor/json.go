@@ -31,7 +31,6 @@ This processor is useful for applying high performance mutations on JSON data.
 For more advanced mapping use cases take a look at the
 ` + "[`jmespath` processor](/docs/components/processors/jmespath)" + `, and also
 the ` + "[`awk` processor](/docs/components/processors/awk)" + `.`,
-		Deprecated: true,
 		Footnotes: `
 ## Operators
 

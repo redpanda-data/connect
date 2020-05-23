@@ -132,7 +132,7 @@ func TestExpressions(t *testing.T) {
 		"match empty 3": {
 			input: `match "" {
   json().foo > 5 => "bigfoo"
-  json().bar > 5 => "bigbar"
+  json().bar.number().or(0) > 5 => "bigbar"
   _ => json().baz }`,
 			output: `isbaz`,
 			messages: []easyMsg{

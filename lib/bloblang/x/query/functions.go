@@ -3,6 +3,7 @@ package query
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 	"time"
 
@@ -208,6 +209,28 @@ func metadataFunction(args ...interface{}) (Function, error) {
 var _ = RegisterFunction("nothing", false, func(...interface{}) (Function, error) {
 	return literalFunction(Nothing(nil)), nil
 })
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterFunction(
+	"random_int", true, randomIntFunction,
+	ExpectOneOrZeroArgs(),
+	ExpectIntArg(1),
+)
+
+func randomIntFunction(args ...interface{}) (Function, error) {
+	seed := int64(0)
+	if len(args) > 0 {
+		var err error
+		if seed, err = IGetInt(args[0]); err != nil {
+			return nil, err
+		}
+	}
+	r := rand.New(rand.NewSource(seed))
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		return int64(r.Int()), nil
+	}), nil
+}
 
 //------------------------------------------------------------------------------
 

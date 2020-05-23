@@ -18,7 +18,9 @@ func init() {
 	Constructors[TypeJSON] = TypeSpec{
 		constructor: NewJSON,
 		Summary: `
-Checks JSON messages against a logical [operator](#operators) and an argument.`,
+DEPRECATED: This condition is now deprecated, and the new
+[bloblang condition](/docs/components/conditions/bloblang) should be used
+instead.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("operator", "A logical [operator](#operators) to check with.").HasOptions(
 				"exists", "equals", "contains",

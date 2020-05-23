@@ -79,6 +79,8 @@ func decodeMethod(target Function, args ...interface{}) (Function, error) {
 			}
 			return dec, nil
 		}
+	default:
+		return nil, fmt.Errorf("unrecognized encoding type: %v", args[0])
 	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
@@ -146,6 +148,8 @@ func encodeMethod(target Function, args ...interface{}) (Function, error) {
 			}
 			return string(enc), nil
 		}
+	default:
+		return nil, fmt.Errorf("unrecognized encoding type: %v", args[0])
 	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
@@ -280,6 +284,8 @@ func hashMethod(target Function, args ...interface{}) (Function, error) {
 			h.Write(b)
 			return []byte(strconv.FormatUint(h.Sum64(), 10)), nil
 		}
+	default:
+		return nil, fmt.Errorf("unrecognized hash type: %v", args[0])
 	}
 
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {

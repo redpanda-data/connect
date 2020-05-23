@@ -114,3 +114,24 @@ func TestFunctions(t *testing.T) {
 		})
 	}
 }
+
+func TestRandomInt(t *testing.T) {
+	e, err := tryParse(`random_int()`, false)
+	require.NoError(t, err)
+
+	tallies := map[int64]int64{}
+
+	for i := 0; i < 100; i++ {
+		res, err := e.Exec(FunctionContext{})
+		require.NoError(t, err)
+		require.IsType(t, int64(0), res)
+		tallies[res.(int64)] = tallies[res.(int64)] + 1
+	}
+
+	// Can't prove it ain't random, but I can kick up a fuss if something
+	// stinks.
+	assert.GreaterOrEqual(t, len(tallies), 20)
+	for _, v := range tallies {
+		assert.LessOrEqual(t, v, int64(10))
+	}
+}

@@ -1,0 +1,14 @@
+input:
+  kafka_balanced:
+    addresses: [ TODO ]
+    topics: [ foo, bar ]
+    consumer_group: foogroup
+
+pipeline:
+  processors:
+  - bloblang: 'root = "%vend".format(content().uppercase().string())'
+
+output:
+  s3:
+    bucket: TODO
+    path: '${! meta("kafka_topic") }/${! json("message.id") }.json'

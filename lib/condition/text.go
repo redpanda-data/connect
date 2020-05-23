@@ -21,8 +21,9 @@ func init() {
 	Constructors[TypeText] = TypeSpec{
 		constructor: NewText,
 		Summary: `
-Checks the contents of a message as plain text against a logical
-[operator](#operators) and an argument.`,
+DEPRECATED: This condition is now deprecated, and the new
+[bloblang condition](/docs/components/conditions/bloblang) should be used
+instead.`,
 		Description: `
 It's possible to use the ` + "[`check_field`](/docs/components/conditions/check_field)" + ` and
 ` + "[`check_interpolation`](/docs/components/conditions/check_interpolation)" + ` conditions to check a

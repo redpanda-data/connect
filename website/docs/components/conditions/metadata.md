@@ -11,7 +11,9 @@ type: condition
 -->
 
 
-Checks a metadata key against an argument according to a chosen [operator](#operators).
+DEPRECATED: This condition is now deprecated, and the new
+[bloblang condition](/docs/components/conditions/bloblang) should be used
+instead.
 
 
 import Tabs from '@theme/Tabs';

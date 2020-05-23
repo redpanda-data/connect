@@ -11,8 +11,9 @@ type: processor
 -->
 
 
-Performs operations on the metadata of a message. Metadata are key/value pairs
-that are associated with messages.
+DEPRECATED: This processor is now deprecated, and the new
+[bloblang processor](/docs/components/processors/bloblang) should be used
+instead.
 
 
 import Tabs from '@theme/Tabs';

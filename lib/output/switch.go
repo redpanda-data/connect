@@ -102,18 +102,14 @@ output:
         foo:
           foo_field_1: value1
       condition:
-        text:
-          operator: contains
-          arg: foo
+        bloblang: content().contains("foo")
       fallthrough: true
     - output:
         bar:
           bar_field_1: value2
           bar_field_2: value3
       condition:
-        text:
-          operator: contains
-          arg: bar
+        bloblang: content().contains("bar")
       fallthrough: true
     - output:
         baz:

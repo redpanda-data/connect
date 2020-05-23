@@ -50,8 +50,7 @@ output:
           url: https://sqs.us-west-2.amazonaws.com/TODO/TODO
           max_in_flight: 20
       condition:
-        jmespath:
-          query: "contains(doc.tags, 'AWS')"
+        bloblang: doc.tags.contains("AWS")
 
     - output:
         redis_pubsub:

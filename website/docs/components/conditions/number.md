@@ -11,8 +11,9 @@ type: condition
 -->
 
 
-Checks the contents of a message parsed as a 64-bit floating point number
-against a logical [operator](#operators) and an argument.
+DEPRECATED: This condition is now deprecated, and the new
+[bloblang condition](/docs/components/conditions/bloblang) should be used
+instead.
 
 
 import Tabs from '@theme/Tabs';

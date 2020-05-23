@@ -36,6 +36,24 @@ func IGetNumber(v interface{}) (float64, error) {
 	return 0, fmt.Errorf("function returned non-numerical type: %T", v)
 }
 
+// IGetInt takes a boxed value and attempts to extract an integer (int64) from
+// it.
+func IGetInt(v interface{}) (int64, error) {
+	switch t := v.(type) {
+	case int64:
+		return t, nil
+	case uint64:
+		return int64(t), nil
+	case float64:
+		return int64(t), nil
+	case []byte:
+		return strconv.ParseInt(string(t), 10, 64)
+	case string:
+		return strconv.ParseInt(t, 10, 64)
+	}
+	return 0, fmt.Errorf("function returned non-numerical type: %T", v)
+}
+
 // IIsNull returns whether a bloblang type is null, this includes Delete and
 // Nothing types.
 func IIsNull(i interface{}) bool {

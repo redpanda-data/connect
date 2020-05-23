@@ -13,6 +13,7 @@ const (
 	arithmeticSub
 	arithmeticDiv
 	arithmeticMul
+	arithmeticMod
 	arithmeticEq
 	arithmeticNeq
 	arithmeticGt
@@ -137,6 +138,34 @@ func multiply(lhs, rhs Function) Function {
 				err = tmpErr
 			} else {
 				result = result * denom
+			}
+		} else {
+			err = tmpErr
+		}
+
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
+	})
+}
+
+func modulo(lhs, rhs Function) Function {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		var result int64
+		var err error
+
+		if leftV, tmpErr := lhs.Exec(ctx); tmpErr == nil {
+			result, err = IGetInt(leftV)
+		} else {
+			err = tmpErr
+		}
+		if rightV, tmpErr := rhs.Exec(ctx); tmpErr == nil {
+			var right int64
+			if right, tmpErr = IGetInt(rightV); tmpErr != nil {
+				err = tmpErr
+			} else {
+				result = result % right
 			}
 		} else {
 			err = tmpErr
@@ -292,6 +321,8 @@ func resolveArithmetic(fns []Function, ops []arithmeticOp) (Function, error) {
 			fnsNew[len(fnsNew)-1] = multiply(fnsNew[len(fnsNew)-1], fns[i+1])
 		case arithmeticDiv:
 			fnsNew[len(fnsNew)-1] = divide(fnsNew[len(fnsNew)-1], fns[i+1])
+		case arithmeticMod:
+			fnsNew[len(fnsNew)-1] = modulo(fnsNew[len(fnsNew)-1], fns[i+1])
 		case arithmeticPipe:
 			fnsNew[len(fnsNew)-1] = coalesce(fnsNew[len(fnsNew)-1], fns[i+1])
 		default:

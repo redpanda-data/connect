@@ -14,6 +14,7 @@ func arithmeticOpParser() parser.Type {
 		parser.Char('-'),
 		parser.Char('/'),
 		parser.Char('*'),
+		parser.Char('%'),
 		parser.Term("&&"),
 		parser.Term("||"),
 		parser.Term("=="),
@@ -38,6 +39,8 @@ func arithmeticOpParser() parser.Type {
 			res.Payload = arithmeticDiv
 		case "*":
 			res.Payload = arithmeticMul
+		case "%":
+			res.Payload = arithmeticMod
 		case "==":
 			res.Payload = arithmeticEq
 		case "!=":

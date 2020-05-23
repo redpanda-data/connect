@@ -72,10 +72,9 @@ Or perhaps augment the message payload with the error message:
 
 ```yaml
   - catch:
-    - json:
-        operator: set
-        path: meta.error
-        value: ${!error()}
+    - bloblang: |
+        root = this
+        meta.error = error()
 ```
 
 ## Attempt Until Success
@@ -102,13 +101,14 @@ unblock itself without intervention.
 
 ## Drop Failed Messages
 
-In order to filter out any failed messages from your pipeline you can simply use
-a [`filter_parts`][filter_parts] processor:
+In order to filter out any failed messages from your pipeline you can use a
+[`bloblang` processor][processors.bloblang] processor:
 
 ```yaml
-  - filter_parts:
-      not:
-        type: processor_failed
+  - bloblang: |
+      root = match {
+        error().length() > 0 => deleted()
+      }
 ```
 
 This will remove any failed messages from a batch.
@@ -117,7 +117,7 @@ This will remove any failed messages from a batch.
 
 It is possible to send failed messages to different destinations using either a
 [`group_by`][group_by] processor with a [`switch`][switch] output, or a
-[`broker`][broker] output with [`filter_parts`][filter_parts] processors.
+[`broker`][broker] output with [`bloblang`][processors.bloblang] processors.
 
 ```yaml
 pipeline:
@@ -148,18 +148,21 @@ output:
     outputs:
     - type: foo # Dead letter queue
       processors:
-      - filter_parts:
-          type: processor_failed
+      - bloblang: |
+          root = match {
+            error().length() == 0 => deleted()
+          }
     - type: bar # Everything else
       processors:
-      - filter_parts:
-          not:
-            type: processor_failed
+      - bloblang: |
+          root = match {
+            error().length() > 0 => deleted()
+          }
 ```
 
 [processors]: /docs/components/processors/about
+[processors.bloblang]: /docs/components/processors/bloblang
 [processor_failed]: /docs/components/conditions/processor_failed
-[filter_parts]: /docs/components/processors/filter_parts
 [while]: /docs/components/processors/while
 [for_each]: /docs/components/processors/for_each
 [conditional]: /docs/components/processors/conditional

@@ -205,6 +205,17 @@ result = foo.get(target)
 # Out: {"result":"from baz"}
 ```
 
+### `index`
+
+Extract an element from an array by an index. The index can be negative, and if so the element will be selected from the end counting backwards starting from -1. E.g. an index of -1 returns the last element, an index of -2 returns the element before the last, and so on.
+
+```coffee
+last_name = names.index(-1)
+
+# In:  {"names":["rachel","stevens"]}
+# Out: {"last_name":"stevens"}
+```
+
 ### `keys`
 
 Returns the keys of an object as an array. The order of the resulting array will be random.

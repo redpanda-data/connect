@@ -121,6 +121,7 @@ pipeline:
     - log:
         level: ERROR
         message: "Schema validation failed due to: ${!error()}"
+    - bloblang: 'root = deleted()' # Drop messages that fail
 ```
 
 If a payload being processed looked like:
@@ -129,9 +130,6 @@ If a payload being processed looked like:
 {"firstName":"John","lastName":"Doe","age":-21}
 ```
 
-Then the payload would be unchanged but a log message would appear explaining
-the fault. This gives you flexibility in how you may handle schema errors, but
-for a simpler use case you might instead wish to use the
-[`json_schema`](/docs/components/conditions/json_schema) condition with a
-[`filter`](/docs/components/processors/filter).
+Then a log message would appear explaining the fault and the payload would be
+dropped.
 

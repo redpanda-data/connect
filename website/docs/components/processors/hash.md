@@ -11,7 +11,9 @@ type: processor
 -->
 
 
-Hashes messages according to the selected algorithm.
+DEPRECATED: This processor is now deprecated, and the new
+[bloblang processor](/docs/components/processors/bloblang) should be used
+instead.
 
 
 import Tabs from '@theme/Tabs';

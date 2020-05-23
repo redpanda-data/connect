@@ -24,7 +24,9 @@ func init() {
 	Constructors[TypeHash] = TypeSpec{
 		constructor: NewHash,
 		Summary: `
-Hashes messages according to the selected algorithm.`,
+DEPRECATED: This processor is now deprecated, and the new
+[bloblang processor](/docs/components/processors/bloblang) should be used
+instead.`,
 		Description: `
 This processor is mostly useful when combined with the
 ` + "[`process_field`](/docs/components/processors/process_field)" + ` processor as it allows you to hash a

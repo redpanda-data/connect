@@ -1,0 +1,8 @@
+pipeline:
+  processors:
+  - bloblang: |
+      root = match {
+        meta("topic").or("") == "foo" ||
+        doc.type.or("") == "bar" ||
+        doc.urls.contains("https://www.benthos.dev/").catch(false) => deleted()
+      }

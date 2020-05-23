@@ -71,8 +71,7 @@ output:
   switch:
     outputs:
     - condition:
-        jmespath:
-          query: contains(urls, 'http://benthos.dev')
+        bloblang: urls.contains("http://benthos.dev")
       output:
         cache:
           target: foo
@@ -88,7 +87,7 @@ For each output case you are able to specify a [condition][conditions] to determ
 
 ### Broker Multiplexing
 
-An alternative way to multiplex is to use a [`broker`][output.broker] with the `fan_out` pattern and a [filter processor][processor.filter_parts] on each output, which is a processor that drops messages if the condition does not pass:
+An alternative way to multiplex is to use a [`broker`][output.broker] with the `fan_out` pattern and a [`bloblang` processor][processor.bloblang] on each output that selectively drops messages:
 
 ```yaml
 output:
@@ -99,16 +98,18 @@ output:
         target: foo
         key: ${! json("id") }
       processors:
-      - filter_parts:
-          jmespath:
-            query: "contains(urls, 'http://benthos.dev')"
+      - bloblang: |
+          root = match {
+            !urls.contains("http://benthos.dev") => deleted()
+          }
     - s3:
         bucket: bar
         path: ${! json("id") }
       processors:
-      - filter_parts:
-          jmespath:
-            query: "!contains(urls, 'http://benthos.dev')"
+      - bloblang: |
+          root = match {
+            urls.contains("http://benthos.dev") => deleted()
+          }
 ```
 
 import ComponentSelect from '@theme/ComponentSelect';
@@ -116,7 +117,7 @@ import ComponentSelect from '@theme/ComponentSelect';
 <ComponentSelect type="outputs"></ComponentSelect>
 
 [processors]: /docs/components/processors/about
-[processor.filter_parts]: /docs/components/processors/filter_parts
+[processor.bloblang]: /docs/components/processors/bloblang
 [conditions]: /docs/components/conditions/about
 [output.broker]: /docs/components/outputs/broker
 [output.switch]: /docs/components/outputs/switch

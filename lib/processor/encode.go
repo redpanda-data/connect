@@ -23,6 +23,10 @@ func init() {
 	Constructors[TypeEncode] = TypeSpec{
 		constructor: NewEncode,
 		Summary: `
+DEPRECATED: This processor is now deprecated, and the new
+[bloblang processor](/docs/components/processors/bloblang) should be used
+instead.`,
+		Description: `
 Encodes messages according to the selected scheme.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("scheme", "The decoding scheme to use.").HasOptions("hex", "base64", "ascii85", "z85"),

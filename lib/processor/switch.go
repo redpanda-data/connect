@@ -54,19 +54,11 @@ pipeline:
   processors:
     - switch:
       - condition:
-          metadata:
-            operator: equals
-            key: kafka_topic
-            arg: from_george
+          bloblang: meta("kafka_topic") == "from_george"
         processors:
-        - text:
-            operator: to_lower
-        - text:
-            operator: prepend
-            value: "PROBABLY FALSE: "
+        - bloblang: root = "PROBABLY FALSE: %v".format(content().lowercase())
       - processors:
-        - text:
-            operator: to_upper
+        - bloblang: root = content().uppercase()
 ` + "```" + `
 
 You're cool George but you're also a piece of work.`,

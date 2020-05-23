@@ -1,0 +1,14 @@
+parallel: true
+tests:
+  - name: Basic filter
+    environment: {}
+    target_processors: /pipeline/processors/0
+    input_batch:
+      - content: '{"doc":{"should":"remain"},"id":"1"}'
+      - content: '{"doc":{"should":"not remain"},"id":"2"}'
+        metadata:
+          topic: foo
+      - content: '{"doc":{"should":"not remain","type":"bar"},"id":"3"}'
+      - content: '{"doc":{"should":"not remain","urls":["https://www.benthos.dev/"]},"id":"4"}'
+    output_batches:
+      - - content_equals: '{"doc":{"should":"remain"},"id":"1"}'

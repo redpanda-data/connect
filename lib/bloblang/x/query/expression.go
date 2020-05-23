@@ -1,8 +1,6 @@
 package query
 
-import (
-	"golang.org/x/xerrors"
-)
+import "fmt"
 
 type matchCase struct {
 	caseFn  Function
@@ -16,22 +14,14 @@ func matchFunction(contextFn Function, cases []matchCase) Function {
 			return nil, err
 		}
 		ctx.Value = &ctxVal
-		var caseErr error
 		for i, c := range cases {
 			var caseVal interface{}
 			if caseVal, err = c.caseFn.Exec(ctx); err != nil {
-				if recover, ok := err.(*ErrRecoverable); ok {
-					caseVal = recover.Recovered
-				} else {
-					caseErr = xerrors.Errorf("failed to check match case %v: %w", i, err)
-				}
+				return nil, fmt.Errorf("failed to check match case %v: %w", i, err)
 			}
 			if matched, _ := caseVal.(bool); matched {
 				return c.queryFn.Exec(ctx)
 			}
-		}
-		if caseErr != nil {
-			return nil, caseErr
 		}
 		return Nothing(nil), nil
 	})

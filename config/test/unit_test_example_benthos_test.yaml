@@ -1,0 +1,14 @@
+parallel: true
+tests:
+  - name: example test
+    target_processors: '/pipeline/processors'
+    environment: {}
+    input_batch:
+      - content: 'example content'
+        metadata:
+          example_key: example metadata value
+    output_batches:
+      -
+        - content_equals: EXAMPLE CONTENTend
+          metadata_equals:
+            example_key: example metadata value

@@ -26,8 +26,9 @@ buffer:
 
 pipeline:
   processors:
-  - jmespath:
-      query: '{ message: @, meta: { link_count: length(links) } }'
+  - bloblang: |
+      message = this
+      meta.link_count = links.length()
 
 output:
   s3:
@@ -66,18 +67,9 @@ tracer:
 
 Finally, there are [conditions][conditions], [caches][caches] and
 [rate limits][rate_limits]. These are components that are useful when used by
-core components, and they are either configured as a field within that component:
-
-```yaml
-pipeline:
-  processors:
-    - filter_parts: # This is a processor
-        text: # This is a child condition
-          operator: contains
-          arg: foo
-```
-
-Or as a resource where they are referenced by one or more core components:
+core components, and they are either configured as a field within that
+component, or as a resource where they are referenced by one or more core
+components:
 
 ```yaml
 input:
@@ -87,9 +79,7 @@ input:
 
 pipeline:
   processors:
-    - filter_parts: # This is a processor
-        resource: bar_condition # This is a reference to a condition
-    - dedupe: # This is another processor
+    - dedupe: # This is a processor
         cache: baz_cache # This is a reference to a cache
         hash: xxhash
         key: ${! json("id") }
@@ -100,11 +90,6 @@ resources:
       local:
         count: 500
         interval: 1s
-  conditions:
-    bar_condition:
-      text:
-        operator: contains
-        arg: foo
   caches:
     baz_cache:
       memcached:

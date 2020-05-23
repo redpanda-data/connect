@@ -22,13 +22,14 @@ input:
 
 pipeline:
   processors:
-  - jmespath:
-      query: '{ message: @, meta: { link_count: length(links) } }'
+  - bloblang: |
+      message = this
+      meta.link_count = links.length()
 
 output:
   s3:
     bucket: TODO
-    path: "${!metadata:kafka_topic}/${!json_field:message.id}.json"
+    path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
 ```
 
 ### Delivery Guarantees

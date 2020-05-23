@@ -11,8 +11,9 @@ type: processor
 -->
 
 
-Tests each message against a [condition](/docs/components/conditions/about), if
-the condition fails then the message is dropped.
+DEPRECATED: This processor is now deprecated, and the new
+[bloblang processor](/docs/components/processors/bloblang) should be used
+instead.
 
 ```yaml
 # Config fields, showing default values
@@ -23,6 +24,9 @@ filter_parts:
     part: 0
   type: text
 ```
+
+Tests each message against a [condition](/docs/components/conditions/about), if
+the condition fails then the message is dropped.
 
 You can find a [full list of conditions here](/docs/components/conditions/about).
 

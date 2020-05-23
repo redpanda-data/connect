@@ -11,10 +11,9 @@ type: processor
 -->
 
 
-Retains a pseudo-randomly sampled percentage of message batches (0 to 100) and
-drops all others. The random seed is static in order to sample
-deterministically, but can be set in config to allow parallel samples that are
-unique.
+DEPRECATED: This processor is now deprecated, and the new
+[bloblang processor](/docs/components/processors/bloblang) should be used
+instead.
 
 ```yaml
 # Config fields, showing default values
@@ -22,6 +21,11 @@ sample:
   retain: 10
   seed: 0
 ```
+
+Retains a pseudo-randomly sampled percentage of message batches (0 to 100) and
+drops all others. The random seed is static in order to sample
+deterministically, but can be set in config to allow parallel samples that are
+unique.
 
 ## Fields
 

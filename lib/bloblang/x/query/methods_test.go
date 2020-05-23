@@ -26,6 +26,22 @@ func TestMethods(t *testing.T) {
 		messages []easyMsg
 		index    int
 	}{
+		"check index": {
+			input:  `["foo","bar","baz"].index(1)`,
+			output: "bar",
+		},
+		"check index neg": {
+			input:  `["foo","bar","baz"].index(-1)`,
+			output: "baz",
+		},
+		"check index oob": {
+			input:  `["foo","bar","baz"].index(4).catch("buz")`,
+			output: "buz",
+		},
+		"check index oob neg": {
+			input:  `["foo","bar","baz"].index(-4).catch("buz")`,
+			output: "buz",
+		},
 		"check url escape query": {
 			input:  `"foo & bar".escape_url_query()`,
 			output: "foo+%26+bar",

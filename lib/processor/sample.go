@@ -18,6 +18,10 @@ func init() {
 	Constructors[TypeSample] = TypeSpec{
 		constructor: NewSample,
 		Summary: `
+DEPRECATED: This processor is now deprecated, and the new
+[bloblang processor](/docs/components/processors/bloblang) should be used
+instead.`,
+		Description: `
 Retains a pseudo-randomly sampled percentage of message batches (0 to 100) and
 drops all others. The random seed is static in order to sample
 deterministically, but can be set in config to allow parallel samples that are

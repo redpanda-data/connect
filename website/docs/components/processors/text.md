@@ -11,7 +11,9 @@ type: processor
 -->
 
 
-Performs text based mutations on payloads.
+DEPRECATED: This processor is now deprecated, and the new
+[bloblang processor](/docs/components/processors/bloblang) should be used
+instead.
 
 
 import Tabs from '@theme/Tabs';

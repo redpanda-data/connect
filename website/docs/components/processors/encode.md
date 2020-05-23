@@ -11,7 +11,9 @@ type: processor
 -->
 
 
-Encodes messages according to the selected scheme.
+DEPRECATED: This processor is now deprecated, and the new
+[bloblang processor](/docs/components/processors/bloblang) should be used
+instead.
 
 
 import Tabs from '@theme/Tabs';
@@ -43,6 +45,8 @@ encode:
 
 </TabItem>
 </Tabs>
+
+Encodes messages according to the selected scheme.
 
 ## Fields
 

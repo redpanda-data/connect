@@ -25,11 +25,7 @@ input:
 
 pipeline:
   processors:
-  - text:
-      operator: to_upper
-  - text:
-      operator: append
-      value: end
+  - bloblang: '"%vend".format(content().uppercase().string())'
 
 output:
   s3:
@@ -53,8 +49,7 @@ tests:
       -
         - content_equals: example content
           metadata_equals:
-            key: example_key
-            value: example metadata value
+            example_key: example metadata value
 ```
 
 The field `parallel` instructs as to whether the tests listed in this definition should be executed in parallel. Under `tests` we then have a list of any number of unit tests to execute for the config file. 

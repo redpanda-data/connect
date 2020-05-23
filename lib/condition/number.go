@@ -17,8 +17,9 @@ func init() {
 	Constructors[TypeNumber] = TypeSpec{
 		constructor: NewNumber,
 		Summary: `
-Checks the contents of a message parsed as a 64-bit floating point number
-against a logical [operator](#operators) and an argument.`,
+DEPRECATED: This condition is now deprecated, and the new
+[bloblang condition](/docs/components/conditions/bloblang) should be used
+instead.`,
 		Description: `
 This condition is useful when paired with the ` + "[`check_field`](/docs/components/conditions/check_field)" + ` and
 ` + "[`check_interpolation`](/docs/components/conditions/check_interpolation)" + ` conditions to check a

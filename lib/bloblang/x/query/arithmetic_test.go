@@ -19,6 +19,34 @@ func TestArithmetic(t *testing.T) {
 		messages []easyMsg
 		index    int
 	}{
+		"comparisons with not": {
+			input:  `!true || false`,
+			output: `false`,
+		},
+		"comparisons with not 2": {
+			input:  `false || !false`,
+			output: `true`,
+		},
+		"mod two ints": {
+			input:  `5 % 2`,
+			output: `1`,
+		},
+		"mod two strings": {
+			input:  `"7" % "4"`,
+			output: `3`,
+		},
+		"comparisons": {
+			input:  `true && false || true && false`,
+			output: `false`,
+		},
+		"comparisons 2": {
+			input:  `false || true && true || false`,
+			output: `true`,
+		},
+		"comparisons 3": {
+			input:  `true || false && true`,
+			output: `true`,
+		},
 		"add two ints": {
 			input:  `json("foo") + json("bar")`,
 			output: `17`,

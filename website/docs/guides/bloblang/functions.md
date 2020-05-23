@@ -106,6 +106,15 @@ The parameter is optional and if omitted the entire metadata contents are return
 topic = meta("kafka_topic")
 ```
 
+### `random_int()`
+
+Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.
+
+```coffee
+first = random_int()
+second = random_int(content().hash("xxhash64").number())
+```
+
 ### `timestamp`
 
 Prints the current time in a custom format specified by the argument. The format is defined by showing how the reference time, defined to be

@@ -171,15 +171,28 @@ func parseWithTails(fnParser parser.Type) parser.Type {
 		),
 	)
 
+	mightNot := parser.Sequence(
+		parser.Optional(parser.Sequence(
+			parser.Char('!'),
+			parser.Discard(parser.SpacesAndTabs()),
+		)),
+		fnParser,
+	)
+
 	return func(input []rune) parser.Result {
-		res := fnParser(input)
+		res := mightNot(input)
 		if res.Err != nil {
 			return res
 		}
 
-		fn := res.Payload.(Function)
+		seq := res.Payload.([]interface{})
+		isNot := seq[0] != nil
+		fn := seq[1].(Function)
 		for {
 			if res = delim(res.Remaining); res.Err != nil {
+				if isNot {
+					fn = &notMethod{fn}
+				}
 				return parser.Result{
 					Payload:   fn,
 					Remaining: res.Remaining,

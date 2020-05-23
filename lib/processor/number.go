@@ -20,9 +20,9 @@ func init() {
 	Constructors[TypeNumber] = TypeSpec{
 		constructor: NewNumber,
 		Summary: `
-Parses message contents into a 64-bit floating point number and performs an
-operator on it. In order to execute this processor on a sub field of a document
-use it with the ` + "[`process_field`](/docs/components/processors/process_field)" + ` processor.`,
+DEPRECATED: This processor is now deprecated, and the new
+[bloblang processor](/docs/components/processors/bloblang) should be used
+instead.`,
 		Description: `
 The value field can either be a number or a string type. If it is a string type
 then this processor will interpolate functions within it, you can find a list of

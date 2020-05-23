@@ -43,8 +43,7 @@ input:
     path: /post
 pipeline:
   processors:
-  - text:
-      operator: to_upper
+  - bloblang: root = content().uppercase()
 output:
   type: sync_response
 ```
@@ -68,8 +67,7 @@ output:
         topic: foo_topic
     - type: sync_response
       processors:
-      - text:
-          operator: to_upper
+      - bloblang: root = content().uppercase()
 ```
 
 Using the above example, sending a request 'foo bar' to the path `/post` passes
@@ -94,12 +92,9 @@ input:
 
 pipeline:
   processors:
-    - text:
-        operator: append
-        value: " baz"
+    - bloblang: root = "%v baz".format(content().string())
     - type: sync_response
-    - text:
-        operator: to_upper
+    - bloblang: root = content().uppercase()
 
 output:
   kafka:

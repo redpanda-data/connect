@@ -102,7 +102,7 @@ root = some.value # And now this is a comment
 
 ## Boolean Logic and Arithmetic
 
-Bloblang supports a range of boolean operators `>`, `>=`, `==`, `<`, `<=`, `&&`, `||` and arithmetic operators `+`, `-`, `*`, `/`:
+Bloblang supports a range of boolean operators `!`, `>`, `>=`, `==`, `<`, `<=`, `&&`, `||` and arithmetic operators `+`, `-`, `*`, `/`, `%`:
 
 ```coffee
 is_big = number > 100
@@ -225,9 +225,35 @@ root = match {
 }
 ```
 
+## Error Handling
+
+Functions and methods can fail under certain circumstances, such as when they receive types they aren't able to act upon. These failures, when not caught, will cause the entire mapping to fail. However, the [method `catch`][methods.catch] can be used in order to return a value when a failure occurs instead:
+
+```coffee
+# Map an empty array to `foo` if the field `bar` is not a string.
+foo = bar.split(",").catch([])
+```
+
+Since `catch` is a method it can also be attached to bracketed map expressions:
+
+```coffee
+# Map `false` if any of the operations in this boolean query fail.
+thing = ( foo > bar && baz.contains("wut") ).catch(false)
+```
+
+The `catch` method only acts on errors, sometimes it's also useful to set a fall back value when a query returns `null` in which case the [method `or`][methods.or] can be used the same way:
+
+```coffee
+# Map "default" if either the element index 5 does not exist, or the underlying
+# element is `null`.
+foo = bar.index(5).or("default")
+```
+
 [field_paths]: /docs/configuration/field_paths
 [blobl.proc]: /docs/components/processors/bloblang
 [blobl.cond]: /docs/components/conditions/bloblang
 [blobl.interp]: /docs/configuration/interpolation#bloblang-queries
 [blobl.functions]: /docs/guides/bloblang/functions
 [blobl.methods]: /docs/guides/bloblang/methods
+[methods.catch]: /docs/guides/bloblang/methods#catch
+[methods.or]: /docs/guides/bloblang/methods#or

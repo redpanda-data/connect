@@ -23,7 +23,9 @@ func init() {
 	Constructors[TypeText] = TypeSpec{
 		constructor: NewText,
 		Summary: `
-Performs text based mutations on payloads.`,
+DEPRECATED: This processor is now deprecated, and the new
+[bloblang processor](/docs/components/processors/bloblang) should be used
+instead.`,
 		Description: `
 This processor will interpolate functions within the ` + "`value`" + ` field,
 you can find a list of functions [here](/docs/configuration/interpolation#functions).

@@ -11,8 +11,9 @@ type: processor
 -->
 
 
-Retains a percentage of message batches deterministically by hashing selected
-messages and checking the hash against a valid range, dropping all others.
+DEPRECATED: This processor is now deprecated, and the new
+[bloblang processor](/docs/components/processors/bloblang) should be used
+instead.
 
 
 import Tabs from '@theme/Tabs';
@@ -47,6 +48,9 @@ hash_sample:
 
 </TabItem>
 </Tabs>
+
+Retains a percentage of message batches deterministically by hashing selected
+messages and checking the hash against a valid range, dropping all others.
 
 For example, setting `retain_min` to `0.0` and `remain_max` to `50.0`
 results in dropping half of the input stream, and setting `retain_min`

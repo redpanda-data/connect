@@ -20,9 +20,13 @@ func init() {
 	Constructors[TypeFilterParts] = TypeSpec{
 		constructor: NewFilterParts,
 		Summary: `
-Tests each message against a [condition](/docs/components/conditions/about), if
-the condition fails then the message is dropped.`,
+DEPRECATED: This processor is now deprecated, and the new
+[bloblang processor](/docs/components/processors/bloblang) should be used
+instead.`,
 		Description: `
+Tests each message against a [condition](/docs/components/conditions/about), if
+the condition fails then the message is dropped.
+
 You can find a [full list of conditions here](/docs/components/conditions/about).`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return condition.SanitiseConfig(conf.FilterParts.Config)

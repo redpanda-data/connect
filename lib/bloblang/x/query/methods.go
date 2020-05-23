@@ -394,6 +394,38 @@ func getMethodCtor(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"index", true, indexMethod,
+	ExpectNArgs(1),
+	ExpectIntArg(0),
+)
+
+func indexMethod(target Function, args ...interface{}) (Function, error) {
+	index := args[0].(int64)
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		array, ok := v.([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("expected array, found %T", v)
+		}
+
+		i := int(index)
+		if i < 0 {
+			i = len(array) + i
+		}
+		if i < 0 || i >= len(array) {
+			return nil, fmt.Errorf("index '%v' was out of bounds for array size: %v", i, len(array))
+		}
+		return array[i], nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"keys", false, keysMethod,
 	ExpectNArgs(0),
 )
@@ -599,6 +631,33 @@ func mergeMethod(target Function, args ...interface{}) (Function, error) {
 		}
 		return root.Data(), nil
 	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"not", false, notMethodCtor,
+	ExpectNArgs(0),
+)
+
+type notMethod struct {
+	fn Function
+}
+
+func (n *notMethod) Exec(ctx FunctionContext) (interface{}, error) {
+	v, err := n.fn.Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+	b, ok := v.(bool)
+	if !ok {
+		return nil, fmt.Errorf("expected boolean, received %T", v)
+	}
+	return !b, nil
+}
+
+func notMethodCtor(target Function, _ ...interface{}) (Function, error) {
+	return &notMethod{fn: target}, nil
 }
 
 //------------------------------------------------------------------------------
