@@ -15,15 +15,15 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: grok
-    grok:
-      named_captures_only: true
-      output_format: json
-      parts: []
-      pattern_definitions: {}
-      patterns: []
-      remove_empty_values: true
-      use_default_patterns: true
+    - type: grok
+      grok:
+        named_captures_only: true
+        output_format: json
+        parts: []
+        pattern_definitions: {}
+        patterns: []
+        remove_empty_values: true
+        use_default_patterns: true
   threads: 1
 output:
   type: stdout

@@ -30,7 +30,7 @@ import TabItem from '@theme/TabItem';
 output:
   mqtt:
     urls:
-    - tcp://localhost:1883
+      - tcp://localhost:1883
     qos: 1
     topic: benthos_topic
     client_id: benthos_output
@@ -45,7 +45,7 @@ output:
 output:
   mqtt:
     urls:
-    - tcp://localhost:1883
+      - tcp://localhost:1883
     qos: 1
     topic: benthos_topic
     client_id: benthos_output
@@ -81,7 +81,7 @@ Default: `["tcp://localhost:1883"]`
 # Examples
 
 urls:
-- tcp://localhost:1883
+  - tcp://localhost:1883
 ```
 
 ### `qos`

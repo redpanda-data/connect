@@ -30,9 +30,9 @@ import TabItem from '@theme/TabItem';
 input:
   nsq:
     nsqd_tcp_addresses:
-    - localhost:4150
+      - localhost:4150
     lookupd_http_addresses:
-    - localhost:4161
+      - localhost:4161
     topic: benthos_messages
     channel: benthos_stream
     user_agent: benthos_consumer
@@ -47,9 +47,9 @@ input:
 input:
   nsq:
     nsqd_tcp_addresses:
-    - localhost:4150
+      - localhost:4150
     lookupd_http_addresses:
-    - localhost:4161
+      - localhost:4161
     tls:
       enabled: false
       skip_cert_verify: false
@@ -126,12 +126,12 @@ Default: `[]`
 # Examples
 
 client_certs:
-- cert: foo
-  key: bar
+  - cert: foo
+    key: bar
 
 client_certs:
-- cert_file: ./example.pem
-  key_file: ./example.key
+  - cert_file: ./example.pem
+    key_file: ./example.key
 ```
 
 ### `topic`

@@ -22,7 +22,7 @@ input:
     limit: 10
     start_from_oldest: true
     streams:
-    - benthos_stream
+      - benthos_stream
     timeout: 1s
     url: tcp://localhost:6379
 buffer:

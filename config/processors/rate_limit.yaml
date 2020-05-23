@@ -15,9 +15,9 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: rate_limit
-    rate_limit:
-      resource: ""
+    - type: rate_limit
+      rate_limit:
+        resource: ""
   threads: 1
 output:
   type: stdout

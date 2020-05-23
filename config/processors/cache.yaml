@@ -15,13 +15,13 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: cache
-    cache:
-      cache: ""
-      key: ""
-      operator: set
-      parts: []
-      value: ""
+    - type: cache
+      cache:
+        cache: ""
+        key: ""
+        operator: set
+        parts: []
+        value: ""
   threads: 1
 output:
   type: stdout

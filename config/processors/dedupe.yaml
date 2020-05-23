@@ -15,14 +15,14 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: dedupe
-    dedupe:
-      cache: ""
-      drop_on_err: true
-      hash: none
-      key: ""
-      parts:
-      - 0
+    - type: dedupe
+      dedupe:
+        cache: ""
+        drop_on_err: true
+        hash: none
+        key: ""
+        parts:
+          - 0
   threads: 1
 output:
   type: stdout

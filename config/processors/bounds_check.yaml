@@ -15,12 +15,12 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: bounds_check
-    bounds_check:
-      max_part_size: 1.073741824e+09
-      max_parts: 100
-      min_part_size: 1
-      min_parts: 1
+    - type: bounds_check
+      bounds_check:
+        max_part_size: 1.073741824e+09
+        max_parts: 100
+        min_part_size: 1
+        min_parts: 1
   threads: 1
 output:
   type: stdout

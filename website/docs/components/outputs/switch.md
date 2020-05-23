@@ -81,18 +81,18 @@ Default: `[]`
 # Examples
 
 outputs:
-- condition:
-    jmespath:
-      query: contains(urls, 'http://benthos.dev')
-  fallthrough: false
-  output:
-    cache:
-      key: ${!json("id")}
-      target: foo
-- output:
-    s3:
-      bucket: bar
-      path: ${!json("id")}
+  - condition:
+      jmespath:
+        query: contains(urls, 'http://benthos.dev')
+    fallthrough: false
+    output:
+      cache:
+        key: ${!json("id")}
+        target: foo
+  - output:
+      s3:
+        bucket: bar
+        path: ${!json("id")}
 ```
 
 ## Examples

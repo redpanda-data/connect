@@ -11,7 +11,7 @@ input:
     queue: benthos_queue
     subject: benthos_messages
     urls:
-    - nats://127.0.0.1:4222
+      - nats://127.0.0.1:4222
 buffer:
   type: none
   none: {}
@@ -24,7 +24,7 @@ output:
     max_in_flight: 1
     subject: benthos_messages
     urls:
-    - nats://127.0.0.1:4222
+      - nats://127.0.0.1:4222
 resources:
   caches: {}
   conditions: {}

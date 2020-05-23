@@ -217,48 +217,48 @@ func TestSwitchSanitised(t *testing.T) {
 
 	exp := `type: switch
 switch:
-- condition:
-    type: text
-    text:
-      arg: A
-      operator: contains_cs
-      part: 0
-  fallthrough: false
-  processors:
-  - type: text
-    text:
-      arg: ""
-      operator: prepend
-      parts: []
-      value: 'Hit case 0: '
-- condition:
-    type: text
-    text:
-      arg: B
-      operator: contains_cs
-      part: 0
-  fallthrough: true
-  processors:
-  - type: text
-    text:
-      arg: ""
-      operator: prepend
-      parts: []
-      value: 'Hit case 1: '
-- condition:
-    type: text
-    text:
-      arg: C
-      operator: contains_cs
-      part: 0
-  fallthrough: false
-  processors:
-  - type: text
-    text:
-      arg: ""
-      operator: prepend
-      parts: []
-      value: 'Hit case 2: '
+  - condition:
+      type: text
+      text:
+        arg: A
+        operator: contains_cs
+        part: 0
+    fallthrough: false
+    processors:
+      - type: text
+        text:
+          arg: ""
+          operator: prepend
+          parts: []
+          value: 'Hit case 0: '
+  - condition:
+      type: text
+      text:
+        arg: B
+        operator: contains_cs
+        part: 0
+    fallthrough: true
+    processors:
+      - type: text
+        text:
+          arg: ""
+          operator: prepend
+          parts: []
+          value: 'Hit case 1: '
+  - condition:
+      type: text
+      text:
+        arg: C
+        operator: contains_cs
+        part: 0
+    fallthrough: false
+    processors:
+      - type: text
+        text:
+          arg: ""
+          operator: prepend
+          parts: []
+          value: 'Hit case 2: '
 `
 	if act := string(sanitBytes); exp != act {
 		t.Errorf("Wrong sanitised config output: %v != %v", act, exp)

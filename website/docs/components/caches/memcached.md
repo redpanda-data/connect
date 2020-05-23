@@ -30,7 +30,7 @@ import TabItem from '@theme/TabItem';
 # Common config fields, showing default values
 memcached:
   addresses:
-  - localhost:11211
+    - localhost:11211
   prefix: ""
   ttl: 300
 ```
@@ -42,7 +42,7 @@ memcached:
 # All config fields, showing default values
 memcached:
   addresses:
-  - localhost:11211
+    - localhost:11211
   prefix: ""
   ttl: 300
   retries: 3

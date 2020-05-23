@@ -15,8 +15,8 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: resource
-    resource: ""
+    - type: resource
+      resource: ""
   threads: 1
 output:
   type: stdout

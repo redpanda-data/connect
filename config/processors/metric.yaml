@@ -15,12 +15,12 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: metric
-    metric:
-      labels: {}
-      path: ""
-      type: counter
-      value: ""
+    - type: metric
+      metric:
+        labels: {}
+        path: ""
+        type: counter
+        value: ""
   threads: 1
 output:
   type: stdout

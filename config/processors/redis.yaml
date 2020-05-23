@@ -15,14 +15,14 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: redis
-    redis:
-      key: ""
-      operator: scard
-      parts: []
-      retries: 3
-      retry_period: 500ms
-      url: tcp://localhost:6379
+    - type: redis
+      redis:
+        key: ""
+        operator: scard
+        parts: []
+        retries: 3
+        retry_period: 500ms
+        url: tcp://localhost:6379
   threads: 1
 output:
   type: stdout

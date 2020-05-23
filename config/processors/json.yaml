@@ -15,12 +15,12 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: json
-    json:
-      operator: clean
-      parts: []
-      path: ""
-      value: ""
+    - type: json
+      json:
+        operator: clean
+        parts: []
+        path: ""
+        value: ""
   threads: 1
 output:
   type: stdout

@@ -15,22 +15,22 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: lambda
-    lambda:
-      credentials:
-        id: ""
-        profile: ""
-        role: ""
-        role_external_id: ""
-        secret: ""
-        token: ""
-      endpoint: ""
-      function: ""
-      parallel: false
-      rate_limit: ""
-      region: eu-west-1
-      retries: 3
-      timeout: 5s
+    - type: lambda
+      lambda:
+        credentials:
+          id: ""
+          profile: ""
+          role: ""
+          role_external_id: ""
+          secret: ""
+          token: ""
+        endpoint: ""
+        function: ""
+        parallel: false
+        rate_limit: ""
+        region: eu-west-1
+        retries: 3
+        timeout: 5s
   threads: 1
 output:
   type: stdout

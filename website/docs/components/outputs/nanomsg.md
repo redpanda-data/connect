@@ -18,7 +18,7 @@ Send messages over a Nanomsg socket.
 output:
   nanomsg:
     urls:
-    - tcp://localhost:5556
+      - tcp://localhost:5556
     bind: false
     socket_type: PUSH
     poll_timeout: 5s
@@ -47,7 +47,7 @@ Default: `["tcp://localhost:5556"]`
 # Examples
 
 urls:
-- tcp://localhost:5556
+  - tcp://localhost:5556
 ```
 
 ### `bind`

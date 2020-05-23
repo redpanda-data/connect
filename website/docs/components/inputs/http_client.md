@@ -75,7 +75,7 @@ input:
     max_retry_backoff: 300s
     retries: 3
     backoff_on:
-    - 429
+      - 429
     drop_on: []
     successful_on: []
     payload: ""
@@ -226,12 +226,12 @@ Default: `[]`
 # Examples
 
 client_certs:
-- cert: foo
-  key: bar
+  - cert: foo
+    key: bar
 
 client_certs:
-- cert_file: ./example.pem
-  key_file: ./example.key
+  - cert_file: ./example.pem
+    key_file: ./example.key
 ```
 
 ### `copy_response_headers`

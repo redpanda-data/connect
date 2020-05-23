@@ -15,10 +15,10 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: parallel
-    parallel:
-      cap: 0
-      processors: []
+    - type: parallel
+      parallel:
+        cap: 0
+        processors: []
   threads: 1
 output:
   type: stdout

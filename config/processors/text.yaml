@@ -15,12 +15,12 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: text
-    text:
-      arg: ""
-      operator: trim_space
-      parts: []
-      value: ""
+    - type: text
+      text:
+        arg: ""
+        operator: trim_space
+        parts: []
+        value: ""
   threads: 1
 output:
   type: stdout

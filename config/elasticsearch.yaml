@@ -56,7 +56,7 @@ output:
     timeout: 5s
     type: doc
     urls:
-    - http://localhost:9200
+      - http://localhost:9200
 resources:
   caches: {}
   conditions: {}

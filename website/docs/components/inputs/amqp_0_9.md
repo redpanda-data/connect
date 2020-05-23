@@ -148,8 +148,8 @@ Default: `[]`
 # Examples
 
 bindings_declare:
-- exchange: foo
-  key: bar
+  - exchange: foo
+    key: bar
 ```
 
 ### `consumer_tag`
@@ -220,12 +220,12 @@ Default: `[]`
 # Examples
 
 client_certs:
-- cert: foo
-  key: bar
+  - cert: foo
+    key: bar
 
 client_certs:
-- cert_file: ./example.pem
-  key_file: ./example.key
+  - cert_file: ./example.pem
+    key_file: ./example.key
 ```
 
 

@@ -15,8 +15,8 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: for_each
-    for_each: []
+    - type: for_each
+      for_each: []
   threads: 1
 output:
   type: stdout

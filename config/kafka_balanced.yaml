@@ -8,7 +8,7 @@ input:
   type: kafka_balanced
   kafka_balanced:
     addresses:
-    - localhost:9092
+      - localhost:9092
     batching:
       byte_size: 0
       condition:
@@ -43,7 +43,7 @@ input:
       root_cas_file: ""
       skip_cert_verify: false
     topics:
-    - benthos_stream
+      - benthos_stream
 buffer:
   type: none
   none: {}

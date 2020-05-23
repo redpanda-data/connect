@@ -15,13 +15,13 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: filter
-    filter:
-      type: text
-      text:
-        arg: ""
-        operator: equals_cs
-        part: 0
+    - type: filter
+      filter:
+        type: text
+        text:
+          arg: ""
+          operator: equals_cs
+          part: 0
   threads: 1
 output:
   type: stdout

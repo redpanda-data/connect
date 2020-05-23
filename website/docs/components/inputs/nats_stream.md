@@ -31,7 +31,7 @@ import TabItem from '@theme/TabItem';
 input:
   nats_stream:
     urls:
-    - nats://127.0.0.1:4222
+      - nats://127.0.0.1:4222
     cluster_id: test-cluster
     client_id: benthos_client
     queue: benthos_queue
@@ -48,7 +48,7 @@ input:
 input:
   nats_stream:
     urls:
-    - nats://127.0.0.1:4222
+      - nats://127.0.0.1:4222
     cluster_id: test-cluster
     client_id: benthos_client
     queue: benthos_queue
@@ -98,7 +98,7 @@ Default: `["nats://127.0.0.1:4222"]`
 # Examples
 
 urls:
-- nats://127.0.0.1:4222
+  - nats://127.0.0.1:4222
 ```
 
 ### `cluster_id`

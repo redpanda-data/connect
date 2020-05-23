@@ -33,7 +33,7 @@ input:
     url: tcp://localhost:6379
     body_key: body
     streams:
-    - benthos_stream
+      - benthos_stream
     limit: 10
     client_id: benthos_consumer
     consumer_group: benthos_group
@@ -49,7 +49,7 @@ input:
     url: tcp://localhost:6379
     body_key: body
     streams:
-    - benthos_stream
+      - benthos_stream
     limit: 10
     client_id: benthos_consumer
     consumer_group: benthos_group

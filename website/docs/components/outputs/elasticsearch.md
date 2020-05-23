@@ -31,7 +31,7 @@ import TabItem from '@theme/TabItem';
 output:
   elasticsearch:
     urls:
-    - http://localhost:9200
+      - http://localhost:9200
     index: benthos_index
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
     type: doc
@@ -50,7 +50,7 @@ output:
 output:
   elasticsearch:
     urls:
-    - http://localhost:9200
+      - http://localhost:9200
     index: benthos_index
     pipeline: ""
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
@@ -126,7 +126,7 @@ Default: `["http://localhost:9200"]`
 # Examples
 
 urls:
-- http://localhost:9200
+  - http://localhost:9200
 ```
 
 ### `index`
@@ -334,15 +334,15 @@ Default: `[]`
 # Examples
 
 processors:
-- archive:
-    format: lines
+  - archive:
+      format: lines
 
 processors:
-- archive:
-    format: json_array
+  - archive:
+      format: json_array
 
 processors:
-- merge_json: {}
+  - merge_json: {}
 ```
 
 ### `aws`

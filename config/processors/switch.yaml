@@ -15,8 +15,8 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: switch
-    switch: []
+    - type: switch
+      switch: []
   threads: 1
 output:
   type: stdout

@@ -15,12 +15,12 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: filter_parts
-    filter_parts:
-      type: check_interpolation
-      check_interpolation:
-        condition: {}
-        value: ""
+    - type: filter_parts
+      filter_parts:
+        type: check_interpolation
+        check_interpolation:
+          condition: {}
+          value: ""
   threads: 1
 output:
   type: stdout

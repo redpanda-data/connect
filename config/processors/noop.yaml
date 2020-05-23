@@ -15,7 +15,7 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: noop
+    - type: noop
   threads: 1
 output:
   type: stdout

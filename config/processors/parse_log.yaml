@@ -15,15 +15,15 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: parse_log
-    parse_log:
-      allow_rfc3339: true
-      best_effort: true
-      codec: json
-      default_timezone: UTC
-      default_year: current
-      format: syslog_rfc5424
-      parts: []
+    - type: parse_log
+      parse_log:
+        allow_rfc3339: true
+        best_effort: true
+        codec: json
+        default_timezone: UTC
+        default_year: current
+        format: syslog_rfc5424
+        parts: []
   threads: 1
 output:
   type: stdout

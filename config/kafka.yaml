@@ -8,7 +8,7 @@ input:
   type: kafka
   kafka:
     addresses:
-    - localhost:9092
+      - localhost:9092
     batching:
       byte_size: 0
       condition:
@@ -51,7 +51,7 @@ output:
   kafka:
     ack_replicas: false
     addresses:
-    - localhost:9092
+      - localhost:9092
     backoff:
       initial_interval: 3s
       max_elapsed_time: 30s

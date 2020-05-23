@@ -38,7 +38,7 @@ select_parts: {}
 # All config fields, showing default values
 select_parts:
   parts:
-  - 0
+    - 0
 ```
 
 </TabItem>

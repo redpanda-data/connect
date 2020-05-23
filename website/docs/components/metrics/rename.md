@@ -48,10 +48,10 @@ Default: `[]`
 # Examples
 
 by_regexp:
-- pattern: foo\.([a-z]*)\.([a-z]*)
-  to_label:
-    bar: $2
-  value: foo.$1
+  - pattern: foo\.([a-z]*)\.([a-z]*)
+    to_label:
+      bar: $2
+    value: foo.$1
 ```
 
 ### `child`

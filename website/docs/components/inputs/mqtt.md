@@ -30,9 +30,9 @@ import TabItem from '@theme/TabItem';
 input:
   mqtt:
     urls:
-    - tcp://localhost:1883
+      - tcp://localhost:1883
     topics:
-    - benthos_topic
+      - benthos_topic
     client_id: benthos_input
 ```
 
@@ -44,9 +44,9 @@ input:
 input:
   mqtt:
     urls:
-    - tcp://localhost:1883
+      - tcp://localhost:1883
     topics:
-    - benthos_topic
+      - benthos_topic
     client_id: benthos_input
     qos: 1
     clean_session: true

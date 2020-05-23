@@ -15,10 +15,10 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: jmespath
-    jmespath:
-      parts: []
-      query: ""
+    - type: jmespath
+      jmespath:
+        parts: []
+        query: ""
   threads: 1
 output:
   type: stdout

@@ -15,13 +15,13 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: process_field
-    process_field:
-      codec: json
-      parts: []
-      path: ""
-      processors: []
-      result_type: string
+    - type: process_field
+      process_field:
+        codec: json
+        parts: []
+        path: ""
+        processors: []
+        result_type: string
   threads: 1
 output:
   type: stdout

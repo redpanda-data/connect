@@ -15,12 +15,12 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: metadata
-    metadata:
-      key: example
-      operator: set
-      parts: []
-      value: ${!hostname()}
+    - type: metadata
+      metadata:
+        key: example
+        operator: set
+        parts: []
+        value: ${!hostname()}
   threads: 1
 output:
   type: stdout

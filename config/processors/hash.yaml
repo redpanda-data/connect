@@ -15,11 +15,11 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: hash
-    hash:
-      algorithm: sha256
-      key: ""
-      parts: []
+    - type: hash
+      hash:
+        algorithm: sha256
+        key: ""
+        parts: []
   threads: 1
 output:
   type: stdout

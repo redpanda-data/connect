@@ -15,13 +15,13 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: sql
-    sql:
-      args: []
-      driver: mysql
-      dsn: ""
-      query: ""
-      result_codec: none
+    - type: sql
+      sql:
+        args: []
+        driver: mysql
+        dsn: ""
+        query: ""
+        result_codec: none
   threads: 1
 output:
   type: stdout

@@ -46,7 +46,7 @@ dedupe:
   key: ""
   drop_on_err: true
   parts:
-  - 0
+    - 0
 ```
 
 </TabItem>

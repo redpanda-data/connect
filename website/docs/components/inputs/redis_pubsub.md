@@ -20,7 +20,7 @@ input:
   redis_pubsub:
     url: tcp://localhost:6379
     channels:
-    - benthos_chan
+      - benthos_chan
     use_patterns: false
 ```
 

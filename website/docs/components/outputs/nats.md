@@ -18,7 +18,7 @@ Publish to an NATS subject.
 output:
   nats:
     urls:
-    - nats://127.0.0.1:4222
+      - nats://127.0.0.1:4222
     subject: benthos_messages
     max_in_flight: 1
 ```

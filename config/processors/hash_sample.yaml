@@ -15,12 +15,12 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: hash_sample
-    hash_sample:
-      parts:
-      - 0
-      retain_max: 10
-      retain_min: 0
+    - type: hash_sample
+      hash_sample:
+        parts:
+          - 0
+        retain_max: 10
+        retain_min: 0
   threads: 1
 output:
   type: stdout

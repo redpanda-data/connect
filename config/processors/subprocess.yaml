@@ -15,12 +15,12 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: subprocess
-    subprocess:
-      args: []
-      max_buffer: 65536
-      name: cat
-      parts: []
+    - type: subprocess
+      subprocess:
+        args: []
+        max_buffer: 65536
+        name: cat
+        parts: []
   threads: 1
 output:
   type: stdout

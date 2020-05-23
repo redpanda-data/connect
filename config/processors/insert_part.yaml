@@ -15,10 +15,10 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: insert_part
-    insert_part:
-      content: ""
-      index: -1
+    - type: insert_part
+      insert_part:
+        content: ""
+        index: -1
   threads: 1
 output:
   type: stdout

@@ -226,12 +226,12 @@ Default: `[]`
 # Examples
 
 client_certs:
-- cert: foo
-  key: bar
+  - cert: foo
+    key: bar
 
 client_certs:
-- cert_file: ./example.pem
-  key_file: ./example.key
+  - cert_file: ./example.pem
+    key_file: ./example.key
 ```
 
 

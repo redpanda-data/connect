@@ -8,7 +8,7 @@ input:
   type: http_client
   http_client:
     backoff_on:
-    - 429
+      - 429
     basic_auth:
       enabled: false
       password: ""
@@ -54,7 +54,7 @@ output:
   type: http_client
   http_client:
     backoff_on:
-    - 429
+      - 429
     basic_auth:
       enabled: false
       password: ""

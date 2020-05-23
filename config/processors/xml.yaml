@@ -15,10 +15,10 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: xml
-    xml:
-      operator: to_json
-      parts: []
+    - type: xml
+      xml:
+        operator: to_json
+        parts: []
   threads: 1
 output:
   type: stdout

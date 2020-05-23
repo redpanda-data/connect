@@ -42,7 +42,7 @@ hash_sample:
   retain_min: 0
   retain_max: 10
   parts:
-  - 0
+    - 0
 ```
 
 </TabItem>

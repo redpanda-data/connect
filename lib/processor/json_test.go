@@ -1107,9 +1107,9 @@ value:
 		`
 value:
   baz:
-  - first
-  - 2
-  - third`: `{"foo":{"bar":{"baz":["first",2,"third"]}}}`,
+    - first
+    - 2
+    - third`: `{"foo":{"bar":{"baz":["first",2,"third"]}}}`,
 		`
 value:
   baz:
@@ -1154,7 +1154,7 @@ func TestJSONConfigYAMLMarshal(t *testing.T) {
 
 	tests := []string{
 		`parts:
-- 0
+  - 0
 operator: set
 path: foo.bar
 value:
@@ -1163,54 +1163,54 @@ value:
   here: 11
 `,
 		`parts:
-- 0
+  - 0
 operator: set
 path: foo.bar
 value: null
 `,
 		`parts:
-- 0
+  - 0
 operator: set
 path: foo.bar
 value:
   foo: null
 `,
 		`parts:
-- 0
+  - 0
 operator: set
 path: foo.bar
 value:
   baz:
     deeper:
-    - first
-    - second
-    - third
+      - first
+      - second
+      - third
   here: 11
 `,
 		`parts:
-- 5
+  - 5
 operator: set
 path: foo.bar.baz
 value: 5
 `,
 		`parts:
-- 0
+  - 0
 operator: set
 path: foo.bar
 value: hello world
 `,
 		`parts:
-- 0
+  - 0
 operator: set
 path: foo.bar
 value:
   root:
-  - values:
-    - nested: true
-    with: array
+    - values:
+        - nested: true
+      with: array
 `,
 		`parts:
-- 0
+  - 0
 operator: set
 path: foo.bar
 value:

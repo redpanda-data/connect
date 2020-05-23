@@ -19,7 +19,7 @@ a single message payload.
 input:
   hdfs:
     hosts:
-    - localhost:9000
+      - localhost:9000
     user: benthos_hdfs
     directory: ""
 ```

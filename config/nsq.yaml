@@ -17,10 +17,10 @@ input:
       processors: []
     channel: benthos_stream
     lookupd_http_addresses:
-    - localhost:4161
+      - localhost:4161
     max_in_flight: 100
     nsqd_tcp_addresses:
-    - localhost:4150
+      - localhost:4150
     tls:
       client_certs: []
       enabled: false

@@ -190,15 +190,15 @@ Default: `[]`
 # Examples
 
 processors:
-- archive:
-    format: lines
+  - archive:
+      format: lines
 
 processors:
-- archive:
-    format: json_array
+  - archive:
+      format: json_array
 
 processors:
-- merge_json: {}
+  - merge_json: {}
 ```
 
 ### `region`

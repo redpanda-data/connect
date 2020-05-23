@@ -18,7 +18,7 @@ Sends message parts as files to a HDFS directory.
 output:
   hdfs:
     hosts:
-    - localhost:9000
+      - localhost:9000
     user: benthos_hdfs
     directory: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt

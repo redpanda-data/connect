@@ -15,11 +15,11 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: log
-    log:
-      fields: {}
-      level: INFO
-      message: ""
+    - type: log
+      log:
+        fields: {}
+        level: INFO
+        message: ""
   threads: 1
 output:
   type: stdout

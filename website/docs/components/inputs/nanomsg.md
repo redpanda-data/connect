@@ -30,7 +30,7 @@ import TabItem from '@theme/TabItem';
 input:
   nanomsg:
     urls:
-    - tcp://*:5555
+      - tcp://*:5555
     bind: true
     socket_type: PULL
     sub_filters: []
@@ -44,7 +44,7 @@ input:
 input:
   nanomsg:
     urls:
-    - tcp://*:5555
+      - tcp://*:5555
     bind: true
     socket_type: PULL
     sub_filters: []

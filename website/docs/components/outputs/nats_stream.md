@@ -18,7 +18,7 @@ Publish to a NATS Stream subject.
 output:
   nats_stream:
     urls:
-    - nats://127.0.0.1:4222
+      - nats://127.0.0.1:4222
     cluster_id: test-cluster
     subject: benthos_messages
     client_id: benthos_client

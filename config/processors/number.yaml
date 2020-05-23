@@ -15,11 +15,11 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: number
-    number:
-      operator: add
-      parts: []
-      value: 0
+    - type: number
+      number:
+        operator: add
+        parts: []
+        value: 0
   threads: 1
 output:
   type: stdout

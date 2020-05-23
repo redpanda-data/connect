@@ -12,9 +12,9 @@ input:
     password: ""
     qos: 1
     topics:
-    - benthos_topic
+      - benthos_topic
     urls:
-    - tcp://localhost:1883
+      - tcp://localhost:1883
     user: ""
 buffer:
   type: none
@@ -31,7 +31,7 @@ output:
     qos: 1
     topic: benthos_topic
     urls:
-    - tcp://localhost:1883
+      - tcp://localhost:1883
     user: ""
 resources:
   caches: {}

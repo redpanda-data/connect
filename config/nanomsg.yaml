@@ -13,7 +13,7 @@ input:
     socket_type: PULL
     sub_filters: []
     urls:
-    - tcp://*:5555
+      - tcp://*:5555
 buffer:
   type: none
   none: {}
@@ -28,7 +28,7 @@ output:
     poll_timeout: 5s
     socket_type: PUSH
     urls:
-    - tcp://localhost:5556
+      - tcp://localhost:5556
 resources:
   caches: {}
   conditions: {}

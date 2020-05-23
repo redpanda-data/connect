@@ -31,7 +31,7 @@ import TabItem from '@theme/TabItem';
 output:
   kafka:
     addresses:
-    - localhost:9092
+      - localhost:9092
     topic: benthos_stream
     client_id: benthos_kafka_output
     key: ""
@@ -52,7 +52,7 @@ output:
 output:
   kafka:
     addresses:
-    - localhost:9092
+      - localhost:9092
     tls:
       enabled: false
       skip_cert_verify: false
@@ -125,14 +125,14 @@ Default: `["localhost:9092"]`
 # Examples
 
 addresses:
-- localhost:9092
+  - localhost:9092
 
 addresses:
-- localhost:9041,localhost:9042
+  - localhost:9041,localhost:9042
 
 addresses:
-- localhost:9041
-- localhost:9042
+  - localhost:9041
+  - localhost:9042
 ```
 
 ### `tls`
@@ -179,12 +179,12 @@ Default: `[]`
 # Examples
 
 client_certs:
-- cert: foo
-  key: bar
+  - cert: foo
+    key: bar
 
 client_certs:
-- cert_file: ./example.pem
-  key_file: ./example.key
+  - cert_file: ./example.pem
+    key_file: ./example.key
 ```
 
 ### `sasl`
@@ -421,15 +421,15 @@ Default: `[]`
 # Examples
 
 processors:
-- archive:
-    format: lines
+  - archive:
+      format: lines
 
 processors:
-- archive:
-    format: json_array
+  - archive:
+      format: json_array
 
 processors:
-- merge_json: {}
+  - merge_json: {}
 ```
 
 ### `max_retries`

@@ -15,9 +15,9 @@ buffer:
   none: {}
 pipeline:
   processors:
-  - type: throttle
-    throttle:
-      period: 100us
+    - type: throttle
+      throttle:
+        period: 100us
   threads: 1
 output:
   type: stdout

@@ -30,7 +30,7 @@ import TabItem from '@theme/TabItem';
 input:
   nats:
     urls:
-    - nats://127.0.0.1:4222
+      - nats://127.0.0.1:4222
     queue: benthos_queue
     subject: benthos_messages
 ```
@@ -43,7 +43,7 @@ input:
 input:
   nats:
     urls:
-    - nats://127.0.0.1:4222
+      - nats://127.0.0.1:4222
     queue: benthos_queue
     subject: benthos_messages
     prefetch_count: 32
@@ -77,7 +77,7 @@ Default: `["nats://127.0.0.1:4222"]`
 # Examples
 
 urls:
-- nats://127.0.0.1:4222
+  - nats://127.0.0.1:4222
 ```
 
 ### `queue`
