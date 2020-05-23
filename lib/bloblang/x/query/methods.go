@@ -72,6 +72,44 @@ func applyMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"bool", true, boolMethod,
+	ExpectOneOrZeroArgs(),
+	ExpectBoolArg(0),
+)
+
+func boolMethod(target Function, args ...interface{}) (Function, error) {
+	defaultBool := false
+	if len(args) > 0 {
+		defaultBool = args[0].(bool)
+	}
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			if len(args) > 0 {
+				return defaultBool, nil
+			}
+			return nil, &ErrRecoverable{
+				Recovered: defaultBool,
+				Err:       err,
+			}
+		}
+		f, err := IGetBool(v)
+		if err != nil {
+			if len(args) > 0 {
+				return defaultBool, nil
+			}
+			return nil, &ErrRecoverable{
+				Recovered: defaultBool,
+				Err:       err,
+			}
+		}
+		return f, nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"catch", false, catchMethod,
 	ExpectNArgs(1),
 )
@@ -663,23 +701,34 @@ func notMethodCtor(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"number", false, numberMethod,
-	ExpectNArgs(0),
+	"number", true, numberMethod,
+	ExpectOneOrZeroArgs(),
+	ExpectFloatArg(0),
 )
 
-func numberMethod(target Function, _ ...interface{}) (Function, error) {
+func numberMethod(target Function, args ...interface{}) (Function, error) {
+	defaultNum := 0.0
+	if len(args) > 0 {
+		defaultNum = args[0].(float64)
+	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
+			if len(args) > 0 {
+				return defaultNum, nil
+			}
 			return nil, &ErrRecoverable{
-				Recovered: 0,
+				Recovered: defaultNum,
 				Err:       err,
 			}
 		}
 		f, err := IGetNumber(v)
 		if err != nil {
+			if len(args) > 0 {
+				return defaultNum, nil
+			}
 			return nil, &ErrRecoverable{
-				Recovered: float64(0),
+				Recovered: defaultNum,
 				Err:       err,
 			}
 		}

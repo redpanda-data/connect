@@ -133,6 +133,37 @@ func ExpectIntArg(i int) ArgCheckFn {
 	}
 }
 
+// ExpectFloatArg returns an error if an argument i is not a float type.
+func ExpectFloatArg(i int) ArgCheckFn {
+	return func(args []interface{}) error {
+		if len(args) <= i {
+			return nil
+		}
+		switch t := args[i].(type) {
+		case int64:
+			args[i] = float64(t)
+		case float64:
+		default:
+			return fmt.Errorf("expected float param, received %T", args[i])
+		}
+		return nil
+	}
+}
+
+// ExpectBoolArg returns an error if an argument i is not a boolean type.
+func ExpectBoolArg(i int) ArgCheckFn {
+	return func(args []interface{}) error {
+		if len(args) <= i {
+			return nil
+		}
+		_, ok := args[i].(bool)
+		if !ok {
+			return fmt.Errorf("expected bool param, received %T", args[i])
+		}
+		return nil
+	}
+}
+
 //------------------------------------------------------------------------------
 
 // FunctionCtor constructs a new function from input arguments.

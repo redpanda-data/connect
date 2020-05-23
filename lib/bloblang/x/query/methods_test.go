@@ -26,6 +26,58 @@ func TestMethods(t *testing.T) {
 		messages []easyMsg
 		index    int
 	}{
+		"check bool": {
+			input:  `"true".bool()`,
+			output: true,
+		},
+		"check bool 2": {
+			input:  `"false".bool()`,
+			output: false,
+		},
+		"check bool 3": {
+			input:  `true.bool()`,
+			output: true,
+		},
+		"check bool 4": {
+			input:  `false.bool()`,
+			output: false,
+		},
+		"check bool 5": {
+			input:  `5.bool()`,
+			output: true,
+		},
+		"check bool 6": {
+			input:  `0.bool()`,
+			output: false,
+		},
+		"check bool 7": {
+			input: `"nope".bool()`,
+			err:   `function returned non-bool type: string`,
+		},
+		"check bool 8": {
+			input:  `"nope".bool(true)`,
+			output: true,
+		},
+		"check bool 9": {
+			input:  `"nope".bool(false)`,
+			output: false,
+		},
+		"check number": {
+			input:  `"21".number()`,
+			output: float64(21),
+		},
+		"check number 2": {
+			input: `"nope".number()`,
+			err:   `strconv.ParseFloat: parsing "nope": invalid syntax`,
+		},
+		"check number 3": {
+			input:  `"nope".number(5)`,
+			output: float64(5),
+		},
+		"check number 4": {
+			input:  `"nope".number(5.2)`,
+			output: float64(5.2),
+		},
 		"check index": {
 			input:  `["foo","bar","baz"].index(1)`,
 			output: "bar",

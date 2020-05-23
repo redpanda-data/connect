@@ -33,6 +33,15 @@ foo = doc.apply("thing")
 # Out: {"foo":{"inner":"hello world"}}
 ```
 
+### `bool`
+
+Attempt to parse a value into a boolean. An optional argument can be provided, in which case if the value cannot be parsed the argument will be returned instead.
+
+```coffee
+foo = thing.bool()
+bar = thing.bool(true)
+```
+
 ### `catch`
 
 If the result of a target function fails (due to incorrect types, failed parsing, etc) the argument is returned instead.
@@ -71,10 +80,11 @@ doc.id = thing.id.or(uuid_v4())
 
 ### `number`
 
-Attempt to parse a value into a number.
+Attempt to parse a value into a number. An optional argument can be provided, in which case if the value cannot be parsed into a number the argument will be returned instead.
 
 ```coffee
-result = thing.number().catch(0) + 10
+foo = thing.number() + 10
+bar = thing.number(5) * 10
 ```
 
 ### `string`

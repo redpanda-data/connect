@@ -1,6 +1,7 @@
 package query
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -52,6 +53,34 @@ func IGetInt(v interface{}) (int64, error) {
 		return strconv.ParseInt(t, 10, 64)
 	}
 	return 0, fmt.Errorf("function returned non-numerical type: %T", v)
+}
+
+// IGetBool takes a boxed value and attempts to extract a boolean from it.
+func IGetBool(v interface{}) (bool, error) {
+	switch t := v.(type) {
+	case bool:
+		return t, nil
+	case int64:
+		return t > 0, nil
+	case uint64:
+		return t > 0, nil
+	case float64:
+		return t > 0, nil
+	case []byte:
+		if bytes.Equal(t, []byte("true")) {
+			return true, nil
+		} else if bytes.Equal(t, []byte("false")) {
+			return false, nil
+		}
+	case string:
+		switch t {
+		case "true":
+			return true, nil
+		case "false":
+			return false, nil
+		}
+	}
+	return false, fmt.Errorf("function returned non-bool type: %T", v)
 }
 
 // IIsNull returns whether a bloblang type is null, this includes Delete and
