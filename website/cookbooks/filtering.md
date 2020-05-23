@@ -1,6 +1,6 @@
 ---
 id: filtering
-title: Filtering With Benthos
+title: Filtering and Sampling
 description: Configure Benthos to conditionally drop messages.
 ---
 

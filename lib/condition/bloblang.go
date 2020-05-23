@@ -15,7 +15,7 @@ import (
 func init() {
 	Constructors[TypeBloblang] = TypeSpec{
 		constructor: NewBloblang,
-		Description: `
+		Summary: `
 BETA: This a beta component and therefore subject to change outside of major
 version releases. Consult the changelog for changes before upgrading.
 

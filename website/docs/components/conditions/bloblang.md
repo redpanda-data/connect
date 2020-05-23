@@ -11,17 +11,17 @@ type: condition
 -->
 
 
-```yaml
-# Config fields, showing default values
-bloblang: ""
-```
-
 BETA: This a beta component and therefore subject to change outside of major
 version releases. Consult the changelog for changes before upgrading.
 
 Executes a [Bloblang](/docs/guides/bloblang/about) query on messages, expecting
 a boolean result. If the result of the query is true then the condition passes,
 otherwise it does not.
+
+```yaml
+# Config fields, showing default values
+bloblang: ""
+```
 
 ## Examples
 

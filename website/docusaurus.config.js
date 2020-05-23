@@ -43,8 +43,9 @@ module.exports = {
         {to: 'https://github.com/Jeffail/benthos/releases/latest', label: 'Download', position: 'right'},
         {
           href: 'https://github.com/Jeffail/benthos',
-          label: 'GitHub',
           position: 'right',
+          className: 'header-github-link',
+          'aria-label': 'GitHub repository',
         },
       ],
     },
