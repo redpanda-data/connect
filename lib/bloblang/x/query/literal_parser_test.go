@@ -15,7 +15,7 @@ func TestLiteralParserErrors(t *testing.T) {
 	}{
 		"bad object key": {
 			input: `{5:"foo"}`,
-			err:   `char 1: expected: quoted-string`,
+			err:   `char 0: object keys must be strings, received: int64`,
 		},
 		"bad array element": {
 			input: `[5,null,"unterminated string]`,
@@ -57,6 +57,12 @@ func TestLiteralParser(t *testing.T) {
 				"foo": float64(10),
 			},
 		},
+		"dynamic map dynamic key": {
+			mapping: `{("foobar".uppercase()):5}`,
+			result: map[string]interface{}{
+				"FOOBAR": int64(5),
+			},
+		},
 		"dynamic map nested": {
 			mapping: `{"foo":{"bar":(5 + 5)}}`,
 			result: map[string]interface{}{
@@ -83,7 +89,7 @@ func TestLiteralParser(t *testing.T) {
 		},
 		"bad object value": {
 			mapping: `{"foo":(5 + "not a number")}`,
-			err:     "strconv.ParseFloat: parsing \"not a number\": invalid syntax",
+			err:     "failed to resolve 'foo' value: strconv.ParseFloat: parsing \"not a number\": invalid syntax",
 		},
 	}
 

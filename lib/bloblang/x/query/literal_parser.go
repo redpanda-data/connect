@@ -94,7 +94,10 @@ func dynamicObjectParser() parser.Type {
 				whitespace,
 			), "object"),
 			parser.Sequence(
-				parser.QuotedString(),
+				parser.OneOf(
+					parser.QuotedString(),
+					parser.Expect(Parse, "object"),
+				),
 				parser.Discard(parser.SpacesAndTabs()),
 				parser.Char(':'),
 				parser.Discard(whitespace),
@@ -118,46 +121,14 @@ func dynamicObjectParser() parser.Type {
 			return res
 		}
 
-		isDynamic := false
-		values := map[string]interface{}{}
+		values := [][2]interface{}{}
+
 		for _, sequenceValue := range res.Payload.([]interface{}) {
 			slice := sequenceValue.([]interface{})
-			values[slice[0].(string)] = slice[4]
-			if _, isFunction := slice[4].(Function); isFunction {
-				isDynamic = true
-			}
-		}
-		if !isDynamic {
-			res.Payload = values
-			return res
+			values = append(values, [2]interface{}{slice[0], slice[4]})
 		}
 
-		res.Payload = closureFn(func(ctx FunctionContext) (interface{}, error) {
-			dynMap := make(map[string]interface{}, len(values))
-			var err error
-			for k, v := range values {
-				if fn, isFunction := v.(Function); isFunction {
-					fnRes, fnErr := fn.Exec(ctx)
-					if fnErr != nil {
-						if recovered, ok := fnErr.(*ErrRecoverable); ok {
-							dynMap[k] = recovered.Recovered
-							err = fnErr
-						}
-						return nil, fnErr
-					}
-					dynMap[k] = fnRes
-				} else {
-					dynMap[k] = v
-				}
-			}
-			if err != nil {
-				return nil, &ErrRecoverable{
-					Recovered: dynMap,
-					Err:       err,
-				}
-			}
-			return dynMap, nil
-		})
+		res.Payload, res.Err = newMapLiteral(values)
 		return res
 	}
 }
