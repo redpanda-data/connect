@@ -21,12 +21,10 @@ func init() {
 	Constructors[TypeBloblang] = TypeSpec{
 		constructor: NewBloblang,
 		Summary: `
-BETA: This a beta component and therefore subject to change outside of major
-version releases. Consult the changelog for changes before upgrading.
-
 Executes a [Bloblang](/docs/guides/bloblang/about) mapping on messages.`,
 		Description: `
-For more information about Bloblang
+Bloblang is a powerful language that enables a wide range of mapping,
+transformation and filtering tasks. For more information
 [check out the docs](/docs/guides/bloblang/about).`,
 		Footnotes: `
 ## Examples

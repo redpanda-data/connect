@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.15.0 - 2020-05-24
+
 ### Added
 
 - Flag `log` added to `test` sub command to allow logging during tests.
@@ -15,6 +17,11 @@ All notable changes to this project will be documented in this file.
 
 - The `redis_streams` input no longer incorrectly copies message data into a
   metadata field.
+
+### Changed
+
+- Bloblang is no longer considered beta. Therefore, no breaking changes will be
+  introduced outside of a major version release.
 
 ## 3.14.0 - 2020-05-17
 
