@@ -33,16 +33,16 @@ func TestMappingErrors(t *testing.T) {
 	}{
 		"no mappings": {
 			mapping: ``,
-			err:     `failed to parse mapping: line 1 char 1: expected one of: [import map let meta target-path]`,
+			err:     `line 1 char 1: expected one of: [import map let meta target-path]`,
 		},
 		"no mappings 2": {
 			mapping: `
    `,
-			err: `failed to parse mapping: line 2 char 4: expected one of: [import map let meta target-path]`,
+			err: `line 2 char 4: expected one of: [import map let meta target-path]`,
 		},
 		"double mapping": {
 			mapping: `foo = bar bar = baz`,
-			err:     `failed to parse mapping: line 1 char 11: expected: line-break`,
+			err:     `line 1 char 11: expected: line-break`,
 		},
 		"double mapping line breaks": {
 			mapping: `
@@ -50,45 +50,45 @@ func TestMappingErrors(t *testing.T) {
 foo = bar bar = baz
 
 `,
-			err: `failed to parse mapping: line 3 char 11: expected: line-break`,
+			err: `line 3 char 11: expected: line-break`,
 		},
 		"double mapping line 2": {
 			mapping: `let a = "a"
 foo = bar bar = baz`,
-			err: `failed to parse mapping: line 2 char 11: expected: line-break`,
+			err: `line 2 char 11: expected: line-break`,
 		},
 		"double mapping line 3": {
 			mapping: `let a = "a"
 foo = bar bar = baz
 	let a = "a"`,
-			err: "failed to parse mapping: line 2 char 11: expected: line-break",
+			err: "line 2 char 11: expected: line-break",
 		},
 		"bad mapping": {
 			mapping: `foo wat bar`,
-			err:     `failed to parse mapping: line 1 char 5: expected: =`,
+			err:     `line 1 char 5: expected: =`,
 		},
 		"bad char": {
 			mapping: `!foo = bar`,
-			err:     `failed to parse mapping: line 1 char 1: expected one of: [import map let meta target-path]`,
+			err:     `line 1 char 1: expected one of: [import map let meta target-path]`,
 		},
 		"bad char 2": {
 			mapping: `let foo = bar
 !foo = bar`,
-			err: `failed to parse mapping: line 2 char 1: expected one of: [import map let meta target-path]`,
+			err: `line 2 char 1: expected one of: [import map let meta target-path]`,
 		},
 		"bad char 3": {
 			mapping: `let foo = bar
 !foo = bar
 this = that`,
-			err: `failed to parse mapping: line 2 char 1: expected one of: [import map let meta target-path]`,
+			err: `line 2 char 1: expected one of: [import map let meta target-path]`,
 		},
 		"bad query": {
 			mapping: `foo = blah.`,
-			err:     `failed to parse mapping: line 1 char 12: required one of: [method field-path]`,
+			err:     `line 1 char 12: required one of: [method field-path]`,
 		},
 		"bad variable assign": {
 			mapping: `let = blah`,
-			err:     `failed to parse mapping: line 1 char 5: required: variable-name`,
+			err:     `line 1 char 5: required: variable-name`,
 		},
 		"double map definition": {
 			mapping: `map foo {
@@ -98,39 +98,39 @@ map foo {
   foo = bar
 }
 foo = bar.apply("foo")`,
-			err: `failed to parse mapping: line 4 char 1: map name collision: foo`,
+			err: `line 4 char 1: map name collision: foo`,
 		},
 		"map contains meta assignment": {
 			mapping: `map foo {
   meta foo = "bar"
 }
 foo = bar.apply("foo")`,
-			err: `failed to parse mapping: line 2 char 3: setting meta fields from within a map is not allowed`,
+			err: `line 2 char 3: setting meta fields from within a map is not allowed`,
 		},
 		"no name map definition": {
 			mapping: `map {
   foo = bar
 }
 foo = bar.apply("foo")`,
-			err: `failed to parse mapping: line 1 char 5: required: map-name`,
+			err: `line 1 char 5: required: map-name`,
 		},
 		"no file import": {
 			mapping: `import "this file doesnt exist (i hope)"
 
 foo = bar.apply("from_import")`,
-			err: `failed to parse mapping: line 1 char 1: failed to read import: open this file doesnt exist (i hope): no such file or directory`,
+			err: `line 1 char 1: failed to read import: open this file doesnt exist (i hope): no such file or directory`,
 		},
 		"bad file import": {
 			mapping: fmt.Sprintf(`import "%v"
 
 foo = bar.apply("from_import")`, badMapFile),
-			err: fmt.Sprintf(`failed to parse mapping: line 1 char 1: failed to parse import '%v': line 1 char 5: expected: =`, badMapFile),
+			err: fmt.Sprintf(`line 1 char 1: failed to parse import '%v': line 1 char 5: expected: =`, badMapFile),
 		},
 		"no maps file import": {
 			mapping: fmt.Sprintf(`import "%v"
 
 foo = bar.apply("from_import")`, noMapsFile),
-			err: fmt.Sprintf(`failed to parse mapping: line 1 char 1: no maps to import from '%v'`, noMapsFile),
+			err: fmt.Sprintf(`line 1 char 1: no maps to import from '%v'`, noMapsFile),
 		},
 		"colliding maps file import": {
 			mapping: fmt.Sprintf(`map "foo" { this = that }			
@@ -138,7 +138,7 @@ foo = bar.apply("from_import")`, noMapsFile),
 import "%v"
 
 foo = bar.apply("foo")`, goodMapFile),
-			err: fmt.Sprintf(`failed to parse mapping: line 3 char 1: map name collisions from import '%v': [foo]`, goodMapFile),
+			err: fmt.Sprintf(`line 3 char 1: map name collisions from import '%v': [foo]`, goodMapFile),
 		},
 	}
 
@@ -204,6 +204,11 @@ zed = deleted()
   `,
 			input:  []part{{Content: `{"foo":10,"zed":"gone"}`}},
 			output: part{Content: `{"bar":"test1","foo":12}`},
+		},
+		"simple root query": {
+			mapping: `{"result": foo + 2}`,
+			input:   []part{{Content: `{"foo":10}`}},
+			output:  part{Content: `{"result":12}`},
 		},
 		"simple json map with comments": {
 			mapping: `

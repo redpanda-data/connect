@@ -57,6 +57,23 @@ func ExecToBytes(fn Function, ctx FunctionContext) []byte {
 
 //------------------------------------------------------------------------------
 
+// New creates a new query function from a query string.
+func New(query string) (Function, error) {
+	res := Parse([]rune(query))
+	if res.Err != nil {
+		return nil, res.Err
+	}
+	fn := res.Payload.(Function)
+
+	// Remove all tailing whitespace and ensure no remaining input.
+	res = parser.DiscardAll(parser.OneOf(parser.SpacesAndTabs(), parser.Newline()))(res.Remaining)
+	if len(res.Remaining) > 0 {
+		i := len(query) - len(res.Remaining)
+		return nil, parser.ErrAtPosition(i, parser.ExpectedError{"end-of-input"})
+	}
+	return fn, nil
+}
+
 // Parse parses an input into a query.Function.
 func Parse(input []rune) parser.Result {
 	rootParser := parseWithTails(parser.OneOf(

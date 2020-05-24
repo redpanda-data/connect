@@ -9,6 +9,11 @@ All notable changes to this project will be documented in this file.
 
 - Flag `log` added to `test` sub command to allow logging during tests.
 
+### Fixed
+
+- The `redis_streams` input no longer incorrectly copies message data into a
+  metadata field.
+
 ## 3.14.0 - 2020-05-17
 
 ### Added

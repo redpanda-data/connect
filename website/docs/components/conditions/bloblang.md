@@ -28,7 +28,7 @@ bloblang: ""
 With the following config:
 
 ``` yaml
-bloblang: 'a == "foo"'
+bloblang: a == "foo"
 ```
 
 A message `{"a":"foo"}` would pass, but

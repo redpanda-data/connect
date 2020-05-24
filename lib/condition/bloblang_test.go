@@ -47,6 +47,14 @@ func TestBloblangCheck(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name:  "bool result pos whitespace",
+			query: `foo == "bar"   `,
+			arg: [][]byte{
+				[]byte(`{"foo":"bar"}`),
+			},
+			want: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

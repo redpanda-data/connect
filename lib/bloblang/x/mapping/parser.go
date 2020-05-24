@@ -154,12 +154,30 @@ func (e *Executor) ToString(ctx query.FunctionContext) string {
 	return query.IToString(v)
 }
 
+func getLineIndexes(input string) []int {
+	var i int
+	var lineIndexes []int
+	for _, l := range strings.Split(input, "\n") {
+		i = i + len(l) + 1
+		lineIndexes = append(lineIndexes, i)
+	}
+	return lineIndexes
+}
+
 // NewExecutor parses a bloblang mapping and returns an executor to run it, or
 // an error if the parsing fails.
 func NewExecutor(mapping string) (*Executor, error) {
-	res := parseExecutor([]rune(mapping))
+	lineIndexes := getLineIndexes(mapping)
+
+	in := []rune(mapping)
+	res := parseExecutor(lineIndexes)(in)
 	if res.Err != nil {
-		return nil, xerrors.Errorf("failed to parse mapping: %w", res.Err)
+		singleRes := singleRootMapping()(in)
+		if singleRes.Err == nil {
+			res = singleRes
+		} else {
+			return nil, wrapParserErr(lineIndexes, res.Err)
+		}
 	}
 
 	return res.Payload.(*Executor), nil
@@ -201,79 +219,114 @@ func wrapParserErr(lines []int, err error) error {
 	return err
 }
 
-func parseExecutor(input []rune) parser.Result {
-	maps := map[string]query.Function{}
-	statements := []mappingStatement{}
-
-	var i int
-	var lineIndexes []int
-	for _, l := range strings.Split(string(input), "\n") {
-		i = i + len(l) + 1
-		lineIndexes = append(lineIndexes, i)
-	}
-
+func parseExecutor(lineIndexes []int) parser.Type {
 	newline := parser.NewlineAllowComment()
 	whitespace := parser.SpacesAndTabs()
 	allWhitespace := parser.DiscardAll(parser.OneOf(whitespace, newline))
 
-	statement := parser.OneOf(
-		importParser(maps),
-		mapParser(maps),
-		letStatementParser(),
-		metaStatementParser(false),
-		plainMappingStatementParser(),
-	)
+	return func(input []rune) parser.Result {
+		maps := map[string]query.Function{}
+		statements := []mappingStatement{}
 
-	res := allWhitespace(input)
+		statement := parser.OneOf(
+			importParser(maps),
+			mapParser(maps),
+			letStatementParser(),
+			metaStatementParser(false),
+			plainMappingStatementParser(),
+		)
 
-	i = len(input) - len(res.Remaining)
-	res = statement(res.Remaining)
-	if res.Err != nil {
-		res.Err = wrapParserErr(lineIndexes, parser.ErrAtPosition(i, res.Err))
-		return res
-	}
-	if mStmt, ok := res.Payload.(mappingStatement); ok {
-		mStmt.line, _ = getLineCol(lineIndexes, i)
-		statements = append(statements, mStmt)
-	}
+		res := allWhitespace(input)
 
-	for {
-		res = parser.Discard(whitespace)(res.Remaining)
-		if len(res.Remaining) == 0 {
-			break
-		}
-
-		i = len(input) - len(res.Remaining)
-		if res = newline(res.Remaining); res.Err != nil {
-			return parser.Result{
-				Err:       wrapParserErr(lineIndexes, parser.ErrAtPosition(i, res.Err)),
-				Remaining: input,
-			}
-		}
-
-		res = allWhitespace(res.Remaining)
-		if len(res.Remaining) == 0 {
-			break
-		}
-
-		i = len(input) - len(res.Remaining)
-		if res = statement(res.Remaining); res.Err != nil {
-			return parser.Result{
-				Err:       wrapParserErr(lineIndexes, parser.ErrAtPosition(i, res.Err)),
-				Remaining: input,
-			}
+		i := len(input) - len(res.Remaining)
+		res = statement(res.Remaining)
+		if res.Err != nil {
+			res.Err = parser.ErrAtPosition(i, res.Err)
+			return res
 		}
 		if mStmt, ok := res.Payload.(mappingStatement); ok {
 			mStmt.line, _ = getLineCol(lineIndexes, i)
 			statements = append(statements, mStmt)
 		}
-	}
 
-	return parser.Result{
-		Remaining: res.Remaining,
-		Payload: &Executor{
-			maps, statements,
-		},
+		for {
+			res = parser.Discard(whitespace)(res.Remaining)
+			if len(res.Remaining) == 0 {
+				break
+			}
+
+			i = len(input) - len(res.Remaining)
+			if res = newline(res.Remaining); res.Err != nil {
+				return parser.Result{
+					Err:       parser.ErrAtPosition(i, res.Err),
+					Remaining: input,
+				}
+			}
+
+			res = allWhitespace(res.Remaining)
+			if len(res.Remaining) == 0 {
+				break
+			}
+
+			i = len(input) - len(res.Remaining)
+			if res = statement(res.Remaining); res.Err != nil {
+				return parser.Result{
+					Err:       parser.ErrAtPosition(i, res.Err),
+					Remaining: input,
+				}
+			}
+			if mStmt, ok := res.Payload.(mappingStatement); ok {
+				mStmt.line, _ = getLineCol(lineIndexes, i)
+				statements = append(statements, mStmt)
+			}
+		}
+
+		return parser.Result{
+			Remaining: res.Remaining,
+			Payload: &Executor{
+				maps, statements,
+			},
+		}
+	}
+}
+
+func singleRootMapping() parser.Type {
+	whitespace := parser.SpacesAndTabs()
+	allWhitespace := parser.DiscardAll(parser.OneOf(whitespace, parser.Newline()))
+
+	return func(input []rune) parser.Result {
+		res := query.Parse(input)
+		if res.Err != nil {
+			return res
+		}
+
+		fn := res.Payload.(query.Function)
+
+		// Remove all tailing whitespace and ensure no remaining input.
+		res = allWhitespace(res.Remaining)
+		if len(res.Remaining) > 0 {
+			i := len(input) - len(res.Remaining)
+			return parser.Result{
+				Remaining: input,
+				Err:       parser.ErrAtPosition(i, parser.ExpectedError{"end-of-input"}),
+			}
+		}
+
+		stmt := mappingStatement{
+			line: 0,
+			assignment: &jsonAssignment{
+				Path: []string{},
+			},
+			query: fn,
+		}
+
+		return parser.Result{
+			Remaining: res.Remaining,
+			Payload: &Executor{
+				maps:       map[string]query.Function{},
+				statements: []mappingStatement{stmt},
+			},
+		}
 	}
 }
 
@@ -331,15 +384,17 @@ func importParser(maps map[string]query.Function) parser.Type {
 		contents, err := ioutil.ReadFile(filepath)
 		if err != nil {
 			return parser.Result{
-				Err:       xerrors.Errorf("failed to read import: %w", err),
+				Err:       fmt.Errorf("failed to read import: %w", err),
 				Remaining: input,
 			}
 		}
 
-		execRes := parseExecutor([]rune(string(contents)))
+		lineIndexes := getLineIndexes(string(contents))
+		execRes := parseExecutor(lineIndexes)([]rune(string(contents)))
 		if execRes.Err != nil {
+			// WARNING: We do NOT want to wrap the underlying execRes.Err here.
 			return parser.Result{
-				Err:       xerrors.Errorf("failed to parse import '%v': %w", filepath, execRes.Err),
+				Err:       fmt.Errorf("failed to parse import '%v': %v", filepath, wrapParserErr(lineIndexes, execRes.Err)),
 				Remaining: input,
 			}
 		}
@@ -347,7 +402,7 @@ func importParser(maps map[string]query.Function) parser.Type {
 		exec := execRes.Payload.(*Executor)
 		if len(exec.maps) == 0 {
 			return parser.Result{
-				Err:       xerrors.Errorf("no maps to import from '%v'", filepath),
+				Err:       fmt.Errorf("no maps to import from '%v'", filepath),
 				Remaining: input,
 			}
 		}

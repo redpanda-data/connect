@@ -1,13 +1,10 @@
 package condition
 
 import (
-	"fmt"
-
 	"github.com/Jeffail/benthos/v3/lib/bloblang/x/query"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"golang.org/x/xerrors"
 )
 
 //------------------------------------------------------------------------------
@@ -28,7 +25,7 @@ otherwise it does not.`,
 With the following config:
 
 ` + "``` yaml" + `
-bloblang: 'a == "foo"'
+bloblang: a == "foo"
 ` + "```" + `
 
 A message ` + "`" + `{"a":"foo"}` + "`" + ` would pass, but
@@ -65,17 +62,13 @@ type Bloblang struct {
 func NewBloblang(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	res := query.Parse([]rune(conf.Bloblang))
-	if res.Err != nil {
-		return nil, xerrors.Errorf("failed to parse query: %w", res.Err)
-	}
-	if len(res.Remaining) > 0 {
-		return nil, fmt.Errorf("unexpected contents at end of query: %v", string(res.Remaining))
+	fn, err := query.New(string(conf.Bloblang))
+	if err != nil {
+		return nil, err
 	}
 
 	return &Bloblang{
-		fn: res.Payload.(query.Function),
-
+		fn:  fn,
 		log: log,
 
 		mCount: stats.GetCounter("count"),
