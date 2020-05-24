@@ -26,6 +26,26 @@ func TestMethods(t *testing.T) {
 		messages []easyMsg
 		index    int
 	}{
+		"check has_prefix": {
+			input:    `"foobar".has_prefix("foo") && content().has_prefix("foo")`,
+			messages: []easyMsg{{content: `foobar`}},
+			output:   true,
+		},
+		"check has_prefix neg": {
+			input:    `"foobar".has_prefix("bar") || content().has_prefix("bar")`,
+			messages: []easyMsg{{content: `foobar`}},
+			output:   false,
+		},
+		"check has_suffix": {
+			input:    `"foobar".has_suffix("bar") && content().has_suffix("bar")`,
+			messages: []easyMsg{{content: `foobar`}},
+			output:   true,
+		},
+		"check has_suffix neg": {
+			input:    `"foobar".has_suffix("foo") || content().has_suffix("foo")`,
+			messages: []easyMsg{{content: `foobar`}},
+			output:   false,
+		},
 		"check bool": {
 			input:  `"true".bool()`,
 			output: true,

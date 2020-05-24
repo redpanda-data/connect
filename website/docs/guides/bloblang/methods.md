@@ -348,6 +348,19 @@ title = title.capitalize()
 # Out: {"title":"The Foo Bar"}
 ```
 
+### `decode`
+
+Decodes an encoded string target according to a chosen scheme and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.
+
+Available schemes are: `base64`, `hex`, `ascii85`, `z85`.
+
+```coffee
+decoded = value.decode("hex").string()
+
+# In:  {"value":"68656c6c6f20776f726c64"}
+# Out: {"decoded":"hello world"}
+```
+
 ### `encode`
 
 Encodes a string or byte array target according to a chosen scheme and returns a string result. Available schemes are: `base64`, `hex`, `ascii85`, `z85`.
@@ -370,19 +383,6 @@ escaped = value.escape_url_query()
 # Out: {"escaped":"foo+%26+bar"}
 ```
 
-### `decode`
-
-Decodes an encoded string target according to a chosen scheme and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.
-
-Available schemes are: `base64`, `hex`, `ascii85`, `z85`.
-
-```coffee
-decoded = value.decode("hex").string()
-
-# In:  {"value":"68656c6c6f20776f726c64"}
-# Out: {"decoded":"hello world"}
-```
-
 ### `format`
 
 Use a value string as a format specifier in order to produce a new string, using any number of provided arguments.
@@ -399,6 +399,30 @@ foo = template.format(arg1, arg2)
 
 # In:  {"template":"%s -> %s","arg1":"foo","arg2":"bar"}
 # Out: {"foo":"foo -> bar"}
+```
+
+### `has_prefix`
+
+Checks whether a string has a prefix argument and returns a bool.
+
+```coffee
+t1 = v1.has_prefix("foo")
+t2 = v2.has_prefix("foo")
+
+# In:  {"v1":"foobar","v2":"barfoo"}
+# Out: {"t1":true,"t2":false}
+```
+
+### `has_suffix`
+
+Checks whether a string has a suffix argument and returns a bool.
+
+```coffee
+t1 = v1.has_suffix("foo")
+t2 = v2.has_suffix("foo")
+
+# In:  {"v1":"foobar","v2":"barfoo"}
+# Out: {"t1":false,"t2":true}
 ```
 
 ### `hash`

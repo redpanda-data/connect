@@ -221,6 +221,58 @@ func formatMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"has_prefix", true, hasPrefixMethod,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
+
+func hasPrefixMethod(target Function, args ...interface{}) (Function, error) {
+	prefix := args[0].(string)
+	prefixB := []byte(prefix)
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		switch t := v.(type) {
+		case string:
+			return strings.HasPrefix(t, prefix), nil
+		case []byte:
+			return bytes.HasPrefix(t, prefixB), nil
+		}
+		return nil, fmt.Errorf("expected string value, received %T", v)
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"has_suffix", true, hasSuffixMethod,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
+
+func hasSuffixMethod(target Function, args ...interface{}) (Function, error) {
+	prefix := args[0].(string)
+	prefixB := []byte(prefix)
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		switch t := v.(type) {
+		case string:
+			return strings.HasSuffix(t, prefix), nil
+		case []byte:
+			return bytes.HasSuffix(t, prefixB), nil
+		}
+		return nil, fmt.Errorf("expected string value, received %T", v)
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"hash", true, hashMethod,
 	ExpectStringArg(0),
 	ExpectStringArg(1),
