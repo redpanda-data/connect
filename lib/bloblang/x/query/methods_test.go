@@ -348,6 +348,14 @@ func TestMethods(t *testing.T) {
 			input:  `"foo bar baz".slice(8)`,
 			output: "baz",
 		},
+		"check slice oob string": {
+			input: `"foo bar baz".slice(0, 30)`,
+			err:   `upper slice bound 30 was larger than string size: 11`,
+		},
+		"check slice oob array": {
+			input: `["foo","bar","baz"].slice(0, 30)`,
+			err:   `upper slice bound 30 was larger than array size: 3`,
+		},
 		"check slice invalid": {
 			input: `10.slice(8)`,
 			err:   `expected string or array value, received int64`,

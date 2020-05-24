@@ -812,10 +812,16 @@ var _ = RegisterMethod(
 
 func sliceMethod(target Function, args ...interface{}) (Function, error) {
 	low := args[0].(int64)
+	if low < 0 {
+		return nil, fmt.Errorf("lower slice bound %v must be greater than zero", low)
+	}
 	var high *int64
 	if len(args) > 1 {
 		highV := args[1].(int64)
 		high = &highV
+		if low >= highV {
+			return nil, fmt.Errorf("lower slice bound %v must be lower than upper (%v)", low, highV)
+		}
 	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
@@ -828,17 +834,35 @@ func sliceMethod(target Function, args ...interface{}) (Function, error) {
 			if high != nil {
 				highV = *high
 			}
+			if highV > int64(len(t)) {
+				return nil, fmt.Errorf("upper slice bound %v was larger than string size: %v", highV, len(t))
+			}
+			if low >= highV {
+				return nil, fmt.Errorf("lower slice bound %v must be lower than upper bound (%v) and target length (%v)", low, highV, len(t))
+			}
 			return t[low:highV], nil
 		case []byte:
 			highV := int64(len(t))
 			if high != nil {
 				highV = *high
 			}
+			if highV > int64(len(t)) {
+				return nil, fmt.Errorf("upper slice bound %v was larger than string size: %v", highV, len(t))
+			}
+			if low >= highV {
+				return nil, fmt.Errorf("lower slice bound %v must be lower than upper bound (%v) and target length (%v)", low, highV, len(t))
+			}
 			return t[low:highV], nil
 		case []interface{}:
 			highV := int64(len(t))
 			if high != nil {
 				highV = *high
+			}
+			if highV > int64(len(t)) {
+				return nil, fmt.Errorf("upper slice bound %v was larger than array size: %v", highV, len(t))
+			}
+			if low >= highV {
+				return nil, fmt.Errorf("lower slice bound %v must be lower than upper bound (%v) and target length (%v)", low, highV, len(t))
 			}
 			return t[low:highV], nil
 		}

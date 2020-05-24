@@ -69,7 +69,7 @@ foo = bar bar = baz
 		},
 		"bad char": {
 			mapping: `!foo = bar`,
-			err:     `line 1 char 1: expected one of: [import map let meta target-path]`,
+			err:     `line 1 char 6: expected: end-of-input`,
 		},
 		"bad char 2": {
 			mapping: `let foo = bar

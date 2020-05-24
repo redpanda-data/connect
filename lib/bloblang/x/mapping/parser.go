@@ -170,14 +170,12 @@ func NewExecutor(mapping string) (*Executor, error) {
 	lineIndexes := getLineIndexes(mapping)
 
 	in := []rune(mapping)
-	res := parseExecutor(lineIndexes)(in)
+	res := parser.BestMatch(
+		parseExecutor(lineIndexes),
+		singleRootMapping(),
+	)(in)
 	if res.Err != nil {
-		singleRes := singleRootMapping()(in)
-		if singleRes.Err == nil {
-			res = singleRes
-		} else {
-			return nil, wrapParserErr(lineIndexes, res.Err)
-		}
+		return nil, wrapParserErr(lineIndexes, res.Err)
 	}
 
 	return res.Payload.(*Executor), nil
