@@ -202,7 +202,7 @@ and chat in either [the Gitter community][benthos-gitter] or the
 [compose-examples]: resources/docker/compose_examples
 [streams-api]: https://www.benthos.dev/docs/guides/streams_mode/streams_api
 [streams-mode]: https://www.benthos.dev/docs/guides/streams_mode/about
-[general-docs]: https://www.benthos.dev/docs
+[general-docs]: https://www.benthos.dev/docs/about
 [env-config]: config/env/README.md
 [config-doc]: https://www.benthos.dev/docs/configuration/about
 [serverless]: https://www.benthos.dev/docs/guides/serverless/about
