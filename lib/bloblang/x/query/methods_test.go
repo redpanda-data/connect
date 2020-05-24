@@ -156,11 +156,11 @@ func TestMethods(t *testing.T) {
 			output: `2aae6c35c94fcfb415dbe95f408b9ce91ee846ed`,
 		},
 		"check hmac sha1 hash": {
-			input:  `"hello world".hash("hmac-sha1","static-key").encode("hex")`,
+			input:  `"hello world".hash("hmac_sha1","static-key").encode("hex")`,
 			output: `d87e5f068fa08fe90bb95bc7c8344cb809179d76`,
 		},
 		"check hmac sha1 hash 2": {
-			input:  `"hello world".hash("hmac-sha1","foo").encode("hex")`,
+			input:  `"hello world".hash("hmac_sha1","foo").encode("hex")`,
 			output: `20224529cc42a39bacc96459f6ead9d17da7f128`,
 		},
 		"check sha256 hash": {
@@ -168,7 +168,7 @@ func TestMethods(t *testing.T) {
 			output: `b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9`,
 		},
 		"check hmac sha256 hash": {
-			input:  `"hello world".hash("hmac-sha256","static-key").encode("hex")`,
+			input:  `"hello world".hash("hmac_sha256","static-key").encode("hex")`,
 			output: `b1cdce8b2add1f96135b2506f8ab748ae8ef15c49c0320357a6d168c42e20746`,
 		},
 		"check sha512 hash": {
@@ -176,7 +176,7 @@ func TestMethods(t *testing.T) {
 			output: `309ecc489c12d6eb4cc40f50c902f2b4d0ed77ee511a7c7a9bcd3ca86d4cd86f989dd35bc5ff499670da34255b45b0cfd830e81f605dcf7dc5542e93ae9cd76f`,
 		},
 		"check hmac sha512 hash": {
-			input:  `"hello world".hash("hmac-sha512","static-key").encode("hex")`,
+			input:  `"hello world".hash("hmac_sha512","static-key").encode("hex")`,
 			output: `fd5d5ed60b96e820ebaace4fed962a401adefd3e89c51a374f0bb7f49ed02892af8bc8591628dcbc8b5f065df6bb06588cba95d488c1c8b88faa7cbe08e4558d`,
 		},
 		"check xxhash64 hash": {

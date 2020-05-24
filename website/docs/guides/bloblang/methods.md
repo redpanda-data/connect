@@ -388,13 +388,13 @@ foo = template.format(arg1, arg2)
 
 Hashes a string or byte array according to a chosen algorithm and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][method.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.
 
-Available algorithms are: `hmac-sha1`, `hmac-sha256`, `hmac-sha512`, `sha1`, `sha256`, `sha512`, `xxhash64`.
+Available algorithms are: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `sha1`, `sha256`, `sha512`, `xxhash64`.
 
-The following algorithms require a key, which is specified as a second argument: `hmac-sha1`, `hmac-sha256`, `hmac-sha512`.
+The following algorithms require a key, which is specified as a second argument: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`.
 
 ```coffee
 h1 = value.hash("sha1").encode("hex")
-h2 = value.hash("hmac-sha1","static-key").encode("hex")
+h2 = value.hash("hmac_sha1","static-key").encode("hex")
 
 # In:  {"value":"hello world"}
 # Out: {"h1":"2aae6c35c94fcfb415dbe95f408b9ce91ee846ed","h2":"d87e5f068fa08fe90bb95bc7c8344cb809179d76"}

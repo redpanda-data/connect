@@ -233,7 +233,7 @@ func hashMethod(target Function, args ...interface{}) (Function, error) {
 	}
 	var hashFn func([]byte) ([]byte, error)
 	switch args[0].(string) {
-	case "hmac-sha1":
+	case "hmac_sha1", "hmac-sha1":
 		if len(key) == 0 {
 			return nil, fmt.Errorf("hash algorithm %v requires a key argument", args[0].(string))
 		}
@@ -242,7 +242,7 @@ func hashMethod(target Function, args ...interface{}) (Function, error) {
 			hasher.Write(b)
 			return hasher.Sum(nil), nil
 		}
-	case "hmac-sha256":
+	case "hmac_sha256", "hmac-sha256":
 		if len(key) == 0 {
 			return nil, fmt.Errorf("hash algorithm %v requires a key argument", args[0].(string))
 		}
@@ -251,7 +251,7 @@ func hashMethod(target Function, args ...interface{}) (Function, error) {
 			hasher.Write(b)
 			return hasher.Sum(nil), nil
 		}
-	case "hmac-sha512":
+	case "hmac_sha512", "hmac-sha512":
 		if len(key) == 0 {
 			return nil, fmt.Errorf("hash algorithm %v requires a key argument", args[0].(string))
 		}
