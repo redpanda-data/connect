@@ -8,6 +8,12 @@ Bloblang, or blobl for short (pronounced "blobble"), is a language designed spec
 
 Bloblang is available as a [mapping processor][blobl.proc], as a [condition][blobl.cond], and it's also possible to use blobl queries in [function interpolations][blobl.interp].
 
+You can also execute bloblang mappings on the command line with the `blobl` subcommand:
+
+```shell
+$ cat data.jsonl | benthos blobl 'foo.(bar | baz).buz'
+```
+
 ## Assignment
 
 An assignment consists of a left-hand-side assignment target and a right-hand-side mapping query.

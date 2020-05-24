@@ -330,7 +330,11 @@ func TestMethods(t *testing.T) {
 		},
 		"check slice invalid": {
 			input: `10.slice(8)`,
-			err:   `expected string value, received int64`,
+			err:   `expected string or array value, received int64`,
+		},
+		"check slice array": {
+			input:  `["foo", "bar", "baz", "buz"].slice(1, 3)`,
+			output: []interface{}{"bar", "baz"},
 		},
 		"check regexp match": {
 			input:  `"there are 10 puppies".re_match("[0-9]")`,

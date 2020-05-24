@@ -285,6 +285,23 @@ Merge a source object into an existing destination object. When a collision is f
 root = this.apply("foo").merge(this.apply("bar"))
 ```
 
+### `slice`
+
+Extract a slice from a string or array value by specifying two indices, a low and high bound, which selects a half-open range that includes the first element, but excludes the last one.
+
+If the second index is omitted then it defaults to the length of the input string.
+
+```coffee
+beginning = value.slice(0, 2)
+end = value.slice(4)
+
+# In:  {"value":"foo bar"}
+# Out: {"beginning":"fo","end":"bar"}
+
+# In:  {"value":["foo","bar","baz","buz","bev"]}
+# Out: {"beginning":["foo","bar"],"end":["bev"]}
+```
+
 ### `sort`
 
 Attempts to sort the values of an array in increasing order. The type of all values must match in order for the ordering to be accurate. Supports strings, integers and float values.
@@ -461,20 +478,6 @@ new_value = value.re_replace("ADD ([0-9]+)","+($1)")
 
 # In:  {"value":"foo ADD 70"}
 # Out: {"new_value":"foo +(70)"}
-```
-
-### `slice`
-
-Extract a slice from a string value by specifying two indices, a low and high bound, which selects a half-open range that includes the first element, but excludes the last one. 
-
-If the second index is omitted then it defaults to the length of the input string.
-
-```coffee
-beginning = value.slice(0, 3)
-end = value.slice(8)
-
-# In:  {"value":"foo bar baz"}
-# Out: {"beginning":"foo","end":"baz"}
 ```
 
 ### `split`

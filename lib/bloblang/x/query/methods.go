@@ -804,6 +804,51 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"slice", true, sliceMethod,
+	ExpectAtLeastOneArg(),
+	ExpectIntArg(0),
+	ExpectIntArg(1),
+)
+
+func sliceMethod(target Function, args ...interface{}) (Function, error) {
+	low := args[0].(int64)
+	var high *int64
+	if len(args) > 1 {
+		highV := args[1].(int64)
+		high = &highV
+	}
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		switch t := v.(type) {
+		case string:
+			highV := int64(len(t))
+			if high != nil {
+				highV = *high
+			}
+			return t[low:highV], nil
+		case []byte:
+			highV := int64(len(t))
+			if high != nil {
+				highV = *high
+			}
+			return t[low:highV], nil
+		case []interface{}:
+			highV := int64(len(t))
+			if high != nil {
+				highV = *high
+			}
+			return t[low:highV], nil
+		}
+		return nil, fmt.Errorf("expected string or array value, received %T", v)
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"sum", false, sumMethod,
 	ExpectNArgs(0),
 )
