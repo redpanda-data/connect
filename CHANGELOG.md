@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Flag `log` added to `test` sub command to allow logging during tests.
 - New subcommand `blobl` added for convenient mapping over the command line.
+- Lots of new bloblang methods.
 
 ### Fixed
 
