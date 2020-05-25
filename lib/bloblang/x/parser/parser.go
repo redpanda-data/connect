@@ -909,7 +909,7 @@ func bestMatch(input []rune, left, right Result) (Result, bool) {
 			return left, false
 		}
 		if xerrors.As(left.Err, &pos) {
-			matchedLeft = pos.Position
+			matchedLeft = pos.Position - 1
 		}
 	}
 	if right.Err != nil {
@@ -917,7 +917,7 @@ func bestMatch(input []rune, left, right Result) (Result, bool) {
 			return right, false
 		}
 		if xerrors.As(right.Err, &pos) {
-			matchedRight = pos.Position
+			matchedRight = pos.Position - 1
 		}
 	}
 	if matchedRight > matchedLeft {

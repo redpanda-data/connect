@@ -210,6 +210,16 @@ zed = deleted()
 			input:   []part{{Content: `{"foo":10}`}},
 			output:  part{Content: `{"result":12}`},
 		},
+		"simple root query 2": {
+			mapping: `foo.bar`,
+			input:   []part{{Content: `{"foo":{"bar":10}}`}},
+			output:  part{Content: `10`},
+		},
+		"simple root query 3": {
+			mapping: `root = foo.bar`,
+			input:   []part{{Content: `{"foo":{"bar":10}}`}},
+			output:  part{Content: `10`},
+		},
 		"simple json map with comments": {
 			mapping: `
 # Here's a comment
