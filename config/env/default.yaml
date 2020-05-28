@@ -627,6 +627,7 @@ output:
             enabled: ${OUTPUT_AMQP_TLS_ENABLED:false}
             root_cas_file: ${OUTPUT_AMQP_TLS_ROOT_CAS_FILE}
             skip_cert_verify: ${OUTPUT_AMQP_TLS_SKIP_CERT_VERIFY:false}
+          type: ${OUTPUT_AMQP_TYPE}
           url: ${OUTPUT_AMQP_URL:amqp://guest:guest@localhost:5672/}
         amqp_0_9:
           exchange: ${OUTPUT_AMQP_0_9_EXCHANGE:benthos-exchange}
@@ -643,6 +644,7 @@ output:
             enabled: ${OUTPUT_AMQP_0_9_TLS_ENABLED:false}
             root_cas_file: ${OUTPUT_AMQP_0_9_TLS_ROOT_CAS_FILE}
             skip_cert_verify: ${OUTPUT_AMQP_0_9_TLS_SKIP_CERT_VERIFY:false}
+          type: ${OUTPUT_AMQP_0_9_TYPE}
           url: ${OUTPUT_AMQP_0_9_URL:amqp://guest:guest@localhost:5672/}
         cache:
           key: ${OUTPUT_CACHE_KEY:${!count("items")}-${!timestamp_unix_nano()}}

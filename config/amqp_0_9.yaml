@@ -53,6 +53,7 @@ output:
       enabled: false
       root_cas_file: ""
       skip_cert_verify: false
+    type: ""
     url: amqp://guest:guest@localhost:5672/
 resources:
   caches: {}

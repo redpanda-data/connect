@@ -34,6 +34,7 @@ type AMQPConfig struct {
 	Exchange        string                    `json:"exchange" yaml:"exchange"`
 	ExchangeDeclare AMQPExchangeDeclareConfig `json:"exchange_declare" yaml:"exchange_declare"`
 	BindingKey      string                    `json:"key" yaml:"key"`
+	Type            string                    `json:"type" yaml:"type"`
 	Persistent      bool                      `json:"persistent" yaml:"persistent"`
 	Mandatory       bool                      `json:"mandatory" yaml:"mandatory"`
 	Immediate       bool                      `json:"immediate" yaml:"immediate"`
@@ -52,6 +53,7 @@ func NewAMQPConfig() AMQPConfig {
 			Durable: true,
 		},
 		BindingKey: "benthos-key",
+		Type:       "",
 		Persistent: false,
 		Mandatory:  false,
 		Immediate:  false,
@@ -63,7 +65,8 @@ func NewAMQPConfig() AMQPConfig {
 
 // AMQP is an output type that serves AMQP messages.
 type AMQP struct {
-	key field.Expression
+	key     field.Expression
+	msgType field.Expression
 
 	log   log.Modular
 	stats metrics.Type
@@ -92,6 +95,9 @@ func NewAMQP(conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error
 	var err error
 	if a.key, err = field.New(conf.BindingKey); err != nil {
 		return nil, fmt.Errorf("failed to parse binding key expression: %v", err)
+	}
+	if a.msgType, err = field.New(conf.Type); err != nil {
+		return nil, fmt.Errorf("failed to parse type property expression: %v", err)
 	}
 	if conf.Persistent {
 		a.deliveryMode = amqp.Persistent
@@ -208,6 +214,7 @@ func (a *AMQP) Write(msg types.Message) error {
 	}
 
 	bindingKey := strings.Replace(a.key.String(0, msg), "/", ".", -1)
+	msgType := strings.Replace(a.msgType.String(0, msg), "/", ".", -1)
 
 	return msg.Iter(func(i int, p types.Part) error {
 		headers := amqp.Table{}
@@ -227,6 +234,7 @@ func (a *AMQP) Write(msg types.Message) error {
 				Body:            p.Get(),
 				DeliveryMode:    a.deliveryMode, // 1=non-persistent, 2=persistent
 				Priority:        0,              // 0-9
+				Type:            msgType,
 				// a bunch of application/implementation-specific fields
 			},
 		)
