@@ -85,11 +85,11 @@ func TestLiteralParser(t *testing.T) {
 		},
 		"bad array element": {
 			mapping: `["foo",(5 + "not a number"),"bar"]`,
-			err:     "strconv.ParseFloat: parsing \"not a number\": invalid syntax",
+			err:     "expected number value, found string: not a number",
 		},
 		"bad object value": {
 			mapping: `{"foo":(5 + "not a number")}`,
-			err:     "failed to resolve 'foo' value: strconv.ParseFloat: parsing \"not a number\": invalid syntax",
+			err:     "failed to resolve 'foo' value: expected number value, found string: not a number",
 		},
 	}
 

@@ -93,7 +93,7 @@ func boolMethod(target Function, args ...interface{}) (Function, error) {
 				Err:       err,
 			}
 		}
-		f, err := IGetBool(v)
+		f, err := IToBool(v)
 		if err != nil {
 			if len(args) > 0 {
 				return defaultBool, nil
@@ -722,7 +722,7 @@ func numberMethod(target Function, args ...interface{}) (Function, error) {
 				Err:       err,
 			}
 		}
-		f, err := IGetNumber(v)
+		f, err := IToNumber(v)
 		if err != nil {
 			if len(args) > 0 {
 				return defaultNum, nil
@@ -891,10 +891,10 @@ func sumMethod(target Function, _ ...interface{}) (Function, error) {
 			return v, nil
 		case []interface{}:
 			var total float64
-			for _, v := range t {
+			for i, v := range t {
 				n, nErr := IGetNumber(v)
 				if nErr != nil {
-					err = fmt.Errorf("unexpected type in array, expected number, found: %T", v)
+					err = fmt.Errorf("index %v: %w", i, nErr)
 				} else {
 					total += n
 				}

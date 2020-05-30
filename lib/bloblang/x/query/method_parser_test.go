@@ -224,7 +224,7 @@ func TestMethodParser(t *testing.T) {
 			},
 		},
 		"map each uncaught errors": {
-			input:  `json("foo").map_each(this + 10)`,
+			input:  `json("foo").map_each(this.number(0) + 10)`,
 			output: `[11,12,10,12]`,
 			messages: []easyMsg{
 				{content: `{"foo":[1,2,"nope",2]}`},
@@ -298,7 +298,7 @@ func TestMethodParser(t *testing.T) {
 		},
 		"test sum standard array 3": {
 			input:  `json("foo").sum()`,
-			output: `12`,
+			output: `8`,
 			messages: []easyMsg{
 				{content: `{"foo":[1,2,2,"4",3]}`},
 			},
@@ -315,7 +315,7 @@ func TestMethodParser(t *testing.T) {
 		},
 		"test sum standard array 5": {
 			input:  `json("foo").from_all().sum()`,
-			output: `16`,
+			output: `13`,
 			messages: []easyMsg{
 				{content: `{"foo":1}`},
 				{content: `{"foo":"3"}`},
@@ -332,7 +332,7 @@ func TestMethodParser(t *testing.T) {
 			},
 		},
 		"test map json 2": {
-			input:  `json("foo").map(bar + 10)`,
+			input:  `json("foo").map(bar.number() + 10)`,
 			output: `13`,
 			messages: []easyMsg{
 				{content: `{"foo":{"bar":"3"}}`},

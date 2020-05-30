@@ -32,7 +32,7 @@ func TestArithmetic(t *testing.T) {
 			output: `1`,
 		},
 		"mod two strings": {
-			input:  `"7" % "4"`,
+			input:  `"7".number() % "4".number()`,
 			output: `3`,
 		},
 		"comparisons": {
@@ -83,7 +83,7 @@ func TestArithmetic(t *testing.T) {
 			},
 		},
 		"two ints and a string": {
-			input:  `json("foo") + json("bar") + meta("baz")`,
+			input:  `json("foo") + json("bar") + meta("baz").number(0)`,
 			output: `17`,
 			messages: []easyMsg{
 				{
@@ -95,21 +95,14 @@ func TestArithmetic(t *testing.T) {
 			},
 		},
 		"two ints and a string 2": {
-			input:  `json("foo") + json("bar") + "baz"`,
+			input:  `json("foo") + json("bar") + "baz".number(0)`,
 			output: `17`,
 			messages: []easyMsg{
 				{content: `{"foo":5,"bar":12}`},
 			},
 		},
-		"two ints and a string 3": {
-			input:  `json("foo") + json("bar") + "2"`,
-			output: `19`,
-			messages: []easyMsg{
-				{content: `{"foo":5,"bar":12}`},
-			},
-		},
 		"add three ints": {
-			input:  `json("foo") + json("bar") + meta("baz")`,
+			input:  `json("foo") + json("bar") + meta("baz").number()`,
 			output: `20`,
 			messages: []easyMsg{
 				{
@@ -128,7 +121,7 @@ func TestArithmetic(t *testing.T) {
 			},
 		},
 		"sub and add two ints": {
-			input:  `json("foo") + json("bar") - meta("foo") - meta("bar")`,
+			input:  `json("foo") + json("bar") - meta("foo").number() - meta("bar").number()`,
 			output: `6`,
 			messages: []easyMsg{
 				{
@@ -138,20 +131,6 @@ func TestArithmetic(t *testing.T) {
 						"bar": "8",
 					},
 				},
-			},
-		},
-		"sub bad int": {
-			input:  `json("foo") - json("bar")`,
-			output: `5`,
-			messages: []easyMsg{
-				{content: `{"foo":5,"bar":"not a number"}`},
-			},
-		},
-		"sub from bad int": {
-			input:  `json("foo") - json("bar")`,
-			output: `-7`,
-			messages: []easyMsg{
-				{content: `{"foo":"not a number","bar":7}`},
 			},
 		},
 		"multiply two ints": {
@@ -316,7 +295,7 @@ func TestArithmeticLiterals(t *testing.T) {
 
 	tests := map[string]string{
 		`2 == 3`:               `false`,
-		`"2" == 2`:             `false`,
+		`"2".number() == 2`:    `true`,
 		`"2" == "2"`:           `true`,
 		`"2" == "3"`:           `false`,
 		`2.0 == 2`:             `true`,
@@ -340,6 +319,12 @@ func TestArithmeticLiterals(t *testing.T) {
 		`(2 == 2) && (2 != 2)`: `false`,
 		`(2 == 2) || (2 != 2)`: `true`,
 		`(2 == 1) || (2 != 2)`: `false`,
+		`null == null`:         `true`,
+		`{} == {}`:             `true`,
+		`["foo"] == ["foo"]`:   `true`,
+		`["bar"] == ["foo"]`:   `false`,
+		`["bar"] != ["foo"]`:   `true`,
+		`{} != null`:           `true`,
 	}
 
 	for k, v := range tests {

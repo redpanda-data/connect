@@ -72,7 +72,7 @@ func TestMethods(t *testing.T) {
 		},
 		"check bool 7": {
 			input: `"nope".bool()`,
-			err:   `function returned non-bool type: string`,
+			err:   `expected bool value, found string: nope`,
 		},
 		"check bool 8": {
 			input:  `"nope".bool(true)`,
@@ -599,7 +599,7 @@ func TestMethods(t *testing.T) {
 			messages: []easyMsg{
 				{content: `{}`},
 			},
-			err: "function returned non-numerical type: <nil>",
+			err: "expected number value, found null",
 		},
 		"check keys literal": {
 			input:    `{"foo":1,"bar":2}.keys().sort()`,

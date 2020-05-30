@@ -117,7 +117,7 @@ func TestBloblangFiltering(t *testing.T) {
 	conf := NewConfig()
 	conf.Bloblang = `
 	root = match {
-		(foo | bar).delete == true => deleted(),
+		(foo | bar).delete.or(false) => deleted(),
 	}
 	`
 	proc, err := NewBloblang(conf, nil, log.Noop(), metrics.Noop())

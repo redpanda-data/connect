@@ -11,6 +11,51 @@ import (
 
 //------------------------------------------------------------------------------
 
+// ValueType represents a discrete value type supported by Bloblang queries.
+type ValueType string
+
+// ValueType variants.
+var (
+	ValueString  ValueType = "string"
+	ValueBytes   ValueType = "bytes"
+	ValueNumber  ValueType = "number"
+	ValueBool    ValueType = "bool"
+	ValueArray   ValueType = "array"
+	ValueObject  ValueType = "object"
+	ValueNull    ValueType = "null"
+	ValueDelete  ValueType = "delete"
+	ValueNothing ValueType = "nothing"
+	ValueUnknown ValueType = "unknown"
+)
+
+// ITypeOf returns the type of a boxed value as a discrete ValueType. If the
+// type of the value is unknown then ValueUnknown is returned.
+func ITypeOf(i interface{}) ValueType {
+	switch i.(type) {
+	case string:
+		return ValueString
+	case []byte:
+		return ValueBytes
+	case int64, uint64, float64:
+		return ValueNumber
+	case bool:
+		return ValueBool
+	case []interface{}:
+		return ValueArray
+	case map[string]interface{}:
+		return ValueObject
+	case Delete:
+		return ValueDelete
+	case Nothing:
+		return ValueNothing
+	case nil:
+		return ValueNull
+	}
+	return ValueUnknown
+}
+
+//------------------------------------------------------------------------------
+
 // Delete is a special type that serializes to `null` when forced but indicates
 // a target should be deleted.
 type Delete *struct{}
@@ -29,12 +74,8 @@ func IGetNumber(v interface{}) (float64, error) {
 		return float64(t), nil
 	case float64:
 		return t, nil
-	case []byte:
-		return strconv.ParseFloat(string(t), 64)
-	case string:
-		return strconv.ParseFloat(t, 64)
 	}
-	return 0, fmt.Errorf("function returned non-numerical type: %T", v)
+	return 0, NewTypeError(v, ValueNumber)
 }
 
 // IGetInt takes a boxed value and attempts to extract an integer (int64) from
@@ -47,12 +88,8 @@ func IGetInt(v interface{}) (int64, error) {
 		return int64(t), nil
 	case float64:
 		return int64(t), nil
-	case []byte:
-		return strconv.ParseInt(string(t), 10, 64)
-	case string:
-		return strconv.ParseInt(t, 10, 64)
 	}
-	return 0, fmt.Errorf("function returned non-numerical type: %T", v)
+	return 0, NewTypeError(v, ValueNumber)
 }
 
 // IGetBool takes a boxed value and attempts to extract a boolean from it.
@@ -66,21 +103,20 @@ func IGetBool(v interface{}) (bool, error) {
 		return t > 0, nil
 	case float64:
 		return t > 0, nil
-	case []byte:
-		if bytes.Equal(t, []byte("true")) {
-			return true, nil
-		} else if bytes.Equal(t, []byte("false")) {
-			return false, nil
-		}
-	case string:
-		switch t {
-		case "true":
-			return true, nil
-		case "false":
-			return false, nil
-		}
 	}
-	return false, fmt.Errorf("function returned non-bool type: %T", v)
+	return false, NewTypeError(v, ValueBool)
+}
+
+// IGetString takes a boxed value and attempts to return a string value. Returns
+// an error if the value is not a string or byte slice.
+func IGetString(v interface{}) (string, error) {
+	switch t := v.(type) {
+	case string:
+		return t, nil
+	case []byte:
+		return string(t), nil
+	}
+	return "", NewTypeError(v, ValueString)
 }
 
 // IIsNull returns whether a bloblang type is null, this includes Delete and
@@ -170,6 +206,53 @@ func IToString(i interface{}) string {
 	}
 	// Last resort
 	return gabs.Wrap(i).String()
+}
+
+// IToNumber takes a boxed value and attempts to extract a number (float64)
+// from it or parse one.
+func IToNumber(v interface{}) (float64, error) {
+	switch t := v.(type) {
+	case int64:
+		return float64(t), nil
+	case uint64:
+		return float64(t), nil
+	case float64:
+		return t, nil
+	case []byte:
+		return strconv.ParseFloat(string(t), 64)
+	case string:
+		return strconv.ParseFloat(t, 64)
+	}
+	return 0, NewTypeError(v, ValueNumber)
+}
+
+// IToBool takes a boxed value and attempts to extract a boolean from it or
+// parse it into a bool.
+func IToBool(v interface{}) (bool, error) {
+	switch t := v.(type) {
+	case bool:
+		return t, nil
+	case int64:
+		return t > 0, nil
+	case uint64:
+		return t > 0, nil
+	case float64:
+		return t > 0, nil
+	case []byte:
+		if bytes.Equal(t, []byte("true")) {
+			return true, nil
+		} else if bytes.Equal(t, []byte("false")) {
+			return false, nil
+		}
+	case string:
+		switch t {
+		case "true":
+			return true, nil
+		case "false":
+			return false, nil
+		}
+	}
+	return false, NewTypeError(v, ValueBool)
 }
 
 // IClone performs a deep copy of a generic value.

@@ -2,8 +2,6 @@
 title: Unit Testing
 ---
 
-EXPERIMENTAL: The tooling outlined on this document are experimental and therefore subject to change outside of major version releases.
-
 The Benthos service offers a command `benthos test ./...` for running unit tests on sections of a configuration file. This makes it easy to protect your config files from regressions over time.
 
 ## Contents
