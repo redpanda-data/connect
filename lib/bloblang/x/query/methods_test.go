@@ -26,6 +26,38 @@ func TestMethods(t *testing.T) {
 		messages []easyMsg
 		index    int
 	}{
+		"check sort custom": {
+			input:  `[3,22,13,7,30].sort(left > right)`,
+			output: []interface{}{int64(30), int64(22), int64(13), int64(7), int64(3)},
+		},
+		"check sort strings custom": {
+			input:  `["c","a","f","z"].sort(left > right)`,
+			output: []interface{}{"z", "f", "c", "a"},
+		},
+		"check join": {
+			input:  `["foo","bar"].join(",")`,
+			output: "foo,bar",
+		},
+		"check join 2": {
+			input:  `["foo"].join(",")`,
+			output: "foo",
+		},
+		"check join 3": {
+			input:  `[].join(",")`,
+			output: "",
+		},
+		"check join no delim": {
+			input:  `["foo","bar"].join()`,
+			output: "foobar",
+		},
+		"check join fail not array": {
+			input: `"foo".join(",")`,
+			err:   "expected array value, found string: foo",
+		},
+		"check join fail number": {
+			input: `["foo",10,"bar"].join(",")`,
+			err:   "failed to join element 1: expected string value, found number: 10",
+		},
 		"check regexp find all submatch": {
 			input: `"-axxb-ab-".re_find_all_submatch("a(x*)b")`,
 			output: []interface{}{

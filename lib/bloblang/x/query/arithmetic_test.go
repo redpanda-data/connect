@@ -19,6 +19,10 @@ func TestArithmetic(t *testing.T) {
 		messages []easyMsg
 		index    int
 	}{
+		"add strings": {
+			input:  `"foo" + "bar" + "%v-%v".format(10, 20)`,
+			output: `foobar10-20`,
+		},
 		"comparisons with not": {
 			input:  `!true || false`,
 			output: `false`,

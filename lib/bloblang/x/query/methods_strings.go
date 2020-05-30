@@ -361,6 +361,49 @@ func hashMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"join", true, joinMethod,
+	ExpectOneOrZeroArgs(),
+	ExpectStringArg(0),
+)
+
+func joinMethod(target Function, args ...interface{}) (Function, error) {
+	var delim string
+	if len(args) > 0 {
+		delim = args[0].(string)
+	}
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		slice, ok := v.([]interface{})
+		if !ok {
+			return nil, NewTypeError(v, ValueArray)
+		}
+
+		var buf bytes.Buffer
+		for i, sv := range slice {
+			if i > 0 {
+				buf.WriteString(delim)
+			}
+			switch t := sv.(type) {
+			case string:
+				buf.WriteString(t)
+			case []byte:
+				buf.Write(t)
+			default:
+				return nil, fmt.Errorf("failed to join element %v: %w", i, NewTypeError(sv, ValueString))
+			}
+		}
+
+		return buf.String(), nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"lowercase", false, lowercaseMethod,
 	ExpectNArgs(0),
 )

@@ -50,15 +50,27 @@ func add(lhs, rhs Function) Function {
 			return nil, err
 		}
 
-		var lhs, rhs float64
-		if lhs, err = IGetNumber(leftV); err == nil {
-			rhs, err = IGetNumber(rightV)
+		switch leftV.(type) {
+		case float64, int64, uint64:
+			var lhs, rhs float64
+			if lhs, err = IGetNumber(leftV); err == nil {
+				rhs, err = IGetNumber(rightV)
+			}
+			if err != nil {
+				return nil, err
+			}
+			return lhs + rhs, nil
+		case string, []byte:
+			var lhs, rhs string
+			if lhs, err = IGetString(leftV); err == nil {
+				rhs, err = IGetString(rightV)
+			}
+			if err != nil {
+				return nil, err
+			}
+			return lhs + rhs, nil
 		}
-		if err != nil {
-			return nil, err
-		}
-
-		return lhs + rhs, nil
+		return nil, NewTypeError(leftV, ValueNumber, ValueString)
 	})
 }
 

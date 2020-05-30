@@ -766,10 +766,55 @@ func orMethod(fn Function, args ...interface{}) (Function, error) {
 
 var _ = RegisterMethod(
 	"sort", false, sortMethod,
-	ExpectNArgs(0),
+	ExpectOneOrZeroArgs(),
 )
 
 func sortMethod(target Function, args ...interface{}) (Function, error) {
+	compareFn := func(ctx FunctionContext, values []interface{}, i, j int) bool {
+		switch values[i].(type) {
+		case float64, int64, uint64:
+			var lhs, rhs float64
+			var err error
+			if lhs, err = IGetNumber(values[i]); err == nil {
+				rhs, err = IGetNumber(values[j])
+			}
+			if err != nil {
+				return false
+			}
+			return lhs < rhs
+		case string, []byte:
+			var lhs, rhs string
+			var err error
+			if lhs, err = IGetString(values[i]); err == nil {
+				rhs, err = IGetString(values[j])
+			}
+			if err != nil {
+				return false
+			}
+			return lhs < rhs
+		}
+		return false
+	}
+	if len(args) > 0 {
+		mapFn, ok := args[0].(Function)
+		if !ok {
+			return nil, fmt.Errorf("expected function param, received %T", args[0])
+		}
+		compareFn = func(ctx FunctionContext, values []interface{}, i, j int) bool {
+			var ctxValue interface{} = map[string]interface{}{
+				"left":  values[i],
+				"right": values[j],
+			}
+			ctx.Value = &ctxValue
+			v, err := mapFn.Exec(ctx)
+			if err != nil {
+				return false
+			}
+			b, _ := v.(bool)
+			return b
+		}
+	}
+
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
@@ -780,20 +825,8 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 			for _, e := range m {
 				values = append(values, e)
 			}
-			// TODO: Solve this with ICompare or something.
 			sort.Slice(values, func(i, j int) bool {
-				switch iV := values[i].(type) {
-				case string:
-					jStr, _ := values[j].(string)
-					return iV < jStr
-				case float64:
-					jFlt, _ := values[j].(float64)
-					return iV < jFlt
-				case int64:
-					jInt, _ := values[j].(int64)
-					return iV < jInt
-				}
-				return false
+				return compareFn(ctx, values, i, j)
 			})
 			return values, nil
 		}

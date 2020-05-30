@@ -316,13 +316,22 @@ end = value.slice(4)
 
 ### `sort`
 
-Attempts to sort the values of an array in increasing order. The type of all values must match in order for the ordering to be accurate. Supports strings, integers and float values.
+Attempts to sort the values of an array in increasing order. The type of all values must match in order for the ordering to be accurate. Supports string and number values.
 
 ```coffee
 sorted = foo.sort()
 
 # In:  {"foo":["bbb","ccc",aaa"]}
 # Out: {"sorted":["aaa","bbb","ccc"]}
+```
+
+It's also possible to specify a custom comparison function by providing a mapping argument that compares a left-hand side value `left` with a right hand side value `right`. This allows you to sort arrays containing non-string or non-number values.
+
+```coffee
+sorted = foo.sort(left.value < right.value)
+
+# In:  {"foo":[{"v":"bbb","id":"foo"},{"v":"ccc","id":"bar"},{"v":"aaa","id":"baz"}]}
+# Out: {"sorted":[{"id":"baz","v":"aaa"},{"id":"foo","v":"bbb"},{"id":"bar","v":"ccc"}]}
 ```
 
 ### `sum`
@@ -451,6 +460,18 @@ h2 = value.hash("hmac_sha1","static-key").encode("hex")
 
 # In:  {"value":"hello world"}
 # Out: {"h1":"2aae6c35c94fcfb415dbe95f408b9ce91ee846ed","h2":"d87e5f068fa08fe90bb95bc7c8344cb809179d76"}
+```
+
+### `join`
+
+Join an array of strings with an optional delimiter into a single string.
+
+```coffee
+joined_words = words.join()
+joined_numbers = numbers.map_each(this.string()).join(",")
+
+# In:  {"words":["hello","world"],"numbers":[3,8,11]}
+# Out: {"joined_words":"helloworld","joined_numbers":"3,8,11"}
 ```
 
 ### `lowercase`
