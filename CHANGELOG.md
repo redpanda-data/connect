@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New bloblang methods `type`, `re_find_all` and `re_find_all_submatch`.
+- Bloblang now supports multiline strings with triple quotes.
+
 ## 3.15.0 - 2020-05-24
 
 ### Added

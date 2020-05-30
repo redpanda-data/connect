@@ -76,7 +76,7 @@ func matchExpressionParser() parser.Type {
 	return func(input []rune) parser.Result {
 		res := parser.Sequence(
 			parser.Term("match"),
-			parser.Discard(parser.SpacesAndTabs()),
+			parser.SpacesAndTabs(),
 			parser.Optional(Parse),
 			whitespace,
 			parser.MustBe(

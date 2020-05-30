@@ -31,6 +31,25 @@ func (e ExpectedError) Error() string {
 	return fmt.Sprintf("expected one of: %v", dedupeStack)
 }
 
+// Append an expected error to another (and remove duplicates).
+func (e ExpectedError) Append(exp ExpectedError) ExpectedError {
+	seen := map[string]struct{}{}
+	new := make([]string, 0, len(e)+len(exp))
+	for _, v := range e {
+		if _, exists := seen[v]; !exists {
+			new = append(new, v)
+			seen[v] = struct{}{}
+		}
+	}
+	for _, v := range exp {
+		if _, exists := seen[v]; !exists {
+			new = append(new, v)
+			seen[v] = struct{}{}
+		}
+	}
+	return ExpectedError(new)
+}
+
 // ExpectedFatalError represents a parser error where one of a list of possible
 // tokens was expected but not found, and this is a fatal error.
 type ExpectedFatalError []string
@@ -112,7 +131,7 @@ func selectErr(errLeft, errRight error, into *error) bool {
 	if xerrors.As(errLeft, &posLeft) && posLeft.Position > 0 {
 		if xerrors.As(errRight, &posRight) && posRight.Position > 0 {
 			if posLeft.Position == posRight.Position {
-				expLeft = append(expLeft, expRight...)
+				expLeft = expLeft.Append(expRight)
 				posLeft.Err = expLeft
 				*into = posLeft
 			} else if posLeft.Position > posRight.Position {
@@ -131,8 +150,7 @@ func selectErr(errLeft, errRight error, into *error) bool {
 	}
 
 	// Otherwise, just return combined expected.
-	expLeft = append(expLeft, expRight...)
-	*into = expLeft
+	*into = expLeft.Append(expRight)
 	return true
 }
 
@@ -462,6 +480,7 @@ func LiteralValue() Type {
 	return OneOf(
 		Boolean(),
 		Number(),
+		TripleQuoteString(),
 		QuotedString(),
 		Null(),
 		Array(),
@@ -571,6 +590,37 @@ func SnakeCase() Type {
 	}
 }
 
+// TripleQuoteString parses a single instance of a triple-quoted multiple line
+// string. The result is the inner contents.
+func TripleQuoteString() Type {
+	exp := ExpectedError{"quoted-string"}
+	return NotEnd(func(input []rune) Result {
+		if len(input) < 6 ||
+			input[0] != '"' ||
+			input[1] != '"' ||
+			input[2] != '"' {
+			return Result{
+				Err:       exp,
+				Remaining: input,
+			}
+		}
+		for i := 2; i < len(input)-2; i++ {
+			if input[i] == '"' &&
+				input[i+1] == '"' &&
+				input[i+2] == '"' {
+				return Result{
+					Payload:   string(input[3:i]),
+					Remaining: input[i+3:],
+				}
+			}
+		}
+		return Result{
+			Err:       exp,
+			Remaining: input,
+		}
+	}, exp)
+}
+
 // QuotedString parses a single instance of a quoted string. The result is the
 // inner contents unescaped.
 func QuotedString() Type {
@@ -583,9 +633,8 @@ func QuotedString() Type {
 				Remaining: input,
 			}
 		}
-		i := 1
 		escaped := false
-		for ; i < len(input); i++ {
+		for i := 1; i < len(input); i++ {
 			if input[i] == '"' && !escaped {
 				unquoted, err := strconv.Unquote(string(input[:i+1]))
 				if err != nil {
@@ -606,7 +655,7 @@ func QuotedString() Type {
 			}
 		}
 		return Result{
-			Err:       ExpectedError{"quoted-string"},
+			Err:       exp,
 			Remaining: input,
 		}
 	}, exp)
@@ -879,11 +928,11 @@ func Expect(parser Type, expected ...string) Type {
 // OneOf accepts one or more parsers and tries them in order against an input.
 // If a parser returns an ExpectedError then the next parser is tried and so
 // on. Otherwise, the result is returned.
-func OneOf(Types ...Type) Type {
+func OneOf(parsers ...Type) Type {
 	return func(input []rune) Result {
 		var err error
 	tryParsers:
-		for _, p := range Types {
+		for _, p := range parsers {
 			res := p(input)
 			if res.Err != nil {
 				if selectErr(err, res.Err, &err) {

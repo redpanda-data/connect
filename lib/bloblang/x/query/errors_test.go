@@ -12,6 +12,11 @@ func TestTypeError(t *testing.T) {
 		types  []ValueType
 		exp    string
 	}{
+		"want nothing get str": {
+			actual: "hello world",
+			types:  []ValueType{},
+			exp:    `found unexpected value type string`,
+		},
 		"want num get str": {
 			actual: "hello world",
 			types:  []ValueType{ValueNumber},

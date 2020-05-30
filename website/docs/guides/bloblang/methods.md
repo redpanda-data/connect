@@ -78,6 +78,18 @@ If the result of the target function fails or resolves to `null`, returns the ar
 doc.id = thing.id.or(uuid_v4())
 ```
 
+### `type`
+
+Returns the type of a value as a string, providing one of the following values: `string`, `bytes`, `number`, `bool`, `array`, `object` or `null`.
+
+```coffee
+bar_type = bar.type()
+foo_type = foo.type()
+
+# In:  {"bar":10,"foo":"is a string"}
+# Out: {"bar_type":"number","foo_type":"string"}
+```
+
 ### `number`
 
 Attempt to parse a value into a number. An optional argument can be provided, in which case if the value cannot be parsed into a number the argument will be returned instead.
@@ -477,6 +489,28 @@ new_value = value.replace("foo","dog")
 
 # In:  {"value":"The foo ate my homework"}
 # Out: {"new_value":"The dog ate my homework"}
+```
+
+### `re_find_all`
+
+Returns an array containing all successive matches of a regular expression in a string.
+
+```coffee
+matches = value.re_find_all("a.")
+
+# In:  {"value":"paranormal"}
+# Out: {"matches":["ar","an","al"]}
+```
+
+### `re_find_all_submatch`
+
+Returns an array of arrays containing all successive matches of the regular expression in a string and the matches, if any, of its subexpressions.
+
+```coffee
+matches = value.re_find_all_submatch("a(x*)b")
+
+# In:  {"value":"-axxb-ab-"}
+# Out: {"matches":[["axxb","xx"],["ab",""]]}
 ```
 
 ### `re_match`

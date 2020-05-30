@@ -26,6 +26,38 @@ func TestMethods(t *testing.T) {
 		messages []easyMsg
 		index    int
 	}{
+		"check regexp find all submatch": {
+			input: `"-axxb-ab-".re_find_all_submatch("a(x*)b")`,
+			output: []interface{}{
+				[]interface{}{"axxb", "xx"},
+				[]interface{}{"ab", ""},
+			},
+		},
+		"check regexp find all submatch bytes": {
+			input:    `content().re_find_all_submatch("a(x*)b")`,
+			messages: []easyMsg{{content: `-axxb-ab-`}},
+			output: []interface{}{
+				[]interface{}{"axxb", "xx"},
+				[]interface{}{"ab", ""},
+			},
+		},
+		"check regexp find all": {
+			input:  `"paranormal".re_find_all("a.")`,
+			output: []interface{}{"ar", "an", "al"},
+		},
+		"check regexp find all bytes": {
+			input:    `content().re_find_all("a.")`,
+			messages: []easyMsg{{content: `paranormal`}},
+			output:   []interface{}{"ar", "an", "al"},
+		},
+		"check type": {
+			input:  `"foobar".type()`,
+			output: "string",
+		},
+		"check type 2": {
+			input:  `match { true == true => "foobar", _ => false }.type()`,
+			output: "string",
+		},
 		"check has_prefix": {
 			input:    `"foobar".has_prefix("foo") && content().has_prefix("foo")`,
 			messages: []easyMsg{{content: `foobar`}},

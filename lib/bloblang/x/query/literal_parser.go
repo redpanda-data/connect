@@ -137,6 +137,7 @@ func dynamicLiteralValueParser() parser.Type {
 	return parser.OneOf(
 		parser.Boolean(),
 		parser.Number(),
+		parser.TripleQuoteString(),
 		parser.QuotedString(),
 		parser.Null(),
 		dynamicArrayParser(),

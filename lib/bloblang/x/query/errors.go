@@ -30,9 +30,9 @@ func (t *TypeError) Error() string {
 		expStr.WriteString(string(exp))
 	}
 	if t.Value != nil {
-		return fmt.Sprintf("expected %v value, found %v: %v", expStr.String(), string(t.Actual), t.Value)
+		return fmt.Sprintf("expected %v value, found %v: %v", expStr.String(), t.Actual, t.Value)
 	}
-	return fmt.Sprintf("expected %v value, found %v", expStr.String(), string(t.Actual))
+	return fmt.Sprintf("expected %v value, found %v", expStr.String(), t.Actual)
 }
 
 // NewTypeError creates a new type error.
@@ -61,7 +61,7 @@ type TypeMismatch struct {
 
 // Error implements the standard error interface.
 func (t *TypeMismatch) Error() string {
-	return fmt.Sprintf("found incomparable types %v and %v", string(t.Left), string(t.Right))
+	return fmt.Sprintf("found incomparable types %v and %v", t.Left, t.Right)
 }
 
 // NewTypeMismatch creates a new type mismatch error.

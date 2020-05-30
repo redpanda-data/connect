@@ -90,12 +90,15 @@ Bloblang supports number, boolean, string, null, array and object literals:
 root = [
   7, false, "string", null, {
     "first": 11,
-    "second": {"foo":"bar"}
+    "second": {"foo":"bar"},
+    "third": """multiple
+lines on this
+string"""
   }
 ]
 
 # In:  {}
-# Out: [7,false,"string",null,{"first":11,"second":{"foo":"bar"}}]
+# Out: [7,false,"string",null,{"first":11,"second":{"foo":"bar"},"third":"multiple\nlines on this\nstring"}]
 ```
 
 ## Comments

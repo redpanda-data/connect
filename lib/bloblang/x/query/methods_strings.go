@@ -473,6 +473,92 @@ func replaceMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"re_find_all", true, regexpFindAllMethod,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
+
+func regexpFindAllMethod(target Function, args ...interface{}) (Function, error) {
+	re, err := regexp.Compile(args[0].(string))
+	if err != nil {
+		return nil, err
+	}
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var result []interface{}
+		switch t := v.(type) {
+		case string:
+			matches := re.FindAllString(t, -1)
+			result = make([]interface{}, 0, len(matches))
+			for _, str := range matches {
+				result = append(result, str)
+			}
+		case []byte:
+			matches := re.FindAll(t, -1)
+			result = make([]interface{}, 0, len(matches))
+			for _, str := range matches {
+				result = append(result, string(str))
+			}
+		default:
+			return nil, fmt.Errorf("expected string value, received %T", v)
+		}
+		return result, nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"re_find_all_submatch", true, regexpFindAllSubmatchMethod,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
+
+func regexpFindAllSubmatchMethod(target Function, args ...interface{}) (Function, error) {
+	re, err := regexp.Compile(args[0].(string))
+	if err != nil {
+		return nil, err
+	}
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var result []interface{}
+		switch t := v.(type) {
+		case string:
+			groupMatches := re.FindAllStringSubmatch(t, -1)
+			result = make([]interface{}, 0, len(groupMatches))
+			for _, matches := range groupMatches {
+				r := make([]interface{}, 0, len(matches))
+				for _, str := range matches {
+					r = append(r, str)
+				}
+				result = append(result, r)
+			}
+		case []byte:
+			groupMatches := re.FindAllSubmatch(t, -1)
+			result = make([]interface{}, 0, len(groupMatches))
+			for _, matches := range groupMatches {
+				r := make([]interface{}, 0, len(matches))
+				for _, str := range matches {
+					r = append(r, string(str))
+				}
+				result = append(result, r)
+			}
+		default:
+			return nil, fmt.Errorf("expected string value, received %T", v)
+		}
+		return result, nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"re_match", true, regexpMatchMethod,
 	ExpectNArgs(1),
 	ExpectStringArg(0),

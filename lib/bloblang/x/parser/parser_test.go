@@ -1283,6 +1283,70 @@ func TestQuotedString(t *testing.T) {
 	}
 }
 
+func TestQuotedMultilineString(t *testing.T) {
+	str := TripleQuoteString()
+
+	tests := map[string]struct {
+		input     string
+		result    interface{}
+		remaining string
+		err       error
+	}{
+		"empty input": {
+			err: ExpectedError{"quoted-string"},
+		},
+		"only quote": {
+			input:     `"""foo"""`,
+			result:    "foo",
+			remaining: "",
+		},
+		"quote plus extra": {
+			input:     `"""foo""" and this`,
+			result:    "foo",
+			remaining: " and this",
+		},
+		"quote with escapes": {
+			input:     `"""foo\u263abar""" and this`,
+			result:    `foo\u263abar`,
+			remaining: " and this",
+		},
+		"quote with escaped quotes": {
+			input:     `"""foo"bar"baz""" and this`,
+			result:    `foo"bar"baz`,
+			remaining: " and this",
+		},
+		"quote with escaped quotes 2": {
+			input: `"""foo\\\"
+bar\\\"
+
+baz""" and this`,
+			result: `foo\\\"
+bar\\\"
+
+baz`,
+			remaining: " and this",
+		},
+		"not quoted": {
+			input:     `foo`,
+			remaining: "foo",
+			err:       ExpectedError{"quoted-string"},
+		},
+		"unfinished quotes": {
+			input:     `"""foo\"bar\"baz and this`,
+			remaining: `"""foo\"bar\"baz and this`,
+			err:       ExpectedError{"quoted-string"},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			res := str([]rune(test.input))
+			_ = assert.Equal(t, test.err, res.Err, "Error") &&
+				assert.Equal(t, test.result, res.Payload, "Result") &&
+				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+		})
+	}
+}
 func TestArray(t *testing.T) {
 	p := LiteralValue()
 

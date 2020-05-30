@@ -917,6 +917,23 @@ func sumMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"type", false, typeMethod,
+	ExpectNArgs(0),
+)
+
+func typeMethod(target Function, _ ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return string(ITypeOf(v)), nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"values", false, valuesMethod,
 	ExpectNArgs(0),
 )
