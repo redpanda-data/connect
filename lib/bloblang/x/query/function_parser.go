@@ -429,6 +429,7 @@ func parseDeprecatedFunction(input []rune) parser.Result {
 		if input[i] == ':' {
 			targetFunc = string(input[:i])
 			arg = string(input[i+1:])
+			break
 		}
 	}
 	if len(targetFunc) == 0 {

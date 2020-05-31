@@ -478,4 +478,20 @@ func TestTimestamps(t *testing.T) {
 	if !strings.Contains(tStamp, "UTC") {
 		t.Errorf("Non-UTC timezone detected: %v", tStamp)
 	}
+
+	now = time.Now()
+	e, err = parse("${!timestamp_utc:2006-01-02T15:04:05.000Z}")
+	if !assert.NoError(t, err) {
+		return
+	}
+	tStamp = e.String(0, message.New(nil))
+
+	tThen, err = time.Parse("2006-01-02T15:04:05.000Z", tStamp)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if tThen.Sub(now).Seconds() > 5.0 {
+		t.Errorf("Timestamps too far out of sync: %v and %v", tThen, now)
+	}
 }
