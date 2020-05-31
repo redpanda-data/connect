@@ -1,0 +1,13 @@
+pipeline:
+  processors:
+    - bloblang: |
+        map unescape_values {
+          root = match {
+            this.type() == "object" => this.map_each(this.value.apply("unescape_values")),
+            this.type() == "array" => this.map_each(this.apply("unescape_values")),
+            this.type() == "string" => this.unescape_html(),
+            this.type() == "bytes" => this.unescape_html(),
+            _ => this,
+          }
+        }
+        root = this.or(content()).apply("unescape_values")
