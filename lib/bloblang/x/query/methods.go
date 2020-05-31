@@ -574,7 +574,11 @@ func mapEachMethod(target Function, args ...interface{}) (Function, error) {
 						return nil, mapErr
 					}
 				}
-				if _, isDelete := newV.(Delete); !isDelete {
+				switch newV.(type) {
+				case Delete:
+				case Nothing:
+					newSlice = append(newSlice, v)
+				default:
 					newSlice = append(newSlice, newV)
 				}
 			}
@@ -596,7 +600,11 @@ func mapEachMethod(target Function, args ...interface{}) (Function, error) {
 						return nil, mapErr
 					}
 				}
-				if _, isDelete := newV.(Delete); !isDelete {
+				switch newV.(type) {
+				case Delete:
+				case Nothing:
+					newMap[k] = v
+				default:
 					newMap[k] = newV
 				}
 			}

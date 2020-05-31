@@ -19,6 +19,11 @@ All notable changes to this project will be documented in this file.
 - The `xml` processor is now less strict with XML parsing, allowing unrecognised
   escape sequences to be passed through unchanged.
 
+### Fixed
+
+- The bloblang method `map_each` now respects `Nothing` mapping by copying the
+  underlying value unchanged.
+
 ## 3.15.0 - 2020-05-24
 
 ### Added

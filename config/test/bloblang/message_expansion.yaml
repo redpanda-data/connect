@@ -1,0 +1,7 @@
+pipeline:
+  processors:
+    - bloblang: |
+        let doc_root = this.map_each(if key == "items" { deleted() })
+        root = items.map_each($doc_root.merge(this))
+    - unarchive:
+        format: json_array
