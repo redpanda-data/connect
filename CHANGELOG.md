@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 
 - The bloblang method `map_each` now respects `Nothing` mapping by copying the
   underlying value unchanged.
+- It's now possible to reference resource inputs and outputs in streams mode.
 
 ## 3.15.0 - 2020-05-24
 

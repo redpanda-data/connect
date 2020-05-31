@@ -29,6 +29,28 @@ func (n *NamespacedManager) RegisterEndpoint(p, desc string, h http.HandlerFunc)
 	n.mgr.RegisterEndpoint(path.Join(n.ns, p), desc, h)
 }
 
+// GetOutput attempts to find a service wide output by its name.
+func (n *NamespacedManager) GetOutput(name string) (types.OutputWriter, error) {
+	// TODO: V4 Simplify this.
+	if outProv, ok := n.mgr.(interface {
+		GetOutput(name string) (types.OutputWriter, error)
+	}); ok {
+		return outProv.GetOutput(name)
+	}
+	return nil, errors.New("wrapped manager does not support output resources")
+}
+
+// GetInput attempts to find a service wide input by its name.
+func (n *NamespacedManager) GetInput(name string) (types.Input, error) {
+	// TODO: V4 Simplify this.
+	if inProv, ok := n.mgr.(interface {
+		GetInput(name string) (types.Input, error)
+	}); ok {
+		return inProv.GetInput(name)
+	}
+	return nil, errors.New("wrapped manager does not support input resources")
+}
+
 // GetCache attempts to find a service wide cache by its name.
 func (n *NamespacedManager) GetCache(name string) (types.Cache, error) {
 	return n.mgr.GetCache(name)
