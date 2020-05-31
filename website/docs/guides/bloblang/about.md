@@ -124,6 +124,37 @@ multiplied = number * 7
 # Out: {"is_big":true,"multiplied":1050}
 ```
 
+## Conditional Mapping
+
+Use `if` expressions to perform maps conditionally:
+
+```coffee
+root = this
+sorted_foo = if foo.type() == "array" { foo.sort() }
+
+# In:  {"foo":"foobar"}
+# Out: {"foo":"foobar"}
+
+# In:  {"foo":["foo","bar"]}
+# Out: {"foo":["foo","bar"],"sorted_foo":["bar","foo"]}
+```
+
+And add an `else` for alternative maps:
+
+```coffee
+foo = if this.exists("foo") {
+  foo
+} else {
+  "default"
+}
+
+# In:  {"foo":"foobar"}
+# Out: {"foo":"foobar"}
+
+# In:  {}
+# Out: {"foo":"default"}
+```
+
 ## Pattern Matching
 
 A `match` expression allows you to perform conditional mappings on a value using boolean logic:

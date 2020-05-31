@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - New bloblang methods `type`, `join`, `re_find_all` and `re_find_all_submatch`.
 - Bloblang `sort` method now allows custom sorting functions.
+- Bloblang now supports `if` expressions.
 - Bloblang now allows joining strings with the `+` operator.
 - Bloblang now supports multiline strings with triple quotes.
 

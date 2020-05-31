@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestExpressions(t *testing.T) {
+func TestExpressionsParser(t *testing.T) {
 	type easyMsg struct {
 		content string
 		meta    map[string]string

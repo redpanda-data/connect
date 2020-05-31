@@ -25,15 +25,15 @@ func TestFunctionParserErrors(t *testing.T) {
 		"bad args 2": {
 			input:      `json("foo`,
 			deprecated: true,
-			err:        `char 5: required one of: [boolean number quoted-string match function null array object variable-path field-path]`,
+			err:        `char 5: required one of: [boolean number quoted-string match if function null array object variable-path field-path]`,
 		},
 		"bad args 3": {
 			input: `json(`,
-			err:   `char 5: required one of: [boolean number quoted-string match function null array object variable-path field-path]`,
+			err:   `char 5: required one of: [boolean number quoted-string match if function null array object variable-path field-path]`,
 		},
 		"bad args 4": {
 			input: `json(0,`,
-			err:   `char 7: required one of: [boolean number quoted-string match function null array object variable-path field-path]`,
+			err:   `char 7: required one of: [boolean number quoted-string match if function null array object variable-path field-path]`,
 		},
 		"bad args 5": {
 			input:      `json`,
@@ -50,7 +50,7 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"bad operators": {
 			input: `json("foo") + `,
-			err:   `char 14: expected one of: [match function boolean number quoted-string null array object variable-path field-path]`,
+			err:   `char 14: expected one of: [match if function boolean number quoted-string null array object variable-path field-path]`,
 		},
 		"bad expression": {
 			input: `(json("foo") `,
@@ -58,7 +58,7 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"bad expression 2": {
 			input: `(json("foo") + `,
-			err:   `char 15: expected one of: [match function boolean number quoted-string null array object variable-path field-path]`,
+			err:   `char 15: expected one of: [match if function boolean number quoted-string null array object variable-path field-path]`,
 		},
 		"bad expression 3": {
 			input: `(json("foo") + meta("bar") `,
@@ -75,7 +75,7 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"bad method args 2": {
 			input: `json("foo").from(`,
-			err:   `char 17: required one of: [boolean number quoted-string match function null array object variable-path field-path]`,
+			err:   `char 17: required one of: [boolean number quoted-string match if function null array object variable-path field-path]`,
 		},
 		"bad method args 3": {
 			input: `json("foo").from()`,
@@ -91,11 +91,11 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"gibberish": {
 			input: `json("foo").(=)`,
-			err:   `char 13: required one of: [match function boolean number quoted-string null array object variable-path field-path]`,
+			err:   `char 13: required one of: [match if function boolean number quoted-string null array object variable-path field-path]`,
 		},
 		"gibberish 2": {
 			input: `json("foo").(1 + )`,
-			err:   `char 17: required one of: [match function boolean number quoted-string null array object variable-path field-path]`,
+			err:   `char 17: required one of: [match if function boolean number quoted-string null array object variable-path field-path]`,
 		},
 		"bad match": {
 			input: `match json("foo")`,

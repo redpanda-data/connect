@@ -26,3 +26,19 @@ func matchFunction(contextFn Function, cases []matchCase) Function {
 		return Nothing(nil), nil
 	})
 }
+
+func ifFunction(queryFn Function, ifFn Function, elseFn Function) Function {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		queryVal, err := queryFn.Exec(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check if condition: %w", err)
+		}
+		if queryRes, _ := queryVal.(bool); queryRes {
+			return ifFn.Exec(ctx)
+		}
+		if elseFn != nil {
+			return elseFn.Exec(ctx)
+		}
+		return Nothing(nil), nil
+	})
+}

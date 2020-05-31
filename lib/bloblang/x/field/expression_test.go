@@ -51,15 +51,15 @@ func TestExpressionParserErrors(t *testing.T) {
 		},
 		"bad args 2": {
 			input: `foo ${!json("foo} bar`,
-			err:   `failed to parse expression: char 12: required one of: [boolean number quoted-string match function null array object variable-path field-path]`,
+			err:   `failed to parse expression: char 12: required one of: [boolean number quoted-string match if function null array object variable-path field-path]`,
 		},
 		"bad args 3": {
 			input: `foo ${!json(} bar`,
-			err:   `failed to parse expression: char 12: required one of: [boolean number quoted-string match function null array object variable-path field-path]`,
+			err:   `failed to parse expression: char 12: required one of: [boolean number quoted-string match if function null array object variable-path field-path]`,
 		},
 		"bad args 4": {
 			input: `foo ${!json(0,} bar`,
-			err:   `failed to parse expression: char 14: required one of: [boolean number quoted-string match function null array object variable-path field-path]`,
+			err:   `failed to parse expression: char 14: required one of: [boolean number quoted-string match if function null array object variable-path field-path]`,
 		},
 		"bad args 5": {
 			input: `foo ${!json} bar`,

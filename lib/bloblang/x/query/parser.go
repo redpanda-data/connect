@@ -78,6 +78,7 @@ func New(query string) (Function, error) {
 func Parse(input []rune) parser.Result {
 	rootParser := parseWithTails(parser.OneOf(
 		matchExpressionParser(),
+		ifExpressionParser(),
 		bracketsExpressionParser(),
 		literalValueParser(),
 		functionParser(),
@@ -98,6 +99,7 @@ func Parse(input []rune) parser.Result {
 func ParseDeprecated(input []rune) parser.Result {
 	rootParser := parser.OneOf(
 		matchExpressionParser(),
+		ifExpressionParser(),
 		parseWithTails(bracketsExpressionParser()),
 		parseWithTails(literalValueParser()),
 		parseWithTails(functionParser()),

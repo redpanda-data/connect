@@ -128,6 +128,57 @@ func matchExpressionParser() parser.Type {
 	}
 }
 
+func ifExpressionParser() parser.Type {
+	optionalWhitespace := parser.DiscardAll(
+		parser.OneOf(
+			parser.SpacesAndTabs(),
+			parser.NewlineAllowComment(),
+		),
+	)
+
+	return func(input []rune) parser.Result {
+		res := parser.Sequence(
+			parser.Term("if"),
+			parser.SpacesAndTabs(),
+			Parse,
+			optionalWhitespace,
+			parser.Char('{'),
+			optionalWhitespace,
+			Parse,
+			optionalWhitespace,
+			parser.Char('}'),
+			parser.Optional(
+				parser.Sequence(
+					optionalWhitespace,
+					parser.Term("else"),
+					optionalWhitespace,
+					parser.Char('{'),
+					optionalWhitespace,
+					Parse,
+					optionalWhitespace,
+					parser.Char('}'),
+				),
+			),
+		)(input)
+		if res.Err != nil {
+			return res
+		}
+
+		seqSlice := res.Payload.([]interface{})
+		queryFn := seqSlice[2].(Function)
+		ifFn := seqSlice[6].(Function)
+
+		var elseFn Function
+		elseSlice, _ := seqSlice[9].([]interface{})
+		if len(elseSlice) > 0 {
+			elseFn, _ = elseSlice[5].(Function)
+		}
+
+		res.Payload = ifFunction(queryFn, ifFn, elseFn)
+		return res
+	}
+}
+
 func bracketsExpressionParser() parser.Type {
 	whitespace := parser.DiscardAll(
 		parser.OneOf(
