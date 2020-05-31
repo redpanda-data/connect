@@ -24,7 +24,7 @@ for each message, allowing you to store or retrieve data within message payloads
 This processor will interpolate functions within the ` + "`key` and `value`" + `
 fields individually for each message. This allows you to specify dynamic keys
 and values based on the contents of the message payloads and metadata. You can
-find a list of functions [here](/docs/configuration/interpolation#functions).
+find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
 
 ## Operators
 
@@ -76,8 +76,7 @@ condition:
     operator: add
     key: '${!json("message.id")}'
     value: "storeme"
-- filter_parts:
-    type: processor_failed
+- bloblang: root = if error().length() > 0 { deleted() }
 ` + "```" + `
 
 ### Hydration

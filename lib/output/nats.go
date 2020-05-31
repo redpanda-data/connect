@@ -17,7 +17,7 @@ func init() {
 Publish to an NATS subject.`,
 		Description: `
 This output will interpolate functions within the subject field, you
-can find a list of functions [here](/docs/configuration/interpolation#functions).`,
+can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`,
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs."),

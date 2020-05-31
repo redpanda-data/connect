@@ -85,7 +85,7 @@ selected.
 
 The fields `message_group_id` and `message_deduplication_id` can be
 set dynamically using
-[function interpolations](/docs/configuration/interpolation#functions), which are
+[function interpolations](/docs/configuration/interpolation#bloblang-queries), which are
 resolved individually for each message of a batch.
 
 ### Credentials
@@ -118,7 +118,7 @@ Default: `""`
 ### `message_group_id`
 
 An optional group ID to set for messages.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
@@ -127,7 +127,7 @@ Default: `""`
 ### `message_deduplication_id`
 
 An optional deduplication ID to set for messages.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

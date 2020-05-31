@@ -21,14 +21,14 @@ output:
 ```
 
 In order for each message to create a new file the path must use function
-interpolations as described [here](/docs/configuration/interpolation#functions).
+interpolations as described [here](/docs/configuration/interpolation#bloblang-queries).
 
 ## Fields
 
 ### `path`
 
 The file to write to, if the file does not yet exist it will be created.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

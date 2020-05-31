@@ -34,7 +34,7 @@ Optionally, the ` + "`key`" + ` field can be populated in order to hash on a
 function interpolated string rather than the full contents of messages. This
 allows you to deduplicate based on dynamic fields within a message, such as its
 metadata, JSON fields, etc. A full list of interpolation functions can be found
-[here](/docs/configuration/interpolation#functions).
+[here](/docs/configuration/interpolation#bloblang-queries).
 
 For example, the following config would deduplicate based on the concatenated
 values of the metadata field ` + "`kafka_key`" + ` and the value of the JSON

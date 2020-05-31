@@ -26,7 +26,7 @@ output:
 ```
 
 The field `key` supports
-[interpolation functions](/docs/configuration/interpolation#functions), allowing
+[interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing
 you to create a unique key for each message.
 
 The field `fields` allows you to specify an explicit map of field
@@ -83,7 +83,7 @@ url: tcp://localhost:6379
 ### `key`
 
 The key for each message, function interpolations should be used to create a unique key per message.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
@@ -118,7 +118,7 @@ Default: `false`
 ### `fields`
 
 A map of key/value pairs to set as hash fields.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `object`  

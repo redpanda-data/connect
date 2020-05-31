@@ -91,7 +91,7 @@ input:
 </Tabs>
 
 The URL and header values of this type can be dynamically set using function
-interpolations described [here](/docs/configuration/interpolation#functions).
+interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 
 ### Streaming
 
@@ -105,7 +105,7 @@ of a message.
 ### `url`
 
 The URL to connect to.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
@@ -132,7 +132,7 @@ verb: DELETE
 ### `headers`
 
 A map of headers to add to the request.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `object`  

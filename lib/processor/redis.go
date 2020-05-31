@@ -27,7 +27,7 @@ performed for each message of a batch, where the contents are replaced with the
 result.`,
 		Description: `
 The field ` + "`key`" + ` supports
-[interpolation functions](/docs/configuration/interpolation#functions) resolved
+[interpolation functions](/docs/configuration/interpolation#bloblang-queries) resolved
 individually for each message of the batch.
 
 For example, given payloads with a metadata field ` + "`set_key`" + `, you could

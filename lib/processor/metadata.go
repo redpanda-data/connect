@@ -29,7 +29,7 @@ which allow you to set fields in certain outputs using these dynamic values.
 
 This processor will interpolate functions within both the
 ` + "`key` and `value`" + ` fields, you can find a list of functions
-[here](/docs/configuration/interpolation#functions). This allows you to set the
+[here](/docs/configuration/interpolation#bloblang-queries). This allows you to set the
 contents of a metadata field using values taken from the message payload.
 
 Value interpolations are resolved once per batch. In order to resolve them per

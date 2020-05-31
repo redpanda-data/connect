@@ -57,7 +57,7 @@ output:
 </Tabs>
 
 The `topic` field can be dynamically set using function interpolations
-described [here](/docs/configuration/interpolation#functions). When sending
+described [here](/docs/configuration/interpolation#bloblang-queries). When sending
 batched messages these interpolations are performed per message part.
 
 ## Performance
@@ -79,7 +79,7 @@ Default: `"localhost:4150"`
 ### `topic`
 
 The topic to publish to.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

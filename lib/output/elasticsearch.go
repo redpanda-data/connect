@@ -24,7 +24,7 @@ Publishes messages into an Elasticsearch index. If the index does not exist then
 it is created with a dynamic mapping.`,
 		Description: `
 Both the ` + "`id` and `index`" + ` fields can be dynamically set using function
-interpolations described [here](/docs/configuration/interpolation#functions). When
+interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When
 sending batched messages these interpolations are performed per message part.
 
 ### AWS

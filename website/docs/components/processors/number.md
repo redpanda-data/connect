@@ -50,7 +50,7 @@ number:
 
 The value field can either be a number or a string type. If it is a string type
 then this processor will interpolate functions within it, you can find a list of
-functions [here](/docs/configuration/interpolation#functions).
+functions [here](/docs/configuration/interpolation#bloblang-queries).
 
 For example, if we wanted to subtract the current unix timestamp from the field
 'foo' of a JSON document `{"foo":1561219142}` we could use the
@@ -93,7 +93,7 @@ Default: `"add"`
 ### `value`
 
 A value used by the operator.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `number`  

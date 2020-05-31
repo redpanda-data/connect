@@ -12,7 +12,7 @@ type: condition
 
 
 Resolves a string containing
-[function interpolations](/docs/configuration/interpolation#functions) and then tests
+[function interpolations](/docs/configuration/interpolation#bloblang-queries) and then tests
 the result against a child condition.
 
 ```yaml
@@ -38,7 +38,7 @@ check_interpolation:
 ### `value`
 
 The value to check against the child condition.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

@@ -23,7 +23,7 @@ Inserts items into a DynamoDB table.`,
 		Description: `
 The field ` + "`string_columns`" + ` is a map of column names to string values,
 where the values are
-[function interpolated](/docs/configuration/interpolation#functions) per message of a
+[function interpolated](/docs/configuration/interpolation#bloblang-queries) per message of a
 batch. This allows you to populate string columns of an item by extracting
 fields within the document payload or metadata like follows:
 

@@ -23,7 +23,7 @@ Sends messages to a Kinesis stream.`,
 		Description: `
 Both the ` + "`partition_key`" + `(required) and ` + "`hash_key`" + ` (optional)
 fields can be dynamically set using function interpolations described
-[here](/docs/configuration/interpolation#functions). When sending batched messages the
+[here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages the
 interpolations are performed per message part.
 
 ### Credentials

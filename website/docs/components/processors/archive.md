@@ -25,7 +25,7 @@ Some archive formats (such as tar, zip) treat each archive item (message part)
 as a file with a path. Since message parts only contain raw data a unique path
 must be generated for each part. This can be done by using function
 interpolations on the 'path' field as described
-[here](/docs/configuration/interpolation#functions). For types that aren't file based
+[here](/docs/configuration/interpolation#bloblang-queries). For types that aren't file based
 (such as binary) the file field is ignored.
 
 The resulting archived message adopts the metadata of the _first_ message part
@@ -48,7 +48,7 @@ Options: `tar`, `zip`, `binary`, `lines`, `json_array`.
 ### `path`
 
 The path to set for each message in the archive (when applicable).
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

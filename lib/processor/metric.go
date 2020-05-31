@@ -39,7 +39,7 @@ set and will automatically be converted into the correct format of the
 configured metric aggregator.
 
 The ` + "`value`" + ` field can be set using function interpolations described
-[here](/docs/configuration/interpolation#functions) and is used according to the
+[here](/docs/configuration/interpolation#bloblang-queries) and is used according to the
 specific type.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("type", "The metric [type](#types) to create.").HasOptions(),

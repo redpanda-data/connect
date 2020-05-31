@@ -51,7 +51,7 @@ resources:
 ` + "```" + `
 
 In order to create a unique ` + "`key`" + ` value per item you should use
-function interpolations described [here](/docs/configuration/interpolation#functions).
+function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 When sending batched messages the interpolations are performed per message part.`,
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{

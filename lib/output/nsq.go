@@ -18,7 +18,7 @@ func init() {
 Publish to an NSQ topic.`,
 		Description: `
 The ` + "`topic`" + ` field can be dynamically set using function interpolations
-described [here](/docs/configuration/interpolation#functions). When sending
+described [here](/docs/configuration/interpolation#bloblang-queries). When sending
 batched messages these interpolations are performed per message part.`,
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{

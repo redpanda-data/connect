@@ -31,7 +31,7 @@ The new message will have metadata copied from the first pre-existing message of
 the batch.
 
 This processor will interpolate functions within the 'content' field, you can
-find a list of functions [here](/docs/configuration/interpolation#functions).
+find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
 
 ## Fields
 
@@ -46,7 +46,7 @@ Default: `-1`
 ### `content`
 
 The content of the message being inserted.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

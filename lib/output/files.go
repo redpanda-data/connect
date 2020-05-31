@@ -17,7 +17,7 @@ func init() {
 Writes each individual message to a new file.`,
 		Description: `
 In order for each message to create a new file the path must use function
-interpolations as described [here](/docs/configuration/interpolation#functions).`,
+interpolations as described [here](/docs/configuration/interpolation#bloblang-queries).`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("path", "The file to write to, if the file does not yet exist it will be created.").SupportsInterpolation(false),
 		},

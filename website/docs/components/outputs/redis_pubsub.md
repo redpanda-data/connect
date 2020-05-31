@@ -24,7 +24,7 @@ output:
 ```
 
 This output will interpolate functions within the channel field, you
-can find a list of functions [here](/docs/configuration/interpolation#functions).
+can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
 
 ## Performance
 
@@ -51,7 +51,7 @@ url: tcp://localhost:6379
 ### `channel`
 
 The channel to publish messages to.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

@@ -205,7 +205,7 @@ Default: `{"headers":{"Content-Type":"application/octet-stream"}}`
 ### `sync_response.headers`
 
 Specify headers to return with synchronous responses.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `object`  

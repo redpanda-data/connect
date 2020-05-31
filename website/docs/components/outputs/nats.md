@@ -24,7 +24,7 @@ output:
 ```
 
 This output will interpolate functions within the subject field, you
-can find a list of functions [here](/docs/configuration/interpolation#functions).
+can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
 
 ## Performance
 
@@ -45,7 +45,7 @@ Default: `["nats://127.0.0.1:4222"]`
 ### `subject`
 
 The subject to publish to.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

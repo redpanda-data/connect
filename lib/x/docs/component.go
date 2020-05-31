@@ -123,10 +123,10 @@ import TabItem from '@theme/TabItem';
 
 {{$field.Description}}
 {{if eq $field.Interpolation .InterpolationBatchWide -}}
-This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 {{end -}}
 {{if eq $field.Interpolation .InterpolationIndividual -}}
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 {{end}}
 
 Type: ` + "`{{$field.Type}}`" + `  

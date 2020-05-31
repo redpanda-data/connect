@@ -19,7 +19,7 @@ func init() {
 		Summary: `
 Prints a log event each time it processes a batch. Messages always remain
 unchanged. The log message can be set using function interpolations described
-[here](/docs/configuration/interpolation#functions) which allows you to log the
+[here](/docs/configuration/interpolation#bloblang-queries) which allows you to log the
 contents and metadata of messages.`,
 		Description: `
 In order to print a log message per message of a batch place it within a

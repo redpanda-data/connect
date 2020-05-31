@@ -54,7 +54,7 @@ redis:
 </Tabs>
 
 The field `key` supports
-[interpolation functions](/docs/configuration/interpolation#functions) resolved
+[interpolation functions](/docs/configuration/interpolation#bloblang-queries) resolved
 individually for each message of the batch.
 
 For example, given payloads with a metadata field `set_key`, you could
@@ -104,7 +104,7 @@ Options: `scard`, `sadd`.
 ### `key`
 
 A key to use for the target operator.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

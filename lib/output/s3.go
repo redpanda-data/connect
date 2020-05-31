@@ -19,7 +19,7 @@ Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
 with the path specified with the ` + "`path`" + ` field.`,
 		Description: `
 In order to have a different path for each object you should use function
-interpolations described [here](/docs/configuration/interpolation#functions), which are
+interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
 calculated per message of a batch.
 
 ### Credentials

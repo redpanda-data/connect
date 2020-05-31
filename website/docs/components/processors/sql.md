@@ -26,7 +26,7 @@ sql:
 ```
 
 If a query contains arguments they can be set as an array of strings supporting
-[interpolation functions](/docs/configuration/interpolation#functions) in the
+[interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the
 `args` field.
 
 In order to execute an SQL query for each message of the batch use this
@@ -96,7 +96,7 @@ query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);
 ### `args`
 
 A list of arguments for the query to be resolved for each message batch.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `array`  

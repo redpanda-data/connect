@@ -28,7 +28,7 @@ selected.
 
 The fields ` + "`message_group_id` and `message_deduplication_id`" + ` can be
 set dynamically using
-[function interpolations](/docs/configuration/interpolation#functions), which are
+[function interpolations](/docs/configuration/interpolation#bloblang-queries), which are
 resolved individually for each message of a batch.
 
 ### Credentials

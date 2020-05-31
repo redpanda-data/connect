@@ -28,7 +28,7 @@ DEPRECATED: This processor is now deprecated, and the new
 instead.`,
 		Description: `
 This processor will interpolate functions within the ` + "`value`" + ` field,
-you can find a list of functions [here](/docs/configuration/interpolation#functions).
+you can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
 
 Value interpolations are resolved once per message batch, in order to resolve it
 for each message of the batch place it within a

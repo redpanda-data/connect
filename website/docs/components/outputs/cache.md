@@ -51,7 +51,7 @@ resources:
 ```
 
 In order to create a unique `key` value per item you should use
-function interpolations described [here](/docs/configuration/interpolation#functions).
+function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 When sending batched messages the interpolations are performed per message part.
 
 ## Performance
@@ -73,7 +73,7 @@ Default: `""`
 ### `key`
 
 The key to store messages by, function interpolation should be used in order to derive a unique key for each message.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

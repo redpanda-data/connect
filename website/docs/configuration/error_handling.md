@@ -102,13 +102,10 @@ unblock itself without intervention.
 ## Drop Failed Messages
 
 In order to filter out any failed messages from your pipeline you can use a
-[`bloblang` processor][processors.bloblang] processor:
+[`bloblang` processor][processors.bloblang]:
 
 ```yaml
-  - bloblang: |
-      root = match {
-        error().length() > 0 => deleted()
-      }
+  - bloblang: root = if error().length() > 0 { deleted() }
 ```
 
 This will remove any failed messages from a batch.
@@ -148,16 +145,10 @@ output:
     outputs:
     - type: foo # Dead letter queue
       processors:
-      - bloblang: |
-          root = match {
-            error().length() == 0 => deleted()
-          }
+      - bloblang: root = if error().length() == 0 { deleted() }
     - type: bar # Everything else
       processors:
-      - bloblang: |
-          root = match {
-            error().length() > 0 => deleted()
-          }
+      - bloblang: root = if error().length() > 0 { deleted() }
 ```
 
 [processors]: /docs/components/processors/about

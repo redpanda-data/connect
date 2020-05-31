@@ -45,7 +45,7 @@ func init() {
 Connects to a server and continuously performs requests for a single message.`,
 		Description: `
 The URL and header values of this type can be dynamically set using function
-interpolations described [here](/docs/configuration/interpolation#functions).
+interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 
 ### Streaming
 

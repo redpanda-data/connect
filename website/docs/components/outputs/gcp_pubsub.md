@@ -45,7 +45,7 @@ Default: `""`
 ### `topic`
 
 The topic to publish to.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

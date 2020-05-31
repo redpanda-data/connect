@@ -17,7 +17,7 @@ func init() {
 Sets Redis hash objects using the HMSET command.`,
 		Description: `
 The field ` + "`key`" + ` supports
-[interpolation functions](/docs/configuration/interpolation#functions), allowing
+[interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing
 you to create a unique key for each message.
 
 The field ` + "`fields`" + ` allows you to specify an explicit map of field

@@ -54,7 +54,7 @@ cache:
 This processor will interpolate functions within the `key` and `value`
 fields individually for each message. This allows you to specify dynamic keys
 and values based on the contents of the message payloads and metadata. You can
-find a list of functions [here](/docs/configuration/interpolation#functions).
+find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
 
 ## Operators
 
@@ -102,7 +102,7 @@ Options: `set`, `add`, `get`, `delete`.
 ### `key`
 
 A key to use with the cache.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
@@ -111,7 +111,7 @@ Default: `""`
 ### `value`
 
 A value to use with the cache (when applicable).
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
@@ -149,8 +149,7 @@ condition:
     operator: add
     key: '${!json("message.id")}'
     value: "storeme"
-- filter_parts:
-    type: processor_failed
+- bloblang: root = if error().length() > 0 { deleted() }
 ```
 
 ### Hydration

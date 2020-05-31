@@ -38,7 +38,7 @@ set and will automatically be converted into the correct format of the
 configured metric aggregator.
 
 The `value` field can be set using function interpolations described
-[here](/docs/configuration/interpolation#functions) and is used according to the
+[here](/docs/configuration/interpolation#bloblang-queries) and is used according to the
 specific type.
 
 ## Fields
@@ -62,7 +62,7 @@ Default: `""`
 ### `labels`
 
 A map of label names and values that can be used to enrich metrics with aggregators such as Prometheus.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `object`  
@@ -79,7 +79,7 @@ labels:
 ### `value`
 
 For some metric types specifies a value to set, increment.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

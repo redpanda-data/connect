@@ -31,7 +31,7 @@ The new message will have metadata copied from the first pre-existing message of
 the batch.
 
 This processor will interpolate functions within the 'content' field, you can
-find a list of functions [here](/docs/configuration/interpolation#functions).`,
+find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("index", "The index within the batch to insert the message at."),
 			docs.FieldCommon("content", "The content of the message being inserted.").SupportsInterpolation(true),

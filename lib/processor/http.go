@@ -40,7 +40,7 @@ The ` + "`rate_limit`" + ` field can be used to specify a rate limit
 parallel components service wide.
 
 The URL and header values of this type can be dynamically set using function
-interpolations described [here](/docs/configuration/interpolation#functions).
+interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 
 In order to map or encode the payload to a specific request body, and map the
 response back into the original payload instead of replacing it entirely, you

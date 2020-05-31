@@ -28,7 +28,7 @@ TLS is automatic when connecting to an ` + "`amqps`" + ` URL, but custom
 settings can be enabled in the ` + "`tls`" + ` section.
 
 The field 'key' can be dynamically set using function interpolations described
-[here](/docs/configuration/interpolation#functions).`,
+[here](/docs/configuration/interpolation#bloblang-queries).`,
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("url",

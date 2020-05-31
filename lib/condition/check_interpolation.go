@@ -20,7 +20,7 @@ func init() {
 		constructor: NewCheckInterpolation,
 		Summary: `
 Resolves a string containing
-[function interpolations](/docs/configuration/interpolation#functions) and then tests
+[function interpolations](/docs/configuration/interpolation#bloblang-queries) and then tests
 the result against a child condition.`,
 		Description: `
 For example, you could use this to test against the size of a message batch:

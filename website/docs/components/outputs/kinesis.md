@@ -79,7 +79,7 @@ output:
 
 Both the `partition_key`(required) and `hash_key` (optional)
 fields can be dynamically set using function interpolations described
-[here](/docs/configuration/interpolation#functions). When sending batched messages the
+[here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages the
 interpolations are performed per message part.
 
 ### Credentials
@@ -112,7 +112,7 @@ Default: `""`
 ### `partition_key`
 
 A required key for partitioning messages.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
@@ -121,7 +121,7 @@ Default: `""`
 ### `hash_key`
 
 A optional hash key for partitioning messages.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

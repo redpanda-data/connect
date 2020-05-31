@@ -18,7 +18,7 @@ Publishes messages through the Redis PubSub model. It is not possible to
 guarantee that messages have been received.`,
 		Description: `
 This output will interpolate functions within the channel field, you
-can find a list of functions [here](/docs/configuration/interpolation#functions).`,
+can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`,
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("url", "The URL of a Redis server to connect to.", "tcp://localhost:6379"),

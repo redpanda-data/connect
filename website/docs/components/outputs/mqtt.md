@@ -58,7 +58,7 @@ output:
 </Tabs>
 
 The `topic` field can be dynamically set using function interpolations
-described [here](/docs/configuration/interpolation#functions). When sending batched
+described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched
 messages these interpolations are performed per message part.
 
 ## Performance

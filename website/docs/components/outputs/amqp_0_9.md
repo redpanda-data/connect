@@ -74,7 +74,7 @@ TLS is automatic when connecting to an `amqps` URL, but custom
 settings can be enabled in the `tls` section.
 
 The field 'key' can be dynamically set using function interpolations described
-[here](/docs/configuration/interpolation#functions).
+[here](/docs/configuration/interpolation#bloblang-queries).
 
 ## Performance
 
@@ -144,7 +144,7 @@ Default: `true`
 ### `key`
 
 The binding key to set for each message.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

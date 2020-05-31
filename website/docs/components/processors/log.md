@@ -13,7 +13,7 @@ type: processor
 
 Prints a log event each time it processes a batch. Messages always remain
 unchanged. The log message can be set using function interpolations described
-[here](/docs/configuration/interpolation#functions) which allows you to log the
+[here](/docs/configuration/interpolation#bloblang-queries) which allows you to log the
 contents and metadata of messages.
 
 ```yaml
@@ -72,7 +72,7 @@ Options: `FATAL`, `ERROR`, `WARN`, `INFO`, `DEBUG`, `TRACE`, `ALL`.
 ### `fields`
 
 A map of fields to print along with the log message.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `object`  
@@ -81,7 +81,7 @@ Default: `{}`
 ### `message`
 
 The message to print.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions) that are resolved batch wide.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

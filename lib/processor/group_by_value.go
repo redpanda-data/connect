@@ -23,7 +23,7 @@ func init() {
 		Summary: `
 Splits a batch of messages into N batches, where each resulting batch contains a
 group of messages determined by a
-[function interpolated string](/docs/configuration/interpolation#functions) evaluated
+[function interpolated string](/docs/configuration/interpolation#bloblang-queries) evaluated
 per message.`,
 		Description: `
 This allows you to group messages using arbitrary fields within their content or

@@ -27,7 +27,7 @@ The config field ` + "`ack_replicas`" + ` determines whether we wait for
 acknowledgement from all replicas or just a single broker.
 
 Both the ` + "`key` and `topic`" + ` fields can be dynamically set using
-function interpolations described [here](/docs/configuration/interpolation#functions).
+function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 When sending batched messages these interpolations are performed per message
 part.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {

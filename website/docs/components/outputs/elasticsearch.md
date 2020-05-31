@@ -93,7 +93,7 @@ output:
 </Tabs>
 
 Both the `id` and `index` fields can be dynamically set using function
-interpolations described [here](/docs/configuration/interpolation#functions). When
+interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When
 sending batched messages these interpolations are performed per message part.
 
 ### AWS
@@ -132,7 +132,7 @@ urls:
 ### `index`
 
 The index to place messages.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
@@ -141,7 +141,7 @@ Default: `"benthos_index"`
 ### `pipeline`
 
 An optional pipeline id to preprocess incoming documents.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
@@ -150,7 +150,7 @@ Default: `""`
 ### `id`
 
 The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

@@ -99,7 +99,7 @@ behaviour after this will depend on the pipeline but usually this simply means
 the send is attempted again until successful whilst applying back pressure.
 
 The URL and header values of this type can be dynamically set using function
-interpolations described [here](/docs/configuration/interpolation#functions).
+interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 
 The body of the HTTP request is the raw contents of the message payload. If the
 message has multiple parts (is a batch) the request will be sent according to
@@ -128,7 +128,7 @@ Batches can be formed at both the input and output level. You can find out more
 ### `url`
 
 The URL to connect to.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
@@ -155,7 +155,7 @@ verb: DELETE
 ### `headers`
 
 A map of headers to add to the request.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `object`  

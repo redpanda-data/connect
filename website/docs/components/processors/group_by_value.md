@@ -13,7 +13,7 @@ type: processor
 
 Splits a batch of messages into N batches, where each resulting batch contains a
 group of messages determined by a
-[function interpolated string](/docs/configuration/interpolation#functions) evaluated
+[function interpolated string](/docs/configuration/interpolation#bloblang-queries) evaluated
 per message.
 
 ```yaml
@@ -34,7 +34,7 @@ that are batched. You can find out more about batching [in this doc](/docs/confi
 ### `value`
 
 The interpolated string to group based on.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

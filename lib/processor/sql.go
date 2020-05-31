@@ -30,7 +30,7 @@ queries that return rows, replaces the batch with the result according to a
 [codec](#result-codecs).`,
 		Description: `
 If a query contains arguments they can be set as an array of strings supporting
-[interpolation functions](/docs/configuration/interpolation#functions) in the
+[interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the
 ` + "`args`" + ` field.
 
 In order to execute an SQL query for each message of the batch use this

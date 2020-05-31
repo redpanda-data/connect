@@ -27,7 +27,7 @@ output:
 
 Each file is written with the path specified with the 'path' field, in order to
 have a different path for each object you should use function interpolations
-described [here](/docs/configuration/interpolation#functions). When sending
+described [here](/docs/configuration/interpolation#bloblang-queries). When sending
 batched messages the interpolations are performed per message part.
 
 ## Performance
@@ -71,7 +71,7 @@ Default: `""`
 ### `path`
 
 The path to upload messages as, interpolation functions should be used in order to generate unique file paths.
-This field supports [interpolation functions](/docs/configuration/interpolation#functions).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
