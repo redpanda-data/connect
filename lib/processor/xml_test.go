@@ -23,6 +23,20 @@ func TestXMLCases(t *testing.T) {
 			output: `{"root":{"next":"foo1"}}`,
 		},
 		{
+			name: "contains escapes 1",
+			input: `<root>
+  <next>foo&amp;bar</next>
+</root>`,
+			output: `{"root":{"next":"foo&bar"}}`,
+		},
+		{
+			name: "contains HTML escapes",
+			input: `<root>
+  <next>foo&lt;&ndash;&circ;&amp;bar</next>
+</root>`,
+			output: `{"root":{"next":"foo<&ndash;&circ;&bar"}}`,
+		},
+		{
 			name: "basic 2",
 			input: `<root>
   <next>foo1</next>

@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io/ioutil"
 	"net/url"
 	"regexp"
@@ -162,6 +163,32 @@ func encodeMethod(target Function, args ...interface{}) (Function, error) {
 			res, err = schemeFn([]byte(t))
 		case []byte:
 			res, err = schemeFn(t)
+		default:
+			err = fmt.Errorf("expected string value, received %T", v)
+		}
+		return res, err
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"escape_html", false, escapeHTMLMethod,
+	ExpectNArgs(0),
+)
+
+func escapeHTMLMethod(target Function, args ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var res string
+		switch t := v.(type) {
+		case string:
+			res = html.EscapeString(t)
+		case []byte:
+			res = html.EscapeString(string(t))
 		default:
 			err = fmt.Errorf("expected string value, received %T", v)
 		}
@@ -775,6 +802,32 @@ func trimMethod(target Function, args ...interface{}) (Function, error) {
 			return bytes.Trim(t, cutset), nil
 		}
 		return nil, fmt.Errorf("expected string value, received %T", v)
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"unescape_html", false, unescapeHTMLMethod,
+	ExpectNArgs(0),
+)
+
+func unescapeHTMLMethod(target Function, args ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var res string
+		switch t := v.(type) {
+		case string:
+			res = html.UnescapeString(t)
+		case []byte:
+			res = html.UnescapeString(string(t))
+		default:
+			err = fmt.Errorf("expected string value, received %T", v)
+		}
+		return res, err
 	}), nil
 }
 

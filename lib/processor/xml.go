@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"encoding/xml"
 	"fmt"
 	"time"
 
@@ -15,6 +16,10 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
+	dec := xml.NewDecoder(nil)
+	dec.Strict = false
+	mxj.CustomDecoder = dec
+
 	Constructors[TypeXML] = TypeSpec{
 		constructor: NewXML,
 		Summary: `
@@ -114,6 +119,7 @@ func NewXML(
 	if conf.XML.Operator != "to_json" {
 		return nil, fmt.Errorf("operator not recognised: %v", conf.XML.Operator)
 	}
+
 	j := &XML{
 		parts: conf.XML.Parts,
 		conf:  conf,

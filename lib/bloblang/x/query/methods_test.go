@@ -26,6 +26,28 @@ func TestMethods(t *testing.T) {
 		messages []easyMsg
 		index    int
 	}{
+		"check html escape query": {
+			input:  `"foo & bar".escape_html()`,
+			output: "foo &amp; bar",
+		},
+		"check html escape query bytes": {
+			input: `content().escape_html()`,
+			messages: []easyMsg{
+				{content: `foo & bar`},
+			},
+			output: "foo &amp; bar",
+		},
+		"check html unescape query": {
+			input:  `"foo &amp; bar".unescape_html()`,
+			output: "foo & bar",
+		},
+		"check html unescape query bytes": {
+			input: `content().unescape_html()`,
+			messages: []easyMsg{
+				{content: `foo &amp; bar`},
+			},
+			output: "foo & bar",
+		},
 		"check sort custom": {
 			input:  `[3,22,13,7,30].sort(left > right)`,
 			output: []interface{}{int64(30), int64(22), int64(13), int64(7), int64(3)},

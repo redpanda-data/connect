@@ -7,11 +7,17 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- New bloblang methods `type`, `join`, `re_find_all` and `re_find_all_submatch`.
+- New bloblang methods `type`, `join`, `escape_html`, `unescape_html`,
+  `re_find_all` and `re_find_all_submatch`.
 - Bloblang `sort` method now allows custom sorting functions.
 - Bloblang now supports `if` expressions.
 - Bloblang now allows joining strings with the `+` operator.
 - Bloblang now supports multiline strings with triple quotes.
+
+### Changed
+
+- The `xml` processor is now less strict with XML parsing, allowing unrecognised
+  escape sequences to be passed through unchanged.
 
 ## 3.15.0 - 2020-05-24
 

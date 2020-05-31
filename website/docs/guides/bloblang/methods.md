@@ -393,6 +393,17 @@ encoded = value.encode("hex")
 # Out: {"encoded":"68656c6c6f20776f726c64"}
 ```
 
+### `escape_html`
+
+Escapes a string so that special characters like `<` to become `&lt;`. It escapes only five such characters: `<`, `>`, `&`, `'` and `"` so that it can be safely placed within an HTML entity.
+
+```coffee
+escaped = value.escape_html()
+
+# In:  {"value":"foo & bar"}
+# Out: {"escaped":"foo &amp; bar"}
+```
+
 ### `escape_url_query`
 
 Escapes a string so that it can be safely placed within a URL query.
@@ -591,6 +602,17 @@ description = description.trim()
 
 # In:  {"title":"!!!watch out!?","description":"  something happened and its amazing! "}
 # Out: {"title":"watch out","description":"something happened and its amazing!"}
+```
+
+### `unescape_html`
+
+Unescapes a string so that entities like `&lt;` become `<`. It unescapes a larger range of entities than `escape_html` escapes. For example, `&aacute;` unescapes to `á`, as does `&#225;` and `&xE1;`.
+
+```coffee
+unescaped = value.unescape_html()
+
+# In:  {"value":"foo &amp; bar"}
+# Out: {"escaped":"foo & bar"}
 ```
 
 ### `unescape_url_query`
