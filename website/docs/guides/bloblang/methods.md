@@ -345,6 +345,26 @@ sum = foo.sum()
 # Out: {"sum":15}
 ```
 
+### `unique`
+
+Attempts to remove duplicate values from an array. The array may contain a combination of different value types, but numbers and strings are checked separately (`"5"` is a different element to `5`).
+
+```coffee
+uniques = foo.unique()
+
+# In:  {"foo":["a","b","a","c"]}
+# Out: {"uniques":["a","b","c"]}
+```
+
+It's also possible to deduplicate values that aren't strings or numbers by providing a mapping argument that converts an element into a string or number for comparison:
+
+```coffee
+uniques = foo.unique(val)
+
+# In:  {"foo":[{"val":"a"},{"val":"b"},{"val":"a"},{"val":"c"}]}
+# Out: {"uniques":[{"val":"a"},{"val":"b"},{"val":"c"}]}
+```
+
 ### `values`
 
 Returns the values of an object as an array. The order of the resulting array will be random.

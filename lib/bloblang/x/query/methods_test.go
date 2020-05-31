@@ -26,6 +26,35 @@ func TestMethods(t *testing.T) {
 		messages []easyMsg
 		index    int
 	}{
+		"check unique custom": {
+			input: `[{"v":"a"},{"v":"b"},{"v":"c"},{"v":"b"},{"v":"d"},{"v":"a"}].unique(v)`,
+			output: []interface{}{
+				map[string]interface{}{"v": "a"},
+				map[string]interface{}{"v": "b"},
+				map[string]interface{}{"v": "c"},
+				map[string]interface{}{"v": "d"},
+			},
+		},
+		"check unique bad": {
+			input: `[{"v":"a"},{"v":"b"},{"v":"c"},{"v":"b"},{"v":"d"},{"v":"a"}].unique()`,
+			err:   "index 0: expected string or number value, found object",
+		},
+		"check unique not array": {
+			input: `"foo".unique()`,
+			err:   "expected array value, found string: foo",
+		},
+		"check unique": {
+			input:  `[3.0,5,3,4,5.1,5].unique()`,
+			output: []interface{}{float64(3), int64(5), int64(4), float64(5.1)},
+		},
+		"check unique strings": {
+			input:  `["a","b","c","b","d","a"].unique()`,
+			output: []interface{}{"a", "b", "c", "d"},
+		},
+		"check unique mixed": {
+			input:  `[3.0,"a","5",3,"b",5,"c","b",5.0,"d","a"].unique()`,
+			output: []interface{}{float64(3), "a", "5", "b", int64(5), "c", "d"},
+		},
 		"check html escape query": {
 			input:  `"foo & bar".escape_html()`,
 			output: "foo &amp; bar",

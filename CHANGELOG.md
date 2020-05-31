@@ -5,9 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.16.0 - 2020-05-31
+
 ### Added
 
-- New bloblang methods `type`, `join`, `escape_html`, `unescape_html`,
+- New bloblang methods `type`, `join`, `unique`, `escape_html`, `unescape_html`,
   `re_find_all` and `re_find_all_submatch`.
 - Bloblang `sort` method now allows custom sorting functions.
 - Bloblang now supports `if` expressions.

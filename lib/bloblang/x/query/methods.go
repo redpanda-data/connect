@@ -975,6 +975,91 @@ func typeMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"unique", false, uniqueMethod,
+	ExpectOneOrZeroArgs(),
+)
+
+func uniqueMethod(target Function, args ...interface{}) (Function, error) {
+	var emitFn Function
+	if len(args) > 0 {
+		var ok bool
+		emitFn, ok = args[0].(Function)
+		if !ok {
+			return nil, fmt.Errorf("expected function param, received %T", args[0])
+		}
+	}
+
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		slice, ok := v.([]interface{})
+		if !ok {
+			return nil, NewTypeError(v, ValueArray)
+		}
+
+		var strCompares map[string]struct{}
+		var numCompares map[float64]struct{}
+
+		checkStr := func(str string) bool {
+			if strCompares == nil {
+				strCompares = make(map[string]struct{}, len(slice))
+			}
+			_, exists := strCompares[str]
+			if !exists {
+				strCompares[str] = struct{}{}
+			}
+			return !exists
+		}
+
+		checkNum := func(num float64) bool {
+			if numCompares == nil {
+				numCompares = make(map[float64]struct{}, len(slice))
+			}
+			_, exists := numCompares[num]
+			if !exists {
+				numCompares[num] = struct{}{}
+			}
+			return !exists
+		}
+
+		uniqueSlice := make([]interface{}, 0, len(slice))
+		for i, v := range slice {
+			check := v
+			if emitFn != nil {
+				ctx.Value = &v
+				var err error
+				if check, err = emitFn.Exec(ctx); err != nil {
+					return nil, fmt.Errorf("index %v: %w", i, err)
+				}
+			}
+			var unique bool
+			switch t := check.(type) {
+			case string:
+				unique = checkStr(t)
+			case []byte:
+				unique = checkStr(string(t))
+			case int64:
+				unique = checkNum(float64(t))
+			case uint64:
+				unique = checkNum(float64(t))
+			case float64:
+				unique = checkNum(float64(t))
+			default:
+				return nil, fmt.Errorf("index %v: %w", i, NewTypeError(check, ValueString, ValueNumber))
+			}
+			if unique {
+				uniqueSlice = append(uniqueSlice, v)
+			}
+		}
+		return uniqueSlice, nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"values", false, valuesMethod,
 	ExpectNArgs(0),
 )
