@@ -80,6 +80,9 @@ func TestAMQPIntegration(t *testing.T) {
 	t.Run("TestAMQP09Disconnect", func(te *testing.T) {
 		testAMQP09Disconnect(url, te)
 	})
+	t.Run("testAMQP09MessageType", func(te *testing.T) {
+		testAMQP09MessageType(url, te)
+	})
 }
 
 func createAMQPInputOutput(
@@ -692,5 +695,74 @@ func testAMQP09Disconnect(url string, t *testing.T) {
 		t.Errorf("Wrong error: %v != %v", err, types.ErrTypeClosed)
 	}
 
+	wg.Wait()
+}
+
+func testAMQP09MessageType(url string, t *testing.T) {
+	subject := "benthos_test_09_single_part"
+
+	outConf := writer.NewAMQPConfig()
+	outConf.URL = url
+	outConf.Exchange = subject
+	outConf.ExchangeDeclare.Enabled = true
+	outConf.Type = "sample_msg_type"
+
+	inConf := reader.NewAMQP09Config()
+	inConf.URL = url
+	inConf.Queue = subject
+	inConf.QueueDeclare.Enabled = true
+	inConf.BindingsDeclare = append(inConf.BindingsDeclare, reader.AMQP09BindingConfig{
+		Exchange:   outConf.Exchange,
+		RoutingKey: outConf.BindingKey,
+	})
+
+	mInput, mOutput, err := createAMQP09InputOutput(inConf, outConf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		mInput.CloseAsync()
+		if cErr := mInput.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+		mOutput.CloseAsync()
+		if cErr := mOutput.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+	}()
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	testStr := "Hello type property"
+	msg := message.New([][]byte{
+		[]byte(testStr),
+	})
+	if gerr := mOutput.Write(msg); gerr != nil {
+		t.Fatal(gerr)
+	}
+	wg.Done()
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second*10)
+	defer done()
+
+	var actM types.Message
+	var ackFn reader.AsyncAckFn
+	actM, ackFn, err = mInput.ReadWithContext(ctx)
+	if err != nil {
+		t.Error(err)
+	} else {
+		act := string(actM.Get(0).Get())
+		if string(act) != testStr {
+			t.Errorf("Unexpected message: %v", act)
+		}
+		if act = actM.Get(0).Metadata().Get("amqp_type"); act != outConf.Type {
+			t.Errorf("Wrong message type returned: %v != %v", outConf.Type, act)
+		}
+	}
+	if err = ackFn(ctx, response.NewAck()); err != nil {
+		t.Error(err)
+	}
 	wg.Wait()
 }

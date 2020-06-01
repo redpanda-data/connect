@@ -27,7 +27,7 @@ then the declaration passively verifies that the settings match.
 TLS is automatic when connecting to an ` + "`amqps`" + ` URL, but custom
 settings can be enabled in the ` + "`tls`" + ` section.
 
-The field 'key' can be dynamically set using function interpolations described
+The fields 'key' and 'type' can be dynamically set using function interpolations described
 [here](/docs/configuration/interpolation#bloblang-queries).`,
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
@@ -45,6 +45,7 @@ The field 'key' can be dynamically set using function interpolations described
 				docs.FieldCommon("durable", "Whether the exchange should be durable."),
 			),
 			docs.FieldCommon("key", "The binding key to set for each message.").SupportsInterpolation(false),
+			docs.FieldCommon("type", "The type property to set for each message.").SupportsInterpolation(false),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldAdvanced("persistent", "Whether message delivery should be persistent (transient by default)."),
 			docs.FieldAdvanced("mandatory", "Whether to set the mandatory flag on published messages. When set if a published message is routed to zero queues it is returned."),

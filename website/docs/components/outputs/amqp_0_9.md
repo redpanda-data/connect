@@ -33,6 +33,7 @@ output:
     url: amqp://guest:guest@localhost:5672/
     exchange: benthos-exchange
     key: benthos-key
+    type: ""
     max_in_flight: 1
 ```
 
@@ -50,6 +51,7 @@ output:
       type: direct
       durable: true
     key: benthos-key
+    type: ""
     max_in_flight: 1
     persistent: false
     mandatory: false
@@ -73,7 +75,7 @@ then the declaration passively verifies that the settings match.
 TLS is automatic when connecting to an `amqps` URL, but custom
 settings can be enabled in the `tls` section.
 
-The field 'key' can be dynamically set using function interpolations described
+The fields 'key' and 'type' can be dynamically set using function interpolations described
 [here](/docs/configuration/interpolation#bloblang-queries).
 
 ## Performance
@@ -149,6 +151,15 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `"benthos-key"`  
+
+### `type`
+
+The type property to set for each message.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
 
 ### `max_in_flight`
 

@@ -539,6 +539,7 @@ OUTPUT_AMQP_0_9_PERSISTENT                            = false
 OUTPUT_AMQP_0_9_TLS_ENABLED                           = false
 OUTPUT_AMQP_0_9_TLS_ROOT_CAS_FILE
 OUTPUT_AMQP_0_9_TLS_SKIP_CERT_VERIFY                  = false
+OUTPUT_AMQP_0_9_TYPE
 OUTPUT_AMQP_0_9_URL                                   = amqp://guest:guest@localhost:5672/
 OUTPUT_AMQP_EXCHANGE                                  = benthos-exchange
 OUTPUT_AMQP_EXCHANGE_DECLARE_DURABLE                  = true
@@ -552,6 +553,7 @@ OUTPUT_AMQP_PERSISTENT                                = false
 OUTPUT_AMQP_TLS_ENABLED                               = false
 OUTPUT_AMQP_TLS_ROOT_CAS_FILE
 OUTPUT_AMQP_TLS_SKIP_CERT_VERIFY                      = false
+OUTPUT_AMQP_TYPE
 OUTPUT_AMQP_URL                                       = amqp://guest:guest@localhost:5672/
 OUTPUT_CACHE_KEY                                      = ${!count("items")}-${!timestamp_unix_nano()}
 OUTPUT_CACHE_MAX_IN_FLIGHT                            = 1
