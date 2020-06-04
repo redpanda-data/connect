@@ -62,6 +62,11 @@ func decodeMethod(target Function, args ...interface{}) (Function, error) {
 			e := base64.NewDecoder(base64.StdEncoding, bytes.NewReader(b))
 			return ioutil.ReadAll(e)
 		}
+	case "base64url":
+		schemeFn = func(b []byte) ([]byte, error) {
+			e := base64.NewDecoder(base64.URLEncoding, bytes.NewReader(b))
+			return ioutil.ReadAll(e)
+		}
 	case "hex":
 		schemeFn = func(b []byte) ([]byte, error) {
 			e := hex.NewDecoder(bytes.NewReader(b))
@@ -116,6 +121,14 @@ func encodeMethod(target Function, args ...interface{}) (Function, error) {
 		schemeFn = func(b []byte) (string, error) {
 			var buf bytes.Buffer
 			e := base64.NewEncoder(base64.StdEncoding, &buf)
+			e.Write(b)
+			e.Close()
+			return buf.String(), nil
+		}
+	case "base64url":
+		schemeFn = func(b []byte) (string, error) {
+			var buf bytes.Buffer
+			e := base64.NewEncoder(base64.URLEncoding, &buf)
 			e.Write(b)
 			e.Close()
 			return buf.String(), nil
