@@ -393,7 +393,7 @@ title = title.capitalize()
 
 Decodes an encoded string target according to a chosen scheme and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.
 
-Available schemes are: `base64`, `hex`, `ascii85`, `z85`.
+Available schemes are: `base64`, `base64url`, `hex`, `ascii85`, `z85`.
 
 ```coffee
 decoded = value.decode("hex").string()
@@ -404,7 +404,7 @@ decoded = value.decode("hex").string()
 
 ### `encode`
 
-Encodes a string or byte array target according to a chosen scheme and returns a string result. Available schemes are: `base64`, `hex`, `ascii85`, `z85`.
+Encodes a string or byte array target according to a chosen scheme and returns a string result. Available schemes are: `base64`, `base64url`, `hex`, `ascii85`, `z85`.
 
 ```coffee
 encoded = value.encode("hex")

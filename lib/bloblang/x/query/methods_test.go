@@ -334,6 +334,14 @@ func TestMethods(t *testing.T) {
 			input:  `"aGVsbG8gd29ybGQ=".decode("base64").string()`,
 			output: `hello world`,
 		},
+		"check base64url encode": {
+			input:  `"<<???>>".encode("base64url")`,
+			output: `PDw_Pz8-Pg==`,
+		},
+		"check base64url decode": {
+			input:  `"PDw_Pz8-Pg==".decode("base64url").string()`,
+			output: `<<???>>`,
+		},
 		"check z85 encode": {
 			input:  `"hello world!".encode("z85")`,
 			output: `xK#0@zY<mxA+]nf`,
