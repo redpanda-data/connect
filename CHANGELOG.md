@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New field `type` added to the `amqp_0_9` output.
+- New bloblang methods `explode` and `without`.
 
 ## 3.16.0 - 2020-05-31
 

@@ -116,6 +116,24 @@ func ExpectStringArg(i int) ArgCheckFn {
 	}
 }
 
+// ExpectAllStringArgs returns an error if any argument is not a string type (or
+// a byte slice that can be converted).
+func ExpectAllStringArgs() ArgCheckFn {
+	return func(args []interface{}) error {
+		for i, arg := range args {
+			switch t := arg.(type) {
+			case string:
+			case []byte:
+				// Allow byte slice value here but cast it.
+				args[i] = string(t)
+			default:
+				return fmt.Errorf("expected string param %v, received %T", i, arg)
+			}
+		}
+		return nil
+	}
+}
+
 // ExpectIntArg returns an error if an argument i is not an integer type.
 func ExpectIntArg(i int) ArgCheckFn {
 	return func(args []interface{}) error {

@@ -1493,6 +1493,9 @@ func TestObject(t *testing.T) {
 		"multiple values object with comments": {
 			input: `{ # start of object
 	"foo":2  , # heres a thing
+	# A comment followed by an empty comment
+	#
+	# Followed by another comment
 	"bar":     null,
 # now these things are crazy
 	"baz":

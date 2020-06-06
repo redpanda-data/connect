@@ -518,7 +518,7 @@ func Comment() Type {
 		Sequence(
 			Char('#'),
 			JoinStringPayloads(
-				UntilFail(NotChar('\n')),
+				Optional(UntilFail(NotChar('\n'))),
 			),
 			Newline(),
 		),

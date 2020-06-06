@@ -85,7 +85,7 @@ pipeline:
 However, most of the time we also need to map the elements before expanding them, and often that includes copying fields outside of our target array. We can do that with context variables:
 
 ```coffee
-let doc_root = this.map_each(if key == "items" { deleted() })
+let doc_root = this.without("items")
 root = items.map_each($doc_root.merge(this))
 
 # In:  {"id":"foobar","items":[{"content":"foo"},{"content":"bar"},{"content":"baz"}]}
@@ -98,7 +98,7 @@ Also note that when we set `doc_root` we remove the field `items` from the targe
 pipeline:
   processors:
     - bloblang: |
-        let doc_root = this.map_each(if key == "items" { deleted() })
+        let doc_root = this.without("items")
         root = items.map_each($doc_root.merge(this))
     - unarchive:
         format: json_array

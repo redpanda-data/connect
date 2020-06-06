@@ -182,6 +182,32 @@ result = foo.exists("bar.baz")
 # Out: {"result":false}
 ```
 
+### `explode`
+
+Explodes an array or object at a [field path][field_paths].
+
+#### On arrays
+
+Exploding arrays results in an array containing elements matching the original document, where the target field of each element is an element of the exploded array:
+
+```coffee
+root = this.explode("value")
+
+# In:  {"id":1,"value":["foo","bar","baz"]}
+# Out: [{"id":1,"value":"foo"},{"id":1,"value":"bar"},{"id":1,"value":"baz"}]
+```
+
+#### On objects
+
+Exploding objects results in an object where the keys match the target object, and the values match the original document but with the target field replaced by the exploded value:
+
+```coffee
+root = this.explode("value")
+
+# In:  {"id":1,"value":{"foo":2,"bar":[3,4],"baz":{"bev":5}}}
+# Out: {"foo":{"id":1,"value":2},"bar":{"id":1,"value":[3,4]},"baz":{"id":1,"value":{"bev":5}}
+```
+
 ### `flatten`
 
 Iterates an array and any element that is itself an array is removed and has its elements inserted directly in the resulting array.
@@ -374,6 +400,19 @@ foo_vals = foo.values()
 
 # In:  {"foo":{"bar":1,"baz":2}}
 # Out: {"foo_vals":[1,2]}
+```
+
+### `without`
+
+Returns an object where one or more [field path][field_paths] arguments are removed. Each path specifies a specific field to be deleted from the input object, allowing for nested fields.
+
+If a key within a nested path does not exist or is not an object then it is not removed.
+
+```coffee
+root = this.without("inner.a","inner.c","d")
+
+# In:  {"inner":{"a":"first","b":"second","c":"third"},"d":"fourth","e":"fifth"}
+# Out: {"inner":{"b":"second"},"e":"fifth"}
 ```
 
 ## String Stuff

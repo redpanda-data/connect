@@ -26,7 +26,7 @@ func appendMethod(target Function, args ...interface{}) (Function, error) {
 		}
 		arr, ok := res.([]interface{})
 		if !ok {
-			return nil, fmt.Errorf("expected array target, found %T", res)
+			return nil, NewTypeError(res, ValueArray)
 		}
 		return append(arr, args...), nil
 	}), nil
@@ -186,7 +186,7 @@ func containsMethod(target Function, args ...interface{}) (Function, error) {
 		default:
 			return nil, &ErrRecoverable{
 				Recovered: false,
-				Err:       fmt.Errorf("expected string, array or map target, found %T", v),
+				Err:       NewTypeError(v, ValueString, ValueArray, ValueObject),
 			}
 		}
 		return false, nil
@@ -208,7 +208,7 @@ func enumerateMethod(target Function, args ...interface{}) (Function, error) {
 		}
 		arr, ok := res.([]interface{})
 		if !ok {
-			return nil, fmt.Errorf("expected array target, found %T", res)
+			return nil, NewTypeError(res, ValueArray)
 		}
 		enumerated := make([]interface{}, 0, len(arr))
 		for i, ele := range arr {
@@ -244,6 +244,48 @@ func existsMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"explode", true, explodeMethod,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
+
+func explodeMethod(target Function, args ...interface{}) (Function, error) {
+	path := gabs.DotPathToSlice(args[0].(string))
+
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		target := gabs.Wrap(v).Search(path...)
+
+		switch t := target.Data().(type) {
+		case []interface{}:
+			result := make([]interface{}, len(t))
+			for i, ele := range t {
+				gExploded := gabs.Wrap(IClone(v))
+				gExploded.Set(ele, path...)
+				result[i] = gExploded.Data()
+			}
+			return result, nil
+		case map[string]interface{}:
+			result := make(map[string]interface{}, len(t))
+			for key, ele := range t {
+				gExploded := gabs.Wrap(IClone(v))
+				gExploded.Set(ele, path...)
+				result[key] = gExploded.Data()
+			}
+			return result, nil
+		}
+
+		return nil, NewTypeError(v, ValueObject, ValueArray)
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"flatten", false, flattenMethod,
 	ExpectNArgs(0),
 )
@@ -256,7 +298,7 @@ func flattenMethod(target Function, args ...interface{}) (Function, error) {
 		}
 		array, isArray := v.([]interface{})
 		if !isArray {
-			return nil, fmt.Errorf("expected array, received %T", v)
+			return nil, NewTypeError(v, ValueArray)
 		}
 		result := make([]interface{}, 0, len(array))
 		for _, child := range array {
@@ -298,7 +340,7 @@ func foldMethod(target Function, args ...interface{}) (Function, error) {
 
 		resArray, ok := res.([]interface{})
 		if !ok {
-			return nil, fmt.Errorf("expected array, found: %T", res)
+			return nil, NewTypeError(res, ValueArray)
 		}
 
 		var tally interface{}
@@ -447,7 +489,7 @@ func indexMethod(target Function, args ...interface{}) (Function, error) {
 
 		array, ok := v.([]interface{})
 		if !ok {
-			return nil, fmt.Errorf("expected array, found %T", v)
+			return nil, NewTypeError(v, ValueArray)
 		}
 
 		i := int(index)
@@ -481,7 +523,7 @@ func keysMethod(target Function, args ...interface{}) (Function, error) {
 			}
 			return keys, nil
 		}
-		return nil, fmt.Errorf("expected map, found %T", v)
+		return nil, NewTypeError(v, ValueObject)
 	}), nil
 }
 
@@ -512,7 +554,7 @@ func lengthMethod(target Function, _ ...interface{}) (Function, error) {
 		default:
 			return nil, &ErrRecoverable{
 				Recovered: length,
-				Err:       fmt.Errorf("expected string, array or object value, received %T", v),
+				Err:       NewTypeError(v, ValueString, ValueArray, ValueObject),
 			}
 		}
 		return length, nil
@@ -612,7 +654,7 @@ func mapEachMethod(target Function, args ...interface{}) (Function, error) {
 		default:
 			return nil, &ErrRecoverable{
 				Recovered: res,
-				Err:       fmt.Errorf("expected array, found: %T", res),
+				Err:       NewTypeError(res, ValueArray),
 			}
 		}
 		if err != nil {
@@ -661,7 +703,7 @@ func mergeMethod(target Function, args ...interface{}) (Function, error) {
 		if _, isObject := mergeInto.(map[string]interface{}); !isObject {
 			return nil, &ErrRecoverable{
 				Recovered: mergeInto,
-				Err:       fmt.Errorf("expected object or array target, received %T", mergeInto),
+				Err:       NewTypeError(mergeInto, ValueObject, ValueArray),
 			}
 		}
 
@@ -697,7 +739,7 @@ func (n *notMethod) Exec(ctx FunctionContext) (interface{}, error) {
 	}
 	b, ok := v.(bool)
 	if !ok {
-		return nil, fmt.Errorf("expected boolean, received %T", v)
+		return nil, NewTypeError(v, ValueBool)
 	}
 	return !b, nil
 }
@@ -838,7 +880,7 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 			})
 			return values, nil
 		}
-		return nil, fmt.Errorf("expected array, found %T", v)
+		return nil, NewTypeError(v, ValueArray)
 	}), nil
 }
 
@@ -907,7 +949,7 @@ func sliceMethod(target Function, args ...interface{}) (Function, error) {
 			}
 			return t[low:highV], nil
 		}
-		return nil, fmt.Errorf("expected string or array value, received %T", v)
+		return nil, NewTypeError(v, ValueArray, ValueString)
 	}), nil
 }
 
@@ -950,7 +992,7 @@ func sumMethod(target Function, _ ...interface{}) (Function, error) {
 		}
 		return nil, &ErrRecoverable{
 			Recovered: int64(0),
-			Err:       fmt.Errorf("expected array value, received %T", v),
+			Err:       NewTypeError(v, ValueArray),
 		}
 	}), nil
 }
@@ -1077,7 +1119,64 @@ func valuesMethod(target Function, args ...interface{}) (Function, error) {
 			}
 			return values, nil
 		}
-		return nil, fmt.Errorf("expected map, found %T", v)
+		return nil, NewTypeError(v, ValueObject)
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"without", true, withoutMethod,
+	ExpectAtLeastOneArg(),
+	ExpectAllStringArgs(),
+)
+
+func mapWithout(m map[string]interface{}, paths [][]string) map[string]interface{} {
+	newMap := make(map[string]interface{}, len(m))
+	for k, v := range m {
+		excluded := false
+		var nestedExclude [][]string
+		for _, p := range paths {
+			if p[0] == k {
+				if len(p) > 1 {
+					nestedExclude = append(nestedExclude, p[1:])
+				} else {
+					excluded = true
+				}
+			}
+		}
+		if !excluded {
+			if len(nestedExclude) > 0 {
+				vMap, ok := v.(map[string]interface{})
+				if ok {
+					newMap[k] = mapWithout(vMap, nestedExclude)
+				} else {
+					newMap[k] = v
+				}
+			} else {
+				newMap[k] = v
+			}
+		}
+	}
+	return newMap
+}
+
+func withoutMethod(target Function, args ...interface{}) (Function, error) {
+	excludeList := make([][]string, 0, len(args))
+	for _, arg := range args {
+		excludeList = append(excludeList, gabs.DotPathToSlice(arg.(string)))
+	}
+
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		m, ok := v.(map[string]interface{})
+		if !ok {
+			return nil, NewTypeError(v, ValueObject)
+		}
+		return mapWithout(m, excludeList), nil
 	}), nil
 }
 

@@ -26,6 +26,50 @@ func TestMethods(t *testing.T) {
 		messages []easyMsg
 		index    int
 	}{
+		"check explode 1": {
+			input:  `{"foo":[1,2,3],"id":"bar"}.explode("foo").string()`,
+			output: `[{"foo":1,"id":"bar"},{"foo":2,"id":"bar"},{"foo":3,"id":"bar"}]`,
+		},
+		"check explode 2": {
+			input:  `{"foo":{"also":"this","bar":[{"key":"value1"},{"key":"value2"},{"key":"value3"}]},"id":"baz"}.explode("foo.bar").string()`,
+			output: `[{"foo":{"also":"this","bar":{"key":"value1"}},"id":"baz"},{"foo":{"also":"this","bar":{"key":"value2"}},"id":"baz"},{"foo":{"also":"this","bar":{"key":"value3"}},"id":"baz"}]`,
+		},
+		"check explode 3": {
+			input:  `{"foo":{"a":1,"b":2,"c":3},"id":"bar"}.explode("foo").string()`,
+			output: `{"a":{"foo":1,"id":"bar"},"b":{"foo":2,"id":"bar"},"c":{"foo":3,"id":"bar"}}`,
+		},
+		"check explode 4": {
+			input:  `{"foo":{"also":"this","bar":{"key1":["a","b"],"key2":{"c":3,"d":4}}},"id":"baz"}.explode("foo.bar").string()`,
+			output: `{"key1":{"foo":{"also":"this","bar":["a","b"]},"id":"baz"},"key2":{"foo":{"also":"this","bar":{"c":3,"d":4}},"id":"baz"}}`,
+		},
+		"check without single": {
+			input:  `{"a":"first","b":"second"}.without("a")`,
+			output: map[string]interface{}{"b": "second"},
+		},
+		"check without double": {
+			input:  `{"a":"first","b":"second","c":"third"}.without("a","c")`,
+			output: map[string]interface{}{"b": "second"},
+		},
+		"check without nested": {
+			input: `{"inner":{"a":"first","b":"second","c":"third"}}.without("inner.a","inner.c","thisdoesntexist")`,
+			output: map[string]interface{}{
+				"inner": map[string]interface{}{"b": "second"},
+			},
+		},
+		"check without combination": {
+			input: `{"d":"fourth","e":"fifth","inner":{"a":"first","b":"second","c":"third"}}.without("d","inner.a","inner.c")`,
+			output: map[string]interface{}{
+				"e":     "fifth",
+				"inner": map[string]interface{}{"b": "second"},
+			},
+		},
+		"check without nested not object": {
+			input: `{"a":"first","b":"second","c":"third"}.without("a","c.foo")`,
+			output: map[string]interface{}{
+				"b": "second",
+				"c": "third",
+			},
+		},
 		"check unique custom": {
 			input: `[{"v":"a"},{"v":"b"},{"v":"c"},{"v":"b"},{"v":"d"},{"v":"a"}].unique(v)`,
 			output: []interface{}{
@@ -481,7 +525,7 @@ func TestMethods(t *testing.T) {
 		},
 		"check slice invalid": {
 			input: `10.slice(8)`,
-			err:   `expected string or array value, received int64`,
+			err:   `expected array or string value, found number: 10`,
 		},
 		"check slice array": {
 			input:  `["foo", "bar", "baz", "buz"].slice(1, 3)`,
@@ -655,7 +699,7 @@ func TestMethods(t *testing.T) {
 		"check contains invalid type": {
 			input:    `json("nope").contains("foo")`,
 			messages: []easyMsg{{content: `{"nope":false}`}},
-			err:      "expected string, array or map target, found bool",
+			err:      "expected string, array or object value, found bool: false",
 		},
 		"check substr": {
 			input:    `json("foo").contains("foo")`,
@@ -742,7 +786,7 @@ func TestMethods(t *testing.T) {
 		"check keys error": {
 			input:    `"foo".keys().sort()`,
 			messages: []easyMsg{{content: `{"bar":2,"foo":1}`}},
-			err:      `expected map, found string`,
+			err:      `expected object value, found string: foo`,
 		},
 		"check values literal": {
 			input:    `{"foo":1,"bar":2}.values().sort()`,
@@ -762,7 +806,7 @@ func TestMethods(t *testing.T) {
 		"check values error": {
 			input:    `"foo".values().sort()`,
 			messages: []easyMsg{{content: `{"bar":2,"foo":1}`}},
-			err:      `expected map, found string`,
+			err:      `expected object value, found string: foo`,
 		},
 	}
 

@@ -42,7 +42,7 @@ func capitalizeMethod(target Function, _ ...interface{}) (Function, error) {
 		case []byte:
 			return bytes.Title(t), nil
 		}
-		return nil, fmt.Errorf("expected string value, received %T", v)
+		return nil, NewTypeError(v, ValueString)
 	}), nil
 }
 
@@ -100,7 +100,7 @@ func decodeMethod(target Function, args ...interface{}) (Function, error) {
 		case []byte:
 			res, err = schemeFn(t)
 		default:
-			err = fmt.Errorf("expected string value, received %T", v)
+			err = NewTypeError(v, ValueString)
 		}
 		return res, err
 	}), nil
@@ -177,7 +177,7 @@ func encodeMethod(target Function, args ...interface{}) (Function, error) {
 		case []byte:
 			res, err = schemeFn(t)
 		default:
-			err = fmt.Errorf("expected string value, received %T", v)
+			err = NewTypeError(v, ValueString)
 		}
 		return res, err
 	}), nil
@@ -203,7 +203,7 @@ func escapeHTMLMethod(target Function, args ...interface{}) (Function, error) {
 		case []byte:
 			res = html.EscapeString(string(t))
 		default:
-			err = fmt.Errorf("expected string value, received %T", v)
+			err = NewTypeError(v, ValueString)
 		}
 		return res, err
 	}), nil
@@ -229,7 +229,7 @@ func escapeURLQueryMethod(target Function, args ...interface{}) (Function, error
 		case []byte:
 			res = url.QueryEscape(string(t))
 		default:
-			err = fmt.Errorf("expected string value, received %T", v)
+			err = NewTypeError(v, ValueString)
 		}
 		return res, err
 	}), nil
@@ -253,7 +253,7 @@ func formatMethod(target Function, args ...interface{}) (Function, error) {
 		case []byte:
 			return fmt.Sprintf(string(t), args...), nil
 		default:
-			return nil, fmt.Errorf("expected string value, received %T", v)
+			return nil, NewTypeError(v, ValueString)
 		}
 	}), nil
 }
@@ -280,7 +280,7 @@ func hasPrefixMethod(target Function, args ...interface{}) (Function, error) {
 		case []byte:
 			return bytes.HasPrefix(t, prefixB), nil
 		}
-		return nil, fmt.Errorf("expected string value, received %T", v)
+		return nil, NewTypeError(v, ValueString)
 	}), nil
 }
 
@@ -306,7 +306,7 @@ func hasSuffixMethod(target Function, args ...interface{}) (Function, error) {
 		case []byte:
 			return bytes.HasSuffix(t, prefixB), nil
 		}
-		return nil, fmt.Errorf("expected string value, received %T", v)
+		return nil, NewTypeError(v, ValueString)
 	}), nil
 }
 
@@ -392,7 +392,7 @@ func hashMethod(target Function, args ...interface{}) (Function, error) {
 		case []byte:
 			res, err = hashFn(t)
 		default:
-			err = fmt.Errorf("expected string value, received %T", v)
+			err = NewTypeError(v, ValueString)
 		}
 		return res, err
 	}), nil
@@ -465,7 +465,7 @@ func lowercaseMethod(target Function, _ ...interface{}) (Function, error) {
 		default:
 			return nil, &ErrRecoverable{
 				Recovered: strings.ToLower(IToString(v)),
-				Err:       fmt.Errorf("expected string value, received %T", v),
+				Err:       NewTypeError(v, ValueString),
 			}
 		}
 	}), nil
@@ -491,7 +491,7 @@ func parseJSONMethod(target Function, _ ...interface{}) (Function, error) {
 		case []byte:
 			jsonBytes = t
 		default:
-			return nil, fmt.Errorf("expected string value, received %T", v)
+			return nil, NewTypeError(v, ValueString)
 		}
 		var jObj interface{}
 		if err = json.Unmarshal(jsonBytes, &jObj); err != nil {
@@ -520,7 +520,7 @@ func quoteMethod(target Function, _ ...interface{}) (Function, error) {
 		case []byte:
 			return strconv.Quote(string(t)), nil
 		}
-		return nil, fmt.Errorf("expected string value, received %T", v)
+		return nil, NewTypeError(v, ValueString)
 	}), nil
 }
 
@@ -549,7 +549,7 @@ func replaceMethod(target Function, args ...interface{}) (Function, error) {
 		case []byte:
 			return bytes.ReplaceAll(t, matchB, withB), nil
 		}
-		return nil, fmt.Errorf("expected string value, received %T", v)
+		return nil, NewTypeError(v, ValueString)
 	}), nil
 }
 
@@ -586,7 +586,7 @@ func regexpFindAllMethod(target Function, args ...interface{}) (Function, error)
 				result = append(result, string(str))
 			}
 		default:
-			return nil, fmt.Errorf("expected string value, received %T", v)
+			return nil, NewTypeError(v, ValueString)
 		}
 		return result, nil
 	}), nil
@@ -633,7 +633,7 @@ func regexpFindAllSubmatchMethod(target Function, args ...interface{}) (Function
 				result = append(result, r)
 			}
 		default:
-			return nil, fmt.Errorf("expected string value, received %T", v)
+			return nil, NewTypeError(v, ValueString)
 		}
 		return result, nil
 	}), nil
@@ -664,7 +664,7 @@ func regexpMatchMethod(target Function, args ...interface{}) (Function, error) {
 		case []byte:
 			result = re.Match(t)
 		default:
-			return nil, fmt.Errorf("expected string value, received %T", v)
+			return nil, NewTypeError(v, ValueString)
 		}
 		return result, nil
 	}), nil
@@ -698,7 +698,7 @@ func regexpReplaceMethod(target Function, args ...interface{}) (Function, error)
 		case []byte:
 			result = string(re.ReplaceAll(t, withBytes))
 		default:
-			return nil, fmt.Errorf("expected string value, received %T", v)
+			return nil, NewTypeError(v, ValueString)
 		}
 		return result, nil
 	}), nil
@@ -736,7 +736,7 @@ func splitMethod(target Function, args ...interface{}) (Function, error) {
 			}
 			return vals, nil
 		}
-		return nil, fmt.Errorf("expected string value, received %T", v)
+		return nil, NewTypeError(v, ValueString)
 	}), nil
 }
 
@@ -780,7 +780,7 @@ func stripHTMLMethod(target Function, _ ...interface{}) (Function, error) {
 		case []byte:
 			return p.SanitizeBytes(t), nil
 		}
-		return nil, fmt.Errorf("expected string value, received %T", v)
+		return nil, NewTypeError(v, ValueString)
 	}), nil
 }
 
@@ -814,7 +814,7 @@ func trimMethod(target Function, args ...interface{}) (Function, error) {
 			}
 			return bytes.Trim(t, cutset), nil
 		}
-		return nil, fmt.Errorf("expected string value, received %T", v)
+		return nil, NewTypeError(v, ValueString)
 	}), nil
 }
 
@@ -838,7 +838,7 @@ func unescapeHTMLMethod(target Function, args ...interface{}) (Function, error) 
 		case []byte:
 			res = html.UnescapeString(string(t))
 		default:
-			err = fmt.Errorf("expected string value, received %T", v)
+			err = NewTypeError(v, ValueString)
 		}
 		return res, err
 	}), nil
@@ -864,7 +864,7 @@ func unescapeURLQueryMethod(target Function, args ...interface{}) (Function, err
 		case []byte:
 			res, err = url.QueryUnescape(string(t))
 		default:
-			err = fmt.Errorf("expected string value, received %T", v)
+			err = NewTypeError(v, ValueString)
 		}
 		return res, err
 	}), nil
@@ -889,7 +889,7 @@ func unquoteMethod(target Function, _ ...interface{}) (Function, error) {
 		case []byte:
 			return strconv.Unquote(string(t))
 		}
-		return nil, fmt.Errorf("expected string value, received %T", v)
+		return nil, NewTypeError(v, ValueString)
 	}), nil
 }
 
@@ -917,7 +917,7 @@ func uppercaseMethod(target Function, _ ...interface{}) (Function, error) {
 		default:
 			return nil, &ErrRecoverable{
 				Recovered: strings.ToUpper(IToString(v)),
-				Err:       fmt.Errorf("expected string value, received %T", v),
+				Err:       NewTypeError(v, ValueString),
 			}
 		}
 	}), nil
