@@ -88,10 +88,10 @@ else
 
 			for i := 0; i < 10; i++ {
 				res, err := e.Exec(FunctionContext{
-					Value: test.value,
-					Maps:  map[string]Function{},
-					Index: test.index,
-					Msg:   msg,
+					Value:    test.value,
+					Maps:     map[string]Function{},
+					Index:    test.index,
+					MsgBatch: msg,
 				})
 				if len(test.err) > 0 {
 					require.EqualError(t, err, test.err)

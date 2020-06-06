@@ -466,8 +466,8 @@ func TestMethodParser(t *testing.T) {
 			e, err := tryParse(test.input, false)
 			require.NoError(t, err)
 			res := ExecToString(e, FunctionContext{
-				Index: test.index,
-				Msg:   msg,
+				Index:    test.index,
+				MsgBatch: msg,
 			})
 			assert.Equal(t, test.output, res)
 		})
@@ -513,8 +513,8 @@ func TestMethodErrors(t *testing.T) {
 			require.NoError(t, err)
 
 			_, err = e.Exec(FunctionContext{
-				Index: test.index,
-				Msg:   msg,
+				Index:    test.index,
+				MsgBatch: msg,
 			})
 			assert.EqualError(t, err, test.errStr)
 		})
@@ -629,9 +629,9 @@ func TestMethodMaps(t *testing.T) {
 			require.NoError(t, err)
 
 			res, err := e.Exec(FunctionContext{
-				Maps:  test.maps,
-				Index: test.index,
-				Msg:   msg,
+				Maps:     test.maps,
+				Index:    test.index,
+				MsgBatch: msg,
 			})
 			if len(test.err) > 0 {
 				require.EqualError(t, err, test.err)

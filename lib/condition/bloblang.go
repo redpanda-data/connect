@@ -87,10 +87,10 @@ func (c *Bloblang) Check(msg types.Message) bool {
 	}
 
 	result, err := c.fn.Exec(query.FunctionContext{
-		Value: valuePtr,
-		Maps:  map[string]query.Function{},
-		Vars:  map[string]interface{}{},
-		Msg:   msg,
+		Value:    valuePtr,
+		Maps:     map[string]query.Function{},
+		Vars:     map[string]interface{}{},
+		MsgBatch: msg,
 	})
 	if err != nil {
 		c.log.Errorf("Failed to check query: %v\n", err)

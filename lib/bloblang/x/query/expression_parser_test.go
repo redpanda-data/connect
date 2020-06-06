@@ -221,12 +221,12 @@ func TestExpressionsParser(t *testing.T) {
 				return
 			}
 			res := ExecToString(e, FunctionContext{
-				Index: test.index, Msg: msg,
+				Index: test.index, MsgBatch: msg,
 				Value: test.value,
 			})
 			assert.Equal(t, test.output, res)
 			res = string(ExecToBytes(e, FunctionContext{
-				Index: test.index, Msg: msg,
+				Index: test.index, MsgBatch: msg,
 				Value: test.value,
 			}))
 			assert.Equal(t, test.output, res)

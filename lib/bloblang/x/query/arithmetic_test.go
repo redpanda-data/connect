@@ -278,13 +278,13 @@ func TestArithmetic(t *testing.T) {
 				return
 			}
 			res := ExecToString(e, FunctionContext{
-				Index: test.index,
-				Msg:   msg,
+				Index:    test.index,
+				MsgBatch: msg,
 			})
 			assert.Equal(t, test.output, res)
 			res = string(ExecToBytes(e, FunctionContext{
-				Index: test.index,
-				Msg:   msg,
+				Index:    test.index,
+				MsgBatch: msg,
 			}))
 			assert.Equal(t, test.output, res)
 		})
@@ -338,11 +338,11 @@ func TestArithmeticLiterals(t *testing.T) {
 			return
 		}
 		res := ExecToString(e, FunctionContext{
-			Index: 0,
-			Msg:   msg,
+			Index:    0,
+			MsgBatch: msg,
 		})
 		assert.Equal(t, v, res, k)
-		res = string(ExecToBytes(e, FunctionContext{Msg: msg}))
+		res = string(ExecToBytes(e, FunctionContext{MsgBatch: msg}))
 		assert.Equal(t, v, res, k)
 	}
 }

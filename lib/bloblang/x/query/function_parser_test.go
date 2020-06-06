@@ -561,12 +561,12 @@ func TestFunctionQueries(t *testing.T) {
 				return
 			}
 			res := ExecToString(e, FunctionContext{
-				Index: test.index, Msg: msg,
+				Index: test.index, MsgBatch: msg,
 				Value: test.value,
 			})
 			assert.Equal(t, test.output, res)
 			res = string(ExecToBytes(e, FunctionContext{
-				Index: test.index, Msg: msg,
+				Index: test.index, MsgBatch: msg,
 				Value: test.value,
 			}))
 			assert.Equal(t, test.output, res)
@@ -594,7 +594,7 @@ func TestCountersFunction(t *testing.T) {
 			continue
 		}
 		res := ExecToString(e, FunctionContext{
-			Msg: message.New(nil),
+			MsgBatch: message.New(nil),
 		})
 		assert.Equal(t, test[1], res)
 	}
@@ -609,7 +609,7 @@ func TestUUIDV4Function(t *testing.T) {
 			continue
 		}
 		res := ExecToString(e, FunctionContext{
-			Msg: message.New(nil),
+			MsgBatch: message.New(nil),
 		})
 		if _, exists := results[res]; exists {
 			t.Errorf("Duplicate UUID generated: %v", res)
@@ -625,7 +625,7 @@ func TestTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp := ExecToString(e, FunctionContext{Msg: message.New(nil)})
+	tStamp := ExecToString(e, FunctionContext{MsgBatch: message.New(nil)})
 
 	nanoseconds, err := strconv.ParseInt(tStamp, 10, 64)
 	if err != nil {
@@ -642,7 +642,7 @@ func TestTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp = ExecToString(e, FunctionContext{Msg: message.New(nil)})
+	tStamp = ExecToString(e, FunctionContext{MsgBatch: message.New(nil)})
 
 	seconds, err := strconv.ParseInt(tStamp, 10, 64)
 	if err != nil {
@@ -659,7 +659,7 @@ func TestTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp = ExecToString(e, FunctionContext{Msg: message.New(nil)})
+	tStamp = ExecToString(e, FunctionContext{MsgBatch: message.New(nil)})
 
 	var secondsF float64
 	secondsF, err = strconv.ParseFloat(tStamp, 64)
@@ -677,7 +677,7 @@ func TestTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp = ExecToString(e, FunctionContext{Msg: message.New(nil)})
+	tStamp = ExecToString(e, FunctionContext{MsgBatch: message.New(nil)})
 
 	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
 	if err != nil {
@@ -693,7 +693,7 @@ func TestTimestamps(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	tStamp = ExecToString(e, FunctionContext{Msg: message.New(nil)})
+	tStamp = ExecToString(e, FunctionContext{MsgBatch: message.New(nil)})
 
 	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
 	if err != nil {

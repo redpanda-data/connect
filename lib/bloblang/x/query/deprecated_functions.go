@@ -17,14 +17,14 @@ import (
 
 func wrapDeprecatedFunction(d deprecatedFunction) Function {
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		return d(ctx.Index, ctx.Msg, ctx.Legacy), nil
+		return d(ctx.Index, ctx.MsgBatch, ctx.Legacy), nil
 	})
 }
 
-type deprecatedFunction func(int, Message, bool) []byte
+type deprecatedFunction func(int, MessageBatch, bool) []byte
 
 func jsonFieldFunction(arg string) deprecatedFunction {
-	return func(i int, msg Message, legacy bool) []byte {
+	return func(i int, msg MessageBatch, legacy bool) []byte {
 		part := 0
 		if !legacy {
 			part = i
@@ -56,7 +56,7 @@ func jsonFieldFunction(arg string) deprecatedFunction {
 }
 
 func deprecatedMetadataFunction(arg string) deprecatedFunction {
-	return func(i int, msg Message, legacy bool) []byte {
+	return func(i int, msg MessageBatch, legacy bool) []byte {
 		part := 0
 		if !legacy {
 			part = i
@@ -78,7 +78,7 @@ func deprecatedMetadataFunction(arg string) deprecatedFunction {
 }
 
 func deprecatedMetadataMapFunction(arg string) deprecatedFunction {
-	return func(i int, msg Message, legacy bool) []byte {
+	return func(i int, msg MessageBatch, legacy bool) []byte {
 		part := 0
 		if !legacy {
 			part = i
@@ -103,7 +103,7 @@ func deprecatedMetadataMapFunction(arg string) deprecatedFunction {
 }
 
 func deprecatedErrorFunction(arg string) deprecatedFunction {
-	return func(i int, msg Message, legacy bool) []byte {
+	return func(i int, msg MessageBatch, legacy bool) []byte {
 		part := 0
 		if !legacy {
 			part = i
@@ -120,7 +120,7 @@ func deprecatedErrorFunction(arg string) deprecatedFunction {
 }
 
 func deprecatedContentFunction(arg string) deprecatedFunction {
-	return func(i int, msg Message, legacy bool) []byte {
+	return func(i int, msg MessageBatch, legacy bool) []byte {
 		part := 0
 		if !legacy {
 			part = i
@@ -142,12 +142,12 @@ var countersMux = &sync.Mutex{}
 
 var deprecatedFunctions = map[string]func(arg string) deprecatedFunction{
 	"timestamp_unix_nano": func(arg string) deprecatedFunction {
-		return func(_ int, _ Message, _ bool) []byte {
+		return func(_ int, _ MessageBatch, _ bool) []byte {
 			return []byte(strconv.FormatInt(time.Now().UnixNano(), 10))
 		}
 	},
 	"timestamp_unix": func(arg string) deprecatedFunction {
-		return func(_ int, _ Message, _ bool) []byte {
+		return func(_ int, _ MessageBatch, _ bool) []byte {
 			tNow := time.Now()
 			precision, _ := strconv.ParseInt(arg, 10, 64)
 			tStr := strconv.FormatInt(tNow.Unix(), 10)
@@ -165,7 +165,7 @@ var deprecatedFunctions = map[string]func(arg string) deprecatedFunction{
 		if len(arg) == 0 {
 			arg = "Mon Jan 2 15:04:05 -0700 MST 2006"
 		}
-		return func(_ int, _ Message, _ bool) []byte {
+		return func(_ int, _ MessageBatch, _ bool) []byte {
 			return []byte(time.Now().Format(arg))
 		}
 	},
@@ -173,23 +173,23 @@ var deprecatedFunctions = map[string]func(arg string) deprecatedFunction{
 		if len(arg) == 0 {
 			arg = "Mon Jan 2 15:04:05 -0700 MST 2006"
 		}
-		return func(_ int, _ Message, _ bool) []byte {
+		return func(_ int, _ MessageBatch, _ bool) []byte {
 			return []byte(time.Now().In(time.UTC).Format(arg))
 		}
 	},
 	"hostname": func(_ string) deprecatedFunction {
-		return func(_ int, _ Message, _ bool) []byte {
+		return func(_ int, _ MessageBatch, _ bool) []byte {
 			hn, _ := os.Hostname()
 			return []byte(hn)
 		}
 	},
 	"echo": func(arg string) deprecatedFunction {
-		return func(_ int, _ Message, _ bool) []byte {
+		return func(_ int, _ MessageBatch, _ bool) []byte {
 			return []byte(arg)
 		}
 	},
 	"count": func(arg string) deprecatedFunction {
-		return func(_ int, _ Message, _ bool) []byte {
+		return func(_ int, _ MessageBatch, _ bool) []byte {
 			countersMux.Lock()
 			defer countersMux.Unlock()
 
@@ -212,12 +212,12 @@ var deprecatedFunctions = map[string]func(arg string) deprecatedFunction{
 	"metadata":             deprecatedMetadataFunction,
 	"metadata_json_object": deprecatedMetadataMapFunction,
 	"batch_size": func(_ string) deprecatedFunction {
-		return func(_ int, m Message, _ bool) []byte {
+		return func(_ int, m MessageBatch, _ bool) []byte {
 			return strconv.AppendInt(nil, int64(m.Len()), 10)
 		}
 	},
 	"uuid_v4": func(_ string) deprecatedFunction {
-		return func(_ int, _ Message, _ bool) []byte {
+		return func(_ int, _ MessageBatch, _ bool) []byte {
 			u4, err := uuid.NewV4()
 			if err != nil {
 				panic(err)

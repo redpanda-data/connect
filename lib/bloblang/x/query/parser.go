@@ -7,21 +7,21 @@ import (
 
 //------------------------------------------------------------------------------
 
-// Message is an interface type to be given to a query function, it allows the
-// function to resolve fields and metadata from a message.
-type Message interface {
+// MessageBatch is an interface type to be given to a query function, it allows the
+// function to resolve fields and metadata from a Benthos message batch.
+type MessageBatch interface {
 	Get(p int) types.Part
 	Len() int
 }
 
 // FunctionContext provides access to a root message, its index within the batch, and
 type FunctionContext struct {
-	Value  *interface{}
-	Maps   map[string]Function
-	Vars   map[string]interface{}
-	Index  int
-	Msg    Message
-	Legacy bool
+	Value    *interface{}
+	Maps     map[string]Function
+	Vars     map[string]interface{}
+	Index    int
+	MsgBatch MessageBatch
+	Legacy   bool
 }
 
 // Function takes a set of contextual parameters and returns the result of the

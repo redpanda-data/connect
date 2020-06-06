@@ -10,6 +10,11 @@ All notable changes to this project will be documented in this file.
 - New field `type` added to the `amqp_0_9` output.
 - New bloblang methods `explode` and `without`.
 
+### Fixed
+
+- Message functions such as `json` and `content` now work correctly when
+  executing bloblang with the `blobl` sub command.
+
 ## 3.16.0 - 2020-05-31
 
 ### Added

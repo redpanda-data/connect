@@ -65,7 +65,7 @@ var _ = RegisterFunction("batch_index", false, func(...interface{}) (Function, e
 
 var _ = RegisterFunction("batch_size", false, func(...interface{}) (Function, error) {
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		return int64(ctx.Msg.Len()), nil
+		return int64(ctx.MsgBatch.Len()), nil
 	}), nil
 })
 
@@ -75,7 +75,7 @@ var _ = RegisterFunction("content", false, contentFunction)
 
 func contentFunction(...interface{}) (Function, error) {
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		return ctx.Msg.Get(ctx.Index).Get(), nil
+		return ctx.MsgBatch.Get(ctx.Index).Get(), nil
 	}), nil
 }
 
@@ -120,7 +120,7 @@ var _ = RegisterFunction("error", false, errorFunction)
 
 func errorFunction(...interface{}) (Function, error) {
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		return ctx.Msg.Get(ctx.Index).Metadata().Get(types.FailFlagKey), nil
+		return ctx.MsgBatch.Get(ctx.Index).Metadata().Get(types.FailFlagKey), nil
 	}), nil
 }
 
@@ -155,7 +155,7 @@ func jsonFunction(args ...interface{}) (Function, error) {
 		argPath = gabs.DotPathToSlice(args[0].(string))
 	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		jPart, err := ctx.Msg.Get(ctx.Index).JSON()
+		jPart, err := ctx.MsgBatch.Get(ctx.Index).JSON()
 		if err != nil {
 			return nil, &ErrRecoverable{
 				Recovered: nil,
@@ -182,7 +182,7 @@ func metadataFunction(args ...interface{}) (Function, error) {
 	if len(args) > 0 {
 		return closureFn(func(ctx FunctionContext) (interface{}, error) {
 			field := args[0].(string)
-			v := ctx.Msg.Get(ctx.Index).Metadata().Get(field)
+			v := ctx.MsgBatch.Get(ctx.Index).Metadata().Get(field)
 			if len(v) == 0 {
 				return nil, &ErrRecoverable{
 					Recovered: "",
@@ -194,7 +194,7 @@ func metadataFunction(args ...interface{}) (Function, error) {
 	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		kvs := map[string]interface{}{}
-		ctx.Msg.Get(ctx.Index).Metadata().Iter(func(k, v string) error {
+		ctx.MsgBatch.Get(ctx.Index).Metadata().Iter(func(k, v string) error {
 			if len(v) > 0 {
 				kvs[k] = v
 			}

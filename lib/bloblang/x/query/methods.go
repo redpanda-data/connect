@@ -409,9 +409,9 @@ var _ = RegisterMethod(
 
 func fromAllMethod(target Function, _ ...interface{}) (Function, error) {
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		values := make([]interface{}, ctx.Msg.Len())
+		values := make([]interface{}, ctx.MsgBatch.Len())
 		var err error
-		for i := 0; i < ctx.Msg.Len(); i++ {
+		for i := 0; i < ctx.MsgBatch.Len(); i++ {
 			subCtx := ctx
 			subCtx.Index = i
 			v, tmpErr := target.Exec(subCtx)

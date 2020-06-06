@@ -104,7 +104,7 @@ func TestLiteralParser(t *testing.T) {
 			q := res.Payload.(Function)
 
 			result, err := q.Exec(FunctionContext{
-				Index: 0, Msg: message.New(nil),
+				Index: 0, MsgBatch: message.New(nil),
 				Value: test.value,
 			})
 			if len(test.err) > 0 {

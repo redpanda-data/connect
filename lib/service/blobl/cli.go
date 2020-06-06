@@ -2,13 +2,13 @@ package blobl
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
 
 	"github.com/Jeffail/benthos/v3/lib/bloblang/x/mapping"
 	"github.com/Jeffail/benthos/v3/lib/bloblang/x/query"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/fatih/color"
 	"github.com/urfave/cli/v2"
@@ -97,18 +97,24 @@ func run(c *cli.Context) error {
 					return
 				}
 
+				msg := message.New([][]byte{input})
+
 				var value interface{}
 				if raw {
 					value = input
-				} else if err = json.Unmarshal(input, &value); err != nil {
-					fmt.Fprintln(os.Stderr, red(fmt.Sprintf("failed to parse JSON: %v", err)))
-					continue
+				} else {
+					var err error
+					if value, err = msg.Get(0).JSON(); err != nil {
+						fmt.Fprintln(os.Stderr, red(fmt.Sprintf("failed to parse JSON: %v", err)))
+						continue
+					}
 				}
 
 				result, err := exec.Exec(query.FunctionContext{
-					Value: &value,
-					Maps:  map[string]query.Function{},
-					Vars:  map[string]interface{}{},
+					Value:    &value,
+					Maps:     map[string]query.Function{},
+					Vars:     map[string]interface{}{},
+					MsgBatch: msg,
 				})
 				if err != nil {
 					fmt.Fprintln(os.Stderr, red(fmt.Sprintf("failed to execute map: %v", err)))

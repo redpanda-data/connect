@@ -300,14 +300,14 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			}
 
 			res := ExecToString(e, FunctionContext{
-				Index:  test.index,
-				Msg:    msg,
-				Legacy: test.legacy,
+				Index:    test.index,
+				MsgBatch: msg,
+				Legacy:   test.legacy,
 			})
 			res2 := string(ExecToBytes(e, FunctionContext{
-				Index:  test.index,
-				Msg:    msg,
-				Legacy: test.legacy,
+				Index:    test.index,
+				MsgBatch: msg,
+				Legacy:   test.legacy,
 			}))
 
 			assert.Equal(t, test.output, res)
@@ -316,7 +316,7 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 	}
 }
 
-var emptyCtx = FunctionContext{Msg: message.New(nil)}
+var emptyCtx = FunctionContext{MsgBatch: message.New(nil)}
 
 func TestDeprecatedCountersFunction(t *testing.T) {
 	tests := [][2]string{

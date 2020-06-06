@@ -59,11 +59,11 @@ func (e *Executor) MapPart(index int, msg Message) (types.Part, error) {
 	var newObj interface{} = query.Nothing(nil)
 	for _, stmt := range e.statements {
 		res, err := stmt.query.Exec(query.FunctionContext{
-			Maps:  e.maps,
-			Value: valuePtr,
-			Vars:  vars,
-			Index: index,
-			Msg:   msg,
+			Maps:     e.maps,
+			Value:    valuePtr,
+			Vars:     vars,
+			Index:    index,
+			MsgBatch: msg,
 		})
 		if err != nil {
 			return nil, xerrors.Errorf("failed to execute mapping assignment at line %v: %v", stmt.line+1, err)
