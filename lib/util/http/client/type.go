@@ -245,9 +245,20 @@ func OptSetManager(mgr types.Manager) func(*Type) {
 
 // OptSetHTTPTransport sets the HTTP Transport to use. NOTE: This setting will
 // override any configured TLS options.
+//
+// WARNING: DEPRECATED, use OptSetRoundTripper instead.
+// TODO: V4 Remove this
 func OptSetHTTPTransport(transport *http.Transport) func(*Type) {
 	return func(t *Type) {
 		t.client.Transport = transport
+	}
+}
+
+// OptSetRoundTripper sets the *client.Transport to use for HTTP requests.
+// NOTE: This setting will override any configured TLS options.
+func OptSetRoundTripper(rt http.RoundTripper) func(*Type) {
+	return func(t *Type) {
+		t.client.Transport = rt
 	}
 }
 
