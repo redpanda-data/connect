@@ -16,16 +16,16 @@ pipeline:
   - bloblang: root = deleted()
 ```
 
-But that's most likely not what you want. We can instead only delete an event under certain conditions with a [`match` expression][bloblang.match]:
+But that's most likely not what you want. We can instead only delete an event under certain conditions with a [`match`][bloblang.match] or [`if`][bloblang.if] expression:
 
 ```yaml
 pipeline:
   processors:
   - bloblang: |
-      root = match {
-        meta("topic").or("") == "foo" ||
+      root = if meta("topic").or("") == "foo" ||
         doc.type.or("") == "bar" ||
-        doc.urls.contains("https://www.benthos.dev/").catch(false) => deleted()
+        doc.urls.contains("https://www.benthos.dev/").catch(false) {
+        deleted()
       }
 ```
 
@@ -46,9 +46,7 @@ pipeline:
   processors:
   - bloblang: |
       # Drop 50% of documents randomly
-      root = match {
-        random_int() % 2 == 0 => deleted()
-      }
+      root = if random_int() % 2 == 0 { deleted() }
 ```
 
 We can also do this in a deterministic way by hashing events and using the hash as our seed:
@@ -58,10 +56,11 @@ pipeline:
   processors:
   - bloblang: |
       # Drop 10% of documents deterministically (same docs filtered each run)
-      root = match {
-        random_int(content().hash("xxhash64").number()) % 10 == 0 => deleted()
+      root = if random_int(content().hash("xxhash64").number()) % 10 == 0 {
+         deleted()
       }
 ```
 
 [processors.bloblang]: /docs/components/processors/bloblang
-[bloblang.match]: /docs/guides/bloblang/about##pattern-matching
+[bloblang.match]: /docs/guides/bloblang/about#pattern-matching
+[bloblang.if]: /docs/guides/bloblang/about#conditional-mapping
