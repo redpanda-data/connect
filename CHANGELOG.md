@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.17.0 - 2020-06-07
+
 ### Added
 
 - New field `type` added to the `amqp_0_9` output.
