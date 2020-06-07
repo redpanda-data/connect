@@ -91,6 +91,7 @@ func run(c *cli.Context) error {
 		go func() {
 			defer wg.Done()
 
+		inputsLoop:
 			for {
 				input, open := <-inputsChan
 				if !open {
@@ -127,6 +128,17 @@ func run(c *cli.Context) error {
 					resultStr = t
 				case []byte:
 					resultStr = string(t)
+				case query.Delete:
+					// Return nothing (filter the message)
+					continue inputsLoop
+				case query.Nothing:
+					// Do not change the original contents
+					gObj := gabs.Wrap(value)
+					if pretty {
+						resultStr = gObj.StringIndent("", "  ")
+					} else {
+						resultStr = gObj.String()
+					}
 				default:
 					gObj := gabs.Wrap(result)
 					if pretty {

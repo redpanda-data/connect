@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Fixed deleting and skipping maps with the `blobl` subcommand.
+
 ## 3.17.0 - 2020-06-07
 
 ### Added
