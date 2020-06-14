@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.18.0 - 2020-06-14
+
 ### Added
 
 - Field `drop_empty_bodies` added to the `http_client` input.
