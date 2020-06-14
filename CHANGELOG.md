@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Field `drop_empty_bodies` added to the `http_client` input.
+
 ### Fixed
 
 - Fixed deleting and skipping maps with the `blobl` subcommand.

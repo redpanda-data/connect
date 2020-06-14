@@ -31,6 +31,7 @@ then line feed (\n) is used.`).HasType("string"),
 
 	specs := append(client.FieldSpecs(),
 		docs.FieldCommon("payload", "An optional payload to deliver for each request."),
+		docs.FieldAdvanced("drop_empty_bodies", "Whether empty payloads received from the target server should be dropped."),
 		docs.FieldCommon(
 			"stream", "Allows you to set streaming mode, where requests are kept open and messages are processed line-by-line.",
 		).WithChildren(streamSpecs...),
@@ -71,9 +72,10 @@ type StreamConfig struct {
 
 // HTTPClientConfig contains configuration for the HTTPClient output type.
 type HTTPClientConfig struct {
-	client.Config `json:",inline" yaml:",inline"`
-	Payload       string       `json:"payload" yaml:"payload"`
-	Stream        StreamConfig `json:"stream" yaml:"stream"`
+	client.Config   `json:",inline" yaml:",inline"`
+	Payload         string       `json:"payload" yaml:"payload"`
+	DropEmptyBodies bool         `json:"drop_empty_bodies" yaml:"drop_empty_bodies"`
+	Stream          StreamConfig `json:"stream" yaml:"stream"`
 }
 
 // NewHTTPClientConfig creates a new HTTPClientConfig with default values.
@@ -82,8 +84,9 @@ func NewHTTPClientConfig() HTTPClientConfig {
 	cConf.Verb = "GET"
 	cConf.URL = "http://localhost:4195/get"
 	return HTTPClientConfig{
-		Config:  cConf,
-		Payload: "",
+		Config:          cConf,
+		Payload:         "",
+		DropEmptyBodies: true,
 		Stream: StreamConfig{
 			Enabled:   false,
 			Reconnect: true,
@@ -130,7 +133,10 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 	}
 
 	if !h.conf.HTTPClient.Stream.Enabled {
-		hc, err := reader.NewHTTPClient(h.payload, h.client)
+		hc, err := reader.NewHTTPClient(
+			h.payload, h.client,
+			reader.HTTPClientOptSetDropEmpty(h.conf.HTTPClient.DropEmptyBodies),
+		)
 		if err != nil {
 			return nil, err
 		}

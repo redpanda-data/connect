@@ -79,6 +79,7 @@ input:
     drop_on: []
     successful_on: []
     payload: ""
+    drop_empty_bodies: true
     stream:
       enabled: false
       reconnect: true
@@ -313,6 +314,14 @@ An optional payload to deliver for each request.
 
 Type: `string`  
 Default: `""`  
+
+### `drop_empty_bodies`
+
+Whether empty payloads received from the target server should be dropped.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `stream`
 

@@ -16,14 +16,34 @@ import (
 type HTTPClient struct {
 	payload types.Message
 	client  *client.Type
+
+	dropEmptyBodies bool
+}
+
+// HTTPClientOptFunc changes the behaviour of an HTTPClient reader.
+type HTTPClientOptFunc func(*HTTPClient)
+
+// HTTPClientOptSetDropEmpty determines whether payloads received that are empty
+// should be dropped rather than propagated as an empty benthos message.
+func HTTPClientOptSetDropEmpty(dropEmpty bool) HTTPClientOptFunc {
+	return func(h *HTTPClient) {
+		h.dropEmptyBodies = dropEmpty
+	}
 }
 
 // NewHTTPClient creates a new HTTPClient reader type.
-func NewHTTPClient(payload types.Message, httpClient *client.Type) (*HTTPClient, error) {
-	return &HTTPClient{
-		payload: payload,
-		client:  httpClient,
-	}, nil
+func NewHTTPClient(payload types.Message, httpClient *client.Type, opts ...HTTPClientOptFunc) (*HTTPClient, error) {
+	h := &HTTPClient{
+		payload:         payload,
+		client:          httpClient,
+		dropEmptyBodies: true,
+	}
+
+	for _, opt := range opts {
+		opt(h)
+	}
+
+	return h, nil
 }
 
 //------------------------------------------------------------------------------
@@ -55,7 +75,10 @@ func (h *HTTPClient) ReadWithContext(ctx context.Context) (types.Message, AsyncA
 		return nil, nil, err
 	}
 
-	if msg.Len() == 0 || msg.Len() == 1 && msg.Get(0).IsEmpty() {
+	if msg.Len() == 0 {
+		return nil, nil, types.ErrTimeout
+	}
+	if msg.Len() == 1 && msg.Get(0).IsEmpty() && h.dropEmptyBodies {
 		return nil, nil, types.ErrTimeout
 	}
 

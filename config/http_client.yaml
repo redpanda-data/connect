@@ -14,6 +14,7 @@ input:
       password: ""
       username: ""
     copy_response_headers: false
+    drop_empty_bodies: true
     drop_on: []
     headers:
       Content-Type: application/octet-stream
