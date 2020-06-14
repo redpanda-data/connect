@@ -118,7 +118,7 @@ aws lambda invoke \
 You can build and archive the function yourself with:
 
 ```sh
-go build github.com/Jeffail/benthos/cmd/serverless/benthos-lambda
+go build github.com/Jeffail/benthos/v3/cmd/serverless/benthos-lambda
 zip benthos-lambda.zip benthos-lambda
 ```
 
