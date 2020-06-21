@@ -40,6 +40,24 @@ func OptSetVersionStamp(version, dateBuilt string) func() {
 
 //------------------------------------------------------------------------------
 
+var customFlags []cli.Flag
+
+// OptAddStringFlag registers a custom CLI flag for the standard Benthos run
+// command.
+func OptAddStringFlag(name, usage string, aliases []string, value string, destination *string) func() {
+	return func() {
+		customFlags = append(customFlags, &cli.StringFlag{
+			Name:        name,
+			Aliases:     aliases,
+			Value:       value,
+			Usage:       usage,
+			Destination: destination,
+		})
+	}
+}
+
+//------------------------------------------------------------------------------
+
 func cmdVersion(version, dateBuild string) {
 	fmt.Printf("Version: %v\nDate: %v\n", Version, DateBuilt)
 	os.Exit(0)
@@ -134,6 +152,29 @@ func RunWithOpts(opts ...func()) {
 // call blocks until either the pipeline shuts down or a termination signal is
 // received.
 func Run() {
+	flags := []cli.Flag{
+		&cli.BoolFlag{
+			Name:    "version",
+			Aliases: []string{"v"},
+			Value:   false,
+			Usage:   "display version info, then exit",
+		},
+		&cli.StringFlag{
+			Name:    "config",
+			Aliases: []string{"c"},
+			Value:   "",
+			Usage:   "a path to a configuration file",
+		},
+		&cli.BoolFlag{
+			Name:  "chilled",
+			Value: false,
+			Usage: "continue to execute a config containing linter errors",
+		},
+	}
+	if len(customFlags) > 0 {
+		flags = append(flags, customFlags...)
+	}
+
 	app := &cli.App{
 		Name:  "benthos",
 		Usage: "A stream processor for mundane tasks - https://benthos.dev",
@@ -143,25 +184,7 @@ func Run() {
    benthos list inputs
    benthos create kafka_balanced//file > ./config.yaml
    benthos -c ./config.yaml`[4:],
-		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:    "version",
-				Aliases: []string{"v"},
-				Value:   false,
-				Usage:   "display version info, then exit",
-			},
-			&cli.StringFlag{
-				Name:    "config",
-				Aliases: []string{"c"},
-				Value:   "",
-				Usage:   "a path to a configuration file",
-			},
-			&cli.BoolFlag{
-				Name:  "chilled",
-				Value: false,
-				Usage: "continue to execute a config containing linter errors",
-			},
-		},
+		Flags: flags,
 		Action: func(c *cli.Context) error {
 			if c.Bool("version") {
 				cmdVersion(Version, DateBuilt)
