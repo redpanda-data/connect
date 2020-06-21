@@ -82,7 +82,7 @@ new_doc.type = thing.(article | comment | this).type
 # Out: {"new_doc":{"type":"baz"}}
 ```
 
-## Literals and Arithmetic
+## Literals
 
 Bloblang supports number, boolean, string, null, array and object literals:
 
