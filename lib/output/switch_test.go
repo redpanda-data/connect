@@ -381,6 +381,67 @@ func TestSwitchNoMatch(t *testing.T) {
 	}
 }
 
+func TestSwitchNoMatchStrict(t *testing.T) {
+	mockOutputs := []*MockOutputType{{}, {}, {}}
+
+	conf := NewConfig()
+	conf.Switch.StrictMode = true
+	for i := 0; i < len(mockOutputs); i++ {
+		conf.Switch.Outputs = append(conf.Switch.Outputs, NewSwitchConfigOutput())
+	}
+
+	fooConfig := condition.NewConfig()
+	fooConfig.Type = condition.TypeJMESPath
+	fooConfig.JMESPath.Query = "foo == 'bar'"
+	conf.Switch.Outputs[0].Condition = fooConfig
+
+	barConfig := condition.NewConfig()
+	barConfig.Type = condition.TypeJMESPath
+	barConfig.JMESPath.Query = "foo == 'baz'"
+	conf.Switch.Outputs[1].Condition = barConfig
+
+	bazConfig := condition.NewConfig()
+	bazConfig.Type = condition.TypeStatic
+	bazConfig.Static = false
+	conf.Switch.Outputs[2].Condition = bazConfig
+
+	s, err := newSwitch(conf, mockOutputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	readChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
+
+	if err = s.Consume(readChan); err != nil {
+		t.Fatal(err)
+	}
+
+	msg := message.New([][]byte{[]byte(`{"foo":"qux"}`)})
+	select {
+	case readChan <- types.NewTransaction(msg, resChan):
+	case <-time.After(time.Second):
+		t.Errorf("Timed out waiting for output send")
+		return
+	}
+
+	select {
+	case res := <-resChan:
+		if err := res.Error(); err == nil {
+			t.Error("Expected error from output but was nil")
+		}
+	case <-time.After(time.Second):
+		t.Errorf("Timed out responding to output")
+		return
+	}
+
+	s.CloseAsync()
+
+	if err := s.WaitForClose(time.Second * 5); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 	nMsgs := 100
 
