@@ -41,6 +41,7 @@ output:
 output:
   switch:
     retry_until_success: true
+    strict_mode: false
     outputs: []
 ```
 
@@ -65,6 +66,16 @@ in order to avoid duplicate messages being routed to an output.
 
 Type: `bool`  
 Default: `true`  
+
+### `strict_mode`
+
+This field determines whether an error should be reported if no condition is met.
+If set to true, an error is propagated back to the input level. The default
+behavior is false, which will drop the message.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `outputs`
 

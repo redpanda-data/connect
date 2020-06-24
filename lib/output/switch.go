@@ -160,6 +160,7 @@ duplicate messages aren't introduced during error conditions.`,
 			}
 			return map[string]interface{}{
 				"retry_until_success": conf.Switch.RetryUntilSuccess,
+				"strict_mode":         conf.Switch.StrictMode,
 				"outputs":             outSlice,
 			}, nil
 		},
@@ -179,6 +180,7 @@ type SwitchConfig struct {
 func NewSwitchConfig() SwitchConfig {
 	return SwitchConfig{
 		RetryUntilSuccess: true,
+		StrictMode:        false,
 		Outputs:           []SwitchConfigOutput{},
 	}
 }

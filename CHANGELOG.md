@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Field `strict_mode` added to the `switch` output.
+
 ## 3.18.0 - 2020-06-14
 
 ### Added
