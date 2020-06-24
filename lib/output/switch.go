@@ -51,6 +51,12 @@ to the input level.
 If a message can be routed to >1 outputs it is usually best to set this to true
 in order to avoid duplicate messages being routed to an output.`,
 			),
+			docs.FieldAdvanced(
+				"strict_mode", `
+This field determines whether an error should be reported if no condition is met.
+If set to true, an error is propagated back to the input level. The default
+behavior is false, which will drop the message.`,
+			),
 			docs.FieldCommon(
 				"outputs", `
 A list of switch cases, each consisting of an [output](/docs/components/outputs/about),
@@ -165,6 +171,7 @@ duplicate messages aren't introduced during error conditions.`,
 // SwitchConfig contains configuration fields for the Switch output type.
 type SwitchConfig struct {
 	RetryUntilSuccess bool                 `json:"retry_until_success" yaml:"retry_until_success"`
+	StrictMode        bool                 `json:"strict_mode" yaml:"strict_mode"`
 	Outputs           []SwitchConfigOutput `json:"outputs" yaml:"outputs"`
 }
 
@@ -238,6 +245,7 @@ type Switch struct {
 	transactions <-chan types.Transaction
 
 	retryUntilSuccess bool
+	strictMode        bool
 	outputTsChans     []chan types.Transaction
 	outputs           []types.Output
 	conditions        []types.Condition
@@ -271,6 +279,7 @@ func NewSwitch(
 		conditions:        make([]types.Condition, lOutputs),
 		fallthroughs:      make([]bool, lOutputs),
 		retryUntilSuccess: conf.Switch.RetryUntilSuccess,
+		strictMode:        conf.Switch.StrictMode,
 		closedChan:        make(chan struct{}),
 		ctx:               ctx,
 		close:             done,
@@ -381,6 +390,15 @@ func (o *Switch) loop() {
 						break
 					}
 				}
+			}
+
+			if o.strictMode && len(outputTargets) == 0 {
+				select {
+				case ts.ResponseChan <- response.NewError(ErrSwitchNoConditionMet):
+				case <-o.ctx.Done():
+					return
+				}
+				continue
 			}
 
 			var owg errgroup.Group
