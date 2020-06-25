@@ -19,6 +19,7 @@ pipeline:
 output:
   type: switch
   switch:
+    max_in_flight: 1
     outputs: []
     retry_until_success: true
     strict_mode: false
