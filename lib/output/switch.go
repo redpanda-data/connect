@@ -57,6 +57,10 @@ This field determines whether an error should be reported if no condition is met
 If set to true, an error is propagated back to the input level. The default
 behavior is false, which will drop the message.`,
 			),
+			docs.FieldAdvanced(
+				"max_in_flight", `
+The maximum number of parallel message batches to have in flight at any given time.`,
+			),
 			docs.FieldCommon(
 				"outputs", `
 A list of switch cases, each consisting of an [output](/docs/components/outputs/about),
@@ -161,6 +165,7 @@ duplicate messages aren't introduced during error conditions.`,
 			return map[string]interface{}{
 				"retry_until_success": conf.Switch.RetryUntilSuccess,
 				"strict_mode":         conf.Switch.StrictMode,
+				"max_in_flight":       conf.Switch.MaxInFlight,
 				"outputs":             outSlice,
 			}, nil
 		},
@@ -173,6 +178,7 @@ duplicate messages aren't introduced during error conditions.`,
 type SwitchConfig struct {
 	RetryUntilSuccess bool                 `json:"retry_until_success" yaml:"retry_until_success"`
 	StrictMode        bool                 `json:"strict_mode" yaml:"strict_mode"`
+	MaxInFlight       int                  `json:"max_in_flight" yaml:"max_in_flight"`
 	Outputs           []SwitchConfigOutput `json:"outputs" yaml:"outputs"`
 }
 
@@ -181,6 +187,7 @@ func NewSwitchConfig() SwitchConfig {
 	return SwitchConfig{
 		RetryUntilSuccess: true,
 		StrictMode:        false,
+		MaxInFlight:       1,
 		Outputs:           []SwitchConfigOutput{},
 	}
 }
@@ -275,7 +282,7 @@ func NewSwitch(
 	o := &Switch{
 		stats:             stats,
 		logger:            logger,
-		maxInFlight:       1,
+		maxInFlight:       conf.Switch.MaxInFlight,
 		transactions:      nil,
 		outputs:           make([]types.Output, lOutputs),
 		conditions:        make([]types.Condition, lOutputs),

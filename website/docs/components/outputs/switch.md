@@ -42,6 +42,7 @@ output:
   switch:
     retry_until_success: true
     strict_mode: false
+    max_in_flight: 1
     outputs: []
 ```
 
@@ -76,6 +77,14 @@ behavior is false, which will drop the message.
 
 Type: `bool`  
 Default: `false`  
+
+### `max_in_flight`
+
+The maximum number of parallel message batches to have in flight at any given time.
+
+
+Type: `number`  
+Default: `1`  
 
 ### `outputs`
 
