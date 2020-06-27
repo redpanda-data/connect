@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Field `strict_mode` added to the `switch` output.
+- Fields `strict_mode` and `max_in_flight` added to the `switch` output.
 
 ## 3.18.0 - 2020-06-14
 
