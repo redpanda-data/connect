@@ -66,6 +66,11 @@ INPUT_AMQP_0_9_TLS_ENABLED                           = false
 INPUT_AMQP_0_9_TLS_ROOT_CAS_FILE
 INPUT_AMQP_0_9_TLS_SKIP_CERT_VERIFY                  = false
 INPUT_AMQP_0_9_URL                                   = amqp://guest:guest@localhost:5672/
+INPUT_AMQP_1_SOURCE_ADDRESS
+INPUT_AMQP_1_TLS_ENABLED                             = false
+INPUT_AMQP_1_TLS_ROOT_CAS_FILE
+INPUT_AMQP_1_TLS_SKIP_CERT_VERIFY                    = false
+INPUT_AMQP_1_URL
 INPUT_AMQP_CONSUMER_TAG                              = benthos-consumer
 INPUT_AMQP_MAX_BATCH_COUNT                           = 1
 INPUT_AMQP_PREFETCH_COUNT                            = 10
@@ -542,6 +547,12 @@ OUTPUT_AMQP_0_9_TLS_ROOT_CAS_FILE
 OUTPUT_AMQP_0_9_TLS_SKIP_CERT_VERIFY                  = false
 OUTPUT_AMQP_0_9_TYPE
 OUTPUT_AMQP_0_9_URL                                   = amqp://guest:guest@localhost:5672/
+OUTPUT_AMQP_1_MAX_IN_FLIGHT                           = 1
+OUTPUT_AMQP_1_TARGET_ADDRESS
+OUTPUT_AMQP_1_TLS_ENABLED                             = false
+OUTPUT_AMQP_1_TLS_ROOT_CAS_FILE
+OUTPUT_AMQP_1_TLS_SKIP_CERT_VERIFY                    = false
+OUTPUT_AMQP_1_URL
 OUTPUT_AMQP_EXCHANGE                                  = benthos-exchange
 OUTPUT_AMQP_EXCHANGE_DECLARE_DURABLE                  = true
 OUTPUT_AMQP_EXCHANGE_DECLARE_ENABLED                  = false

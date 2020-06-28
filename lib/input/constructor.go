@@ -64,6 +64,7 @@ var Constructors = map[string]TypeSpec{}
 const (
 	TypeAMQP            = "amqp"
 	TypeAMQP09          = "amqp_0_9"
+	TypeAMQP1           = "amqp_1"
 	TypeBroker          = "broker"
 	TypeDynamic         = "dynamic"
 	TypeFile            = "file"
@@ -106,6 +107,7 @@ type Config struct {
 	Type            string                       `json:"type" yaml:"type"`
 	AMQP            reader.AMQPConfig            `json:"amqp" yaml:"amqp"`
 	AMQP09          reader.AMQP09Config          `json:"amqp_0_9" yaml:"amqp_0_9"`
+	AMQP1           reader.AMQP1Config           `json:"amqp_1" yaml:"amqp_1"`
 	Broker          BrokerConfig                 `json:"broker" yaml:"broker"`
 	Dynamic         DynamicConfig                `json:"dynamic" yaml:"dynamic"`
 	File            FileConfig                   `json:"file" yaml:"file"`
@@ -149,6 +151,7 @@ func NewConfig() Config {
 		Type:            "stdin",
 		AMQP:            reader.NewAMQPConfig(),
 		AMQP09:          reader.NewAMQP09Config(),
+		AMQP1:           reader.NewAMQP1Config(),
 		Broker:          NewBrokerConfig(),
 		Dynamic:         NewDynamicConfig(),
 		File:            NewFileConfig(),

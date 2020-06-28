@@ -40,6 +40,13 @@ input:
             root_cas_file: ${INPUT_AMQP_0_9_TLS_ROOT_CAS_FILE}
             skip_cert_verify: ${INPUT_AMQP_0_9_TLS_SKIP_CERT_VERIFY:false}
           url: ${INPUT_AMQP_0_9_URL:amqp://guest:guest@localhost:5672/}
+        amqp_1:
+          source_address: ${INPUT_AMQP_1_SOURCE_ADDRESS}
+          tls:
+            enabled: ${INPUT_AMQP_1_TLS_ENABLED:false}
+            root_cas_file: ${INPUT_AMQP_1_TLS_ROOT_CAS_FILE}
+            skip_cert_verify: ${INPUT_AMQP_1_TLS_SKIP_CERT_VERIFY:false}
+          url: ${INPUT_AMQP_1_URL}
         dynamic:
           prefix: ${INPUT_DYNAMIC_PREFIX}
           timeout: ${INPUT_DYNAMIC_TIMEOUT:5s}
@@ -647,6 +654,14 @@ output:
             skip_cert_verify: ${OUTPUT_AMQP_0_9_TLS_SKIP_CERT_VERIFY:false}
           type: ${OUTPUT_AMQP_0_9_TYPE}
           url: ${OUTPUT_AMQP_0_9_URL:amqp://guest:guest@localhost:5672/}
+        amqp_1:
+          max_in_flight: ${OUTPUT_AMQP_1_MAX_IN_FLIGHT:1}
+          target_address: ${OUTPUT_AMQP_1_TARGET_ADDRESS}
+          tls:
+            enabled: ${OUTPUT_AMQP_1_TLS_ENABLED:false}
+            root_cas_file: ${OUTPUT_AMQP_1_TLS_ROOT_CAS_FILE}
+            skip_cert_verify: ${OUTPUT_AMQP_1_TLS_SKIP_CERT_VERIFY:false}
+          url: ${OUTPUT_AMQP_1_URL}
         cache:
           key: ${OUTPUT_CACHE_KEY:${!count("items")}-${!timestamp_unix_nano()}}
           max_in_flight: ${OUTPUT_CACHE_MAX_IN_FLIGHT:1}

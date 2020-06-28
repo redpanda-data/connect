@@ -1,0 +1,197 @@
+package writer
+
+import (
+	"context"
+	"crypto/tls"
+	"sync"
+	"time"
+
+	"github.com/Azure/go-amqp"
+	"github.com/Jeffail/benthos/v3/lib/bloblang/x/field"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
+)
+
+//------------------------------------------------------------------------------
+
+// AMQP1Config contains configuration fields for the AMQP1 output type.
+type AMQP1Config struct {
+	URL           string      `json:"url" yaml:"url"`
+	TargetAddress string      `json:"target_address" yaml:"target_address"`
+	MaxInFlight   int         `json:"max_in_flight" yaml:"max_in_flight"`
+	TLS           btls.Config `json:"tls" yaml:"tls"`
+}
+
+// NewAMQP1Config creates a new AMQP1Config with default values.
+func NewAMQP1Config() AMQP1Config {
+	return AMQP1Config{
+		URL:           "",
+		TargetAddress: "",
+		MaxInFlight:   1,
+		TLS:           btls.NewConfig(),
+	}
+}
+
+//------------------------------------------------------------------------------
+
+// AMQP1 is an output type that serves AMQP1 messages.
+type AMQP1 struct {
+	client  *amqp.Client
+	session *amqp.Session
+	sender  *amqp.Sender
+
+	key     field.Expression
+	msgType field.Expression
+
+	log   log.Modular
+	stats metrics.Type
+
+	conf    AMQP1Config
+	tlsConf *tls.Config
+
+	connLock sync.RWMutex
+}
+
+// NewAMQP1 creates a new AMQP1 writer type.
+func NewAMQP1(conf AMQP1Config, log log.Modular, stats metrics.Type) (*AMQP1, error) {
+	a := AMQP1{
+		log:   log,
+		stats: stats,
+		conf:  conf,
+	}
+	var err error
+	if conf.TLS.Enabled {
+		if a.tlsConf, err = conf.TLS.Get(); err != nil {
+			return nil, err
+		}
+	}
+	return &a, nil
+}
+
+//------------------------------------------------------------------------------
+
+// Connect establishes a connection to an AMQP1 server.
+func (a *AMQP1) Connect() error {
+	return a.ConnectWithContext(context.Background())
+}
+
+// ConnectWithContext establishes a connection to an AMQP1 server.
+func (a *AMQP1) ConnectWithContext(ctx context.Context) error {
+	a.connLock.Lock()
+	defer a.connLock.Unlock()
+
+	if a.client != nil {
+		return nil
+	}
+
+	var (
+		client  *amqp.Client
+		session *amqp.Session
+		sender  *amqp.Sender
+		err     error
+	)
+
+	opts := []amqp.ConnOption{}
+	if a.conf.TLS.Enabled {
+		opts = append(opts, amqp.ConnTLS(true))
+		opts = append(opts, amqp.ConnTLSConfig(a.tlsConf))
+	}
+
+	// Create client
+	if client, err = amqp.Dial(a.conf.URL, opts...); err != nil {
+		return err
+	}
+
+	// Open a session
+	if session, err = client.NewSession(); err != nil {
+		client.Close()
+		return err
+	}
+
+	// Create a sender
+	if sender, err = session.NewSender(
+		amqp.LinkTargetAddress(a.conf.TargetAddress),
+	); err != nil {
+		session.Close(context.Background())
+		client.Close()
+		return err
+	}
+
+	a.client = client
+	a.session = session
+	a.sender = sender
+
+	a.log.Infof("Sending AMQP 1.0 messages to target: %v\n", a.conf.TargetAddress)
+	return nil
+}
+
+// disconnect safely closes a connection to an AMQP1 server.
+func (a *AMQP1) disconnect(ctx context.Context) error {
+	a.connLock.Lock()
+	defer a.connLock.Unlock()
+
+	if a.client == nil {
+		return nil
+	}
+
+	if err := a.sender.Close(ctx); err != nil {
+		return err
+	}
+	if err := a.session.Close(ctx); err != nil {
+		return err
+	}
+	if err := a.client.Close(); err != nil {
+		return err
+	}
+	a.client = nil
+	a.session = nil
+	a.sender = nil
+
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
+// Write will attempt to write a message over AMQP1, wait for acknowledgement,
+// and returns an error if applicable.
+func (a *AMQP1) Write(msg types.Message) error {
+	return a.WriteWithContext(context.Background(), msg)
+}
+
+// WriteWithContext will attempt to write a message over AMQP1, wait for
+// acknowledgement, and returns an error if applicable.
+func (a *AMQP1) WriteWithContext(ctx context.Context, msg types.Message) error {
+	var s *amqp.Sender
+	a.connLock.RLock()
+	if a.sender != nil {
+		s = a.sender
+	}
+	a.connLock.RUnlock()
+
+	if s == nil {
+		return types.ErrNotConnected
+	}
+
+	return msg.Iter(func(i int, p types.Part) error {
+		m := amqp.NewMessage(p.Get())
+		err := s.Send(ctx, m)
+		if err == amqp.ErrTimeout {
+			err = types.ErrTimeout
+		}
+		return err
+	})
+}
+
+// CloseAsync shuts down the AMQP1 output and stops processing messages.
+func (a *AMQP1) CloseAsync() {
+	a.disconnect(context.Background())
+}
+
+// WaitForClose blocks until the AMQP1 output has closed down.
+func (a *AMQP1) WaitForClose(timeout time.Duration) error {
+	return nil
+}
+
+//------------------------------------------------------------------------------

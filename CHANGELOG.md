@@ -5,9 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.19.0 - 2020-06-28
+
 ### Added
 
 - Fields `strict_mode` and `max_in_flight` added to the `switch` output.
+- New beta `amqp_1` input and output added.
 
 ## 3.18.0 - 2020-06-14
 
