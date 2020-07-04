@@ -128,7 +128,7 @@ received_at = timestamp("15:04:05")
 
 ### `timestamp_unix`
 
-Resolves to the current unix timestamp in seconds. You can add fractional precision up to the nanosecond by specifying the precision as an argument, e.g. `timestamp_unix(3)` for millisecond precision.
+Resolves to the current unix timestamp in seconds.
 
 ```coffee
 received_at = timestamp_unix()
