@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Bloblang boolean operands now short circuit.
+
 ## 3.19.0 - 2020-06-28
 
 ### Added

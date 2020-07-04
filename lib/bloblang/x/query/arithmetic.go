@@ -316,38 +316,64 @@ func compare(lhs, rhs Function, op arithmeticOp) (Function, error) {
 }
 
 func logicalBool(lhs, rhs Function, op arithmeticOp) (Function, error) {
-	var opFn func(lhs, rhs bool) bool
 	switch op {
 	case arithmeticAnd:
-		opFn = func(lhs, rhs bool) bool {
-			return lhs && rhs
-		}
+		return closureFn(func(ctx FunctionContext) (interface{}, error) {
+			var lhsV, rhsV bool
+			var err error
+
+			if leftV, tmpErr := lhs.Exec(ctx); tmpErr == nil {
+				lhsV, err = IGetBool(leftV)
+			} else {
+				err = tmpErr
+			}
+			if err != nil {
+				return nil, err
+			}
+			if !lhsV {
+				return false, nil
+			}
+
+			if rightV, tmpErr := rhs.Exec(ctx); tmpErr == nil {
+				rhsV, err = IGetBool(rightV)
+			} else {
+				err = tmpErr
+			}
+			if err != nil {
+				return nil, err
+			}
+			return rhsV, nil
+		}), nil
 	case arithmeticOr:
-		opFn = func(lhs, rhs bool) bool {
-			return lhs || rhs
-		}
+		return closureFn(func(ctx FunctionContext) (interface{}, error) {
+			var lhsV, rhsV bool
+			var err error
+
+			if leftV, tmpErr := lhs.Exec(ctx); tmpErr == nil {
+				lhsV, err = IGetBool(leftV)
+			} else {
+				err = tmpErr
+			}
+			if err != nil {
+				return nil, err
+			}
+			if lhsV {
+				return true, nil
+			}
+
+			if rightV, tmpErr := rhs.Exec(ctx); tmpErr == nil {
+				rhsV, err = IGetBool(rightV)
+			} else {
+				err = tmpErr
+			}
+			if err != nil {
+				return nil, err
+			}
+			return lhsV || rhsV, nil
+		}), nil
 	default:
 		return nil, fmt.Errorf("operator not supported: %v", op)
 	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
-		var lhsV, rhsV bool
-		var err error
-
-		if leftV, tmpErr := lhs.Exec(ctx); tmpErr == nil {
-			lhsV, err = IGetBool(leftV)
-		} else {
-			err = tmpErr
-		}
-		if rightV, tmpErr := rhs.Exec(ctx); err == nil && tmpErr == nil {
-			rhsV, err = IGetBool(rightV)
-		} else {
-			err = tmpErr
-		}
-		if err != nil {
-			return nil, err
-		}
-		return opFn(lhsV, rhsV), nil
-	}), nil
 }
 
 func resolveArithmetic(fns []Function, ops []arithmeticOp) (Function, error) {

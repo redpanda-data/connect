@@ -51,6 +51,22 @@ func TestArithmetic(t *testing.T) {
 			input:  `true || false && true`,
 			output: `true`,
 		},
+		"and exit early": {
+			input:  `false && ("not a number".number() > 0)`,
+			output: `false`,
+		},
+		"and second exit early": {
+			input:  `true && false && ("not a number".number() > 0)`,
+			output: `false`,
+		},
+		"or exit early": {
+			input:  `true || ("not a number".number() > 0)`,
+			output: `true`,
+		},
+		"or second early": {
+			input:  `false || true || ("not a number".number() > 0)`,
+			output: `true`,
+		},
 		"add two ints": {
 			input:  `json("foo") + json("bar")`,
 			output: `17`,

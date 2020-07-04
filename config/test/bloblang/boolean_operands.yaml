@@ -1,0 +1,5 @@
+pipeline:
+  processors:
+  - bloblang: |
+      ands = (first && second).catch("failed")
+      ors = (first || second).catch("failed")
