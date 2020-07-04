@@ -14,6 +14,7 @@ var (
 )
 
 // Config contains configuration for SASL based authentication.
+// TODO: V4 Remove "enabled" and set a default mechanism
 type Config struct {
 	Enabled     bool   `json:"enabled" yaml:"enabled"` // DEPRECATED
 	Mechanism   string `json:"mechanism" yaml:"mechanism"`

@@ -41,6 +41,10 @@ input:
             skip_cert_verify: ${INPUT_AMQP_0_9_TLS_SKIP_CERT_VERIFY:false}
           url: ${INPUT_AMQP_0_9_URL:amqp://guest:guest@localhost:5672/}
         amqp_1:
+          sasl:
+            mechanism: ${INPUT_AMQP_1_SASL_MECHANISM:none}
+            password: ${INPUT_AMQP_1_SASL_PASSWORD}
+            user: ${INPUT_AMQP_1_SASL_USER}
           source_address: ${INPUT_AMQP_1_SOURCE_ADDRESS}
           tls:
             enabled: ${INPUT_AMQP_1_TLS_ENABLED:false}
@@ -656,6 +660,10 @@ output:
           url: ${OUTPUT_AMQP_0_9_URL:amqp://guest:guest@localhost:5672/}
         amqp_1:
           max_in_flight: ${OUTPUT_AMQP_1_MAX_IN_FLIGHT:1}
+          sasl:
+            mechanism: ${OUTPUT_AMQP_1_SASL_MECHANISM:none}
+            password: ${OUTPUT_AMQP_1_SASL_PASSWORD}
+            user: ${OUTPUT_AMQP_1_SASL_USER}
           target_address: ${OUTPUT_AMQP_1_TARGET_ADDRESS}
           tls:
             enabled: ${OUTPUT_AMQP_1_TLS_ENABLED:false}

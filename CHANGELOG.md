@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- SASL config fields added to `amqp_1` input and output.
+
 ### Fixed
 
 - Bloblang boolean operands now short circuit.

@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/amqp/sasl"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
@@ -21,6 +22,7 @@ type AMQP1Config struct {
 	URL           string      `json:"url" yaml:"url"`
 	SourceAddress string      `json:"source_address" yaml:"source_address"`
 	TLS           btls.Config `json:"tls" yaml:"tls"`
+	SASL          sasl.Config `json:"sasl" yaml:"sasl"`
 }
 
 // NewAMQP1Config creates a new AMQP1Config with default values.
@@ -29,6 +31,7 @@ func NewAMQP1Config() AMQP1Config {
 		URL:           "",
 		SourceAddress: "",
 		TLS:           btls.NewConfig(),
+		SASL:          sasl.NewConfig(),
 	}
 }
 
@@ -83,7 +86,10 @@ func (a *AMQP1) ConnectWithContext(ctx context.Context) error {
 		err      error
 	)
 
-	opts := []amqp.ConnOption{}
+	opts, err := a.conf.SASL.ToOptFns()
+	if err != nil {
+		return err
+	}
 	if a.conf.TLS.Enabled {
 		opts = append(opts, amqp.ConnTLS(true))
 		opts = append(opts, amqp.ConnTLSConfig(a.tlsConf))

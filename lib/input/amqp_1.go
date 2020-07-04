@@ -5,6 +5,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/amqp/sasl"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
@@ -40,6 +41,7 @@ You can access these metadata fields using
 			),
 			docs.FieldCommon("source_address", "The source address to consume from.", "/foo", "queue:/bar", "topic:/baz"),
 			tls.FieldSpec(),
+			sasl.FieldSpec(),
 		},
 	}
 }

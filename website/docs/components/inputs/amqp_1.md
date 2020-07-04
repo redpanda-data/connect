@@ -50,6 +50,10 @@ input:
       skip_cert_verify: false
       root_cas_file: ""
       client_certs: []
+    sasl:
+      mechanism: none
+      user: ""
+      password: ""
 ```
 
 </TabItem>
@@ -154,6 +158,51 @@ client_certs:
 client_certs:
   - cert_file: ./example.pem
     key_file: ./example.key
+```
+
+### `sasl`
+
+Enables SASL authentication.
+
+
+Type: `object`  
+Default: `{"mechanism":"none","password":"","user":""}`  
+
+### `sasl.mechanism`
+
+The SASL authentication mechanism to use.
+
+
+Type: `string`  
+Default: `"none"`  
+Options: `none`, `plain`.
+
+### `sasl.user`
+
+A SASL plain text username. It is recommended that you use environment variables to populate this field.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+user: ${USER}
+```
+
+### `sasl.password`
+
+A SASL plain text password. It is recommended that you use environment variables to populate this field.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+password: ${PASSWORD}
 ```
 
 

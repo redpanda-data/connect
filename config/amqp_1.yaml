@@ -7,6 +7,10 @@ http:
 input:
   type: amqp_1
   amqp_1:
+    sasl:
+      mechanism: none
+      password: ""
+      user: ""
     source_address: ""
     tls:
       client_certs: []
@@ -24,6 +28,10 @@ output:
   type: amqp_1
   amqp_1:
     max_in_flight: 1
+    sasl:
+      mechanism: none
+      password: ""
+      user: ""
     target_address: ""
     tls:
       client_certs: []

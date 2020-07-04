@@ -66,6 +66,9 @@ INPUT_AMQP_0_9_TLS_ENABLED                           = false
 INPUT_AMQP_0_9_TLS_ROOT_CAS_FILE
 INPUT_AMQP_0_9_TLS_SKIP_CERT_VERIFY                  = false
 INPUT_AMQP_0_9_URL                                   = amqp://guest:guest@localhost:5672/
+INPUT_AMQP_1_SASL_MECHANISM                          = none
+INPUT_AMQP_1_SASL_PASSWORD
+INPUT_AMQP_1_SASL_USER
 INPUT_AMQP_1_SOURCE_ADDRESS
 INPUT_AMQP_1_TLS_ENABLED                             = false
 INPUT_AMQP_1_TLS_ROOT_CAS_FILE
@@ -548,6 +551,9 @@ OUTPUT_AMQP_0_9_TLS_SKIP_CERT_VERIFY                  = false
 OUTPUT_AMQP_0_9_TYPE
 OUTPUT_AMQP_0_9_URL                                   = amqp://guest:guest@localhost:5672/
 OUTPUT_AMQP_1_MAX_IN_FLIGHT                           = 1
+OUTPUT_AMQP_1_SASL_MECHANISM                          = none
+OUTPUT_AMQP_1_SASL_PASSWORD
+OUTPUT_AMQP_1_SASL_USER
 OUTPUT_AMQP_1_TARGET_ADDRESS
 OUTPUT_AMQP_1_TLS_ENABLED                             = false
 OUTPUT_AMQP_1_TLS_ROOT_CAS_FILE

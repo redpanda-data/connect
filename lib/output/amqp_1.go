@@ -5,6 +5,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/amqp/sasl"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
@@ -30,6 +31,7 @@ Sends messages to an AMQP (1.0) server.`,
 			docs.FieldCommon("target_address", "The target address to write to.", "/foo", "queue:/bar", "topic:/baz"),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			tls.FieldSpec(),
+			sasl.FieldSpec(),
 		},
 	}
 }
