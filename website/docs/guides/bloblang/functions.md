@@ -106,7 +106,7 @@ The parameter is optional and if omitted the entire metadata contents are return
 topic = meta("kafka_topic")
 ```
 
-### `random_int()`
+### `random_int`
 
 Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.
 
