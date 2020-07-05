@@ -53,13 +53,12 @@ resources:
           path: foo.bar
 
     proc3:
-      bloblang:
-        mapping: |
-          root = this
-          foo.first.bar.baz = "first_value"
-          foo.second.bar.baz = "second_value"
-          foo.third.bar.baz = foo.baz
-          foo.bar = deleted()
+      bloblang: |
+        root = this
+        foo.first.bar.baz = "first_value"
+        foo.second.bar.baz = "second_value"
+        foo.third.bar.baz = foo.baz
+        foo.bar = deleted()
 
 metrics:
   prometheus:

@@ -1,4 +1,3 @@
-parallel: true
 tests:
   - name: Basic filter
     environment: {}

@@ -397,6 +397,13 @@ input:
             request_url: ${INPUT_WEBSOCKET_OAUTH_REQUEST_URL}
           open_message: ${INPUT_WEBSOCKET_OPEN_MESSAGE}
           url: ${INPUT_WEBSOCKET_URL:ws://localhost:4195/get/ws}
+        zmq4:
+          bind: ${INPUT_ZMQ4_BIND:false}
+          high_water_mark: ${INPUT_ZMQ4_HIGH_WATER_MARK:0}
+          poll_timeout: ${INPUT_ZMQ4_POLL_TIMEOUT:5s}
+          socket_type: ${INPUT_ZMQ4_SOCKET_TYPE:PULL}
+          urls:
+            - ${INPUT_ZMQ4_URLS:tcp://localhost:5555}
   type: broker
 buffer:
   memory:
@@ -986,6 +993,13 @@ output:
             enabled: ${OUTPUT_WEBSOCKET_OAUTH_ENABLED:false}
             request_url: ${OUTPUT_WEBSOCKET_OAUTH_REQUEST_URL}
           url: ${OUTPUT_WEBSOCKET_URL:ws://localhost:4195/post/ws}
+        zmq4:
+          bind: ${OUTPUT_ZMQ4_BIND:true}
+          high_water_mark: ${OUTPUT_ZMQ4_HIGH_WATER_MARK:0}
+          poll_timeout: ${OUTPUT_ZMQ4_POLL_TIMEOUT:5s}
+          socket_type: ${OUTPUT_ZMQ4_SOCKET_TYPE:PUSH}
+          urls:
+            - ${OUTPUT_ZMQ4_URLS:tcp://*:5556}
     pattern: ${OUTPUTS_PATTERN:greedy}
   type: broker
 logger:

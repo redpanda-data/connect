@@ -360,6 +360,11 @@ INPUT_WEBSOCKET_OAUTH_ENABLED                        = false
 INPUT_WEBSOCKET_OAUTH_REQUEST_URL
 INPUT_WEBSOCKET_OPEN_MESSAGE
 INPUT_WEBSOCKET_URL                                  = ws://localhost:4195/get/ws
+INPUT_ZMQ4_BIND                                      = false
+INPUT_ZMQ4_HIGH_WATER_MARK                           = 0
+INPUT_ZMQ4_POLL_TIMEOUT                              = 5s
+INPUT_ZMQ4_SOCKET_TYPE                               = PULL
+INPUT_ZMQ4_URLS                                      = tcp://localhost:5555
 ```
 
 ## BUFFER
@@ -823,6 +828,11 @@ OUTPUT_WEBSOCKET_OAUTH_CONSUMER_SECRET
 OUTPUT_WEBSOCKET_OAUTH_ENABLED                        = false
 OUTPUT_WEBSOCKET_OAUTH_REQUEST_URL
 OUTPUT_WEBSOCKET_URL                                  = ws://localhost:4195/post/ws
+OUTPUT_ZMQ4_BIND                                      = true
+OUTPUT_ZMQ4_HIGH_WATER_MARK                           = 0
+OUTPUT_ZMQ4_POLL_TIMEOUT                              = 5s
+OUTPUT_ZMQ4_SOCKET_TYPE                               = PUSH
+OUTPUT_ZMQ4_URLS                                      = tcp://*:5556
 ```
 
 ## LOGGER

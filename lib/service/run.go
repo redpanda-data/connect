@@ -223,45 +223,7 @@ func Run() {
 					return nil
 				},
 			},
-			{
-				Name:  "lint",
-				Usage: "Parse Benthos configs and report any linting errors",
-				Description: `
-   Exits with a status code 1 if any linting errors are detected:
-   
-   benthos -c target.yaml lint
-   benthos lint ./configs/*.yaml
-   benthos lint ./foo.yaml ./bar.yaml`[4:],
-				Action: func(c *cli.Context) error {
-					targets := c.Args().Slice()
-					if conf := c.String("config"); len(conf) > 0 {
-						targets = append(targets, conf)
-					}
-					var pathLints []string
-					for _, target := range targets {
-						if len(target) == 0 {
-							continue
-						}
-						var conf = config.New()
-						lints, err := config.Read(target, true, &conf)
-						if err != nil {
-							fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
-							os.Exit(1)
-						}
-						for _, l := range lints {
-							pathLints = append(pathLints, target+": "+l)
-						}
-					}
-					if len(pathLints) == 0 {
-						os.Exit(0)
-					}
-					for _, lint := range pathLints {
-						fmt.Fprintln(os.Stderr, lint)
-					}
-					os.Exit(1)
-					return nil
-				},
-			},
+			lintCliCommand(),
 			{
 				Name:  "streams",
 				Usage: "Run Benthos in streams mode",

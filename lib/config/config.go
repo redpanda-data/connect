@@ -27,6 +27,7 @@ type Type struct {
 	Metrics            metrics.Config `json:"metrics" yaml:"metrics"`
 	Tracer             tracer.Config  `json:"tracer" yaml:"tracer"`
 	SystemCloseTimeout string         `json:"shutdown_timeout" yaml:"shutdown_timeout"`
+	Tests              interface{}    `json:"tests,omitempty" yaml:"tests,omitempty"`
 }
 
 // New returns a new configuration with default values.
@@ -39,6 +40,7 @@ func New() Type {
 		Metrics:            metrics.NewConfig(),
 		Tracer:             tracer.NewConfig(),
 		SystemCloseTimeout: "20s",
+		Tests:              nil,
 	}
 }
 
@@ -55,6 +57,7 @@ type SanitisedConfig struct {
 	Metrics            interface{} `json:"metrics" yaml:"metrics"`
 	Tracer             interface{} `json:"tracer" yaml:"tracer"`
 	SystemCloseTimeout interface{} `json:"shutdown_timeout" yaml:"shutdown_timeout"`
+	Tests              interface{} `json:"tests,omitempty" yaml:"tests,omitempty"`
 }
 
 // Sanitised returns a sanitised copy of the Benthos configuration, meaning
@@ -113,6 +116,7 @@ func (c Type) Sanitised() (*SanitisedConfig, error) {
 		Metrics:            metConf,
 		Tracer:             tracConf,
 		SystemCloseTimeout: c.SystemCloseTimeout,
+		Tests:              c.Tests,
 	}, nil
 }
 

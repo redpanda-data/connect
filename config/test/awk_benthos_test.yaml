@@ -1,4 +1,3 @@
-parallel: true
 tests:
   - name: Example test case 1
     environment: {}

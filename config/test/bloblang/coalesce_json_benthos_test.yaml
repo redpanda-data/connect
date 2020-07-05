@@ -1,4 +1,3 @@
-parallel: true
 tests:
   - name: None of the targets
     target_processors: /pipeline/processors

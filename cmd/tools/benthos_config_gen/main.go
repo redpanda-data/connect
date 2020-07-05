@@ -374,11 +374,15 @@ func main() {
 
 	// Get list of all types (both input and output).
 	typeMap := map[string]struct{}{}
-	for t := range input.Constructors {
-		typeMap[t] = struct{}{}
+	for t, info := range input.Constructors {
+		if !info.Deprecated {
+			typeMap[t] = struct{}{}
+		}
 	}
-	for t := range output.Constructors {
-		typeMap[t] = struct{}{}
+	for t, info := range output.Constructors {
+		if !info.Deprecated {
+			typeMap[t] = struct{}{}
+		}
 	}
 
 	// Generate configs for all types.
@@ -404,7 +408,11 @@ func main() {
 	}
 
 	// Create processor configs for all types.
-	for t := range processor.Constructors {
+	for t, info := range processor.Constructors {
+		if info.Deprecated {
+			continue
+		}
+
 		conf := config.New()
 		conf.Input.Processors = nil
 		conf.Output.Processors = nil

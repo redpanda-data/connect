@@ -1,4 +1,3 @@
-parallel: true
 tests:
   - name: Just a string
     target_processors: /pipeline/processors

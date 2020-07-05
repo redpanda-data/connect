@@ -30,6 +30,15 @@ func TestConfigLints(t *testing.T) {
 			lints: []string{"line 3: path 'input': Key 'kafka' found but is ignored"},
 		},
 		{
+			name: "ignore tests section",
+			conf: `input:
+  type: stdin
+tests:
+  this: can just contain anything
+  like_this: ["foo","bar"]`,
+			lints: []string{},
+		},
+		{
 			name: "broker object type",
 			conf: `input:
   type: broker
