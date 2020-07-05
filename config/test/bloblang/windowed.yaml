@@ -12,3 +12,17 @@ pipeline:
       root = match {
         batch_index() > 0 => deleted()
       }
+
+tests:
+  - name: Bloblang windowed functions test
+    environment: {}
+    target_processors: /pipeline/processors
+    input_batch:
+      - content: '{"doc":{"count":243,"contents":"foobar 1"}}'
+      - content: '{"doc":{"count":71,"contents":"foobar 2"}}'
+      - content: '{"doc":{"count":10,"contents":"foobar 3"}}'
+      - content: '{"doc":{"count":333,"contents":"foobar 4"}}'
+      - content: '{"doc":{"count":164,"contents":"foobar 5"}}'
+    output_batches:
+      - - content_equals: |
+            {"doc":{"contents":"foobar 1","count":821,"max":333}}

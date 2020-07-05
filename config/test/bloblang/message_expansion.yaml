@@ -5,3 +5,21 @@ pipeline:
         root = items.map_each($doc_root.merge(this))
     - unarchive:
         format: json_array
+
+tests:
+  - name: Sample object
+    target_processors: /pipeline/processors
+    input_batch:
+      - content: |
+          {
+            "id": "foobar",
+            "items": [
+              {"content":"foo"},
+              {"content":"bar"},
+              {"content":"baz"}
+            ]
+          }
+    output_batches:
+      - - content_equals: '{"content":"foo","id":"foobar"}'
+        - content_equals: '{"content":"bar","id":"foobar"}'
+        - content_equals: '{"content":"baz","id":"foobar"}'

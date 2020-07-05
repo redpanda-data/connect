@@ -11,3 +11,39 @@ pipeline:
           }
         }
         root = this.or(content()).apply("unescape_values")
+
+tests:
+  - name: Just a string
+    target_processors: /pipeline/processors
+    input_batch:
+      - content: 'foo &amp; bar'
+    output_batches:
+      - - content_equals: 'foo & bar'
+
+  - name: Just an array
+    target_processors: /pipeline/processors
+    input_batch:
+      - content: '["foo &amp; bar",10,"1 &lt; 2"]'
+    output_batches:
+      - - content_equals: '["foo & bar",10,"1 < 2"]'
+
+  - name: Just an object
+    target_processors: /pipeline/processors
+    input_batch:
+      - content: '{"first":"foo &amp; bar","second":10,"third":"1 &lt; 2"}'
+    output_batches:
+      - - content_equals: '{"first":"foo & bar","second":10,"third":"1 < 2"}'
+
+  - name: Nested object
+    target_processors: /pipeline/processors
+    input_batch:
+      - content: '{"first":{"nested":"foo &amp; bar"},"second":10,"third":"1 &lt; 2"}'
+    output_batches:
+      - - content_equals: '{"first":{"nested":"foo & bar"},"second":10,"third":"1 < 2"}'
+
+  - name: Nested object with array
+    target_processors: /pipeline/processors
+    input_batch:
+      - content: '{"first":{"nested":"foo &amp; bar"},"second":10,"third":["1 &lt; 2",{"also_nested":"2 &gt; 1"}]}'
+    output_batches:
+      - - content_equals: '{"first":{"nested":"foo & bar"},"second":10,"third":["1 < 2",{"also_nested":"2 > 1"}]}'

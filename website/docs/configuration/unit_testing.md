@@ -64,6 +64,8 @@ The field `output_batches` lists any number of batches of messages which are exp
 
 If the number of batches defined does not match the resulting number of batches the test will fail. If the number of messages defined in each batch does not match the number in the resulting batches the test will fail. If any condition of a message fails then the test fails.
 
+> Pro tip: for small configs it might be more convenient to place your tests within the same file. This is also supported, simply add a `tests` field to the bottom of your config file.
+
 ## Output Conditions
 
 ### `content_equals`

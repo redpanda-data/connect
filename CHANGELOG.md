@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 
 - SASL config fields added to `amqp_1` input and output.
 - The `lint` subcommand now supports triple dot wildcard paths: `./foo/...`.
+- The `test` subcommand now supports tests defined within the target config file
+  being tested.
 
 ### Fixed
 

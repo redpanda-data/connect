@@ -37,8 +37,32 @@ func getBothPaths(fullPath, testSuffix string) (configPath string, definitionPat
 	return
 }
 
+func getDefinition(targetPath, definitionPath string) (*Definition, error) {
+	if _, err := os.Stat(targetPath); err != nil {
+		return nil, fmt.Errorf("unable to access target config file '%v': %v", targetPath, err)
+	}
+	if _, err := os.Stat(definitionPath); err != nil {
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("unable to access test definition file '%v': %v", definitionPath, err)
+		}
+		if !strings.HasSuffix(targetPath, ".yaml") && !strings.HasSuffix(targetPath, ".yml") {
+			return &Definition{}, nil
+		}
+		definitionPath = targetPath
+	}
+	var definition Definition
+	defBytes, err := ioutil.ReadFile(definitionPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read test definition from '%v': %v", definitionPath, err)
+	}
+	if err := yaml.Unmarshal(defBytes, &definition); err != nil {
+		return nil, fmt.Errorf("failed to parse test definition from '%v': %v", definitionPath, err)
+	}
+	return &definition, nil
+}
+
 // Searches for test definition targets.
-func getTestTargets(targetPath, testSuffix string, recurse bool) ([]string, error) {
+func getTestTargets(targetPath, testSuffix string, recurse bool) (map[string]Definition, error) {
 	targetPath = filepath.Clean(targetPath)
 	info, err := os.Stat(targetPath)
 	if err != nil {
@@ -46,16 +70,19 @@ func getTestTargets(targetPath, testSuffix string, recurse bool) ([]string, erro
 	}
 	if !info.IsDir() {
 		configPath, definitionPath := getBothPaths(targetPath, testSuffix)
-		if _, err = os.Stat(configPath); err != nil {
-			return nil, fmt.Errorf("unable to access target config file '%v': %v", configPath, err)
+		def, err := getDefinition(configPath, definitionPath)
+		if err != nil {
+			return nil, err
 		}
-		if _, err = os.Stat(definitionPath); err != nil {
-			return nil, fmt.Errorf("unable to access test definition file '%v': %v", definitionPath, err)
+		if len(def.Cases) == 0 {
+			return nil, fmt.Errorf("no tests found for %v", configPath)
 		}
-		return []string{definitionPath}, nil
+		return map[string]Definition{
+			configPath: *def,
+		}, nil
 	}
 
-	pathMap := map[string]struct{}{}
+	pathMap := map[string]Definition{}
 	err = filepath.Walk(targetPath, func(path string, info os.FileInfo, werr error) error {
 		if werr != nil {
 			return werr
@@ -66,49 +93,28 @@ func getTestTargets(targetPath, testSuffix string, recurse bool) ([]string, erro
 			}
 			return filepath.SkipDir
 		}
-
 		configPath, definitionPath := getBothPaths(path, testSuffix)
-		if _, exists := pathMap[definitionPath]; exists {
+		if _, exists := pathMap[configPath]; exists {
 			return nil
 		}
-
-		if _, err = os.Stat(configPath); err != nil {
-			return fmt.Errorf("unable to access target config file '%v': %v", configPath, err)
+		def, err := getDefinition(configPath, definitionPath)
+		if err != nil {
+			return err
 		}
-		if _, err = os.Stat(definitionPath); err != nil {
-			if os.IsNotExist(err) {
-				// We simply skip files where there is no test definition.
-				return nil
-			}
-			return fmt.Errorf("unable to access test definition file '%v': %v", definitionPath, err)
-		}
-		pathMap[definitionPath] = struct{}{}
+		pathMap[configPath] = *def
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	list := []string{}
-	for k := range pathMap {
-		list = append(list, k)
+	// Tests without cases are skipped.
+	for k, v := range pathMap {
+		if len(v.Cases) == 0 {
+			delete(pathMap, k)
+		}
 	}
-	sort.Strings(list)
-	return list, nil
-}
-
-// Executes a test definition and either returns fails or returns an error.
-func testTarget(path, testSuffix string, logger log.Modular) ([]CaseFailure, error) {
-	confPath, _ := getBothPaths(path, testSuffix)
-	var definition Definition
-	defBytes, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read test definition '%v': %v", path, err)
-	}
-	if err := yaml.Unmarshal(defBytes, &definition); err != nil {
-		return nil, fmt.Errorf("failed to parse test definition '%v': %v", path, err)
-	}
-	return definition.ExecuteWithLogger(confPath, logger)
+	return pathMap, nil
 }
 
 // Lints the config target of a test definition and either returns linting
@@ -160,7 +166,7 @@ func RunAllWithLogger(paths []string, testSuffix string, lint bool, logger log.M
 }
 
 func runAll(paths []string, testSuffix string, lint bool, logger log.Modular) bool {
-	var targets []string
+	targets := map[string]Definition{}
 
 	for _, path := range paths {
 		var recurse bool
@@ -170,7 +176,9 @@ func runAll(paths []string, testSuffix string, lint bool, logger log.Modular) bo
 			fmt.Fprintf(os.Stderr, "Failed to obtain test targets: %v\n", err)
 			return false
 		}
-		targets = append(targets, lTargets...)
+		for k, v := range lTargets {
+			targets[k] = v
+		}
 	}
 
 	if len(targets) == 0 {
@@ -185,8 +193,14 @@ func runAll(paths []string, testSuffix string, lint bool, logger log.Modular) bo
 	}
 	fails := []failedTarget{}
 
+	targetPaths := make([]string, 0, len(targets))
+	for k := range targets {
+		targetPaths = append(targetPaths, k)
+	}
+	sort.Strings(targetPaths)
+
 	var err error
-	for _, target := range targets {
+	for _, target := range targetPaths {
 		var lints []string
 		var failCases []CaseFailure
 		if lint {
@@ -195,7 +209,7 @@ func runAll(paths []string, testSuffix string, lint bool, logger log.Modular) bo
 				return false
 			}
 		}
-		if failCases, err = testTarget(target, testSuffix, logger); err != nil {
+		if failCases, err = targets[target].ExecuteWithLogger(target, logger); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to execute test target '%v': %v\n", target, err)
 			return false
 		}

@@ -87,8 +87,8 @@ func TestGetBothPaths(t *testing.T) {
 
 func TestGetTargetsSingle(t *testing.T) {
 	testDir, err := initTestFiles(map[string]string{
-		"foo.yaml":              `foobar`,
-		"foo_benthos_test.yaml": `foobar`,
+		"foo.yaml":              `tests: [{}]`,
+		"foo_benthos_test.yaml": `tests: [{}]`,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -102,8 +102,8 @@ func TestGetTargetsSingle(t *testing.T) {
 	if exp, act := 1, len(paths); exp != act {
 		t.Fatalf("Wrong count of paths: %v != %v", act, exp)
 	}
-	if exp, act := filepath.Join(testDir, "foo_benthos_test.yaml"), paths[0]; exp != act {
-		t.Errorf("Wrong path returned: %v != %v", act, exp)
+	if _, exists := paths[filepath.Join(testDir, "foo.yaml")]; !exists {
+		t.Errorf("Wrong path returned: %v does not contain foo.yaml", paths)
 	}
 
 	paths, err = getTestTargets(filepath.Join(testDir, "foo_benthos_test.yaml"), "_benthos_test", false)
@@ -113,15 +113,15 @@ func TestGetTargetsSingle(t *testing.T) {
 	if exp, act := 1, len(paths); exp != act {
 		t.Fatalf("Wrong count of paths: %v != %v", act, exp)
 	}
-	if exp, act := filepath.Join(testDir, "foo_benthos_test.yaml"), paths[0]; exp != act {
-		t.Errorf("Wrong path returned: %v != %v", act, exp)
+	if _, exists := paths[filepath.Join(testDir, "foo.yaml")]; !exists {
+		t.Errorf("Wrong path returned: %v does not contain foo.yaml", paths)
 	}
 }
 
 func TestGetTargetsSingleError(t *testing.T) {
 	testDir, err := initTestFiles(map[string]string{
-		"foo.yaml":              `foobar`,
-		"bar_benthos_test.yaml": `foobar`,
+		"foo.yaml":              `foobar: {}`,
+		"bar_benthos_test.yaml": `tests: [{}]`,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -141,14 +141,14 @@ func TestGetTargetsSingleError(t *testing.T) {
 
 func TestGetTargetsDir(t *testing.T) {
 	testDir, err := initTestFiles(map[string]string{
-		"foo.yaml":                     `foobar`,
-		"foo_benthos_test.yaml":        `foobar`,
-		"bar.yaml":                     `foobar`,
-		"bar_benthos_test.yaml":        `foobar`,
-		"nested/baz.yaml":              `foobar`,
-		"nested/baz_benthos_test.yaml": `foobar`,
-		"ignored.yaml":                 `foobar`,
-		"nested/also_ignored.yaml":     `foobar`,
+		"foo.yaml":                     `foobar: {}`,
+		"foo_benthos_test.yaml":        `tests: [{}]`,
+		"bar.yaml":                     `tests: [{}]`,
+		"not_a_yaml.txt":               `foobar this isnt json or yaml`,
+		"nested/baz.yaml":              `foobar: {}`,
+		"nested/baz_benthos_test.yaml": `tests: [{}]`,
+		"ignored.yaml":                 `foobar: {}`,
+		"nested/also_ignored.yaml":     `foobar: {}`,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -162,11 +162,11 @@ func TestGetTargetsDir(t *testing.T) {
 	if exp, act := 2, len(paths); exp != act {
 		t.Fatalf("Wrong count of paths: %v != %v", act, exp)
 	}
-	if exp, act := filepath.Join(testDir, "bar_benthos_test.yaml"), paths[0]; exp != act {
-		t.Errorf("Wrong path returned: %v != %v", act, exp)
+	if _, exists := paths[filepath.Join(testDir, "foo.yaml")]; !exists {
+		t.Errorf("Wrong path returned: %v does not contain foo.yaml", paths)
 	}
-	if exp, act := filepath.Join(testDir, "foo_benthos_test.yaml"), paths[1]; exp != act {
-		t.Errorf("Wrong path returned: %v != %v", act, exp)
+	if _, exists := paths[filepath.Join(testDir, "bar.yaml")]; !exists {
+		t.Errorf("Wrong path returned: %v does not contain bar.yaml", paths)
 	}
 
 	paths, err = getTestTargets(testDir, "_benthos_test", true)
@@ -176,22 +176,22 @@ func TestGetTargetsDir(t *testing.T) {
 	if exp, act := 3, len(paths); exp != act {
 		t.Fatalf("Wrong count of paths: %v != %v", act, exp)
 	}
-	if exp, act := filepath.Join(testDir, "bar_benthos_test.yaml"), paths[0]; exp != act {
-		t.Errorf("Wrong path returned: %v != %v", act, exp)
+	if _, exists := paths[filepath.Join(testDir, "foo.yaml")]; !exists {
+		t.Errorf("Wrong path returned: %v does not contain foo.yaml", paths)
 	}
-	if exp, act := filepath.Join(testDir, "foo_benthos_test.yaml"), paths[1]; exp != act {
-		t.Errorf("Wrong path returned: %v != %v", act, exp)
+	if _, exists := paths[filepath.Join(testDir, "bar.yaml")]; !exists {
+		t.Errorf("Wrong path returned: %v does not contain bar.yaml", paths)
 	}
-	if exp, act := filepath.Join(testDir, "nested/baz_benthos_test.yaml"), paths[2]; exp != act {
-		t.Errorf("Wrong path returned: %v != %v", act, exp)
+	if _, exists := paths[filepath.Join(testDir, "nested/baz.yaml")]; !exists {
+		t.Errorf("Wrong path returned: %v does not contain nested/baz.yaml", paths)
 	}
 }
 
 func TestGetTargetsDirError(t *testing.T) {
 	testDir, err := initTestFiles(map[string]string{
-		"foo_benthos_test.yaml": `foobar`,
-		"bar.yaml":              `foobar`,
-		"bar_benthos_test.yaml": `foobar`,
+		"foo_benthos_test.yaml": `tests: [{}]`,
+		"bar.yaml":              `foobar: {}`,
+		"bar_benthos_test.yaml": `tests: [{}]`,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -205,11 +205,11 @@ func TestGetTargetsDirError(t *testing.T) {
 
 func TestGetTargetsDirRecurseError(t *testing.T) {
 	testDir, err := initTestFiles(map[string]string{
-		"foo.yaml":                     `foobar`,
-		"foo_benthos_test.yaml":        `foobar`,
-		"bar.yaml":                     `foobar`,
-		"bar_benthos_test.yaml":        `foobar`,
-		"nested/baz_benthos_test.yaml": `foobar`,
+		"foo.yaml":                     `foobar: {}`,
+		"foo_benthos_test.yaml":        `tests: [{}]`,
+		"bar.yaml":                     `foobar: {}`,
+		"bar_benthos_test.yaml":        `tests: [{}]`,
+		"nested/baz_benthos_test.yaml": `tests: [{}]`,
 	})
 	if err != nil {
 		t.Fatal(err)
