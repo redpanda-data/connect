@@ -90,7 +90,7 @@ require (
 	golang.org/x/net v0.0.0-20200520182314-0ba52f642ac2 // indirect
 	golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a
 	golang.org/x/sys v0.0.0-20200519105757-fe76b779f299 // indirect
-	golang.org/x/tools v0.0.0-20200702044944-0cc1aa72b347 // indirect
+	golang.org/x/tools v0.0.0-20200522201501-cb1345f3a375 // indirect
 	golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543
 	google.golang.org/api v0.25.0 // indirect
 	google.golang.org/genproto v0.0.0-20200521103424-e9a78aa275b7 // indirect
