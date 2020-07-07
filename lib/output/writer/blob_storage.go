@@ -150,9 +150,9 @@ func (a *AzureBlobStorage) WriteWithContext(wctx context.Context, msg types.Mess
 		if err := a.uploadToBlob(ctx, p.Get(), a.path.String(i, msg), a.blobType.String(i, msg), c); err != nil {
 			if containerNotFound(err) {
 				if _, cerr := c.Create(ctx, azblob.Metadata{}, azblob.PublicAccessNone); cerr != nil {
-					a.log.Errorf("Error creating container: %v.", cerr)
+					a.log.Errorf("error creating container: %v.", cerr)
 				} else {
-					a.log.Infof("Created container: %s.", c.String())
+					a.log.Infof("created container: %s.", c.String())
 					// Retry upload to blob
 					err = a.uploadToBlob(ctx, p.Get(), a.path.String(i, msg), a.blobType.String(i, msg), c)
 				}
