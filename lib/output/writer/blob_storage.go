@@ -77,9 +77,9 @@ func NewAzureBlobStorage(
 		credential = azblob.NewAnonymousCredential()
 	} else {
 		credential, err = azblob.NewSharedKeyCredential(conf.StorageAccount, conf.StorageAccessKey)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
+		if err != nil {
+			return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
+		}
 	}
 	a := &AzureBlobStorage{
 		conf:       conf,
