@@ -46,13 +46,14 @@ func NewAzureBlobStorageConfig() AzureBlobStorageConfig {
 // AzureBlobStorage is a benthos writer. Type implementation that writes messages to an
 // Azure Blob Storage storage account.
 type AzureBlobStorage struct {
-	conf      AzureBlobStorageConfig
-	container field.Expression
-	path      field.Expression
-	blobType  field.Expression
-	timeout   time.Duration
-	log       log.Modular
-	stats     metrics.Type
+	conf       AzureBlobStorageConfig
+	credential azblob.Credential
+	container  field.Expression
+	path       field.Expression
+	blobType   field.Expression
+	timeout    time.Duration
+	log        log.Modular
+	stats      metrics.Type
 }
 
 // NewAzureBlobStorage creates a new Amazon S3 bucket writer.Type.
@@ -62,19 +63,31 @@ func NewAzureBlobStorage(
 	stats metrics.Type,
 ) (*AzureBlobStorage, error) {
 	var timeout time.Duration
+	var err error
 	if tout := conf.Timeout; len(tout) > 0 {
-		var err error
 		if timeout, err = time.ParseDuration(tout); err != nil {
 			return nil, fmt.Errorf("failed to parse timeout period string: %v", err)
 		}
 	}
-	a := &AzureBlobStorage{
-		conf:    conf,
-		log:     log,
-		stats:   stats,
-		timeout: timeout,
+	if len(conf.StorageAccount) == 0 {
+		return nil, fmt.Errorf("invalid azure storage account")
 	}
-	var err error
+	var credential azblob.Credential
+	if len(conf.StorageAccessKey) == 0 {
+		credential = azblob.NewAnonymousCredential()
+	} else {
+		credential, err = azblob.NewSharedKeyCredential(conf.StorageAccount, conf.StorageAccessKey)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
+	}
+	a := &AzureBlobStorage{
+		conf:       conf,
+		log:        log,
+		stats:      stats,
+		timeout:    timeout,
+		credential: credential,
+	}
 	if a.container, err = field.New(conf.Container); err != nil {
 		return nil, fmt.Errorf("failed to parse container expression: %v", err)
 	}
@@ -103,16 +116,8 @@ func (a *AzureBlobStorage) Write(msg types.Message) error {
 }
 
 func (a *AzureBlobStorage) getContainer(name string) (*azblob.ContainerURL, error) {
-	accountName, accountKey := a.conf.StorageAccount, a.conf.StorageAccessKey
-	if len(accountName) == 0 || len(accountKey) == 0 {
-		return nil, fmt.Errorf("invalid azure storage account credentials")
-	}
-	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
-	if err != nil {
-		return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
-	}
-	p := azblob.NewPipeline(credential, azblob.PipelineOptions{})
-	URL, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, name))
+	p := azblob.NewPipeline(a.credential, azblob.PipelineOptions{})
+	URL, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net/%s", a.conf.StorageAccount, name))
 	containerURL := azblob.NewContainerURL(*URL, p)
 	return &containerURL, nil
 }
@@ -134,9 +139,7 @@ func (a *AzureBlobStorage) uploadToBlob(ctx context.Context, message []byte, blo
 
 // WriteWithContext attempts to write message contents to a target storage account as files.
 func (a *AzureBlobStorage) WriteWithContext(wctx context.Context, msg types.Message) error {
-	ctx, cancel := context.WithTimeout(
-		wctx, a.timeout,
-	)
+	ctx, cancel := context.WithTimeout(wctx, a.timeout)
 	defer cancel()
 
 	return msg.Iter(func(i int, p types.Part) error {
@@ -145,10 +148,12 @@ func (a *AzureBlobStorage) WriteWithContext(wctx context.Context, msg types.Mess
 			return err
 		}
 		if err := a.uploadToBlob(ctx, p.Get(), a.path.String(i, msg), a.blobType.String(i, msg), c); err != nil {
-			a.log.Errorf("Error uploading blob: %v.", err)
 			if containerNotFound(err) {
 				if _, cerr := c.Create(ctx, azblob.Metadata{}, azblob.PublicAccessNone); cerr != nil {
 					a.log.Errorf("Error creating container: %v.", cerr)
+				} else {
+					a.log.Infof("Created container: %s.", c.String())
+					err = a.uploadToBlob(ctx, p.Get(), a.path.String(i, msg), a.blobType.String(i, msg), c)
 				}
 			}
 			return err
