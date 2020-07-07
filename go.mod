@@ -62,7 +62,6 @@ require (
 	github.com/patrobinson/gokini v0.1.0
 	github.com/pebbe/zmq4 v1.2.0
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
-	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.6.0
 	github.com/prometheus/common v0.10.0 // indirect
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
