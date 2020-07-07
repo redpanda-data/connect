@@ -140,17 +140,14 @@ func (a *AzureBlobStorage) WriteWithContext(wctx context.Context, msg types.Mess
 	defer cancel()
 
 	return msg.Iter(func(i int, p types.Part) error {
-		containerName := a.container.String(i, msg)
-		containerURL, err := a.getContainer(containerName)
+		c, err := a.getContainer(a.container.String(i, msg))
 		if err != nil {
 			return err
 		}
-
-		blobName, blobType := a.path.String(i, msg), a.blobType.String(i, msg)
-		if err := a.uploadToBlob(ctx, p.Get(), blobName, blobType, containerURL); err != nil {
+		if err := a.uploadToBlob(ctx, p.Get(), a.path.String(i, msg), a.blobType.String(i, msg), c); err != nil {
 			a.log.Errorf("Error uploading blob: %v.", err)
 			if containerNotFound(err) {
-				if _, cerr := containerURL.Create(ctx, azblob.Metadata{}, azblob.PublicAccessNone); cerr != nil {
+				if _, cerr := c.Create(ctx, azblob.Metadata{}, azblob.PublicAccessNone); cerr != nil {
 					a.log.Errorf("Error creating container: %v.", cerr)
 				}
 			}
@@ -164,6 +161,7 @@ func containerNotFound(err error) bool {
 	if serr, ok := err.(azblob.StorageError); ok {
 		return serr.ServiceCode() == azblob.ServiceCodeContainerNotFound
 	}
+	// TODO azure blob storage api (preview) is returning an internal wrapped storageError
 	return strings.Contains(err.Error(), "ContainerNotFound")
 }
 
