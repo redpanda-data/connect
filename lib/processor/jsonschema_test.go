@@ -217,7 +217,7 @@ func TestJSONSchemaLowercaseDescriptionCheck(t *testing.T) {
 			"description": "The person's first name."
 		  },
 		  "addresses": {
-			"description": "The person' addresses.'",
+			"description": "The person's addresses.'",
 			"type": "array",
 			"items": {
 			"type": "object",
