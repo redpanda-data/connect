@@ -205,6 +205,116 @@ func TestJSONSchemaInlineSchemaCheck(t *testing.T) {
 	}
 }
 
+func TestJSONSchemaLowercaseDescriptionCheck(t *testing.T) {
+	schema := `{
+		"$id": "https://example.com/person.schema.json",
+		"$schema": "http://json-schema.org/draft-07/schema#",
+		"title": "Person",
+		"type": "object",
+		"properties": {
+		  "firstName": {
+			"type": "string",
+			"description": "The person's first name."
+		  },
+		  "addresses": {
+			"description": "The person' addresses.'",
+			"type": "array",
+			"items": {
+			"type": "object",
+			"properties": {
+			  "cityName": {
+				"description": "The city's name'",
+				"type": "string",
+				"maxLength": 50
+			  },
+			  "postCode": {
+				"description": "The city's postal code'",
+				"type": "string",
+				"maxLength": 50
+			  }
+			},
+			"required": [
+			  "cityName"
+			]
+		  }
+		}
+      },
+      "required": [
+	    "firstName",
+        "addresses"
+      ]
+	}`
+
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testMet := metrics.DudType{}
+
+	type fields struct {
+		schema string
+		part   int
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		arg    [][]byte
+		output string
+		err    string
+	}{
+		{
+			name: "schema match",
+			fields: fields{
+				schema: schema,
+				part:   0,
+			},
+			arg: [][]byte{
+				[]byte(`{"firstName":"John","addresses":[{"cityName":"Reading", "postCode":"RG1"},{"cityName":"London", "postCode":"E1"}]}`),
+			},
+			output: `{"firstName":"John","addresses":[{"cityName":"Reading", "postCode":"RG1"},{"cityName":"London", "postCode":"E1"}]}`,
+		},
+		{
+			name: "schema no match",
+			fields: fields{
+				schema: schema,
+				part:   0,
+			},
+			arg: [][]byte{
+				[]byte(`{"firstName":"John","addresses":[{"postCode":"RG1"},{"cityName":"London", "postCode":"E1"}]}`),
+			},
+			output: `{"firstName":"John","addresses":[{"postCode":"RG1"},{"cityName":"London", "postCode":"E1"}]}`,
+			err:    `addresses.0 cityName is required`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf := NewConfig()
+			conf.Type = "jsonschema"
+			conf.JSONSchema.Schema = tt.fields.schema
+			conf.JSONSchema.Parts = []int{0}
+
+			c, err := NewJSONSchema(conf, nil, testLog, testMet)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			msgs, _ := c.ProcessMessage(message.New(tt.arg))
+
+			if len(msgs) != 1 {
+				t.Fatalf("Test '%v' did not succeed", tt.name)
+			}
+
+			if exp, act := tt.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
+				t.Errorf("Wrong result '%v': %v != %v", tt.name, act, exp)
+			}
+			msgs[0].Iter(func(i int, part types.Part) error {
+				act := part.Metadata().Get(FailFlagKey)
+				if len(act) > 0 && act != tt.err {
+					t.Errorf("Wrong error message '%v': %v != %v", tt.name, act, tt.err)
+				}
+				return nil
+			})
+		})
+	}
+}
+
 func TestJSONSchemaPathNotExist(t *testing.T) {
 	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
 	testMet := metrics.DudType{}

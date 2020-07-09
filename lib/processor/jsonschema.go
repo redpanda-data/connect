@@ -193,7 +193,7 @@ func (s *JSONSchema) ProcessMessage(msg types.Message) ([]types.Message, types.R
 				if i > 0 {
 					errStr = errStr + "\n"
 				}
-				errStr = errStr + desc.Field() + " " + desc.Description()
+				errStr = errStr + desc.Field() + " " + strings.ToLower(desc.Description())
 			}
 			return errors.New(errStr)
 		}
