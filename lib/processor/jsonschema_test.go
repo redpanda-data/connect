@@ -238,11 +238,7 @@ func TestJSONSchemaLowercaseDescriptionCheck(t *testing.T) {
 			]
 		  }
 		}
-      },
-      "required": [
-	    "firstName",
-        "addresses"
-      ]
+      }
 	}`
 
 	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
