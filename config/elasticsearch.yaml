@@ -54,6 +54,11 @@ output:
     pipeline: ""
     sniff: true
     timeout: 5s
+    tls:
+      client_certs: []
+      enabled: false
+      root_cas_file: ""
+      skip_cert_verify: false
     type: doc
     urls:
       - http://localhost:9200
