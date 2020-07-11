@@ -3,6 +3,7 @@ module github.com/Jeffail/benthos/v3
 require (
 	cloud.google.com/go v0.57.0 // indirect
 	cloud.google.com/go/pubsub v1.3.1
+	github.com/Azure/azure-storage-blob-go v0.10.0
 	github.com/Azure/go-amqp v0.12.7
 	github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 // indirect
 	github.com/Jeffail/gabs/v2 v2.5.1
