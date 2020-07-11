@@ -264,7 +264,7 @@ func (d *DynamoDB) get(key string) ([]byte, error) {
 
 	val, ok := res.Item[d.conf.DataKey]
 	if !ok || val.B == nil {
-		d.log.Warnf("key not found: %s", key)
+		d.log.Debugf("key not found: %s", key)
 		return nil, types.ErrKeyNotFound
 	}
 	return val.B, nil
