@@ -7,7 +7,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- New `bloblang` input for generating documents.
+- New (BETA) `bloblang` input for generating documents.
+- New (BETA) Azure `blob_storage` output.
 
 ### Fixed
 

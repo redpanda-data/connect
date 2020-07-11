@@ -14,8 +14,12 @@ func init() {
 	Constructors[TypeBlobStorage] = TypeSpec{
 		constructor: NewAzureBlobStorage,
 		Summary: `
-Sends message parts as objects to an Azure Blob Storage Account container. Each object is uploaded
-with the filename specified with the ` + "`container`" + ` field.`,
+BETA: This input is currently in a BETA stage and is therefore subject to
+breaking configuration changes outside of major version releases.
+
+Sends message parts as objects to an Azure Blob Storage Account container. Each
+object is uploaded with the filename specified with the ` + "`container`" + `
+field.`,
 		Description: `
 In order to have a different path for each object you should use function
 interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are

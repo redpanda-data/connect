@@ -11,8 +11,12 @@ type: output
 -->
 
 
-Sends message parts as objects to an Azure Blob Storage Account container. Each object is uploaded
-with the filename specified with the `container` field.
+BETA: This input is currently in a BETA stage and is therefore subject to
+breaking configuration changes outside of major version releases.
+
+Sends message parts as objects to an Azure Blob Storage Account container. Each
+object is uploaded with the filename specified with the `container`
+field.
 
 
 import Tabs from '@theme/Tabs';
