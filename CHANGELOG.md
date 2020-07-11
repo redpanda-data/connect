@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New `bloblang` input for generating documents.
+
 ## 3.20.0 - 2020-07-05
 
 ### Added

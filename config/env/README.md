@@ -85,6 +85,9 @@ INPUT_AMQP_TLS_ENABLED                               = false
 INPUT_AMQP_TLS_ROOT_CAS_FILE
 INPUT_AMQP_TLS_SKIP_CERT_VERIFY                      = false
 INPUT_AMQP_URL                                       = amqp://guest:guest@localhost:5672/
+INPUT_BLOBLANG_COUNT                                 = 0
+INPUT_BLOBLANG_INTERVAL                              = 1s
+INPUT_BLOBLANG_MAPPING
 INPUT_DYNAMIC_PREFIX
 INPUT_DYNAMIC_TIMEOUT                                = 5s
 INPUT_FILES_DELETE_FILES                             = false

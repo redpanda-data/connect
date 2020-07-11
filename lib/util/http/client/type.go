@@ -378,6 +378,8 @@ func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err erro
 	resMsg = message.New(nil)
 
 	if res.Body != nil {
+		defer res.Body.Close()
+
 		contentType := res.Header.Get("Content-Type")
 
 		var mediaType string
@@ -393,8 +395,6 @@ func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err erro
 
 		var buffer bytes.Buffer
 		if strings.HasPrefix(mediaType, "multipart/") {
-			resMsg = message.New(nil)
-
 			mr := multipart.NewReader(res.Body, params["boundary"])
 			var bufferIndex int64
 			for {
@@ -436,7 +436,7 @@ func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err erro
 				return
 			}
 			if bytesRead > 0 {
-				resMsg = message.New([][]byte{buffer.Bytes()[:bytesRead]})
+				resMsg.Append(message.NewPart(buffer.Bytes()[:bytesRead]))
 			} else {
 				resMsg.Append(message.NewPart(nil))
 			}
@@ -449,7 +449,6 @@ func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err erro
 				}
 			}
 		}
-		res.Body.Close()
 	} else {
 		resMsg.Append(message.NewPart(nil))
 	}

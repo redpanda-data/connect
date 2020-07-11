@@ -51,6 +51,10 @@ input:
             root_cas_file: ${INPUT_AMQP_1_TLS_ROOT_CAS_FILE}
             skip_cert_verify: ${INPUT_AMQP_1_TLS_SKIP_CERT_VERIFY:false}
           url: ${INPUT_AMQP_1_URL}
+        bloblang:
+          count: ${INPUT_BLOBLANG_COUNT:0}
+          interval: ${INPUT_BLOBLANG_INTERVAL:1s}
+          mapping: ${INPUT_BLOBLANG_MAPPING}
         dynamic:
           prefix: ${INPUT_DYNAMIC_PREFIX}
           timeout: ${INPUT_DYNAMIC_TIMEOUT:5s}
