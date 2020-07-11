@@ -543,7 +543,11 @@ func TestHTTPSyncResponseHeaders(t *testing.T) {
 
 	input := `{"foo":"test message","field1":"bar"}`
 
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+
 		res, err := http.Post(
 			server.URL+"/testpost",
 			"application/octet-stream",
@@ -589,4 +593,127 @@ func TestHTTPSyncResponseHeaders(t *testing.T) {
 	if err := h.WaitForClose(time.Second * 5); err != nil {
 		t.Error(err)
 	}
+
+	wg.Wait()
+}
+
+func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
+	t.Parallel()
+
+	reg := apiRegMutWrapper{mut: &http.ServeMux{}}
+	mgr, err := manager.New(manager.NewConfig(), reg, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conf := input.NewConfig()
+	conf.HTTPServer.Path = "/testpost"
+	conf.HTTPServer.Response.Status = `${! meta("status").or("200") }`
+	conf.HTTPServer.Response.Headers["Content-Type"] = "application/json"
+	conf.HTTPServer.Response.Headers["foo"] = `${!json("field1")}`
+
+	h, err := input.NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(reg.mut)
+	defer server.Close()
+
+	input := `{"foo":"test message","field1":"bar"}`
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		res, err := http.Post(
+			server.URL+"/testpost",
+			"application/octet-stream",
+			bytes.NewBuffer([]byte(input)),
+		)
+		if err != nil {
+			t.Fatal(err)
+		} else if res.StatusCode != 200 {
+			t.Fatalf("Wrong error code returned: %v", res.StatusCode)
+		}
+		resBytes, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if exp, act := input, string(resBytes); exp != act {
+			t.Errorf("Wrong sync response: %v != %v", act, exp)
+		}
+		if exp, act := "application/json", res.Header.Get("Content-Type"); exp != act {
+			t.Errorf("Wrong sync response header: %v != %v", act, exp)
+		}
+		if exp, act := "bar", res.Header.Get("foo"); exp != act {
+			t.Errorf("Wrong sync response header: %v != %v", act, exp)
+		}
+
+		res, err = http.Post(
+			server.URL+"/testpost",
+			"application/octet-stream",
+			bytes.NewBuffer([]byte(input)),
+		)
+		if err != nil {
+			t.Fatal(err)
+		} else if res.StatusCode != 400 {
+			t.Fatalf("Wrong error code returned: %v", res.StatusCode)
+		}
+		resBytes, err = ioutil.ReadAll(res.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if exp, act := input, string(resBytes); exp != act {
+			t.Errorf("Wrong sync response: %v != %v", act, exp)
+		}
+		if exp, act := "application/json", res.Header.Get("Content-Type"); exp != act {
+			t.Errorf("Wrong sync response header: %v != %v", act, exp)
+		}
+		if exp, act := "bar", res.Header.Get("foo"); exp != act {
+			t.Errorf("Wrong sync response header: %v != %v", act, exp)
+		}
+	}()
+
+	// Non errored message
+	var ts types.Transaction
+	select {
+	case ts = <-h.TransactionChan():
+		if res := string(ts.Payload.Get(0).Get()); res != input {
+			t.Errorf("Wrong result, %v != %v", ts.Payload, res)
+		}
+		roundtrip.SetAsResponse(ts.Payload)
+	case <-time.After(time.Second):
+		t.Fatal("Timed out waiting for message")
+	}
+	select {
+	case ts.ResponseChan <- response.NewAck():
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for response")
+	}
+
+	// Errored message
+	select {
+	case ts = <-h.TransactionChan():
+		if res := string(ts.Payload.Get(0).Get()); res != input {
+			t.Errorf("Wrong result, %v != %v", ts.Payload, res)
+		}
+		ts.Payload.Get(0).Metadata().Set("status", "400")
+		roundtrip.SetAsResponse(ts.Payload)
+	case <-time.After(time.Second):
+		t.Fatal("Timed out waiting for message")
+	}
+	select {
+	case ts.ResponseChan <- response.NewAck():
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for response")
+	}
+
+	h.CloseAsync()
+	if err := h.WaitForClose(time.Second * 5); err != nil {
+		t.Error(err)
+	}
+
+	wg.Wait()
 }

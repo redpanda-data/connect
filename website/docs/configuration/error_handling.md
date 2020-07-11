@@ -105,7 +105,7 @@ In order to filter out any failed messages from your pipeline you can use a
 [`bloblang` processor][processors.bloblang]:
 
 ```yaml
-  - bloblang: root = if error().length() > 0 { deleted() }
+  - bloblang: root = if errored() { deleted() }
 ```
 
 This will remove any failed messages from a batch.
@@ -145,10 +145,10 @@ output:
     outputs:
     - type: foo # Dead letter queue
       processors:
-      - bloblang: root = if error().length() == 0 { deleted() }
+      - bloblang: root = if !errored() { deleted() }
     - type: bar # Everything else
       processors:
-      - bloblang: root = if error().length() > 0 { deleted() }
+      - bloblang: root = if errored() { deleted() }
 ```
 
 [processors]: /docs/components/processors/about

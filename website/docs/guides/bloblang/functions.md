@@ -68,11 +68,18 @@ new_nums = nums.for_each(
 
 ### `error`
 
-If an error has occurred during the processing of a message this function returns the reported cause of the error. For more information about error
-handling patterns read [here][error_handling].
+If an error has occurred during the processing of a message this function returns the reported cause of the error. For more information about error handling patterns read [here][error_handling].
 
 ```coffee
 doc.error = error()
+```
+
+### `errored`
+
+Returns a boolean value indicating whether an error has occurred during the processing of a message. For more information about error handling patterns read [here][error_handling].
+
+```coffee
+doc.status = if errored() { 400 } else { 200 }
 ```
 
 ### `hostname`

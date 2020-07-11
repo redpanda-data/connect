@@ -53,10 +53,10 @@ response payload will be sent as per ` + "`ws_rate_limit_message`" + `.
 ### Responses
 
 It's possible to return a response for each message received using
-[synchronous responses](/docs/guides/sync_responses). When doing so you can customise
-headers with the ` + "`sync_response` field `headers`" + `, which can also use
-[function interpolation](/docs/configuration/interpolation#metadata) in the value based
-on the response message contents.
+[synchronous responses](/docs/guides/sync_responses). When doing so you can
+customise headers with the ` + "`sync_response` field `headers`" + `, which can
+also use [function interpolation](/docs/configuration/interpolation#bloblang-queries)
+in the value based on the response message contents.
 
 ### Endpoints
 
@@ -108,6 +108,11 @@ You can access these metadata fields using
 			docs.FieldAdvanced("cert_file", "Only valid with a custom `address`."),
 			docs.FieldAdvanced("key_file", "Only valid with a custom `address`."),
 			docs.FieldAdvanced("sync_response", "Customise messages returned via [synchronous responses](/docs/guides/sync_responses).").WithChildren(
+				docs.FieldCommon(
+					"status",
+					"Specify the status code to return with synchronous responses. This is a string value, which allows you to customize it based on resulting payloads and their metadata.",
+					"200", `${! json("status") }`, `${! meta("status") }`,
+				).SupportsInterpolation(true),
 				docs.FieldCommon("headers", "Specify headers to return with synchronous responses.").SupportsInterpolation(true),
 			),
 		},
@@ -119,12 +124,14 @@ You can access these metadata fields using
 // HTTPServerResponseConfig provides config fields for customising the response
 // given from successful requests.
 type HTTPServerResponseConfig struct {
+	Status  string            `json:"status" yaml:"status"`
 	Headers map[string]string `json:"headers" yaml:"headers"`
 }
 
 // NewHTTPServerResponseConfig creates a new HTTPServerConfig with default values.
 func NewHTTPServerResponseConfig() HTTPServerResponseConfig {
 	return HTTPServerResponseConfig{
+		Status: "200",
 		Headers: map[string]string{
 			"Content-Type": "application/octet-stream",
 		},
@@ -181,6 +188,7 @@ type HTTPServer struct {
 	server  *http.Server
 	timeout time.Duration
 
+	responseStatus  field.Expression
 	responseHeaders map[string]field.Expression
 
 	transactions chan types.Transaction
@@ -262,6 +270,9 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 	}
 
 	var err error
+	if h.responseStatus, err = field.New(h.conf.HTTPServer.Response.Status); err != nil {
+		return nil, fmt.Errorf("failed to parse response status expression: %v", err)
+	}
 	for k, v := range h.conf.HTTPServer.Response.Headers {
 		if h.responseHeaders[k], err = field.New(v); err != nil {
 			return nil, fmt.Errorf("failed to parse response header '%v' expression: %v", k, err)
@@ -461,6 +472,17 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	if responseMsg.Len() != 0 {
 		for k, v := range h.responseHeaders {
 			w.Header().Set(k, v.String(0, responseMsg))
+		}
+		if statusCodeStr := h.responseStatus.String(0, responseMsg); statusCodeStr == "200" {
+			w.WriteHeader(200)
+		} else {
+			statusCode, err := strconv.Atoi(statusCodeStr)
+			if err != nil {
+				h.log.Errorf("Failed to parse sync response status code expression: %v\n", err)
+				w.WriteHeader(http.StatusBadGateway)
+				return
+			}
+			w.WriteHeader(statusCode)
 		}
 	}
 	if plen := responseMsg.Len(); plen == 1 {

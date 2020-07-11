@@ -54,6 +54,7 @@ input:
     cert_file: ""
     key_file: ""
     sync_response:
+      status: "200"
       headers:
         Content-Type: application/octet-stream
 ```
@@ -75,10 +76,10 @@ response payload will be sent as per `ws_rate_limit_message`.
 ### Responses
 
 It's possible to return a response for each message received using
-[synchronous responses](/docs/guides/sync_responses). When doing so you can customise
-headers with the `sync_response` field `headers`, which can also use
-[function interpolation](/docs/configuration/interpolation#metadata) in the value based
-on the response message contents.
+[synchronous responses](/docs/guides/sync_responses). When doing so you can
+customise headers with the `sync_response` field `headers`, which can
+also use [function interpolation](/docs/configuration/interpolation#bloblang-queries)
+in the value based on the response message contents.
 
 ### Endpoints
 
@@ -200,7 +201,26 @@ Customise messages returned via [synchronous responses](/docs/guides/sync_respon
 
 
 Type: `object`  
-Default: `{"headers":{"Content-Type":"application/octet-stream"}}`  
+Default: `{"headers":{"Content-Type":"application/octet-stream"},"status":"200"}`  
+
+### `sync_response.status`
+
+Specify the status code to return with synchronous responses. This is a string value, which allows you to customize it based on resulting payloads and their metadata.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `"200"`  
+
+```yaml
+# Examples
+
+status: "200"
+
+status: ${! json("status") }
+
+status: ${! meta("status") }
+```
 
 ### `sync_response.headers`
 

@@ -15,6 +15,7 @@ input:
     sync_response:
       headers:
         Content-Type: application/octet-stream
+      status: "200"
     timeout: 5s
     ws_path: /post/ws
     ws_rate_limit_message: ""

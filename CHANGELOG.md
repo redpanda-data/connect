@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 
 - New (BETA) `bloblang` input for generating documents.
 - New (BETA) Azure `blob_storage` output.
+- Field `sync_response.status` added to `http_server` input. 
+- New Bloblang `errored` function.
 
 ### Fixed
 

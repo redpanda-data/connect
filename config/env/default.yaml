@@ -126,6 +126,7 @@ input:
           sync_response:
             headers:
               Content-Type: ${INPUT_HTTP_SERVER_SYNC_RESPONSE_HEADERS_CONTENT_TYPE:application/octet-stream}
+            status: ${INPUT_HTTP_SERVER_SYNC_RESPONSE_STATUS:200}
           timeout: ${INPUT_HTTP_SERVER_TIMEOUT:5s}
           ws_path: ${INPUT_HTTP_SERVER_WS_PATH:/post/ws}
           ws_rate_limit_message: ${INPUT_HTTP_SERVER_WS_RATE_LIMIT_MESSAGE}

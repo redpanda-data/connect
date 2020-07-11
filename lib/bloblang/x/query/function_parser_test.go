@@ -301,6 +301,67 @@ func TestFunctionQueries(t *testing.T) {
 				}},
 			},
 		},
+		"errored function": {
+			input:  `errored()`,
+			output: `true`,
+			messages: []easyMsg{
+				{meta: map[string]string{
+					types.FailFlagKey: "test error",
+				}},
+			},
+		},
+		"errored function if": {
+			input:  `if errored() { "failed" } else { "succeeded" }`,
+			output: `failed`,
+			index:  1,
+			messages: []easyMsg{
+				{},
+				{meta: map[string]string{
+					types.FailFlagKey: "test error",
+				}},
+			},
+		},
+		"errored function else": {
+			input:  `if errored() { "failed" } else { "succeeded" }`,
+			output: `succeeded`,
+			index:  0,
+			messages: []easyMsg{
+				{},
+				{meta: map[string]string{
+					types.FailFlagKey: "test error",
+				}},
+			},
+		},
+		"errored function 2": {
+			input:  `errored().from(1)`,
+			output: `false`,
+			messages: []easyMsg{
+				{meta: map[string]string{
+					types.FailFlagKey: "test error",
+				}},
+			},
+		},
+		"errored function 3": {
+			input:  `errored().from(1)`,
+			output: `true`,
+			messages: []easyMsg{
+				{},
+				{meta: map[string]string{
+					types.FailFlagKey: "test error",
+				}},
+			},
+		},
+		"errored function 4": {
+			input:  `errored()`,
+			output: `true`,
+			index:  1,
+			messages: []easyMsg{
+				{},
+				{meta: map[string]string{
+					types.FailFlagKey: "test error",
+				}},
+			},
+		},
 		"content function": {
 			input:  `content()`,
 			output: `foobar`,

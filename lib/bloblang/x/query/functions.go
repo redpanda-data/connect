@@ -124,6 +124,14 @@ func errorFunction(...interface{}) (Function, error) {
 	}), nil
 }
 
+var _ = RegisterFunction("errored", false, erroredFunction)
+
+func erroredFunction(...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		return len(ctx.MsgBatch.Get(ctx.Index).Metadata().Get(types.FailFlagKey)) > 0, nil
+	}), nil
+}
+
 //------------------------------------------------------------------------------
 
 var _ = RegisterFunction("hostname", false, hostnameFunction)
