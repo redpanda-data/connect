@@ -29,7 +29,9 @@ acknowledgement from all replicas or just a single broker.
 Both the ` + "`key` and `topic`" + ` fields can be dynamically set using
 function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 When sending batched messages these interpolations are performed per message
-part.`,
+part.
+
+The value of header under ` + "`headers`" + ` can be given in the same format as under ` + "`key` and `topic`.",
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.Kafka, conf.Kafka.Batching)
 		},
@@ -50,6 +52,7 @@ part.`,
 			docs.FieldAdvanced("max_msg_bytes", "The maximum size in bytes of messages sent to the target topic."),
 			docs.FieldAdvanced("timeout", "The maximum period of time to wait for message sends before abandoning the request and retrying."),
 			docs.FieldAdvanced("target_version", "The version of the Kafka protocol to use."),
+			docs.FieldCommon("headers", "A map of headers that are send to outpu topic.", map[string]string{"first-header": "direct-value", "second-header": "${! json(\"a\") }"}),
 			batch.FieldSpec(),
 		}, retries.FieldSpecs()...),
 	}
