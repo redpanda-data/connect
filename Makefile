@@ -67,6 +67,7 @@ docker-cgo: deps
 
 fmt:
 	@go list -f {{.Dir}} ./... | xargs -I{} gofmt -w -s {}
+	@go mod tidy
 
 lint:
 	@go vet $(GO_FLAGS) ./...
