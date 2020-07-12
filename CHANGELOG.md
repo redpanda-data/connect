@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.21.0 - 2020-07-12
+
 ### Added
 
 - New (BETA) `bloblang` input for generating documents.
@@ -14,7 +16,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- The `json_schema` processor no longer lowercases fields within error messages.
+- The `json_schema` processor no longer lower cases fields within error messages.
 - The `dynamodb` cache no longer creates warning logs for get misses.
 
 ## 3.20.0 - 2020-07-05
