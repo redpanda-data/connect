@@ -2,6 +2,8 @@ package query
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -164,6 +166,104 @@ func encodeMethod(target Function, args ...interface{}) (Function, error) {
 		}
 	default:
 		return nil, fmt.Errorf("unrecognized encoding type: %v", args[0])
+	}
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var res string
+		switch t := v.(type) {
+		case string:
+			res, err = schemeFn([]byte(t))
+		case []byte:
+			res, err = schemeFn(t)
+		default:
+			err = NewTypeError(v, ValueString)
+		}
+		return res, err
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"decryptaes", true, decryptAESMethod,
+	ExpectNArgs(3),
+	ExpectAllStringArgs(),
+)
+
+func decryptAESMethod(target Function, args ...interface{}) (Function, error) {
+	var schemeFn func([]byte) ([]byte, error)
+	switch args[0].(string) {
+	case "ctr":
+		schemeFn = func(b []byte) ([]byte, error) {
+			key := []byte(args[1].(string))
+			ciphertext := b
+			iv := []byte(args[2].(string))
+
+			block, err := aes.NewCipher(key)
+			if err != nil {
+				return nil, err
+			}
+			plaintext := make([]byte, len(ciphertext))
+
+			stream := cipher.NewCTR(block, iv)
+			stream.XORKeyStream(plaintext, ciphertext)
+
+			return plaintext, nil
+		}
+
+	default:
+		return nil, fmt.Errorf("unrecognized decryption type: %v", args[0])
+	}
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var res []byte
+		switch t := v.(type) {
+		case string:
+			res, err = schemeFn([]byte(t))
+		case []byte:
+			res, err = schemeFn(t)
+		default:
+			err = NewTypeError(v, ValueString)
+		}
+		return res, err
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+var _ = RegisterMethod(
+	"encryptaes", true, encryptAESMethod,
+	ExpectNArgs(3),
+	ExpectAllStringArgs(),
+)
+
+func encryptAESMethod(target Function, args ...interface{}) (Function, error) {
+	var schemeFn func([]byte) (string, error)
+	switch args[0].(string) {
+	case "ctr":
+		schemeFn = func(b []byte) (string, error) {
+			key := []byte(args[1].(string))
+			plaintext := b
+			iv := []byte(args[2].(string))
+
+			block, err := aes.NewCipher(key)
+			if err != nil {
+				return "", err
+			}
+			ciphertext := make([]byte, len(plaintext))
+
+			stream := cipher.NewCTR(block, iv)
+			stream.XORKeyStream(ciphertext, plaintext)
+
+			return string(ciphertext), nil
+		}
+	default:
+		return nil, fmt.Errorf("unrecognized encryption type: %v", args[0])
 	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)

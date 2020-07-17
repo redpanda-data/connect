@@ -808,6 +808,14 @@ func TestMethods(t *testing.T) {
 			messages: []easyMsg{{content: `{"bar":2,"foo":1}`}},
 			err:      `expected object value, found string: foo`,
 		},
+		"check aes-ctr encryption": {
+			input:  `"hello world!".encryptaes("ctr","2b7e151628aed2a6abf7158809cf4f3c".decode("hex"),"f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff".decode("hex")).encode("hex")`,
+			output: `84e9b31ff7400bdf80be7254`,
+		},
+		"check aes-ctr decryption": {
+			input:  `"84e9b31ff7400bdf80be7254".decode("hex").decryptaes("ctr","2b7e151628aed2a6abf7158809cf4f3c".decode("hex"),"f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff".decode("hex")).string()`,
+			output: `hello world!`,
+		},
 	}
 
 	for name, test := range tests {
