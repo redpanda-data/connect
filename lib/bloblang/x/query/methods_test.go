@@ -816,6 +816,30 @@ func TestMethods(t *testing.T) {
 			input:  `"84e9b31ff7400bdf80be7254".decode("hex").decrypt_aes("ctr","2b7e151628aed2a6abf7158809cf4f3c".decode("hex"),"f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff".decode("hex")).string()`,
 			output: `hello world!`,
 		},
+		"check aes-ofb encryption": {
+			input:  `"hello world!".encrypt_aes("ofb","2b7e151628aed2a6abf7158809cf4f3c".decode("hex"),"000102030405060708090a0b0c0d0e0f".decode("hex")).encode("hex")`,
+			output: `389b0ba0f64d45d9a86553c8`,
+		},
+		"check aes-ofb decryption": {
+			input:  `"389b0ba0f64d45d9a86553c8".decode("hex").decrypt_aes("ofb","2b7e151628aed2a6abf7158809cf4f3c".decode("hex"),"000102030405060708090a0b0c0d0e0f".decode("hex")).string()`,
+			output: `hello world!`,
+		},
+		"check aes-cbc encryption": {
+			input:  `"6bc1bee22e409f96e93d7e117393172a".decode("hex").encrypt_aes("cbc","2b7e151628aed2a6abf7158809cf4f3c".decode("hex"),"000102030405060708090a0b0c0d0e0f".decode("hex")).encode("hex")`,
+			output: `7649abac8119b246cee98e9b12e9197d`,
+		},
+		"check aes-cbc encryption error": {
+			input: `"hello world".encrypt_aes("cbc","2b7e151628aed2a6abf7158809cf4f3c".decode("hex"),"000102030405060708090a0b0c0d0e0f".decode("hex")).encode("hex")`,
+			err:   `plaintext is not a multiple of the block size`,
+		},
+		"check aes-cbc decryption": {
+			input:  `"7649abac8119b246cee98e9b12e9197d".decode("hex").decrypt_aes("cbc","2b7e151628aed2a6abf7158809cf4f3c".decode("hex"),"000102030405060708090a0b0c0d0e0f".decode("hex")).string().encode("hex")`,
+			output: `6bc1bee22e409f96e93d7e117393172a`,
+		},
+		"check aes-cbc decryption error": {
+			input: `"7649abac81".decode("hex").decrypt_aes("cbc","2b7e151628aed2a6abf7158809cf4f3c".decode("hex"),"000102030405060708090a0b0c0d0e0f".decode("hex")).string().encode("hex")`,
+			err:   `ciphertext is not a multiple of the block size`,
+		},
 	}
 
 	for name, test := range tests {

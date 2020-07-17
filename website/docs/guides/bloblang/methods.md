@@ -454,7 +454,7 @@ encoded = value.encode("hex")
 
 ### `encrypt_aes`
 
-Encrypts a string or byte array target according to a chosen AES encryption method and returns a string result. The algorithms require a key and an initialization vector / nonce. Available schemes are: `ctr`.
+Encrypts a string or byte array target according to a chosen AES encryption method and returns a string result. The algorithms require a key and an initialization vector / nonce. Available schemes are: `ctr`, `ofb`, `cbc`.
 
 ```coffee
 encrypted = value.encrypt_aes("ctr", "key", "vector").encode("hex")
@@ -465,7 +465,7 @@ encrypted = value.encrypt_aes("ctr", "key", "vector").encode("hex")
 
 ### `decrypt_aes`
 
-Decrypts an encrypted string or byte array target according to a chosen AES encryption method and returns the result as a byte array. The algorithms require a key and an initialization vector / nonce. Available schemes are: `ctr`.
+Decrypts an encrypted string or byte array target according to a chosen AES encryption method and returns the result as a byte array. The algorithms require a key and an initialization vector / nonce. Available schemes are: `ctr`, `ofb`, `cbc`.
 
 ```coffee
 decrypted = value.decode("hex").decrypt_aes("ctr", "key", "vector").string()
