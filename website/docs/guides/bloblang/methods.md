@@ -468,7 +468,7 @@ encrypted = value.encrypt_aes("ctr", "key", "vector").encode("hex")
 Decrypts an encrypted string or byte array target according to a chosen AES encryption method and returns the result as a byte array. The algorithms require a key and an initialization vector / nonce. Available schemes are: `ctr`.
 
 ```coffee
-decrypted = value.decode("hex").string().decrypt_aes("ctr", "key", "vector").encode("hex")
+decrypted = value.decode("hex").decrypt_aes("ctr", "key", "vector").string()
 
 # In:  {"value":"84e9b31ff7400bdf80be7254"}
 # Out: {"decrypted":"hello world!"}
