@@ -188,7 +188,7 @@ func encodeMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"decryptaes", true, decryptAESMethod,
+	"decrypt_aes", true, decryptAESMethod,
 	ExpectNArgs(3),
 	ExpectAllStringArgs(),
 )
@@ -237,7 +237,7 @@ func decryptAESMethod(target Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 var _ = RegisterMethod(
-	"encryptaes", true, encryptAESMethod,
+	"encrypt_aes", true, encryptAESMethod,
 	ExpectNArgs(3),
 	ExpectAllStringArgs(),
 )
