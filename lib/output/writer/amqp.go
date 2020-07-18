@@ -213,15 +213,16 @@ func (a *AMQP) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	bindingKey := strings.Replace(a.key.String(0, msg), "/", ".", -1)
-	msgType := strings.Replace(a.msgType.String(0, msg), "/", ".", -1)
-
 	return msg.Iter(func(i int, p types.Part) error {
+		bindingKey := strings.Replace(a.key.String(i, msg), "/", ".", -1)
+		msgType := strings.Replace(a.msgType.String(i, msg), "/", ".", -1)
+
 		headers := amqp.Table{}
 		p.Metadata().Iter(func(k, v string) error {
 			headers[strings.Replace(k, "_", "-", -1)] = v
 			return nil
 		})
+
 		err := amqpChan.Publish(
 			a.conf.Exchange,  // publish to an exchange
 			bindingKey,       // routing to 0 or more queues

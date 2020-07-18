@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
 - Added TLS fields to `elasticsearch` output.
 - New Bloblang methods `encrypt_aes` and `decrypt_aes` added.
 
+### Fixed
+
+- The `amqp_0_9` now resolves `type` and `key` fields per message of a batch.
+
 ## 3.21.0 - 2020-07-12
 
 ### Added
