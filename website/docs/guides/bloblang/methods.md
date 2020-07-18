@@ -428,6 +428,17 @@ title = title.capitalize()
 # Out: {"title":"The Foo Bar"}
 ```
 
+### `encode`
+
+Encodes a string or byte array target according to a chosen scheme and returns a string result. Available schemes are: `base64`, `base64url`, `hex`, `ascii85`, `z85`.
+
+```coffee
+encoded = value.encode("hex")
+
+# In:  {"value":"hello world"}
+# Out: {"encoded":"68656c6c6f20776f726c64"}
+```
+
 ### `decode`
 
 Decodes an encoded string target according to a chosen scheme and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.
@@ -439,17 +450,6 @@ decoded = value.decode("hex").string()
 
 # In:  {"value":"68656c6c6f20776f726c64"}
 # Out: {"decoded":"hello world"}
-```
-
-### `encode`
-
-Encodes a string or byte array target according to a chosen scheme and returns a string result. Available schemes are: `base64`, `base64url`, `hex`, `ascii85`, `z85`.
-
-```coffee
-encoded = value.encode("hex")
-
-# In:  {"value":"hello world"}
-# Out: {"encoded":"68656c6c6f20776f726c64"}
 ```
 
 ### `encrypt_aes`
@@ -485,6 +485,17 @@ escaped = value.escape_html()
 # Out: {"escaped":"foo &amp; bar"}
 ```
 
+### `unescape_html`
+
+Unescapes a string so that entities like `&lt;` become `<`. It unescapes a larger range of entities than `escape_html` escapes. For example, `&aacute;` unescapes to `á`, as does `&#225;` and `&xE1;`.
+
+```coffee
+unescaped = value.unescape_html()
+
+# In:  {"value":"foo &amp; bar"}
+# Out: {"escaped":"foo & bar"}
+```
+
 ### `escape_url_query`
 
 Escapes a string so that it can be safely placed within a URL query.
@@ -494,6 +505,17 @@ escaped = value.escape_url_query()
 
 # In:  {"value":"foo & bar"}
 # Out: {"escaped":"foo+%26+bar"}
+```
+
+### `unescape_url_query`
+
+Expands escape sequences from a URL query string.
+
+```coffee
+unescaped = value.unescape_url_query()
+
+# In:  {"value":"foo+%26+bar"}
+# Out: {"unescaped":"foo & bar"}
 ```
 
 ### `format`
@@ -593,6 +615,14 @@ Quotes a target string using escape sequences (`\t`, `\n`, `\xFF`, `\u0100`) for
 quoted = thing.quote()
 ```
 
+### `unquote`
+
+Unquotes a target string, expanding any escape sequences (`\t`, `\n`, `\xFF`, `\u0100`) for control characters and non-printable characters.
+
+```coffee
+unquoted = target.unquote()
+```
+
 ### `replace`
 
 Replaces all occurrences of the first argument in a target string with the second argument.
@@ -683,36 +713,6 @@ description = description.trim()
 
 # In:  {"title":"!!!watch out!?","description":"  something happened and its amazing! "}
 # Out: {"title":"watch out","description":"something happened and its amazing!"}
-```
-
-### `unescape_html`
-
-Unescapes a string so that entities like `&lt;` become `<`. It unescapes a larger range of entities than `escape_html` escapes. For example, `&aacute;` unescapes to `á`, as does `&#225;` and `&xE1;`.
-
-```coffee
-unescaped = value.unescape_html()
-
-# In:  {"value":"foo &amp; bar"}
-# Out: {"escaped":"foo & bar"}
-```
-
-### `unescape_url_query`
-
-Expands escape sequences from a URL query string.
-
-```coffee
-unescaped = value.unescape_url_query()
-
-# In:  {"value":"foo+%26+bar"}
-# Out: {"unescaped":"foo & bar"}
-```
-
-### `unquote`
-
-Unquotes a target string, expanding any escape sequences (`\t`, `\n`, `\xFF`, `\u0100`) for control characters and non-printable characters.
-
-```coffee
-unquoted = target.unquote()
 ```
 
 ### `uppercase`

@@ -206,32 +206,32 @@ Default: `{"client_certs":[],"enabled":false,"root_cas_file":"","skip_cert_verif
 Whether custom TLS settings are enabled.
 
 
-Type: `bool`
-Default: `false`
+Type: `bool`  
+Default: `false`  
 
 ### `tls.skip_cert_verify`
 
 Whether to skip server side certificate verification.
 
 
-Type: `bool`
-Default: `false`
+Type: `bool`  
+Default: `false`  
 
 ### `tls.root_cas_file`
 
 The path of a root certificate authority file to use.
 
 
-Type: `string`
-Default: `""`
+Type: `string`  
+Default: `""`  
 
 ### `tls.client_certs`
 
 A list of client certificates to use.
 
 
-Type: `array`
-Default: `[]`
+Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples
