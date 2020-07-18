@@ -91,16 +91,15 @@ input:
 
 pipeline:
   processors:
-  # Reduce document into only fields we wish to cache.
-  - jmespath:
-      query: '{"article": article}'
+    # Reduce document into only fields we wish to cache.
+    - bloblang: 'article = article'
 
-  # Store reduced articles into our cache.
-  - cache:
-      operator: set
-      cache: hydration_cache
-      key: '${!json("article.id")}'
-      value: '${!content()}'
+    # Store reduced articles into our cache.
+    - cache:
+        operator: set
+        cache: hydration_cache
+        key: '${!json("article.id")}'
+        value: '${!content()}'
 
 # Drop all articles after they are cached.
 output:
@@ -135,34 +134,34 @@ input:
 
 pipeline:
   processors:
-  # Attempt to obtain parent event from cache.
-  - process_map:
-      premap:
-        parent_id: comment.parent_id
-      processors:
-      - cache:
-          operator: get
-          cache: hydration_cache
-          key: '${!json("parent_id")}'
-      postmap:
-        # We only need the article section of our parent document.
-        article: article
-  
-  # Reduce comment into only fields we wish to cache.
-  - process_map:
-      premap:
-        comment.id: comment.id
-        article: article
-      processors:
-      # Store reduced comment into our cache.
-      - cache:
-          operator: set
-          cache: hydration_cache
-          key: '${!json("comment.id")}'
-          value: '${!content()}'
-      postmap_optional:
-        # Dummy map since we don't need to map the result back.
-        foo: will.never.exist
+    # Attempt to obtain parent event from cache.
+    - process_map:
+        premap:
+          parent_id: comment.parent_id
+        processors:
+          - cache:
+              operator: get
+              cache: hydration_cache
+              key: '${!json("parent_id")}'
+        postmap:
+          # We only need the article section of our parent document.
+          article: article
+    
+    # Reduce comment into only fields we wish to cache.
+    - process_map:
+        premap:
+          comment.id: comment.id
+          article: article
+        processors:
+          # Store reduced comment into our cache.
+          - cache:
+              operator: set
+              cache: hydration_cache
+              key: '${!json("comment.id")}'
+              value: '${!content()}'
+        postmap_optional:
+          # Dummy map since we don't need to map the result back.
+          foo: will.never.exist
 
 # Send resulting documents to our hydrated topic.
 output:
@@ -205,54 +204,44 @@ Our config (omitting the caching sections for brevity) now looks like this:
 input:
   broker:
     inputs:
-    - kafka_balanced:
-        addresses: [ TODO ]
-        topics: [ comments ]
-        consumer_group: benthos_comments_group
+      - kafka_balanced:
+          addresses: [ TODO ]
+          topics: [ comments ]
+          consumer_group: benthos_comments_group
 
-    - kafka_balanced:
-        addresses: [ TODO ]
-        topics: [ comments_retry ]
-        consumer_group: benthos_comments_group
+      - kafka_balanced:
+          addresses: [ TODO ]
+          topics: [ comments_retry ]
+          consumer_group: benthos_comments_group
 
-      processors:
-      - for_each:
-        # Calculate time until next retry attempt and sleep for that duration.
-        # This sleep blocks the topic 'comments_retry' but NOT 'comments',
-        # because both topics are consumed independently and these processors
-        # only apply to the 'comments_retry' input.
-        - sleep:
-            duration: '${! 3600 - ( timestamp_unix() - meta("last_attempted") ) }s'
+        processors:
+          - for_each:
+            # Calculate time until next retry attempt and sleep for that duration.
+            # This sleep blocks the topic 'comments_retry' but NOT 'comments',
+            # because both topics are consumed independently and these processors
+            # only apply to the 'comments_retry' input.
+            - sleep:
+                duration: '${! 3600 - ( timestamp_unix() - meta("last_attempted") ) }s'
 
 pipeline:
   processors:
-  - try:
-    # Attempt to obtain parent event from cache.
-    - process_map:
-        {} # Omitted
+    - try:
+        # Attempt to obtain parent event from cache.
+        - process_map:
+            {} # Omitted
 
-    # Reduce document into only fields we wish to cache.
-    - process_map:
-        {} # Omitted
+        # Reduce document into only fields we wish to cache.
+        - process_map:
+            {} # Omitted
 
-    # If we've reached this point then both processors succeeded.
-    - metadata:
-        operator: set
-        key: output_topic
-        value: comments_hydrated
+        # If we've reached this point then both processors succeeded.
+        - bloblang: 'meta output_topic = "comments_hydrated"'
 
-  - catch:
-    # If we reach here then a processing stage failed.
-    - metadata:
-        operator: set
-        key: output_topic
-        value: comments_retry
-
-    # Add current timestamp.
-    - metadata:
-        operator: set
-        key: last_attempted
-        value: ${!timestamp_unix()}
+    - catch:
+        # If we reach here then a processing stage failed.
+        - bloblang: |
+            meta output_topic = "comments_retry"
+            meta last_attempted = timestamp_unix()
 
 # Send resulting documents either to our hydrated topic or the retry topic.
 output:

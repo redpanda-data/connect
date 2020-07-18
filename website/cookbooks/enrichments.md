@@ -86,17 +86,17 @@ input:
 
 pipeline:
   processors:
-  - process_map:
-      premap:
-        text: article.content
-      processors:
-      - http:
-          parallel: true
-          request:
-            url: http://localhost:4197/claims
-            verb: POST
-      postmap:
-        tmp.claims: claims
+    - process_map:
+        premap:
+          text: article.content
+        processors:
+          - http:
+              parallel: true
+              request:
+                url: http://localhost:4197/claims
+                verb: POST
+        postmap:
+          tmp.claims: claims
 
 output:
   kafka:
@@ -176,14 +176,14 @@ and [`unarchive`][unarchive-proc] processors in our
     premap:
       text: article.content
     processors:
-    - archive:
-        format: json_array
-    - http:
-        request:
-          url: http://localhost:4198/hyperbole
-          verb: POST
-    - unarchive:
-        format: json_array
+      - archive:
+          format: json_array
+      - http:
+          request:
+            url: http://localhost:4198/hyperbole
+            verb: POST
+      - unarchive:
+          format: json_array
     postmap:
       tmp.hyperbole_rank: hyperbole_rank
 ```
@@ -240,11 +240,11 @@ original document at the path `article.fake_news_score`. Our
       claims: tmp.claims
       hyperbole_rank: tmp.hyperbole_rank
     processors:
-    - http:
-        parallel: true
-        request:
-          url: http://localhost:4199/fakenews
-          verb: POST
+      - http:
+          parallel: true
+          request:
+            url: http://localhost:4199/fakenews
+            verb: POST
     postmap:
       article.fake_news_score: fake_news_rank
 ```
@@ -280,9 +280,6 @@ document looking like this:
 }
 ```
 
-Since the contents of `tmp` won't be required downstream we can remove it after
-our enrichments with a [`json` processor][json-proc].
-
 ### Combining into a Workflow
 
 Since the dependency graph of our enrichments is simple it would be sufficient
@@ -316,63 +313,66 @@ input:
 
 pipeline:
   processors:
-  - process_dag:
-      claims:
-        premap:
-          text: article.content
-        processors:
-        - http:
-            parallel: true
-            request:
-              url: http://localhost:4197/claims
-              verb: POST
-        postmap:
-          tmp.claims: claims
+    - process_dag:
+        claims:
+          premap:
+            text: article.content
+          processors:
+            - http:
+                parallel: true
+                request:
+                  url: http://localhost:4197/claims
+                  verb: POST
+          postmap:
+            tmp.claims: claims
 
-      hyperbole:
-        premap:
-          text: article.content
-        processors:
-        - archive:
-            format: json_array
-        - http:
-            request:
-              url: http://localhost:4198/hyperbole
-              verb: POST
-        - unarchive:
-            format: json_array
-        postmap:
-          tmp.hyperbole_rank: hyperbole_rank
+        hyperbole:
+          premap:
+            text: article.content
+          processors:
+            - archive:
+                format: json_array
+            - http:
+                request:
+                  url: http://localhost:4198/hyperbole
+                  verb: POST
+            - unarchive:
+                format: json_array
+          postmap:
+            tmp.hyperbole_rank: hyperbole_rank
 
-      fake_news:
-        premap:
-          text: article.content
-          claims: tmp.claims
-          hyperbole_rank: tmp.hyperbole_rank
-        processors:
-        - http:
-            parallel: true
-            request:
-              url: http://localhost:4199/fakenews
-              verb: POST
-        postmap:
-          article.fake_news_score: fake_news_rank
+        fake_news:
+          premap:
+            text: article.content
+            claims: tmp.claims
+            hyperbole_rank: tmp.hyperbole_rank
+          processors:
+            - http:
+                parallel: true
+                request:
+                  url: http://localhost:4199/fakenews
+                  verb: POST
+          postmap:
+            article.fake_news_score: fake_news_rank
 
-  - catch:
-    - log:
-        fields:
-          content: "${!content()}"
-        message: "Enrichments failed due to: ${!error()}"
+    - catch:
+        - log:
+            fields:
+              content: "${!content()}"
+            message: "Enrichments failed due to: ${!error()}"
 
-  - json:
-      operator: delete
-      path: tmp
+    - bloblang: |
+        root = this
+        tmp = deleted()
 
 output:
   kafka:
     addresses: [ TODO ]
     topic: comments_hydrated
 ```
+
+Since the contents of `tmp` won't be required downstream we remove it after our
+enrichments using a [`bloblang` processor][bloblang-proc].
 
 A [`catch`][catch-proc] processor was added at the end of the pipeline which
 catches documents that failed enrichment. You can replace the log event with a
@@ -388,7 +388,7 @@ dropping the message entirely, etc. You can read more about error handling
 [catch-proc]: /docs/components/processors/catch
 [archive-proc]: /docs/components/processors/archive
 [unarchive-proc]: /docs/components/processors/unarchive
-[json-proc]: /docs/components/processors/json
+[bloblang-proc]: /docs/components/processors/bloblang
 [subproc-proc]: /docs/components/processors/subprocess
 [http-proc]: /docs/components/processors/http
 [lambda-proc]: /docs/components/processors/lambda

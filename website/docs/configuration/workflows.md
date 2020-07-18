@@ -131,16 +131,16 @@ since we aren't sure which will be present.
 
 ```yaml
 processors:
-- http:
-    parallel: true
-    request:
-      url: http://fooserve/enrich
-      verb: POST
-      headers:
-        Content-Type: application/json
-      backoff_on: [ 429 ]
-      drop_on: [ 400 ]
-      retries: 3
+  - http:
+      parallel: true
+      request:
+        url: http://fooserve/enrich
+        verb: POST
+        headers:
+          Content-Type: application/json
+        backoff_on: [ 429 ]
+        drop_on: [ 400 ]
+        retries: 3
 postmap_optional:
   tmp.enrichments.bar: bar
   tmp.enrichments.baz: baz
@@ -159,16 +159,16 @@ stage.
 premap:
   .: tmp.enrichments.bar
 processors:
-- http:
-    parallel: true
-    request:
-      url: http://barserve/enrich
-      verb: POST
-      headers:
-        Content-Type: application/json
-      backoff_on: [ 429 ]
-      drop_on: [ 400 ]
-      retries: 3
+  - http:
+      parallel: true
+      request:
+        url: http://barserve/enrich
+        verb: POST
+        headers:
+          Content-Type: application/json
+        backoff_on: [ 429 ]
+        drop_on: [ 400 ]
+        retries: 3
 postmap:
   tmp.enrichments.baz: baz
 ```
@@ -183,16 +183,16 @@ provide this target they will both be run before this stage.
 premap:
   .: tmp.enrichments.baz
 processors:
-- http:
-    parallel: true
-    request:
-      url: http://bazserve/enrich
-      verb: POST
-      headers:
-        Content-Type: application/json
-      backoff_on: [ 429 ]
-      drop_on: [ 400 ]
-      retries: 3
+  - http:
+      parallel: true
+      request:
+        url: http://bazserve/enrich
+        verb: POST
+        headers:
+          Content-Type: application/json
+        backoff_on: [ 429 ]
+        drop_on: [ 400 ]
+        retries: 3
 postmap:
   tmp.enrichments.qux: qux
 ```
@@ -210,21 +210,20 @@ from the payload, therefore we add a condition that performs this check.
 
 ```yaml
 dependencies:
-- tmp.enrichments.qux
+  - tmp.enrichments.qux
 conditions:
-- jmespath:
-    query: 'tmp.enrichments.qux == `null`'
+  - bloblang: 'this.exists("tmp.enrichments.qux")'
 processors:
-- http:
-    parallel: true
-    request:
-      url: http://recoverserve/enrich
-      verb: POST
-      headers:
-        Content-Type: application/json
-      backoff_on: [ 429 ]
-      drop_on: [ 400 ]
-      retries: 3
+  - http:
+      parallel: true
+      request:
+        url: http://recoverserve/enrich
+        verb: POST
+        headers:
+          Content-Type: application/json
+        backoff_on: [ 429 ]
+        drop_on: [ 400 ]
+        retries: 3
 postmap:
   tmp.enrichments.qux: qux
 ```
@@ -242,76 +241,75 @@ input:
 
 pipeline:
   processors:
-  - process_dag:
-      A:
-        processors:
-        - http:
-            parallel: true
-            request:
-              url: http://fooserve/enrich
-              verb: POST
-              headers:
-                Content-Type: application/json
-              backoff_on: [ 429 ]
-              drop_on: [ 400 ]
-              retries: 3
-        postmap_optional:
-          tmp.enrichments.bar: bar
-          tmp.enrichments.baz: baz
+    - process_dag:
+        A:
+          processors:
+            - http:
+                parallel: true
+                request:
+                  url: http://fooserve/enrich
+                  verb: POST
+                  headers:
+                    Content-Type: application/json
+                  backoff_on: [ 429 ]
+                  drop_on: [ 400 ]
+                  retries: 3
+          postmap_optional:
+            tmp.enrichments.bar: bar
+            tmp.enrichments.baz: baz
 
-      B:
-        premap:
-          .: tmp.enrichments.bar
-        processors:
-        - http:
-            parallel: true
-            request:
-              url: http://barserve/enrich
-              verb: POST
-              headers:
-                Content-Type: application/json
-              backoff_on: [ 429 ]
-              drop_on: [ 400 ]
-              retries: 3
-        postmap:
-          tmp.enrichments.baz: baz
+        B:
+          premap:
+            .: tmp.enrichments.bar
+          processors:
+            - http:
+                parallel: true
+                request:
+                  url: http://barserve/enrich
+                  verb: POST
+                  headers:
+                    Content-Type: application/json
+                  backoff_on: [ 429 ]
+                  drop_on: [ 400 ]
+                  retries: 3
+          postmap:
+            tmp.enrichments.baz: baz
 
-      C:
-        premap:
-          .: tmp.enrichments.baz
-        processors:
-        - http:
-            parallel: true
-            request:
-              url: http://bazserve/enrich
-              verb: POST
-              headers:
-                Content-Type: application/json
-              backoff_on: [ 429 ]
-              drop_on: [ 400 ]
-              retries: 3
-        postmap:
-          tmp.enrichments.qux: qux
+        C:
+          premap:
+            .: tmp.enrichments.baz
+          processors:
+            - http:
+                parallel: true
+                request:
+                  url: http://bazserve/enrich
+                  verb: POST
+                  headers:
+                    Content-Type: application/json
+                  backoff_on: [ 429 ]
+                  drop_on: [ 400 ]
+                  retries: 3
+          postmap:
+            tmp.enrichments.qux: qux
 
-      D:
-        dependencies:
-        - tmp.enrichments.qux
-        conditions:
-        - jmespath:
-            query: 'tmp.enrichments.qux == `null`'
-        processors:
-        - http:
-            parallel: true
-            request:
-              url: http://recoverserve/enrich
-              verb: POST
-              headers:
-                Content-Type: application/json
-              backoff_on: [ 429 ]
-              drop_on: [ 400 ]
-              retries: 3
-        postmap:
-          tmp.enrichments.qux: qux
+        D:
+          dependencies:
+            - tmp.enrichments.qux
+          conditions:
+            - bloblang: 'this.exists("tmp.enrichments.qux")'
+          processors:
+            - http:
+                parallel: true
+                request:
+                  url: http://recoverserve/enrich
+                  verb: POST
+                  headers:
+                    Content-Type: application/json
+                  backoff_on: [ 429 ]
+                  drop_on: [ 400 ]
+                  retries: 3
+          postmap:
+            tmp.enrichments.qux: qux
 
 output:
   type: stdout # TODO

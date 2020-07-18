@@ -30,7 +30,7 @@ finally maps the result back into the original payload.`,
 		Description: `
 This processor is useful for performing processors on subsections of a payload.
 For example, you could extract sections of a JSON object in order to construct
-a reduced request object for an ` + "[`http`](/docs/components/processors/http" + `
+a reduced request object for an ` + "[`http`](/docs/components/processors/http)" + `
 processor, then map the result back into a field within the original object.
 
 The order of stages of this processor are as follows:
@@ -54,9 +54,23 @@ entirely.
 
 This processor supports batched messages, but the list of processors to apply
 must NOT change the ordering (or count) of the messages (do not use a
-` + "`group_by`" + ` processor, for example).`,
+` + "`group_by`" + ` processor, for example).
+
+### Error Handling
+
+When premap, processing or postmap stages fail the underlying message will
+remain unchanged, the errors are logged, and the message is flagged as having
+failed, allowing you to use
+[standard processor error handling patterns](/docs/configuration/error_handling)
+for recovery.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("conditions", "A list of [conditions](/docs/components/conditions/about) to test against messages. If any condition fails then the message will not be mapped and processed."),
+			docs.FieldCommon("conditions", "A list of [conditions](/docs/components/conditions/about) to test against messages. If any condition fails then the message will not be mapped and processed.",
+				[]interface{}{
+					map[string]interface{}{
+						"bloblang": "document.urls.length() > 0",
+					},
+				},
+			),
 			docs.FieldCommon(
 				"premap", "A map of source to destination [paths](/docs/configuration/field_paths) used to create a new object from the original. An empty (or dot `.`) path indicates the root of the object. If a map source is not found then the message will not be processed, for optional sources use the field [`premap_optional`](#premap_optional).",
 				map[string]string{

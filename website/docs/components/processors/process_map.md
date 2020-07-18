@@ -59,7 +59,7 @@ process_map:
 
 This processor is useful for performing processors on subsections of a payload.
 For example, you could extract sections of a JSON object in order to construct
-a reduced request object for an [`http`](/docs/components/processors/http
+a reduced request object for an [`http`](/docs/components/processors/http)
 processor, then map the result back into a field within the original object.
 
 The order of stages of this processor are as follows:
@@ -85,6 +85,14 @@ This processor supports batched messages, but the list of processors to apply
 must NOT change the ordering (or count) of the messages (do not use a
 `group_by` processor, for example).
 
+### Error Handling
+
+When premap, processing or postmap stages fail the underlying message will
+remain unchanged, the errors are logged, and the message is flagged as having
+failed, allowing you to use
+[standard processor error handling patterns](/docs/configuration/error_handling)
+for recovery.
+
 ## Fields
 
 ### `conditions`
@@ -94,6 +102,13 @@ A list of [conditions](/docs/components/conditions/about) to test against messag
 
 Type: `array`  
 Default: `[]`  
+
+```yaml
+# Examples
+
+conditions:
+  - bloblang: document.urls.length() > 0
+```
 
 ### `premap`
 
