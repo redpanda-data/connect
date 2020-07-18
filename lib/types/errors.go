@@ -39,6 +39,49 @@ var (
 
 //------------------------------------------------------------------------------
 
+// BatchError represents a general error across an entire batch of messages that
+// can optionally be broken down into errors at the individual message level,
+// identified by their index in the batch.
+type BatchError struct {
+	err         error
+	indexErrors map[int]error
+}
+
+// NewBatchError creates a fresh batch error from a general error message. Under
+// normal use this root error will be provided. Once a batch error is
+// initialized it is possible to add index specific errors with AddErrAt.
+func NewBatchError(err error) *BatchError {
+	return &BatchError{
+		err:         err,
+		indexErrors: map[int]error{},
+	}
+}
+
+// AddErrAt adds an error for a message at a specific index. If an error for the
+// given index already exists it is overridden. A reference to the BatchError is
+// returned for convenient chaining.
+func (b *BatchError) AddErrAt(i int, err error) *BatchError {
+	b.indexErrors[i] = err
+	return b
+}
+
+// IndexedErrors returns a map of message indexes to their individual errors.
+func (b *BatchError) IndexedErrors() map[int]error {
+	return b.indexErrors
+}
+
+// Error implements the common error interface.
+func (b *BatchError) Error() string {
+	return b.err.Error()
+}
+
+// Unwrap returns the underlying common error.
+func (b *BatchError) Unwrap() error {
+	return b.err
+}
+
+//------------------------------------------------------------------------------
+
 // Manager errors
 var (
 	ErrInputNotFound     = errors.New("input not found")

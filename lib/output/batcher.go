@@ -1,6 +1,7 @@
 package output
 
 import (
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -142,11 +144,27 @@ func (m *Batcher) loop() {
 				if !open {
 					return
 				}
-				for _, c := range upstreamResChans {
+				// Check if the returned error (if there is one) is a
+				// *BatchError, which provides index specific error messages.
+				var berr *types.BatchError
+				if resErr := res.Error(); resErr != nil {
+					errors.As(resErr, &berr)
+				}
+				for i, c := range upstreamResChans {
+					iRes := res
+					if berr != nil {
+						// If we did receive a *BatchError then acknowledge
+						// messages that didn't error.
+						if iErr, exists := berr.IndexedErrors()[i]; exists {
+							iRes = response.NewError(iErr)
+						} else {
+							iRes = response.NewAck()
+						}
+					}
 					select {
 					case <-m.fullyCloseChan:
 						return
-					case c <- res:
+					case c <- iRes:
 					}
 				}
 			}

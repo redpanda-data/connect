@@ -296,9 +296,10 @@ func (k *Kafka) Write(msg types.Message) error {
 	msg.Iter(func(i int, p types.Part) error {
 		key := k.key.Bytes(i, msg)
 		nextMsg := &sarama.ProducerMessage{
-			Topic:   k.topic.String(i, msg),
-			Value:   sarama.ByteEncoder(p.Get()),
-			Headers: buildHeaders(version, p),
+			Topic:    k.topic.String(i, msg),
+			Value:    sarama.ByteEncoder(p.Get()),
+			Headers:  buildHeaders(version, p),
+			Metadata: i, // Store the original index for later reference.
 		}
 		if len(key) > 0 {
 			nextMsg.Key = sarama.ByteEncoder(key)
@@ -309,18 +310,29 @@ func (k *Kafka) Write(msg types.Message) error {
 
 	err := producer.SendMessages(msgs)
 	for err != nil {
-		pErrs, ok := err.(sarama.ProducerErrors)
-		if !ok {
-			k.log.Errorf("Failed to send messages: %v\n", err)
-		} else {
+		if pErrs, ok := err.(sarama.ProducerErrors); ok {
 			if len(pErrs) == 0 {
 				break
 			}
+			batchErr := types.NewBatchError(pErrs[0].Err)
 			msgs = nil
 			for _, pErr := range pErrs {
+				if mIndex, ok := pErr.Msg.Metadata.(int); ok {
+					batchErr.AddErrAt(mIndex, pErr.Err)
+				}
 				msgs = append(msgs, pErr.Msg)
 			}
-			k.log.Errorf("Failed to send '%v' messages: %v\n", len(pErrs), pErrs[0].Err)
+			if len(pErrs) == len(batchErr.IndexedErrors()) {
+				err = batchErr
+			} else {
+				// If these lengths don't match then somehow we failed to obtain
+				// the indexes from metadata, which implies something is wrong
+				// with our logic here.
+				k.log.Warnln("Unable to determine batch index of errors")
+			}
+			k.log.Errorf("Failed to send '%v' messages: %v\n", len(pErrs), err)
+		} else {
+			k.log.Errorf("Failed to send messages: %v\n", err)
 		}
 
 		tNext := k.backoff.NextBackOff()

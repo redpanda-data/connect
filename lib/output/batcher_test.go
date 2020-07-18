@@ -14,6 +14,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 //------------------------------------------------------------------------------
@@ -187,6 +189,88 @@ func TestBatcherBasic(t *testing.T) {
 	}(outTr.ResponseChan, finalErr)
 
 	if err = b.WaitForClose(time.Second * 10); err != nil {
+		t.Error(err)
+	}
+	wg.Wait()
+}
+
+func TestBatcherBatchError(t *testing.T) {
+	tInChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
+
+	policyConf := batch.NewPolicyConfig()
+	policyConf.Count = 4
+	batcher, err := batch.NewPolicy(policyConf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	out := &mockOutput{}
+
+	b := NewBatcher(batcher, out, log.Noop(), metrics.Noop())
+	require.NoError(t, b.Consume(tInChan))
+
+	tOutChan := out.ts
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		firstErr := errors.New("first error")
+		thirdErr := errors.New("third error")
+
+		// Receive first batch on output
+		var outTr types.Transaction
+		select {
+		case outTr = <-tOutChan:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out waiting for message read")
+		}
+		assert.Equal(t, [][]byte{
+			[]byte("foo0"),
+			[]byte("foo1"),
+			[]byte("foo2"),
+			[]byte("foo3"),
+		}, message.GetAllBytes(outTr.Payload))
+
+		batchErr := types.NewBatchError(errors.New("foo")).
+			AddErrAt(0, firstErr).AddErrAt(2, thirdErr)
+
+		select {
+		case outTr.ResponseChan <- response.NewError(batchErr):
+		case <-time.After(time.Second):
+			t.Error("timed out")
+		}
+	}()
+
+	for i := 0; i < 4; i++ {
+		data := []byte(fmt.Sprintf("foo%v", i))
+		select {
+		case tInChan <- types.NewTransaction(message.New([][]byte{data}), resChan):
+		case <-time.After(time.Second):
+			t.Fatal("timed out")
+		}
+	}
+	for i := 0; i < 4; i++ {
+		var act error
+		select {
+		case actRes := <-resChan:
+			act = actRes.Error()
+		case <-time.After(time.Second):
+			t.Fatal("timed out")
+		}
+		switch i {
+		case 0:
+			assert.EqualError(t, act, "first error")
+		case 2:
+			assert.EqualError(t, act, "third error")
+		default:
+			assert.Nil(t, act)
+		}
+	}
+
+	b.CloseAsync()
+
+	if err = b.WaitForClose(time.Second * 5); err != nil {
 		t.Error(err)
 	}
 	wg.Wait()
