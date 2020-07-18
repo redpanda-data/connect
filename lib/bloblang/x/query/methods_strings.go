@@ -2,6 +2,8 @@ package query
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -164,6 +166,132 @@ func encodeMethod(target Function, args ...interface{}) (Function, error) {
 		}
 	default:
 		return nil, fmt.Errorf("unrecognized encoding type: %v", args[0])
+	}
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var res string
+		switch t := v.(type) {
+		case string:
+			res, err = schemeFn([]byte(t))
+		case []byte:
+			res, err = schemeFn(t)
+		default:
+			err = NewTypeError(v, ValueString)
+		}
+		return res, err
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"decrypt_aes", true, decryptAESMethod,
+	ExpectNArgs(3),
+	ExpectAllStringArgs(),
+)
+
+func decryptAESMethod(target Function, args ...interface{}) (Function, error) {
+	key := []byte(args[1].(string))
+	iv := []byte(args[2].(string))
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	var schemeFn func([]byte) ([]byte, error)
+	switch args[0].(string) {
+	case "ctr":
+		schemeFn = func(b []byte) ([]byte, error) {
+			plaintext := make([]byte, len(b))
+			stream := cipher.NewCTR(block, iv)
+			stream.XORKeyStream(plaintext, b)
+			return plaintext, nil
+		}
+	case "ofb":
+		schemeFn = func(b []byte) ([]byte, error) {
+			plaintext := make([]byte, len(b))
+			stream := cipher.NewOFB(block, iv)
+			stream.XORKeyStream(plaintext, b)
+			return plaintext, nil
+		}
+	case "cbc":
+		schemeFn = func(b []byte) ([]byte, error) {
+			if len(b)%aes.BlockSize != 0 {
+				return nil, fmt.Errorf("ciphertext is not a multiple of the block size")
+			}
+			stream := cipher.NewCBCDecrypter(block, iv)
+			stream.CryptBlocks(b, b)
+			return b, nil
+		}
+	default:
+		return nil, fmt.Errorf("unrecognized decryption type: %v", args[0])
+	}
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var res []byte
+		switch t := v.(type) {
+		case string:
+			res, err = schemeFn([]byte(t))
+		case []byte:
+			res, err = schemeFn(t)
+		default:
+			err = NewTypeError(v, ValueString)
+		}
+		return res, err
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+var _ = RegisterMethod(
+	"encrypt_aes", true, encryptAESMethod,
+	ExpectNArgs(3),
+	ExpectAllStringArgs(),
+)
+
+func encryptAESMethod(target Function, args ...interface{}) (Function, error) {
+	key := []byte(args[1].(string))
+	iv := []byte(args[2].(string))
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	var schemeFn func([]byte) (string, error)
+	switch args[0].(string) {
+	case "ctr":
+		schemeFn = func(b []byte) (string, error) {
+			ciphertext := make([]byte, len(b))
+			stream := cipher.NewCTR(block, iv)
+			stream.XORKeyStream(ciphertext, b)
+			return string(ciphertext), nil
+		}
+	case "ofb":
+		schemeFn = func(b []byte) (string, error) {
+			ciphertext := make([]byte, len(b))
+			stream := cipher.NewOFB(block, iv)
+			stream.XORKeyStream(ciphertext, b)
+			return string(ciphertext), nil
+		}
+	case "cbc":
+		schemeFn = func(b []byte) (string, error) {
+			if len(b)%aes.BlockSize != 0 {
+				return "", fmt.Errorf("plaintext is not a multiple of the block size")
+			}
+
+			ciphertext := make([]byte, len(b))
+			stream := cipher.NewCBCEncrypter(block, iv)
+			stream.CryptBlocks(ciphertext, b)
+			return string(ciphertext), nil
+		}
+	default:
+		return nil, fmt.Errorf("unrecognized encryption type: %v", args[0])
 	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)

@@ -452,6 +452,28 @@ encoded = value.encode("hex")
 # Out: {"encoded":"68656c6c6f20776f726c64"}
 ```
 
+### `encrypt_aes`
+
+Encrypts a string or byte array target according to a chosen AES encryption method and returns a string result. The algorithms require a key and an initialization vector / nonce. Available schemes are: `ctr`, `ofb`, `cbc`.
+
+```coffee
+encrypted = value.encrypt_aes("ctr", "key", "vector").encode("hex")
+
+# In:  {"value":"hello world!"}
+# Out: {"encrypted":"84e9b31ff7400bdf80be7254"}
+```
+
+### `decrypt_aes`
+
+Decrypts an encrypted string or byte array target according to a chosen AES encryption method and returns the result as a byte array. The algorithms require a key and an initialization vector / nonce. Available schemes are: `ctr`, `ofb`, `cbc`.
+
+```coffee
+decrypted = value.decode("hex").decrypt_aes("ctr", "key", "vector").string()
+
+# In:  {"value":"84e9b31ff7400bdf80be7254"}
+# Out: {"decrypted":"hello world!"}
+```
+
 ### `escape_html`
 
 Escapes a string so that special characters like `<` to become `&lt;`. It escapes only five such characters: `<`, `>`, `&`, `'` and `"` so that it can be safely placed within an HTML entity.
