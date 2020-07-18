@@ -78,6 +78,9 @@ test:
 	@go run $(GO_FLAGS) ./cmd/benthos/main.go lint ./config/...
 	@go run $(GO_FLAGS) ./cmd/benthos/main.go test ./config/test/...
 
+test-wasm-build:
+	@GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o ./target/wasm_test ./cmd/benthos
+
 test-race:
 	@go test $(GO_FLAGS) -timeout 300s -race ./...
 
