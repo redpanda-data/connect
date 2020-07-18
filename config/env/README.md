@@ -620,6 +620,9 @@ OUTPUT_ELASTICSEARCH_MAX_RETRIES                      = 0
 OUTPUT_ELASTICSEARCH_PIPELINE
 OUTPUT_ELASTICSEARCH_SNIFF                            = true
 OUTPUT_ELASTICSEARCH_TIMEOUT                          = 5s
+OUTPUT_ELASTICSEARCH_TLS_ENABLED                      = false
+OUTPUT_ELASTICSEARCH_TLS_ROOT_CAS_FILE
+OUTPUT_ELASTICSEARCH_TLS_SKIP_CERT_VERIFY             = false
 OUTPUT_ELASTICSEARCH_TYPE                             = doc
 OUTPUT_ELASTICSEARCH_URLS                             = http://localhost:9200
 OUTPUT_FILES_PATH                                     = ${!count("files")}-${!timestamp_unix_nano()}.txt

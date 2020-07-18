@@ -2,6 +2,7 @@ package writer
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
+	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/cenkalti/backoff"
 	"github.com/olivere/elastic"
 	aws "github.com/olivere/elastic/aws/v4"
@@ -42,6 +44,7 @@ type ElasticsearchConfig struct {
 	Pipeline       string               `json:"pipeline" yaml:"pipeline"`
 	Type           string               `json:"type" yaml:"type"`
 	Timeout        string               `json:"timeout" yaml:"timeout"`
+	TLS            btls.Config          `json:"tls" yaml:"tls"`
 	Auth           auth.BasicAuthConfig `json:"basic_auth" yaml:"basic_auth"`
 	AWS            OptionalAWSConfig    `json:"aws" yaml:"aws"`
 	MaxInFlight    int                  `json:"max_in_flight" yaml:"max_in_flight"`
@@ -68,6 +71,7 @@ func NewElasticsearchConfig() ElasticsearchConfig {
 		Pipeline:    "",
 		Type:        "doc",
 		Timeout:     "5s",
+		TLS:         btls.NewConfig(),
 		Auth:        auth.NewBasicAuthConfig(),
 		AWS: OptionalAWSConfig{
 			Enabled: false,
@@ -93,6 +97,7 @@ type Elasticsearch struct {
 
 	backoff backoff.BackOff
 	timeout time.Duration
+	tlsConf *tls.Config
 
 	idStr             field.Expression
 	indexStr          field.Expression
@@ -145,6 +150,12 @@ func NewElasticsearch(conf ElasticsearchConfig, log log.Modular, stats metrics.T
 		return nil, err
 	}
 
+	if conf.TLS.Enabled {
+		var err error
+		if e.tlsConf, err = conf.TLS.Get(); err != nil {
+			return nil, err
+		}
+	}
 	return &e, nil
 }
 
@@ -164,9 +175,6 @@ func (e *Elasticsearch) Connect() error {
 
 	opts := []elastic.ClientOptionFunc{
 		elastic.SetURL(e.urls...),
-		elastic.SetHttpClient(&http.Client{
-			Timeout: e.timeout,
-		}),
 		elastic.SetSniff(e.sniff),
 		elastic.SetHealthcheck(e.healthcheck),
 	}
@@ -176,6 +184,21 @@ func (e *Elasticsearch) Connect() error {
 			e.conf.Auth.Username, e.conf.Auth.Password,
 		))
 	}
+
+	if e.conf.TLS.Enabled {
+		opts = append(opts, elastic.SetHttpClient(&http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: e.tlsConf,
+			},
+			Timeout: e.timeout,
+		}))
+
+	} else {
+		opts = append(opts, elastic.SetHttpClient(&http.Client{
+			Timeout: e.timeout,
+		}))
+	}
+
 	if e.conf.AWS.Enabled {
 		tsess, err := e.conf.AWS.GetSession()
 		if err != nil {

@@ -729,6 +729,10 @@ output:
           pipeline: ${OUTPUT_ELASTICSEARCH_PIPELINE}
           sniff: ${OUTPUT_ELASTICSEARCH_SNIFF:true}
           timeout: ${OUTPUT_ELASTICSEARCH_TIMEOUT:5s}
+          tls:
+            enabled: ${OUTPUT_ELASTICSEARCH_TLS_ENABLED:false}
+            root_cas_file: ${OUTPUT_ELASTICSEARCH_TLS_ROOT_CAS_FILE}
+            skip_cert_verify: ${OUTPUT_ELASTICSEARCH_TLS_SKIP_CERT_VERIFY:false}
           type: ${OUTPUT_ELASTICSEARCH_TYPE:doc}
           urls:
             - ${OUTPUT_ELASTICSEARCH_URLS:http://localhost:9200}

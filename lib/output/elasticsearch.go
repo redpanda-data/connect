@@ -11,6 +11,7 @@ import (
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
+	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
@@ -46,6 +47,7 @@ false for connections to succeed.`,
 			docs.FieldAdvanced("sniff", "Prompts Benthos to sniff for brokers to connect to when establishing a connection."),
 			docs.FieldAdvanced("healthcheck", "Whether to enable healthchecks."),
 			docs.FieldAdvanced("timeout", "The maximum time to wait before abandoning a request (and trying again)."),
+			tls.FieldSpec(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		}.Merge(retries.FieldSpecs()).Add(
 			auth.BasicAuthFieldSpec(),

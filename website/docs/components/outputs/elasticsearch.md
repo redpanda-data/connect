@@ -58,6 +58,11 @@ output:
     sniff: true
     healthcheck: true
     timeout: 5s
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      root_cas_file: ""
+      client_certs: []
     max_in_flight: 1
     max_retries: 0
     backoff:
@@ -187,6 +192,58 @@ The maximum time to wait before abandoning a request (and trying again).
 
 Type: `string`  
 Default: `"5s"`  
+
+### `tls`
+
+Custom TLS settings can be used to override system defaults.
+
+
+Type: `object`  
+Default: `{"client_certs":[],"enabled":false,"root_cas_file":"","skip_cert_verify":false}`  
+
+### `tls.enabled`
+
+Whether custom TLS settings are enabled.
+
+
+Type: `bool`
+Default: `false`
+
+### `tls.skip_cert_verify`
+
+Whether to skip server side certificate verification.
+
+
+Type: `bool`
+Default: `false`
+
+### `tls.root_cas_file`
+
+The path of a root certificate authority file to use.
+
+
+Type: `string`
+Default: `""`
+
+### `tls.client_certs`
+
+A list of client certificates to use.
+
+
+Type: `array`
+Default: `[]`
+
+```yaml
+# Examples
+
+client_certs:
+  - cert: foo
+    key: bar
+
+client_certs:
+  - cert_file: ./example.pem
+    key_file: ./example.key
+```
 
 ### `max_in_flight`
 
