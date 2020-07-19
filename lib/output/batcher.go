@@ -1,7 +1,6 @@
 package output
 
 import (
-	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -146,10 +145,16 @@ func (m *Batcher) loop() {
 				}
 				// Check if the returned error (if there is one) is a
 				// *BatchError, which provides index specific error messages.
+				//
+				// NOTE: Disabled until we can guarantee pipeline.Processors
+				// is able to strip this error when the batch is chopped and
+				// mutated.
 				var berr *types.BatchError
-				if resErr := res.Error(); resErr != nil {
-					errors.As(resErr, &berr)
-				}
+				/*
+					if resErr := res.Error(); resErr != nil {
+						errors.As(resErr, &berr)
+					}
+				*/
 				for i, c := range upstreamResChans {
 					iRes := res
 					if berr != nil {
