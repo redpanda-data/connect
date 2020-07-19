@@ -40,7 +40,7 @@ type KafkaConfig struct {
 	MaxInFlight    int         `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config `json:",inline" yaml:",inline"`
 	Batching       batch.PolicyConfig `json:"batching" yaml:"batching"`
-	Headers        map[string]string  `json:"headers" yaml:"headers"`
+	StaticHeaders  map[string]string  `json:"static_headers" yaml:"static_headers"`
 
 	// TODO: V4 remove this.
 	RoundRobinPartitions bool `json:"round_robin_partitions" yaml:"round_robin_partitions"`
@@ -100,7 +100,7 @@ type Kafka struct {
 	compression sarama.CompressionCodec
 	partitioner sarama.PartitionerConstructor
 
-	headers map[string]field.Expression
+	staticHeaders map[string]string
 
 	connMut sync.RWMutex
 }
@@ -127,10 +127,10 @@ func NewKafka(conf KafkaConfig, mgr types.Manager, log log.Modular, stats metric
 		mgr:   mgr,
 		stats: stats,
 
-		conf:        conf,
-		compression: compression,
-		partitioner: partitioner,
-		headers:     make(map[string]field.Expression),
+		conf:          conf,
+		compression:   compression,
+		partitioner:   partitioner,
+		staticHeaders: conf.StaticHeaders,
 	}
 
 	if k.key, err = field.New(conf.Key); err != nil {
@@ -138,11 +138,6 @@ func NewKafka(conf KafkaConfig, mgr types.Manager, log log.Modular, stats metric
 	}
 	if k.topic, err = field.New(conf.Topic); err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
-	}
-	for hname, hexpression := range conf.Headers {
-		if k.headers[hname], err = field.New(hexpression); err != nil {
-			return nil, fmt.Errorf("failed to parse header expression: %v", err)
-		}
 	}
 
 	if tout := conf.Timeout; len(tout) > 0 {
@@ -221,8 +216,7 @@ func concatenateHeaders(systemHeaders, userHeaders []sarama.RecordHeader) []sara
 	}
 	out := make([]sarama.RecordHeader, 0, len(systemHeaders)+len(userHeaders))
 	out = append(out, systemHeaders...)
-	out = append(out, userHeaders...)
-	return out
+	return append(out, userHeaders...)
 }
 
 //------------------------------------------------------------------------------
@@ -247,14 +241,14 @@ func buildSystemHeaders(version sarama.KafkaVersion, part types.Part) []sarama.R
 
 //------------------------------------------------------------------------------
 
-func buildUserDefinedHeaders(version sarama.KafkaVersion, i int, msg types.Message, k *Kafka) []sarama.RecordHeader {
+func buildUserDefinedHeaders(version sarama.KafkaVersion, staticHeaders map[string]string) []sarama.RecordHeader {
 	if version.IsAtLeast(sarama.V0_11_0_0) {
-		out := make([]sarama.RecordHeader, 0, len(k.headers))
+		out := make([]sarama.RecordHeader, 0, len(staticHeaders))
 
-		for hname, hvalue := range k.headers {
+		for name, value := range staticHeaders {
 			out = append(out, sarama.RecordHeader{
-				Key:   []byte(hname),
-				Value: hvalue.Bytes(i, msg),
+				Key:   []byte(name),
+				Value: []byte(value),
 			})
 		}
 
@@ -333,13 +327,14 @@ func (k *Kafka) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
+	userDefinedHeaders := buildUserDefinedHeaders(version, k.staticHeaders)
 	msgs := []*sarama.ProducerMessage{}
 	msg.Iter(func(i int, p types.Part) error {
 		key := k.key.Bytes(i, msg)
 		nextMsg := &sarama.ProducerMessage{
 			Topic:    k.topic.String(i, msg),
 			Value:    sarama.ByteEncoder(p.Get()),
-			Headers:  concatenateHeaders(buildSystemHeaders(version, p), buildUserDefinedHeaders(version, i, msg, k)),
+			Headers:  concatenateHeaders(buildSystemHeaders(version, p), userDefinedHeaders),
 			Metadata: i, // Store the original index for later reference.
 		}
 		if len(key) > 0 {

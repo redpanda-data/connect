@@ -29,9 +29,7 @@ acknowledgement from all replicas or just a single broker.
 Both the ` + "`key` and `topic`" + ` fields can be dynamically set using
 function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 When sending batched messages these interpolations are performed per message
-part.
-
-The value of header under ` + "`headers`" + ` can be given in the same format as under ` + "`key` and `topic`.",
+part.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.Kafka, conf.Kafka.Batching)
 		},
@@ -47,12 +45,12 @@ The value of header under ` + "`headers`" + ` can be given in the same format as
 			docs.FieldCommon("key", "The key to publish messages with.").SupportsInterpolation(false),
 			docs.FieldCommon("partitioner", "The partitioning algorithm to use.").HasOptions("fnv1a_hash", "murmur2_hash", "random", "round_robin"),
 			docs.FieldCommon("compression", "The compression algorithm to use.").HasOptions("none", "snappy", "lz4", "gzip"),
+			docs.FieldCommon("static_headers", "A map of static headers that are send to outpu topic.", map[string]string{"first-static-header": "value-1", "second-static-header": "value-2"}),
 			docs.FieldCommon("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 			docs.FieldAdvanced("ack_replicas", "Ensure that messages have been copied across all replicas before acknowledging receipt."),
 			docs.FieldAdvanced("max_msg_bytes", "The maximum size in bytes of messages sent to the target topic."),
 			docs.FieldAdvanced("timeout", "The maximum period of time to wait for message sends before abandoning the request and retrying."),
 			docs.FieldAdvanced("target_version", "The version of the Kafka protocol to use."),
-			docs.FieldCommon("headers", "A map of headers that are send to outpu topic.", map[string]string{"first-header": "direct-value", "second-header": "${! json(\"a\") }"}),
 			batch.FieldSpec(),
 		}, retries.FieldSpecs()...),
 	}
