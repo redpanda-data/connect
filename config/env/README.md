@@ -44,6 +44,7 @@ All variables within the config are listed in this document.
 ```
 HTTP_ADDRESS         = 0.0.0.0:4195
 HTTP_DEBUG_ENDPOINTS = false
+HTTP_ENABLED         = true
 HTTP_READ_TIMEOUT    = 5s
 HTTP_ROOT_PATH       = /benthos
 ```

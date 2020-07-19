@@ -8,8 +8,8 @@ for deployment as an AWS Lambda function.
 
 It uses the same configuration format as a regular Benthos instance, except it
 is read from the environment variable `BENTHOS_CONFIG` (YAML format). Also, the
-`input` and `buffer` sections are ignored as messages are inserted via function
-invocations.
+`http`, `input` and `buffer` sections are ignored as the service wide HTTP
+server is not used, and messages are inserted via function invocations.
 
 If the `output` section is omitted in your config then the result of the
 processing pipeline is returned back to the caller, otherwise the resulting data

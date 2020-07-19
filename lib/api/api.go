@@ -21,6 +21,7 @@ import (
 // Config contains the configuration fields for the Benthos API.
 type Config struct {
 	Address        string `json:"address" yaml:"address"`
+	Enabled        bool   `json:"enabled" yaml:"enabled"`
 	ReadTimeout    string `json:"read_timeout" yaml:"read_timeout"`
 	RootPath       string `json:"root_path" yaml:"root_path"`
 	DebugEndpoints bool   `json:"debug_endpoints" yaml:"debug_endpoints"`
@@ -30,6 +31,7 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		Address:        "0.0.0.0:4195",
+		Enabled:        true,
 		ReadTimeout:    "5s",
 		RootPath:       "/benthos",
 		DebugEndpoints: false,
@@ -43,6 +45,9 @@ type Type struct {
 	conf         Config
 	endpoints    map[string]string
 	endpointsMut sync.Mutex
+
+	ctx    context.Context
+	cancel func()
 
 	handlers    map[string]http.HandlerFunc
 	handlersMut sync.RWMutex
@@ -80,6 +85,7 @@ func New(
 		mux:       handler,
 		server:    server,
 	}
+	t.ctx, t.cancel = context.WithCancel(context.Background())
 
 	handlePing := func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("pong"))
@@ -214,11 +220,16 @@ func (t *Type) RegisterEndpoint(path, desc string, handler http.HandlerFunc) {
 
 // ListenAndServe launches the API and blocks until the server closes or fails.
 func (t *Type) ListenAndServe() error {
+	if !t.conf.Enabled {
+		<-t.ctx.Done()
+		return nil
+	}
 	return t.server.ListenAndServe()
 }
 
 // Shutdown attempts to close the http server.
 func (t *Type) Shutdown(ctx context.Context) error {
+	t.cancel()
 	return t.server.Shutdown(ctx)
 }
 

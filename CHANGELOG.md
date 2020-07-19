@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Added TLS fields to `elasticsearch` output.
 - New Bloblang methods `encrypt_aes` and `decrypt_aes` added.
 - New field `static_headers` added to the `kafka` output.
+- New field `enabled` added to the `http` config section.
 
 ### Fixed
 

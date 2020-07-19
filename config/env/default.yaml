@@ -3,6 +3,7 @@
 http:
   address: ${HTTP_ADDRESS:0.0.0.0:4195}
   debug_endpoints: ${HTTP_DEBUG_ENDPOINTS:false}
+  enabled: ${HTTP_ENABLED:true}
   read_timeout: ${HTTP_READ_TIMEOUT:5s}
   root_path: ${HTTP_ROOT_PATH:/benthos}
 input:

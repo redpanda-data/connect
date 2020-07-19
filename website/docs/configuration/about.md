@@ -28,9 +28,10 @@ input:
 
 pipeline:
   processors:
-  - type: jmespath
-    jmespath:
-      query: '{ message: @, meta: { link_count: length(links) } }'
+  - type: bloblang
+    bloblang: |
+      message = this
+      meta.link_count = links.length()
 
 output:
   type: s3
@@ -59,9 +60,10 @@ buffer:
 
 pipeline:
   processors:
-  - type: jmespath
-    jmespath:
-      query: '{ message: @, meta: { link_count: length(links) } }'
+  - type: bloblang
+    bloblang: |
+      message = this
+      meta.link_count = links.length()
 
 output:
   type: s3
@@ -124,8 +126,9 @@ input:
 
 pipeline:
   processors:
-  - jmespath:
-      query: '{ message: @, meta: { link_count: length(links) } }'
+  - bloblang: |
+      message = this
+      meta.link_count = links.length()
 
 output:
   s3:
@@ -268,11 +271,11 @@ configuration examples for any types, and you can do this from the binary using
 the `create` subcommand.
 
 If, for example, we wanted to generate a config with a websocket input, a Kafka
-output and a JMESPath processor in the middle, we could do it with the following
+output and a Bloblang processor in the middle, we could do it with the following
 command:
 
 ```yaml
-benthos create websocket/jmespath/kafka
+benthos create websocket/bloblang/kafka
 ```
 
 > If you need a gentle reminder as to which components Benthos offers you can see those as well with `benthos list`.
