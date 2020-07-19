@@ -118,7 +118,7 @@ func (a *AzureBlobStorage) WriteWithContext(wctx context.Context, msg types.Mess
 	ctx, cancel := context.WithTimeout(wctx, a.timeout)
 	defer cancel()
 
-	return msg.Iter(func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		c, err := a.getContainer(a.container.String(i, msg))
 		if err != nil {
 			return err

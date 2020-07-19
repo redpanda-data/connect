@@ -106,7 +106,7 @@ func (h *HDFS) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return msg.Iter(func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		path := h.path.String(i, msg)
 		filePath := filepath.Join(h.conf.Directory, path)
 

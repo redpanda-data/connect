@@ -132,7 +132,7 @@ func (r *RedisList) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return msg.Iter(func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		if err := client.RPush(r.conf.Key, p.Get()).Err(); err != nil {
 			r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)

@@ -187,6 +187,10 @@ func walkJSON(root interface{}) *dynamodb.AttributeValue {
 		return &dynamodb.AttributeValue{
 			N: aws.String(strconv.Itoa(v)),
 		}
+	case int64:
+		return &dynamodb.AttributeValue{
+			N: aws.String(strconv.Itoa(int(v))),
+		}
 	case bool:
 		return &dynamodb.AttributeValue{
 			BOOL: aws.Bool(v),

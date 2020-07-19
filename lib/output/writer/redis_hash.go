@@ -161,7 +161,7 @@ func (r *RedisHash) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return msg.Iter(func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		key := r.keyStr.String(i, msg)
 		fields := map[string]interface{}{}
 		if r.conf.WalkMetadata {

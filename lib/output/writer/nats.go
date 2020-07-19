@@ -100,7 +100,7 @@ func (n *NATS) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return msg.Iter(func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		subject := n.subjectStr.String(i, msg)
 		n.log.Debugf("Writing NATS message to topic %s", subject)
 		err := conn.Publish(subject, p.Get())

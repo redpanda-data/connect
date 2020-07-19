@@ -180,7 +180,7 @@ func (a *AMQP1) WriteWithContext(ctx context.Context, msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return msg.Iter(func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		m := amqp.NewMessage(p.Get())
 		err := s.Send(ctx, m)
 		if err == amqp.ErrTimeout {

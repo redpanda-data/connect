@@ -213,7 +213,7 @@ func (a *AMQP) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return msg.Iter(func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		bindingKey := strings.Replace(a.key.String(i, msg), "/", ".", -1)
 		msgType := strings.Replace(a.msgType.String(i, msg), "/", ".", -1)
 

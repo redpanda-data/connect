@@ -77,7 +77,7 @@ func (f *Files) WriteWithContext(ctx context.Context, msg types.Message) error {
 
 // Write attempts to write message contents to a directory as files.
 func (f *Files) Write(msg types.Message) error {
-	return msg.Iter(func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		path := f.path.String(i, msg)
 
 		err := os.MkdirAll(filepath.Dir(path), os.FileMode(0777))

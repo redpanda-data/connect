@@ -120,7 +120,7 @@ func (r *RedisPubSub) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return msg.Iter(func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		channel := r.channelStr.String(i, msg)
 		if err := client.Publish(channel, p.Get()).Err(); err != nil {
 			r.disconnect()

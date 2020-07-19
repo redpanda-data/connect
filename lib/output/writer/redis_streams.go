@@ -119,7 +119,7 @@ func (r *RedisStreams) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return msg.Iter(func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		values := map[string]interface{}{}
 		p.Metadata().Iter(func(k, v string) error {
 			values[k] = v

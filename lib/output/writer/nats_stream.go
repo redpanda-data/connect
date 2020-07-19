@@ -113,7 +113,7 @@ func (n *NATSStream) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return msg.Iter(func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		err := conn.Publish(n.conf.Subject, p.Get())
 		if err == stan.ErrConnectionClosed {
 			conn.Close()

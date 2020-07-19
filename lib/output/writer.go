@@ -1,6 +1,7 @@
 package output
 
 import (
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -127,7 +128,7 @@ func (w *Writer) loop() {
 		latency, err := w.latencyMeasuringWrite(ts.Payload)
 
 		// If our writer says it is not connected.
-		if err == types.ErrNotConnected {
+		if errors.Is(err, types.ErrNotConnected) {
 			mLostConn.Incr(1)
 			atomic.StoreInt32(&w.isConnected, 0)
 
@@ -135,7 +136,7 @@ func (w *Writer) loop() {
 			for atomic.LoadInt32(&w.running) == 1 {
 				if err = w.writer.Connect(); err != nil {
 					// Close immediately if our writer is closed.
-					if err == types.ErrTypeClosed {
+					if errors.Is(err, types.ErrTypeClosed) {
 						return
 					}
 
@@ -144,7 +145,7 @@ func (w *Writer) loop() {
 					if !throt.Retry() {
 						return
 					}
-				} else if latency, err = w.latencyMeasuringWrite(ts.Payload); err != types.ErrNotConnected {
+				} else if latency, err = w.latencyMeasuringWrite(ts.Payload); !errors.Is(err, types.ErrNotConnected) {
 					atomic.StoreInt32(&w.isConnected, 1)
 					mConn.Incr(1)
 					break
@@ -155,7 +156,7 @@ func (w *Writer) loop() {
 		}
 
 		// Close immediately if our writer is closed.
-		if err == types.ErrTypeClosed {
+		if errors.Is(err, types.ErrTypeClosed) {
 			return
 		}
 

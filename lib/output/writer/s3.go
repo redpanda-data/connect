@@ -146,7 +146,7 @@ func (a *AmazonS3) WriteWithContext(wctx context.Context, msg types.Message) err
 	)
 	defer cancel()
 
-	return msg.Iter(func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		metadata := map[string]*string{}
 		p.Metadata().Iter(func(k, v string) error {
 			metadata[k] = aws.String(v)

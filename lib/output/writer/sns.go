@@ -105,7 +105,7 @@ func (a *SNS) WriteWithContext(wctx context.Context, msg types.Message) error {
 	ctx, cancel := context.WithTimeout(wctx, a.tout)
 	defer cancel()
 
-	return msg.Iter(func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		message := &sns.PublishInput{
 			TopicArn: aws.String(a.conf.TopicArn),
 			Message:  aws.String(string(p.Get())),

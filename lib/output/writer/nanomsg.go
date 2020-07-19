@@ -178,7 +178,7 @@ func (s *Nanomsg) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return msg.Iter(func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		return socket.Send(p.Get())
 	})
 }
