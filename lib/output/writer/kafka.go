@@ -66,6 +66,7 @@ func NewKafkaConfig() KafkaConfig {
 		Timeout:              "5s",
 		AckReplicas:          false,
 		TargetVersion:        sarama.V1_0_0_0.String(),
+		StaticHeaders:        map[string]string{},
 		TLS:                  btls.NewConfig(),
 		SASL:                 sasl.NewConfig(),
 		MaxInFlight:          1,
@@ -210,17 +211,6 @@ func strToPartitioner(str string) (sarama.PartitionerConstructor, error) {
 
 //------------------------------------------------------------------------------
 
-func concatenateHeaders(systemHeaders, userHeaders []sarama.RecordHeader) []sarama.RecordHeader {
-	if systemHeaders == nil {
-		return nil
-	}
-	out := make([]sarama.RecordHeader, 0, len(systemHeaders)+len(userHeaders))
-	out = append(out, systemHeaders...)
-	return append(out, userHeaders...)
-}
-
-//------------------------------------------------------------------------------
-
 func buildSystemHeaders(version sarama.KafkaVersion, part types.Part) []sarama.RecordHeader {
 	if version.IsAtLeast(sarama.V0_11_0_0) {
 		out := []sarama.RecordHeader{}
@@ -334,7 +324,7 @@ func (k *Kafka) Write(msg types.Message) error {
 		nextMsg := &sarama.ProducerMessage{
 			Topic:    k.topic.String(i, msg),
 			Value:    sarama.ByteEncoder(p.Get()),
-			Headers:  concatenateHeaders(buildSystemHeaders(version, p), userDefinedHeaders),
+			Headers:  append(buildSystemHeaders(version, p), userDefinedHeaders...),
 			Metadata: i, // Store the original index for later reference.
 		}
 		if len(key) > 0 {

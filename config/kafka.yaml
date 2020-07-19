@@ -80,6 +80,7 @@ output:
       token_cache: ""
       token_key: ""
       user: ""
+    static_headers: {}
     target_version: 1.0.0
     timeout: 5s
     tls:

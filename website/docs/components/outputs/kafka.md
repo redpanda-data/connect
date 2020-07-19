@@ -37,6 +37,7 @@ output:
     key: ""
     partitioner: fnv1a_hash
     compression: none
+    static_headers: {}
     max_in_flight: 1
     batching:
       count: 1
@@ -70,6 +71,7 @@ output:
     key: ""
     partitioner: fnv1a_hash
     compression: none
+    static_headers: {}
     max_in_flight: 1
     ack_replicas: false
     max_msg_bytes: 1000000
@@ -299,6 +301,22 @@ The compression algorithm to use.
 Type: `string`  
 Default: `"none"`  
 Options: `none`, `snappy`, `lz4`, `gzip`.
+
+### `static_headers`
+
+An optional map of static headers that should be added to messages in addition to metadata.
+
+
+Type: `object`  
+Default: `{}`  
+
+```yaml
+# Examples
+
+static_headers:
+  first-static-header: value-1
+  second-static-header: value-2
+```
 
 ### `max_in_flight`
 

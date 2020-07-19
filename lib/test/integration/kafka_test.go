@@ -226,6 +226,7 @@ func testKafkaSinglePart(address string, t *testing.T) {
 	outConf.TargetVersion = "2.1.0"
 	outConf.Addresses = []string{address}
 	outConf.Topic = topic
+	outConf.StaticHeaders["static_one"] = "baz"
 
 	mInput, mOutput, err := createKafkaInputOutput(inConf, outConf)
 	if err != nil {
@@ -284,6 +285,9 @@ func testKafkaSinglePart(address string, t *testing.T) {
 			}
 			if act = actM.Get(0).Metadata().Get("root_foo"); act != "bar2" {
 				t.Errorf("Wrong metadata returned: %v != bar2", act)
+			}
+			if act = actM.Get(0).Metadata().Get("static_one"); act != "baz" {
+				t.Errorf("Wrong metadata returned: %v != baz", act)
 			}
 		}
 		if err = ackFn(ctx, response.NewAck()); err != nil {
