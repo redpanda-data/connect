@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.22.0 - 2020-07-19
+
 ### Added
 
 - Added TLS fields to `elasticsearch` output.
