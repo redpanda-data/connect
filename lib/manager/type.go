@@ -51,6 +51,54 @@ func NewConfig() Config {
 	}
 }
 
+// AddFrom takes another Config and adds all of its resources to itself. If
+// there are any resource name collisions an error is returned.
+func (c *Config) AddFrom(extra *Config) error {
+	for k, v := range extra.Inputs {
+		if _, exists := c.Inputs[k]; exists {
+			return fmt.Errorf("resource input name collision: %v", k)
+		}
+		c.Inputs[k] = v
+	}
+	for k, v := range extra.Conditions {
+		if _, exists := c.Conditions[k]; exists {
+			return fmt.Errorf("resource condition name collision: %v", k)
+		}
+		c.Conditions[k] = v
+	}
+	for k, v := range extra.Processors {
+		if _, exists := c.Processors[k]; exists {
+			return fmt.Errorf("resource processor name collision: %v", k)
+		}
+		c.Processors[k] = v
+	}
+	for k, v := range extra.Outputs {
+		if _, exists := c.Outputs[k]; exists {
+			return fmt.Errorf("resource output name collision: %v", k)
+		}
+		c.Outputs[k] = v
+	}
+	for k, v := range extra.Caches {
+		if _, exists := c.Caches[k]; exists {
+			return fmt.Errorf("resource cache name collision: %v", k)
+		}
+		c.Caches[k] = v
+	}
+	for k, v := range extra.RateLimits {
+		if _, exists := c.RateLimits[k]; exists {
+			return fmt.Errorf("resource ratelimit name collision: %v", k)
+		}
+		c.RateLimits[k] = v
+	}
+	for k, v := range extra.Plugins {
+		if _, exists := c.Plugins[k]; exists {
+			return fmt.Errorf("resource plugin name collision: %v", k)
+		}
+		c.Plugins[k] = v
+	}
+	return nil
+}
+
 // AddExamples inserts example caches and conditions if none exist in the
 // config.
 func AddExamples(c *Config) {

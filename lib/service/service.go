@@ -19,6 +19,7 @@ import (
 	strmmgr "github.com/Jeffail/benthos/v3/lib/stream/manager"
 	"github.com/Jeffail/benthos/v3/lib/tracer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -72,7 +73,7 @@ func OptOnManagerInit(fn ManagerInitFunc) func() {
 
 //------------------------------------------------------------------------------
 
-func readConfig(path string) (lints []string) {
+func readConfig(path string, resourcesPaths []string) (lints []string) {
 	// A list of default config paths to check for if not explicitly defined
 	defaultPaths := []string{
 		"/benthos.yaml",
@@ -101,6 +102,27 @@ func readConfig(path string) (lints []string) {
 		}
 	}
 
+	for _, rPath := range resourcesPaths {
+		resourceBytes, err := config.ReadWithJSONPointers(rPath, true)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Resource configuration file read error: %v\n", err)
+			os.Exit(1)
+		}
+		extraMgrWrapper := struct {
+			Manager manager.Config `yaml:"resources"`
+		}{
+			Manager: manager.NewConfig(),
+		}
+		if err = yaml.Unmarshal(resourceBytes, &extraMgrWrapper); err != nil {
+			fmt.Fprintf(os.Stderr, "Resource configuration file read error: %v\n", err)
+			os.Exit(1)
+		}
+		if err = conf.Manager.AddFrom(&extraMgrWrapper.Manager); err != nil {
+			fmt.Fprintf(os.Stderr, "Resource configuration file read error: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
 	return
 }
 
@@ -108,11 +130,12 @@ func readConfig(path string) (lints []string) {
 
 func cmdService(
 	confPath string,
+	resourcesPaths []string,
 	strict bool,
 	streamsMode bool,
 	streamsConfigs []string,
 ) int {
-	lints := readConfig(confPath)
+	lints := readConfig(confPath, resourcesPaths)
 	if strict && len(lints) > 0 {
 		for _, lint := range lints {
 			fmt.Fprintln(os.Stderr, lint)

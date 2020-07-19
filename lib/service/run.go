@@ -165,6 +165,11 @@ func Run() {
 			Value:   "",
 			Usage:   "a path to a configuration file",
 		},
+		&cli.StringSliceFlag{
+			Name:    "resources",
+			Aliases: []string{"r"},
+			Usage:   "BETA FEATURE: parse extra resources from a file, which can be referenced the same as resources defined in the main config",
+		},
 		&cli.BoolFlag{
 			Name:  "chilled",
 			Value: false,
@@ -194,7 +199,7 @@ func Run() {
 				cli.ShowAppHelp(c)
 				os.Exit(1)
 			}
-			os.Exit(cmdService(c.String("config"), !c.Bool("chilled"), false, nil))
+			os.Exit(cmdService(c.String("config"), c.StringSlice("resources"), !c.Bool("chilled"), false, nil))
 			return nil
 		},
 		Commands: []*cli.Command{
@@ -208,7 +213,7 @@ func Run() {
 
    benthos -c ./config.yaml echo | less`[4:],
 				Action: func(c *cli.Context) error {
-					readConfig(c.String("config"))
+					readConfig(c.String("config"), c.StringSlice("resources"))
 					outConf, err := conf.Sanitised()
 					if err == nil {
 						var configYAML []byte
@@ -243,7 +248,7 @@ func Run() {
    For more information check out the docs at:
    https://benthos.dev/docs/guides/streams_mode/about`[4:],
 				Action: func(c *cli.Context) error {
-					os.Exit(cmdService(c.String("config"), !c.Bool("chilled"), true, c.Args().Slice()))
+					os.Exit(cmdService(c.String("config"), c.StringSlice("resources"), !c.Bool("chilled"), true, c.Args().Slice()))
 					return nil
 				},
 			},
@@ -334,7 +339,7 @@ func Run() {
 		}
 
 		deprecatedExecute(*configPath, testSuffix)
-		os.Exit(cmdService(*configPath, false, false, nil))
+		os.Exit(cmdService(*configPath, nil, false, false, nil))
 		return nil
 	}
 

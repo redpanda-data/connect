@@ -1,6 +1,7 @@
 package test
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -8,6 +9,8 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/processor"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func initTestFiles(files map[string]string) (string, error) {
@@ -167,4 +170,110 @@ pipeline:
 	if exp, act := "HELLO WORLD", string(msgs[0].Get(0).Get()); exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
+}
+
+func TestProcessorsExtraResources(t *testing.T) {
+	files := map[string]string{
+		"resources1.yaml": `
+resources:
+  caches:
+    barcache:
+      memory: {}
+`,
+		"resources2.yaml": `
+resources:
+  caches:
+    bazcache:
+      memory: {}
+`,
+		"config1.yaml": `
+resources:
+  caches:
+    foocache:
+      memory: {}
+
+pipeline:
+  processors:
+  - cache:
+      cache: foocache
+      operator: set
+      key: defaultkey
+      value: foo
+  - cache:
+      cache: barcache
+      operator: set
+      key: defaultkey
+      value: bar
+  - cache:
+      cache: bazcache
+      operator: set
+      key: defaultkey
+      value: bar
+`,
+	}
+
+	testDir, err := initTestFiles(files)
+	require.NoError(t, err)
+	defer os.RemoveAll(testDir)
+
+	provider := NewProcessorsProvider(
+		filepath.Join(testDir, "config1.yaml"),
+		OptAddResourcesPaths([]string{
+			filepath.Join(testDir, "resources1.yaml"),
+			filepath.Join(testDir, "resources2.yaml"),
+		}),
+	)
+	procs, err := provider.Provide("/pipeline/processors", nil)
+	require.NoError(t, err)
+	assert.Len(t, procs, 3)
+}
+
+func TestProcessorsExtraResourcesError(t *testing.T) {
+	files := map[string]string{
+		"resources1.yaml": `
+resources:
+  caches:
+    barcache:
+      memory: {}
+`,
+		"resources2.yaml": `
+resources:
+  caches:
+    barcache:
+      memory: {}
+`,
+		"config1.yaml": `
+resources:
+  caches:
+    foocache:
+      memory: {}
+
+pipeline:
+  processors:
+  - cache:
+      cache: foocache
+      operator: set
+      key: defaultkey
+      value: foo
+  - cache:
+      cache: barcache
+      operator: set
+      key: defaultkey
+      value: bar
+`,
+	}
+
+	testDir, err := initTestFiles(files)
+	require.NoError(t, err)
+	defer os.RemoveAll(testDir)
+
+	provider := NewProcessorsProvider(
+		filepath.Join(testDir, "config1.yaml"),
+		OptAddResourcesPaths([]string{
+			filepath.Join(testDir, "resources1.yaml"),
+			filepath.Join(testDir, "resources2.yaml"),
+		}),
+	)
+	_, err = provider.Provide("/pipeline/processors", nil)
+	require.EqualError(t, err, fmt.Sprintf("failed to merge resources from '%v/resources2.yaml': resource cache name collision: barcache", testDir))
 }

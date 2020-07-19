@@ -49,11 +49,11 @@ func CliCommand(testSuffix string) *cli.Command {
 				logConf := log.NewConfig()
 				logConf.LogLevel = logLevel
 				logger := log.New(os.Stdout, logConf)
-				if RunAllWithLogger(c.Args().Slice(), testSuffix, true, logger) {
+				if runAll(c.Args().Slice(), testSuffix, true, logger, c.StringSlice("resources")) {
 					os.Exit(0)
 				}
 			} else {
-				if RunAll(c.Args().Slice(), testSuffix, true) {
+				if runAll(c.Args().Slice(), testSuffix, true, log.Noop(), c.StringSlice("resources")) {
 					os.Exit(0)
 				}
 			}

@@ -365,13 +365,13 @@ func deprecatedExecute(configPath string, testSuffix string) {
 	}
 
 	if depFlags.lintConfig {
-		lints := readConfig(configPath)
+		lints := readConfig(configPath, nil)
 		cmdDeprecatedLintConfig(lints)
 	}
 
 	// If the user wants the configuration to be printed we do so and then exit.
 	if depFlags.showConfigJSON || depFlags.showConfigYAML {
-		readConfig(configPath)
+		readConfig(configPath, nil)
 		cmdDeprecatedPrintConfig(&conf, depFlags.examples, depFlags.showAll, depFlags.showConfigJSON)
 	}
 
@@ -405,6 +405,6 @@ func deprecatedExecute(configPath string, testSuffix string) {
 		if len(depFlags.streamsDir) > 0 {
 			dirs = append(dirs, depFlags.streamsDir)
 		}
-		os.Exit(cmdService(configPath, depFlags.strictConfig, depFlags.streamsMode, dirs))
+		os.Exit(cmdService(configPath, nil, depFlags.strictConfig, depFlags.streamsMode, dirs))
 	}
 }

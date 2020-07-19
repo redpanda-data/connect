@@ -1,77 +1,88 @@
-http:
-  address: 0.0.0.0:4195
-
-input:
-  broker:
-    inputs:
-      - http_client:
-          url: https://api.github.com/repos/Jeffail/benthos/releases/latest
-          rate_limit: github_reqs
-        processors:
-          - jmespath:
-              query: |
-                map(&{
-                  dist: name,
-                  download_count: download_count
-                }, assets)
-          - unarchive:
-              format: json_array
-          - process_field:
-              path: dist
-              processors:
-                - text:
-                    operator: replace_regexp
-                    arg: '^benthos-?((lambda_)|_)[^_]+_([^\.]+).*'
-                    value: $2$3
-          - filter_parts:
-              jmespath:
-                query: "dist != 'checksums'"
-
-      - http_client:
-          url: https://hub.docker.com/v2/repositories/jeffail/benthos/
-          rate_limit: docker_reqs
-        processors:
-          - jmespath:
-              query: |
-                {
-                  dist: 'docker',
-                  download_count: pull_count
-                }
-
 pipeline:
+  threads: 20
   processors:
-    - for_each:
-      - resource: metric.proc
-
-output:
-  type: drop
+  - resource: scrape_third_party_downloads
+  - catch:
+      - bloblang: root = error()
+  - bloblang: result = content().string()
 
 resources:
-  rate_limits:
-    github_reqs:
-      local:
-        count: 1
-        interval: 300s
-
-    docker_reqs:
-      local:
-        count: 1
-        interval: 300s
-
   processors:
-    metric.proc:
+    scrape_third_party_downloads:
+      try:
+      # Grab docker dl count
+      - bloblang: root = ""
+      - http:
+          request:
+            url: https://hub.docker.com/v2/repositories/jeffail/benthos/
+            verb: GET
+            retries: 0
+      - bloblang: |
+          type = "gauge"
+          source = "docker"
+          dist = "docker"
+          download_count = pull_count
+      - resource: set_metrics
+
+      # Grab github latest release dl count
+      - bloblang: root = ""
+      - http:
+          request:
+            url: https://api.github.com/repos/Jeffail/benthos/releases/latest
+            verb: GET
+            retries: 0
+      - bloblang: |
+          root = assets.map_each(match {
+            "type":"gauge",
+            "source":"github",
+            "dist": name.re_replace("^benthos-?((lambda_)|_)[0-9\\.]+_([^\\.]+).*", "$2$3"),
+            "download_count": download_count
+          } {
+            dist != "checksums" => this
+            _ => deleted()
+          })
+      - unarchive:
+          format: json_array
+      - resource: set_metrics
+
+    set_metrics:
+      try:
+        - switch:
+           - condition:
+               bloblang: type == "gauge"
+             processors:
+               - resource: metric.gauge
+           - processors:
+               - resource: metric.counter
+
+    metric.gauge:
       metric:
         labels:
-          dist: "${!json_field:dist}"
-        path: "downloads"
+          dist: ${!json("dist")}
+          source: ${!json("source")}
+        path: BenthosDownloadGauge
         type: gauge
-        value: "${!json_field:download_count}"
+        value: ${!json("download_count")}
+
+    metric.counter:
+      metric:
+        labels:
+          version: ${!json("version")}
+          dist: ${!json("dist")}
+          source: ${!json("source")}
+        path: BenthosDownload
+        type: counter
 
 metrics:
   rename:
     by_regexp:
-    - pattern: '^resource\.processor\.metric\.proc\.(.*)$'
-      value: "$1"
+    - pattern: '^resource\.processor\.metric\.(gauge|counter)\.(.*)$'
+      value: "$2"
     child:
-      prometheus:
-        prefix: benthos
+      whitelist:
+        paths:
+          - BenthosDownloadGauge
+          - BenthosDownload
+        child:
+          prometheus:
+            prefix: benthos

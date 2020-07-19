@@ -28,17 +28,21 @@ func ExampleDefinition() Definition {
 // ExecuteWithLogger attempts to run a test definition on a target config file,
 // with a logger. Returns an array of test failures or an error.
 func (d Definition) ExecuteWithLogger(filepath string, logger log.Modular) ([]CaseFailure, error) {
-	return d.execute(filepath, logger)
+	return d.execute(filepath, nil, logger)
 }
 
 // Execute attempts to run a test definition on a target config file. Returns
 // an array of test failures or an error.
 func (d Definition) Execute(filepath string) ([]CaseFailure, error) {
-	return d.execute(filepath, log.Noop())
+	return d.execute(filepath, nil, log.Noop())
 }
 
-func (d Definition) execute(filepath string, logger log.Modular) ([]CaseFailure, error) {
-	procsProvider := NewProcessorsProvider(filepath, OptProcessorsProviderSetLogger(logger))
+func (d Definition) execute(filepath string, resourcesPaths []string, logger log.Modular) ([]CaseFailure, error) {
+	procsProvider := NewProcessorsProvider(
+		filepath,
+		OptAddResourcesPaths(resourcesPaths),
+		OptProcessorsProviderSetLogger(logger),
+	)
 	if d.Parallel {
 		// Warm the cache of processor configs.
 		for _, c := range d.Cases {

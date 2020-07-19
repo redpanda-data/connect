@@ -23,8 +23,9 @@ type cachedConfig struct {
 // ProcessorsProvider consumes a Benthos config and, given a JSON Pointer,
 // extracts and constructs the target processors from the config file.
 type ProcessorsProvider struct {
-	targetPath    string
-	cachedConfigs map[string]cachedConfig
+	targetPath     string
+	resourcesPaths []string
+	cachedConfigs  map[string]cachedConfig
 
 	logger log.Modular
 }
@@ -43,6 +44,13 @@ func NewProcessorsProvider(targetPath string, opts ...func(*ProcessorsProvider))
 }
 
 //------------------------------------------------------------------------------
+
+// OptAddResourcesPaths adds paths to files where resources should be parsed.
+func OptAddResourcesPaths(paths []string) func(*ProcessorsProvider) {
+	return func(p *ProcessorsProvider) {
+		p.resourcesPaths = paths
+	}
+}
 
 // OptProcessorsProviderSetLogger sets the logger used by tested components.
 func OptProcessorsProviderSetLogger(logger log.Modular) func(*ProcessorsProvider) {
@@ -122,6 +130,25 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 	if err = yaml.Unmarshal(configBytes, &mgrWrapper); err != nil {
 		return confs, fmt.Errorf("failed to parse config file '%v': %v", p.targetPath, err)
 	}
+
+	for _, path := range p.resourcesPaths {
+		resourceBytes, err := config.ReadWithJSONPointers(path, true)
+		if err != nil {
+			return confs, fmt.Errorf("failed to parse resources config file '%v': %v", path, err)
+		}
+		extraMgrWrapper := struct {
+			Manager manager.Config `yaml:"resources"`
+		}{
+			Manager: manager.NewConfig(),
+		}
+		if err = yaml.Unmarshal(resourceBytes, &extraMgrWrapper); err != nil {
+			return confs, fmt.Errorf("failed to parse resources config file '%v': %v", path, err)
+		}
+		if err = mgrWrapper.Manager.AddFrom(&extraMgrWrapper.Manager); err != nil {
+			return confs, fmt.Errorf("failed to merge resources from '%v': %v", path, err)
+		}
+	}
+
 	confs.mgr = mgrWrapper.Manager
 
 	var root interface{}

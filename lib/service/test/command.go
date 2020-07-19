@@ -155,17 +155,17 @@ func Run(path, testSuffix string, lint bool) bool {
 // a config file, a config files test definition file, a directory, or the
 // wildcard pattern './...'.
 func RunAll(paths []string, testSuffix string, lint bool) bool {
-	return runAll(paths, testSuffix, lint, log.Noop())
+	return runAll(paths, testSuffix, lint, log.Noop(), nil)
 }
 
 // RunAllWithLogger executes the test command for a slice of paths. The path can
 // either be a config file, a config files test definition file, a directory, or
 // the wildcard pattern './...'.
 func RunAllWithLogger(paths []string, testSuffix string, lint bool, logger log.Modular) bool {
-	return runAll(paths, testSuffix, lint, logger)
+	return runAll(paths, testSuffix, lint, logger, nil)
 }
 
-func runAll(paths []string, testSuffix string, lint bool, logger log.Modular) bool {
+func runAll(paths []string, testSuffix string, lint bool, logger log.Modular, resourcesPaths []string) bool {
 	targets := map[string]Definition{}
 
 	for _, path := range paths {
@@ -209,7 +209,7 @@ func runAll(paths []string, testSuffix string, lint bool, logger log.Modular) bo
 				return false
 			}
 		}
-		if failCases, err = targets[target].ExecuteWithLogger(target, logger); err != nil {
+		if failCases, err = targets[target].execute(target, resourcesPaths, logger); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to execute test target '%v': %v\n", target, err)
 			return false
 		}
