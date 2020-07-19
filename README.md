@@ -40,7 +40,7 @@ at-least-once delivery without needing to persist messages during transit.
 
 ## Supported Sources & Sinks
 
-[AWS (DynamoDB, Kinesis, S3, SQS, SNS)][aws], [Elasticsearch][elasticsearch] (output only), File, [GCP (pub/sub)][gcp], [HDFS][hdfs], HTTP(S), [Kafka][kafka], [Memcached][memcached] (output only), [MQTT][mqtt], [Nanomsg][nanomsg], [NATS][nats], [NATS Streaming][natsstreaming], [NSQ][nsq], [RabbitMQ (AMQP 0.91)][rabbitmq], [Redis (streams, list, pubsub, hashes)][redis], Stdin/Stdout, TCP & UDP, Websocket and [ZMQ4][zmq].
+[AWS (DynamoDB, Kinesis, S3, SQS, SNS)][aws], [Elasticsearch][elasticsearch] (output only), File, [GCP (pub/sub)][gcp], [HDFS][hdfs], HTTP (server and client, including websockets), [Kafka][kafka], [Memcached][memcached] (output only), [MQTT][mqtt], [Nanomsg][nanomsg], [NATS][nats], [NATS Streaming][natsstreaming], [NSQ][nsq], [RabbitMQ (AMQP 0.91)][rabbitmq], [Redis (streams, list, pubsub, hashes)][redis], Stdin/Stdout, TCP & UDP, sockets and [ZMQ4][zmq].
 
 If you want more [then say](https://github.com/Jeffail/benthos/issues/new).
 
