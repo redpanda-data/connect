@@ -8,7 +8,7 @@
 const fs = require('fs-extra');
 const globby = require('globby');
 const path = require('path');
-const {parse, normalizeUrl, aliasedSitePath} = require('@docusaurus/utils');
+const {parseMarkdownString, normalizeUrl, aliasedSitePath} = require('@docusaurus/utils');
 
 module.exports = {
   truncate: truncate,
@@ -48,7 +48,7 @@ async function generateCookbookPosts(
       const guideFileName = path.basename(relativeSource);
 
       const fileString = await fs.readFile(source, 'utf-8');
-      const {frontMatter, excerpt} = parse(fileString);
+      const {frontMatter, excerpt} = parseMarkdownString(fileString);
 
       let date;
       // Extract date and title from filename.
