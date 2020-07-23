@@ -993,6 +993,15 @@ output:
           url: ${OUTPUT_SQS_URL}
         stdout:
           delimiter: ${OUTPUT_STDOUT_DELIMITER}
+        table_storage:
+          insert_type: ${OUTPUT_TABLE_STORAGE_INSERT_TYPE:INSERT}
+          max_in_flight: ${OUTPUT_TABLE_STORAGE_MAX_IN_FLIGHT:1}
+          partition_key: ${OUTPUT_TABLE_STORAGE_PARTITION_KEY}
+          row_key: ${OUTPUT_TABLE_STORAGE_ROW_KEY}
+          storage_access_key: ${OUTPUT_TABLE_STORAGE_STORAGE_ACCESS_KEY}
+          storage_account: ${OUTPUT_TABLE_STORAGE_STORAGE_ACCOUNT}
+          table_name: ${OUTPUT_TABLE_STORAGE_TABLE_NAME}
+          timeout: ${OUTPUT_TABLE_STORAGE_TIMEOUT:5s}
         tcp:
           address: ${OUTPUT_TCP_ADDRESS:localhost:4194}
         type: ${OUTPUT_TYPE:dynamic}
