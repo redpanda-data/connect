@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - New (BETA) `csv` input for consuming CSV files.
 - New (BETA) Azure `table_storage` output.
 - New `parse_csv` Bloblang method.
+- New `throw` Bloblang function.
 
 ### Fixed
 

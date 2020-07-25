@@ -22,6 +22,22 @@ func TestFunctions(t *testing.T) {
 		vars     map[string]interface{}
 		index    int
 	}{
+		"check throw function 1": {
+			input: `throw("foo")`,
+			err:   "foo",
+		},
+		"check throw function 2": {
+			input:  `throw("foo").catch("bar")`,
+			output: "bar",
+		},
+		"check throw function 3": {
+			input:  `if false { throw("foo") } else { "bar" }`,
+			output: "bar",
+		},
+		"check throw function 4": {
+			input: `if true { throw("foo") } else { "bar" }`,
+			err:   "foo",
+		},
 		"check var function": {
 			input:  `var("foo").uppercase()`,
 			output: "FOOBAR",

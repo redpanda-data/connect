@@ -276,6 +276,15 @@ var _ = RegisterFunction("timestamp_utc", true, func(args ...interface{}) (Funct
 
 //------------------------------------------------------------------------------
 
+var _ = RegisterFunction("throw", true, func(args ...interface{}) (Function, error) {
+	msg := args[0].(string)
+	return closureFn(func(_ FunctionContext) (interface{}, error) {
+		return nil, errors.New(msg)
+	}), nil
+}, ExpectNArgs(1), ExpectStringArg(0))
+
+//------------------------------------------------------------------------------
+
 var _ = RegisterFunction("uuid_v4", false, uuidFunction)
 
 func uuidFunction(...interface{}) (Function, error) {

@@ -157,6 +157,25 @@ The equivalent of `timestamp` except the time is printed as UTC instead of the l
 received_at = timestamp_utc("15:04:05")
 ```
 
+### `throw`
+
+Returns an error similar to a regular mapping error. This is useful for abandoning a mapping entirely given certain conditions.
+
+```coffee
+doc.type = match {
+  this.exists("header.id") => "foo"
+  this.exists("body.data") => "bar"
+  _ => throw("unknown type")
+}
+doc.contents = (body.content | thing.body)
+
+# In:  {"header":{"id":"first"},"thing":{"body":"hello world"}}
+# Out: {"doc":{"contents":"hello world","type":"foo"}}
+
+# In:  {"nothing":"matches"}
+# Out: Error("unknown type")
+```
+
 ### `uuid_v4`
 
 Generates a new RFC-4122 UUID each time it is invoked and prints a string representation.
