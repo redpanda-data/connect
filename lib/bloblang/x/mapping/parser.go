@@ -344,22 +344,6 @@ func varNameParser() parser.Type {
 	)
 }
 
-func pathLiteralParser() parser.Type {
-	return parser.JoinStringPayloads(
-		parser.UntilFail(
-			parser.OneOf(
-				parser.InRange('a', 'z'),
-				parser.InRange('A', 'Z'),
-				parser.InRange('0', '9'),
-				parser.InRange('*', '+'),
-				parser.Char('.'),
-				parser.Char('_'),
-				parser.Char('~'),
-			),
-		),
-	)
-}
-
 func importParser(maps map[string]query.Function) parser.Type {
 	p := parser.Sequence(
 		parser.Term("import"),
@@ -538,13 +522,30 @@ func letStatementParser() parser.Type {
 	}
 }
 
+func nameLiteralParser() parser.Type {
+	return parser.JoinStringPayloads(
+		parser.UntilFail(
+			parser.OneOf(
+				parser.InRange('a', 'z'),
+				parser.InRange('A', 'Z'),
+				parser.InRange('0', '9'),
+				parser.InRange('*', '+'),
+				parser.Char('.'),
+				parser.Char('_'),
+				parser.Char('-'),
+				parser.Char('~'),
+			),
+		),
+	)
+}
+
 func metaStatementParser(disabled bool) parser.Type {
 	p := parser.Sequence(
 		parser.Term("meta"),
 		parser.SpacesAndTabs(),
 		parser.Optional(parser.OneOf(
 			parser.QuotedString(),
-			pathLiteralParser(),
+			nameLiteralParser(),
 		)),
 		parser.Optional(parser.SpacesAndTabs()),
 		parser.Char('='),
@@ -580,15 +581,90 @@ func metaStatementParser(disabled bool) parser.Type {
 	}
 }
 
+func pathLiteralSegmentParser() parser.Type {
+	return parser.JoinStringPayloads(
+		parser.UntilFail(
+			parser.OneOf(
+				parser.InRange('a', 'z'),
+				parser.InRange('A', 'Z'),
+				parser.InRange('0', '9'),
+				parser.InRange('*', '+'),
+				parser.Char('_'),
+				parser.Char('-'),
+				parser.Char('~'),
+			),
+		),
+	)
+}
+
+func quotedPathLiteralSegmentParser() parser.Type {
+	pattern := parser.QuotedString()
+
+	return func(input []rune) parser.Result {
+		res := pattern(input)
+		if res.Err != nil {
+			return res
+		}
+
+		rawSegment, _ := res.Payload.(string)
+
+		// Convert into a JSON pointer style path string.
+		rawSegment = strings.Replace(rawSegment, "~", "~0", -1)
+		rawSegment = strings.Replace(rawSegment, ".", "~1", -1)
+
+		return parser.Result{
+			Payload:   rawSegment,
+			Remaining: res.Remaining,
+		}
+	}
+}
+
+func pathParser() parser.Type {
+	p := parser.Sequence(
+		parser.Expect(pathLiteralSegmentParser(), "target-path"),
+		parser.Optional(
+			parser.Sequence(
+				parser.Char('.'),
+				parser.Delimited(
+					parser.Expect(
+						parser.OneOf(
+							quotedPathLiteralSegmentParser(),
+							pathLiteralSegmentParser(),
+						),
+						"target-path",
+					),
+					parser.Char('.'),
+				),
+			),
+		),
+	)
+
+	return func(input []rune) parser.Result {
+		res := p(input)
+		if res.Err != nil {
+			return res
+		}
+
+		sequence := res.Payload.([]interface{})
+		path := []string{sequence[0].(string)}
+
+		if sequence[1] != nil {
+			pathParts := sequence[1].([]interface{})[1].([]interface{})[0].([]interface{})
+			for _, p := range pathParts {
+				path = append(path, gabs.DotPathToSlice(p.(string))...)
+			}
+		}
+
+		return parser.Result{
+			Payload:   path,
+			Remaining: res.Remaining,
+		}
+	}
+}
+
 func plainMappingStatementParser() parser.Type {
 	p := parser.Sequence(
-		parser.Expect(
-			parser.OneOf(
-				parser.QuotedString(),
-				pathLiteralParser(),
-			),
-			"target-path",
-		),
+		pathParser(),
 		parser.SpacesAndTabs(),
 		parser.Char('='),
 		parser.SpacesAndTabs(),
@@ -601,10 +677,12 @@ func plainMappingStatementParser() parser.Type {
 			return res
 		}
 		resSlice := res.Payload.([]interface{})
-		path := gabs.DotPathToSlice(resSlice[0].(string))
+		path := resSlice[0].([]string)
+
 		if len(path) > 0 && path[0] == "root" {
 			path = path[1:]
 		}
+
 		return parser.Result{
 			Payload: mappingStatement{
 				assignment: &jsonAssignment{

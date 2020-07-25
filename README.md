@@ -6,7 +6,7 @@
 
 Benthos is a high performance and resilient stream processor, able to connect
 various [sources][inputs] and [sinks][outputs] in a range of brokering patterns
-and perform arbitrary [actions, transformations and filters][processors] on
+and perform [hydration, enrichments, transformations and filters][processors] on
 payloads. It is easy to deploy and monitor, and ready to drop into your pipeline
 either as a static binary or a docker image.
 

@@ -102,7 +102,7 @@ func cloneGeneric(root interface{}) (interface{}, error) {
 		return cloneCheekyMap(t)
 	case []interface{}:
 		return cloneSlice(t)
-	case string, json.Number, int, int64, float64, bool, json.RawMessage:
+	case string, []byte, json.Number, uint64, int, int64, float64, bool, json.RawMessage:
 		return t, nil
 	default:
 		// Oops, this means we have 'dirty' types within the JSON object. Our

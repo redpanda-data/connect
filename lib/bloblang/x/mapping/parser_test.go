@@ -140,6 +140,11 @@ import "%v"
 foo = bar.apply("foo")`, goodMapFile),
 			err: fmt.Sprintf(`line 3 char 1: map name collisions from import '%v': [foo]`, goodMapFile),
 		},
+		"quotes at root": {
+			mapping: `
+"root.something" = 5 + 2`,
+			err: "line 2 char 1: expected one of: [import map let meta target-path]",
+		},
 	}
 
 	for name, test := range tests {
@@ -334,7 +339,7 @@ meta bar = 5 + 2`,
 		"quoted paths": {
 			mapping: `
 meta "foo bar" = "hello world"
-"root.bar baz.test" = 5 + 2`,
+root."bar baz".test = 5 + 2`,
 			input: []part{
 				{Content: `this isn't json`},
 			},

@@ -515,6 +515,28 @@ func TestFunctionQueries(t *testing.T) {
 				return &v
 			}(),
 		},
+		"field quoted literal": {
+			input:  `this."foo.bar"`,
+			output: `test`,
+			value: func() *interface{} {
+				var v interface{} = map[string]interface{}{
+					"foo.bar": "test",
+				}
+				return &v
+			}(),
+		},
+		"field quoted literal extended": {
+			input:  `this."foo.bar".baz`,
+			output: `test`,
+			value: func() *interface{} {
+				var v interface{} = map[string]interface{}{
+					"foo.bar": map[string]interface{}{
+						"baz": "test",
+					},
+				}
+				return &v
+			}(),
+		},
 		"map literal": {
 			input:  `json().foo`,
 			output: `hello world`,

@@ -65,6 +65,19 @@ meta bar = "hello world"
 new_doc.bar = meta("kafka_topic")
 ```
 
+### Special Characters in Paths
+
+Quotes can be used to describe sections of a field path that contain whitespace, dots or other special characters:
+
+```coffee
+# Use quotes around a path segment in order to include whitespace or dots within
+# the path
+root."foo.bar".baz = this."buz bev".fub
+
+# In:  {"buz bev":{"fub":"hello world"}}
+# Out: {"foo.bar":{"baz":"hello world"}}
+```
+
 ## Coalesce
 
 The pipe operator (`|`) used within brackets allows you to coalesce values within a path:
@@ -281,7 +294,20 @@ Since `catch` is a method it can also be attached to bracketed map expressions:
 thing = ( foo > bar && baz.contains("wut") ).catch(false)
 ```
 
-The `catch` method only acts on errors, sometimes it's also useful to set a fall back value when a query returns `null` in which case the [method `or`][methods.or] can be used the same way:
+And one of the more powerful features of Bloblang is that a single `catch` method at the end of a chain of methods can recover errors from any method in the chain:
+
+```coffee
+# Catch errors caused by:
+# - foo not existing
+# - foo not being a string
+# - an element from split foo not being a valid JSON string
+things = foo.split(",").map_each( this.parse_json() ).catch([])
+
+# Specifically catch a JSON parse error
+things = foo.split(",").map_each( this.parse_json().catch({}) )
+```
+
+However, the `catch` method only acts on errors, sometimes it's also useful to set a fall back value when a query returns `null` in which case the [method `or`][methods.or] can be used the same way:
 
 ```coffee
 # Map "default" if either the element index 5 does not exist, or the underlying
