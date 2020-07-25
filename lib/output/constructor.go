@@ -12,7 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/config"
 	"github.com/Jeffail/benthos/v3/lib/x/docs"
-	yaml "gopkg.in/yaml.v3"
+	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -91,6 +91,7 @@ const (
 	TypeSTDOUT          = "stdout"
 	TypeSwitch          = "switch"
 	TypeSyncResponse    = "sync_response"
+	TypeTableStorage    = "table_storage"
 	TypeTCP             = "tcp"
 	TypeTry             = "try"
 	TypeUDP             = "udp"
@@ -103,53 +104,54 @@ const (
 
 // Config is the all encompassing configuration struct for all output types.
 type Config struct {
-	Type            string                        `json:"type" yaml:"type"`
-	AMQP            writer.AMQPConfig             `json:"amqp" yaml:"amqp"`
-	AMQP09          writer.AMQPConfig             `json:"amqp_0_9" yaml:"amqp_0_9"`
-	AMQP1           writer.AMQP1Config            `json:"amqp_1" yaml:"amqp_1"`
-	BlobStorage     writer.AzureBlobStorageConfig `json:"blob_storage" yaml:"blob_storage"`
-	Broker          BrokerConfig                  `json:"broker" yaml:"broker"`
-	Cache           writer.CacheConfig            `json:"cache" yaml:"cache"`
-	Drop            writer.DropConfig             `json:"drop" yaml:"drop"`
-	DropOnError     DropOnErrorConfig             `json:"drop_on_error" yaml:"drop_on_error"`
-	Dynamic         DynamicConfig                 `json:"dynamic" yaml:"dynamic"`
-	DynamoDB        writer.DynamoDBConfig         `json:"dynamodb" yaml:"dynamodb"`
-	Elasticsearch   writer.ElasticsearchConfig    `json:"elasticsearch" yaml:"elasticsearch"`
-	File            FileConfig                    `json:"file" yaml:"file"`
-	Files           writer.FilesConfig            `json:"files" yaml:"files"`
-	GCPPubSub       writer.GCPPubSubConfig        `json:"gcp_pubsub" yaml:"gcp_pubsub"`
-	HDFS            writer.HDFSConfig             `json:"hdfs" yaml:"hdfs"`
-	HTTPClient      writer.HTTPClientConfig       `json:"http_client" yaml:"http_client"`
-	HTTPServer      HTTPServerConfig              `json:"http_server" yaml:"http_server"`
-	Inproc          InprocConfig                  `json:"inproc" yaml:"inproc"`
-	Kafka           writer.KafkaConfig            `json:"kafka" yaml:"kafka"`
-	Kinesis         writer.KinesisConfig          `json:"kinesis" yaml:"kinesis"`
-	KinesisFirehose writer.KinesisFirehoseConfig  `json:"kinesis_firehose" yaml:"kinesis_firehose"`
-	MQTT            writer.MQTTConfig             `json:"mqtt" yaml:"mqtt"`
-	Nanomsg         writer.NanomsgConfig          `json:"nanomsg" yaml:"nanomsg"`
-	NATS            writer.NATSConfig             `json:"nats" yaml:"nats"`
-	NATSStream      writer.NATSStreamConfig       `json:"nats_stream" yaml:"nats_stream"`
-	NSQ             writer.NSQConfig              `json:"nsq" yaml:"nsq"`
-	Plugin          interface{}                   `json:"plugin,omitempty" yaml:"plugin,omitempty"`
-	RedisHash       writer.RedisHashConfig        `json:"redis_hash" yaml:"redis_hash"`
-	RedisList       writer.RedisListConfig        `json:"redis_list" yaml:"redis_list"`
-	RedisPubSub     writer.RedisPubSubConfig      `json:"redis_pubsub" yaml:"redis_pubsub"`
-	RedisStreams    writer.RedisStreamsConfig     `json:"redis_streams" yaml:"redis_streams"`
-	Resource        string                        `json:"resource" yaml:"resource"`
-	Retry           RetryConfig                   `json:"retry" yaml:"retry"`
-	S3              writer.AmazonS3Config         `json:"s3" yaml:"s3"`
-	SNS             writer.SNSConfig              `json:"sns" yaml:"sns"`
-	SQS             writer.AmazonSQSConfig        `json:"sqs" yaml:"sqs"`
-	STDOUT          STDOUTConfig                  `json:"stdout" yaml:"stdout"`
-	Switch          SwitchConfig                  `json:"switch" yaml:"switch"`
-	SyncResponse    struct{}                      `json:"sync_response" yaml:"sync_response"`
-	TCP             writer.TCPConfig              `json:"tcp" yaml:"tcp"`
-	Try             TryConfig                     `json:"try" yaml:"try"`
-	UDP             writer.UDPConfig              `json:"udp" yaml:"udp"`
-	Socket          writer.SocketConfig           `json:"socket" yaml:"socket"`
-	Websocket       writer.WebsocketConfig        `json:"websocket" yaml:"websocket"`
-	ZMQ4            *writer.ZMQ4Config            `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
-	Processors      []processor.Config            `json:"processors" yaml:"processors"`
+	Type            string                         `json:"type" yaml:"type"`
+	AMQP            writer.AMQPConfig              `json:"amqp" yaml:"amqp"`
+	AMQP09          writer.AMQPConfig              `json:"amqp_0_9" yaml:"amqp_0_9"`
+	AMQP1           writer.AMQP1Config             `json:"amqp_1" yaml:"amqp_1"`
+	BlobStorage     writer.AzureBlobStorageConfig  `json:"blob_storage" yaml:"blob_storage"`
+	Broker          BrokerConfig                   `json:"broker" yaml:"broker"`
+	Cache           writer.CacheConfig             `json:"cache" yaml:"cache"`
+	Drop            writer.DropConfig              `json:"drop" yaml:"drop"`
+	DropOnError     DropOnErrorConfig              `json:"drop_on_error" yaml:"drop_on_error"`
+	Dynamic         DynamicConfig                  `json:"dynamic" yaml:"dynamic"`
+	DynamoDB        writer.DynamoDBConfig          `json:"dynamodb" yaml:"dynamodb"`
+	Elasticsearch   writer.ElasticsearchConfig     `json:"elasticsearch" yaml:"elasticsearch"`
+	File            FileConfig                     `json:"file" yaml:"file"`
+	Files           writer.FilesConfig             `json:"files" yaml:"files"`
+	GCPPubSub       writer.GCPPubSubConfig         `json:"gcp_pubsub" yaml:"gcp_pubsub"`
+	HDFS            writer.HDFSConfig              `json:"hdfs" yaml:"hdfs"`
+	HTTPClient      writer.HTTPClientConfig        `json:"http_client" yaml:"http_client"`
+	HTTPServer      HTTPServerConfig               `json:"http_server" yaml:"http_server"`
+	Inproc          InprocConfig                   `json:"inproc" yaml:"inproc"`
+	Kafka           writer.KafkaConfig             `json:"kafka" yaml:"kafka"`
+	Kinesis         writer.KinesisConfig           `json:"kinesis" yaml:"kinesis"`
+	KinesisFirehose writer.KinesisFirehoseConfig   `json:"kinesis_firehose" yaml:"kinesis_firehose"`
+	MQTT            writer.MQTTConfig              `json:"mqtt" yaml:"mqtt"`
+	Nanomsg         writer.NanomsgConfig           `json:"nanomsg" yaml:"nanomsg"`
+	NATS            writer.NATSConfig              `json:"nats" yaml:"nats"`
+	NATSStream      writer.NATSStreamConfig        `json:"nats_stream" yaml:"nats_stream"`
+	NSQ             writer.NSQConfig               `json:"nsq" yaml:"nsq"`
+	Plugin          interface{}                    `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	RedisHash       writer.RedisHashConfig         `json:"redis_hash" yaml:"redis_hash"`
+	RedisList       writer.RedisListConfig         `json:"redis_list" yaml:"redis_list"`
+	RedisPubSub     writer.RedisPubSubConfig       `json:"redis_pubsub" yaml:"redis_pubsub"`
+	RedisStreams    writer.RedisStreamsConfig      `json:"redis_streams" yaml:"redis_streams"`
+	Resource        string                         `json:"resource" yaml:"resource"`
+	Retry           RetryConfig                    `json:"retry" yaml:"retry"`
+	S3              writer.AmazonS3Config          `json:"s3" yaml:"s3"`
+	SNS             writer.SNSConfig               `json:"sns" yaml:"sns"`
+	SQS             writer.AmazonSQSConfig         `json:"sqs" yaml:"sqs"`
+	STDOUT          STDOUTConfig                   `json:"stdout" yaml:"stdout"`
+	Switch          SwitchConfig                   `json:"switch" yaml:"switch"`
+	SyncResponse    struct{}                       `json:"sync_response" yaml:"sync_response"`
+	TableStorage    writer.AzureTableStorageConfig `json:"table_storage" yaml:"table_storage"`
+	TCP             writer.TCPConfig               `json:"tcp" yaml:"tcp"`
+	Try             TryConfig                      `json:"try" yaml:"try"`
+	UDP             writer.UDPConfig               `json:"udp" yaml:"udp"`
+	Socket          writer.SocketConfig            `json:"socket" yaml:"socket"`
+	Websocket       writer.WebsocketConfig         `json:"websocket" yaml:"websocket"`
+	ZMQ4            *writer.ZMQ4Config             `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
+	Processors      []processor.Config             `json:"processors" yaml:"processors"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -195,6 +197,7 @@ func NewConfig() Config {
 		STDOUT:          NewSTDOUTConfig(),
 		Switch:          NewSwitchConfig(),
 		SyncResponse:    struct{}{},
+		TableStorage:    writer.NewAzureTableStorageConfig(),
 		TCP:             writer.NewTCPConfig(),
 		Try:             NewTryConfig(),
 		UDP:             writer.NewUDPConfig(),
