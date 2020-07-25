@@ -243,6 +243,7 @@ input:
           client_id: ${INPUT_MQTT_CLIENT_ID:benthos_input}
           password: ${INPUT_MQTT_PASSWORD}
           qos: ${INPUT_MQTT_QOS:1}
+          stale_connection_timeout: ${INPUT_MQTT_STALE_CONNECTION_TIMEOUT}
           topics:
             - ${INPUT_MQTT_TOPICS:benthos_topic}
           urls:

@@ -9,6 +9,11 @@ All notable changes to this project will be documented in this file.
 
 - Path segments in Bloblang mapping targets can now be quote-escaped.
 
+### Fixed
+
+- Manual `mqtt` connection handling for both the input and output. This should
+  fix some cases where connections were dropped and never recovered.
+
 ## 3.22.0 - 2020-07-19
 
 ### Added

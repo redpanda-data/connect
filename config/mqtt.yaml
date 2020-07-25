@@ -12,6 +12,7 @@ input:
     client_id: benthos_input
     password: ""
     qos: 1
+    stale_connection_timeout: ""
     topics:
       - benthos_topic
     urls:

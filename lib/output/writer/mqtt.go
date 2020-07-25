@@ -100,7 +100,11 @@ func (m *MQTT) Connect() error {
 	}
 
 	conf := mqtt.NewClientOptions().
-		SetAutoReconnect(true).
+		SetAutoReconnect(false).
+		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
+			client.Disconnect(0)
+			m.log.Errorf("Connection lost due to: %v\n", reason)
+		}).
 		SetConnectTimeout(time.Second).
 		SetWriteTimeout(time.Second).
 		SetClientID(m.conf.ClientID)
@@ -149,7 +153,14 @@ func (m *MQTT) Write(msg types.Message) error {
 	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		mtok := client.Publish(m.topic.String(i, msg), byte(m.conf.QoS), false, p.Get())
 		mtok.Wait()
-		return mtok.Error()
+		sendErr := mtok.Error()
+		if sendErr != nil && strings.Contains(sendErr.Error(), "Not Connected") {
+			m.connMut.RLock()
+			m.client = nil
+			m.connMut.RUnlock()
+			sendErr = types.ErrNotConnected
+		}
+		return sendErr
 	})
 }
 

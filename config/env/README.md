@@ -240,6 +240,7 @@ INPUT_MQTT_CLEAN_SESSION                             = true
 INPUT_MQTT_CLIENT_ID                                 = benthos_input
 INPUT_MQTT_PASSWORD
 INPUT_MQTT_QOS                                       = 1
+INPUT_MQTT_STALE_CONNECTION_TIMEOUT
 INPUT_MQTT_TOPICS                                    = benthos_topic
 INPUT_MQTT_URLS                                      = tcp://localhost:1883
 INPUT_MQTT_USER
