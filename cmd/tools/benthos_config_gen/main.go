@@ -164,7 +164,11 @@ func envify(rootPath string, conf interface{}, paths map[string]string) (newConf
 		var valStr string
 		switch t := from.(type) {
 		case string:
-			valStr = t
+			if t == "," {
+				valStr = `"` + t + `"`
+			} else {
+				valStr = t
+			}
 		case bool:
 			if t {
 				valStr = "true"

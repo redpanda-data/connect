@@ -56,6 +56,8 @@ input:
           count: ${INPUT_BLOBLANG_COUNT:0}
           interval: ${INPUT_BLOBLANG_INTERVAL:1s}
           mapping: ${INPUT_BLOBLANG_MAPPING}
+        csv:
+          delimiter: ${INPUT_CSV_DELIMITER:","}
         dynamic:
           prefix: ${INPUT_DYNAMIC_PREFIX}
           timeout: ${INPUT_DYNAMIC_TIMEOUT:5s}

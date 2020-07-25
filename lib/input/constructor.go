@@ -67,6 +67,7 @@ const (
 	TypeAMQP1           = "amqp_1"
 	TypeBloblang        = "bloblang"
 	TypeBroker          = "broker"
+	TypeCSVFile         = "csv"
 	TypeDynamic         = "dynamic"
 	TypeFile            = "file"
 	TypeFiles           = "files"
@@ -90,13 +91,14 @@ const (
 	TypeRedisStreams    = "redis_streams"
 	TypeResource        = "resource"
 	TypeS3              = "s3"
+	TypeSequence        = "sequence"
+	TypeSocket          = "socket"
+	TypeSocketServer    = "socket_server"
 	TypeSQS             = "sqs"
 	TypeSTDIN           = "stdin"
 	TypeTCP             = "tcp"
 	TypeTCPServer       = "tcp_server"
 	TypeUDPServer       = "udp_server"
-	TypeSocket          = "socket"
-	TypeSocketServer    = "socket_server"
 	TypeWebsocket       = "websocket"
 	TypeZMQ4            = "zmq4"
 )
@@ -111,6 +113,7 @@ type Config struct {
 	AMQP1           reader.AMQP1Config           `json:"amqp_1" yaml:"amqp_1"`
 	Bloblang        BloblangConfig               `json:"bloblang" yaml:"bloblang"`
 	Broker          BrokerConfig                 `json:"broker" yaml:"broker"`
+	CSVFile         CSVFileConfig                `json:"csv" yaml:"csv"`
 	Dynamic         DynamicConfig                `json:"dynamic" yaml:"dynamic"`
 	File            FileConfig                   `json:"file" yaml:"file"`
 	Files           reader.FilesConfig           `json:"files" yaml:"files"`
@@ -135,13 +138,14 @@ type Config struct {
 	RedisStreams    reader.RedisStreamsConfig    `json:"redis_streams" yaml:"redis_streams"`
 	Resource        string                       `json:"resource" yaml:"resource"`
 	S3              reader.AmazonS3Config        `json:"s3" yaml:"s3"`
+	Sequence        SequenceConfig               `json:"sequence" yaml:"sequence"`
+	Socket          SocketConfig                 `json:"socket" yaml:"socket"`
+	SocketServer    SocketServerConfig           `json:"socket_server" yaml:"socket_server"`
 	SQS             reader.AmazonSQSConfig       `json:"sqs" yaml:"sqs"`
 	STDIN           STDINConfig                  `json:"stdin" yaml:"stdin"`
 	TCP             TCPConfig                    `json:"tcp" yaml:"tcp"`
 	TCPServer       TCPServerConfig              `json:"tcp_server" yaml:"tcp_server"`
 	UDPServer       UDPServerConfig              `json:"udp_server" yaml:"udp_server"`
-	Socket          SocketConfig                 `json:"socket" yaml:"socket"`
-	SocketServer    SocketServerConfig           `json:"socket_server" yaml:"socket_server"`
 	Websocket       reader.WebsocketConfig       `json:"websocket" yaml:"websocket"`
 	ZMQ4            *reader.ZMQ4Config           `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	Processors      []processor.Config           `json:"processors" yaml:"processors"`
@@ -156,6 +160,7 @@ func NewConfig() Config {
 		AMQP1:           reader.NewAMQP1Config(),
 		Bloblang:        NewBloblangConfig(),
 		Broker:          NewBrokerConfig(),
+		CSVFile:         NewCSVFileConfig(),
 		Dynamic:         NewDynamicConfig(),
 		File:            NewFileConfig(),
 		Files:           reader.NewFilesConfig(),
@@ -180,13 +185,14 @@ func NewConfig() Config {
 		RedisStreams:    reader.NewRedisStreamsConfig(),
 		Resource:        "",
 		S3:              reader.NewAmazonS3Config(),
+		Sequence:        NewSequenceConfig(),
+		Socket:          NewSocketConfig(),
+		SocketServer:    NewSocketServerConfig(),
 		SQS:             reader.NewAmazonSQSConfig(),
 		STDIN:           NewSTDINConfig(),
 		TCP:             NewTCPConfig(),
 		TCPServer:       NewTCPServerConfig(),
 		UDPServer:       NewUDPServerConfig(),
-		Socket:          NewSocketConfig(),
-		SocketServer:    NewSocketServerConfig(),
 		Websocket:       reader.NewWebsocketConfig(),
 		ZMQ4:            reader.NewZMQ4Config(),
 		Processors:      []processor.Config{},
