@@ -8,8 +8,9 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Path segments in Bloblang mapping targets can now be quote-escaped.
-- New `sequence` input, for sequentially chaining inputs that have an end.
-- New `csv` input for consuming CSV files.
+- New (BETA) `sequence` input, for sequentially chaining inputs.
+- New (BETA) `csv` input for consuming CSV files.
+- New (BETA) Azure `table_storage` output.
 
 ### Fixed
 
