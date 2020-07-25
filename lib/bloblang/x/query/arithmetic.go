@@ -1,6 +1,7 @@
 package query
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/google/go-cmp/cmp"
@@ -97,6 +98,10 @@ func sub(lhs, rhs Function) Function {
 	})
 }
 
+// ErrDivideByZero occurs when an arithmetic operator is prevented from dividing
+// a value by zero.
+var ErrDivideByZero = errors.New("attempted to divide by zero")
+
 func divide(lhs, rhs Function) Function {
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		var err error
@@ -114,6 +119,10 @@ func divide(lhs, rhs Function) Function {
 		}
 		if err != nil {
 			return nil, err
+		}
+
+		if rhs == 0 {
+			return nil, ErrDivideByZero
 		}
 
 		return lhs / rhs, nil
@@ -160,6 +169,10 @@ func modulo(lhs, rhs Function) Function {
 		}
 		if err != nil {
 			return nil, err
+		}
+
+		if rhs == 0 {
+			return nil, ErrDivideByZero
 		}
 
 		return lhs % rhs, nil

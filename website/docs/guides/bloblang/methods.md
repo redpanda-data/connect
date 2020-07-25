@@ -562,7 +562,7 @@ t2 = v2.has_suffix("foo")
 
 ### `hash`
 
-Hashes a string or byte array according to a chosen algorithm and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][method.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.
+Hashes a string or byte array according to a chosen algorithm and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.
 
 Available algorithms are: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `sha1`, `sha256`, `sha512`, `xxhash64`.
 
