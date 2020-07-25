@@ -198,6 +198,10 @@ func TestExpressionsParser(t *testing.T) {
 			output:   `second`,
 			messages: []easyMsg{},
 		},
+		"if statement inline": {
+			input:  `if "foo" == "foo" { "foo" } else { "bar" }`,
+			output: `foo`,
+		},
 	}
 
 	for name, test := range tests {

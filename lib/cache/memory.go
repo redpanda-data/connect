@@ -122,6 +122,9 @@ func NewMemory(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 //------------------------------------------------------------------------------
 
 func (m *Memory) compaction() {
+	if m.compInterval == 0 {
+		return
+	}
 	if time.Since(m.lastCompaction) < m.compInterval {
 		return
 	}
