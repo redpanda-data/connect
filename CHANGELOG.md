@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - New (BETA) `sequence` input, for sequentially chaining inputs.
 - New (BETA) `csv` input for consuming CSV files.
 - New (BETA) Azure `table_storage` output.
+- New `parse_csv` Bloblang method.
 
 ### Fixed
 

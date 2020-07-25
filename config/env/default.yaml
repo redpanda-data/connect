@@ -58,6 +58,7 @@ input:
           mapping: ${INPUT_BLOBLANG_MAPPING}
         csv:
           delimiter: ${INPUT_CSV_DELIMITER:","}
+          parse_header_row: ${INPUT_CSV_PARSE_HEADER_ROW:true}
         dynamic:
           prefix: ${INPUT_DYNAMIC_PREFIX}
           timeout: ${INPUT_DYNAMIC_TIMEOUT:5s}

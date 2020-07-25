@@ -26,6 +26,33 @@ func TestMethods(t *testing.T) {
 		messages []easyMsg
 		index    int
 	}{
+		"check parse csv 1": {
+			input: `"foo,bar,baz\n1,2,3\n4,5,6".parse_csv()`,
+			output: []interface{}{
+				map[string]interface{}{
+					"foo": "1",
+					"bar": "2",
+					"baz": "3",
+				},
+				map[string]interface{}{
+					"foo": "4",
+					"bar": "5",
+					"baz": "6",
+				},
+			},
+		},
+		"check parse csv 2": {
+			input:  `"foo,bar,baz".parse_csv()`,
+			output: []interface{}{},
+		},
+		"check parse csv 3": {
+			input:  `"foo,bar\nfoo 1,bar 1\nfoo 2,bar 2".parse_csv().string()`,
+			output: `[{"bar":"bar 1","foo":"foo 1"},{"bar":"bar 2","foo":"foo 2"}]`,
+		},
+		"check parse csv error 1": {
+			input: `"foo,bar,baz\n1,2,3,4".parse_csv()`,
+			err:   "record on line 2: wrong number of fields",
+		},
 		"check explode 1": {
 			input:  `{"foo":[1,2,3],"id":"bar"}.explode("foo").string()`,
 			output: `[{"foo":1,"id":"bar"},{"foo":2,"id":"bar"},{"foo":3,"id":"bar"}]`,

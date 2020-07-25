@@ -9,6 +9,7 @@ input:
   type: csv
   csv:
     delimiter: ','
+    parse_header_row: true
     paths: []
 buffer:
   type: none

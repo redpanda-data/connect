@@ -10,8 +10,10 @@ import (
 	"crypto/sha512"
 	"encoding/ascii85"
 	"encoding/base64"
+	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"io/ioutil"
@@ -596,6 +598,58 @@ func lowercaseMethod(target Function, _ ...interface{}) (Function, error) {
 				Err:       NewTypeError(v, ValueString),
 			}
 		}
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"parse_csv", false, parseCSVMethod,
+	ExpectNArgs(0),
+)
+
+func parseCSVMethod(target Function, _ ...interface{}) (Function, error) {
+	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var csvBytes []byte
+		switch t := v.(type) {
+		case string:
+			csvBytes = []byte(t)
+		case []byte:
+			csvBytes = t
+		default:
+			return nil, NewTypeError(v, ValueString)
+		}
+
+		r := csv.NewReader(bytes.NewReader(csvBytes))
+		strRecords, err := r.ReadAll()
+		if err != nil {
+			return nil, err
+		}
+		if len(strRecords) == 0 {
+			return nil, errors.New("zero records were parsed")
+		}
+
+		records := make([]interface{}, 0, len(strRecords)-1)
+		headers := strRecords[0]
+		if len(headers) == 0 {
+			return nil, fmt.Errorf("no headers found on first row")
+		}
+		for j, strRecord := range strRecords[1:] {
+			if len(headers) != len(strRecord) {
+				return nil, fmt.Errorf("record on line %v: record mismatch with headers", j)
+			}
+			obj := make(map[string]interface{}, len(strRecord))
+			for i, r := range strRecord {
+				obj[headers[i]] = r
+			}
+			records = append(records, obj)
+		}
+
+		return records, nil
 	}), nil
 }
 

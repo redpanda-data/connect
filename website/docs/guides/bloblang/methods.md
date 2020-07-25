@@ -596,6 +596,19 @@ Convert a string value into lowercase.
 foo = foo.lowercase()
 ```
 
+### `parse_csv`
+
+Attempts to parse a string into an array of objects by following the CSV format
+described in RFC 4180. The first line is assumed to be a header row, which
+determines the keys of values in each object:
+
+```coffee
+orders = orders.parse_csv()
+
+# In:  {"orders":"foo,bar\nfoo 1,bar 1\nfoo 2,bar 2"}
+# Out: {"orders":[{"foo":"foo 1","bar":"bar 1"},{"foo":"foo 2","bar":"bar 2"}]}
+```
+
 ### `parse_json`
 
 Attempts to parse a string as a JSON document and returns the result.

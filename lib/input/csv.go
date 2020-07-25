@@ -26,11 +26,43 @@ func init() {
 BETA: This component is experimental and therefore subject to change outside of
 major version releases.
 
-Reads one or more CSV files as structured records.`,
+Reads one or more CSV files as structured records following the format described
+in RFC 4180.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("paths", "A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close."),
+			docs.FieldCommon("parse_header_row", "Whether to reference the first row as a header row. If set to true the output structure for messages will be an object where field keys are determined by the header row."),
 			docs.FieldCommon("delimiter", `The delimiter to use for splitting values in each record, must be a single character.`),
 		},
+		Description: `
+When parsing with a header row each line of the file will be consumed as a
+structured object, where the key names are determined from the header now. For
+example, the following CSV file:
+
+` + "```csv" + `
+foo,bar,baz
+first foo,first bar,first baz
+second foo,second bar,second baz
+` + "```" + `
+
+Would produce the following messages:
+
+` + "```json" + `
+{"foo":"first foo","bar":"first bar","baz":"first baz"}
+{"foo":"second foo","bar":"second bar","baz":"second baz"}
+` + "```" + `
+
+If, however, the field ` + "`parse_header_row` is set to `false`" + ` then
+arrays are produced instead, like follows:
+
+` + "```json" + `
+["first foo","first bar","first baz"]
+["second foo","second bar","second baz"]
+` + "```" + ``,
+		Footnotes: `
+This input is particularly useful when consuming CSV from files too large to
+parse entirely within memory. However, in cases where CSV is consumed from other
+input types it's also possible to parse them using the
+` + "[Bloblang `parse_csv` method](/docs/guides/bloblang/methods#parse_csv)" + `.`,
 	}
 }
 
@@ -38,15 +70,17 @@ Reads one or more CSV files as structured records.`,
 
 // CSVFileConfig contains configuration values for the CSVFile input type.
 type CSVFileConfig struct {
-	Paths []string `json:"paths" yaml:"paths"`
-	Delim string   `json:"delimiter" yaml:"delimiter"`
+	Paths          []string `json:"paths" yaml:"paths"`
+	ParseHeaderRow bool     `json:"parse_header_row" yaml:"parse_header_row"`
+	Delim          string   `json:"delimiter" yaml:"delimiter"`
 }
 
 // NewCSVFileConfig creates a new CSVFileConfig with default values.
 func NewCSVFileConfig() CSVFileConfig {
 	return CSVFileConfig{
-		Paths: []string{},
-		Delim: ",",
+		Paths:          []string{},
+		ParseHeaderRow: true,
+		Delim:          ",",
 	}
 }
 
@@ -79,6 +113,7 @@ func NewCSVFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.T
 		},
 		func(context.Context) {},
 		optCSVSetComma(comma),
+		optCSVSetExpectHeaders(conf.CSVFile.ParseHeaderRow),
 	)
 	if err != nil {
 		return nil, err
