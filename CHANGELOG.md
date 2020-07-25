@@ -13,6 +13,8 @@ All notable changes to this project will be documented in this file.
 
 - Manual `mqtt` connection handling for both the input and output. This should
   fix some cases where connections were dropped and never recovered.
+- Fixed Bloblang error where calls to a `.get` method would return `null` after
+  the first query.
 
 ## 3.22.0 - 2020-07-19
 

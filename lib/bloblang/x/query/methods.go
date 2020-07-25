@@ -459,11 +459,18 @@ func getMethodCtor(target Function, args ...interface{}) (Function, error) {
 	path := gabs.DotPathToSlice(args[0].(string))
 	switch t := target.(type) {
 	case *getMethod:
-		t.path = append(t.path, path...)
-		return t, nil
+		newPath := append([]string{}, t.path...)
+		newPath = append(newPath, path...)
+		return &getMethod{
+			fn:   t.fn,
+			path: newPath,
+		}, nil
 	case *fieldFunction:
-		t.path = append(t.path, path...)
-		return t, nil
+		newPath := append([]string{}, t.path...)
+		newPath = append(newPath, path...)
+		return &fieldFunction{
+			path: newPath,
+		}, nil
 	}
 	return &getMethod{
 		fn:   target,
