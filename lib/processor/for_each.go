@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -137,25 +138,30 @@ func NewProcessBatch(
 func (p *ForEach) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	p.mCount.Incr(1)
 
-	resultMsgs := make([]types.Message, msg.Len())
+	individualMsgs := make([]types.Message, msg.Len())
 	msg.Iter(func(i int, p types.Part) error {
 		tmpMsg := message.New(nil)
 		tmpMsg.SetAll([]types.Part{p})
-		resultMsgs[i] = tmpMsg
+		individualMsgs[i] = tmpMsg
 		return nil
 	})
 
-	var res types.Response
-	if resultMsgs, res = ExecuteAll(p.children, resultMsgs...); res != nil {
-		return nil, res
+	resMsg := message.New(nil)
+	for _, tmpMsg := range individualMsgs {
+		resultMsgs, res := ExecuteAll(p.children, tmpMsg)
+		if res != nil && res.Error() != nil {
+			return nil, res
+		}
+		for _, m := range resultMsgs {
+			m.Iter(func(i int, p types.Part) error {
+				resMsg.Append(p)
+				return nil
+			})
+		}
 	}
 
-	resMsg := message.New(nil)
-	for _, m := range resultMsgs {
-		m.Iter(func(i int, p types.Part) error {
-			resMsg.Append(p)
-			return nil
-		})
+	if resMsg.Len() == 0 {
+		return nil, response.NewAck()
 	}
 
 	p.mBatchSent.Incr(1)

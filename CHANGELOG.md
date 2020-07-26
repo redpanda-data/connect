@@ -21,6 +21,8 @@ All notable changes to this project will be documented in this file.
   fix some cases where connections were dropped and never recovered.
 - Fixed Bloblang error where calls to a `.get` method would return `null` after
   the first query.
+- The `for_each` processor no longer interlaces child processors during split
+  processing.
 
 ## 3.22.0 - 2020-07-19
 
