@@ -67,6 +67,76 @@ func TestCSVReaderHappy(t *testing.T) {
 	assert.Equal(t, types.ErrTypeClosed, err)
 }
 
+func TestCSVReaderGroupCount(t *testing.T) {
+	var handle bytes.Buffer
+
+	for _, msg := range []string{
+		"foo,bar,baz",
+		"foo1,bar1,baz1",
+		"foo2,bar2,baz2",
+		"foo3,bar3,baz3",
+		"foo4,bar4,baz4",
+		"foo5,bar5,baz5",
+		"foo6,bar6,baz6",
+		"foo7,bar7,baz7",
+	} {
+		handle.Write([]byte(msg))
+		handle.Write([]byte("\n"))
+	}
+
+	ctored := false
+	f, err := newCSVReader(
+		func(ctx context.Context) (io.Reader, error) {
+			if ctored {
+				return nil, io.EOF
+			}
+			ctored = true
+			return &handle, nil
+		},
+		func(ctx context.Context) {},
+		optCSVSetGroupCount(3),
+	)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		f.CloseAsync()
+		require.NoError(t, f.WaitForClose(time.Second))
+	})
+
+	require.NoError(t, f.ConnectWithContext(context.Background()))
+
+	for _, exp := range [][]string{
+		{
+			`{"bar":"bar1","baz":"baz1","foo":"foo1"}`,
+			`{"bar":"bar2","baz":"baz2","foo":"foo2"}`,
+			`{"bar":"bar3","baz":"baz3","foo":"foo3"}`,
+		},
+		{
+			`{"bar":"bar4","baz":"baz4","foo":"foo4"}`,
+			`{"bar":"bar5","baz":"baz5","foo":"foo5"}`,
+			`{"bar":"bar6","baz":"baz6","foo":"foo6"}`,
+		},
+		{
+			`{"bar":"bar7","baz":"baz7","foo":"foo7"}`,
+		},
+	} {
+		var resMsg types.Message
+		resMsg, _, err = f.ReadWithContext(context.Background())
+		require.NoError(t, err)
+
+		require.Equal(t, len(exp), resMsg.Len())
+		for i := 0; i < len(exp); i++ {
+			assert.Equal(t, exp[i], string(resMsg.Get(i).Get()))
+		}
+	}
+
+	_, _, err = f.ReadWithContext(context.Background())
+	assert.Equal(t, types.ErrNotConnected, err)
+
+	err = f.ConnectWithContext(context.Background())
+	assert.Equal(t, types.ErrTypeClosed, err)
+}
+
 func TestCSVReadersTwoFiles(t *testing.T) {
 	var handleOne, handleTwo bytes.Buffer
 

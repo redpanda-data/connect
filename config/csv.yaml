@@ -8,6 +8,7 @@ http:
 input:
   type: csv
   csv:
+    batch_count: 1
     delimiter: ','
     parse_header_row: true
     paths: []

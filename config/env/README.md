@@ -89,6 +89,7 @@ INPUT_AMQP_URL                                       = amqp://guest:guest@localh
 INPUT_BLOBLANG_COUNT                                 = 0
 INPUT_BLOBLANG_INTERVAL                              = 1s
 INPUT_BLOBLANG_MAPPING
+INPUT_CSV_BATCH_COUNT                                = 1
 INPUT_CSV_DELIMITER                                  = ","
 INPUT_CSV_PARSE_HEADER_ROW                           = true
 INPUT_DYNAMIC_PREFIX

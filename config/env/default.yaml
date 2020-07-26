@@ -57,6 +57,7 @@ input:
           interval: ${INPUT_BLOBLANG_INTERVAL:1s}
           mapping: ${INPUT_BLOBLANG_MAPPING}
         csv:
+          batch_count: ${INPUT_CSV_BATCH_COUNT:1}
           delimiter: ${INPUT_CSV_DELIMITER:","}
           parse_header_row: ${INPUT_CSV_PARSE_HEADER_ROW:true}
         dynamic:

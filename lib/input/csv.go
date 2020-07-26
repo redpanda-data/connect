@@ -32,6 +32,7 @@ in RFC 4180.`,
 			docs.FieldCommon("paths", "A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close."),
 			docs.FieldCommon("parse_header_row", "Whether to reference the first row as a header row. If set to true the output structure for messages will be an object where field keys are determined by the header row."),
 			docs.FieldCommon("delimiter", `The delimiter to use for splitting values in each record, must be a single character.`),
+			docs.FieldAdvanced("batch_count", `Optionally process records in batches. This can help to speed up the consumption of exceptionally large CSV files. When the end of the file is reached the remaining records are processed as a (potentially smaller) batch.`),
 		},
 		Description: `
 When parsing with a header row each line of the file will be consumed as a
@@ -73,6 +74,7 @@ type CSVFileConfig struct {
 	Paths          []string `json:"paths" yaml:"paths"`
 	ParseHeaderRow bool     `json:"parse_header_row" yaml:"parse_header_row"`
 	Delim          string   `json:"delimiter" yaml:"delimiter"`
+	BatchCount     int      `json:"batch_count" yaml:"batch_count"`
 }
 
 // NewCSVFileConfig creates a new CSVFileConfig with default values.
@@ -81,6 +83,7 @@ func NewCSVFileConfig() CSVFileConfig {
 		Paths:          []string{},
 		ParseHeaderRow: true,
 		Delim:          ",",
+		BatchCount:     1,
 	}
 }
 
@@ -100,6 +103,10 @@ func NewCSVFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.T
 		return nil, errors.New("requires at least one input file path")
 	}
 
+	if conf.CSVFile.BatchCount < 1 {
+		return nil, errors.New("batch_count must be at least 1")
+	}
+
 	rdr, err := newCSVReader(
 		func(context.Context) (io.Reader, error) {
 			if len(pathsRemaining) == 0 {
@@ -114,6 +121,7 @@ func NewCSVFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.T
 		func(context.Context) {},
 		optCSVSetComma(comma),
 		optCSVSetExpectHeaders(conf.CSVFile.ParseHeaderRow),
+		optCSVSetGroupCount(conf.CSVFile.BatchCount),
 	)
 	if err != nil {
 		return nil, err
@@ -135,11 +143,10 @@ type csvReader struct {
 	scanner *csv.Reader
 	headers []string
 
-	structuredRecordPool sync.Pool
-
 	expectHeaders bool
 	comma         rune
 	strict        bool
+	groupCount    int
 }
 
 // NewCSV creates a new reader input type able to create a feed of line
@@ -164,6 +171,7 @@ func newCSVReader(
 		comma:         ',',
 		expectHeaders: true,
 		strict:        false,
+		groupCount:    1,
 	}
 
 	for _, opt := range options {
@@ -180,6 +188,14 @@ func newCSVReader(
 func optCSVSetComma(comma rune) func(r *csvReader) {
 	return func(r *csvReader) {
 		r.comma = comma
+	}
+}
+
+// OptCSVSetGroupCount is a option func that sets the group count used to batch
+// process records.
+func optCSVSetGroupCount(groupCount int) func(r *csvReader) {
+	return func(r *csvReader) {
+		r.groupCount = groupCount
 	}
 }
 
@@ -264,64 +280,56 @@ func (r *csvReader) ReadWithContext(ctx context.Context) (types.Message, reader.
 		return nil, nil, types.ErrNotConnected
 	}
 
-	records, err := r.readNext(scanner)
-	if err != nil {
-		return nil, nil, err
-	}
+	msg := message.New(nil)
 
-	if r.expectHeaders && headers == nil {
-		headers = make([]string, 0, len(records))
-		for _, r := range records {
-			headers = append(headers, r)
+	for i := 0; i < r.groupCount; i++ {
+		records, err := r.readNext(scanner)
+		if err != nil {
+			if i == 0 {
+				return nil, nil, err
+			}
+			break
 		}
 
-		r.mut.Lock()
-		r.headers = headers
-		r.structuredRecordPool = sync.Pool{} // New headers, new pool
-		r.mut.Unlock()
+		if r.expectHeaders && headers == nil {
+			headers = make([]string, 0, len(records))
+			for _, r := range records {
+				headers = append(headers, r)
+			}
 
-		if records, err = r.readNext(scanner); err != nil {
+			r.mut.Lock()
+			r.headers = headers
+			r.mut.Unlock()
+
+			if records, err = r.readNext(scanner); err != nil {
+				return nil, nil, err
+			}
+		}
+
+		part := message.NewPart(nil)
+
+		var structured interface{}
+		if len(headers) == 0 || len(headers) < len(records) {
+			slice := make([]interface{}, 0, len(records))
+			for _, r := range records {
+				slice = append(slice, r)
+			}
+			structured = slice
+		} else {
+			obj := make(map[string]interface{}, len(records))
+			for i, r := range records {
+				obj[headers[i]] = r
+			}
+			structured = obj
+		}
+
+		if err = part.SetJSON(structured); err != nil {
 			return nil, nil, err
 		}
+		msg.Append(part)
 	}
 
-	part := message.NewPart(nil)
-
-	var structured interface{}
-	if len(headers) == 0 || len(headers) < len(records) {
-		var slice []interface{}
-		var ok bool
-		if slice, ok = r.structuredRecordPool.Get().([]interface{}); !ok {
-			slice = make([]interface{}, 0, len(records))
-		} else {
-			slice = slice[:0]
-		}
-		for _, r := range records {
-			slice = append(slice, r)
-		}
-		structured = slice
-	} else {
-		var obj map[string]interface{}
-		var ok bool
-		if obj, ok = r.structuredRecordPool.Get().(map[string]interface{}); !ok {
-			obj = make(map[string]interface{}, len(records))
-		}
-		for i, r := range records {
-			obj[headers[i]] = r
-		}
-		structured = obj
-	}
-
-	if err = part.SetJSON(structured); err != nil {
-		return nil, nil, err
-	}
-
-	msg := message.New(nil)
-	msg.Append(part)
-	return msg, func(context.Context, types.Response) error {
-		r.structuredRecordPool.Put(structured)
-		return nil
-	}, nil
+	return msg, func(context.Context, types.Response) error { return nil }, nil
 }
 
 // CloseAsync shuts down the reader input and stops processing requests.
