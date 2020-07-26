@@ -33,8 +33,6 @@ func TestBloblangInterval(t *testing.T) {
 	assert.EqualError(t, err, "action timed out")
 
 	b.CloseAsync()
-	_, _, err = b.ReadWithContext(ctx)
-	assert.EqualError(t, err, "not connected to target source or sink")
 }
 
 func TestBloblangMapping(t *testing.T) {

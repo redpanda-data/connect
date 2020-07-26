@@ -3,7 +3,6 @@ package input
 import (
 	"context"
 	"fmt"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -40,7 +39,7 @@ testing your pipeline configs.`,
 				`root = "hello world"`,
 				`root = {"test":"message","id":uuid_v4()}`,
 			),
-			docs.FieldCommon("interval", "The time interval at which messages should be generated."),
+			docs.FieldCommon("interval", "The time interval at which messages should be generated. If set to an empty string messages will be generated as fast as downstream services can process them."),
 			docs.FieldCommon("count", "An optional number of messages to generate, if set above 0 the specified number of messages is generated and then the input will shut down."),
 		},
 		Footnotes: `
@@ -91,18 +90,19 @@ func NewBloblangConfig() BloblangConfig {
 type Bloblang struct {
 	remaining int32
 
-	timerDuration time.Duration
-	exec          *mapping.Executor
-
-	timerMut sync.Mutex
-	timer    *time.Ticker
+	exec  *mapping.Executor
+	timer *time.Ticker
 }
 
 // newBloblang creates a new bloblang input reader type.
 func newBloblang(conf BloblangConfig) (*Bloblang, error) {
-	duration, err := time.ParseDuration(conf.Interval)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse interval: %w", err)
+	var timer *time.Ticker
+	if len(conf.Interval) > 0 {
+		duration, err := time.ParseDuration(conf.Interval)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse interval: %w", err)
+		}
+		timer = time.NewTicker(duration)
 	}
 	exec, err := mapping.NewExecutor(conf.Mapping)
 	if err != nil {
@@ -113,48 +113,34 @@ func newBloblang(conf BloblangConfig) (*Bloblang, error) {
 		remaining = -1
 	}
 	return &Bloblang{
-		timerDuration: duration,
-		exec:          exec,
-		remaining:     remaining,
+		exec:      exec,
+		remaining: remaining,
+		timer:     timer,
 	}, nil
 }
 
 // ConnectWithContext establishes a Bloblang reader.
 func (b *Bloblang) ConnectWithContext(ctx context.Context) error {
-	b.timerMut.Lock()
-	defer b.timerMut.Unlock()
-
-	if b.timer != nil {
-		return nil
-	}
-
-	b.timer = time.NewTicker(b.timerDuration)
 	return nil
 }
 
 // ReadWithContext a new bloblang generated message.
 func (b *Bloblang) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
-	b.timerMut.Lock()
-	timer := b.timer
-	b.timerMut.Unlock()
-
-	if timer == nil {
-		return nil, nil, types.ErrNotConnected
-	}
-
 	if atomic.LoadInt32(&b.remaining) >= 0 {
 		if atomic.AddInt32(&b.remaining, -1) < 0 {
 			return nil, nil, types.ErrTypeClosed
 		}
 	}
 
-	select {
-	case _, open := <-timer.C:
-		if !open {
-			return nil, nil, types.ErrNotConnected
+	if b.timer != nil {
+		select {
+		case _, open := <-b.timer.C:
+			if !open {
+				return nil, nil, types.ErrTypeClosed
+			}
+		case <-ctx.Done():
+			return nil, nil, types.ErrTimeout
 		}
-	case <-ctx.Done():
-		return nil, nil, types.ErrTimeout
 	}
 
 	p, err := b.exec.MapPart(0, message.New(nil))
@@ -173,10 +159,9 @@ func (b *Bloblang) ReadWithContext(ctx context.Context) (types.Message, reader.A
 
 // CloseAsync shuts down the bloblang reader.
 func (b *Bloblang) CloseAsync() {
-	b.timerMut.Lock()
-	b.timer.Stop()
-	b.timer = nil
-	b.timerMut.Unlock()
+	if b.timer != nil {
+		b.timer.Stop()
+	}
 }
 
 // WaitForClose blocks until the bloblang input has closed down.

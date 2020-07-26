@@ -47,7 +47,7 @@ mapping: root = {"test":"message","id":uuid_v4()}
 
 ### `interval`
 
-The time interval at which messages should be generated.
+The time interval at which messages should be generated. If set to an empty string messages will be generated as fast as downstream services can process them.
 
 
 Type: `string`  
