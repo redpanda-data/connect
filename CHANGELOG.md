@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.23.0 - 2020-07-26
+
 ### Added
 
 - Path segments in Bloblang mapping targets can now be quote-escaped.
