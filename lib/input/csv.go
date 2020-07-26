@@ -130,11 +130,12 @@ type csvReader struct {
 	handleCtor func(ctx context.Context) (io.Reader, error)
 	onClose    func(ctx context.Context)
 
-	mut        sync.Mutex
-	handle     io.Reader
-	shutdownFn func()
-	errChan    chan error
-	msgChan    chan types.Message
+	mut     sync.Mutex
+	handle  io.Reader
+	scanner *csv.Reader
+	headers []string
+
+	structuredRecordPool sync.Pool
 
 	expectHeaders bool
 	comma         rune
@@ -169,7 +170,6 @@ func newCSVReader(
 		opt(&r)
 	}
 
-	r.shutdownFn = func() {}
 	return &r, nil
 }
 
@@ -208,7 +208,6 @@ func (r *csvReader) closeHandle() {
 		}
 		r.handle = nil
 	}
-	r.shutdownFn()
 }
 
 //------------------------------------------------------------------------------
@@ -217,7 +216,9 @@ func (r *csvReader) closeHandle() {
 func (r *csvReader) ConnectWithContext(ctx context.Context) error {
 	r.mut.Lock()
 	defer r.mut.Unlock()
-	r.closeHandle()
+	if r.scanner != nil {
+		return nil
+	}
 
 	handle, err := r.handleCtor(ctx)
 	if err != nil {
@@ -231,106 +232,96 @@ func (r *csvReader) ConnectWithContext(ctx context.Context) error {
 	scanner.Comma = r.comma
 	scanner.ReuseRecord = true
 
-	scannerCtx, shutdownFn := context.WithCancel(context.Background())
-	msgChan := make(chan types.Message)
-	errChan := make(chan error)
-
-	go func() {
-		defer func() {
-			shutdownFn()
-			close(errChan)
-			close(msgChan)
-		}()
-
-		var headers []string
-
-	recordLoop:
-		for {
-			records, err := scanner.Read()
-			if err != nil && (r.strict || len(records) == 0) {
-				if err == io.EOF {
-					break recordLoop
-				}
-				select {
-				case errChan <- err:
-				case <-scannerCtx.Done():
-					return
-				}
-				continue recordLoop
-			}
-
-			if r.expectHeaders && headers == nil {
-				headers = make([]string, 0, len(records))
-				for _, r := range records {
-					headers = append(headers, r)
-				}
-				continue recordLoop
-			}
-
-			part := message.NewPart(nil)
-
-			var structured interface{}
-			if len(headers) == 0 || len(headers) < len(records) {
-				slice := make([]interface{}, 0, len(records))
-				for _, r := range records {
-					slice = append(slice, r)
-				}
-				structured = slice
-			} else {
-				obj := make(map[string]interface{}, len(records))
-				for i, r := range records {
-					obj[headers[i]] = r
-				}
-				structured = obj
-			}
-
-			if err = part.SetJSON(structured); err != nil {
-				select {
-				case errChan <- err:
-				case <-scannerCtx.Done():
-					return
-				}
-				continue recordLoop
-			}
-
-			msg := message.New(nil)
-			msg.Append(part)
-			select {
-			case msgChan <- msg:
-			case <-scannerCtx.Done():
-				return
-			}
-		}
-	}()
-
+	r.scanner = scanner
 	r.handle = handle
-	r.msgChan = msgChan
-	r.errChan = errChan
-	r.shutdownFn = shutdownFn
+
 	return nil
+}
+
+func (r *csvReader) readNext(reader *csv.Reader) ([]string, error) {
+	records, err := reader.Read()
+	if err != nil && (r.strict || len(records) == 0) {
+		if err == io.EOF {
+			r.mut.Lock()
+			r.scanner = nil
+			r.headers = nil
+			r.mut.Unlock()
+			return nil, types.ErrNotConnected
+		}
+		return nil, err
+	}
+	return records, nil
 }
 
 // ReadWithContext attempts to read a new line from the io.Reader.
 func (r *csvReader) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
 	r.mut.Lock()
-	msgChan := r.msgChan
-	errChan := r.errChan
+	scanner := r.scanner
+	headers := r.headers
 	r.mut.Unlock()
 
-	select {
-	case msg, open := <-msgChan:
-		if !open {
-			return nil, nil, types.ErrNotConnected
-		}
-		return msg, func(context.Context, types.Response) error { return nil }, nil
-	case err, open := <-errChan:
-		if !open {
-			return nil, nil, types.ErrNotConnected
-		}
-		return nil, nil, err
-	case <-ctx.Done():
+	if scanner == nil {
+		return nil, nil, types.ErrNotConnected
 	}
-	return nil, nil, types.ErrTimeout
+
+	records, err := r.readNext(scanner)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if r.expectHeaders && headers == nil {
+		headers = make([]string, 0, len(records))
+		for _, r := range records {
+			headers = append(headers, r)
+		}
+
+		r.mut.Lock()
+		r.headers = headers
+		r.structuredRecordPool = sync.Pool{} // New headers, new pool
+		r.mut.Unlock()
+
+		if records, err = r.readNext(scanner); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	part := message.NewPart(nil)
+
+	var structured interface{}
+	if len(headers) == 0 || len(headers) < len(records) {
+		var slice []interface{}
+		var ok bool
+		if slice, ok = r.structuredRecordPool.Get().([]interface{}); !ok {
+			slice = make([]interface{}, 0, len(records))
+		} else {
+			slice = slice[:0]
+		}
+		for _, r := range records {
+			slice = append(slice, r)
+		}
+		structured = slice
+	} else {
+		var obj map[string]interface{}
+		var ok bool
+		if obj, ok = r.structuredRecordPool.Get().(map[string]interface{}); !ok {
+			obj = make(map[string]interface{}, len(records))
+		}
+		for i, r := range records {
+			obj[headers[i]] = r
+		}
+		structured = obj
+	}
+
+	if err = part.SetJSON(structured); err != nil {
+		return nil, nil, err
+	}
+
+	msg := message.New(nil)
+	msg.Append(part)
+	return msg, func(context.Context, types.Response) error {
+		r.structuredRecordPool.Put(structured)
+		return nil
+	}, nil
 }
 
 // CloseAsync shuts down the reader input and stops processing requests.
