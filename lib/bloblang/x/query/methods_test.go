@@ -542,13 +542,37 @@ func TestMethods(t *testing.T) {
 			input:  `"foo bar baz".slice(8)`,
 			output: "baz",
 		},
+		"check slice neg start": {
+			input:  `"foo bar baz".slice(-1)`,
+			output: "z",
+		},
+		"check slice neg start 2": {
+			input:  `"foo bar baz".slice(-2)`,
+			output: "az",
+		},
+		"check slice neg start 3": {
+			input:  `"foo bar baz".slice(-100)`,
+			output: "foo bar baz",
+		},
+		"check slice neg end 1": {
+			input:  `"foo bar baz".slice(0, -1)`,
+			output: "foo bar ba",
+		},
+		"check slice neg end 2": {
+			input:  `"foo bar baz".slice(0, -2)`,
+			output: "foo bar b",
+		},
+		"check slice neg end 3": {
+			input:  `"foo bar baz".slice(0, -100)`,
+			output: "",
+		},
 		"check slice oob string": {
-			input: `"foo bar baz".slice(0, 30)`,
-			err:   `upper slice bound 30 was larger than string size: 11`,
+			input:  `"foo bar baz".slice(0, 30)`,
+			output: "foo bar baz",
 		},
 		"check slice oob array": {
-			input: `["foo","bar","baz"].slice(0, 30)`,
-			err:   `upper slice bound 30 was larger than array size: 3`,
+			input:  `["foo","bar","baz"].slice(0, 30)`,
+			output: []interface{}{"foo", "bar", "baz"},
 		},
 		"check slice invalid": {
 			input: `10.slice(8)`,

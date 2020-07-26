@@ -49,14 +49,14 @@ pipeline:
       root = if random_int() % 2 == 0 { deleted() }
 ```
 
-We can also do this in a deterministic way by hashing events and using the hash as our seed:
+We can also do this in a deterministic way by hashing events and filtering by that hash value:
 
 ```yaml
 pipeline:
   processors:
   - bloblang: |
-      # Drop 10% of documents deterministically (same docs filtered each run)
-      root = if random_int(content().hash("xxhash64").number()) % 10 == 0 {
+      # Drop ~10% of documents deterministically (same docs filtered each run)
+      root = if content().hash("xxhash64").slice(-8).number() % 10 == 0 {
          deleted()
       }
 ```

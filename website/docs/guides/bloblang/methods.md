@@ -325,9 +325,7 @@ root = this.apply("foo").merge(this.apply("bar"))
 
 ### `slice`
 
-Extract a slice from a string or array value by specifying two indices, a low and high bound, which selects a half-open range that includes the first element, but excludes the last one.
-
-If the second index is omitted then it defaults to the length of the input string.
+Extract a slice from a string or array value by specifying two indices, a low and high bound, which selects a half-open range that includes the first element, but excludes the last one. If the second index is omitted then it defaults to the length of the input sequence.
 
 ```coffee
 beginning = value.slice(0, 2)
@@ -338,6 +336,18 @@ end = value.slice(4)
 
 # In:  {"value":["foo","bar","baz","buz","bev"]}
 # Out: {"beginning":["foo","bar"],"end":["bev"]}
+```
+
+A negative low index can be used, indicating an offset from the end of the sequence. If the low index is greater than the length of the sequence then an empty result is returned.
+
+A negative high index can also be used, indicating an offset from the end of the sequence. If the high index is greater than the length of the sequence, slice extracts through to the end of the sequence.
+
+```coffee
+last_chunk = value.slice(-4)
+the_rest = value.slice(0, -4)
+
+# In:  {"value":"foo bar"}
+# Out: {"last_chunk":" bar","the_rest":"foo"}
 ```
 
 ### `sort`

@@ -119,7 +119,7 @@ Generates a non-negative pseudo-random 64-bit integer. An optional integer argum
 
 ```coffee
 first = random_int()
-second = random_int(content().hash("xxhash64").number())
+second = random_int(1)
 ```
 
 ### `timestamp`

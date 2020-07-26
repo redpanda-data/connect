@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - New (BETA) Azure `table_storage` output.
 - New `parse_csv` Bloblang method.
 - New `throw` Bloblang function.
+- The `slice` Bloblang method now supports negative low and high arguments.
 
 ### Fixed
 

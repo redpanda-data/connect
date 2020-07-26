@@ -3,6 +3,7 @@ package cache
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -80,7 +81,7 @@ func TestMemoryCacheCompaction(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = "memory"
 	conf.Memory.TTL = 0
-	conf.Memory.CompactionInterval = ""
+	conf.Memory.CompactionInterval = "1ns"
 
 	c, err := New(conf, nil, testLog, metrics.DudType{})
 	if err != nil {
@@ -102,6 +103,8 @@ func TestMemoryCacheCompaction(t *testing.T) {
 	} else if string(act) != exp {
 		t.Errorf("Wrong result: %v != %v", string(act), exp)
 	}
+
+	<-time.After(time.Millisecond * 50)
 
 	// This should trigger compaction.
 	if err = c.Add("bar", []byte("2")); err != nil {
