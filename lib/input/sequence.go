@@ -30,22 +30,22 @@ must not be consumed in parallel.`,
 		Footnotes: `
 ## Examples
 
-Read from three CSV files sequentially:
+A common use case might be to generate a message at the end of our main input:
 
 ` + "```yaml" + `
 input:
   sequence:
     inputs:
-      - file:
-          format: csv
-          path: ./first.csv
-      - file:
-          format: csv
-          path: ./second.csv
-      - file:
-          format: csv
-          path: ./third.csv
-` + "```" + ``,
+      - csv:
+          paths: [ ./dataset.csv ]
+      - bloblang:
+          count: 1
+          mapping: 'root = {"status":"finished"}'
+` + "```" + `
+
+With this config once the records within ` + "`./dataset.csv`" + ` are exhausted
+our final payload ` + "`" + `{"status":"finished"}` + "`" + ` will be routed
+through the pipeline.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			inputsSanit := make([]interface{}, 0, len(conf.Sequence.Inputs))
 			for _, in := range conf.Sequence.Inputs {

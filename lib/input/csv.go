@@ -114,9 +114,13 @@ func NewCSVFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.T
 			}
 
 			path := pathsRemaining[0]
+			handle, err := os.Open(path)
+			if err != nil {
+				return nil, err
+			}
 			pathsRemaining = pathsRemaining[1:]
 
-			return os.Open(path)
+			return handle, nil
 		},
 		func(context.Context) {},
 		optCSVSetComma(comma),
