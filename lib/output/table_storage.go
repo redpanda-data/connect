@@ -1,7 +1,10 @@
 package output
 
 import (
+	"fmt"
+
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -53,7 +56,11 @@ properties:
 	device: '${! json("device") }'
 	timestamp: '${! json("timestamp") }'
 ` + "```" + ``,
-		Async: true,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			return sanitiseWithBatch(conf.TableStorage, conf.TableStorage.Batching)
+		},
+		Async:   true,
+		Batches: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("storage_account", "The storage account to upload messages to."),
 			docs.FieldCommon("storage_access_key", "The storage account access key."),
@@ -73,6 +80,7 @@ properties:
 			docs.FieldCommon("max_in_flight",
 				"The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldAdvanced("timeout", "The maximum period to wait on an upload before abandoning it and reattempting."),
+			batch.FieldSpec(),
 		},
 	}
 }
@@ -85,14 +93,25 @@ func NewAzureTableStorage(conf Config, mgr types.Manager, log log.Modular, stats
 	if err != nil {
 		return nil, err
 	}
+	var w Type
 	if conf.TableStorage.MaxInFlight == 1 {
-		return NewWriter(
+		w, err = NewWriter(
 			TypeTableStorage, sthree, log, stats,
 		)
+	} else {
+		w, err = NewAsyncWriter(
+			TypeTableStorage, conf.TableStorage.MaxInFlight, sthree, log, stats,
+		)
 	}
-	return NewAsyncWriter(
-		TypeTableStorage, conf.TableStorage.MaxInFlight, sthree, log, stats,
-	)
+
+	if bconf := conf.TableStorage.Batching; err == nil && !bconf.IsNoop() {
+		policy, err := batch.NewPolicy(bconf, mgr, log.NewModule(".batching"), metrics.Namespaced(stats, "batching"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to construct batch policy: %v", err)
+		}
+		w = NewBatcher(policy, w, log, stats)
+	}
+	return w, err
 }
 
 //------------------------------------------------------------------------------
