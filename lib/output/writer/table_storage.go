@@ -162,21 +162,7 @@ func (a *AzureTableStorage) WriteWithContext(wctx context.Context, msg types.Mes
 			}
 		}
 	}
-
 	return nil
-}
-
-func (a *AzureTableStorage) insert(insertType string, entity *storage.Entity) error {
-	switch insertType {
-	case "INSERT":
-		return entity.Insert(storage.FullMetadata, nil)
-	case "INSERT_MERGE":
-		return entity.InsertOrMerge(nil)
-	case "INSERT_REPLACE":
-		return entity.InsertOrReplace(nil)
-	default:
-		return fmt.Errorf("invalid insert type")
-	}
 }
 
 func (a *AzureTableStorage) createBatch(tableBatch *storage.TableBatch, insertType string, entity *storage.Entity) error {
