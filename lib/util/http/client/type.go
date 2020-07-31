@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/textproto"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,6 +44,7 @@ type Config struct {
 	DropOn              []int             `json:"drop_on" yaml:"drop_on"`
 	SuccessfulOn        []int             `json:"successful_on" yaml:"successful_on"`
 	TLS                 tls.Config        `json:"tls" yaml:"tls"`
+	HTTPProxy           string            `json:"http_proxy" yaml:"http_proxy"`
 	auth.Config         `json:",inline" yaml:",inline"`
 }
 
@@ -141,6 +143,20 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		h.client.Transport = &http.Transport{
 			TLSClientConfig: tlsConf,
 		}
+	}
+
+	if h.conf.HTTPProxy != "" {
+		proxyURL, err := url.Parse(h.conf.HTTPProxy)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse http_proxy string: %v", err)
+		}
+		var tr *http.Transport
+		if h.client.Transport != nil {
+			tr = h.client.Transport.(*http.Transport)
+		} else {
+			tr = http.DefaultTransport.(*http.Transport)
+		}
+		tr.Proxy = http.ProxyURL(proxyURL)
 	}
 
 	for _, c := range conf.BackoffOn {

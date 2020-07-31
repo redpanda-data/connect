@@ -79,6 +79,7 @@ http:
       - 429
     drop_on: []
     successful_on: []
+    http_proxy: ""
 ```
 
 </TabItem>
@@ -159,7 +160,7 @@ Controls how the HTTP request is made.
 
 
 Type: `object`  
-Default: `{"backoff_on":[429],"basic_auth":{"enabled":false,"password":"","username":""},"copy_response_headers":false,"drop_on":[],"headers":{"Content-Type":"application/octet-stream"},"max_retry_backoff":"300s","oauth":{"access_token":"","access_token_secret":"","consumer_key":"","consumer_secret":"","enabled":false,"request_url":""},"rate_limit":"","retries":3,"retry_period":"1s","successful_on":[],"timeout":"5s","tls":{"client_certs":[],"enabled":false,"root_cas_file":"","skip_cert_verify":false},"url":"http://localhost:4195/post","verb":"POST"}`  
+Default: `{"backoff_on":[429],"basic_auth":{"enabled":false,"password":"","username":""},"copy_response_headers":false,"drop_on":[],"headers":{"Content-Type":"application/octet-stream"},"http_proxy":"","max_retry_backoff":"300s","oauth":{"access_token":"","access_token_secret":"","consumer_key":"","consumer_secret":"","enabled":false,"request_url":""},"rate_limit":"","retries":3,"retry_period":"1s","successful_on":[],"timeout":"5s","tls":{"client_certs":[],"enabled":false,"root_cas_file":"","skip_cert_verify":false},"url":"http://localhost:4195/post","verb":"POST"}`  
 
 ### `request.url`
 
@@ -364,5 +365,13 @@ A list of status codes whereby the attempt should be considered successful (allo
 
 Type: `array`  
 Default: `[]`  
+
+### `request.http_proxy`
+
+An HTTP proxy URL
+
+
+Type: `string`  
+Default: `""`  
 
 
