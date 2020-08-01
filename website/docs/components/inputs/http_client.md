@@ -78,6 +78,7 @@ input:
       - 429
     drop_on: []
     successful_on: []
+    http_proxy: ""
     payload: ""
     drop_empty_bodies: true
     stream:
@@ -306,6 +307,14 @@ A list of status codes whereby the attempt should be considered successful (allo
 
 Type: `array`  
 Default: `[]`  
+
+### `http_proxy`
+
+An HTTP proxy URL
+
+
+Type: `string`  
+Default: `""`  
 
 ### `payload`
 

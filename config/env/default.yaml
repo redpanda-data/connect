@@ -97,6 +97,7 @@ input:
           drop_empty_bodies: ${INPUT_HTTP_CLIENT_DROP_EMPTY_BODIES:true}
           headers:
             Content-Type: ${INPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE:application/octet-stream}
+          http_proxy: ${INPUT_HTTP_CLIENT_HTTP_PROXY}
           max_retry_backoff: ${INPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF:300s}
           oauth:
             access_token: ${INPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN}
@@ -526,6 +527,7 @@ pipeline:
           copy_response_headers: ${PROCESSOR_HTTP_REQUEST_COPY_RESPONSE_HEADERS:false}
           headers:
             Content-Type: ${PROCESSOR_HTTP_REQUEST_HEADERS_CONTENT_TYPE:application/octet-stream}
+          http_proxy: ${PROCESSOR_HTTP_REQUEST_HTTP_PROXY}
           max_retry_backoff: ${PROCESSOR_HTTP_REQUEST_MAX_RETRY_BACKOFF:300s}
           oauth:
             access_token: ${PROCESSOR_HTTP_REQUEST_OAUTH_ACCESS_TOKEN}
@@ -772,6 +774,7 @@ output:
           copy_response_headers: ${OUTPUT_HTTP_CLIENT_COPY_RESPONSE_HEADERS:false}
           headers:
             Content-Type: ${OUTPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE:application/octet-stream}
+          http_proxy: ${OUTPUT_HTTP_CLIENT_HTTP_PROXY}
           max_in_flight: ${OUTPUT_HTTP_CLIENT_MAX_IN_FLIGHT:1}
           max_retry_backoff: ${OUTPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF:300s}
           oauth:

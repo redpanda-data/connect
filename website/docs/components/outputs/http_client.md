@@ -79,6 +79,7 @@ output:
       - 429
     drop_on: []
     successful_on: []
+    http_proxy: ""
     propagate_response: false
     max_in_flight: 1
     batching:
@@ -328,6 +329,14 @@ A list of status codes whereby the attempt should be considered successful (allo
 
 Type: `array`  
 Default: `[]`  
+
+### `http_proxy`
+
+An HTTP proxy URL
+
+
+Type: `string`  
+Default: `""`  
 
 ### `propagate_response`
 
