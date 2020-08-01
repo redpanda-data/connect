@@ -298,6 +298,9 @@ func compare(lhs, rhs Function, op arithmeticOp) (Function, error) {
 			}
 			rhs, err := IGetString(rhsV)
 			if err != nil {
+				if op == arithmeticNeq {
+					return true, nil
+				}
 				return nil, err
 			}
 			return strOpFn(lhs, rhs), nil
@@ -307,6 +310,9 @@ func compare(lhs, rhs Function, op arithmeticOp) (Function, error) {
 			}
 			rhs, err := IGetNumber(rhsV)
 			if err != nil {
+				if op == arithmeticNeq {
+					return true, nil
+				}
 				return nil, err
 			}
 			return numOpFn(lhs, rhs), nil
@@ -316,6 +322,9 @@ func compare(lhs, rhs Function, op arithmeticOp) (Function, error) {
 			}
 			rhs, err := IGetBool(rhsV)
 			if err != nil {
+				if op == arithmeticNeq {
+					return true, nil
+				}
 				return nil, err
 			}
 			return boolOpFn(lhs, rhs), nil

@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 - Azure `table_storage` output now supports batched sends.
 - All HTTP components are now able to configure a proxy URL.
 
+### Fixed
+
+- Bloblang now allows non-matching not-equals comparisons, allowing
+  `foo != null` expressions.
+
 ### Changed
 
 - Condition `check_interpolation` has been deprecated.
