@@ -10,7 +10,7 @@ However, sometimes the transaction model is undesired, in which case there are a
 Buffers can therefore solve a number of typical streaming problems but come at the cost of weakening the delivery guarantees of your pipeline. Common problems that might warrant use of a buffer are:
 
 - Input sources can periodically spike beyond the capacity of your output sinks.
-- Your input source needs occasional protection against back pressure from your sink, e.g. during restarts. Please keep in mind that all buffers have an eventual limit.
+- Your input source needs occasional protection against back pressure from your sink, e.g. during restarts. Keep in mind that all buffers have an eventual limit.
 
 If you believe that a problem you have would be solved by a buffer the next step is to choose an implementation based on the throughput and delivery guarantees you need. In order to help here are some simplified tables outlining the different options and their qualities:
 

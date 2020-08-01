@@ -489,6 +489,7 @@ pipeline:
         cache: ${PROCESSOR_CACHE_CACHE}
         key: ${PROCESSOR_CACHE_KEY}
         operator: ${PROCESSOR_CACHE_OPERATOR:set}
+        resource: ${PROCESSOR_CACHE_RESOURCE}
         value: ${PROCESSOR_CACHE_VALUE}
       compress:
         algorithm: ${PROCESSOR_COMPRESS_ALGORITHM:gzip}

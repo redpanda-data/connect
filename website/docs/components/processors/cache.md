@@ -29,7 +29,7 @@ import TabItem from '@theme/TabItem';
 ```yaml
 # Common config fields, showing default values
 cache:
-  cache: ""
+  resource: ""
   operator: set
   key: ""
   value: ""
@@ -41,7 +41,7 @@ cache:
 ```yaml
 # All config fields, showing default values
 cache:
-  cache: ""
+  resource: ""
   operator: set
   key: ""
   value: ""
@@ -82,7 +82,7 @@ action is a no-op and will not fail with an error.
 
 ## Fields
 
-### `cache`
+### `resource`
 
 The [`cache` resource](/docs/components/caches/about) to target with this processor.
 
@@ -140,16 +140,15 @@ in order to solve a variety of data stream problems.
 Deduplication can be done using the add operator with a key extracted from the
 message payload, since it fails when a key already exists we can remove the
 duplicates using a
-[`processor_failed`](/docs/components/conditions/processor_failed)
-condition:
+[`bloblang` processor](/docs/components/processors/bloblang):
 
 ``` yaml
 - cache:
-    cache: TODO
+    resource: TODO
     operator: add
-    key: '${!json("message.id")}'
+    key: '${! json("message.id") }'
     value: "storeme"
-- bloblang: root = if error().length() > 0 { deleted() }
+- bloblang: root = if errored() { deleted() }
 ```
 
 ### Hydration
@@ -161,9 +160,9 @@ using the [`process_map`](/docs/components/processors/process_map) processor:
 - process_map:
     processors:
     - cache:
-        cache: TODO
+        resource: TODO
         operator: get
-        key: '${!json("message.document_id")}'
+        key: '${! json("message.document_id") }'
     postmap:
       message.document: .
 ```

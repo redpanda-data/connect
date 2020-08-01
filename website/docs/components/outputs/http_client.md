@@ -375,9 +375,7 @@ batching:
 
 batching:
   condition:
-    text:
-      arg: END BATCH
-      operator: contains
+    bloblang: this.contains("END BATCH")
   period: 1m
 ```
 

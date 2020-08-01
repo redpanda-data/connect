@@ -20,10 +20,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).`,
 			map[string]interface{}{
 				"period": "1m",
 				"condition": map[string]interface{}{
-					"text": map[string]interface{}{
-						"operator": "contains",
-						"arg":      "END BATCH",
-					},
+					"bloblang": `this.contains("END BATCH")`,
 				},
 			},
 		},

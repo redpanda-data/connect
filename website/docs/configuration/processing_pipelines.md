@@ -20,7 +20,7 @@ output:
   type: bar
 ```
 
-If the field `threads` is set to `0` (or omitted) it will automatically match the number of logical CPUs available.
+If the field `threads` is set to `0` it will automatically match the number of logical CPUs available.
 
 By default almost all Benthos sources will utilise as many processing threads as have been configured, which makes horizontal scaling easy. However, this configuration would not be optimal if our input isn't able to utilise >1 processing threads, which will be mentioned in its documentation ([`kafka`][kafka-input], for example).
 

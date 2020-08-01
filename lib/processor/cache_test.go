@@ -11,7 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-func TestCacheSet(t *testing.T) {
+func TestCacheSetDeprecated(t *testing.T) {
 	memCache, err := cache.NewMemory(cache.NewConfig(), nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
@@ -68,6 +68,63 @@ func TestCacheSet(t *testing.T) {
 	}
 }
 
+func TestCacheSet(t *testing.T) {
+	memCache, err := cache.NewMemory(cache.NewConfig(), nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	mgr := &fakeMgr{
+		caches: map[string]types.Cache{
+			"foocache": memCache,
+		},
+	}
+
+	conf := NewConfig()
+	conf.Cache.Key = "${!json(\"key\")}"
+	conf.Cache.Value = "${!json(\"value\")}"
+	conf.Cache.Resource = "foocache"
+	proc, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	input := message.New([][]byte{
+		[]byte(`{"key":"1","value":"foo 1"}`),
+		[]byte(`{"key":"2","value":"foo 2"}`),
+		[]byte(`{"key":"1","value":"foo 3"}`),
+	})
+
+	output, res := proc.ProcessMessage(input)
+	if res != nil {
+		t.Fatal(res.Error())
+	}
+
+	if len(output) != 1 {
+		t.Fatalf("Wrong count of result messages: %v", len(output))
+	}
+
+	if exp, act := message.GetAllBytes(input), message.GetAllBytes(output[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result messages: %s != %s", act, exp)
+	}
+
+	actBytes, err := memCache.Get("1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := "foo 3", string(actBytes); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+
+	actBytes, err = memCache.Get("2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := "foo 2", string(actBytes); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+}
+
 func TestCacheSetParts(t *testing.T) {
 	memCache, err := cache.NewMemory(cache.NewConfig(), nil, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -82,7 +139,7 @@ func TestCacheSetParts(t *testing.T) {
 	conf := NewConfig()
 	conf.Cache.Key = "${!json(\"key\")}"
 	conf.Cache.Value = "${!json(\"value\")}"
-	conf.Cache.Cache = "foocache"
+	conf.Cache.Resource = "foocache"
 	conf.Cache.Parts = []int{0, 1}
 	proc, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -140,7 +197,7 @@ func TestCacheAdd(t *testing.T) {
 	conf := NewConfig()
 	conf.Cache.Key = "${!json(\"key\")}"
 	conf.Cache.Value = "${!json(\"value\")}"
-	conf.Cache.Cache = "foocache"
+	conf.Cache.Resource = "foocache"
 	conf.Cache.Operator = "add"
 	proc, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -210,7 +267,7 @@ func TestCacheGet(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Cache.Key = "${!json(\"key\")}"
-	conf.Cache.Cache = "foocache"
+	conf.Cache.Resource = "foocache"
 	conf.Cache.Operator = "get"
 	proc, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -270,7 +327,7 @@ func TestCacheDelete(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Cache.Key = "${!json(\"key\")}"
-	conf.Cache.Cache = "foocache"
+	conf.Cache.Resource = "foocache"
 	conf.Cache.Operator = "delete"
 	proc, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {

@@ -18,21 +18,12 @@ import (
 func init() {
 	Constructors[TypeCheckInterpolation] = TypeSpec{
 		constructor: NewCheckInterpolation,
-		Summary: `
-Resolves a string containing
-[function interpolations](/docs/configuration/interpolation#bloblang-queries) and then tests
-the result against a child condition.`,
-		Description: `
-For example, you could use this to test against the size of a message batch:
+		Deprecated:  true,
+		Footnotes: `
+## Alternatives
 
-` + "``` yaml" + `
-check_interpolation:
-  value: ${! batch_size() }
-  condition:
-    number:
-      operator: greater_than
-      arg: 1
-` + "```" + ``,
+Consider using the [bloblang](/docs/components/conditions/bloblang) condition
+instead.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			var condConf interface{} = struct{}{}
 			if conf.CheckInterpolation.Condition != nil {

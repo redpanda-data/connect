@@ -127,8 +127,8 @@ input:
 pipeline:
   processors:
   - bloblang: |
-      message = this
-      meta.link_count = links.length()
+      root.document = this.without("links")
+      root.link_count = this.links.length()
 
 output:
   s3:
@@ -185,7 +185,7 @@ pipeline:
   - cache:
       operator: get
       key: ${! json("id") }
-      cache: objects
+      resource: objects
 ```
 
 And we wished to use this snippet within a larger configuration file
@@ -213,7 +213,7 @@ pipeline:
   - cache:
       operator: get
       key: ${! json("id") }
-      cache: objects
+      resource: objects
 ```
 
 Note that the path of a reference is relative to the configuration file

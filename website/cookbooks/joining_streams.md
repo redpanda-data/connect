@@ -97,7 +97,7 @@ pipeline:
     # Store reduced articles into our cache.
     - cache:
         operator: set
-        cache: hydration_cache
+        resource: hydration_cache
         key: '${!json("article.id")}'
         value: '${!content()}'
 
@@ -141,7 +141,7 @@ pipeline:
         processors:
           - cache:
               operator: get
-              cache: hydration_cache
+              resource: hydration_cache
               key: '${!json("parent_id")}'
         postmap:
           # We only need the article section of our parent document.
@@ -156,7 +156,7 @@ pipeline:
           # Store reduced comment into our cache.
           - cache:
               operator: set
-              cache: hydration_cache
+              resource: hydration_cache
               key: '${!json("comment.id")}'
               value: '${!content()}'
         postmap_optional:

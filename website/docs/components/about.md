@@ -79,10 +79,12 @@ input:
 
 pipeline:
   processors:
-    - dedupe: # This is a processor
-        cache: baz_cache # This is a reference to a cache
-        hash: xxhash
-        key: ${! json("id") }
+    - cache: # This is a processor
+        resource: baz_cache # This is a reference to a cache
+        operator: add
+        key: '${! json("id") }'
+        value: "x"
+    - bloblang: root = if errored() { deleted() }
 
 resources:
   rate_limits:

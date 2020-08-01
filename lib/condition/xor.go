@@ -19,17 +19,13 @@ true if _exactly_ one of its children conditions resolves to true.`,
 		Footnotes: `
 ## Examples
 
-The following snippet resolves to true if a message contains 'foo' or 'bar', but
-not both:
+The following snippet resolves to true if a message matches the resource
+condition 'foo' or 'bar', but not both:
 
 ` + "``` yaml" + `
 xor:
-  - text:
-      operator: contains
-      arg: foo
-  - text:
-      operator: contains
-      arg: bar
+  - resource: foo
+  - resource: bar
 ` + "```" + ``,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			var err error

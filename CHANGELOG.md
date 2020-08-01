@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - Azure `table_storage` output now supports batched sends.
 - All HTTP components are now able to configure a proxy URL.
 
+### Changed
+
+- Condition `check_interpolation` has been deprecated.
+
 ## 3.23.0 - 2020-07-26
 
 ### Added

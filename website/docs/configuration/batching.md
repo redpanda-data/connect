@@ -67,22 +67,18 @@ pipeline:
         query: "{ nested: @, links: join(', ', data.urls) }"
 ```
 
-And some [function interpolation][function_interpolation] operations are evaluated batch wide:
+And some processors such as [`sleep`][processor.sleep] are execute once per batch, you can also avoid this behaviour with the [`for_each` processor][proc_for_each]:
 
 ```yaml
 pipeline:
   processors:
-    # Set the field `common_foo` of every message of the batch to the value of
-    # `body.source_id` of the last message of the batch.
-    - json:
-        operator: set
-        path: common_foo
-        value: "${! json("body.source_id").from(-1) }"
+    # Sleep for one second for each message of a batch
+    - for_each:
+      - sleep:
+          duration: 1s
 ```
 
-You can also avoid this behaviour with the [`for_each` processor][proc_for_each].
-
-There's a vast number of processors that specialise in operations across batches such as [grouping][proc_group_by], [archiving][proc_archive], [joining][proc_merge_json] and more. For example, the following processors group a batch of messages according to a metadata field and compresses them into separate `.tar.gz` archives:
+There's a vast number of processors that specialise in operations across batches such as [grouping][proc_group_by] and [archiving][proc_archive]. For example, the following processors group a batch of messages according to a metadata field and compresses them into separate `.tar.gz` archives:
 
 ```yaml
 pipeline:
@@ -188,6 +184,7 @@ The above config will batch up messages and then merge them into a line delimite
 During shutdown any remaining messages waiting for a batch to complete will be flushed down the pipeline.
 
 [processors]: /docs/components/processors/about
+[processor.sleep]: /docs/components/processors/sleep
 [conditions]: /docs/components/conditions/about
 [split]: /docs/components/processors/split
 [archive]: /docs/components/processors/archive
@@ -195,7 +192,6 @@ During shutdown any remaining messages waiting for a batch to complete will be f
 [proc_for_each]: /docs/components/processors/for_each
 [proc_group_by]: /docs/components/processors/group_by
 [proc_archive]: /docs/components/processors/archive
-[proc_merge_json]: /docs/components/processors/merge_json
 [input_broker]: /docs/components/inputs/broker
 [output_broker]: /docs/components/outputs/broker
 [input_kafka]: /docs/components/inputs/kafka

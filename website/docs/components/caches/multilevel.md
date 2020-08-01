@@ -34,7 +34,7 @@ pipeline:
     - process_map:
         processors:
           - cache:
-              cache: leveled
+              resource: leveled
               operator: get
               key: ${! json("key") }
           - catch:

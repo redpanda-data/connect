@@ -18,10 +18,10 @@ pipeline:
   processors:
     - type: cache
       cache:
-        cache: ""
         key: ""
         operator: set
         parts: []
+        resource: ""
         value: ""
   threads: 1
 output:

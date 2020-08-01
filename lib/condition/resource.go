@@ -42,10 +42,7 @@ output:
 resources:
   conditions:
     foobar:
-      text:
-        operator: equals_cs
-        part: 1
-        arg: filter me please
+      bloblang: 'this.from(1) == "filter me please"'
 ` + "```" + ``,
 	}
 }

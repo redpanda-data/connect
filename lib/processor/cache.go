@@ -50,7 +50,8 @@ can be detected with [processor error handling](/docs/configuration/error_handli
 Delete a key and its contents from the cache.  If the key does not exist the
 action is a no-op and will not fail with an error.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("cache", "The [`cache` resource](/docs/components/caches/about) to target with this processor."),
+			docs.FieldCommon("resource", "The [`cache` resource](/docs/components/caches/about) to target with this processor."),
+			docs.FieldDeprecated("cache"),
 			docs.FieldCommon("operator", "The [operation](#operators) to perform with the cache.").HasOptions("set", "add", "get", "delete"),
 			docs.FieldCommon("key", "A key to use with the cache.").SupportsInterpolation(false),
 			docs.FieldCommon("value", "A value to use with the cache (when applicable).").SupportsInterpolation(false),
@@ -67,16 +68,15 @@ in order to solve a variety of data stream problems.
 Deduplication can be done using the add operator with a key extracted from the
 message payload, since it fails when a key already exists we can remove the
 duplicates using a
-[` + "`processor_failed`" + `](/docs/components/conditions/processor_failed)
-condition:
+[` + "`bloblang` processor" + `](/docs/components/processors/bloblang):
 
 ` + "``` yaml" + `
 - cache:
-    cache: TODO
+    resource: TODO
     operator: add
-    key: '${!json("message.id")}'
+    key: '${! json("message.id") }'
     value: "storeme"
-- bloblang: root = if error().length() > 0 { deleted() }
+- bloblang: root = if errored() { deleted() }
 ` + "```" + `
 
 ### Hydration
@@ -88,9 +88,9 @@ using the [` + "`process_map`" + `](/docs/components/processors/process_map) pro
 - process_map:
     processors:
     - cache:
-        cache: TODO
+        resource: TODO
         operator: get
-        key: '${!json("message.document_id")}'
+        key: '${! json("message.document_id") }'
     postmap:
       message.document: .
 ` + "```" + ``,
@@ -102,6 +102,7 @@ using the [` + "`process_map`" + `](/docs/components/processors/process_map) pro
 // CacheConfig contains configuration fields for the Cache processor.
 type CacheConfig struct {
 	Cache    string `json:"cache" yaml:"cache"`
+	Resource string `json:"resource" yaml:"resource"`
 	Parts    []int  `json:"parts" yaml:"parts"`
 	Operator string `json:"operator" yaml:"operator"`
 	Key      string `json:"key" yaml:"key"`
@@ -112,6 +113,7 @@ type CacheConfig struct {
 func NewCacheConfig() CacheConfig {
 	return CacheConfig{
 		Cache:    "",
+		Resource: "",
 		Parts:    []int{},
 		Operator: "set",
 		Key:      "",
@@ -147,7 +149,13 @@ type Cache struct {
 func NewCache(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	c, err := mgr.GetCache(conf.Cache.Cache)
+	var c types.Cache
+	var err error
+	if len(conf.Cache.Resource) > 0 {
+		c, err = mgr.GetCache(conf.Cache.Resource)
+	} else {
+		c, err = mgr.GetCache(conf.Cache.Cache)
+	}
 	if err != nil {
 		return nil, err
 	}
