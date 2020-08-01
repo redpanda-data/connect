@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -11,7 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/config"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -52,6 +52,7 @@ type TypeSpec struct {
 	Description string
 	Footnotes   string
 	FieldSpecs  docs.FieldSpecs
+	Beta        bool
 	Deprecated  bool
 }
 

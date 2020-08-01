@@ -1,13 +1,13 @@
 package input
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/amqp/sasl"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -15,10 +15,8 @@ import (
 func init() {
 	Constructors[TypeAMQP1] = TypeSpec{
 		constructor: NewAMQP1,
+		Beta:        true,
 		Summary: `
-BETA: This input is currently in a BETA stage and is therefore subject to
-breaking configuration changes outside of major version releases.
-
 Reads messages from an AMQP (1.0) server.`,
 		Description: `
 ### Metadata

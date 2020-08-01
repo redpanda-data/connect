@@ -1,6 +1,6 @@
 package batch
 
-import "github.com/Jeffail/benthos/v3/lib/x/docs"
+import "github.com/Jeffail/benthos/v3/internal/docs"
 
 // FieldSpec returns a spec for a common batching field.
 func FieldSpec() docs.FieldSpec {

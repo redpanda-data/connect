@@ -1,6 +1,7 @@
 ---
 title: amqp_1
 type: output
+beta: true
 ---
 
 <!--
@@ -10,9 +11,8 @@ type: output
      lib/output/amqp_1.go
 -->
 
-
-BETA: This output is currently in a BETA stage and is therefore subject to
-breaking configuration changes outside of major version releases.
+BETA: This component is experimental and therefore subject to change outside of
+major version releases.
 
 Sends messages to an AMQP (1.0) server.
 

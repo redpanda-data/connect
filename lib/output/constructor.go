@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
@@ -11,7 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/config"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"gopkg.in/yaml.v3"
 )
 
@@ -39,6 +39,9 @@ type TypeSpec struct {
 
 	// Batches indicates whether this output benefits from batching of messages.
 	Batches bool
+
+	// Beta indicates whether this output is a beta component.
+	Beta bool
 
 	// Deprecated indicates whether this component is deprecated.
 	Deprecated bool

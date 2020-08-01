@@ -1,6 +1,7 @@
 ---
 title: number
 type: condition
+deprecated: true
 ---
 
 <!--
@@ -10,10 +11,8 @@ type: condition
      lib/condition/number.go
 -->
 
-
-DEPRECATED: This condition is now deprecated, and the new
-[bloblang condition](/docs/components/conditions/bloblang) should be used
-instead.
+DEPRECATED: This component is deprecated and will be removed in the next major
+version release. Please consider moving onto [alternative components](#alternatives).
 
 
 import Tabs from '@theme/Tabs';
@@ -48,10 +47,6 @@ number:
 </TabItem>
 </Tabs>
 
-This condition is useful when paired with the [`check_field`](/docs/components/conditions/check_field) and
-[`check_interpolation`](/docs/components/conditions/check_interpolation) conditions to check a
-number condition against arbitrary metadata or fields of messages.
-
 ## Fields
 
 ### `operator`
@@ -83,25 +78,11 @@ counting backwards starting from -1.
 Type: `number`  
 Default: `0`  
 
-## Operators
+## Alternatives
 
-### `equals`
-
-Checks whether the value equals the argument.
-
-### `greater_than`
-
-Checks whether the value is greater than the argument. Returns false if the
-value cannot be parsed as a number.
-
-### `less_than`
-
-Checks whether the value is less than the argument. Returns false if the value
-cannot be parsed as a number.
-
-## Examples
-
-You can test a number condition against the size of a message batch with:
+Consider using the [bloblang](/docs/components/conditions/bloblang) condition
+instead as it offers a wide range of number processing options. For example, the
+following condition:
 
 ``` yaml
 check_interpolation:
@@ -110,5 +91,11 @@ check_interpolation:
     number:
       operator: greater_than
       arg: 1
+```
+
+Can instead be expressed with:
+
+``` yaml
+bloblang: 'batch_size() > 1'
 ```
 

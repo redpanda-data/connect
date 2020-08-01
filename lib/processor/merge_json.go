@@ -3,12 +3,12 @@ package processor
 import (
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/Jeffail/gabs/v2"
 )
 
@@ -17,18 +17,12 @@ import (
 func init() {
 	Constructors[TypeMergeJSON] = TypeSpec{
 		constructor: NewMergeJSON,
-		Summary: `
-DEPRECATED: This processor is now deprecated, and the new
-[bloblang processor](/docs/components/processors/bloblang) should be used
-instead.`,
-		Description: `
-Parses selected messages of a batch as JSON documents, attempts to merge them
-into one single JSON document and then writes it to a new message at the end of
-the batch.
+		Deprecated:  true,
+		Footnotes: `
+## Alternatives
 
-Merged parts are removed unless ` + "`retain_parts`" + ` is set to
-true. The new merged message will contain the metadata of the first part to be
-merged.`,
+All functionality of this processor has been superseded by the
+[bloblang](/docs/components/processors/bloblang) processor.`,
 		UsesBatches: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("retain_parts", "Whether messages that are merged should also have their original contents preserved."),

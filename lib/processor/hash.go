@@ -9,11 +9,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/OneOfOne/xxhash"
 	"github.com/opentracing/opentracing-go"
 )
@@ -23,23 +23,12 @@ import (
 func init() {
 	Constructors[TypeHash] = TypeSpec{
 		constructor: NewHash,
-		Summary: `
-DEPRECATED: This processor is now deprecated, and the new
-[bloblang processor](/docs/components/processors/bloblang) should be used
-instead.`,
-		Description: `
-This processor is mostly useful when combined with the
-` + "[`process_field`](/docs/components/processors/process_field)" + ` processor as it allows you to hash a
-specific field of a document like this:
+		Deprecated:  true,
+		Footnotes: `
+## Alternatives
 
-` + "``` yaml" + `
-# Hash the contents of 'foo.bar'
-process_field:
-  path: foo.bar
-  processors:
-  - hash:
-      algorithm: sha256
-` + "```" + ``,
+All functionality of this processor has been superseded by the
+[bloblang](/docs/components/processors/bloblang) processor.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("algorithm", "The hash algorithm to use.").HasOptions("sha256", "sha512", "sha1", "xxhash64", "hmac-sha1", "hmac-sha256", "hmac-sha512"),
 			docs.FieldCommon("key", "key used for HMAC algorithms"),

@@ -1,6 +1,7 @@
 ---
 title: filter_parts
 type: processor
+deprecated: true
 ---
 
 <!--
@@ -10,10 +11,8 @@ type: processor
      lib/processor/filter_parts.go
 -->
 
-
-DEPRECATED: This processor is now deprecated, and the new
-[bloblang processor](/docs/components/processors/bloblang) should be used
-instead.
+DEPRECATED: This component is deprecated and will be removed in the next major
+version release. Please consider moving onto [alternative components](#alternatives).
 
 ```yaml
 # Config fields, showing default values
@@ -25,9 +24,8 @@ filter_parts:
   type: text
 ```
 
-Tests each message against a [condition](/docs/components/conditions/about), if
-the condition fails then the message is dropped.
+## Alternatives
 
-You can find a [full list of conditions here](/docs/components/conditions/about).
-
+All functionality of this processor has been superseded by the
+[bloblang](/docs/components/processors/bloblang) processor.
 

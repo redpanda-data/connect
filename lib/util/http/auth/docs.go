@@ -1,6 +1,6 @@
 package auth
 
-import "github.com/Jeffail/benthos/v3/lib/x/docs"
+import "github.com/Jeffail/benthos/v3/internal/docs"
 
 // BasicAuthFieldSpec returns a basic authentication field spec.
 func BasicAuthFieldSpec() docs.FieldSpec {

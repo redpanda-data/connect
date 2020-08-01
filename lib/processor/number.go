@@ -6,11 +6,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/bloblang/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/opentracing/opentracing-go"
 )
 
@@ -19,42 +19,12 @@ import (
 func init() {
 	Constructors[TypeNumber] = TypeSpec{
 		constructor: NewNumber,
-		Summary: `
-DEPRECATED: This processor is now deprecated, and the new
-[bloblang processor](/docs/components/processors/bloblang) should be used
-instead.`,
-		Description: `
-The value field can either be a number or a string type. If it is a string type
-then this processor will interpolate functions within it, you can find a list of
-functions [here](/docs/configuration/interpolation#bloblang-queries).
+		Deprecated:  true,
+		Footnotes: `
+## Alternatives
 
-For example, if we wanted to subtract the current unix timestamp from the field
-'foo' of a JSON document ` + "`{\"foo\":1561219142}`" + ` we could use the
-following config:
-
-` + "``` yaml" + `
-process_field:
-  path: foo
-  result_type: float
-  processors:
-  - number:
-      operator: subtract
-      value: "${!timestamp_unix()}"
-` + "```" + `
-
-Value interpolations are resolved once per message batch, in order to resolve it
-for each message of the batch place it within a
-` + "[`for_each`](/docs/components/processors/for_each)" + ` processor.
-
-## Operators
-
-### ` + "`add`" + `
-
-Adds a value.
-
-### ` + "`subtract`" + `
-
-Subtracts a value.`,
+All functionality of this processor has been superseded by the
+[bloblang](/docs/components/processors/bloblang) processor.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("operator", "The [operator](#operators) to apply."),
 			docs.FieldCommon("value", "A value used by the operator.").SupportsInterpolation(true),

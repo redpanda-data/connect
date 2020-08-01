@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -22,10 +22,8 @@ import (
 func init() {
 	Constructors[TypeCSVFile] = TypeSpec{
 		constructor: NewCSVFile,
+		Beta:        true,
 		Summary: `
-BETA: This component is experimental and therefore subject to change outside of
-major version releases.
-
 Reads one or more CSV files as structured records following the format described
 in RFC 4180.`,
 		FieldSpecs: docs.FieldSpecs{

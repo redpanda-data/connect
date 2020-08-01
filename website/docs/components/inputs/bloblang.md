@@ -1,6 +1,7 @@
 ---
 title: bloblang
 type: input
+beta: true
 ---
 
 <!--
@@ -10,9 +11,8 @@ type: input
      lib/input/bloblang.go
 -->
 
-
-BETA: This input is currently in a BETA stage and is therefore subject to
-breaking configuration changes outside of major version releases.
+BETA: This component is experimental and therefore subject to change outside of
+major version releases.
 
 Generates messages at a given interval using a [Bloblang](/docs/guides/bloblang/about)
 mapping executed without a context. This allows you to generate messages for

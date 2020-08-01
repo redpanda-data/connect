@@ -7,10 +7,10 @@ import (
 	"net"
 	"regexp"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	radix "github.com/armon/go-radix"
 	"github.com/spf13/cast"
 )
@@ -20,91 +20,13 @@ import (
 func init() {
 	Constructors[TypeText] = TypeSpec{
 		constructor: NewText,
-		Summary: `
-DEPRECATED: This condition is now deprecated, and the new
-[bloblang condition](/docs/components/conditions/bloblang) should be used
-instead.`,
-		Description: `
-It's possible to use the ` + "[`check_field`](/docs/components/conditions/check_field)" + ` and
-` + "[`check_interpolation`](/docs/components/conditions/check_interpolation)" + ` conditions to check a
-text condition against arbitrary metadata or fields of messages.`,
+		Deprecated:  true,
 		Footnotes: `
-## Operators
+## Alternatives
 
-### ` + "`equals_cs`" + `
-
-Checks whether the content equals the argument (case sensitive.)
-
-### ` + "`equals`" + `
-
-Checks whether the content equals the argument under unicode case-folding (case
-insensitive.)
-
-### ` + "`contains_cs`" + `
-
-Checks whether the content contains the argument (case sensitive.)
-
-### ` + "`contains`" + `
-
-Checks whether the content contains the argument under unicode case-folding
-(case insensitive).
-
-### ` + "`contains_any_cs`" + `
-
-Checks whether the content contains any of the list of arguments under unicode case-folding (case sensitive).
-
-### ` + "`contains_any`" + `
-
-Checks whether the content contains any of the list of arguments under unicode case-folding (case insensitive).
-
-### ` + "`is`" + `
-
-Checks whether the content meets the characteristic of a type specified in 
-the argument field. Supported types are ` + "`ip`, " + "`ipv4`, " + "`ipv6`." + `
-
-### ` + "`prefix_cs`" + `
-
-Checks whether the content begins with the argument (case sensitive.)
-
-### ` + "`prefix`" + `
-
-Checks whether the content begins with the argument under unicode case-folding
-(case insensitive.)
-
-### ` + "`suffix_cs`" + `
-
-Checks whether the content ends with the argument (case sensitive.)
-
-### ` + "`suffix`" + `
-
-Checks whether the content ends with the argument under unicode case-folding
-(case insensitive.)
-
-### ` + "`regexp_partial`" + `
-
-Checks whether any section of the content matches a regular expression (RE2
-syntax).
-
-### ` + "`regexp_exact`" + `
-
-Checks whether the content exactly matches a regular expression (RE2 syntax).
-
-### ` + "`enum`" + `
-
-Checks whether the content matches any entry of a list of arguments, the field
-` + "`arg`" + ` must be an array for this operator, e.g.:
-
-` + "``` yaml" + `
-text:
-  operator: enum
-  arg:
-  - foo
-  - bar
-` + "```" + `
-
-## Examples
-
-To test a text condition against a JSON field ` + "`foo.bar`" + ` you can use:
+Consider using the [bloblang](/docs/components/conditions/bloblang) condition
+instead as it offers a wide range of text processing options. For example, the
+following text condition:
 
 ` + "``` yaml" + `
 check_field:
@@ -115,6 +37,12 @@ check_field:
       arg:
       - foo
       - bar
+` + "```" + `
+
+Can instead be expressed with:
+
+` + "``` yaml" + `
+bloblang: '["foo","bar"].contains(foo.bar)'
 ` + "```" + ``,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("operator", "An [operator](#operators) to apply."),

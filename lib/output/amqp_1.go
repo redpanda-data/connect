@@ -1,13 +1,13 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/amqp/sasl"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -15,10 +15,8 @@ import (
 func init() {
 	Constructors[TypeAMQP1] = TypeSpec{
 		constructor: NewAMQP1,
+		Beta:        true,
 		Summary: `
-BETA: This output is currently in a BETA stage and is therefore subject to
-breaking configuration changes outside of major version releases.
-
 Sends messages to an AMQP (1.0) server.`,
 		Description: ``,
 		Async:       true,

@@ -5,11 +5,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -17,15 +17,12 @@ import (
 func init() {
 	Constructors[TypeSample] = TypeSpec{
 		constructor: NewSample,
-		Summary: `
-DEPRECATED: This processor is now deprecated, and the new
-[bloblang processor](/docs/components/processors/bloblang) should be used
-instead.`,
-		Description: `
-Retains a pseudo-randomly sampled percentage of message batches (0 to 100) and
-drops all others. The random seed is static in order to sample
-deterministically, but can be set in config to allow parallel samples that are
-unique.`,
+		Deprecated:  true,
+		Footnotes: `
+## Alternatives
+
+All functionality of this processor has been superseded by the
+[bloblang](/docs/components/processors/bloblang) processor.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("retain", "The percentage of messages to keep."),
 			docs.FieldCommon("seed", "A seed for pseudo-random sampling."),

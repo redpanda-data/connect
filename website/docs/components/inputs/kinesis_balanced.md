@@ -1,6 +1,7 @@
 ---
 title: kinesis_balanced
 type: input
+beta: true
 ---
 
 <!--
@@ -10,9 +11,8 @@ type: input
      lib/input/kinesis_balanced.go
 -->
 
-
-BETA: This input is a beta component and is subject to change outside of major
-version releases.
+BETA: This component is experimental and therefore subject to change outside of
+major version releases.
 
 Receives messages from a Kinesis stream and automatically balances shards across
 consumers.

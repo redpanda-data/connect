@@ -7,11 +7,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/config"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -34,6 +34,8 @@ type TypeSpec struct {
 	// UsesBatches indicates whether this processors functionality is best
 	// applied on messages that are already batched.
 	UsesBatches bool
+
+	Beta bool
 
 	// Deprecated indicates whether this component is deprecated.
 	Deprecated bool

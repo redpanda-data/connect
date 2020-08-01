@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	radix "github.com/armon/go-radix"
 	"github.com/spf13/cast"
 )
@@ -20,19 +20,15 @@ import (
 func init() {
 	Constructors[TypeMetadata] = TypeSpec{
 		constructor: NewMetadata,
-		Summary: `
-DEPRECATED: This condition is now deprecated, and the new
-[bloblang condition](/docs/components/conditions/bloblang) should be used
-instead.`,
+		Deprecated:  true,
 		Footnotes: `
-## Operators
+## Alternatives
 
-### ` + "`enum`" + `
+Consider using the [bloblang](/docs/components/conditions/bloblang) condition
+instead as it offers a wide range of metadata processing options. For example,
+the following condition:
 
-Checks whether the contents of a metadata key matches one of the defined enum
-values.
-
-` + "```yaml" + `
+` + "``` yaml" + `
 metadata:
   operator: enum
   key: foo
@@ -43,105 +39,11 @@ metadata:
     - quux
 ` + "```" + `
 
-### ` + "`equals`" + `
+Can instead be expressed with:
 
-Checks whether the contents of a metadata key matches an argument. This operator
-is case insensitive.
-
-` + "```yaml" + `
-metadata:
-  operator: equals
-  key: foo
-  arg: bar
-` + "```" + `
-
-### ` + "`equals_cs`" + `
-
-Checks whether the contents of a metadata key matches an argument. This operator
-is case sensitive.
-
-` + "```yaml" + `
-metadata:
-  operator: equals_cs
-  key: foo
-  arg: BAR
-` + "```" + `
-
-### ` + "`exists`" + `
-
-Checks whether a metadata key exists.
-
-` + "```yaml" + `
-metadata:
-  operator: exists
-  key: foo
-` + "```" + `
-
-### ` + "`greater_than`" + `
-
-Checks whether the contents of a metadata key, parsed as a floating point
-number, is greater than an argument. Returns false if the metadata value cannot
-be parsed into a number.
-
-` + "```yaml" + `
-metadata:
-  operator: greater_than
-  key: foo
-  arg: 3
-` + "```" + `
-
-### ` + "`has_prefix`" + `
-
-Checks whether the contents of a metadata key match one of the provided prefixes.
-The arg field can either be a singular prefix string or a list of prefixes.
-
-` + "```yaml" + `
-metadata:
-  operator: has_prefix
-  key: foo
-  arg:
-    - foo
-    - bar
-    - baz
-` + "```" + `
-
-### ` + "`less_than`" + `
-
-Checks whether the contents of a metadata key, parsed as a floating point
-number, is less than an argument. Returns false if the metadata value cannot be
-parsed into a number.
-
-` + "```yaml" + `
-metadata:
-  operator: less_than
-  key: foo
-  arg: 3
-` + "```" + `
-
-### ` + "`regexp_partial`" + `
-
-Checks whether any section of the contents of a metadata key matches a regular
-expression (RE2 syntax).
-
-` + "```yaml" + `
-metadata:
-  operator: regexp_partial
-  key: foo
-  arg: "1[a-z]2"
-` + "```" + `
-
-### ` + "`regexp_exact`" + `
-
-Checks whether the contents of a metadata key exactly matches a regular expression 
-(RE2 syntax).
-
-` + "```yaml" + `
-metadata:
-  operator: regexp_partial
-  key: foo
-  arg: "1[a-z]2"
-` + "```" + `
-`,
+` + "``` yaml" + `
+bloblang: '["bar","baz","qux","quux"].contains(meta("foo"))'
+` + "```" + ``,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("operator", "An [operator](#operators) to apply."),
 			docs.FieldCommon("key", "The key of the metadata field to check."),

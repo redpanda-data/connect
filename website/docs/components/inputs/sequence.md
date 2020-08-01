@@ -1,6 +1,7 @@
 ---
 title: sequence
 type: input
+beta: true
 ---
 
 <!--
@@ -10,9 +11,8 @@ type: input
      lib/input/sequence.go
 -->
 
-
-BETA: This input is experimental and is therefore subject to breaking changes
-outside of major version releases.
+BETA: This component is experimental and therefore subject to change outside of
+major version releases.
 
 Reads messages from a sequence of child inputs, starting with the first and once
 that input gracefully terminates starts consuming from the next, and so on.

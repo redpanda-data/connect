@@ -1,6 +1,7 @@
 ---
 title: merge_json
 type: processor
+deprecated: true
 ---
 
 <!--
@@ -10,10 +11,8 @@ type: processor
      lib/processor/merge_json.go
 -->
 
-
-DEPRECATED: This processor is now deprecated, and the new
-[bloblang processor](/docs/components/processors/bloblang) should be used
-instead.
+DEPRECATED: This component is deprecated and will be removed in the next major
+version release. Please consider moving onto [alternative components](#alternatives).
 
 
 import Tabs from '@theme/Tabs';
@@ -46,13 +45,6 @@ merge_json:
 </TabItem>
 </Tabs>
 
-Parses selected messages of a batch as JSON documents, attempts to merge them
-into one single JSON document and then writes it to a new message at the end of
-the batch.
-
-Merged parts are removed unless `retain_parts` is set to
-true. The new merged message will contain the metadata of the first part to be
-merged.
 
 The functionality of this processor depends on being applied across messages
 that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).
@@ -80,4 +72,8 @@ counting backwards starting from -1.
 Type: `array`  
 Default: `[]`  
 
+## Alternatives
+
+All functionality of this processor has been superseded by the
+[bloblang](/docs/components/processors/bloblang) processor.
 

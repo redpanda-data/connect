@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Azure/go-amqp"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
+	"github.com/Jeffail/benthos/v3/internal/docs"
 )
 
 // ErrMechanismNotSupported is returned if a SASL mechanism was not recognized.

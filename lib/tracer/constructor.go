@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/util/config"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -31,6 +31,7 @@ type TypeSpec struct {
 	Description string
 	Footnotes   string
 	FieldSpecs  docs.FieldSpecs
+	Beta        bool
 	Deprecated  bool
 }
 

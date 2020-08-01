@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -16,34 +16,13 @@ import (
 func init() {
 	Constructors[TypeNumber] = TypeSpec{
 		constructor: NewNumber,
-		Summary: `
-DEPRECATED: This condition is now deprecated, and the new
-[bloblang condition](/docs/components/conditions/bloblang) should be used
-instead.`,
-		Description: `
-This condition is useful when paired with the ` + "[`check_field`](/docs/components/conditions/check_field)" + ` and
-` + "[`check_interpolation`](/docs/components/conditions/check_interpolation)" + ` conditions to check a
-number condition against arbitrary metadata or fields of messages.`,
+		Deprecated:  true,
 		Footnotes: `
-## Operators
+## Alternatives
 
-### ` + "`equals`" + `
-
-Checks whether the value equals the argument.
-
-### ` + "`greater_than`" + `
-
-Checks whether the value is greater than the argument. Returns false if the
-value cannot be parsed as a number.
-
-### ` + "`less_than`" + `
-
-Checks whether the value is less than the argument. Returns false if the value
-cannot be parsed as a number.
-
-## Examples
-
-You can test a number condition against the size of a message batch with:
+Consider using the [bloblang](/docs/components/conditions/bloblang) condition
+instead as it offers a wide range of number processing options. For example, the
+following condition:
 
 ` + "``` yaml" + `
 check_interpolation:
@@ -52,6 +31,12 @@ check_interpolation:
     number:
       operator: greater_than
       arg: 1
+` + "```" + `
+
+Can instead be expressed with:
+
+` + "``` yaml" + `
+bloblang: 'batch_size() > 1'
 ` + "```" + ``,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("operator", "An [operator](#operators) to apply."),

@@ -29,6 +29,12 @@ type ComponentSpec struct {
 	// Footnotes of the component (in markdown).
 	Footnotes string
 
+	// Whether the component is beta.
+	Beta bool
+
+	// Whether the component is now deprecated.
+	Deprecated bool
+
 	Fields FieldSpecs
 }
 
@@ -53,6 +59,8 @@ type componentContext struct {
 	Footnotes      string
 	CommonConfig   string
 	AdvancedConfig string
+	Beta           bool
+	Deprecated     bool
 }
 
 func (ctx fieldContext) InterpolationBatchWide() FieldInterpolation {
@@ -66,6 +74,10 @@ func (ctx fieldContext) InterpolationIndividual() FieldInterpolation {
 var componentTemplate = `---
 title: {{.Name}}
 type: {{.Type}}
+{{if .Beta}}beta: true
+{{end -}}
+{{if .Deprecated}}deprecated: true
+{{end -}}
 ---
 
 <!--
@@ -74,6 +86,15 @@ type: {{.Type}}
      To make changes please edit the contents of:
      lib/{{.Type}}/{{.Name}}.go
 -->
+
+{{if .Beta -}}
+BETA: This component is experimental and therefore subject to change outside of
+major version releases.
+{{end -}}
+{{if .Deprecated -}}
+DEPRECATED: This component is deprecated and will be removed in the next major
+version release. Please consider moving onto [alternative components](#alternatives).
+{{end -}}
 
 {{if gt (len .Summary) 0 -}}
 {{.Summary}}
@@ -211,6 +232,8 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 		Summary:     c.Summary,
 		Description: c.Description,
 		Footnotes:   c.Footnotes,
+		Beta:        c.Beta,
+		Deprecated:  c.Deprecated,
 	}
 
 	if tmpBytes, err := yaml.Marshal(fullConfigExample); err == nil {

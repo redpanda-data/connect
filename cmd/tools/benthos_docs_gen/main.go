@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"path"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/condition"
@@ -17,7 +18,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/tracer"
 	"github.com/Jeffail/benthos/v3/lib/util/config"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -72,9 +72,6 @@ func main() {
 
 func doInputs(docsDir string) {
 	for k, v := range input.Constructors {
-		if v.Deprecated {
-			continue
-		}
 		spec := docs.ComponentSpec{
 			Type:        "input",
 			Name:        k,
@@ -82,6 +79,8 @@ func doInputs(docsDir string) {
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
+			Beta:        v.Beta,
+			Deprecated:  v.Deprecated,
 		}
 
 		conf := input.NewConfig()
@@ -104,6 +103,8 @@ func doBuffers(docsDir string) {
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
+			Beta:        v.Beta,
+			Deprecated:  v.Deprecated,
 		}
 
 		conf := buffer.NewConfig()
@@ -126,6 +127,8 @@ func doCaches(docsDir string) {
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
+			Beta:        v.Beta,
+			Deprecated:  v.Deprecated,
 		}
 
 		conf := cache.NewConfig()
@@ -148,6 +151,8 @@ func doConditions(docsDir string) {
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
+			Beta:        v.Beta,
+			Deprecated:  v.Deprecated,
 		}
 
 		conf := condition.NewConfig()
@@ -170,6 +175,8 @@ func doMetrics(docsDir string) {
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
+			Beta:        v.Beta,
+			Deprecated:  v.Deprecated,
 		}
 
 		conf := metrics.NewConfig()
@@ -185,9 +192,6 @@ func doMetrics(docsDir string) {
 
 func doOutputs(docsDir string) {
 	for k, v := range output.Constructors {
-		if v.Deprecated {
-			continue
-		}
 		spec := docs.ComponentSpec{
 			Type:        "output",
 			Name:        k,
@@ -195,6 +199,8 @@ func doOutputs(docsDir string) {
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
+			Beta:        v.Beta,
+			Deprecated:  v.Deprecated,
 		}
 		if v.Async || v.Batches {
 			spec.Description = spec.Description + "\n\n## Performance"
@@ -219,9 +225,6 @@ func doOutputs(docsDir string) {
 
 func doProcessors(docsDir string) {
 	for k, v := range processor.Constructors {
-		if v.Deprecated {
-			continue
-		}
 		spec := docs.ComponentSpec{
 			Type:        "processor",
 			Name:        k,
@@ -229,6 +232,8 @@ func doProcessors(docsDir string) {
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
+			Beta:        v.Beta,
+			Deprecated:  v.Deprecated,
 		}
 		if v.UsesBatches {
 			spec.Description = spec.Description + "\n" + processor.DocsUsesBatches
@@ -254,6 +259,8 @@ func doRateLimits(docsDir string) {
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
+			Beta:        v.Beta,
+			Deprecated:  v.Deprecated,
 		}
 
 		conf := ratelimit.NewConfig()
@@ -276,6 +283,8 @@ func doTracers(docsDir string) {
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
+			Beta:        v.Beta,
+			Deprecated:  v.Deprecated,
 		}
 
 		conf := tracer.NewConfig()

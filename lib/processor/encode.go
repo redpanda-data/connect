@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/opentracing/opentracing-go"
 	"github.com/tilinna/z85"
 )
@@ -22,12 +22,12 @@ import (
 func init() {
 	Constructors[TypeEncode] = TypeSpec{
 		constructor: NewEncode,
-		Summary: `
-DEPRECATED: This processor is now deprecated, and the new
-[bloblang processor](/docs/components/processors/bloblang) should be used
-instead.`,
-		Description: `
-Encodes messages according to the selected scheme.`,
+		Deprecated:  true,
+		Footnotes: `
+## Alternatives
+
+All functionality of this processor has been superseded by the
+[bloblang](/docs/components/processors/bloblang) processor.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("scheme", "The decoding scheme to use.").HasOptions("hex", "base64", "ascii85", "z85"),
 			partsFieldSpec,

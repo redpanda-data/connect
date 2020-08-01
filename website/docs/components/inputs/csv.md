@@ -1,6 +1,7 @@
 ---
 title: csv
 type: input
+beta: true
 ---
 
 <!--
@@ -9,7 +10,6 @@ type: input
      To make changes please edit the contents of:
      lib/input/csv.go
 -->
-
 
 BETA: This component is experimental and therefore subject to change outside of
 major version releases.

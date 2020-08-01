@@ -6,13 +6,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/bloblang/x/mapping"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -26,10 +26,8 @@ func init() {
 			}
 			return NewAsyncReader(TypeBloblang, true, b, log, stats)
 		},
+		Beta: true,
 		Summary: `
-BETA: This input is currently in a BETA stage and is therefore subject to
-breaking configuration changes outside of major version releases.
-
 Generates messages at a given interval using a [Bloblang](/docs/guides/bloblang/about)
 mapping executed without a context. This allows you to generate messages for
 testing your pipeline configs.`,

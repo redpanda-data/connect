@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	batchInternal "github.com/Jeffail/benthos/v3/lib/internal/batch"
+	batchInternal "github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"

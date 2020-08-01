@@ -1,9 +1,9 @@
 package client
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 // FieldSpecs returns a map of field specs for an HTTP type.

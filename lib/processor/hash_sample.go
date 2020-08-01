@@ -4,11 +4,11 @@ import (
 	"math"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -17,20 +17,12 @@ import (
 func init() {
 	Constructors[TypeHashSample] = TypeSpec{
 		constructor: NewHashSample,
-		Summary: `
-DEPRECATED: This processor is now deprecated, and the new
-[bloblang processor](/docs/components/processors/bloblang) should be used
-instead.`,
-		Description: `
-Retains a percentage of message batches deterministically by hashing selected
-messages and checking the hash against a valid range, dropping all others.
+		Deprecated:  true,
+		Footnotes: `
+## Alternatives
 
-For example, setting ` + "`retain_min` to `0.0` and `remain_max` to `50.0`" + `
-results in dropping half of the input stream, and setting ` + "`retain_min`" + `
-to ` + "`50.0` and `retain_max` to `100.1`" + ` will drop the _other_ half.
-
-In order to sample individual messages of a batch use this processor with the
-` + "[`for_each`](/docs/components/processors/for_each)" + ` processor.`,
+All functionality of this processor has been superseded by the
+[bloblang](/docs/components/processors/bloblang) processor.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("retain_min", "The lower percentage of the sample range."),
 			docs.FieldCommon("retain_max", "The upper percentage of the sample range."),

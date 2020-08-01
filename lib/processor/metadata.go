@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/bloblang/x/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/opentracing/opentracing-go"
 )
 
@@ -18,52 +18,12 @@ import (
 func init() {
 	Constructors[TypeMetadata] = TypeSpec{
 		constructor: NewMetadata,
-		Summary: `
-DEPRECATED: This processor is now deprecated, and the new
-[bloblang processor](/docs/components/processors/bloblang) should be used
-instead.`,
-		Description: `
-Metadata values can be referred to using configuration
-[interpolation functions](/docs/configuration/interpolation#metadata),
-which allow you to set fields in certain outputs using these dynamic values.
+		Deprecated:  true,
+		Footnotes: `
+## Alternatives
 
-This processor will interpolate functions within both the
-` + "`key` and `value`" + ` fields, you can find a list of functions
-[here](/docs/configuration/interpolation#bloblang-queries). This allows you to set the
-contents of a metadata field using values taken from the message payload.
-
-Value interpolations are resolved once per batch. In order to resolve them per
-message of a batch place it within a ` + "[`for_each`](/docs/components/processors/for_each)" + `
-processor:
-
-` + "``` yaml" + `
-for_each:
-- metadata:
-    operator: set
-    key: foo
-    value: ${! json("document.foo") }
-` + "```" + `
-
-## Operators
-
-### ` + "`set`" + `
-
-Sets the value of a metadata key.
-
-### ` + "`delete`" + `
-
-Removes all metadata values from the message where the key matches the value
-provided. If the value field is left empty the key value will instead be used.
-
-### ` + "`delete_all`" + `
-
-Removes all metadata values from the message.
-
-### ` + "`delete_prefix`" + `
-
-Removes all metadata values from the message where the key is prefixed with the
-value provided. If the value field is left empty the key value will instead be
-used as the prefix.`,
+All functionality of this processor has been superseded by the
+[bloblang](/docs/components/processors/bloblang) processor.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("operator", "The operator to apply to messages.").HasOptions("set", "delete", "delete_all", "delete_prefix"),
 			docs.FieldCommon("key", "The metadata key to target with the chosen operator.").SupportsInterpolation(true),

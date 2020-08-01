@@ -1,13 +1,13 @@
 package input
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/aws/session"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -15,10 +15,8 @@ import (
 func init() {
 	Constructors[TypeKinesisBalanced] = TypeSpec{
 		constructor: NewKinesisBalanced,
+		Beta:        true,
 		Summary: `
-BETA: This input is a beta component and is subject to change outside of major
-version releases.
-
 Receives messages from a Kinesis stream and automatically balances shards across
 consumers.`,
 		Description: `

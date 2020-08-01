@@ -1,6 +1,7 @@
 ---
 title: text
 type: condition
+deprecated: true
 ---
 
 <!--
@@ -10,10 +11,8 @@ type: condition
      lib/condition/text.go
 -->
 
-
-DEPRECATED: This condition is now deprecated, and the new
-[bloblang condition](/docs/components/conditions/bloblang) should be used
-instead.
+DEPRECATED: This component is deprecated and will be removed in the next major
+version release. Please consider moving onto [alternative components](#alternatives).
 
 
 import Tabs from '@theme/Tabs';
@@ -48,10 +47,6 @@ text:
 </TabItem>
 </Tabs>
 
-It's possible to use the [`check_field`](/docs/components/conditions/check_field) and
-[`check_interpolation`](/docs/components/conditions/check_interpolation) conditions to check a
-text condition against arbitrary metadata or fields of messages.
-
 ## Fields
 
 ### `operator`
@@ -83,82 +78,11 @@ counting backwards starting from -1.
 Type: `number`  
 Default: `0`  
 
-## Operators
+## Alternatives
 
-### `equals_cs`
-
-Checks whether the content equals the argument (case sensitive.)
-
-### `equals`
-
-Checks whether the content equals the argument under unicode case-folding (case
-insensitive.)
-
-### `contains_cs`
-
-Checks whether the content contains the argument (case sensitive.)
-
-### `contains`
-
-Checks whether the content contains the argument under unicode case-folding
-(case insensitive).
-
-### `contains_any_cs`
-
-Checks whether the content contains any of the list of arguments under unicode case-folding (case sensitive).
-
-### `contains_any`
-
-Checks whether the content contains any of the list of arguments under unicode case-folding (case insensitive).
-
-### `is`
-
-Checks whether the content meets the characteristic of a type specified in 
-the argument field. Supported types are `ip`, `ipv4`, `ipv6`.
-
-### `prefix_cs`
-
-Checks whether the content begins with the argument (case sensitive.)
-
-### `prefix`
-
-Checks whether the content begins with the argument under unicode case-folding
-(case insensitive.)
-
-### `suffix_cs`
-
-Checks whether the content ends with the argument (case sensitive.)
-
-### `suffix`
-
-Checks whether the content ends with the argument under unicode case-folding
-(case insensitive.)
-
-### `regexp_partial`
-
-Checks whether any section of the content matches a regular expression (RE2
-syntax).
-
-### `regexp_exact`
-
-Checks whether the content exactly matches a regular expression (RE2 syntax).
-
-### `enum`
-
-Checks whether the content matches any entry of a list of arguments, the field
-`arg` must be an array for this operator, e.g.:
-
-``` yaml
-text:
-  operator: enum
-  arg:
-  - foo
-  - bar
-```
-
-## Examples
-
-To test a text condition against a JSON field `foo.bar` you can use:
+Consider using the [bloblang](/docs/components/conditions/bloblang) condition
+instead as it offers a wide range of text processing options. For example, the
+following text condition:
 
 ``` yaml
 check_field:
@@ -169,5 +93,11 @@ check_field:
       arg:
       - foo
       - bar
+```
+
+Can instead be expressed with:
+
+``` yaml
+bloblang: '["foo","bar"].contains(foo.bar)'
 ```
 

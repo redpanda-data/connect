@@ -1,6 +1,7 @@
 ---
 title: hash_sample
 type: processor
+deprecated: true
 ---
 
 <!--
@@ -10,10 +11,8 @@ type: processor
      lib/processor/hash_sample.go
 -->
 
-
-DEPRECATED: This processor is now deprecated, and the new
-[bloblang processor](/docs/components/processors/bloblang) should be used
-instead.
+DEPRECATED: This component is deprecated and will be removed in the next major
+version release. Please consider moving onto [alternative components](#alternatives).
 
 
 import Tabs from '@theme/Tabs';
@@ -49,16 +48,6 @@ hash_sample:
 </TabItem>
 </Tabs>
 
-Retains a percentage of message batches deterministically by hashing selected
-messages and checking the hash against a valid range, dropping all others.
-
-For example, setting `retain_min` to `0.0` and `remain_max` to `50.0`
-results in dropping half of the input stream, and setting `retain_min`
-to `50.0` and `retain_max` to `100.1` will drop the _other_ half.
-
-In order to sample individual messages of a batch use this processor with the
-[`for_each`](/docs/components/processors/for_each) processor.
-
 ## Fields
 
 ### `retain_min`
@@ -85,4 +74,8 @@ An array of message indexes within the batch to sample based on. If left empty a
 Type: `array`  
 Default: `[0]`  
 
+## Alternatives
+
+All functionality of this processor has been superseded by the
+[bloblang](/docs/components/processors/bloblang) processor.
 

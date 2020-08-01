@@ -3,12 +3,12 @@ package output
 import (
 	"fmt"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -16,10 +16,8 @@ import (
 func init() {
 	Constructors[TypeTableStorage] = TypeSpec{
 		constructor: NewAzureTableStorage,
+		Beta:        true,
 		Summary: `
-BETA: This input is currently in a BETA stage and is therefore subject to
-breaking configuration changes outside of major version releases.
-
 Stores message parts in an Azure Table Storage table.`,
 		Description: `
 In order to set the ` + "`table_name`" + `,  ` + "`partition_key`" + ` and ` + "`row_key`" + ` 

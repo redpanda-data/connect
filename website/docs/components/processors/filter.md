@@ -1,6 +1,7 @@
 ---
 title: filter
 type: processor
+deprecated: true
 ---
 
 <!--
@@ -10,10 +11,8 @@ type: processor
      lib/processor/filter.go
 -->
 
-
-DEPRECATED: This processor is now deprecated, and the new
-[bloblang processor](/docs/components/processors/bloblang) should be used
-instead.
+DEPRECATED: This component is deprecated and will be removed in the next major
+version release. Please consider moving onto [alternative components](#alternatives).
 
 ```yaml
 # Config fields, showing default values
@@ -25,10 +24,8 @@ filter:
   type: text
 ```
 
-Tests each message batch against a condition, if the condition fails then the
-entire batch is dropped. You can find a [full list of conditions here](/docs/components/conditions/about).
+## Alternatives
 
-In order to instead filter individual messages of a batch use the
-[`filter_parts`](/docs/components/processors/filter_parts) processor.
-
+All functionality of this processor has been superseded by the
+[bloblang](/docs/components/processors/bloblang) processor.
 

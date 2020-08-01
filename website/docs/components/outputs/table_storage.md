@@ -1,6 +1,7 @@
 ---
 title: table_storage
 type: output
+beta: true
 ---
 
 <!--
@@ -10,9 +11,8 @@ type: output
      lib/output/table_storage.go
 -->
 
-
-BETA: This input is currently in a BETA stage and is therefore subject to
-breaking configuration changes outside of major version releases.
+BETA: This component is experimental and therefore subject to change outside of
+major version releases.
 
 Stores message parts in an Azure Table Storage table.
 

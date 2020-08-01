@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	"github.com/Jeffail/gabs/v2"
 )
 
@@ -17,10 +17,7 @@ import (
 func init() {
 	Constructors[TypeJSON] = TypeSpec{
 		constructor: NewJSON,
-		Summary: `
-DEPRECATED: This condition is now deprecated, and the new
-[bloblang condition](/docs/components/conditions/bloblang) should be used
-instead.`,
+		Deprecated:  true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("operator", "A logical [operator](#operators) to check with.").HasOptions(
 				"exists", "equals", "contains",
@@ -30,20 +27,24 @@ instead.`,
 			partFieldSpec,
 		},
 		Footnotes: `
-## Operators
+## Alternatives
 
-### ` + "`exists`" + `
+Consider using the [bloblang](/docs/components/conditions/bloblang) condition
+instead as it offers a wide range of json processing options. For example, the
+following condition:
 
-Checks whether the target path exists within a document. If the path is the root
-(empty or '.') then it simply checks that the document is valid JSON.
+` + "``` yaml" + `
+json:
+  operator: equals
+  path: foo
+  arg: bar
+` + "```" + `
 
-### ` + "`equals`" + `
+Can instead be expressed with:
 
-Checks whether the target path exists and matches the argument.
-
-### ` + "`contains`" + `
-
-Checks whether the target path is an array containing the argument.`,
+` + "``` yaml" + `
+bloblang: 'this.foo == "bar"'
+` + "```" + ``,
 	}
 }
 

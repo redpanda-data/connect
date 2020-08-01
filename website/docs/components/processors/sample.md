@@ -1,6 +1,7 @@
 ---
 title: sample
 type: processor
+deprecated: true
 ---
 
 <!--
@@ -10,10 +11,8 @@ type: processor
      lib/processor/sample.go
 -->
 
-
-DEPRECATED: This processor is now deprecated, and the new
-[bloblang processor](/docs/components/processors/bloblang) should be used
-instead.
+DEPRECATED: This component is deprecated and will be removed in the next major
+version release. Please consider moving onto [alternative components](#alternatives).
 
 ```yaml
 # Config fields, showing default values
@@ -21,11 +20,6 @@ sample:
   retain: 10
   seed: 0
 ```
-
-Retains a pseudo-randomly sampled percentage of message batches (0 to 100) and
-drops all others. The random seed is static in order to sample
-deterministically, but can be set in config to allow parallel samples that are
-unique.
 
 ## Fields
 
@@ -45,4 +39,8 @@ A seed for pseudo-random sampling.
 Type: `number`  
 Default: `0`  
 
+## Alternatives
+
+All functionality of this processor has been superseded by the
+[bloblang](/docs/components/processors/bloblang) processor.
 

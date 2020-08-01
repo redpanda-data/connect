@@ -1,6 +1,7 @@
 ---
 title: hash
 type: processor
+deprecated: true
 ---
 
 <!--
@@ -10,10 +11,8 @@ type: processor
      lib/processor/hash.go
 -->
 
-
-DEPRECATED: This processor is now deprecated, and the new
-[bloblang processor](/docs/components/processors/bloblang) should be used
-instead.
+DEPRECATED: This component is deprecated and will be removed in the next major
+version release. Please consider moving onto [alternative components](#alternatives).
 
 
 import Tabs from '@theme/Tabs';
@@ -48,19 +47,6 @@ hash:
 </TabItem>
 </Tabs>
 
-This processor is mostly useful when combined with the
-[`process_field`](/docs/components/processors/process_field) processor as it allows you to hash a
-specific field of a document like this:
-
-``` yaml
-# Hash the contents of 'foo.bar'
-process_field:
-  path: foo.bar
-  processors:
-  - hash:
-      algorithm: sha256
-```
-
 ## Fields
 
 ### `algorithm`
@@ -93,4 +79,8 @@ counting backwards starting from -1.
 Type: `array`  
 Default: `[]`  
 
+## Alternatives
+
+All functionality of this processor has been superseded by the
+[bloblang](/docs/components/processors/bloblang) processor.
 

@@ -1,11 +1,11 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -13,10 +13,8 @@ import (
 func init() {
 	Constructors[TypeBlobStorage] = TypeSpec{
 		constructor: NewAzureBlobStorage,
+		Beta:        true,
 		Summary: `
-BETA: This input is currently in a BETA stage and is therefore subject to
-breaking configuration changes outside of major version releases.
-
 Sends message parts as objects to an Azure Blob Storage Account container. Each
 object is uploaded with the filename specified with the ` + "`container`" + `
 field.`,

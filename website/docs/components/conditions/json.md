@@ -1,6 +1,7 @@
 ---
 title: json
 type: condition
+deprecated: true
 ---
 
 <!--
@@ -10,10 +11,8 @@ type: condition
      lib/condition/json.go
 -->
 
-
-DEPRECATED: This condition is now deprecated, and the new
-[bloblang condition](/docs/components/conditions/bloblang) should be used
-instead.
+DEPRECATED: This component is deprecated and will be removed in the next major
+version release. Please consider moving onto [alternative components](#alternatives).
 
 
 import Tabs from '@theme/Tabs';
@@ -90,18 +89,22 @@ counting backwards starting from -1.
 Type: `number`  
 Default: `0`  
 
-## Operators
+## Alternatives
 
-### `exists`
+Consider using the [bloblang](/docs/components/conditions/bloblang) condition
+instead as it offers a wide range of json processing options. For example, the
+following condition:
 
-Checks whether the target path exists within a document. If the path is the root
-(empty or '.') then it simply checks that the document is valid JSON.
+``` yaml
+json:
+  operator: equals
+  path: foo
+  arg: bar
+```
 
-### `equals`
+Can instead be expressed with:
 
-Checks whether the target path exists and matches the argument.
-
-### `contains`
-
-Checks whether the target path is an array containing the argument.
+``` yaml
+bloblang: 'this.foo == "bar"'
+```
 

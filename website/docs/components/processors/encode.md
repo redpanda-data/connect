@@ -1,6 +1,7 @@
 ---
 title: encode
 type: processor
+deprecated: true
 ---
 
 <!--
@@ -10,10 +11,8 @@ type: processor
      lib/processor/encode.go
 -->
 
-
-DEPRECATED: This processor is now deprecated, and the new
-[bloblang processor](/docs/components/processors/bloblang) should be used
-instead.
+DEPRECATED: This component is deprecated and will be removed in the next major
+version release. Please consider moving onto [alternative components](#alternatives).
 
 
 import Tabs from '@theme/Tabs';
@@ -46,8 +45,6 @@ encode:
 </TabItem>
 </Tabs>
 
-Encodes messages according to the selected scheme.
-
 ## Fields
 
 ### `scheme`
@@ -72,4 +69,8 @@ counting backwards starting from -1.
 Type: `array`  
 Default: `[]`  
 
+## Alternatives
+
+All functionality of this processor has been superseded by the
+[bloblang](/docs/components/processors/bloblang) processor.
 

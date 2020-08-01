@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 	statsd "github.com/smira/go-statsd"
 )
 

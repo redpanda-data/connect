@@ -19,15 +19,12 @@ import (
 func init() {
 	Constructors[TypeFilterParts] = TypeSpec{
 		constructor: NewFilterParts,
-		Summary: `
-DEPRECATED: This processor is now deprecated, and the new
-[bloblang processor](/docs/components/processors/bloblang) should be used
-instead.`,
-		Description: `
-Tests each message against a [condition](/docs/components/conditions/about), if
-the condition fails then the message is dropped.
+		Deprecated:  true,
+		Footnotes: `
+## Alternatives
 
-You can find a [full list of conditions here](/docs/components/conditions/about).`,
+All functionality of this processor has been superseded by the
+[bloblang](/docs/components/processors/bloblang) processor.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return condition.SanitiseConfig(conf.FilterParts.Config)
 		},

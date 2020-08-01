@@ -1,6 +1,7 @@
 ---
 title: number
 type: processor
+deprecated: true
 ---
 
 <!--
@@ -10,10 +11,8 @@ type: processor
      lib/processor/number.go
 -->
 
-
-DEPRECATED: This processor is now deprecated, and the new
-[bloblang processor](/docs/components/processors/bloblang) should be used
-instead.
+DEPRECATED: This component is deprecated and will be removed in the next major
+version release. Please consider moving onto [alternative components](#alternatives).
 
 
 import Tabs from '@theme/Tabs';
@@ -48,38 +47,6 @@ number:
 </TabItem>
 </Tabs>
 
-The value field can either be a number or a string type. If it is a string type
-then this processor will interpolate functions within it, you can find a list of
-functions [here](/docs/configuration/interpolation#bloblang-queries).
-
-For example, if we wanted to subtract the current unix timestamp from the field
-'foo' of a JSON document `{"foo":1561219142}` we could use the
-following config:
-
-``` yaml
-process_field:
-  path: foo
-  result_type: float
-  processors:
-  - number:
-      operator: subtract
-      value: "${!timestamp_unix()}"
-```
-
-Value interpolations are resolved once per message batch, in order to resolve it
-for each message of the batch place it within a
-[`for_each`](/docs/components/processors/for_each) processor.
-
-## Operators
-
-### `add`
-
-Adds a value.
-
-### `subtract`
-
-Subtracts a value.
-
 ## Fields
 
 ### `operator`
@@ -112,4 +79,8 @@ counting backwards starting from -1.
 Type: `array`  
 Default: `[]`  
 
+## Alternatives
+
+All functionality of this processor has been superseded by the
+[bloblang](/docs/components/processors/bloblang) processor.
 

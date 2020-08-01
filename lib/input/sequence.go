@@ -7,10 +7,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/x/docs"
 )
 
 //------------------------------------------------------------------------------
@@ -18,10 +18,8 @@ import (
 func init() {
 	Constructors[TypeSequence] = TypeSpec{
 		constructor: NewSequence,
+		Beta:        true,
 		Summary: `
-BETA: This input is experimental and is therefore subject to breaking changes
-outside of major version releases.
-
 Reads messages from a sequence of child inputs, starting with the first and once
 that input gracefully terminates starts consuming from the next, and so on.`,
 		Description: `
