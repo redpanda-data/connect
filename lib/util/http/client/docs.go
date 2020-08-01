@@ -27,7 +27,7 @@ func FieldSpecs() docs.FieldSpecs {
 		docs.FieldAdvanced("backoff_on", "A list of status codes whereby retries should be attempted but the period between them should be increased gradually.").HasType("array"),
 		docs.FieldAdvanced("drop_on", "A list of status codes whereby the attempt should be considered failed but retries should not be attempted.").HasType("array"),
 		docs.FieldAdvanced("successful_on", "A list of status codes whereby the attempt should be considered successful (allows you to configure non-2XX codes).").HasType("array"),
-		docs.FieldAdvanced("http_proxy", "An HTTP proxy URL").HasType("string"),
+		docs.FieldAdvanced("proxy_url", "An optional HTTP proxy URL.").HasType("string"),
 	)
 
 	return httpSpecs

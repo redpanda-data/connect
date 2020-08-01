@@ -44,7 +44,7 @@ type Config struct {
 	DropOn              []int             `json:"drop_on" yaml:"drop_on"`
 	SuccessfulOn        []int             `json:"successful_on" yaml:"successful_on"`
 	TLS                 tls.Config        `json:"tls" yaml:"tls"`
-	HTTPProxy           string            `json:"http_proxy" yaml:"http_proxy"`
+	ProxyURL            string            `json:"proxy_url" yaml:"proxy_url"`
 	auth.Config         `json:",inline" yaml:",inline"`
 }
 
@@ -145,18 +145,22 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		}
 	}
 
-	if h.conf.HTTPProxy != "" {
-		proxyURL, err := url.Parse(h.conf.HTTPProxy)
+	if h.conf.ProxyURL != "" {
+		proxyURL, err := url.Parse(h.conf.ProxyURL)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse http_proxy string: %v", err)
+			return nil, fmt.Errorf("failed to parse proxy_url string: %v", err)
 		}
-		var tr *http.Transport
 		if h.client.Transport != nil {
-			tr = h.client.Transport.(*http.Transport)
+			if tr, ok := h.client.Transport.(*http.Transport); ok {
+				tr.Proxy = http.ProxyURL(proxyURL)
+			} else {
+				return nil, fmt.Errorf("unable to apply proxy_url to transport, unexpected type %T", h.client.Transport)
+			}
 		} else {
-			tr = http.DefaultTransport.(*http.Transport)
+			h.client.Transport = &http.Transport{
+				Proxy: http.ProxyURL(proxyURL),
+			}
 		}
-		tr.Proxy = http.ProxyURL(proxyURL)
 	}
 
 	for _, c := range conf.BackoffOn {

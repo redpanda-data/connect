@@ -97,7 +97,6 @@ input:
           drop_empty_bodies: ${INPUT_HTTP_CLIENT_DROP_EMPTY_BODIES:true}
           headers:
             Content-Type: ${INPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE:application/octet-stream}
-          http_proxy: ${INPUT_HTTP_CLIENT_HTTP_PROXY}
           max_retry_backoff: ${INPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF:300s}
           oauth:
             access_token: ${INPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN}
@@ -107,6 +106,7 @@ input:
             enabled: ${INPUT_HTTP_CLIENT_OAUTH_ENABLED:false}
             request_url: ${INPUT_HTTP_CLIENT_OAUTH_REQUEST_URL}
           payload: ${INPUT_HTTP_CLIENT_PAYLOAD}
+          proxy_url: ${INPUT_HTTP_CLIENT_PROXY_URL}
           rate_limit: ${INPUT_HTTP_CLIENT_RATE_LIMIT}
           retries: ${INPUT_HTTP_CLIENT_RETRIES:3}
           retry_period: ${INPUT_HTTP_CLIENT_RETRY_PERIOD:1s}
@@ -527,7 +527,6 @@ pipeline:
           copy_response_headers: ${PROCESSOR_HTTP_REQUEST_COPY_RESPONSE_HEADERS:false}
           headers:
             Content-Type: ${PROCESSOR_HTTP_REQUEST_HEADERS_CONTENT_TYPE:application/octet-stream}
-          http_proxy: ${PROCESSOR_HTTP_REQUEST_HTTP_PROXY}
           max_retry_backoff: ${PROCESSOR_HTTP_REQUEST_MAX_RETRY_BACKOFF:300s}
           oauth:
             access_token: ${PROCESSOR_HTTP_REQUEST_OAUTH_ACCESS_TOKEN}
@@ -536,6 +535,7 @@ pipeline:
             consumer_secret: ${PROCESSOR_HTTP_REQUEST_OAUTH_CONSUMER_SECRET}
             enabled: ${PROCESSOR_HTTP_REQUEST_OAUTH_ENABLED:false}
             request_url: ${PROCESSOR_HTTP_REQUEST_OAUTH_REQUEST_URL}
+          proxy_url: ${PROCESSOR_HTTP_REQUEST_PROXY_URL}
           rate_limit: ${PROCESSOR_HTTP_REQUEST_RATE_LIMIT}
           retries: ${PROCESSOR_HTTP_REQUEST_RETRIES:3}
           retry_period: ${PROCESSOR_HTTP_REQUEST_RETRY_PERIOD:1s}
@@ -774,7 +774,6 @@ output:
           copy_response_headers: ${OUTPUT_HTTP_CLIENT_COPY_RESPONSE_HEADERS:false}
           headers:
             Content-Type: ${OUTPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE:application/octet-stream}
-          http_proxy: ${OUTPUT_HTTP_CLIENT_HTTP_PROXY}
           max_in_flight: ${OUTPUT_HTTP_CLIENT_MAX_IN_FLIGHT:1}
           max_retry_backoff: ${OUTPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF:300s}
           oauth:
@@ -785,6 +784,7 @@ output:
             enabled: ${OUTPUT_HTTP_CLIENT_OAUTH_ENABLED:false}
             request_url: ${OUTPUT_HTTP_CLIENT_OAUTH_REQUEST_URL}
           propagate_response: ${OUTPUT_HTTP_CLIENT_PROPAGATE_RESPONSE:false}
+          proxy_url: ${OUTPUT_HTTP_CLIENT_PROXY_URL}
           rate_limit: ${OUTPUT_HTTP_CLIENT_RATE_LIMIT}
           retries: ${OUTPUT_HTTP_CLIENT_RETRIES:3}
           retry_period: ${OUTPUT_HTTP_CLIENT_RETRY_PERIOD:1s}

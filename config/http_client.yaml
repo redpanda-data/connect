@@ -19,7 +19,6 @@ input:
     drop_on: []
     headers:
       Content-Type: application/octet-stream
-    http_proxy: ""
     max_retry_backoff: 300s
     oauth:
       access_token: ""
@@ -29,6 +28,7 @@ input:
       enabled: false
       request_url: ""
     payload: ""
+    proxy_url: ""
     rate_limit: ""
     retries: 3
     retry_period: 1s
@@ -74,7 +74,6 @@ output:
     drop_on: []
     headers:
       Content-Type: application/octet-stream
-    http_proxy: ""
     max_in_flight: 1
     max_retry_backoff: 300s
     oauth:
@@ -85,6 +84,7 @@ output:
       enabled: false
       request_url: ""
     propagate_response: false
+    proxy_url: ""
     rate_limit: ""
     retries: 3
     retry_period: 1s
