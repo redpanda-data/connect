@@ -10,7 +10,6 @@ input:
   nanomsg:
     bind: true
     poll_timeout: 5s
-    reply_timeout: 5s
     socket_type: PULL
     sub_filters: []
     urls:

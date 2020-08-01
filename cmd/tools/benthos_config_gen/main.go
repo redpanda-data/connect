@@ -403,7 +403,7 @@ func main() {
 			conf.Output.Type = t
 		}
 
-		sanit, err := conf.Sanitised()
+		sanit, err := conf.SanitisedNoDeprecated()
 		if err != nil {
 			panic(err)
 		}
@@ -426,7 +426,7 @@ func main() {
 
 		conf.Pipeline.Processors = append(conf.Pipeline.Processors, procConf)
 
-		sanit, err := conf.Sanitised()
+		sanit, err := conf.SanitisedNoDeprecated()
 		if err != nil {
 			panic(err)
 		}
@@ -435,7 +435,11 @@ func main() {
 	}
 
 	// Create condition configs for all types.
-	for t := range condition.Constructors {
+	for t, info := range condition.Constructors {
+		if info.Deprecated {
+			continue
+		}
+
 		conf := config.New()
 		conf.Input.Processors = nil
 		conf.Output.Processors = nil
@@ -451,7 +455,7 @@ func main() {
 
 		conf.Pipeline.Processors = append(conf.Pipeline.Processors, procConf)
 
-		sanit, err := conf.Sanitised()
+		sanit, err := conf.SanitisedNoDeprecated()
 		if err != nil {
 			panic(err)
 		}
@@ -460,7 +464,11 @@ func main() {
 	}
 
 	// Create metrics configs for all types.
-	for t := range metrics.Constructors {
+	for t, info := range metrics.Constructors {
+		if info.Deprecated {
+			continue
+		}
+
 		conf := config.New()
 		conf.Input.Processors = nil
 		conf.Output.Processors = nil
@@ -468,7 +476,7 @@ func main() {
 
 		conf.Metrics.Type = t
 
-		sanit, err := conf.Sanitised()
+		sanit, err := conf.SanitisedNoDeprecated()
 		if err != nil {
 			panic(err)
 		}
@@ -477,7 +485,11 @@ func main() {
 	}
 
 	// Create tracer configs for all types.
-	for t := range tracer.Constructors {
+	for t, info := range tracer.Constructors {
+		if info.Deprecated {
+			continue
+		}
+
 		conf := config.New()
 		conf.Input.Processors = nil
 		conf.Output.Processors = nil
@@ -485,7 +497,7 @@ func main() {
 
 		conf.Tracer.Type = t
 
-		sanit, err := conf.Sanitised()
+		sanit, err := conf.SanitisedNoDeprecated()
 		if err != nil {
 			panic(err)
 		}

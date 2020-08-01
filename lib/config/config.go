@@ -9,7 +9,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/pipeline"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/stream"
 	"github.com/Jeffail/benthos/v3/lib/tracer"
@@ -64,43 +63,53 @@ type SanitisedConfig struct {
 // fields of no consequence (unused inputs, outputs, processors etc) are
 // excluded.
 func (c Type) Sanitised() (*SanitisedConfig, error) {
-	inConf, err := input.SanitiseConfig(c.Input)
+	return c.sanitised(false)
+}
+
+// SanitisedNoDeprecated returns a sanitised copy of the Benthos configuration
+// also omitting any fields that are deprecated.
+func (c Type) SanitisedNoDeprecated() (*SanitisedConfig, error) {
+	return c.sanitised(true)
+}
+
+func (c Type) sanitised(skipDeprecated bool) (*SanitisedConfig, error) {
+	inConf, err := c.Input.Sanitised(skipDeprecated)
 	if err != nil {
 		return nil, err
 	}
 
 	var pipeConf interface{}
-	pipeConf, err = pipeline.SanitiseConfig(c.Pipeline)
+	pipeConf, err = c.Pipeline.Sanitised(skipDeprecated)
 	if err != nil {
 		return nil, err
 	}
 
 	var outConf interface{}
-	outConf, err = output.SanitiseConfig(c.Output)
+	outConf, err = c.Output.Sanitised(skipDeprecated)
 	if err != nil {
 		return nil, err
 	}
 
 	var bufConf interface{}
-	bufConf, err = buffer.SanitiseConfig(c.Buffer)
+	bufConf, err = c.Buffer.Sanitised(skipDeprecated)
 	if err != nil {
 		return nil, err
 	}
 
 	var mgrConf interface{}
-	mgrConf, err = manager.SanitiseConfig(c.Manager)
+	mgrConf, err = c.Manager.Sanitised(skipDeprecated)
 	if err != nil {
 		return nil, err
 	}
 
 	var metConf interface{}
-	metConf, err = metrics.SanitiseConfig(c.Metrics)
+	metConf, err = c.Metrics.Sanitised(skipDeprecated)
 	if err != nil {
 		return nil, err
 	}
 
 	var tracConf interface{}
-	tracConf, err = tracer.SanitiseConfig(c.Tracer)
+	tracConf, err = c.Tracer.Sanitised(skipDeprecated)
 	if err != nil {
 		return nil, err
 	}

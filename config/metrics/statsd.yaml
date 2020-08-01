@@ -40,7 +40,6 @@ metrics:
   statsd:
     address: localhost:4040
     flush_period: 100ms
-    network: udp
     prefix: benthos
     tag_format: legacy
 tracer:

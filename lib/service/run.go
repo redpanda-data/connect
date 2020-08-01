@@ -295,7 +295,7 @@ func Run() {
 							os.Exit(1)
 						}
 					}
-					outConf, err := conf.Sanitised()
+					outConf, err := conf.SanitisedNoDeprecated()
 					if err == nil {
 						var configYAML []byte
 						if configYAML, err = uconfig.MarshalYAML(outConf); err == nil {

@@ -8,14 +8,6 @@ http:
 input:
   type: nsq
   nsq:
-    batching:
-      byte_size: 0
-      condition:
-        type: static
-        static: false
-      count: 1
-      period: ""
-      processors: []
     channel: benthos_stream
     lookupd_http_addresses:
       - localhost:4161

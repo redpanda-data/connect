@@ -22,7 +22,6 @@ input:
     commit_period: 1s
     consumer_group: benthos_consumer_group
     fetch_buffer_cap: 256
-    max_batch_count: 1
     max_processing_period: 100ms
     partition: 0
     sasl:
@@ -72,7 +71,6 @@ output:
     max_msg_bytes: 1000000
     max_retries: 0
     partitioner: fnv1a_hash
-    round_robin_partitions: false
     sasl:
       access_token: ""
       enabled: false

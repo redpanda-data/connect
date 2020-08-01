@@ -126,52 +126,59 @@ func AddExamples(c *Config) {
 
 // SanitiseConfig creates a sanitised version of a manager config.
 func SanitiseConfig(conf Config) (interface{}, error) {
+	return conf.Sanitised(false)
+}
+
+// Sanitised returns a sanitised version of the config, meaning sections that
+// aren't relevant to behaviour are removed. Also optionally removes deprecated
+// fields.
+func (c Config) Sanitised(removeDeprecated bool) (interface{}, error) {
 	var err error
 
 	inputs := map[string]interface{}{}
-	for k, v := range conf.Inputs {
-		if inputs[k], err = input.SanitiseConfig(v); err != nil {
+	for k, v := range c.Inputs {
+		if inputs[k], err = v.Sanitised(removeDeprecated); err != nil {
 			return nil, err
 		}
 	}
 
 	caches := map[string]interface{}{}
-	for k, v := range conf.Caches {
-		if caches[k], err = cache.SanitiseConfig(v); err != nil {
+	for k, v := range c.Caches {
+		if caches[k], err = v.Sanitised(removeDeprecated); err != nil {
 			return nil, err
 		}
 	}
 
 	conditions := map[string]interface{}{}
-	for k, v := range conf.Conditions {
-		if conditions[k], err = condition.SanitiseConfig(v); err != nil {
+	for k, v := range c.Conditions {
+		if conditions[k], err = v.Sanitised(removeDeprecated); err != nil {
 			return nil, err
 		}
 	}
 
 	processors := map[string]interface{}{}
-	for k, v := range conf.Processors {
-		if processors[k], err = processor.SanitiseConfig(v); err != nil {
+	for k, v := range c.Processors {
+		if processors[k], err = v.Sanitised(removeDeprecated); err != nil {
 			return nil, err
 		}
 	}
 
 	outputs := map[string]interface{}{}
-	for k, v := range conf.Outputs {
-		if outputs[k], err = output.SanitiseConfig(v); err != nil {
+	for k, v := range c.Outputs {
+		if outputs[k], err = v.Sanitised(removeDeprecated); err != nil {
 			return nil, err
 		}
 	}
 
 	rateLimits := map[string]interface{}{}
-	for k, v := range conf.RateLimits {
-		if rateLimits[k], err = ratelimit.SanitiseConfig(v); err != nil {
+	for k, v := range c.RateLimits {
+		if rateLimits[k], err = v.Sanitised(removeDeprecated); err != nil {
 			return nil, err
 		}
 	}
 
 	plugins := map[string]interface{}{}
-	for k, v := range conf.Plugins {
+	for k, v := range c.Plugins {
 		if spec, exists := pluginSpecs[v.Type]; exists {
 			if spec.confSanitiser != nil {
 				outputMap := config.Sanitised{}

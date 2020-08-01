@@ -36,6 +36,13 @@ func NewConfig() Config {
 // SanitiseConfig returns a sanitised version of the Config, meaning sections
 // that aren't relevant to behaviour are removed.
 func SanitiseConfig(conf Config) (interface{}, error) {
+	return conf.Sanitised(false)
+}
+
+// Sanitised returns a sanitised version of the config, meaning sections that
+// aren't relevant to behaviour are removed. Also optionally removes deprecated
+// fields.
+func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
 	cBytes, err := json.Marshal(conf)
 	if err != nil {
 		return nil, err
@@ -49,7 +56,7 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 	procSlice := []interface{}{}
 	for _, proc := range conf.Processors {
 		var procSanitised interface{}
-		procSanitised, err = processor.SanitiseConfig(proc)
+		procSanitised, err = proc.Sanitised(removeDeprecated)
 		if err != nil {
 			return nil, err
 		}

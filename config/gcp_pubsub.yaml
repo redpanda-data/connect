@@ -8,15 +8,6 @@ http:
 input:
   type: gcp_pubsub
   gcp_pubsub:
-    batching:
-      byte_size: 0
-      condition:
-        type: static
-        static: false
-      count: 1
-      period: ""
-      processors: []
-    max_batch_count: 1
     max_outstanding_bytes: 1000000000
     max_outstanding_messages: 1000
     project: ""

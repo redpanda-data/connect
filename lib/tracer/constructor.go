@@ -31,6 +31,7 @@ type TypeSpec struct {
 	Description string
 	Footnotes   string
 	FieldSpecs  docs.FieldSpecs
+	Deprecated  bool
 }
 
 // Constructors is a map of all tracer types with their specs.
@@ -73,6 +74,13 @@ func NewConfig() Config {
 // SanitiseConfig returns a sanitised version of the Config, meaning sections
 // that aren't relevant to behaviour are removed.
 func SanitiseConfig(conf Config) (interface{}, error) {
+	return conf.Sanitised(false)
+}
+
+// Sanitised returns a sanitised version of the config, meaning sections that
+// aren't relevant to behaviour are removed. Also optionally removes deprecated
+// fields.
+func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
 	cBytes, err := json.Marshal(conf)
 	if err != nil {
 		return nil, err
@@ -95,6 +103,18 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 		outputMap[t] = hashMap[t]
 	}
 
+	def := Constructors[t]
+
+	if removeDeprecated {
+		if m, ok := outputMap[t].(map[string]interface{}); ok {
+			for _, spec := range def.FieldSpecs {
+				if spec.Deprecated {
+					delete(m, spec.Name)
+				}
+			}
+		}
+	}
+
 	return outputMap, nil
 }
 
@@ -102,7 +122,7 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 
 // UnmarshalYAML ensures that when parsing configs that are in a map or slice
 // the default values are still applied.
-func (c *Config) UnmarshalYAML(value *yaml.Node) error {
+func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 	type confAlias Config
 	aliased := confAlias(NewConfig())
 
@@ -130,7 +150,7 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 		aliased.Type = inferredType
 	}
 
-	*c = Config(aliased)
+	*conf = Config(aliased)
 	return nil
 }
 

@@ -28,7 +28,6 @@ input:
     dynamodb_table: ""
     dynamodb_write_provision: 0
     endpoint: ""
-    max_batch_count: 1
     region: eu-west-1
     start_from_oldest: true
     stream: ""

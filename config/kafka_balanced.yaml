@@ -26,7 +26,6 @@ input:
       heartbeat_interval: 3s
       rebalance_timeout: 60s
       session_timeout: 10s
-    max_batch_count: 1
     max_processing_period: 100ms
     sasl:
       access_token: ""
