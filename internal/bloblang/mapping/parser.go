@@ -6,8 +6,8 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/lib/bloblang/x/parser"
-	"github.com/Jeffail/benthos/v3/lib/bloblang/x/query"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
 	"golang.org/x/xerrors"

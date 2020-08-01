@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/bloblang/x/field"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
