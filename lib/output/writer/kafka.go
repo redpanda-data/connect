@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/bloblang/x/field"
+	batchInternal "github.com/Jeffail/benthos/v3/lib/internal/batch"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -340,15 +341,15 @@ func (k *Kafka) Write(msg types.Message) error {
 			if len(pErrs) == 0 {
 				break
 			}
-			batchErr := types.NewBatchError(pErrs[0].Err)
+			batchErr := batchInternal.NewError(msg, pErrs[0].Err)
 			msgs = nil
 			for _, pErr := range pErrs {
 				if mIndex, ok := pErr.Msg.Metadata.(int); ok {
-					batchErr.AddErrAt(mIndex, pErr.Err)
+					batchErr.Failed(mIndex, pErr.Err)
 				}
 				msgs = append(msgs, pErr.Msg)
 			}
-			if len(pErrs) == len(batchErr.IndexedErrors()) {
+			if len(pErrs) == batchErr.IndexedErrors() {
 				err = batchErr
 			} else {
 				// If these lengths don't match then somehow we failed to obtain

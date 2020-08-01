@@ -1,14 +1,14 @@
 package output
 
 import (
-	"sync"
+	"context"
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/internal/transaction"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -28,9 +28,10 @@ type Batcher struct {
 
 	running int32
 
-	closeChan      chan struct{}
-	fullyCloseChan chan struct{}
-	fullyCloseOnce sync.Once
+	ctx           context.Context
+	closeFn       func()
+	fullyCloseCtx context.Context
+	fullyCloseFn  func()
 
 	closedChan chan struct{}
 }
@@ -42,16 +43,21 @@ func NewBatcher(
 	log log.Modular,
 	stats metrics.Type,
 ) Type {
+	ctx, cancelFn := context.WithCancel(context.Background())
+	fullyCloseCtx, fullyCancelFn := context.WithCancel(context.Background())
+
 	m := Batcher{
-		stats:          stats,
-		log:            log,
-		child:          child,
-		batcher:        batcher,
-		messagesOut:    make(chan types.Transaction),
-		running:        1,
-		closeChan:      make(chan struct{}),
-		fullyCloseChan: make(chan struct{}),
-		closedChan:     make(chan struct{}),
+		stats:         stats,
+		log:           log,
+		child:         child,
+		batcher:       batcher,
+		messagesOut:   make(chan types.Transaction),
+		running:       1,
+		ctx:           ctx,
+		closeFn:       cancelFn,
+		fullyCloseCtx: fullyCloseCtx,
+		fullyCloseFn:  fullyCancelFn,
+		closedChan:    make(chan struct{}),
 	}
 	return &m
 }
@@ -79,7 +85,7 @@ func (m *Batcher) loop() {
 		nextTimedBatchChan = time.After(tNext)
 	}
 
-	var pendingResChans []chan<- types.Response
+	var pendingTrans []*transaction.Tracked
 	for atomic.LoadInt32(&m.running) == 1 {
 		if nextTimedBatchChan == nil {
 			if tNext := m.batcher.UntilNext(); tNext >= 0 {
@@ -98,23 +104,24 @@ func (m *Batcher) loop() {
 				if nextTimedBatchChan != nil {
 					select {
 					case <-nextTimedBatchChan:
-					case <-m.closeChan:
+					case <-m.ctx.Done():
 						return
 					}
 				}
 			} else {
-				tran.Payload.Iter(func(i int, p types.Part) error {
+				trackedTran := transaction.NewTracked(tran.Payload, tran.ResponseChan)
+				trackedTran.Message().Iter(func(i int, p types.Part) error {
 					if m.batcher.Add(p) {
 						flushBatch = true
 					}
 					return nil
 				})
-				pendingResChans = append(pendingResChans, tran.ResponseChan)
+				pendingTrans = append(pendingTrans, trackedTran)
 			}
 		case <-nextTimedBatchChan:
 			flushBatch = true
 			nextTimedBatchChan = nil
-		case <-m.closeChan:
+		case <-m.ctx.Done():
 			atomic.StoreInt32(&m.running, 0)
 			flushBatch = true
 		}
@@ -131,50 +138,24 @@ func (m *Batcher) loop() {
 		resChan := make(chan types.Response)
 		select {
 		case m.messagesOut <- types.NewTransaction(sendMsg, resChan):
-		case <-m.fullyCloseChan:
+		case <-m.fullyCloseCtx.Done():
 			return
 		}
 
-		go func(rChan chan types.Response, upstreamResChans []chan<- types.Response) {
+		go func(rChan chan types.Response, upstreamTrans []*transaction.Tracked) {
 			select {
-			case <-m.fullyCloseChan:
+			case <-m.fullyCloseCtx.Done():
 				return
 			case res, open := <-rChan:
 				if !open {
 					return
 				}
-				// Check if the returned error (if there is one) is a
-				// *BatchError, which provides index specific error messages.
-				//
-				// NOTE: Disabled until we can guarantee pipeline.Processors
-				// is able to strip this error when the batch is chopped and
-				// mutated.
-				var berr *types.BatchError
-				/*
-					if resErr := res.Error(); resErr != nil {
-						errors.As(resErr, &berr)
-					}
-				*/
-				for i, c := range upstreamResChans {
-					iRes := res
-					if berr != nil {
-						// If we did receive a *BatchError then acknowledge
-						// messages that didn't error.
-						if iErr, exists := berr.IndexedErrors()[i]; exists {
-							iRes = response.NewError(iErr)
-						} else {
-							iRes = response.NewAck()
-						}
-					}
-					select {
-					case <-m.fullyCloseChan:
-						return
-					case c <- iRes:
-					}
+				for _, t := range upstreamTrans {
+					t.Ack(m.fullyCloseCtx, res.Error())
 				}
 			}
-		}(resChan, pendingResChans)
-		pendingResChans = nil
+		}(resChan, pendingTrans)
+		pendingTrans = nil
 	}
 }
 
@@ -199,19 +180,15 @@ func (m *Batcher) Consume(msgs <-chan types.Transaction) error {
 
 // CloseAsync shuts down the Batcher and stops processing messages.
 func (m *Batcher) CloseAsync() {
-	if atomic.CompareAndSwapInt32(&m.running, 1, 0) {
-		close(m.closeChan)
-	}
+	m.closeFn()
 }
 
 // WaitForClose blocks until the Batcher output has closed down.
 func (m *Batcher) WaitForClose(timeout time.Duration) error {
-	if atomic.LoadInt32(&m.running) == 0 {
-		go m.fullyCloseOnce.Do(func() {
-			<-time.After(timeout - time.Second)
-			close(m.fullyCloseChan)
-		})
-	}
+	go func() {
+		<-time.After(timeout - time.Second)
+		m.fullyCloseFn()
+	}()
 	select {
 	case <-m.closedChan:
 	case <-time.After(timeout):

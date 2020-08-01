@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Endpoint `/ready` added to streams mode API.
+- Azure `table_storage` output now supports batched sends.
+
 ## 3.23.0 - 2020-07-26
 
 ### Added

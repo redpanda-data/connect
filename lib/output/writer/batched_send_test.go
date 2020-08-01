@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/lib/internal/batch"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
@@ -55,7 +56,7 @@ func TestBatchedSendALittleSad(t *testing.T) {
 	})
 	assert.Error(t, err)
 
-	expErr := types.NewBatchError(errFirst).AddErrAt(1, errFirst).AddErrAt(3, errSecond)
+	expErr := batch.NewError(msg, errFirst).Failed(1, errFirst).Failed(3, errSecond)
 
 	assert.Equal(t, parts, seen)
 	assert.Equal(t, expErr, err)

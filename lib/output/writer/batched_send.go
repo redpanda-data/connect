@@ -3,6 +3,7 @@ package writer
 import (
 	"errors"
 
+	"github.com/Jeffail/benthos/v3/lib/internal/batch"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -28,7 +29,7 @@ func sendErrIsFatal(err error) bool {
 // However, if a fatal error is returned such as a connection loss or shut down
 // then it is returned immediately.
 func IterateBatchedSend(msg types.Message, fn func(int, types.Part) error) error {
-	var batchErr *types.BatchError
+	var batchErr *batch.Error
 	if err := msg.Iter(func(i int, p types.Part) error {
 		tmpErr := fn(i, p)
 		if tmpErr != nil {
@@ -36,9 +37,9 @@ func IterateBatchedSend(msg types.Message, fn func(int, types.Part) error) error
 				return tmpErr
 			}
 			if batchErr == nil {
-				batchErr = types.NewBatchError(tmpErr)
+				batchErr = batch.NewError(msg, tmpErr)
 			}
-			batchErr.AddErrAt(i, tmpErr)
+			batchErr.Failed(i, tmpErr)
 		}
 		return nil
 	}); err != nil {

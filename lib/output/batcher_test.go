@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	batchInternal "github.com/Jeffail/benthos/v3/lib/internal/batch"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -195,11 +196,6 @@ func TestBatcherBasic(t *testing.T) {
 }
 
 func TestBatcherBatchError(t *testing.T) {
-	// NOTE: Disabled until we can guarantee pipeline.Processors
-	// is able to strip this error when the batch is chopped and
-	// mutated.
-	t.Skip()
-
 	tInChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
@@ -237,8 +233,8 @@ func TestBatcherBatchError(t *testing.T) {
 			[]byte("foo3"),
 		}, message.GetAllBytes(outTr.Payload))
 
-		batchErr := types.NewBatchError(errors.New("foo")).
-			AddErrAt(0, firstErr).AddErrAt(2, thirdErr)
+		batchErr := batchInternal.NewError(outTr.Payload, errors.New("foo")).
+			Failed(0, firstErr).Failed(2, thirdErr)
 
 		select {
 		case outTr.ResponseChan <- response.NewError(batchErr):
