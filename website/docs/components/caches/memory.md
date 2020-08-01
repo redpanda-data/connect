@@ -16,13 +16,40 @@ every time the service restarts. Each item in the cache has a TTL set from the
 moment it was last edited, after which it will be removed during the next
 compaction.
 
+
+import Tabs from '@theme/Tabs';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+import TabItem from '@theme/TabItem';
+
+<TabItem value="common">
+
 ```yaml
-# Config fields, showing default values
+# Common config fields, showing default values
 memory:
   ttl: 300
   compaction_interval: 60s
   init_values: {}
 ```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+# All config fields, showing default values
+memory:
+  ttl: 300
+  compaction_interval: 60s
+  shards: 1
+  init_values: {}
+```
+
+</TabItem>
+</Tabs>
 
 A compaction only occurs during a write where the time since the last compaction
 is above the compaction interval. It is therefore possible to obtain values of
@@ -58,6 +85,14 @@ The period of time to wait before each compaction, at which point expired items 
 
 Type: `string`  
 Default: `"60s"`  
+
+### `shards`
+
+A number of logical shards to spread keys across, increasing the shards can have a performance benefit when processing a large number of keys.
+
+
+Type: `number`  
+Default: `1`  
 
 ### `init_values`
 

@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -8,6 +9,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 //------------------------------------------------------------------------------
@@ -167,3 +170,71 @@ func TestMemoryCacheInitValues(t *testing.T) {
 }
 
 //------------------------------------------------------------------------------
+
+func BenchmarkMemoryShards1(b *testing.B) {
+	conf := NewConfig()
+	conf.Type = TypeMemory
+	conf.Memory.TTL = 0
+	conf.Memory.CompactionInterval = ""
+
+	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(b, err)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		key, value := fmt.Sprintf("key%v", i), []byte(fmt.Sprintf("foo%v", i))
+
+		assert.NoError(b, c.Set(key, value))
+
+		res, err := c.Get(key)
+		require.NoError(b, err)
+		assert.Equal(b, value, res)
+	}
+}
+
+func BenchmarkMemoryShards10(b *testing.B) {
+	conf := NewConfig()
+	conf.Type = TypeMemory
+	conf.Memory.TTL = 0
+	conf.Memory.CompactionInterval = ""
+	conf.Memory.Shards = 10
+
+	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(b, err)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		key, value := fmt.Sprintf("key%v", i), []byte(fmt.Sprintf("foo%v", i))
+
+		assert.NoError(b, c.Set(key, value))
+
+		res, err := c.Get(key)
+		require.NoError(b, err)
+		assert.Equal(b, value, res)
+	}
+}
+
+func BenchmarkMemoryShards100(b *testing.B) {
+	conf := NewConfig()
+	conf.Type = TypeMemory
+	conf.Memory.TTL = 0
+	conf.Memory.CompactionInterval = ""
+	conf.Memory.Shards = 10
+
+	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(b, err)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		key, value := fmt.Sprintf("key%v", i), []byte(fmt.Sprintf("foo%v", i))
+
+		assert.NoError(b, c.Set(key, value))
+
+		res, err := c.Get(key)
+		require.NoError(b, err)
+		assert.Equal(b, value, res)
+	}
+}

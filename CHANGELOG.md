@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Azure `table_storage` output now supports batched sends.
 - All HTTP components are now able to configure a proxy URL.
 - New `ristretto` cache.
+- Field `shards` added to `memory` cache.
 
 ### Fixed
 
