@@ -44,6 +44,11 @@ func (m *Type) registerEndpoints() {
 		"GET a list of metrics for the stream.",
 		m.HandleStreamStats,
 	)
+	m.manager.RegisterEndpoint(
+		"/ready",
+		"Returns 200 OK if the inputs and outputs of all running streams are connected, otherwise a 503 is returned. If there are no active streams 200 is returned.",
+		m.HandleStreamReady,
+	)
 }
 
 // HandleStreamsCRUD is an http.HandleFunc for returning maps of active benthos
@@ -374,6 +379,28 @@ func (m *Type) HandleStreamStats(w http.ResponseWriter, r *http.Request) {
 		serverErr = nil
 		http.Error(w, "Stream not found", http.StatusNotFound)
 	}
+}
+
+// HandleStreamReady is an http.HandleFunc for providing a ready check across
+// all streams.
+func (m *Type) HandleStreamReady(w http.ResponseWriter, r *http.Request) {
+	var notReady []string
+
+	m.lock.Lock()
+	for k, v := range m.streams {
+		if !v.IsReady() {
+			notReady = append(notReady, k)
+		}
+	}
+	m.lock.Unlock()
+
+	if len(notReady) == 0 {
+		w.Write([]byte("OK"))
+		return
+	}
+
+	w.WriteHeader(http.StatusServiceUnavailable)
+	w.Write([]byte(fmt.Sprintf("streams %v are not connected\n", strings.Join(notReady, ", "))))
 }
 
 //------------------------------------------------------------------------------

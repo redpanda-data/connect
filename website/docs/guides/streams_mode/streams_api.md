@@ -13,6 +13,14 @@ A walkthrough on using this API [can be found here][streams-api-walkthrough].
 
 ## API
 
+### GET `/ready`
+
+Returns a 200 OK response if all active streams are connected to their
+respective inputs and outputs at the time of the request. Otherwise, a 503
+response is returned along with a message naming the faulty stream.
+
+If zero streams are active this endpoint still returns a 200 OK response.
+
 ### GET `/streams`
 
 Returns a map of existing streams by their unique identifiers to an object

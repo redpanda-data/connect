@@ -127,6 +127,12 @@ func OptOnClose(onClose func()) func(*Type) {
 
 //------------------------------------------------------------------------------
 
+// IsReady returns a boolean indicating whether both the input and output layers
+// of the stream are connected.
+func (t *Type) IsReady() bool {
+	return t.inputLayer.Connected() && t.outputLayer.Connected()
+}
+
 func (t *Type) start() (err error) {
 	// Constructors
 	if t.inputLayer, err = input.New(

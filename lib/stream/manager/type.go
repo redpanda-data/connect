@@ -49,6 +49,12 @@ func (s *StreamStatus) IsRunning() bool {
 	return atomic.LoadInt64(&s.stoppedAfter) == 0
 }
 
+// IsReady returns a boolean indicating whether the stream is connected at both
+// the input and output level.
+func (s *StreamStatus) IsReady() bool {
+	return s.strm.IsReady()
+}
+
 // Uptime returns a time.Duration indicating the current uptime of the stream.
 func (s *StreamStatus) Uptime() time.Duration {
 	if stoppedAfter := atomic.LoadInt64(&s.stoppedAfter); stoppedAfter > 0 {
