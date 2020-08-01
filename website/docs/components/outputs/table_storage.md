@@ -39,6 +39,10 @@ output:
     row_key: ""
     properties: {}
     max_in_flight: 1
+    batching:
+      count: 1
+      byte_size: 0
+      period: ""
 ```
 
 </TabItem>
@@ -57,6 +61,14 @@ output:
     insert_type: INSERT
     max_in_flight: 1
     timeout: 5s
+    batching:
+      count: 1
+      byte_size: 0
+      period: ""
+      condition:
+        static: false
+        type: static
+      processors: []
 ```
 
 </TabItem>
@@ -102,6 +114,10 @@ properties:
 This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
+
+This output benefits from sending messages as a batch for improved performance.
+Batches can be formed at both the input and output level. You can find out more
+[in this doc](/docs/configuration/batching).
 
 ## Fields
 
@@ -200,5 +216,97 @@ The maximum period to wait on an upload before abandoning it and reattempting.
 
 Type: `string`  
 Default: `"5s"`  
+
+### `batching`
+
+Allows you to configure a [batching policy](/docs/configuration/batching).
+
+
+Type: `object`  
+Default: `{"byte_size":0,"condition":{"static":false,"type":"static"},"count":1,"period":"","processors":[]}`  
+
+```yaml
+# Examples
+
+batching:
+  byte_size: 5000
+  period: 1s
+
+batching:
+  count: 10
+  period: 1s
+
+batching:
+  condition:
+    text:
+      arg: END BATCH
+      operator: contains
+  period: 1m
+```
+
+### `batching.count`
+
+A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+
+Type: `number`  
+Default: `1`  
+
+### `batching.byte_size`
+
+An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+
+Type: `number`  
+Default: `0`  
+
+### `batching.period`
+
+A period in which an incomplete batch should be flushed regardless of its size.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+period: 1s
+
+period: 1m
+
+period: 500ms
+```
+
+### `batching.condition`
+
+A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+
+
+Type: `object`  
+Default: `{"static":false,"type":"static"}`  
+
+### `batching.processors`
+
+A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+processors:
+  - archive:
+      format: lines
+
+processors:
+  - archive:
+      format: json_array
+
+processors:
+  - merge_json: {}
+```
 
 

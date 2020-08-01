@@ -20,6 +20,14 @@ pipeline:
 output:
   type: table_storage
   table_storage:
+    batching:
+      byte_size: 0
+      condition:
+        type: static
+        static: false
+      count: 1
+      period: ""
+      processors: []
     insert_type: INSERT
     max_in_flight: 1
     partition_key: ""

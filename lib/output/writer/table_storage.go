@@ -94,17 +94,17 @@ func (a *AzureTableStorage) Write(msg types.Message) error {
 
 // WriteWithContext attempts to write message contents to a target storage account as files.
 func (a *AzureTableStorage) WriteWithContext(wctx context.Context, msg types.Message) error {
-	return IterateBatchedSend(msg, func(i int, p types.Part) error {
+	writeReqs := make(map[string]map[string][]*storage.Entity)
+
+	if err := IterateBatchedSend(msg, func(i int, p types.Part) error {
+		entity := &storage.Entity{}
 		tableName := a.tableName.String(i, msg)
 		partitionKey := a.partitionKey.String(i, msg)
-		rowKey := a.rowKey.String(i, msg)
-
-		table := a.client.GetTableReference(tableName)
-
-		entity := table.GetEntityReference(partitionKey, rowKey)
+		entity.PartitionKey = a.partitionKey.String(i, msg)
+		entity.RowKey = a.rowKey.String(i, msg)
 		entity.TimeStamp = time.Now()
-		jsonMap := make(map[string]interface{})
 
+		jsonMap := make(map[string]interface{})
 		if len(a.properties) == 0 {
 			err := json.Unmarshal(p.Get(), &jsonMap)
 			if err != nil {
@@ -126,33 +126,57 @@ func (a *AzureTableStorage) WriteWithContext(wctx context.Context, msg types.Mes
 			}
 		}
 		entity.Properties = jsonMap
-		if err := a.insert(a.conf.InsertType, entity); err != nil {
-			if cerr, ok := err.(storage.AzureStorageServiceError); ok {
-				if cerr.Code == "TableNotFound" {
-					if cerr := table.Create(uint(10), storage.FullMetadata, nil); cerr != nil {
-						a.log.Errorf("error creating table: %v.", cerr)
-					}
-					// retry
-					err = a.insert(a.conf.InsertType, entity)
+
+		if writeReqs[tableName] == nil {
+			writeReqs[tableName] = make(map[string][]*storage.Entity)
+		}
+		writeReqs[tableName][partitionKey] = append(writeReqs[tableName][partitionKey], entity)
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	for tn, pks := range writeReqs {
+		table := a.client.GetTableReference(tn)
+		for _, entities := range pks {
+			tableBatch := table.NewBatch()
+			for _, entity := range entities {
+				entity.Table = table
+				if err := a.createBatch(tableBatch, a.conf.InsertType, entity); err != nil {
+					return err
 				}
 			}
-			return err
+			if err := tableBatch.ExecuteBatch(); err != nil {
+				if cerr, ok := err.(storage.AzureStorageServiceError); ok {
+					if cerr.Code == "TableNotFound" {
+						if cerr := table.Create(uint(10), storage.FullMetadata, nil); cerr != nil {
+							a.log.Errorf("error creating table: %v.", cerr)
+						}
+						// retry
+						err = tableBatch.ExecuteBatch()
+					}
+				}
+				if err != nil {
+					return err
+				}
+			}
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
-func (a *AzureTableStorage) insert(insertType string, entity *storage.Entity) error {
+func (a *AzureTableStorage) createBatch(tableBatch *storage.TableBatch, insertType string, entity *storage.Entity) error {
 	switch insertType {
 	case "INSERT":
-		return entity.Insert(storage.FullMetadata, nil)
+		tableBatch.InsertEntity(entity)
 	case "INSERT_MERGE":
-		return entity.InsertOrMerge(nil)
+		tableBatch.InsertOrMergeEntity(entity, true)
 	case "INSERT_REPLACE":
-		return entity.InsertOrReplace(nil)
+		tableBatch.InsertOrReplaceEntity(entity, true)
 	default:
 		return fmt.Errorf("invalid insert type")
 	}
+	return nil
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.

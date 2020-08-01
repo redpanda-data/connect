@@ -999,6 +999,10 @@ output:
         stdout:
           delimiter: ${OUTPUT_STDOUT_DELIMITER}
         table_storage:
+          batching:
+            byte_size: ${OUTPUT_TABLE_STORAGE_BATCHING_BYTE_SIZE:0}
+            count: ${OUTPUT_TABLE_STORAGE_BATCHING_COUNT:1}
+            period: ${OUTPUT_TABLE_STORAGE_BATCHING_PERIOD}
           insert_type: ${OUTPUT_TABLE_STORAGE_INSERT_TYPE:INSERT}
           max_in_flight: ${OUTPUT_TABLE_STORAGE_MAX_IN_FLIGHT:1}
           partition_key: ${OUTPUT_TABLE_STORAGE_PARTITION_KEY}
