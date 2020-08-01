@@ -4,11 +4,9 @@
 [![goreportcard for Jeffail/benthos][goreport-badge]][goreport-url]
 [![Build Status][drone-badge]][drone-url]
 
-Benthos is a high performance and resilient stream processor, able to connect
-various [sources][inputs] and [sinks][outputs] in a range of brokering patterns
-and perform [hydration, enrichments, transformations and filters][processors] on
-payloads. It is easy to deploy and monitor, and ready to drop into your pipeline
-either as a static binary or a docker image.
+Benthos is a high performance and resilient stream processor, able to connect various [sources][inputs] and [sinks][outputs] in a range of brokering patterns and perform [hydration, enrichments, transformations and filters][processors] on payloads.
+
+It comes with a [powerful mapping language][bloblang-about], is easy to deploy and monitor, and ready to drop into your pipeline either as a static binary, docker image, or [serverless function][serverless].
 
 Stream pipelines are defined in a single config file, allowing you to declare
 connectors and a list of processing stages:
@@ -23,13 +21,13 @@ input:
 pipeline:
   processors:
   - bloblang: |
-      message = this
-      meta.link_count = links.length()
+      root.document = this.without("links")
+      root.link_count = this.links.length()
 
 output:
   s3:
     bucket: TODO
-    path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
+    path: '${! meta("kafka_topic") }/${! json("document.id") }.json'
 ```
 
 ### Delivery Guarantees
@@ -40,9 +38,9 @@ at-least-once delivery without needing to persist messages during transit.
 
 ## Supported Sources & Sinks
 
-[AWS (DynamoDB, Kinesis, S3, SQS, SNS)][aws], [Elasticsearch][elasticsearch] (output only), File, [GCP (pub/sub)][gcp], [HDFS][hdfs], HTTP (server and client, including websockets), [Kafka][kafka], [Memcached][memcached] (output only), [MQTT][mqtt], [Nanomsg][nanomsg], [NATS][nats], [NATS Streaming][natsstreaming], [NSQ][nsq], [RabbitMQ (AMQP 0.91)][rabbitmq], [Redis (streams, list, pubsub, hashes)][redis], Stdin/Stdout, TCP & UDP, sockets and [ZMQ4][zmq].
+AWS (DynamoDB, Kinesis, S3, SQS, SNS), Azure (Blob storage, table storage, output only), Elasticsearch (output only), File, GCP (pub/sub), HDFS, HTTP (server and client, including websockets), Kafka, Memcached (output only), MQTT, Nanomsg, NATS, NATS Streaming, NSQ, AMQP 0.91 (RabbitMQ), AMQP 1, Redis (streams, list, pubsub, hashes), Stdin/Stdout, TCP & UDP, sockets and ZMQ4.
 
-If you want more [then say](https://github.com/Jeffail/benthos/issues/new).
+Connectors are being added constantly, if something you want is missing then [open an issue](https://github.com/Jeffail/benthos/issues/new).
 
 ## Documentation
 
@@ -70,14 +68,13 @@ Or pull the docker image:
 docker pull jeffail/benthos
 ```
 
-On macOS, Benthos can be installed via Homebrew:
+Benthos can also be installed via Homebrew:
 
 ```shell
 brew install benthos
 ```
 
-There are also specialised distributions of Benthos for
-[serverless deployment][serverless].
+For more information check out the [getting started guide][getting-started].
 
 ## Run
 
@@ -192,23 +189,25 @@ and chat in either [the Gitter community][benthos-gitter] or the
 [#benthos Gophers slack channel][benthos-slack-chan]
 ([get an invite][gophers-slack-invite]), and watch your back.
 
-[inputs]: https://www.benthos.dev/docs/components/inputs/about
-[processors]: https://www.benthos.dev/docs/components/processors/about
-[outputs]: https://www.benthos.dev/docs/components/outputs/about
-[metrics]: https://www.benthos.dev/docs/components/metrics/about
-[tracers]: https://www.benthos.dev/docs/components/tracers/about
+[inputs]: https://www.benthos.dev/docs/components/inputs/about/
+[processors]: https://www.benthos.dev/docs/components/processors/about/
+[outputs]: https://www.benthos.dev/docs/components/outputs/about/
+[metrics]: https://www.benthos.dev/docs/components/metrics/about/
+[tracers]: https://www.benthos.dev/docs/components/tracers/about/
 [metrics-config]: config/metrics
-[config-interp]: https://www.benthos.dev/docs/configuration/interpolation
+[config-interp]: https://www.benthos.dev/docs/configuration/interpolation/
 [compose-examples]: resources/docker/compose_examples
-[streams-api]: https://www.benthos.dev/docs/guides/streams_mode/streams_api
-[streams-mode]: https://www.benthos.dev/docs/guides/streams_mode/about
-[general-docs]: https://www.benthos.dev/docs/about
+[streams-api]: https://www.benthos.dev/docs/guides/streams_mode/streams_api/
+[streams-mode]: https://www.benthos.dev/docs/guides/streams_mode/about/
+[general-docs]: https://www.benthos.dev/docs/about/
 [env-config]: config/env/README.md
-[config-doc]: https://www.benthos.dev/docs/configuration/about
-[serverless]: https://www.benthos.dev/docs/guides/serverless/about
-[cookbooks]: https://www.benthos.dev/cookbooks
+[bloblang-about]: https://www.benthos.dev/docs/guides/bloblang/about/
+[config-doc]: https://www.benthos.dev/docs/configuration/about/
+[serverless]: https://www.benthos.dev/docs/guides/serverless/about/
+[cookbooks]: https://www.benthos.dev/cookbooks/
 [releases]: https://github.com/Jeffail/benthos/releases
 [plugin-repo]: https://github.com/benthosdev/benthos-plugin-example
+[getting-started]: https://www.benthos.dev/docs/guides/getting_started/
 
 [godoc-badge]: https://godoc.org/github.com/Jeffail/benthos/lib/stream?status.svg
 [godoc-url]: https://godoc.org/github.com/Jeffail/benthos/lib/stream
@@ -221,18 +220,4 @@ and chat in either [the Gitter community][benthos-gitter] or the
 [benthos-slack-chan]: https://app.slack.com/client/T029RQSE6/CLWCBK7FY
 [gophers-slack-invite]: https://gophersinvite.herokuapp.com/
 
-[aws]: https://aws.amazon.com/
-[zmq]: http://zeromq.org/
-[nanomsg]: http://nanomsg.org/
-[rabbitmq]: https://www.rabbitmq.com/
-[mqtt]: http://mqtt.org/
-[nsq]: http://nsq.io/
-[nats]: http://nats.io/
-[natsstreaming]: https://nats.io/documentation/streaming/nats-streaming-intro/
-[redis]: https://redis.io/
-[kafka]: https://kafka.apache.org/
-[elasticsearch]: https://www.elastic.co/
-[hdfs]: https://hadoop.apache.org/
-[gcp]: https://cloud.google.com/
-[memcached]: https://memcached.org/
 [jaeger]: https://www.jaegertracing.io/
