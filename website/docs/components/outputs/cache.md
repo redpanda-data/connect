@@ -31,6 +31,7 @@ and can target any of the following types:
 - [`memory`](/docs/components/caches/memory/)
 - [`multilevel`](/docs/components/caches/multilevel/)
 - [`redis`](/docs/components/caches/redis/)
+- [`ristretto`](/docs/components/caches/ristretto/)
 - [`s3`](/docs/components/caches/s3/)
 
 The `target` field must point to a configured cache like follows:

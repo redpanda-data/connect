@@ -42,6 +42,7 @@ const (
 	TypeMemory     = "memory"
 	TypeMultilevel = "multilevel"
 	TypeRedis      = "redis"
+	TypeRistretto  = "ristretto"
 	TypeS3         = "s3"
 )
 
@@ -57,6 +58,7 @@ type Config struct {
 	Multilevel MultilevelConfig `json:"multilevel" yaml:"multilevel"`
 	Plugin     interface{}      `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Redis      RedisConfig      `json:"redis" yaml:"redis"`
+	Ristretto  RistrettoConfig  `json:"ristretto" yaml:"ristretto"`
 	S3         S3Config         `json:"s3" yaml:"s3"`
 }
 
@@ -71,6 +73,7 @@ func NewConfig() Config {
 		Multilevel: NewMultilevelConfig(),
 		Plugin:     nil,
 		Redis:      NewRedisConfig(),
+		Ristretto:  NewRistrettoConfig(),
 		S3:         NewS3Config(),
 	}
 }
