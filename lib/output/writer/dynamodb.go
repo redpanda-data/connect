@@ -22,6 +22,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/cenkalti/backoff"
+	"github.com/google/go-cmp/cmp"
 )
 
 //------------------------------------------------------------------------------
@@ -348,20 +349,18 @@ unprocessedLoop:
 		// Sad, we have unprocessed messages, we need to map the requests back
 		// to the origin message index. The DynamoDB API doesn't make this easy.
 		batchErr := batchInternal.NewError(msg, err)
-		requestStrToIndex := map[string]int{}
 
-		for i, req := range writeReqs {
-			requestStrToIndex[req.GoString()] = i
-		}
-
+	requestsLoop:
 		for _, req := range unproc {
-			if i, ok := requestStrToIndex[req.GoString()]; ok {
-				batchErr.Failed(i, errors.New("failed to set item"))
-			} else {
-				// If we're unable to map a single request to the origin message
-				// then we return a general error.
-				return err
+			for i, src := range writeReqs {
+				if cmp.Equal(req, src) {
+					batchErr.Failed(i, errors.New("failed to set item"))
+					continue requestsLoop
+				}
 			}
+			// If we're unable to map a single request to the origin message
+			// then we return a general error.
+			return err
 		}
 
 		err = batchErr

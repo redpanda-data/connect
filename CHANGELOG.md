@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.24.0 - 2020-08-02
+
 ### Added
 
 - Endpoint `/ready` added to streams mode API.
