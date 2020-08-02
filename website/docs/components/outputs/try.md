@@ -45,4 +45,31 @@ output:
       path: /usr/local/benthos/everything_failed.jsonl
 ```
 
+### Batching
+
+When an output within a try sequence uses batching, like so:
+
+``` yaml
+output:
+  try:
+  - dynamodb:
+      table: foo
+      string_columns:
+        id: ${!json("id")}
+        content: ${!content()}
+      batching:
+        count: 10
+        period: 1s
+  - file:
+      path: /usr/local/benthos/failed_stuff.jsonl
+```
+
+Benthos makes a best attempt at inferring which specific messages of the batch
+failed, and only propagates those individual messages to the next try tier.
+
+However, depending on the output and the error returned it is sometimes not
+possible to determine the individual messages that failed, in which case the
+whole batch is passed to the next tier in order to preserve at-least-once
+guarantees.
+
 

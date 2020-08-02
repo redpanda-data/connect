@@ -15,6 +15,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Batch error handling and retry logic has been improved for the `kafka` and
+  `dynamodb` outputs.
 - Bloblang now allows non-matching not-equals comparisons, allowing
   `foo != null` expressions.
 

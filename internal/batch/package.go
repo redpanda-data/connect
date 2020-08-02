@@ -24,6 +24,9 @@ type Error struct {
 // NewError creates a new batch-wide error, where it's possible to add granular
 // errors for individual messages of the batch.
 func NewError(msg types.Message, err error) *Error {
+	if berr, ok := err.(*Error); ok {
+		err = berr.Unwrap()
+	}
 	return &Error{
 		err:    err,
 		source: msg,
