@@ -21,6 +21,36 @@ import (
 
 //------------------------------------------------------------------------------
 
+func TestBatcherEarlyTermination(t *testing.T) {
+	tInChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
+
+	policyConf := batch.NewPolicyConfig()
+	policyConf.Count = 10
+	policyConf.Period = "50ms"
+	batcher, err := batch.NewPolicy(policyConf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out := &mockOutput{}
+
+	b := NewBatcher(batcher, out, log.Noop(), metrics.Noop())
+	if err := b.Consume(tInChan); err != nil {
+		t.Fatal(err)
+	}
+
+	require.Error(t, b.WaitForClose(time.Millisecond*100))
+
+	select {
+	case tInChan <- types.NewTransaction(message.New([][]byte{[]byte("foo")}), resChan):
+	case <-time.After(time.Second):
+		t.Error("unexpected")
+	}
+
+	require.Error(t, b.WaitForClose(time.Second))
+}
+
 func TestBatcherBasic(t *testing.T) {
 	tInChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)

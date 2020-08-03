@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.24.1 - 2020-08-03
+
+### Fixed
+
+- Prevented an issue where batched outputs would terminate at start up. Fixes a
+  regression introduced in v3.24.0.
+
 ## 3.24.0 - 2020-08-02
 
 ### Added

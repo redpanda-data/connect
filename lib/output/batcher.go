@@ -180,15 +180,18 @@ func (m *Batcher) Consume(msgs <-chan types.Transaction) error {
 
 // CloseAsync shuts down the Batcher and stops processing messages.
 func (m *Batcher) CloseAsync() {
+	atomic.StoreInt32(&m.running, 0)
 	m.closeFn()
 }
 
 // WaitForClose blocks until the Batcher output has closed down.
 func (m *Batcher) WaitForClose(timeout time.Duration) error {
-	go func() {
-		<-time.After(timeout - time.Second)
-		m.fullyCloseFn()
-	}()
+	if atomic.LoadInt32(&m.running) == 0 {
+		go func() {
+			<-time.After(timeout - time.Second)
+			m.fullyCloseFn()
+		}()
+	}
 	select {
 	case <-m.closedChan:
 	case <-time.After(timeout):

@@ -8,3 +8,4 @@ cat CHANGELOG.md | awk '
       if ( release == 1 ) print;
       if ( release > 1 ) exit;
   }'
+echo "The full change log can be [found here](https://github.com/Jeffail/benthos/blob/master/CHANGELOG.md)."
