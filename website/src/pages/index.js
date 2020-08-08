@@ -27,8 +27,8 @@ const snippets = [
 pipeline:
   processors:
     - bloblang: |
-        message = this
-        meta.link_count = links.length()
+        root.message = this
+        root.meta.link_count = this.links.length()
 
 output:
   s3:

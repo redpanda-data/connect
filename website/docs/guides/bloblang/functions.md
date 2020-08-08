@@ -7,9 +7,9 @@ description: A list of Bloblang functions
 Functions can be placed anywhere and allow you to extract information from your environment, generate values, or access data from the underlying message being mapped:
 
 ```coffee
-doc.id = uuid_v4()
-doc.received_at = timestamp_unix()
-doc.host = hostname()
+root.doc.id = uuid_v4()
+root.doc.received_at = timestamp_unix()
+root.doc.host = hostname()
 ```
 
 ### `batch_index`
@@ -28,7 +28,7 @@ root = match {
 Returns the size of the message batch.
 
 ```coffee
-foo = batch_size()
+root.foo = batch_size()
 ```
 
 ### `content`
@@ -36,7 +36,7 @@ foo = batch_size()
 Returns the full raw contents of the mapping target message as a byte array. When mapping to a JSON field the value should be encoded using the method [`encode`][methods.encode], or cast to a string directly using the method [`string`][methods.string], otherwise it will be base64 encoded by default.
 
 ```coffee
-doc = content().string()
+root.doc = content().string()
 
 # In:  {"foo":"bar"}
 # Out: {"doc":"{\"foo\":\"bar\"}"}
@@ -47,7 +47,7 @@ doc = content().string()
 The `count` function is a counter starting at 1 which increments after each time it is called. Count takes an argument which is an identifier for the counter, allowing you to specify multiple unique counters in your configuration.
 
 ```coffee
-doc.id = count("documents")
+root.doc.id = count("documents")
 ```
 
 ### `deleted`
@@ -55,7 +55,7 @@ doc.id = count("documents")
 This is a special function indicating that the mapping target should be deleted. For example, it can be used to remove elements of an array within `for_each`:
 
 ```coffee
-new_nums = nums.for_each(
+root.new_nums = this.nums.for_each(
   match this {
     this < 10 => deleted()
     _ => this - 10
@@ -71,7 +71,7 @@ new_nums = nums.for_each(
 If an error has occurred during the processing of a message this function returns the reported cause of the error. For more information about error handling patterns read [here][error_handling].
 
 ```coffee
-doc.error = error()
+root.doc.error = error()
 ```
 
 ### `errored`
@@ -79,7 +79,7 @@ doc.error = error()
 Returns a boolean value indicating whether an error has occurred during the processing of a message. For more information about error handling patterns read [here][error_handling].
 
 ```coffee
-doc.status = if errored() { 400 } else { 200 }
+root.doc.status = if errored() { 400 } else { 200 }
 ```
 
 ### `hostname`
@@ -87,7 +87,7 @@ doc.status = if errored() { 400 } else { 200 }
 Resolves to the hostname of the machine running Benthos.
 
 ```coffee
-thing.host = hostname()
+root.thing.host = hostname()
 ```
 
 ### `json`
@@ -95,13 +95,13 @@ thing.host = hostname()
 Returns the value of a field within a JSON message located by a [dot path][field_paths] argument. This function always targets the entire source JSON document regardless of the mapping context.
 
 ```coffee
-mapped = json("foo.bar")
+root.mapped = json("foo.bar")
 
 # In:  {"foo":{"bar":"hello world"}}
 # Out: {"mapped":"hello world"}
 ```
 
-The path parameter is optional and if omitted the entire JSON payload is returned.
+The path argument is optional and if omitted the entire JSON payload is returned.
 
 ### `meta`
 
@@ -110,7 +110,7 @@ Returns the value of a metadata key from a message identified by a key. Values a
 The parameter is optional and if omitted the entire metadata contents are returned as a JSON object.
 
 ```coffee
-topic = meta("kafka_topic")
+root.topic = meta("kafka_topic")
 ```
 
 ### `random_int`
@@ -118,8 +118,8 @@ topic = meta("kafka_topic")
 Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.
 
 ```coffee
-first = random_int()
-second = random_int(1)
+root.first = random_int()
+root.second = random_int(1)
 ```
 
 ### `timestamp`
@@ -130,7 +130,7 @@ Prints the current time in a custom format specified by the argument. The format
 A fractional second is represented by adding a period and zeros to the end of the seconds section of layout string, as in `15:04:05.000` to format a time stamp with millisecond precision.
 
 ```coffee
-received_at = timestamp("15:04:05")
+root.received_at = timestamp("15:04:05")
 ```
 
 ### `timestamp_unix`
@@ -138,7 +138,7 @@ received_at = timestamp("15:04:05")
 Resolves to the current unix timestamp in seconds.
 
 ```coffee
-received_at = timestamp_unix()
+root.received_at = timestamp_unix()
 ```
 
 ### `timestamp_unix_nano`
@@ -146,7 +146,7 @@ received_at = timestamp_unix()
 Resolves to the current unix timestamp in nanoseconds.
 
 ```coffee
-received_at = timestamp_unix_nano()
+root.received_at = timestamp_unix_nano()
 ```
 
 ### `timestamp_utc`
@@ -154,7 +154,7 @@ received_at = timestamp_unix_nano()
 The equivalent of `timestamp` except the time is printed as UTC instead of the local timezone.
 
 ```coffee
-received_at = timestamp_utc("15:04:05")
+root.received_at = timestamp_utc("15:04:05")
 ```
 
 ### `throw`
@@ -162,12 +162,12 @@ received_at = timestamp_utc("15:04:05")
 Returns an error similar to a regular mapping error. This is useful for abandoning a mapping entirely given certain conditions.
 
 ```coffee
-doc.type = match {
+root.doc.type = match {
   this.exists("header.id") => "foo"
   this.exists("body.data") => "bar"
   _ => throw("unknown type")
 }
-doc.contents = (body.content | thing.body)
+root.doc.contents = (this.body.content | this.thing.body)
 
 # In:  {"header":{"id":"first"},"thing":{"body":"hello world"}}
 # Out: {"doc":{"contents":"hello world","type":"foo"}}
@@ -181,7 +181,7 @@ doc.contents = (body.content | thing.body)
 Generates a new RFC-4122 UUID each time it is invoked and prints a string representation.
 
 ```coffee
-id = uuid_v4()
+root.id = uuid_v4()
 ```
 
 [error_handling]: /docs/configuration/error_handling
