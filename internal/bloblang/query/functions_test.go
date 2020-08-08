@@ -101,8 +101,8 @@ func TestFunctions(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, err := tryParse(test.input, false)
-			require.NoError(t, err)
+			e, perr := tryParse(test.input, false)
+			require.Nil(t, perr)
 
 			for i := 0; i < 10; i++ {
 				res, err := e.Exec(FunctionContext{
@@ -133,7 +133,7 @@ func TestFunctions(t *testing.T) {
 
 func TestRandomInt(t *testing.T) {
 	e, err := tryParse(`random_int()`, false)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	tallies := map[int64]int64{}
 

@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFunctionQueries(t *testing.T) {
@@ -639,10 +640,9 @@ func TestFunctionQueries(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, err := tryParse(test.input, test.deprecated)
-			if !assert.NoError(t, err) {
-				return
-			}
+			e, perr := tryParse(test.input, test.deprecated)
+			require.Nil(t, perr)
+
 			res := ExecToString(e, FunctionContext{
 				Index: test.index, MsgBatch: msg,
 				Value: test.value,
@@ -672,10 +672,9 @@ func TestCountersFunction(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		e, err := tryParse(test[0], false)
-		if !assert.NoError(t, err) {
-			continue
-		}
+		e, perr := tryParse(test[0], false)
+		require.Nil(t, perr)
+
 		res := ExecToString(e, FunctionContext{
 			MsgBatch: message.New(nil),
 		})
@@ -687,10 +686,9 @@ func TestUUIDV4Function(t *testing.T) {
 	results := map[string]struct{}{}
 
 	for i := 0; i < 100; i++ {
-		e, err := tryParse("uuid_v4()", false)
-		if !assert.NoError(t, err) {
-			continue
-		}
+		e, perr := tryParse("uuid_v4()", false)
+		require.Nil(t, perr)
+
 		res := ExecToString(e, FunctionContext{
 			MsgBatch: message.New(nil),
 		})
@@ -704,10 +702,9 @@ func TestUUIDV4Function(t *testing.T) {
 func TestTimestamps(t *testing.T) {
 	now := time.Now()
 
-	e, err := tryParse("timestamp_unix_nano()", false)
-	if !assert.NoError(t, err) {
-		return
-	}
+	e, perr := tryParse("timestamp_unix_nano()", false)
+	require.Nil(t, perr)
+
 	tStamp := ExecToString(e, FunctionContext{MsgBatch: message.New(nil)})
 
 	nanoseconds, err := strconv.ParseInt(tStamp, 10, 64)
@@ -721,10 +718,9 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = tryParse("timestamp_unix()", false)
-	if !assert.NoError(t, err) {
-		return
-	}
+	e, perr = tryParse("timestamp_unix()", false)
+	require.Nil(t, perr)
+
 	tStamp = ExecToString(e, FunctionContext{MsgBatch: message.New(nil)})
 
 	seconds, err := strconv.ParseInt(tStamp, 10, 64)
@@ -738,10 +734,9 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = tryParse("timestamp_unix(10)", false)
-	if !assert.NoError(t, err) {
-		return
-	}
+	e, perr = tryParse("timestamp_unix(10)", false)
+	require.Nil(t, perr)
+
 	tStamp = ExecToString(e, FunctionContext{MsgBatch: message.New(nil)})
 
 	var secondsF float64
@@ -756,10 +751,9 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = tryParse("timestamp()", false)
-	if !assert.NoError(t, err) {
-		return
-	}
+	e, perr = tryParse("timestamp()", false)
+	require.Nil(t, perr)
+
 	tStamp = ExecToString(e, FunctionContext{MsgBatch: message.New(nil)})
 
 	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
@@ -772,10 +766,9 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = tryParse("timestamp_utc()", false)
-	if !assert.NoError(t, err) {
-		return
-	}
+	e, perr = tryParse("timestamp_utc()", false)
+	require.Nil(t, perr)
+
 	tStamp = ExecToString(e, FunctionContext{MsgBatch: message.New(nil)})
 
 	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)

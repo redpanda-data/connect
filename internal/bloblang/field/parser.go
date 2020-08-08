@@ -1,7 +1,7 @@
 package field
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
@@ -22,8 +22,7 @@ func intoStaticResolver(p parser.Type) parser.Type {
 func aFunction(input []rune) parser.Result {
 	if len(input) < 3 || input[0] != '$' || input[1] != '{' || input[2] != '!' {
 		return parser.Result{
-			Payload:   nil,
-			Err:       parser.ExpectedError{"${!"},
+			Err:       parser.NewError(input, "${!"),
 			Remaining: input,
 		}
 	}
@@ -33,21 +32,20 @@ func aFunction(input []rune) parser.Result {
 			res := query.ParseDeprecated(input[3:i])
 			if res.Err == nil {
 				if len(res.Remaining) > 0 {
+					pos := len(input[3:i]) - len(res.Remaining)
 					return parser.Result{
-						Err: parser.ErrAtPosition(
-							i-len(res.Remaining),
-							fmt.Errorf("unexpected contents at end of expression: %v", string(res.Remaining)),
-						),
+						Err:       parser.NewFatalError(input[3+pos:], errors.New("required"), "end of expression"),
 						Remaining: input,
 					}
 				}
 				res.Remaining = input[i+1:]
 				res.Payload = queryResolver{fn: res.Payload.(query.Function)}
 			} else {
-				res.Err = parser.ErrAtPosition(3, res.Err).Expand(func(err error) error {
-					// Scrap underlying expected error.
-					return fmt.Errorf("%v", err.Error())
-				})
+				pos := len(input[3:i]) - len(res.Err.Input)
+				if !res.Err.IsFatal() {
+					res.Err.Err = errors.New("required")
+				}
+				res.Err.Input = input[3+pos:]
 				res.Remaining = input
 			}
 			return res
@@ -63,8 +61,7 @@ func aFunction(input []rune) parser.Result {
 func escapedBlock(input []rune) parser.Result {
 	if len(input) < 4 || input[0] != '$' || input[1] != '{' || input[2] != '{' || input[3] != '!' {
 		return parser.Result{
-			Payload:   nil,
-			Err:       parser.ExpectedError{"${{!"},
+			Err:       parser.NewError(input, "${{!"),
 			Remaining: input,
 		}
 	}
@@ -87,7 +84,7 @@ func escapedBlock(input []rune) parser.Result {
 
 //------------------------------------------------------------------------------
 
-func parse(expr string) (*expression, error) {
+func parse(expr string) (*expression, *parser.Error) {
 	var resolvers []resolver
 
 	p := parser.OneOf(
@@ -98,13 +95,11 @@ func parse(expr string) (*expression, error) {
 	)
 
 	remaining := []rune(expr)
-	i := 0
 	for len(remaining) > 0 {
 		res := p(remaining)
 		if res.Err != nil {
-			return nil, fmt.Errorf("failed to parse expression: %v", parser.ErrAtPosition(i, res.Err))
+			return nil, res.Err
 		}
-		i = len(remaining) - len(res.Remaining)
 		remaining = res.Remaining
 		resolvers = append(resolvers, res.Payload.(resolver))
 	}

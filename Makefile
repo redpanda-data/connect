@@ -32,7 +32,9 @@ deps:
 	@go mod tidy
 	@go mod vendor
 
-$(PATHINSTBIN)/%: $(wildcard lib/*/*.go lib/*/*/*.go lib/*/*/*/*.go cmd/*/*.go)
+SOURCE_FILES = $(shell find lib internal cmd -type f -name "*.go")
+
+$(PATHINSTBIN)/%: $(SOURCE_FILES)
 	@mkdir -p $(dir $@)
 	@go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/$*
 
@@ -41,7 +43,7 @@ $(APPS): %: $(PATHINSTBIN)/%
 SERVERLESS = benthos-lambda
 serverless: $(SERVERLESS)
 
-$(PATHINSTSERVERLESS)/%: $(wildcard lib/*/*.go lib/*/*/*.go lib/*/*/*/*.go cmd/serverless/*/*.go)
+$(PATHINSTSERVERLESS)/%: $(SOURCE_FILES)
 	@mkdir -p $(dir $@)
 	@GOOS=linux go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/serverless/$*
 	@zip -m -j $@.zip $@

@@ -62,7 +62,7 @@ func arithmeticOpParser() parser.Type {
 		default:
 			return parser.Result{
 				Remaining: input,
-				Err:       fmt.Errorf("operator not recognized: %v", res.Payload),
+				Err:       parser.NewFatalError(input, fmt.Errorf("operator not recognized: %v", res.Payload)),
 			}
 		}
 		return res
@@ -105,7 +105,7 @@ func arithmeticParser(fnParser parser.Type) parser.Type {
 		fn, err := resolveArithmetic(fns, ops)
 		if err != nil {
 			return parser.Result{
-				Err:       err,
+				Err:       parser.NewFatalError(input, err),
 				Remaining: input,
 			}
 		}

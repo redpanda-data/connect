@@ -122,7 +122,7 @@ func catchMethod(fn Function, args ...interface{}) (Function, error) {
 	case Function:
 		catchFn = t
 	default:
-		return nil, fmt.Errorf("expected function or literal param, received %T", args[0])
+		return nil, fmt.Errorf("expected query or literal argument, received %T", args[0])
 	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		res, err := fn.Exec(ctx)
@@ -330,7 +330,7 @@ func foldMethod(target Function, args ...interface{}) (Function, error) {
 	}
 	foldFn, ok := args[1].(Function)
 	if !ok {
-		return nil, fmt.Errorf("expected function param, received %T", args[1])
+		return nil, fmt.Errorf("expected query argument, received %T", args[1])
 	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		res, err := target.Exec(ctx)
@@ -578,7 +578,7 @@ var _ = RegisterMethod(
 func mapMethod(target Function, args ...interface{}) (Function, error) {
 	mapFn, ok := args[0].(Function)
 	if !ok {
-		return nil, fmt.Errorf("expected function param, received %T", args[0])
+		return nil, fmt.Errorf("expected query argument, received %T", args[0])
 	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		res, err := target.Exec(ctx)
@@ -600,7 +600,7 @@ var _ = RegisterMethod(
 func mapEachMethod(target Function, args ...interface{}) (Function, error) {
 	mapFn, ok := args[0].(Function)
 	if !ok {
-		return nil, fmt.Errorf("expected function param, received %T", args[0])
+		return nil, fmt.Errorf("expected query argument, received %T", args[0])
 	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		res, err := target.Exec(ctx)
@@ -808,7 +808,7 @@ func orMethod(fn Function, args ...interface{}) (Function, error) {
 	case Function:
 		orFn = t
 	default:
-		return nil, fmt.Errorf("expected function or literal param, received %T", args[0])
+		return nil, fmt.Errorf("expected query or literal argument, received %T", args[0])
 	}
 	return closureFn(func(ctx FunctionContext) (interface{}, error) {
 		res, err := fn.Exec(ctx)
@@ -855,7 +855,7 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 	if len(args) > 0 {
 		mapFn, ok := args[0].(Function)
 		if !ok {
-			return nil, fmt.Errorf("expected function param, received %T", args[0])
+			return nil, fmt.Errorf("expected query argument, received %T", args[0])
 		}
 		compareFn = func(ctx FunctionContext, values []interface{}, i, j int) bool {
 			var ctxValue interface{} = map[string]interface{}{
@@ -1040,7 +1040,7 @@ func uniqueMethod(target Function, args ...interface{}) (Function, error) {
 		var ok bool
 		emitFn, ok = args[0].(Function)
 		if !ok {
-			return nil, fmt.Errorf("expected function param, received %T", args[0])
+			return nil, fmt.Errorf("expected query argument, received %T", args[0])
 		}
 	}
 

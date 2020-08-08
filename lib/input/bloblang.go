@@ -104,7 +104,7 @@ func newBloblang(conf BloblangConfig) (*Bloblang, error) {
 	}
 	exec, err := mapping.NewExecutor(conf.Mapping)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse bloblang mapping: %w", err)
+		return nil, fmt.Errorf("failed to parse mapping: %v", err.ErrorAtPosition([]rune(conf.Mapping)))
 	}
 	remaining := int32(conf.Count)
 	if remaining <= 0 {

@@ -58,7 +58,11 @@ type Expression interface {
 // New attempts to parse and create an expression from a string. If the
 // expression is invalid an error is returned.
 func New(expr string) (Expression, error) {
-	return parse(expr)
+	e, err := parse(expr)
+	if err != nil {
+		return e, err
+	}
+	return e, nil
 }
 
 //------------------------------------------------------------------------------

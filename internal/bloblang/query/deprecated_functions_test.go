@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDeprecatedFunctionExpressions(t *testing.T) {
@@ -295,9 +296,7 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			}
 
 			e, err := tryParse(test.input, true)
-			if !assert.NoError(t, err) {
-				return
-			}
+			require.Nil(t, err)
 
 			res := ExecToString(e, FunctionContext{
 				Index:    test.index,
@@ -334,9 +333,7 @@ func TestDeprecatedCountersFunction(t *testing.T) {
 
 	for _, test := range tests {
 		e, err := tryParse(test[0], true)
-		if !assert.NoError(t, err) {
-			continue
-		}
+		require.Nil(t, err)
 		res := ExecToString(e, emptyCtx)
 		assert.Equal(t, test[1], res)
 	}
@@ -347,9 +344,8 @@ func TestDeprecatedUUIDV4Function(t *testing.T) {
 
 	for i := 0; i < 100; i++ {
 		e, err := tryParse("uuid_v4", true)
-		if !assert.NoError(t, err) {
-			continue
-		}
+		require.Nil(t, err)
+
 		res := ExecToString(e, emptyCtx)
 		if _, exists := results[res]; exists {
 			t.Errorf("Duplicate UUID generated: %v", res)
@@ -361,10 +357,9 @@ func TestDeprecatedUUIDV4Function(t *testing.T) {
 func TestDeprecatedTimestamps(t *testing.T) {
 	now := time.Now()
 
-	e, err := tryParse("timestamp_unix_nano", true)
-	if !assert.NoError(t, err) {
-		return
-	}
+	e, perr := tryParse("timestamp_unix_nano", true)
+	require.Nil(t, perr)
+
 	tStamp := ExecToString(e, emptyCtx)
 
 	nanoseconds, err := strconv.ParseInt(tStamp, 10, 64)
@@ -379,9 +374,8 @@ func TestDeprecatedTimestamps(t *testing.T) {
 
 	now = time.Now()
 	e, err = tryParse("timestamp_unix", true)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.Nil(t, err)
+
 	tStamp = ExecToString(e, emptyCtx)
 
 	seconds, err := strconv.ParseInt(tStamp, 10, 64)
@@ -396,16 +390,14 @@ func TestDeprecatedTimestamps(t *testing.T) {
 
 	now = time.Now()
 	e, err = tryParse("timestamp_unix:10", true)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.Nil(t, err)
+
 	tStamp = ExecToString(e, emptyCtx)
 
 	var secondsF float64
 	secondsF, err = strconv.ParseFloat(tStamp, 64)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	tThen = time.Unix(int64(secondsF), 0)
 
 	if tThen.Sub(now).Seconds() > 5.0 {
@@ -414,9 +406,8 @@ func TestDeprecatedTimestamps(t *testing.T) {
 
 	now = time.Now()
 	e, err = tryParse("timestamp", true)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.Nil(t, err)
+
 	tStamp = ExecToString(e, emptyCtx)
 
 	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
@@ -430,9 +421,8 @@ func TestDeprecatedTimestamps(t *testing.T) {
 
 	now = time.Now()
 	e, err = tryParse("timestamp_utc", true)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.Nil(t, err)
+
 	tStamp = ExecToString(e, emptyCtx)
 
 	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)

@@ -2,164 +2,18 @@ package parser
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
-
-	"golang.org/x/xerrors"
 )
-
-//------------------------------------------------------------------------------
-
-// ExpectedError represents a parser error where one of a list of possible
-// tokens was expected but not found.
-type ExpectedError []string
-
-// Error returns a human readable error string.
-func (e ExpectedError) Error() string {
-	seen := map[string]struct{}{}
-	var dedupeStack []string
-	for _, s := range e {
-		if _, exists := seen[string(s)]; !exists {
-			dedupeStack = append(dedupeStack, s)
-			seen[string(s)] = struct{}{}
-		}
-	}
-	if len(dedupeStack) == 1 {
-		return fmt.Sprintf("expected: %v", dedupeStack[0])
-	}
-	return fmt.Sprintf("expected one of: %v", dedupeStack)
-}
-
-// Append an expected error to another (and remove duplicates).
-func (e ExpectedError) Append(exp ExpectedError) ExpectedError {
-	seen := map[string]struct{}{}
-	new := make([]string, 0, len(e)+len(exp))
-	for _, v := range e {
-		if _, exists := seen[v]; !exists {
-			new = append(new, v)
-			seen[v] = struct{}{}
-		}
-	}
-	for _, v := range exp {
-		if _, exists := seen[v]; !exists {
-			new = append(new, v)
-			seen[v] = struct{}{}
-		}
-	}
-	return ExpectedError(new)
-}
-
-// ExpectedFatalError represents a parser error where one of a list of possible
-// tokens was expected but not found, and this is a fatal error.
-type ExpectedFatalError []string
-
-// Error returns a human readable error string.
-func (e ExpectedFatalError) Error() string {
-	seen := map[string]struct{}{}
-	var dedupeStack []string
-	for _, s := range e {
-		if _, exists := seen[string(s)]; !exists {
-			dedupeStack = append(dedupeStack, s)
-			seen[string(s)] = struct{}{}
-		}
-	}
-	if len(dedupeStack) == 1 {
-		return fmt.Sprintf("required: %v", dedupeStack[0])
-	}
-	return fmt.Sprintf("required one of: %v", dedupeStack)
-}
-
-// PositionalError represents an error that has occurred at a particular
-// position in the input.
-type PositionalError struct {
-	Position int
-	Err      error
-}
-
-// Error returns a human readable error string.
-func (e PositionalError) Error() string {
-	return fmt.Sprintf("char %v: %v", e.Position, e.Err)
-}
-
-// Unwrap returns the underlying error.
-func (e PositionalError) Unwrap() error {
-	return e.Err
-}
-
-// Expand the underlying error with more context.
-func (e PositionalError) Expand(fn func(error) error) PositionalError {
-	e.Err = fn(e.Err)
-	return e
-}
-
-// ErrAtPosition takes an error and returns a positional wrapper. If the
-// provided error is itself a positional type then the position is aggregated.
-func ErrAtPosition(i int, err error) PositionalError {
-	if p, ok := err.(PositionalError); ok {
-		p.Position += i
-		return p
-	}
-	return PositionalError{
-		Position: i,
-		Err:      err,
-	}
-}
-
-//------------------------------------------------------------------------------
-
-func selectErr(errLeft, errRight error, into *error) bool {
-	var expLeft, expRight ExpectedError
-
-	if errLeft == nil {
-		*into = errRight
-		return xerrors.As(errRight, &expRight)
-	}
-
-	// Errors that aren't wrapping ExpectedError are considered fatal.
-	if !xerrors.As(errLeft, &expLeft) {
-		*into = errLeft
-		return false
-	}
-	if !xerrors.As(errRight, &expRight) {
-		*into = errRight
-		return false
-	}
-
-	// If either are positional then we take the furthest position.
-	var posLeft, posRight PositionalError
-	if xerrors.As(errLeft, &posLeft) && posLeft.Position > 0 {
-		if xerrors.As(errRight, &posRight) && posRight.Position > 0 {
-			if posLeft.Position == posRight.Position {
-				expLeft = expLeft.Append(expRight)
-				posLeft.Err = expLeft
-				*into = posLeft
-			} else if posLeft.Position > posRight.Position {
-				*into = errLeft
-			} else {
-				*into = errRight
-			}
-			return true
-		}
-		*into = errLeft
-		return true
-	}
-	if xerrors.As(errRight, &posRight) && posRight.Position > 0 {
-		*into = errRight
-		return true
-	}
-
-	// Otherwise, just return combined expected.
-	*into = expLeft.Append(expRight)
-	return true
-}
 
 //------------------------------------------------------------------------------
 
 // Result represents the result of a parser given an input.
 type Result struct {
 	Payload   interface{}
-	Err       error
+	Err       *Error
 	Remaining []rune
 }
 
@@ -171,12 +25,12 @@ type Type func([]rune) Result
 // NotEnd parses zero characters from an input and expects it to not have ended.
 // An ExpectedError must be provided which provides the error returned on empty
 // input.
-func NotEnd(p Type, exp ExpectedError) Type {
+func NotEnd(p Type, exp ...string) Type {
 	return func(input []rune) Result {
 		if len(input) == 0 {
 			return Result{
 				Payload:   nil,
-				Err:       exp,
+				Err:       NewError(input, exp...),
 				Remaining: input,
 			}
 		}
@@ -186,12 +40,12 @@ func NotEnd(p Type, exp ExpectedError) Type {
 
 // Char parses a single character and expects it to match one candidate.
 func Char(c rune) Type {
-	exp := ExpectedError{string(c)}
+	exp := string(c)
 	return NotEnd(func(input []rune) Result {
 		if input[0] != c {
 			return Result{
 				Payload:   nil,
-				Err:       exp,
+				Err:       NewError(input, exp),
 				Remaining: input,
 			}
 		}
@@ -205,12 +59,12 @@ func Char(c rune) Type {
 
 // NotChar parses any number of characters until they match a single candidate.
 func NotChar(c rune) Type {
-	exp := ExpectedError{"not " + string(c)}
+	exp := "not " + string(c)
 	return NotEnd(func(input []rune) Result {
 		if input[0] == c {
 			return Result{
 				Payload:   nil,
-				Err:       exp,
+				Err:       NewError(input, exp),
 				Remaining: input,
 			}
 		}
@@ -238,14 +92,14 @@ func InSet(set ...rune) Type {
 	for _, r := range set {
 		setMap[r] = struct{}{}
 	}
-	exp := ExpectedError{fmt.Sprintf("chars(%v)", string(set))}
+	exp := fmt.Sprintf("chars(%v)", string(set))
 	return NotEnd(func(input []rune) Result {
 		i := 0
 		for ; i < len(input); i++ {
 			if _, exists := setMap[input[i]]; !exists {
 				if i == 0 {
 					return Result{
-						Err:       exp,
+						Err:       NewError(input, exp),
 						Remaining: input,
 					}
 				}
@@ -263,14 +117,14 @@ func InSet(set ...rune) Type {
 
 // InRange parses any number of characters between two runes inclusive.
 func InRange(lower, upper rune) Type {
-	exp := ExpectedError{fmt.Sprintf("range(%c - %c)", lower, upper)}
+	exp := fmt.Sprintf("range(%c - %c)", lower, upper)
 	return NotEnd(func(input []rune) Result {
 		i := 0
 		for ; i < len(input); i++ {
 			if input[i] < lower || input[i] > upper {
 				if i == 0 {
 					return Result{
-						Err:       exp,
+						Err:       NewError(input, exp),
 						Remaining: input,
 					}
 				}
@@ -293,13 +147,13 @@ func SpacesAndTabs() Type {
 
 // Term parses a single instance of a string.
 func Term(str string) Type {
-	exp := ExpectedError{str}
+	exp := str
 	return NotEnd(func(input []rune) Result {
 		for i, c := range str {
 			if len(input) <= i || input[i] != c {
 				return Result{
 					Payload:   nil,
-					Err:       exp,
+					Err:       NewError(input, exp),
 					Remaining: input,
 				}
 			}
@@ -324,12 +178,8 @@ func Number() Type {
 		if res.Err == nil {
 			negative = true
 		}
-		res = digitSet(res.Remaining)
+		res = Expect(digitSet, "number")(res.Remaining)
 		if res.Err != nil {
-			if _, ok := res.Err.(ExpectedError); ok {
-				// Override potentially confused expected list.
-				res.Err = ExpectedError{"number"}
-			}
 			return res
 		}
 		resStr := res.Payload.(string)
@@ -343,7 +193,10 @@ func Number() Type {
 			f, err := strconv.ParseFloat(resStr, 64)
 			if err != nil {
 				return Result{
-					Err:       fmt.Errorf("failed to parse '%v' as float: %v", resStr, err),
+					Err: NewFatalError(
+						input,
+						fmt.Errorf("failed to parse '%v' as float: %v", resStr, err),
+					),
 					Remaining: input,
 				}
 			}
@@ -355,7 +208,10 @@ func Number() Type {
 			i, err := strconv.ParseInt(resStr, 10, 64)
 			if err != nil {
 				return Result{
-					Err:       fmt.Errorf("failed to parse '%v' as integer: %v", resStr, err),
+					Err: NewFatalError(
+						input,
+						fmt.Errorf("failed to parse '%v' as integer: %v", resStr, err),
+					),
 					Remaining: input,
 				}
 			}
@@ -370,14 +226,11 @@ func Number() Type {
 
 // Boolean parses either 'true' or 'false' into a boolean value.
 func Boolean() Type {
-	parser := OneOf(Term("true"), Term("false"))
+	parser := Expect(OneOf(Term("true"), Term("false")), "boolean")
 	return func(input []rune) Result {
 		res := parser(input)
 		if res.Err == nil {
 			res.Payload = res.Payload.(string) == "true"
-		} else if _, ok := res.Err.(ExpectedError); ok {
-			// Override potentially confused expected list.
-			res.Err = ExpectedError{"boolean"}
 		}
 		return res
 	}
@@ -532,75 +385,24 @@ func Comment() Type {
 // is very strict and does not support double underscores, prefix or suffix
 // underscores.
 func SnakeCase() Type {
-	parser := OneOf(
+	return Expect(JoinStringPayloads(UntilFail(OneOf(
 		InRange('a', 'z'),
 		InRange('0', '9'),
 		Char('_'),
-	)
-	return func(input []rune) Result {
-		partials := []string{}
-		res := Result{
-			Remaining: input,
-		}
-		var i int
-		for {
-			i = len(input) - len(res.Remaining)
-			if res = parser(res.Remaining); res.Err != nil {
-				break
-			}
-			next := res.Payload.(string)
-			if next == "_" {
-				if len(partials) == 0 {
-					return Result{
-						Remaining: input,
-						Err:       ExpectedError{"snake-case"},
-					}
-				} else if partials[len(partials)-1] == "_" {
-					return Result{
-						Remaining: input,
-						Err:       ExpectedError{"snake-case"},
-					}
-				}
-			}
-			partials = append(partials, next)
-		}
-		if len(partials) == 0 {
-			return Result{
-				Remaining: input,
-				Err: PositionalError{
-					Position: i,
-					Err:      res.Err,
-				},
-			}
-		}
-		if partials[len(partials)-1] == "_" {
-			return Result{
-				Remaining: input,
-				Err:       ExpectedError{"snake-case"},
-			}
-		}
-		var buf bytes.Buffer
-		for _, p := range partials {
-			buf.WriteString(p)
-		}
-		return Result{
-			Payload:   buf.String(),
-			Remaining: res.Remaining,
-		}
-	}
+	))), "snake-case")
 }
 
 // TripleQuoteString parses a single instance of a triple-quoted multiple line
 // string. The result is the inner contents.
 func TripleQuoteString() Type {
-	exp := ExpectedError{"quoted-string"}
+	exp := "quoted string"
 	return NotEnd(func(input []rune) Result {
 		if len(input) < 6 ||
 			input[0] != '"' ||
 			input[1] != '"' ||
 			input[2] != '"' {
 			return Result{
-				Err:       exp,
+				Err:       NewError(input, exp),
 				Remaining: input,
 			}
 		}
@@ -615,7 +417,7 @@ func TripleQuoteString() Type {
 			}
 		}
 		return Result{
-			Err:       exp,
+			Err:       NewFatalError(input[len(input):], errors.New("required"), "end triple-quote"),
 			Remaining: input,
 		}
 	}, exp)
@@ -624,12 +426,12 @@ func TripleQuoteString() Type {
 // QuotedString parses a single instance of a quoted string. The result is the
 // inner contents unescaped.
 func QuotedString() Type {
-	exp := ExpectedError{"quoted-string"}
+	exp := "quoted string"
 	return NotEnd(func(input []rune) Result {
 		if input[0] != '"' {
 			return Result{
 				Payload:   nil,
-				Err:       exp,
+				Err:       NewError(input, exp),
 				Remaining: input,
 			}
 		}
@@ -639,7 +441,7 @@ func QuotedString() Type {
 				unquoted, err := strconv.Unquote(string(input[:i+1]))
 				if err != nil {
 					return Result{
-						Err:       fmt.Errorf("failed to unescape quoted string contents: %v", err),
+						Err:       NewFatalError(input, fmt.Errorf("failed to unescape quoted string contents: %v", err)),
 						Remaining: input,
 					}
 				}
@@ -655,7 +457,7 @@ func QuotedString() Type {
 			}
 		}
 		return Result{
-			Err:       exp,
+			Err:       NewFatalError(input[len(input):], errors.New("required"), "end quote"),
 			Remaining: input,
 		}
 	}, exp)
@@ -663,13 +465,13 @@ func QuotedString() Type {
 
 // Newline parses a line break.
 func Newline() Type {
-	return Expect(Char('\n'), "line-break")
+	return Expect(Char('\n'), "line break")
 }
 
 // NewlineAllowComment parses an optional comment followed by a mandatory line
 // break.
 func NewlineAllowComment() Type {
-	return Expect(OneOf(Comment(), Char('\n')), "line-break")
+	return Expect(OneOf(Comment(), Char('\n')), "line break")
 }
 
 // UntilFail applies a parser until it fails, and returns a slice containing all
@@ -724,33 +526,30 @@ func DelimitedPattern(
 			}
 			return results
 		}
-		i := len(input) - len(res.Remaining)
 		if res = primary(res.Remaining); res.Err != nil {
 			if resStop := stop(res.Remaining); resStop.Err == nil {
 				resStop.Payload = mkRes()
 				return resStop
 			}
 			return Result{
-				Err:       ErrAtPosition(i, res.Err),
+				Err:       res.Err,
 				Remaining: input,
 			}
 		}
 		results = append(results, res.Payload)
 
 		for {
-			i = len(input) - len(res.Remaining)
 			if res = delimiter(res.Remaining); res.Err != nil {
 				if resStop := stop(res.Remaining); resStop.Err == nil {
 					resStop.Payload = mkRes()
 					return resStop
 				}
 				return Result{
-					Err:       ErrAtPosition(i, res.Err),
+					Err:       res.Err,
 					Remaining: input,
 				}
 			}
 			delims = append(delims, res.Payload)
-			i = len(input) - len(res.Remaining)
 			if res = primary(res.Remaining); res.Err != nil {
 				if allowTrailing {
 					if resStop := stop(res.Remaining); resStop.Err == nil {
@@ -759,7 +558,7 @@ func DelimitedPattern(
 					}
 				}
 				return Result{
-					Err:       ErrAtPosition(i, res.Err),
+					Err:       res.Err,
 					Remaining: input,
 				}
 			}
@@ -795,10 +594,9 @@ func Delimited(primary, delimiter Type) Type {
 				}
 			}
 			delims = append(delims, res.Payload)
-			i := len(input) - len(res.Remaining)
 			if res = primary(res.Remaining); res.Err != nil {
 				return Result{
-					Err:       ErrAtPosition(i, res.Err),
+					Err:       res.Err,
 					Remaining: input,
 				}
 			}
@@ -816,10 +614,9 @@ func Sequence(parsers ...Type) Type {
 			Remaining: input,
 		}
 		for _, p := range parsers {
-			i := len(input) - len(res.Remaining)
 			if res = p(res.Remaining); res.Err != nil {
 				return Result{
-					Err:       ErrAtPosition(i, res.Err),
+					Err:       res.Err,
 					Remaining: input,
 				}
 			}
@@ -838,10 +635,8 @@ func Sequence(parsers ...Type) Type {
 func Optional(parser Type) Type {
 	return func(input []rune) Result {
 		res := parser(input)
-		if res.Err != nil {
-			if exp := ExpectedError(nil); xerrors.As(res.Err, &exp) {
-				res.Err = nil
-			}
+		if res.Err != nil && !res.Err.IsFatal() {
+			res.Err = nil
 		}
 		return res
 	}
@@ -872,54 +667,25 @@ func DiscardAll(parser Type) Type {
 	}
 }
 
-// MustBe applies a parser and if the result is an ExpectedError converts it
-// into a fatal error in order to prevent fallback parsers during AnyOf.
+// MustBe applies a parser and if the result is a non-fatal error then it is
+// upgraded to a fatal one.
 func MustBe(parser Type) Type {
-	replaceErr := func(err *error) {
-		var exp ExpectedError
-		if xerrors.As(*err, &exp) {
-			*err = ExpectedFatalError(exp)
-		}
-	}
 	return func(input []rune) Result {
 		res := parser(input)
-		if res.Err != nil {
-			var positional PositionalError
-			if xerrors.As(res.Err, &positional) {
-				replaceErr(&positional.Err)
-				res.Err = positional
-			} else {
-				replaceErr(&res.Err)
-			}
+		if res.Err != nil && !res.Err.IsFatal() {
+			res.Err.Err = errors.New("required")
 		}
 		return res
 	}
 }
 
-// Expect applies a parser and if an ExpectedError (or ExpectedFatalError) is
-// returned its contents are replaced with the provided list. This is useful for
-// providing better context to users.
+// Expect applies a parser and if an error is returned the list of expected candidates is replaced with the given
+// strings. This is useful for providing better context to users.
 func Expect(parser Type, expected ...string) Type {
-	replaceErr := func(err *error) {
-		var exp ExpectedError
-		if xerrors.As(*err, &exp) {
-			*err = ExpectedError(expected)
-		}
-		var expFatal ExpectedFatalError
-		if xerrors.As(*err, &expFatal) {
-			*err = ExpectedFatalError(expected)
-		}
-	}
 	return func(input []rune) Result {
 		res := parser(input)
-		if res.Err != nil {
-			var positional PositionalError
-			if xerrors.As(res.Err, &positional) {
-				replaceErr(&positional.Err)
-				res.Err = positional
-			} else {
-				replaceErr(&res.Err)
-			}
+		if res.Err != nil && !res.Err.IsFatal() {
+			res.Err.Expected = expected
 		}
 		return res
 	}
@@ -930,14 +696,20 @@ func Expect(parser Type, expected ...string) Type {
 // on. Otherwise, the result is returned.
 func OneOf(parsers ...Type) Type {
 	return func(input []rune) Result {
-		var err error
+		var err *Error
 	tryParsers:
 		for _, p := range parsers {
 			res := p(input)
 			if res.Err != nil {
-				if selectErr(err, res.Err, &err) {
-					continue tryParsers
+				if res.Err.IsFatal() {
+					return res
 				}
+				if err == nil || len(err.Input) > len(res.Err.Input) {
+					err = res.Err
+				} else if len(err.Input) == len(res.Err.Input) {
+					err.Add(res.Err)
+				}
+				continue tryParsers
 			}
 			return res
 		}
@@ -948,28 +720,30 @@ func OneOf(parsers ...Type) Type {
 	}
 }
 
-func bestMatch(input []rune, left, right Result) (Result, bool) {
-	matchedLeft := len(input) - len(left.Remaining)
-	matchedRight := len(input) - len(right.Remaining)
-	exp := ExpectedError{}
-	pos := PositionalError{}
+func bestMatch(left, right Result) (Result, bool) {
+	remainingLeft := len(left.Remaining)
+	remainingRight := len(right.Remaining)
 	if left.Err != nil {
-		if !xerrors.As(left.Err, &exp) {
+		if left.Err.IsFatal() {
 			return left, false
 		}
-		if xerrors.As(left.Err, &pos) {
-			matchedLeft = pos.Position - 1
-		}
+		remainingLeft = len(left.Err.Input)
 	}
 	if right.Err != nil {
-		if !xerrors.As(right.Err, &exp) {
+		if right.Err.IsFatal() {
 			return right, false
 		}
-		if xerrors.As(right.Err, &pos) {
-			matchedRight = pos.Position - 1
+		remainingRight = len(right.Err.Input)
+	}
+	if remainingRight == remainingLeft {
+		if left.Err == nil {
+			return left, true
+		}
+		if right.Err == nil {
+			return right, true
 		}
 	}
-	if matchedRight > matchedLeft {
+	if remainingRight < remainingLeft {
 		return right, true
 	}
 	return left, true
@@ -994,7 +768,7 @@ func BestMatch(parsers ...Type) Type {
 		for _, p := range parsers[1:] {
 			resTmp := p(input)
 			var cont bool
-			if res, cont = bestMatch(input, res, resTmp); !cont {
+			if res, cont = bestMatch(res, resTmp); !cont {
 				return res
 			}
 		}

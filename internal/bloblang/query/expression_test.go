@@ -84,7 +84,7 @@ else
 			}
 
 			e, err := tryParse(test.input, false)
-			require.NoError(t, err)
+			require.Nil(t, err)
 
 			for i := 0; i < 10; i++ {
 				res, err := e.Exec(FunctionContext{

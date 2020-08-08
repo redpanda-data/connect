@@ -128,7 +128,13 @@ func dynamicObjectParser() parser.Type {
 			values = append(values, [2]interface{}{slice[0], slice[4]})
 		}
 
-		res.Payload, res.Err = newMapLiteral(values)
+		lit, err := newMapLiteral(values)
+		if err != nil {
+			res.Err = parser.NewFatalError(input, err)
+			res.Remaining = input
+		} else {
+			res.Payload = lit
+		}
 		return res
 	}
 }

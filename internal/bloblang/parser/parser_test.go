@@ -9,12 +9,12 @@ import (
 )
 
 func TestNotEnd(t *testing.T) {
-	errInner := errors.New("test err")
+	errInner := NewFatalError(nil, errors.New("test err"))
 	notEnd := NotEnd(func([]rune) Result {
 		return Result{Err: errInner}
-	}, ExpectedError{"foobar"})
+	}, "foobar")
 	assert.Equal(t, errInner, notEnd([]rune("foo")).Err)
-	assert.Equal(t, "expected: foobar", notEnd([]rune("")).Err.Error())
+	assert.Equal(t, "expected foobar, but reached end of input", notEnd([]rune("")).Err.Error())
 }
 
 func TestChar(t *testing.T) {
@@ -24,10 +24,10 @@ func TestChar(t *testing.T) {
 		input     string
 		result    interface{}
 		remaining string
-		err       error
+		err       *Error
 	}{
 		"empty input": {
-			err: ExpectedError{"x"},
+			err: NewError([]rune(""), "x"),
 		},
 		"only the char": {
 			input:  "x",
@@ -41,16 +41,16 @@ func TestChar(t *testing.T) {
 		"wrong input": {
 			input:     "not x",
 			remaining: "not x",
-			err:       ExpectedError{"x"},
+			err:       NewError([]rune("not x"), "x"),
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := char([]rune(test.input))
-			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Payload, "Result") &&
-				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
@@ -62,20 +62,20 @@ func TestNotChar(t *testing.T) {
 		input     string
 		result    interface{}
 		remaining string
-		err       error
+		err       *Error
 	}{
 		"empty input": {
-			err: ExpectedError{"not x"},
+			err: NewError([]rune(""), "not x"),
 		},
 		"only the char": {
 			input:     "x",
 			remaining: "x",
-			err:       ExpectedError{"not x"},
+			err:       NewError([]rune("x"), "not x"),
 		},
 		"lots of the char": {
 			input:     "xxxx",
 			remaining: "xxxx",
-			err:       ExpectedError{"not x"},
+			err:       NewError([]rune("xxxx"), "not x"),
 		},
 		"only not the char": {
 			input:     "n",
@@ -92,9 +92,9 @@ func TestNotChar(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := char([]rune(test.input))
-			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Payload, "Result") &&
-				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
@@ -106,10 +106,10 @@ func TestInSet(t *testing.T) {
 		input     string
 		result    interface{}
 		remaining string
-		err       error
+		err       *Error
 	}{
 		"empty input": {
-			err: ExpectedError{"chars(abc)"},
+			err: NewError([]rune(""), "chars(abc)"),
 		},
 		"only a char": {
 			input:     "a",
@@ -129,21 +129,21 @@ func TestInSet(t *testing.T) {
 		"not in the set": {
 			input:     "n",
 			remaining: "n",
-			err:       ExpectedError{"chars(abc)"},
+			err:       NewError([]rune("n"), "chars(abc)"),
 		},
 		"lots not in the set": {
 			input:     "nononono",
 			remaining: "nononono",
-			err:       ExpectedError{"chars(abc)"},
+			err:       NewError([]rune("nononono"), "chars(abc)"),
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := inSet([]rune(test.input))
-			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Payload, "Result") &&
-				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
@@ -155,10 +155,10 @@ func TestInRange(t *testing.T) {
 		input     string
 		result    interface{}
 		remaining string
-		err       error
+		err       *Error
 	}{
 		"empty input": {
-			err: ExpectedError{"range(a - c)"},
+			err: NewError([]rune(""), "range(a - c)"),
 		},
 		"only a char": {
 			input:     "a",
@@ -178,143 +178,78 @@ func TestInRange(t *testing.T) {
 		"not in the set": {
 			input:     "n",
 			remaining: "n",
-			err:       ExpectedError{"range(a - c)"},
+			err:       NewError([]rune("n"), "range(a - c)"),
 		},
 		"lots not in the set": {
 			input:     "nononono",
 			remaining: "nononono",
-			err:       ExpectedError{"range(a - c)"},
+			err:       NewError([]rune("nononono"), "range(a - c)"),
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := parser([]rune(test.input))
-			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Payload, "Result") &&
-				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
 
-func TestAnyOfErrors(t *testing.T) {
+func TestOneOfErrors(t *testing.T) {
+	input := "foo bar baz"
 	tests := map[string]struct {
-		resultErrs []error
+		resultErrs []*Error
 		err        string
 	}{
 		"One parser fails": {
-			resultErrs: []error{
-				PositionalError{
-					Position: 5,
-					Err:      ExpectedError{"foo"},
-				},
+			resultErrs: []*Error{
+				NewError([]rune("bar baz"), "foo"),
 			},
-			err: `char 5: expected: foo`,
+			err: `line 1 char 5: expected foo`,
 		},
 		"Two parsers fail": {
-			resultErrs: []error{
-				PositionalError{
-					Position: 5,
-					Err:      ExpectedError{"foo"},
-				},
-				PositionalError{
-					Position: 5,
-					Err:      ExpectedError{"bar"},
-				},
+			resultErrs: []*Error{
+				NewError([]rune("bar baz"), "foo"),
+				NewError([]rune("bar baz"), "bar"),
 			},
-			err: `char 5: expected one of: [foo bar]`,
+			err: `line 1 char 5: expected foo or bar`,
 		},
 		"Two parsers fail 2": {
-			resultErrs: []error{
-				PositionalError{
-					Position: 5,
-					Err:      ExpectedError{"bar"},
-				},
-				ExpectedError{"foo"},
+			resultErrs: []*Error{
+				NewError([]rune("bar baz"), "bar"),
+				NewError([]rune("o bar baz"), "foo"),
 			},
-			err: `char 5: expected: bar`,
+			err: `line 1 char 5: expected bar`,
 		},
 		"Two parsers fail 3": {
-			resultErrs: []error{
-				ExpectedError{"foo"},
-				PositionalError{
-					Position: 5,
-					Err:      ExpectedError{"bar"},
-				},
+			resultErrs: []*Error{
+				NewError([]rune("o bar baz"), "foo"),
+				NewError([]rune("bar baz"), "bar"),
 			},
-			err: `char 5: expected: bar`,
-		},
-		"Two parsers fail 4": {
-			resultErrs: []error{
-				PositionalError{
-					Position: 5,
-					Err:      ExpectedError{"foo"},
-				},
-				PositionalError{
-					Position: 8,
-					Err:      ExpectedError{"bar"},
-				},
-			},
-			err: `char 8: expected: bar`,
-		},
-		"Two parsers fail 5": {
-			resultErrs: []error{
-				PositionalError{
-					Position: 8,
-					Err:      ExpectedError{"bar"},
-				},
-				PositionalError{
-					Position: 5,
-					Err:      ExpectedError{"foo"},
-				},
-			},
-			err: `char 8: expected: bar`,
+			err: `line 1 char 5: expected bar`,
 		},
 		"Fatal parsers fail": {
-			resultErrs: []error{
-				errors.New("this is a real error"),
-				PositionalError{
-					Position: 5,
-					Err:      ExpectedError{"foo"},
-				},
+			resultErrs: []*Error{
+				NewFatalError([]rune("bar baz"), errors.New("this is a real error")),
+				NewError([]rune("bar baz"), "bar"),
 			},
-			err: `this is a real error`,
+			err: `line 1 char 5: this is a real error`,
 		},
 		"Fatal parsers fail 2": {
-			resultErrs: []error{
-				PositionalError{
-					Position: 0,
-					Err:      errors.New("this is a real error"),
-				},
-				PositionalError{
-					Position: 5,
-					Err:      ExpectedError{"foo"},
-				},
+			resultErrs: []*Error{
+				NewFatalError([]rune("bar baz"), errors.New("this is a real error")),
+				NewError([]rune("baz"), "bar"),
 			},
-			err: `char 0: this is a real error`,
+			err: `line 1 char 5: this is a real error`,
 		},
 		"Fatal parsers fail 3": {
-			resultErrs: []error{
-				PositionalError{
-					Position: 5,
-					Err:      ExpectedError{"foo"},
-				},
-				errors.New("this is a real error"),
+			resultErrs: []*Error{
+				NewError([]rune("bar baz"), "bar"),
+				NewFatalError([]rune("bar baz"), errors.New("this is a real error")),
 			},
-			err: `this is a real error`,
-		},
-		"Fatal parsers fail 4": {
-			resultErrs: []error{
-				PositionalError{
-					Position: 5,
-					Err:      ExpectedError{"foo"},
-				},
-				PositionalError{
-					Position: 0,
-					Err:      errors.New("this is a real error"),
-				},
-			},
-			err: `char 0: this is a real error`,
+			err: `line 1 char 5: this is a real error`,
 		},
 	}
 
@@ -329,8 +264,8 @@ func TestAnyOfErrors(t *testing.T) {
 			})
 		}
 		t.Run(name, func(t *testing.T) {
-			res := OneOf(childParsers...)([]rune("foobar"))
-			assert.Equal(t, test.err, res.Err.Error(), "Error")
+			res := OneOf(childParsers...)([]rune(input))
+			assert.Equal(t, test.err, res.Err.ErrorAtPosition([]rune(input)), "Error")
 		})
 	}
 }
@@ -343,42 +278,27 @@ func TestBestMatch(t *testing.T) {
 		"Three parsers fail": {
 			inputResults: []Result{
 				{
-					Err: PositionalError{
-						Position: 5,
-						Err:      ExpectedError{"foo"},
-					},
+					Err:       NewError([]rune("ar"), "foo"),
 					Remaining: []rune("foobar"),
 				},
 				{
-					Err: PositionalError{
-						Position: 3,
-						Err:      ExpectedError{"bar"},
-					},
+					Err:       NewError([]rune("obar"), "bar"),
 					Remaining: []rune("foobar"),
 				},
 				{
-					Err: PositionalError{
-						Position: 4,
-						Err:      ExpectedError{"bar"},
-					},
+					Err:       NewError([]rune("bar"), "bar"),
 					Remaining: []rune("foobar"),
 				},
 			},
 			result: Result{
-				Err: PositionalError{
-					Position: 5,
-					Err:      ExpectedError{"foo"},
-				},
+				Err:       NewError([]rune("ar"), "foo"),
 				Remaining: []rune("foobar"),
 			},
 		},
 		"One parser succeeds": {
 			inputResults: []Result{
 				{
-					Err: PositionalError{
-						Position: 5,
-						Err:      ExpectedError{"foo"},
-					},
+					Err:       NewError([]rune("ar"), "foo"),
 					Remaining: []rune("foobar"),
 				},
 				{
@@ -387,20 +307,14 @@ func TestBestMatch(t *testing.T) {
 				},
 			},
 			result: Result{
-				Err: PositionalError{
-					Position: 5,
-					Err:      ExpectedError{"foo"},
-				},
+				Err:       NewError([]rune("ar"), "foo"),
 				Remaining: []rune("foobar"),
 			},
 		},
 		"One parser succeeds 2": {
 			inputResults: []Result{
 				{
-					Err: PositionalError{
-						Position: 4,
-						Err:      ExpectedError{"foo"},
-					},
+					Err:       NewError([]rune("ar"), "foo"),
 					Remaining: []rune("foobar"),
 				},
 				{
@@ -416,26 +330,20 @@ func TestBestMatch(t *testing.T) {
 		"Three parsers fail one severe": {
 			inputResults: []Result{
 				{
-					Err: PositionalError{
-						Position: 5,
-						Err:      ExpectedError{"foo"},
-					},
+					Err:       NewError([]rune("ar"), "foo"),
 					Remaining: []rune("foobar"),
 				},
 				{
-					Err:       errors.New("this is a real error"),
+					Err:       NewFatalError([]rune("ar"), errors.New("this is a real error")),
 					Remaining: []rune("foobar"),
 				},
 				{
-					Err: PositionalError{
-						Position: 4,
-						Err:      ExpectedError{"bar"},
-					},
+					Err:       NewError([]rune("bar"), "bar"),
 					Remaining: []rune("foobar"),
 				},
 			},
 			result: Result{
-				Err:       errors.New("this is a real error"),
+				Err:       NewFatalError([]rune("ar"), errors.New("this is a real error")),
 				Remaining: []rune("foobar"),
 			},
 		},
@@ -466,7 +374,7 @@ func TestSnakeCase(t *testing.T) {
 		err       string
 	}{
 		"empty input": {
-			err: `char 0: expected one of: [range(a - z) range(0 - 9) _]`,
+			err: `line 1 char 1: expected snake-case`,
 		},
 		"only a char": {
 			input:     "a",
@@ -486,27 +394,27 @@ func TestSnakeCase(t *testing.T) {
 		"not in the set": {
 			input:     "N",
 			remaining: "N",
-			err:       `char 0: expected one of: [range(a - z) range(0 - 9) _]`,
+			err:       `line 1 char 1: expected snake-case`,
 		},
 		"lots not in the set": {
 			input:     "NONONONO",
 			remaining: "NONONONO",
-			err:       `char 0: expected one of: [range(a - z) range(0 - 9) _]`,
+			err:       `line 1 char 1: expected snake-case`,
 		},
 		"prefix underscore": {
 			input:     "_foobar baz",
-			remaining: "_foobar baz",
-			err:       `expected: snake-case`,
+			remaining: " baz",
+			result:    "_foobar",
 		},
 		"suffix underscore": {
 			input:     "foo_bar_ baz",
-			remaining: "foo_bar_ baz",
-			err:       `expected: snake-case`,
+			remaining: " baz",
+			result:    "foo_bar_",
 		},
 		"double underscore": {
 			input:     "foo_bar__baz",
-			remaining: "foo_bar__baz",
-			err:       `expected: snake-case`,
+			remaining: "",
+			result:    "foo_bar__baz",
 		},
 	}
 
@@ -514,7 +422,7 @@ func TestSnakeCase(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := parser([]rune(test.input))
 			if res.Err != nil || len(test.err) > 0 {
-				assert.Equal(t, test.err, res.Err.Error(), "Error")
+				assert.Equal(t, test.err, res.Err.ErrorAtPosition([]rune(test.input)), "Error")
 			}
 			assert.Equal(t, test.result, res.Payload, "Result")
 			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
@@ -529,25 +437,25 @@ func TestSequence(t *testing.T) {
 		input     string
 		result    interface{}
 		remaining string
-		err       error
+		err       *Error
 	}{
 		"empty input": {
-			err: ErrAtPosition(0, ExpectedError{"abc"}),
+			err: NewError([]rune(""), "abc"),
 		},
 		"smaller than string": {
 			input:     "ab",
 			remaining: "ab",
-			err:       ErrAtPosition(0, ExpectedError{"abc"}),
+			err:       NewError([]rune("ab"), "abc"),
 		},
 		"matches first": {
 			input:     "abcNo",
 			remaining: "abcNo",
-			err:       ErrAtPosition(3, ExpectedError{"def"}),
+			err:       NewError([]rune("No"), "def"),
 		},
 		"matches some of second": {
 			input:     "abcdeNo",
 			remaining: "abcdeNo",
-			err:       ErrAtPosition(3, ExpectedError{"def"}),
+			err:       NewError([]rune("deNo"), "def"),
 		},
 		"matches all": {
 			input:     "abcdef",
@@ -569,9 +477,9 @@ func TestSequence(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := parser([]rune(test.input))
-			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Payload, "Result") &&
-				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
@@ -583,15 +491,15 @@ func TestAllOf(t *testing.T) {
 		input     string
 		result    interface{}
 		remaining string
-		err       error
+		err       *Error
 	}{
 		"empty input": {
-			err: ExpectedError{"abc"},
+			err: NewError([]rune(""), "abc"),
 		},
 		"smaller than string": {
 			input:     "ab",
 			remaining: "ab",
-			err:       ExpectedError{"abc"},
+			err:       NewError([]rune("ab"), "abc"),
 		},
 		"matches first": {
 			input:     "abcNo",
@@ -623,9 +531,9 @@ func TestAllOf(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := parser([]rune(test.input))
-			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Payload, "Result") &&
-				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
@@ -637,20 +545,20 @@ func TestDelimitedPattern(t *testing.T) {
 		input     string
 		result    interface{}
 		remaining string
-		err       error
+		err       *Error
 	}{
 		"empty input": {
-			err: ExpectedError{"#"},
+			err: NewError([]rune(""), "#"),
 		},
 		"no start": {
 			input:     "ab",
 			remaining: "ab",
-			err:       ExpectedError{"#"},
+			err:       NewError([]rune("ab"), "#"),
 		},
 		"smaller than string": {
 			input:     "#ab",
 			remaining: "#ab",
-			err:       ErrAtPosition(1, ExpectedError{"abc"}),
+			err:       NewError([]rune("ab"), "abc"),
 		},
 		"matches first": {
 			input:     "#abc!No",
@@ -660,12 +568,12 @@ func TestDelimitedPattern(t *testing.T) {
 		"matches some of second": {
 			input:     "#abc,abNo",
 			remaining: "#abc,abNo",
-			err:       ErrAtPosition(5, ExpectedError{"abc"}),
+			err:       NewError([]rune("abNo"), "abc"),
 		},
 		"matches not stopped": {
 			input:     "#abc,abcNo",
 			remaining: "#abc,abcNo",
-			err:       ErrAtPosition(8, ExpectedError{","}),
+			err:       NewError([]rune("No"), ","),
 		},
 		"matches all": {
 			input:     "#abc,abc!",
@@ -687,9 +595,9 @@ func TestDelimitedPattern(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := parser([]rune(test.input))
-			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Payload, "Result") &&
-				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
@@ -701,20 +609,20 @@ func TestDelimitedPatternAllowTrailing(t *testing.T) {
 		input     string
 		result    interface{}
 		remaining string
-		err       error
+		err       *Error
 	}{
 		"empty input": {
-			err: ExpectedError{"#"},
+			err: NewError([]rune(""), "#"),
 		},
 		"no start": {
 			input:     "ab",
 			remaining: "ab",
-			err:       ExpectedError{"#"},
+			err:       NewError([]rune("ab"), "#"),
 		},
 		"smaller than string": {
 			input:     "#ab",
 			remaining: "#ab",
-			err:       ErrAtPosition(1, ExpectedError{"abc"}),
+			err:       NewError([]rune("ab"), "abc"),
 		},
 		"matches first": {
 			input:     "#abc!No",
@@ -729,12 +637,12 @@ func TestDelimitedPatternAllowTrailing(t *testing.T) {
 		"matches some of second": {
 			input:     "#abc,abNo",
 			remaining: "#abc,abNo",
-			err:       ErrAtPosition(5, ExpectedError{"abc"}),
+			err:       NewError([]rune("abNo"), "abc"),
 		},
 		"matches not stopped": {
 			input:     "#abc,abcNo",
 			remaining: "#abc,abcNo",
-			err:       ErrAtPosition(8, ExpectedError{","}),
+			err:       NewError([]rune("No"), ","),
 		},
 		"matches all": {
 			input:     "#abc,abc!",
@@ -761,9 +669,9 @@ func TestDelimitedPatternAllowTrailing(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := parser([]rune(test.input))
-			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Payload, "Result") &&
-				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
@@ -785,51 +693,51 @@ func TestMustBe(t *testing.T) {
 		},
 		"Real error": {
 			inputRes: Result{
-				Err:       errors.New("testerr"),
+				Err:       NewFatalError(nil, errors.New("testerr")),
 				Remaining: []rune("foobar"),
 			},
 			outputRes: Result{
-				Err:       errors.New("testerr"),
+				Err:       NewFatalError(nil, errors.New("testerr")),
 				Remaining: []rune("foobar"),
 			},
 		},
 		"Expected error": {
 			inputRes: Result{
-				Err:       ExpectedError{"testerr"},
+				Err:       NewError(nil, "testerr"),
 				Remaining: []rune("foobar"),
 			},
 			outputRes: Result{
-				Err:       ExpectedFatalError{"testerr"},
+				Err:       NewFatalError(nil, errors.New("required"), "testerr"),
 				Remaining: []rune("foobar"),
 			},
 		},
 		"Expected already fatal error": {
 			inputRes: Result{
-				Err:       ExpectedFatalError{"testerr"},
+				Err:       NewFatalError(nil, errors.New("testerr"), "testerr"),
 				Remaining: []rune("foobar"),
 			},
 			outputRes: Result{
-				Err:       ExpectedFatalError{"testerr"},
+				Err:       NewFatalError(nil, errors.New("testerr"), "testerr"),
 				Remaining: []rune("foobar"),
 			},
 		},
 		"Expected and positioned error": {
 			inputRes: Result{
-				Err:       ErrAtPosition(10, ExpectedError{"testerr"}),
+				Err:       NewError([]rune("foo"), "testerr"),
 				Remaining: []rune("foobar"),
 			},
 			outputRes: Result{
-				Err:       ErrAtPosition(10, ExpectedFatalError{"testerr"}),
+				Err:       NewFatalError([]rune("foo"), errors.New("required"), "testerr"),
 				Remaining: []rune("foobar"),
 			},
 		},
 		"Fatal and positioned error": {
 			inputRes: Result{
-				Err:       ErrAtPosition(10, errors.New("testerr")),
+				Err:       NewFatalError([]rune("foo"), errors.New("testerr")),
 				Remaining: []rune("foobar"),
 			},
 			outputRes: Result{
-				Err:       ErrAtPosition(10, errors.New("testerr")),
+				Err:       NewFatalError([]rune("foo"), errors.New("testerr")),
 				Remaining: []rune("foobar"),
 			},
 		},
@@ -864,61 +772,31 @@ func TestInterceptExpectedError(t *testing.T) {
 		},
 		"Real error": {
 			inputRes: Result{
-				Err:       errors.New("testerr"),
+				Err:       NewFatalError(nil, errors.New("testerr")),
 				Remaining: []rune("foobar"),
 			},
 			outputRes: Result{
-				Err:       errors.New("testerr"),
+				Err:       NewFatalError(nil, errors.New("testerr")),
 				Remaining: []rune("foobar"),
 			},
 		},
 		"Expected error": {
 			inputRes: Result{
-				Err:       ExpectedError{"testerr"},
+				Err:       NewError(nil, "testerr"),
 				Remaining: []rune("foobar"),
 			},
 			outputRes: Result{
-				Err:       ExpectedError{"foobar"},
+				Err:       NewError(nil, "foobar"),
 				Remaining: []rune("foobar"),
 			},
 		},
 		"Expected and positioned error": {
 			inputRes: Result{
-				Err:       ErrAtPosition(10, ExpectedError{"testerr"}),
+				Err:       NewError([]rune("foo"), "testerr"),
 				Remaining: []rune("foobar"),
 			},
 			outputRes: Result{
-				Err:       ErrAtPosition(10, ExpectedError{"foobar"}),
-				Remaining: []rune("foobar"),
-			},
-		},
-		"Expected fatal error": {
-			inputRes: Result{
-				Err:       ExpectedFatalError{"testerr"},
-				Remaining: []rune("foobar"),
-			},
-			outputRes: Result{
-				Err:       ExpectedFatalError{"foobar"},
-				Remaining: []rune("foobar"),
-			},
-		},
-		"Expected fatal and positioned error": {
-			inputRes: Result{
-				Err:       ErrAtPosition(10, ExpectedFatalError{"testerr"}),
-				Remaining: []rune("foobar"),
-			},
-			outputRes: Result{
-				Err:       ErrAtPosition(10, ExpectedFatalError{"foobar"}),
-				Remaining: []rune("foobar"),
-			},
-		},
-		"Fatal and positioned error": {
-			inputRes: Result{
-				Err:       ErrAtPosition(10, errors.New("testerr")),
-				Remaining: []rune("foobar"),
-			},
-			outputRes: Result{
-				Err:       ErrAtPosition(10, errors.New("testerr")),
+				Err:       NewError([]rune("foo"), "foobar"),
 				Remaining: []rune("foobar"),
 			},
 		},
@@ -943,15 +821,15 @@ func TestMatch(t *testing.T) {
 		input     string
 		result    interface{}
 		remaining string
-		err       error
+		err       *Error
 	}{
 		"empty input": {
-			err: ExpectedError{"abc"},
+			err: NewError([]rune(""), "abc"),
 		},
 		"smaller than string": {
 			input:     "ab",
 			remaining: "ab",
-			err:       ExpectedError{"abc"},
+			err:       NewError([]rune("ab"), "abc"),
 		},
 		"only string": {
 			input:     "abc",
@@ -971,21 +849,21 @@ func TestMatch(t *testing.T) {
 		"not in the string": {
 			input:     "n",
 			remaining: "n",
-			err:       ExpectedError{"abc"},
+			err:       NewError([]rune("n"), "abc"),
 		},
 		"lots not in the set": {
 			input:     "nononono",
 			remaining: "nononono",
-			err:       ExpectedError{"abc"},
+			err:       NewError([]rune("nononono"), "abc"),
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := str([]rune(test.input))
-			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Payload, "Result") &&
-				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
@@ -1027,7 +905,7 @@ func TestDiscard(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := parser([]rune(test.input))
-			require.NoError(t, res.Err)
+			require.Nil(t, res.Err)
 			assert.Nil(t, res.Payload)
 			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
@@ -1075,7 +953,7 @@ func TestDiscardAll(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := parser([]rune(test.input))
-			require.NoError(t, res.Err)
+			require.Nil(t, res.Err)
 			assert.Nil(t, res.Payload)
 			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
@@ -1094,7 +972,7 @@ func TestOptional(t *testing.T) {
 		input     string
 		result    interface{}
 		remaining string
-		err       error
+		err       *Error
 	}{
 		"empty input": {},
 		"smaller than string": {
@@ -1133,10 +1011,10 @@ func TestNumber(t *testing.T) {
 		input     string
 		result    interface{}
 		remaining string
-		err       error
+		err       *Error
 	}{
 		"empty input": {
-			err: ExpectedError{"number"},
+			err: NewError([]rune(""), "number"),
 		},
 		"just digits": {
 			input:     "123",
@@ -1166,16 +1044,16 @@ func TestNumber(t *testing.T) {
 		"not a number": {
 			input:     "hello",
 			remaining: "hello",
-			err:       ExpectedError{"number"},
+			err:       NewError([]rune("hello"), "number"),
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := p([]rune(test.input))
-			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Payload, "Result") &&
-				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
@@ -1187,10 +1065,10 @@ func TestBoolean(t *testing.T) {
 		input     string
 		result    interface{}
 		remaining string
-		err       error
+		err       *Error
 	}{
 		"empty input": {
-			err: ExpectedError{"boolean"},
+			err: NewError([]rune(""), "boolean"),
 		},
 		"just bool": {
 			input:     "true",
@@ -1205,7 +1083,7 @@ func TestBoolean(t *testing.T) {
 		"not a bool": {
 			input:     "hello",
 			remaining: "hello",
-			err:       ExpectedError{"boolean"},
+			err:       NewError([]rune("hello"), "boolean"),
 		},
 		"bool and stuff": {
 			input:     "false foo",
@@ -1222,9 +1100,9 @@ func TestBoolean(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := p([]rune(test.input))
-			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Payload, "Result") &&
-				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
@@ -1236,10 +1114,10 @@ func TestQuotedString(t *testing.T) {
 		input     string
 		result    interface{}
 		remaining string
-		err       error
+		err       *Error
 	}{
 		"empty input": {
-			err: ExpectedError{"quoted-string"},
+			err: NewError([]rune(""), "quoted string"),
 		},
 		"only quote": {
 			input:     `"foo"`,
@@ -1269,16 +1147,16 @@ func TestQuotedString(t *testing.T) {
 		"not quoted": {
 			input:     `foo`,
 			remaining: "foo",
-			err:       ExpectedError{"quoted-string"},
+			err:       NewError([]rune("foo"), "quoted string"),
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := str([]rune(test.input))
-			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Payload, "Result") &&
-				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
@@ -1290,10 +1168,10 @@ func TestQuotedMultilineString(t *testing.T) {
 		input     string
 		result    interface{}
 		remaining string
-		err       error
+		err       *Error
 	}{
 		"empty input": {
-			err: ExpectedError{"quoted-string"},
+			err: NewError([]rune(""), "quoted string"),
 		},
 		"only quote": {
 			input:     `"""foo"""`,
@@ -1329,24 +1207,25 @@ baz`,
 		"not quoted": {
 			input:     `foo`,
 			remaining: "foo",
-			err:       ExpectedError{"quoted-string"},
+			err:       NewError([]rune("foo"), "quoted string"),
 		},
 		"unfinished quotes": {
 			input:     `"""foo\"bar\"baz and this`,
 			remaining: `"""foo\"bar\"baz and this`,
-			err:       ExpectedError{"quoted-string"},
+			err:       NewFatalError([]rune(``), errors.New("required"), "end triple-quote"),
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := str([]rune(test.input))
-			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Payload, "Result") &&
-				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
+
 func TestArray(t *testing.T) {
 	p := LiteralValue()
 
@@ -1354,10 +1233,10 @@ func TestArray(t *testing.T) {
 		input     string
 		result    interface{}
 		remaining string
-		err       error
+		err       *Error
 	}{
 		"empty input": {
-			err: ExpectedError{"boolean", "number", "quoted-string", "null", "array", "object"},
+			err: NewError([]rune(""), "boolean", "number", "quoted string", "quoted string", "null", "array", "object"),
 		},
 		"empty array": {
 			input:     "[] and this",
@@ -1376,17 +1255,17 @@ func TestArray(t *testing.T) {
 		},
 		"tailing comma array": {
 			input:     `[ "foo", ] and this`,
-			err:       ErrAtPosition(9, ExpectedError{"boolean", "number", "quoted-string", "null", "array", "object"}),
+			err:       NewError([]rune(`] and this`), "boolean", "number", "quoted string", "quoted string", "null", "array", "object"),
 			remaining: `[ "foo", ] and this`,
 		},
 		"random stuff array": {
 			input:     `[ "foo", whats this ] and this`,
-			err:       ErrAtPosition(9, ExpectedError{"boolean", "number", "quoted-string", "null", "array", "object"}),
+			err:       NewError([]rune(`whats this ] and this`), "boolean", "number", "quoted string", "quoted string", "null", "array", "object"),
 			remaining: `[ "foo", whats this ] and this`,
 		},
 		"random stuff array 2": {
 			input:     `[ "foo" whats this ] and this`,
-			err:       ErrAtPosition(8, ExpectedError{","}),
+			err:       NewError([]rune(`whats this ] and this`), ","),
 			remaining: `[ "foo" whats this ] and this`,
 		},
 		"multiple elements array": {
@@ -1420,9 +1299,9 @@ func TestArray(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := p([]rune(test.input))
-			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Payload, "Result") &&
-				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
@@ -1434,10 +1313,10 @@ func TestObject(t *testing.T) {
 		input     string
 		result    interface{}
 		remaining string
-		err       error
+		err       *Error
 	}{
 		"empty input": {
-			err: ExpectedError{"boolean", "number", "quoted-string", "null", "array", "object"},
+			err: NewError([]rune(""), "boolean", "number", "quoted string", "quoted string", "null", "array", "object"),
 		},
 		"empty object": {
 			input:     "{} and this",
@@ -1456,17 +1335,17 @@ func TestObject(t *testing.T) {
 		},
 		"tailing comma object": {
 			input:     `{ "foo": } and this`,
-			err:       ErrAtPosition(9, ExpectedError{"boolean", "number", "quoted-string", "null", "array", "object"}),
+			err:       NewError([]rune("} and this"), "boolean", "number", "quoted string", "quoted string", "null", "array", "object"),
 			remaining: `{ "foo": } and this`,
 		},
 		"random stuff object": {
 			input:     `{ "foo": whats this } and this`,
-			err:       ErrAtPosition(9, ExpectedError{"boolean", "number", "quoted-string", "null", "array", "object"}),
+			err:       NewError([]rune("whats this } and this"), "boolean", "number", "quoted string", "quoted string", "null", "array", "object"),
 			remaining: `{ "foo": whats this } and this`,
 		},
 		"multiple values random stuff object": {
 			input:     `{ "foo":true "bar":5.2 } and this`,
-			err:       ErrAtPosition(13, ExpectedError{","}),
+			err:       NewError([]rune(`"bar":5.2 } and this`), ","),
 			remaining: `{ "foo":true "bar":5.2 } and this`,
 		},
 		"multiple values object": {
@@ -1515,9 +1394,9 @@ func TestObject(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := p([]rune(test.input))
-			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Payload, "Result") &&
-				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
@@ -1529,10 +1408,10 @@ func TestSpacesAndTabs(t *testing.T) {
 		input     string
 		result    interface{}
 		remaining string
-		err       error
+		err       *Error
 	}{
 		"empty input": {
-			err: ExpectedError{"whitespace"},
+			err: NewError([]rune(""), "whitespace"),
 		},
 		"only a char": {
 			input:     " ",
@@ -1552,21 +1431,21 @@ func TestSpacesAndTabs(t *testing.T) {
 		"not in the set": {
 			input:     "n",
 			remaining: "n",
-			err:       ExpectedError{"whitespace"},
+			err:       NewError([]rune("n"), "whitespace"),
 		},
 		"lots not in the set": {
 			input:     "nononono",
 			remaining: "nononono",
-			err:       ExpectedError{"whitespace"},
+			err:       NewError([]rune("nononono"), "whitespace"),
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := inSet([]rune(test.input))
-			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Payload, "Result") &&
-				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
@@ -1578,10 +1457,10 @@ func TestNewline(t *testing.T) {
 		input     string
 		result    interface{}
 		remaining string
-		err       error
+		err       *Error
 	}{
 		"empty input": {
-			err: ExpectedError{"line-break"},
+			err: NewError([]rune(""), "line break"),
 		},
 		"only a line feed": {
 			input:     "\n",
@@ -1591,7 +1470,7 @@ func TestNewline(t *testing.T) {
 		"only a carriage return": {
 			input:     "\r",
 			remaining: "\r",
-			err:       ExpectedError{"line-break"},
+			err:       NewError([]rune("\r"), "line break"),
 		},
 		"a line feed plus": {
 			input:     "\n foo",
@@ -1601,16 +1480,16 @@ func TestNewline(t *testing.T) {
 		"lots not in the set": {
 			input:     "nononono",
 			remaining: "nononono",
-			err:       ExpectedError{"line-break"},
+			err:       NewError([]rune("nononono"), "line break"),
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := inSet([]rune(test.input))
-			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Payload, "Result") &&
-				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }
@@ -1626,10 +1505,10 @@ func TestAnyOf(t *testing.T) {
 		input     string
 		result    interface{}
 		remaining string
-		err       error
+		err       *Error
 	}{
 		"empty input": {
-			err: ExpectedError{"a", "b", "c"},
+			err: NewError([]rune(""), "a", "b", "c"),
 		},
 		"only a char": {
 			input:     "a",
@@ -1669,21 +1548,21 @@ func TestAnyOf(t *testing.T) {
 		"not in the set": {
 			input:     "n",
 			remaining: "n",
-			err:       ExpectedError{"a", "b", "c"},
+			err:       NewError([]rune("n"), "a", "b", "c"),
 		},
 		"lots not in the set": {
 			input:     "nononono",
 			remaining: "nononono",
-			err:       ExpectedError{"a", "b", "c"},
+			err:       NewError([]rune("nononono"), "a", "b", "c"),
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := anyOf([]rune(test.input))
-			_ = assert.Equal(t, test.err, res.Err, "Error") &&
-				assert.Equal(t, test.result, res.Payload, "Result") &&
-				assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
 }

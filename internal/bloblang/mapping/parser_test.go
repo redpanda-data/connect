@@ -33,16 +33,16 @@ func TestMappingErrors(t *testing.T) {
 	}{
 		"no mappings": {
 			mapping: ``,
-			err:     `line 1 char 1: expected one of: [import map let meta target-path]`,
+			err:     `line 1 char 1: expected import, map, or assignment`,
 		},
 		"no mappings 2": {
 			mapping: `
    `,
-			err: `line 2 char 4: expected one of: [import map let meta target-path]`,
+			err: `line 2 char 4: expected import, map, or assignment`,
 		},
 		"double mapping": {
 			mapping: `foo = bar bar = baz`,
-			err:     `line 1 char 11: expected: line-break`,
+			err:     `line 1 char 11: expected line break`,
 		},
 		"double mapping line breaks": {
 			mapping: `
@@ -50,45 +50,45 @@ func TestMappingErrors(t *testing.T) {
 foo = bar bar = baz
 
 `,
-			err: `line 3 char 11: expected: line-break`,
+			err: `line 3 char 11: expected line break`,
 		},
 		"double mapping line 2": {
 			mapping: `let a = "a"
 foo = bar bar = baz`,
-			err: `line 2 char 11: expected: line-break`,
+			err: `line 2 char 11: expected line break`,
 		},
 		"double mapping line 3": {
 			mapping: `let a = "a"
 foo = bar bar = baz
 	let a = "a"`,
-			err: "line 2 char 11: expected: line-break",
+			err: "line 2 char 11: expected line break",
 		},
 		"bad mapping": {
 			mapping: `foo wat bar`,
-			err:     `line 1 char 5: expected: =`,
+			err:     `line 1 char 5: expected =`,
 		},
 		"bad char": {
 			mapping: `!foo = bar`,
-			err:     `line 1 char 6: expected: end-of-input`,
+			err:     `line 1 char 6: expected end of input`,
 		},
 		"bad char 2": {
 			mapping: `let foo = bar
 !foo = bar`,
-			err: `line 2 char 1: expected one of: [import map let meta target-path]`,
+			err: `line 2 char 1: expected import, map, or assignment`,
 		},
 		"bad char 3": {
 			mapping: `let foo = bar
 !foo = bar
 this = that`,
-			err: `line 2 char 1: expected one of: [import map let meta target-path]`,
+			err: `line 2 char 1: expected import, map, or assignment`,
 		},
 		"bad query": {
 			mapping: `foo = blah.`,
-			err:     `line 1 char 12: required one of: [method field-path]`,
+			err:     `line 1 char 12: required: expected method or field path`,
 		},
 		"bad variable assign": {
 			mapping: `let = blah`,
-			err:     `line 1 char 5: required: variable-name`,
+			err:     `line 1 char 5: required: expected variable name`,
 		},
 		"double map definition": {
 			mapping: `map foo {
@@ -112,7 +112,7 @@ foo = bar.apply("foo")`,
   foo = bar
 }
 foo = bar.apply("foo")`,
-			err: `line 1 char 5: required: map-name`,
+			err: `line 1 char 5: required: expected map name`,
 		},
 		"no file import": {
 			mapping: `import "this file doesnt exist (i hope)"
@@ -124,7 +124,7 @@ foo = bar.apply("from_import")`,
 			mapping: fmt.Sprintf(`import "%v"
 
 foo = bar.apply("from_import")`, badMapFile),
-			err: fmt.Sprintf(`line 1 char 1: failed to parse import '%v': line 1 char 5: expected: =`, badMapFile),
+			err: fmt.Sprintf(`line 1 char 1: failed to parse import '%v': line 1 char 5: expected =`, badMapFile),
 		},
 		"no maps file import": {
 			mapping: fmt.Sprintf(`import "%v"
@@ -143,7 +143,7 @@ foo = bar.apply("foo")`, goodMapFile),
 		"quotes at root": {
 			mapping: `
 "root.something" = 5 + 2`,
-			err: "line 2 char 1: expected one of: [import map let meta target-path]",
+			err: "line 2 char 1: expected import, map, or assignment",
 		},
 	}
 
@@ -151,7 +151,7 @@ foo = bar.apply("foo")`, goodMapFile),
 		test := test
 		t.Run(name, func(t *testing.T) {
 			exec, err := NewExecutor(test.mapping)
-			assert.EqualError(t, err, test.err)
+			assert.Equal(t, test.err, err.ErrorAtPosition([]rune(test.mapping)))
 			assert.Nil(t, exec)
 		})
 	}
@@ -447,8 +447,8 @@ root = this.apply("foo")`, goodMapFile),
 				test.output.Meta = map[string]string{}
 			}
 
-			exec, err := NewExecutor(test.mapping)
-			require.NoError(t, err)
+			exec, perr := NewExecutor(test.mapping)
+			require.Nil(t, perr)
 
 			resPart, err := exec.MapPart(test.index, msg)
 			require.NoError(t, err)

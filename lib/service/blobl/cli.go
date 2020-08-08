@@ -59,7 +59,7 @@ func run(c *cli.Context) error {
 	m := c.Args().First()
 	exec, err := mapping.NewExecutor(m)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, red(fmt.Sprintf("failed to parse mapping: %v", err)))
+		fmt.Fprintln(os.Stderr, fmt.Sprintf("%v %v", red("failed to parse mapping:"), err.ErrorAtPositionStructured("", []rune(m))))
 		os.Exit(1)
 	}
 

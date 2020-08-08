@@ -5,6 +5,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExpressionsParser(t *testing.T) {
@@ -221,9 +222,8 @@ func TestExpressionsParser(t *testing.T) {
 			}
 
 			e, err := tryParse(test.input, test.deprecated)
-			if !assert.NoError(t, err) {
-				return
-			}
+			require.Nil(t, err)
+
 			res := ExecToString(e, FunctionContext{
 				Index: test.index, MsgBatch: msg,
 				Value: test.value,

@@ -909,8 +909,8 @@ func TestMethods(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, err := tryParse(test.input, false)
-			require.NoError(t, err)
+			e, perr := tryParse(test.input, false)
+			require.Nil(t, perr)
 
 			for i := 0; i < 10; i++ {
 				res, err := e.Exec(FunctionContext{

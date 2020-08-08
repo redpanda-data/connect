@@ -5,6 +5,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStaticExpressionOptimization(t *testing.T) {
@@ -19,15 +20,15 @@ func TestStaticExpressionOptimization(t *testing.T) {
 	for k, v := range tests {
 		t.Run(k, func(t *testing.T) {
 			e, err := parse(k)
-			_ = assert.NoError(t, err) &&
-				assert.Equal(t, v, e.static) &&
-				assert.Equal(t, 0, len(e.resolvers)) &&
-				assert.Equal(t, v, e.String(0, message.New(nil))) &&
-				assert.Equal(t, v, e.StringLegacy(0, message.New(nil))) &&
-				assert.Equal(t, v, string(e.Bytes(0, message.New(nil)))) &&
-				assert.Equal(t, v, string(e.BytesEscaped(0, message.New(nil)))) &&
-				assert.Equal(t, v, string(e.BytesLegacy(0, message.New(nil)))) &&
-				assert.Equal(t, v, string(e.BytesEscapedLegacy(0, message.New(nil))))
+			require.Nil(t, err)
+			assert.Equal(t, v, e.static)
+			assert.Equal(t, 0, len(e.resolvers))
+			assert.Equal(t, v, e.String(0, message.New(nil)))
+			assert.Equal(t, v, e.StringLegacy(0, message.New(nil)))
+			assert.Equal(t, v, string(e.Bytes(0, message.New(nil))))
+			assert.Equal(t, v, string(e.BytesEscaped(0, message.New(nil))))
+			assert.Equal(t, v, string(e.BytesLegacy(0, message.New(nil))))
+			assert.Equal(t, v, string(e.BytesEscapedLegacy(0, message.New(nil))))
 		})
 	}
 }
@@ -39,31 +40,31 @@ func TestExpressionParserErrors(t *testing.T) {
 	}{
 		"bad function": {
 			input: `static string ${!not a function} hello world`,
-			err:   `failed to parse expression: char 20: expected: function-parameters`,
+			err:   `char 21: required: expected function arguments`,
 		},
 		"bad function 2": {
 			input: `static string ${!not_a_function()} hello world`,
-			err:   `failed to parse expression: char 17: unrecognised function 'not_a_function'`,
+			err:   `char 18: unrecognised function 'not_a_function'`,
 		},
 		"bad args": {
 			input: `foo ${!json("foo") whats this?} bar`,
-			err:   `failed to parse expression: char 19: unexpected contents at end of expression: whats this?`,
+			err:   `char 20: required: expected end of expression`,
 		},
 		"bad args 2": {
 			input: `foo ${!json("foo} bar`,
-			err:   `failed to parse expression: char 12: required one of: [boolean number quoted-string match if function null array object variable-path field-path]`,
+			err:   `char 17: required: expected end quote`,
 		},
 		"bad args 3": {
 			input: `foo ${!json(} bar`,
-			err:   `failed to parse expression: char 12: required one of: [boolean number quoted-string match if function null array object variable-path field-path]`,
+			err:   `char 13: required: expected boolean, number, quoted string, or query`,
 		},
 		"bad args 4": {
 			input: `foo ${!json(0,} bar`,
-			err:   `failed to parse expression: char 14: required one of: [boolean number quoted-string match if function null array object variable-path field-path]`,
+			err:   `char 15: required: expected boolean, number, quoted string, or query`,
 		},
 		"bad args 5": {
 			input: `foo ${!json} bar`,
-			err:   `failed to parse expression: char 11: expected: function-parameters`,
+			err:   `char 12: required: expected function arguments`,
 		},
 	}
 
@@ -72,8 +73,8 @@ func TestExpressionParserErrors(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			_, err := parse(test.input)
-			_ = assert.Error(t, err) &&
-				assert.Equal(t, test.err, err.Error())
+			require.NotNil(t, err)
+			require.Equal(t, test.err, err.ErrorAtChar([]rune(test.input)))
 		})
 	}
 }
@@ -233,9 +234,8 @@ func TestExpressions(t *testing.T) {
 			}
 
 			e, err := parse(test.input)
-			if !assert.NoError(t, err) {
-				return
-			}
+			require.Nil(t, err)
+
 			var res string
 			if test.escaped {
 				res = string(e.BytesEscaped(test.index, msg))

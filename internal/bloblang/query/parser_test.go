@@ -5,6 +5,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFunctionParserErrors(t *testing.T) {
@@ -16,94 +17,94 @@ func TestFunctionParserErrors(t *testing.T) {
 		"bad function": {
 			input:      `not a function`,
 			deprecated: true,
-			err:        `char 3: expected: function-parameters`,
+			err:        `line 1 char 4: expected function arguments`,
 		},
 		"bad function 2": {
 			input: `not_a_function()`,
-			err:   `char 0: unrecognised function 'not_a_function'`,
+			err:   `line 1 char 1: unrecognised function 'not_a_function'`,
 		},
 		"bad args 2": {
 			input:      `json("foo`,
 			deprecated: true,
-			err:        `char 5: required one of: [boolean number quoted-string match if function null array object variable-path field-path]`,
+			err:        `line 1 char 10: required: expected end quote`,
 		},
 		"bad args 3": {
 			input: `json(`,
-			err:   `char 5: required one of: [boolean number quoted-string match if function null array object variable-path field-path]`,
+			err:   `line 1 char 6: required: expected boolean, number, quoted string, or query`,
 		},
 		"bad args 4": {
 			input: `json(0,`,
-			err:   `char 7: required one of: [boolean number quoted-string match if function null array object variable-path field-path]`,
+			err:   `line 1 char 8: required: expected boolean, number, quoted string, or query`,
 		},
 		"bad args 5": {
 			input:      `json`,
 			deprecated: true,
-			err:        `char 4: expected: function-parameters`,
+			err:        `line 1 char 5: expected function arguments`,
 		},
 		"bad args 7": {
 			input: `json(5)`,
-			err:   `char 0: expected string param, received int64`,
+			err:   `line 1 char 1: expected string argument, received int64`,
 		},
 		"bad args 8": {
 			input: `json(false)`,
-			err:   `char 0: expected string param, received bool`,
+			err:   `line 1 char 1: expected string argument, received bool`,
 		},
 		"bad operators": {
 			input: `json("foo") + `,
-			err:   `char 14: expected one of: [match if function boolean number quoted-string null array object variable-path field-path]`,
+			err:   `line 1 char 15: expected query`,
 		},
 		"bad expression": {
 			input: `(json("foo") `,
-			err:   `char 13: expected: )`,
+			err:   `line 1 char 14: required: expected closing bracket`,
 		},
 		"bad expression 2": {
 			input: `(json("foo") + `,
-			err:   `char 15: expected one of: [match if function boolean number quoted-string null array object variable-path field-path]`,
+			err:   `line 1 char 16: expected query`,
 		},
 		"bad expression 3": {
 			input: `(json("foo") + meta("bar") `,
-			err:   `char 27: expected: )`,
+			err:   `line 1 char 28: required: expected closing bracket`,
 		},
 		"bad method": {
 			input: `json("foo").not_a_thing()`,
-			err:   `char 12: unrecognised method 'not_a_thing'`,
+			err:   `line 1 char 13: unrecognised method 'not_a_thing'`,
 		},
 		"bad method 2": {
 			input:      `json("foo").not_a_thing()`,
 			deprecated: true,
-			err:        `char 12: unrecognised method 'not_a_thing'`,
+			err:        `line 1 char 13: unrecognised method 'not_a_thing'`,
 		},
 		"bad method args 2": {
 			input: `json("foo").from(`,
-			err:   `char 17: required one of: [boolean number quoted-string match if function null array object variable-path field-path]`,
+			err:   `line 1 char 18: required: expected boolean, number, quoted string, or query`,
 		},
 		"bad method args 3": {
 			input: `json("foo").from()`,
-			err:   `char 12: expected 1 parameters, received: 0`,
+			err:   `line 1 char 13: expected 1 arguments, received: 0`,
 		},
 		"bad method args 4": {
 			input: `json("foo").from("nah")`,
-			err:   `char 12: expected int param, received string`,
+			err:   `line 1 char 13: expected int argument, received string`,
 		},
 		"bad map args": {
 			input: `json("foo").map()`,
-			err:   `char 12: expected 1 parameters, received: 0`,
+			err:   `line 1 char 13: expected 1 arguments, received: 0`,
 		},
 		"gibberish": {
 			input: `json("foo").(=)`,
-			err:   `char 13: required one of: [match if function boolean number quoted-string null array object variable-path field-path]`,
+			err:   `line 1 char 14: required: expected query`,
 		},
 		"gibberish 2": {
 			input: `json("foo").(1 + )`,
-			err:   `char 17: required one of: [match if function boolean number quoted-string null array object variable-path field-path]`,
+			err:   `line 1 char 18: required: expected query`,
 		},
 		"bad match": {
 			input: `match json("foo")`,
-			err:   `char 17: required: {`,
+			err:   `line 1 char 18: required: expected {`,
 		},
 		"bad match 2": {
 			input: `match json("foo") what is this?`,
-			err:   `char 18: required: {`,
+			err:   `line 1 char 19: required: expected {`,
 		},
 	}
 
@@ -112,8 +113,8 @@ func TestFunctionParserErrors(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			_, err := tryParse(test.input, test.deprecated)
-			_ = assert.Error(t, err) &&
-				assert.Equal(t, test.err, err.Error())
+			require.NotNil(t, err)
+			assert.Equal(t, test.err, err.ErrorAtPosition([]rune(test.input)))
 		})
 	}
 }
@@ -227,8 +228,8 @@ not this`,
 			} else {
 				res = Parse([]rune(test.input))
 			}
-			_ = assert.NoError(t, res.Err) &&
-				assert.Equal(t, test.remaining, string(res.Remaining))
+			require.Nil(t, res.Err)
+			assert.Equal(t, test.remaining, string(res.Remaining))
 		})
 	}
 }

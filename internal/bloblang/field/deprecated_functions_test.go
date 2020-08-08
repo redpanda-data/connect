@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDeprecatedFunctionExpressions(t *testing.T) {
@@ -332,9 +333,7 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			}
 
 			e, err := parse(test.input)
-			if !assert.NoError(t, err) {
-				return
-			}
+			require.Nil(t, err)
 			var res string
 			if test.escaped {
 				if test.legacy {
@@ -366,9 +365,7 @@ func TestCountersFunction(t *testing.T) {
 
 	for _, test := range tests {
 		e, err := parse(test[0])
-		if !assert.NoError(t, err) {
-			continue
-		}
+		require.Nil(t, err)
 		res := e.String(0, message.New(nil))
 		assert.Equal(t, test[1], res)
 	}
@@ -379,9 +376,7 @@ func TestUUIDV4Function(t *testing.T) {
 
 	for i := 0; i < 100; i++ {
 		e, err := parse("${!uuid_v4}")
-		if !assert.NoError(t, err) {
-			continue
-		}
+		require.Nil(t, err)
 		res := e.String(0, message.New(nil))
 		if _, exists := results[res]; exists {
 			t.Errorf("Duplicate UUID generated: %v", res)
@@ -393,10 +388,9 @@ func TestUUIDV4Function(t *testing.T) {
 func TestTimestamps(t *testing.T) {
 	now := time.Now()
 
-	e, err := parse("${!timestamp_unix_nano}")
-	if !assert.NoError(t, err) {
-		return
-	}
+	e, perr := parse("${!timestamp_unix_nano}")
+	require.Nil(t, perr)
+
 	tStamp := e.String(0, message.New(nil))
 
 	nanoseconds, err := strconv.ParseInt(tStamp, 10, 64)
@@ -410,10 +404,9 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = parse("${!timestamp_unix}")
-	if !assert.NoError(t, err) {
-		return
-	}
+	e, perr = parse("${!timestamp_unix}")
+	require.Nil(t, perr)
+
 	tStamp = e.String(0, message.New(nil))
 
 	seconds, err := strconv.ParseInt(tStamp, 10, 64)
@@ -427,10 +420,9 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = parse("${!timestamp_unix:10}")
-	if !assert.NoError(t, err) {
-		return
-	}
+	e, perr = parse("${!timestamp_unix:10}")
+	require.Nil(t, perr)
+
 	tStamp = e.String(0, message.New(nil))
 
 	var secondsF float64
@@ -445,10 +437,9 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = parse("${!timestamp}")
-	if !assert.NoError(t, err) {
-		return
-	}
+	e, perr = parse("${!timestamp}")
+	require.Nil(t, perr)
+
 	tStamp = e.String(0, message.New(nil))
 
 	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
@@ -461,10 +452,9 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = parse("${!timestamp_utc}")
-	if !assert.NoError(t, err) {
-		return
-	}
+	e, perr = parse("${!timestamp_utc}")
+	require.Nil(t, perr)
+
 	tStamp = e.String(0, message.New(nil))
 
 	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
@@ -480,10 +470,9 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = parse("${!timestamp_utc:2006-01-02T15:04:05.000Z}")
-	if !assert.NoError(t, err) {
-		return
-	}
+	e, perr = parse("${!timestamp_utc:2006-01-02T15:04:05.000Z}")
+	require.Nil(t, perr)
+
 	tStamp = e.String(0, message.New(nil))
 
 	tThen, err = time.Parse("2006-01-02T15:04:05.000Z", tStamp)

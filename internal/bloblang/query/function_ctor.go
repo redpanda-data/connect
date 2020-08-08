@@ -71,7 +71,7 @@ func checkArgs(fn FunctionCtor, checks ...ArgCheckFn) FunctionCtor {
 func ExpectAtLeastOneArg() ArgCheckFn {
 	return func(args []interface{}) error {
 		if len(args) == 0 {
-			return errors.New("expected at least one parameter, received none")
+			return errors.New("expected at least one argument, received none")
 		}
 		return nil
 	}
@@ -81,7 +81,7 @@ func ExpectAtLeastOneArg() ArgCheckFn {
 func ExpectOneOrZeroArgs() ArgCheckFn {
 	return func(args []interface{}) error {
 		if len(args) > 1 {
-			return fmt.Errorf("expected one or zero parameters, received: %v", len(args))
+			return fmt.Errorf("expected one or zero arguments, received: %v", len(args))
 		}
 		return nil
 	}
@@ -91,7 +91,7 @@ func ExpectOneOrZeroArgs() ArgCheckFn {
 func ExpectNArgs(i int) ArgCheckFn {
 	return func(args []interface{}) error {
 		if len(args) != i {
-			return fmt.Errorf("expected %v parameters, received: %v", i, len(args))
+			return fmt.Errorf("expected %v arguments, received: %v", i, len(args))
 		}
 		return nil
 	}
@@ -110,7 +110,7 @@ func ExpectStringArg(i int) ArgCheckFn {
 			// Allow byte slice value here but cast it.
 			args[i] = string(t)
 		default:
-			return fmt.Errorf("expected string param, received %T", args[i])
+			return fmt.Errorf("expected string argument, received %T", args[i])
 		}
 		return nil
 	}
@@ -127,7 +127,7 @@ func ExpectAllStringArgs() ArgCheckFn {
 				// Allow byte slice value here but cast it.
 				args[i] = string(t)
 			default:
-				return fmt.Errorf("expected string param %v, received %T", i, arg)
+				return fmt.Errorf("expected string argument %v, received %T", i, arg)
 			}
 		}
 		return nil
@@ -145,7 +145,7 @@ func ExpectIntArg(i int) ArgCheckFn {
 		case float64:
 			args[i] = int64(t)
 		default:
-			return fmt.Errorf("expected int param, received %T", args[i])
+			return fmt.Errorf("expected int argument, received %T", args[i])
 		}
 		return nil
 	}
@@ -162,7 +162,7 @@ func ExpectFloatArg(i int) ArgCheckFn {
 			args[i] = float64(t)
 		case float64:
 		default:
-			return fmt.Errorf("expected float param, received %T", args[i])
+			return fmt.Errorf("expected float argument, received %T", args[i])
 		}
 		return nil
 	}
@@ -176,7 +176,7 @@ func ExpectBoolArg(i int) ArgCheckFn {
 		}
 		_, ok := args[i].(bool)
 		if !ok {
-			return fmt.Errorf("expected bool param, received %T", args[i])
+			return fmt.Errorf("expected bool argument, received %T", args[i])
 		}
 		return nil
 	}

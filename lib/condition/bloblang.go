@@ -1,6 +1,8 @@
 package condition
 
 import (
+	"fmt"
+
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -61,7 +63,7 @@ func NewBloblang(
 ) (Type, error) {
 	fn, err := query.New(string(conf.Bloblang))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%v", err.ErrorAtPosition([]rune(conf.Bloblang)))
 	}
 
 	return &Bloblang{

@@ -15,11 +15,11 @@ func TestLiteralParserErrors(t *testing.T) {
 	}{
 		"bad object key": {
 			input: `{5:"foo"}`,
-			err:   `char 0: object keys must be strings, received: int64`,
+			err:   `line 1 char 1: object keys must be strings, received: int64`,
 		},
 		"bad array element": {
 			input: `[5,null,"unterminated string]`,
-			err:   `char 8: expected one of: [boolean number quoted-string null array object]`,
+			err:   `line 1 char 30: required: expected end quote`,
 		},
 	}
 
@@ -28,7 +28,7 @@ func TestLiteralParserErrors(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			_, err := tryParse(test.input, false)
-			assert.EqualError(t, err, test.err)
+			assert.Equal(t, test.err, err.ErrorAtPosition([]rune(test.input)))
 		})
 	}
 }
@@ -99,7 +99,7 @@ func TestLiteralParser(t *testing.T) {
 			t.Parallel()
 
 			res := Parse([]rune(test.mapping))
-			require.NoError(t, res.Err)
+			require.Nil(t, res.Err)
 			require.Implements(t, (*Function)(nil), res.Payload)
 			q := res.Payload.(Function)
 

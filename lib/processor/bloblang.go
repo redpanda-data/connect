@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
@@ -12,7 +13,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/opentracing/opentracing-go"
 	olog "github.com/opentracing/opentracing-go/log"
-	"golang.org/x/xerrors"
 )
 
 //------------------------------------------------------------------------------
@@ -119,7 +119,7 @@ func NewBloblang(
 ) (Type, error) {
 	exec, err := mapping.NewExecutor(string(conf.Bloblang))
 	if err != nil {
-		return nil, xerrors.Errorf("failed to parse mapping: %w", err)
+		return nil, fmt.Errorf("%v", err.ErrorAtPosition([]rune(conf.Bloblang)))
 	}
 
 	return &Bloblang{

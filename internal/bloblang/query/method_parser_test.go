@@ -463,8 +463,8 @@ func TestMethodParser(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, err := tryParse(test.input, false)
-			require.NoError(t, err)
+			e, perr := tryParse(test.input, false)
+			require.Nil(t, perr)
 			res := ExecToString(e, FunctionContext{
 				Index:    test.index,
 				MsgBatch: msg,
@@ -509,10 +509,10 @@ func TestMethodErrors(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, err := tryParse(test.input, false)
-			require.NoError(t, err)
+			e, perr := tryParse(test.input, false)
+			require.Nil(t, perr)
 
-			_, err = e.Exec(FunctionContext{
+			_, err := e.Exec(FunctionContext{
 				Index:    test.index,
 				MsgBatch: msg,
 			})
@@ -625,8 +625,8 @@ func TestMethodMaps(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, err := tryParse(test.input, false)
-			require.NoError(t, err)
+			e, perr := tryParse(test.input, false)
+			require.Nil(t, perr)
 
 			res, err := e.Exec(FunctionContext{
 				Maps:     test.maps,

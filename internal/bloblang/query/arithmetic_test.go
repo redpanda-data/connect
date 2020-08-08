@@ -5,6 +5,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestArithmetic(t *testing.T) {
@@ -306,9 +307,8 @@ func TestArithmetic(t *testing.T) {
 			}
 
 			e, err := tryParse(test.input, false)
-			if !assert.NoError(t, err) {
-				return
-			}
+			require.Nil(t, err)
+
 			res := ExecToString(e, FunctionContext{
 				Index:    test.index,
 				MsgBatch: msg,
@@ -366,9 +366,8 @@ func TestArithmeticLiterals(t *testing.T) {
 	for k, v := range tests {
 		msg := message.New(nil)
 		e, err := tryParse(k, false)
-		if !assert.NoError(t, err) {
-			return
-		}
+		require.Nil(t, err)
+
 		res := ExecToString(e, FunctionContext{
 			Index:    0,
 			MsgBatch: msg,

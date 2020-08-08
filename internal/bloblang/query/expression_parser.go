@@ -12,7 +12,7 @@ func matchCaseParser() parser.Type {
 			parser.Sequence(
 				parser.Expect(
 					parser.Char('_'),
-					"match-case",
+					"match case",
 				),
 				parser.Optional(whitespace),
 				parser.Term("=>"),
@@ -20,7 +20,7 @@ func matchCaseParser() parser.Type {
 			parser.Sequence(
 				parser.Expect(
 					Parse,
-					"match-case",
+					"match case",
 				),
 				parser.Optional(whitespace),
 				parser.Term("=>"),
@@ -195,7 +195,7 @@ func bracketsExpressionParser() parser.Type {
 			whitespace,
 			Parse,
 			whitespace,
-			parser.Char(')'),
+			parser.MustBe(parser.Expect(parser.Char(')'), "closing bracket")),
 		)(input)
 		if res.Err != nil {
 			return res

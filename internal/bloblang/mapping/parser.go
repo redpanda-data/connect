@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"path"
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
@@ -25,7 +26,7 @@ type Message interface {
 //------------------------------------------------------------------------------
 
 type mappingStatement struct {
-	line       int
+	input      []rune
 	assignment Assignment
 	query      query.Function
 }
@@ -33,6 +34,7 @@ type mappingStatement struct {
 // Executor is a parsed bloblang mapping that can be executed on a Benthos
 // message.
 type Executor struct {
+	input      []rune
 	maps       map[string]query.Function
 	statements []mappingStatement
 }
@@ -66,7 +68,11 @@ func (e *Executor) MapPart(index int, msg Message) (types.Part, error) {
 			MsgBatch: msg,
 		})
 		if err != nil {
-			return nil, xerrors.Errorf("failed to execute mapping assignment at line %v: %v", stmt.line+1, err)
+			var line int
+			if len(e.input) > 0 && len(stmt.input) > 0 {
+				line, _ = parser.LineAndColOf(e.input, stmt.input)
+			}
+			return nil, xerrors.Errorf("failed to execute mapping query at line %v: %v", line, err)
 		}
 		if _, isNothing := res.(query.Nothing); isNothing {
 			// Skip assignment entirely
@@ -78,7 +84,11 @@ func (e *Executor) MapPart(index int, msg Message) (types.Part, error) {
 			Meta:  meta,
 			Value: &newObj,
 		}); err != nil {
-			return nil, xerrors.Errorf("failed to assign mapping result at line %v: %v", stmt.line+1, err)
+			var line int
+			if len(e.input) > 0 && len(stmt.input) > 0 {
+				line, _ = parser.LineAndColOf(e.input, stmt.input)
+			}
+			return nil, xerrors.Errorf("failed to assign query result at line %v: %v", line, err)
 		}
 	}
 
@@ -109,7 +119,11 @@ func (e *Executor) Exec(ctx query.FunctionContext) (interface{}, error) {
 	for _, stmt := range e.statements {
 		res, err := stmt.query.Exec(ctx)
 		if err != nil {
-			return nil, xerrors.Errorf("failed to execute mapping assignment at line %v: %v", stmt.line, err)
+			var line int
+			if len(e.input) > 0 && len(stmt.input) > 0 {
+				line, _ = parser.LineAndColOf(e.input, stmt.input)
+			}
+			return nil, xerrors.Errorf("failed to execute mapping assignment at line %v: %v", line, err)
 		}
 		if _, isNothing := res.(query.Nothing); isNothing {
 			// Skip assignment entirely
@@ -121,7 +135,11 @@ func (e *Executor) Exec(ctx query.FunctionContext) (interface{}, error) {
 			// Meta: meta, Prevented for now due to .from(int)
 			Value: &newObj,
 		}); err != nil {
-			return nil, xerrors.Errorf("failed to assign mapping result at line %v: %v", stmt.line, err)
+			var line int
+			if len(e.input) > 0 && len(stmt.input) > 0 {
+				line, _ = parser.LineAndColOf(e.input, stmt.input)
+			}
+			return nil, xerrors.Errorf("failed to assign mapping result at line %v: %v", line, err)
 		}
 	}
 
@@ -154,70 +172,23 @@ func (e *Executor) ToString(ctx query.FunctionContext) string {
 	return query.IToString(v)
 }
 
-func getLineIndexes(input string) []int {
-	var i int
-	var lineIndexes []int
-	for _, l := range strings.Split(input, "\n") {
-		i = i + len(l) + 1
-		lineIndexes = append(lineIndexes, i)
-	}
-	return lineIndexes
-}
-
 // NewExecutor parses a bloblang mapping and returns an executor to run it, or
 // an error if the parsing fails.
-func NewExecutor(mapping string) (*Executor, error) {
-	lineIndexes := getLineIndexes(mapping)
-
+func NewExecutor(mapping string) (*Executor, *parser.Error) {
 	in := []rune(mapping)
 	res := parser.BestMatch(
-		parseExecutor(lineIndexes),
+		parseExecutor(""),
 		singleRootMapping(),
 	)(in)
 	if res.Err != nil {
-		return nil, wrapParserErr(lineIndexes, res.Err)
+		return nil, res.Err
 	}
-
 	return res.Payload.(*Executor), nil
 }
 
 //------------------------------------------------------------------------------'
 
-type mappingParseError struct {
-	line   int
-	column int
-	err    error
-}
-
-func (e *mappingParseError) Error() string {
-	return fmt.Sprintf("line %v char %v: %v", e.line+1, e.column+1, e.err)
-}
-
-func getLineCol(lines []int, char int) (int, int) {
-	line, column := 0, char
-	for i, index := range lines {
-		if index > char {
-			break
-		}
-		line = i + 1
-		column = char - index
-	}
-	return line, column
-}
-
-func wrapParserErr(lines []int, err error) error {
-	if p, ok := err.(parser.PositionalError); ok {
-		line, column := getLineCol(lines, p.Position)
-		return &mappingParseError{
-			line:   line,
-			column: column,
-			err:    p.Err,
-		}
-	}
-	return err
-}
-
-func parseExecutor(lineIndexes []int) parser.Type {
+func parseExecutor(baseDir string) parser.Type {
 	newline := parser.NewlineAllowComment()
 	whitespace := parser.SpacesAndTabs()
 	allWhitespace := parser.DiscardAll(parser.OneOf(whitespace, newline))
@@ -227,7 +198,7 @@ func parseExecutor(lineIndexes []int) parser.Type {
 		statements := []mappingStatement{}
 
 		statement := parser.OneOf(
-			importParser(maps),
+			importParser(baseDir, maps),
 			mapParser(maps),
 			letStatementParser(),
 			metaStatementParser(false),
@@ -236,14 +207,14 @@ func parseExecutor(lineIndexes []int) parser.Type {
 
 		res := allWhitespace(input)
 
-		i := len(input) - len(res.Remaining)
+		statementInput := res.Remaining
 		res = statement(res.Remaining)
 		if res.Err != nil {
-			res.Err = parser.ErrAtPosition(i, res.Err)
+			res.Remaining = input
 			return res
 		}
 		if mStmt, ok := res.Payload.(mappingStatement); ok {
-			mStmt.line, _ = getLineCol(lineIndexes, i)
+			mStmt.input = statementInput
 			statements = append(statements, mStmt)
 		}
 
@@ -253,10 +224,9 @@ func parseExecutor(lineIndexes []int) parser.Type {
 				break
 			}
 
-			i = len(input) - len(res.Remaining)
 			if res = newline(res.Remaining); res.Err != nil {
 				return parser.Result{
-					Err:       parser.ErrAtPosition(i, res.Err),
+					Err:       res.Err,
 					Remaining: input,
 				}
 			}
@@ -266,15 +236,15 @@ func parseExecutor(lineIndexes []int) parser.Type {
 				break
 			}
 
-			i = len(input) - len(res.Remaining)
+			statementInput = res.Remaining
 			if res = statement(res.Remaining); res.Err != nil {
 				return parser.Result{
-					Err:       parser.ErrAtPosition(i, res.Err),
+					Err:       res.Err,
 					Remaining: input,
 				}
 			}
 			if mStmt, ok := res.Payload.(mappingStatement); ok {
-				mStmt.line, _ = getLineCol(lineIndexes, i)
+				mStmt.input = statementInput
 				statements = append(statements, mStmt)
 			}
 		}
@@ -282,7 +252,7 @@ func parseExecutor(lineIndexes []int) parser.Type {
 		return parser.Result{
 			Remaining: res.Remaining,
 			Payload: &Executor{
-				maps, statements,
+				input, maps, statements,
 			},
 		}
 	}
@@ -303,15 +273,14 @@ func singleRootMapping() parser.Type {
 		// Remove all tailing whitespace and ensure no remaining input.
 		res = allWhitespace(res.Remaining)
 		if len(res.Remaining) > 0 {
-			i := len(input) - len(res.Remaining)
 			return parser.Result{
 				Remaining: input,
-				Err:       parser.ErrAtPosition(i, parser.ExpectedError{"end-of-input"}),
+				Err:       parser.NewError(res.Remaining, "end of input"),
 			}
 		}
 
 		stmt := mappingStatement{
-			line: 0,
+			input: input,
 			assignment: &jsonAssignment{
 				Path: []string{},
 			},
@@ -319,7 +288,7 @@ func singleRootMapping() parser.Type {
 		}
 
 		return parser.Result{
-			Remaining: res.Remaining,
+			Remaining: nil,
 			Payload: &Executor{
 				maps:       map[string]query.Function{},
 				statements: []mappingStatement{stmt},
@@ -344,14 +313,14 @@ func varNameParser() parser.Type {
 	)
 }
 
-func importParser(maps map[string]query.Function) parser.Type {
+func importParser(baseDir string, maps map[string]query.Function) parser.Type {
 	p := parser.Sequence(
 		parser.Term("import"),
 		parser.SpacesAndTabs(),
 		parser.MustBe(
 			parser.Expect(
 				parser.QuotedString(),
-				"file-path",
+				"filepath",
 			),
 		),
 	)
@@ -363,20 +332,20 @@ func importParser(maps map[string]query.Function) parser.Type {
 		}
 
 		filepath := res.Payload.([]interface{})[2].(string)
+		filepath = path.Join(baseDir, filepath)
 		contents, err := ioutil.ReadFile(filepath)
 		if err != nil {
 			return parser.Result{
-				Err:       fmt.Errorf("failed to read import: %w", err),
+				Err:       parser.NewFatalError(input, fmt.Errorf("failed to read import: %w", err)),
 				Remaining: input,
 			}
 		}
 
-		lineIndexes := getLineIndexes(string(contents))
-		execRes := parseExecutor(lineIndexes)([]rune(string(contents)))
+		importContent := []rune(string(contents))
+		execRes := parseExecutor(path.Dir(filepath))(importContent)
 		if execRes.Err != nil {
-			// WARNING: We do NOT want to wrap the underlying execRes.Err here.
 			return parser.Result{
-				Err:       fmt.Errorf("failed to parse import '%v': %v", filepath, wrapParserErr(lineIndexes, execRes.Err)),
+				Err:       parser.NewFatalError(input, parser.NewImportError(filepath, importContent, execRes.Err)),
 				Remaining: input,
 			}
 		}
@@ -384,7 +353,7 @@ func importParser(maps map[string]query.Function) parser.Type {
 		exec := execRes.Payload.(*Executor)
 		if len(exec.maps) == 0 {
 			return parser.Result{
-				Err:       fmt.Errorf("no maps to import from '%v'", filepath),
+				Err:       parser.NewFatalError(input, fmt.Errorf("no maps to import from '%v'", filepath)),
 				Remaining: input,
 			}
 		}
@@ -399,7 +368,7 @@ func importParser(maps map[string]query.Function) parser.Type {
 		}
 		if len(collisions) > 0 {
 			return parser.Result{
-				Err:       fmt.Errorf("map name collisions from import '%v': %v", filepath, collisions),
+				Err:       parser.NewFatalError(input, fmt.Errorf("map name collisions from import '%v': %v", filepath, collisions)),
 				Remaining: input,
 			}
 		}
@@ -426,7 +395,7 @@ func mapParser(maps map[string]query.Function) parser.Type {
 					parser.QuotedString(),
 					varNameParser(),
 				),
-				"map-name",
+				"map name",
 			),
 		),
 		parser.SpacesAndTabs(),
@@ -465,7 +434,7 @@ func mapParser(maps map[string]query.Function) parser.Type {
 
 		if _, exists := maps[ident]; exists {
 			return parser.Result{
-				Err:       fmt.Errorf("map name collision: %v", ident),
+				Err:       parser.NewFatalError(input, fmt.Errorf("map name collision: %v", ident)),
 				Remaining: input,
 			}
 		}
@@ -475,7 +444,7 @@ func mapParser(maps map[string]query.Function) parser.Type {
 			statements[i] = v.(mappingStatement)
 		}
 
-		maps[ident] = &Executor{maps, statements}
+		maps[ident] = &Executor{input, maps, statements}
 
 		return parser.Result{
 			Payload:   ident,
@@ -486,7 +455,7 @@ func mapParser(maps map[string]query.Function) parser.Type {
 
 func letStatementParser() parser.Type {
 	p := parser.Sequence(
-		parser.Term("let"),
+		parser.Expect(parser.Term("let"), "assignment"),
 		parser.SpacesAndTabs(),
 		// Prevents a missing path from being captured by the next parser
 		parser.MustBe(
@@ -495,7 +464,7 @@ func letStatementParser() parser.Type {
 					parser.QuotedString(),
 					varNameParser(),
 				),
-				"variable-name",
+				"variable name",
 			),
 		),
 		parser.SpacesAndTabs(),
@@ -512,6 +481,7 @@ func letStatementParser() parser.Type {
 		resSlice := res.Payload.([]interface{})
 		return parser.Result{
 			Payload: mappingStatement{
+				input: input,
 				assignment: &varAssignment{
 					Name: resSlice[2].(string),
 				},
@@ -541,7 +511,7 @@ func nameLiteralParser() parser.Type {
 
 func metaStatementParser(disabled bool) parser.Type {
 	p := parser.Sequence(
-		parser.Term("meta"),
+		parser.Expect(parser.Term("meta"), "assignment"),
 		parser.SpacesAndTabs(),
 		parser.Optional(parser.OneOf(
 			parser.QuotedString(),
@@ -560,7 +530,7 @@ func metaStatementParser(disabled bool) parser.Type {
 		}
 		if disabled {
 			return parser.Result{
-				Err:       errors.New("setting meta fields from within a map is not allowed"),
+				Err:       parser.NewFatalError(input, errors.New("setting meta fields from within a map is not allowed")),
 				Remaining: input,
 			}
 		}
@@ -573,6 +543,7 @@ func metaStatementParser(disabled bool) parser.Type {
 
 		return parser.Result{
 			Payload: mappingStatement{
+				input:      input,
 				assignment: &metaAssignment{Key: keyPtr},
 				query:      resSlice[6].(query.Function),
 			},
@@ -621,7 +592,7 @@ func quotedPathLiteralSegmentParser() parser.Type {
 
 func pathParser() parser.Type {
 	p := parser.Sequence(
-		parser.Expect(pathLiteralSegmentParser(), "target-path"),
+		parser.Expect(pathLiteralSegmentParser(), "assignment"),
 		parser.Optional(
 			parser.Sequence(
 				parser.Char('.'),
@@ -631,7 +602,7 @@ func pathParser() parser.Type {
 							quotedPathLiteralSegmentParser(),
 							pathLiteralSegmentParser(),
 						),
-						"target-path",
+						"target path",
 					),
 					parser.Char('.'),
 				),
@@ -685,6 +656,7 @@ func plainMappingStatementParser() parser.Type {
 
 		return parser.Result{
 			Payload: mappingStatement{
+				input: input,
 				assignment: &jsonAssignment{
 					Path: path,
 				},

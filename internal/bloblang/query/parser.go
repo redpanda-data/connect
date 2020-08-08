@@ -24,7 +24,7 @@ type FunctionContext struct {
 	Legacy   bool
 }
 
-// Function takes a set of contextual parameters and returns the result of the
+// Function takes a set of contextual arguments and returns the result of the
 // query.
 type Function interface {
 	// Execute this function for a message of a batch.
@@ -58,7 +58,7 @@ func ExecToBytes(fn Function, ctx FunctionContext) []byte {
 //------------------------------------------------------------------------------
 
 // New creates a new query function from a query string.
-func New(query string) (Function, error) {
+func New(query string) (Function, *parser.Error) {
 	res := Parse([]rune(query))
 	if res.Err != nil {
 		return nil, res.Err
@@ -68,29 +68,27 @@ func New(query string) (Function, error) {
 	// Remove all tailing whitespace and ensure no remaining input.
 	res = parser.DiscardAll(parser.OneOf(parser.SpacesAndTabs(), parser.Newline()))(res.Remaining)
 	if len(res.Remaining) > 0 {
-		i := len(query) - len(res.Remaining)
-		return nil, parser.ErrAtPosition(i, parser.ExpectedError{"end-of-input"})
+		return nil, parser.NewError(res.Remaining, "end of input")
 	}
 	return fn, nil
 }
 
 // Parse parses an input into a query.Function.
 func Parse(input []rune) parser.Result {
-	rootParser := parseWithTails(parser.OneOf(
-		matchExpressionParser(),
-		ifExpressionParser(),
-		bracketsExpressionParser(),
-		literalValueParser(),
-		functionParser(),
-		variableLiteralParser(),
-		fieldLiteralRootParser(),
+	rootParser := parseWithTails(parser.Expect(
+		parser.OneOf(
+			matchExpressionParser(),
+			ifExpressionParser(),
+			bracketsExpressionParser(),
+			literalValueParser(),
+			functionParser(),
+			variableLiteralParser(),
+			fieldLiteralRootParser(),
+		),
+		"query",
 	))
 	res := parser.SpacesAndTabs()(input)
-	i := len(input) - len(res.Remaining)
-	if res = arithmeticParser(rootParser)(res.Remaining); res.Err != nil {
-		res.Err = parser.ErrAtPosition(i, res.Err)
-	}
-	return res
+	return arithmeticParser(rootParser)(res.Remaining)
 }
 
 // ParseDeprecated parses an input into a query.Function, but permits deprecated
@@ -108,11 +106,10 @@ func ParseDeprecated(input []rune) parser.Result {
 
 	res := parser.SpacesAndTabs()(input)
 
-	i := len(input) - len(res.Remaining)
 	res = arithmeticParser(rootParser)(res.Remaining)
 	if res.Err != nil {
 		return parser.Result{
-			Err:       parser.ErrAtPosition(i, res.Err),
+			Err:       res.Err,
 			Remaining: input,
 		}
 	}
@@ -125,7 +122,7 @@ func ParseDeprecated(input []rune) parser.Result {
 	}
 }
 
-func tryParse(expr string, deprecated bool) (Function, error) {
+func tryParse(expr string, deprecated bool) (Function, *parser.Error) {
 	var res parser.Result
 	if deprecated {
 		res = ParseDeprecated([]rune(expr))

@@ -2,7 +2,6 @@ package query
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
@@ -16,28 +15,10 @@ func (e badFunctionErr) Error() string {
 	return fmt.Sprintf("unrecognised function '%v'", string(e))
 }
 
-func (e badFunctionErr) ToExpectedErr() parser.ExpectedError {
-	exp := []string{}
-	for k := range functions {
-		exp = append(exp, k)
-	}
-	sort.Strings(exp)
-	return parser.ExpectedError(exp)
-}
-
 type badMethodErr string
 
 func (e badMethodErr) Error() string {
 	return fmt.Sprintf("unrecognised method '%v'", string(e))
-}
-
-func (e badMethodErr) ToExpectedErr() parser.ExpectedError {
-	exp := []string{}
-	for k := range methods {
-		exp = append(exp, k)
-	}
-	sort.Strings(exp)
-	return parser.ExpectedError(exp)
 }
 
 //------------------------------------------------------------------------------
@@ -69,9 +50,12 @@ func functionArgsParser(allowFunctions bool) parser.Type {
 					open,
 					whitespace,
 				),
-				"function-parameters",
+				"function arguments",
 			),
-			parser.MustBe(parser.OneOf(tmpParamTypes...)),
+			parser.Expect(
+				parser.MustBe(parser.OneOf(tmpParamTypes...)),
+				"function argument",
+			),
 			parser.Sequence(
 				parser.Discard(parser.SpacesAndTabs()),
 				comma,
@@ -110,7 +94,13 @@ func parseFunctionTail(fn Function) parser.Type {
 			fieldLiteralMapParser(fn),
 		)(input)
 		if seqSlice, isSlice := res.Payload.([]interface{}); isSlice {
-			res.Payload, res.Err = mapMethod(fn, seqSlice[2].(Function))
+			method, err := mapMethod(fn, seqSlice[2].(Function))
+			if err != nil {
+				res.Err = parser.NewFatalError(input, err)
+				res.Remaining = input
+			} else {
+				res.Payload = method
+			}
 		}
 		return res
 	}
@@ -149,11 +139,10 @@ func parseLiteralWithTails(litParser parser.Type) parser.Type {
 			if fn == nil {
 				fn = literalFunction(lit)
 			}
-			i := len(input) - len(res.Remaining)
 			if res = parser.MustBe(parseFunctionTail(fn))(res.Remaining); res.Err != nil {
 				return parser.Result{
-					Err:       parser.ErrAtPosition(i, res.Err),
-					Remaining: res.Remaining,
+					Err:       res.Err,
+					Remaining: input,
 				}
 			}
 			fn = res.Payload.(Function)
@@ -199,11 +188,10 @@ func parseWithTails(fnParser parser.Type) parser.Type {
 					Remaining: res.Remaining,
 				}
 			}
-			i := len(input) - len(res.Remaining)
 			if res = parser.MustBe(parseFunctionTail(fn))(res.Remaining); res.Err != nil {
 				return parser.Result{
-					Err:       parser.ErrAtPosition(i, res.Err),
-					Remaining: res.Remaining,
+					Err:       res.Err,
+					Remaining: input,
 				}
 			}
 			fn = res.Payload.(Function)
@@ -251,7 +239,7 @@ func fieldLiteralMapParser(ctxFn Function) parser.Type {
 			),
 			quotedPathSegmentParser(),
 		),
-		"field-path",
+		"field path",
 	)
 
 	return func(input []rune) parser.Result {
@@ -264,7 +252,7 @@ func fieldLiteralMapParser(ctxFn Function) parser.Type {
 		if err != nil {
 			return parser.Result{
 				Remaining: input,
-				Err:       err,
+				Err:       parser.NewFatalError(input, err),
 			}
 		}
 
@@ -291,7 +279,7 @@ func variableLiteralParser() parser.Type {
 				),
 			),
 		),
-		"variable-path",
+		"variable path",
 	)
 
 	return func(input []rune) parser.Result {
@@ -308,7 +296,7 @@ func variableLiteralParser() parser.Type {
 		if err != nil {
 			return parser.Result{
 				Remaining: input,
-				Err:       err,
+				Err:       parser.NewFatalError(input, err),
 			}
 		}
 
@@ -333,7 +321,7 @@ func fieldLiteralRootParser() parser.Type {
 				),
 			),
 		),
-		"field-path",
+		"field path",
 	)
 
 	return func(input []rune) parser.Result {
@@ -354,7 +342,7 @@ func fieldLiteralRootParser() parser.Type {
 		if err != nil {
 			return parser.Result{
 				Remaining: input,
-				Err:       err,
+				Err:       parser.NewFatalError(input, err),
 			}
 		}
 
@@ -386,7 +374,7 @@ func methodParser(fn Function) parser.Type {
 		mtor, exists := methods[targetMethod]
 		if !exists {
 			return parser.Result{
-				Err:       badMethodErr(targetMethod),
+				Err:       parser.NewFatalError(input, badMethodErr(targetMethod)),
 				Remaining: input,
 			}
 		}
@@ -395,7 +383,7 @@ func methodParser(fn Function) parser.Type {
 		method, err := mtor(fn, args...)
 		if err != nil {
 			return parser.Result{
-				Err:       err,
+				Err:       parser.NewFatalError(input, err),
 				Remaining: input,
 			}
 		}
@@ -427,7 +415,7 @@ func functionParser() parser.Type {
 		ctor, exists := functions[targetFunc]
 		if !exists {
 			return parser.Result{
-				Err:       badFunctionErr(targetFunc),
+				Err:       parser.NewFatalError(input, badFunctionErr(targetFunc)),
 				Remaining: input,
 			}
 		}
@@ -436,7 +424,7 @@ func functionParser() parser.Type {
 		fn, err := ctor(args...)
 		if err != nil {
 			return parser.Result{
-				Err:       err,
+				Err:       parser.NewFatalError(input, err),
 				Remaining: input,
 			}
 		}
@@ -466,8 +454,7 @@ func parseDeprecatedFunction(input []rune) parser.Result {
 	ftor, exists := deprecatedFunctions[targetFunc]
 	if !exists {
 		return parser.Result{
-			// Make no suggestions, we want users to move off of these functions
-			Err:       parser.ExpectedError{},
+			Err:       parser.NewError(input),
 			Remaining: input,
 		}
 	}
