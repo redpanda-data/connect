@@ -1,6 +1,7 @@
 ---
 title: stdout
 type: metrics
+beta: true
 ---
 
 <!--
@@ -10,6 +11,8 @@ type: metrics
      lib/metrics/stdout.go
 -->
 
+BETA: This component is experimental and therefore subject to change outside of
+major version releases.
 
 Prints aggregated metrics as JSON objects to stdout.
 
@@ -22,9 +25,6 @@ metrics:
       '@service': benthos
     flush_metrics: false
 ```
-
-EXPERIMENTAL: This component is considered experimental and is therefore subject
-to change outside of major version releases.
 
 When Benthos shuts down all aggregated metrics are printed. If a
 `push_interval` is specified then metrics are also printed

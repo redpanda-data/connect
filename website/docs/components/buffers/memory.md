@@ -91,7 +91,6 @@ Optionally configure a policy to flush buffered messages in batches.
 
 
 Type: `object`  
-Default: `{"byte_size":0,"condition":{"static":false,"type":"static"},"count":0,"enabled":false,"period":"","processors":[]}`  
 
 ### `batch_policy.enabled`
 

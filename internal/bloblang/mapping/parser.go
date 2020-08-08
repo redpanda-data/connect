@@ -174,10 +174,17 @@ func (e *Executor) ToString(ctx query.FunctionContext) string {
 
 // NewExecutor parses a bloblang mapping and returns an executor to run it, or
 // an error if the parsing fails.
-func NewExecutor(mapping string) (*Executor, *parser.Error) {
+//
+// The filepath is optional and used for relative file imports and error
+// messages.
+func NewExecutor(filepath string, mapping string) (*Executor, *parser.Error) {
 	in := []rune(mapping)
+	dir := ""
+	if len(filepath) > 0 {
+		dir = path.Dir(filepath)
+	}
 	res := parser.BestMatch(
-		parseExecutor(""),
+		parseExecutor(dir),
 		singleRootMapping(),
 	)(in)
 	if res.Err != nil {

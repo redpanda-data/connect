@@ -201,7 +201,6 @@ Customise messages returned via [synchronous responses](/docs/guides/sync_respon
 
 
 Type: `object`  
-Default: `{"headers":{"Content-Type":"application/octet-stream"},"status":"200"}`  
 
 ### `sync_response.status`
 

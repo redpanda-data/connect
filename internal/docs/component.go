@@ -151,7 +151,8 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 {{end}}
 
 Type: ` + "`{{$field.Type}}`" + `  
-Default: ` + "`{{$field.Default}}`" + `  
+{{if gt (len $field.Default) 0}}Default: ` + "`{{$field.Default}}`" + `  
+{{end -}}
 {{if gt (len $field.Options) 0}}Options: {{range $j, $option := $field.Options -}}
 {{if ne $j 0}}, {{end}}` + "`" + `{{$option}}` + "`" + `{{end}}.
 {{end}}
@@ -280,7 +281,6 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 			seenFields[v.Name] = struct{}{}
 			newV := v
 			delete(expectedFields, v.Name)
-			newV.Children = nil
 			if len(path) > 0 {
 				newV.Name = path + newV.Name
 			}
@@ -316,6 +316,11 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 		defaultValue := gConf.Path(v.Name)
 		if defaultValue.Data() == nil {
 			return nil, fmt.Errorf("field '%v' not found in config example", v.Name)
+		}
+
+		defaultValueStr := defaultValue.String()
+		if len(v.Children) > 0 {
+			defaultValueStr = ""
 		}
 
 		fieldType := v.Type
@@ -354,7 +359,7 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 			Name:          v.Name,
 			Type:          fieldType,
 			Description:   v.Description,
-			Default:       defaultValue.String(),
+			Default:       defaultValueStr,
 			Advanced:      v.Advanced,
 			Examples:      examples,
 			Options:       v.Options,

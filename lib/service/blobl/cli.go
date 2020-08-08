@@ -3,6 +3,7 @@ package blobl
 import (
 	"bufio"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"sync"
 
@@ -26,6 +27,8 @@ func CliCommand() *cli.Command {
 
    cat documents.jsonl | benthos blobl 'foo.bar.map_each(this.uppercase())'
 
+   echo '{"foo":"bar"}' | benthos blobl -f ./mapping.blobl
+
    Find out more about Bloblang at: https://benthos.dev/docs/guides/bloblang/about`[4:],
 		Flags: []cli.Flag{
 			&cli.IntFlag{
@@ -44,6 +47,11 @@ func CliCommand() *cli.Command {
 				Aliases: []string{"p"},
 				Usage:   "pretty-print output.",
 			},
+			&cli.StringFlag{
+				Name:    "file",
+				Aliases: []string{"f"},
+				Usage:   "execute a mapping from a file.",
+			},
 		},
 		Action: run,
 	}
@@ -56,10 +64,24 @@ func run(c *cli.Context) error {
 	}
 	raw := c.Bool("raw")
 	pretty := c.Bool("pretty")
+	file := c.String("file")
 	m := c.Args().First()
-	exec, err := mapping.NewExecutor(m)
+	if len(file) > 0 {
+		if len(m) > 0 {
+			fmt.Fprintln(os.Stderr, red("invalid flags, unable to execute both a file mapping and an inline mapping"))
+			os.Exit(1)
+		}
+		mappingBytes, err := ioutil.ReadFile(file)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, red("failed to read mapping file: %v\n"), err)
+			os.Exit(1)
+		}
+		m = string(mappingBytes)
+	}
+
+	exec, err := mapping.NewExecutor(file, m)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, fmt.Sprintf("%v %v", red("failed to parse mapping:"), err.ErrorAtPositionStructured("", []rune(m))))
+		fmt.Fprintln(os.Stderr, red(fmt.Sprintf("failed to parse mapping: %v", err.ErrorAtPositionStructured("", []rune(m)))))
 		os.Exit(1)
 	}
 

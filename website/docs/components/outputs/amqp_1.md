@@ -118,7 +118,6 @@ Custom TLS settings can be used to override system defaults.
 
 
 Type: `object`  
-Default: `{"client_certs":[],"enabled":false,"root_cas_file":"","skip_cert_verify":false}`  
 
 ### `tls.enabled`
 
@@ -170,7 +169,6 @@ Enables SASL authentication.
 
 
 Type: `object`  
-Default: `{"mechanism":"none","password":"","user":""}`  
 
 ### `sasl.mechanism`
 

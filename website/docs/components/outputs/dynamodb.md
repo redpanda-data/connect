@@ -212,7 +212,6 @@ Allows you to configure a [batching policy](/docs/configuration/batching).
 
 
 Type: `object`  
-Default: `{"byte_size":0,"condition":{"static":false,"type":"static"},"count":1,"period":"","processors":[]}`  
 
 ```yaml
 # Examples
@@ -318,7 +317,6 @@ Optional manual configuration of AWS credentials to use. More information can be
 
 
 Type: `object`  
-Default: `{"id":"","profile":"","role":"","role_external_id":"","secret":"","token":""}`  
 
 ### `credentials.profile`
 
@@ -382,7 +380,6 @@ Control time intervals between retry attempts.
 
 
 Type: `object`  
-Default: `{"initial_interval":"1s","max_elapsed_time":"30s","max_interval":"5s"}`  
 
 ### `backoff.initial_interval`
 

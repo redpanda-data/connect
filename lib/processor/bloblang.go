@@ -117,7 +117,7 @@ type Bloblang struct {
 func NewBloblang(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	exec, err := mapping.NewExecutor(string(conf.Bloblang))
+	exec, err := mapping.NewExecutor("", string(conf.Bloblang))
 	if err != nil {
 		return nil, fmt.Errorf("%v", err.ErrorAtPosition([]rune(conf.Bloblang)))
 	}

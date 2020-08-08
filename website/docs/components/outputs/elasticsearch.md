@@ -199,7 +199,6 @@ Custom TLS settings can be used to override system defaults.
 
 
 Type: `object`  
-Default: `{"client_certs":[],"enabled":false,"root_cas_file":"","skip_cert_verify":false}`  
 
 ### `tls.enabled`
 
@@ -267,7 +266,6 @@ Control time intervals between retry attempts.
 
 
 Type: `object`  
-Default: `{"initial_interval":"1s","max_elapsed_time":"30s","max_interval":"5s"}`  
 
 ### `backoff.initial_interval`
 
@@ -316,7 +314,6 @@ Allows you to configure a [batching policy](/docs/configuration/batching).
 
 
 Type: `object`  
-Default: `{"byte_size":0,"condition":{"static":false,"type":"static"},"count":1,"period":"","processors":[]}`  
 
 ```yaml
 # Examples
@@ -406,7 +403,6 @@ Enables and customises connectivity to Amazon Elastic Service.
 
 
 Type: `object`  
-Default: `{"credentials":{"id":"","profile":"","role":"","role_external_id":"","secret":"","token":""},"enabled":false,"endpoint":"","region":"eu-west-1"}`  
 
 ### `aws.enabled`
 
@@ -438,7 +434,6 @@ Optional manual configuration of AWS credentials to use. More information can be
 
 
 Type: `object`  
-Default: `{"id":"","profile":"","role":"","role_external_id":"","secret":"","token":""}`  
 
 ### `aws.credentials.profile`
 

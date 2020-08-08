@@ -23,10 +23,8 @@ func init() {
 		constructor: NewAvro,
 		Summary: `
 Performs Avro based operations on messages based on a schema.`,
+		Beta: true,
 		Description: `
-EXPERIMENTAL: This processor is considered experimental and is therefore subject
-to change outside of major version releases.
-
 ## Operators
 
 ### ` + "`to_json`" + `

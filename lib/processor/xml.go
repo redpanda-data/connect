@@ -22,13 +22,11 @@ func init() {
 
 	Constructors[TypeXML] = TypeSpec{
 		constructor: NewXML,
+		Beta:        true,
 		Summary: `
 Parses messages as an XML document, performs a mutation on the data, and then
 overwrites the previous contents with the new value.`,
 		Description: `
-EXPERIMENTAL: This processor is considered experimental and is therefore subject
-to change outside of major version releases.
-
 ## Operators
 
 ### ` + "`to_json`" + `

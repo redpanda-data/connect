@@ -1,6 +1,7 @@
 ---
 title: avro
 type: processor
+beta: true
 ---
 
 <!--
@@ -10,6 +11,8 @@ type: processor
      lib/processor/avro.go
 -->
 
+BETA: This component is experimental and therefore subject to change outside of
+major version releases.
 
 Performs Avro based operations on messages based on a schema.
 
@@ -49,9 +52,6 @@ avro:
 
 </TabItem>
 </Tabs>
-
-EXPERIMENTAL: This processor is considered experimental and is therefore subject
-to change outside of major version releases.
 
 ## Operators
 

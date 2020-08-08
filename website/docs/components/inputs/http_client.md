@@ -190,7 +190,6 @@ Custom TLS settings can be used to override system defaults.
 
 
 Type: `object`  
-Default: `{"client_certs":[],"enabled":false,"root_cas_file":"","skip_cert_verify":false}`  
 
 ### `tls.enabled`
 
@@ -338,7 +337,6 @@ Allows you to set streaming mode, where requests are kept open and messages are 
 
 
 Type: `object`  
-Default: `{"delimiter":"","enabled":false,"max_buffer":1000000,"multipart":false,"reconnect":true}`  
 
 ### `stream.enabled`
 

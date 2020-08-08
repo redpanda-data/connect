@@ -143,7 +143,6 @@ Custom TLS settings can be used to override system defaults.
 
 
 Type: `object`  
-Default: `{"client_certs":[],"enabled":false,"root_cas_file":"","skip_cert_verify":false}`  
 
 ### `tls.enabled`
 
@@ -195,7 +194,6 @@ Enables SASL authentication.
 
 
 Type: `object`  
-Default: `{"access_token":"","enabled":false,"mechanism":"","password":"","token_cache":"","token_key":"","user":""}`  
 
 ### `sasl.mechanism`
 
@@ -364,7 +362,6 @@ Allows you to configure a [batching policy](/docs/configuration/batching).
 
 
 Type: `object`  
-Default: `{"byte_size":0,"condition":{"static":false,"type":"static"},"count":1,"period":"","processors":[]}`  
 
 ```yaml
 # Examples
@@ -462,7 +459,6 @@ Control time intervals between retry attempts.
 
 
 Type: `object`  
-Default: `{"initial_interval":"3s","max_elapsed_time":"30s","max_interval":"10s"}`  
 
 ### `backoff.initial_interval`
 

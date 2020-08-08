@@ -132,7 +132,6 @@ Optional manual configuration of AWS credentials to use. More information can be
 
 
 Type: `object`  
-Default: `{"id":"","profile":"","role":"","role_external_id":"","secret":"","token":""}`  
 
 ### `credentials.profile`
 

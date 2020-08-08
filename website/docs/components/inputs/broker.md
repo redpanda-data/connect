@@ -133,7 +133,6 @@ Allows you to configure a [batching policy](/docs/configuration/batching).
 
 
 Type: `object`  
-Default: `{"byte_size":0,"condition":{"static":false,"type":"static"},"count":1,"period":"","processors":[]}`  
 
 ```yaml
 # Examples

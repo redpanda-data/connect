@@ -102,7 +102,7 @@ func newBloblang(conf BloblangConfig) (*Bloblang, error) {
 		}
 		timer = time.NewTicker(duration)
 	}
-	exec, err := mapping.NewExecutor(conf.Mapping)
+	exec, err := mapping.NewExecutor("", conf.Mapping)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse mapping: %v", err.ErrorAtPosition([]rune(conf.Mapping)))
 	}

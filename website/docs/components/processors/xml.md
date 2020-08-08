@@ -1,6 +1,7 @@
 ---
 title: xml
 type: processor
+beta: true
 ---
 
 <!--
@@ -10,6 +11,8 @@ type: processor
      lib/processor/xml.go
 -->
 
+BETA: This component is experimental and therefore subject to change outside of
+major version releases.
 
 Parses messages as an XML document, performs a mutation on the data, and then
 overwrites the previous contents with the new value.
@@ -44,9 +47,6 @@ xml:
 
 </TabItem>
 </Tabs>
-
-EXPERIMENTAL: This processor is considered experimental and is therefore subject
-to change outside of major version releases.
 
 ## Operators
 

@@ -80,7 +80,6 @@ Control time intervals between retry attempts.
 
 
 Type: `object`  
-Default: `{"initial_interval":"500ms","max_elapsed_time":"0s","max_interval":"3s"}`  
 
 ### `backoff.initial_interval`
 
