@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -111,7 +112,7 @@ type Type struct {
 
 // New creates a new Type.
 func New(conf Config, opts ...func(*Type)) (*Type, error) {
-	urlStr, err := field.New(conf.URL)
+	urlStr, err := bloblang.NewField(conf.URL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse URL expression: %v", err)
 	}
@@ -175,11 +176,11 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 
 	for k, v := range conf.Headers {
 		if strings.ToLower(k) == "host" {
-			if h.host, err = field.New(v); err != nil {
+			if h.host, err = bloblang.NewField(v); err != nil {
 				return nil, fmt.Errorf("failed to parse header 'host' expression: %v", err)
 			}
 		} else {
-			if h.headers[k], err = field.New(v); err != nil {
+			if h.headers[k], err = bloblang.NewField(v); err != nil {
 				return nil, fmt.Errorf("failed to parse header '%v' expression: %v", k, err)
 			}
 		}

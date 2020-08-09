@@ -10,16 +10,18 @@ import (
 
 //------------------------------------------------------------------------------
 
-type closureFn func(ctx FunctionContext) (interface{}, error)
+// ClosureFunction is a query.Function implementation that wraps a closure.
+type ClosureFunction func(ctx FunctionContext) (interface{}, error)
 
-func (f closureFn) Exec(ctx FunctionContext) (interface{}, error) {
+// Exec the underlying closure.
+func (f ClosureFunction) Exec(ctx FunctionContext) (interface{}, error) {
 	return f(ctx)
 }
 
 //------------------------------------------------------------------------------
 
 func withDynamicArgs(args []interface{}, fn FunctionCtor) Function {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		dynArgs := make([]interface{}, 0, len(args))
 		for i, dArg := range args {
 			if fArg, isDyn := dArg.(Function); isDyn {
@@ -201,6 +203,15 @@ func RegisterFunction(name string, allowDynamicArgs bool, ctor FunctionCtor, che
 	}
 	functions[name] = ctor
 	return struct{}{}
+}
+
+// InitFunction attempts to initialise a function by its name and arguments.
+func InitFunction(name string, args ...interface{}) (Function, error) {
+	ctor, exists := functions[name]
+	if !exists {
+		return nil, badFunctionErr(name)
+	}
+	return ctor(args...)
 }
 
 var functions = map[string]FunctionCtor{}

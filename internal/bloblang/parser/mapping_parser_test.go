@@ -1,4 +1,4 @@
-package mapping
+package parser
 
 import (
 	"fmt"
@@ -150,7 +150,7 @@ foo = bar.apply("foo")`, goodMapFile),
 	for name, test := range tests {
 		test := test
 		t.Run(name, func(t *testing.T) {
-			exec, err := NewExecutor("", test.mapping)
+			exec, err := ParseMapping("", test.mapping)
 			assert.Equal(t, test.err, err.ErrorAtPosition([]rune(test.mapping)))
 			assert.Nil(t, exec)
 		})
@@ -447,7 +447,7 @@ root = this.apply("foo")`, goodMapFile),
 				test.output.Meta = map[string]string{}
 			}
 
-			exec, perr := NewExecutor("", test.mapping)
+			exec, perr := ParseMapping("", test.mapping)
 			require.Nil(t, perr)
 
 			resPart, err := exec.MapPart(test.index, msg)

@@ -3,78 +3,41 @@ package field
 import (
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestStaticExpressionOptimization(t *testing.T) {
-	tests := map[string]string{
-		"a static string":                          "a static string",
-		"a string ${{!with escapes}} still static": "a string ${!with escapes} still static",
-		"a string $ with dollars still static":     "a string $ with dollars still static",
-		"  ":                                       "  ",
-		"":                                         "",
-	}
-
-	for k, v := range tests {
-		t.Run(k, func(t *testing.T) {
-			e, err := parse(k)
-			require.Nil(t, err)
-			assert.Equal(t, v, e.static)
-			assert.Equal(t, 0, len(e.resolvers))
-			assert.Equal(t, v, e.String(0, message.New(nil)))
-			assert.Equal(t, v, e.StringLegacy(0, message.New(nil)))
-			assert.Equal(t, v, string(e.Bytes(0, message.New(nil))))
-			assert.Equal(t, v, string(e.BytesEscaped(0, message.New(nil))))
-			assert.Equal(t, v, string(e.BytesLegacy(0, message.New(nil))))
-			assert.Equal(t, v, string(e.BytesEscapedLegacy(0, message.New(nil))))
-		})
-	}
-}
-
-func TestExpressionParserErrors(t *testing.T) {
-	tests := map[string]struct {
-		input string
-		err   string
+	tests := []struct {
+		input  []Resolver
+		output string
 	}{
-		"bad function": {
-			input: `static string ${!not a function} hello world`,
-			err:   `char 21: required: expected function arguments`,
+		{
+			input: []Resolver{
+				StaticResolver("a static string"),
+			},
+			output: "a static string",
 		},
-		"bad function 2": {
-			input: `static string ${!not_a_function()} hello world`,
-			err:   `char 18: unrecognised function 'not_a_function'`,
-		},
-		"bad args": {
-			input: `foo ${!json("foo") whats this?} bar`,
-			err:   `char 20: required: expected end of expression`,
-		},
-		"bad args 2": {
-			input: `foo ${!json("foo} bar`,
-			err:   `char 17: required: expected end quote`,
-		},
-		"bad args 3": {
-			input: `foo ${!json(} bar`,
-			err:   `char 13: required: expected boolean, number, quoted string, or query`,
-		},
-		"bad args 4": {
-			input: `foo ${!json(0,} bar`,
-			err:   `char 15: required: expected boolean, number, quoted string, or query`,
-		},
-		"bad args 5": {
-			input: `foo ${!json} bar`,
-			err:   `char 12: required: expected function arguments`,
+		{
+			input: []Resolver{
+				StaticResolver("multiple "),
+				StaticResolver("static "),
+				StaticResolver("strings"),
+			},
+			output: "multiple static strings",
 		},
 	}
 
-	for name, test := range tests {
+	for _, test := range tests {
 		test := test
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			_, err := parse(test.input)
-			require.NotNil(t, err)
-			require.Equal(t, test.err, err.ErrorAtChar([]rune(test.input)))
+		t.Run(test.output, func(t *testing.T) {
+			ei := NewExpression(test.input...)
+
+			e := ei.(*expression)
+			assert.Equal(t, test.output, e.static)
+			assert.Equal(t, 0, len(e.resolvers))
 		})
 	}
 }
@@ -86,71 +49,66 @@ func TestExpressions(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		input    string
-		output   string
-		messages []easyMsg
-		index    int
-		escaped  bool
+		expression Expression
+		output     string
+		messages   []easyMsg
+		index      int
+		escaped    bool
 	}{
 		"static string": {
-			input:  `static string hello world`,
+			expression: NewExpression(
+				StaticResolver("static string hello world"),
+			),
 			output: `static string hello world`,
 		},
 		"unsuspicious string": {
-			input:  `${{! not a thing`,
+			expression: NewExpression(
+				StaticResolver("${{! not a thing"),
+			),
 			output: `${{! not a thing`,
 		},
 		"unsuspicious string 2": {
-			input:  `${! not a thing`,
+			expression: NewExpression(
+				StaticResolver("${! not a thing"),
+			),
 			output: `${! not a thing`,
 		},
 		"dollar on its own": {
-			input:  `hello $ world`,
+			expression: NewExpression(
+				StaticResolver("hello $ world"),
+			),
 			output: `hello $ world`,
 		},
-		"dollar on its own 2": {
-			input:  `hello world $`,
-			output: `hello world $`,
-		},
-		"dollar on its own 3": {
-			input:  `$ hello world`,
-			output: `$ hello world`,
-		},
-		"escaped string": {
-			input:  `hello ${{!this is escaped}} world`,
-			output: `hello ${!this is escaped} world`,
-		},
-		"escaped string 2": {
-			input:  `hello world ${{!this is escaped}}`,
-			output: `hello world ${!this is escaped}`,
-		},
-		"escaped string 3": {
-			input:  `${{!this is escaped}} hello world`,
-			output: `${!this is escaped} hello world`,
-		},
-		"escaped string 4": {
-			input:  `${{!this is escaped}}`,
-			output: `${!this is escaped}`,
-		},
 		"echo function": {
-			input:  `${!echo:this}`,
+			expression: NewExpression(
+				NewQueryResolver(func() query.Function {
+					fn, ok := query.DeprecatedFunction("echo", "this")
+					require.True(t, ok)
+					return fn
+				}()),
+			),
 			output: `this`,
 		},
 		"echo function 2": {
-			input:  `foo ${!echo:} bar`,
+			expression: NewExpression(
+				StaticResolver("foo "),
+				NewQueryResolver(func() query.Function {
+					fn, ok := query.DeprecatedFunction("echo", "")
+					require.True(t, ok)
+					return fn
+				}()),
+				StaticResolver(" bar"),
+			),
 			output: `foo  bar`,
 		},
-		"echo function 3": {
-			input:  `${!echo} bar`,
-			output: ` bar`,
-		},
-		"echo function 4": {
-			input:   `${!echo:"this"}`,
-			output:  `\"this\"`,
-			escaped: true,
-		},
 		"json function": {
-			input:  `${!json()}`,
+			expression: NewExpression(
+				NewQueryResolver(func() query.Function {
+					fn, err := query.InitFunction("json")
+					require.NoError(t, err)
+					return fn
+				}()),
+			),
 			output: `{"foo":"bar"}`,
 			messages: []easyMsg{
 				{content: `{"foo":"bar"}`},
@@ -158,14 +116,24 @@ func TestExpressions(t *testing.T) {
 			},
 		},
 		"json function 2": {
-			input:  `${!json("foo")}`,
+			expression: NewExpression(
+				NewQueryResolver(func() query.Function {
+					fn, err := query.InitFunction("json", "foo")
+					require.NoError(t, err)
+					return fn
+				}()),
+			),
 			output: `bar`,
 			messages: []easyMsg{
 				{content: `{"foo":"bar"}`},
 			},
 		},
 		"json function 3": {
-			input:  `${!json("foo")}`,
+			expression: NewExpression(NewQueryResolver(func() query.Function {
+				fn, err := query.InitFunction("json", "foo")
+				require.NoError(t, err)
+				return fn
+			}())),
 			output: `bar`,
 			index:  1,
 			messages: []easyMsg{
@@ -174,16 +142,11 @@ func TestExpressions(t *testing.T) {
 			},
 		},
 		"json function 4": {
-			input:   `${!json("foo")}`,
-			output:  `{\"bar\":\"baz\"}`,
-			index:   0,
-			escaped: true,
-			messages: []easyMsg{
-				{content: `{"foo":{"bar":"baz"}}`},
-			},
-		},
-		"json function 5": {
-			input:   `${!json("foo")   }`,
+			expression: NewExpression(NewQueryResolver(func() query.Function {
+				fn, err := query.InitFunction("json", "foo")
+				require.NoError(t, err)
+				return fn
+			}())),
 			output:  `{\"bar\":\"baz\"}`,
 			index:   0,
 			escaped: true,
@@ -192,7 +155,15 @@ func TestExpressions(t *testing.T) {
 			},
 		},
 		"json_from function": {
-			input:  `${!json("foo").from(1)}`,
+			expression: NewExpression(
+				NewQueryResolver(func() query.Function {
+					fn, err := query.InitFunction("json", "foo")
+					require.NoError(t, err)
+					fn, err = query.InitMethod("from", fn, int64(1))
+					require.NoError(t, err)
+					return fn
+				}()),
+			),
 			output: `bar`,
 			messages: []easyMsg{
 				{content: `not json`},
@@ -200,7 +171,15 @@ func TestExpressions(t *testing.T) {
 			},
 		},
 		"json_from function 2": {
-			input:  `${!json("foo").from(0)}`,
+			expression: NewExpression(
+				NewQueryResolver(func() query.Function {
+					fn, err := query.InitFunction("json", "foo")
+					require.NoError(t, err)
+					fn, err = query.InitMethod("from", fn, int64(0))
+					require.NoError(t, err)
+					return fn
+				}()),
+			),
 			output: `null`,
 			messages: []easyMsg{
 				{content: `not json`},
@@ -208,7 +187,15 @@ func TestExpressions(t *testing.T) {
 			},
 		},
 		"json_from function 3": {
-			input:  `${!json("foo").from(-1)}`,
+			expression: NewExpression(
+				NewQueryResolver(func() query.Function {
+					fn, err := query.InitFunction("json", "foo")
+					require.NoError(t, err)
+					fn, err = query.InitMethod("from", fn, int64(-1))
+					require.NoError(t, err)
+					return fn
+				}()),
+			),
 			output: `bar`,
 			messages: []easyMsg{
 				{content: `not json`},
@@ -233,14 +220,99 @@ func TestExpressions(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, err := parse(test.input)
-			require.Nil(t, err)
+			var res string
+			if test.escaped {
+				res = string(test.expression.BytesEscaped(test.index, msg))
+			} else {
+				res = test.expression.String(test.index, msg)
+			}
+			assert.Equal(t, test.output, res)
+		})
+	}
+}
+
+func TestLegacyExpressions(t *testing.T) {
+	type easyMsg struct {
+		content string
+		meta    map[string]string
+	}
+
+	tests := map[string]struct {
+		expression Expression
+		output     string
+		messages   []easyMsg
+		index      int
+		escaped    bool
+	}{
+		"json function": {
+			expression: NewExpression(
+				NewQueryResolver(func() query.Function {
+					fn, ok := query.DeprecatedFunction("json_field", "")
+					require.True(t, ok)
+					return fn
+				}()),
+			),
+			index:  1,
+			output: `{"foo":"bar"}`,
+			messages: []easyMsg{
+				{content: `{"foo":"bar"}`},
+				{content: `not json`},
+			},
+		},
+		"json function escaped": {
+			expression: NewExpression(
+				NewQueryResolver(func() query.Function {
+					fn, ok := query.DeprecatedFunction("json_field", "")
+					require.True(t, ok)
+					return fn
+				}()),
+			),
+			escaped: true,
+			index:   1,
+			output:  `{\"foo\":\"bar\"}`,
+			messages: []easyMsg{
+				{content: `{"foo":"bar"}`},
+				{content: `not json`},
+			},
+		},
+		"json function 2": {
+			expression: NewExpression(
+				NewQueryResolver(func() query.Function {
+					fn, ok := query.DeprecatedFunction("json_field", "1")
+					require.True(t, ok)
+					return fn
+				}()),
+			),
+			index:  0,
+			output: `null`,
+			messages: []easyMsg{
+				{content: `{"foo":"bar"}`},
+				{content: `not json`},
+			},
+		},
+	}
+
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			msg := message.New(nil)
+			for _, m := range test.messages {
+				part := message.NewPart([]byte(m.content))
+				if m.meta != nil {
+					for k, v := range m.meta {
+						part.Metadata().Set(k, v)
+					}
+				}
+				msg.Append(part)
+			}
 
 			var res string
 			if test.escaped {
-				res = string(e.BytesEscaped(test.index, msg))
+				res = string(test.expression.BytesEscapedLegacy(test.index, msg))
 			} else {
-				res = e.String(test.index, msg)
+				res = test.expression.StringLegacy(test.index, msg)
 			}
 			assert.Equal(t, test.output, res)
 		})

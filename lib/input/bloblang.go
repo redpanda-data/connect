@@ -6,7 +6,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -102,9 +104,12 @@ func newBloblang(conf BloblangConfig) (*Bloblang, error) {
 		}
 		timer = time.NewTicker(duration)
 	}
-	exec, err := mapping.NewExecutor("", conf.Mapping)
+	exec, err := bloblang.NewMapping("", conf.Mapping)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse mapping: %v", err.ErrorAtPosition([]rune(conf.Mapping)))
+		if perr, ok := err.(*parser.Error); ok {
+			return nil, fmt.Errorf("failed to parse mapping: %v", perr.ErrorAtPosition([]rune(conf.Mapping)))
+		}
+		return nil, fmt.Errorf("failed to parse mapping: %v", err)
 	}
 	remaining := int32(conf.Count)
 	if remaining <= 0 {

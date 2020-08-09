@@ -1,9 +1,8 @@
-package query
+package parser
 
 import (
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -112,7 +111,7 @@ func TestFunctionParserErrors(t *testing.T) {
 		test := test
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			_, err := tryParse(test.input, test.deprecated)
+			_, err := tryParseQuery(test.input, test.deprecated)
 			require.NotNil(t, err)
 			assert.Equal(t, test.err, err.ErrorAtPosition([]rune(test.input)))
 		})
@@ -222,11 +221,11 @@ not this`,
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			var res parser.Result
+			var res Result
 			if test.deprecated {
-				res = ParseDeprecated([]rune(test.input))
+				res = ParseDeprecatedQuery([]rune(test.input))
 			} else {
-				res = Parse([]rune(test.input))
+				res = ParseQuery([]rune(test.input))
 			}
 			require.Nil(t, res.Err)
 			assert.Equal(t, test.remaining, string(res.Remaining))

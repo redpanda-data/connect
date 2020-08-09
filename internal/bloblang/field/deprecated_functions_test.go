@@ -1,382 +1,21 @@
 package field
 
 import (
-	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
-
-func TestDeprecatedFunctionExpressions(t *testing.T) {
-	hostname, _ := os.Hostname()
-
-	type easyMsg struct {
-		content string
-		meta    map[string]string
-	}
-
-	tests := map[string]struct {
-		input    string
-		output   string
-		messages []easyMsg
-		index    int
-		escaped  bool
-		legacy   bool
-	}{
-		"hostname": {
-			input:  `foo ${!hostname} baz`,
-			output: fmt.Sprintf(`foo %v baz`, hostname),
-			index:  1,
-		},
-		"metadata 1": {
-			input:  `foo ${!metadata:foo} baz`,
-			output: `foo bar baz`,
-			index:  1,
-			legacy: true,
-			messages: []easyMsg{
-				{
-					meta: map[string]string{
-						"foo":    "bar",
-						"baz":    "qux",
-						"duck,1": "quack",
-					},
-				},
-				{},
-			},
-		},
-		"metadata 2": {
-			input:  `foo ${!metadata:bar} baz`,
-			output: "foo  baz",
-			messages: []easyMsg{
-				{
-					meta: map[string]string{
-						"foo":    "bar",
-						"baz":    "qux",
-						"duck,1": "quack",
-					},
-				},
-			},
-		},
-		"metadata 3": {
-			input:  `foo ${!metadata} bar`,
-			output: `foo  bar`,
-			messages: []easyMsg{
-				{
-					meta: map[string]string{
-						"foo":    "bar",
-						"baz":    "qux",
-						"duck,1": "quack",
-					},
-				},
-			},
-		},
-		"metadata 4": {
-			input:  `foo ${!metadata:duck,1,} baz`,
-			output: "foo quack baz",
-			messages: []easyMsg{
-				{
-					meta: map[string]string{
-						"foo":    "bar",
-						"baz":    "qux",
-						"duck,1": "quack",
-					},
-				},
-			},
-		},
-		"metadata 5": {
-			input:  `foo ${!metadata:foo,1} baz`,
-			output: "foo bar baz",
-			index:  0,
-			messages: []easyMsg{
-				{},
-				{
-					meta: map[string]string{
-						"foo":    "bar",
-						"baz":    "qux",
-						"duck,1": "quack",
-					},
-				},
-			},
-		},
-		"metadata 6": {
-			input:  `foo ${!metadata:foo} baz`,
-			output: `foo  baz`,
-			index:  1,
-			messages: []easyMsg{
-				{
-					meta: map[string]string{
-						"foo":    "bar",
-						"baz":    "qux",
-						"duck,1": "quack",
-					},
-				},
-				{},
-			},
-		},
-		"metadata map": {
-			input:  `foo ${!metadata_json_object:1} baz`,
-			output: `foo {"baz":"qux","duck,1":"quack","foo":"bar"} baz`,
-			index:  0,
-			messages: []easyMsg{
-				{},
-				{
-					meta: map[string]string{
-						"foo":    "bar",
-						"baz":    "qux",
-						"duck,1": "quack",
-					},
-				},
-			},
-		},
-		"metadata map 2": {
-			input:  `foo ${!metadata_json_object} baz`,
-			output: `foo {} baz`,
-			index:  1,
-			legacy: true,
-			messages: []easyMsg{
-				{},
-				{
-					meta: map[string]string{
-						"foo":    "bar",
-						"baz":    "qux",
-						"duck,1": "quack",
-					},
-				},
-			},
-		},
-		"metadata map 3": {
-			input:  `foo ${!metadata_json_object} baz`,
-			output: `foo {"baz":"qux","duck,1":"quack","foo":"bar"} baz`,
-			index:  1,
-			messages: []easyMsg{
-				{},
-				{
-					meta: map[string]string{
-						"foo":    "bar",
-						"baz":    "qux",
-						"duck,1": "quack",
-					},
-				},
-			},
-		},
-		"json combo": {
-			input:  `${!json_field:foo} ${!json("foo")}`,
-			output: `bar1 bar1`,
-			messages: []easyMsg{
-				{content: `{"foo":"bar1"}`},
-				{content: `{"foo":"bar2"}`},
-			},
-		},
-		"json combo 2": {
-			input:  `${!json_field:foo} ${!json("foo")}`,
-			output: `bar1 bar2`,
-			index:  1,
-			legacy: true,
-			messages: []easyMsg{
-				{content: `{"foo":"bar1"}`},
-				{content: `{"foo":"bar2"}`},
-			},
-		},
-		"json combo 3": {
-			input:  `${!json_field:foo} ${!json("foo")}`,
-			output: `bar2 bar2`,
-			index:  1,
-			messages: []easyMsg{
-				{content: `{"foo":"bar1"}`},
-				{content: `{"foo":"bar2"}`},
-			},
-		},
-		"json function": {
-			input:  `${!json_field}`,
-			output: `{"foo":"bar"}`,
-			messages: []easyMsg{
-				{content: `{"foo":"bar"}`},
-				{content: `not json`},
-			},
-		},
-		"json function 2": {
-			input:  `${!json_field:foo}`,
-			output: `bar`,
-			index:  1,
-			legacy: true,
-			messages: []easyMsg{
-				{content: `{"foo":"bar"}`},
-			},
-		},
-		"json function 3": {
-			input:  `${!json_field:foo,1}`,
-			output: `bar`,
-			index:  0,
-			messages: []easyMsg{
-				{content: `not json`},
-				{content: `{"foo":"bar"}`},
-			},
-		},
-		"json function 4": {
-			input:   `${!json_field:foo,0}`,
-			output:  `{\"bar\":\"baz\"}`,
-			index:   1,
-			escaped: true,
-			messages: []easyMsg{
-				{content: `{"foo":{"bar":"baz"}}`},
-			},
-		},
-		"json function 5": {
-			input:  `${!json_field:foo}`,
-			output: `null`,
-			index:  1,
-			messages: []easyMsg{
-				{content: `{"foo":"bar"}`},
-				{content: `not json`},
-			},
-		},
-		"json function 6": {
-			input:  `${!json_field:foo,0}`,
-			output: `bar`,
-			index:  1,
-			messages: []easyMsg{
-				{content: `{"foo":"bar"}`},
-				{content: `not json`},
-			},
-		},
-		"error function": {
-			input:  `foo ${!error} bar`,
-			output: `foo test error bar`,
-			messages: []easyMsg{
-				{meta: map[string]string{
-					types.FailFlagKey: "test error",
-				}},
-			},
-		},
-		"error function 2": {
-			input:  `foo ${!error:1} bar`,
-			output: `foo  bar`,
-			messages: []easyMsg{
-				{meta: map[string]string{
-					types.FailFlagKey: "test error",
-				}},
-			},
-		},
-		"error function 3": {
-			input:  `foo ${!error:1} bar`,
-			output: `foo test error bar`,
-			messages: []easyMsg{
-				{},
-				{meta: map[string]string{
-					types.FailFlagKey: "test error",
-				}},
-			},
-		},
-		"content function": {
-			input:  `hello ${!content} world`,
-			output: `hello foobar world`,
-			index:  1,
-			legacy: true,
-			messages: []easyMsg{
-				{content: `foobar`},
-				{content: `barbaz`},
-			},
-		},
-		"content function 2": {
-			input:  `hello ${!content:1} world`,
-			output: `hello barbaz world`,
-			index:  1,
-			messages: []easyMsg{
-				{content: `foobar`},
-				{content: `barbaz`},
-			},
-		},
-		"content function 3": {
-			input:  `hello ${!content} world`,
-			output: `hello barbaz world`,
-			index:  1,
-			messages: []easyMsg{
-				{content: `foobar`},
-				{content: `barbaz`},
-			},
-		},
-		"batch size": {
-			input:  `${!batch_size}`,
-			output: `2`,
-			messages: []easyMsg{
-				{}, {},
-			},
-		},
-		"batch size 2": {
-			input:  `${!batch_size}`,
-			output: `1`,
-			messages: []easyMsg{
-				{},
-			},
-		},
-	}
-
-	for name, test := range tests {
-		test := test
-		t.Run(name, func(t *testing.T) {
-			msg := message.New(nil)
-			for _, m := range test.messages {
-				part := message.NewPart([]byte(m.content))
-				if m.meta != nil {
-					for k, v := range m.meta {
-						part.Metadata().Set(k, v)
-					}
-				}
-				msg.Append(part)
-			}
-
-			e, err := parse(test.input)
-			require.Nil(t, err)
-			var res string
-			if test.escaped {
-				if test.legacy {
-					res = string(e.BytesEscapedLegacy(test.index, msg))
-				} else {
-					res = string(e.BytesEscaped(test.index, msg))
-				}
-			} else {
-				if test.legacy {
-					res = e.StringLegacy(test.index, msg)
-				} else {
-					res = e.String(test.index, msg)
-				}
-			}
-			assert.Equal(t, test.output, res)
-		})
-	}
-}
-
-func TestCountersFunction(t *testing.T) {
-	tests := [][2]string{
-		{"foo1: ${!count:foo}", "foo1: 1"},
-		{"bar1: ${!count:bar}", "bar1: 1"},
-		{"foo2: ${!count:foo} ${!count:foo}", "foo2: 2 3"},
-		{"bar2: ${!count:bar} ${!count:bar}", "bar2: 2 3"},
-		{"foo3: ${!count:foo} ${!count:foo}", "foo3: 4 5"},
-		{"bar3: ${!count:bar} ${!count:bar}", "bar3: 4 5"},
-	}
-
-	for _, test := range tests {
-		e, err := parse(test[0])
-		require.Nil(t, err)
-		res := e.String(0, message.New(nil))
-		assert.Equal(t, test[1], res)
-	}
-}
 
 func TestUUIDV4Function(t *testing.T) {
 	results := map[string]struct{}{}
+	fn, _ := query.DeprecatedFunction("uuid_v4", "")
+	e := NewExpression(NewQueryResolver(fn))
 
 	for i := 0; i < 100; i++ {
-		e, err := parse("${!uuid_v4}")
-		require.Nil(t, err)
 		res := e.String(0, message.New(nil))
 		if _, exists := results[res]; exists {
 			t.Errorf("Duplicate UUID generated: %v", res)
@@ -388,8 +27,8 @@ func TestUUIDV4Function(t *testing.T) {
 func TestTimestamps(t *testing.T) {
 	now := time.Now()
 
-	e, perr := parse("${!timestamp_unix_nano}")
-	require.Nil(t, perr)
+	fn, _ := query.DeprecatedFunction("timestamp_unix_nano", "")
+	e := NewExpression(NewQueryResolver(fn))
 
 	tStamp := e.String(0, message.New(nil))
 
@@ -404,8 +43,9 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, perr = parse("${!timestamp_unix}")
-	require.Nil(t, perr)
+
+	fn, _ = query.DeprecatedFunction("timestamp_unix", "")
+	e = NewExpression(NewQueryResolver(fn))
 
 	tStamp = e.String(0, message.New(nil))
 
@@ -420,8 +60,8 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, perr = parse("${!timestamp_unix:10}")
-	require.Nil(t, perr)
+	fn, _ = query.DeprecatedFunction("timestamp_unix", "10")
+	e = NewExpression(NewQueryResolver(fn))
 
 	tStamp = e.String(0, message.New(nil))
 
@@ -437,8 +77,8 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, perr = parse("${!timestamp}")
-	require.Nil(t, perr)
+	fn, _ = query.DeprecatedFunction("timestamp", "")
+	e = NewExpression(NewQueryResolver(fn))
 
 	tStamp = e.String(0, message.New(nil))
 
@@ -452,8 +92,8 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, perr = parse("${!timestamp_utc}")
-	require.Nil(t, perr)
+	fn, _ = query.DeprecatedFunction("timestamp_utc", "")
+	e = NewExpression(NewQueryResolver(fn))
 
 	tStamp = e.String(0, message.New(nil))
 
@@ -470,8 +110,8 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, perr = parse("${!timestamp_utc:2006-01-02T15:04:05.000Z}")
-	require.Nil(t, perr)
+	fn, _ = query.DeprecatedFunction("timestamp_utc", "2006-01-02T15:04:05.000Z")
+	e = NewExpression(NewQueryResolver(fn))
 
 	tStamp = e.String(0, message.New(nil))
 

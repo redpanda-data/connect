@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -60,7 +61,7 @@ func NewRedisPubSub(
 		conf:  conf,
 	}
 	var err error
-	if r.channelStr, err = field.New(conf.Channel); err != nil {
+	if r.channelStr, err = bloblang.NewField(conf.Channel); err != nil {
 		return nil, fmt.Errorf("failed to parse channel expression: %v", err)
 	}
 	r.url, err = url.Parse(conf.URL)

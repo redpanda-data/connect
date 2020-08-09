@@ -14,8 +14,22 @@ func TestFunctions(t *testing.T) {
 		meta    map[string]string
 	}
 
+	mustFunc := func(name string, args ...interface{}) Function {
+		t.Helper()
+		fn, err := InitFunction(name, args...)
+		require.NoError(t, err)
+		return fn
+	}
+
+	mustMethod := func(fn Function, name string, args ...interface{}) Function {
+		t.Helper()
+		fn, err := InitMethod(name, fn, args...)
+		require.NoError(t, err)
+		return fn
+	}
+
 	tests := map[string]struct {
-		input    string
+		input    Function
 		output   interface{}
 		err      string
 		messages []easyMsg
@@ -23,37 +37,34 @@ func TestFunctions(t *testing.T) {
 		index    int
 	}{
 		"check throw function 1": {
-			input: `throw("foo")`,
+			input: mustFunc("throw", "foo"),
 			err:   "foo",
 		},
 		"check throw function 2": {
-			input:  `throw("foo").catch("bar")`,
+			input: mustMethod(
+				mustFunc("throw", "foo"),
+				"catch", "bar",
+			),
 			output: "bar",
-		},
-		"check throw function 3": {
-			input:  `if false { throw("foo") } else { "bar" }`,
-			output: "bar",
-		},
-		"check throw function 4": {
-			input: `if true { throw("foo") } else { "bar" }`,
-			err:   "foo",
 		},
 		"check var function": {
-			input:  `var("foo").uppercase()`,
-			output: "FOOBAR",
-			vars: map[string]interface{}{
-				"foo": "foobar",
-			},
-		},
-		"check var literal": {
-			input:  `$foo.uppercase()`,
+			input: mustMethod(
+				mustFunc("var", "foo"),
+				"uppercase",
+			),
 			output: "FOOBAR",
 			vars: map[string]interface{}{
 				"foo": "foobar",
 			},
 		},
 		"check var function object": {
-			input:  `var("foo").bar.uppercase()`,
+			input: mustMethod(
+				mustMethod(
+					mustFunc("var", "foo"),
+					"get", "bar",
+				),
+				"uppercase",
+			),
 			output: "FOOBAR",
 			vars: map[string]interface{}{
 				"foo": map[string]interface{}{
@@ -61,27 +72,24 @@ func TestFunctions(t *testing.T) {
 				},
 			},
 		},
-		"check var function object 2": {
-			input:  `var("foo").bar.baz.bev.uppercase()`,
-			output: "FOOBAR",
-			vars: map[string]interface{}{
-				"foo": map[string]interface{}{
-					"bar": map[string]interface{}{
-						"baz": map[string]interface{}{
-							"bev": "foobar",
-						},
-					},
-				},
+		"check var function error": {
+			input: mustFunc("var", "foo"),
+			vars:  map[string]interface{}{},
+			err:   `variable 'foo' undefined`,
+		},
+		"check meta function object": {
+			input:  mustFunc("meta", "foo"),
+			output: "foobar",
+			messages: []easyMsg{
+				{content: "", meta: map[string]string{
+					"foo": "foobar",
+				}},
 			},
 		},
-		"check var literal object": {
-			input:  `$foo.bar.uppercase()`,
-			output: "FOOBAR",
-			vars: map[string]interface{}{
-				"foo": map[string]interface{}{
-					"bar": "foobar",
-				},
-			},
+		"check meta function error": {
+			input: mustFunc("meta", "foo"),
+			vars:  map[string]interface{}{},
+			err:   `metadata value not found`,
 		},
 	}
 
@@ -101,11 +109,8 @@ func TestFunctions(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, perr := tryParse(test.input, false)
-			require.Nil(t, perr)
-
 			for i := 0; i < 10; i++ {
-				res, err := e.Exec(FunctionContext{
+				res, err := test.input.Exec(FunctionContext{
 					Vars:     test.vars,
 					Maps:     map[string]Function{},
 					Index:    test.index,
@@ -132,7 +137,7 @@ func TestFunctions(t *testing.T) {
 }
 
 func TestRandomInt(t *testing.T) {
-	e, err := tryParse(`random_int()`, false)
+	e, err := InitFunction("random_int")
 	require.Nil(t, err)
 
 	tallies := map[int64]int64{}

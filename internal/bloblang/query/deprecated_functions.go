@@ -16,7 +16,7 @@ import (
 //------------------------------------------------------------------------------
 
 func wrapDeprecatedFunction(d deprecatedFunction) Function {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		return d(ctx.Index, ctx.MsgBatch, ctx.Legacy), nil
 	})
 }
@@ -139,6 +139,16 @@ func deprecatedContentFunction(arg string) deprecatedFunction {
 
 var counters = map[string]int64{}
 var countersMux = &sync.Mutex{}
+
+// DeprecatedFunction attempts to initialize a (now deprecated) old-syntax
+// function.
+func DeprecatedFunction(name, arg string) (Function, bool) {
+	fn, ok := deprecatedFunctions[name]
+	if !ok {
+		return nil, false
+	}
+	return wrapDeprecatedFunction(fn(arg)), true
+}
 
 var deprecatedFunctions = map[string]func(arg string) deprecatedFunction{
 	"timestamp_unix_nano": func(arg string) deprecatedFunction {

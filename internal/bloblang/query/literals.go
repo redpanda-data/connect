@@ -6,7 +6,10 @@ type mapLiteral struct {
 	keyValues [][2]interface{}
 }
 
-func newMapLiteral(values [][2]interface{}) (interface{}, error) {
+// NewMapLiteral creates a map literal from a slice of key/value pairs. If all
+// keys and values are static then a static map[string]interface{} value is
+// returned. However, if any keys or values are dynamic a Function is returned.
+func NewMapLiteral(values [][2]interface{}) (interface{}, error) {
 	isDynamic := false
 	staticValues := make(map[string]interface{}, len(values))
 	for _, kv := range values {
@@ -16,7 +19,7 @@ func newMapLiteral(values [][2]interface{}) (interface{}, error) {
 		case string:
 			key = t
 			isStr = true
-		case *literal:
+		case *Literal:
 			if key, isStr = t.Value.(string); !isStr {
 				return nil, fmt.Errorf("object keys must be strings, received: %T", t.Value)
 			}

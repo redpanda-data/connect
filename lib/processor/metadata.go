@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -141,11 +142,11 @@ type Metadata struct {
 func NewMetadata(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	value, err := field.New(conf.Metadata.Value)
+	value, err := bloblang.NewField(conf.Metadata.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}
-	key, err := field.New(conf.Metadata.Key)
+	key, err := bloblang.NewField(conf.Metadata.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}

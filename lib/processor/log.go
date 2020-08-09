@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -96,7 +97,7 @@ type Log struct {
 func NewLog(
 	conf Config, mgr types.Manager, logger log.Modular, stats metrics.Type,
 ) (Type, error) {
-	message, err := field.New(conf.Log.Message)
+	message, err := bloblang.NewField(conf.Log.Message)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse message expression: %v", err)
 	}
@@ -108,7 +109,7 @@ func NewLog(
 	}
 	if len(conf.Log.Fields) > 0 {
 		for k, v := range conf.Log.Fields {
-			if l.fields[k], err = field.New(v); err != nil {
+			if l.fields[k], err = bloblang.NewField(v); err != nil {
 				return nil, fmt.Errorf("failed to parse field '%v' expression: %v", k, err)
 			}
 		}

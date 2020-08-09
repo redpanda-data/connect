@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -101,12 +102,12 @@ func NewAmazonSQS(
 
 	var err error
 	if id := conf.MessageGroupID; len(id) > 0 {
-		if s.groupID, err = field.New(id); err != nil {
+		if s.groupID, err = bloblang.NewField(id); err != nil {
 			return nil, fmt.Errorf("failed to parse group ID expression: %v", err)
 		}
 	}
 	if id := conf.MessageDeduplicationID; len(id) > 0 {
-		if s.dedupeID, err = field.New(id); err != nil {
+		if s.dedupeID, err = bloblang.NewField(id); err != nil {
 			return nil, fmt.Errorf("failed to parse dedupe ID expression: %v", err)
 		}
 	}

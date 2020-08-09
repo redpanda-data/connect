@@ -10,6 +10,11 @@ All notable changes to this project will be documented in this file.
 - Improved parser error messages with the `blobl` subcommand.
 - Added flag `file` to the `blobl` subcommand.
 
+### Fixed
+
+- Wholesale metadata mappings (`meta = {"foo":"bar"}`) in Bloblang now correctly
+  clear pre-existing fields.
+
 ## 3.24.1 - 2020-08-03
 
 ### Fixed

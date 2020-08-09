@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -88,16 +89,16 @@ func NewAmazonS3(
 		timeout: timeout,
 	}
 	var err error
-	if a.path, err = field.New(conf.Path); err != nil {
+	if a.path, err = bloblang.NewField(conf.Path); err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}
-	if a.contentType, err = field.New(conf.ContentType); err != nil {
+	if a.contentType, err = bloblang.NewField(conf.ContentType); err != nil {
 		return nil, fmt.Errorf("failed to parse content type expression: %v", err)
 	}
-	if a.contentEncoding, err = field.New(conf.ContentEncoding); err != nil {
+	if a.contentEncoding, err = bloblang.NewField(conf.ContentEncoding); err != nil {
 		return nil, fmt.Errorf("failed to parse content encoding expression: %v", err)
 	}
-	if a.storageClass, err = field.New(conf.StorageClass); err != nil {
+	if a.storageClass, err = bloblang.NewField(conf.StorageClass); err != nil {
 		return nil, fmt.Errorf("failed to parse storage class expression: %v", err)
 	}
 	return a, nil

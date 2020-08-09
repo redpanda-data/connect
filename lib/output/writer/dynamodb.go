@@ -10,6 +10,7 @@ import (
 	"time"
 
 	batchInternal "github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -102,7 +103,7 @@ func NewDynamoDB(
 	}
 	var err error
 	for k, v := range conf.StringColumns {
-		if db.strColumns[k], err = field.New(v); err != nil {
+		if db.strColumns[k], err = bloblang.NewField(v); err != nil {
 			return nil, fmt.Errorf("failed to parse column '%v' expression: %v", k, err)
 		}
 	}

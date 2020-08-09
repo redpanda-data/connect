@@ -4,11 +4,11 @@ sidebar_label: About
 description: The Benthos native mapping language
 ---
 
-Bloblang, or blobl for short (pronounced "blobble"), is a language designed specifically for mapping unstructured data. It's a safe, fast, and powerful way to perform document mapping within Benthos.
+Bloblang, or blobl for short, is a language designed for mapping data of a wide variety of forms. It's a safe, fast, and powerful way to perform document mapping within Benthos.
 
-Bloblang is available as a [mapping processor][blobl.proc], as a [condition][blobl.cond], and it's also possible to use blobl queries in [function interpolations][blobl.interp].
+Bloblang is available as a [processor][blobl.proc], as a [condition][blobl.cond], and it's also possible to use blobl queries in [function interpolations][blobl.interp].
 
-You can also execute bloblang mappings on the command line with the `blobl` subcommand:
+You can also execute Bloblang mappings on the command-line with the `blobl` subcommand:
 
 ```shell
 $ cat data.jsonl | benthos blobl 'foo.(bar | baz).buz'
@@ -41,6 +41,19 @@ root.foo = "added value"
 # Out: {"id":"wat1","message":"hello world","foo":"added value"}
 ```
 
+### Non-structured Results
+
+Your newly mapped document doesn't need to be a structured object, simply assign a value type to the `root` of your document:
+
+```coffee
+root = this.foo
+
+# In:  {"foo":"hello world"}
+# Out: hello world
+```
+
+And the resulting message payload will be the raw value you've assigned.
+
 ### Deleting
 
 It's possible to selectively delete fields from an object by assigning the function `deleted()` to the field path:
@@ -66,7 +79,7 @@ root.new_doc.type = $foo
 
 ### Metadata
 
-Benthos messages contain metadata as well as structured documents, in Bloblang you can query and modify the metadata of messages with the `meta` assignment keyword and query function:
+Benthos messages contain metadata that is separate from the main payload, in Bloblang you can query and modify the metadata of messages with the `meta` assignment keyword and query function:
 
 ```coffee
 # Delete all existing metadata

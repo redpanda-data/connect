@@ -1,8 +1,9 @@
-package query
+package parser
 
 import (
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -463,9 +464,9 @@ func TestMethodParser(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, perr := tryParse(test.input, false)
+			e, perr := tryParseQuery(test.input, false)
 			require.Nil(t, perr)
-			res := ExecToString(e, FunctionContext{
+			res := query.ExecToString(e, query.FunctionContext{
 				Index:    test.index,
 				MsgBatch: msg,
 			})
@@ -509,10 +510,10 @@ func TestMethodErrors(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, perr := tryParse(test.input, false)
+			e, perr := tryParseQuery(test.input, false)
 			require.Nil(t, perr)
 
-			_, err := e.Exec(FunctionContext{
+			_, err := e.Exec(query.FunctionContext{
 				Index:    test.index,
 				MsgBatch: msg,
 			})
@@ -531,7 +532,7 @@ func TestMethodMaps(t *testing.T) {
 		input    string
 		output   interface{}
 		err      string
-		maps     map[string]Function
+		maps     map[string]query.Function
 		messages []easyMsg
 		index    int
 	}{
@@ -543,25 +544,22 @@ func TestMethodMaps(t *testing.T) {
 		"map not exist": {
 			input:    `"foo".apply("nope")`,
 			err:      "map nope was not found",
-			maps:     map[string]Function{},
+			maps:     map[string]query.Function{},
 			messages: []easyMsg{{}},
 		},
 		"map static": {
 			input:  `"foo".apply("foo")`,
 			output: "hello world",
-			maps: map[string]Function{
-				"foo": literalFunction("hello world"),
+			maps: map[string]query.Function{
+				"foo": query.NewLiteralFunction("hello world"),
 			},
 			messages: []easyMsg{{}},
 		},
 		"map context": {
 			input:  `json().apply("foo")`,
 			output: "this value",
-			maps: map[string]Function{
-				"foo": func() Function {
-					f, _ := fieldFunctionCtor("foo")
-					return f
-				}(),
+			maps: map[string]query.Function{
+				"foo": query.NewFieldFunction("foo"),
 			},
 			messages: []easyMsg{{
 				content: `{"foo":"this value"}`,
@@ -570,15 +568,9 @@ func TestMethodMaps(t *testing.T) {
 		"map dynamic": {
 			input:  `json().apply(meta("dyn_map"))`,
 			output: "this value",
-			maps: map[string]Function{
-				"foo": func() Function {
-					f, _ := fieldFunctionCtor("foo")
-					return f
-				}(),
-				"bar": func() Function {
-					f, _ := fieldFunctionCtor("bar")
-					return f
-				}(),
+			maps: map[string]query.Function{
+				"foo": query.NewFieldFunction("foo"),
+				"bar": query.NewFieldFunction("bar"),
 			},
 			messages: []easyMsg{{
 				content: `{"foo":"this value","bar":"and this value"}`,
@@ -590,15 +582,9 @@ func TestMethodMaps(t *testing.T) {
 		"map dynamic 2": {
 			input:  `json().apply(meta("dyn_map"))`,
 			output: "and this value",
-			maps: map[string]Function{
-				"foo": func() Function {
-					f, _ := fieldFunctionCtor("foo")
-					return f
-				}(),
-				"bar": func() Function {
-					f, _ := fieldFunctionCtor("bar")
-					return f
-				}(),
+			maps: map[string]query.Function{
+				"foo": query.NewFieldFunction("foo"),
+				"bar": query.NewFieldFunction("bar"),
 			},
 			messages: []easyMsg{{
 				content: `{"foo":"this value","bar":"and this value"}`,
@@ -625,10 +611,10 @@ func TestMethodMaps(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, perr := tryParse(test.input, false)
+			e, perr := tryParseQuery(test.input, false)
 			require.Nil(t, perr)
 
-			res, err := e.Exec(FunctionContext{
+			res, err := e.Exec(query.FunctionContext{
 				Maps:     test.maps,
 				Index:    test.index,
 				MsgBatch: msg,

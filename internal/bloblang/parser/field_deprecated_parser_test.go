@@ -1,4 +1,4 @@
-package query
+package parser
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDeprecatedFunctionExpressions(t *testing.T) {
+func TestFieldDeprecatedFunctionExpressions(t *testing.T) {
 	hostname, _ := os.Hostname()
 
 	type easyMsg struct {
@@ -27,16 +27,17 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 		output   string
 		messages []easyMsg
 		index    int
+		escaped  bool
 		legacy   bool
 	}{
 		"hostname": {
-			input:  `hostname`,
-			output: fmt.Sprintf(`%v`, hostname),
+			input:  `foo ${!hostname} baz`,
+			output: fmt.Sprintf(`foo %v baz`, hostname),
 			index:  1,
 		},
 		"metadata 1": {
-			input:  `metadata:foo`,
-			output: `bar`,
+			input:  `foo ${!metadata:foo} baz`,
+			output: `foo bar baz`,
 			index:  1,
 			legacy: true,
 			messages: []easyMsg{
@@ -51,8 +52,8 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			},
 		},
 		"metadata 2": {
-			input:  `metadata:bar`,
-			output: "",
+			input:  `foo ${!metadata:bar} baz`,
+			output: "foo  baz",
 			messages: []easyMsg{
 				{
 					meta: map[string]string{
@@ -64,8 +65,8 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			},
 		},
 		"metadata 3": {
-			input:  `metadata`,
-			output: ``,
+			input:  `foo ${!metadata} bar`,
+			output: `foo  bar`,
 			messages: []easyMsg{
 				{
 					meta: map[string]string{
@@ -77,8 +78,8 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			},
 		},
 		"metadata 4": {
-			input:  `metadata:duck,1,`,
-			output: "quack",
+			input:  `foo ${!metadata:duck,1,} baz`,
+			output: "foo quack baz",
 			messages: []easyMsg{
 				{
 					meta: map[string]string{
@@ -90,8 +91,8 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			},
 		},
 		"metadata 5": {
-			input:  `metadata:foo,1`,
-			output: "bar",
+			input:  `foo ${!metadata:foo,1} baz`,
+			output: "foo bar baz",
 			index:  0,
 			messages: []easyMsg{
 				{},
@@ -105,8 +106,8 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			},
 		},
 		"metadata 6": {
-			input:  `metadata:foo`,
-			output: ``,
+			input:  `foo ${!metadata:foo} baz`,
+			output: `foo  baz`,
 			index:  1,
 			messages: []easyMsg{
 				{
@@ -120,8 +121,8 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			},
 		},
 		"metadata map": {
-			input:  `metadata_json_object:1`,
-			output: `{"baz":"qux","duck,1":"quack","foo":"bar"}`,
+			input:  `foo ${!metadata_json_object:1} baz`,
+			output: `foo {"baz":"qux","duck,1":"quack","foo":"bar"} baz`,
 			index:  0,
 			messages: []easyMsg{
 				{},
@@ -135,8 +136,8 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			},
 		},
 		"metadata map 2": {
-			input:  `metadata_json_object`,
-			output: `{}`,
+			input:  `foo ${!metadata_json_object} baz`,
+			output: `foo {} baz`,
 			index:  1,
 			legacy: true,
 			messages: []easyMsg{
@@ -151,8 +152,8 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			},
 		},
 		"metadata map 3": {
-			input:  `metadata_json_object`,
-			output: `{"baz":"qux","duck,1":"quack","foo":"bar"}`,
+			input:  `foo ${!metadata_json_object} baz`,
+			output: `foo {"baz":"qux","duck,1":"quack","foo":"bar"} baz`,
 			index:  1,
 			messages: []easyMsg{
 				{},
@@ -165,8 +166,35 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 				},
 			},
 		},
+		"json combo": {
+			input:  `${!json_field:foo} ${!json("foo")}`,
+			output: `bar1 bar1`,
+			messages: []easyMsg{
+				{content: `{"foo":"bar1"}`},
+				{content: `{"foo":"bar2"}`},
+			},
+		},
+		"json combo 2": {
+			input:  `${!json_field:foo} ${!json("foo")}`,
+			output: `bar1 bar2`,
+			index:  1,
+			legacy: true,
+			messages: []easyMsg{
+				{content: `{"foo":"bar1"}`},
+				{content: `{"foo":"bar2"}`},
+			},
+		},
+		"json combo 3": {
+			input:  `${!json_field:foo} ${!json("foo")}`,
+			output: `bar2 bar2`,
+			index:  1,
+			messages: []easyMsg{
+				{content: `{"foo":"bar1"}`},
+				{content: `{"foo":"bar2"}`},
+			},
+		},
 		"json function": {
-			input:  `json_field`,
+			input:  `${!json_field}`,
 			output: `{"foo":"bar"}`,
 			messages: []easyMsg{
 				{content: `{"foo":"bar"}`},
@@ -174,7 +202,7 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			},
 		},
 		"json function 2": {
-			input:  `json_field:foo`,
+			input:  `${!json_field:foo}`,
 			output: `bar`,
 			index:  1,
 			legacy: true,
@@ -183,7 +211,7 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			},
 		},
 		"json function 3": {
-			input:  `json_field:foo,1`,
+			input:  `${!json_field:foo,1}`,
 			output: `bar`,
 			index:  0,
 			messages: []easyMsg{
@@ -191,8 +219,17 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 				{content: `{"foo":"bar"}`},
 			},
 		},
+		"json function 4": {
+			input:   `${!json_field:foo,0}`,
+			output:  `{\"bar\":\"baz\"}`,
+			index:   1,
+			escaped: true,
+			messages: []easyMsg{
+				{content: `{"foo":{"bar":"baz"}}`},
+			},
+		},
 		"json function 5": {
-			input:  `json_field:foo`,
+			input:  `${!json_field:foo}`,
 			output: `null`,
 			index:  1,
 			messages: []easyMsg{
@@ -201,7 +238,7 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			},
 		},
 		"json function 6": {
-			input:  `json_field:foo,0`,
+			input:  `${!json_field:foo,0}`,
 			output: `bar`,
 			index:  1,
 			messages: []easyMsg{
@@ -210,8 +247,8 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			},
 		},
 		"error function": {
-			input:  `error`,
-			output: `test error`,
+			input:  `foo ${!error} bar`,
+			output: `foo test error bar`,
 			messages: []easyMsg{
 				{meta: map[string]string{
 					types.FailFlagKey: "test error",
@@ -219,8 +256,8 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			},
 		},
 		"error function 2": {
-			input:  `error:1`,
-			output: ``,
+			input:  `foo ${!error:1} bar`,
+			output: `foo  bar`,
 			messages: []easyMsg{
 				{meta: map[string]string{
 					types.FailFlagKey: "test error",
@@ -228,8 +265,8 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			},
 		},
 		"error function 3": {
-			input:  `error:1`,
-			output: `test error`,
+			input:  `foo ${!error:1} bar`,
+			output: `foo test error bar`,
 			messages: []easyMsg{
 				{},
 				{meta: map[string]string{
@@ -238,8 +275,8 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			},
 		},
 		"content function": {
-			input:  `content`,
-			output: `foobar`,
+			input:  `hello ${!content} world`,
+			output: `hello foobar world`,
 			index:  1,
 			legacy: true,
 			messages: []easyMsg{
@@ -248,8 +285,8 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			},
 		},
 		"content function 2": {
-			input:  `content:1`,
-			output: `barbaz`,
+			input:  `hello ${!content:1} world`,
+			output: `hello barbaz world`,
 			index:  1,
 			messages: []easyMsg{
 				{content: `foobar`},
@@ -257,8 +294,8 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			},
 		},
 		"content function 3": {
-			input:  `content`,
-			output: `barbaz`,
+			input:  `hello ${!content} world`,
+			output: `hello barbaz world`,
 			index:  1,
 			messages: []easyMsg{
 				{content: `foobar`},
@@ -266,14 +303,14 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 			},
 		},
 		"batch size": {
-			input:  `batch_size`,
+			input:  `${!batch_size}`,
 			output: `2`,
 			messages: []easyMsg{
 				{}, {},
 			},
 		},
 		"batch size 2": {
-			input:  `batch_size`,
+			input:  `${!batch_size}`,
 			output: `1`,
 			messages: []easyMsg{
 				{},
@@ -295,58 +332,52 @@ func TestDeprecatedFunctionExpressions(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, err := tryParse(test.input, true)
+			e, err := ParseField(test.input)
 			require.Nil(t, err)
-
-			res := ExecToString(e, FunctionContext{
-				Index:    test.index,
-				MsgBatch: msg,
-				Legacy:   test.legacy,
-			})
-			res2 := string(ExecToBytes(e, FunctionContext{
-				Index:    test.index,
-				MsgBatch: msg,
-				Legacy:   test.legacy,
-			}))
-
+			var res string
+			if test.escaped {
+				if test.legacy {
+					res = string(e.BytesEscapedLegacy(test.index, msg))
+				} else {
+					res = string(e.BytesEscaped(test.index, msg))
+				}
+			} else {
+				if test.legacy {
+					res = e.StringLegacy(test.index, msg)
+				} else {
+					res = e.String(test.index, msg)
+				}
+			}
 			assert.Equal(t, test.output, res)
-			assert.Equal(t, test.output, res2)
 		})
 	}
 }
 
-var emptyCtx = FunctionContext{MsgBatch: message.New(nil)}
-
-func TestDeprecatedCountersFunction(t *testing.T) {
+func TestFieldCountersFunction(t *testing.T) {
 	tests := [][2]string{
-		{"count:foo", "1"},
-		{"count:bar", "1"},
-		{"count:foo", "2"},
-		{"count:foo", "3"},
-		{"count:bar", "2"},
-		{"count:bar", "3"},
-		{"count:foo", "4"},
-		{"count:foo", "5"},
-		{"count:bar", "4"},
-		{"count:bar", "5"},
+		{"foo1: ${!count:foo}", "foo1: 1"},
+		{"bar1: ${!count:bar}", "bar1: 1"},
+		{"foo2: ${!count:foo} ${!count:foo}", "foo2: 2 3"},
+		{"bar2: ${!count:bar} ${!count:bar}", "bar2: 2 3"},
+		{"foo3: ${!count:foo} ${!count:foo}", "foo3: 4 5"},
+		{"bar3: ${!count:bar} ${!count:bar}", "bar3: 4 5"},
 	}
 
 	for _, test := range tests {
-		e, err := tryParse(test[0], true)
+		e, err := ParseField(test[0])
 		require.Nil(t, err)
-		res := ExecToString(e, emptyCtx)
+		res := e.String(0, message.New(nil))
 		assert.Equal(t, test[1], res)
 	}
 }
 
-func TestDeprecatedUUIDV4Function(t *testing.T) {
+func TestFieldUUIDV4Function(t *testing.T) {
 	results := map[string]struct{}{}
 
 	for i := 0; i < 100; i++ {
-		e, err := tryParse("uuid_v4", true)
+		e, err := ParseField("${!uuid_v4}")
 		require.Nil(t, err)
-
-		res := ExecToString(e, emptyCtx)
+		res := e.String(0, message.New(nil))
 		if _, exists := results[res]; exists {
 			t.Errorf("Duplicate UUID generated: %v", res)
 		}
@@ -354,13 +385,13 @@ func TestDeprecatedUUIDV4Function(t *testing.T) {
 	}
 }
 
-func TestDeprecatedTimestamps(t *testing.T) {
+func TestFieldTimestamps(t *testing.T) {
 	now := time.Now()
 
-	e, perr := tryParse("timestamp_unix_nano", true)
+	e, perr := ParseField("${!timestamp_unix_nano}")
 	require.Nil(t, perr)
 
-	tStamp := ExecToString(e, emptyCtx)
+	tStamp := e.String(0, message.New(nil))
 
 	nanoseconds, err := strconv.ParseInt(tStamp, 10, 64)
 	if err != nil {
@@ -373,10 +404,10 @@ func TestDeprecatedTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = tryParse("timestamp_unix", true)
-	require.Nil(t, err)
+	e, perr = ParseField("${!timestamp_unix}")
+	require.Nil(t, perr)
 
-	tStamp = ExecToString(e, emptyCtx)
+	tStamp = e.String(0, message.New(nil))
 
 	seconds, err := strconv.ParseInt(tStamp, 10, 64)
 	if err != nil {
@@ -389,15 +420,16 @@ func TestDeprecatedTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = tryParse("timestamp_unix:10", true)
-	require.Nil(t, err)
+	e, perr = ParseField("${!timestamp_unix:10}")
+	require.Nil(t, perr)
 
-	tStamp = ExecToString(e, emptyCtx)
+	tStamp = e.String(0, message.New(nil))
 
 	var secondsF float64
 	secondsF, err = strconv.ParseFloat(tStamp, 64)
-	require.NoError(t, err)
-
+	if err != nil {
+		t.Fatal(err)
+	}
 	tThen = time.Unix(int64(secondsF), 0)
 
 	if tThen.Sub(now).Seconds() > 5.0 {
@@ -405,10 +437,10 @@ func TestDeprecatedTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = tryParse("timestamp", true)
-	require.Nil(t, err)
+	e, perr = ParseField("${!timestamp}")
+	require.Nil(t, perr)
 
-	tStamp = ExecToString(e, emptyCtx)
+	tStamp = e.String(0, message.New(nil))
 
 	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
 	if err != nil {
@@ -420,10 +452,10 @@ func TestDeprecatedTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, err = tryParse("timestamp_utc", true)
-	require.Nil(t, err)
+	e, perr = ParseField("${!timestamp_utc}")
+	require.Nil(t, perr)
 
-	tStamp = ExecToString(e, emptyCtx)
+	tStamp = e.String(0, message.New(nil))
 
 	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
 	if err != nil {
@@ -435,5 +467,20 @@ func TestDeprecatedTimestamps(t *testing.T) {
 	}
 	if !strings.Contains(tStamp, "UTC") {
 		t.Errorf("Non-UTC timezone detected: %v", tStamp)
+	}
+
+	now = time.Now()
+	e, perr = ParseField("${!timestamp_utc:2006-01-02T15:04:05.000Z}")
+	require.Nil(t, perr)
+
+	tStamp = e.String(0, message.New(nil))
+
+	tThen, err = time.Parse("2006-01-02T15:04:05.000Z", tStamp)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if tThen.Sub(now).Seconds() > 5.0 {
+		t.Errorf("Timestamps too far out of sync: %v and %v", tThen, now)
 	}
 }

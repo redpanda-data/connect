@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -270,11 +271,11 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 	}
 
 	var err error
-	if h.responseStatus, err = field.New(h.conf.HTTPServer.Response.Status); err != nil {
+	if h.responseStatus, err = bloblang.NewField(h.conf.HTTPServer.Response.Status); err != nil {
 		return nil, fmt.Errorf("failed to parse response status expression: %v", err)
 	}
 	for k, v := range h.conf.HTTPServer.Response.Headers {
-		if h.responseHeaders[k], err = field.New(v); err != nil {
+		if h.responseHeaders[k], err = bloblang.NewField(v); err != nil {
 			return nil, fmt.Errorf("failed to parse response header '%v' expression: %v", k, err)
 		}
 	}

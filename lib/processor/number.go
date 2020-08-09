@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -116,7 +117,7 @@ func NewNumber(
 	var err error
 	switch t := conf.Number.Value.(type) {
 	case string:
-		n.interpolatedValue, err = field.New(t)
+		n.interpolatedValue, err = bloblang.NewField(t)
 	case float64:
 		n.value = t
 	case int:

@@ -19,7 +19,7 @@ var _ = RegisterMethod(
 )
 
 func appendMethod(target Function, args ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		res, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -42,7 +42,7 @@ var _ = RegisterMethod(
 
 func applyMethod(target Function, args ...interface{}) (Function, error) {
 	targetMap := args[0].(string)
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		res, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -82,7 +82,7 @@ func boolMethod(target Function, args ...interface{}) (Function, error) {
 	if len(args) > 0 {
 		defaultBool = args[0].(bool)
 	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			if len(args) > 0 {
@@ -118,13 +118,13 @@ func catchMethod(fn Function, args ...interface{}) (Function, error) {
 	var catchFn Function
 	switch t := args[0].(type) {
 	case uint64, int64, float64, string, []byte, bool, []interface{}, map[string]interface{}:
-		catchFn = literalFunction(t)
+		catchFn = NewLiteralFunction(t)
 	case Function:
 		catchFn = t
 	default:
 		return nil, fmt.Errorf("expected query or literal argument, received %T", args[0])
 	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		res, err := fn.Exec(ctx)
 		if err != nil {
 			res, err = catchFn.Exec(ctx)
@@ -141,7 +141,7 @@ var _ = RegisterMethod(
 )
 
 func collapseMethod(target Function, args ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -161,7 +161,7 @@ func containsMethod(target Function, args ...interface{}) (Function, error) {
 	compareRight := args[0]
 	sub := IToString(args[0])
 	bsub := IToBytes(args[0])
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -201,7 +201,7 @@ var _ = RegisterMethod(
 )
 
 func enumerateMethod(target Function, args ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		res, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -232,7 +232,7 @@ var _ = RegisterMethod(
 func existsMethod(target Function, args ...interface{}) (Function, error) {
 	pathStr := args[0].(string)
 	path := gabs.DotPathToSlice(pathStr)
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -252,7 +252,7 @@ var _ = RegisterMethod(
 func explodeMethod(target Function, args ...interface{}) (Function, error) {
 	path := gabs.DotPathToSlice(args[0].(string))
 
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -291,7 +291,7 @@ var _ = RegisterMethod(
 )
 
 func flattenMethod(target Function, args ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -323,7 +323,7 @@ var _ = RegisterMethod(
 func foldMethod(target Function, args ...interface{}) (Function, error) {
 	var foldTallyStart interface{}
 	switch t := args[0].(type) {
-	case *literal:
+	case *Literal:
 		foldTallyStart = t.Value
 	default:
 		foldTallyStart = t
@@ -332,7 +332,7 @@ func foldMethod(target Function, args ...interface{}) (Function, error) {
 	if !ok {
 		return nil, fmt.Errorf("expected query argument, received %T", args[1])
 	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		res, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -408,7 +408,7 @@ var _ = RegisterMethod(
 )
 
 func fromAllMethod(target Function, _ ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		values := make([]interface{}, ctx.MsgBatch.Len())
 		var err error
 		for i := 0; i < ctx.MsgBatch.Len(); i++ {
@@ -455,6 +455,11 @@ func (g *getMethod) Exec(ctx FunctionContext) (interface{}, error) {
 	return gabs.Wrap(v).S(g.path...).Data(), nil
 }
 
+// NewGetMethod creates a new get method.
+func NewGetMethod(target Function, path string) (Function, error) {
+	return getMethodCtor(target, path)
+}
+
 func getMethodCtor(target Function, args ...interface{}) (Function, error) {
 	path := gabs.DotPathToSlice(args[0].(string))
 	switch t := target.(type) {
@@ -488,7 +493,7 @@ var _ = RegisterMethod(
 
 func indexMethod(target Function, args ...interface{}) (Function, error) {
 	index := args[0].(int64)
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -518,7 +523,7 @@ var _ = RegisterMethod(
 )
 
 func keysMethod(target Function, args ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -542,7 +547,7 @@ var _ = RegisterMethod(
 )
 
 func lengthMethod(target Function, _ ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -575,12 +580,17 @@ var _ = RegisterMethod(
 	ExpectNArgs(1),
 )
 
+// NewMapMethod attempts to create a map method.
+func NewMapMethod(target, mapArg Function) (Function, error) {
+	return mapMethod(target, mapArg)
+}
+
 func mapMethod(target Function, args ...interface{}) (Function, error) {
 	mapFn, ok := args[0].(Function)
 	if !ok {
 		return nil, fmt.Errorf("expected query argument, received %T", args[0])
 	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		res, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -602,7 +612,7 @@ func mapEachMethod(target Function, args ...interface{}) (Function, error) {
 	if !ok {
 		return nil, fmt.Errorf("expected query argument, received %T", args[0])
 	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		res, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -687,9 +697,9 @@ func mergeMethod(target Function, args ...interface{}) (Function, error) {
 	case Function:
 		mapFn = t
 	default:
-		mapFn = literalFunction(t)
+		mapFn = NewLiteralFunction(t)
 	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		mergeInto, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -739,6 +749,13 @@ type notMethod struct {
 	fn Function
 }
 
+// Not returns a logical NOT of a child function.
+func Not(fn Function) Function {
+	return &notMethod{
+		fn: fn,
+	}
+}
+
 func (n *notMethod) Exec(ctx FunctionContext) (interface{}, error) {
 	v, err := n.fn.Exec(ctx)
 	if err != nil {
@@ -768,7 +785,7 @@ func numberMethod(target Function, args ...interface{}) (Function, error) {
 	if len(args) > 0 {
 		defaultNum = args[0].(float64)
 	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			if len(args) > 0 {
@@ -804,13 +821,13 @@ func orMethod(fn Function, args ...interface{}) (Function, error) {
 	var orFn Function
 	switch t := args[0].(type) {
 	case uint64, int64, float64, string, []byte, bool, []interface{}, map[string]interface{}:
-		orFn = literalFunction(t)
+		orFn = NewLiteralFunction(t)
 	case Function:
 		orFn = t
 	default:
 		return nil, fmt.Errorf("expected query or literal argument, received %T", args[0])
 	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		res, err := fn.Exec(ctx)
 		if err != nil || IIsNull(res) {
 			res, err = orFn.Exec(ctx)
@@ -872,7 +889,7 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 		}
 	}
 
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -937,7 +954,7 @@ func sliceMethod(target Function, args ...interface{}) (Function, error) {
 		}
 		return
 	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -974,7 +991,7 @@ var _ = RegisterMethod(
 )
 
 func sumMethod(target Function, _ ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, &ErrRecoverable{
@@ -1018,7 +1035,7 @@ var _ = RegisterMethod(
 )
 
 func typeMethod(target Function, _ ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -1044,7 +1061,7 @@ func uniqueMethod(target Function, args ...interface{}) (Function, error) {
 		}
 	}
 
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -1120,7 +1137,7 @@ var _ = RegisterMethod(
 )
 
 func valuesMethod(target Function, args ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -1180,7 +1197,7 @@ func withoutMethod(target Function, args ...interface{}) (Function, error) {
 		excludeList = append(excludeList, gabs.DotPathToSlice(arg.(string)))
 	}
 
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err

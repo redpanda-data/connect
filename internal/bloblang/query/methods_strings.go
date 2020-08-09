@@ -35,7 +35,7 @@ var _ = RegisterMethod(
 )
 
 func capitalizeMethod(target Function, _ ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -92,7 +92,7 @@ func decodeMethod(target Function, args ...interface{}) (Function, error) {
 	default:
 		return nil, fmt.Errorf("unrecognized encoding type: %v", args[0])
 	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -169,7 +169,7 @@ func encodeMethod(target Function, args ...interface{}) (Function, error) {
 	default:
 		return nil, fmt.Errorf("unrecognized encoding type: %v", args[0])
 	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -231,7 +231,7 @@ func decryptAESMethod(target Function, args ...interface{}) (Function, error) {
 	default:
 		return nil, fmt.Errorf("unrecognized decryption type: %v", args[0])
 	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -295,7 +295,7 @@ func encryptAESMethod(target Function, args ...interface{}) (Function, error) {
 	default:
 		return nil, fmt.Errorf("unrecognized encryption type: %v", args[0])
 	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -321,7 +321,7 @@ var _ = RegisterMethod(
 )
 
 func escapeHTMLMethod(target Function, args ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -347,7 +347,7 @@ var _ = RegisterMethod(
 )
 
 func escapeURLQueryMethod(target Function, args ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -372,7 +372,7 @@ var _ = RegisterMethod(
 )
 
 func formatMethod(target Function, args ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -399,7 +399,7 @@ var _ = RegisterMethod(
 func hasPrefixMethod(target Function, args ...interface{}) (Function, error) {
 	prefix := args[0].(string)
 	prefixB := []byte(prefix)
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -425,7 +425,7 @@ var _ = RegisterMethod(
 func hasSuffixMethod(target Function, args ...interface{}) (Function, error) {
 	prefix := args[0].(string)
 	prefixB := []byte(prefix)
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -510,7 +510,7 @@ func hashMethod(target Function, args ...interface{}) (Function, error) {
 		return nil, fmt.Errorf("unrecognized hash type: %v", args[0])
 	}
 
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -541,7 +541,7 @@ func joinMethod(target Function, args ...interface{}) (Function, error) {
 	if len(args) > 0 {
 		delim = args[0].(string)
 	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -579,7 +579,7 @@ var _ = RegisterMethod(
 )
 
 func lowercaseMethod(target Function, _ ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, &ErrRecoverable{
@@ -609,7 +609,7 @@ var _ = RegisterMethod(
 )
 
 func parseCSVMethod(target Function, _ ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -661,7 +661,7 @@ var _ = RegisterMethod(
 )
 
 func parseJSONMethod(target Function, _ ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -691,7 +691,7 @@ var _ = RegisterMethod(
 )
 
 func quoteMethod(target Function, _ ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -720,7 +720,7 @@ func replaceMethod(target Function, args ...interface{}) (Function, error) {
 	matchB := []byte(match)
 	with := args[1].(string)
 	withB := []byte(with)
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -748,7 +748,7 @@ func regexpFindAllMethod(target Function, args ...interface{}) (Function, error)
 	if err != nil {
 		return nil, err
 	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -787,7 +787,7 @@ func regexpFindAllSubmatchMethod(target Function, args ...interface{}) (Function
 	if err != nil {
 		return nil, err
 	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -834,7 +834,7 @@ func regexpMatchMethod(target Function, args ...interface{}) (Function, error) {
 	if err != nil {
 		return nil, err
 	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -868,7 +868,7 @@ func regexpReplaceMethod(target Function, args ...interface{}) (Function, error)
 	}
 	with := args[1].(string)
 	withBytes := []byte(with)
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -897,7 +897,7 @@ var _ = RegisterMethod(
 func splitMethod(target Function, args ...interface{}) (Function, error) {
 	delim := args[0].(string)
 	delimB := []byte(delim)
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -930,7 +930,7 @@ var _ = RegisterMethod(
 )
 
 func stringMethod(target Function, _ ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, &ErrRecoverable{
@@ -951,7 +951,7 @@ var _ = RegisterMethod(
 
 func stripHTMLMethod(target Function, _ ...interface{}) (Function, error) {
 	p := bluemonday.NewPolicy()
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -979,7 +979,7 @@ func trimMethod(target Function, args ...interface{}) (Function, error) {
 	if len(args) > 0 {
 		cutset = args[0].(string)
 	}
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -1008,7 +1008,7 @@ var _ = RegisterMethod(
 )
 
 func unescapeHTMLMethod(target Function, args ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -1034,7 +1034,7 @@ var _ = RegisterMethod(
 )
 
 func unescapeURLQueryMethod(target Function, args ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -1060,7 +1060,7 @@ var _ = RegisterMethod(
 )
 
 func unquoteMethod(target Function, _ ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -1083,7 +1083,7 @@ var _ = RegisterMethod(
 )
 
 func uppercaseMethod(target Function, _ ...interface{}) (Function, error) {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, &ErrRecoverable{

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -71,12 +72,12 @@ func NewRedisHash(
 	}
 
 	var err error
-	if r.keyStr, err = field.New(conf.Key); err != nil {
+	if r.keyStr, err = bloblang.NewField(conf.Key); err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
 
 	for k, v := range conf.Fields {
-		if r.fields[k], err = field.New(v); err != nil {
+		if r.fields[k], err = bloblang.NewField(v); err != nil {
 			return nil, fmt.Errorf("failed to parse field '%v' expression: %v", k, err)
 		}
 	}

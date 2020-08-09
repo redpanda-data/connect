@@ -1,45 +1,45 @@
-package field
+package parser
 
 import (
 	"errors"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 )
 
 //------------------------------------------------------------------------------
 
-func intoStaticResolver(p parser.Type) parser.Type {
-	return func(input []rune) parser.Result {
+func intoStaticResolver(p Type) Type {
+	return func(input []rune) Result {
 		res := p(input)
 		if str, ok := res.Payload.(string); ok {
-			res.Payload = staticResolver(str)
+			res.Payload = field.StaticResolver(str)
 		}
 		return res
 	}
 }
 
-func aFunction(input []rune) parser.Result {
+func aFunction(input []rune) Result {
 	if len(input) < 3 || input[0] != '$' || input[1] != '{' || input[2] != '!' {
-		return parser.Result{
-			Err:       parser.NewError(input, "${!"),
+		return Result{
+			Err:       NewError(input, "${!"),
 			Remaining: input,
 		}
 	}
 	i := 3
 	for ; i < len(input); i++ {
 		if input[i] == '}' {
-			res := query.ParseDeprecated(input[3:i])
+			res := ParseDeprecatedQuery(input[3:i])
 			if res.Err == nil {
 				if len(res.Remaining) > 0 {
 					pos := len(input[3:i]) - len(res.Remaining)
-					return parser.Result{
-						Err:       parser.NewFatalError(input[3+pos:], errors.New("required"), "end of expression"),
+					return Result{
+						Err:       NewFatalError(input[3+pos:], errors.New("required"), "end of expression"),
 						Remaining: input,
 					}
 				}
 				res.Remaining = input[i+1:]
-				res.Payload = queryResolver{fn: res.Payload.(query.Function)}
+				res.Payload = field.NewQueryResolver(res.Payload.(query.Function))
 			} else {
 				pos := len(input[3:i]) - len(res.Err.Input)
 				if !res.Err.IsFatal() {
@@ -51,32 +51,32 @@ func aFunction(input []rune) parser.Result {
 			return res
 		}
 	}
-	return parser.Result{
-		Payload:   staticResolver(string(input)),
+	return Result{
+		Payload:   field.StaticResolver(string(input)),
 		Err:       nil,
 		Remaining: nil,
 	}
 }
 
-func escapedBlock(input []rune) parser.Result {
+func escapedBlock(input []rune) Result {
 	if len(input) < 4 || input[0] != '$' || input[1] != '{' || input[2] != '{' || input[3] != '!' {
-		return parser.Result{
-			Err:       parser.NewError(input, "${{!"),
+		return Result{
+			Err:       NewError(input, "${{!"),
 			Remaining: input,
 		}
 	}
 	i := 4
 	for ; i < len(input)-1; i++ {
 		if input[i] == '}' && input[i+1] == '}' {
-			return parser.Result{
-				Payload:   staticResolver("${!" + string(input[4:i]) + "}"),
+			return Result{
+				Payload:   field.StaticResolver("${!" + string(input[4:i]) + "}"),
 				Err:       nil,
 				Remaining: input[i+2:],
 			}
 		}
 	}
-	return parser.Result{
-		Payload:   staticResolver(string(input)),
+	return Result{
+		Payload:   field.StaticResolver(string(input)),
 		Err:       nil,
 		Remaining: nil,
 	}
@@ -84,14 +84,14 @@ func escapedBlock(input []rune) parser.Result {
 
 //------------------------------------------------------------------------------
 
-func parse(expr string) (*expression, *parser.Error) {
-	var resolvers []resolver
+func parseFieldResolvers(expr string) ([]field.Resolver, *Error) {
+	var resolvers []field.Resolver
 
-	p := parser.OneOf(
+	p := OneOf(
 		escapedBlock,
 		aFunction,
-		intoStaticResolver(parser.Char('$')),
-		intoStaticResolver(parser.NotChar('$')),
+		intoStaticResolver(Char('$')),
+		intoStaticResolver(NotChar('$')),
 	)
 
 	remaining := []rune(expr)
@@ -101,10 +101,19 @@ func parse(expr string) (*expression, *parser.Error) {
 			return nil, res.Err
 		}
 		remaining = res.Remaining
-		resolvers = append(resolvers, res.Payload.(resolver))
+		resolvers = append(resolvers, res.Payload.(field.Resolver))
 	}
 
-	return buildExpression(resolvers), nil
+	return resolvers, nil
+}
+
+// ParseField attempts to parse a field expression.
+func ParseField(expr string) (field.Expression, *Error) {
+	resolvers, err := parseFieldResolvers(expr)
+	if err != nil {
+		return nil, err
+	}
+	return field.NewExpression(resolvers...), nil
 }
 
 //------------------------------------------------------------------------------

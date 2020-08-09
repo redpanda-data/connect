@@ -9,6 +9,7 @@ import (
 	"time"
 
 	batchInternal "github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -135,10 +136,10 @@ func NewKafka(conf KafkaConfig, mgr types.Manager, log log.Modular, stats metric
 		staticHeaders: conf.StaticHeaders,
 	}
 
-	if k.key, err = field.New(conf.Key); err != nil {
+	if k.key, err = bloblang.NewField(conf.Key); err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
-	if k.topic, err = field.New(conf.Topic); err != nil {
+	if k.topic, err = bloblang.NewField(conf.Topic); err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
 

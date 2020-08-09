@@ -9,23 +9,26 @@ import (
 
 //------------------------------------------------------------------------------
 
-type arithmeticOp int
+// ArithmeticOperator represents an arithmetic operation that combines the
+// results of two query functions.
+type ArithmeticOperator int
 
+// All arithmetic operators.
 const (
-	arithmeticAdd arithmeticOp = iota
-	arithmeticSub
-	arithmeticDiv
-	arithmeticMul
-	arithmeticMod
-	arithmeticEq
-	arithmeticNeq
-	arithmeticGt
-	arithmeticLt
-	arithmeticGte
-	arithmeticLte
-	arithmeticAnd
-	arithmeticOr
-	arithmeticPipe
+	ArithmeticAdd ArithmeticOperator = iota
+	ArithmeticSub
+	ArithmeticDiv
+	ArithmeticMul
+	ArithmeticMod
+	ArithmeticEq
+	ArithmeticNeq
+	ArithmeticGt
+	ArithmeticLt
+	ArithmeticGte
+	ArithmeticLte
+	ArithmeticAnd
+	ArithmeticOr
+	ArithmeticPipe
 )
 
 func restrictForComparison(v interface{}) interface{} {
@@ -41,7 +44,7 @@ func restrictForComparison(v interface{}) interface{} {
 }
 
 func add(lhs, rhs Function) Function {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		var err error
 		var leftV, rightV interface{}
 		if leftV, err = lhs.Exec(ctx); err == nil {
@@ -76,7 +79,7 @@ func add(lhs, rhs Function) Function {
 }
 
 func sub(lhs, rhs Function) Function {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		var err error
 		var leftV, rightV interface{}
 		if leftV, err = lhs.Exec(ctx); err == nil {
@@ -103,7 +106,7 @@ func sub(lhs, rhs Function) Function {
 var ErrDivideByZero = errors.New("attempted to divide by zero")
 
 func divide(lhs, rhs Function) Function {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		var err error
 		var leftV, rightV interface{}
 		if leftV, err = lhs.Exec(ctx); err == nil {
@@ -130,7 +133,7 @@ func divide(lhs, rhs Function) Function {
 }
 
 func multiply(lhs, rhs Function) Function {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		var err error
 		var leftV, rightV interface{}
 		if leftV, err = lhs.Exec(ctx); err == nil {
@@ -153,7 +156,7 @@ func multiply(lhs, rhs Function) Function {
 }
 
 func modulo(lhs, rhs Function) Function {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		var err error
 		var leftV, rightV interface{}
 		if leftV, err = lhs.Exec(ctx); err == nil {
@@ -180,7 +183,7 @@ func modulo(lhs, rhs Function) Function {
 }
 
 func coalesce(lhs, rhs Function) Function {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		lhsV, err := lhs.Exec(ctx)
 		if err == nil && !IIsNull(lhsV) {
 			return lhsV, nil
@@ -189,29 +192,29 @@ func coalesce(lhs, rhs Function) Function {
 	})
 }
 
-func compareNumFn(op arithmeticOp) func(lhs, rhs float64) bool {
+func compareNumFn(op ArithmeticOperator) func(lhs, rhs float64) bool {
 	switch op {
-	case arithmeticEq:
+	case ArithmeticEq:
 		return func(lhs, rhs float64) bool {
 			return lhs == rhs
 		}
-	case arithmeticNeq:
+	case ArithmeticNeq:
 		return func(lhs, rhs float64) bool {
 			return lhs != rhs
 		}
-	case arithmeticGt:
+	case ArithmeticGt:
 		return func(lhs, rhs float64) bool {
 			return lhs > rhs
 		}
-	case arithmeticGte:
+	case ArithmeticGte:
 		return func(lhs, rhs float64) bool {
 			return lhs >= rhs
 		}
-	case arithmeticLt:
+	case ArithmeticLt:
 		return func(lhs, rhs float64) bool {
 			return lhs < rhs
 		}
-	case arithmeticLte:
+	case ArithmeticLte:
 		return func(lhs, rhs float64) bool {
 			return lhs <= rhs
 		}
@@ -219,29 +222,29 @@ func compareNumFn(op arithmeticOp) func(lhs, rhs float64) bool {
 	return nil
 }
 
-func compareStrFn(op arithmeticOp) func(lhs, rhs string) bool {
+func compareStrFn(op ArithmeticOperator) func(lhs, rhs string) bool {
 	switch op {
-	case arithmeticEq:
+	case ArithmeticEq:
 		return func(lhs, rhs string) bool {
 			return lhs == rhs
 		}
-	case arithmeticNeq:
+	case ArithmeticNeq:
 		return func(lhs, rhs string) bool {
 			return lhs != rhs
 		}
-	case arithmeticGt:
+	case ArithmeticGt:
 		return func(lhs, rhs string) bool {
 			return lhs > rhs
 		}
-	case arithmeticGte:
+	case ArithmeticGte:
 		return func(lhs, rhs string) bool {
 			return lhs >= rhs
 		}
-	case arithmeticLt:
+	case ArithmeticLt:
 		return func(lhs, rhs string) bool {
 			return lhs < rhs
 		}
-	case arithmeticLte:
+	case ArithmeticLte:
 		return func(lhs, rhs string) bool {
 			return lhs <= rhs
 		}
@@ -249,13 +252,13 @@ func compareStrFn(op arithmeticOp) func(lhs, rhs string) bool {
 	return nil
 }
 
-func compareBoolFn(op arithmeticOp) func(lhs, rhs bool) bool {
+func compareBoolFn(op ArithmeticOperator) func(lhs, rhs bool) bool {
 	switch op {
-	case arithmeticEq:
+	case ArithmeticEq:
 		return func(lhs, rhs bool) bool {
 			return lhs == rhs
 		}
-	case arithmeticNeq:
+	case ArithmeticNeq:
 		return func(lhs, rhs bool) bool {
 			return lhs != rhs
 		}
@@ -263,13 +266,13 @@ func compareBoolFn(op arithmeticOp) func(lhs, rhs bool) bool {
 	return nil
 }
 
-func compareGenericFn(op arithmeticOp) func(lhs, rhs interface{}) bool {
+func compareGenericFn(op ArithmeticOperator) func(lhs, rhs interface{}) bool {
 	switch op {
-	case arithmeticEq:
+	case ArithmeticEq:
 		return func(lhs, rhs interface{}) bool {
 			return cmp.Equal(lhs, rhs)
 		}
-	case arithmeticNeq:
+	case ArithmeticNeq:
 		return func(lhs, rhs interface{}) bool {
 			return !cmp.Equal(lhs, rhs)
 		}
@@ -277,12 +280,12 @@ func compareGenericFn(op arithmeticOp) func(lhs, rhs interface{}) bool {
 	return nil
 }
 
-func compare(lhs, rhs Function, op arithmeticOp) (Function, error) {
+func compare(lhs, rhs Function, op ArithmeticOperator) (Function, error) {
 	strOpFn := compareStrFn(op)
 	numOpFn := compareNumFn(op)
 	boolOpFn := compareBoolFn(op)
 	genericOpFn := compareGenericFn(op)
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		var lhsV, rhsV interface{}
 		var err error
 		if lhsV, err = lhs.Exec(ctx); err == nil {
@@ -298,7 +301,7 @@ func compare(lhs, rhs Function, op arithmeticOp) (Function, error) {
 			}
 			rhs, err := IGetString(rhsV)
 			if err != nil {
-				if op == arithmeticNeq {
+				if op == ArithmeticNeq {
 					return true, nil
 				}
 				return nil, err
@@ -310,7 +313,7 @@ func compare(lhs, rhs Function, op arithmeticOp) (Function, error) {
 			}
 			rhs, err := IGetNumber(rhsV)
 			if err != nil {
-				if op == arithmeticNeq {
+				if op == ArithmeticNeq {
 					return true, nil
 				}
 				return nil, err
@@ -322,7 +325,7 @@ func compare(lhs, rhs Function, op arithmeticOp) (Function, error) {
 			}
 			rhs, err := IGetBool(rhsV)
 			if err != nil {
-				if op == arithmeticNeq {
+				if op == ArithmeticNeq {
 					return true, nil
 				}
 				return nil, err
@@ -337,10 +340,10 @@ func compare(lhs, rhs Function, op arithmeticOp) (Function, error) {
 	}), nil
 }
 
-func logicalBool(lhs, rhs Function, op arithmeticOp) (Function, error) {
+func logicalBool(lhs, rhs Function, op ArithmeticOperator) (Function, error) {
 	switch op {
-	case arithmeticAnd:
-		return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	case ArithmeticAnd:
+		return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 			var lhsV, rhsV bool
 			var err error
 
@@ -366,8 +369,8 @@ func logicalBool(lhs, rhs Function, op arithmeticOp) (Function, error) {
 			}
 			return rhsV, nil
 		}), nil
-	case arithmeticOr:
-		return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	case ArithmeticOr:
+		return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 			var lhsV, rhsV bool
 			var err error
 
@@ -398,7 +401,10 @@ func logicalBool(lhs, rhs Function, op arithmeticOp) (Function, error) {
 	}
 }
 
-func resolveArithmetic(fns []Function, ops []arithmeticOp) (Function, error) {
+// NewArithmeticExpression creates a single query function from a list of child
+// functions and the arithmetic operator types that chain them together. The
+// length of functions must be exactly one fewer than the length of operators.
+func NewArithmeticExpression(fns []Function, ops []ArithmeticOperator) (Function, error) {
 	if len(fns) == 1 && len(ops) == 0 {
 		return fns[0], nil
 	}
@@ -407,16 +413,16 @@ func resolveArithmetic(fns []Function, ops []arithmeticOp) (Function, error) {
 	}
 
 	// First pass to resolve division, multiplication and coalesce
-	fnsNew, opsNew := []Function{fns[0]}, []arithmeticOp{}
+	fnsNew, opsNew := []Function{fns[0]}, []ArithmeticOperator{}
 	for i, op := range ops {
 		switch op {
-		case arithmeticMul:
+		case ArithmeticMul:
 			fnsNew[len(fnsNew)-1] = multiply(fnsNew[len(fnsNew)-1], fns[i+1])
-		case arithmeticDiv:
+		case ArithmeticDiv:
 			fnsNew[len(fnsNew)-1] = divide(fnsNew[len(fnsNew)-1], fns[i+1])
-		case arithmeticMod:
+		case ArithmeticMod:
 			fnsNew[len(fnsNew)-1] = modulo(fnsNew[len(fnsNew)-1], fns[i+1])
-		case arithmeticPipe:
+		case ArithmeticPipe:
 			fnsNew[len(fnsNew)-1] = coalesce(fnsNew[len(fnsNew)-1], fns[i+1])
 		default:
 			fnsNew = append(fnsNew, fns[i+1])
@@ -429,12 +435,12 @@ func resolveArithmetic(fns []Function, ops []arithmeticOp) (Function, error) {
 	}
 
 	// Second pass to resolve addition and subtraction
-	fnsNew, opsNew = []Function{fns[0]}, []arithmeticOp{}
+	fnsNew, opsNew = []Function{fns[0]}, []ArithmeticOperator{}
 	for i, op := range ops {
 		switch op {
-		case arithmeticAdd:
+		case ArithmeticAdd:
 			fnsNew[len(fnsNew)-1] = add(fnsNew[len(fnsNew)-1], fns[i+1])
-		case arithmeticSub:
+		case ArithmeticSub:
 			fnsNew[len(fnsNew)-1] = sub(fnsNew[len(fnsNew)-1], fns[i+1])
 		default:
 			fnsNew = append(fnsNew, fns[i+1])
@@ -448,15 +454,15 @@ func resolveArithmetic(fns []Function, ops []arithmeticOp) (Function, error) {
 
 	// Third pass for numerical comparison
 	var err error
-	fnsNew, opsNew = []Function{fns[0]}, []arithmeticOp{}
+	fnsNew, opsNew = []Function{fns[0]}, []ArithmeticOperator{}
 	for i, op := range ops {
 		switch op {
-		case arithmeticEq,
-			arithmeticNeq,
-			arithmeticGt,
-			arithmeticGte,
-			arithmeticLt,
-			arithmeticLte:
+		case ArithmeticEq,
+			ArithmeticNeq,
+			ArithmeticGt,
+			ArithmeticGte,
+			ArithmeticLt,
+			ArithmeticLte:
 			if fnsNew[len(fnsNew)-1], err = compare(fnsNew[len(fnsNew)-1], fns[i+1], op); err != nil {
 				return nil, err
 			}
@@ -471,11 +477,11 @@ func resolveArithmetic(fns []Function, ops []arithmeticOp) (Function, error) {
 	}
 
 	// Fourth pass for boolean operators
-	fnsNew, opsNew = []Function{fns[0]}, []arithmeticOp{}
+	fnsNew, opsNew = []Function{fns[0]}, []ArithmeticOperator{}
 	for i, op := range ops {
 		switch op {
-		case arithmeticAnd,
-			arithmeticOr:
+		case ArithmeticAnd,
+			ArithmeticOr:
 			if fnsNew[len(fnsNew)-1], err = logicalBool(fnsNew[len(fnsNew)-1], fns[i+1], op); err != nil {
 				return nil, err
 			}

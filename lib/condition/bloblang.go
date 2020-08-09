@@ -3,6 +3,8 @@ package condition
 import (
 	"fmt"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -61,9 +63,12 @@ type Bloblang struct {
 func NewBloblang(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	fn, err := query.New(string(conf.Bloblang))
+	fn, err := bloblang.NewQuery(string(conf.Bloblang))
 	if err != nil {
-		return nil, fmt.Errorf("%v", err.ErrorAtPosition([]rune(conf.Bloblang)))
+		if perr, ok := err.(*parser.Error); ok {
+			return nil, fmt.Errorf("%v", perr.ErrorAtPosition([]rune(conf.Bloblang)))
+		}
+		return nil, err
 	}
 
 	return &Bloblang{

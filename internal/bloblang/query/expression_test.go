@@ -1,6 +1,7 @@
 package query
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -14,56 +15,113 @@ func TestExpressions(t *testing.T) {
 		meta    map[string]string
 	}
 
+	mustFunc := func(fn Function, err error) Function {
+		t.Helper()
+		require.NoError(t, err)
+		return fn
+	}
+
 	tests := map[string]struct {
-		input    string
+		input    Function
 		value    *interface{}
 		output   interface{}
-		err      string
+		err      error
 		messages []easyMsg
 		index    int
 	}{
-		"check if inline false": {
-			input:  `if 10 > 20 { "foo" }`,
+		"if false": {
+			input: NewIfFunction(
+				mustFunc(NewArithmeticExpression(
+					[]Function{
+						NewLiteralFunction(int64(10)),
+						NewLiteralFunction(int64(20)),
+					},
+					[]ArithmeticOperator{
+						ArithmeticGt,
+					},
+				)),
+				NewLiteralFunction("foo"),
+				nil,
+			),
 			output: Nothing(nil),
 		},
-		"check if inline true": {
-			input:  `if 30 > 20 { "foo" }`,
+		"if false else": {
+			input: NewIfFunction(
+				mustFunc(NewArithmeticExpression(
+					[]Function{
+						NewLiteralFunction(int64(10)),
+						NewLiteralFunction(int64(20)),
+					},
+					[]ArithmeticOperator{
+						ArithmeticGt,
+					},
+				)),
+				NewLiteralFunction("foo"),
+				NewLiteralFunction("bar"),
+			),
+			output: "bar",
+		},
+		"if true": {
+			input: NewIfFunction(
+				mustFunc(NewArithmeticExpression(
+					[]Function{
+						NewLiteralFunction(int64(10)),
+						NewLiteralFunction(int64(20)),
+					},
+					[]ArithmeticOperator{
+						ArithmeticLt,
+					},
+				)),
+				NewLiteralFunction("foo"),
+				NewLiteralFunction(Nothing(nil)),
+			),
 			output: "foo",
 		},
-		"check if/else inline false": {
-			input:  `if 10 > 20 { "foo" } else { "bar" }`,
+		"if query fails": {
+			input: NewIfFunction(
+				NewVarFunction("doesnt exist"),
+				NewLiteralFunction("foo"),
+				NewLiteralFunction("bar"),
+			),
+			err: errors.New("failed to check if condition: variables were undefined"),
+		},
+		"match context fails": {
+			input: NewMatchFunction(
+				NewVarFunction("doesnt exist"),
+				NewMatchCase(NewLiteralFunction(true), NewLiteralFunction("foo")),
+			),
+			err: errors.New("variables were undefined"),
+		},
+		"match first case fails": {
+			input: NewMatchFunction(
+				NewLiteralFunction("context"),
+				NewMatchCase(NewVarFunction("doesnt exist"), NewLiteralFunction("foo")),
+				NewMatchCase(NewLiteralFunction(true), NewLiteralFunction("bar")),
+			),
+			err: errors.New("failed to check match case 0: variables were undefined"),
+		},
+		"match second case fails": {
+			input: NewMatchFunction(
+				NewLiteralFunction("context"),
+				NewMatchCase(NewLiteralFunction(true), NewLiteralFunction("bar")),
+				NewMatchCase(NewVarFunction("doesnt exist"), NewLiteralFunction("foo")),
+			),
 			output: "bar",
 		},
-		"check if/else inline true": {
-			input:  `if 30 > 20 { "foo" } else { "bar" }`,
-			output: "foo",
+		"match context": {
+			input: NewMatchFunction(
+				NewLiteralFunction("context"),
+				NewMatchCase(NewLiteralFunction(true), NewFieldFunction("")),
+			),
+			output: "context",
 		},
-		"check if/else inline error": {
-			input: `if "foo" > 10 { "foo" } else { "bar" }`,
-			err:   "failed to check if condition: expected string value, found number: 10",
-		},
-		"check if/else inline false compressed": {
-			input:  `if 10 > 20{"foo"}else{"bar"}`,
-			output: "bar",
-		},
-		"check if/else expanded false": {
-			input: `if 10 > 20 {
-  "foo"
-} else {
-  "bar"
-}`,
-			output: "bar",
-		},
-		"check if/else expanded more false": {
-			input: `if 10 > 20
-{
-  "foo"
-}
-else
-{
-  "bar"
-}`,
-			output: "bar",
+		"match context all fail": {
+			input: NewMatchFunction(
+				NewLiteralFunction("context"),
+				NewMatchCase(NewLiteralFunction(false), NewLiteralFunction("foo")),
+				NewMatchCase(NewLiteralFunction(false), NewLiteralFunction("bar")),
+			),
+			output: Nothing(nil),
 		},
 	}
 
@@ -83,24 +141,19 @@ else
 				msg.Append(part)
 			}
 
-			e, err := tryParse(test.input, false)
-			require.Nil(t, err)
-
 			for i := 0; i < 10; i++ {
-				res, err := e.Exec(FunctionContext{
+				res, err := test.input.Exec(FunctionContext{
 					Value:    test.value,
 					Maps:     map[string]Function{},
 					Index:    test.index,
 					MsgBatch: msg,
 				})
-				if len(test.err) > 0 {
-					require.EqualError(t, err, test.err)
+				if test.err != nil {
+					require.EqualError(t, err, test.err.Error())
 				} else {
 					require.NoError(t, err)
 				}
-				if !assert.Equal(t, test.output, res) {
-					break
-				}
+				require.Equal(t, test.output, res)
 			}
 
 			// Ensure nothing changed

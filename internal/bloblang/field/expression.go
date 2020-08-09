@@ -55,25 +55,16 @@ type Expression interface {
 	StringLegacy(index int, msg Message) string
 }
 
-// New attempts to parse and create an expression from a string. If the
-// expression is invalid an error is returned.
-func New(expr string) (Expression, error) {
-	e, err := parse(expr)
-	if err != nil {
-		return e, err
-	}
-	return e, nil
-}
-
 //------------------------------------------------------------------------------
 
-func buildExpression(resolvers []resolver) *expression {
+// NewExpression creates a field expression from a slice of resolvers.
+func NewExpression(resolvers ...Resolver) Expression {
 	e := &expression{
 		resolvers: resolvers,
 	}
 	var staticBuf bytes.Buffer
 	for _, r := range resolvers {
-		if s, is := r.(staticResolver); is {
+		if s, is := r.(StaticResolver); is {
 			staticBuf.Write(s.ResolveBytes(0, message.New(nil), false, false))
 		} else {
 			return e
@@ -91,7 +82,7 @@ func buildExpression(resolvers []resolver) *expression {
 
 type expression struct {
 	static    string
-	resolvers []resolver
+	resolvers []Resolver
 }
 
 func (e *expression) resolve(index int, msg Message, escaped, legacy bool) []byte {

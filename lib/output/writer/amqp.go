@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -93,10 +94,10 @@ func NewAMQP(conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error
 		deliveryMode: amqp.Transient,
 	}
 	var err error
-	if a.key, err = field.New(conf.BindingKey); err != nil {
+	if a.key, err = bloblang.NewField(conf.BindingKey); err != nil {
 		return nil, fmt.Errorf("failed to parse binding key expression: %v", err)
 	}
-	if a.msgType, err = field.New(conf.Type); err != nil {
+	if a.msgType, err = bloblang.NewField(conf.Type); err != nil {
 		return nil, fmt.Errorf("failed to parse type property expression: %v", err)
 	}
 	if conf.Persistent {

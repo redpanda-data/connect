@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -104,6 +105,37 @@ func TestBloblangContext(t *testing.T) {
 	assert.Equal(t, "orig1", resPart.Metadata().Get("foo"))
 	assert.Equal(t, "orig2", resPart.Metadata().Get("bar"))
 	assert.Equal(t, val, message.GetContext(resPart).Value(key))
+}
+
+func TestBloblangCustomObject(t *testing.T) {
+	msg := message.New(nil)
+
+	part := message.NewPart(nil)
+
+	gObj := gabs.New()
+	gObj.ArrayOfSize(3, "foos")
+
+	gObjEle := gabs.New()
+	gObjEle.Set("FROM NEW OBJECT", "foo")
+
+	gObj.S("foos").SetIndex(gObjEle.Data(), 0)
+	gObj.S("foos").SetIndex(5, 1)
+
+	require.NoError(t, part.SetJSON(gObj.Data()))
+	msg.Append(part)
+
+	conf := NewConfig()
+	conf.Bloblang = `root.foos = this.foos`
+	proc, err := NewBloblang(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	outMsgs, res := proc.ProcessMessage(msg)
+	require.Nil(t, res)
+	require.Len(t, outMsgs, 1)
+
+	resPart := outMsgs[0].Get(0)
+
+	assert.Equal(t, `{"foos":[{"foo":"FROM NEW OBJECT"},5,null]}`, string(resPart.Get()))
 }
 
 func TestBloblangFiltering(t *testing.T) {

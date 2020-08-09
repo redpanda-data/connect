@@ -28,28 +28,48 @@ type Assignment interface {
 
 //------------------------------------------------------------------------------
 
-type varAssignment struct {
-	Name string
+// VarAssignment creates a variable and assigns it a value.
+type VarAssignment struct {
+	name string
 }
 
-func (v *varAssignment) Apply(value interface{}, ctx AssignmentContext) error {
+// NewVarAssignment creates a new variable assignment.
+func NewVarAssignment(name string) *VarAssignment {
+	return &VarAssignment{
+		name: name,
+	}
+}
+
+// Apply a value to a variable.
+func (v *VarAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 	if _, deleted := value.(query.Delete); deleted {
-		delete(ctx.Vars, v.Name)
+		delete(ctx.Vars, v.name)
 	} else {
-		ctx.Vars[v.Name] = value
+		ctx.Vars[v.name] = value
 	}
 	return nil
 }
 
 //------------------------------------------------------------------------------
 
-type metaAssignment struct {
-	Key *string
+// MetaAssignment assigns a value to a metadata key of a message. If the key is
+// omitted and the value is an object then the metadata of the message is reset
+// to the contents of the value.
+type MetaAssignment struct {
+	key *string
 }
 
-func (v *metaAssignment) Apply(value interface{}, ctx AssignmentContext) error {
+// NewMetaAssignment creates a new meta assignment.
+func NewMetaAssignment(key *string) *MetaAssignment {
+	return &MetaAssignment{
+		key: key,
+	}
+}
+
+// Apply a value to a metadata key.
+func (m *MetaAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 	_, deleted := value.(query.Delete)
-	if v.Key == nil {
+	if m.key == nil {
 		if deleted {
 			ctx.Meta.Iter(func(k, _ string) error {
 				ctx.Meta.Delete(k)
@@ -57,6 +77,10 @@ func (v *metaAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 			})
 		} else {
 			if m, ok := value.(map[string]interface{}); ok {
+				ctx.Meta.Iter(func(k, _ string) error {
+					ctx.Meta.Delete(k)
+					return nil
+				})
 				for k, v := range m {
 					ctx.Meta.Set(k, query.IToString(v))
 				}
@@ -67,25 +91,35 @@ func (v *metaAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 		return nil
 	}
 	if deleted {
-		ctx.Meta.Delete(*v.Key)
+		ctx.Meta.Delete(*m.key)
 	} else {
-		ctx.Meta.Set(*v.Key, query.IToString(value))
+		ctx.Meta.Set(*m.key, query.IToString(value))
 	}
 	return nil
 }
 
 //------------------------------------------------------------------------------
 
-type jsonAssignment struct {
-	Path []string
+// JSONAssignment creates a path within the structured message and assigns it a
+// value.
+type JSONAssignment struct {
+	path []string
 }
 
-func (v *jsonAssignment) Apply(value interface{}, ctx AssignmentContext) error {
+// NewJSONAssignment creates a new JSON assignment.
+func NewJSONAssignment(path ...string) *JSONAssignment {
+	return &JSONAssignment{
+		path: path,
+	}
+}
+
+// Apply a value to the target JSON path.
+func (j *JSONAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 	_, deleted := value.(query.Delete)
 	if !deleted {
 		value = query.IClone(value)
 	}
-	if len(v.Path) == 0 {
+	if len(j.path) == 0 {
 		*ctx.Value = value
 	}
 	if _, isNothing := (*ctx.Value).(query.Nothing); isNothing || *ctx.Value == nil {
@@ -93,9 +127,9 @@ func (v *jsonAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 	}
 	gObj := gabs.Wrap(*ctx.Value)
 	if deleted {
-		gObj.Delete(v.Path...)
+		gObj.Delete(j.path...)
 	} else {
-		gObj.Set(value, v.Path...)
+		gObj.Set(value, j.path...)
 	}
 	*ctx.Value = gObj.Data()
 	return nil

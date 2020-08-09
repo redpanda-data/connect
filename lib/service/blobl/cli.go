@@ -7,7 +7,8 @@ import (
 	"os"
 	"sync"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/gabs/v2"
@@ -66,6 +67,7 @@ func run(c *cli.Context) error {
 	pretty := c.Bool("pretty")
 	file := c.String("file")
 	m := c.Args().First()
+
 	if len(file) > 0 {
 		if len(m) > 0 {
 			fmt.Fprintln(os.Stderr, red("invalid flags, unable to execute both a file mapping and an inline mapping"))
@@ -79,9 +81,13 @@ func run(c *cli.Context) error {
 		m = string(mappingBytes)
 	}
 
-	exec, err := mapping.NewExecutor(file, m)
+	exec, err := bloblang.NewMapping(file, m)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, red(fmt.Sprintf("failed to parse mapping: %v", err.ErrorAtPositionStructured("", []rune(m)))))
+		if perr, ok := err.(*parser.Error); ok {
+			fmt.Fprintln(os.Stderr, red(fmt.Sprintf("failed to parse mapping: %v", perr.ErrorAtPositionStructured("", []rune(m)))))
+		} else {
+			fmt.Fprintln(os.Stderr, red(err.Error()))
+		}
 		os.Exit(1)
 	}
 

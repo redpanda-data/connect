@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -137,7 +138,7 @@ func NewRedis(
 		Password: pass,
 	})
 
-	key, err := field.New(conf.Redis.Key)
+	key, err := bloblang.NewField(conf.Redis.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}

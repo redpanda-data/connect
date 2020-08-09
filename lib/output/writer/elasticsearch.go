@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -121,13 +122,13 @@ func NewElasticsearch(conf ElasticsearchConfig, log log.Modular, stats metrics.T
 	}
 
 	var err error
-	if e.idStr, err = field.New(conf.ID); err != nil {
+	if e.idStr, err = bloblang.NewField(conf.ID); err != nil {
 		return nil, fmt.Errorf("failed to parse id expression: %v", err)
 	}
-	if e.indexStr, err = field.New(conf.Index); err != nil {
+	if e.indexStr, err = bloblang.NewField(conf.Index); err != nil {
 		return nil, fmt.Errorf("failed to parse index expression: %v", err)
 	}
-	if e.pipelineStr, err = field.New(conf.Pipeline); err != nil {
+	if e.pipelineStr, err = bloblang.NewField(conf.Pipeline); err != nil {
 		return nil, fmt.Errorf("failed to parse pipeline expression: %v", err)
 	}
 

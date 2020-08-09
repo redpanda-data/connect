@@ -1,6 +1,7 @@
 package query
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -14,279 +15,480 @@ func TestArithmetic(t *testing.T) {
 		meta    map[string]string
 	}
 
+	arithmetic := func(fns []Function, ops []ArithmeticOperator) Function {
+		t.Helper()
+		fn, err := NewArithmeticExpression(fns, ops)
+		require.NoError(t, err)
+		return fn
+	}
+
 	tests := map[string]struct {
-		input    string
-		output   string
+		input    Function
+		output   interface{}
+		err      error
 		messages []easyMsg
 		index    int
 	}{
 		"compare string to int": {
-			input:  `"foo" != 5`,
-			output: `true`,
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction("foo"),
+					NewLiteralFunction(int64(5)),
+				},
+				[]ArithmeticOperator{
+					ArithmeticNeq,
+				},
+			),
+			output: true,
+		},
+		"dont divide by zero": {
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(int64(5)),
+					NewLiteralFunction(int64(0)),
+				},
+				[]ArithmeticOperator{
+					ArithmeticDiv,
+				},
+			),
+			err: errors.New("attempted to divide by zero"),
+		},
+		"dont divide by zero 2": {
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(int64(5)),
+					NewLiteralFunction(int64(0)),
+				},
+				[]ArithmeticOperator{
+					ArithmeticMod,
+				},
+			),
+			err: errors.New("attempted to divide by zero"),
 		},
 		"compare string to null": {
-			input:  `"foo" != null`,
-			output: `true`,
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction("foo"),
+					NewLiteralFunction(nil),
+				},
+				[]ArithmeticOperator{
+					ArithmeticNeq,
+				},
+			),
+			output: true,
 		},
 		"compare string to int 2": {
-			input:  `5 != "foo"`,
-			output: `true`,
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(int64(5)),
+					NewLiteralFunction("foo"),
+				},
+				[]ArithmeticOperator{
+					ArithmeticNeq,
+				},
+			),
+			output: true,
 		},
 		"compare string to null 2": {
-			input:  `null != "foo"`,
-			output: `true`,
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(nil),
+					NewLiteralFunction("foo"),
+				},
+				[]ArithmeticOperator{
+					ArithmeticNeq,
+				},
+			),
+			output: true,
 		},
 		"add strings": {
-			input:  `"foo" + "bar" + "%v-%v".format(10, 20)`,
-			output: `foobar10-20`,
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction("foo"),
+					NewLiteralFunction("bar"),
+					NewLiteralFunction("baz"),
+				},
+				[]ArithmeticOperator{
+					ArithmeticAdd,
+					ArithmeticAdd,
+				},
+			),
+			output: `foobarbaz`,
 		},
 		"comparisons with not": {
-			input:  `!true || false`,
-			output: `false`,
+			input: arithmetic(
+				[]Function{
+					Not(NewLiteralFunction(true)),
+					NewLiteralFunction(false),
+				},
+				[]ArithmeticOperator{
+					ArithmeticOr,
+				},
+			),
+			output: false,
 		},
 		"comparisons with not 2": {
-			input:  `false || !false`,
-			output: `true`,
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(false),
+					Not(NewLiteralFunction(false)),
+				},
+				[]ArithmeticOperator{
+					ArithmeticOr,
+				},
+			),
+			output: true,
 		},
 		"mod two ints": {
-			input:  `5 % 2`,
-			output: `1`,
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(int64(5)),
+					NewLiteralFunction(int64(2)),
+				},
+				[]ArithmeticOperator{
+					ArithmeticMod,
+				},
+			),
+			output: int64(1),
 		},
-		"mod two strings": {
-			input:  `"7".number() % "4".number()`,
-			output: `3`,
+		"number comparisons": {
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(5.0),
+					NewLiteralFunction(5.0),
+				},
+				[]ArithmeticOperator{
+					ArithmeticNeq,
+				},
+			),
+			output: false,
 		},
 		"comparisons": {
-			input:  `true && false || true && false`,
-			output: `false`,
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(true),
+					NewLiteralFunction(false),
+					NewLiteralFunction(true),
+					NewLiteralFunction(false),
+				},
+				[]ArithmeticOperator{
+					ArithmeticAnd,
+					ArithmeticOr,
+					ArithmeticAnd,
+				},
+			),
+			output: false,
 		},
 		"comparisons 2": {
-			input:  `false || true && true || false`,
-			output: `true`,
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(false),
+					NewLiteralFunction(true),
+					NewLiteralFunction(true),
+					NewLiteralFunction(false),
+				},
+				[]ArithmeticOperator{
+					ArithmeticOr,
+					ArithmeticAnd,
+					ArithmeticOr,
+				},
+			),
+			output: true,
 		},
 		"comparisons 3": {
-			input:  `true || false && true`,
-			output: `true`,
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(true),
+					NewLiteralFunction(false),
+					NewLiteralFunction(true),
+				},
+				[]ArithmeticOperator{
+					ArithmeticOr,
+					ArithmeticAnd,
+				},
+			),
+			output: true,
+		},
+		"err comparison": {
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction("not a number"),
+					NewLiteralFunction(int64(0)),
+				},
+				[]ArithmeticOperator{
+					ArithmeticGt,
+				},
+			),
+			err: errors.New("expected string value, found number: 0"),
+		},
+		"numbers comparison": {
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(float64(15)),
+					NewLiteralFunction(uint64(0)),
+				},
+				[]ArithmeticOperator{
+					ArithmeticGt,
+				},
+			),
+			output: true,
+		},
+		"numbers comparison 2": {
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(int64(0)),
+					NewLiteralFunction(float64(15)),
+				},
+				[]ArithmeticOperator{
+					ArithmeticGt,
+				},
+			),
+			output: false,
+		},
+		"numbers comparison 3": {
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(uint64(15)),
+					NewLiteralFunction(int64(15)),
+				},
+				[]ArithmeticOperator{
+					ArithmeticGte,
+				},
+			),
+			output: true,
+		},
+		"numbers comparison 4": {
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(uint64(15)),
+					NewLiteralFunction(float64(15)),
+				},
+				[]ArithmeticOperator{
+					ArithmeticLte,
+				},
+			),
+			output: true,
+		},
+		"numbers comparison 5": {
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(int64(15)),
+					NewLiteralFunction(float64(15)),
+				},
+				[]ArithmeticOperator{
+					ArithmeticLt,
+				},
+			),
+			output: false,
 		},
 		"and exit early": {
-			input:  `false && ("not a number".number() > 0)`,
-			output: `false`,
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(false),
+					arithmetic(
+						[]Function{
+							NewLiteralFunction("not a number"),
+							NewLiteralFunction(int64(0)),
+						},
+						[]ArithmeticOperator{
+							ArithmeticGt,
+						},
+					),
+				},
+				[]ArithmeticOperator{
+					ArithmeticAnd,
+				},
+			),
+			output: false,
 		},
 		"and second exit early": {
-			input:  `true && false && ("not a number".number() > 0)`,
-			output: `false`,
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(true),
+					NewLiteralFunction(false),
+					arithmetic(
+						[]Function{
+							NewLiteralFunction("not a number"),
+							NewLiteralFunction(int64(0)),
+						},
+						[]ArithmeticOperator{
+							ArithmeticGt,
+						},
+					),
+				},
+				[]ArithmeticOperator{
+					ArithmeticAnd,
+					ArithmeticAnd,
+				},
+			),
+			output: false,
 		},
 		"or exit early": {
-			input:  `true || ("not a number".number() > 0)`,
-			output: `true`,
-		},
-		"or second early": {
-			input:  `false || true || ("not a number".number() > 0)`,
-			output: `true`,
-		},
-		"add two ints": {
-			input:  `json("foo") + json("bar")`,
-			output: `17`,
-			messages: []easyMsg{
-				{content: `{"foo":5,"bar":12}`},
-			},
-		},
-		"add two ints 2": {
-			input:  `(json("foo")) + (json("bar"))`,
-			output: `17`,
-			messages: []easyMsg{
-				{content: `{"foo":5,"bar":12}`},
-			},
-		},
-		"add two ints 3": {
-			input:  `json("foo") + 5`,
-			output: `10`,
-			messages: []easyMsg{
-				{content: `{"foo":5,"bar":12}`},
-			},
-		},
-		"subtract two ints": {
-			input:  `json("foo") - 5`,
-			output: `0`,
-			messages: []easyMsg{
-				{content: `{"foo":5,"bar":12}`},
-			},
-		},
-		"subtract two ints 2": {
-			input:  `json("foo") - 7`,
-			output: `-2`,
-			messages: []easyMsg{
-				{content: `{"foo":5,"bar":12}`},
-			},
-		},
-		"two ints and a string": {
-			input:  `json("foo") + json("bar") + meta("baz").number(0)`,
-			output: `17`,
-			messages: []easyMsg{
-				{
-					content: `{"foo":5,"bar":12}`,
-					meta: map[string]string{
-						"baz": "this aint a number",
-					},
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(true),
+					arithmetic(
+						[]Function{
+							NewLiteralFunction("not a number"),
+							NewLiteralFunction(int64(0)),
+						},
+						[]ArithmeticOperator{
+							ArithmeticGt,
+						},
+					),
 				},
-			},
-		},
-		"two ints and a string 2": {
-			input:  `json("foo") + json("bar") + "baz".number(0)`,
-			output: `17`,
-			messages: []easyMsg{
-				{content: `{"foo":5,"bar":12}`},
-			},
-		},
-		"add three ints": {
-			input:  `json("foo") + json("bar") + meta("baz").number()`,
-			output: `20`,
-			messages: []easyMsg{
-				{
-					content: `{"foo":5,"bar":12}`,
-					meta: map[string]string{
-						"baz": "3",
-					},
+				[]ArithmeticOperator{
+					ArithmeticOr,
 				},
-			},
+			),
+			output: true,
 		},
-		"sub two ints": {
-			input:  `json("foo") - json("bar")`,
-			output: `-7`,
-			messages: []easyMsg{
-				{content: `{"foo":5,"bar":12}`},
-			},
-		},
-		"sub and add two ints": {
-			input:  `json("foo") + json("bar") - meta("foo").number() - meta("bar").number()`,
-			output: `6`,
-			messages: []easyMsg{
-				{
-					content: `{"foo":5,"bar":12}`,
-					meta: map[string]string{
-						"foo": "3",
-						"bar": "8",
-					},
+		"or second exit early": {
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(false),
+					NewLiteralFunction(true),
+					arithmetic(
+						[]Function{
+							NewLiteralFunction("not a number"),
+							NewLiteralFunction(int64(0)),
+						},
+						[]ArithmeticOperator{
+							ArithmeticGt,
+						},
+					),
 				},
-			},
-		},
-		"multiply two ints": {
-			input:  `json("foo") * json("bar")`,
-			output: `10`,
-			messages: []easyMsg{
-				{content: `{"foo":5,"bar":2}`},
-			},
-		},
-		"multiply three ints": {
-			input:  `json("foo") * json("bar") * 2`,
-			output: `20`,
-			messages: []easyMsg{
-				{content: `{"foo":5,"bar":2}`},
-			},
-		},
-		"multiply and additions of ints": {
-			input:    `2 + 3 * 2 + 1`,
-			output:   `9`,
-			messages: []easyMsg{{}},
-		},
-		"multiply and additions of ints 2": {
-			input:    `( 2 + 3 ) * (2 + 1)`,
-			output:   `15`,
-			messages: []easyMsg{{}},
+				[]ArithmeticOperator{
+					ArithmeticOr,
+					ArithmeticOr,
+				},
+			),
+			output: true,
 		},
 		"multiply and additions of ints 3": {
-			input:    `2 + 3 * 2 + 1 * 3`,
-			output:   `11`,
-			messages: []easyMsg{{}},
-		},
-		"multiply and additions of ints 4": {
-			input:    `(2 + 3 )* (2+1 ) * 3`,
-			output:   `45`,
-			messages: []easyMsg{{}},
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(int64(2)),
+					NewLiteralFunction(int64(3)),
+					NewLiteralFunction(float64(2)),
+					NewLiteralFunction(uint64(1)),
+					NewLiteralFunction(uint64(3)),
+				},
+				[]ArithmeticOperator{
+					ArithmeticAdd,
+					ArithmeticMul,
+					ArithmeticAdd,
+					ArithmeticMul,
+				},
+			),
+			output: float64(11),
 		},
 		"division and subtractions of ints": {
-			input:    `6 - 6 / 2 + 1`,
-			output:   `4`,
-			messages: []easyMsg{{}},
-		},
-		"division and subtractions of ints 2": {
-			input:    `(8 - 4) / (1 + 1)`,
-			output:   `2`,
-			messages: []easyMsg{{}},
-		},
-		"compare ints": {
-			input:    `8 == 2`,
-			output:   `false`,
-			messages: []easyMsg{{}},
-		},
-		"compare ints 2": {
-			input:    `8 != 2`,
-			output:   `true`,
-			messages: []easyMsg{{}},
-		},
-		"compare ints 3": {
-			input:    `8 == 8`,
-			output:   `true`,
-			messages: []easyMsg{{}},
-		},
-		"compare ints 4": {
-			input:    `8 > 7`,
-			output:   `true`,
-			messages: []easyMsg{{}},
-		},
-		"compare ints 5": {
-			input:    `8 > 2*6`,
-			output:   `false`,
-			messages: []easyMsg{{}},
-		},
-		"compare ints 6": {
-			input:    `8 >= 7+1`,
-			output:   `true`,
-			messages: []easyMsg{{}},
-		},
-		"compare ints 7": {
-			input:    `5 < 2*3`,
-			output:   `true`,
-			messages: []easyMsg{{}},
-		},
-		"compare ints 8": {
-			input:    `5 < 2*3`,
-			output:   `true`,
-			messages: []easyMsg{{}},
-		},
-		"compare ints 9": {
-			input:    `8 > 3 * 5`,
-			output:   `false`,
-			messages: []easyMsg{{}},
-		},
-		"compare ints chained boolean": {
-			input:    `8 > 3 && 1 < 4`,
-			output:   `true`,
-			messages: []easyMsg{{}},
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(int64(6)),
+					NewLiteralFunction(int64(6)),
+					NewLiteralFunction(float64(2)),
+					NewLiteralFunction(uint64(1)),
+				},
+				[]ArithmeticOperator{
+					ArithmeticSub,
+					ArithmeticDiv,
+					ArithmeticAdd,
+				},
+			),
+			output: float64(4),
 		},
 		"coalesce json": {
-			input:  `json("foo") | json("bar")`,
+			input: arithmetic(
+				[]Function{
+					func() Function {
+						t.Helper()
+						fn, err := jsonFunction("foo")
+						require.NoError(t, err)
+						return fn
+					}(),
+					func() Function {
+						t.Helper()
+						fn, err := jsonFunction("bar")
+						require.NoError(t, err)
+						return fn
+					}(),
+				},
+				[]ArithmeticOperator{
+					ArithmeticPipe,
+				},
+			),
 			output: `from_bar`,
 			messages: []easyMsg{
 				{content: `{"foo":null,"bar":"from_bar"}`},
 			},
 		},
 		"coalesce json 2": {
-			input:  `json("foo") | "notthis"`,
+			input: arithmetic(
+				[]Function{
+					func() Function {
+						t.Helper()
+						fn, err := jsonFunction("foo")
+						require.NoError(t, err)
+						return fn
+					}(),
+					NewLiteralFunction("not this"),
+				},
+				[]ArithmeticOperator{
+					ArithmeticPipe,
+				},
+			),
 			output: `from_foo`,
 			messages: []easyMsg{
 				{content: `{"foo":"from_foo"}`},
 			},
 		},
-		"coalesce deleted": {
-			input:    `deleted() | "this"`,
-			output:   `this`,
-			messages: []easyMsg{{}},
+		"coalesce delete unmapped": {
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(Delete(nil)),
+					NewLiteralFunction(Nothing(nil)),
+					NewLiteralFunction("this"),
+				},
+				[]ArithmeticOperator{
+					ArithmeticPipe,
+					ArithmeticPipe,
+				},
+			),
+			output: `this`,
 		},
-		"coalesce nothing": {
-			input:    `nothing() | "this"`,
-			output:   `this`,
-			messages: []easyMsg{{}},
+		"compare maps": {
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(map[string]interface{}{
+						"foo": "bar",
+					}),
+					NewLiteralFunction(map[string]interface{}{
+						"foo": "bar",
+					}),
+				},
+				[]ArithmeticOperator{
+					ArithmeticEq,
+				},
+			),
+			output: true,
+		},
+		"compare maps neg": {
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(map[string]interface{}{
+						"foo": "bar",
+					}),
+					NewLiteralFunction(map[string]interface{}{
+						"foo": "baz",
+					}),
+				},
+				[]ArithmeticOperator{
+					ArithmeticNeq,
+				},
+			),
+			output: true,
 		},
 	}
 
@@ -306,74 +508,16 @@ func TestArithmetic(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, err := tryParse(test.input, false)
-			require.Nil(t, err)
-
-			res := ExecToString(e, FunctionContext{
+			res, err := test.input.Exec(FunctionContext{
 				Index:    test.index,
 				MsgBatch: msg,
 			})
-			assert.Equal(t, test.output, res)
-			res = string(ExecToBytes(e, FunctionContext{
-				Index:    test.index,
-				MsgBatch: msg,
-			}))
-			assert.Equal(t, test.output, res)
+			if test.err != nil {
+				require.EqualError(t, err, test.err.Error())
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, test.output, res)
+			}
 		})
-	}
-}
-
-func TestArithmeticLiterals(t *testing.T) {
-	type easyMsg struct {
-		content string
-		meta    map[string]string
-	}
-
-	tests := map[string]string{
-		`2 == 3`:               `false`,
-		`"2".number() == 2`:    `true`,
-		`"2" == "2"`:           `true`,
-		`"2" == "3"`:           `false`,
-		`2.0 == 2`:             `true`,
-		`true == true`:         `true`,
-		`true == false`:        `false`,
-		`2 == -2`:              `false`,
-		`2 == 3-1`:             `true`,
-		`2 == 2`:               `true`,
-		`2 != 3`:               `true`,
-		`2.5 == 3.2`:           `false`,
-		`2.5 == 3.5-1`:         `true`,
-		`2.3 == 2.3`:           `true`,
-		`2.3 != 2.2`:           `true`,
-		`3 != 3`:               `false`,
-		`5 < 2*3`:              `true`,
-		`5 > 2*3`:              `false`,
-		`5 <= 2.5*2`:           `true`,
-		`2 > -3`:               `true`,
-		`-2 < 2`:               `true`,
-		`(2 == 2) && (1 != 2)`: `true`,
-		`(2 == 2) && (2 != 2)`: `false`,
-		`(2 == 2) || (2 != 2)`: `true`,
-		`(2 == 1) || (2 != 2)`: `false`,
-		`null == null`:         `true`,
-		`{} == {}`:             `true`,
-		`["foo"] == ["foo"]`:   `true`,
-		`["bar"] == ["foo"]`:   `false`,
-		`["bar"] != ["foo"]`:   `true`,
-		`{} != null`:           `true`,
-	}
-
-	for k, v := range tests {
-		msg := message.New(nil)
-		e, err := tryParse(k, false)
-		require.Nil(t, err)
-
-		res := ExecToString(e, FunctionContext{
-			Index:    0,
-			MsgBatch: msg,
-		})
-		assert.Equal(t, v, res, k)
-		res = string(ExecToBytes(e, FunctionContext{MsgBatch: msg}))
-		assert.Equal(t, v, res, k)
 	}
 }

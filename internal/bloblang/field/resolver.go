@@ -8,30 +8,45 @@ import (
 
 //------------------------------------------------------------------------------
 
-type resolver interface {
+// Resolver is an interface for resolving a string containing Bloblang function
+// interpolations into either a string or bytes.
+type Resolver interface {
 	ResolveString(index int, msg Message, escaped, legacy bool) string
 	ResolveBytes(index int, msg Message, escaped, legacy bool) []byte
 }
 
 //------------------------------------------------------------------------------
 
-type staticResolver string
+// StaticResolver is a Resolver implementation that simply returns a static
+// string
+type StaticResolver string
 
-func (s staticResolver) ResolveString(index int, msg Message, escaped, legacy bool) string {
+// ResolveString returns a string.
+func (s StaticResolver) ResolveString(index int, msg Message, escaped, legacy bool) string {
 	return string(s)
 }
 
-func (s staticResolver) ResolveBytes(index int, msg Message, escaped, legacy bool) []byte {
+// ResolveBytes returns a byte slice.
+func (s StaticResolver) ResolveBytes(index int, msg Message, escaped, legacy bool) []byte {
 	return []byte(s)
 }
 
 //------------------------------------------------------------------------------
 
-type queryResolver struct {
+// QueryResolver executes a query and returns a string representation of the
+// result.
+type QueryResolver struct {
 	fn query.Function
 }
 
-func (q queryResolver) ResolveString(index int, msg Message, escaped, legacy bool) string {
+// NewQueryResolver creates a field query resolver that returns the result of a
+// query function.
+func NewQueryResolver(fn query.Function) *QueryResolver {
+	return &QueryResolver{fn}
+}
+
+// ResolveString returns a string.
+func (q QueryResolver) ResolveString(index int, msg Message, escaped, legacy bool) string {
 	return query.ExecToString(q.fn, query.FunctionContext{
 		Index:    index,
 		MsgBatch: msg,
@@ -39,7 +54,8 @@ func (q queryResolver) ResolveString(index int, msg Message, escaped, legacy boo
 	})
 }
 
-func (q queryResolver) ResolveBytes(index int, msg Message, escaped, legacy bool) []byte {
+// ResolveBytes returns a byte slice.
+func (q QueryResolver) ResolveBytes(index int, msg Message, escaped, legacy bool) []byte {
 	bs := query.ExecToBytes(q.fn, query.FunctionContext{
 		Index:    index,
 		MsgBatch: msg,

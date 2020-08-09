@@ -1,8 +1,9 @@
-package query
+package parser
 
 import (
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -221,15 +222,15 @@ func TestExpressionsParser(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, err := tryParse(test.input, test.deprecated)
+			e, err := tryParseQuery(test.input, test.deprecated)
 			require.Nil(t, err)
 
-			res := ExecToString(e, FunctionContext{
+			res := query.ExecToString(e, query.FunctionContext{
 				Index: test.index, MsgBatch: msg,
 				Value: test.value,
 			})
 			assert.Equal(t, test.output, res)
-			res = string(ExecToBytes(e, FunctionContext{
+			res = string(query.ExecToBytes(e, query.FunctionContext{
 				Index: test.index, MsgBatch: msg,
 				Value: test.value,
 			}))

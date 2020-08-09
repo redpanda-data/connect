@@ -1,8 +1,9 @@
-package query
+package parser
 
 import (
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,7 +28,7 @@ func TestLiteralParserErrors(t *testing.T) {
 		test := test
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			_, err := tryParse(test.input, false)
+			_, err := tryParseQuery(test.input, false)
 			assert.Equal(t, test.err, err.ErrorAtPosition([]rune(test.input)))
 		})
 	}
@@ -98,12 +99,12 @@ func TestLiteralParser(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			res := Parse([]rune(test.mapping))
+			res := ParseQuery([]rune(test.mapping))
 			require.Nil(t, res.Err)
-			require.Implements(t, (*Function)(nil), res.Payload)
-			q := res.Payload.(Function)
+			require.Implements(t, (*query.Function)(nil), res.Payload)
+			q := res.Payload.(query.Function)
 
-			result, err := q.Exec(FunctionContext{
+			result, err := q.Exec(query.FunctionContext{
 				Index: 0, MsgBatch: message.New(nil),
 				Value: test.value,
 			})

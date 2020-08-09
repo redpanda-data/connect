@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -58,18 +59,18 @@ func NewAzureTableStorage(
 		timeout: timeout,
 		client:  basicClient.GetTableService(),
 	}
-	if a.tableName, err = field.New(conf.TableName); err != nil {
+	if a.tableName, err = bloblang.NewField(conf.TableName); err != nil {
 		return nil, fmt.Errorf("failed to parse table name expression: %v", err)
 	}
-	if a.partitionKey, err = field.New(conf.PartitionKey); err != nil {
+	if a.partitionKey, err = bloblang.NewField(conf.PartitionKey); err != nil {
 		return nil, fmt.Errorf("failed to parse partition key expression: %v", err)
 	}
-	if a.rowKey, err = field.New(conf.RowKey); err != nil {
+	if a.rowKey, err = bloblang.NewField(conf.RowKey); err != nil {
 		return nil, fmt.Errorf("failed to parse row key expression: %v", err)
 	}
 	a.properties = make(map[string]field.Expression)
 	for property, value := range conf.Properties {
-		if a.properties[property], err = field.New(value); err != nil {
+		if a.properties[property], err = bloblang.NewField(value); err != nil {
 			return nil, fmt.Errorf("failed to parse property expression: %v", err)
 		}
 	}

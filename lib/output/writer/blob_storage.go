@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -64,13 +65,13 @@ func NewAzureBlobStorage(
 		timeout:    timeout,
 		credential: credential,
 	}
-	if a.container, err = field.New(conf.Container); err != nil {
+	if a.container, err = bloblang.NewField(conf.Container); err != nil {
 		return nil, fmt.Errorf("failed to parse container expression: %v", err)
 	}
-	if a.path, err = field.New(conf.Path); err != nil {
+	if a.path, err = bloblang.NewField(conf.Path); err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}
-	if a.blobType, err = field.New(conf.BlobType); err != nil {
+	if a.blobType, err = bloblang.NewField(conf.BlobType); err != nil {
 		return nil, fmt.Errorf("failed to parse blob type expression: %v", err)
 	}
 	return a, nil

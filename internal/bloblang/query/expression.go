@@ -2,13 +2,25 @@ package query
 
 import "fmt"
 
-type matchCase struct {
+// MatchCase represents a single match case of a match expression, where a case
+// query is checked and, if true, the underlying query is executed and returned.
+type MatchCase struct {
 	caseFn  Function
 	queryFn Function
 }
 
-func matchFunction(contextFn Function, cases []matchCase) Function {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+// NewMatchCase creates a single match case of a match expression, where a case
+// query is checked and, if true, the underlying query is executed and returned.
+func NewMatchCase(caseFn, queryFn Function) MatchCase {
+	return MatchCase{
+		caseFn, queryFn,
+	}
+}
+
+// NewMatchFunction takes a contextual mapping and a list of MatchCases, when
+// the function is executed
+func NewMatchFunction(contextFn Function, cases ...MatchCase) Function {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		ctxVal, err := contextFn.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -27,8 +39,11 @@ func matchFunction(contextFn Function, cases []matchCase) Function {
 	})
 }
 
-func ifFunction(queryFn Function, ifFn Function, elseFn Function) Function {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+// NewIfFunction creates a logical if expression from a query which should
+// return a boolean value. If the returned boolean is true then the ifFn is
+// executed and returned, otherwise elseFn is executed and returned.
+func NewIfFunction(queryFn Function, ifFn Function, elseFn Function) Function {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		queryVal, err := queryFn.Exec(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check if condition: %w", err)

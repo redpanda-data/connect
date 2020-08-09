@@ -10,7 +10,7 @@ import (
 //------------------------------------------------------------------------------
 
 func methodWithDynamicArgs(args []interface{}, target Function, ctor MethodCtor) Function {
-	return closureFn(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		dynArgs := make([]interface{}, 0, len(args))
 		for i, dArg := range args {
 			if fArg, isDyn := dArg.(Function); isDyn {
@@ -72,6 +72,16 @@ func RegisterMethod(name string, allowDynamicArgs bool, ctor MethodCtor, checks 
 	}
 	methods[name] = ctor
 	return struct{}{}
+}
+
+// InitMethod attempts to initialise a method by its name, target function and
+// arguments.
+func InitMethod(name string, target Function, args ...interface{}) (Function, error) {
+	ctor, exists := methods[name]
+	if !exists {
+		return nil, badMethodErr(name)
+	}
+	return ctor(target, args...)
 }
 
 var methods = map[string]MethodCtor{}

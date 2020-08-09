@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -165,12 +166,12 @@ func NewCache(
 		return nil, err
 	}
 
-	key, err := field.New(conf.Cache.Key)
+	key, err := bloblang.NewField(conf.Cache.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
 
-	value, err := field.New(conf.Cache.Value)
+	value, err := bloblang.NewField(conf.Cache.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}
