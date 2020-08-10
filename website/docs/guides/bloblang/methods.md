@@ -134,6 +134,17 @@ root.result = this.collapse()
 # Out: {"result":{"foo.0.bar":"1","foo.1.bar":"2"}}
 ```
 
+### `collapse_include_empty`
+
+Same as `collapse` but will include any empty objects or arrays.
+
+```coffee
+root.result = this.collapse_include_empty()
+
+# In:  {"foo":[{"bar":{}},{"bar":[]}]}
+# Out: {"result":{"foo.0.bar":{},"foo.1.bar":[]}}
+```
+
 ### `contains`
 
 Checks whether a string contains a substring, an array contains an element matching the argument, or an object contains a value matching the argument, and returns a boolean result.

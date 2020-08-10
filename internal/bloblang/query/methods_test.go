@@ -612,6 +612,19 @@ func TestMethods(t *testing.T) {
 				"foo.1.bar": "2",
 			},
 		},
+		"check collapse include empty": {
+			input: methods(
+				function("json"),
+				method("collapse_include_empty"),
+			),
+			messages: []easyMsg{
+				{content: `{"foo":[{"bar":{}},{"bar":[]}]}`},
+			},
+			output: map[string]interface{}{
+				"foo.0.bar": struct{}{},
+				"foo.1.bar": []struct{}{},
+			},
+		},
 		"check sha1 hash": {
 			input: methods(
 				literalFn("hello world"),
