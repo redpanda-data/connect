@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/OneOfOne/xxhash"
 	"github.com/microcosm-cc/bluemonday"
@@ -680,6 +681,36 @@ func parseJSONMethod(target Function, _ ...interface{}) (Function, error) {
 			return nil, fmt.Errorf("failed to parse value as JSON: %w", err)
 		}
 		return jObj, nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	"parse_timestamp_unix", false, parseTimestampMethod,
+	ExpectOneOrZeroArgs(),
+	ExpectStringArg(0),
+)
+
+func parseTimestampMethod(target Function, args ...interface{}) (Function, error) {
+	layout := time.RFC3339
+	if len(args) > 0 {
+		layout = args[0].(string)
+	}
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		switch t := v.(type) {
+		case string:
+			ut, err := time.Parse(layout, t)
+			if err != nil {
+				return nil, err
+			}
+			return ut.Unix(), nil
+		}
+		return nil, NewTypeError(v, ValueString)
 	}), nil
 }
 
