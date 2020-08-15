@@ -975,6 +975,10 @@ output:
           url: ${OUTPUT_REDIS_STREAMS_URL:tcp://localhost:6379}
         resource: ${OUTPUT_RESOURCE}
         s3:
+          batching:
+            byte_size: ${OUTPUT_S3_BATCHING_BYTE_SIZE:0}
+            count: ${OUTPUT_S3_BATCHING_COUNT:1}
+            period: ${OUTPUT_S3_BATCHING_PERIOD}
           bucket: ${OUTPUT_S3_BUCKET}
           content_encoding: ${OUTPUT_S3_CONTENT_ENCODING}
           content_type: ${OUTPUT_S3_CONTENT_TYPE:application/octet-stream}

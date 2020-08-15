@@ -22,10 +22,9 @@ const snippets = [
   {
     label: 'Mapping',
     config: `input:
-  kafka_balanced:
-    addresses: [ TODO ]
-    topics: [ foo, bar ]
-    consumer_group: foogroup
+  gcp_pubsub:
+    project: foo
+    subscription: bar
 
 pipeline:
   processors:
@@ -34,16 +33,18 @@ pipeline:
         root.meta.link_count = this.links.length()
 
 output:
-  s3:
-    bucket: TODO
-    path: \${! meta("kafka_topic") }/\${! json("message.id") }.json`,
+  redis_streams:
+    url: tcp://TODO:6379
+    stream: baz
+    max_in_flight: 20`,
   },
   {
     label: 'Multiplexing',
     config: `input:
-  gcp_pubsub:
-    project: foo
-    subscription: bar
+  kafka_balanced:
+    addresses: [ TODO ]
+    topics: [ foo, bar ]
+    consumer_group: foogroup
 
 output:
   switch:
@@ -81,10 +82,16 @@ pipeline:
           results.sentiment: .
 
 output:
-  redis_streams:
-    url: tcp://TODO:6379
-    stream: baz
-    max_in_flight: 20`,
+  s3:
+    bucket: TODO
+    path: '\${! meta("partition") }/\${! timestamp_unix_nano() }.tar.gz'
+    batching:
+      count: 100
+      processors:
+        - archive:
+            format: tar
+        - compress:
+            algorithm: gzip`,
   },
 ];
 
@@ -138,6 +145,11 @@ const features = [
           It's completely stateless, allowing for easy deployment and liberal
           scaling. It also exposes <a href="/docs/components/metrics/about">metrics</a> and <a href="/docs/components/tracers/about">tracing</a> events
           to targets of your choice.
+        </p>
+        <p>
+          At Meltwater it's enriching over 450 million documents per day with a
+          network of more than 20 NLP services. It sounds very interesting but
+          rest assured, <a href="https://underthehood.meltwater.com/blog/2019/08/26/enriching-450m-docs-daily-with-a-boring-stream-processor/">it's totally drab</a>.
         </p>
       </>
     ),

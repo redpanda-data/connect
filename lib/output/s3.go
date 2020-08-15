@@ -1,8 +1,11 @@
 package output
 
 import (
+	"fmt"
+
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -27,7 +30,51 @@ calculated per message of a batch.
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/aws).`,
+[in this document](/docs/guides/aws).
+
+### Batching
+
+It's common to want to upload messages to S3 as batched archives, the easiest
+way to do this is to batch your messages at the output level and join the batch
+of messages with an
+` + "[`archive`](/docs/components/processors/archive)" + ` and/or
+` + "[`compress`](/docs/components/processors/compress)" + ` processor.
+
+For example, if we wished to upload messages as a .tar.gz archive of documents
+we could achieve that with the following config:
+
+` + "```yaml" + `
+output:
+  s3:
+    bucket: TODO
+    path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
+    batching:
+      count: 100
+      period: 10s
+      processors:
+        - archive:
+            format: tar
+        - compress:
+            algorithm: gzip
+` + "```" + `
+
+Alternatively, if we wished to upload JSON documents as a single large document
+containing an array of objects we can do that with:
+
+` + "```yaml" + `
+output:
+  s3:
+    bucket: TODO
+    path: ${!count("files")}-${!timestamp_unix_nano()}.json
+    batching:
+      count: 100
+      processors:
+        - archive:
+            format: json_array
+` + "```" + ``,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			return sanitiseWithBatch(conf.S3, conf.S3.Batching)
+		},
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("bucket", "The bucket to upload messages to."),
@@ -46,6 +93,7 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldAdvanced("force_path_style_urls", "Forces the client API to use path style URLs, which helps when connecting to custom endpoints."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldAdvanced("timeout", "The maximum period to wait on an upload before abandoning it and reattempting."),
+			batch.FieldSpec(),
 		}.Merge(session.FieldSpecs()),
 	}
 }
@@ -58,14 +106,22 @@ func NewAmazonS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.
 	if err != nil {
 		return nil, err
 	}
-	if conf.S3.MaxInFlight == 1 {
-		return NewWriter(
-			TypeS3, sthree, log, stats,
-		)
-	}
-	return NewAsyncWriter(
+
+	w, err := NewAsyncWriter(
 		TypeS3, conf.S3.MaxInFlight, sthree, log, stats,
 	)
+	if err != nil {
+		return nil, err
+	}
+
+	if bconf := conf.S3.Batching; err == nil && !bconf.IsNoop() {
+		policy, err := batch.NewPolicy(bconf, mgr, log.NewModule(".batching"), metrics.Namespaced(stats, "batching"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to construct batch policy: %v", err)
+		}
+		w = NewBatcher(policy, w, log, stats)
+	}
+	return w, err
 }
 
 //------------------------------------------------------------------------------

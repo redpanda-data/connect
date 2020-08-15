@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
@@ -22,19 +23,22 @@ import (
 // AmazonS3Config contains configuration fields for the AmazonS3 output type.
 type AmazonS3Config struct {
 	sess.Config        `json:",inline" yaml:",inline"`
-	Bucket             string `json:"bucket" yaml:"bucket"`
-	ForcePathStyleURLs bool   `json:"force_path_style_urls" yaml:"force_path_style_urls"`
-	Path               string `json:"path" yaml:"path"`
-	ContentType        string `json:"content_type" yaml:"content_type"`
-	ContentEncoding    string `json:"content_encoding" yaml:"content_encoding"`
-	StorageClass       string `json:"storage_class" yaml:"storage_class"`
-	Timeout            string `json:"timeout" yaml:"timeout"`
-	KMSKeyID           string `json:"kms_key_id" yaml:"kms_key_id"`
-	MaxInFlight        int    `json:"max_in_flight" yaml:"max_in_flight"`
+	Bucket             string             `json:"bucket" yaml:"bucket"`
+	ForcePathStyleURLs bool               `json:"force_path_style_urls" yaml:"force_path_style_urls"`
+	Path               string             `json:"path" yaml:"path"`
+	ContentType        string             `json:"content_type" yaml:"content_type"`
+	ContentEncoding    string             `json:"content_encoding" yaml:"content_encoding"`
+	StorageClass       string             `json:"storage_class" yaml:"storage_class"`
+	Timeout            string             `json:"timeout" yaml:"timeout"`
+	KMSKeyID           string             `json:"kms_key_id" yaml:"kms_key_id"`
+	MaxInFlight        int                `json:"max_in_flight" yaml:"max_in_flight"`
+	Batching           batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewAmazonS3Config creates a new Config with default values.
 func NewAmazonS3Config() AmazonS3Config {
+	batching := batch.NewPolicyConfig()
+	batching.Count = 1
 	return AmazonS3Config{
 		Config:             sess.NewConfig(),
 		Bucket:             "",
@@ -46,6 +50,7 @@ func NewAmazonS3Config() AmazonS3Config {
 		Timeout:            "5s",
 		KMSKeyID:           "",
 		MaxInFlight:        1,
+		Batching:           batching,
 	}
 }
 

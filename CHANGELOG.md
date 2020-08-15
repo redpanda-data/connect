@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Added flag `file` to the `blobl` subcommand.
 - New Bloblang method `parse_timestamp_unix`.
 - New (BETA) `protobuf` processor.
+- Batching fields added to `s3` output.
 
 ### Changed
 

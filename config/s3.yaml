@@ -40,6 +40,14 @@ pipeline:
 output:
   type: s3
   s3:
+    batching:
+      byte_size: 0
+      condition:
+        type: static
+        static: false
+      count: 1
+      period: ""
+      processors: []
     bucket: ""
     content_encoding: ""
     content_type: application/octet-stream
