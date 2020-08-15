@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/client"
+	"github.com/google/go-cmp/cmp"
 )
 
 //------------------------------------------------------------------------------
@@ -23,21 +25,14 @@ func init() {
 Performs an HTTP request using a message batch as the request body, and replaces
 the original message parts with the body of the response.`,
 		Description: `
-If the batch contains only a single message part then it will be sent as the
-body of the request. If the batch contains multiple messages then they will be
-sent as a multipart HTTP request using a ` + "`Content-Type: multipart`" + `
-header.
-
-If you are sending batches and wish to avoid this behaviour then you can set the
-` + "`parallel`" + ` flag to ` + "`true`" + ` and the messages of a batch will
-be sent as individual requests in parallel. You can also cap the max number of
-parallel requests with ` + "`max_parallel`" + `. Alternatively, you can use the
-` + "[`archive`](/docs/components/processors/archive)" + ` processor to create a single message
-from the batch.
+If a processed message batch contains more than one message they will be sent in
+a single request as a [multipart message](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).
+Alternatively, message batches can be sent in parallel by setting the field
+` + "`parallel` to `true`" + `.
 
 The ` + "`rate_limit`" + ` field can be used to specify a rate limit
-[resource](/docs/components/rate_limits/about) to cap the rate of requests across all
-parallel components service wide.
+[resource](/docs/components/rate_limits/about) to cap the rate of requests
+across all parallel components service wide.
 
 The URL and header values of this type can be dynamically set using function
 interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
@@ -73,10 +68,27 @@ When all retry attempts for a message are exhausted the processor cancels the
 attempt. These failed messages will continue through the pipeline unchanged, but
 can be dropped or placed in a dead letter queue according to your config, you
 can read about these patterns [here](/docs/configuration/error_handling).`,
-		FieldSpecs: docs.FieldSpecs{
+		FieldSpecs: append(docs.FieldSpecs{
 			docs.FieldCommon("parallel", "When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent within a single request."),
-			docs.FieldCommon("max_parallel", "A limit on the maximum messages in flight when sending batched messages in parallel."),
-			docs.FieldCommon("request", "Controls how the HTTP request is made.").WithChildren(client.FieldSpecs()...),
+			docs.FieldDeprecated("max_parallel"),
+			docs.FieldDeprecated("request"),
+		}, client.FieldSpecs()...),
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			cBytes, err := json.Marshal(conf.HTTP)
+			if err != nil {
+				return nil, err
+			}
+
+			hashMap := map[string]interface{}{}
+			if err = json.Unmarshal(cBytes, &hashMap); err != nil {
+				return nil, err
+			}
+
+			if cmp.Equal(conf.HTTP.Client, client.NewConfig()) {
+				delete(hashMap, "request")
+			}
+
+			return hashMap, nil
 		},
 	}
 }
@@ -85,9 +97,10 @@ can read about these patterns [here](/docs/configuration/error_handling).`,
 
 // HTTPConfig contains configuration fields for the HTTP processor.
 type HTTPConfig struct {
-	Client      client.Config `json:"request" yaml:"request"`
-	Parallel    bool          `json:"parallel" yaml:"parallel"`
-	MaxParallel int           `json:"max_parallel" yaml:"max_parallel"`
+	Parallel      bool          `json:"parallel" yaml:"parallel"`
+	MaxParallel   int           `json:"max_parallel" yaml:"max_parallel"`
+	Client        client.Config `json:"request" yaml:"request"`
+	client.Config `json:",inline" yaml:",inline"`
 }
 
 // NewHTTPConfig returns a HTTPConfig with default values.
@@ -96,6 +109,7 @@ func NewHTTPConfig() HTTPConfig {
 		Client:      client.NewConfig(),
 		Parallel:    false,
 		MaxParallel: 0,
+		Config:      client.NewConfig(),
 	}
 }
 
@@ -124,6 +138,13 @@ type HTTP struct {
 func NewHTTP(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
+	if !cmp.Equal(conf.HTTP.Client, client.NewConfig()) {
+		if !cmp.Equal(conf.HTTP.Config, client.NewConfig()) {
+			return nil, fmt.Errorf("detected a mix of both deprecated http.request and standard http config fields")
+		}
+		log.Warnln("Using deprecated http.request fields. All fields under the path http.request should now be written directly within http.")
+		conf.HTTP.Config = conf.HTTP.Client
+	}
 	g := &HTTP{
 		conf:  conf,
 		log:   log,
@@ -140,7 +161,7 @@ func NewHTTP(
 	}
 	var err error
 	if g.client, err = client.New(
-		conf.HTTP.Client,
+		conf.HTTP.Config,
 		client.OptSetLogger(g.log),
 		client.OptSetStats(metrics.Namespaced(g.stats, "client")),
 		client.OptSetManager(mgr),

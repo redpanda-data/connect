@@ -30,8 +30,7 @@ pipeline:
         processors:
         - type: http
           http:
-            request:
-              url: "http://httpbin/status/200,200,404"
+            url: "http://httpbin/status/200,200,404"
             parallel: true
         - type: for_each
           for_each:
@@ -52,8 +51,7 @@ pipeline:
         processors:
         - type: http
           http:
-            request:
-              url: http://httpbin/post
+            url: http://httpbin/post
             parallel: true
         postmap:
           echo.body: json.body
@@ -69,8 +67,7 @@ pipeline:
         processors:
         - type: http
           http:
-            request:
-              url: http://httpbin/post
+            url: http://httpbin/post
             parallel: true
         postmap:
           echo.body: json.body

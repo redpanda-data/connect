@@ -181,9 +181,8 @@ pipeline:
   threads: 8
   processors:
   - http:
-      request:
-        url: http://foo.bar/baz
-        rate_limit: foobar
+      url: http://foo.bar/baz
+      rate_limit: foobar
       parallel: true
 resources:
   rate_limits:

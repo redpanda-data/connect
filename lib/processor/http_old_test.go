@@ -14,7 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
 
-func TestHTTPClientRetries(t *testing.T) {
+func TestHTTPOldClientRetries(t *testing.T) {
 	var reqCount uint32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddUint32(&reqCount, 1)
@@ -24,9 +24,9 @@ func TestHTTPClientRetries(t *testing.T) {
 	defer ts.Close()
 
 	conf := NewConfig()
-	conf.HTTP.Config.URL = ts.URL + "/testpost"
-	conf.HTTP.Config.Retry = "1ms"
-	conf.HTTP.Config.NumRetries = 3
+	conf.HTTP.Client.URL = ts.URL + "/testpost"
+	conf.HTTP.Client.Retry = "1ms"
+	conf.HTTP.Client.NumRetries = 3
 
 	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -58,7 +58,7 @@ func TestHTTPClientRetries(t *testing.T) {
 	}
 }
 
-func TestHTTPClientBasic(t *testing.T) {
+func TestHTTPOldClientBasic(t *testing.T) {
 	i := 0
 	expPayloads := []string{"foo", "bar", "baz"}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -77,7 +77,7 @@ func TestHTTPClientBasic(t *testing.T) {
 	defer ts.Close()
 
 	conf := NewConfig()
-	conf.HTTP.Config.URL = ts.URL + "/testpost"
+	conf.HTTP.Client.URL = ts.URL + "/testpost"
 
 	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -129,7 +129,7 @@ func TestHTTPClientBasic(t *testing.T) {
 	}
 }
 
-func TestHTTPClientEmptyResponse(t *testing.T) {
+func TestHTTPOldClientEmptyResponse(t *testing.T) {
 	i := 0
 	expPayloads := []string{"foo", "bar", "baz"}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -146,7 +146,7 @@ func TestHTTPClientEmptyResponse(t *testing.T) {
 	defer ts.Close()
 
 	conf := NewConfig()
-	conf.HTTP.Config.URL = ts.URL + "/testpost"
+	conf.HTTP.Client.URL = ts.URL + "/testpost"
 
 	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -190,14 +190,14 @@ func TestHTTPClientEmptyResponse(t *testing.T) {
 	}
 }
 
-func TestHTTPClientEmpty404Response(t *testing.T) {
+func TestHTTPOldClientEmpty404Response(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer ts.Close()
 
 	conf := NewConfig()
-	conf.HTTP.Config.URL = ts.URL + "/testpost"
+	conf.HTTP.Client.URL = ts.URL + "/testpost"
 
 	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -218,7 +218,7 @@ func TestHTTPClientEmpty404Response(t *testing.T) {
 	}
 }
 
-func TestHTTPClientBasicWithMetadata(t *testing.T) {
+func TestHTTPOldClientBasicWithMetadata(t *testing.T) {
 	i := 0
 	expPayloads := []string{"foo", "bar", "baz"}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -237,8 +237,8 @@ func TestHTTPClientBasicWithMetadata(t *testing.T) {
 	defer ts.Close()
 
 	conf := NewConfig()
-	conf.HTTP.Config.URL = ts.URL + "/testpost"
-	conf.HTTP.Config.CopyResponseHeaders = true
+	conf.HTTP.Client.URL = ts.URL + "/testpost"
+	conf.HTTP.Client.CopyResponseHeaders = true
 
 	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -259,7 +259,7 @@ func TestHTTPClientBasicWithMetadata(t *testing.T) {
 	}
 }
 
-func TestHTTPClientParallel(t *testing.T) {
+func TestHTTPOldClientParallel(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(5)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -271,7 +271,7 @@ func TestHTTPClientParallel(t *testing.T) {
 	defer ts.Close()
 
 	conf := NewConfig()
-	conf.HTTP.Config.URL = ts.URL + "/testpost"
+	conf.HTTP.Client.URL = ts.URL + "/testpost"
 	conf.HTTP.Parallel = true
 
 	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
@@ -301,7 +301,7 @@ func TestHTTPClientParallel(t *testing.T) {
 	}
 }
 
-func TestHTTPClientParallelError(t *testing.T) {
+func TestHTTPOldClientParallelError(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(5)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -320,9 +320,9 @@ func TestHTTPClientParallelError(t *testing.T) {
 	defer ts.Close()
 
 	conf := NewConfig()
-	conf.HTTP.Config.URL = ts.URL + "/testpost"
+	conf.HTTP.Client.URL = ts.URL + "/testpost"
 	conf.HTTP.Parallel = true
-	conf.HTTP.Config.NumRetries = 0
+	conf.HTTP.Client.NumRetries = 0
 
 	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -364,7 +364,7 @@ func TestHTTPClientParallelError(t *testing.T) {
 	}
 }
 
-func TestHTTPClientParallelCapped(t *testing.T) {
+func TestHTTPOldClientParallelCapped(t *testing.T) {
 	var reqs int64
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if req := atomic.AddInt64(&reqs, 1); req > 5 {
@@ -377,7 +377,7 @@ func TestHTTPClientParallelCapped(t *testing.T) {
 	defer ts.Close()
 
 	conf := NewConfig()
-	conf.HTTP.Config.URL = ts.URL + "/testpost"
+	conf.HTTP.Client.URL = ts.URL + "/testpost"
 	conf.HTTP.Parallel = true
 	conf.HTTP.MaxParallel = 5
 

@@ -133,14 +133,13 @@ since we aren't sure which will be present.
 processors:
   - http:
       parallel: true
-      request:
-        url: http://fooserve/enrich
-        verb: POST
-        headers:
-          Content-Type: application/json
-        backoff_on: [ 429 ]
-        drop_on: [ 400 ]
-        retries: 3
+      url: http://fooserve/enrich
+      verb: POST
+      headers:
+        Content-Type: application/json
+      backoff_on: [ 429 ]
+      drop_on: [ 400 ]
+      retries: 3
 postmap_optional:
   tmp.enrichments.bar: bar
   tmp.enrichments.baz: baz
@@ -161,14 +160,13 @@ premap:
 processors:
   - http:
       parallel: true
-      request:
-        url: http://barserve/enrich
-        verb: POST
-        headers:
-          Content-Type: application/json
-        backoff_on: [ 429 ]
-        drop_on: [ 400 ]
-        retries: 3
+      url: http://barserve/enrich
+      verb: POST
+      headers:
+        Content-Type: application/json
+      backoff_on: [ 429 ]
+      drop_on: [ 400 ]
+      retries: 3
 postmap:
   tmp.enrichments.baz: baz
 ```
@@ -185,14 +183,13 @@ premap:
 processors:
   - http:
       parallel: true
-      request:
-        url: http://bazserve/enrich
-        verb: POST
-        headers:
-          Content-Type: application/json
-        backoff_on: [ 429 ]
-        drop_on: [ 400 ]
-        retries: 3
+      url: http://bazserve/enrich
+      verb: POST
+      headers:
+        Content-Type: application/json
+      backoff_on: [ 429 ]
+      drop_on: [ 400 ]
+      retries: 3
 postmap:
   tmp.enrichments.qux: qux
 ```
@@ -216,14 +213,13 @@ conditions:
 processors:
   - http:
       parallel: true
-      request:
-        url: http://recoverserve/enrich
-        verb: POST
-        headers:
-          Content-Type: application/json
-        backoff_on: [ 429 ]
-        drop_on: [ 400 ]
-        retries: 3
+      url: http://recoverserve/enrich
+      verb: POST
+      headers:
+        Content-Type: application/json
+      backoff_on: [ 429 ]
+      drop_on: [ 400 ]
+      retries: 3
 postmap:
   tmp.enrichments.qux: qux
 ```
@@ -246,14 +242,13 @@ pipeline:
           processors:
             - http:
                 parallel: true
-                request:
-                  url: http://fooserve/enrich
-                  verb: POST
-                  headers:
-                    Content-Type: application/json
-                  backoff_on: [ 429 ]
-                  drop_on: [ 400 ]
-                  retries: 3
+                url: http://fooserve/enrich
+                verb: POST
+                headers:
+                  Content-Type: application/json
+                backoff_on: [ 429 ]
+                drop_on: [ 400 ]
+                retries: 3
           postmap_optional:
             tmp.enrichments.bar: bar
             tmp.enrichments.baz: baz
@@ -264,14 +259,13 @@ pipeline:
           processors:
             - http:
                 parallel: true
-                request:
-                  url: http://barserve/enrich
-                  verb: POST
-                  headers:
-                    Content-Type: application/json
-                  backoff_on: [ 429 ]
-                  drop_on: [ 400 ]
-                  retries: 3
+                url: http://barserve/enrich
+                verb: POST
+                headers:
+                  Content-Type: application/json
+                backoff_on: [ 429 ]
+                drop_on: [ 400 ]
+                retries: 3
           postmap:
             tmp.enrichments.baz: baz
 
@@ -281,14 +275,13 @@ pipeline:
           processors:
             - http:
                 parallel: true
-                request:
-                  url: http://bazserve/enrich
-                  verb: POST
-                  headers:
-                    Content-Type: application/json
-                  backoff_on: [ 429 ]
-                  drop_on: [ 400 ]
-                  retries: 3
+                url: http://bazserve/enrich
+                verb: POST
+                headers:
+                  Content-Type: application/json
+                backoff_on: [ 429 ]
+                drop_on: [ 400 ]
+                retries: 3
           postmap:
             tmp.enrichments.qux: qux
 
@@ -300,14 +293,13 @@ pipeline:
           processors:
             - http:
                 parallel: true
-                request:
-                  url: http://recoverserve/enrich
-                  verb: POST
-                  headers:
-                    Content-Type: application/json
-                  backoff_on: [ 429 ]
-                  drop_on: [ 400 ]
-                  retries: 3
+                url: http://recoverserve/enrich
+                verb: POST
+                headers:
+                  Content-Type: application/json
+                backoff_on: [ 429 ]
+                drop_on: [ 400 ]
+                retries: 3
           postmap:
             tmp.enrichments.qux: qux
 

@@ -12,6 +12,13 @@ All notable changes to this project will be documented in this file.
 - New Bloblang method `parse_timestamp_unix`.
 - New (BETA) `protobuf` processor.
 
+### Changed
+
+- The `http` processor field `max_parallel` has been deprecated in favour of
+  rate limits, and the fields within `request` have been moved to the root of
+  the `http` namespace. This change is backwards compatible and `http.request`
+  fields will still be recognized until the next version release.
+
 ### Fixed
 
 - Wholesale metadata mappings (`meta = {"foo":"bar"}`) in Bloblang now correctly

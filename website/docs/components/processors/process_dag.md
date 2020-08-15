@@ -49,8 +49,7 @@ process_dag:
       .: .
     processors:
     - http:
-        request:
-          url: http://foo/enrich
+        url: http://foo/enrich
     postmap:
       foo_result: .
 
@@ -59,8 +58,7 @@ process_dag:
       .: msg.sub.path
     processors:
     - http:
-        request:
-          url: http://bar/enrich
+        url: http://bar/enrich
     postmap:
       bar_result: .
 
@@ -70,8 +68,7 @@ process_dag:
       bar_obj: bar_result
     processors:
     - http:
-        request:
-          url: http://baz/enrich
+        url: http://baz/enrich
     postmap:
       baz_obj: .
 ```

@@ -121,8 +121,7 @@ pipeline:
           content: doc.content
         processors:
           - http:
-              request:
-                url: http://localhost:1234
+              url: http://localhost:1234
         postmap:
           doc.language: .
 ` + "```" + `

@@ -92,9 +92,8 @@ pipeline:
         processors:
           - http:
               parallel: true
-              request:
-                url: http://localhost:4197/claims
-                verb: POST
+              url: http://localhost:4197/claims
+              verb: POST
         postmap:
           tmp.claims: claims
 
@@ -179,9 +178,8 @@ and [`unarchive`][unarchive-proc] processors in our
       - archive:
           format: json_array
       - http:
-          request:
-            url: http://localhost:4198/hyperbole
-            verb: POST
+          url: http://localhost:4198/hyperbole
+          verb: POST
       - unarchive:
           format: json_array
     postmap:
@@ -242,9 +240,8 @@ original document at the path `article.fake_news_score`. Our
     processors:
       - http:
           parallel: true
-          request:
-            url: http://localhost:4199/fakenews
-            verb: POST
+          url: http://localhost:4199/fakenews
+          verb: POST
     postmap:
       article.fake_news_score: fake_news_rank
 ```
@@ -320,9 +317,8 @@ pipeline:
           processors:
             - http:
                 parallel: true
-                request:
-                  url: http://localhost:4197/claims
-                  verb: POST
+                url: http://localhost:4197/claims
+                verb: POST
           postmap:
             tmp.claims: claims
 
@@ -333,9 +329,8 @@ pipeline:
             - archive:
                 format: json_array
             - http:
-                request:
-                  url: http://localhost:4198/hyperbole
-                  verb: POST
+                url: http://localhost:4198/hyperbole
+                verb: POST
             - unarchive:
                 format: json_array
           postmap:
@@ -349,9 +344,8 @@ pipeline:
           processors:
             - http:
                 parallel: true
-                request:
-                  url: http://localhost:4199/fakenews
-                  verb: POST
+                url: http://localhost:4199/fakenews
+                verb: POST
           postmap:
             article.fake_news_score: fake_news_rank
 

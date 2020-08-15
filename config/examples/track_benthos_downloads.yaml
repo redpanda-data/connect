@@ -13,10 +13,9 @@ resources:
       # Grab docker dl count
       - bloblang: root = ""
       - http:
-          request:
-            url: https://hub.docker.com/v2/repositories/jeffail/benthos/
-            verb: GET
-            retries: 0
+          url: https://hub.docker.com/v2/repositories/jeffail/benthos/
+          verb: GET
+          retries: 0
       - bloblang: |
           type = "gauge"
           source = "docker"
@@ -27,10 +26,9 @@ resources:
       # Grab github latest release dl count
       - bloblang: root = ""
       - http:
-          request:
-            url: https://api.github.com/repos/Jeffail/benthos/releases/latest
-            verb: GET
-            retries: 0
+          url: https://api.github.com/repos/Jeffail/benthos/releases/latest
+          verb: GET
+          retries: 0
       - bloblang: |
           root = assets.map_each(match {
             "type":"gauge",
