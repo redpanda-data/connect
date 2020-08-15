@@ -18,9 +18,9 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
-	"github.com/cenkalti/backoff"
-	"github.com/olivere/elastic"
-	aws "github.com/olivere/elastic/aws/v4"
+	"github.com/cenkalti/backoff/v4"
+	"github.com/olivere/elastic/v7"
+	aws "github.com/olivere/elastic/v7/aws/v4"
 )
 
 //------------------------------------------------------------------------------
@@ -96,9 +96,9 @@ type Elasticsearch struct {
 	healthcheck bool
 	conf        ElasticsearchConfig
 
-	backoff backoff.BackOff
-	timeout time.Duration
-	tlsConf *tls.Config
+	backoffCtor func() backoff.BackOff
+	timeout     time.Duration
+	tlsConf     *tls.Config
 
 	idStr             field.Expression
 	indexStr          field.Expression
@@ -147,7 +147,7 @@ func NewElasticsearch(conf ElasticsearchConfig, log log.Modular, stats metrics.T
 		}
 	}
 
-	if e.backoff, err = conf.Config.Get(); err != nil {
+	if e.backoffCtor, err = conf.Config.GetCtor(); err != nil {
 		return nil, err
 	}
 
@@ -246,6 +246,8 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
+	boff := e.backoffCtor()
+
 	if msg.Len() == 1 {
 		index := e.indexStr.String(0, msg)
 		_, err := e.client.Index().
@@ -261,8 +263,6 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 		}
 		return err
 	}
-
-	e.backoff.Reset()
 
 	requests := map[string]*pendingBulkIndex{}
 	msg.Iter(func(i int, part types.Part) error {
@@ -301,11 +301,10 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 
 		failed := result.Failed()
 		if len(failed) == 0 {
-			e.backoff.Reset()
 			continue
 		}
 
-		wait := e.backoff.NextBackOff()
+		wait := boff.NextBackOff()
 		for i := 0; i < len(failed); i++ {
 			if !shouldRetry(failed[i].Status) {
 				e.log.Errorf("Elasticsearch message '%v' rejected with code [%s]: %v\n", failed[i].Id, failed[i].Status, failed[i].Error.Reason)

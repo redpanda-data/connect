@@ -16,7 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kinesis"
-	"github.com/ory/dockertest"
+	"github.com/ory/dockertest/v3"
 )
 
 func TestKinesisIntegration(t *testing.T) {

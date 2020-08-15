@@ -13,8 +13,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/olivere/elastic"
-	"github.com/ory/dockertest"
+	"github.com/olivere/elastic/v7"
+	"github.com/ory/dockertest/v3"
 )
 
 func TestElasticIntegration(t *testing.T) {

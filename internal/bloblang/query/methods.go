@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/Jeffail/gabs/v2"
-	"golang.org/x/xerrors"
 )
 
 //------------------------------------------------------------------------------
@@ -637,7 +636,7 @@ func mapEachMethod(target Function, args ...interface{}) (Function, error) {
 				if mapErr != nil {
 					if recover, ok := mapErr.(*ErrRecoverable); ok {
 						newV = recover.Recovered
-						err = xerrors.Errorf("failed to process element %v: %w", i, recover.Err)
+						err = fmt.Errorf("failed to process element %v: %w", i, recover.Err)
 					} else {
 						return nil, mapErr
 					}
@@ -663,7 +662,7 @@ func mapEachMethod(target Function, args ...interface{}) (Function, error) {
 				if mapErr != nil {
 					if recover, ok := mapErr.(*ErrRecoverable); ok {
 						newV = recover.Recovered
-						err = xerrors.Errorf("failed to process element %v: %w", k, recover.Err)
+						err = fmt.Errorf("failed to process element %v: %w", k, recover.Err)
 					} else {
 						return nil, mapErr
 					}

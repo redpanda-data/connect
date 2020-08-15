@@ -18,8 +18,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/ory/dockertest"
-	"github.com/ory/dockertest/docker"
+	"github.com/ory/dockertest/v3"
+	"github.com/ory/dockertest/v3/docker"
 )
 
 func getFreePort() (int, error) {

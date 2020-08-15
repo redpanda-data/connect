@@ -198,7 +198,6 @@ func TestDynamoDBSadToGoodBatch(t *testing.T) {
 		"id":      `${!json("id")}`,
 		"content": `${!json("content")}`,
 	}
-	conf.Backoff.MaxElapsedTime = "100ms"
 	conf.Table = "FooTable"
 
 	db, err := NewDynamoDB(conf, log.Noop(), metrics.Noop())
@@ -297,7 +296,6 @@ func TestDynamoDBSad(t *testing.T) {
 		"id":      `${!json("id")}`,
 		"content": `${!json("content")}`,
 	}
-	conf.Backoff.MaxElapsedTime = "100ms"
 	conf.Table = "FooTable"
 
 	db, err := NewDynamoDB(conf, log.Noop(), metrics.Noop())
@@ -408,7 +406,6 @@ func TestDynamoDBSadBatch(t *testing.T) {
 		"id":      `${!json("id")}`,
 		"content": `${!json("content")}`,
 	}
-	conf.Backoff.MaxElapsedTime = "100ms"
 	conf.Table = "FooTable"
 
 	db, err := NewDynamoDB(conf, log.Noop(), metrics.Noop())

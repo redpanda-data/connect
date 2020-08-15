@@ -20,7 +20,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Shopify/sarama"
-	"github.com/cenkalti/backoff"
+	"github.com/cenkalti/backoff/v4"
 )
 
 //------------------------------------------------------------------------------
@@ -85,7 +85,7 @@ type Kafka struct {
 	mgr   types.Manager
 	stats metrics.Type
 
-	backoff backoff.BackOff
+	backoffCtor func() backoff.BackOff
 
 	tlsConf *tls.Config
 	timeout time.Duration
@@ -142,6 +142,9 @@ func NewKafka(conf KafkaConfig, mgr types.Manager, log log.Modular, stats metric
 	if k.topic, err = bloblang.NewField(conf.Topic); err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
+	if k.backoffCtor, err = conf.Config.GetCtor(); err != nil {
+		return nil, err
+	}
 
 	if tout := conf.Timeout; len(tout) > 0 {
 		var err error
@@ -169,9 +172,6 @@ func NewKafka(conf KafkaConfig, mgr types.Manager, log log.Modular, stats metric
 		}
 	}
 
-	if k.backoff, err = conf.Config.Get(); err != nil {
-		return nil, err
-	}
 	return &k, nil
 }
 
@@ -319,6 +319,8 @@ func (k *Kafka) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
+	boff := k.backoffCtor()
+
 	userDefinedHeaders := buildUserDefinedHeaders(version, k.staticHeaders)
 	msgs := []*sarama.ProducerMessage{}
 	msg.Iter(func(i int, p types.Part) error {
@@ -363,9 +365,8 @@ func (k *Kafka) Write(msg types.Message) error {
 			k.log.Errorf("Failed to send messages: %v\n", err)
 		}
 
-		tNext := k.backoff.NextBackOff()
+		tNext := boff.NextBackOff()
 		if tNext == backoff.Stop {
-			k.backoff.Reset()
 			return err
 		}
 		<-time.After(tNext)
@@ -381,7 +382,6 @@ func (k *Kafka) Write(msg types.Message) error {
 		err = producer.SendMessages(msgs)
 	}
 
-	k.backoff.Reset()
 	return nil
 }
 

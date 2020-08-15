@@ -15,7 +15,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"github.com/ory/dockertest"
+	"github.com/ory/dockertest/v3"
 )
 
 func TestMQTTIntegration(t *testing.T) {

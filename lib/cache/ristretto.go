@@ -11,7 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
-	"github.com/cenkalti/backoff"
+	"github.com/cenkalti/backoff/v4"
 	"github.com/dgraph-io/ristretto"
 )
 
@@ -113,6 +113,10 @@ func NewRistretto(conf Config, mgr types.Manager, log log.Modular, stats metrics
 // if the key does not exist.
 func (r *Ristretto) Get(key string) ([]byte, error) {
 	boff := r.boffPool.Get().(backoff.BackOff)
+	defer func() {
+		boff.Reset()
+		r.boffPool.Put(boff)
+	}()
 
 	var res interface{}
 	var ok bool

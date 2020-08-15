@@ -15,7 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/ory/dockertest"
+	"github.com/ory/dockertest/v3"
 )
 
 func TestDynamoDBIntegration(t *testing.T) {

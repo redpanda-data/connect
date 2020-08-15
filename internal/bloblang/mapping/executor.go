@@ -1,11 +1,11 @@
 package mapping
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"golang.org/x/xerrors"
 )
 
 //------------------------------------------------------------------------------
@@ -112,7 +112,7 @@ func (e *Executor) MapPart(index int, msg Message) (types.Part, error) {
 			if len(e.input) > 0 && len(stmt.input) > 0 {
 				line, _ = LineAndColOf(e.input, stmt.input)
 			}
-			return nil, xerrors.Errorf("failed to execute mapping query at line %v: %v", line, err)
+			return nil, fmt.Errorf("failed to execute mapping query at line %v: %w", line, err)
 		}
 		if _, isNothing := res.(query.Nothing); isNothing {
 			// Skip assignment entirely
@@ -128,7 +128,7 @@ func (e *Executor) MapPart(index int, msg Message) (types.Part, error) {
 			if len(e.input) > 0 && len(stmt.input) > 0 {
 				line, _ = LineAndColOf(e.input, stmt.input)
 			}
-			return nil, xerrors.Errorf("failed to assign query result at line %v: %v", line, err)
+			return nil, fmt.Errorf("failed to assign query result at line %v: %w", line, err)
 		}
 	}
 
@@ -146,7 +146,7 @@ func (e *Executor) MapPart(index int, msg Message) (types.Part, error) {
 			part.Set(t)
 		default:
 			if err := part.SetJSON(newObj); err != nil {
-				return nil, xerrors.Errorf("failed to set result of mapping: %w", err)
+				return nil, fmt.Errorf("failed to set result of mapping: %w", err)
 			}
 		}
 	}
@@ -163,7 +163,7 @@ func (e *Executor) Exec(ctx query.FunctionContext) (interface{}, error) {
 			if len(e.input) > 0 && len(stmt.input) > 0 {
 				line, _ = LineAndColOf(e.input, stmt.input)
 			}
-			return nil, xerrors.Errorf("failed to execute mapping assignment at line %v: %v", line, err)
+			return nil, fmt.Errorf("failed to execute mapping assignment at line %v: %w", line, err)
 		}
 		if _, isNothing := res.(query.Nothing); isNothing {
 			// Skip assignment entirely
@@ -179,7 +179,7 @@ func (e *Executor) Exec(ctx query.FunctionContext) (interface{}, error) {
 			if len(e.input) > 0 && len(stmt.input) > 0 {
 				line, _ = LineAndColOf(e.input, stmt.input)
 			}
-			return nil, xerrors.Errorf("failed to assign mapping result at line %v: %v", line, err)
+			return nil, fmt.Errorf("failed to assign mapping result at line %v: %w", line, err)
 		}
 	}
 

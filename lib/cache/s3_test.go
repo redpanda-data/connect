@@ -13,7 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/ory/dockertest"
+	"github.com/ory/dockertest/v3"
 )
 
 func TestS3Integration(t *testing.T) {

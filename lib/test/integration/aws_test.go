@@ -20,7 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/ory/dockertest"
+	"github.com/ory/dockertest/v3"
 )
 
 func TestAWSIntegration(t *testing.T) {

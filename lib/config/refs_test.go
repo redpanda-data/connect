@@ -52,12 +52,12 @@ func TestConfigRefs(t *testing.T) {
 	exp := `a:
     bar: baz
 b:
-  - foo
-  - c:
-      - 9
-      - 8
-      - 7
-  - bar
+    - foo
+    - c:
+        - 9
+        - 8
+        - 7
+    - bar
 d: bar
 `
 	if act := string(res); exp != act {
@@ -107,9 +107,9 @@ func TestConfigRefsRootExpansion(t *testing.T) {
     bar: baz
 b:
     c:
-      - 9
-      - 8
-      - 7
+        - 9
+        - 8
+        - 7
 `
 	if act := string(res); exp != act {
 		t.Errorf("Wrong config result: %v != %v", act, exp)

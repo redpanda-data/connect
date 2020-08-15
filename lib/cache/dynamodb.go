@@ -17,7 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/aws/aws-sdk-go/service/dynamodb/expression"
-	"github.com/cenkalti/backoff"
+	"github.com/cenkalti/backoff/v4"
 )
 
 //------------------------------------------------------------------------------
@@ -220,6 +220,10 @@ func (d *DynamoDB) Get(key string) ([]byte, error) {
 
 	tStarted := time.Now()
 	boff := d.boffPool.Get().(backoff.BackOff)
+	defer func() {
+		boff.Reset()
+		d.boffPool.Put(boff)
+	}()
 
 	result, err := d.get(key)
 	for err != nil && err != types.ErrKeyNotFound {
@@ -243,8 +247,6 @@ func (d *DynamoDB) Get(key string) ([]byte, error) {
 	d.mGetLatency.Timing(latency)
 	d.mLatency.Timing(latency)
 
-	boff.Reset()
-	d.boffPool.Put(boff)
 	return result, err
 }
 
@@ -276,6 +278,10 @@ func (d *DynamoDB) Set(key string, value []byte) error {
 
 	tStarted := time.Now()
 	boff := d.boffPool.Get().(backoff.BackOff)
+	defer func() {
+		boff.Reset()
+		d.boffPool.Put(boff)
+	}()
 
 	_, err := d.client.PutItem(d.putItemInput(key, value))
 	for err != nil {
@@ -297,8 +303,6 @@ func (d *DynamoDB) Set(key string, value []byte) error {
 	d.mSetLatency.Timing(latency)
 	d.mLatency.Timing(latency)
 
-	boff.Reset()
-	d.boffPool.Put(boff)
 	return err
 }
 
@@ -309,6 +313,10 @@ func (d *DynamoDB) SetMulti(items map[string][]byte) error {
 
 	tStarted := time.Now()
 	boff := d.boffPool.Get().(backoff.BackOff)
+	defer func() {
+		boff.Reset()
+		d.boffPool.Put(boff)
+	}()
 
 	writeReqs := []*dynamodb.WriteRequest{}
 	for k, v := range items {
@@ -356,8 +364,6 @@ func (d *DynamoDB) SetMulti(items map[string][]byte) error {
 	d.mSetMultiLatency.Timing(latency)
 	d.mLatency.Timing(latency)
 
-	boff.Reset()
-	d.boffPool.Put(boff)
 	return err
 }
 
@@ -368,6 +374,10 @@ func (d *DynamoDB) Add(key string, value []byte) error {
 
 	tStarted := time.Now()
 	boff := d.boffPool.Get().(backoff.BackOff)
+	defer func() {
+		boff.Reset()
+		d.boffPool.Put(boff)
+	}()
 
 	err := d.add(key, value)
 	for err != nil && err != types.ErrKeyAlreadyExists {
@@ -391,8 +401,6 @@ func (d *DynamoDB) Add(key string, value []byte) error {
 	d.mAddLatency.Timing(latency)
 	d.mLatency.Timing(latency)
 
-	boff.Reset()
-	d.boffPool.Put(boff)
 	return err
 }
 
@@ -426,6 +434,10 @@ func (d *DynamoDB) Delete(key string) error {
 
 	tStarted := time.Now()
 	boff := d.boffPool.Get().(backoff.BackOff)
+	defer func() {
+		boff.Reset()
+		d.boffPool.Put(boff)
+	}()
 
 	err := d.delete(key)
 	for err != nil {
@@ -447,8 +459,6 @@ func (d *DynamoDB) Delete(key string) error {
 	d.mDelLatency.Timing(latency)
 	d.mLatency.Timing(latency)
 
-	boff.Reset()
-	d.boffPool.Put(boff)
 	return err
 }
 

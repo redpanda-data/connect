@@ -22,7 +22,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
-	"github.com/cenkalti/backoff"
+	"github.com/cenkalti/backoff/v4"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -236,6 +236,10 @@ func (d *DynamoDB) WriteWithContext(ctx context.Context, msg types.Message) erro
 	}
 
 	boff := d.boffPool.Get().(backoff.BackOff)
+	defer func() {
+		boff.Reset()
+		d.boffPool.Put(boff)
+	}()
 
 	writeReqs := []*dynamodb.WriteRequest{}
 	msg.Iter(func(i int, p types.Part) error {
@@ -328,6 +332,7 @@ unprocessedLoop:
 		if wait == backoff.Stop {
 			break unprocessedLoop
 		}
+
 		select {
 		case <-time.After(wait):
 		case <-ctx.Done():
@@ -347,6 +352,10 @@ unprocessedLoop:
 	}
 
 	if len(unproc) > 0 {
+		if err == nil {
+			err = errors.New("ran out of request retries")
+		}
+
 		// Sad, we have unprocessed messages, we need to map the requests back
 		// to the origin message index. The DynamoDB API doesn't make this easy.
 		batchErr := batchInternal.NewError(msg, err)

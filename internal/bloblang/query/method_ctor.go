@@ -3,8 +3,6 @@ package query
 import (
 	"fmt"
 	"sort"
-
-	"golang.org/x/xerrors"
 )
 
 //------------------------------------------------------------------------------
@@ -16,7 +14,7 @@ func methodWithDynamicArgs(args []interface{}, target Function, ctor MethodCtor)
 			if fArg, isDyn := dArg.(Function); isDyn {
 				res, err := fArg.Exec(ctx)
 				if err != nil {
-					return nil, xerrors.Errorf("failed to extract input arg %v: %w", i, err)
+					return nil, fmt.Errorf("failed to extract input arg %v: %w", i, err)
 				}
 				dynArgs = append(dynArgs, res)
 			} else {

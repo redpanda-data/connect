@@ -15,7 +15,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/nats-io/nats.go"
-	"github.com/ory/dockertest"
+	"github.com/ory/dockertest/v3"
 )
 
 func TestNATSIntegration(t *testing.T) {

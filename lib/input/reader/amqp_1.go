@@ -187,9 +187,9 @@ func (a *AMQP1) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn,
 
 	return msg, func(ctx context.Context, res types.Response) error {
 		if res.Error() != nil {
-			return amqpMsg.Modify(true, false, amqpMsg.Annotations)
+			return amqpMsg.Modify(ctx, true, false, amqpMsg.Annotations)
 		}
-		return amqpMsg.Accept()
+		return amqpMsg.Accept(ctx)
 	}, nil
 }
 

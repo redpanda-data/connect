@@ -14,7 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
-	"github.com/cenkalti/backoff"
+	"github.com/cenkalti/backoff/v4"
 )
 
 //------------------------------------------------------------------------------

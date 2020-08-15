@@ -13,7 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/firehose"
 	"github.com/aws/aws-sdk-go/service/firehose/firehoseiface"
-	"github.com/cenkalti/backoff"
+	"github.com/cenkalti/backoff/v4"
 )
 
 var (
