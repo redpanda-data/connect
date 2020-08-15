@@ -605,24 +605,26 @@ func TestMethods(t *testing.T) {
 				method("collapse"),
 			),
 			messages: []easyMsg{
-				{content: `{"foo":[{"bar":"1"},{"bar":"2"}]}`},
+				{content: `{"foo":[{"bar":"1"},{"bar":{}},{"bar":"2"},{"bar":[]}]}`},
 			},
 			output: map[string]interface{}{
 				"foo.0.bar": "1",
-				"foo.1.bar": "2",
+				"foo.2.bar": "2",
 			},
 		},
 		"check collapse include empty": {
 			input: methods(
 				function("json"),
-				method("collapse_include_empty"),
+				method("collapse", true),
 			),
 			messages: []easyMsg{
-				{content: `{"foo":[{"bar":{}},{"bar":[]}]}`},
+				{content: `{"foo":[{"bar":"1"},{"bar":{}},{"bar":"2"},{"bar":[]}]}`},
 			},
 			output: map[string]interface{}{
-				"foo.0.bar": struct{}{},
-				"foo.1.bar": []struct{}{},
+				"foo.0.bar": "1",
+				"foo.1.bar": struct{}{},
+				"foo.2.bar": "2",
+				"foo.3.bar": []struct{}{},
 			},
 		},
 		"check sha1 hash": {

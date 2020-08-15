@@ -125,24 +125,22 @@ root.foo = this.foo.append("and", "this")
 
 ### `collapse`
 
-Collapse an array or object into an object of key/value pairs for each field, where the key is the full path of the structured field in dot path notation.
+Collapse an array or object into an object of key/value pairs for each field, where the key is the full path of the structured field in dot path notation. Empty arrays an objects are ignored by default.
 
 ```coffee
 root.result = this.collapse()
 
-# In:  {"foo":[{"bar":"1"},{"bar":"2"}]}
-# Out: {"result":{"foo.0.bar":"1","foo.1.bar":"2"}}
+# In:  {"foo":[{"bar":"1"},{"bar":{}},{"bar":"2"},{"bar":[]}]}
+# Out: {"result":{"foo.0.bar":"1","foo.2.bar":"2"}}
 ```
 
-### `collapse_include_empty`
-
-Same as `collapse` but will include any empty objects or arrays.
+An optional boolean parameter can be set to `true` in order to include empty objects and arrays:
 
 ```coffee
-root.result = this.collapse_include_empty()
+root.result = this.collapse(true)
 
-# In:  {"foo":[{"bar":{}},{"bar":[]}]}
-# Out: {"result":{"foo.0.bar":{},"foo.1.bar":[]}}
+# In:  {"foo":[{"bar":"1"},{"bar":{}},{"bar":"2"},{"bar":[]}]}
+# Out: {"result":{"foo.0.bar":"1","foo.1.bar":{},"foo.2.bar":"2","foo.3.bar":[]}}
 ```
 
 ### `contains`

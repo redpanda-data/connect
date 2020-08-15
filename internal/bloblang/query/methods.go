@@ -136,34 +136,26 @@ func catchMethod(fn Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"collapse", false, collapseMethod,
-	ExpectNArgs(0),
+	"collapse", true, collapseMethod,
+	ExpectOneOrZeroArgs(),
+	ExpectBoolArg(0),
 )
 
 func collapseMethod(target Function, args ...interface{}) (Function, error) {
+	includeEmpty := false
+	if len(args) > 0 {
+		includeEmpty = args[0].(bool)
+	}
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
 		}
-		return gabs.Wrap(v).Flatten()
-	}), nil
-}
-
-//------------------------------------------------------------------------------
-
-var _ = RegisterMethod(
-	"collapse_include_empty", false, collapseIncludeEmptyMethod,
-	ExpectNArgs(0),
-)
-
-func collapseIncludeEmptyMethod(target Function, args ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
+		gObj := gabs.Wrap(v)
+		if includeEmpty {
+			return gObj.FlattenIncludeEmpty()
 		}
-		return gabs.Wrap(v).FlattenIncludeEmpty()
+		return gObj.Flatten()
 	}), nil
 }
 
