@@ -1048,6 +1048,41 @@ func TestMethods(t *testing.T) {
 			),
 			err: `failed to parse value as JSON: invalid character 'o' in literal null (expecting 'u')`,
 		},
+		"check parse timestamp unix": {
+			input: methods(
+				literalFn("2020-08-14T11:45:26.371Z"),
+				method("parse_timestamp_unix"),
+			),
+			output: int64(1597405526),
+		},
+		"check parse timestamp unix with format": {
+			input: methods(
+				literalFn("2020-Aug-14"),
+				method("parse_timestamp_unix", "2006-Jan-02"),
+			),
+			output: int64(1597363200),
+		},
+		"check parse timestamp unix invalid": {
+			input: methods(
+				literalFn("not valid timestamp"),
+				method("parse_timestamp_unix"),
+			),
+			err: `parsing time "not valid timestamp" as "2006-01-02T15:04:05Z07:00": cannot parse "not valid timestamp" as "2006"`,
+		},
+		"check parse timestamp unix with invalid format": {
+			input: methods(
+				literalFn("invalid format"),
+				method("parse_timestamp_unix", "2006-Jan-02"),
+			),
+			err: `parsing time "invalid format" as "2006-Jan-02": cannot parse "invalid format" as "2006"`,
+		},
+		"check parse timestamp unix with invalid literal type": {
+			input: methods(
+				literalFn(1),
+				method("parse_timestamp_unix", "2006-Jan-02"),
+			),
+			err: `expected string value, found unknown`,
+		},
 		"check append": {
 			input: methods(
 				jsonFn(`["foo"]`),

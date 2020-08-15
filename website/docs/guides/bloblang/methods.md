@@ -630,6 +630,24 @@ root.doc = this.doc.parse_json()
 # Out: {"doc":{"foo":"bar"}}
 ```
 
+### `parse_timestamp_unix`
+
+Attempts to parse a string as a timestamp accordingly to a format (defaults to ISO 8601) and returns the unix epoch.
+
+```coffee
+root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix()
+
+# In:  {"doc":"{\"timestamp\":\"2020-08-14T11:45:26.371Z\"}"}
+# Out: {"doc":{"timestamp":1597405526}}
+```
+
+```coffee
+root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix("2006-Jan-02")
+
+# In:  {"doc":"{\"timestamp\":\"2020-Aug-14\"}"}
+# Out: {"doc":{"timestamp":1597363200}}
+```
+
 ### `quote`
 
 Quotes a target string using escape sequences (`\t`, `\n`, `\xFF`, `\u0100`) for control characters and non-printable characters.
