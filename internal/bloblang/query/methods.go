@@ -153,6 +153,23 @@ func collapseMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
+	"collapse_include_empty", false, collapseIncludeEmptyMethod,
+	ExpectNArgs(0),
+)
+
+func collapseIncludeEmptyMethod(target Function, args ...interface{}) (Function, error) {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return gabs.Wrap(v).FlattenIncludeEmpty()
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
 	"contains", true, containsMethod,
 	ExpectNArgs(1),
 )
