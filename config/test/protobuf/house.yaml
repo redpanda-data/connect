@@ -1,0 +1,34 @@
+pipeline:
+  processors:
+    # Our test injects JSON, so in order to test the protobuf conversions we go
+    # from JSON to protobuf, then back to JSON, do some mutations, then back to
+    # protobufs, then back to JSON for checking the result.
+    - try:
+      - protobuf:
+          operator: from_json
+          message: testing.House
+          import_path: config/test/protobuf/schema
+      - protobuf:
+          operator: to_json
+          message: testing.House
+          import_path: config/test/protobuf/schema
+      - bloblang: |
+          root = this.people.index(0) | {"first_name":"unknown"}
+      - protobuf:
+          operator: from_json
+          message: testing.Person
+          import_path: config/test/protobuf/schema
+      - protobuf:
+          operator: to_json
+          message: testing.Person
+          import_path: config/test/protobuf/schema
+    - catch:
+      - bloblang: 'root = "error: %v".format(error())'
+
+tests:
+  - name: Simple bridge
+    target_processors: /pipeline/processors
+    input_batch:
+      - content: '{"people":[{"firstName":"john","lastName":"oates","age":10}]}'
+    output_batches:
+      - - content_equals: '{"firstName":"john","lastName":"oates","age":10}'

@@ -113,6 +113,7 @@ const (
 	TypeProcessDAG   = "process_dag"
 	TypeProcessField = "process_field"
 	TypeProcessMap   = "process_map"
+	TypeProtobuf     = "protobuf"
 	TypeRateLimit    = "rate_limit"
 	TypeRedis        = "redis"
 	TypeResource     = "resource"
@@ -178,6 +179,7 @@ type Config struct {
 	ProcessDAG   ProcessDAGConfig   `json:"process_dag" yaml:"process_dag"`
 	ProcessField ProcessFieldConfig `json:"process_field" yaml:"process_field"`
 	ProcessMap   ProcessMapConfig   `json:"process_map" yaml:"process_map"`
+	Protobuf     ProtobufConfig     `json:"protobuf" yaml:"protobuf"`
 	RateLimit    RateLimitConfig    `json:"rate_limit" yaml:"rate_limit"`
 	Redis        RedisConfig        `json:"redis" yaml:"redis"`
 	Resource     string             `json:"resource" yaml:"resource"`
@@ -242,6 +244,7 @@ func NewConfig() Config {
 		ProcessDAG:   NewProcessDAGConfig(),
 		ProcessField: NewProcessFieldConfig(),
 		ProcessMap:   NewProcessMapConfig(),
+		Protobuf:     NewProtobufConfig(),
 		RateLimit:    NewRateLimitConfig(),
 		Redis:        NewRedisConfig(),
 		Resource:     "",

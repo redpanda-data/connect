@@ -13,7 +13,7 @@ const install = `# Install
 curl -Lsf https://sh.benthos.dev | bash
 
 # Make a config
-benthos create nats/avro/blob_storage > ./config.yaml
+benthos create nats/protobuf/blob_storage > ./config.yaml
 
 # Run
 benthos -c ./config.yaml`

@@ -599,6 +599,10 @@ pipeline:
         default_timezone: ${PROCESSOR_PARSE_LOG_DEFAULT_TIMEZONE:UTC}
         default_year: ${PROCESSOR_PARSE_LOG_DEFAULT_YEAR:current}
         format: ${PROCESSOR_PARSE_LOG_FORMAT:syslog_rfc5424}
+      protobuf:
+        import_path: ${PROCESSOR_PROTOBUF_IMPORT_PATH}
+        message: ${PROCESSOR_PROTOBUF_MESSAGE}
+        operator: ${PROCESSOR_PROTOBUF_OPERATOR:to_json}
       rate_limit:
         resource: ${PROCESSOR_RATE_LIMIT_RESOURCE}
       redis:

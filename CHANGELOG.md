@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Improved parser error messages with the `blobl` subcommand.
 - Added flag `file` to the `blobl` subcommand.
 - New Bloblang method `parse_timestamp_unix`.
+- New (BETA) `protobuf` processor.
 
 ### Fixed
 

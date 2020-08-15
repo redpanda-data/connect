@@ -1,0 +1,42 @@
+pipeline:
+  processors:
+    # Our test injects JSON, so in order to test the protobuf conversions we go
+    # from JSON to protobuf, then back to JSON, do some mutations, then back to
+    # protobufs, then back to JSON for checking the result.
+    - try:
+      - protobuf:
+          operator: from_json
+          message: testing.Person
+          import_path: config/test/protobuf/schema
+      - protobuf:
+          operator: to_json
+          message: testing.Person
+          import_path: config/test/protobuf/schema
+      - bloblang: |
+          root = this
+          root.age = (this.age | 0) + 10
+          root.fullName = this.firstName + " " + this.lastName
+      - protobuf:
+          operator: from_json
+          message: testing.Person
+          import_path: config/test/protobuf/schema
+      - protobuf:
+          operator: to_json
+          message: testing.Person
+          import_path: config/test/protobuf/schema
+    - catch:
+      - bloblang: 'root = "error: %v".format(error())'
+
+tests:
+  - name: Simple bridge
+    target_processors: /pipeline/processors
+    input_batch:
+      - content: '{"firstName":"john","lastName":"oates","age":10}'
+      - content: '{"firstName":"daryl","lastName":"hall"}'
+      - content: '{"firstName":"caleb","lastName":"quaye","email":"caleb@myspace.com"}'
+      - content: '{"firstName":"bad","lastName":"data","contains":"unrecognized fields"}'
+    output_batches:
+      - - content_equals: '{"firstName":"john","lastName":"oates","fullName":"john oates","age":20}'
+        - content_equals: '{"firstName":"daryl","lastName":"hall","fullName":"daryl hall","age":10}'
+        - content_equals: '{"firstName":"caleb","lastName":"quaye","fullName":"caleb quaye","age":10,"email":"caleb@myspace.com"}'
+        - content_equals: 'error: failed to unmarshal JSON message: message type testing.Person has no known field named contains'
