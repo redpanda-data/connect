@@ -22,7 +22,7 @@ func (g *fieldFunction) Exec(ctx FunctionContext) (interface{}, error) {
 	if ctx.Value == nil {
 		return nil, &ErrRecoverable{
 			Recovered: nil,
-			Err:       errors.New("context was undefined"),
+			Err:       ErrNoContext,
 		}
 	}
 	if len(g.path) == 0 {

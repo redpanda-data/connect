@@ -16,6 +16,11 @@ type ErrRecoverable struct {
 	Err       error
 }
 
+// Unwrap the error.
+func (e *ErrRecoverable) Unwrap() error {
+	return e.Err
+}
+
 // Error implements the standard error interface.
 func (e *ErrRecoverable) Error() string {
 	return e.Err.Error()

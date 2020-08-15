@@ -158,6 +158,15 @@ func TestAssignments(t *testing.T) {
 			}},
 			output: &part{Content: `{}`},
 		},
+		"invalid json message": {
+			mapping: NewExecutor(nil, nil,
+				NewStatement(nil, NewJSONAssignment("bar"), query.NewLiteralFunction("test2")),
+				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("bar")),
+				NewStatement(nil, NewJSONAssignment("zed"), query.NewLiteralFunction(query.Delete(nil))),
+			),
+			input: []part{{Content: `{@#$ not valid json`}},
+			err:   errors.New("failed to execute mapping query at line 0: failed to parse message as JSON: invalid character '@' looking for beginning of object key string"),
+		},
 	}
 
 	for name, test := range tests {

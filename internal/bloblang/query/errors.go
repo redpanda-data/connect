@@ -2,8 +2,16 @@ package query
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 )
+
+// Common query errors.
+var (
+	ErrNoContext = errors.New("context was undefined")
+)
+
+//------------------------------------------------------------------------------
 
 // TypeError represents an error where a value of a type was required for a
 // function, method or operator but instead a different type was found.

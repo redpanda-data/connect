@@ -1,6 +1,7 @@
 package mapping
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -94,8 +95,11 @@ func (e *Executor) MapPart(index int, msg Message) (types.Part, error) {
 	meta := part.Metadata()
 
 	var valuePtr *interface{}
+	var parseErr error
 	if jObj, err := part.JSON(); err == nil {
 		valuePtr = &jObj
+	} else {
+		parseErr = err
 	}
 
 	var newObj interface{} = query.Nothing(nil)
@@ -111,6 +115,9 @@ func (e *Executor) MapPart(index int, msg Message) (types.Part, error) {
 			var line int
 			if len(e.input) > 0 && len(stmt.input) > 0 {
 				line, _ = LineAndColOf(e.input, stmt.input)
+			}
+			if parseErr != nil && errors.Is(err, query.ErrNoContext) {
+				err = fmt.Errorf("failed to parse message as JSON: %w", parseErr)
 			}
 			return nil, fmt.Errorf("failed to execute mapping query at line %v: %w", line, err)
 		}
