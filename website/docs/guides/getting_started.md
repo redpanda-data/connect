@@ -94,9 +94,9 @@ pipeline:
     - sleep:
         duration: 500ms
     - bloblang: |
-        doc = this
-        first_name = names.0.uppercase()
-        last_name = names.index(-1).hash("sha256").encode("base64")
+        root.doc = this
+        root.first_name = this.names.index(0).uppercase()
+        root.last_name = this.names.index(-1).hash("sha256").encode("base64")
 
 output:
   type: stdout
