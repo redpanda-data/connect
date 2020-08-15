@@ -302,7 +302,7 @@ root.foo = this.value_one.apply("things")
 root.bar = this.value_two.apply("things")
 ```
 
-The path of an import statement is relative to the file that is importing it.
+Imports from a Bloblang mapping within a Benthos config are relative to the process running the config. Imports from an imported file are relative to the file that is importing it.
 
 ## Filtering
 

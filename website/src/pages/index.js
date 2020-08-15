@@ -12,6 +12,9 @@ import TabItem from '@theme/TabItem';
 const install = `# Install
 curl -Lsf https://sh.benthos.dev | bash
 
+# Make a config
+benthos create nats/avro/blob_storage > ./config.yaml
+
 # Run
 benthos -c ./config.yaml`
 
@@ -98,14 +101,10 @@ const features = [
     description: (
       <>
         <p>
-          Most stream processing tasks are actually just boring transformations,
-          service queries or multiplexing. Benthos specializes in these tasks,
-          letting you focus on the more exciting features of your architecture.
+          Most stream processing tasks are actually just boring transformations, glueing APIs together, and multiplexing. Benthos specializes in these tasks, letting you focus on the more exciting features of your architecture.
         </p>
         <p>
-          At Meltwater it's enriching over 450 million documents per day with a
-          network of more than 20 NLP services. It sounds very interesting but
-          rest assured, <a href="https://underthehood.meltwater.com/blog/2019/08/26/enriching-450m-docs-daily-with-a-boring-stream-processor/">it's totally drab</a>.
+          It comes armed with a wide range <a href="/docs/components/processors/about">processors</a>, a <a href="/docs/guides/bloblang/about/">lit mapping language</a>, stateless <a href="/docs/configuration/windowed_processing/">windowed processing capabilities</a> and an <a href="/blobfish/">industry leading mascot</a>.
         </p>
       </>
     ),
@@ -118,6 +117,9 @@ const features = [
         <p>
           Benthos is able to glue a wide range of <a href="/docs/components/inputs/about">sources</a> and <a href="/docs/components/outputs/about">sinks</a> together
           and hook into a variety of <a href="/docs/components/processors/sql">databases</a>, <a href="/docs/components/processors/cache">caches</a> and your <a href="/docs/components/processors/http">own services</a>, enabling you to seamlessly deploy it without changing your existing infrastructure.
+        </p>
+        <p>
+          Working with disparate APIs and services can be a daunting task, doubly so in a streaming data context. With Benthos it's possible to break these tasks down and automatically parallelize them as <a href="/cookbooks/enrichments/">a streaming workflow</a>.
         </p>
       </>
     ),

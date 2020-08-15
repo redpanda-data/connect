@@ -12,15 +12,15 @@ pipeline:
   threads: 1
   processors:
     - bloblang: |
-        message = this
-        meta.link_count = links.length()
+        root.message = this
+        root.meta.link_count = this.links.length()
 ```
 
 The `threads` field in the pipeline section determines how many parallel processing threads are created. You can read more about parallel processing in the [pipeline guide][pipelines].
 
 ### Error Handling
 
-Some processors have conditions whereby they might fail. Benthos has mechanisms for detecting and recovering from these failures which can be read about [here][error_handling].
+Some processors have conditions whereby they might fail. Rather than throw these messages into the abyss Benthos still attempts to send these messages onwards, and has mechanisms for filtering, recovering or dead-letter queuing messages that have failed which can be read about [here][error_handling].
 
 ### Batching and Multiple Part Messages
 

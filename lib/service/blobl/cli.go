@@ -84,7 +84,7 @@ func run(c *cli.Context) error {
 	exec, err := bloblang.NewMapping(file, m)
 	if err != nil {
 		if perr, ok := err.(*parser.Error); ok {
-			fmt.Fprintln(os.Stderr, red(fmt.Sprintf("failed to parse mapping: %v", perr.ErrorAtPositionStructured("", []rune(m)))))
+			fmt.Fprintln(os.Stderr, fmt.Sprintf("%v %v", red("failed to parse mapping:"), perr.ErrorAtPositionStructured("", []rune(m))))
 		} else {
 			fmt.Fprintln(os.Stderr, red(err.Error()))
 		}

@@ -4,7 +4,7 @@ title: Windowed Processing
 
 There are many ways of performing windowed or aggregated message processing with the wide range of [connectors and processors][processors] Benthos offers, but this usually relies on aggregating messages in transit with a cache or database.
 
-Instead, this document outlines the simplest way of performing windowed processing in Benthos, which is to use input level [batching][batching].
+Instead, this document outlines the simplest way of performing tumbling window processing in Benthos, which is to use input level [batching][batching]. There are plans to eventually offer other windowing mechanisms such as hopping or sliding and these will behave similarly.
 
 ## Creating Batches
 

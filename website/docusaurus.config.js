@@ -27,6 +27,9 @@ module.exports = {
       theme: require('prism-react-renderer/themes/github'),
       darkTheme: require('./src/plugins/prism_themes/monokai'),
     },
+    colorMode: {
+      defaultMode: 'dark',
+    },
     image: 'img/logo_hero.svg',
     navbar: {
       title: 'Benthos',
@@ -34,7 +37,7 @@ module.exports = {
         alt: 'Benthos Blobfish',
         src: 'img/logo.svg',
       },
-      links: [
+      items: [
         {to: 'docs/about', label: 'Docs', position: 'left'},
         {to: 'cookbooks', label: 'Cookbooks', position: 'left'},
         {to: 'blog', label: 'Blog', position: 'left'},
@@ -72,22 +75,22 @@ module.exports = {
               label: 'Gitter',
               href: 'https://gitter.im/jeffail-benthos/community',
             },
+            {
+              label: 'GitHub',
+              href: 'https://github.com/Jeffail/benthos',
+            },
           ],
         },
         {
           title: 'Social',
           items: [
             {
-              label: "Jeffail's Blog",
-              to: 'https://www.jeffail.uk',
-            },
-            {
-              label: 'GitHub',
-              href: 'https://github.com/Jeffail/benthos',
-            },
-            {
               label: 'Twitter',
               href: 'https://twitter.com/jeffail',
+            },
+            {
+              label: 'Mascot',
+              to: 'blobfish',
             },
           ],
         },
@@ -120,8 +123,5 @@ module.exports = {
   plugins: [
     path.resolve(__dirname, './src/plugins/cookbooks'),
     path.resolve(__dirname, './src/plugins/redirects'),
-  ],
-  scripts: [
-    '/js/dark_default.js',
   ],
 };
