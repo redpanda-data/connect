@@ -632,19 +632,21 @@ root.doc = this.doc.parse_json()
 
 ### `parse_timestamp_unix`
 
-Attempts to parse a string as a timestamp accordingly to a format (defaults to ISO 8601) and returns the unix epoch.
+Attempts to parse a string as a timestamp, following ISO 8601 format by default, and returns the unix epoch.
 
 ```coffee
 root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix()
 
-# In:  {"doc":"{\"timestamp\":\"2020-08-14T11:45:26.371Z\"}"}
+# In:  {"doc":{"timestamp":"2020-08-14T11:45:26.371Z"}}
 # Out: {"doc":{"timestamp":1597405526}}
 ```
+
+An optional string argument can be used in order to specify the expected format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
 
 ```coffee
 root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix("2006-Jan-02")
 
-# In:  {"doc":"{\"timestamp\":\"2020-Aug-14\"}"}
+# In:  {"doc":{"timestamp":"2020-Aug-14"}}
 # Out: {"doc":{"timestamp":1597363200}}
 ```
 

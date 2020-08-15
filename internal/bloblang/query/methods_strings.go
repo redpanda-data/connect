@@ -687,7 +687,7 @@ func parseJSONMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"parse_timestamp_unix", false, parseTimestampMethod,
+	"parse_timestamp_unix", true, parseTimestampMethod,
 	ExpectOneOrZeroArgs(),
 	ExpectStringArg(0),
 )
@@ -702,15 +702,20 @@ func parseTimestampMethod(target Function, args ...interface{}) (Function, error
 		if err != nil {
 			return nil, err
 		}
+		var str string
 		switch t := v.(type) {
+		case []byte:
+			str = string(t)
 		case string:
-			ut, err := time.Parse(layout, t)
-			if err != nil {
-				return nil, err
-			}
-			return ut.Unix(), nil
+			str = t
+		default:
+			return nil, NewTypeError(v, ValueString)
 		}
-		return nil, NewTypeError(v, ValueString)
+		ut, err := time.Parse(layout, str)
+		if err != nil {
+			return nil, err
+		}
+		return ut.Unix(), nil
 	}), nil
 }
 
