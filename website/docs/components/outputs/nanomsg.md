@@ -10,6 +10,9 @@ type: output
      lib/output/nanomsg.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Send messages over a Nanomsg socket.
 

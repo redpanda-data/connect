@@ -10,6 +10,9 @@ type: output
      lib/output/hdfs.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Sends message parts as files to a HDFS directory.
 

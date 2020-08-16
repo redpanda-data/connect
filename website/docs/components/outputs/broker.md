@@ -10,19 +10,18 @@ type: output
      lib/output/broker.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Allows you to route messages to multiple child outputs using a range of
 brokering [patterns](#patterns).
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

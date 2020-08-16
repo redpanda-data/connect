@@ -10,19 +10,18 @@ type: condition
      lib/condition/jmespath.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Executes a JMESPath query on JSON payloads, expecting a boolean result. If the
 result of the query is true then the condition passes, otherwise it does not.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

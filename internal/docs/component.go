@@ -12,6 +12,18 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// AnnotatedExample is an isolated example for a component.
+type AnnotatedExample struct {
+	// A title for the example.
+	Title string
+
+	// Summary of the example.
+	Summary string
+
+	// A config snippet to show.
+	Config string
+}
+
 // ComponentSpec describes a Benthos component.
 type ComponentSpec struct {
 	// Name of the component
@@ -28,6 +40,9 @@ type ComponentSpec struct {
 
 	// Footnotes of the component (in markdown).
 	Footnotes string
+
+	// Examples demonstrating use cases for the component.
+	Examples []AnnotatedExample
 
 	// Whether the component is beta.
 	Beta bool
@@ -55,6 +70,7 @@ type componentContext struct {
 	Type           string
 	Summary        string
 	Description    string
+	Examples       []AnnotatedExample
 	Fields         []fieldContext
 	Footnotes      string
 	CommonConfig   string
@@ -74,9 +90,11 @@ func (ctx fieldContext) InterpolationIndividual() FieldInterpolation {
 var componentTemplate = `---
 title: {{.Name}}
 type: {{.Type}}
-{{if .Beta}}beta: true
+{{if .Beta -}}
+beta: true
 {{end -}}
-{{if .Deprecated}}deprecated: true
+{{if .Deprecated -}}
+deprecated: true
 {{end -}}
 ---
 
@@ -86,6 +104,9 @@ type: {{.Type}}
      To make changes please edit the contents of:
      lib/{{.Type}}/{{.Name}}.go
 -->
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
 
 {{if .Beta -}}
 BETA: This component is experimental and therefore subject to change outside of
@@ -105,14 +126,10 @@ version release. Please consider moving onto [alternative components](#alternati
 {{.CommonConfig -}}
 ` + "```" + `
 {{else}}
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={{"{"}}[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]{{"}"}}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 
@@ -135,6 +152,30 @@ import TabItem from '@theme/TabItem';
 {{if gt (len .Description) 0}}
 {{.Description}}
 {{end}}
+{{if gt (len .Examples) 0 -}}
+## Examples
+
+<Tabs defaultValue="{{ (index .Examples 0).Title }}" values={{"{"}}[
+{{range $i, $example := .Examples -}}
+  { label: '{{$example.Title}}', value: '{{$example.Title}}', },
+{{end -}}
+]{{"}"}}>
+
+{{range $i, $example := .Examples -}}
+<TabItem value="{{$example.Title}}">
+
+{{if gt (len $example.Summary) 0 -}}
+{{$example.Summary}}
+{{end}}
+{{if gt (len $example.Config) 0 -}}
+` + "```yaml" + `{{$example.Config}}` + "```" + `
+{{end}}
+</TabItem>
+{{end -}}
+</Tabs>
+
+{{end -}}
+
 {{if gt (len .Fields) 0 -}}
 ## Fields
 
@@ -166,7 +207,8 @@ Type: ` + "`{{$field.Type}}`" + `
 ` + "```" + `
 
 {{end -}}
-{{end}}{{if gt (len .Footnotes) 0 -}}
+{{end -}}
+{{if gt (len .Footnotes) 0 -}}
 {{.Footnotes}}
 {{end}}
 `
@@ -232,6 +274,7 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 		Type:        c.Type,
 		Summary:     c.Summary,
 		Description: c.Description,
+		Examples:    c.Examples,
 		Footnotes:   c.Footnotes,
 		Beta:        c.Beta,
 		Deprecated:  c.Deprecated,

@@ -10,19 +10,18 @@ type: input
      lib/input/broker.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Allows you to combine multiple inputs, where each input will be read in
 parallel.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

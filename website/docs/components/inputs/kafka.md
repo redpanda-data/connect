@@ -10,18 +10,17 @@ type: input
      lib/input/kafka.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Connects to a Kafka broker and consumes a topic and partition.
 
-
-import Tabs from '@theme/Tabs';
 
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

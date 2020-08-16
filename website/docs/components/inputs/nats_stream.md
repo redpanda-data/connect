@@ -10,19 +10,18 @@ type: input
      lib/input/nats_stream.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Subscribe to a NATS Stream subject. Joining a queue is optional and allows
 multiple clients of a subject to consume using queue semantics.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

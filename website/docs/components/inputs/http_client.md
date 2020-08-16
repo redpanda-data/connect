@@ -10,18 +10,17 @@ type: input
      lib/input/http_client.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Connects to a server and continuously performs requests for a single message.
 
-
-import Tabs from '@theme/Tabs';
 
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

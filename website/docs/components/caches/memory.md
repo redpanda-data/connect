@@ -10,6 +10,9 @@ type: cache
      lib/cache/memory.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Stores key/value pairs in a map held in memory. This cache is therefore reset
 every time the service restarts. Each item in the cache has a TTL set from the
@@ -17,14 +20,10 @@ moment it was last edited, after which it will be removed during the next
 compaction.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

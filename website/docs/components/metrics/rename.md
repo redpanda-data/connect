@@ -10,6 +10,9 @@ type: metrics
      lib/metrics/rename.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Rename metric paths as they are registered.
 

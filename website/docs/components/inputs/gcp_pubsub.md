@@ -10,6 +10,9 @@ type: input
      lib/input/gcp_pubsub.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Consumes messages from a GCP Cloud Pub/Sub subscription.
 

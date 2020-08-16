@@ -10,19 +10,18 @@ type: input
      lib/input/kafka_balanced.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Connects to Kafka brokers and consumes topics by automatically sharing
 partitions across other consumers of the same consumer group.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

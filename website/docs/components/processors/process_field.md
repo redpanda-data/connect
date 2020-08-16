@@ -11,6 +11,9 @@ deprecated: true
      lib/processor/process_field.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 DEPRECATED: This component is deprecated and will be removed in the next major
 version release. Please consider moving onto [alternative components](#alternatives).
 
@@ -20,14 +23,10 @@ processors to the extracted value and finally sets the field within the original
 payloads to the processed result.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

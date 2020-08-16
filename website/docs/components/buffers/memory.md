@@ -10,20 +10,19 @@ type: buffer
      lib/buffer/memory.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Stores consumed messages in memory and acknowledges them at the input level.
 During shutdown Benthos will make a best attempt at flushing all remaining
 messages before exiting cleanly.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

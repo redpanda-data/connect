@@ -230,6 +230,7 @@ func doProcessors(docsDir string) {
 			Name:        k,
 			Summary:     v.Summary,
 			Description: v.Description,
+			Examples:    v.Examples,
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
 			Beta:        v.Beta,

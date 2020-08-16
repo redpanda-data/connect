@@ -10,20 +10,19 @@ type: cache
      lib/cache/dynamodb.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Stores key/value pairs as a single document in a DynamoDB table. The key is
 stored as a string value and used as the table hash key. The value is stored as
 a binary value using the `data_key` field name.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

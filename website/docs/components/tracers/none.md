@@ -10,6 +10,9 @@ type: tracer
      lib/tracer/none.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Do not send opentracing events anywhere.
 

@@ -10,6 +10,9 @@ type: output
      lib/output/nats_stream.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Publish to a NATS Stream subject.
 

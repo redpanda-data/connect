@@ -10,6 +10,9 @@ type: metrics
      lib/metrics/statsd.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Pushes metrics using the [StatsD protocol](https://github.com/statsd/statsd).
 Supported tagging formats are 'legacy', 'none', 'datadog' and 'influxdb'.

@@ -10,6 +10,9 @@ type: rate_limit
      lib/rate_limit/local.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 The local rate limit is a simple X every Y type rate limit that can be shared
 across any number of components within the pipeline but does not support

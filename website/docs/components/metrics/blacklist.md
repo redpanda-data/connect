@@ -10,6 +10,9 @@ type: metrics
      lib/metrics/blacklist.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Blacklist metric paths within Benthos so that they are not aggregated by a child
 metric target.

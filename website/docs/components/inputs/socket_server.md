@@ -10,19 +10,18 @@ type: input
      lib/input/socket_server.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Creates a server that receives messages over a (tcp/udp/unix) socket. Each
 connection is parsed as a continuous stream of line delimited messages.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

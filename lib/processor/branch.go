@@ -44,6 +44,42 @@ branch messages.
 If the ` + "`result_map`" + ` fails the message will remain unchanged with an
 error and standard [error handling methods](/docs/configuration/error_handling)
 can be used in order to filter, DLQ or recover the failed messages.`,
+		Examples: []docs.AnnotatedExample{
+			{
+				Title: "HTTP Request",
+				Summary: `
+This example strips the request message into an empty body, grabs an HTTP
+payload, and places the result back into the original message at the path
+` + "`repo.status`" + `:`,
+				Config: `
+pipeline:
+  processors:
+    - branch:
+        request_map: 'root = ""'
+        processors:
+          - http:
+              url: https://hub.docker.com/v2/repositories/jeffail/benthos
+              verb: GET
+        result_map: 'root.repo.status = this'
+`,
+			},
+			{
+				Title: "Lambda Function",
+				Summary: `
+This example maps a new payload for triggering a lambda function with an ID and
+username from the original message, and the result of the lambda is discarded,
+meaning the original message is unchanged.`,
+				Config: `
+pipeline:
+  processors:
+    - branch:
+        request_map: '{"id":this.doc.id,"username":this.user.name}'
+        processors:
+          - lambda:
+              function: trigger_user_update
+`,
+			},
+		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(
 				"request_map",

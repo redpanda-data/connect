@@ -11,6 +11,9 @@ deprecated: true
      lib/processor/process_batch.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 DEPRECATED: This component is deprecated and will be removed in the next major
 version release. Please consider moving onto [alternative components](#alternatives).
 

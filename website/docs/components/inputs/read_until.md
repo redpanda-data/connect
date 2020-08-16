@@ -10,6 +10,9 @@ type: input
      lib/input/read_until.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Reads messages from a child input until a consumed message passes a condition,
 at which point the input closes.

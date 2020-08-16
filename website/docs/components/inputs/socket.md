@@ -10,18 +10,17 @@ type: input
      lib/input/socket.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Connects to a (tcp/unix) socket and consumes a continuous stream of messages.
 
-
-import Tabs from '@theme/Tabs';
 
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

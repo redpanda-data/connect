@@ -10,6 +10,9 @@ type: metrics
      lib/metrics/whitelist.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Whitelist metric paths within Benthos so that only matching metric paths are
 aggregated by a child metric target.

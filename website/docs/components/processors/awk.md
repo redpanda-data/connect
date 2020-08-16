@@ -10,20 +10,19 @@ type: processor
      lib/processor/awk.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Executes an AWK program on messages. This processor is very powerful as it
 offers a range of [custom functions](#awk-functions) for querying and mutating
 message contents and metadata.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

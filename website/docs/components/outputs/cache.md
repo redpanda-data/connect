@@ -10,6 +10,9 @@ type: output
      lib/output/cache.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Stores each message in a [cache](/docs/components/caches/about).
 

@@ -10,6 +10,9 @@ type: output
      lib/output/socket.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Sends messages as a continuous stream of line delimited data over a
 (tcp/udp/unix) socket by connecting to a server.

@@ -10,20 +10,19 @@ type: condition
      lib/condition/check_field.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Extracts the value of a field identified via [dot path](/docs/configuration/field_paths)
 within messages (currently only JSON format is supported) and then tests the
 extracted value against a child condition.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

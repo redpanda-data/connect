@@ -10,6 +10,9 @@ type: condition
      lib/condition/static.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Always resolves to the same static boolean value.
 

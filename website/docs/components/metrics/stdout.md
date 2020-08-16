@@ -11,6 +11,9 @@ beta: true
      lib/metrics/stdout.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 BETA: This component is experimental and therefore subject to change outside of
 major version releases.
 

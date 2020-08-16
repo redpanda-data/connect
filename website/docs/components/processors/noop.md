@@ -10,6 +10,9 @@ type: processor
      lib/processor/noop.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Noop is a no-op processor that does nothing, the message passes through
 unchanged. Why? That's a great question.

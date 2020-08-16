@@ -10,6 +10,9 @@ type: processor
      lib/processor/sleep.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Sleep for a period of time specified as a duration string. This processor will
 interpolate functions within the `duration` field, you can find a list

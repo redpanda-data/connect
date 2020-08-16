@@ -10,6 +10,9 @@ type: output
      lib/output/drop_on_error.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Attempts to write messages to a child output and if the write fails for any
 reason the message is dropped instead of being reattempted.

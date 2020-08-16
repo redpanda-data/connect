@@ -10,6 +10,9 @@ type: condition
      lib/condition/count.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Counts messages starting from one, returning true until the counter reaches its
 target, at which point it will return false and reset the counter.

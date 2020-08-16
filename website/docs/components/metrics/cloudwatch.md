@@ -10,6 +10,9 @@ type: metrics
      lib/metrics/cloudwatch.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Send metrics to AWS CloudWatch using the PutMetricData endpoint.
 
@@ -17,14 +20,10 @@ ALPHA: This metrics target is experimental, untested, and subject to breaking
 changes outside of major releases. It also wrote Game of Thrones Season 8.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

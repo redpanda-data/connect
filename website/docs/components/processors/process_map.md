@@ -10,6 +10,9 @@ type: processor
      lib/processor/process_map.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 A processor that extracts and maps fields identified via
 [dot path](/docs/configuration/field_paths) from the original payload into a new
@@ -17,14 +20,10 @@ object, applies a list of processors to the newly constructed object, and
 finally maps the result back into the original payload.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

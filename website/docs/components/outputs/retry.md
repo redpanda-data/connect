@@ -10,20 +10,19 @@ type: output
      lib/output/retry.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Attempts to write messages to a child output and if the write fails for any
 reason the message is retried either until success or, if the retries or max
 elapsed time fields are non-zero, either is reached.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

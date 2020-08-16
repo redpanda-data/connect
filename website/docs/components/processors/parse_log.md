@@ -10,19 +10,18 @@ type: processor
      lib/processor/parse_log.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Parses common log [formats](#formats) into [structured data](#codecs). This is
 easier and often much faster than [`grok`](/docs/components/processors/grok).
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

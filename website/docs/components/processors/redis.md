@@ -10,6 +10,9 @@ type: processor
      lib/processor/redis.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Performs actions against Redis that aren't possible using a
 [`cache`](/docs/components/processors/cache) processor. Actions are
@@ -17,14 +20,10 @@ performed for each message of a batch, where the contents are replaced with the
 result.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

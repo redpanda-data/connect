@@ -39,6 +39,9 @@ type TypeSpec struct {
 
 	// Deprecated indicates whether this component is deprecated.
 	Deprecated bool
+
+	Examples []docs.AnnotatedExample
+
 	FieldSpecs docs.FieldSpecs
 }
 

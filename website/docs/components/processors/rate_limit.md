@@ -10,6 +10,9 @@ type: processor
      lib/processor/rate_limit.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Throttles the throughput of a pipeline according to a specified
 [`rate_limit`](/docs/components/rate_limits/about) resource. Rate limits are

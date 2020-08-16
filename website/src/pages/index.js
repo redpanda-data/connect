@@ -13,7 +13,7 @@ const install = `# Install
 curl -Lsf https://sh.benthos.dev | bash
 
 # Make a config
-benthos create nats/protobuf/blob_storage > ./config.yaml
+benthos create nats/protobuf/sqs > ./config.yaml
 
 # Run
 benthos -c ./config.yaml`
@@ -71,15 +71,14 @@ output:
 
 pipeline:
   processors:
-    - process_map:
-        premap:
-          id: doc.id
-          contents: doc.body
+    - branch:
+        request_map: |
+          root.id = this.doc.id
+          root.content = this.doc.body
         processors:
           - lambda:
               function: sentiment_analysis
-        postmap:
-          results.sentiment: .
+        result_map: root.results.sentiment = this
 
 output:
   s3:

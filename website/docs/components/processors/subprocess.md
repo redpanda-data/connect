@@ -10,20 +10,19 @@ type: processor
      lib/processor/subprocess.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Subprocess is a processor that runs a process in the background and, for each
 message, will pipe its contents to the stdin stream of the process followed by a
 newline.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

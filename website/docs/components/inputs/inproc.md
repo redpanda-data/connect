@@ -10,6 +10,9 @@ type: input
      lib/input/inproc.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 ```yaml
 # Config fields, showing default values

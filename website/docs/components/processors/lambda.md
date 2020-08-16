@@ -10,20 +10,19 @@ type: processor
      lib/processor/lambda.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Invokes an AWS lambda for each message. The contents of the message is the
 payload of the request, and the result of the invocation will become the new
 contents of the message.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

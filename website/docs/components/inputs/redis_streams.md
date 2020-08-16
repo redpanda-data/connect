@@ -10,19 +10,18 @@ type: input
      lib/input/redis_streams.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Pulls messages from Redis (v5.0+) streams with the XREADGROUP command. The
 `client_id` should be unique for each consumer of a group.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

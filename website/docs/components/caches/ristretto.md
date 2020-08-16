@@ -11,6 +11,9 @@ beta: true
      lib/cache/ristretto.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 BETA: This component is experimental and therefore subject to change outside of
 major version releases.
 
@@ -23,14 +26,10 @@ The add command is non-atomic, and therefore this cache is not suitable for
 deduplication.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

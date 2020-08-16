@@ -10,6 +10,9 @@ type: input
      lib/input/redis_pubsub.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Consume from a Redis publish/subscribe channel using either the SUBSCRIBE or
 PSUBSCRIBE commands.

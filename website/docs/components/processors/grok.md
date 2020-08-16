@@ -10,20 +10,19 @@ type: processor
      lib/processor/grok.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Parses messages into a structured format by attempting to apply a list of Grok
 patterns, if a pattern returns at least one value a resulting structured object
 is created according to the chosen output format.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

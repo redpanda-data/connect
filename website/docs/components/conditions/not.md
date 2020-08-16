@@ -10,6 +10,9 @@ type: condition
      lib/condition/not.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Returns the opposite (NOT) of a child condition.
 

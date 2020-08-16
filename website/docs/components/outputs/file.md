@@ -10,6 +10,9 @@ type: output
      lib/output/file.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Writes messages in line delimited format to a file.
 

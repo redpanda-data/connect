@@ -10,6 +10,9 @@ type: processor
      lib/processor/archive.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Archives all the messages of a batch into a single message according to the
 selected archive [format](#formats).

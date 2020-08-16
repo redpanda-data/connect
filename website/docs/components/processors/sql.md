@@ -10,6 +10,9 @@ type: processor
      lib/processor/sql.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Runs an SQL query against a target database for each message batch and, for
 queries that return rows, replaces the batch with the result according to a

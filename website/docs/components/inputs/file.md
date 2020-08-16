@@ -10,6 +10,9 @@ type: input
      lib/input/file.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Reads a file, where each line is processed as an individual message.
 

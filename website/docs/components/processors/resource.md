@@ -10,6 +10,9 @@ type: processor
      lib/processor/resource.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Resource is a processor type that runs a processor resource by its name. This
 processor allows you to run the same configured processor resource in multiple

@@ -10,6 +10,9 @@ type: processor
      lib/processor/log.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Prints a log event each time it processes a batch. Messages always remain
 unchanged. The log message can be set using function interpolations described

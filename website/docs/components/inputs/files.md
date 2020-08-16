@@ -10,6 +10,9 @@ type: input
      lib/input/files.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Reads files from a path, where each discrete file will be consumed as a single
 message.

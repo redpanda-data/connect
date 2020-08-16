@@ -10,6 +10,9 @@ type: processor
      lib/processor/try.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Behaves similarly to the [`for_each`](/docs/components/processors/for_each) processor, where a
 list of child processors are applied to individual messages of a batch. However,

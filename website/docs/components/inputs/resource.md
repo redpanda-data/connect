@@ -10,6 +10,9 @@ type: input
      lib/input/resource.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Resource is an input type that runs a resource input by its name. This input
 allows you to run the same configured input resource in multiple places.

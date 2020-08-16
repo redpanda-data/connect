@@ -10,6 +10,9 @@ type: processor
      lib/processor/metric.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Expose custom metrics by extracting values from message batches.
 

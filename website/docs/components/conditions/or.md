@@ -10,6 +10,9 @@ type: condition
      lib/condition/or.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Returns the logical OR of children conditions.
 

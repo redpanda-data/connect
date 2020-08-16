@@ -10,6 +10,9 @@ type: processor
      lib/processor/process_dag.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 A processor that manages a map of `process_map` processors and
 calculates a Directed Acyclic Graph (DAG) of their dependencies by referring to

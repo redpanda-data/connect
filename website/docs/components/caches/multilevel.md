@@ -10,6 +10,9 @@ type: cache
      lib/cache/multilevel.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Combines multiple caches as levels, performing read-through and write-through
 operations across them.

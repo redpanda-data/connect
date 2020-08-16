@@ -10,6 +10,9 @@ type: processor
      lib/processor/conditional.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Executes a set of child processors when a [condition](/docs/components/conditions/about)
 passes for a message batch, otherwise a different set of processors are applied.

@@ -10,6 +10,9 @@ type: buffer
      lib/buffer/none.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Do not buffer messages. This is the default and most resilient configuration.
 

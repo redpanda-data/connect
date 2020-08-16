@@ -10,6 +10,9 @@ type: condition
      lib/condition/and.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 And is a condition that returns the logical AND of its children conditions.
 

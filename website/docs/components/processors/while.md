@@ -10,20 +10,19 @@ type: processor
      lib/processor/while.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 While is a processor that has a condition and a list of child processors. The
 child processors are executed continuously on a message batch for as long as the
 child condition resolves to true.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

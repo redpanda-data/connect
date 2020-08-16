@@ -10,6 +10,9 @@ type: processor
      lib/processor/workflow.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Executes an automatically resolved workflow of processing stages.
 

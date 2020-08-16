@@ -10,6 +10,9 @@ type: output
      lib/output/sync_response.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Returns the final message payload back to the input origin of the message, where
 it is dealt with according to that specific input type.

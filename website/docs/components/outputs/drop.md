@@ -10,6 +10,9 @@ type: output
      lib/output/drop.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Drops all messages.
 

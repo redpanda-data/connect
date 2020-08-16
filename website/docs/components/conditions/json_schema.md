@@ -10,19 +10,18 @@ type: condition
      lib/condition/json_schema.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Validates a message against the provided JSONSchema definition to retrieve a
 boolean response indicating whether the message matches the schema or not.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

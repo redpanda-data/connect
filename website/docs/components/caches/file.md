@@ -10,6 +10,9 @@ type: cache
      lib/cache/file.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Stores each item in a directory as a file, where an item ID is the path relative
 to the configured directory.

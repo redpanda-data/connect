@@ -10,19 +10,18 @@ type: processor
      lib/processor/cache.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Performs operations against a [cache resource](/docs/components/caches/about)
 for each message, allowing you to store or retrieve data within message payloads.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

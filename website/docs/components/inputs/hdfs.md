@@ -10,6 +10,9 @@ type: input
      lib/input/hdfs.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Reads files from a HDFS directory, where each discrete file will be consumed as
 a single message payload.

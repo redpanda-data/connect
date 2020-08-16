@@ -10,6 +10,9 @@ type: output
      lib/output/try.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Attempts to send each message to a child output, starting from the first output
 on the list. If an output attempt fails then the next output in the list is

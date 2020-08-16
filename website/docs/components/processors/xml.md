@@ -11,6 +11,9 @@ beta: true
      lib/processor/xml.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 BETA: This component is experimental and therefore subject to change outside of
 major version releases.
 
@@ -18,14 +21,10 @@ Parses messages as an XML document, performs a mutation on the data, and then
 overwrites the previous contents with the new value.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

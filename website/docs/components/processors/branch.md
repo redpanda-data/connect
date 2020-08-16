@@ -11,6 +11,9 @@ beta: true
      lib/processor/branch.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 BETA: This component is experimental and therefore subject to change outside of
 major version releases.
 
@@ -42,6 +45,53 @@ branch messages.
 If the `result_map` fails the message will remain unchanged with an
 error and standard [error handling methods](/docs/configuration/error_handling)
 can be used in order to filter, DLQ or recover the failed messages.
+
+## Examples
+
+<Tabs defaultValue="HTTP Request" values={[
+{ label: 'HTTP Request', value: 'HTTP Request', },
+{ label: 'Lambda Function', value: 'Lambda Function', },
+]}>
+
+<TabItem value="HTTP Request">
+
+
+This example strips the request message into an empty body, grabs an HTTP
+payload, and places the result back into the original message at the path
+`repo.status`:
+
+```yaml
+pipeline:
+  processors:
+    - branch:
+        request_map: 'root = ""'
+        processors:
+          - http:
+              url: https://hub.docker.com/v2/repositories/jeffail/benthos
+              verb: GET
+        result_map: 'root.repo.status = this'
+```
+
+</TabItem>
+<TabItem value="Lambda Function">
+
+
+This example maps a new payload for triggering a lambda function with an ID and
+username from the original message, and the result of the lambda is discarded,
+meaning the original message is unchanged.
+
+```yaml
+pipeline:
+  processors:
+    - branch:
+        request_map: '{"id":this.doc.id,"username":this.user.name}'
+        processors:
+          - lambda:
+              function: trigger_user_update
+```
+
+</TabItem>
+</Tabs>
 
 ## Fields
 

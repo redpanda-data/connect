@@ -10,6 +10,9 @@ type: processor
      lib/processor/parallel.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 A processor that applies a list of child processors to messages of a batch as
 though they were each a batch of one message (similar to the

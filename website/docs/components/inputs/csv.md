@@ -11,6 +11,9 @@ beta: true
      lib/input/csv.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 BETA: This component is experimental and therefore subject to change outside of
 major version releases.
 
@@ -18,14 +21,10 @@ Reads one or more CSV files as structured records following the format described
 in RFC 4180.
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

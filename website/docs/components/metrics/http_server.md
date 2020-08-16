@@ -10,6 +10,9 @@ type: metrics
      lib/metrics/http_server.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Serves metrics as [JSON object](#object-format) with the service wide HTTP
 service at the endpoints `/stats` and `/metrics`.

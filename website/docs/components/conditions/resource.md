@@ -10,6 +10,9 @@ type: condition
      lib/condition/resource.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Runs a condition resource by its name. This condition allows you to run the same
 configured condition resource in multiple processors, or as a branch of another

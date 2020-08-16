@@ -10,6 +10,9 @@ type: output
      lib/output/stdout.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 The stdout output type prints messages to stdout.
 

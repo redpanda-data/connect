@@ -10,6 +10,9 @@ type: processor
      lib/processor/catch.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Applies a list of child processors _only_ when a previous processing step has
 failed.

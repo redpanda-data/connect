@@ -10,6 +10,9 @@ type: output
      lib/output/gcp_pubsub.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Sends messages to a GCP Cloud Pub/Sub topic. [Metadata](/docs/configuration/metadata)
 from messages are sent as attributes.

@@ -10,6 +10,9 @@ type: output
      lib/output/files.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Writes each individual message to a new file.
 

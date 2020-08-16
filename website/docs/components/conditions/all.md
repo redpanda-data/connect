@@ -10,6 +10,9 @@ type: condition
      lib/condition/all.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 A condition that tests a child condition against each message of a batch
 individually. If all messages pass the child condition then this condition also

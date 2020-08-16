@@ -10,6 +10,9 @@ type: output
      lib/output/redis_pubsub.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Publishes messages through the Redis PubSub model. It is not possible to
 guarantee that messages have been received.

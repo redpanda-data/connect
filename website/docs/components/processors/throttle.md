@@ -10,6 +10,9 @@ type: processor
      lib/processor/throttle.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Throttles the throughput of a pipeline to a maximum of one message batch per
 period. This throttle is per processing pipeline, and therefore four threads

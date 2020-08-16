@@ -10,6 +10,9 @@ type: condition
      lib/condition/bloblang.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Executes a [Bloblang](/docs/guides/bloblang/about) query on messages, expecting
 a boolean result. If the result of the query is true then the condition passes,

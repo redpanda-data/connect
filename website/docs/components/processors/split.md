@@ -10,6 +10,9 @@ type: processor
      lib/processor/split.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Breaks message batches (synonymous with multiple part messages) into smaller
 batches. The size of the resulting batches are determined either by a discrete

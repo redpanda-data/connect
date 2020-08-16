@@ -10,6 +10,9 @@ type: processor
      lib/processor/switch.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 A processor that lists child case objects each containing a condition and
 processors. Each batch of messages is tested against the condition of each child

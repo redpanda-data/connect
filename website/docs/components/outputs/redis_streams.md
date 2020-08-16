@@ -10,6 +10,9 @@ type: output
      lib/output/redis_streams.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Pushes messages to a Redis (v5.0+) Stream (which is created if it doesn't
 already exist) using the XADD command.

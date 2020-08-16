@@ -10,20 +10,19 @@ type: processor
      lib/processor/json_schema.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Checks messages against a provided JSONSchema definition but does not change the
 payload under any circumstances. If a message does not match the schema it can
 be caught using error handling methods outlined [here](/docs/configuration/error_handling).
 
 
-import Tabs from '@theme/Tabs';
-
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
-
-import TabItem from '@theme/TabItem';
 
 <TabItem value="common">
 

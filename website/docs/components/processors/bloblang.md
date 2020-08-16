@@ -10,6 +10,9 @@ type: processor
      lib/processor/bloblang.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Executes a [Bloblang](/docs/guides/bloblang/about) mapping on messages.
 
