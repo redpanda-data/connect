@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.25.0 - 2020-08-16
+
 ### Added
 
 - Improved parser error messages with the `blobl` subcommand.
