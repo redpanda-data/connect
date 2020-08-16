@@ -1627,3 +1627,18 @@ func TestMethods(t *testing.T) {
 		})
 	}
 }
+
+func TestMethodNoArgsTargets(t *testing.T) {
+	fn := NewFieldFunction("foo.bar.baz")
+	exp := NewTargetPath(TargetValue, "foo", "bar", "baz")
+	for k := range methods {
+		// Only tests methods that do not need arguments, we need manual checks
+		// for other methods.
+		m, err := InitMethod(k, fn)
+		if err != nil {
+			continue
+		}
+		targets := m.QueryTargets()
+		assert.Contains(t, targets, exp)
+	}
+}

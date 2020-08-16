@@ -1,6 +1,7 @@
 package query
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -132,6 +133,58 @@ func TestFunctions(t *testing.T) {
 				}
 				assert.Equal(t, m.content, string(msg.Get(i).Get()))
 			}
+		})
+	}
+}
+
+func TestFunctionTargets(t *testing.T) {
+	function := func(name string, args ...interface{}) Function {
+		t.Helper()
+		fn, err := InitFunction(name, args...)
+		require.NoError(t, err)
+		return fn
+	}
+
+	tests := []struct {
+		input  Function
+		output []TargetPath
+	}{
+		{
+			input: function("throw", "foo"),
+		},
+		{
+			input: function("json", "foo.bar.baz"),
+			output: []TargetPath{
+				NewTargetPath(TargetValue, "foo", "bar", "baz"),
+			},
+		},
+		{
+			input: NewFieldFunction("foo.bar.baz"),
+			output: []TargetPath{
+				NewTargetPath(TargetValue, "foo", "bar", "baz"),
+			},
+		},
+		{
+			input: function("meta", "foo"),
+			output: []TargetPath{
+				NewTargetPath(TargetMetadata, "foo"),
+			},
+		},
+		{
+			input: function("var", "foo"),
+			output: []TargetPath{
+				NewTargetPath(TargetVariable, "foo"),
+			},
+		},
+	}
+
+	for i, test := range tests {
+		test := test
+		t.Run(fmt.Sprintf("%v", i), func(t *testing.T) {
+			t.Parallel()
+
+			res := test.input.QueryTargets()
+			assert.Equal(t, test.output, res)
 		})
 	}
 }

@@ -28,7 +28,7 @@ func appendMethod(target Function, args ...interface{}) (Function, error) {
 			return nil, NewTypeError(res, ValueArray)
 		}
 		return append(arr, args...), nil
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -41,6 +41,9 @@ var _ = RegisterMethod(
 
 func applyMethod(target Function, args ...interface{}) (Function, error) {
 	targetMap := args[0].(string)
+
+	// TODO: Currently ignoring targets from the map itself. We could
+	// potentially expand all of this to make a best attempt.
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		res, err := target.Exec(ctx)
 		if err != nil {
@@ -65,7 +68,7 @@ func applyMethod(target Function, args ...interface{}) (Function, error) {
 		// ISOLATED VARIABLES
 		ctx.Vars = map[string]interface{}{}
 		return m.Exec(ctx)
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -103,7 +106,7 @@ func boolMethod(target Function, args ...interface{}) (Function, error) {
 			}
 		}
 		return f, nil
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -129,7 +132,7 @@ func catchMethod(fn Function, args ...interface{}) (Function, error) {
 			res, err = catchFn.Exec(ctx)
 		}
 		return res, err
-	}), nil
+	}, aggregateTargetPaths(fn, catchFn)), nil
 }
 
 //------------------------------------------------------------------------------
@@ -155,7 +158,7 @@ func collapseMethod(target Function, args ...interface{}) (Function, error) {
 			return gObj.FlattenIncludeEmpty()
 		}
 		return gObj.Flatten()
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -198,7 +201,7 @@ func containsMethod(target Function, args ...interface{}) (Function, error) {
 			}
 		}
 		return false, nil
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -226,7 +229,7 @@ func enumerateMethod(target Function, args ...interface{}) (Function, error) {
 			})
 		}
 		return enumerated, nil
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -246,7 +249,7 @@ func existsMethod(target Function, args ...interface{}) (Function, error) {
 			return nil, err
 		}
 		return gabs.Wrap(v).Exists(path...), nil
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -288,7 +291,7 @@ func explodeMethod(target Function, args ...interface{}) (Function, error) {
 		}
 
 		return nil, NewTypeError(v, ValueObject, ValueArray)
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -318,7 +321,7 @@ func flattenMethod(target Function, args ...interface{}) (Function, error) {
 			}
 		}
 		return result, nil
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -340,6 +343,10 @@ func foldMethod(target Function, args ...interface{}) (Function, error) {
 	if !ok {
 		return nil, fmt.Errorf("expected query argument, received %T", args[1])
 	}
+
+	// TODO: Query targets do not take the fold function into account as it's
+	// dynamic. We could work it out by expanding targets with the fold targets
+	// less the value prefix.
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		res, err := target.Exec(ctx)
 		if err != nil {
@@ -381,7 +388,7 @@ func foldMethod(target Function, args ...interface{}) (Function, error) {
 			tally = newV
 		}
 		return tally, nil
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -406,6 +413,10 @@ type fromMethod struct {
 func (f *fromMethod) Exec(ctx FunctionContext) (interface{}, error) {
 	ctx.Index = f.index
 	return f.target.Exec(ctx)
+}
+
+func (f *fromMethod) QueryTargets() []TargetPath {
+	return f.target.QueryTargets()
 }
 
 //------------------------------------------------------------------------------
@@ -439,7 +450,7 @@ func fromAllMethod(target Function, _ ...interface{}) (Function, error) {
 			}
 		}
 		return values, nil
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -461,6 +472,17 @@ func (g *getMethod) Exec(ctx FunctionContext) (interface{}, error) {
 		return nil, err
 	}
 	return gabs.Wrap(v).S(g.path...).Data(), nil
+}
+
+func (g *getMethod) QueryTargets() []TargetPath {
+	targets := g.fn.QueryTargets()
+	for i, t := range targets {
+		tmpPath := make([]string, 0, len(t.Path)+len(g.path))
+		tmpPath = append(tmpPath, t.Path...)
+		tmpPath = append(tmpPath, g.path...)
+		targets[i].Path = tmpPath
+	}
+	return targets
 }
 
 // NewGetMethod creates a new get method.
@@ -520,7 +542,7 @@ func indexMethod(target Function, args ...interface{}) (Function, error) {
 			return nil, fmt.Errorf("index '%v' was out of bounds for array size: %v", i, len(array))
 		}
 		return array[i], nil
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -544,7 +566,7 @@ func keysMethod(target Function, args ...interface{}) (Function, error) {
 			return keys, nil
 		}
 		return nil, NewTypeError(v, ValueObject)
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -578,7 +600,7 @@ func lengthMethod(target Function, _ ...interface{}) (Function, error) {
 			}
 		}
 		return length, nil
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -605,6 +627,8 @@ func mapMethod(target Function, args ...interface{}) (Function, error) {
 		}
 		ctx.Value = &res
 		return mapFn.Exec(ctx)
+	}, func() []TargetPath {
+		return expandTargetPaths(target.QueryTargets(), mapFn.QueryTargets())
 	}), nil
 }
 
@@ -620,6 +644,9 @@ func mapEachMethod(target Function, args ...interface{}) (Function, error) {
 	if !ok {
 		return nil, fmt.Errorf("expected query argument, received %T", args[0])
 	}
+
+	// TODO: Query targets do not take the mapping function into account as it's
+	// dynamic.
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		res, err := target.Exec(ctx)
 		if err != nil {
@@ -689,7 +716,7 @@ func mapEachMethod(target Function, args ...interface{}) (Function, error) {
 			}
 		}
 		return resValue, nil
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -743,7 +770,7 @@ func mergeMethod(target Function, args ...interface{}) (Function, error) {
 			}
 		}
 		return root.Data(), nil
-	}), nil
+	}, aggregateTargetPaths(target, mapFn)), nil
 }
 
 //------------------------------------------------------------------------------
@@ -774,6 +801,10 @@ func (n *notMethod) Exec(ctx FunctionContext) (interface{}, error) {
 		return nil, NewTypeError(v, ValueBool)
 	}
 	return !b, nil
+}
+
+func (n *notMethod) QueryTargets() []TargetPath {
+	return n.fn.QueryTargets()
 }
 
 func notMethodCtor(target Function, _ ...interface{}) (Function, error) {
@@ -815,7 +846,7 @@ func numberMethod(target Function, args ...interface{}) (Function, error) {
 			}
 		}
 		return f, nil
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -841,7 +872,7 @@ func orMethod(fn Function, args ...interface{}) (Function, error) {
 			res, err = orFn.Exec(ctx)
 		}
 		return res, err
-	}), nil
+	}, aggregateTargetPaths(fn, orFn)), nil
 }
 
 //------------------------------------------------------------------------------
@@ -913,7 +944,7 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 			return values, nil
 		}
 		return nil, NewTypeError(v, ValueArray)
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -988,7 +1019,7 @@ func sliceMethod(target Function, args ...interface{}) (Function, error) {
 			return t[start:end], nil
 		}
 		return nil, NewTypeError(v, ValueArray, ValueString)
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -1032,7 +1063,7 @@ func sumMethod(target Function, _ ...interface{}) (Function, error) {
 			Recovered: int64(0),
 			Err:       NewTypeError(v, ValueArray),
 		}
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -1049,7 +1080,7 @@ func typeMethod(target Function, _ ...interface{}) (Function, error) {
 			return nil, err
 		}
 		return string(ITypeOf(v)), nil
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -1134,7 +1165,7 @@ func uniqueMethod(target Function, args ...interface{}) (Function, error) {
 			}
 		}
 		return uniqueSlice, nil
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -1158,7 +1189,7 @@ func valuesMethod(target Function, args ...interface{}) (Function, error) {
 			return values, nil
 		}
 		return nil, NewTypeError(v, ValueObject)
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -1215,7 +1246,7 @@ func withoutMethod(target Function, args ...interface{}) (Function, error) {
 			return nil, NewTypeError(v, ValueObject)
 		}
 		return mapWithout(m, excludeList), nil
-	}), nil
+	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------

@@ -47,7 +47,7 @@ func matchCaseParser() Type {
 						return false, nil
 					}
 					return *ctx.Value == lit.Value, nil
-				})
+				}, nil)
 			} else {
 				caseFn = t
 			}
@@ -104,16 +104,7 @@ func matchExpressionParser() Type {
 		}
 
 		seqSlice := res.Payload.([]interface{})
-		contextFn, ok := seqSlice[2].(query.Function)
-		if !ok {
-			contextFn = query.ClosureFunction(func(ctx query.FunctionContext) (interface{}, error) {
-				var value interface{}
-				if ctx.Value != nil {
-					value = *ctx.Value
-				}
-				return value, nil
-			})
-		}
+		contextFn, _ := seqSlice[2].(query.Function)
 
 		cases := []query.MatchCase{}
 		for _, caseVal := range seqSlice[4].([]interface{}) {

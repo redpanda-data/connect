@@ -75,7 +75,7 @@ func add(lhs, rhs Function) Function {
 			return lhs + rhs, nil
 		}
 		return nil, NewTypeError(leftV, ValueNumber, ValueString)
-	})
+	}, aggregateTargetPaths(lhs, rhs))
 }
 
 func sub(lhs, rhs Function) Function {
@@ -98,7 +98,7 @@ func sub(lhs, rhs Function) Function {
 		}
 
 		return lhs - rhs, nil
-	})
+	}, aggregateTargetPaths(lhs, rhs))
 }
 
 // ErrDivideByZero occurs when an arithmetic operator is prevented from dividing
@@ -129,7 +129,7 @@ func divide(lhs, rhs Function) Function {
 		}
 
 		return lhs / rhs, nil
-	})
+	}, aggregateTargetPaths(lhs, rhs))
 }
 
 func multiply(lhs, rhs Function) Function {
@@ -152,7 +152,7 @@ func multiply(lhs, rhs Function) Function {
 		}
 
 		return lhs * rhs, nil
-	})
+	}, aggregateTargetPaths(lhs, rhs))
 }
 
 func modulo(lhs, rhs Function) Function {
@@ -179,7 +179,7 @@ func modulo(lhs, rhs Function) Function {
 		}
 
 		return lhs % rhs, nil
-	})
+	}, aggregateTargetPaths(lhs, rhs))
 }
 
 func coalesce(lhs, rhs Function) Function {
@@ -189,7 +189,7 @@ func coalesce(lhs, rhs Function) Function {
 			return lhsV, nil
 		}
 		return rhs.Exec(ctx)
-	})
+	}, aggregateTargetPaths(lhs, rhs))
 }
 
 func compareNumFn(op ArithmeticOperator) func(lhs, rhs float64) bool {
@@ -337,7 +337,7 @@ func compare(lhs, rhs Function, op ArithmeticOperator) (Function, error) {
 			}
 			return genericOpFn(lhsV, rhsV), nil
 		}
-	}), nil
+	}, aggregateTargetPaths(lhs, rhs)), nil
 }
 
 func logicalBool(lhs, rhs Function, op ArithmeticOperator) (Function, error) {
@@ -368,7 +368,7 @@ func logicalBool(lhs, rhs Function, op ArithmeticOperator) (Function, error) {
 				return nil, err
 			}
 			return rhsV, nil
-		}), nil
+		}, aggregateTargetPaths(lhs, rhs)), nil
 	case ArithmeticOr:
 		return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 			var lhsV, rhsV bool
@@ -395,7 +395,7 @@ func logicalBool(lhs, rhs Function, op ArithmeticOperator) (Function, error) {
 				return nil, err
 			}
 			return lhsV || rhsV, nil
-		}), nil
+		}, aggregateTargetPaths(lhs, rhs)), nil
 	default:
 		return nil, fmt.Errorf("operator not supported: %v", op)
 	}

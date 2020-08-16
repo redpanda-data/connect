@@ -485,6 +485,9 @@ pipeline:
         max_parts: ${PROCESSOR_BOUNDS_CHECK_MAX_PARTS:100}
         min_part_size: ${PROCESSOR_BOUNDS_CHECK_MIN_PART_SIZE:1}
         min_parts: ${PROCESSOR_BOUNDS_CHECK_MIN_PARTS:1}
+      branch:
+        request_map: ${PROCESSOR_BRANCH_REQUEST_MAP}
+        result_map: ${PROCESSOR_BRANCH_RESULT_MAP}
       cache:
         cache: ${PROCESSOR_CACHE_CACHE}
         key: ${PROCESSOR_CACHE_KEY}

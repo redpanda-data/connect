@@ -20,6 +20,15 @@ func NewMatchCase(caseFn, queryFn Function) MatchCase {
 // NewMatchFunction takes a contextual mapping and a list of MatchCases, when
 // the function is executed
 func NewMatchFunction(contextFn Function, cases ...MatchCase) Function {
+	if contextFn == nil {
+		contextFn = ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+			var value interface{}
+			if ctx.Value != nil {
+				value = *ctx.Value
+			}
+			return value, nil
+		}, nil)
+	}
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		ctxVal, err := contextFn.Exec(ctx)
 		if err != nil {
@@ -36,6 +45,19 @@ func NewMatchFunction(contextFn Function, cases ...MatchCase) Function {
 			}
 		}
 		return Nothing(nil), nil
+	}, func() []TargetPath {
+		contextTargets := contextFn.QueryTargets()
+
+		var targets []TargetPath
+		for _, c := range cases {
+			var cTargets []TargetPath
+			cTargets = append(cTargets, c.caseFn.QueryTargets()...)
+			cTargets = append(cTargets, c.queryFn.QueryTargets()...)
+			targets = append(targets, expandTargetPaths(cTargets, contextTargets)...)
+		}
+
+		targets = append(targets, contextTargets...)
+		return targets
 	})
 }
 
@@ -55,5 +77,5 @@ func NewIfFunction(queryFn Function, ifFn Function, elseFn Function) Function {
 			return elseFn.Exec(ctx)
 		}
 		return Nothing(nil), nil
-	})
+	}, aggregateTargetPaths(queryFn, ifFn, elseFn))
 }

@@ -108,6 +108,17 @@ func TestExpressions(t *testing.T) {
 			),
 			output: "bar",
 		},
+		"match context empty": {
+			input: NewMatchFunction(
+				nil,
+				NewMatchCase(NewLiteralFunction(true), NewFieldFunction("")),
+			),
+			value: func() *interface{} {
+				var v interface{} = "context"
+				return &v
+			}(),
+			output: "context",
+		},
 		"match context": {
 			input: NewMatchFunction(
 				NewLiteralFunction("context"),
@@ -164,6 +175,98 @@ func TestExpressions(t *testing.T) {
 				}
 				assert.Equal(t, m.content, string(msg.Get(i).Get()))
 			}
+		})
+	}
+}
+
+func TestExpressionTargets(t *testing.T) {
+	mustFunc := func(fn Function, err error) Function {
+		t.Helper()
+		require.NoError(t, err)
+		return fn
+	}
+
+	tests := map[string]struct {
+		input  Function
+		output []TargetPath
+	}{
+		"if query path": {
+			input: NewIfFunction(
+				mustFunc(InitFunction("json", "foo.bar")),
+				NewLiteralFunction("foo"),
+				mustFunc(InitFunction("var", "baz")),
+			),
+			output: []TargetPath{
+				NewTargetPath(TargetValue, "foo", "bar"),
+				NewTargetPath(TargetVariable, "baz"),
+			},
+		},
+		"match empty context": {
+			input: NewMatchFunction(
+				nil,
+				NewMatchCase(
+					NewFieldFunction("foo"),
+					NewFieldFunction("bar"),
+				),
+				NewMatchCase(
+					NewFieldFunction("baz"),
+					NewFieldFunction("buz"),
+				),
+			),
+			output: []TargetPath{
+				NewTargetPath(TargetValue, "foo"),
+				NewTargetPath(TargetValue, "bar"),
+				NewTargetPath(TargetValue, "baz"),
+				NewTargetPath(TargetValue, "buz"),
+			},
+		},
+		"match meta context": {
+			input: NewMatchFunction(
+				mustFunc(InitFunction("meta", "foo")),
+				NewMatchCase(
+					mustFunc(InitFunction("meta", "bar")),
+					NewFieldFunction("baz"),
+				),
+				NewMatchCase(
+					NewFieldFunction("buz"),
+					NewLiteralFunction("qux"),
+				),
+			),
+			output: []TargetPath{
+				NewTargetPath(TargetMetadata, "bar"),
+				NewTargetPath(TargetValue, "baz"),
+				NewTargetPath(TargetValue, "buz"),
+				NewTargetPath(TargetMetadata, "foo"),
+			},
+		},
+		"match value context": {
+			input: NewMatchFunction(
+				NewFieldFunction("foo.bar"),
+				NewMatchCase(
+					mustFunc(InitFunction("meta", "bar")),
+					NewFieldFunction("baz.buz"),
+				),
+				NewMatchCase(
+					NewFieldFunction("qux.quz"),
+					NewLiteralFunction("quack"),
+				),
+			),
+			output: []TargetPath{
+				NewTargetPath(TargetMetadata, "bar"),
+				NewTargetPath(TargetValue, "foo", "bar", "baz", "buz"),
+				NewTargetPath(TargetValue, "foo", "bar", "qux", "quz"),
+				NewTargetPath(TargetValue, "foo", "bar"),
+			},
+		},
+	}
+
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			res := test.input.QueryTargets()
+			assert.Equal(t, test.output, res)
 		})
 	}
 }

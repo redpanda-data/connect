@@ -89,27 +89,50 @@ func (e *Executor) Maps() map[string]query.Function {
 // query.Delete value, in which case nil is returned and the part should be
 // discarded.
 func (e *Executor) MapPart(index int, msg Message) (types.Part, error) {
-	vars := map[string]interface{}{}
+	return e.mapPart(nil, index, msg)
+}
 
-	part := msg.Get(index).Copy()
-	meta := part.Metadata()
+// MapOnto maps into an existing message part, where mappings are appended to
+// the message rather than being used to construct a new message.
+func (e *Executor) MapOnto(part types.Part, index int, msg Message) (types.Part, error) {
+	return e.mapPart(part, index, msg)
+}
 
+// MapInto an existing message. If append is set to true then mappings are
+// appended to the existing message, otherwise the newly mapped object will
+// begin empty.
+func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (types.Part, error) {
 	var valuePtr *interface{}
 	var parseErr error
-	if jObj, err := part.JSON(); err == nil {
+	if jObj, err := reference.Get(index).JSON(); err == nil {
 		valuePtr = &jObj
 	} else {
 		parseErr = err
 	}
 
+	var newPart types.Part
 	var newObj interface{} = query.Nothing(nil)
+	var newMeta types.Metadata
+
+	if appendTo == nil {
+		newPart = reference.Get(index).Copy()
+	} else {
+		newPart = appendTo
+		if appendObj, err := appendTo.JSON(); err == nil {
+			newObj = appendObj
+		}
+	}
+	newMeta = newPart.Metadata()
+
+	vars := map[string]interface{}{}
+
 	for _, stmt := range e.statements {
 		res, err := stmt.query.Exec(query.FunctionContext{
 			Maps:     e.maps,
 			Value:    valuePtr,
 			Vars:     vars,
 			Index:    index,
-			MsgBatch: msg,
+			MsgBatch: reference,
 		})
 		if err != nil {
 			var line int
@@ -128,7 +151,7 @@ func (e *Executor) MapPart(index int, msg Message) (types.Part, error) {
 		if err = stmt.assignment.Apply(res, AssignmentContext{
 			Maps:  e.maps,
 			Vars:  vars,
-			Meta:  meta,
+			Meta:  newMeta,
 			Value: &newObj,
 		}); err != nil {
 			var line int
@@ -148,16 +171,36 @@ func (e *Executor) MapPart(index int, msg Message) (types.Part, error) {
 	default:
 		switch t := newObj.(type) {
 		case string:
-			part.Set([]byte(t))
+			newPart.Set([]byte(t))
 		case []byte:
-			part.Set(t)
+			newPart.Set(t)
 		default:
-			if err := part.SetJSON(newObj); err != nil {
+			if err := newPart.SetJSON(newObj); err != nil {
 				return nil, fmt.Errorf("failed to set result of mapping: %w", err)
 			}
 		}
 	}
-	return part, nil
+	return newPart, nil
+}
+
+// QueryTargets returns a slice of all targets referenced by queries within the
+// mapping.
+func (e *Executor) QueryTargets() []query.TargetPath {
+	var paths []query.TargetPath
+	for _, stmt := range e.statements {
+		paths = append(paths, stmt.query.QueryTargets()...)
+	}
+	return paths
+}
+
+// AssignmentTargets returns a slice of all targets assigned to by statements
+// within the mapping.
+func (e *Executor) AssignmentTargets() []TargetPath {
+	var paths []TargetPath
+	for _, stmt := range e.statements {
+		paths = append(paths, stmt.assignment.Target())
+	}
+	return paths
 }
 
 // Exec this function with a context struct.

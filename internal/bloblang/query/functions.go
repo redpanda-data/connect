@@ -18,17 +18,23 @@ type fieldFunction struct {
 	path []string
 }
 
-func (g *fieldFunction) Exec(ctx FunctionContext) (interface{}, error) {
+func (f *fieldFunction) Exec(ctx FunctionContext) (interface{}, error) {
 	if ctx.Value == nil {
 		return nil, &ErrRecoverable{
 			Recovered: nil,
 			Err:       ErrNoContext,
 		}
 	}
-	if len(g.path) == 0 {
+	if len(f.path) == 0 {
 		return *ctx.Value, nil
 	}
-	return gabs.Wrap(*ctx.Value).S(g.path...).Data(), nil
+	return gabs.Wrap(*ctx.Value).S(f.path...).Data(), nil
+}
+
+func (f *fieldFunction) QueryTargets() []TargetPath {
+	return []TargetPath{
+		NewTargetPath(TargetValue, f.path...),
+	}
 }
 
 // NewFieldFunction creates a query function that returns a path from a JSON
@@ -62,9 +68,14 @@ func (l *Literal) Exec(ctx FunctionContext) (interface{}, error) {
 	return l.Value, nil
 }
 
+// QueryTargets returns nothing.
+func (l *Literal) QueryTargets() []TargetPath {
+	return nil
+}
+
 // NewLiteralFunction creates a query function that returns a static, literal
 // value.
-func NewLiteralFunction(v interface{}) Function {
+func NewLiteralFunction(v interface{}) *Literal {
 	return &Literal{v}
 }
 
@@ -73,7 +84,7 @@ func NewLiteralFunction(v interface{}) Function {
 var _ = RegisterFunction("batch_index", false, func(...interface{}) (Function, error) {
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		return int64(ctx.Index), nil
-	}), nil
+	}, nil), nil
 })
 
 //------------------------------------------------------------------------------
@@ -81,7 +92,7 @@ var _ = RegisterFunction("batch_index", false, func(...interface{}) (Function, e
 var _ = RegisterFunction("batch_size", false, func(...interface{}) (Function, error) {
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		return int64(ctx.MsgBatch.Len()), nil
-	}), nil
+	}, nil), nil
 })
 
 //------------------------------------------------------------------------------
@@ -91,7 +102,7 @@ var _ = RegisterFunction("content", false, contentFunction)
 func contentFunction(...interface{}) (Function, error) {
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		return ctx.MsgBatch.Get(ctx.Index).Get(), nil
-	}), nil
+	}, nil), nil
 }
 
 //------------------------------------------------------------------------------
@@ -120,7 +131,7 @@ func countFunction(args ...interface{}) (Function, error) {
 		counters[name] = count
 
 		return count, nil
-	}), nil
+	}, nil), nil
 }
 
 //------------------------------------------------------------------------------
@@ -136,7 +147,7 @@ var _ = RegisterFunction("error", false, errorFunction)
 func errorFunction(...interface{}) (Function, error) {
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		return ctx.MsgBatch.Get(ctx.Index).Metadata().Get(types.FailFlagKey), nil
-	}), nil
+	}, nil), nil
 }
 
 var _ = RegisterFunction("errored", false, erroredFunction)
@@ -144,7 +155,7 @@ var _ = RegisterFunction("errored", false, erroredFunction)
 func erroredFunction(...interface{}) (Function, error) {
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		return len(ctx.MsgBatch.Get(ctx.Index).Metadata().Get(types.FailFlagKey)) > 0, nil
-	}), nil
+	}, nil), nil
 }
 
 //------------------------------------------------------------------------------
@@ -161,7 +172,7 @@ func hostnameFunction(...interface{}) (Function, error) {
 			}
 		}
 		return hn, err
-	}), nil
+	}, nil), nil
 }
 
 //------------------------------------------------------------------------------
@@ -190,6 +201,10 @@ func jsonFunction(args ...interface{}) (Function, error) {
 			gPart = gPart.Search(argPath...)
 		}
 		return ISanitize(gPart.Data()), nil
+	}, func() []TargetPath {
+		return []TargetPath{
+			NewTargetPath(TargetValue, argPath...),
+		}
 	}), nil
 }
 
@@ -203,8 +218,8 @@ var _ = RegisterFunction(
 
 func metadataFunction(args ...interface{}) (Function, error) {
 	if len(args) > 0 {
+		field := args[0].(string)
 		return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-			field := args[0].(string)
 			v := ctx.MsgBatch.Get(ctx.Index).Metadata().Get(field)
 			if len(v) == 0 {
 				return nil, &ErrRecoverable{
@@ -213,6 +228,10 @@ func metadataFunction(args ...interface{}) (Function, error) {
 				}
 			}
 			return v, nil
+		}, func() []TargetPath {
+			return []TargetPath{
+				NewTargetPath(TargetMetadata, field),
+			}
 		}), nil
 	}
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
@@ -224,6 +243,10 @@ func metadataFunction(args ...interface{}) (Function, error) {
 			return nil
 		})
 		return kvs, nil
+	}, func() []TargetPath {
+		return []TargetPath{
+			NewTargetPath(TargetMetadata),
+		}
 	}), nil
 }
 
@@ -252,7 +275,7 @@ func randomIntFunction(args ...interface{}) (Function, error) {
 	r := rand.New(rand.NewSource(seed))
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		return int64(r.Int()), nil
-	}), nil
+	}, nil), nil
 }
 
 //------------------------------------------------------------------------------
@@ -260,13 +283,13 @@ func randomIntFunction(args ...interface{}) (Function, error) {
 var _ = RegisterFunction("timestamp_unix", false, func(...interface{}) (Function, error) {
 	return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
 		return time.Now().Unix(), nil
-	}), nil
+	}, nil), nil
 })
 
 var _ = RegisterFunction("timestamp_unix_nano", false, func(...interface{}) (Function, error) {
 	return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
 		return time.Now().UnixNano(), nil
-	}), nil
+	}, nil), nil
 })
 
 var _ = RegisterFunction("timestamp", true, func(args ...interface{}) (Function, error) {
@@ -276,7 +299,7 @@ var _ = RegisterFunction("timestamp", true, func(args ...interface{}) (Function,
 	}
 	return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
 		return time.Now().Format(format), nil
-	}), nil
+	}, nil), nil
 }, ExpectOneOrZeroArgs(), ExpectStringArg(0))
 
 var _ = RegisterFunction("timestamp_utc", true, func(args ...interface{}) (Function, error) {
@@ -286,7 +309,7 @@ var _ = RegisterFunction("timestamp_utc", true, func(args ...interface{}) (Funct
 	}
 	return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
 		return time.Now().In(time.UTC).Format(format), nil
-	}), nil
+	}, nil), nil
 }, ExpectOneOrZeroArgs(), ExpectStringArg(0))
 
 //------------------------------------------------------------------------------
@@ -295,7 +318,7 @@ var _ = RegisterFunction("throw", true, func(args ...interface{}) (Function, err
 	msg := args[0].(string)
 	return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
 		return nil, errors.New(msg)
-	}), nil
+	}, nil), nil
 }, ExpectNArgs(1), ExpectStringArg(0))
 
 //------------------------------------------------------------------------------
@@ -309,7 +332,7 @@ func uuidFunction(...interface{}) (Function, error) {
 			panic(err)
 		}
 		return u4.String(), nil
-	}), nil
+	}, nil), nil
 }
 
 //------------------------------------------------------------------------------
@@ -341,6 +364,10 @@ func varFunction(args ...interface{}) (Function, error) {
 		return nil, &ErrRecoverable{
 			Recovered: nil,
 			Err:       fmt.Errorf("variable '%v' undefined", name),
+		}
+	}, func() []TargetPath {
+		return []TargetPath{
+			NewTargetPath(TargetVariable, name),
 		}
 	}), nil
 }

@@ -18,7 +18,7 @@ import (
 func wrapDeprecatedFunction(d deprecatedFunction) Function {
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		return d(ctx.Index, ctx.MsgBatch, ctx.Legacy), nil
-	})
+	}, nil)
 }
 
 type deprecatedFunction func(int, MessageBatch, bool) []byte

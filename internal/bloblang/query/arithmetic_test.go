@@ -21,6 +21,12 @@ func TestArithmetic(t *testing.T) {
 		require.NoError(t, err)
 		return fn
 	}
+	function := func(name string, args ...interface{}) Function {
+		t.Helper()
+		fn, err := InitFunction(name, args...)
+		require.NoError(t, err)
+		return fn
+	}
 
 	tests := map[string]struct {
 		input    Function
@@ -402,18 +408,8 @@ func TestArithmetic(t *testing.T) {
 		"coalesce json": {
 			input: arithmetic(
 				[]Function{
-					func() Function {
-						t.Helper()
-						fn, err := jsonFunction("foo")
-						require.NoError(t, err)
-						return fn
-					}(),
-					func() Function {
-						t.Helper()
-						fn, err := jsonFunction("bar")
-						require.NoError(t, err)
-						return fn
-					}(),
+					function("json", "foo"),
+					function("json", "bar"),
 				},
 				[]ArithmeticOperator{
 					ArithmeticPipe,
@@ -427,12 +423,7 @@ func TestArithmetic(t *testing.T) {
 		"coalesce json 2": {
 			input: arithmetic(
 				[]Function{
-					func() Function {
-						t.Helper()
-						fn, err := jsonFunction("foo")
-						require.NoError(t, err)
-						return fn
-					}(),
+					function("json", "foo"),
 					NewLiteralFunction("not this"),
 				},
 				[]ArithmeticOperator{
@@ -518,6 +509,86 @@ func TestArithmetic(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, test.output, res)
 			}
+		})
+	}
+}
+
+func TestArithmeticTargets(t *testing.T) {
+	arithmetic := func(fns []Function, ops []ArithmeticOperator) Function {
+		t.Helper()
+		fn, err := NewArithmeticExpression(fns, ops)
+		require.NoError(t, err)
+		return fn
+	}
+	function := func(name string, args ...interface{}) Function {
+		t.Helper()
+		fn, err := InitFunction(name, args...)
+		require.NoError(t, err)
+		return fn
+	}
+
+	tests := map[string]struct {
+		input  Function
+		output []TargetPath
+	}{
+		"no targets": {
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction(int64(5)),
+					NewLiteralFunction("bar"),
+				},
+				[]ArithmeticOperator{
+					ArithmeticAdd,
+				},
+			),
+			output: nil,
+		},
+		"coalesced targets": {
+			input: arithmetic(
+				[]Function{
+					function("meta", "foo"),
+					function("var", "bar"),
+				},
+				[]ArithmeticOperator{
+					ArithmeticPipe,
+				},
+			),
+			output: []TargetPath{
+				NewTargetPath(TargetMetadata, "foo"),
+				NewTargetPath(TargetVariable, "bar"),
+			},
+		},
+		"mix of function types": {
+			input: arithmetic(
+				[]Function{
+					function("meta", "buz"),
+					NewLiteralFunction(int64(5)),
+					function("json", "foo.bar"),
+					NewLiteralFunction("bar"),
+					NewFieldFunction("qux.quz"),
+				},
+				[]ArithmeticOperator{
+					ArithmeticEq,
+					ArithmeticAdd,
+					ArithmeticMul,
+					ArithmeticGt,
+				},
+			),
+			output: []TargetPath{
+				NewTargetPath(TargetMetadata, "buz"),
+				NewTargetPath(TargetValue, "foo", "bar"),
+				NewTargetPath(TargetValue, "qux", "quz"),
+			},
+		},
+	}
+
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			res := test.input.QueryTargets()
+			assert.Equal(t, test.output, res)
 		})
 	}
 }

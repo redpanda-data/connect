@@ -42,14 +42,15 @@ func (e badMethodErr) Error() string {
 
 //------------------------------------------------------------------------------
 
-// MessageBatch is an interface type to be given to a query function, it allows the
-// function to resolve fields and metadata from a Benthos message batch.
+// MessageBatch is an interface type to be given to a query function, it allows
+// the function to resolve fields and metadata from a Benthos message batch.
 type MessageBatch interface {
 	Get(p int) types.Part
 	Len() int
 }
 
-// FunctionContext provides access to a root message, its index within the batch, and
+// FunctionContext provides access to a range of query targets for functions to
+// reference.
 type FunctionContext struct {
 	Value    *interface{}
 	Maps     map[string]Function
@@ -59,11 +60,17 @@ type FunctionContext struct {
 	Legacy   bool
 }
 
+//------------------------------------------------------------------------------
+
 // Function takes a set of contextual arguments and returns the result of the
 // query.
 type Function interface {
 	// Execute this function for a message of a batch.
 	Exec(ctx FunctionContext) (interface{}, error)
+
+	// Return a map of target types to path segments for any targets that this
+	// query function references.
+	QueryTargets() []TargetPath
 }
 
 // ExecToString returns a string from a function exection.

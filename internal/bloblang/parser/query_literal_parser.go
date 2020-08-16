@@ -37,43 +37,7 @@ func dynamicArrayParser() Type {
 			return res
 		}
 
-		isDynamic := false
-		values := res.Payload.([]interface{})
-		for _, v := range values {
-			if _, isFunction := v.(query.Function); isFunction {
-				isDynamic = true
-			}
-		}
-		if !isDynamic {
-			return res
-		}
-
-		res.Payload = query.ClosureFunction(func(ctx query.FunctionContext) (interface{}, error) {
-			dynArray := make([]interface{}, len(values))
-			var err error
-			for i, v := range values {
-				if fn, isFunction := v.(query.Function); isFunction {
-					fnRes, fnErr := fn.Exec(ctx)
-					if fnErr != nil {
-						if recovered, ok := fnErr.(*query.ErrRecoverable); ok {
-							dynArray[i] = recovered.Recovered
-							err = fnErr
-						}
-						return nil, fnErr
-					}
-					dynArray[i] = fnRes
-				} else {
-					dynArray[i] = v
-				}
-			}
-			if err != nil {
-				return nil, &query.ErrRecoverable{
-					Recovered: dynArray,
-					Err:       err,
-				}
-			}
-			return dynArray, nil
-		})
+		res.Payload = query.NewArrayLiteral(res.Payload.([]interface{})...)
 		return res
 	}
 }

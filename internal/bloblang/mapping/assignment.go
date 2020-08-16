@@ -1,6 +1,7 @@
 package mapping
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
@@ -24,6 +25,7 @@ type AssignmentContext struct {
 // metadata field, etc.
 type Assignment interface {
 	Apply(value interface{}, ctx AssignmentContext) error
+	Target() TargetPath
 }
 
 //------------------------------------------------------------------------------
@@ -50,6 +52,11 @@ func (v *VarAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 	return nil
 }
 
+// Target returns a representation of what the assignment targets.
+func (v *VarAssignment) Target() TargetPath {
+	return NewTargetPath(TargetVariable, v.name)
+}
+
 //------------------------------------------------------------------------------
 
 // MetaAssignment assigns a value to a metadata key of a message. If the key is
@@ -68,6 +75,9 @@ func NewMetaAssignment(key *string) *MetaAssignment {
 
 // Apply a value to a metadata key.
 func (m *MetaAssignment) Apply(value interface{}, ctx AssignmentContext) error {
+	if ctx.Meta == nil {
+		return errors.New("unable to assign metadata in the current context")
+	}
 	_, deleted := value.(query.Delete)
 	if m.key == nil {
 		if deleted {
@@ -96,6 +106,15 @@ func (m *MetaAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 		ctx.Meta.Set(*m.key, query.IToString(value))
 	}
 	return nil
+}
+
+// Target returns a representation of what the assignment targets.
+func (m *MetaAssignment) Target() TargetPath {
+	var path []string
+	if m.key != nil {
+		path = []string{*m.key}
+	}
+	return NewTargetPath(TargetMetadata, path...)
 }
 
 //------------------------------------------------------------------------------
@@ -133,6 +152,16 @@ func (j *JSONAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 	}
 	*ctx.Value = gObj.Data()
 	return nil
+}
+
+// Target returns a representation of what the assignment targets.
+func (j *JSONAssignment) Target() TargetPath {
+	var path []string
+	if len(j.path) > 0 {
+		path = make([]string, len(j.path))
+		copy(path, j.path)
+	}
+	return NewTargetPath(TargetValue, path...)
 }
 
 //------------------------------------------------------------------------------

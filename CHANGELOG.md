@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Added flag `file` to the `blobl` subcommand.
 - New Bloblang method `parse_timestamp_unix`.
 - New (BETA) `protobuf` processor.
+- New (BETA) `branch` processor.
 - Batching fields added to `s3` output.
 
 ### Changed
@@ -19,6 +20,8 @@ All notable changes to this project will be documented in this file.
   rate limits, and the fields within `request` have been moved to the root of
   the `http` namespace. This change is backwards compatible and `http.request`
   fields will still be recognized until the next version release.
+- The `process_field` processor is now deprecated, and `branch` should be used
+  instead.
 
 ### Fixed
 

@@ -8,12 +8,32 @@ import (
 
 //------------------------------------------------------------------------------
 
-// ClosureFunction is a query.Function implementation that wraps a closure.
-type ClosureFunction func(ctx FunctionContext) (interface{}, error)
+// ClosureFunction allows you to define a Function using closures, this is a
+// convenient constructor for function implementations that don't manage complex
+// state.
+func ClosureFunction(
+	exec func(ctx FunctionContext) (interface{}, error),
+	queryTargets func() []TargetPath,
+) Function {
+	if queryTargets == nil {
+		queryTargets = func() []TargetPath { return nil }
+	}
+	return closureFunction{exec, queryTargets}
+}
+
+type closureFunction struct {
+	exec         func(ctx FunctionContext) (interface{}, error)
+	queryTargets func() []TargetPath
+}
 
 // Exec the underlying closure.
-func (f ClosureFunction) Exec(ctx FunctionContext) (interface{}, error) {
-	return f(ctx)
+func (f closureFunction) Exec(ctx FunctionContext) (interface{}, error) {
+	return f.exec(ctx)
+}
+
+// QueryTargets returns nothing.
+func (f closureFunction) QueryTargets() []TargetPath {
+	return f.queryTargets()
 }
 
 //------------------------------------------------------------------------------
@@ -37,7 +57,7 @@ func withDynamicArgs(args []interface{}, fn FunctionCtor) Function {
 			return nil, err
 		}
 		return dynFunc.Exec(ctx)
-	})
+	}, nil)
 }
 
 func enableDynamicArgs(fn FunctionCtor) FunctionCtor {

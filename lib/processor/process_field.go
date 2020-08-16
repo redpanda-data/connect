@@ -25,6 +25,7 @@ A processor that extracts the value of a field [dot path](/docs/configuration/fi
 within payloads according to a specified [codec](#codec), applies a list of
 processors to the extracted value and finally sets the field within the original
 payloads to the processed result.`,
+		Deprecated: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("codec", "A [codec](#codec) to use in order to extract (and set) the target field.").HasOptions("json", "metadata"),
 			docs.FieldCommon("path", "A [dot path](/docs/configuration/field_paths) pointing to the target field."),
@@ -60,24 +61,10 @@ notation path.
 
 Extracts and sets a metadata value identified by the path field.`,
 		Footnotes: `
-## Examples
+## Alternatives
 
-For example, with an input JSON document ` + "`{\"foo\":\"hello world\"}`" + `
-it's possible to uppercase the value of the field 'foo' by using the JSON codec
-and a ` + "[`text`](/docs/components/processors/text)" + ` child processor:
-
-` + "```yaml" + `
-process_field:
-  codec: json
-  path: foo
-  processors:
-  - text:
-      operator: to_upper
-` + "```" + `
-
-If the number of messages resulting from the processing steps does not match the
-original count then this processor fails and the messages continue unchanged.
-Therefore, you should avoid using batch and filter type processors in this list.`,
+The ` + "[`branch` processor](/docs/components/processors/branch)" + ` offers a
+more flexible and robust way to perform the actions of this processor.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			var err error
 			procConfs := make([]interface{}, len(conf.ProcessField.Processors))

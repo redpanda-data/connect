@@ -1,6 +1,10 @@
 package query
 
-import "fmt"
+import (
+	"fmt"
+)
+
+var _ Function = &mapLiteral{}
 
 type mapLiteral struct {
 	keyValues [][2]interface{}
@@ -76,4 +80,79 @@ func (m *mapLiteral) Exec(ctx FunctionContext) (interface{}, error) {
 		dynMap[key] = value
 	}
 	return dynMap, nil
+}
+
+func (m *mapLiteral) QueryTargets() []TargetPath {
+	var targetPaths []TargetPath
+	for _, kv := range m.keyValues {
+		if fn, ok := kv[0].(Function); ok {
+			targetPaths = append(targetPaths, fn.QueryTargets()...)
+		}
+		if fn, ok := kv[1].(Function); ok {
+			targetPaths = append(targetPaths, fn.QueryTargets()...)
+		}
+	}
+	return targetPaths
+}
+
+//------------------------------------------------------------------------------
+
+var _ Function = &arrayLiteral{}
+
+type arrayLiteral struct {
+	values []interface{}
+}
+
+// NewArrayLiteral creates an array literal from a slice of values. If all
+// values are static then a static []interface{} value is returned. However, if
+// any values are dynamic a Function is returned.
+func NewArrayLiteral(values ...interface{}) interface{} {
+	isDynamic := false
+	for _, v := range values {
+		if _, isFunction := v.(Function); isFunction {
+			isDynamic = true
+		}
+	}
+	if !isDynamic {
+		return values
+	}
+
+	return &arrayLiteral{values}
+}
+
+func (a *arrayLiteral) Exec(ctx FunctionContext) (interface{}, error) {
+	dynArray := make([]interface{}, len(a.values))
+	var err error
+	for i, v := range a.values {
+		if fn, isFunction := v.(Function); isFunction {
+			fnRes, fnErr := fn.Exec(ctx)
+			if fnErr != nil {
+				if recovered, ok := fnErr.(*ErrRecoverable); ok {
+					dynArray[i] = recovered.Recovered
+					err = fnErr
+				}
+				return nil, fnErr
+			}
+			dynArray[i] = fnRes
+		} else {
+			dynArray[i] = v
+		}
+	}
+	if err != nil {
+		return nil, &ErrRecoverable{
+			Recovered: dynArray,
+			Err:       err,
+		}
+	}
+	return dynArray, nil
+}
+
+func (a *arrayLiteral) QueryTargets() []TargetPath {
+	var targetPaths []TargetPath
+	for _, v := range a.values {
+		if fn, ok := v.(Function); ok {
+			targetPaths = append(targetPaths, fn.QueryTargets()...)
+		}
+	}
+	return targetPaths
 }

@@ -79,6 +79,7 @@ const (
 	TypeBatch        = "batch"
 	TypeBloblang     = "bloblang"
 	TypeBoundsCheck  = "bounds_check"
+	TypeBranch       = "branch"
 	TypeCache        = "cache"
 	TypeCatch        = "catch"
 	TypeCompress     = "compress"
@@ -145,6 +146,7 @@ type Config struct {
 	Batch        BatchConfig        `json:"batch" yaml:"batch"`
 	Bloblang     BloblangConfig     `json:"bloblang" yaml:"bloblang"`
 	BoundsCheck  BoundsCheckConfig  `json:"bounds_check" yaml:"bounds_check"`
+	Branch       BranchConfig       `json:"branch" yaml:"branch"`
 	Cache        CacheConfig        `json:"cache" yaml:"cache"`
 	Catch        CatchConfig        `json:"catch" yaml:"catch"`
 	Compress     CompressConfig     `json:"compress" yaml:"compress"`
@@ -210,6 +212,7 @@ func NewConfig() Config {
 		Batch:        NewBatchConfig(),
 		Bloblang:     NewBloblangConfig(),
 		BoundsCheck:  NewBoundsCheckConfig(),
+		Branch:       NewBranchConfig(),
 		Cache:        NewCacheConfig(),
 		Catch:        NewCatchConfig(),
 		Compress:     NewCompressConfig(),

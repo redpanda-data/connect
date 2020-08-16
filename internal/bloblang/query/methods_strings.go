@@ -36,11 +36,7 @@ var _ = RegisterMethod(
 )
 
 func capitalizeMethod(target Function, _ ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		switch t := v.(type) {
 		case string:
 			return strings.Title(t), nil
@@ -93,12 +89,9 @@ func decodeMethod(target Function, args ...interface{}) (Function, error) {
 	default:
 		return nil, fmt.Errorf("unrecognized encoding type: %v", args[0])
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var res []byte
+		var err error
 		switch t := v.(type) {
 		case string:
 			res, err = schemeFn([]byte(t))
@@ -170,12 +163,9 @@ func encodeMethod(target Function, args ...interface{}) (Function, error) {
 	default:
 		return nil, fmt.Errorf("unrecognized encoding type: %v", args[0])
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var res string
+		var err error
 		switch t := v.(type) {
 		case string:
 			res, err = schemeFn([]byte(t))
@@ -232,12 +222,9 @@ func decryptAESMethod(target Function, args ...interface{}) (Function, error) {
 	default:
 		return nil, fmt.Errorf("unrecognized decryption type: %v", args[0])
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var res []byte
+		var err error
 		switch t := v.(type) {
 		case string:
 			res, err = schemeFn([]byte(t))
@@ -296,12 +283,9 @@ func encryptAESMethod(target Function, args ...interface{}) (Function, error) {
 	default:
 		return nil, fmt.Errorf("unrecognized encryption type: %v", args[0])
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var res string
+		var err error
 		switch t := v.(type) {
 		case string:
 			res, err = schemeFn([]byte(t))
@@ -322,12 +306,9 @@ var _ = RegisterMethod(
 )
 
 func escapeHTMLMethod(target Function, args ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var res string
+		var err error
 		switch t := v.(type) {
 		case string:
 			res = html.EscapeString(t)
@@ -348,12 +329,9 @@ var _ = RegisterMethod(
 )
 
 func escapeURLQueryMethod(target Function, args ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var res string
+		var err error
 		switch t := v.(type) {
 		case string:
 			res = url.QueryEscape(t)
@@ -373,11 +351,7 @@ var _ = RegisterMethod(
 )
 
 func formatMethod(target Function, args ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		switch t := v.(type) {
 		case string:
 			return fmt.Sprintf(t, args...), nil
@@ -400,11 +374,7 @@ var _ = RegisterMethod(
 func hasPrefixMethod(target Function, args ...interface{}) (Function, error) {
 	prefix := args[0].(string)
 	prefixB := []byte(prefix)
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		switch t := v.(type) {
 		case string:
 			return strings.HasPrefix(t, prefix), nil
@@ -426,11 +396,7 @@ var _ = RegisterMethod(
 func hasSuffixMethod(target Function, args ...interface{}) (Function, error) {
 	prefix := args[0].(string)
 	prefixB := []byte(prefix)
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		switch t := v.(type) {
 		case string:
 			return strings.HasSuffix(t, prefix), nil
@@ -445,6 +411,7 @@ func hasSuffixMethod(target Function, args ...interface{}) (Function, error) {
 
 var _ = RegisterMethod(
 	"hash", true, hashMethod,
+	ExpectAtLeastOneArg(),
 	ExpectStringArg(0),
 	ExpectStringArg(1),
 )
@@ -511,12 +478,9 @@ func hashMethod(target Function, args ...interface{}) (Function, error) {
 		return nil, fmt.Errorf("unrecognized hash type: %v", args[0])
 	}
 
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var res []byte
+		var err error
 		switch t := v.(type) {
 		case string:
 			res, err = hashFn([]byte(t))
@@ -542,12 +506,7 @@ func joinMethod(target Function, args ...interface{}) (Function, error) {
 	if len(args) > 0 {
 		delim = args[0].(string)
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
-
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		slice, ok := v.([]interface{})
 		if !ok {
 			return nil, NewTypeError(v, ValueArray)
@@ -580,14 +539,7 @@ var _ = RegisterMethod(
 )
 
 func lowercaseMethod(target Function, _ ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: "",
-				Err:       err,
-			}
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		switch t := v.(type) {
 		case string:
 			return strings.ToLower(t), nil
@@ -610,11 +562,7 @@ var _ = RegisterMethod(
 )
 
 func parseCSVMethod(target Function, _ ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var csvBytes []byte
 		switch t := v.(type) {
 		case string:
@@ -662,11 +610,7 @@ var _ = RegisterMethod(
 )
 
 func parseJSONMethod(target Function, _ ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var jsonBytes []byte
 		switch t := v.(type) {
 		case string:
@@ -677,7 +621,7 @@ func parseJSONMethod(target Function, _ ...interface{}) (Function, error) {
 			return nil, NewTypeError(v, ValueString)
 		}
 		var jObj interface{}
-		if err = json.Unmarshal(jsonBytes, &jObj); err != nil {
+		if err := json.Unmarshal(jsonBytes, &jObj); err != nil {
 			return nil, fmt.Errorf("failed to parse value as JSON: %w", err)
 		}
 		return jObj, nil
@@ -697,11 +641,7 @@ func parseTimestampMethod(target Function, args ...interface{}) (Function, error
 	if len(args) > 0 {
 		layout = args[0].(string)
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var str string
 		switch t := v.(type) {
 		case []byte:
@@ -727,11 +667,7 @@ var _ = RegisterMethod(
 )
 
 func quoteMethod(target Function, _ ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		switch t := v.(type) {
 		case string:
 			return strconv.Quote(t), nil
@@ -756,11 +692,7 @@ func replaceMethod(target Function, args ...interface{}) (Function, error) {
 	matchB := []byte(match)
 	with := args[1].(string)
 	withB := []byte(with)
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		switch t := v.(type) {
 		case string:
 			return strings.ReplaceAll(t, match, with), nil
@@ -784,11 +716,7 @@ func regexpFindAllMethod(target Function, args ...interface{}) (Function, error)
 	if err != nil {
 		return nil, err
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var result []interface{}
 		switch t := v.(type) {
 		case string:
@@ -823,11 +751,7 @@ func regexpFindAllSubmatchMethod(target Function, args ...interface{}) (Function
 	if err != nil {
 		return nil, err
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var result []interface{}
 		switch t := v.(type) {
 		case string:
@@ -870,11 +794,7 @@ func regexpMatchMethod(target Function, args ...interface{}) (Function, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var result bool
 		switch t := v.(type) {
 		case string:
@@ -904,11 +824,7 @@ func regexpReplaceMethod(target Function, args ...interface{}) (Function, error)
 	}
 	with := args[1].(string)
 	withBytes := []byte(with)
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var result string
 		switch t := v.(type) {
 		case string:
@@ -933,11 +849,7 @@ var _ = RegisterMethod(
 func splitMethod(target Function, args ...interface{}) (Function, error) {
 	delim := args[0].(string)
 	delimB := []byte(delim)
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		switch t := v.(type) {
 		case string:
 			bits := strings.Split(t, delim)
@@ -966,14 +878,7 @@ var _ = RegisterMethod(
 )
 
 func stringMethod(target Function, _ ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: "",
-				Err:       err,
-			}
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		return IToString(v), nil
 	}), nil
 }
@@ -987,11 +892,7 @@ var _ = RegisterMethod(
 
 func stripHTMLMethod(target Function, _ ...interface{}) (Function, error) {
 	p := bluemonday.NewPolicy()
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		switch t := v.(type) {
 		case string:
 			return p.Sanitize(t), nil
@@ -1015,11 +916,7 @@ func trimMethod(target Function, args ...interface{}) (Function, error) {
 	if len(args) > 0 {
 		cutset = args[0].(string)
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		switch t := v.(type) {
 		case string:
 			if len(cutset) == 0 {
@@ -1044,12 +941,9 @@ var _ = RegisterMethod(
 )
 
 func unescapeHTMLMethod(target Function, args ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var res string
+		var err error
 		switch t := v.(type) {
 		case string:
 			res = html.UnescapeString(t)
@@ -1070,12 +964,9 @@ var _ = RegisterMethod(
 )
 
 func unescapeURLQueryMethod(target Function, args ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var res string
+		var err error
 		switch t := v.(type) {
 		case string:
 			res, err = url.QueryUnescape(t)
@@ -1096,11 +987,7 @@ var _ = RegisterMethod(
 )
 
 func unquoteMethod(target Function, _ ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		switch t := v.(type) {
 		case string:
 			return strconv.Unquote(t)
@@ -1119,14 +1006,7 @@ var _ = RegisterMethod(
 )
 
 func uppercaseMethod(target Function, _ ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: "",
-				Err:       err,
-			}
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		switch t := v.(type) {
 		case string:
 			return strings.ToUpper(t), nil

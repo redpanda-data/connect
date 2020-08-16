@@ -2,6 +2,7 @@ package mapping
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
@@ -207,6 +208,149 @@ func TestAssignments(t *testing.T) {
 			} else {
 				assert.Nil(t, resPart)
 			}
+		})
+	}
+}
+
+func TestTargets(t *testing.T) {
+	function := func(name string, args ...interface{}) query.Function {
+		t.Helper()
+		fn, err := query.InitFunction(name, args...)
+		require.NoError(t, err)
+		return fn
+	}
+
+	metaKey := func(k string) *string {
+		return &k
+	}
+
+	tests := []struct {
+		mapping           *Executor
+		queryTargets      []query.TargetPath
+		assignmentTargets []TargetPath
+	}{
+		{
+			mapping: NewExecutor(nil, nil,
+				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("first")),
+				NewStatement(nil, NewMetaAssignment(metaKey("bar")), query.NewLiteralFunction("second")),
+				NewStatement(nil, NewVarAssignment("baz"), function("meta", "third")),
+			),
+			queryTargets: []query.TargetPath{
+				query.NewTargetPath(query.TargetValue, "first"),
+				query.NewTargetPath(query.TargetMetadata, "third"),
+			},
+			assignmentTargets: []TargetPath{
+				NewTargetPath(TargetValue, "foo"),
+				NewTargetPath(TargetMetadata, "bar"),
+				NewTargetPath(TargetVariable, "baz"),
+			},
+		},
+		{
+			mapping: NewExecutor(nil, nil,
+				NewStatement(nil, NewJSONAssignment(), query.NewFieldFunction("first")),
+				NewStatement(nil, NewMetaAssignment(nil), query.NewLiteralFunction("second")),
+				NewStatement(nil, NewVarAssignment("baz"), function("meta", "third")),
+			),
+			queryTargets: []query.TargetPath{
+				query.NewTargetPath(query.TargetValue, "first"),
+				query.NewTargetPath(query.TargetMetadata, "third"),
+			},
+			assignmentTargets: []TargetPath{
+				NewTargetPath(TargetValue),
+				NewTargetPath(TargetMetadata),
+				NewTargetPath(TargetVariable, "baz"),
+			},
+		},
+	}
+
+	for i, test := range tests {
+		test := test
+		t.Run(fmt.Sprintf("%v", i), func(t *testing.T) {
+			assert.Equal(t, test.queryTargets, test.mapping.QueryTargets())
+			assert.Equal(t, test.assignmentTargets, test.mapping.AssignmentTargets())
+		})
+	}
+}
+
+func TestExec(t *testing.T) {
+	metaKey := func(k string) *string {
+		return &k
+	}
+
+	function := func(name string, args ...interface{}) query.Function {
+		t.Helper()
+		fn, err := query.InitFunction(name, args...)
+		require.NoError(t, err)
+		return fn
+	}
+
+	tests := map[string]struct {
+		mapping      *Executor
+		input        interface{}
+		output       interface{}
+		outputString string
+		err          string
+	}{
+		"cant set meta": {
+			mapping: NewExecutor(nil, nil,
+				NewStatement(nil, NewMetaAssignment(metaKey("foo")), query.NewLiteralFunction("bar")),
+			),
+			err: "failed to assign mapping result at line 0: unable to assign metadata in the current context",
+		},
+		"cant use json": {
+			mapping: NewExecutor(nil, nil,
+				NewStatement(nil, NewJSONAssignment("foo"), function("json", "bar")),
+			),
+			err: "failed to execute mapping assignment at line 0: target message part does not exist",
+		},
+		"simple root get and set": {
+			mapping: NewExecutor(nil, nil,
+				NewStatement(nil, NewJSONAssignment(), query.NewFieldFunction("")),
+			),
+			input:        "foobar",
+			output:       "foobar",
+			outputString: "foobar",
+		},
+		"nested get and set": {
+			mapping: NewExecutor(nil, nil,
+				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("bar")),
+			),
+			input:        map[string]interface{}{"bar": "baz"},
+			output:       map[string]interface{}{"foo": "baz"},
+			outputString: `{"foo":"baz"}`,
+		},
+		"failed get": {
+			mapping: NewExecutor(nil, nil,
+				NewStatement(nil, NewJSONAssignment("foo"), function("json", "bar.baz")),
+			),
+			input:        map[string]interface{}{"nope": "baz"},
+			err:          "failed to execute mapping assignment at line 0: target message part does not exist",
+			outputString: "",
+		},
+	}
+
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			res, err := test.mapping.Exec(query.FunctionContext{
+				Value:    &test.input,
+				MsgBatch: message.New(nil),
+			})
+			if len(test.err) > 0 {
+				require.EqualError(t, err, test.err)
+			} else {
+				assert.Equal(t, test.output, res)
+			}
+			resString := test.mapping.ToString(query.FunctionContext{
+				Value:    &test.input,
+				MsgBatch: message.New(nil),
+			})
+			assert.Equal(t, test.outputString, resString)
+			resBytes := test.mapping.ToBytes(query.FunctionContext{
+				Value:    &test.input,
+				MsgBatch: message.New(nil),
+			})
+			assert.Equal(t, test.outputString, string(resBytes))
 		})
 	}
 }

@@ -1,6 +1,7 @@
 ---
 title: process_field
 type: processor
+deprecated: true
 ---
 
 <!--
@@ -10,6 +11,8 @@ type: processor
      lib/processor/process_field.go
 -->
 
+DEPRECATED: This component is deprecated and will be removed in the next major
+version release. Please consider moving onto [alternative components](#alternatives).
 
 A processor that extracts the value of a field [dot path](/docs/configuration/field_paths)
 within payloads according to a specified [codec](#codec), applies a list of
@@ -127,22 +130,8 @@ counting backwards starting from -1.
 Type: `array`  
 Default: `[]`  
 
-## Examples
+## Alternatives
 
-For example, with an input JSON document `{"foo":"hello world"}`
-it's possible to uppercase the value of the field 'foo' by using the JSON codec
-and a [`text`](/docs/components/processors/text) child processor:
-
-```yaml
-process_field:
-  codec: json
-  path: foo
-  processors:
-  - text:
-      operator: to_upper
-```
-
-If the number of messages resulting from the processing steps does not match the
-original count then this processor fails and the messages continue unchanged.
-Therefore, you should avoid using batch and filter type processors in this list.
+The [`branch` processor](/docs/components/processors/branch) offers a
+more flexible and robust way to perform the actions of this processor.
 

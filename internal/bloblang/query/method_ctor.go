@@ -26,7 +26,7 @@ func methodWithDynamicArgs(args []interface{}, target Function, ctor MethodCtor)
 			return nil, err
 		}
 		return dynFunc.Exec(ctx)
-	})
+	}, target.QueryTargets)
 }
 
 func enableMethodDynamicArgs(fn MethodCtor) MethodCtor {
@@ -49,6 +49,19 @@ func checkMethodArgs(fn MethodCtor, checks ...ArgCheckFn) MethodCtor {
 		}
 		return fn(target, args...)
 	}
+}
+
+func simpleMethod(
+	target Function,
+	fn func(interface{}, FunctionContext) (interface{}, error),
+) Function {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return fn(v, ctx)
+	}, target.QueryTargets)
 }
 
 //------------------------------------------------------------------------------
