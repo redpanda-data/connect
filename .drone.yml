@@ -8,7 +8,7 @@ steps:
   - git fetch --tags
 
 - name: test
-  image: golang:1.14.1
+  image: golang:1.15
   environment:
     GOPATH: /drone
     GO111MODULE: on
@@ -17,7 +17,7 @@ steps:
     - make test
 
 - name: release
-  image: golang:1.14.1
+  image: golang:1.15
   environment:
     GITHUB_TOKEN:
       from_secret: github_token
