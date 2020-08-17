@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Fixed `http` processor error log messages that would print incorrect URLs.
+
 ## 3.25.0 - 2020-08-16
 
 ### Added

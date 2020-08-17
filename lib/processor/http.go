@@ -189,7 +189,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 			}
 			h.mErr.Incr(1)
 			h.mErrHTTP.Incr(1)
-			h.log.Errorf("HTTP request to '%v' failed: %v\n", h.conf.HTTP.Client.URL, err)
+			h.log.Errorf("HTTP request to '%v' failed: %v\n", h.conf.HTTP.URL, err)
 			responseMsg = msg.Copy()
 			responseMsg.Iter(func(i int, p types.Part) error {
 				if len(codeStr) > 0 {
@@ -262,7 +262,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 			if err := <-resChan; err != nil {
 				h.mErr.Incr(1)
 				h.mErrHTTP.Incr(1)
-				h.log.Errorf("HTTP parallel request to '%v' failed: %v\n", h.conf.HTTP.Client.URL, err)
+				h.log.Errorf("HTTP parallel request to '%v' failed: %v\n", h.conf.HTTP.URL, err)
 			}
 		}
 
@@ -273,7 +273,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 	if responseMsg.Len() < 1 {
 		return nil, response.NewError(fmt.Errorf(
-			"HTTP response from '%v' was empty", h.conf.HTTP.Client.URL,
+			"HTTP response from '%v' was empty", h.conf.HTTP.URL,
 		))
 	}
 
