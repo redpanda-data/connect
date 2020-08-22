@@ -113,8 +113,9 @@ type Prometheus struct {
 	closedChan chan struct{}
 	running    int32
 
-	config PrometheusConfig
-	prefix string
+	config      PrometheusConfig
+	pathMapping *pathMapping
+	prefix      string
 
 	counters map[string]*prometheus.CounterVec
 	gauges   map[string]*prometheus.GaugeVec
@@ -138,6 +139,11 @@ func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 
 	for _, opt := range opts {
 		opt(p)
+	}
+
+	var err error
+	if p.pathMapping, err = newPathMapping(p.config.PathMapping, p.log); err != nil {
+		return nil, fmt.Errorf("failed to init path mapping: %v", err)
 	}
 
 	if len(p.config.PushURL) > 0 && len(p.config.PushInterval) > 0 {
@@ -173,15 +179,18 @@ func (p *Prometheus) HandlerFunc() http.HandlerFunc {
 
 //------------------------------------------------------------------------------
 
-func toPromName(dotSepName string) string {
+func (p *Prometheus) toPromName(dotSepName string) string {
 	dotSepName = strings.Replace(dotSepName, "_", "__", -1)
 	dotSepName = strings.Replace(dotSepName, "-", "__", -1)
-	return strings.Replace(dotSepName, ".", "_", -1)
+	return p.pathMapping.mapPath(strings.Replace(dotSepName, ".", "_", -1))
 }
 
 // GetCounter returns a stat counter object for a path.
 func (p *Prometheus) GetCounter(path string) StatCounter {
-	stat := toPromName(path)
+	stat := p.toPromName(path)
+	if len(stat) == 0 {
+		return DudStat{}
+	}
 
 	var ctr *prometheus.CounterVec
 
@@ -205,7 +214,10 @@ func (p *Prometheus) GetCounter(path string) StatCounter {
 
 // GetTimer returns a stat timer object for a path.
 func (p *Prometheus) GetTimer(path string) StatTimer {
-	stat := toPromName(path)
+	stat := p.toPromName(path)
+	if len(stat) == 0 {
+		return DudStat{}
+	}
 
 	var tmr *prometheus.SummaryVec
 
@@ -230,7 +242,10 @@ func (p *Prometheus) GetTimer(path string) StatTimer {
 
 // GetGauge returns a stat gauge object for a path.
 func (p *Prometheus) GetGauge(path string) StatGauge {
-	stat := toPromName(path)
+	stat := p.toPromName(path)
+	if len(stat) == 0 {
+		return DudStat{}
+	}
 
 	var ctr *prometheus.GaugeVec
 
@@ -256,7 +271,12 @@ func (p *Prometheus) GetGauge(path string) StatGauge {
 // these labels must be consistent with any other metrics registered on the same
 // path.
 func (p *Prometheus) GetCounterVec(path string, labelNames []string) StatCounterVec {
-	stat := toPromName(path)
+	stat := p.toPromName(path)
+	if len(stat) == 0 {
+		return fakeCounterVec(func([]string) StatCounter {
+			return DudStat{}
+		})
+	}
 
 	var ctr *prometheus.CounterVec
 
@@ -282,7 +302,12 @@ func (p *Prometheus) GetCounterVec(path string, labelNames []string) StatCounter
 // these labels must be consistent with any other metrics registered on the same
 // path.
 func (p *Prometheus) GetTimerVec(path string, labelNames []string) StatTimerVec {
-	stat := toPromName(path)
+	stat := p.toPromName(path)
+	if len(stat) == 0 {
+		return fakeTimerVec(func([]string) StatTimer {
+			return DudStat{}
+		})
+	}
 
 	var tmr *prometheus.SummaryVec
 
@@ -309,7 +334,12 @@ func (p *Prometheus) GetTimerVec(path string, labelNames []string) StatTimerVec 
 // these labels must be consistent with any other metrics registered on the same
 // path.
 func (p *Prometheus) GetGaugeVec(path string, labelNames []string) StatGaugeVec {
-	stat := toPromName(path)
+	stat := p.toPromName(path)
+	if len(stat) == 0 {
+		return fakeGaugeVec(func([]string) StatGauge {
+			return DudStat{}
+		})
+	}
 
 	var ctr *prometheus.GaugeVec
 

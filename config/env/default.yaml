@@ -1098,10 +1098,13 @@ metrics:
     endpoint: ${METRICS_CLOUDWATCH_ENDPOINT}
     flush_period: ${METRICS_CLOUDWATCH_FLUSH_PERIOD:100ms}
     namespace: ${METRICS_CLOUDWATCH_NAMESPACE:Benthos}
+    path_mapping: ${METRICS_CLOUDWATCH_PATH_MAPPING}
     region: ${METRICS_CLOUDWATCH_REGION:eu-west-1}
   http_server:
+    path_mapping: ${METRICS_HTTP_SERVER_PATH_MAPPING}
     prefix: ${METRICS_HTTP_SERVER_PREFIX:benthos}
   prometheus:
+    path_mapping: ${METRICS_PROMETHEUS_PATH_MAPPING}
     prefix: ${METRICS_PROMETHEUS_PREFIX:benthos}
     push_interval: ${METRICS_PROMETHEUS_PUSH_INTERVAL}
     push_job_name: ${METRICS_PROMETHEUS_PUSH_JOB_NAME:benthos_push}
@@ -1110,10 +1113,12 @@ metrics:
     address: ${METRICS_STATSD_ADDRESS:localhost:4040}
     flush_period: ${METRICS_STATSD_FLUSH_PERIOD:100ms}
     network: ${METRICS_STATSD_NETWORK:udp}
+    path_mapping: ${METRICS_STATSD_PATH_MAPPING}
     prefix: ${METRICS_STATSD_PREFIX:benthos}
     tag_format: ${METRICS_STATSD_TAG_FORMAT:legacy}
   stdout:
     flush_metrics: ${METRICS_STDOUT_FLUSH_METRICS:false}
+    path_mapping: ${METRICS_STDOUT_PATH_MAPPING}
     push_interval: ${METRICS_STDOUT_PUSH_INTERVAL}
     static_fields:
       '@service': ${METRICS_STDOUT_STATIC_FIELDS_@SERVICE:benthos}

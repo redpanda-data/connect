@@ -13,15 +13,29 @@ metrics:
     flush_period: 100ms
 ```
 
-There are also metric components that offer ways to filter and/or format the metrics that Benthos exposes such as [`rename`][metrics.rename] and [`whitelist`][metrics.whitelist].
+The metrics paths that you will see depend on your configured pipeline. However, there are some critical metrics that will always be present that are [outlined below](#paths).
 
-The metrics paths that you will see depend on your configured pipeline. However, there are some critical metrics that will always be present that are outlined here.
+Each metrics output type has a field `path_mapping` that allows you to change or remove metric paths before they are registered by applying a [Bloblang mapping][bloblang.about]. For example, the following mapping reduces the metrics exposed by Benthos to an explicit list by deleting names that aren't in the desired list:
+
+```yaml
+metrics:
+  prometheus:
+    prefix: benthos
+    path_mapping: |
+      if ![
+        "input_received",
+        "input_latency",
+        "output_sent"
+      ].contains(this) { deleted() }
+```
+
+The value of `this` in the context of the mapping is the full path of the metric (excluding the prefix).
 
 ## Paths
 
 This document lists some of the most useful metrics exposed by Benthos, there are lots of more granular metrics available that may not appear here which will depend on your pipeline configuration.
 
-Paths are listed here in dot notation, which is how they will appear if aggregated by Statsd. Other metrics destinations such as Prometheus will display these metrics with other notations (underscores instead of dots.)
+Paths are listed here in dot notation, which is how they will appear if sent to StatsD. Other metrics destinations such as Prometheus will display these metrics with other notations (underscores instead of dots.)
 
 ### Input
 
@@ -81,8 +95,7 @@ Components within the resources section have a metrics path containing their nam
 - `resource.processor.baz.count`
 - `resource.rate_limit.quz.count`
 
-[metrics.rename]: /docs/components/metrics/rename
-[metrics.whitelist]: /docs/components/metrics/whitelist
+[bloblang.about]: /docs/guides/bloblang/about
 
 import ComponentSelect from '@theme/ComponentSelect';
 

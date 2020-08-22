@@ -48,6 +48,7 @@ logger:
 metrics:
   type: http_server
   http_server:
+    path_mapping: ""
     prefix: benthos
 tracer:
   type: none

@@ -22,6 +22,7 @@ Supported tagging formats are 'legacy', 'none', 'datadog' and 'influxdb'.
 metrics:
   statsd:
     prefix: benthos
+    path_mapping: ""
     address: localhost:4040
     flush_period: 100ms
     tag_format: legacy
@@ -47,6 +48,27 @@ A string prefix to add to all metrics.
 
 Type: `string`  
 Default: `"benthos"`  
+
+### `path_mapping`
+
+An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+path_mapping: this.replace("input", "source").replace("output", "sink")
+
+path_mapping: |-
+  if ![
+    "benthos_input_received",
+    "benthos_input_latency",
+    "benthos_output_sent"
+  ].contains(this) { deleted() }
+```
 
 ### `address`
 

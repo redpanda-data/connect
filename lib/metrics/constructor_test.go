@@ -12,7 +12,8 @@ func TestSanitise(t *testing.T) {
 	exp := config.Sanitised{
 		"type": "http_server",
 		"http_server": map[string]interface{}{
-			"prefix": "benthos",
+			"prefix":       "benthos",
+			"path_mapping": "",
 		},
 	}
 
@@ -32,6 +33,7 @@ func TestSanitise(t *testing.T) {
 		"statsd": map[string]interface{}{
 			"address":      "foo",
 			"prefix":       "benthos",
+			"path_mapping": "",
 			"flush_period": "100ms",
 			"network":      "udp",
 			"tag_format":   "legacy",

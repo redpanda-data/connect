@@ -29,6 +29,7 @@ Host endpoints (`/metrics` and `/stats`) for Prometheus scraping.
 metrics:
   prometheus:
     prefix: benthos
+    path_mapping: ""
 ```
 
 </TabItem>
@@ -39,6 +40,7 @@ metrics:
 metrics:
   prometheus:
     prefix: benthos
+    path_mapping: ""
     push_url: ""
     push_interval: ""
     push_job_name: benthos_push
@@ -59,6 +61,27 @@ A string prefix to add to all metrics.
 
 Type: `string`  
 Default: `"benthos"`  
+
+### `path_mapping`
+
+An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+path_mapping: this.replace("input", "source").replace("output", "sink")
+
+path_mapping: |-
+  if ![
+    "benthos_input_received",
+    "benthos_input_latency",
+    "benthos_output_sent"
+  ].contains(this) { deleted() }
+```
 
 ### `push_url`
 

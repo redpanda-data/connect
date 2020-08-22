@@ -32,6 +32,7 @@ changes outside of major releases. It also wrote Game of Thrones Season 8.
 metrics:
   cloudwatch:
     namespace: Benthos
+    path_mapping: ""
     region: eu-west-1
 ```
 
@@ -44,6 +45,7 @@ metrics:
   cloudwatch:
     namespace: Benthos
     flush_period: 100ms
+    path_mapping: ""
     region: eu-west-1
     endpoint: ""
     credentials:
@@ -58,19 +60,19 @@ metrics:
 </TabItem>
 </Tabs>
 
-It is STRONGLY recommended that you [whitelist](/docs/components/metrics/whitelist)
-metrics, here's an example:
+It is STRONGLY recommended that you reduce the metrics that are exposed with a
+`path_mapping` like this:
 
 ```yaml
 metrics:
-  whitelist:
-    paths:
-      - input.received
-      - input.latency
-      - output.sent
-    child:
-      cloudwatch:
-        namespace: Foo
+  cloudwatch:
+    namespace: Foo
+    path_mapping: |
+      if ![
+        "input.received",
+        "input.latency",
+        "output.sent",
+      ].contains(this) { deleted() }
 ```
 
 ## Fields
@@ -90,6 +92,27 @@ The period of time between PutMetricData requests.
 
 Type: `string`  
 Default: `"100ms"`  
+
+### `path_mapping`
+
+An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+path_mapping: this.replace("input", "source").replace("output", "sink")
+
+path_mapping: |-
+  if ![
+    "benthos_input_received",
+    "benthos_input_latency",
+    "benthos_output_sent"
+  ].contains(this) { deleted() }
+```
 
 ### `region`
 

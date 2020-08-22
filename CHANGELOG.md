@@ -9,6 +9,12 @@ All notable changes to this project will be documented in this file.
 
 - New Bloblang methods `not_null` and `filter`.
 - New Bloblang function `env`.
+- New field `path_mapping` added to all metrics types.
+
+### Changed
+
+- The `rename`, `whitelist` and `blacklist` metrics types are now deprecated,
+  and the `path_mapping` field should be used instead.
 
 ### Fixed
 

@@ -1,6 +1,7 @@
 ---
 title: whitelist
 type: metrics
+deprecated: true
 ---
 
 <!--
@@ -13,6 +14,8 @@ type: metrics
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+DEPRECATED: This component is deprecated and will be removed in the next major
+version release. Please consider moving onto [alternative components](#alternatives).
 
 Whitelist metric paths within Benthos so that only matching metric paths are
 aggregated by a child metric target.

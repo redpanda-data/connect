@@ -27,23 +27,24 @@ Send metrics to AWS CloudWatch using the PutMetricData endpoint.
 ALPHA: This metrics target is experimental, untested, and subject to breaking
 changes outside of major releases. It also wrote Game of Thrones Season 8.`,
 		Description: `
-It is STRONGLY recommended that you [whitelist](/docs/components/metrics/whitelist)
-metrics, here's an example:
+It is STRONGLY recommended that you reduce the metrics that are exposed with a
+` + "`path_mapping`" + ` like this:
 
 ` + "```yaml" + `
 metrics:
-  whitelist:
-    paths:
-      - input.received
-      - input.latency
-      - output.sent
-    child:
-      cloudwatch:
-        namespace: Foo
+  cloudwatch:
+    namespace: Foo
+    path_mapping: |
+      if ![
+        "input.received",
+        "input.latency",
+        "output.sent",
+      ].contains(this) { deleted() }
 ` + "```" + ``,
 		FieldSpecs: append(docs.FieldSpecs{
 			docs.FieldCommon("namespace", "The namespace used to distinguish metrics from other services."),
 			docs.FieldAdvanced("flush_period", "The period of time between PutMetricData requests."),
+			pathMappingDocs(),
 		}, session.FieldSpecs()...),
 	}
 }
@@ -55,6 +56,7 @@ type CloudWatchConfig struct {
 	session.Config `json:",inline" yaml:",inline"`
 	Namespace      string `json:"namespace" yaml:"namespace"`
 	FlushPeriod    string `json:"flush_period" yaml:"flush_period"`
+	PathMapping    string `json:"path_mapping" yaml:"path_mapping"`
 }
 
 // NewCloudWatchConfig creates an CloudWatchConfig struct with default values.
@@ -63,6 +65,7 @@ func NewCloudWatchConfig() CloudWatchConfig {
 		Config:      session.NewConfig(),
 		Namespace:   "Benthos",
 		FlushPeriod: "100ms",
+		PathMapping: "",
 	}
 }
 
@@ -250,8 +253,9 @@ type CloudWatch struct {
 	ctx    context.Context
 	cancel func()
 
-	config CloudWatchConfig
-	log    log.Modular
+	pathMapping *pathMapping
+	config      CloudWatchConfig
+	log         log.Modular
 }
 
 // NewCloudWatch creates and returns a new CloudWatch object.
@@ -266,6 +270,11 @@ func NewCloudWatch(config Config, opts ...func(Type)) (Type, error) {
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 	for _, opt := range opts {
 		opt(c)
+	}
+
+	var err error
+	if c.pathMapping, err = newPathMapping(config.CloudWatch.PathMapping, c.log); err != nil {
+		return nil, fmt.Errorf("failed to init path mapping: %v", err)
 	}
 
 	sess, err := config.CloudWatch.GetSession()
@@ -284,13 +293,16 @@ func NewCloudWatch(config Config, opts ...func(Type)) (Type, error) {
 
 //------------------------------------------------------------------------------
 
-func toCMName(dotSepName string) string {
-	return dotSepName
+func (c *CloudWatch) toCMName(dotSepName string) string {
+	return c.pathMapping.mapPath(dotSepName)
 }
 
 // GetCounter returns a stat counter object for a path.
 func (c *CloudWatch) GetCounter(path string) StatCounter {
-	name := toCMName(path)
+	name := c.toCMName(path)
+	if len(name) == 0 {
+		return DudStat{}
+	}
 	return &cloudWatchStat{
 		root: c,
 		id:   name,
@@ -301,10 +313,16 @@ func (c *CloudWatch) GetCounter(path string) StatCounter {
 
 // GetCounterVec returns a stat counter object for a path with the labels
 func (c *CloudWatch) GetCounterVec(path string, n []string) StatCounterVec {
+	name := c.toCMName(path)
+	if len(name) == 0 {
+		return fakeCounterVec(func([]string) StatCounter {
+			return DudStat{}
+		})
+	}
 	return &cloudWatchCounterVec{
 		cloudWatchStatVec: cloudWatchStatVec{
 			root:       c,
-			name:       toCMName(path),
+			name:       name,
 			unit:       cloudwatch.StandardUnitCount,
 			labelNames: n,
 		},
@@ -313,7 +331,10 @@ func (c *CloudWatch) GetCounterVec(path string, n []string) StatCounterVec {
 
 // GetTimer returns a stat timer object for a path.
 func (c *CloudWatch) GetTimer(path string) StatTimer {
-	name := toCMName(path)
+	name := c.toCMName(path)
+	if len(name) == 0 {
+		return DudStat{}
+	}
 	return &cloudWatchStat{
 		root: c,
 		id:   name,
@@ -324,10 +345,16 @@ func (c *CloudWatch) GetTimer(path string) StatTimer {
 
 // GetTimerVec returns a stat timer object for a path with the labels
 func (c *CloudWatch) GetTimerVec(path string, n []string) StatTimerVec {
+	name := c.toCMName(path)
+	if len(name) == 0 {
+		return fakeTimerVec(func([]string) StatTimer {
+			return DudStat{}
+		})
+	}
 	return &cloudWatchTimerVec{
 		cloudWatchStatVec: cloudWatchStatVec{
 			root:       c,
-			name:       toCMName(path),
+			name:       name,
 			unit:       cloudwatch.StandardUnitMicroseconds,
 			labelNames: n,
 		},
@@ -336,7 +363,10 @@ func (c *CloudWatch) GetTimerVec(path string, n []string) StatTimerVec {
 
 // GetGauge returns a stat gauge object for a path.
 func (c *CloudWatch) GetGauge(path string) StatGauge {
-	name := toCMName(path)
+	name := c.toCMName(path)
+	if len(name) == 0 {
+		return DudStat{}
+	}
 	return &cloudWatchStat{
 		root: c,
 		id:   name,
@@ -347,10 +377,16 @@ func (c *CloudWatch) GetGauge(path string) StatGauge {
 
 // GetGaugeVec returns a stat timer object for a path with the labels
 func (c *CloudWatch) GetGaugeVec(path string, n []string) StatGaugeVec {
+	name := c.toCMName(path)
+	if len(name) == 0 {
+		return fakeGaugeVec(func([]string) StatGauge {
+			return DudStat{}
+		})
+	}
 	return &cloudWatchGaugeVec{
 		cloudWatchStatVec: cloudWatchStatVec{
 			root:       c,
-			name:       toCMName(path),
+			name:       name,
 			unit:       cloudwatch.StandardUnitNone,
 			labelNames: n,
 		},

@@ -39,6 +39,7 @@ metrics:
   type: stdout
   stdout:
     flush_metrics: false
+    path_mapping: ""
     push_interval: ""
     static_fields:
       '@service': benthos

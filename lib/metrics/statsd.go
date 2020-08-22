@@ -30,6 +30,7 @@ rely on sending Statsd metrics over TCP and want it to be supported long term
 please [raise an issue](https://github.com/Jeffail/benthos/issues).`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("prefix", "A string prefix to add to all metrics."),
+			pathMappingDocs(),
 			docs.FieldCommon("address", "The address to send metrics to."),
 			docs.FieldCommon("flush_period", "The time interval between metrics flushes."),
 			docs.FieldCommon("tag_format", "Metrics tagging is supported in a variety of formats. The format 'legacy' is a special case that forces Benthos to use a deprecated library for backwards compatibility.").HasOptions(
@@ -55,6 +56,7 @@ func (s wrappedDatadogLogger) Printf(msg string, args ...interface{}) {
 // StatsdConfig is config for the Statsd metrics type.
 type StatsdConfig struct {
 	Prefix      string `json:"prefix" yaml:"prefix"`
+	PathMapping string `json:"path_mapping" yaml:"path_mapping"`
 	Address     string `json:"address" yaml:"address"`
 	FlushPeriod string `json:"flush_period" yaml:"flush_period"`
 	Network     string `json:"network" yaml:"network"`
@@ -65,6 +67,7 @@ type StatsdConfig struct {
 func NewStatsdConfig() StatsdConfig {
 	return StatsdConfig{
 		Prefix:      "benthos",
+		PathMapping: "",
 		Address:     "localhost:4040",
 		FlushPeriod: "100ms",
 		Network:     "udp",
@@ -119,9 +122,10 @@ func (s *StatsdStat) Set(value int64) error {
 // Statsd is a stats object with capability to hold internal stats as a JSON
 // endpoint.
 type Statsd struct {
-	config Config
-	s      *statsd.Client
-	log    log.Modular
+	config      Config
+	s           *statsd.Client
+	log         log.Modular
+	pathMapping *pathMapping
 }
 
 // NewStatsd creates and returns a new Statsd object.
@@ -141,6 +145,10 @@ func NewStatsd(config Config, opts ...func(Type)) (Type, error) {
 	}
 	for _, opt := range opts {
 		opt(s)
+	}
+
+	if s.pathMapping, err = newPathMapping(config.Statsd.PathMapping, s.log); err != nil {
+		return nil, fmt.Errorf("failed to init path mapping: %v", err)
 	}
 
 	prefix := config.Statsd.Prefix
@@ -174,6 +182,9 @@ func NewStatsd(config Config, opts ...func(Type)) (Type, error) {
 
 // GetCounter returns a stat counter object for a path.
 func (h *Statsd) GetCounter(path string) StatCounter {
+	if path = h.pathMapping.mapPath(path); len(path) == 0 {
+		return DudStat{}
+	}
 	return &StatsdStat{
 		path: path,
 		s:    h.s,
@@ -182,6 +193,11 @@ func (h *Statsd) GetCounter(path string) StatCounter {
 
 // GetCounterVec returns a stat counter object for a path with the labels
 func (h *Statsd) GetCounterVec(path string, n []string) StatCounterVec {
+	if path = h.pathMapping.mapPath(path); len(path) == 0 {
+		return fakeCounterVec(func([]string) StatCounter {
+			return DudStat{}
+		})
+	}
 	return &fCounterVec{
 		f: func(l []string) StatCounter {
 			return &StatsdStat{
@@ -195,6 +211,9 @@ func (h *Statsd) GetCounterVec(path string, n []string) StatCounterVec {
 
 // GetTimer returns a stat timer object for a path.
 func (h *Statsd) GetTimer(path string) StatTimer {
+	if path = h.pathMapping.mapPath(path); len(path) == 0 {
+		return DudStat{}
+	}
 	return &StatsdStat{
 		path: path,
 		s:    h.s,
@@ -203,6 +222,11 @@ func (h *Statsd) GetTimer(path string) StatTimer {
 
 // GetTimerVec returns a stat timer object for a path with the labels
 func (h *Statsd) GetTimerVec(path string, n []string) StatTimerVec {
+	if path = h.pathMapping.mapPath(path); len(path) == 0 {
+		return fakeTimerVec(func([]string) StatTimer {
+			return DudStat{}
+		})
+	}
 	return &fTimerVec{
 		f: func(l []string) StatTimer {
 			return &StatsdStat{
@@ -216,6 +240,9 @@ func (h *Statsd) GetTimerVec(path string, n []string) StatTimerVec {
 
 // GetGauge returns a stat gauge object for a path.
 func (h *Statsd) GetGauge(path string) StatGauge {
+	if path = h.pathMapping.mapPath(path); len(path) == 0 {
+		return DudStat{}
+	}
 	return &StatsdStat{
 		path: path,
 		s:    h.s,
@@ -224,6 +251,11 @@ func (h *Statsd) GetGauge(path string) StatGauge {
 
 // GetGaugeVec returns a stat timer object for a path with the labels
 func (h *Statsd) GetGaugeVec(path string, n []string) StatGaugeVec {
+	if path = h.pathMapping.mapPath(path); len(path) == 0 {
+		return fakeGaugeVec(func([]string) StatGauge {
+			return DudStat{}
+		})
+	}
 	return &fGaugeVec{
 		f: func(l []string) StatGauge {
 			return &StatsdStat{

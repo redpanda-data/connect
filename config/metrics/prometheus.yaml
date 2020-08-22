@@ -38,6 +38,7 @@ logger:
 metrics:
   type: prometheus
   prometheus:
+    path_mapping: ""
     prefix: benthos
     push_interval: ""
     push_job_name: benthos_push

@@ -27,6 +27,7 @@ metrics:
     static_fields:
       '@service': benthos
     flush_metrics: false
+    path_mapping: ""
 ```
 
 When Benthos shuts down all aggregated metrics are printed. If a
@@ -58,5 +59,26 @@ Whether counters and timing metrics should be reset to 0 each time metrics are p
 
 Type: `bool`  
 Default: `false`  
+
+### `path_mapping`
+
+An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+path_mapping: this.replace("input", "source").replace("output", "sink")
+
+path_mapping: |-
+  if ![
+    "benthos_input_received",
+    "benthos_input_latency",
+    "benthos_output_sent"
+  ].contains(this) { deleted() }
+```
 
 

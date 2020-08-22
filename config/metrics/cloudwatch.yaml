@@ -48,6 +48,7 @@ metrics:
     endpoint: ""
     flush_period: 100ms
     namespace: Benthos
+    path_mapping: ""
     region: eu-west-1
 tracer:
   type: none

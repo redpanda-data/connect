@@ -14,6 +14,7 @@ Metrics paths will differ from [the list](/docs/components/metrics/about#paths) 
 instead be underscores.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("prefix", "A string prefix to add to all metrics."),
+			pathMappingDocs(),
 			docs.FieldAdvanced("push_url", "An optional [Push Gateway URL](#push-gateway) to push metrics to."),
 			docs.FieldAdvanced("push_interval", "The period of time between each push when sending metrics to a Push Gateway."),
 			docs.FieldAdvanced("push_job_name", "An identifier for push jobs."),
@@ -36,6 +37,7 @@ include the "/metrics/jobs/..." path in the push URL.`,
 // PrometheusConfig is config for the Prometheus metrics type.
 type PrometheusConfig struct {
 	Prefix       string `json:"prefix" yaml:"prefix"`
+	PathMapping  string `json:"path_mapping" yaml:"path_mapping"`
 	PushURL      string `json:"push_url" yaml:"push_url"`
 	PushInterval string `json:"push_interval" yaml:"push_interval"`
 	PushJobName  string `json:"push_job_name" yaml:"push_job_name"`
@@ -45,6 +47,7 @@ type PrometheusConfig struct {
 func NewPrometheusConfig() PrometheusConfig {
 	return PrometheusConfig{
 		Prefix:       "benthos",
+		PathMapping:  "",
 		PushURL:      "",
 		PushInterval: "",
 		PushJobName:  "benthos_push",

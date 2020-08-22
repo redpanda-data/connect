@@ -43,6 +43,7 @@ like this:
 ` + "```" + ``,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("prefix", "A string prefix to add to all metrics."),
+			pathMappingDocs(),
 		},
 	}
 }
@@ -58,13 +59,15 @@ var (
 
 // HTTPConfig contains configuration parameters for the HTTP metrics aggregator.
 type HTTPConfig struct {
-	Prefix string `json:"prefix" yaml:"prefix"`
+	Prefix      string `json:"prefix" yaml:"prefix"`
+	PathMapping string `json:"path_mapping" yaml:"path_mapping"`
 }
 
 // NewHTTPConfig returns a new HTTPConfig with default values.
 func NewHTTPConfig() HTTPConfig {
 	return HTTPConfig{
-		Prefix: "benthos",
+		Prefix:      "benthos",
+		PathMapping: "",
 	}
 }
 
@@ -72,9 +75,11 @@ func NewHTTPConfig() HTTPConfig {
 
 // HTTP is an object with capability to hold internal stats as a JSON endpoint.
 type HTTP struct {
-	local      *Local
-	timestamp  time.Time
-	pathPrefix string
+	local       *Local
+	log         log.Modular
+	timestamp   time.Time
+	pathPrefix  string
+	pathMapping *pathMapping
 }
 
 // NewHTTP creates and returns a new HTTP object.
@@ -87,10 +92,22 @@ func NewHTTP(config Config, opts ...func(Type)) (Type, error) {
 	for _, opt := range opts {
 		opt(t)
 	}
+	var err error
+	if t.pathMapping, err = newPathMapping(config.HTTP.PathMapping, t.log); err != nil {
+		return nil, fmt.Errorf("failed to init path mapping: %v", err)
+	}
 	return t, nil
 }
 
 //------------------------------------------------------------------------------
+
+func (h *HTTP) getPath(path string) string {
+	path = h.pathMapping.mapPath(path)
+	if len(h.pathPrefix) > 0 && len(path) > 0 {
+		path = h.pathPrefix + "." + path
+	}
+	return path
+}
 
 // HandlerFunc returns an http.HandlerFunc for accessing metrics as a JSON blob.
 func (h *HTTP) HandlerFunc() http.HandlerFunc {
@@ -112,12 +129,6 @@ func (h *HTTP) HandlerFunc() http.HandlerFunc {
 		obj.SetP(fmt.Sprintf("%v", uptime), "uptime")
 		obj.SetP(goroutines, "goroutines")
 
-		if len(h.pathPrefix) > 0 {
-			rootObj := gabs.New()
-			rootObj.SetP(obj.Data(), h.pathPrefix)
-			obj = rootObj
-		}
-
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(obj.Bytes())
 	}
@@ -125,12 +136,20 @@ func (h *HTTP) HandlerFunc() http.HandlerFunc {
 
 // GetCounter returns a stat counter object for a path.
 func (h *HTTP) GetCounter(path string) StatCounter {
+	if path = h.getPath(path); len(path) == 0 {
+		return DudStat{}
+	}
 	return h.local.GetCounter(path)
 }
 
 // GetCounterVec returns a stat counter object for a path with the labels
 // discarded.
 func (h *HTTP) GetCounterVec(path string, n []string) StatCounterVec {
+	if path = h.getPath(path); len(path) == 0 {
+		return fakeCounterVec(func([]string) StatCounter {
+			return DudStat{}
+		})
+	}
 	return fakeCounterVec(func([]string) StatCounter {
 		return h.local.GetCounter(path)
 	})
@@ -138,12 +157,20 @@ func (h *HTTP) GetCounterVec(path string, n []string) StatCounterVec {
 
 // GetTimer returns a stat timer object for a path.
 func (h *HTTP) GetTimer(path string) StatTimer {
+	if path = h.getPath(path); len(path) == 0 {
+		return DudStat{}
+	}
 	return h.local.GetTimer(path)
 }
 
 // GetTimerVec returns a stat timer object for a path with the labels
 // discarded.
 func (h *HTTP) GetTimerVec(path string, n []string) StatTimerVec {
+	if path = h.getPath(path); len(path) == 0 {
+		return fakeTimerVec(func([]string) StatTimer {
+			return DudStat{}
+		})
+	}
 	return fakeTimerVec(func([]string) StatTimer {
 		return h.local.GetTimer(path)
 	})
@@ -151,19 +178,29 @@ func (h *HTTP) GetTimerVec(path string, n []string) StatTimerVec {
 
 // GetGauge returns a stat gauge object for a path.
 func (h *HTTP) GetGauge(path string) StatGauge {
+	if path = h.getPath(path); len(path) == 0 {
+		return DudStat{}
+	}
 	return h.local.GetGauge(path)
 }
 
 // GetGaugeVec returns a stat timer object for a path with the labels
 // discarded.
 func (h *HTTP) GetGaugeVec(path string, n []string) StatGaugeVec {
+	if path = h.getPath(path); len(path) == 0 {
+		return fakeGaugeVec(func([]string) StatGauge {
+			return DudStat{}
+		})
+	}
 	return fakeGaugeVec(func([]string) StatGauge {
 		return h.local.GetGauge(path)
 	})
 }
 
 // SetLogger does nothing.
-func (h *HTTP) SetLogger(log log.Modular) {}
+func (h *HTTP) SetLogger(log log.Modular) {
+	h.log = log
+}
 
 // Close stops the HTTP object from aggregating metrics and cleans up resources.
 func (h *HTTP) Close() error {
