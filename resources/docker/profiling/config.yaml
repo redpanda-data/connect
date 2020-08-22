@@ -1,0 +1,32 @@
+http:
+  address: 0.0.0.0:4195
+  debug_endpoints: true
+
+input:
+  bloblang:
+    interval: "1ms"
+    mapping: |
+      root = {
+        "foo": "bar"
+      }
+
+pipeline:
+  threads: 20
+  processors:
+    - bloblang: |
+        root = this
+        root.foo = this.foo.uppercase()
+
+output:
+  type: drop
+
+metrics:
+  prometheus:
+    prefix: benthos
+    push_interval: 1s
+    push_job_name: benthos_push
+    push_url: "http://localhost:9091"
+
+tracer:
+  jaeger:
+    agent_address: 'localhost:6831'
