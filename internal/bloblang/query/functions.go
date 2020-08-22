@@ -208,6 +208,28 @@ root.bar = deleted()`,
 
 var _ = RegisterFunctionSpec(
 	NewFunctionSpec(
+		FunctionCategoryEnvironment, "env",
+		"Returns the value of an environment variable.",
+		NewExampleSpec("",
+			`root.thing.key = env("key")`,
+		),
+	),
+	true, envFunction,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
+
+func envFunction(args ...interface{}) (Function, error) {
+	key := args[0].(string)
+	return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
+		return os.Getenv(key), nil
+	}, nil), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterFunctionSpec(
+	NewFunctionSpec(
 		FunctionCategoryGeneral, "error",
 		"If an error has occurred during the processing of a message this function returns the reported cause of the error. For more information about error handling patterns read [here][error_handling].",
 		NewExampleSpec("",

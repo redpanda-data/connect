@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New Bloblang methods `not_null` and `filter`.
+- New Bloblang function `env`.
+
 ### Fixed
 
 - Fixed `http` processor error log messages that would print incorrect URLs.

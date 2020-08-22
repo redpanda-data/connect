@@ -382,6 +382,20 @@ root.new_value = this.value.re_replace("ADD ([0-9]+)","+($1)")
 
 ## Type Coercion
 
+### `not_null`
+
+Ensures that the given value is not `null`, and if so returns it, otherwise an error is returned.
+
+```coffee
+root.a = this.a.not_null()
+
+# In:  {"a":"foobar","b":"barbaz"}
+# Out: {"a":"foobar"}
+
+# In:  {"b":"barbaz"}
+# Out: Error("failed to execute mapping query at line 1: value is null")
+```
+
 ### `string`
 
 Marshal a value into a string. If the value is already a string it is unchanged.
@@ -519,6 +533,28 @@ root = this.explode("value")
 
 # In:  {"id":1,"value":{"foo":2,"bar":[3,4],"baz":{"bev":5}}}
 # Out: {"bar":{"id":1,"value":[3,4]},"baz":{"id":1,"value":{"bev":5}},"foo":{"id":1,"value":2}}
+```
+
+### `filter`
+
+Executes a mapping query argument for each element of an array or key/value pair of an object, and unless the mapping returns `false` the item is removed from the resulting array or object.
+
+```coffee
+root.new_nums = this.nums.filter(this > 10)
+
+# In:  {"nums":[3,11,4,17]}
+# Out: {"new_nums":[11,17]}
+```
+
+#### On objects
+
+When filtering objects the mapping query argument is provided a context with a field `key` containing the value key, and a field `value` containing the value.
+
+```coffee
+root.new_dict = this.dict.filter(this.value.contains("foo"))
+
+# In:  {"dict":{"first":"hello foo","second":"world","third":"this foo is great"}}
+# Out: {"new_dict":{"first":"hello foo","third":"this foo is great"}}
 ```
 
 ### `flatten`

@@ -68,7 +68,6 @@ func TestMethodExamples(t *testing.T) {
 					for j, io := range e.Results {
 						msg := message.New([][]byte{[]byte(io[0])})
 						p, err := m.MapPart(0, msg)
-						require.NoError(t, err)
 						exp := io[1]
 						if strings.HasPrefix(exp, "Error(") {
 							exp = exp[7 : len(exp)-2]

@@ -508,6 +508,20 @@ func TestMethods(t *testing.T) {
 			),
 			output: float64(5.2),
 		},
+		"check not_null": {
+			input: methods(
+				literalFn(21.0),
+				method("not_null"),
+			),
+			output: 21.0,
+		},
+		"check not null 2": {
+			input: methods(
+				literalFn(nil),
+				method("not_null"),
+			),
+			err: `value is null`,
+		},
 		"check index": {
 			input: methods(
 				jsonFn(`["foo","bar","baz"]`),
@@ -1328,6 +1342,43 @@ func TestMethods(t *testing.T) {
 				)),
 			),
 			output: []interface{}{"(FOO)", "(BAR)"},
+		},
+		"check map each object": {
+			input: methods(
+				jsonFn(`{"foo":"hello world","bar":"this is ash"}`),
+				method("map_each", methods(
+					NewFieldFunction("value"),
+					method("uppercase"),
+				)),
+			),
+			output: map[string]interface{}{
+				"foo": "HELLO WORLD",
+				"bar": "THIS IS ASH",
+			},
+		},
+		"check filter array": {
+			input: methods(
+				jsonFn(`[2,14,4,11,7]`),
+				method("filter", arithmetic(
+					NewFieldFunction(""),
+					NewLiteralFunction(10.0),
+					ArithmeticGt,
+				)),
+			),
+			output: []interface{}{14.0, 11.0},
+		},
+		"check filter object": {
+			input: methods(
+				jsonFn(`{"foo":"hello ! world","bar":"this is ash","baz":"im cool!"}`),
+				method("filter", methods(
+					NewFieldFunction("value"),
+					method("contains", "!"),
+				)),
+			),
+			output: map[string]interface{}{
+				"foo": "hello ! world",
+				"baz": "im cool!",
+			},
 		},
 		"check fold": {
 			input: methods(

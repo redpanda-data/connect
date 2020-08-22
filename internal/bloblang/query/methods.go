@@ -426,6 +426,84 @@ func explodeMethod(target Function, args ...interface{}) (Function, error) {
 
 var _ = RegisterMethod(
 	NewMethodSpec(
+		"filter", "",
+	).InCategory(
+		MethodCategoryObjectAndArray,
+		"Executes a mapping query argument for each element of an array or key/value pair of an object, and unless the mapping returns `false` the item is removed from the resulting array or object.",
+		NewExampleSpec(``,
+			`root.new_nums = this.nums.filter(this > 10)`,
+			`{"nums":[3,11,4,17]}`,
+			`{"new_nums":[11,17]}`,
+		),
+		NewExampleSpec(`#### On objects
+
+When filtering objects the mapping query argument is provided a context with a field `+"`key`"+` containing the value key, and a field `+"`value`"+` containing the value.`,
+			`root.new_dict = this.dict.filter(this.value.contains("foo"))`,
+			`{"dict":{"first":"hello foo","second":"world","third":"this foo is great"}}`,
+			`{"new_dict":{"first":"hello foo","third":"this foo is great"}}`,
+		),
+	),
+	false, filterMethod,
+	ExpectNArgs(1),
+)
+
+func filterMethod(target Function, args ...interface{}) (Function, error) {
+	mapFn, ok := args[0].(Function)
+	if !ok {
+		return nil, fmt.Errorf("expected query argument, received %T", args[0])
+	}
+
+	// TODO: Query targets do not take the mapping function into account as it's
+	// dynamic.
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+		res, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		var resValue interface{}
+		switch t := res.(type) {
+		case []interface{}:
+			newSlice := make([]interface{}, 0, len(t))
+			for _, v := range t {
+				ctx.Value = &v
+				f, err := mapFn.Exec(ctx)
+				if err != nil {
+					return nil, err
+				}
+				if b, _ := f.(bool); b {
+					newSlice = append(newSlice, v)
+				}
+			}
+			resValue = newSlice
+		case map[string]interface{}:
+			newMap := make(map[string]interface{}, len(t))
+			for k, v := range t {
+				var ctxMap interface{} = map[string]interface{}{
+					"key":   k,
+					"value": v,
+				}
+				ctx.Value = &ctxMap
+				f, err := mapFn.Exec(ctx)
+				if err != nil {
+					return nil, err
+				}
+				if b, _ := f.(bool); b {
+					newMap[k] = v
+				}
+			}
+			resValue = newMap
+		default:
+			return nil, NewTypeError(res, ValueArray, ValueObject)
+		}
+		return resValue, nil
+	}, target.QueryTargets), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
 		"flatten",
 		"Iterates an array and any element that is itself an array is removed and has its elements inserted directly in the resulting array.",
 	).InCategory(
@@ -1071,6 +1149,35 @@ func (n *notMethod) QueryTargets(ctx TargetsContext) []TargetPath {
 
 func notMethodCtor(target Function, _ ...interface{}) (Function, error) {
 	return &notMethod{fn: target}, nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
+		"not_null", "",
+	).InCategory(
+		MethodCategoryCoercion,
+		"Ensures that the given value is not `null`, and if so returns it, otherwise an error is returned.",
+		NewExampleSpec("",
+			`root.a = this.a.not_null()`,
+			`{"a":"foobar","b":"barbaz"}`,
+			`{"a":"foobar"}`,
+			`{"b":"barbaz"}`,
+			`Error("failed to execute mapping query at line 1: value is null")`,
+		),
+	),
+	false, notNullMethod,
+	ExpectNArgs(0),
+)
+
+func notNullMethod(target Function, _ ...interface{}) (Function, error) {
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		if v == nil {
+			return nil, errors.New("value is null")
+		}
+		return v, nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------

@@ -183,6 +183,14 @@ root.all_metadata = meta()
 
 ## Environment
 
+### `env`
+
+Returns the value of an environment variable.
+
+```coffee
+root.thing.key = env("key")
+```
+
 ### `hostname`
 
 Returns a string matching the hostname of the machine running Benthos.

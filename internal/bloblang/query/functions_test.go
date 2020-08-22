@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -189,6 +190,21 @@ func TestFunctionTargets(t *testing.T) {
 			assert.Equal(t, test.output, res)
 		})
 	}
+}
+
+func TestEnvFunction(t *testing.T) {
+	key := "BENTHOS_TEST_BLOBLANG_FUNCTION"
+	os.Setenv(key, "foobar")
+	t.Cleanup(func() {
+		os.Unsetenv(key)
+	})
+
+	e, err := InitFunction("env", key)
+	require.Nil(t, err)
+
+	res, err := e.Exec(FunctionContext{})
+	require.NoError(t, err)
+	assert.Equal(t, "foobar", res)
 }
 
 func TestRandomInt(t *testing.T) {
