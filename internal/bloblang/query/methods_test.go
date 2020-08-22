@@ -274,6 +274,13 @@ func TestMethods(t *testing.T) {
 			),
 			output: []interface{}{30.0, 22.0, 13.0, 7.0, 3.0},
 		},
+		"check sort error": {
+			input: methods(
+				jsonFn(`[3,22,{"foo":"bar"},7,null]`),
+				method("sort"),
+			),
+			err: "expected number or string value, found object",
+		},
 		"check sort strings custom": {
 			input: methods(
 				jsonFn(`["c","a","f","z"]`),
@@ -1628,6 +1635,67 @@ func TestMethods(t *testing.T) {
 	}
 }
 
+func TestMethodTargets(t *testing.T) {
+	function := func(name string, args ...interface{}) Function {
+		t.Helper()
+		fn, err := InitFunction(name, args...)
+		require.NoError(t, err)
+		return fn
+	}
+	method := func(fn Function, name string, args ...interface{}) Function {
+		t.Helper()
+		fn, err := InitMethod(name, fn, args...)
+		require.NoError(t, err)
+		return fn
+	}
+
+	tests := map[string]struct {
+		input  Function
+		maps   map[string]Function
+		output []TargetPath
+	}{
+		"get from json": {
+			input: method(function("json", "foo.bar"), "get", "baz.buz"),
+			output: []TargetPath{
+				NewTargetPath(TargetValue, "foo", "bar", "baz", "buz"),
+			},
+		},
+		"get from get from json": {
+			input: method(method(function("json", "foo.bar"), "get", "baz"), "get", "buz"),
+			output: []TargetPath{
+				NewTargetPath(TargetValue, "foo", "bar", "baz", "buz"),
+			},
+		},
+		"mapping get from json": {
+			input: method(NewFieldFunction("foo.bar"), "map", NewFieldFunction("baz")),
+			output: []TargetPath{
+				NewTargetPath(TargetValue, "foo", "bar", "baz"),
+			},
+		},
+		"ref mapping get from json": {
+			input: method(NewFieldFunction("foo.bar"), "apply", "foomap"),
+			maps: map[string]Function{
+				"foomap": NewFieldFunction("baz"),
+			},
+			output: []TargetPath{
+				NewTargetPath(TargetValue, "foo", "bar", "baz"),
+			},
+		},
+	}
+
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			res := test.input.QueryTargets(TargetsContext{
+				Maps: test.maps,
+			})
+			assert.Equal(t, test.output, res)
+		})
+	}
+}
+
 func TestMethodNoArgsTargets(t *testing.T) {
 	fn := NewFieldFunction("foo.bar.baz")
 	exp := NewTargetPath(TargetValue, "foo", "bar", "baz")
@@ -1638,7 +1706,9 @@ func TestMethodNoArgsTargets(t *testing.T) {
 		if err != nil {
 			continue
 		}
-		targets := m.QueryTargets()
+		targets := m.QueryTargets(TargetsContext{
+			Maps: map[string]Function{},
+		})
 		assert.Contains(t, targets, exp)
 	}
 }

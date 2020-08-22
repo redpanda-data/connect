@@ -5,6 +5,7 @@ TAGS =
 INSTALL_DIR        = $(GOPATH)/bin
 DEST_DIR           = ./target
 PATHINSTBIN        = $(DEST_DIR)/bin
+PATHINSTTOOLS      = $(DEST_DIR)/tools
 PATHINSTSERVERLESS = $(DEST_DIR)/serverless
 PATHINSTDOCKER     = $(DEST_DIR)/docker
 
@@ -39,6 +40,15 @@ $(PATHINSTBIN)/%: $(SOURCE_FILES)
 	@go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/$*
 
 $(APPS): %: $(PATHINSTBIN)/%
+
+TOOLS = benthos_config_gen benthos_docs_gen
+tools: $(TOOLS)
+
+$(PATHINSTTOOLS)/%: $(SOURCE_FILES)
+	@mkdir -p $(dir $@)
+	@GOOS=linux go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/tools/$*
+
+$(TOOLS): %: $(PATHINSTTOOLS)/%
 
 SERVERLESS = benthos-lambda
 serverless: $(SERVERLESS)
@@ -95,6 +105,6 @@ clean:
 	rm -rf $(DEST_DIR)/serverless
 	rm -rf $(PATHINSTDOCKER)
 
-docs: $(APPS)
-	@go run $(GO_FLAGS) ./cmd/tools/benthos_config_gen/main.go
-	@go run $(GO_FLAGS) -tags "$(TAGS)" ./cmd/tools/benthos_docs_gen/main.go
+docs: $(TOOLS)
+	@$(PATHINSTTOOLS)/benthos_config_gen
+	@$(PATHINSTTOOLS)/benthos_docs_gen

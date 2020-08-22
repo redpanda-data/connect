@@ -234,7 +234,7 @@ func (b *Branch) targetsUsed() [][]string {
 	var paths [][]string
 
 pathLoop:
-	for _, p := range b.requestMap.QueryTargets() {
+	for _, p := range b.requestMap.QueryTargets(query.TargetsContext{}) {
 		path := make([]string, 0, len(p.Path)+1)
 		switch p.Type {
 		case query.TargetValue:

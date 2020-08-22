@@ -45,15 +45,15 @@ func NewMatchFunction(contextFn Function, cases ...MatchCase) Function {
 			}
 		}
 		return Nothing(nil), nil
-	}, func() []TargetPath {
-		contextTargets := contextFn.QueryTargets()
+	}, func(ctx TargetsContext) []TargetPath {
+		contextTargets := contextFn.QueryTargets(ctx)
 
 		var targets []TargetPath
 		for _, c := range cases {
 			var cTargets []TargetPath
-			cTargets = append(cTargets, c.caseFn.QueryTargets()...)
-			cTargets = append(cTargets, c.queryFn.QueryTargets()...)
-			targets = append(targets, expandTargetPaths(cTargets, contextTargets)...)
+			cTargets = append(cTargets, c.caseFn.QueryTargets(ctx)...)
+			cTargets = append(cTargets, c.queryFn.QueryTargets(ctx)...)
+			targets = append(targets, rebaseTargetPaths(cTargets, contextTargets)...)
 		}
 
 		targets = append(targets, contextTargets...)

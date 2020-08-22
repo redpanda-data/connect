@@ -1,6 +1,8 @@
 package bloblang
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
@@ -9,6 +11,78 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestFunctionExamples(t *testing.T) {
+	for _, spec := range query.FunctionDocs() {
+		spec := spec
+		t.Run(spec.Name, func(t *testing.T) {
+			t.Parallel()
+			for i, e := range spec.Examples {
+				m, err := NewMapping("", e.Mapping)
+				require.NoError(t, err)
+
+				for j, io := range e.Results {
+					msg := message.New([][]byte{[]byte(io[0])})
+					p, err := m.MapPart(0, msg)
+					exp := io[1]
+					if strings.HasPrefix(exp, "Error(") {
+						exp = exp[7 : len(exp)-2]
+						require.EqualError(t, err, exp, fmt.Sprintf("%v-%v", i, j))
+					} else {
+						require.NoError(t, err)
+						assert.Equal(t, exp, string(p.Get()), fmt.Sprintf("%v-%v", i, j))
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestMethodExamples(t *testing.T) {
+	for _, spec := range query.MethodDocs() {
+		spec := spec
+		t.Run(spec.Name, func(t *testing.T) {
+			t.Parallel()
+			for i, e := range spec.Examples {
+				m, err := NewMapping("", e.Mapping)
+				require.NoError(t, err)
+
+				for j, io := range e.Results {
+					msg := message.New([][]byte{[]byte(io[0])})
+					p, err := m.MapPart(0, msg)
+					exp := io[1]
+					if strings.HasPrefix(exp, "Error(") {
+						exp = exp[7 : len(exp)-2]
+						require.EqualError(t, err, exp, fmt.Sprintf("%v-%v", i, j))
+					} else {
+						require.NoError(t, err)
+						assert.Equal(t, exp, string(p.Get()), fmt.Sprintf("%v-%v", i, j))
+					}
+				}
+			}
+			for _, target := range spec.Categories {
+				for i, e := range target.Examples {
+					m, err := NewMapping("", e.Mapping)
+					require.NoError(t, err)
+
+					for j, io := range e.Results {
+						msg := message.New([][]byte{[]byte(io[0])})
+						p, err := m.MapPart(0, msg)
+						require.NoError(t, err)
+						exp := io[1]
+						if strings.HasPrefix(exp, "Error(") {
+							exp = exp[7 : len(exp)-2]
+							require.EqualError(t, err, exp, fmt.Sprintf("%v-%v-%v", target.Category, i, j))
+						} else {
+							require.NoError(t, err)
+							assert.Equal(t, exp, string(p.Get()), fmt.Sprintf("%v-%v-%v", target.Category, i, j))
+						}
+					}
+				}
+			}
+		})
+	}
+}
 
 func TestMappings(t *testing.T) {
 	tests := map[string]struct {
@@ -88,7 +162,9 @@ func TestMappings(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, test.assignmentTargets, m.AssignmentTargets())
-			assert.Equal(t, test.queryTargets, m.QueryTargets())
+			assert.Equal(t, test.queryTargets, m.QueryTargets(query.TargetsContext{
+				Maps: map[string]query.Function{},
+			}))
 
 			res, err := m.Exec(query.FunctionContext{
 				Value:    &test.input,

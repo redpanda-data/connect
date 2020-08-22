@@ -13,21 +13,22 @@ connectors and a list of processing stages:
 
 ```yaml
 input:
-  kafka_balanced:
-    addresses: [ TODO ]
-    topics: [ foo, bar ]
-    consumer_group: foogroup
+  gcp_pubsub:
+    project: foo
+    subscription: bar
 
 pipeline:
   processors:
-  - bloblang: |
-      root.document = this.without("links")
-      root.link_count = this.links.length()
+    - bloblang: |
+        root.message = this
+        root.meta.link_count = this.links.length()
+        root.user.age = this.user.age.number()
 
 output:
-  s3:
-    bucket: TODO
-    path: '${! meta("kafka_topic") }/${! json("document.id") }.json'
+  redis_streams:
+    url: tcp://TODO:6379
+    stream: baz
+    max_in_flight: 20
 ```
 
 ### Delivery Guarantees

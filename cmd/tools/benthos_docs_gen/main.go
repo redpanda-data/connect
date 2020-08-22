@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path"
+	"path/filepath"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
@@ -68,6 +69,9 @@ func main() {
 	doProcessors(docsDir)
 	doRateLimits(docsDir)
 	doTracers(docsDir)
+
+	// Bloblang stuff
+	doBloblang(docsDir)
 }
 
 func doInputs(docsDir string) {
@@ -297,6 +301,21 @@ func doTracers(docsDir string) {
 
 		render(path.Join(docsDir, "./tracers", k+".md"), true, confSanit, spec)
 	}
+}
+
+func doBloblang(dir string) {
+	mdSpec, err := docs.BloblangFunctionsMarkdown()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to generate docs for bloblang functions: %v", err))
+	}
+
+	create("bloblang functions", filepath.Join(dir, "../guides/bloblang/functions.md"), mdSpec)
+
+	if mdSpec, err = docs.BloblangMethodsMarkdown(); err != nil {
+		panic(fmt.Sprintf("Failed to generate docs for bloblang methods: %v", err))
+	}
+
+	create("bloblang methods", filepath.Join(dir, "../guides/bloblang/methods.md"), mdSpec)
 }
 
 //------------------------------------------------------------------------------

@@ -124,7 +124,9 @@ func TestLiterals(t *testing.T) {
 					Value: &test.value,
 					Maps:  map[string]Function{},
 				})
-				targets = fn.QueryTargets()
+				targets = fn.QueryTargets(TargetsContext{
+					Maps: map[string]Function{},
+				})
 			}
 
 			if test.err != nil {

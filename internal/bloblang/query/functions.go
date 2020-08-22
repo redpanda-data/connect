@@ -31,7 +31,7 @@ func (f *fieldFunction) Exec(ctx FunctionContext) (interface{}, error) {
 	return gabs.Wrap(*ctx.Value).S(f.path...).Data(), nil
 }
 
-func (f *fieldFunction) QueryTargets() []TargetPath {
+func (f *fieldFunction) QueryTargets(ctx TargetsContext) []TargetPath {
 	return []TargetPath{
 		NewTargetPath(TargetValue, f.path...),
 	}
@@ -69,7 +69,7 @@ func (l *Literal) Exec(ctx FunctionContext) (interface{}, error) {
 }
 
 // QueryTargets returns nothing.
-func (l *Literal) QueryTargets() []TargetPath {
+func (l *Literal) QueryTargets(ctx TargetsContext) []TargetPath {
 	return nil
 }
 
@@ -81,23 +81,52 @@ func NewLiteralFunction(v interface{}) *Literal {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction("batch_index", false, func(...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		return int64(ctx.Index), nil
-	}, nil), nil
-})
+var _ = RegisterFunctionSpec(
+	NewFunctionSpec(
+		FunctionCategoryMessage, "batch_index",
+		"Returns the index of the mapped message within a batch. This is useful for applying maps only on certain messages of a batch.",
+		NewExampleSpec("",
+			`root = if batch_index() > 0 { deleted() }`,
+		),
+	),
+	false, func(...interface{}) (Function, error) {
+		return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+			return int64(ctx.Index), nil
+		}, nil), nil
+	},
+)
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction("batch_size", false, func(...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		return int64(ctx.MsgBatch.Len()), nil
-	}, nil), nil
-})
+var _ = RegisterFunctionSpec(
+	NewFunctionSpec(
+		FunctionCategoryMessage, "batch_size",
+		"Returns the size of the message batch.",
+		NewExampleSpec("",
+			`root.foo = batch_size()`,
+		),
+	),
+	false, func(...interface{}) (Function, error) {
+		return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+			return int64(ctx.MsgBatch.Len()), nil
+		}, nil), nil
+	},
+)
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction("content", false, contentFunction)
+var _ = RegisterFunctionSpec(
+	NewFunctionSpec(
+		FunctionCategoryMessage, "content",
+		"Returns the full raw contents of the mapping target message as a byte array. When mapping to a JSON field the value should be encoded using the method [`encode`][methods.encode], or cast to a string directly using the method [`string`][methods.string], otherwise it will be base64 encoded by default.",
+		NewExampleSpec("",
+			`root.doc = content().string()`,
+			`{"foo":"bar"}`,
+			`{"doc":"{\"foo\":\"bar\"}"}`,
+		),
+	),
+	false, contentFunction,
+)
 
 func contentFunction(...interface{}) (Function, error) {
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
@@ -107,8 +136,20 @@ func contentFunction(...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
-	"count", true, countFunction,
+var _ = RegisterFunctionSpec(
+	NewFunctionSpec(
+		FunctionCategoryGeneral, "count",
+		"The `count` function is a counter starting at 1 which increments after each time it is called. Count takes an argument which is an identifier for the counter, allowing you to specify multiple unique counters in your configuration.",
+		NewExampleSpec("",
+			`root = this
+root.id = count("bloblang_function_example")`,
+			`{"message":"foo"}`,
+			`{"id":1,"message":"foo"}`,
+			`{"message":"bar"}`,
+			`{"id":2,"message":"bar"}`,
+		),
+	),
+	true, countFunction,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
 )
@@ -136,13 +177,45 @@ func countFunction(args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction("deleted", false, func(...interface{}) (Function, error) {
-	return NewLiteralFunction(Delete(nil)), nil
-})
+var _ = RegisterFunctionSpec(
+	NewFunctionSpec(
+		FunctionCategoryGeneral, "deleted",
+		"A function that returns a result indicating that the mapping target should be deleted.",
+		NewExampleSpec("",
+			`root = this
+root.bar = deleted()`,
+			`{"bar":"bar_value","baz":"baz_value","foo":"foo value"}`,
+			`{"baz":"baz_value","foo":"foo value"}`,
+		),
+		NewExampleSpec(
+			"Since the result is a value it can be used to do things like remove elements of an array within `map_each`.",
+			`root.new_nums = this.nums.map_each(
+  match this {
+    this < 10 => deleted()
+    _ => this - 10
+  }
+)`,
+			`{"nums":[3,11,4,17]}`,
+			`{"new_nums":[1,7]}`,
+		),
+	),
+	false, func(...interface{}) (Function, error) {
+		return NewLiteralFunction(Delete(nil)), nil
+	},
+)
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction("error", false, errorFunction)
+var _ = RegisterFunctionSpec(
+	NewFunctionSpec(
+		FunctionCategoryGeneral, "error",
+		"If an error has occurred during the processing of a message this function returns the reported cause of the error. For more information about error handling patterns read [here][error_handling].",
+		NewExampleSpec("",
+			`root.doc.error = error()`,
+		),
+	),
+	false, errorFunction,
+)
 
 func errorFunction(...interface{}) (Function, error) {
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
@@ -150,7 +223,16 @@ func errorFunction(...interface{}) (Function, error) {
 	}, nil), nil
 }
 
-var _ = RegisterFunction("errored", false, erroredFunction)
+var _ = RegisterFunctionSpec(
+	NewFunctionSpec(
+		FunctionCategoryGeneral, "errored",
+		"Returns a boolean value indicating whether an error has occurred during the processing of a message. For more information about error handling patterns read [here][error_handling].",
+		NewExampleSpec("",
+			`root.doc.status = if errored() { 400 } else { 200 }`,
+		),
+	),
+	false, erroredFunction,
+)
 
 func erroredFunction(...interface{}) (Function, error) {
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
@@ -160,7 +242,16 @@ func erroredFunction(...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction("hostname", false, hostnameFunction)
+var _ = RegisterFunctionSpec(
+	NewFunctionSpec(
+		FunctionCategoryEnvironment, "hostname",
+		"Returns a string matching the hostname of the machine running Benthos.",
+		NewExampleSpec("",
+			`root.thing.host = hostname()`,
+		),
+	),
+	false, hostnameFunction,
+)
 
 func hostnameFunction(...interface{}) (Function, error) {
 	return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
@@ -177,8 +268,23 @@ func hostnameFunction(...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
-	"json", true, jsonFunction,
+var _ = RegisterFunctionSpec(
+	NewFunctionSpec(
+		FunctionCategoryMessage, "json",
+		"Returns the value of a field within a JSON message located by a [dot path][field_paths] argument. This function always targets the entire source JSON document regardless of the mapping context.",
+		NewExampleSpec("",
+			`root.mapped = json("foo.bar")`,
+			`{"foo":{"bar":"hello world"}}`,
+			`{"mapped":"hello world"}`,
+		),
+		NewExampleSpec(
+			"The path argument is optional and if omitted the entire JSON payload is returned.",
+			`root.doc = json()`,
+			`{"foo":{"bar":"hello world"}}`,
+			`{"doc":{"foo":{"bar":"hello world"}}}`,
+		),
+	),
+	true, jsonFunction,
 	ExpectOneOrZeroArgs(),
 	ExpectStringArg(0),
 )
@@ -201,7 +307,7 @@ func jsonFunction(args ...interface{}) (Function, error) {
 			gPart = gPart.Search(argPath...)
 		}
 		return ISanitize(gPart.Data()), nil
-	}, func() []TargetPath {
+	}, func(ctx TargetsContext) []TargetPath {
 		return []TargetPath{
 			NewTargetPath(TargetValue, argPath...),
 		}
@@ -210,8 +316,19 @@ func jsonFunction(args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
-	"meta", true, metadataFunction,
+var _ = RegisterFunctionSpec(
+	NewFunctionSpec(
+		FunctionCategoryMessage, "meta",
+		"Returns the value of a metadata key from a message identified by a key. Values are extracted from the referenced input message and therefore do NOT reflect changes made from within the map.",
+		NewExampleSpec("",
+			`root.topic = meta("kafka_topic")`,
+		),
+		NewExampleSpec(
+			"The parameter is optional and if omitted the entire metadata contents are returned as a JSON object.",
+			`root.all_metadata = meta()`,
+		),
+	),
+	true, metadataFunction,
 	ExpectOneOrZeroArgs(),
 	ExpectStringArg(0),
 )
@@ -228,7 +345,7 @@ func metadataFunction(args ...interface{}) (Function, error) {
 				}
 			}
 			return v, nil
-		}, func() []TargetPath {
+		}, func(ctx TargetsContext) []TargetPath {
 			return []TargetPath{
 				NewTargetPath(TargetMetadata, field),
 			}
@@ -243,7 +360,7 @@ func metadataFunction(args ...interface{}) (Function, error) {
 			return nil
 		})
 		return kvs, nil
-	}, func() []TargetPath {
+	}, func(ctx TargetsContext) []TargetPath {
 		return []TargetPath{
 			NewTargetPath(TargetMetadata),
 		}
@@ -252,14 +369,25 @@ func metadataFunction(args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction("nothing", false, func(...interface{}) (Function, error) {
-	return NewLiteralFunction(Nothing(nil)), nil
-})
+var _ = RegisterFunctionSpec(
+	NewDeprecatedFunctionSpec("nothing"),
+	false, func(...interface{}) (Function, error) {
+		return NewLiteralFunction(Nothing(nil)), nil
+	},
+)
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
-	"random_int", true, randomIntFunction,
+var _ = RegisterFunctionSpec(
+	NewFunctionSpec(
+		FunctionCategoryGeneral, "random_int",
+		"Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.",
+		NewExampleSpec("",
+			`root.first = random_int()
+root.second = random_int(1)`,
+		),
+	),
+	true, randomIntFunction,
 	ExpectOneOrZeroArgs(),
 	ExpectIntArg(1),
 )
@@ -280,50 +408,117 @@ func randomIntFunction(args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction("timestamp_unix", false, func(...interface{}) (Function, error) {
-	return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
-		return time.Now().Unix(), nil
-	}, nil), nil
-})
+var _ = RegisterFunctionSpec(
+	NewFunctionSpec(
+		FunctionCategoryEnvironment, "timestamp",
+		"Returns the current time in a custom format specified by the argument. The format is defined by showing how the reference time, defined to be `Mon Jan 2 15:04:05 -0700 MST 2006` would be displayed if it were the value.\n\nA fractional second is represented by adding a period and zeros to the end of the seconds section of layout string, as in `15:04:05.000` to format a time stamp with millisecond precision.",
+		NewExampleSpec("",
+			`root.received_at = timestamp("15:04:05")`,
+		),
+	),
+	true, func(args ...interface{}) (Function, error) {
+		format := "Mon Jan 2 15:04:05 -0700 MST 2006"
+		if len(args) > 0 {
+			format = args[0].(string)
+		}
+		return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
+			return time.Now().Format(format), nil
+		}, nil), nil
+	},
+	ExpectOneOrZeroArgs(),
+	ExpectStringArg(0),
+)
 
-var _ = RegisterFunction("timestamp_unix_nano", false, func(...interface{}) (Function, error) {
-	return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
-		return time.Now().UnixNano(), nil
-	}, nil), nil
-})
+var _ = RegisterFunctionSpec(
+	NewFunctionSpec(
+		FunctionCategoryEnvironment, "timestamp_utc",
+		"The equivalent of `timestamp` except the time is printed as UTC instead of the local timezone.",
+		NewExampleSpec("",
+			`root.received_at = timestamp_utc("15:04:05")`,
+		),
+	),
+	true, func(args ...interface{}) (Function, error) {
+		format := "Mon Jan 2 15:04:05 -0700 MST 2006"
+		if len(args) > 0 {
+			format = args[0].(string)
+		}
+		return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
+			return time.Now().In(time.UTC).Format(format), nil
+		}, nil), nil
+	},
+	ExpectOneOrZeroArgs(),
+	ExpectStringArg(0),
+)
 
-var _ = RegisterFunction("timestamp", true, func(args ...interface{}) (Function, error) {
-	format := "Mon Jan 2 15:04:05 -0700 MST 2006"
-	if len(args) > 0 {
-		format = args[0].(string)
-	}
-	return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
-		return time.Now().Format(format), nil
-	}, nil), nil
-}, ExpectOneOrZeroArgs(), ExpectStringArg(0))
+var _ = RegisterFunctionSpec(
+	NewFunctionSpec(
+		FunctionCategoryEnvironment, "timestamp_unix",
+		"Returns the current unix timestamp in seconds.",
+		NewExampleSpec("",
+			`root.received_at = timestamp_unix()`,
+		),
+	),
+	false, func(...interface{}) (Function, error) {
+		return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
+			return time.Now().Unix(), nil
+		}, nil), nil
+	},
+)
 
-var _ = RegisterFunction("timestamp_utc", true, func(args ...interface{}) (Function, error) {
-	format := "Mon Jan 2 15:04:05 -0700 MST 2006"
-	if len(args) > 0 {
-		format = args[0].(string)
-	}
-	return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
-		return time.Now().In(time.UTC).Format(format), nil
-	}, nil), nil
-}, ExpectOneOrZeroArgs(), ExpectStringArg(0))
+var _ = RegisterFunctionSpec(
+	NewFunctionSpec(
+		FunctionCategoryEnvironment, "timestamp_unix_nano",
+		"Returns the current unix timestamp in nanoseconds.",
+		NewExampleSpec("",
+			`root.received_at = timestamp_unix_nano()`,
+		),
+	),
+	false, func(...interface{}) (Function, error) {
+		return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
+			return time.Now().UnixNano(), nil
+		}, nil), nil
+	},
+)
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction("throw", true, func(args ...interface{}) (Function, error) {
-	msg := args[0].(string)
-	return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
-		return nil, errors.New(msg)
-	}, nil), nil
-}, ExpectNArgs(1), ExpectStringArg(0))
+var _ = RegisterFunctionSpec(
+	NewFunctionSpec(
+		FunctionCategoryGeneral, "throw",
+		"Throws an error similar to a regular mapping error. This is useful for abandoning a mapping entirely given certain conditions.",
+		NewExampleSpec("",
+			`root.doc.type = match {
+  this.exists("header.id") => "foo"
+  this.exists("body.data") => "bar"
+  _ => throw("unknown type")
+}
+root.doc.contents = (this.body.content | this.thing.body)`,
+			`{"header":{"id":"first"},"thing":{"body":"hello world"}}`,
+			`{"doc":{"contents":"hello world","type":"foo"}}`,
+			`{"nothing":"matches"}`,
+			`Error("failed to execute mapping query at line 1: unknown type")`,
+		),
+	),
+	true, func(args ...interface{}) (Function, error) {
+		msg := args[0].(string)
+		return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
+			return nil, errors.New(msg)
+		}, nil), nil
+	},
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction("uuid_v4", false, uuidFunction)
+var _ = RegisterFunctionSpec(
+	NewFunctionSpec(
+		FunctionCategoryGeneral, "uuid_v4",
+		"Generates a new RFC-4122 UUID each time it is invoked and prints a string representation.",
+		NewExampleSpec("", `root.id = uuid_v4()`),
+	),
+	false, uuidFunction,
+)
 
 func uuidFunction(...interface{}) (Function, error) {
 	return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
@@ -337,8 +532,8 @@ func uuidFunction(...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
-	"var", true, varFunction,
+var _ = RegisterFunctionSpec(
+	NewDeprecatedFunctionSpec("var"), true, varFunction,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
 )
@@ -365,7 +560,7 @@ func varFunction(args ...interface{}) (Function, error) {
 			Recovered: nil,
 			Err:       fmt.Errorf("variable '%v' undefined", name),
 		}
-	}, func() []TargetPath {
+	}, func(ctx TargetsContext) []TargetPath {
 		return []TargetPath{
 			NewTargetPath(TargetVariable, name),
 		}

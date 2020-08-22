@@ -587,7 +587,9 @@ func TestArithmeticTargets(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			res := test.input.QueryTargets()
+			res := test.input.QueryTargets(TargetsContext{
+				Maps: map[string]Function{},
+			})
 			assert.Equal(t, test.output, res)
 		})
 	}

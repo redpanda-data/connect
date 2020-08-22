@@ -31,7 +31,18 @@ import (
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"capitalize", false, capitalizeMethod,
+	NewMethodSpec(
+		"capitalize", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Takes a string value and returns a copy with all Unicode letters that begin words mapped to their Unicode title case.",
+		NewExampleSpec("",
+			`root.title = this.title.capitalize()`,
+			`{"title":"the foo bar"}`,
+			`{"title":"The Foo Bar"}`,
+		),
+	),
+	false, capitalizeMethod,
 	ExpectNArgs(0),
 )
 
@@ -50,64 +61,18 @@ func capitalizeMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"decode", true, decodeMethod,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
-)
-
-func decodeMethod(target Function, args ...interface{}) (Function, error) {
-	var schemeFn func([]byte) ([]byte, error)
-	switch args[0].(string) {
-	case "base64":
-		schemeFn = func(b []byte) ([]byte, error) {
-			e := base64.NewDecoder(base64.StdEncoding, bytes.NewReader(b))
-			return ioutil.ReadAll(e)
-		}
-	case "base64url":
-		schemeFn = func(b []byte) ([]byte, error) {
-			e := base64.NewDecoder(base64.URLEncoding, bytes.NewReader(b))
-			return ioutil.ReadAll(e)
-		}
-	case "hex":
-		schemeFn = func(b []byte) ([]byte, error) {
-			e := hex.NewDecoder(bytes.NewReader(b))
-			return ioutil.ReadAll(e)
-		}
-	case "ascii85":
-		schemeFn = func(b []byte) ([]byte, error) {
-			e := ascii85.NewDecoder(bytes.NewReader(b))
-			return ioutil.ReadAll(e)
-		}
-	case "z85":
-		schemeFn = func(b []byte) ([]byte, error) {
-			dec := make([]byte, z85.DecodedLen(len(b)))
-			if _, err := z85.Decode(dec, b); err != nil {
-				return nil, err
-			}
-			return dec, nil
-		}
-	default:
-		return nil, fmt.Errorf("unrecognized encoding type: %v", args[0])
-	}
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		var res []byte
-		var err error
-		switch t := v.(type) {
-		case string:
-			res, err = schemeFn([]byte(t))
-		case []byte:
-			res, err = schemeFn(t)
-		default:
-			err = NewTypeError(v, ValueString)
-		}
-		return res, err
-	}), nil
-}
-
-//------------------------------------------------------------------------------
-
-var _ = RegisterMethod(
-	"encode", true, encodeMethod,
+	NewMethodSpec(
+		"encode", "",
+	).InCategory(
+		MethodCategoryEncoding,
+		"Encodes a string or byte array target according to a chosen scheme and returns a string result. Available schemes are: `base64`, `base64url`, `hex`, `ascii85`, `z85`.",
+		NewExampleSpec("",
+			`root.encoded = this.value.encode("hex")`,
+			`{"value":"hello world"}`,
+			`{"encoded":"68656c6c6f20776f726c64"}`,
+		),
+	),
+	true, encodeMethod,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
 )
@@ -181,46 +146,55 @@ func encodeMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"decrypt_aes", true, decryptAESMethod,
-	ExpectNArgs(3),
-	ExpectAllStringArgs(),
+	NewMethodSpec(
+		"decode", "",
+	).InCategory(
+		MethodCategoryEncoding,
+		"Decodes an encoded string target according to a chosen scheme and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.\n\nAvailable schemes are: `base64`, `base64url`, `hex`, `ascii85`, `z85`.",
+		NewExampleSpec("",
+			`root.decoded = this.value.decode("hex").string()`,
+			`{"value":"68656c6c6f20776f726c64"}`,
+			`{"decoded":"hello world"}`,
+		),
+	),
+	true, decodeMethod,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
 )
 
-func decryptAESMethod(target Function, args ...interface{}) (Function, error) {
-	key := []byte(args[1].(string))
-	iv := []byte(args[2].(string))
-
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
+func decodeMethod(target Function, args ...interface{}) (Function, error) {
 	var schemeFn func([]byte) ([]byte, error)
 	switch args[0].(string) {
-	case "ctr":
+	case "base64":
 		schemeFn = func(b []byte) ([]byte, error) {
-			plaintext := make([]byte, len(b))
-			stream := cipher.NewCTR(block, iv)
-			stream.XORKeyStream(plaintext, b)
-			return plaintext, nil
+			e := base64.NewDecoder(base64.StdEncoding, bytes.NewReader(b))
+			return ioutil.ReadAll(e)
 		}
-	case "ofb":
+	case "base64url":
 		schemeFn = func(b []byte) ([]byte, error) {
-			plaintext := make([]byte, len(b))
-			stream := cipher.NewOFB(block, iv)
-			stream.XORKeyStream(plaintext, b)
-			return plaintext, nil
+			e := base64.NewDecoder(base64.URLEncoding, bytes.NewReader(b))
+			return ioutil.ReadAll(e)
 		}
-	case "cbc":
+	case "hex":
 		schemeFn = func(b []byte) ([]byte, error) {
-			if len(b)%aes.BlockSize != 0 {
-				return nil, fmt.Errorf("ciphertext is not a multiple of the block size")
+			e := hex.NewDecoder(bytes.NewReader(b))
+			return ioutil.ReadAll(e)
+		}
+	case "ascii85":
+		schemeFn = func(b []byte) ([]byte, error) {
+			e := ascii85.NewDecoder(bytes.NewReader(b))
+			return ioutil.ReadAll(e)
+		}
+	case "z85":
+		schemeFn = func(b []byte) ([]byte, error) {
+			dec := make([]byte, z85.DecodedLen(len(b)))
+			if _, err := z85.Decode(dec, b); err != nil {
+				return nil, err
 			}
-			stream := cipher.NewCBCDecrypter(block, iv)
-			stream.CryptBlocks(b, b)
-			return b, nil
+			return dec, nil
 		}
 	default:
-		return nil, fmt.Errorf("unrecognized decryption type: %v", args[0])
+		return nil, fmt.Errorf("unrecognized encoding type: %v", args[0])
 	}
 	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var res []byte
@@ -238,8 +212,22 @@ func decryptAESMethod(target Function, args ...interface{}) (Function, error) {
 }
 
 //------------------------------------------------------------------------------
+
 var _ = RegisterMethod(
-	"encrypt_aes", true, encryptAESMethod,
+	NewMethodSpec(
+		"encrypt_aes", "",
+	).InCategory(
+		MethodCategoryEncoding,
+		"Encrypts a string or byte array target according to a chosen AES encryption method and returns a string result. The algorithms require a key and an initialization vector / nonce. Available schemes are: `ctr`, `ofb`, `cbc`.",
+		NewExampleSpec("",
+			`let key = "2b7e151628aed2a6abf7158809cf4f3c".decode("hex")
+let vector = "f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff".decode("hex")
+root.encrypted = this.value.encrypt_aes("ctr", $key, $vector).encode("hex")`,
+			`{"value":"hello world!"}`,
+			`{"encrypted":"84e9b31ff7400bdf80be7254"}`,
+		),
+	),
+	true, encryptAESMethod,
 	ExpectNArgs(3),
 	ExpectAllStringArgs(),
 )
@@ -301,7 +289,90 @@ func encryptAESMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"escape_html", false, escapeHTMLMethod,
+	NewMethodSpec(
+		"decrypt_aes", "",
+	).InCategory(
+		MethodCategoryEncoding,
+		"Decrypts an encrypted string or byte array target according to a chosen AES encryption method and returns the result as a byte array. The algorithms require a key and an initialization vector / nonce. Available schemes are: `ctr`, `ofb`, `cbc`.",
+		NewExampleSpec("",
+			`let key = "2b7e151628aed2a6abf7158809cf4f3c".decode("hex")
+let vector = "f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff".decode("hex")
+root.decrypted = this.value.decode("hex").decrypt_aes("ctr", $key, $vector).string()`,
+			`{"value":"84e9b31ff7400bdf80be7254"}`,
+			`{"decrypted":"hello world!"}`,
+		),
+	),
+	true, decryptAESMethod,
+	ExpectNArgs(3),
+	ExpectAllStringArgs(),
+)
+
+func decryptAESMethod(target Function, args ...interface{}) (Function, error) {
+	key := []byte(args[1].(string))
+	iv := []byte(args[2].(string))
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	var schemeFn func([]byte) ([]byte, error)
+	switch args[0].(string) {
+	case "ctr":
+		schemeFn = func(b []byte) ([]byte, error) {
+			plaintext := make([]byte, len(b))
+			stream := cipher.NewCTR(block, iv)
+			stream.XORKeyStream(plaintext, b)
+			return plaintext, nil
+		}
+	case "ofb":
+		schemeFn = func(b []byte) ([]byte, error) {
+			plaintext := make([]byte, len(b))
+			stream := cipher.NewOFB(block, iv)
+			stream.XORKeyStream(plaintext, b)
+			return plaintext, nil
+		}
+	case "cbc":
+		schemeFn = func(b []byte) ([]byte, error) {
+			if len(b)%aes.BlockSize != 0 {
+				return nil, fmt.Errorf("ciphertext is not a multiple of the block size")
+			}
+			stream := cipher.NewCBCDecrypter(block, iv)
+			stream.CryptBlocks(b, b)
+			return b, nil
+		}
+	default:
+		return nil, fmt.Errorf("unrecognized decryption type: %v", args[0])
+	}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		var res []byte
+		var err error
+		switch t := v.(type) {
+		case string:
+			res, err = schemeFn([]byte(t))
+		case []byte:
+			res, err = schemeFn(t)
+		default:
+			err = NewTypeError(v, ValueString)
+		}
+		return res, err
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
+		"escape_html", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Escapes a string so that special characters like `<` to become `&lt;`. It escapes only five such characters: `<`, `>`, `&`, `'` and `\"` so that it can be safely placed within an HTML entity.",
+		NewExampleSpec("",
+			`root.escaped = this.value.escape_html()`,
+			`{"value":"foo & bar"}`,
+			`{"escaped":"foo &amp; bar"}`,
+		),
+	),
+	false, escapeHTMLMethod,
 	ExpectNArgs(0),
 )
 
@@ -324,7 +395,52 @@ func escapeHTMLMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"escape_url_query", false, escapeURLQueryMethod,
+	NewMethodSpec(
+		"unescape_html", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Unescapes a string so that entities like `&lt;` become `<`. It unescapes a larger range of entities than `escape_html` escapes. For example, `&aacute;` unescapes to `á`, as does `&#225;` and `&xE1;`.",
+		NewExampleSpec("",
+			`root.unescaped = this.value.unescape_html()`,
+			`{"value":"foo &amp; bar"}`,
+			`{"unescaped":"foo & bar"}`,
+		),
+	),
+	false, unescapeHTMLMethod,
+	ExpectNArgs(0),
+)
+
+func unescapeHTMLMethod(target Function, args ...interface{}) (Function, error) {
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		var res string
+		var err error
+		switch t := v.(type) {
+		case string:
+			res = html.UnescapeString(t)
+		case []byte:
+			res = html.UnescapeString(string(t))
+		default:
+			err = NewTypeError(v, ValueString)
+		}
+		return res, err
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
+		"escape_url_query", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Escapes a string so that it can be safely placed within a URL query.",
+		NewExampleSpec("",
+			`root.escaped = this.value.escape_url_query()`,
+			`{"value":"foo & bar"}`,
+			`{"escaped":"foo+%26+bar"}`,
+		),
+	),
+	false, escapeURLQueryMethod,
 	ExpectNArgs(0),
 )
 
@@ -347,7 +463,52 @@ func escapeURLQueryMethod(target Function, args ...interface{}) (Function, error
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"format", true, formatMethod,
+	NewMethodSpec(
+		"unescape_url_query", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Expands escape sequences from a URL query string.",
+		NewExampleSpec("",
+			`root.unescaped = this.value.unescape_url_query()`,
+			`{"value":"foo+%26+bar"}`,
+			`{"unescaped":"foo & bar"}`,
+		),
+	),
+	false, unescapeURLQueryMethod,
+	ExpectNArgs(0),
+)
+
+func unescapeURLQueryMethod(target Function, args ...interface{}) (Function, error) {
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		var res string
+		var err error
+		switch t := v.(type) {
+		case string:
+			res, err = url.QueryUnescape(t)
+		case []byte:
+			res, err = url.QueryUnescape(string(t))
+		default:
+			err = NewTypeError(v, ValueString)
+		}
+		return res, err
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
+		"format", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Use a value string as a format specifier in order to produce a new string, using any number of provided arguments.",
+		NewExampleSpec("",
+			`root.foo = "%s(%v): %v".format(this.name, this.age, this.fingers)`,
+			`{"name":"lance","age":37,"fingers":13}`,
+			`{"foo":"lance(37): 13"}`,
+		),
+	),
+	true, formatMethod,
 )
 
 func formatMethod(target Function, args ...interface{}) (Function, error) {
@@ -366,7 +527,19 @@ func formatMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"has_prefix", true, hasPrefixMethod,
+	NewMethodSpec(
+		"has_prefix", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Checks whether a string has a prefix argument and returns a bool.",
+		NewExampleSpec("",
+			`root.t1 = this.v1.has_prefix("foo")
+root.t2 = this.v2.has_prefix("foo")`,
+			`{"v1":"foobar","v2":"barfoo"}`,
+			`{"t1":true,"t2":false}`,
+		),
+	),
+	true, hasPrefixMethod,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
 )
@@ -388,7 +561,19 @@ func hasPrefixMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"has_suffix", true, hasSuffixMethod,
+	NewMethodSpec(
+		"has_suffix", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Checks whether a string has a suffix argument and returns a bool.",
+		NewExampleSpec("",
+			`root.t1 = this.v1.has_suffix("foo")
+root.t2 = this.v2.has_suffix("foo")`,
+			`{"v1":"foobar","v2":"barfoo"}`,
+			`{"t1":false,"t2":true}`,
+		),
+	),
+	true, hasSuffixMethod,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
 )
@@ -410,7 +595,24 @@ func hasSuffixMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"hash", true, hashMethod,
+	NewMethodSpec(
+		"hash", "",
+	).InCategory(
+		MethodCategoryEncoding,
+		`
+Hashes a string or byte array according to a chosen algorithm and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method `+"[`string`][methods.string], or encoded using the method [`encode`][methods.encode]"+`, otherwise it will be base64 encoded by default.
+
+Available algorithms are: `+"`hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `sha1`, `sha256`, `sha512`, `xxhash64`"+`.
+
+The following algorithms require a key, which is specified as a second argument: `+"`hmac_sha1`, `hmac_sha256`, `hmac_sha512`"+`.`,
+		NewExampleSpec("",
+			`root.h1 = this.value.hash("sha1").encode("hex")
+root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")`,
+			`{"value":"hello world"}`,
+			`{"h1":"2aae6c35c94fcfb415dbe95f408b9ce91ee846ed","h2":"d87e5f068fa08fe90bb95bc7c8344cb809179d76"}`,
+		),
+	),
+	true, hashMethod,
 	ExpectAtLeastOneArg(),
 	ExpectStringArg(0),
 	ExpectStringArg(1),
@@ -496,7 +698,19 @@ func hashMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"join", true, joinMethod,
+	NewMethodSpec(
+		"join", "",
+	).InCategory(
+		MethodCategoryObjectAndArray,
+		"Join an array of strings with an optional delimiter into a single string.",
+		NewExampleSpec("",
+			`root.joined_words = this.words.join()
+root.joined_numbers = this.numbers.map_each(this.string()).join(",")`,
+			`{"words":["hello","world"],"numbers":[3,8,11]}`,
+			`{"joined_numbers":"3,8,11","joined_words":"helloworld"}`,
+		),
+	),
+	true, joinMethod,
 	ExpectOneOrZeroArgs(),
 	ExpectStringArg(0),
 )
@@ -534,7 +748,52 @@ func joinMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"lowercase", false, lowercaseMethod,
+	NewMethodSpec(
+		"uppercase", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Convert a string value into uppercase.",
+		NewExampleSpec("",
+			`root.foo = this.foo.uppercase()`,
+			`{"foo":"hello world"}`,
+			`{"foo":"HELLO WORLD"}`,
+		),
+	),
+	false, uppercaseMethod,
+	ExpectNArgs(0),
+)
+
+func uppercaseMethod(target Function, _ ...interface{}) (Function, error) {
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		switch t := v.(type) {
+		case string:
+			return strings.ToUpper(t), nil
+		case []byte:
+			return bytes.ToUpper(t), nil
+		default:
+			return nil, &ErrRecoverable{
+				Recovered: strings.ToUpper(IToString(v)),
+				Err:       NewTypeError(v, ValueString),
+			}
+		}
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
+		"lowercase", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Convert a string value into lowercase.",
+		NewExampleSpec("",
+			`root.foo = this.foo.lowercase()`,
+			`{"foo":"HELLO WORLD"}`,
+			`{"foo":"hello world"}`,
+		),
+	),
+	false, lowercaseMethod,
 	ExpectNArgs(0),
 )
 
@@ -557,7 +816,18 @@ func lowercaseMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"parse_csv", false, parseCSVMethod,
+	NewMethodSpec(
+		"parse_csv", "",
+	).InCategory(
+		MethodCategoryParsing,
+		"Attempts to parse a string into an array of objects by following the CSV format described in RFC 4180. The first line is assumed to be a header row, which determines the keys of values in each object.",
+		NewExampleSpec("",
+			`root.orders = this.orders.parse_csv()`,
+			`{"orders":"foo,bar\nfoo 1,bar 1\nfoo 2,bar 2"}`,
+			`{"orders":[{"bar":"bar 1","foo":"foo 1"},{"bar":"bar 2","foo":"foo 2"}]}`,
+		),
+	),
+	false, parseCSVMethod,
 	ExpectNArgs(0),
 )
 
@@ -605,7 +875,18 @@ func parseCSVMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"parse_json", false, parseJSONMethod,
+	NewMethodSpec(
+		"parse_json", "",
+	).InCategory(
+		MethodCategoryParsing,
+		"Attempts to parse a string as a JSON document and returns the result.",
+		NewExampleSpec("",
+			`root.doc = this.doc.parse_json()`,
+			`{"doc":"{\"foo\":\"bar\"}"}`,
+			`{"doc":{"foo":"bar"}}`,
+		),
+	),
+	false, parseJSONMethod,
 	ExpectNArgs(0),
 )
 
@@ -631,7 +912,24 @@ func parseJSONMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"parse_timestamp_unix", true, parseTimestampMethod,
+	NewMethodSpec(
+		"parse_timestamp_unix", "",
+	).InCategory(
+		MethodCategoryParsing,
+		"Attempts to parse a string as a timestamp, following ISO 8601 format by default, and returns the unix epoch.",
+		NewExampleSpec("",
+			`root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix()`,
+			`{"doc":{"timestamp":"2020-08-14T11:45:26.371Z"}}`,
+			`{"doc":{"timestamp":1597405526}}`,
+		),
+		NewExampleSpec(
+			"An optional string argument can be used in order to specify the expected format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.",
+			`root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix("2006-Jan-02")`,
+			`{"doc":{"timestamp":"2020-Aug-14"}}`,
+			`{"doc":{"timestamp":1597363200}}`,
+		),
+	),
+	true, parseTimestampMethod,
 	ExpectOneOrZeroArgs(),
 	ExpectStringArg(0),
 )
@@ -662,7 +960,18 @@ func parseTimestampMethod(target Function, args ...interface{}) (Function, error
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"quote", false, quoteMethod,
+	NewMethodSpec(
+		"quote", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Quotes a target string using escape sequences (`\t`, `\n`, `\xFF`, `\u0100`) for control characters and non-printable characters.",
+		NewExampleSpec("",
+			`root.quoted = this.thing.quote()`,
+			`{"thing":"foo\nbar"}`,
+			`{"quoted":"\"foo\\nbar\""}`,
+		),
+	),
+	false, quoteMethod,
 	ExpectNArgs(0),
 )
 
@@ -681,7 +990,48 @@ func quoteMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"replace", true, replaceMethod,
+	NewMethodSpec(
+		"unquote", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Unquotes a target string, expanding any escape sequences (`\t`, `\n`, `\xFF`, `\u0100`) for control characters and non-printable characters.",
+		NewExampleSpec("",
+			`root.unquoted = this.thing.unquote()`,
+			`{"thing":"\"foo\\nbar\""}`,
+			`{"unquoted":"foo\nbar"}`,
+		),
+	),
+	false, unquoteMethod,
+	ExpectNArgs(0),
+)
+
+func unquoteMethod(target Function, _ ...interface{}) (Function, error) {
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		switch t := v.(type) {
+		case string:
+			return strconv.Unquote(t)
+		case []byte:
+			return strconv.Unquote(string(t))
+		}
+		return nil, NewTypeError(v, ValueString)
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
+		"replace", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Replaces all occurrences of the first argument in a target string with the second argument.",
+		NewExampleSpec("",
+			`root.new_value = this.value.replace("foo","dog")`,
+			`{"value":"The foo ate my homework"}`,
+			`{"new_value":"The dog ate my homework"}`,
+		),
+	),
+	true, replaceMethod,
 	ExpectNArgs(2),
 	ExpectStringArg(0),
 	ExpectStringArg(1),
@@ -706,7 +1056,18 @@ func replaceMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"re_find_all", true, regexpFindAllMethod,
+	NewMethodSpec(
+		"re_find_all", "",
+	).InCategory(
+		MethodCategoryRegexp,
+		"Returns an array containing all successive matches of a regular expression in a string.",
+		NewExampleSpec("",
+			`root.matches = this.value.re_find_all("a.")`,
+			`{"value":"paranormal"}`,
+			`{"matches":["ar","an","al"]}`,
+		),
+	),
+	true, regexpFindAllMethod,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
 )
@@ -741,7 +1102,18 @@ func regexpFindAllMethod(target Function, args ...interface{}) (Function, error)
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"re_find_all_submatch", true, regexpFindAllSubmatchMethod,
+	NewMethodSpec(
+		"re_find_all_submatch", "",
+	).InCategory(
+		MethodCategoryRegexp,
+		"Returns an array of arrays containing all successive matches of the regular expression in a string and the matches, if any, of its subexpressions.",
+		NewExampleSpec("",
+			`root.matches = this.value.re_find_all_submatch("a(x*)b")`,
+			`{"value":"-axxb-ab-"}`,
+			`{"matches":[["axxb","xx"],["ab",""]]}`,
+		),
+	),
+	true, regexpFindAllSubmatchMethod,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
 )
@@ -784,7 +1156,20 @@ func regexpFindAllSubmatchMethod(target Function, args ...interface{}) (Function
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"re_match", true, regexpMatchMethod,
+	NewMethodSpec(
+		"re_match", "",
+	).InCategory(
+		MethodCategoryRegexp,
+		"Checks whether a regular expression matches against any part of a string and returns a boolean.",
+		NewExampleSpec("",
+			`root.matches = this.value.re_match("[0-9]")`,
+			`{"value":"there are 10 puppies"}`,
+			`{"matches":true}`,
+			`{"value":"there are ten puppies"}`,
+			`{"matches":false}`,
+		),
+	),
+	true, regexpMatchMethod,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
 )
@@ -811,7 +1196,18 @@ func regexpMatchMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"re_replace", true, regexpReplaceMethod,
+	NewMethodSpec(
+		"re_replace", "",
+	).InCategory(
+		MethodCategoryRegexp,
+		"Replaces all occurrences of the argument regular expression in a string with a value. Inside the value $ signs are interpreted as submatch expansions, e.g. `$1` represents the text of the first submatch.",
+		NewExampleSpec("",
+			`root.new_value = this.value.re_replace("ADD ([0-9]+)","+($1)")`,
+			`{"value":"foo ADD 70"}`,
+			`{"new_value":"foo +(70)"}`,
+		),
+	),
+	true, regexpReplaceMethod,
 	ExpectNArgs(2),
 	ExpectStringArg(0),
 	ExpectStringArg(1),
@@ -841,7 +1237,18 @@ func regexpReplaceMethod(target Function, args ...interface{}) (Function, error)
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"split", true, splitMethod,
+	NewMethodSpec(
+		"split", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Split a string value into an array of strings by splitting it on a string separator.",
+		NewExampleSpec("",
+			`root.new_value = this.value.split(",")`,
+			`{"value":"foo,bar,baz"}`,
+			`{"new_value":["foo","bar","baz"]}`,
+		),
+	),
+	true, splitMethod,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
 )
@@ -873,7 +1280,18 @@ func splitMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"string", false, stringMethod,
+	NewMethodSpec(
+		"string", "",
+	).InCategory(
+		MethodCategoryCoercion,
+		"Marshal a value into a string. If the value is already a string it is unchanged.",
+		NewExampleSpec("",
+			`root.nested_json = this.string()`,
+			`{"foo":"bar"}`,
+			`{"nested_json":"{\"foo\":\"bar\"}"}`,
+		),
+	),
+	false, stringMethod,
 	ExpectNArgs(0),
 )
 
@@ -886,7 +1304,18 @@ func stringMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"strip_html", false, stripHTMLMethod,
+	NewMethodSpec(
+		"strip_html", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Attempts to remove all HTML tags from a target string.",
+		NewExampleSpec("",
+			`root.stripped = this.value.strip_html()`,
+			`{"value":"<p>the plain <strong>old text</strong></p>"}`,
+			`{"stripped":"the plain old text"}`,
+		),
+	),
+	false, stripHTMLMethod,
 	ExpectNArgs(0),
 )
 
@@ -906,7 +1335,19 @@ func stripHTMLMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"trim", true, trimMethod,
+	NewMethodSpec(
+		"trim", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Remove all leading and trailing characters from a string that are contained within an argument cutset. If no arguments are provided then whitespace is removed.",
+		NewExampleSpec("",
+			`root.title = this.title.trim("!?")
+root.description = this.description.trim()`,
+			`{"description":"  something happened and its amazing! ","title":"!!!watch out!?"}`,
+			`{"description":"something happened and its amazing!","title":"watch out"}`,
+		),
+	),
+	true, trimMethod,
 	ExpectOneOrZeroArgs(),
 	ExpectStringArg(0),
 )
@@ -930,94 +1371,6 @@ func trimMethod(target Function, args ...interface{}) (Function, error) {
 			return bytes.Trim(t, cutset), nil
 		}
 		return nil, NewTypeError(v, ValueString)
-	}), nil
-}
-
-//------------------------------------------------------------------------------
-
-var _ = RegisterMethod(
-	"unescape_html", false, unescapeHTMLMethod,
-	ExpectNArgs(0),
-)
-
-func unescapeHTMLMethod(target Function, args ...interface{}) (Function, error) {
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		var res string
-		var err error
-		switch t := v.(type) {
-		case string:
-			res = html.UnescapeString(t)
-		case []byte:
-			res = html.UnescapeString(string(t))
-		default:
-			err = NewTypeError(v, ValueString)
-		}
-		return res, err
-	}), nil
-}
-
-//------------------------------------------------------------------------------
-
-var _ = RegisterMethod(
-	"unescape_url_query", false, unescapeURLQueryMethod,
-	ExpectNArgs(0),
-)
-
-func unescapeURLQueryMethod(target Function, args ...interface{}) (Function, error) {
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		var res string
-		var err error
-		switch t := v.(type) {
-		case string:
-			res, err = url.QueryUnescape(t)
-		case []byte:
-			res, err = url.QueryUnescape(string(t))
-		default:
-			err = NewTypeError(v, ValueString)
-		}
-		return res, err
-	}), nil
-}
-
-//------------------------------------------------------------------------------
-
-var _ = RegisterMethod(
-	"unquote", false, unquoteMethod,
-	ExpectNArgs(0),
-)
-
-func unquoteMethod(target Function, _ ...interface{}) (Function, error) {
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		switch t := v.(type) {
-		case string:
-			return strconv.Unquote(t)
-		case []byte:
-			return strconv.Unquote(string(t))
-		}
-		return nil, NewTypeError(v, ValueString)
-	}), nil
-}
-
-//------------------------------------------------------------------------------
-
-var _ = RegisterMethod(
-	"uppercase", false, uppercaseMethod,
-	ExpectNArgs(0),
-)
-
-func uppercaseMethod(target Function, _ ...interface{}) (Function, error) {
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		switch t := v.(type) {
-		case string:
-			return strings.ToUpper(t), nil
-		case []byte:
-			return bytes.ToUpper(t), nil
-		default:
-			return nil, &ErrRecoverable{
-				Recovered: strings.ToUpper(IToString(v)),
-				Err:       NewTypeError(v, ValueString),
-			}
-		}
 	}), nil
 }
 

@@ -185,10 +185,13 @@ func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (t
 
 // QueryTargets returns a slice of all targets referenced by queries within the
 // mapping.
-func (e *Executor) QueryTargets() []query.TargetPath {
+func (e *Executor) QueryTargets(ctx query.TargetsContext) []query.TargetPath {
+	// Reset maps to our own.
+	ctx.Maps = e.maps
+
 	var paths []query.TargetPath
 	for _, stmt := range e.statements {
-		paths = append(paths, stmt.query.QueryTargets()...)
+		paths = append(paths, stmt.query.QueryTargets(ctx)...)
 	}
 	return paths
 }

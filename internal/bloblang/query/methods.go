@@ -13,7 +13,19 @@ import (
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"append", true, appendMethod,
+	NewMethodSpec(
+		"append",
+		"Returns an array with new elements appended to the end.",
+	).InCategory(
+		MethodCategoryObjectAndArray,
+		"",
+		NewExampleSpec("",
+			`root.foo = this.foo.append("and", "this")`,
+			`{"foo":["bar","baz"]}`,
+			`{"foo":["bar","baz","and","this"]}`,
+		),
+	),
+	true, appendMethod,
 	ExpectAtLeastOneArg(),
 )
 
@@ -34,7 +46,20 @@ func appendMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"apply", true, applyMethod,
+	NewMethodSpec(
+		"apply",
+		"Apply a declared map on a value.",
+		NewExampleSpec("",
+			`map thing {
+  root.inner = this.first
+}
+
+root.foo = this.doc.apply("thing")`,
+			`{"doc":{"first":"hello world"}}`,
+			`{"foo":{"inner":"hello world"}}`,
+		),
+	),
+	true, applyMethod,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
 )
@@ -42,8 +67,6 @@ var _ = RegisterMethod(
 func applyMethod(target Function, args ...interface{}) (Function, error) {
 	targetMap := args[0].(string)
 
-	// TODO: Currently ignoring targets from the map itself. We could
-	// potentially expand all of this to make a best attempt.
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		res, err := target.Exec(ctx)
 		if err != nil {
@@ -68,13 +91,27 @@ func applyMethod(target Function, args ...interface{}) (Function, error) {
 		// ISOLATED VARIABLES
 		ctx.Vars = map[string]interface{}{}
 		return m.Exec(ctx)
-	}, target.QueryTargets), nil
+	}, func(ctx TargetsContext) []TargetPath {
+		m, ok := ctx.Maps[targetMap]
+		if !ok {
+			return target.QueryTargets(ctx)
+		}
+		return expandTargetPaths(target.QueryTargets(ctx), m.QueryTargets(ctx))
+	}), nil
 }
 
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"bool", true, boolMethod,
+	NewMethodSpec("bool", "").InCategory(
+		MethodCategoryCoercion,
+		"Attempt to parse a value into a boolean. An optional argument can be provided, in which case if the value cannot be parsed the argument will be returned instead.",
+		NewExampleSpec("",
+			`root.foo = this.thing.bool()
+root.bar = this.thing.bool(true)`,
+		),
+	),
+	true, boolMethod,
 	ExpectOneOrZeroArgs(),
 	ExpectBoolArg(0),
 )
@@ -112,7 +149,14 @@ func boolMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"catch", false, catchMethod,
+	NewMethodSpec(
+		"catch",
+		"If the result of a target query fails (due to incorrect types, failed parsing, etc) the argument is returned instead.",
+		NewExampleSpec("",
+			`root.doc.id = this.thing.id.string().catch(uuid_v4())`,
+		),
+	),
+	false, catchMethod,
 	ExpectNArgs(1),
 )
 
@@ -138,7 +182,24 @@ func catchMethod(fn Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"collapse", true, collapseMethod,
+	NewMethodSpec(
+		"collapse", "",
+	).InCategory(
+		MethodCategoryObjectAndArray,
+		"Collapse an array or object into an object of key/value pairs for each field, where the key is the full path of the structured field in dot path notation. Empty arrays an objects are ignored by default.",
+		NewExampleSpec("",
+			`root.result = this.collapse()`,
+			`{"foo":[{"bar":"1"},{"bar":{}},{"bar":"2"},{"bar":[]}]}`,
+			`{"result":{"foo.0.bar":"1","foo.2.bar":"2"}}`,
+		),
+		NewExampleSpec(
+			"An optional boolean parameter can be set to true in order to include empty objects and arrays.",
+			`root.result = this.collapse(true)`,
+			`{"foo":[{"bar":"1"},{"bar":{}},{"bar":"2"},{"bar":[]}]}`,
+			`{"result":{"foo.0.bar":"1","foo.1.bar":{},"foo.2.bar":"2","foo.3.bar":[]}}`,
+		),
+	),
+	true, collapseMethod,
 	ExpectOneOrZeroArgs(),
 	ExpectBoolArg(0),
 )
@@ -164,7 +225,30 @@ func collapseMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"contains", true, containsMethod,
+	NewMethodSpec(
+		"contains", "",
+	).InCategory(
+		MethodCategoryObjectAndArray,
+		"Checks whether an array contains an element matching the argument, or an object contains a value matching the argument, and returns a boolean result.",
+		NewExampleSpec("",
+			`root.has_foo = this.thing.contains("foo")`,
+			`{"thing":["this","foo","that"]}`,
+			`{"has_foo":true}`,
+			`{"thing":["this","bar","that"]}`,
+			`{"has_foo":false}`,
+		),
+	).InCategory(
+		MethodCategoryStrings,
+		"Checks whether a string contains a substring and returns a boolean result.",
+		NewExampleSpec("",
+			`root.has_foo = this.thing.contains("foo")`,
+			`{"thing":"this foo that"}`,
+			`{"has_foo":true}`,
+			`{"thing":"this bar that"}`,
+			`{"has_foo":false}`,
+		),
+	),
+	true, containsMethod,
 	ExpectNArgs(1),
 )
 
@@ -207,7 +291,18 @@ func containsMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"enumerated", false, enumerateMethod,
+	NewMethodSpec(
+		"enumerated",
+		"Converts an array into a new array of objects, where each object has a field index containing the `index` of the element and a field `value` containing the original value of the element.",
+	).InCategory(
+		MethodCategoryObjectAndArray, "",
+		NewExampleSpec("",
+			`root.foo = this.foo.enumerated()`,
+			`{"foo":["bar","baz"]}`,
+			`{"foo":[{"index":0,"value":"bar"},{"index":1,"value":"baz"}]}`,
+		),
+	),
+	false, enumerateMethod,
 	ExpectNArgs(0),
 )
 
@@ -235,7 +330,20 @@ func enumerateMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"exists", true, existsMethod,
+	NewMethodSpec(
+		"exists",
+		"Checks that a field, identified via a [dot path][field_paths], exists in an object.",
+		NewExampleSpec("",
+			`root.result = this.foo.exists("bar.baz")`,
+			`{"foo":{"bar":{"baz":"yep, I exist"}}}`,
+			`{"result":true}`,
+			`{"foo":{"bar":{}}}`,
+			`{"result":false}`,
+			`{"foo":{}}`,
+			`{"result":false}`,
+		),
+	),
+	true, existsMethod,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
 )
@@ -255,7 +363,27 @@ func existsMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"explode", true, explodeMethod,
+	NewMethodSpec(
+		"explode", "",
+	).InCategory(
+		MethodCategoryObjectAndArray,
+		"Explodes an array or object at a [field path][field_paths].",
+		NewExampleSpec(`#### On arrays
+
+Exploding arrays results in an array containing elements matching the original document, where the target field of each element is an element of the exploded array:`,
+			`root = this.explode("value")`,
+			`{"id":1,"value":["foo","bar","baz"]}`,
+			`[{"id":1,"value":"foo"},{"id":1,"value":"bar"},{"id":1,"value":"baz"}]`,
+		),
+		NewExampleSpec(`#### On objects
+
+Exploding objects results in an object where the keys match the target object, and the values match the original document but with the target field replaced by the exploded value:`,
+			`root = this.explode("value")`,
+			`{"id":1,"value":{"foo":2,"bar":[3,4],"baz":{"bev":5}}}`,
+			`{"bar":{"id":1,"value":[3,4]},"baz":{"id":1,"value":{"bev":5}},"foo":{"id":1,"value":2}}`,
+		),
+	),
+	true, explodeMethod,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
 )
@@ -297,7 +425,18 @@ func explodeMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"flatten", false, flattenMethod,
+	NewMethodSpec(
+		"flatten",
+		"Iterates an array and any element that is itself an array is removed and has its elements inserted directly in the resulting array.",
+	).InCategory(
+		MethodCategoryObjectAndArray, "",
+		NewExampleSpec(``,
+			`root.result = this.flatten()`,
+			`["foo",["bar","baz"],"buz"]`,
+			`{"result":["foo","bar","baz","buz"]}`,
+		),
+	),
+	false, flattenMethod,
 	ExpectNArgs(0),
 )
 
@@ -327,7 +466,23 @@ func flattenMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"fold", false, foldMethod,
+	NewMethodSpec(
+		"fold",
+		"Takes two arguments: an initial value, and a mapping query. For each element of an array the mapping context is an object with two fields `tally` and `value`, where `tally` contains the current accumulated value and `value` is the value of the current element. The mapping must return the result of adding the value to the tally.\n\nThe first argument is the value that `tally` will have on the first call.",
+	).InCategory(
+		MethodCategoryObjectAndArray, "",
+		NewExampleSpec(``,
+			`root.sum = this.foo.fold(0, this.tally + this.value)`,
+			`{"foo":[3,8,11]}`,
+			`{"sum":22}`,
+		),
+		NewExampleSpec(``,
+			`root.result = this.foo.fold("", "%v%v".format(this.tally, this.value))`,
+			`{"foo":["hello ", "world"]}`,
+			`{"result":"hello world"}`,
+		),
+	),
+	false, foldMethod,
 	ExpectNArgs(2),
 )
 
@@ -394,7 +549,15 @@ func foldMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"from", false, func(target Function, args ...interface{}) (Function, error) {
+	NewMethodSpec(
+		"from",
+		"Execute a query from the context of another message in the batch. This allows you to mutate events based on the contents of other messages.",
+		NewExampleSpec("For example, the following map extracts the contents of the JSON field `foo` specifically from message index `1` of a batch, effectively overriding the field `foo` for all messages of a batch to that of message 1:",
+			`root = this
+root.foo = json("foo").from(1)`,
+		),
+	),
+	false, func(target Function, args ...interface{}) (Function, error) {
 		i64 := args[0].(int64)
 		return &fromMethod{
 			index:  int(i64),
@@ -415,14 +578,22 @@ func (f *fromMethod) Exec(ctx FunctionContext) (interface{}, error) {
 	return f.target.Exec(ctx)
 }
 
-func (f *fromMethod) QueryTargets() []TargetPath {
-	return f.target.QueryTargets()
+func (f *fromMethod) QueryTargets(ctx TargetsContext) []TargetPath {
+	return f.target.QueryTargets(ctx)
 }
 
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"from_all", false, fromAllMethod,
+	NewMethodSpec(
+		"from_all",
+		"Execute a query for all messages of the batch, and return an array of all results.",
+		NewExampleSpec("",
+			`root = this
+root.foo_summed = json("foo").from_all().sum()`,
+		),
+	),
+	false, fromAllMethod,
 	ExpectNArgs(0),
 )
 
@@ -456,7 +627,20 @@ func fromAllMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"get", true, getMethodCtor,
+	NewMethodSpec(
+		"get",
+		"Extract a field value, identified via a [dot path][field_paths], from an object.",
+	).InCategory(
+		MethodCategoryObjectAndArray, "",
+		NewExampleSpec("",
+			`root.result = this.foo.get(this.target)`,
+			`{"foo":{"bar":"from bar","baz":"from baz"},"target":"bar"}`,
+			`{"result":"from bar"}`,
+			`{"foo":{"bar":"from bar","baz":"from baz"},"target":"baz"}`,
+			`{"result":"from baz"}`,
+		),
+	),
+	true, getMethodCtor,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
 )
@@ -474,8 +658,8 @@ func (g *getMethod) Exec(ctx FunctionContext) (interface{}, error) {
 	return gabs.Wrap(v).S(g.path...).Data(), nil
 }
 
-func (g *getMethod) QueryTargets() []TargetPath {
-	targets := g.fn.QueryTargets()
+func (g *getMethod) QueryTargets(ctx TargetsContext) []TargetPath {
+	targets := g.fn.QueryTargets(ctx)
 	for i, t := range targets {
 		tmpPath := make([]string, 0, len(t.Path)+len(g.path))
 		tmpPath = append(tmpPath, t.Path...)
@@ -516,7 +700,18 @@ func getMethodCtor(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"index", true, indexMethod,
+	NewMethodSpec(
+		"index",
+		"Extract an element from an array by an index. The index can be negative, and if so the element will be selected from the end counting backwards starting from -1. E.g. an index of -1 returns the last element, an index of -2 returns the element before the last, and so on.",
+	).InCategory(
+		MethodCategoryObjectAndArray, "",
+		NewExampleSpec("",
+			`root.last_name = this.names.index(-1)`,
+			`{"names":["rachel","stevens"]}`,
+			`{"last_name":"stevens"}`,
+		),
+	),
+	true, indexMethod,
 	ExpectNArgs(1),
 	ExpectIntArg(0),
 )
@@ -548,7 +743,18 @@ func indexMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"keys", false, keysMethod,
+	NewMethodSpec(
+		"keys",
+		"Returns the keys of an object as an array. The order of the resulting array will be random.",
+	).InCategory(
+		MethodCategoryObjectAndArray, "",
+		NewExampleSpec("",
+			`root.foo_keys = this.foo.keys()`,
+			`{"foo":{"bar":1,"baz":2}}`,
+			`{"foo_keys":["bar","baz"]}`,
+		),
+	),
+	false, keysMethod,
 	ExpectNArgs(0),
 )
 
@@ -563,6 +769,9 @@ func keysMethod(target Function, args ...interface{}) (Function, error) {
 			for k := range m {
 				keys = append(keys, k)
 			}
+			sort.Slice(keys, func(i, j int) bool {
+				return keys[i].(string) < keys[j].(string)
+			})
 			return keys, nil
 		}
 		return nil, NewTypeError(v, ValueObject)
@@ -572,7 +781,26 @@ func keysMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"length", false, lengthMethod,
+	NewMethodSpec(
+		"length", "",
+	).InCategory(
+		MethodCategoryStrings, "Returns the length of a string.",
+		NewExampleSpec("",
+			`root.foo_len = this.foo.length()`,
+			`{"foo":"hello world"}`,
+			`{"foo_len":11}`,
+		),
+	).InCategory(
+		MethodCategoryObjectAndArray, "Returns the length of an array or object (number of keys).",
+		NewExampleSpec("",
+			`root.foo_len = this.foo.length()`,
+			`{"foo":["first","second"]}`,
+			`{"foo_len":2}`,
+			`{"foo":{"first":"bar","second":"baz"}}`,
+			`{"foo_len":2}`,
+		),
+	),
+	false, lengthMethod,
 	ExpectNArgs(0),
 )
 
@@ -606,7 +834,7 @@ func lengthMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"map", false, mapMethod,
+	NewDeprecatedMethodSpec("map"), false, mapMethod,
 	ExpectNArgs(1),
 )
 
@@ -627,15 +855,39 @@ func mapMethod(target Function, args ...interface{}) (Function, error) {
 		}
 		ctx.Value = &res
 		return mapFn.Exec(ctx)
-	}, func() []TargetPath {
-		return expandTargetPaths(target.QueryTargets(), mapFn.QueryTargets())
+	}, func(ctx TargetsContext) []TargetPath {
+		return expandTargetPaths(target.QueryTargets(ctx), mapFn.QueryTargets(ctx))
 	}), nil
 }
 
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"map_each", false, mapEachMethod,
+	NewMethodSpec(
+		"map_each", "",
+	).InCategory(
+		MethodCategoryObjectAndArray, "Returns the length of an array or object (number of keys).",
+		NewExampleSpec(`#### On arrays
+
+Apply a mapping to each element of an array and replace the element with the result. Within the argument mapping the context is the value of the element being mapped.`,
+			`root.new_nums = this.nums.map_each(
+  match this {
+    this < 10 => deleted()
+    _ => this - 10
+  }
+)`,
+			`{"nums":[3,11,4,17]}`,
+			`{"new_nums":[1,7]}`,
+		),
+		NewExampleSpec(`#### On objects
+
+Apply a mapping to each value of an object and replace the value with the result. Within the argument mapping the context is an object with a field `+"`key`"+` containing the value key, and a field `+"`value`"+`.`,
+			`root.new_dict = this.dict.map_each(this.value.uppercase())`,
+			`{"dict":{"foo":"hello","bar":"world"}}`,
+			`{"new_dict":{"bar":"WORLD","foo":"HELLO"}}`,
+		),
+	),
+	false, mapEachMethod,
 	ExpectNArgs(1),
 )
 
@@ -722,7 +974,17 @@ func mapEachMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"merge", false, mergeMethod,
+	NewMethodSpec(
+		"merge", "Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the result will be an array containing both values, where values that are already arrays will be expanded into the resulting array.",
+	).InCategory(
+		MethodCategoryObjectAndArray, "",
+		NewExampleSpec(``,
+			`root = this.foo.merge(this.bar)`,
+			`{"foo":{"first_name":"fooer","likes":"bars"},"bar":{"second_name":"barer","likes":"foos"}}`,
+			`{"first_name":"fooer","likes":["bars","foos"],"second_name":"barer"}`,
+		),
+	),
+	false, mergeMethod,
 	ExpectNArgs(1),
 )
 
@@ -776,7 +1038,7 @@ func mergeMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"not", false, notMethodCtor,
+	NewDeprecatedMethodSpec("not"), false, notMethodCtor,
 	ExpectNArgs(0),
 )
 
@@ -803,8 +1065,8 @@ func (n *notMethod) Exec(ctx FunctionContext) (interface{}, error) {
 	return !b, nil
 }
 
-func (n *notMethod) QueryTargets() []TargetPath {
-	return n.fn.QueryTargets()
+func (n *notMethod) QueryTargets(ctx TargetsContext) []TargetPath {
+	return n.fn.QueryTargets(ctx)
 }
 
 func notMethodCtor(target Function, _ ...interface{}) (Function, error) {
@@ -814,7 +1076,17 @@ func notMethodCtor(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"number", true, numberMethod,
+	NewMethodSpec(
+		"number", "",
+	).InCategory(
+		MethodCategoryCoercion,
+		"Attempt to parse a value into a number. An optional argument can be provided, in which case if the value cannot be parsed into a number the argument will be returned instead.",
+		NewExampleSpec("",
+			`root.foo = this.thing.number() + 10
+root.bar = this.thing.number(5) * 10`,
+		),
+	),
+	true, numberMethod,
 	ExpectOneOrZeroArgs(),
 	ExpectFloatArg(0),
 )
@@ -852,7 +1124,11 @@ func numberMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"or", false, orMethod,
+	NewMethodSpec(
+		"or", "If the result of the target query fails or resolves to `null`, returns the argument instead. This is an explicit method alternative to the coalesce pipe operator `|`.",
+		NewExampleSpec("", `root.doc.id = this.thing.id.or(uuid_v4())`),
+	),
+	false, orMethod,
 	ExpectNArgs(1),
 )
 
@@ -878,12 +1154,28 @@ func orMethod(fn Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"sort", false, sortMethod,
+	NewMethodSpec(
+		"sort", "",
+	).InCategory(
+		MethodCategoryObjectAndArray,
+		"Attempts to sort the values of an array in increasing order. The type of all values must match in order for the ordering to be accurate. Supports string and number values.",
+		NewExampleSpec("",
+			`root.sorted = this.foo.sort()`,
+			`{"foo":["bbb","ccc","aaa"]}`,
+			`{"sorted":["aaa","bbb","ccc"]}`,
+		),
+		NewExampleSpec("It's also possible to specify a mapping argument, which is provided an object context with fields `left` and `right`, the mapping must return a boolean indicating whether the `left` value is less than `right`. This allows you to sort arrays containing non-string or non-number values.",
+			`root.sorted = this.foo.sort(this.left.v < this.right.v)`,
+			`{"foo":[{"id":"foo","v":"bbb"},{"id":"bar","v":"ccc"},{"id":"baz","v":"aaa"}]}`,
+			`{"sorted":[{"id":"baz","v":"aaa"},{"id":"foo","v":"bbb"},{"id":"bar","v":"ccc"}]}`,
+		),
+	),
+	false, sortMethod,
 	ExpectOneOrZeroArgs(),
 )
 
 func sortMethod(target Function, args ...interface{}) (Function, error) {
-	compareFn := func(ctx FunctionContext, values []interface{}, i, j int) bool {
+	compareFn := func(ctx FunctionContext, values []interface{}, i, j int) (bool, error) {
 		switch values[i].(type) {
 		case float64, int64, uint64:
 			var lhs, rhs float64
@@ -892,9 +1184,9 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 				rhs, err = IGetNumber(values[j])
 			}
 			if err != nil {
-				return false
+				return false, err
 			}
-			return lhs < rhs
+			return lhs < rhs, nil
 		case string, []byte:
 			var lhs, rhs string
 			var err error
@@ -902,18 +1194,18 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 				rhs, err = IGetString(values[j])
 			}
 			if err != nil {
-				return false
+				return false, err
 			}
-			return lhs < rhs
+			return lhs < rhs, nil
 		}
-		return false
+		return false, NewTypeError(values[i], ValueNumber, ValueString)
 	}
 	if len(args) > 0 {
 		mapFn, ok := args[0].(Function)
 		if !ok {
 			return nil, fmt.Errorf("expected query argument, received %T", args[0])
 		}
-		compareFn = func(ctx FunctionContext, values []interface{}, i, j int) bool {
+		compareFn = func(ctx FunctionContext, values []interface{}, i, j int) (bool, error) {
 			var ctxValue interface{} = map[string]interface{}{
 				"left":  values[i],
 				"right": values[j],
@@ -921,10 +1213,10 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 			ctx.Value = &ctxValue
 			v, err := mapFn.Exec(ctx)
 			if err != nil {
-				return false
+				return false, err
 			}
 			b, _ := v.(bool)
-			return b
+			return b, nil
 		}
 	}
 
@@ -939,8 +1231,16 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 				values = append(values, e)
 			}
 			sort.Slice(values, func(i, j int) bool {
-				return compareFn(ctx, values, i, j)
+				if err == nil {
+					var b bool
+					b, err = compareFn(ctx, values, i, j)
+					return b
+				}
+				return false
 			})
+			if err != nil {
+				return nil, err
+			}
 			return values, nil
 		}
 		return nil, NewTypeError(v, ValueArray)
@@ -950,7 +1250,41 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"slice", true, sliceMethod,
+	NewMethodSpec(
+		"slice", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Extract a slice from a string by specifying two indices, a low and high bound, which selects a half-open range that includes the first character, but excludes the last one. If the second index is omitted then it defaults to the length of the input sequence.",
+		NewExampleSpec("",
+			`root.beginning = this.value.slice(0, 2)
+root.end = this.value.slice(4)`,
+			`{"value":"foo bar"}`,
+			`{"beginning":"fo","end":"bar"}`,
+		),
+		NewExampleSpec(`A negative low index can be used, indicating an offset from the end of the sequence. If the low index is greater than the length of the sequence then an empty result is returned.`,
+			`root.last_chunk = this.value.slice(-4)
+root.the_rest = this.value.slice(0, -4)`,
+			`{"value":"foo bar"}`,
+			`{"last_chunk":" bar","the_rest":"foo"}`,
+		),
+	).InCategory(
+		MethodCategoryObjectAndArray,
+		"Extract a slice from an array by specifying two indices, a low and high bound, which selects a half-open range that includes the first element, but excludes the last one. If the second index is omitted then it defaults to the length of the input sequence.",
+		NewExampleSpec("",
+			`root.beginning = this.value.slice(0, 2)
+root.end = this.value.slice(4)`,
+			`{"value":["foo","bar","baz","buz","bev"]}`,
+			`{"beginning":["foo","bar"],"end":["bev"]}`,
+		),
+		NewExampleSpec(
+			`A negative low index can be used, indicating an offset from the end of the sequence. If the low index is greater than the length of the sequence then an empty result is returned.`,
+			`root.last_chunk = this.value.slice(-2)
+root.the_rest = this.value.slice(0, -2)`,
+			`{"value":["foo","bar","baz","buz","bev"]}`,
+			`{"last_chunk":["buz","bev"],"the_rest":["foo","bar","baz"]}`,
+		),
+	),
+	true, sliceMethod,
 	ExpectAtLeastOneArg(),
 	ExpectIntArg(0),
 	ExpectIntArg(1),
@@ -1025,7 +1359,18 @@ func sliceMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"sum", false, sumMethod,
+	NewMethodSpec(
+		"sum", "",
+	).InCategory(
+		MethodCategoryObjectAndArray,
+		"Sum the numerical values of an array.",
+		NewExampleSpec("",
+			`root.sum = this.foo.sum()`,
+			`{"foo":[3,8,4]}`,
+			`{"sum":15}`,
+		),
+	),
+	false, sumMethod,
 	ExpectNArgs(0),
 )
 
@@ -1069,7 +1414,19 @@ func sumMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"type", false, typeMethod,
+	NewMethodSpec(
+		"type", "",
+	).InCategory(
+		MethodCategoryCoercion,
+		"Returns the type of a value as a string, providing one of the following values: `string`, `bytes`, `number`, `bool`, `array`, `object` or `null`.",
+		NewExampleSpec("",
+			`root.bar_type = this.bar.type()
+root.foo_type = this.foo.type()`,
+			`{"bar":10,"foo":"is a string"}`,
+			`{"bar_type":"number","foo_type":"string"}`,
+		),
+	),
+	false, typeMethod,
 	ExpectNArgs(0),
 )
 
@@ -1086,7 +1443,18 @@ func typeMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"unique", false, uniqueMethod,
+	NewMethodSpec(
+		"unique", "",
+	).InCategory(
+		MethodCategoryObjectAndArray,
+		"Attempts to remove duplicate values from an array. The array may contain a combination of different value types, but numbers and strings are checked separately (`\"5\"` is a different element to `5`).",
+		NewExampleSpec("",
+			`root.uniques = this.foo.unique()`,
+			`{"foo":["a","b","a","c"]}`,
+			`{"uniques":["a","b","c"]}`,
+		),
+	),
+	false, uniqueMethod,
 	ExpectOneOrZeroArgs(),
 )
 
@@ -1171,7 +1539,18 @@ func uniqueMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"values", false, valuesMethod,
+	NewMethodSpec(
+		"values", "",
+	).InCategory(
+		MethodCategoryObjectAndArray,
+		"Returns the values of an object as an array. The order of the resulting array will be random.",
+		NewExampleSpec("",
+			`root.foo_vals = this.foo.values().sort()`,
+			`{"foo":{"bar":1,"baz":2}}`,
+			`{"foo_vals":[1,2]}`,
+		),
+	),
+	false, valuesMethod,
 	ExpectNArgs(0),
 )
 
@@ -1195,7 +1574,20 @@ func valuesMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	"without", true, withoutMethod,
+	NewMethodSpec(
+		"without", "",
+	).InCategory(
+		MethodCategoryObjectAndArray,
+		`Returns an object where one or more [field path][field_paths] arguments are removed. Each path specifies a specific field to be deleted from the input object, allowing for nested fields.
+
+If a key within a nested path does not exist or is not an object then it is not removed.`,
+		NewExampleSpec("",
+			`root = this.without("inner.a","inner.c","d")`,
+			`{"inner":{"a":"first","b":"second","c":"third"},"d":"fourth","e":"fifth"}`,
+			`{"e":"fifth","inner":{"b":"second"}}`,
+		),
+	),
+	true, withoutMethod,
 	ExpectAtLeastOneArg(),
 	ExpectAllStringArgs(),
 )

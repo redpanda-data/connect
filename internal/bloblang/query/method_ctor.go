@@ -71,17 +71,18 @@ type MethodCtor func(target Function, args ...interface{}) (Function, error)
 
 // RegisterMethod to be accessible from Bloblang queries. Returns an empty
 // struct in order to allow inline calls.
-func RegisterMethod(name string, allowDynamicArgs bool, ctor MethodCtor, checks ...ArgCheckFn) struct{} {
+func RegisterMethod(spec MethodSpec, allowDynamicArgs bool, ctor MethodCtor, checks ...ArgCheckFn) struct{} {
 	if len(checks) > 0 {
 		ctor = checkMethodArgs(ctor, checks...)
 	}
 	if allowDynamicArgs {
 		ctor = enableMethodDynamicArgs(ctor)
 	}
-	if _, exists := methods[name]; exists {
-		panic(fmt.Sprintf("Conflicting method name: %v", name))
+	if _, exists := methods[spec.Name]; exists {
+		panic(fmt.Sprintf("Conflicting method name: %v", spec.Name))
 	}
-	methods[name] = ctor
+	methods[spec.Name] = ctor
+	methodSpecs = append(methodSpecs, spec)
 	return struct{}{}
 }
 
@@ -96,6 +97,7 @@ func InitMethod(name string, target Function, args ...interface{}) (Function, er
 }
 
 var methods = map[string]MethodCtor{}
+var methodSpecs = []MethodSpec{}
 
 // ListMethods returns a slice of method names, sorted alphabetically.
 func ListMethods() []string {
@@ -105,6 +107,11 @@ func ListMethods() []string {
 	}
 	sort.Strings(methodNames)
 	return methodNames
+}
+
+// MethodDocs returns a slice of specs, one for each method.
+func MethodDocs() []MethodSpec {
+	return methodSpecs
 }
 
 //------------------------------------------------------------------------------

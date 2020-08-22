@@ -183,7 +183,9 @@ func TestFunctionTargets(t *testing.T) {
 		t.Run(fmt.Sprintf("%v", i), func(t *testing.T) {
 			t.Parallel()
 
-			res := test.input.QueryTargets()
+			res := test.input.QueryTargets(TargetsContext{
+				Maps: map[string]Function{},
+			})
 			assert.Equal(t, test.output, res)
 		})
 	}

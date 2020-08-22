@@ -60,6 +60,12 @@ type FunctionContext struct {
 	Legacy   bool
 }
 
+// TargetsContext provides access to a range of query targets for functions to
+// reference when determining their targets.
+type TargetsContext struct {
+	Maps map[string]Function
+}
+
 //------------------------------------------------------------------------------
 
 // Function takes a set of contextual arguments and returns the result of the
@@ -70,7 +76,7 @@ type Function interface {
 
 	// Return a map of target types to path segments for any targets that this
 	// query function references.
-	QueryTargets() []TargetPath
+	QueryTargets(ctx TargetsContext) []TargetPath
 }
 
 // ExecToString returns a string from a function exection.

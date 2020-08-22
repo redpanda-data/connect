@@ -13,17 +13,17 @@ import (
 // state.
 func ClosureFunction(
 	exec func(ctx FunctionContext) (interface{}, error),
-	queryTargets func() []TargetPath,
+	queryTargets func(ctx TargetsContext) []TargetPath,
 ) Function {
 	if queryTargets == nil {
-		queryTargets = func() []TargetPath { return nil }
+		queryTargets = func(TargetsContext) []TargetPath { return nil }
 	}
 	return closureFunction{exec, queryTargets}
 }
 
 type closureFunction struct {
 	exec         func(ctx FunctionContext) (interface{}, error)
-	queryTargets func() []TargetPath
+	queryTargets func(ctx TargetsContext) []TargetPath
 }
 
 // Exec the underlying closure.
@@ -32,8 +32,8 @@ func (f closureFunction) Exec(ctx FunctionContext) (interface{}, error) {
 }
 
 // QueryTargets returns nothing.
-func (f closureFunction) QueryTargets() []TargetPath {
-	return f.queryTargets()
+func (f closureFunction) QueryTargets(ctx TargetsContext) []TargetPath {
+	return f.queryTargets(ctx)
 }
 
 //------------------------------------------------------------------------------
@@ -223,6 +223,22 @@ func RegisterFunction(name string, allowDynamicArgs bool, ctor FunctionCtor, che
 	return struct{}{}
 }
 
+// RegisterFunctionSpec TODO
+func RegisterFunctionSpec(spec FunctionSpec, allowDynamicArgs bool, ctor FunctionCtor, checks ...ArgCheckFn) struct{} {
+	if len(checks) > 0 {
+		ctor = checkArgs(ctor, checks...)
+	}
+	if allowDynamicArgs {
+		ctor = enableDynamicArgs(ctor)
+	}
+	if _, exists := functions[spec.Name]; exists {
+		panic(fmt.Sprintf("Conflicting function name: %v", spec.Name))
+	}
+	functions[spec.Name] = ctor
+	functionSpecs = append(functionSpecs, spec)
+	return struct{}{}
+}
+
 // InitFunction attempts to initialise a function by its name and arguments.
 func InitFunction(name string, args ...interface{}) (Function, error) {
 	ctor, exists := functions[name]
@@ -233,6 +249,12 @@ func InitFunction(name string, args ...interface{}) (Function, error) {
 }
 
 var functions = map[string]FunctionCtor{}
+var functionSpecs = []FunctionSpec{}
+
+// FunctionDocs returns a slice of specs, one for each function.
+func FunctionDocs() []FunctionSpec {
+	return functionSpecs
+}
 
 // ListFunctions returns a slice of function names, sorted alphabetically.
 func ListFunctions() []string {

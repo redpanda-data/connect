@@ -82,14 +82,14 @@ func (m *mapLiteral) Exec(ctx FunctionContext) (interface{}, error) {
 	return dynMap, nil
 }
 
-func (m *mapLiteral) QueryTargets() []TargetPath {
+func (m *mapLiteral) QueryTargets(ctx TargetsContext) []TargetPath {
 	var targetPaths []TargetPath
 	for _, kv := range m.keyValues {
 		if fn, ok := kv[0].(Function); ok {
-			targetPaths = append(targetPaths, fn.QueryTargets()...)
+			targetPaths = append(targetPaths, fn.QueryTargets(ctx)...)
 		}
 		if fn, ok := kv[1].(Function); ok {
-			targetPaths = append(targetPaths, fn.QueryTargets()...)
+			targetPaths = append(targetPaths, fn.QueryTargets(ctx)...)
 		}
 	}
 	return targetPaths
@@ -147,11 +147,11 @@ func (a *arrayLiteral) Exec(ctx FunctionContext) (interface{}, error) {
 	return dynArray, nil
 }
 
-func (a *arrayLiteral) QueryTargets() []TargetPath {
+func (a *arrayLiteral) QueryTargets(ctx TargetsContext) []TargetPath {
 	var targetPaths []TargetPath
 	for _, v := range a.values {
 		if fn, ok := v.(Function); ok {
-			targetPaths = append(targetPaths, fn.QueryTargets()...)
+			targetPaths = append(targetPaths, fn.QueryTargets(ctx)...)
 		}
 	}
 	return targetPaths

@@ -266,7 +266,9 @@ func TestTargets(t *testing.T) {
 	for i, test := range tests {
 		test := test
 		t.Run(fmt.Sprintf("%v", i), func(t *testing.T) {
-			assert.Equal(t, test.queryTargets, test.mapping.QueryTargets())
+			assert.Equal(t, test.queryTargets, test.mapping.QueryTargets(query.TargetsContext{
+				Maps: map[string]query.Function{},
+			}))
 			assert.Equal(t, test.assignmentTargets, test.mapping.AssignmentTargets())
 		})
 	}

@@ -258,7 +258,7 @@ You can find a full list of functions in [this doc][blobl.functions].
 
 ## Methods
 
-Methods provide most of the power in Bloblang as they allow you to augment values by chaining them:
+Methods provide most of the power in Bloblang as they allow you to augment query values and can be added to any expression:
 
 ```coffee
 root.doc.id = this.thing.id.string().catch(uuid_v4())
@@ -268,6 +268,7 @@ root.doc.reduced_nums = this.thing.nums.for_each(
     _ => this - 10
   }
 )
+root.has_good_taste = ["pikachu","mewtwo","magmar"].contains(this.user.fav_pokemon)
 ```
 
 You can find a full list of methods in [this doc][blobl.methods].
