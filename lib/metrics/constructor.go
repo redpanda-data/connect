@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/util/config"
+	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -149,17 +150,17 @@ func (conf *Config) UnmarshalJSON(bytes []byte) error {
 
 // UnmarshalYAML ensures that when parsing configs that are in a map or slice
 // the default values are still applied.
-func (conf *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 	type confAlias Config
 	aliased := confAlias(NewConfig())
 
-	if err := unmarshal(&aliased); err != nil {
-		return err
+	if err := value.Decode(&aliased); err != nil {
+		return fmt.Errorf("line %v: %v", value.Line, err)
 	}
 
 	var raw interface{}
-	if err := unmarshal(&raw); err != nil {
-		return err
+	if err := value.Decode(&raw); err != nil {
+		return fmt.Errorf("line %v: %v", value.Line, err)
 	}
 	if typeCandidates := config.GetInferenceCandidates(raw); len(typeCandidates) > 0 {
 		var inferredType string
@@ -175,6 +176,9 @@ func (conf *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 			return fmt.Errorf("unable to infer type, candidates were: %v", typeCandidates)
 		}
 		aliased.Type = inferredType
+	}
+	if _, exists := Constructors[aliased.Type]; !exists {
+		return fmt.Errorf("line %v: type '%v' was not recognised", value.Line, aliased.Type)
 	}
 
 	*conf = Config(aliased)

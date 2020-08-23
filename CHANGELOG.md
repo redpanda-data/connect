@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - The `http_server` input now emits `latency` metrics.
 - Fixed a panic that could occur during the shutdown of an `http_server` input
   serving a backlog of requests.
+- Explicit component types (`type: foo`) are now checked by the config linter.
 
 ## 3.25.0 - 2020-08-16
 

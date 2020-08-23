@@ -19,8 +19,8 @@ A --|          |--> D
 ```
 
 This flow would be easy to express in a standard Benthos config, we could simply
-use a [`conditional`][conditional] processor to route to either B or C depending
-on a condition on the result of A. However, this method of flow control quickly
+use a [`switch`][switch] processor to route to either B or C depending on a
+condition on the result of A. However, this method of flow control quickly
 becomes unfeasible as the DAG gets more complicated, imagine expressing this
 flow using conditional or switch processors:
 
@@ -315,7 +315,7 @@ occur there are many mechanisms within Benthos that allow you to capture and/or
 recover from them outlined [in this document][error-handling].
 
 [dag_wiki]: https://en.wikipedia.org/wiki/Directed_acyclic_graph
-[conditional]: /docs/components/processors/conditional
+[switch]: /docs/components/processors/switch
 [process_dag]: /docs/components/processors/process_dag
 [process_map]: /docs/components/processors/process_map
 [error-handling]: /docs/configuration/error_handling

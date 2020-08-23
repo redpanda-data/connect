@@ -41,13 +41,13 @@ Failed messages can be fed into their own processor steps with a
 
 Once messages finish the catch block they will have their failure flags removed
 and are treated like regular messages. If this behaviour is not desired then it
-is possible to simulate a catch block with a [`conditional`][conditional]
-processor placed within a [`for_each`][for_each] processor:
+is possible to simulate a catch block with a [`switch`][switch] processor placed
+within a [`for_each`][for_each] processor:
 
 ```yaml
   - for_each:
-    - conditional:
-        condition:
+    - switch:
+      - condition:
           type: processor_failed
         processors:
         - type: foo # Recover here
@@ -156,7 +156,6 @@ output:
 [processor_failed]: /docs/components/conditions/processor_failed
 [while]: /docs/components/processors/while
 [for_each]: /docs/components/processors/for_each
-[conditional]: /docs/components/processors/conditional
 [catch]: /docs/components/processors/catch
 [try]: /docs/components/processors/try
 [log]: /docs/components/processors/log

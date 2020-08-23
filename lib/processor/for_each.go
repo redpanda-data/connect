@@ -92,7 +92,7 @@ func NewForEach(
 		prefix := fmt.Sprintf("%v", i)
 		proc, err := New(pconf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("child processor [%v]: %w", i, err)
 		}
 		children = append(children, proc)
 	}

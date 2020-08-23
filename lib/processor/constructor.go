@@ -340,11 +340,17 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 	aliased := confAlias(NewConfig())
 
 	if err := value.Decode(&aliased); err != nil {
+		if strings.HasPrefix(err.Error(), "line ") {
+			return err
+		}
 		return fmt.Errorf("line %v: %v", value.Line, err)
 	}
 
 	var raw interface{}
 	if err := value.Decode(&raw); err != nil {
+		if strings.HasPrefix(err.Error(), "line ") {
+			return err
+		}
 		return fmt.Errorf("line %v: %v", value.Line, err)
 	}
 	if typeCandidates := config.GetInferenceCandidates(raw); len(typeCandidates) > 0 {
@@ -375,6 +381,11 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 		}
 		aliased.Plugin = conf
 	} else {
+		if !exists {
+			if _, exists = Constructors[aliased.Type]; !exists {
+				return fmt.Errorf("line %v: processor type '%v' was not recognised", value.Line, aliased.Type)
+			}
+		}
 		aliased.Plugin = nil
 	}
 

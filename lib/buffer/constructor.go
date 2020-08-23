@@ -139,6 +139,9 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 		}
 		aliased.Type = inferredType
 	}
+	if _, exists := Constructors[aliased.Type]; !exists {
+		return fmt.Errorf("line %v: type '%v' was not recognised", value.Line, aliased.Type)
+	}
 
 	*conf = Config(aliased)
 	return nil

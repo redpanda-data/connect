@@ -2,6 +2,7 @@ package processor
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -187,7 +188,7 @@ func NewSwitch(
 			log.NewModule("."+prefix+".condition"),
 			metrics.Namespaced(stats, prefix+".condition"),
 		); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("case [%v] condition: %w", i, err)
 		}
 
 		for j, procConf := range caseConf.Processors {
@@ -198,7 +199,7 @@ func NewSwitch(
 				log.NewModule("."+procPrefix),
 				metrics.Namespaced(stats, procPrefix),
 			); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("case [%v] processor [%v]: %w", i, j, err)
 			}
 			procs = append(procs, proc)
 		}

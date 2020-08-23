@@ -220,6 +220,11 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 		}
 		aliased.Plugin = conf
 	} else {
+		if !exists {
+			if _, exists = Constructors[aliased.Type]; !exists {
+				return fmt.Errorf("line %v: type '%v' was not recognised", value.Line, aliased.Type)
+			}
+		}
 		aliased.Plugin = nil
 	}
 
