@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.26.0 - TBD
+
 ### Added
 
 - New Bloblang methods `not_null` and `filter`.
