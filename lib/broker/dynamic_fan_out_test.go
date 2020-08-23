@@ -14,6 +14,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 //------------------------------------------------------------------------------
@@ -252,19 +254,11 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewDynamicFanOut(
-		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.Noop(), metrics.Noop(),
 	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if err = oTM.Consume(readChan); err != nil {
-		t.Error(err)
-		return
-	}
-	if err = oTM.Consume(readChan); err == nil {
-		t.Error("Expected error on duplicate receive call")
-	}
+	require.NoError(t, err)
+	require.NoError(t, oTM.Consume(readChan))
+	assert.NotNil(t, oTM.Consume(readChan), "Expected error on duplicate receive call")
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -319,8 +313,7 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 	select {
 	case readChan <- types.NewTransaction(message.New([][]byte{[]byte("hello world")}), resChan):
 	case <-time.After(time.Second):
-		t.Error("Timed out waiting for broker send")
-		return
+		t.Fatal("Timed out waiting for broker send")
 	}
 
 	wg.Wait()
@@ -331,15 +324,77 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 			t.Errorf("Fan out returned error %v", res.Error())
 		}
 	case <-time.After(time.Second):
-		t.Errorf("Timed out responding to broker")
-		return
+		t.Error("Timed out responding to broker")
 	}
 
 	close(readChan)
 
-	if err := oTM.WaitForClose(time.Second * 5); err != nil {
-		t.Error(err)
+	assert.NoError(t, oTM.WaitForClose(time.Second*5))
+}
+
+func TestDynamicFanOutStartEmpty(t *testing.T) {
+	mockOne := MockOutputType{}
+
+	readChan := make(chan types.Transaction)
+	resChan := make(chan types.Response)
+
+	outputs := map[string]DynamicOutput{}
+
+	oTM, err := NewDynamicFanOut(outputs, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	oTM.WithMaxInFlight(10)
+	require.NoError(t, oTM.Consume(readChan))
+	assert.NotNil(t, oTM.Consume(readChan), "Expected error on duplicate receive call")
+
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+
+		select {
+		case readChan <- types.NewTransaction(message.New([][]byte{[]byte("hello world")}), resChan):
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for broker send")
+		}
+	}()
+
+	require.NoError(t, oTM.SetOutput("first", &mockOne, time.Second))
+
+	go func() {
+		defer wg.Done()
+		var ts types.Transaction
+		select {
+		case ts = <-mockOne.TChan:
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for mockOne")
+			return
+		}
+		select {
+		case ts.ResponseChan <- response.NewAck():
+		case <-mockOne.TChan:
+			t.Error("Received duplicate message to mockOne")
+		case <-time.After(time.Second):
+			t.Error("Timed out responding to broker")
+			return
+		}
+	}()
+
+	wg.Wait()
+
+	select {
+	case res := <-resChan:
+		if res.Error() != nil {
+			t.Errorf("Fan out returned error %v", res.Error())
+		}
+	case <-time.After(time.Second):
+		t.Error("Timed out responding to broker")
 	}
+
+	close(readChan)
+
+	assert.NoError(t, oTM.WaitForClose(time.Second*5))
 }
 
 func TestDynamicFanOutShutDownFromErrorResponse(t *testing.T) {

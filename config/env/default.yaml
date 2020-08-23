@@ -739,6 +739,7 @@ output:
           max_in_flight: ${OUTPUT_CACHE_MAX_IN_FLIGHT:1}
           target: ${OUTPUT_CACHE_TARGET}
         dynamic:
+          max_in_flight: ${OUTPUT_DYNAMIC_MAX_IN_FLIGHT:1}
           prefix: ${OUTPUT_DYNAMIC_PREFIX}
           timeout: ${OUTPUT_DYNAMIC_TIMEOUT:5s}
         elasticsearch:

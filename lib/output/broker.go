@@ -91,7 +91,7 @@ outputs.`,
 			docs.FieldCommon("pattern", "The brokering pattern to use.").HasOptions(
 				"fan_out", "fan_out_sequential", "round_robin", "greedy", "try",
 			),
-			docs.FieldAdvanced(
+			docs.FieldCommon(
 				"max_in_flight",
 				"The maximum number of messages to dispatch at any given time. Only relevant for `fan_out`, `fan_out_sequential` brokers.",
 			),

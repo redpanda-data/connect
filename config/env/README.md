@@ -628,6 +628,7 @@ OUTPUT_BLOB_STORAGE_TIMEOUT                           = 5s
 OUTPUT_CACHE_KEY                                      = ${!count("items")}-${!timestamp_unix_nano()}
 OUTPUT_CACHE_MAX_IN_FLIGHT                            = 1
 OUTPUT_CACHE_TARGET
+OUTPUT_DYNAMIC_MAX_IN_FLIGHT                          = 1
 OUTPUT_DYNAMIC_PREFIX
 OUTPUT_DYNAMIC_TIMEOUT                                = 5s
 OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_ID

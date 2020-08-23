@@ -31,7 +31,7 @@ To GET a JSON map of input identifiers with their current uptimes use the
 
 To perform CRUD actions on the inputs themselves use POST, DELETE, and GET
 methods on the `/inputs/{input_id}` endpoint. When using POST the body
-of the request should be a JSON configuration for the input, if the input
+of the request should be a YAML configuration for the input, if the input
 already exists it will be changed.
 
 ## Fields

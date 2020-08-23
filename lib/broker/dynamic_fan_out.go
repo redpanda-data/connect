@@ -1,8 +1,9 @@
 package broker
 
 import (
+	"context"
 	"fmt"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -10,14 +11,14 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
+	"golang.org/x/sync/errgroup"
 )
 
 //------------------------------------------------------------------------------
 
 // DynamicOutput is an interface of output types that must be closable.
 type DynamicOutput interface {
-	types.Consumer
-	types.Closable
+	types.Output
 }
 
 // wrappedOutput is a struct that wraps a DynamicOutput with an identifying
@@ -29,12 +30,11 @@ type wrappedOutput struct {
 	ResChan chan<- error
 }
 
-// outputWithResChan is a struct containing both an output and the response chan
-// it reads from.
-type outputWithResChan struct {
-	tsChan  chan types.Transaction
-	resChan chan types.Response
-	output  DynamicOutput
+// outputWithTsChan is a struct containing both an output and the transaction
+// chan it reads from.
+type outputWithTsChan struct {
+	tsChan chan types.Transaction
+	output DynamicOutput
 }
 
 //------------------------------------------------------------------------------
@@ -42,23 +42,23 @@ type outputWithResChan struct {
 // DynamicFanOut is a broker that implements types.Consumer and broadcasts each
 // message out to a dynamic map of outputs.
 type DynamicFanOut struct {
-	running int32
+	maxInFlight int
 
 	log   log.Modular
 	stats metrics.Type
-
-	throt *throttle.Type
 
 	onAdd    func(label string)
 	onRemove func(label string)
 
 	transactions <-chan types.Transaction
 
+	outputsMut    sync.RWMutex
 	newOutputChan chan wrappedOutput
-	outputs       map[string]outputWithResChan
+	outputs       map[string]outputWithTsChan
 
+	ctx        context.Context
+	close      func()
 	closedChan chan struct{}
-	closeChan  chan struct{}
 }
 
 // NewDynamicFanOut creates a new DynamicFanOut type by providing outputs.
@@ -68,33 +68,41 @@ func NewDynamicFanOut(
 	stats metrics.Type,
 	options ...func(*DynamicFanOut),
 ) (*DynamicFanOut, error) {
+	ctx, done := context.WithCancel(context.Background())
 	d := &DynamicFanOut{
-		running:       1,
+		maxInFlight:   1,
 		stats:         stats,
 		log:           logger,
 		onAdd:         func(l string) {},
 		onRemove:      func(l string) {},
 		transactions:  nil,
 		newOutputChan: make(chan wrappedOutput),
-		outputs:       make(map[string]outputWithResChan, len(outputs)),
+		outputs:       make(map[string]outputWithTsChan, len(outputs)),
 		closedChan:    make(chan struct{}),
-		closeChan:     make(chan struct{}),
+		ctx:           ctx,
+		close:         done,
 	}
 	for _, opt := range options {
 		opt(d)
 	}
-	d.throt = throttle.New(throttle.OptCloseChan(d.closeChan))
 
-	mAddErr := d.stats.GetCounter("output.add.error")
 	for k, v := range outputs {
 		if err := d.addOutput(k, v); err != nil {
-			d.log.Errorf("Failed to initialise dynamic output '%v': %v\n", k, err)
-			mAddErr.Incr(1)
-		} else {
-			d.onAdd(k)
+			return nil, fmt.Errorf("failed to initialise dynamic output '%v': %v", k, err)
 		}
+		d.onAdd(k)
 	}
 	return d, nil
+}
+
+// WithMaxInFlight sets the maximum number of in-flight messages this broker
+// supports. This must be set before calling Consume.
+func (d *DynamicFanOut) WithMaxInFlight(i int) *DynamicFanOut {
+	if i < 1 {
+		i = 1
+	}
+	d.maxInFlight = i
+	return d
 }
 
 // SetOutput attempts to add a new output to the dynamic output broker. If an
@@ -104,10 +112,11 @@ func NewDynamicFanOut(
 //
 // A nil output argument is safe and will simply remove the previous output
 // under the indentifier, if there was one.
+//
+// TODO: V4 use context here instead.
 func (d *DynamicFanOut) SetOutput(ident string, output DynamicOutput, timeout time.Duration) error {
-	if atomic.LoadInt32(&d.running) != 1 {
-		return types.ErrTypeClosed
-	}
+	ctx, done := context.WithTimeout(d.ctx, timeout)
+	defer done()
 	resChan := make(chan error)
 	select {
 	case d.newOutputChan <- wrappedOutput{
@@ -116,10 +125,15 @@ func (d *DynamicFanOut) SetOutput(ident string, output DynamicOutput, timeout ti
 		ResChan: resChan,
 		Timeout: timeout,
 	}:
-	case <-d.closeChan:
-		return types.ErrTypeClosed
+	case <-ctx.Done():
+		return types.ErrTimeout
 	}
-	return <-resChan
+	select {
+	case err := <-resChan:
+		return err
+	case <-ctx.Done():
+	}
+	return types.ErrTimeout
 }
 
 //------------------------------------------------------------------------------
@@ -160,10 +174,9 @@ func (d *DynamicFanOut) addOutput(ident string, output DynamicOutput) error {
 		return fmt.Errorf("output key '%v' already exists", ident)
 	}
 
-	ow := outputWithResChan{
-		tsChan:  make(chan types.Transaction),
-		resChan: make(chan types.Response),
-		output:  output,
+	ow := outputWithTsChan{
+		tsChan: make(chan types.Transaction),
+		output: output,
 	}
 
 	if err := output.Consume(ow.tsChan); err != nil {
@@ -195,7 +208,20 @@ func (d *DynamicFanOut) removeOutput(ident string, timeout time.Duration) error 
 
 // loop is an internal loop that brokers incoming messages to many outputs.
 func (d *DynamicFanOut) loop() {
+	var (
+		wg          = sync.WaitGroup{}
+		mCount      = d.stats.GetCounter("count")
+		mRemoveErr  = d.stats.GetCounter("output.remove.error")
+		mRemoveSucc = d.stats.GetCounter("output.remove.success")
+		mAddErr     = d.stats.GetCounter("output.add.error")
+		mAddSucc    = d.stats.GetCounter("output.add.success")
+		mMsgsRcd    = d.stats.GetCounter("messages.received")
+		mOutputErr  = d.stats.GetCounter("output.error")
+		mMsgsSnt    = d.stats.GetCounter("messages.sent")
+	)
+
 	defer func() {
+		wg.Wait()
 		for _, ow := range d.outputs {
 			ow.output.CloseAsync()
 			close(ow.tsChan)
@@ -207,133 +233,174 @@ func (d *DynamicFanOut) loop() {
 				}
 			}
 		}
-		d.outputs = map[string]outputWithResChan{}
+		d.outputs = map[string]outputWithTsChan{}
 		close(d.closedChan)
 	}()
 
-	var (
-		mCount      = d.stats.GetCounter("count")
-		mRemoveErr  = d.stats.GetCounter("output.remove.error")
-		mRemoveSucc = d.stats.GetCounter("output.remove.success")
-		mAddErr     = d.stats.GetCounter("output.add.error")
-		mAddSucc    = d.stats.GetCounter("output.add.success")
-		mMsgsRcd    = d.stats.GetCounter("messages.received")
-		mOutputErr  = d.stats.GetCounter("output.error")
-		mMsgsSnt    = d.stats.GetCounter("messages.sent")
-	)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
 
-	for atomic.LoadInt32(&d.running) == 1 {
-		var ts types.Transaction
-		var open bool
-
-		// Only actually consume messages if we have at least one output.
-		var tsChan <-chan types.Transaction
-		if len(d.outputs) > 0 {
-			tsChan = d.transactions
-		}
-
-		// Either attempt to read the next message or listen for changes to our
-		// outputs and apply them.
-		select {
-		case wrappedOutput, open := <-d.newOutputChan:
-			if !open {
-				return
-			}
-			mCount.Incr(1)
-
-			if _, exists := d.outputs[wrappedOutput.Name]; exists {
-				if err := d.removeOutput(wrappedOutput.Name, wrappedOutput.Timeout); err != nil {
-					mRemoveErr.Incr(1)
-					d.log.Errorf("Failed to stop old copy of dynamic output '%v': %v\n", wrappedOutput.Name, err)
-					wrappedOutput.ResChan <- err
-					continue
-				}
-				mRemoveSucc.Incr(1)
-				d.onRemove(wrappedOutput.Name)
-			}
-			if wrappedOutput.Output == nil {
-				wrappedOutput.ResChan <- nil
-			} else {
-				err := d.addOutput(wrappedOutput.Name, wrappedOutput.Output)
-				if err != nil {
-					mAddErr.Incr(1)
-					d.log.Errorf("Failed to start new dynamic output '%v': %v\n", wrappedOutput.Name, err)
-				} else {
-					mAddSucc.Incr(1)
-					d.onAdd(wrappedOutput.Name)
-				}
-				wrappedOutput.ResChan <- err
-			}
-			continue
-		case ts, open = <-tsChan:
-			if !open {
-				return
-			}
-		case <-d.closeChan:
-			return
-		}
-		mMsgsRcd.Incr(1)
-
-		// If we received a message attempt to send it to each output.
-		remainingTargets := make(map[string]outputWithResChan, len(d.outputs))
-		for k, v := range d.outputs {
-			remainingTargets[k] = v
-		}
-		for len(remainingTargets) > 0 {
-			for _, v := range remainingTargets {
-				// Perform a copy here as it could be dangerous to release the
-				// same message to parallel processor pipelines.
-				msgCopy := ts.Payload.Copy()
-				select {
-				case v.tsChan <- types.NewTransaction(msgCopy, v.resChan):
-				case <-d.closeChan:
+		for {
+			select {
+			case wrappedOutput, open := <-d.newOutputChan:
+				if !open {
 					return
 				}
-			}
-			for k, v := range remainingTargets {
-				var res types.Response
-				select {
-				case res, open = <-v.resChan:
-					if !open {
-						d.log.Warnf("Dynamic output '%v' has closed\n", k)
-						d.removeOutput(k, time.Second)
-						delete(remainingTargets, k)
-					} else if res.Error() != nil {
-						d.log.Errorf("Failed to dispatch dynamic fan out message: %v\n", res.Error())
-						mOutputErr.Incr(1)
-						if !d.throt.Retry() {
+				func() {
+					d.outputsMut.Lock()
+					defer d.outputsMut.Unlock()
+					if _, exists := d.outputs[wrappedOutput.Name]; exists {
+						if err := d.removeOutput(wrappedOutput.Name, wrappedOutput.Timeout); err != nil {
+							mRemoveErr.Incr(1)
+							d.log.Errorf("Failed to stop old copy of dynamic output '%v': %v\n", wrappedOutput.Name, err)
+							select {
+							case wrappedOutput.ResChan <- err:
+							case <-d.ctx.Done():
+							}
 							return
 						}
-					} else {
-						d.throt.Reset()
-						mMsgsSnt.Incr(1)
-						delete(remainingTargets, k)
+						mRemoveSucc.Incr(1)
+						d.onRemove(wrappedOutput.Name)
 					}
-				case <-d.closeChan:
+					if wrappedOutput.Output == nil {
+						wrappedOutput.ResChan <- nil
+					} else {
+						err := d.addOutput(wrappedOutput.Name, wrappedOutput.Output)
+						if err != nil {
+							mAddErr.Incr(1)
+							d.log.Errorf("Failed to start new dynamic output '%v': %v\n", wrappedOutput.Name, err)
+						} else {
+							mAddSucc.Incr(1)
+							d.onAdd(wrappedOutput.Name)
+						}
+						select {
+						case wrappedOutput.ResChan <- err:
+						case <-d.ctx.Done():
+							return
+						}
+					}
+				}()
+			case <-d.ctx.Done():
+				return
+			}
+		}
+	}()
+
+	sendLoop := func() {
+		defer wg.Done()
+
+		for {
+			var ts types.Transaction
+			var open bool
+			select {
+			case ts, open = <-d.transactions:
+				if !open {
+					d.close()
 					return
+				}
+				mCount.Incr(1)
+			case <-d.ctx.Done():
+				return
+			}
+			mMsgsRcd.Incr(1)
+
+			d.outputsMut.RLock()
+			for len(d.outputs) == 0 {
+				// Assuming this isn't a common enough occurrence that it
+				// won't be busy enough to require a sync.Cond, looping with
+				// a sleep is fine for now.
+				d.outputsMut.RUnlock()
+				select {
+				case <-time.After(time.Millisecond * 10):
+				case <-d.ctx.Done():
+					return
+				}
+				d.outputsMut.RLock()
+			}
+
+			var owg errgroup.Group
+			for name := range d.outputs {
+				msgCopy, name := ts.Payload.Copy(), name
+				owg.Go(func() error {
+					d.outputsMut.RLock()
+					defer d.outputsMut.RUnlock()
+
+					throt := throttle.New(throttle.OptCloseChan(d.ctx.Done()))
+					resChan := make(chan types.Response)
+
+					// Try until success, shutdown, or the output was removed.
+					for {
+						output, exists := d.outputs[name]
+						if !exists {
+							return nil
+						}
+
+						select {
+						case output.tsChan <- types.NewTransaction(msgCopy, resChan):
+						case <-d.ctx.Done():
+							return types.ErrTypeClosed
+						}
+
+						select {
+						case res := <-resChan:
+							if res.Error() != nil {
+								d.log.Errorf("Failed to dispatch dynamic fan out message to '%v': %v\n", name, res.Error())
+								mOutputErr.Incr(1)
+
+								// Sleep and also allow API to potentially
+								// mutate outputs.
+								d.outputsMut.RUnlock()
+								cont := throt.Retry()
+
+								d.outputsMut.RLock()
+								if !cont {
+									return types.ErrTypeClosed
+								}
+							} else {
+								mMsgsSnt.Incr(1)
+								return nil
+							}
+						case <-d.ctx.Done():
+							return types.ErrTypeClosed
+						}
+					}
+				})
+			}
+			d.outputsMut.RUnlock()
+
+			if owg.Wait() == nil {
+				select {
+				case ts.ResponseChan <- response.NewAck():
+				case <-d.ctx.Done():
 				}
 			}
 		}
-		select {
-		case ts.ResponseChan <- response.NewAck():
-		case <-d.closeChan:
-			return
-		}
+	}
+
+	// Max in flight
+	for i := 0; i < d.maxInFlight; i++ {
+		wg.Add(1)
+		go sendLoop()
 	}
 }
 
 // Connected returns a boolean indicating whether this output is currently
 // connected to its target.
 func (d *DynamicFanOut) Connected() bool {
-	// Always return true as this is fuzzy right now.
+	d.outputsMut.RLock()
+	defer d.outputsMut.RUnlock()
+	for _, out := range d.outputs {
+		if !out.output.Connected() {
+			return false
+		}
+	}
 	return true
 }
 
 // CloseAsync shuts down the DynamicFanOut broker and stops processing requests.
 func (d *DynamicFanOut) CloseAsync() {
-	if atomic.CompareAndSwapInt32(&d.running, 1, 0) {
-		close(d.closeChan)
-	}
+	d.close()
 }
 
 // WaitForClose blocks until the DynamicFanOut broker has closed down.

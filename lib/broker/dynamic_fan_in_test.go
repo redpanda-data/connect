@@ -291,6 +291,7 @@ func TestStaticDynamicFanInAsync(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	defer fanIn.CloseAsync()
 
 	wg := sync.WaitGroup{}
 	wg.Add(nInputs)

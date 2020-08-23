@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - New Bloblang methods `not_null` and `filter`.
 - New Bloblang function `env`.
 - New field `path_mapping` added to all metrics types.
+- Field `max_in_flight` added to the `dynamic` output.
 
 ### Changed
 
@@ -19,6 +20,9 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Fixed `http` processor error log messages that would print incorrect URLs.
+- The `http_server` input now emits `latency` metrics.
+- Fixed a panic that could occur during the shutdown of an `http_server` input
+  serving a backlog of requests.
 
 ## 3.25.0 - 2020-08-16
 

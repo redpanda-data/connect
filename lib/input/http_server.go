@@ -12,6 +12,7 @@ import (
 	"net/textproto"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -192,12 +193,14 @@ type HTTPServer struct {
 	responseStatus  field.Expression
 	responseHeaders map[string]field.Expression
 
+	handlerWG    sync.WaitGroup
 	transactions chan types.Transaction
 
 	closeChan  chan struct{}
 	closedChan chan struct{}
 
 	mCount         metrics.StatCounter
+	mLatency       metrics.StatTimer
 	mRateLimited   metrics.StatCounter
 	mWSRateLimited metrics.StatCounter
 	mRcvd          metrics.StatCounter
@@ -256,6 +259,7 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		closedChan:      make(chan struct{}),
 
 		mCount:         stats.GetCounter("count"),
+		mLatency:       stats.GetTimer("latency"),
 		mRateLimited:   stats.GetCounter("rate_limited"),
 		mWSRateLimited: stats.GetCounter("ws.rate_limited"),
 		mRcvd:          stats.GetCounter("batch.received"),
@@ -375,12 +379,9 @@ func extractMessageFromRequest(r *http.Request) (types.Message, error) {
 }
 
 func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
+	h.handlerWG.Add(1)
+	defer h.handlerWG.Done()
 	defer r.Body.Close()
-
-	if atomic.LoadInt32(&h.running) != 1 {
-		http.Error(w, "Server closing", http.StatusServiceUnavailable)
-		return
-	}
 
 	if r.Method != "POST" {
 		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
@@ -400,17 +401,10 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var err error
-	defer func() {
-		if err != nil {
-			http.Error(w, "Bad request", http.StatusBadRequest)
-			h.log.Warnf("Request read failed: %v\n", err)
-			return
-		}
-	}()
-
 	msg, err := extractMessageFromRequest(r)
 	if err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		h.log.Warnf("Request read failed: %v\n", err)
 		return
 	}
 	defer tracing.FinishSpans(msg)
@@ -445,6 +439,8 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, res.Error().Error(), http.StatusBadGateway)
 			return
 		}
+		tTaken := time.Since(msg.CreatedAt()).Nanoseconds()
+		h.mLatency.Timing(tTaken)
 		h.mSucc.Incr(1)
 	case <-time.After(h.timeout):
 		h.mTimeout.Incr(1)
@@ -456,6 +452,8 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 				h.mAsyncErr.Incr(1)
 				h.mErr.Incr(1)
 			} else {
+				tTaken := time.Since(msg.CreatedAt()).Nanoseconds()
+				h.mLatency.Timing(tTaken)
 				h.mAsyncSucc.Incr(1)
 				h.mSucc.Incr(1)
 			}
@@ -521,6 +519,9 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
+	h.handlerWG.Add(1)
+	defer h.handlerWG.Done()
+
 	var err error
 	defer func() {
 		if err != nil {
@@ -609,6 +610,8 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 				h.mErr.Incr(1)
 				throt.Retry()
 			} else {
+				tTaken := time.Since(msg.CreatedAt()).Nanoseconds()
+				h.mLatency.Timing(tTaken)
 				h.mWSSucc.Incr(1)
 				h.mSucc.Incr(1)
 				msgBytes = nil
@@ -639,9 +642,12 @@ func (h *HTTPServer) loop() {
 		atomic.StoreInt32(&h.running, 0)
 
 		if h.server != nil {
-			h.server.Shutdown(context.Background())
+			if err := h.server.Shutdown(context.Background()); err != nil {
+				h.log.Errorf("Failed to gracefully terminate http_server: %v\n", err)
+			}
 		}
 
+		h.handlerWG.Wait()
 		mRunning.Decr(1)
 
 		close(h.transactions)

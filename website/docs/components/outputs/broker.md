@@ -30,6 +30,7 @@ brokering [patterns](#patterns).
 output:
   broker:
     pattern: fan_out
+    max_in_flight: 1
     outputs: []
     batching:
       count: 1

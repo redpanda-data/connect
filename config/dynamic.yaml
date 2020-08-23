@@ -20,6 +20,7 @@ pipeline:
 output:
   type: dynamic
   dynamic:
+    max_in_flight: 1
     outputs: {}
     prefix: ""
     timeout: 5s

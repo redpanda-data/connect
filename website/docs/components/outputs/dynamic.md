@@ -24,6 +24,7 @@ output:
     outputs: {}
     prefix: ""
     timeout: 5s
+    max_in_flight: 1
 ```
 
 The broker pattern used is always `fan_out`, meaning each message will
@@ -34,7 +35,41 @@ To GET a JSON map of output identifiers with their current uptimes use the
 
 To perform CRUD actions on the outputs themselves use POST, DELETE, and GET
 methods on the `/outputs/{output_id}` endpoint. When using POST the
-body of the request should be a JSON configuration for the output, if the output
+body of the request should be a YAML configuration for the output, if the output
 already exists it will be changed.
+
+## Fields
+
+### `outputs`
+
+A map of outputs to statically create.
+
+
+Type: `object`  
+Default: `{}`  
+
+### `prefix`
+
+A path prefix for HTTP endpoints that are registered.
+
+
+Type: `string`  
+Default: `""`  
+
+### `timeout`
+
+The server side timeout of HTTP requests.
+
+
+Type: `string`  
+Default: `"5s"`  
+
+### `max_in_flight`
+
+The maximum number of messages to dispatch across child outputs at any given time.
+
+
+Type: `number`  
+Default: `1`  
 
 

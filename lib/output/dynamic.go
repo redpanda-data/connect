@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/api"
 	"github.com/Jeffail/benthos/v3/lib/broker"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -32,7 +33,7 @@ To GET a JSON map of output identifiers with their current uptimes use the
 
 To perform CRUD actions on the outputs themselves use POST, DELETE, and GET
 methods on the ` + "`/outputs/{output_id}`" + ` endpoint. When using POST the
-body of the request should be a JSON configuration for the output, if the output
+body of the request should be a YAML configuration for the output, if the output
 already exists it will be changed.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			nestedOutputs := conf.Dynamic.Outputs
@@ -45,10 +46,19 @@ already exists it will be changed.`,
 				outMap[k] = sanOutput
 			}
 			return map[string]interface{}{
-				"outputs": outMap,
-				"prefix":  conf.Dynamic.Prefix,
-				"timeout": conf.Dynamic.Timeout,
+				"outputs":       outMap,
+				"prefix":        conf.Dynamic.Prefix,
+				"max_in_flight": conf.Dynamic.MaxInFlight,
+				"timeout":       conf.Dynamic.Timeout,
 			}, nil
+		},
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("outputs", "A map of outputs to statically create."),
+			docs.FieldCommon("prefix", "A path prefix for HTTP endpoints that are registered."),
+			docs.FieldCommon("timeout", "The server side timeout of HTTP requests."),
+			docs.FieldCommon(
+				"max_in_flight", "The maximum number of messages to dispatch across child outputs at any given time.",
+			),
 		},
 	}
 }
@@ -57,17 +67,19 @@ already exists it will be changed.`,
 
 // DynamicConfig contains configuration fields for the Dynamic output type.
 type DynamicConfig struct {
-	Outputs map[string]Config `json:"outputs" yaml:"outputs"`
-	Prefix  string            `json:"prefix" yaml:"prefix"`
-	Timeout string            `json:"timeout" yaml:"timeout"`
+	Outputs     map[string]Config `json:"outputs" yaml:"outputs"`
+	Prefix      string            `json:"prefix" yaml:"prefix"`
+	Timeout     string            `json:"timeout" yaml:"timeout"`
+	MaxInFlight int               `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
 // NewDynamicConfig creates a new DynamicConfig with default values.
 func NewDynamicConfig() DynamicConfig {
 	return DynamicConfig{
-		Outputs: map[string]Config{},
-		Prefix:  "",
-		Timeout: "5s",
+		Outputs:     map[string]Config{},
+		Prefix:      "",
+		Timeout:     "5s",
+		MaxInFlight: 1,
 	}
 }
 
@@ -128,6 +140,7 @@ func NewDynamic(
 	if err != nil {
 		return nil, err
 	}
+	fanOut = fanOut.WithMaxInFlight(conf.Dynamic.MaxInFlight)
 
 	dynAPI.OnUpdate(func(id string, c []byte) error {
 		newConf := NewConfig()
