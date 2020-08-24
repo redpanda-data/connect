@@ -69,8 +69,14 @@ html[data-theme="dark"] .loveSection {
   background-image: url(/img/love-bg-dark.svg);
 }
 
+html[data-theme="light"] .sponsorLink {
+  background-color: #000000;
+}
+
 .sponsorLink {
   display: inline-block;
+  margin: 10px;
+  padding: 10px;
 }
 
 .meltwaterImg {
