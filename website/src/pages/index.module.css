@@ -69,6 +69,15 @@ html[data-theme="dark"] .loveSection {
   background-image: url(/img/love-bg-dark.svg);
 }
 
-.sponsorImg {
+.sponsorLink {
+  display: inline-block;
+}
+
+.meltwaterImg {
   max-height: 30px;
+  padding: 10px;
+}
+
+.whiteopsImg {
+  max-height: 50px;
 }

@@ -264,7 +264,8 @@ function Home() {
             <div className="row">
               <div className={classnames('col col--6')}>
                 <h3>Sponsored by the following heroes</h3>
-                <a href="https://www.meltwater.com/"><img className={styles.sponsorImg} src="/img/mw_logo.png" /></a>
+                <a href="https://www.meltwater.com/" className={styles.sponsorLink}><img className={styles.meltwaterImg} src="/img/sponsors/mw_logo.png" /></a>
+                <a href="https://www.whiteops.com/" className={styles.sponsorLink}><img className={styles.whiteopsImg} src="/img/sponsors/whiteops_logo.png" /></a>
               </div>
               <div className={classnames('col col--6', styles.loveSectionPlea)}>
                 <div>

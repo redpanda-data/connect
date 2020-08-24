@@ -46,7 +46,7 @@ tools: $(TOOLS)
 
 $(PATHINSTTOOLS)/%: $(SOURCE_FILES)
 	@mkdir -p $(dir $@)
-	@GOOS=linux go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/tools/$*
+	@go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/tools/$*
 
 $(TOOLS): %: $(PATHINSTTOOLS)/%
 
@@ -102,6 +102,7 @@ test-integration:
 clean:
 	rm -rf $(PATHINSTBIN)
 	rm -rf $(DEST_DIR)/dist
+	rm -rf $(DEST_DIR)/tools
 	rm -rf $(DEST_DIR)/serverless
 	rm -rf $(PATHINSTDOCKER)
 
