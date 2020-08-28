@@ -4,21 +4,13 @@ title: Enrichment Workflows
 description: How to configure Benthos to process a workflow of enrichment services.
 ---
 
-This cookbook demonstrates how to enrich a stream of JSON documents with
-HTTP services. This method also works with AWS Lambda functions, subprocesses,
-etc.
+This cookbook demonstrates how to enrich a stream of JSON documents with HTTP services. This method also works with AWS Lambda functions, subprocesses, etc.
 
-We will start off by configuring a single enrichment, then we will move onto a
-workflow of enrichments with a network of dependencies.
+We will start off by configuring a single enrichment, then we will move onto a workflow of enrichments with a network of dependencies.
 
-Each enrichment will be performed in parallel across a [pre-batched][batching]
-stream of documents. Workflow enrichments that do not depend on each other will
-also be performed in parallel, making this orchestration method very efficient.
+Each enrichment will be performed in parallel across a [pre-batched][batching] stream of documents. Workflow enrichments that do not depend on each other will also be performed in parallel, making this orchestration method very efficient.
 
-The imaginary problem we are going to solve is applying a set of NLP based
-enrichments to a feed of articles in order to detect fake news. We will be
-consuming and writing to Kafka, but the example works with any [input][inputs]
-and [output][outputs] combination.
+The imaginary problem we are going to solve is applying a set of NLP based enrichments to a feed of articles in order to detect fake news. We will be consuming and writing to Kafka, but the example works with any [input][inputs] and [output][outputs] combination.
 
 Articles are received over the topic `articles` and look like this:
 
@@ -33,13 +25,11 @@ Articles are received over the topic `articles` and look like this:
 }
 ```
 
-## First Enrichment
+## Meet the Enrichments
 
 ### Claims Detector
 
-To start us off we will configure a single enrichment, which is an imaginary
-'claims detector' service. This is an HTTP service that wraps a trained machine
-learning model to extract claims that are made within a body of text.
+To start us off we will configure a single enrichment, which is an imaginary 'claims detector' service. This is an HTTP service that wraps a trained machine learning model to extract claims that are made within a body of text.
 
 The service expects a `POST` request with JSON payload of the form:
 
@@ -66,13 +56,9 @@ And returns a JSON payload of the form:
 }
 ```
 
-Since each request only applies to a single document we will make this
-enrichment scale by deploying multiple HTTP services and hitting those instances
-in parallel across our document batches.
+Since each request only applies to a single document we will make this enrichment scale by deploying multiple HTTP services and hitting those instances in parallel across our document batches.
 
-In order to send a mapped request and map the response back into the original
-document we will use the [`process_map`][procmap-proc] processor, with a child
-[`http`][http-proc] processor.
+In order to send a mapped request and map the response back into the original document we will use the [`branch` processor][processor.branch], with a child [`http`][processor.http] processor.
 
 ```yaml
 input:
@@ -86,27 +72,20 @@ input:
 
 pipeline:
   processors:
-    - process_map:
-        premap:
-          text: article.content
+    - branch:
+        request_map: 'root.text = this.article.content'
         processors:
           - http:
               parallel: true
               url: http://localhost:4197/claims
               verb: POST
-        postmap:
-          tmp.claims: claims
+        result_map: 'root.tmp.claims = this.claims'
 
 output:
   kafka:
     addresses: [ TODO ]
     topic: comments_hydrated
 ```
-
-We configure the [`http`][http-proc] processor to send a batch of documents out
-in parallel, but if we were instead using the [`lambda`][lambda-proc] or
-[`subprocess`][subproc-proc] processors to hit an enrichment we could wrap them
-within the [`parallel`][parallel-proc] processor for the same result.
 
 With this pipeline our documents will come out looking something like this:
 
@@ -133,17 +112,9 @@ With this pipeline our documents will come out looking something like this:
 }
 ```
 
-## Enrichment Workflows
-
-Extracting the claims of an article isn't enough for us to detect fake news, for
-that we need to add two more enrichments.
-
 ### Hyperbole Detector
 
-Next up is a 'hyperbole detector' that takes a `POST` request containing the
-article contents and returns a hyperbole score between 0 and 1. This time the
-format is array-based and therefore supports calculating multiple documents
-in a single request, making better use of the host machines GPU.
+Next up is a 'hyperbole detector' that takes a `POST` request containing the article contents and returns a hyperbole score between 0 and 1. This time the format is array-based and therefore supports calculating multiple documents in a single request, making better use of the host machines GPU.
 
 A request should take the following form:
 
@@ -165,15 +136,11 @@ And the response looks like this:
 ]
 ```
 
-In order to create a single request from a batch of documents, and subsequently
-map the result back into our batch, we will use the [`archive`][archive-proc]
-and [`unarchive`][unarchive-proc] processors in our
-[`process_map`][procmap-proc] flow, like this:
+In order to create a single request from a batch of documents, and subsequently map the result back into our batch, we will use the [`archive`][processor.archive] and [`unarchive`][processor.unarchive] processors in our [`branch`][processor.branch] flow, like this:
 
 ``` yaml
-- process_map:
-    premap:
-      text: article.content
+- branch:
+    request_map: 'root.text = this.article.content'
     processors:
       - archive:
           format: json_array
@@ -182,25 +149,18 @@ and [`unarchive`][unarchive-proc] processors in our
           verb: POST
       - unarchive:
           format: json_array
-    postmap:
-      tmp.hyperbole_rank: hyperbole_rank
+    result_map: 'root.tmp.hyperbole_rank = this.hyperbole_rank'
 ```
 
-The purpose of the `json_array` format `archive` processor is to take a batch of
-JSON documents and place them into a single document as an array. Subsequently,
-we then send one single request for each batch.
+The purpose of the `json_array` format `archive` processor is to take a batch of JSON documents and place them into a single document as an array. Subsequently, we then send one single request for each batch.
 
-After the request is made we do the opposite with the `unarchive` processor in
-order to convert it back into a batch of the original size.
+After the request is made we do the opposite with the `unarchive` processor in order to convert it back into a batch of the original size.
 
 ### Fake News Detector
 
-Finally, we are going to use a 'fake news detector' that takes the article
-contents as well as the output of the previous two enrichments and calculates a
-fake news rank between 0 and 1.
+Finally, we are going to use a 'fake news detector' that takes the article contents as well as the output of the previous two enrichments and calculates a fake news rank between 0 and 1.
 
-This service behaves similarly to the claims detector service and takes a
-document of the form:
+This service behaves similarly to the claims detector service and takes a document of the form:
 
 ```json
 {
@@ -227,30 +187,25 @@ And returns an object of the form:
 }
 ```
 
-We then wish to map the field `fake_news_rank` from that result into the
-original document at the path `article.fake_news_score`. Our
-[`process_map`][procmap-proc] block for this enrichment would look like this:
+We then wish to map the field `fake_news_rank` from that result into the original document at the path `article.fake_news_score`. Our [`branch`][processor.branch] block for this enrichment would look like this:
 
 ```yaml
-- process_map:
-    premap:
-      text: article.content
-      claims: tmp.claims
-      hyperbole_rank: tmp.hyperbole_rank
+- branch:
+    request_map: |
+      root.text = this.article.content
+      root.claims = this.tmp.claims
+      root.hyperbole_rank = this.tmp.hyperbole_rank
     processors:
       - http:
           parallel: true
           url: http://localhost:4199/fakenews
           verb: POST
-    postmap:
-      article.fake_news_score: fake_news_rank
+    result_map: 'root.article.fake_news_score = this.fake_news_rank'
 ```
 
-Note that in our `premap` we are targeting fields that are populated from the
-previous two enrichments.
+Note that in our `request_map` we are targeting fields that are populated from the previous two enrichments.
 
-If we were to execute all three enrichments in order we'll end up with a
-document looking like this:
+If we were to execute all three enrichments in a sequence we'll end up with a document looking like this:
 
 ```json
 {
@@ -277,26 +232,16 @@ document looking like this:
 }
 ```
 
-### Combining into a Workflow
+Great! However, as a streaming pipeline this set up isn't ideal as our first two enrichments are independent and could potentially be executed in parallel in order to reduce processing latency.
 
-Since the dependency graph of our enrichments is simple it would be sufficient
-to simply configure these three enrichments sequentially such that the 'fake
-news detector' is run last.
+## Combining into a Workflow
 
-However, if we configure our enrichments within a [`process_dag`][procdag-proc]
-processor we can use Benthos to automatically detect our dependency graph,
-giving us two key benefits:
+If we configure our enrichments within a [`workflow` processor][processor.workflow] we can use Benthos to automatically detect our dependency graph, giving us two key benefits:
 
-1. Enrichments at the same level of a dependency graph (claims and hyperbole)
-   will be executed in parallel.
-2. When introducing more enrichments to our pipeline the added complexity of
-   resolving the dependency graph is handled automatically by Benthos.
+1. Enrichments at the same level of a dependency graph (claims and hyperbole) will be executed in parallel.
+2. When introducing more enrichments to our pipeline the added complexity of resolving the dependency graph is handled automatically by Benthos.
 
-You can read more about workflows and the advantages of this method
-[in this article][workflows].
-
-Using the [`process_dag`][procdag-proc] processor for our enrichments makes our
-final pipeline configuration look like this:
+Placing our branches within a [`workflow` processor][processors.workflow] makes our final pipeline configuration look like this:
 
 ``` yaml
 input:
@@ -310,44 +255,41 @@ input:
 
 pipeline:
   processors:
-    - process_dag:
-        claims:
-          premap:
-            text: article.content
-          processors:
-            - http:
-                parallel: true
-                url: http://localhost:4197/claims
-                verb: POST
-          postmap:
-            tmp.claims: claims
+    - workflow:
+        meta_path: '' # Don't bother storing branch metadata.
+        branches:
+          claims:
+            request_map: 'root.text = this.article.content'
+            processors:
+              - http:
+                  parallel: true
+                  url: http://localhost:4197/claims
+                  verb: POST
+            result_map: 'root.tmp.claims = this.claims'
 
-        hyperbole:
-          premap:
-            text: article.content
-          processors:
-            - archive:
-                format: json_array
-            - http:
-                url: http://localhost:4198/hyperbole
-                verb: POST
-            - unarchive:
-                format: json_array
-          postmap:
-            tmp.hyperbole_rank: hyperbole_rank
+          hyperbole:
+            request_map: 'root.text = this.article.content'
+            processors:
+              - archive:
+                  format: json_array
+              - http:
+                  url: http://localhost:4198/hyperbole
+                  verb: POST
+              - unarchive:
+                  format: json_array
+            result_map: 'root.tmp.hyperbole_rank = this.hyperbole_rank'
 
-        fake_news:
-          premap:
-            text: article.content
-            claims: tmp.claims
-            hyperbole_rank: tmp.hyperbole_rank
-          processors:
-            - http:
-                parallel: true
-                url: http://localhost:4199/fakenews
-                verb: POST
-          postmap:
-            article.fake_news_score: fake_news_rank
+          fake_news:
+            request_map: |
+              root.text = this.article.content
+              root.claims = this.tmp.claims
+              root.hyperbole_rank = this.tmp.hyperbole_rank
+            processors:
+              - http:
+                  parallel: true
+                  url: http://localhost:4199/fakenews
+                  verb: POST
+            result_map: 'root.article.fake_news_score = this.fake_news_rank'
 
     - catch:
         - log:
@@ -357,7 +299,7 @@ pipeline:
 
     - bloblang: |
         root = this
-        tmp = deleted()
+        root.tmp = deleted()
 
 output:
   kafka:
@@ -365,28 +307,20 @@ output:
     topic: comments_hydrated
 ```
 
-Since the contents of `tmp` won't be required downstream we remove it after our
-enrichments using a [`bloblang` processor][bloblang-proc].
+Since the contents of `tmp` won't be required downstream we remove it after our enrichments using a [`bloblang` processor][processor.bloblang].
 
-A [`catch`][catch-proc] processor was added at the end of the pipeline which
-catches documents that failed enrichment. You can replace the log event with a
-wide range of recovery actions such as sending to a dead-letter/retry queue,
-dropping the message entirely, etc. You can read more about error handling
-[in this article][error-handling].
+A [`catch`][processor.catch] processor was added at the end of the pipeline which catches documents that failed enrichment. You can replace the log event with a wide range of recovery actions such as sending to a dead-letter/retry queue, dropping the message entirely, etc. You can read more about error handling [in this article][error-handling].
 
 [inputs]: /docs/components/inputs/about
 [outputs]: /docs/components/outputs/about
 [error-handling]: /docs/configuration/error_handling
 [batching]: /docs/configuration/batching
-[workflows]: /docs/configuration/workflows
-[catch-proc]: /docs/components/processors/catch
-[archive-proc]: /docs/components/processors/archive
-[unarchive-proc]: /docs/components/processors/unarchive
-[bloblang-proc]: /docs/components/processors/bloblang
-[subproc-proc]: /docs/components/processors/subprocess
-[http-proc]: /docs/components/processors/http
-[lambda-proc]: /docs/components/processors/lambda
-[subprocess-proc]: /docs/components/processors/subprocess
-[parallel-proc]: /docs/components/processors/parallel
-[procmap-proc]: /docs/components/processors/process_map
-[procdag-proc]: /docs/components/processors/process_dag
+[processor.catch]: /docs/components/processors/catch
+[processor.archive]: /docs/components/processors/archive
+[processor.unarchive]: /docs/components/processors/unarchive
+[processor.bloblang]: /docs/components/processors/bloblang
+[processor.subprocess]: /docs/components/processors/subprocess
+[processor.http]: /docs/components/processors/http
+[processor.lambda]: /docs/components/processors/lambda
+[processor.branch]: /docs/components/processors/branch
+[processor.workflow]: /docs/components/processors/workflow

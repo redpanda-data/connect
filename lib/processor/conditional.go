@@ -17,9 +17,15 @@ import (
 func init() {
 	Constructors[TypeConditional] = TypeSpec{
 		constructor: NewConditional,
+		Deprecated:  true,
 		Summary: `
 Executes a set of child processors when a [condition](/docs/components/conditions/about)
-passes for a message batch, otherwise a different set of processors are applied.`,
+passes for a message batch, otherwise a different set of processors are applied.
+
+## Alternatives
+
+All functionality of this processor has been superseded by the
+[switch](/docs/components/processors/switch) processor.`,
 		Description: `
 Conditional is a processor that has a list of child ` + "`processors`," + `
 ` + "`else_processors`, and a `condition`" + `. For each message batch, if the

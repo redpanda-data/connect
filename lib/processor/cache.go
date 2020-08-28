@@ -83,17 +83,16 @@ duplicates using a
 ### Hydration
 
 It's possible to enrich payloads with content previously stored in a cache by
-using the [` + "`process_map`" + `](/docs/components/processors/process_map) processor:
+using the [` + "`branch`" + `](/docs/components/processors/branch) processor:
 
 ` + "``` yaml" + `
-- process_map:
+- branch:
     processors:
     - cache:
         resource: TODO
         operator: get
         key: '${! json("message.document_id") }'
-    postmap:
-      message.document: .
+    result_map: 'root.message.document = this'
 ` + "```" + ``,
 	}
 }

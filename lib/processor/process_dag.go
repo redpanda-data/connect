@@ -25,7 +25,13 @@ func init() {
 A processor that manages a map of ` + "`process_map`" + ` processors and
 calculates a Directed Acyclic Graph (DAG) of their dependencies by referring to
 their postmap targets for provided fields and their premap targets for required
-fields.`,
+fields.
+
+## Alternatives
+
+All functionality of this processor has been superseded by the
+[workflow](/docs/components/processors/workflow) processor.`,
+		Deprecated: true,
 		Description: `
 The names of workflow stages may only contain alphanumeric, underscore and dash
 characters (they must match the regular expression ` + "`[a-zA-Z0-9_-]+`" + `).
@@ -208,7 +214,7 @@ func NewProcessDAG(
 		explicitDeps[k] = v.Dependencies
 	}
 
-	dag, err := resolveDAG(explicitDeps, children)
+	dag, err := resolveProcessMapDAG(explicitDeps, children)
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +308,7 @@ func (p *ProcessDAG) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 //------------------------------------------------------------------------------
 
-func getDeps(id string, wanted []string, procs map[string]*ProcessMap) []string {
+func getProcessMapDeps(id string, wanted []string, procs map[string]*ProcessMap) []string {
 	dependencies := []string{}
 	targetsNeeded := wanted
 
@@ -324,7 +330,7 @@ eLoop:
 	return dependencies
 }
 
-func resolveDAG(explicitDeps map[string][]string, procs map[string]*ProcessMap) ([][]string, error) {
+func resolveProcessMapDAG(explicitDeps map[string][]string, procs map[string]*ProcessMap) ([][]string, error) {
 	if procs == nil || len(procs) == 0 {
 		return [][]string{}, nil
 	}
@@ -337,7 +343,7 @@ func resolveDAG(explicitDeps map[string][]string, procs map[string]*ProcessMap) 
 
 		targetProcs[id] = struct{}{}
 		entries = append(entries, dependencysolver.Entry{
-			ID: id, Deps: getDeps(id, wanted, procs),
+			ID: id, Deps: getProcessMapDeps(id, wanted, procs),
 		})
 	}
 	layers := dependencysolver.LayeredTopologicalSort(entries)

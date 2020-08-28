@@ -100,13 +100,13 @@ func TestBranchBasic(t *testing.T) {
 				msg(
 					`{"id":0,"name":"first"}`,
 					FailFlagKey,
-					"request failed: failed to execute mapping query at line 1: i dont like zero",
+					"request failed: request map: failed to execute mapping query at line 1: i dont like zero",
 				),
 				msg(`{"id":1,"name":"second","result":"SECOND"}`),
 				msg(
 					`{"id":2,"name":"third"}`,
 					FailFlagKey,
-					"response failed: failed to execute mapping query at line 1: i dont like two either",
+					"response failed: result map: failed to execute mapping query at line 1: i dont like two either",
 				),
 				msg(`{"id":3,"name":"fourth"}`),
 				msg(`{"id":4,"name":"fifth","result":"FIFTH"}`),
@@ -161,7 +161,7 @@ func TestBranchBasic(t *testing.T) {
 				msg(
 					`{"id":3,"name":"fourth"}`,
 					FailFlagKey,
-					"request failed: failed to execute mapping query at line 1: foo",
+					"request failed: request map: failed to execute mapping query at line 1: foo",
 				),
 				msg(
 					`{"id":4,"name":"fifth"}`,
@@ -200,7 +200,7 @@ func TestBranchBasic(t *testing.T) {
 				msg(
 					`{"id":3,"name":"fourth"}`,
 					FailFlagKey,
-					"request failed: failed to execute mapping query at line 1: foo",
+					"request failed: request map: failed to execute mapping query at line 1: foo",
 				),
 				msg(
 					`{"id":4,"name":"fifth"}`,

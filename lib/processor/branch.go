@@ -32,18 +32,20 @@ message using another mapping.
 This is useful for preserving the original message contents when using
 processors that would otherwise replace the entire contents.`,
 		Description: `
-If the ` + "`request_map`" + ` fails the child processors will not be executed
-and the message will remain unchanged, and normal processor
+### Error Handling
+
+If the ` + "`request_map`" + ` fails the child processors will not be executed.
+If the child processors themselves result in an (uncaught) error then the
+` + "`result_map`" + ` will not be executed. If the ` + "`result_map`" + ` fails
+the message will remain unchanged. Under any of these conditions standard
 [error handling methods](/docs/configuration/error_handling) can be used in
 order to filter, DLQ or recover the failed messages.
 
+### Conditional Branching
+
 If the root of your request map is set to ` + "`deleted()`" + ` then the branch
 processors are skipped for the given message, this allows you to conditionally
-branch messages.
-
-If the ` + "`result_map`" + ` fails the message will remain unchanged with an
-error and standard [error handling methods](/docs/configuration/error_handling)
-can be used in order to filter, DLQ or recover the failed messages.`,
+branch messages.`,
 		Examples: []docs.AnnotatedExample{
 			{
 				Title: "HTTP Request",
@@ -77,6 +79,30 @@ pipeline:
         processors:
           - lambda:
               function: trigger_user_update
+`,
+			},
+			{
+				Title: "Conditional Caching",
+				Summary: `
+This example caches a document by a message ID only when the type of the
+document is a foo:`,
+				Config: `
+pipeline:
+  processors:
+    - branch:
+        request_map: |
+          meta id = this.id
+          root = if this.type == "foo" {
+            this.document
+          } else {
+            deleted()
+          }
+        processors:
+          - cache:
+              resource: TODO
+              operator: set
+              key: ${! meta("id") }
+              value: ${! content() }
 `,
 			},
 		},
@@ -178,8 +204,14 @@ type Branch struct {
 func NewBranch(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	children := make([]types.Processor, 0, len(conf.Branch.Processors))
-	for i, pconf := range conf.Branch.Processors {
+	return newBranch(conf.Branch, mgr, log, stats)
+}
+
+func newBranch(
+	conf BranchConfig, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (*Branch, error) {
+	children := make([]types.Processor, 0, len(conf.Processors))
+	for i, pconf := range conf.Processors {
 		prefix := fmt.Sprintf("processor.%v", i)
 		proc, err := New(pconf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
 		if err != nil {
@@ -208,13 +240,13 @@ func NewBranch(
 	}
 
 	var err error
-	if len(conf.Branch.RequestMap) > 0 {
-		if b.requestMap, err = bloblang.NewMapping("", conf.Branch.RequestMap); err != nil {
+	if len(conf.RequestMap) > 0 {
+		if b.requestMap, err = bloblang.NewMapping("", conf.RequestMap); err != nil {
 			return nil, fmt.Errorf("failed to parse request mapping: %w", err)
 		}
 	}
-	if len(conf.Branch.ResultMap) > 0 {
-		if b.resultMap, err = bloblang.NewMapping("", conf.Branch.ResultMap); err != nil {
+	if len(conf.ResultMap) > 0 {
+		if b.resultMap, err = bloblang.NewMapping("", conf.ResultMap); err != nil {
 			return nil, fmt.Errorf("failed to parse result mapping: %w", err)
 		}
 	}
@@ -244,7 +276,7 @@ pathLoop:
 		default:
 			continue pathLoop
 		}
-		path = append(path, p.Path...)
+		paths = append(paths, append(path, p.Path...))
 	}
 
 	return paths
@@ -269,7 +301,7 @@ pathLoop:
 		default:
 			continue pathLoop
 		}
-		path = append(path, p.Path...)
+		paths = append(paths, append(path, p.Path...))
 	}
 
 	return paths
@@ -287,7 +319,15 @@ func (b *Branch) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		}
 	}()
 
-	resultParts, mapErrs, err := b.createResult(branchMsg)
+	parts := make([]types.Part, 0, branchMsg.Len())
+	branchMsg.Iter(func(i int, p types.Part) error {
+		// Remove errors so that they aren't propagated into the branch.
+		ClearFail(p)
+		parts = append(parts, p)
+		return nil
+	})
+
+	resultParts, mapErrs, err := b.createResult(parts, msg)
 	if err != nil {
 		result := msg.Copy()
 		// Add general error to all messages.
@@ -340,41 +380,50 @@ func newBranchMapError(index int, err error) branchMapError {
 // of the payload will remain unchanged, where reduced indexes are nil. This
 // result can be overlayed onto the original message in order to complete the
 // map.
-func (b *Branch) createResult(msg types.Message) ([]types.Part, []branchMapError, error) {
+func (b *Branch) createResult(parts []types.Part, referenceMsg types.Message) ([]types.Part, []branchMapError, error) {
 	b.mCount.Incr(1)
 
-	originalLen := msg.Len()
+	originalLen := len(parts)
 
 	// Create request payloads
 	var skipped, failed []int
 	var mapErrs []branchMapError
 
-	if b.requestMap != nil {
-		var parts []types.Part
-		for i := 0; i < msg.Len(); i++ {
-			newPart, err := b.requestMap.MapPart(i, msg)
+	newParts := make([]types.Part, 0, len(parts))
+	for i := 0; i < len(parts); i++ {
+		if parts[i] == nil {
+			// Skip if the message part is nil.
+			skipped = append(skipped, i)
+			continue
+		}
+		if b.requestMap != nil {
+			newPart, err := b.requestMap.MapPart(i, referenceMsg)
 			if err != nil {
 				b.mErrReq.Incr(1)
 				b.log.Debugf("Failed to map request '%v': %v\n", i, err)
 
 				// Skip if message part fails mapping.
 				failed = append(failed, i)
-				mapErrs = append(mapErrs, newBranchMapError(i, err))
+				mapErrs = append(mapErrs, newBranchMapError(i, fmt.Errorf("request map: %w", err)))
 			} else if newPart == nil {
 				// Skip if the message part is deleted.
 				skipped = append(skipped, i)
 			} else {
-				parts = append(parts, newPart)
+				newParts = append(newParts, newPart)
 			}
+		} else {
+			newParts = append(newParts, parts[i])
 		}
-		msg.SetAll(parts)
 	}
+	parts = newParts
 
 	// Execute child processors
 	var procResults []types.Message
 	var err error
-	if msg.Len() > 0 {
+	if len(parts) > 0 {
 		var res types.Response
+		msg := message.New(nil)
+		msg.SetAll(parts)
 		if procResults, res = ExecuteAll(b.children, msg); res != nil && res.Error() != nil {
 			err = fmt.Errorf("child processors failed: %v", res.Error())
 		}
@@ -396,6 +445,16 @@ func (b *Branch) createResult(msg types.Message) ([]types.Part, []branchMapError
 		b.mErr.Incr(1)
 		b.log.Errorf("Processor result mis-aligned with original batch: %v\n", err)
 		return nil, mapErrs, err
+	}
+
+	for i, p := range alignedResult {
+		if p == nil {
+			continue
+		}
+		if fail := GetFail(p); len(fail) > 0 {
+			alignedResult[i] = nil
+			mapErrs = append(mapErrs, newBranchMapError(i, fmt.Errorf("processors failed: %v", fail)))
+		}
 	}
 
 	return alignedResult, mapErrs, nil
@@ -432,7 +491,7 @@ func (b *Branch) overlayResult(payload types.Message, results []types.Part) ([]b
 				b.mErrRes.Incr(1)
 				b.log.Debugf("Failed to map result '%v': %v\n", i, err)
 
-				failed = append(failed, newBranchMapError(i, err))
+				failed = append(failed, newBranchMapError(i, fmt.Errorf("result map: %w", err)))
 				continue partLoop
 			}
 

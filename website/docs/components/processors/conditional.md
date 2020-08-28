@@ -1,6 +1,7 @@
 ---
 title: conditional
 type: processor
+deprecated: true
 ---
 
 <!--
@@ -13,9 +14,16 @@ type: processor
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+DEPRECATED: This component is deprecated and will be removed in the next major
+version release. Please consider moving onto [alternative components](#alternatives).
 
 Executes a set of child processors when a [condition](/docs/components/conditions/about)
 passes for a message batch, otherwise a different set of processors are applied.
+
+## Alternatives
+
+All functionality of this processor has been superseded by the
+[switch](/docs/components/processors/switch) processor.
 
 ```yaml
 # Config fields, showing default values

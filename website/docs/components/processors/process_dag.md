@@ -1,6 +1,7 @@
 ---
 title: process_dag
 type: processor
+deprecated: true
 ---
 
 <!--
@@ -13,11 +14,18 @@ type: processor
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+DEPRECATED: This component is deprecated and will be removed in the next major
+version release. Please consider moving onto [alternative components](#alternatives).
 
 A processor that manages a map of `process_map` processors and
 calculates a Directed Acyclic Graph (DAG) of their dependencies by referring to
 their postmap targets for provided fields and their premap targets for required
 fields.
+
+## Alternatives
+
+All functionality of this processor has been superseded by the
+[workflow](/docs/components/processors/workflow) processor.
 
 ```yaml
 # Config fields, showing default values

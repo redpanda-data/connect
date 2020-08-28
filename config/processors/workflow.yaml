@@ -18,8 +18,9 @@ pipeline:
   processors:
     - type: workflow
       workflow:
+        branches: {}
         meta_path: meta.workflow
-        stages: {}
+        order: []
   threads: 1
 output:
   type: stdout

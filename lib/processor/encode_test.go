@@ -32,8 +32,6 @@ func TestEncodeBase64(t *testing.T) {
 	conf := NewConfig()
 	conf.Encode.Scheme = "base64"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-
 	input := [][]byte{
 		[]byte("hello world first part"),
 		[]byte("hello world second part"),
@@ -58,7 +56,7 @@ func TestEncodeBase64(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewEncode(conf, nil, testLog, metrics.DudType{})
+	proc, err := NewEncode(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,9 +185,7 @@ func TestEncodeZ85(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	//proc, err := NewEncode(conf, nil, log.Noop(), metrics.Noop())
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "DEBUG"})
-	proc, err := NewEncode(conf, nil, testLog, metrics.Noop())
+	proc, err := NewEncode(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,8 +226,6 @@ func TestEncodeZ85(t *testing.T) {
 func TestEncodeIndexBounds(t *testing.T) {
 	conf := NewConfig()
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-
 	input := [][]byte{
 		[]byte("0"),
 		[]byte("1"),
@@ -267,7 +261,7 @@ func TestEncodeIndexBounds(t *testing.T) {
 
 	for i, expIndex := range tests {
 		conf.Encode.Parts = []int{i}
-		proc, err := NewEncode(conf, nil, testLog, metrics.DudType{})
+		proc, err := NewEncode(conf, nil, log.Noop(), metrics.Noop())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -291,8 +285,7 @@ func TestEncodeEmpty(t *testing.T) {
 	conf := NewConfig()
 	conf.Encode.Parts = []int{0, 1}
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewEncode(conf, nil, testLog, metrics.DudType{})
+	proc, err := NewEncode(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

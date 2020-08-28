@@ -34,7 +34,7 @@ remote cache:
 ```yaml
 pipeline:
   processors:
-    - process_map:
+    - branch:
         processors:
           - cache:
               resource: leveled
@@ -44,8 +44,7 @@ pipeline:
             - text:
                 operator: set
                 value: '{"err":"${! error() }"}'
-        postmap:
-          result: .
+        result_map: 'root.result = this'
 
 resources:
   caches:

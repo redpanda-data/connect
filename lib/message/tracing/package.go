@@ -46,13 +46,16 @@ func CreateChildSpans(operationName string, msg types.Message) []opentracing.Spa
 	return spans
 }
 
-// WithChildSpans takes a message, extracts spans per message part, creates new
-// child spans, and returns a new message with those spans embedded. The
-// original message is unchanged.
-func WithChildSpans(operationName string, msg types.Message) (types.Message, []opentracing.Span) {
-	spans := make([]opentracing.Span, msg.Len())
-	parts := make([]types.Part, msg.Len())
-	msg.Iter(func(i int, part types.Part) error {
+// PartsWithChildSpans takes a slice of message parts, extracts spans per part,
+// creates new child spans, and returns a new slice of parts with those spans
+// embedded. The original parts are unchanged.
+func PartsWithChildSpans(operationName string, parts []types.Part) ([]types.Part, []opentracing.Span) {
+	spans := make([]opentracing.Span, 0, len(parts))
+	newParts := make([]types.Part, len(parts))
+	for i, part := range parts {
+		if part == nil {
+			continue
+		}
 		ctx := message.GetContext(part)
 		span := opentracing.SpanFromContext(ctx)
 		if span == nil {
@@ -64,13 +67,26 @@ func WithChildSpans(operationName string, msg types.Message) (types.Message, []o
 			)
 		}
 		ctx = opentracing.ContextWithSpan(ctx, span)
-		parts[i] = message.WithContext(ctx, part)
-		spans[i] = span
+		newParts[i] = message.WithContext(ctx, part)
+		spans = append(spans, span)
+	}
+	return newParts, spans
+}
+
+// WithChildSpans takes a message, extracts spans per message part, creates new
+// child spans, and returns a new message with those spans embedded. The
+// original message is unchanged.
+func WithChildSpans(operationName string, msg types.Message) (types.Message, []opentracing.Span) {
+	parts := make([]types.Part, 0, msg.Len())
+	msg.Iter(func(i int, p types.Part) error {
+		parts = append(parts, p)
 		return nil
 	})
 
+	newParts, spans := PartsWithChildSpans(operationName, parts)
 	newMsg := message.New(nil)
-	newMsg.SetAll(parts)
+	newMsg.SetAll(newParts)
+
 	return newMsg, spans
 }
 

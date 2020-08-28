@@ -1,6 +1,7 @@
 ---
 title: workflow
 type: processor
+beta: true
 ---
 
 <!--
@@ -13,59 +14,223 @@ type: processor
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+BETA: This component is experimental and therefore subject to change outside of
+major version releases.
 
-Executes an automatically resolved workflow of processing stages.
+Executes a topology of [`branch` processors][processors.branch],
+performing them in parallel where possible.
 
 ```yaml
 # Config fields, showing default values
 workflow:
   meta_path: meta.workflow
-  stages: {}
+  order: []
+  branches: {}
 ```
 
-Performs the same workflow stages as the [`process_dag`](/docs/components/processors/process_dag)
-processor, but uses a record of workflow statuses stored in the path specified
-by the field `meta_path` in order to report which workflow stages
-succeeded, were skipped, or failed for a document. The record takes this form:
+## Why Use a Workflow
 
-```json
-{
-	"succeeded": [ "foo" ],
-	"skipped": [ "bar" ],
-	"failed": [ "baz" ]
-}
+### Performance
+
+Most of the time the best way to compose processors is also the simplest, just configure them in series. This is because processors are often CPU bound, low-latency, and you can gain vertical scaling by increasing the number of processor pipeline threads, allowing Benthos to process [multiple messages in parallel][configuration.pipelines].
+
+However, some processors such as [`http`][processors.http], [`lambda`][processors.lambda] or [`cache`][processors.cache] interact with external services and therefore spend most of their time waiting for a response. These processors tend to be high-latency and low CPU activity, which causes messages to process slowly.
+
+When a processing pipeline contains multiple network processors that aren't dependent on each other we can benefit from performing these processors in parallel for each individual message, reducing the overall message processing latency.
+
+### Simplifying Processor Topology
+
+A workflow is often expressed as a [DAG][dag_wiki] of processing stages, where each stage can result in N possible next stages, until finally the flow ends at an exit node.
+
+For example, if we had processing stages A, B, C and D, where stage A could result in either stage B or C being next, always followed by D, it might look something like this:
+
+```text
+     /--> B --\
+A --|          |--> D
+     \--> C --/
 ```
 
-If a document is consumed that already contains these records then they will be
-used in order to only perform stages that haven't already succeeded or have been
-skipped. For example, if a document received contained the above snippet then
-the foo and bar stages would not be attempted. Before writing the new records to
-the resulting payloads the old one will be moved into
-`<meta_path>.previous`.
+This flow would be easy to express in a standard Benthos config, we could simply use a [`switch` processor][processors.switch] to route to either B or C depending on a condition on the result of A. However, this method of flow control quickly becomes unfeasible as the DAG gets more complicated, imagine expressing this flow using switch processors:
 
-If a field `<meta_path>.apply` exists in the record for a document and
-is an array then it will be used as a whitelist of stages to apply, all other
-stages will be skipped.
+```text
+      /--> B -------------|--> D
+     /                   /
+A --|          /--> E --|
+     \--> C --|          \
+               \----------|--> F
+```
 
-You can read more about workflows in Benthos
-[in this document](/docs/configuration/workflows).
+And imagine doing so knowing that the diagram is subject to change over time. Yikes! Instead, with a workflow we can either trust it to automatically resolve the DAG or express it manually as simply as `order: [ [ A ], [ B, C ], [ E ], [ D, F ] ]`, and the conditional logic for determining if a stage is executed is defined as part of the branch itself.
 
 ## Fields
 
 ### `meta_path`
 
-A [dot path](/docs/configuration/field_paths) indicating where to store metadata about workflow execution within the message.
+A [dot path](/docs/configuration/field_paths) indicating where to store and reference [structured metadata](#structured-metadata) about the workflow execution.
 
 
 Type: `string`  
 Default: `"meta.workflow"`  
 
-### `stages`
+### `order`
 
-A map of ids to [`process_map`](/docs/components/processors/process_map) processors that define each workflow step.
+An explicit declaration of branch ordered tiers, which describes the order in which parallel tiers of branches should be executed.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+order:
+  - - foo
+    - bar
+  - - baz
+
+order:
+  - - foo
+  - - bar
+  - - baz
+```
+
+### `branches`
+
+An object of named [`branch` processors](/docs/components/processors/branch) that make up the workflow. The order and parallelism in which branches are executed can either be made explicit with the field `order`, or if omitted an attempt is made to automatically resolve an ordering based on the mappings of each branch.
 
 
 Type: `object`  
 Default: `{}`  
+
+## Examples
+
+<Tabs defaultValue="Automatic Ordering" values={[
+{ label: 'Automatic Ordering', value: 'Automatic Ordering', },
+{ label: 'Conditional Branches', value: 'Conditional Branches', },
+]}>
+
+<TabItem value="Automatic Ordering">
+
+
+When the field `order` is omitted a best attempt is made to determine a dependency tree between branches based on their request and result mappings. In the following example the branches foo and bar will be executed first in parallel, and afterwards the branch baz will be executed.
+
+```yaml
+pipeline:
+  processors:
+    - workflow:
+        meta_path: meta.workflow
+        branches:
+          foo:
+            request_map: 'root = ""'
+            processors:
+              - http:
+                  url: TODO
+            result_map: 'root.foo = this'
+
+          bar:
+            request_map: 'root = this.body'
+            processors:
+              - lambda:
+                  function: TODO
+            result_map: 'root.bar = this'
+
+          baz:
+            request_map: |
+              root.fooid = this.foo.id
+              root.barstuff = this.bar.content
+            processors:
+              - cache:
+                  resource: TODO
+                  operator: set
+                  key: ${! json("fooid") }
+                  value: ${! json("barstuff") }
+```
+
+</TabItem>
+<TabItem value="Conditional Branches">
+
+
+Branches of a workflow are skipped when the `request_map` assigns `deleted()` to the root. In this example the branch A is executed when the document type is "foo", and branch B otherwise. Branch C is executed afterwards and is skipped unless either A or B successfully provided a result at `tmp.result`.
+
+```yaml
+pipeline:
+  processors:
+    - workflow:
+        branches:
+          A:
+            request_map: |
+              root = if this.document.type != "foo" {
+                  deleted()
+              }
+            processors:
+              - http:
+                  url: TODO
+            result_map: 'root.tmp.result = this'
+
+          B:
+            request_map: |
+              root = if this.document.type == "foo" {
+                  deleted()
+              }
+            processors:
+              - lambda:
+                  function: TODO
+            result_map: 'root.tmp.result = this'
+
+          C:
+            request_map: |
+              root = if this.tmp.result != null {
+                  deleted()
+              }
+            processors:
+              - http:
+                  url: TODO_SOMEWHERE_ELSE
+            result_map: 'root.tmp.result = this'
+```
+
+</TabItem>
+</Tabs>
+
+## Structured Metadata
+
+When the field `meta_path` is non-empty the workflow processor creates an object describing which workflows were successful, skipped or failed for each message and stores the object within the message at the end.
+
+The object is of the following form:
+
+```json
+{
+	"succeeded": [ "foo" ],
+	"skipped": [ "bar" ],
+	"failed": {
+		"baz": "the error message from the branch"
+	}
+}
+```
+
+If a message already has a meta object at the given path when it is processed then the object is used in order to determine which branches have already been performed on the message (or skipped) and can therefore be skipped on this run.
+
+This is a useful pattern when replaying messages that have failed some branches previously. For example, given the above example object the branches foo and bar would automatically be skipped, and baz would be reattempted.
+
+The previous meta object will also be preserved in the field `<meta_path>.previous` when the new meta object is written, preserving a full record of all workflow executions.
+
+If a field `<meta_path>.apply` exists in the meta object for a message and is an array then it will be used as an explicit list of stages to apply, all other stages will be skipped.
+
+## Error Handling
+
+The recommended approach to handle failures within a workflow is to query against the [structured metadata](#structured-metadata) it provides, as it provides granular information about exactly which branches failed and which ones succeeded and therefore aren't necessary to perform again.
+
+For example, if our meta object is stored at the path `meta.workflow` and we wanted to check whether a message has failed for any branch we can do that using a [Bloblang query][guides.bloblang] like `this.meta.workflow.failed.length() | 0 > 0`, or to check whether a specific branch failed we can use `this.exists("meta.workflow.failed.foo")`.
+
+However, if structured metadata is disabled by setting the field `meta_path` to empty then the workflow processor instead adds a general error flag to messages when any executed branch fails. In this case it's possible to handle failures using [standard error handling patterns][configuration.error-handling].
+
+[dag_wiki]: https://en.wikipedia.org/wiki/Directed_acyclic_graph
+[processors.switch]: /docs/components/processors/switch
+[processors.http]: /docs/components/processors/http
+[processors.lambda]: /docs/components/processors/lambda
+[processors.cache]: /docs/components/processors/cache
+[processors.branch]: /docs/components/processors/branch
+[guides.bloblang]: /docs/guides/bloblang/about
+[configuration.pipelines]: /docs/configuration/processing_pipelines
+[configuration.error-handling]: /docs/configuration/error_handling
 
 

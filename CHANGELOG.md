@@ -13,6 +13,9 @@ All notable changes to this project will be documented in this file.
 - New Bloblang function `env`.
 - New field `path_mapping` added to all metrics types.
 - Field `max_in_flight` added to the `dynamic` output.
+- The `workflow` processor has been updated to use `branch` processors with the
+  new field `branches`, these changes are backwards compatible with the now
+  deprecated `stages` field.
 
 ### Changed
 

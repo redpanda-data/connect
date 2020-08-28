@@ -33,65 +33,20 @@ branch:
   result_map: ""
 ```
 
-If the `request_map` fails the child processors will not be executed
-and the message will remain unchanged, and normal processor
+### Error Handling
+
+If the `request_map` fails the child processors will not be executed.
+If the child processors themselves result in an (uncaught) error then the
+`result_map` will not be executed. If the `result_map` fails
+the message will remain unchanged. Under any of these conditions standard
 [error handling methods](/docs/configuration/error_handling) can be used in
 order to filter, DLQ or recover the failed messages.
+
+### Conditional Branching
 
 If the root of your request map is set to `deleted()` then the branch
 processors are skipped for the given message, this allows you to conditionally
 branch messages.
-
-If the `result_map` fails the message will remain unchanged with an
-error and standard [error handling methods](/docs/configuration/error_handling)
-can be used in order to filter, DLQ or recover the failed messages.
-
-## Examples
-
-<Tabs defaultValue="HTTP Request" values={[
-{ label: 'HTTP Request', value: 'HTTP Request', },
-{ label: 'Lambda Function', value: 'Lambda Function', },
-]}>
-
-<TabItem value="HTTP Request">
-
-
-This example strips the request message into an empty body, grabs an HTTP
-payload, and places the result back into the original message at the path
-`repo.status`:
-
-```yaml
-pipeline:
-  processors:
-    - branch:
-        request_map: 'root = ""'
-        processors:
-          - http:
-              url: https://hub.docker.com/v2/repositories/jeffail/benthos
-              verb: GET
-        result_map: 'root.repo.status = this'
-```
-
-</TabItem>
-<TabItem value="Lambda Function">
-
-
-This example maps a new payload for triggering a lambda function with an ID and
-username from the original message, and the result of the lambda is discarded,
-meaning the original message is unchanged.
-
-```yaml
-pipeline:
-  processors:
-    - branch:
-        request_map: '{"id":this.doc.id,"username":this.user.name}'
-        processors:
-          - lambda:
-              function: trigger_user_update
-```
-
-</TabItem>
-</Tabs>
 
 ## Fields
 
@@ -152,5 +107,79 @@ result_map: |-
   	this
   }
 ```
+
+## Examples
+
+<Tabs defaultValue="HTTP Request" values={[
+{ label: 'HTTP Request', value: 'HTTP Request', },
+{ label: 'Lambda Function', value: 'Lambda Function', },
+{ label: 'Conditional Caching', value: 'Conditional Caching', },
+]}>
+
+<TabItem value="HTTP Request">
+
+
+This example strips the request message into an empty body, grabs an HTTP
+payload, and places the result back into the original message at the path
+`repo.status`:
+
+```yaml
+pipeline:
+  processors:
+    - branch:
+        request_map: 'root = ""'
+        processors:
+          - http:
+              url: https://hub.docker.com/v2/repositories/jeffail/benthos
+              verb: GET
+        result_map: 'root.repo.status = this'
+```
+
+</TabItem>
+<TabItem value="Lambda Function">
+
+
+This example maps a new payload for triggering a lambda function with an ID and
+username from the original message, and the result of the lambda is discarded,
+meaning the original message is unchanged.
+
+```yaml
+pipeline:
+  processors:
+    - branch:
+        request_map: '{"id":this.doc.id,"username":this.user.name}'
+        processors:
+          - lambda:
+              function: trigger_user_update
+```
+
+</TabItem>
+<TabItem value="Conditional Caching">
+
+
+This example caches a document by a message ID only when the type of the
+document is a foo:
+
+```yaml
+pipeline:
+  processors:
+    - branch:
+        request_map: |
+          meta id = this.id
+          root = if this.type == "foo" {
+            this.document
+          } else {
+            deleted()
+          }
+        processors:
+          - cache:
+              resource: TODO
+              operator: set
+              key: ${! meta("id") }
+              value: ${! content() }
+```
+
+</TabItem>
+</Tabs>
 
 

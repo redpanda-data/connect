@@ -87,7 +87,40 @@ func (ctx fieldContext) InterpolationIndividual() FieldInterpolation {
 	return FieldInterpolationIndividual
 }
 
-var componentTemplate = `---
+var componentTemplate = `{{define "field_docs" -}}
+## Fields
+
+{{range $i, $field := .Fields -}}
+### ` + "`{{$field.Name}}`" + `
+
+{{$field.Description}}
+{{if eq $field.Interpolation .InterpolationBatchWide -}}
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+{{end -}}
+{{if eq $field.Interpolation .InterpolationIndividual -}}
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+{{end}}
+
+Type: ` + "`{{$field.Type}}`" + `  
+{{if gt (len $field.Default) 0}}Default: ` + "`{{$field.Default}}`" + `  
+{{end -}}
+{{if gt (len $field.Options) 0}}Options: {{range $j, $option := $field.Options -}}
+{{if ne $j 0}}, {{end}}` + "`" + `{{$option}}` + "`" + `{{end}}.
+{{end}}
+{{if gt (len $field.Examples) 0 -}}
+` + "```yaml" + `
+# Examples
+
+{{range $j, $example := $field.Examples -}}
+{{if ne $j 0}}
+{{end}}{{$example}}{{end -}}
+` + "```" + `
+
+{{end -}}
+{{end -}}
+{{end -}}
+
+---
 title: {{.Name}}
 type: {{.Type}}
 {{if .Beta -}}
@@ -152,6 +185,10 @@ version release. Please consider moving onto [alternative components](#alternati
 {{if gt (len .Description) 0}}
 {{.Description}}
 {{end}}
+{{if and (le (len .Fields) 6) (gt (len .Fields) 0) -}}
+{{template "field_docs" . -}}
+{{end -}}
+
 {{if gt (len .Examples) 0 -}}
 ## Examples
 
@@ -176,38 +213,10 @@ version release. Please consider moving onto [alternative components](#alternati
 
 {{end -}}
 
-{{if gt (len .Fields) 0 -}}
-## Fields
-
+{{if gt (len .Fields) 6 -}}
+{{template "field_docs" . -}}
 {{end -}}
-{{range $i, $field := .Fields -}}
-### ` + "`{{$field.Name}}`" + `
 
-{{$field.Description}}
-{{if eq $field.Interpolation .InterpolationBatchWide -}}
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-{{end -}}
-{{if eq $field.Interpolation .InterpolationIndividual -}}
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-{{end}}
-
-Type: ` + "`{{$field.Type}}`" + `  
-{{if gt (len $field.Default) 0}}Default: ` + "`{{$field.Default}}`" + `  
-{{end -}}
-{{if gt (len $field.Options) 0}}Options: {{range $j, $option := $field.Options -}}
-{{if ne $j 0}}, {{end}}` + "`" + `{{$option}}` + "`" + `{{end}}.
-{{end}}
-{{if gt (len $field.Examples) 0 -}}
-` + "```yaml" + `
-# Examples
-
-{{range $j, $example := $field.Examples -}}
-{{if ne $j 0}}
-{{end}}{{$example}}{{end -}}
-` + "```" + `
-
-{{end -}}
-{{end -}}
 {{if gt (len .Footnotes) 0 -}}
 {{.Footnotes}}
 {{end}}

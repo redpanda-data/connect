@@ -39,8 +39,7 @@ interpolations described [here](/docs/configuration/interpolation#bloblang-queri
 
 In order to map or encode the payload to a specific request body, and map the
 response back into the original payload instead of replacing it entirely, you
-can use the ` + "[`process_map`](/docs/components/processors/process_map)" + ` or
- ` + "[`process_field`](/docs/components/processors/process_field)" + ` processors.
+can use the ` + "[`branch` processor](/docs/components/processors/branch)" + `.
 
 ## Response Codes
 

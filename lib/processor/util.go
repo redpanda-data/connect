@@ -136,6 +136,12 @@ func FlagErr(part types.Part, err error) {
 	}
 }
 
+// GetFail returns an error string for a message part if it has failed, or an
+// empty string if not.
+func GetFail(part types.Part) string {
+	return part.Metadata().Get(FailFlagKey)
+}
+
 // HasFailed checks whether a message part has failed a processing step.
 func HasFailed(part types.Part) bool {
 	return len(part.Metadata().Get(FailFlagKey)) > 0

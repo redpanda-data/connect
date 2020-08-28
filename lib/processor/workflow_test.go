@@ -1,338 +1,355 @@
 package processor
 
 import (
-	"reflect"
+	"sort"
+	"strconv"
 	"testing"
+	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestWorkflowCircular(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = "workflow"
-	conf.Workflow.Stages["foo"] = createProcMapConf("tmp.baz", "tmp.foo")
-	conf.Workflow.Stages["bar"] = createProcMapConf("tmp.foo", "tmp.bar")
-	conf.Workflow.Stages["baz"] = createProcMapConf("tmp.bar", "tmp.baz")
+func TestWorkflowDeps(t *testing.T) {
+	tests := []struct {
+		branches      [][2]string
+		inputOrdering [][]string
+		ordering      [][]string
+		err           string
+	}{
+		{
+			branches: [][2]string{
+				{
+					"root = this.foo",
+					"root.bar = this",
+				},
+				{
+					"root = this.bar",
+					"root.baz = this",
+				},
+				{
+					"root = this.baz",
+					"root.buz = this",
+				},
+			},
+			ordering: [][]string{
+				{"0"}, {"1"}, {"2"},
+			},
+		},
+		{
+			branches: [][2]string{
+				{
+					"root = this.foo",
+					"root.bar = this",
+				},
+				{
+					"root = this.bar",
+					"root.baz = this",
+				},
+				{
+					"root = this.baz",
+					"root.buz = this",
+				},
+			},
+			inputOrdering: [][]string{
+				{"1", "2"}, {"0"},
+			},
+			ordering: [][]string{
+				{"1", "2"}, {"0"},
+			},
+		},
+		{
+			branches: [][2]string{
+				{
+					"root = this.foo",
+					"root.bar = this",
+				},
+				{
+					"root = this.bar",
+					"root.baz = this",
+				},
+				{
+					"root = this.baz",
+					"root.buz = this",
+				},
+			},
+			ordering: [][]string{
+				{"0"}, {"1"}, {"2"},
+			},
+		},
+		{
+			branches: [][2]string{
+				{
+					"root = this.foo",
+					"root.bar = this",
+				},
+				{
+					"root = this.foo",
+					"root.baz = this",
+				},
+				{
+					"root = this.baz",
+					"root.foo = this",
+				},
+			},
+			err: "failed to automatically resolve DAG, circular dependencies detected for branches: [0 1 2]",
+		},
+		{
+			branches: [][2]string{
+				{
+					"root = this.foo",
+					"root.bar = this",
+				},
+				{
+					"root = this.bar",
+					"root.baz = this",
+				},
+				{
+					"root = this.baz",
+					"root.buz = this",
+				},
+			},
+			inputOrdering: [][]string{
+				{"1"}, {"0"},
+			},
+			err: "the following branches were missing from order: [2]",
+		},
+		{
+			branches: [][2]string{
+				{
+					"root = this.foo",
+					"root.bar = this",
+				},
+				{
+					"root = this.bar",
+					"root.baz = this",
+				},
+				{
+					"root = this.baz",
+					"root.buz = this",
+				},
+			},
+			inputOrdering: [][]string{
+				{"1"}, {"0", "2"}, {"1"},
+			},
+			err: "order branch double listed or not found: 1",
+		},
+		{
+			branches: [][2]string{
+				{
+					"root = this.foo",
+					"root.bar = this",
+				},
+				{
+					"root = this.foo",
+					"root.baz = this",
+				},
+				{
+					`root.bar = this.bar
+					root.baz = this.baz`,
+					"root.buz = this",
+				},
+			},
+			ordering: [][]string{
+				{"0", "1"}, {"2"},
+			},
+		},
+	}
 
-	_, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err == nil {
-		t.Error("expected error from circular deps")
+	for i, test := range tests {
+		test := test
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			conf := NewConfig()
+			conf.Workflow.Order = test.inputOrdering
+			for j, mappings := range test.branches {
+				branchConf := NewBranchConfig()
+				branchConf.RequestMap = mappings[0]
+				branchConf.ResultMap = mappings[1]
+				dudProc := NewConfig()
+				dudProc.Type = TypeBloblang
+				dudProc.Bloblang = BloblangConfig("root = this")
+				branchConf.Processors = append(branchConf.Processors, dudProc)
+				conf.Workflow.Branches[strconv.Itoa(j)] = branchConf
+			}
+
+			p, err := NewWorkflow(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+			if len(test.err) > 0 {
+				assert.EqualError(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+
+				dag := p.(*Workflow).dag
+				for _, d := range dag {
+					sort.Strings(d)
+				}
+				assert.Equal(t, test.ordering, dag)
+			}
+		})
 	}
 }
 
-func TestWorkflowBadNames(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = "workflow"
-	conf.Workflow.Stages["foo,bar"] = createProcMapConf("tmp.baz", "tmp.foo")
-
-	_, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err == nil {
-		t.Error("expected error from bad name")
+func TestWorkflows(t *testing.T) {
+	// To make configs simpler they break branches down into three mappings, the
+	// request map, a bloblang processor, and a result map.
+	tests := []struct {
+		branches [][3]string
+		order    [][]string
+		input    []string
+		output   []string
+		err      string
+	}{
+		{
+			branches: [][3]string{
+				{
+					"root.foo = this.foo.not_null()",
+					"root = this",
+					"root.bar = this.foo.number()",
+				},
+			},
+			input: []string{
+				`{}`,
+				`{"foo":"not a number"}`,
+				`{"foo":"5"}`,
+			},
+			output: []string{
+				`{"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null"}}}}`,
+				`{"foo":"not a number","meta":{"workflow":{"failed":{"0":"result map: failed to execute mapping query at line 1: strconv.ParseFloat: parsing \"not a number\": invalid syntax"}}}}`,
+				`{"bar":5,"foo":"5","meta":{"workflow":{"succeeded":["0"]}}}`,
+			},
+		},
+		{
+			branches: [][3]string{
+				{
+					"root.foo = this.foo.not_null()",
+					"root = this",
+					"root.bar = this.foo.number()",
+				},
+				{
+					"root.bar = this.bar.not_null()",
+					"root = this",
+					"root.baz = this.bar.number() + 5",
+				},
+				{
+					"root.baz = this.baz.not_null()",
+					"root = this",
+					"root.buz = this.baz.number() + 2",
+				},
+			},
+			input: []string{
+				`{}`,
+				`{"foo":"not a number"}`,
+				`{"foo":"5"}`,
+			},
+			output: []string{
+				`{"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null","1":"request map: failed to execute mapping query at line 1: value is null","2":"request map: failed to execute mapping query at line 1: value is null"}}}}`,
+				`{"foo":"not a number","meta":{"workflow":{"failed":{"0":"result map: failed to execute mapping query at line 1: strconv.ParseFloat: parsing \"not a number\": invalid syntax","1":"request map: failed to execute mapping query at line 1: value is null","2":"request map: failed to execute mapping query at line 1: value is null"}}}}`,
+				`{"bar":5,"baz":10,"buz":12,"foo":"5","meta":{"workflow":{"succeeded":["0","1","2"]}}}`,
+			},
+		},
+		{
+			branches: [][3]string{
+				{
+					"root.foo = this.foo.not_null()",
+					"root = this",
+					"root.bar = this.foo.number()",
+				},
+				{
+					"root.bar = this.bar.not_null()",
+					"root = this",
+					"root.baz = this.bar.number() + 5",
+				},
+				{
+					"root.baz = this.baz.not_null()",
+					"root = this",
+					"root.buz = this.baz.number() + 2",
+				},
+			},
+			input: []string{
+				`{"meta":{"workflow":{"apply":["2"]}},"baz":2}`,
+				`{"meta":{"workflow":{"skipped":["0"]}},"bar":3}`,
+				`{"meta":{"workflow":{"succeeded":["1"]}},"baz":9}`,
+			},
+			output: []string{
+				`{"baz":2,"buz":4,"meta":{"workflow":{"previous":{"apply":["2"]},"skipped":["0","1"],"succeeded":["2"]}}}`,
+				`{"bar":3,"baz":8,"buz":10,"meta":{"workflow":{"previous":{"skipped":["0"]},"skipped":["0"],"succeeded":["1","2"]}}}`,
+				`{"baz":9,"buz":11,"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null"},"previous":{"succeeded":["1"]},"skipped":["1"],"succeeded":["2"]}}}`,
+			},
+		},
+		{
+			branches: [][3]string{
+				{
+					"root = this.foo.not_null()",
+					"root = this",
+					"root.bar = this.number() + 2",
+				},
+				{
+					"root = this.foo.not_null()",
+					"root = this",
+					"root.baz = this.number() + 3",
+				},
+				{
+					`root.bar = this.bar.not_null()
+					root.baz = this.baz.not_null()`,
+					"root = this",
+					"root.buz = this.bar + this.baz",
+				},
+			},
+			input: []string{
+				`{"foo":2}`,
+				`{}`,
+				`not even a json object`,
+			},
+			output: []string{
+				`{"bar":4,"baz":5,"buz":9,"foo":2,"meta":{"workflow":{"succeeded":["0","1","2"]}}}`,
+				`{"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null","1":"request map: failed to execute mapping query at line 1: value is null","2":"request map: failed to execute mapping query at line 1: value is null"}}}}`,
+				`not even a json object`,
+			},
+		},
 	}
 
-	conf = NewConfig()
-	conf.Type = "workflow"
-	conf.Workflow.Stages["foo$"] = createProcMapConf("tmp.baz", "tmp.foo")
+	for i, test := range tests {
+		test := test
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			conf := NewConfig()
+			conf.Workflow.Order = test.order
+			for j, mappings := range test.branches {
+				branchConf := NewBranchConfig()
+				branchConf.RequestMap = mappings[0]
+				branchConf.ResultMap = mappings[2]
+				proc := NewConfig()
+				proc.Type = TypeBloblang
+				proc.Bloblang = BloblangConfig(mappings[1])
+				branchConf.Processors = append(branchConf.Processors, proc)
+				conf.Workflow.Branches[strconv.Itoa(j)] = branchConf
+			}
 
-	if _, err = New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
-		t.Error("expected error from bad name")
-	}
-}
+			p, err := NewWorkflow(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+			require.NoError(t, err)
 
-func TestWorkflowGoodNames(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = "workflow"
-	conf.Workflow.Stages["foo_bar"] = createProcMapConf("tmp.baz", "tmp.foo")
-	conf.Workflow.Stages["FOO-BAR"] = createProcMapConf("tmp.baz", "tmp.foo")
-	conf.Workflow.Stages["FOO-9"] = createProcMapConf("tmp.baz", "tmp.foo")
-	conf.Workflow.Stages["FOO-10"] = createProcMapConf("tmp.baz", "tmp.foo")
+			var parts [][]byte
+			for _, input := range test.input {
+				parts = append(parts, []byte(input))
+			}
 
-	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err != nil {
-		t.Error(err)
-	}
-}
+			msgs, res := p.ProcessMessage(message.New(parts))
+			if len(test.err) > 0 {
+				require.NotNil(t, res)
+				require.EqualError(t, res.Error(), test.err)
+			} else {
+				require.Len(t, msgs, 1)
+				var output []string
+				for _, b := range message.GetAllBytes(msgs[0]) {
+					output = append(output, string(b))
+				}
+				assert.Equal(t, test.output, output)
+			}
 
-func TestWorkflowSimple(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = "workflow"
-	conf.Workflow.MetaPath = "0meta"
-	conf.Workflow.Stages["foo"] = createProcMapConf("root", "tmp.foo")
-	conf.Workflow.Stages["bar"] = createProcMapConf("tmp.foo", "tmp.bar")
-	conf.Workflow.Stages["baz"] = createProcMapConf("tmp.bar", "tmp.baz")
-
-	c, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
-	exp := [][]byte{
-		[]byte(`{"0meta":{"failed":["bar","baz","foo"],"skipped":[],"succeeded":[]},"oops":"no root"}`),
-		[]byte(`{"0meta":{"failed":[],"skipped":[],"succeeded":["bar","baz","foo"]},"root":"foobarbaz","tmp":{"bar":"foobarbaz","baz":"foobarbaz","foo":"foobarbaz"}}`),
-		[]byte(`{"0meta":{"failed":[],"skipped":[],"succeeded":["bar","baz","foo"]},"root":"foobarbaz","tmp":{"also":"here","bar":"foobarbaz","baz":"foobarbaz","foo":"foobarbaz"}}`),
-	}
-
-	msg, res := c.ProcessMessage(message.New([][]byte{
-		[]byte(`{"oops":"no root"}`),
-		[]byte(`{"root":"foobarbaz"}`),
-		[]byte(`{"root":"foobarbaz","tmp":{"also":"here"}}`),
-	}))
-	if res != nil {
-		t.Error(res.Error())
-	}
-	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong result: %s != %s", act, exp)
-	}
-}
-
-func TestWorkflowNoMeta(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = "workflow"
-	conf.Workflow.MetaPath = ""
-	conf.Workflow.Stages["foo"] = createProcMapConf("root", "tmp.foo")
-	conf.Workflow.Stages["bar"] = createProcMapConf("tmp.foo", "tmp.bar")
-	conf.Workflow.Stages["baz"] = createProcMapConf("tmp.bar", "tmp.baz")
-
-	c, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
-	exp := [][]byte{
-		[]byte(`{"oops":"no root"}`),
-		[]byte(`{"root":"foobarbaz","tmp":{"bar":"foobarbaz","baz":"foobarbaz","foo":"foobarbaz"}}`),
-		[]byte(`{"root":"foobarbaz","tmp":{"also":"here","bar":"foobarbaz","baz":"foobarbaz","foo":"foobarbaz"}}`),
-	}
-
-	msg, res := c.ProcessMessage(message.New([][]byte{
-		[]byte(`{"oops":"no root"}`),
-		[]byte(`{"root":"foobarbaz"}`),
-		[]byte(`{"root":"foobarbaz","tmp":{"also":"here"}}`),
-	}))
-	if res != nil {
-		t.Error(res.Error())
-	}
-	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong result: %s != %s", act, exp)
-	}
-}
-
-func TestWorkflowSimpleFromPrevious(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = "workflow"
-	conf.Workflow.MetaPath = "0meta"
-	conf.Workflow.Stages["foo"] = createProcMapConf("root", "tmp.foo")
-	conf.Workflow.Stages["bar"] = createProcMapConf("tmp.foo", "tmp.bar")
-	conf.Workflow.Stages["baz"] = createProcMapConf("tmp.bar", "tmp.baz")
-
-	c, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
-	exp := [][]byte{
-		[]byte(`{"0meta":{"failed":["baz","foo"],"previous":{"failed":["baz","foo"],"skipped":["bar"],"succeeded":[]},"skipped":["bar"],"succeeded":[]},"oops":"no root"}`),
-		[]byte(`{"0meta":{"failed":[],"previous":{"failed":[],"skipped":["baz"],"succeeded":[]},"skipped":["baz"],"succeeded":["bar","foo"]},"root":"foobarbaz","tmp":{"bar":"foobarbaz","foo":"foobarbaz"}}`),
-		[]byte(`{"0meta":{"failed":[],"previous":{"failed":[],"skipped":[],"succeeded":["baz"]},"skipped":["baz"],"succeeded":["bar","foo"]},"root":"foobarbaz","tmp":{"also":"here","bar":"foobarbaz","foo":"foobarbaz"}}`),
-	}
-
-	msg, res := c.ProcessMessage(message.New([][]byte{
-		[]byte(`{"0meta":{"failed":["baz","foo"],"skipped":["bar"],"succeeded":[]},"oops":"no root"}`),
-		[]byte(`{"0meta":{"failed":[],"skipped":["baz"],"succeeded":[]},"root":"foobarbaz"}`),
-		[]byte(`{"0meta":{"failed":[],"skipped":[],"succeeded":["baz"]},"root":"foobarbaz","tmp":{"also":"here"}}`),
-	}))
-	if res != nil {
-		t.Error(res.Error())
-	}
-	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong result: %s != %s", act, exp)
-	}
-}
-
-func TestWorkflowParallel(t *testing.T) {
-	condConf := condition.NewConfig()
-	condConf.Type = condition.TypeText
-	condConf.Text.Operator = "contains"
-	condConf.Text.Arg = "foo"
-
-	procConf := NewConfig()
-	procConf.Type = TypeMetadata
-	procConf.Metadata.Operator = "set"
-	procConf.Metadata.Key = "A"
-	procConf.Metadata.Value = "foo: ${!json(\"foo\")}"
-
-	fooConf := NewProcessMapConfig()
-	fooConf.Conditions = []condition.Config{condConf}
-	fooConf.Premap["."] = "."
-	fooConf.Postmap["tmp.A"] = "."
-	fooConf.Processors = []Config{procConf}
-
-	condConf = condition.NewConfig()
-	condConf.Type = condition.TypeText
-	condConf.Text.Operator = "contains"
-	condConf.Text.Arg = "bar"
-
-	procConf = NewConfig()
-	procConf.Type = TypeMetadata
-	procConf.Metadata.Operator = "set"
-	procConf.Metadata.Key = "A"
-	procConf.Metadata.Value = "bar: ${!json(\"bar\")}"
-
-	barConf := NewProcessMapConfig()
-	barConf.Conditions = []condition.Config{condConf}
-	barConf.Premap["."] = "."
-	barConf.Postmap["tmp.A"] = "."
-	barConf.Processors = []Config{procConf}
-
-	condConf = condition.NewConfig()
-	condConf.Type = condition.TypeText
-	condConf.Text.Operator = "contains"
-	condConf.Text.Arg = "baz"
-
-	procConf = NewConfig()
-	procConf.Type = TypeMetadata
-	procConf.Metadata.Operator = "set"
-	procConf.Metadata.Key = "B"
-	procConf.Metadata.Value = "${!meta(\"A\")}"
-
-	bazConf := NewProcessMapConfig()
-	bazConf.Conditions = []condition.Config{condConf}
-	bazConf.Premap["."] = "tmp.A"
-	bazConf.Postmap["tmp.B"] = "."
-	bazConf.Processors = []Config{procConf}
-
-	condConf = condition.NewConfig()
-	condConf.Type = condition.TypeText
-	condConf.Text.Operator = "contains"
-	condConf.Text.Arg = "qux"
-
-	procConf = NewConfig()
-	procConf.Type = TypeMetadata
-	procConf.Metadata.Operator = "set"
-	procConf.Metadata.Key = "B"
-	procConf.Metadata.Value = "${!meta(\"A\")}"
-
-	quxConf := NewProcessMapConfig()
-	quxConf.Conditions = []condition.Config{condConf}
-	quxConf.Premap["."] = "tmp.A"
-	quxConf.Postmap["tmp.B"] = "."
-	quxConf.Processors = []Config{procConf}
-
-	conf := NewConfig()
-	conf.Type = TypeWorkflow
-	conf.Workflow.MetaPath = "0meta"
-	conf.Workflow.Stages["foo"] = DepProcessMapConfig{
-		ProcessMapConfig: fooConf,
-	}
-	conf.Workflow.Stages["bar"] = DepProcessMapConfig{
-		ProcessMapConfig: barConf,
-	}
-	conf.Workflow.Stages["baz"] = DepProcessMapConfig{
-		ProcessMapConfig: bazConf,
-	}
-	conf.Workflow.Stages["qux"] = DepProcessMapConfig{
-		ProcessMapConfig: quxConf,
-	}
-
-	c, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
-	expParts := [][]byte{
-		[]byte(`{"0meta":{"failed":[],"skipped":["bar","baz"],"succeeded":["foo","qux"]},"foo":"1","qux":"2","tmp":{"A":{"foo":"1","qux":"2"},"B":{"foo":"1","qux":"2"}}}`),
-		[]byte(`{"0meta":{"failed":[],"skipped":["baz","foo"],"succeeded":["bar","qux"]},"bar":"3","qux":"4","tmp":{"A":{"bar":"3","qux":"4"},"B":{"bar":"3","qux":"4"}}}`),
-		[]byte(`{"0meta":{"failed":[],"skipped":["bar","qux"],"succeeded":["baz","foo"]},"baz":"6","foo":"5","tmp":{"A":{"baz":"6","foo":"5"},"B":{"baz":"6","foo":"5"}}}`),
-		[]byte(`{"0meta":{"failed":[],"skipped":["foo","qux"],"succeeded":["bar","baz"]},"bar":"7","baz":"8","tmp":{"A":{"bar":"7","baz":"8"},"B":{"bar":"7","baz":"8"}}}`),
-		[]byte(`{"0meta":{"failed":[],"skipped":["bar","baz","qux"],"succeeded":["foo"]},"foo":"9","tmp":{"A":{"foo":"9"}}}`),
-		[]byte(`{"0meta":{"failed":[],"skipped":["baz","foo","qux"],"succeeded":["bar"]},"bar":"10","tmp":{"A":{"bar":"10"}}}`),
-		[]byte(`{"0meta":{"failed":[],"skipped":["bar","baz"],"succeeded":["foo","qux"]},"foo":"11","qux":"12","tmp":{"A":{"foo":"11","qux":"12"},"B":{"foo":"11","qux":"12"}}}`),
-		[]byte(`{"0meta":{"failed":[],"skipped":["baz","foo"],"succeeded":["bar","qux"]},"bar":"13","qux":"14","tmp":{"A":{"bar":"13","qux":"14"},"B":{"bar":"13","qux":"14"}}}`),
-		[]byte(`{"0meta":{"failed":[],"skipped":["bar","qux"],"succeeded":["baz","foo"]},"baz":"16","foo":"15","tmp":{"A":{"baz":"16","foo":"15"},"B":{"baz":"16","foo":"15"}}}`),
-		[]byte(`{"0meta":{"failed":[],"skipped":["foo","qux"],"succeeded":["bar","baz"]},"bar":"17","baz":"18","tmp":{"A":{"bar":"17","baz":"18"},"B":{"bar":"17","baz":"18"}}}`),
-	}
-
-	msg, res := c.ProcessMessage(message.New([][]byte{
-		[]byte(`{"foo":"1","qux":"2"}`),
-		[]byte(`{"bar":"3","qux":"4"}`),
-		[]byte(`{"foo":"5","baz":"6"}`),
-		[]byte(`{"bar":"7","baz":"8"}`),
-		[]byte(`{"foo":"9"}`),
-		[]byte(`{"bar":"10"}`),
-		[]byte(`{"foo":"11","qux":"12"}`),
-		[]byte(`{"bar":"13","qux":"14"}`),
-		[]byte(`{"foo":"15","baz":"16"}`),
-		[]byte(`{"bar":"17","baz":"18"}`),
-		[]byte(`{"baz":"19"}`),
-		[]byte(`{"qux":"20"}`),
-	}))
-	if res != nil {
-		t.Error(res.Error())
-	}
-
-	actParts := message.GetAllBytes(msg[0])
-	for i, exp := range expParts {
-		if len(actParts) <= i {
-			t.Errorf("Missing result part index '%v': %s", i, exp)
-		}
-		if actStr, expStr := string(actParts[i]), string(exp); actStr != expStr {
-			t.Errorf("Wrong part result: %v != %v", actStr, expStr)
-		}
-	}
-}
-
-func TestWorkflowRoot(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = "workflow"
-	conf.Workflow.MetaPath = "0meta"
-	conf.Workflow.Stages["foo"] = createProcMapConf("root", "tmp.foo")
-	conf.Workflow.Stages["bar"] = createProcMapConf("", "tmp.bar")
-	conf.Workflow.Stages["baz"] = createProcMapConf("tmp.bar", "tmp.baz")
-
-	c, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
-	exp := [][]byte{
-		[]byte(`{"0meta":{"failed":["foo"],"skipped":[],"succeeded":["bar","baz"]},"oops":"no root","tmp":{"bar":{"oops":"no root"},"baz":{"oops":"no root"}}}`),
-		[]byte(`{"0meta":{"failed":[],"skipped":[],"succeeded":["bar","baz","foo"]},"root":"foobarbaz","tmp":{"bar":{"root":"foobarbaz"},"baz":{"root":"foobarbaz"},"foo":"foobarbaz"}}`),
-		[]byte(`{"0meta":{"failed":[],"skipped":[],"succeeded":["bar","baz","foo"]},"root":"foobarbaz","tmp":{"also":"here","bar":{"root":"foobarbaz","tmp":{"also":"here"}},"baz":{"root":"foobarbaz","tmp":{"also":"here"}},"foo":"foobarbaz"}}`),
-	}
-
-	msg, res := c.ProcessMessage(message.New([][]byte{
-		[]byte(`{"oops":"no root"}`),
-		[]byte(`{"root":"foobarbaz"}`),
-		[]byte(`{"root":"foobarbaz","tmp":{"also":"here"}}`),
-	}))
-	if res != nil {
-		t.Error(res.Error())
-	}
-	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong result: %s != %s", act, exp)
-	}
-}
-
-func TestWorkflowDiamond(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = "workflow"
-	conf.Workflow.MetaPath = "0meta"
-	conf.Workflow.Stages["foo"] = createProcMapConf(".", "foo_result")
-	conf.Workflow.Stages["bar"] = createProcMapConf("root.path", "bar_result")
-	conf.Workflow.Stages["baz"] = createProcMapConf(".", "baz_result", "foo_result", "bar_result")
-
-	c, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
-	exp := [][]byte{
-		[]byte(`{"0meta":{"failed":[],"skipped":[],"succeeded":["bar","baz","foo"]},"bar_result":"nested","baz_result":{"bar_result":"nested","foo_result":{"outter":"value","root":{"path":"nested"}},"outter":"value","root":{"path":"nested"}},"foo_result":{"outter":"value","root":{"path":"nested"}},"outter":"value","root":{"path":"nested"}}`),
-	}
-
-	msg, res := c.ProcessMessage(message.New([][]byte{
-		[]byte(`{"outter":"value","root":{"path":"nested"}}`),
-	}))
-	if res != nil {
-		t.Error(res.Error())
-	}
-	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong result: %s != %s", act, exp)
+			p.CloseAsync()
+			assert.NoError(t, p.WaitForClose(time.Second))
+		})
 	}
 }

@@ -26,6 +26,7 @@ const redirects = [
   ["/sync_responses", "/docs/guides/sync_responses", false],
   ["/workflows", "/docs/configuration/workflows", false],
   ["/streams", "/docs/guides/streams_mode/about", false],
+  ["/docs/configuration/workflows", "/docs/components/processors/workflow", false],
 ];
 
 module.exports = function() {

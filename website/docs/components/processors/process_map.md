@@ -1,6 +1,7 @@
 ---
 title: process_map
 type: processor
+deprecated: true
 ---
 
 <!--
@@ -13,11 +14,18 @@ type: processor
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+DEPRECATED: This component is deprecated and will be removed in the next major
+version release. Please consider moving onto [alternative components](#alternatives).
 
 A processor that extracts and maps fields identified via
 [dot path](/docs/configuration/field_paths) from the original payload into a new
 object, applies a list of processors to the newly constructed object, and
 finally maps the result back into the original payload.
+
+## Alternatives
+
+All functionality of this processor has been superseded by the
+[branch](/docs/components/processors/branch) processor.
 
 
 <Tabs defaultValue="common" values={[

@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/opentracing/opentracing-go"
+	"github.com/quipo/dependencysolver"
 )
 
 //------------------------------------------------------------------------------
@@ -20,53 +21,207 @@ import (
 func init() {
 	Constructors[TypeWorkflow] = TypeSpec{
 		constructor: NewWorkflow,
+		Beta:        true,
 		Summary: `
-Executes an automatically resolved workflow of processing stages.`,
+Executes a topology of ` + "[`branch` processors][processors.branch]" + `,
+performing them in parallel where possible.`,
 		Description: `
-Performs the same workflow stages as the ` + "[`process_dag`](/docs/components/processors/process_dag)" + `
-processor, but uses a record of workflow statuses stored in the path specified
-by the field ` + "`meta_path`" + ` in order to report which workflow stages
-succeeded, were skipped, or failed for a document. The record takes this form:
+## Why Use a Workflow
+
+### Performance
+
+Most of the time the best way to compose processors is also the simplest, just configure them in series. This is because processors are often CPU bound, low-latency, and you can gain vertical scaling by increasing the number of processor pipeline threads, allowing Benthos to process [multiple messages in parallel][configuration.pipelines].
+
+However, some processors such as ` + "[`http`][processors.http], [`lambda`][processors.lambda] or [`cache`][processors.cache]" + ` interact with external services and therefore spend most of their time waiting for a response. These processors tend to be high-latency and low CPU activity, which causes messages to process slowly.
+
+When a processing pipeline contains multiple network processors that aren't dependent on each other we can benefit from performing these processors in parallel for each individual message, reducing the overall message processing latency.
+
+### Simplifying Processor Topology
+
+A workflow is often expressed as a [DAG][dag_wiki] of processing stages, where each stage can result in N possible next stages, until finally the flow ends at an exit node.
+
+For example, if we had processing stages A, B, C and D, where stage A could result in either stage B or C being next, always followed by D, it might look something like this:
+
+` + "```text" + `
+     /--> B --\
+A --|          |--> D
+     \--> C --/
+` + "```" + `
+
+This flow would be easy to express in a standard Benthos config, we could simply use a ` + "[`switch` processor][processors.switch]" + ` to route to either B or C depending on a condition on the result of A. However, this method of flow control quickly becomes unfeasible as the DAG gets more complicated, imagine expressing this flow using switch processors:
+
+` + "```text" + `
+      /--> B -------------|--> D
+     /                   /
+A --|          /--> E --|
+     \--> C --|          \
+               \----------|--> F
+` + "```" + `
+
+And imagine doing so knowing that the diagram is subject to change over time. Yikes! Instead, with a workflow we can either trust it to automatically resolve the DAG or express it manually as simply as ` + "`order: [ [ A ], [ B, C ], [ E ], [ D, F ] ]`" + `, and the conditional logic for determining if a stage is executed is defined as part of the branch itself.`,
+		Footnotes: `
+## Structured Metadata
+
+When the field ` + "`meta_path`" + ` is non-empty the workflow processor creates an object describing which workflows were successful, skipped or failed for each message and stores the object within the message at the end.
+
+The object is of the following form:
 
 ` + "```json" + `
 {
 	"succeeded": [ "foo" ],
 	"skipped": [ "bar" ],
-	"failed": [ "baz" ]
+	"failed": {
+		"baz": "the error message from the branch"
+	}
 }
 ` + "```" + `
 
-If a document is consumed that already contains these records then they will be
-used in order to only perform stages that haven't already succeeded or have been
-skipped. For example, if a document received contained the above snippet then
-the foo and bar stages would not be attempted. Before writing the new records to
-the resulting payloads the old one will be moved into
-` + "`<meta_path>.previous`" + `.
+If a message already has a meta object at the given path when it is processed then the object is used in order to determine which branches have already been performed on the message (or skipped) and can therefore be skipped on this run.
 
-If a field ` + "`<meta_path>.apply`" + ` exists in the record for a document and
-is an array then it will be used as a whitelist of stages to apply, all other
-stages will be skipped.
+This is a useful pattern when replaying messages that have failed some branches previously. For example, given the above example object the branches foo and bar would automatically be skipped, and baz would be reattempted.
 
-You can read more about workflows in Benthos
-[in this document](/docs/configuration/workflows).`,
+The previous meta object will also be preserved in the field ` + "`<meta_path>.previous`" + ` when the new meta object is written, preserving a full record of all workflow executions.
+
+If a field ` + "`<meta_path>.apply`" + ` exists in the meta object for a message and is an array then it will be used as an explicit list of stages to apply, all other stages will be skipped.
+
+## Error Handling
+
+The recommended approach to handle failures within a workflow is to query against the [structured metadata](#structured-metadata) it provides, as it provides granular information about exactly which branches failed and which ones succeeded and therefore aren't necessary to perform again.
+
+For example, if our meta object is stored at the path ` + "`meta.workflow`" + ` and we wanted to check whether a message has failed for any branch we can do that using a [Bloblang query][guides.bloblang] like ` + "`this.meta.workflow.failed.length() | 0 > 0`" + `, or to check whether a specific branch failed we can use ` + "`this.exists(\"meta.workflow.failed.foo\")`" + `.
+
+However, if structured metadata is disabled by setting the field ` + "`meta_path`" + ` to empty then the workflow processor instead adds a general error flag to messages when any executed branch fails. In this case it's possible to handle failures using [standard error handling patterns][configuration.error-handling].
+
+[dag_wiki]: https://en.wikipedia.org/wiki/Directed_acyclic_graph
+[processors.switch]: /docs/components/processors/switch
+[processors.http]: /docs/components/processors/http
+[processors.lambda]: /docs/components/processors/lambda
+[processors.cache]: /docs/components/processors/cache
+[processors.branch]: /docs/components/processors/branch
+[guides.bloblang]: /docs/guides/bloblang/about
+[configuration.pipelines]: /docs/configuration/processing_pipelines
+[configuration.error-handling]: /docs/configuration/error_handling
+`,
+		Examples: []docs.AnnotatedExample{
+			{
+				Title: "Automatic Ordering",
+				Summary: `
+When the field ` + "`order`" + ` is omitted a best attempt is made to determine a dependency tree between branches based on their request and result mappings. In the following example the branches foo and bar will be executed first in parallel, and afterwards the branch baz will be executed.`,
+				Config: `
+pipeline:
+  processors:
+    - workflow:
+        meta_path: meta.workflow
+        branches:
+          foo:
+            request_map: 'root = ""'
+            processors:
+              - http:
+                  url: TODO
+            result_map: 'root.foo = this'
+
+          bar:
+            request_map: 'root = this.body'
+            processors:
+              - lambda:
+                  function: TODO
+            result_map: 'root.bar = this'
+
+          baz:
+            request_map: |
+              root.fooid = this.foo.id
+              root.barstuff = this.bar.content
+            processors:
+              - cache:
+                  resource: TODO
+                  operator: set
+                  key: ${! json("fooid") }
+                  value: ${! json("barstuff") }
+`,
+			},
+			{
+				Title: "Conditional Branches",
+				Summary: `
+Branches of a workflow are skipped when the ` + "`request_map`" + ` assigns ` + "`deleted()`" + ` to the root. In this example the branch A is executed when the document type is "foo", and branch B otherwise. Branch C is executed afterwards and is skipped unless either A or B successfully provided a result at ` + "`tmp.result`" + `.`,
+				Config: `
+pipeline:
+  processors:
+    - workflow:
+        branches:
+          A:
+            request_map: |
+              root = if this.document.type != "foo" {
+                  deleted()
+              }
+            processors:
+              - http:
+                  url: TODO
+            result_map: 'root.tmp.result = this'
+
+          B:
+            request_map: |
+              root = if this.document.type == "foo" {
+                  deleted()
+              }
+            processors:
+              - lambda:
+                  function: TODO
+            result_map: 'root.tmp.result = this'
+
+          C:
+            request_map: |
+              root = if this.tmp.result != null {
+                  deleted()
+              }
+            processors:
+              - http:
+                  url: TODO_SOMEWHERE_ELSE
+            result_map: 'root.tmp.result = this'
+`,
+			},
+		},
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("meta_path", "A [dot path](/docs/configuration/field_paths) indicating where to store metadata about workflow execution within the message."),
-			docs.FieldCommon("stages", "A map of ids to [`process_map`](/docs/components/processors/process_map) processors that define each workflow step."),
+			docs.FieldCommon("meta_path", "A [dot path](/docs/configuration/field_paths) indicating where to store and reference [structured metadata](#structured-metadata) about the workflow execution."),
+			docs.FieldDeprecated("stages"),
+			docs.FieldCommon(
+				"order",
+				"An explicit declaration of branch ordered tiers, which describes the order in which parallel tiers of branches should be executed.",
+				[][]string{{"foo", "bar"}, {"baz"}},
+				[][]string{{"foo"}, {"bar"}, {"baz"}},
+			),
+			docs.FieldCommon(
+				"branches",
+				"An object of named [`branch` processors](/docs/components/processors/branch) that make up the workflow. The order and parallelism in which branches are executed can either be made explicit with the field `order`, or if omitted an attempt is made to automatically resolve an ordering based on the mappings of each branch.",
+			),
 		},
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			sanitChildren := map[string]interface{}{}
-			for k, v := range conf.Workflow.Stages {
+			sanitBranches := map[string]interface{}{}
+			for k, v := range conf.Workflow.Branches {
 				sanit, err := v.Sanitise()
 				if err != nil {
 					return nil, err
 				}
-				sanit["dependencies"] = v.Dependencies
-				sanitChildren[k] = sanit
+				sanitBranches[k] = sanit
 			}
-			return map[string]interface{}{
+			m := map[string]interface{}{
 				"meta_path": conf.Workflow.MetaPath,
-				"stages":    sanitChildren,
-			}, nil
+				"order":     conf.Workflow.Order,
+				"branches":  sanitBranches,
+			}
+			if len(conf.Workflow.Stages) > 0 {
+				sanitChildren := map[string]interface{}{}
+				for k, v := range conf.Workflow.Stages {
+					sanit, err := v.Sanitise()
+					if err != nil {
+						return nil, err
+					}
+					sanit["dependencies"] = v.Dependencies
+					sanitChildren[k] = sanit
+				}
+				m["stages"] = sanitChildren
+			}
+
+			return m, nil
 		},
 	}
 }
@@ -77,6 +232,8 @@ You can read more about workflows in Benthos
 // processor.
 type WorkflowConfig struct {
 	MetaPath string                         `json:"meta_path" yaml:"meta_path"`
+	Order    [][]string                     `json:"order" yaml:"order"`
+	Branches map[string]BranchConfig        `json:"branches" yaml:"branches"`
 	Stages   map[string]DepProcessMapConfig `json:"stages" yaml:"stages"`
 }
 
@@ -84,6 +241,8 @@ type WorkflowConfig struct {
 func NewWorkflowConfig() WorkflowConfig {
 	return WorkflowConfig{
 		MetaPath: "meta.workflow",
+		Order:    [][]string{},
+		Branches: map[string]BranchConfig{},
 		Stages:   map[string]DepProcessMapConfig{},
 	}
 }
@@ -97,7 +256,7 @@ type Workflow struct {
 	log   log.Modular
 	stats metrics.Type
 
-	children  map[string]*ProcessMap
+	children  map[string]*Branch
 	dag       [][]string
 	allStages map[string]struct{}
 	metaPath  []string
@@ -118,6 +277,13 @@ type Workflow struct {
 func NewWorkflow(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
+	if len(conf.Workflow.Stages) > 0 {
+		if len(conf.Workflow.Branches) > 0 {
+			return nil, fmt.Errorf("cannot combine both workflow branches and stages in the same processor")
+		}
+		return newWorkflowDeprecated(conf, mgr, log, stats)
+	}
+
 	w := &Workflow{
 		log:         log,
 		stats:       stats,
@@ -130,30 +296,54 @@ func NewWorkflow(
 		w.metaPath = gabs.DotPathToSlice(conf.Workflow.MetaPath)
 	}
 
-	explicitDeps := map[string][]string{}
-	w.children = map[string]*ProcessMap{}
-
-	for k, v := range conf.Workflow.Stages {
+	w.children = map[string]*Branch{}
+	for k, v := range conf.Workflow.Branches {
 		if len(processDAGStageName.FindString(k)) != len(k) {
-			return nil, fmt.Errorf("workflow stage name '%v' contains invalid characters", k)
+			return nil, fmt.Errorf("workflow branch name '%v' contains invalid characters", k)
 		}
 
 		nsLog := log.NewModule(fmt.Sprintf(".%v", k))
 		nsStats := metrics.Namespaced(stats, k)
 
-		child, err := NewProcessMap(v.ProcessMapConfig, mgr, nsLog, nsStats)
+		child, err := newBranch(v, mgr, nsLog, nsStats)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create child process_map '%v': %v", k, err)
+			return nil, fmt.Errorf("failed to create branch '%v': %v", k, err)
 		}
 
 		w.children[k] = child
-		explicitDeps[k] = v.Dependencies
 		w.allStages[k] = struct{}{}
 	}
 
-	var err error
-	if w.dag, err = resolveDAG(explicitDeps, w.children); err != nil {
-		return nil, err
+	if len(conf.Workflow.Order) > 0 {
+		remaining := map[string]struct{}{}
+		for id := range w.children {
+			remaining[id] = struct{}{}
+		}
+		for i, tier := range conf.Workflow.Order {
+			if len(tier) == 0 {
+				return nil, fmt.Errorf("explicit order tier '%v' was empty", i)
+			}
+			for _, t := range tier {
+				if _, exists := remaining[t]; !exists {
+					return nil, fmt.Errorf("order branch double listed or not found: %v", t)
+				}
+				delete(remaining, t)
+			}
+		}
+		if len(remaining) > 0 {
+			names := make([]string, 0, len(remaining))
+			for k := range remaining {
+				names = append(names, k)
+			}
+			return nil, fmt.Errorf("the following branches were missing from order: %v", names)
+		}
+		w.dag = conf.Workflow.Order
+	} else {
+		var err error
+		if w.dag, err = resolveBranchDAG(w.children); err != nil {
+			return nil, err
+		}
+		w.log.Infof("Automatically resolved workflow DAG: %v\n", w.dag)
 	}
 
 	w.mCount = stats.GetCounter("count")
@@ -165,8 +355,77 @@ func NewWorkflow(
 	w.mErrMeta = stats.GetCounter("error.meta_set")
 	w.mErrOverlay = stats.GetCounter("error.overlay")
 
-	w.log.Infof("Resolved workflow DAG: %v\n", w.dag)
 	return w, nil
+}
+
+//------------------------------------------------------------------------------
+
+func depHasPrefix(wanted, provided []string) bool {
+	if len(wanted) < len(provided) {
+		return false
+	}
+	for i, s := range provided {
+		if wanted[i] != s {
+			return false
+		}
+	}
+	return true
+}
+
+func getBranchDeps(id string, wanted [][]string, branches map[string]*Branch) []string {
+	dependencies := []string{}
+
+eLoop:
+	for k, b := range branches {
+		if k == id {
+			continue
+		}
+		for _, tp := range b.targetsProvided() {
+			for _, tn := range wanted {
+				if depHasPrefix(tn, tp) {
+					dependencies = append(dependencies, k)
+					continue eLoop
+				}
+			}
+		}
+	}
+
+	return dependencies
+}
+
+func resolveBranchDAG(branches map[string]*Branch) ([][]string, error) {
+	if branches == nil || len(branches) == 0 {
+		return [][]string{}, nil
+	}
+	remaining := map[string]struct{}{}
+
+	var entries []dependencysolver.Entry
+	for id, b := range branches {
+		wanted := b.targetsUsed()
+
+		remaining[id] = struct{}{}
+		entries = append(entries, dependencysolver.Entry{
+			ID: id, Deps: getBranchDeps(id, wanted, branches),
+		})
+	}
+
+	layers := dependencysolver.LayeredTopologicalSort(entries)
+	for _, l := range layers {
+		for _, id := range l {
+			delete(remaining, id)
+		}
+	}
+
+	if len(remaining) > 0 {
+		var tProcs []string
+		for k := range remaining {
+			tProcs = append(tProcs, k)
+		}
+		sort.Strings(tProcs)
+		return nil, fmt.Errorf("failed to automatically resolve DAG, circular dependencies detected for branches: %v", tProcs)
+	}
+
+	return layers, nil
 }
 
 //------------------------------------------------------------------------------
@@ -193,10 +452,12 @@ func (w *Workflow) incrStageSucc(id string) {
 	w.mSuccStages[id] = ctr
 }
 
+//------------------------------------------------------------------------------
+
 type resultTracker struct {
 	succeeded map[string]struct{}
 	skipped   map[string]struct{}
-	failed    map[string]struct{}
+	failed    map[string]string
 	sync.Mutex
 }
 
@@ -204,7 +465,7 @@ func trackerFromTree(tree [][]string) *resultTracker {
 	r := &resultTracker{
 		succeeded: map[string]struct{}{},
 		skipped:   map[string]struct{}{},
-		failed:    map[string]struct{}{},
+		failed:    map[string]string{},
 	}
 	for _, layer := range tree {
 		for _, k := range layer {
@@ -223,7 +484,7 @@ func (r *resultTracker) Skipped(k string) {
 	r.Unlock()
 }
 
-func (r *resultTracker) Failed(k string) {
+func (r *resultTracker) Failed(k, why string) {
 	r.Lock()
 	if _, exists := r.succeeded[k]; exists {
 		delete(r.succeeded, k)
@@ -231,32 +492,42 @@ func (r *resultTracker) Failed(k string) {
 	if _, exists := r.skipped[k]; exists {
 		delete(r.skipped, k)
 	}
-	r.failed[k] = struct{}{}
+	r.failed[k] = why
 	r.Unlock()
 }
 
-func (r *resultTracker) ToSlices() (succeeded, skipped, failed []string) {
-	r.Lock()
-
-	succeeded = make([]string, 0, len(r.succeeded))
-	skipped = make([]string, 0, len(r.skipped))
-	failed = make([]string, 0, len(r.failed))
+func (r *resultTracker) ToObject() map[string]interface{} {
+	succeeded := make([]interface{}, 0, len(r.succeeded))
+	skipped := make([]interface{}, 0, len(r.skipped))
+	failed := make(map[string]interface{}, len(r.failed))
 
 	for k := range r.succeeded {
 		succeeded = append(succeeded, k)
 	}
-	sort.Strings(succeeded)
+	sort.Slice(succeeded, func(i, j int) bool {
+		return succeeded[i].(string) < succeeded[j].(string)
+	})
 	for k := range r.skipped {
 		skipped = append(skipped, k)
 	}
-	sort.Strings(skipped)
-	for k := range r.failed {
-		failed = append(failed, k)
+	sort.Slice(skipped, func(i, j int) bool {
+		return skipped[i].(string) < skipped[j].(string)
+	})
+	for k, v := range r.failed {
+		failed[k] = v
 	}
-	sort.Strings(failed)
 
-	r.Unlock()
-	return
+	m := map[string]interface{}{}
+	if len(succeeded) > 0 {
+		m["succeeded"] = succeeded
+	}
+	if len(skipped) > 0 {
+		m["skipped"] = skipped
+	}
+	if len(failed) > 0 {
+		m["failed"] = failed
+	}
+	return m
 }
 
 // Returns a map of enrichment IDs that should be skipped for this payload.
@@ -333,47 +604,50 @@ func (w *Workflow) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	}
 
 	for _, layer := range w.dag {
-		results := make([]types.Message, len(layer))
+		results := make([][]types.Part, len(layer))
 		errors := make([]error, len(layer))
 
 		wg := sync.WaitGroup{}
 		wg.Add(len(layer))
 		for i, eid := range layer {
 			go func(id string, index int) {
-				msgCopy := propMsg.Copy()
-				msgCopy.Iter(func(partIndex int, p types.Part) error {
-					if _, exists := skipOnMeta[partIndex][id]; exists {
-						p.Set(nil)
+				requestParts := make([]types.Part, propMsg.Len())
+				propMsg.Iter(func(partIndex int, p types.Part) error {
+					if _, exists := skipOnMeta[partIndex][id]; !exists {
+						part := p.Copy()
+						// Remove errors so that they aren't propagated into the
+						// branch.
+						ClearFail(part)
+						requestParts[partIndex] = part
 					}
 					return nil
 				})
 
-				var resSpans []opentracing.Span
-				results[index], resSpans = tracing.WithChildSpans(id, msgCopy)
-				errors[index] = w.children[id].CreateResult(results[index])
-				for _, s := range resSpans {
+				var mapErrs []branchMapError
+				var requestSpans []opentracing.Span
+				requestParts, requestSpans = tracing.PartsWithChildSpans(id, requestParts)
+				results[index], mapErrs, errors[index] = w.children[id].createResult(requestParts, propMsg)
+				for _, s := range requestSpans {
 					s.Finish()
 				}
-				results[index].Iter(func(j int, p types.Part) error {
-					if p.IsEmpty() {
+				for j, p := range results[index] {
+					if p == nil {
 						records[j].Skipped(id)
 					}
-					if HasFailed(p) {
-						records[j].Failed(id)
-						p.Set(nil)
-					}
-					return nil
-				})
+				}
+				for _, e := range mapErrs {
+					records[e.index].Failed(id, e.err.Error())
+				}
 				wg.Done()
 			}(eid, i)
 		}
 		wg.Wait()
 
 		for i, id := range layer {
-			var failed []int
+			var failed []branchMapError
 			err := errors[i]
 			if err == nil {
-				if failed, err = w.children[id].OverlayResult(payload, results[i]); err != nil {
+				if failed, err = w.children[id].overlayResult(payload, results[i]); err != nil {
 					w.mErrOverlay.Incr(1)
 				}
 			}
@@ -382,12 +656,12 @@ func (w *Workflow) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 				w.mErr.Incr(1)
 				w.log.Errorf("Failed to perform enrichment '%v': %v\n", id, err)
 				for j := range records {
-					records[j].Failed(id)
+					records[j].Failed(id, err.Error())
 				}
 				continue
 			}
-			for _, j := range failed {
-				records[j].Failed(id)
+			for _, e := range failed {
+				records[e.index].Failed(id, e.err.Error())
 			}
 			w.incrStageSucc(id)
 		}
@@ -401,35 +675,31 @@ func (w *Workflow) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 				w.mErr.Incr(1)
 				w.mErrMeta.Incr(1)
 				w.log.Errorf("Failed to parse message for meta update: %v\n", err)
+				FlagErr(p, err)
 				return nil
 			}
 
 			gObj := gabs.Wrap(pJSON)
-			if oldRecord := gObj.S(w.metaPath...).Data(); oldRecord != nil {
-				gObj.Delete(w.metaPath...)
-				gObj.Set(oldRecord, append(w.metaPath, "previous")...)
+			previous := gObj.S(w.metaPath...).Data()
+			current := records[i].ToObject()
+			if previous != nil {
+				current["previous"] = previous
 			}
-
-			succStrs, skipStrs, failStrs := records[i].ToSlices()
-			succeeded := make([]interface{}, len(succStrs))
-			skipped := make([]interface{}, len(skipStrs))
-			failed := make([]interface{}, len(failStrs))
-
-			for j, v := range succStrs {
-				succeeded[j] = v
-			}
-			for j, v := range skipStrs {
-				skipped[j] = v
-			}
-			for j, v := range failStrs {
-				failed[j] = v
-			}
-
-			gObj.Set(succeeded, append(w.metaPath, "succeeded")...)
-			gObj.Set(skipped, append(w.metaPath, "skipped")...)
-			gObj.Set(failed, append(w.metaPath, "failed")...)
+			gObj.Set(current, w.metaPath...)
 
 			p.SetJSON(gObj.Data())
+			return nil
+		})
+	} else {
+		payload.Iter(func(i int, p types.Part) error {
+			if lf := len(records[i].failed); lf > 0 {
+				failed := make([]string, 0, lf)
+				for k := range records[i].failed {
+					failed = append(failed, k)
+				}
+				sort.Strings(failed)
+				FlagErr(p, fmt.Errorf("workflow branches failed: %v", failed))
+			}
 			return nil
 		})
 	}
