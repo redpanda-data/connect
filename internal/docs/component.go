@@ -185,7 +185,7 @@ version release. Please consider moving onto [alternative components](#alternati
 {{if gt (len .Description) 0}}
 {{.Description}}
 {{end}}
-{{if and (le (len .Fields) 6) (gt (len .Fields) 0) -}}
+{{if and (le (len .Fields) 4) (gt (len .Fields) 0) -}}
 {{template "field_docs" . -}}
 {{end -}}
 
@@ -213,7 +213,7 @@ version release. Please consider moving onto [alternative components](#alternati
 
 {{end -}}
 
-{{if gt (len .Fields) 6 -}}
+{{if gt (len .Fields) 4 -}}
 {{template "field_docs" . -}}
 {{end -}}
 

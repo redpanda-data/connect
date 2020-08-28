@@ -55,29 +55,53 @@ fields individually for each message. This allows you to specify dynamic keys
 and values based on the contents of the message payloads and metadata. You can
 find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
 
-## Operators
+## Examples
 
-### `set`
+<Tabs defaultValue="Deduplication" values={[
+{ label: 'Deduplication', value: 'Deduplication', },
+{ label: 'Hydration', value: 'Hydration', },
+]}>
 
-Set a key in the cache to a value. If the key already exists the contents are
-overridden.
+<TabItem value="Deduplication">
 
-### `add`
 
-Set a key in the cache to a value. If the key already exists the action fails
-with a 'key already exists' error, which can be detected with
-[processor error handling](/docs/configuration/error_handling).
+Deduplication can be done using the add operator with a key extracted from the
+message payload, since it fails when a key already exists we can remove the
+duplicates using a
+[`bloblang` processor](/docs/components/processors/bloblang):
 
-### `get`
+```yaml
+pipeline:
+  processors:
+    - cache:
+        resource: TODO
+        operator: add
+        key: '${! json("message.id") }'
+        value: "storeme"
+    - bloblang: root = if errored() { deleted() }
+```
 
-Retrieve the contents of a cached key and replace the original message payload
-with the result. If the key does not exist the action fails with an error, which
-can be detected with [processor error handling](/docs/configuration/error_handling).
+</TabItem>
+<TabItem value="Hydration">
 
-### `delete`
 
-Delete a key and its contents from the cache.  If the key does not exist the
-action is a no-op and will not fail with an error.
+It's possible to enrich payloads with content previously stored in a cache by
+using the [`branch`](/docs/components/processors/branch) processor:
+
+```yaml
+pipeline:
+  processors:
+    - branch:
+        processors:
+          - cache:
+              resource: TODO
+              operator: get
+              key: '${! json("message.document_id") }'
+        result_map: 'root.message.document = this'
+```
+
+</TabItem>
+</Tabs>
 
 ## Fields
 
@@ -129,39 +153,27 @@ counting backwards starting from -1.
 Type: `array`  
 Default: `[]`  
 
-## Examples
+## Operators
 
-The `cache` processor can be used in combination with other processors
-in order to solve a variety of data stream problems.
+### `set`
 
-### Deduplication
+Set a key in the cache to a value. If the key already exists the contents are
+overridden.
 
-Deduplication can be done using the add operator with a key extracted from the
-message payload, since it fails when a key already exists we can remove the
-duplicates using a
-[`bloblang` processor](/docs/components/processors/bloblang):
+### `add`
 
-``` yaml
-- cache:
-    resource: TODO
-    operator: add
-    key: '${! json("message.id") }'
-    value: "storeme"
-- bloblang: root = if errored() { deleted() }
-```
+Set a key in the cache to a value. If the key already exists the action fails
+with a 'key already exists' error, which can be detected with
+[processor error handling](/docs/configuration/error_handling).
 
-### Hydration
+### `get`
 
-It's possible to enrich payloads with content previously stored in a cache by
-using the [`branch`](/docs/components/processors/branch) processor:
+Retrieve the contents of a cached key and replace the original message payload
+with the result. If the key does not exist the action fails with an error, which
+can be detected with [processor error handling](/docs/configuration/error_handling).
 
-``` yaml
-- branch:
-    processors:
-    - cache:
-        resource: TODO
-        operator: get
-        key: '${! json("message.document_id") }'
-    result_map: 'root.message.document = this'
-```
+### `delete`
+
+Delete a key and its contents from the cache.  If the key does not exist the
+action is a no-op and will not fail with an error.
 

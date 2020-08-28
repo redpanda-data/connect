@@ -6,7 +6,7 @@ description: How to configure Benthos to process a workflow of enrichment servic
 
 This cookbook demonstrates how to enrich a stream of JSON documents with HTTP services. This method also works with AWS Lambda functions, subprocesses, etc.
 
-We will start off by configuring a single enrichment, then we will move onto a workflow of enrichments with a network of dependencies.
+We will start off by configuring a single enrichment, then we will move onto a workflow of enrichments with a network of dependencies using the [`workflow` processor][processor.workflow].
 
 Each enrichment will be performed in parallel across a [pre-batched][batching] stream of documents. Workflow enrichments that do not depend on each other will also be performed in parallel, making this orchestration method very efficient.
 

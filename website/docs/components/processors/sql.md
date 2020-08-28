@@ -14,8 +14,8 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Runs an SQL query against a target database for each message batch and, for
-queries that return rows, replaces the batch with the result according to a
+Runs an SQL prepared query against a target database for each message batch and,
+for queries that return rows, replaces the batch with the result according to a
 [codec](#result-codecs).
 
 ```yaml
@@ -29,23 +29,8 @@ sql:
 ```
 
 If a query contains arguments they can be set as an array of strings supporting
-[interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the
-`args` field.
-
-In order to execute an SQL query for each message of the batch use this
-processor within a [`for_each`](/docs/components/processors/for_each) processor:
-
-``` yaml
-for_each:
-- sql:
-    driver: mysql
-    dsn: foouser:foopassword@tcp(localhost:3306)/foodb
-    query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
-    args:
-    - ${! json("document.foo") }
-    - ${! json("document.bar") }
-    - ${! meta("kafka_topic") }
-```
+[interpolation functions](/docs/configuration/interpolation#bloblang-queries) in
+the `args` field.
 
 ## Drivers
 
@@ -56,6 +41,61 @@ The following is a list of supported drivers and their respective DSN formats:
 
 Please note that the `postgres` driver enforces SSL by default, you
 can override this with the parameter `sslmode=disable` if required.
+
+## Examples
+
+<Tabs defaultValue="Table Insert (MySQL)" values={[
+{ label: 'Table Insert (MySQL)', value: 'Table Insert (MySQL)', },
+{ label: 'Table Query (PostgreSQL)', value: 'Table Query (PostgreSQL)', },
+]}>
+
+<TabItem value="Table Insert (MySQL)">
+
+
+The following example inserts rows into the table footable with the columns foo,
+bar and baz populated with values extracted from messages:
+
+```yaml
+pipeline:
+  processors:
+    - for_each:
+      - sql:
+          driver: mysql
+          dsn: foouser:foopassword@tcp(localhost:3306)/foodb
+          query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
+          args:
+            - ${! json("document.foo") }
+            - ${! json("document.bar") }
+            - ${! meta("kafka_topic") }
+```
+
+</TabItem>
+<TabItem value="Table Query (PostgreSQL)">
+
+
+Here we query a database for columns of footable that share a `user_id`
+with the message `user.id`. The `result_codec` is set to
+`json_array` and a [`branch` processor](/docs/components/processors/branch)
+is used in order to insert the resulting array into the original message at the
+path `foo_rows`:
+
+```yaml
+pipeline:
+  processors:
+    - branch:
+        processors:
+          - sql:
+              driver: postgresql
+              result_codec: json_array
+              dsn: postgres://foouser:foopass@localhost:5432/testdb?sslmode=disable
+              query: "SELECT * FROM footable WHERE user_id = $1;"
+              args:
+                - ${! json("user.id") }
+        result_map: 'root.foo_rows = this'
+```
+
+</TabItem>
+</Tabs>
 
 ## Fields
 
@@ -112,6 +152,7 @@ A [codec](#result-codecs) to determine how resulting rows are converted into mes
 
 Type: `string`  
 Default: `"none"`  
+Options: `none`, `json_array`.
 
 ## Result Codecs
 

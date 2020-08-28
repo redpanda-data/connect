@@ -26,28 +26,13 @@ func init() {
 	Constructors[TypeSQL] = TypeSpec{
 		constructor: NewSQL,
 		Summary: `
-Runs an SQL query against a target database for each message batch and, for
-queries that return rows, replaces the batch with the result according to a
+Runs an SQL prepared query against a target database for each message batch and,
+for queries that return rows, replaces the batch with the result according to a
 [codec](#result-codecs).`,
 		Description: `
 If a query contains arguments they can be set as an array of strings supporting
-[interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the
-` + "`args`" + ` field.
-
-In order to execute an SQL query for each message of the batch use this
-processor within a ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor:
-
-` + "``` yaml" + `
-for_each:
-- sql:
-    driver: mysql
-    dsn: foouser:foopassword@tcp(localhost:3306)/foodb
-    query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
-    args:
-    - ${! json("document.foo") }
-    - ${! json("document.bar") }
-    - ${! meta("kafka_topic") }
-` + "```" + `
+[interpolation functions](/docs/configuration/interpolation#bloblang-queries) in
+the ` + "`args`" + ` field.
 
 ## Drivers
 
@@ -58,8 +43,55 @@ The following is a list of supported drivers and their respective DSN formats:
 
 Please note that the ` + "`postgres`" + ` driver enforces SSL by default, you
 can override this with the parameter ` + "`sslmode=disable`" + ` if required.`,
+		Examples: []docs.AnnotatedExample{
+			{
+				Title: "Table Insert (MySQL)",
+				Summary: `
+The following example inserts rows into the table footable with the columns foo,
+bar and baz populated with values extracted from messages:`,
+				Config: `
+pipeline:
+  processors:
+    - for_each:
+      - sql:
+          driver: mysql
+          dsn: foouser:foopassword@tcp(localhost:3306)/foodb
+          query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
+          args:
+            - ${! json("document.foo") }
+            - ${! json("document.bar") }
+            - ${! meta("kafka_topic") }
+`,
+			},
+			{
+				Title: "Table Query (PostgreSQL)",
+				Summary: `
+Here we query a database for columns of footable that share a ` + "`user_id`" + `
+with the message ` + "`user.id`" + `. The ` + "`result_codec`" + ` is set to
+` + "`json_array`" + ` and a ` + "[`branch` processor](/docs/components/processors/branch)" + `
+is used in order to insert the resulting array into the original message at the
+path ` + "`foo_rows`" + `:`,
+				Config: `
+pipeline:
+  processors:
+    - branch:
+        processors:
+          - sql:
+              driver: postgresql
+              result_codec: json_array
+              dsn: postgres://foouser:foopass@localhost:5432/testdb?sslmode=disable
+              query: "SELECT * FROM footable WHERE user_id = $1;"
+              args:
+                - ${! json("user.id") }
+        result_map: 'root.foo_rows = this'
+`,
+			},
+		},
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("driver", "A database [driver](#drivers) to use.").HasOptions("mysql", "postgres"),
+			docs.FieldCommon(
+				"driver",
+				"A database [driver](#drivers) to use.",
+			).HasOptions("mysql", "postgres"),
 			docs.FieldCommon(
 				"dsn", "A Data Source Name to identify the target database.",
 				"foouser:foopassword@tcp(localhost:3306)/foodb",
@@ -68,8 +100,14 @@ can override this with the parameter ` + "`sslmode=disable`" + ` if required.`,
 				"query", "The query to run against the database.",
 				"INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);",
 			),
-			docs.FieldCommon("args", "A list of arguments for the query to be resolved for each message batch.").SupportsInterpolation(true),
-			docs.FieldCommon("result_codec", "A [codec](#result-codecs) to determine how resulting rows are converted into messages."),
+			docs.FieldCommon(
+				"args",
+				"A list of arguments for the query to be resolved for each message batch.",
+			).SupportsInterpolation(true),
+			docs.FieldCommon(
+				"result_codec",
+				"A [codec](#result-codecs) to determine how resulting rows are converted into messages.",
+			).HasOptions("none", "json_array"),
 		},
 		Footnotes: `
 ## Result Codecs
