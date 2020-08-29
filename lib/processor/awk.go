@@ -30,6 +30,9 @@ func init() {
 
 	Constructors[TypeAWK] = TypeSpec{
 		constructor: NewAWK,
+		Categories: []Category{
+			CategoryMapping,
+		},
 		Summary: `
 Executes an AWK program on messages. This processor is very powerful as it
 offers a range of [custom functions](#awk-functions) for querying and mutating

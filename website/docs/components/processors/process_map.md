@@ -22,11 +22,6 @@ A processor that extracts and maps fields identified via
 object, applies a list of processors to the newly constructed object, and
 finally maps the result back into the original payload.
 
-## Alternatives
-
-All functionality of this processor has been superseded by the
-[branch](/docs/components/processors/branch) processor.
-
 
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
@@ -63,6 +58,11 @@ process_map:
 
 </TabItem>
 </Tabs>
+
+## Alternatives
+
+All functionality of this processor has been superseded by the
+[branch](/docs/components/processors/branch) processor.
 
 This processor is useful for performing processors on subsections of a payload.
 For example, you could extract sections of a JSON object in order to construct

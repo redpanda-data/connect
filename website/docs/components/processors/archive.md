@@ -1,6 +1,7 @@
 ---
 title: archive
 type: processor
+categories: ["Parsing"]
 ---
 
 <!--

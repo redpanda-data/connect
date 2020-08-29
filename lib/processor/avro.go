@@ -21,6 +21,9 @@ import (
 func init() {
 	Constructors[TypeAvro] = TypeSpec{
 		constructor: NewAvro,
+		Categories: []Category{
+			CategoryParsing,
+		},
 		Summary: `
 Performs Avro based operations on messages based on a schema.`,
 		Beta: true,

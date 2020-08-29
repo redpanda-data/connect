@@ -1,6 +1,7 @@
 ---
 title: subprocess
 type: processor
+categories: ["Integration"]
 ---
 
 <!--

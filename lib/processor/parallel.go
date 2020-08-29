@@ -19,6 +19,9 @@ import (
 func init() {
 	Constructors[TypeParallel] = TypeSpec{
 		constructor: NewParallel,
+		Categories: []Category{
+			CategoryComposition,
+		},
 		Summary: `
 A processor that applies a list of child processors to messages of a batch as
 though they were each a batch of one message (similar to the

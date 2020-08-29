@@ -23,15 +23,18 @@ func init() {
 	Constructors[TypeBranch] = TypeSpec{
 		Beta:        true,
 		constructor: NewBranch,
+		Categories: []Category{
+			CategoryComposition,
+		},
 		Summary: `
 The ` + "`branch`" + ` processor allows you to create a new request message via
 a [Bloblang mapping](/docs/guides/bloblang/about), execute a list of processors
 on the request messages, and, finally, map the result back into the source
-message using another mapping.
-
+message using another mapping.`,
+		Description: `,
 This is useful for preserving the original message contents when using
-processors that would otherwise replace the entire contents.`,
-		Description: `
+processors that would otherwise replace the entire contents.
+
 ### Error Handling
 
 If the ` + "`request_map`" + ` fails the child processors will not be executed.

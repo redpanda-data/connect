@@ -1,5 +1,5 @@
 const path = require('path');
-const {listNames} = require('./src/plugins/components');
+const {components} = require('./src/plugins/components');
 
 module.exports = {
   title: 'Benthos',
@@ -11,15 +11,15 @@ module.exports = {
   projectName: 'benthos',
   customFields: {
     components: {
-      inputs: listNames("inputs"),
-      processors: listNames("processors"),
-      conditions: listNames("conditions"),
-      outputs: listNames("outputs"),
-      caches: listNames("caches"),
-      rate_limits: listNames("rate_limits"),
-      buffers: listNames("buffers"),
-      metrics: listNames("metrics"),
-      tracers: listNames("tracers"),
+      inputs: components("inputs"),
+      processors: components("processors"),
+      conditions: components("conditions"),
+      outputs: components("outputs"),
+      caches: components("caches"),
+      rate_limits: components("rate_limits"),
+      buffers: components("buffers"),
+      metrics: components("metrics"),
+      tracers: components("tracers"),
     },
   },
   themeConfig: {

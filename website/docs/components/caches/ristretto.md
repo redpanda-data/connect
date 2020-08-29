@@ -18,12 +18,7 @@ BETA: This component is experimental and therefore subject to change outside of
 major version releases.
 
 Stores key/value pairs in a map held in the memory-bound
-[Ristretto cache](https://github.com/dgraph-io/ristretto). This cache is more
-efficient and appropriate for high-volume use cases than the standard memory
-cache.
-
-The add command is non-atomic, and therefore this cache is not suitable for
-deduplication.
+[Ristretto cache](https://github.com/dgraph-io/ristretto).
 
 
 <Tabs defaultValue="common" values={[
@@ -55,6 +50,8 @@ ristretto:
 
 </TabItem>
 </Tabs>
+
+This cache is more efficient and appropriate for high-volume use cases than the standard memory cache. The add command is non-atomic, and therefore this cache is not suitable for deduplication.
 
 ## Fields
 

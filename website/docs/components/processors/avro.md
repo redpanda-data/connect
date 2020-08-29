@@ -1,6 +1,7 @@
 ---
 title: avro
 type: processor
+categories: ["Parsing"]
 beta: true
 ---
 

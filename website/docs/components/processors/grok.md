@@ -1,6 +1,7 @@
 ---
 title: grok
 type: processor
+categories: ["Parsing"]
 ---
 
 <!--

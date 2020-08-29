@@ -17,6 +17,9 @@ import (
 func init() {
 	Constructors[TypeLog] = TypeSpec{
 		constructor: NewLog,
+		Categories: []Category{
+			CategoryUtility,
+		},
 		Summary: `
 Prints a log event each time it processes a batch. Messages always remain
 unchanged. The log message can be set using function interpolations described

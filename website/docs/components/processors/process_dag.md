@@ -22,15 +22,15 @@ calculates a Directed Acyclic Graph (DAG) of their dependencies by referring to
 their postmap targets for provided fields and their premap targets for required
 fields.
 
-## Alternatives
-
-All functionality of this processor has been superseded by the
-[workflow](/docs/components/processors/workflow) processor.
-
 ```yaml
 # Config fields, showing default values
 process_dag: {}
 ```
+
+## Alternatives
+
+All functionality of this processor has been superseded by the
+[workflow](/docs/components/processors/workflow) processor.
 
 The names of workflow stages may only contain alphanumeric, underscore and dash
 characters (they must match the regular expression `[a-zA-Z0-9_-]+`).

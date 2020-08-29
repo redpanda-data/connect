@@ -21,6 +21,9 @@ import (
 func init() {
 	Constructors[TypeRedis] = TypeSpec{
 		constructor: NewRedis,
+		Categories: []Category{
+			CategoryIntegration,
+		},
 		Summary: `
 Performs actions against Redis that aren't possible using a
 ` + "[`cache`](/docs/components/processors/cache)" + ` processor. Actions are

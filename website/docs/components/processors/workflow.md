@@ -1,6 +1,7 @@
 ---
 title: workflow
 type: processor
+categories: ["Composition"]
 beta: true
 ---
 

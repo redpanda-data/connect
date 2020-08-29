@@ -1,6 +1,7 @@
 ---
 title: lambda
 type: processor
+categories: ["Integration"]
 ---
 
 <!--

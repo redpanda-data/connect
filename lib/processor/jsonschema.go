@@ -21,6 +21,9 @@ import (
 func init() {
 	Constructors[TypeJSONSchema] = TypeSpec{
 		constructor: NewJSONSchema,
+		Categories: []Category{
+			CategoryMapping,
+		},
 		Summary: `
 Checks messages against a provided JSONSchema definition but does not change the
 payload under any circumstances. If a message does not match the schema it can

@@ -19,6 +19,9 @@ import (
 func init() {
 	Constructors[TypeWhile] = TypeSpec{
 		constructor: NewWhile,
+		Categories: []Category{
+			CategoryComposition,
+		},
 		Summary: `
 While is a processor that has a condition and a list of child processors. The
 child processors are executed continuously on a message batch for as long as the

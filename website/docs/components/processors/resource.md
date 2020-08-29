@@ -1,6 +1,7 @@
 ---
 title: resource
 type: processor
+categories: ["Utility"]
 ---
 
 <!--

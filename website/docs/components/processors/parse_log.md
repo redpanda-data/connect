@@ -1,6 +1,7 @@
 ---
 title: parse_log
 type: processor
+categories: ["Parsing"]
 ---
 
 <!--

@@ -25,6 +25,9 @@ import (
 func init() {
 	Constructors[TypeSQL] = TypeSpec{
 		constructor: NewSQL,
+		Categories: []Category{
+			CategoryIntegration,
+		},
 		Summary: `
 Runs an SQL prepared query against a target database for each message batch and,
 for queries that return rows, replaces the batch with the result according to a

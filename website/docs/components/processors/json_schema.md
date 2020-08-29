@@ -1,6 +1,7 @@
 ---
 title: json_schema
 type: processor
+categories: ["Mapping"]
 ---
 
 <!--

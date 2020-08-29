@@ -23,12 +23,9 @@ func init() {
 		Beta:        true,
 		Summary: `
 Stores key/value pairs in a map held in the memory-bound
-[Ristretto cache](https://github.com/dgraph-io/ristretto). This cache is more
-efficient and appropriate for high-volume use cases than the standard memory
-cache.
-
-The add command is non-atomic, and therefore this cache is not suitable for
-deduplication.`,
+[Ristretto cache](https://github.com/dgraph-io/ristretto).`,
+		Description: `
+This cache is more efficient and appropriate for high-volume use cases than the standard memory cache. The add command is non-atomic, and therefore this cache is not suitable for deduplication.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(
 				"ttl",

@@ -1,6 +1,7 @@
 ---
 title: protobuf
 type: processor
+categories: ["Parsing"]
 beta: true
 ---
 

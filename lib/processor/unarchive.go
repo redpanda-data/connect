@@ -23,6 +23,9 @@ import (
 func init() {
 	Constructors[TypeUnarchive] = TypeSpec{
 		constructor: NewUnarchive,
+		Categories: []Category{
+			CategoryParsing,
+		},
 		Summary: `
 Unarchives messages according to the selected archive [format](#formats) into
 multiple messages within a [batch](/docs/configuration/batching).`,

@@ -16,6 +16,9 @@ import (
 func init() {
 	Constructors[TypeSplit] = TypeSpec{
 		constructor: NewSplit,
+		Categories: []Category{
+			CategoryUtility,
+		},
 		Summary: `
 Breaks message batches (synonymous with multiple part messages) into smaller
 batches. The size of the resulting batches are determined either by a discrete

@@ -1,6 +1,7 @@
 ---
 title: http
 type: processor
+categories: ["Integration"]
 ---
 
 <!--

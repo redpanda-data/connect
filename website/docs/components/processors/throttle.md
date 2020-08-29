@@ -1,6 +1,7 @@
 ---
 title: throttle
 type: processor
+categories: ["Utility"]
 ---
 
 <!--

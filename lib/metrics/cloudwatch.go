@@ -21,11 +21,9 @@ import (
 func init() {
 	Constructors[TypeCloudWatch] = TypeSpec{
 		constructor: NewCloudWatch,
+		Beta:        true,
 		Summary: `
-Send metrics to AWS CloudWatch using the PutMetricData endpoint.
-
-ALPHA: This metrics target is experimental, untested, and subject to breaking
-changes outside of major releases. It also wrote Game of Thrones Season 8.`,
+Send metrics to AWS CloudWatch using the PutMetricData endpoint.`,
 		Description: `
 It is STRONGLY recommended that you reduce the metrics that are exposed with a
 ` + "`path_mapping`" + ` like this:

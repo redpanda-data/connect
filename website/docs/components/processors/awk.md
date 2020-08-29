@@ -1,6 +1,7 @@
 ---
 title: awk
 type: processor
+categories: ["Mapping"]
 ---
 
 <!--

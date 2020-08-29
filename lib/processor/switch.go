@@ -19,6 +19,9 @@ import (
 func init() {
 	Constructors[TypeSwitch] = TypeSpec{
 		constructor: NewSwitch,
+		Categories: []Category{
+			CategoryComposition,
+		},
 		Summary: `
 A processor that lists child case objects each containing a condition and
 processors. Each batch of messages is tested against the condition of each child

@@ -1,6 +1,7 @@
 ---
 title: sql
 type: processor
+categories: ["Integration"]
 ---
 
 <!--

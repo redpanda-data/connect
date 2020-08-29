@@ -18,6 +18,9 @@ import (
 func init() {
 	Constructors[TypeCache] = TypeSpec{
 		constructor: NewCache,
+		Categories: []Category{
+			CategoryIntegration,
+		},
 		Summary: `
 Performs operations against a [cache resource](/docs/components/caches/about)
 for each message, allowing you to store or retrieve data within message payloads.`,

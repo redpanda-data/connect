@@ -25,6 +25,9 @@ import (
 func init() {
 	Constructors[TypeSubprocess] = TypeSpec{
 		constructor: NewSubprocess,
+		Categories: []Category{
+			CategoryIntegration,
+		},
 		Summary: `
 Subprocess is a processor that runs a process in the background and, for each
 message, will pipe its contents to the stdin stream of the process followed by a

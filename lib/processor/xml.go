@@ -23,6 +23,9 @@ func init() {
 	Constructors[TypeXML] = TypeSpec{
 		constructor: NewXML,
 		Beta:        true,
+		Categories: []Category{
+			CategoryParsing,
+		},
 		Summary: `
 Parses messages as an XML document, performs a mutation on the data, and then
 overwrites the previous contents with the new value.`,

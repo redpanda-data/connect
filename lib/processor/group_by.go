@@ -20,6 +20,9 @@ import (
 func init() {
 	Constructors[TypeGroupBy] = TypeSpec{
 		constructor: NewGroupBy,
+		Categories: []Category{
+			CategoryComposition,
+		},
 		Summary: `
 Splits a batch of messages into N batches, where each resulting batch contains a
 group of messages determined by conditions that are applied per message of the

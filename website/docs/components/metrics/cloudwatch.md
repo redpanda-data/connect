@@ -1,6 +1,7 @@
 ---
 title: cloudwatch
 type: metrics
+beta: true
 ---
 
 <!--
@@ -13,11 +14,10 @@ type: metrics
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+BETA: This component is experimental and therefore subject to change outside of
+major version releases.
 
 Send metrics to AWS CloudWatch using the PutMetricData endpoint.
-
-ALPHA: This metrics target is experimental, untested, and subject to breaking
-changes outside of major releases. It also wrote Game of Thrones Season 8.
 
 
 <Tabs defaultValue="common" values={[

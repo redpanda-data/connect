@@ -16,6 +16,9 @@ import (
 func init() {
 	Constructors[TypeForEach] = TypeSpec{
 		constructor: NewForEach,
+		Categories: []Category{
+			CategoryComposition,
+		},
 		Summary: `
 A processor that applies a list of child processors to messages of a batch as
 though they were each a batch of one message.`,

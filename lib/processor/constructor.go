@@ -17,6 +17,18 @@ import (
 
 //------------------------------------------------------------------------------
 
+// Category describes the general purpose of a processor.
+type Category string
+
+// Processor categories
+var (
+	CategoryMapping     Category = "Mapping"
+	CategoryParsing     Category = "Parsing"
+	CategoryIntegration Category = "Integration"
+	CategoryComposition Category = "Composition"
+	CategoryUtility     Category = "Utility"
+)
+
 // TypeSpec Constructor and a usage description for each processor type.
 type TypeSpec struct {
 	constructor func(
@@ -30,6 +42,8 @@ type TypeSpec struct {
 	Summary     string
 	Description string
 	Footnotes   string
+
+	Categories []Category
 
 	// UsesBatches indicates whether this processors functionality is best
 	// applied on messages that are already batched.

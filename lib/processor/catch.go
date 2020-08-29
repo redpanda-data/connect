@@ -15,6 +15,9 @@ import (
 func init() {
 	Constructors[TypeCatch] = TypeSpec{
 		constructor: NewCatch,
+		Categories: []Category{
+			CategoryComposition,
+		},
 		Summary: `
 Applies a list of child processors _only_ when a previous processing step has
 failed.`,

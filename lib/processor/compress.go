@@ -21,6 +21,9 @@ import (
 func init() {
 	Constructors[TypeCompress] = TypeSpec{
 		constructor: NewCompress,
+		Categories: []Category{
+			CategoryParsing,
+		},
 		Summary: `
 Compresses messages according to the selected algorithm. Supported compression
 algorithms are: gzip, zlib, flate.`,

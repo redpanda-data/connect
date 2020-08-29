@@ -1,6 +1,7 @@
 ---
 title: bloblang
 type: processor
+categories: ["Mapping","Parsing"]
 ---
 
 <!--

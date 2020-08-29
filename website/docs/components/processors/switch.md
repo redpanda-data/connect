@@ -1,6 +1,7 @@
 ---
 title: switch
 type: processor
+categories: ["Composition"]
 ---
 
 <!--

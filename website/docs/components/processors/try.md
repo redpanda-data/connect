@@ -1,6 +1,7 @@
 ---
 title: try
 type: processor
+categories: ["Composition"]
 ---
 
 <!--

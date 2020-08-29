@@ -19,6 +19,9 @@ import (
 func init() {
 	Constructors[TypeLambda] = TypeSpec{
 		constructor: NewLambda,
+		Categories: []Category{
+			CategoryIntegration,
+		},
 		Summary: `
 Invokes an AWS lambda for each message. The contents of the message is the
 payload of the request, and the result of the invocation will become the new

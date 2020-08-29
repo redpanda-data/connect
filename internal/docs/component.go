@@ -2,6 +2,7 @@ package docs
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -38,6 +39,9 @@ type ComponentSpec struct {
 	// Description of the component (in markdown).
 	Description string
 
+	// Categories that describe the purpose of the component.
+	Categories []string
+
 	// Footnotes of the component (in markdown).
 	Footnotes string
 
@@ -66,17 +70,19 @@ type fieldContext struct {
 }
 
 type componentContext struct {
-	Name           string
-	Type           string
-	Summary        string
-	Description    string
-	Examples       []AnnotatedExample
-	Fields         []fieldContext
-	Footnotes      string
-	CommonConfig   string
-	AdvancedConfig string
-	Beta           bool
-	Deprecated     bool
+	Name               string
+	Type               string
+	FrontMatterSummary string
+	Summary            string
+	Description        string
+	Categories         string
+	Examples           []AnnotatedExample
+	Fields             []fieldContext
+	Footnotes          string
+	CommonConfig       string
+	AdvancedConfig     string
+	Beta               bool
+	Deprecated         bool
 }
 
 func (ctx fieldContext) InterpolationBatchWide() FieldInterpolation {
@@ -123,6 +129,12 @@ Type: ` + "`{{$field.Type}}`" + `
 ---
 title: {{.Name}}
 type: {{.Type}}
+{{if gt (len .FrontMatterSummary) 0 -}}
+description: "{{.FrontMatterSummary}}"
+{{end -}}
+{{if gt (len .Categories) 0 -}}
+categories: {{.Categories}}
+{{end -}}
 {{if .Beta -}}
 beta: true
 {{end -}}
@@ -278,15 +290,25 @@ func (c *ComponentSpec) createConfigs(root string, fullConfigExample interface{}
 // AsMarkdown renders the spec of a component, along with a full configuration
 // example, into a markdown document.
 func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]byte, error) {
+	if strings.Contains(c.Summary, "\n\n") {
+		return nil, fmt.Errorf("%v component '%v' has a summary containing empty lines", c.Type, c.Name)
+	}
+
 	ctx := componentContext{
-		Name:        c.Name,
-		Type:        c.Type,
+		Name: c.Name,
+		Type: c.Type,
+		// FrontMatterSummary: strings.Replace(strings.TrimSpace(c.Summary), "\n", " ", 0),
 		Summary:     c.Summary,
 		Description: c.Description,
 		Examples:    c.Examples,
 		Footnotes:   c.Footnotes,
 		Beta:        c.Beta,
 		Deprecated:  c.Deprecated,
+	}
+
+	if len(c.Categories) > 0 {
+		cats, _ := json.Marshal(c.Categories)
+		ctx.Categories = string(cats)
 	}
 
 	if tmpBytes, err := yaml.Marshal(fullConfigExample); err == nil {

@@ -1,6 +1,7 @@
 ---
 title: branch
 type: processor
+categories: ["Composition"]
 beta: true
 ---
 
@@ -22,9 +23,6 @@ a [Bloblang mapping](/docs/guides/bloblang/about), execute a list of processors
 on the request messages, and, finally, map the result back into the source
 message using another mapping.
 
-This is useful for preserving the original message contents when using
-processors that would otherwise replace the entire contents.
-
 ```yaml
 # Config fields, showing default values
 branch:
@@ -32,6 +30,10 @@ branch:
   processors: []
   result_map: ""
 ```
+
+,
+This is useful for preserving the original message contents when using
+processors that would otherwise replace the entire contents.
 
 ### Error Handling
 

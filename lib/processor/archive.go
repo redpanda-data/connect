@@ -38,6 +38,9 @@ interpolations on the 'path' field as described
 
 The resulting archived message adopts the metadata of the _first_ message part
 of the batch.`,
+		Categories: []Category{
+			CategoryParsing,
+		},
 		UsesBatches: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("format", "The archiving [format](#formats) to apply.").HasOptions("tar", "zip", "binary", "lines", "json_array"),

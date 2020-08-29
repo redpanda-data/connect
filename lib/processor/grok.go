@@ -20,6 +20,9 @@ func init() {
 
 	Constructors[TypeGrok] = TypeSpec{
 		constructor: NewGrok,
+		Categories: []Category{
+			CategoryParsing,
+		},
 		Summary: `
 Parses messages into a structured format by attempting to apply a list of Grok
 patterns, if a pattern returns at least one value a resulting structured object

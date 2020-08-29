@@ -1,6 +1,7 @@
 ---
 title: insert_part
 type: processor
+categories: ["Composition"]
 ---
 
 <!--

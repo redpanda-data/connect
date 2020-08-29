@@ -21,6 +21,9 @@ import (
 func init() {
 	Constructors[TypeMetric] = TypeSpec{
 		constructor: NewMetric,
+		Categories: []Category{
+			CategoryUtility,
+		},
 		Summary: `
 Expose custom metrics by extracting values from message batches.`,
 		Description: `

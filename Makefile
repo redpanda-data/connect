@@ -55,7 +55,8 @@ serverless: $(SERVERLESS)
 
 $(PATHINSTSERVERLESS)/%: $(SOURCE_FILES)
 	@mkdir -p $(dir $@)
-	@GOOS=linux go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/serverless/$*
+	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+		go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/serverless/$*
 	@zip -m -j $@.zip $@
 
 $(SERVERLESS): %: $(PATHINSTSERVERLESS)/%

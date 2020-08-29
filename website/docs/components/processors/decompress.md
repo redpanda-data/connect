@@ -1,6 +1,7 @@
 ---
 title: decompress
 type: processor
+categories: ["Parsing"]
 ---
 
 <!--

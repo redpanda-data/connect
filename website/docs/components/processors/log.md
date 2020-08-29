@@ -1,6 +1,7 @@
 ---
 title: log
 type: processor
+categories: ["Utility"]
 ---
 
 <!--

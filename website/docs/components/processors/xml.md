@@ -1,6 +1,7 @@
 ---
 title: xml
 type: processor
+categories: ["Parsing"]
 beta: true
 ---
 

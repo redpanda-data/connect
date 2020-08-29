@@ -23,6 +23,9 @@ import (
 func init() {
 	Constructors[TypeProtobuf] = TypeSpec{
 		constructor: NewProtobuf,
+		Categories: []Category{
+			CategoryParsing,
+		},
 		Summary: `
 Performs conversions to or from a protobuf message. This processor uses
 reflection, meaning conversions can be made directly from the target .proto

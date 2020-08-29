@@ -21,7 +21,10 @@ import (
 func init() {
 	Constructors[TypeWorkflow] = TypeSpec{
 		constructor: NewWorkflow,
-		Beta:        true,
+		Categories: []Category{
+			CategoryComposition,
+		},
+		Beta: true,
 		Summary: `
 Executes a topology of ` + "[`branch` processors][processors.branch]" + `,
 performing them in parallel where possible.`,

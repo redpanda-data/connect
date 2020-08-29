@@ -17,6 +17,9 @@ import (
 func init() {
 	Constructors[TypeJMESPath] = TypeSpec{
 		constructor: NewJMESPath,
+		Categories: []Category{
+			CategoryMapping,
+		},
 		Summary: `
 Executes a [JMESPath query](http://jmespath.org/) on JSON documents and replaces
 the message with the resulting document.`,

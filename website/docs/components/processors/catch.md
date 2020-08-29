@@ -1,6 +1,7 @@
 ---
 title: catch
 type: processor
+categories: ["Composition"]
 ---
 
 <!--

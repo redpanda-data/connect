@@ -19,6 +19,9 @@ import (
 func init() {
 	Constructors[TypeParseLog] = TypeSpec{
 		constructor: NewParseLog,
+		Categories: []Category{
+			CategoryParsing,
+		},
 		Summary: `
 Parses common log [formats](#formats) into [structured data](#codecs). This is
 easier and often much faster than ` + "[`grok`](/docs/components/processors/grok)" + `.`,

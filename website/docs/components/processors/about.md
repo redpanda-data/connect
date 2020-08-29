@@ -18,11 +18,38 @@ pipeline:
 
 The `threads` field in the pipeline section determines how many parallel processing threads are created. You can read more about parallel processing in the [pipeline guide][pipelines].
 
-### Error Handling
+import ComponentsByCategory from '@theme/ComponentsByCategory';
+
+## Categories
+
+<ComponentsByCategory type="processors" summaries={[
+  {
+    name: "Mapping",
+    description: "Processors that specialize in restructuring messages.",
+  },
+  {
+    name: "Integration",
+    description: "Processors that interact with external services.",
+  },
+  {
+    name: "Parsing",
+    description: "Processors that specialize in translating messages from one format to another.",
+  },
+  {
+    name: "Composition",
+    description: "Higher level processors that compose other processors and modify their behavior.",
+  },
+  {
+    name: "Utility",
+    description: "Processors that provide general utility or do not fit in another category.",
+  },
+]}></ComponentsByCategory>
+
+## Error Handling
 
 Some processors have conditions whereby they might fail. Rather than throw these messages into the abyss Benthos still attempts to send these messages onwards, and has mechanisms for filtering, recovering or dead-letter queuing messages that have failed which can be read about [here][error_handling].
 
-### Batching and Multiple Part Messages
+## Batching and Multiple Part Messages
 
 All Benthos processors support multiple part messages, which are synonymous with batches. This enables some cool [windowed processing][windowed_processing] capabilities.
 
@@ -33,10 +60,6 @@ Part indexes can be negative, and if so the part will be selected from the end c
 Some processors such as [`dedupe`][processor.dedupe] act across an entire batch, when instead we might like to perform them on individual messages of a batch. In this case the [`for_each`][processor.for_each] processor can be used.
 
 You can read more about batching [in this document][batching].
-
-import ComponentSelect from '@theme/ComponentSelect';
-
-<ComponentSelect type="processors"></ComponentSelect>
 
 [error_handling]: /docs/configuration/error_handling
 [batching]: /docs/configuration/batching

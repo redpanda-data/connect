@@ -16,6 +16,9 @@ import (
 func init() {
 	Constructors[TypeRateLimit] = TypeSpec{
 		constructor: NewRateLimit,
+		Categories: []Category{
+			CategoryUtility,
+		},
 		Summary: `
 Throttles the throughput of a pipeline according to a specified
 ` + "[`rate_limit`](/docs/components/rate_limits/about)" + ` resource. Rate limits are

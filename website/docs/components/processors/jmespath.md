@@ -1,6 +1,7 @@
 ---
 title: jmespath
 type: processor
+categories: ["Mapping"]
 ---
 
 <!--

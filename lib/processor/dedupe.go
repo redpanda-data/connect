@@ -23,6 +23,9 @@ import (
 func init() {
 	Constructors[TypeDedupe] = TypeSpec{
 		constructor: NewDedupe,
+		Categories: []Category{
+			CategoryUtility,
+		},
 		Summary: `
 Deduplicates message batches by caching selected (and optionally hashed)
 messages, dropping batches that are already cached.`,

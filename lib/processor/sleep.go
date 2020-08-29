@@ -19,6 +19,9 @@ import (
 func init() {
 	Constructors[TypeSleep] = TypeSpec{
 		constructor: NewSleep,
+		Categories: []Category{
+			CategoryUtility,
+		},
 		Summary: `
 Sleep for a period of time specified as a duration string. This processor will
 interpolate functions within the ` + "`duration`" + ` field, you can find a list

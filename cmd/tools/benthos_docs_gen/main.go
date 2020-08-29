@@ -240,6 +240,12 @@ func doProcessors(docsDir string) {
 			Beta:        v.Beta,
 			Deprecated:  v.Deprecated,
 		}
+		if len(v.Categories) > 0 {
+			spec.Categories = make([]string, 0, len(v.Categories))
+			for _, cat := range v.Categories {
+				spec.Categories = append(spec.Categories, string(cat))
+			}
+		}
 		if v.UsesBatches {
 			spec.Description = spec.Description + "\n" + processor.DocsUsesBatches
 		}

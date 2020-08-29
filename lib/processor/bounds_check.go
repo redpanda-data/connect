@@ -16,6 +16,9 @@ import (
 func init() {
 	Constructors[TypeBoundsCheck] = TypeSpec{
 		constructor: NewBoundsCheck,
+		Categories: []Category{
+			CategoryUtility,
+		},
 		Summary: `
 Removes messages (and batches) that do not fit within certain size boundaries.`,
 		FieldSpecs: docs.FieldSpecs{

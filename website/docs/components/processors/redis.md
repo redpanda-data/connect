@@ -1,6 +1,7 @@
 ---
 title: redis
 type: processor
+categories: ["Integration"]
 ---
 
 <!--

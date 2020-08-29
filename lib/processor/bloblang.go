@@ -22,6 +22,10 @@ import (
 func init() {
 	Constructors[TypeBloblang] = TypeSpec{
 		constructor: NewBloblang,
+		Categories: []Category{
+			CategoryMapping,
+			CategoryParsing,
+		},
 		Summary: `
 Executes a [Bloblang](/docs/guides/bloblang/about) mapping on messages.`,
 		Description: `

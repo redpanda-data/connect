@@ -15,6 +15,9 @@ import (
 func init() {
 	Constructors[TypeTry] = TypeSpec{
 		constructor: NewTry,
+		Categories: []Category{
+			CategoryComposition,
+		},
 		Summary: `
 Behaves similarly to the ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor, where a
 list of child processors are applied to individual messages of a batch. However,

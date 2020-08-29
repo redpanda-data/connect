@@ -1,6 +1,7 @@
 ---
 title: for_each
 type: processor
+categories: ["Composition"]
 ---
 
 <!--

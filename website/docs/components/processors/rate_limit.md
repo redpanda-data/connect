@@ -1,6 +1,7 @@
 ---
 title: rate_limit
 type: processor
+categories: ["Utility"]
 ---
 
 <!--
