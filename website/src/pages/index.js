@@ -123,7 +123,7 @@ const features = [
       <>
         <p>
           Benthos is able to glue a wide range of <a href="/docs/components/inputs/about">sources</a> and <a href="/docs/components/outputs/about">sinks</a> together
-          and hook into a variety of <a href="/docs/components/processors/sql">databases</a>, <a href="/docs/components/processors/cache">caches</a> and your <a href="/docs/components/processors/http">own services</a>, enabling you to seamlessly deploy it without changing your existing infrastructure.
+          and hook into a variety of <a href="/docs/components/processors/sql">databases</a>, <a href="/docs/components/processors/cache">caches</a>, <a href="/docs/components/processors/http">HTTP APIs</a>, <a href="/docs/components/processors/lambda">lambdas</a> and more, enabling you to seamlessly deploy it without changing your existing infrastructure.
         </p>
         <p>
           Working with disparate APIs and services can be a daunting task, doubly so in a streaming data context. With Benthos it's possible to break these tasks down and automatically parallelize them as <a href="/cookbooks/enrichments/">a streaming workflow</a>.

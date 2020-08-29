@@ -7,8 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
@@ -27,6 +29,10 @@ func TestExamples(t *testing.T) {
 				Pipeline struct {
 					Processors []Config `yaml:"processors"`
 				} `yaml:"pipeline"`
+				Resources struct {
+					Caches     map[string]cache.Config     `yaml:"caches"`
+					Ratelimits map[string]ratelimit.Config `yaml:"rate_limits"`
+				}
 			}{}
 			dec := yaml.NewDecoder(bytes.NewReader([]byte(example.Config)))
 			dec.KnownFields(true)
@@ -37,6 +43,10 @@ func TestExamples(t *testing.T) {
 				Pipeline struct {
 					Processors []confAlias `yaml:"processors"`
 				} `yaml:"pipeline"`
+				Resources struct {
+					Caches     map[string]cache.Config     `yaml:"caches"`
+					Ratelimits map[string]ratelimit.Config `yaml:"rate_limits"`
+				}
 			}{}
 			dec = yaml.NewDecoder(bytes.NewReader([]byte(example.Config)))
 			dec.KnownFields(true)

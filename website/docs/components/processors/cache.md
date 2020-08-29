@@ -75,11 +75,17 @@ duplicates using a
 pipeline:
   processors:
     - cache:
-        resource: TODO
+        resource: foocache
         operator: add
         key: '${! json("message.id") }'
         value: "storeme"
     - bloblang: root = if errored() { deleted() }
+
+resources:
+  caches:
+    foocache:
+      redis:
+        url: tcp://TODO:6379
 ```
 
 </TabItem>
@@ -95,10 +101,16 @@ pipeline:
     - branch:
         processors:
           - cache:
-              resource: TODO
+              resource: foocache
               operator: get
               key: '${! json("message.document_id") }'
         result_map: 'root.message.document = this'
+
+resources:
+  caches:
+    foocache:
+      memcached:
+        addresses: [ "TODO:11211" ]
 ```
 
 </TabItem>
