@@ -1,48 +1,67 @@
 pipeline:
   threads: 20
   processors:
-  - resource: scrape_third_party_downloads
-  - catch:
-      - bloblang: root = error()
-  - bloblang: result = content().string()
+    - bloblang: 'root = {}'
+    - workflow:
+        meta_path: results
+        branches:
+          dockerhub:
+            request_map: 'root = ""'
+            processors:
+              - try:
+                # Grab docker dl count
+                - http:
+                    url: https://hub.docker.com/v2/repositories/jeffail/benthos/
+                    verb: GET
+                    retries: 0
+                - bloblang: |
+                    type = "gauge"
+                    source = "docker"
+                    dist = "docker"
+                    download_count = pull_count
+                - resource: set_metrics
+
+          github:
+            request_map: 'root = ""'
+            processors:
+              - try:
+                # Grab github latest release dl count
+                - http:
+                    url: https://api.github.com/repos/Jeffail/benthos/releases/latest
+                    verb: GET
+                    retries: 0
+                - bloblang: |
+                    root = assets.map_each(match {
+                      "type":"gauge",
+                      "source":"github",
+                      "dist": name.re_replace("^benthos-?((lambda_)|_)[0-9\\.]+_([^\\.]+).*", "$2$3"),
+                      "download_count": download_count
+                    } {
+                      dist != "checksums" => this
+                      _ => deleted()
+                    })
+                - unarchive:
+                    format: json_array
+                - resource: set_metrics
+                - bloblang: 'root = if batch_index() != 0 { deleted() }'
+
+          homebrew:
+            request_map: 'root = ""'
+            processors:
+              - try:
+                - http:
+                    url: https://formulae.brew.sh/api/formula/benthos.json
+                    verb: GET
+                    retries: 0
+                - bloblang: |
+                    type = "gauge"
+                    source = "homebrew"
+                    dist = "brew"
+                    download_count = analytics.install.30d.benthos
+                - resource: set_metrics
 
 resources:
   processors:
-    scrape_third_party_downloads:
-      try:
-      # Grab docker dl count
-      - bloblang: root = ""
-      - http:
-          url: https://hub.docker.com/v2/repositories/jeffail/benthos/
-          verb: GET
-          retries: 0
-      - bloblang: |
-          type = "gauge"
-          source = "docker"
-          dist = "docker"
-          download_count = pull_count
-      - resource: set_metrics
-
-      # Grab github latest release dl count
-      - bloblang: root = ""
-      - http:
-          url: https://api.github.com/repos/Jeffail/benthos/releases/latest
-          verb: GET
-          retries: 0
-      - bloblang: |
-          root = assets.map_each(match {
-            "type":"gauge",
-            "source":"github",
-            "dist": name.re_replace("^benthos-?((lambda_)|_)[0-9\\.]+_([^\\.]+).*", "$2$3"),
-            "download_count": download_count
-          } {
-            dist != "checksums" => this
-            _ => deleted()
-          })
-      - unarchive:
-          format: json_array
-      - resource: set_metrics
-
     set_metrics:
       try:
         - switch:
@@ -72,15 +91,13 @@ resources:
         type: counter
 
 metrics:
-  rename:
-    by_regexp:
-    - pattern: '^resource\.processor\.metric\.(gauge|counter)\.(.*)$'
-      value: "$2"
-    child:
-      whitelist:
-        paths:
-          - BenthosDownloadGauge
-          - BenthosDownload
-        child:
-          prometheus:
-            prefix: benthos
+  cloudwatch:
+    namespace: BenthosAnalyticsStaging
+    flush_period: 500ms
+    region: eu-west-1
+    path_mapping: |
+      let name = this.re_replace("^resource\\.processor\\.metric\\.(gauge|counter)\\.(.*)$", "$2")
+      root = if [
+        "BenthosDownloadGauge",
+        "BenthosDownload"
+      ].contains($name) { $name } else { deleted() }
