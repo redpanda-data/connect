@@ -273,7 +273,7 @@ func (m *ParallelWrapper) Consume(msgs <-chan types.Transaction) error {
 	m.messagesIn = msgs
 
 	m.closedWG.Add(2)
-	go m.batchedInputLoop()
+	go m.inputLoop()
 	go m.outputLoop()
 	go func() {
 		m.closedWG.Wait()

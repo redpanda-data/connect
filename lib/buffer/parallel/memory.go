@@ -125,6 +125,11 @@ func (m *Memory) PushMessage(msg types.Message) (int, error) {
 // until the close is completed.
 func (m *Memory) CloseOnceEmpty() {
 	m.cond.L.Lock()
+	// TODO: We include pendingBytes here even though they're not acked, which
+	// means if those pending messages fail we have message loss. However, if we
+	// don't count them then we don't have any way to signal to a batcher at the
+	// upper level that it should flush the final batch. We need a cleaner
+	// mechanism here.
 	for (m.bytes-m.pendingBytes > 0) && !m.closed {
 		m.cond.Wait()
 	}

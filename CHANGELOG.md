@@ -29,6 +29,8 @@ All notable changes to this project will be documented in this file.
 - Fixed a panic that could occur during the shutdown of an `http_server` input
   serving a backlog of requests.
 - Explicit component types (`type: foo`) are now checked by the config linter.
+- The `amqp_1` input and output should now reconnect automatically after an
+  unexpected link detach.
 
 ## 3.25.0 - 2020-08-16
 

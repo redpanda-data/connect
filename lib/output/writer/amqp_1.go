@@ -183,8 +183,18 @@ func (a *AMQP1) WriteWithContext(ctx context.Context, msg types.Message) error {
 	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		m := amqp.NewMessage(p.Get())
 		err := s.Send(ctx, m)
-		if err == amqp.ErrTimeout {
-			err = types.ErrTimeout
+		if err != nil {
+			if err == amqp.ErrTimeout {
+				err = types.ErrTimeout
+			} else {
+				if dErr, isDetachError := err.(*amqp.DetachError); isDetachError {
+					if dErr.RemoteError != nil {
+						a.log.Errorf("Lost connection due to: %v\n", dErr.RemoteError)
+					}
+					a.disconnect(ctx)
+					err = types.ErrNotConnected
+				}
+			}
 		}
 		return err
 	})
