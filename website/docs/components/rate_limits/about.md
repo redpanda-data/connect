@@ -44,4 +44,4 @@ import ComponentSelect from '@theme/ComponentSelect';
 
 [processor.rate_limit]: /docs/components/processors/rate_limit
 [input.csv]: /docs/components/input/csv
-[input.http_client]: /docs/components/input/http_client
+[input.http_client]: /docs/components/inputs/http_client
