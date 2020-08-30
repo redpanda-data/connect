@@ -186,9 +186,7 @@ make docker-cgo
 ## Contributing
 
 Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come
-and chat in either [the Gitter community][benthos-gitter] or the
-[#benthos Gophers slack channel][benthos-slack-chan]
-([get an invite][gophers-slack-invite]), and watch your back.
+and chat (links are on the [community page][community]), and watch your back.
 
 [inputs]: https://www.benthos.dev/docs/components/inputs/about/
 [processors]: https://www.benthos.dev/docs/components/processors/about/
@@ -217,8 +215,6 @@ and chat in either [the Gitter community][benthos-gitter] or the
 [drone-badge]: https://cloud.drone.io/api/badges/Jeffail/benthos/status.svg
 [drone-url]: https://cloud.drone.io/Jeffail/benthos
 
-[benthos-gitter]: https://gitter.im/jeffail-benthos/community
-[benthos-slack-chan]: https://app.slack.com/client/T029RQSE6/CLWCBK7FY
-[gophers-slack-invite]: https://gophersinvite.herokuapp.com/
+[community]: https://www.benthos.dev/community/
 
 [jaeger]: https://www.jaegertracing.io/

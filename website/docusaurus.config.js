@@ -72,8 +72,8 @@ module.exports = {
           title: 'Community',
           items: [
             {
-              label: 'Gitter',
-              href: 'https://gitter.im/jeffail-benthos/community',
+              label: 'Join the Chat',
+              to: 'community',
             },
             {
               label: 'GitHub',

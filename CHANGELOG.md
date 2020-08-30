@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## 3.26.0 - TBD
+## 3.26.0 - 2020-08-30
 
 ### Added
 
@@ -21,6 +21,9 @@ All notable changes to this project will be documented in this file.
 
 - The `rename`, `whitelist` and `blacklist` metrics types are now deprecated,
   and the `path_mapping` field should be used instead.
+- The `conditional`, `process_map` and `process_dag` processors are now
+  deprecated and are superseded by the `switch`, `branch` and `workflow`
+  processors respectively.
 
 ### Fixed
 
