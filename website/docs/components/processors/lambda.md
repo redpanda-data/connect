@@ -83,6 +83,30 @@ services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](/docs/guides/aws).
 
+## Examples
+
+<Tabs defaultValue="Branched Invoke" values={[
+{ label: 'Branched Invoke', value: 'Branched Invoke', },
+]}>
+
+<TabItem value="Branched Invoke">
+
+
+This example uses a [`branch` processor](/docs/components/processors/branch/) to map a new payload for triggering a lambda function with an ID and username from the original message, and the result of the lambda is discarded, meaning the original message is unchanged.
+
+```yaml
+pipeline:
+  processors:
+    - branch:
+        request_map: '{"id":this.doc.id,"username":this.user.name}'
+        processors:
+          - lambda:
+              function: trigger_user_update
+```
+
+</TabItem>
+</Tabs>
+
 ## Fields
 
 ### `parallel`

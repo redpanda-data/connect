@@ -52,9 +52,11 @@
 }
 
 .loveSection {
-  margin: 20px 0;
-  padding: 20px 0;
+  padding: 40px 0;
+  background-color: #1f201c;
   background-image: url(/img/love-bg-dark.svg);
+
+  --ifm-heading-color: #ffffff;
 }
 
 .loveSectionPlea {
@@ -63,14 +65,6 @@
 
 .loveImg {
   height: 200px;
-}
-
-html[data-theme="dark"] .loveSection {
-  background-image: url(/img/love-bg-dark.svg);
-}
-
-html[data-theme="light"] .sponsorLink {
-  background-color: #000000;
 }
 
 .sponsorLink {

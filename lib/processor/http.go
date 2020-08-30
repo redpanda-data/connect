@@ -75,6 +75,24 @@ can read about these patterns [here](/docs/configuration/error_handling).`,
 			docs.FieldDeprecated("max_parallel"),
 			docs.FieldDeprecated("request"),
 		}, client.FieldSpecs()...),
+		Examples: []docs.AnnotatedExample{
+			{
+				Title: "Branched Request",
+				Summary: `
+This example uses a ` + "[`branch` processor](/docs/components/processors/branch/)" + ` to strip the request message into an empty body, grab an HTTP payload, and place the result back into the original message at the path ` + "`repo.status`" + `:`,
+				Config: `
+pipeline:
+  processors:
+    - branch:
+        request_map: 'root = ""'
+        processors:
+          - http:
+              url: https://hub.docker.com/v2/repositories/jeffail/benthos
+              verb: GET
+        result_map: 'root.repo.status = this'
+`,
+			},
+		},
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			cBytes, err := json.Marshal(conf.HTTP)
 			if err != nil {

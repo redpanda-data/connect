@@ -124,6 +124,32 @@ attempt. These failed messages will continue through the pipeline unchanged, but
 can be dropped or placed in a dead letter queue according to your config, you
 can read about these patterns [here](/docs/configuration/error_handling).
 
+## Examples
+
+<Tabs defaultValue="Branched Request" values={[
+{ label: 'Branched Request', value: 'Branched Request', },
+]}>
+
+<TabItem value="Branched Request">
+
+
+This example uses a [`branch` processor](/docs/components/processors/branch/) to strip the request message into an empty body, grab an HTTP payload, and place the result back into the original message at the path `repo.status`:
+
+```yaml
+pipeline:
+  processors:
+    - branch:
+        request_map: 'root = ""'
+        processors:
+          - http:
+              url: https://hub.docker.com/v2/repositories/jeffail/benthos
+              verb: GET
+        result_map: 'root.repo.status = this'
+```
+
+</TabItem>
+</Tabs>
+
 ## Fields
 
 ### `parallel`

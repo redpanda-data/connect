@@ -52,6 +52,22 @@ allowing you to transfer data across accounts. You can find out more
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("parallel", "Whether messages of a batch should be dispatched in parallel."),
 		}.Merge(client.FieldSpecs()),
+		Examples: []docs.AnnotatedExample{
+			{
+				Title: "Branched Invoke",
+				Summary: `
+This example uses a ` + "[`branch` processor](/docs/components/processors/branch/)" + ` to map a new payload for triggering a lambda function with an ID and username from the original message, and the result of the lambda is discarded, meaning the original message is unchanged.`,
+				Config: `
+pipeline:
+  processors:
+    - branch:
+        request_map: '{"id":this.doc.id,"username":this.user.name}'
+        processors:
+          - lambda:
+              function: trigger_user_update
+`,
+			},
+		},
 	}
 }
 

@@ -138,7 +138,7 @@ And the response looks like this:
 
 In order to create a single request from a batch of documents, and subsequently map the result back into our batch, we will use the [`archive`][processor.archive] and [`unarchive`][processor.unarchive] processors in our [`branch`][processor.branch] flow, like this:
 
-``` yaml
+```yaml
 - branch:
     request_map: 'root.text = this.article.content'
     processors:
@@ -243,7 +243,7 @@ If we configure our enrichments within a [`workflow` processor][processor.workfl
 
 Placing our branches within a [`workflow` processor][processors.workflow] makes our final pipeline configuration look like this:
 
-``` yaml
+```yaml
 input:
   kafka_balanced:
     addresses: [ TODO ]

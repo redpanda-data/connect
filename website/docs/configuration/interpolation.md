@@ -56,10 +56,11 @@ Bloblang supports coalesce and mapping, which makes it easy to extract values fr
 ```yaml
 pipeline:
   processors:
-  - json:
-      operator: set
-      path: result
-      value: '${! json().foo.(a | b | c).baz }'
+    - cache:
+        resource: foocache
+        operator: set
+        key: '${! json().message.(foo | bar).id }'
+        value: '${! content() }'
 ```
 
 Here's a map of inputs to resulting values:
