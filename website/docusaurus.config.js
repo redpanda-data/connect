@@ -28,7 +28,7 @@ module.exports = {
       darkTheme: require('./src/plugins/prism_themes/monokai'),
     },
     colorMode: {
-      defaultMode: 'dark',
+      defaultMode: 'light',
     },
     image: 'img/logo_hero.svg',
     navbar: {
@@ -59,7 +59,7 @@ module.exports = {
           title: 'Docs',
           items: [
             {
-              label: 'Getting Started',
+              label: 'Getting started',
               to: 'docs/guides/getting_started',
             },
             {
@@ -72,7 +72,7 @@ module.exports = {
           title: 'Community',
           items: [
             {
-              label: 'Join the Chat',
+              label: 'Join the chat',
               to: 'community',
             },
             {
@@ -85,8 +85,8 @@ module.exports = {
           title: 'Social',
           items: [
             {
-              label: 'Twitter',
-              href: 'https://twitter.com/jeffail',
+              label: 'Get in touch',
+              to: 'community',
             },
             {
               label: 'Mascot',

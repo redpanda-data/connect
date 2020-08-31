@@ -18,42 +18,85 @@ function Community() {
           <div className="hero--subtitle">
             These are places where you can ask questions and find your soul mate (no promises).
           </div>
+          <img className={styles.headerImg} src="/img/Blobsocial.svg" />
         </div>
       </header>
       <main>
         <div className="container">
           <div className="row margin-vert--lg">
-            <div className="col text--center">
-              <a href="https://gitter.im/jeffail-benthos/community" target="_blank"  className={styles.button}>
-                <div className={classnames(styles.icon, styles.chat)}>
+            <div className="col text--center padding-vert--md">
+              <div class="card">
+                <div class="card__header">
+                  <i className={classnames(styles.icon, styles.discord)}></i>
                 </div>
-                <div className={styles.title}>Chat</div>
-                <div className={styles.description}>Join the Gitter channel</div>
-              </a>
-            </div>
-            <div className="col text--center">
-              <a href="https://twitter.com/jeffail" target="_blank" className={styles.button}>
-                <div className={classnames(styles.icon, styles.twitter)}>
+                <div class="card__body">
+                  <p>Be one of the first to join the new Benthos discord server</p>
                 </div>
-                <div className={styles.title}>@jeffail</div>
-                <div className={styles.description}>
-                  Aggressively &#64;mention Ash
+                <div class="card__footer">
+                  <Link to="https://discord.gg/pXAF57" class="button button--outline button--primary button--block">Join</Link>
                 </div>
-              </a>
+              </div>
             </div>
-            <div className="col text--center">
-              <a href="mailto:hello@benthos.dev" className={styles.button}>
-                <div className={classnames(styles.icon, styles.email)}>
+
+            <div className="col text--center padding-vert--md">
+              <div class="card">
+                <div class="card__header">
+                  <i className={classnames(styles.icon, styles.twitter)}></i>
                 </div>
-                <div className={styles.title}>hello@benthos.dev</div>
-                <div className={styles.description}>Say hello via email</div>
-              </a>
+                <div class="card__body">
+                  <p>Aggressively &#64;mention Ash on Twitter</p>
+                </div>
+                <div class="card__footer">
+                  <Link to="https://twitter.com/jeffail" class="button button--outline button--primary button--block">Follow &#64;Jeffail</Link>
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="row margin-vert--lg">
-            <div className="col text--center">
-              <p>You can also find us on the <a href="https://app.slack.com/client/T029RQSE6/CLWCBK7FY">#benthos channel on the gophers slack</a>. You can get an invite from <a href="https://gophersinvite.herokuapp.com/">this link</a>.</p>
+
+            <div className="col text--center padding-vert--md">
+              <div class="card">
+                <div class="card__header">
+                  <i className={classnames(styles.icon, styles.email)}></i>
+                </div>
+                <div class="card__body">
+                  <p>Say hello via email</p>
+                </div>
+                <div class="card__footer">
+                  <Link to="mailto:hello@benthos.dev" class="button button--outline button--primary button--block">hello&#64;benthos.dev</Link>
+                </div>
+              </div>
             </div>
+
+            <div className="col text--center padding-vert--md">
+              <div class="card">
+                <div class="card__header">
+                  <i className={classnames(styles.icon, styles.slack)}></i>
+                </div>
+                <div class="card__body">
+                  <p>Join us on the &#35;benthos channel in the Gophers slack</p>
+                </div>
+                <div class="card__footer">
+                  <Link to="https://gophersinvite.herokuapp.com/" class="button button--outline button--success button--block">Get an invite</Link>
+                </div>
+                <div class="card__footer">
+                  <Link to="https://app.slack.com/client/T029RQSE6/CLWCBK7FY" class="button button--outline button--primary button--block">Open</Link>
+                </div>
+              </div>
+            </div>
+
+            <div className="col text--center padding-vert--md">
+              <div class="card">
+                <div class="card__header">
+                  <i className={classnames(styles.icon, styles.chat)}></i>
+                </div>
+                <div class="card__body">
+                  <p>A few blobs can also be found on the Gitter channel</p>
+                </div>
+                <div class="card__footer">
+                  <Link to="https://gitter.im/jeffail-benthos/community" class="button button--outline button--primary button--block">Join</Link>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </main>
