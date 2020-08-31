@@ -241,7 +241,7 @@ If we configure our enrichments within a [`workflow` processor][processor.workfl
 1. Enrichments at the same level of a dependency graph (claims and hyperbole) will be executed in parallel.
 2. When introducing more enrichments to our pipeline the added complexity of resolving the dependency graph is handled automatically by Benthos.
 
-Placing our branches within a [`workflow` processor][processors.workflow] makes our final pipeline configuration look like this:
+Placing our branches within a [`workflow` processor][processor.workflow] makes our final pipeline configuration look like this:
 
 ```yaml
 input:

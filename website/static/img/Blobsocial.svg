@@ -17,7 +17,7 @@
    inkscape:version="1.0 (b51213c273, 2020-08-10)"><metadata
      id="metadata8"><rdf:RDF><cc:Work
          rdf:about=""><dc:format>image/svg+xml</dc:format><dc:type
-           rdf:resource="http://purl.org/dc/dcmitype/StillImage" /><dc:title></dc:title></cc:Work></rdf:RDF></metadata><defs
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" /><dc:title /></cc:Work></rdf:RDF></metadata><defs
      id="defs6"><clipPath
        clipPathUnits="userSpaceOnUse"
        id="clipPath70"><path
@@ -50,7 +50,11 @@
      id="g10"
      inkscape:groupmode="layer"
      inkscape:label="ink_ext_XXXXXX"
-     transform="matrix(1.3333333,0,0,-1.3333333,0,386.02667)"><ellipse
+     transform="matrix(1.3333333,0,0,-1.3333333,0,386.02667)"><path
+       style="clip-rule:evenodd;fill:#a6f6ff;fill-opacity:1;fill-rule:evenodd;stroke-width:0.952869;stroke-linecap:round;stroke-linejoin:round"
+       inkscape:connector-curvature="0"
+       id="path1048"
+       d="m 78.795604,41.094413 c 0,108.925267 99.037096,197.227187 221.204726,197.227187 122.16773,0 221.20408,-88.30192 221.20408,-197.227187 0,-17.656674 -2.60259,-34.7716793 -7.48376,-51.0562057 -29.08521,-4.0965493 -407.74947,-4.0965493 -427.638066,0.660424 -4.754533,16.0865804 -7.28698,32.9775637 -7.28698,50.3957817 z" /><ellipse
        style="fill:#ffd866;stroke:none;stroke-width:2.24134;stroke-linecap:round;fill-opacity:1"
        id="path898"
        cx="300"

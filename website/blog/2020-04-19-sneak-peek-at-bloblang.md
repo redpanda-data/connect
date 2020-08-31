@@ -26,7 +26,7 @@ My life has no meaning. Also, mapping is one of the most common boring tasks in 
 
 Up until now the story for mapping documents in Benthos has been to use [JMESPath][processor.jmespath], [AWK][processor.awk] or a string of the general purpose [JSON processors][processor.json]. Time and time again it has been made apparent that it ain't good enough for many use cases.
 
-I should mention at this point that there's also the option of [IDML][idml], and although Benthos hasn't supported it internally there is a solution to [running it in your pipeline][idml-example].
+I should mention at this point that there's also the option of [IDML][idml], and although Benthos hasn't supported it internally there is a solution to [running it in your pipeline][processor.subprocess].
 
 For the last few years I've been helping users adopt these options and each time they fall short I've taken note of where the gaps are. This is an important part of the "research" phase for a language, but I also don't want to dwell on it. Here's an insultingly terse summary of what we currently have within Benthos.
 
@@ -142,6 +142,6 @@ Until I'm allowed to practice with my professional rock paper scissors team agai
 [processor.json]: /docs/components/processors/json
 [processor.awk]: /docs/components/processors/awk
 [idml]: https://idml.io/
-[idml-example]: https://github.com/Jeffail/benthos/blob/master/resources/docker/Dockerfile.idml
+[processor.subprocess]: /docs/components/processors/subprocess
 [jq]: https://stedolan.github.io/jq/
 [jmespath]: https://jmespath.org/
