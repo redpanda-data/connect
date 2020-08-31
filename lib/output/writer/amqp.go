@@ -185,7 +185,7 @@ func (a *AMQP) disconnect() error {
 	}
 	if a.conn != nil {
 		if err := a.conn.Close(); err != nil {
-			return fmt.Errorf("AMQP connection close error: %s", err)
+			a.log.Errorf("Failed to close connection cleanly: %v\n", err)
 		}
 		a.conn = nil
 	}

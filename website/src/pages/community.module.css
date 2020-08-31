@@ -1,6 +1,7 @@
 .button {
     text-decoration: none !important;
     padding: 20px;
+    margin: 10px;
     border-radius: 5px;
     border: 1px solid var(--ifm-heading-color);
     display: inline-block;

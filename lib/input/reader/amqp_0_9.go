@@ -191,18 +191,16 @@ func (a *AMQP09) disconnect() error {
 	defer a.m.Unlock()
 
 	if a.amqpChan != nil {
-		err := a.amqpChan.Cancel(a.conf.ConsumerTag, true)
-		a.amqpChan = nil
-		if err != nil {
-			return fmt.Errorf("consumer cancel failed: %s", err)
+		if err := a.amqpChan.Cancel(a.conf.ConsumerTag, true); err != nil {
+			a.log.Errorf("Failed to cancel consumer: %v\n", err)
 		}
+		a.amqpChan = nil
 	}
 	if a.conn != nil {
-		err := a.conn.Close()
-		a.conn = nil
-		if err != nil {
-			return fmt.Errorf("AMQP 0.9 connection close error: %s", err)
+		if err := a.conn.Close(); err != nil {
+			a.log.Errorf("Failed to close connection cleanly: %v\n", err)
 		}
+		a.conn = nil
 	}
 
 	return nil

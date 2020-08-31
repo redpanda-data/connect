@@ -134,13 +134,13 @@ func (a *AMQP1) disconnect(ctx context.Context) error {
 	}
 
 	if err := a.receiver.Close(ctx); err != nil {
-		return err
+		a.log.Errorf("Failed to cleanly close receiver: %v\n", err)
 	}
 	if err := a.session.Close(ctx); err != nil {
-		return err
+		a.log.Errorf("Failed to cleanly close session: %v\n", err)
 	}
 	if err := a.client.Close(); err != nil {
-		return err
+		a.log.Errorf("Failed to cleanly close client: %v\n", err)
 	}
 	a.client = nil
 	a.session = nil
