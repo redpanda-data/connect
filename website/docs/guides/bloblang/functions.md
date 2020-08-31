@@ -66,22 +66,6 @@ root.new_nums = this.nums.map_each(
 # Out: {"new_nums":[1,7]}
 ```
 
-### `error`
-
-If an error has occurred during the processing of a message this function returns the reported cause of the error. For more information about error handling patterns read [here][error_handling].
-
-```coffee
-root.doc.error = error()
-```
-
-### `errored`
-
-Returns a boolean value indicating whether an error has occurred during the processing of a message. For more information about error handling patterns read [here][error_handling].
-
-```coffee
-root.doc.status = if errored() { 400 } else { 200 }
-```
-
 ### `throw`
 
 Throws an error similar to a regular mapping error. This is useful for abandoning a mapping entirely given certain conditions.
@@ -145,6 +129,22 @@ root.doc = content().string()
 
 # In:  {"foo":"bar"}
 # Out: {"doc":"{\"foo\":\"bar\"}"}
+```
+
+### `error`
+
+If an error has occurred during the processing of a message this function returns the reported cause of the error. For more information about error handling patterns read [here][error_handling].
+
+```coffee
+root.doc.error = error()
+```
+
+### `errored`
+
+Returns a boolean value indicating whether an error has occurred during the processing of a message. For more information about error handling patterns read [here][error_handling].
+
+```coffee
+root.doc.status = if errored() { 400 } else { 200 }
 ```
 
 ### `json`

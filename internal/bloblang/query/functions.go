@@ -230,7 +230,7 @@ func envFunction(args ...interface{}) (Function, error) {
 
 var _ = RegisterFunctionSpec(
 	NewFunctionSpec(
-		FunctionCategoryGeneral, "error",
+		FunctionCategoryMessage, "error",
 		"If an error has occurred during the processing of a message this function returns the reported cause of the error. For more information about error handling patterns read [here][error_handling].",
 		NewExampleSpec("",
 			`root.doc.error = error()`,
@@ -247,7 +247,7 @@ func errorFunction(...interface{}) (Function, error) {
 
 var _ = RegisterFunctionSpec(
 	NewFunctionSpec(
-		FunctionCategoryGeneral, "errored",
+		FunctionCategoryMessage, "errored",
 		"Returns a boolean value indicating whether an error has occurred during the processing of a message. For more information about error handling patterns read [here][error_handling].",
 		NewExampleSpec("",
 			`root.doc.status = if errored() { 400 } else { 200 }`,
