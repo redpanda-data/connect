@@ -151,6 +151,7 @@ foo = bar.apply("foo")`, goodMapFile),
 		test := test
 		t.Run(name, func(t *testing.T) {
 			exec, err := ParseMapping("", test.mapping)
+			require.NotNil(t, err)
 			assert.Equal(t, test.err, err.ErrorAtPosition([]rune(test.mapping)))
 			assert.Nil(t, exec)
 		})

@@ -77,7 +77,10 @@ func arithmeticParser(fnParser Type) Type {
 		),
 	)
 	p := Delimited(
-		fnParser,
+		Sequence(
+			Optional(Sequence(Char('-'), whitespace)),
+			fnParser,
+		),
 		Sequence(
 			DiscardAll(SpacesAndTabs()),
 			arithmeticOpParser(),
@@ -95,8 +98,27 @@ func arithmeticParser(fnParser Type) Type {
 		}
 
 		seqSlice := res.Payload.([]interface{})
-		for _, fn := range seqSlice[0].([]interface{}) {
-			fns = append(fns, fn.(query.Function))
+		for _, fnSeqI := range seqSlice[0].([]interface{}) {
+			fnSeq := fnSeqI.([]interface{})
+			fn := fnSeq[1].(query.Function)
+			if fnSeq[0] != nil {
+				var err error
+				if fn, err = query.NewArithmeticExpression(
+					[]query.Function{
+						query.NewLiteralFunction(int64(0)),
+						fn,
+					},
+					[]query.ArithmeticOperator{
+						query.ArithmeticSub,
+					},
+				); err != nil {
+					return Result{
+						Err:       NewFatalError(input, err),
+						Remaining: input,
+					}
+				}
+			}
+			fns = append(fns, fn)
 		}
 		for _, op := range seqSlice[1].([]interface{}) {
 			ops = append(ops, op.([]interface{})[1].(query.ArithmeticOperator))

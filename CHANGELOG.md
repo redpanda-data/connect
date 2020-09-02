@@ -5,10 +5,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New function `range` added to Bloblang.
+
 ### Fixed
 
 - Eliminated situations where an `amqp_0_9` or `amqp_1` component would abandon
   a connection reset due to partial errors.
+- The Bloblang parser now allows naked negation of queries.
 
 ## 3.26.0 - 2020-08-30
 

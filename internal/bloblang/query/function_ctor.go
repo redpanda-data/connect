@@ -107,6 +107,20 @@ func ExpectOneOrZeroArgs() ArgCheckFn {
 	}
 }
 
+// ExpectBetweenNAndMArgs returns an error unless between N and M arguments are
+// specified.
+func ExpectBetweenNAndMArgs(n, m int) ArgCheckFn {
+	return func(args []interface{}) error {
+		if len(args) < n {
+			return fmt.Errorf("expected at least %v arguments, received: %v", n, len(args))
+		}
+		if len(args) > m {
+			return fmt.Errorf("expected fewer than %v arguments, received: %v", m, len(args))
+		}
+		return nil
+	}
+}
+
 // ExpectNArgs returns an error unless exactly N arguments are specified.
 func ExpectNArgs(i int) ArgCheckFn {
 	return func(args []interface{}) error {

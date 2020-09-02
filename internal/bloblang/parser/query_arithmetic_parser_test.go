@@ -158,6 +158,13 @@ func TestArithmeticParser(t *testing.T) {
 				{content: `{"foo":5,"bar":12}`},
 			},
 		},
+		"negate json int": {
+			input:  `-json("foo")`,
+			output: `-5`,
+			messages: []easyMsg{
+				{content: `{"foo":5}`},
+			},
+		},
 		"sub and add two ints": {
 			input:  `json("foo") + json("bar") - meta("foo").number() - meta("bar").number()`,
 			output: `6`,
@@ -352,6 +359,9 @@ func TestArithmeticLiteralsParser(t *testing.T) {
 		`5 <= 2.5*2`:           `true`,
 		`2 > -3`:               `true`,
 		`-2 < 2`:               `true`,
+		`-(2) < 2`:             `true`,
+		`2 < -"2".number()`:    `false`,
+		`2 > -"2".number()`:    `true`,
 		`(2 == 2) && (1 != 2)`: `true`,
 		`(2 == 2) && (2 != 2)`: `false`,
 		`(2 == 2) || (2 != 2)`: `true`,

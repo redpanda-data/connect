@@ -266,6 +266,48 @@ func erroredFunction(...interface{}) (Function, error) {
 
 var _ = RegisterFunctionSpec(
 	NewFunctionSpec(
+		FunctionCategoryGeneral, "range",
+		"The `range` function creates an array of integers following a range between a start, stop and optional step integer argument. If the step argument is omitted then it defaults to 1. A negative step can be provided as long as stop < start.",
+		NewExampleSpec("",
+			`root.a = range(0, 10)
+root.b = range(0, this.max, 2)
+root.c = range(0, -this.max, -2)`,
+			`{"max":10}`,
+			`{"a":[0,1,2,3,4,5,6,7,8,9],"b":[0,2,4,6,8],"c":[0,-2,-4,-6,-8]}`,
+		),
+	),
+	true, rangeFunction,
+	ExpectBetweenNAndMArgs(2, 3),
+	ExpectIntArg(0),
+	ExpectIntArg(1),
+	ExpectIntArg(2),
+)
+
+func rangeFunction(args ...interface{}) (Function, error) {
+	start, stop, step := args[0].(int64), args[1].(int64), int64(1)
+	if len(args) > 2 {
+		step = args[2].(int64)
+	}
+	if step < 0 && stop > start {
+		return nil, fmt.Errorf("with negative step arg stop (%v) must be <= to start (%v)", stop, start)
+	}
+	r := make([]int64, (stop-start)/step)
+	for i := 0; i < len(r); i++ {
+		r[i] = start + step*int64(i)
+	}
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+		rClone := make([]interface{}, 0, len(r))
+		for _, v := range r {
+			rClone = append(rClone, v)
+		}
+		return rClone, nil
+	}, nil), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterFunctionSpec(
+	NewFunctionSpec(
 		FunctionCategoryEnvironment, "hostname",
 		"Returns a string matching the hostname of the machine running Benthos.",
 		NewExampleSpec("",

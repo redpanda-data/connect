@@ -66,6 +66,19 @@ root.new_nums = this.nums.map_each(
 # Out: {"new_nums":[1,7]}
 ```
 
+### `range`
+
+The `range` function creates an array of integers following a range between a start, stop and optional step integer argument. If the step argument is omitted then it defaults to 1. A negative step can be provided as long as stop < start.
+
+```coffee
+root.a = range(0, 10)
+root.b = range(0, this.max, 2)
+root.c = range(0, -this.max, -2)
+
+# In:  {"max":10}
+# Out: {"a":[0,1,2,3,4,5,6,7,8,9],"b":[0,2,4,6,8],"c":[0,-2,-4,-6,-8]}
+```
+
 ### `throw`
 
 Throws an error similar to a regular mapping error. This is useful for abandoning a mapping entirely given certain conditions.
