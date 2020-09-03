@@ -28,6 +28,9 @@ batched messages these interpolations are performed per message part.`,
 			tls.FieldSpec(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		},
+		Categories: []Category{
+			CategoryServices,
+		},
 	}
 }
 

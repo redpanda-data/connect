@@ -60,6 +60,9 @@ already exists it will be changed.`,
 				"max_in_flight", "The maximum number of messages to dispatch across child outputs at any given time.",
 			),
 		},
+		Categories: []Category{
+			CategoryUtility,
+		},
 	}
 }
 

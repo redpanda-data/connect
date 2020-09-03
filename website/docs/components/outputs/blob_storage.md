@@ -1,6 +1,7 @@
 ---
 title: blob_storage
 type: output
+categories: ["Services","Azure"]
 beta: true
 ---
 

@@ -21,6 +21,9 @@ interpolations as described [here](/docs/configuration/interpolation#bloblang-qu
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("path", "The file to write to, if the file does not yet exist it will be created.").SupportsInterpolation(false),
 		},
+		Categories: []Category{
+			CategoryLocal,
+		},
 	}
 }
 

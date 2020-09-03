@@ -1,6 +1,7 @@
 ---
 title: nats
 type: output
+categories: ["Services"]
 ---
 
 <!--

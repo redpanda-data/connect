@@ -30,6 +30,9 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).`,
+		Categories: []Category{
+			CategoryServices,
+		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("hosts", "A list of target host addresses to connect to."),
 			docs.FieldCommon("user", "A user ID to connect as."),

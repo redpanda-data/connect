@@ -29,6 +29,10 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldAdvanced("timeout", "The maximum period to wait on an upload before abandoning it and reattempting."),
 		}.Merge(session.FieldSpecs()),
+		Categories: []Category{
+			CategoryServices,
+			CategoryAWS,
+		},
 	}
 }
 

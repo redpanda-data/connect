@@ -58,6 +58,9 @@ false for connections to succeed.`,
 				}.Merge(sess.FieldSpecs())...,
 			),
 		),
+		Categories: []Category{
+			CategoryServices,
+		},
 	}
 }
 

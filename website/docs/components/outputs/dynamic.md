@@ -1,6 +1,7 @@
 ---
 title: dynamic
 type: output
+categories: ["Utility"]
 ---
 
 <!--

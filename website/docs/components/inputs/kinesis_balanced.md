@@ -1,6 +1,7 @@
 ---
 title: kinesis_balanced
 type: input
+categories: ["Services","AWS"]
 beta: true
 ---
 

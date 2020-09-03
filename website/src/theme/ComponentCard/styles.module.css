@@ -5,9 +5,8 @@
   box-shadow: var(--ifm-panel-box-shadow);
   color: var(--ifm-font-base-color);
   display: inline-block;
-  margin: 5px;
-  margin-bottom: var(--ifm-spacing-vertical);
-  padding: calc( var(--ifm-spacing-vertical) * 1.5 ) calc( var(--ifm-spacing-horizontal) * 2 );
+  margin: 3px;
+  padding: calc( var(--ifm-spacing-vertical) * 1 ) calc( var(--ifm-spacing-horizontal) * 1.5 );
 }
 
 .componentCard:hover {

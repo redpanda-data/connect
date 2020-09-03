@@ -1,6 +1,7 @@
 ---
 title: nats
 type: input
+categories: ["Services"]
 ---
 
 <!--

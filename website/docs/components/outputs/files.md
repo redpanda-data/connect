@@ -1,6 +1,7 @@
 ---
 title: files
 type: output
+categories: ["Local"]
 ---
 
 <!--

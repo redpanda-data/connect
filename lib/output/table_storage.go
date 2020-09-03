@@ -80,6 +80,10 @@ properties:
 			docs.FieldAdvanced("timeout", "The maximum period to wait on an upload before abandoning it and reattempting."),
 			batch.FieldSpec(),
 		},
+		Categories: []Category{
+			CategoryServices,
+			CategoryAzure,
+		},
 	}
 }
 

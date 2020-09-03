@@ -81,6 +81,9 @@ the broker level, where they will be applied to _all_ child inputs, as well as
 on the individual child inputs. If you have processors at both the broker level
 _and_ on child inputs then the broker processors will be applied _after_ the
 child nodes processors.`,
+		Categories: []Category{
+			CategoryUtility,
+		},
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			var err error
 			inSlice := []interface{}{}

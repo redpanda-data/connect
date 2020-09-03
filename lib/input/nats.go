@@ -32,6 +32,9 @@ You can access these metadata fields using
 			docs.FieldCommon("subject", "A subject to consume from."),
 			docs.FieldAdvanced("prefetch_count", "The maximum number of messages to pull at a time."),
 		},
+		Categories: []Category{
+			CategoryServices,
+		},
 	}
 }
 

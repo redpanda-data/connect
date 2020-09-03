@@ -29,6 +29,9 @@ messages these interpolations are performed per message part.`,
 			docs.FieldAdvanced("password", "A password to connect with."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		},
+		Categories: []Category{
+			CategoryServices,
+		},
 	}
 }
 

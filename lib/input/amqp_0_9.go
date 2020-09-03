@@ -51,6 +51,9 @@ You can access these metadata fields using
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.AMQP09, conf.AMQP09.Batching)
 		},
+		Categories: []Category{
+			CategoryServices,
+		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("url",
 				"A URL to connect to.",

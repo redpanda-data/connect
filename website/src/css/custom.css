@@ -86,6 +86,11 @@ html[data-theme="dark"] {
   --ifm-blockquote-color: #c0c0c0;
 }
 
+code {
+  background-color: var(--ifm-code-background) !important;
+  color: var(--ifm-code-color) !important;
+}
+
 a > code {
   color: var(--ifm-link-color);
 }

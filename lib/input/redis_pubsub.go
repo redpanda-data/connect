@@ -32,6 +32,9 @@ verbatim.`,
 			docs.FieldCommon("channels", "A list of channels to consume from."),
 			docs.FieldCommon("use_patterns", "Whether to use the PSUBSCRIBE command."),
 		},
+		Categories: []Category{
+			CategoryServices,
+		},
 	}
 }
 

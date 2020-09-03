@@ -1,6 +1,7 @@
 ---
 title: sns
 type: output
+categories: ["Services","AWS"]
 ---
 
 <!--

@@ -19,6 +19,9 @@ Sends messages to an HTTP server via a websocket connection.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("url", "The URL to connect to."),
 		}.Merge(auth.FieldSpecs()),
+		Categories: []Category{
+			CategoryNetwork,
+		},
 	}
 }
 

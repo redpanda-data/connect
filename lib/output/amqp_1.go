@@ -31,6 +31,9 @@ Sends messages to an AMQP (1.0) server.`,
 			tls.FieldSpec(),
 			sasl.FieldSpec(),
 		},
+		Categories: []Category{
+			CategoryServices,
+		},
 	}
 }
 

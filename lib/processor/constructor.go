@@ -39,24 +39,18 @@ type TypeSpec struct {
 	) (Type, error)
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
 
-	Summary     string
-	Description string
-	Footnotes   string
-
-	Categories []Category
-
 	// UsesBatches indicates whether this processors functionality is best
 	// applied on messages that are already batched.
 	UsesBatches bool
 
-	Beta bool
-
-	// Deprecated indicates whether this component is deprecated.
-	Deprecated bool
-
-	Examples []docs.AnnotatedExample
-
-	FieldSpecs docs.FieldSpecs
+	Summary     string
+	Description string
+	Categories  []Category
+	Footnotes   string
+	FieldSpecs  docs.FieldSpecs
+	Examples    []docs.AnnotatedExample
+	Beta        bool
+	Deprecated  bool
 }
 
 // Constructors is a map of all processor types with their specs.

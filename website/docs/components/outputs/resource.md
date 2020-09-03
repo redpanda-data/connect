@@ -1,6 +1,7 @@
 ---
 title: resource
 type: output
+categories: ["Utility"]
 ---
 
 <!--

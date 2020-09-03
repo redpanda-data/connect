@@ -53,6 +53,9 @@ This behaviour can be overridden by
 			docs.FieldAdvanced("cert_file", "An optional certificate file to use for TLS connections. Only applicable when an `address` is specified."),
 			docs.FieldAdvanced("key_file", "An optional certificate key file to use for TLS connections. Only applicable when an `address` is specified."),
 		},
+		Categories: []Category{
+			CategoryNetwork,
+		},
 	}
 }
 

@@ -42,6 +42,9 @@ testing your pipeline configs.`,
 			docs.FieldCommon("interval", "The time interval at which messages should be generated. If set to an empty string messages will be generated as fast as downstream services can process them."),
 			docs.FieldCommon("count", "An optional number of messages to generate, if set above 0 the specified number of messages is generated and then the input will shut down."),
 		},
+		Categories: []Category{
+			CategoryUtility,
+		},
 		Footnotes: `
 ## Examples
 

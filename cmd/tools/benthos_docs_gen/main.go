@@ -82,9 +82,16 @@ func doInputs(docsDir string) {
 			Summary:     v.Summary,
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
+			Examples:    v.Examples,
 			Fields:      v.FieldSpecs,
 			Beta:        v.Beta,
 			Deprecated:  v.Deprecated,
+		}
+		if len(v.Categories) > 0 {
+			spec.Categories = make([]string, 0, len(v.Categories))
+			for _, cat := range v.Categories {
+				spec.Categories = append(spec.Categories, string(cat))
+			}
 		}
 
 		conf := input.NewConfig()
@@ -203,8 +210,15 @@ func doOutputs(docsDir string) {
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
+			Examples:    v.Examples,
 			Beta:        v.Beta,
 			Deprecated:  v.Deprecated,
+		}
+		if len(v.Categories) > 0 {
+			spec.Categories = make([]string, 0, len(v.Categories))
+			for _, cat := range v.Categories {
+				spec.Categories = append(spec.Categories, string(cat))
+			}
 		}
 		if v.Async || v.Batches {
 			spec.Description = spec.Description + "\n\n## Performance"

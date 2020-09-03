@@ -47,6 +47,10 @@ You can access these metadata fields using
 			batch.FieldSpec(),
 			docs.FieldDeprecated("max_batch_count"),
 		),
+		Categories: []Category{
+			CategoryServices,
+			CategoryAWS,
+		},
 	}
 }
 

@@ -22,28 +22,7 @@ import ComponentsByCategory from '@theme/ComponentsByCategory';
 
 ## Categories
 
-<ComponentsByCategory type="processors" summaries={[
-  {
-    name: "Mapping",
-    description: "Processors that specialize in restructuring messages.",
-  },
-  {
-    name: "Integration",
-    description: "Processors that interact with external services.",
-  },
-  {
-    name: "Parsing",
-    description: "Processors that specialize in translating messages from one format to another.",
-  },
-  {
-    name: "Composition",
-    description: "Higher level processors that compose other processors and modify their behavior.",
-  },
-  {
-    name: "Utility",
-    description: "Processors that provide general utility or do not fit in another category.",
-  },
-]}></ComponentsByCategory>
+<ComponentsByCategory type="processors"></ComponentsByCategory>
 
 ## Error Handling
 

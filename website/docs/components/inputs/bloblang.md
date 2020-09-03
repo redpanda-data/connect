@@ -1,6 +1,7 @@
 ---
 title: bloblang
 type: input
+categories: ["Utility"]
 beta: true
 ---
 

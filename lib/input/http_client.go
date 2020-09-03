@@ -55,6 +55,9 @@ line delimited feed of message parts. Each part is read as an individual message
 unless multipart is set to true, in which case an empty line indicates the end
 of a message.`,
 		FieldSpecs: httpClientSpecs(),
+		Categories: []Category{
+			CategoryNetwork,
+		},
 	}
 }
 

@@ -1,6 +1,7 @@
 ---
 title: read_until
 type: input
+categories: ["Utility"]
 ---
 
 <!--

@@ -1,6 +1,7 @@
 ---
 title: redis_pubsub
 type: input
+categories: ["Services"]
 ---
 
 <!--

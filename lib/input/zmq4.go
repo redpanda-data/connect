@@ -41,6 +41,9 @@ socket types then they can be added easily.`,
 			docs.FieldAdvanced("high_water_mark", "The message high water mark to use."),
 			docs.FieldAdvanced("poll_timeout", "The poll timeout to use."),
 		},
+		Categories: []Category{
+			CategoryNetwork,
+		},
 	}
 }
 

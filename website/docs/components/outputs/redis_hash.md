@@ -1,6 +1,7 @@
 ---
 title: redis_hash
 type: output
+categories: ["Services"]
 ---
 
 <!--

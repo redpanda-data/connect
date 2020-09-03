@@ -1,6 +1,7 @@
 ---
 title: redis_streams
 type: output
+categories: ["Services"]
 ---
 
 <!--

@@ -1,6 +1,7 @@
 ---
 title: nats_stream
 type: input
+categories: ["Services"]
 ---
 
 <!--

@@ -1,6 +1,7 @@
 ---
 title: sequence
 type: input
+categories: ["Utility"]
 beta: true
 ---
 

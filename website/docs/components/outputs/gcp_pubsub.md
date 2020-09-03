@@ -1,6 +1,7 @@
 ---
 title: gcp_pubsub
 type: output
+categories: ["Services","GCP"]
 ---
 
 <!--

@@ -1,6 +1,7 @@
 ---
 title: nsq
 type: output
+categories: ["Services"]
 ---
 
 <!--

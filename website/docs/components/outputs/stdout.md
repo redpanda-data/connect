@@ -1,6 +1,7 @@
 ---
 title: stdout
 type: output
+categories: ["Local"]
 ---
 
 <!--

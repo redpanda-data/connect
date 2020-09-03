@@ -45,6 +45,10 @@ You can access these metadata fields using
 			docs.FieldAdvanced("timeout", "The period of time to wait before abandoning a request and trying again."),
 			docs.FieldAdvanced("max_number_of_messages", "The maximum number of messages to consume from each request."),
 		),
+		Categories: []Category{
+			CategoryServices,
+			CategoryAWS,
+		},
 	}
 }
 

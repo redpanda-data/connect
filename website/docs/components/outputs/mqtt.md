@@ -1,6 +1,7 @@
 ---
 title: mqtt
 type: output
+categories: ["Services"]
 ---
 
 <!--

@@ -38,6 +38,9 @@ go install -tags "ZMQ4" github.com/Jeffail/benthos/v3/cmd/benthos
 			docs.FieldAdvanced("high_water_mark", "The message high water mark to use."),
 			docs.FieldCommon("poll_timeout", "The maximum period of time to wait for a message to send before the request is abandoned and reattempted."),
 		},
+		Categories: []Category{
+			CategoryNetwork,
+		},
 	}
 }
 

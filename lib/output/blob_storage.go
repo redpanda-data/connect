@@ -42,6 +42,10 @@ calculated per message of a batch.`,
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldAdvanced("timeout", "The maximum period to wait on an upload before abandoning it and reattempting."),
 		},
+		Categories: []Category{
+			CategoryServices,
+			CategoryAzure,
+		},
 	}
 }
 

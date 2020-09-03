@@ -49,6 +49,10 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			batch.FieldSpec(),
 		}.Merge(session.FieldSpecs()).Merge(retries.FieldSpecs()),
+		Categories: []Category{
+			CategoryServices,
+			CategoryAWS,
+		},
 	}
 }
 

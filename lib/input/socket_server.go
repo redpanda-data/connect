@@ -44,6 +44,9 @@ connection exceeds this value then the connection will be closed.`,
 			docs.FieldAdvanced("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed."),
 			docs.FieldAdvanced("delimiter", "The delimiter to use to detect the end of each message. If left empty line breaks are used."),
 		},
+		Categories: []Category{
+			CategoryNetwork,
+		},
 	}
 }
 

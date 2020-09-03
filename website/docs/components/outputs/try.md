@@ -1,6 +1,7 @@
 ---
 title: try
 type: output
+categories: ["Utility"]
 ---
 
 <!--

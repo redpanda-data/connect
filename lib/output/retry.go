@@ -61,6 +61,9 @@ use the ` + "[`try`](/docs/components/outputs/try)" + ` output type.`,
 		FieldSpecs: retries.FieldSpecs().Add(
 			docs.FieldCommon("output", "A child output."),
 		),
+		Categories: []Category{
+			CategoryUtility,
+		},
 	}
 }
 

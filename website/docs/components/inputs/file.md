@@ -1,6 +1,7 @@
 ---
 title: file
 type: input
+categories: ["Local"]
 ---
 
 <!--

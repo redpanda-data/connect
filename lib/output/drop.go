@@ -14,6 +14,9 @@ func init() {
 		constructor: NewDrop,
 		Summary: `
 Drops all messages.`,
+		Categories: []Category{
+			CategoryUtility,
+		},
 	}
 }
 

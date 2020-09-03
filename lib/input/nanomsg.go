@@ -25,6 +25,9 @@ Currently only PULL and SUB sockets are supported.`,
 			docs.FieldAdvanced("poll_timeout", "The period to wait until a poll is abandoned and reattempted."),
 			docs.FieldDeprecated("reply_timeout"),
 		},
+		Categories: []Category{
+			CategoryNetwork,
+		},
 	}
 }
 

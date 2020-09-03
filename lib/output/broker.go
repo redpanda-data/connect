@@ -120,6 +120,9 @@ outputs.`,
 				"batching":      batchSanit,
 			}, nil
 		},
+		Categories: []Category{
+			CategoryUtility,
+		},
 	}
 }
 

@@ -32,6 +32,9 @@ To perform CRUD actions on the inputs themselves use POST, DELETE, and GET
 methods on the ` + "`/inputs/{input_id}`" + ` endpoint. When using POST the body
 of the request should be a YAML configuration for the input, if the input
 already exists it will be changed.`,
+		Categories: []Category{
+			CategoryUtility,
+		},
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			nestedInputs := conf.Dynamic.Inputs
 			inMap := map[string]interface{}{}

@@ -57,6 +57,9 @@ arrays are produced instead, like follows:
 ["first foo","first bar","first baz"]
 ["second foo","second bar","second baz"]
 ` + "```" + ``,
+		Categories: []Category{
+			CategoryLocal,
+		},
 		Footnotes: `
 This input is particularly useful when consuming CSV from files too large to
 parse entirely within memory. However, in cases where CSV is consumed from other

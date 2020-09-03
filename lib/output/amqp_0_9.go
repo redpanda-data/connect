@@ -52,6 +52,9 @@ The fields 'key' and 'type' can be dynamically set using function interpolations
 			docs.FieldAdvanced("immediate", "Whether to set the immediate flag on published messages. When set if there are no ready consumers of a queue then the message is dropped instead of waiting."),
 			tls.FieldSpec(),
 		},
+		Categories: []Category{
+			CategoryServices,
+		},
 	}
 }
 

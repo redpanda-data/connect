@@ -19,6 +19,12 @@ output:
        query: '{ message: @, meta: { link_count: length(links) } }'
 ```
 
+import ComponentsByCategory from '@theme/ComponentsByCategory';
+
+## Categories
+
+<ComponentsByCategory type="outputs"></ComponentsByCategory>
+
 ## Back Pressure
 
 Benthos outputs apply back pressure to components upstream. This means if your output target starts blocking traffic Benthos will gracefully stop consuming until the issue is resolved.

@@ -80,6 +80,9 @@ guarantees.`,
 			}
 			return outSlice, nil
 		},
+		Categories: []Category{
+			CategoryUtility,
+		},
 	}
 }
 

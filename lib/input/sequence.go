@@ -60,6 +60,9 @@ through the pipeline.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("inputs", "An array of inputs to read from sequentially."),
 		},
+		Categories: []Category{
+			CategoryUtility,
+		},
 	}
 }
 

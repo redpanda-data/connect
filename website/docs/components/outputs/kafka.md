@@ -1,6 +1,7 @@
 ---
 title: kafka
 type: output
+categories: ["Services"]
 ---
 
 <!--

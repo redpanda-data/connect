@@ -42,6 +42,10 @@ mechanism will stall with this input due its sequential transaction model.`,
 			docs.FieldAdvanced("limit", "The maximum number of messages to consume from each request."),
 			batch.FieldSpec(),
 		),
+		Categories: []Category{
+			CategoryServices,
+			CategoryAWS,
+		},
 	}
 }
 

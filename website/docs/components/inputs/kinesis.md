@@ -1,6 +1,7 @@
 ---
 title: kinesis
 type: input
+categories: ["Services","AWS"]
 ---
 
 <!--

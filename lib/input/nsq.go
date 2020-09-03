@@ -29,6 +29,9 @@ Subscribe to an NSQ instance topic and channel.`,
 			docs.FieldCommon("user_agent", "A user agent to assume when connecting."),
 			docs.FieldCommon("max_in_flight", "The maximum number of pending messages to consume at any given time."),
 		},
+		Categories: []Category{
+			CategoryServices,
+		},
 	}
 }
 

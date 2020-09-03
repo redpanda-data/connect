@@ -17,6 +17,20 @@ import (
 
 //------------------------------------------------------------------------------
 
+// Category describes the general category of an input.
+type Category string
+
+// Input categories
+var (
+	CategoryLocal    Category = "Local"
+	CategoryAWS      Category = "AWS"
+	CategoryGCP      Category = "GCP"
+	CategoryAzure    Category = "Azure"
+	CategoryServices Category = "Services"
+	CategoryNetwork  Category = "Network"
+	CategoryUtility  Category = "Utility"
+)
+
 // TypeSpec is a struct containing constructors, markdown descriptions and an
 // optional sanitisation function for each input type.
 type TypeSpec struct {
@@ -50,8 +64,10 @@ type TypeSpec struct {
 
 	Summary     string
 	Description string
+	Categories  []Category
 	Footnotes   string
 	FieldSpecs  docs.FieldSpecs
+	Examples    []docs.AnnotatedExample
 	Beta        bool
 	Deprecated  bool
 }

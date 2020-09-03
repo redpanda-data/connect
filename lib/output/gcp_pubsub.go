@@ -25,6 +25,10 @@ For information on how to set up credentials check out
 			docs.FieldCommon("topic", "The topic to publish to.").SupportsInterpolation(false),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		},
+		Categories: []Category{
+			CategoryServices,
+			CategoryGCP,
+		},
 	}
 }
 

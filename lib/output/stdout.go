@@ -37,6 +37,9 @@ baz\n\n
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("delimiter", "A custom delimiter to separate messages with. If left empty defaults to a line break."),
 		},
+		Categories: []Category{
+			CategoryLocal,
+		},
 	}
 }
 

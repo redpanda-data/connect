@@ -53,6 +53,9 @@ You can access these metadata fields using
 			docs.FieldAdvanced("max_inflight", "The maximum number of unprocessed messages to fetch at a given time."),
 			docs.FieldAdvanced("ack_wait", "An optional duration to specify at which a message that is yet to be acked will be automatically retried."),
 		},
+		Categories: []Category{
+			CategoryServices,
+		},
 	}
 }
 

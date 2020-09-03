@@ -76,6 +76,9 @@ You can access these metadata fields using
 			docs.FieldAdvanced("target_version", "The version of the Kafka protocol to use."),
 			batch.FieldSpec(),
 		},
+		Categories: []Category{
+			CategoryServices,
+		},
 	}
 }
 

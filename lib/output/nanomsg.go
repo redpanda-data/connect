@@ -25,6 +25,9 @@ Currently only PUSH and PUB sockets are supported.`,
 			docs.FieldCommon("poll_timeout", "The maximum period of time to wait for a message to send before the request is abandoned and reattempted."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		},
+		Categories: []Category{
+			CategoryNetwork,
+		},
 	}
 }
 

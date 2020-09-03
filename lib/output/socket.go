@@ -40,6 +40,9 @@ baz\n\n
 			),
 			docs.FieldCommon("address", "The address (or path) to connect to.", "/tmp/benthos.sock", "localhost:9000"),
 		},
+		Categories: []Category{
+			CategoryNetwork,
+		},
 	}
 }
 

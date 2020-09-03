@@ -17,6 +17,20 @@ import (
 
 //------------------------------------------------------------------------------
 
+// Category describes the general category of an output.
+type Category string
+
+// Output categories
+var (
+	CategoryLocal    Category = "Local"
+	CategoryAWS      Category = "AWS"
+	CategoryGCP      Category = "GCP"
+	CategoryAzure    Category = "Azure"
+	CategoryServices Category = "Services"
+	CategoryNetwork  Category = "Network"
+	CategoryUtility  Category = "Utility"
+)
+
 // TypeSpec is a constructor and a usage description for each output type.
 type TypeSpec struct {
 	brokerConstructor func(
@@ -29,10 +43,6 @@ type TypeSpec struct {
 	constructor        func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error)
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
 
-	Summary     string
-	Description string
-	Footnotes   string
-
 	// Async indicates whether this output benefits from sending multiple
 	// messages asynchronously over the protocol.
 	Async bool
@@ -40,13 +50,14 @@ type TypeSpec struct {
 	// Batches indicates whether this output benefits from batching of messages.
 	Batches bool
 
-	// Beta indicates whether this output is a beta component.
-	Beta bool
-
-	// Deprecated indicates whether this component is deprecated.
-	Deprecated bool
-
-	FieldSpecs docs.FieldSpecs
+	Summary     string
+	Description string
+	Categories  []Category
+	Footnotes   string
+	FieldSpecs  docs.FieldSpecs
+	Examples    []docs.AnnotatedExample
+	Beta        bool
+	Deprecated  bool
 }
 
 // Constructors is a map of all output types with their specs.

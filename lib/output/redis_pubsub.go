@@ -25,6 +25,9 @@ can find a list of functions [here](/docs/configuration/interpolation#bloblang-q
 			docs.FieldCommon("channel", "The channel to publish messages to.").SupportsInterpolation(false),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		},
+		Categories: []Category{
+			CategoryServices,
+		},
 	}
 }
 

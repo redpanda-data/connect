@@ -1,6 +1,7 @@
 ---
 title: drop
 type: output
+categories: ["Utility"]
 ---
 
 <!--

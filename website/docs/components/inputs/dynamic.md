@@ -1,6 +1,7 @@
 ---
 title: dynamic
 type: input
+categories: ["Utility"]
 ---
 
 <!--

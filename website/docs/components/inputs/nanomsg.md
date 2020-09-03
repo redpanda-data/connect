@@ -1,6 +1,7 @@
 ---
 title: nanomsg
 type: input
+categories: ["Network"]
 ---
 
 <!--

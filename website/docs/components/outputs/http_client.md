@@ -1,6 +1,7 @@
 ---
 title: http_client
 type: output
+categories: ["Network"]
 ---
 
 <!--

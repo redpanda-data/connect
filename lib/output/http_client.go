@@ -47,6 +47,9 @@ these propagated responses.`,
 			docs.FieldAdvanced("propagate_response", "Whether responses from the server should be [propagated back](/docs/guides/sync_responses) to the input."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		).Add(batch.FieldSpec()),
+		Categories: []Category{
+			CategoryNetwork,
+		},
 	}
 }
 

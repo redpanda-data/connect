@@ -40,6 +40,9 @@ You can access these metadata fields using
 			docs.FieldAdvanced("password", "A password to provide for the connection."),
 			docs.FieldDeprecated("stale_connection_timeout"),
 		},
+		Categories: []Category{
+			CategoryServices,
+		},
 	}
 }
 

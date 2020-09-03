@@ -62,6 +62,9 @@ resources:
 But now the metrics path of Kafka output will be
 ` + "`resources.outputs.foo`" + `, this way of flattening observability
 labels becomes more useful as configs get larger and more nested.`,
+		Categories: []Category{
+			CategoryUtility,
+		},
 	}
 }
 

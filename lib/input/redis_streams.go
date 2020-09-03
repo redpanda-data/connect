@@ -35,6 +35,9 @@ as metadata fields.`,
 			docs.FieldAdvanced("commit_period", "The period of time between each commit of the current offset. Offsets are always committed during shutdown."),
 			docs.FieldAdvanced("timeout", "The length of time to poll for new messages before reattempting."),
 		},
+		Categories: []Category{
+			CategoryServices,
+		},
 	}
 }
 

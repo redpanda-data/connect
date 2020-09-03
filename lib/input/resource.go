@@ -61,6 +61,9 @@ resources:
 But now the metrics path of Kafka input will be
 ` + "`resources.inputs.foo`" + `, this way of flattening observability
 labels becomes more useful as configs get larger and more nested.`,
+		Categories: []Category{
+			CategoryUtility,
+		},
 	}
 }
 

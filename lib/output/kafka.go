@@ -53,6 +53,9 @@ part.`,
 			docs.FieldAdvanced("target_version", "The version of the Kafka protocol to use."),
 			batch.FieldSpec(),
 		}, retries.FieldSpecs()...),
+		Categories: []Category{
+			CategoryServices,
+		},
 	}
 }
 

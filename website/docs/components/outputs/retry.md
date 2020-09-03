@@ -1,6 +1,7 @@
 ---
 title: retry
 type: output
+categories: ["Utility"]
 ---
 
 <!--

@@ -1,6 +1,7 @@
 ---
 title: socket
 type: input
+categories: ["Network"]
 ---
 
 <!--

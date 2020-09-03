@@ -60,6 +60,9 @@ Where latter stages will overwrite matching field names of a former stage.`,
 			docs.FieldCommon("fields", "A map of key/value pairs to set as hash fields.").SupportsInterpolation(false),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		},
+		Categories: []Category{
+			CategoryServices,
+		},
 	}
 }
 

@@ -23,6 +23,9 @@ Pops messages from the beginning of a Redis list using the BLPop command.`,
 			docs.FieldCommon("key", "The key of a list to read from."),
 			docs.FieldAdvanced("timeout", "The length of time to poll for new messages before reattempting."),
 		},
+		Categories: []Category{
+			CategoryServices,
+		},
 	}
 }
 

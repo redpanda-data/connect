@@ -1,6 +1,7 @@
 ---
 title: cache
 type: output
+categories: ["Services"]
 ---
 
 <!--

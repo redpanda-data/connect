@@ -1,6 +1,7 @@
 ---
 title: csv
 type: input
+categories: ["Local"]
 beta: true
 ---
 

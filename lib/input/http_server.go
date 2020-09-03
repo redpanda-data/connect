@@ -118,6 +118,9 @@ You can access these metadata fields using
 				docs.FieldCommon("headers", "Specify headers to return with synchronous responses.").SupportsInterpolation(true),
 			),
 		},
+		Categories: []Category{
+			CategoryNetwork,
+		},
 	}
 }
 

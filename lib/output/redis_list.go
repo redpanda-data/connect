@@ -25,6 +25,9 @@ already exist) using the RPUSH command.`,
 			docs.FieldCommon("key", "The key of a Redis list."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		},
+		Categories: []Category{
+			CategoryServices,
+		},
 	}
 }
 

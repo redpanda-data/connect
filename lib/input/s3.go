@@ -95,6 +95,10 @@ You can access these metadata fields using
 			docs.FieldAdvanced("timeout", "The period of time to wait before abandoning a request and trying again."),
 			docs.FieldDeprecated("max_batch_count"),
 		),
+		Categories: []Category{
+			CategoryServices,
+			CategoryAWS,
+		},
 	}
 }
 

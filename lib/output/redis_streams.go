@@ -33,6 +33,9 @@ a metadata item and the body then the body takes precedence.`,
 			docs.FieldCommon("max_length", "When greater than zero enforces a rough cap on the length of the target stream."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		},
+		Categories: []Category{
+			CategoryServices,
+		},
 	}
 }
 

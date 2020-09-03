@@ -93,6 +93,9 @@ to true.`,
 				},
 			),
 		},
+		Categories: []Category{
+			CategoryUtility,
+		},
 		Footnotes: `
 ## Examples
 

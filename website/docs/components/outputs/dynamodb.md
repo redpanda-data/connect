@@ -1,6 +1,7 @@
 ---
 title: dynamodb
 type: output
+categories: ["Services","AWS"]
 ---
 
 <!--

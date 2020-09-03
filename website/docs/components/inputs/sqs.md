@@ -1,6 +1,7 @@
 ---
 title: sqs
 type: input
+categories: ["Services","AWS"]
 ---
 
 <!--

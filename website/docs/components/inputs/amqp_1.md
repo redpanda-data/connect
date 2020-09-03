@@ -1,6 +1,7 @@
 ---
 title: amqp_1
 type: input
+categories: ["Services"]
 beta: true
 ---
 

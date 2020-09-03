@@ -81,6 +81,9 @@ input:
 			docs.FieldCommon("condition", "The [condition](/docs/components/conditions/about) to test messages against."),
 			docs.FieldCommon("restart_input", "Whether the input should be reopened if it closes itself before the condition has resolved to true."),
 		},
+		Categories: []Category{
+			CategoryUtility,
+		},
 	}
 }
 

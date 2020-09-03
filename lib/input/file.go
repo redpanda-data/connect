@@ -29,6 +29,9 @@ downstream.`),
 A string that indicates the end of a message within the target file. If left
 empty then line feed (\n) is used.`),
 		},
+		Categories: []Category{
+			CategoryLocal,
+		},
 	}
 }
 

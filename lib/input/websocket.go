@@ -24,6 +24,9 @@ first established.`,
 			docs.FieldCommon("url", "The URL to connect to.", "ws://localhost:4195/get/ws").HasType("string"),
 			docs.FieldAdvanced("open_message", "An optional message to send to the server upon connection."),
 		}, auth.FieldSpecs()...),
+		Categories: []Category{
+			CategoryNetwork,
+		},
 	}
 }
 
