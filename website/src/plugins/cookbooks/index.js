@@ -21,16 +21,23 @@ const DEFAULT_OPTIONS = {
   truncateMarker: /<!--\s*(truncate)\s*-->/, // string or regex
 };
 
+const {
+  STATIC_DIR_NAME,
+  DEFAULT_PLUGIN_ID,
+} = require('@docusaurus/core/lib/constants');
+
 module.exports = pluginContentCookbook;
 
 function pluginContentCookbook(context, opts) {
   const options = {...DEFAULT_OPTIONS, ...opts};
   const {siteDir, generatedFilesDir} = context;
   const contentPath = path.resolve(siteDir, options.path);
-  const dataDir = path.join(
+
+  const pluginDataDirRoot = path.join(
     generatedFilesDir,
     'cookbooks',
   );
+  const dataDir = path.join(pluginDataDirRoot, options.id ?? DEFAULT_PLUGIN_ID);
 
   return {
     name: 'cookbooks',
@@ -44,7 +51,7 @@ function pluginContentCookbook(context, opts) {
     // Fetches guide contents and returns metadata for the necessary routes.
     async loadContent() {
       const guidePosts = await generateCookbookPosts(contentPath, context, options);
-      if (!guidePosts) {
+      if (!guidePosts.length) {
         return null;
       }
 
@@ -64,7 +71,7 @@ function pluginContentCookbook(context, opts) {
       } = options;
 
       const aliasedSource = (source) =>
-        `~cookbook/${path.relative(dataDir, source)}`;
+        `~cookbooks/${path.relative(pluginDataDirRoot, source)}`;
       const {addRoute, createData} = actions;
       const {
         guidePosts,
@@ -136,7 +143,7 @@ function pluginContentCookbook(context, opts) {
       return {
         resolve: {
           alias: {
-            '~cookbook': dataDir,
+            '~cookbooks': pluginDataDirRoot,
           },
         },
         module: {
@@ -148,16 +155,17 @@ function pluginContentCookbook(context, opts) {
                 getCacheLoader(isServer),
                 getBabelLoader(isServer),
                 {
-                  loader: '@docusaurus/mdx-loader',
+                  loader: require.resolve('@docusaurus/mdx-loader'),
                   options: {
                     remarkPlugins,
                     rehypePlugins,
+                    staticDir: path.join(siteDir, STATIC_DIR_NAME),
                     // Note that metadataPath must be the same/ in-sync as the path from createData for each MDX
                     metadataPath: (mdxPath) => {
-                      const aliasedSource = aliasedSitePath(mdxPath, siteDir);
+                      const aliasedPath = aliasedSitePath(mdxPath, siteDir);
                       return path.join(
                         dataDir,
-                        `${docuHash(aliasedSource)}.json`,
+                        `${docuHash(aliasedPath)}.json`,
                       );
                     },
                   },
