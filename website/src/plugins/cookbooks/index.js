@@ -37,7 +37,7 @@ function pluginContentCookbook(context, opts) {
     generatedFilesDir,
     'cookbooks',
   );
-  const dataDir = path.join(pluginDataDirRoot, options.id ?? DEFAULT_PLUGIN_ID);
+  const dataDir = path.join(pluginDataDirRoot, options.id || DEFAULT_PLUGIN_ID);
 
   return {
     name: 'cookbooks',

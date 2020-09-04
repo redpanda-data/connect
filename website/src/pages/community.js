@@ -82,21 +82,6 @@ function Community() {
                 </div>
               </div>
             </div>
-
-            <div className="col text--center padding-vert--md">
-              <div class="card">
-                <div class="card__header">
-                  <i className={classnames(styles.icon, styles.chat)}></i>
-                </div>
-                <div class="card__body">
-                  <p>A few blobs can also be found on the Gitter channel</p>
-                </div>
-                <div class="card__footer">
-                  <Link to="https://gitter.im/jeffail-benthos/community" class="button button--outline button--primary button--block">Join</Link>
-                </div>
-              </div>
-            </div>
-
           </div>
         </div>
       </main>

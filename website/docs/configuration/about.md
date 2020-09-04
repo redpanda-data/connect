@@ -30,8 +30,8 @@ pipeline:
   processors:
   - type: bloblang
     bloblang: |
-      message = this
-      meta.link_count = links.length()
+      root.message = this
+      root.meta.link_count = this.links.length()
 
 output:
   type: s3
@@ -62,8 +62,8 @@ pipeline:
   processors:
   - type: bloblang
     bloblang: |
-      message = this
-      meta.link_count = links.length()
+      root.message = this
+      root.meta.link_count = this.links.length()
 
 output:
   type: s3

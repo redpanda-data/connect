@@ -14,7 +14,7 @@ Benthos is ready to commit to this relationship, are you?
 
 import Link from '@docusaurus/Link';
 
-<Link to="/docs/guides/getting_started" className="button button--lg button--block button--primary">Get Started</Link>
+<Link to="/docs/guides/getting_started" className="button button--lg button--outline button--block button--primary">Get Started</Link>
 
 ## Components
 

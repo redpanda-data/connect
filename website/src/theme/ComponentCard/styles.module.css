@@ -1,6 +1,6 @@
 .componentCard {
   background-color: var(--ifm-background-surface-color);
-  border: 1px solid var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-background-surface-color-secondary);
   border-radius: var(--ifm-global-radius);
   box-shadow: var(--ifm-panel-box-shadow);
   color: var(--ifm-font-base-color);
