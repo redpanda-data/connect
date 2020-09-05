@@ -60,6 +60,9 @@ overridden by functions within the program.
 Check out the [examples section](#examples) in order to see how this processor
 can be used.
 
+This processor uses [GoAWK][goawk], in order to understand the differences
+in how the program works you can [read more about it here][goawk.differences].
+
 ## Fields
 
 ### `codec`
@@ -417,4 +420,7 @@ Which would give us the result:
 ```json
 {"path":{"to":{"foos":["one","two","three","two","four"],"foos_unique":["one","two","three","four"]}}}
 ```
+
+[goawk]: https://github.com/benhoyt/goawk
+[goawk.differences]: https://github.com/benhoyt/goawk#differences-from-awk
 

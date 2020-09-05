@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New function `range` added to Bloblang.
+- New (BETA) `jq` processor.
 
 ### Fixed
 
