@@ -49,6 +49,10 @@ This processor is useful for performing large mappings in order to restructure
 JSON documents. In order to map documents using more advanced logic consider
 instead using the [`awk` processor](/docs/components/processors/awk).
 
+It is possible to create boolean queries with JMESPath, in order to filter
+messages with boolean queries please instead use the
+[`jmespath`](/docs/components/conditions/jmespath) condition.
+
 ## Fields
 
 ### `query`
@@ -74,16 +78,16 @@ Default: `[]`
 
 ## Examples
 
-With the following query:
+<Tabs defaultValue="Mapping" values={[
+{ label: 'Mapping', value: 'Mapping', },
+]}>
 
-``` yaml
-jmespath:
-  query: locations[?state == 'WA'].name | sort(@) | {Cities: join(', ', @)}
-```
+<TabItem value="Mapping">
 
-If the initial contents of a message were JSON document of the form:
 
-``` json
+When receiving JSON documents of the form:
+
+```json
 {
   "locations": [
     {"name": "Seattle", "state": "WA"},
@@ -94,13 +98,22 @@ If the initial contents of a message were JSON document of the form:
 }
 ```
 
-Then the resulting contents would be:
+We could collapse the location names from the state of Washington into a field `Cities`:
 
-``` json
+```json
 {"Cities": "Bellevue, Olympia, Seattle"}
 ```
 
-It is possible to create boolean queries with JMESPath, in order to filter
-messages with boolean queries please instead use the
-[`jmespath`](/docs/components/conditions/jmespath) condition.
+With the following config:
+
+```yaml
+pipeline:
+  processors:
+    - jmespath:
+        query: "locations[?state == 'WA'].name | sort(@) | {Cities: join(', ', @)}"
+```
+
+</TabItem>
+</Tabs>
+
 

@@ -26,20 +26,18 @@ the message with the resulting document.`,
 		Description: `
 This processor is useful for performing large mappings in order to restructure
 JSON documents. In order to map documents using more advanced logic consider
-instead using the ` + "[`awk` processor](/docs/components/processors/awk)" + `.`,
-		Footnotes: `
-## Examples
+instead using the ` + "[`awk` processor](/docs/components/processors/awk)" + `.
 
-With the following query:
+It is possible to create boolean queries with JMESPath, in order to filter
+messages with boolean queries please instead use the
+` + "[`jmespath`](/docs/components/conditions/jmespath)" + ` condition.`,
+		Examples: []docs.AnnotatedExample{
+			{
+				Title: "Mapping",
+				Summary: `
+When receiving JSON documents of the form:
 
-` + "``` yaml" + `
-jmespath:
-  query: locations[?state == 'WA'].name | sort(@) | {Cities: join(', ', @)}
-` + "```" + `
-
-If the initial contents of a message were JSON document of the form:
-
-` + "``` json" + `
+` + "```json" + `
 {
   "locations": [
     {"name": "Seattle", "state": "WA"},
@@ -50,15 +48,21 @@ If the initial contents of a message were JSON document of the form:
 }
 ` + "```" + `
 
-Then the resulting contents would be:
+We could collapse the location names from the state of Washington into a field ` + "`Cities`" + `:
 
-` + "``` json" + `
+` + "```json" + `
 {"Cities": "Bellevue, Olympia, Seattle"}
 ` + "```" + `
 
-It is possible to create boolean queries with JMESPath, in order to filter
-messages with boolean queries please instead use the
-` + "[`jmespath`](/docs/components/conditions/jmespath)" + ` condition.`,
+With the following config:`,
+				Config: `
+pipeline:
+  processors:
+    - jmespath:
+        query: "locations[?state == 'WA'].name | sort(@) | {Cities: join(', ', @)}"
+`,
+			},
+		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("query", "The JMESPath query to apply to messages."),
 			partsFieldSpec,

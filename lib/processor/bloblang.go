@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
@@ -41,12 +42,11 @@ are logged, and the message is flagged as having failed, allowing you to use
 
 However, Bloblang itself also provides powerful ways of ensuring your mappings
 do not fail by specifying desired fallback behaviour, which you can read about
-[in this section](/docs/guides/bloblang/about#error-handling).
-
-## Examples
-
-### Mapping
-
+[in this section](/docs/guides/bloblang/about#error-handling).`,
+		Examples: []docs.AnnotatedExample{
+			{
+				Title: "Mapping",
+				Summary: `
 Given JSON documents containing an array of fans:
 
 ` + "```json" + `
@@ -62,21 +62,7 @@ Given JSON documents containing an array of fans:
 }
 ` + "```" + `
 
-We can reduce the fans to only those with an obsession score above 0.5 with this
-mapping:
-
-` + "```yaml" + `
-pipeline:
-  processors:
-  - bloblang: |
-      root = this
-      fans = fans.map_each(match {
-        this.obsession > 0.5 => this
-        _ => deleted()
-      })
-` + "```" + `
-
-Giving us:
+We can reduce the fans to only those with an obsession score above 0.5, giving us:
 
 ` + "```json" + `
 {
@@ -89,7 +75,19 @@ Giving us:
 }
 ` + "```" + `
 
-For more cool examples check out the [advanced Bloblang page](/docs/guides/bloblang/advanced).`,
+With the following config:`,
+				Config: `
+pipeline:
+  processors:
+  - bloblang: |
+      root = this
+      fans = fans.map_each(match {
+        this.obsession > 0.5 => this
+        _ => deleted()
+      })
+`,
+			},
+		},
 	}
 }
 

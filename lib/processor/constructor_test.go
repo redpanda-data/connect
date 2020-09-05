@@ -23,7 +23,7 @@ func TestConstructorDescription(t *testing.T) {
 }
 
 func TestExamples(t *testing.T) {
-	for _, ctor := range Constructors {
+	for typeName, ctor := range Constructors {
 		for _, example := range ctor.Examples {
 			s := struct {
 				Pipeline struct {
@@ -36,7 +36,7 @@ func TestExamples(t *testing.T) {
 			}{}
 			dec := yaml.NewDecoder(bytes.NewReader([]byte(example.Config)))
 			dec.KnownFields(true)
-			require.NoError(t, dec.Decode(&s), example.Title)
+			require.NoError(t, dec.Decode(&s), "%v:%v", typeName, example.Title)
 
 			type confAlias Config
 			sAliased := struct {
@@ -50,7 +50,7 @@ func TestExamples(t *testing.T) {
 			}{}
 			dec = yaml.NewDecoder(bytes.NewReader([]byte(example.Config)))
 			dec.KnownFields(true)
-			require.NoError(t, dec.Decode(&sAliased), example.Title)
+			require.NoError(t, dec.Decode(&sAliased), "%v:%v", typeName, example.Title)
 		}
 	}
 }

@@ -54,7 +54,7 @@ and the message is replaced with the query result.
 Message metadata is also accessible within the query from the variable
 `$metadata`.
 
-This processor uses a native [Go library][gojq], and therefore does not require
+This processor uses the [gojq library][gojq], and therefore does not require
 jq to be installed as a dependency. However, this also means there are some
 differences in how these queries are executed versus the jq cli which you can
 [read about here][gojq-difference].
@@ -88,6 +88,46 @@ Whether to process the input as a raw string instead of as JSON.
 
 Type: `bool`  
 Default: `false`  
+
+## Examples
+
+<Tabs defaultValue="Mapping" values={[
+{ label: 'Mapping', value: 'Mapping', },
+]}>
+
+<TabItem value="Mapping">
+
+
+When receiving JSON documents of the form:
+
+```json
+{
+  "locations": [
+    {"name": "Seattle", "state": "WA"},
+    {"name": "New York", "state": "NY"},
+    {"name": "Bellevue", "state": "WA"},
+    {"name": "Olympia", "state": "WA"}
+  ]
+}
+```
+
+We could collapse the location names from the state of Washington into a field `Cities`:
+
+```json
+{"Cities": "Bellevue, Olympia, Seattle"}
+```
+
+With the following config:
+
+```yaml
+pipeline:
+  processors:
+    - jq:
+        query: '{Cities: .locations | map(select(.state == "WA").name) | sort | join(", ") }'
+```
+
+</TabItem>
+</Tabs>
 
 [gojq]: https://github.com/itchyny/gojq
 [gojq-difference]: https://github.com/itchyny/gojq#difference-to-jq

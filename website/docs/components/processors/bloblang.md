@@ -26,19 +26,14 @@ Bloblang is a powerful language that enables a wide range of mapping,
 transformation and filtering tasks. For more information
 [check out the docs](/docs/guides/bloblang/about).
 
-## Error Handling
-
-Bloblang mappings can fail, in which case the message remains unchanged, errors
-are logged, and the message is flagged as having failed, allowing you to use
-[standard processor error handling patterns](/docs/configuration/error_handling).
-
-However, Bloblang itself also provides powerful ways of ensuring your mappings
-do not fail by specifying desired fallback behaviour, which you can read about
-[in this section](/docs/guides/bloblang/about#error-handling).
-
 ## Examples
 
-### Mapping
+<Tabs defaultValue="Mapping" values={[
+{ label: 'Mapping', value: 'Mapping', },
+]}>
+
+<TabItem value="Mapping">
+
 
 Given JSON documents containing an array of fans:
 
@@ -55,21 +50,7 @@ Given JSON documents containing an array of fans:
 }
 ```
 
-We can reduce the fans to only those with an obsession score above 0.5 with this
-mapping:
-
-```yaml
-pipeline:
-  processors:
-  - bloblang: |
-      root = this
-      fans = fans.map_each(match {
-        this.obsession > 0.5 => this
-        _ => deleted()
-      })
-```
-
-Giving us:
+We can reduce the fans to only those with an obsession score above 0.5, giving us:
 
 ```json
 {
@@ -82,5 +63,29 @@ Giving us:
 }
 ```
 
-For more cool examples check out the [advanced Bloblang page](/docs/guides/bloblang/advanced).
+With the following config:
+
+```yaml
+pipeline:
+  processors:
+  - bloblang: |
+      root = this
+      fans = fans.map_each(match {
+        this.obsession > 0.5 => this
+        _ => deleted()
+      })
+```
+
+</TabItem>
+</Tabs>
+
+## Error Handling
+
+Bloblang mappings can fail, in which case the message remains unchanged, errors
+are logged, and the message is flagged as having failed, allowing you to use
+[standard processor error handling patterns](/docs/configuration/error_handling).
+
+However, Bloblang itself also provides powerful ways of ensuring your mappings
+do not fail by specifying desired fallback behaviour, which you can read about
+[in this section](/docs/guides/bloblang/about#error-handling).
 
