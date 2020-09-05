@@ -14,7 +14,7 @@ let descriptions = {
     },
     {
       name: "Network",
-      description: "Inputs that consume from TCP/UDP and HTTP based protocols.",
+      description: "Inputs that consume directly from low level network protocols.",
     },
     {
       name: "AWS",
@@ -62,7 +62,7 @@ let descriptions = {
     },
     {
       name: "Network",
-      description: "Outputs that write to TCP/UDP and HTTP based protocols.",
+      description: "Outputs that write directly to low level network protocols.",
     },
     {
       name: "AWS",

@@ -95,6 +95,104 @@ counting backwards starting from -1.
 Type: `array`  
 Default: `[]`  
 
+## Examples
+
+<Tabs defaultValue="JSON Mapping and Arithmetic" values={[
+{ label: 'JSON Mapping and Arithmetic', value: 'JSON Mapping and Arithmetic', },
+{ label: 'Stuff With Arrays', value: 'Stuff With Arrays', },
+]}>
+
+<TabItem value="JSON Mapping and Arithmetic">
+
+
+Because AWK is a full programming language it's much easier to map documents and
+perform arithmetic with it than with other Benthos processors. For example, if
+we were expecting documents of the form:
+
+```json
+{"doc":{"val1":5,"val2":10},"id":"1","type":"add"}
+{"doc":{"val1":5,"val2":10},"id":"2","type":"multiply"}
+```
+
+And we wished to perform the arithmetic specified in the `type` field,
+on the values `val1` and `val2` and, finally, map the result into the
+document, giving us the following resulting documents:
+
+```json
+{"doc":{"result":15,"val1":5,"val2":10},"id":"1","type":"add"}
+{"doc":{"result":50,"val1":5,"val2":10},"id":"2","type":"multiply"}
+```
+
+We can do that with the following:
+
+```yaml
+pipeline:
+  processors:
+  - awk:
+      program: |
+        function map_add_vals() {
+          json_set_int("doc.result", json_get("doc.val1") + json_get("doc.val2"));
+        }
+        function map_multiply_vals() {
+          json_set_int("doc.result", json_get("doc.val1") * json_get("doc.val2"));
+        }
+        function map_unknown(type) {
+          json_set("error","unknown document type");
+          print_log("Document type not recognised: " type, "ERROR");
+        }
+        {
+          type = json_get("type");
+          if (type == "add")
+            map_add_vals();
+          else if (type == "multiply")
+            map_multiply_vals();
+          else
+            map_unknown(type);
+        }
+```
+
+</TabItem>
+<TabItem value="Stuff With Arrays">
+
+
+It's possible to iterate JSON arrays by appending an index value to the path,
+this can be used to do things like removing duplicates from arrays. For example,
+given the following input document:
+
+```json
+{"path":{"to":{"foos":["one","two","three","two","four"]}}}
+```
+
+We could create a new array `foos_unique` from `foos` giving us the result:
+
+```json
+{"path":{"to":{"foos":["one","two","three","two","four"],"foos_unique":["one","two","three","four"]}}}
+```
+
+With the following config:
+
+```yaml
+pipeline:
+  processors:
+  - awk:
+      program: |
+        {
+          array_path = "path.to.foos"
+          array_len = json_length(array_path)
+
+          for (i = 0; i < array_len; i++) {
+            ele = json_get(array_path "." i)
+            if ( ! ( ele in seen ) ) {
+              json_append(array_path "_unique", ele)
+              seen[ele] = 1
+            }
+          }
+        }
+```
+
+</TabItem>
+</Tabs>
+
 ## Codecs
 
 The chosen codec determines how the contents of the message are fed into the
@@ -330,96 +428,6 @@ Signature: `print_log(message, level)`
 
 Prints a Benthos log message at a particular log level. The log level is
 optional, and if omitted the level `INFO` will be used.
-
-## Examples
-
-### JSON Mapping and Arithmetic
-
-Because AWK is a full programming language it's much easier to map documents and
-perform arithmetic with it than with other Benthos processors. For example, if
-we were expecting documents of the form:
-
-```json
-{"doc":{"val1":5,"val2":10},"id":"1","type":"add"}
-{"doc":{"val1":5,"val2":10},"id":"2","type":"multiply"}
-```
-
-And we wished to perform the arithmetic specified in the `type` field,
-on the values `val1` and `val2` and, finally, map the result into the
-document, we can solve that with a program like follows:
-
-```yaml
-pipeline:
-  processors:
-  - awk:
-      program: |
-        function map_add_vals() {
-          json_set_int("doc.result", json_get("doc.val1") + json_get("doc.val2"));
-        }
-        function map_multiply_vals() {
-          json_set_int("doc.result", json_get("doc.val1") * json_get("doc.val2"));
-        }
-        function map_unknown(type) {
-          json_set("error","unknown document type");
-          print_log("Document type not recognised: " type, "ERROR");
-        }
-        {
-          type = json_get("type");
-          if (type == "add")
-            map_add_vals();
-          else if (type == "multiply")
-            map_multiply_vals();
-          else
-            map_unknown(type);
-        }
-```
-
-Which would give us the following resulting documents:
-
-```json
-{"doc":{"result":15,"val1":5,"val2":10},"id":"1","type":"add"}
-{"doc":{"result":50,"val1":5,"val2":10},"id":"2","type":"multiply"}
-```
-
-Using functions allows us to separate our mapping logic, and we've also
-implemented a fallback mapper for when the document type is not recognised.
-
-### Stuff With Arrays
-
-It's possible to iterate JSON arrays by appending an index value to the path,
-this can be used to do things like removing duplicates from arrays. For example,
-given the following input document:
-
-```json
-{"path":{"to":{"foos":["one","two","three","two","four"]}}}
-```
-
-We could create a new array `foos_unique` from `foos` with this:
-
-```yaml
-pipeline:
-  processors:
-  - awk:
-      program: |
-        {
-          array_path = "path.to.foos"
-          array_len = json_length(array_path)
-
-          for (i = 0; i < array_len; i++) {
-            ele = json_get(array_path "." i)
-            if ( ! ( ele in seen ) ) {
-              json_append(array_path "_unique", ele)
-              seen[ele] = 1
-            }
-          }
-        }
-```
-
-Which would give us the result:
-
-```json
-{"path":{"to":{"foos":["one","two","three","two","four"],"foos_unique":["one","two","three","four"]}}}
-```
 
 [goawk]: https://github.com/benhoyt/goawk
 [goawk.differences]: https://github.com/benhoyt/goawk#differences-from-awk

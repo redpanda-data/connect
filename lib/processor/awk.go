@@ -52,11 +52,6 @@ can be used.
 
 This processor uses [GoAWK][goawk], in order to understand the differences
 in how the program works you can [read more about it here][goawk.differences].`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("codec", "A [codec](#codecs) defines how messages should be inserted into the AWK program as variables. The codec does not change which [custom Benthos functions](#awk-functions) are available. The `text` codec is the closest to a typical AWK use case.").HasOptions("none", "text", "json"),
-			docs.FieldCommon("program", "An AWK program to execute"),
-			partsFieldSpec,
-		},
 		Footnotes: `
 ## Codecs
 
@@ -294,10 +289,17 @@ Signature: ` + "`print_log(message, level)`" + `
 Prints a Benthos log message at a particular log level. The log level is
 optional, and if omitted the level ` + "`INFO`" + ` will be used.
 
-## Examples
-
-### JSON Mapping and Arithmetic
-
+[goawk]: https://github.com/benhoyt/goawk
+[goawk.differences]: https://github.com/benhoyt/goawk#differences-from-awk`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("codec", "A [codec](#codecs) defines how messages should be inserted into the AWK program as variables. The codec does not change which [custom Benthos functions](#awk-functions) are available. The `text` codec is the closest to a typical AWK use case.").HasOptions("none", "text", "json"),
+			docs.FieldCommon("program", "An AWK program to execute"),
+			partsFieldSpec,
+		},
+		Examples: []docs.AnnotatedExample{
+			{
+				Title: "JSON Mapping and Arithmetic",
+				Summary: `
 Because AWK is a full programming language it's much easier to map documents and
 perform arithmetic with it than with other Benthos processors. For example, if
 we were expecting documents of the form:
@@ -309,9 +311,15 @@ we were expecting documents of the form:
 
 And we wished to perform the arithmetic specified in the ` + "`type`" + ` field,
 on the values ` + "`val1` and `val2`" + ` and, finally, map the result into the
-document, we can solve that with a program like follows:
+document, giving us the following resulting documents:
 
-` + "```yaml" + `
+` + "```json" + `
+{"doc":{"result":15,"val1":5,"val2":10},"id":"1","type":"add"}
+{"doc":{"result":50,"val1":5,"val2":10},"id":"2","type":"multiply"}
+` + "```" + `
+
+We can do that with the following:`,
+				Config: `
 pipeline:
   processors:
   - awk:
@@ -335,20 +343,11 @@ pipeline:
           else
             map_unknown(type);
         }
-` + "```" + `
-
-Which would give us the following resulting documents:
-
-` + "```json" + `
-{"doc":{"result":15,"val1":5,"val2":10},"id":"1","type":"add"}
-{"doc":{"result":50,"val1":5,"val2":10},"id":"2","type":"multiply"}
-` + "```" + `
-
-Using functions allows us to separate our mapping logic, and we've also
-implemented a fallback mapper for when the document type is not recognised.
-
-### Stuff With Arrays
-
+`,
+			},
+			{
+				Title: "Stuff With Arrays",
+				Summary: `
 It's possible to iterate JSON arrays by appending an index value to the path,
 this can be used to do things like removing duplicates from arrays. For example,
 given the following input document:
@@ -357,9 +356,14 @@ given the following input document:
 {"path":{"to":{"foos":["one","two","three","two","four"]}}}
 ` + "```" + `
 
-We could create a new array ` + "`foos_unique` from `foos`" + ` with this:
+We could create a new array ` + "`foos_unique` from `foos`" + ` giving us the result:
 
-` + "```yaml" + `
+` + "```json" + `
+{"path":{"to":{"foos":["one","two","three","two","four"],"foos_unique":["one","two","three","four"]}}}
+` + "```" + `
+
+With the following config:`,
+				Config: `
 pipeline:
   processors:
   - awk:
@@ -376,16 +380,9 @@ pipeline:
             }
           }
         }
-` + "```" + `
-
-Which would give us the result:
-
-` + "```json" + `
-{"path":{"to":{"foos":["one","two","three","two","four"],"foos_unique":["one","two","three","four"]}}}
-` + "```" + `
-
-[goawk]: https://github.com/benhoyt/goawk
-[goawk.differences]: https://github.com/benhoyt/goawk#differences-from-awk`,
+`,
+			},
+		},
 	}
 }
 

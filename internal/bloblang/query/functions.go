@@ -291,16 +291,12 @@ func rangeFunction(args ...interface{}) (Function, error) {
 	if step < 0 && stop > start {
 		return nil, fmt.Errorf("with negative step arg stop (%v) must be <= to start (%v)", stop, start)
 	}
-	r := make([]int64, (stop-start)/step)
+	r := make([]interface{}, (stop-start)/step)
 	for i := 0; i < len(r); i++ {
 		r[i] = start + step*int64(i)
 	}
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		rClone := make([]interface{}, 0, len(r))
-		for _, v := range r {
-			rClone = append(rClone, v)
-		}
-		return rClone, nil
+		return r, nil
 	}, nil), nil
 }
 
