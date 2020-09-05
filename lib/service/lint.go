@@ -1,14 +1,22 @@
 package service
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/lib/config"
+	"github.com/fatih/color"
 	"github.com/urfave/cli/v2"
+	"gopkg.in/yaml.v3"
 )
+
+var red = color.New(color.FgRed).SprintFunc()
+var yellow = color.New(color.FgYellow).SprintFunc()
 
 func resolveLintPath(path string) (string, bool) {
 	recurse := false
@@ -21,6 +29,95 @@ func resolveLintPath(path string) (string, bool) {
 		path = strings.TrimSuffix(path, "/...")
 	}
 	return path, recurse
+}
+
+type pathLint struct {
+	source string
+	line   int
+	lint   string
+	err    string
+}
+
+func lintFile(path string) (pathLints []pathLint) {
+	conf := config.New()
+	lints, err := config.Read(path, true, &conf)
+	if err != nil {
+		pathLints = append(pathLints, pathLint{
+			source: path,
+			err:    err.Error(),
+		})
+		return
+	}
+	for _, l := range lints {
+		pathLints = append(pathLints, pathLint{
+			source: path,
+			lint:   l,
+		})
+	}
+	return
+}
+
+func lintMDSnippets(path string) (pathLints []pathLint) {
+	rawBytes, err := ioutil.ReadFile(path)
+	if err != nil {
+		pathLints = append(pathLints, pathLint{
+			source: path,
+			err:    err.Error(),
+		})
+		return
+	}
+
+	startTag, endTag := []byte("```yaml"), []byte("```")
+
+	nextSnippet := bytes.Index(rawBytes, startTag)
+	for nextSnippet != -1 {
+		nextSnippet = nextSnippet + len(startTag)
+
+		snippetLine := bytes.Count(rawBytes[:nextSnippet], []byte("\n")) + 1
+
+		endOfSnippet := bytes.Index(rawBytes[nextSnippet:], endTag)
+		if endOfSnippet == -1 {
+			pathLints = append(pathLints, pathLint{
+				source: path,
+				line:   snippetLine,
+				err:    "markdown snippet not terminated",
+			})
+			return
+		}
+		endOfSnippet = nextSnippet + endOfSnippet + len(endTag)
+
+		conf := config.New()
+		configBytes := rawBytes[nextSnippet : endOfSnippet-len(endTag)]
+
+		if err := yaml.Unmarshal(configBytes, &conf); err != nil {
+			pathLints = append(pathLints, pathLint{
+				source: path,
+				line:   snippetLine,
+				err:    err.Error(),
+			})
+		} else {
+			lints, err := config.Lint(configBytes, conf)
+			if err != nil {
+				pathLints = append(pathLints, pathLint{
+					source: path,
+					line:   snippetLine,
+					err:    err.Error(),
+				})
+			}
+			for _, l := range lints {
+				pathLints = append(pathLints, pathLint{
+					source: path,
+					line:   snippetLine,
+					lint:   l,
+				})
+			}
+		}
+
+		if nextSnippet = bytes.Index(rawBytes[endOfSnippet:], []byte("```yaml")); nextSnippet != -1 {
+			nextSnippet = nextSnippet + endOfSnippet
+		}
+	}
+	return
 }
 
 func lintCliCommand() *cli.Command {
@@ -65,26 +162,30 @@ func lintCliCommand() *cli.Command {
 			if conf := c.String("config"); len(conf) > 0 {
 				targets = append(targets, conf)
 			}
-			var pathLints []string
+			var pathLints []pathLint
 			for _, target := range targets {
 				if len(target) == 0 {
 					continue
 				}
-				var conf = config.New()
-				lints, err := config.Read(target, true, &conf)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Configuration file read error '%v': %v\n", target, err)
-					os.Exit(1)
-				}
-				for _, l := range lints {
-					pathLints = append(pathLints, target+": "+l)
+				if path.Ext(target) == ".md" {
+					pathLints = append(pathLints, lintMDSnippets(target)...)
+				} else {
+					pathLints = append(pathLints, lintFile(target)...)
 				}
 			}
 			if len(pathLints) == 0 {
 				os.Exit(0)
 			}
 			for _, lint := range pathLints {
-				fmt.Fprintln(os.Stderr, lint)
+				message := yellow(lint.lint)
+				if len(lint.err) > 0 {
+					message = red(lint.err)
+				}
+				if lint.line > 0 {
+					fmt.Fprintf(os.Stderr, "%v: from snippet at line %v: %v\n", lint.source, lint.line, message)
+				} else {
+					fmt.Fprintf(os.Stderr, "%v: %v\n", lint.source, message)
+				}
 			}
 			os.Exit(1)
 			return nil

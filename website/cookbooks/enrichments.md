@@ -139,17 +139,19 @@ And the response looks like this:
 In order to create a single request from a batch of documents, and subsequently map the result back into our batch, we will use the [`archive`][processor.archive] and [`unarchive`][processor.unarchive] processors in our [`branch`][processor.branch] flow, like this:
 
 ```yaml
-- branch:
-    request_map: 'root.text = this.article.content'
-    processors:
-      - archive:
-          format: json_array
-      - http:
-          url: http://localhost:4198/hyperbole
-          verb: POST
-      - unarchive:
-          format: json_array
-    result_map: 'root.tmp.hyperbole_rank = this.hyperbole_rank'
+pipeline:
+  processors:
+    - branch:
+        request_map: 'root.text = this.article.content'
+        processors:
+          - archive:
+              format: json_array
+          - http:
+              url: http://localhost:4198/hyperbole
+              verb: POST
+          - unarchive:
+              format: json_array
+        result_map: 'root.tmp.hyperbole_rank = this.hyperbole_rank'
 ```
 
 The purpose of the `json_array` format `archive` processor is to take a batch of JSON documents and place them into a single document as an array. Subsequently, we then send one single request for each batch.
@@ -190,17 +192,19 @@ And returns an object of the form:
 We then wish to map the field `fake_news_rank` from that result into the original document at the path `article.fake_news_score`. Our [`branch`][processor.branch] block for this enrichment would look like this:
 
 ```yaml
-- branch:
-    request_map: |
-      root.text = this.article.content
-      root.claims = this.tmp.claims
-      root.hyperbole_rank = this.tmp.hyperbole_rank
-    processors:
-      - http:
-          parallel: true
-          url: http://localhost:4199/fakenews
-          verb: POST
-    result_map: 'root.article.fake_news_score = this.fake_news_rank'
+pipeline:
+  processors:
+    - branch:
+        request_map: |
+          root.text = this.article.content
+          root.claims = this.tmp.claims
+          root.hyperbole_rank = this.tmp.hyperbole_rank
+        processors:
+          - http:
+              parallel: true
+              url: http://localhost:4199/fakenews
+              verb: POST
+        result_map: 'root.article.fake_news_score = this.fake_news_rank'
 ```
 
 Note that in our `request_map` we are targeting fields that are populated from the previous two enrichments.
