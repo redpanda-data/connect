@@ -508,6 +508,8 @@ PROCESSOR_HTTP_VERB                                  = POST
 PROCESSOR_INSERT_PART_CONTENT
 PROCESSOR_INSERT_PART_INDEX                          = -1
 PROCESSOR_JMESPATH_QUERY
+PROCESSOR_JQ_QUERY                                   = .
+PROCESSOR_JQ_RAW                                     = false
 PROCESSOR_JSON_OPERATOR                              = clean
 PROCESSOR_JSON_PATH
 PROCESSOR_JSON_SCHEMA_SCHEMA

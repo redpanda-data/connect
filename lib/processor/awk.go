@@ -48,7 +48,10 @@ message metadata, json fields, printing logs, etc. These functions can be
 overridden by functions within the program.
 
 Check out the [examples section](#examples) in order to see how this processor
-can be used.`,
+can be used.
+
+This processor uses [GoAWK][goawk], in order to understand the differences
+in how the program works you can [read more about it here][goawk.differences].`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("codec", "A [codec](#codecs) defines how messages should be inserted into the AWK program as variables. The codec does not change which [custom Benthos functions](#awk-functions) are available. The `text` codec is the closest to a typical AWK use case.").HasOptions("none", "text", "json"),
 			docs.FieldCommon("program", "An AWK program to execute"),
@@ -379,7 +382,10 @@ Which would give us the result:
 
 ` + "```json" + `
 {"path":{"to":{"foos":["one","two","three","two","four"],"foos_unique":["one","two","three","four"]}}}
-` + "```" + ``,
+` + "```" + `
+
+[goawk]: https://github.com/benhoyt/goawk
+[goawk.differences]: https://github.com/benhoyt/goawk#differences-from-awk`,
 	}
 }
 

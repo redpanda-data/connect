@@ -37,6 +37,7 @@ require (
 	github.com/gorilla/websocket v1.4.2
 	github.com/hashicorp/golang-lru v0.5.3 // indirect
 	github.com/influxdata/go-syslog/v3 v3.0.0
+	github.com/itchyny/gojq v0.10.0
 	github.com/jhump/protoreflect v1.7.0
 	github.com/jmespath/go-jmespath v0.3.0
 	github.com/klauspost/compress v1.10.11 // indirect

@@ -194,4 +194,56 @@ func IteratePartsWithSpan(
 	}
 }
 
+// Iterate the parts of a message, mutate them as required, and return either a
+// boolean or an error. If the error is nil and the boolean is false then the
+// message part is removed.
+func iteratePartsFilterableWithSpan(
+	operationName string, parts []int, msg types.Message,
+	iter func(int, opentracing.Span, types.Part) (bool, error),
+) {
+	newParts := make([]types.Part, 0, msg.Len())
+	exec := func(i int) bool {
+		part := msg.Get(i)
+		span := tracing.GetSpan(part)
+		if span == nil {
+			span = opentracing.StartSpan(operationName)
+		} else {
+			span = opentracing.StartSpan(
+				operationName,
+				opentracing.ChildOf(span.Context()),
+			)
+		}
+
+		var keep bool
+		var err error
+		if keep, err = iter(i, span, part); err != nil {
+			FlagErr(part, err)
+			span.SetTag("error", true)
+			span.LogFields(
+				olog.String("event", "error"),
+				olog.String("type", err.Error()),
+			)
+			keep = true
+		}
+		span.Finish()
+		return keep
+	}
+
+	if len(parts) == 0 {
+		for i := 0; i < msg.Len(); i++ {
+			if exec(i) {
+				newParts = append(newParts, msg.Get(i))
+			}
+		}
+	} else {
+		for _, i := range parts {
+			if exec(i) {
+				newParts = append(newParts, msg.Get(i))
+			}
+		}
+	}
+
+	msg.SetAll(newParts)
+}
+
 //------------------------------------------------------------------------------

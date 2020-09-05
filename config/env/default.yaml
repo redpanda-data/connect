@@ -583,6 +583,9 @@ pipeline:
         index: ${PROCESSOR_INSERT_PART_INDEX:-1}
       jmespath:
         query: ${PROCESSOR_JMESPATH_QUERY}
+      jq:
+        query: ${PROCESSOR_JQ_QUERY:.}
+        raw: ${PROCESSOR_JQ_RAW:false}
       json:
         operator: ${PROCESSOR_JSON_OPERATOR:clean}
         path: ${PROCESSOR_JSON_PATH}
