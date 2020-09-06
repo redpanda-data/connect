@@ -58,28 +58,20 @@ pipeline:
   processors:
   - group_by:
     - condition:
-        text:
-          operator: contains
-          arg: "this is a foo"
+        bloblang: 'content().contains("this is a foo")'
       processors:
       - archive:
           format: tar
       - compress:
           algorithm: gzip
-      - metadata:
-          operator: set
-          key: grouping
-          value: foo
+      - bloblang: 'meta grouping = "foo"'
 output:
   switch:
     outputs:
     - output:
         type: foo_output
       condition:
-        metadata:
-          operator: equals
-          key: grouping
-          arg: foo
+        bloblang: 'meta("grouping") == "foo"'
     - output:
         type: bar_output
 ```

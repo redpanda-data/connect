@@ -41,9 +41,7 @@ pipeline:
               operator: get
               key: ${! json("key") }
           - catch:
-            - text:
-                operator: set
-                value: '{"err":"${! error() }"}'
+            - bloblang: 'root = {"err":error()}'
         result_map: 'root.result = this'
 
 resources:
