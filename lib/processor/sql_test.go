@@ -12,6 +12,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/ory/dockertest/v3"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSQLPostgresIntegration(t *testing.T) {
@@ -67,9 +69,61 @@ func TestSQLPostgresIntegration(t *testing.T) {
 	t.Run("testSQLPostgres", func(t *testing.T) {
 		testSQLPostgres(t, dsn)
 	})
+	t.Run("testSQLPostgresDeprecated", func(t *testing.T) {
+		testSQLPostgresDeprecated(t, dsn)
+	})
 }
 
 func testSQLPostgres(t *testing.T, dsn string) {
+	conf := NewConfig()
+	conf.Type = TypeSQL
+	conf.SQL.Driver = "postgres"
+	conf.SQL.DataSourceName = dsn
+	conf.SQL.Query = "INSERT INTO footable (foo, bar, baz) VALUES ($1, $2, $3);"
+	conf.SQL.Args = []string{
+		"${! json(\"foo\") }",
+		"${! json(\"bar\") }",
+		"${! json(\"baz\") }",
+	}
+
+	s, err := NewSQL(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	parts := [][]byte{
+		[]byte(`{"foo":"foo1","bar":"bar1","baz":"baz1"}`),
+		[]byte(`{"foo":"foo2","bar":"bar2","baz":"baz2"}`),
+	}
+
+	resMsgs, response := s.ProcessMessage(message.New(parts))
+	require.Nil(t, response)
+	require.Len(t, resMsgs, 1)
+	assert.Equal(t, parts, message.GetAllBytes(resMsgs[0]))
+
+	conf.SQL.Query = "SELECT * FROM footable WHERE foo = $1;"
+	conf.SQL.Args = []string{
+		"${! json(\"foo\") }",
+	}
+	conf.SQL.ResultCodec = "json_array"
+	s, err = NewSQL(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	parts = [][]byte{
+		[]byte(`{"foo":"foo1"}`),
+		[]byte(`{"foo":"foo2"}`),
+	}
+
+	resMsgs, response = s.ProcessMessage(message.New(parts))
+	require.Nil(t, response)
+	require.Len(t, resMsgs, 1)
+
+	expParts := [][]byte{
+		[]byte(`[{"bar":"bar1","baz":"baz1","foo":"foo1"}]`),
+		[]byte(`[{"bar":"bar2","baz":"baz2","foo":"foo2"}]`),
+	}
+	assert.Equal(t, expParts, message.GetAllBytes(resMsgs[0]))
+}
+
+func testSQLPostgresDeprecated(t *testing.T, dsn string) {
 	conf := NewConfig()
 	conf.Type = TypeSQL
 	conf.SQL.Driver = "postgres"
@@ -87,8 +141,8 @@ func testSQLPostgres(t *testing.T, dsn string) {
 	}
 
 	parts := [][]byte{
-		[]byte(`{"foo":"foo1","bar":"bar1","baz":"baz1"}`),
-		[]byte(`{"foo":"foo2","bar":"bar2","baz":"baz2"}`),
+		[]byte(`{"foo":"foo3","bar":"bar3","baz":"baz3"}`),
+		[]byte(`{"foo":"foo4","bar":"bar4","baz":"baz4"}`),
 	}
 
 	resMsgs, response := s.ProcessMessage(message.New(parts))
@@ -126,7 +180,7 @@ func testSQLPostgres(t *testing.T, dsn string) {
 		t.Fatalf("Wrong resulting msgs: %v != %v", len(resMsgs), 1)
 	}
 	expParts := [][]byte{
-		[]byte(`[{"bar":"bar2","baz":"baz2","foo":"foo2"}]`),
+		[]byte(`[{"bar":"bar4","baz":"baz4","foo":"foo4"}]`),
 	}
 	if act, exp := message.GetAllBytes(resMsgs[0]), expParts; !reflect.DeepEqual(exp, act) {
 		t.Fatalf("Wrong result: %s != %s", act, exp)
@@ -187,9 +241,61 @@ func TestSQLMySQLIntegration(t *testing.T) {
 	t.Run("testSQLMySQL", func(t *testing.T) {
 		testSQLMySQL(t, dsn)
 	})
+	t.Run("testSQLMySQLDeprecated", func(t *testing.T) {
+		testSQLMySQLDeprecated(t, dsn)
+	})
 }
 
 func testSQLMySQL(t *testing.T, dsn string) {
+	conf := NewConfig()
+	conf.Type = TypeSQL
+	conf.SQL.Driver = "mysql"
+	conf.SQL.DataSourceName = dsn
+	conf.SQL.Query = "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
+	conf.SQL.Args = []string{
+		"${! json(\"foo\") }",
+		"${! json(\"bar\") }",
+		"${! json(\"baz\") }",
+	}
+
+	s, err := NewSQL(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	parts := [][]byte{
+		[]byte(`{"foo":"foo1","bar":"bar1","baz":"baz1"}`),
+		[]byte(`{"foo":"foo2","bar":"bar2","baz":"baz2"}`),
+	}
+
+	resMsgs, response := s.ProcessMessage(message.New(parts))
+	require.Nil(t, response)
+	require.Len(t, resMsgs, 1)
+	assert.Equal(t, parts, message.GetAllBytes(resMsgs[0]))
+
+	conf.SQL.Query = "SELECT * FROM footable WHERE foo = ?;"
+	conf.SQL.Args = []string{
+		"${! json(\"foo\") }",
+	}
+	conf.SQL.ResultCodec = "json_array"
+	s, err = NewSQL(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	parts = [][]byte{
+		[]byte(`{"foo":"foo1"}`),
+		[]byte(`{"foo":"foo2"}`),
+	}
+
+	resMsgs, response = s.ProcessMessage(message.New(parts))
+	require.Nil(t, response)
+	require.Len(t, resMsgs, 1)
+
+	expParts := [][]byte{
+		[]byte(`[{"bar":"bar1","baz":"baz1","foo":"foo1"}]`),
+		[]byte(`[{"bar":"bar2","baz":"baz2","foo":"foo2"}]`),
+	}
+	assert.Equal(t, expParts, message.GetAllBytes(resMsgs[0]))
+}
+
+func testSQLMySQLDeprecated(t *testing.T, dsn string) {
 	conf := NewConfig()
 	conf.Type = TypeSQL
 	conf.SQL.Driver = "mysql"
@@ -207,8 +313,8 @@ func testSQLMySQL(t *testing.T, dsn string) {
 	}
 
 	parts := [][]byte{
-		[]byte(`{"foo":"foo1","bar":"bar1","baz":"baz1"}`),
-		[]byte(`{"foo":"foo2","bar":"bar2","baz":"baz2"}`),
+		[]byte(`{"foo":"foo3","bar":"bar3","baz":"baz3"}`),
+		[]byte(`{"foo":"foo4","bar":"bar4","baz":"baz4"}`),
 	}
 
 	resMsgs, response := s.ProcessMessage(message.New(parts))
@@ -246,7 +352,7 @@ func testSQLMySQL(t *testing.T, dsn string) {
 		t.Fatalf("Wrong resulting msgs: %v != %v", len(resMsgs), 1)
 	}
 	expParts := [][]byte{
-		[]byte(`[{"bar":"bar2","baz":"baz2","foo":"foo2"}]`),
+		[]byte(`[{"bar":"bar4","baz":"baz4","foo":"foo4"}]`),
 	}
 	if act, exp := message.GetAllBytes(resMsgs[0]), expParts; !reflect.DeepEqual(exp, act) {
 		t.Fatalf("Wrong result: %s != %s", act, exp)

@@ -658,6 +658,7 @@ pipeline:
         byte_size: ${PROCESSOR_SPLIT_BYTE_SIZE:0}
         size: ${PROCESSOR_SPLIT_SIZE:1}
       sql:
+        data_source_name: ${PROCESSOR_SQL_DATA_SOURCE_NAME}
         driver: ${PROCESSOR_SQL_DRIVER:mysql}
         dsn: ${PROCESSOR_SQL_DSN}
         query: ${PROCESSOR_SQL_QUERY}

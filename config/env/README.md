@@ -562,6 +562,7 @@ PROCESSOR_SELECT_PARTS_PARTS                         = 0
 PROCESSOR_SLEEP_DURATION                             = 100us
 PROCESSOR_SPLIT_BYTE_SIZE                            = 0
 PROCESSOR_SPLIT_SIZE                                 = 1
+PROCESSOR_SQL_DATA_SOURCE_NAME
 PROCESSOR_SQL_DRIVER                                 = mysql
 PROCESSOR_SQL_DSN
 PROCESSOR_SQL_QUERY

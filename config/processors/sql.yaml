@@ -19,8 +19,8 @@ pipeline:
     - type: sql
       sql:
         args: []
+        data_source_name: ""
         driver: mysql
-        dsn: ""
         query: ""
         result_codec: none
   threads: 1

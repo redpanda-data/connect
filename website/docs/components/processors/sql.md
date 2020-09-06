@@ -15,15 +15,15 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Runs an SQL prepared query against a target database for each message batch and,
-for queries that return rows, replaces the batch with the result according to a
+Runs an SQL prepared query against a target database for each message and, for
+queries that return rows, replaces it with the result according to a
 [codec](#result-codecs).
 
 ```yaml
 # Config fields, showing default values
 sql:
   driver: mysql
-  dsn: ""
+  data_source_name: ""
   query: ""
   args: []
   result_codec: none
@@ -37,8 +37,10 @@ the `args` field.
 
 The following is a list of supported drivers and their respective DSN formats:
 
-- `mysql`: `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]`
-- `postgres`: `postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`
+| Driver | Data Source Name Format |
+|---|---|
+| `mysql` | `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]` |
+| `postgres` | `postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` |
 
 Please note that the `postgres` driver enforces SSL by default, you
 can override this with the parameter `sslmode=disable` if required.
@@ -59,15 +61,14 @@ bar and baz populated with values extracted from messages:
 ```yaml
 pipeline:
   processors:
-    - for_each:
-      - sql:
-          driver: mysql
-          dsn: foouser:foopassword@tcp(localhost:3306)/foodb
-          query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
-          args:
-            - ${! json("document.foo") }
-            - ${! json("document.bar") }
-            - ${! meta("kafka_topic") }
+    - sql:
+        driver: mysql
+        data_source_name: foouser:foopassword@tcp(localhost:3306)/foodb
+        query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
+        args:
+          - ${! json("document.foo") }
+          - ${! json("document.bar") }
+          - ${! meta("kafka_topic") }
 ```
 
 </TabItem>
@@ -88,7 +89,7 @@ pipeline:
           - sql:
               driver: postgresql
               result_codec: json_array
-              dsn: postgres://foouser:foopass@localhost:5432/testdb?sslmode=disable
+              data_source_name: postgres://foouser:foopass@localhost:5432/testdb?sslmode=disable
               query: "SELECT * FROM footable WHERE user_id = $1;"
               args:
                 - ${! json("user.id") }
@@ -109,7 +110,7 @@ Type: `string`
 Default: `"mysql"`  
 Options: `mysql`, `postgres`.
 
-### `dsn`
+### `data_source_name`
 
 A Data Source Name to identify the target database.
 
@@ -120,7 +121,9 @@ Default: `""`
 ```yaml
 # Examples
 
-dsn: foouser:foopassword@tcp(localhost:3306)/foodb
+data_source_name: foouser:foopassword@tcp(localhost:3306)/foodb
+
+data_source_name: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable
 ```
 
 ### `query`
@@ -139,7 +142,7 @@ query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);
 
 ### `args`
 
-A list of arguments for the query to be resolved for each message batch.
+A list of arguments for the query to be resolved for each message.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
@@ -158,12 +161,12 @@ Options: `none`, `json_array`.
 ## Result Codecs
 
 When a query returns rows they are serialised according to a chosen codec, and
-the batch contents are replaced with the serialised result.
+the message contents are replaced with the serialised result.
 
 ### `none`
 
-The result of the query is ignored and the message batch remains unchanged. If
-your query does not return rows then this is the appropriate codec.
+The result of the query is ignored and the message remains unchanged. If your
+query does not return rows then this is the appropriate codec.
 
 ### `json_array`
 

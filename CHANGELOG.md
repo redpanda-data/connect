@@ -10,11 +10,19 @@ All notable changes to this project will be documented in this file.
 - New function `range` added to Bloblang.
 - New (BETA) `jq` processor.
 
+### Changed
+
+- New field `data_source_name` replaces `dsn` for the `sql` processor, and when
+  using this field each message of a batch is processed individually. When using
+  the field `dsn` the behaviour remains unchanged.
+
 ### Fixed
 
 - Eliminated situations where an `amqp_0_9` or `amqp_1` component would abandon
   a connection reset due to partial errors.
 - The Bloblang parser now allows naked negation of queries.
+- The `cache` processor interpolations for `key` and `value` now cross-batch
+  reference messages before processing.
 
 ## 3.26.0 - 2020-08-30
 

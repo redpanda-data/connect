@@ -267,8 +267,8 @@ func (c *Cache) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 	newMsg := msg.Copy()
 
 	proc := func(index int, span opentracing.Span, part types.Part) error {
-		key := c.key.String(index, newMsg)
-		value := c.value.Bytes(index, newMsg)
+		key := c.key.String(index, msg)
+		value := c.value.Bytes(index, msg)
 
 		result, useResult, err := c.operator(key, value)
 		if err != nil {

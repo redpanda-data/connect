@@ -92,7 +92,7 @@ code {
 }
 
 a > code {
-  color: var(--ifm-link-color);
+  color: var(--ifm-link-color) !important;
 }
 
 a.contents__link > code {
