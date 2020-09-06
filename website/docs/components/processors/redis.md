@@ -53,34 +53,44 @@ redis:
 </TabItem>
 </Tabs>
 
-The field `key` supports
-[interpolation functions](/docs/configuration/interpolation#bloblang-queries) resolved
-individually for each message of the batch.
-
-For example, given payloads with a metadata field `set_key`, you could
-add a JSON field to your payload with the cardinality of their target sets with:
-
-```yaml
-- process_field:
-    path: meta.cardinality
-    result_type: int
-    processors:
-      - redis:
-          url: TODO
-          operator: scard
-          key: ${! meta("set_key") }
- ```
-
-
 ## Operators
 
 ### `scard`
 
-Returns the cardinality of a set, or 0 if the key does not exist.
+Returns the cardinality of a set, or `0` if the key does not exist.
 
 ### `sadd`
 
 Adds a new member to a set. Returns `1` if the member was added.
+
+## Examples
+
+<Tabs defaultValue="Querying Cardinality" values={[
+{ label: 'Querying Cardinality', value: 'Querying Cardinality', },
+]}>
+
+<TabItem value="Querying Cardinality">
+
+
+If given payloads containing a metadata field `set_key` it's possible
+to query and store the cardinality of the set for each message using a
+[`branch` processor](/docs/components/processors/branch) in order to
+augment rather than replace the message contents:
+
+```yaml
+pipeline:
+  processors:
+    - branch:
+        processors:
+          - redis:
+              url: TODO
+              operator: scard
+              key: ${! meta("set_key") }
+        result_map: 'root.cardinality = this'
+```
+
+</TabItem>
+</Tabs>
 
 ## Fields
 
