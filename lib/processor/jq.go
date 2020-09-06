@@ -24,6 +24,10 @@ func init() {
 		Summary: `
 Transforms and filters messages using jq queries.`,
 		Description: `
+:::note Try out Bloblang
+For better performance and improved capabilities try out native Benthos mapping with the [bloblang processor](/docs/components/processors/bloblang).
+:::
+
 The provided query is executed on each message, targeting either the contents
 as a structured JSON value or as a raw string using the field ` + "`raw`" + `,
 and the message is replaced with the query result.

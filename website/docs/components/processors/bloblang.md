@@ -30,6 +30,7 @@ transformation and filtering tasks. For more information
 
 <Tabs defaultValue="Mapping" values={[
 { label: 'Mapping', value: 'Mapping', },
+{ label: 'More Mapping', value: 'More Mapping', },
 ]}>
 
 <TabItem value="Mapping">
@@ -74,6 +75,37 @@ pipeline:
         this.obsession > 0.5 => this
         _ => deleted()
       })
+```
+
+</TabItem>
+<TabItem value="More Mapping">
+
+
+When receiving JSON documents of the form:
+
+```json
+{
+  "locations": [
+    {"name": "Seattle", "state": "WA"},
+    {"name": "New York", "state": "NY"},
+    {"name": "Bellevue", "state": "WA"},
+    {"name": "Olympia", "state": "WA"}
+  ]
+}
+```
+
+We could collapse the location names from the state of Washington into a field `Cities`:
+
+```json
+{"Cities": "Bellevue, Olympia, Seattle"}
+```
+
+With the following config:
+
+```yaml
+pipeline:
+  processors:
+    - bloblang: '{"Cities":this.locations.filter(this.state == "WA").map_each(this.name).sort().join(", ")}'
 ```
 
 </TabItem>

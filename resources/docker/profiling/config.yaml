@@ -4,21 +4,43 @@ http:
 
 input:
   bloblang:
-    interval: "1ms"
+    interval: "1us"
     mapping: |
       root = {
-        "foo": "bar"
+        "locations": [
+          {"name": "Seattle", "state": "WA"},
+          {"name": "New York", "state": "NY"},
+          {"name": "Bellevue", "state": "WA"},
+          {"name": "Olympia", "state": "WA"}
+        ]
       }
 
 pipeline:
   threads: 20
   processors:
-    - bloblang: |
-        root = this
-        root.foo = this.foo.uppercase()
+    - resource: with_bloblang
+    # - resource: with_jq
+    # - resource: with_jmespath
+    - catch:
+      - log:
+          message: "Err: ${! error() }"
+    - bloblang: 'root = deleted()'
 
 output:
   type: drop
+
+resources:
+  processors:
+    with_bloblang:
+      bloblang: '{"Cities":this.locations.filter(this.state == "WA").map_each(this.name).sort().join(", ")}'
+
+    with_jq:
+      jq:
+        query: '{Cities: .locations | map(select(.state == "WA").name) | sort | join(", ") }'
+
+    with_jmespath:
+      jmespath:
+        query: "locations[?state == 'WA'].name | sort(@) | {Cities: join(', ', @)}"
 
 metrics:
   prometheus:
@@ -27,6 +49,6 @@ metrics:
     push_job_name: benthos_push
     push_url: "http://localhost:9091"
 
-tracer:
-  jaeger:
-    agent_address: 'localhost:6831'
+# tracer:
+#   jaeger:
+#     agent_address: 'localhost:6831'

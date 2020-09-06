@@ -87,6 +87,35 @@ pipeline:
       })
 `,
 			},
+			{
+				Title: "More Mapping",
+				Summary: `
+When receiving JSON documents of the form:
+
+` + "```json" + `
+{
+  "locations": [
+    {"name": "Seattle", "state": "WA"},
+    {"name": "New York", "state": "NY"},
+    {"name": "Bellevue", "state": "WA"},
+    {"name": "Olympia", "state": "WA"}
+  ]
+}
+` + "```" + `
+
+We could collapse the location names from the state of Washington into a field ` + "`Cities`" + `:
+
+` + "```json" + `
+{"Cities": "Bellevue, Olympia, Seattle"}
+` + "```" + `
+
+With the following config:`,
+				Config: `
+pipeline:
+  processors:
+    - bloblang: '{"Cities":this.locations.filter(this.state == "WA").map_each(this.name).sort().join(", ")}'
+`,
+			},
 		},
 	}
 }

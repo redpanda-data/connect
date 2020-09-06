@@ -24,9 +24,9 @@ func init() {
 Executes a [JMESPath query](http://jmespath.org/) on JSON documents and replaces
 the message with the resulting document.`,
 		Description: `
-This processor is useful for performing large mappings in order to restructure
-JSON documents. In order to map documents using more advanced logic consider
-instead using the ` + "[`awk` processor](/docs/components/processors/awk)" + `.
+:::note Try out Bloblang
+For better performance and improved capabilities try out native Benthos mapping with the [bloblang processor](/docs/components/processors/bloblang).
+:::
 
 It is possible to create boolean queries with JMESPath, in order to filter
 messages with boolean queries please instead use the
