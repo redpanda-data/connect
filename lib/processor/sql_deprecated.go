@@ -72,6 +72,11 @@ func strToSQLResultCodecDeprecated(codec string) (sqlResultCodecDeprecated, erro
 
 //------------------------------------------------------------------------------
 
+func (s *SQL) doExecuteDeprecated(args ...interface{}) error {
+	_, err := s.query.Exec(args...)
+	return err
+}
+
 // processMessageDeprecated.
 // TODO: V4 Remove this
 func (s *SQL) processMessageDeprecated(msg types.Message) ([]types.Message, types.Response) {
@@ -86,7 +91,7 @@ func (s *SQL) processMessageDeprecated(msg types.Message) ([]types.Message, type
 	}
 	var err error
 	if s.resCodecDeprecated == nil {
-		if err = s.doExecute(args...); err != nil {
+		if err = s.doExecuteDeprecated(args...); err != nil {
 			err = fmt.Errorf("failed to execute query: %v", err)
 		}
 	} else {

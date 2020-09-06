@@ -16,6 +16,103 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestSQLClickhouseIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	pool, err := dockertest.NewPool("")
+	if err != nil {
+		t.Skipf("Could not connect to docker: %s", err)
+	}
+
+	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
+		Repository:   "yandex/clickhouse-server",
+		ExposedPorts: []string{"9000/tcp"},
+	})
+	require.NoError(t, err)
+
+	defer func() {
+		if err = pool.Purge(resource); err != nil {
+			t.Logf("Failed to clean up docker resource: %v", err)
+		}
+	}()
+
+	dsn := fmt.Sprintf("tcp://localhost:%v/", resource.GetPort("9000/tcp"))
+	if err = pool.Retry(func() error {
+		db, dberr := sql.Open("clickhouse", dsn)
+		if dberr != nil {
+			return dberr
+		}
+		if dberr = db.Ping(); err != nil {
+			return dberr
+		}
+		if _, dberr = db.Exec(`create table footable (
+  foo String,
+  bar String,
+  baz String
+) engine=Memory;`); dberr != nil {
+			return dberr
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("Could not connect to docker resource: %s", err)
+	}
+
+	t.Run("testSQLClickhouse", func(t *testing.T) {
+		testSQLClickhouse(t, dsn)
+	})
+}
+
+func testSQLClickhouse(t *testing.T, dsn string) {
+	conf := NewConfig()
+	conf.Type = TypeSQL
+	conf.SQL.Driver = "clickhouse"
+	conf.SQL.DataSourceName = dsn
+	conf.SQL.Query = "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
+	conf.SQL.Args = []string{
+		"${! json(\"foo\") }",
+		"${! json(\"bar\") }",
+		"${! json(\"baz\") }",
+	}
+
+	s, err := NewSQL(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	parts := [][]byte{
+		[]byte(`{"foo":"foo1","bar":"bar1","baz":"baz1"}`),
+		[]byte(`{"foo":"foo2","bar":"bar2","baz":"baz2"}`),
+	}
+
+	resMsgs, response := s.ProcessMessage(message.New(parts))
+	require.Nil(t, response)
+	require.Len(t, resMsgs, 1)
+	assert.Equal(t, parts, message.GetAllBytes(resMsgs[0]))
+
+	conf.SQL.Query = "SELECT * FROM footable WHERE foo = ?;"
+	conf.SQL.Args = []string{
+		"${! json(\"foo\") }",
+	}
+	conf.SQL.ResultCodec = "json_array"
+	s, err = NewSQL(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	parts = [][]byte{
+		[]byte(`{"foo":"foo1"}`),
+		[]byte(`{"foo":"foo2"}`),
+	}
+
+	resMsgs, response = s.ProcessMessage(message.New(parts))
+	require.Nil(t, response)
+	require.Len(t, resMsgs, 1)
+
+	expParts := [][]byte{
+		[]byte(`[{"bar":"bar1","baz":"baz1","foo":"foo1"}]`),
+		[]byte(`[{"bar":"bar2","baz":"baz2","foo":"foo2"}]`),
+	}
+	assert.Equal(t, expParts, message.GetAllBytes(resMsgs[0]))
+}
+
 func TestSQLPostgresIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
@@ -39,6 +136,12 @@ func TestSQLPostgresIntegration(t *testing.T) {
 		t.Fatalf("Could not start resource: %s", err)
 	}
 
+	defer func() {
+		if err = pool.Purge(resource); err != nil {
+			t.Logf("Failed to clean up docker resource: %v", err)
+		}
+	}()
+
 	dsn := fmt.Sprintf("postgres://testuser:testpass@localhost:%v/testdb?sslmode=disable", resource.GetPort("5432/tcp"))
 	if err = pool.Retry(func() error {
 		db, dberr := sql.Open("postgres", dsn)
@@ -60,11 +163,6 @@ func TestSQLPostgresIntegration(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Could not connect to docker resource: %s", err)
 	}
-	defer func() {
-		if err = pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %v", err)
-		}
-	}()
 
 	t.Run("testSQLPostgres", func(t *testing.T) {
 		testSQLPostgres(t, dsn)
@@ -211,6 +309,12 @@ func TestSQLMySQLIntegration(t *testing.T) {
 		t.Fatalf("Could not start resource: %s", err)
 	}
 
+	defer func() {
+		if err = pool.Purge(resource); err != nil {
+			t.Logf("Failed to clean up docker resource: %v", err)
+		}
+	}()
+
 	dsn := fmt.Sprintf("testuser:testpass@tcp(localhost:%v)/testdb", resource.GetPort("3306/tcp"))
 	if err = pool.Retry(func() error {
 		db, dberr := sql.Open("mysql", dsn)
@@ -232,11 +336,6 @@ func TestSQLMySQLIntegration(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Could not connect to docker resource: %s", err)
 	}
-	defer func() {
-		if err = pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %v", err)
-		}
-	}()
 
 	t.Run("testSQLMySQL", func(t *testing.T) {
 		testSQLMySQL(t, dsn)

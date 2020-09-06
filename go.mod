@@ -10,6 +10,7 @@ require (
 	github.com/Azure/go-autorest/autorest v0.11.3 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.9.2 // indirect
 	github.com/Azure/go-autorest/autorest/to v0.4.0 // indirect
+	github.com/ClickHouse/clickhouse-go v1.4.3
 	github.com/Jeffail/gabs/v2 v2.6.0
 	github.com/OneOfOne/xxhash v1.2.8
 	github.com/Shopify/sarama v1.27.0

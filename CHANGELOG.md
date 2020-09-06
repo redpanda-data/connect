@@ -9,12 +9,13 @@ All notable changes to this project will be documented in this file.
 
 - New function `range` added to Bloblang.
 - New (BETA) `jq` processor.
+- New driver `clickhouse` added to the `sql` processor.
 
 ### Changed
 
 - New field `data_source_name` replaces `dsn` for the `sql` processor, and when
   using this field each message of a batch is processed individually. When using
-  the field `dsn` the behaviour remains unchanged.
+  the field `dsn` the behaviour remains unchanged for backwards compatibility.
 
 ### Fixed
 

@@ -39,6 +39,7 @@ The following is a list of supported drivers and their respective DSN formats:
 
 | Driver | Data Source Name Format |
 |---|---|
+| `clickhouse` | [`tcp://[netloc][:port][?param1=value1&...&paramN=valueN]`](https://github.com/ClickHouse/clickhouse-go#dsn)
 | `mysql` | `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]` |
 | `postgres` | `postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` |
 
@@ -108,7 +109,7 @@ A database [driver](#drivers) to use.
 
 Type: `string`  
 Default: `"mysql"`  
-Options: `mysql`, `postgres`.
+Options: `mysql`, `postgres`, `clickhouse`.
 
 ### `data_source_name`
 
@@ -120,6 +121,8 @@ Default: `""`
 
 ```yaml
 # Examples
+
+data_source_name: tcp://host1:9000?username=user&password=qwerty&database=clicks&read_timeout=10&write_timeout=20&alt_hosts=host2:9000,host3:9000
 
 data_source_name: foouser:foopassword@tcp(localhost:3306)/foodb
 

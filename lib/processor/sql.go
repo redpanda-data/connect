@@ -16,6 +16,7 @@ import (
 	"github.com/opentracing/opentracing-go"
 
 	// SQL Drivers
+	_ "github.com/ClickHouse/clickhouse-go"
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -42,6 +43,7 @@ The following is a list of supported drivers and their respective DSN formats:
 
 | Driver | Data Source Name Format |
 |---|---|
+` + "| `clickhouse` | [`tcp://[netloc][:port][?param1=value1&...&paramN=valueN]`](https://github.com/ClickHouse/clickhouse-go#dsn)" + `
 ` + "| `mysql` | `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]` |" + `
 ` + "| `postgres` | `postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` |" + `
 
@@ -94,9 +96,10 @@ pipeline:
 			docs.FieldCommon(
 				"driver",
 				"A database [driver](#drivers) to use.",
-			).HasOptions("mysql", "postgres"),
+			).HasOptions("mysql", "postgres", "clickhouse"),
 			docs.FieldCommon(
 				"data_source_name", "A Data Source Name to identify the target database.",
+				"tcp://host1:9000?username=user&password=qwerty&database=clicks&read_timeout=10&write_timeout=20&alt_hosts=host2:9000,host3:9000",
 				"foouser:foopassword@tcp(localhost:3306)/foodb",
 				"postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable",
 			),
@@ -159,6 +162,15 @@ func NewSQLConfig() SQLConfig {
 
 //------------------------------------------------------------------------------
 
+func insertOnlyBatchDriver(driver string) bool {
+	_, exists := map[string]struct{}{
+		"clickhouse": {},
+	}[driver]
+	return exists
+}
+
+//------------------------------------------------------------------------------
+
 // SQL is a processor that executes an SQL query for each message.
 type SQL struct {
 	log   log.Modular
@@ -200,12 +212,6 @@ func NewSQL(
 		deprecated = true
 	}
 
-	var db *sql.DB
-	var err error
-	if db, err = sql.Open(conf.SQL.Driver, dsn); err != nil {
-		return nil, err
-	}
-
 	var args []field.Expression
 	for i, v := range conf.SQL.Args {
 		expr, err := bloblang.NewField(v)
@@ -219,7 +225,6 @@ func NewSQL(
 		log:        log,
 		stats:      stats,
 		conf:       conf.SQL,
-		db:         db,
 		args:       args,
 		deprecated: deprecated,
 		closeChan:  make(chan struct{}),
@@ -230,7 +235,12 @@ func NewSQL(
 		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 
+	var err error
 	if deprecated {
+		s.log.Warnln("Using deprecated SQL functionality due to use of field 'dsn'. To switch to the new processor use the field 'data_source_name' instead. The new processor is not backwards compatible due to differences in how message batches are processed.")
+		if conf.SQL.Driver != "mysql" && conf.SQL.Driver != "postgres" {
+			return nil, fmt.Errorf("driver '%v' is not supported with deprecated SQL features (using field 'dsn')", conf.SQL.Driver)
+		}
 		if s.resCodecDeprecated, err = strToSQLResultCodecDeprecated(conf.SQL.ResultCodec); err != nil {
 			return nil, err
 		}
@@ -240,9 +250,16 @@ func NewSQL(
 		}
 	}
 
-	if s.query, err = db.Prepare(conf.SQL.Query); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to prepare query: %v", err)
+	if s.db, err = sql.Open(conf.SQL.Driver, dsn); err != nil {
+		return nil, err
+	}
+
+	// Some drivers only support transactional prepared inserts.
+	if s.resCodec != nil || s.resCodecDeprecated != nil || !insertOnlyBatchDriver(conf.SQL.Driver) {
+		if s.query, err = s.db.Prepare(conf.SQL.Query); err != nil {
+			s.db.Close()
+			return nil, fmt.Errorf("failed to prepare query: %v", err)
+		}
 	}
 
 	go func() {
@@ -311,9 +328,45 @@ func strToSQLResultCodec(codec string) (sqlResultCodec, error) {
 
 //------------------------------------------------------------------------------
 
-func (s *SQL) doExecute(args ...interface{}) error {
-	_, err := s.query.Exec(args...)
-	return err
+func (s *SQL) doExecute(argSets [][]interface{}) (errs []error) {
+	var err error
+	defer func() {
+		if err != nil {
+			if len(errs) == 0 {
+				errs = make([]error, len(argSets))
+			}
+			for i := range errs {
+				if errs[i] == nil {
+					errs[i] = err
+				}
+			}
+		}
+	}()
+
+	var tx *sql.Tx
+	if tx, err = s.db.Begin(); err != nil {
+		return
+	}
+
+	stmt := s.query
+	if stmt == nil {
+		if stmt, err = tx.Prepare(s.conf.Query); err != nil {
+			return
+		}
+		defer stmt.Close()
+	}
+
+	for i, args := range argSets {
+		if _, serr := stmt.Exec(args...); serr != nil {
+			if len(errs) == 0 {
+				errs = make([]error, len(argSets))
+			}
+			errs[i] = serr
+		}
+	}
+
+	err = tx.Commit()
+	return
 }
 
 func (s *SQL) doQuery(args ...interface{}) (*sql.Rows, error) {
@@ -329,19 +382,31 @@ func (s *SQL) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 	s.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int, span opentracing.Span, part types.Part) error {
-		args := make([]interface{}, len(s.args))
-		for i, v := range s.args {
-			args[i] = v.String(index, msg)
-		}
-		var err error
-		if s.resCodec == nil {
-			if err = s.doExecute(args...); err != nil {
-				err = fmt.Errorf("failed to execute query: %v", err)
+	if s.resCodec == nil {
+		argSets := make([][]interface{}, newMsg.Len())
+		newMsg.Iter(func(index int, p types.Part) error {
+			args := make([]interface{}, len(s.args))
+			for i, v := range s.args {
+				args[i] = v.String(index, msg)
 			}
-		} else {
-			var rows *sql.Rows
-			if rows, err = s.doQuery(args...); err == nil {
+			argSets[index] = args
+			return nil
+		})
+		for i, err := range s.doExecute(argSets) {
+			if err != nil {
+				s.mErr.Incr(1)
+				s.log.Debugf("SQL error: %v\n", err)
+				FlagErr(newMsg.Get(i), err)
+			}
+		}
+	} else {
+		IteratePartsWithSpan(TypeSQL, nil, newMsg, func(index int, span opentracing.Span, part types.Part) error {
+			args := make([]interface{}, len(s.args))
+			for i, v := range s.args {
+				args[i] = v.String(index, msg)
+			}
+			rows, err := s.doQuery(args...)
+			if err == nil {
 				defer rows.Close()
 				if err = s.resCodec(rows, part); err != nil {
 					err = fmt.Errorf("failed to apply result codec: %v", err)
@@ -349,16 +414,14 @@ func (s *SQL) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			} else {
 				err = fmt.Errorf("failed to execute query: %v", err)
 			}
-		}
-		if err != nil {
-			s.mErr.Incr(1)
-			s.log.Debugf("SQL error: %v\n", err)
-			return err
-		}
-		return nil
+			if err != nil {
+				s.mErr.Incr(1)
+				s.log.Debugf("SQL error: %v\n", err)
+				return err
+			}
+			return nil
+		})
 	}
-
-	IteratePartsWithSpan(TypeSQL, nil, newMsg, proc)
 
 	s.mBatchSent.Incr(1)
 	s.mSent.Incr(int64(newMsg.Len()))
