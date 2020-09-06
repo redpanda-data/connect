@@ -178,7 +178,7 @@ type SQL struct {
 
 	conf     SQLConfig
 	db       *sql.DB
-	dbMux    sync.Mutex
+	dbMux    sync.RWMutex
 	args     []field.Expression
 	resCodec sqlResultCodec
 
@@ -264,10 +264,12 @@ func NewSQL(
 
 	go func() {
 		defer func() {
+			s.dbMux.Lock()
 			s.db.Close()
 			if s.query != nil {
 				s.query.Close()
 			}
+			s.dbMux.Unlock()
 			close(s.closedChan)
 		}()
 		<-s.closeChan
@@ -313,6 +315,9 @@ func sqlResultJSONArrayCodec(rows *sql.Rows, part types.Part) error {
 		}
 		jArray = append(jArray, jObj)
 	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
 	return part.SetJSON(jArray)
 }
 
@@ -354,6 +359,8 @@ func (s *SQL) doExecute(argSets [][]interface{}) (errs []error) {
 			return
 		}
 		defer stmt.Close()
+	} else {
+		stmt = tx.Stmt(stmt)
 	}
 
 	for i, args := range argSets {
@@ -369,12 +376,11 @@ func (s *SQL) doExecute(argSets [][]interface{}) (errs []error) {
 	return
 }
 
-func (s *SQL) doQuery(args ...interface{}) (*sql.Rows, error) {
-	return s.query.Query(args...)
-}
-
 // ProcessMessage logs an event and returns the message unchanged.
 func (s *SQL) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+	s.dbMux.RLock()
+	defer s.dbMux.RUnlock()
+
 	if s.deprecated {
 		return s.processMessageDeprecated(msg)
 	}
@@ -392,6 +398,7 @@ func (s *SQL) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			argSets[index] = args
 			return nil
 		})
+
 		for i, err := range s.doExecute(argSets) {
 			if err != nil {
 				s.mErr.Incr(1)
@@ -405,7 +412,7 @@ func (s *SQL) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			for i, v := range s.args {
 				args[i] = v.String(index, msg)
 			}
-			rows, err := s.doQuery(args...)
+			rows, err := s.query.Query(args...)
 			if err == nil {
 				defer rows.Close()
 				if err = s.resCodec(rows, part); err != nil {

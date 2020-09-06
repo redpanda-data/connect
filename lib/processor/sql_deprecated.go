@@ -96,7 +96,7 @@ func (s *SQL) processMessageDeprecated(msg types.Message) ([]types.Message, type
 		}
 	} else {
 		var rows *sql.Rows
-		if rows, err = s.doQuery(args...); err == nil {
+		if rows, err = s.query.Query(args...); err == nil {
 			defer rows.Close()
 			if err = s.resCodecDeprecated(rows, result); err != nil {
 				err = fmt.Errorf("failed to apply result codec: %v", err)
