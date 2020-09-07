@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.27.0 - 2020-09-07
+
 ### Added
 
 - New function `range` added to Bloblang.
