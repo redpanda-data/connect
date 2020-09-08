@@ -39,6 +39,12 @@ func (f closureFunction) QueryTargets(ctx TargetsContext) []TargetPath {
 //------------------------------------------------------------------------------
 
 func withDynamicArgs(args []interface{}, fn FunctionCtor) Function {
+	fns := []Function{}
+	for _, dArg := range args {
+		if fArg, isDyn := dArg.(Function); isDyn {
+			fns = append(fns, fArg)
+		}
+	}
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		dynArgs := make([]interface{}, 0, len(args))
 		for i, dArg := range args {
@@ -57,7 +63,7 @@ func withDynamicArgs(args []interface{}, fn FunctionCtor) Function {
 			return nil, err
 		}
 		return dynFunc.Exec(ctx)
-	}, nil)
+	}, aggregateTargetPaths(fns...))
 }
 
 func enableDynamicArgs(fn FunctionCtor) FunctionCtor {

@@ -1,6 +1,7 @@
 package query
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -37,6 +38,10 @@ func (f *fieldFunction) QueryTargets(ctx TargetsContext) []TargetPath {
 	}
 }
 
+func (f *fieldFunction) Close(ctx context.Context) error {
+	return nil
+}
+
 // NewFieldFunction creates a query function that returns a path from a JSON
 // input document.
 func NewFieldFunction(pathStr string) Function {
@@ -70,6 +75,11 @@ func (l *Literal) Exec(ctx FunctionContext) (interface{}, error) {
 
 // QueryTargets returns nothing.
 func (l *Literal) QueryTargets(ctx TargetsContext) []TargetPath {
+	return nil
+}
+
+// Close does nothing.
+func (l *Literal) Close(ctx context.Context) error {
 	return nil
 }
 

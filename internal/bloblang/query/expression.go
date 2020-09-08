@@ -1,6 +1,8 @@
 package query
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // MatchCase represents a single match case of a match expression, where a case
 // query is checked and, if true, the underlying query is executed and returned.

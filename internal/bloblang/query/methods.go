@@ -30,17 +30,15 @@ var _ = RegisterMethod(
 )
 
 func appendMethod(target Function, args ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		res, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(res interface{}, ctx FunctionContext) (interface{}, error) {
 		arr, ok := res.([]interface{})
 		if !ok {
 			return nil, NewTypeError(res, ValueArray)
 		}
-		return append(arr, args...), nil
-	}, target.QueryTargets), nil
+		copied := make([]interface{}, 0, len(arr)+len(args))
+		copied = append(copied, arr...)
+		return append(copied, args...), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
@@ -209,17 +207,13 @@ func collapseMethod(target Function, args ...interface{}) (Function, error) {
 	if len(args) > 0 {
 		includeEmpty = args[0].(bool)
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		gObj := gabs.Wrap(v)
 		if includeEmpty {
 			return gObj.FlattenIncludeEmpty()
 		}
 		return gObj.Flatten()
-	}, target.QueryTargets), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
@@ -256,11 +250,7 @@ func containsMethod(target Function, args ...interface{}) (Function, error) {
 	compareRight := args[0]
 	sub := IToString(args[0])
 	bsub := IToBytes(args[0])
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		switch t := v.(type) {
 		case string:
 			return strings.Contains(t, sub), nil
@@ -285,7 +275,7 @@ func containsMethod(target Function, args ...interface{}) (Function, error) {
 			}
 		}
 		return false, nil
-	}, target.QueryTargets), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
@@ -307,11 +297,7 @@ var _ = RegisterMethod(
 )
 
 func enumerateMethod(target Function, args ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		res, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(res interface{}, ctx FunctionContext) (interface{}, error) {
 		arr, ok := res.([]interface{})
 		if !ok {
 			return nil, NewTypeError(res, ValueArray)
@@ -324,7 +310,7 @@ func enumerateMethod(target Function, args ...interface{}) (Function, error) {
 			})
 		}
 		return enumerated, nil
-	}, target.QueryTargets), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
@@ -351,13 +337,9 @@ var _ = RegisterMethod(
 func existsMethod(target Function, args ...interface{}) (Function, error) {
 	pathStr := args[0].(string)
 	path := gabs.DotPathToSlice(pathStr)
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		return gabs.Wrap(v).Exists(path...), nil
-	}, target.QueryTargets), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
@@ -391,12 +373,7 @@ Exploding objects results in an object where the keys match the target object, a
 func explodeMethod(target Function, args ...interface{}) (Function, error) {
 	path := gabs.DotPathToSlice(args[0].(string))
 
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
-
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		target := gabs.Wrap(v).Search(path...)
 
 		switch t := target.Data().(type) {
@@ -419,7 +396,7 @@ func explodeMethod(target Function, args ...interface{}) (Function, error) {
 		}
 
 		return nil, NewTypeError(v, ValueObject, ValueArray)
-	}, target.QueryTargets), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
@@ -455,12 +432,7 @@ func filterMethod(target Function, args ...interface{}) (Function, error) {
 
 	// TODO: Query targets do not take the mapping function into account as it's
 	// dynamic.
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		res, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
-
+	return simpleMethod(target, func(res interface{}, ctx FunctionContext) (interface{}, error) {
 		var resValue interface{}
 		switch t := res.(type) {
 		case []interface{}:
@@ -497,7 +469,7 @@ func filterMethod(target Function, args ...interface{}) (Function, error) {
 			return nil, NewTypeError(res, ValueArray, ValueObject)
 		}
 		return resValue, nil
-	}, target.QueryTargets), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
@@ -519,11 +491,7 @@ var _ = RegisterMethod(
 )
 
 func flattenMethod(target Function, args ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		array, isArray := v.([]interface{})
 		if !isArray {
 			return nil, NewTypeError(v, ValueArray)
@@ -538,7 +506,7 @@ func flattenMethod(target Function, args ...interface{}) (Function, error) {
 			}
 		}
 		return result, nil
-	}, target.QueryTargets), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
@@ -580,18 +548,14 @@ func foldMethod(target Function, args ...interface{}) (Function, error) {
 	// TODO: Query targets do not take the fold function into account as it's
 	// dynamic. We could work it out by expanding targets with the fold targets
 	// less the value prefix.
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		res, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
-
+	return simpleMethod(target, func(res interface{}, ctx FunctionContext) (interface{}, error) {
 		resArray, ok := res.([]interface{})
 		if !ok {
 			return nil, NewTypeError(res, ValueArray)
 		}
 
 		var tally interface{}
+		var err error
 		switch t := foldTallyStart.(type) {
 		case Function:
 			if tally, err = t.Exec(ctx); err != nil {
@@ -621,7 +585,7 @@ func foldMethod(target Function, args ...interface{}) (Function, error) {
 			tally = newV
 		}
 		return tally, nil
-	}, target.QueryTargets), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
@@ -796,12 +760,7 @@ var _ = RegisterMethod(
 
 func indexMethod(target Function, args ...interface{}) (Function, error) {
 	index := args[0].(int64)
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
-
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		array, ok := v.([]interface{})
 		if !ok {
 			return nil, NewTypeError(v, ValueArray)
@@ -815,7 +774,7 @@ func indexMethod(target Function, args ...interface{}) (Function, error) {
 			return nil, fmt.Errorf("index '%v' was out of bounds for array size: %v", i, len(array))
 		}
 		return array[i], nil
-	}, target.QueryTargets), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
@@ -837,11 +796,7 @@ var _ = RegisterMethod(
 )
 
 func keysMethod(target Function, args ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		if m, ok := v.(map[string]interface{}); ok {
 			keys := make([]interface{}, 0, len(m))
 			for k := range m {
@@ -853,7 +808,7 @@ func keysMethod(target Function, args ...interface{}) (Function, error) {
 			return keys, nil
 		}
 		return nil, NewTypeError(v, ValueObject)
-	}, target.QueryTargets), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
@@ -883,12 +838,7 @@ var _ = RegisterMethod(
 )
 
 func lengthMethod(target Function, _ ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
-
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var length int64
 		switch t := v.(type) {
 		case string:
@@ -906,7 +856,7 @@ func lengthMethod(target Function, _ ...interface{}) (Function, error) {
 			}
 		}
 		return length, nil
-	}, target.QueryTargets), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
@@ -977,13 +927,9 @@ func mapEachMethod(target Function, args ...interface{}) (Function, error) {
 
 	// TODO: Query targets do not take the mapping function into account as it's
 	// dynamic.
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		res, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
-
+	return simpleMethod(target, func(res interface{}, ctx FunctionContext) (interface{}, error) {
 		var resValue interface{}
+		var err error
 		switch t := res.(type) {
 		case []interface{}:
 			newSlice := make([]interface{}, 0, len(t))
@@ -1046,7 +992,7 @@ func mapEachMethod(target Function, args ...interface{}) (Function, error) {
 			}
 		}
 		return resValue, nil
-	}, target.QueryTargets), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
@@ -1307,9 +1253,10 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 		}
 		return false, NewTypeError(values[i], ValueNumber, ValueString)
 	}
+	var mapFn Function
 	if len(args) > 0 {
-		mapFn, ok := args[0].(Function)
-		if !ok {
+		var ok bool
+		if mapFn, ok = args[0].(Function); !ok {
 			return nil, fmt.Errorf("expected query argument, received %T", args[0])
 		}
 		compareFn = func(ctx FunctionContext, values []interface{}, i, j int) (bool, error) {
@@ -1325,6 +1272,11 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 			b, _ := v.(bool)
 			return b, nil
 		}
+	}
+
+	targets := target.QueryTargets
+	if mapFn != nil {
+		targets = aggregateTargetPaths(target, mapFn)
 	}
 
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
@@ -1351,7 +1303,7 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 			return values, nil
 		}
 		return nil, NewTypeError(v, ValueArray)
-	}, target.QueryTargets), nil
+	}, targets), nil
 }
 
 //------------------------------------------------------------------------------
@@ -1434,11 +1386,7 @@ func sliceMethod(target Function, args ...interface{}) (Function, error) {
 		}
 		return
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		switch t := v.(type) {
 		case string:
 			start, end, err := getBounds(int64(len(t)))
@@ -1460,7 +1408,7 @@ func sliceMethod(target Function, args ...interface{}) (Function, error) {
 			return t[start:end], nil
 		}
 		return nil, NewTypeError(v, ValueArray, ValueString)
-	}, target.QueryTargets), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
@@ -1538,13 +1486,9 @@ root.foo_type = this.foo.type()`,
 )
 
 func typeMethod(target Function, _ ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		return string(ITypeOf(v)), nil
-	}, target.QueryTargets), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
@@ -1575,11 +1519,7 @@ func uniqueMethod(target Function, args ...interface{}) (Function, error) {
 		}
 	}
 
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		slice, ok := v.([]interface{})
 		if !ok {
 			return nil, NewTypeError(v, ValueArray)
@@ -1640,7 +1580,7 @@ func uniqueMethod(target Function, args ...interface{}) (Function, error) {
 			}
 		}
 		return uniqueSlice, nil
-	}, target.QueryTargets), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
@@ -1662,11 +1602,7 @@ var _ = RegisterMethod(
 )
 
 func valuesMethod(target Function, args ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		if m, ok := v.(map[string]interface{}); ok {
 			values := make([]interface{}, 0, len(m))
 			for _, e := range m {
@@ -1675,7 +1611,7 @@ func valuesMethod(target Function, args ...interface{}) (Function, error) {
 			return values, nil
 		}
 		return nil, NewTypeError(v, ValueObject)
-	}, target.QueryTargets), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
@@ -1735,17 +1671,13 @@ func withoutMethod(target Function, args ...interface{}) (Function, error) {
 		excludeList = append(excludeList, gabs.DotPathToSlice(arg.(string)))
 	}
 
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		m, ok := v.(map[string]interface{})
 		if !ok {
 			return nil, NewTypeError(v, ValueObject)
 		}
 		return mapWithout(m, excludeList), nil
-	}, target.QueryTargets), nil
+	}), nil
 }
 
 //------------------------------------------------------------------------------
