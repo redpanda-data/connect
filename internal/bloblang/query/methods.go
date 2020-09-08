@@ -14,6 +14,118 @@ import (
 
 var _ = RegisterMethod(
 	NewMethodSpec(
+		"all",
+		"Checks each element of an array against a query and returns true if all elements passed. An error occurs if the target is not an array, or if any element results in the provided query returning a non-boolean result. Returns false if the target array is empty.",
+	).InCategory(
+		MethodCategoryObjectAndArray,
+		"",
+		NewExampleSpec("",
+			`root.all_over_21 = this.patrons.all(this.age >= 21)`,
+			`{"patrons":[{"id":"1","age":18},{"id":"2","age":23}]}`,
+			`{"all_over_21":false}`,
+			`{"patrons":[{"id":"1","age":45},{"id":"2","age":23}]}`,
+			`{"all_over_21":true}`,
+		),
+	),
+	false, allMethod,
+	ExpectNArgs(1),
+)
+
+func allMethod(target Function, args ...interface{}) (Function, error) {
+	queryFn, ok := args[0].(Function)
+	if !ok {
+		return nil, fmt.Errorf("expected query argument, received %T", args[0])
+	}
+
+	return simpleMethod(target, func(res interface{}, ctx FunctionContext) (interface{}, error) {
+		arr, ok := res.([]interface{})
+		if !ok {
+			return nil, NewTypeError(res, ValueArray)
+		}
+
+		if len(arr) == 0 {
+			return false, nil
+		}
+
+		for i, v := range arr {
+			vCtx := ctx
+			vCtx.Value = &v
+			res, err := queryFn.Exec(vCtx)
+			if err != nil {
+				return nil, fmt.Errorf("element %v: %w", i, err)
+			}
+			b, ok := res.(bool)
+			if !ok {
+				return nil, fmt.Errorf("element %v: %w", i, NewTypeError(res, ValueBool))
+			}
+			if !b {
+				return false, nil
+			}
+		}
+
+		return true, nil
+	}), nil
+}
+
+var _ = RegisterMethod(
+	NewMethodSpec(
+		"any",
+		"Checks the elements of an array against a query and returns true if any element passes. An error occurs if the target is not an array, or if an element results in the provided query returning a non-boolean result. Returns false if the target array is empty.",
+	).InCategory(
+		MethodCategoryObjectAndArray,
+		"",
+		NewExampleSpec("",
+			`root.any_over_21 = this.patrons.any(this.age >= 21)`,
+			`{"patrons":[{"id":"1","age":18},{"id":"2","age":23}]}`,
+			`{"any_over_21":true}`,
+			`{"patrons":[{"id":"1","age":10},{"id":"2","age":12}]}`,
+			`{"any_over_21":false}`,
+		),
+	),
+	false, anyMethod,
+	ExpectNArgs(1),
+)
+
+func anyMethod(target Function, args ...interface{}) (Function, error) {
+	queryFn, ok := args[0].(Function)
+	if !ok {
+		return nil, fmt.Errorf("expected query argument, received %T", args[0])
+	}
+
+	return simpleMethod(target, func(res interface{}, ctx FunctionContext) (interface{}, error) {
+		arr, ok := res.([]interface{})
+		if !ok {
+			return nil, NewTypeError(res, ValueArray)
+		}
+
+		if len(arr) == 0 {
+			return false, nil
+		}
+
+		for i, v := range arr {
+			vCtx := ctx
+			vCtx.Value = &v
+			res, err := queryFn.Exec(vCtx)
+			if err != nil {
+				return nil, fmt.Errorf("element %v: %w", i, err)
+			}
+			b, ok := res.(bool)
+			if !ok {
+				return nil, fmt.Errorf("element %v: %w", i, NewTypeError(res, ValueBool))
+			}
+			if b {
+				return true, nil
+			}
+		}
+
+		return false, nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
 		"append",
 		"Returns an array with new elements appended to the end.",
 	).InCategory(

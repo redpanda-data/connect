@@ -1641,6 +1641,108 @@ func TestMethods(t *testing.T) {
 			),
 			err: `ciphertext is not a multiple of the block size`,
 		},
+		"check any no array": {
+			input: methods(
+				literalFn("foo"),
+				method("any", arithmetic(
+					NewFieldFunction(""),
+					NewLiteralFunction("bar"),
+					ArithmeticEq,
+				)),
+			),
+			err: "expected array value, found string: foo",
+		},
+		"check any bad mapping": {
+			input: methods(
+				literalFn([]interface{}{false, "bar", true}),
+				method("any", NewFieldFunction("")),
+			),
+			err: "element 1: expected bool value, found string: bar",
+		},
+		"check any true": {
+			input: methods(
+				literalFn([]interface{}{"foo", "bar", "baz"}),
+				method("any", arithmetic(
+					NewFieldFunction(""),
+					NewLiteralFunction("bar"),
+					ArithmeticEq,
+				)),
+			),
+			output: true,
+		},
+		"check any false": {
+			input: methods(
+				literalFn([]interface{}{"foo", "buz", "baz"}),
+				method("any", arithmetic(
+					NewFieldFunction(""),
+					NewLiteralFunction("bar"),
+					ArithmeticEq,
+				)),
+			),
+			output: false,
+		},
+		"check any empty": {
+			input: methods(
+				literalFn([]interface{}{}),
+				method("any", arithmetic(
+					NewFieldFunction(""),
+					NewLiteralFunction(9.0),
+					ArithmeticLt,
+				)),
+			),
+			output: false,
+		},
+		"check all true": {
+			input: methods(
+				literalFn([]interface{}{10.0, 11.0, 12.0}),
+				method("all", arithmetic(
+					NewFieldFunction(""),
+					NewLiteralFunction(9.0),
+					ArithmeticGt,
+				)),
+			),
+			output: true,
+		},
+		"check all false": {
+			input: methods(
+				literalFn([]interface{}{10.0, 8.0, 12.0}),
+				method("all", arithmetic(
+					NewFieldFunction(""),
+					NewLiteralFunction(9.0),
+					ArithmeticGt,
+				)),
+			),
+			output: false,
+		},
+		"check all empty": {
+			input: methods(
+				literalFn([]interface{}{}),
+				method("all", arithmetic(
+					NewFieldFunction(""),
+					NewLiteralFunction(9.0),
+					ArithmeticLt,
+				)),
+			),
+			output: false,
+		},
+		"check all bad mapping": {
+			input: methods(
+				literalFn([]interface{}{true, "bar", false}),
+				method("all", NewFieldFunction("")),
+			),
+			err: "element 1: expected bool value, found string: bar",
+		},
+		"check all no array": {
+			input: methods(
+				literalFn("foo"),
+				method("any", arithmetic(
+					NewFieldFunction(""),
+					NewLiteralFunction("bar"),
+					ArithmeticEq,
+				)),
+			),
+			err: "expected array value, found string: foo",
+		},
 	}
 
 	for name, test := range tests {

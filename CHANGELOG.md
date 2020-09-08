@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New methods `any` and `all` added to Bloblang.
+
 ## 3.27.0 - 2020-09-07
 
 ### Added

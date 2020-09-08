@@ -473,6 +473,34 @@ root.result = this.foo.get(this.target)
 # Out: {"result":"from baz"}
 ```
 
+### `all`
+
+Checks each element of an array against a query and returns true if all elements passed. An error occurs if the target is not an array, or if any element results in the provided query returning a non-boolean result. Returns false if the target array is empty.
+
+```coffee
+root.all_over_21 = this.patrons.all(this.age >= 21)
+
+# In:  {"patrons":[{"id":"1","age":18},{"id":"2","age":23}]}
+# Out: {"all_over_21":false}
+
+# In:  {"patrons":[{"id":"1","age":45},{"id":"2","age":23}]}
+# Out: {"all_over_21":true}
+```
+
+### `any`
+
+Checks the elements of an array against a query and returns true if any element passes. An error occurs if the target is not an array, or if an element results in the provided query returning a non-boolean result. Returns false if the target array is empty.
+
+```coffee
+root.any_over_21 = this.patrons.any(this.age >= 21)
+
+# In:  {"patrons":[{"id":"1","age":18},{"id":"2","age":23}]}
+# Out: {"any_over_21":true}
+
+# In:  {"patrons":[{"id":"1","age":10},{"id":"2","age":12}]}
+# Out: {"any_over_21":false}
+```
+
 ### `append`
 
 Returns an array with new elements appended to the end.
