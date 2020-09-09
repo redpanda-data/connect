@@ -356,3 +356,84 @@ func TestExec(t *testing.T) {
 		})
 	}
 }
+
+func TestQueries(t *testing.T) {
+	type part struct {
+		Content string
+		Meta    map[string]string
+	}
+
+	initFunc := func(name string, args ...interface{}) query.Function {
+		t.Helper()
+		fn, err := query.InitFunction(name, args...)
+		require.NoError(t, err)
+		return fn
+	}
+
+	tests := map[string]struct {
+		index   int
+		input   []part
+		mapping *Executor
+		output  bool
+		err     error
+	}{
+		"simple json query": {
+			mapping: NewExecutor(nil, nil,
+				NewStatement(nil, NewJSONAssignment(), query.NewFieldFunction("bar")),
+			),
+			input:  []part{{Content: `{"bar":true}`}},
+			output: true,
+		},
+		"simple json query 2": {
+			mapping: NewExecutor(nil, nil,
+				NewStatement(nil, NewJSONAssignment(), query.NewFieldFunction("bar")),
+			),
+			input:  []part{{Content: `{"bar":false}`}},
+			output: false,
+		},
+		"simple json query bad type": {
+			mapping: NewExecutor(nil, nil,
+				NewStatement(nil, NewJSONAssignment(), query.NewFieldFunction("bar")),
+			),
+			input: []part{{Content: `{"bar":{"is":"an object"}}`}},
+			err:   errors.New("expected bool value, found object"),
+		},
+		"var assignment": {
+			mapping: NewExecutor(nil, nil,
+				NewStatement(nil, NewVarAssignment("foo"), query.NewLiteralFunction(true)),
+				NewStatement(nil, NewJSONAssignment(), initFunc("var", "foo")),
+			),
+			input:  []part{{Content: `not valid json`}},
+			output: true,
+		},
+		"meta query error": {
+			mapping: NewExecutor(nil, nil,
+				NewStatement(nil, NewJSONAssignment("foo"), initFunc("meta", "foo")),
+			),
+			input: []part{{Content: `{}`}},
+			err:   errors.New("failed to execute mapping query at line 0: metadata value not found"),
+		},
+	}
+
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			msg := message.New(nil)
+			for _, p := range test.input {
+				part := message.NewPart([]byte(p.Content))
+				for k, v := range p.Meta {
+					part.Metadata().Set(k, v)
+				}
+				msg.Append(part)
+			}
+
+			res, err := test.mapping.QueryPart(test.index, msg)
+			if test.err != nil {
+				assert.EqualError(t, err, test.err.Error())
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, test.output, res)
+			}
+		})
+	}
+}
