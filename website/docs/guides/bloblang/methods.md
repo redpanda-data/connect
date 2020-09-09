@@ -473,6 +473,35 @@ root.result = this.foo.get(this.target)
 # Out: {"result":"from baz"}
 ```
 
+### `json_schema`
+
+BETA: This method is experimental and therefore subject to change outside of major version releases.
+
+Checks a [JSON schema](https://json-schema.org/) against a value and returns the value if it matches or throws and error if it does not.
+
+```coffee
+root = this.json_schema("""{
+  "type":"object",
+  "properties":{
+    "foo":{
+      "type":"string"
+    }
+  }
+}""")
+
+# In:  {"foo":"bar"}
+# Out: {"foo":"bar"}
+
+# In:  {"foo":5}
+# Out: Error("failed to execute mapping query at line 1: foo invalid type. expected: string, given: integer")
+```
+
+In order to load a schema from a file use the `file` function.
+
+```coffee
+root = this.json_schema(file(var("BENTHOS_TEST_BLOBLANG_SCHEMA_FILE")))
+```
+
 ### `all`
 
 Checks each element of an array against a query and returns true if all elements passed. An error occurs if the target is not an array, or if any element results in the provided query returning a non-boolean result. Returns false if the target array is empty.

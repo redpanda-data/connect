@@ -21,7 +21,6 @@ func TestFunctionExamples(t *testing.T) {
 		os.Remove(tmpJSONFile.Name())
 	})
 
-	// write schema definition to tmpfile
 	_, err = tmpJSONFile.Write([]byte(`{"foo":"bar"}`))
 	require.NoError(t, err)
 
@@ -57,6 +56,28 @@ func TestFunctionExamples(t *testing.T) {
 }
 
 func TestMethodExamples(t *testing.T) {
+	tmpJSONFile, err := ioutil.TempFile("", "benthos_bloblang_methods_test")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.Remove(tmpJSONFile.Name())
+	})
+
+	_, err = tmpJSONFile.Write([]byte(`
+  "type":"object",
+  "properties":{
+    "foo":{
+      "type":"string"
+    }
+  }
+}`))
+	require.NoError(t, err)
+
+	key := "BENTHOS_TEST_BLOBLANG_SCHEMA_FILE"
+	os.Setenv(key, tmpJSONFile.Name())
+	t.Cleanup(func() {
+		os.Unsetenv(key)
+	})
+
 	for _, spec := range query.MethodDocs() {
 		spec := spec
 		t.Run(spec.Name, func(t *testing.T) {

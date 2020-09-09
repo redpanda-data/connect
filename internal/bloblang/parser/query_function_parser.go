@@ -20,6 +20,7 @@ func functionArgsParser(allowFunctions bool) Type {
 	paramTypes := []Type{
 		parseLiteralWithTails(Boolean()),
 		parseLiteralWithTails(Number()),
+		parseLiteralWithTails(TripleQuoteString()),
 		parseLiteralWithTails(QuotedString()),
 	}
 

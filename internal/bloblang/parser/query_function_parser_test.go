@@ -153,6 +153,37 @@ func TestFunctionQueries(t *testing.T) {
 			input:  `hostname()`,
 			output: fmt.Sprintf(`%v`, hostname),
 		},
+		"metadata triple quote string arg 1": {
+			input:  `meta("""foo""")`,
+			output: `bar`,
+			index:  1,
+			messages: []easyMsg{
+				{},
+				{
+					meta: map[string]string{
+						"foo":    "bar",
+						"baz":    "qux",
+						"duck,1": "quack",
+					},
+				},
+			},
+		},
+		"metadata triple quote string arg 2": {
+			input: `meta("""foo
+bar""")`,
+			output: `bar`,
+			index:  1,
+			messages: []easyMsg{
+				{},
+				{
+					meta: map[string]string{
+						"foo\nbar": "bar",
+						"baz":      "qux",
+						"duck,1":   "quack",
+					},
+				},
+			},
+		},
 		"metadata 1": {
 			input:  `meta("foo")`,
 			output: `bar`,

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/gabs/v2"
+	jsonschema "github.com/xeipuuv/gojsonschema"
 )
 
 //------------------------------------------------------------------------------
@@ -886,6 +887,67 @@ func indexMethod(target Function, args ...interface{}) (Function, error) {
 			return nil, fmt.Errorf("index '%v' was out of bounds for array size: %v", i, len(array))
 		}
 		return array[i], nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
+		"json_schema",
+		"Checks a [JSON schema](https://json-schema.org/) against a value and returns the value if it matches or throws and error if it does not.",
+	).InCategory(
+		MethodCategoryObjectAndArray,
+		"",
+		NewExampleSpec("",
+			`root = this.json_schema("""{
+  "type":"object",
+  "properties":{
+    "foo":{
+      "type":"string"
+    }
+  }
+}""")`,
+			`{"foo":"bar"}`,
+			`{"foo":"bar"}`,
+			`{"foo":5}`,
+			`Error("failed to execute mapping query at line 1: foo invalid type. expected: string, given: integer")`,
+		),
+		NewExampleSpec(
+			"In order to load a schema from a file use the `file` function.",
+			`root = this.json_schema(file(var("BENTHOS_TEST_BLOBLANG_SCHEMA_FILE")))`,
+		),
+	).IsBeta(true),
+	true, jsonSchemaMethod,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
+
+func jsonSchemaMethod(target Function, args ...interface{}) (Function, error) {
+	schema, err := jsonschema.NewSchema(jsonschema.NewStringLoader(args[0].(string)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse json schema definition: %w", err)
+	}
+	return simpleMethod(target, func(res interface{}, ctx FunctionContext) (interface{}, error) {
+		result, err := schema.Validate(jsonschema.NewGoLoader(res))
+		if err != nil {
+			return nil, err
+		}
+		if !result.Valid() {
+			var errStr string
+			for i, desc := range result.Errors() {
+				if i > 0 {
+					errStr = errStr + "\n"
+				}
+				description := strings.ToLower(desc.Description())
+				if property := desc.Details()["property"]; property != nil {
+					description = property.(string) + strings.TrimPrefix(description, strings.ToLower(property.(string)))
+				}
+				errStr = errStr + desc.Field() + " " + description
+			}
+			return nil, errors.New(errStr)
+		}
+		return res, nil
 	}), nil
 }
 
