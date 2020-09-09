@@ -35,6 +35,10 @@ var bloblangFunctionsTemplate = `{{define "function_example" -}}
 {{define "function_spec" -}}
 ### ` + "`{{.Name}}`" + `
 
+{{if .Beta -}}
+BETA: This function is experimental and therefore subject to change outside of major version releases.
+
+{{end -}}
 {{.Description}}
 {{range $i, $example := .Examples}}
 {{template "function_example" $example -}}
@@ -141,6 +145,10 @@ var bloblangMethodsTemplate = `{{define "method_example" -}}
 {{define "method_spec" -}}
 ### ` + "`{{.Name}}`" + `
 
+{{if .Beta -}}
+BETA: This method is experimental and therefore subject to change outside of major version releases.
+
+{{end -}}
 {{.Description}}
 {{range $i, $example := .Examples}}
 {{template "method_example" $example -}}

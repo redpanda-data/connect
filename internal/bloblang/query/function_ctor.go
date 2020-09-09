@@ -68,8 +68,11 @@ func withDynamicArgs(args []interface{}, fn FunctionCtor) Function {
 
 func enableDynamicArgs(fn FunctionCtor) FunctionCtor {
 	return func(args ...interface{}) (Function, error) {
-		for _, arg := range args {
-			if _, isDyn := arg.(Function); isDyn {
+		for i, arg := range args {
+			switch t := arg.(type) {
+			case *Literal:
+				args[i] = t.Value
+			case Function:
 				return withDynamicArgs(args, fn), nil
 			}
 		}
@@ -229,22 +232,7 @@ type FunctionCtor func(args ...interface{}) (Function, error)
 
 // RegisterFunction to be accessible from Bloblang queries. Returns an empty
 // struct in order to allow inline calls.
-func RegisterFunction(name string, allowDynamicArgs bool, ctor FunctionCtor, checks ...ArgCheckFn) struct{} {
-	if len(checks) > 0 {
-		ctor = checkArgs(ctor, checks...)
-	}
-	if allowDynamicArgs {
-		ctor = enableDynamicArgs(ctor)
-	}
-	if _, exists := functions[name]; exists {
-		panic(fmt.Sprintf("Conflicting function name: %v", name))
-	}
-	functions[name] = ctor
-	return struct{}{}
-}
-
-// RegisterFunctionSpec TODO
-func RegisterFunctionSpec(spec FunctionSpec, allowDynamicArgs bool, ctor FunctionCtor, checks ...ArgCheckFn) struct{} {
+func RegisterFunction(spec FunctionSpec, allowDynamicArgs bool, ctor FunctionCtor, checks ...ArgCheckFn) struct{} {
 	if len(checks) > 0 {
 		ctor = checkArgs(ctor, checks...)
 	}

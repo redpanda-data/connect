@@ -2,6 +2,8 @@ package bloblang
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 
@@ -13,6 +15,22 @@ import (
 )
 
 func TestFunctionExamples(t *testing.T) {
+	tmpJSONFile, err := ioutil.TempFile("", "benthos_bloblang_functions_test")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.Remove(tmpJSONFile.Name())
+	})
+
+	// write schema definition to tmpfile
+	_, err = tmpJSONFile.Write([]byte(`{"foo":"bar"}`))
+	require.NoError(t, err)
+
+	key := "BENTHOS_TEST_BLOBLANG_FILE"
+	os.Setenv(key, tmpJSONFile.Name())
+	t.Cleanup(func() {
+		os.Unsetenv(key)
+	})
+
 	for _, spec := range query.FunctionDocs() {
 		spec := spec
 		t.Run(spec.Name, func(t *testing.T) {

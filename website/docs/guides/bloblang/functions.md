@@ -204,6 +204,19 @@ Returns the value of an environment variable.
 root.thing.key = env("key")
 ```
 
+### `file`
+
+BETA: This function is experimental and therefore subject to change outside of major version releases.
+
+Reads a file and returns its contents. Relative paths are resolved from the directory of the process executing the mapping.
+
+```coffee
+root.doc = file(env("BENTHOS_TEST_BLOBLANG_FILE")).parse_json()
+
+# In:  {}
+# Out: {"doc":{"foo":"bar"}}
+```
+
 ### `hostname`
 
 Returns a string matching the hostname of the machine running Benthos.

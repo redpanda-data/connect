@@ -49,6 +49,9 @@ type FunctionSpec struct {
 	// Examples shows general usage for the function.
 	Examples []ExampleSpec
 
+	// Beta describes whether this function is a beta component.
+	Beta bool
+
 	// Deprecated is true for functions that are deprecated and only exist for
 	// backwards compatibility reasons.
 	Deprecated bool
@@ -62,6 +65,12 @@ func NewFunctionSpec(category FunctionCategory, name, description string, exampl
 		Description: description,
 		Examples:    examples,
 	}
+}
+
+// IsBeta sets whether the function is a beta component.
+func (s FunctionSpec) IsBeta(b bool) FunctionSpec {
+	s.Beta = b
+	return s
 }
 
 // NewDeprecatedFunctionSpec creates a new function spec that is deprecated. The
@@ -111,6 +120,9 @@ type MethodSpec struct {
 	// Categories that this method fits within.
 	Categories []MethodCatSpec
 
+	// Beta describes whether this function is a beta component.
+	Beta bool
+
 	// Deprecated is true for methods that are deprecated and only exist for
 	// backwards compatibility reasons.
 	Deprecated bool
@@ -133,6 +145,12 @@ func NewDeprecatedMethodSpec(name string) MethodSpec {
 		Name:       name,
 		Deprecated: true,
 	}
+}
+
+// IsBeta sets whether the function is a beta component.
+func (m MethodSpec) IsBeta(b bool) MethodSpec {
+	m.Beta = b
+	return m
 }
 
 // InCategory describes the methods behaviour in the context of a given

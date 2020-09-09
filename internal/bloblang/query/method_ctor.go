@@ -38,8 +38,11 @@ func methodWithDynamicArgs(args []interface{}, target Function, ctor MethodCtor)
 
 func enableMethodDynamicArgs(fn MethodCtor) MethodCtor {
 	return func(target Function, args ...interface{}) (Function, error) {
-		for _, arg := range args {
-			if _, isDyn := arg.(Function); isDyn {
+		for i, arg := range args {
+			switch t := arg.(type) {
+			case *Literal:
+				args[i] = t.Value
+			case Function:
 				return methodWithDynamicArgs(args, target, fn), nil
 			}
 		}
