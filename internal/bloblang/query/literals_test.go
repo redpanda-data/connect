@@ -121,9 +121,8 @@ func TestLiterals(t *testing.T) {
 			res := test.input
 			if fn, ok := test.input.(Function); ok {
 				res, err = fn.Exec(FunctionContext{
-					Value: &test.value,
-					Maps:  map[string]Function{},
-				})
+					Maps: map[string]Function{},
+				}.WithValue(test.value))
 				targets = fn.QueryTargets(TargetsContext{
 					Maps: map[string]Function{},
 				})

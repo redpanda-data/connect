@@ -21,16 +21,17 @@ type fieldFunction struct {
 }
 
 func (f *fieldFunction) Exec(ctx FunctionContext) (interface{}, error) {
-	if ctx.Value == nil {
+	v := ctx.Value()
+	if v == nil {
 		return nil, &ErrRecoverable{
 			Recovered: nil,
 			Err:       ErrNoContext,
 		}
 	}
 	if len(f.path) == 0 {
-		return *ctx.Value, nil
+		return *v, nil
 	}
-	return gabs.Wrap(*ctx.Value).S(f.path...).Data(), nil
+	return gabs.Wrap(*v).S(f.path...).Data(), nil
 }
 
 func (f *fieldFunction) QueryTargets(ctx TargetsContext) []TargetPath {

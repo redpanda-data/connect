@@ -43,10 +43,11 @@ func matchCaseParser() Type {
 		case query.Function:
 			if lit, isLiteral := t.(*query.Literal); isLiteral {
 				caseFn = query.ClosureFunction(func(ctx query.FunctionContext) (interface{}, error) {
-					if ctx.Value == nil {
+					v := ctx.Value()
+					if v == nil {
 						return false, nil
 					}
-					return *ctx.Value == lit.Value, nil
+					return *v == lit.Value, nil
 				}, nil)
 			} else {
 				caseFn = t

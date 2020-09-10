@@ -677,12 +677,12 @@ bar""")`,
 
 			res := query.ExecToString(e, query.FunctionContext{
 				Index: test.index, MsgBatch: msg,
-				Value: test.value,
+				Value: func() *interface{} { return test.value },
 			})
 			assert.Equal(t, test.output, res)
 			res = string(query.ExecToBytes(e, query.FunctionContext{
 				Index: test.index, MsgBatch: msg,
-				Value: test.value,
+				Value: func() *interface{} { return test.value },
 			}))
 			assert.Equal(t, test.output, res)
 		})

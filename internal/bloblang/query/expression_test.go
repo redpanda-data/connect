@@ -154,7 +154,7 @@ func TestExpressions(t *testing.T) {
 
 			for i := 0; i < 10; i++ {
 				res, err := test.input.Exec(FunctionContext{
-					Value:    test.value,
+					Value:    func() *interface{} { return test.value },
 					Maps:     map[string]Function{},
 					Index:    test.index,
 					MsgBatch: msg,

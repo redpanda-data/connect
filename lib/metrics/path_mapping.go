@@ -50,11 +50,10 @@ func (m *pathMapping) mapPath(path string) string {
 	}
 	var input interface{} = path
 	v, err := m.m.Exec(query.FunctionContext{
-		Value:    &input,
 		Maps:     map[string]query.Function{},
 		Vars:     map[string]interface{}{},
 		MsgBatch: message.New(nil),
-	})
+	}.WithValue(input))
 	if err != nil {
 		m.logger.Errorf("Failed to apply path mapping on '%v': %v\n", path, err)
 		return path

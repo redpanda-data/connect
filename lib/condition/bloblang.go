@@ -89,12 +89,21 @@ func (c *Bloblang) Check(msg types.Message) bool {
 	c.mCount.Incr(1)
 
 	var valuePtr *interface{}
-	if jObj, err := msg.Get(0).JSON(); err == nil {
-		valuePtr = &jObj
+	var parseErr error
+
+	lazyValue := func() *interface{} {
+		if valuePtr == nil && parseErr == nil {
+			if jObj, err := msg.Get(0).JSON(); err == nil {
+				valuePtr = &jObj
+			} else {
+				parseErr = err
+			}
+		}
+		return valuePtr
 	}
 
 	result, err := c.fn.Exec(query.FunctionContext{
-		Value:    valuePtr,
+		Value:    lazyValue,
 		Maps:     map[string]query.Function{},
 		Vars:     map[string]interface{}{},
 		MsgBatch: msg,

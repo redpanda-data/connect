@@ -49,8 +49,7 @@ func allMethod(target Function, args ...interface{}) (Function, error) {
 		}
 
 		for i, v := range arr {
-			vCtx := ctx
-			vCtx.Value = &v
+			vCtx := ctx.WithValue(v)
 			res, err := queryFn.Exec(vCtx)
 			if err != nil {
 				return nil, fmt.Errorf("element %v: %w", i, err)
@@ -104,8 +103,7 @@ func anyMethod(target Function, args ...interface{}) (Function, error) {
 		}
 
 		for i, v := range arr {
-			vCtx := ctx
-			vCtx.Value = &v
+			vCtx := ctx.WithValue(v)
 			res, err := queryFn.Exec(vCtx)
 			if err != nil {
 				return nil, fmt.Errorf("element %v: %w", i, err)
@@ -183,7 +181,7 @@ func applyMethod(target Function, args ...interface{}) (Function, error) {
 		if err != nil {
 			return nil, err
 		}
-		ctx.Value = &res
+		ctx = ctx.WithValue(res)
 
 		if ctx.Maps == nil {
 			return nil, &ErrRecoverable{
@@ -551,8 +549,7 @@ func filterMethod(target Function, args ...interface{}) (Function, error) {
 		case []interface{}:
 			newSlice := make([]interface{}, 0, len(t))
 			for _, v := range t {
-				ctx.Value = &v
-				f, err := mapFn.Exec(ctx)
+				f, err := mapFn.Exec(ctx.WithValue(v))
 				if err != nil {
 					return nil, err
 				}
@@ -568,8 +565,7 @@ func filterMethod(target Function, args ...interface{}) (Function, error) {
 					"key":   k,
 					"value": v,
 				}
-				ctx.Value = &ctxMap
-				f, err := mapFn.Exec(ctx)
+				f, err := mapFn.Exec(ctx.WithValue(ctxMap))
 				if err != nil {
 					return nil, err
 				}
@@ -687,10 +683,7 @@ func foldMethod(target Function, args ...interface{}) (Function, error) {
 			tmpObj["tally"] = tally
 			tmpObj["value"] = v
 
-			var tmpVal interface{} = tmpObj
-			ctx.Value = &tmpVal
-
-			newV, mapErr := foldFn.Exec(ctx)
+			newV, mapErr := foldFn.Exec(ctx.WithValue(tmpObj))
 			if mapErr != nil {
 				return nil, mapErr
 			}
@@ -1055,8 +1048,7 @@ func mapMethod(target Function, args ...interface{}) (Function, error) {
 		if err != nil {
 			return nil, err
 		}
-		ctx.Value = &res
-		return mapFn.Exec(ctx)
+		return mapFn.Exec(ctx.WithValue(res))
 	}, func(ctx TargetsContext) []TargetPath {
 		return expandTargetPaths(target.QueryTargets(ctx), mapFn.QueryTargets(ctx))
 	}), nil
@@ -1108,8 +1100,7 @@ func mapEachMethod(target Function, args ...interface{}) (Function, error) {
 		case []interface{}:
 			newSlice := make([]interface{}, 0, len(t))
 			for i, v := range t {
-				ctx.Value = &v
-				newV, mapErr := mapFn.Exec(ctx)
+				newV, mapErr := mapFn.Exec(ctx.WithValue(v))
 				if mapErr != nil {
 					if recover, ok := mapErr.(*ErrRecoverable); ok {
 						newV = recover.Recovered
@@ -1134,8 +1125,7 @@ func mapEachMethod(target Function, args ...interface{}) (Function, error) {
 					"key":   k,
 					"value": v,
 				}
-				ctx.Value = &ctxMap
-				newV, mapErr := mapFn.Exec(ctx)
+				newV, mapErr := mapFn.Exec(ctx.WithValue(ctxMap))
 				if mapErr != nil {
 					if recover, ok := mapErr.(*ErrRecoverable); ok {
 						newV = recover.Recovered
@@ -1438,8 +1428,7 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 				"left":  values[i],
 				"right": values[j],
 			}
-			ctx.Value = &ctxValue
-			v, err := mapFn.Exec(ctx)
+			v, err := mapFn.Exec(ctx.WithValue(ctxValue))
 			if err != nil {
 				return false, err
 			}
@@ -1728,9 +1717,8 @@ func uniqueMethod(target Function, args ...interface{}) (Function, error) {
 		for i, v := range slice {
 			check := v
 			if emitFn != nil {
-				ctx.Value = &v
 				var err error
-				if check, err = emitFn.Exec(ctx); err != nil {
+				if check, err = emitFn.Exec(ctx.WithValue(v)); err != nil {
 					return nil, fmt.Errorf("index %v: %w", i, err)
 				}
 			}

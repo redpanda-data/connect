@@ -88,10 +88,16 @@ func (e *Executor) Maps() map[string]query.Function {
 func (e *Executor) QueryPart(index int, msg Message) (bool, error) {
 	var valuePtr *interface{}
 	var parseErr error
-	if jObj, err := msg.Get(index).JSON(); err == nil {
-		valuePtr = &jObj
-	} else {
-		parseErr = err
+
+	lazyValue := func() *interface{} {
+		if valuePtr == nil && parseErr == nil {
+			if jObj, err := msg.Get(index).JSON(); err == nil {
+				valuePtr = &jObj
+			} else {
+				parseErr = err
+			}
+		}
+		return valuePtr
 	}
 
 	var newValue interface{} = query.Nothing(nil)
@@ -100,7 +106,7 @@ func (e *Executor) QueryPart(index int, msg Message) (bool, error) {
 	for _, stmt := range e.statements {
 		res, err := stmt.query.Exec(query.FunctionContext{
 			Maps:     e.maps,
-			Value:    valuePtr,
+			Value:    lazyValue,
 			Vars:     vars,
 			Index:    index,
 			MsgBatch: msg,
@@ -162,10 +168,16 @@ func (e *Executor) MapOnto(part types.Part, index int, msg Message) (types.Part,
 func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (types.Part, error) {
 	var valuePtr *interface{}
 	var parseErr error
-	if jObj, err := reference.Get(index).JSON(); err == nil {
-		valuePtr = &jObj
-	} else {
-		parseErr = err
+
+	lazyValue := func() *interface{} {
+		if valuePtr == nil && parseErr == nil {
+			if jObj, err := reference.Get(index).JSON(); err == nil {
+				valuePtr = &jObj
+			} else {
+				parseErr = err
+			}
+		}
+		return valuePtr
 	}
 
 	var newPart types.Part
@@ -187,7 +199,7 @@ func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (t
 	for _, stmt := range e.statements {
 		res, err := stmt.query.Exec(query.FunctionContext{
 			Maps:     e.maps,
-			Value:    valuePtr,
+			Value:    lazyValue,
 			Vars:     vars,
 			Index:    index,
 			MsgBatch: reference,

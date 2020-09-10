@@ -205,10 +205,9 @@ func TestMappings(t *testing.T) {
 			}))
 
 			res, err := m.Exec(query.FunctionContext{
-				Value:    &test.input,
 				MsgBatch: message.New(nil),
 				Vars:     map[string]interface{}{},
-			})
+			}.WithValue(test.input))
 			require.NoError(t, err)
 			assert.Equal(t, test.output, res)
 		})

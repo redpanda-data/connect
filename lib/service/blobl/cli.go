@@ -140,11 +140,10 @@ func run(c *cli.Context) error {
 				}
 
 				result, err := exec.Exec(query.FunctionContext{
-					Value:    &value,
 					Maps:     map[string]query.Function{},
 					Vars:     map[string]interface{}{},
 					MsgBatch: msg,
-				})
+				}.WithValue(value))
 				if err != nil {
 					fmt.Fprintln(os.Stderr, red(fmt.Sprintf("failed to execute map: %v", err)))
 					continue

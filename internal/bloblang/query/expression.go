@@ -25,8 +25,8 @@ func NewMatchFunction(contextFn Function, cases ...MatchCase) Function {
 	if contextFn == nil {
 		contextFn = ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 			var value interface{}
-			if ctx.Value != nil {
-				value = *ctx.Value
+			if v := ctx.Value(); v != nil {
+				value = *v
 			}
 			return value, nil
 		}, nil)
@@ -36,7 +36,7 @@ func NewMatchFunction(contextFn Function, cases ...MatchCase) Function {
 		if err != nil {
 			return nil, err
 		}
-		ctx.Value = &ctxVal
+		ctx = ctx.WithValue(ctxVal)
 		for i, c := range cases {
 			var caseVal interface{}
 			if caseVal, err = c.caseFn.Exec(ctx); err != nil {

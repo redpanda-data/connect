@@ -335,23 +335,20 @@ func TestExec(t *testing.T) {
 		test := test
 		t.Run(name, func(t *testing.T) {
 			res, err := test.mapping.Exec(query.FunctionContext{
-				Value:    &test.input,
 				MsgBatch: message.New(nil),
-			})
+			}.WithValue(test.input))
 			if len(test.err) > 0 {
 				require.EqualError(t, err, test.err)
 			} else {
 				assert.Equal(t, test.output, res)
 			}
 			resString := test.mapping.ToString(query.FunctionContext{
-				Value:    &test.input,
 				MsgBatch: message.New(nil),
-			})
+			}.WithValue(test.input))
 			assert.Equal(t, test.outputString, resString)
 			resBytes := test.mapping.ToBytes(query.FunctionContext{
-				Value:    &test.input,
 				MsgBatch: message.New(nil),
-			})
+			}.WithValue(test.input))
 			assert.Equal(t, test.outputString, string(resBytes))
 		})
 	}
