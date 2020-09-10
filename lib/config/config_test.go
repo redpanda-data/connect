@@ -1,13 +1,64 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/lib/input"
+	"github.com/Jeffail/benthos/v3/lib/output"
+	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/gabs/v2"
+	"github.com/stretchr/testify/assert"
+	yaml "gopkg.in/yaml.v3"
 )
+
+func TestComponentExamples(t *testing.T) {
+	for typeName, ctor := range input.Constructors {
+		for _, example := range ctor.Examples {
+			s := New()
+			dec := yaml.NewDecoder(bytes.NewReader([]byte(example.Config)))
+			dec.KnownFields(true)
+			assert.NoError(t, dec.Decode(&s), "%v:%v:%v", "input", typeName, example.Title)
+
+			type confAlias Type
+			sAliased := confAlias(New())
+			dec = yaml.NewDecoder(bytes.NewReader([]byte(example.Config)))
+			dec.KnownFields(true)
+			assert.NoError(t, dec.Decode(&sAliased), "%v:%v:%v", "input", typeName, example.Title)
+		}
+	}
+	for typeName, ctor := range processor.Constructors {
+		for _, example := range ctor.Examples {
+			s := New()
+			dec := yaml.NewDecoder(bytes.NewReader([]byte(example.Config)))
+			dec.KnownFields(true)
+			assert.NoError(t, dec.Decode(&s), "%v:%v:%v", "processor", typeName, example.Title)
+
+			type confAlias Type
+			sAliased := confAlias(New())
+			dec = yaml.NewDecoder(bytes.NewReader([]byte(example.Config)))
+			dec.KnownFields(true)
+			assert.NoError(t, dec.Decode(&sAliased), "%v:%v:%v", "processor", typeName, example.Title)
+		}
+	}
+	for typeName, ctor := range output.Constructors {
+		for _, example := range ctor.Examples {
+			s := New()
+			dec := yaml.NewDecoder(bytes.NewReader([]byte(example.Config)))
+			dec.KnownFields(true)
+			assert.NoError(t, dec.Decode(&s), "%v:%v:%v", "output", typeName, example.Title)
+
+			type confAlias Type
+			sAliased := confAlias(New())
+			dec = yaml.NewDecoder(bytes.NewReader([]byte(example.Config)))
+			dec.KnownFields(true)
+			assert.NoError(t, dec.Decode(&sAliased), "%v:%v:%v", "output", typeName, example.Title)
+		}
+	}
+}
 
 func CheckTagsOfType(v reflect.Type, checkedTypes map[string]struct{}, t *testing.T) {
 	tPath := v.PkgPath() + "." + v.Name()

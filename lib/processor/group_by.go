@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -45,40 +46,38 @@ group_by:
 Messages are added to the first group that passes and can only belong to a
 single group. Messages that do not pass the conditions of any group are placed
 in a final batch with no processors applied.`,
-		Footnotes: `
-## Examples
-
-Imagine we have a batch of messages that we wish to split into two groups - the
-foos and the bars - which should be sent to different output destinations based
-on those groupings. We also need to send the foos as a tar gzip archive. For
-this purpose we can use the ` + "`group_by`" + ` processor with a
-` + "[`switch`](/docs/components/outputs/switch)" + ` output:
-
-` + "```yaml" + `
+		Examples: []docs.AnnotatedExample{
+			{
+				Title:   "Grouped Processing",
+				Summary: "Imagine we have a batch of messages that we wish to split into a group of foos and everything else, which should be sent to different output destinations based on those groupings. We also need to send the foos as a tar gzip archive. For this purpose we can use the `group_by` processor with a [`switch`](/docs/components/outputs/switch) output:",
+				Config: `
 pipeline:
   processors:
-  - group_by:
-    - condition:
-        bloblang: 'content().contains("this is a foo")'
-      processors:
-      - archive:
-          format: tar
-      - compress:
-          algorithm: gzip
-      - bloblang: 'meta grouping = "foo"'
+    - group_by:
+      - condition:
+          bloblang: 'content().contains("this is a foo")'
+        processors:
+          - archive:
+              format: tar
+          - compress:
+              algorithm: gzip
+          - bloblang: 'meta grouping = "foo"'
+
 output:
   switch:
-    outputs:
-    - output:
-        type: foo_output
-      condition:
-        bloblang: 'meta("grouping") == "foo"'
-    - output:
-        type: bar_output
-` + "```" + `
-
-Since any message that isn't a foo is a bar, and bars do not require their own
-processing steps, we only need a single grouping configuration.`,
+    cases:
+      - check: 'meta("grouping") == "foo"'
+        output:
+          gcp_pubsub:
+            project: foo_prod
+            topic: only_the_foos
+      - output:
+          gcp_pubsub:
+            project: somewhere_else
+            topic: no_foos_here
+`,
+			},
+		},
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			groups := []interface{}{}
 			for _, g := range conf.GroupBy {

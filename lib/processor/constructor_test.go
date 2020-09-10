@@ -1,57 +1,20 @@
 package processor
 
 import (
-	"bytes"
 	"encoding/json"
 	"os"
 	"strings"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
 )
 
 func TestConstructorDescription(t *testing.T) {
 	if len(Descriptions()) == 0 {
 		t.Error("package descriptions were empty")
-	}
-}
-
-func TestExamples(t *testing.T) {
-	for typeName, ctor := range Constructors {
-		for _, example := range ctor.Examples {
-			s := struct {
-				Pipeline struct {
-					Processors []Config `yaml:"processors"`
-				} `yaml:"pipeline"`
-				Resources struct {
-					Caches     map[string]cache.Config     `yaml:"caches"`
-					Ratelimits map[string]ratelimit.Config `yaml:"rate_limits"`
-				}
-			}{}
-			dec := yaml.NewDecoder(bytes.NewReader([]byte(example.Config)))
-			dec.KnownFields(true)
-			require.NoError(t, dec.Decode(&s), "%v:%v", typeName, example.Title)
-
-			type confAlias Config
-			sAliased := struct {
-				Pipeline struct {
-					Processors []confAlias `yaml:"processors"`
-				} `yaml:"pipeline"`
-				Resources struct {
-					Caches     map[string]cache.Config     `yaml:"caches"`
-					Ratelimits map[string]ratelimit.Config `yaml:"rate_limits"`
-				}
-			}{}
-			dec = yaml.NewDecoder(bytes.NewReader([]byte(example.Config)))
-			dec.KnownFields(true)
-			require.NoError(t, dec.Decode(&sAliased), "%v:%v", typeName, example.Title)
-		}
 	}
 }
 

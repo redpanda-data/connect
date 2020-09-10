@@ -30,7 +30,7 @@ on their contents.
 # Common config fields, showing default values
 output:
   switch:
-    outputs: []
+    cases: []
 ```
 
 </TabItem>
@@ -43,15 +43,11 @@ output:
     retry_until_success: true
     strict_mode: false
     max_in_flight: 1
-    outputs: []
+    cases: []
 ```
 
 </TabItem>
 </Tabs>
-
-When [batching messages at the input level](/docs/configuration/batching/)
-conditional logic is applied across the entire batch. In order to multiplex per
-message of a batch use [broker based multiplexing](/docs/components/outputs/about#broker-multiplexing).
 
 ## Fields
 
@@ -86,12 +82,9 @@ The maximum number of parallel message batches to have in flight at any given ti
 Type: `number`  
 Default: `1`  
 
-### `outputs`
+### `cases`
 
-A list of switch cases, each consisting of an [output](/docs/components/outputs/about),
-a [condition](/docs/components/conditions/about) and a field fallthrough,
-indicating whether the next case should also be tested if the current resolves
-to true.
+A list of switch cases, each consisting of an [`output`](/docs/components/outputs/about), a [Bloblang query field `check`](/docs/guides/bloblang/about) and a field `fallthrough`, indicating whether the next case should also be tested if the current resolves to `true`. If the field `check` is left empty then the case always passes, otherwise the result is expected to be a boolean value.
 
 
 Type: `array`  
@@ -100,11 +93,9 @@ Default: `[]`
 ```yaml
 # Examples
 
-outputs:
-  - condition:
-      jmespath:
-        query: contains(urls, 'http://benthos.dev')
-    fallthrough: false
+cases:
+  - check: this.urls.contains("http://benthos.dev")
+    fallthrough: true
     output:
       cache:
         key: ${!json("id")}
@@ -117,52 +108,44 @@ outputs:
 
 ## Examples
 
-In the following example, messages containing "foo" will be sent to both the
-`foo` and `baz` outputs. Messages containing "bar" will be
-sent to both the `bar` and `baz` outputs. Messages
-containing both "foo" and "bar" will be sent to all three outputs. And finally,
-messages that do not contain "foo" or "bar" will be sent to the `baz`
-output only.
+<Tabs defaultValue="Multiplexing" values={[
+{ label: 'Multiplexing', value: 'Multiplexing', },
+]}>
 
-``` yaml
+<TabItem value="Multiplexing">
+
+
+The most common use for a switch output is to multiplex messages across a range of output destinations. The following config checks the contents of the field `type` of messages and sends `foo` type messages to an `amqp_1` output, `bar` type messages to a `gcp_pubsub` output, and everything else to a `redis_streams` output.
+
+Outputs can have their own processors associated with them, and in this example the `redis_streams` output has a processor that enforces the presence of a type field before sending it.
+
+```yaml
 output:
   switch:
-    retry_until_success: true
-    outputs:
-    - output:
-        foo:
-          foo_field_1: value1
-      condition:
-        bloblang: content().contains("foo")
-      fallthrough: true
-    - output:
-        bar:
-          bar_field_1: value2
-          bar_field_2: value3
-      condition:
-        bloblang: content().contains("bar")
-      fallthrough: true
-    - output:
-        baz:
-          baz_field_1: value4
-        processors:
-        - type: baz_processor
-  processors:
-  - type: some_processor
+    cases:
+      - check: this.type == "foo"
+        output:
+          amqp_1:
+            url: amqps://guest:guest@localhost:5672/
+            target_address: queue:/the_foos
+
+      - check: this.type == "bar"
+        output:
+          gcp_pubsub:
+            project: dealing_with_mike
+            topic: mikes_bars
+
+      - output:
+          redis_streams:
+            url: tcp://localhost:6379
+            stream: everything_else
+          processors:
+            - bloblang: |
+                root = this
+                root.type = this.type.not_null() | "unknown"
 ```
 
-The switch output requires a minimum of two outputs. If no condition is defined
-for an output, it behaves like a static `true` condition. If
-`fallthrough` is set to `true`, the switch output will
-continue evaluating additional outputs after finding a match.
+</TabItem>
+</Tabs>
 
-Messages that do not match any outputs will be dropped. If an output applies
-back pressure it will block all subsequent messages.
-
-If an output fails to send a message it will be retried continuously until
-completion or service shut down. You can change this behaviour so that when an
-output returns an error the switch output also returns an error by setting
-`retry_until_success` to `false`. This allows you to
-wrap the switch with a `try` broker, but care must be taken to ensure
-duplicate messages aren't introduced during error conditions.
 

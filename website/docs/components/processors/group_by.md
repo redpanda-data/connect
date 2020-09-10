@@ -47,35 +47,42 @@ that are batched. You can find out more about batching [in this doc](/docs/confi
 
 ## Examples
 
-Imagine we have a batch of messages that we wish to split into two groups - the
-foos and the bars - which should be sent to different output destinations based
-on those groupings. We also need to send the foos as a tar gzip archive. For
-this purpose we can use the `group_by` processor with a
-[`switch`](/docs/components/outputs/switch) output:
+<Tabs defaultValue="Grouped Processing" values={[
+{ label: 'Grouped Processing', value: 'Grouped Processing', },
+]}>
+
+<TabItem value="Grouped Processing">
+
+Imagine we have a batch of messages that we wish to split into a group of foos and everything else, which should be sent to different output destinations based on those groupings. We also need to send the foos as a tar gzip archive. For this purpose we can use the `group_by` processor with a [`switch`](/docs/components/outputs/switch) output:
 
 ```yaml
 pipeline:
   processors:
-  - group_by:
-    - condition:
-        bloblang: 'content().contains("this is a foo")'
-      processors:
-      - archive:
-          format: tar
-      - compress:
-          algorithm: gzip
-      - bloblang: 'meta grouping = "foo"'
+    - group_by:
+      - condition:
+          bloblang: 'content().contains("this is a foo")'
+        processors:
+          - archive:
+              format: tar
+          - compress:
+              algorithm: gzip
+          - bloblang: 'meta grouping = "foo"'
+
 output:
   switch:
-    outputs:
-    - output:
-        type: foo_output
-      condition:
-        bloblang: 'meta("grouping") == "foo"'
-    - output:
-        type: bar_output
+    cases:
+      - check: 'meta("grouping") == "foo"'
+        output:
+          gcp_pubsub:
+            project: foo_prod
+            topic: only_the_foos
+      - output:
+          gcp_pubsub:
+            project: somewhere_else
+            topic: no_foos_here
 ```
 
-Since any message that isn't a foo is a bar, and bars do not require their own
-processing steps, we only need a single grouping configuration.
+</TabItem>
+</Tabs>
+
 

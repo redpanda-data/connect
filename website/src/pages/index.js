@@ -51,19 +51,18 @@ output:
 
 output:
   switch:
-    outputs:
-    - output:
-        sqs:
-          url: https://sqs.us-west-2.amazonaws.com/TODO/TODO
-          max_in_flight: 20
-      condition:
-        bloblang: doc.tags.contains("AWS")
+    cases:
+      - check: doc.tags.contains("AWS")
+        output:
+          sqs:
+            url: https://sqs.us-west-2.amazonaws.com/TODO/TODO
+            max_in_flight: 20
 
-    - output:
-        redis_pubsub:
-          url: tcp://TODO:6379
-          channel: baz
-          max_in_flight: 20`,
+      - output:
+          redis_pubsub:
+            url: tcp://TODO:6379
+            channel: baz
+            max_in_flight: 20`,
   },
   {
     label: 'Enrichments',

@@ -6,160 +6,134 @@ It's always possible for things to go wrong, be a good captain and plan ahead.
 
 <div style={{textAlign: 'center'}}><img style={{maxWidth: '300px', marginBottom: '40px'}} src="/img/Blobpirate.svg" /></div>
 
-Benthos supports a range of [processors][processors] such as `http` and `lambda`
-that have the potential to fail if their retry attempts are exhausted. When this
-happens the data is not dropped but instead continues through the pipeline
-mostly unchanged. The content remains the same but a metadata flag is added to
-the message that can be referred to later in the pipeline using the
-[`processor_failed`][processor_failed] condition.
+Benthos supports a range of [processors][processors] such as `http` and `lambda` that have the potential to fail if their retry attempts are exhausted. When this happens the data is not dropped but instead continues through the pipeline mostly unchanged, but a metadata flag is added allowing you to handle the errors in a way that suits your needs.
 
-This behaviour allows you to define in your config whether you would like the
-failed messages to be dropped, recovered with more processing, or routed to a
-dead-letter queue, or any combination thereof.
+This document outlines common patterns for dealing with errors, such as dropping them, recovering them with more processing, routing them to a dead-letter queue, or any combination thereof.
 
 ## Abandon on Failure
 
-It's possible to define a list of processors which should be skipped for
-messages that failed a previous stage using the [`try`][try] processor:
+It's possible to define a list of processors which should be skipped for messages that failed a previous stage using the [`try` processor][processor.try]:
 
 ```yaml
-  - try:
-    - type: foo
-    - type: bar # Skipped if foo failed
-    - type: baz # Skipped if foo or bar failed
+pipeline:
+  processors:
+    - try:
+      - type: foo
+      - type: bar # Skipped if foo failed
+      - type: baz # Skipped if foo or bar failed
 ```
 
 ## Recover Failed Messages
 
-Failed messages can be fed into their own processor steps with a
-[`catch`][catch] processor:
+Failed messages can be fed into their own processor steps with a [`catch` processor][processor.catch]:
 
 ```yaml
-  - catch:
-    - type: foo # Recover here
+pipeline:
+  processors:
+    - type: foo # Processor that might fail
+    - catch:
+      - type: bar # Recover here
 ```
 
-Once messages finish the catch block they will have their failure flags removed
-and are treated like regular messages. If this behaviour is not desired then it
-is possible to simulate a catch block with a [`switch`][switch] processor placed
-within a [`for_each`][for_each] processor:
+Once messages finish the catch block they will have their failure flags removed and are treated like regular messages. If this behaviour is not desired then it is possible to simulate a catch block with a [`switch` processor][processor.switch] placed within a [`for_each` processor][processor.for_each]:
 
 ```yaml
-  - for_each:
-    - switch:
-      - condition:
-          type: processor_failed
-        processors:
-        - type: foo # Recover here
+pipeline:
+  processors:
+    - type: foo # Processor that might fail
+    - for_each:
+      - switch:
+        - condition:
+            bloblang: errored()
+          processors:
+            - type: bar # Recover here
 ```
 
 ## Logging Errors
 
-When an error occurs there will occasionally be useful information stored within
-the error flag that can be exposed with the interpolation function
-[`error`][error_interpolation]. This allows you to expose the information with
-processors.
+When an error occurs there will occasionally be useful information stored within the error flag that can be exposed with the interpolation function [`error`][configuration.interpolation]. This allows you to expose the information with processors.
 
-For example, when catching failed processors you can [`log`][log] the messages:
+For example, when catching failed processors you can [`log`][processor.log] the messages:
 
 ```yaml
-  - catch:
-    - log:
-        message: "Processing failed due to: ${!error()}"
+pipeline:
+  processors:
+    - type: foo # Processor that might fail
+    - catch:
+      - log:
+          message: "Processing failed due to: ${!error()}"
 ```
 
 Or perhaps augment the message payload with the error message:
 
 ```yaml
-  - catch:
-    - bloblang: |
-        root = this
-        meta.error = error()
+pipeline:
+  processors:
+    - type: foo # Processor that might fail
+    - catch:
+      - bloblang: |
+          root = this
+          root.meta.error = error()
 ```
 
 ## Attempt Until Success
 
-It's possible to reattempt a processor for a particular message until it is
-successful with a [`while`][while] processor:
+It's possible to reattempt a processor for a particular message until it is successful with a [`while`][processor.while] processor:
 
 ```yaml
-  - for_each:
-    - while:
-        at_least_once: true
-        max_loops: 0 # Set this greater than zero to cap the number of attempts
-        condition:
-          type: processor_failed
-        processors:
-        - type: catch # Wipe any previous error
-        - type: foo # Attempt this processor until success
+pipeline:
+  processors:
+    - for_each:
+      - while:
+          at_least_once: true
+          max_loops: 0 # Set this greater than zero to cap the number of attempts
+          condition:
+            bloblang: errored()
+          processors:
+            - type: catch # Wipe any previous error
+            - type: foo # Attempt this processor until success
 ```
 
-This loop will block the pipeline and prevent the blocking message from being
-acknowledged. It is therefore usually a good idea in practice to build your
-condition with an exit strategy after N failed attempts so that the pipeline can
-unblock itself without intervention.
+This loop will block the pipeline and prevent the blocking message from being acknowledged. It is therefore usually a good idea in practice to use the `max_loops` field to set a limit to the number of attempts to make so that the pipeline can unblock itself without intervention.
 
 ## Drop Failed Messages
 
-In order to filter out any failed messages from your pipeline you can use a
-[`bloblang` processor][processors.bloblang]:
+In order to filter out any failed messages from your pipeline you can use a [`bloblang` processor][processor.bloblang]:
 
 ```yaml
-  - bloblang: root = if errored() { deleted() }
+pipeline:
+  processors:
+    - bloblang: root = if errored() { deleted() }
 ```
 
 This will remove any failed messages from a batch.
 
 ## Route to a Dead-Letter Queue
 
-It is possible to send failed messages to different destinations using either a
-[`group_by`][group_by] processor with a [`switch`][switch] output, or a
-[`broker`][broker] output with [`bloblang`][processors.bloblang] processors.
+It is possible to route failed messages to different destinations using a [`switch` output][output.switch]:
 
 ```yaml
-pipeline:
-  processors:
-  - group_by:
-    - condition:
-        type: processor_failed
 output:
   switch:
-    outputs:
-    - output:
-        type: foo # Dead letter queue
-      condition:
-        type: processor_failed
-    - output:
-        type: bar # Everything else
-```
+    cases:
+      - check: errored()
+        output:
+          type: foo # Dead letter queue
 
-Note that the [`group_by`][group_by] processor is only necessary when messages
-are batched.
-
-Alternatively, using a `broker` output looks like this:
-
-```yaml
-output:
-  broker:
-    pattern: fan_out
-    outputs:
-    - type: foo # Dead letter queue
-      processors:
-      - bloblang: root = if !errored() { deleted() }
-    - type: bar # Everything else
-      processors:
-      - bloblang: root = if errored() { deleted() }
+      - output:
+          type: bar # Everything else
 ```
 
 [processors]: /docs/components/processors/about
-[processors.bloblang]: /docs/components/processors/bloblang
-[processor_failed]: /docs/components/conditions/processor_failed
-[while]: /docs/components/processors/while
-[for_each]: /docs/components/processors/for_each
-[catch]: /docs/components/processors/catch
-[try]: /docs/components/processors/try
-[log]: /docs/components/processors/log
-[group_by]: /docs/components/processors/group_by
-[switch]: /docs/components/outputs/switch
-[broker]: /docs/components/outputs/broker
-[error_interpolation]: /docs/configuration/interpolation#error
+[processor.bloblang]: /docs/components/processors/bloblang
+[processor.switch]: /docs/components/processors/switch
+[processor.while]: /docs/components/processors/while
+[processor.for_each]: /docs/components/processors/for_each
+[processor.catch]: /docs/components/processors/catch
+[processor.try]: /docs/components/processors/try
+[processor.log]: /docs/components/processors/log
+[processor.group_by]: /docs/components/processors/group_by
+[condition.processor_failed]: /docs/components/conditions/processor_failed
+[output.switch]: /docs/components/outputs/switch
+[output.broker]: /docs/components/outputs/broker
+[configuration.interpolation]: /docs/configuration/interpolation#bloblang-queries

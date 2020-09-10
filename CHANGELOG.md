@@ -9,6 +9,14 @@ All notable changes to this project will be documented in this file.
 
 - New methods `any`, `all` and `json_schema` added to Bloblang.
 - New function `file` added to Bloblang.
+- The `switch` output can now route batched messages individually (when using
+  the new `cases` field).
+
+### Changed
+
+- New field `cases` replaces `outputs` for the `switch` output, `outputs` can
+  still be used for backwards compatibility but will be removed in the next
+  major version release.
 
 ## 3.27.0 - 2020-09-07
 

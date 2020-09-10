@@ -3,7 +3,7 @@ title: Outputs
 sidebar_label: About
 ---
 
-An output is a sink where we wish to send our consumed data after applying an optional array of [processors][processors]. Only one output is configured at the root of a Benthos config. However, the output can be a [broker][output.broker] which combines multiple outputs under a chosen brokering pattern.
+An output is a sink where we wish to send our consumed data after applying an optional array of [processors][processors]. Only one output is configured at the root of a Benthos config. However, the output can be a [broker][output.broker] which combines multiple outputs under a chosen brokering pattern, or a [switch][output.switch] which is used to multiplex against different outputs.
 
 An output config section looks like this:
 
@@ -15,8 +15,7 @@ output:
 
   # Optional list of processing steps
   processors:
-   - jmespath:
-       query: '{ message: @, meta: { link_count: length(links) } }'
+   - bloblang: '{"message":this,"meta":{"link_count":this.links.length()}}'
 ```
 
 import ComponentsByCategory from '@theme/ComponentsByCategory';
@@ -42,13 +41,13 @@ It's possible to create fallback outputs for when an output target fails using a
 ```yaml
 output:
   try:
-  - sqs:
-      url: https://sqs.us-west-2.amazonaws.com/TODO/TODO
-      max_in_flight: 20
+    - sqs:
+        url: https://sqs.us-west-2.amazonaws.com/TODO/TODO
+        max_in_flight: 20
 
-  - http_client:
-      url: http://backup:1234/dlq
-      verb: POST
+    - http_client:
+        url: http://backup:1234/dlq
+        verb: POST
 ```
 
 ## Multiplexing Outputs
@@ -57,7 +56,9 @@ There are a few different ways of multiplexing in Benthos, here's a quick run th
 
 ### Interpolation Multiplexing
 
-The easiest form of multiplexing is by using [field interpolation][interpolation]:
+Some output fields support [field interpolation][interpolation], which is a super easy way to multiplex messages based on their contents in situations where you are multiplexing to the same service.
+
+For example, multiplexing against Kafka topics is a common pattern:
 
 ```yaml
 output:
@@ -66,56 +67,36 @@ output:
     topic: ${! meta("target_topic") }
 ```
 
-Although this form of multiplexing is limited as it doesn't support different output types, and only some output fields support interpolation.
+Refer to the field documentation for a given output to see if it support interpolation.
 
 ### Switch Multiplexing
 
-It is possible to perform content based multiplexing of messages to specific outputs by using the [`switch`][output.switch] output:
+A more advanced form of multiplexing is to route messages to different output configurations based on a query. This is easy with the [`switch` output][output.switch]:
 
 ```yaml
 output:
   switch:
-    outputs:
-    - condition:
-        bloblang: urls.contains("http://benthos.dev")
-      output:
-        cache:
-          target: foo
-          key: ${! json("id") }
-      fallthrough: false
-    - output:
-        s3:
-          bucket: bar
-          path: ${! json("id") }
-```
+    cases:
+      - check: this.type == "foo"
+        output:
+          amqp_1:
+            url: amqps://guest:guest@localhost:5672/
+            target_address: queue:/the_foos
 
-For each output case you are able to specify a [condition][conditions] to determine whether a message should be routed to it.
+      - check: this.type == "bar"
+        output:
+          gcp_pubsub:
+            project: dealing_with_mike
+            topic: mikes_bars
 
-### Broker Multiplexing
-
-An alternative way to multiplex is to use a [`broker`][output.broker] with the `fan_out` pattern and a [`bloblang` processor][processor.bloblang] on each output that selectively drops messages:
-
-```yaml
-output:
-  broker:
-    pattern: fan_out
-    outputs:
-    - cache:
-        target: foo
-        key: ${! json("id") }
-      processors:
-      - bloblang: |
-          root = match {
-            !urls.contains("http://benthos.dev") => deleted()
-          }
-    - s3:
-        bucket: bar
-        path: ${! json("id") }
-      processors:
-      - bloblang: |
-          root = match {
-            urls.contains("http://benthos.dev") => deleted()
-          }
+      - output:
+          redis_streams:
+            url: tcp://localhost:6379
+            stream: everything_else
+          processors:
+            - bloblang: |
+                root = this
+                root.type = this.type.not_null() | "unknown"
 ```
 
 import ComponentSelect from '@theme/ComponentSelect';

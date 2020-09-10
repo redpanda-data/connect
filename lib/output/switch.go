@@ -2,15 +2,17 @@ package output
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -24,9 +26,12 @@ var (
 	// ErrSwitchNoConditionMet is returned when a message does not match any
 	// output conditions.
 	ErrSwitchNoConditionMet = errors.New("no switch output conditions were met by message")
+	// ErrSwitchNoCasesMatched is returned when a message does not match any
+	// output cases.
+	ErrSwitchNoCasesMatched = errors.New("no switch cases were matched by message")
 	// ErrSwitchNoOutputs is returned when creating a Switch type with less than
 	// 2 outputs.
-	ErrSwitchNoOutputs = errors.New("attempting to create switch with less than 2 outputs")
+	ErrSwitchNoOutputs = errors.New("attempting to create switch with fewer than 2 cases")
 )
 
 //------------------------------------------------------------------------------
@@ -37,10 +42,6 @@ func init() {
 		Summary: `
 The switch output type allows you to route messages to different outputs based
 on their contents.`,
-		Description: `
-When [batching messages at the input level](/docs/configuration/batching/)
-conditional logic is applied across the entire batch. In order to multiplex per
-message of a batch use ` + "[broker based multiplexing](/docs/components/outputs/about#broker-multiplexing)" + `.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldAdvanced(
 				"retry_until_success", `
@@ -62,25 +63,18 @@ behavior is false, which will drop the message.`,
 The maximum number of parallel message batches to have in flight at any given time.`,
 			),
 			docs.FieldCommon(
-				"outputs", `
-A list of switch cases, each consisting of an [output](/docs/components/outputs/about),
-a [condition](/docs/components/conditions/about) and a field fallthrough,
-indicating whether the next case should also be tested if the current resolves
-to true.`,
+				"cases",
+				"A list of switch cases, each consisting of an [`output`](/docs/components/outputs/about), a [Bloblang query field `check`](/docs/guides/bloblang/about) and a field `fallthrough`, indicating whether the next case should also be tested if the current resolves to `true`. If the field `check` is left empty then the case always passes, otherwise the result is expected to be a boolean value.",
 				[]interface{}{
 					map[string]interface{}{
-						"fallthrough": false,
+						"fallthrough": true,
 						"output": map[string]interface{}{
 							"cache": map[string]interface{}{
 								"target": "foo",
 								"key":    "${!json(\"id\")}",
 							},
 						},
-						"condition": map[string]interface{}{
-							"jmespath": map[string]interface{}{
-								"query": "contains(urls, 'http://benthos.dev')",
-							},
-						},
+						"check": `this.urls.contains("http://benthos.dev")`,
 					},
 					map[string]interface{}{
 						"output": map[string]interface{}{
@@ -92,85 +86,86 @@ to true.`,
 					},
 				},
 			),
+			docs.FieldDeprecated("outputs"),
 		},
 		Categories: []Category{
 			CategoryUtility,
 		},
-		Footnotes: `
-## Examples
+		Examples: []docs.AnnotatedExample{
+			{
+				Title: "Multiplexing",
+				Summary: `
+The most common use for a switch output is to multiplex messages across a range of output destinations. The following config checks the contents of the field ` + "`type` of messages and sends `foo` type messages to an `amqp_1` output, `bar` type messages to a `gcp_pubsub` output, and everything else to a `redis_streams` output" + `.
 
-In the following example, messages containing "foo" will be sent to both the
-` + "`foo`" + ` and ` + "`baz`" + ` outputs. Messages containing "bar" will be
-sent to both the ` + "`bar`" + ` and ` + "`baz`" + ` outputs. Messages
-containing both "foo" and "bar" will be sent to all three outputs. And finally,
-messages that do not contain "foo" or "bar" will be sent to the ` + "`baz`" + `
-output only.
-
-` + "``` yaml" + `
+Outputs can have their own processors associated with them, and in this example the ` + "`redis_streams`" + ` output has a processor that enforces the presence of a type field before sending it.`,
+				Config: `
 output:
   switch:
-    retry_until_success: true
-    outputs:
-    - output:
-        foo:
-          foo_field_1: value1
-      condition:
-        bloblang: content().contains("foo")
-      fallthrough: true
-    - output:
-        bar:
-          bar_field_1: value2
-          bar_field_2: value3
-      condition:
-        bloblang: content().contains("bar")
-      fallthrough: true
-    - output:
-        baz:
-          baz_field_1: value4
-        processors:
-        - type: baz_processor
-  processors:
-  - type: some_processor
-` + "```" + `
+    cases:
+      - check: this.type == "foo"
+        output:
+          amqp_1:
+            url: amqps://guest:guest@localhost:5672/
+            target_address: queue:/the_foos
 
-The switch output requires a minimum of two outputs. If no condition is defined
-for an output, it behaves like a static ` + "`true`" + ` condition. If
-` + "`fallthrough`" + ` is set to ` + "`true`" + `, the switch output will
-continue evaluating additional outputs after finding a match.
+      - check: this.type == "bar"
+        output:
+          gcp_pubsub:
+            project: dealing_with_mike
+            topic: mikes_bars
 
-Messages that do not match any outputs will be dropped. If an output applies
-back pressure it will block all subsequent messages.
-
-If an output fails to send a message it will be retried continuously until
-completion or service shut down. You can change this behaviour so that when an
-output returns an error the switch output also returns an error by setting
-` + "`retry_until_success`" + ` to ` + "`false`" + `. This allows you to
-wrap the switch with a ` + "`try`" + ` broker, but care must be taken to ensure
-duplicate messages aren't introduced during error conditions.`,
+      - output:
+          redis_streams:
+            url: tcp://localhost:6379
+            stream: everything_else
+          processors:
+            - bloblang: |
+                root = this
+                root.type = this.type.not_null() | "unknown"
+`,
+			},
+		},
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			outSlice := []interface{}{}
-			for _, out := range conf.Switch.Outputs {
-				sanOutput, err := SanitiseConfig(out.Output)
-				if err != nil {
-					return nil, err
-				}
-				var sanCond interface{}
-				if sanCond, err = condition.SanitiseConfig(out.Condition); err != nil {
-					return nil, err
-				}
-				sanit := map[string]interface{}{
-					"output":      sanOutput,
-					"fallthrough": out.Fallthrough,
-					"condition":   sanCond,
-				}
-				outSlice = append(outSlice, sanit)
-			}
-			return map[string]interface{}{
+			m := map[string]interface{}{
 				"retry_until_success": conf.Switch.RetryUntilSuccess,
 				"strict_mode":         conf.Switch.StrictMode,
 				"max_in_flight":       conf.Switch.MaxInFlight,
-				"outputs":             outSlice,
-			}, nil
+			}
+			casesSlice := []interface{}{}
+			for _, c := range conf.Switch.Cases {
+				sanOutput, err := SanitiseConfig(c.Output)
+				if err != nil {
+					return nil, err
+				}
+				sanit := map[string]interface{}{
+					"check":       c.Check,
+					"output":      sanOutput,
+					"fallthrough": c.Fallthrough,
+				}
+				casesSlice = append(casesSlice, sanit)
+			}
+			m["cases"] = casesSlice
+			if len(conf.Switch.Outputs) > 0 {
+				outSlice := []interface{}{}
+				for _, out := range conf.Switch.Outputs {
+					sanOutput, err := SanitiseConfig(out.Output)
+					if err != nil {
+						return nil, err
+					}
+					var sanCond interface{}
+					if sanCond, err = condition.SanitiseConfig(out.Condition); err != nil {
+						return nil, err
+					}
+					sanit := map[string]interface{}{
+						"output":      sanOutput,
+						"fallthrough": out.Fallthrough,
+						"condition":   sanCond,
+					}
+					outSlice = append(outSlice, sanit)
+				}
+				m["outputs"] = outSlice
+			}
+			return m, nil
 		},
 	}
 }
@@ -182,6 +177,7 @@ type SwitchConfig struct {
 	RetryUntilSuccess bool                 `json:"retry_until_success" yaml:"retry_until_success"`
 	StrictMode        bool                 `json:"strict_mode" yaml:"strict_mode"`
 	MaxInFlight       int                  `json:"max_in_flight" yaml:"max_in_flight"`
+	Cases             []SwitchConfigCase   `json:"cases" yaml:"cases"`
 	Outputs           []SwitchConfigOutput `json:"outputs" yaml:"outputs"`
 }
 
@@ -189,60 +185,28 @@ type SwitchConfig struct {
 func NewSwitchConfig() SwitchConfig {
 	return SwitchConfig{
 		RetryUntilSuccess: true,
-		StrictMode:        false,
-		MaxInFlight:       1,
-		Outputs:           []SwitchConfigOutput{},
+		// TODO: V4 consider making this true by default.
+		StrictMode:  false,
+		MaxInFlight: 1,
+		Cases:       []SwitchConfigCase{},
+		Outputs:     []SwitchConfigOutput{},
 	}
 }
 
-// SwitchConfigOutput contains configuration fields per output of a switch type.
-type SwitchConfigOutput struct {
-	Condition   condition.Config `json:"condition" yaml:"condition"`
-	Fallthrough bool             `json:"fallthrough" yaml:"fallthrough"`
-	Output      Config           `json:"output" yaml:"output"`
+// SwitchConfigCase contains configuration fields per output of a switch type.
+type SwitchConfigCase struct {
+	Check       string `json:"check" yaml:"check"`
+	Fallthrough bool   `json:"fallthrough" yaml:"fallthrough"`
+	Output      Config `json:"output" yaml:"output"`
 }
 
-// NewSwitchConfigOutput creates a new switch output config with default values.
-func NewSwitchConfigOutput() SwitchConfigOutput {
-	cond := condition.NewConfig()
-	cond.Type = condition.TypeStatic
-	cond.Static = true
-
-	return SwitchConfigOutput{
-		Condition:   cond,
+// NewSwitchConfigCase creates a new switch output config with default values.
+func NewSwitchConfigCase() SwitchConfigCase {
+	return SwitchConfigCase{
+		Check:       "",
 		Fallthrough: false,
 		Output:      NewConfig(),
 	}
-}
-
-//------------------------------------------------------------------------------
-
-// UnmarshalJSON ensures that when parsing configs that are in a map or slice
-// the default values are still applied.
-func (s *SwitchConfigOutput) UnmarshalJSON(bytes []byte) error {
-	type confAlias SwitchConfigOutput
-	aliased := confAlias(NewSwitchConfigOutput())
-
-	if err := json.Unmarshal(bytes, &aliased); err != nil {
-		return err
-	}
-
-	*s = SwitchConfigOutput(aliased)
-	return nil
-}
-
-// UnmarshalYAML ensures that when parsing configs that are in a map or slice
-// the default values are still applied.
-func (s *SwitchConfigOutput) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type confAlias SwitchConfigOutput
-	aliased := confAlias(NewSwitchConfigOutput())
-
-	if err := unmarshal(&aliased); err != nil {
-		return err
-	}
-
-	*s = SwitchConfigOutput(aliased)
-	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -260,6 +224,7 @@ type Switch struct {
 	strictMode        bool
 	outputTsChans     []chan types.Transaction
 	outputs           []types.Output
+	checks            []*mapping.Executor
 	conditions        []types.Condition
 	fallthroughs      []bool
 
@@ -276,25 +241,35 @@ func NewSwitch(
 	logger log.Modular,
 	stats metrics.Type,
 ) (Type, error) {
-	lOutputs := len(conf.Switch.Outputs)
-	if lOutputs < 2 {
-		return nil, ErrSwitchNoOutputs
-	}
-
 	ctx, done := context.WithCancel(context.Background())
 	o := &Switch{
 		stats:             stats,
 		logger:            logger,
 		maxInFlight:       conf.Switch.MaxInFlight,
 		transactions:      nil,
-		outputs:           make([]types.Output, lOutputs),
-		conditions:        make([]types.Condition, lOutputs),
-		fallthroughs:      make([]bool, lOutputs),
 		retryUntilSuccess: conf.Switch.RetryUntilSuccess,
 		strictMode:        conf.Switch.StrictMode,
 		closedChan:        make(chan struct{}),
 		ctx:               ctx,
 		close:             done,
+	}
+
+	lCases := len(conf.Switch.Cases)
+	lOutputs := len(conf.Switch.Outputs)
+	if lCases < 2 && lOutputs < 2 {
+		return nil, ErrSwitchNoOutputs
+	}
+	if lCases > 0 {
+		if lOutputs > 0 {
+			return nil, errors.New("combining switch cases with deprecated outputs is not supported")
+		}
+		o.outputs = make([]types.Output, lCases)
+		o.checks = make([]*mapping.Executor, lCases)
+		o.fallthroughs = make([]bool, lCases)
+	} else {
+		o.outputs = make([]types.Output, lOutputs)
+		o.conditions = make([]types.Condition, lOutputs)
+		o.fallthroughs = make([]bool, lOutputs)
 	}
 
 	var err error
@@ -317,6 +292,23 @@ func NewSwitch(
 		o.fallthroughs[i] = oConf.Fallthrough
 	}
 
+	for i, cConf := range conf.Switch.Cases {
+		ns := fmt.Sprintf("switch.%v", i)
+		if o.outputs[i], err = New(
+			cConf.Output, mgr,
+			logger.NewModule("."+ns+".output"),
+			metrics.Combine(stats, metrics.Namespaced(stats, ns+".output")),
+		); err != nil {
+			return nil, fmt.Errorf("failed to create case '%v' output type '%v': %v", i, cConf.Output.Type, err)
+		}
+		if len(cConf.Check) > 0 {
+			if o.checks[i], err = bloblang.NewMapping("", cConf.Check); err != nil {
+				return nil, fmt.Errorf("failed to parse case '%v' check mapping: %v", i, err)
+			}
+		}
+		o.fallthroughs[i] = cConf.Fallthrough
+	}
+
 	o.outputTsChans = make([]chan types.Transaction, len(o.outputs))
 	for i := range o.outputTsChans {
 		o.outputTsChans[i] = make(chan types.Transaction)
@@ -336,7 +328,12 @@ func (o *Switch) Consume(transactions <-chan types.Transaction) error {
 	}
 	o.transactions = transactions
 
-	go o.loop()
+	if len(o.conditions) > 0 {
+		o.logger.Warnf("Using deprecated field `outputs` which will be removed in the next major release of Benthos. For more information check out the docs at https://www.benthos.dev/docs/components/outputs/switch.")
+		go o.loopDeprecated()
+	} else {
+		go o.loop()
+	}
 	return nil
 }
 
@@ -394,19 +391,33 @@ func (o *Switch) loop() {
 			}
 			mMsgRcvd.Incr(1)
 
-			var outputTargets []int
-			for i, oCond := range o.conditions {
-				if oCond.Check(ts.Payload) {
-					outputTargets = append(outputTargets, i)
-					if !o.fallthroughs[i] {
-						break
+			outputTargets := make([][]types.Part, len(o.checks))
+			if checksErr := ts.Payload.Iter(func(i int, p types.Part) error {
+				routedAtLeastOnce := false
+				for j, exe := range o.checks {
+					test := true
+					if exe != nil {
+						var err error
+						if test, err = exe.QueryPart(i, ts.Payload); err != nil {
+							test = false
+							o.logger.Errorf("Failed to test case %v: %v\n", j, err)
+						}
+					}
+					if test {
+						routedAtLeastOnce = true
+						outputTargets[j] = append(outputTargets[j], p.Copy())
+						if !o.fallthroughs[j] {
+							return nil
+						}
 					}
 				}
-			}
-
-			if o.strictMode && len(outputTargets) == 0 {
+				if !routedAtLeastOnce && o.strictMode {
+					return ErrSwitchNoConditionMet
+				}
+				return nil
+			}); checksErr != nil {
 				select {
-				case ts.ResponseChan <- response.NewError(ErrSwitchNoConditionMet):
+				case ts.ResponseChan <- response.NewError(checksErr):
 				case <-o.ctx.Done():
 					return
 				}
@@ -414,8 +425,12 @@ func (o *Switch) loop() {
 			}
 
 			var owg errgroup.Group
-			for _, target := range outputTargets {
-				msgCopy, i := ts.Payload.Copy(), target
+			for target, parts := range outputTargets {
+				if len(parts) == 0 {
+					continue
+				}
+				msgCopy, i := message.New(nil), target
+				msgCopy.SetAll(parts)
 				owg.Go(func() error {
 					throt := throttle.New(throttle.OptCloseChan(o.ctx.Done()))
 					resChan := make(chan types.Response)
