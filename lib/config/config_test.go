@@ -16,46 +16,38 @@ import (
 )
 
 func TestComponentExamples(t *testing.T) {
+	testComponent := func(componentType, typeName, title, conf string) {
+		s := New()
+		dec := yaml.NewDecoder(bytes.NewReader([]byte(conf)))
+		dec.KnownFields(true)
+		assert.NoError(t, dec.Decode(&s), "%v:%v:%v", componentType, typeName, title)
+
+		lints, err := Lint([]byte(conf), s)
+		assert.NoError(t, err, "%v:%v:%v", componentType, typeName, title)
+		for _, lint := range lints {
+			t.Errorf("%v %v:%v:%v", lint, componentType, typeName, title)
+		}
+
+		type confAlias Type
+		sAliased := confAlias(New())
+		dec = yaml.NewDecoder(bytes.NewReader([]byte(conf)))
+		dec.KnownFields(true)
+		assert.NoError(t, dec.Decode(&sAliased), "%v:%v:%v", componentType, typeName, title)
+	}
+
 	for typeName, ctor := range input.Constructors {
 		for _, example := range ctor.Examples {
-			s := New()
-			dec := yaml.NewDecoder(bytes.NewReader([]byte(example.Config)))
-			dec.KnownFields(true)
-			assert.NoError(t, dec.Decode(&s), "%v:%v:%v", "input", typeName, example.Title)
-
-			type confAlias Type
-			sAliased := confAlias(New())
-			dec = yaml.NewDecoder(bytes.NewReader([]byte(example.Config)))
-			dec.KnownFields(true)
-			assert.NoError(t, dec.Decode(&sAliased), "%v:%v:%v", "input", typeName, example.Title)
+			testComponent("input", typeName, example.Title, example.Config)
 		}
 	}
 	for typeName, ctor := range processor.Constructors {
 		for _, example := range ctor.Examples {
-			s := New()
-			dec := yaml.NewDecoder(bytes.NewReader([]byte(example.Config)))
-			dec.KnownFields(true)
-			assert.NoError(t, dec.Decode(&s), "%v:%v:%v", "processor", typeName, example.Title)
-
-			type confAlias Type
-			sAliased := confAlias(New())
-			dec = yaml.NewDecoder(bytes.NewReader([]byte(example.Config)))
-			dec.KnownFields(true)
-			assert.NoError(t, dec.Decode(&sAliased), "%v:%v:%v", "processor", typeName, example.Title)
+			testComponent("processor", typeName, example.Title, example.Config)
 		}
 	}
 	for typeName, ctor := range output.Constructors {
 		for _, example := range ctor.Examples {
-			s := New()
-			dec := yaml.NewDecoder(bytes.NewReader([]byte(example.Config)))
-			dec.KnownFields(true)
-			assert.NoError(t, dec.Decode(&s), "%v:%v:%v", "output", typeName, example.Title)
-
-			type confAlias Type
-			sAliased := confAlias(New())
-			dec = yaml.NewDecoder(bytes.NewReader([]byte(example.Config)))
-			dec.KnownFields(true)
-			assert.NoError(t, dec.Decode(&sAliased), "%v:%v:%v", "output", typeName, example.Title)
+			testComponent("output", typeName, example.Title, example.Config)
 		}
 	}
 }

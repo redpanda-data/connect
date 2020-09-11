@@ -140,6 +140,9 @@ root.bar.id = this.user.id`,
 }`,
 			),
 		},
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			return conf.Branch.Sanitise()
+		},
 	}
 }
 
