@@ -5,7 +5,7 @@ description: Find out about AWS components in Benthos
 
 There are many components within Benthos which utilise AWS services. You will find that each of these components contains a configuration section under the field `credentials`, of the format:
 
-```yaml
+```yml
 credentials:
   profile: ""
   id: ""
@@ -29,7 +29,7 @@ By explicitly setting the credentials you are using at the component level it's 
 
 If you are using your shared credentials file but wish to explicitly select a profile set the `profile` field:
 
-```yaml
+```yml
 credentials:
   profile: foo
 ```
@@ -38,7 +38,7 @@ credentials:
 
 If you are using long term credentials for your account you only need to set the fields `id` and `secret`:
 
-```yaml
+```yml
 credentials:
   id: foo     # aws_access_key_id
   secret: bar # aws_secret_access_key
@@ -46,7 +46,7 @@ credentials:
 
 If you are using short term credentials then you will also need to set the field `token`:
 
-```yaml
+```yml
 credentials:
   id: foo     # aws_access_key_id
   secret: bar # aws_secret_access_key
@@ -57,7 +57,7 @@ credentials:
 
 It's also possible to configure Benthos to [assume a role][assuming-role] using your credentials by setting the field `role` to your target role ARN.
 
-```yaml
+```yml
 credentials:
   role: fooarn # Role ARN
 ```
@@ -66,7 +66,7 @@ This does NOT require explicit credentials, but it's possible to use both.
 
 If you need to assume a role owned by another organisation they might require you to [provide an external ID][role-external-id], in which case place it in the field `role_external_id`:
 
-```yaml
+```yml
 credentials:
   role: fooarn # Role ARN
   role_external_id: bar_id

@@ -8,16 +8,20 @@ If you have processors that are heavy on CPU and aren't specific to a certain in
 
 ```yaml
 input:
-  type: foo
+  resource: foo
 
 pipeline:
   threads: 4
   processors:
-    - jmespath:
-        query: "reservations[].instances[].[tags[?Key=='Name'].Values[] | [0], type, state.name]"
+    - bloblang: |
+        root = this
+        fans = fans.map_each(match {
+          this.obsession > 0.5 => this
+          _ => deleted()
+        })
 
 output:
-  type: bar
+  resource: bar
 ```
 
 If the field `threads` is set to `0` it will automatically match the number of logical CPUs available.
@@ -35,16 +39,20 @@ input:
   broker:
     copies: 8
     inputs:
-      - type: baz
+      - resource: baz
 
 pipeline:
   threads: 4
   processors:
-    - jmespath:
-        query: "reservations[].instances[].[tags[?Key=='Name'].Values[] | [0], type, state.name]"
+    - bloblang: |
+        root = this
+        fans = fans.map_each(match {
+          this.obsession > 0.5 => this
+          _ => deleted()
+        })
 
 output:
-  type: bar
+  resource: bar
 ```
 
 The disadvantage of this set up is that increasing the number of consuming clients potentially puts unnecessary stress on your data source.
@@ -55,7 +63,7 @@ The disadvantage of this set up is that increasing the number of consuming clien
 
 ```yaml
 input:
-  type: foo
+  resource: foo
 
 buffer:
   memory:
@@ -64,15 +72,18 @@ buffer:
 pipeline:
   threads: 4
   processors:
-    - jmespath:
-        query: "reservations[].instances[].[tags[?Key=='Name'].Values[] | [0], type, state.name]"
+    - bloblang: |
+        root = this
+        fans = fans.map_each(match {
+          this.obsession > 0.5 => this
+          _ => deleted()
+        })
 
 output:
-  type: bar
+  resource: bar
 ```
 
 [processors]: /docs/components/processors/about
-[jmespath-processor]: /docs/components/processors/jmespath
 [split-proc]: /docs/components/processors/split
 [broker-input]: /docs/components/inputs/broker
 [kafka-input]: /docs/components/inputs/kafka

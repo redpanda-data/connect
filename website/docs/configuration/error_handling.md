@@ -18,9 +18,9 @@ It's possible to define a list of processors which should be skipped for message
 pipeline:
   processors:
     - try:
-      - type: foo
-      - type: bar # Skipped if foo failed
-      - type: baz # Skipped if foo or bar failed
+      - resource: foo
+      - resource: bar # Skipped if foo failed
+      - resource: baz # Skipped if foo or bar failed
 ```
 
 ## Recover Failed Messages
@@ -30,9 +30,9 @@ Failed messages can be fed into their own processor steps with a [`catch` proces
 ```yaml
 pipeline:
   processors:
-    - type: foo # Processor that might fail
+    - resource: foo # Processor that might fail
     - catch:
-      - type: bar # Recover here
+      - resource: bar # Recover here
 ```
 
 Once messages finish the catch block they will have their failure flags removed and are treated like regular messages. If this behaviour is not desired then it is possible to simulate a catch block with a [`switch` processor][processor.switch] placed within a [`for_each` processor][processor.for_each]:
@@ -40,13 +40,13 @@ Once messages finish the catch block they will have their failure flags removed 
 ```yaml
 pipeline:
   processors:
-    - type: foo # Processor that might fail
+    - resource: foo # Processor that might fail
     - for_each:
       - switch:
         - condition:
             bloblang: errored()
           processors:
-            - type: bar # Recover here
+            - resource: bar # Recover here
 ```
 
 ## Logging Errors
@@ -58,7 +58,7 @@ For example, when catching failed processors you can [`log`][processor.log] the 
 ```yaml
 pipeline:
   processors:
-    - type: foo # Processor that might fail
+    - resource: foo # Processor that might fail
     - catch:
       - log:
           message: "Processing failed due to: ${!error()}"
@@ -69,7 +69,7 @@ Or perhaps augment the message payload with the error message:
 ```yaml
 pipeline:
   processors:
-    - type: foo # Processor that might fail
+    - resource: foo # Processor that might fail
     - catch:
       - bloblang: |
           root = this
@@ -91,7 +91,7 @@ pipeline:
             bloblang: errored()
           processors:
             - type: catch # Wipe any previous error
-            - type: foo # Attempt this processor until success
+            - resource: foo # Attempt this processor until success
 ```
 
 This loop will block the pipeline and prevent the blocking message from being acknowledged. It is therefore usually a good idea in practice to use the `max_loops` field to set a limit to the number of attempts to make so that the pipeline can unblock itself without intervention.
@@ -118,10 +118,10 @@ output:
     cases:
       - check: errored()
         output:
-          type: foo # Dead letter queue
+          resource: foo # Dead letter queue
 
       - output:
-          type: bar # Everything else
+          resource: bar # Everything else
 ```
 
 [processors]: /docs/components/processors/about

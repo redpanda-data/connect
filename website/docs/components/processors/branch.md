@@ -31,7 +31,6 @@ branch:
   result_map: ""
 ```
 
-,
 This is useful for preserving the original message contents when using
 processors that would otherwise replace the entire contents.
 

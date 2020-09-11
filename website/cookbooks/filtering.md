@@ -8,7 +8,7 @@ Events are like eyebrows, sometimes it's best to just get rid of them. Filtering
 
 ## The Basic Filter
 
-Dropping events with Bloblang is done by mapping the function `deleted()` to the `root` of the mapped document. To remove all events indiscriminantly you can simply do:
+Dropping events with [Bloblang][guides.bloblang] is done by mapping the function `deleted()` to the `root` of the mapped document. To remove all events indiscriminantly you can simply do:
 
 ```yaml
 pipeline:
@@ -23,8 +23,8 @@ pipeline:
   processors:
   - bloblang: |
       root = if meta("topic").or("") == "foo" ||
-        doc.type.or("") == "bar" ||
-        doc.urls.contains("https://www.benthos.dev/").catch(false) {
+        this.doc.type == "bar" ||
+        this.doc.urls.contains("https://www.benthos.dev/").catch(false) {
         deleted()
       }
 ```
@@ -64,3 +64,4 @@ pipeline:
 [processors.bloblang]: /docs/components/processors/bloblang
 [bloblang.match]: /docs/guides/bloblang/about#pattern-matching
 [bloblang.if]: /docs/guides/bloblang/about#conditional-mapping
+[guides.bloblang]: /docs/guides/bloblang/about

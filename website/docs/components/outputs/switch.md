@@ -142,7 +142,7 @@ output:
           processors:
             - bloblang: |
                 root = this
-                root.type = this.type.not_null() | "unknown"
+                root.type = this.type | "unknown"
 ```
 
 </TabItem>

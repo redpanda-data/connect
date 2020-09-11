@@ -9,7 +9,7 @@ Conditions themselves can modify ([`not`][condition.not]) and combine ([`and`][c
 
 The format of a condition is similar to other Benthos types:
 
-```yaml
+```yml
 condition:
   bloblang: meta("kafka_topic") == "foo"
 ```
@@ -23,9 +23,9 @@ pipeline:
       - condition:
           bloblang: meta("kafka_topic") == "foo"
         processors:
-        - foo: {}
+          - resource: foo
       - processors:
-        - bar: {}
+          - resource: bar
 ```
 
 ### Batching and Multipart Messages

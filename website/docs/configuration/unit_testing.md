@@ -33,7 +33,7 @@ output:
 
 In order to write unit tests for this config we must accompany it with a file of the same name and extension, but suffixed with `_benthos_test`, which in this case would be `foo_benthos_test.yaml`. We can generate an example definition for this config with `benthos test --generate ./foo.yaml`:
 
-```yaml
+```yml
 parallel: true
 tests:
   - name: example test
@@ -70,7 +70,7 @@ If the number of batches defined does not match the resulting number of batches 
 
 ### `content_equals`
 
-```yaml
+```yml
 content_equals: example content
 ```
 
@@ -78,7 +78,7 @@ Checks the full raw contents of a message against a value.
 
 ### `content_matches`
 
-```yaml
+```yml
 content_matches: "^foo [a-z]+ bar$"
 ```
 
@@ -86,7 +86,7 @@ Checks whether the full raw contents of a message matches a regular expression (
 
 ### `metadata_equals`
 
-```yaml
+```yml
 metadata_equals:
   example_key: example metadata value
 ```

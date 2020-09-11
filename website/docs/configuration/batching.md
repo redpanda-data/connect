@@ -14,7 +14,10 @@ For most users the only benefit of batching messages is improving throughput ove
 
 ```yaml
 output:
-  foo:
+  kafka:
+    addresses: [ todo:9092 ]
+    topic: benthos_stream
+
     # Either send batches when they reach 10 messages or when 100ms has passed
     # since the last batch.
     batching:
@@ -28,13 +31,15 @@ However, a small number of inputs such as [`kafka`][input_kafka] must be consume
 input:
   kafka:
     addresses: [ todo:9092 ]
-    topic: baz
+    topic: benthos_input_stream
     batching:
       count: 10
       period: 100ms
 
 output:
-  type: foo
+  kafka:
+    addresses: [ todo:9092 ]
+    topic: benthos_stream
 ```
 
 Inputs that behave this way are documented as such and have a `batching` configuration block.
@@ -45,8 +50,8 @@ Sometimes you may prefer to create your batches before processing in order to be
 input:
   broker:
     inputs:
-      - type: foo
-      - type: bar
+      - resource: foo
+      - resource: bar
     batching:
       count: 50
       period: 500ms
@@ -62,12 +67,14 @@ One of the more powerful features of Benthos is that all processors are "batch a
 pipeline:
   processors:
     # This processor only acts on the first message of a batch
-    - jmespath:
+    - protobuf:
         parts: [ 0 ]
-        query: "{ nested: @, links: join(', ', data.urls) }"
+        operator: to_json
+        message: header.Message
+        import_path: /tmp/protos
 ```
 
-And some processors such as [`sleep`][processor.sleep] are execute once per batch, you can also avoid this behaviour with the [`for_each` processor][proc_for_each]:
+And some processors such as [`sleep`][processor.sleep] are executed once per batch, you can avoid this behaviour with the [`for_each` processor][proc_for_each]:
 
 ```yaml
 pipeline:
@@ -83,12 +90,12 @@ There's a vast number of processors that specialise in operations across batches
 ```yaml
 pipeline:
   processors:
-  - group_by_value:
-      value: ${! meta("kafka_partition") }
-  - archive:
-      format: tar
-  - compress:
-      algorithm: gzip
+    - group_by_value:
+        value: ${! meta("kafka_partition") }
+    - archive:
+        format: tar
+    - compress:
+        algorithm: gzip
 
 output:
   s3:
@@ -113,14 +120,14 @@ A message batch (or multiple part message) can be broken down into smaller batch
 ```yaml
 input:
   # Consume messages that arrive in three parts.
-  type: foo
+  resource: foo
   processors:
     # Drop the third part
     - select_parts:
         parts: [ 0, 1 ]
     # Then break our message parts into individual messages
     - split:
-        count: 1
+        size: 1
 ```
 
 This is also useful when your input source creates batches that are too large for your output protocol:
@@ -133,7 +140,7 @@ input:
 pipeline:
   processors:
     - decompress:
-        algorith: gzip
+        algorithm: gzip
     - unarchive:
         format: tar
     # Limit batch sizes to 5MB
@@ -156,7 +163,10 @@ This allows you to combine conditions:
 
 ```yaml
 output:
-  foo:
+  kafka:
+    addresses: [ todo:9092 ]
+    topic: benthos_stream
+
     # Either send batches when they reach 10 messages or when 100ms has passed
     # since the last batch.
     batching:
@@ -175,8 +185,8 @@ output:
     batching:
       count: 10
       processors:
-      - archive:
-          format: lines
+        - archive:
+            format: lines
 ```
 
 The above config will batch up messages and then merge them into a line delimited format before sending it over HTTP. This is an easier format to parse than the default which would have been [rfc1342](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).

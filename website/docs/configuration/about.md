@@ -165,7 +165,7 @@ you to break your configs down significantly.
 
 To reference a config snippet use the `$ref` keyword:
 
-```yaml
+```yml
 local_reference:
   $ref: '#/path/to/field'
 
@@ -192,7 +192,7 @@ And we wished to use this snippet within a larger configuration file
 `./config/bar.yaml`. We can do so by adding an object with a key `$ref` and a
 string value which is the path to our snippet:
 
-```yaml
+```yml
 pipeline:
   processors:
   - decompress:
@@ -226,7 +226,7 @@ It is further possible to use environment variables to specify which snippet
 to load. This works because environment variable interpolations within 
 configurations are resolved _before_ references are resolved.
 
-```yaml
+```yml
 pipeline:
   processors:
   - decompress:
@@ -252,16 +252,13 @@ all they actually needed to see was something like:
 
 ```yaml
 input:
-  type: amqp
-  amqp:
+  type: amqp_0_9
+  amqp_0_9:
     url: amqp://guest:guest@localhost:5672/
     consumer_tag: benthos-consumer
-    exchange: benthos-exchange
-    exchange_type: direct
-    key: benthos-key
+    queue: benthos-queue
     prefetch_count: 10
     prefetch_size: 0
-    queue: benthos-queue
 output:
   type: stdout
 ```
@@ -274,7 +271,7 @@ If, for example, we wanted to generate a config with a websocket input, a Kafka
 output and a Bloblang processor in the middle, we could do it with the following
 command:
 
-```yaml
+```text
 benthos create websocket/bloblang/kafka
 ```
 
@@ -309,7 +306,7 @@ AMQP, but there is a typo in our config struct:
 ```yaml
 input:
   type: amqp_0_9
-  amqq_0_9:
+  amqp_0_9:
     url: amqp://guest:guest@rabbitmqserver:5672/
 ```
 

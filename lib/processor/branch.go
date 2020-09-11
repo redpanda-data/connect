@@ -31,7 +31,7 @@ The ` + "`branch`" + ` processor allows you to create a new request message via
 a [Bloblang mapping](/docs/guides/bloblang/about), execute a list of processors
 on the request messages, and, finally, map the result back into the source
 message using another mapping.`,
-		Description: `,
+		Description: `
 This is useful for preserving the original message contents when using
 processors that would otherwise replace the entire contents.
 

@@ -3,6 +3,7 @@
 TAGS =
 
 INSTALL_DIR        = $(GOPATH)/bin
+WEBSITE_DIR        = ./website
 DEST_DIR           = ./target
 PATHINSTBIN        = $(DEST_DIR)/bin
 PATHINSTTOOLS      = $(DEST_DIR)/tools
@@ -88,11 +89,10 @@ lint:
 
 test: $(APPS)
 	@go test $(GO_FLAGS) -timeout 300s -race ./...
-	@$(PATHINSTBIN)/benthos lint ./config/... ./website/cookbooks/*.md
 	@$(PATHINSTBIN)/benthos test ./config/test/...
 
 test-wasm-build:
-	@GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o ./target/wasm_test ./cmd/benthos
+	@GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o $(DEST_DIR)/wasm_test ./cmd/benthos
 
 test-race:
 	@go test $(GO_FLAGS) -timeout 300s -race ./...
@@ -107,6 +107,12 @@ clean:
 	rm -rf $(DEST_DIR)/serverless
 	rm -rf $(PATHINSTDOCKER)
 
-docs: $(TOOLS)
+docs: $(APPS) $(TOOLS)
 	@$(PATHINSTTOOLS)/benthos_config_gen
 	@$(PATHINSTTOOLS)/benthos_docs_gen
+	@$(PATHINSTBIN)/benthos lint ./config/... \
+		$(WEBSITE_DIR)/cookbooks/*.md \
+		$(WEBSITE_DIR)/docs/components/**/about.md \
+		$(WEBSITE_DIR)/docs/guides/*.md \
+		$(WEBSITE_DIR)/docs/guides/**/*.md \
+		$(WEBSITE_DIR)/docs/configuration/*.md

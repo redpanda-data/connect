@@ -20,7 +20,7 @@ is sent to the output destination.
 The flow of a Benthos lambda function with an output configured looks like this:
 
 ```text
-.                   benthos-lambda
+                    benthos-lambda
            +------------------------------+
            |                              |
        -------> Processors ----> Output -----> Somewhere
@@ -41,7 +41,7 @@ returned containing the reason for the failure.
 The flow when an output is not configured looks like this:
 
 ```text
-.              benthos-lambda
+               benthos-lambda
            +--------------------+
            |                    |
        -------> Processors --\  |
@@ -72,7 +72,7 @@ For example, if we wished for our lambda function to send a payload to Kafka
 and also return the same payload back to the caller we could use a
 [broker][output-broker]:
 
-```yaml
+```yml
 output:
   broker:
     pattern: fan_out

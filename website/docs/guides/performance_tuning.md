@@ -20,8 +20,9 @@ Next, if your source supports multiple parallel consumers then you can try doing
 
 ```yaml
 input:
-  foo:
-    field1: etc
+  http_client:
+    url: http://localhost:4195/get
+    verb: GET
 ```
 
 You could change to:
@@ -31,8 +32,9 @@ input:
   broker:
     copies: 4
     inputs:
-    - foo:
-        field1: etc
+      - http_client:
+          url: http://localhost:4195/get
+          verb: GET
 ```
 
 Which would create the exact same consumer as before with four connections in total. Try increasing the number of copies to see how that affects the throughput. If your multiple consumers would require different configurations then set copies to `1` and write each consumer as a separate object in the `inputs` array.
@@ -61,14 +63,14 @@ Most outputs will send data quicker when messages are batched, this is often don
 
 If your output sink supports multiple parallel writers then it can greatly increase your throughput to have multiple connections configured.
 
-Increasing the number of parallel output sinks is similar to doing the same for input sources and is done using a [broker][broker-output]. The output broker
-type supports a few different routing patterns depending on your intention. In this case we want to maximize throughput so our best choice is a `greedy`
-pattern. For example, if you started with:
+Increasing the number of parallel output sinks is similar to doing the same for input sources and is done using a [broker][broker-output]. The output broker type supports a few different routing patterns depending on your intention. In this case we want to maximize throughput so our best choice is a `greedy` pattern. For example, if you started with:
 
 ```yaml
 output:
-  foo:
-    field1: etc
+  kafka:
+    addresses:
+      - localhost:9092
+    topic: benthos_stream
 ```
 
 You could change to:
@@ -79,8 +81,10 @@ output:
     pattern: greedy
     copies: 4
     outputs:
-    - foo:
-        field1: etc
+      - kafka:
+          addresses:
+            - localhost:9092
+          topic: benthos_stream
 ```
 
 Which would create the exact same output writer as before with four copies in total. Try increasing the number of copies to see how that affects the throughput. If your multiple output writers would require different configurations (client ids, for example) then set copies to `1` and write each consumer as a separate object in the `outputs` array.
