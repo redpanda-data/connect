@@ -66,23 +66,20 @@ output:
 [Processors](/docs/components/processors/about) can be listed to apply across
 individual outputs or all outputs:
 
-``` yaml
+```yaml
 output:
   broker:
     pattern: fan_out
     outputs:
-    - foo:
-        foo_field_1: value1
-    - bar:
-        bar_field_1: value2
-        bar_field_2: value3
-      # Processors only applied to messages sent to bar.
-      processors:
-      - type: bar_processor
+      - resource: foo
+      - resource: bar
+        # Processors only applied to messages sent to bar.
+        processors:
+          - resource: bar_processor
 
   # Processors applied to messages sent to all brokered outputs.
   processors:
-  - type: some_processor
+    - resource: general_processor
 ```
 
 ## Fields

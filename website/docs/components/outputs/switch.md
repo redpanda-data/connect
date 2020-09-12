@@ -30,6 +30,7 @@ on their contents.
 # Common config fields, showing default values
 output:
   switch:
+    max_in_flight: 1
     cases: []
 ```
 
@@ -84,7 +85,9 @@ Default: `1`
 
 ### `cases`
 
-A list of switch cases, each consisting of an [`output`](/docs/components/outputs/about), a [Bloblang query field `check`](/docs/guides/bloblang/about) and a field `fallthrough`, indicating whether the next case should also be tested if the current resolves to `true`. If the field `check` is left empty then the case always passes, otherwise the result is expected to be a boolean value.
+A list of switch cases, each consisting of an [`output`](/docs/components/outputs/about), a [Bloblang query field `check`](/docs/guides/bloblang/about) and a field `continue`, indicating whether the next case should also be tested if the current resolves to true.
+
+If the field `check` is left empty then the case always passes, otherwise the result is expected to be a boolean value.
 
 
 Type: `array`  
@@ -95,7 +98,7 @@ Default: `[]`
 
 cases:
   - check: this.urls.contains("http://benthos.dev")
-    fallthrough: true
+    continue: true
     output:
       cache:
         key: ${!json("id")}
@@ -108,11 +111,12 @@ cases:
 
 ## Examples
 
-<Tabs defaultValue="Multiplexing" values={[
-{ label: 'Multiplexing', value: 'Multiplexing', },
+<Tabs defaultValue="Basic Multiplexing" values={[
+{ label: 'Basic Multiplexing', value: 'Basic Multiplexing', },
+{ label: 'Control Flow', value: 'Control Flow', },
 ]}>
 
-<TabItem value="Multiplexing">
+<TabItem value="Basic Multiplexing">
 
 
 The most common use for a switch output is to multiplex messages across a range of output destinations. The following config checks the contents of the field `type` of messages and sends `foo` type messages to an `amqp_1` output, `bar` type messages to a `gcp_pubsub` output, and everything else to a `redis_streams` output.
@@ -143,6 +147,32 @@ output:
             - bloblang: |
                 root = this
                 root.type = this.type | "unknown"
+```
+
+</TabItem>
+<TabItem value="Control Flow">
+
+
+The `continue` field allows messages that have passed a case to be tested against the next one also. This can be useful when combining non-mutually-exclusive case checks.
+
+In the following example a message that passes both the check of the first case as well as the second will be routed to both.
+
+```yaml
+output:
+  switch:
+    cases:
+      - check: 'this.user.interests.contains("walks").catch(false)'
+        output:
+          amqp_1:
+            url: amqps://guest:guest@localhost:5672/
+            target_address: queue:/people_what_think_good
+        continue: true
+
+      - check: 'this.user.dislikes.contains("videogames").catch(false)'
+        output:
+          gcp_pubsub:
+            project: people
+            topic: that_i_dont_want_to_hang_with
 ```
 
 </TabItem>

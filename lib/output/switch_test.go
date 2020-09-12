@@ -46,7 +46,7 @@ func TestSwitchNoConditions(t *testing.T) {
 	mockOutputs := []*MockOutputType{}
 	for i := 0; i < nOutputs; i++ {
 		conf.Switch.Cases = append(conf.Switch.Cases, NewSwitchConfigCase())
-		conf.Switch.Cases[i].Fallthrough = true
+		conf.Switch.Cases[i].Continue = true
 		mockOutputs = append(mockOutputs, &MockOutputType{})
 	}
 
@@ -113,7 +113,7 @@ func TestSwitchNoRetries(t *testing.T) {
 	mockOutputs := []*MockOutputType{}
 	for i := 0; i < nOutputs; i++ {
 		conf.Switch.Cases = append(conf.Switch.Cases, NewSwitchConfigCase())
-		conf.Switch.Cases[i].Fallthrough = true
+		conf.Switch.Cases[i].Continue = true
 		mockOutputs = append(mockOutputs, &MockOutputType{})
 	}
 
@@ -693,7 +693,7 @@ func TestSwitchAtLeastOnce(t *testing.T) {
 	conf := NewConfig()
 	for i := 0; i < len(mockOutputs); i++ {
 		outConf := NewSwitchConfigCase()
-		outConf.Fallthrough = true
+		outConf.Continue = true
 		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
 	}
 
@@ -775,7 +775,7 @@ func TestSwitchShutDownFromErrorResponse(t *testing.T) {
 	conf := NewConfig()
 	for i := 0; i < len(mockOutputs); i++ {
 		outConf := NewSwitchConfigCase()
-		outConf.Fallthrough = true
+		outConf.Continue = true
 		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
 	}
 
@@ -837,7 +837,7 @@ func TestSwitchShutDownFromReceive(t *testing.T) {
 	conf := NewConfig()
 	for i := 0; i < len(mockOutputs); i++ {
 		outConf := NewSwitchConfigCase()
-		outConf.Fallthrough = true
+		outConf.Continue = true
 		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
 	}
 
@@ -883,7 +883,7 @@ func TestSwitchShutDownFromSend(t *testing.T) {
 	conf := NewConfig()
 	for i := 0; i < len(mockOutputs); i++ {
 		outConf := NewSwitchConfigCase()
-		outConf.Fallthrough = true
+		outConf.Continue = true
 		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
 	}
 
@@ -922,7 +922,7 @@ func TestSwitchBackPressure(t *testing.T) {
 	conf := NewConfig()
 	for i := 0; i < len(mockOutputs); i++ {
 		outConf := NewSwitchConfigCase()
-		outConf.Fallthrough = true
+		outConf.Continue = true
 		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
 	}
 

@@ -58,16 +58,19 @@ This field determines whether an error should be reported if no condition is met
 If set to true, an error is propagated back to the input level. The default
 behavior is false, which will drop the message.`,
 			),
-			docs.FieldAdvanced(
+			docs.FieldCommon(
 				"max_in_flight", `
 The maximum number of parallel message batches to have in flight at any given time.`,
 			),
 			docs.FieldCommon(
 				"cases",
-				"A list of switch cases, each consisting of an [`output`](/docs/components/outputs/about), a [Bloblang query field `check`](/docs/guides/bloblang/about) and a field `fallthrough`, indicating whether the next case should also be tested if the current resolves to `true`. If the field `check` is left empty then the case always passes, otherwise the result is expected to be a boolean value.",
+				`
+A list of switch cases, each consisting of an `+"[`output`](/docs/components/outputs/about), a [Bloblang query field `check`](/docs/guides/bloblang/about) and a field `continue`"+`, indicating whether the next case should also be tested if the current resolves to true.
+
+If the field `+"`check`"+` is left empty then the case always passes, otherwise the result is expected to be a boolean value.`,
 				[]interface{}{
 					map[string]interface{}{
-						"fallthrough": true,
+						"continue": true,
 						"output": map[string]interface{}{
 							"cache": map[string]interface{}{
 								"target": "foo",
@@ -93,7 +96,7 @@ The maximum number of parallel message batches to have in flight at any given ti
 		},
 		Examples: []docs.AnnotatedExample{
 			{
-				Title: "Multiplexing",
+				Title: "Basic Multiplexing",
 				Summary: `
 The most common use for a switch output is to multiplex messages across a range of output destinations. The following config checks the contents of the field ` + "`type` of messages and sends `foo` type messages to an `amqp_1` output, `bar` type messages to a `gcp_pubsub` output, and everything else to a `redis_streams` output" + `.
 
@@ -124,6 +127,30 @@ output:
                 root.type = this.type | "unknown"
 `,
 			},
+			{
+				Title: "Control Flow",
+				Summary: `
+The ` + "`continue`" + ` field allows messages that have passed a case to be tested against the next one also. This can be useful when combining non-mutually-exclusive case checks.
+
+In the following example a message that passes both the check of the first case as well as the second will be routed to both.`,
+				Config: `
+output:
+  switch:
+    cases:
+      - check: 'this.user.interests.contains("walks").catch(false)'
+        output:
+          amqp_1:
+            url: amqps://guest:guest@localhost:5672/
+            target_address: queue:/people_what_think_good
+        continue: true
+
+      - check: 'this.user.dislikes.contains("videogames").catch(false)'
+        output:
+          gcp_pubsub:
+            project: people
+            topic: that_i_dont_want_to_hang_with
+`,
+			},
 		},
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			m := map[string]interface{}{
@@ -138,9 +165,9 @@ output:
 					return nil, err
 				}
 				sanit := map[string]interface{}{
-					"check":       c.Check,
-					"output":      sanOutput,
-					"fallthrough": c.Fallthrough,
+					"check":    c.Check,
+					"output":   sanOutput,
+					"continue": c.Continue,
 				}
 				casesSlice = append(casesSlice, sanit)
 			}
@@ -195,17 +222,17 @@ func NewSwitchConfig() SwitchConfig {
 
 // SwitchConfigCase contains configuration fields per output of a switch type.
 type SwitchConfigCase struct {
-	Check       string `json:"check" yaml:"check"`
-	Fallthrough bool   `json:"fallthrough" yaml:"fallthrough"`
-	Output      Config `json:"output" yaml:"output"`
+	Check    string `json:"check" yaml:"check"`
+	Continue bool   `json:"continue" yaml:"continue"`
+	Output   Config `json:"output" yaml:"output"`
 }
 
 // NewSwitchConfigCase creates a new switch output config with default values.
 func NewSwitchConfigCase() SwitchConfigCase {
 	return SwitchConfigCase{
-		Check:       "",
-		Fallthrough: false,
-		Output:      NewConfig(),
+		Check:    "",
+		Continue: false,
+		Output:   NewConfig(),
 	}
 }
 
@@ -226,6 +253,7 @@ type Switch struct {
 	outputs           []types.Output
 	checks            []*mapping.Executor
 	conditions        []types.Condition
+	continues         []bool
 	fallthroughs      []bool
 
 	ctx        context.Context
@@ -265,6 +293,7 @@ func NewSwitch(
 		}
 		o.outputs = make([]types.Output, lCases)
 		o.checks = make([]*mapping.Executor, lCases)
+		o.continues = make([]bool, lCases)
 		o.fallthroughs = make([]bool, lCases)
 	} else {
 		o.outputs = make([]types.Output, lOutputs)
@@ -306,7 +335,7 @@ func NewSwitch(
 				return nil, fmt.Errorf("failed to parse case '%v' check mapping: %v", i, err)
 			}
 		}
-		o.fallthroughs[i] = cConf.Fallthrough
+		o.continues[i] = cConf.Continue
 	}
 
 	o.outputTsChans = make([]chan types.Transaction, len(o.outputs))
@@ -406,7 +435,7 @@ func (o *Switch) loop() {
 					if test {
 						routedAtLeastOnce = true
 						outputTargets[j] = append(outputTargets[j], p.Copy())
-						if !o.fallthroughs[j] {
+						if !o.continues[j] {
 							return nil
 						}
 					}
