@@ -4,91 +4,73 @@ pipeline:
     - bloblang: 'root = {}'
     - workflow:
         meta_path: results
-        branches:
-          dockerhub:
-            request_map: 'root = ""'
-            processors:
-              - try:
-                # Grab docker dl count
-                - http:
-                    url: https://hub.docker.com/v2/repositories/jeffail/benthos/
-                    verb: GET
-                    retries: 0
-                - bloblang: |
-                    type = "gauge"
-                    source = "docker"
-                    dist = "docker"
-                    download_count = pull_count
-                - resource: set_metrics
-
-          github:
-            request_map: 'root = ""'
-            processors:
-              - try:
-                # Grab github latest release dl count
-                - http:
-                    url: https://api.github.com/repos/Jeffail/benthos/releases/latest
-                    verb: GET
-                    retries: 0
-                - bloblang: |
-                    root = assets.map_each(match {
-                      "type":"gauge",
-                      "source":"github",
-                      "dist": name.re_replace("^benthos-?((lambda_)|_)[0-9\\.]+_([^\\.]+).*", "$2$3"),
-                      "download_count": download_count
-                    } {
-                      dist != "checksums" => this
-                      _ => deleted()
-                    })
-                - unarchive:
-                    format: json_array
-                - resource: set_metrics
-                - bloblang: 'root = if batch_index() != 0 { deleted() }'
-
-          homebrew:
-            request_map: 'root = ""'
-            processors:
-              - try:
-                - http:
-                    url: https://formulae.brew.sh/api/formula/benthos.json
-                    verb: GET
-                    retries: 0
-                - bloblang: |
-                    type = "gauge"
-                    source = "homebrew"
-                    dist = "brew"
-                    download_count = analytics.install.30d.benthos
-                - resource: set_metrics
+        order: [ [ dockerhub, github, homebrew ] ]
 
 resources:
   processors:
-    set_metrics:
-      try:
-        - switch:
-           - condition:
-               bloblang: type == "gauge"
-             processors:
-               - resource: metric.gauge
-           - processors:
-               - resource: metric.counter
+    dockerhub:
+      branch:
+        request_map: 'root = ""'
+        processors:
+          - try:
+            # Grab docker dl count
+            - http:
+                url: https://hub.docker.com/v2/repositories/jeffail/benthos/
+                verb: GET
+                retries: 0
+            - bloblang: |
+                root.source = "docker"
+                root.dist = "docker"
+                root.download_count = this.pull_count
+            - resource: metric.gauge
+
+    github:
+      branch:
+        request_map: 'root = ""'
+        processors:
+          - try:
+            # Grab github latest release dl count
+            - http:
+                url: https://api.github.com/repos/Jeffail/benthos/releases/latest
+                verb: GET
+                retries: 0
+            - bloblang: |
+                root = this.assets.map_each(match {
+                  "source":"github",
+                  "dist": this.name.re_replace("^benthos-?((lambda_)|_)[0-9\\.]+_([^\\.]+).*", "$2$3"),
+                  "download_count": this.download_count
+                } {
+                  this.dist != "checksums" => this
+                  _ => deleted()
+                })
+            - unarchive:
+                format: json_array
+            - resource: metric.gauge
+            - bloblang: 'root = if batch_index() != 0 { deleted() }'
+
+    homebrew:
+      branch:
+        request_map: 'root = ""'
+        processors:
+          - try:
+            - http:
+                url: https://formulae.brew.sh/api/formula/benthos.json
+                verb: GET
+                retries: 0
+            - bloblang: |
+                root.source = "homebrew"
+                root.dist = "brew"
+                root.download_count = this.analytics.install.30d.benthos
+            - resource: metric.gauge
 
     metric.gauge:
       metric:
-        labels:
-          dist: ${!json("dist")}
-          source: ${!json("source")}
-        path: BenthosDownloadGauge
         type: gauge
-        value: ${!json("download_count")}
-
-    metric.counter:
-      metric:
+        name: BenthosDownloadGauge
         labels:
-          version: ${!json("version")}
-          dist: ${!json("dist")}
-          source: ${!json("source")}
-        path: BenthosDownload
-        type: counter
+          dist: ${! json("dist") }
+          source: ${! json("source") }
+        value: ${! json("download_count") }
 
 metrics:
   cloudwatch:
@@ -96,8 +78,7 @@ metrics:
     flush_period: 500ms
     region: eu-west-1
     path_mapping: |
-      let name = this.re_replace("^resource\\.processor\\.metric\\.(gauge|counter)\\.(.*)$", "$2")
+      # Only emit our custom metric, and no internal Benthos metrics.
       root = if [
-        "BenthosDownloadGauge",
-        "BenthosDownload"
-      ].contains($name) { $name } else { deleted() }
+        "BenthosDownloadGauge"
+      ].contains(this) { this } else { deleted() }

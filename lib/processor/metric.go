@@ -24,38 +24,49 @@ func init() {
 		Categories: []Category{
 			CategoryUtility,
 		},
-		Summary: `
-Expose custom metrics by extracting values from message batches.`,
+		Summary: "Emit custom metrics by extracting values from messages.",
 		Description: `
-This processor executes once per batch, in order to execute once per message
-place it within a ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor:
+This processor works by evaluating an [interpolated field ` + "`value`" + `](/docs/configuration/interpolation#bloblang-queries) for each message and updating a emitted metric according to the [type](#types).
 
-` + "```yaml" + `
-for_each:
-- metric:
-    type: counter_by
-    path: count.custom.field
-    value: ${!json("field.some.value")}
-` + "```" + `
-
-The ` + "`path`" + ` field should be a dot separated path of the metric to be
-set and will automatically be converted into the correct format of the
-configured metric aggregator.
-
-The ` + "`value`" + ` field can be set using function interpolations described
-[here](/docs/configuration/interpolation#bloblang-queries) and is used according to the
-specific type.`,
+Custom metrics such as these are emitted along with Benthos internal metrics, where you can customize where metrics are sent, which metric names are emitted and rename them as/when appropriate. For more information check out the [metrics docs here](/docs/components/metrics/about).`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("type", "The metric [type](#types) to create.").HasOptions(),
-			docs.FieldCommon("path", "The path of the metric to create."),
+			docs.FieldCommon("type", "The metric [type](#types) to create.").HasOptions(
+				"counter",
+				"counter_by",
+				"gauge",
+				"timing",
+			),
+			docs.FieldDeprecated("path"),
+			docs.FieldCommon("name", "The name of the metric to create, this must be unique across all Benthos components otherwise it will overwrite those other metrics."),
 			docs.FieldCommon(
-				"labels", "A map of label names and values that can be used to enrich metrics with aggregators such as Prometheus.",
+				"labels", "A map of label names and values that can be used to enrich metrics. Labels are not supported by some metric destinations, in which case the metrics series are combined.",
 				map[string]string{
-					"type":  "${!json(\"doc.type\")}",
-					"topic": "${!meta(\"kafka_topic\")}",
+					"type":  "${! json(\"doc.type\") }",
+					"topic": "${! meta(\"kafka_topic\") }",
 				},
 			).SupportsInterpolation(true),
 			docs.FieldCommon("value", "For some metric types specifies a value to set, increment.").SupportsInterpolation(true),
+			partsFieldSpec,
+		},
+		Examples: []docs.AnnotatedExample{
+			{
+				Title:   "Gauge",
+				Summary: "In this example we emit a gauge metric called `FooSize`, which is given a value extracted from JSON messages at the path `foo.size`. We then also configure our Prometheus metric exporter to only emit this custom metric and nothing else. We also label the metric with some metadata.",
+				Config: `
+pipeline:
+  processors:
+    - metric:
+        name: FooSize
+        type: gauge
+        labels:
+          topic: ${! meta("kafka_topic") }
+        value: ${! json("foo.size") }
+
+metrics:
+  prometheus:
+    path_mapping: 'if this != "FooSize" { deleted() }'
+`,
+			},
 		},
 		Footnotes: `
 ## Types
@@ -64,11 +75,6 @@ specific type.`,
 
 Increments a counter by exactly 1, the contents of ` + "`value`" + ` are ignored
 by this type.
-
-### ` + "`counter_parts`" + `
-
-Increments a counter by the number of parts within the message batch, the
-contents of ` + "`value`" + ` are ignored by this type.
 
 ### ` + "`counter_by`" + `
 
@@ -81,7 +87,7 @@ For example, the following configuration will increment the value of the
 ` + "```yaml" + `
 metric:
   type: counter_by
-  path: count.custom.field
+  name: CountCustomField
   value: ${!json("field.some.value")}
 ` + "```" + `
 
@@ -96,7 +102,7 @@ For example, the following configuration will set the value of the
 ` + "```yaml" + `
 metric:
   type: gauge
-  path: gauge.custom.field
+  path: GaugeCustomField
   value: ${!json("field.some.value")}
 ` + "```" + `
 
@@ -110,8 +116,10 @@ Equivalent to ` + "`gauge`" + ` where instead the metric is a timing.`,
 
 // MetricConfig contains configuration fields for the Metric processor.
 type MetricConfig struct {
+	Parts  []int             `json:"parts" yaml:"parts"`
 	Type   string            `json:"type" yaml:"type"`
 	Path   string            `json:"path" yaml:"path"`
+	Name   string            `json:"name" yaml:"name"`
 	Labels map[string]string `json:"labels" yaml:"labels"`
 	Value  string            `json:"value" yaml:"value"`
 }
@@ -119,8 +127,10 @@ type MetricConfig struct {
 // NewMetricConfig returns a MetricConfig with default values.
 func NewMetricConfig() MetricConfig {
 	return MetricConfig{
+		Parts:  []int{},
 		Type:   "counter",
 		Path:   "",
+		Name:   "",
 		Labels: map[string]string{},
 		Value:  "",
 	}
@@ -130,6 +140,9 @@ func NewMetricConfig() MetricConfig {
 
 // Metric is a processor that creates a metric from extracted values from a message part.
 type Metric struct {
+	parts      []int
+	deprecated bool
+
 	conf  Config
 	log   log.Modular
 	stats metrics.Type
@@ -145,7 +158,7 @@ type Metric struct {
 	mGaugeVec   metrics.StatGaugeVec
 	mTimerVec   metrics.StatTimerVec
 
-	handler func(string, types.Message) error
+	handler func(string, int, types.Message) error
 }
 
 type labels []label
@@ -154,8 +167,8 @@ type label struct {
 	value field.Expression
 }
 
-func (l *label) val(msg types.Message) string {
-	return l.value.String(0, msg)
+func (l *label) val(index int, msg types.Message) string {
+	return l.value.String(index, msg)
 }
 
 func (l labels) names() []string {
@@ -166,12 +179,26 @@ func (l labels) names() []string {
 	return names
 }
 
-func (l labels) values(msg types.Message) []string {
+func (l labels) values(index int, msg types.Message) []string {
 	var values []string
 	for i := range l {
-		values = append(values, l[i].val(msg))
+		values = append(values, l[i].val(index, msg))
 	}
 	return values
+}
+
+func unwrapMetric(t metrics.Type) metrics.Type {
+	for {
+		u, ok := t.(interface {
+			Unwrap() metrics.Type
+		})
+		if ok {
+			t = u.Unwrap()
+		} else {
+			break
+		}
+	}
+	return t
 }
 
 // NewMetric returns a Metric processor.
@@ -184,14 +211,30 @@ func NewMetric(
 	}
 
 	m := &Metric{
+		parts: conf.Metric.Parts,
 		conf:  conf,
 		log:   log,
 		stats: stats,
 		value: value,
 	}
 
-	if len(conf.Metric.Path) == 0 {
-		return nil, errors.New("path must not be empty")
+	name := conf.Metric.Name
+	if len(conf.Metric.Path) > 0 {
+		if len(conf.Metric.Name) > 0 {
+			return nil, errors.New("cannot combine deprecated path field with name field")
+		}
+		if len(conf.Metric.Parts) > 0 {
+			return nil, errors.New("cannot combine deprecated path field with parts field")
+		}
+		m.deprecated = true
+		name = conf.Metric.Path
+	}
+	if len(name) == 0 {
+		return nil, errors.New("metric name must not be empty")
+	}
+	if !m.deprecated {
+		// Remove any namespaces from the metric type.
+		stats = unwrapMetric(stats)
 	}
 
 	labelNames := make([]string, 0, len(conf.Metric.Labels))
@@ -214,37 +257,37 @@ func NewMetric(
 	switch strings.ToLower(conf.Metric.Type) {
 	case "counter":
 		if len(m.labels) > 0 {
-			m.mCounterVec = stats.GetCounterVec(conf.Metric.Path, m.labels.names())
+			m.mCounterVec = stats.GetCounterVec(name, m.labels.names())
 		} else {
-			m.mCounter = stats.GetCounter(conf.Metric.Path)
+			m.mCounter = stats.GetCounter(name)
 		}
 		m.handler = m.handleCounter
 	case "counter_parts":
 		if len(m.labels) > 0 {
-			m.mCounterVec = stats.GetCounterVec(conf.Metric.Path, m.labels.names())
+			m.mCounterVec = stats.GetCounterVec(name, m.labels.names())
 		} else {
-			m.mCounter = stats.GetCounter(conf.Metric.Path)
+			m.mCounter = stats.GetCounter(name)
 		}
 		m.handler = m.handleCounterParts
 	case "counter_by":
 		if len(m.labels) > 0 {
-			m.mCounterVec = stats.GetCounterVec(conf.Metric.Path, m.labels.names())
+			m.mCounterVec = stats.GetCounterVec(name, m.labels.names())
 		} else {
-			m.mCounter = stats.GetCounter(conf.Metric.Path)
+			m.mCounter = stats.GetCounter(name)
 		}
 		m.handler = m.handleCounterBy
 	case "gauge":
 		if len(m.labels) > 0 {
-			m.mGaugeVec = stats.GetGaugeVec(conf.Metric.Path, m.labels.names())
+			m.mGaugeVec = stats.GetGaugeVec(name, m.labels.names())
 		} else {
-			m.mGauge = stats.GetGauge(conf.Metric.Path)
+			m.mGauge = stats.GetGauge(name)
 		}
 		m.handler = m.handleGauge
 	case "timing":
 		if len(m.labels) > 0 {
-			m.mTimerVec = stats.GetTimerVec(conf.Metric.Path, m.labels.names())
+			m.mTimerVec = stats.GetTimerVec(name, m.labels.names())
 		} else {
-			m.mTimer = stats.GetTimer(conf.Metric.Path)
+			m.mTimer = stats.GetTimer(name)
 		}
 		m.handler = m.handleTimer
 	default:
@@ -254,28 +297,29 @@ func NewMetric(
 	return m, nil
 }
 
-func (m *Metric) handleCounter(val string, msg types.Message) error {
+func (m *Metric) handleCounter(val string, index int, msg types.Message) error {
 	if len(m.labels) > 0 {
-		m.mCounterVec.With(m.labels.values(msg)...).Incr(1)
+		m.mCounterVec.With(m.labels.values(index, msg)...).Incr(1)
 	} else {
 		m.mCounter.Incr(1)
 	}
 	return nil
 }
 
-func (m *Metric) handleCounterParts(val string, msg types.Message) error {
+// TODO: V4 Remove this
+func (m *Metric) handleCounterParts(val string, index int, msg types.Message) error {
 	if msg.Len() == 0 {
 		return nil
 	}
 	if len(m.labels) > 0 {
-		m.mCounterVec.With(m.labels.values(msg)...).Incr(int64(msg.Len()))
+		m.mCounterVec.With(m.labels.values(index, msg)...).Incr(int64(msg.Len()))
 	} else {
 		m.mCounter.Incr(int64(msg.Len()))
 	}
 	return nil
 }
 
-func (m *Metric) handleCounterBy(val string, msg types.Message) error {
+func (m *Metric) handleCounterBy(val string, index int, msg types.Message) error {
 	i, err := strconv.ParseInt(val, 10, 64)
 	if err != nil {
 		return err
@@ -284,14 +328,14 @@ func (m *Metric) handleCounterBy(val string, msg types.Message) error {
 		return errors.New("value is negative")
 	}
 	if len(m.labels) > 0 {
-		m.mCounterVec.With(m.labels.values(msg)...).Incr(i)
+		m.mCounterVec.With(m.labels.values(index, msg)...).Incr(i)
 	} else {
 		m.mCounter.Incr(i)
 	}
 	return nil
 }
 
-func (m *Metric) handleGauge(val string, msg types.Message) error {
+func (m *Metric) handleGauge(val string, index int, msg types.Message) error {
 	i, err := strconv.ParseInt(val, 10, 64)
 	if err != nil {
 		return err
@@ -300,14 +344,14 @@ func (m *Metric) handleGauge(val string, msg types.Message) error {
 		return errors.New("value is negative")
 	}
 	if len(m.labels) > 0 {
-		m.mGaugeVec.With(m.labels.values(msg)...).Set(i)
+		m.mGaugeVec.With(m.labels.values(index, msg)...).Set(i)
 	} else {
 		m.mGauge.Set(i)
 	}
 	return nil
 }
 
-func (m *Metric) handleTimer(val string, msg types.Message) error {
+func (m *Metric) handleTimer(val string, index int, msg types.Message) error {
 	i, err := strconv.ParseInt(val, 10, 64)
 	if err != nil {
 		return err
@@ -316,7 +360,7 @@ func (m *Metric) handleTimer(val string, msg types.Message) error {
 		return errors.New("value is negative")
 	}
 	if len(m.labels) > 0 {
-		m.mTimerVec.With(m.labels.values(msg)...).Timing(i)
+		m.mTimerVec.With(m.labels.values(index, msg)...).Timing(i)
 	} else {
 		m.mTimer.Timing(i)
 	}
@@ -325,11 +369,20 @@ func (m *Metric) handleTimer(val string, msg types.Message) error {
 
 // ProcessMessage applies the processor to a message
 func (m *Metric) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	value := m.value.String(0, msg)
-	if err := m.handler(value, msg); err != nil {
-		m.log.Errorf("Handler error: %v\n", err)
+	if m.deprecated {
+		value := m.value.String(0, msg)
+		if err := m.handler(value, 0, msg); err != nil {
+			m.log.Errorf("Handler error: %v\n", err)
+		}
+		return []types.Message{msg}, nil
 	}
-
+	iterateParts(m.parts, msg, func(index int, p types.Part) error {
+		value := m.value.String(index, msg)
+		if err := m.handler(value, index, msg); err != nil {
+			m.log.Errorf("Handler error: %v\n", err)
+		}
+		return nil
+	})
 	return []types.Message{msg}, nil
 }
 

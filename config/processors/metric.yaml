@@ -19,7 +19,8 @@ pipeline:
     - type: metric
       metric:
         labels: {}
-        path: ""
+        name: ""
+        parts: []
         type: counter
         value: ""
   threads: 1

@@ -14,36 +14,72 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+Emit custom metrics by extracting values from messages.
 
-Expose custom metrics by extracting values from message batches.
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
 
 ```yaml
-# Config fields, showing default values
+# Common config fields, showing default values
 metric:
   type: counter
-  path: ""
+  name: ""
   labels: {}
   value: ""
 ```
 
-This processor executes once per batch, in order to execute once per message
-place it within a [`for_each`](/docs/components/processors/for_each) processor:
+</TabItem>
+<TabItem value="advanced">
 
 ```yaml
-for_each:
-- metric:
-    type: counter_by
-    path: count.custom.field
-    value: ${!json("field.some.value")}
+# All config fields, showing default values
+metric:
+  type: counter
+  name: ""
+  labels: {}
+  value: ""
+  parts: []
 ```
 
-The `path` field should be a dot separated path of the metric to be
-set and will automatically be converted into the correct format of the
-configured metric aggregator.
+</TabItem>
+</Tabs>
 
-The `value` field can be set using function interpolations described
-[here](/docs/configuration/interpolation#bloblang-queries) and is used according to the
-specific type.
+This processor works by evaluating an [interpolated field `value`](/docs/configuration/interpolation#bloblang-queries) for each message and updating a emitted metric according to the [type](#types).
+
+Custom metrics such as these are emitted along with Benthos internal metrics, where you can customize where metrics are sent, which metric names are emitted and rename them as/when appropriate. For more information check out the [metrics docs here](/docs/components/metrics/about).
+
+## Examples
+
+<Tabs defaultValue="Gauge" values={[
+{ label: 'Gauge', value: 'Gauge', },
+]}>
+
+<TabItem value="Gauge">
+
+In this example we emit a gauge metric called `FooSize`, which is given a value extracted from JSON messages at the path `foo.size`. We then also configure our Prometheus metric exporter to only emit this custom metric and nothing else. We also label the metric with some metadata.
+
+```yaml
+pipeline:
+  processors:
+    - metric:
+        name: FooSize
+        type: gauge
+        labels:
+          topic: ${! meta("kafka_topic") }
+        value: ${! json("foo.size") }
+
+metrics:
+  prometheus:
+    path_mapping: 'if this != "FooSize" { deleted() }'
+```
+
+</TabItem>
+</Tabs>
 
 ## Fields
 
@@ -54,10 +90,11 @@ The metric [type](#types) to create.
 
 Type: `string`  
 Default: `"counter"`  
+Options: `counter`, `counter_by`, `gauge`, `timing`.
 
-### `path`
+### `name`
 
-The path of the metric to create.
+The name of the metric to create, this must be unique across all Benthos components otherwise it will overwrite those other metrics.
 
 
 Type: `string`  
@@ -65,7 +102,7 @@ Default: `""`
 
 ### `labels`
 
-A map of label names and values that can be used to enrich metrics with aggregators such as Prometheus.
+A map of label names and values that can be used to enrich metrics. Labels are not supported by some metric destinations, in which case the metrics series are combined.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
@@ -76,8 +113,8 @@ Default: `{}`
 # Examples
 
 labels:
-  topic: ${!meta("kafka_topic")}
-  type: ${!json("doc.type")}
+  topic: ${! meta("kafka_topic") }
+  type: ${! json("doc.type") }
 ```
 
 ### `value`
@@ -89,17 +126,25 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `""`  
 
+### `parts`
+
+An optional array of message indexes of a batch that the processor should apply to.
+If left empty all messages are processed. This field is only applicable when
+batching messages [at the input level](/docs/configuration/batching).
+
+Indexes can be negative, and if so the part will be selected from the end
+counting backwards starting from -1.
+
+
+Type: `array`  
+Default: `[]`  
+
 ## Types
 
 ### `counter`
 
 Increments a counter by exactly 1, the contents of `value` are ignored
 by this type.
-
-### `counter_parts`
-
-Increments a counter by the number of parts within the message batch, the
-contents of `value` are ignored by this type.
 
 ### `counter_by`
 
@@ -112,7 +157,7 @@ For example, the following configuration will increment the value of the
 ```yaml
 metric:
   type: counter_by
-  path: count.custom.field
+  name: CountCustomField
   value: ${!json("field.some.value")}
 ```
 
@@ -127,7 +172,7 @@ For example, the following configuration will set the value of the
 ```yaml
 metric:
   type: gauge
-  path: gauge.custom.field
+  path: GaugeCustomField
   value: ${!json("field.some.value")}
 ```
 

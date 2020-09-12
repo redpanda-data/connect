@@ -20,6 +20,28 @@ func Combine(t1, t2 Type) Type {
 	}
 }
 
+func unwrapMetric(t Type) Type {
+	for {
+		u, ok := t.(interface {
+			Unwrap() Type
+		})
+		if ok {
+			t = u.Unwrap()
+		} else {
+			break
+		}
+	}
+	return t
+}
+
+// Unwrap to the underlying metrics type.
+func (c *combinedWrapper) Unwrap() Type {
+	return &combinedWrapper{
+		t1: unwrapMetric(c.t1),
+		t2: unwrapMetric(c.t2),
+	}
+}
+
 //------------------------------------------------------------------------------
 
 type combinedCounter struct {

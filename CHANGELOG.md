@@ -13,6 +13,10 @@ All notable changes to this project will be documented in this file.
   the new `cases` field).
 - The `workflow` processor can now reference resource configured `branch`
   processors.
+- The `metric` processor now has a field `name` that replaces the now deprecated
+  field `path`. When used the processor now applies to all messages of a batch
+  and the name of the metric is now absolute, without being prefixed by a path
+  generated based on its position within the config.
 
 ### Changed
 

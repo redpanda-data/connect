@@ -618,6 +618,7 @@ pipeline:
         operator: ${PROCESSOR_METADATA_OPERATOR:set}
         value: ${PROCESSOR_METADATA_VALUE:${!hostname()}}
       metric:
+        name: ${PROCESSOR_METRIC_NAME}
         path: ${PROCESSOR_METRIC_PATH}
         type: ${PROCESSOR_METRIC_TYPE:counter}
         value: ${PROCESSOR_METRIC_VALUE}
