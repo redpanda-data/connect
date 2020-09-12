@@ -55,10 +55,39 @@ Custom metrics such as these are emitted along with Benthos internal metrics, wh
 
 ## Examples
 
-<Tabs defaultValue="Gauge" values={[
+<Tabs defaultValue="Counter" values={[
+{ label: 'Counter', value: 'Counter', },
 { label: 'Gauge', value: 'Gauge', },
 ]}>
 
+<TabItem value="Counter">
+
+In this example we emit a counter metric called `Foos`, which increments for every message processed, and we label the metric with some metadata about where the message came from and a field from the document that states what type it is. We also configure our metrics to emit to CloudWatch, and explicitly only allow our custom metric and some internal Benthos metrics to emit.
+
+```yaml
+pipeline:
+  processors:
+    - metric:
+        name: Foos
+        type: counter
+        labels:
+          topic: ${! meta("kafka_topic") }
+          parition: ${! meta("kafka_partition") }
+          type: ${! json("document.type").or("unknown") }
+
+metrics:
+  cloudwatch:
+    namespace: ProdConsumer
+    region: eu-west-1
+    path_mapping: |
+      root = if ![
+        "Foos",
+        "input.received",
+        "output.sent"
+      ].contains(this) { deleted() }
+```
+
+</TabItem>
 <TabItem value="Gauge">
 
 In this example we emit a gauge metric called `FooSize`, which is given a value extracted from JSON messages at the path `foo.size`. We then also configure our Prometheus metric exporter to only emit this custom metric and nothing else. We also label the metric with some metadata.
