@@ -277,7 +277,7 @@ Finally, let's combine all the custom metrics into one pipeline.
 
 ## Combining into a Workflow
 
-The following config expands on the previous examples by configuring each API poll as a [`branch` processor][processors.branch], which allows us to run them within a [`workflow` processor][processors.workflow] that can execute all three branches in parallel.
+Okay I'm getting bored now so let's wrap this up. The following config expands on the previous examples by configuring each API poll as a [`branch` processor][processors.branch], which allows us to run them within a [`workflow` processor][processors.workflow] that can execute all three branches in parallel.
 
 The [`metric` processors][processors.metric] have also been combined into a single reusable resource by updating the other API calls to format their payloads into the same structure as our Github remap.
 

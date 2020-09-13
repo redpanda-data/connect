@@ -35,18 +35,16 @@ pipeline:
       - resource: bar # Recover here
 ```
 
-Once messages finish the catch block they will have their failure flags removed and are treated like regular messages. If this behaviour is not desired then it is possible to simulate a catch block with a [`switch` processor][processor.switch] placed within a [`for_each` processor][processor.for_each]:
+Once messages finish the catch block they will have their failure flags removed and are treated like regular messages. If this behaviour is not desired then it is possible to simulate a catch block with a [`switch` processor][processor.switch]:
 
 ```yaml
 pipeline:
   processors:
     - resource: foo # Processor that might fail
-    - for_each:
-      - switch:
-        - condition:
-            bloblang: errored()
-          processors:
-            - resource: bar # Recover here
+    - switch:
+      - check: errored()
+        processors:
+          - resource: bar # Recover here
 ```
 
 ## Logging Errors
