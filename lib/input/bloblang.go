@@ -39,7 +39,7 @@ testing your pipeline configs.`,
 				`root = "hello world"`,
 				`root = {"test":"message","id":uuid_v4()}`,
 			),
-			docs.FieldCommon("interval", "The time interval at which messages should be generated. If set to an empty string messages will be generated as fast as downstream services can process them."),
+			docs.FieldCommon("interval", "The time interval at which messages should be generated. If set to an empty string messages will be generated as fast as downstream services can process them. The first message emitted is always instant."),
 			docs.FieldCommon("count", "An optional number of messages to generate, if set above 0 the specified number of messages is generated and then the input will shut down."),
 		},
 		Categories: []Category{
@@ -91,7 +91,8 @@ func NewBloblangConfig() BloblangConfig {
 // input is read from. An interval period must be specified that determines how
 // often a message is generated.
 type Bloblang struct {
-	remaining int32
+	remaining   int32
+	firstIsFree bool
 
 	exec  *mapping.Executor
 	timer *time.Ticker
@@ -119,9 +120,10 @@ func newBloblang(conf BloblangConfig) (*Bloblang, error) {
 		remaining = -1
 	}
 	return &Bloblang{
-		exec:      exec,
-		remaining: remaining,
-		timer:     timer,
+		exec:        exec,
+		remaining:   remaining,
+		timer:       timer,
+		firstIsFree: true,
 	}, nil
 }
 
@@ -138,7 +140,7 @@ func (b *Bloblang) ReadWithContext(ctx context.Context) (types.Message, reader.A
 		}
 	}
 
-	if b.timer != nil {
+	if !b.firstIsFree && b.timer != nil {
 		select {
 		case _, open := <-b.timer.C:
 			if !open {
@@ -149,6 +151,7 @@ func (b *Bloblang) ReadWithContext(ctx context.Context) (types.Message, reader.A
 		}
 	}
 
+	b.firstIsFree = false
 	p, err := b.exec.MapPart(0, message.New(nil))
 	if err != nil {
 		return nil, nil, err

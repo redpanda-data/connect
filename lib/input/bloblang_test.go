@@ -24,11 +24,19 @@ func TestBloblangInterval(t *testing.T) {
 	err = b.ConnectWithContext(ctx)
 	require.NoError(t, err)
 
+	// First read is immediate.
 	m, _, err := b.ReadWithContext(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, m.Len())
 	assert.Equal(t, "hello world", string(m.Get(0).Get()))
 
+	// Second takes 50ms.
+	m, _, err = b.ReadWithContext(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, m.Len())
+	assert.Equal(t, "hello world", string(m.Get(0).Get()))
+
+	// Third takes another 50ms and therefore times out.
 	_, _, err = b.ReadWithContext(ctx)
 	assert.EqualError(t, err, "action timed out")
 

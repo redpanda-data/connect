@@ -22,6 +22,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- The `bloblang` input with an interval configured now emits the first message
+  straight away.
 - New field `cases` replaces `outputs` for the `switch` output, `outputs` can
   still be used for backwards compatibility but will be removed in the next
   major version release.
