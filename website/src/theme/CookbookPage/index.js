@@ -4,26 +4,13 @@ import Layout from '@theme/Layout';
 import Link from '@docusaurus/Link';
 import MDXComponents from '@theme/MDXComponents';
 import {MDXProvider} from '@mdx-js/react';
-import useTOCHighlight from '@theme/hooks/useTOCHighlight';
+import TOC from '@theme/TOC';
 
 import classnames from 'classnames';
 import readingTime from 'reading-time';
 import styles from './styles.module.css';
 
 const LINK_CLASS_NAME = 'contents__link';
-const ACTIVE_LINK_CLASS_NAME = 'contents__link--active';
-const TOP_OFFSET = 100;
-
-function DocTOC({headings}) {
-  useTOCHighlight(LINK_CLASS_NAME, ACTIVE_LINK_CLASS_NAME, TOP_OFFSET);
-  return (
-    <div className="col col--3">
-      <div className={styles.tableOfContents}>
-        <Headings headings={headings} />
-      </div>
-    </div>
-  );
-}
 
 /* eslint-disable jsx-a11y/control-has-associated-label */
 function Headings({headings, isChild}) {
@@ -71,7 +58,9 @@ function CookbookPage(props) {
             </article>
           </div>
           {CookbookContents.rightToc && (
-            <DocTOC headings={CookbookContents.rightToc} />
+            <div className="col col--2">
+              <TOC headings={CookbookContents.rightToc} />
+            </div>
           )}
         </div>
       </div>
