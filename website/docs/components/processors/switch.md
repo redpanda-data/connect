@@ -15,52 +15,86 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-A processor that lists child case objects each containing a condition and
-processors. Each batch of messages is tested against the condition of each child
-case until a condition passes, whereby the processors of that case will be
-executed on the batch.
+Conditionally processes messages based on their contents.
 
 ```yaml
 # Config fields, showing default values
 switch: []
 ```
 
-Each case may specify a boolean `fallthrough` field indicating whether
-the next case should be executed after it (the default is `false`.)
+For each switch case a [Bloblang query](/docs/guides/bloblang/about/) is checked and, if the result is true (or the check is empty) the child processors are executed on the message.
 
-A case takes this form:
+## Fields
 
-``` yaml
-- condition:
-    type: foo
-  processors:
-  - type: foo
-  fallthrough: false
+### `[].check`
+
+A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should have the processors of this case executed on it. If left empty the case always passes.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+check: this.type == "foo"
+
+check: this.contents.urls.contains("https://benthos.dev/")
 ```
 
-In order to switch each message of a batch individually use this processor with
-the [`for_each`](/docs/components/processors/for_each) processor.
+### `[].processors`
 
-You can find a [full list of conditions here](/docs/components/conditions/about).
+A list of [processors](/docs/components/processors/about/) to execute on a message.
+
+
+Type: `array`  
+Default: `[]`  
+
+### `[].fallthrough`
+
+Indicates whether, if this case passes for a message, the next case should also be executed.
+
+
+Type: `bool`  
+Default: `false`  
 
 ## Examples
 
-George is very noisy and lies quite often. For any messages received over the
-Kafka topic "from_george", which are messages from George, we want to lowercase
-everything he says and prefix it with "PROBABLY FALSE: ". For all other messages
-we want to uppercase them just to further spite him.
+<Tabs defaultValue="I Hate George" values={[
+{ label: 'I Hate George', value: 'I Hate George', },
+]}>
+
+<TabItem value="I Hate George">
+
+
+We have a system where we're counting a metric for all messages that pass through our system. However, occasionally we get messages from George where he's rambling about dumb stuff we don't care about.
+
+For Georges messages we want to instead emit a metric that gauges how angry he is about being ignored and then we drop it.
 
 ```yaml
 pipeline:
   processors:
     - switch:
-      - condition:
-          bloblang: meta("kafka_topic") == "from_george"
-        processors:
-        - bloblang: root = "PROBABLY FALSE: %v".format(content().lowercase())
-      - processors:
-        - bloblang: root = content().uppercase()
+        - check: this.user.name.first != "George"
+          processors:
+            - metric:
+                type: counter
+                name: MessagesWeCareAbout
+
+        - processors:
+            - metric:
+                type: gauge
+                name: GeorgesAnger
+                value: ${! json("user.anger") }
+            - bloblang: root = deleted()
 ```
 
-You're cool George but you're also a piece of work.
+</TabItem>
+</Tabs>
+
+## Batching
+
+When a switch processor executes on a [batch of messages](/docs/configuration/batching/) they are checked individually and can be matched independently against cases. During processing the messages matched against a case are processed as a batch, although the ordering of messages during case processing cannot be guaranteed to match the order as received.
+
+At the end of switch processing the resulting batch will follow the same ordering as the batch was received. If any child processors have split or otherwise grouped messages this grouping will be lost as the result of a switch is always a single batch. In order to perform conditional grouping and/or splitting use the [`group_by` processor](/docs/components/processors/group_by/).
 

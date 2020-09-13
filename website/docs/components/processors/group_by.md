@@ -15,35 +15,35 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Splits a batch of messages into N batches, where each resulting batch contains a
-group of messages determined by conditions that are applied per message of the
-original batch.
+Splits a batch of messages into N batches, where each resulting batch contains a group of messages determined by conditions that are applied per message of the original batch.
 
 ```yaml
 # Config fields, showing default values
 group_by: []
 ```
 
-Once the groups are established a list of processors are applied to their
-respective grouped batch, which can be used to label the batch as per their
-grouping.
-
-Each group is configured in a list with a condition and a list of processors:
-
-``` yaml
-group_by:
-- condition:
-    static: true
-  processors:
-  - type: noop
-```
-
-Messages are added to the first group that passes and can only belong to a
-single group. Messages that do not pass the conditions of any group are placed
-in a final batch with no processors applied.
+Once the groups are established a list of processors are applied to their respective grouped batch, which can be used to label the batch as per their grouping.
 
 The functionality of this processor depends on being applied across messages
 that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).
+
+## Fields
+
+### `[].condition`
+
+A [condition](/docs/components/conditions/about/) that is checked against each message individually in order to determine whether it belongs to a group.
+
+
+Type: `object`  
+Default: `{}`  
+
+### `[].processors`
+
+A list of [processors](/docs/components/processors/about/) to execute on the newly formed group.
+
+
+Type: `array`  
+Default: `[]`  
 
 ## Examples
 

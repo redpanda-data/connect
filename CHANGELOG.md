@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 - New function `file` added to Bloblang.
 - The `switch` output can now route batched messages individually (when using
   the new `cases` field).
+- The `switch` processor now routes batched messages individually (when using
+  the new `cases` field).
 - The `workflow` processor can now reference resource configured `branch`
   processors.
 - The `metric` processor now has a field `name` that replaces the now deprecated

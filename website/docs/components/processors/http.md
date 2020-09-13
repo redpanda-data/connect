@@ -111,8 +111,8 @@ will not be reattempted and is immediately considered a failed request.
 
 ## Adding Metadata
 
-If the request returns a response code this processor sets a metadata field
-`http_status_code` on all resulting messages.
+If the request returns an error response code this processor sets a metadata
+field `http_status_code` on the resulting message.
 
 If the field `copy_response_headers` is set to `true` then any headers
 in the response will also be set in the resulting message as metadata.

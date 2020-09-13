@@ -2,6 +2,7 @@ package docs
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 
 	"gopkg.in/yaml.v3"
@@ -35,9 +36,13 @@ type FieldSpec struct {
 	// backwards compatibility reasons.
 	Deprecated bool
 
+	// Default value of the field. If left nil the docs generator will attempt
+	// to infer the default value from an example config.
+	Default interface{}
+
 	// Type of the field. This is optional and doesn't prevent documentation for
 	// a field.
-	Type string
+	Type FieldType
 
 	// Interpolation indicates the type of interpolation that this field
 	// supports.
@@ -65,8 +70,14 @@ func (f FieldSpec) SupportsInterpolation(batchWide bool) FieldSpec {
 }
 
 // HasType returns a new FieldSpec that specifies a specific type.
-func (f FieldSpec) HasType(typeStr string) FieldSpec {
-	f.Type = typeStr
+func (f FieldSpec) HasType(t FieldType) FieldSpec {
+	f.Type = t
+	return f
+}
+
+// HasDefault returns a new FieldSpec that specifies a default value.
+func (f FieldSpec) HasDefault(v interface{}) FieldSpec {
+	f.Default = v
 	return f
 }
 
@@ -78,7 +89,9 @@ func (f FieldSpec) HasOptions(options ...string) FieldSpec {
 
 // WithChildren returns a new FieldSpec that has child fields.
 func (f FieldSpec) WithChildren(children ...FieldSpec) FieldSpec {
-	f.Type = "object"
+	if len(f.Type) == 0 {
+		f.Type = "object"
+	}
 	f.Children = append(f.Children, children...)
 	return f
 }
@@ -109,6 +122,38 @@ func FieldDeprecated(name string) FieldSpec {
 		Description: "DEPRECATED: Do not use.",
 		Deprecated:  true,
 	}
+}
+
+//------------------------------------------------------------------------------
+
+// FieldType represents a field type.
+type FieldType string
+
+// ValueType variants.
+var (
+	FieldString  FieldType = "string"
+	FieldNumber  FieldType = "number"
+	FieldBool    FieldType = "bool"
+	FieldArray   FieldType = "array"
+	FieldObject  FieldType = "object"
+	FieldUnknown FieldType = "unknown"
+)
+
+// GetFieldType attempts to extract a field type from a general value.
+func GetFieldType(v interface{}) FieldType {
+	switch reflect.TypeOf(v).Kind().String() {
+	case "map":
+		return FieldObject
+	case "slice":
+		return FieldArray
+	case "float64", "int", "int64":
+		return FieldNumber
+	case "string":
+		return FieldString
+	case "bool":
+		return FieldBool
+	}
+	return FieldUnknown
 }
 
 //------------------------------------------------------------------------------
@@ -202,7 +247,7 @@ func (f FieldSpecs) configFilteredFromNode(node yaml.Node, filter func(FieldSpec
 		for i := 0; i < len(node.Content); i += 2 {
 			if node.Content[i].Value == field.Name {
 				nextNode := node.Content[i+1]
-				if len(field.Children) > 0 {
+				if len(field.Children) > 0 && field.Type != FieldArray {
 					if nextNode.Kind != yaml.MappingNode {
 						return nil, fmt.Errorf("expected mapping node kind: %v", nextNode.Kind)
 					}

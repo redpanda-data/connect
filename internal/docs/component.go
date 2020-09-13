@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"strings"
 	"text/template"
 
@@ -237,8 +236,11 @@ version release. Please consider moving onto [alternative components](#alternati
 func (c *ComponentSpec) createConfigs(root string, fullConfigExample interface{}) (
 	advancedConfigBytes, commonConfigBytes []byte,
 ) {
+	rootArray, isRootArray := fullConfigExample.([]interface{})
+	isEmptyRootArray := isRootArray && len(rootArray) == 0
+
 	var err error
-	if len(c.Fields) > 0 {
+	if len(c.Fields) > 0 && !isEmptyRootArray {
 		advancedConfig, err := c.Fields.ConfigAdvanced(fullConfigExample)
 		if err == nil {
 			tmp := map[string]interface{}{
@@ -270,7 +272,7 @@ func (c *ComponentSpec) createConfigs(root string, fullConfigExample interface{}
 	if err != nil {
 		panic(err)
 	}
-	if len(c.Fields) == 0 {
+	if isEmptyRootArray || len(c.Fields) == 0 {
 		tmp := map[string]interface{}{
 			c.Name: fullConfigExample,
 		}
@@ -295,9 +297,8 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 	}
 
 	ctx := componentContext{
-		Name: c.Name,
-		Type: c.Type,
-		// FrontMatterSummary: strings.Replace(strings.TrimSpace(c.Summary), "\n", " ", 0),
+		Name:        c.Name,
+		Type:        c.Type,
 		Summary:     c.Summary,
 		Description: c.Description,
 		Examples:    c.Examples,
@@ -360,7 +361,14 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 			}
 			flattenedFields = append(flattenedFields, newV)
 			if len(v.Children) > 0 {
-				tmpMissing, tmpDuplicate := walkFields(path+v.Name+".", gConf.S(v.Name), v.Children)
+				if v.Name == "cases" {
+					fmt.Printf("foo: %v\n", v.Type)
+				}
+				newPath := path + v.Name
+				if newV.Type == FieldArray {
+					newPath = newPath + "[]"
+				}
+				tmpMissing, tmpDuplicate := walkFields(newPath+".", gConf.S(v.Name), v.Children)
 				missingFields = append(missingFields, tmpMissing...)
 				duplicateFields = append(duplicateFields, tmpDuplicate...)
 			}
@@ -371,7 +379,11 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 		return missingFields, duplicateFields
 	}
 	if len(c.Fields) > 0 {
-		if missing, duplicates := walkFields("", gConf, c.Fields); len(missing) > 0 {
+		rootPath := ""
+		if _, isArray := gConf.Data().([]interface{}); isArray {
+			rootPath = "[]."
+		}
+		if missing, duplicates := walkFields(rootPath, gConf, c.Fields); len(missing) > 0 {
 			return nil, fmt.Errorf("spec missing fields: %v", missing)
 		} else if len(duplicates) > 0 {
 			return nil, fmt.Errorf("spec duplicate fields: %v", duplicates)
@@ -383,16 +395,20 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 			continue
 		}
 
-		if !gConf.ExistsP(v.Name) {
+		// TODO: Find another way to verify array element fields
+		if !strings.Contains(v.Name, "[].") && !gConf.ExistsP(v.Name) {
 			return nil, fmt.Errorf("unrecognised field '%v'", v.Name)
 		}
 
-		defaultValue := gConf.Path(v.Name)
-		if defaultValue.Data() == nil {
+		defaultValue := v.Default
+		if defaultValue == nil {
+			defaultValue = gConf.Path(v.Name).Data()
+		}
+		if defaultValue == nil {
 			return nil, fmt.Errorf("field '%v' not found in config example", v.Name)
 		}
 
-		defaultValueStr := defaultValue.String()
+		defaultValueStr := gabs.Wrap(defaultValue).String()
 		if len(v.Children) > 0 {
 			defaultValueStr = ""
 		}
@@ -400,18 +416,10 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 		fieldType := v.Type
 		if len(fieldType) == 0 {
 			if len(v.Examples) > 0 {
-				fieldType = reflect.TypeOf(v.Examples[0]).Kind().String()
+				fieldType = GetFieldType(v.Examples[0])
 			} else {
-				fieldType = reflect.TypeOf(defaultValue.Data()).Kind().String()
+				fieldType = GetFieldType(defaultValue)
 			}
-		}
-		switch fieldType {
-		case "map":
-			fieldType = "object"
-		case "slice":
-			fieldType = "array"
-		case "float64", "int", "int64":
-			fieldType = "number"
 		}
 
 		var examples []string
@@ -431,7 +439,7 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 
 		fieldCtx := fieldContext{
 			Name:          v.Name,
-			Type:          fieldType,
+			Type:          string(fieldType),
 			Description:   v.Description,
 			Default:       defaultValueStr,
 			Advanced:      v.Advanced,

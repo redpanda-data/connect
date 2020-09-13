@@ -25,27 +25,9 @@ func init() {
 			CategoryComposition,
 		},
 		Summary: `
-Splits a batch of messages into N batches, where each resulting batch contains a
-group of messages determined by conditions that are applied per message of the
-original batch.`,
+Splits a batch of messages into N batches, where each resulting batch contains a group of messages determined by conditions that are applied per message of the original batch.`,
 		Description: `
-Once the groups are established a list of processors are applied to their
-respective grouped batch, which can be used to label the batch as per their
-grouping.
-
-Each group is configured in a list with a condition and a list of processors:
-
-` + "``` yaml" + `
-group_by:
-- condition:
-    static: true
-  processors:
-  - type: noop
-` + "```" + `
-
-Messages are added to the first group that passes and can only belong to a
-single group. Messages that do not pass the conditions of any group are placed
-in a final batch with no processors applied.`,
+Once the groups are established a list of processors are applied to their respective grouped batch, which can be used to label the batch as per their grouping.`,
 		Examples: []docs.AnnotatedExample{
 			{
 				Title:   "Grouped Processing",
@@ -77,6 +59,16 @@ output:
             topic: no_foos_here
 `,
 			},
+		},
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon(
+				"condition",
+				"A [condition](/docs/components/conditions/about/) that is checked against each message individually in order to determine whether it belongs to a group.",
+			).HasDefault(map[string]interface{}{}),
+			docs.FieldCommon(
+				"processors",
+				"A list of [processors](/docs/components/processors/about/) to execute on the newly formed group.",
+			).HasDefault([]interface{}{}),
 		},
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			groups := []interface{}{}

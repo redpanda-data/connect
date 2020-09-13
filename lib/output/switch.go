@@ -64,20 +64,17 @@ The maximum number of parallel message batches to have in flight at any given ti
 			),
 			docs.FieldCommon(
 				"cases",
-				`
-A list of switch cases, each consisting of an `+"[`output`](/docs/components/outputs/about), a [Bloblang query field `check`](/docs/guides/bloblang/about) and a field `continue`"+`, indicating whether the next case should also be tested if the current resolves to true.
-
-If the field `+"`check`"+` is left empty then the case always passes, otherwise the result is expected to be a boolean value.`,
+				"A list of switch cases, outlining outputs that can be routed to.",
 				[]interface{}{
 					map[string]interface{}{
-						"continue": true,
+						"check": `this.urls.contains("http://benthos.dev")`,
 						"output": map[string]interface{}{
 							"cache": map[string]interface{}{
 								"target": "foo",
 								"key":    "${!json(\"id\")}",
 							},
 						},
-						"check": `this.urls.contains("http://benthos.dev")`,
+						"continue": true,
 					},
 					map[string]interface{}{
 						"output": map[string]interface{}{
@@ -88,6 +85,20 @@ If the field `+"`check`"+` is left empty then the case always passes, otherwise 
 						},
 					},
 				},
+			).HasType(docs.FieldArray).WithChildren(
+				docs.FieldCommon(
+					"check",
+					"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should be routed to the case output. If left empty the case always passes.",
+					`this.type == "foo"`,
+					`this.contents.urls.contains("https://benthos.dev/")`,
+				).HasDefault(""),
+				docs.FieldCommon(
+					"output", "An [output](/docs/components/outputs/about/) for messages that pass the check to be routed to.",
+				).HasDefault(map[string]interface{}{}),
+				docs.FieldAdvanced(
+					"continue",
+					"Indicates whether, if this case passes for a message, the next case should also be tested.",
+				).HasDefault(false),
 			),
 			docs.FieldDeprecated("outputs"),
 		},

@@ -50,65 +50,6 @@ output:
 </TabItem>
 </Tabs>
 
-## Fields
-
-### `retry_until_success`
-
-If a selected output fails to send a message this field determines whether it is
-reattempted indefinitely. If set to false the error is instead propagated back
-to the input level.
-
-If a message can be routed to >1 outputs it is usually best to set this to true
-in order to avoid duplicate messages being routed to an output.
-
-
-Type: `bool`  
-Default: `true`  
-
-### `strict_mode`
-
-This field determines whether an error should be reported if no condition is met.
-If set to true, an error is propagated back to the input level. The default
-behavior is false, which will drop the message.
-
-
-Type: `bool`  
-Default: `false`  
-
-### `max_in_flight`
-
-The maximum number of parallel message batches to have in flight at any given time.
-
-
-Type: `number`  
-Default: `1`  
-
-### `cases`
-
-A list of switch cases, each consisting of an [`output`](/docs/components/outputs/about), a [Bloblang query field `check`](/docs/guides/bloblang/about) and a field `continue`, indicating whether the next case should also be tested if the current resolves to true.
-
-If the field `check` is left empty then the case always passes, otherwise the result is expected to be a boolean value.
-
-
-Type: `array`  
-Default: `[]`  
-
-```yaml
-# Examples
-
-cases:
-  - check: this.urls.contains("http://benthos.dev")
-    continue: true
-    output:
-      cache:
-        key: ${!json("id")}
-        target: foo
-  - output:
-      s3:
-        bucket: bar
-        path: ${!json("id")}
-```
-
 ## Examples
 
 <Tabs defaultValue="Basic Multiplexing" values={[
@@ -177,5 +118,93 @@ output:
 
 </TabItem>
 </Tabs>
+
+## Fields
+
+### `retry_until_success`
+
+If a selected output fails to send a message this field determines whether it is
+reattempted indefinitely. If set to false the error is instead propagated back
+to the input level.
+
+If a message can be routed to >1 outputs it is usually best to set this to true
+in order to avoid duplicate messages being routed to an output.
+
+
+Type: `bool`  
+Default: `true`  
+
+### `strict_mode`
+
+This field determines whether an error should be reported if no condition is met.
+If set to true, an error is propagated back to the input level. The default
+behavior is false, which will drop the message.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `max_in_flight`
+
+The maximum number of parallel message batches to have in flight at any given time.
+
+
+Type: `number`  
+Default: `1`  
+
+### `cases`
+
+A list of switch cases, outlining outputs that can be routed to.
+
+
+Type: `array`  
+
+```yaml
+# Examples
+
+cases:
+  - check: this.urls.contains("http://benthos.dev")
+    continue: true
+    output:
+      cache:
+        key: ${!json("id")}
+        target: foo
+  - output:
+      s3:
+        bucket: bar
+        path: ${!json("id")}
+```
+
+### `cases[].check`
+
+A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should be routed to the case output. If left empty the case always passes.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+check: this.type == "foo"
+
+check: this.contents.urls.contains("https://benthos.dev/")
+```
+
+### `cases[].output`
+
+An [output](/docs/components/outputs/about/) for messages that pass the check to be routed to.
+
+
+Type: `object`  
+Default: `{}`  
+
+### `cases[].continue`
+
+Indicates whether, if this case passes for a message, the next case should also be tested.
+
+
+Type: `bool`  
+Default: `false`  
 
 
