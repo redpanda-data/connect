@@ -9,25 +9,17 @@ All notable changes to this project will be documented in this file.
 
 - New methods `any`, `all` and `json_schema` added to Bloblang.
 - New function `file` added to Bloblang.
-- The `switch` output can now route batched messages individually (when using
-  the new `cases` field).
-- The `switch` processor now routes batched messages individually (when using
-  the new `cases` field).
-- The `workflow` processor can now reference resource configured `branch`
-  processors.
-- The `metric` processor now has a field `name` that replaces the now deprecated
-  field `path`. When used the processor now applies to all messages of a batch
-  and the name of the metric is now absolute, without being prefixed by a path
-  generated based on its position within the config.
-- New field `check` added to `group_by` processor children, which now replaces
-  the old `condition` field.
-- New field `check` added to `while` processor, which now replaces the old
-  `condition` field.
+- The `switch` output can now route batched messages individually (when using the new `cases` field).
+- The `switch` processor now routes batched messages individually (when using the new `cases` field).
+- The `workflow` processor can now reference resource configured `branch` processors.
+- The `metric` processor now has a field `name` that replaces the now deprecated field `path`. When used the processor now applies to all messages of a batch and the name of the metric is now absolute, without being prefixed by a path generated based on its position within the config.
+- New field `check` added to `group_by` processor children, which now replaces the old `condition` field.
+- New field `check` added to `while` processor, which now replaces the old `condition` field.
+- New field `check` added to `read_until` input, which now replaces the old `condition` field.
 
 ### Changed
 
-- The `bloblang` input with an interval configured now emits the first message
-  straight away.
+- The `bloblang` input with an interval configured now emits the first message straight away.
 
 ## 3.27.0 - 2020-09-07
 
@@ -39,17 +31,13 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- New field `data_source_name` replaces `dsn` for the `sql` processor, and when
-  using this field each message of a batch is processed individually. When using
-  the field `dsn` the behaviour remains unchanged for backwards compatibility.
+- New field `data_source_name` replaces `dsn` for the `sql` processor, and when using this field each message of a batch is processed individually. When using the field `dsn` the behaviour remains unchanged for backwards compatibility.
 
 ### Fixed
 
-- Eliminated situations where an `amqp_0_9` or `amqp_1` component would abandon
-  a connection reset due to partial errors.
+- Eliminated situations where an `amqp_0_9` or `amqp_1` component would abandon a connection reset due to partial errors.
 - The Bloblang parser now allows naked negation of queries.
-- The `cache` processor interpolations for `key` and `value` now cross-batch
-  reference messages before processing.
+- The `cache` processor interpolations for `key` and `value` now cross-batch reference messages before processing.
 
 ## 3.26.0 - 2020-08-30
 
@@ -59,27 +47,20 @@ All notable changes to this project will be documented in this file.
 - New Bloblang function `env`.
 - New field `path_mapping` added to all metrics types.
 - Field `max_in_flight` added to the `dynamic` output.
-- The `workflow` processor has been updated to use `branch` processors with the
-  new field `branches`, these changes are backwards compatible with the now
-  deprecated `stages` field.
+- The `workflow` processor has been updated to use `branch` processors with the new field `branches`, these changes are backwards compatible with the now deprecated `stages` field.
 
 ### Changed
 
-- The `rename`, `whitelist` and `blacklist` metrics types are now deprecated,
-  and the `path_mapping` field should be used instead.
-- The `conditional`, `process_map` and `process_dag` processors are now
-  deprecated and are superseded by the `switch`, `branch` and `workflow`
-  processors respectively.
+- The `rename`, `whitelist` and `blacklist` metrics types are now deprecated, and the `path_mapping` field should be used instead.
+- The `conditional`, `process_map` and `process_dag` processors are now deprecated and are superseded by the `switch`, `branch` and `workflow` processors respectively.
 
 ### Fixed
 
 - Fixed `http` processor error log messages that would print incorrect URLs.
 - The `http_server` input now emits `latency` metrics.
-- Fixed a panic that could occur during the shutdown of an `http_server` input
-  serving a backlog of requests.
+- Fixed a panic that could occur during the shutdown of an `http_server` input serving a backlog of requests.
 - Explicit component types (`type: foo`) are now checked by the config linter.
-- The `amqp_1` input and output should now reconnect automatically after an
-  unexpected link detach.
+- The `amqp_1` input and output should now reconnect automatically after an unexpected link detach.
 
 ## 3.25.0 - 2020-08-16
 
@@ -94,24 +75,18 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- The `http` processor field `max_parallel` has been deprecated in favour of
-  rate limits, and the fields within `request` have been moved to the root of
-  the `http` namespace. This change is backwards compatible and `http.request`
-  fields will still be recognized until the next version release.
-- The `process_field` processor is now deprecated, and `branch` should be used
-  instead.
+- The `http` processor field `max_parallel` has been deprecated in favour of rate limits, and the fields within `request` have been moved to the root of the `http` namespace. This change is backwards compatible and `http.request` fields will still be recognized until the next version release.
+- The `process_field` processor is now deprecated, and `branch` should be used instead.
 
 ### Fixed
 
-- Wholesale metadata mappings (`meta = {"foo":"bar"}`) in Bloblang now correctly
-  clear pre-existing fields.
+- Wholesale metadata mappings (`meta = {"foo":"bar"}`) in Bloblang now correctly clear pre-existing fields.
 
 ## 3.24.1 - 2020-08-03
 
 ### Fixed
 
-- Prevented an issue where batched outputs would terminate at start up. Fixes a
-  regression introduced in v3.24.0.
+- Prevented an issue where batched outputs would terminate at start up. Fixes a regression introduced in v3.24.0.
 
 ## 3.24.0 - 2020-08-02
 
@@ -125,10 +100,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Batch error handling and retry logic has been improved for the `kafka` and
-  `dynamodb` outputs.
-- Bloblang now allows non-matching not-equals comparisons, allowing
-  `foo != null` expressions.
+- Batch error handling and retry logic has been improved for the `kafka` and `dynamodb` outputs.
+- Bloblang now allows non-matching not-equals comparisons, allowing `foo != null` expressions.
 
 ### Changed
 
@@ -148,12 +121,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Manual `mqtt` connection handling for both the input and output. This should
-  fix some cases where connections were dropped and never recovered.
-- Fixed Bloblang error where calls to a `.get` method would return `null` after
-  the first query.
-- The `for_each` processor no longer interlaces child processors during split
-  processing.
+- Manual `mqtt` connection handling for both the input and output. This should fix some cases where connections were dropped and never recovered.
+- Fixed Bloblang error where calls to a `.get` method would return `null` after the first query.
+- The `for_each` processor no longer interlaces child processors during split processing.
 
 ## 3.22.0 - 2020-07-19
 
@@ -163,8 +133,7 @@ All notable changes to this project will be documented in this file.
 - New Bloblang methods `encrypt_aes` and `decrypt_aes` added.
 - New field `static_headers` added to the `kafka` output.
 - New field `enabled` added to the `http` config section.
-- Experimental CLI flag `-resources` added for specifying files containing extra
-  resources.
+- Experimental CLI flag `-resources` added for specifying files containing extra resources.
 
 ### Fixed
 
@@ -190,8 +159,7 @@ All notable changes to this project will be documented in this file.
 
 - SASL config fields added to `amqp_1` input and output.
 - The `lint` subcommand now supports triple dot wildcard paths: `./foo/...`.
-- The `test` subcommand now supports tests defined within the target config file
-  being tested.
+- The `test` subcommand now supports tests defined within the target config file being tested.
 
 ### Fixed
 
@@ -223,15 +191,13 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Message functions such as `json` and `content` now work correctly when
-  executing bloblang with the `blobl` sub command.
+- Message functions such as `json` and `content` now work correctly when executing bloblang with the `blobl` sub command.
 
 ## 3.16.0 - 2020-05-31
 
 ### Added
 
-- New bloblang methods `type`, `join`, `unique`, `escape_html`, `unescape_html`,
-  `re_find_all` and `re_find_all_submatch`.
+- New bloblang methods `type`, `join`, `unique`, `escape_html`, `unescape_html`, `re_find_all` and `re_find_all_submatch`.
 - Bloblang `sort` method now allows custom sorting functions.
 - Bloblang now supports `if` expressions.
 - Bloblang now allows joining strings with the `+` operator.
@@ -239,16 +205,13 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- The `xml` processor is now less strict with XML parsing, allowing unrecognised
-  escape sequences to be passed through unchanged.
+- The `xml` processor is now less strict with XML parsing, allowing unrecognised escape sequences to be passed through unchanged.
 
 ### Fixed
 
-- The bloblang method `map_each` now respects `Nothing` mapping by copying the
-  underlying value unchanged.
+- The bloblang method `map_each` now respects `Nothing` mapping by copying the underlying value unchanged.
 - It's now possible to reference resource inputs and outputs in streams mode.
-- Fixed a problem with compiling old interpolation functions with arguments
-  containing colons (i.e. `${!timestamp_utc:2006-01-02T15:04:05.000Z}`)
+- Fixed a problem with compiling old interpolation functions with arguments containing colons (i.e. `${!timestamp_utc:2006-01-02T15:04:05.000Z}`)
 
 ## 3.15.0 - 2020-05-24
 
@@ -260,26 +223,22 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- The `redis_streams` input no longer incorrectly copies message data into a
-  metadata field.
+- The `redis_streams` input no longer incorrectly copies message data into a metadata field.
 
 ### Changed
 
-- Bloblang is no longer considered beta. Therefore, no breaking changes will be
-  introduced outside of a major version release.
+- Bloblang is no longer considered beta. Therefore, no breaking changes will be introduced outside of a major version release.
 
 ## 3.14.0 - 2020-05-17
 
 ### Added
 
-- New `ascii85` and `z85` options have been added to the `encode` and `decode`
-  processors.
+- New `ascii85` and `z85` options have been added to the `encode` and `decode` processors.
 
 ### Bloblang BETA Changes
 
 - The `meta` function no longer reflects changes made within the map itself.
-- Extracting data from other messages of a batch using `from` no longer reflects
-  changes made within a map.
+- Extracting data from other messages of a batch using `from` no longer reflects changes made within a map.
 - Meta assignments are no longer allowed within named maps.
 - Assigning `deleted()` to `root` now filters out a message entirely.
 - Lots of new methods and goodies.
@@ -294,39 +253,31 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Prevented a crash that might occur with high-concurrent access of
-  `http_server` metrics with labels.
+- Prevented a crash that might occur with high-concurrent access of `http_server` metrics with labels.
 - The `http_client` output now respects the `copy_response_headers` field.
 
 ## 3.12.0 - 2020-04-19
 
 ### Added
 
-- Vastly improved function interpolations, including better batch handling and
-  arithmetic operators.
-- The `gcp_pubsub` output now supports function interpolation on the field
-  `topic`.
-- New `contains_any` and `contains_any_cs` operators added to the `text`
-  condition.
+- Vastly improved function interpolations, including better batch handling and arithmetic operators.
+- The `gcp_pubsub` output now supports function interpolation on the field `topic`.
+- New `contains_any` and `contains_any_cs` operators added to the `text` condition.
 - Support for input and output `resource` types.
-- The `broker` and `switch` output types now allow async messages and batching
-  within child outputs.
+- The `broker` and `switch` output types now allow async messages and batching within child outputs.
 - Field `schema_path` added to the `avro` processor.
-- The `redis` cache, `redis_list` inputs and outputs now support selecting a
-  database with the URL path.
+- The `redis` cache, `redis_list` inputs and outputs now support selecting a database with the URL path.
 - New field `max_in_flight` added to the `broker` output.
 
 ### Changed
 
 - Benthos now runs in strict mode, but this can be disabled with `--chilled`.
-- The Benthos CLI has been revamped, the old flags are still supported but are
-  deprecated.
+- The Benthos CLI has been revamped, the old flags are still supported but are deprecated.
 - The `http_server` input now accepts requests without a content-type header.
 
 ### Fixed
 
-- Outputs that resolve function interpolations now correctly resolve the
-  `batch_size` function.
+- Outputs that resolve function interpolations now correctly resolve the `batch_size` function.
 - The `kinesis_balanced` input now correctly establishes connections.
 - Fixed an auth transport issue with the `gcp_pubsub` input and output.
 
@@ -336,8 +287,7 @@ All notable changes to this project will be documented in this file.
 
 - Format `syslog_rfc3164` added to the `parse_log` processor.
 - New `multilevel` cache.
-- New `json_append`, `json_type` and `json_length` functions added to the `awk`
-  processor.
+- New `json_append`, `json_type` and `json_length` functions added to the `awk` processor.
 - New `flatten` operator added to the `json` processor.
 
 ### Changed
@@ -346,8 +296,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Kafka connectors now correctly set username and password for all SASL
-  strategies.
+- Kafka connectors now correctly set username and password for all SASL strategies.
 
 ## 3.10.0 - 2020-02-05
 
@@ -355,12 +304,10 @@ All notable changes to this project will be documented in this file.
 
 - Field `delete_files` added to `files` input.
 - TLS fields added to `nsq` input and output.
-- Field `processors` added to batching fields to easily accommodate aggregations
-  and archiving of batched messages.
+- Field `processors` added to batching fields to easily accommodate aggregations and archiving of batched messages.
 - New `parse_log` processor.
 - New `json` condition.
-- Operators `flatten_array`, `fold_number_array` and `fold_string_array` added
-  to `json` processor.
+- Operators `flatten_array`, `fold_number_array` and `fold_string_array` added to `json` processor.
 
 ### Changed
 
@@ -376,16 +323,13 @@ All notable changes to this project will be documented in this file.
 
 - New `socket`, `socket_server` inputs.
 - New `socket` output.
-- Kafka connectors now support SASL using `OAUTHBEARER`, `SCRAM-SHA-256`,
-  `SCRAM-SHA-512` mechanisms.
+- Kafka connectors now support SASL using `OAUTHBEARER`, `SCRAM-SHA-256`, `SCRAM-SHA-512` mechanisms.
 - Experimental support for AWS CloudWatch metrics.
 
 ### Changed
 
-- The `tcp`, `tcp_server` and `udp_server` inputs have been deprecated and moved
-  into the `socket` and `socket_server` inputs respectively.
-- The `udp` and `tcp` outputs have been deprecated and moved into the `socket`
-  output.
+- The `tcp`, `tcp_server` and `udp_server` inputs have been deprecated and moved into the `socket` and `socket_server` inputs respectively.
+- The `udp` and `tcp` outputs have been deprecated and moved into the `socket` output.
 
 ### Fixed
 
@@ -434,17 +378,14 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Function interpolated strings within the `json` processor `value` field are
-  now correctly unicode escaped.
-- Retry intervals for `kafka` output have been tuned to prevent circuit breaker
-  throttling.
+- Function interpolated strings within the `json` processor `value` field are now correctly unicode escaped.
+- Retry intervals for `kafka` output have been tuned to prevent circuit breaker throttling.
 
 ## 3.7.0 - 2019-12-21
 
 ### Added
 
-- New `try` output, which is a drop-in replacement for a `broker` with the `try`
-  pattern.
+- New `try` output, which is a drop-in replacement for a `broker` with the `try` pattern.
 - Field `successful_on` added to the `http` processor.
 - The `statsd` metrics type now supports Datadog or InfluxDB tagging.
 - Field `sync_response.headers` added to `http_server` input.
@@ -457,17 +398,14 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- The `kafka` input should now correctly recover from coordinator failures
-  during an offset commit.
-- Attributes permitted by the `sqs` output should now have parity with real
-  limitations.
+- The `kafka` input should now correctly recover from coordinator failures during an offset commit.
+- Attributes permitted by the `sqs` output should now have parity with real limitations.
 
 ## 3.6.1 - 2019-12-05
 
 ### Fixed
 
-- Batching using an input `broker` now works with only one child input
-  configured.
+- Batching using an input `broker` now works with only one child input configured.
 - The `zmq4` input now correctly supports broker based batching.
 
 ## 3.6.0 - 2019-12-03
@@ -484,8 +422,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- The `kafka` output no longer attempts to send headers on old versions of the
-  protocol.
+- The `kafka` output no longer attempts to send headers on old versions of the protocol.
 
 ## 3.5.0 - 2019-11-26
 
@@ -504,8 +441,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `memory` buffer now allows parallel processing of batched payloads.
-- Version and date information should now be correctly displayed in archive
-  distributions.
+- Version and date information should now be correctly displayed in archive distributions.
 
 ## 3.3.1 - 2019-10-21
 
@@ -529,10 +465,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - Experimental `kafka_cg` input has been removed.
-- The `kafka_balanced` inputs underlying implementation has been replaced with
-  the `kafka_cg` one.
-- All inputs have been updated to automatically utilise >1 processing threads,
-  with the exception of `kafka` and `kinesis`.
+- The `kafka_balanced` inputs underlying implementation has been replaced with the `kafka_cg` one.
+- All inputs have been updated to automatically utilise >1 processing threads, with the exception of `kafka` and `kinesis`.
 
 ## 3.2.0 - 2019-09-27
 
@@ -547,16 +481,14 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Linting is now disabled for the environment var config shipped with docker
-  images, this should prevent the log spam on start up.
+- Linting is now disabled for the environment var config shipped with docker images, this should prevent the log spam on start up.
 - Go API: Experimental `reader.Async` component methods renamed.
 
 ## 3.1.1 - 2019-09-23
 
 ### Fixed
 
-- Prevented `kafka_cg` input lock up after batch policy period trigger with no
-  backlog.
+- Prevented `kafka_cg` input lock up after batch policy period trigger with no backlog.
 
 ## 3.1.0 - 2019-09-23
 
@@ -569,33 +501,27 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- The `json` processor no longer removes content moved from a path to the same
-  path.
+- The `json` processor no longer removes content moved from a path to the same path.
 
 ## 3.0.0 - 2019-09-17
 
-This is a major version release, for more information and guidance on how to
-migrate please refer to [https://benthos.dev/docs/guides/migration/v3](https://www.benthos.dev/docs/guides/migration/v3).
+This is a major version release, for more information and guidance on how to migrate please refer to [https://benthos.dev/docs/guides/migration/v3](https://www.benthos.dev/docs/guides/migration/v3).
 
 ### Added
 
-- The `json` processor now allows you to `move` from either a root source or to
-  a root destination.
+- The `json` processor now allows you to `move` from either a root source or to a root destination.
 - Added interpolation to the `metadata` processor `key` field.
 - Granular retry fields added to `kafka` output.
 
 ### Changed
 
-- Go modules are now fully supported, imports must now include the major version
-  (e.g. `github.com/Jeffail/benthos/v3`).
+- Go modules are now fully supported, imports must now include the major version (e.g. `github.com/Jeffail/benthos/v3`).
 - Removed deprecated `mmap_file` buffer.
 - Removed deprecated (and undocumented) metrics paths.
 - Moved field `prefix` from root of `metrics` into relevant child components.
 - Names of `process_dag` stages must now match the regexp `[a-zA-Z0-9_-]+`.
-- Go API: buffer constructors now take a `types.Manager` argument in parity with
-  other components.
-- JSON dot paths within the following components have been updated to allow
-  array-based operations:
+- Go API: buffer constructors now take a `types.Manager` argument in parity with other components.
+- JSON dot paths within the following components have been updated to allow array-based operations:
   + `awk` processor
   + `json` processor
   + `process_field` processor
@@ -607,24 +533,20 @@ migrate please refer to [https://benthos.dev/docs/guides/migration/v3](https://w
 
 ### Fixed
 
-- The `sqs` output no longer attempts to send invalid attributes with payloads
-  from metadata.
-- During graceful shutdown Benthos now scales the attempt to propagate acks for
-  sent messages with the overall system shutdown period.
+- The `sqs` output no longer attempts to send invalid attributes with payloads from metadata.
+- During graceful shutdown Benthos now scales the attempt to propagate acks for sent messages with the overall system shutdown period.
 
 ## 2.15.1 - 2019-09-10
 
 ### Fixed
 
-- The `s3` and `sqs` inputs should now correctly log handles and codes from
-  failed SQS message deletes and visibility timeout changes.
+- The `s3` and `sqs` inputs should now correctly log handles and codes from failed SQS message deletes and visibility timeout changes.
 
 ## 2.15.0 - 2019-09-03
 
 ### Added
 
-- New `message_group_id` and `message_deduplication_id` fields added to `sqs`
-  output for supporting FIFO queues.
+- New `message_group_id` and `message_deduplication_id` fields added to `sqs` output for supporting FIFO queues.
 
 ## 2.14.0 - 2019-08-29
 
@@ -639,8 +561,7 @@ migrate please refer to [https://benthos.dev/docs/guides/migration/v3](https://w
 
 ### Fixed
 
-- The `json` processor now correctly stores parsed `value` JSON when using `set`
-  on the root path.
+- The `json` processor now correctly stores parsed `value` JSON when using `set` on the root path.
 
 ## 2.13.0 - 2019-08-27
 
@@ -674,34 +595,29 @@ migrate please refer to [https://benthos.dev/docs/guides/migration/v3](https://w
 ### Added
 
 - Field `codec` added to `process_field` processor.
-- Removed experimental status from sync responses components, which are now
-  considered stable.
+- Removed experimental status from sync responses components, which are now considered stable.
 - Field `pattern_definitions` added to `grok` processor.
 
 ### Changed
 
-- Simplified serverless lambda main function body for improving plugin
-  documentation.
+- Simplified serverless lambda main function body for improving plugin documentation.
 
 ### Fixed
 
-- Fixed a bug where the `prepend` and `append` operators of the `text` processor
-  could result in invalid messages when consuming line-based inputs.
+- Fixed a bug where the `prepend` and `append` operators of the `text` processor could result in invalid messages when consuming line-based inputs.
 
 ## 2.11.2 - 2019-08-06
 
 ### Added
 
 - Field `clean_session` added to `mqtt` input.
-- The `http_server` input now adds request query parameters to messages as
-  metadata.
+- The `http_server` input now adds request query parameters to messages as metadata.
 
 ## 2.11.1 - 2019-08-05
 
 ### Fixed
 
-- Prevent concurrent access race condition on nested parallel `process_map`
-  processors.
+- Prevent concurrent access race condition on nested parallel `process_map` processors.
 
 ## 2.11.0 - 2019-08-03
 
@@ -714,8 +630,7 @@ migrate please refer to [https://benthos.dev/docs/guides/migration/v3](https://w
 
 ### Added
 
-- Improved error messages attached to payloads that fail `process_dag`.
-  post mappings.
+- Improved error messages attached to payloads that fail `process_dag`. post mappings.
 - New `redis_hash` output.
 - New `sns` output.
 
@@ -724,30 +639,25 @@ migrate please refer to [https://benthos.dev/docs/guides/migration/v3](https://w
 ### Added
 
 - Allow extracting metric `rename` submatches into labels.
-- Field `use_patterns` added to `redis_pubsub` input for subscribing to channels
-  using glob-style patterns.
+- Field `use_patterns` added to `redis_pubsub` input for subscribing to channels using glob-style patterns.
 
 ## 2.9.2 - 2019-07-17
 
 ### Changed
 
-- Go API: It's now possible to specify a custom config unit test file path
-  suffix.
+- Go API: It's now possible to specify a custom config unit test file path suffix.
 
 ## 2.9.1 - 2019-07-15
 
 ### Added
 
 - New rate limit and websocket message fields added to `http_server` input.
-- The `http` processor now optionally copies headers from response into
-  resulting message metadata.
-- The `http` processor now sets a `http_status_code` metadata value into
-  resulting messages (provided one is received.)
+- The `http` processor now optionally copies headers from response into resulting message metadata.
+- The `http` processor now sets a `http_status_code` metadata value into resulting messages (provided one is received.)
 
 ### Changed
 
-- Go API: Removed experimental `Block` functions from the cache and rate limit
-  packages.
+- Go API: Removed experimental `Block` functions from the cache and rate limit packages.
 
 ## 2.9.0 - 2019-07-12
 
@@ -760,13 +670,11 @@ migrate please refer to [https://benthos.dev/docs/guides/migration/v3](https://w
 
 ### Added
 
-- All errors caught by processors should now be accessible via the `${!error}`
-  interpolation function, rather than just flagged as `true`.
+- All errors caught by processors should now be accessible via the `${!error}` interpolation function, rather than just flagged as `true`.
 
 ### Fixed
 
-- The `process_field` processor now propagates metadata to the original payload
-  with the `result_type` set to discard. This allows proper error propagation.
+- The `process_field` processor now propagates metadata to the original payload with the `result_type` set to discard. This allows proper error propagation.
 
 ## 2.8.5 - 2019-07-03
 
@@ -776,8 +684,7 @@ migrate please refer to [https://benthos.dev/docs/guides/migration/v3](https://w
 
 ### Fixed
 
-- The `subprocess` processor now correctly logs and recovers subprocess pipeline
-  related errors (such as exceeding buffer limits.)
+- The `subprocess` processor now correctly logs and recovers subprocess pipeline related errors (such as exceeding buffer limits.)
 
 ## 2.8.4 - 2019-07-02
 
@@ -787,8 +694,7 @@ migrate please refer to [https://benthos.dev/docs/guides/migration/v3](https://w
 
 ### Fixed
 
-- SQS output now correctly waits between retry attempts and escapes error loops
-  during shutdown.
+- SQS output now correctly waits between retry attempts and escapes error loops during shutdown.
 
 ## 2.8.3 - 2019-06-28
 
@@ -798,15 +704,13 @@ migrate please refer to [https://benthos.dev/docs/guides/migration/v3](https://w
 
 ### Fixed
 
-- The `filter` and `filter_parts` config sections now correctly marshall when
-  printing with `--all`.
+- The `filter` and `filter_parts` config sections now correctly marshall when printing with `--all`.
 
 ## 2.8.2 - 2019-06-28
 
 ### Added
 
-- Go API: A new service method `RunWithOpts` has been added in order to
-  accomodate service customisations with opt funcs.
+- Go API: A new service method `RunWithOpts` has been added in order to accomodate service customisations with opt funcs.
 
 ## 2.8.1 - 2019-06-28
 
@@ -820,18 +724,15 @@ migrate please refer to [https://benthos.dev/docs/guides/migration/v3](https://w
 - New `number` processor.
 - New `avro` processor.
 - Operator `enum` added to `text` condition.
-- Field `result_type` added to `process_field` processor for marshalling results
-  into non-string types.
+- Field `result_type` added to `process_field` processor for marshalling results into non-string types.
 - Go API: Plugin APIs now allow nil config constructors.
-- Registering plugins automatically adds plugin documentation flags to the main
-  Benthos service.
+- Registering plugins automatically adds plugin documentation flags to the main Benthos service.
 
 ## 2.7.0 - 2019-06-20
 
 ### Added
 
-- Output `http_client` is now able to propagate responses from each request back
-  to inputs supporting sync responses.
+- Output `http_client` is now able to propagate responses from each request back to inputs supporting sync responses.
 - Added support for Gzip compression to `http_server` output sync responses.
 - New `check_interpolation` condition.
 
@@ -839,18 +740,15 @@ migrate please refer to [https://benthos.dev/docs/guides/migration/v3](https://w
 
 ### Added
 
-- New `sync_response` output type, with experimental support added to the
-  `http_server` input.
+- New `sync_response` output type, with experimental support added to the `http_server` input.
 - SASL authentication fields added to all Kafka components.
 
 ## 2.5.0 - 2019-06-14
 
 ### Added
 
-- The `s3` input now sets `s3_content_encoding` metadata (when not using the
-  download manager.)
-- New trace logging for the `rename`, `blacklist` and `whitelist` metric
-  components to assist with debugging.
+- The `s3` input now sets `s3_content_encoding` metadata (when not using the download manager.)
+- New trace logging for the `rename`, `blacklist` and `whitelist` metric components to assist with debugging.
 
 ## 2.4.0 - 2019-06-06
 
@@ -860,8 +758,7 @@ migrate please refer to [https://benthos.dev/docs/guides/migration/v3](https://w
 
 ### Changed
 
-- The `insert_part`, `merge_json` and `unarchive` processors now propagate
-  message contexts.
+- The `insert_part`, `merge_json` and `unarchive` processors now propagate message contexts.
 
 ## 2.3.2 - 2019-06-05
 
@@ -874,8 +771,7 @@ migrate please refer to [https://benthos.dev/docs/guides/migration/v3](https://w
 ### Fixed
 
 - The `http` processor now preserves message metadata and contexts.
-- Any `http` components that create requests with messages containing empty
-  bodies now correctly function in WASM.
+- Any `http` components that create requests with messages containing empty bodies now correctly function in WASM.
 
 ## 2.3.0 - 2019-06-04
 
@@ -911,24 +807,19 @@ migrate please refer to [https://benthos.dev/docs/guides/migration/v3](https://w
 
 ### Fixed
 
-- Improved construction error messages for `broker` and `switch` input and
-  outputs.
+- Improved construction error messages for `broker` and `switch` input and outputs.
 
 ### Changed
 
-- Plugins that don't use a configuration structure can now return nil in their
-  sanitise functions in order to have the plugin section omitted.
+- Plugins that don't use a configuration structure can now return nil in their sanitise functions in order to have the plugin section omitted.
 
 ## 2.2.0 - 2019-05-22
 
 ### Added
 
-- The `kafka` and `kafka_balanced` inputs now set a `kafka_lag` metadata field
-  to incoming messages.
-- The `awk` processor now has a variety of typed `json_set` functions
-  `json_set_int`, `json_set_float` and `json_set_bool`.
-- Go API: Add experimental function for blocking cache and ratelimit
-  constructors.
+- The `kafka` and `kafka_balanced` inputs now set a `kafka_lag` metadata field to incoming messages.
+- The `awk` processor now has a variety of typed `json_set` functions `json_set_int`, `json_set_float` and `json_set_bool`.
+- Go API: Add experimental function for blocking cache and ratelimit constructors.
 
 ### Fixed
 
@@ -944,8 +835,7 @@ migrate please refer to [https://benthos.dev/docs/guides/migration/v3](https://w
 
 ### Added
 
-- Core service logic has been moved into new package `service`, making it easier
-  to maintain plugin builds that match upstream Benthos.
+- Core service logic has been moved into new package `service`, making it easier to maintain plugin builds that match upstream Benthos.
 
 ## 2.1.1 - 2019-05-17
 
@@ -969,27 +859,20 @@ migrate please refer to [https://benthos.dev/docs/guides/migration/v3](https://w
 
 ### Changed
 
-This is a major version released due to a series of minor breaking changes, you
-can read the [full migration guide here](https://www.benthos.dev/docs/guides/migration/v2).
+This is a major version released due to a series of minor breaking changes, you can read the [full migration guide here](https://www.benthos.dev/docs/guides/migration/v2).
 
 #### Configuration
 
-- Benthos now attempts to infer the `type` of config sections whenever the field
-  is omitted, for more information please read this overview:
-  [Concise Configuration](https://www.benthos.dev/docs/configuration/about#concise-configuration).
-- Field `unsubscribe_on_close` of the `nats_stream` input is now `false` by
-  default.
+- Benthos now attempts to infer the `type` of config sections whenever the field is omitted, for more information please read this overview: [Concise Configuration](https://www.benthos.dev/docs/configuration/about#concise-configuration).
+- Field `unsubscribe_on_close` of the `nats_stream` input is now `false` by default.
 
 #### Service
 
-- The following commandline flags have been removed: `swap-envs`, `plugins-dir`,
-  `list-input-plugins`, `list-output-plugins`, `list-processor-plugins`,
-  `list-condition-plugins`.
+- The following commandline flags have been removed: `swap-envs`, `plugins-dir`, `list-input-plugins`, `list-output-plugins`, `list-processor-plugins`, `list-condition-plugins`.
 
 #### Go API
 
-- Package `github.com/Jeffail/benthos/lib/processor/condition` changed to
-  `github.com/Jeffail/benthos/lib/condition`.
+- Package `github.com/Jeffail/benthos/lib/processor/condition` changed to `github.com/Jeffail/benthos/lib/condition`.
 - Interface `types.Cache` now has `types.Closable` embedded.
 - Interface `types.RateLimit` now has `types.Closable` embedded.
 - Add method `GetPlugin` to interface `types.Manager`.
@@ -1005,15 +888,13 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Added
 
-- New `for_each` processor with the same behaviour as `process_batch`,
-  `process_batch` is now considered an alias for `for_each`.
+- New `for_each` processor with the same behaviour as `process_batch`, `process_batch` is now considered an alias for `for_each`.
 
 ## 1.20.2 - 2019-05-10
 
 ### Changed
 
-- The `sql` processor now executes across the batch, documentation updated to
-  clarify.
+- The `sql` processor now executes across the batch, documentation updated to clarify.
 
 ## 1.20.1 - 2019-05-10
 
@@ -1029,8 +910,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Fixed
 
-- Using `json_map_columns` with the `dynamodb` output should now correctly store
-  `null` and array values within the target JSON structure.
+- Using `json_map_columns` with the `dynamodb` output should now correctly store `null` and array values within the target JSON structure.
 
 ## 1.19.2 - 2019-05-09
 
@@ -1046,8 +926,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Fixed
 
-- Benthos in streams mode no longer tries to load directory `/benthos/streams`
-  by default.
+- Benthos in streams mode no longer tries to load directory `/benthos/streams` by default.
 
 ## 1.19.0 - 2019-05-07
 
@@ -1072,8 +951,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Fixed
 
-- The `benthos-lambda` distribution now correctly returns all message parts in
-  synchronous execution.
+- The `benthos-lambda` distribution now correctly returns all message parts in synchronous execution.
 
 ### Changed
 
@@ -1089,8 +967,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Fixed
 
-- Improved error and output logging for `subprocess` processor when the process
-  exits unexpectedly.
+- Improved error and output logging for `subprocess` processor when the process exits unexpectedly.
 
 ## 1.15.0 - 2019-04-26
 
@@ -1109,8 +986,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Fixed
 
-- The `redis` cache no longer incorrectly returns a "key not found" error
-  instead of connection errors.
+- The `redis` cache no longer incorrectly returns a "key not found" error instead of connection errors.
 
 ## 1.14.1 - 2019-04-24
 
@@ -1139,13 +1015,11 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 - New `s3` cache implementation.
 - New `file` cache implementation.
 - Operators `quote` and `unquote` added to the `text` processor.
-- Configs sent via the streams mode HTTP API are now interpolated with
-  environment variable substitutes.
+- Configs sent via the streams mode HTTP API are now interpolated with environment variable substitutes.
 
 ### Changed
 
-- All AWS `s3` components now enforce path style syntax for bucket URLs. This
-  improves compatibility with third party endpoints.
+- All AWS `s3` components now enforce path style syntax for bucket URLs. This improves compatibility with third party endpoints.
 
 ## 1.11.0 - 2019-04-12
 
@@ -1155,8 +1029,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Fixed
 
-- The `dynamodb` cache `get` call now correctly reports key not found versus
-  general request error.
+- The `dynamodb` cache `get` call now correctly reports key not found versus general request error.
 
 ## 1.10.10 - 2019-04-10
 
@@ -1166,24 +1039,20 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Fixed
 
-- The `sqs` input now rejects messages that fail by resetting the visibility
-  timeout.
-- The `sqs` input no longer fails to delete consumed messages when the batch
-  contains duplicate message IDs.
+- The `sqs` input now rejects messages that fail by resetting the visibility timeout.
+- The `sqs` input no longer fails to delete consumed messages when the batch contains duplicate message IDs.
 
 ## 1.10.9 - 2019-04-05
 
 ### Fixed
 
-- The `metric` processor no longer mixes label keys when processing across
-  parallel pipelines.
+- The `metric` processor no longer mixes label keys when processing across parallel pipelines.
 
 ## 1.10.8 - 2019-04-03
 
 ### Added
 
-- Comma separated `kafka` and `kafka_balanced` address and topic values are now
-  trimmed for whitespace.
+- Comma separated `kafka` and `kafka_balanced` address and topic values are now trimmed for whitespace.
 
 ## 1.10.6 - 2019-04-02
 
@@ -1217,8 +1086,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Fixed
 
-- The `while` processor now correctly checks conditions against the first batch
-  of the result of last processor loop.
+- The `while` processor now correctly checks conditions against the first batch of the result of last processor loop.
 
 ## 1.10.1 - 2019-03-19
 
@@ -1284,8 +1152,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Fixed
 
-- Field `dependencies` of children of the `process_dag` processor now correctly
-  parsed from config files.
+- Field `dependencies` of children of the `process_dag` processor now correctly parsed from config files.
 
 ## 1.7.0 - 2019-02-26
 
@@ -1313,17 +1180,14 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 - New `whitelist` metrics target.
 - Initial support for opentracing, including a new `tracer` root component.
 - Improved generated metrics documentation and config examples.
-- The `nats_stream` input now has a field `unsubscribe_on_close` that when
-  disabled allows durable subscription offsets to persist even when all
-  connections are closed.
+- The `nats_stream` input now has a field `unsubscribe_on_close` that when disabled allows durable subscription offsets to persist even when all connections are closed.
 - Metadata field `nats_stream_sequence` added to `nats_stream` input.
 
 ## 1.5.1 - 2019-02-11
 
 ### Fixed
 
-- The `subprocess` processor no longer sends unexpected empty lines when
-  messages end with a line break.
+- The `subprocess` processor no longer sends unexpected empty lines when messages end with a line break.
 
 ## 1.5.0 - 2019-02-07
 
@@ -1358,8 +1222,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Fixed
 
-- Output broker types now correctly allocates nested processors for `fan_out`
-  and `try` patterns.
+- Output broker types now correctly allocates nested processors for `fan_out` and `try` patterns.
 - JSON formatted loggers now correctly escape error messages with line breaks.
 
 ## 1.3.0 - 2019-01-29
@@ -1374,16 +1237,14 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Added
 
-- Resources (including plugins) that implement `Closable` are now shutdown
-  cleanly.
+- Resources (including plugins) that implement `Closable` are now shutdown cleanly.
 
 ## 1.2.0 - 2019-01-28
 
 ### Added
 
 - New `json_array` format added to the `archive` and `unarchive` processors.
-- Preliminary support added to the resource manager API to allow arbitrary
-  shared resource plugins.
+- Preliminary support added to the resource manager API to allow arbitrary shared resource plugins.
 
 ## 1.1.4 - 2019-01-23
 
@@ -1401,32 +1262,27 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Fixed
 
-- Fixed environment variable interpolation when combined with embedded function
-  interpolations.
+- Fixed environment variable interpolation when combined with embedded function interpolations.
 - Fixed break down metric indexes for input and output brokers.
 
 ## 1.1.0 - 2019-01-17
 
 ### Added
 
-- Input `s3` can now toggle the use of a download manager, switching off now
-  downloads metadata from the target file.
+- Input `s3` can now toggle the use of a download manager, switching off now downloads metadata from the target file.
 - Output `s3` now writes metadata to the uploaded file.
 - Operator `unescape_url_query` added to `text` processor.
 
 ### Fixed
 
-- The `nats_steam` input and output now actively attempt to recover stale
-  connections.
-- The `awk` processor prints errors and flags failure when the program exits
-  with a non-zero status.
+- The `nats_steam` input and output now actively attempt to recover stale connections.
+- The `awk` processor prints errors and flags failure when the program exits with a non-zero status.
 
 ## 1.0.2 - 2019-01-07
 
 ### Fixed
 
-- The `subprocess` processor now attempts to read all flushed stderr output from
-  a process when it fails.
+- The `subprocess` processor now attempts to read all flushed stderr output from a process when it fails.
 
 ## 1.0.1 - 2019-01-05
 
@@ -1436,8 +1292,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Fixed
 
-- The `awk` processor function `json_get` no longer returns string values with
-  quotes.
+- The `awk` processor function `json_get` no longer returns string values with quotes.
 
 ## 1.0.0 - 2019-01-01
 
@@ -1461,8 +1316,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Added
 
-- Functions `timestamp_format`, `timestamp_format_nano`, `metadata_get` and
-  `metadata_set` added to `awk` processor.
+- Functions `timestamp_format`, `timestamp_format_nano`, `metadata_get` and `metadata_set` added to `awk` processor.
 
 ## 0.42.0 - 2018-12-19
 
@@ -1473,10 +1327,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Changed
 
-- Converted all integer based time period fields to string based, e.g.
-  `timeout_ms: 5000` would now be `timeout: 5s`. This will may potentially be
-  disruptive but the `--strict` flag should catch all deprecated fields in an
-  existing config.
+- Converted all integer based time period fields to string based, e.g. `timeout_ms: 5000` would now be `timeout: 5s`. This will may potentially be disruptive but the `--strict` flag should catch all deprecated fields in an existing config.
 
 ## 0.41.0 - 2018-12-12
 
@@ -1488,8 +1339,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Added
 
-- New `max_batch_size` field added to `kafka`, `kafka_balanced` and `amqp`
-  inputs. This provides a mechanism for creating message batches optimistically.
+- New `max_batch_size` field added to `kafka`, `kafka_balanced` and `amqp` inputs. This provides a mechanism for creating message batches optimistically.
 
 ## 0.40.0 - 2018-12-10
 
@@ -1499,9 +1349,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Changed
 
-- API: The `types.Processor` interface has been changed in order to add lifetime
-  cleanup methods (added `CloseAsync` and `WaitForClose`). For the overwhelming
-  majority of processors these functions will be no-ops.
+- API: The `types.Processor` interface has been changed in order to add lifetime cleanup methods (added `CloseAsync` and `WaitForClose`). For the overwhelming majority of processors these functions will be no-ops.
 - More consistent `condition` metrics.
 
 ## 0.39.2 - 2018-12-07
@@ -1525,9 +1373,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Added
 
-- New endpoint `/ready` that returns 200 when both the input and output
-  components are connected, otherwise 503. This is intended to be used as a
-  readiness probe.
+- New endpoint `/ready` that returns 200 when both the input and output components are connected, otherwise 503. This is intended to be used as a readiness probe.
 
 ### Changed
 
@@ -1540,8 +1386,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 ### Added
 
 - Field `role_external_id` added to all S3 credential configs.
-- New `processor_failed` condition and improved processor error handling which
-  can be read about [here](./docs/error_handling.md)
+- New `processor_failed` condition and improved processor error handling which can be read about [here](./docs/error_handling.md)
 
 ## 0.38.8 - 2018-11-29
 
@@ -1560,8 +1405,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 ### Added
 
 - Lint errors are logged (level INFO) during normal Benthos operation.
-- New `--strict` command flag which causes Benthos to abort when linting errors
-  are found in a config file.
+- New `--strict` command flag which causes Benthos to abort when linting errors are found in a config file.
 
 ## 0.38.4 - 2018-11-26
 
@@ -1580,8 +1424,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Changed
 
-- Resource based conditions no longer benefit from cached results. In practice
-  this optimisation was easy to lose in config and difficult to maintain.
+- Resource based conditions no longer benefit from cached results. In practice this optimisation was easy to lose in config and difficult to maintain.
 
 ## 0.37.4 - 2018-11-22
 
@@ -1610,8 +1453,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Changed
 
-- Removed submatch indexes in the `text` processor `find_regexp` operator and
-  added documentation for expanding submatches in the `replace_regexp` operator.
+- Removed submatch indexes in the `text` processor `find_regexp` operator and added documentation for expanding submatches in the `replace_regexp` operator.
 
 ## 0.36.4 - 2018-11-09
 
@@ -1640,8 +1482,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Changed
 
-- The `s3` output now calculates `path` field function interpolations per
-  message of a batch.
+- The `s3` output now calculates `path` field function interpolations per message of a batch.
 
 ## 0.35.1 - 2018-10-31
 
@@ -1678,8 +1519,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Changed
 
-- The `process_map` processor now allows map target path overrides when a target
-  is the parent of another target.
+- The `process_map` processor now allows map target path overrides when a target is the parent of another target.
 
 ## 0.34.4 - 2018-10-02
 
@@ -1729,11 +1569,8 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Changed
 
-- The `combine` processor is now considered DEPRECATED, please use the `batch`
-  processor instead.
-- The `batch` processor field `byte_size` is now set at 0 (and therefore
-  ignored) by default. A log warning has been added in case anyone was relying
-  on the default.
+- The `combine` processor is now considered DEPRECATED, please use the `batch` processor instead.
+- The `batch` processor field `byte_size` is now set at 0 (and therefore ignored) by default. A log warning has been added in case anyone was relying on the default.
 
 ## 0.31.4 - 2018-09-16
 
@@ -1786,9 +1623,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Changed
 
-- The `kinesis` output field `retries` has been renamed `max_retries` in order
-  to expose the difference in its zero value behaviour (endless retries) versus
-  other `retry` fields (zero retries).
+- The `kinesis` output field `retries` has been renamed `max_retries` in order to expose the difference in its zero value behaviour (endless retries) versus other `retry` fields (zero retries).
 
 ## 0.28.0 - 2018-09-01
 
@@ -1817,8 +1652,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Changed
 
-- The `kinesis` output type now supports batched sends and per message
-  interpolation.
+- The `kinesis` output type now supports batched sends and per message interpolation.
 
 ## 0.26.2 - 2018-08-27
 
@@ -1842,8 +1676,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Added
 
-- The `index` field of the `elasticsearch` output can now be dynamically set
-  using function interpolation.
+- The `index` field of the `elasticsearch` output can now be dynamically set using function interpolation.
 - New `hash` processor.
 
 ### Changed
@@ -1854,9 +1687,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Changed
 
-- Significant restructuring of `amqp` inputs and outputs. These changes should
-  be backwards compatible for existing pipelines, but changes the way in which
-  queues, exchanges and bindings are declared using these types.
+- Significant restructuring of `amqp` inputs and outputs. These changes should be backwards compatible for existing pipelines, but changes the way in which queues, exchanges and bindings are declared using these types.
 
 ## 0.23.17 - 2018-08-17
 
@@ -1900,17 +1731,14 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 - New `metadata` condition type.
 - More metadata fields for `kafka` input.
-- Field `commit_period_ms` for `kafka` and `kafka_balanced` inputs for
-  specifying a commit period.
+- Field `commit_period_ms` for `kafka` and `kafka_balanced` inputs for specifying a commit period.
 
 ## 0.23.1 - 2018-08-06
 
 ### Added
 
-- New `retries` field to `s3` input, to cap the number of download attempts made
-  on the same bucket item.
-- Added metadata based mechanism to detect final message from a `read_until`
-  input.
+- New `retries` field to `s3` input, to cap the number of download attempts made on the same bucket item.
+- Added metadata based mechanism to detect final message from a `read_until` input.
 - Added field to `split` processor for specifying target batch sizes.
 
 ## 0.23.0 - 2018-08-06
@@ -1918,30 +1746,23 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 ### Added
 
 - Metadata fields are now per message part within a batch.
-- New `metadata_json_object` function interpolation to return a JSON object of
-  metadata key/value pairs.
+- New `metadata_json_object` function interpolation to return a JSON object of metadata key/value pairs.
 
 ### Changed
 
-- The `metadata` function interpolation now allows part indexing and no longer
-  returns a JSON object when no key is specified, this behaviour can now be done
-  using the `metadata_json_object` function.
+- The `metadata` function interpolation now allows part indexing and no longer returns a JSON object when no key is specified, this behaviour can now be done using the `metadata_json_object` function.
 
 ## 0.22.0 - 2018-08-03
 
 ### Added
 
-- Fields for the `http` processor to enable parallel requests from message
-  batches.
+- Fields for the `http` processor to enable parallel requests from message batches.
 
 ### Changed
 
-- Broker level output processors are now applied _before_ the individual output
-  processors.
-- The `dynamic` input and output HTTP paths for CRUD operations are now
-  `/inputs/{input_id}` and `/outputs/{output_id}` respectively.
-- Removed deprecated `amazon_s3`, `amazon_sqs` and `scalability_protocols` input
-  and output types.
+- Broker level output processors are now applied _before_ the individual output processors.
+- The `dynamic` input and output HTTP paths for CRUD operations are now `/inputs/{input_id}` and `/outputs/{output_id}` respectively.
+- Removed deprecated `amazon_s3`, `amazon_sqs` and `scalability_protocols` input and output types.
 - Removed deprecated `json_fields` field from the `dedupe` processor.
 
 ## 0.21.0 - 2018-07-31
@@ -1952,9 +1773,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Changed
 
-- TLS config fields have been cleaned up for multiple types. This affects
-  the `kafka`, `kafka_balanced` and `http_client` input and output types, as
-  well as the `http` processor type.
+- TLS config fields have been cleaned up for multiple types. This affects the `kafka`, `kafka_balanced` and `http_client` input and output types, as well as the `http` processor type.
 
 ## 0.20.8 - 2018-07-30
 
@@ -1962,26 +1781,20 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 - New `delete_all` and `delete_prefix` operators for `metadata` processor.
 - More metadata fields extracted from the AMQP input.
-- HTTP clients now support function interpolation on the URL and header values,
-  this includes the `http_client` input and output as well as the `http`
-  processor.
+- HTTP clients now support function interpolation on the URL and header values, this includes the `http_client` input and output as well as the `http` processor.
 
 ## 0.20.7 - 2018-07-27
 
 ### Added
 
-- New `key` field added to the `dedupe` processor, allowing you to deduplicate
-  using function interpolation. This deprecates the `json_paths` array field.
+- New `key` field added to the `dedupe` processor, allowing you to deduplicate using function interpolation. This deprecates the `json_paths` array field.
 
 ## 0.20.6 - 2018-07-27
 
 ### Added
 
-- New `s3` and `sqs` input and output types, these replace the now deprecated
-  `amazon_s3` and `amazon_sqs` types respectively, which will eventually be
-  removed.
-- New `nanomsg` input and output types, these replace the now deprecated
-  `scalability_protocols` types, which will eventually be removed.
+- New `s3` and `sqs` input and output types, these replace the now deprecated `amazon_s3` and `amazon_sqs` types respectively, which will eventually be removed.
+- New `nanomsg` input and output types, these replace the now deprecated `scalability_protocols` types, which will eventually be removed.
 
 ## 0.20.5 - 2018-07-27
 
@@ -2001,20 +1814,17 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Added
 
-- New config interpolator function `json_field` for extracting parts of a JSON
-  message into a config value.
+- New config interpolator function `json_field` for extracting parts of a JSON message into a config value.
 
 ### Changed
 
-- Log level config field no longer stutters, `logger.log_level` is now
-  `logger.level`.
+- Log level config field no longer stutters, `logger.log_level` is now `logger.level`.
 
 ## 0.19.1 - 2018-07-25
 
 ### Added
 
-- Ability to create batches via conditions on message payloads in the `batch`
-  processor.
+- Ability to create batches via conditions on message payloads in the `batch` processor.
 - New `--examples` flag for generating specific examples from Benthos.
 
 ## 0.19.0 - 2018-07-23
@@ -2025,8 +1835,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Changed
 
-- Processor `process_map` replaced field `strict_premapping` with
-  `premap_optional`.
+- Processor `process_map` replaced field `strict_premapping` with `premap_optional`.
 
 ## 0.18.0 - 2018-07-20
 
@@ -2037,8 +1846,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Changed
 
-- Removed mapping fields from the `http` processor, this behaviour has been put
-  into the new `process_map` processor instead.
+- Removed mapping fields from the `http` processor, this behaviour has been put into the new `process_map` processor instead.
 
 ## 0.17.0 - 2018-07-17
 
@@ -2055,8 +1863,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Changed
 
-- Metrics for items configured within the `resources` section are now namespaced
-  under their identifier.
+- Metrics for items configured within the `resources` section are now namespaced under their identifier.
 
 ## 0.16.3 - 2018-07-16
 
@@ -2090,16 +1897,14 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Added
 
-- New `http` processor, where payloads can be sent to arbitrary HTTP endpoints
-  and the result constructed into a new payload.
+- New `http` processor, where payloads can be sent to arbitrary HTTP endpoints and the result constructed into a new payload.
 - New `inproc` inputs and outputs for linking streams together.
 
 ## 0.15.3 - 2018-07-03
 
 ### Added
 
-- New streams endpoint `/streams/{id}/stats` for obtaining JSON metrics for a
-  stream.
+- New streams endpoint `/streams/{id}/stats` for obtaining JSON metrics for a stream.
 
 ### Changed
 
@@ -2113,16 +1918,13 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Changed
 
-- Sweeping changes were made to the environment variable configuration file.
-  This file is now auto generated along with its supporting document. This
-  change will impact the docker image.
+- Sweeping changes were made to the environment variable configuration file. This file is now auto generated along with its supporting document. This change will impact the docker image.
 
 ## 0.14.7 - 2018-06-24
 
 ### Added
 
-- New `filter_parts` processor for filtering individual parts of a message
-  batch.
+- New `filter_parts` processor for filtering individual parts of a message batch.
 - New field `open_message` for `websocket` input.
 
 ### Changed
@@ -2157,17 +1959,14 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Added
 
-- More granular config options in the `http_client` output for controlling retry
-  logic.
-- New `try` pattern for the output `broker` type, which can be used in order to
-  configure fallback outputs.
+- More granular config options in the `http_client` output for controlling retry logic.
+- New `try` pattern for the output `broker` type, which can be used in order to configure fallback outputs.
 - New `json` processor, this replaces `delete_json`, `select_json`, `set_json`.
 
 ### Changed
 
 - The `streams` API endpoints have been changed to become more "RESTy".
-- Removed the `delete_json`, `select_json` and `set_json` processors, please use
-  the `json` processor instead.
+- Removed the `delete_json`, `select_json` and `set_json` processors, please use the `json` processor instead.
 
 ## 0.13.5 - 2018-06-10
 
@@ -2184,8 +1983,7 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 ### Changed
 
 - Increase default `max_buffer` for `stdin`, `file` and `http_client` inputs.
-- Command flags `--print-yaml` and `--print-json` changed to provide sanitised
-  outputs unless accompanied by new `--all` flag.
+- Command flags `--print-yaml` and `--print-json` changed to provide sanitised outputs unless accompanied by new `--all` flag.
 
 ### Removed
 
@@ -2216,16 +2014,14 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 
 ### Changed
 
-- Back to using Scratch as base for Docker image, instead taking ca-certificates
-  from the build image.
+- Back to using Scratch as base for Docker image, instead taking ca-certificates from the build image.
 
 ## 0.13.0 - 2018-06-02
 
 ### Added
 
 - New `batch` processor for combining payloads up to a number of bytes.
-- New `conditional` processor, allows you to configure a chain of processors to
-  only be run if the payload passes a `condition`.
+- New `conditional` processor, allows you to configure a chain of processors to only be run if the payload passes a `condition`.
 - New `--stream` mode features:
   + POST verb for `/streams` path now supported.
   + New `--streams-dir` flag for parsing a directory of stream configs.
@@ -2233,6 +2029,5 @@ can read the [full migration guide here](https://www.benthos.dev/docs/guides/mig
 ### Changed
 
 - The `condition` processor has been renamed `filter`.
-- The `custom_delimiter` fields in any line reader types `file`, `stdin`,
-  `stdout`, etc have been renamed `delimiter`, where the behaviour is the same.
+- The `custom_delimiter` fields in any line reader types `file`, `stdin`, `stdout`, etc have been renamed `delimiter`, where the behaviour is the same.
 - Now using Alpine as base for Docker image, includes ca-certificates.
