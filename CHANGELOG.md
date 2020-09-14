@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.28.0 - 2020-09-14
+
 ### Added
 
 - New methods `any`, `all` and `json_schema` added to Bloblang.
