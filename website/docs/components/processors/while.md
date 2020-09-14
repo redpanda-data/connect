@@ -15,9 +15,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-While is a processor that has a condition and a list of child processors. The
-child processors are executed continuously on a message batch for as long as the
-child condition resolves to true.
+While is a processor that checks a [Bloblang query](/docs/guides/bloblang/about/) against messages and executes child processors on them for as long as the query resolves to true.
 
 
 <Tabs defaultValue="common" values={[
@@ -31,12 +29,7 @@ child condition resolves to true.
 # Common config fields, showing default values
 while:
   at_least_once: false
-  condition:
-    text:
-      arg: ""
-      operator: equals_cs
-      part: 0
-    type: text
+  check: ""
   processors: []
 ```
 
@@ -48,30 +41,18 @@ while:
 while:
   at_least_once: false
   max_loops: 0
-  condition:
-    text:
-      arg: ""
-      operator: equals_cs
-      part: 0
-    type: text
+  check: ""
   processors: []
 ```
 
 </TabItem>
 </Tabs>
 
-The field `at_least_once`, if true, ensures that the child processors
-are always executed at least one time (like a do .. while loop.)
+The field `at_least_once`, if true, ensures that the child processors are always executed at least one time (like a do .. while loop.)
 
-The field `max_loops`, if greater than zero, caps the number of loops
-for a message batch to this value.
+The field `max_loops`, if greater than zero, caps the number of loops for a message batch to this value.
 
-If following a loop execution the number of messages in a batch is reduced to
-zero the loop is exited regardless of the condition result. If following a loop
-execution there are more than 1 message batches the condition is checked against
-the first batch only.
-
-You can find a [full list of conditions here](/docs/components/conditions/about).
+If following a loop execution the number of messages in a batch is reduced to zero the loop is exited regardless of the condition result. If following a loop execution there are more than 1 message batches the query is checked against the first batch only.
 
 ## Fields
 
@@ -91,13 +72,21 @@ An optional maximum number of loops to execute. Helps protect against accidental
 Type: `number`  
 Default: `0`  
 
-### `condition`
+### `check`
 
-A [condition](/docs/components/conditions/about) to test for each loop. If the condition fails the loop is stopped.
+A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether the while loop should execute again.
 
 
-Type: `object`  
-Default: `{"text":{"arg":"","operator":"equals_cs","part":0},"type":"text"}`  
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+check: errored()
+
+check: this.urls.unprocessed.length() > 0
+```
 
 ### `processors`
 

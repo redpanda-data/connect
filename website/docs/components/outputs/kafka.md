@@ -43,6 +43,7 @@ output:
       count: 1
       byte_size: 0
       period: ""
+      check: ""
 ```
 
 </TabItem>
@@ -81,9 +82,7 @@ output:
       count: 1
       byte_size: 0
       period: ""
-      condition:
-        static: false
-        type: static
+      check: ""
       processors: []
     max_retries: 0
     backoff:
@@ -368,6 +367,7 @@ Type: `object`
 
 batching:
   byte_size: 5000
+  count: 0
   period: 1s
 
 batching:
@@ -375,8 +375,8 @@ batching:
   period: 1s
 
 batching:
-  condition:
-    bloblang: this.contains("END BATCH")
+  check: this.contains("END BATCH")
+  count: 0
   period: 1m
 ```
 
@@ -414,13 +414,19 @@ period: 1m
 period: 500ms
 ```
 
-### `batching.condition`
+### `batching.check`
 
-A [condition](/docs/components/conditions/about) to test against each message entering the batch, if this condition resolves to `true` then the batch is flushed.
+A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should end a batch.
 
 
-Type: `object`  
-Default: `{"static":false,"type":"static"}`  
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+check: this.type == "end_of_transaction"
+```
 
 ### `batching.processors`
 

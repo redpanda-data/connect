@@ -19,12 +19,7 @@ pipeline:
     - type: while
       while:
         at_least_once: false
-        condition:
-          type: text
-          text:
-            arg: ""
-            operator: equals_cs
-            part: 0
+        check: ""
         max_loops: 0
         processors: []
   threads: 1

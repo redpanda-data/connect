@@ -13,6 +13,31 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestPolicyNoop(t *testing.T) {
+	conf := NewPolicyConfig()
+	assert.True(t, conf.IsNoop())
+
+	conf = NewPolicyConfig()
+	conf.Count = 2
+	assert.False(t, conf.IsNoop())
+
+	conf = NewPolicyConfig()
+	conf.Condition = condition.NewConfig()
+	assert.False(t, conf.IsNoop())
+
+	conf = NewPolicyConfig()
+	conf.Check = "foo.bar"
+	assert.False(t, conf.IsNoop())
+
+	conf = NewPolicyConfig()
+	conf.ByteSize = 10
+	assert.False(t, conf.IsNoop())
+
+	conf = NewPolicyConfig()
+	conf.Period = "10s"
+	assert.False(t, conf.IsNoop())
+}
+
 func TestPolicyBasic(t *testing.T) {
 	conf := NewPolicyConfig()
 	conf.Count = 2
@@ -104,6 +129,65 @@ func TestPolicySize(t *testing.T) {
 		t.Error("Unexpected batch")
 	}
 	if !pol.Add(message.NewPart(exp[1])) {
+		t.Error("Expected batch")
+	}
+
+	msg := pol.Flush()
+	if !reflect.DeepEqual(exp, message.GetAllBytes(msg)) {
+		t.Errorf("Wrong result: %s != %s", message.GetAllBytes(msg), exp)
+	}
+
+	if msg = pol.Flush(); msg != nil {
+		t.Error("Non-nil empty flush")
+	}
+}
+
+func TestPolicyCheck(t *testing.T) {
+	conf := NewPolicyConfig()
+	conf.Check = `content() == "bar"`
+
+	pol, err := NewPolicy(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exp := [][]byte{[]byte("foo"), []byte("bar")}
+
+	if pol.Add(message.NewPart(exp[0])) {
+		t.Error("Unexpected batch")
+	}
+	if !pol.Add(message.NewPart(exp[1])) {
+		t.Error("Expected batch")
+	}
+
+	msg := pol.Flush()
+	if !reflect.DeepEqual(exp, message.GetAllBytes(msg)) {
+		t.Errorf("Wrong result: %s != %s", message.GetAllBytes(msg), exp)
+	}
+
+	if msg = pol.Flush(); msg != nil {
+		t.Error("Non-nil empty flush")
+	}
+}
+
+func TestPolicyCheckAdvanced(t *testing.T) {
+	conf := NewPolicyConfig()
+	conf.Check = `batch_size() >= 3`
+
+	pol, err := NewPolicy(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exp := [][]byte{[]byte("foo"), []byte("bar"), []byte("baz")}
+
+	if pol.Add(message.NewPart(exp[0])) {
+		t.Error("Unexpected batch")
+	}
+	if pol.Add(message.NewPart(exp[1])) {
+		t.Error("Expected batch")
+	}
+	if !pol.Add(message.NewPart(exp[2])) {
 		t.Error("Expected batch")
 	}
 

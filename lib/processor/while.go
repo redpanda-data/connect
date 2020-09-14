@@ -1,10 +1,13 @@
 package processor
 
 import (
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -23,45 +26,47 @@ func init() {
 			CategoryComposition,
 		},
 		Summary: `
-While is a processor that has a condition and a list of child processors. The
-child processors are executed continuously on a message batch for as long as the
-child condition resolves to true.`,
+While is a processor that checks a [Bloblang query](/docs/guides/bloblang/about/) against messages and executes child processors on them for as long as the query resolves to true.`,
 		Description: `
-The field ` + "`at_least_once`" + `, if true, ensures that the child processors
-are always executed at least one time (like a do .. while loop.)
+The field ` + "`at_least_once`" + `, if true, ensures that the child processors are always executed at least one time (like a do .. while loop.)
 
-The field ` + "`max_loops`" + `, if greater than zero, caps the number of loops
-for a message batch to this value.
+The field ` + "`max_loops`" + `, if greater than zero, caps the number of loops for a message batch to this value.
 
-If following a loop execution the number of messages in a batch is reduced to
-zero the loop is exited regardless of the condition result. If following a loop
-execution there are more than 1 message batches the condition is checked against
-the first batch only.
-
-You can find a [full list of conditions here](/docs/components/conditions/about).`,
+If following a loop execution the number of messages in a batch is reduced to zero the loop is exited regardless of the condition result. If following a loop execution there are more than 1 message batches the query is checked against the first batch only.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("at_least_once", "Whether to always run the child processors at least one time."),
 			docs.FieldAdvanced("max_loops", "An optional maximum number of loops to execute. Helps protect against accidentally creating infinite loops."),
-			docs.FieldCommon("condition", "A [condition](/docs/components/conditions/about) to test for each loop. If the condition fails the loop is stopped."),
+			docs.FieldCommon(
+				"check",
+				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether the while loop should execute again.",
+				`errored()`,
+				`this.urls.unprocessed.length() > 0`,
+			).HasDefault(""),
+			docs.FieldDeprecated("condition"),
 			docs.FieldCommon("processors", "A list of child processors to execute on each loop."),
 		},
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			condSanit, err := condition.SanitiseConfig(conf.While.Condition)
-			if err != nil {
-				return nil, err
-			}
 			procConfs := make([]interface{}, len(conf.While.Processors))
 			for i, pConf := range conf.While.Processors {
+				var err error
 				if procConfs[i], err = SanitiseConfig(pConf); err != nil {
 					return nil, err
 				}
 			}
-			return map[string]interface{}{
+			whileSanit := map[string]interface{}{
+				"check":         conf.While.Check,
 				"at_least_once": conf.While.AtLeastOnce,
 				"max_loops":     conf.While.MaxLoops,
-				"condition":     condSanit,
 				"processors":    procConfs,
-			}, nil
+			}
+			if !isDefaultGroupCond(conf.While.Condition) {
+				condSanit, err := condition.SanitiseConfig(conf.While.Condition)
+				if err != nil {
+					return nil, err
+				}
+				whileSanit["condition"] = condSanit
+			}
+			return whileSanit, nil
 		},
 	}
 }
@@ -73,6 +78,7 @@ You can find a [full list of conditions here](/docs/components/conditions/about)
 type WhileConfig struct {
 	AtLeastOnce bool             `json:"at_least_once" yaml:"at_least_once"`
 	MaxLoops    int              `json:"max_loops" yaml:"max_loops"`
+	Check       string           `json:"check" yaml:"check"`
 	Condition   condition.Config `json:"condition" yaml:"condition"`
 	Processors  []Config         `json:"processors" yaml:"processors"`
 }
@@ -82,6 +88,7 @@ func NewWhileConfig() WhileConfig {
 	return WhileConfig{
 		AtLeastOnce: false,
 		MaxLoops:    0,
+		Check:       "",
 		Condition:   condition.NewConfig(),
 		Processors:  []Config{},
 	}
@@ -96,6 +103,7 @@ type While struct {
 	maxLoops    int
 	atLeastOnce bool
 	cond        condition.Type
+	check       *mapping.Executor
 	children    []types.Processor
 
 	log log.Modular
@@ -111,9 +119,31 @@ type While struct {
 func NewWhile(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	cond, err := condition.New(conf.While.Condition, mgr, log.NewModule(".condition"), metrics.Namespaced(stats, "condition"))
-	if err != nil {
-		return nil, err
+	var cond condition.Type
+	var check *mapping.Executor
+	var err error
+
+	if !isDefaultGroupCond(conf.While.Condition) {
+		if cond, err = condition.New(
+			conf.While.Condition, mgr,
+			log.NewModule(".condition"),
+			metrics.Namespaced(stats, "condition"),
+		); err != nil {
+			return nil, err
+		}
+	}
+	if len(conf.While.Check) > 0 {
+		if check, err = bloblang.NewMapping("", conf.While.Check); err != nil {
+			return nil, fmt.Errorf("failed to parse check query: %w", err)
+		}
+	}
+
+	if cond == nil && check == nil {
+		return nil, errors.New("a check query is required")
+	}
+
+	if cond != nil && check != nil {
+		return nil, errors.New("cannot specify both a condition and a check query")
 	}
 
 	var children []types.Processor
@@ -133,6 +163,7 @@ func NewWhile(
 		maxLoops:    conf.While.MaxLoops,
 		atLeastOnce: conf.While.AtLeastOnce,
 		cond:        cond,
+		check:       check,
 		children:    children,
 
 		log: log,
@@ -147,6 +178,18 @@ func NewWhile(
 
 //------------------------------------------------------------------------------
 
+func (w *While) checkMsg(msg types.Message) bool {
+	if w.cond != nil {
+		return w.cond.Check(msg)
+	}
+	c, err := w.check.QueryPart(0, msg)
+	if err != nil {
+		c = false
+		w.log.Errorf("Query failed for loop: %v\n", err)
+	}
+	return c
+}
+
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
 func (w *While) ProcessMessage(msg types.Message) (msgs []types.Message, res types.Response) {
@@ -156,7 +199,7 @@ func (w *While) ProcessMessage(msg types.Message) (msgs []types.Message, res typ
 	msgs = []types.Message{msg}
 
 	loops := 0
-	condResult := w.atLeastOnce || w.cond.Check(msg)
+	condResult := w.atLeastOnce || w.checkMsg(msg)
 	for condResult {
 		if atomic.LoadInt32(&w.running) != 1 {
 			return nil, response.NewError(types.ErrTypeClosed)
@@ -176,7 +219,7 @@ func (w *While) ProcessMessage(msg types.Message) (msgs []types.Message, res typ
 		if len(msgs) == 0 {
 			return
 		}
-		condResult = w.cond.Check(msgs[0])
+		condResult = w.checkMsg(msgs[0])
 		loops++
 	}
 

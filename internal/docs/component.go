@@ -361,9 +361,6 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 			}
 			flattenedFields = append(flattenedFields, newV)
 			if len(v.Children) > 0 {
-				if v.Name == "cases" {
-					fmt.Printf("foo: %v\n", v.Type)
-				}
 				newPath := path + v.Name
 				if newV.Type == FieldArray {
 					newPath = newPath + "[]"

@@ -90,7 +90,7 @@ func TestSanitise(t *testing.T) {
 	exp = `{` +
 		`"type":"memory",` +
 		`"memory":{` +
-		`"batch_policy":{"byte_size":0,"condition":{"type":"static","static":false},"count":0,"enabled":false,"period":"","processors":[]},` +
+		`"batch_policy":{"byte_size":0,"check":"","count":0,"enabled":false,"period":"","processors":[]},` +
 		`"limit":20` +
 		`}` +
 		`}`

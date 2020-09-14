@@ -19,14 +19,15 @@ All notable changes to this project will be documented in this file.
   field `path`. When used the processor now applies to all messages of a batch
   and the name of the metric is now absolute, without being prefixed by a path
   generated based on its position within the config.
+- New field `check` added to `group_by` processor children, which now replaces
+  the old `condition` field.
+- New field `check` added to `while` processor, which now replaces the old
+  `condition` field.
 
 ### Changed
 
 - The `bloblang` input with an interval configured now emits the first message
   straight away.
-- New field `cases` replaces `outputs` for the `switch` output, `outputs` can
-  still be used for backwards compatibility but will be removed in the next
-  major version release.
 
 ## 3.27.0 - 2020-09-07
 

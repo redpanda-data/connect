@@ -15,27 +15,37 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Splits a batch of messages into N batches, where each resulting batch contains a group of messages determined by conditions that are applied per message of the original batch.
+Splits a [batch of messages](/docs/configuration/batching/) into N batches, where each resulting batch contains a group of messages determined by a [Bloblang query](/docs/guides/bloblang/about/).
 
 ```yaml
 # Config fields, showing default values
 group_by: []
 ```
 
-Once the groups are established a list of processors are applied to their respective grouped batch, which can be used to label the batch as per their grouping.
+Once the groups are established a list of processors are applied to their respective grouped batch, which can be used to label the batch as per their grouping. Messages that do not pass the check of any specified group are placed in their own group.
 
 The functionality of this processor depends on being applied across messages
 that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).
 
 ## Fields
 
-### `[].condition`
+### `[].check`
 
-A [condition](/docs/components/conditions/about/) that is checked against each message individually in order to determine whether it belongs to a group.
+A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message belongs to a given group.
 
 
-Type: `object`  
-Default: `{}`  
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+check: this.type == "foo"
+
+check: this.contents.urls.contains("https://benthos.dev/")
+
+check: "true"
+```
 
 ### `[].processors`
 
@@ -59,8 +69,7 @@ Imagine we have a batch of messages that we wish to split into a group of foos a
 pipeline:
   processors:
     - group_by:
-      - condition:
-          bloblang: 'content().contains("this is a foo")'
+      - check: content().contains("this is a foo")
         processors:
           - archive:
               format: tar
@@ -71,7 +80,7 @@ pipeline:
 output:
   switch:
     cases:
-      - check: 'meta("grouping") == "foo"'
+      - check: meta("grouping") == "foo"
         output:
           gcp_pubsub:
             project: foo_prod

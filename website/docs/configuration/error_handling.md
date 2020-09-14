@@ -85,8 +85,7 @@ pipeline:
       - while:
           at_least_once: true
           max_loops: 0 # Set this greater than zero to cap the number of attempts
-          condition:
-            bloblang: errored()
+          check: errored()
           processors:
             - type: catch # Wipe any previous error
             - resource: foo # Attempt this processor until success
@@ -130,7 +129,6 @@ output:
 [processor.catch]: /docs/components/processors/catch
 [processor.try]: /docs/components/processors/try
 [processor.log]: /docs/components/processors/log
-[processor.group_by]: /docs/components/processors/group_by
 [condition.processor_failed]: /docs/components/conditions/processor_failed
 [output.switch]: /docs/components/outputs/switch
 [output.broker]: /docs/components/outputs/broker

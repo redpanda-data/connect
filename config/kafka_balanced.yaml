@@ -12,9 +12,7 @@ input:
       - localhost:9092
     batching:
       byte_size: 0
-      condition:
-        type: static
-        static: false
+      check: ""
       count: 1
       period: ""
       processors: []

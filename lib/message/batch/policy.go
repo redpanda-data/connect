@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -15,32 +17,42 @@ import (
 // SanitisePolicyConfig returns a policy config structure ready to be marshalled
 // with irrelevant fields omitted.
 func SanitisePolicyConfig(policy PolicyConfig) (interface{}, error) {
-	condSanit, err := condition.SanitiseConfig(policy.Condition)
-	if err != nil {
-		return nil, err
-	}
 	procConfs := make([]interface{}, len(policy.Processors))
 	for i, pConf := range policy.Processors {
+		var err error
 		if procConfs[i], err = processor.SanitiseConfig(pConf); err != nil {
 			return nil, err
 		}
 	}
-	return map[string]interface{}{
+	bSanit := map[string]interface{}{
 		"byte_size":  policy.ByteSize,
 		"count":      policy.Count,
-		"condition":  condSanit,
+		"check":      policy.Check,
 		"period":     policy.Period,
 		"processors": procConfs,
-	}, nil
+	}
+	if !isNoopCondition(policy.Condition) {
+		condSanit, err := condition.SanitiseConfig(policy.Condition)
+		if err != nil {
+			return nil, err
+		}
+		bSanit["condition"] = condSanit
+	}
+	return bSanit, nil
 }
 
 //------------------------------------------------------------------------------
+
+func isNoopCondition(conf condition.Config) bool {
+	return conf.Type == condition.TypeStatic && !conf.Static
+}
 
 // PolicyConfig contains configuration parameters for a batch policy.
 type PolicyConfig struct {
 	ByteSize   int                `json:"byte_size" yaml:"byte_size"`
 	Count      int                `json:"count" yaml:"count"`
 	Condition  condition.Config   `json:"condition" yaml:"condition"`
+	Check      string             `json:"check" yaml:"check"`
 	Period     string             `json:"period" yaml:"period"`
 	Processors []processor.Config `json:"processors" yaml:"processors"`
 }
@@ -54,6 +66,7 @@ func NewPolicyConfig() PolicyConfig {
 		ByteSize:   0,
 		Count:      0,
 		Condition:  cond,
+		Check:      "",
 		Period:     "",
 		Processors: []processor.Config{},
 	}
@@ -67,7 +80,10 @@ func (p PolicyConfig) IsNoop() bool {
 	if p.Count > 1 {
 		return false
 	}
-	if p.Condition.Type != condition.TypeStatic {
+	if !isNoopCondition(p.Condition) {
+		return false
+	}
+	if len(p.Check) > 0 {
 		return false
 	}
 	if len(p.Period) > 0 {
@@ -90,6 +106,7 @@ type Policy struct {
 	count     int
 	period    time.Duration
 	cond      condition.Type
+	check     *mapping.Executor
 	procs     []types.Processor
 	sizeTally int
 	parts     []types.Part
@@ -100,6 +117,7 @@ type Policy struct {
 	mSizeBatch   metrics.StatCounter
 	mCountBatch  metrics.StatCounter
 	mPeriodBatch metrics.StatCounter
+	mCheckBatch  metrics.StatCounter
 	mCondBatch   metrics.StatCounter
 }
 
@@ -110,9 +128,20 @@ func NewPolicy(
 	log log.Modular,
 	stats metrics.Type,
 ) (*Policy, error) {
-	cond, err := condition.New(conf.Condition, mgr, log.NewModule(".condition"), metrics.Namespaced(stats, "condition"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create condition: %v", err)
+	var cond types.Condition
+	var err error
+	if !isNoopCondition(conf.Condition) {
+		if cond, err = condition.New(
+			conf.Condition, mgr, log.NewModule(".condition"), metrics.Namespaced(stats, "condition"),
+		); err != nil {
+			return nil, fmt.Errorf("failed to create condition: %v", err)
+		}
+	}
+	var check *mapping.Executor
+	if len(conf.Check) > 0 {
+		if check, err = bloblang.NewMapping("", conf.Check); err != nil {
+			return nil, fmt.Errorf("failed to parse check: %v", err)
+		}
 	}
 	var period time.Duration
 	if len(conf.Period) > 0 {
@@ -136,6 +165,7 @@ func NewPolicy(
 		count:    conf.Count,
 		period:   period,
 		cond:     cond,
+		check:    check,
 		procs:    procs,
 
 		lastBatch: time.Now(),
@@ -143,6 +173,7 @@ func NewPolicy(
 		mSizeBatch:   stats.GetCounter("on_size"),
 		mCountBatch:  stats.GetCounter("on_count"),
 		mPeriodBatch: stats.GetCounter("on_period"),
+		mCheckBatch:  stats.GetCounter("on_check"),
 		mCondBatch:   stats.GetCounter("on_condition"),
 	}, nil
 }
@@ -167,12 +198,24 @@ func (p *Policy) Add(part types.Part) bool {
 	}
 	tmpMsg := message.New(nil)
 	tmpMsg.Append(part)
-	if !p.triggered && p.cond.Check(tmpMsg) {
+	if p.cond != nil && !p.triggered && p.cond.Check(tmpMsg) {
 		p.triggered = true
 		p.mCondBatch.Incr(1)
 		p.log.Traceln("Batching based on condition")
 	}
-
+	tmpMsg.SetAll(p.parts)
+	if p.check != nil && !p.triggered {
+		test, err := p.check.QueryPart(tmpMsg.Len()-1, tmpMsg)
+		if err != nil {
+			test = false
+			p.log.Errorf("Failed to execute batch check query: %v\n", err)
+		}
+		if test {
+			p.triggered = true
+			p.mCheckBatch.Incr(1)
+			p.log.Traceln("Batching based on check query")
+		}
+	}
 	return p.triggered || (p.period > 0 && time.Since(p.lastBatch) > p.period)
 }
 

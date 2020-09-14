@@ -27,6 +27,7 @@ input:
         amqp_0_9:
           batching:
             byte_size: ${INPUT_AMQP_0_9_BATCHING_BYTE_SIZE:0}
+            check: ${INPUT_AMQP_0_9_BATCHING_CHECK}
             count: ${INPUT_AMQP_0_9_BATCHING_COUNT:1}
             period: ${INPUT_AMQP_0_9_BATCHING_PERIOD}
           consumer_tag: ${INPUT_AMQP_0_9_CONSUMER_TAG:benthos-consumer}
@@ -74,6 +75,7 @@ input:
         gcp_pubsub:
           batching:
             byte_size: ${INPUT_GCP_PUBSUB_BATCHING_BYTE_SIZE:0}
+            check: ${INPUT_GCP_PUBSUB_BATCHING_CHECK}
             count: ${INPUT_GCP_PUBSUB_BATCHING_COUNT:1}
             period: ${INPUT_GCP_PUBSUB_BATCHING_PERIOD}
           max_batch_count: ${INPUT_GCP_PUBSUB_MAX_BATCH_COUNT:1}
@@ -143,6 +145,7 @@ input:
             - ${INPUT_KAFKA_ADDRESSES:localhost:9092}
           batching:
             byte_size: ${INPUT_KAFKA_BATCHING_BYTE_SIZE:0}
+            check: ${INPUT_KAFKA_BATCHING_CHECK}
             count: ${INPUT_KAFKA_BATCHING_COUNT:1}
             period: ${INPUT_KAFKA_BATCHING_PERIOD}
           client_id: ${INPUT_KAFKA_CLIENT_ID:benthos_kafka_input}
@@ -172,6 +175,7 @@ input:
             - ${INPUT_KAFKA_BALANCED_ADDRESSES:localhost:9092}
           batching:
             byte_size: ${INPUT_KAFKA_BALANCED_BATCHING_BYTE_SIZE:0}
+            check: ${INPUT_KAFKA_BALANCED_BATCHING_CHECK}
             count: ${INPUT_KAFKA_BALANCED_BATCHING_COUNT:1}
             period: ${INPUT_KAFKA_BALANCED_BATCHING_PERIOD}
           client_id: ${INPUT_KAFKA_BALANCED_CLIENT_ID:benthos_kafka_input}
@@ -203,6 +207,7 @@ input:
         kinesis:
           batching:
             byte_size: ${INPUT_KINESIS_BATCHING_BYTE_SIZE:0}
+            check: ${INPUT_KINESIS_BATCHING_CHECK}
             count: ${INPUT_KINESIS_BATCHING_COUNT:1}
             period: ${INPUT_KINESIS_BATCHING_PERIOD}
           client_id: ${INPUT_KINESIS_CLIENT_ID:benthos_consumer}
@@ -225,6 +230,7 @@ input:
         kinesis_balanced:
           batching:
             byte_size: ${INPUT_KINESIS_BALANCED_BATCHING_BYTE_SIZE:0}
+            check: ${INPUT_KINESIS_BALANCED_BATCHING_CHECK}
             count: ${INPUT_KINESIS_BALANCED_BATCHING_COUNT:1}
             period: ${INPUT_KINESIS_BALANCED_BATCHING_PERIOD}
           credentials:
@@ -271,6 +277,7 @@ input:
           ack_wait: ${INPUT_NATS_STREAM_ACK_WAIT:30s}
           batching:
             byte_size: ${INPUT_NATS_STREAM_BATCHING_BYTE_SIZE:0}
+            check: ${INPUT_NATS_STREAM_BATCHING_CHECK}
             count: ${INPUT_NATS_STREAM_BATCHING_COUNT:1}
             period: ${INPUT_NATS_STREAM_BATCHING_PERIOD}
           client_id: ${INPUT_NATS_STREAM_CLIENT_ID:benthos_client}
@@ -286,6 +293,7 @@ input:
         nsq:
           batching:
             byte_size: ${INPUT_NSQ_BATCHING_BYTE_SIZE:0}
+            check: ${INPUT_NSQ_BATCHING_CHECK}
             count: ${INPUT_NSQ_BATCHING_COUNT:1}
             period: ${INPUT_NSQ_BATCHING_PERIOD}
           channel: ${INPUT_NSQ_CHANNEL:benthos_stream}
@@ -312,6 +320,7 @@ input:
         redis_streams:
           batching:
             byte_size: ${INPUT_REDIS_STREAMS_BATCHING_BYTE_SIZE:0}
+            check: ${INPUT_REDIS_STREAMS_BATCHING_CHECK}
             count: ${INPUT_REDIS_STREAMS_BATCHING_COUNT:1}
             period: ${INPUT_REDIS_STREAMS_BATCHING_PERIOD}
           body_key: ${INPUT_REDIS_STREAMS_BODY_KEY:body}
@@ -769,6 +778,7 @@ output:
             username: ${OUTPUT_ELASTICSEARCH_BASIC_AUTH_USERNAME}
           batching:
             byte_size: ${OUTPUT_ELASTICSEARCH_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_ELASTICSEARCH_BATCHING_CHECK}
             count: ${OUTPUT_ELASTICSEARCH_BATCHING_COUNT:1}
             period: ${OUTPUT_ELASTICSEARCH_BATCHING_PERIOD}
           healthcheck: ${OUTPUT_ELASTICSEARCH_HEALTHCHECK:true}
@@ -811,6 +821,7 @@ output:
             username: ${OUTPUT_HTTP_CLIENT_BASIC_AUTH_USERNAME}
           batching:
             byte_size: ${OUTPUT_HTTP_CLIENT_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_HTTP_CLIENT_BATCHING_CHECK}
             count: ${OUTPUT_HTTP_CLIENT_BATCHING_COUNT:1}
             period: ${OUTPUT_HTTP_CLIENT_BATCHING_PERIOD}
           copy_response_headers: ${OUTPUT_HTTP_CLIENT_COPY_RESPONSE_HEADERS:false}
@@ -856,6 +867,7 @@ output:
             max_interval: ${OUTPUT_KAFKA_BACKOFF_MAX_INTERVAL:10s}
           batching:
             byte_size: ${OUTPUT_KAFKA_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_KAFKA_BATCHING_CHECK}
             count: ${OUTPUT_KAFKA_BATCHING_COUNT:1}
             period: ${OUTPUT_KAFKA_BATCHING_PERIOD}
           client_id: ${OUTPUT_KAFKA_CLIENT_ID:benthos_kafka_output}
@@ -888,6 +900,7 @@ output:
             max_interval: ${OUTPUT_KINESIS_BACKOFF_MAX_INTERVAL:5s}
           batching:
             byte_size: ${OUTPUT_KINESIS_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_KINESIS_BATCHING_CHECK}
             count: ${OUTPUT_KINESIS_BATCHING_COUNT:1}
             period: ${OUTPUT_KINESIS_BATCHING_PERIOD}
           credentials:
@@ -911,6 +924,7 @@ output:
             max_interval: ${OUTPUT_KINESIS_FIREHOSE_BACKOFF_MAX_INTERVAL:5s}
           batching:
             byte_size: ${OUTPUT_KINESIS_FIREHOSE_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_KINESIS_FIREHOSE_BATCHING_CHECK}
             count: ${OUTPUT_KINESIS_FIREHOSE_BATCHING_COUNT:1}
             period: ${OUTPUT_KINESIS_FIREHOSE_BATCHING_PERIOD}
           credentials:
@@ -986,6 +1000,7 @@ output:
         s3:
           batching:
             byte_size: ${OUTPUT_S3_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_S3_BATCHING_CHECK}
             count: ${OUTPUT_S3_BATCHING_COUNT:1}
             period: ${OUTPUT_S3_BATCHING_PERIOD}
           bucket: ${OUTPUT_S3_BUCKET}
@@ -1029,6 +1044,7 @@ output:
             max_interval: ${OUTPUT_SQS_BACKOFF_MAX_INTERVAL:5s}
           batching:
             byte_size: ${OUTPUT_SQS_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_SQS_BATCHING_CHECK}
             count: ${OUTPUT_SQS_BATCHING_COUNT:1}
             period: ${OUTPUT_SQS_BATCHING_PERIOD}
           credentials:
@@ -1050,6 +1066,7 @@ output:
         table_storage:
           batching:
             byte_size: ${OUTPUT_TABLE_STORAGE_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_TABLE_STORAGE_BATCHING_CHECK}
             count: ${OUTPUT_TABLE_STORAGE_BATCHING_COUNT:1}
             period: ${OUTPUT_TABLE_STORAGE_BATCHING_PERIOD}
           insert_type: ${OUTPUT_TABLE_STORAGE_INSERT_TYPE:INSERT}

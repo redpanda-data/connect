@@ -331,26 +331,29 @@ func (s *Switch) ProcessMessage(msg types.Message) (msgs []types.Message, res ty
 			}
 		}
 
-		execMsg := message.New(nil)
-		execMsg.SetAll(passed)
-
-		msgs, res := ExecuteAll(switchCase.processors, execMsg)
-		if res != nil && res.Error() != nil {
-			return nil, res
-		}
-
 		carryOver = nil
-		for _, m := range msgs {
-			m.Iter(func(_ int, p types.Part) error {
-				if switchCase.fallThrough {
-					carryOver = append(carryOver, p)
-				} else {
-					result = append(result, p)
-				}
-				return nil
-			})
-		}
 		remaining = failed
+
+		if len(passed) > 0 {
+			execMsg := message.New(nil)
+			execMsg.SetAll(passed)
+
+			msgs, res := ExecuteAll(switchCase.processors, execMsg)
+			if res != nil && res.Error() != nil {
+				return nil, res
+			}
+
+			for _, m := range msgs {
+				m.Iter(func(_ int, p types.Part) error {
+					if switchCase.fallThrough {
+						carryOver = append(carryOver, p)
+					} else {
+						result = append(result, p)
+					}
+					return nil
+				})
+			}
+		}
 	}
 
 	result = append(result, remaining...)
