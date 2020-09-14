@@ -33,14 +33,13 @@ output:
     topic: ${! meta("target_topic") }
 ```
 
-Benthos also allows you to conditionally process messages based on their metadata with the [`bloblang` condition][conditions.bloblang] and processors such as [`switch`][processors.switch]:
+Benthos also allows you to conditionally process messages based on their metadata with the [`switch` processor][processors.switch]:
 
 ```yaml
 pipeline:
   processors:
   - switch:
-    - condition:
-        bloblang: meta("doc_type") == "nested"
+    - check: meta("doc_type") == "nested"
       processors:
         - sql:
             driver: mysql
@@ -58,4 +57,3 @@ Or, for more complex branches it might be best to use the [`awk` processor][proc
 [processors.switch]: /docs/components/processors/switch
 [processors.awk]: /docs/components/processors/awk
 [processors.bloblang]: /docs/components/processors/bloblang
-[conditions.bloblang]: /docs/components/conditions/bloblang

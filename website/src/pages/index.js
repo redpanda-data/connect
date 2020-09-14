@@ -9,7 +9,10 @@ import CodeSnippet from "@site/src/theme/CodeSnippet";
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-const install = `# Install
+const installs = [
+  {
+    label: 'Curl',
+    snippet: `# Install
 curl -Lsf https://sh.benthos.dev | bash
 
 # Make a config
@@ -17,6 +20,30 @@ benthos create nats/protobuf/sqs > ./config.yaml
 
 # Run
 benthos -c ./config.yaml`
+  },
+  {
+    label: 'Homebrew',
+    snippet: `# Install
+brew install benthos
+
+# Make a config
+benthos create nats/protobuf/sqs > ./config.yaml
+
+# Run
+benthos -c ./config.yaml`
+  },
+  {
+    label: 'Docker',
+    snippet: `# Pull
+docker pull jeffail/benthos
+
+# Make a config
+docker run --rm jeffail/benthos create nats/protobuf/sqs > ./config.yaml
+
+# Run
+docker run --rm -v $(pwd)/config.yaml:/benthos.yaml jeffail/benthos`
+  },
+]
 
 const snippets = [
   {
@@ -89,6 +116,7 @@ output:
     path: '\${! meta("partition") }/\${! timestamp_unix_nano() }.tar.gz'
     batching:
       count: 100
+      period: 10s
       processors:
         - archive:
             format: tar
@@ -225,7 +253,17 @@ function Home() {
                 single YAML file, allowing you to declare connectors and a list
                 of processing stages.
               </p>
-              <CodeSnippet snippet={install} lang="bash"></CodeSnippet>
+              {installs && installs.length && (
+                <Tabs defaultValue={installs[0].label} values={installs.map((props, idx) => {
+                  return {label:props.label, value:props.label};
+                })}>
+                  {installs.map((props, idx) => (
+                    <TabItem value={props.label}>
+                      <CodeSnippet snippet={props.snippet} lang="bash"></CodeSnippet>
+                    </TabItem>
+                  ))}
+                </Tabs>
+              )}
             </div>
             <div className={classnames('col col--6')}>
                 {snippets && snippets.length && (

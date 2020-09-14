@@ -2,7 +2,6 @@ const {listPaths} = require('./src/plugins/components');
 
 let inputs_docs = listPaths("inputs");
 let processors_docs = listPaths("processors");
-let conditions_docs = listPaths("conditions");
 let outputs_docs = listPaths("outputs");
 let caches_docs = listPaths("caches");
 let rate_limits_docs = listPaths("rate_limits");
@@ -46,11 +45,6 @@ module.exports = {
           type: 'category',
           label: 'Processors',
           items: processors_docs,
-        },
-        {
-          type: 'category',
-          label: 'Conditions',
-          items: conditions_docs,
         },
         {
           type: 'category',

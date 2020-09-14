@@ -334,7 +334,6 @@ missing or fields are incorrect, which allows you to pinpoint typos in the
 config.
 
 [processors]: /docs/components/processors/about
-[conditions]: /docs/components/conditions/about
 [config-interp]: /docs/configuration/interpolation
 [config.testing]: /docs/configuration/unit_testing
 [json-references]: https://tools.ietf.org/html/draft-pbryan-zyp-json-ref-03

@@ -10,9 +10,7 @@ A good ninja gets clued up on its gear.
 
 ## Core Components
 
-Every Benthos pipeline has at least one [input][inputs], an optional
-[buffer][buffers], an [output][outputs] and any number of
-[processors][processors]:
+Every Benthos pipeline has at least one [input][inputs], an optional [buffer][buffers], an [output][outputs] and any number of [processors][processors]:
 
 ```yaml
 input:
@@ -36,14 +34,11 @@ output:
     path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
 ```
 
-These are the main components within Benthos and they provide the majority of
-useful behaviour.
+These are the main components within Benthos and they provide the majority of useful behaviour.
 
 ## Observability Components
 
-There are also the observability components [logger][logger], [metrics][metrics],
-and [tracing][tracers], which allow you to specify how Benthos exposes
-observability data:
+There are also the observability components [logger][logger], [metrics][metrics], and [tracing][tracers], which allow you to specify how Benthos exposes observability data:
 
 ```yaml
 logger:
@@ -65,11 +60,7 @@ tracer:
 
 ## Resource Components
 
-Finally, there are [conditions][conditions], [caches][caches] and
-[rate limits][rate_limits]. These are components that are useful when used by
-core components, and they are either configured as a field within that
-component, or as a resource where they are referenced by one or more core
-components:
+Finally, there are [caches][caches] and [rate limits][rate_limits]. These are components that are referenced by core components and can be shared.
 
 ```yaml
 input:
@@ -92,6 +83,7 @@ resources:
       local:
         count: 500
         interval: 1s
+
   caches:
     baz_cache:
       memcached:
@@ -99,7 +91,9 @@ resources:
         ttl: 60
 ```
 
-For more information about any of these components check out their sections:
+It's also possible to configure inputs, outputs and processors as resources which allows them to be reused throughout a configuration with the [`resource` input][inputs.resource], [`resource` output][outputs.resource] and [`resource` processor][processors.resource] respectively.
+
+For more information about any of these component types check out their sections:
 
 - [inputs][inputs]
 - [processors][processors]
@@ -108,17 +102,18 @@ For more information about any of these components check out their sections:
 - [metrics][metrics]
 - [tracers][tracers]
 - [logger][logger]
-- [conditions][conditions]
 - [caches][caches]
 - [rate limits][rate_limits]
 
 [inputs]: /docs/components/inputs/about
+[inputs.resource]: /docs/components/inputs/resource
 [processors]: /docs/components/processors/about
-[outputs]: /docs/components/inputs/about
+[processors.resource]: /docs/components/processors/resource
+[outputs]: /docs/components/outputs/about
+[outputs.resource]: /docs/components/outputs/resource
 [buffers]: /docs/components/buffers/about
 [metrics]: /docs/components/metrics/about
 [tracers]: /docs/components/tracers/about
 [logger]: /docs/components/logger/about
-[conditions]: /docs/components/conditions/about
 [caches]: /docs/components/caches/about
 [rate_limits]: /docs/components/rate_limits/about

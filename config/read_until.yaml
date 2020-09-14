@@ -8,12 +8,7 @@ http:
 input:
   type: read_until
   read_until:
-    condition:
-      type: text
-      text:
-        arg: ""
-        operator: equals_cs
-        part: 0
+    check: ""
     input: {}
     restart_input: false
 buffer:

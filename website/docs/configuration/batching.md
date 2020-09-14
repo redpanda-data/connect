@@ -156,7 +156,7 @@ Batches are considered complete and will be flushed downstream when either of th
 
 - The `byte_size` field is non-zero and the total size of the batch in bytes matches or exceeds it (disregarding metadata.)
 - The `count` field is non-zero and the total number of messages in the batch matches or exceeds it.
-- A message added to the batch causes the [`condition`][conditions] to resolve to `true`.
+- A message added to the batch causes the [`check`][bloblang] to return to `true`.
 - The `period` field is non-empty and the time since the last batch exceeds its value.
 
 This allows you to combine conditions:
@@ -195,7 +195,6 @@ During shutdown any remaining messages waiting for a batch to complete will be f
 
 [processors]: /docs/components/processors/about
 [processor.sleep]: /docs/components/processors/sleep
-[conditions]: /docs/components/conditions/about
 [split]: /docs/components/processors/split
 [archive]: /docs/components/processors/archive
 [unarchive]: /docs/components/processors/unarchive
@@ -206,4 +205,5 @@ During shutdown any remaining messages waiting for a batch to complete will be f
 [output_broker]: /docs/components/outputs/broker
 [input_kafka]: /docs/components/inputs/kafka
 [function_interpolation]: /docs/configuration/interpolation#bloblang-queries
+[bloblang]: /docs/guides/bloblang/about
 [windowing]: /docs/configuration/windowed_processing

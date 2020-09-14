@@ -6,7 +6,7 @@ description: The Benthos native mapping language
 
 Bloblang, or blobl for short, is a language designed for mapping data of a wide variety of forms. It's a safe, fast, and powerful way to perform document mapping within Benthos.
 
-Bloblang is available as a [processor][blobl.proc], as a [condition][blobl.cond], and it's also possible to use blobl queries in [function interpolations][blobl.interp].
+Bloblang is available as a [processor][blobl.proc] and it's also possible to use blobl queries in [function interpolations][blobl.interp].
 
 You can also execute Bloblang mappings on the command-line with the `blobl` subcommand:
 
@@ -355,7 +355,6 @@ root.foo = this.bar.index(5).or("default")
 
 [field_paths]: /docs/configuration/field_paths
 [blobl.proc]: /docs/components/processors/bloblang
-[blobl.cond]: /docs/components/conditions/bloblang
 [blobl.interp]: /docs/configuration/interpolation#bloblang-queries
 [blobl.functions]: /docs/guides/bloblang/functions
 [blobl.methods]: /docs/guides/bloblang/methods

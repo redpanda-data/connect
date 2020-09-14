@@ -15,37 +15,24 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Reads messages from a child input until a consumed message passes a condition,
-at which point the input closes.
+Reads messages from a child input until a consumed message passes a [Bloblang query](/docs/guides/bloblang/about/), at which point the input closes.
 
 ```yaml
 # Config fields, showing default values
 input:
   read_until:
     input: {}
-    condition:
-      text:
-        arg: ""
-        operator: equals_cs
-        part: 0
-      type: text
+    check: ""
     restart_input: false
 ```
 
-Messages are read continuously while the condition returns false, when the
-condition returns true the message that triggered the condition is sent out and
-the input is closed. Use this type to define inputs where the stream should end
-once a certain message appears.
+Messages are read continuously while the query check returns false, when the query returns true the message that triggered the check is sent out and the input is closed. Use this to define inputs where the stream should end once a certain message appears.
 
-Sometimes inputs close themselves. For example, when the `file` input
-type reaches the end of a file it will shut down. By default this type will also
-shut down. If you wish for the input type to be restarted every time it shuts
-down until the condition is met then set `restart_input` to `true`.
+Sometimes inputs close themselves. For example, when the `file` input type reaches the end of a file it will shut down. By default this type will also shut down. If you wish for the input type to be restarted every time it shuts down until the query check is met then set `restart_input` to `true`.
 
 ### Metadata
 
-A metadata key `benthos_read_until` containing the value `final` is
-added to the first part of the message that triggers the input to stop.
+A metadata key `benthos_read_until` containing the value `final` is added to the first part of the message that triggers the input to stop.
 
 ## Fields
 
@@ -57,13 +44,21 @@ The child input to consume from.
 Type: `object`  
 Default: `{}`  
 
-### `condition`
+### `check`
 
-The [condition](/docs/components/conditions/about) to test messages against.
+A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether the input should now be closed.
 
 
-Type: `object`  
-Default: `{"text":{"arg":"","operator":"equals_cs","part":0},"type":"text"}`  
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+check: this.type == "foo"
+
+check: count("messages") >= 100
+```
 
 ### `restart_input`
 
@@ -75,23 +70,27 @@ Default: `false`
 
 ## Examples
 
-This input is useful when paired with the
-[`count`](/docs/components/conditions/count) condition, as it can be
-used to cut the input stream off once a certain number of messages have been
-read:
+<Tabs defaultValue="Consume N Messages" values={[
+{ label: 'Consume N Messages', value: 'Consume N Messages', },
+]}>
+
+<TabItem value="Consume N Messages">
+
+A common reason to use this input is to consume only N messages from an input and then stop. This can easily be done with the [`count` function](/docs/guides/bloblang/functions/#count):
 
 ```yaml
 # Only read 100 messages, and then exit.
 input:
   read_until:
+    check: count("messages") >= 100
     input:
       kafka_balanced:
         addresses: [ TODO ]
         topics: [ foo, bar ]
         consumer_group: foogroup
-      condition:
-        not:
-          count:
-            arg: 100
 ```
+
+</TabItem>
+</Tabs>
+
 

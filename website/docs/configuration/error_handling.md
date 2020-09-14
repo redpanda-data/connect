@@ -129,7 +129,6 @@ output:
 [processor.catch]: /docs/components/processors/catch
 [processor.try]: /docs/components/processors/try
 [processor.log]: /docs/components/processors/log
-[condition.processor_failed]: /docs/components/conditions/processor_failed
 [output.switch]: /docs/components/outputs/switch
 [output.broker]: /docs/components/outputs/broker
 [configuration.interpolation]: /docs/configuration/interpolation#bloblang-queries

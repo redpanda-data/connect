@@ -105,7 +105,6 @@ import ComponentSelect from '@theme/ComponentSelect';
 
 [processors]: /docs/components/processors/about
 [processor.bloblang]: /docs/components/processors/bloblang
-[conditions]: /docs/components/conditions/about
 [output.broker]: /docs/components/outputs/broker
 [output.switch]: /docs/components/outputs/switch
 [output.retry]: /docs/components/outputs/retry
