@@ -251,7 +251,7 @@ Try experimenting with other Benthos processors, you can find the documentation 
 
 ## Next Steps
 
-After playing around with Benthos processors you should check out the various [inputs][inputs], [outputs][inputs], [metrics aggregators][metrics] and [tracers][tracers] that it's able to hook up with.
+After playing around with Benthos processors you should check out the various [inputs][inputs], [outputs][outputs], [metrics aggregators][metrics] and [tracers][tracers] that it's able to hook up with.
 
 For example, here's a modified version of the previous config where we write from Kafka to an S3 bucket, sending our metrics to Prometheus:
 
