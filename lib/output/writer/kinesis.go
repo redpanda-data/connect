@@ -54,8 +54,6 @@ func NewKinesisConfig() KinesisConfig {
 	rConf.Backoff.InitialInterval = "1s"
 	rConf.Backoff.MaxInterval = "5s"
 	rConf.Backoff.MaxElapsedTime = "30s"
-	batching := batch.NewPolicyConfig()
-	batching.Count = 1
 	return KinesisConfig{
 		sessionConfig: sessionConfig{
 			Config: sess.NewConfig(),
@@ -65,7 +63,7 @@ func NewKinesisConfig() KinesisConfig {
 		PartitionKey: "",
 		MaxInFlight:  1,
 		Config:       rConf,
-		Batching:     batching,
+		Batching:     batch.NewPolicyConfig(),
 	}
 }
 

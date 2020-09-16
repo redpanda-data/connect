@@ -123,12 +123,10 @@ type BrokerConfig struct {
 
 // NewBrokerConfig creates a new BrokerConfig with default values.
 func NewBrokerConfig() BrokerConfig {
-	batching := batch.NewPolicyConfig()
-	batching.Count = 1
 	return BrokerConfig{
 		Copies:   1,
 		Inputs:   brokerInputList{},
-		Batching: batching,
+		Batching: batch.NewPolicyConfig(),
 	}
 }
 

@@ -37,7 +37,7 @@ output:
     batching:
       byte_size: 0
       check: ""
-      count: 1
+      count: 0
       period: ""
       processors: []
     credentials:

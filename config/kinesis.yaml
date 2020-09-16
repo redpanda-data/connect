@@ -11,7 +11,7 @@ input:
     batching:
       byte_size: 0
       check: ""
-      count: 1
+      count: 0
       period: ""
       processors: []
     client_id: benthos_consumer
@@ -47,7 +47,7 @@ output:
     batching:
       byte_size: 0
       check: ""
-      count: 1
+      count: 0
       period: ""
       processors: []
     credentials:

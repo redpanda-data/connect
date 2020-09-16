@@ -38,8 +38,6 @@ type NATSStreamConfig struct {
 
 // NewNATSStreamConfig creates a new NATSStreamConfig with default values.
 func NewNATSStreamConfig() NATSStreamConfig {
-	batchConf := batch.NewPolicyConfig()
-	batchConf.Count = 1
 	return NATSStreamConfig{
 		URLs:            []string{stan.DefaultNatsURL},
 		ClusterID:       "test-cluster",
@@ -51,7 +49,7 @@ func NewNATSStreamConfig() NATSStreamConfig {
 		Subject:         "benthos_messages",
 		MaxInflight:     1024,
 		AckWait:         "30s",
-		Batching:        batchConf,
+		Batching:        batch.NewPolicyConfig(),
 	}
 }
 

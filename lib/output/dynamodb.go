@@ -1,8 +1,6 @@
 package output
 
 import (
-	"fmt"
-
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -118,14 +116,10 @@ func NewDynamoDB(conf Config, mgr types.Manager, log log.Modular, stats metrics.
 			TypeDynamoDB, conf.DynamoDB.MaxInFlight, dyn, log, stats,
 		)
 	}
-	if bconf := conf.DynamoDB.Batching; err == nil && !bconf.IsNoop() {
-		policy, err := batch.NewPolicy(bconf, mgr, log.NewModule(".batching"), metrics.Namespaced(stats, "batching"))
-		if err != nil {
-			return nil, fmt.Errorf("failed to construct batch policy: %v", err)
-		}
-		w = NewBatcher(policy, w, log, stats)
+	if err != nil {
+		return w, err
 	}
-	return w, err
+	return newBatcherFromConf(conf.DynamoDB.Batching, w, mgr, log, stats)
 }
 
 //------------------------------------------------------------------------------

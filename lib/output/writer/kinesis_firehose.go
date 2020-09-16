@@ -39,8 +39,7 @@ func NewKinesisFirehoseConfig() KinesisFirehoseConfig {
 	rConf.Backoff.InitialInterval = "1s"
 	rConf.Backoff.MaxInterval = "5s"
 	rConf.Backoff.MaxElapsedTime = "30s"
-	batching := batch.NewPolicyConfig()
-	batching.Count = 1
+
 	return KinesisFirehoseConfig{
 		sessionConfig: sessionConfig{
 			Config: sess.NewConfig(),
@@ -48,7 +47,7 @@ func NewKinesisFirehoseConfig() KinesisFirehoseConfig {
 		Stream:      "",
 		MaxInFlight: 1,
 		Config:      rConf,
-		Batching:    batching,
+		Batching:    batch.NewPolicyConfig(),
 	}
 }
 

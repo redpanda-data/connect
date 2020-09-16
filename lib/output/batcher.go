@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -34,6 +35,23 @@ type Batcher struct {
 	fullyCloseFn  func()
 
 	closedChan chan struct{}
+}
+
+func newBatcherFromConf(
+	conf batch.PolicyConfig,
+	child Type,
+	mgr types.Manager,
+	log log.Modular,
+	stats metrics.Type,
+) (Type, error) {
+	if !conf.IsNoop() {
+		policy, err := batch.NewPolicy(conf, mgr, log.NewModule(".batching"), metrics.Namespaced(stats, "batching"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to construct batch policy: %v", err)
+		}
+		child = NewBatcher(policy, child, log, stats)
+	}
+	return child, nil
 }
 
 // NewBatcher creates a new Producer/Consumer around a buffer.

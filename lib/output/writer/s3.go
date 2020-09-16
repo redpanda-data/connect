@@ -37,8 +37,6 @@ type AmazonS3Config struct {
 
 // NewAmazonS3Config creates a new Config with default values.
 func NewAmazonS3Config() AmazonS3Config {
-	batching := batch.NewPolicyConfig()
-	batching.Count = 1
 	return AmazonS3Config{
 		Config:             sess.NewConfig(),
 		Bucket:             "",
@@ -50,7 +48,7 @@ func NewAmazonS3Config() AmazonS3Config {
 		Timeout:            "5s",
 		KMSKeyID:           "",
 		MaxInFlight:        1,
-		Batching:           batching,
+		Batching:           batch.NewPolicyConfig(),
 	}
 }
 

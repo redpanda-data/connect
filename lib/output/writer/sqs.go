@@ -50,8 +50,6 @@ func NewAmazonSQSConfig() AmazonSQSConfig {
 	rConf.Backoff.MaxInterval = "5s"
 	rConf.Backoff.MaxElapsedTime = "30s"
 
-	batching := batch.NewPolicyConfig()
-	batching.Count = 1
 	return AmazonSQSConfig{
 		sessionConfig: sessionConfig{
 			Config: sess.NewConfig(),
@@ -61,7 +59,7 @@ func NewAmazonSQSConfig() AmazonSQSConfig {
 		MessageDeduplicationID: "",
 		MaxInFlight:            1,
 		Config:                 rConf,
-		Batching:               batching,
+		Batching:               batch.NewPolicyConfig(),
 	}
 }
 

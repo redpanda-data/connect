@@ -34,8 +34,6 @@ type KinesisBalancedConfig struct {
 
 // NewKinesisBalancedConfig creates a new Config with default values.
 func NewKinesisBalancedConfig() KinesisBalancedConfig {
-	batchConf := batch.NewPolicyConfig()
-	batchConf.Count = 1
 	s := sess.NewConfig()
 	return KinesisBalancedConfig{
 		Config:                s,
@@ -45,7 +43,7 @@ func NewKinesisBalancedConfig() KinesisBalancedConfig {
 		DynamoDBReadCapacity:  0,
 		DynamoDBWriteCapacity: 0,
 		MaxBatchCount:         1,
-		Batching:              batchConf,
+		Batching:              batch.NewPolicyConfig(),
 		StartFromOldest:       true,
 	}
 }

@@ -136,14 +136,12 @@ type BrokerConfig struct {
 
 // NewBrokerConfig creates a new BrokerConfig with default values.
 func NewBrokerConfig() BrokerConfig {
-	batching := batch.NewPolicyConfig()
-	batching.Count = 1
 	return BrokerConfig{
 		Copies:      1,
 		Pattern:     "fan_out",
 		MaxInFlight: 1,
 		Outputs:     brokerOutputList{},
-		Batching:    batching,
+		Batching:    batch.NewPolicyConfig(),
 	}
 }
 
@@ -170,12 +168,8 @@ func NewBroker(
 		if err != nil {
 			return nil, err
 		}
-		if !conf.Broker.Batching.IsNoop() {
-			policy, err := batch.NewPolicy(conf.Broker.Batching, mgr, log.NewModule(".batching"), metrics.Namespaced(stats, "batching"))
-			if err != nil {
-				return nil, fmt.Errorf("failed to construct batch policy: %v", err)
-			}
-			b = NewBatcher(policy, b, log, stats)
+		if b, err = newBatcherFromConf(conf.Broker.Batching, b, mgr, log, stats); err != nil {
+			return nil, err
 		}
 		return b, nil
 	}

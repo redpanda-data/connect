@@ -34,8 +34,6 @@ type NSQConfig struct {
 
 // NewNSQConfig creates a new NSQConfig with default values.
 func NewNSQConfig() NSQConfig {
-	batching := batch.NewPolicyConfig()
-	batching.Count = 1
 	return NSQConfig{
 		Addresses:       []string{"localhost:4150"},
 		LookupAddresses: []string{"localhost:4161"},
@@ -44,7 +42,7 @@ func NewNSQConfig() NSQConfig {
 		UserAgent:       "benthos_consumer",
 		TLS:             btls.NewConfig(),
 		MaxInFlight:     100,
-		Batching:        batching,
+		Batching:        batch.NewPolicyConfig(),
 	}
 }
 

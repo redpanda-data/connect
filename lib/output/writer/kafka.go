@@ -54,8 +54,7 @@ func NewKafkaConfig() KafkaConfig {
 	rConf.Backoff.InitialInterval = "3s"
 	rConf.Backoff.MaxInterval = "10s"
 	rConf.Backoff.MaxElapsedTime = "30s"
-	batching := batch.NewPolicyConfig()
-	batching.Count = 1
+
 	return KafkaConfig{
 		Addresses:            []string{"localhost:9092"},
 		ClientID:             "benthos_kafka_output",
@@ -73,7 +72,7 @@ func NewKafkaConfig() KafkaConfig {
 		SASL:                 sasl.NewConfig(),
 		MaxInFlight:          1,
 		Config:               rConf,
-		Batching:             batching,
+		Batching:             batch.NewPolicyConfig(),
 	}
 }
 

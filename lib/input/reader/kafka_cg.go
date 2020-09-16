@@ -59,6 +59,9 @@ type KafkaCG struct {
 func NewKafkaCG(
 	conf KafkaBalancedConfig, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (*KafkaCG, error) {
+	if conf.Batching.IsNoop() {
+		conf.Batching.Count = 1
+	}
 	k := KafkaCG{
 		conf:          conf,
 		stats:         stats,
@@ -159,7 +162,16 @@ func (k *KafkaCG) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.Co
 	latestOffset := claim.InitialOffset()
 	batchPolicy, err := batch.NewPolicy(k.conf.Batching, k.mgr, k.log, k.stats)
 	if err != nil {
-		return fmt.Errorf("failed to initialise batch policy: %v", err)
+		k.log.Errorf("Failed to initialise batch policy: %v, falling back to single messages.\n", err)
+		fallBackConf := batch.NewPolicyConfig()
+		fallBackConf.Count = 1
+		if batchPolicy, err = batch.NewPolicy(fallBackConf, k.mgr, k.log, k.stats); err != nil {
+			k.log.Errorf("Failed to initialise fallback batch policy: %v.\n", err)
+			// The consume claim gets reopened immediately so let's try and
+			// avoid a busy loop (this should never happen anyway).
+			<-time.After(time.Second)
+			return err
+		}
 	}
 	defer batchPolicy.CloseAsync()
 

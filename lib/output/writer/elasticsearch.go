@@ -60,9 +60,6 @@ func NewElasticsearchConfig() ElasticsearchConfig {
 	rConf.Backoff.MaxInterval = "5s"
 	rConf.Backoff.MaxElapsedTime = "30s"
 
-	batching := batch.NewPolicyConfig()
-	batching.Count = 1
-
 	return ElasticsearchConfig{
 		URLs:        []string{"http://localhost:9200"},
 		Sniff:       true,
@@ -80,7 +77,7 @@ func NewElasticsearchConfig() ElasticsearchConfig {
 		},
 		MaxInFlight: 1,
 		Config:      rConf,
-		Batching:    batching,
+		Batching:    batch.NewPolicyConfig(),
 	}
 }
 

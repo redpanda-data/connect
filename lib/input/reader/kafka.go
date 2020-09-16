@@ -42,8 +42,6 @@ type KafkaConfig struct {
 
 // NewKafkaConfig creates a new KafkaConfig with default values.
 func NewKafkaConfig() KafkaConfig {
-	batchConf := batch.NewPolicyConfig()
-	batchConf.Count = 1
 	return KafkaConfig{
 		Addresses:           []string{"localhost:9092"},
 		ClientID:            "benthos_kafka_input",
@@ -58,7 +56,7 @@ func NewKafkaConfig() KafkaConfig {
 		MaxBatchCount:       1,
 		TLS:                 btls.NewConfig(),
 		SASL:                sasl.NewConfig(),
-		Batching:            batchConf,
+		Batching:            batch.NewPolicyConfig(),
 	}
 }
 

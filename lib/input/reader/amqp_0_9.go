@@ -50,8 +50,6 @@ type AMQP09Config struct {
 
 // NewAMQP09Config creates a new AMQP09Config with default values.
 func NewAMQP09Config() AMQP09Config {
-	batching := batch.NewPolicyConfig()
-	batching.Count = 1
 	return AMQP09Config{
 		URL:   "amqp://guest:guest@localhost:5672/",
 		Queue: "benthos-queue",
@@ -63,7 +61,7 @@ func NewAMQP09Config() AMQP09Config {
 		PrefetchCount:   10,
 		PrefetchSize:    0,
 		TLS:             btls.NewConfig(),
-		Batching:        batching,
+		Batching:        batch.NewPolicyConfig(),
 		BindingsDeclare: []AMQP09BindingConfig{},
 	}
 }

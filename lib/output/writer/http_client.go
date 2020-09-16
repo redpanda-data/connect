@@ -25,13 +25,11 @@ type HTTPClientConfig struct {
 
 // NewHTTPClientConfig creates a new HTTPClientConfig with default values.
 func NewHTTPClientConfig() HTTPClientConfig {
-	batching := batch.NewPolicyConfig()
-	batching.Count = 1
 	return HTTPClientConfig{
 		Config:            client.NewConfig(),
 		MaxInFlight:       1, // TODO: Increase this default?
 		PropagateResponse: false,
-		Batching:          batching,
+		Batching:          batch.NewPolicyConfig(),
 	}
 }
 

@@ -48,8 +48,6 @@ func NewDynamoDBConfig() DynamoDBConfig {
 	rConf.Backoff.InitialInterval = "1s"
 	rConf.Backoff.MaxInterval = "5s"
 	rConf.Backoff.MaxElapsedTime = "30s"
-	batching := batch.NewPolicyConfig()
-	batching.Count = 1
 	return DynamoDBConfig{
 		sessionConfig: sessionConfig{
 			Config: session.NewConfig(),
@@ -61,7 +59,7 @@ func NewDynamoDBConfig() DynamoDBConfig {
 		TTLKey:         "",
 		MaxInFlight:    1,
 		Config:         rConf,
-		Batching:       batching,
+		Batching:       batch.NewPolicyConfig(),
 	}
 }
 

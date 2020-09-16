@@ -38,8 +38,6 @@ type RedisStreamsConfig struct {
 
 // NewRedisStreamsConfig creates a new RedisStreamsConfig with default values.
 func NewRedisStreamsConfig() RedisStreamsConfig {
-	batchConf := batch.NewPolicyConfig()
-	batchConf.Count = 1
 	return RedisStreamsConfig{
 		URL:             "tcp://localhost:6379",
 		BodyKey:         "body",
@@ -47,7 +45,7 @@ func NewRedisStreamsConfig() RedisStreamsConfig {
 		ConsumerGroup:   "benthos_group",
 		ClientID:        "benthos_consumer",
 		Limit:           10,
-		Batching:        batchConf,
+		Batching:        batch.NewPolicyConfig(),
 		StartFromOldest: true,
 		CommitPeriod:    "1s",
 		Timeout:         "1s",

@@ -30,15 +30,13 @@ type GCPPubSubConfig struct {
 
 // NewGCPPubSubConfig creates a new Config with default values.
 func NewGCPPubSubConfig() GCPPubSubConfig {
-	batchConf := batch.NewPolicyConfig()
-	batchConf.Count = 1
 	return GCPPubSubConfig{
 		ProjectID:              "",
 		SubscriptionID:         "",
 		MaxOutstandingMessages: pubsub.DefaultReceiveSettings.MaxOutstandingMessages,
 		MaxOutstandingBytes:    pubsub.DefaultReceiveSettings.MaxOutstandingBytes,
 		MaxBatchCount:          1,
-		Batching:               batchConf,
+		Batching:               batch.NewPolicyConfig(),
 	}
 }
 

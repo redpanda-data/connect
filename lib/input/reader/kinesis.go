@@ -38,8 +38,6 @@ type KinesisConfig struct {
 
 // NewKinesisConfig creates a new Config with default values.
 func NewKinesisConfig() KinesisConfig {
-	batchConf := batch.NewPolicyConfig()
-	batchConf.Count = 1
 	return KinesisConfig{
 		Config:          sess.NewConfig(),
 		Limit:           100,
@@ -50,7 +48,7 @@ func NewKinesisConfig() KinesisConfig {
 		CommitPeriod:    "1s",
 		StartFromOldest: true,
 		Timeout:         "5s",
-		Batching:        batchConf,
+		Batching:        batch.NewPolicyConfig(),
 	}
 }
 

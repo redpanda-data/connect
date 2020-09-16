@@ -34,7 +34,7 @@ output:
     json_map_columns: {}
     max_in_flight: 1
     batching:
-      count: 1
+      count: 0
       byte_size: 0
       period: ""
       check: ""
@@ -55,7 +55,7 @@ output:
     ttl_key: ""
     max_in_flight: 1
     batching:
-      count: 1
+      count: 0
       byte_size: 0
       period: ""
       check: ""
@@ -236,7 +236,7 @@ A number of messages at which the batch should be flushed. If `0` disables count
 
 
 Type: `number`  
-Default: `1`  
+Default: `0`  
 
 ### `batching.byte_size`
 

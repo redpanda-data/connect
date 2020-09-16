@@ -22,8 +22,6 @@ type AzureTableStorageConfig struct {
 
 // NewAzureTableStorageConfig creates a new Config with default values.
 func NewAzureTableStorageConfig() AzureTableStorageConfig {
-	batching := batch.NewPolicyConfig()
-	batching.Count = 1
 	return AzureTableStorageConfig{
 		StorageAccount:   "",
 		StorageAccessKey: "",
@@ -34,7 +32,7 @@ func NewAzureTableStorageConfig() AzureTableStorageConfig {
 		InsertType:       "INSERT",
 		Timeout:          "5s",
 		MaxInFlight:      1,
-		Batching:         batching,
+		Batching:         batch.NewPolicyConfig(),
 	}
 }
 

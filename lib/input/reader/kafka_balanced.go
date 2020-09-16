@@ -62,8 +62,6 @@ type KafkaBalancedConfig struct {
 // NewKafkaBalancedConfig creates a new KafkaBalancedConfig with default values.
 // TODO: V4 Remove this unused implementation.
 func NewKafkaBalancedConfig() KafkaBalancedConfig {
-	batchConf := batch.NewPolicyConfig()
-	batchConf.Count = 1
 	return KafkaBalancedConfig{
 		Addresses:           []string{"localhost:9092"},
 		ClientID:            "benthos_kafka_input",
@@ -75,7 +73,7 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 		Topics:              []string{"benthos_stream"},
 		StartFromOldest:     true,
 		TargetVersion:       sarama.V1_0_0_0.String(),
-		Batching:            batchConf,
+		Batching:            batch.NewPolicyConfig(),
 		MaxBatchCount:       1,
 		TLS:                 btls.NewConfig(),
 		SASL:                sasl.NewConfig(),
@@ -122,6 +120,9 @@ type KafkaBalanced struct {
 func NewKafkaBalanced(
 	conf KafkaBalancedConfig, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (*KafkaBalanced, error) {
+	if conf.Batching.IsNoop() {
+		conf.Batching.Count = 1
+	}
 	k := KafkaBalanced{
 		conf:          conf,
 		stats:         stats,
