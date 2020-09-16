@@ -35,6 +35,14 @@ message using another mapping.`,
 This is useful for preserving the original message contents when using
 processors that would otherwise replace the entire contents.
 
+### Metadata
+
+Metadata fields that are added to messages during branch processing will not be
+automatically copied into the resulting message. In order to do this you should
+explicitly declare in your ` + "`result_map`" + ` either a wholesale copy with
+` + "`meta = meta()`" + `, or selective copies with
+` + "`meta foo = meta(\"bar\")`" + ` and so on.
+
 ### Error Handling
 
 If the ` + "`request_map`" + ` fails the child processors will not be executed.
@@ -65,7 +73,7 @@ pipeline:
           - http:
               url: https://hub.docker.com/v2/repositories/jeffail/benthos
               verb: GET
-        result_map: 'root.repo.status = this'
+        result_map: root.repo.status = this
 `,
 			},
 			{
@@ -112,7 +120,7 @@ pipeline:
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(
 				"request_map",
-				"A [Bloblang mapping](/docs/guides/bloblang/about) that describes how to create a request payload suitable for the child processors of this branch.",
+				"A [Bloblang mapping](/docs/guides/bloblang/about) that describes how to create a request payload suitable for the child processors of this branch. If left empty then the branch will begin with an exact copy of the origin message (including metadata).",
 				`root = {
 	"id": this.doc.id,
 	"content": this.doc.body.text
@@ -129,9 +137,11 @@ pipeline:
 			),
 			docs.FieldCommon(
 				"result_map",
-				"A [Bloblang mapping](/docs/guides/bloblang/about) that describes how the resulting messages from branched processing should be mapped back into the original payload.",
-				`root.foo_result = this`,
-				`root.bar.body = this.body
+				"A [Bloblang mapping](/docs/guides/bloblang/about) that describes how the resulting messages from branched processing should be mapped back into the original payload. If left empty the origin message will remain unchanged  (including metadata).",
+				`meta foo_code = meta("code")
+root.foo_result = this`,
+				`meta = meta()
+root.bar.body = this.body
 root.bar.id = this.user.id`,
 				`root.enrichments.foo = if errored() {
 	throw(error())
