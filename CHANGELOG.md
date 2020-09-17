@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- The default value for `batching.count` fields is now zero, which means adding a non-count based batching mechanism without also explicitly overriding `count` no longer incorrectly caps batches at one message. This change is backwards compatible in that working batching configs will not change in behaviour. However, a broken batching config will now behave as expected.
+
 ## 3.28.0 - 2020-09-14
 
 ### Added
