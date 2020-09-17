@@ -3,54 +3,26 @@
 package integration
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/input/reader"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/gofrs/uuid"
 	"github.com/ory/dockertest/v3"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestAWSS3ToSQSIntegration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
-	t.Parallel()
-
-	pool, err := dockertest.NewPool("")
-	if err != nil {
-		t.Skipf("Could not connect to docker: %s", err)
-	}
-
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:   "localstack/localstack",
-		ExposedPorts: []string{"4572/tcp"},
-		Env:          []string{"SERVICES=s3,sqs"},
-	})
-	if err != nil {
-		t.Fatalf("Could not start resource: %s", err)
-	}
-	defer func() {
-		if err = pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %v", err)
-		}
-	}()
-	resource.Expire(900)
-
-	endpoint := fmt.Sprintf("http://localhost:%v", resource.GetPort("4572/tcp"))
-	bucket := "benthos-test-bucket-two"
-	sqsQueue := "benthos-test-queue-two"
-	sqsEndpoint := fmt.Sprintf("http://localhost:%v", resource.GetPort("4576/tcp"))
+func createBucketQueue(port, portTwo, id string) error {
+	endpoint := fmt.Sprintf("http://localhost:%v", port)
+	bucket := "bucket-" + id
+	sqsQueue := "queue-" + id
+	sqsEndpoint := fmt.Sprintf("http://localhost:%v", portTwo)
 	sqsQueueURL := fmt.Sprintf("%v/queue/%v", sqsEndpoint, sqsQueue)
 
 	s3Client := s3.New(session.Must(session.NewSession(&aws.Config{
@@ -66,28 +38,22 @@ func TestAWSS3ToSQSIntegration(t *testing.T) {
 		Region:      aws.String("eu-west-1"),
 	})))
 
-	bucketCreated := false
-
-	if err = pool.Retry(func() error {
-		var berr error
-		if !bucketCreated {
-			if _, berr = s3Client.CreateBucket(&s3.CreateBucketInput{
-				Bucket: &bucket,
-			}); berr != nil {
-				return berr
-			}
-			bucketCreated = true
-		}
-		if _, berr = sqsClient.CreateQueue(&sqs.CreateQueueInput{
-			QueueName: aws.String(sqsQueue),
-		}); berr != nil {
-			return berr
-		}
-		return s3Client.WaitUntilBucketExists(&s3.HeadBucketInput{
-			Bucket: &bucket,
-		})
+	if _, err := s3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: &bucket,
 	}); err != nil {
-		t.Fatalf("Could not connect to docker resource: %s", err)
+		return err
+	}
+
+	if _, err := sqsClient.CreateQueue(&sqs.CreateQueueInput{
+		QueueName: aws.String(sqsQueue),
+	}); err != nil {
+		return err
+	}
+
+	if err := s3Client.WaitUntilBucketExists(&s3.HeadBucketInput{
+		Bucket: &bucket,
+	}); err != nil {
+		return err
 	}
 
 	res, err := sqsClient.GetQueueAttributes(&sqs.GetQueueAttributesInput{
@@ -95,12 +61,12 @@ func TestAWSS3ToSQSIntegration(t *testing.T) {
 		AttributeNames: []*string{aws.String("All")},
 	})
 	if err != nil {
-		t.Error(err)
-		return
+		return err
 	}
+
 	sqsQueueArn := res.Attributes["QueueArn"]
 
-	if _, err = s3Client.PutBucketNotificationConfiguration(&s3.PutBucketNotificationConfigurationInput{
+	if _, err := s3Client.PutBucketNotificationConfiguration(&s3.PutBucketNotificationConfigurationInput{
 		Bucket: &bucket,
 		NotificationConfiguration: &s3.NotificationConfiguration{
 			QueueConfigurations: []*s3.QueueConfiguration{
@@ -113,114 +79,105 @@ func TestAWSS3ToSQSIntegration(t *testing.T) {
 			},
 		},
 	}); err != nil {
-		t.Error(err)
-		return
+		return err
 	}
-
-	t.Run("testS3ToSQSStreams", func(t *testing.T) {
-		testS3ToSQSStreams(t, endpoint, sqsEndpoint, sqsQueueURL, bucket)
-	})
-	t.Run("testS3ToSQSStreamsAsync", func(t *testing.T) {
-		testS3ToSQSStreamsAsync(t, endpoint, sqsEndpoint, sqsQueueURL, bucket)
-	})
+	return nil
 }
 
-func testS3ToSQSStreams(t *testing.T, endpoint, sqsEndpoint, sqsURL, bucket string) {
-	inconf := reader.NewAmazonS3Config()
-	inconf.Endpoint = endpoint
-	inconf.Credentials.ID = "xxxxx"
-	inconf.Credentials.Secret = "xxxxx"
-	inconf.Credentials.Token = "xxxxx"
-	inconf.Region = "eu-west-1"
-	inconf.Bucket = bucket
-	inconf.ForcePathStyleURLs = true
-	inconf.Timeout = "10s"
-	inconf.SQSURL = sqsURL
-	inconf.SQSEndpoint = sqsEndpoint
+func TestAWSS3ToSQS(t *testing.T) {
+	t.Parallel()
 
-	outconf := writer.NewAmazonS3Config()
-	outconf.Endpoint = endpoint
-	outconf.Credentials.ID = "xxxxx"
-	outconf.Credentials.Secret = "xxxxx"
-	outconf.Credentials.Token = "xxxxx"
-	outconf.Region = "eu-west-1"
-	outconf.Bucket = bucket
-	outconf.ForcePathStyleURLs = true
-	outconf.Path = "foo${!count(\"s3uploaddownload2\")}.txt"
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
 
-	outputCtr := func() (mOutput writer.Type, err error) {
-		if mOutput, err = writer.NewAmazonS3(outconf, log.Noop(), metrics.Noop()); err != nil {
-			return
-		}
-		if err = mOutput.Connect(); err != nil {
-			return
-		}
-		return
-	}
-	inputCtr := func() (mInput reader.Type, err error) {
-		if mInput, err = reader.NewAmazonS3(inconf, log.Noop(), metrics.Noop()); err != nil {
-			return
-		}
-		if err = mInput.Connect(); err != nil {
-			return
-		}
-		return
-	}
+	pool.MaxWait = time.Second * 30
 
-	checkALOSynchronous(outputCtr, inputCtr, t)
-	checkALOSynchronousAndDie(outputCtr, inputCtr, t)
+	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
+		Repository:   "localstack/localstack",
+		ExposedPorts: []string{"4572/tcp"},
+		Env:          []string{"SERVICES=s3,sqs"},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, pool.Purge(resource))
+	})
 
-	inconf.DownloadManager.Enabled = false
+	resource.Expire(900)
 
-	checkALOSynchronous(outputCtr, inputCtr, t)
-	checkALOSynchronousAndDie(outputCtr, inputCtr, t)
-}
+	s3Port := resource.GetPort("4572/tcp")
+	sqsPort := resource.GetPort("4576/tcp")
 
-func testS3ToSQSStreamsAsync(t *testing.T, endpoint, sqsEndpoint, sqsURL, bucket string) {
-	inconf := reader.NewAmazonS3Config()
-	inconf.Endpoint = endpoint
-	inconf.Credentials.ID = "xxxxx"
-	inconf.Credentials.Secret = "xxxxx"
-	inconf.Credentials.Token = "xxxxx"
-	inconf.Region = "eu-west-1"
-	inconf.Bucket = bucket
-	inconf.ForcePathStyleURLs = true
-	inconf.Timeout = "10s"
-	inconf.SQSURL = sqsURL
-	inconf.SQSEndpoint = sqsEndpoint
+	require.NoError(t, pool.Retry(func() error {
+		u4, err := uuid.NewV4()
+		require.NoError(t, err)
 
-	outconf := writer.NewAmazonS3Config()
-	outconf.Endpoint = endpoint
-	outconf.Credentials.ID = "xxxxx"
-	outconf.Credentials.Secret = "xxxxx"
-	outconf.Credentials.Token = "xxxxx"
-	outconf.Region = "eu-west-1"
-	outconf.Bucket = bucket
-	outconf.ForcePathStyleURLs = true
-	outconf.Path = "${!count(\"s3uploaddownload3\")}.txt"
+		return createBucketQueue(s3Port, sqsPort, u4.String())
+	}))
 
-	outputCtr := func() (mOutput writer.Type, err error) {
-		if mOutput, err = writer.NewAmazonS3(outconf, log.Noop(), metrics.Noop()); err != nil {
-			return
-		}
-		if err = mOutput.Connect(); err != nil {
-			return
-		}
-		return
-	}
-	inputCtr := func() (mInput reader.Async, err error) {
-		ctx, done := context.WithTimeout(context.Background(), time.Second*60)
-		defer done()
+	template := `
+output:
+  s3:
+    bucket: bucket-$ID
+    endpoint: http://localhost:$PORT
+    force_path_style_urls: true
+    region: eu-west-1
+    path: ${!count("$ID")}.txt
+    credentials:
+      id: xxxxx
+      secret: xxxxx
+      token: xxxxx
+    batching:
+      count: $OUTPUT_BATCH_COUNT
 
-		if mInput, err = reader.NewAmazonS3(inconf, log.Noop(), metrics.Noop()); err != nil {
-			return
-		}
-		if err = mInput.ConnectWithContext(ctx); err != nil {
-			return
-		}
-		return
-	}
+input:
+  s3:
+    bucket: bucket-$ID
+    endpoint: http://localhost:$PORT
+    force_path_style_urls: true
+    sqs_url: http://localhost:$PORT_TWO/queue/queue-$ID
+    sqs_body_path: Records.*.s3.object.key
+    sqs_endpoint: http://localhost:$PORT_TWO
+    region: eu-west-1
+    delete_objects: true
+    download_manager:
+      enabled: $VAR1
+    credentials:
+      id: xxxxx
+      secret: xxxxx
+      token: xxxxx
+`
+	integrationTests(
+		integrationTestOpenClose(),
+		// integrationTestMetadata(), Does dumb stuff with rewriting keys.
+		integrationTestSendBatch(10),
+		integrationTestSendBatchCount(10),
+		integrationTestLotsOfDataSequential(50),
+	).Run(
+		t, template,
+		testOptPreTest(func(t *testing.T, env *testEnvironment) {
+			require.NoError(t, createBucketQueue(s3Port, sqsPort, env.configVars.id))
+		}),
+		testOptPort(s3Port),
+		testOptPortTwo(sqsPort),
+		testOptVarOne("false"),
+	)
 
-	checkALOSynchronousAsync(outputCtr, inputCtr, t)
-	checkALOSynchronousAndDieAsync(outputCtr, inputCtr, t)
+	t.Run("with download manager", func(t *testing.T) {
+		t.Parallel()
+
+		integrationTests(
+			integrationTestOpenClose(),
+			integrationTestSendBatch(10),
+			integrationTestSendBatchCount(10),
+			integrationTestLotsOfDataSequential(50),
+		).Run(
+			t, template,
+			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+				require.NoError(t, createBucketQueue(s3Port, sqsPort, env.configVars.id))
+			}),
+			testOptPort(s3Port),
+			testOptPortTwo(sqsPort),
+			testOptVarOne("true"),
+		)
+	})
 }
