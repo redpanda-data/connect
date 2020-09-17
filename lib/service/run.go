@@ -160,6 +160,11 @@ func Run() {
 			Usage:   "display version info, then exit",
 		},
 		&cli.StringFlag{
+			Name:  "log.level",
+			Value: "",
+			Usage: "override the configured log level, options are: off, error, warn, info, debug, trace.",
+		},
+		&cli.StringFlag{
 			Name:    "config",
 			Aliases: []string{"c"},
 			Value:   "",
@@ -199,7 +204,14 @@ func Run() {
 				cli.ShowAppHelp(c)
 				os.Exit(1)
 			}
-			os.Exit(cmdService(c.String("config"), c.StringSlice("resources"), !c.Bool("chilled"), false, nil))
+			os.Exit(cmdService(
+				c.String("config"),
+				c.StringSlice("resources"),
+				c.String("log.level"),
+				!c.Bool("chilled"),
+				false,
+				nil,
+			))
 			return nil
 		},
 		Commands: []*cli.Command{
@@ -248,7 +260,14 @@ func Run() {
    For more information check out the docs at:
    https://benthos.dev/docs/guides/streams_mode/about`[4:],
 				Action: func(c *cli.Context) error {
-					os.Exit(cmdService(c.String("config"), c.StringSlice("resources"), !c.Bool("chilled"), true, c.Args().Slice()))
+					os.Exit(cmdService(
+						c.String("config"),
+						c.StringSlice("resources"),
+						c.String("log.level"),
+						!c.Bool("chilled"),
+						true,
+						c.Args().Slice(),
+					))
 					return nil
 				},
 			},
@@ -339,7 +358,7 @@ func Run() {
 		}
 
 		deprecatedExecute(*configPath, testSuffix)
-		os.Exit(cmdService(*configPath, nil, false, false, nil))
+		os.Exit(cmdService(*configPath, nil, "", false, false, nil))
 		return nil
 	}
 

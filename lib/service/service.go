@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime/pprof"
+	"strings"
 	"syscall"
 	"time"
 
@@ -131,6 +132,7 @@ func readConfig(path string, resourcesPaths []string) (lints []string) {
 func cmdService(
 	confPath string,
 	resourcesPaths []string,
+	overrideLogLevel string,
 	strict bool,
 	streamsMode bool,
 	streamsConfigs []string,
@@ -142,6 +144,10 @@ func cmdService(
 		}
 		fmt.Println("Shutting down due to linter errors, to prevent shutdown run Benthos with --chilled")
 		return 1
+	}
+
+	if len(overrideLogLevel) > 0 {
+		conf.Logger.LogLevel = strings.ToUpper(overrideLogLevel)
 	}
 
 	// Logging and stats aggregation.

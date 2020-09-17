@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New cli flag `log.level` for overriding the configured logging level.
+
 ### Changed
 
 - The default value for `batching.count` fields is now zero, which means adding a non-count based batching mechanism without also explicitly overriding `count` no longer incorrectly caps batches at one message. This change is backwards compatible in that working batching configs will not change in behaviour. However, a broken batching config will now behave as expected.

@@ -405,6 +405,6 @@ func deprecatedExecute(configPath string, testSuffix string) {
 		if len(depFlags.streamsDir) > 0 {
 			dirs = append(dirs, depFlags.streamsDir)
 		}
-		os.Exit(cmdService(configPath, nil, depFlags.strictConfig, depFlags.streamsMode, dirs))
+		os.Exit(cmdService(configPath, nil, "", depFlags.strictConfig, depFlags.streamsMode, dirs))
 	}
 }
