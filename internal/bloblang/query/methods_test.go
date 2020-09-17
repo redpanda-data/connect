@@ -629,8 +629,8 @@ func TestMethods(t *testing.T) {
 				{content: `{"foo":[{"bar":"1"},{"bar":{}},{"bar":"2"},{"bar":[]}]}`},
 			},
 			output: map[string]interface{}{
-				"foo.0.bar": "1",
-				"foo.2.bar": "2",
+				"foo_0_bar": "1",
+				"foo_2_bar": "2",
 			},
 		},
 		"check collapse include empty": {
@@ -642,10 +642,10 @@ func TestMethods(t *testing.T) {
 				{content: `{"foo":[{"bar":"1"},{"bar":{}},{"bar":"2"},{"bar":[]}]}`},
 			},
 			output: map[string]interface{}{
-				"foo.0.bar": "1",
-				"foo.1.bar": struct{}{},
-				"foo.2.bar": "2",
-				"foo.3.bar": []struct{}{},
+				"foo_0_bar": "1",
+				"foo_1_bar": struct{}{},
+				"foo_2_bar": "2",
+				"foo_3_bar": []struct{}{},
 			},
 		},
 		"check sha1 hash": {
