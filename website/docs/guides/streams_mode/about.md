@@ -59,37 +59,28 @@ registered with the prefix `benthos.foo`.
 
 This can cause problems if your streams are short lived and uniquely named as
 the number of metrics registered will continue to climb indefinitely. In order
-to avoid this you should either limit the streams that register their metrics
-with [`whitelist`][whitelist] or [`blacklist`][blacklist] rules:
+to avoid this you can use the `path_mapping` field to filter metric names.
 
-``` yaml
+```yaml
 # Only register metrics for the stream `foo`. Others will be ignored.
 metrics:
-  whitelist:
-    paths:
-    - foo
-    child:
-      type: prometheus
-      prefix: benthos
+  prometheus:
+    prefix: benthos
+    path_mapping: if !this.has_prefix("foo") { deleted() }
 ```
 
-Or use [`rename`][rename] rules to set the same prefix for groups of streams:
+Or use it to rename prefixes in order to reduce the cardinality of names:
 
-``` yaml
+```yaml
 # Rename all stream metric prefixes of the form `foo_<uuid_v4>` to just `foo`.
 metrics:
-  rename:
-    by_regexp:
-    - pattern: "foo_[0-9\\-a-zA-Z]+\\.(.*)"
-      value: "foo.$1"
-    child:
-      type: prometheus
-      prefix: benthos
+  statsd:
+    prefix: benthos
+    address: localhost:8125
+    flush_period: 100m
+    path_mapping: this.re_replace("foo_[0-9\\-a-zA-Z]+\\.(.*)","foo.$1")
 ```
 
 [static-files]: /docs/guides/streams_mode/using_config_files
 [rest-api]: /docs/guides/streams_mode/using_rest_api
 [metrics]: /docs/components/metrics/about
-[whitelist]: /docs/components/metrics/whitelist
-[blacklist]: /docs/components/metrics/blacklist
-[rename]: /docs/components/metrics/rename
