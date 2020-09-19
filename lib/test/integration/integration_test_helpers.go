@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -36,6 +35,12 @@ type testConfigVars struct {
 
 	// A second port to use in secondary connector URLs.
 	portTwo string
+
+	// A third port to use in tertiary connector URLs.
+	portThree string
+
+	// A fourth port to use in quarternary connector URLs.
+	portFour string
 
 	// Used by batching testers to check the input honours batching fields.
 	inputBatchCount int
@@ -78,7 +83,7 @@ func newTestEnvironment(t *testing.T, confTemplate string) testEnvironment {
 			id:          u4.String(),
 			maxInFlight: 1,
 		},
-		timeout: time.Second * 60,
+		timeout: time.Second * 90,
 		ctx:     context.Background(),
 		log:     log.Noop(),
 		stats:   metrics.Noop(),
@@ -89,6 +94,8 @@ func (e testEnvironment) RenderConfig() string {
 	return strings.NewReplacer(
 		"$ID", e.configVars.id,
 		"$PORT_TWO", e.configVars.portTwo,
+		"$PORT_THREE", e.configVars.portThree,
+		"$PORT_FOUR", e.configVars.portFour,
 		"$PORT", e.configVars.port,
 		"$VAR1", e.configVars.var1,
 		"$INPUT_BATCH_COUNT", strconv.Itoa(e.configVars.inputBatchCount),
@@ -185,6 +192,18 @@ func (i integrationTestList) Run(t *testing.T, configTemplate string, opts ...te
 	}
 }
 
+var registeredIntegrationTests = map[string]func(*testing.T){}
+
+// register an integration test that should only execute under the `integration`
+// build tag. Returns an empty struct so that it can be called at a file root.
+func registerIntegrationTest(name string, fn func(*testing.T)) struct{} {
+	if _, exists := registeredIntegrationTests[name]; exists {
+		panic(fmt.Sprintf("integration test double registered: %v", name))
+	}
+	registeredIntegrationTests[name] = fn
+	return struct{}{}
+}
+
 //------------------------------------------------------------------------------
 
 func namedTest(name string, test testDefinition) testDefinition {
@@ -202,6 +221,38 @@ func initConnectors(
 	trans <-chan types.Transaction,
 	env *testEnvironment,
 ) (types.Input, types.Output) {
+	t.Helper()
+
+	out := initOutput(t, trans, env)
+	in := initInput(t, env)
+	return in, out
+}
+
+func initInput(t *testing.T, env *testEnvironment) types.Input {
+	t.Helper()
+
+	confBytes := []byte(env.RenderConfig())
+
+	s := config.New()
+	dec := yaml.NewDecoder(bytes.NewReader(confBytes))
+	dec.KnownFields(true)
+	require.NoError(t, dec.Decode(&s))
+
+	lints, err := config.Lint(confBytes, s)
+	require.NoError(t, err)
+	assert.Empty(t, lints)
+
+	input, err := input.New(s.Input, types.NoopMgr(), env.log, env.stats)
+	require.NoError(t, err)
+
+	if env.sleepAfterInput > 0 {
+		time.Sleep(env.sleepAfterInput)
+	}
+
+	return input
+}
+
+func initOutput(t *testing.T, trans <-chan types.Transaction, env *testEnvironment) types.Output {
 	t.Helper()
 
 	confBytes := []byte(env.RenderConfig())
@@ -224,22 +275,18 @@ func initConnectors(
 		time.Sleep(env.sleepAfterOutput)
 	}
 
-	input, err := input.New(s.Input, types.NoopMgr(), env.log, env.stats)
-	require.NoError(t, err)
-
-	if env.sleepAfterInput > 0 {
-		time.Sleep(env.sleepAfterInput)
-	}
-
-	return input, output
+	return output
 }
 
 func closeConnectors(t *testing.T, input types.Input, output types.Output) {
-	output.CloseAsync()
-	require.NoError(t, output.WaitForClose(time.Second*10))
-
-	input.CloseAsync()
-	require.NoError(t, input.WaitForClose(time.Second*10))
+	if output != nil {
+		output.CloseAsync()
+		require.NoError(t, output.WaitForClose(time.Second*10))
+	}
+	if input != nil {
+		input.CloseAsync()
+		require.NoError(t, input.WaitForClose(time.Second*10))
+	}
 }
 
 func sendMessage(
@@ -310,6 +357,7 @@ func receiveMessage(
 	ctx context.Context,
 	t *testing.T,
 	tranChan <-chan types.Transaction,
+	err error,
 ) types.Part {
 	t.Helper()
 
@@ -322,8 +370,13 @@ func receiveMessage(
 
 	require.Equal(t, tran.Payload.Len(), 1)
 
+	var res types.Response = response.NewAck()
+	if err != nil {
+		res = response.NewError(err)
+	}
+
 	select {
-	case tran.ResponseChan <- response.NewAck():
+	case tran.ResponseChan <- res:
 	case <-ctx.Done():
 		t.Fatal("timed out on response")
 	}
@@ -360,189 +413,4 @@ func messageInSet(t *testing.T, pop bool, p types.Part, set map[string][]string)
 	if pop {
 		delete(set, string(p.Get()))
 	}
-}
-
-//------------------------------------------------------------------------------
-
-func integrationTestOpenClose() testDefinition {
-	return namedTest(
-		"can open and close",
-		func(t *testing.T, env *testEnvironment) {
-			t.Parallel()
-
-			tranChan := make(chan types.Transaction)
-			input, output := initConnectors(t, tranChan, env)
-
-			require.NoError(t, sendMessage(env.ctx, t, tranChan, "hello world"))
-			messageMatch(t, receiveMessage(env.ctx, t, input.TransactionChan()), "hello world")
-
-			closeConnectors(t, input, output)
-		},
-	)
-}
-
-func integrationTestMetadata() testDefinition {
-	return namedTest(
-		"can send and receive metadata",
-		func(t *testing.T, env *testEnvironment) {
-			t.Parallel()
-
-			tranChan := make(chan types.Transaction)
-			input, output := initConnectors(t, tranChan, env)
-
-			require.NoError(t, sendMessage(
-				env.ctx, t, tranChan,
-				"hello world",
-				"foo", "foo_value",
-				"bar", "bar_value",
-			))
-			messageMatch(
-				t, receiveMessage(env.ctx, t, input.TransactionChan()),
-				"hello world",
-				"foo", "foo_value",
-				"bar", "bar_value",
-			)
-
-			closeConnectors(t, input, output)
-		},
-	)
-}
-
-func integrationTestSendBatch(n int) testDefinition {
-	return namedTest(
-		"can send a message batch of a size, and receive them",
-		func(t *testing.T, env *testEnvironment) {
-			t.Parallel()
-
-			tranChan := make(chan types.Transaction)
-			input, output := initConnectors(t, tranChan, env)
-
-			set := map[string][]string{}
-			payloads := []string{}
-			for i := 0; i < n; i++ {
-				payload := fmt.Sprintf("hello world %v", i)
-				set[payload] = nil
-				payloads = append(payloads, payload)
-			}
-			sendBatch(env.ctx, t, tranChan, payloads)
-
-			for i := 0; i < n; i++ {
-				messageInSet(t, true, receiveMessage(env.ctx, t, input.TransactionChan()), set)
-			}
-
-			closeConnectors(t, input, output)
-		},
-	)
-}
-
-func integrationTestSendBatchCount(n int) testDefinition {
-	return namedTest(
-		"can send messages when configured with an output batch count",
-		func(t *testing.T, env *testEnvironment) {
-			t.Parallel()
-
-			env.configVars.outputBatchCount = n
-
-			tranChan := make(chan types.Transaction)
-			input, output := initConnectors(t, tranChan, env)
-
-			resChan := make(chan types.Response)
-
-			set := map[string][]string{}
-			for i := 0; i < n; i++ {
-				payload := fmt.Sprintf("hello world %v", i)
-				set[payload] = nil
-				msg := message.New(nil)
-				msg.Append(message.NewPart([]byte(payload)))
-				select {
-				case tranChan <- types.NewTransaction(msg, resChan):
-				case res := <-resChan:
-					t.Fatalf("premature response: %v", res.Error())
-				case <-env.ctx.Done():
-					t.Fatal("timed out on send")
-				}
-			}
-
-			for i := 0; i < n; i++ {
-				select {
-				case res := <-resChan:
-					assert.NoError(t, res.Error())
-				case <-env.ctx.Done():
-					t.Fatal("timed out on response")
-				}
-			}
-
-			for i := 0; i < n; i++ {
-				messageInSet(t, true, receiveMessage(env.ctx, t, input.TransactionChan()), set)
-			}
-
-			closeConnectors(t, input, output)
-		},
-	)
-}
-
-func integrationTestLotsOfDataSequential(n int) testDefinition {
-	return namedTest(
-		"can send and receive lots of data sequentially without loss or duplicates",
-		func(t *testing.T, env *testEnvironment) {
-			t.Parallel()
-
-			tranChan := make(chan types.Transaction)
-			input, output := initConnectors(t, tranChan, env)
-
-			set := map[string][]string{}
-
-			for i := 0; i < n; i++ {
-				payload := fmt.Sprintf("hello world: %v", i)
-				set[payload] = nil
-				require.NoError(t, sendMessage(env.ctx, t, tranChan, payload))
-			}
-
-			for i := 0; i < n; i++ {
-				messageInSet(t, true, receiveMessage(env.ctx, t, input.TransactionChan()), set)
-			}
-
-			closeConnectors(t, input, output)
-		},
-	)
-}
-
-func integrationTestLotsOfDataParallel(n int) testDefinition {
-	return namedTest(
-		"can send and receive lots of data in parallel without loss or duplicates",
-		func(t *testing.T, env *testEnvironment) {
-			t.Parallel()
-
-			tranChan := make(chan types.Transaction)
-			input, output := initConnectors(t, tranChan, env)
-
-			set := map[string][]string{}
-			for i := 0; i < n; i++ {
-				payload := fmt.Sprintf("hello world: %v", i)
-				set[payload] = nil
-			}
-
-			wg := sync.WaitGroup{}
-			wg.Add(2)
-
-			go func() {
-				defer wg.Done()
-				for i := 0; i < n; i++ {
-					payload := fmt.Sprintf("hello world: %v", i)
-					require.NoError(t, sendMessage(env.ctx, t, tranChan, payload))
-				}
-			}()
-
-			go func() {
-				defer wg.Done()
-				for i := 0; i < n; i++ {
-					messageInSet(t, true, receiveMessage(env.ctx, t, input.TransactionChan()), set)
-				}
-			}()
-
-			wg.Wait()
-
-			closeConnectors(t, input, output)
-		},
-	)
 }

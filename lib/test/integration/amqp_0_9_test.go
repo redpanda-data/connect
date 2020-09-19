@@ -1,5 +1,3 @@
-// +build integration
-
 package integration
 
 import (
@@ -13,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAMQP09(t *testing.T) {
+var _ = registerIntegrationTest("amqp_0_9", func(t *testing.T) {
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -65,6 +63,7 @@ input:
 		integrationTestSendBatch(10),
 		integrationTestLotsOfDataSequential(1000),
 		integrationTestLotsOfDataParallel(1000),
+		integrationTestLotsOfDataParallelLossy(1000),
 	)
 	suite.Run(
 		t, template,
@@ -73,6 +72,7 @@ input:
 		testOptPort(resource.GetPort("5672/tcp")),
 	)
 	t.Run("with max in flight", func(t *testing.T) {
+		t.Parallel()
 		suite.Run(
 			t, template,
 			testOptSleepAfterInput(100*time.Millisecond),
@@ -81,4 +81,4 @@ input:
 			testOptMaxInFlight(10),
 		)
 	})
-}
+})
