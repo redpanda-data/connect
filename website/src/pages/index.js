@@ -307,6 +307,7 @@ function Home() {
                 <h3>Sponsored by the following heroes</h3>
                 <a href="https://www.meltwater.com/" className={styles.sponsorLink}><img className={styles.meltwaterImg} src="/img/sponsors/mw_logo.png" /></a>
                 <a href="https://www.whiteops.com/" className={styles.sponsorLink}><img className={styles.whiteopsImg} src="/img/sponsors/whiteops_logo.png" /></a>
+                <a href="https://www.infosum.com/" className={styles.sponsorLink}><img className={styles.infosumImg} src="/img/sponsors/infosum_logo.png" /></a>
               </div>
               <div className={classnames('col col--6', styles.loveSectionPlea)}>
                 <div>

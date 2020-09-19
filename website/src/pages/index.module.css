@@ -53,8 +53,7 @@
 
 .loveSection {
   padding: 40px 0;
-  background-color: #1f201c;
-  background-image: url(/img/love-bg-dark.svg);
+  background-color: #602541;
 
   --ifm-heading-color: #ffffff;
 }
@@ -70,7 +69,6 @@
 .sponsorLink {
   display: inline-block;
   margin: 10px;
-  padding: 10px;
 }
 
 .meltwaterImg {
@@ -80,4 +78,10 @@
 
 .whiteopsImg {
   max-height: 50px;
+  padding: 0 10px;
+}
+
+.infosumImg {
+  max-height: 40px;
+  padding: 10px;
 }
