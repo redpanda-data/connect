@@ -58,8 +58,8 @@ input:
 		integrationTestOpenClose(),
 		// integrationTestMetadata(), TODO
 		integrationTestSendBatch(10),
-		integrationTestLotsOfDataParallel(1000),
-		integrationTestLotsOfDataParallelLossy(1000),
+		integrationTestStreamParallel(1000),
+		integrationTestStreamParallelLossy(1000),
 	)
 	suite.Run(
 		t, template,

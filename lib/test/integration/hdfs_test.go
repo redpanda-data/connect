@@ -80,6 +80,6 @@ input:
 `
 	integrationTests(
 		integrationTestOpenCloseIsolated(),
-		integrationTestLotsOfDataIsolated(10),
+		integrationTestStreamIsolated(10),
 	).Run(t, template)
 })

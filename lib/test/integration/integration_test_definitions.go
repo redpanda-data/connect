@@ -103,8 +103,8 @@ func integrationTestSendBatch(n int) testDefinition {
 			}
 			sendBatch(env.ctx, t, tranChan, payloads)
 
-			for i := 0; i < n; i++ {
-				messageInSet(t, true, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+			for len(set) > 0 {
+				messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
 			}
 		},
 	)
@@ -150,8 +150,8 @@ func integrationTestSendBatchCount(n int) testDefinition {
 				}
 			}
 
-			for i := 0; i < n; i++ {
-				messageInSet(t, true, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+			for len(set) > 0 {
+				messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
 			}
 		},
 	)
@@ -188,7 +188,7 @@ func integrationTestReceiveBatchCount(n int) testDefinition {
 
 			assert.Equal(t, n, tran.Payload.Len())
 			tran.Payload.Iter(func(_ int, p types.Part) error {
-				messageInSet(t, true, p, set)
+				messageInSet(t, true, false, p, set)
 				return nil
 			})
 
@@ -201,7 +201,7 @@ func integrationTestReceiveBatchCount(n int) testDefinition {
 	)
 }
 
-func integrationTestLotsOfDataSequential(n int) testDefinition {
+func integrationTestStreamSequential(n int) testDefinition {
 	return namedTest(
 		"can send and receive data sequentially",
 		func(t *testing.T, env *testEnvironment) {
@@ -221,15 +221,15 @@ func integrationTestLotsOfDataSequential(n int) testDefinition {
 				require.NoError(t, sendMessage(env.ctx, t, tranChan, payload))
 			}
 
-			for i := 0; i < n; i++ {
-				messageInSet(t, true, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+			for len(set) > 0 {
+				messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
 			}
 		},
 	)
 }
 
 // The input is created after the output has written data.
-func integrationTestLotsOfDataIsolated(n int) testDefinition {
+func integrationTestStreamIsolated(n int) testDefinition {
 	return namedTest(
 		"can send and receive data isolated",
 		func(t *testing.T, env *testEnvironment) {
@@ -254,14 +254,14 @@ func integrationTestLotsOfDataIsolated(n int) testDefinition {
 				closeConnectors(t, input, nil)
 			})
 
-			for i := 0; i < n; i++ {
-				messageInSet(t, true, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+			for len(set) > 0 {
+				messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
 			}
 		},
 	)
 }
 
-func integrationTestLotsOfDataParallel(n int) testDefinition {
+func integrationTestStreamParallel(n int) testDefinition {
 	return namedTest(
 		"can send and receive data in parallel",
 		func(t *testing.T, env *testEnvironment) {
@@ -292,8 +292,8 @@ func integrationTestLotsOfDataParallel(n int) testDefinition {
 
 			go func() {
 				defer wg.Done()
-				for i := 0; i < n; i++ {
-					messageInSet(t, true, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+				for len(set) > 0 {
+					messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
 				}
 			}()
 
@@ -302,7 +302,7 @@ func integrationTestLotsOfDataParallel(n int) testDefinition {
 	)
 }
 
-func integrationTestLotsOfDataParallelLossy(n int) testDefinition {
+func integrationTestStreamParallelLossy(n int) testDefinition {
 	return namedTest(
 		"can send and receive data in parallel lossy",
 		func(t *testing.T, env *testEnvironment) {
@@ -338,18 +338,79 @@ func integrationTestLotsOfDataParallelLossy(n int) testDefinition {
 					if i%10 == 1 {
 						rejected++
 						messageInSet(
-							t, false,
+							t, false, true,
 							receiveMessage(env.ctx, t, input.TransactionChan(), errors.New("rejected just cus")),
 							set,
 						)
 					} else {
-						messageInSet(t, true, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+						messageInSet(t, true, true, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
 					}
 				}
 
 				t.Log("Finished first loop, looping through rejected messages.")
-				for i := 0; i < rejected; i++ {
-					messageInSet(t, true, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+				for len(set) > 0 {
+					messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+				}
+			}()
+
+			wg.Wait()
+		},
+	)
+}
+
+func integrationTestStreamParallelLossyThroughReconnect(n int) testDefinition {
+	return namedTest(
+		"can send and receive data in parallel lossy through reconnect",
+		func(t *testing.T, env *testEnvironment) {
+			t.Parallel()
+
+			tranChan := make(chan types.Transaction)
+			input, output := initConnectors(t, tranChan, env)
+			t.Cleanup(func() {
+				closeConnectors(t, nil, output)
+			})
+
+			set := map[string][]string{}
+			for i := 0; i < n; i++ {
+				payload := fmt.Sprintf("hello world: %v", i)
+				set[payload] = nil
+			}
+
+			wg := sync.WaitGroup{}
+			wg.Add(2)
+
+			go func() {
+				defer wg.Done()
+				for i := 0; i < n; i++ {
+					payload := fmt.Sprintf("hello world: %v", i)
+					require.NoError(t, sendMessage(env.ctx, t, tranChan, payload))
+				}
+			}()
+
+			go func() {
+				defer wg.Done()
+				rejected := 0
+				for i := 0; i < n; i++ {
+					if i%10 == 1 {
+						rejected++
+						messageInSet(
+							t, false, env.allowDuplicateMessages,
+							receiveMessage(env.ctx, t, input.TransactionChan(), errors.New("rejected just cus")),
+							set,
+						)
+					} else {
+						messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+					}
+				}
+
+				closeConnectors(t, input, nil)
+
+				input = initInput(t, env)
+				defer closeConnectors(t, input, nil)
+
+				t.Log("Finished first loop, looping through rejected messages.")
+				for len(set) > 0 {
+					messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
 				}
 			}()
 

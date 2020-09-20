@@ -130,9 +130,9 @@ input:
 		integrationTestOpenClose(),
 		integrationTestMetadata(),
 		integrationTestSendBatch(10),
-		integrationTestLotsOfDataSequential(1000),
-		integrationTestLotsOfDataParallel(1000),
-		integrationTestLotsOfDataParallelLossy(1000),
+		integrationTestStreamSequential(1000),
+		integrationTestStreamParallel(1000),
+		integrationTestStreamParallelLossy(1000),
 		integrationTestSendBatchCount(10),
 		integrationTestReceiveBatchCount(10),
 	)

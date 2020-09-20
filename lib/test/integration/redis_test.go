@@ -66,9 +66,10 @@ input:
 			integrationTestOpenClose(),
 			integrationTestMetadata(),
 			integrationTestSendBatch(10),
-			integrationTestLotsOfDataSequential(1000),
-			integrationTestLotsOfDataParallel(1000),
-			integrationTestLotsOfDataParallelLossy(1000),
+			integrationTestStreamSequential(1000),
+			integrationTestStreamParallel(1000),
+			integrationTestStreamParallelLossy(1000),
+			integrationTestStreamParallelLossyThroughReconnect(100),
 		)
 		suite.Run(
 			t, template,
@@ -105,9 +106,9 @@ input:
 		suite := integrationTests(
 			integrationTestOpenClose(),
 			integrationTestSendBatch(10),
-			integrationTestLotsOfDataSequential(100),
-			integrationTestLotsOfDataParallel(100),
-			integrationTestLotsOfDataParallelLossy(100),
+			integrationTestStreamSequential(100),
+			integrationTestStreamParallel(100),
+			integrationTestStreamParallelLossy(100),
 		)
 		suite.Run(
 			t, template,
@@ -144,9 +145,9 @@ input:
 		suite := integrationTests(
 			integrationTestOpenClose(),
 			integrationTestSendBatch(10),
-			integrationTestLotsOfDataSequential(1000),
-			integrationTestLotsOfDataParallel(1000),
-			integrationTestLotsOfDataParallelLossy(1000),
+			integrationTestStreamSequential(1000),
+			integrationTestStreamParallel(1000),
+			integrationTestStreamParallelLossy(1000),
 		)
 		suite.Run(
 			t, template,

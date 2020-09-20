@@ -48,9 +48,10 @@ input:
 	suite := integrationTests(
 		integrationTestOpenClose(),
 		integrationTestSendBatch(10),
-		integrationTestLotsOfDataSequential(1000),
-		integrationTestLotsOfDataParallel(1000),
-		integrationTestLotsOfDataParallelLossy(1000),
+		integrationTestStreamSequential(1000),
+		integrationTestStreamParallel(1000),
+		integrationTestStreamParallelLossy(1000),
+		integrationTestStreamParallelLossyThroughReconnect(1000),
 	)
 	suite.Run(
 		t, template,

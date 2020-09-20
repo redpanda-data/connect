@@ -66,6 +66,8 @@ type testEnvironment struct {
 	log     log.Modular
 	stats   metrics.Type
 
+	allowDuplicateMessages bool
+
 	// Ugly work arounds for slow connectors.
 	sleepAfterInput  time.Duration
 	sleepAfterOutput time.Duration
@@ -111,6 +113,12 @@ type testOptFunc func(*testEnvironment)
 func testOptTimeout(timeout time.Duration) testOptFunc {
 	return func(env *testEnvironment) {
 		env.timeout = timeout
+	}
+}
+
+func testOptAllowDupes() testOptFunc {
+	return func(env *testEnvironment) {
+		env.allowDuplicateMessages = true
 	}
 }
 
@@ -189,6 +197,26 @@ func (i integrationTestList) Run(t *testing.T, configTemplate string, opts ...te
 			env.preTest(t, &env)
 		}
 		test(t, &env)
+	}
+}
+
+func (i integrationTestList) RunSequentially(t *testing.T, configTemplate string, opts ...testOptFunc) {
+	for _, test := range i {
+		env := newTestEnvironment(t, configTemplate)
+		for _, opt := range opts {
+			opt(&env)
+		}
+
+		var done func()
+		env.ctx, done = context.WithTimeout(env.ctx, env.timeout)
+		t.Cleanup(done)
+
+		if env.preTest != nil {
+			env.preTest(t, &env)
+		}
+		t.Run("seq", func(t *testing.T) {
+			test(t, &env)
+		})
 	}
 }
 
@@ -400,11 +428,14 @@ func messageMatch(t *testing.T, p types.Part, content string, metadata ...string
 	}
 }
 
-func messageInSet(t *testing.T, pop bool, p types.Part, set map[string][]string) {
+func messageInSet(t *testing.T, pop, allowDupes bool, p types.Part, set map[string][]string) {
 	t.Helper()
 
 	metadata, exists := set[string(p.Get())]
-	require.True(t, exists, "in set: %v", string(p.Get()))
+	if allowDupes && !exists {
+		return
+	}
+	require.True(t, exists, "in set: %v, set: %v", string(p.Get()), set)
 
 	for i := 0; i < len(metadata); i += 2 {
 		assert.Equal(t, metadata[i+1], p.Metadata().Get(metadata[i]))

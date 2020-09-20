@@ -16,68 +16,84 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func createBucketQueue(port, portTwo, id string) error {
-	endpoint := fmt.Sprintf("http://localhost:%v", port)
+func createBucketQueue(s3Port, sqsPort, id string) error {
+	endpoint := fmt.Sprintf("http://localhost:%v", s3Port)
 	bucket := "bucket-" + id
 	sqsQueue := "queue-" + id
-	sqsEndpoint := fmt.Sprintf("http://localhost:%v", portTwo)
+	sqsEndpoint := fmt.Sprintf("http://localhost:%v", sqsPort)
 	sqsQueueURL := fmt.Sprintf("%v/queue/%v", sqsEndpoint, sqsQueue)
 
-	s3Client := s3.New(session.Must(session.NewSession(&aws.Config{
-		S3ForcePathStyle: aws.Bool(true),
-		Credentials:      credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		Endpoint:         aws.String(endpoint),
-		Region:           aws.String("eu-west-1"),
-	})))
-
-	sqsClient := sqs.New(session.Must(session.NewSession(&aws.Config{
-		Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		Endpoint:    aws.String(sqsEndpoint),
-		Region:      aws.String("eu-west-1"),
-	})))
-
-	if _, err := s3Client.CreateBucket(&s3.CreateBucketInput{
-		Bucket: &bucket,
-	}); err != nil {
-		return err
+	var s3Client *s3.S3
+	if s3Port != "" {
+		s3Client = s3.New(session.Must(session.NewSession(&aws.Config{
+			S3ForcePathStyle: aws.Bool(true),
+			Credentials:      credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
+			Endpoint:         aws.String(endpoint),
+			Region:           aws.String("eu-west-1"),
+		})))
 	}
 
-	if _, err := sqsClient.CreateQueue(&sqs.CreateQueueInput{
-		QueueName: aws.String(sqsQueue),
-	}); err != nil {
-		return err
+	var sqsClient *sqs.SQS
+	if sqsPort != "" {
+		sqsClient = sqs.New(session.Must(session.NewSession(&aws.Config{
+			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
+			Endpoint:    aws.String(sqsEndpoint),
+			Region:      aws.String("eu-west-1"),
+		})))
 	}
 
-	if err := s3Client.WaitUntilBucketExists(&s3.HeadBucketInput{
-		Bucket: &bucket,
-	}); err != nil {
-		return err
+	if s3Client != nil {
+		if _, err := s3Client.CreateBucket(&s3.CreateBucketInput{
+			Bucket: &bucket,
+		}); err != nil {
+			return err
+		}
 	}
 
-	res, err := sqsClient.GetQueueAttributes(&sqs.GetQueueAttributesInput{
-		QueueUrl:       &sqsQueueURL,
-		AttributeNames: []*string{aws.String("All")},
-	})
-	if err != nil {
-		return err
+	if sqsClient != nil {
+		if _, err := sqsClient.CreateQueue(&sqs.CreateQueueInput{
+			QueueName: aws.String(sqsQueue),
+		}); err != nil {
+			return err
+		}
 	}
 
-	sqsQueueArn := res.Attributes["QueueArn"]
+	if s3Client != nil {
+		if err := s3Client.WaitUntilBucketExists(&s3.HeadBucketInput{
+			Bucket: &bucket,
+		}); err != nil {
+			return err
+		}
+	}
 
-	if _, err := s3Client.PutBucketNotificationConfiguration(&s3.PutBucketNotificationConfigurationInput{
-		Bucket: &bucket,
-		NotificationConfiguration: &s3.NotificationConfiguration{
-			QueueConfigurations: []*s3.QueueConfiguration{
-				{
-					Events: []*string{
-						aws.String("s3:ObjectCreated:*"),
+	var sqsQueueArn *string
+	if sqsPort != "" {
+		res, err := sqsClient.GetQueueAttributes(&sqs.GetQueueAttributesInput{
+			QueueUrl:       &sqsQueueURL,
+			AttributeNames: []*string{aws.String("All")},
+		})
+		if err != nil {
+			return err
+		}
+		sqsQueueArn = res.Attributes["QueueArn"]
+	}
+
+	if s3Port != "" && sqsPort != "" {
+		if _, err := s3Client.PutBucketNotificationConfiguration(&s3.PutBucketNotificationConfigurationInput{
+			Bucket: &bucket,
+			NotificationConfiguration: &s3.NotificationConfiguration{
+				QueueConfigurations: []*s3.QueueConfiguration{
+					{
+						Events: []*string{
+							aws.String("s3:ObjectCreated:*"),
+						},
+						QueueArn: sqsQueueArn,
 					},
-					QueueArn: sqsQueueArn,
 				},
 			},
-		},
-	}); err != nil {
-		return err
+		}); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -148,9 +164,12 @@ input:
 		integrationTests(
 			integrationTestOpenClose(),
 			// integrationTestMetadata(), Does dumb stuff with rewriting keys.
-			integrationTestSendBatch(10),
+			// integrationTestSendBatch(10),
 			integrationTestSendBatchCount(10),
-			integrationTestLotsOfDataSequential(10),
+			integrationTestStreamSequential(10),
+			// integrationTestStreamParallel(10),
+			// integrationTestStreamParallelLossy(10),
+			integrationTestStreamParallelLossyThroughReconnect(10),
 		).Run(
 			t, template,
 			testOptPreTest(func(t *testing.T, env *testEnvironment) {
@@ -159,6 +178,7 @@ input:
 			testOptPort(s3Port),
 			testOptPortTwo(sqsPort),
 			testOptVarOne("false"),
+			testOptAllowDupes(),
 		)
 
 		t.Run("with download manager", func(t *testing.T) {
@@ -166,9 +186,12 @@ input:
 
 			integrationTests(
 				integrationTestOpenClose(),
-				integrationTestSendBatch(10),
+				// integrationTestSendBatch(10),
 				integrationTestSendBatchCount(10),
-				integrationTestLotsOfDataSequential(10),
+				integrationTestStreamSequential(10),
+				// integrationTestStreamParallel(10),
+				// integrationTestStreamParallelLossy(10),
+				integrationTestStreamParallelLossyThroughReconnect(10),
 			).Run(
 				t, template,
 				testOptPreTest(func(t *testing.T, env *testEnvironment) {
@@ -177,6 +200,7 @@ input:
 				testOptPort(s3Port),
 				testOptPortTwo(sqsPort),
 				testOptVarOne("true"),
+				testOptAllowDupes(),
 			)
 		})
 	})
@@ -213,11 +237,11 @@ input:
 `
 		integrationTests(
 			integrationTestOpenCloseIsolated(),
-			integrationTestLotsOfDataIsolated(10),
+			integrationTestStreamIsolated(10),
 		).Run(
 			t, template,
 			testOptPreTest(func(t *testing.T, env *testEnvironment) {
-				require.NoError(t, createBucketQueue(s3Port, sqsPort, env.configVars.id))
+				require.NoError(t, createBucketQueue(s3Port, "", env.configVars.id))
 			}),
 			testOptPort(s3Port),
 			testOptVarOne("false"),
@@ -226,11 +250,11 @@ input:
 		t.Run("with download manager", func(t *testing.T) {
 			integrationTests(
 				integrationTestOpenCloseIsolated(),
-				integrationTestLotsOfDataIsolated(10),
+				integrationTestStreamIsolated(10),
 			).Run(
 				t, template,
 				testOptPreTest(func(t *testing.T, env *testEnvironment) {
-					require.NoError(t, createBucketQueue(s3Port, sqsPort, env.configVars.id))
+					require.NoError(t, createBucketQueue(s3Port, "", env.configVars.id))
 				}),
 				testOptPort(s3Port),
 				testOptVarOne("true"),
@@ -266,12 +290,14 @@ input:
 		integrationTests(
 			integrationTestOpenClose(),
 			integrationTestSendBatch(10),
-			integrationTestLotsOfDataSequential(50),
-			integrationTestLotsOfDataParallel(50),
+			integrationTestStreamSequential(50),
+			integrationTestStreamParallel(50),
+			integrationTestStreamParallelLossy(50),
+			integrationTestStreamParallelLossyThroughReconnect(50),
 		).Run(
 			t, template,
 			testOptPreTest(func(t *testing.T, env *testEnvironment) {
-				require.NoError(t, createBucketQueue(s3Port, sqsPort, env.configVars.id))
+				require.NoError(t, createBucketQueue("", sqsPort, env.configVars.id))
 			}),
 			testOptPort(sqsPort),
 		)
