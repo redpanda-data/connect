@@ -9,7 +9,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-func intoStaticResolver(p Type) Type {
+func intoStaticResolver(p Func) Func {
 	return func(input []rune) Result {
 		res := p(input)
 		if str, ok := res.Payload.(string); ok {

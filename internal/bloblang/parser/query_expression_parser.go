@@ -4,7 +4,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 )
 
-func matchCaseParser() Type {
+func matchCaseParser() Func {
 	whitespace := SpacesAndTabs()
 
 	p := Sequence(
@@ -63,7 +63,7 @@ func matchCaseParser() Type {
 	}
 }
 
-func matchExpressionParser() Type {
+func matchExpressionParser() Func {
 	whitespace := DiscardAll(
 		OneOf(
 			SpacesAndTabs(),
@@ -117,7 +117,7 @@ func matchExpressionParser() Type {
 	}
 }
 
-func ifExpressionParser() Type {
+func ifExpressionParser() Func {
 	optionalWhitespace := DiscardAll(
 		OneOf(
 			SpacesAndTabs(),
@@ -168,7 +168,7 @@ func ifExpressionParser() Type {
 	}
 }
 
-func bracketsExpressionParser() Type {
+func bracketsExpressionParser() Func {
 	whitespace := DiscardAll(
 		OneOf(
 			SpacesAndTabs(),

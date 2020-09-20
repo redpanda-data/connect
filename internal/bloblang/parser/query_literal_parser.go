@@ -4,7 +4,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 )
 
-func dynamicArrayParser() Type {
+func dynamicArrayParser() Func {
 	open, comma, close := Char('['), Char(','), Char(']')
 	whitespace := DiscardAll(
 		OneOf(
@@ -42,7 +42,7 @@ func dynamicArrayParser() Type {
 	}
 }
 
-func dynamicObjectParser() Type {
+func dynamicObjectParser() Func {
 	open, comma, close := Char('{'), Char(','), Char('}')
 	whitespace := DiscardAll(
 		OneOf(
@@ -103,7 +103,7 @@ func dynamicObjectParser() Type {
 	}
 }
 
-func dynamicLiteralValueParser() Type {
+func dynamicLiteralValueParser() Func {
 	return OneOf(
 		Boolean(),
 		Number(),
@@ -115,7 +115,7 @@ func dynamicLiteralValueParser() Type {
 	)
 }
 
-func literalValueParser() Type {
+func literalValueParser() Func {
 	p := dynamicLiteralValueParser()
 
 	return func(input []rune) Result {

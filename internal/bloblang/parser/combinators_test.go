@@ -254,7 +254,7 @@ func TestOneOfErrors(t *testing.T) {
 	}
 
 	for name, test := range tests {
-		childParsers := []Type{}
+		childParsers := []Func{}
 		for _, err := range test.resultErrs {
 			err := err
 			childParsers = append(childParsers, func([]rune) Result {
@@ -350,7 +350,7 @@ func TestBestMatch(t *testing.T) {
 	}
 
 	for name, test := range tests {
-		childParsers := []Type{}
+		childParsers := []Func{}
 		for _, res := range test.inputResults {
 			res := res
 			childParsers = append(childParsers, func([]rune) Result {

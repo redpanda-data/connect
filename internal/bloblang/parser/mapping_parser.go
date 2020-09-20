@@ -35,7 +35,7 @@ func ParseMapping(filepath string, expr string) (*mapping.Executor, *Error) {
 
 //------------------------------------------------------------------------------'
 
-func parseExecutor(baseDir string) Type {
+func parseExecutor(baseDir string) Func {
 	newline := NewlineAllowComment()
 	whitespace := SpacesAndTabs()
 	allWhitespace := DiscardAll(OneOf(whitespace, newline))
@@ -99,7 +99,7 @@ func parseExecutor(baseDir string) Type {
 	}
 }
 
-func singleRootMapping() Type {
+func singleRootMapping() Func {
 	whitespace := SpacesAndTabs()
 	allWhitespace := DiscardAll(OneOf(whitespace, Newline()))
 
@@ -131,7 +131,7 @@ func singleRootMapping() Type {
 
 //------------------------------------------------------------------------------
 
-func varNameParser() Type {
+func varNameParser() Func {
 	return JoinStringPayloads(
 		UntilFail(
 			OneOf(
@@ -145,7 +145,7 @@ func varNameParser() Type {
 	)
 }
 
-func importParser(baseDir string, maps map[string]query.Function) Type {
+func importParser(baseDir string, maps map[string]query.Function) Func {
 	p := Sequence(
 		Term("import"),
 		SpacesAndTabs(),
@@ -212,7 +212,7 @@ func importParser(baseDir string, maps map[string]query.Function) Type {
 	}
 }
 
-func mapParser(maps map[string]query.Function) Type {
+func mapParser(maps map[string]query.Function) Func {
 	newline := NewlineAllowComment()
 	whitespace := SpacesAndTabs()
 	allWhitespace := DiscardAll(OneOf(whitespace, newline))
@@ -285,7 +285,7 @@ func mapParser(maps map[string]query.Function) Type {
 	}
 }
 
-func letStatementParser() Type {
+func letStatementParser() Func {
 	p := Sequence(
 		Expect(Term("let"), "assignment"),
 		SpacesAndTabs(),
@@ -322,7 +322,7 @@ func letStatementParser() Type {
 	}
 }
 
-func nameLiteralParser() Type {
+func nameLiteralParser() Func {
 	return JoinStringPayloads(
 		UntilFail(
 			OneOf(
@@ -339,7 +339,7 @@ func nameLiteralParser() Type {
 	)
 }
 
-func metaStatementParser(disabled bool) Type {
+func metaStatementParser(disabled bool) Func {
 	p := Sequence(
 		Expect(Term("meta"), "assignment"),
 		SpacesAndTabs(),
@@ -382,7 +382,7 @@ func metaStatementParser(disabled bool) Type {
 	}
 }
 
-func pathLiteralSegmentParser() Type {
+func pathLiteralSegmentParser() Func {
 	return JoinStringPayloads(
 		UntilFail(
 			OneOf(
@@ -398,7 +398,7 @@ func pathLiteralSegmentParser() Type {
 	)
 }
 
-func quotedPathLiteralSegmentParser() Type {
+func quotedPathLiteralSegmentParser() Func {
 	pattern := QuotedString()
 
 	return func(input []rune) Result {
@@ -420,7 +420,7 @@ func quotedPathLiteralSegmentParser() Type {
 	}
 }
 
-func pathParser() Type {
+func pathParser() Func {
 	p := Sequence(
 		Expect(pathLiteralSegmentParser(), "assignment"),
 		Optional(
@@ -463,7 +463,7 @@ func pathParser() Type {
 	}
 }
 
-func plainMappingStatementParser() Type {
+func plainMappingStatementParser() Func {
 	p := Sequence(
 		pathParser(),
 		SpacesAndTabs(),

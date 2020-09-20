@@ -17,15 +17,15 @@ type Result struct {
 	Remaining []rune
 }
 
-// Type is a general parser method.
-type Type func([]rune) Result
+// Func is the common signature of a parser function.
+type Func func([]rune) Result
 
 //------------------------------------------------------------------------------
 
 // NotEnd parses zero characters from an input and expects it to not have ended.
 // An ExpectedError must be provided which provides the error returned on empty
 // input.
-func NotEnd(p Type, exp ...string) Type {
+func NotEnd(p Func, exp ...string) Func {
 	return func(input []rune) Result {
 		if len(input) == 0 {
 			return Result{
@@ -39,7 +39,7 @@ func NotEnd(p Type, exp ...string) Type {
 }
 
 // Char parses a single character and expects it to match one candidate.
-func Char(c rune) Type {
+func Char(c rune) Func {
 	exp := string(c)
 	return NotEnd(func(input []rune) Result {
 		if input[0] != c {
@@ -58,7 +58,7 @@ func Char(c rune) Type {
 }
 
 // NotChar parses any number of characters until they match a single candidate.
-func NotChar(c rune) Type {
+func NotChar(c rune) Func {
 	exp := "not " + string(c)
 	return NotEnd(func(input []rune) Result {
 		if input[0] == c {
@@ -87,7 +87,7 @@ func NotChar(c rune) Type {
 }
 
 // InSet parses any number of characters within a set of runes.
-func InSet(set ...rune) Type {
+func InSet(set ...rune) Func {
 	setMap := make(map[rune]struct{}, len(set))
 	for _, r := range set {
 		setMap[r] = struct{}{}
@@ -116,7 +116,7 @@ func InSet(set ...rune) Type {
 }
 
 // InRange parses any number of characters between two runes inclusive.
-func InRange(lower, upper rune) Type {
+func InRange(lower, upper rune) Func {
 	exp := fmt.Sprintf("range(%c - %c)", lower, upper)
 	return NotEnd(func(input []rune) Result {
 		i := 0
@@ -141,12 +141,12 @@ func InRange(lower, upper rune) Type {
 }
 
 // SpacesAndTabs parses any number of space or tab characters.
-func SpacesAndTabs() Type {
+func SpacesAndTabs() Func {
 	return Expect(InSet(' ', '\t'), "whitespace")
 }
 
 // Term parses a single instance of a string.
-func Term(str string) Type {
+func Term(str string) Func {
 	exp := str
 	return NotEnd(func(input []rune) Result {
 		for i, c := range str {
@@ -168,7 +168,7 @@ func Term(str string) Type {
 
 // Number parses any number of numerical characters into either an int64 or, if
 // the number contains float characters, a float64.
-func Number() Type {
+func Number() Func {
 	digitSet := InSet([]rune("0123456789")...)
 	dot := Char('.')
 	minus := Char('-')
@@ -225,7 +225,7 @@ func Number() Type {
 }
 
 // Boolean parses either 'true' or 'false' into a boolean value.
-func Boolean() Type {
+func Boolean() Func {
 	parser := Expect(OneOf(Term("true"), Term("false")), "boolean")
 	return func(input []rune) Result {
 		res := parser(input)
@@ -237,7 +237,7 @@ func Boolean() Type {
 }
 
 // Null parses a null literal value.
-func Null() Type {
+func Null() Func {
 	nullMatch := Term("null")
 	return func(input []rune) Result {
 		res := nullMatch(input)
@@ -249,7 +249,7 @@ func Null() Type {
 }
 
 // Array parses an array literal.
-func Array() Type {
+func Array() Func {
 	open, comma, close := Char('['), Char(','), Char(']')
 	whitespace := DiscardAll(
 		OneOf(
@@ -279,7 +279,7 @@ func Array() Type {
 }
 
 // Object parses an object literal.
-func Object() Type {
+func Object() Func {
 	open, comma, close := Char('{'), Char(','), Char('}')
 	whitespace := DiscardAll(
 		OneOf(
@@ -329,7 +329,7 @@ func Object() Type {
 
 // LiteralValue parses a literal bool, number, quoted string, null value, array
 // of literal values, or object.
-func LiteralValue() Type {
+func LiteralValue() Func {
 	return OneOf(
 		Boolean(),
 		Number(),
@@ -346,7 +346,7 @@ func LiteralValue() Type {
 //
 // Warning! If the result is not a []interface{}, or if an element is not a
 // string, then this parser returns a zero value instead.
-func JoinStringPayloads(p Type) Type {
+func JoinStringPayloads(p Func) Func {
 	return func(input []rune) Result {
 		res := p(input)
 		if res.Err != nil {
@@ -366,7 +366,7 @@ func JoinStringPayloads(p Type) Type {
 }
 
 // Comment parses a # comment (always followed by a line break).
-func Comment() Type {
+func Comment() Func {
 	p := JoinStringPayloads(
 		Sequence(
 			Char('#'),
@@ -384,7 +384,7 @@ func Comment() Type {
 // SnakeCase parses any number of characters of a camel case string. This parser
 // is very strict and does not support double underscores, prefix or suffix
 // underscores.
-func SnakeCase() Type {
+func SnakeCase() Func {
 	return Expect(JoinStringPayloads(UntilFail(OneOf(
 		InRange('a', 'z'),
 		InRange('0', '9'),
@@ -394,7 +394,7 @@ func SnakeCase() Type {
 
 // TripleQuoteString parses a single instance of a triple-quoted multiple line
 // string. The result is the inner contents.
-func TripleQuoteString() Type {
+func TripleQuoteString() Func {
 	exp := "quoted string"
 	return NotEnd(func(input []rune) Result {
 		if len(input) < 6 ||
@@ -425,7 +425,7 @@ func TripleQuoteString() Type {
 
 // QuotedString parses a single instance of a quoted string. The result is the
 // inner contents unescaped.
-func QuotedString() Type {
+func QuotedString() Func {
 	exp := "quoted string"
 	return NotEnd(func(input []rune) Result {
 		if input[0] != '"' {
@@ -464,19 +464,19 @@ func QuotedString() Type {
 }
 
 // Newline parses a line break.
-func Newline() Type {
+func Newline() Func {
 	return Expect(Char('\n'), "line break")
 }
 
 // NewlineAllowComment parses an optional comment followed by a mandatory line
 // break.
-func NewlineAllowComment() Type {
+func NewlineAllowComment() Func {
 	return Expect(OneOf(Comment(), Char('\n')), "line break")
 }
 
 // UntilFail applies a parser until it fails, and returns a slice containing all
 // results. If the parser does not succeed at least once an error is returned.
-func UntilFail(parser Type) Type {
+func UntilFail(parser Func) Func {
 	return func(input []rune) Result {
 		res := parser(input)
 		if res.Err != nil {
@@ -507,9 +507,9 @@ func UntilFail(parser Type) Type {
 // to true then two slices are returned, the first element being a slice of
 // primary results and the second element being the delimiter results.
 func DelimitedPattern(
-	start, primary, delimiter, stop Type,
+	start, primary, delimiter, stop Func,
 	allowTrailing, returnDelimiters bool,
-) Type {
+) Func {
 	return func(input []rune) Result {
 		res := start(input)
 		if res.Err != nil {
@@ -573,7 +573,7 @@ func DelimitedPattern(
 //
 // Two slices are returned, the first element being a slice of primary results
 // and the second element being the delimiter results.
-func Delimited(primary, delimiter Type) Type {
+func Delimited(primary, delimiter Func) Func {
 	return func(input []rune) Result {
 		results := []interface{}{}
 		delims := []interface{}{}
@@ -607,7 +607,7 @@ func Delimited(primary, delimiter Type) Type {
 
 // Sequence applies a sequence of parsers and returns either a slice of the
 // results or an error if any parser fails.
-func Sequence(parsers ...Type) Type {
+func Sequence(parsers ...Func) Func {
 	return func(input []rune) Result {
 		results := make([]interface{}, 0, len(parsers))
 		res := Result{
@@ -632,7 +632,7 @@ func Sequence(parsers ...Type) Type {
 // Optional applies a child parser and if it returns an ExpectedError then it is
 // cleared and a nil result is returned instead. Any other form of error will be
 // returned unchanged.
-func Optional(parser Type) Type {
+func Optional(parser Func) Func {
 	return func(input []rune) Result {
 		res := parser(input)
 		if res.Err != nil && !res.Err.IsFatal() {
@@ -644,7 +644,7 @@ func Optional(parser Type) Type {
 
 // Discard the result of a child parser, regardless of the result. This has the
 // effect of running the parser and returning only Remaining.
-func Discard(parser Type) Type {
+func Discard(parser Func) Func {
 	return func(input []rune) Result {
 		res := parser(input)
 		res.Payload = nil
@@ -655,7 +655,7 @@ func Discard(parser Type) Type {
 
 // DiscardAll the results of a child parser, applied until it fails. This has
 // the effect of running the parser and returning only Remaining.
-func DiscardAll(parser Type) Type {
+func DiscardAll(parser Func) Func {
 	return func(input []rune) Result {
 		res := parser(input)
 		for res.Err == nil {
@@ -669,7 +669,7 @@ func DiscardAll(parser Type) Type {
 
 // MustBe applies a parser and if the result is a non-fatal error then it is
 // upgraded to a fatal one.
-func MustBe(parser Type) Type {
+func MustBe(parser Func) Func {
 	return func(input []rune) Result {
 		res := parser(input)
 		if res.Err != nil && !res.Err.IsFatal() {
@@ -681,7 +681,7 @@ func MustBe(parser Type) Type {
 
 // Expect applies a parser and if an error is returned the list of expected candidates is replaced with the given
 // strings. This is useful for providing better context to users.
-func Expect(parser Type, expected ...string) Type {
+func Expect(parser Func, expected ...string) Func {
 	return func(input []rune) Result {
 		res := parser(input)
 		if res.Err != nil && !res.Err.IsFatal() {
@@ -694,7 +694,7 @@ func Expect(parser Type, expected ...string) Type {
 // OneOf accepts one or more parsers and tries them in order against an input.
 // If a parser returns an ExpectedError then the next parser is tried and so
 // on. Otherwise, the result is returned.
-func OneOf(parsers ...Type) Type {
+func OneOf(parsers ...Func) Func {
 	return func(input []rune) Result {
 		var err *Error
 	tryParsers:
@@ -759,7 +759,7 @@ func bestMatch(left, right Result) (Result, bool) {
 // 'aaaa', if the input 'aaab' were provided then an error from parser B would
 // be returned, as although the input didn't match, it matched more of parser B
 // than parser A.
-func BestMatch(parsers ...Type) Type {
+func BestMatch(parsers ...Func) Func {
 	if len(parsers) == 1 {
 		return parsers[0]
 	}

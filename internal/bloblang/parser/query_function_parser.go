@@ -8,7 +8,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-func functionArgsParser(allowFunctions bool) Type {
+func functionArgsParser(allowFunctions bool) Func {
 	open, comma, close := Char('('), Char(','), Char(')')
 	whitespace := DiscardAll(
 		OneOf(
@@ -17,7 +17,7 @@ func functionArgsParser(allowFunctions bool) Type {
 		),
 	)
 
-	paramTypes := []Type{
+	paramTypes := []Func{
 		parseLiteralWithTails(Boolean()),
 		parseLiteralWithTails(Number()),
 		parseLiteralWithTails(TripleQuoteString()),
@@ -27,7 +27,7 @@ func functionArgsParser(allowFunctions bool) Type {
 	return func(input []rune) Result {
 		tmpParamTypes := paramTypes
 		if allowFunctions {
-			tmpParamTypes = append([]Type{}, paramTypes...)
+			tmpParamTypes = append([]Func{}, paramTypes...)
 			tmpParamTypes = append(tmpParamTypes, ParseQuery)
 		}
 		return DelimitedPattern(
@@ -56,7 +56,7 @@ func functionArgsParser(allowFunctions bool) Type {
 	}
 }
 
-func parseFunctionTail(fn query.Function) Type {
+func parseFunctionTail(fn query.Function) Func {
 	openBracket := Char('(')
 	closeBracket := Char(')')
 
@@ -92,7 +92,7 @@ func parseFunctionTail(fn query.Function) Type {
 	}
 }
 
-func parseLiteralWithTails(litParser Type) Type {
+func parseLiteralWithTails(litParser Func) Func {
 	delim := Sequence(
 		Char('.'),
 		Discard(
@@ -136,7 +136,7 @@ func parseLiteralWithTails(litParser Type) Type {
 	}
 }
 
-func parseWithTails(fnParser Type) Type {
+func parseWithTails(fnParser Func) Func {
 	delim := Sequence(
 		Char('.'),
 		Discard(
@@ -185,7 +185,7 @@ func parseWithTails(fnParser Type) Type {
 	}
 }
 
-func quotedPathSegmentParser() Type {
+func quotedPathSegmentParser() Func {
 	pattern := QuotedString()
 
 	return func(input []rune) Result {
@@ -207,7 +207,7 @@ func quotedPathSegmentParser() Type {
 	}
 }
 
-func fieldLiteralMapParser(ctxFn query.Function) Type {
+func fieldLiteralMapParser(ctxFn query.Function) Func {
 	fieldPathParser := Expect(
 		OneOf(
 			JoinStringPayloads(
@@ -249,7 +249,7 @@ func fieldLiteralMapParser(ctxFn query.Function) Type {
 	}
 }
 
-func variableLiteralParser() Type {
+func variableLiteralParser() Func {
 	varPathParser := Expect(
 		Sequence(
 			Char('$'),
@@ -284,7 +284,7 @@ func variableLiteralParser() Type {
 	}
 }
 
-func fieldLiteralRootParser() Type {
+func fieldLiteralRootParser() Func {
 	fieldPathParser := Expect(
 		JoinStringPayloads(
 			UntilFail(
@@ -330,7 +330,7 @@ func fieldLiteralRootParser() Type {
 	}
 }
 
-func methodParser(fn query.Function) Type {
+func methodParser(fn query.Function) Func {
 	p := Sequence(
 		Expect(
 			SnakeCase(),
@@ -364,7 +364,7 @@ func methodParser(fn query.Function) Type {
 	}
 }
 
-func functionParser() Type {
+func functionParser() Func {
 	p := Sequence(
 		Expect(
 			SnakeCase(),

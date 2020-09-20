@@ -8,7 +8,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-func arithmeticOpParser() Type {
+func arithmeticOpParser() Func {
 	opParser := OneOf(
 		Char('+'),
 		Char('-'),
@@ -69,7 +69,7 @@ func arithmeticOpParser() Type {
 	}
 }
 
-func arithmeticParser(fnParser Type) Type {
+func arithmeticParser(fnParser Func) Func {
 	whitespace := DiscardAll(
 		OneOf(
 			SpacesAndTabs(),
