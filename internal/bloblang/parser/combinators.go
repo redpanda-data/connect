@@ -450,6 +450,12 @@ func QuotedString() Func {
 					Remaining: input[i+1:],
 				}
 			}
+			if input[i] == '\n' {
+				return Result{
+					Err:       NewFatalError(input[i:], errors.New("required"), "end quote"),
+					Remaining: input,
+				}
+			}
 			if input[i] == '\\' {
 				escaped = !escaped
 			} else if escaped {
