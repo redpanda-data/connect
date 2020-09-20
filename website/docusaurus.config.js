@@ -30,7 +30,7 @@ module.exports = {
     colorMode: {
       defaultMode: 'light',
     },
-    image: 'img/logo_hero.png',
+    image: 'img/og_img.png',
     navbar: {
       title: 'Benthos',
       logo: {
