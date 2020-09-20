@@ -573,7 +573,7 @@ func TestDelimitedPattern(t *testing.T) {
 		"matches not stopped": {
 			input:     "#abc,abcNo",
 			remaining: "#abc,abcNo",
-			err:       NewError([]rune("No"), ","),
+			err:       NewError([]rune("No"), ",", "!"),
 		},
 		"matches all": {
 			input:     "#abc,abc!",
@@ -642,7 +642,7 @@ func TestDelimitedPatternAllowTrailing(t *testing.T) {
 		"matches not stopped": {
 			input:     "#abc,abcNo",
 			remaining: "#abc,abcNo",
-			err:       NewError([]rune("No"), ","),
+			err:       NewError([]rune("No"), ",", "!"),
 		},
 		"matches all": {
 			input:     "#abc,abc!",
@@ -1265,7 +1265,7 @@ func TestArray(t *testing.T) {
 		},
 		"random stuff array 2": {
 			input:     `[ "foo" whats this ] and this`,
-			err:       NewError([]rune(`whats this ] and this`), ","),
+			err:       NewError([]rune(`whats this ] and this`), ",", "]"),
 			remaining: `[ "foo" whats this ] and this`,
 		},
 		"multiple elements array": {
@@ -1345,7 +1345,7 @@ func TestObject(t *testing.T) {
 		},
 		"multiple values random stuff object": {
 			input:     `{ "foo":true "bar":5.2 } and this`,
-			err:       NewError([]rune(`"bar":5.2 } and this`), ","),
+			err:       NewError([]rune(`"bar":5.2 } and this`), ",", "}"),
 			remaining: `{ "foo":true "bar":5.2 } and this`,
 		},
 		"multiple values object": {

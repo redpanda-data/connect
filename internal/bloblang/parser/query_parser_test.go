@@ -29,11 +29,11 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"bad args 3": {
 			input: `json(`,
-			err:   `line 1 char 6: required: expected boolean, number, quoted string, or query`,
+			err:   `line 1 char 6: required: expected function argument`,
 		},
 		"bad args 4": {
 			input: `json(0,`,
-			err:   `line 1 char 8: required: expected boolean, number, quoted string, or query`,
+			err:   `line 1 char 8: required: expected function argument`,
 		},
 		"bad args 5": {
 			input:      `json`,
@@ -75,7 +75,7 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"bad method args 2": {
 			input: `json("foo").from(`,
-			err:   `line 1 char 18: required: expected boolean, number, quoted string, or query`,
+			err:   `line 1 char 18: required: expected function argument`,
 		},
 		"bad method args 3": {
 			input: `json("foo").from()`,

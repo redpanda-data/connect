@@ -57,11 +57,11 @@ func TestFieldExpressionParserErrors(t *testing.T) {
 		},
 		"bad args 3": {
 			input: `foo ${!json(} bar`,
-			err:   `char 13: required: expected boolean, number, quoted string, or query`,
+			err:   `char 13: required: expected function argument`,
 		},
 		"bad args 4": {
 			input: `foo ${!json(0,} bar`,
-			err:   `char 15: required: expected boolean, number, quoted string, or query`,
+			err:   `char 15: required: expected function argument`,
 		},
 		"bad args 5": {
 			input: `foo ${!json} bar`,

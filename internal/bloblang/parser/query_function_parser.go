@@ -38,19 +38,25 @@ func functionArgsParser(allowFunctions bool) Func {
 				),
 				"function arguments",
 			),
-			Expect(
-				MustBe(OneOf(tmpParamTypes...)),
+			MustBe(Expect(
+				OneOf(tmpParamTypes...),
 				"function argument",
-			),
-			Sequence(
-				Discard(SpacesAndTabs()),
-				comma,
-				whitespace,
-			),
-			Sequence(
-				whitespace,
-				close,
-			),
+			)),
+			MustBe(Expect(
+				Sequence(
+					Discard(SpacesAndTabs()),
+					comma,
+					whitespace,
+				),
+				"comma",
+			)),
+			MustBe(Expect(
+				Sequence(
+					whitespace,
+					close,
+				),
+				"closing bracket",
+			)),
 			false, false,
 		)(input)
 	}

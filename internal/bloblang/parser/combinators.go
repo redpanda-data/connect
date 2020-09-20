@@ -546,10 +546,12 @@ func DelimitedPattern(
 
 		for {
 			if res = delimiter(res.Remaining); res.Err != nil {
-				if resStop := stop(res.Remaining); resStop.Err == nil {
+				resStop := stop(res.Remaining)
+				if resStop.Err == nil {
 					resStop.Payload = mkRes()
 					return resStop
 				}
+				res.Err.Add(resStop.Err)
 				return Result{
 					Err:       res.Err,
 					Remaining: input,
