@@ -14,8 +14,9 @@ deprecated: true
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-DEPRECATED: This component is deprecated and will be removed in the next major
-version release. Please consider moving onto [alternative components](#alternatives).
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
 
 Blacklist metric paths within Benthos so that they are not aggregated by a child
 metric target.

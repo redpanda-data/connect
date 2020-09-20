@@ -1,7 +1,12 @@
-const {listPaths} = require('./src/plugins/components');
+const {listPaths,listDeprecatedPaths} = require('./src/plugins/components');
 
 let inputs_docs = listPaths("inputs");
 let processors_docs = listPaths("processors");
+processors_docs.push({
+  type: 'category',
+  label: 'Deprecated',
+  items: listDeprecatedPaths("processors"),
+});
 let outputs_docs = listPaths("outputs");
 let caches_docs = listPaths("caches");
 let rate_limits_docs = listPaths("rate_limits");

@@ -157,8 +157,9 @@ BETA: This component is experimental and therefore subject to change outside of
 major version releases.
 {{end -}}
 {{if .Deprecated -}}
-DEPRECATED: This component is deprecated and will be removed in the next major
-version release. Please consider moving onto [alternative components](#alternatives).
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
 {{end -}}
 
 {{if gt (len .Summary) 0 -}}

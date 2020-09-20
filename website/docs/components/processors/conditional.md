@@ -14,8 +14,9 @@ deprecated: true
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-DEPRECATED: This component is deprecated and will be removed in the next major
-version release. Please consider moving onto [alternative components](#alternatives).
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
 
 Executes a set of child processors when a [condition](/docs/components/conditions/about)
 passes for a message batch, otherwise a different set of processors are applied.
