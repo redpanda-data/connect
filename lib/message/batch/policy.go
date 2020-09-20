@@ -115,6 +115,19 @@ func (p PolicyConfig) isLimited() bool {
 	return false
 }
 
+func (p PolicyConfig) isHardLimited() bool {
+	if p.ByteSize > 0 {
+		return true
+	}
+	if p.Count > 0 {
+		return true
+	}
+	if len(p.Period) > 0 {
+		return true
+	}
+	return false
+}
+
 //------------------------------------------------------------------------------
 
 // Policy implements a batching policy by buffering messages until, based on a
@@ -150,6 +163,9 @@ func NewPolicy(
 ) (*Policy, error) {
 	if !conf.isLimited() {
 		return nil, errors.New("batch policy must have at least one active trigger")
+	}
+	if !conf.isHardLimited() {
+		log.Warnln("Batch policy should have at least one of count, period or byte_size set in order to provide a hard batch ceiling.")
 	}
 	var cond types.Condition
 	var err error
