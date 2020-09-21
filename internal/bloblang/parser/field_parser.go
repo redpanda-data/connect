@@ -21,10 +21,7 @@ func intoStaticResolver(p Func) Func {
 
 func aFunction(input []rune) Result {
 	if len(input) < 3 || input[0] != '$' || input[1] != '{' || input[2] != '!' {
-		return Result{
-			Err:       NewError(input, "${!"),
-			Remaining: input,
-		}
+		return Fail(NewError(input, "${!"), input)
 	}
 	i := 3
 	for ; i < len(input); i++ {
@@ -33,10 +30,7 @@ func aFunction(input []rune) Result {
 			if res.Err == nil {
 				if len(res.Remaining) > 0 {
 					pos := len(input[3:i]) - len(res.Remaining)
-					return Result{
-						Err:       NewFatalError(input[3+pos:], errors.New("required"), "end of expression"),
-						Remaining: input,
-					}
+					return Fail(NewFatalError(input[3+pos:], errors.New("required"), "end of expression"), input)
 				}
 				res.Remaining = input[i+1:]
 				res.Payload = field.NewQueryResolver(res.Payload.(query.Function))
@@ -51,35 +45,20 @@ func aFunction(input []rune) Result {
 			return res
 		}
 	}
-	return Result{
-		Payload:   field.StaticResolver(string(input)),
-		Err:       nil,
-		Remaining: nil,
-	}
+	return Success(field.StaticResolver(string(input)), nil)
 }
 
 func escapedBlock(input []rune) Result {
 	if len(input) < 4 || input[0] != '$' || input[1] != '{' || input[2] != '{' || input[3] != '!' {
-		return Result{
-			Err:       NewError(input, "${{!"),
-			Remaining: input,
-		}
+		return Fail(NewError(input, "${{!"), input)
 	}
 	i := 4
 	for ; i < len(input)-1; i++ {
 		if input[i] == '}' && input[i+1] == '}' {
-			return Result{
-				Payload:   field.StaticResolver("${!" + string(input[4:i]) + "}"),
-				Err:       nil,
-				Remaining: input[i+2:],
-			}
+			return Success(field.StaticResolver("${!"+string(input[4:i])+"}"), input[i+2:])
 		}
 	}
-	return Result{
-		Payload:   field.StaticResolver(string(input)),
-		Err:       nil,
-		Remaining: nil,
-	}
+	return Success(field.StaticResolver(string(input)), nil)
 }
 
 //------------------------------------------------------------------------------

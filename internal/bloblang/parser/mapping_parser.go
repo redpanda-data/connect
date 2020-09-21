@@ -70,10 +70,7 @@ func parseExecutor(baseDir string) Func {
 			}
 
 			if res = newline(res.Remaining); res.Err != nil {
-				return Result{
-					Err:       res.Err,
-					Remaining: input,
-				}
+				return Fail(res.Err, input)
 			}
 
 			res = allWhitespace(res.Remaining)
@@ -82,20 +79,13 @@ func parseExecutor(baseDir string) Func {
 			}
 
 			if res = statement(res.Remaining); res.Err != nil {
-				return Result{
-					Err:       res.Err,
-					Remaining: input,
-				}
+				return Fail(res.Err, input)
 			}
 			if mStmt, ok := res.Payload.(mapping.Statement); ok {
 				statements = append(statements, mStmt)
 			}
 		}
-
-		return Result{
-			Remaining: res.Remaining,
-			Payload:   mapping.NewExecutor(input, maps, statements...),
-		}
+		return Success(mapping.NewExecutor(input, maps, statements...), res.Remaining)
 	}
 }
 
@@ -114,18 +104,11 @@ func singleRootMapping() Func {
 		// Remove all tailing whitespace and ensure no remaining input.
 		res = allWhitespace(res.Remaining)
 		if len(res.Remaining) > 0 {
-			return Result{
-				Remaining: input,
-				Err:       NewError(res.Remaining, "end of input"),
-			}
+			return Fail(NewError(res.Remaining, "end of input"), input)
 		}
 
 		stmt := mapping.NewStatement(input, mapping.NewJSONAssignment(), fn)
-
-		return Result{
-			Remaining: nil,
-			Payload:   mapping.NewExecutor(input, map[string]query.Function{}, stmt),
-		}
+		return Success(mapping.NewExecutor(input, map[string]query.Function{}, stmt), nil)
 	}
 }
 
@@ -167,27 +150,19 @@ func importParser(baseDir string, maps map[string]query.Function) Func {
 		filepath = path.Join(baseDir, filepath)
 		contents, err := ioutil.ReadFile(filepath)
 		if err != nil {
-			return Result{
-				Err:       NewFatalError(input, fmt.Errorf("failed to read import: %w", err)),
-				Remaining: input,
-			}
+			return Fail(NewFatalError(input, fmt.Errorf("failed to read import: %w", err)), input)
 		}
 
 		importContent := []rune(string(contents))
 		execRes := parseExecutor(path.Dir(filepath))(importContent)
 		if execRes.Err != nil {
-			return Result{
-				Err:       NewFatalError(input, NewImportError(filepath, importContent, execRes.Err)),
-				Remaining: input,
-			}
+			return Fail(NewFatalError(input, NewImportError(filepath, importContent, execRes.Err)), input)
 		}
 
 		exec := execRes.Payload.(*mapping.Executor)
 		if len(exec.Maps()) == 0 {
-			return Result{
-				Err:       NewFatalError(input, fmt.Errorf("no maps to import from '%v'", filepath)),
-				Remaining: input,
-			}
+			err := fmt.Errorf("no maps to import from '%v'", filepath)
+			return Fail(NewFatalError(input, err), input)
 		}
 
 		collisions := []string{}
@@ -199,16 +174,11 @@ func importParser(baseDir string, maps map[string]query.Function) Func {
 			}
 		}
 		if len(collisions) > 0 {
-			return Result{
-				Err:       NewFatalError(input, fmt.Errorf("map name collisions from import '%v': %v", filepath, collisions)),
-				Remaining: input,
-			}
+			err := fmt.Errorf("map name collisions from import '%v': %v", filepath, collisions)
+			return Fail(NewFatalError(input, err), input)
 		}
 
-		return Result{
-			Payload:   filepath,
-			Remaining: res.Remaining,
-		}
+		return Success(filepath, res.Remaining)
 	}
 }
 
@@ -265,10 +235,7 @@ func mapParser(maps map[string]query.Function) Func {
 		stmtSlice := seqSlice[4].([]interface{})
 
 		if _, exists := maps[ident]; exists {
-			return Result{
-				Err:       NewFatalError(input, fmt.Errorf("map name collision: %v", ident)),
-				Remaining: input,
-			}
+			return Fail(NewFatalError(input, fmt.Errorf("map name collision: %v", ident)), input)
 		}
 
 		statements := make([]mapping.Statement, len(stmtSlice))
@@ -278,10 +245,7 @@ func mapParser(maps map[string]query.Function) Func {
 
 		maps[ident] = mapping.NewExecutor(input, maps, statements...)
 
-		return Result{
-			Payload:   ident,
-			Remaining: res.Remaining,
-		}
+		return Success(ident, res.Remaining)
 	}
 }
 
@@ -311,14 +275,14 @@ func letStatementParser() Func {
 			return res
 		}
 		resSlice := res.Payload.([]interface{})
-		return Result{
-			Payload: mapping.NewStatement(
+		return Success(
+			mapping.NewStatement(
 				input,
 				mapping.NewVarAssignment(resSlice[2].(string)),
 				resSlice[6].(query.Function),
 			),
-			Remaining: res.Remaining,
-		}
+			res.Remaining,
+		)
 	}
 }
 
@@ -359,10 +323,10 @@ func metaStatementParser(disabled bool) Func {
 			return res
 		}
 		if disabled {
-			return Result{
-				Err:       NewFatalError(input, errors.New("setting meta fields from within a map is not allowed")),
-				Remaining: input,
-			}
+			return Fail(
+				NewFatalError(input, errors.New("setting meta fields from within a map is not allowed")),
+				input,
+			)
 		}
 		resSlice := res.Payload.([]interface{})
 
@@ -371,14 +335,14 @@ func metaStatementParser(disabled bool) Func {
 			keyPtr = &key
 		}
 
-		return Result{
-			Payload: mapping.NewStatement(
+		return Success(
+			mapping.NewStatement(
 				input,
 				mapping.NewMetaAssignment(keyPtr),
 				resSlice[6].(query.Function),
 			),
-			Remaining: res.Remaining,
-		}
+			res.Remaining,
+		)
 	}
 }
 
@@ -413,10 +377,7 @@ func quotedPathLiteralSegmentParser() Func {
 		rawSegment = strings.Replace(rawSegment, "~", "~0", -1)
 		rawSegment = strings.Replace(rawSegment, ".", "~1", -1)
 
-		return Result{
-			Payload:   rawSegment,
-			Remaining: res.Remaining,
-		}
+		return Success(rawSegment, res.Remaining)
 	}
 }
 
@@ -456,10 +417,7 @@ func pathParser() Func {
 			}
 		}
 
-		return Result{
-			Payload:   path,
-			Remaining: res.Remaining,
-		}
+		return Success(path, res.Remaining)
 	}
 }
 
@@ -484,14 +442,14 @@ func plainMappingStatementParser() Func {
 			path = path[1:]
 		}
 
-		return Result{
-			Payload: mapping.NewStatement(
+		return Success(
+			mapping.NewStatement(
 				input,
 				mapping.NewJSONAssignment(path...),
 				resSlice[4].(query.Function),
 			),
-			Remaining: res.Remaining,
-		}
+			res.Remaining,
+		)
 	}
 }
 

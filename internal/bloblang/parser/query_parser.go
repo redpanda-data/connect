@@ -57,18 +57,12 @@ func ParseDeprecatedQuery(input []rune) Result {
 
 	res = arithmeticParser(rootParser)(res.Remaining)
 	if res.Err != nil {
-		return Result{
-			Err:       res.Err,
-			Remaining: input,
-		}
+		return Fail(res.Err, input)
 	}
 
 	result := res.Payload
 	res = SpacesAndTabs()(res.Remaining)
-	return Result{
-		Payload:   result,
-		Remaining: res.Remaining,
-	}
+	return Success(result, res.Remaining)
 }
 
 func tryParseQuery(expr string, deprecated bool) (query.Function, *Error) {

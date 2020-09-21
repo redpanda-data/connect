@@ -123,19 +123,13 @@ func parseLiteralWithTails(litParser Func) Func {
 				if fn != nil {
 					payload = fn
 				}
-				return Result{
-					Payload:   payload,
-					Remaining: res.Remaining,
-				}
+				return Success(payload, res.Remaining)
 			}
 			if fn == nil {
 				fn = query.NewLiteralFunction(lit)
 			}
 			if res = MustBe(parseFunctionTail(fn))(res.Remaining); res.Err != nil {
-				return Result{
-					Err:       res.Err,
-					Remaining: input,
-				}
+				return Fail(res.Err, input)
 			}
 			fn = res.Payload.(query.Function)
 		}
@@ -175,16 +169,10 @@ func parseWithTails(fnParser Func) Func {
 				if isNot {
 					fn = query.Not(fn)
 				}
-				return Result{
-					Payload:   fn,
-					Remaining: res.Remaining,
-				}
+				return Success(fn, res.Remaining)
 			}
 			if res = MustBe(parseFunctionTail(fn))(res.Remaining); res.Err != nil {
-				return Result{
-					Err:       res.Err,
-					Remaining: input,
-				}
+				return Fail(res.Err, input)
 			}
 			fn = res.Payload.(query.Function)
 		}
@@ -206,10 +194,7 @@ func quotedPathSegmentParser() Func {
 		rawSegment = strings.Replace(rawSegment, "~", "~0", -1)
 		rawSegment = strings.Replace(rawSegment, ".", "~1", -1)
 
-		return Result{
-			Payload:   rawSegment,
-			Remaining: res.Remaining,
-		}
+		return Success(rawSegment, res.Remaining)
 	}
 }
 
@@ -242,16 +227,10 @@ func fieldLiteralMapParser(ctxFn query.Function) Func {
 
 		fn, err := query.NewGetMethod(ctxFn, res.Payload.(string))
 		if err != nil {
-			return Result{
-				Remaining: input,
-				Err:       NewFatalError(input, err),
-			}
+			return Fail(NewFatalError(input, err), input)
 		}
 
-		return Result{
-			Remaining: res.Remaining,
-			Payload:   fn,
-		}
+		return Success(fn, res.Remaining)
 	}
 }
 
@@ -283,10 +262,7 @@ func variableLiteralParser() Func {
 		path := res.Payload.([]interface{})[1].(string)
 		fn := query.NewVarFunction(path)
 
-		return Result{
-			Remaining: res.Remaining,
-			Payload:   fn,
-		}
+		return Success(fn, res.Remaining)
 	}
 }
 
@@ -323,16 +299,10 @@ func fieldLiteralRootParser() Func {
 			fn = query.NewFieldFunction(path)
 		}
 		if err != nil {
-			return Result{
-				Remaining: input,
-				Err:       NewFatalError(input, err),
-			}
+			return Fail(NewFatalError(input, err), input)
 		}
 
-		return Result{
-			Remaining: res.Remaining,
-			Payload:   fn,
-		}
+		return Success(fn, res.Remaining)
 	}
 }
 
@@ -358,15 +328,9 @@ func methodParser(fn query.Function) Func {
 
 		method, err := query.InitMethod(targetMethod, fn, args...)
 		if err != nil {
-			return Result{
-				Err:       NewFatalError(input, err),
-				Remaining: input,
-			}
+			return Fail(NewFatalError(input, err), input)
 		}
-		return Result{
-			Payload:   method,
-			Remaining: res.Remaining,
-		}
+		return Success(method, res.Remaining)
 	}
 }
 
@@ -392,15 +356,9 @@ func functionParser() Func {
 
 		fn, err := query.InitFunction(targetFunc, args...)
 		if err != nil {
-			return Result{
-				Err:       NewFatalError(input, err),
-				Remaining: input,
-			}
+			return Fail(NewFatalError(input, err), input)
 		}
-		return Result{
-			Payload:   fn,
-			Remaining: res.Remaining,
-		}
+		return Success(fn, res.Remaining)
 	}
 }
 
@@ -422,16 +380,9 @@ func parseDeprecatedFunction(input []rune) Result {
 
 	fn, exists := query.DeprecatedFunction(targetFunc, arg)
 	if !exists {
-		return Result{
-			Err:       NewError(input),
-			Remaining: input,
-		}
+		return Fail(NewError(input), input)
 	}
-	return Result{
-		Payload:   fn,
-		Err:       nil,
-		Remaining: nil,
-	}
+	return Success(fn, nil)
 }
 
 //------------------------------------------------------------------------------

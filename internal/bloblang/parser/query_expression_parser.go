@@ -56,10 +56,10 @@ func matchCaseParser() Func {
 			caseFn = query.NewLiteralFunction(true)
 		}
 
-		return Result{
-			Payload:   query.NewMatchCase(caseFn, seqSlice[2].(query.Function)),
-			Remaining: res.Remaining,
-		}
+		return Success(
+			query.NewMatchCase(caseFn, seqSlice[2].(query.Function)),
+			res.Remaining,
+		)
 	}
 }
 

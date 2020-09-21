@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New cli flag `log.level` for overriding the configured logging level.
+- New integration test suite (much more dapper and also a bit more swanky than the last).
 
 ### Changed
 

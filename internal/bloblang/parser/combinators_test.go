@@ -8,15 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNotEnd(t *testing.T) {
-	errInner := NewFatalError(nil, errors.New("test err"))
-	notEnd := NotEnd(func([]rune) Result {
-		return Result{Err: errInner}
-	}, "foobar")
-	assert.Equal(t, errInner, notEnd([]rune("foo")).Err)
-	assert.Equal(t, "expected foobar, but reached end of input", notEnd([]rune("")).Err.Error())
-}
-
 func TestChar(t *testing.T) {
 	char := Char('x')
 

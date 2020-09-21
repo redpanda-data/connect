@@ -22,68 +22,49 @@ type Func func([]rune) Result
 
 //------------------------------------------------------------------------------
 
-// NotEnd parses zero characters from an input and expects it to not have ended.
-// An ExpectedError must be provided which provides the error returned on empty
-// input.
-func NotEnd(p Func, exp ...string) Func {
-	return func(input []rune) Result {
-		if len(input) == 0 {
-			return Result{
-				Payload:   nil,
-				Err:       NewError(input, exp...),
-				Remaining: input,
-			}
-		}
-		return p(input)
+// Success creates a result with a payload from successful parsing.
+func Success(payload interface{}, remaining []rune) Result {
+	return Result{
+		Payload:   payload,
+		Remaining: remaining,
 	}
 }
 
+// Fail creates a result with an error from failed parsing.
+func Fail(err *Error, input []rune) Result {
+	return Result{
+		Err:       err,
+		Remaining: input,
+	}
+}
+
+//------------------------------------------------------------------------------
+
 // Char parses a single character and expects it to match one candidate.
 func Char(c rune) Func {
-	exp := string(c)
-	return NotEnd(func(input []rune) Result {
-		if input[0] != c {
-			return Result{
-				Payload:   nil,
-				Err:       NewError(input, exp),
-				Remaining: input,
-			}
+	return func(input []rune) Result {
+		if len(input) == 0 || input[0] != c {
+			return Fail(NewError(input, string(c)), input)
 		}
-		return Result{
-			Payload:   string(c),
-			Err:       nil,
-			Remaining: input[1:],
-		}
-	}, exp)
+		return Success(string(c), input[1:])
+	}
 }
 
 // NotChar parses any number of characters until they match a single candidate.
 func NotChar(c rune) Func {
 	exp := "not " + string(c)
-	return NotEnd(func(input []rune) Result {
-		if input[0] == c {
-			return Result{
-				Payload:   nil,
-				Err:       NewError(input, exp),
-				Remaining: input,
-			}
+	return func(input []rune) Result {
+		if len(input) == 0 || input[0] == c {
+			return Fail(NewError(input, exp), input)
 		}
 		i := 0
 		for ; i < len(input); i++ {
 			if input[i] == c {
-				return Result{
-					Payload:   string(input[:i]),
-					Err:       nil,
-					Remaining: input[i:],
-				}
+				return Success(string(input[:i]), input[i:])
 			}
 		}
-		return Result{
-			Payload:   string(input),
-			Err:       nil,
-			Remaining: nil,
-		}
-	}, exp)
+		return Success(string(input), nil)
+	}
 }
 
 // InSet parses any number of characters within a set of runes.
@@ -93,51 +74,41 @@ func InSet(set ...rune) Func {
 		setMap[r] = struct{}{}
 	}
 	exp := fmt.Sprintf("chars(%v)", string(set))
-	return NotEnd(func(input []rune) Result {
+	return func(input []rune) Result {
+		if len(input) == 0 {
+			return Fail(NewError(input, exp), input)
+		}
 		i := 0
 		for ; i < len(input); i++ {
 			if _, exists := setMap[input[i]]; !exists {
 				if i == 0 {
-					return Result{
-						Err:       NewError(input, exp),
-						Remaining: input,
-					}
+					return Fail(NewError(input, exp), input)
 				}
 				break
 			}
 		}
-
-		return Result{
-			Payload:   string(input[:i]),
-			Err:       nil,
-			Remaining: input[i:],
-		}
-	}, exp)
+		return Success(string(input[:i]), input[i:])
+	}
 }
 
 // InRange parses any number of characters between two runes inclusive.
 func InRange(lower, upper rune) Func {
 	exp := fmt.Sprintf("range(%c - %c)", lower, upper)
-	return NotEnd(func(input []rune) Result {
+	return func(input []rune) Result {
+		if len(input) == 0 {
+			return Fail(NewError(input, exp), input)
+		}
 		i := 0
 		for ; i < len(input); i++ {
 			if input[i] < lower || input[i] > upper {
 				if i == 0 {
-					return Result{
-						Err:       NewError(input, exp),
-						Remaining: input,
-					}
+					return Fail(NewError(input, exp), input)
 				}
 				break
 			}
 		}
-
-		return Result{
-			Payload:   string(input[:i]),
-			Err:       nil,
-			Remaining: input[i:],
-		}
-	}, exp)
+		return Success(string(input[:i]), input[i:])
+	}
 }
 
 // SpacesAndTabs parses any number of space or tab characters.
@@ -146,24 +117,15 @@ func SpacesAndTabs() Func {
 }
 
 // Term parses a single instance of a string.
-func Term(str string) Func {
-	exp := str
-	return NotEnd(func(input []rune) Result {
-		for i, c := range str {
+func Term(term string) Func {
+	return func(input []rune) Result {
+		for i, c := range term {
 			if len(input) <= i || input[i] != c {
-				return Result{
-					Payload:   nil,
-					Err:       NewError(input, exp),
-					Remaining: input,
-				}
+				return Fail(NewError(input, term), input)
 			}
 		}
-		return Result{
-			Payload:   str,
-			Err:       nil,
-			Remaining: input[len(str):],
-		}
-	}, exp)
+		return Success(term, input[len(term):])
+	}
 }
 
 // Number parses any number of numerical characters into either an int64 or, if
@@ -192,13 +154,8 @@ func Number() Func {
 		if strings.Contains(resStr, ".") {
 			f, err := strconv.ParseFloat(resStr, 64)
 			if err != nil {
-				return Result{
-					Err: NewFatalError(
-						input,
-						fmt.Errorf("failed to parse '%v' as float: %v", resStr, err),
-					),
-					Remaining: input,
-				}
+				err = fmt.Errorf("failed to parse '%v' as float: %v", resStr, err)
+				return Fail(NewFatalError(input, err), input)
 			}
 			if negative {
 				f = -f
@@ -207,13 +164,8 @@ func Number() Func {
 		} else {
 			i, err := strconv.ParseInt(resStr, 10, 64)
 			if err != nil {
-				return Result{
-					Err: NewFatalError(
-						input,
-						fmt.Errorf("failed to parse '%v' as integer: %v", resStr, err),
-					),
-					Remaining: input,
-				}
+				err = fmt.Errorf("failed to parse '%v' as integer: %v", resStr, err)
+				return Fail(NewFatalError(input, err), input)
 			}
 			if negative {
 				i = -i
@@ -395,66 +347,43 @@ func SnakeCase() Func {
 // TripleQuoteString parses a single instance of a triple-quoted multiple line
 // string. The result is the inner contents.
 func TripleQuoteString() Func {
-	exp := "quoted string"
-	return NotEnd(func(input []rune) Result {
+	return func(input []rune) Result {
 		if len(input) < 6 ||
 			input[0] != '"' ||
 			input[1] != '"' ||
 			input[2] != '"' {
-			return Result{
-				Err:       NewError(input, exp),
-				Remaining: input,
-			}
+			return Fail(NewError(input, "quoted string"), input)
 		}
 		for i := 2; i < len(input)-2; i++ {
 			if input[i] == '"' &&
 				input[i+1] == '"' &&
 				input[i+2] == '"' {
-				return Result{
-					Payload:   string(input[3:i]),
-					Remaining: input[i+3:],
-				}
+				return Success(string(input[3:i]), input[i+3:])
 			}
 		}
-		return Result{
-			Err:       NewFatalError(input[len(input):], errors.New("required"), "end triple-quote"),
-			Remaining: input,
-		}
-	}, exp)
+		return Fail(NewFatalError(input[len(input):], errors.New("required"), "end triple-quote"), input)
+	}
 }
 
 // QuotedString parses a single instance of a quoted string. The result is the
 // inner contents unescaped.
 func QuotedString() Func {
-	exp := "quoted string"
-	return NotEnd(func(input []rune) Result {
-		if input[0] != '"' {
-			return Result{
-				Payload:   nil,
-				Err:       NewError(input, exp),
-				Remaining: input,
-			}
+	return func(input []rune) Result {
+		if len(input) == 0 || input[0] != '"' {
+			return Fail(NewError(input, "quoted string"), input)
 		}
 		escaped := false
 		for i := 1; i < len(input); i++ {
 			if input[i] == '"' && !escaped {
 				unquoted, err := strconv.Unquote(string(input[:i+1]))
 				if err != nil {
-					return Result{
-						Err:       NewFatalError(input, fmt.Errorf("failed to unescape quoted string contents: %v", err)),
-						Remaining: input,
-					}
+					err = fmt.Errorf("failed to unescape quoted string contents: %v", err)
+					return Fail(NewFatalError(input, err), input)
 				}
-				return Result{
-					Payload:   unquoted,
-					Remaining: input[i+1:],
-				}
+				return Success(unquoted, input[i+1:])
 			}
 			if input[i] == '\n' {
-				return Result{
-					Err:       NewFatalError(input[i:], errors.New("required"), "end quote"),
-					Remaining: input,
-				}
+				Fail(NewFatalError(input[i:], errors.New("required"), "end quote"), input)
 			}
 			if input[i] == '\\' {
 				escaped = !escaped
@@ -462,11 +391,8 @@ func QuotedString() Func {
 				escaped = false
 			}
 		}
-		return Result{
-			Err:       NewFatalError(input[len(input):], errors.New("required"), "end quote"),
-			Remaining: input,
-		}
-	}, exp)
+		return Fail(NewFatalError(input[len(input):], errors.New("required"), "end quote"), input)
+	}
 }
 
 // Newline parses a line break.
@@ -491,10 +417,7 @@ func UntilFail(parser Func) Func {
 		results := []interface{}{res.Payload}
 		for {
 			if res = parser(res.Remaining); res.Err != nil {
-				return Result{
-					Payload:   results,
-					Remaining: res.Remaining,
-				}
+				return Success(results, res.Remaining)
 			}
 			results = append(results, res.Payload)
 		}
@@ -537,10 +460,7 @@ func DelimitedPattern(
 				resStop.Payload = mkRes()
 				return resStop
 			}
-			return Result{
-				Err:       res.Err,
-				Remaining: input,
-			}
+			return Fail(res.Err, input)
 		}
 		results = append(results, res.Payload)
 
@@ -552,10 +472,7 @@ func DelimitedPattern(
 					return resStop
 				}
 				res.Err.Add(resStop.Err)
-				return Result{
-					Err:       res.Err,
-					Remaining: input,
-				}
+				return Fail(res.Err, input)
 			}
 			delims = append(delims, res.Payload)
 			if res = primary(res.Remaining); res.Err != nil {
@@ -565,10 +482,7 @@ func DelimitedPattern(
 						return resStop
 					}
 				}
-				return Result{
-					Err:       res.Err,
-					Remaining: input,
-				}
+				return Fail(res.Err, input)
 			}
 			results = append(results, res.Payload)
 		}
@@ -594,19 +508,13 @@ func Delimited(primary, delimiter Func) Func {
 
 		for {
 			if res = delimiter(res.Remaining); res.Err != nil {
-				return Result{
-					Payload: []interface{}{
-						results, delims,
-					},
-					Remaining: res.Remaining,
-				}
+				return Success([]interface{}{
+					results, delims,
+				}, res.Remaining)
 			}
 			delims = append(delims, res.Payload)
 			if res = primary(res.Remaining); res.Err != nil {
-				return Result{
-					Err:       res.Err,
-					Remaining: input,
-				}
+				return Fail(res.Err, input)
 			}
 			results = append(results, res.Payload)
 		}
@@ -623,17 +531,11 @@ func Sequence(parsers ...Func) Func {
 		}
 		for _, p := range parsers {
 			if res = p(res.Remaining); res.Err != nil {
-				return Result{
-					Err:       res.Err,
-					Remaining: input,
-				}
+				return Fail(res.Err, input)
 			}
 			results = append(results, res.Payload)
 		}
-		return Result{
-			Payload:   results,
-			Remaining: res.Remaining,
-		}
+		return Success(results, res.Remaining)
 	}
 }
 
@@ -721,10 +623,7 @@ func OneOf(parsers ...Func) Func {
 			}
 			return res
 		}
-		return Result{
-			Err:       err,
-			Remaining: input,
-		}
+		return Fail(err, input)
 	}
 }
 
