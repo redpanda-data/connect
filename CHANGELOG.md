@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.29.0 - 2020-09-21
+
 ### Added
 
 - New cli flag `log.level` for overriding the configured logging level.
