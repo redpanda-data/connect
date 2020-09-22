@@ -123,6 +123,7 @@ func (h *HTTPClient) WriteWithContext(ctx context.Context, msg types.Message) er
 // CloseAsync shuts down the HTTPClient output and stops processing messages.
 func (h *HTTPClient) CloseAsync() {
 	close(h.closeChan)
+	h.client.CloseAsync()
 }
 
 // WaitForClose blocks until the HTTPClient output has closed down.

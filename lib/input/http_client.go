@@ -217,6 +217,7 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 				res.Body.Close()
 				res = nil
 			}
+			h.client.CloseAsync()
 		},
 		reader.OptLinesSetDelimiter(delim),
 		reader.OptLinesSetMaxBuffer(conf.HTTPClient.Stream.MaxBuffer),

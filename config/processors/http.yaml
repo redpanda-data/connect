@@ -36,6 +36,11 @@ pipeline:
           consumer_secret: ""
           enabled: false
           request_url: ""
+        oauth2:
+          client_key: ""
+          client_secret: ""
+          enabled: false
+          token_url: ""
         parallel: false
         proxy_url: ""
         rate_limit: ""

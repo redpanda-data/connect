@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- OAuth 2.0 using the client credentials token flow is now supported by the `http_client` input and output, and the `http` processor.
+
 ## 3.29.0 - 2020-09-21
 
 ### Added

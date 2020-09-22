@@ -87,6 +87,7 @@ func (h *HTTPClient) ReadWithContext(ctx context.Context) (types.Message, AsyncA
 
 // CloseAsync shuts down the HTTPClient input and stops processing requests.
 func (h *HTTPClient) CloseAsync() {
+	h.client.CloseAsync()
 }
 
 // WaitForClose blocks until the HTTPClient input has closed down.

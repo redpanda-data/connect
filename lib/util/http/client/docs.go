@@ -15,7 +15,7 @@ func FieldSpecs() docs.FieldSpecs {
 			"Content-Type": "application/octet-stream",
 		}).HasType("object").SupportsInterpolation(false),
 	}
-	httpSpecs = append(httpSpecs, auth.FieldSpecs()...)
+	httpSpecs = append(httpSpecs, auth.FieldSpecsExpanded()...)
 	httpSpecs = append(httpSpecs, tls.FieldSpec())
 	httpSpecs = append(httpSpecs,
 		docs.FieldAdvanced("copy_response_headers", "Sets whether to copy the headers from the response to the resulting payload.").HasType("bool"),

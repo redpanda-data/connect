@@ -306,6 +306,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 // CloseAsync shuts down the processor and stops processing requests.
 func (h *HTTP) CloseAsync() {
+	h.client.CloseAsync()
 }
 
 // WaitForClose blocks until the processor has closed down.

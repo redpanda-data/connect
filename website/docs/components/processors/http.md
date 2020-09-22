@@ -56,6 +56,11 @@ http:
     access_token: ""
     access_token_secret: ""
     request_url: ""
+  oauth2:
+    enabled: false
+    client_key: ""
+    client_secret: ""
+    token_url: ""
   basic_auth:
     enabled: false
     username: ""
@@ -253,6 +258,45 @@ Default: `""`
 ### `oauth.request_url`
 
 The URL of the OAuth provider.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth2`
+
+Allows you to specify open authentication via OAuth version 2 using the client credentials token flow.
+
+
+Type: `object`  
+
+### `oauth2.enabled`
+
+Whether to use OAuth version 2 in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `oauth2.client_key`
+
+A value used to identify the client to the token provider.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth2.client_secret`
+
+A secret used to establish ownership of the client key.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth2.token_url`
+
+The URL of the token provider.
 
 
 Type: `string`  

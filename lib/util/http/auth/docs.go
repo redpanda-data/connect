@@ -26,10 +26,31 @@ func oAuthFieldSpec() docs.FieldSpec {
 	)
 }
 
+func oAuth2FieldSpec() docs.FieldSpec {
+	return docs.FieldAdvanced("oauth2",
+		"Allows you to specify open authentication via OAuth version 2 using the client credentials token flow.",
+	).WithChildren(
+		docs.FieldCommon("enabled", "Whether to use OAuth version 2 in requests."),
+		docs.FieldCommon("client_key", "A value used to identify the client to the token provider."),
+		docs.FieldCommon("client_secret", "A secret used to establish ownership of the client key."),
+		docs.FieldCommon("token_url", "The URL of the token provider."),
+	)
+}
+
 // FieldSpecs returns a map of field specs for an auth type.
 func FieldSpecs() docs.FieldSpecs {
 	return docs.FieldSpecs{
 		oAuthFieldSpec(),
+		BasicAuthFieldSpec(),
+	}
+}
+
+// FieldSpecsExpanded includes OAuth2 fields that might not be appropriate for
+// all components.
+func FieldSpecsExpanded() docs.FieldSpecs {
+	return docs.FieldSpecs{
+		oAuthFieldSpec(),
+		oAuth2FieldSpec(),
 		BasicAuthFieldSpec(),
 	}
 }

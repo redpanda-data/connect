@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"mime"
@@ -47,6 +48,7 @@ type Config struct {
 	TLS                 tls.Config        `json:"tls" yaml:"tls"`
 	ProxyURL            string            `json:"proxy_url" yaml:"proxy_url"`
 	auth.Config         `json:",inline" yaml:",inline"`
+	OAuth2              auth.OAuth2Config `json:"oauth2" yaml:"oauth2"`
 }
 
 // NewConfig creates a new Config with default values.
@@ -68,6 +70,7 @@ func NewConfig() Config {
 		SuccessfulOn:        []int{},
 		TLS:                 tls.NewConfig(),
 		Config:              auth.NewConfig(),
+		OAuth2:              auth.NewOAuth2Config(),
 	}
 }
 
@@ -75,7 +78,7 @@ func NewConfig() Config {
 
 // Type is an output type that pushes messages to Type.
 type Type struct {
-	client http.Client
+	client *http.Client
 
 	backoffOn map[int]struct{}
 	dropOn    map[int]struct{}
@@ -107,6 +110,8 @@ type Type struct {
 	mCodes   map[int]metrics.StatCounter
 	codesMut sync.RWMutex
 
+	ctx       context.Context
+	done      func()
 	closeChan <-chan struct{}
 }
 
@@ -116,6 +121,7 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse URL expression: %v", err)
 	}
+
 	h := Type{
 		url:       urlStr,
 		conf:      conf,
@@ -128,6 +134,8 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		headers:   map[string]field.Expression{},
 		host:      nil,
 	}
+	h.ctx, h.done = context.WithCancel(context.Background())
+	h.client = conf.OAuth2.Client(h.ctx)
 
 	if tout := conf.Timeout; len(tout) > 0 {
 		var err error
@@ -637,6 +645,11 @@ func (h *Type) Send(msg types.Message) (types.Message, error) {
 		return nil, err
 	}
 	return h.ParseResponse(res)
+}
+
+// CloseAsync closes the HTTP client and all managed resources.
+func (h *Type) CloseAsync() {
+	h.done()
 }
 
 //------------------------------------------------------------------------------

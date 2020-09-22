@@ -27,6 +27,11 @@ input:
       consumer_secret: ""
       enabled: false
       request_url: ""
+    oauth2:
+      client_key: ""
+      client_secret: ""
+      enabled: false
+      token_url: ""
     payload: ""
     proxy_url: ""
     rate_limit: ""
@@ -81,6 +86,11 @@ output:
       consumer_secret: ""
       enabled: false
       request_url: ""
+    oauth2:
+      client_key: ""
+      client_secret: ""
+      enabled: false
+      token_url: ""
     propagate_response: false
     proxy_url: ""
     rate_limit: ""
