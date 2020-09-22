@@ -235,6 +235,7 @@ func BloblangMethodsMarkdown() ([]byte, error) {
 	for _, cat := range []query.MethodCategory{
 		query.MethodCategoryStrings,
 		query.MethodCategoryRegexp,
+		query.MethodCategoryTime,
 		query.MethodCategoryCoercion,
 		query.MethodCategoryObjectAndArray,
 		query.MethodCategoryParsing,

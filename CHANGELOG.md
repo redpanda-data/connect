@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - OAuth 2.0 using the client credentials token flow is now supported by the `http_client` input and output, and the `http` processor.
+- Method `format_timestamp` added to Bloblang.
 
 ## 3.29.0 - 2020-09-21
 

@@ -3,6 +3,7 @@ package query
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -222,6 +223,30 @@ func IToNumber(v interface{}) (float64, error) {
 		return strconv.ParseFloat(string(t), 64)
 	case string:
 		return strconv.ParseFloat(t, 64)
+	}
+	return 0, NewTypeError(v, ValueNumber)
+}
+
+const maxUint = ^uint64(0)
+const maxInt = uint64(maxUint >> 1)
+
+// IToInt takes a boxed value and attempts to extract a number (int64) from it
+// or parse one.
+func IToInt(v interface{}) (int64, error) {
+	switch t := v.(type) {
+	case int64:
+		return t, nil
+	case uint64:
+		if t > maxInt {
+			return 0, errors.New("unsigned integer value is too large to be cast as a signed integer")
+		}
+		return int64(t), nil
+	case float64:
+		return int64(t), nil
+	case []byte:
+		return strconv.ParseInt(string(t), 10, 64)
+	case string:
+		return strconv.ParseInt(t, 10, 64)
 	}
 	return 0, NewTypeError(v, ValueNumber)
 }

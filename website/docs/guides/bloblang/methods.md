@@ -380,6 +380,53 @@ root.new_value = this.value.re_replace("ADD ([0-9]+)","+($1)")
 # Out: {"new_value":"foo +(70)"}
 ```
 
+## Timestamp Manipulation
+
+### `parse_timestamp_unix`
+
+Attempts to parse a string as a timestamp, following ISO 8601 format by default, and returns the unix epoch.
+
+```coffee
+root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix()
+
+# In:  {"doc":{"timestamp":"2020-08-14T11:45:26.371Z"}}
+# Out: {"doc":{"timestamp":1597405526}}
+```
+
+An optional string argument can be used in order to specify the expected format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
+
+```coffee
+root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix("2006-Jan-02")
+
+# In:  {"doc":{"timestamp":"2020-Aug-14"}}
+# Out: {"doc":{"timestamp":1597363200}}
+```
+
+### `format_timestamp`
+
+BETA: This method is experimental and therefore subject to change outside of major version releases.
+
+Attempts to format a unix timestamp as a string, following ISO 8601 format by default.
+
+```coffee
+root.something_at = (this.created_at + 300).format_timestamp()
+```
+
+An optional string argument can be used in order to specify the expected format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
+
+```coffee
+root.something_at = (this.created_at + 300).format_timestamp("2006-Jan-02 15:04:05")
+```
+
+A second optional string argument can also be used in order to specify a timezone, otherwise the local timezone is used.
+
+```coffee
+root.something_at = (this.created_at + 300).format_timestamp("2006-Jan-02 15:04:05", "UTC")
+
+# In:  {"created_at":1597405526}
+# Out: {"something_at":"2020-Aug-14 11:50:26"}
+```
+
 ## Type Coercion
 
 ### `not_null`
@@ -845,26 +892,6 @@ root.doc = this.doc.parse_json()
 
 # In:  {"doc":"{\"foo\":\"bar\"}"}
 # Out: {"doc":{"foo":"bar"}}
-```
-
-### `parse_timestamp_unix`
-
-Attempts to parse a string as a timestamp, following ISO 8601 format by default, and returns the unix epoch.
-
-```coffee
-root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix()
-
-# In:  {"doc":{"timestamp":"2020-08-14T11:45:26.371Z"}}
-# Out: {"doc":{"timestamp":1597405526}}
-```
-
-An optional string argument can be used in order to specify the expected format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
-
-```coffee
-root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix("2006-Jan-02")
-
-# In:  {"doc":{"timestamp":"2020-Aug-14"}}
-# Out: {"doc":{"timestamp":1597363200}}
 ```
 
 ## Encoding and Encryption

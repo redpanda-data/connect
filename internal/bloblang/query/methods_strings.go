@@ -915,7 +915,7 @@ var _ = RegisterMethod(
 	NewMethodSpec(
 		"parse_timestamp_unix", "",
 	).InCategory(
-		MethodCategoryParsing,
+		MethodCategoryTime,
 		"Attempts to parse a string as a timestamp, following ISO 8601 format by default, and returns the unix epoch.",
 		NewExampleSpec("",
 			`root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix()`,
@@ -954,6 +954,59 @@ func parseTimestampMethod(target Function, args ...interface{}) (Function, error
 			return nil, err
 		}
 		return ut.Unix(), nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
+		"format_timestamp", "",
+	).InCategory(
+		MethodCategoryTime,
+		"Attempts to format a unix timestamp as a string, following ISO 8601 format by default.",
+		NewExampleSpec("",
+			`root.something_at = (this.created_at + 300).format_timestamp()`,
+			// `{"created_at":1597405526}`,
+			// `{"something_at":"2020-08-14T11:50:26.371Z"}`,
+		),
+		NewExampleSpec(
+			"An optional string argument can be used in order to specify the expected format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.",
+			`root.something_at = (this.created_at + 300).format_timestamp("2006-Jan-02 15:04:05")`,
+			// `{"created_at":1597405526}`,
+			// `{"something_at":"2020-Aug-14 11:50:26"}`,
+		),
+		NewExampleSpec(
+			"A second optional string argument can also be used in order to specify a timezone, otherwise the local timezone is used.",
+			`root.something_at = (this.created_at + 300).format_timestamp("2006-Jan-02 15:04:05", "UTC")`,
+			`{"created_at":1597405526}`,
+			`{"something_at":"2020-Aug-14 11:50:26"}`,
+		),
+	).IsBeta(true),
+	true, formatTimestampMethod,
+	ExpectBetweenNAndMArgs(0, 2),
+	ExpectStringArg(0),
+	ExpectStringArg(1),
+)
+
+func formatTimestampMethod(target Function, args ...interface{}) (Function, error) {
+	layout := time.RFC3339
+	if len(args) > 0 {
+		layout = args[0].(string)
+	}
+	timezone := time.Local
+	if len(args) > 1 {
+		var err error
+		if timezone, err = time.LoadLocation(args[1].(string)); err != nil {
+			return nil, fmt.Errorf("failed to parse timezone location name: %w", err)
+		}
+	}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		u, err := IToInt(v)
+		if err != nil {
+			return nil, err
+		}
+		return time.Unix(u, 0).In(timezone).Format(layout), nil
 	}), nil
 }
 
