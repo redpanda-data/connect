@@ -42,16 +42,16 @@ input:
     url: ws://localhost:4195/get/ws
     open_message: ""
     oauth:
-      access_token: ""
-      access_token_secret: ""
+      enabled: false
       consumer_key: ""
       consumer_secret: ""
-      enabled: false
+      access_token: ""
+      access_token_secret: ""
       request_url: ""
     basic_auth:
       enabled: false
-      password: ""
       username: ""
+      password: ""
 ```
 
 </TabItem>
@@ -87,23 +87,58 @@ Default: `""`
 
 ### `oauth`
 
-Allows you to specify open authentication.
+Allows you to specify open authentication via OAuth version 1.
 
 
 Type: `object`  
-Default: `{"access_token":"","access_token_secret":"","consumer_key":"","consumer_secret":"","enabled":false,"request_url":""}`  
 
-```yaml
-# Examples
+### `oauth.enabled`
 
-oauth:
-  access_token: baz
-  access_token_secret: bev
-  consumer_key: foo
-  consumer_secret: bar
-  enabled: true
-  request_url: http://thisisjustanexample.com/dontactuallyusethis
-```
+Whether to use OAuth version 1 in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `oauth.consumer_key`
+
+A value used to identify the client to the service provider.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth.consumer_secret`
+
+A secret used to establish ownership of the consumer key.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth.access_token`
+
+A value used to gain access to the protected resources on behalf of the user.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth.access_token_secret`
+
+A secret provided in order to establish ownership of a given access token.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth.request_url`
+
+The URL of the OAuth provider.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `basic_auth`
 
@@ -111,15 +146,29 @@ Allows you to specify basic authentication.
 
 
 Type: `object`  
-Default: `{"enabled":false,"password":"","username":""}`  
 
-```yaml
-# Examples
+### `basic_auth.enabled`
 
-basic_auth:
-  enabled: true
-  password: bar
-  username: foo
-```
+Whether to use basic authentication in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `basic_auth.username`
+
+A username to authenticate as.
+
+
+Type: `string`  
+Default: `""`  
+
+### `basic_auth.password`
+
+A password to authenticate with.
+
+
+Type: `string`  
+Default: `""`  
 
 

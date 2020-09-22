@@ -72,8 +72,8 @@ output:
       max_elapsed_time: 30s
     basic_auth:
       enabled: false
-      password: ""
       username: ""
+      password: ""
     batching:
       count: 0
       byte_size: 0
@@ -225,11 +225,10 @@ Default: `""`
 
 ### `tls.client_certs`
 
-A list of client certificates to use.
+A list of client certificates to use. For each certificate either the fields `cert` and `key`, or `cert_file` and `key_file` should be specified, but not both.
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yaml
 # Examples
@@ -242,6 +241,38 @@ client_certs:
   - cert_file: ./example.pem
     key_file: ./example.key
 ```
+
+### `tls.client_certs[].cert`
+
+A plain text certificate to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].key`
+
+A plain text certificate key to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].cert_file`
+
+The path to a certificate to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].key_file`
+
+The path of a certificate key to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `max_in_flight`
 
@@ -296,16 +327,30 @@ Allows you to specify basic authentication.
 
 
 Type: `object`  
-Default: `{"enabled":false,"password":"","username":""}`  
 
-```yaml
-# Examples
+### `basic_auth.enabled`
 
-basic_auth:
-  enabled: true
-  password: bar
-  username: foo
-```
+Whether to use basic authentication in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `basic_auth.username`
+
+A username to authenticate as.
+
+
+Type: `string`  
+Default: `""`  
+
+### `basic_auth.password`
+
+A password to authenticate with.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `batching`
 

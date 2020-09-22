@@ -145,11 +145,10 @@ Default: `""`
 
 ### `tls.client_certs`
 
-A list of client certificates to use.
+A list of client certificates to use. For each certificate either the fields `cert` and `key`, or `cert_file` and `key_file` should be specified, but not both.
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yaml
 # Examples
@@ -162,6 +161,38 @@ client_certs:
   - cert_file: ./example.pem
     key_file: ./example.key
 ```
+
+### `tls.client_certs[].cert`
+
+A plain text certificate to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].key`
+
+A plain text certificate key to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].cert_file`
+
+The path to a certificate to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].key_file`
+
+The path of a certificate key to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `sasl`
 

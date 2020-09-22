@@ -53,16 +53,16 @@ input:
     headers:
       Content-Type: application/octet-stream
     oauth:
-      access_token: ""
-      access_token_secret: ""
+      enabled: false
       consumer_key: ""
       consumer_secret: ""
-      enabled: false
+      access_token: ""
+      access_token_secret: ""
       request_url: ""
     basic_auth:
       enabled: false
-      password: ""
       username: ""
+      password: ""
     tls:
       enabled: false
       skip_cert_verify: false
@@ -149,23 +149,58 @@ headers:
 
 ### `oauth`
 
-Allows you to specify open authentication.
+Allows you to specify open authentication via OAuth version 1.
 
 
 Type: `object`  
-Default: `{"access_token":"","access_token_secret":"","consumer_key":"","consumer_secret":"","enabled":false,"request_url":""}`  
 
-```yaml
-# Examples
+### `oauth.enabled`
 
-oauth:
-  access_token: baz
-  access_token_secret: bev
-  consumer_key: foo
-  consumer_secret: bar
-  enabled: true
-  request_url: http://thisisjustanexample.com/dontactuallyusethis
-```
+Whether to use OAuth version 1 in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `oauth.consumer_key`
+
+A value used to identify the client to the service provider.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth.consumer_secret`
+
+A secret used to establish ownership of the consumer key.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth.access_token`
+
+A value used to gain access to the protected resources on behalf of the user.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth.access_token_secret`
+
+A secret provided in order to establish ownership of a given access token.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth.request_url`
+
+The URL of the OAuth provider.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `basic_auth`
 
@@ -173,16 +208,30 @@ Allows you to specify basic authentication.
 
 
 Type: `object`  
-Default: `{"enabled":false,"password":"","username":""}`  
 
-```yaml
-# Examples
+### `basic_auth.enabled`
 
-basic_auth:
-  enabled: true
-  password: bar
-  username: foo
-```
+Whether to use basic authentication in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `basic_auth.username`
+
+A username to authenticate as.
+
+
+Type: `string`  
+Default: `""`  
+
+### `basic_auth.password`
+
+A password to authenticate with.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `tls`
 
@@ -217,11 +266,10 @@ Default: `""`
 
 ### `tls.client_certs`
 
-A list of client certificates to use.
+A list of client certificates to use. For each certificate either the fields `cert` and `key`, or `cert_file` and `key_file` should be specified, but not both.
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yaml
 # Examples
@@ -234,6 +282,38 @@ client_certs:
   - cert_file: ./example.pem
     key_file: ./example.key
 ```
+
+### `tls.client_certs[].cert`
+
+A plain text certificate to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].key`
+
+A plain text certificate key to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].cert_file`
+
+The path to a certificate to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].key_file`
+
+The path of a certificate key to use.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `copy_response_headers`
 
