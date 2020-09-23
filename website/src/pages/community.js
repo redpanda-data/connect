@@ -30,7 +30,7 @@ function Community() {
                   <i className={classnames(styles.icon, styles.discord)}></i>
                 </div>
                 <div class="card__body">
-                  <p>Be one of the first to join the new Benthos discord server</p>
+                  <p>Join the official Benthos discord server</p>
                 </div>
                 <div class="card__footer">
                   <Link to="https://discord.gg/6VaWjzP" class="button button--outline button--primary button--block">Join</Link>
