@@ -33,7 +33,7 @@ function Community() {
                   <p>Be one of the first to join the new Benthos discord server</p>
                 </div>
                 <div class="card__footer">
-                  <Link to="https://discord.gg/pXAF57" class="button button--outline button--primary button--block">Join</Link>
+                  <Link to="https://discord.gg/6VaWjzP" class="button button--outline button--primary button--block">Join</Link>
                 </div>
               </div>
             </div>
