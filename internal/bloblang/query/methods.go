@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Jeffail/gabs/v2"
 	jsonschema "github.com/xeipuuv/gojsonschema"
@@ -1839,6 +1840,47 @@ func withoutMethod(target Function, args ...interface{}) (Function, error) {
 			return nil, NewTypeError(v, ValueObject)
 		}
 		return mapWithout(m, excludeList), nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
+		"parse_unix_timestamp", "",
+	).InCategory(
+		MethodCategoryTime,
+		"Converts an unix epoch to a timestamp formatted by default as ISO 8601.",
+		NewExampleSpec("",
+			`root.doc.timestamp = this.doc.timestamp.parse_unix_timestamp()`,
+			`{"doc":{"timestamp":1597405526}}`,
+			`{"doc":{"timestamp":"2020-08-14T12:45:26+01:00"}}`,
+		),
+		NewExampleSpec(
+			"An optional string argument can be used in order to specify the expected format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.",
+			`root.doc.timestamp = this.doc.timestamp.parse_unix_timestamp("2006-Jan-02")`,
+			`{"doc":{"timestamp":1597363200}}`,
+			`{"doc":{"timestamp":"2020-Aug-14"}}`,
+		),
+	),
+	true, parseUnixMethod,
+	ExpectOneOrZeroArgs(),
+	ExpectStringArg(0),
+)
+
+func parseUnixMethod(target Function, args ...interface{}) (Function, error) {
+	layout := time.RFC3339
+	if len(args) > 0 {
+		layout = args[0].(string)
+	}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		switch t := v.(type) {
+		case float64:
+			ts := time.Unix(int64(t), 0)
+			return ts.Format(layout), nil
+		default:
+			return nil, NewTypeError(v, ValueNumber)
+		}
 	}), nil
 }
 

@@ -919,7 +919,7 @@ var _ = RegisterMethod(
 		"Attempts to parse a string as a timestamp, following ISO 8601 format by default, and returns the unix epoch.",
 		NewExampleSpec("",
 			`root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix()`,
-			`{"doc":{"timestamp":"2020-08-14T11:45:26.371Z"}}`,
+			`{"doc":{"timestamp":"2020-08-14T12:45:26+01:00"}}`,
 			`{"doc":{"timestamp":1597405526}}`,
 		),
 		NewExampleSpec(

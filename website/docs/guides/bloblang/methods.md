@@ -382,6 +382,26 @@ root.new_value = this.value.re_replace("ADD ([0-9]+)","+($1)")
 
 ## Timestamp Manipulation
 
+### `parse_unix_timestamp`
+
+Converts an unix epoch to a timestamp formatted by default as ISO 8601.
+
+```coffee
+root.doc.timestamp = this.doc.timestamp.parse_unix_timestamp()
+
+# In:  {"doc":{"timestamp":1597405526}}
+# Out: {"doc":{"timestamp":"2020-08-14T12:45:26+01:00"}}
+```
+
+An optional string argument can be used in order to specify the expected format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
+
+```coffee
+root.doc.timestamp = this.doc.timestamp.parse_unix_timestamp("2006-Jan-02")
+
+# In:  {"doc":{"timestamp":1597363200}}
+# Out: {"doc":{"timestamp":"2020-Aug-14"}}
+```
+
 ### `parse_timestamp_unix`
 
 Attempts to parse a string as a timestamp, following ISO 8601 format by default, and returns the unix epoch.
@@ -389,7 +409,7 @@ Attempts to parse a string as a timestamp, following ISO 8601 format by default,
 ```coffee
 root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix()
 
-# In:  {"doc":{"timestamp":"2020-08-14T11:45:26.371Z"}}
+# In:  {"doc":{"timestamp":"2020-08-14T12:45:26+01:00"}}
 # Out: {"doc":{"timestamp":1597405526}}
 ```
 

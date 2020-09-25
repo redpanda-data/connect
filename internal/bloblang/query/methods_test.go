@@ -1119,6 +1119,27 @@ func TestMethods(t *testing.T) {
 			),
 			err: `expected string value, found unknown`,
 		},
+		"check parse unix timestamp": {
+			input: methods(
+				literalFn(float64(1597405526)),
+				method("parse_unix_timestamp"),
+			),
+			output: "2020-08-14T12:45:26+01:00",
+		},
+		"check parse unix timestamp with format": {
+			input: methods(
+				literalFn(float64(1597363200)),
+				method("parse_unix_timestamp", "2006-Jan-02"),
+			),
+			output: "2020-Aug-14",
+		},
+		"check parse unix timestamp with invalid literal type": {
+			input: methods(
+				literalFn("invalid"),
+				method("parse_unix_timestamp", "2006-Jan-02"),
+			),
+			err: `expected number value, found string: invalid`,
+		},
 		"check append": {
 			input: methods(
 				jsonFn(`["foo"]`),
