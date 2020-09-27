@@ -610,21 +610,16 @@ func Expect(parser Func, expected ...string) Func {
 func OneOf(parsers ...Func) Func {
 	return func(input []rune) Result {
 		var err *Error
-	tryParsers:
 		for _, p := range parsers {
 			res := p(input)
-			if res.Err != nil {
-				if res.Err.IsFatal() {
-					return res
-				}
-				if err == nil || len(err.Input) > len(res.Err.Input) {
-					err = res.Err
-				} else if len(err.Input) == len(res.Err.Input) {
-					err.Add(res.Err)
-				}
-				continue tryParsers
+			if res.Err == nil || res.Err.IsFatal() {
+				return res
 			}
-			return res
+			if err == nil || len(err.Input) > len(res.Err.Input) {
+				err = res.Err
+			} else if len(err.Input) == len(res.Err.Input) {
+				err.Add(res.Err)
+			}
 		}
 		return Fail(err, input)
 	}
