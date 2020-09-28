@@ -228,7 +228,7 @@ func Array() Func {
 				whitespace,
 				close,
 			),
-			false, false,
+			true,
 		)(input)
 	}
 }
@@ -265,7 +265,7 @@ func Object() Func {
 				whitespace,
 				close,
 			),
-			false, false,
+			true,
 		)(input)
 		if res.Err != nil {
 			return res
@@ -427,7 +427,7 @@ func UntilFail(parser Func) Func {
 	}
 }
 
-// DelimitedPattern attempts to parse zero or more primary parsers in between an
+// DelimitedPattern attempts to parse zero or more primary parsers in between a
 // start and stop parser, where after the first parse a delimiter is expected.
 // Parsing is stopped only once an explicit stop parser is successful.
 //
@@ -435,12 +435,10 @@ func UntilFail(parser Func) Func {
 // primary parse fails then an error is returned.
 //
 // Only the results of the primary parser are returned, the results of the
-// start, delimiter and stop parsers are discarded. If returnDelimiters is set
-// to true then two slices are returned, the first element being a slice of
-// primary results and the second element being the delimiter results.
+// start, delimiter and stop parsers are discarded.
 func DelimitedPattern(
 	start, primary, delimiter, stop Func,
-	allowTrailing, returnDelimiters bool,
+	allowTrailing bool,
 ) Func {
 	return func(input []rune) Result {
 		res := start(input)
@@ -449,18 +447,10 @@ func DelimitedPattern(
 		}
 
 		results := []interface{}{}
-		delims := []interface{}{}
-		mkRes := func() interface{} {
-			if returnDelimiters {
-				return []interface{}{
-					results, delims,
-				}
-			}
-			return results
-		}
+
 		if res = primary(res.Remaining); res.Err != nil {
 			if resStop := stop(res.Remaining); resStop.Err == nil {
-				resStop.Payload = mkRes()
+				resStop.Payload = results
 				return resStop
 			}
 			return Fail(res.Err, input)
@@ -471,17 +461,16 @@ func DelimitedPattern(
 			if res = delimiter(res.Remaining); res.Err != nil {
 				resStop := stop(res.Remaining)
 				if resStop.Err == nil {
-					resStop.Payload = mkRes()
+					resStop.Payload = results
 					return resStop
 				}
 				res.Err.Add(resStop.Err)
 				return Fail(res.Err, input)
 			}
-			delims = append(delims, res.Payload)
 			if res = primary(res.Remaining); res.Err != nil {
 				if allowTrailing {
 					if resStop := stop(res.Remaining); resStop.Err == nil {
-						resStop.Payload = mkRes()
+						resStop.Payload = results
 						return resStop
 					}
 				}
@@ -492,6 +481,14 @@ func DelimitedPattern(
 	}
 }
 
+// DelimitedResult is an explicit result struct returned by the Delimited
+// parser, containing a slice of primary parser payloads and a slice of
+// delimited parser payloads.
+type DelimitedResult struct {
+	Primary   []interface{}
+	Delimiter []interface{}
+}
+
 // Delimited attempts to parse one or more primary parsers, where after the
 // first parse a delimiter is expected. Parsing is stopped only once a delimiter
 // parse is not successful.
@@ -500,26 +497,23 @@ func DelimitedPattern(
 // and the second element being the delimiter results.
 func Delimited(primary, delimiter Func) Func {
 	return func(input []rune) Result {
-		results := []interface{}{}
-		delims := []interface{}{}
+		delimRes := DelimitedResult{}
 
 		res := primary(input)
 		if res.Err != nil {
 			return res
 		}
-		results = append(results, res.Payload)
+		delimRes.Primary = append(delimRes.Primary, res.Payload)
 
 		for {
 			if res = delimiter(res.Remaining); res.Err != nil {
-				return Success([]interface{}{
-					results, delims,
-				}, res.Remaining)
+				return Success(delimRes, res.Remaining)
 			}
-			delims = append(delims, res.Payload)
+			delimRes.Delimiter = append(delimRes.Delimiter, res.Payload)
 			if res = primary(res.Remaining); res.Err != nil {
 				return Fail(res.Err, input)
 			}
-			results = append(results, res.Payload)
+			delimRes.Primary = append(delimRes.Primary, res.Payload)
 		}
 	}
 }

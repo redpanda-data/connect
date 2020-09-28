@@ -220,7 +220,7 @@ func mapParser(maps map[string]query.Function) Func {
 				allWhitespace,
 				Char('}'),
 			),
-			true, false,
+			true,
 		),
 	)
 
@@ -411,7 +411,7 @@ func pathParser() Func {
 		path := []string{sequence[0].(string)}
 
 		if sequence[1] != nil {
-			pathParts := sequence[1].([]interface{})[1].([]interface{})[0].([]interface{})
+			pathParts := sequence[1].([]interface{})[1].(DelimitedResult).Primary
 			for _, p := range pathParts {
 				path = append(path, gabs.DotPathToSlice(p.(string))...)
 			}

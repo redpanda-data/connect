@@ -31,6 +31,30 @@ func TestFunctionQueries(t *testing.T) {
 		value      *interface{}
 		index      int
 	}{
+		"without method": {
+			input: `this.without("bar","baz")`,
+			value: func() *interface{} {
+				var v interface{} = map[string]interface{}{
+					"foo": 1.0,
+					"bar": 2.0,
+					"baz": 3.0,
+				}
+				return &v
+			}(),
+			output: `{"foo":1}`,
+		},
+		"without method trailing comma": {
+			input: `this.without("bar","baz",)`,
+			value: func() *interface{} {
+				var v interface{} = map[string]interface{}{
+					"foo": 1.0,
+					"bar": 2.0,
+					"baz": 3.0,
+				}
+				return &v
+			}(),
+			output: `{"foo":1}`,
+		},
 		"literal function": {
 			input:    `5`,
 			output:   `5`,

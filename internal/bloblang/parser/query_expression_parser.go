@@ -96,7 +96,7 @@ func matchExpressionParser() Func {
 						whitespace,
 						Char('}'),
 					),
-					true, false,
+					true,
 				),
 			),
 		)(input)

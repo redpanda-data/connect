@@ -31,7 +31,7 @@ func dynamicArrayParser() Func {
 				whitespace,
 				close,
 			),
-			false, false,
+			true,
 		)(input)
 		if res.Err != nil {
 			return res
@@ -79,7 +79,7 @@ func dynamicObjectParser() Func {
 				whitespace,
 				close,
 			),
-			false, false,
+			true,
 		)(input)
 		if res.Err != nil {
 			return res

@@ -57,7 +57,7 @@ func functionArgsParser(allowFunctions bool) Func {
 				),
 				"closing bracket",
 			)),
-			false, false,
+			true,
 		)(input)
 	}
 }

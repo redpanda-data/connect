@@ -52,8 +52,20 @@ func TestLiteralParser(t *testing.T) {
 				"foo": "bar",
 			},
 		},
+		"basic map trailing comma": {
+			mapping: `{"foo":"bar",}`,
+			result: map[string]interface{}{
+				"foo": "bar",
+			},
+		},
 		"dynamic map": {
 			mapping: `{"foo":(5 + 5)}`,
+			result: map[string]interface{}{
+				"foo": float64(10),
+			},
+		},
+		"dynamic map trailing comma": {
+			mapping: `{"foo":(5 + 5),}`,
 			result: map[string]interface{}{
 				"foo": float64(10),
 			},
@@ -74,6 +86,12 @@ func TestLiteralParser(t *testing.T) {
 		},
 		"dynamic array": {
 			mapping: `["foo",(5 + 5),null]`,
+			result: []interface{}{
+				"foo", float64(10), nil,
+			},
+		},
+		"dynamic array trailing comma": {
+			mapping: `["foo",(5 + 5),null,]`,
 			result: []interface{}{
 				"foo", float64(10), nil,
 			},

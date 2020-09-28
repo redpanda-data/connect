@@ -529,8 +529,63 @@ func TestAllOf(t *testing.T) {
 	}
 }
 
+func TestDelimited(t *testing.T) {
+	parser := Delimited(Term("abc"), Char('#'))
+
+	tests := map[string]struct {
+		input     string
+		result    interface{}
+		remaining string
+		err       *Error
+	}{
+		"empty input": {
+			err: NewError([]rune(""), "abc"),
+		},
+		"no first primary": {
+			input:     "ab",
+			remaining: "ab",
+			err:       NewError([]rune("ab"), "abc"),
+		},
+		"matches first": {
+			input:     "abc#",
+			remaining: "abc#",
+			err:       NewError([]rune(""), "abc"),
+		},
+		"matches some of second": {
+			input:     "abc#ab",
+			remaining: "abc#ab",
+			err:       NewError([]rune("ab"), "abc"),
+		},
+		"matches all": {
+			input:     "abc#abc",
+			remaining: "",
+			result: DelimitedResult{
+				Primary:   []interface{}{"abc", "abc"},
+				Delimiter: []interface{}{"#"},
+			},
+		},
+		"matches some": {
+			input:     "abc#abc and this",
+			remaining: " and this",
+			result: DelimitedResult{
+				Primary:   []interface{}{"abc", "abc"},
+				Delimiter: []interface{}{"#"},
+			},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			res := parser([]rune(test.input))
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+		})
+	}
+}
+
 func TestDelimitedPattern(t *testing.T) {
-	parser := DelimitedPattern(Char('#'), Term("abc"), Char(','), Char('!'), false, false)
+	parser := DelimitedPattern(Char('#'), Term("abc"), Char(','), Char('!'), false)
 
 	tests := map[string]struct {
 		input     string
@@ -594,7 +649,7 @@ func TestDelimitedPattern(t *testing.T) {
 }
 
 func TestDelimitedPatternAllowTrailing(t *testing.T) {
-	parser := DelimitedPattern(Char('#'), Term("abc"), Char(','), Char('!'), true, false)
+	parser := DelimitedPattern(Char('#'), Term("abc"), Char(','), Char('!'), true)
 
 	tests := map[string]struct {
 		input     string
@@ -1246,8 +1301,8 @@ func TestArray(t *testing.T) {
 		},
 		"tailing comma array": {
 			input:     `[ "foo", ] and this`,
-			err:       NewError([]rune(`] and this`), "boolean", "number", "quoted string", "quoted string", "null", "array", "object"),
-			remaining: `[ "foo", ] and this`,
+			result:    []interface{}{"foo"},
+			remaining: ` and this`,
 		},
 		"random stuff array": {
 			input:     `[ "foo", whats this ] and this`,
@@ -1324,7 +1379,7 @@ func TestObject(t *testing.T) {
 			result:    map[string]interface{}{"foo": "bar"},
 			remaining: " and this",
 		},
-		"tailing comma object": {
+		"unfinished item object": {
 			input:     `{ "foo": } and this`,
 			err:       NewError([]rune("} and this"), "boolean", "number", "quoted string", "quoted string", "null", "array", "object"),
 			remaining: `{ "foo": } and this`,
@@ -1341,6 +1396,11 @@ func TestObject(t *testing.T) {
 		},
 		"multiple values object": {
 			input:     `{ "foo":true, "bar":5.2 } and this`,
+			result:    map[string]interface{}{"foo": true, "bar": 5.2},
+			remaining: " and this",
+		},
+		"multiple values trailing comma object": {
+			input:     `{ "foo":true, "bar":5.2, } and this`,
 			result:    map[string]interface{}{"foo": true, "bar": 5.2},
 			remaining: " and this",
 		},
