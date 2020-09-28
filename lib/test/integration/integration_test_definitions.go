@@ -410,7 +410,7 @@ func integrationTestStreamParallelLossyThroughReconnect(n int) testDefinition {
 
 				t.Log("Finished first loop, looping through rejected messages.")
 				for len(set) > 0 {
-					messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+					messageInSet(t, true, true, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
 				}
 			}()
 
