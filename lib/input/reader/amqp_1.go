@@ -170,13 +170,13 @@ func (a *AMQP1) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn,
 		if err == amqp.ErrTimeout {
 			err = types.ErrTimeout
 		} else {
-			if dErr, isDetachError := err.(*amqp.DetachError); isDetachError {
-				if dErr.RemoteError != nil {
-					a.log.Errorf("Lost connection due to: %v\n", dErr.RemoteError)
-				}
-				a.disconnect(ctx)
-				err = types.ErrNotConnected
+			if dErr, isDetachError := err.(*amqp.DetachError); isDetachError && dErr.RemoteError != nil {
+				a.log.Errorf("Lost connection due to: %v\n", dErr.RemoteError)
+			} else {
+				a.log.Errorf("Lost connection due to: %v\n", err)
 			}
+			a.disconnect(ctx)
+			err = types.ErrNotConnected
 		}
 		return nil, nil, err
 	}
