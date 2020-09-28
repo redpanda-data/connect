@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
 - OAuth 2.0 using the client credentials token flow is now supported by the `http_client` input and output, and the `http` processor.
 - Method `format_timestamp` added to Bloblang.
 
+### Fixed
+
+- The `amqp_1` input and output now re-establish connections to brokers on any unknown error.
+
 ## 3.29.0 - 2020-09-21
 
 ### Added
