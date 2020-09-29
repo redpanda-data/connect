@@ -1210,6 +1210,130 @@ func regexpFindAllSubmatchMethod(target Function, args ...interface{}) (Function
 
 var _ = RegisterMethod(
 	NewMethodSpec(
+		"re_find_object", "",
+	).InCategory(
+		MethodCategoryRegexp,
+		"Returns an object containing the first match of the regular expression and the matches of its subexpressions. The key of each match value is the name of the group when specified, otherwise it is the index of the matching group, starting with the expression as a whole at 0.",
+		NewExampleSpec("",
+			`root.matches = this.value.re_find_object("a(?P<foo>x*)b")`,
+			`{"value":"-axxb-ab-"}`,
+			`{"matches":{"0":"axxb","foo":"xx"}}`,
+		),
+		NewExampleSpec("",
+			`root.matches = this.value.re_find_object("(?P<key>\\w+):\\s+(?P<value>\\w+)")`,
+			`{"value":"option1: value1"}`,
+			`{"matches":{"0":"option1: value1","key":"option1","value":"value1"}}`,
+		),
+	),
+	true, regexpFindSubmatchObjectMethod,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
+
+func regexpFindSubmatchObjectMethod(target Function, args ...interface{}) (Function, error) {
+	re, err := regexp.Compile(args[0].(string))
+	if err != nil {
+		return nil, err
+	}
+	groups := re.SubexpNames()
+	for i, k := range groups {
+		if len(k) == 0 {
+			groups[i] = fmt.Sprintf("%v", i)
+		}
+	}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		result := make(map[string]interface{}, len(groups))
+		switch t := v.(type) {
+		case string:
+			groupMatches := re.FindStringSubmatch(t)
+			for i, match := range groupMatches {
+				key := groups[i]
+				result[key] = match
+			}
+		case []byte:
+			groupMatches := re.FindSubmatch(t)
+			for i, match := range groupMatches {
+				key := groups[i]
+				result[key] = match
+			}
+		default:
+			return nil, NewTypeError(v, ValueString)
+		}
+		return result, nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
+		"re_find_all_object", "",
+	).InCategory(
+		MethodCategoryRegexp,
+		"Returns an array of objects containing all matches of the regular expression and the matches of its subexpressions. The key of each match value is the name of the group when specified, otherwise it is the index of the matching group, starting with the expression as a whole at 0.",
+		NewExampleSpec("",
+			`root.matches = this.value.re_find_all_object("a(?P<foo>x*)b")`,
+			`{"value":"-axxb-ab-"}`,
+			`{"matches":[{"0":"axxb","foo":"xx"},{"0":"ab","foo":""}]}`,
+		),
+		NewExampleSpec("",
+			`root.matches = this.value.re_find_all_object("(?m)(?P<key>\\w+):\\s+(?P<value>\\w+)$")`,
+			`{"value":"option1: value1\noption2: value2\noption3: value3"}`,
+			`{"matches":[{"0":"option1: value1","key":"option1","value":"value1"},{"0":"option2: value2","key":"option2","value":"value2"},{"0":"option3: value3","key":"option3","value":"value3"}]}`,
+		),
+	),
+	true, regexpFindAllSubmatchObjectMethod,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
+
+func regexpFindAllSubmatchObjectMethod(target Function, args ...interface{}) (Function, error) {
+	re, err := regexp.Compile(args[0].(string))
+	if err != nil {
+		return nil, err
+	}
+	groups := re.SubexpNames()
+	for i, k := range groups {
+		if len(k) == 0 {
+			groups[i] = fmt.Sprintf("%v", i)
+		}
+	}
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		var result []interface{}
+		switch t := v.(type) {
+		case string:
+			reMatches := re.FindAllStringSubmatch(t, -1)
+			result = make([]interface{}, 0, len(reMatches))
+			for _, matches := range reMatches {
+				obj := make(map[string]interface{}, len(groups))
+				for i, match := range matches {
+					key := groups[i]
+					obj[key] = match
+				}
+				result = append(result, obj)
+			}
+		case []byte:
+			reMatches := re.FindAllSubmatch(t, -1)
+			result = make([]interface{}, 0, len(reMatches))
+			for _, matches := range reMatches {
+				obj := make(map[string]interface{}, len(groups))
+				for i, match := range matches {
+					key := groups[i]
+					obj[key] = match
+				}
+				result = append(result, obj)
+			}
+		default:
+			return nil, NewTypeError(v, ValueString)
+		}
+		return result, nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
 		"re_match", "",
 	).InCategory(
 		MethodCategoryRegexp,

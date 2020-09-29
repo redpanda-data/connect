@@ -355,6 +355,42 @@ root.matches = this.value.re_find_all_submatch("a(x*)b")
 # Out: {"matches":[["axxb","xx"],["ab",""]]}
 ```
 
+### `re_find_object`
+
+Returns an object containing the first match of the regular expression and the matches of its subexpressions. The key of each match value is the name of the group when specified, otherwise it is the index of the matching group, starting with the expression as a whole at 0.
+
+```coffee
+root.matches = this.value.re_find_object("a(?P<foo>x*)b")
+
+# In:  {"value":"-axxb-ab-"}
+# Out: {"matches":{"0":"axxb","foo":"xx"}}
+```
+
+```coffee
+root.matches = this.value.re_find_object("(?P<key>\\w+):\\s+(?P<value>\\w+)")
+
+# In:  {"value":"option1: value1"}
+# Out: {"matches":{"0":"option1: value1","key":"option1","value":"value1"}}
+```
+
+### `re_find_all_object`
+
+Returns an array of objects containing all matches of the regular expression and the matches of its subexpressions. The key of each match value is the name of the group when specified, otherwise it is the index of the matching group, starting with the expression as a whole at 0.
+
+```coffee
+root.matches = this.value.re_find_all_object("a(?P<foo>x*)b")
+
+# In:  {"value":"-axxb-ab-"}
+# Out: {"matches":[{"0":"axxb","foo":"xx"},{"0":"ab","foo":""}]}
+```
+
+```coffee
+root.matches = this.value.re_find_all_object("(?m)(?P<key>\\w+):\\s+(?P<value>\\w+)$")
+
+# In:  {"value":"option1: value1\noption2: value2\noption3: value3"}
+# Out: {"matches":[{"0":"option1: value1","key":"option1","value":"value1"},{"0":"option2: value2","key":"option2","value":"value2"},{"0":"option3: value3","key":"option3","value":"value3"}]}
+```
+
 ### `re_match`
 
 Checks whether a regular expression matches against any part of a string and returns a boolean.
