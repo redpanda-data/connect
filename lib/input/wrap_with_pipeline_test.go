@@ -3,6 +3,7 @@ package input
 import (
 	"errors"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,7 +18,8 @@ import (
 //------------------------------------------------------------------------------
 
 type mockInput struct {
-	ts chan types.Transaction
+	closeOnce sync.Once
+	ts        chan types.Transaction
 }
 
 func (m *mockInput) TransactionChan() <-chan types.Transaction {
@@ -29,7 +31,9 @@ func (m *mockInput) Connected() bool {
 }
 
 func (m *mockInput) CloseAsync() {
-	close(m.ts)
+	m.closeOnce.Do(func() {
+		close(m.ts)
+	})
 }
 
 func (m *mockInput) WaitForClose(time.Duration) error {

@@ -123,7 +123,6 @@ func (m *Batcher) loop() {
 					select {
 					case <-nextTimedBatchChan:
 					case <-m.ctx.Done():
-						return
 					}
 				}
 			} else {

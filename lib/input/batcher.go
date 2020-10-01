@@ -148,8 +148,10 @@ func (m *Batcher) loop() {
 					select {
 					case <-nextTimedBatchChan:
 					case <-m.ctx.Done():
+						return
 					}
 				}
+				flushBatchFn()
 				return
 			}
 			tran.Payload.Iter(func(i int, p types.Part) error {

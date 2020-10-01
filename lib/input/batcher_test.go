@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBatcherStandard(t *testing.T) {
@@ -232,6 +233,55 @@ func TestBatcherTiming(t *testing.T) {
 		if err.Error() != errSend {
 			t.Errorf("Unexpected error: %v != %v", err.Error(), errSend)
 		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out")
+	}
+
+	if err := batcher.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestBatcherFinalFlush(t *testing.T) {
+	mock := &mockInput{
+		ts: make(chan types.Transaction),
+	}
+
+	batchConf := batch.NewPolicyConfig()
+	batchConf.Count = 10
+
+	batchPol, err := batch.NewPolicy(batchConf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	batcher := NewBatcher(batchPol, mock, log.Noop(), metrics.Noop())
+
+	resChan := make(chan types.Response)
+	select {
+	case mock.ts <- types.NewTransaction(message.New([][]byte{[]byte("foo1")}), resChan):
+	case <-time.After(time.Second):
+		t.Fatal("timed out")
+	}
+
+	mock.CloseAsync()
+
+	var tran types.Transaction
+	select {
+	case tran = <-batcher.TransactionChan():
+	case <-time.After(time.Second):
+		t.Fatal("timed out")
+	}
+
+	if exp, act := 1, tran.Payload.Len(); exp != act {
+		t.Errorf("Wrong batch size: %v != %v", act, exp)
+	}
+	if exp, act := "foo1", string(tran.Payload.Get(0).Get()); exp != act {
+		t.Errorf("Unexpected message part: %v != %v", act, exp)
+	}
+
+	batcher.CloseAsync()
+
+	select {
+	case tran.ResponseChan <- response.NewAck():
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}

@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `amqp_1` input and output now re-establish connections to brokers on any unknown error.
+- Batching components now more efficiently attempt a final flush of data during graceful shutdown.
 
 ## 3.29.0 - 2020-09-21
 
