@@ -28,9 +28,9 @@ interpolations described [here](/docs/configuration/interpolation#bloblang-queri
 calculated per message of a batch.`,
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("storage_account", "The storage account to upload messages to."),
-			docs.FieldCommon("storage_access_key", "The storage account access key."),
-			docs.FieldCommon("storage_connection_string", "The storage account connection string."),
+			docs.FieldCommon("storage_account", `The storage account to upload messages to. It's not taken in consideration if `+"`storage_connection_string`"+` is set`),
+			docs.FieldCommon("storage_access_key", `The storage account access key. It's not taken in consideration if `+"`storage_connection_string`"+` is set`),
+			docs.FieldCommon("storage_connection_string", `The storage account connection string. Only required if `+"`storage_account + storage_access_key`"+` are not set`),
 			docs.FieldCommon(
 				"container", "The container for uploading the messages to.",
 				`messages-${!timestamp("2006")}`,

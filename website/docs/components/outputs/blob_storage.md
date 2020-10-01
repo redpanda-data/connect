@@ -80,7 +80,7 @@ field `max_in_flight`.
 
 ### `storage_account`
 
-The storage account to upload messages to.
+The storage account to upload messages to. It's not taken in consideration if `storage_connection_string` is set
 
 
 Type: `string`  
@@ -88,7 +88,7 @@ Default: `""`
 
 ### `storage_access_key`
 
-The storage account access key.
+The storage account access key. It's not taken in consideration if `storage_connection_string` is set
 
 
 Type: `string`  
@@ -96,7 +96,7 @@ Default: `""`
 
 ### `storage_connection_string`
 
-The storage account connection string.
+The storage account connection string. Only required if `storage_account + storage_access_key` are not set
 
 
 Type: `string`  
