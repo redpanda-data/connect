@@ -58,7 +58,7 @@ func NewAzureBlobStorage(
 		if sa := pcs["AccountName"]; sa == "" {
 			return nil, fmt.Errorf("invalid azure storage connection string")
 		} else if sk := pcs["AccountKey"]; sk == "" {
-			return nil, fmt.Errorf("invalid azure storage connection string")
+			return nil, errors.New("invalid azure storage connection string (missing AccountKey)")
 		} else {
 			storageAccount = sa
 			storageAccessKey = sk
