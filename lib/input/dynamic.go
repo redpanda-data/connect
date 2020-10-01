@@ -155,6 +155,7 @@ func NewDynamic(
 		inputConfigs[id] = Config(newConf)
 		inputConfigsMut.Unlock()
 		if err = fanIn.SetInput(id, newInput, timeout); err != nil {
+			log.Errorf("Failed to set input '%v': %v", id, err)
 			inputConfigsMut.Lock()
 			delete(inputConfigs, id)
 			inputConfigsMut.Unlock()
@@ -162,7 +163,11 @@ func NewDynamic(
 		return err
 	})
 	dynAPI.OnDelete(func(id string) error {
-		return fanIn.SetInput(id, nil, timeout)
+		err := fanIn.SetInput(id, nil, timeout)
+		if err != nil {
+			log.Errorf("Failed to close input '%v': %v", id, err)
+		}
+		return err
 	})
 
 	mgr.RegisterEndpoint(

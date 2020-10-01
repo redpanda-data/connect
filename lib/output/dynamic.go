@@ -163,6 +163,7 @@ func NewDynamic(
 		outputConfigs[id] = newConf
 		outputConfigsMut.Unlock()
 		if err = fanOut.SetOutput(id, newOutput, reqTimeout); err != nil {
+			log.Errorf("Failed to set output '%v': %v", id, err)
 			outputConfigsMut.Lock()
 			delete(outputConfigs, id)
 			outputConfigsMut.Unlock()
@@ -170,7 +171,11 @@ func NewDynamic(
 		return err
 	})
 	dynAPI.OnDelete(func(id string) error {
-		return fanOut.SetOutput(id, nil, reqTimeout)
+		err := fanOut.SetOutput(id, nil, reqTimeout)
+		if err != nil {
+			log.Errorf("Failed to close output '%v': %v", id, err)
+		}
+		return err
 	})
 
 	mgr.RegisterEndpoint(
