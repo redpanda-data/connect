@@ -63,7 +63,9 @@ output:
 </Tabs>
 
 The output can be authenticated through a connection string or a storage account name with 
-the respective access key. If both authentication methods are set, the connection string is used.
+the respective access key. 
+Only one authentication method is required, `storage_connection_string` or `storage_account + storage_access_key`. If both are set, it's used `storage_connection_string`.
+
 In order to have a different path for each object you should use function
 interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
 calculated per message of a batch.

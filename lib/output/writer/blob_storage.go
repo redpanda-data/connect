@@ -5,6 +5,7 @@ package writer
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
