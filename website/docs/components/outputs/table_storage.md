@@ -34,6 +34,7 @@ output:
   table_storage:
     storage_account: ""
     storage_access_key: ""
+    storage_connection_string: ""
     table_name: ""
     partition_key: ""
     row_key: ""
@@ -55,6 +56,7 @@ output:
   table_storage:
     storage_account: ""
     storage_access_key: ""
+    storage_connection_string: ""
     table_name: ""
     partition_key: ""
     row_key: ""
@@ -72,6 +74,9 @@ output:
 
 </TabItem>
 </Tabs>
+
+The output can be authenticated through a connection string or a storage account name with 
+the respective access key. If both authentication methods are set, the connection string is used.
 
 In order to set the `table_name`,  `partition_key` and `row_key` 
 you can use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
@@ -131,6 +136,14 @@ Default: `""`
 ### `storage_access_key`
 
 The storage account access key.
+
+
+Type: `string`  
+Default: `""`  
+
+### `storage_connection_string`
+
+The storage account connection string.
 
 
 Type: `string`  

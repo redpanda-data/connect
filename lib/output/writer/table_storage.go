@@ -45,10 +45,16 @@ func NewAzureTableStorage(
 			return nil, fmt.Errorf("failed to parse timeout period string: %v", err)
 		}
 	}
-	if len(conf.StorageAccount) == 0 {
-		return nil, fmt.Errorf("invalid azure storage account")
+	if len(conf.StorageAccount) == 0 && len(conf.StorageConnectionString) == 0 {
+		return nil, fmt.Errorf("invalid azure storage account credentials")
 	}
-	basicClient, err := storage.NewBasicClient(conf.StorageAccount, conf.StorageAccessKey)
+
+	var client storage.Client
+	if len(conf.StorageConnectionString) > 0 {
+		client, err = storage.NewClientFromConnectionString(conf.StorageConnectionString)
+	} else {
+		client, err = storage.NewBasicClient(conf.StorageAccount, conf.StorageAccessKey)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
 	}
@@ -57,7 +63,7 @@ func NewAzureTableStorage(
 		log:     log,
 		stats:   stats,
 		timeout: timeout,
-		client:  basicClient.GetTableService(),
+		client:  client.GetTableService(),
 	}
 	if a.tableName, err = bloblang.NewField(conf.TableName); err != nil {
 		return nil, fmt.Errorf("failed to parse table name expression: %v", err)

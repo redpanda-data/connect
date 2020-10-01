@@ -18,6 +18,9 @@ func init() {
 		Summary: `
 Stores message parts in an Azure Table Storage table.`,
 		Description: `
+The output can be authenticated through a connection string or a storage account name with 
+the respective access key. If both authentication methods are set, the connection string is used.
+
 In order to set the ` + "`table_name`" + `,  ` + "`partition_key`" + ` and ` + "`row_key`" + ` 
 you can use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
 calculated per message of a batch.
@@ -60,6 +63,7 @@ properties:
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("storage_account", "The storage account to upload messages to."),
 			docs.FieldCommon("storage_access_key", "The storage account access key."),
+			docs.FieldCommon("storage_connection_string", "The storage account connection string."),
 			docs.FieldCommon("table_name", "The table to store messages into.",
 				`${!meta("kafka_topic")}`,
 			).SupportsInterpolation(false),

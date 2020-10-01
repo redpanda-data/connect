@@ -1095,6 +1095,7 @@ output:
           row_key: ${OUTPUT_TABLE_STORAGE_ROW_KEY}
           storage_access_key: ${OUTPUT_TABLE_STORAGE_STORAGE_ACCESS_KEY}
           storage_account: ${OUTPUT_TABLE_STORAGE_STORAGE_ACCOUNT}
+          storage_connection_string: ${OUTPUT_TABLE_STORAGE_STORAGE_CONNECTION_STRING}
           table_name: ${OUTPUT_TABLE_STORAGE_TABLE_NAME}
           timeout: ${OUTPUT_TABLE_STORAGE_TIMEOUT:5s}
         tcp:
