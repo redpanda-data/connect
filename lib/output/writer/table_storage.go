@@ -5,6 +5,7 @@ package writer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -46,7 +47,7 @@ func NewAzureTableStorage(
 		}
 	}
 	if len(conf.StorageAccount) == 0 && len(conf.StorageConnectionString) == 0 {
-		return nil, fmt.Errorf("invalid azure storage account credentials")
+		return nil, errors.New("invalid azure storage account credentials")
 	}
 
 	var client storage.Client

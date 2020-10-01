@@ -76,7 +76,8 @@ output:
 </Tabs>
 
 The output can be authenticated through a connection string or a storage account name with 
-the respective access key. If both authentication methods are set, the connection string is used.
+the respective access key. 
+Only one authentication method is required, `storage_connection_string` or `storage_account + storage_access_key`. If both are set, it's used `storage_connection_string`.
 
 In order to set the `table_name`,  `partition_key` and `row_key` 
 you can use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
@@ -127,7 +128,7 @@ Batches can be formed at both the input and output level. You can find out more
 
 ### `storage_account`
 
-The storage account to upload messages to.
+The storage account to upload messages to. It's not taken in consideration if `storage_connection_string` is set
 
 
 Type: `string`  
@@ -135,7 +136,7 @@ Default: `""`
 
 ### `storage_access_key`
 
-The storage account access key.
+The storage account access key. It's not taken in consideration if `storage_connection_string` is set
 
 
 Type: `string`  
@@ -143,7 +144,7 @@ Default: `""`
 
 ### `storage_connection_string`
 
-The storage account connection string.
+The storage account connection string. Only required if `storage_account + storage_access_key` are not set
 
 
 Type: `string`  
