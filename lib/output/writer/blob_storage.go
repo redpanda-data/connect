@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -23,14 +24,15 @@ import (
 // AzureBlobStorage is a benthos writer. Type implementation that writes messages to an
 // Azure Blob Storage storage account.
 type AzureBlobStorage struct {
-	conf       AzureBlobStorageConfig
-	credential azblob.Credential
-	container  field.Expression
-	path       field.Expression
-	blobType   field.Expression
-	timeout    time.Duration
-	log        log.Modular
-	stats      metrics.Type
+	conf             AzureBlobStorageConfig
+	credential       azblob.Credential
+	container        field.Expression
+	path             field.Expression
+	blobType         field.Expression
+	timeout          time.Duration
+	log              log.Modular
+	stats            metrics.Type
+	storageURLFormat string
 }
 
 // NewAzureBlobStorage creates a new Amazon S3 bucket writer.Type.
@@ -46,24 +48,47 @@ func NewAzureBlobStorage(
 			return nil, fmt.Errorf("failed to parse timeout period string: %v", err)
 		}
 	}
-	if len(conf.StorageAccount) == 0 {
-		return nil, fmt.Errorf("invalid azure storage account")
-	}
+
 	var credential azblob.Credential
-	if len(conf.StorageAccessKey) == 0 {
+	storageAccount := conf.StorageAccount
+	storageAccessKey := conf.StorageAccessKey
+	storageURLFormat := ""
+	if len(conf.StorageConnectionString) != 0 {
+		pcs := extractValues(conf.StorageConnectionString)
+		if sa := pcs["AccountName"]; sa == "" {
+			return nil, fmt.Errorf("invalid azure storage connection string")
+		} else if sk := pcs["AccountKey"]; sk == "" {
+			return nil, fmt.Errorf("invalid azure storage connection string")
+		} else {
+			storageAccount = sa
+			storageAccessKey = sk
+			if eps := pcs["EndpointSuffix"]; eps != "" {
+				storageURLFormat = fmt.Sprintf("%s://%s.blob.%s/%s", pcs["DefaultEndpointsProtocol"], sa, eps, "%s")
+			} else if be := pcs["BlobEndpoint"]; be != "" {
+				storageURLFormat = fmt.Sprintf("%s/%s", be, "%s")
+			}
+		}
+	} else {
+		storageURLFormat = fmt.Sprintf("https://%s.blob.core.windows.net/%s", storageAccount, "%s")
+	}
+	if len(storageAccount) == 0 {
+		return nil, fmt.Errorf("invalid azure storage credentials")
+	}
+	if len(storageAccessKey) == 0 {
 		credential = azblob.NewAnonymousCredential()
 	} else {
-		credential, err = azblob.NewSharedKeyCredential(conf.StorageAccount, conf.StorageAccessKey)
+		credential, err = azblob.NewSharedKeyCredential(storageAccount, storageAccessKey)
 		if err != nil {
 			return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
 		}
 	}
 	a := &AzureBlobStorage{
-		conf:       conf,
-		log:        log,
-		stats:      stats,
-		timeout:    timeout,
-		credential: credential,
+		conf:             conf,
+		log:              log,
+		stats:            stats,
+		timeout:          timeout,
+		credential:       credential,
+		storageURLFormat: storageURLFormat,
 	}
 	if a.container, err = bloblang.NewField(conf.Container); err != nil {
 		return nil, fmt.Errorf("failed to parse container expression: %v", err)
@@ -75,6 +100,16 @@ func NewAzureBlobStorage(
 		return nil, fmt.Errorf("failed to parse blob type expression: %v", err)
 	}
 	return a, nil
+}
+
+func extractValues(str string) map[string]string {
+	var re = regexp.MustCompile(`(?m)\w+(?:[^=])=(?:[^;])+`)
+	values := make(map[string]string)
+	for _, match := range re.FindAllString(str, -1) {
+		kv := strings.SplitN(match, "=", 2)
+		values[kv[0]] = kv[1]
+	}
+	return values
 }
 
 // ConnectWithContext attempts to establish a connection to the target Blob Storage Account.
@@ -94,7 +129,7 @@ func (a *AzureBlobStorage) Write(msg types.Message) error {
 
 func (a *AzureBlobStorage) getContainer(name string) (*azblob.ContainerURL, error) {
 	p := azblob.NewPipeline(a.credential, azblob.PipelineOptions{})
-	URL, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net/%s", a.conf.StorageAccount, name))
+	URL, _ := url.Parse(fmt.Sprintf(a.storageURLFormat, name))
 	containerURL := azblob.NewContainerURL(*URL, p)
 	return &containerURL, nil
 }

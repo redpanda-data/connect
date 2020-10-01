@@ -649,6 +649,7 @@ OUTPUT_BLOB_STORAGE_MAX_IN_FLIGHT                     = 1
 OUTPUT_BLOB_STORAGE_PATH                              = ${!count("files")}-${!timestamp_unix_nano()}.txt
 OUTPUT_BLOB_STORAGE_STORAGE_ACCESS_KEY
 OUTPUT_BLOB_STORAGE_STORAGE_ACCOUNT
+OUTPUT_BLOB_STORAGE_STORAGE_CONNECTION_STRING
 OUTPUT_BLOB_STORAGE_TIMEOUT                           = 5s
 OUTPUT_CACHE_KEY                                      = ${!count("items")}-${!timestamp_unix_nano()}
 OUTPUT_CACHE_MAX_IN_FLIGHT                            = 1

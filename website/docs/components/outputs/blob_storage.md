@@ -36,6 +36,7 @@ output:
   blob_storage:
     storage_account: ""
     storage_access_key: ""
+    storage_connection_string: ""
     container: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     max_in_flight: 1
@@ -50,6 +51,7 @@ output:
   blob_storage:
     storage_account: ""
     storage_access_key: ""
+    storage_connection_string: ""
     container: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     blob_type: BLOCK
@@ -60,6 +62,8 @@ output:
 </TabItem>
 </Tabs>
 
+The output can be authenticated through a connection string or a storage account name with 
+the respective access key. If both authentication methods are set, the connection string is used.
 In order to have a different path for each object you should use function
 interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
 calculated per message of a batch.
@@ -83,6 +87,14 @@ Default: `""`
 ### `storage_access_key`
 
 The storage account access key.
+
+
+Type: `string`  
+Default: `""`  
+
+### `storage_connection_string`
+
+The storage account connection string.
 
 
 Type: `string`  

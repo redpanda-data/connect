@@ -19,6 +19,8 @@ Sends message parts as objects to an Azure Blob Storage Account container. Each
 object is uploaded with the filename specified with the ` + "`container`" + `
 field.`,
 		Description: `
+The output can be authenticated through a connection string or a storage account name with 
+the respective access key. If both authentication methods are set, the connection string is used.
 In order to have a different path for each object you should use function
 interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
 calculated per message of a batch.`,
@@ -26,6 +28,7 @@ calculated per message of a batch.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("storage_account", "The storage account to upload messages to."),
 			docs.FieldCommon("storage_access_key", "The storage account access key."),
+			docs.FieldCommon("storage_connection_string", "The storage account connection string."),
 			docs.FieldCommon(
 				"container", "The container for uploading the messages to.",
 				`messages-${!timestamp("2006")}`,
