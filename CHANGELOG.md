@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 
 - The `amqp_1` input and output now re-establish connections to brokers on any unknown error.
 - Batching components now more efficiently attempt a final flush of data during graceful shutdown.
+- The `dynamic` output is now more flexible with removing outputs, and should no longer block the API as aggressively.
 
 ## 3.29.0 - 2020-09-21
 

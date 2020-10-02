@@ -24,9 +24,9 @@ type DynamicOutput interface {
 // wrappedOutput is a struct that wraps a DynamicOutput with an identifying
 // name.
 type wrappedOutput struct {
+	Ctx     context.Context
 	Name    string
 	Output  DynamicOutput
-	Timeout time.Duration
 	ResChan chan<- error
 }
 
@@ -35,6 +35,8 @@ type wrappedOutput struct {
 type outputWithTsChan struct {
 	tsChan chan types.Transaction
 	output DynamicOutput
+	ctx    context.Context
+	done   func()
 }
 
 //------------------------------------------------------------------------------
@@ -117,13 +119,13 @@ func (d *DynamicFanOut) WithMaxInFlight(i int) *DynamicFanOut {
 func (d *DynamicFanOut) SetOutput(ident string, output DynamicOutput, timeout time.Duration) error {
 	ctx, done := context.WithTimeout(d.ctx, timeout)
 	defer done()
-	resChan := make(chan error)
+	resChan := make(chan error, 1)
 	select {
 	case d.newOutputChan <- wrappedOutput{
 		Name:    ident,
 		Output:  output,
 		ResChan: resChan,
-		Timeout: timeout,
+		Ctx:     ctx,
 	}:
 	case <-ctx.Done():
 		return types.ErrTimeout
@@ -183,25 +185,31 @@ func (d *DynamicFanOut) addOutput(ident string, output DynamicOutput) error {
 		output.CloseAsync()
 		return err
 	}
+	ow.ctx, ow.done = context.WithCancel(context.Background())
 
 	d.outputs[ident] = ow
 	return nil
 }
 
-func (d *DynamicFanOut) removeOutput(ident string, timeout time.Duration) error {
+func (d *DynamicFanOut) removeOutput(ctx context.Context, ident string) error {
 	ow, exists := d.outputs[ident]
 	if !exists {
 		return nil
 	}
 
-	ow.output.CloseAsync()
-	if err := ow.output.WaitForClose(timeout); err != nil {
-		return err
+	timeout := time.Second * 5
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout = time.Until(deadline)
 	}
 
+	ow.output.CloseAsync()
+	err := ow.output.WaitForClose(timeout)
+
+	ow.done()
 	close(ow.tsChan)
 	delete(d.outputs, ident)
-	return nil
+
+	return err
 }
 
 //------------------------------------------------------------------------------
@@ -250,19 +258,19 @@ func (d *DynamicFanOut) loop() {
 				func() {
 					d.outputsMut.Lock()
 					defer d.outputsMut.Unlock()
+
+					// First, always remove the previous output if it exists.
 					if _, exists := d.outputs[wrappedOutput.Name]; exists {
-						if err := d.removeOutput(wrappedOutput.Name, wrappedOutput.Timeout); err != nil {
+						if err := d.removeOutput(wrappedOutput.Ctx, wrappedOutput.Name); err != nil {
 							mRemoveErr.Incr(1)
-							d.log.Errorf("Failed to stop old copy of dynamic output '%v': %v\n", wrappedOutput.Name, err)
-							select {
-							case wrappedOutput.ResChan <- err:
-							case <-d.ctx.Done():
-							}
-							return
+							d.log.Errorf("Failed to stop old copy of dynamic output '%v' in time: %v, the output will continue to shut down in the background.\n", wrappedOutput.Name, err)
+						} else {
+							mRemoveSucc.Incr(1)
 						}
-						mRemoveSucc.Incr(1)
 						d.onRemove(wrappedOutput.Name)
 					}
+
+					// Next, attempt to create a new output (if specified).
 					if wrappedOutput.Output == nil {
 						wrappedOutput.ResChan <- nil
 					} else {
@@ -274,11 +282,7 @@ func (d *DynamicFanOut) loop() {
 							mAddSucc.Incr(1)
 							d.onAdd(wrappedOutput.Name)
 						}
-						select {
-						case wrappedOutput.ResChan <- err:
-						case <-d.ctx.Done():
-							return
-						}
+						wrappedOutput.ResChan <- err
 					}
 				}()
 			case <-d.ctx.Done():
@@ -323,44 +327,43 @@ func (d *DynamicFanOut) loop() {
 			for name := range d.outputs {
 				msgCopy, name := ts.Payload.Copy(), name
 				owg.Go(func() error {
-					d.outputsMut.RLock()
-					defer d.outputsMut.RUnlock()
-
 					throt := throttle.New(throttle.OptCloseChan(d.ctx.Done()))
 					resChan := make(chan types.Response)
 
 					// Try until success, shutdown, or the output was removed.
 					for {
+						d.outputsMut.RLock()
 						output, exists := d.outputs[name]
 						if !exists {
+							d.outputsMut.RUnlock()
 							return nil
 						}
 
 						select {
 						case output.tsChan <- types.NewTransaction(msgCopy, resChan):
 						case <-d.ctx.Done():
+							d.outputsMut.RUnlock()
 							return types.ErrTypeClosed
 						}
+
+						// Allow outputs to be mutated at this stage in case the
+						// response is slow.
+						d.outputsMut.RUnlock()
 
 						select {
 						case res := <-resChan:
 							if res.Error() != nil {
 								d.log.Errorf("Failed to dispatch dynamic fan out message to '%v': %v\n", name, res.Error())
 								mOutputErr.Incr(1)
-
-								// Sleep and also allow API to potentially
-								// mutate outputs.
-								d.outputsMut.RUnlock()
-								cont := throt.Retry()
-
-								d.outputsMut.RLock()
-								if !cont {
+								if cont := throt.Retry(); !cont {
 									return types.ErrTypeClosed
 								}
 							} else {
 								mMsgsSnt.Incr(1)
 								return nil
 							}
+						case <-output.ctx.Done():
+							return nil
 						case <-d.ctx.Done():
 							return types.ErrTypeClosed
 						}
@@ -373,6 +376,7 @@ func (d *DynamicFanOut) loop() {
 				select {
 				case ts.ResponseChan <- response.NewAck():
 				case <-d.ctx.Done():
+					return
 				}
 			}
 		}
