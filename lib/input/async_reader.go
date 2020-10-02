@@ -93,6 +93,7 @@ func (r *AsyncReader) loop() {
 		r.reader.CloseAsync()
 		err := r.reader.WaitForClose(time.Second)
 		for ; err != nil; err = r.reader.WaitForClose(time.Second) {
+			r.log.Warnf("Waiting for input to close, blocked by: %v\n", err)
 		}
 		mRunning.Decr(1)
 		atomic.StoreInt32(&r.connected, 0)

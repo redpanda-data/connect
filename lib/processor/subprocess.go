@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os/exec"
 	"sync"
@@ -415,7 +416,7 @@ func (e *Subprocess) CloseAsync() {
 func (e *Subprocess) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return fmt.Errorf("subprocess failed to close in allotted time: %w", types.ErrTimeout)
 	case <-e.subproc.closedChan:
 	}
 	return nil

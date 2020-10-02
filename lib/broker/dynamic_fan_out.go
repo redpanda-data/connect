@@ -194,12 +194,12 @@ func (d *DynamicFanOut) removeOutput(ident string, timeout time.Duration) error 
 		return nil
 	}
 
-	close(ow.tsChan)
 	ow.output.CloseAsync()
 	if err := ow.output.WaitForClose(timeout); err != nil {
 		return err
 	}
 
+	close(ow.tsChan)
 	delete(d.outputs, ident)
 	return nil
 }

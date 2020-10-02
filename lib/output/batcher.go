@@ -93,6 +93,7 @@ func (m *Batcher) loop() {
 		m.batcher.CloseAsync()
 		err = m.batcher.WaitForClose(time.Second)
 		for err != nil {
+			m.log.Warnf("Waiting for batch policy to close, blocked by: %v\n", err)
 			err = m.batcher.WaitForClose(time.Second)
 		}
 		close(m.closedChan)
