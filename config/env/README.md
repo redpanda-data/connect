@@ -362,6 +362,9 @@ INPUT_NSQ_TLS_ROOT_CAS_FILE
 INPUT_NSQ_TLS_SKIP_CERT_VERIFY                       = false
 INPUT_NSQ_TOPIC                                      = benthos_messages
 INPUT_NSQ_USER_AGENT                                 = benthos_consumer
+INPUT_PULSAR_SUBSCRIPTION_NAME
+INPUT_PULSAR_TOPIC
+INPUT_PULSAR_URL
 INPUT_REDIS_LIST_KEY                                 = benthos_list
 INPUT_REDIS_LIST_KIND                                = simple
 INPUT_REDIS_LIST_MASTER
@@ -1125,6 +1128,9 @@ OUTPUT_NSQ_TLS_ROOT_CAS_FILE
 OUTPUT_NSQ_TLS_SKIP_CERT_VERIFY                          = false
 OUTPUT_NSQ_TOPIC                                         = benthos_messages
 OUTPUT_NSQ_USER_AGENT                                    = benthos_producer
+OUTPUT_PULSAR_MAX_IN_FLIGHT                              = 1
+OUTPUT_PULSAR_TOPIC
+OUTPUT_PULSAR_URL
 OUTPUT_REDIS_HASH_KEY
 OUTPUT_REDIS_HASH_KIND                                   = simple
 OUTPUT_REDIS_HASH_MASTER

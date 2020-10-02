@@ -201,6 +201,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- New (beta) Apache Pulsar input and output.
 - OAuth 2.0 using the client credentials token flow is now supported by the `http_client` input and output, and the `http` processor.
 - Method `format_timestamp` added to Bloblang.
 - Methods `re_find_object` and `re_find_all_object` added to Bloblang.

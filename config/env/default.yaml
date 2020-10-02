@@ -393,6 +393,10 @@ input:
             skip_cert_verify: ${INPUT_NSQ_TLS_SKIP_CERT_VERIFY:false}
           topic: ${INPUT_NSQ_TOPIC:benthos_messages}
           user_agent: ${INPUT_NSQ_USER_AGENT:benthos_consumer}
+        pulsar:
+          subscription_name: ${INPUT_PULSAR_SUBSCRIPTION_NAME}
+          topic: ${INPUT_PULSAR_TOPIC}
+          url: ${INPUT_PULSAR_URL}
         redis_list:
           key: ${INPUT_REDIS_LIST_KEY:benthos_list}
           kind: ${INPUT_REDIS_LIST_KIND:simple}
@@ -1341,6 +1345,10 @@ output:
             skip_cert_verify: ${OUTPUT_NSQ_TLS_SKIP_CERT_VERIFY:false}
           topic: ${OUTPUT_NSQ_TOPIC:benthos_messages}
           user_agent: ${OUTPUT_NSQ_USER_AGENT:benthos_producer}
+        pulsar:
+          max_in_flight: ${OUTPUT_PULSAR_MAX_IN_FLIGHT:1}
+          topic: ${OUTPUT_PULSAR_TOPIC}
+          url: ${OUTPUT_PULSAR_URL}
         redis_hash:
           key: ${OUTPUT_REDIS_HASH_KEY}
           kind: ${OUTPUT_REDIS_HASH_KIND:simple}

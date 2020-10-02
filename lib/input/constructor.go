@@ -165,6 +165,7 @@ const (
 	TypeNATS             = "nats"
 	TypeNATSStream       = "nats_stream"
 	TypeNSQ              = "nsq"
+	TypePulsar           = "pulsar"
 	TypeReadUntil        = "read_until"
 	TypeRedisList        = "redis_list"
 	TypeRedisPubSub      = "redis_pubsub"
@@ -218,6 +219,7 @@ type Config struct {
 	NATSStream       reader.NATSStreamConfig      `json:"nats_stream" yaml:"nats_stream"`
 	NSQ              reader.NSQConfig             `json:"nsq" yaml:"nsq"`
 	Plugin           interface{}                  `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	Pulsar           PulsarConfig                 `json:"pulsar" yaml:"pulsar"`
 	ReadUntil        ReadUntilConfig              `json:"read_until" yaml:"read_until"`
 	RedisList        reader.RedisListConfig       `json:"redis_list" yaml:"redis_list"`
 	RedisPubSub      reader.RedisPubSubConfig     `json:"redis_pubsub" yaml:"redis_pubsub"`
@@ -271,6 +273,7 @@ func NewConfig() Config {
 		NATSStream:       reader.NewNATSStreamConfig(),
 		NSQ:              reader.NewNSQConfig(),
 		Plugin:           nil,
+		Pulsar:           NewPulsarConfig(),
 		ReadUntil:        NewReadUntilConfig(),
 		RedisList:        reader.NewRedisListConfig(),
 		RedisPubSub:      reader.NewRedisPubSubConfig(),
