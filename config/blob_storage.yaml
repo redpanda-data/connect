@@ -20,10 +20,11 @@ pipeline:
 output:
   type: blob_storage
   blob_storage:
-    blob_type: BLOCK
+    blob_type: block
     container: ""
     max_in_flight: 1
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
+    public_access_level: private
     storage_access_key: ""
     storage_account: ""
     storage_connection_string: ""

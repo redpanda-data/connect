@@ -52,9 +52,10 @@ output:
     storage_account: ""
     storage_access_key: ""
     storage_connection_string: ""
+    public_access_level: private
     container: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
-    blob_type: BLOCK
+    blob_type: block
     max_in_flight: 1
     timeout: 5s
 ```
@@ -102,6 +103,15 @@ The storage account connection string. Only required if `storage_account + stora
 Type: `string`  
 Default: `""`  
 
+### `public_access_level`
+
+The container's public access level. The default value is `private`.
+
+
+Type: `string`  
+Default: `"private"`  
+Options: `private`, `blob`, `container`.
+
 ### `container`
 
 The container for uploading the messages to.
@@ -143,8 +153,8 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"BLOCK"`  
-Options: `BLOCK`, `APPEND`.
+Default: `"block"`  
+Options: `block`, `append`.
 
 ### `max_in_flight`
 

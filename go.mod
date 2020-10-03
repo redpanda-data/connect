@@ -3,9 +3,7 @@ module github.com/Jeffail/benthos/v3
 require (
 	cloud.google.com/go v0.63.0 // indirect
 	cloud.google.com/go/pubsub v1.6.1
-	github.com/Azure/azure-pipeline-go v0.2.3 // indirect
 	github.com/Azure/azure-sdk-for-go v45.1.0+incompatible
-	github.com/Azure/azure-storage-blob-go v0.10.0
 	github.com/Azure/go-amqp v0.13.1
 	github.com/Azure/go-autorest/autorest v0.11.3 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.9.2 // indirect
@@ -33,6 +31,7 @@ require (
 	github.com/golang/protobuf v1.4.2
 	github.com/google/go-cmp v0.5.1
 	github.com/google/gofuzz v1.1.0
+	github.com/google/uuid v1.1.1 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e // indirect
 	github.com/gorilla/mux v1.7.4
 	github.com/gorilla/websocket v1.4.2
