@@ -95,14 +95,10 @@ func (a *AzureBlobStorage) Write(msg types.Message) error {
 }
 
 func (a *AzureBlobStorage) uploadBlob(b *storage.Blob, blobType string, message []byte) error {
-	switch blobType {
-	case "block":
-		return b.CreateBlockBlobFromReader(bytes.NewReader(message), nil)
-	case "append":
+	if blobType == "append" {
 		return b.AppendBlock(message, nil)
-	default:
-		return errors.New("unsupported block type")
 	}
+	return b.CreateBlockBlobFromReader(bytes.NewReader(message), nil)
 }
 
 func (a *AzureBlobStorage) createContainer(c *storage.Container, accessLEvel string) error {
