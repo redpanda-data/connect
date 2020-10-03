@@ -128,6 +128,7 @@ func (a *AzureBlobStorage) WriteWithContext(wctx context.Context, msg types.Mess
 			if containerNotFound(err) {
 				if cerr := a.createContainer(c, a.accessLevel.String(i, msg)); cerr != nil {
 					a.log.Debugf("error creating container: %v.", cerr)
+					return cerr
 				} else {
 					err = a.uploadBlob(b, a.blobType.String(i, msg), p.Get())
 					if err != nil {
