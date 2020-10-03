@@ -6,10 +6,9 @@
 
 Benthos is a high performance and resilient stream processor, able to connect various [sources][inputs] and [sinks][outputs] in a range of brokering patterns and perform [hydration, enrichments, transformations and filters][processors] on payloads.
 
-It comes with a [powerful mapping language][bloblang-about], is easy to deploy and monitor, and ready to drop into your pipeline either as a static binary, docker image, or [serverless function][serverless].
+It comes with a [powerful mapping language][bloblang-about], is easy to deploy and monitor, and ready to drop into your pipeline either as a static binary, docker image, or [serverless function][serverless], making it cloud native as heck.
 
-Stream pipelines are defined in a single config file, allowing you to declare
-connectors and a list of processing stages:
+Benthos is fully declarative, with stream pipelines defined in a single config file, allowing you to specify connectors and a list of processing stages:
 
 ```yaml
 input:
@@ -33,9 +32,7 @@ output:
 
 ### Delivery Guarantees
 
-Yep, we got 'em. Benthos implements transaction based resiliency with back
-pressure. When connecting to at-least-once sources and sinks it guarantees
-at-least-once delivery without needing to persist messages during transit.
+Yep, we got 'em. Benthos implements transaction based resiliency with back pressure. When connecting to at-least-once sources and sinks it guarantees at-least-once delivery without needing to persist messages during transit.
 
 ## Supported Sources & Sinks
 
@@ -45,15 +42,11 @@ Connectors are being added constantly, if something you want is missing then [op
 
 ## Documentation
 
-If you want to dive fully into Benthos then don't waste your time in this dump,
-check out the [documentation site][general-docs].
+If you want to dive fully into Benthos then don't waste your time in this dump, check out the [documentation site][general-docs].
 
-For guidance on how to configure more advanced stream processing concepts such
-as stream joins, enrichment workflows, etc, check out the
-[cookbooks section.][cookbooks]
+For guidance on how to configure more advanced stream processing concepts such as stream joins, enrichment workflows, etc, check out the [cookbooks section.][cookbooks]
 
-For guidance on building your own custom plugins check out
-[this example repo.][plugin-repo]
+For guidance on building your own custom plugins check out [this example repo.][plugin-repo]
 
 ## Install
 
@@ -105,31 +98,23 @@ docker run --rm -v /path/to/your/config.yaml:/benthos.yaml jeffail/benthos
 
 Benthos serves two HTTP endpoints for health checks:
 - `/ping` can be used as a liveness probe as it always returns a 200.
-- `/ready` can be used as a readiness probe as it serves a 200 only when both
-  the input and output are connected, otherwise a 503 is returned.
+- `/ready` can be used as a readiness probe as it serves a 200 only when both the input and output are connected, otherwise a 503 is returned.
 
 ### Metrics
 
-Benthos [exposes lots of metrics][metrics] either to Statsd, Prometheus or for
-debugging purposes an HTTP endpoint that returns a JSON formatted object. The
-target can be specified [via config][metrics-config].
+Benthos [exposes lots of metrics][metrics] either to Statsd, Prometheus or for debugging purposes an HTTP endpoint that returns a JSON formatted object. The target can be specified [via config][metrics-config].
 
 ### Tracing
 
-Benthos also [emits opentracing events][tracers] to a tracer of your choice
-(currently only [Jaeger][jaeger] is supported) which can be used to visualise
-the processors within a pipeline.
+Benthos also [emits opentracing events][tracers] to a tracer of your choice (currently only [Jaeger][jaeger] is supported) which can be used to visualise the processors within a pipeline.
 
 ## Configuration
 
-Benthos provides lots of tools for making configuration discovery, debugging and
-organisation easy. You can [read about them here][config-doc].
+Benthos provides lots of tools for making configuration discovery, debugging and organisation easy. You can [read about them here][config-doc].
 
 ### Environment Variables
 
-It is possible to select fields inside a configuration file to be set via
-[environment variables][config-interp]. The docker image, for example, is built
-with [a config file][env-config] where _all_ common fields can be set this way.
+It is possible to select fields inside a configuration file to be set via [environment variables][config-interp]. The docker image, for example, is built with [a config file][env-config] where _all_ common fields can be set this way.
 
 ## Build
 
@@ -143,13 +128,11 @@ make
 
 ### Plugins
 
-It's pretty easy to write your own custom plugins for Benthos, take a look at
-[this repo][plugin-repo] for examples and build instructions.
+It's pretty easy to write your own custom plugins for Benthos, take a look at [this repo][plugin-repo] for examples and build instructions.
 
 ### Docker Builds
 
-There's a multi-stage `Dockerfile` for creating a Benthos docker image which
-results in a minimal image from scratch. You can build it with:
+There's a multi-stage `Dockerfile` for creating a Benthos docker image which results in a minimal image from scratch. You can build it with:
 
 ```shell
 make docker
@@ -165,13 +148,11 @@ docker run --rm \
 	benthos -c /config.yaml
 ```
 
-There are a [few examples here][compose-examples] that show you some ways of
-setting up Benthos containers using `docker-compose`.
+There are a [few examples here][compose-examples] that show you some ways of setting up Benthos containers using `docker-compose`.
 
 ### ZMQ4 Support
 
-Benthos supports ZMQ4 for both data input and output. To add this you need to
-install libzmq4 and use the compile time flag when building Benthos:
+Benthos supports ZMQ4 for both data input and output. To add this you need to install libzmq4 and use the compile time flag when building Benthos:
 
 ```shell
 make TAGS=ZMQ4
@@ -185,8 +166,7 @@ make docker-cgo
 
 ## Contributing
 
-Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come
-and chat (links are on the [community page][community]), and watch your back.
+Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come and chat (links are on the [community page][community]), and watch your back.
 
 [inputs]: https://www.benthos.dev/docs/components/inputs/about/
 [processors]: https://www.benthos.dev/docs/components/processors/about/

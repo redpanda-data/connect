@@ -249,9 +249,7 @@ function Home() {
             <div className={classnames(`${styles.pitch} col col--6`)}>
               <h2>It's boringly easy to use</h2>
               <p>
-                Written in Go, deployed as a static binary. Configured with a
-                single YAML file, allowing you to declare connectors and a list
-                of processing stages.
+                Written in Go, deployed as a static binary, declarative configuration. Cloud native as utter heck.
               </p>
               {installs && installs.length && (
                 <Tabs defaultValue={installs[0].label} values={installs.map((props, idx) => {

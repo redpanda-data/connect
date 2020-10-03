@@ -73,7 +73,7 @@ function CookbookListPage(props) {
               </div>
               <div className="search">
                 <input
-                  className={styles.cookbookSearch}
+                  className={classnames("shadow--lw", styles.cookbookSearch)}
                   type="text"
                   onChange={(event) => setSearchTerm(event.currentTarget.value)}
                   placeholder="🔍 Search..." />
