@@ -101,9 +101,9 @@ func (a *AzureBlobStorage) uploadBlob(b *storage.Blob, blobType string, message 
 	return b.CreateBlockBlobFromReader(bytes.NewReader(message), nil)
 }
 
-func (a *AzureBlobStorage) createContainer(c *storage.Container, accessLEvel string) error {
+func (a *AzureBlobStorage) createContainer(c *storage.Container, accessLevel string) error {
 	opts := storage.CreateContainerOptions{}
-	switch accessLEvel {
+	switch accessLevel {
 	case "blob":
 		opts.Access = storage.ContainerAccessTypeBlob
 	case "container":
