@@ -23,8 +23,8 @@ func NewAzureBlobStorageConfig() AzureBlobStorageConfig {
 		StorageConnectionString: "",
 		Container:               "",
 		Path:                    `${!count("files")}-${!timestamp_unix_nano()}.txt`,
-		BlobType:                "block",
-		PublicAccessLevel:       "private",
+		BlobType:                "BLOCK",
+		PublicAccessLevel:       "PRIVATE",
 		Timeout:                 "5s",
 		MaxInFlight:             1,
 	}

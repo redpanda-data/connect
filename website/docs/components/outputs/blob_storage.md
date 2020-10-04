@@ -52,10 +52,10 @@ output:
     storage_account: ""
     storage_access_key: ""
     storage_connection_string: ""
-    public_access_level: private
+    public_access_level: PRIVATE
     container: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
-    blob_type: block
+    blob_type: BLOCK
     max_in_flight: 1
     timeout: 5s
 ```
@@ -109,7 +109,7 @@ The container's public access level. The default value is `PRIVATE`.
 
 
 Type: `string`  
-Default: `"private"`  
+Default: `"PRIVATE"`  
 Options: `PRIVATE`, `BLOB`, `CONTAINER`.
 
 ### `container`
@@ -153,7 +153,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"block"`  
+Default: `"BLOCK"`  
 Options: `BLOCK`, `APPEND`.
 
 ### `max_in_flight`
