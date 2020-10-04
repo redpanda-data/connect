@@ -31,8 +31,8 @@ calculated per message of a batch.`,
 			docs.FieldCommon("storage_account", `The storage account to upload messages to. It's not taken in consideration if `+"`storage_connection_string`"+` is set`),
 			docs.FieldCommon("storage_access_key", `The storage account access key. It's not taken in consideration if `+"`storage_connection_string`"+` is set`),
 			docs.FieldCommon("storage_connection_string", `The storage account connection string. Only required if `+"`storage_account + storage_access_key`"+` are not set`),
-			docs.FieldAdvanced("public_access_level", `The container's public access level. The default value is `+"`private`"+`.`).HasOptions(
-				"private", "blob", "container",
+			docs.FieldAdvanced("public_access_level", `The container's public access level. The default value is `+"`PRIVATE`"+`.`).HasOptions(
+				"PRIVATE", "BLOB", "CONTAINER",
 			),
 			docs.FieldCommon(
 				"container", "The container for uploading the messages to.",
@@ -44,8 +44,8 @@ calculated per message of a batch.`,
 				`${!meta("kafka_key")}.json`,
 				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
 			).SupportsInterpolation(false),
-			docs.FieldAdvanced("blob_type", "Block and Append blobs are comprised of blocks, and each blob can support up to 50,000 blocks. The default value is `+\"`block`\"+`.`").HasOptions(
-				"block", "append",
+			docs.FieldAdvanced("blob_type", "Block and Append blobs are comprised of blocks, and each blob can support up to 50,000 blocks. The default value is `+\"`BLOCK`\"+`.`").HasOptions(
+				"BLOCK", "APPEND",
 			).SupportsInterpolation(false),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldAdvanced("timeout", "The maximum period to wait on an upload before abandoning it and reattempting."),

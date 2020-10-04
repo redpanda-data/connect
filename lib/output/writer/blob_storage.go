@@ -101,7 +101,7 @@ func (a *AzureBlobStorage) Write(msg types.Message) error {
 }
 
 func (a *AzureBlobStorage) uploadBlob(b *storage.Blob, blobType string, message []byte) error {
-	if blobType == "append" {
+	if blobType == "APPEND" {
 		return b.AppendBlock(message, nil)
 	}
 	return b.CreateBlockBlobFromReader(bytes.NewReader(message), nil)
@@ -110,9 +110,9 @@ func (a *AzureBlobStorage) uploadBlob(b *storage.Blob, blobType string, message 
 func (a *AzureBlobStorage) createContainer(c *storage.Container, accessLevel string) error {
 	opts := storage.CreateContainerOptions{}
 	switch accessLevel {
-	case "blob":
+	case "BLOB":
 		opts.Access = storage.ContainerAccessTypeBlob
-	case "container":
+	case "CONTAINER":
 		opts.Access = storage.ContainerAccessTypeContainer
 	}
 	return c.Create(&opts)

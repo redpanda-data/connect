@@ -105,12 +105,12 @@ Default: `""`
 
 ### `public_access_level`
 
-The container's public access level. The default value is `private`.
+The container's public access level. The default value is `PRIVATE`.
 
 
 Type: `string`  
 Default: `"private"`  
-Options: `private`, `blob`, `container`.
+Options: `PRIVATE`, `BLOB`, `CONTAINER`.
 
 ### `container`
 
@@ -148,13 +148,13 @@ path: ${!json("doc.namespace")}/${!json("doc.id")}.json
 
 ### `blob_type`
 
-Block and Append blobs are comprised of blocks, and each blob can support up to 50,000 blocks.
+Block and Append blobs are comprised of blocks, and each blob can support up to 50,000 blocks. The default value is `+"`BLOCK`"+`.`
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
 Default: `"block"`  
-Options: `block`, `append`.
+Options: `BLOCK`, `APPEND`.
 
 ### `max_in_flight`
 
