@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
@@ -49,10 +50,13 @@ func NewAzureTableStorage(
 	if len(conf.StorageAccount) == 0 && len(conf.StorageConnectionString) == 0 {
 		return nil, errors.New("invalid azure storage account credentials")
 	}
-
 	var client storage.Client
 	if len(conf.StorageConnectionString) > 0 {
-		client, err = storage.NewClientFromConnectionString(conf.StorageConnectionString)
+		if strings.Contains(conf.StorageConnectionString, "UseDevelopmentStorage=true;") {
+			client, err = storage.NewEmulatorClient()
+		} else {
+			client, err = storage.NewClientFromConnectionString(conf.StorageConnectionString)
+		}
 	} else {
 		client, err = storage.NewBasicClient(conf.StorageAccount, conf.StorageAccessKey)
 	}
