@@ -33,6 +33,7 @@ output:
     row_key: ""
     storage_access_key: ""
     storage_account: ""
+    storage_connection_string: ""
     table_name: ""
     timeout: 5s
 resources:
