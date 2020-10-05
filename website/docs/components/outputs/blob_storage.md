@@ -36,6 +36,7 @@ output:
   blob_storage:
     storage_account: ""
     storage_access_key: ""
+    storage_connection_string: ""
     container: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     max_in_flight: 1
@@ -50,6 +51,8 @@ output:
   blob_storage:
     storage_account: ""
     storage_access_key: ""
+    storage_connection_string: ""
+    public_access_level: PRIVATE
     container: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     blob_type: BLOCK
@@ -59,6 +62,10 @@ output:
 
 </TabItem>
 </Tabs>
+
+The output can be authenticated through a connection string or a storage account name with 
+the respective access key. 
+Only one authentication method is required, `storage_connection_string` or `storage_account + storage_access_key`. If both are set, it's used `storage_connection_string`.
 
 In order to have a different path for each object you should use function
 interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
@@ -74,7 +81,7 @@ field `max_in_flight`.
 
 ### `storage_account`
 
-The storage account to upload messages to.
+The storage account to upload messages to. It's not taken in consideration if `storage_connection_string` is set
 
 
 Type: `string`  
@@ -82,11 +89,28 @@ Default: `""`
 
 ### `storage_access_key`
 
-The storage account access key.
+The storage account access key. It's not taken in consideration if `storage_connection_string` is set
 
 
 Type: `string`  
 Default: `""`  
+
+### `storage_connection_string`
+
+The storage account connection string. Only required if `storage_account + storage_access_key` are not set
+
+
+Type: `string`  
+Default: `""`  
+
+### `public_access_level`
+
+The container's public access level. The default value is `PRIVATE`.
+
+
+Type: `string`  
+Default: `"PRIVATE"`  
+Options: `PRIVATE`, `BLOB`, `CONTAINER`.
 
 ### `container`
 
@@ -124,7 +148,7 @@ path: ${!json("doc.namespace")}/${!json("doc.id")}.json
 
 ### `blob_type`
 
-Block and Append blobs are comprised of blocks, and each blob can support up to 50,000 blocks.
+Block and Append blobs are comprised of blocks, and each blob can support up to 50,000 blocks. The default value is `+"`BLOCK`"+`.`
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 

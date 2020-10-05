@@ -760,8 +760,10 @@ output:
           container: ${OUTPUT_BLOB_STORAGE_CONTAINER}
           max_in_flight: ${OUTPUT_BLOB_STORAGE_MAX_IN_FLIGHT:1}
           path: ${OUTPUT_BLOB_STORAGE_PATH:${!count("files")}-${!timestamp_unix_nano()}.txt}
+          public_access_level: ${OUTPUT_BLOB_STORAGE_PUBLIC_ACCESS_LEVEL:PRIVATE}
           storage_access_key: ${OUTPUT_BLOB_STORAGE_STORAGE_ACCESS_KEY}
           storage_account: ${OUTPUT_BLOB_STORAGE_STORAGE_ACCOUNT}
+          storage_connection_string: ${OUTPUT_BLOB_STORAGE_STORAGE_CONNECTION_STRING}
           timeout: ${OUTPUT_BLOB_STORAGE_TIMEOUT:5s}
         cache:
           key: ${OUTPUT_CACHE_KEY:${!count("items")}-${!timestamp_unix_nano()}}
