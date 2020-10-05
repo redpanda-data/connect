@@ -63,9 +63,7 @@ output:
 </TabItem>
 </Tabs>
 
-The output can be authenticated through a connection string or a storage account name with 
-the respective access key. 
-Only one authentication method is required, `storage_connection_string` or `storage_account + storage_access_key`. If both are set, it's used `storage_connection_string`.
+Only one authentication method is required, `storage_connection_string` or `storage_account` and `storage_access_key`. If both are set then the `storage_connection_string` is given priority.
 
 In order to have a different path for each object you should use function
 interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
@@ -81,7 +79,7 @@ field `max_in_flight`.
 
 ### `storage_account`
 
-The storage account to upload messages to. It's not taken in consideration if `storage_connection_string` is set
+The storage account to upload messages to. This field is ignored if `storage_connection_string` is set.
 
 
 Type: `string`  
@@ -89,7 +87,7 @@ Default: `""`
 
 ### `storage_access_key`
 
-The storage account access key. It's not taken in consideration if `storage_connection_string` is set
+The storage account access key. This field is ignored if `storage_connection_string` is set.
 
 
 Type: `string`  
@@ -97,7 +95,7 @@ Default: `""`
 
 ### `storage_connection_string`
 
-The storage account connection string. Only required if `storage_account + storage_access_key` are not set
+A storage account connection string. This field is required if `storage_account` and `storage_access_key` are not set.
 
 
 Type: `string`  

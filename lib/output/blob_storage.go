@@ -19,18 +19,25 @@ Sends message parts as objects to an Azure Blob Storage Account container. Each
 object is uploaded with the filename specified with the ` + "`container`" + `
 field.`,
 		Description: `
-The output can be authenticated through a connection string or a storage account name with 
-the respective access key. 
-Only one authentication method is required, ` + "`storage_connection_string`" + ` or ` + "`storage_account + storage_access_key`" + `. If both are set, it's used ` + "`storage_connection_string`" + `.
+Only one authentication method is required, ` + "`storage_connection_string`" + ` or ` + "`storage_account` and `storage_access_key`" + `. If both are set then the ` + "`storage_connection_string`" + ` is given priority.
 
 In order to have a different path for each object you should use function
 interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
 calculated per message of a batch.`,
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("storage_account", `The storage account to upload messages to. It's not taken in consideration if `+"`storage_connection_string`"+` is set`),
-			docs.FieldCommon("storage_access_key", `The storage account access key. It's not taken in consideration if `+"`storage_connection_string`"+` is set`),
-			docs.FieldCommon("storage_connection_string", `The storage account connection string. Only required if `+"`storage_account + storage_access_key`"+` are not set`),
+			docs.FieldCommon(
+				"storage_account",
+				"The storage account to upload messages to. This field is ignored if `storage_connection_string` is set.",
+			),
+			docs.FieldCommon(
+				"storage_access_key",
+				"The storage account access key. This field is ignored if `storage_connection_string` is set.",
+			),
+			docs.FieldCommon(
+				"storage_connection_string",
+				"A storage account connection string. This field is required if `storage_account` and `storage_access_key` are not set.",
+			),
 			docs.FieldAdvanced("public_access_level", `The container's public access level. The default value is `+"`PRIVATE`"+`.`).HasOptions(
 				"PRIVATE", "BLOB", "CONTAINER",
 			),
