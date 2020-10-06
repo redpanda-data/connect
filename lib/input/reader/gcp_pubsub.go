@@ -107,6 +107,9 @@ func (c *GCPPubSub) ConnectWithContext(ignored context.Context) error {
 			select {
 			case msgsChan <- m:
 			case <-ctx.Done():
+				if m != nil {
+					m.Nack()
+				}
 			}
 		})
 		if rerr != context.Canceled {

@@ -421,6 +421,45 @@ func TestSnakeCase(t *testing.T) {
 	}
 }
 
+func TestTerm(t *testing.T) {
+	parser := Term("a🥰c")
+
+	tests := map[string]struct {
+		input     string
+		result    interface{}
+		remaining string
+		err       *Error
+	}{
+		"empty input": {
+			err: NewError([]rune(""), "a🥰c"),
+		},
+		"smaller than string": {
+			input:     "a🥰",
+			remaining: "a🥰",
+			err:       NewError([]rune("a🥰"), "a🥰c"),
+		},
+		"matches first": {
+			input:     "a🥰cNo",
+			result:    "a🥰c",
+			remaining: "No",
+		},
+		"matches all": {
+			input:     "a🥰c",
+			remaining: "",
+			result:    "a🥰c",
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			res := parser([]rune(test.input))
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+		})
+	}
+}
+
 func TestSequence(t *testing.T) {
 	parser := Sequence(Term("abc"), Term("def"))
 

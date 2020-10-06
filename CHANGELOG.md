@@ -5,12 +5,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.30.0 - 2020-10-06
+
 ### Added
 
 - OAuth 2.0 using the client credentials token flow is now supported by the `http_client` input and output, and the `http` processor.
 - Method `format_timestamp` added to Bloblang.
 - Methods `re_find_object` and `re_find_all_object` added to Bloblang.
 - Field `connection_string` added to the Azure `blob_storage` and `table_storage` outputs.
+- Field `public_access_level` added to the Azure `blob_storage` output.
 - Bloblang now supports trailing commas in object and array literals and function and method parameters.
 
 ### Fixed

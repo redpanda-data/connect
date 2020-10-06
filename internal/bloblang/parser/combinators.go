@@ -118,16 +118,17 @@ func SpacesAndTabs() Func {
 
 // Term parses a single instance of a string.
 func Term(term string) Func {
+	termRunes := []rune(term)
 	return func(input []rune) Result {
-		if len(input) < len(term) {
+		if len(input) < len(termRunes) {
 			return Fail(NewError(input, term), input)
 		}
-		for i, c := range term {
+		for i, c := range termRunes {
 			if input[i] != c {
 				return Fail(NewError(input, term), input)
 			}
 		}
-		return Success(term, input[len(term):])
+		return Success(term, input[len(termRunes):])
 	}
 }
 
