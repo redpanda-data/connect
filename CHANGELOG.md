@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New input `subprocess`.
+- New output `subprocess`.
+
 ## 3.30.0 - 2020-10-06
 
 ### Added

@@ -4,7 +4,7 @@ title: Enrichment Workflows
 description: How to configure Benthos to process a workflow of enrichment services.
 ---
 
-This cookbook demonstrates how to enrich a stream of JSON documents with HTTP services. This method also works with AWS Lambda functions, subprocesses, etc.
+This cookbook demonstrates how to enrich a stream of JSON documents with HTTP services. This method also works with [AWS Lambda functions][processor.lambda], [subprocesses][processor.subprocess], etc.
 
 We will start off by configuring a single enrichment, then we will move onto a workflow of enrichments with a network of dependencies using the [`workflow` processor][processor.workflow].
 
@@ -324,6 +324,7 @@ A [`catch`][processor.catch] processor was added at the end of the pipeline whic
 [processor.unarchive]: /docs/components/processors/unarchive
 [processor.bloblang]: /docs/components/processors/bloblang
 [processor.subprocess]: /docs/components/processors/subprocess
+[processor.lambda]: /docs/components/processors/lambda
 [processor.http]: /docs/components/processors/http
 [processor.lambda]: /docs/components/processors/lambda
 [processor.branch]: /docs/components/processors/branch

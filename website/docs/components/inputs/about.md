@@ -25,12 +25,6 @@ Some inputs have a logical end, for example a [`csv` input][input.csv] ends once
 
 It's also possible to specify a logical end for an input that otherwise doesn't have one with the [`read_until` input][input.read_until], which checks a condition against each consumed message in order to determine whether it should be the last.
 
-import ComponentsByCategory from '@theme/ComponentsByCategory';
-
-## Categories
-
-<ComponentsByCategory type="inputs"></ComponentsByCategory>
-
 ## Brokering
 
 Only one input is configured at the root of a Benthos config. However, the root input can be a [broker][input.broker] which combines multiple inputs and merges the streams:
@@ -59,6 +53,12 @@ Sometimes it's useful to consume a sequence of inputs, where an input is only co
 ## Generating Messages
 
 Sometimes it's useful to generate data, in which case the most convenient option is the [`bloblang` input][input.bloblang].
+
+import ComponentsByCategory from '@theme/ComponentsByCategory';
+
+## Categories
+
+<ComponentsByCategory type="inputs"></ComponentsByCategory>
 
 import ComponentSelect from '@theme/ComponentSelect';
 

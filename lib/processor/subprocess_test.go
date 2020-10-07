@@ -1,6 +1,9 @@
 package processor
 
 import (
+	"io/ioutil"
+	"os"
+	"path"
 	"reflect"
 	"testing"
 	"time"
@@ -8,6 +11,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSubprocessWithSed(t *testing.T) {
@@ -161,4 +166,74 @@ func TestSubprocessWithErrors(t *testing.T) {
 	if err := proc.WaitForClose(time.Second); err != nil {
 		t.Error(err)
 	}
+}
+
+func testProgram(t *testing.T, program string) string {
+	t.Helper()
+
+	dir, err := ioutil.TempDir("", "benthos_subprocessor_test")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(dir)
+	})
+
+	pathStr := path.Join(dir, "main.go")
+	require.NoError(t, ioutil.WriteFile(pathStr, []byte(program), 0666))
+
+	return pathStr
+}
+
+func TestSubprocessHappy(t *testing.T) {
+	filePath := testProgram(t, `package main
+
+import (
+	"fmt"
+	"bufio"
+	"os"
+	"log"
+	"strings"
+)
+
+func main() {
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		fmt.Println(strings.ToUpper(scanner.Text()))
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Println(err)
+	}
+}
+`)
+
+	conf := NewConfig()
+	conf.Type = TypeSubprocess
+	conf.Subprocess.Name = "go"
+	conf.Subprocess.Args = []string{"run", filePath}
+
+	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	exp := [][]byte{
+		[]byte(`FOO`),
+		[]byte(`BAR`),
+		[]byte(`BAZ`),
+	}
+
+	msgIn := message.New([][]byte{
+		[]byte(`foo`),
+		[]byte(`bar`),
+		[]byte(`baz`),
+	})
+
+	msgs, res := proc.ProcessMessage(msgIn)
+	require.Len(t, msgs, 1)
+	require.Nil(t, res)
+
+	assert.Empty(t, msgs[0].Get(0).Metadata().Get(FailFlagKey))
+	assert.Equal(t, exp, message.GetAllBytes(msgs[0]))
+
+	proc.CloseAsync()
+	assert.NoError(t, proc.WaitForClose(time.Second))
 }

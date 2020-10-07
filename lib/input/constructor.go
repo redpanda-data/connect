@@ -113,6 +113,7 @@ const (
 	TypeSocketServer    = "socket_server"
 	TypeSQS             = "sqs"
 	TypeSTDIN           = "stdin"
+	TypeSubprocess      = "subprocess"
 	TypeTCP             = "tcp"
 	TypeTCPServer       = "tcp_server"
 	TypeUDPServer       = "udp_server"
@@ -160,6 +161,7 @@ type Config struct {
 	SocketServer    SocketServerConfig           `json:"socket_server" yaml:"socket_server"`
 	SQS             reader.AmazonSQSConfig       `json:"sqs" yaml:"sqs"`
 	STDIN           STDINConfig                  `json:"stdin" yaml:"stdin"`
+	Subprocess      SubprocessConfig             `json:"subprocess" yaml:"subprocess"`
 	TCP             TCPConfig                    `json:"tcp" yaml:"tcp"`
 	TCPServer       TCPServerConfig              `json:"tcp_server" yaml:"tcp_server"`
 	UDPServer       UDPServerConfig              `json:"udp_server" yaml:"udp_server"`
@@ -207,6 +209,7 @@ func NewConfig() Config {
 		SocketServer:    NewSocketServerConfig(),
 		SQS:             reader.NewAmazonSQSConfig(),
 		STDIN:           NewSTDINConfig(),
+		Subprocess:      NewSubprocessConfig(),
 		TCP:             NewTCPConfig(),
 		TCPServer:       NewTCPServerConfig(),
 		UDPServer:       NewUDPServerConfig(),

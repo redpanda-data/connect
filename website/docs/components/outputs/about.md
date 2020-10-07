@@ -18,12 +18,6 @@ output:
    - bloblang: '{"message":this,"meta":{"link_count":this.links.length()}}'
 ```
 
-import ComponentsByCategory from '@theme/ComponentsByCategory';
-
-## Categories
-
-<ComponentsByCategory type="outputs"></ComponentsByCategory>
-
 ## Back Pressure
 
 Benthos outputs apply back pressure to components upstream. This means if your output target starts blocking traffic Benthos will gracefully stop consuming until the issue is resolved.
@@ -98,6 +92,12 @@ output:
                 root = this
                 root.type = this.type.not_null() | "unknown"
 ```
+
+import ComponentsByCategory from '@theme/ComponentsByCategory';
+
+## Categories
+
+<ComponentsByCategory type="outputs"></ComponentsByCategory>
 
 import ComponentSelect from '@theme/ComponentSelect';
 

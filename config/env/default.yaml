@@ -394,6 +394,10 @@ input:
           delimiter: ${INPUT_STDIN_DELIMITER}
           max_buffer: ${INPUT_STDIN_MAX_BUFFER:1000000}
           multipart: ${INPUT_STDIN_MULTIPART:false}
+        subprocess:
+          codec: ${INPUT_SUBPROCESS_CODEC:lines}
+          max_buffer: ${INPUT_SUBPROCESS_MAX_BUFFER:65536}
+          name: ${INPUT_SUBPROCESS_NAME}
         tcp:
           address: ${INPUT_TCP_ADDRESS:localhost:4194}
           delimiter: ${INPUT_TCP_DELIMITER}
@@ -1085,6 +1089,9 @@ output:
           url: ${OUTPUT_SQS_URL}
         stdout:
           delimiter: ${OUTPUT_STDOUT_DELIMITER}
+        subprocess:
+          codec: ${OUTPUT_SUBPROCESS_CODEC:lines}
+          name: ${OUTPUT_SUBPROCESS_NAME}
         table_storage:
           batching:
             byte_size: ${OUTPUT_TABLE_STORAGE_BATCHING_BYTE_SIZE:0}

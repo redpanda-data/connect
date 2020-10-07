@@ -30,32 +30,21 @@ func init() {
 			CategoryIntegration,
 		},
 		Summary: `
-Subprocess is a processor that runs a process in the background and, for each
-message, will pipe its contents to the stdin stream of the process followed by a
-newline.`,
+Executes a command as a subprocess and, for each message, will pipe its contents to the stdin stream of the process followed by a newline.`,
 		Description: `
-The subprocess must then either return a line over stdout or stderr. If a
-response is returned over stdout then its contents will replace the message. If
-a response is instead returned from stderr it will be logged and the message
-will continue unchanged and will be [marked as failed](/docs/configuration/error_handling).
+The subprocess must then either return a line over stdout or stderr. If a response is returned over stdout then its contents will replace the message. If a response is instead returned from stderr it will be logged and the message will continue unchanged and will be [marked as failed](/docs/configuration/error_handling).
 
-The field ` + "`max_buffer`" + ` defines the maximum response size able to be
-read from the subprocess. This value should be set significantly above the real
-expected maximum response size.
+The execution environment of the subprocess is the same as the Benthos instance, including environment variables and the current working directory.
+
+The field ` + "`max_buffer`" + ` defines the maximum response size able to be read from the subprocess. This value should be set significantly above the real expected maximum response size.
 
 ## Subprocess requirements
 
-It is required that subprocesses flush their stdout and stderr pipes for each
-line.
-
-Benthos will attempt to keep the process alive for as long as the pipeline is
-running. If the process exits early it will be restarted.
+It is required that subprocesses flush their stdout and stderr pipes for each line. Benthos will attempt to keep the process alive for as long as the pipeline is running. If the process exits early it will be restarted.
 
 ## Messages containing line breaks
 
-If a message contains line breaks each line of the message is piped to the
-subprocess and flushed, and a response is expected from the subprocess before
-another line is fed in.`,
+If a message contains line breaks each line of the message is piped to the subprocess and flushed, and a response is expected from the subprocess before another line is fed in.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("name", "The command to execute as a subprocess.", "cat", "sed", "awk"),
 			docs.FieldCommon("args", "A list of arguments to provide the command."),
@@ -109,17 +98,23 @@ type Subprocess struct {
 func NewSubprocess(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
+	return newSubprocess(conf.Subprocess, mgr, log, stats)
+}
+
+func newSubprocess(
+	conf SubprocessConfig, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
 	e := &Subprocess{
 		log:        log,
 		stats:      stats,
-		conf:       conf.Subprocess,
+		conf:       conf,
 		mCount:     stats.GetCounter("count"),
 		mErr:       stats.GetCounter("error"),
 		mSent:      stats.GetCounter("sent"),
 		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 	var err error
-	if e.subproc, err = newSubprocWrapper(conf.Subprocess.Name, conf.Subprocess.Args, e.conf.MaxBuffer, log); err != nil {
+	if e.subproc, err = newSubprocWrapper(conf.Name, conf.Args, e.conf.MaxBuffer, log); err != nil {
 		return nil, err
 	}
 	return e, nil

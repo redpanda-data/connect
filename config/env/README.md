@@ -361,6 +361,9 @@ INPUT_SQS_URL
 INPUT_STDIN_DELIMITER
 INPUT_STDIN_MAX_BUFFER                               = 1000000
 INPUT_STDIN_MULTIPART                                = false
+INPUT_SUBPROCESS_CODEC                               = lines
+INPUT_SUBPROCESS_MAX_BUFFER                          = 65536
+INPUT_SUBPROCESS_NAME
 INPUT_TCP_ADDRESS                                    = localhost:4194
 INPUT_TCP_DELIMITER
 INPUT_TCP_MAX_BUFFER                                 = 1000000
@@ -909,6 +912,8 @@ OUTPUT_SQS_MESSAGE_GROUP_ID
 OUTPUT_SQS_REGION                                     = eu-west-1
 OUTPUT_SQS_URL
 OUTPUT_STDOUT_DELIMITER
+OUTPUT_SUBPROCESS_CODEC                               = lines
+OUTPUT_SUBPROCESS_NAME
 OUTPUT_TABLE_STORAGE_BATCHING_BYTE_SIZE               = 0
 OUTPUT_TABLE_STORAGE_BATCHING_CHECK
 OUTPUT_TABLE_STORAGE_BATCHING_COUNT                   = 0
