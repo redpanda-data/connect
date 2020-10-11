@@ -12,6 +12,7 @@ input:
     codec: lines
     max_buffer: 65536
     name: ""
+    restart_on_exit: false
 buffer:
   type: none
   none: {}

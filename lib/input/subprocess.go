@@ -33,7 +33,7 @@ func init() {
 		Summary: `
 Executes a command, runs it as a subprocess, and consumes messages from it over stdout.`,
 		Description: `
-Messages are consumed according to a specified codec. The command is executed once and if it terminates the input also closes down. In order to instead restart the process this input can be placed within a ` + "[`read_until` input](/docs/components/inputs/read_until/)" + `.
+Messages are consumed according to a specified codec. The command is executed once and if it terminates the input also closes down gracefully. Alternatively, the field ` + "`restart_on_close` can be set to `true`" + ` in order to have Benthos re-execute the command each time it stops.
 
 The field ` + "`max_buffer`" + ` defines the maximum message size able to be read from the subprocess. This value should be set significantly above the real expected maximum message size.
 
@@ -44,6 +44,7 @@ The execution environment of the subprocess is the same as the Benthos instance,
 			docs.FieldCommon(
 				"codec", "The way in which messages should be consumed from the subprocess.",
 			).HasOptions("lines"),
+			docs.FieldCommon("restart_on_exit", "Whether the command should be re-executed each time the subprocess ends."),
 			docs.FieldAdvanced("max_buffer", "The maximum expected size of an individual message."),
 		},
 		Categories: []Category{
@@ -86,19 +87,21 @@ func codecFromStr(codec string) (subprocCodec, error) {
 
 // SubprocessConfig contains configuration for the Subprocess input type.
 type SubprocessConfig struct {
-	Name      string   `json:"name" yaml:"name"`
-	Args      []string `json:"args" yaml:"args"`
-	Codec     string   `json:"codec" yaml:"codec"`
-	MaxBuffer int      `json:"max_buffer" yaml:"max_buffer"`
+	Name          string   `json:"name" yaml:"name"`
+	Args          []string `json:"args" yaml:"args"`
+	Codec         string   `json:"codec" yaml:"codec"`
+	RestartOnExit bool     `json:"restart_on_exit" yaml:"restart_on_exit"`
+	MaxBuffer     int      `json:"max_buffer" yaml:"max_buffer"`
 }
 
 // NewSubprocessConfig creates a new SubprocessConfig with default values.
 func NewSubprocessConfig() SubprocessConfig {
 	return SubprocessConfig{
-		Name:      "",
-		Args:      []string{},
-		Codec:     "lines",
-		MaxBuffer: bufio.MaxScanTokenSize,
+		Name:          "",
+		Args:          []string{},
+		Codec:         "lines",
+		RestartOnExit: false,
+		MaxBuffer:     bufio.MaxScanTokenSize,
 	}
 }
 
@@ -214,7 +217,11 @@ func (s *Subprocess) ReadWithContext(ctx context.Context) (types.Message, reader
 	select {
 	case b, open := <-msgChan:
 		if !open {
-			// TODO: Allow restart here
+			if s.conf.RestartOnExit {
+				s.msgChan = nil
+				s.errChan = nil
+				return nil, nil, types.ErrNotConnected
+			}
 			return nil, nil, types.ErrTypeClosed
 		}
 		msg := message.New(nil)
@@ -222,7 +229,11 @@ func (s *Subprocess) ReadWithContext(ctx context.Context) (types.Message, reader
 		return msg, func(context.Context, types.Response) error { return nil }, nil
 	case err, open := <-errChan:
 		if !open {
-			// TODO: Allow restart here
+			if s.conf.RestartOnExit {
+				s.msgChan = nil
+				s.errChan = nil
+				return nil, nil, types.ErrNotConnected
+			}
 			return nil, nil, types.ErrTypeClosed
 		}
 		return nil, nil, err

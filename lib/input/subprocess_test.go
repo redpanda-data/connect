@@ -88,6 +88,57 @@ func main() {
 	}
 }
 
+func TestSubprocessRestarted(t *testing.T) {
+	filePath := testProgram(t, `package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	fmt.Println("foo")
+	fmt.Println("bar")
+	fmt.Println("baz")
+}
+`)
+
+	conf := NewConfig()
+	conf.Type = TypeSubprocess
+	conf.Subprocess.Name = "go"
+	conf.Subprocess.RestartOnExit = true
+	conf.Subprocess.Args = []string{"run", filePath}
+
+	i, err := New(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	msg := readMsg(t, i.TransactionChan())
+	assert.Equal(t, 1, msg.Len())
+	assert.Equal(t, "foo", string(msg.Get(0).Get()))
+
+	msg = readMsg(t, i.TransactionChan())
+	assert.Equal(t, 1, msg.Len())
+	assert.Equal(t, "bar", string(msg.Get(0).Get()))
+
+	msg = readMsg(t, i.TransactionChan())
+	assert.Equal(t, 1, msg.Len())
+	assert.Equal(t, "baz", string(msg.Get(0).Get()))
+
+	msg = readMsg(t, i.TransactionChan())
+	assert.Equal(t, 1, msg.Len())
+	assert.Equal(t, "foo", string(msg.Get(0).Get()))
+
+	msg = readMsg(t, i.TransactionChan())
+	assert.Equal(t, 1, msg.Len())
+	assert.Equal(t, "bar", string(msg.Get(0).Get()))
+
+	msg = readMsg(t, i.TransactionChan())
+	assert.Equal(t, 1, msg.Len())
+	assert.Equal(t, "baz", string(msg.Get(0).Get()))
+
+	i.CloseAsync()
+	require.NoError(t, i.WaitForClose(time.Second))
+}
+
 func TestSubprocessCloseInBetween(t *testing.T) {
 	filePath := testProgram(t, `package main
 

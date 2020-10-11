@@ -365,6 +365,7 @@ INPUT_STDIN_MULTIPART                                = false
 INPUT_SUBPROCESS_CODEC                               = lines
 INPUT_SUBPROCESS_MAX_BUFFER                          = 65536
 INPUT_SUBPROCESS_NAME
+INPUT_SUBPROCESS_RESTART_ON_EXIT                     = false
 INPUT_TCP_ADDRESS                                    = localhost:4194
 INPUT_TCP_DELIMITER
 INPUT_TCP_MAX_BUFFER                                 = 1000000

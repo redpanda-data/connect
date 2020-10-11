@@ -35,6 +35,7 @@ input:
     name: ""
     args: []
     codec: lines
+    restart_on_exit: false
 ```
 
 </TabItem>
@@ -47,13 +48,14 @@ input:
     name: ""
     args: []
     codec: lines
+    restart_on_exit: false
     max_buffer: 65536
 ```
 
 </TabItem>
 </Tabs>
 
-Messages are consumed according to a specified codec. The command is executed once and if it terminates the input also closes down. In order to instead restart the process this input can be placed within a [`read_until` input](/docs/components/inputs/read_until/).
+Messages are consumed according to a specified codec. The command is executed once and if it terminates the input also closes down gracefully. Alternatively, the field `restart_on_close` can be set to `true` in order to have Benthos re-execute the command each time it stops.
 
 The field `max_buffer` defines the maximum message size able to be read from the subprocess. This value should be set significantly above the real expected maximum message size.
 
@@ -95,6 +97,14 @@ The way in which messages should be consumed from the subprocess.
 Type: `string`  
 Default: `"lines"`  
 Options: `lines`.
+
+### `restart_on_exit`
+
+Whether the command should be re-executed each time the subprocess ends.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `max_buffer`
 
