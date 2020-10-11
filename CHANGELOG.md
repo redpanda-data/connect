@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - New input `subprocess`.
 - New output `subprocess`.
+- Field `auto_ack` added to the `amqp_0_9` input.
 
 ## 3.30.0 - 2020-10-06
 

@@ -50,6 +50,7 @@ input:
       enabled: false
     bindings_declare: []
     consumer_tag: benthos-consumer
+    auto_ack: false
     prefetch_count: 10
     prefetch_size: 0
     tls:
@@ -159,6 +160,14 @@ A consumer tag.
 
 Type: `string`  
 Default: `"benthos-consumer"`  
+
+### `auto_ack`
+
+Acknowledge messages automatically as they are consumed rather than waiting for acknowledgments from downstream. This can improve throughput and prevent the pipeline from blocking but at the cost of eliminating delivery guarantees.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `prefetch_count`
 

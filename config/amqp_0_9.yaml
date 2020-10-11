@@ -8,6 +8,7 @@ http:
 input:
   type: amqp_0_9
   amqp_0_9:
+    auto_ack: false
     bindings_declare: []
     consumer_tag: benthos-consumer
     prefetch_count: 10

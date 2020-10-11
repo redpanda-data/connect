@@ -49,6 +49,7 @@ output:
 input:
   amqp_0_9:
     url: amqp://guest:guest@localhost:$PORT/
+    auto_ack: $VAR1
     queue: queue-$ID
     queue_declare:
       durable: true
@@ -71,6 +72,7 @@ input:
 		testOptSleepAfterInput(100*time.Millisecond),
 		testOptSleepAfterOutput(100*time.Millisecond),
 		testOptPort(resource.GetPort("5672/tcp")),
+		testOptVarOne("false"),
 	)
 	t.Run("with max in flight", func(t *testing.T) {
 		t.Parallel()
@@ -79,7 +81,24 @@ input:
 			testOptSleepAfterInput(100*time.Millisecond),
 			testOptSleepAfterOutput(100*time.Millisecond),
 			testOptPort(resource.GetPort("5672/tcp")),
+			testOptVarOne("false"),
 			testOptMaxInFlight(10),
+		)
+	})
+	t.Run("with auto ack", func(t *testing.T) {
+		t.Parallel()
+		integrationTests(
+			integrationTestOpenClose(),
+			integrationTestMetadata(),
+			integrationTestSendBatch(10),
+			integrationTestStreamSequential(100),
+			integrationTestStreamParallel(100),
+		).Run(
+			t, template,
+			testOptVarOne("true"),
+			testOptSleepAfterInput(100*time.Millisecond),
+			testOptSleepAfterOutput(100*time.Millisecond),
+			testOptPort(resource.GetPort("5672/tcp")),
 		)
 	})
 })

@@ -25,6 +25,7 @@ input:
             skip_cert_verify: ${INPUT_AMQP_TLS_SKIP_CERT_VERIFY:false}
           url: ${INPUT_AMQP_URL:amqp://guest:guest@localhost:5672/}
         amqp_0_9:
+          auto_ack: ${INPUT_AMQP_0_9_AUTO_ACK:false}
           batching:
             byte_size: ${INPUT_AMQP_0_9_BATCHING_BYTE_SIZE:0}
             check: ${INPUT_AMQP_0_9_BATCHING_CHECK}

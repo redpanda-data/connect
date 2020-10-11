@@ -54,6 +54,7 @@ HTTP_ROOT_PATH       = /benthos
 ```
 INPUTS                                               = 1
 INPUT_TYPE                                           = dynamic
+INPUT_AMQP_0_9_AUTO_ACK                              = false
 INPUT_AMQP_0_9_BATCHING_BYTE_SIZE                    = 0
 INPUT_AMQP_0_9_BATCHING_CHECK
 INPUT_AMQP_0_9_BATCHING_COUNT                        = 0

@@ -40,6 +40,7 @@ type AMQP09Config struct {
 	QueueDeclare    AMQP09QueueDeclareConfig `json:"queue_declare" yaml:"queue_declare"`
 	BindingsDeclare []AMQP09BindingConfig    `json:"bindings_declare" yaml:"bindings_declare"`
 	ConsumerTag     string                   `json:"consumer_tag" yaml:"consumer_tag"`
+	AutoAck         bool                     `json:"auto_ack" yaml:"auto_ack"`
 	PrefetchCount   int                      `json:"prefetch_count" yaml:"prefetch_count"`
 	PrefetchSize    int                      `json:"prefetch_size" yaml:"prefetch_size"`
 	TLS             btls.Config              `json:"tls" yaml:"tls"`
@@ -58,6 +59,7 @@ func NewAMQP09Config() AMQP09Config {
 			Durable: true,
 		},
 		ConsumerTag:     "benthos-consumer",
+		AutoAck:         false,
 		PrefetchCount:   10,
 		PrefetchSize:    0,
 		TLS:             btls.NewConfig(),
@@ -74,7 +76,6 @@ type AMQP09 struct {
 	amqpChan     *amqp.Channel
 	consumerChan <-chan amqp.Delivery
 
-	ackTag  uint64
 	tlsConf *tls.Config
 
 	conf  AMQP09Config
@@ -166,7 +167,7 @@ func (a *AMQP09) ConnectWithContext(ctx context.Context) (err error) {
 	if consumerChan, err = amqpChan.Consume(
 		a.conf.Queue,       // name
 		a.conf.ConsumerTag, // consumerTag,
-		false,              // noAck
+		a.conf.AutoAck,     // autoAck
 		false,              // exclusive
 		false,              // noLocal
 		false,              // noWait
@@ -222,9 +223,6 @@ func (a *AMQP09) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn
 
 	msg := message.New(nil)
 	addPart := func(data amqp.Delivery) {
-		// Only store the latest delivery tag, but always Ack multiple.
-		a.ackTag = data.DeliveryTag
-
 		part := message.NewPart(data.Body)
 
 		for k, v := range data.Headers {
@@ -268,6 +266,9 @@ func (a *AMQP09) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn
 		}
 		addPart(data)
 		return msg, func(actx context.Context, res types.Response) error {
+			if a.conf.AutoAck {
+				return nil
+			}
 			if res.Error() != nil {
 				return data.Nack(false, true)
 			}
