@@ -184,7 +184,7 @@ func (s *Subprocess) ConnectWithContext(ctx context.Context) error {
 
 			for errScanner.Scan() {
 				select {
-				case errChan <- errors.New(outScanner.Text()):
+				case errChan <- errors.New(errScanner.Text()):
 				case <-s.ctx.Done():
 				}
 			}
