@@ -38,9 +38,10 @@ func readMsg(t *testing.T, tranChan <-chan types.Transaction) types.Message {
 		select {
 		case tran.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second):
+			t.Fatal("timed out")
 		}
 		return tran.Payload
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 	}
 	t.Fatal("timed out")
 	return nil
