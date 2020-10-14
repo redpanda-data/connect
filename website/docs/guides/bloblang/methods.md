@@ -677,7 +677,7 @@ root = this.explode("value")
 
 ### `filter`
 
-Executes a mapping query argument for each element of an array or key/value pair of an object, and unless the mapping returns `false` the item is removed from the resulting array or object.
+Executes a mapping query argument for each element of an array or key/value pair of an object, and unless the mapping returns `true` the item is removed from the resulting array or object.
 
 ```coffee
 root.new_nums = this.nums.filter(this > 10)
