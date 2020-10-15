@@ -128,7 +128,7 @@ func NewStatsdLegacy(config Config, opts ...func(Type)) (Type, error) {
 
 // GetCounter returns a stat counter object for a path.
 func (h *StatsdLegacy) GetCounter(path string) StatCounter {
-	if path = h.pathMapping.mapPath(path); len(path) == 0 {
+	if path = h.pathMapping.mapPathNoTags(path); len(path) == 0 {
 		return DudStat{}
 	}
 	return &StatsdLegacyStat{
@@ -140,7 +140,7 @@ func (h *StatsdLegacy) GetCounter(path string) StatCounter {
 // GetCounterVec returns a stat counter object for a path with the labels
 // discarded.
 func (h *StatsdLegacy) GetCounterVec(path string, n []string) StatCounterVec {
-	path = h.pathMapping.mapPath(path)
+	path = h.pathMapping.mapPathNoTags(path)
 	return fakeCounterVec(func([]string) StatCounter {
 		if len(path) == 0 {
 			return DudStat{}
@@ -154,7 +154,7 @@ func (h *StatsdLegacy) GetCounterVec(path string, n []string) StatCounterVec {
 
 // GetTimer returns a stat timer object for a path.
 func (h *StatsdLegacy) GetTimer(path string) StatTimer {
-	if path = h.pathMapping.mapPath(path); len(path) == 0 {
+	if path = h.pathMapping.mapPathNoTags(path); len(path) == 0 {
 		return DudStat{}
 	}
 	return &StatsdLegacyStat{
@@ -166,7 +166,7 @@ func (h *StatsdLegacy) GetTimer(path string) StatTimer {
 // GetTimerVec returns a stat timer object for a path with the labels
 // discarded.
 func (h *StatsdLegacy) GetTimerVec(path string, n []string) StatTimerVec {
-	path = h.pathMapping.mapPath(path)
+	path = h.pathMapping.mapPathNoTags(path)
 	return fakeTimerVec(func([]string) StatTimer {
 		if len(path) == 0 {
 			return DudStat{}
@@ -180,7 +180,7 @@ func (h *StatsdLegacy) GetTimerVec(path string, n []string) StatTimerVec {
 
 // GetGauge returns a stat gauge object for a path.
 func (h *StatsdLegacy) GetGauge(path string) StatGauge {
-	if path = h.pathMapping.mapPath(path); len(path) == 0 {
+	if path = h.pathMapping.mapPathNoTags(path); len(path) == 0 {
 		return DudStat{}
 	}
 	return &StatsdLegacyStat{
@@ -192,7 +192,7 @@ func (h *StatsdLegacy) GetGauge(path string) StatGauge {
 // GetGaugeVec returns a stat timer object for a path with the labels
 // discarded.
 func (h *StatsdLegacy) GetGaugeVec(path string, n []string) StatGaugeVec {
-	path = h.pathMapping.mapPath(path)
+	path = h.pathMapping.mapPathNoTags(path)
 	return fakeGaugeVec(func([]string) StatGauge {
 		if len(path) == 0 {
 			return DudStat{}

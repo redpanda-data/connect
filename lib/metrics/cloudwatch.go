@@ -42,7 +42,7 @@ metrics:
 		FieldSpecs: append(docs.FieldSpecs{
 			docs.FieldCommon("namespace", "The namespace used to distinguish metrics from other services."),
 			docs.FieldAdvanced("flush_period", "The period of time between PutMetricData requests."),
-			pathMappingDocs(),
+			pathMappingDocs(true),
 		}, session.FieldSpecs()...),
 	}
 }
@@ -291,30 +291,55 @@ func NewCloudWatch(config Config, opts ...func(Type)) (Type, error) {
 
 //------------------------------------------------------------------------------
 
-func (c *CloudWatch) toCMName(dotSepName string) string {
-	return c.pathMapping.mapPath(dotSepName)
+func (c *CloudWatch) toCMName(dotSepName string) (string, []string, []string) {
+	return c.pathMapping.mapPathWithTags(dotSepName)
 }
 
 // GetCounter returns a stat counter object for a path.
 func (c *CloudWatch) GetCounter(path string) StatCounter {
-	name := c.toCMName(path)
+	name, labels, values := c.toCMName(path)
 	if len(name) == 0 {
 		return DudStat{}
 	}
-	return &cloudWatchStat{
-		root: c,
-		id:   name,
-		name: name,
-		unit: cloudwatch.StandardUnitCount,
+	if len(labels) == 0 {
+		return &cloudWatchStat{
+			root: c,
+			id:   name,
+			name: name,
+			unit: cloudwatch.StandardUnitCount,
+		}
 	}
+	return (&cloudWatchCounterVec{
+		cloudWatchStatVec: cloudWatchStatVec{
+			root:       c,
+			name:       name,
+			unit:       cloudwatch.StandardUnitCount,
+			labelNames: labels,
+		},
+	}).With(values...)
 }
 
 // GetCounterVec returns a stat counter object for a path with the labels
 func (c *CloudWatch) GetCounterVec(path string, n []string) StatCounterVec {
-	name := c.toCMName(path)
+	name, labels, values := c.toCMName(path)
 	if len(name) == 0 {
 		return fakeCounterVec(func([]string) StatCounter {
 			return DudStat{}
+		})
+	}
+	if len(labels) > 0 {
+		labels = append(labels, n...)
+		return fakeCounterVec(func(vs []string) StatCounter {
+			fvs := append([]string{}, values...)
+			fvs = append(fvs, vs...)
+			return (&cloudWatchCounterVec{
+				cloudWatchStatVec: cloudWatchStatVec{
+					root:       c,
+					name:       name,
+					unit:       cloudwatch.StandardUnitCount,
+					labelNames: labels,
+				},
+			}).With(fvs...)
 		})
 	}
 	return &cloudWatchCounterVec{
@@ -329,24 +354,49 @@ func (c *CloudWatch) GetCounterVec(path string, n []string) StatCounterVec {
 
 // GetTimer returns a stat timer object for a path.
 func (c *CloudWatch) GetTimer(path string) StatTimer {
-	name := c.toCMName(path)
+	name, labels, values := c.toCMName(path)
 	if len(name) == 0 {
 		return DudStat{}
 	}
-	return &cloudWatchStat{
-		root: c,
-		id:   name,
-		name: name,
-		unit: cloudwatch.StandardUnitMicroseconds,
+	if len(labels) == 0 {
+		return &cloudWatchStat{
+			root: c,
+			id:   name,
+			name: name,
+			unit: cloudwatch.StandardUnitMicroseconds,
+		}
 	}
+	return (&cloudWatchTimerVec{
+		cloudWatchStatVec: cloudWatchStatVec{
+			root:       c,
+			name:       name,
+			unit:       cloudwatch.StandardUnitMicroseconds,
+			labelNames: labels,
+		},
+	}).With(values...)
 }
 
 // GetTimerVec returns a stat timer object for a path with the labels
 func (c *CloudWatch) GetTimerVec(path string, n []string) StatTimerVec {
-	name := c.toCMName(path)
+	name, labels, values := c.toCMName(path)
 	if len(name) == 0 {
 		return fakeTimerVec(func([]string) StatTimer {
 			return DudStat{}
+		})
+	}
+	if len(labels) > 0 {
+		labels = append(labels, n...)
+		return fakeTimerVec(func(vs []string) StatTimer {
+			fvs := append([]string{}, values...)
+			fvs = append(fvs, vs...)
+			return (&cloudWatchTimerVec{
+				cloudWatchStatVec: cloudWatchStatVec{
+					root:       c,
+					name:       name,
+					unit:       cloudwatch.StandardUnitMicroseconds,
+					labelNames: labels,
+				},
+			}).With(fvs...)
 		})
 	}
 	return &cloudWatchTimerVec{
@@ -361,24 +411,49 @@ func (c *CloudWatch) GetTimerVec(path string, n []string) StatTimerVec {
 
 // GetGauge returns a stat gauge object for a path.
 func (c *CloudWatch) GetGauge(path string) StatGauge {
-	name := c.toCMName(path)
+	name, labels, values := c.toCMName(path)
 	if len(name) == 0 {
 		return DudStat{}
 	}
-	return &cloudWatchStat{
-		root: c,
-		id:   name,
-		name: name,
-		unit: cloudwatch.StandardUnitNone,
+	if len(labels) == 0 {
+		return &cloudWatchStat{
+			root: c,
+			id:   name,
+			name: name,
+			unit: cloudwatch.StandardUnitNone,
+		}
 	}
+	return (&cloudWatchGaugeVec{
+		cloudWatchStatVec: cloudWatchStatVec{
+			root:       c,
+			name:       name,
+			unit:       cloudwatch.StandardUnitNone,
+			labelNames: labels,
+		},
+	}).With(values...)
 }
 
 // GetGaugeVec returns a stat timer object for a path with the labels
 func (c *CloudWatch) GetGaugeVec(path string, n []string) StatGaugeVec {
-	name := c.toCMName(path)
+	name, labels, values := c.toCMName(path)
 	if len(name) == 0 {
 		return fakeGaugeVec(func([]string) StatGauge {
 			return DudStat{}
+		})
+	}
+	if len(labels) > 0 {
+		labels = append(labels, n...)
+		return fakeGaugeVec(func(vs []string) StatGauge {
+			fvs := append([]string{}, values...)
+			fvs = append(fvs, vs...)
+			return (&cloudWatchGaugeVec{
+				cloudWatchStatVec: cloudWatchStatVec{
+					root:       c,
+					name:       name,
+					unit:       cloudwatch.StandardUnitNone,
+					labelNames: labels,
+				},
+			}).With(fvs...)
 		})
 	}
 	return &cloudWatchGaugeVec{

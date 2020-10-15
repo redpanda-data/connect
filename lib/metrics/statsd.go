@@ -30,7 +30,7 @@ rely on sending Statsd metrics over TCP and want it to be supported long term
 please [raise an issue](https://github.com/Jeffail/benthos/issues).`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("prefix", "A string prefix to add to all metrics."),
-			pathMappingDocs(),
+			pathMappingDocs(false),
 			docs.FieldCommon("address", "The address to send metrics to."),
 			docs.FieldCommon("flush_period", "The time interval between metrics flushes."),
 			docs.FieldCommon("tag_format", "Metrics tagging is supported in a variety of formats. The format 'legacy' is a special case that forces Benthos to use a deprecated library for backwards compatibility.").HasOptions(
@@ -182,7 +182,7 @@ func NewStatsd(config Config, opts ...func(Type)) (Type, error) {
 
 // GetCounter returns a stat counter object for a path.
 func (h *Statsd) GetCounter(path string) StatCounter {
-	if path = h.pathMapping.mapPath(path); len(path) == 0 {
+	if path = h.pathMapping.mapPathNoTags(path); len(path) == 0 {
 		return DudStat{}
 	}
 	return &StatsdStat{
@@ -193,7 +193,7 @@ func (h *Statsd) GetCounter(path string) StatCounter {
 
 // GetCounterVec returns a stat counter object for a path with the labels
 func (h *Statsd) GetCounterVec(path string, n []string) StatCounterVec {
-	if path = h.pathMapping.mapPath(path); len(path) == 0 {
+	if path = h.pathMapping.mapPathNoTags(path); len(path) == 0 {
 		return fakeCounterVec(func([]string) StatCounter {
 			return DudStat{}
 		})
@@ -211,7 +211,7 @@ func (h *Statsd) GetCounterVec(path string, n []string) StatCounterVec {
 
 // GetTimer returns a stat timer object for a path.
 func (h *Statsd) GetTimer(path string) StatTimer {
-	if path = h.pathMapping.mapPath(path); len(path) == 0 {
+	if path = h.pathMapping.mapPathNoTags(path); len(path) == 0 {
 		return DudStat{}
 	}
 	return &StatsdStat{
@@ -222,7 +222,7 @@ func (h *Statsd) GetTimer(path string) StatTimer {
 
 // GetTimerVec returns a stat timer object for a path with the labels
 func (h *Statsd) GetTimerVec(path string, n []string) StatTimerVec {
-	if path = h.pathMapping.mapPath(path); len(path) == 0 {
+	if path = h.pathMapping.mapPathNoTags(path); len(path) == 0 {
 		return fakeTimerVec(func([]string) StatTimer {
 			return DudStat{}
 		})
@@ -240,7 +240,7 @@ func (h *Statsd) GetTimerVec(path string, n []string) StatTimerVec {
 
 // GetGauge returns a stat gauge object for a path.
 func (h *Statsd) GetGauge(path string) StatGauge {
-	if path = h.pathMapping.mapPath(path); len(path) == 0 {
+	if path = h.pathMapping.mapPathNoTags(path); len(path) == 0 {
 		return DudStat{}
 	}
 	return &StatsdStat{
@@ -251,7 +251,7 @@ func (h *Statsd) GetGauge(path string) StatGauge {
 
 // GetGaugeVec returns a stat timer object for a path with the labels
 func (h *Statsd) GetGaugeVec(path string, n []string) StatGaugeVec {
-	if path = h.pathMapping.mapPath(path); len(path) == 0 {
+	if path = h.pathMapping.mapPathNoTags(path); len(path) == 0 {
 		return fakeGaugeVec(func([]string) StatGauge {
 			return DudStat{}
 		})

@@ -95,7 +95,7 @@ Default: `"100ms"`
 
 ### `path_mapping`
 
-An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported.
+An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported. BETA FEATURE: Labels can also be created for the metric path by mapping meta fields.
 
 
 Type: `string`  
@@ -112,6 +112,11 @@ path_mapping: |-
     "benthos_input_latency",
     "benthos_output_sent"
   ].contains(this) { deleted() }
+
+path_mapping: |-
+  let matches = this.re_find_all_submatch("resource_processor_([a-zA-Z]+)_(.*)")
+  meta processor = $matches.0.1 | deleted()
+  root = $matches.0.2 | deleted()
 ```
 
 ### `region`

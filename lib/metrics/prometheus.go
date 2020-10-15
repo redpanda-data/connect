@@ -179,15 +179,15 @@ func (p *Prometheus) HandlerFunc() http.HandlerFunc {
 
 //------------------------------------------------------------------------------
 
-func (p *Prometheus) toPromName(dotSepName string) string {
+func (p *Prometheus) toPromName(dotSepName string) (string, []string, []string) {
 	dotSepName = strings.Replace(dotSepName, "_", "__", -1)
 	dotSepName = strings.Replace(dotSepName, "-", "__", -1)
-	return p.pathMapping.mapPath(strings.Replace(dotSepName, ".", "_", -1))
+	return p.pathMapping.mapPathWithTags(strings.Replace(dotSepName, ".", "_", -1))
 }
 
 // GetCounter returns a stat counter object for a path.
 func (p *Prometheus) GetCounter(path string) StatCounter {
-	stat := p.toPromName(path)
+	stat, labels, values := p.toPromName(path)
 	if len(stat) == 0 {
 		return DudStat{}
 	}
@@ -201,20 +201,20 @@ func (p *Prometheus) GetCounter(path string) StatCounter {
 			Namespace: p.prefix,
 			Name:      stat,
 			Help:      "Benthos Counter metric",
-		}, nil)
+		}, labels)
 		prometheus.MustRegister(ctr)
 		p.counters[stat] = ctr
 	}
 	p.Unlock()
 
 	return &PromCounter{
-		ctr: ctr.WithLabelValues(),
+		ctr: ctr.WithLabelValues(values...),
 	}
 }
 
 // GetTimer returns a stat timer object for a path.
 func (p *Prometheus) GetTimer(path string) StatTimer {
-	stat := p.toPromName(path)
+	stat, labels, values := p.toPromName(path)
 	if len(stat) == 0 {
 		return DudStat{}
 	}
@@ -229,20 +229,20 @@ func (p *Prometheus) GetTimer(path string) StatTimer {
 			Name:       stat,
 			Help:       "Benthos Timing metric",
 			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
-		}, nil)
+		}, labels)
 		prometheus.MustRegister(tmr)
 		p.timers[stat] = tmr
 	}
 	p.Unlock()
 
 	return &PromTiming{
-		sum: tmr.WithLabelValues(),
+		sum: tmr.WithLabelValues(values...),
 	}
 }
 
 // GetGauge returns a stat gauge object for a path.
 func (p *Prometheus) GetGauge(path string) StatGauge {
-	stat := p.toPromName(path)
+	stat, labels, values := p.toPromName(path)
 	if len(stat) == 0 {
 		return DudStat{}
 	}
@@ -256,14 +256,14 @@ func (p *Prometheus) GetGauge(path string) StatGauge {
 			Namespace: p.prefix,
 			Name:      stat,
 			Help:      "Benthos Gauge metric",
-		}, nil)
+		}, labels)
 		prometheus.MustRegister(ctr)
 		p.gauges[stat] = ctr
 	}
 	p.Unlock()
 
 	return &PromGauge{
-		ctr: ctr.WithLabelValues(),
+		ctr: ctr.WithLabelValues(values...),
 	}
 }
 
@@ -271,11 +271,14 @@ func (p *Prometheus) GetGauge(path string) StatGauge {
 // these labels must be consistent with any other metrics registered on the same
 // path.
 func (p *Prometheus) GetCounterVec(path string, labelNames []string) StatCounterVec {
-	stat := p.toPromName(path)
+	stat, labels, values := p.toPromName(path)
 	if len(stat) == 0 {
 		return fakeCounterVec(func([]string) StatCounter {
 			return DudStat{}
 		})
+	}
+	if len(labels) > 0 {
+		labelNames = append(labels, labelNames...)
 	}
 
 	var ctr *prometheus.CounterVec
@@ -293,6 +296,15 @@ func (p *Prometheus) GetCounterVec(path string, labelNames []string) StatCounter
 	}
 	p.Unlock()
 
+	if len(labels) > 0 {
+		return fakeCounterVec(func(vs []string) StatCounter {
+			fvs := append([]string{}, values...)
+			fvs = append(fvs, vs...)
+			return (&PromCounterVec{
+				ctr: ctr,
+			}).With(fvs...)
+		})
+	}
 	return &PromCounterVec{
 		ctr: ctr,
 	}
@@ -302,11 +314,14 @@ func (p *Prometheus) GetCounterVec(path string, labelNames []string) StatCounter
 // these labels must be consistent with any other metrics registered on the same
 // path.
 func (p *Prometheus) GetTimerVec(path string, labelNames []string) StatTimerVec {
-	stat := p.toPromName(path)
+	stat, labels, values := p.toPromName(path)
 	if len(stat) == 0 {
 		return fakeTimerVec(func([]string) StatTimer {
 			return DudStat{}
 		})
+	}
+	if len(labels) > 0 {
+		labelNames = append(labels, labelNames...)
 	}
 
 	var tmr *prometheus.SummaryVec
@@ -325,6 +340,15 @@ func (p *Prometheus) GetTimerVec(path string, labelNames []string) StatTimerVec 
 	}
 	p.Unlock()
 
+	if len(labels) > 0 {
+		return fakeTimerVec(func(vs []string) StatTimer {
+			fvs := append([]string{}, values...)
+			fvs = append(fvs, vs...)
+			return (&PromTimingVec{
+				sum: tmr,
+			}).With(fvs...)
+		})
+	}
 	return &PromTimingVec{
 		sum: tmr,
 	}
@@ -334,11 +358,14 @@ func (p *Prometheus) GetTimerVec(path string, labelNames []string) StatTimerVec 
 // these labels must be consistent with any other metrics registered on the same
 // path.
 func (p *Prometheus) GetGaugeVec(path string, labelNames []string) StatGaugeVec {
-	stat := p.toPromName(path)
+	stat, labels, values := p.toPromName(path)
 	if len(stat) == 0 {
 		return fakeGaugeVec(func([]string) StatGauge {
 			return DudStat{}
 		})
+	}
+	if len(labels) > 0 {
+		labelNames = append(labels, labelNames...)
 	}
 
 	var ctr *prometheus.GaugeVec
@@ -356,6 +383,15 @@ func (p *Prometheus) GetGaugeVec(path string, labelNames []string) StatGaugeVec 
 	}
 	p.Unlock()
 
+	if len(labels) > 0 {
+		return fakeGaugeVec(func(vs []string) StatGauge {
+			fvs := append([]string{}, values...)
+			fvs = append(fvs, vs...)
+			return (&PromGaugeVec{
+				ctr: ctr,
+			}).With(fvs...)
+		})
+	}
 	return &PromGaugeVec{
 		ctr: ctr,
 	}

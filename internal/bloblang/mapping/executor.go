@@ -309,6 +309,32 @@ func (e *Executor) Exec(ctx query.FunctionContext) (interface{}, error) {
 	return newObj, nil
 }
 
+// ExecOnto a provided assignment context.
+func (e *Executor) ExecOnto(ctx query.FunctionContext, onto AssignmentContext) error {
+	for _, stmt := range e.statements {
+		res, err := stmt.query.Exec(ctx)
+		if err != nil {
+			var line int
+			if len(e.input) > 0 && len(stmt.input) > 0 {
+				line, _ = LineAndColOf(e.input, stmt.input)
+			}
+			return fmt.Errorf("failed to execute mapping assignment at line %v: %w", line, err)
+		}
+		if _, isNothing := res.(query.Nothing); isNothing {
+			// Skip assignment entirely
+			continue
+		}
+		if err = stmt.assignment.Apply(res, onto); err != nil {
+			var line int
+			if len(e.input) > 0 && len(stmt.input) > 0 {
+				line, _ = LineAndColOf(e.input, stmt.input)
+			}
+			return fmt.Errorf("failed to assign mapping result at line %v: %w", line, err)
+		}
+	}
+	return nil
+}
+
 // ToBytes executes this function for a message of a batch and returns the
 // result marshalled into a byte slice.
 func (e *Executor) ToBytes(ctx query.FunctionContext) []byte {

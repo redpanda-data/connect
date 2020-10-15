@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/service/cloudwatch/cloudwatchiface"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type mockCloudWatchClient struct {
@@ -349,36 +350,139 @@ func TestCloudWatchTags(t *testing.T) {
 	}
 	cw.ctx, cw.cancel = context.WithCancel(context.Background())
 
-	ctrFoo := cw.GetCounterVec("counter.foo", []string{"foo"})
-	ggeFoo := cw.GetGaugeVec("gauge.foo", []string{"bar"})
+	ctr := cw.GetCounterVec("counter.bar", []string{"foo"})
+	gge := cw.GetGaugeVec("gauge.bar", []string{"bar"})
 
-	ctrFoo.With("one").Incr(1)
-	ctrFoo.With("two").Incr(2)
-	ggeFoo.With("third").Set(3)
+	ctr.With("one").Incr(1)
+	ctr.With("two").Incr(2)
+	gge.With("third").Set(3)
 
 	cw.flush()
 
 	assert.Equal(t, 1, len(mockSvc.inputs))
 	assert.Equal(t, "Benthos", *mockSvc.inputs[0].Namespace)
 	assert.Equal(t, map[string]checkedDatum{
-		"counter.foo:map[foo:one]": {
+		"counter.bar:map[foo:one]": {
 			unit: "Count",
 			dimensions: map[string]string{
 				"foo": "one",
 			},
 			value: 1,
 		},
-		"counter.foo:map[foo:two]": {
+		"counter.bar:map[foo:two]": {
 			unit: "Count",
 			dimensions: map[string]string{
 				"foo": "two",
 			},
 			value: 2,
 		},
-		"gauge.foo:map[bar:third]": {
+		"gauge.bar:map[bar:third]": {
 			unit: "None",
 			dimensions: map[string]string{
 				"bar": "third",
+			},
+			values: map[float64]float64{
+				3: 1,
+			},
+		},
+	}, checkInput(mockSvc.inputs[0]))
+}
+
+func TestCloudWatchStaticTags(t *testing.T) {
+	mockSvc := &mockCloudWatchClient{}
+
+	cw := &CloudWatch{
+		config:    NewCloudWatchConfig(),
+		datumses:  map[string]*cloudWatchDatum{},
+		datumLock: &sync.Mutex{},
+		log:       log.Noop(),
+		client:    mockSvc,
+	}
+	cw.ctx, cw.cancel = context.WithCancel(context.Background())
+
+	var err error
+	cw.pathMapping, err = newPathMapping(`meta buz = "first"`, log.Noop())
+	require.NoError(t, err)
+
+	ctr := cw.GetCounter("counter.baz")
+	gge := cw.GetGauge("gauge.baz")
+
+	ctr.Incr(1)
+	gge.Set(3)
+
+	cw.flush()
+
+	assert.Equal(t, 1, len(mockSvc.inputs))
+	assert.Equal(t, "Benthos", *mockSvc.inputs[0].Namespace)
+	assert.Equal(t, map[string]checkedDatum{
+		"counter.baz:map[buz:first]": {
+			unit: "Count",
+			dimensions: map[string]string{
+				"buz": "first",
+			},
+			value: 1,
+		},
+		"gauge.baz:map[buz:first]": {
+			unit: "None",
+			dimensions: map[string]string{
+				"buz": "first",
+			},
+			values: map[float64]float64{
+				3: 1,
+			},
+		},
+	}, checkInput(mockSvc.inputs[0]))
+}
+
+func TestCloudWatchTagsAndStaticTags(t *testing.T) {
+	mockSvc := &mockCloudWatchClient{}
+
+	cw := &CloudWatch{
+		config:    NewCloudWatchConfig(),
+		datumses:  map[string]*cloudWatchDatum{},
+		datumLock: &sync.Mutex{},
+		log:       log.Noop(),
+		client:    mockSvc,
+	}
+	cw.ctx, cw.cancel = context.WithCancel(context.Background())
+
+	var err error
+	cw.pathMapping, err = newPathMapping(`meta buz = "first"`, log.Noop())
+	require.NoError(t, err)
+
+	ctr := cw.GetCounterVec("counter.baz", []string{"foo"})
+	gge := cw.GetGaugeVec("gauge.baz", []string{"bar"})
+
+	ctr.With("one").Incr(1)
+	ctr.With("two").Incr(2)
+	gge.With("third").Set(3)
+
+	cw.flush()
+
+	assert.Equal(t, 1, len(mockSvc.inputs))
+	assert.Equal(t, "Benthos", *mockSvc.inputs[0].Namespace)
+	assert.Equal(t, map[string]checkedDatum{
+		"counter.baz:map[buz:first foo:one]": {
+			unit: "Count",
+			dimensions: map[string]string{
+				"foo": "one",
+				"buz": "first",
+			},
+			value: 1,
+		},
+		"counter.baz:map[buz:first foo:two]": {
+			unit: "Count",
+			dimensions: map[string]string{
+				"foo": "two",
+				"buz": "first",
+			},
+			value: 2,
+		},
+		"gauge.baz:map[bar:third buz:first]": {
+			unit: "None",
+			dimensions: map[string]string{
+				"bar": "third",
+				"buz": "first",
 			},
 			values: map[float64]float64{
 				3: 1,

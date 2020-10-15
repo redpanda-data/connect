@@ -43,7 +43,7 @@ like this:
 ` + "```" + ``,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("prefix", "A string prefix to add to all metrics."),
-			pathMappingDocs(),
+			pathMappingDocs(false),
 		},
 	}
 }
@@ -102,7 +102,7 @@ func NewHTTP(config Config, opts ...func(Type)) (Type, error) {
 //------------------------------------------------------------------------------
 
 func (h *HTTP) getPath(path string) string {
-	path = h.pathMapping.mapPath(path)
+	path = h.pathMapping.mapPathNoTags(path)
 	if len(h.pathPrefix) > 0 && len(path) > 0 {
 		path = h.pathPrefix + "." + path
 	}

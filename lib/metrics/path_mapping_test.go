@@ -10,57 +10,84 @@ import (
 )
 
 func TestPathMapping(t *testing.T) {
-	tests := []struct {
-		mapping      string
-		inputOutputs [][2]string
-	}{
-		{
-			mapping: `if this.contains("foo") { deleted() }`,
-			inputOutputs: [][2]string{
-				{"foo", ""},
-				{"hello foo world", ""},
-				{"hello world", "hello world"},
+	type test struct {
+		input       string
+		output      string
+		allowLabels bool
+		labels      []string
+		values      []string
+	}
+	tests := map[string][]test{
+		`if this.contains("foo") { deleted() }`: {
+			{
+				input:  "foo",
+				output: "",
+			},
+			{
+				input:  "foo",
+				output: "",
+			},
+			{
+				input:  "hello foo world",
+				output: "",
+			},
+			{
+				input:  "hello world",
+				output: "hello world",
 			},
 		},
-		{
-			mapping: `root = this.foo.bar.not_null()`,
-			inputOutputs: [][2]string{
-				{"foo", "foo"},
+		`root = this.foo.bar.not_null()`: {
+			{input: "foo", output: "foo"},
+		},
+		`root = this
+		 meta foo = "bar"`: {
+			{input: "foo", output: "foo"},
+			{
+				input: "foo", output: "foo",
+				allowLabels: true,
+				labels:      []string{"foo"},
+				values:      []string{"bar"},
 			},
 		},
-		{
-			mapping: `this.replace("foo","bar")`,
-			inputOutputs: [][2]string{
-				{"foo", "bar"},
-				{"hello foo world", "hello bar world"},
-				{"hello world", "hello world"},
+		`root = this
+		 meta foo = "bar"
+		 meta bar = "baz"`: {
+			{input: "foo", output: "foo"},
+			{
+				input: "foo", output: "foo",
+				allowLabels: true,
+				labels:      []string{"bar", "foo"},
+				values:      []string{"baz", "bar"},
 			},
 		},
-		{
-			mapping: `10`,
-			inputOutputs: [][2]string{
-				{"foo", "foo"},
-				{"hello foo world", "hello foo world"},
-				{"hello world", "hello world"},
-			},
+		`this.replace("foo","bar")`: {
+			{input: "foo", output: "bar"},
+			{input: "hello foo world", output: "hello bar world"},
+			{input: "hello world", output: "hello world"},
 		},
-		{
-			mapping: ``,
-			inputOutputs: [][2]string{
-				{"foo", "foo"},
-				{"hello foo world", "hello foo world"},
-				{"hello world", "hello world"},
-			},
+		`10`: {
+			{input: "foo", output: "foo"},
+			{input: "hello foo world", output: "hello foo world"},
+			{input: "hello world", output: "hello world"},
+		},
+		``: {
+			{input: "foo", output: "foo"},
+			{input: "hello foo world", output: "hello foo world"},
+			{input: "hello world", output: "hello world"},
 		},
 	}
 
-	for i, test := range tests {
-		test := test
-		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			m, err := newPathMapping(test.mapping, log.Noop())
+	for mapping, defs := range tests {
+		mapping := mapping
+		defs := defs
+		t.Run(mapping, func(t *testing.T) {
+			m, err := newPathMapping(mapping, log.Noop())
 			require.NoError(t, err)
-			for j, io := range test.inputOutputs {
-				assert.Equal(t, io[1], m.mapPath(io[0]), strconv.Itoa(j))
+			for i, def := range defs {
+				out, labels, values := m.mapPath(def.input, def.allowLabels)
+				assert.Equal(t, def.output, out, strconv.Itoa(i))
+				assert.Equal(t, def.labels, labels, strconv.Itoa(i))
+				assert.Equal(t, def.values, values, strconv.Itoa(i))
 			}
 		})
 	}

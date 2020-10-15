@@ -30,7 +30,7 @@ periodically.`,
 			docs.FieldCommon("push_interval", "An optional period of time to continuously print metrics."),
 			docs.FieldCommon("static_fields", "A map of static fields to add to each flushed metric object."),
 			docs.FieldCommon("flush_metrics", "Whether counters and timing metrics should be reset to 0 each time metrics are printed."),
-			pathMappingDocs(),
+			pathMappingDocs(false),
 		},
 	}
 }
@@ -199,7 +199,7 @@ func (s *Stdout) constructMetrics(co map[string]*gabs.Container, metrics map[str
 
 // GetCounter returns a stat counter object for a path.
 func (s *Stdout) GetCounter(path string) StatCounter {
-	if path = s.pathMapping.mapPath(path); len(path) == 0 {
+	if path = s.pathMapping.mapPathNoTags(path); len(path) == 0 {
 		return DudStat{}
 	}
 	return s.local.GetCounter(path)
@@ -208,7 +208,7 @@ func (s *Stdout) GetCounter(path string) StatCounter {
 // GetCounterVec returns a stat counter object for a path with the labels
 // discarded.
 func (s *Stdout) GetCounterVec(path string, n []string) StatCounterVec {
-	path = s.pathMapping.mapPath(path)
+	path = s.pathMapping.mapPathNoTags(path)
 	return fakeCounterVec(func([]string) StatCounter {
 		if len(path) == 0 {
 			return DudStat{}
@@ -219,7 +219,7 @@ func (s *Stdout) GetCounterVec(path string, n []string) StatCounterVec {
 
 // GetTimer returns a stat timer object for a path.
 func (s *Stdout) GetTimer(path string) StatTimer {
-	if path = s.pathMapping.mapPath(path); len(path) == 0 {
+	if path = s.pathMapping.mapPathNoTags(path); len(path) == 0 {
 		return DudStat{}
 	}
 	return s.local.GetTimer(path)
@@ -228,7 +228,7 @@ func (s *Stdout) GetTimer(path string) StatTimer {
 // GetTimerVec returns a stat timer object for a path with the labels
 // discarded.
 func (s *Stdout) GetTimerVec(path string, n []string) StatTimerVec {
-	path = s.pathMapping.mapPath(path)
+	path = s.pathMapping.mapPathNoTags(path)
 	return fakeTimerVec(func([]string) StatTimer {
 		if len(path) == 0 {
 			return DudStat{}
@@ -239,7 +239,7 @@ func (s *Stdout) GetTimerVec(path string, n []string) StatTimerVec {
 
 // GetGauge returns a stat gauge object for a path.
 func (s *Stdout) GetGauge(path string) StatGauge {
-	if path = s.pathMapping.mapPath(path); len(path) == 0 {
+	if path = s.pathMapping.mapPathNoTags(path); len(path) == 0 {
 		return DudStat{}
 	}
 	return s.local.GetGauge(path)
@@ -248,7 +248,7 @@ func (s *Stdout) GetGauge(path string) StatGauge {
 // GetGaugeVec returns a stat timer object for a path with the labels
 // discarded.
 func (s *Stdout) GetGaugeVec(path string, n []string) StatGaugeVec {
-	path = s.pathMapping.mapPath(path)
+	path = s.pathMapping.mapPathNoTags(path)
 	return fakeGaugeVec(func([]string) StatGauge {
 		if len(path) == 0 {
 			return DudStat{}
