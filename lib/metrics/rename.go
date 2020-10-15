@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"sort"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -235,17 +236,26 @@ func (r *Rename) renamePath(path string) (string, map[string]string) {
 
 //------------------------------------------------------------------------------
 
+func labelsFromMap(labels map[string]string) ([]string, []string) {
+	names := make([]string, 0, len(labels))
+	for k := range labels {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	values := make([]string, 0, len(names))
+	for _, k := range names {
+		values = append(values, labels[k])
+	}
+	return names, values
+}
+
 // GetCounter returns a stat counter object for a path.
 func (r *Rename) GetCounter(path string) StatCounter {
 	rpath, labels := r.renamePath(path)
 	if len(labels) == 0 {
 		return r.s.GetCounter(rpath)
 	}
-	names, values := make([]string, 0, len(labels)), make([]string, 0, len(labels))
-	for k, v := range labels {
-		names = append(names, k)
-		values = append(values, v)
-	}
+	names, values := labelsFromMap(labels)
 	return r.s.GetCounterVec(rpath, names).With(values...)
 }
 
@@ -263,11 +273,7 @@ func (r *Rename) GetTimer(path string) StatTimer {
 		return r.s.GetTimer(rpath)
 	}
 
-	names, values := make([]string, 0, len(labels)), make([]string, 0, len(labels))
-	for k, v := range labels {
-		names = append(names, k)
-		values = append(values, v)
-	}
+	names, values := labelsFromMap(labels)
 	return r.s.GetTimerVec(rpath, names).With(values...)
 }
 
@@ -285,11 +291,7 @@ func (r *Rename) GetGauge(path string) StatGauge {
 		return r.s.GetGauge(rpath)
 	}
 
-	names, values := make([]string, 0, len(labels)), make([]string, 0, len(labels))
-	for k, v := range labels {
-		names = append(names, k)
-		values = append(values, v)
-	}
+	names, values := labelsFromMap(labels)
 	return r.s.GetGaugeVec(rpath, names).With(values...)
 }
 

@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - New output `subprocess`.
 - Field `auto_ack` added to the `amqp_0_9` input.
 
+### Fixed
+
+- Metrics labels registered using the `rename` metrics component are now sorted before registering, fixing incorrect values that could potentially be seen when renaming multiple metrics to the same name.
+
 ## 3.30.0 - 2020-10-06
 
 ### Added
