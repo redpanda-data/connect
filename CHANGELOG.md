@@ -5,11 +5,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.31.0 - 2020-10-15
+
 ### Added
 
 - New input `subprocess`.
 - New output `subprocess`.
 - Field `auto_ack` added to the `amqp_0_9` input.
+- Metric labels can be renamed for `prometheus` and `cloudwatch` metrics components using `path_mapping` by assigning meta fields.
 
 ### Fixed
 
