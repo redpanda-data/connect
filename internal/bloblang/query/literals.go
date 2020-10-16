@@ -16,24 +16,34 @@ type mapLiteral struct {
 func NewMapLiteral(values [][2]interface{}) (interface{}, error) {
 	isDynamic := false
 	staticValues := make(map[string]interface{}, len(values))
-	for _, kv := range values {
+	for i, kv := range values {
 		var key string
-		var isStr bool
 		switch t := kv[0].(type) {
 		case string:
 			key = t
-			isStr = true
 		case *Literal:
+			var isStr bool
 			if key, isStr = t.Value.(string); !isStr {
 				return nil, fmt.Errorf("object keys must be strings, received: %T", t.Value)
 			}
-		}
-		_, isFn := kv[1].(Function)
-		if isStr && !isFn {
-			staticValues[key] = kv[1]
-		} else {
+			values[i][0] = key
+		case Function:
 			isDynamic = true
-			break
+		default:
+			return nil, fmt.Errorf("object keys must be strings, received: %T", t)
+		}
+		switch t := kv[1].(type) {
+		case *Literal:
+			values[i][1] = t.Value
+			if !isDynamic {
+				staticValues[key] = t.Value
+			}
+		case Function:
+			isDynamic = true
+		default:
+			if !isDynamic {
+				staticValues[key] = kv[1]
+			}
 		}
 	}
 	if isDynamic {
@@ -108,15 +118,17 @@ type arrayLiteral struct {
 // any values are dynamic a Function is returned.
 func NewArrayLiteral(values ...interface{}) interface{} {
 	isDynamic := false
-	for _, v := range values {
-		if _, isFunction := v.(Function); isFunction {
+	for i, v := range values {
+		switch t := v.(type) {
+		case *Literal:
+			values[i] = t.Value
+		case Function:
 			isDynamic = true
 		}
 	}
 	if !isDynamic {
 		return values
 	}
-
 	return &arrayLiteral{values}
 }
 

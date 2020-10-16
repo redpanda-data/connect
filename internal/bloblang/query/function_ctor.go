@@ -38,6 +38,14 @@ func (f closureFunction) QueryTargets(ctx TargetsContext) []TargetPath {
 
 //------------------------------------------------------------------------------
 
+func expandLiteralArgs(args []interface{}) {
+	for i, dArg := range args {
+		if lit, isLit := dArg.(*Literal); isLit {
+			args[i] = lit.Value
+		}
+	}
+}
+
 func withDynamicArgs(args []interface{}, fn FunctionCtor) Function {
 	fns := []Function{}
 	for _, dArg := range args {
@@ -159,6 +167,21 @@ func ExpectStringArg(i int) ArgCheckFn {
 	}
 }
 
+// ExpectFunctionArg ensures that parameters are query functions. If the
+// argument is a static value it will be converted into a literal function.
+func ExpectFunctionArg(i int) ArgCheckFn {
+	return func(args []interface{}) error {
+		if len(args) <= i {
+			return nil
+		}
+		if _, ok := args[i].(Function); ok {
+			return nil
+		}
+		args[i] = NewLiteralFunction(args[i])
+		return nil
+	}
+}
+
 // ExpectAllStringArgs returns an error if any argument is not a string type (or
 // a byte slice that can be converted).
 func ExpectAllStringArgs() ArgCheckFn {
@@ -253,6 +276,7 @@ func InitFunction(name string, args ...interface{}) (Function, error) {
 	if !exists {
 		return nil, badFunctionErr(name)
 	}
+	expandLiteralArgs(args)
 	return ctor(args...)
 }
 

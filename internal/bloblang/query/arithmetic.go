@@ -31,6 +31,35 @@ const (
 	ArithmeticPipe
 )
 
+type arithmeticOpFunc func(l, r interface{}) (interface{}, error)
+
+func arithmeticFunc(lhs, rhs Function, op arithmeticOpFunc) (Function, error) {
+	var litL, litR *Literal
+	var isLit bool
+	if litL, isLit = lhs.(*Literal); isLit {
+		if litR, isLit = rhs.(*Literal); isLit {
+			res, err := op(litL.Value, litR.Value)
+			if err != nil {
+				return nil, err
+			}
+			return NewLiteralFunction(res), nil
+		}
+	}
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+		var err error
+		var leftV, rightV interface{}
+		if leftV, err = lhs.Exec(ctx); err == nil {
+			rightV, err = rhs.Exec(ctx)
+		}
+		if err != nil {
+			return nil, err
+		}
+		return op(leftV, rightV)
+	}, aggregateTargetPaths(lhs, rhs)), nil
+}
+
+//------------------------------------------------------------------------------
+
 func restrictForComparison(v interface{}) interface{} {
 	switch t := v.(type) {
 	case int64:
@@ -43,143 +72,56 @@ func restrictForComparison(v interface{}) interface{} {
 	return v
 }
 
-func add(lhs, rhs Function) Function {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		var err error
-		var leftV, rightV interface{}
-		if leftV, err = lhs.Exec(ctx); err == nil {
-			rightV, err = rhs.Exec(ctx)
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		switch leftV.(type) {
-		case float64, int64, uint64:
-			var lhs, rhs float64
-			if lhs, err = IGetNumber(leftV); err == nil {
-				rhs, err = IGetNumber(rightV)
-			}
-			if err != nil {
-				return nil, err
-			}
-			return lhs + rhs, nil
-		case string, []byte:
-			var lhs, rhs string
-			if lhs, err = IGetString(leftV); err == nil {
-				rhs, err = IGetString(rightV)
-			}
-			if err != nil {
-				return nil, err
-			}
-			return lhs + rhs, nil
-		}
-		return nil, NewTypeError(leftV, ValueNumber, ValueString)
-	}, aggregateTargetPaths(lhs, rhs))
-}
-
-func sub(lhs, rhs Function) Function {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		var err error
-		var leftV, rightV interface{}
-		if leftV, err = lhs.Exec(ctx); err == nil {
-			rightV, err = rhs.Exec(ctx)
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		var lhs, rhs float64
-		if lhs, err = IGetNumber(leftV); err == nil {
-			rhs, err = IGetNumber(rightV)
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		return lhs - rhs, nil
-	}, aggregateTargetPaths(lhs, rhs))
-}
-
 // ErrDivideByZero occurs when an arithmetic operator is prevented from dividing
 // a value by zero.
 var ErrDivideByZero = errors.New("attempted to divide by zero")
 
-func divide(lhs, rhs Function) Function {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		var err error
-		var leftV, rightV interface{}
-		if leftV, err = lhs.Exec(ctx); err == nil {
-			rightV, err = rhs.Exec(ctx)
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		var lhs, rhs float64
-		if lhs, err = IGetNumber(leftV); err == nil {
-			rhs, err = IGetNumber(rightV)
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		if rhs == 0 {
-			return nil, ErrDivideByZero
-		}
-
-		return lhs / rhs, nil
-	}, aggregateTargetPaths(lhs, rhs))
-}
-
-func multiply(lhs, rhs Function) Function {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		var err error
-		var leftV, rightV interface{}
-		if leftV, err = lhs.Exec(ctx); err == nil {
-			rightV, err = rhs.Exec(ctx)
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		var lhs, rhs float64
-		if lhs, err = IGetNumber(leftV); err == nil {
-			rhs, err = IGetNumber(rightV)
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		return lhs * rhs, nil
-	}, aggregateTargetPaths(lhs, rhs))
-}
-
-func modulo(lhs, rhs Function) Function {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		var err error
-		var leftV, rightV interface{}
-		if leftV, err = lhs.Exec(ctx); err == nil {
-			rightV, err = rhs.Exec(ctx)
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		var lhs, rhs int64
-		if lhs, err = IGetInt(leftV); err == nil {
-			rhs, err = IGetInt(rightV)
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		if rhs == 0 {
-			return nil, ErrDivideByZero
-		}
-
-		return lhs % rhs, nil
-	}, aggregateTargetPaths(lhs, rhs))
+func prodOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
+	switch op {
+	case ArithmeticMul:
+		return func(left, right interface{}) (interface{}, error) {
+			var err error
+			var lhs, rhs float64
+			if lhs, err = IGetNumber(left); err == nil {
+				rhs, err = IGetNumber(right)
+			}
+			if err != nil {
+				return nil, err
+			}
+			return lhs * rhs, nil
+		}, true
+	case ArithmeticDiv:
+		return func(left, right interface{}) (interface{}, error) {
+			var err error
+			var lhs, rhs float64
+			if lhs, err = IGetNumber(left); err == nil {
+				rhs, err = IGetNumber(right)
+			}
+			if err != nil {
+				return nil, err
+			}
+			if rhs == 0 {
+				return nil, ErrDivideByZero
+			}
+			return lhs / rhs, nil
+		}, true
+	case ArithmeticMod:
+		return func(left, right interface{}) (interface{}, error) {
+			var err error
+			var lhs, rhs int64
+			if lhs, err = IGetInt(left); err == nil {
+				rhs, err = IGetInt(right)
+			}
+			if err != nil {
+				return nil, err
+			}
+			if rhs == 0 {
+				return nil, ErrDivideByZero
+			}
+			return lhs % rhs, nil
+		}, true
+	}
+	return nil, false
 }
 
 func coalesce(lhs, rhs Function) Function {
@@ -190,6 +132,49 @@ func coalesce(lhs, rhs Function) Function {
 		}
 		return rhs.Exec(ctx)
 	}, aggregateTargetPaths(lhs, rhs))
+}
+
+func sumOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
+	switch op {
+	case ArithmeticAdd:
+		return func(left, right interface{}) (interface{}, error) {
+			var err error
+			switch left.(type) {
+			case float64, int64, uint64:
+				var lhs, rhs float64
+				if lhs, err = IGetNumber(left); err == nil {
+					rhs, err = IGetNumber(right)
+				}
+				if err != nil {
+					return nil, err
+				}
+				return lhs + rhs, nil
+			case string, []byte:
+				var lhs, rhs string
+				if lhs, err = IGetString(left); err == nil {
+					rhs, err = IGetString(right)
+				}
+				if err != nil {
+					return nil, err
+				}
+				return lhs + rhs, nil
+			}
+			return nil, NewTypeError(left, ValueNumber, ValueString)
+		}, true
+	case ArithmeticSub:
+		return func(left, right interface{}) (interface{}, error) {
+			var err error
+			var lhs, rhs float64
+			if lhs, err = IGetNumber(left); err == nil {
+				rhs, err = IGetNumber(right)
+			}
+			if err != nil {
+				return nil, err
+			}
+			return lhs - rhs, nil
+		}, true
+	}
+	return nil, false
 }
 
 func compareNumFn(op ArithmeticOperator) func(lhs, rhs float64) bool {
@@ -280,125 +265,113 @@ func compareGenericFn(op ArithmeticOperator) func(lhs, rhs interface{}) bool {
 	return nil
 }
 
-func compare(lhs, rhs Function, op ArithmeticOperator) (Function, error) {
-	strOpFn := compareStrFn(op)
-	numOpFn := compareNumFn(op)
-	boolOpFn := compareBoolFn(op)
-	genericOpFn := compareGenericFn(op)
+func compareOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
+	switch op {
+	case ArithmeticEq,
+		ArithmeticNeq,
+		ArithmeticGt,
+		ArithmeticGte,
+		ArithmeticLt,
+		ArithmeticLte:
+		strOpFn := compareStrFn(op)
+		numOpFn := compareNumFn(op)
+		boolOpFn := compareBoolFn(op)
+		genericOpFn := compareGenericFn(op)
+		return func(left, right interface{}) (interface{}, error) {
+			switch lhs := restrictForComparison(left).(type) {
+			case string:
+				if strOpFn == nil {
+					return nil, NewTypeError(left)
+				}
+				rhs, err := IGetString(right)
+				if err != nil {
+					if op == ArithmeticNeq {
+						return true, nil
+					}
+					return nil, err
+				}
+				return strOpFn(lhs, rhs), nil
+			case float64:
+				if numOpFn == nil {
+					return nil, NewTypeError(left)
+				}
+				rhs, err := IGetNumber(right)
+				if err != nil {
+					if op == ArithmeticNeq {
+						return true, nil
+					}
+					return nil, err
+				}
+				return numOpFn(lhs, rhs), nil
+			case bool:
+				if boolOpFn == nil {
+					return nil, NewTypeError(left)
+				}
+				rhs, err := IGetBool(right)
+				if err != nil {
+					if op == ArithmeticNeq {
+						return true, nil
+					}
+					return nil, err
+				}
+				return boolOpFn(lhs, rhs), nil
+			default:
+				if genericOpFn == nil {
+					return nil, NewTypeError(left)
+				}
+				return genericOpFn(left, right), nil
+			}
+		}, true
+	}
+	return nil, false
+}
+
+func boolOr(lhs, rhs Function) Function {
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		var lhsV, rhsV interface{}
-		var err error
-		if lhsV, err = lhs.Exec(ctx); err == nil {
-			rhsV, err = rhs.Exec(ctx)
-		}
+		lhsV, err := lhs.Exec(ctx)
 		if err != nil {
 			return nil, err
 		}
-		switch lhs := restrictForComparison(lhsV).(type) {
-		case string:
-			if strOpFn == nil {
-				return nil, NewTypeError(lhsV)
-			}
-			rhs, err := IGetString(rhsV)
-			if err != nil {
-				if op == ArithmeticNeq {
-					return true, nil
-				}
-				return nil, err
-			}
-			return strOpFn(lhs, rhs), nil
-		case float64:
-			if numOpFn == nil {
-				return nil, NewTypeError(lhsV)
-			}
-			rhs, err := IGetNumber(rhsV)
-			if err != nil {
-				if op == ArithmeticNeq {
-					return true, nil
-				}
-				return nil, err
-			}
-			return numOpFn(lhs, rhs), nil
-		case bool:
-			if boolOpFn == nil {
-				return nil, NewTypeError(lhsV)
-			}
-			rhs, err := IGetBool(rhsV)
-			if err != nil {
-				if op == ArithmeticNeq {
-					return true, nil
-				}
-				return nil, err
-			}
-			return boolOpFn(lhs, rhs), nil
-		default:
-			if genericOpFn == nil {
-				return nil, NewTypeError(lhsV)
-			}
-			return genericOpFn(lhsV, rhsV), nil
+		b, err := IGetBool(lhsV)
+		if err != nil {
+			return nil, err
 		}
-	}, aggregateTargetPaths(lhs, rhs)), nil
+		if b {
+			return true, nil
+		}
+		rhsV, err := rhs.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if b, err = IGetBool(rhsV); err != nil {
+			return nil, err
+		}
+		return b, nil
+	}, aggregateTargetPaths(lhs, rhs))
 }
 
-func logicalBool(lhs, rhs Function, op ArithmeticOperator) (Function, error) {
-	switch op {
-	case ArithmeticAnd:
-		return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-			var lhsV, rhsV bool
-			var err error
-
-			if leftV, tmpErr := lhs.Exec(ctx); tmpErr == nil {
-				lhsV, err = IGetBool(leftV)
-			} else {
-				err = tmpErr
-			}
-			if err != nil {
-				return nil, err
-			}
-			if !lhsV {
-				return false, nil
-			}
-
-			if rightV, tmpErr := rhs.Exec(ctx); tmpErr == nil {
-				rhsV, err = IGetBool(rightV)
-			} else {
-				err = tmpErr
-			}
-			if err != nil {
-				return nil, err
-			}
-			return rhsV, nil
-		}, aggregateTargetPaths(lhs, rhs)), nil
-	case ArithmeticOr:
-		return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-			var lhsV, rhsV bool
-			var err error
-
-			if leftV, tmpErr := lhs.Exec(ctx); tmpErr == nil {
-				lhsV, err = IGetBool(leftV)
-			} else {
-				err = tmpErr
-			}
-			if err != nil {
-				return nil, err
-			}
-			if lhsV {
-				return true, nil
-			}
-
-			if rightV, tmpErr := rhs.Exec(ctx); tmpErr == nil {
-				rhsV, err = IGetBool(rightV)
-			} else {
-				err = tmpErr
-			}
-			if err != nil {
-				return nil, err
-			}
-			return lhsV || rhsV, nil
-		}, aggregateTargetPaths(lhs, rhs)), nil
-	default:
-		return nil, fmt.Errorf("operator not supported: %v", op)
-	}
+func boolAnd(lhs, rhs Function) Function {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+		lhsV, err := lhs.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		b, err := IGetBool(lhsV)
+		if err != nil {
+			return nil, err
+		}
+		if !b {
+			return false, nil
+		}
+		rhsV, err := rhs.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if b, err = IGetBool(rhsV); err != nil {
+			return nil, err
+		}
+		return b, nil
+	}, aggregateTargetPaths(lhs, rhs))
 }
 
 // NewArithmeticExpression creates a single query function from a list of child
@@ -412,19 +385,18 @@ func NewArithmeticExpression(fns []Function, ops []ArithmeticOperator) (Function
 		return nil, fmt.Errorf("mismatch of functions (%v) to arithmetic operators (%v)", len(fns), len(ops))
 	}
 
+	var err error
+
 	// First pass to resolve division, multiplication and coalesce
 	fnsNew, opsNew := []Function{fns[0]}, []ArithmeticOperator{}
 	for i, op := range ops {
-		switch op {
-		case ArithmeticMul:
-			fnsNew[len(fnsNew)-1] = multiply(fnsNew[len(fnsNew)-1], fns[i+1])
-		case ArithmeticDiv:
-			fnsNew[len(fnsNew)-1] = divide(fnsNew[len(fnsNew)-1], fns[i+1])
-		case ArithmeticMod:
-			fnsNew[len(fnsNew)-1] = modulo(fnsNew[len(fnsNew)-1], fns[i+1])
-		case ArithmeticPipe:
+		if opFunc, isProd := prodOp(op); isProd {
+			if fnsNew[len(fnsNew)-1], err = arithmeticFunc(fnsNew[len(fnsNew)-1], fns[i+1], opFunc); err != nil {
+				return nil, err
+			}
+		} else if op == ArithmeticPipe {
 			fnsNew[len(fnsNew)-1] = coalesce(fnsNew[len(fnsNew)-1], fns[i+1])
-		default:
+		} else {
 			fnsNew = append(fnsNew, fns[i+1])
 			opsNew = append(opsNew, op)
 		}
@@ -437,12 +409,11 @@ func NewArithmeticExpression(fns []Function, ops []ArithmeticOperator) (Function
 	// Second pass to resolve addition and subtraction
 	fnsNew, opsNew = []Function{fns[0]}, []ArithmeticOperator{}
 	for i, op := range ops {
-		switch op {
-		case ArithmeticAdd:
-			fnsNew[len(fnsNew)-1] = add(fnsNew[len(fnsNew)-1], fns[i+1])
-		case ArithmeticSub:
-			fnsNew[len(fnsNew)-1] = sub(fnsNew[len(fnsNew)-1], fns[i+1])
-		default:
+		if opFunc, isSum := sumOp(op); isSum {
+			if fnsNew[len(fnsNew)-1], err = arithmeticFunc(fnsNew[len(fnsNew)-1], fns[i+1], opFunc); err != nil {
+				return nil, err
+			}
+		} else {
 			fnsNew = append(fnsNew, fns[i+1])
 			opsNew = append(opsNew, op)
 		}
@@ -453,20 +424,13 @@ func NewArithmeticExpression(fns []Function, ops []ArithmeticOperator) (Function
 	}
 
 	// Third pass for numerical comparison
-	var err error
 	fnsNew, opsNew = []Function{fns[0]}, []ArithmeticOperator{}
 	for i, op := range ops {
-		switch op {
-		case ArithmeticEq,
-			ArithmeticNeq,
-			ArithmeticGt,
-			ArithmeticGte,
-			ArithmeticLt,
-			ArithmeticLte:
-			if fnsNew[len(fnsNew)-1], err = compare(fnsNew[len(fnsNew)-1], fns[i+1], op); err != nil {
+		if opFunc, isCompare := compareOp(op); isCompare {
+			if fnsNew[len(fnsNew)-1], err = arithmeticFunc(fnsNew[len(fnsNew)-1], fns[i+1], opFunc); err != nil {
 				return nil, err
 			}
-		default:
+		} else {
 			fnsNew = append(fnsNew, fns[i+1])
 			opsNew = append(opsNew, op)
 		}
@@ -480,11 +444,10 @@ func NewArithmeticExpression(fns []Function, ops []ArithmeticOperator) (Function
 	fnsNew, opsNew = []Function{fns[0]}, []ArithmeticOperator{}
 	for i, op := range ops {
 		switch op {
-		case ArithmeticAnd,
-			ArithmeticOr:
-			if fnsNew[len(fnsNew)-1], err = logicalBool(fnsNew[len(fnsNew)-1], fns[i+1], op); err != nil {
-				return nil, err
-			}
+		case ArithmeticAnd:
+			fnsNew[len(fnsNew)-1] = boolAnd(fnsNew[len(fnsNew)-1], fns[i+1])
+		case ArithmeticOr:
+			fnsNew[len(fnsNew)-1] = boolOr(fnsNew[len(fnsNew)-1], fns[i+1])
 		default:
 			fnsNew = append(fnsNew, fns[i+1])
 			opsNew = append(opsNew, op)

@@ -8,7 +8,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-func functionArgsParser(allowFunctions bool) Func {
+func functionArgsParser() Func {
 	open, comma, close := Char('('), Char(','), Char(')')
 	whitespace := DiscardAll(
 		OneOf(
@@ -17,46 +17,12 @@ func functionArgsParser(allowFunctions bool) Func {
 		),
 	)
 
-	paramTypes := []Func{
-		parseLiteralWithTails(Boolean()),
-		parseLiteralWithTails(Number()),
-		parseLiteralWithTails(TripleQuoteString()),
-		parseLiteralWithTails(QuotedString()),
-	}
-
 	return func(input []rune) Result {
-		tmpParamTypes := paramTypes
-		if allowFunctions {
-			tmpParamTypes = append([]Func{}, paramTypes...)
-			tmpParamTypes = append(tmpParamTypes, ParseQuery)
-		}
 		return DelimitedPattern(
-			Expect(
-				Sequence(
-					open,
-					whitespace,
-				),
-				"function arguments",
-			),
-			MustBe(Expect(
-				OneOf(tmpParamTypes...),
-				"function argument",
-			)),
-			MustBe(Expect(
-				Sequence(
-					Discard(SpacesAndTabs()),
-					comma,
-					whitespace,
-				),
-				"comma",
-			)),
-			MustBe(Expect(
-				Sequence(
-					whitespace,
-					close,
-				),
-				"closing bracket",
-			)),
+			Expect(Sequence(open, whitespace), "function arguments"),
+			MustBe(Expect(ParseQuery, "function argument")),
+			MustBe(Expect(Sequence(Discard(SpacesAndTabs()), comma, whitespace), "comma")),
+			MustBe(Expect(Sequence(whitespace, close), "closing bracket")),
 			true,
 		)(input)
 	}
@@ -312,7 +278,7 @@ func methodParser(fn query.Function) Func {
 			SnakeCase(),
 			"method",
 		),
-		functionArgsParser(true),
+		functionArgsParser(),
 	)
 
 	return func(input []rune) Result {
@@ -340,7 +306,7 @@ func functionParser() Func {
 			SnakeCase(),
 			"function",
 		),
-		functionArgsParser(true),
+		functionArgsParser(),
 	)
 
 	return func(input []rune) Result {

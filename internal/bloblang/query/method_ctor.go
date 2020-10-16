@@ -103,6 +103,7 @@ func InitMethod(name string, target Function, args ...interface{}) (Function, er
 	if !exists {
 		return nil, badMethodErr(name)
 	}
+	expandLiteralArgs(args)
 	return ctor(target, args...)
 }
 

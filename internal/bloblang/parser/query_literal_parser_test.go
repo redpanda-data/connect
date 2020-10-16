@@ -41,10 +41,11 @@ func TestLiteralParser(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		mapping string
-		result  interface{}
-		err     string
-		value   *interface{}
+		mapping  string
+		result   interface{}
+		parseErr string
+		err      string
+		value    *interface{}
 	}{
 		"basic map": {
 			mapping: `{"foo":"bar"}`,
@@ -103,12 +104,12 @@ func TestLiteralParser(t *testing.T) {
 			},
 		},
 		"bad array element": {
-			mapping: `["foo",(5 + "not a number"),"bar"]`,
-			err:     "expected number value, found string: not a number",
+			mapping:  `["foo",(5 + "not a number"),"bar"]`,
+			parseErr: "expected number value, found string: not a number: 5 + \"",
 		},
 		"bad object value": {
-			mapping: `{"foo":(5 + "not a number")}`,
-			err:     "failed to resolve 'foo' value: expected number value, found string: not a number",
+			mapping:  `{"foo":(5 + "not a number")}`,
+			parseErr: "expected number value, found string: not a number: 5 + \"",
 		},
 	}
 
@@ -118,6 +119,10 @@ func TestLiteralParser(t *testing.T) {
 			t.Parallel()
 
 			res := ParseQuery([]rune(test.mapping))
+			if len(test.parseErr) > 0 {
+				assert.Equal(t, test.parseErr, res.Err.Error())
+				return
+			}
 			require.Nil(t, res.Err)
 			require.Implements(t, (*query.Function)(nil), res.Payload)
 			q := res.Payload.(query.Function)

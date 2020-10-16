@@ -62,6 +62,19 @@ func TestLiterals(t *testing.T) {
 				NewTargetPath(TargetValue, "second"),
 			},
 		},
+		"object literal function keys and values": {
+			input: mustVal(NewMapLiteral(
+				[][2]interface{}{
+					{NewLiteralFunction("first"), NewLiteralFunction("second")},
+					{NewLiteralFunction("third"), NewLiteralFunction("fourth")},
+				},
+			)),
+			value: map[string]interface{}{},
+			output: map[string]interface{}{
+				"first": "second",
+				"third": "fourth",
+			},
+		},
 		"static object": {
 			input: mustVal(NewMapLiteral(
 				[][2]interface{}{
@@ -81,6 +94,7 @@ func TestLiterals(t *testing.T) {
 				NewFieldFunction("first"),
 				NewFieldFunction("second"),
 				"static",
+				NewLiteralFunction("static literal"),
 			),
 			value: map[string]interface{}{
 				"first":  "foo",
@@ -90,6 +104,7 @@ func TestLiterals(t *testing.T) {
 				"foo",
 				"bar",
 				"static",
+				"static literal",
 			},
 			targets: []TargetPath{
 				NewTargetPath(TargetValue, "first"),
@@ -99,7 +114,7 @@ func TestLiterals(t *testing.T) {
 		"static array values": {
 			input: NewArrayLiteral(
 				"static1",
-				"static2",
+				NewLiteralFunction("static2"),
 				"static3",
 			),
 			output: []interface{}{

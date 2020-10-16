@@ -18,10 +18,7 @@ func dynamicArrayParser() Func {
 				open,
 				whitespace,
 			), "array"),
-			OneOf(
-				dynamicLiteralValueParser(),
-				Expect(ParseQuery, "object"),
-			),
+			Expect(ParseQuery, "object"),
 			Sequence(
 				Discard(SpacesAndTabs()),
 				comma,
@@ -65,10 +62,7 @@ func dynamicObjectParser() Func {
 				Discard(SpacesAndTabs()),
 				Char(':'),
 				Discard(whitespace),
-				OneOf(
-					dynamicLiteralValueParser(),
-					Expect(ParseQuery, "object"),
-				),
+				Expect(ParseQuery, "object"),
 			),
 			Sequence(
 				Discard(SpacesAndTabs()),
@@ -103,8 +97,8 @@ func dynamicObjectParser() Func {
 	}
 }
 
-func dynamicLiteralValueParser() Func {
-	return OneOf(
+func literalValueParser() Func {
+	p := OneOf(
 		Boolean(),
 		Number(),
 		TripleQuoteString(),
@@ -113,10 +107,6 @@ func dynamicLiteralValueParser() Func {
 		dynamicArrayParser(),
 		dynamicObjectParser(),
 	)
-}
-
-func literalValueParser() Func {
-	p := dynamicLiteralValueParser()
 
 	return func(input []rune) Result {
 		res := p(input)

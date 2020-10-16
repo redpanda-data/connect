@@ -30,6 +30,7 @@ var _ = RegisterMethod(
 	),
 	false, allMethod,
 	ExpectNArgs(1),
+	ExpectFunctionArg(0),
 )
 
 func allMethod(target Function, args ...interface{}) (Function, error) {
@@ -84,6 +85,7 @@ var _ = RegisterMethod(
 	),
 	false, anyMethod,
 	ExpectNArgs(1),
+	ExpectFunctionArg(0),
 )
 
 func anyMethod(target Function, args ...interface{}) (Function, error) {
@@ -166,6 +168,17 @@ var _ = RegisterMethod(
 root.foo = this.doc.apply("thing")`,
 			`{"doc":{"first":"hello world"}}`,
 			`{"foo":{"inner":"hello world"}}`,
+		),
+		NewExampleSpec("",
+			`map create_foo {
+  root.name = "a foo"
+  root.purpose = "to be a foo"
+}
+
+root = this
+root.foo = null.apply("create_foo")`,
+			`{"id":"1234"}`,
+			`{"foo":{"name":"a foo","purpose":"to be a foo"},"id":"1234"}`,
 		),
 	),
 	true, applyMethod,
@@ -533,6 +546,7 @@ When filtering objects the mapping query argument is provided a context with a f
 	),
 	false, filterMethod,
 	ExpectNArgs(1),
+	ExpectFunctionArg(0),
 )
 
 func filterMethod(target Function, args ...interface{}) (Function, error) {
@@ -639,6 +653,7 @@ var _ = RegisterMethod(
 	),
 	false, foldMethod,
 	ExpectNArgs(2),
+	ExpectFunctionArg(1),
 )
 
 func foldMethod(target Function, args ...interface{}) (Function, error) {
@@ -1031,6 +1046,7 @@ func lengthMethod(target Function, _ ...interface{}) (Function, error) {
 var _ = RegisterMethod(
 	NewDeprecatedMethodSpec("map"), false, mapMethod,
 	ExpectNArgs(1),
+	ExpectFunctionArg(0),
 )
 
 // NewMapMethod attempts to create a map method.
@@ -1083,6 +1099,7 @@ Apply a mapping to each value of an object and replace the value with the result
 	),
 	false, mapEachMethod,
 	ExpectNArgs(1),
+	ExpectFunctionArg(0),
 )
 
 func mapEachMethod(target Function, args ...interface{}) (Function, error) {
@@ -1389,6 +1406,7 @@ var _ = RegisterMethod(
 	),
 	false, sortMethod,
 	ExpectOneOrZeroArgs(),
+	ExpectFunctionArg(0),
 )
 
 func sortMethod(target Function, args ...interface{}) (Function, error) {
@@ -1670,6 +1688,7 @@ var _ = RegisterMethod(
 	),
 	false, uniqueMethod,
 	ExpectOneOrZeroArgs(),
+	ExpectFunctionArg(0),
 )
 
 func uniqueMethod(target Function, args ...interface{}) (Function, error) {

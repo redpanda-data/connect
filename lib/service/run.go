@@ -303,8 +303,8 @@ func Run() {
    comma-separated lists of inputs, processors and outputs, divided by
    forward slashes:
 
-   benthos create stdin/jmespath,awk/nats
-   benthos create file,http_server/json/http_client
+   benthos create stdin/bloblang,awk/nats
+   benthos create file,http_server/protobuf/http_client
 
    If the expression is omitted a default config is created.`[4:],
 				Action: func(c *cli.Context) error {

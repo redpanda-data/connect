@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Bloblang literals, including method and function arguments, can now be mutated without brackets regardless of where they appear.
+
 ## 3.31.0 - 2020-10-15
 
 ### Added

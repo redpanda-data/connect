@@ -112,10 +112,7 @@ func arithmeticParser(fnParser Func) Func {
 						query.ArithmeticSub,
 					},
 				); err != nil {
-					return Fail(
-						NewFatalError(input, err),
-						input,
-					)
+					return Fail(NewFatalError(input, err), input)
 				}
 			}
 			fns = append(fns, fn)
@@ -126,10 +123,7 @@ func arithmeticParser(fnParser Func) Func {
 
 		fn, err := query.NewArithmeticExpression(fns, ops)
 		if err != nil {
-			return Fail(
-				NewFatalError(input, err),
-				input,
-			)
+			return Fail(NewFatalError(input, err), input)
 		}
 		return Success(fn, res.Remaining)
 	}

@@ -27,6 +27,11 @@ func TestArithmetic(t *testing.T) {
 		require.NoError(t, err)
 		return fn
 	}
+	opaqueLit := func(v interface{}) Function {
+		return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+			return v, nil
+		}, nil)
+	}
 
 	tests := map[string]struct {
 		input    Function
@@ -51,7 +56,7 @@ func TestArithmetic(t *testing.T) {
 			input: arithmetic(
 				[]Function{
 					NewLiteralFunction(int64(5)),
-					NewLiteralFunction(int64(0)),
+					opaqueLit(int64(0)),
 				},
 				[]ArithmeticOperator{
 					ArithmeticDiv,
@@ -63,7 +68,7 @@ func TestArithmetic(t *testing.T) {
 			input: arithmetic(
 				[]Function{
 					NewLiteralFunction(int64(5)),
-					NewLiteralFunction(int64(0)),
+					opaqueLit(int64(0)),
 				},
 				[]ArithmeticOperator{
 					ArithmeticMod,
@@ -219,7 +224,7 @@ func TestArithmetic(t *testing.T) {
 			input: arithmetic(
 				[]Function{
 					NewLiteralFunction("not a number"),
-					NewLiteralFunction(int64(0)),
+					opaqueLit(int64(0)),
 				},
 				[]ArithmeticOperator{
 					ArithmeticGt,
@@ -294,7 +299,7 @@ func TestArithmetic(t *testing.T) {
 					arithmetic(
 						[]Function{
 							NewLiteralFunction("not a number"),
-							NewLiteralFunction(int64(0)),
+							opaqueLit(int64(0)),
 						},
 						[]ArithmeticOperator{
 							ArithmeticGt,
@@ -315,7 +320,7 @@ func TestArithmetic(t *testing.T) {
 					arithmetic(
 						[]Function{
 							NewLiteralFunction("not a number"),
-							NewLiteralFunction(int64(0)),
+							opaqueLit(int64(0)),
 						},
 						[]ArithmeticOperator{
 							ArithmeticGt,
@@ -336,7 +341,7 @@ func TestArithmetic(t *testing.T) {
 					arithmetic(
 						[]Function{
 							NewLiteralFunction("not a number"),
-							NewLiteralFunction(int64(0)),
+							opaqueLit(int64(0)),
 						},
 						[]ArithmeticOperator{
 							ArithmeticGt,
@@ -357,7 +362,7 @@ func TestArithmetic(t *testing.T) {
 					arithmetic(
 						[]Function{
 							NewLiteralFunction("not a number"),
-							NewLiteralFunction(int64(0)),
+							opaqueLit(int64(0)),
 						},
 						[]ArithmeticOperator{
 							ArithmeticGt,
@@ -526,6 +531,11 @@ func TestArithmeticTargets(t *testing.T) {
 		require.NoError(t, err)
 		return fn
 	}
+	opaqueLit := func(v interface{}) Function {
+		return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+			return v, nil
+		}, nil)
+	}
 
 	tests := map[string]struct {
 		input  Function
@@ -535,7 +545,7 @@ func TestArithmeticTargets(t *testing.T) {
 			input: arithmetic(
 				[]Function{
 					NewLiteralFunction(int64(5)),
-					NewLiteralFunction("bar"),
+					opaqueLit("bar"),
 				},
 				[]ArithmeticOperator{
 					ArithmeticAdd,
