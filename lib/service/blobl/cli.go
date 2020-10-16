@@ -140,7 +140,7 @@ func run(c *cli.Context) error {
 				}
 
 				result, err := exec.Exec(query.FunctionContext{
-					Maps:     map[string]query.Function{},
+					Maps:     exec.Maps(),
 					Vars:     map[string]interface{}{},
 					MsgBatch: msg,
 				}.WithValue(value))

@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Bloblang literals, including method and function arguments, can now be mutated without brackets regardless of where they appear.
+- Bloblang maps now work when running bloblang with the `blobl` subcommand.
 
 ## 3.31.0 - 2020-10-15
 
