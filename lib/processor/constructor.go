@@ -120,6 +120,7 @@ const (
 	TypeMetric       = "metric"
 	TypeNoop         = "noop"
 	TypeNumber       = "number"
+	TypeOAuth2Token  = "oauth2_token"
 	TypeParallel     = "parallel"
 	TypeParseLog     = "parse_log"
 	TypeProcessBatch = "process_batch"
@@ -187,6 +188,7 @@ type Config struct {
 	Metadata     MetadataConfig     `json:"metadata" yaml:"metadata"`
 	Metric       MetricConfig       `json:"metric" yaml:"metric"`
 	Number       NumberConfig       `json:"number" yaml:"number"`
+	OAuth2Token  OAuth2TokenConfig  `json:"oauth2_token" yaml:"oauth2_token"`
 	Plugin       interface{}        `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Parallel     ParallelConfig     `json:"parallel" yaml:"parallel"`
 	ParseLog     ParseLogConfig     `json:"parse_log" yaml:"parse_log"`
@@ -254,6 +256,7 @@ func NewConfig() Config {
 		Metadata:     NewMetadataConfig(),
 		Metric:       NewMetricConfig(),
 		Number:       NewNumberConfig(),
+		OAuth2Token:  NewOAuth2TokenConfig(),
 		Plugin:       nil,
 		Parallel:     NewParallelConfig(),
 		ParseLog:     NewParseLogConfig(),

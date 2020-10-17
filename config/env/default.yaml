@@ -655,6 +655,11 @@ pipeline:
       number:
         operator: ${PROCESSOR_NUMBER_OPERATOR:add}
         value: ${PROCESSOR_NUMBER_VALUE:0}
+      oauth2_token:
+        client_id: ${PROCESSOR_OAUTH2_TOKEN_CLIENT_ID}
+        client_secret: ${PROCESSOR_OAUTH2_TOKEN_CLIENT_SECRET}
+        endpoint: ${PROCESSOR_OAUTH2_TOKEN_ENDPOINT}
+        metadata_key: ${PROCESSOR_OAUTH2_TOKEN_METADATA_KEY}
       parallel:
         cap: ${PROCESSOR_PARALLEL_CAP:0}
       parse_log:

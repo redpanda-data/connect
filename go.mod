@@ -20,6 +20,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.0.2
 	github.com/clbanning/mxj v1.8.4
 	github.com/colinmarc/hdfs v1.1.3
+	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/dgraph-io/ristretto v0.0.3
 	github.com/dnaeon/go-vcr v1.0.1 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.2.0
@@ -57,6 +58,7 @@ require (
 	github.com/ory/dockertest/v3 v3.6.0
 	github.com/patrobinson/gokini v0.1.0
 	github.com/pebbe/zmq4 v1.2.1
+	github.com/pquerna/cachecontrol v0.0.0-20200921180117-858c6e7e6b7e // indirect
 	github.com/prometheus/client_golang v1.7.1
 	github.com/prometheus/common v0.12.0 // indirect
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
@@ -83,6 +85,7 @@ require (
 	golang.org/x/sys v0.0.0-20200814200057-3d37ad5750ed // indirect
 	golang.org/x/tools v0.0.0-20200814230902-9882f1d1823d // indirect
 	google.golang.org/genproto v0.0.0-20200815001618-f69a88009b70 // indirect
+	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
 	nanomsg.org/go-mangos v1.4.0
 )
