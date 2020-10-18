@@ -145,17 +145,16 @@ output:
       count: $OUTPUT_BATCH_COUNT
 
 input:
-  s3:
+  aws_s3:
     bucket: bucket-$ID
     endpoint: http://localhost:$PORT
     force_path_style_urls: true
-    sqs_url: http://localhost:$PORT_TWO/queue/queue-$ID
-    sqs_body_path: Records.*.s3.object.key
-    sqs_endpoint: http://localhost:$PORT_TWO
     region: eu-west-1
     delete_objects: true
-    download_manager:
-      enabled: $VAR1
+    sqs:
+      url: http://localhost:$PORT_TWO/queue/queue-$ID
+      key_path: Records.*.s3.object.key
+      endpoint: http://localhost:$PORT_TWO
     credentials:
       id: xxxxx
       secret: xxxxx
@@ -177,32 +176,63 @@ input:
 			}),
 			testOptPort(s3Port),
 			testOptPortTwo(sqsPort),
-			testOptVarOne("false"),
 			testOptAllowDupes(),
 		)
+	})
 
-		t.Run("with download manager", func(t *testing.T) {
-			t.Parallel()
+	t.Run("s3_to_sqs_lines", func(t *testing.T) {
+		template := `
+output:
+  s3:
+    bucket: bucket-$ID
+    endpoint: http://localhost:$PORT
+    force_path_style_urls: true
+    region: eu-west-1
+    path: ${!count("$ID")}.txt
+    credentials:
+      id: xxxxx
+      secret: xxxxx
+      token: xxxxx
+    batching:
+      count: $OUTPUT_BATCH_COUNT
+      processors:
+        - archive:
+            format: lines
 
-			integrationTests(
-				integrationTestOpenClose(),
-				// integrationTestSendBatch(10),
-				integrationTestSendBatchCount(10),
-				integrationTestStreamSequential(10),
-				// integrationTestStreamParallel(10),
-				// integrationTestStreamParallelLossy(10),
-				integrationTestStreamParallelLossyThroughReconnect(10),
-			).Run(
-				t, template,
-				testOptPreTest(func(t *testing.T, env *testEnvironment) {
-					require.NoError(t, createBucketQueue(s3Port, sqsPort, env.configVars.id))
-				}),
-				testOptPort(s3Port),
-				testOptPortTwo(sqsPort),
-				testOptVarOne("true"),
-				testOptAllowDupes(),
-			)
-		})
+input:
+  aws_s3:
+    bucket: bucket-$ID
+    endpoint: http://localhost:$PORT
+    force_path_style_urls: true
+    region: eu-west-1
+    delete_objects: true
+    codec: lines
+    sqs:
+      url: http://localhost:$PORT_TWO/queue/queue-$ID
+      key_path: Records.*.s3.object.key
+      endpoint: http://localhost:$PORT_TWO
+    credentials:
+      id: xxxxx
+      secret: xxxxx
+      token: xxxxx
+`
+		integrationTests(
+			integrationTestOpenClose(),
+			integrationTestStreamSequential(20),
+			integrationTestSendBatchCount(10),
+			integrationTestStreamParallelLossyThroughReconnect(20),
+		).Run(
+			t, template,
+			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+				if env.configVars.outputBatchCount == 0 {
+					env.configVars.outputBatchCount = 1
+				}
+				require.NoError(t, createBucketQueue(s3Port, sqsPort, env.configVars.id))
+			}),
+			testOptPort(s3Port),
+			testOptPortTwo(sqsPort),
+			testOptAllowDupes(),
+		)
 	})
 
 	t.Run("s3", func(t *testing.T) {
@@ -222,14 +252,12 @@ output:
       count: $OUTPUT_BATCH_COUNT
 
 input:
-  s3:
+  aws_s3:
     bucket: bucket-$ID
     endpoint: http://localhost:$PORT
     force_path_style_urls: true
     region: eu-west-1
     delete_objects: true
-    download_manager:
-      enabled: $VAR1
     credentials:
       id: xxxxx
       secret: xxxxx
@@ -246,20 +274,6 @@ input:
 			testOptPort(s3Port),
 			testOptVarOne("false"),
 		)
-
-		t.Run("with download manager", func(t *testing.T) {
-			integrationTests(
-				integrationTestOpenCloseIsolated(),
-				integrationTestStreamIsolated(10),
-			).Run(
-				t, template,
-				testOptPreTest(func(t *testing.T, env *testEnvironment) {
-					require.NoError(t, createBucketQueue(s3Port, "", env.configVars.id))
-				}),
-				testOptPort(s3Port),
-				testOptVarOne("true"),
-			)
-		})
 	})
 
 	t.Run("sqs", func(t *testing.T) {

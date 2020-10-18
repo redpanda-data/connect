@@ -23,6 +23,18 @@ import (
 
 //------------------------------------------------------------------------------
 
+func listableStatus(s docs.Status) bool {
+	switch s {
+	case "": // Empty status is the equivalent of stable.
+		return true
+	case docs.StatusStable:
+		return true
+	case docs.StatusBeta:
+		return true
+	}
+	return false
+}
+
 func listComponents(c *cli.Context) {
 	jsonFmt := c.String("format") == "json"
 
@@ -71,14 +83,14 @@ func listComponents(c *cli.Context) {
 	}()
 
 	for t, c := range input.Constructors {
-		if c.Status != docs.StatusDeprecated {
+		if listableStatus(c.Status) {
 			components = append(components, t)
 		}
 	}
 	printAll("Inputs")
 
 	for t, c := range processor.Constructors {
-		if c.Status != docs.StatusDeprecated {
+		if listableStatus(c.Status) {
 			components = append(components, t)
 		}
 	}
@@ -90,42 +102,42 @@ func listComponents(c *cli.Context) {
 	printAll("Conditions")
 
 	for t, c := range output.Constructors {
-		if c.Status != docs.StatusDeprecated {
+		if listableStatus(c.Status) {
 			components = append(components, t)
 		}
 	}
 	printAll("Outputs")
 
 	for t, c := range cache.Constructors {
-		if c.Status != docs.StatusDeprecated {
+		if listableStatus(c.Status) {
 			components = append(components, t)
 		}
 	}
 	printAll("Caches")
 
 	for t, c := range ratelimit.Constructors {
-		if c.Status != docs.StatusDeprecated {
+		if listableStatus(c.Status) {
 			components = append(components, t)
 		}
 	}
 	printAll("Rate Limits")
 
 	for t, c := range buffer.Constructors {
-		if c.Status != docs.StatusDeprecated {
+		if listableStatus(c.Status) {
 			components = append(components, t)
 		}
 	}
 	printAll("Buffers")
 
 	for t, c := range metrics.Constructors {
-		if c.Status != docs.StatusDeprecated {
+		if listableStatus(c.Status) {
 			components = append(components, t)
 		}
 	}
 	printAll("Metrics")
 
 	for t, c := range tracer.Constructors {
-		if c.Status != docs.StatusDeprecated {
+		if listableStatus(c.Status) {
 			components = append(components, t)
 		}
 	}

@@ -88,6 +88,25 @@ INPUT_AMQP_TLS_ENABLED                               = false
 INPUT_AMQP_TLS_ROOT_CAS_FILE
 INPUT_AMQP_TLS_SKIP_CERT_VERIFY                      = false
 INPUT_AMQP_URL                                       = amqp://guest:guest@localhost:5672/
+INPUT_AWS_S3_BUCKET
+INPUT_AWS_S3_CODEC                                   = all-bytes
+INPUT_AWS_S3_CREDENTIALS_ID
+INPUT_AWS_S3_CREDENTIALS_PROFILE
+INPUT_AWS_S3_CREDENTIALS_ROLE
+INPUT_AWS_S3_CREDENTIALS_ROLE_EXTERNAL_ID
+INPUT_AWS_S3_CREDENTIALS_SECRET
+INPUT_AWS_S3_CREDENTIALS_TOKEN
+INPUT_AWS_S3_DELETE_OBJECTS                          = false
+INPUT_AWS_S3_ENDPOINT
+INPUT_AWS_S3_FORCE_PATH_STYLE_URLS                   = false
+INPUT_AWS_S3_PREFIX
+INPUT_AWS_S3_REGION                                  = eu-west-1
+INPUT_AWS_S3_SQS_BUCKET_PATH                         = Records.*.s3.bucket.name
+INPUT_AWS_S3_SQS_ENDPOINT
+INPUT_AWS_S3_SQS_ENVELOPE_PATH
+INPUT_AWS_S3_SQS_KEY_PATH                            = Records.*.s3.object.key
+INPUT_AWS_S3_SQS_MAX_MESSAGES                        = 10
+INPUT_AWS_S3_SQS_URL
 INPUT_BLOBLANG_COUNT                                 = 0
 INPUT_BLOBLANG_INTERVAL                              = 1s
 INPUT_BLOBLANG_MAPPING

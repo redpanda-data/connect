@@ -403,13 +403,15 @@ func receiveMessage(
 		res = response.NewError(err)
 	}
 
+	b := tran.Payload.Get(0)
+
 	select {
 	case tran.ResponseChan <- res:
 	case <-ctx.Done():
 		t.Fatal("timed out on response")
 	}
 
-	return tran.Payload.Get(0)
+	return b
 }
 
 func messageMatch(t *testing.T, p types.Part, content string, metadata ...string) {

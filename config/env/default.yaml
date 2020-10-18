@@ -54,6 +54,28 @@ input:
             root_cas_file: ${INPUT_AMQP_1_TLS_ROOT_CAS_FILE}
             skip_cert_verify: ${INPUT_AMQP_1_TLS_SKIP_CERT_VERIFY:false}
           url: ${INPUT_AMQP_1_URL}
+        aws_s3:
+          bucket: ${INPUT_AWS_S3_BUCKET}
+          codec: ${INPUT_AWS_S3_CODEC:all-bytes}
+          credentials:
+            id: ${INPUT_AWS_S3_CREDENTIALS_ID}
+            profile: ${INPUT_AWS_S3_CREDENTIALS_PROFILE}
+            role: ${INPUT_AWS_S3_CREDENTIALS_ROLE}
+            role_external_id: ${INPUT_AWS_S3_CREDENTIALS_ROLE_EXTERNAL_ID}
+            secret: ${INPUT_AWS_S3_CREDENTIALS_SECRET}
+            token: ${INPUT_AWS_S3_CREDENTIALS_TOKEN}
+          delete_objects: ${INPUT_AWS_S3_DELETE_OBJECTS:false}
+          endpoint: ${INPUT_AWS_S3_ENDPOINT}
+          force_path_style_urls: ${INPUT_AWS_S3_FORCE_PATH_STYLE_URLS:false}
+          prefix: ${INPUT_AWS_S3_PREFIX}
+          region: ${INPUT_AWS_S3_REGION:eu-west-1}
+          sqs:
+            bucket_path: ${INPUT_AWS_S3_SQS_BUCKET_PATH:Records.*.s3.bucket.name}
+            endpoint: ${INPUT_AWS_S3_SQS_ENDPOINT}
+            envelope_path: ${INPUT_AWS_S3_SQS_ENVELOPE_PATH}
+            key_path: ${INPUT_AWS_S3_SQS_KEY_PATH:Records.*.s3.object.key}
+            max_messages: ${INPUT_AWS_S3_SQS_MAX_MESSAGES:10}
+            url: ${INPUT_AWS_S3_SQS_URL}
         bloblang:
           count: ${INPUT_BLOBLANG_COUNT:0}
           interval: ${INPUT_BLOBLANG_INTERVAL:1s}
