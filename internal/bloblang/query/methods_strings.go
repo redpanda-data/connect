@@ -982,7 +982,7 @@ var _ = RegisterMethod(
 			`{"created_at":1597405526}`,
 			`{"something_at":"2020-Aug-14 11:50:26"}`,
 		),
-	).IsBeta(true),
+	).Beta(),
 	true, formatTimestampMethod,
 	ExpectBetweenNAndMArgs(0, 2),
 	ExpectStringArg(0),

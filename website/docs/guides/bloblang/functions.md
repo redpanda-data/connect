@@ -206,7 +206,7 @@ root.thing.key = env("key")
 
 ### `file`
 
-BETA: This function is experimental and therefore subject to change outside of major version releases.
+BETA: This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 
 Reads a file and returns its contents. Relative paths are resolved from the directory of the process executing the mapping.
 

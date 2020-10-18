@@ -35,8 +35,8 @@ var bloblangFunctionsTemplate = `{{define "function_example" -}}
 {{define "function_spec" -}}
 ### ` + "`{{.Name}}`" + `
 
-{{if .Beta -}}
-BETA: This function is experimental and therefore subject to change outside of major version releases.
+{{if eq .Status "beta" -}}
+BETA: This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 
 {{end -}}
 {{.Description}}
@@ -145,8 +145,8 @@ var bloblangMethodsTemplate = `{{define "method_example" -}}
 {{define "method_spec" -}}
 ### ` + "`{{.Name}}`" + `
 
-{{if .Beta -}}
-BETA: This method is experimental and therefore subject to change outside of major version releases.
+{{if eq .Status "beta" -}}
+BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 
 {{end -}}
 {{.Description}}
@@ -254,7 +254,7 @@ func BloblangMethodsMarkdown() ([]byte, error) {
 	}
 
 	for _, spec := range specs {
-		if len(spec.Categories) == 0 && !spec.Deprecated {
+		if len(spec.Categories) == 0 && spec.Status != query.StatusDeprecated {
 			spec.Description = strings.TrimSpace(spec.Description)
 			ctx.General = append(ctx.General, spec)
 		}

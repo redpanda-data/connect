@@ -25,6 +25,18 @@ func NewExampleSpec(summary, mapping string, results ...string) ExampleSpec {
 
 //------------------------------------------------------------------------------
 
+// Status of a function or method.
+type Status string
+
+// Component statuses.
+var (
+	StatusStable     Status = "stable"
+	StatusBeta       Status = "beta"
+	StatusDeprecated Status = "deprecated"
+)
+
+//------------------------------------------------------------------------------
+
 // FunctionCategory is an abstract title for functions of a similar purpose.
 type FunctionCategory string
 
@@ -37,6 +49,9 @@ var (
 
 // FunctionSpec describes a Bloblang function.
 type FunctionSpec struct {
+	// The release status of the function.
+	Status Status
+
 	// A category to place the function within.
 	Category FunctionCategory
 
@@ -48,18 +63,12 @@ type FunctionSpec struct {
 
 	// Examples shows general usage for the function.
 	Examples []ExampleSpec
-
-	// Beta describes whether this function is a beta component.
-	Beta bool
-
-	// Deprecated is true for functions that are deprecated and only exist for
-	// backwards compatibility reasons.
-	Deprecated bool
 }
 
 // NewFunctionSpec creates a new function spec.
 func NewFunctionSpec(category FunctionCategory, name, description string, examples ...ExampleSpec) FunctionSpec {
 	return FunctionSpec{
+		Status:      StatusStable,
 		Category:    category,
 		Name:        name,
 		Description: description,
@@ -67,9 +76,9 @@ func NewFunctionSpec(category FunctionCategory, name, description string, exampl
 	}
 }
 
-// IsBeta sets whether the function is a beta component.
-func (s FunctionSpec) IsBeta(b bool) FunctionSpec {
-	s.Beta = b
+// Beta flags the function as a beta component.
+func (s FunctionSpec) Beta() FunctionSpec {
+	s.Status = StatusBeta
 	return s
 }
 
@@ -78,8 +87,8 @@ func (s FunctionSpec) IsBeta(b bool) FunctionSpec {
 // mappings.
 func NewDeprecatedFunctionSpec(name string) FunctionSpec {
 	return FunctionSpec{
-		Name:       name,
-		Deprecated: true,
+		Name:   name,
+		Status: StatusDeprecated,
 	}
 }
 
@@ -109,6 +118,9 @@ type MethodCatSpec struct {
 
 // MethodSpec describes a Bloblang method.
 type MethodSpec struct {
+	// The release status of the function.
+	Status Status
+
 	// Name of the method (as it appears in config).
 	Name string
 
@@ -120,19 +132,13 @@ type MethodSpec struct {
 
 	// Categories that this method fits within.
 	Categories []MethodCatSpec
-
-	// Beta describes whether this function is a beta component.
-	Beta bool
-
-	// Deprecated is true for methods that are deprecated and only exist for
-	// backwards compatibility reasons.
-	Deprecated bool
 }
 
 // NewMethodSpec creates a new method spec.
 func NewMethodSpec(name, description string, examples ...ExampleSpec) MethodSpec {
 	return MethodSpec{
 		Name:        name,
+		Status:      StatusStable,
 		Description: description,
 		Examples:    examples,
 	}
@@ -143,14 +149,14 @@ func NewMethodSpec(name, description string, examples ...ExampleSpec) MethodSpec
 // mappings.
 func NewDeprecatedMethodSpec(name string) MethodSpec {
 	return MethodSpec{
-		Name:       name,
-		Deprecated: true,
+		Name:   name,
+		Status: StatusDeprecated,
 	}
 }
 
-// IsBeta sets whether the function is a beta component.
-func (m MethodSpec) IsBeta(b bool) MethodSpec {
-	m.Beta = b
+// Beta flags the function as a beta component.
+func (m MethodSpec) Beta() MethodSpec {
+	m.Status = StatusBeta
 	return m
 }
 

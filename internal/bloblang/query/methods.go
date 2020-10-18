@@ -925,7 +925,7 @@ var _ = RegisterMethod(
 			"In order to load a schema from a file use the `file` function.",
 			`root = this.json_schema(file(var("BENTHOS_TEST_BLOBLANG_SCHEMA_FILE")))`,
 		),
-	).IsBeta(true),
+	).Beta(),
 	true, jsonSchemaMethod,
 	ExpectNArgs(1),
 	ExpectStringArg(0),

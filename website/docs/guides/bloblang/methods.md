@@ -453,7 +453,7 @@ root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix("2006-Jan-02")
 
 ### `format_timestamp`
 
-BETA: This method is experimental and therefore subject to change outside of major version releases.
+BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 
 Attempts to format a unix timestamp as a string, following ISO 8601 format by default.
 
@@ -571,7 +571,7 @@ root.result = this.foo.get(this.target)
 
 ### `json_schema`
 
-BETA: This method is experimental and therefore subject to change outside of major version releases.
+BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 
 Checks a [JSON schema](https://json-schema.org/) against a value and returns the value if it matches or throws and error if it does not.
 

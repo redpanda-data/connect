@@ -283,7 +283,7 @@ var _ = RegisterFunction(
 			`{}`,
 			`{"doc":{"foo":"bar"}}`,
 		),
-	).IsBeta(true),
+	).Beta(),
 	true, fileFunction,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
