@@ -1,6 +1,7 @@
 ---
 title: json_schema
 type: condition
+status: stable
 ---
 
 <!--

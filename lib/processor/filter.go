@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
@@ -18,7 +19,7 @@ import (
 func init() {
 	Constructors[TypeFilter] = TypeSpec{
 		constructor: NewFilter,
-		Deprecated:  true,
+		Status:      docs.StatusDeprecated,
 		Footnotes: `
 ## Alternatives
 

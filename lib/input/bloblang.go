@@ -28,7 +28,7 @@ func init() {
 			}
 			return NewAsyncReader(TypeBloblang, true, b, log, stats)
 		},
-		Beta: true,
+		Status: docs.StatusBeta,
 		Summary: `
 Generates messages at a given interval using a [Bloblang](/docs/guides/bloblang/about)
 mapping executed without a context. This allows you to generate messages for

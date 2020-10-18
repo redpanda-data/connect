@@ -17,7 +17,7 @@ import (
 func init() {
 	Constructors[TypeJSON] = TypeSpec{
 		constructor: NewJSON,
-		Deprecated:  true,
+		Status:      docs.StatusDeprecated,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("operator", "A logical [operator](#operators) to check with.").HasOptions(
 				"exists", "equals", "contains",

@@ -22,7 +22,7 @@ func init() {
 
 	Constructors[TypeXML] = TypeSpec{
 		constructor: NewXML,
-		Beta:        true,
+		Status:      docs.StatusBeta,
 		Categories: []Category{
 			CategoryParsing,
 		},

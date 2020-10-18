@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/util/config"
 	"gopkg.in/yaml.v3"
@@ -129,7 +130,7 @@ func Descriptions() string {
 	buf.WriteString("### Contents\n\n")
 	i := 0
 	for _, name := range names {
-		if Constructors[name].Deprecated {
+		if Constructors[name].Status == docs.StatusDeprecated {
 			continue
 		}
 		i++
@@ -140,7 +141,7 @@ func Descriptions() string {
 	// Append each description
 	for i, name := range names {
 		def := Constructors[name]
-		if def.Deprecated {
+		if def.Status == docs.StatusDeprecated {
 			continue
 		}
 

@@ -3,6 +3,10 @@ const fs = require('fs');
 const {parseMarkdownString} = require('@docusaurus/utils');
 
 function components(type) {
+  return all_components(type).filter(c => c.status == "stable" || c.status == "beta")
+}
+
+function all_components(type) {
   let components = [];
   let dir = path.join(__dirname, `../../../docs/components/${type}`);
   fs.readdirSync(dir).forEach(function (file) {
@@ -10,24 +14,6 @@ function components(type) {
       let name = file.split('.').slice(0, -1).join('.');
       let data = fs.readFileSync(path.join(dir, file));
       const {frontMatter} = parseMarkdownString(data);
-      if (frontMatter.deprecated === true) {
-        return;
-      }
-      frontMatter["name"] = name;
-      components.push(frontMatter);
-    }
-  });
-  return components;
-}
-
-function deprecatedComponents(type) {
-  let components = [];
-  let dir = path.join(__dirname, `../../../docs/components/${type}`);
-  fs.readdirSync(dir).forEach(function (file) {
-    let name = file.split('.').slice(0, -1).join('.');
-    let data = fs.readFileSync(path.join(dir, file));
-    const {frontMatter} = parseMarkdownString(data);
-    if (frontMatter.deprecated === true) {
       frontMatter["name"] = name;
       components.push(frontMatter);
     }
@@ -38,26 +24,42 @@ function deprecatedComponents(type) {
 function listPaths(type) {
   let paths = [`components/${type}/about`];
 
-  components(type).forEach(function (info) {
-    paths.push(`components/${type}/${info.name}`);
-  });
+  let components = all_components(type);
 
-  return paths;
-}
+  components
+    .filter(c => c.status == "stable" || c.status == "beta")
+    .forEach(function (info) {
+      paths.push(`components/${type}/${info.name}`);
+    });
 
-function listDeprecatedPaths(type) {
-  let paths = [];
+  let experimentalPaths = components
+    .filter(c => c.status == "experimental")
+    .map(c => `components/${type}/${c.name}`);
 
-  deprecatedComponents(type).forEach(function (info) {
-    paths.push(`components/${type}/${info.name}`);
-  });
+  if ( experimentalPaths.length > 0 ) {
+    paths.push({
+      type: 'category',
+      label: 'Experimental',
+      items: experimentalPaths,
+    });
+  }
+
+  let deprecatedPaths = components
+    .filter(c => c.status == "deprecated")
+    .map(c => `components/${type}/${c.name}`);
+
+  if ( deprecatedPaths.length > 0 ) {
+    paths.push({
+      type: 'category',
+      label: 'Deprecated',
+      items: deprecatedPaths,
+    });
+  }
 
   return paths;
 }
 
 module.exports = {
-  listPaths: listPaths,
-  listDeprecatedPaths: listDeprecatedPaths,
   components: components,
-  deprecatedComponents: deprecatedComponents,
+  listPaths: listPaths,
 };

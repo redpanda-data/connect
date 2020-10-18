@@ -1,6 +1,7 @@
 ---
 title: kafka_balanced
 type: input
+status: stable
 categories: ["Services"]
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: filter
 type: processor
-deprecated: true
+status: deprecated
 ---
 
 <!--

@@ -1,6 +1,7 @@
 ---
 title: sleep
 type: processor
+status: stable
 categories: ["Utility"]
 ---
 

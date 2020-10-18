@@ -30,7 +30,7 @@ func init() {
 Performs conversions to or from a protobuf message. This processor uses
 reflection, meaning conversions can be made directly from the target .proto
 files.`,
-		Beta: true,
+		Status: docs.StatusBeta,
 		Description: `
 The main functionality of this processor is to map to and from JSON documents,
 you can read more about JSON mapping of protobuf messages here:

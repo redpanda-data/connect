@@ -1,7 +1,7 @@
 ---
 title: hash_sample
 type: processor
-deprecated: true
+status: deprecated
 ---
 
 <!--

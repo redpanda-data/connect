@@ -29,12 +29,11 @@ type TypeSpec struct {
 	constructor        func(conf Config, opts ...func(Type)) (Type, error)
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
 
+	Status      docs.Status
 	Summary     string
 	Description string
 	Footnotes   string
 	FieldSpecs  docs.FieldSpecs
-	Beta        bool
-	Deprecated  bool
 }
 
 // Constructors is a map of all metrics types with their specs.

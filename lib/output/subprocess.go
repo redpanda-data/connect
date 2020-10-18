@@ -24,7 +24,7 @@ func init() {
 			}
 			return NewAsyncWriter(TypeSubprocess, 1, s, log, stats)
 		},
-		Beta: true,
+		Status: docs.StatusBeta,
 		Summary: `
 Executes a command, runs it as a subprocess, and writes messages to it over stdin.`,
 		Description: `

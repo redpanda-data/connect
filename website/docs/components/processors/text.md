@@ -1,7 +1,7 @@
 ---
 title: text
 type: processor
-deprecated: true
+status: deprecated
 ---
 
 <!--

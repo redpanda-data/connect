@@ -17,7 +17,7 @@ import (
 func init() {
 	Constructors[TypeSample] = TypeSpec{
 		constructor: NewSample,
-		Deprecated:  true,
+		Status:      docs.StatusDeprecated,
 		Footnotes: `
 ## Alternatives
 

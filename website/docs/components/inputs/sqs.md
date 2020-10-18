@@ -1,6 +1,7 @@
 ---
 title: sqs
 type: input
+status: stable
 categories: ["Services","AWS"]
 ---
 

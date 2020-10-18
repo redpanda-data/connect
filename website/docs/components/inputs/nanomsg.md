@@ -1,6 +1,7 @@
 ---
 title: nanomsg
 type: input
+status: stable
 categories: ["Network"]
 ---
 

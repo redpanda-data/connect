@@ -4,6 +4,7 @@ import (
 	"io"
 	"net"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -27,7 +28,7 @@ instance of this input can utilise any number of threads within a
 ` + "`pipeline`" + ` section of a config.
 
 If the delimiter field is left empty then line feed (\n) is used.`,
-		Deprecated: true,
+		Status: docs.StatusDeprecated,
 	}
 }
 

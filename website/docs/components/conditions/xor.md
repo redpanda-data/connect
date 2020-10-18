@@ -1,6 +1,7 @@
 ---
 title: xor
 type: condition
+status: stable
 ---
 
 <!--

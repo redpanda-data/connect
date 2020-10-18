@@ -1,6 +1,7 @@
 ---
 title: nats_stream
 type: input
+status: stable
 categories: ["Services"]
 ---
 

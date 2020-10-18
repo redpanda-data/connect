@@ -21,12 +21,11 @@ import (
 type TypeSpec struct {
 	constructor func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (types.RateLimit, error)
 
+	Status      docs.Status
 	Summary     string
 	Description string
 	Footnotes   string
 	FieldSpecs  docs.FieldSpecs
-	Beta        bool
-	Deprecated  bool
 }
 
 // Constructors is a map of all cache types with their specs.

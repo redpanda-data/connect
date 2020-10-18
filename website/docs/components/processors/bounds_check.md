@@ -1,6 +1,7 @@
 ---
 title: bounds_check
 type: processor
+status: stable
 categories: ["Utility"]
 ---
 

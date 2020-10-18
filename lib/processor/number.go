@@ -20,7 +20,7 @@ import (
 func init() {
 	Constructors[TypeNumber] = TypeSpec{
 		constructor: NewNumber,
-		Deprecated:  true,
+		Status:      docs.StatusDeprecated,
 		Footnotes: `
 ## Alternatives
 

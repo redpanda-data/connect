@@ -1,6 +1,7 @@
 ---
 title: bloblang
 type: condition
+status: stable
 ---
 
 <!--

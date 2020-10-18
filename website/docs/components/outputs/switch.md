@@ -1,6 +1,7 @@
 ---
 title: switch
 type: output
+status: stable
 categories: ["Utility"]
 ---
 

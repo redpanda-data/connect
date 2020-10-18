@@ -1,6 +1,7 @@
 ---
 title: insert_part
 type: processor
+status: stable
 categories: ["Composition"]
 ---
 

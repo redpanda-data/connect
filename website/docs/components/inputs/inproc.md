@@ -1,6 +1,7 @@
 ---
 title: inproc
 type: input
+status: stable
 categories: ["Utility"]
 ---
 

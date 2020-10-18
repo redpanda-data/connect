@@ -1,6 +1,7 @@
 ---
 title: mqtt
 type: output
+status: stable
 categories: ["Services"]
 ---
 

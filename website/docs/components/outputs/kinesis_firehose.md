@@ -1,6 +1,7 @@
 ---
 title: kinesis_firehose
 type: output
+status: stable
 categories: ["Services","AWS"]
 ---
 

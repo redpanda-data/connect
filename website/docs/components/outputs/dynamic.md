@@ -1,6 +1,7 @@
 ---
 title: dynamic
 type: output
+status: stable
 categories: ["Utility"]
 ---
 

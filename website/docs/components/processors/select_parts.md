@@ -1,6 +1,7 @@
 ---
 title: select_parts
 type: processor
+status: stable
 categories: ["Utility"]
 ---
 

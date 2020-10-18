@@ -25,7 +25,7 @@ A processor that extracts the value of a field [dot path](/docs/configuration/fi
 within payloads according to a specified [codec](#codec), applies a list of
 processors to the extracted value and finally sets the field within the original
 payloads to the processed result.`,
-		Deprecated: true,
+		Status: docs.StatusDeprecated,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("codec", "A [codec](#codec) to use in order to extract (and set) the target field.").HasOptions("json", "metadata"),
 			docs.FieldCommon("path", "A [dot path](/docs/configuration/field_paths) pointing to the target field."),

@@ -15,7 +15,7 @@ import (
 func init() {
 	Constructors[TypeKinesisBalanced] = TypeSpec{
 		constructor: NewKinesisBalanced,
-		Beta:        true,
+		Status:      docs.StatusBeta,
 		Summary: `
 Receives messages from a Kinesis stream and automatically balances shards across
 consumers.`,

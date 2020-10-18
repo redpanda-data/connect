@@ -1,7 +1,7 @@
 ---
 title: udp_server
 type: input
-deprecated: true
+status: deprecated
 ---
 
 <!--

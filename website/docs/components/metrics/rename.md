@@ -1,7 +1,7 @@
 ---
 title: rename
 type: metrics
-deprecated: true
+status: deprecated
 ---
 
 <!--

@@ -1,6 +1,7 @@
 ---
 title: sns
 type: output
+status: stable
 categories: ["Services","AWS"]
 ---
 

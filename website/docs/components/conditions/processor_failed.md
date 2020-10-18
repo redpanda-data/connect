@@ -1,6 +1,7 @@
 ---
 title: processor_failed
 type: condition
+status: stable
 ---
 
 <!--

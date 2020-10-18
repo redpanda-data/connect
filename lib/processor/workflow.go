@@ -25,7 +25,7 @@ func init() {
 		Categories: []Category{
 			CategoryComposition,
 		},
-		Beta: true,
+		Status: docs.StatusBeta,
 		Summary: `
 Executes a topology of ` + "[`branch` processors][processors.branch]" + `,
 performing them in parallel where possible.`,

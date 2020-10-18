@@ -1,7 +1,7 @@
 ---
 title: filter_parts
 type: processor
-deprecated: true
+status: deprecated
 ---
 
 <!--

@@ -1,6 +1,7 @@
 ---
 title: kinesis
 type: input
+status: stable
 categories: ["Services","AWS"]
 ---
 

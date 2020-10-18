@@ -1,6 +1,7 @@
 ---
 title: noop
 type: processor
+status: stable
 ---
 
 <!--

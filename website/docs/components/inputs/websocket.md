@@ -1,6 +1,7 @@
 ---
 title: websocket
 type: input
+status: stable
 categories: ["Network"]
 ---
 

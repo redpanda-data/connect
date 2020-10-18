@@ -1,6 +1,7 @@
 ---
 title: redis
 type: cache
+status: stable
 ---
 
 <!--

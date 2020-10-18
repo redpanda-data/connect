@@ -1,6 +1,7 @@
 ---
 title: resource
 type: input
+status: stable
 categories: ["Utility"]
 ---
 

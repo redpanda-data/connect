@@ -1,6 +1,7 @@
 ---
 title: http
 type: processor
+status: stable
 categories: ["Integration"]
 ---
 

@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -27,7 +28,7 @@ left empty then line feed (\n) is used.
 The field ` + "`max_buffer`" + ` specifies the maximum amount of memory to
 allocate for buffering lines of data, this must exceed the largest expected
 message size.`,
-		Deprecated: true,
+		Status: docs.StatusDeprecated,
 	}
 }
 

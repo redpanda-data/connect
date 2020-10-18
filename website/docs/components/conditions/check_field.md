@@ -1,6 +1,7 @@
 ---
 title: check_field
 type: condition
+status: stable
 ---
 
 <!--

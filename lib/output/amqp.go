@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
@@ -15,7 +16,7 @@ func init() {
 		Description: `
 DEPRECATED: This output is deprecated and scheduled for removal in Benthos V4.
 Please use [` + "`amqp_0_9`" + `](amqp_0_9) instead.`,
-		Deprecated: true,
+		Status: docs.StatusDeprecated,
 	}
 }
 

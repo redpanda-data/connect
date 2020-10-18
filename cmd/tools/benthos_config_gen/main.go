@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/lib/condition"
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -379,12 +379,12 @@ func main() {
 	// Get list of all types (both input and output).
 	typeMap := map[string]struct{}{}
 	for t, info := range input.Constructors {
-		if !info.Deprecated {
+		if info.Status != docs.StatusDeprecated && info.Status != docs.StatusExperimental {
 			typeMap[t] = struct{}{}
 		}
 	}
 	for t, info := range output.Constructors {
-		if !info.Deprecated {
+		if info.Status != docs.StatusDeprecated && info.Status != docs.StatusExperimental {
 			typeMap[t] = struct{}{}
 		}
 	}
@@ -413,7 +413,7 @@ func main() {
 
 	// Create processor configs for all types.
 	for t, info := range processor.Constructors {
-		if info.Deprecated {
+		if info.Status == docs.StatusDeprecated || info.Status == docs.StatusExperimental {
 			continue
 		}
 
@@ -434,38 +434,9 @@ func main() {
 		createYAML(t, filepath.Join(configsDir, "processors", t+".yaml"), false, sanit)
 	}
 
-	// Create condition configs for all types.
-	for t, info := range condition.Constructors {
-		if info.Deprecated {
-			continue
-		}
-
-		conf := config.New()
-		conf.Input.Processors = nil
-		conf.Output.Processors = nil
-
-		condConf := condition.NewConfig()
-		condConf.Type = t
-
-		procConf := processor.NewConfig()
-		procConf.Type = "filter_parts"
-		procConf.FilterParts = processor.FilterPartsConfig{
-			Config: condConf,
-		}
-
-		conf.Pipeline.Processors = append(conf.Pipeline.Processors, procConf)
-
-		sanit, err := conf.SanitisedNoDeprecated()
-		if err != nil {
-			panic(err)
-		}
-
-		createYAML(t, filepath.Join(configsDir, "conditions", t+".yaml"), false, sanit)
-	}
-
 	// Create metrics configs for all types.
 	for t, info := range metrics.Constructors {
-		if info.Deprecated {
+		if info.Status == docs.StatusDeprecated || info.Status == docs.StatusExperimental {
 			continue
 		}
 
@@ -486,7 +457,7 @@ func main() {
 
 	// Create tracer configs for all types.
 	for t, info := range tracer.Constructors {
-		if info.Deprecated {
+		if info.Status == docs.StatusDeprecated || info.Status == docs.StatusExperimental {
 			continue
 		}
 

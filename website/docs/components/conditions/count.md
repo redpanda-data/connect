@@ -1,6 +1,7 @@
 ---
 title: count
 type: condition
+status: stable
 ---
 
 <!--

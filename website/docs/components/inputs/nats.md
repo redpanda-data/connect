@@ -1,6 +1,7 @@
 ---
 title: nats
 type: input
+status: stable
 categories: ["Services"]
 ---
 

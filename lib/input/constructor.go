@@ -62,14 +62,13 @@ type TypeSpec struct {
 		stats metrics.Type,
 	) (Type, error)
 
+	Status      docs.Status
 	Summary     string
 	Description string
 	Categories  []Category
 	Footnotes   string
 	FieldSpecs  docs.FieldSpecs
 	Examples    []docs.AnnotatedExample
-	Beta        bool
-	Deprecated  bool
 }
 
 // Constructors is a map of all input types with their specs.

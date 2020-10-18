@@ -17,7 +17,7 @@ import (
 func init() {
 	Constructors[TypeConditional] = TypeSpec{
 		constructor: NewConditional,
-		Deprecated:  true,
+		Status:      docs.StatusDeprecated,
 		Summary: `
 Executes a set of child processors when a [condition](/docs/components/conditions/about)
 passes for a message batch, otherwise a different set of processors are applied.`,

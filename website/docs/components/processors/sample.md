@@ -1,7 +1,7 @@
 ---
 title: sample
 type: processor
-deprecated: true
+status: deprecated
 ---
 
 <!--

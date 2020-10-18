@@ -1,6 +1,7 @@
 ---
 title: redis_list
 type: input
+status: stable
 categories: ["Services"]
 ---
 

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -26,7 +27,7 @@ A processor that manages a map of ` + "`process_map`" + ` processors and
 calculates a Directed Acyclic Graph (DAG) of their dependencies by referring to
 their postmap targets for provided fields and their premap targets for required
 fields.`,
-		Deprecated: true,
+		Status: docs.StatusDeprecated,
 		Description: `
 ## Alternatives
 

@@ -21,7 +21,7 @@ import (
 
 func init() {
 	Constructors[TypeBranch] = TypeSpec{
-		Beta:        true,
+		Status:      docs.StatusBeta,
 		constructor: NewBranch,
 		Categories: []Category{
 			CategoryComposition,

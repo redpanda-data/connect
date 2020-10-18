@@ -48,6 +48,19 @@ root.foo = this.doc.apply("thing")
 # Out: {"foo":{"inner":"hello world"}}
 ```
 
+```coffee
+map create_foo {
+  root.name = "a foo"
+  root.purpose = "to be a foo"
+}
+
+root = this
+root.foo = null.apply("create_foo")
+
+# In:  {"id":"1234"}
+# Out: {"foo":{"name":"a foo","purpose":"to be a foo"},"id":"1234"}
+```
+
 ### `catch`
 
 If the result of a target query fails (due to incorrect types, failed parsing, etc) the argument is returned instead.

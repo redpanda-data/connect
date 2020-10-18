@@ -1,6 +1,7 @@
 ---
 title: static
 type: condition
+status: stable
 ---
 
 <!--

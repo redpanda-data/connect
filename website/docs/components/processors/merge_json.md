@@ -1,7 +1,7 @@
 ---
 title: merge_json
 type: processor
-deprecated: true
+status: deprecated
 ---
 
 <!--

@@ -27,7 +27,7 @@ A processor that extracts and maps fields identified via
 [dot path](/docs/configuration/field_paths) from the original payload into a new
 object, applies a list of processors to the newly constructed object, and
 finally maps the result back into the original payload.`,
-		Deprecated: true,
+		Status: docs.StatusDeprecated,
 		Description: `
 ## Alternatives
 

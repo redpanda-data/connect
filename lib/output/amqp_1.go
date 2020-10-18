@@ -15,7 +15,7 @@ import (
 func init() {
 	Constructors[TypeAMQP1] = TypeSpec{
 		constructor: NewAMQP1,
-		Beta:        true,
+		Status:      docs.StatusBeta,
 		Summary: `
 Sends messages to an AMQP (1.0) server.`,
 		Description: ``,

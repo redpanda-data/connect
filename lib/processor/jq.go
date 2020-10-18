@@ -17,7 +17,7 @@ import (
 func init() {
 	Constructors[TypeJQ] = TypeSpec{
 		constructor: NewJQ,
-		Beta:        true,
+		Status:      docs.StatusBeta,
 		Categories: []Category{
 			CategoryMapping,
 		},

@@ -1,6 +1,7 @@
 ---
 title: subprocess
 type: processor
+status: stable
 categories: ["Integration"]
 ---
 

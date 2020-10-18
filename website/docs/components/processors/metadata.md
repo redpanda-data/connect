@@ -1,7 +1,7 @@
 ---
 title: metadata
 type: processor
-deprecated: true
+status: deprecated
 ---
 
 <!--

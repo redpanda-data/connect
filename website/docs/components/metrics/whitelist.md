@@ -1,7 +1,7 @@
 ---
 title: whitelist
 type: metrics
-deprecated: true
+status: deprecated
 ---
 
 <!--

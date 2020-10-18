@@ -1,6 +1,7 @@
 ---
 title: socket_server
 type: input
+status: stable
 categories: ["Network"]
 ---
 

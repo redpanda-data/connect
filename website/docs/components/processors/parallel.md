@@ -1,6 +1,7 @@
 ---
 title: parallel
 type: processor
+status: stable
 categories: ["Composition"]
 ---
 

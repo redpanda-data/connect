@@ -21,7 +21,7 @@ import (
 func init() {
 	Constructors[TypeCloudWatch] = TypeSpec{
 		constructor: NewCloudWatch,
-		Beta:        true,
+		Status:      docs.StatusBeta,
 		Summary: `
 Send metrics to AWS CloudWatch using the PutMetricData endpoint.`,
 		Description: `

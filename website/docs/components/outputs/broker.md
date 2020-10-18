@@ -1,6 +1,7 @@
 ---
 title: broker
 type: output
+status: stable
 categories: ["Utility"]
 ---
 

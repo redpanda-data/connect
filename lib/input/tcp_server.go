@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -33,7 +34,7 @@ If the delimiter field is left empty then line feed (\n) is used.
 The field ` + "`max_buffer`" + ` specifies the maximum amount of memory to
 allocate _per connection_ for buffering lines of data. If a line of data from a
 connection exceeds this value then the connection will be closed.`,
-		Deprecated: true,
+		Status: docs.StatusDeprecated,
 	}
 }
 

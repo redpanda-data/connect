@@ -29,7 +29,7 @@ func init() {
 			}
 			return NewAsyncReader(TypeSubprocess, true, b, log, stats)
 		},
-		Beta: true,
+		Status: docs.StatusBeta,
 		Summary: `
 Executes a command, runs it as a subprocess, and consumes messages from it over stdout.`,
 		Description: `

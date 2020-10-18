@@ -1,6 +1,7 @@
 ---
 title: lambda
 type: processor
+status: stable
 categories: ["Integration"]
 ---
 

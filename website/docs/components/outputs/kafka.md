@@ -1,6 +1,7 @@
 ---
 title: kafka
 type: output
+status: stable
 categories: ["Services"]
 ---
 

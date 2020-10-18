@@ -26,7 +26,7 @@ func init() {
 		},
 		Summary: `
 Performs Avro based operations on messages based on a schema.`,
-		Beta: true,
+		Status: docs.StatusBeta,
 		Description: `
 ## Operators
 

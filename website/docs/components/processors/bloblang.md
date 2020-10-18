@@ -1,6 +1,7 @@
 ---
 title: bloblang
 type: processor
+status: stable
 categories: ["Mapping","Parsing"]
 ---
 

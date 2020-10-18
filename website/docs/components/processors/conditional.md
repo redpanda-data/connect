@@ -1,7 +1,7 @@
 ---
 title: conditional
 type: processor
-deprecated: true
+status: deprecated
 ---
 
 <!--

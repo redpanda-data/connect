@@ -1,7 +1,7 @@
 ---
 title: json
 type: processor
-deprecated: true
+status: deprecated
 ---
 
 <!--

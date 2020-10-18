@@ -19,7 +19,7 @@ import (
 func init() {
 	Constructors[TypeStdout] = TypeSpec{
 		constructor: NewStdout,
-		Beta:        true,
+		Status:      docs.StatusBeta,
 		Summary: `
 Prints aggregated metrics as JSON objects to stdout.`,
 		Description: `

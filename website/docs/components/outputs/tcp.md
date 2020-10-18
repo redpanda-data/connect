@@ -1,7 +1,7 @@
 ---
 title: tcp
 type: output
-deprecated: true
+status: deprecated
 ---
 
 <!--

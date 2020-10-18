@@ -1,6 +1,7 @@
 ---
 title: dynamodb
 type: output
+status: stable
 categories: ["Services","AWS"]
 ---
 

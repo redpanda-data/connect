@@ -1,6 +1,7 @@
 ---
 title: amqp_0_9
 type: input
+status: stable
 categories: ["Services"]
 ---
 

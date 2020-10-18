@@ -1,6 +1,7 @@
 ---
 title: hdfs
 type: output
+status: stable
 categories: ["Services"]
 ---
 

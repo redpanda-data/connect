@@ -1,7 +1,7 @@
 ---
 title: metadata
 type: condition
-deprecated: true
+status: deprecated
 ---
 
 <!--

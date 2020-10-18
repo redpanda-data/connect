@@ -1,6 +1,7 @@
 ---
 title: gcp_pubsub
 type: input
+status: stable
 categories: ["Services","GCP"]
 ---
 

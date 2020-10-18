@@ -1,6 +1,7 @@
 ---
 title: socket
 type: output
+status: stable
 categories: ["Network"]
 ---
 

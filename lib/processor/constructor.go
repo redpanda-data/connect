@@ -43,14 +43,13 @@ type TypeSpec struct {
 	// applied on messages that are already batched.
 	UsesBatches bool
 
+	Status      docs.Status
 	Summary     string
 	Description string
 	Categories  []Category
 	Footnotes   string
 	FieldSpecs  docs.FieldSpecs
 	Examples    []docs.AnnotatedExample
-	Beta        bool
-	Deprecated  bool
 }
 
 // Constructors is a map of all processor types with their specs.
@@ -484,7 +483,7 @@ func Descriptions() string {
 	buf.WriteString("### Contents\n\n")
 	i := 0
 	for _, name := range names {
-		if Constructors[name].Deprecated {
+		if Constructors[name].Status == docs.StatusDeprecated {
 			continue
 		}
 		i++
@@ -495,7 +494,7 @@ func Descriptions() string {
 	// Append each description
 	for i, name := range names {
 		def := Constructors[name]
-		if def.Deprecated {
+		if def.Status == docs.StatusDeprecated {
 			continue
 		}
 

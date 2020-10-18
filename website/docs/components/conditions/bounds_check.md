@@ -1,6 +1,7 @@
 ---
 title: bounds_check
 type: condition
+status: stable
 ---
 
 <!--

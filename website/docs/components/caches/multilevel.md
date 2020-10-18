@@ -1,6 +1,7 @@
 ---
 title: multilevel
 type: cache
+status: stable
 ---
 
 <!--

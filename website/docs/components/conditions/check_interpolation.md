@@ -1,7 +1,7 @@
 ---
 title: check_interpolation
 type: condition
-deprecated: true
+status: deprecated
 ---
 
 <!--

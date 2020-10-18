@@ -22,7 +22,7 @@ import (
 func init() {
 	Constructors[TypeEncode] = TypeSpec{
 		constructor: NewEncode,
-		Deprecated:  true,
+		Status:      docs.StatusDeprecated,
 		Footnotes: `
 ## Alternatives
 

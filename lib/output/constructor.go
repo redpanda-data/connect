@@ -50,14 +50,13 @@ type TypeSpec struct {
 	// Batches indicates whether this output benefits from batching of messages.
 	Batches bool
 
+	Status      docs.Status
 	Summary     string
 	Description string
 	Categories  []Category
 	Footnotes   string
 	FieldSpecs  docs.FieldSpecs
 	Examples    []docs.AnnotatedExample
-	Beta        bool
-	Deprecated  bool
 }
 
 // Constructors is a map of all output types with their specs.

@@ -1,6 +1,7 @@
 ---
 title: memory
 type: buffer
+status: stable
 ---
 
 <!--

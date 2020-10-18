@@ -1,7 +1,7 @@
 ---
 title: process_dag
 type: processor
-deprecated: true
+status: deprecated
 ---
 
 <!--

@@ -1,6 +1,7 @@
 ---
 title: prometheus
 type: metrics
+status: stable
 ---
 
 <!--

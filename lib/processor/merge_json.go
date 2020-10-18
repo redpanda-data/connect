@@ -17,7 +17,7 @@ import (
 func init() {
 	Constructors[TypeMergeJSON] = TypeSpec{
 		constructor: NewMergeJSON,
-		Deprecated:  true,
+		Status:      docs.StatusDeprecated,
 		Footnotes: `
 ## Alternatives
 

@@ -1,6 +1,7 @@
 ---
 title: elasticsearch
 type: output
+status: stable
 categories: ["Services"]
 ---
 

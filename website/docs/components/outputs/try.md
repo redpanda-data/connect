@@ -1,6 +1,7 @@
 ---
 title: try
 type: output
+status: stable
 categories: ["Utility"]
 ---
 

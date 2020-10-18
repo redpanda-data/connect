@@ -1,7 +1,7 @@
 ---
 title: blacklist
 type: metrics
-deprecated: true
+status: deprecated
 ---
 
 <!--

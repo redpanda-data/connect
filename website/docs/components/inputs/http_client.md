@@ -1,6 +1,7 @@
 ---
 title: http_client
 type: input
+status: stable
 categories: ["Network"]
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: number
 type: condition
-deprecated: true
+status: deprecated
 ---
 
 <!--

@@ -27,12 +27,11 @@ type TypeSpec struct {
 	) (Type, error)
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
 
+	Status      docs.Status
 	Summary     string
 	Description string
 	Footnotes   string
 	FieldSpecs  docs.FieldSpecs
-	Beta        bool
-	Deprecated  bool
 }
 
 // Constructors is a map of all condition types with their specs.

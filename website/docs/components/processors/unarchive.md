@@ -1,6 +1,7 @@
 ---
 title: unarchive
 type: processor
+status: stable
 categories: ["Parsing"]
 ---
 

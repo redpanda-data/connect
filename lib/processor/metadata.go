@@ -19,7 +19,7 @@ import (
 func init() {
 	Constructors[TypeMetadata] = TypeSpec{
 		constructor: NewMetadata,
-		Deprecated:  true,
+		Status:      docs.StatusDeprecated,
 		Footnotes: `
 ## Alternatives
 

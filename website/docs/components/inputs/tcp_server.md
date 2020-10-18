@@ -1,7 +1,7 @@
 ---
 title: tcp_server
 type: input
-deprecated: true
+status: deprecated
 ---
 
 <!--

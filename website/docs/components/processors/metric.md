@@ -1,6 +1,7 @@
 ---
 title: metric
 type: processor
+status: stable
 categories: ["Utility"]
 ---
 

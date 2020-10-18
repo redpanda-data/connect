@@ -1,6 +1,7 @@
 ---
 title: memory
 type: cache
+status: stable
 ---
 
 <!--

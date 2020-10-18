@@ -1,6 +1,7 @@
 ---
 title: http_server
 type: output
+status: stable
 categories: ["Network"]
 ---
 

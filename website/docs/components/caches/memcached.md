@@ -1,6 +1,7 @@
 ---
 title: memcached
 type: cache
+status: stable
 ---
 
 <!--

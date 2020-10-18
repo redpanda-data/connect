@@ -1,7 +1,7 @@
 ---
 title: process_field
 type: processor
-deprecated: true
+status: deprecated
 ---
 
 <!--

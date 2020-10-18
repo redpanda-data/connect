@@ -1,7 +1,7 @@
 ---
 title: batch
 type: processor
-deprecated: true
+status: deprecated
 ---
 
 <!--

@@ -1,6 +1,7 @@
 ---
 title: mqtt
 type: input
+status: stable
 categories: ["Services"]
 ---
 

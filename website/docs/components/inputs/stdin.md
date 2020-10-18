@@ -1,6 +1,7 @@
 ---
 title: stdin
 type: input
+status: stable
 categories: ["Local"]
 ---
 

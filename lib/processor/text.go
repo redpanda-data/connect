@@ -23,7 +23,7 @@ import (
 func init() {
 	Constructors[TypeText] = TypeSpec{
 		constructor: NewText,
-		Deprecated:  true,
+		Status:      docs.StatusDeprecated,
 		Footnotes: `
 ## Alternatives
 

@@ -1,6 +1,7 @@
 ---
 title: resource
 type: condition
+status: stable
 ---
 
 <!--

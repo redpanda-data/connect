@@ -1,7 +1,7 @@
 ---
 title: hash
 type: processor
-deprecated: true
+status: deprecated
 ---
 
 <!--

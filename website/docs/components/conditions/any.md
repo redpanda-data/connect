@@ -1,6 +1,7 @@
 ---
 title: any
 type: condition
+status: stable
 ---
 
 <!--

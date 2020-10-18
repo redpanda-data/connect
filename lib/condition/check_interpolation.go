@@ -19,7 +19,7 @@ import (
 func init() {
 	Constructors[TypeCheckInterpolation] = TypeSpec{
 		constructor: NewCheckInterpolation,
-		Deprecated:  true,
+		Status:      docs.StatusDeprecated,
 		Footnotes: `
 ## Alternatives
 

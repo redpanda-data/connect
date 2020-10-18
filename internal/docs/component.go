@@ -24,6 +24,17 @@ type AnnotatedExample struct {
 	Config string
 }
 
+// Status of a component.
+type Status string
+
+// Component statuses.
+var (
+	StatusStable       Status = "stable"
+	StatusBeta         Status = "beta"
+	StatusExperimental Status = "experimental"
+	StatusDeprecated   Status = "deprecated"
+)
+
 // ComponentSpec describes a Benthos component.
 type ComponentSpec struct {
 	// Name of the component
@@ -31,6 +42,9 @@ type ComponentSpec struct {
 
 	// Type of the component (input, output, etc)
 	Type string
+
+	// The status of the component.
+	Status Status
 
 	// Summary of the component (in markdown, must be short).
 	Summary string
@@ -46,12 +60,6 @@ type ComponentSpec struct {
 
 	// Examples demonstrating use cases for the component.
 	Examples []AnnotatedExample
-
-	// Whether the component is beta.
-	Beta bool
-
-	// Whether the component is now deprecated.
-	Deprecated bool
 
 	Fields FieldSpecs
 }
@@ -80,8 +88,7 @@ type componentContext struct {
 	Footnotes          string
 	CommonConfig       string
 	AdvancedConfig     string
-	Beta               bool
-	Deprecated         bool
+	Status             string
 }
 
 func (ctx fieldContext) InterpolationBatchWide() FieldInterpolation {
@@ -128,17 +135,12 @@ Type: ` + "`{{$field.Type}}`" + `
 ---
 title: {{.Name}}
 type: {{.Type}}
+status: {{.Status}}
 {{if gt (len .FrontMatterSummary) 0 -}}
 description: "{{.FrontMatterSummary}}"
 {{end -}}
 {{if gt (len .Categories) 0 -}}
 categories: {{.Categories}}
-{{end -}}
-{{if .Beta -}}
-beta: true
-{{end -}}
-{{if .Deprecated -}}
-deprecated: true
 {{end -}}
 ---
 
@@ -152,11 +154,13 @@ deprecated: true
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-{{if .Beta -}}
-BETA: This component is experimental and therefore subject to change outside of
-major version releases.
+{{if eq .Status "beta" -}}
+BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 {{end -}}
-{{if .Deprecated -}}
+{{if eq .Status "experimental" -}}
+EXPERIMENTAL: This component is experimental and therefore subject to change or removal outside of major version releases.
+{{end -}}
+{{if eq .Status "deprecated" -}}
 :::warning DEPRECATED
 This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
 :::
@@ -304,8 +308,10 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 		Description: c.Description,
 		Examples:    c.Examples,
 		Footnotes:   c.Footnotes,
-		Beta:        c.Beta,
-		Deprecated:  c.Deprecated,
+		Status:      string(c.Status),
+	}
+	if len(ctx.Status) == 0 {
+		ctx.Status = string(StatusStable)
 	}
 
 	if len(c.Categories) > 0 {

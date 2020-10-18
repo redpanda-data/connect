@@ -1,6 +1,7 @@
 ---
 title: redis
 type: processor
+status: stable
 categories: ["Integration"]
 ---
 

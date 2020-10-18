@@ -1,6 +1,7 @@
 ---
 title: dedupe
 type: processor
+status: stable
 categories: ["Utility"]
 ---
 

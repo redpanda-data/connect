@@ -1,6 +1,7 @@
 ---
 title: nsq
 type: input
+status: stable
 categories: ["Services"]
 ---
 

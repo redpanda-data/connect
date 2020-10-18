@@ -1,6 +1,7 @@
 ---
 title: cache
 type: output
+status: stable
 categories: ["Services"]
 ---
 

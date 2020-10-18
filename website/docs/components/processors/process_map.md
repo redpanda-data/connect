@@ -1,7 +1,7 @@
 ---
 title: process_map
 type: processor
-deprecated: true
+status: deprecated
 ---
 
 <!--

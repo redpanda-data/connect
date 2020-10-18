@@ -1,6 +1,7 @@
 ---
 title: retry
 type: output
+status: stable
 categories: ["Utility"]
 ---
 

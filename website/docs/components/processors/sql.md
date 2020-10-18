@@ -1,6 +1,7 @@
 ---
 title: sql
 type: processor
+status: stable
 categories: ["Integration"]
 ---
 

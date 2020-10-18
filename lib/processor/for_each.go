@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -56,7 +57,7 @@ instead.`,
 			}
 			return procConfs, nil
 		},
-		Deprecated: true,
+		Status: docs.StatusDeprecated,
 	}
 }
 

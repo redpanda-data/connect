@@ -1,6 +1,7 @@
 ---
 title: http_server
 type: metrics
+status: stable
 ---
 
 <!--

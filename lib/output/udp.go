@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
@@ -18,7 +19,7 @@ connecting to a server.
 
 If batched messages are sent the final message of the batch will be followed by
 two line breaks in order to indicate the end of the batch.`,
-		Deprecated: true,
+		Status: docs.StatusDeprecated,
 	}
 }
 

@@ -1,7 +1,7 @@
 ---
 title: amqp
 type: input
-deprecated: true
+status: deprecated
 ---
 
 <!--

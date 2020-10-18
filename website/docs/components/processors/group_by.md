@@ -1,6 +1,7 @@
 ---
 title: group_by
 type: processor
+status: stable
 categories: ["Composition"]
 ---
 

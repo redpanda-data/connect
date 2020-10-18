@@ -1,6 +1,7 @@
 ---
 title: dynamodb
 type: cache
+status: stable
 ---
 
 <!--

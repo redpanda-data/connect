@@ -23,7 +23,7 @@ import (
 func init() {
 	Constructors[TypeJSON] = TypeSpec{
 		constructor: NewJSON,
-		Deprecated:  true,
+		Status:      docs.StatusDeprecated,
 		Footnotes: `
 ## Alternatives
 

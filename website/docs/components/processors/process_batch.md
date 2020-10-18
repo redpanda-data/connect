@@ -1,7 +1,7 @@
 ---
 title: process_batch
 type: processor
-deprecated: true
+status: deprecated
 ---
 
 <!--

@@ -1,8 +1,8 @@
 ---
 title: bloblang
 type: input
+status: beta
 categories: ["Utility"]
-beta: true
 ---
 
 <!--
@@ -15,8 +15,7 @@ beta: true
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-BETA: This component is experimental and therefore subject to change outside of
-major version releases.
+BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 
 Generates messages at a given interval using a [Bloblang](/docs/guides/bloblang/about)
 mapping executed without a context. This allows you to generate messages for

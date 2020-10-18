@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -24,7 +25,7 @@ improved batching mechanisms. For more information about batching in Benthos
 please check out [this document](/docs/configuration/batching).
 
 This processor is scheduled to be removed in Benthos V4`,
-		Deprecated: true,
+		Status: docs.StatusDeprecated,
 	}
 }
 

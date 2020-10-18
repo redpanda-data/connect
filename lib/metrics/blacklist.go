@@ -17,7 +17,7 @@ import (
 func init() {
 	Constructors[TypeBlackList] = TypeSpec{
 		constructor: NewBlacklist,
-		Deprecated:  true,
+		Status:      docs.StatusDeprecated,
 		Summary: `
 Blacklist metric paths within Benthos so that they are not aggregated by a child
 metric target.`,

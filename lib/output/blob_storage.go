@@ -13,7 +13,7 @@ import (
 func init() {
 	Constructors[TypeBlobStorage] = TypeSpec{
 		constructor: NewAzureBlobStorage,
-		Beta:        true,
+		Status:      docs.StatusBeta,
 		Summary: `
 Sends message parts as objects to an Azure Blob Storage Account container. Each
 object is uploaded with the filename specified with the ` + "`container`" + `

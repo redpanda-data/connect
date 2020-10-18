@@ -1,6 +1,7 @@
 ---
 title: files
 type: input
+status: stable
 categories: ["Local"]
 ---
 

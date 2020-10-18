@@ -84,8 +84,7 @@ func doInputs(docsDir string) {
 			Footnotes:   v.Footnotes,
 			Examples:    v.Examples,
 			Fields:      v.FieldSpecs,
-			Beta:        v.Beta,
-			Deprecated:  v.Deprecated,
+			Status:      v.Status,
 		}
 		if len(v.Categories) > 0 {
 			spec.Categories = make([]string, 0, len(v.Categories))
@@ -114,8 +113,7 @@ func doBuffers(docsDir string) {
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
-			Beta:        v.Beta,
-			Deprecated:  v.Deprecated,
+			Status:      v.Status,
 		}
 
 		conf := buffer.NewConfig()
@@ -138,8 +136,7 @@ func doCaches(docsDir string) {
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
-			Beta:        v.Beta,
-			Deprecated:  v.Deprecated,
+			Status:      v.Status,
 		}
 
 		conf := cache.NewConfig()
@@ -162,8 +159,7 @@ func doConditions(docsDir string) {
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
-			Beta:        v.Beta,
-			Deprecated:  v.Deprecated,
+			Status:      v.Status,
 		}
 
 		conf := condition.NewConfig()
@@ -186,8 +182,7 @@ func doMetrics(docsDir string) {
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
-			Beta:        v.Beta,
-			Deprecated:  v.Deprecated,
+			Status:      v.Status,
 		}
 
 		conf := metrics.NewConfig()
@@ -211,8 +206,7 @@ func doOutputs(docsDir string) {
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
 			Examples:    v.Examples,
-			Beta:        v.Beta,
-			Deprecated:  v.Deprecated,
+			Status:      v.Status,
 		}
 		if len(v.Categories) > 0 {
 			spec.Categories = make([]string, 0, len(v.Categories))
@@ -251,8 +245,7 @@ func doProcessors(docsDir string) {
 			Examples:    v.Examples,
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
-			Beta:        v.Beta,
-			Deprecated:  v.Deprecated,
+			Status:      v.Status,
 		}
 		if len(v.Categories) > 0 {
 			spec.Categories = make([]string, 0, len(v.Categories))
@@ -284,8 +277,7 @@ func doRateLimits(docsDir string) {
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
-			Beta:        v.Beta,
-			Deprecated:  v.Deprecated,
+			Status:      v.Status,
 		}
 
 		conf := ratelimit.NewConfig()
@@ -308,8 +300,7 @@ func doTracers(docsDir string) {
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
-			Beta:        v.Beta,
-			Deprecated:  v.Deprecated,
+			Status:      v.Status,
 		}
 
 		conf := tracer.NewConfig()

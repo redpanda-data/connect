@@ -25,8 +25,7 @@ type TypeSpec struct {
 	Description string
 	Footnotes   string
 	FieldSpecs  docs.FieldSpecs
-	Beta        bool
-	Deprecated  bool
+	Status      docs.Status
 }
 
 // Constructors is a map of all cache types with their specs.

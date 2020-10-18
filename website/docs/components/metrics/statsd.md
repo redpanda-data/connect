@@ -1,6 +1,7 @@
 ---
 title: statsd
 type: metrics
+status: stable
 ---
 
 <!--

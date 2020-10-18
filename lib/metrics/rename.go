@@ -17,7 +17,7 @@ import (
 func init() {
 	Constructors[TypeRename] = TypeSpec{
 		constructor: NewRename,
-		Deprecated:  true,
+		Status:      docs.StatusDeprecated,
 		Summary: `
 Rename metric paths as they are registered.`,
 		FieldSpecs: docs.FieldSpecs{

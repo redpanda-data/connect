@@ -1,6 +1,7 @@
 ---
 title: not
 type: condition
+status: stable
 ---
 
 <!--

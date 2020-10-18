@@ -23,7 +23,7 @@ import (
 func init() {
 	Constructors[TypeHash] = TypeSpec{
 		constructor: NewHash,
-		Deprecated:  true,
+		Status:      docs.StatusDeprecated,
 		Footnotes: `
 ## Alternatives
 

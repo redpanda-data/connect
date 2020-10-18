@@ -17,7 +17,7 @@ import (
 func init() {
 	Constructors[TypeHashSample] = TypeSpec{
 		constructor: NewHashSample,
-		Deprecated:  true,
+		Status:      docs.StatusDeprecated,
 		Footnotes: `
 ## Alternatives
 

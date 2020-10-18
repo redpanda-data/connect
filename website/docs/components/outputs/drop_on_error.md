@@ -1,6 +1,7 @@
 ---
 title: drop_on_error
 type: output
+status: stable
 ---
 
 <!--

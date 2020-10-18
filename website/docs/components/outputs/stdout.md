@@ -1,6 +1,7 @@
 ---
 title: stdout
 type: output
+status: stable
 categories: ["Local"]
 ---
 

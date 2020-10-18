@@ -1,7 +1,7 @@
 ---
 title: udp
 type: output
-deprecated: true
+status: deprecated
 ---
 
 <!--

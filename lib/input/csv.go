@@ -22,7 +22,7 @@ import (
 func init() {
 	Constructors[TypeCSVFile] = TypeSpec{
 		constructor: NewCSVFile,
-		Beta:        true,
+		Status:      docs.StatusBeta,
 		Summary: `
 Reads one or more CSV files as structured records following the format described
 in RFC 4180.`,

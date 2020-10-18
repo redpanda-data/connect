@@ -1,6 +1,7 @@
 ---
 title: jmespath
 type: condition
+status: stable
 ---
 
 <!--
