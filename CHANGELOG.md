@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- The `csv` input now supports glob patterns in file paths.
+
 ### Fixed
 
 - Bloblang literals, including method and function arguments, can now be mutated without brackets regardless of where they appear.

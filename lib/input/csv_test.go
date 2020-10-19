@@ -5,10 +5,16 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/ioutil"
+	"os"
+	"path"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
@@ -65,6 +71,95 @@ func TestCSVReaderHappy(t *testing.T) {
 
 	err = f.ConnectWithContext(context.Background())
 	assert.Equal(t, types.ErrTypeClosed, err)
+}
+
+func TestCSVGPaths(t *testing.T) {
+	dir, err := ioutil.TempDir("", "csv_glob_test")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(dir)
+	})
+
+	require.NoError(t, ioutil.WriteFile(filepath.Join(dir, "a.csv"), []byte(`header1,header2,header3
+foo1,bar1,baz1
+foo2,bar2,baz2
+foo3,bar3,baz3
+`), 0777))
+	require.NoError(t, ioutil.WriteFile(filepath.Join(dir, "b.csv"), []byte(`header4,header5,header6
+foo4,bar4,baz4
+foo5,bar5,baz5
+foo6,bar6,baz6
+`), 0777))
+
+	conf := NewConfig()
+	conf.Type = TypeCSVFile
+	conf.CSVFile.Paths = []string{
+		path.Join(dir, "a.csv"),
+		path.Join(dir, "b.csv"),
+	}
+
+	f, err := New(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		require.NoError(t, f.WaitForClose(time.Second))
+	})
+
+	for _, exp := range []string{
+		`{"header1":"foo1","header2":"bar1","header3":"baz1"}`,
+		`{"header1":"foo2","header2":"bar2","header3":"baz2"}`,
+		`{"header1":"foo3","header2":"bar3","header3":"baz3"}`,
+		`{"header4":"foo4","header5":"bar4","header6":"baz4"}`,
+		`{"header4":"foo5","header5":"bar5","header6":"baz5"}`,
+		`{"header4":"foo6","header5":"bar6","header6":"baz6"}`,
+	} {
+		m := readMsg(t, f.TransactionChan())
+		assert.Equal(t, exp, string(m.Get(0).Get()))
+	}
+}
+
+func TestCSVGlobPaths(t *testing.T) {
+	dir, err := ioutil.TempDir("", "csv_glob_test")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(dir)
+	})
+
+	require.NoError(t, ioutil.WriteFile(filepath.Join(dir, "a.csv"), []byte(`header1,header2,header3
+foo1,bar1,baz1
+foo2,bar2,baz2
+foo3,bar3,baz3
+`), 0777))
+	require.NoError(t, ioutil.WriteFile(filepath.Join(dir, "b.csv"), []byte(`header4,header5,header6
+foo4,bar4,baz4
+foo5,bar5,baz5
+foo6,bar6,baz6
+`), 0777))
+
+	conf := NewConfig()
+	conf.Type = TypeCSVFile
+	conf.CSVFile.Paths = []string{dir + "/*.csv"}
+
+	f, err := New(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		require.NoError(t, f.WaitForClose(time.Second))
+	})
+
+	for _, exp := range []string{
+		`{"header1":"foo1","header2":"bar1","header3":"baz1"}`,
+		`{"header1":"foo2","header2":"bar2","header3":"baz2"}`,
+		`{"header1":"foo3","header2":"bar3","header3":"baz3"}`,
+		`{"header4":"foo4","header5":"bar4","header6":"baz4"}`,
+		`{"header4":"foo5","header5":"bar5","header6":"baz5"}`,
+		`{"header4":"foo6","header5":"bar6","header6":"baz6"}`,
+	} {
+		m := readMsg(t, f.TransactionChan())
+		assert.Equal(t, exp, string(m.Get(0).Get()))
+	}
 }
 
 func TestCSVReaderGroupCount(t *testing.T) {

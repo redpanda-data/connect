@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/csv"
 	"errors"
+	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -27,7 +29,10 @@ func init() {
 Reads one or more CSV files as structured records following the format described
 in RFC 4180.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("paths", "A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close."),
+			docs.FieldCommon(
+				"paths", "A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported.",
+				[]string{"/tmp/foo.csv", "/tmp/bar/*.csv"},
+			),
 			docs.FieldCommon("parse_header_row", "Whether to reference the first row as a header row. If set to true the output structure for messages will be an object where field keys are determined by the header row."),
 			docs.FieldCommon("delimiter", `The delimiter to use for splitting values in each record, must be a single character.`),
 			docs.FieldAdvanced("batch_count", `Optionally process records in batches. This can help to speed up the consumption of exceptionally large CSV files. When the end of the file is reached the remaining records are processed as a (potentially smaller) batch.`),
@@ -90,6 +95,17 @@ func NewCSVFileConfig() CSVFileConfig {
 
 //------------------------------------------------------------------------------
 
+func resolveGlob(p string) ([]string, error) {
+	globbed, err := filepath.Glob(p)
+	if err != nil {
+		return nil, err
+	}
+	if len(globbed) == 0 {
+		globbed = []string{p}
+	}
+	return globbed, nil
+}
+
 // NewCSVFile creates a new CSV file input type.
 func NewCSVFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	delimRunes := []rune(conf.CSVFile.Delim)
@@ -99,7 +115,14 @@ func NewCSVFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.T
 
 	comma := delimRunes[0]
 
-	pathsRemaining := conf.CSVFile.Paths
+	var pathsRemaining []string
+	for _, pattern := range conf.CSVFile.Paths {
+		gs, err := resolveGlob(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve path glob: %w", err)
+		}
+		pathsRemaining = append(pathsRemaining, gs...)
+	}
 	if len(pathsRemaining) == 0 {
 		return nil, errors.New("requires at least one input file path")
 	}
