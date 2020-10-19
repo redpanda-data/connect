@@ -37,7 +37,7 @@ func ITypeOf(i interface{}) ValueType {
 		return ValueString
 	case []byte:
 		return ValueBytes
-	case int64, uint64, float64:
+	case int64, uint64, float64, json.Number:
 		return ValueNumber
 	case bool:
 		return ValueBool
@@ -75,6 +75,8 @@ func IGetNumber(v interface{}) (float64, error) {
 		return float64(t), nil
 	case float64:
 		return t, nil
+	case json.Number:
+		return t.Float64()
 	}
 	return 0, NewTypeError(v, ValueNumber)
 }
@@ -89,6 +91,8 @@ func IGetInt(v interface{}) (int64, error) {
 		return int64(t), nil
 	case float64:
 		return int64(t), nil
+	case json.Number:
+		return t.Int64()
 	}
 	return 0, NewTypeError(v, ValueNumber)
 }
@@ -99,11 +103,13 @@ func IGetBool(v interface{}) (bool, error) {
 	case bool:
 		return t, nil
 	case int64:
-		return t > 0, nil
+		return t != 0, nil
 	case uint64:
-		return t > 0, nil
+		return t != 0, nil
 	case float64:
-		return t > 0, nil
+		return t != 0, nil
+	case json.Number:
+		return t.String() != "0", nil
 	}
 	return false, NewTypeError(v, ValueBool)
 }
@@ -144,7 +150,7 @@ func ISanitize(i interface{}) interface{} {
 		return []byte(t)
 	case json.Number:
 		if i, err := t.Int64(); err == nil {
-			return int(i)
+			return int64(i)
 		}
 		if f, err := t.Float64(); err == nil {
 			return f
@@ -173,6 +179,8 @@ func IToBytes(i interface{}) []byte {
 		return []byte(t)
 	case []byte:
 		return t
+	case json.Number:
+		return []byte(t.String())
 	case int64, uint64, float64:
 		return []byte(fmt.Sprintf("%v", t)) // TODO
 	case bool:
@@ -197,6 +205,8 @@ func IToString(i interface{}) string {
 		return string(t)
 	case int64, uint64, float64:
 		return fmt.Sprintf("%v", t) // TODO
+	case json.Number:
+		return t.String()
 	case bool:
 		if t {
 			return "true"
@@ -219,6 +229,8 @@ func IToNumber(v interface{}) (float64, error) {
 		return float64(t), nil
 	case float64:
 		return t, nil
+	case json.Number:
+		return t.Float64()
 	case []byte:
 		return strconv.ParseFloat(string(t), 64)
 	case string:
@@ -243,6 +255,8 @@ func IToInt(v interface{}) (int64, error) {
 		return int64(t), nil
 	case float64:
 		return int64(t), nil
+	case json.Number:
+		return t.Int64()
 	case []byte:
 		return strconv.ParseInt(string(t), 10, 64)
 	case string:
@@ -258,11 +272,13 @@ func IToBool(v interface{}) (bool, error) {
 	case bool:
 		return t, nil
 	case int64:
-		return t > 0, nil
+		return t != 0, nil
 	case uint64:
-		return t > 0, nil
+		return t != 0, nil
 	case float64:
-		return t > 0, nil
+		return t != 0, nil
+	case json.Number:
+		return t.String() != "0", nil
 	case []byte:
 		if bytes.Equal(t, []byte("true")) {
 			return true, nil

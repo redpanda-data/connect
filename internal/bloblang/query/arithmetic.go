@@ -1,6 +1,7 @@
 package query
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -66,6 +67,10 @@ func restrictForComparison(v interface{}) interface{} {
 		return float64(t)
 	case uint64:
 		return float64(t)
+	case json.Number:
+		if f, err := IGetNumber(t); err == nil {
+			return f
+		}
 	case []byte:
 		return string(t)
 	}
@@ -140,7 +145,7 @@ func sumOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
 		return func(left, right interface{}) (interface{}, error) {
 			var err error
 			switch left.(type) {
-			case float64, int64, uint64:
+			case float64, int64, uint64, json.Number:
 				var lhs, rhs float64
 				if lhs, err = IGetNumber(left); err == nil {
 					rhs, err = IGetNumber(right)

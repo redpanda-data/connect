@@ -1,6 +1,7 @@
 package query
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -210,6 +211,11 @@ func ExpectIntArg(i int) ArgCheckFn {
 		case int64:
 		case float64:
 			args[i] = int64(t)
+		case json.Number:
+			var err error
+			if args[i], err = t.Int64(); err != nil {
+				return fmt.Errorf("expected int argument, failed to parse: %w", err)
+			}
 		default:
 			return fmt.Errorf("expected int argument, received %T", args[i])
 		}
@@ -227,6 +233,11 @@ func ExpectFloatArg(i int) ArgCheckFn {
 		case int64:
 			args[i] = float64(t)
 		case float64:
+		case json.Number:
+			var err error
+			if args[i], err = t.Float64(); err != nil {
+				return fmt.Errorf("expected float argument, failed to parse: %w", err)
+			}
 		default:
 			return fmt.Errorf("expected float argument, received %T", args[i])
 		}

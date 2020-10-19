@@ -1,6 +1,8 @@
 package query
 
 import (
+	"encoding/json"
+	"strconv"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -44,6 +46,9 @@ func TestMethods(t *testing.T) {
 		)
 		require.NoError(t, err)
 		return fn
+	}
+	jn := func(i int) json.Number {
+		return json.Number(strconv.Itoa(i))
 	}
 
 	type easyMethod struct {
@@ -1184,7 +1189,7 @@ func TestMethods(t *testing.T) {
 			output: map[string]interface{}{
 				"first":  "val1",
 				"second": "val2",
-				"third":  []interface{}{float64(3), float64(6)},
+				"third":  []interface{}{jn(3), jn(6)},
 			},
 		},
 		"check merge 3": {
@@ -1201,14 +1206,14 @@ func TestMethods(t *testing.T) {
 			output: map[string]interface{}{
 				"foo": map[string]interface{}{
 					"first": "val1",
-					"third": float64(3),
+					"third": jn(3),
 				},
 				"bar": map[string]interface{}{
 					"second": "val2",
-					"third":  float64(6),
+					"third":  jn(6),
 				},
 				"second": "val2",
-				"third":  float64(6),
+				"third":  jn(6),
 			},
 		},
 		"check merge 4": {
@@ -1225,7 +1230,7 @@ func TestMethods(t *testing.T) {
 			output: map[string]interface{}{
 				"first":  "val1",
 				"second": "val2",
-				"third":  []interface{}{float64(3), float64(6)},
+				"third":  []interface{}{jn(3), jn(6)},
 			},
 		},
 		"check merge 5": {
@@ -1243,7 +1248,7 @@ func TestMethods(t *testing.T) {
 			output: map[string]interface{}{
 				"first":  []interface{}{"val1", "val1"},
 				"second": "val2",
-				"third":  []interface{}{float64(3), float64(6), float64(3)},
+				"third":  []interface{}{jn(3), jn(6), jn(3)},
 			},
 		},
 		"check merge arrays": {
@@ -1479,7 +1484,7 @@ func TestMethods(t *testing.T) {
 				method("sort"),
 			),
 			messages: []easyMsg{{content: `{"bar":2,"foo":1}`}},
-			output:   []interface{}{1.0, 2.0},
+			output:   []interface{}{jn(1), jn(2)},
 		},
 		"check values error": {
 			input: methods(

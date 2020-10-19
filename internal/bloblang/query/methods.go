@@ -2,6 +2,7 @@ package query
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -285,7 +286,7 @@ var _ = RegisterMethod(
 func catchMethod(fn Function, args ...interface{}) (Function, error) {
 	var catchFn Function
 	switch t := args[0].(type) {
-	case uint64, int64, float64, string, []byte, bool, []interface{}, map[string]interface{}:
+	case uint64, int64, float64, json.Number, string, []byte, bool, []interface{}, map[string]interface{}:
 		catchFn = NewLiteralFunction(t)
 	case Function:
 		catchFn = t
@@ -1369,7 +1370,7 @@ var _ = RegisterMethod(
 func orMethod(fn Function, args ...interface{}) (Function, error) {
 	var orFn Function
 	switch t := args[0].(type) {
-	case uint64, int64, float64, string, []byte, bool, []interface{}, map[string]interface{}:
+	case uint64, int64, float64, json.Number, string, []byte, bool, []interface{}, map[string]interface{}:
 		orFn = NewLiteralFunction(t)
 	case Function:
 		orFn = t
@@ -1412,7 +1413,7 @@ var _ = RegisterMethod(
 func sortMethod(target Function, args ...interface{}) (Function, error) {
 	compareFn := func(ctx FunctionContext, values []interface{}, i, j int) (bool, error) {
 		switch values[i].(type) {
-		case float64, int64, uint64:
+		case float64, int64, uint64, json.Number:
 			var lhs, rhs float64
 			var err error
 			if lhs, err = IGetNumber(values[i]); err == nil {
@@ -1620,7 +1621,7 @@ func sumMethod(target Function, _ ...interface{}) (Function, error) {
 			}
 		}
 		switch t := v.(type) {
-		case float64, int64, uint64:
+		case float64, int64, uint64, json.Number:
 			return v, nil
 		case []interface{}:
 			var total float64
@@ -1747,6 +1748,18 @@ func uniqueMethod(target Function, args ...interface{}) (Function, error) {
 				unique = checkStr(t)
 			case []byte:
 				unique = checkStr(string(t))
+			case json.Number:
+				f, err := t.Float64()
+				if err != nil {
+					var i int64
+					if i, err = t.Int64(); err == nil {
+						f = float64(i)
+					}
+				}
+				if err != nil {
+					return nil, fmt.Errorf("index %v: failed to parse number: %w", i, err)
+				}
+				unique = checkNum(f)
 			case int64:
 				unique = checkNum(float64(t))
 			case uint64:

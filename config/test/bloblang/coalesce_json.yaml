@@ -23,14 +23,14 @@ tests:
     target_processors: /pipeline/processors
     input_batch:
       - content: '{"foo":{"bar":{"baz":"from_bar"}}}'
-      - content: '{"fallback":{"baz":"this also exists"}},"foo":{"bar":{"baz":"from_bar"}}'
-      - content: '{"fallback_two":{"baz":"this also exists"}},"foo":{"bar":{"baz":"from_bar"}}'
-      - content: '{"fallback":{"baz":"this also exists"},"fallback_two":{"baz":"and also this"}},"foo":{"bar":{"baz":"from_bar"}}'
+      - content: '{"fallback":{"baz":"this also exists"},"foo":{"bar":{"baz":"from_bar"}}}'
+      - content: '{"fallback_two":{"baz":"this also exists"},"foo":{"bar":{"baz":"from_bar"}}}'
+      - content: '{"fallback":{"baz":"this also exists"},"fallback_two":{"baz":"and also this"},"foo":{"bar":{"baz":"from_bar"}}}'
     output_batches:
       - - content_equals: '{"foo":{"bar":{"baz":"from_bar"}},"result":"from_bar"}'
-        - content_equals: '{"fallback":{"baz":"this also exists"}},"foo":{"bar":{"baz":"from_bar"}}'
-        - content_equals: '{"fallback_two":{"baz":"this also exists"}},"foo":{"bar":{"baz":"from_bar"}}'
-        - content_equals: '{"fallback":{"baz":"this also exists"},"fallback_two":{"baz":"and also this"}},"foo":{"bar":{"baz":"from_bar"}}'
+        - content_equals: '{"fallback":{"baz":"this also exists"},"foo":{"bar":{"baz":"from_bar"}},"result":"from_bar"}'
+        - content_equals: '{"fallback_two":{"baz":"this also exists"},"foo":{"bar":{"baz":"from_bar"}},"result":"from_bar"}'
+        - content_equals: '{"fallback":{"baz":"this also exists"},"fallback_two":{"baz":"and also this"},"foo":{"bar":{"baz":"from_bar"}},"result":"from_bar"}'
 
   - name: From fallback
     target_processors: /pipeline/processors

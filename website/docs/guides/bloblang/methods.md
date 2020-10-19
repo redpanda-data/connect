@@ -503,6 +503,13 @@ root.nested_json = this.string()
 # Out: {"nested_json":"{\"foo\":\"bar\"}"}
 ```
 
+```coffee
+root.id = this.id.string()
+
+# In:  {"id":228930314431312345}
+# Out: {"id":"228930314431312345"}
+```
+
 ### `bool`
 
 Attempt to parse a value into a boolean. An optional argument can be provided, in which case if the value cannot be parsed the argument will be returned instead.

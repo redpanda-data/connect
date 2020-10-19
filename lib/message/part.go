@@ -101,7 +101,9 @@ func (p *Part) JSON() (interface{}, error) {
 	if p.data == nil {
 		return nil, ErrMessagePartNotExist
 	}
-	if err := json.Unmarshal(p.data, &p.jsonCache); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(p.data))
+	dec.UseNumber()
+	if err := dec.Decode(&p.jsonCache); err != nil {
 		return nil, err
 	}
 	return p.jsonCache, nil
