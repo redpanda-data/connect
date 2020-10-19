@@ -109,7 +109,7 @@ type OAuth2Token struct {
 	log   log.Modular
 	stats metrics.Type
 
-	endpoint     field.Expression
+	provider     *oidc.Provider
 	clientID     field.Expression
 	clientSecret field.Expression
 	metadataKey  field.Expression
@@ -124,9 +124,10 @@ func NewOAuth2Token(
 		log:   log,
 		stats: stats,
 	}
+
 	var err error
-	if a.endpoint, err = bloblang.NewField(conf.OAuth2Token.Endpoint); err != nil {
-		return nil, fmt.Errorf("failed to parse endpoint expression: %v", err)
+	if a.provider, err = oidc.NewProvider(context.Background(), conf.OAuth2Token.Endpoint); err != nil {
+		return nil, fmt.Errorf("failed instantiating identity provider: %v", err)
 	}
 	if a.clientID, err = bloblang.NewField(conf.OAuth2Token.ClientID); err != nil {
 		return nil, fmt.Errorf("failed to parse client_id expression: %v", err)
@@ -146,18 +147,13 @@ func (o *OAuth2Token) ProcessMessage(msg types.Message) ([]types.Message, types.
 	newMsg := msg.Copy()
 
 	proc := func(index int, span opentracing.Span, part types.Part) error {
-		ctx := context.Background()
-		provider, err := oidc.NewProvider(ctx, o.endpoint.String(index, msg))
-		if err != nil {
-			return err
-		}
 		config := clientcredentials.Config{
 			ClientID:     o.clientID.String(index, msg),
 			ClientSecret: o.clientSecret.String(index, msg),
-			TokenURL:     provider.Endpoint().TokenURL,
+			TokenURL:     o.provider.Endpoint().TokenURL,
 			Scopes:       o.conf.Scopes,
 		}
-		token, err := config.Token(ctx)
+		token, err := config.Token(context.Background())
 		if err != nil {
 			return err
 		}
