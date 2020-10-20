@@ -8,12 +8,20 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - The `csv` input now supports glob patterns in file paths.
+- New experimental `aws_s3` input.
 
 ### Fixed
 
 - Bloblang literals, including method and function arguments, can now be mutated without brackets regardless of where they appear.
 - Bloblang maps now work when running bloblang with the `blobl` subcommand.
-- New experimental `aws_s3` input.
+
+### Changed
+
+Benthos now parses numbers within JSON documents in a way that preserves precision even in cases where the number does not fit a 64-bit signed integer or float. When arithmetic is applied to those numbers (either in Bloblang or by other means) the number is converted (and precision lost) at that point based on the operation itself.
+
+This change means that string coercion on large numbers (e.g. `root.foo = this.large_int.string()`) should now preserve the original form. However, if you are using plugins that interact with JSON message payloads you must ensure that your plugins are able to process the [`json.Number`](https://golang.org/pkg/encoding/json/#Number) type.
+
+This change should otherwise not alter the behaviour of your configs, but if you notice odd side effects you can disable this feature by setting the environment variable `BENTHOS_USE_NUMBER` to `false` (`BENTHOS_USE_NUMBER=false benthos -c ./config.yaml`). Please [raise an issue](https://github.com/Jeffail/benthos/issues/new) if this is the case so that it can be looked into.
 
 ## 3.31.0 - 2020-10-15
 

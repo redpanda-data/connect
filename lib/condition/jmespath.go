@@ -1,6 +1,7 @@
 package condition
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -123,6 +124,33 @@ func safeSearch(part interface{}, j *jmespath.JMESPath) (res interface{}, err er
 	return j.Search(part)
 }
 
+// JMESPath doesn't like json.Number so we walk the tree and replace them.
+func clearNumbers(v interface{}) (interface{}, bool) {
+	switch t := v.(type) {
+	case map[string]interface{}:
+		for k, v := range t {
+			if nv, ok := clearNumbers(v); ok {
+				t[k] = nv
+			}
+		}
+	case []interface{}:
+		for i, v := range t {
+			if nv, ok := clearNumbers(v); ok {
+				t[i] = nv
+			}
+		}
+	case json.Number:
+		f, err := t.Float64()
+		if err != nil {
+			if i, err := t.Int64(); err == nil {
+				return i, true
+			}
+		}
+		return f, true
+	}
+	return nil, false
+}
+
 // Check attempts to check a message part against a configured condition.
 func (c *JMESPath) Check(msg types.Message) bool {
 	c.mCount.Incr(1)
@@ -143,6 +171,9 @@ func (c *JMESPath) Check(msg types.Message) bool {
 		c.mErr.Incr(1)
 		c.mFalse.Incr(1)
 		return false
+	}
+	if v, replace := clearNumbers(jsonPart); replace {
+		jsonPart = v
 	}
 
 	var result interface{}

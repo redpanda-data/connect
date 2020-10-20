@@ -171,6 +171,12 @@ func TestJMESPath(t *testing.T) {
 			input:  `{"foo":{"bar":true}}`,
 			output: `true`,
 		},
+		{
+			name:   "addition int",
+			path:   "sum([foo.bar, `6`])",
+			input:  `{"foo":{"bar":123}}`,
+			output: `129`,
+		},
 	}
 
 	for _, test := range tests {

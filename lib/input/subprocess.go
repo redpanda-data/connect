@@ -62,7 +62,7 @@ type subprocScanner interface {
 	Scan() bool
 }
 
-func linesCodec(conf SubprocessConfig, stdout, stderr io.Reader) (subprocScanner, subprocScanner) {
+func linesSubprocCodec(conf SubprocessConfig, stdout, stderr io.Reader) (subprocScanner, subprocScanner) {
 	outScanner := bufio.NewScanner(stdout)
 	errScanner := bufio.NewScanner(stderr)
 	if conf.MaxBuffer != bufio.MaxScanTokenSize {
@@ -78,7 +78,7 @@ func codecFromStr(codec string) (subprocCodec, error) {
 	// TODO: Flesh this out with more options based on s.conf.Codec.
 	switch codec {
 	case "lines":
-		return linesCodec, nil
+		return linesSubprocCodec, nil
 	}
 	return nil, fmt.Errorf("codec not recognised: %v", codec)
 }

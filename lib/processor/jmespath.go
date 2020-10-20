@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -144,6 +145,33 @@ func safeSearch(part interface{}, j *jmespath.JMESPath) (res interface{}, err er
 	return j.Search(part)
 }
 
+// JMESPath doesn't like json.Number so we walk the tree and replace them.
+func clearNumbers(v interface{}) (interface{}, bool) {
+	switch t := v.(type) {
+	case map[string]interface{}:
+		for k, v := range t {
+			if nv, ok := clearNumbers(v); ok {
+				t[k] = nv
+			}
+		}
+	case []interface{}:
+		for i, v := range t {
+			if nv, ok := clearNumbers(v); ok {
+				t[i] = nv
+			}
+		}
+	case json.Number:
+		f, err := t.Float64()
+		if err != nil {
+			if i, err := t.Int64(); err == nil {
+				return i, true
+			}
+		}
+		return f, true
+	}
+	return nil, false
+}
+
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
 func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
@@ -157,6 +185,9 @@ func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to parse part into json: %v\n", err)
 			return err
+		}
+		if v, replace := clearNumbers(jsonPart); replace {
+			jsonPart = v
 		}
 
 		var result interface{}

@@ -1,14 +1,10 @@
 package input
 
 import (
-	"archive/tar"
-	"bufio"
-	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"strconv"
 	"strings"
@@ -94,9 +90,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 			}, sess.FieldSpecs()...),
 			docs.FieldAdvanced("force_path_style_urls", "Forces the client API to use path style URLs for downloading keys, which is often required when connecting to custom endpoints."),
 			docs.FieldAdvanced("delete_objects", "Whether to delete downloaded objects from the bucket once they are processed."),
-			docs.FieldCommon(
-				"codec", "The way in which objects are consumed, codecs are useful for specifying how large files might be processed in small chunks rather than loading it all in memory.",
-			).HasOptions("all-bytes", "lines", "tar", "tar-gzip"),
+			codecDocs,
 			docs.FieldCommon("sqs", "Consume SQS messages in order to trigger key downloads.").WithChildren(
 				docs.FieldCommon("url", "An optional SQS URL to connect to. When specified this queue will control which objects are downloaded."),
 				docs.FieldAdvanced("endpoint", "A custom endpoint to use when connecting to SQS."),
@@ -170,25 +164,27 @@ type objectTarget struct {
 	ackFn func(context.Context, error) error
 }
 
-func (i objectTarget) Ack(ctx context.Context, err error) error {
-	if i.ackFn != nil {
-		return i.ackFn(ctx, err)
+func newObjectTarget(key, bucket string, ackFn codecAckFn) *objectTarget {
+	if ackFn == nil {
+		ackFn = func(context.Context, error) error {
+			return nil
+		}
 	}
-	return nil
+	return &objectTarget{key, bucket, ackFn}
 }
 
 type objectTargetReader interface {
-	Pop(ctx context.Context) (objectTarget, error)
+	Pop(ctx context.Context) (*objectTarget, error)
 	Close(ctx context.Context) error
 }
 
 //------------------------------------------------------------------------------
 
-type staticTargetReader []objectTarget
+type staticTargetReader []*objectTarget
 
-func (s *staticTargetReader) Pop(context.Context) (objectTarget, error) {
+func (s *staticTargetReader) Pop(context.Context) (*objectTarget, error) {
 	if len(*s) == 0 {
-		return objectTarget{}, io.EOF
+		return nil, io.EOF
 	}
 
 	o := (*s)[0]
@@ -208,7 +204,7 @@ type sqsTargetReader struct {
 	log  log.Modular
 	sqs  *sqs.SQS
 
-	pending []objectTarget
+	pending []*objectTarget
 }
 
 func newSQSTargetReader(
@@ -219,7 +215,7 @@ func newSQSTargetReader(
 	return &sqsTargetReader{conf, log, sqs, nil}
 }
 
-func (s *sqsTargetReader) Pop(ctx context.Context) (objectTarget, error) {
+func (s *sqsTargetReader) Pop(ctx context.Context) (*objectTarget, error) {
 	if len(s.pending) > 0 {
 		t := s.pending[0]
 		s.pending = s.pending[1:]
@@ -227,10 +223,10 @@ func (s *sqsTargetReader) Pop(ctx context.Context) (objectTarget, error) {
 	}
 	var err error
 	if s.pending, err = s.readSQSEvents(ctx); err != nil {
-		return objectTarget{}, err
+		return nil, err
 	}
 	if len(s.pending) == 0 {
-		return objectTarget{}, types.ErrTimeout
+		return nil, types.ErrTimeout
 	}
 	t := s.pending[0]
 	s.pending = s.pending[1:]
@@ -240,7 +236,7 @@ func (s *sqsTargetReader) Pop(ctx context.Context) (objectTarget, error) {
 func (s *sqsTargetReader) Close(ctx context.Context) error {
 	var err error
 	for _, p := range s.pending {
-		if aerr := p.Ack(ctx, errors.New("service shutting down")); aerr != nil {
+		if aerr := p.ackFn(ctx, errors.New("service shutting down")); aerr != nil {
 			err = aerr
 		}
 	}
@@ -316,7 +312,7 @@ func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]objectTarget, erro
 	return objects, nil
 }
 
-func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]objectTarget, error) {
+func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*objectTarget, error) {
 	var dudMessageHandles []*sqs.ChangeMessageVisibilityBatchRequestEntry
 	addDudFn := func(m *sqs.Message) {
 		dudMessageHandles = append(dudMessageHandles, &sqs.ChangeMessageVisibilityBatchRequestEntry{
@@ -334,7 +330,7 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]objectTarget, er
 		return nil, err
 	}
 
-	var pendingObjects []objectTarget
+	var pendingObjects []*objectTarget
 
 messageLoop:
 	for _, sqsMsg := range output.Messages {
@@ -362,10 +358,9 @@ messageLoop:
 		var nackOnce sync.Once
 		for _, object := range objects {
 			ackOnce := sync.Once{}
-			pendingObjects = append(pendingObjects, objectTarget{
-				key:    object.key,
-				bucket: object.bucket,
-				ackFn: func(ctx context.Context, err error) (aerr error) {
+			pendingObjects = append(pendingObjects, newObjectTarget(
+				object.key, object.bucket,
+				func(ctx context.Context, err error) (aerr error) {
 					if err != nil {
 						nackOnce.Do(func() {
 							// Prevent future acks from triggering a delete.
@@ -387,7 +382,7 @@ messageLoop:
 					}
 					return
 				},
-			})
+			))
 		}
 	}
 
@@ -429,210 +424,12 @@ func (s *sqsTargetReader) ackSQSMessage(ctx context.Context, msg *sqs.Message) e
 
 //------------------------------------------------------------------------------
 
-type scannerAckFn func(context.Context, error) error
-
-type objectScanner interface {
-	Next(ctx context.Context) ([]byte, scannerAckFn, error)
-	Close(context.Context) error
-}
-
-type objectScannerCtor func(io.ReadCloser, objectTarget) (objectScanner, error)
-
-func getObjectScanner(codec string) (objectScannerCtor, error) {
-	switch codec {
-	case "all-bytes":
-		return func(r io.ReadCloser, target objectTarget) (objectScanner, error) {
-			return &allScanner{r, target, false}, nil
-		}, nil
-	case "lines":
-		return newLinesScanner, nil
-	case "tar":
-		return newTarScanner, nil
-	case "tar-gzip":
-		return func(r io.ReadCloser, target objectTarget) (objectScanner, error) {
-			g, err := gzip.NewReader(r)
-			if err != nil {
-				r.Close()
-				return nil, err
-			}
-			return newTarScanner(g, target)
-		}, nil
-	}
-	return nil, fmt.Errorf("codec was not recognised: %v", codec)
-}
-
-//------------------------------------------------------------------------------
-
-type allScanner struct {
-	i        io.ReadCloser
-	target   objectTarget
-	consumed bool
-}
-
-func (a *allScanner) Next(ctx context.Context) ([]byte, scannerAckFn, error) {
-	if a.consumed {
-		return nil, nil, io.EOF
-	}
-	a.consumed = true
-	b, err := ioutil.ReadAll(a.i)
-	if err != nil {
-		a.target.Ack(ctx, err)
-		return nil, nil, err
-	}
-	return b, a.target.Ack, nil
-}
-
-func (a *allScanner) Close(ctx context.Context) error {
-	if !a.consumed {
-		a.target.Ack(ctx, errors.New("service shutting down"))
-	}
-	return a.i.Close()
-}
-
-//------------------------------------------------------------------------------
-
-type linesScanner struct {
-	buf    *bufio.Scanner
-	r      io.ReadCloser
-	target objectTarget
-
-	mut      sync.Mutex
-	finished bool
-	total    int32
-	pending  int32
-}
-
-func newLinesScanner(r io.ReadCloser, target objectTarget) (objectScanner, error) {
-	return &linesScanner{
-		buf:    bufio.NewScanner(r),
-		r:      r,
-		target: target,
-	}, nil
-}
-
-func (a *linesScanner) ack(ctx context.Context, err error) error {
-	a.mut.Lock()
-	a.pending--
-	doAck := a.pending == 0 && a.finished
-	a.mut.Unlock()
-
-	if err != nil {
-		return a.target.Ack(ctx, err)
-	}
-	if doAck {
-		return a.target.Ack(ctx, nil)
-	}
-	return nil
-}
-
-func (a *linesScanner) Next(ctx context.Context) ([]byte, scannerAckFn, error) {
-	a.mut.Lock()
-	defer a.mut.Unlock()
-
-	if a.buf.Scan() {
-		a.pending++
-		a.total++
-		return a.buf.Bytes(), a.ack, nil
-	}
-	err := a.buf.Err()
-	if err == nil {
-		err = io.EOF
-	}
-	a.finished = true
-	return nil, nil, err
-}
-
-func (a *linesScanner) Close(ctx context.Context) error {
-	a.mut.Lock()
-	defer a.mut.Unlock()
-
-	if !a.finished {
-		a.target.Ack(ctx, errors.New("service shutting down"))
-	}
-	if a.pending == 0 && a.total == 0 {
-		a.target.Ack(ctx, nil)
-	}
-	return a.r.Close()
-}
-
-//------------------------------------------------------------------------------
-
-type tarScanner struct {
-	buf    *tar.Reader
-	r      io.ReadCloser
-	target objectTarget
-
-	mut      sync.Mutex
-	finished bool
-	total    int32
-	pending  int32
-}
-
-func newTarScanner(r io.ReadCloser, target objectTarget) (objectScanner, error) {
-	return &tarScanner{
-		buf:    tar.NewReader(r),
-		r:      r,
-		target: target,
-	}, nil
-}
-
-func (a *tarScanner) ack(ctx context.Context, err error) error {
-	a.mut.Lock()
-	a.pending--
-	doAck := a.pending == 0 && a.finished
-	a.mut.Unlock()
-
-	if err != nil {
-		return a.target.Ack(ctx, err)
-	}
-	if doAck {
-		return a.target.Ack(ctx, nil)
-	}
-	return nil
-}
-
-func (a *tarScanner) Next(ctx context.Context) ([]byte, scannerAckFn, error) {
-	a.mut.Lock()
-	defer a.mut.Unlock()
-
-	_, err := a.buf.Next()
-	if err == nil {
-		b, err := ioutil.ReadAll(a.buf)
-		if err != nil {
-			return nil, nil, err
-		}
-		a.pending++
-		a.total++
-		return b, a.ack, nil
-	}
-
-	if err == io.EOF {
-		a.finished = true
-	}
-	return nil, nil, err
-}
-
-func (a *tarScanner) Close(ctx context.Context) error {
-	a.mut.Lock()
-	defer a.mut.Unlock()
-
-	if !a.finished {
-		a.target.Ack(ctx, errors.New("service shutting down"))
-	}
-	if a.pending == 0 && a.total == 0 {
-		a.target.Ack(ctx, nil)
-	}
-	return a.r.Close()
-}
-
-//------------------------------------------------------------------------------
-
 // AmazonS3 is a benthos reader.Type implementation that reads messages from an
 // Amazon S3 bucket.
 type awsS3 struct {
 	conf AWSS3Config
 
-	objectScannerCtor objectScannerCtor
+	objectScannerCtor partCodecCtor
 	keyReader         objectTargetReader
 
 	session *session.Session
@@ -647,9 +444,9 @@ type awsS3 struct {
 }
 
 type pendingObject struct {
-	target  objectTarget
+	target  *objectTarget
 	obj     *s3.GetObjectOutput
-	scanner objectScanner
+	scanner partCodec
 }
 
 // NewAmazonS3 creates a new Amazon S3 bucket reader.Type.
@@ -667,7 +464,7 @@ func newAmazonS3(
 		stats: stats,
 	}
 	var err error
-	if s.objectScannerCtor, err = getObjectScanner(conf.Codec); err != nil {
+	if s.objectScannerCtor, err = getPartCodec(conf.Codec); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -687,10 +484,7 @@ func (a *awsS3) getTargetReader(ctx context.Context) (objectTargetReader, error)
 	err := a.s3.ListObjectsPagesWithContext(ctx, listInput,
 		func(page *s3.ListObjectsOutput, isLastPage bool) bool {
 			for _, obj := range page.Contents {
-				staticKeys = append(staticKeys, objectTarget{
-					key:    *obj.Key,
-					bucket: a.conf.Bucket,
-				})
+				staticKeys = append(staticKeys, newObjectTarget(*obj.Key, a.conf.Bucket, nil))
 			}
 			return true
 		},
@@ -740,9 +534,9 @@ func (a *awsS3) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func msgFromBytes(p *pendingObject, b []byte) types.Message {
+func s3MsgFromPart(p *pendingObject, part types.Part) types.Message {
 	msg := message.New(nil)
-	msg.Append(message.NewPart(b))
+	msg.Append(part)
 
 	meta := msg.Get(0).Metadata()
 
@@ -776,7 +570,7 @@ func (a *awsS3) getObjectTarget(ctx context.Context) (*pendingObject, error) {
 		Key:    aws.String(target.key),
 	})
 	if err != nil {
-		target.Ack(ctx, err)
+		target.ackFn(ctx, err)
 		return nil, err
 	}
 
@@ -784,8 +578,8 @@ func (a *awsS3) getObjectTarget(ctx context.Context) (*pendingObject, error) {
 		target: target,
 		obj:    obj,
 	}
-	if object.scanner, err = a.objectScannerCtor(obj.Body, target); err != nil {
-		target.Ack(ctx, err)
+	if object.scanner, err = a.objectScannerCtor(obj.Body, target.ackFn); err != nil {
+		target.ackFn(ctx, err)
 		return nil, err
 	}
 
@@ -814,12 +608,12 @@ func (a *awsS3) ReadWithContext(ctx context.Context) (msg types.Message, ackFn r
 		return
 	}
 
-	var b []byte
-	var scnAckFn scannerAckFn
+	var p types.Part
+	var scnAckFn codecAckFn
 
 scanLoop:
 	for {
-		if b, scnAckFn, err = object.scanner.Next(ctx); err == nil {
+		if p, scnAckFn, err = object.scanner.Next(ctx); err == nil {
 			break scanLoop
 		}
 		a.object = nil
@@ -834,7 +628,7 @@ scanLoop:
 		}
 	}
 
-	return msgFromBytes(object, b), func(rctx context.Context, res types.Response) error {
+	return s3MsgFromPart(object, p), func(rctx context.Context, res types.Response) error {
 		return scnAckFn(rctx, res.Error())
 	}, nil
 }

@@ -220,7 +220,7 @@ Default: `false`
 
 ### `codec`
 
-The way in which objects are consumed, codecs are useful for specifying how large files might be processed in small chunks rather than loading it all in memory.
+The way in which the bytes of consumed files are converted into messages, codecs are useful for specifying how large files might be processed in small chunks rather than loading it all in memory.
 
 
 Type: `string`  

@@ -82,7 +82,7 @@ arrays are produced instead, like follows:
 
 ### `paths`
 
-A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported in order to import a range of files.
+A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported.
 
 
 Type: `array`  
