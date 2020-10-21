@@ -3,15 +3,12 @@ package cache
 import (
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/retries"
-	"github.com/cenkalti/backoff/v4"
 	"github.com/dgraph-io/ristretto"
 )
 
@@ -25,14 +22,16 @@ func init() {
 Stores key/value pairs in a map held in the memory-bound
 [Ristretto cache](https://github.com/dgraph-io/ristretto).`,
 		Description: `
-This cache is more efficient and appropriate for high-volume use cases than the standard memory cache. The add command is non-atomic, and therefore this cache is not suitable for deduplication.`,
+This cache is more efficient and appropriate for high-volume use cases than the standard memory cache. However, the add command is non-atomic, and therefore this cache is not suitable for deduplication.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(
 				"ttl",
 				"The TTL of each item as a duration string. After this period an item will be eligible for removal during the next compaction.",
 				"60s", "5m", "36h",
 			),
-		}.Merge(retries.FieldSpecs()),
+			docs.FieldAdvanced("retries", "The maximum number of retry attempts to make before abandoning a request."),
+			docs.FieldAdvanced("retry_period", "The duration to wait between retry attempts."),
+		},
 	}
 }
 
@@ -40,20 +39,17 @@ This cache is more efficient and appropriate for high-volume use cases than the 
 
 // RistrettoConfig contains config fields for the Ristretto cache type.
 type RistrettoConfig struct {
-	TTL            string `json:"ttl" yaml:"ttl"`
-	retries.Config `json:",inline" yaml:",inline"`
+	TTL         string `json:"ttl" yaml:"ttl"`
+	Retries     int    `json:"retries" yaml:"retries"`
+	RetryPeriod string `json:"retry_period" yaml:"retry_period"`
 }
 
 // NewRistrettoConfig creates a RistrettoConfig populated with default values.
 func NewRistrettoConfig() RistrettoConfig {
-	rConf := retries.NewConfig()
-	rConf.MaxRetries = 3
-	rConf.Backoff.InitialInterval = "1s"
-	rConf.Backoff.MaxInterval = "5s"
-	rConf.Backoff.MaxElapsedTime = "30s"
 	return RistrettoConfig{
-		TTL:    "",
-		Config: rConf,
+		TTL:         "",
+		Retries:     0,
+		RetryPeriod: "50ms",
 	}
 }
 
@@ -64,8 +60,8 @@ type Ristretto struct {
 	ttl   time.Duration
 	cache *ristretto.Cache
 
-	backoffCtor func() backoff.BackOff
-	boffPool    sync.Pool
+	retries     int
+	retryPeriod time.Duration
 }
 
 // NewRistretto creates a new Ristretto cache type.
@@ -79,6 +75,14 @@ func NewRistretto(conf Config, mgr types.Manager, log log.Modular, stats metrics
 		}
 	}
 
+	var retryPeriod time.Duration
+	if tout := conf.Ristretto.RetryPeriod; len(tout) > 0 {
+		var err error
+		if retryPeriod, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse retry period string: %v", err)
+		}
+	}
+
 	cache, err := ristretto.NewCache(&ristretto.Config{
 		NumCounters: 1e7,     // number of keys to track frequency of (10M).
 		MaxCost:     1 << 30, // maximum cost of cache (1GB).
@@ -88,17 +92,10 @@ func NewRistretto(conf Config, mgr types.Manager, log log.Modular, stats metrics
 		return nil, err
 	}
 	r := &Ristretto{
-		ttl:   ttl,
-		cache: cache,
-	}
-
-	if r.backoffCtor, err = conf.Ristretto.Config.GetCtor(); err != nil {
-		return nil, err
-	}
-	r.boffPool = sync.Pool{
-		New: func() interface{} {
-			return r.backoffCtor()
-		},
+		ttl:         ttl,
+		cache:       cache,
+		retries:     conf.Ristretto.Retries,
+		retryPeriod: retryPeriod,
 	}
 
 	return r, nil
@@ -109,24 +106,11 @@ func NewRistretto(conf Config, mgr types.Manager, log log.Modular, stats metrics
 // Get attempts to locate and return a cached value by its key, returns an error
 // if the key does not exist.
 func (r *Ristretto) Get(key string) ([]byte, error) {
-	boff := r.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		r.boffPool.Put(boff)
-	}()
-
-	var res interface{}
-	var ok bool
-	for !ok {
-		if res, ok = r.cache.Get(key); !ok {
-			wait := boff.NextBackOff()
-			if wait == backoff.Stop {
-				break
-			}
-			time.Sleep(wait)
-		}
+	res, ok := r.cache.Get(key)
+	for i := 0; !ok && i < r.retries; i++ {
+		<-time.After(r.retryPeriod)
+		res, ok = r.cache.Get(key)
 	}
-
 	if !ok {
 		return nil, types.ErrKeyNotFound
 	}

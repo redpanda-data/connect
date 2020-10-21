@@ -40,17 +40,14 @@ ristretto:
 # All config fields, showing default values
 ristretto:
   ttl: ""
-  max_retries: 3
-  backoff:
-    initial_interval: 1s
-    max_interval: 5s
-    max_elapsed_time: 30s
+  retries: 0
+  retry_period: 50ms
 ```
 
 </TabItem>
 </Tabs>
 
-This cache is more efficient and appropriate for high-volume use cases than the standard memory cache. The add command is non-atomic, and therefore this cache is not suitable for deduplication.
+This cache is more efficient and appropriate for high-volume use cases than the standard memory cache. However, the add command is non-atomic, and therefore this cache is not suitable for deduplication.
 
 ## Fields
 
@@ -72,43 +69,20 @@ ttl: 5m
 ttl: 36h
 ```
 
-### `max_retries`
+### `retries`
 
-The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
+The maximum number of retry attempts to make before abandoning a request.
 
 
 Type: `number`  
-Default: `3`  
+Default: `0`  
 
-### `backoff`
+### `retry_period`
 
-Control time intervals between retry attempts.
-
-
-Type: `object`  
-
-### `backoff.initial_interval`
-
-The initial period to wait between retry attempts.
+The duration to wait between retry attempts.
 
 
 Type: `string`  
-Default: `"1s"`  
-
-### `backoff.max_interval`
-
-The maximum period to wait between retry attempts.
-
-
-Type: `string`  
-Default: `"5s"`  
-
-### `backoff.max_elapsed_time`
-
-The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
-
-
-Type: `string`  
-Default: `"30s"`  
+Default: `"50ms"`  
 
 

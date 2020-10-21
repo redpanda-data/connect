@@ -13,8 +13,8 @@ import (
 func TestRistrettoCache(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = TypeRistretto
-	conf.Ristretto.Backoff.InitialInterval = "1ms"
-	conf.Ristretto.Backoff.MaxInterval = "50ms"
+	conf.Ristretto.Retries = 50
+	conf.Ristretto.RetryPeriod = "1ms"
 
 	c, err := New(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
