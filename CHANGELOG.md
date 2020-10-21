@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - The `csv` input now supports glob patterns in file paths.
+- The `file` input now supports multiple paths, glob patterns, and a range of codecs.
 - New experimental `aws_s3` input.
 
 ### Fixed
@@ -18,6 +19,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - The `ristretto` cache no longer forces retries on get commands, and the retry fields have been changed in order to reflect this behaviour.
+- The `files` input has been deprecated as it's behaviour is now covered by `file`.
 - Numbers within JSON documents are now parsed in a way that preserves precision even in cases where the number does not fit a 64-bit signed integer or float. When arithmetic is applied to those numbers (either in Bloblang or by other means) the number is converted (and precision lost) at that point based on the operation itself.
 
   This change means that string coercion on large numbers (e.g. `root.foo = this.large_int.string()`) should now preserve the original form. However, if you are using plugins that interact with JSON message payloads you must ensure that your plugins are able to process the [`json.Number`](https://golang.org/pkg/encoding/json/#Number) type.

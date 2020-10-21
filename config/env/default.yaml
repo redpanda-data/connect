@@ -88,6 +88,8 @@ input:
           prefix: ${INPUT_DYNAMIC_PREFIX}
           timeout: ${INPUT_DYNAMIC_TIMEOUT:5s}
         file:
+          codec: ${INPUT_FILE_CODEC:lines}
+          delete_on_finish: ${INPUT_FILE_DELETE_ON_FINISH:false}
           delimiter: ${INPUT_FILE_DELIMITER}
           max_buffer: ${INPUT_FILE_MAX_BUFFER:1000000}
           multipart: ${INPUT_FILE_MULTIPART:false}

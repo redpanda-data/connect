@@ -464,7 +464,7 @@ func newAmazonS3(
 		stats: stats,
 	}
 	var err error
-	if s.objectScannerCtor, err = getPartCodec(conf.Codec); err != nil {
+	if s.objectScannerCtor, err = getPartCodec(conf.Codec, newCodecConfig()); err != nil {
 		return nil, err
 	}
 	return s, nil

@@ -1,7 +1,7 @@
 ---
 title: files
 type: input
-status: stable
+status: deprecated
 categories: ["Local"]
 ---
 
@@ -15,6 +15,9 @@ categories: ["Local"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
 
 Reads files from a path, where each discrete file will be consumed as a single
 message.
@@ -30,6 +33,10 @@ input:
 The path can either point to a single file (resulting in only a single message)
 or a directory, in which case the directory will be walked and each file found
 will become a message.
+
+## Alternatives
+
+The behaviour of this input is now covered by the [`file` input](/docs/components/inputs/file).
 
 ### Metadata
 

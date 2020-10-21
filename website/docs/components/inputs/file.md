@@ -16,33 +16,73 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Reads a file, where each line is processed as an individual message.
+Consumes data from files on disk, emitting messages according to a chosen codec.
+
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
 
 ```yaml
-# Config fields, showing default values
+# Common config fields, showing default values
 input:
   file:
-    path: ""
+    paths: []
+    codec: lines
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+# All config fields, showing default values
+input:
+  file:
+    paths: []
+    codec: lines
     multipart: false
     max_buffer: 1e+06
-    delimiter: ""
+    delete_on_finish: false
 ```
+
+</TabItem>
+</Tabs>
 
 ## Fields
 
-### `path`
+### `paths`
 
-A path pointing to a file on disk.
+A list of paths to consume sequentially. Glob patterns are supported.
+
+
+Type: `array`  
+Default: `[]`  
+
+### `codec`
+
+The way in which the bytes of consumed files are converted into messages, codecs are useful for specifying how large files might be processed in small chunks rather than loading it all in memory. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.
 
 
 Type: `string`  
-Default: `""`  
+Default: `"lines"`  
+Options: `all-bytes`, `lines`, `delim:x`, `tar`, `tar-gzip`.
+
+```yaml
+# Examples
+
+codec: lines
+
+codec: "delim:\t"
+
+codec: delim:foobar
+```
 
 ### `multipart`
 
-If set `true` each line is read as a message part, and an empty line
-indicates the end of a message batch, and only then is the batch flushed
-downstream.
+Consume multipart messages from the codec by interpretting empty lines as the end of the message. Multipart messages are processed as a batch within Benthos. Not all codecs are appropriate for multipart messages.
 
 
 Type: `bool`  
@@ -50,19 +90,18 @@ Default: `false`
 
 ### `max_buffer`
 
-Must be larger than the largest line of the target file.
+The largest token size expected when consuming delimited files.
 
 
 Type: `number`  
 Default: `1000000`  
 
-### `delimiter`
+### `delete_on_finish`
 
-A string that indicates the end of a message within the target file. If left
-empty then line feed (\n) is used.
+Whether to delete consumed files from the disk once they are fully consumed.
 
 
-Type: `string`  
-Default: `""`  
+Type: `bool`  
+Default: `false`  
 
 

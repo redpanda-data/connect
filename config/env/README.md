@@ -117,6 +117,8 @@ INPUT_DYNAMIC_PREFIX
 INPUT_DYNAMIC_TIMEOUT                                = 5s
 INPUT_FILES_DELETE_FILES                             = false
 INPUT_FILES_PATH
+INPUT_FILE_CODEC                                     = lines
+INPUT_FILE_DELETE_ON_FINISH                          = false
 INPUT_FILE_DELIMITER
 INPUT_FILE_MAX_BUFFER                                = 1000000
 INPUT_FILE_MULTIPART                                 = false

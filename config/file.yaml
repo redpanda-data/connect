@@ -8,10 +8,11 @@ http:
 input:
   type: file
   file:
-    delimiter: ""
+    codec: lines
+    delete_on_finish: false
     max_buffer: 1e+06
     multipart: false
-    path: ""
+    paths: []
 buffer:
   type: none
   none: {}

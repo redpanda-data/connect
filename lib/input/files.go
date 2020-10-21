@@ -13,6 +13,7 @@ import (
 func init() {
 	Constructors[TypeFiles] = TypeSpec{
 		constructor: NewFiles,
+		Status:      docs.StatusDeprecated,
 		Summary: `
 Reads files from a path, where each discrete file will be consumed as a single
 message.`,
@@ -20,6 +21,10 @@ message.`,
 The path can either point to a single file (resulting in only a single message)
 or a directory, in which case the directory will be walked and each file found
 will become a message.
+
+## Alternatives
+
+The behaviour of this input is now covered by the ` + "[`file` input](/docs/components/inputs/file)" + `.
 
 ### Metadata
 

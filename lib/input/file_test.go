@@ -3,6 +3,7 @@ package input
 import (
 	"io/ioutil"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -10,14 +11,17 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestFileSinglePart(t *testing.T) {
+func TestFileSinglePartDeprecated(t *testing.T) {
 	tmpfile, err := ioutil.TempFile("", "benthos_file_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(tmpfile.Name())
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.Remove(tmpfile.Name())
+	})
 
 	messages := []string{
 		"first message",
@@ -34,29 +38,21 @@ func TestFileSinglePart(t *testing.T) {
 	conf := NewConfig()
 	conf.File.Path = tmpfile.Name()
 
-	f, err := NewFile(conf, nil, log.Noop(), metrics.DudType{})
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	f, err := NewFile(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
 
 	defer func() {
 		f.CloseAsync()
-		if err := f.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, f.WaitForClose(time.Second))
 	}()
 
-	for _, msg := range messages {
+	for _, exp := range messages {
 		var ts types.Transaction
 		var open bool
 		select {
 		case ts, open = <-f.TransactionChan():
-			if !open {
-				t.Error("channel closed early")
-			} else if res := string(ts.Payload.Get(0).Get()); res != msg {
-				t.Errorf("Wrong result, %v != %v", res, msg)
-			}
+			require.True(t, open)
+			assert.Equal(t, exp, string(ts.Payload.Get(0).Get()))
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for message")
 		}
@@ -69,20 +65,19 @@ func TestFileSinglePart(t *testing.T) {
 
 	select {
 	case _, open := <-f.TransactionChan():
-		if open {
-			t.Error("Channel not closed at end of messages")
-		}
+		require.False(t, open)
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for channel close")
 	}
 }
 
-func TestFileMultiPart(t *testing.T) {
+func TestFileMultiPartDeprecated(t *testing.T) {
 	tmpfile, err := ioutil.TempFile("", "benthos_file_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(tmpfile.Name())
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.Remove(tmpfile.Name())
+	})
 
 	messages := [][]string{
 		{
@@ -114,17 +109,12 @@ func TestFileMultiPart(t *testing.T) {
 	conf.File.Path = tmpfile.Name()
 	conf.File.Multipart = true
 
-	f, err := NewFile(conf, nil, log.Noop(), metrics.DudType{})
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	f, err := NewFile(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
 
 	defer func() {
 		f.CloseAsync()
-		if err := f.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, f.WaitForClose(time.Second))
 	}()
 
 	for _, msg := range messages {
@@ -132,14 +122,9 @@ func TestFileMultiPart(t *testing.T) {
 		var open bool
 		select {
 		case ts, open = <-f.TransactionChan():
-			if !open {
-				t.Error("channel closed early")
-			} else {
-				for i, part := range msg {
-					if res := string(ts.Payload.Get(i).Get()); res != part {
-						t.Errorf("Wrong result, %v != %v", res, part)
-					}
-				}
+			require.True(t, open)
+			for i, exp := range msg {
+				assert.Equal(t, exp, string(ts.Payload.Get(i).Get()), strconv.Itoa(i))
 			}
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for message")
@@ -153,9 +138,7 @@ func TestFileMultiPart(t *testing.T) {
 
 	select {
 	case _, open := <-f.TransactionChan():
-		if open {
-			t.Error("Channel not closed at end of messages")
-		}
+		require.False(t, open)
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for channel close")
 	}

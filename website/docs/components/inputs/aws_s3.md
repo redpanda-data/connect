@@ -220,12 +220,22 @@ Default: `false`
 
 ### `codec`
 
-The way in which the bytes of consumed files are converted into messages, codecs are useful for specifying how large files might be processed in small chunks rather than loading it all in memory.
+The way in which the bytes of consumed files are converted into messages, codecs are useful for specifying how large files might be processed in small chunks rather than loading it all in memory. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.
 
 
 Type: `string`  
 Default: `"all-bytes"`  
-Options: `all-bytes`, `lines`, `tar`, `tar-gzip`.
+Options: `all-bytes`, `lines`, `delim:x`, `tar`, `tar-gzip`.
+
+```yaml
+# Examples
+
+codec: lines
+
+codec: "delim:\t"
+
+codec: delim:foobar
+```
 
 ### `sqs`
 

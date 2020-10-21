@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/filepath"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -95,17 +95,6 @@ func NewCSVFileConfig() CSVFileConfig {
 
 //------------------------------------------------------------------------------
 
-func resolveGlob(p string) ([]string, error) {
-	globbed, err := filepath.Glob(p)
-	if err != nil {
-		return nil, err
-	}
-	if len(globbed) == 0 {
-		globbed = []string{p}
-	}
-	return globbed, nil
-}
-
 // NewCSVFile creates a new CSV file input type.
 func NewCSVFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	delimRunes := []rune(conf.CSVFile.Delim)
@@ -115,13 +104,9 @@ func NewCSVFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.T
 
 	comma := delimRunes[0]
 
-	var pathsRemaining []string
-	for _, pattern := range conf.CSVFile.Paths {
-		gs, err := resolveGlob(pattern)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve path glob: %w", err)
-		}
-		pathsRemaining = append(pathsRemaining, gs...)
+	pathsRemaining, err := filepath.Globs(conf.CSVFile.Paths)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve path glob: %w", err)
 	}
 	if len(pathsRemaining) == 0 {
 		return nil, errors.New("requires at least one input file path")
