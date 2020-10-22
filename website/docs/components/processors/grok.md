@@ -68,6 +68,43 @@ of the input. However, this property often makes it less performant than pcre
 based implementations of grok. For more information see
 [https://swtch.com/~rsc/regexp/regexp1.html](https://swtch.com/~rsc/regexp/regexp1.html).
 
+## Examples
+
+<Tabs defaultValue="VPC Flow Logs" values={[
+{ label: 'VPC Flow Logs', value: 'VPC Flow Logs', },
+]}>
+
+<TabItem value="VPC Flow Logs">
+
+
+Grok can be used to parse unstructured logs such as VPC flow logs that look like this:
+
+```text
+2 123456789010 eni-1235b8ca123456789 172.31.16.139 172.31.16.21 20641 22 6 20 4249 1418530010 1418530070 ACCEPT OK
+```
+
+Into structured objects that look like this:
+
+```json
+{"accountid":"123456789010","action":"ACCEPT","bytes":4249,"dstaddr":"172.31.16.21","dstport":22,"end":1418530070,"interfaceid":"eni-1235b8ca123456789","logstatus":"OK","packets":20,"protocol":6,"srcaddr":"172.31.16.139","srcport":20641,"start":1418530010,"version":2}
+```
+
+With the following config:
+
+```yaml
+pipeline:
+  processors:
+    - grok:
+        output_format: json
+        patterns:
+          - '%{VPCFLOWLOG}'
+        pattern_definitions:
+          VPCFLOWLOG: '%{NUMBER:version:int} %{NUMBER:accountid} %{NOTSPACE:interfaceid} %{NOTSPACE:srcaddr} %{NOTSPACE:dstaddr} %{NOTSPACE:srcport:int} %{NOTSPACE:dstport:int} %{NOTSPACE:protocol:int} %{NOTSPACE:packets:int} %{NOTSPACE:bytes:int} %{NUMBER:start:int} %{NUMBER:end:int} %{NOTSPACE:action} %{NOTSPACE:logstatus}'
+```
+
+</TabItem>
+</Tabs>
+
 ## Fields
 
 ### `patterns`
@@ -132,4 +169,7 @@ counting backwards starting from -1.
 Type: `array`  
 Default: `[]`  
 
+## Default Patterns
+
+A summary of the default patterns on offer can be [found here](https://github.com/trivago/grok/blob/master/patterns.go#L5).
 

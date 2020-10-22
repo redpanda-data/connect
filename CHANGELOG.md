@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - The `csv` input now supports glob patterns in file paths.
 - The `file` input now supports multiple paths, glob patterns, and a range of codecs.
 - New experimental `aws_s3` input.
+- All `redis` components now support TLS.
 
 ### Fixed
 

@@ -101,6 +101,14 @@ The path of a schema document to apply. Use either this or the `schema` field.
 Type: `string`  
 Default: `""`  
 
+```yaml
+# Examples
+
+schema_path: file://path/to/spec.avsc
+
+schema_path: http://localhost:8081/path/to/spec/versions/1
+```
+
 ### `parts`
 
 An optional array of message indexes of a batch that the processor should apply to.

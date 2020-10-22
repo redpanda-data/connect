@@ -44,7 +44,11 @@ specified encoding.`,
 			docs.FieldCommon("operator", "The [operator](#operators) to execute").HasOptions("to_json", "from_json"),
 			docs.FieldCommon("encoding", "An Avro encoding format to use for conversions to and from a schema.").HasOptions("textual", "binary", "single"),
 			docs.FieldCommon("schema", "A full Avro schema to use."),
-			docs.FieldCommon("schema_path", "The path of a schema document to apply. Use either this or the `schema` field."),
+			docs.FieldCommon(
+				"schema_path", "The path of a schema document to apply. Use either this or the `schema` field.",
+				"file://path/to/spec.avsc",
+				"http://localhost:8081/path/to/spec/versions/1",
+			),
 			partsFieldSpec,
 		},
 	}

@@ -16,8 +16,6 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	// defaultPatternsObjBytes, _ := yaml.Marshal(grok.DefaultPatterns)
-
 	Constructors[TypeGrok] = TypeSpec{
 		constructor: NewGrok,
 		Categories: []Category{
@@ -50,17 +48,39 @@ based implementations of grok. For more information see
 			docs.FieldAdvanced("remove_empty_values", "Whether to remove values that are empty from the resulting structure."),
 			partsFieldSpec,
 		},
-		/*
-			Footnotes: fmt.Sprintf(`
-				## Default Patterns
+		Examples: []docs.AnnotatedExample{
+			{
+				Title: "VPC Flow Logs",
+				Summary: `
+Grok can be used to parse unstructured logs such as VPC flow logs that look like this:
 
-				The following is a list of default patterns that can be used.
+` + "```text" + `
+2 123456789010 eni-1235b8ca123456789 172.31.16.139 172.31.16.21 20641 22 6 20 4249 1418530010 1418530070 ACCEPT OK
+` + "```" + `
 
-				<div style={{maxWidth: '100px'}}>
-				`+"```"+`
-				%s
-				`+"```"+`
-				</div>`, defaultPatternsObjBytes),*/
+Into structured objects that look like this:
+
+` + "```json" + `
+{"accountid":"123456789010","action":"ACCEPT","bytes":4249,"dstaddr":"172.31.16.21","dstport":22,"end":1418530070,"interfaceid":"eni-1235b8ca123456789","logstatus":"OK","packets":20,"protocol":6,"srcaddr":"172.31.16.139","srcport":20641,"start":1418530010,"version":2}
+` + "```" + `
+
+With the following config:`,
+				Config: `
+pipeline:
+  processors:
+    - grok:
+        output_format: json
+        patterns:
+          - '%{VPCFLOWLOG}'
+        pattern_definitions:
+          VPCFLOWLOG: '%{NUMBER:version:int} %{NUMBER:accountid} %{NOTSPACE:interfaceid} %{NOTSPACE:srcaddr} %{NOTSPACE:dstaddr} %{NOTSPACE:srcport:int} %{NOTSPACE:dstport:int} %{NOTSPACE:protocol:int} %{NOTSPACE:packets:int} %{NOTSPACE:bytes:int} %{NUMBER:start:int} %{NUMBER:end:int} %{NOTSPACE:action} %{NOTSPACE:logstatus}'
+`,
+			},
+		},
+		Footnotes: `
+## Default Patterns
+
+A summary of the default patterns on offer can be [found here](https://github.com/trivago/grok/blob/master/patterns.go#L5).`,
 	}
 }
 
