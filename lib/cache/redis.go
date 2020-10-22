@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/go-redis/redis/v7"
 )
 
@@ -30,6 +32,7 @@ string in order to set no expiration.`,
 			docs.FieldCommon("expiration", "An optional period after which cached items will expire."),
 			docs.FieldAdvanced("retries", "The maximum number of retry attempts to make before abandoning a request."),
 			docs.FieldAdvanced("retry_period", "The duration to wait between retry attempts."),
+			btls.FieldSpec(),
 		},
 	}
 }
@@ -38,11 +41,12 @@ string in order to set no expiration.`,
 
 // RedisConfig is a config struct for a redis connection.
 type RedisConfig struct {
-	URL         string `json:"url" yaml:"url"`
-	Prefix      string `json:"prefix" yaml:"prefix"`
-	Expiration  string `json:"expiration" yaml:"expiration"`
-	Retries     int    `json:"retries" yaml:"retries"`
-	RetryPeriod string `json:"retry_period" yaml:"retry_period"`
+	URL         string      `json:"url" yaml:"url"`
+	Prefix      string      `json:"prefix" yaml:"prefix"`
+	Expiration  string      `json:"expiration" yaml:"expiration"`
+	Retries     int         `json:"retries" yaml:"retries"`
+	RetryPeriod string      `json:"retry_period" yaml:"retry_period"`
+	TLS         btls.Config `json:"tls" yaml:"tls"`
 }
 
 // NewRedisConfig returns a RedisConfig with default values.
@@ -53,6 +57,7 @@ func NewRedisConfig() RedisConfig {
 		Expiration:  "24h",
 		Retries:     3,
 		RetryPeriod: "500ms",
+		TLS:         btls.NewConfig(),
 	}
 }
 
@@ -138,11 +143,20 @@ func NewRedis(
 		}
 	}
 
+	var tlsConf *tls.Config = nil
+	if conf.Redis.TLS.Enabled {
+		var err error
+		if tlsConf, err = conf.Redis.TLS.Get(); err != nil {
+			return nil, err
+		}
+	}
+
 	client := redis.NewClient(&redis.Options{
-		Addr:     url.Host,
-		Network:  url.Scheme,
-		DB:       redisDB,
-		Password: pass,
+		Addr:      url.Host,
+		Network:   url.Scheme,
+		DB:        redisDB,
+		Password:  pass,
+		TLSConfig: tlsConf,
 	})
 
 	return &Redis{
