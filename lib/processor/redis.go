@@ -2,13 +2,13 @@ package processor
 
 import (
 	"fmt"
-	"net/url"
 	"strconv"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	bredis "github.com/Jeffail/benthos/v3/internal/service/redis"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -39,14 +39,13 @@ Returns the cardinality of a set, or ` + "`0`" + ` if the key does not exist.
 ### ` + "`sadd`" + `
 
 Adds a new member to a set. Returns ` + "`1`" + ` if the member was added.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("url", "The URL of the target Redis instance."),
+		FieldSpecs: bredis.ConfigDocs().Add(
 			docs.FieldCommon("operator", "The [operator](#operators) to apply.").HasOptions("scard", "sadd"),
 			docs.FieldCommon("key", "A key to use for the target operator.").SupportsInterpolation(false),
 			docs.FieldAdvanced("retries", "The maximum number of retries before abandoning a request."),
 			docs.FieldAdvanced("retry_period", "The time to wait before consecutive retry attempts."),
 			partsFieldSpec,
-		},
+		),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title: "Querying Cardinality",
@@ -75,18 +74,18 @@ pipeline:
 
 // RedisConfig contains configuration fields for the Redis processor.
 type RedisConfig struct {
-	URL         string `json:"url" yaml:"url"`
-	Parts       []int  `json:"parts" yaml:"parts"`
-	Operator    string `json:"operator" yaml:"operator"`
-	Key         string `json:"key" yaml:"key"`
-	Retries     int    `json:"retries" yaml:"retries"`
-	RetryPeriod string `json:"retry_period" yaml:"retry_period"`
+	bredis.Config `json:",inline" yaml:",inline"`
+	Parts         []int  `json:"parts" yaml:"parts"`
+	Operator      string `json:"operator" yaml:"operator"`
+	Key           string `json:"key" yaml:"key"`
+	Retries       int    `json:"retries" yaml:"retries"`
+	RetryPeriod   string `json:"retry_period" yaml:"retry_period"`
 }
 
 // NewRedisConfig returns a RedisConfig with default values.
 func NewRedisConfig() RedisConfig {
 	return RedisConfig{
-		URL:         "tcp://localhost:6379",
+		Config:      bredis.NewConfig(),
 		Parts:       []int{},
 		Operator:    "scard",
 		Key:         "",
@@ -128,20 +127,11 @@ func NewRedis(
 			return nil, fmt.Errorf("failed to parse retry period string: %v", err)
 		}
 	}
-	uri, err := url.Parse(conf.Redis.URL)
+
+	client, err := conf.Redis.Config.Client()
 	if err != nil {
 		return nil, err
 	}
-
-	var pass string
-	if uri.User != nil {
-		pass, _ = uri.User.Password()
-	}
-	client := redis.NewClient(&redis.Options{
-		Addr:     uri.Host,
-		Network:  uri.Scheme,
-		Password: pass,
-	})
 
 	key, err := bloblang.NewField(conf.Redis.Key)
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	bredis "github.com/Jeffail/benthos/v3/internal/service/redis"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -18,15 +19,15 @@ import (
 // RedisPubSubConfig contains configuration fields for the RedisPubSub input
 // type.
 type RedisPubSubConfig struct {
-	URL         string   `json:"url" yaml:"url"`
-	Channels    []string `json:"channels" yaml:"channels"`
-	UsePatterns bool     `json:"use_patterns" yaml:"use_patterns"`
+	bredis.Config `json:",inline" yaml:",inline"`
+	Channels      []string `json:"channels" yaml:"channels"`
+	UsePatterns   bool     `json:"use_patterns" yaml:"use_patterns"`
 }
 
 // NewRedisPubSubConfig creates a new RedisPubSubConfig with default values.
 func NewRedisPubSubConfig() RedisPubSubConfig {
 	return RedisPubSubConfig{
-		URL:         "tcp://localhost:6379",
+		Config:      bredis.NewConfig(),
 		Channels:    []string{"benthos_chan"},
 		UsePatterns: false,
 	}
@@ -57,8 +58,7 @@ func NewRedisPubSub(
 		log:   log,
 	}
 
-	var err error
-	r.url, err = url.Parse(r.conf.URL)
+	_, err := r.conf.Config.Client()
 	if err != nil {
 		return nil, err
 	}
@@ -82,16 +82,10 @@ func (r *RedisPubSub) ConnectWithContext(ctx context.Context) error {
 		return nil
 	}
 
-	var pass string
-	if r.url.User != nil {
-		pass, _ = r.url.User.Password()
+	client, err := r.conf.Config.Client()
+	if err != nil {
+		return err
 	}
-	client := redis.NewClient(&redis.Options{
-		Addr:     r.url.Host,
-		Network:  r.url.Scheme,
-		Password: pass,
-	})
-
 	if _, err := client.Ping().Result(); err != nil {
 		return err
 	}

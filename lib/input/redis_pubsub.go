@@ -2,6 +2,7 @@ package input
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/service/redis"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -27,11 +28,10 @@ patterns in your channel names. For example:
 
 Use ` + "`\\`" + ` to escape special characters if you want to match them
 verbatim.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("url", "The URL of a Redis server to connect to.", "tcp://localhost:6379"),
+		FieldSpecs: redis.ConfigDocs().Add(
 			docs.FieldCommon("channels", "A list of channels to consume from."),
 			docs.FieldCommon("use_patterns", "Whether to use the PSUBSCRIBE command."),
-		},
+		),
 		Categories: []Category{
 			CategoryServices,
 		},

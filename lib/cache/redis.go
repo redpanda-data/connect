@@ -1,17 +1,14 @@
 package cache
 
 import (
-	"crypto/tls"
 	"fmt"
-	"net/url"
-	"strconv"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	bredis "github.com/Jeffail/benthos/v3/internal/service/redis"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/go-redis/redis/v7"
 )
 
@@ -23,17 +20,12 @@ func init() {
 		Summary: `
 Use a Redis instance as a cache. The expiration can be set to zero or an empty
 string in order to set no expiration.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon(
-				"url", "The URL of the target Redis server. Database is optional and is supplied as the URL path.",
-				"tcp://localhost:6379", "tcp://localhost:6379/1",
-			),
+		FieldSpecs: bredis.ConfigDocs().Add(
 			docs.FieldCommon("prefix", "An optional string to prefix item keys with in order to prevent collisions with similar services."),
 			docs.FieldCommon("expiration", "An optional period after which cached items will expire."),
 			docs.FieldAdvanced("retries", "The maximum number of retry attempts to make before abandoning a request."),
 			docs.FieldAdvanced("retry_period", "The duration to wait between retry attempts."),
-			btls.FieldSpec(),
-		},
+		),
 	}
 }
 
@@ -41,23 +33,21 @@ string in order to set no expiration.`,
 
 // RedisConfig is a config struct for a redis connection.
 type RedisConfig struct {
-	URL         string      `json:"url" yaml:"url"`
-	Prefix      string      `json:"prefix" yaml:"prefix"`
-	Expiration  string      `json:"expiration" yaml:"expiration"`
-	Retries     int         `json:"retries" yaml:"retries"`
-	RetryPeriod string      `json:"retry_period" yaml:"retry_period"`
-	TLS         btls.Config `json:"tls" yaml:"tls"`
+	bredis.Config `json:",inline" yaml:",inline"`
+	Prefix        string `json:"prefix" yaml:"prefix"`
+	Expiration    string `json:"expiration" yaml:"expiration"`
+	Retries       int    `json:"retries" yaml:"retries"`
+	RetryPeriod   string `json:"retry_period" yaml:"retry_period"`
 }
 
 // NewRedisConfig returns a RedisConfig with default values.
 func NewRedisConfig() RedisConfig {
 	return RedisConfig{
-		URL:         "tcp://localhost:6379",
+		Config:      bredis.NewConfig(),
 		Prefix:      "",
 		Expiration:  "24h",
 		Retries:     3,
 		RetryPeriod: "500ms",
-		TLS:         btls.NewConfig(),
 	}
 }
 
@@ -121,43 +111,10 @@ func NewRedis(
 		}
 	}
 
-	url, err := url.Parse(conf.Redis.URL)
+	client, err := conf.Redis.Config.Client()
 	if err != nil {
 		return nil, err
 	}
-
-	var pass string
-	if url.User != nil {
-		pass, _ = url.User.Password()
-	}
-
-	// We default to Redis DB 0 for backward compatibility, but if it's
-	// specified in the URL, we'll use the specified one instead.
-	var redisDB int
-	if len(url.Path) > 1 {
-		var err error
-		// We'll strip the leading '/'
-		redisDB, err = strconv.Atoi(url.Path[1:])
-		if err != nil {
-			return nil, fmt.Errorf("invalid Redis DB, can't parse '%s'", url.Path)
-		}
-	}
-
-	var tlsConf *tls.Config = nil
-	if conf.Redis.TLS.Enabled {
-		var err error
-		if tlsConf, err = conf.Redis.TLS.Get(); err != nil {
-			return nil, err
-		}
-	}
-
-	client := redis.NewClient(&redis.Options{
-		Addr:      url.Host,
-		Network:   url.Scheme,
-		DB:        redisDB,
-		Password:  pass,
-		TLSConfig: tlsConf,
-	})
 
 	return &Redis{
 		conf:  conf,

@@ -2,6 +2,7 @@ package output
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/service/redis"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
@@ -49,8 +50,7 @@ The order of hash field extraction is as follows:
 
 Where latter stages will overwrite matching field names of a former stage.`,
 		Async: true,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("url", "The URL of a Redis server to connect to.", "tcp://localhost:6379"),
+		FieldSpecs: redis.ConfigDocs().Add(
 			docs.FieldCommon(
 				"key", "The key for each message, function interpolations should be used to create a unique key per message.",
 				"${!meta(\"kafka_key\")}", "${!json(\"doc.id\")}", "${!count(\"msgs\")}",
@@ -59,7 +59,7 @@ Where latter stages will overwrite matching field names of a former stage.`,
 			docs.FieldCommon("walk_json_object", "Whether to walk each message as a JSON object and add each key/value pair to the list of hash fields to set."),
 			docs.FieldCommon("fields", "A map of key/value pairs to set as hash fields.").SupportsInterpolation(false),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-		},
+		),
 		Categories: []Category{
 			CategoryServices,
 		},

@@ -2,10 +2,10 @@ package writer
 
 import (
 	"context"
-	"net/url"
 	"sync"
 	"time"
 
+	bredis "github.com/Jeffail/benthos/v3/internal/service/redis"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -16,17 +16,17 @@ import (
 
 // RedisStreamsConfig contains configuration fields for the RedisStreams output type.
 type RedisStreamsConfig struct {
-	URL          string `json:"url" yaml:"url"`
-	Stream       string `json:"stream" yaml:"stream"`
-	BodyKey      string `json:"body_key" yaml:"body_key"`
-	MaxLenApprox int64  `json:"max_length" yaml:"max_length"`
-	MaxInFlight  int    `json:"max_in_flight" yaml:"max_in_flight"`
+	bredis.Config `json:",inline" yaml:",inline"`
+	Stream        string `json:"stream" yaml:"stream"`
+	BodyKey       string `json:"body_key" yaml:"body_key"`
+	MaxLenApprox  int64  `json:"max_length" yaml:"max_length"`
+	MaxInFlight   int    `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
 // NewRedisStreamsConfig creates a new RedisStreamsConfig with default values.
 func NewRedisStreamsConfig() RedisStreamsConfig {
 	return RedisStreamsConfig{
-		URL:          "tcp://localhost:6379",
+		Config:       bredis.NewConfig(),
 		Stream:       "benthos_stream",
 		BodyKey:      "body",
 		MaxLenApprox: 0,
@@ -41,7 +41,6 @@ type RedisStreams struct {
 	log   log.Modular
 	stats metrics.Type
 
-	url  *url.URL
 	conf RedisStreamsConfig
 
 	client  *redis.Client
@@ -61,12 +60,9 @@ func NewRedisStreams(
 		conf:  conf,
 	}
 
-	var err error
-	r.url, err = url.Parse(conf.URL)
-	if err != nil {
+	if _, err := conf.Config.Client(); err != nil {
 		return nil, err
 	}
-
 	return r, nil
 }
 
@@ -82,17 +78,11 @@ func (r *RedisStreams) Connect() error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
-	var pass string
-	if r.url.User != nil {
-		pass, _ = r.url.User.Password()
+	client, err := r.conf.Config.Client()
+	if err != nil {
+		return err
 	}
-	client := redis.NewClient(&redis.Options{
-		Addr:     r.url.Host,
-		Network:  r.url.Scheme,
-		Password: pass,
-	})
-
-	if _, err := client.Ping().Result(); err != nil {
+	if _, err = client.Ping().Result(); err != nil {
 		return err
 	}
 

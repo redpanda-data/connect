@@ -17,6 +17,11 @@ input:
     streams:
       - benthos_stream
     timeout: 1s
+    tls:
+      client_certs: []
+      enabled: false
+      root_cas_file: ""
+      skip_cert_verify: false
     url: tcp://localhost:6379
 buffer:
   type: none
@@ -31,6 +36,11 @@ output:
     max_in_flight: 1
     max_length: 0
     stream: benthos_stream
+    tls:
+      client_certs: []
+      enabled: false
+      root_cas_file: ""
+      skip_cert_verify: false
     url: tcp://localhost:6379
 resources:
   caches: {}

@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"strconv"
 	"sync"
 	"time"
 
+	bredis "github.com/Jeffail/benthos/v3/internal/service/redis"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -19,15 +19,15 @@ import (
 
 // RedisListConfig contains configuration fields for the RedisList input type.
 type RedisListConfig struct {
-	URL     string `json:"url" yaml:"url"`
-	Key     string `json:"key" yaml:"key"`
-	Timeout string `json:"timeout" yaml:"timeout"`
+	bredis.Config `json:",inline" yaml:",inline"`
+	Key           string `json:"key" yaml:"key"`
+	Timeout       string `json:"timeout" yaml:"timeout"`
 }
 
 // NewRedisListConfig creates a new RedisListConfig with default values.
 func NewRedisListConfig() RedisListConfig {
 	return RedisListConfig{
-		URL:     "tcp://localhost:6379",
+		Config:  bredis.NewConfig(),
 		Key:     "benthos_list",
 		Timeout: "5s",
 	}
@@ -65,12 +65,9 @@ func NewRedisList(
 		}
 	}
 
-	var err error
-	r.url, err = url.Parse(r.conf.URL)
-	if err != nil {
+	if _, err := conf.Config.Client(); err != nil {
 		return nil, err
 	}
-
 	return r, nil
 }
 
@@ -90,31 +87,11 @@ func (r *RedisList) ConnectWithContext(ctx context.Context) error {
 		return nil
 	}
 
-	var pass string
-	if r.url.User != nil {
-		pass, _ = r.url.User.Password()
+	client, err := r.conf.Config.Client()
+	if err == nil {
+		_, err = client.Ping().Result()
 	}
-
-	// We default to Redis DB 0 for backward compatibilitiy, but if it's
-	// specified in the URL, we'll use the specified one instead.
-	var redisDB int
-	if len(r.url.Path) > 1 {
-		var err error
-		// We'll strip the leading '/'
-		redisDB, err = strconv.Atoi(r.url.Path[1:])
-		if err != nil {
-			return fmt.Errorf("invalid Redis DB, can't parse '%s'", r.url.Path)
-		}
-	}
-
-	client := redis.NewClient(&redis.Options{
-		Addr:     r.url.Host,
-		Network:  r.url.Scheme,
-		DB:       redisDB,
-		Password: pass,
-	})
-
-	if _, err := client.Ping().Result(); err != nil {
+	if err != nil {
 		return err
 	}
 

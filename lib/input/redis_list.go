@@ -2,6 +2,7 @@ package input
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/service/redis"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -15,14 +16,10 @@ func init() {
 		constructor: NewRedisList,
 		Summary: `
 Pops messages from the beginning of a Redis list using the BLPop command.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("url",
-				"The URL of a Redis server to connect to. Database is optional and is supplied as the URL path.",
-				"tcp://localhost:6379", "tcp://localhost:6379/1",
-			),
+		FieldSpecs: redis.ConfigDocs().Add(
 			docs.FieldCommon("key", "The key of a list to read from."),
 			docs.FieldAdvanced("timeout", "The length of time to poll for new messages before reattempting."),
-		},
+		),
 		Categories: []Category{
 			CategoryServices,
 		},

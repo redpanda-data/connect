@@ -3,11 +3,11 @@ package reader
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
 
+	bredis "github.com/Jeffail/benthos/v3/internal/service/redis"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -22,7 +22,7 @@ import (
 // RedisStreamsConfig contains configuration fields for the RedisStreams input
 // type.
 type RedisStreamsConfig struct {
-	URL             string   `json:"url" yaml:"url"`
+	bredis.Config   `json:",inline" yaml:",inline"`
 	BodyKey         string   `json:"body_key" yaml:"body_key"`
 	Streams         []string `json:"streams" yaml:"streams"`
 	ConsumerGroup   string   `json:"consumer_group" yaml:"consumer_group"`
@@ -39,7 +39,7 @@ type RedisStreamsConfig struct {
 // NewRedisStreamsConfig creates a new RedisStreamsConfig with default values.
 func NewRedisStreamsConfig() RedisStreamsConfig {
 	return RedisStreamsConfig{
-		URL:             "tcp://localhost:6379",
+		Config:          bredis.NewConfig(),
 		BodyKey:         "body",
 		Streams:         []string{"benthos_stream"},
 		ConsumerGroup:   "benthos_group",
@@ -70,7 +70,6 @@ type RedisStreams struct {
 	timeout      time.Duration
 	commitPeriod time.Duration
 
-	url  *url.URL
 	conf RedisStreamsConfig
 
 	backlogs map[string]string
@@ -106,9 +105,7 @@ func NewRedisStreams(
 		r.backlogs[str] = "0"
 	}
 
-	var err error
-	r.url, err = url.Parse(r.conf.URL)
-	if err != nil {
+	if _, err := r.conf.Config.Client(); err != nil {
 		return nil, err
 	}
 
@@ -209,16 +206,10 @@ func (r *RedisStreams) ConnectWithContext(ctx context.Context) error {
 		return nil
 	}
 
-	var pass string
-	if r.url.User != nil {
-		pass, _ = r.url.User.Password()
+	client, err := r.conf.Config.Client()
+	if err != nil {
+		return err
 	}
-	client := redis.NewClient(&redis.Options{
-		Addr:     r.url.Host,
-		Network:  r.url.Scheme,
-		Password: pass,
-	})
-
 	if _, err := client.Ping().Result(); err != nil {
 		return err
 	}

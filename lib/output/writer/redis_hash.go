@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	bredis "github.com/Jeffail/benthos/v3/internal/service/redis"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -20,7 +20,7 @@ import (
 
 // RedisHashConfig contains configuration fields for the RedisHash output type.
 type RedisHashConfig struct {
-	URL            string            `json:"url" yaml:"url"`
+	bredis.Config  `json:",inline" yaml:",inline"`
 	Key            string            `json:"key" yaml:"key"`
 	WalkMetadata   bool              `json:"walk_metadata" yaml:"walk_metadata"`
 	WalkJSONObject bool              `json:"walk_json_object" yaml:"walk_json_object"`
@@ -31,7 +31,7 @@ type RedisHashConfig struct {
 // NewRedisHashConfig creates a new RedisHashConfig with default values.
 func NewRedisHashConfig() RedisHashConfig {
 	return RedisHashConfig{
-		URL:            "tcp://localhost:6379",
+		Config:         bredis.NewConfig(),
 		Key:            "",
 		WalkMetadata:   false,
 		WalkJSONObject: false,
@@ -48,7 +48,6 @@ type RedisHash struct {
 	log   log.Modular
 	stats metrics.Type
 
-	url  *url.URL
 	conf RedisHashConfig
 
 	keyStr field.Expression
@@ -86,8 +85,7 @@ func NewRedisHash(
 		return nil, errors.New("at least one mechanism for setting fields must be enabled")
 	}
 
-	r.url, err = url.Parse(conf.URL)
-	if err != nil {
+	if _, err := conf.Config.Client(); err != nil {
 		return nil, err
 	}
 
@@ -106,17 +104,11 @@ func (r *RedisHash) Connect() error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
-	var pass string
-	if r.url.User != nil {
-		pass, _ = r.url.User.Password()
+	client, err := r.conf.Config.Client()
+	if err != nil {
+		return err
 	}
-	client := redis.NewClient(&redis.Options{
-		Addr:     r.url.Host,
-		Network:  r.url.Scheme,
-		Password: pass,
-	})
-
-	if _, err := client.Ping().Result(); err != nil {
+	if _, err = client.Ping().Result(); err != nil {
 		return err
 	}
 

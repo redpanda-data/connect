@@ -10,6 +10,11 @@ input:
   redis_pubsub:
     channels:
       - benthos_chan
+    tls:
+      client_certs: []
+      enabled: false
+      root_cas_file: ""
+      skip_cert_verify: false
     url: tcp://localhost:6379
     use_patterns: false
 buffer:
@@ -23,6 +28,11 @@ output:
   redis_pubsub:
     channel: benthos_chan
     max_in_flight: 1
+    tls:
+      client_certs: []
+      enabled: false
+      root_cas_file: ""
+      skip_cert_verify: false
     url: tcp://localhost:6379
 resources:
   caches: {}

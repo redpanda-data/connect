@@ -10,6 +10,11 @@ input:
   redis_list:
     key: benthos_list
     timeout: 5s
+    tls:
+      client_certs: []
+      enabled: false
+      root_cas_file: ""
+      skip_cert_verify: false
     url: tcp://localhost:6379
 buffer:
   type: none
@@ -22,6 +27,11 @@ output:
   redis_list:
     key: benthos_list
     max_in_flight: 1
+    tls:
+      client_certs: []
+      enabled: false
+      root_cas_file: ""
+      skip_cert_verify: false
     url: tcp://localhost:6379
 resources:
   caches: {}

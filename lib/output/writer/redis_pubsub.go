@@ -3,12 +3,12 @@ package writer
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	bredis "github.com/Jeffail/benthos/v3/internal/service/redis"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -20,15 +20,15 @@ import (
 // RedisPubSubConfig contains configuration fields for the RedisPubSub output
 // type.
 type RedisPubSubConfig struct {
-	URL         string `json:"url" yaml:"url"`
-	Channel     string `json:"channel" yaml:"channel"`
-	MaxInFlight int    `json:"max_in_flight" yaml:"max_in_flight"`
+	bredis.Config `json:",inline" yaml:",inline"`
+	Channel       string `json:"channel" yaml:"channel"`
+	MaxInFlight   int    `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
 // NewRedisPubSubConfig creates a new RedisPubSubConfig with default values.
 func NewRedisPubSubConfig() RedisPubSubConfig {
 	return RedisPubSubConfig{
-		URL:         "tcp://localhost:6379",
+		Config:      bredis.NewConfig(),
 		Channel:     "benthos_chan",
 		MaxInFlight: 1,
 	}
@@ -41,7 +41,6 @@ type RedisPubSub struct {
 	log   log.Modular
 	stats metrics.Type
 
-	url        *url.URL
 	conf       RedisPubSubConfig
 	channelStr field.Expression
 
@@ -64,8 +63,7 @@ func NewRedisPubSub(
 	if r.channelStr, err = bloblang.NewField(conf.Channel); err != nil {
 		return nil, fmt.Errorf("failed to parse channel expression: %v", err)
 	}
-	r.url, err = url.Parse(conf.URL)
-	if err != nil {
+	if _, err = conf.Config.Client(); err != nil {
 		return nil, err
 	}
 	return r, nil
@@ -83,17 +81,11 @@ func (r *RedisPubSub) Connect() error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
-	var pass string
-	if r.url.User != nil {
-		pass, _ = r.url.User.Password()
+	client, err := r.conf.Config.Client()
+	if err != nil {
+		return err
 	}
-	client := redis.NewClient(&redis.Options{
-		Addr:     r.url.Host,
-		Network:  r.url.Scheme,
-		Password: pass,
-	})
-
-	if _, err := client.Ping().Result(); err != nil {
+	if _, err = client.Ping().Result(); err != nil {
 		return err
 	}
 

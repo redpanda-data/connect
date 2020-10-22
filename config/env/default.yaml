@@ -341,10 +341,18 @@ input:
         redis_list:
           key: ${INPUT_REDIS_LIST_KEY:benthos_list}
           timeout: ${INPUT_REDIS_LIST_TIMEOUT:5s}
+          tls:
+            enabled: ${INPUT_REDIS_LIST_TLS_ENABLED:false}
+            root_cas_file: ${INPUT_REDIS_LIST_TLS_ROOT_CAS_FILE}
+            skip_cert_verify: ${INPUT_REDIS_LIST_TLS_SKIP_CERT_VERIFY:false}
           url: ${INPUT_REDIS_LIST_URL:tcp://localhost:6379}
         redis_pubsub:
           channels:
             - ${INPUT_REDIS_PUBSUB_CHANNELS:benthos_chan}
+          tls:
+            enabled: ${INPUT_REDIS_PUBSUB_TLS_ENABLED:false}
+            root_cas_file: ${INPUT_REDIS_PUBSUB_TLS_ROOT_CAS_FILE}
+            skip_cert_verify: ${INPUT_REDIS_PUBSUB_TLS_SKIP_CERT_VERIFY:false}
           url: ${INPUT_REDIS_PUBSUB_URL:tcp://localhost:6379}
           use_patterns: ${INPUT_REDIS_PUBSUB_USE_PATTERNS:false}
         redis_streams:
@@ -362,6 +370,10 @@ input:
           streams:
             - ${INPUT_REDIS_STREAMS_STREAMS:benthos_stream}
           timeout: ${INPUT_REDIS_STREAMS_TIMEOUT:1s}
+          tls:
+            enabled: ${INPUT_REDIS_STREAMS_TLS_ENABLED:false}
+            root_cas_file: ${INPUT_REDIS_STREAMS_TLS_ROOT_CAS_FILE}
+            skip_cert_verify: ${INPUT_REDIS_STREAMS_TLS_SKIP_CERT_VERIFY:false}
           url: ${INPUT_REDIS_STREAMS_URL:tcp://localhost:6379}
         resource: ${INPUT_RESOURCE}
         s3:
@@ -699,6 +711,10 @@ pipeline:
         operator: ${PROCESSOR_REDIS_OPERATOR:scard}
         retries: ${PROCESSOR_REDIS_RETRIES:3}
         retry_period: ${PROCESSOR_REDIS_RETRY_PERIOD:500ms}
+        tls:
+          enabled: ${PROCESSOR_REDIS_TLS_ENABLED:false}
+          root_cas_file: ${PROCESSOR_REDIS_TLS_ROOT_CAS_FILE}
+          skip_cert_verify: ${PROCESSOR_REDIS_TLS_SKIP_CERT_VERIFY:false}
         url: ${PROCESSOR_REDIS_URL:tcp://localhost:6379}
       resource: ${PROCESSOR_RESOURCE}
       sample:
@@ -1031,22 +1047,38 @@ output:
         redis_hash:
           key: ${OUTPUT_REDIS_HASH_KEY}
           max_in_flight: ${OUTPUT_REDIS_HASH_MAX_IN_FLIGHT:1}
+          tls:
+            enabled: ${OUTPUT_REDIS_HASH_TLS_ENABLED:false}
+            root_cas_file: ${OUTPUT_REDIS_HASH_TLS_ROOT_CAS_FILE}
+            skip_cert_verify: ${OUTPUT_REDIS_HASH_TLS_SKIP_CERT_VERIFY:false}
           url: ${OUTPUT_REDIS_HASH_URL:tcp://localhost:6379}
           walk_json_object: ${OUTPUT_REDIS_HASH_WALK_JSON_OBJECT:false}
           walk_metadata: ${OUTPUT_REDIS_HASH_WALK_METADATA:false}
         redis_list:
           key: ${OUTPUT_REDIS_LIST_KEY:benthos_list}
           max_in_flight: ${OUTPUT_REDIS_LIST_MAX_IN_FLIGHT:1}
+          tls:
+            enabled: ${OUTPUT_REDIS_LIST_TLS_ENABLED:false}
+            root_cas_file: ${OUTPUT_REDIS_LIST_TLS_ROOT_CAS_FILE}
+            skip_cert_verify: ${OUTPUT_REDIS_LIST_TLS_SKIP_CERT_VERIFY:false}
           url: ${OUTPUT_REDIS_LIST_URL:tcp://localhost:6379}
         redis_pubsub:
           channel: ${OUTPUT_REDIS_PUBSUB_CHANNEL:benthos_chan}
           max_in_flight: ${OUTPUT_REDIS_PUBSUB_MAX_IN_FLIGHT:1}
+          tls:
+            enabled: ${OUTPUT_REDIS_PUBSUB_TLS_ENABLED:false}
+            root_cas_file: ${OUTPUT_REDIS_PUBSUB_TLS_ROOT_CAS_FILE}
+            skip_cert_verify: ${OUTPUT_REDIS_PUBSUB_TLS_SKIP_CERT_VERIFY:false}
           url: ${OUTPUT_REDIS_PUBSUB_URL:tcp://localhost:6379}
         redis_streams:
           body_key: ${OUTPUT_REDIS_STREAMS_BODY_KEY:body}
           max_in_flight: ${OUTPUT_REDIS_STREAMS_MAX_IN_FLIGHT:1}
           max_length: ${OUTPUT_REDIS_STREAMS_MAX_LENGTH:0}
           stream: ${OUTPUT_REDIS_STREAMS_STREAM:benthos_stream}
+          tls:
+            enabled: ${OUTPUT_REDIS_STREAMS_TLS_ENABLED:false}
+            root_cas_file: ${OUTPUT_REDIS_STREAMS_TLS_ROOT_CAS_FILE}
+            skip_cert_verify: ${OUTPUT_REDIS_STREAMS_TLS_SKIP_CERT_VERIFY:false}
           url: ${OUTPUT_REDIS_STREAMS_URL:tcp://localhost:6379}
         resource: ${OUTPUT_RESOURCE}
         s3:

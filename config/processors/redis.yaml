@@ -23,6 +23,11 @@ pipeline:
         parts: []
         retries: 3
         retry_period: 500ms
+        tls:
+          client_certs: []
+          enabled: false
+          root_cas_file: ""
+          skip_cert_verify: false
         url: tcp://localhost:6379
   threads: 1
 output:

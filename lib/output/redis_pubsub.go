@@ -2,6 +2,7 @@ package output
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/service/redis"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
@@ -20,11 +21,10 @@ guarantee that messages have been received.`,
 This output will interpolate functions within the channel field, you
 can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`,
 		Async: true,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("url", "The URL of a Redis server to connect to.", "tcp://localhost:6379"),
+		FieldSpecs: redis.ConfigDocs().Add(
 			docs.FieldCommon("channel", "The channel to publish messages to.").SupportsInterpolation(false),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-		},
+		),
 		Categories: []Category{
 			CategoryServices,
 		},

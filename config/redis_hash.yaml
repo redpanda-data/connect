@@ -23,6 +23,11 @@ output:
     fields: {}
     key: ""
     max_in_flight: 1
+    tls:
+      client_certs: []
+      enabled: false
+      root_cas_file: ""
+      skip_cert_verify: false
     url: tcp://localhost:6379
     walk_json_object: false
     walk_metadata: false

@@ -318,8 +318,14 @@ INPUT_NSQ_TOPIC                                      = benthos_messages
 INPUT_NSQ_USER_AGENT                                 = benthos_consumer
 INPUT_REDIS_LIST_KEY                                 = benthos_list
 INPUT_REDIS_LIST_TIMEOUT                             = 5s
+INPUT_REDIS_LIST_TLS_ENABLED                         = false
+INPUT_REDIS_LIST_TLS_ROOT_CAS_FILE
+INPUT_REDIS_LIST_TLS_SKIP_CERT_VERIFY                = false
 INPUT_REDIS_LIST_URL                                 = tcp://localhost:6379
 INPUT_REDIS_PUBSUB_CHANNELS                          = benthos_chan
+INPUT_REDIS_PUBSUB_TLS_ENABLED                       = false
+INPUT_REDIS_PUBSUB_TLS_ROOT_CAS_FILE
+INPUT_REDIS_PUBSUB_TLS_SKIP_CERT_VERIFY              = false
 INPUT_REDIS_PUBSUB_URL                               = tcp://localhost:6379
 INPUT_REDIS_PUBSUB_USE_PATTERNS                      = false
 INPUT_REDIS_STREAMS_BATCHING_BYTE_SIZE               = 0
@@ -334,6 +340,9 @@ INPUT_REDIS_STREAMS_LIMIT                            = 10
 INPUT_REDIS_STREAMS_START_FROM_OLDEST                = true
 INPUT_REDIS_STREAMS_STREAMS                          = benthos_stream
 INPUT_REDIS_STREAMS_TIMEOUT                          = 1s
+INPUT_REDIS_STREAMS_TLS_ENABLED                      = false
+INPUT_REDIS_STREAMS_TLS_ROOT_CAS_FILE
+INPUT_REDIS_STREAMS_TLS_SKIP_CERT_VERIFY             = false
 INPUT_REDIS_STREAMS_URL                              = tcp://localhost:6379
 INPUT_RESOURCE
 INPUT_S3_BUCKET
@@ -602,6 +611,9 @@ PROCESSOR_REDIS_KEY
 PROCESSOR_REDIS_OPERATOR                             = scard
 PROCESSOR_REDIS_RETRIES                              = 3
 PROCESSOR_REDIS_RETRY_PERIOD                         = 500ms
+PROCESSOR_REDIS_TLS_ENABLED                          = false
+PROCESSOR_REDIS_TLS_ROOT_CAS_FILE
+PROCESSOR_REDIS_TLS_SKIP_CERT_VERIFY                 = false
 PROCESSOR_REDIS_URL                                  = tcp://localhost:6379
 PROCESSOR_RESOURCE
 PROCESSOR_SAMPLE_RETAIN                              = 10
@@ -865,19 +877,31 @@ OUTPUT_NSQ_TOPIC                                      = benthos_messages
 OUTPUT_NSQ_USER_AGENT                                 = benthos_producer
 OUTPUT_REDIS_HASH_KEY
 OUTPUT_REDIS_HASH_MAX_IN_FLIGHT                       = 1
+OUTPUT_REDIS_HASH_TLS_ENABLED                         = false
+OUTPUT_REDIS_HASH_TLS_ROOT_CAS_FILE
+OUTPUT_REDIS_HASH_TLS_SKIP_CERT_VERIFY                = false
 OUTPUT_REDIS_HASH_URL                                 = tcp://localhost:6379
 OUTPUT_REDIS_HASH_WALK_JSON_OBJECT                    = false
 OUTPUT_REDIS_HASH_WALK_METADATA                       = false
 OUTPUT_REDIS_LIST_KEY                                 = benthos_list
 OUTPUT_REDIS_LIST_MAX_IN_FLIGHT                       = 1
+OUTPUT_REDIS_LIST_TLS_ENABLED                         = false
+OUTPUT_REDIS_LIST_TLS_ROOT_CAS_FILE
+OUTPUT_REDIS_LIST_TLS_SKIP_CERT_VERIFY                = false
 OUTPUT_REDIS_LIST_URL                                 = tcp://localhost:6379
 OUTPUT_REDIS_PUBSUB_CHANNEL                           = benthos_chan
 OUTPUT_REDIS_PUBSUB_MAX_IN_FLIGHT                     = 1
+OUTPUT_REDIS_PUBSUB_TLS_ENABLED                       = false
+OUTPUT_REDIS_PUBSUB_TLS_ROOT_CAS_FILE
+OUTPUT_REDIS_PUBSUB_TLS_SKIP_CERT_VERIFY              = false
 OUTPUT_REDIS_PUBSUB_URL                               = tcp://localhost:6379
 OUTPUT_REDIS_STREAMS_BODY_KEY                         = body
 OUTPUT_REDIS_STREAMS_MAX_IN_FLIGHT                    = 1
 OUTPUT_REDIS_STREAMS_MAX_LENGTH                       = 0
 OUTPUT_REDIS_STREAMS_STREAM                           = benthos_stream
+OUTPUT_REDIS_STREAMS_TLS_ENABLED                      = false
+OUTPUT_REDIS_STREAMS_TLS_ROOT_CAS_FILE
+OUTPUT_REDIS_STREAMS_TLS_SKIP_CERT_VERIFY             = false
 OUTPUT_REDIS_STREAMS_URL                              = tcp://localhost:6379
 OUTPUT_RESOURCE
 OUTPUT_S3_BATCHING_BYTE_SIZE                          = 0
