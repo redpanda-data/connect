@@ -200,7 +200,7 @@ func NewCache(
 
 	if conf.Cache.TTL != "" {
 		if _, ok := c.(types.CacheWithTTL); !ok {
-			return nil, fmt.Errorf("this case type does not support per-key ttl")
+			return nil, fmt.Errorf("this cache type does not support per-key ttl")
 		}
 	}
 
