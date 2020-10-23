@@ -144,11 +144,17 @@ func NewMemcached(
 //------------------------------------------------------------------------------
 
 // getItemFor returns a memcache.Item object ready to be stored in memcache
-func (m *Memcached) getItemFor(key string, value []byte) *memcache.Item {
+func (m *Memcached) getItemFor(key string, value []byte, ttl *time.Duration) *memcache.Item {
+	var expiration int32
+	if ttl != nil {
+		expiration = int32(ttl.Seconds())
+	} else {
+		expiration = m.conf.Memcached.TTL
+	}
 	return &memcache.Item{
 		Key:        m.conf.Memcached.Prefix + key,
 		Value:      value,
-		Expiration: m.conf.Memcached.TTL,
+		Expiration: expiration,
 	}
 }
 
@@ -180,16 +186,16 @@ func (m *Memcached) Get(key string) ([]byte, error) {
 }
 
 // Set attempts to set the value of a key.
-func (m *Memcached) Set(key string, value []byte) error {
+func (m *Memcached) Set(key string, value []byte, ttl *time.Duration) error {
 	m.mSetCount.Incr(1)
 	tStarted := time.Now()
 
-	err := m.mc.Set(m.getItemFor(key, value))
+	err := m.mc.Set(m.getItemFor(key, value, ttl))
 	for i := 0; i < m.conf.Memcached.Retries && err != nil; i++ {
 		m.log.Errorf("Set command failed: %v\n", err)
 		<-time.After(m.retryPeriod)
 		m.mSetRetry.Incr(1)
-		err = m.mc.Set(m.getItemFor(key, value))
+		err = m.mc.Set(m.getItemFor(key, value, ttl))
 	}
 	if err != nil {
 		m.mSetFailed.Incr(1)
@@ -206,10 +212,10 @@ func (m *Memcached) Set(key string, value []byte) error {
 
 // SetMulti attempts to set the value of multiple keys, returns an error if any
 // keys fail.
-func (m *Memcached) SetMulti(items map[string][]byte) error {
+func (m *Memcached) SetMulti(items map[string][]byte, t *time.Duration) error {
 	// TODO: Come back and optimise this.
 	for k, v := range items {
-		if err := m.Set(k, v); err != nil {
+		if err := m.Set(k, v, t); err != nil {
 			return err
 		}
 	}
@@ -218,11 +224,11 @@ func (m *Memcached) SetMulti(items map[string][]byte) error {
 
 // Add attempts to set the value of a key only if the key does not already exist
 // and returns an error if the key already exists or if the operation fails.
-func (m *Memcached) Add(key string, value []byte) error {
+func (m *Memcached) Add(key string, value []byte, ttl *time.Duration) error {
 	m.mAddCount.Incr(1)
 	tStarted := time.Now()
 
-	err := m.mc.Add(m.getItemFor(key, value))
+	err := m.mc.Add(m.getItemFor(key, value, ttl))
 	if memcache.ErrNotStored == err {
 		m.mAddFailedDupe.Incr(1)
 
@@ -236,7 +242,7 @@ func (m *Memcached) Add(key string, value []byte) error {
 		m.log.Errorf("Add command failed: %v\n", err)
 		<-time.After(m.retryPeriod)
 		m.mAddRetry.Incr(1)
-		if err := m.mc.Add(m.getItemFor(key, value)); memcache.ErrNotStored == err {
+		if err := m.mc.Add(m.getItemFor(key, value, ttl)); memcache.ErrNotStored == err {
 			m.mAddFailedDupe.Incr(1)
 
 			latency := int64(time.Since(tStarted))

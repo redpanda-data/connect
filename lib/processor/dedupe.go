@@ -247,7 +247,7 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 			d.mDropped.Incr(1)
 			return nil, response.NewAck()
 		}
-	} else if err := d.cache.Add(string(hasher.Bytes()), []byte{'t'}); err != nil {
+	} else if err := d.cache.Add(string(hasher.Bytes()), []byte{'t'}, nil); err != nil {
 		if err != types.ErrKeyAlreadyExists {
 			d.mErrCache.Incr(1)
 			d.mErr.Incr(1)

@@ -23,6 +23,7 @@ output:
     key: ${!count("items")}-${!timestamp_unix_nano()}
     max_in_flight: 1
     target: ""
+    ttl: ""
 resources:
   caches: {}
   conditions: {}

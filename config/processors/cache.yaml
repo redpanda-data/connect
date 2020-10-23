@@ -22,6 +22,7 @@ pipeline:
         operator: set
         parts: []
         resource: ""
+        ttl: ""
         value: ""
   threads: 1
 output:

@@ -273,7 +273,7 @@ func (d *DynamoDB) get(key string) ([]byte, error) {
 }
 
 // Set attempts to set the value of a key.
-func (d *DynamoDB) Set(key string, value []byte) error {
+func (d *DynamoDB) Set(key string, value []byte, _ *time.Duration) error {
 	d.mSetCount.Incr(1)
 
 	tStarted := time.Now()
@@ -308,7 +308,7 @@ func (d *DynamoDB) Set(key string, value []byte) error {
 
 // SetMulti attempts to set the value of multiple keys, if any keys fail to be
 // set an error is returned.
-func (d *DynamoDB) SetMulti(items map[string][]byte) error {
+func (d *DynamoDB) SetMulti(items map[string][]byte, _ *time.Duration) error {
 	d.mSetMultiCount.Incr(1)
 
 	tStarted := time.Now()
@@ -369,7 +369,7 @@ func (d *DynamoDB) SetMulti(items map[string][]byte) error {
 
 // Add attempts to set the value of a key only if the key does not already exist
 // and returns an error if the key already exists.
-func (d *DynamoDB) Add(key string, value []byte) error {
+func (d *DynamoDB) Add(key string, value []byte, _ *time.Duration) error {
 	d.mAddCount.Incr(1)
 
 	tStarted := time.Now()

@@ -35,6 +35,10 @@ find a list of functions [here](/docs/configuration/interpolation#bloblang-queri
 			docs.FieldCommon("operator", "The [operation](#operators) to perform with the cache.").HasOptions("set", "add", "get", "delete"),
 			docs.FieldCommon("key", "A key to use with the cache.").SupportsInterpolation(false),
 			docs.FieldCommon("value", "A value to use with the cache (when applicable).").SupportsInterpolation(false),
+			docs.FieldAdvanced("ttl", "A per-key ttl (when supported by the cache resource).",
+				"The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction.",
+				"60s", "5m", "36h",
+			).SupportsInterpolation(false),
 			partsFieldSpec,
 		},
 		Examples: []docs.AnnotatedExample{
@@ -123,6 +127,7 @@ type CacheConfig struct {
 	Operator string `json:"operator" yaml:"operator"`
 	Key      string `json:"key" yaml:"key"`
 	Value    string `json:"value" yaml:"value"`
+	TTL      string `json:"ttl" yaml:"ttl"`
 }
 
 // NewCacheConfig returns a CacheConfig with default values.
@@ -134,6 +139,7 @@ func NewCacheConfig() CacheConfig {
 		Operator: "set",
 		Key:      "",
 		Value:    "",
+		TTL:      "",
 	}
 }
 
@@ -150,6 +156,7 @@ type Cache struct {
 
 	key   field.Expression
 	value field.Expression
+	ttl   field.Expression
 
 	cache    types.Cache
 	operator cacheOperator
@@ -191,6 +198,11 @@ func NewCache(
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}
 
+	ttl, err := bloblang.NewField(conf.Cache.TTL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ttl expression: %v", err)
+	}
+
 	return &Cache{
 		conf:  conf,
 		log:   log,
@@ -200,6 +212,7 @@ func NewCache(
 
 		key:   key,
 		value: value,
+		ttl:   ttl,
 
 		cache:    c,
 		operator: op,
@@ -214,31 +227,31 @@ func NewCache(
 
 //------------------------------------------------------------------------------
 
-type cacheOperator func(key string, value []byte) ([]byte, bool, error)
+type cacheOperator func(key string, value []byte, ttl *time.Duration) ([]byte, bool, error)
 
 func newCacheSetOperator(cache types.Cache) cacheOperator {
-	return func(key string, value []byte) ([]byte, bool, error) {
-		err := cache.Set(key, value)
+	return func(key string, value []byte, ttl *time.Duration) ([]byte, bool, error) {
+		err := cache.Set(key, value, ttl)
 		return nil, false, err
 	}
 }
 
 func newCacheAddOperator(cache types.Cache) cacheOperator {
-	return func(key string, value []byte) ([]byte, bool, error) {
-		err := cache.Add(key, value)
+	return func(key string, value []byte, ttl *time.Duration) ([]byte, bool, error) {
+		err := cache.Add(key, value, ttl)
 		return nil, false, err
 	}
 }
 
 func newCacheGetOperator(cache types.Cache) cacheOperator {
-	return func(key string, _ []byte) ([]byte, bool, error) {
+	return func(key string, _ []byte, _ *time.Duration) ([]byte, bool, error) {
 		result, err := cache.Get(key)
 		return result, true, err
 	}
 }
 
 func newCacheDeleteOperator(cache types.Cache) cacheOperator {
-	return func(key string, _ []byte) ([]byte, bool, error) {
+	return func(key string, _ []byte, _ *time.Duration) ([]byte, bool, error) {
 		err := cache.Delete(key)
 		return nil, false, err
 	}
@@ -269,8 +282,17 @@ func (c *Cache) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 	proc := func(index int, span opentracing.Span, part types.Part) error {
 		key := c.key.String(index, msg)
 		value := c.value.Bytes(index, msg)
-
-		result, useResult, err := c.operator(key, value)
+		var ttl time.Duration
+		var err error
+		if ttls := c.ttl.String(index, msg); ttls != "" {
+			ttl, err = time.ParseDuration(ttls)
+			if err != nil {
+				c.mErr.Incr(1)
+				c.log.Debugf("TTL must be a duration: %v\n", err)
+				return err
+			}
+		}
+		result, useResult, err := c.operator(key, value, &ttl)
 		if err != nil {
 			if err != types.ErrKeyAlreadyExists {
 				c.mErr.Incr(1)

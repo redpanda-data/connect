@@ -96,7 +96,7 @@ func TestMultilevelCacheGetting(t *testing.T) {
 	_, err = c.Get("not_exist")
 	assert.Equal(t, err, types.ErrKeyNotFound)
 
-	if err = memCache2.Set("foo", []byte("test value 1")); err != nil {
+	if err = memCache2.Set("foo", []byte("test value 1"), nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -145,7 +145,7 @@ func TestMultilevelCacheSet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = c.Set("foo", []byte("test value 1"))
+	err = c.Set("foo", []byte("test value 1"), nil)
 	assert.Equal(t, err, nil)
 
 	val, err := memCache1.Get("foo")
@@ -156,7 +156,7 @@ func TestMultilevelCacheSet(t *testing.T) {
 	assert.Equal(t, err, nil)
 	assert.Equal(t, val, []byte("test value 1"))
 
-	err = c.Set("foo", []byte("test value 2"))
+	err = c.Set("foo", []byte("test value 2"), nil)
 	assert.Equal(t, err, nil)
 
 	val, err = memCache1.Get("foo")
@@ -196,7 +196,7 @@ func TestMultilevelCacheMultiSet(t *testing.T) {
 	err = c.SetMulti(map[string][]byte{
 		"foo": []byte("test value 1"),
 		"bar": []byte("test value 2"),
-	})
+	}, nil)
 	assert.Equal(t, err, nil)
 
 	val, err := memCache1.Get("foo")
@@ -215,7 +215,7 @@ func TestMultilevelCacheMultiSet(t *testing.T) {
 	assert.Equal(t, err, nil)
 	assert.Equal(t, val, []byte("test value 2"))
 
-	err = c.Set("foo", []byte("test value 3"))
+	err = c.Set("foo", []byte("test value 3"), nil)
 	assert.Equal(t, err, nil)
 
 	val, err = memCache1.Get("foo")
@@ -260,7 +260,7 @@ func TestMultilevelCacheDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = memCache2.Set("foo", []byte("test value 1")); err != nil {
+	if err = memCache2.Set("foo", []byte("test value 1"), nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -273,10 +273,10 @@ func TestMultilevelCacheDelete(t *testing.T) {
 	_, err = memCache2.Get("foo")
 	assert.Equal(t, err, types.ErrKeyNotFound)
 
-	if err = memCache1.Set("foo", []byte("test value 1")); err != nil {
+	if err = memCache1.Set("foo", []byte("test value 1"), nil); err != nil {
 		t.Fatal(err)
 	}
-	if err = memCache2.Set("foo", []byte("test value 2")); err != nil {
+	if err = memCache2.Set("foo", []byte("test value 2"), nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -315,7 +315,7 @@ func TestMultilevelCacheAdd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = c.Add("foo", []byte("test value 1"))
+	err = c.Add("foo", []byte("test value 1"), nil)
 	assert.Equal(t, err, nil)
 
 	val, err := memCache1.Get("foo")
@@ -326,7 +326,7 @@ func TestMultilevelCacheAdd(t *testing.T) {
 	assert.Equal(t, err, nil)
 	assert.Equal(t, val, []byte("test value 1"))
 
-	err = c.Add("foo", []byte("test value 2"))
+	err = c.Add("foo", []byte("test value 2"), nil)
 	assert.Equal(t, err, types.ErrKeyAlreadyExists)
 
 	val, err = memCache1.Get("foo")
@@ -340,13 +340,13 @@ func TestMultilevelCacheAdd(t *testing.T) {
 	err = memCache2.Delete("foo")
 	assert.Equal(t, err, nil)
 
-	err = c.Add("foo", []byte("test value 3"))
+	err = c.Add("foo", []byte("test value 3"), nil)
 	assert.Equal(t, err, types.ErrKeyAlreadyExists)
 
 	err = memCache1.Delete("foo")
 	assert.Equal(t, err, nil)
 
-	err = c.Add("foo", []byte("test value 4"))
+	err = c.Add("foo", []byte("test value 4"), nil)
 	assert.Equal(t, err, nil)
 
 	val, err = memCache1.Get("foo")
@@ -360,7 +360,7 @@ func TestMultilevelCacheAdd(t *testing.T) {
 	err = memCache1.Delete("foo")
 	assert.Equal(t, err, nil)
 
-	err = c.Add("foo", []byte("test value 5"))
+	err = c.Add("foo", []byte("test value 5"), nil)
 	assert.Equal(t, err, types.ErrKeyAlreadyExists)
 }
 
@@ -394,7 +394,7 @@ func TestMultilevelCacheAddMoreCaches(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = c.Add("foo", []byte("test value 1"))
+	err = c.Add("foo", []byte("test value 1"), nil)
 	assert.Equal(t, err, nil)
 
 	val, err := memCache1.Get("foo")
@@ -409,7 +409,7 @@ func TestMultilevelCacheAddMoreCaches(t *testing.T) {
 	assert.Equal(t, err, nil)
 	assert.Equal(t, val, []byte("test value 1"))
 
-	err = c.Add("foo", []byte("test value 2"))
+	err = c.Add("foo", []byte("test value 2"), nil)
 	assert.Equal(t, err, types.ErrKeyAlreadyExists)
 
 	val, err = memCache1.Get("foo")
@@ -430,13 +430,13 @@ func TestMultilevelCacheAddMoreCaches(t *testing.T) {
 	err = memCache2.Delete("foo")
 	assert.Equal(t, err, nil)
 
-	err = c.Add("foo", []byte("test value 3"))
+	err = c.Add("foo", []byte("test value 3"), nil)
 	assert.Equal(t, err, types.ErrKeyAlreadyExists)
 
 	err = memCache3.Delete("foo")
 	assert.Equal(t, err, nil)
 
-	err = c.Add("foo", []byte("test value 4"))
+	err = c.Add("foo", []byte("test value 4"), nil)
 	assert.Equal(t, err, nil)
 
 	val, err = memCache1.Get("foo")

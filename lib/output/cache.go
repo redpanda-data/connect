@@ -61,6 +61,10 @@ When sending batched messages the interpolations are performed per message part.
 				`${!json("doc.id")}`,
 				`${!meta("kafka_key")}`,
 			).SupportsInterpolation(false),
+			docs.FieldAdvanced("ttl", "A per-key ttl (when supported by the cache resource).",
+				"The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction.",
+				"60s", "5m", "36h",
+			).SupportsInterpolation(false),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		},
 		Categories: []Category{

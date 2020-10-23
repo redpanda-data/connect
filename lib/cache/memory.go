@@ -198,7 +198,7 @@ func (m *Memory) Get(key string) ([]byte, error) {
 }
 
 // Set attempts to set the value of a key.
-func (m *Memory) Set(key string, value []byte) error {
+func (m *Memory) Set(key string, value []byte, _ *time.Duration) error {
 	shard := m.getShard(key)
 	shard.Lock()
 	shard.compaction()
@@ -210,9 +210,9 @@ func (m *Memory) Set(key string, value []byte) error {
 
 // SetMulti attempts to set the value of multiple keys, returns an error if any
 // keys fail.
-func (m *Memory) SetMulti(items map[string][]byte) error {
+func (m *Memory) SetMulti(items map[string][]byte, t *time.Duration) error {
 	for k, v := range items {
-		if err := m.Set(k, v); err != nil {
+		if err := m.Set(k, v, t); err != nil {
 			return err
 		}
 	}
@@ -221,7 +221,7 @@ func (m *Memory) SetMulti(items map[string][]byte) error {
 
 // Add attempts to set the value of a key only if the key does not already exist
 // and returns an error if the key already exists.
-func (m *Memory) Add(key string, value []byte) error {
+func (m *Memory) Add(key string, value []byte, _ *time.Duration) error {
 	shard := m.getShard(key)
 	shard.Lock()
 	if _, exists := shard.items[key]; exists {

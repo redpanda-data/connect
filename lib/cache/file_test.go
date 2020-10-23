@@ -32,7 +32,7 @@ func TestFileCache(t *testing.T) {
 		t.Errorf("Wrong error returned: %v != %v", act, expErr)
 	}
 
-	if err = c.Set("foo", []byte("1")); err != nil {
+	if err = c.Set("foo", []byte("1"), nil); err != nil {
 		t.Error(err)
 	}
 
@@ -43,7 +43,7 @@ func TestFileCache(t *testing.T) {
 		t.Errorf("Wrong result: %v != %v", string(act), exp)
 	}
 
-	if err = c.Add("bar", []byte("2")); err != nil {
+	if err = c.Add("bar", []byte("2"), nil); err != nil {
 		t.Error(err)
 	}
 
@@ -55,11 +55,11 @@ func TestFileCache(t *testing.T) {
 	}
 
 	expErr = types.ErrKeyAlreadyExists
-	if act := c.Add("foo", []byte("2")); expErr != act {
+	if act := c.Add("foo", []byte("2"), nil); expErr != act {
 		t.Errorf("Wrong error returned: %v != %v", act, expErr)
 	}
 
-	if err = c.Set("foo", []byte("3")); err != nil {
+	if err = c.Set("foo", []byte("3"), nil); err != nil {
 		t.Error(err)
 	}
 

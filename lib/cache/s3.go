@@ -214,7 +214,7 @@ func (s *S3) Get(key string) ([]byte, error) {
 }
 
 // Set attempts to set the value of a key.
-func (s *S3) Set(key string, value []byte) error {
+func (s *S3) Set(key string, value []byte, _ *time.Duration) error {
 	ctx, cancel := context.WithTimeout(
 		aws.BackgroundContext(), s.timeout,
 	)
@@ -244,9 +244,9 @@ func (s *S3) Set(key string, value []byte) error {
 
 // SetMulti attempts to set the value of multiple keys, returns an error if any
 // keys fail.
-func (s *S3) SetMulti(items map[string][]byte) error {
+func (s *S3) SetMulti(items map[string][]byte, t *time.Duration) error {
 	for k, v := range items {
-		if err := s.Set(k, v); err != nil {
+		if err := s.Set(k, v, t); err != nil {
 			// TODO: Batch upload
 			return err
 		}
@@ -256,7 +256,7 @@ func (s *S3) SetMulti(items map[string][]byte) error {
 
 // Add attempts to set the value of a key only if the key does not already exist
 // and returns an error if the key already exists.
-func (s *S3) Add(key string, value []byte) error {
+func (s *S3) Add(key string, value []byte, t *time.Duration) error {
 	_, err := s.s3.HeadObject(&s3.HeadObjectInput{
 		Bucket: &s.bucket,
 		Key:    &key,
@@ -264,7 +264,7 @@ func (s *S3) Add(key string, value []byte) error {
 	if err == nil {
 		return types.ErrKeyAlreadyExists
 	}
-	return s.Set(key, value)
+	return s.Set(key, value, t)
 }
 
 // Delete attempts to remove a key.

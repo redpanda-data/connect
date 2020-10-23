@@ -17,16 +17,16 @@ type Cache interface {
 
 	// Set attempts to set the value of a key, returns an error if the command
 	// fails.
-	Set(key string, value []byte) error
+	Set(key string, value []byte, ttl *time.Duration) error
 
 	// SetMulti attempts to set the value of multiple keys, returns an error if
 	// any of the keys fail.
-	SetMulti(items map[string][]byte) error
+	SetMulti(items map[string][]byte, ttl *time.Duration) error
 
 	// Add attempts to set the value of a key only if the key does not already
 	// exist, returns an error if the key already exists or if the command
 	// fails.
-	Add(key string, value []byte) error
+	Add(key string, value []byte, ttl *time.Duration) error
 
 	// Delete attempts to remove a key. Returns an error if a failure occurs.
 	Delete(key string) error
