@@ -198,6 +198,12 @@ func NewCache(
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}
 
+	if conf.Cache.TTL != "" {
+		if _, ok := c.(types.CacheWithTTL); !ok {
+			return nil, fmt.Errorf("this case type does not support per-key ttl")
+		}
+	}
+
 	ttl, err := bloblang.NewField(conf.Cache.TTL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse ttl expression: %v", err)
