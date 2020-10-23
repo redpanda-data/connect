@@ -31,7 +31,7 @@ func TestMemoryCache(t *testing.T) {
 		t.Errorf("Wrong error returned: %v != %v", act, expErr)
 	}
 
-	if err = c.Set("foo", []byte("1"), nil); err != nil {
+	if err = c.Set("foo", []byte("1")); err != nil {
 		t.Error(err)
 	}
 
@@ -42,7 +42,7 @@ func TestMemoryCache(t *testing.T) {
 		t.Errorf("Wrong result: %v != %v", string(act), exp)
 	}
 
-	if err = c.Add("bar", []byte("2"), nil); err != nil {
+	if err = c.Add("bar", []byte("2")); err != nil {
 		t.Error(err)
 	}
 
@@ -54,11 +54,11 @@ func TestMemoryCache(t *testing.T) {
 	}
 
 	expErr = types.ErrKeyAlreadyExists
-	if act := c.Add("foo", []byte("2"), nil); expErr != act {
+	if act := c.Add("foo", []byte("2")); expErr != act {
 		t.Errorf("Wrong error returned: %v != %v", act, expErr)
 	}
 
-	if err = c.Set("foo", []byte("3"), nil); err != nil {
+	if err = c.Set("foo", []byte("3")); err != nil {
 		t.Error(err)
 	}
 
@@ -96,7 +96,7 @@ func TestMemoryCacheCompaction(t *testing.T) {
 		t.Errorf("Wrong error returned: %v != %v", act, expErr)
 	}
 
-	if err = c.Set("foo", []byte("1"), nil); err != nil {
+	if err = c.Set("foo", []byte("1")); err != nil {
 		t.Error(err)
 	}
 
@@ -110,7 +110,7 @@ func TestMemoryCacheCompaction(t *testing.T) {
 	<-time.After(time.Millisecond * 50)
 
 	// This should trigger compaction.
-	if err = c.Add("bar", []byte("2"), nil); err != nil {
+	if err = c.Add("bar", []byte("2")); err != nil {
 		t.Error(err)
 	}
 
@@ -150,7 +150,7 @@ func TestMemoryCacheInitValues(t *testing.T) {
 	}
 
 	// This should trigger compaction.
-	if err = c.Add("foo3", []byte("bar3"), nil); err != nil {
+	if err = c.Add("foo3", []byte("bar3")); err != nil {
 		t.Error(err)
 	}
 
@@ -185,7 +185,7 @@ func BenchmarkMemoryShards1(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		key, value := fmt.Sprintf("key%v", i), []byte(fmt.Sprintf("foo%v", i))
 
-		assert.NoError(b, c.Set(key, value, nil))
+		assert.NoError(b, c.Set(key, value))
 
 		res, err := c.Get(key)
 		require.NoError(b, err)
@@ -208,7 +208,7 @@ func BenchmarkMemoryShards10(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		key, value := fmt.Sprintf("key%v", i), []byte(fmt.Sprintf("foo%v", i))
 
-		assert.NoError(b, c.Set(key, value, nil))
+		assert.NoError(b, c.Set(key, value))
 
 		res, err := c.Get(key)
 		require.NoError(b, err)
@@ -231,7 +231,7 @@ func BenchmarkMemoryShards100(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		key, value := fmt.Sprintf("key%v", i), []byte(fmt.Sprintf("foo%v", i))
 
-		assert.NoError(b, c.Set(key, value, nil))
+		assert.NoError(b, c.Set(key, value))
 
 		res, err := c.Get(key)
 		require.NoError(b, err)

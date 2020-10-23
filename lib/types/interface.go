@@ -17,21 +17,40 @@ type Cache interface {
 
 	// Set attempts to set the value of a key, returns an error if the command
 	// fails.
-	Set(key string, value []byte, ttl *time.Duration) error
+	Set(key string, value []byte) error
 
 	// SetMulti attempts to set the value of multiple keys, returns an error if
 	// any of the keys fail.
-	SetMulti(items map[string][]byte, ttl *time.Duration) error
+	SetMulti(items map[string][]byte) error
 
 	// Add attempts to set the value of a key only if the key does not already
 	// exist, returns an error if the key already exists or if the command
 	// fails.
-	Add(key string, value []byte, ttl *time.Duration) error
+	Add(key string, value []byte) error
 
 	// Delete attempts to remove a key. Returns an error if a failure occurs.
 	Delete(key string) error
 
 	Closable
+}
+
+// CacheWithTTL is a key/value store that can be shared across components and executing
+// threads of a Benthos service.
+type CacheWithTTL interface {
+	// SetWithTTL attempts to set the value of a key, returns an error if the command
+	// fails.
+	SetWithTTL(key string, value []byte, ttl *time.Duration) error
+
+	// SetMultiWithTTL attempts to set the value of multiple keys, returns an error if
+	// any of the keys fail.
+	SetMultiWithTTL(items map[string][]byte, ttl *time.Duration) error
+
+	// AddWithTTL attempts to set the value of a key only if the key does not already
+	// exist, returns an error if the key already exists or if the command
+	// fails.
+	AddWithTTL(key string, value []byte, ttl *time.Duration) error
+
+	Cache
 }
 
 //------------------------------------------------------------------------------

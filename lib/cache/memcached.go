@@ -185,8 +185,8 @@ func (m *Memcached) Get(key string) ([]byte, error) {
 	return item.Value, err
 }
 
-// Set attempts to set the value of a key.
-func (m *Memcached) Set(key string, value []byte, ttl *time.Duration) error {
+// SetWithTTL attempts to set the value of a key.
+func (m *Memcached) SetWithTTL(key string, value []byte, ttl *time.Duration) error {
 	m.mSetCount.Incr(1)
 	tStarted := time.Now()
 
@@ -210,21 +210,32 @@ func (m *Memcached) Set(key string, value []byte, ttl *time.Duration) error {
 	return err
 }
 
-// SetMulti attempts to set the value of multiple keys, returns an error if any
+// Set attempts to set the value of a key.
+func (m *Memcached) Set(key string, value []byte) error {
+	return m.SetWithTTL(key, value, nil)
+}
+
+// SetMultiWithTTL attempts to set the value of multiple keys, returns an error if any
 // keys fail.
-func (m *Memcached) SetMulti(items map[string][]byte, t *time.Duration) error {
+func (m *Memcached) SetMultiWithTTL(items map[string][]byte, t *time.Duration) error {
 	// TODO: Come back and optimise this.
 	for k, v := range items {
-		if err := m.Set(k, v, t); err != nil {
+		if err := m.SetWithTTL(k, v, t); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// Add attempts to set the value of a key only if the key does not already exist
+// SetMulti attempts to set the value of multiple keys, returns an error if any
+// keys fail.
+func (m *Memcached) SetMulti(items map[string][]byte) error {
+	return m.SetMultiWithTTL(items, nil)
+}
+
+// AddWithTTL attempts to set the value of a key only if the key does not already exist
 // and returns an error if the key already exists or if the operation fails.
-func (m *Memcached) Add(key string, value []byte, ttl *time.Duration) error {
+func (m *Memcached) AddWithTTL(key string, value []byte, ttl *time.Duration) error {
 	m.mAddCount.Incr(1)
 	tStarted := time.Now()
 
@@ -263,6 +274,12 @@ func (m *Memcached) Add(key string, value []byte, ttl *time.Duration) error {
 	m.mLatency.Timing(latency)
 
 	return err
+}
+
+// Add attempts to set the value of a key only if the key does not already exist
+// and returns an error if the key already exists or if the operation fails.
+func (m *Memcached) Add(key string, value []byte) error {
+	return m.AddWithTTL(key, value, nil)
 }
 
 // Delete attempts to remove a key.

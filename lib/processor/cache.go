@@ -231,14 +231,24 @@ type cacheOperator func(key string, value []byte, ttl *time.Duration) ([]byte, b
 
 func newCacheSetOperator(cache types.Cache) cacheOperator {
 	return func(key string, value []byte, ttl *time.Duration) ([]byte, bool, error) {
-		err := cache.Set(key, value, ttl)
+		var err error
+		if cttl, ok := cache.(types.CacheWithTTL); ok {
+			err = cttl.SetWithTTL(key, value, ttl)
+		} else {
+			err = cache.Set(key, value)
+		}
 		return nil, false, err
 	}
 }
 
 func newCacheAddOperator(cache types.Cache) cacheOperator {
 	return func(key string, value []byte, ttl *time.Duration) ([]byte, bool, error) {
-		err := cache.Add(key, value, ttl)
+		var err error
+		if cttl, ok := cache.(types.CacheWithTTL); ok {
+			err = cttl.AddWithTTL(key, value, ttl)
+		} else {
+			err = cache.Add(key, value)
+		}
 		return nil, false, err
 	}
 }
@@ -251,7 +261,7 @@ func newCacheGetOperator(cache types.Cache) cacheOperator {
 }
 
 func newCacheDeleteOperator(cache types.Cache) cacheOperator {
-	return func(key string, _ []byte, _ *time.Duration) ([]byte, bool, error) {
+	return func(key string, _ []byte, ttl *time.Duration) ([]byte, bool, error) {
 		err := cache.Delete(key)
 		return nil, false, err
 	}
@@ -282,17 +292,19 @@ func (c *Cache) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 	proc := func(index int, span opentracing.Span, part types.Part) error {
 		key := c.key.String(index, msg)
 		value := c.value.Bytes(index, msg)
-		var ttl time.Duration
+		var ttl *time.Duration
 		var err error
 		if ttls := c.ttl.String(index, msg); ttls != "" {
-			ttl, err = time.ParseDuration(ttls)
+			td, err := time.ParseDuration(ttls)
 			if err != nil {
 				c.mErr.Incr(1)
 				c.log.Debugf("TTL must be a duration: %v\n", err)
 				return err
 			}
+			ttl = &td
 		}
-		result, useResult, err := c.operator(key, value, &ttl)
+		result, useResult, err := c.operator(key, value, ttl)
+
 		if err != nil {
 			if err != types.ErrKeyAlreadyExists {
 				c.mErr.Incr(1)
@@ -323,7 +335,7 @@ func (c *Cache) CloseAsync() {
 }
 
 // WaitForClose blocks until the processor has closed down.
-func (c *Cache) WaitForClose(timeout time.Duration) error {
+func (c *Cache) WaitForClose(_ time.Duration) error {
 	return nil
 }
 

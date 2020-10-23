@@ -103,7 +103,7 @@ func (c *Cache) Write(msg types.Message) error {
 				return err
 			}
 		}
-		return c.cache.Set(c.key.String(0, msg), msg.Get(0).Get(), ttl)
+		return c.cache.Set(c.key.String(0, msg), msg.Get(0).Get())
 	}
 	items := map[string][]byte{}
 	msg.Iter(func(i int, p types.Part) error {
@@ -111,7 +111,7 @@ func (c *Cache) Write(msg types.Message) error {
 		return nil
 	})
 	if len(items) > 0 {
-		return c.cache.SetMulti(items, nil)
+		return c.cache.SetMulti(items)
 	}
 	return nil
 }

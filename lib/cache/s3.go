@@ -3,6 +3,7 @@ package cache
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"time"
@@ -213,8 +214,13 @@ func (s *S3) Get(key string) ([]byte, error) {
 	return bytes, err
 }
 
+// SetWithTTL attempts to set the value of a key.
+func (s *S3) SetWithTTL(_ string, _ []byte, _ *time.Duration) error {
+	return errors.New("this cache type doesn't support per-key TTL")
+}
+
 // Set attempts to set the value of a key.
-func (s *S3) Set(key string, value []byte, _ *time.Duration) error {
+func (s *S3) Set(key string, value []byte) error {
 	ctx, cancel := context.WithTimeout(
 		aws.BackgroundContext(), s.timeout,
 	)
@@ -242,11 +248,17 @@ func (s *S3) Set(key string, value []byte, _ *time.Duration) error {
 	return err
 }
 
+// SetMultiWithTTL attempts to set the value of multiple keys, returns an error if any
+// keys fail.
+func (s *S3) SetMultiWithTTL(_ map[string][]byte, _ *time.Duration) error {
+	return errors.New("this cache type doesn't support per-key TTL")
+}
+
 // SetMulti attempts to set the value of multiple keys, returns an error if any
 // keys fail.
-func (s *S3) SetMulti(items map[string][]byte, t *time.Duration) error {
+func (s *S3) SetMulti(items map[string][]byte) error {
 	for k, v := range items {
-		if err := s.Set(k, v, t); err != nil {
+		if err := s.Set(k, v); err != nil {
 			// TODO: Batch upload
 			return err
 		}
@@ -254,9 +266,15 @@ func (s *S3) SetMulti(items map[string][]byte, t *time.Duration) error {
 	return nil
 }
 
+// AddWithTTL attempts to set the value of a key only if the key does not already exist
+// and returns an error if the key already exists.
+func (s *S3) AddWithTTL(_ string, _ []byte, _ *time.Duration) error {
+	return errors.New("this cache type doesn't support per-key TTL")
+}
+
 // Add attempts to set the value of a key only if the key does not already exist
 // and returns an error if the key already exists.
-func (s *S3) Add(key string, value []byte, t *time.Duration) error {
+func (s *S3) Add(key string, value []byte) error {
 	_, err := s.s3.HeadObject(&s3.HeadObjectInput{
 		Bucket: &s.bucket,
 		Key:    &key,
@@ -264,7 +282,7 @@ func (s *S3) Add(key string, value []byte, t *time.Duration) error {
 	if err == nil {
 		return types.ErrKeyAlreadyExists
 	}
-	return s.Set(key, value, t)
+	return s.Set(key, value)
 }
 
 // Delete attempts to remove a key.

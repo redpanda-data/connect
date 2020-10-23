@@ -70,15 +70,15 @@ func (f *File) Get(key string) ([]byte, error) {
 }
 
 // Set attempts to set the value of a key.
-func (f *File) Set(key string, value []byte, _ *time.Duration) error {
+func (f *File) Set(key string, value []byte) error {
 	return ioutil.WriteFile(filepath.Join(f.dir, key), value, 0644)
 }
 
 // SetMulti attempts to set the value of multiple keys, returns an error if any
 // keys fail.
-func (f *File) SetMulti(items map[string][]byte, t *time.Duration) error {
+func (f *File) SetMulti(items map[string][]byte) error {
 	for k, v := range items {
-		if err := f.Set(k, v, t); err != nil {
+		if err := f.Set(k, v); err != nil {
 			return err
 		}
 	}
@@ -87,7 +87,7 @@ func (f *File) SetMulti(items map[string][]byte, t *time.Duration) error {
 
 // Add attempts to set the value of a key only if the key does not already exist
 // and returns an error if the key already exists.
-func (f *File) Add(key string, value []byte, _ *time.Duration) error {
+func (f *File) Add(key string, value []byte) error {
 	file, err := os.OpenFile(filepath.Join(f.dir, key), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0644)
 	if err != nil {
 		if os.IsExist(err) {

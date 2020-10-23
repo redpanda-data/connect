@@ -22,7 +22,7 @@ func TestRistrettoCache(t *testing.T) {
 	_, err = c.Get("foo")
 	assert.Equal(t, types.ErrKeyNotFound, err)
 
-	require.NoError(t, c.Set("foo", []byte("1"), nil))
+	require.NoError(t, c.Set("foo", []byte("1")))
 
 	res, err := c.Get("foo")
 

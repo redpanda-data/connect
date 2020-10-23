@@ -262,8 +262,8 @@ func TestCacheGet(t *testing.T) {
 		},
 	}
 
-	memCache.Set("1", []byte("foo 1"), nil)
-	memCache.Set("2", []byte("foo 2"), nil)
+	memCache.Set("1", []byte("foo 1"))
+	memCache.Set("2", []byte("foo 2"))
 
 	conf := NewConfig()
 	conf.Cache.Key = "${!json(\"key\")}"
@@ -321,9 +321,9 @@ func TestCacheDelete(t *testing.T) {
 		},
 	}
 
-	memCache.Set("1", []byte("foo 1"), nil)
-	memCache.Set("2", []byte("foo 2"), nil)
-	memCache.Set("3", []byte("foo 3"), nil)
+	memCache.Set("1", []byte("foo 1"))
+	memCache.Set("2", []byte("foo 2"))
+	memCache.Set("3", []byte("foo 3"))
 
 	conf := NewConfig()
 	conf.Cache.Key = "${!json(\"key\")}"
