@@ -79,7 +79,6 @@ pipeline:
 
 // OAuth2TokenConfig contains configuration fields for the OAuth2Token processor.
 type OAuth2TokenConfig struct {
-	Parts        []int    `json:"parts" yaml:"parts"`
 	ClientID     string   `json:"client_id" yaml:"client_id"`
 	CLientSecret string   `json:"client_secret" yaml:"client_secret"`
 	MetadataKey  string   `json:"metadata_key" yaml:"metadata_key"`
@@ -90,7 +89,6 @@ type OAuth2TokenConfig struct {
 // NewOAuth2TokenConfig returns a OAuth2TokenConfig with default values.
 func NewOAuth2TokenConfig() OAuth2TokenConfig {
 	return OAuth2TokenConfig{
-		Parts:        []int{},
 		Endpoint:     "",
 		ClientID:     "",
 		CLientSecret: "",
@@ -112,7 +110,6 @@ type OAuth2Token struct {
 	provider     *oidc.Provider
 	clientID     field.Expression
 	clientSecret field.Expression
-	metadataKey  field.Expression
 }
 
 // NewOAuth2Token returns a OAuth2Token processor.
