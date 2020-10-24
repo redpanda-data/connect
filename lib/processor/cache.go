@@ -298,8 +298,8 @@ func (c *Cache) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 	proc := func(index int, span opentracing.Span, part types.Part) error {
 		key := c.key.String(index, msg)
 		value := c.value.Bytes(index, msg)
+
 		var ttl *time.Duration
-		var err error
 		if ttls := c.ttl.String(index, msg); ttls != "" {
 			td, err := time.ParseDuration(ttls)
 			if err != nil {
@@ -309,8 +309,8 @@ func (c *Cache) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 			}
 			ttl = &td
 		}
-		result, useResult, err := c.operator(key, value, ttl)
 
+		result, useResult, err := c.operator(key, value, ttl)
 		if err != nil {
 			if err != types.ErrKeyAlreadyExists {
 				c.mErr.Incr(1)
