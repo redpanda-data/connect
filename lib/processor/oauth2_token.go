@@ -80,7 +80,7 @@ pipeline:
 // OAuth2TokenConfig contains configuration fields for the OAuth2Token processor.
 type OAuth2TokenConfig struct {
 	ClientID     string   `json:"client_id" yaml:"client_id"`
-	CLientSecret string   `json:"client_secret" yaml:"client_secret"`
+	ClientSecret string   `json:"client_secret" yaml:"client_secret"`
 	MetadataKey  string   `json:"metadata_key" yaml:"metadata_key"`
 	Scopes       []string `json:"scopes" yaml:"scopes"`
 	Endpoint     string   `json:"endpoint" yaml:"endpoint"`
@@ -91,7 +91,7 @@ func NewOAuth2TokenConfig() OAuth2TokenConfig {
 	return OAuth2TokenConfig{
 		Endpoint:     "",
 		ClientID:     "",
-		CLientSecret: "",
+		ClientSecret: "",
 		MetadataKey:  "",
 		Scopes:       []string{},
 	}
@@ -129,7 +129,7 @@ func NewOAuth2Token(
 	if a.clientID, err = bloblang.NewField(conf.OAuth2Token.ClientID); err != nil {
 		return nil, fmt.Errorf("failed to parse client_id expression: %v", err)
 	}
-	if a.clientSecret, err = bloblang.NewField(conf.OAuth2Token.CLientSecret); err != nil {
+	if a.clientSecret, err = bloblang.NewField(conf.OAuth2Token.ClientSecret); err != nil {
 		return nil, fmt.Errorf("failed to parse client_secret expression: %v", err)
 	}
 
