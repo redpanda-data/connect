@@ -3,7 +3,6 @@ package cache
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"time"
@@ -214,11 +213,6 @@ func (s *S3) Get(key string) ([]byte, error) {
 	return bytes, err
 }
 
-// SetWithTTL attempts to set the value of a key.
-func (s *S3) SetWithTTL(_ string, _ []byte, _ *time.Duration) error {
-	return errors.New("this cache type doesn't support per-key TTL")
-}
-
 // Set attempts to set the value of a key.
 func (s *S3) Set(key string, value []byte) error {
 	ctx, cancel := context.WithTimeout(
@@ -248,12 +242,6 @@ func (s *S3) Set(key string, value []byte) error {
 	return err
 }
 
-// SetMultiWithTTL attempts to set the value of multiple keys, returns an error if any
-// keys fail.
-func (s *S3) SetMultiWithTTL(_ map[string][]byte, _ *time.Duration) error {
-	return errors.New("this cache type doesn't support per-key TTL")
-}
-
 // SetMulti attempts to set the value of multiple keys, returns an error if any
 // keys fail.
 func (s *S3) SetMulti(items map[string][]byte) error {
@@ -264,12 +252,6 @@ func (s *S3) SetMulti(items map[string][]byte) error {
 		}
 	}
 	return nil
-}
-
-// AddWithTTL attempts to set the value of a key only if the key does not already exist
-// and returns an error if the key already exists.
-func (s *S3) AddWithTTL(_ string, _ []byte, _ *time.Duration) error {
-	return errors.New("this cache type doesn't support per-key TTL")
 }
 
 // Add attempts to set the value of a key only if the key does not already exist
