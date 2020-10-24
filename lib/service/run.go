@@ -162,7 +162,7 @@ func Run() {
 		&cli.StringFlag{
 			Name:  "log.level",
 			Value: "",
-			Usage: "override the configured log level, options are: off, error, warn, info, debug, trace.",
+			Usage: "override the configured log level, options are: off, error, warn, info, debug, trace",
 		},
 		&cli.StringFlag{
 			Name:    "config",
@@ -173,7 +173,7 @@ func Run() {
 		&cli.StringSliceFlag{
 			Name:    "resources",
 			Aliases: []string{"r"},
-			Usage:   "BETA FEATURE: parse extra resources from a file, which can be referenced the same as resources defined in the main config",
+			Usage:   "pull in extra resources from a file, which can be referenced the same as resources defined in the main config, supports glob patterns (requires quotes)",
 		},
 		&cli.BoolFlag{
 			Name:  "chilled",
@@ -193,7 +193,8 @@ func Run() {
 
    benthos list inputs
    benthos create kafka_balanced//file > ./config.yaml
-   benthos -c ./config.yaml`[4:],
+   benthos -c ./config.yaml
+   benthos -r "./production/*.yaml" -c ./config.yaml`[4:],
 		Flags: flags,
 		Action: func(c *cli.Context) error {
 			if c.Bool("version") {

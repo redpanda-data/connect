@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/filepath"
 	"github.com/Jeffail/benthos/v3/lib/api"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -137,6 +138,11 @@ func cmdService(
 	streamsMode bool,
 	streamsConfigs []string,
 ) int {
+	var err error
+	if resourcesPaths, err = filepath.Globs(resourcesPaths); err != nil {
+		fmt.Printf("Failed to resolve resource glob pattern: %v\n", err)
+		return 1
+	}
 	lints := readConfig(confPath, resourcesPaths)
 	if strict && len(lints) > 0 {
 		for _, lint := range lints {
@@ -169,7 +175,6 @@ func cmdService(
 	}
 
 	// Create our metrics type.
-	var err error
 	var stats metrics.Type
 	stats, err = metrics.New(conf.Metrics, metrics.OptSetLogger(logger))
 	for err != nil {
