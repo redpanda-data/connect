@@ -1,6 +1,8 @@
 package checkpoint
 
-import "errors"
+import (
+	"errors"
+)
 
 // ErrOutOfSync is returned when an offset to be tracked is less than or equal
 // to the current highest tracked offset.
@@ -15,25 +17,29 @@ var ErrResolvedOffsetNotTracked = errors.New("resolved offset was not tracked")
 // return the highest offset currently able to be committed such that an
 // unresolved offset is never committed.
 type Type struct {
-	base    int
-	edge    int
-	pending []int
+	base          int
+	maxResolved   int
+	maxUnresolved int
 
-	highestBlocked  int
-	highestResolved int
+	offset  int
+	pending []int
+	buf     []int
 }
 
 // New returns a new checkpointer from a base offset, which is the value
 // returned when no checkpoints have yet been resolved. The base can be zero.
 func New(base int) *Type {
+	buffer := make([]int, 100)
 	return &Type{
-		highestResolved: base,
+		base:    base,
+		pending: buffer[:0],
+		buf:     buffer,
 	}
 }
 
 // Highest returns the current highest checkpoint.
 func (t *Type) Highest() int {
-	return t.highestResolved
+	return t.base + t.maxResolved
 }
 
 // Track a new unresolved integer offset. This offset will be cached until it is
@@ -41,15 +47,21 @@ func (t *Type) Highest() int {
 // committed. If the provided value is lower than an already provided value an
 // error is returned.
 func (t *Type) Track(i int) error {
-	if t.edge >= i {
+	if t.offset == cap(t.buf) {
+		if len(t.pending) == cap(t.buf) {
+			// Reached the limit of our buffer, create a new one.
+			t.buf = make([]int, cap(t.buf)*2)
+		}
+		copy(t.buf, t.pending)
+		t.pending = t.buf[0:len(t.pending)]
+		t.offset = len(t.pending)
+	}
+	if len(t.pending) > 0 && t.pending[len(t.pending)-1] >= i {
 		return ErrOutOfSync
 	}
-	if len(t.pending) == 0 && t.base == 0 {
-		t.base = i
-	} else {
-		t.pending = append(t.pending, i-t.edge)
-	}
-	t.edge = i
+	t.offset++
+	t.pending = t.pending[:len(t.pending)+1]
+	t.pending[len(t.pending)-1] = i
 	return nil
 }
 
@@ -64,69 +76,29 @@ func (t *Type) MustTrack(i int) {
 // offset to be committed is returned, or an error if the provided offset was
 // not recognised.
 func (t *Type) Resolve(offset int) (int, error) {
-	// If our resolved offset is also the base then it can be immediately
-	// resolved as there are no pending lower offsets.
-	if offset == t.base {
-		t.highestResolved = offset
-		if len(t.pending) == 0 {
-			t.base = 0
-			t.edge = 0
-			if t.highestBlocked > t.highestResolved {
-				t.highestResolved = t.highestBlocked
-			}
-		} else {
-			t.base = t.base + t.pending[0]
-			for i := 0; i < len(t.pending)-1; i++ {
-				t.pending[i] = t.pending[i+1]
-			}
-			t.pending = t.pending[:len(t.pending)-1]
+	var i, v int
+	for i, v = range t.pending {
+		if v >= offset {
+			break
 		}
-		return t.highestResolved, nil
 	}
-
-	// Otherwise we cannot commit this resolved offset and must only remove it
-	// from our pending list.
-
-	// Best case scenario, our resolved offset is our highest pending offset, so
-	// we can simply remove it from the edge.
-	if offset == t.edge {
-		t.edge = t.edge - t.pending[len(t.pending)]
-
-		// Second best case scenario, all pending offsets are exactly 1 larger
-		// than the previous, so we can avoid iterating all values to find our
-		// resolving offset.
-	} else if t.edge == t.base+len(t.pending) {
-		t.edge = t.edge - 1
-		t.pending = t.pending[:len(t.pending)-1]
-
-		// Worst case scenario as we're forced to iterate the pending slice
-		// until we reach our target offset. Then we must remove it and adjust
-		// all following values.
+	if v != offset {
+		return 0, ErrResolvedOffsetNotTracked
+	}
+	if v > t.maxUnresolved {
+		t.maxUnresolved = v
+	}
+	if i > 0 {
+		// The offset wasn't the next checkpoint.
+		v = t.maxResolved
+		copy(t.pending[1:], t.pending[:i])
+	} else if len(t.pending) == 1 {
+		t.maxResolved = t.maxUnresolved
 	} else {
-		currentPendingValue := t.base
-		var i int
-		for ; i < len(t.pending)-1; i++ {
-			currentPendingValue += t.pending[i]
-			if offset == currentPendingValue {
-				// We found the element representing our offset, replace it with
-				// the next value.
-				t.pending[i] = t.pending[i+1] + t.pending[i]
-				break
-			}
-		}
-		if offset == currentPendingValue {
-			return 0, ErrResolvedOffsetNotTracked
-		}
-		for i++; i < len(t.pending)-1; i++ {
-			t.pending[i] = t.pending[i+1]
-		}
-		t.pending = t.pending[:len(t.pending)-1]
+		t.maxResolved = v
 	}
-
-	if t.highestBlocked < offset {
-		t.highestBlocked = offset
-	}
-	return t.highestResolved, nil
+	t.pending = t.pending[1:]
+	return t.base + t.maxResolved, nil
 }
 
 // MustResolve is the same as Resolve but panics instead of returning an error.
