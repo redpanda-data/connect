@@ -390,12 +390,14 @@ func receiveMessage(
 	t.Helper()
 
 	var tran types.Transaction
+	var open bool
 	select {
-	case tran = <-tranChan:
+	case tran, open = <-tranChan:
 	case <-ctx.Done():
 		t.Fatal("timed out on receive")
 	}
 
+	require.True(t, open)
 	require.Equal(t, tran.Payload.Len(), 1)
 
 	var res types.Response = response.NewAck()

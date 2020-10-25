@@ -73,12 +73,12 @@ By default Benthos will use a shared credentials file when connecting to AWS ser
 This input adds the following metadata fields to each message:
 
 ` + "```" + `
-- aws_s3_key
-- aws_s3_bucket
-- aws_s3_last_modified_unix
-- aws_s3_last_modified (RFC3339)
-- aws_s3_content_type
-- aws_s3_content_encoding
+- s3_key
+- s3_bucket
+- s3_last_modified_unix
+- s3_last_modified (RFC3339)
+- s3_content_type
+- s3_content_encoding
 - All user defined metadata
 ` + "```" + `
 
@@ -180,17 +180,71 @@ type objectTargetReader interface {
 
 //------------------------------------------------------------------------------
 
-type staticTargetReader []*objectTarget
+type staticTargetReader struct {
+	pending    []*objectTarget
+	s3         *s3.S3
+	conf       AWSS3Config
+	startAfter *string
+}
 
-func (s *staticTargetReader) Pop(context.Context) (*objectTarget, error) {
-	if len(*s) == 0 {
+func newStaticTargetReader(
+	ctx context.Context,
+	conf AWSS3Config,
+	log log.Modular,
+	s3Client *s3.S3,
+) (*staticTargetReader, error) {
+	listInput := &s3.ListObjectsV2Input{
+		Bucket:  aws.String(conf.Bucket),
+		MaxKeys: aws.Int64(100),
+	}
+	if len(conf.Prefix) > 0 {
+		listInput.Prefix = aws.String(conf.Prefix)
+	}
+	output, err := s3Client.ListObjectsV2WithContext(ctx, listInput)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list objects: %v", err)
+	}
+	staticKeys := staticTargetReader{
+		s3:   s3Client,
+		conf: conf,
+	}
+	for _, obj := range output.Contents {
+		staticKeys.pending = append(staticKeys.pending, newObjectTarget(*obj.Key, conf.Bucket, nil))
+	}
+	if len(output.Contents) > 0 {
+		staticKeys.startAfter = output.Contents[len(output.Contents)-1].Key
+	}
+	return &staticKeys, nil
+}
+
+func (s *staticTargetReader) Pop(ctx context.Context) (*objectTarget, error) {
+	if len(s.pending) == 0 && s.startAfter != nil {
+		s.pending = nil
+		listInput := &s3.ListObjectsV2Input{
+			Bucket:     aws.String(s.conf.Bucket),
+			MaxKeys:    aws.Int64(100),
+			StartAfter: s.startAfter,
+		}
+		if len(s.conf.Prefix) > 0 {
+			listInput.Prefix = aws.String(s.conf.Prefix)
+		}
+		output, err := s.s3.ListObjectsV2WithContext(ctx, listInput)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list objects: %v", err)
+		}
+		for _, obj := range output.Contents {
+			s.pending = append(s.pending, newObjectTarget(*obj.Key, s.conf.Bucket, nil))
+		}
+		if len(output.Contents) > 0 {
+			s.startAfter = output.Contents[len(output.Contents)-1].Key
+		}
+	}
+	if len(s.pending) == 0 {
 		return nil, io.EOF
 	}
-
-	o := (*s)[0]
-	*s = (*s)[1:]
-
-	return o, nil
+	obj := s.pending[0]
+	s.pending = s.pending[1:]
+	return obj, nil
 }
 
 func (s staticTargetReader) Close(context.Context) error {
@@ -474,25 +528,7 @@ func (a *awsS3) getTargetReader(ctx context.Context) (objectTargetReader, error)
 	if a.sqs != nil {
 		return newSQSTargetReader(a.conf, a.log, a.sqs), nil
 	}
-	listInput := &s3.ListObjectsInput{
-		Bucket: aws.String(a.conf.Bucket),
-	}
-	if len(a.conf.Prefix) > 0 {
-		listInput.Prefix = aws.String(a.conf.Prefix)
-	}
-	staticKeys := staticTargetReader{}
-	err := a.s3.ListObjectsPagesWithContext(ctx, listInput,
-		func(page *s3.ListObjectsOutput, isLastPage bool) bool {
-			for _, obj := range page.Contents {
-				staticKeys = append(staticKeys, newObjectTarget(*obj.Key, a.conf.Bucket, nil))
-			}
-			return true
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list objects: %v", err)
-	}
-	return &staticKeys, nil
+	return newStaticTargetReader(ctx, a.conf, a.log, a.s3)
 }
 
 // ConnectWithContext attempts to establish a connection to the target S3 bucket
@@ -540,17 +576,17 @@ func s3MsgFromPart(p *pendingObject, part types.Part) types.Message {
 
 	meta := msg.Get(0).Metadata()
 
-	meta.Set("aws_s3_key", p.target.key)
-	meta.Set("aws_s3_bucket", p.target.bucket)
+	meta.Set("s3_key", p.target.key)
+	meta.Set("s3_bucket", p.target.bucket)
 	if p.obj.LastModified != nil {
-		meta.Set("aws_s3_last_modified", p.obj.LastModified.Format(time.RFC3339))
-		meta.Set("aws_s3_last_modified_unix", strconv.FormatInt(p.obj.LastModified.Unix(), 10))
+		meta.Set("s3_last_modified", p.obj.LastModified.Format(time.RFC3339))
+		meta.Set("s3_last_modified_unix", strconv.FormatInt(p.obj.LastModified.Unix(), 10))
 	}
 	if p.obj.ContentType != nil {
-		meta.Set("aws_s3_content_type", *p.obj.ContentType)
+		meta.Set("s3_content_type", *p.obj.ContentType)
 	}
 	if p.obj.ContentEncoding != nil {
-		meta.Set("aws_s3_content_encoding", *p.obj.ContentEncoding)
+		meta.Set("s3_content_encoding", *p.obj.ContentEncoding)
 	}
 	return msg
 }
@@ -596,7 +632,9 @@ func (a *awsS3) ReadWithContext(ctx context.Context) (msg types.Message, ackFn r
 	}
 
 	defer func() {
-		if errors.Is(err, context.Canceled) ||
+		if errors.Is(err, io.EOF) {
+			err = types.ErrTypeClosed
+		} else if errors.Is(err, context.Canceled) ||
 			errors.Is(err, context.DeadlineExceeded) ||
 			(err != nil && strings.HasSuffix(err.Error(), "context canceled")) {
 			err = types.ErrTimeout
