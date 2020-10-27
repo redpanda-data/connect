@@ -90,9 +90,10 @@ func (t *Type) Resolve(offset int) (int, error) {
 	}
 	if i > 0 {
 		// The offset wasn't the next checkpoint.
-		v = t.maxResolved
 		copy(t.pending[1:], t.pending[:i])
 	} else if len(t.pending) == 1 {
+		t.maxResolved = t.maxUnresolved
+	} else if t.pending[1] > t.maxUnresolved {
 		t.maxResolved = t.maxUnresolved
 	} else {
 		t.maxResolved = v

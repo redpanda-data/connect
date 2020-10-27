@@ -56,8 +56,8 @@ func TestOutOfSync(t *testing.T) {
 
 	v, err = c.Resolve(1)
 	require.NoError(t, err)
-	assert.Equal(t, 1, v)
-	assert.Equal(t, 1, c.Highest())
+	assert.Equal(t, 2, v)
+	assert.Equal(t, 2, c.Highest())
 
 	v, err = c.Resolve(3)
 	require.NoError(t, err)
@@ -155,7 +155,7 @@ func TestSequentialRandomLarge(t *testing.T) {
 	}
 }
 
-func BenchmarkChunked(b *testing.B) {
+func BenchmarkChunked100(b *testing.B) {
 	b.ReportAllocs()
 	c := New(0)
 	chunkSize := 100
@@ -180,6 +180,70 @@ func BenchmarkChunked(b *testing.B) {
 	}
 }
 
+func BenchmarkChunkedReverse100(b *testing.B) {
+	b.ReportAllocs()
+	c := New(0)
+	chunkSize := 100
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < chunkSize; j++ {
+			offset := i*chunkSize + j
+			err := c.Track(offset)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+		for j := chunkSize - 1; j >= 0; j-- {
+			offset := i*chunkSize + j
+			v, err := c.Resolve(offset)
+			if err != nil {
+				b.Fatal(err)
+			}
+			var exp int
+			if i > 0 {
+				exp = (i * chunkSize) - 1
+			}
+			if j == 0 {
+				exp = ((i + 1) * chunkSize) - 1
+			}
+			if exp != v {
+				b.Errorf("Wrong value: %v != %v", exp, v)
+			}
+		}
+	}
+}
+
+func BenchmarkChunkedReverse1000(b *testing.B) {
+	b.ReportAllocs()
+	c := New(0)
+	chunkSize := 1000
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < chunkSize; j++ {
+			offset := i*chunkSize + j
+			err := c.Track(offset)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+		for j := chunkSize - 1; j >= 0; j-- {
+			offset := i*chunkSize + j
+			v, err := c.Resolve(offset)
+			if err != nil {
+				b.Fatal(err)
+			}
+			var exp int
+			if i > 0 {
+				exp = (i * chunkSize) - 1
+			}
+			if j == 0 {
+				exp = ((i + 1) * chunkSize) - 1
+			}
+			if exp != v {
+				b.Errorf("Wrong value: %v != %v", exp, v)
+			}
+		}
+	}
+}
+
 func BenchmarkSequential(b *testing.B) {
 	b.ReportAllocs()
 	c := New(0)
@@ -196,32 +260,6 @@ func BenchmarkSequential(b *testing.B) {
 		}
 		if i != v {
 			b.Errorf("Wrong value: %v != %v", i, v)
-		}
-	}
-}
-
-func BenchmarkSequentialReverse(b *testing.B) {
-	b.ReportAllocs()
-	c := New(0)
-	for i := 0; i < b.N+1; i++ {
-		err := c.Track(i)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-	for i := b.N; i >= 0; i-- {
-		v, err := c.Resolve(i)
-		if err != nil {
-			b.Fatal(err)
-		}
-		if i == 0 {
-			if b.N != v {
-				b.Errorf("Wrong value: %v != %v", b.N, v)
-			}
-		} else {
-			if 0 != v {
-				b.Errorf("Wrong value: %v != %v", 0, v)
-			}
 		}
 	}
 }
