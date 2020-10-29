@@ -162,9 +162,6 @@ func (r *Ristretto) SetMulti(items map[string][]byte) error {
 // AddWithTTL attempts to set the value of a key only if the key does not already exist
 // and returns an error if the key already exists.
 func (r *Ristretto) AddWithTTL(key string, value []byte, ttl *time.Duration) error {
-	//if _, err := r.Get(key); err == nil {
-	//	return types.ErrKeyAlreadyExists
-	//}
 	return r.SetWithTTL(key, value, ttl)
 }
 

@@ -93,15 +93,18 @@ func (c *Cache) WriteWithContext(ctx context.Context, msg types.Message) error {
 
 // Write attempts to write message contents to a target Cache.
 func (c *Cache) Write(msg types.Message) error {
+	var ttl *time.Duration
+	if ttls := c.ttl.String(0, msg); ttls != "" {
+		t, err := time.ParseDuration(ttls)
+		if err != nil {
+			c.log.Debugf("TTL must be a duration: %v\n", err)
+			return err
+		}
+		ttl = &t
+	}
 	if msg.Len() == 1 {
-		var ttl *time.Duration
-		var err error
-		if ttls := c.ttl.String(0, msg); ttls != "" {
-			*ttl, err = time.ParseDuration(ttls)
-			if err != nil {
-				c.log.Debugf("TTL must be a duration: %v\n", err)
-				return err
-			}
+		if cttl, ok := c.cache.(types.CacheWithTTL); ok && ttl != nil {
+			return cttl.SetWithTTL(c.key.String(0, msg), msg.Get(0).Get(), ttl)
 		}
 		return c.cache.Set(c.key.String(0, msg), msg.Get(0).Get())
 	}
@@ -111,6 +114,9 @@ func (c *Cache) Write(msg types.Message) error {
 		return nil
 	})
 	if len(items) > 0 {
+		if cttl, ok := c.cache.(types.CacheWithTTL); ok && ttl != nil {
+			return cttl.SetMultiWithTTL(items, ttl)
+		}
 		return c.cache.SetMulti(items)
 	}
 	return nil

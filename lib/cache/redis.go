@@ -212,7 +212,7 @@ func (r *Redis) SetWithTTL(key string, value []byte, ttl *time.Duration) error {
 		r.log.Errorf("Set command failed: %v\n", err)
 		<-time.After(r.retryPeriod)
 		r.mSetRetry.Incr(1)
-		err = r.client.Set(key, value, r.ttl).Err()
+		err = r.client.Set(key, value, t).Err()
 	}
 	if err != nil {
 		r.mSetFailed.Incr(1)
@@ -278,7 +278,7 @@ func (r *Redis) AddWithTTL(key string, value []byte, ttl *time.Duration) error {
 		r.log.Errorf("Add command failed: %v\n", err)
 		<-time.After(r.retryPeriod)
 		r.mAddRetry.Incr(1)
-		if set, err = r.client.SetNX(key, value, r.ttl).Result(); err == nil && !set {
+		if set, err = r.client.SetNX(key, value, t).Result(); err == nil && !set {
 			r.mAddFailedDupe.Incr(1)
 
 			latency := int64(time.Since(tStarted))
