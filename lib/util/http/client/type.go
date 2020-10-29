@@ -519,7 +519,12 @@ func (h *Type) checkStatus(code int) (succeeded bool, retStrat retryStrategy) {
 // Do attempts to create and perform an HTTP request from a message payload.
 // This attempt may include retries, and if all retries fail an error is
 // returned.
-func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
+func (h *Type) Do(msg types.Message) (*http.Response, error) {
+	return h.DoWithContext(context.Background(), msg)
+}
+
+// DoWithContext is the context aware version of Do
+func (h *Type) DoWithContext(ctx context.Context, msg types.Message) (res *http.Response, err error) {
 	h.mCount.Incr(1)
 
 	var spans []opentracing.Span
@@ -560,7 +565,7 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 
 	rateLimited := false
 	numRetries := h.conf.NumRetries
-	if res, err = h.client.Do(req); err == nil {
+	if res, err = h.client.Do(req.WithContext(ctx)); err == nil {
 		h.incrCode(res.StatusCode)
 		if resolved, retryStrat := h.checkStatus(res.StatusCode); !resolved {
 			rateLimited = retryStrat == retryBackoff
@@ -602,7 +607,7 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 			return nil, types.ErrTypeClosed
 		}
 		rateLimited = false
-		if res, err = h.client.Do(req); err == nil {
+		if res, err = h.client.Do(req.WithContext(ctx)); err == nil {
 			h.incrCode(res.StatusCode)
 			if resolved, retryStrat := h.checkStatus(res.StatusCode); !resolved {
 				rateLimited = retryStrat == retryBackoff
@@ -640,7 +645,12 @@ func (h *Type) Do(msg types.Message) (res *http.Response, err error) {
 //
 // If the response body is empty the message returned is nil.
 func (h *Type) Send(msg types.Message) (types.Message, error) {
-	res, err := h.Do(msg)
+	return h.SendWithContext(context.Background(), msg)
+}
+
+// SendWithContext is the context aware version of Send
+func (h *Type) SendWithContext(ctx context.Context, msg types.Message) (types.Message, error) {
+	res, err := h.DoWithContext(ctx, msg)
 	if err != nil {
 		return nil, err
 	}
