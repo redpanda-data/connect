@@ -40,7 +40,7 @@ input:
 input:
   stdin:
     multipart: false
-    max_buffer: 1e+06
+    max_buffer: 1000000
     delimiter: ""
 ```
 

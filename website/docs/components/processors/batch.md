@@ -28,7 +28,7 @@ batch:
     any: {}
     bloblang: ""
     bounds_check:
-      max_part_size: 1.073741824e+09
+      max_part_size: 1073741824
       max_parts: 100
       min_part_size: 1
       min_parts: 1

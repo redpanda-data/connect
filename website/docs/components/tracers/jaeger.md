@@ -79,7 +79,14 @@ The sampler type to use.
 
 Type: `string`  
 Default: `"const"`  
-Options: `const`, `probabilistic`, `ratelimiting`, `remote`.
+
+| Option | Summary |
+|---|---|
+| `const` | A constant decision for all traces, either 1 or 0. |
+| `probabilistic` | The sampler makes a random sampling decision with the probability of sampling equal to the value of sampler param. |
+| `ratelimiting` | The sampler uses a leaky bucket rate limiter to ensure that traces are sampled with a certain constant rate. |
+| `remote` | The sampler consults Jaeger agent for the appropriate sampling strategy to use in the current service. |
+
 
 ### `sampler_manager_address`
 

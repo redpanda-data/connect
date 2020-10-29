@@ -91,7 +91,7 @@ input:
       enabled: false
       reconnect: true
       multipart: false
-      max_buffer: 1e+06
+      max_buffer: 1000000
       delimiter: ""
 ```
 

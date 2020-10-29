@@ -9,7 +9,7 @@ input:
   type: stdin
   stdin:
     delimiter: ""
-    max_buffer: 1e+06
+    max_buffer: 1000000
     multipart: false
 buffer:
   type: none
@@ -18,7 +18,7 @@ pipeline:
   processors:
     - type: bounds_check
       bounds_check:
-        max_part_size: 1.073741824e+09
+        max_part_size: 1073741824
         max_parts: 100
         min_part_size: 1
         min_parts: 1

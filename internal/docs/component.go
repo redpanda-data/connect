@@ -65,15 +65,16 @@ type ComponentSpec struct {
 }
 
 type fieldContext struct {
-	Name          string
-	Type          string
-	Description   string
-	Default       string
-	Advanced      bool
-	Deprecated    bool
-	Interpolation FieldInterpolation
-	Examples      []string
-	Options       []string
+	Name             string
+	Type             string
+	Description      string
+	Default          string
+	Advanced         bool
+	Deprecated       bool
+	Interpolation    FieldInterpolation
+	Examples         []string
+	AnnotatedOptions [][2]string
+	Options          []string
 }
 
 type componentContext struct {
@@ -116,7 +117,12 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: ` + "`{{$field.Type}}`" + `  
 {{if gt (len $field.Default) 0}}Default: ` + "`{{$field.Default}}`" + `  
 {{end -}}
-{{if gt (len $field.Options) 0}}Options: {{range $j, $option := $field.Options -}}
+{{if gt (len $field.AnnotatedOptions) 0}}
+| Option | Summary |
+|---|---|
+{{range $j, $option := $field.AnnotatedOptions -}}` + "| `" + `{{index $option 0}}` + "` |" + ` {{index $option 1}} |
+{{end}}
+{{else if gt (len $field.Options) 0}}Options: {{range $j, $option := $field.Options -}}
 {{if ne $j 0}}, {{end}}` + "`" + `{{$option}}` + "`" + `{{end}}.
 {{end}}
 {{if gt (len $field.Examples) 0 -}}
@@ -442,14 +448,15 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 		}
 
 		fieldCtx := fieldContext{
-			Name:          v.Name,
-			Type:          string(fieldType),
-			Description:   v.Description,
-			Default:       defaultValueStr,
-			Advanced:      v.Advanced,
-			Examples:      examples,
-			Options:       v.Options,
-			Interpolation: v.Interpolation,
+			Name:             v.Name,
+			Type:             string(fieldType),
+			Description:      v.Description,
+			Default:          defaultValueStr,
+			Advanced:         v.Advanced,
+			Examples:         examples,
+			AnnotatedOptions: v.AnnotatedOptions,
+			Options:          v.Options,
+			Interpolation:    v.Interpolation,
 		}
 
 		if len(fieldCtx.Description) == 0 {

@@ -32,7 +32,10 @@ func NewConfig() Config {
 // FieldSpec returns specs for SASL fields.
 func FieldSpec() docs.FieldSpec {
 	return docs.FieldAdvanced("sasl", "Enables SASL authentication.").WithChildren(
-		docs.FieldCommon("mechanism", "The SASL authentication mechanism to use.").HasOptions("none", "plain"),
+		docs.FieldCommon("mechanism", "The SASL authentication mechanism to use.").HasAnnotatedOptions(
+			"none", "No SASL based authentication.",
+			"plain", "Plain text SASL authentication.",
+		),
 		docs.FieldCommon("user", "A SASL plain text username. It is recommended that you use environment variables to populate this field.", "${USER}"),
 		docs.FieldCommon("password", "A SASL plain text password. It is recommended that you use environment variables to populate this field.", "${PASSWORD}"),
 	)

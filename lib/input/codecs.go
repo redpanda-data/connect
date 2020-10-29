@@ -20,7 +20,13 @@ import (
 
 var codecDocs = docs.FieldCommon(
 	"codec", "The way in which the bytes of consumed files are converted into messages, codecs are useful for specifying how large files might be processed in small chunks rather than loading it all in memory. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.", "lines", "delim:\t", "delim:foobar",
-).HasOptions("all-bytes", "lines", "delim:x", "tar", "tar-gzip")
+).HasAnnotatedOptions(
+	"all-bytes", "Consume the entire file as a single binary message.",
+	"lines", "Consume the file in segments divided by linebreaks.",
+	"delim:x", "Consume the file in segments divided by a custom delimter.",
+	"tar", "Parse the file as a tar archive, and consume each file of the archive as a message.",
+	"tar-gzip", "Parse the file as a gzip compressed tar archive, and consume each file of the archive as a message.",
+)
 
 //------------------------------------------------------------------------------
 

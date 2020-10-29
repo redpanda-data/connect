@@ -160,3 +160,12 @@ html[data-theme='dark'] .DocSearch {
     var(--ifm-color-emphasis-100) 100%
   );
 }
+
+.markdown > table {
+  border: none;
+  min-width: 160px;
+}
+
+.markdown > table td {
+  min-width: 160px;
+}

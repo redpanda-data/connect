@@ -44,7 +44,7 @@ input:
     paths: []
     codec: lines
     multipart: false
-    max_buffer: 1e+06
+    max_buffer: 1000000
     delete_on_finish: false
 ```
 
@@ -68,7 +68,15 @@ The way in which the bytes of consumed files are converted into messages, codecs
 
 Type: `string`  
 Default: `"lines"`  
-Options: `all-bytes`, `lines`, `delim:x`, `tar`, `tar-gzip`.
+
+| Option | Summary |
+|---|---|
+| `all-bytes` | Consume the entire file as a single binary message. |
+| `lines` | Consume the file in segments divided by linebreaks. |
+| `delim:x` | Consume the file in segments divided by a custom delimter. |
+| `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
+| `tar-gzip` | Parse the file as a gzip compressed tar archive, and consume each file of the archive as a message. |
+
 
 ```yaml
 # Examples

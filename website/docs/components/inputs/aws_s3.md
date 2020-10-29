@@ -102,12 +102,12 @@ By default Benthos will use a shared credentials file when connecting to AWS ser
 This input adds the following metadata fields to each message:
 
 ```
-- aws_s3_key
-- aws_s3_bucket
-- aws_s3_last_modified_unix
-- aws_s3_last_modified (RFC3339)
-- aws_s3_content_type
-- aws_s3_content_encoding
+- s3_key
+- s3_bucket
+- s3_last_modified_unix
+- s3_last_modified (RFC3339)
+- s3_content_type
+- s3_content_encoding
 - All user defined metadata
 ```
 
@@ -225,7 +225,15 @@ The way in which the bytes of consumed files are converted into messages, codecs
 
 Type: `string`  
 Default: `"all-bytes"`  
-Options: `all-bytes`, `lines`, `delim:x`, `tar`, `tar-gzip`.
+
+| Option | Summary |
+|---|---|
+| `all-bytes` | Consume the entire file as a single binary message. |
+| `lines` | Consume the file in segments divided by linebreaks. |
+| `delim:x` | Consume the file in segments divided by a custom delimter. |
+| `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
+| `tar-gzip` | Parse the file as a gzip compressed tar archive, and consume each file of the archive as a message. |
+
 
 ```yaml
 # Examples

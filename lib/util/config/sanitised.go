@@ -3,8 +3,43 @@ package config
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"sort"
+
+	"gopkg.in/yaml.v3"
 )
+
+//------------------------------------------------------------------------------
+
+// SanitizeComponent performs a generic sanitation on a component config, where
+// a type field describes the type of the component, and the only other fields
+// returned in the sanitized result are under the namespace of the type.
+func SanitizeComponent(conf interface{}) (Sanitised, error) {
+	cBytes, err := yaml.Marshal(conf)
+	if err != nil {
+		return nil, err
+	}
+
+	hashMap := map[string]interface{}{}
+	if err = yaml.Unmarshal(cBytes, &hashMap); err != nil {
+		return nil, err
+	}
+
+	typeStr, exists := hashMap["type"].(string)
+	if !exists {
+		return nil, errors.New("attempted to sanitize config without a type field")
+	}
+
+	sanitMap := Sanitised{}
+	sanitMap["type"] = typeStr
+
+	if _, exists := hashMap[typeStr]; exists {
+		sanitMap[typeStr] = hashMap[typeStr]
+	} else if pluginConf, exists := hashMap["plugin"]; exists && pluginConf != nil {
+		sanitMap["plugin"] = pluginConf
+	}
+	return sanitMap, nil
+}
 
 //------------------------------------------------------------------------------
 

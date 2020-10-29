@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -43,28 +42,17 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 // aren't relevant to behaviour are removed. Also optionally removes deprecated
 // fields.
 func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
-	cBytes, err := json.Marshal(conf)
-	if err != nil {
-		return nil, err
-	}
-
-	hashMap := map[string]interface{}{}
-	if err = json.Unmarshal(cBytes, &hashMap); err != nil {
-		return nil, err
-	}
-
-	procSlice := []interface{}{}
-	for _, proc := range conf.Processors {
-		var procSanitised interface{}
-		procSanitised, err = proc.Sanitised(removeDeprecated)
-		if err != nil {
+	procConfs := make([]interface{}, len(conf.Processors))
+	for i, pConf := range conf.Processors {
+		var err error
+		if procConfs[i], err = pConf.Sanitised(removeDeprecated); err != nil {
 			return nil, err
 		}
-		procSlice = append(procSlice, procSanitised)
 	}
-	hashMap["processors"] = procSlice
-
-	return hashMap, nil
+	return map[string]interface{}{
+		"threads":    conf.Threads,
+		"processors": procConfs,
+	}, nil
 }
 
 //------------------------------------------------------------------------------

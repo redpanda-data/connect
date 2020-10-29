@@ -1,7 +1,6 @@
 package output
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -236,50 +235,22 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 // aren't relevant to behaviour are removed. Also optionally removes deprecated
 // fields.
 func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
-	cBytes, err := json.Marshal(conf)
+	outputMap, err := config.SanitizeComponent(conf)
 	if err != nil {
 		return nil, err
 	}
-
-	hashMap := map[string]interface{}{}
-	if err = json.Unmarshal(cBytes, &hashMap); err != nil {
-		return nil, err
-	}
-
-	outputMap := config.Sanitised{}
-
-	t := conf.Type
-	def := Constructors[t]
-
-	outputMap["type"] = t
-	if sfunc := def.sanitiseConfigFunc; sfunc != nil {
-		if outputMap[t], err = sfunc(conf); err != nil {
+	if sfunc := Constructors[conf.Type].sanitiseConfigFunc; sfunc != nil {
+		if outputMap[conf.Type], err = sfunc(conf); err != nil {
 			return nil, err
 		}
-	} else {
-		if _, exists := hashMap[t]; exists {
-			outputMap[t] = hashMap[t]
-		}
-		if spec, exists := pluginSpecs[conf.Type]; exists {
-			var plugSanit interface{}
-			if spec.confSanitiser != nil {
-				plugSanit = spec.confSanitiser(conf.Plugin)
-			} else {
-				plugSanit = hashMap["plugin"]
-			}
-			if plugSanit != nil {
-				outputMap["plugin"] = plugSanit
-			}
+	}
+	if spec, exists := pluginSpecs[conf.Type]; exists {
+		if spec.confSanitiser != nil {
+			outputMap["plugin"] = spec.confSanitiser(conf.Plugin)
 		}
 	}
 	if removeDeprecated {
-		if m, ok := outputMap[t].(map[string]interface{}); ok {
-			for _, spec := range def.FieldSpecs {
-				if spec.Deprecated {
-					delete(m, spec.Name)
-				}
-			}
-		}
+		Constructors[conf.Type].FieldSpecs.RemoveDeprecated(outputMap)
 	}
 
 	if len(conf.Processors) == 0 {

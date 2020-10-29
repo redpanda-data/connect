@@ -203,7 +203,12 @@ The SASL authentication mechanism to use.
 
 Type: `string`  
 Default: `"none"`  
-Options: `none`, `plain`.
+
+| Option | Summary |
+|---|---|
+| `none` | No SASL based authentication. |
+| `plain` | Plain text SASL authentication. |
+
 
 ### `sasl.user`
 

@@ -129,7 +129,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 		OptSetLogger(log.Noop()),
 		OptSetStats(metrics.Noop()),
 		OptSetManager(types.NoopMgr()),
-		OptSetAPITimeout(time.Second),
+		OptSetAPITimeout(time.Second*10),
 	)
 
 	r := router(mgr)
@@ -326,7 +326,7 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 		OptSetLogger(log.Noop()),
 		OptSetStats(metrics.Noop()),
 		OptSetManager(types.NoopMgr()),
-		OptSetAPITimeout(time.Second),
+		OptSetAPITimeout(time.Second*10),
 	)
 
 	r := router(mgr)

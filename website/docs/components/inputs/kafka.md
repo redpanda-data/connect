@@ -233,7 +233,14 @@ The SASL authentication mechanism, if left empty SASL authentication is not used
 
 Type: `string`  
 Default: `""`  
-Options: `PLAIN`, `OAUTHBEARER`, `SCRAM-SHA-256`, `SCRAM-SHA-512`.
+
+| Option | Summary |
+|---|---|
+| `PLAIN` | Plain text authentication. |
+| `OAUTHBEARER` | OAuth Bearer based authentication. |
+| `SCRAM-SHA-256` | Authentication using the SCRAM-SHA-256 mechanism. |
+| `SCRAM-SHA-512` | Authentication using the SCRAM-SHA-512 mechanism. |
+
 
 ### `sasl.user`
 

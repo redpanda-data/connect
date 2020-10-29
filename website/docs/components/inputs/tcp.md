@@ -24,7 +24,7 @@ input:
   tcp:
     address: localhost:4194
     delimiter: ""
-    max_buffer: 1e+06
+    max_buffer: 1000000
     multipart: false
 ```
 

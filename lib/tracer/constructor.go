@@ -2,7 +2,6 @@ package tracer
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -81,40 +80,18 @@ func SanitiseConfig(conf Config) (interface{}, error) {
 // aren't relevant to behaviour are removed. Also optionally removes deprecated
 // fields.
 func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
-	cBytes, err := json.Marshal(conf)
+	outputMap, err := config.SanitizeComponent(conf)
 	if err != nil {
 		return nil, err
 	}
-
-	hashMap := map[string]interface{}{}
-	if err = json.Unmarshal(cBytes, &hashMap); err != nil {
-		return nil, err
-	}
-
-	outputMap := config.Sanitised{}
-
-	t := conf.Type
-	outputMap["type"] = t
-	if sfunc := Constructors[t].sanitiseConfigFunc; sfunc != nil {
-		if outputMap[t], err = sfunc(conf); err != nil {
+	if sfunc := Constructors[conf.Type].sanitiseConfigFunc; sfunc != nil {
+		if outputMap[conf.Type], err = sfunc(conf); err != nil {
 			return nil, err
 		}
-	} else {
-		outputMap[t] = hashMap[t]
 	}
-
-	def := Constructors[t]
-
 	if removeDeprecated {
-		if m, ok := outputMap[t].(map[string]interface{}); ok {
-			for _, spec := range def.FieldSpecs {
-				if spec.Deprecated {
-					delete(m, spec.Name)
-				}
-			}
-		}
+		Constructors[conf.Type].FieldSpecs.RemoveDeprecated(outputMap)
 	}
-
 	return outputMap, nil
 }
 

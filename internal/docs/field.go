@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"sort"
 
+	"github.com/Jeffail/benthos/v3/lib/util/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -51,6 +52,9 @@ type FieldSpec struct {
 	// Examples is a slice of optional example values for a field.
 	Examples []interface{}
 
+	// AnnotatedOptions for this field. Each option should have a summary.
+	AnnotatedOptions [][2]string
+
 	// Options for this field.
 	Options []string
 
@@ -81,8 +85,28 @@ func (f FieldSpec) HasDefault(v interface{}) FieldSpec {
 	return f
 }
 
+// HasAnnotatedOptions returns a new FieldSpec that specifies a specific list of
+// annotated options. Either
+func (f FieldSpec) HasAnnotatedOptions(options ...string) FieldSpec {
+	if len(f.Options) > 0 {
+		panic("cannot combine annotated and non-annotated options for a field")
+	}
+	if len(options)%2 != 0 {
+		panic("annotated field options must each have a summary")
+	}
+	for i := 0; i < len(options); i += 2 {
+		f.AnnotatedOptions = append(f.AnnotatedOptions, [2]string{
+			options[i], options[i+1],
+		})
+	}
+	return f
+}
+
 // HasOptions returns a new FieldSpec that specifies a specific list of options.
 func (f FieldSpec) HasOptions(options ...string) FieldSpec {
+	if len(f.AnnotatedOptions) > 0 {
+		panic("cannot combine annotated and non-annotated options for a field")
+	}
 	f.Options = options
 	return f
 }
@@ -169,6 +193,18 @@ func (f FieldSpecs) Merge(specs FieldSpecs) FieldSpecs {
 // Add more field specs.
 func (f FieldSpecs) Add(specs ...FieldSpec) FieldSpecs {
 	return append(f, specs...)
+}
+
+// RemoveDeprecated fields from a sanitized config.
+func (f FieldSpecs) RemoveDeprecated(s config.Sanitised) {
+	typeStr, _ := s["type"].(string)
+	if m, ok := s[typeStr].(map[string]interface{}); ok {
+		for _, spec := range f {
+			if spec.Deprecated {
+				delete(m, spec.Name)
+			}
+		}
+	}
 }
 
 // ConfigCommon takes a sanitised configuration of a component, a map of field

@@ -10,7 +10,7 @@ input:
   socket_server:
     address: /tmp/benthos.sock
     delimiter: ""
-    max_buffer: 1e+06
+    max_buffer: 1000000
     multipart: false
     network: unix
 buffer:

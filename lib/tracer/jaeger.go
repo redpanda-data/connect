@@ -22,8 +22,11 @@ Send spans to a [Jaeger](https://www.jaegertracing.io/) agent.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("agent_address", "The address of a Jaeger agent to send tracing events to."),
 			docs.FieldCommon("service_name", "A name to provide for this service."),
-			docs.FieldCommon("sampler_type", "The sampler type to use.").HasOptions(
-				"const", "probabilistic", "ratelimiting", "remote",
+			docs.FieldCommon("sampler_type", "The sampler type to use.").HasAnnotatedOptions(
+				"const", "A constant decision for all traces, either 1 or 0.",
+				"probabilistic", "The sampler makes a random sampling decision with the probability of sampling equal to the value of sampler param.",
+				"ratelimiting", "The sampler uses a leaky bucket rate limiter to ensure that traces are sampled with a certain constant rate.",
+				"remote", "The sampler consults Jaeger agent for the appropriate sampling strategy to use in the current service.",
 			),
 			docs.FieldAdvanced("sampler_manager_address", "An optional address of a sampler manager."),
 			docs.FieldAdvanced("sampler_param", "A parameter to use for sampling. This field is unused for some sampling types."),

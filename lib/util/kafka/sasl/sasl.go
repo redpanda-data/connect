@@ -34,7 +34,12 @@ func NewConfig() Config {
 func FieldSpec() docs.FieldSpec {
 	return docs.FieldAdvanced("sasl", "Enables SASL authentication.").WithChildren(
 		docs.FieldDeprecated("enabled"),
-		docs.FieldCommon("mechanism", "The SASL authentication mechanism, if left empty SASL authentication is not used. Warning: SCRAM based methods within Benthos have not received a security audit.").HasOptions(sarama.SASLTypePlaintext, sarama.SASLTypeOAuth, sarama.SASLTypeSCRAMSHA256, sarama.SASLTypeSCRAMSHA512),
+		docs.FieldCommon("mechanism", "The SASL authentication mechanism, if left empty SASL authentication is not used. Warning: SCRAM based methods within Benthos have not received a security audit.").HasAnnotatedOptions(
+			sarama.SASLTypePlaintext, "Plain text authentication.",
+			sarama.SASLTypeOAuth, "OAuth Bearer based authentication.",
+			sarama.SASLTypeSCRAMSHA256, "Authentication using the SCRAM-SHA-256 mechanism.",
+			sarama.SASLTypeSCRAMSHA512, "Authentication using the SCRAM-SHA-512 mechanism.",
+		),
 		docs.FieldCommon("user", "A `"+sarama.SASLTypePlaintext+"` username. It is recommended that you use environment variables to populate this field.", "${USER}"),
 		docs.FieldCommon("password", "A `"+sarama.SASLTypePlaintext+"` password. It is recommended that you use environment variables to populate this field.", "${PASSWORD}"),
 		docs.FieldAdvanced("access_token", "A static `"+sarama.SASLTypeOAuth+"` access token"),

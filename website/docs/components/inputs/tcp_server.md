@@ -24,7 +24,7 @@ input:
   tcp_server:
     address: 127.0.0.1:0
     delimiter: ""
-    max_buffer: 1e+06
+    max_buffer: 1000000
     multipart: false
 ```
 
