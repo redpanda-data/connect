@@ -1,19 +1,24 @@
 package checkpoint
 
 import (
+	"context"
 	"testing"
+	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSequential(t *testing.T) {
-	c := New(0)
+	c := NewCapped(1000)
 	assert.Equal(t, 0, c.Highest())
 
-	require.NoError(t, c.Track(1))
-	require.NoError(t, c.Track(2))
-	require.NoError(t, c.Track(3))
+	ctx := context.Background()
+
+	require.NoError(t, c.Track(ctx, 1))
+	require.NoError(t, c.Track(ctx, 2))
+	require.NoError(t, c.Track(ctx, 3))
 	assert.Equal(t, 0, c.Highest())
 
 	v, err := c.Resolve(1)
@@ -31,7 +36,7 @@ func TestSequential(t *testing.T) {
 	assert.Equal(t, 3, v)
 	assert.Equal(t, 3, c.Highest())
 
-	require.NoError(t, c.Track(4))
+	require.NoError(t, c.Track(ctx, 4))
 
 	v, err = c.Resolve(4)
 	require.NoError(t, err)
@@ -39,14 +44,42 @@ func TestSequential(t *testing.T) {
 	assert.Equal(t, 4, c.Highest())
 }
 
-func TestOutOfSync(t *testing.T) {
-	c := New(0)
+func TestCapHappy(t *testing.T) {
+	c := NewCapped(100)
 	assert.Equal(t, 0, c.Highest())
 
-	require.NoError(t, c.Track(1))
-	require.NoError(t, c.Track(2))
-	require.NoError(t, c.Track(3))
-	require.NoError(t, c.Track(4))
+	ctx, cancel := context.WithCancel(context.Background())
+
+	for i := 1; i < 100; i++ {
+		require.NoError(t, c.Track(ctx, i))
+	}
+
+	cancel()
+	require.Equal(t, types.ErrTimeout, c.Track(ctx, 100))
+
+	go func() {
+		<-time.After(time.Millisecond * 100)
+		c.Resolve(1)
+	}()
+	require.NoError(t, c.Track(context.Background(), 100))
+
+	for i := 1; i < 100; i++ {
+		n, err := c.Resolve(i + 1)
+		require.NoError(t, err)
+		assert.Equal(t, i+1, n)
+	}
+}
+
+func TestOutOfSync(t *testing.T) {
+	c := NewCapped(1000)
+	assert.Equal(t, 0, c.Highest())
+
+	ctx := context.Background()
+
+	require.NoError(t, c.Track(ctx, 1))
+	require.NoError(t, c.Track(ctx, 2))
+	require.NoError(t, c.Track(ctx, 3))
+	require.NoError(t, c.Track(ctx, 4))
 	assert.Equal(t, 0, c.Highest())
 
 	v, err := c.Resolve(2)
@@ -71,22 +104,25 @@ func TestOutOfSync(t *testing.T) {
 }
 
 func TestInsertOutOfSequence(t *testing.T) {
-	c := New(0)
-	require.NoError(t, c.Track(10))
-	require.EqualError(t, c.Track(5), "provided offset was out of sync")
+	c := NewCapped(1000)
+	ctx := context.Background()
+	require.NoError(t, c.Track(ctx, 10))
+	require.EqualError(t, c.Track(ctx, 5), "provided offset was out of sync")
 }
 
 func TestResolveUnfound(t *testing.T) {
-	c := New(0)
-	require.NoError(t, c.Track(10))
+	c := NewCapped(1000)
+	ctx := context.Background()
+	require.NoError(t, c.Track(ctx, 10))
 	_, err := c.Resolve(5)
 	require.EqualError(t, err, "resolved offset was not tracked")
 }
 
 func TestSequentialLarge(t *testing.T) {
-	c := New(0)
+	c := NewCapped(1000)
+	ctx := context.Background()
 	for i := 0; i < 1000; i++ {
-		require.NoError(t, c.Track(i))
+		require.NoError(t, c.Track(ctx, i))
 	}
 	for i := 0; i < 1000; i++ {
 		v, err := c.Resolve(i)
@@ -97,12 +133,13 @@ func TestSequentialLarge(t *testing.T) {
 }
 
 func TestSequentialChunks(t *testing.T) {
-	c := New(0)
+	c := NewCapped(1000)
+	ctx := context.Background()
 	chunkSize := 100
 	for i := 0; i < 10; i++ {
 		for j := 0; j < chunkSize; j++ {
 			offset := i*chunkSize + j
-			require.NoError(t, c.Track(offset))
+			require.NoError(t, c.Track(ctx, offset))
 		}
 		for j := 0; j < chunkSize; j++ {
 			offset := i*chunkSize + j
@@ -115,9 +152,10 @@ func TestSequentialChunks(t *testing.T) {
 }
 
 func TestSequentialReverseLarge(t *testing.T) {
-	c := New(0)
+	c := NewCapped(1000)
+	ctx := context.Background()
 	for i := 0; i < 1000; i++ {
-		require.NoError(t, c.Track(i))
+		require.NoError(t, c.Track(ctx, i))
 	}
 	for i := 999; i >= 0; i-- {
 		v, err := c.Resolve(i)
@@ -133,10 +171,11 @@ func TestSequentialReverseLarge(t *testing.T) {
 }
 
 func TestSequentialRandomLarge(t *testing.T) {
-	c := New(0)
+	c := NewCapped(1000)
+	ctx := context.Background()
 	indexes := map[int]struct{}{}
 	for i := 0; i < 1000; i++ {
-		require.NoError(t, c.Track(i))
+		require.NoError(t, c.Track(ctx, i))
 		indexes[i] = struct{}{}
 	}
 	for i := range indexes {
@@ -157,13 +196,14 @@ func TestSequentialRandomLarge(t *testing.T) {
 
 func BenchmarkChunked100(b *testing.B) {
 	b.ReportAllocs()
-	c := New(0)
+	c := NewCapped(1000)
+	ctx := context.Background()
 	chunkSize := 100
 	N := b.N / chunkSize
 	for i := 0; i < N; i++ {
 		for j := 0; j < chunkSize; j++ {
 			offset := i*chunkSize + j
-			err := c.Track(offset)
+			err := c.Track(ctx, offset)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -183,13 +223,14 @@ func BenchmarkChunked100(b *testing.B) {
 
 func BenchmarkChunkedReverse100(b *testing.B) {
 	b.ReportAllocs()
-	c := New(0)
+	c := NewCapped(1000)
+	ctx := context.Background()
 	chunkSize := 100
 	N := b.N / chunkSize
 	for i := 0; i < N; i++ {
 		for j := 0; j < chunkSize; j++ {
 			offset := i*chunkSize + j
-			err := c.Track(offset)
+			err := c.Track(ctx, offset)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -216,13 +257,14 @@ func BenchmarkChunkedReverse100(b *testing.B) {
 
 func BenchmarkChunkedReverse1000(b *testing.B) {
 	b.ReportAllocs()
-	c := New(0)
+	c := NewCapped(1001)
+	ctx := context.Background()
 	chunkSize := 1000
 	N := b.N / chunkSize
 	for i := 0; i < N; i++ {
 		for j := 0; j < chunkSize; j++ {
 			offset := i*chunkSize + j
-			err := c.Track(offset)
+			err := c.Track(ctx, offset)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -249,9 +291,10 @@ func BenchmarkChunkedReverse1000(b *testing.B) {
 
 func BenchmarkSequential(b *testing.B) {
 	b.ReportAllocs()
-	c := New(0)
+	c := NewCapped(b.N + 1)
+	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		err := c.Track(i)
+		err := c.Track(ctx, i)
 		if err != nil {
 			b.Fatal(err)
 		}
