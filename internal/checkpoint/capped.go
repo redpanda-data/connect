@@ -52,7 +52,9 @@ func (c *Capped) Track(ctx context.Context, i int) error {
 	defer cancel()
 	go func() {
 		<-ctx.Done()
+		c.cond.L.Lock()
 		c.cond.Broadcast()
+		c.cond.L.Unlock()
 	}()
 
 	for (i - c.t.Highest()) >= c.cap {
