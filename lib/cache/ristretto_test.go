@@ -43,9 +43,6 @@ func TestRistrettoCacheWithTTL(t *testing.T) {
 	c, err := New(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	_, err = c.Get("foo")
-	assert.Equal(t, types.ErrKeyNotFound, err)
-
 	if c, ok := c.(types.CacheWithTTL); ok {
 		require.NoError(t, c.SetWithTTL("foo", []byte("1"), nil))
 
