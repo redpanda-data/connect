@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- New (beta) gRPC Client output.
 - The `csv` input now supports glob patterns in file paths.
 - The `file` input now supports multiple paths, glob patterns, and a range of codecs.
 - New experimental `aws_s3` input.

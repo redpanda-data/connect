@@ -79,6 +79,7 @@ const (
 	TypeFile            = "file"
 	TypeFiles           = "files"
 	TypeGCPPubSub       = "gcp_pubsub"
+	TypeGRPCClient      = "grpc_client"
 	TypeHDFS            = "hdfs"
 	TypeHTTPClient      = "http_client"
 	TypeHTTPServer      = "http_server"
@@ -132,6 +133,7 @@ type Config struct {
 	File            FileConfig                     `json:"file" yaml:"file"`
 	Files           writer.FilesConfig             `json:"files" yaml:"files"`
 	GCPPubSub       writer.GCPPubSubConfig         `json:"gcp_pubsub" yaml:"gcp_pubsub"`
+	GRPCClient      writer.GRPCClientConfig        `json:"grpc_client" yaml:"grpc_client"`
 	HDFS            writer.HDFSConfig              `json:"hdfs" yaml:"hdfs"`
 	HTTPClient      writer.HTTPClientConfig        `json:"http_client" yaml:"http_client"`
 	HTTPServer      HTTPServerConfig               `json:"http_server" yaml:"http_server"`

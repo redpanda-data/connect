@@ -83,6 +83,8 @@ require (
 	golang.org/x/sys v0.0.0-20200814200057-3d37ad5750ed // indirect
 	golang.org/x/tools v0.0.0-20200814230902-9882f1d1823d // indirect
 	google.golang.org/genproto v0.0.0-20200815001618-f69a88009b70 // indirect
+	google.golang.org/grpc v1.31.0
+	google.golang.org/protobuf v1.25.0
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
 	nanomsg.org/go-mangos v1.4.0
 )

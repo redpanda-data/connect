@@ -868,6 +868,10 @@ output:
           max_in_flight: ${OUTPUT_GCP_PUBSUB_MAX_IN_FLIGHT:1}
           project: ${OUTPUT_GCP_PUBSUB_PROJECT}
           topic: ${OUTPUT_GCP_PUBSUB_TOPIC}
+        grpc_client:
+          address: ${OUTPUT_GRPC_CLIENT_ADDRESS}
+          descriptor_file_path: ${OUTPUT_GRPC_CLIENT_DESCRIPTOR_FILE_PATH}
+          method: ${OUTPUT_GRPC_CLIENT_METHOD}
         hdfs:
           directory: ${OUTPUT_HDFS_DIRECTORY}
           hosts:

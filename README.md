@@ -36,7 +36,7 @@ Yep, we got 'em. Benthos implements transaction based resiliency with back press
 
 ## Supported Sources & Sinks
 
-AWS (DynamoDB, Kinesis, S3, SQS, SNS), Azure (Blob storage, Table storage, output only), Elasticsearch (output only), File, GCP (pub/sub), HDFS, HTTP (server and client, including websockets), Kafka, Memcached (output only), MQTT, Nanomsg, NATS, NATS Streaming, NSQ, AMQP 0.91 (RabbitMQ), AMQP 1, Redis (streams, list, pubsub, hashes), SQL (MySQL, PostgreSQL, Clickhouse), Stdin/Stdout, TCP & UDP, sockets and ZMQ4.
+AWS (DynamoDB, Kinesis, S3, SQS, SNS), Azure (Blob storage, Table storage, output only), Elasticsearch (output only), File, GCP (pub/sub), gRPC Client, HDFS, HTTP (server and client, including websockets), Kafka, Memcached (output only), MQTT, Nanomsg, NATS, NATS Streaming, NSQ, AMQP 0.91 (RabbitMQ), AMQP 1, Redis (streams, list, pubsub, hashes), SQL (MySQL, PostgreSQL, Clickhouse), Stdin/Stdout, TCP & UDP, sockets and ZMQ4.
 
 Connectors are being added constantly, if something you want is missing then [open an issue](https://github.com/Jeffail/benthos/issues/new).
 
