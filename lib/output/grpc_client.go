@@ -42,12 +42,12 @@ Sends a Unary message to a GRPC Server.`,
 
 // NewGRPCClient creates a new GRPC Client output type.
 func NewGRPCClient(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	kin, err := writer.NewGRPCClient(conf.GRPCClient, log, stats)
+	g, err := writer.NewGRPCClient(conf.GRPCClient, log, stats)
 	if err != nil {
 		return nil, err
 	}
 	return NewWriter(
-		TypeGRPCClient, kin, log, stats,
+		TypeGRPCClient, g, log, stats,
 	)
 }
 

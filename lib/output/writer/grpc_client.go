@@ -140,16 +140,12 @@ func (a *GRPCClient) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-// Write attempts to write message contents to a target Kinesis stream in
-// batches of 500. If throttling is detected, failed messages are retried
-// according to the configurable backoff settings.
+// Write attempts to write message contents to a target GRPC connection.
 func (a *GRPCClient) Write(msg types.Message) error {
 	return a.WriteWithContext(context.Background(), msg)
 }
 
-// WriteWithContext attempts to write message contents to a target Kinesis
-// stream in batches of 500. If throttling is detected, failed messages are
-// retried according to the configurable backoff settings.
+// WriteWithContext attempts to write message contents to a target GRPC connection.
 func (a *GRPCClient) WriteWithContext(ctx context.Context, msg types.Message) error {
 	if a.conn == nil {
 		return types.ErrNotConnected
