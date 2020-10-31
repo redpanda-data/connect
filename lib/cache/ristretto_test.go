@@ -59,7 +59,6 @@ func TestRistrettoCacheWithTTL(t *testing.T) {
 		require.NoError(t, c.SetWithTTL("foo", []byte("1"), &ttl))
 		// wait to expire
 		time.Sleep(time.Second)
-
 		_, err = c.Get("foo")
 		assert.Equal(t, types.ErrKeyNotFound, err)
 	} else {
