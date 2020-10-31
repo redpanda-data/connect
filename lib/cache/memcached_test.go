@@ -4,8 +4,11 @@ package cache
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -52,6 +55,9 @@ func TestMemcachedIntegration(t *testing.T) {
 	})
 	t.Run("TestMemcachedGetAndSet", func(te *testing.T) {
 		testMemcachedGetAndSet(addrs, te)
+	})
+	t.Run("TestMemcachedGetAndSetWithTTL", func(te *testing.T) {
+		testMemcachedGetAndSetWithTTL(addrs, te)
 	})
 }
 
@@ -138,5 +144,30 @@ func testMemcachedGetAndSet(addrs []string, t *testing.T) {
 
 	if err = c.Delete("benthos_test_foo"); err != nil {
 		t.Error(err)
+	}
+}
+
+func testMemcachedGetAndSetWithTTL(addrs []string, t *testing.T) {
+	conf := NewConfig()
+	conf.Memcached.Addresses = addrs
+
+	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	c, err := NewMemcached(conf, nil, testLog, metrics.DudType{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if c, ok := c.(types.CacheWithTTL); ok {
+		ttl := time.Second
+		if err = c.SetWithTTL("benthos_test_connection", []byte("hello world"), &ttl); err != nil {
+			t.Skipf("Memcached server not available: %v", err)
+		}
+		require.NoError(t, c.SetWithTTL("foo", []byte("1"), &ttl))
+		// wait to expire
+		time.Sleep(2 * time.Second)
+		_, err = c.Get("foo")
+		assert.Equal(t, types.ErrKeyNotFound, err)
+	} else {
+		assert.Fail(t, "memcached should implement CacheWithTTL interface")
 	}
 }
