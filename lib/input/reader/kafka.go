@@ -23,16 +23,19 @@ import (
 
 // KafkaConfig contains configuration fields for the Kafka input type.
 type KafkaConfig struct {
-	Addresses           []string `json:"addresses" yaml:"addresses"`
-	ClientID            string   `json:"client_id" yaml:"client_id"`
-	ConsumerGroup       string   `json:"consumer_group" yaml:"consumer_group"`
-	CommitPeriod        string   `json:"commit_period" yaml:"commit_period"`
-	MaxProcessingPeriod string   `json:"max_processing_period" yaml:"max_processing_period"`
-	FetchBufferCap      int      `json:"fetch_buffer_cap" yaml:"fetch_buffer_cap"`
-	Topic               string   `json:"topic" yaml:"topic"`
-	Partition           int32    `json:"partition" yaml:"partition"`
-	StartFromOldest     bool     `json:"start_from_oldest" yaml:"start_from_oldest"`
-	TargetVersion       string   `json:"target_version" yaml:"target_version"`
+	Addresses           []string                 `json:"addresses" yaml:"addresses"`
+	Topics              []string                 `json:"topics" yaml:"topics"`
+	ClientID            string                   `json:"client_id" yaml:"client_id"`
+	ConsumerGroup       string                   `json:"consumer_group" yaml:"consumer_group"`
+	Group               KafkaBalancedGroupConfig `json:"group" yaml:"group"`
+	CommitPeriod        string                   `json:"commit_period" yaml:"commit_period"`
+	CheckpointLimit     int                      `json:"checkpoint_limit" yaml:"checkpoint_limit"`
+	MaxProcessingPeriod string                   `json:"max_processing_period" yaml:"max_processing_period"`
+	FetchBufferCap      int                      `json:"fetch_buffer_cap" yaml:"fetch_buffer_cap"`
+	Topic               string                   `json:"topic" yaml:"topic"`
+	Partition           int32                    `json:"partition" yaml:"partition"`
+	StartFromOldest     bool                     `json:"start_from_oldest" yaml:"start_from_oldest"`
+	TargetVersion       string                   `json:"target_version" yaml:"target_version"`
 	// TODO: V4 Remove this.
 	MaxBatchCount int                `json:"max_batch_count" yaml:"max_batch_count"`
 	TLS           btls.Config        `json:"tls" yaml:"tls"`
@@ -44,9 +47,12 @@ type KafkaConfig struct {
 func NewKafkaConfig() KafkaConfig {
 	return KafkaConfig{
 		Addresses:           []string{"localhost:9092"},
+		Topics:              []string{},
 		ClientID:            "benthos_kafka_input",
 		ConsumerGroup:       "benthos_consumer_group",
+		Group:               NewKafkaBalancedGroupConfig(),
 		CommitPeriod:        "1s",
+		CheckpointLimit:     1,
 		MaxProcessingPeriod: "100ms",
 		FetchBufferCap:      256,
 		Topic:               "benthos_stream",

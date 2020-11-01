@@ -53,6 +53,8 @@ type testConfigVars struct {
 
 	// Generic variables.
 	var1 string
+	var2 string
+	var3 string
 }
 
 type testEnvironment struct {
@@ -100,6 +102,8 @@ func (e testEnvironment) RenderConfig() string {
 		"$PORT_FOUR", e.configVars.portFour,
 		"$PORT", e.configVars.port,
 		"$VAR1", e.configVars.var1,
+		"$VAR2", e.configVars.var2,
+		"$VAR3", e.configVars.var3,
 		"$INPUT_BATCH_COUNT", strconv.Itoa(e.configVars.inputBatchCount),
 		"$OUTPUT_BATCH_COUNT", strconv.Itoa(e.configVars.outputBatchCount),
 		"$MAX_IN_FLIGHT", strconv.Itoa(e.configVars.maxInFlight),
@@ -151,6 +155,18 @@ func testOptPortTwo(portTwo string) testOptFunc {
 func testOptVarOne(v string) testOptFunc {
 	return func(env *testEnvironment) {
 		env.configVars.var1 = v
+	}
+}
+
+func testOptVarTwo(v string) testOptFunc {
+	return func(env *testEnvironment) {
+		env.configVars.var2 = v
+	}
+}
+
+func testOptVarThree(v string) testOptFunc {
+	return func(env *testEnvironment) {
+		env.configVars.var3 = v
 	}
 }
 

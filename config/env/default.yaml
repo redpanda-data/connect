@@ -178,10 +178,15 @@ input:
             check: ${INPUT_KAFKA_BATCHING_CHECK}
             count: ${INPUT_KAFKA_BATCHING_COUNT:0}
             period: ${INPUT_KAFKA_BATCHING_PERIOD}
+          checkpoint_limit: ${INPUT_KAFKA_CHECKPOINT_LIMIT:1}
           client_id: ${INPUT_KAFKA_CLIENT_ID:benthos_kafka_input}
           commit_period: ${INPUT_KAFKA_COMMIT_PERIOD:1s}
           consumer_group: ${INPUT_KAFKA_CONSUMER_GROUP:benthos_consumer_group}
           fetch_buffer_cap: ${INPUT_KAFKA_FETCH_BUFFER_CAP:256}
+          group:
+            heartbeat_interval: ${INPUT_KAFKA_GROUP_HEARTBEAT_INTERVAL:3s}
+            rebalance_timeout: ${INPUT_KAFKA_GROUP_REBALANCE_TIMEOUT:60s}
+            session_timeout: ${INPUT_KAFKA_GROUP_SESSION_TIMEOUT:10s}
           max_batch_count: ${INPUT_KAFKA_MAX_BATCH_COUNT:1}
           max_processing_period: ${INPUT_KAFKA_MAX_PROCESSING_PERIOD:100ms}
           partition: ${INPUT_KAFKA_PARTITION:0}

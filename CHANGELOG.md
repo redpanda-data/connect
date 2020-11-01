@@ -11,10 +11,12 @@ All notable changes to this project will be documented in this file.
 - The `file` output now supports dynamic file paths.
 - Added field `ttl` to the `cache` processor and output.
 - New `sql` output, which is similar to the `sql` processor and currently supports Clickhouse, PostgreSQL and MySQL.
+- The `kafka` input now supports multiple topics, topic partition balancing, and checkpointing.
 
 ## Changed
 
 - The `files` output has been deprecated as its behaviour is now covered by `file`.
+- The `kafka_balanced` input has now been deprecated as its functionality has been added to the `kafka` input.
 
 ## 3.32.0 - 2020-10-29
 

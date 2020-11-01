@@ -18,17 +18,19 @@ import (
 //
 // This component is safe to use concurrently across goroutines.
 type Capped struct {
-	t    *checkpoint.Type
-	cap  int
-	cond *sync.Cond
+	t     *checkpoint.Type
+	cap   int
+	first int
+	cond  *sync.Cond
 }
 
 // NewCapped returns a new capped checkpointer.
 func NewCapped(cap int) *Capped {
 	return &Capped{
-		t:    checkpoint.New(0),
-		cap:  cap,
-		cond: sync.NewCond(&sync.Mutex{}),
+		t:     checkpoint.New(0),
+		cap:   cap,
+		first: -1,
+		cond:  sync.NewCond(&sync.Mutex{}),
 	}
 }
 
@@ -57,7 +59,11 @@ func (c *Capped) Track(ctx context.Context, i int) error {
 		c.cond.L.Unlock()
 	}()
 
-	for (i - c.t.Highest()) >= c.cap {
+	if c.first < 0 {
+		c.first = i
+	}
+
+	for (i-c.first > c.cap) && ((i - c.t.Highest()) > c.cap) {
 		c.cond.Wait()
 		select {
 		case <-ctx.Done():

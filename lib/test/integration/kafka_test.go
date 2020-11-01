@@ -119,9 +119,9 @@ output:
 input:
   kafka:
     addresses: [ %v ]
-    partition: 0
-    topic: topic-$ID
+    topics: [ topic-$ID$VAR1 ]
     consumer_group: consumer-$ID
+    checkpoint_limit: $VAR2
     batching:
       count: $INPUT_BATCH_COUNT
 `, address, address)
@@ -136,27 +136,29 @@ input:
 		integrationTestSendBatchCount(10),
 		integrationTestReceiveBatchCount(10),
 	)
-	suite.Run(t, template)
 
-	t.Run("with balanced", func(t *testing.T) {
+	t.Run("balanced", func(t *testing.T) {
 		t.Parallel()
-
-		template := fmt.Sprintf(`
-output:
-  kafka:
-    addresses: [ %v ]
-    topic: topic-$ID
-    max_in_flight: $MAX_IN_FLIGHT
-    batching:
-      count: $OUTPUT_BATCH_COUNT
-
-input:
-  kafka_balanced:
-    addresses: [ %v ]
-    topics: [ topic-$ID ]
-    consumer_group: consumer-$ID
-    batching:
-      count: $INPUT_BATCH_COUNT`, address, address)
-		suite.Run(t, template)
+		suite.Run(
+			t, template,
+			testOptVarOne(""),
+			testOptVarTwo("1"),
+		)
+		t.Run("checkpointed", func(t *testing.T) {
+			t.Parallel()
+			suite.Run(
+				t, template,
+				testOptVarOne(""),
+				testOptVarTwo("1000"),
+			)
+		})
+	})
+	t.Run("partitions", func(t *testing.T) {
+		t.Parallel()
+		suite.Run(
+			t, template,
+			testOptVarOne(":0"),
+			testOptVarTwo("1"),
+		)
 	})
 })

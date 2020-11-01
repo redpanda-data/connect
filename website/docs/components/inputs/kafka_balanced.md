@@ -1,7 +1,7 @@
 ---
 title: kafka_balanced
 type: input
-status: stable
+status: deprecated
 categories: ["Services"]
 ---
 
@@ -15,6 +15,9 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
 
 Connects to Kafka brokers and consumes topics by automatically sharing
 partitions across other consumers of the same consumer group.
@@ -100,6 +103,10 @@ The `batching` fields allow you to configure a
 [batching policy](/docs/configuration/batching#batch-policy) which will be
 applied per partition. Any other batching mechanism will stall with this input
 due its sequential transaction model.
+
+## Alternatives
+
+The functionality of this input is now covered by the general [`kafka` input](/docs/components/inputs/kafka).
 
 ### Metadata
 

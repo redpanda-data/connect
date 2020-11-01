@@ -17,6 +17,7 @@ func init() {
 	Constructors[TypeKafkaBalanced] = TypeSpec{
 		constructor:                  NewKafkaBalanced,
 		constructorHasBatchProcessor: newKafkaBalancedHasBatchProcessor,
+		Status:                       docs.StatusDeprecated,
 		Summary: `
 Connects to Kafka brokers and consumes topics by automatically sharing
 partitions across other consumers of the same consumer group.`,
@@ -32,6 +33,10 @@ The ` + "`batching`" + ` fields allow you to configure a
 [batching policy](/docs/configuration/batching#batch-policy) which will be
 applied per partition. Any other batching mechanism will stall with this input
 due its sequential transaction model.
+
+## Alternatives
+
+The functionality of this input is now covered by the general ` + "[`kafka` input](/docs/components/inputs/kafka)" + `.
 
 ### Metadata
 

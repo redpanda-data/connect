@@ -16,7 +16,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Connects to a Kafka broker and consumes a topic and partition.
+Connects to Kafka brokers and consumes one or more topics.
 
 
 <Tabs defaultValue="common" values={[
@@ -32,15 +32,10 @@ input:
   kafka:
     addresses:
       - localhost:9092
-    topic: benthos_stream
-    partition: 0
+    topics: []
     consumer_group: benthos_consumer_group
     client_id: benthos_kafka_input
-    batching:
-      count: 0
-      byte_size: 0
-      period: ""
-      check: ""
+    checkpoint_limit: 1
 ```
 
 </TabItem>
@@ -52,6 +47,7 @@ input:
   kafka:
     addresses:
       - localhost:9092
+    topics: []
     tls:
       enabled: false
       skip_cert_verify: false
@@ -64,13 +60,16 @@ input:
       access_token: ""
       token_cache: ""
       token_key: ""
-    topic: benthos_stream
-    partition: 0
     consumer_group: benthos_consumer_group
     client_id: benthos_kafka_input
     start_from_oldest: true
+    checkpoint_limit: 1
     commit_period: 1s
     max_processing_period: 100ms
+    group:
+      session_timeout: 10s
+      heartbeat_interval: 3s
+      rebalance_timeout: 60s
     fetch_buffer_cap: 256
     target_version: 1.0.0
     batching:
@@ -84,13 +83,11 @@ input:
 </TabItem>
 </Tabs>
 
-Offsets are managed within kafka as per the consumer group. Only one partition
-per input is supported, if you wish to balance partitions across a consumer
-group look at the `kafka_balanced` input type instead.
+Offsets are managed within Kafka under the specified consumer group, and partitions for each topic are automatically balanced across members of the consumer group.
 
-Use the `batching` fields to configure an optional
-[batching policy](/docs/configuration/batching#batch-policy). Any other batching
-mechanism will stall with this input due its sequential transaction model.
+The Kafka input allows parallel processing of messages from different topic partitions, but by default messages of the same topic partition are processed in lockstep in order to enforce ordered processing. This protection often means that batching messages at the output level can stall, in which case it can be tuned by increasing the field [`checkpoint_limit`](#checkpoint_limit), ideally to a value greater than the number of messages you expect to batch.
+
+Alternatively, if you perform batching at the input level using the [`batching`](#batching) field it is done per-partition and therefore avoids stalling.
 
 ### Metadata
 
@@ -106,12 +103,9 @@ This input adds the following metadata fields to each message:
 - All existing message headers (version 0.11+)
 ```
 
-The field `kafka_lag` is the calculated difference between the high
-water mark offset of the partition at the time of ingestion and the current
-message offset.
+The field `kafka_lag` is the calculated difference between the high water mark offset of the partition at the time of ingestion and the current message offset.
 
-You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
 
 ## Fields
 
@@ -135,6 +129,33 @@ addresses:
 addresses:
   - localhost:9041
   - localhost:9042
+```
+
+### `topics`
+
+A list of topics to consume from. Multiple comma separated topics can be listed in a single element. Partitions are automatically distributed across consumers of a topic. Alternatively, it's possible to specify an explicit partition to consume from with a colon after the topic name, e.g. `foo:0` would consume the partition 0 of the topic foo.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+topics:
+  - foo
+  - bar
+
+topics:
+  - foo,bar
+
+topics:
+  - foo:0
+  - bar:1
+  - bar:3
+
+topics:
+  - foo:0,bar:1,bar:3
 ```
 
 ### `tls`
@@ -294,22 +315,6 @@ Required when using a `token_cache`, the key to query the cache with for tokens.
 Type: `string`  
 Default: `""`  
 
-### `topic`
-
-A topic to consume from.
-
-
-Type: `string`  
-Default: `"benthos_stream"`  
-
-### `partition`
-
-A partition to consume from.
-
-
-Type: `number`  
-Default: `0`  
-
 ### `consumer_group`
 
 An identifier for the consumer group of the connection.
@@ -334,6 +339,14 @@ If an offset is not found for a topic parition, determines whether to consume fr
 Type: `bool`  
 Default: `true`  
 
+### `checkpoint_limit`
+
+EXPERIMENTAL: The maximum number of messages of the same topic and partition that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual partitions. Any given offset will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.
+
+
+Type: `number`  
+Default: `1`  
+
 ### `commit_period`
 
 The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.
@@ -349,6 +362,37 @@ A maximum estimate for the time taken to process a message, this is used for tun
 
 Type: `string`  
 Default: `"100ms"`  
+
+### `group`
+
+Tuning parameters for consumer group synchronization.
+
+
+Type: `object`  
+
+### `group.session_timeout`
+
+A period after which a consumer of the group is kicked after no heartbeats.
+
+
+Type: `string`  
+Default: `"10s"`  
+
+### `group.heartbeat_interval`
+
+A period in which heartbeats should be sent out.
+
+
+Type: `string`  
+Default: `"3s"`  
+
+### `group.rebalance_timeout`
+
+A period after which rebalancing is abandoned if unresolved.
+
+
+Type: `string`  
+Default: `"60s"`  
 
 ### `fetch_buffer_cap`
 

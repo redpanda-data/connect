@@ -16,12 +16,16 @@ input:
       count: 0
       period: ""
       processors: []
+    checkpoint_limit: 1
     client_id: benthos_kafka_input
     commit_period: 1s
     consumer_group: benthos_consumer_group
     fetch_buffer_cap: 256
+    group:
+      heartbeat_interval: 3s
+      rebalance_timeout: 60s
+      session_timeout: 10s
     max_processing_period: 100ms
-    partition: 0
     sasl:
       access_token: ""
       enabled: false
@@ -37,7 +41,7 @@ input:
       enabled: false
       root_cas_file: ""
       skip_cert_verify: false
-    topic: benthos_stream
+    topics: []
 buffer:
   type: none
   none: {}

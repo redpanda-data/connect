@@ -44,26 +44,65 @@ func TestSequential(t *testing.T) {
 	assert.Equal(t, 4, c.Highest())
 }
 
+func TestStartBig(t *testing.T) {
+	c := NewCapped(100)
+	assert.Equal(t, 0, c.Highest())
+
+	ctx := context.Background()
+
+	require.NoError(t, c.Track(ctx, 500))
+	require.NoError(t, c.Track(ctx, 501))
+	require.NoError(t, c.Track(ctx, 502))
+	assert.Equal(t, 0, c.Highest())
+
+	v, err := c.Resolve(500)
+	require.NoError(t, err)
+	assert.Equal(t, 500, v)
+	assert.Equal(t, 500, c.Highest())
+
+	v, err = c.Resolve(501)
+	require.NoError(t, err)
+	assert.Equal(t, 501, v)
+	assert.Equal(t, 501, c.Highest())
+
+	v, err = c.Resolve(502)
+	require.NoError(t, err)
+	assert.Equal(t, 502, v)
+	assert.Equal(t, 502, c.Highest())
+
+	require.NoError(t, c.Track(ctx, 503))
+
+	v, err = c.Resolve(503)
+	require.NoError(t, err)
+	assert.Equal(t, 503, v)
+	assert.Equal(t, 503, c.Highest())
+}
+
 func TestCapHappy(t *testing.T) {
 	c := NewCapped(100)
 	assert.Equal(t, 0, c.Highest())
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	for i := 1; i < 100; i++ {
+	require.NoError(t, c.Track(ctx, 100))
+	n, err := c.Resolve(100)
+	require.NoError(t, err)
+	assert.Equal(t, 100, n)
+
+	for i := 101; i <= 200; i++ {
 		require.NoError(t, c.Track(ctx, i))
 	}
 
 	cancel()
-	require.Equal(t, types.ErrTimeout, c.Track(ctx, 100))
+	require.Equal(t, types.ErrTimeout, c.Track(ctx, 201))
 
 	go func() {
 		<-time.After(time.Millisecond * 100)
-		c.Resolve(1)
+		c.Resolve(101)
 	}()
-	require.NoError(t, c.Track(context.Background(), 100))
+	require.NoError(t, c.Track(context.Background(), 201))
 
-	for i := 1; i < 100; i++ {
+	for i := 101; i <= 200; i++ {
 		n, err := c.Resolve(i + 1)
 		require.NoError(t, err)
 		assert.Equal(t, i+1, n)

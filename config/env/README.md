@@ -213,10 +213,14 @@ INPUT_KAFKA_BATCHING_BYTE_SIZE                       = 0
 INPUT_KAFKA_BATCHING_CHECK
 INPUT_KAFKA_BATCHING_COUNT                           = 0
 INPUT_KAFKA_BATCHING_PERIOD
+INPUT_KAFKA_CHECKPOINT_LIMIT                         = 1
 INPUT_KAFKA_CLIENT_ID                                = benthos_kafka_input
 INPUT_KAFKA_COMMIT_PERIOD                            = 1s
 INPUT_KAFKA_CONSUMER_GROUP                           = benthos_consumer_group
 INPUT_KAFKA_FETCH_BUFFER_CAP                         = 256
+INPUT_KAFKA_GROUP_HEARTBEAT_INTERVAL                 = 3s
+INPUT_KAFKA_GROUP_REBALANCE_TIMEOUT                  = 60s
+INPUT_KAFKA_GROUP_SESSION_TIMEOUT                    = 10s
 INPUT_KAFKA_MAX_BATCH_COUNT                          = 1
 INPUT_KAFKA_MAX_PROCESSING_PERIOD                    = 100ms
 INPUT_KAFKA_PARTITION                                = 0
