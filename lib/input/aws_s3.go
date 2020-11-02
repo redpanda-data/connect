@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -90,7 +91,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 			}, sess.FieldSpecs()...),
 			docs.FieldAdvanced("force_path_style_urls", "Forces the client API to use path style URLs for downloading keys, which is often required when connecting to custom endpoints."),
 			docs.FieldAdvanced("delete_objects", "Whether to delete downloaded objects from the bucket once they are processed."),
-			codecDocs,
+			codec.ReaderDocs,
 			docs.FieldCommon("sqs", "Consume SQS messages in order to trigger key downloads.").WithChildren(
 				docs.FieldCommon("url", "An optional SQS URL to connect to. When specified this queue will control which objects are downloaded."),
 				docs.FieldAdvanced("endpoint", "A custom endpoint to use when connecting to SQS."),
@@ -164,7 +165,7 @@ type objectTarget struct {
 	ackFn func(context.Context, error) error
 }
 
-func newObjectTarget(key, bucket string, ackFn codecAckFn) *objectTarget {
+func newObjectTarget(key, bucket string, ackFn codec.ReaderAckFn) *objectTarget {
 	if ackFn == nil {
 		ackFn = func(context.Context, error) error {
 			return nil
@@ -483,7 +484,7 @@ func (s *sqsTargetReader) ackSQSMessage(ctx context.Context, msg *sqs.Message) e
 type awsS3 struct {
 	conf AWSS3Config
 
-	objectScannerCtor partCodecCtor
+	objectScannerCtor codec.ReaderConstructor
 	keyReader         objectTargetReader
 
 	session *session.Session
@@ -500,7 +501,7 @@ type awsS3 struct {
 type pendingObject struct {
 	target  *objectTarget
 	obj     *s3.GetObjectOutput
-	scanner partCodec
+	scanner codec.Reader
 }
 
 // NewAmazonS3 creates a new Amazon S3 bucket reader.Type.
@@ -518,7 +519,7 @@ func newAmazonS3(
 		stats: stats,
 	}
 	var err error
-	if s.objectScannerCtor, err = getPartCodec(conf.Codec, newCodecConfig()); err != nil {
+	if s.objectScannerCtor, err = codec.GetReader(conf.Codec, codec.NewReaderConfig()); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -647,7 +648,7 @@ func (a *awsS3) ReadWithContext(ctx context.Context) (msg types.Message, ackFn r
 	}
 
 	var p types.Part
-	var scnAckFn codecAckFn
+	var scnAckFn codec.ReaderAckFn
 
 scanLoop:
 	for {

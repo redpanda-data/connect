@@ -13,9 +13,14 @@ import (
 func init() {
 	Constructors[TypeFiles] = TypeSpec{
 		constructor: NewFiles,
+		Status:      docs.StatusDeprecated,
 		Summary: `
 Writes each individual message to a new file.`,
 		Description: `
+## Alternatives
+
+The functionality of this output is now supported by the ` + "[`file`](/docs/components/outputs/file)" + ` output.
+
 In order for each message to create a new file the path must use function
 interpolations as described [here](/docs/configuration/interpolation#bloblang-queries).`,
 		FieldSpecs: docs.FieldSpecs{

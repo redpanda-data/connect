@@ -860,6 +860,7 @@ output:
           urls:
             - ${OUTPUT_ELASTICSEARCH_URLS:http://localhost:9200}
         file:
+          codec: ${OUTPUT_FILE_CODEC:lines}
           delimiter: ${OUTPUT_FILE_DELIMITER}
           path: ${OUTPUT_FILE_PATH}
         files:

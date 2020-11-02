@@ -1,7 +1,7 @@
 ---
 title: files
 type: output
-status: stable
+status: deprecated
 categories: ["Local"]
 ---
 
@@ -15,6 +15,9 @@ categories: ["Local"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
 
 Writes each individual message to a new file.
 
@@ -24,6 +27,10 @@ output:
   files:
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
 ```
+
+## Alternatives
+
+The functionality of this output is now supported by the [`file`](/docs/components/outputs/file) output.
 
 In order for each message to create a new file the path must use function
 interpolations as described [here](/docs/configuration/interpolation#bloblang-queries).

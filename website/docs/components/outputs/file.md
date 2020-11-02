@@ -16,50 +16,62 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Writes messages in line delimited format to a file.
+Writes messages to files on disk based on a chosen codec.
 
 ```yaml
 # Config fields, showing default values
 output:
   file:
     path: ""
-    delimiter: ""
+    codec: lines
 ```
 
-Each message written is followed by a delimiter (defaults to '\n' if left empty)
-and when sending multipart messages (message batches) the last message ends with
-double delimiters. E.g. the messages "foo", "bar" and "baz" would be written as:
-
-```
-foo\n
-bar\n
-baz\n
-```
-
-Whereas a multipart message [ "foo", "bar", "baz" ] would be written as:
-
-```
-foo\n
-bar\n
-baz\n\n
-```
+Messages can be written to different files by using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the path field. However, only one file is ever open at a given time, and therefore when the path changes the previously open file is closed.
 
 ## Fields
 
 ### `path`
 
 The file to write to, if the file does not yet exist it will be created.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
 Default: `""`  
 
-### `delimiter`
+```yaml
+# Examples
 
-A custom delimiter to separate messages with. If left empty defaults to a line break.
+path: /tmp/data.txt
+
+path: /tmp/${! timestamp_unix() }.txt
+
+path: /tmp/${! json("document.id") }.json
+```
+
+### `codec`
+
+The way in which the bytes of messages should be written out into the output file. It's possible to write lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.
 
 
 Type: `string`  
-Default: `""`  
+Default: `"lines"`  
+
+| Option | Summary |
+|---|---|
+| `all-bytes` | Write the message to the file in full. If the file already exists the old content is deleted. |
+| `lines` | Append messages to the file followed by a line break. |
+| `delim:x` | Append messages to the file followed by a custom delimiter. |
+
+
+```yaml
+# Examples
+
+codec: lines
+
+codec: "delim:\t"
+
+codec: delim:foobar
+```
 
 

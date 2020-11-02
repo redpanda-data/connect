@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/filepath"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
@@ -26,7 +27,7 @@ func init() {
 Consumes data from files on disk, emitting messages according to a chosen codec.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("paths", "A list of paths to consume sequentially. Glob patterns are supported."),
-			codecDocs,
+			codec.ReaderDocs,
 			docs.FieldAdvanced("multipart", "Consume multipart messages from the codec by interpretting empty lines as the end of the message. Multipart messages are processed as a batch within Benthos. Not all codecs are appropriate for multipart messages."),
 			docs.FieldAdvanced("max_buffer", "The largest token size expected when consuming delimited files."),
 			docs.FieldDeprecated("path"),
@@ -88,11 +89,11 @@ type fileConsumer struct {
 	log log.Modular
 
 	paths       []string
-	scannerCtor partCodecCtor
+	scannerCtor codec.ReaderConstructor
 	multipart   bool
 
 	scannerMut  sync.Mutex
-	scanner     partCodec
+	scanner     codec.Reader
 	currentPath string
 
 	delete bool
@@ -104,9 +105,9 @@ func newFileConsumer(conf FileConfig, log log.Modular) (*fileConsumer, error) {
 		return nil, err
 	}
 
-	codecConf := newCodecConfig()
+	codecConf := codec.NewReaderConfig()
 	codecConf.MaxScanTokenSize = conf.MaxBuffer
-	ctor, err := getPartCodec(conf.Codec, codecConf)
+	ctor, err := codec.GetReader(conf.Codec, codecConf)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +169,7 @@ func (f *fileConsumer) ReadWithContext(ctx context.Context) (types.Message, read
 	}
 
 	msg := message.New(nil)
-	acks := []codecAckFn{}
+	acks := []codec.ReaderAckFn{}
 
 	ackFn := func(ctx context.Context, res types.Response) error {
 		for _, fn := range acks {

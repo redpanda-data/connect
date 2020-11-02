@@ -1,4 +1,4 @@
-package input
+package codec
 
 import (
 	"archive/tar"
@@ -18,7 +18,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-var codecDocs = docs.FieldCommon(
+// ReaderDocs is a static field documentation for input codecs.
+var ReaderDocs = docs.FieldCommon(
 	"codec", "The way in which the bytes of consumed files are converted into messages, codecs are useful for specifying how large files might be processed in small chunks rather than loading it all in memory. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.", "lines", "delim:\t", "delim:foobar",
 ).HasAnnotatedOptions(
 	"all-bytes", "Consume the entire file as a single binary message.",
@@ -30,47 +31,55 @@ var codecDocs = docs.FieldCommon(
 
 //------------------------------------------------------------------------------
 
-type codecConfig struct {
+// ReaderConfig is a general configuration struct that covers all reader codecs.
+type ReaderConfig struct {
 	MaxScanTokenSize int
 }
 
-func newCodecConfig() codecConfig {
-	return codecConfig{
+// NewReaderConfig creates a reader configuration with default values.
+func NewReaderConfig() ReaderConfig {
+	return ReaderConfig{
 		MaxScanTokenSize: bufio.MaxScanTokenSize,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-type codecAckFn func(context.Context, error) error
+// ReaderAckFn is a function provided to a reader codec that it should call once
+// the underlying io.ReadCloser is fully consumed.
+type ReaderAckFn func(context.Context, error) error
 
-type partCodec interface {
-	Next(ctx context.Context) (types.Part, codecAckFn, error)
+// Reader is a codec type that reads message parts from a source.
+type Reader interface {
+	Next(context.Context) (types.Part, ReaderAckFn, error)
 	Close(context.Context) error
 }
 
-type partCodecCtor func(io.ReadCloser, codecAckFn) (partCodec, error)
+// ReaderConstructor creates a reader from an io.ReadCloser and an ack func
+// which is called by the reader once the io.ReadCloser is finished with.
+type ReaderConstructor func(io.ReadCloser, ReaderAckFn) (Reader, error)
 
-func getPartCodec(codec string, conf codecConfig) (partCodecCtor, error) {
+// GetReader returns a constructor that creates reader codecs.
+func GetReader(codec string, conf ReaderConfig) (ReaderConstructor, error) {
 	switch codec {
 	case "all-bytes":
-		return func(r io.ReadCloser, fn codecAckFn) (partCodec, error) {
-			return &allBytesCodec{r, fn, false}, nil
+		return func(r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+			return &allBytesReader{r, fn, false}, nil
 		}, nil
 	case "lines":
-		return func(r io.ReadCloser, fn codecAckFn) (partCodec, error) {
-			return newLinesCodec(conf, r, fn)
+		return func(r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+			return newLinesReader(conf, r, fn)
 		}, nil
 	case "tar":
-		return newTarCodec, nil
+		return newTarReader, nil
 	case "tar-gzip":
-		return func(r io.ReadCloser, fn codecAckFn) (partCodec, error) {
+		return func(r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			g, err := gzip.NewReader(r)
 			if err != nil {
 				r.Close()
 				return nil, err
 			}
-			return newTarCodec(g, fn)
+			return newTarReader(g, fn)
 		}, nil
 	}
 	if strings.HasPrefix(codec, "delim:") {
@@ -78,8 +87,8 @@ func getPartCodec(codec string, conf codecConfig) (partCodecCtor, error) {
 		if len(by) == 0 {
 			return nil, errors.New("custom delimiter codec requires a non-empty delimiter")
 		}
-		return func(r io.ReadCloser, fn codecAckFn) (partCodec, error) {
-			return newCustomDelimCodec(conf, r, by, fn)
+		return func(r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+			return newCustomDelimReader(conf, r, by, fn)
 		}, nil
 	}
 	return nil, fmt.Errorf("codec was not recognised: %v", codec)
@@ -87,13 +96,13 @@ func getPartCodec(codec string, conf codecConfig) (partCodecCtor, error) {
 
 //------------------------------------------------------------------------------
 
-type allBytesCodec struct {
+type allBytesReader struct {
 	i        io.ReadCloser
-	ack      codecAckFn
+	ack      ReaderAckFn
 	consumed bool
 }
 
-func (a *allBytesCodec) Next(ctx context.Context) (types.Part, codecAckFn, error) {
+func (a *allBytesReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
 	if a.consumed {
 		return nil, nil, io.EOF
 	}
@@ -107,7 +116,7 @@ func (a *allBytesCodec) Next(ctx context.Context) (types.Part, codecAckFn, error
 	return p, a.ack, nil
 }
 
-func (a *allBytesCodec) Close(ctx context.Context) error {
+func (a *allBytesReader) Close(ctx context.Context) error {
 	if !a.consumed {
 		a.ack(ctx, errors.New("service shutting down"))
 	}
@@ -116,10 +125,10 @@ func (a *allBytesCodec) Close(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
-type linesCodec struct {
+type linesReader struct {
 	buf       *bufio.Scanner
 	r         io.ReadCloser
-	sourceAck codecAckFn
+	sourceAck ReaderAckFn
 
 	mut      sync.Mutex
 	finished bool
@@ -127,19 +136,19 @@ type linesCodec struct {
 	pending  int32
 }
 
-func newLinesCodec(conf codecConfig, r io.ReadCloser, ackFn codecAckFn) (partCodec, error) {
+func newLinesReader(conf ReaderConfig, r io.ReadCloser, ackFn ReaderAckFn) (Reader, error) {
 	scanner := bufio.NewScanner(r)
 	if conf.MaxScanTokenSize != bufio.MaxScanTokenSize {
 		scanner.Buffer([]byte{}, conf.MaxScanTokenSize)
 	}
-	return &linesCodec{
+	return &linesReader{
 		buf:       scanner,
 		r:         r,
 		sourceAck: ackFn,
 	}, nil
 }
 
-func (a *linesCodec) ack(ctx context.Context, err error) error {
+func (a *linesReader) ack(ctx context.Context, err error) error {
 	a.mut.Lock()
 	a.pending--
 	doAck := a.pending == 0 && a.finished
@@ -154,7 +163,7 @@ func (a *linesCodec) ack(ctx context.Context, err error) error {
 	return nil
 }
 
-func (a *linesCodec) Next(ctx context.Context) (types.Part, codecAckFn, error) {
+func (a *linesReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
 	a.mut.Lock()
 	defer a.mut.Unlock()
 
@@ -171,7 +180,7 @@ func (a *linesCodec) Next(ctx context.Context) (types.Part, codecAckFn, error) {
 	return nil, nil, err
 }
 
-func (a *linesCodec) Close(ctx context.Context) error {
+func (a *linesReader) Close(ctx context.Context) error {
 	a.mut.Lock()
 	defer a.mut.Unlock()
 
@@ -186,10 +195,10 @@ func (a *linesCodec) Close(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
-type customDelimCodec struct {
+type customDelimReader struct {
 	buf       *bufio.Scanner
 	r         io.ReadCloser
-	sourceAck codecAckFn
+	sourceAck ReaderAckFn
 
 	mut      sync.Mutex
 	finished bool
@@ -197,7 +206,7 @@ type customDelimCodec struct {
 	pending  int32
 }
 
-func newCustomDelimCodec(conf codecConfig, r io.ReadCloser, delim string, ackFn codecAckFn) (partCodec, error) {
+func newCustomDelimReader(conf ReaderConfig, r io.ReadCloser, delim string, ackFn ReaderAckFn) (Reader, error) {
 	scanner := bufio.NewScanner(r)
 	if conf.MaxScanTokenSize != bufio.MaxScanTokenSize {
 		scanner.Buffer([]byte{}, conf.MaxScanTokenSize)
@@ -224,14 +233,14 @@ func newCustomDelimCodec(conf codecConfig, r io.ReadCloser, delim string, ackFn 
 		return 0, nil, nil
 	})
 
-	return &customDelimCodec{
+	return &customDelimReader{
 		buf:       scanner,
 		r:         r,
 		sourceAck: ackFn,
 	}, nil
 }
 
-func (a *customDelimCodec) ack(ctx context.Context, err error) error {
+func (a *customDelimReader) ack(ctx context.Context, err error) error {
 	a.mut.Lock()
 	a.pending--
 	doAck := a.pending == 0 && a.finished
@@ -246,7 +255,7 @@ func (a *customDelimCodec) ack(ctx context.Context, err error) error {
 	return nil
 }
 
-func (a *customDelimCodec) Next(ctx context.Context) (types.Part, codecAckFn, error) {
+func (a *customDelimReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
 	a.mut.Lock()
 	defer a.mut.Unlock()
 
@@ -263,7 +272,7 @@ func (a *customDelimCodec) Next(ctx context.Context) (types.Part, codecAckFn, er
 	return nil, nil, err
 }
 
-func (a *customDelimCodec) Close(ctx context.Context) error {
+func (a *customDelimReader) Close(ctx context.Context) error {
 	a.mut.Lock()
 	defer a.mut.Unlock()
 
@@ -278,10 +287,10 @@ func (a *customDelimCodec) Close(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
-type tarCodec struct {
+type tarReader struct {
 	buf       *tar.Reader
 	r         io.ReadCloser
-	sourceAck codecAckFn
+	sourceAck ReaderAckFn
 
 	mut      sync.Mutex
 	finished bool
@@ -289,15 +298,15 @@ type tarCodec struct {
 	pending  int32
 }
 
-func newTarCodec(r io.ReadCloser, ackFn codecAckFn) (partCodec, error) {
-	return &tarCodec{
+func newTarReader(r io.ReadCloser, ackFn ReaderAckFn) (Reader, error) {
+	return &tarReader{
 		buf:       tar.NewReader(r),
 		r:         r,
 		sourceAck: ackFn,
 	}, nil
 }
 
-func (a *tarCodec) ack(ctx context.Context, err error) error {
+func (a *tarReader) ack(ctx context.Context, err error) error {
 	a.mut.Lock()
 	a.pending--
 	doAck := a.pending == 0 && a.finished
@@ -312,7 +321,7 @@ func (a *tarCodec) ack(ctx context.Context, err error) error {
 	return nil
 }
 
-func (a *tarCodec) Next(ctx context.Context) (types.Part, codecAckFn, error) {
+func (a *tarReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
 	a.mut.Lock()
 	defer a.mut.Unlock()
 
@@ -333,7 +342,7 @@ func (a *tarCodec) Next(ctx context.Context) (types.Part, codecAckFn, error) {
 	return nil, nil, err
 }
 
-func (a *tarCodec) Close(ctx context.Context) error {
+func (a *tarReader) Close(ctx context.Context) error {
 	a.mut.Lock()
 	defer a.mut.Unlock()
 

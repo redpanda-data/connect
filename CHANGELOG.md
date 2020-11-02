@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Added field `codec` to the `file` output.
+- The `file` output now supports dynamic file paths.
+
+## Changed
+
+- The `files` output has been deprecated as its behaviour is now covered by `file`.
+
 ## 3.32.0 - 2020-10-29
 
 ### Added

@@ -729,6 +729,7 @@ OUTPUT_ELASTICSEARCH_TLS_SKIP_CERT_VERIFY             = false
 OUTPUT_ELASTICSEARCH_TYPE                             = doc
 OUTPUT_ELASTICSEARCH_URLS                             = http://localhost:9200
 OUTPUT_FILES_PATH                                     = ${!count("files")}-${!timestamp_unix_nano()}.txt
+OUTPUT_FILE_CODEC                                     = lines
 OUTPUT_FILE_DELIMITER
 OUTPUT_FILE_PATH
 OUTPUT_GCP_PUBSUB_MAX_IN_FLIGHT                       = 1

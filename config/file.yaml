@@ -22,7 +22,7 @@ pipeline:
 output:
   type: file
   file:
-    delimiter: ""
+    codec: lines
     path: ""
 resources:
   caches: {}
