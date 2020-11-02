@@ -18,14 +18,38 @@ import TabItem from '@theme/TabItem';
 
 Stores each message in a [cache](/docs/components/caches/about).
 
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yaml
-# Config fields, showing default values
+# Common config fields, showing default values
 output:
   cache:
     target: ""
     key: ${!count("items")}-${!timestamp_unix_nano()}
     max_in_flight: 1
 ```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+# All config fields, showing default values
+output:
+  cache:
+    target: ""
+    key: ${!count("items")}-${!timestamp_unix_nano()}
+    ttl: ""
+    max_in_flight: 1
+```
+
+</TabItem>
+</Tabs>
 
 Caches are configured within the [resources section](/docs/components/caches/about)
 and can target any of the following types:
@@ -93,6 +117,27 @@ key: ${!count("items")}-${!timestamp_unix_nano()}
 key: ${!json("doc.id")}
 
 key: ${!meta("kafka_key")}
+```
+
+### `ttl`
+
+A per-key ttl (when supported by the cache resource).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+ttl: The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction.
+
+ttl: 60s
+
+ttl: 5m
+
+ttl: 36h
 ```
 
 ### `max_in_flight`

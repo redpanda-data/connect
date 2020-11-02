@@ -310,10 +310,19 @@ func (e errCache) Get(key string) ([]byte, error) {
 func (e errCache) Set(key string, value []byte) error {
 	return errors.New("test err")
 }
+func (e errCache) SetWithTTL(key string, value []byte, ttl *time.Duration) error {
+	return errors.New("test err")
+}
 func (e errCache) SetMulti(items map[string][]byte) error {
 	return errors.New("test err")
 }
+func (e errCache) SetMultiWithTTL(items map[string][]byte, ttl *time.Duration) error {
+	return errors.New("test err")
+}
 func (e errCache) Add(key string, value []byte) error {
+	return errors.New("test err")
+}
+func (e errCache) AddWithTTL(key string, value []byte, ttl *time.Duration) error {
 	return errors.New("test err")
 }
 func (e errCache) Delete(key string) error {

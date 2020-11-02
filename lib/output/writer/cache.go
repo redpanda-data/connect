@@ -18,6 +18,7 @@ import (
 type CacheConfig struct {
 	Target      string `json:"target" yaml:"target"`
 	Key         string `json:"key" yaml:"key"`
+	TTL         string `json:"ttl" yaml:"ttl"`
 	MaxInFlight int    `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
@@ -38,6 +39,7 @@ type Cache struct {
 	conf CacheConfig
 
 	key   field.Expression
+	ttl   field.Expression
 	cache types.Cache
 
 	log   log.Modular
@@ -59,9 +61,14 @@ func NewCache(
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
+	ttl, err := bloblang.NewField(conf.TTL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ttl expression: %v", err)
+	}
 	return &Cache{
 		conf:  conf,
 		key:   key,
+		ttl:   ttl,
 		cache: cache,
 		log:   log,
 		stats: stats,
@@ -86,7 +93,19 @@ func (c *Cache) WriteWithContext(ctx context.Context, msg types.Message) error {
 
 // Write attempts to write message contents to a target Cache.
 func (c *Cache) Write(msg types.Message) error {
+	var ttl *time.Duration
+	if ttls := c.ttl.String(0, msg); ttls != "" {
+		t, err := time.ParseDuration(ttls)
+		if err != nil {
+			c.log.Debugf("TTL must be a duration: %v\n", err)
+			return err
+		}
+		ttl = &t
+	}
 	if msg.Len() == 1 {
+		if cttl, ok := c.cache.(types.CacheWithTTL); ok && ttl != nil {
+			return cttl.SetWithTTL(c.key.String(0, msg), msg.Get(0).Get(), ttl)
+		}
 		return c.cache.Set(c.key.String(0, msg), msg.Get(0).Get())
 	}
 	items := map[string][]byte{}
@@ -95,6 +114,9 @@ func (c *Cache) Write(msg types.Message) error {
 		return nil
 	})
 	if len(items) > 0 {
+		if cttl, ok := c.cache.(types.CacheWithTTL); ok && ttl != nil {
+			return cttl.SetMultiWithTTL(items, ttl)
+		}
 		return c.cache.SetMulti(items)
 	}
 	return nil

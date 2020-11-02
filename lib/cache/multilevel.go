@@ -138,15 +138,47 @@ func (l *Multilevel) Get(key string) ([]byte, error) {
 	return nil, types.ErrKeyNotFound
 }
 
-// Set attempts to set the value of a key.
-func (l *Multilevel) Set(key string, value []byte) error {
+// SetWithTTL attempts to set the value of a key.
+func (l *Multilevel) SetWithTTL(key string, value []byte, ttl *time.Duration) error {
 	for _, name := range l.caches {
 		c, err := l.mgr.GetCache(name)
 		if err != nil {
 			return fmt.Errorf("unable to access cache '%v': %v", name, err)
 		}
-		if err = c.Set(key, value); err != nil {
-			return err
+		if cttl, ok := c.(types.CacheWithTTL); ok {
+			if err = cttl.SetWithTTL(key, value, ttl); err != nil {
+				return err
+			}
+		} else {
+			if err = c.Set(key, value); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// Set attempts to set the value of a key.
+func (l *Multilevel) Set(key string, value []byte) error {
+	return l.SetWithTTL(key, value, nil)
+}
+
+// SetMultiWithTTL attempts to set the value of multiple keys, returns an error if any
+// keys fail.
+func (l *Multilevel) SetMultiWithTTL(items map[string][]byte, t *time.Duration) error {
+	for _, name := range l.caches {
+		c, err := l.mgr.GetCache(name)
+		if err != nil {
+			return fmt.Errorf("unable to access cache '%v': %v", name, err)
+		}
+		if cttl, ok := c.(types.CacheWithTTL); ok {
+			if err = cttl.SetMultiWithTTL(items, t); err != nil {
+				return err
+			}
+		} else {
+			if err = c.SetMulti(items); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -155,21 +187,12 @@ func (l *Multilevel) Set(key string, value []byte) error {
 // SetMulti attempts to set the value of multiple keys, returns an error if any
 // keys fail.
 func (l *Multilevel) SetMulti(items map[string][]byte) error {
-	for _, name := range l.caches {
-		c, err := l.mgr.GetCache(name)
-		if err != nil {
-			return fmt.Errorf("unable to access cache '%v': %v", name, err)
-		}
-		if err = c.SetMulti(items); err != nil {
-			return err
-		}
-	}
-	return nil
+	return l.SetMultiWithTTL(items, nil)
 }
 
-// Add attempts to set the value of a key only if the key does not already exist
+// AddWithTTL attempts to set the value of a key only if the key does not already exist
 // and returns an error if the key already exists.
-func (l *Multilevel) Add(key string, value []byte) error {
+func (l *Multilevel) AddWithTTL(key string, value []byte, ttl *time.Duration) error {
 	for i := 0; i < len(l.caches)-1; i++ {
 		c, err := l.mgr.GetCache(l.caches[i])
 		if err != nil {
@@ -187,18 +210,38 @@ func (l *Multilevel) Add(key string, value []byte) error {
 	if err != nil {
 		return fmt.Errorf("unable to access cache '%v': %v", l.caches[len(l.caches)-1], err)
 	}
-	if err = c.Add(key, value); err != nil {
-		return err
+
+	if cttl, ok := c.(types.CacheWithTTL); ok {
+		if err = cttl.AddWithTTL(key, value, ttl); err != nil {
+			return err
+		}
+	} else {
+		if err = c.Add(key, value); err != nil {
+			return err
+		}
 	}
+
 	for i := len(l.caches) - 2; i >= 0; i-- {
 		if c, err = l.mgr.GetCache(l.caches[i]); err != nil {
 			return fmt.Errorf("unable to access cache '%v': %v", l.caches[i], err)
 		}
-		if err = c.Set(key, value); err != nil {
-			return err
+		if cttl, ok := c.(types.CacheWithTTL); ok {
+			if err = cttl.AddWithTTL(key, value, ttl); err != nil {
+				return err
+			}
+		} else {
+			if err = c.Set(key, value); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
+}
+
+// Add attempts to set the value of a key only if the key does not already exist
+// and returns an error if the key already exists.
+func (l *Multilevel) Add(key string, value []byte) error {
+	return l.AddWithTTL(key, value, nil)
 }
 
 // Delete attempts to remove a key.

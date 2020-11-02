@@ -489,6 +489,7 @@ PROCESSOR_CACHE_CACHE
 PROCESSOR_CACHE_KEY
 PROCESSOR_CACHE_OPERATOR                             = set
 PROCESSOR_CACHE_RESOURCE
+PROCESSOR_CACHE_TTL
 PROCESSOR_CACHE_VALUE
 PROCESSOR_COMPRESS_ALGORITHM                         = gzip
 PROCESSOR_COMPRESS_LEVEL                             = -1
@@ -693,6 +694,7 @@ OUTPUT_BLOB_STORAGE_TIMEOUT                           = 5s
 OUTPUT_CACHE_KEY                                      = ${!count("items")}-${!timestamp_unix_nano()}
 OUTPUT_CACHE_MAX_IN_FLIGHT                            = 1
 OUTPUT_CACHE_TARGET
+OUTPUT_CACHE_TTL
 OUTPUT_DYNAMIC_MAX_IN_FLIGHT                          = 1
 OUTPUT_DYNAMIC_PREFIX
 OUTPUT_DYNAMIC_TIMEOUT                                = 5s

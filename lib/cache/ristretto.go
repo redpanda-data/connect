@@ -117,10 +117,38 @@ func (r *Ristretto) Get(key string) ([]byte, error) {
 	return res.([]byte), nil
 }
 
+// SetWithTTL attempts to set the value of a key.
+func (r *Ristretto) SetWithTTL(key string, value []byte, ttl *time.Duration) error {
+	var t time.Duration
+	if ttl != nil {
+		t = *ttl
+	} else {
+		t = r.ttl
+	}
+	if !r.cache.SetWithTTL(key, value, 1, t) {
+		return errors.New("set operation was dropped")
+	}
+	return nil
+}
+
 // Set attempts to set the value of a key.
 func (r *Ristretto) Set(key string, value []byte) error {
-	if !r.cache.SetWithTTL(key, value, 1, r.ttl) {
-		return errors.New("set operation was dropped")
+	return r.SetWithTTL(key, value, nil)
+}
+
+// SetMultiWithTTL attempts to set the value of multiple keys, returns an error if any
+// keys fail.
+func (r *Ristretto) SetMultiWithTTL(items map[string][]byte, ttl *time.Duration) error {
+	var t time.Duration
+	if ttl != nil {
+		t = *ttl
+	} else {
+		t = r.ttl
+	}
+	for key, value := range items {
+		if !r.cache.SetWithTTL(key, value, 1, t) {
+			return errors.New("set operation was dropped")
+		}
 	}
 	return nil
 }
@@ -128,18 +156,19 @@ func (r *Ristretto) Set(key string, value []byte) error {
 // SetMulti attempts to set the value of multiple keys, returns an error if any
 // keys fail.
 func (r *Ristretto) SetMulti(items map[string][]byte) error {
-	for key, value := range items {
-		if !r.cache.SetWithTTL(key, value, 1, r.ttl) {
-			return errors.New("set operation was dropped")
-		}
-	}
-	return nil
+	return r.SetMultiWithTTL(items, nil)
+}
+
+// AddWithTTL attempts to set the value of a key only if the key does not already exist
+// and returns an error if the key already exists.
+func (r *Ristretto) AddWithTTL(key string, value []byte, ttl *time.Duration) error {
+	return r.SetWithTTL(key, value, ttl)
 }
 
 // Add attempts to set the value of a key only if the key does not already exist
 // and returns an error if the key already exists.
 func (r *Ristretto) Add(key string, value []byte) error {
-	return r.Add(key, value)
+	return r.AddWithTTL(key, value, nil)
 }
 
 // Delete attempts to remove a key.

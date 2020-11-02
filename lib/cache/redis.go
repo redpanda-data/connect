@@ -194,19 +194,25 @@ func (r *Redis) Get(key string) ([]byte, error) {
 	return []byte(res), nil
 }
 
-// Set attempts to set the value of a key.
-func (r *Redis) Set(key string, value []byte) error {
+// SetWithTTL attempts to set the value of a key.
+func (r *Redis) SetWithTTL(key string, value []byte, ttl *time.Duration) error {
 	r.mSetCount.Incr(1)
 	tStarted := time.Now()
 
 	key = r.prefix + key
 
-	err := r.client.Set(key, value, r.ttl).Err()
+	var t time.Duration
+	if ttl != nil {
+		t = *ttl
+	} else {
+		t = r.ttl
+	}
+	err := r.client.Set(key, value, t).Err()
 	for i := 0; i < r.conf.Redis.Retries && err != nil; i++ {
 		r.log.Errorf("Set command failed: %v\n", err)
 		<-time.After(r.retryPeriod)
 		r.mSetRetry.Incr(1)
-		err = r.client.Set(key, value, r.ttl).Err()
+		err = r.client.Set(key, value, t).Err()
 	}
 	if err != nil {
 		r.mSetFailed.Incr(1)
@@ -221,27 +227,44 @@ func (r *Redis) Set(key string, value []byte) error {
 	return err
 }
 
-// SetMulti attempts to set the value of multiple keys, returns an error if any
+// Set attempts to set the value of a key.
+func (r *Redis) Set(key string, value []byte) error {
+	return r.SetWithTTL(key, value, nil)
+}
+
+// SetMultiWithTTL attempts to set the value of multiple keys, returns an error if any
 // keys fail.
-func (r *Redis) SetMulti(items map[string][]byte) error {
+func (r *Redis) SetMultiWithTTL(items map[string][]byte, t *time.Duration) error {
 	// TODO: Come back and optimise this.
 	for k, v := range items {
-		if err := r.Set(k, v); err != nil {
+		if err := r.SetWithTTL(k, v, t); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// Add attempts to set the value of a key only if the key does not already exist
+// SetMulti attempts to set the value of multiple keys, returns an error if any
+// keys fail.
+func (r *Redis) SetMulti(items map[string][]byte) error {
+	return r.SetMultiWithTTL(items, nil)
+}
+
+// AddWithTTL attempts to set the value of a key only if the key does not already exist
 // and returns an error if the key already exists or if the operation fails.
-func (r *Redis) Add(key string, value []byte) error {
+func (r *Redis) AddWithTTL(key string, value []byte, ttl *time.Duration) error {
 	r.mAddCount.Incr(1)
 	tStarted := time.Now()
 
 	key = r.prefix + key
 
-	set, err := r.client.SetNX(key, value, r.ttl).Result()
+	var t time.Duration
+	if ttl != nil {
+		t = *ttl
+	} else {
+		t = r.ttl
+	}
+	set, err := r.client.SetNX(key, value, t).Result()
 	if err == nil && !set {
 		r.mAddFailedDupe.Incr(1)
 
@@ -255,7 +278,7 @@ func (r *Redis) Add(key string, value []byte) error {
 		r.log.Errorf("Add command failed: %v\n", err)
 		<-time.After(r.retryPeriod)
 		r.mAddRetry.Incr(1)
-		if set, err = r.client.SetNX(key, value, r.ttl).Result(); err == nil && !set {
+		if set, err = r.client.SetNX(key, value, t).Result(); err == nil && !set {
 			r.mAddFailedDupe.Incr(1)
 
 			latency := int64(time.Since(tStarted))
@@ -276,6 +299,12 @@ func (r *Redis) Add(key string, value []byte) error {
 	r.mLatency.Timing(latency)
 
 	return err
+}
+
+// Add attempts to set the value of a key only if the key does not already exist
+// and returns an error if the key already exists or if the operation fails.
+func (r *Redis) Add(key string, value []byte) error {
+	return r.AddWithTTL(key, value, nil)
 }
 
 // Delete attempts to remove a key.
