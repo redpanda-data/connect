@@ -121,7 +121,7 @@ key: ${!meta("kafka_key")}
 
 ### `ttl`
 
-A per-key ttl (when supported by the cache resource).
+The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction. Not all caches support per-key TTLs, and those that do not will fall back to their generally configured TTL setting.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
@@ -130,8 +130,6 @@ Default: `""`
 
 ```yaml
 # Examples
-
-ttl: The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction.
 
 ttl: 60s
 

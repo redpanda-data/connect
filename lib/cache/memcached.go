@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -165,7 +166,7 @@ func (m *Memcached) Get(key string) ([]byte, error) {
 	tStarted := time.Now()
 
 	item, err := m.mc.Get(m.conf.Memcached.Prefix + key)
-	for i := 0; i < m.conf.Memcached.Retries && err != nil; i++ {
+	for i := 0; i < m.conf.Memcached.Retries && err != nil && !errors.Is(err, memcache.ErrCacheMiss); i++ {
 		m.log.Errorf("Get command failed: %v\n", err)
 		<-time.After(m.retryPeriod)
 		m.mGetRetry.Incr(1)
@@ -177,6 +178,9 @@ func (m *Memcached) Get(key string) ([]byte, error) {
 	m.mLatency.Timing(latency)
 
 	if err != nil {
+		if errors.Is(err, memcache.ErrCacheMiss) {
+			err = types.ErrKeyNotFound
+		}
 		m.mGetFailed.Incr(1)
 		return nil, err
 	}

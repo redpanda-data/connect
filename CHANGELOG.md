@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 
 - Added field `codec` to the `file` output.
 - The `file` output now supports dynamic file paths.
+- Added field `ttl` to the `cache` processor and output.
 
 ## Changed
 

@@ -4,11 +4,12 @@ package cache
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -63,6 +64,7 @@ func TestMemcachedIntegration(t *testing.T) {
 
 func testMemcachedAddDuplicate(addrs []string, t *testing.T) {
 	conf := NewConfig()
+	conf.Memcached.Prefix = "addduplicate"
 	conf.Memcached.Addresses = addrs
 
 	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
@@ -102,6 +104,7 @@ func testMemcachedAddDuplicate(addrs []string, t *testing.T) {
 
 func testMemcachedGetAndSet(addrs []string, t *testing.T) {
 	conf := NewConfig()
+	conf.Memcached.Prefix = "getandset"
 	conf.Memcached.Addresses = addrs
 
 	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
@@ -149,13 +152,11 @@ func testMemcachedGetAndSet(addrs []string, t *testing.T) {
 
 func testMemcachedGetAndSetWithTTL(addrs []string, t *testing.T) {
 	conf := NewConfig()
+	conf.Memcached.Prefix = "setwithttl"
 	conf.Memcached.Addresses = addrs
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	c, err := NewMemcached(conf, nil, testLog, metrics.DudType{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	c, err := NewMemcached(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
 
 	if c, ok := c.(types.CacheWithTTL); ok {
 		ttl := time.Second

@@ -35,8 +35,8 @@ find a list of functions [here](/docs/configuration/interpolation#bloblang-queri
 			docs.FieldCommon("operator", "The [operation](#operators) to perform with the cache.").HasOptions("set", "add", "get", "delete"),
 			docs.FieldCommon("key", "A key to use with the cache.").SupportsInterpolation(false),
 			docs.FieldCommon("value", "A value to use with the cache (when applicable).").SupportsInterpolation(false),
-			docs.FieldAdvanced("ttl", "A per-key ttl (when supported by the cache resource).",
-				"The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction.",
+			docs.FieldAdvanced(
+				"ttl", "The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction. Not all caches support per-key TTLs, and those that do not will fall back to their generally configured TTL setting.",
 				"60s", "5m", "36h",
 			).SupportsInterpolation(false),
 			partsFieldSpec,
