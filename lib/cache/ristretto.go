@@ -139,15 +139,15 @@ func (r *Ristretto) Set(key string, value []byte) error {
 
 // SetMultiWithTTL attempts to set the value of multiple keys, returns an error if any
 // keys fail.
-func (r *Ristretto) SetMultiWithTTL(items map[string][]byte, ttl *time.Duration) error {
-	var t time.Duration
-	if ttl != nil {
-		t = *ttl
-	} else {
-		t = r.ttl
-	}
-	for key, value := range items {
-		if !r.cache.SetWithTTL(key, value, 1, t) {
+func (r *Ristretto) SetMultiWithTTL(items map[string]types.CacheTTLItem) error {
+	for k, v := range items {
+		var t time.Duration
+		if v.TTL != nil {
+			t = *v.TTL
+		} else {
+			t = r.ttl
+		}
+		if !r.cache.SetWithTTL(k, v.Value, 1, t) {
 			return errors.New("set operation was dropped")
 		}
 	}
@@ -157,7 +157,13 @@ func (r *Ristretto) SetMultiWithTTL(items map[string][]byte, ttl *time.Duration)
 // SetMulti attempts to set the value of multiple keys, returns an error if any
 // keys fail.
 func (r *Ristretto) SetMulti(items map[string][]byte) error {
-	return r.SetMultiWithTTL(items, nil)
+	sitems := make(map[string]types.CacheTTLItem, len(items))
+	for k, v := range items {
+		sitems[k] = types.CacheTTLItem{
+			Value: v,
+		}
+	}
+	return r.SetMultiWithTTL(sitems)
 }
 
 // AddWithTTL attempts to set the value of a key only if the key does not already exist

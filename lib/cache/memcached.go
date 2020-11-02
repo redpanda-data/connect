@@ -222,10 +222,10 @@ func (m *Memcached) Set(key string, value []byte) error {
 
 // SetMultiWithTTL attempts to set the value of multiple keys, returns an error if any
 // keys fail.
-func (m *Memcached) SetMultiWithTTL(items map[string][]byte, t *time.Duration) error {
+func (m *Memcached) SetMultiWithTTL(items map[string]types.CacheTTLItem) error {
 	// TODO: Come back and optimise this.
 	for k, v := range items {
-		if err := m.SetWithTTL(k, v, t); err != nil {
+		if err := m.SetWithTTL(k, v.Value, v.TTL); err != nil {
 			return err
 		}
 	}
@@ -235,7 +235,13 @@ func (m *Memcached) SetMultiWithTTL(items map[string][]byte, t *time.Duration) e
 // SetMulti attempts to set the value of multiple keys, returns an error if any
 // keys fail.
 func (m *Memcached) SetMulti(items map[string][]byte) error {
-	return m.SetMultiWithTTL(items, nil)
+	sitems := make(map[string]types.CacheTTLItem, len(items))
+	for k, v := range items {
+		sitems[k] = types.CacheTTLItem{
+			Value: v,
+		}
+	}
+	return m.SetMultiWithTTL(sitems)
 }
 
 // AddWithTTL attempts to set the value of a key only if the key does not already exist

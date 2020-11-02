@@ -93,31 +93,51 @@ func (c *Cache) WriteWithContext(ctx context.Context, msg types.Message) error {
 
 // Write attempts to write message contents to a target Cache.
 func (c *Cache) Write(msg types.Message) error {
-	var ttl *time.Duration
-	if ttls := c.ttl.String(0, msg); ttls != "" {
-		t, err := time.ParseDuration(ttls)
-		if err != nil {
-			c.log.Debugf("TTL must be a duration: %v\n", err)
-			return err
-		}
-		ttl = &t
-	}
 	if msg.Len() == 1 {
+		var ttl *time.Duration
+		if ttls := c.ttl.String(0, msg); ttls != "" {
+			t, err := time.ParseDuration(ttls)
+			if err != nil {
+				c.log.Debugf("Invalid duration string for TTL field: %v\n", err)
+				return fmt.Errorf("ttl field: %w", err)
+			}
+			ttl = &t
+		}
 		if cttl, ok := c.cache.(types.CacheWithTTL); ok && ttl != nil {
 			return cttl.SetWithTTL(c.key.String(0, msg), msg.Get(0).Get(), ttl)
 		}
 		return c.cache.Set(c.key.String(0, msg), msg.Get(0).Get())
 	}
-	items := map[string][]byte{}
-	msg.Iter(func(i int, p types.Part) error {
-		items[c.key.String(i, msg)] = p.Get()
-		return nil
-	})
-	if len(items) > 0 {
-		if cttl, ok := c.cache.(types.CacheWithTTL); ok && ttl != nil {
-			return cttl.SetMultiWithTTL(items, ttl)
+	if cttl, ok := c.cache.(types.CacheWithTTL); ok {
+		items := map[string]types.CacheTTLItem{}
+		msg.Iter(func(i int, p types.Part) error {
+			var ttl *time.Duration
+			if ttls := c.ttl.String(i, msg); ttls != "" {
+				t, err := time.ParseDuration(ttls)
+				if err != nil {
+					c.log.Debugf("Invalid duration string for TTL field: %v\n", err)
+					return fmt.Errorf("ttl field: %w", err)
+				}
+				ttl = &t
+			}
+			items[c.key.String(i, msg)] = types.CacheTTLItem{
+				Value: p.Get(),
+				TTL:   ttl,
+			}
+			return nil
+		})
+		if len(items) > 0 {
+			return cttl.SetMultiWithTTL(items)
 		}
-		return c.cache.SetMulti(items)
+	} else {
+		items := map[string][]byte{}
+		msg.Iter(func(i int, p types.Part) error {
+			items[c.key.String(i, msg)] = p.Get()
+			return nil
+		})
+		if len(items) > 0 {
+			return c.cache.SetMulti(items)
+		}
 	}
 	return nil
 }

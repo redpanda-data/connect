@@ -165,18 +165,22 @@ func (l *Multilevel) Set(key string, value []byte) error {
 
 // SetMultiWithTTL attempts to set the value of multiple keys, returns an error if any
 // keys fail.
-func (l *Multilevel) SetMultiWithTTL(items map[string][]byte, t *time.Duration) error {
+func (l *Multilevel) SetMultiWithTTL(items map[string]types.CacheTTLItem) error {
 	for _, name := range l.caches {
 		c, err := l.mgr.GetCache(name)
 		if err != nil {
 			return fmt.Errorf("unable to access cache '%v': %v", name, err)
 		}
 		if cttl, ok := c.(types.CacheWithTTL); ok {
-			if err = cttl.SetMultiWithTTL(items, t); err != nil {
+			if err = cttl.SetMultiWithTTL(items); err != nil {
 				return err
 			}
 		} else {
-			if err = c.SetMulti(items); err != nil {
+			sitems := make(map[string][]byte, len(items))
+			for k, v := range items {
+				sitems[k] = v.Value
+			}
+			if err = c.SetMulti(sitems); err != nil {
 				return err
 			}
 		}
@@ -187,7 +191,13 @@ func (l *Multilevel) SetMultiWithTTL(items map[string][]byte, t *time.Duration) 
 // SetMulti attempts to set the value of multiple keys, returns an error if any
 // keys fail.
 func (l *Multilevel) SetMulti(items map[string][]byte) error {
-	return l.SetMultiWithTTL(items, nil)
+	sitems := make(map[string]types.CacheTTLItem, len(items))
+	for k, v := range items {
+		sitems[k] = types.CacheTTLItem{
+			Value: v,
+		}
+	}
+	return l.SetMultiWithTTL(sitems)
 }
 
 // AddWithTTL attempts to set the value of a key only if the key does not already exist

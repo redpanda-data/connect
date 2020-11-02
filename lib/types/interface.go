@@ -34,6 +34,12 @@ type Cache interface {
 	Closable
 }
 
+// CacheTTLItem contains a value to cache along with an optional TTL.
+type CacheTTLItem struct {
+	Value []byte
+	TTL   *time.Duration
+}
+
 // CacheWithTTL is a key/value store that can be shared across components and
 // executing threads of a Benthos service.
 type CacheWithTTL interface {
@@ -43,7 +49,7 @@ type CacheWithTTL interface {
 
 	// SetMultiWithTTL attempts to set the value of multiple keys, returns an
 	// error if any of the keys fail.
-	SetMultiWithTTL(items map[string][]byte, ttl *time.Duration) error
+	SetMultiWithTTL(items map[string]CacheTTLItem) error
 
 	// AddWithTTL attempts to set the value of a key only if the key does not
 	// already exist, returns an error if the key already exists or if the
