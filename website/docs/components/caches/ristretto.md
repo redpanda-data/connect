@@ -49,6 +49,10 @@ ristretto:
 
 This cache is more efficient and appropriate for high-volume use cases than the standard memory cache. However, the add command is non-atomic, and therefore this cache is not suitable for deduplication.
 
+This cache type supports setting the TTL individually per key by using the
+dynamic `ttl` field of a cache processor or output in order to
+override the general TTL configured at the cache resource level.
+
 ## Fields
 
 ### `ttl`

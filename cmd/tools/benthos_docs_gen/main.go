@@ -146,6 +146,14 @@ func doCaches(docsDir string) {
 			panic(fmt.Sprintf("Failed to generate docs for '%v': %v", k, err))
 		}
 
+		if v.SupportsPerKeyTTL {
+			spec.Description = spec.Description + `
+
+This cache type supports setting the TTL individually per key by using the
+dynamic ` + "`ttl`" + ` field of a cache processor or output in order to
+override the general TTL configured at the cache resource level.`
+		}
+
 		render(path.Join(docsDir, "./caches", k+".md"), false, confSanit, spec)
 	}
 }

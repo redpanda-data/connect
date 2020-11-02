@@ -17,7 +17,8 @@ import (
 
 func init() {
 	Constructors[TypeMemcached] = TypeSpec{
-		constructor: NewMemcached,
+		constructor:       NewMemcached,
+		SupportsPerKeyTTL: true,
 		Summary: `
 Connects to a cluster of memcached services, a prefix can be specified to allow
 multiple cache types to share a memcached cluster under different namespaces.`,

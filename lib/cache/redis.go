@@ -16,7 +16,8 @@ import (
 
 func init() {
 	Constructors[TypeRedis] = TypeSpec{
-		constructor: NewRedis,
+		constructor:       NewRedis,
+		SupportsPerKeyTTL: true,
 		Summary: `
 Use a Redis instance as a cache. The expiration can be set to zero or an empty
 string in order to set no expiration.`,

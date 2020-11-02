@@ -55,6 +55,11 @@ redis:
 </TabItem>
 </Tabs>
 
+
+This cache type supports setting the TTL individually per key by using the
+dynamic `ttl` field of a cache processor or output in order to
+override the general TTL configured at the cache resource level.
+
 ## Fields
 
 ### `url`
