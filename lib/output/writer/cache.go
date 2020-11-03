@@ -37,10 +37,10 @@ func NewCacheConfig() CacheConfig {
 // Cache directory.
 type Cache struct {
 	conf CacheConfig
+	mgr  types.Manager
 
-	key   field.Expression
-	ttl   field.Expression
-	cache types.Cache
+	key field.Expression
+	ttl field.Expression
 
 	log   log.Modular
 	stats metrics.Type
@@ -53,8 +53,7 @@ func NewCache(
 	log log.Modular,
 	stats metrics.Type,
 ) (*Cache, error) {
-	cache, err := mgr.GetCache(conf.Target)
-	if err != nil {
+	if _, err := mgr.GetCache(conf.Target); err != nil {
 		return nil, fmt.Errorf("failed to obtain cache '%v': %v", conf.Target, err)
 	}
 	key, err := bloblang.NewField(conf.Key)
@@ -67,9 +66,9 @@ func NewCache(
 	}
 	return &Cache{
 		conf:  conf,
+		mgr:   mgr,
 		key:   key,
 		ttl:   ttl,
-		cache: cache,
 		log:   log,
 		stats: stats,
 	}, nil
@@ -93,22 +92,25 @@ func (c *Cache) WriteWithContext(ctx context.Context, msg types.Message) error {
 
 // Write attempts to write message contents to a target Cache.
 func (c *Cache) Write(msg types.Message) error {
-	if msg.Len() == 1 {
-		var ttl *time.Duration
-		if ttls := c.ttl.String(0, msg); ttls != "" {
-			t, err := time.ParseDuration(ttls)
-			if err != nil {
-				c.log.Debugf("Invalid duration string for TTL field: %v\n", err)
-				return fmt.Errorf("ttl field: %w", err)
+	cache, err := c.mgr.GetCache(c.conf.Target)
+	if err != nil {
+		return err
+	}
+
+	if cttl, ok := cache.(types.CacheWithTTL); ok {
+		if msg.Len() == 1 {
+			var ttl *time.Duration
+			if ttls := c.ttl.String(0, msg); ttls != "" {
+				t, err := time.ParseDuration(ttls)
+				if err != nil {
+					c.log.Debugf("Invalid duration string for TTL field: %v\n", err)
+					return fmt.Errorf("ttl field: %w", err)
+				}
+				ttl = &t
 			}
-			ttl = &t
-		}
-		if cttl, ok := c.cache.(types.CacheWithTTL); ok && ttl != nil {
 			return cttl.SetWithTTL(c.key.String(0, msg), msg.Get(0).Get(), ttl)
 		}
-		return c.cache.Set(c.key.String(0, msg), msg.Get(0).Get())
-	}
-	if cttl, ok := c.cache.(types.CacheWithTTL); ok {
+
 		items := map[string]types.CacheTTLItem{}
 		msg.Iter(func(i int, p types.Part) error {
 			var ttl *time.Duration
@@ -126,20 +128,18 @@ func (c *Cache) Write(msg types.Message) error {
 			}
 			return nil
 		})
-		if len(items) > 0 {
-			return cttl.SetMultiWithTTL(items)
-		}
-	} else {
-		items := map[string][]byte{}
-		msg.Iter(func(i int, p types.Part) error {
-			items[c.key.String(i, msg)] = p.Get()
-			return nil
-		})
-		if len(items) > 0 {
-			return c.cache.SetMulti(items)
-		}
+		return cttl.SetMultiWithTTL(items)
 	}
-	return nil
+
+	if msg.Len() == 1 {
+		return cache.Set(c.key.String(0, msg), msg.Get(0).Get())
+	}
+	items := map[string][]byte{}
+	msg.Iter(func(i int, p types.Part) error {
+		items[c.key.String(i, msg)] = p.Get()
+		return nil
+	})
+	return cache.SetMulti(items)
 }
 
 // CloseAsync begins cleaning up resources used by this writer asynchronously.
