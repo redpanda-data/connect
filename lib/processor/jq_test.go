@@ -50,13 +50,14 @@ func TestJQValidation(t *testing.T) {
 
 func TestJQMutation(t *testing.T) {
 	conf := NewConfig()
-	conf.JQ.Query = `{foo: .foo | .bar = "baz"}`
+	conf.JQ.Query = `{foo: .foo} | .foo.bar = "baz"`
 
 	jSet, err := NewJQ(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	ogObj := gabs.New()
 	ogObj.Set("is this", "foo", "original", "content")
+	ogObj.Set("remove this", "bar")
 	ogExp := ogObj.String()
 
 	msgIn := message.New(make([][]byte, 1))
