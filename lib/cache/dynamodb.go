@@ -195,7 +195,10 @@ func NewDynamoDB(conf Config, mgr types.Manager, log log.Modular, stats metrics.
 	})
 	if err != nil {
 		return nil, err
-	} else if out == nil || out.Table == nil || out.Table.TableStatus == nil || *out.Table.TableStatus != dynamodb.TableStatusActive {
+	} else if out == nil ||
+		out.Table == nil ||
+		out.Table.TableStatus == nil ||
+		*out.Table.TableStatus != dynamodb.TableStatusActive {
 		return nil, fmt.Errorf("table '%s' must be active", d.conf.Table)
 	}
 
