@@ -3,6 +3,7 @@ package integration
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -417,6 +418,95 @@ func integrationTestStreamParallelLossyThroughReconnect(n int) testDefinition {
 			}()
 
 			wg.Wait()
+		},
+	)
+}
+
+// With a given identifier, extract the message from the target output
+// destination. This is normally used for testing cache or DB based outputs that
+// don't have a stream consumer available.
+type getMessageFunc func(*testEnvironment, string) (string, []string, error)
+
+func integrationTestOutputOnlySendSequential(n int, getFn getMessageFunc) testDefinition {
+	return namedTest(
+		"can send to output",
+		func(t *testing.T, env *testEnvironment) {
+			t.Parallel()
+
+			tranChan := make(chan types.Transaction)
+			output := initOutput(t, tranChan, env)
+			t.Cleanup(func() {
+				closeConnectors(t, nil, output)
+			})
+
+			set := map[string]string{}
+			for i := 0; i < n; i++ {
+				id := strconv.Itoa(i)
+				payload := fmt.Sprintf(`{"id":%v,"content":"hello world"}`, id)
+				set[id] = payload
+				require.NoError(t, sendMessage(env.ctx, t, tranChan, payload, "id", id))
+			}
+
+			for k, exp := range set {
+				act, _, err := getFn(env, k)
+				require.NoError(t, err)
+				assert.Equal(t, exp, act)
+			}
+		},
+	)
+}
+
+func integrationTestOutputOnlySendBatch(n int, getFn getMessageFunc) testDefinition {
+	return namedTest(
+		"can send to output as batch",
+		func(t *testing.T, env *testEnvironment) {
+			t.Parallel()
+
+			tranChan := make(chan types.Transaction)
+			output := initOutput(t, tranChan, env)
+			t.Cleanup(func() {
+				closeConnectors(t, nil, output)
+			})
+
+			set := map[string]string{}
+			batch := []string{}
+			for i := 0; i < n; i++ {
+				id := strconv.Itoa(i)
+				payload := fmt.Sprintf(`{"id":%v,"content":"hello world"}`, id)
+				set[id] = payload
+				batch = append(batch, payload)
+			}
+			require.NoError(t, sendBatch(env.ctx, t, tranChan, batch))
+
+			for k, exp := range set {
+				act, _, err := getFn(env, k)
+				require.NoError(t, err)
+				assert.Equal(t, exp, act)
+			}
+		},
+	)
+}
+
+func integrationTestOutputOnlyOverride(getFn getMessageFunc) testDefinition {
+	return namedTest(
+		"can send to output and override value",
+		func(t *testing.T, env *testEnvironment) {
+			t.Parallel()
+
+			tranChan := make(chan types.Transaction)
+			output := initOutput(t, tranChan, env)
+			t.Cleanup(func() {
+				closeConnectors(t, nil, output)
+			})
+
+			first := `{"id":1,"content":"this should be overridden"}`
+			exp := `{"id":1,"content":"hello world"}`
+			require.NoError(t, sendMessage(env.ctx, t, tranChan, first))
+			require.NoError(t, sendMessage(env.ctx, t, tranChan, exp))
+
+			act, _, err := getFn(env, "1")
+			require.NoError(t, err)
+			assert.Equal(t, exp, act)
 		},
 	)
 }

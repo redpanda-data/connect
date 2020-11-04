@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
+	"github.com/go-redis/redis/v7"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -165,5 +166,41 @@ input:
 				testOptMaxInFlight(10),
 			)
 		})
+	})
+
+	// HASH
+	t.Run("hash", func(t *testing.T) {
+		t.Parallel()
+		template := `
+output:
+  redis_hash:
+    url: tcp://localhost:$PORT
+    key: $ID-${! json("id") }
+    fields:
+      content: ${! content() }
+`
+		hashGetFn := func(env *testEnvironment, id string) (string, []string, error) {
+			client := redis.NewClient(&redis.Options{
+				Addr:    fmt.Sprintf("localhost:%v", resource.GetPort("6379/tcp")),
+				Network: "tcp",
+			})
+			key := env.configVars.id + "-" + id
+			res, err := client.HGet(key, "content").Result()
+			if err != nil {
+				return "", nil, err
+			}
+			return res, nil, nil
+		}
+		suite := integrationTests(
+			integrationTestOutputOnlySendSequential(10, hashGetFn),
+			integrationTestOutputOnlySendBatch(10, hashGetFn),
+			integrationTestOutputOnlyOverride(hashGetFn),
+		)
+		suite.Run(
+			t, template,
+			testOptSleepAfterInput(100*time.Millisecond),
+			testOptSleepAfterOutput(100*time.Millisecond),
+			testOptPort(resource.GetPort("6379/tcp")),
+		)
 	})
 })
