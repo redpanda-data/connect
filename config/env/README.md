@@ -695,6 +695,18 @@ OUTPUT_CACHE_KEY                                      = ${!count("items")}-${!ti
 OUTPUT_CACHE_MAX_IN_FLIGHT                            = 1
 OUTPUT_CACHE_TARGET
 OUTPUT_CACHE_TTL
+OUTPUT_CASSANDRA_ASYNC                                = true
+OUTPUT_CASSANDRA_BACKOFF_INITIAL_INTERVAL             = 1s
+OUTPUT_CASSANDRA_BACKOFF_MAX_ELAPSED_TIME             = 30s
+OUTPUT_CASSANDRA_BACKOFF_MAX_INTERVAL                 = 5s
+OUTPUT_CASSANDRA_CONSISTENCY                          = QUORUM
+OUTPUT_CASSANDRA_KEYSPACE                             = benthos
+OUTPUT_CASSANDRA_MAX_RETRIES                          = 3
+OUTPUT_CASSANDRA_NODES                                = localhost:9042
+OUTPUT_CASSANDRA_PASSWORD_AUTHENTICATOR_ENABLED       = true
+OUTPUT_CASSANDRA_PASSWORD_AUTHENTICATOR_PASSWORD      = cassandra
+OUTPUT_CASSANDRA_PASSWORD_AUTHENTICATOR_USERNAME      = cassandra
+OUTPUT_CASSANDRA_TABLE                                = benthos
 OUTPUT_DYNAMIC_MAX_IN_FLIGHT                          = 1
 OUTPUT_DYNAMIC_PREFIX
 OUTPUT_DYNAMIC_TIMEOUT                                = 5s
