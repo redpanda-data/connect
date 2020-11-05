@@ -5,9 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
 - Added field `codec` to the `file` output.
 - The `file` output now supports dynamic file paths.
 - Added field `ttl` to the `cache` processor and output.
+- New `sql` output, which is similar to the `sql` processor and currently supports Clickhouse, PostgreSQL and MySQL.
 
 ## Changed
 

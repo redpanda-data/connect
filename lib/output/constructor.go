@@ -99,6 +99,7 @@ const (
 	TypeRetry           = "retry"
 	TypeS3              = "s3"
 	TypeSNS             = "sns"
+	TypeSQL             = "sql"
 	TypeSQS             = "sqs"
 	TypeSTDOUT          = "stdout"
 	TypeSubprocess      = "subprocess"
@@ -153,6 +154,7 @@ type Config struct {
 	Retry           RetryConfig                    `json:"retry" yaml:"retry"`
 	S3              writer.AmazonS3Config          `json:"s3" yaml:"s3"`
 	SNS             writer.SNSConfig               `json:"sns" yaml:"sns"`
+	SQL             SQLConfig                      `json:"sql" yaml:"sql"`
 	SQS             writer.AmazonSQSConfig         `json:"sqs" yaml:"sqs"`
 	STDOUT          STDOUTConfig                   `json:"stdout" yaml:"stdout"`
 	Subprocess      SubprocessConfig               `json:"subprocess" yaml:"subprocess"`
@@ -207,6 +209,7 @@ func NewConfig() Config {
 		Retry:           NewRetryConfig(),
 		S3:              writer.NewAmazonS3Config(),
 		SNS:             writer.NewSNSConfig(),
+		SQL:             NewSQLConfig(),
 		SQS:             writer.NewAmazonSQSConfig(),
 		STDOUT:          NewSTDOUTConfig(),
 		Subprocess:      NewSubprocessConfig(),

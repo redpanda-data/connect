@@ -941,6 +941,14 @@ OUTPUT_SNS_TIMEOUT                                    = 5s
 OUTPUT_SNS_TOPIC_ARN
 OUTPUT_SOCKET_ADDRESS                                 = /tmp/benthos.sock
 OUTPUT_SOCKET_NETWORK                                 = unix
+OUTPUT_SQL_BATCHING_BYTE_SIZE                         = 0
+OUTPUT_SQL_BATCHING_CHECK
+OUTPUT_SQL_BATCHING_COUNT                             = 0
+OUTPUT_SQL_BATCHING_PERIOD
+OUTPUT_SQL_DATA_SOURCE_NAME
+OUTPUT_SQL_DRIVER                                     = mysql
+OUTPUT_SQL_MAX_IN_FLIGHT                              = 1
+OUTPUT_SQL_QUERY
 OUTPUT_SQS_BACKOFF_INITIAL_INTERVAL                   = 1s
 OUTPUT_SQS_BACKOFF_MAX_ELAPSED_TIME                   = 30s
 OUTPUT_SQS_BACKOFF_MAX_INTERVAL                       = 5s

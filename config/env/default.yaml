@@ -1124,6 +1124,16 @@ output:
         socket:
           address: ${OUTPUT_SOCKET_ADDRESS:/tmp/benthos.sock}
           network: ${OUTPUT_SOCKET_NETWORK:unix}
+        sql:
+          batching:
+            byte_size: ${OUTPUT_SQL_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_SQL_BATCHING_CHECK}
+            count: ${OUTPUT_SQL_BATCHING_COUNT:0}
+            period: ${OUTPUT_SQL_BATCHING_PERIOD}
+          data_source_name: ${OUTPUT_SQL_DATA_SOURCE_NAME}
+          driver: ${OUTPUT_SQL_DRIVER:mysql}
+          max_in_flight: ${OUTPUT_SQL_MAX_IN_FLIGHT:1}
+          query: ${OUTPUT_SQL_QUERY}
         sqs:
           backoff:
             initial_interval: ${OUTPUT_SQS_BACKOFF_INITIAL_INTERVAL:1s}
