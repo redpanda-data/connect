@@ -15,27 +15,189 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
+Send messages to a Cassandra database.
+
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yaml
-# Config fields, showing default values
+# Common config fields, showing default values
+output:
+  cassandra: {}
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+# All config fields, showing default values
 output:
   cassandra:
-    async: true
-    backoff:
-      initial_interval: 1s
-      max_elapsed_time: 30s
-      max_interval: 5s
-    consistency: QUORUM
-    keyspace: benthos
-    max_retries: 3
     nodes:
       - localhost:9042
     password_authenticator:
       enabled: true
       password: cassandra
       username: cassandra
+    keyspace: benthos
     table: benthos
+    consistency: QUORUM
+    async: true
+    backoff:
+      initial_interval: 1s
+      max_elapsed_time: 30s
+      max_interval: 5s
+    max_retries: 3
 ```
 
-Sends messages to a Cassandra database.
+</TabItem>
+</Tabs>
+
+This output will send messages to a Cassandra database using the INSERT JSON functionality
+provided by the database (https://cassandra.apache.org/doc/latest/cql/json.html#insert-json).
+
+## Fields
+
+### `nodes`
+
+A list of Cassandra nodes to connect to.
+
+
+Type: `array`  
+Default: `["localhost:9042"]`  
+
+```yaml
+# Examples
+
+nodes:
+  - localhost:9042
+```
+
+### `password_authenticator`
+
+An object containing the username and password.
+
+
+Type: `unknown`  
+Default: `{"enabled":true,"password":"cassandra","username":"cassandra"}`  
+
+```yaml
+# Examples
+
+password_authenticator:
+  enabled: true
+  username: cassandra
+  password: cassandra
+```
+
+### `keyspace`
+
+The name of the Cassandra keyspace to use.
+
+
+Type: `string`  
+Default: `"benthos"`  
+
+```yaml
+# Examples
+
+keyspace: benthos
+```
+
+### `table`
+
+The name of the Cassandra table to use.
+
+
+Type: `string`  
+Default: `"benthos"`  
+
+```yaml
+# Examples
+
+table: benthos
+```
+
+### `consistency`
+
+The consistency level to use.
+
+
+Type: `string`  
+Default: `"QUORUM"`  
+
+```yaml
+# Examples
+
+consistency: ANY
+
+consistency: ONE
+
+consistency: TWO
+
+consistency: THREE
+
+consistency: QUORUM
+
+consistency: ALL
+
+consistency: LOCAL_QUORUM
+
+consistency: EACH_QUORUM
+
+consistency: LOCAL_ONE
+```
+
+### `async`
+
+A flag to determine whether inserts will be performed concurrently.
+
+
+Type: `bool`  
+Default: `true`  
+
+```yaml
+# Examples
+
+async: true
+
+async: false
+```
+
+### `backoff`
+
+The mechanism used to provided retries at increasing intervals.
+
+
+Type: `unknown`  
+Default: `{"initial_interval":"1s","max_elapsed_time":"30s","max_interval":"5s"}`  
+
+```yaml
+# Examples
+
+backoff:
+  initial_interval: 1s
+  max_interval: 5s
+  max_elapsed_time: 30s
+```
+
+### `max_retries`
+
+The maximum number of retries to attempt.
+
+
+Type: `number`  
+Default: `3`  
+
+```yaml
+# Examples
+
+max_retries: 10
+```
 
 
