@@ -18,6 +18,10 @@ All notable changes to this project will be documented in this file.
 - The `files` output has been deprecated as its behaviour is now covered by `file`.
 - The `kafka_balanced` input has now been deprecated as its functionality has been added to the `kafka` input.
 
+## Fixed
+
+- Fixed the `tar` and `tar-gzip` input codecs in experimental inputs.
+
 ## 3.32.0 - 2020-10-29
 
 ### Added

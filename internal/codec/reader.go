@@ -187,7 +187,7 @@ func (a *linesReader) Close(ctx context.Context) error {
 	if !a.finished {
 		a.sourceAck(ctx, errors.New("service shutting down"))
 	}
-	if a.pending == 0 && a.total == 0 {
+	if a.pending == 0 && a.total > 0 {
 		a.sourceAck(ctx, nil)
 	}
 	return a.r.Close()
@@ -279,7 +279,7 @@ func (a *customDelimReader) Close(ctx context.Context) error {
 	if !a.finished {
 		a.sourceAck(ctx, errors.New("service shutting down"))
 	}
-	if a.pending == 0 && a.total == 0 {
+	if a.pending == 0 && a.total > 0 {
 		a.sourceAck(ctx, nil)
 	}
 	return a.r.Close()
@@ -327,13 +327,14 @@ func (a *tarReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
 
 	_, err := a.buf.Next()
 	if err == nil {
-		b, err := ioutil.ReadAll(a.buf)
+		fileBuf := bytes.Buffer{}
+		_, err = fileBuf.ReadFrom(a.buf)
 		if err != nil {
 			return nil, nil, err
 		}
 		a.pending++
 		a.total++
-		return message.NewPart(b), a.ack, nil
+		return message.NewPart(fileBuf.Bytes()), a.ack, nil
 	}
 
 	if err == io.EOF {
@@ -349,7 +350,7 @@ func (a *tarReader) Close(ctx context.Context) error {
 	if !a.finished {
 		a.sourceAck(ctx, errors.New("service shutting down"))
 	}
-	if a.pending == 0 && a.total == 0 {
+	if a.pending == 0 && a.total > 0 {
 		a.sourceAck(ctx, nil)
 	}
 	return a.r.Close()
