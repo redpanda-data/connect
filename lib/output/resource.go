@@ -49,7 +49,7 @@ output:
 resources:
   outputs:
     foo:
-      kafka_balanced:
+      kafka:
         addresses: [ TODO ]
         topic: foo
 

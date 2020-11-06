@@ -67,7 +67,7 @@ therefore as simple as applying those means.
 
 Kafka, for example, allows you to distribute messages across partitions, which
 can either be statically distributed across consumers or, using the
-kafka_balanced input type, can be dynamically distributed across consumers.
+kafka input type, can be dynamically distributed across consumers.
 
 Vertical Scaling
 

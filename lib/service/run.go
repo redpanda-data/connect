@@ -187,12 +187,12 @@ func Run() {
 
 	app := &cli.App{
 		Name:  "benthos",
-		Usage: "A stream processor for mundane tasks - https://benthos.dev",
+		Usage: "A stream processor for mundane tasks - https://www.benthos.dev",
 		Description: `
    Either run Benthos as a stream processor or choose a command:
 
    benthos list inputs
-   benthos create kafka_balanced//file > ./config.yaml
+   benthos create kafka//file > ./config.yaml
    benthos -c ./config.yaml
    benthos -r "./production/*.yaml" -c ./config.yaml`[4:],
 		Flags: flags,

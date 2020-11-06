@@ -71,7 +71,7 @@ output:
     label: 'Multiplexing',
     further: '/docs/components/outputs/about/#multiplexing-outputs',
     config: `input:
-  kafka_balanced:
+  kafka:
     addresses: [ TODO ]
     topics: [ foo, bar ]
     consumer_group: foogroup

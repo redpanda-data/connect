@@ -16,7 +16,7 @@ Let's imagine we have a configuration file `foo.yaml` containing some processors
 
 ```yaml
 input:
-  kafka_balanced:
+  kafka:
     addresses: [ TODO ]
     topics: [ foo, bar ]
     consumer_group: foogroup

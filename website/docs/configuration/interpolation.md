@@ -6,7 +6,7 @@ Benthos allows you to dynamically set config fields with environment variables a
 
 ```yaml
 input:
-  kafka_balanced:
+  kafka:
     addresses: [ "${BROKERS}" ]
     consumer_group: benthos_bridge_consumer
     topics: [ "haha_business" ]

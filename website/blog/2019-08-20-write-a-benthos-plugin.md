@@ -260,7 +260,7 @@ http:
   address: 0.0.0.0:4195
 
 input:
-  kafka_balanced:
+  kafka:
     addresses:
     - localhost:9092
     consumer_group: foo_consumer_group

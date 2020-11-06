@@ -33,7 +33,7 @@ Only one input is configured at the root of a Benthos config. However, the root 
 input:
   broker:
     inputs:
-      - kafka_balanced:
+      - kafka:
           addresses: [ TODO ]
           topics: [ foo, bar ]
           consumer_group: foogroup

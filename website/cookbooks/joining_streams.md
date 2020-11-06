@@ -70,7 +70,7 @@ In this example I'm targeting Redis, but you can choose any of the supported [ca
 
 ```yaml
 input:
-  kafka_balanced:
+  kafka:
     addresses: [ TODO ]
     topics: [ articles ]
     consumer_group: benthos_articles_group
@@ -109,7 +109,7 @@ In this config we make use of the [`branch`][processor.branch] processor as it a
 
 ```yaml
 input:
-  kafka_balanced:
+  kafka:
     addresses: [ TODO ]
     topics: [ comments ]
     consumer_group: benthos_comments_group
@@ -173,12 +173,12 @@ Our config (omitting the caching sections for brevity) now looks like this:
 input:
   broker:
     inputs:
-      - kafka_balanced:
+      - kafka:
           addresses: [ TODO ]
           topics: [ comments ]
           consumer_group: benthos_comments_group
 
-      - kafka_balanced:
+      - kafka:
           addresses: [ TODO ]
           topics: [ comments_retry ]
           consumer_group: benthos_comments_group

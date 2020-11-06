@@ -20,8 +20,8 @@ import TabItem from '@theme/TabItem';
 
 ```yaml
 input:
-  type: kafka_balanced
-  kafka_balanced:
+  type: kafka
+  kafka:
     addresses: [ TODO ]
     topics: [ foo, bar ]
     consumer_group: foogroup
@@ -49,8 +49,8 @@ http:
   debug_endpoints: false
 
 input:
-  type: kafka_balanced
-  kafka_balanced:
+  type: kafka
+  kafka:
     addresses: [ TODO ]
     topics: [ foo, bar ]
     consumer_group: foogroup
@@ -119,7 +119,7 @@ are default. For example, the above configuration could be written as:
 
 ```yaml
 input:
-  kafka_balanced:
+  kafka:
     addresses: [ TODO ]
     topics: [ foo, bar ]
     consumer_group: foogroup
@@ -145,8 +145,8 @@ in your config with environment variables like so:
 
 ```yaml
 input:
-  type: kafka_balanced
-  kafka_balanced:
+  type: kafka
+  kafka:
     addresses:
     - ${KAFKA_BROKER:localhost:9092}
     topics:

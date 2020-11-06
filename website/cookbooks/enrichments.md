@@ -62,7 +62,7 @@ In order to send a mapped request and map the response back into the original do
 
 ```yaml
 input:
-  kafka_balanced:
+  kafka:
     addresses: [ TODO ]
     topics: [ articles ]
     consumer_group: benthos_articles_group
@@ -249,7 +249,7 @@ Placing our branches within a [`workflow` processor][processor.workflow] makes o
 
 ```yaml
 input:
-  kafka_balanced:
+  kafka:
     addresses: [ TODO ]
     topics: [ articles ]
     consumer_group: benthos_articles_group

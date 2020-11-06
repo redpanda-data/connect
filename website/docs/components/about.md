@@ -14,7 +14,7 @@ Every Benthos pipeline has at least one [input][inputs], an optional [buffer][bu
 
 ```yaml
 input:
-  kafka_balanced:
+  kafka:
     addresses: [ TODO ]
     topics: [ foo, bar ]
     consumer_group: foogroup

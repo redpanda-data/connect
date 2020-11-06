@@ -32,7 +32,7 @@ example, the config:
 input:
   broker:
     inputs:
-      - kafka_balanced:
+      - kafka:
           addresses: [ TODO ]
           topics: [ foo ]
           consumer_group: foogroup
@@ -53,7 +53,7 @@ input:
 resources:
   inputs:
     foo:
-      kafka_balanced:
+      kafka:
         addresses: [ TODO ]
         topics: [ foo ]
         consumer_group: foogroup

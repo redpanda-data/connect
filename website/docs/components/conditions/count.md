@@ -51,7 +51,7 @@ read:
 input:
   read_until:
     input:
-      kafka_balanced:
+      kafka:
         addresses: [ TODO ]
         topics: [ foo, bar ]
         consumer_group: foogroup
