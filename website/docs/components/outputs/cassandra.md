@@ -1,7 +1,7 @@
 ---
 title: cassandra
 type: output
-status: stable
+status: beta
 ---
 
 <!--
@@ -14,8 +14,9 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 
-Send messages to a Cassandra database.
+Runs a query against a Cassandra database for each message in order to insert data.
 
 
 <Tabs defaultValue="common" values={[
@@ -28,7 +29,14 @@ Send messages to a Cassandra database.
 ```yaml
 # Common config fields, showing default values
 output:
-  cassandra: {}
+  cassandra:
+    args: []
+    max_in_flight: 1
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
 ```
 
 </TabItem>
@@ -38,44 +46,90 @@ output:
 # All config fields, showing default values
 output:
   cassandra:
-    nodes:
-      - localhost:9042
+    addresses: []
     password_authenticator:
-      enabled: true
-      password: cassandra
-      username: cassandra
-    keyspace: benthos
-    table: benthos
+      enabled: false
+      username: ""
+      password: ""
+    query: ""
+    args: []
     consistency: QUORUM
-    async: true
+    max_retries: 3
     backoff:
       initial_interval: 1s
-      max_elapsed_time: 30s
       max_interval: 5s
-    max_retries: 3
+      max_elapsed_time: 30s
+    max_in_flight: 1
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: []
 ```
 
 </TabItem>
 </Tabs>
 
-This output will send messages to a Cassandra database using the INSERT JSON functionality
-provided by the database (https://cassandra.apache.org/doc/latest/cql/json.html#insert-json).
+Query arguments are set using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the `args` field.
+
+## Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages with the
+field `max_in_flight`.
+
+This output benefits from sending messages as a batch for improved performance.
+Batches can be formed at both the input and output level. You can find out more
+[in this doc](/docs/configuration/batching).
+
+## Examples
+
+<Tabs defaultValue="Insert JSON Documents" values={[
+{ label: 'Insert JSON Documents', value: 'Insert JSON Documents', },
+]}>
+
+<TabItem value="Insert JSON Documents">
+
+The following example inserts JSON documents into the table `footable` of the keyspace `foospace` using INSERT JSON (https://cassandra.apache.org/doc/latest/cql/json.html#insert-json).
+
+```yaml
+output:
+  cassandra:
+    addresses:
+      - localhost:9042
+    query: 'INSERT INTO foospace.footable JSON ?'
+    args:
+      - ${! content() }
+    batching:
+      count: 500
+```
+
+</TabItem>
+</Tabs>
 
 ## Fields
 
-### `nodes`
+### `addresses`
 
-A list of Cassandra nodes to connect to.
+A list of Cassandra nodes to connect to. Multiple comma separated addresses can be specified on a single line.
 
 
 Type: `array`  
-Default: `["localhost:9042"]`  
+Default: `[]`  
 
 ```yaml
 # Examples
 
-nodes:
+addresses:
   - localhost:9042
+
+addresses:
+  - foo:9042
+  - bar:9042
+
+addresses:
+  - foo:9042,bar:9042
 ```
 
 ### `password_authenticator`
@@ -83,45 +137,48 @@ nodes:
 An object containing the username and password.
 
 
-Type: `unknown`  
-Default: `{"enabled":true,"password":"cassandra","username":"cassandra"}`  
+Type: `object`  
 
-```yaml
-# Examples
+### `password_authenticator.enabled`
 
-password_authenticator:
-  enabled: true
-  username: cassandra
-  password: cassandra
-```
+Whether to use password authentication.
 
-### `keyspace`
 
-The name of the Cassandra keyspace to use.
+Type: `bool`  
+Default: `false`  
+
+### `password_authenticator.username`
+
+A username.
 
 
 Type: `string`  
-Default: `"benthos"`  
+Default: `""`  
 
-```yaml
-# Examples
+### `password_authenticator.password`
 
-keyspace: benthos
-```
-
-### `table`
-
-The name of the Cassandra table to use.
+A password.
 
 
 Type: `string`  
-Default: `"benthos"`  
+Default: `""`  
 
-```yaml
-# Examples
+### `query`
 
-table: benthos
-```
+A query to execute for each message.
+
+
+Type: `string`  
+Default: `""`  
+
+### `args`
+
+A list of arguments for the query to be resolved for each message.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `consistency`
 
@@ -130,74 +187,149 @@ The consistency level to use.
 
 Type: `string`  
 Default: `"QUORUM"`  
-
-```yaml
-# Examples
-
-consistency: ANY
-
-consistency: ONE
-
-consistency: TWO
-
-consistency: THREE
-
-consistency: QUORUM
-
-consistency: ALL
-
-consistency: LOCAL_QUORUM
-
-consistency: EACH_QUORUM
-
-consistency: LOCAL_ONE
-```
-
-### `async`
-
-A flag to determine whether inserts will be performed concurrently.
-
-
-Type: `bool`  
-Default: `true`  
-
-```yaml
-# Examples
-
-async: true
-
-async: false
-```
-
-### `backoff`
-
-The mechanism used to provided retries at increasing intervals.
-
-
-Type: `unknown`  
-Default: `{"initial_interval":"1s","max_elapsed_time":"30s","max_interval":"5s"}`  
-
-```yaml
-# Examples
-
-backoff:
-  initial_interval: 1s
-  max_interval: 5s
-  max_elapsed_time: 30s
-```
+Options: `ANY`, `ONE`, `TWO`, `THREE`, `QUORUM`, `ALL`, `LOCAL_QUORUM`, `EACH_QUORUM`, `LOCAL_ONE`.
 
 ### `max_retries`
 
-The maximum number of retries to attempt.
+The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
 
 
 Type: `number`  
 Default: `3`  
 
+### `backoff`
+
+Control time intervals between retry attempts.
+
+
+Type: `object`  
+
+### `backoff.initial_interval`
+
+The initial period to wait between retry attempts.
+
+
+Type: `string`  
+Default: `"1s"`  
+
+### `backoff.max_interval`
+
+The maximum period to wait between retry attempts.
+
+
+Type: `string`  
+Default: `"5s"`  
+
+### `backoff.max_elapsed_time`
+
+The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
+
+
+Type: `string`  
+Default: `"30s"`  
+
+### `max_in_flight`
+
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+
+Type: `number`  
+Default: `1`  
+
+### `batching`
+
+Allows you to configure a [batching policy](/docs/configuration/batching).
+
+
+Type: `object`  
+
 ```yaml
 # Examples
 
-max_retries: 10
+batching:
+  byte_size: 5000
+  count: 0
+  period: 1s
+
+batching:
+  count: 10
+  period: 1s
+
+batching:
+  check: this.contains("END BATCH")
+  count: 0
+  period: 1m
+```
+
+### `batching.count`
+
+A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+
+Type: `number`  
+Default: `0`  
+
+### `batching.byte_size`
+
+An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+
+Type: `number`  
+Default: `0`  
+
+### `batching.period`
+
+A period in which an incomplete batch should be flushed regardless of its size.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+period: 1s
+
+period: 1m
+
+period: 500ms
+```
+
+### `batching.check`
+
+A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should end a batch.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+check: this.type == "end_of_transaction"
+```
+
+### `batching.processors`
+
+A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+processors:
+  - archive:
+      format: lines
+
+processors:
+  - archive:
+      format: json_array
+
+processors:
+  - merge_json: {}
 ```
 
 

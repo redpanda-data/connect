@@ -20,21 +20,26 @@ pipeline:
 output:
   type: cassandra
   cassandra:
-    async: true
+    addresses: []
+    args: []
     backoff:
       initial_interval: 1s
       max_elapsed_time: 30s
       max_interval: 5s
+    batching:
+      byte_size: 0
+      check: ""
+      count: 0
+      period: ""
+      processors: []
     consistency: QUORUM
-    keyspace: benthos
+    max_in_flight: 1
     max_retries: 3
-    nodes:
-      - localhost:9042
     password_authenticator:
-      enabled: true
-      password: cassandra
-      username: cassandra
-    table: benthos
+      enabled: false
+      password: ""
+      username: ""
+    query: ""
 resources:
   caches: {}
   conditions: {}

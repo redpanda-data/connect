@@ -126,7 +126,7 @@ type Config struct {
 	BlobStorage     writer.AzureBlobStorageConfig  `json:"blob_storage" yaml:"blob_storage"`
 	Broker          BrokerConfig                   `json:"broker" yaml:"broker"`
 	Cache           writer.CacheConfig             `json:"cache" yaml:"cache"`
-	Cassandra       writer.CassandraConfig         `json:"cassandra" yaml:"cassandra"`
+	Cassandra       CassandraConfig                `json:"cassandra" yaml:"cassandra"`
 	Drop            writer.DropConfig              `json:"drop" yaml:"drop"`
 	DropOnError     DropOnErrorConfig              `json:"drop_on_error" yaml:"drop_on_error"`
 	Dynamic         DynamicConfig                  `json:"dynamic" yaml:"dynamic"`
@@ -182,7 +182,7 @@ func NewConfig() Config {
 		BlobStorage:     writer.NewAzureBlobStorageConfig(),
 		Broker:          NewBrokerConfig(),
 		Cache:           writer.NewCacheConfig(),
-		Cassandra:       writer.NewCassandraConfig(),
+		Cassandra:       NewCassandraConfig(),
 		Drop:            writer.NewDropConfig(),
 		DropOnError:     NewDropOnErrorConfig(),
 		Dynamic:         NewDynamicConfig(),
