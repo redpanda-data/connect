@@ -30,6 +30,7 @@ require (
 	github.com/fatih/color v1.10.0
 	github.com/go-redis/redis/v7 v7.4.0
 	github.com/go-sql-driver/mysql v1.5.0
+	github.com/gocql/gocql v0.0.0-20201024154641-5913df4d474e
 	github.com/gofrs/uuid v3.3.0+incompatible
 	github.com/golang/protobuf v1.4.3
 	github.com/golang/snappy v0.0.2 // indirect

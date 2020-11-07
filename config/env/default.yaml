@@ -822,6 +822,22 @@ output:
           max_in_flight: ${OUTPUT_CACHE_MAX_IN_FLIGHT:1}
           target: ${OUTPUT_CACHE_TARGET}
           ttl: ${OUTPUT_CACHE_TTL}
+        cassandra:
+          async: ${OUTPUT_CASSANDRA_ASYNC:true}
+          backoff:
+            initial_interval: ${OUTPUT_CASSANDRA_BACKOFF_INITIAL_INTERVAL:1s}
+            max_elapsed_time: ${OUTPUT_CASSANDRA_BACKOFF_MAX_ELAPSED_TIME:30s}
+            max_interval: ${OUTPUT_CASSANDRA_BACKOFF_MAX_INTERVAL:5s}
+          consistency: ${OUTPUT_CASSANDRA_CONSISTENCY:QUORUM}
+          keyspace: ${OUTPUT_CASSANDRA_KEYSPACE:benthos}
+          max_retries: ${OUTPUT_CASSANDRA_MAX_RETRIES:3}
+          nodes:
+            - ${OUTPUT_CASSANDRA_NODES:localhost:9042}
+          password_authenticator:
+            enabled: ${OUTPUT_CASSANDRA_PASSWORD_AUTHENTICATOR_ENABLED:true}
+            password: ${OUTPUT_CASSANDRA_PASSWORD_AUTHENTICATOR_PASSWORD:cassandra}
+            username: ${OUTPUT_CASSANDRA_PASSWORD_AUTHENTICATOR_USERNAME:cassandra}
+          table: ${OUTPUT_CASSANDRA_TABLE:benthos}
         dynamic:
           max_in_flight: ${OUTPUT_DYNAMIC_MAX_IN_FLIGHT:1}
           prefix: ${OUTPUT_DYNAMIC_PREFIX}
