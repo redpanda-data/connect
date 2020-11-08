@@ -25,9 +25,7 @@ func init() {
 	Constructors[TypeCSVFile] = TypeSpec{
 		constructor: NewCSVFile,
 		Status:      docs.StatusBeta,
-		Summary: `
-Reads one or more CSV files as structured records following the format described
-in RFC 4180.`,
+		Summary:     "Reads one or more CSV files as structured records following the format described in RFC 4180.",
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(
 				"paths", "A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported.",
@@ -38,9 +36,9 @@ in RFC 4180.`,
 			docs.FieldAdvanced("batch_count", `Optionally process records in batches. This can help to speed up the consumption of exceptionally large CSV files. When the end of the file is reached the remaining records are processed as a (potentially smaller) batch.`),
 		},
 		Description: `
-When parsing with a header row each line of the file will be consumed as a
-structured object, where the key names are determined from the header now. For
-example, the following CSV file:
+This input offers more control over CSV parsing than the ` + "[`file` input](/docs/components/inputs/file)" + `.
+
+When parsing with a header row each line of the file will be consumed as a structured object, where the key names are determined from the header now. For example, the following CSV file:
 
 ` + "```csv" + `
 foo,bar,baz
@@ -55,8 +53,7 @@ Would produce the following messages:
 {"foo":"second foo","bar":"second bar","baz":"second baz"}
 ` + "```" + `
 
-If, however, the field ` + "`parse_header_row` is set to `false`" + ` then
-arrays are produced instead, like follows:
+If, however, the field ` + "`parse_header_row` is set to `false`" + ` then arrays are produced instead, like follows:
 
 ` + "```json" + `
 ["first foo","first bar","first baz"]

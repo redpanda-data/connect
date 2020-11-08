@@ -228,9 +228,12 @@ Default: `"all-bytes"`
 
 | Option | Summary |
 |---|---|
+| `auto` | EXPERIMENTAL: Attempts to derive a codec for each file based on information such as the extension. For example, a .tar.gz file would be consumed with the tar-gzip codec. Defaults to all-bytes. |
 | `all-bytes` | Consume the entire file as a single binary message. |
-| `lines` | Consume the file in segments divided by linebreaks. |
+| `csv` | Consume structured rows as comma separated values, the first row must be a header row. |
+| `csv-gzip` | Consume structured rows as comma separated values from a gzip compressed file, the first row must be a header row. |
 | `delim:x` | Consume the file in segments divided by a custom delimter. |
+| `lines` | Consume the file in segments divided by linebreaks. |
 | `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
 | `tar-gzip` | Parse the file as a gzip compressed tar archive, and consume each file of the archive as a message. |
 

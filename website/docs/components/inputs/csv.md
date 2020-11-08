@@ -16,9 +16,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
-
-Reads one or more CSV files as structured records following the format described
-in RFC 4180.
+Reads one or more CSV files as structured records following the format described in RFC 4180.
 
 
 <Tabs defaultValue="common" values={[
@@ -53,9 +51,9 @@ input:
 </TabItem>
 </Tabs>
 
-When parsing with a header row each line of the file will be consumed as a
-structured object, where the key names are determined from the header now. For
-example, the following CSV file:
+This input offers more control over CSV parsing than the [`file` input](/docs/components/inputs/file).
+
+When parsing with a header row each line of the file will be consumed as a structured object, where the key names are determined from the header now. For example, the following CSV file:
 
 ```csv
 foo,bar,baz
@@ -70,8 +68,7 @@ Would produce the following messages:
 {"foo":"second foo","bar":"second bar","baz":"second baz"}
 ```
 
-If, however, the field `parse_header_row` is set to `false` then
-arrays are produced instead, like follows:
+If, however, the field `parse_header_row` is set to `false` then arrays are produced instead, like follows:
 
 ```json
 ["first foo","first bar","first baz"]

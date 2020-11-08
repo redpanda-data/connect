@@ -6,10 +6,12 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -22,9 +24,12 @@ import (
 var ReaderDocs = docs.FieldCommon(
 	"codec", "The way in which the bytes of consumed files are converted into messages, codecs are useful for specifying how large files might be processed in small chunks rather than loading it all in memory. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.", "lines", "delim:\t", "delim:foobar",
 ).HasAnnotatedOptions(
+	"auto", "EXPERIMENTAL: Attempts to derive a codec for each file based on information such as the extension. For example, a .tar.gz file would be consumed with the tar-gzip codec. Defaults to all-bytes.",
 	"all-bytes", "Consume the entire file as a single binary message.",
-	"lines", "Consume the file in segments divided by linebreaks.",
+	"csv", "Consume structured rows as comma separated values, the first row must be a header row.",
+	"csv-gzip", "Consume structured rows as comma separated values from a gzip compressed file, the first row must be a header row.",
 	"delim:x", "Consume the file in segments divided by a custom delimter.",
+	"lines", "Consume the file in segments divided by linebreaks.",
 	"tar", "Parse the file as a tar archive, and consume each file of the archive as a message.",
 	"tar-gzip", "Parse the file as a gzip compressed tar archive, and consume each file of the archive as a message.",
 )
@@ -55,31 +60,48 @@ type Reader interface {
 	Close(context.Context) error
 }
 
-// ReaderConstructor creates a reader from an io.ReadCloser and an ack func
-// which is called by the reader once the io.ReadCloser is finished with.
-type ReaderConstructor func(io.ReadCloser, ReaderAckFn) (Reader, error)
+// ReaderConstructor creates a reader from a filename, an io.ReadCloser and an
+// ack func which is called by the reader once the io.ReadCloser is finished
+// with. The filename can be empty and is usually ignored, but might be
+// necessary for certain codecs.
+type ReaderConstructor func(string, io.ReadCloser, ReaderAckFn) (Reader, error)
 
 // GetReader returns a constructor that creates reader codecs.
 func GetReader(codec string, conf ReaderConfig) (ReaderConstructor, error) {
 	switch codec {
+	case "auto":
+		return autoCodec(conf), nil
 	case "all-bytes":
-		return func(r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			return &allBytesReader{r, fn, false}, nil
 		}, nil
 	case "lines":
-		return func(r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			return newLinesReader(conf, r, fn)
 		}, nil
-	case "tar":
-		return newTarReader, nil
-	case "tar-gzip":
-		return func(r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+	case "csv":
+		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+			return newCSVReader(r, fn)
+		}, nil
+	case "csv-gzip":
+		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			g, err := gzip.NewReader(r)
 			if err != nil {
 				r.Close()
 				return nil, err
 			}
-			return newTarReader(g, fn)
+			return newCSVReader(g, fn)
+		}, nil
+	case "tar":
+		return newTarReader, nil
+	case "tar-gzip":
+		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+			g, err := gzip.NewReader(r)
+			if err != nil {
+				r.Close()
+				return nil, err
+			}
+			return newTarReader("", g, fn)
 		}, nil
 	}
 	if strings.HasPrefix(codec, "delim:") {
@@ -87,11 +109,33 @@ func GetReader(codec string, conf ReaderConfig) (ReaderConstructor, error) {
 		if len(by) == 0 {
 			return nil, errors.New("custom delimiter codec requires a non-empty delimiter")
 		}
-		return func(r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			return newCustomDelimReader(conf, r, by, fn)
 		}, nil
 	}
 	return nil, fmt.Errorf("codec was not recognised: %v", codec)
+}
+
+func autoCodec(conf ReaderConfig) ReaderConstructor {
+	return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+		codec := "all-bytes"
+		switch filepath.Ext(path) {
+		case ".csv":
+			codec = "csv"
+		case ".csv.gz", ".csv.gzip":
+			codec = "csv-gzip"
+		case ".tar":
+			codec = "tar"
+		case ".tar.gz", ".tar.gzip":
+			codec = "tar-gzip"
+		}
+
+		ctor, err := GetReader(codec, conf)
+		if err != nil {
+			return nil, fmt.Errorf("failed to infer codec: %v", err)
+		}
+		return ctor(path, r, fn)
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -181,6 +225,97 @@ func (a *linesReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error)
 }
 
 func (a *linesReader) Close(ctx context.Context) error {
+	a.mut.Lock()
+	defer a.mut.Unlock()
+
+	if !a.finished {
+		a.sourceAck(ctx, errors.New("service shutting down"))
+	}
+	if a.pending == 0 && a.total > 0 {
+		a.sourceAck(ctx, nil)
+	}
+	return a.r.Close()
+}
+
+//------------------------------------------------------------------------------
+
+type csvReader struct {
+	scanner   *csv.Reader
+	r         io.ReadCloser
+	sourceAck ReaderAckFn
+
+	headers []string
+
+	mut      sync.Mutex
+	finished bool
+	total    int32
+	pending  int32
+}
+
+func newCSVReader(r io.ReadCloser, ackFn ReaderAckFn) (Reader, error) {
+	scanner := csv.NewReader(r)
+	scanner.ReuseRecord = true
+
+	headers, err := scanner.Read()
+	if err != nil {
+		return nil, err
+	}
+
+	headersCopy := make([]string, len(headers))
+	for i, hdr := range headers {
+		headersCopy[i] = hdr
+	}
+
+	return &csvReader{
+		scanner:   scanner,
+		r:         r,
+		sourceAck: ackFn,
+		headers:   headersCopy,
+	}, nil
+}
+
+func (a *csvReader) ack(ctx context.Context, err error) error {
+	a.mut.Lock()
+	a.pending--
+	doAck := a.pending == 0 && a.finished
+	a.mut.Unlock()
+
+	if err != nil {
+		return a.sourceAck(ctx, err)
+	}
+	if doAck {
+		return a.sourceAck(ctx, nil)
+	}
+	return nil
+}
+
+func (a *csvReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
+	a.mut.Lock()
+	defer a.mut.Unlock()
+
+	records, err := a.scanner.Read()
+	if err != nil {
+		if err == io.EOF {
+			a.finished = true
+		}
+		return nil, nil, err
+	}
+
+	a.pending++
+	a.total++
+
+	obj := make(map[string]interface{}, len(records))
+	for i, r := range records {
+		obj[a.headers[i]] = r
+	}
+
+	part := message.NewPart(nil)
+	part.SetJSON(obj)
+
+	return part, a.ack, nil
+}
+
+func (a *csvReader) Close(ctx context.Context) error {
 	a.mut.Lock()
 	defer a.mut.Unlock()
 
@@ -298,7 +433,7 @@ type tarReader struct {
 	pending  int32
 }
 
-func newTarReader(r io.ReadCloser, ackFn ReaderAckFn) (Reader, error) {
+func newTarReader(path string, r io.ReadCloser, ackFn ReaderAckFn) (Reader, error) {
 	return &tarReader{
 		buf:       tar.NewReader(r),
 		r:         r,

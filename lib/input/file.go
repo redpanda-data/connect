@@ -37,6 +37,18 @@ Consumes data from files on disk, emitting messages according to a chosen codec.
 		Categories: []Category{
 			CategoryLocal,
 		},
+		Examples: []docs.AnnotatedExample{
+			{
+				Title:   "Read a Bunch of CSVs",
+				Summary: "If we wished to consume a directory of CSV files as structured documents we can use a glob pattern and the `csv` codec:",
+				Config: `
+input:
+  file:
+    paths: [ ./data/*.csv ]
+    codec: csv
+`,
+			},
+		},
 	}
 }
 
@@ -142,7 +154,7 @@ func (f *fileConsumer) ConnectWithContext(ctx context.Context) error {
 		return err
 	}
 
-	if f.scanner, err = f.scannerCtor(file, func(ctx context.Context, err error) error {
+	if f.scanner, err = f.scannerCtor(nextPath, file, func(ctx context.Context, err error) error {
 		if err == nil && f.delete {
 			return os.Remove(nextPath)
 		}

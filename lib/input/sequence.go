@@ -18,19 +18,17 @@ import (
 func init() {
 	Constructors[TypeSequence] = TypeSpec{
 		constructor: NewSequence,
-		Status:      docs.StatusBeta,
 		Summary: `
 Reads messages from a sequence of child inputs, starting with the first and once
 that input gracefully terminates starts consuming from the next, and so on.`,
 		Description: `
 This input is useful for consuming from inputs that have an explicit end but
 must not be consumed in parallel.`,
-		Footnotes: `
-## Examples
-
-A common use case might be to generate a message at the end of our main input:
-
-` + "```yaml" + `
+		Examples: []docs.AnnotatedExample{
+			{
+				Title:   "End of Stream Message",
+				Summary: "A common use case for sequence might be to generate a message at the end of our main input. With the following config once the records within `./dataset.csv` are exhausted our final payload `{\"status\":\"finished\"}` will be routed through the pipeline.",
+				Config: `
 input:
   sequence:
     inputs:
@@ -39,11 +37,9 @@ input:
       - bloblang:
           count: 1
           mapping: 'root = {"status":"finished"}'
-` + "```" + `
-
-With this config once the records within ` + "`./dataset.csv`" + ` are exhausted
-our final payload ` + "`" + `{"status":"finished"}` + "`" + ` will be routed
-through the pipeline.`,
+`,
+			},
+		},
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			inputsSanit := make([]interface{}, 0, len(conf.Sequence.Inputs))
 			for _, in := range conf.Sequence.Inputs {

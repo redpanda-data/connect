@@ -1,7 +1,7 @@
 ---
 title: sequence
 type: input
-status: beta
+status: stable
 categories: ["Utility"]
 ---
 
@@ -15,7 +15,6 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 
 Reads messages from a sequence of child inputs, starting with the first and once
 that input gracefully terminates starts consuming from the next, and so on.
@@ -42,7 +41,13 @@ Default: `[]`
 
 ## Examples
 
-A common use case might be to generate a message at the end of our main input:
+<Tabs defaultValue="End of Stream Message" values={[
+{ label: 'End of Stream Message', value: 'End of Stream Message', },
+]}>
+
+<TabItem value="End of Stream Message">
+
+A common use case for sequence might be to generate a message at the end of our main input. With the following config once the records within `./dataset.csv` are exhausted our final payload `{"status":"finished"}` will be routed through the pipeline.
 
 ```yaml
 input:
@@ -55,7 +60,7 @@ input:
           mapping: 'root = {"status":"finished"}'
 ```
 
-With this config once the records within `./dataset.csv` are exhausted
-our final payload `{"status":"finished"}` will be routed
-through the pipeline.
+</TabItem>
+</Tabs>
+
 

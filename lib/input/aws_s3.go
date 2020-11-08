@@ -615,7 +615,7 @@ func (a *awsS3) getObjectTarget(ctx context.Context) (*pendingObject, error) {
 		target: target,
 		obj:    obj,
 	}
-	if object.scanner, err = a.objectScannerCtor(obj.Body, target.ackFn); err != nil {
+	if object.scanner, err = a.objectScannerCtor(target.key, obj.Body, target.ackFn); err != nil {
 		target.ackFn(ctx, err)
 		return nil, err
 	}

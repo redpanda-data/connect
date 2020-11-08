@@ -18,6 +18,8 @@ All notable changes to this project will be documented in this file.
 
 - The `files` output has been deprecated as its behaviour is now covered by `file`.
 - The `kafka_balanced` input has now been deprecated as its functionality has been added to the `kafka` input.
+- The `cloudwatch` metrics aggregator is now considered stable.
+- The `sequence` input is now considered stable.
 
 ## Fixed
 
