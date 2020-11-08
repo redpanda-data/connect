@@ -34,8 +34,18 @@ var _ = registerIntegrationTest("memcached", func(t *testing.T) {
 		conf := cache.NewConfig()
 		conf.Memcached.Addresses = addrs
 
-		_, cErr := cache.NewMemcached(conf, nil, log.Noop(), metrics.Noop())
-		return cErr
+		mCache, cErr := cache.NewMemcached(conf, nil, log.Noop(), metrics.Noop())
+		if cErr != nil {
+			return cErr
+		}
+
+		if cErr = mCache.Set("testkey", []byte("testvalue")); cErr != nil {
+			return cErr
+		}
+		if _, cErr = mCache.Get("testkey"); cErr != nil {
+			return cErr
+		}
+		return nil
 	}))
 
 	template := `
