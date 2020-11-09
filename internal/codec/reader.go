@@ -126,7 +126,7 @@ func autoCodec(conf ReaderConfig) ReaderConstructor {
 			codec = "csv-gzip"
 		case ".tar":
 			codec = "tar"
-		case ".tar.gz", ".tar.gzip":
+		case ".tar.gz", ".tar.gzip", ".tgz":
 			codec = "tar-gzip"
 		}
 
