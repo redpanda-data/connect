@@ -1768,11 +1768,10 @@ func TestMethods(t *testing.T) {
 
 			for i := 0; i < 10; i++ {
 				res, err := test.input.Exec(FunctionContext{
-					Value:    func() *interface{} { return test.value },
 					Maps:     map[string]Function{},
 					Index:    test.index,
 					MsgBatch: msg,
-				})
+				}.WithValueFunc(func() *interface{} { return test.value }))
 				if len(test.err) > 0 {
 					require.EqualError(t, err, test.err)
 				} else {

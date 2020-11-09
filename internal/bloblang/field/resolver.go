@@ -51,7 +51,12 @@ func (q QueryResolver) ResolveString(index int, msg Message, escaped, legacy boo
 		Index:    index,
 		MsgBatch: msg,
 		Legacy:   legacy,
-	})
+	}.WithValueFunc(func() *interface{} {
+		if jObj, err := msg.Get(index).JSON(); err == nil {
+			return &jObj
+		}
+		return nil
+	}))
 }
 
 // ResolveBytes returns a byte slice.
@@ -60,7 +65,12 @@ func (q QueryResolver) ResolveBytes(index int, msg Message, escaped, legacy bool
 		Index:    index,
 		MsgBatch: msg,
 		Legacy:   legacy,
-	})
+	}.WithValueFunc(func() *interface{} {
+		if jObj, err := msg.Get(index).JSON(); err == nil {
+			return &jObj
+		}
+		return nil
+	}))
 	if escaped {
 		bs = escapeBytes(bs)
 	}

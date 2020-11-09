@@ -106,11 +106,10 @@ func (e *Executor) QueryPart(index int, msg Message) (bool, error) {
 	for _, stmt := range e.statements {
 		res, err := stmt.query.Exec(query.FunctionContext{
 			Maps:     e.maps,
-			Value:    lazyValue,
 			Vars:     vars,
 			Index:    index,
 			MsgBatch: msg,
-		})
+		}.WithValueFunc(lazyValue))
 		if err != nil {
 			var line int
 			if len(e.input) > 0 && len(stmt.input) > 0 {
@@ -199,11 +198,10 @@ func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (t
 	for _, stmt := range e.statements {
 		res, err := stmt.query.Exec(query.FunctionContext{
 			Maps:     e.maps,
-			Value:    lazyValue,
 			Vars:     vars,
 			Index:    index,
 			MsgBatch: reference,
-		})
+		}.WithValueFunc(lazyValue))
 		if err != nil {
 			var line int
 			if len(e.input) > 0 && len(stmt.input) > 0 {

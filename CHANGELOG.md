@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.33.0 - TBD
+
 ### Added
 
 - Added field `codec` to the `file` output.
@@ -24,6 +26,7 @@ All notable changes to this project will be documented in this file.
 ## Fixed
 
 - Fixed the `tar` and `tar-gzip` input codecs in experimental inputs.
+- Fixed a crash that could occur when referencing contextual fields within interpolation functions.
 
 ## 3.32.0 - 2020-10-29
 

@@ -52,17 +52,33 @@ type MessageBatch interface {
 // FunctionContext provides access to a range of query targets for functions to
 // reference.
 type FunctionContext struct {
-	Value    func() *interface{}
 	Maps     map[string]Function
 	Vars     map[string]interface{}
 	Index    int
 	MsgBatch MessageBatch
 	Legacy   bool
+
+	valueFn func() *interface{}
+}
+
+// Value returns a lazily evaluated context value. A context value is not always
+// available and can therefore be nil.
+func (ctx FunctionContext) Value() *interface{} {
+	if ctx.valueFn == nil {
+		return nil
+	}
+	return ctx.valueFn()
+}
+
+// WithValueFunc returns a function context with a new value func.
+func (ctx FunctionContext) WithValueFunc(fn func() *interface{}) FunctionContext {
+	ctx.valueFn = fn
+	return ctx
 }
 
 // WithValue returns a function context with a new value.
 func (ctx FunctionContext) WithValue(v interface{}) FunctionContext {
-	ctx.Value = func() *interface{} {
+	ctx.valueFn = func() *interface{} {
 		return &v
 	}
 	return ctx

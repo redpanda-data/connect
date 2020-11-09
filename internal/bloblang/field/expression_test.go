@@ -202,6 +202,16 @@ func TestExpressions(t *testing.T) {
 				{content: `{"foo":"bar"}`},
 			},
 		},
+		"this expression": {
+			expression: NewExpression(
+				NewQueryResolver(query.NewFieldFunction("foo")),
+			),
+			output: `bar`,
+			messages: []easyMsg{
+				{content: `{"foo":"bar"}`},
+				{content: `not json`},
+			},
+		},
 	}
 
 	for name, test := range tests {
