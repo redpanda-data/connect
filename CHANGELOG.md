@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - The `kafka_balanced` input has now been deprecated as its functionality has been added to the `kafka` input.
 - The `cloudwatch` metrics aggregator is now considered stable.
 - The `sequence` input is now considered stable.
+- The `switch` processor no longer permits cases with no processors.
 
 ## Fixed
 

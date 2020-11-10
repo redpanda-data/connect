@@ -236,6 +236,10 @@ func NewSwitch(
 			}
 		}
 
+		if len(caseConf.Processors) == 0 {
+			return nil, fmt.Errorf("case [%v] has no processors, in order to have a no-op case use a `noop` processor", i)
+		}
+
 		for j, procConf := range caseConf.Processors {
 			procPrefix := prefix + "." + strconv.Itoa(j)
 			var proc types.Processor
