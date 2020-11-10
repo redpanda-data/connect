@@ -589,6 +589,12 @@ func s3MsgFromPart(p *pendingObject, part types.Part) types.Message {
 	if p.obj.ContentEncoding != nil {
 		meta.Set("s3_content_encoding", *p.obj.ContentEncoding)
 	}
+	for k, v := range p.obj.Metadata {
+		if v != nil {
+			meta.Set(k, *v)
+		}
+	}
+
 	return msg
 }
 
