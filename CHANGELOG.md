@@ -28,6 +28,7 @@ All notable changes to this project will be documented in this file.
 
 - Fixed the `tar` and `tar-gzip` input codecs in experimental inputs.
 - Fixed a crash that could occur when referencing contextual fields within interpolation functions.
+- The `noop` processor can now be inferred with an empty object (`noop: {}`).
 
 ## 3.32.0 - 2020-10-29
 

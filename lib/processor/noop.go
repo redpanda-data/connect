@@ -13,17 +13,22 @@ import (
 func init() {
 	Constructors[TypeNoop] = TypeSpec{
 		constructor: NewNoop,
-		Summary: `
-Noop is a no-op processor that does nothing, the message passes through
-unchanged. Why? That's a great question.`,
+		Summary:     "Noop is a processor that does nothing, the message passes through unchanged. Why? Sometimes doing nothing is the braver option.",
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// Noop is a no-op processor that does nothing.
-type Noop struct {
+// NoopConfig configures the no-op processor.
+type NoopConfig struct{}
+
+// NewNoopConfig creates a new default no-op processor config.
+func NewNoopConfig() NoopConfig {
+	return NoopConfig{}
 }
+
+// Noop is a no-op processor that does nothing.
+type Noop struct{}
 
 // NewNoop returns a Noop processor.
 func NewNoop(

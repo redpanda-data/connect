@@ -14,13 +14,11 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Noop is a no-op processor that does nothing, the message passes through
-unchanged. Why? That's a great question.
+Noop is a processor that does nothing, the message passes through unchanged. Why? Sometimes doing nothing is the braver option.
 
 ```yaml
 # Config fields, showing default values
-noop: null
+noop: {}
 ```
 
 

@@ -184,6 +184,7 @@ type Config struct {
 	MergeJSON    MergeJSONConfig    `json:"merge_json" yaml:"merge_json"`
 	Metadata     MetadataConfig     `json:"metadata" yaml:"metadata"`
 	Metric       MetricConfig       `json:"metric" yaml:"metric"`
+	Noop         NoopConfig         `json:"noop" yaml:"noop"`
 	Number       NumberConfig       `json:"number" yaml:"number"`
 	Plugin       interface{}        `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Parallel     ParallelConfig     `json:"parallel" yaml:"parallel"`
@@ -251,6 +252,7 @@ func NewConfig() Config {
 		MergeJSON:    NewMergeJSONConfig(),
 		Metadata:     NewMetadataConfig(),
 		Metric:       NewMetricConfig(),
+		Noop:         NewNoopConfig(),
 		Number:       NewNumberConfig(),
 		Plugin:       nil,
 		Parallel:     NewParallelConfig(),
