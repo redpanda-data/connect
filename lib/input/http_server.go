@@ -3,6 +3,7 @@ package input
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -105,6 +106,7 @@ You can access these metadata fields using
 			docs.FieldCommon("ws_path", "The endpoint path to create websocket connections from."),
 			docs.FieldAdvanced("ws_welcome_message", "An optional message to deliver to fresh websocket connections."),
 			docs.FieldAdvanced("ws_rate_limit_message", "An optional message to delivery to websocket connections that are rate limited."),
+			docs.FieldCommon("allowed_verbs", "An array of verbs that are allowed for the `path` endpoint."),
 			docs.FieldCommon("timeout", "Timeout for requests. If a consumed messages takes longer than this to be delivered the connection is closed, but the message may still be delivered."),
 			docs.FieldCommon("rate_limit", "An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by."),
 			docs.FieldAdvanced("cert_file", "Only valid with a custom `address`."),
@@ -150,6 +152,7 @@ type HTTPServerConfig struct {
 	WSPath             string                   `json:"ws_path" yaml:"ws_path"`
 	WSWelcomeMessage   string                   `json:"ws_welcome_message" yaml:"ws_welcome_message"`
 	WSRateLimitMessage string                   `json:"ws_rate_limit_message" yaml:"ws_rate_limit_message"`
+	AllowedVerbs       []string                 `json:"allowed_verbs" yaml:"allowed_verbs"`
 	Timeout            string                   `json:"timeout" yaml:"timeout"`
 	RateLimit          string                   `json:"rate_limit" yaml:"rate_limit"`
 	CertFile           string                   `json:"cert_file" yaml:"cert_file"`
@@ -165,11 +168,14 @@ func NewHTTPServerConfig() HTTPServerConfig {
 		WSPath:             "/post/ws",
 		WSWelcomeMessage:   "",
 		WSRateLimitMessage: "",
-		Timeout:            "5s",
-		RateLimit:          "",
-		CertFile:           "",
-		KeyFile:            "",
-		Response:           NewHTTPServerResponseConfig(),
+		AllowedVerbs: []string{
+			"POST",
+		},
+		Timeout:   "5s",
+		RateLimit: "",
+		CertFile:  "",
+		KeyFile:   "",
+		Response:  NewHTTPServerResponseConfig(),
 	}
 }
 
@@ -201,6 +207,8 @@ type HTTPServer struct {
 
 	closeChan  chan struct{}
 	closedChan chan struct{}
+
+	allowedVerbs map[string]struct{}
 
 	mCount         metrics.StatCounter
 	mLatency       metrics.StatTimer
@@ -247,6 +255,14 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		}
 	}
 
+	verbs := map[string]struct{}{}
+	for _, v := range conf.HTTPServer.AllowedVerbs {
+		verbs[v] = struct{}{}
+	}
+	if len(verbs) == 0 {
+		return nil, errors.New("must provide at least one allowed verb")
+	}
+
 	h := HTTPServer{
 		running:         1,
 		conf:            conf,
@@ -260,6 +276,8 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		transactions:    make(chan types.Transaction),
 		closeChan:       make(chan struct{}),
 		closedChan:      make(chan struct{}),
+
+		allowedVerbs: verbs,
 
 		mCount:         stats.GetCounter("count"),
 		mLatency:       stats.GetTimer("latency"),
@@ -386,7 +404,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	defer h.handlerWG.Done()
 	defer r.Body.Close()
 
-	if r.Method != "POST" {
+	if _, exists := h.allowedVerbs[r.Method]; !exists {
 		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
 		return
 	}

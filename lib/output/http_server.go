@@ -3,6 +3,7 @@ package output
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -14,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -49,6 +49,7 @@ This behaviour can be overridden by
 			docs.FieldCommon("path", "The path from which discrete messages can be consumed."),
 			docs.FieldCommon("stream_path", "The path from which a continuous stream of messages can be consumed."),
 			docs.FieldCommon("ws_path", "The path from which websocket connections can be established."),
+			docs.FieldCommon("allowed_verbs", "An array of verbs that are allowed for the `path` and `stream_path` HTTP endpoint."),
 			docs.FieldAdvanced("timeout", "The maximum time to wait before a blocking, inactive connection is dropped (only applies to the `path` endpoint)."),
 			docs.FieldAdvanced("cert_file", "An optional certificate file to use for TLS connections. Only applicable when an `address` is specified."),
 			docs.FieldAdvanced("key_file", "An optional certificate key file to use for TLS connections. Only applicable when an `address` is specified."),
@@ -64,27 +65,29 @@ This behaviour can be overridden by
 // HTTPServerConfig contains configuration fields for the HTTPServer output
 // type.
 type HTTPServerConfig struct {
-	Address    string `json:"address" yaml:"address"`
-	Path       string `json:"path" yaml:"path"`
-	StreamPath string `json:"stream_path" yaml:"stream_path"`
-	WSPath     string `json:"ws_path" yaml:"ws_path"`
-	Timeout    string `json:"timeout" yaml:"timeout"`
-	CertFile   string `json:"cert_file" yaml:"cert_file"`
-	KeyFile    string `json:"key_file" yaml:"key_file"`
+	Address      string   `json:"address" yaml:"address"`
+	Path         string   `json:"path" yaml:"path"`
+	StreamPath   string   `json:"stream_path" yaml:"stream_path"`
+	WSPath       string   `json:"ws_path" yaml:"ws_path"`
+	AllowedVerbs []string `json:"allowed_verbs" yaml:"allowed_verbs"`
+	Timeout      string   `json:"timeout" yaml:"timeout"`
+	CertFile     string   `json:"cert_file" yaml:"cert_file"`
+	KeyFile      string   `json:"key_file" yaml:"key_file"`
 }
 
 // NewHTTPServerConfig creates a new HTTPServerConfig with default values.
 func NewHTTPServerConfig() HTTPServerConfig {
-	batching := batch.NewPolicyConfig()
-	batching.Count = 1
 	return HTTPServerConfig{
 		Address:    "",
 		Path:       "/get",
 		StreamPath: "/get/stream",
 		WSPath:     "/get/ws",
-		Timeout:    "5s",
-		CertFile:   "",
-		KeyFile:    "",
+		AllowedVerbs: []string{
+			"GET",
+		},
+		Timeout:  "5s",
+		CertFile: "",
+		KeyFile:  "",
 	}
 }
 
@@ -106,6 +109,8 @@ type HTTPServer struct {
 
 	closeChan  chan struct{}
 	closedChan chan struct{}
+
+	allowedVerbs map[string]struct{}
 
 	mRunning       metrics.StatGauge
 	mCount         metrics.StatCounter
@@ -143,6 +148,14 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		server = &http.Server{Addr: conf.HTTPServer.Address, Handler: mux}
 	}
 
+	verbs := map[string]struct{}{}
+	for _, v := range conf.HTTPServer.AllowedVerbs {
+		verbs[v] = struct{}{}
+	}
+	if len(verbs) == 0 {
+		return nil, errors.New("must provide at least one allowed verb")
+	}
+
 	h := HTTPServer{
 		running:    1,
 		conf:       conf,
@@ -152,6 +165,8 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		server:     server,
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
+
+		allowedVerbs: verbs,
 
 		mRunning:       stats.GetGauge("running"),
 		mCount:         stats.GetCounter("count"),
@@ -231,7 +246,7 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method != "GET" {
+	if _, exists := h.allowedVerbs[r.Method]; !exists {
 		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
 		return
 	}
@@ -304,7 +319,7 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method != "GET" {
+	if _, exists := h.allowedVerbs[r.Method]; !exists {
 		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
 		h.mStrmErrWrong.Incr(1)
 		return

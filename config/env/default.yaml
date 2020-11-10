@@ -157,6 +157,8 @@ input:
           verb: ${INPUT_HTTP_CLIENT_VERB:GET}
         http_server:
           address: ${INPUT_HTTP_SERVER_ADDRESS}
+          allowed_verbs:
+            - ${INPUT_HTTP_SERVER_ALLOWED_VERBS:POST}
           cert_file: ${INPUT_HTTP_SERVER_CERT_FILE}
           key_file: ${INPUT_HTTP_SERVER_KEY_FILE}
           path: ${INPUT_HTTP_SERVER_PATH:/post}
@@ -944,6 +946,8 @@ output:
           verb: ${OUTPUT_HTTP_CLIENT_VERB:POST}
         http_server:
           address: ${OUTPUT_HTTP_SERVER_ADDRESS}
+          allowed_verbs:
+            - ${OUTPUT_HTTP_SERVER_ALLOWED_VERBS:GET}
           cert_file: ${OUTPUT_HTTP_SERVER_CERT_FILE}
           key_file: ${OUTPUT_HTTP_SERVER_KEY_FILE}
           path: ${OUTPUT_HTTP_SERVER_PATH:/get}

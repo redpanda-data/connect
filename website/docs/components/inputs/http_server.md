@@ -34,6 +34,8 @@ input:
     address: ""
     path: /post
     ws_path: /post/ws
+    allowed_verbs:
+      - POST
     timeout: 5s
     rate_limit: ""
 ```
@@ -50,6 +52,8 @@ input:
     ws_path: /post/ws
     ws_welcome_message: ""
     ws_rate_limit_message: ""
+    allowed_verbs:
+      - POST
     timeout: 5s
     rate_limit: ""
     cert_file: ""
@@ -163,6 +167,14 @@ An optional message to delivery to websocket connections that are rate limited.
 
 Type: `string`  
 Default: `""`  
+
+### `allowed_verbs`
+
+An array of verbs that are allowed for the `path` endpoint.
+
+
+Type: `array`  
+Default: `["POST"]`  
 
 ### `timeout`
 

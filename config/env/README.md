@@ -170,6 +170,7 @@ INPUT_HTTP_CLIENT_TLS_SKIP_CERT_VERIFY               = false
 INPUT_HTTP_CLIENT_URL                                = http://localhost:4195/get
 INPUT_HTTP_CLIENT_VERB                               = GET
 INPUT_HTTP_SERVER_ADDRESS
+INPUT_HTTP_SERVER_ALLOWED_VERBS                      = POST
 INPUT_HTTP_SERVER_CERT_FILE
 INPUT_HTTP_SERVER_KEY_FILE
 INPUT_HTTP_SERVER_PATH                               = /post
@@ -794,6 +795,7 @@ OUTPUT_HTTP_CLIENT_TLS_SKIP_CERT_VERIFY               = false
 OUTPUT_HTTP_CLIENT_URL                                = http://localhost:4195/post
 OUTPUT_HTTP_CLIENT_VERB                               = POST
 OUTPUT_HTTP_SERVER_ADDRESS
+OUTPUT_HTTP_SERVER_ALLOWED_VERBS                      = GET
 OUTPUT_HTTP_SERVER_CERT_FILE
 OUTPUT_HTTP_SERVER_KEY_FILE
 OUTPUT_HTTP_SERVER_PATH                               = /get

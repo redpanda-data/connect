@@ -36,6 +36,8 @@ output:
     path: /get
     stream_path: /get/stream
     ws_path: /get/ws
+    allowed_verbs:
+      - GET
 ```
 
 </TabItem>
@@ -49,6 +51,8 @@ output:
     path: /get
     stream_path: /get/stream
     ws_path: /get/ws
+    allowed_verbs:
+      - GET
     timeout: 5s
     cert_file: ""
     key_file: ""
@@ -104,6 +108,14 @@ The path from which websocket connections can be established.
 
 Type: `string`  
 Default: `"/get/ws"`  
+
+### `allowed_verbs`
+
+An array of verbs that are allowed for the `path` and `stream_path` HTTP endpoint.
+
+
+Type: `array`  
+Default: `["GET"]`  
 
 ### `timeout`
 

@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - New `sql` output, which is similar to the `sql` processor and currently supports Clickhouse, PostgreSQL and MySQL.
 - The `kafka` input now supports multiple topics, topic partition balancing, and checkpointing.
 - New `cassandra` output.
+- Field `allowed_verbs` added to the `http_server` input and output.
 
 ## Changed
 

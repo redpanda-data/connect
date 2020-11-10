@@ -9,6 +9,8 @@ input:
   type: http_server
   http_server:
     address: ""
+    allowed_verbs:
+      - POST
     cert_file: ""
     key_file: ""
     path: /post
@@ -31,6 +33,8 @@ output:
   type: http_server
   http_server:
     address: ""
+    allowed_verbs:
+      - GET
     cert_file: ""
     key_file: ""
     path: /get
