@@ -198,7 +198,11 @@ func (c *cassandraWriter) ConnectWithContext(ctx context.Context) error {
 
 	var err error
 	conn := gocql.NewCluster(c.conf.Addresses...)
-	conn.SslOpts.Config = c.tlsConf
+	if c.tlsConf != nil {
+		conn.SslOpts = &gocql.SslOptions{
+			Config: c.tlsConf,
+		}
+	}
 	if c.conf.PasswordAuthenticator.Enabled {
 		conn.Authenticator = gocql.PasswordAuthenticator{
 			Username: c.conf.PasswordAuthenticator.Username,
