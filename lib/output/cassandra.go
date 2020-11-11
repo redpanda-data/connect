@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"math"
 	"math/rand"
@@ -16,6 +17,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
+	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/gocql/gocql"
 )
@@ -72,6 +74,7 @@ output:
 				[]string{"foo:9042", "bar:9042"},
 				[]string{"foo:9042,bar:9042"},
 			),
+			btls.FieldSpec(),
 			docs.FieldAdvanced(
 				"password_authenticator",
 				"An object containing the username and password.",
@@ -111,6 +114,7 @@ type PasswordAuthenticator struct {
 // CassandraConfig contains configuration fields for the Cassandra output type.
 type CassandraConfig struct {
 	Addresses             []string              `json:"addresses" yaml:"addresses"`
+	TLS                   btls.Config           `json:"tls" yaml:"tls"`
 	PasswordAuthenticator PasswordAuthenticator `json:"password_authenticator" yaml:"password_authenticator"`
 	Query                 string                `json:"query" yaml:"query"`
 	Args                  []string              `json:"args" yaml:"args"`
@@ -130,6 +134,7 @@ func NewCassandraConfig() CassandraConfig {
 
 	return CassandraConfig{
 		Addresses: []string{},
+		TLS:       btls.NewConfig(),
 		PasswordAuthenticator: PasswordAuthenticator{
 			Enabled:  false,
 			Username: "",
@@ -145,9 +150,10 @@ func NewCassandraConfig() CassandraConfig {
 }
 
 type cassandraWriter struct {
-	conf  CassandraConfig
-	log   log.Modular
-	stats metrics.Type
+	conf    CassandraConfig
+	log     log.Modular
+	stats   metrics.Type
+	tlsConf *tls.Config
 
 	args          []field.Expression
 	session       *gocql.Session
@@ -173,6 +179,12 @@ func newCassandraWriter(conf CassandraConfig, log log.Modular, stats metrics.Typ
 		args:          args,
 		mQueryLatency: stats.GetTimer("query.latency"),
 	}
+	var err error
+	if conf.TLS.Enabled {
+		if c.tlsConf, err = conf.TLS.Get(); err != nil {
+			return nil, err
+		}
+	}
 	return &c, nil
 }
 
@@ -186,6 +198,7 @@ func (c *cassandraWriter) ConnectWithContext(ctx context.Context) error {
 
 	var err error
 	conn := gocql.NewCluster(c.conf.Addresses...)
+	conn.SslOpts.Config = c.tlsConf
 	if c.conf.PasswordAuthenticator.Enabled {
 		conn.Authenticator = gocql.PasswordAuthenticator{
 			Username: c.conf.PasswordAuthenticator.Username,

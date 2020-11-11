@@ -40,6 +40,11 @@ output:
       password: ""
       username: ""
     query: ""
+    tls:
+      client_certs: []
+      enabled: false
+      root_cas_file: ""
+      skip_cert_verify: false
 resources:
   caches: {}
   conditions: {}

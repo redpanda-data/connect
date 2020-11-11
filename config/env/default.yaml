@@ -842,6 +842,10 @@ output:
             password: ${OUTPUT_CASSANDRA_PASSWORD_AUTHENTICATOR_PASSWORD}
             username: ${OUTPUT_CASSANDRA_PASSWORD_AUTHENTICATOR_USERNAME}
           query: ${OUTPUT_CASSANDRA_QUERY}
+          tls:
+            enabled: ${OUTPUT_CASSANDRA_TLS_ENABLED:false}
+            root_cas_file: ${OUTPUT_CASSANDRA_TLS_ROOT_CAS_FILE}
+            skip_cert_verify: ${OUTPUT_CASSANDRA_TLS_SKIP_CERT_VERIFY:false}
         dynamic:
           max_in_flight: ${OUTPUT_DYNAMIC_MAX_IN_FLIGHT:1}
           prefix: ${OUTPUT_DYNAMIC_PREFIX}
