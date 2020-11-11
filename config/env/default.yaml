@@ -835,6 +835,7 @@ output:
             count: ${OUTPUT_CASSANDRA_BATCHING_COUNT:0}
             period: ${OUTPUT_CASSANDRA_BATCHING_PERIOD}
           consistency: ${OUTPUT_CASSANDRA_CONSISTENCY:QUORUM}
+          disable_initial_host_lookup: ${OUTPUT_CASSANDRA_DISABLE_INITIAL_HOST_LOOKUP:false}
           max_in_flight: ${OUTPUT_CASSANDRA_MAX_IN_FLIGHT:1}
           max_retries: ${OUTPUT_CASSANDRA_MAX_RETRIES:3}
           password_authenticator:

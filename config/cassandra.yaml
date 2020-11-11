@@ -33,6 +33,7 @@ output:
       period: ""
       processors: []
     consistency: QUORUM
+    disable_initial_host_lookup: false
     max_in_flight: 1
     max_retries: 3
     password_authenticator:

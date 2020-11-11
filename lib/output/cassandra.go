@@ -83,6 +83,10 @@ output:
 				docs.FieldCommon("username", "A username."),
 				docs.FieldCommon("password", "A password."),
 			),
+			docs.FieldAdvanced(
+				"disable_initial_host_lookup",
+				"If enabled the driver will not attempt to get host info from the system.peers table. This can speed up queries but will mean that data_centre, rack and token information will not be available.",
+			),
 			docs.FieldAdvanced("query", "A query to execute for each message."),
 			docs.FieldCommon(
 				"args",
@@ -113,15 +117,16 @@ type PasswordAuthenticator struct {
 
 // CassandraConfig contains configuration fields for the Cassandra output type.
 type CassandraConfig struct {
-	Addresses             []string              `json:"addresses" yaml:"addresses"`
-	TLS                   btls.Config           `json:"tls" yaml:"tls"`
-	PasswordAuthenticator PasswordAuthenticator `json:"password_authenticator" yaml:"password_authenticator"`
-	Query                 string                `json:"query" yaml:"query"`
-	Args                  []string              `json:"args" yaml:"args"`
-	Consistency           string                `json:"consistency" yaml:"consistency"`
-	retries.Config        `json:",inline" yaml:",inline"`
-	MaxInFlight           int                `json:"max_in_flight" yaml:"max_in_flight"`
-	Batching              batch.PolicyConfig `json:"batching" yaml:"batching"`
+	Addresses                []string              `json:"addresses" yaml:"addresses"`
+	TLS                      btls.Config           `json:"tls" yaml:"tls"`
+	PasswordAuthenticator    PasswordAuthenticator `json:"password_authenticator" yaml:"password_authenticator"`
+	DisableInitialHostLookup bool                  `json:"disable_initial_host_lookup" yaml:"disable_initial_host_lookup"`
+	Query                    string                `json:"query" yaml:"query"`
+	Args                     []string              `json:"args" yaml:"args"`
+	Consistency              string                `json:"consistency" yaml:"consistency"`
+	retries.Config           `json:",inline" yaml:",inline"`
+	MaxInFlight              int                `json:"max_in_flight" yaml:"max_in_flight"`
+	Batching                 batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewCassandraConfig creates a new CassandraConfig with default values.
@@ -140,12 +145,13 @@ func NewCassandraConfig() CassandraConfig {
 			Username: "",
 			Password: "",
 		},
-		Query:       "",
-		Args:        []string{},
-		Consistency: gocql.Quorum.String(),
-		Config:      rConf,
-		MaxInFlight: 1,
-		Batching:    batch.NewPolicyConfig(),
+		DisableInitialHostLookup: false,
+		Query:                    "",
+		Args:                     []string{},
+		Consistency:              gocql.Quorum.String(),
+		Config:                   rConf,
+		MaxInFlight:              1,
+		Batching:                 batch.NewPolicyConfig(),
 	}
 }
 
@@ -201,7 +207,9 @@ func (c *cassandraWriter) ConnectWithContext(ctx context.Context) error {
 	if c.tlsConf != nil {
 		conn.SslOpts = &gocql.SslOptions{
 			Config: c.tlsConf,
+			CaPath: c.conf.TLS.RootCAsFile,
 		}
+		conn.DisableInitialHostLookup = c.conf.TLS.InsecureSkipVerify
 	}
 	if c.conf.PasswordAuthenticator.Enabled {
 		conn.Authenticator = gocql.PasswordAuthenticator{
@@ -209,6 +217,7 @@ func (c *cassandraWriter) ConnectWithContext(ctx context.Context) error {
 			Password: c.conf.PasswordAuthenticator.Password,
 		}
 	}
+	conn.DisableInitialHostLookup = c.conf.DisableInitialHostLookup
 	if conn.Consistency, err = gocql.ParseConsistencyWrapper(c.conf.Consistency); err != nil {
 		return fmt.Errorf("parsing consistency: %w", err)
 	}

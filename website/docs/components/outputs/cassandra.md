@@ -56,6 +56,7 @@ output:
       enabled: false
       username: ""
       password: ""
+    disable_initial_host_lookup: false
     query: ""
     args: []
     consistency: QUORUM
@@ -249,6 +250,14 @@ A password.
 
 Type: `string`  
 Default: `""`  
+
+### `disable_initial_host_lookup`
+
+If enabled the driver will not attempt to get host info from the system.peers table. This can speed up queries but will mean that data_centre, rack and token information will not be available.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `query`
 
