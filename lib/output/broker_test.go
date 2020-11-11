@@ -13,8 +13,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"nanomsg.org/go-mangos/protocol/pull"
-	"nanomsg.org/go-mangos/transport/tcp"
+	"go.nanomsg.org/mangos/v3/protocol/pull"
+	_ "go.nanomsg.org/mangos/v3/transport/all"
 )
 
 func TestBrokerWithNanomsg(t *testing.T) {
@@ -63,9 +63,6 @@ func TestBrokerWithNanomsg(t *testing.T) {
 		t.Error(err)
 		return
 	}
-
-	socketOne.AddTransport(tcp.NewTransport())
-	socketTwo.AddTransport(tcp.NewTransport())
 
 	if err = socketOne.Dial("tcp://localhost:1241"); err != nil {
 		t.Error(err)
@@ -165,9 +162,6 @@ func TestRoundRobinWithNanomsg(t *testing.T) {
 		t.Error(err)
 		return
 	}
-
-	socketOne.AddTransport(tcp.NewTransport())
-	socketTwo.AddTransport(tcp.NewTransport())
 
 	if err = socketOne.Dial("tcp://localhost:1245"); err != nil {
 		t.Error(err)
