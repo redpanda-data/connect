@@ -13,6 +13,8 @@ import (
 	"go.nanomsg.org/mangos/v3"
 	"go.nanomsg.org/mangos/v3/protocol/pub"
 	"go.nanomsg.org/mangos/v3/protocol/push"
+
+	// Import all transport types
 	_ "go.nanomsg.org/mangos/v3/transport/all"
 )
 

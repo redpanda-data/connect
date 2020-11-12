@@ -14,6 +14,8 @@ import (
 	"go.nanomsg.org/mangos/v3"
 	"go.nanomsg.org/mangos/v3/protocol/pull"
 	"go.nanomsg.org/mangos/v3/protocol/sub"
+
+	// Import all transport types
 	_ "go.nanomsg.org/mangos/v3/transport/all"
 )
 
@@ -137,10 +139,12 @@ func (s *ScaleProto) ConnectWithContext(ctx context.Context) error {
 	if nil != err {
 		return err
 	}
-	err = socket.SetOption(mangos.OptionRecvDeadline, s.repTimeout)
-	if nil != err {
-		return err
-	}
+	// TODO: This is only used for request/response sockets, and is invalid with
+	// other socket types.
+	// err = socket.SetOption(mangos.OptionRecvDeadline, s.repTimeout)
+	// if nil != err {
+	// 	return err
+	// }
 
 	if s.conf.Bind {
 		for _, addr := range s.urls {
