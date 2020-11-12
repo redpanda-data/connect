@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"strconv"
 	"sync"
 	"time"
 
@@ -263,12 +264,59 @@ func (c *cassandraWriter) WriteWithContext(ctx context.Context, msg types.Messag
 	return c.writeBatch(session, msg)
 }
 
+type stringValue string
+
+func formatCassandraInt64(x int64) []byte {
+	return []byte{byte(x >> 56), byte(x >> 48), byte(x >> 40), byte(x >> 32),
+		byte(x >> 24), byte(x >> 16), byte(x >> 8), byte(x)}
+}
+
+func formatCassandraInt32(x int32) []byte {
+	return []byte{byte(x >> 24), byte(x >> 16), byte(x >> 8), byte(x)}
+}
+
+// All of our argument values are string types due to interpolation. However,
+// gocql performs type checking and unfortunately does not like timestamp and
+// some other values as strings:
+// https://github.com/gocql/gocql/blob/5913df4d474e0b2492a129d17bbb3c04537a15cd/marshal.go#L1160
+//
+// In order to work around this we manually marshal some types.
+func (s stringValue) MarshalCQL(info gocql.TypeInfo) ([]byte, error) {
+	switch info.Type() {
+	case gocql.TypeTimestamp, gocql.TypeTime:
+		x, err := strconv.ParseInt(string(s), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse timestamp value '%v': expected unix epoch in nanoseconds", s)
+		}
+		return formatCassandraInt64(x), nil
+	case gocql.TypeBoolean:
+		if s == "true" {
+			return []byte{1}, nil
+		} else if s == "false" {
+			return []byte{0}, nil
+		}
+	case gocql.TypeFloat:
+		f, err := strconv.ParseFloat(string(s), 64)
+		if err != nil {
+			return nil, err
+		}
+		return formatCassandraInt64(int64(f)), nil
+	case gocql.TypeDouble:
+		f, err := strconv.ParseFloat(string(s), 32)
+		if err != nil {
+			return nil, err
+		}
+		return formatCassandraInt32(int32(f)), nil
+	}
+	return gocql.Marshal(info, string(s))
+}
+
 func (c *cassandraWriter) writeRow(session *gocql.Session, msg types.Message) error {
 	t0 := time.Now()
 
 	values := make([]interface{}, 0, len(c.args))
 	for _, arg := range c.args {
-		values = append(values, arg.String(0, msg))
+		values = append(values, stringValue(arg.String(0, msg)))
 	}
 	err := session.Query(c.conf.Query, values...).Exec()
 	if err != nil {
@@ -286,7 +334,7 @@ func (c *cassandraWriter) writeBatch(session *gocql.Session, msg types.Message) 
 	msg.Iter(func(i int, p types.Part) error {
 		values := make([]interface{}, 0, len(c.args))
 		for _, arg := range c.args {
-			values = append(values, arg.String(i, msg))
+			values = append(values, stringValue(arg.String(i, msg)))
 		}
 		batch.Query(c.conf.Query, values...)
 		return nil
