@@ -99,15 +99,19 @@ output:
     args:
       - ${! json("id") }
       - ${! json("content") }
-      - ${! timestamp_unix_nano() }
+      - ${! timestamp("2006-01-02T15:04:05.999Z07:00") }
 `
 		queryGetFn := func(env *testEnvironment, id string) (string, []string, error) {
 			var resID int
 			var resContent string
+			var createdAt time.Time
 			if err := session.Query(
-				fmt.Sprintf("select id, content from testspace.table%v where id = ?;", env.configVars.id), id,
-			).Scan(&resID, &resContent); err != nil {
+				fmt.Sprintf("select id, content, created_at from testspace.table%v where id = ?;", env.configVars.id), id,
+			).Scan(&resID, &resContent, &createdAt); err != nil {
 				return "", nil, err
+			}
+			if time.Since(createdAt) > time.Hour || time.Since(createdAt) < 0 {
+				return "", nil, fmt.Errorf("received bad created_at: %v", createdAt)
 			}
 			return fmt.Sprintf(`{"id":%v,"content":"%v"}`, resID, resContent), nil, err
 		}

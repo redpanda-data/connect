@@ -79,6 +79,8 @@ output:
 
 Query arguments are set using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the `args` field.
 
+When populating timestamp columns the value must either be a string in ISO 8601 format (2006-01-02T15:04:05Z07:00), or an integer representing unix time in seconds.
+
 ## Performance
 
 This output benefits from sending multiple messages in flight in parallel for
@@ -91,10 +93,30 @@ Batches can be formed at both the input and output level. You can find out more
 
 ## Examples
 
-<Tabs defaultValue="Insert JSON Documents" values={[
+<Tabs defaultValue="Basic Inserts" values={[
+{ label: 'Basic Inserts', value: 'Basic Inserts', },
 { label: 'Insert JSON Documents', value: 'Insert JSON Documents', },
 ]}>
 
+<TabItem value="Basic Inserts">
+
+If we were to create a table with some basic columns with `CREATE TABLE foo.bar (id int primary key, content text, created_at timestamp);`, and were processing JSON documents of the form `{"id":"342354354","content":"hello world","timestamp":1605219406}`, we could populate our table with the following config:
+
+```yaml
+output:
+  cassandra:
+    addresses:
+      - localhost:9042
+    query: 'INSERT INTO foo.bar (id, content, created_at) VALUES (?, ?, ?)'
+    args:
+      - ${! json("id") }
+      - ${! json("content") }
+      - ${! json("timestamp").format_timestamp() }
+    batching:
+      count: 500
+```
+
+</TabItem>
 <TabItem value="Insert JSON Documents">
 
 The following example inserts JSON documents into the table `footable` of the keyspace `foospace` using INSERT JSON (https://cassandra.apache.org/doc/latest/cql/json.html#insert-json).

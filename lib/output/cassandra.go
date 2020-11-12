@@ -49,8 +49,27 @@ func init() {
 		Summary: `
 Runs a query against a Cassandra database for each message in order to insert data.`,
 		Description: `
-Query arguments are set using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the ` + "`args`" + ` field.`,
+Query arguments are set using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the ` + "`args`" + ` field.
+
+When populating timestamp columns the value must either be a string in ISO 8601 format (2006-01-02T15:04:05Z07:00), or an integer representing unix time in seconds.`,
 		Examples: []docs.AnnotatedExample{
+			{
+				Title:   "Basic Inserts",
+				Summary: "If we were to create a table with some basic columns with `CREATE TABLE foo.bar (id int primary key, content text, created_at timestamp);`, and were processing JSON documents of the form `{\"id\":\"342354354\",\"content\":\"hello world\",\"timestamp\":1605219406}`, we could populate our table with the following config:",
+				Config: `
+output:
+  cassandra:
+    addresses:
+      - localhost:9042
+    query: 'INSERT INTO foo.bar (id, content, created_at) VALUES (?, ?, ?)'
+    args:
+      - ${! json("id") }
+      - ${! json("content") }
+      - ${! json("timestamp").format_timestamp() }
+    batching:
+      count: 500
+`,
+			},
 			{
 				Title:   "Insert JSON Documents",
 				Summary: "The following example inserts JSON documents into the table `footable` of the keyspace `foospace` using INSERT JSON (https://cassandra.apache.org/doc/latest/cql/json.html#insert-json).",
@@ -283,10 +302,24 @@ func formatCassandraInt32(x int32) []byte {
 // In order to work around this we manually marshal some types.
 func (s stringValue) MarshalCQL(info gocql.TypeInfo) ([]byte, error) {
 	switch info.Type() {
-	case gocql.TypeTimestamp, gocql.TypeTime:
+	case gocql.TypeTimestamp:
+		t, err := time.Parse(time.RFC3339, string(s))
+		if err == nil {
+			if t.IsZero() {
+				return []byte{}, nil
+			}
+			x := int64(t.UTC().Unix()*1e3) + int64(t.UTC().Nanosecond()/1e6)
+			return formatCassandraInt64(x), nil
+		}
 		x, err := strconv.ParseInt(string(s), 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse timestamp value '%v': expected unix epoch in nanoseconds", s)
+			return nil, fmt.Errorf("failed to parse time value '%v': expected either an ISO 8601 string or unix epoch in seconds", s)
+		}
+		return formatCassandraInt64(x * 1e3), nil
+	case gocql.TypeTime:
+		x, err := strconv.ParseInt(string(s), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse time value '%v': expected milliseconds", s)
 		}
 		return formatCassandraInt64(x), nil
 	case gocql.TypeBoolean:
