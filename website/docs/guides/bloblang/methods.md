@@ -451,29 +451,57 @@ root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix("2006-Jan-02")
 # Out: {"doc":{"timestamp":1597363200}}
 ```
 
+### `parse_timestamp`
+
+BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+
+Attempts to parse a string as a timestamp following a specified format and outputs a string following ISO 8601, which can then be fed into `format_timestamp`. The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
+
+```coffee
+root.doc.timestamp = this.doc.timestamp.parse_timestamp("2006-Jan-02")
+
+# In:  {"doc":{"timestamp":"2020-Aug-14"}}
+# Out: {"doc":{"timestamp":"2020-08-14T00:00:00Z"}}
+```
+
 ### `format_timestamp`
 
 BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 
-Attempts to format a unix timestamp as a string, following ISO 8601 format by default.
+Attempts to format a timestamp value as a string according to a specified format, or ISO 8601 by default. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.
 
 ```coffee
 root.something_at = (this.created_at + 300).format_timestamp()
 ```
 
-An optional string argument can be used in order to specify the expected format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
+An optional string argument can be used in order to specify the output format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
 
 ```coffee
 root.something_at = (this.created_at + 300).format_timestamp("2006-Jan-02 15:04:05")
 ```
 
-A second optional string argument can also be used in order to specify a timezone, otherwise the local timezone is used.
+A second optional string argument can also be used in order to specify a timezone, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.
 
 ```coffee
-root.something_at = (this.created_at + 300).format_timestamp("2006-Jan-02 15:04:05", "UTC")
+root.something_at = this.created_at.format_timestamp("2006-Jan-02 15:04:05", "UTC")
 
 # In:  {"created_at":1597405526}
+# Out: {"something_at":"2020-Aug-14 11:45:26"}
+
+# In:  {"created_at":"2020-08-14T11:50:26.371Z"}
 # Out: {"something_at":"2020-Aug-14 11:50:26"}
+```
+
+And `format_timestamp` supports up to nanosecond precision with floating point timestamp values.
+
+```coffee
+root.something_at = this.created_at.format_timestamp("2006-Jan-02 15:04:05.999999", "UTC")
+
+# In:  {"created_at":1597405526.123456}
+# Out: {"something_at":"2020-Aug-14 11:45:26.123456"}
+
+# In:  {"created_at":"2020-08-14T11:50:26.371Z"}
+# Out: {"something_at":"2020-Aug-14 11:50:26.371"}
 ```
 
 ## Type Coercion

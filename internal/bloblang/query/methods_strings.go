@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"html"
 	"io/ioutil"
+	"math"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -929,13 +930,13 @@ var _ = RegisterMethod(
 			`{"doc":{"timestamp":1597363200}}`,
 		),
 	),
-	true, parseTimestampMethod,
+	true, parseTimestampUnixMethod,
 	ExpectOneOrZeroArgs(),
 	ExpectStringArg(0),
 )
 
-func parseTimestampMethod(target Function, args ...interface{}) (Function, error) {
-	layout := time.RFC3339
+func parseTimestampUnixMethod(target Function, args ...interface{}) (Function, error) {
+	layout := time.RFC3339Nano
 	if len(args) > 0 {
 		layout = args[0].(string)
 	}
@@ -961,26 +962,79 @@ func parseTimestampMethod(target Function, args ...interface{}) (Function, error
 
 var _ = RegisterMethod(
 	NewMethodSpec(
+		"parse_timestamp", "",
+	).InCategory(
+		MethodCategoryTime,
+		"Attempts to parse a string as a timestamp following a specified format and outputs a string following ISO 8601, which can then be fed into `format_timestamp`. The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.",
+		NewExampleSpec("",
+			`root.doc.timestamp = this.doc.timestamp.parse_timestamp("2006-Jan-02")`,
+			`{"doc":{"timestamp":"2020-Aug-14"}}`,
+			`{"doc":{"timestamp":"2020-08-14T00:00:00Z"}}`,
+		),
+	).Beta(),
+	true, parseTimestampMethod,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
+
+func parseTimestampMethod(target Function, args ...interface{}) (Function, error) {
+	layout := args[0].(string)
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		var str string
+		switch t := v.(type) {
+		case []byte:
+			str = string(t)
+		case string:
+			str = t
+		default:
+			return nil, NewTypeError(v, ValueString)
+		}
+		ut, err := time.Parse(layout, str)
+		if err != nil {
+			return nil, err
+		}
+		return ut.Format(time.RFC3339Nano), nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
 		"format_timestamp", "",
 	).InCategory(
 		MethodCategoryTime,
-		"Attempts to format a unix timestamp as a string, following ISO 8601 format by default.",
+		"Attempts to format a timestamp value as a string according to a specified format, or ISO 8601 by default. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.",
 		NewExampleSpec("",
 			`root.something_at = (this.created_at + 300).format_timestamp()`,
 			// `{"created_at":1597405526}`,
 			// `{"something_at":"2020-08-14T11:50:26.371Z"}`,
 		),
 		NewExampleSpec(
-			"An optional string argument can be used in order to specify the expected format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.",
+			"An optional string argument can be used in order to specify the output format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.",
 			`root.something_at = (this.created_at + 300).format_timestamp("2006-Jan-02 15:04:05")`,
 			// `{"created_at":1597405526}`,
 			// `{"something_at":"2020-Aug-14 11:50:26"}`,
 		),
 		NewExampleSpec(
-			"A second optional string argument can also be used in order to specify a timezone, otherwise the local timezone is used.",
-			`root.something_at = (this.created_at + 300).format_timestamp("2006-Jan-02 15:04:05", "UTC")`,
+			"A second optional string argument can also be used in order to specify a timezone, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.",
+			`root.something_at = this.created_at.format_timestamp("2006-Jan-02 15:04:05", "UTC")`,
+
 			`{"created_at":1597405526}`,
+			`{"something_at":"2020-Aug-14 11:45:26"}`,
+
+			`{"created_at":"2020-08-14T11:50:26.371Z"}`,
 			`{"something_at":"2020-Aug-14 11:50:26"}`,
+		),
+		NewExampleSpec(
+			"And `format_timestamp` supports up to nanosecond precision with floating point timestamp values.",
+			`root.something_at = this.created_at.format_timestamp("2006-Jan-02 15:04:05.999999", "UTC")`,
+
+			`{"created_at":1597405526.123456}`,
+			`{"something_at":"2020-Aug-14 11:45:26.123456"}`,
+
+			`{"created_at":"2020-08-14T11:50:26.371Z"}`,
+			`{"something_at":"2020-Aug-14 11:50:26.371"}`,
 		),
 	).Beta(),
 	true, formatTimestampMethod,
@@ -990,23 +1044,59 @@ var _ = RegisterMethod(
 )
 
 func formatTimestampMethod(target Function, args ...interface{}) (Function, error) {
-	layout := time.RFC3339
+	layout := time.RFC3339Nano
 	if len(args) > 0 {
 		layout = args[0].(string)
 	}
-	timezone := time.Local
+	var timezone *time.Location
 	if len(args) > 1 {
 		var err error
 		if timezone, err = time.LoadLocation(args[1].(string)); err != nil {
 			return nil, fmt.Errorf("failed to parse timezone location name: %w", err)
 		}
 	}
+
 	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		u, err := IToInt(v)
-		if err != nil {
-			return nil, err
+		var target time.Time
+
+		switch t := v.(type) {
+		case int64:
+			target = time.Unix(t, 0)
+		case uint64:
+			target = time.Unix(int64(t), 0)
+		case float64:
+			fint := math.Trunc(t)
+			fdec := t - fint
+			target = time.Unix(int64(fint), int64(fdec*1e9))
+		case json.Number:
+			if i, err := t.Int64(); err == nil {
+				target = time.Unix(i, 0)
+			} else if f, err := t.Float64(); err == nil {
+				fint := math.Trunc(f)
+				fdec := f - fint
+				target = time.Unix(int64(fint), int64(fdec*1e9))
+			} else {
+				return nil, fmt.Errorf("failed to parse value '%v' as number", v)
+			}
+		case []byte:
+			str := string(t)
+			var err error
+			if target, err = time.Parse(time.RFC3339Nano, str); err != nil {
+				return nil, err
+			}
+		case string:
+			var err error
+			if target, err = time.Parse(time.RFC3339Nano, t); err != nil {
+				return nil, err
+			}
+		default:
+			return nil, NewTypeError(v, ValueNumber)
 		}
-		return time.Unix(u, 0).In(timezone).Format(layout), nil
+
+		if timezone != nil {
+			target = target.In(timezone)
+		}
+		return target.Format(layout), nil
 	}), nil
 }
 

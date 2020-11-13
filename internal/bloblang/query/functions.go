@@ -465,7 +465,7 @@ func metadataFunction(args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterFunction(
-	NewDeprecatedFunctionSpec("nothing"),
+	NewHiddenFunctionSpec("nothing"),
 	false, func(...interface{}) (Function, error) {
 		return NewLiteralFunction(Nothing(nil)), nil
 	},
@@ -505,8 +505,27 @@ func randomIntFunction(args ...interface{}) (Function, error) {
 
 var _ = RegisterFunction(
 	NewFunctionSpec(
-		FunctionCategoryEnvironment, "timestamp",
-		"Returns the current time in a custom format specified by the argument. The format is defined by showing how the reference time, defined to be `Mon Jan 2 15:04:05 -0700 MST 2006` would be displayed if it were the value.\n\nA fractional second is represented by adding a period and zeros to the end of the seconds section of layout string, as in `15:04:05.000` to format a time stamp with millisecond precision.",
+		FunctionCategoryEnvironment, "now",
+		"Returns the current timestamp as a string in ISO 8601 format with the local timezone. Use the method `format_timestamp` in order to change the format and timezone.",
+		NewExampleSpec("",
+			`root.received_at = now()`,
+		),
+		NewExampleSpec("",
+			`root.received_at = now().format_timestamp("Mon Jan 2 15:04:05 -0700 MST 2006", "UTC")`,
+		),
+	),
+	true, func(args ...interface{}) (Function, error) {
+		return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
+			return time.Now().Format(time.RFC3339Nano), nil
+		}, nil), nil
+	},
+	ExpectNArgs(0),
+)
+
+var _ = RegisterFunction(
+	NewDeprecatedFunctionSpec(
+		"timestamp",
+		"Returns the current time in a custom format specified by the argument. The format is defined by showing how the reference time, defined to be `Mon Jan 2 15:04:05 -0700 MST 2006` would be displayed if it were the value.\n\nA fractional second is represented by adding a period and zeros to the end of the seconds section of layout string, as in `15:04:05.000` to format a time stamp with millisecond precision. This has been deprecated in favour of the new `now` function.",
 		NewExampleSpec("",
 			`root.received_at = timestamp("15:04:05")`,
 		),
@@ -525,9 +544,9 @@ var _ = RegisterFunction(
 )
 
 var _ = RegisterFunction(
-	NewFunctionSpec(
-		FunctionCategoryEnvironment, "timestamp_utc",
-		"The equivalent of `timestamp` except the time is printed as UTC instead of the local timezone.",
+	NewDeprecatedFunctionSpec(
+		"timestamp_utc",
+		"The equivalent of `timestamp` except the time is printed as UTC instead of the local timezone. This has been deprecated in favour of the new `now` function.",
 		NewExampleSpec("",
 			`root.received_at = timestamp_utc("15:04:05")`,
 		),
@@ -628,7 +647,7 @@ func uuidFunction(...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterFunction(
-	NewDeprecatedFunctionSpec("var"), true, varFunction,
+	NewHiddenFunctionSpec("var"), true, varFunction,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
 )

@@ -16,6 +16,8 @@ All notable changes to this project will be documented in this file.
 - The `kafka` input now supports multiple topics, topic partition balancing, and checkpointing.
 - New `cassandra` output.
 - Field `allowed_verbs` added to the `http_server` input and output.
+- New bloblang function `now`, and method `parse_timestamp`.
+- The bloblang method `format_timestamp` now supports strings in ISO 8601 format as well as unix epochs with decimal precision up to nanoseconds.
 
 ## Changed
 

@@ -1045,7 +1045,7 @@ func lengthMethod(target Function, _ ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	NewDeprecatedMethodSpec("map"), false, mapMethod,
+	NewHiddenMethodSpec("map"), false, mapMethod,
 	ExpectNArgs(1),
 	ExpectFunctionArg(0),
 )
@@ -1244,7 +1244,7 @@ func mergeMethod(target Function, args ...interface{}) (Function, error) {
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(
-	NewDeprecatedMethodSpec("not"), false, notMethodCtor,
+	NewHiddenMethodSpec("not"), false, notMethodCtor,
 	ExpectNArgs(0),
 )
 

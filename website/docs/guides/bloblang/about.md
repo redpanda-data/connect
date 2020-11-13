@@ -250,7 +250,7 @@ Functions can be placed anywhere and allow you to extract information from your 
 
 ```coffee
 root.doc.id = uuid_v4()
-root.doc.received_at = timestamp_unix()
+root.doc.received_at = now()
 root.doc.host = hostname()
 ```
 

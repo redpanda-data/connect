@@ -303,7 +303,7 @@ func formatCassandraInt32(x int32) []byte {
 func (s stringValue) MarshalCQL(info gocql.TypeInfo) ([]byte, error) {
 	switch info.Type() {
 	case gocql.TypeTimestamp:
-		t, err := time.Parse(time.RFC3339, string(s))
+		t, err := time.Parse(time.RFC3339Nano, string(s))
 		if err == nil {
 			if t.IsZero() {
 				return []byte{}, nil

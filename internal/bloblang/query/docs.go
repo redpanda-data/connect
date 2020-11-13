@@ -33,6 +33,7 @@ var (
 	StatusStable     Status = "stable"
 	StatusBeta       Status = "beta"
 	StatusDeprecated Status = "deprecated"
+	StatusHidden     Status = "hidden"
 )
 
 //------------------------------------------------------------------------------
@@ -45,6 +46,7 @@ var (
 	FunctionCategoryGeneral     FunctionCategory = "General"
 	FunctionCategoryMessage     FunctionCategory = "Message Info"
 	FunctionCategoryEnvironment FunctionCategory = "Environment"
+	FunctionCategoryDeprecated  FunctionCategory = "Deprecated"
 )
 
 // FunctionSpec describes a Bloblang function.
@@ -82,13 +84,22 @@ func (s FunctionSpec) Beta() FunctionSpec {
 	return s
 }
 
-// NewDeprecatedFunctionSpec creates a new function spec that is deprecated. The
-// function will not appear in docs or searches but will still be usable in
-// mappings.
-func NewDeprecatedFunctionSpec(name string) FunctionSpec {
+// NewDeprecatedFunctionSpec creates a new function spec that is deprecated.
+func NewDeprecatedFunctionSpec(name, description string, examples ...ExampleSpec) FunctionSpec {
 	return FunctionSpec{
+		Status:      StatusDeprecated,
+		Category:    FunctionCategoryDeprecated,
+		Name:        name,
+		Description: description,
+		Examples:    examples,
+	}
+}
+
+// NewHiddenFunctionSpec creates a new function spec that is hidden from the docs.
+func NewHiddenFunctionSpec(name string) FunctionSpec {
+	return FunctionSpec{
+		Status: StatusHidden,
 		Name:   name,
-		Status: StatusDeprecated,
 	}
 }
 
@@ -106,6 +117,7 @@ var (
 	MethodCategoryCoercion       MethodCategory = "Type Coercion"
 	MethodCategoryParsing        MethodCategory = "Parsing"
 	MethodCategoryObjectAndArray MethodCategory = "Object & Array Manipulation"
+	MethodCategoryDeprecated     MethodCategory = "Deprecated"
 )
 
 // MethodCatSpec describes how a method behaves in the context of a given
@@ -147,10 +159,19 @@ func NewMethodSpec(name, description string, examples ...ExampleSpec) MethodSpec
 // NewDeprecatedMethodSpec creates a new method spec that is deprecated. The
 // method will not appear in docs or searches but will still be usable in
 // mappings.
-func NewDeprecatedMethodSpec(name string) MethodSpec {
+func NewDeprecatedMethodSpec(name, description string, examples ...ExampleSpec) MethodSpec {
+	return MethodSpec{
+		Name:     name,
+		Status:   StatusDeprecated,
+		Examples: examples,
+	}
+}
+
+// NewHiddenMethodSpec creates a new method spec that is hidden from docs.
+func NewHiddenMethodSpec(name string) MethodSpec {
 	return MethodSpec{
 		Name:   name,
-		Status: StatusDeprecated,
+		Status: StatusHidden,
 	}
 }
 
@@ -165,6 +186,10 @@ func (m MethodSpec) Beta() MethodSpec {
 // `contains` method behaves differently in the object and array category versus
 // the strings one, but belongs in both.
 func (m MethodSpec) InCategory(category MethodCategory, description string, examples ...ExampleSpec) MethodSpec {
+	if m.Status == StatusDeprecated {
+		category = MethodCategoryDeprecated
+	}
+
 	cats := make([]MethodCatSpec, 0, len(m.Categories)+1)
 	cats = append(cats, m.Categories...)
 	cats = append(cats, MethodCatSpec{

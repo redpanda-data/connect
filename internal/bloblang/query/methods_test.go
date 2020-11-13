@@ -1108,7 +1108,7 @@ func TestMethods(t *testing.T) {
 				literalFn("not valid timestamp"),
 				method("parse_timestamp_unix"),
 			),
-			err: `parsing time "not valid timestamp" as "2006-01-02T15:04:05Z07:00": cannot parse "not valid timestamp" as "2006"`,
+			err: `parsing time "not valid timestamp" as "2006-01-02T15:04:05.999999999Z07:00": cannot parse "not valid timestamp" as "2006"`,
 		},
 		"check parse timestamp unix with invalid format": {
 			input: methods(
@@ -1747,6 +1747,62 @@ func TestMethods(t *testing.T) {
 				)),
 			),
 			err: "expected array value, found string: foo",
+		},
+		"check parse timestamp with format": {
+			input: methods(
+				literalFn("2020-Aug-14"),
+				method("parse_timestamp", "2006-Jan-02"),
+			),
+			output: "2020-08-14T00:00:00Z",
+		},
+		"check parse timestamp invalid": {
+			input: methods(
+				literalFn("not valid timestamp"),
+				method("parse_timestamp", "2006-01-02T15:04:05Z07:00"),
+			),
+			err: `parsing time "not valid timestamp" as "2006-01-02T15:04:05Z07:00": cannot parse "not valid timestamp" as "2006"`,
+		},
+		"check parse timestamp with invalid format": {
+			input: methods(
+				literalFn("invalid format"),
+				method("parse_timestamp", "2006-Jan-02"),
+			),
+			err: `parsing time "invalid format" as "2006-Jan-02": cannot parse "invalid format" as "2006"`,
+		},
+		"check parse timestamp with invalid literal type": {
+			input: methods(
+				literalFn(1),
+				method("parse_timestamp", "2006-Jan-02"),
+			),
+			err: `expected string value, found unknown`,
+		},
+		"check format timestamp string default": {
+			input: methods(
+				literalFn("2020-08-14T11:45:26.371+01:00"),
+				method("format_timestamp", "2006-01-02T15:04:05.999999999Z07:00"),
+			),
+			output: "2020-08-14T11:45:26.371+01:00",
+		},
+		"check format timestamp string": {
+			input: methods(
+				literalFn("2020-08-14T11:45:26.371+00:00"),
+				method("format_timestamp", "2006-Jan-02 15:04:05.999999"),
+			),
+			output: "2020-Aug-14 11:45:26.371",
+		},
+		"check format timestamp unix float": {
+			input: methods(
+				literalFn(float64(1597405526.123456)),
+				method("format_timestamp", "2006-Jan-02 15:04:05.999999", "UTC"),
+			),
+			output: "2020-Aug-14 11:45:26.123456",
+		},
+		"check format timestamp unix": {
+			input: methods(
+				literalFn(int64(1597405526)),
+				method("format_timestamp", "2006-Jan-02 15:04:05", "UTC"),
+			),
+			output: "2020-Aug-14 11:45:26",
 		},
 	}
 

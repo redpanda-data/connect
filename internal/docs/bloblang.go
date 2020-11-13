@@ -67,7 +67,7 @@ Functions can be placed anywhere and allow you to extract information from your 
 
 ` + "```coffee" + `
 root.doc.id = uuid_v4()
-root.doc.received_at = timestamp_unix()
+root.doc.received_at = now()
 root.doc.host = hostname()
 ` + "```" + `
 
@@ -97,6 +97,7 @@ func BloblangFunctionsMarkdown() ([]byte, error) {
 		query.FunctionCategoryGeneral,
 		query.FunctionCategoryMessage,
 		query.FunctionCategoryEnvironment,
+		query.FunctionCategoryDeprecated,
 	} {
 		functions := functionCategory{
 			Name: string(cat),
@@ -106,7 +107,9 @@ func BloblangFunctionsMarkdown() ([]byte, error) {
 				functions.Specs = append(functions.Specs, spec)
 			}
 		}
-		ctx.Categories = append(ctx.Categories, functions)
+		if len(functions.Specs) > 0 {
+			ctx.Categories = append(ctx.Categories, functions)
+		}
 	}
 
 	var buf bytes.Buffer
@@ -240,6 +243,7 @@ func BloblangMethodsMarkdown() ([]byte, error) {
 		query.MethodCategoryObjectAndArray,
 		query.MethodCategoryParsing,
 		query.MethodCategoryEncoding,
+		query.MethodCategoryDeprecated,
 	} {
 		methods := methodCategory{
 			Name: string(cat),
@@ -250,11 +254,13 @@ func BloblangMethodsMarkdown() ([]byte, error) {
 				methods.Specs = append(methods.Specs, spec)
 			}
 		}
-		ctx.Categories = append(ctx.Categories, methods)
+		if len(methods.Specs) > 0 {
+			ctx.Categories = append(ctx.Categories, methods)
+		}
 	}
 
 	for _, spec := range specs {
-		if len(spec.Categories) == 0 && spec.Status != query.StatusDeprecated {
+		if len(spec.Categories) == 0 && spec.Status != query.StatusHidden {
 			spec.Description = strings.TrimSpace(spec.Description)
 			ctx.General = append(ctx.General, spec)
 		}

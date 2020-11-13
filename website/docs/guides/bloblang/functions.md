@@ -19,7 +19,7 @@ Functions can be placed anywhere and allow you to extract information from your 
 
 ```coffee
 root.doc.id = uuid_v4()
-root.doc.received_at = timestamp_unix()
+root.doc.received_at = now()
 root.doc.host = hostname()
 ```
 
@@ -225,22 +225,16 @@ Returns a string matching the hostname of the machine running Benthos.
 root.thing.host = hostname()
 ```
 
-### `timestamp`
+### `now`
 
-Returns the current time in a custom format specified by the argument. The format is defined by showing how the reference time, defined to be `Mon Jan 2 15:04:05 -0700 MST 2006` would be displayed if it were the value.
-
-A fractional second is represented by adding a period and zeros to the end of the seconds section of layout string, as in `15:04:05.000` to format a time stamp with millisecond precision.
+Returns the current timestamp as a string in ISO 8601 format with the local timezone. Use the method `format_timestamp` in order to change the format and timezone.
 
 ```coffee
-root.received_at = timestamp("15:04:05")
+root.received_at = now()
 ```
 
-### `timestamp_utc`
-
-The equivalent of `timestamp` except the time is printed as UTC instead of the local timezone.
-
 ```coffee
-root.received_at = timestamp_utc("15:04:05")
+root.received_at = now().format_timestamp("Mon Jan 2 15:04:05 -0700 MST 2006", "UTC")
 ```
 
 ### `timestamp_unix`
@@ -257,6 +251,26 @@ Returns the current unix timestamp in nanoseconds.
 
 ```coffee
 root.received_at = timestamp_unix_nano()
+```
+
+## Deprecated
+
+### `timestamp`
+
+Returns the current time in a custom format specified by the argument. The format is defined by showing how the reference time, defined to be `Mon Jan 2 15:04:05 -0700 MST 2006` would be displayed if it were the value.
+
+A fractional second is represented by adding a period and zeros to the end of the seconds section of layout string, as in `15:04:05.000` to format a time stamp with millisecond precision. This has been deprecated in favour of the new `now` function.
+
+```coffee
+root.received_at = timestamp("15:04:05")
+```
+
+### `timestamp_utc`
+
+The equivalent of `timestamp` except the time is printed as UTC instead of the local timezone. This has been deprecated in favour of the new `now` function.
+
+```coffee
+root.received_at = timestamp_utc("15:04:05")
 ```
 
 [error_handling]: /docs/configuration/error_handling
