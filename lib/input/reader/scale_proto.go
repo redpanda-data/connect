@@ -70,7 +70,8 @@ func NewScaleProto(conf ScaleProtoConfig, log log.Modular, stats metrics.Type) (
 	for _, u := range conf.URLs {
 		for _, splitU := range strings.Split(u, ",") {
 			if len(splitU) > 0 {
-				s.urls = append(s.urls, splitU)
+				// TODO: V4 Remove this work around
+				s.urls = append(s.urls, strings.Replace(splitU, "//*:", "//0.0.0.0:", 1))
 			}
 		}
 	}
@@ -134,18 +135,6 @@ func (s *ScaleProto) ConnectWithContext(ctx context.Context) error {
 		return err
 	}
 
-	// Set timeout to prevent endless lock.
-	err = socket.SetOption(mangos.OptionSendDeadline, s.pollTimeout)
-	if nil != err {
-		return err
-	}
-	// TODO: This is only used for request/response sockets, and is invalid with
-	// other socket types.
-	// err = socket.SetOption(mangos.OptionRecvDeadline, s.repTimeout)
-	// if nil != err {
-	// 	return err
-	// }
-
 	if s.conf.Bind {
 		for _, addr := range s.urls {
 			if err = socket.Listen(addr); err != nil {
@@ -160,6 +149,19 @@ func (s *ScaleProto) ConnectWithContext(ctx context.Context) error {
 		}
 	}
 	if err != nil {
+		return err
+	}
+
+	// TODO: This is only used for request/response sockets, and is invalid with
+	// other socket types.
+	// err = socket.SetOption(mangos.OptionSendDeadline, s.pollTimeout)
+	// if nil != err {
+	// 	return err
+	// }
+
+	// Set timeout to prevent endless lock.
+	err = socket.SetOption(mangos.OptionRecvDeadline, s.repTimeout)
+	if nil != err {
 		return err
 	}
 

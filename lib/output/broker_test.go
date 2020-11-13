@@ -1,7 +1,6 @@
 package output
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -13,208 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"go.nanomsg.org/mangos/v3/protocol/pull"
-	_ "go.nanomsg.org/mangos/v3/transport/all"
 )
-
-func TestBrokerWithNanomsg(t *testing.T) {
-	nTestLoops := 1000
-
-	conf := NewConfig()
-
-	scaleOne, scaleTwo := NewConfig(), NewConfig()
-	scaleOne.Type, scaleTwo.Type = TypeNanomsg, TypeNanomsg
-	scaleOne.Nanomsg.Bind, scaleTwo.Nanomsg.Bind = true, true
-	scaleOne.Nanomsg.URLs = []string{"tcp://localhost:1241"}
-	scaleTwo.Nanomsg.URLs = []string{"tcp://localhost:1242"}
-	scaleOne.Nanomsg.SocketType, scaleTwo.Nanomsg.SocketType = "PUSH", "PUSH"
-
-	conf.Broker.Outputs = append(conf.Broker.Outputs, scaleOne)
-	conf.Broker.Outputs = append(conf.Broker.Outputs, scaleTwo)
-
-	s, err := NewBroker(conf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	defer func() {
-		s.CloseAsync()
-		if err := s.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
-	}()
-
-	sendChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
-
-	if err = s.Consume(sendChan); err != nil {
-		t.Error(err)
-		return
-	}
-
-	socketOne, err := pull.NewSocket()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	socketTwo, err := pull.NewSocket()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	if err = socketOne.Dial("tcp://localhost:1241"); err != nil {
-		t.Error(err)
-		return
-	}
-	if err = socketTwo.Dial("tcp://localhost:1242"); err != nil {
-		t.Error(err)
-		return
-	}
-
-	for i := 0; i < nTestLoops; i++ {
-		testStr := fmt.Sprintf("test%v", i)
-		testMsg := message.New([][]byte{[]byte(testStr)})
-
-		select {
-		case sendChan <- types.NewTransaction(testMsg, resChan):
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out")
-			return
-		}
-
-		data, err := socketOne.Recv()
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		if res := string(data); res != testStr {
-			t.Errorf("Wrong value on output: %v != %v", res, testStr)
-		}
-
-		data, err = socketTwo.Recv()
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		if res := string(data); res != testStr {
-			t.Errorf("Wrong value on output: %v != %v", res, testStr)
-		}
-
-		select {
-		case res := <-resChan:
-			if res.Error() != nil {
-				t.Error(res.Error())
-				return
-			}
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out")
-			return
-		}
-	}
-}
-
-func TestRoundRobinWithNanomsg(t *testing.T) {
-	nTestLoops := 1000
-
-	conf := NewConfig()
-	conf.Broker.Pattern = "round_robin"
-
-	scaleOne, scaleTwo := NewConfig(), NewConfig()
-	scaleOne.Type, scaleTwo.Type = TypeNanomsg, TypeNanomsg
-	scaleOne.Nanomsg.Bind, scaleTwo.Nanomsg.Bind = true, true
-	scaleOne.Nanomsg.URLs = []string{"tcp://localhost:1245"}
-	scaleTwo.Nanomsg.URLs = []string{"tcp://localhost:1246"}
-	scaleOne.Nanomsg.SocketType, scaleTwo.Nanomsg.SocketType = "PUSH", "PUSH"
-
-	conf.Broker.Outputs = append(conf.Broker.Outputs, scaleOne)
-	conf.Broker.Outputs = append(conf.Broker.Outputs, scaleTwo)
-
-	s, err := NewBroker(conf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	sendChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
-
-	if err = s.Consume(sendChan); err != nil {
-		t.Error(err)
-		return
-	}
-
-	defer func() {
-		s.CloseAsync()
-		if err := s.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
-	}()
-
-	socketOne, err := pull.NewSocket()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	socketTwo, err := pull.NewSocket()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	if err = socketOne.Dial("tcp://localhost:1245"); err != nil {
-		t.Error(err)
-		return
-	}
-	if err = socketTwo.Dial("tcp://localhost:1246"); err != nil {
-		t.Error(err)
-		return
-	}
-
-	for i := 0; i < nTestLoops; i++ {
-		testStr := fmt.Sprintf("test%v", i)
-		testMsg := message.New([][]byte{[]byte(testStr)})
-
-		select {
-		case sendChan <- types.NewTransaction(testMsg, resChan):
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out")
-			return
-		}
-
-		if i%2 == 0 {
-			data, err := socketOne.Recv()
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			if res := string(data); res != testStr {
-				t.Errorf("Wrong value on output: %v != %v", res, testStr)
-			}
-		} else {
-			data, err := socketTwo.Recv()
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			if res := string(data); res != testStr {
-				t.Errorf("Wrong value on output: %v != %v", res, testStr)
-			}
-		}
-
-		select {
-		case res := <-resChan:
-			if res.Error() != nil {
-				t.Error(res.Error())
-				return
-			}
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out")
-			return
-		}
-	}
-}
 
 func TestFanOutBroker(t *testing.T) {
 	dir, err := ioutil.TempDir("", "benthos_fan_out_broker_tests")
@@ -310,7 +108,9 @@ func TestRoundRobinBroker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(dir)
+	t.Cleanup(func() {
+		os.RemoveAll(dir)
+	})
 
 	outOne, outTwo := NewConfig(), NewConfig()
 	outOne.Type, outTwo.Type = TypeFiles, TypeFiles
@@ -344,12 +144,12 @@ func TestRoundRobinBroker(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	defer func() {
+	t.Cleanup(func() {
 		s.CloseAsync()
 		if err := s.WaitForClose(time.Second); err != nil {
 			t.Error(err)
 		}
-	}()
+	})
 
 	inputs := []string{
 		"first", "second", "third", "fourth",

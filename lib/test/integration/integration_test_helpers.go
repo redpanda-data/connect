@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -73,6 +74,20 @@ type testEnvironment struct {
 	// Ugly work arounds for slow connectors.
 	sleepAfterInput  time.Duration
 	sleepAfterOutput time.Duration
+}
+
+func getFreePort() (int, error) {
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		return 0, err
+	}
+
+	listener, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		return 0, err
+	}
+	defer listener.Close()
+	return listener.Addr().(*net.TCPAddr).Port, nil
 }
 
 func newTestEnvironment(t *testing.T, confTemplate string) testEnvironment {
@@ -211,6 +226,13 @@ func (i integrationTestList) Run(t *testing.T, configTemplate string, opts ...te
 
 		if env.preTest != nil {
 			env.preTest(t, &env)
+		}
+		if len(env.configVars.port) == 0 {
+			p, err := getFreePort()
+			if err != nil {
+				t.Fatal(err)
+			}
+			env.configVars.port = strconv.Itoa(p)
 		}
 		test(t, &env)
 	}

@@ -2,7 +2,6 @@ package integration
 
 import (
 	"fmt"
-	"net"
 	"strconv"
 	"testing"
 	"time"
@@ -16,20 +15,6 @@ import (
 	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/require"
 )
-
-func getFreePort() (int, error) {
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	if err != nil {
-		return 0, err
-	}
-
-	listener, err := net.ListenTCP("tcp", addr)
-	if err != nil {
-		return 0, err
-	}
-	defer listener.Close()
-	return listener.Addr().(*net.TCPAddr).Port, nil
-}
 
 var _ = registerIntegrationTest("kafka", func(t *testing.T) {
 	t.Parallel()
