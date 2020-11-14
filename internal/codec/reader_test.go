@@ -35,11 +35,14 @@ func testReaderOrdered(t *testing.T, codec, path string, buf io.ReadCloser, expe
 		})
 		require.NoError(t, err)
 
+		allReads := map[string][]byte{}
+
 		for _, exp := range expected {
 			p, ackFn, err := r.Next(context.Background())
 			require.NoError(t, err)
 			require.NoError(t, ackFn(context.Background(), nil))
 			assert.Equal(t, exp, string(p.Get()))
+			allReads[string(p.Get())] = p.Get()
 		}
 
 		_, _, err = r.Next(context.Background())
@@ -47,6 +50,10 @@ func testReaderOrdered(t *testing.T, codec, path string, buf io.ReadCloser, expe
 
 		assert.NoError(t, r.Close(context.Background()))
 		assert.NoError(t, ack)
+
+		for k, v := range allReads {
+			assert.Equal(t, k, string(v), "Must not corrupt previous reads")
+		}
 	})
 }
 
@@ -63,12 +70,15 @@ func testReaderUnordered(t *testing.T, codec, path string, buf io.ReadCloser, ex
 		})
 		require.NoError(t, err)
 
+		allReads := map[string][]byte{}
+
 		var ackFns []ReaderAckFn
 		for _, exp := range expected {
 			p, ackFn, err := r.Next(context.Background())
 			require.NoError(t, err)
 			ackFns = append(ackFns, ackFn)
 			assert.Equal(t, exp, string(p.Get()))
+			allReads[string(p.Get())] = p.Get()
 		}
 
 		_, _, err = r.Next(context.Background())
@@ -80,6 +90,10 @@ func testReaderUnordered(t *testing.T, codec, path string, buf io.ReadCloser, ex
 		}
 
 		assert.NoError(t, ack)
+
+		for k, v := range allReads {
+			assert.Equal(t, k, string(v), "Must not corrupt previous reads")
+		}
 	})
 }
 

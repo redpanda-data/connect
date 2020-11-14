@@ -214,7 +214,10 @@ func (a *linesReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error)
 	if a.buf.Scan() {
 		a.pending++
 		a.total++
-		return message.NewPart(a.buf.Bytes()), a.ack, nil
+
+		bytesCopy := make([]byte, len(a.buf.Bytes()))
+		copy(bytesCopy, a.buf.Bytes())
+		return message.NewPart(bytesCopy), a.ack, nil
 	}
 	err := a.buf.Err()
 	if err == nil {
@@ -397,7 +400,10 @@ func (a *customDelimReader) Next(ctx context.Context) (types.Part, ReaderAckFn, 
 	if a.buf.Scan() {
 		a.pending++
 		a.total++
-		return message.NewPart(a.buf.Bytes()), a.ack, nil
+
+		bytesCopy := make([]byte, len(a.buf.Bytes()))
+		copy(bytesCopy, a.buf.Bytes())
+		return message.NewPart(bytesCopy), a.ack, nil
 	}
 	err := a.buf.Err()
 	if err == nil {

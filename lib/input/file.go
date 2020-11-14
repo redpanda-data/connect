@@ -199,10 +199,14 @@ scanLoop:
 				err = types.ErrTimeout
 			}
 			if err != types.ErrTimeout {
+				f.scanner.Close(ctx)
 				f.scanner = nil
 			}
-			if errors.Is(err, io.EOF) && msg.Len() > 0 {
-				return msg, ackFn, nil
+			if errors.Is(err, io.EOF) {
+				if msg.Len() > 0 {
+					return msg, ackFn, nil
+				}
+				return nil, nil, types.ErrTimeout
 			}
 			return nil, nil, err
 		}
