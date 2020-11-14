@@ -111,6 +111,7 @@ type MethodCategory string
 // Method categories.
 var (
 	MethodCategoryStrings        MethodCategory = "String Manipulation"
+	MethodCategoryNumbers        MethodCategory = "Number Manipulation"
 	MethodCategoryTime           MethodCategory = "Timestamp Manipulation"
 	MethodCategoryRegexp         MethodCategory = "Regular Expressions"
 	MethodCategoryEncoding       MethodCategory = "Encoding and Encryption"

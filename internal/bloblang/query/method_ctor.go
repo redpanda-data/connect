@@ -1,6 +1,7 @@
 package query
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 )
@@ -71,6 +72,40 @@ func simpleMethod(
 			return nil, err
 		}
 		return fn(v, ctx)
+	}, target.QueryTargets)
+}
+
+func numberMethod(
+	target Function,
+	fn func(f *float64, i *int64, ui *uint64, ctx FunctionContext) (interface{}, error),
+) Function {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var f *float64
+		var i *int64
+		var ui *uint64
+		switch t := v.(type) {
+		case float64:
+			f = &t
+		case int64:
+			i = &t
+		case uint64:
+			ui = &t
+		case json.Number:
+			if ji, err := t.Int64(); err == nil {
+				i = &ji
+			} else if jf, err := t.Float64(); err == nil {
+				f = &jf
+			} else {
+				return nil, fmt.Errorf("failed to parse number: %v", err)
+			}
+		default:
+			return nil, NewTypeError(v, ValueNumber)
+		}
+		return fn(f, i, ui, ctx)
 	}, target.QueryTargets)
 }
 

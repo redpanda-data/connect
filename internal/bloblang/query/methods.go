@@ -1321,12 +1321,12 @@ var _ = RegisterMethod(
 root.bar = this.thing.number(5) * 10`,
 		),
 	),
-	true, numberMethod,
+	true, numberCoerceMethod,
 	ExpectOneOrZeroArgs(),
 	ExpectFloatArg(0),
 )
 
-func numberMethod(target Function, args ...interface{}) (Function, error) {
+func numberCoerceMethod(target Function, args ...interface{}) (Function, error) {
 	defaultNum := 0.0
 	if len(args) > 0 {
 		defaultNum = args[0].(float64)

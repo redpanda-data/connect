@@ -1804,6 +1804,34 @@ func TestMethods(t *testing.T) {
 			),
 			output: "2020-Aug-14 11:45:26",
 		},
+		"check floor": {
+			input:  methods(literalFn(5.8), method("floor")),
+			output: 5.0,
+		},
+		"check floor bad value": {
+			input: methods(literalFn("nope"), method("floor")),
+			err:   "expected number value, found string: nope",
+		},
+		"check floor int": {
+			input:  methods(literalFn(int64(5)), method("floor")),
+			output: int64(5),
+		},
+		"check floor uint": {
+			input:  methods(literalFn(uint64(5)), method("floor")),
+			output: uint64(5),
+		},
+		"check floor json.Number": {
+			input:  methods(literalFn(json.Number("5.8")), method("floor")),
+			output: 5.0,
+		},
+		"check round up": {
+			input:  methods(literalFn(5.8), method("round")),
+			output: 6.0,
+		},
+		"check round down": {
+			input:  methods(literalFn(5.3), method("round")),
+			output: 5.0,
+		},
 	}
 
 	for name, test := range tests {

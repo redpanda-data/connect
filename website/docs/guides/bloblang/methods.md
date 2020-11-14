@@ -344,6 +344,33 @@ root.description = this.description.trim()
 # Out: {"description":"something happened and its amazing!","title":"watch out"}
 ```
 
+## Number Manipulation
+
+### `floor`
+
+Returns the greatest integer value less than or equal to the target number.
+
+```coffee
+root.new_value = this.value.floor()
+
+# In:  {"value":5.7}
+# Out: {"new_value":5}
+```
+
+### `round`
+
+Rounds numbers to the nearest integer, rounding half away from zero.
+
+```coffee
+root.new_value = this.value.round()
+
+# In:  {"value":5.3}
+# Out: {"new_value":5}
+
+# In:  {"value":5.9}
+# Out: {"new_value":6}
+```
+
 ## Regular Expressions
 
 ### `re_find_all`
