@@ -69,6 +69,8 @@ partMsgLoop:
 			if !open {
 				break partMsgLoop
 			}
+			k.log.Tracef("Received message from topic %v partition %v\n", topic, partition)
+
 			latestOffset = data.Offset
 			part := dataToPart(consumer.HighWaterMarkOffset(), data)
 
@@ -178,14 +180,14 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 			if partConsumer, err = consumer.ConsumePartition(topic, partition, offset); err != nil {
 				if k.conf.StartFromOldest {
 					offset = sarama.OffsetOldest
-					k.log.Warnln("Failed to read from stored offset, restarting from oldest offset")
+					k.log.Warnf("Failed to read from stored offset, restarting from oldest offset: %v\n", err)
 				} else {
 					offset = sarama.OffsetNewest
-					k.log.Warnln("Failed to read from stored offset, restarting from newest offset")
+					k.log.Warnf("Failed to read from stored offset, restarting from newest offset: %v\n", err)
 				}
 				if partConsumer, err = consumer.ConsumePartition(topic, partition, offset); err != nil {
 					doneFn()
-					return fmt.Errorf("failed to consume topic %v partitiont %v: %v", topic, partition, err)
+					return fmt.Errorf("failed to consume topic %v partition %v: %v", topic, partition, err)
 				}
 			}
 

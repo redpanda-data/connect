@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"testing"
@@ -11,10 +12,60 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Shopify/sarama"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/require"
 )
+
+func createKafkaTopic(address, id string, partitions int32) error {
+	topicName := fmt.Sprintf("topic-%v", id)
+
+	b := sarama.NewBroker(address)
+	defer b.Close()
+
+	if err := b.Open(sarama.NewConfig()); err != nil {
+		return err
+	}
+
+	req := &sarama.CreateTopicsRequest{
+		TopicDetails: map[string]*sarama.TopicDetail{
+			topicName: {
+				NumPartitions:     partitions,
+				ReplicationFactor: 1,
+			},
+		},
+	}
+
+	res, err := b.CreateTopics(req)
+	if err != nil {
+		return err
+	}
+	if len(res.TopicErrors) > 0 {
+		if errStr := res.TopicErrors[topicName].ErrMsg; errStr != nil {
+			return errors.New(*errStr)
+		}
+	}
+
+	var meta *sarama.MetadataResponse
+	for i := 0; i < 20; i++ {
+		meta, err = b.GetMetadata(&sarama.MetadataRequest{
+			Topics: []string{topicName},
+		})
+		if err == nil && len(meta.Topics) == 1 && len(meta.Topics[0].Partitions) == 4 {
+			break
+		}
+		<-time.After(time.Millisecond * 100)
+	}
+	if err != nil {
+		return err
+	}
+	if len(meta.Topics) == 0 || len(meta.Topics[0].Partitions) != 4 {
+		return fmt.Errorf("failed to create topic: %v", topicName)
+	}
+
+	return nil
+}
 
 var _ = registerIntegrationTest("kafka", func(t *testing.T) {
 	t.Parallel()
@@ -119,31 +170,95 @@ input:
 		integrationTestStreamParallel(1000),
 		integrationTestStreamParallelLossy(1000),
 		integrationTestSendBatchCount(10),
-		integrationTestReceiveBatchCount(10),
 	)
+	// In some tests include testing input level batching
+	suiteExt := append(suite, integrationTestReceiveBatchCount(10))
 
 	t.Run("balanced", func(t *testing.T) {
 		t.Parallel()
-		suite.Run(
+		suiteExt.Run(
 			t, template,
 			testOptVarOne(""),
 			testOptVarTwo("1"),
 		)
+
 		t.Run("checkpointed", func(t *testing.T) {
 			t.Parallel()
-			suite.Run(
+			suiteExt.Run(
 				t, template,
 				testOptVarOne(""),
 				testOptVarTwo("1000"),
 			)
 		})
+
+		t.Run("with four partitions", func(t *testing.T) {
+			t.Parallel()
+			suite.Run(
+				t, template,
+				testOptPreTest(func(t *testing.T, env *testEnvironment) {
+					require.NoError(t, createKafkaTopic(address, env.configVars.id, 4))
+				}),
+				testOptVarOne(""),
+				testOptVarTwo("1"),
+			)
+
+			t.Run("checkpointed", func(t *testing.T) {
+				t.Parallel()
+				suite.Run(
+					t, template,
+					testOptPreTest(func(t *testing.T, env *testEnvironment) {
+						require.NoError(t, createKafkaTopic(address, env.configVars.id, 4))
+					}),
+					testOptVarOne(""),
+					testOptVarTwo("1000"),
+				)
+			})
+		})
 	})
+
 	t.Run("partitions", func(t *testing.T) {
 		t.Parallel()
-		suite.Run(
+		suiteExt.Run(
 			t, template,
 			testOptVarOne(":0"),
 			testOptVarTwo("1"),
 		)
+
+		t.Run("checkpointed", func(t *testing.T) {
+			t.Parallel()
+			suiteExt.Run(
+				t, template,
+				testOptVarOne(":0"),
+				testOptVarTwo("1000"),
+			)
+		})
+
+		t.Run("with four partitions", func(t *testing.T) {
+			t.Parallel()
+			suite.Run(
+				t, template,
+				testOptPreTest(func(t *testing.T, env *testEnvironment) {
+					topicName := "topic-" + env.configVars.id
+					env.configVars.var1 = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
+					require.NoError(t, createKafkaTopic(address, env.configVars.id, 4))
+				}),
+				testOptSleepAfterInput(time.Second*3),
+				testOptVarTwo("1"),
+			)
+
+			t.Run("checkpointed", func(t *testing.T) {
+				t.Parallel()
+				suite.Run(
+					t, template,
+					testOptPreTest(func(t *testing.T, env *testEnvironment) {
+						topicName := "topic-" + env.configVars.id
+						env.configVars.var1 = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
+						require.NoError(t, createKafkaTopic(address, env.configVars.id, 4))
+					}),
+					testOptSleepAfterInput(time.Second*3),
+					testOptVarTwo("1000"),
+				)
+			})
+		})
 	})
 })
