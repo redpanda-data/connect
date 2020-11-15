@@ -261,4 +261,28 @@ input:
 			})
 		})
 	})
+
+	deprecatedTemplate := fmt.Sprintf(`
+output:
+  kafka:
+    addresses: [ %v ]
+    topic: topic-$ID
+    max_in_flight: $MAX_IN_FLIGHT
+    batching:
+      count: $OUTPUT_BATCH_COUNT
+
+input:
+  kafka:
+    addresses: [ %v ]
+    topic: topic-$ID
+    partition: 0
+    consumer_group: consumer-$ID
+    batching:
+      count: $INPUT_BATCH_COUNT
+`, address, address)
+
+	t.Run("deprecated", func(t *testing.T) {
+		t.Parallel()
+		suiteExt.Run(t, deprecatedTemplate)
+	})
 })
