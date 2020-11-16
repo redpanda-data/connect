@@ -38,6 +38,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `""`  
+Requires version 3.33.0 or newer  
 
 ```yaml
 # Examples
@@ -56,6 +57,7 @@ The way in which the bytes of messages should be written out into the output fil
 
 Type: `string`  
 Default: `"lines"`  
+Requires version 3.33.0 or newer  
 
 | Option | Summary |
 |---|---|

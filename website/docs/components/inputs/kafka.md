@@ -138,6 +138,7 @@ A list of topics to consume from. Multiple comma separated topics can be listed 
 
 Type: `array`  
 Default: `[]`  
+Requires version 3.33.0 or newer  
 
 ```yaml
 # Examples
@@ -346,6 +347,7 @@ EXPERIMENTAL: The maximum number of messages of the same topic and partition tha
 
 Type: `number`  
 Default: `1`  
+Requires version 3.33.0 or newer  
 
 ### `commit_period`
 

@@ -66,13 +66,15 @@ You can access these metadata fields using [function interpolation](/docs/config
 				"topics",
 				"A list of topics to consume from. Multiple comma separated topics can be listed in a single element. Partitions are automatically distributed across consumers of a topic. Alternatively, it's possible to specify an explicit partition to consume from with a colon after the topic name, e.g. `foo:0` would consume the partition 0 of the topic foo.",
 				[]string{"foo", "bar"}, []string{"foo,bar"}, []string{"foo:0", "bar:1", "bar:3"}, []string{"foo:0,bar:1,bar:3"},
-			),
+			).AtVersion("3.33.0"),
 			btls.FieldSpec(),
 			sasl.FieldSpec(),
 			docs.FieldCommon("consumer_group", "An identifier for the consumer group of the connection."),
 			docs.FieldCommon("client_id", "An identifier for the client connection."),
 			docs.FieldAdvanced("start_from_oldest", "If an offset is not found for a topic parition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset."),
-			docs.FieldCommon("checkpoint_limit", "EXPERIMENTAL: The maximum number of messages of the same topic and partition that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual partitions. Any given offset will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees."),
+			docs.FieldCommon(
+				"checkpoint_limit", "EXPERIMENTAL: The maximum number of messages of the same topic and partition that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual partitions. Any given offset will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.",
+			).AtVersion("3.33.0"),
 			docs.FieldAdvanced("commit_period", "The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown."),
 			docs.FieldAdvanced("max_processing_period", "A maximum estimate for the time taken to process a message, this is used for tuning consumer group synchronization."),
 			docs.FieldAdvanced("group", "Tuning parameters for consumer group synchronization.").WithChildren(

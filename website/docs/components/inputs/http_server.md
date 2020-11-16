@@ -175,6 +175,7 @@ An array of verbs that are allowed for the `path` endpoint.
 
 Type: `array`  
 Default: `["POST"]`  
+Requires version 3.33.0 or newer  
 
 ### `timeout`
 

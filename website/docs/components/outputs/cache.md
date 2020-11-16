@@ -127,6 +127,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `""`  
+Requires version 3.33.0 or newer  
 
 ```yaml
 # Examples

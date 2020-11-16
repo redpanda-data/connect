@@ -39,6 +39,7 @@ func init() {
 		Status:  docs.StatusBeta,
 		Batches: true,
 		Async:   true,
+		Version: "3.33.0",
 		Categories: []Category{
 			CategoryServices,
 		},

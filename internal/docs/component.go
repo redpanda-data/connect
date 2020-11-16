@@ -62,6 +62,9 @@ type ComponentSpec struct {
 	Examples []AnnotatedExample
 
 	Fields FieldSpecs
+
+	// Version is the Benthos version this component was introduced.
+	Version string
 }
 
 type fieldContext struct {
@@ -75,6 +78,7 @@ type fieldContext struct {
 	Examples         []string
 	AnnotatedOptions [][2]string
 	Options          []string
+	Version          string
 }
 
 type componentContext struct {
@@ -90,6 +94,7 @@ type componentContext struct {
 	CommonConfig       string
 	AdvancedConfig     string
 	Status             string
+	Version            string
 }
 
 func (ctx fieldContext) InterpolationBatchWide() FieldInterpolation {
@@ -116,6 +121,8 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: ` + "`{{$field.Type}}`" + `  
 {{if gt (len $field.Default) 0}}Default: ` + "`{{$field.Default}}`" + `  
+{{end -}}
+{{if gt (len $field.Version) 0}}Requires version {{$field.Version}} or newer  
 {{end -}}
 {{if gt (len $field.AnnotatedOptions) 0}}
 | Option | Summary |
@@ -174,6 +181,8 @@ This component is deprecated and will be removed in the next major version relea
 
 {{if gt (len .Summary) 0 -}}
 {{.Summary}}
+{{end -}}{{if gt (len .Version) 0}}
+Introduced in version {{.Version}}.
 {{end}}
 {{if eq .CommonConfig .AdvancedConfig -}}
 ` + "```yaml" + `
@@ -315,6 +324,7 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 		Examples:    c.Examples,
 		Footnotes:   c.Footnotes,
 		Status:      string(c.Status),
+		Version:     c.Version,
 	}
 	if len(ctx.Status) == 0 {
 		ctx.Status = string(StatusStable)
@@ -457,6 +467,7 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 			AnnotatedOptions: v.AnnotatedOptions,
 			Options:          v.Options,
 			Interpolation:    v.Interpolation,
+			Version:          v.Version,
 		}
 
 		if len(fieldCtx.Description) == 0 {

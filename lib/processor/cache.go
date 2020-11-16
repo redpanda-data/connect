@@ -38,7 +38,7 @@ find a list of functions [here](/docs/configuration/interpolation#bloblang-queri
 			docs.FieldAdvanced(
 				"ttl", "The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction. Not all caches support per-key TTLs, and those that do not will fall back to their generally configured TTL setting.",
 				"60s", "5m", "36h",
-			).SupportsInterpolation(false),
+			).SupportsInterpolation(false).AtVersion("3.33.0"),
 			partsFieldSpec,
 		},
 		Examples: []docs.AnnotatedExample{

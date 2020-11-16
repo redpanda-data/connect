@@ -56,6 +56,7 @@ type TypeSpec struct {
 	Footnotes   string
 	FieldSpecs  docs.FieldSpecs
 	Examples    []docs.AnnotatedExample
+	Version     string
 }
 
 // Constructors is a map of all output types with their specs.

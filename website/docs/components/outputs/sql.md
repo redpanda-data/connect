@@ -19,6 +19,8 @@ BETA: This component is mostly stable but breaking changes could still be made o
 
 Runs an SQL prepared query against a target database for each message.
 
+Introduced in version 3.33.0.
+
 
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },

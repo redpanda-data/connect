@@ -60,6 +60,9 @@ type FieldSpec struct {
 
 	// Children fields of this field (it must be an object).
 	Children FieldSpecs
+
+	// Version lists an explicit Benthos release where this fields behaviour was last modified.
+	Version string
 }
 
 // SupportsInterpolation returns a new FieldSpec that specifies whether it
@@ -82,6 +85,13 @@ func (f FieldSpec) HasType(t FieldType) FieldSpec {
 // HasDefault returns a new FieldSpec that specifies a default value.
 func (f FieldSpec) HasDefault(v interface{}) FieldSpec {
 	f.Default = v
+	return f
+}
+
+// AtVersion specifies the version at which this fields behaviour was last
+// modified.
+func (f FieldSpec) AtVersion(v string) FieldSpec {
+	f.Version = v
 	return f
 }
 

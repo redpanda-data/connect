@@ -215,6 +215,7 @@ func doOutputs(docsDir string) {
 			Fields:      v.FieldSpecs,
 			Examples:    v.Examples,
 			Status:      v.Status,
+			Version:     v.Version,
 		}
 		if len(v.Categories) > 0 {
 			spec.Categories = make([]string, 0, len(v.Categories))
