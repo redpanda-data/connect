@@ -489,50 +489,60 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 			return nil
 		})
 	}
-	if responseMsg.Len() != 0 {
+	if responseMsg.Len() > 0 {
 		for k, v := range h.responseHeaders {
 			w.Header().Set(k, v.String(0, responseMsg))
 		}
-		if statusCodeStr := h.responseStatus.String(0, responseMsg); statusCodeStr == "200" {
-			w.WriteHeader(200)
-		} else {
-			statusCode, err := strconv.Atoi(statusCodeStr)
-			if err != nil {
+
+		statusCode := 200
+		if statusCodeStr := h.responseStatus.String(0, responseMsg); statusCodeStr != "200" {
+			if statusCode, err = strconv.Atoi(statusCodeStr); err != nil {
 				h.log.Errorf("Failed to parse sync response status code expression: %v\n", err)
 				w.WriteHeader(http.StatusBadGateway)
 				return
 			}
+		}
+
+		if plen := responseMsg.Len(); plen == 1 {
+			payload := responseMsg.Get(0).Get()
+			if len(w.Header().Get("Content-Type")) == 0 {
+				w.Header().Set("Content-Type", http.DetectContentType(payload))
+			}
 			w.WriteHeader(statusCode)
-		}
-	}
-	if plen := responseMsg.Len(); plen == 1 {
-		payload := responseMsg.Get(0).Get()
-		if len(w.Header().Get("Content-Type")) == 0 {
-			w.Header().Set("Content-Type", http.DetectContentType(payload))
-		}
-		w.Write(payload)
-	} else if plen > 1 {
-		customContentType, customContentTypeExists := h.responseHeaders["Content-Type"]
-		writer := multipart.NewWriter(w)
+			w.Write(payload)
+		} else if plen > 1 {
+			customContentType, customContentTypeExists := h.responseHeaders["Content-Type"]
 
-		var merr error
-		for i := 0; i < plen && merr == nil; i++ {
-			payload := responseMsg.Get(i).Get()
+			var buf bytes.Buffer
+			writer := multipart.NewWriter(&buf)
 
-			mimeHeader := textproto.MIMEHeader{}
-			if customContentTypeExists {
-				mimeHeader.Set("Content-Type", customContentType.String(i, responseMsg))
+			var merr error
+			for i := 0; i < plen && merr == nil; i++ {
+				payload := responseMsg.Get(i).Get()
+
+				mimeHeader := textproto.MIMEHeader{}
+				if customContentTypeExists {
+					mimeHeader.Set("Content-Type", customContentType.String(i, responseMsg))
+				} else {
+					mimeHeader.Set("Content-Type", http.DetectContentType(payload))
+				}
+
+				var part io.Writer
+				if part, merr = writer.CreatePart(mimeHeader); merr == nil {
+					_, merr = io.Copy(part, bytes.NewReader(payload))
+				}
+			}
+
+			merr = writer.Close()
+			if merr == nil {
+				w.Header().Del("Content-Type")
+				w.Header().Add("Content-Type", writer.FormDataContentType())
+				w.WriteHeader(statusCode)
+				buf.WriteTo(w)
 			} else {
-				mimeHeader.Set("Content-Type", http.DetectContentType(payload))
+				h.log.Errorf("Failed to return sync response: %v\n", merr)
+				w.WriteHeader(http.StatusBadGateway)
 			}
-
-			var part io.Writer
-			if part, merr = writer.CreatePart(mimeHeader); merr == nil {
-				_, merr = io.Copy(part, bytes.NewReader(payload))
-			}
-		}
-		if merr != nil {
-			h.log.Errorf("Failed to return sync response: %v\n", merr)
 		}
 	}
 

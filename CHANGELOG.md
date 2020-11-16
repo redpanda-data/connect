@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Sync responses of >1 payloads should now get a correct rfc1341 multipart header.
+
 ## 3.33.0 - 2020-11-16
 
 ### Added

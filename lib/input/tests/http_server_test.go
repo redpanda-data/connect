@@ -3,9 +3,13 @@ package tests
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"net/url"
 	"sync"
 	"testing"
@@ -21,6 +25,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/gorilla/websocket"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type apiRegMutWrapper struct {
@@ -593,6 +599,137 @@ func TestHTTPSyncResponseHeaders(t *testing.T) {
 	if err := h.WaitForClose(time.Second * 5); err != nil {
 		t.Error(err)
 	}
+
+	wg.Wait()
+}
+
+func createMultipart(payloads []string, contentType string) (string, []byte, error) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	var err error
+	for i := 0; i < len(payloads) && err == nil; i++ {
+		var part io.Writer
+		if part, err = writer.CreatePart(textproto.MIMEHeader{
+			"Content-Type": []string{contentType},
+		}); err == nil {
+			_, err = io.Copy(part, bytes.NewReader([]byte(payloads[i])))
+		}
+	}
+
+	if err != nil {
+		return "", nil, err
+	}
+
+	writer.Close()
+	return writer.FormDataContentType(), body.Bytes(), nil
+}
+
+func readMultipart(res *http.Response) ([]string, error) {
+	var params map[string]string
+	var err error
+	if contentType := res.Header.Get("Content-Type"); len(contentType) > 0 {
+		if _, params, err = mime.ParseMediaType(contentType); err != nil {
+			return nil, err
+		}
+	}
+
+	var buffer bytes.Buffer
+	var output []string
+
+	mr := multipart.NewReader(res.Body, params["boundary"])
+	var bufferIndex int64
+	for {
+		var p *multipart.Part
+		if p, err = mr.NextPart(); err != nil {
+			if err == io.EOF {
+				err = nil
+				break
+			}
+			return nil, err
+		}
+
+		var bytesRead int64
+		if bytesRead, err = buffer.ReadFrom(p); err != nil {
+			return nil, err
+		}
+
+		output = append(output, string(buffer.Bytes()[bufferIndex:bufferIndex+bytesRead]))
+		bufferIndex += bytesRead
+	}
+
+	return output, nil
+}
+
+func TestHTTPSyncResponseMultipart(t *testing.T) {
+	t.Parallel()
+
+	reg := apiRegMutWrapper{mut: &http.ServeMux{}}
+	mgr, err := manager.New(manager.NewConfig(), reg, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	conf := input.NewConfig()
+	conf.HTTPServer.Path = "/testpost"
+	conf.HTTPServer.Response.Headers["Content-Type"] = "application/json"
+
+	h, err := input.NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	server := httptest.NewServer(reg.mut)
+	t.Cleanup(func() {
+		server.Close()
+	})
+
+	input := []string{
+		`{"foo":"test message 1","field1":"bar"}`,
+		`{"foo":"test message 2","field1":"baz"}`,
+		`{"foo":"test message 3","field1":"buz"}`,
+	}
+	output := []string{
+		`{"foo":"test message 4","field1":"bar"}`,
+		`{"foo":"test message 5","field1":"baz"}`,
+		`{"foo":"test message 6","field1":"buz"}`,
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		hdr, body, err := createMultipart(input, "application/octet-stream")
+		require.NoError(t, err)
+
+		res, err := http.Post(server.URL+"/testpost", hdr, bytes.NewReader(body))
+		require.NoError(t, err)
+		require.Equal(t, 200, res.StatusCode)
+
+		act, err := readMultipart(res)
+		require.NoError(t, err)
+		assert.Equal(t, output, act)
+	}()
+
+	var ts types.Transaction
+	select {
+	case ts = <-h.TransactionChan():
+		for i, in := range input {
+			assert.Equal(t, in, string(ts.Payload.Get(i).Get()))
+		}
+		for i, o := range output {
+			ts.Payload.Get(i).Set([]byte(o))
+		}
+		roundtrip.SetAsResponse(ts.Payload)
+	case <-time.After(time.Second):
+		t.Fatal("Timed out waiting for message")
+	}
+	select {
+	case ts.ResponseChan <- response.NewAck():
+	case <-time.After(time.Second):
+		t.Error("Timed out waiting for response")
+	}
+
+	h.CloseAsync()
+	err = h.WaitForClose(time.Second * 5)
+	require.NoError(t, err)
 
 	wg.Wait()
 }

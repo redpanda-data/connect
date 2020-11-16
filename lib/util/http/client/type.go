@@ -414,7 +414,7 @@ func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err erro
 		var mediaType string
 		var params map[string]string
 		if len(contentType) > 0 {
-			if mediaType, params, err = mime.ParseMediaType(res.Header.Get("Content-Type")); err != nil {
+			if mediaType, params, err = mime.ParseMediaType(contentType); err != nil {
 				h.mErrRes.Incr(1)
 				h.mErr.Incr(1)
 				h.log.Errorf("Failed to parse media type: %v\n", err)
