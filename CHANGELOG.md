@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## 3.33.0 - TBD
+## 3.33.0 - 2020-11-16
 
 ### Added
 
