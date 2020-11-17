@@ -115,7 +115,7 @@ func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
 		return nil, err
 	}
 
-	if conf.JSONFormat {
+	if removeDeprecated && conf.JSONFormat {
 		delete(hashMap, "json_format")
 	}
 
