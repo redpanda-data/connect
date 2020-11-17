@@ -1032,6 +1032,7 @@ OUTPUT_ZMQ4_URLS                                      = tcp://*:5556
 
 ```
 LOGGER_ADD_TIMESTAMP = true
+LOGGER_FORMAT        = json
 LOGGER_JSON_FORMAT   = true
 LOGGER_LEVEL         = INFO
 LOGGER_PREFIX        = benthos

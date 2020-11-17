@@ -1,13 +1,17 @@
 package log
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -77,6 +81,7 @@ func logLevelToInt(level string) int {
 type Config struct {
 	Prefix       string            `json:"prefix" yaml:"prefix"`
 	LogLevel     string            `json:"level" yaml:"level"`
+	Format       string            `json:"format" yaml:"format"`
 	AddTimeStamp bool              `json:"add_timestamp" yaml:"add_timestamp"`
 	JSONFormat   bool              `json:"json_format" yaml:"json_format"`
 	StaticFields map[string]string `json:"static_fields" yaml:"static_fields"`
@@ -87,6 +92,7 @@ func NewConfig() Config {
 	return Config{
 		Prefix:       "benthos",
 		LogLevel:     "INFO",
+		Format:       "json",
 		AddTimeStamp: true,
 		JSONFormat:   true,
 		StaticFields: map[string]string{
@@ -95,11 +101,32 @@ func NewConfig() Config {
 	}
 }
 
+// Sanitised returns a sanitised version of the config, meaning sections that
+// aren't relevant to behaviour are removed. Also optionally removes deprecated
+// fields.
+func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
+	cBytes, err := yaml.Marshal(conf)
+	if err != nil {
+		return nil, err
+	}
+
+	hashMap := map[string]interface{}{}
+	if err = yaml.Unmarshal(cBytes, &hashMap); err != nil {
+		return nil, err
+	}
+
+	if conf.JSONFormat {
+		delete(hashMap, "json_format")
+	}
+
+	return hashMap, nil
+}
+
 //------------------------------------------------------------------------------
 
 // UnmarshalJSON ensures that when parsing configs that are in a slice the
 // default values are still applied.
-func (l *Config) UnmarshalJSON(bytes []byte) error {
+func (conf *Config) UnmarshalJSON(bytes []byte) error {
 	type confAlias Config
 	aliased := confAlias(NewConfig())
 
@@ -113,13 +140,13 @@ func (l *Config) UnmarshalJSON(bytes []byte) error {
 		aliased.StaticFields = defaultFields
 	}
 
-	*l = Config(aliased)
+	*conf = Config(aliased)
 	return nil
 }
 
 // UnmarshalYAML ensures that when parsing configs that are in a slice the
 // default values are still applied.
-func (l *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (conf *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	type confAlias Config
 	aliased := confAlias(NewConfig())
 
@@ -134,7 +161,7 @@ func (l *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		aliased.StaticFields = defaultFields
 	}
 
-	*l = Config(aliased)
+	*conf = Config(aliased)
 	return nil
 }
 
@@ -142,28 +169,50 @@ func (l *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // Logger is an object with support for levelled logging and modular components.
 type Logger struct {
-	stream          io.Writer
-	config          Config
-	level           int
-	staticFieldsRaw string
+	stream    io.Writer
+	config    Config
+	level     int
+	formatter logFormatter
 }
 
 // New creates and returns a new logger object.
+// TODO: V4 replace this with NewV2
 func New(stream io.Writer, config Config) Modular {
+	if !config.JSONFormat {
+		config.Format = "deprecated"
+	}
+
 	logger := Logger{
 		stream: stream,
 		config: config,
 		level:  logLevelToInt(config.LogLevel),
 	}
 
-	if len(config.StaticFields) > 0 {
-		jBytes, _ := json.Marshal(config.StaticFields)
-		if len(jBytes) > 2 {
-			logger.staticFieldsRaw = string(jBytes[1:len(jBytes)-1]) + ","
-		}
+	logger.formatter, _ = getFormatter(config)
+	if logger.formatter == nil {
+		logger.formatter = deprecatedFormatter(config)
+	}
+	return &logger
+}
+
+// NewV2 returns a new logger from a config, or returns an error if the config
+// is invalid.
+func NewV2(stream io.Writer, config Config) (Modular, error) {
+	if !config.JSONFormat {
+		config.Format = "deprecated"
 	}
 
-	return &logger
+	logger := Logger{
+		stream: stream,
+		config: config,
+		level:  logLevelToInt(config.LogLevel),
+	}
+
+	var err error
+	if logger.formatter, err = getFormatter(config); err != nil {
+		return nil, err
+	}
+	return &logger, nil
 }
 
 //------------------------------------------------------------------------------
@@ -171,9 +220,10 @@ func New(stream io.Writer, config Config) Modular {
 // Noop creates and returns a new logger object that writes nothing.
 func Noop() Modular {
 	return &Logger{
-		stream: ioutil.Discard,
-		config: NewConfig(),
-		level:  LogOff,
+		stream:    ioutil.Discard,
+		config:    NewConfig(),
+		level:     LogOff,
+		formatter: deprecatedFormatter(NewConfig()),
 	}
 }
 
@@ -183,11 +233,16 @@ func (l *Logger) NewModule(prefix string) Modular {
 	config := l.config
 	config.Prefix = fmt.Sprintf("%v%v", config.Prefix, prefix)
 
+	formatter, _ := getFormatter(config)
+	if formatter == nil {
+		formatter = deprecatedFormatter(config)
+	}
+
 	return &Logger{
-		stream:          l.stream,
-		config:          config,
-		level:           l.level,
-		staticFieldsRaw: l.staticFieldsRaw,
+		stream:    l.stream,
+		config:    config,
+		level:     l.level,
+		formatter: formatter,
 	}
 }
 
@@ -201,18 +256,17 @@ func (l *Logger) WithFields(fields map[string]string) Modular {
 			newConfig.StaticFields[k] = v
 		}
 	}
-	var staticFieldsRaw string
-	if len(newConfig.StaticFields) > 0 {
-		jBytes, _ := json.Marshal(newConfig.StaticFields)
-		if len(jBytes) > 2 {
-			staticFieldsRaw = string(jBytes[1:len(jBytes)-1]) + ","
-		}
+
+	formatter, _ := getFormatter(newConfig)
+	if formatter == nil {
+		formatter = deprecatedFormatter(newConfig)
 	}
+
 	return &Logger{
-		stream:          l.stream,
-		config:          newConfig,
-		level:           l.level,
-		staticFieldsRaw: staticFieldsRaw,
+		stream:    l.stream,
+		config:    newConfig,
+		level:     l.level,
+		formatter: formatter,
 	}
 }
 
@@ -224,65 +278,94 @@ func WithFields(l Modular, fields map[string]string) Modular {
 
 //------------------------------------------------------------------------------
 
-// writeFormatted prints a log message with any configured extras prepended.
-func (l *Logger) writeFormatted(message string, level string, other ...interface{}) {
-	if l.config.JSONFormat {
+type logFormatter func(w io.Writer, message string, level string, other ...interface{})
+
+func jsonFormatter(conf Config) logFormatter {
+	var staticFieldsRawJSON string
+	if len(conf.StaticFields) > 0 {
+		jBytes, _ := json.Marshal(conf.StaticFields)
+		if len(jBytes) > 2 {
+			staticFieldsRawJSON = string(jBytes[1:len(jBytes)-1]) + ","
+		}
+	}
+
+	return func(w io.Writer, message string, level string, other ...interface{}) {
 		message = strings.TrimSuffix(message, "\n")
-		if l.config.AddTimeStamp {
-			fmt.Fprintf(
-				l.stream,
-				"{\"@timestamp\":\"%v\",%v\"level\":\"%v\",\"component\":\"%v\",\"message\":%v}\n",
-				time.Now().Format(time.RFC3339), l.staticFieldsRaw, level, l.config.Prefix,
-				strconv.QuoteToASCII(fmt.Sprintf(message, other...)),
-			)
-		} else {
-			fmt.Fprintf(
-				l.stream,
-				"{%v\"level\":\"%v\",\"component\":\"%v\",\"message\":%v}\n",
-				l.staticFieldsRaw, level, l.config.Prefix,
-				strconv.QuoteToASCII(fmt.Sprintf(message, other...)),
-			)
+		timestampStr := ""
+		if conf.AddTimeStamp {
+			timestampStr = fmt.Sprintf("\"@timestamp\":\"%v\",", time.Now().Format(time.RFC3339))
 		}
-	} else {
-		if l.config.AddTimeStamp {
-			fmt.Fprintf(l.stream, fmt.Sprintf(
-				"%v | %v | %v | %v",
-				time.Now().Format(time.RFC3339), level, l.config.Prefix, message,
-			), other...)
-		} else {
-			fmt.Fprintf(l.stream, fmt.Sprintf(
-				"%v | %v | %v", level, l.config.Prefix, message,
-			), other...)
-		}
+		fmt.Fprintf(
+			w,
+			"{%v%v\"level\":\"%v\",\"component\":\"%v\",\"message\":%v}\n",
+			timestampStr, staticFieldsRawJSON, level, conf.Prefix,
+			strconv.QuoteToASCII(fmt.Sprintf(message, other...)),
+		)
 	}
 }
 
-// writeLine prints a log message with any configured extras prepended.
-func (l *Logger) writeLine(message string, level string) {
-	if l.config.JSONFormat {
-		if l.config.AddTimeStamp {
-			fmt.Fprintf(l.stream,
-				"{\"@timestamp\":\"%v\",%v\"level\":\"%v\",\"component\":\"%v\",\"message\":%v}\n",
-				time.Now().Format(time.RFC3339), l.staticFieldsRaw, level,
-				l.config.Prefix, strconv.QuoteToASCII(message),
-			)
-		} else {
-			fmt.Fprintf(l.stream,
-				"{%v\"level\":\"%v\",\"component\":\"%v\",\"message\":%v}\n",
-				l.staticFieldsRaw, level, l.config.Prefix,
-				strconv.QuoteToASCII(message),
-			)
+func logfmtFormatter(conf Config) logFormatter {
+	var staticFieldsRaw string
+	if len(conf.StaticFields) > 0 {
+		keys := make([]string, 0, len(conf.StaticFields))
+		for k := range conf.StaticFields {
+			keys = append(keys, k)
 		}
-	} else {
-		if l.config.AddTimeStamp {
-			fmt.Fprintf(
-				l.stream, "%v | %v | %v | %v\n",
-				time.Now().Format(time.RFC3339), level, l.config.Prefix, message,
-			)
-		} else {
-			fmt.Fprintf(l.stream, "%v | %v | %v\n", level, l.config.Prefix, message)
+		sort.Strings(keys)
+
+		var buf bytes.Buffer
+		for _, k := range keys {
+			buf.WriteString(fmt.Sprintf("%v=%v ", k, conf.StaticFields[k]))
 		}
+		staticFieldsRaw = buf.String()
 	}
+
+	return func(w io.Writer, message string, level string, other ...interface{}) {
+		message = strings.TrimSuffix(message, "\n")
+		timestampStr := ""
+		if conf.AddTimeStamp {
+			timestampStr = fmt.Sprintf("timestamp=\"%v\" ", time.Now().Format(time.RFC3339))
+		}
+		fmt.Fprintf(
+			w,
+			"%v%vlevel=%v component=%v msg=%v\n",
+			timestampStr, staticFieldsRaw, level, conf.Prefix,
+			strconv.QuoteToASCII(fmt.Sprintf(message, other...)),
+		)
+	}
+}
+
+func deprecatedFormatter(conf Config) logFormatter {
+	return func(w io.Writer, message string, level string, other ...interface{}) {
+		if !strings.HasSuffix(message, "\n") {
+			message = message + "\n"
+		}
+		timestampStr := ""
+		if conf.AddTimeStamp {
+			timestampStr = fmt.Sprintf("%v | ", time.Now().Format(time.RFC3339))
+		}
+		fmt.Fprintf(w, fmt.Sprintf(
+			"%v%v | %v | %v",
+			timestampStr, level, conf.Prefix, message,
+		), other...)
+	}
+}
+
+func getFormatter(conf Config) (logFormatter, error) {
+	switch conf.Format {
+	case "json":
+		return jsonFormatter(conf), nil
+	case "logfmt":
+		return logfmtFormatter(conf), nil
+	case "deprecated":
+		return deprecatedFormatter(conf), nil
+	}
+	return nil, fmt.Errorf("log format '%v' not recognized", conf.Format)
+}
+
+// write prints a log message with any configured extras prepended.
+func (l *Logger) write(message string, level string, other ...interface{}) {
+	l.formatter(l.stream, message, level, other...)
 }
 
 //------------------------------------------------------------------------------
@@ -290,42 +373,42 @@ func (l *Logger) writeLine(message string, level string) {
 // Fatalf prints a fatal message to the console. Does NOT cause panic.
 func (l *Logger) Fatalf(format string, v ...interface{}) {
 	if LogFatal <= l.level {
-		l.writeFormatted(format, "FATAL", v...)
+		l.write(format, "FATAL", v...)
 	}
 }
 
 // Errorf prints an error message to the console.
 func (l *Logger) Errorf(format string, v ...interface{}) {
 	if LogError <= l.level {
-		l.writeFormatted(format, "ERROR", v...)
+		l.write(format, "ERROR", v...)
 	}
 }
 
 // Warnf prints a warning message to the console.
 func (l *Logger) Warnf(format string, v ...interface{}) {
 	if LogWarn <= l.level {
-		l.writeFormatted(format, "WARN", v...)
+		l.write(format, "WARN", v...)
 	}
 }
 
 // Infof prints an information message to the console.
 func (l *Logger) Infof(format string, v ...interface{}) {
 	if LogInfo <= l.level {
-		l.writeFormatted(format, "INFO", v...)
+		l.write(format, "INFO", v...)
 	}
 }
 
 // Debugf prints a debug message to the console.
 func (l *Logger) Debugf(format string, v ...interface{}) {
 	if LogDebug <= l.level {
-		l.writeFormatted(format, "DEBUG", v...)
+		l.write(format, "DEBUG", v...)
 	}
 }
 
 // Tracef prints a trace message to the console.
 func (l *Logger) Tracef(format string, v ...interface{}) {
 	if LogTrace <= l.level {
-		l.writeFormatted(format, "TRACE", v...)
+		l.write(format, "TRACE", v...)
 	}
 }
 
@@ -334,42 +417,42 @@ func (l *Logger) Tracef(format string, v ...interface{}) {
 // Fatalln prints a fatal message to the console. Does NOT cause panic.
 func (l *Logger) Fatalln(message string) {
 	if LogFatal <= l.level {
-		l.writeLine(message, "FATAL")
+		l.write(message, "FATAL")
 	}
 }
 
 // Errorln prints an error message to the console.
 func (l *Logger) Errorln(message string) {
 	if LogError <= l.level {
-		l.writeLine(message, "ERROR")
+		l.write(message, "ERROR")
 	}
 }
 
 // Warnln prints a warning message to the console.
 func (l *Logger) Warnln(message string) {
 	if LogWarn <= l.level {
-		l.writeLine(message, "WARN")
+		l.write(message, "WARN")
 	}
 }
 
 // Infoln prints an information message to the console.
 func (l *Logger) Infoln(message string) {
 	if LogInfo <= l.level {
-		l.writeLine(message, "INFO")
+		l.write(message, "INFO")
 	}
 }
 
 // Debugln prints a debug message to the console.
 func (l *Logger) Debugln(message string) {
 	if LogDebug <= l.level {
-		l.writeLine(message, "DEBUG")
+		l.write(message, "DEBUG")
 	}
 }
 
 // Traceln prints a trace message to the console.
 func (l *Logger) Traceln(message string) {
 	if LogTrace <= l.level {
-		l.writeLine(message, "TRACE")
+		l.write(message, "TRACE")
 	}
 }
 

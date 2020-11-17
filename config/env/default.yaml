@@ -1239,6 +1239,7 @@ output:
   type: broker
 logger:
   add_timestamp: ${LOGGER_ADD_TIMESTAMP:true}
+  format: ${LOGGER_FORMAT:json}
   json_format: ${LOGGER_JSON_FORMAT:true}
   level: ${LOGGER_LEVEL:INFO}
   prefix: ${LOGGER_PREFIX:benthos}

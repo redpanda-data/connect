@@ -72,10 +72,10 @@ resources:
   processors: {}
   rate_limits: {}
 logger:
-  prefix: benthos
-  level: INFO
   add_timestamp: true
-  json_format: true
+  format: json
+  level: INFO
+  prefix: benthos
   static_fields:
     '@service': benthos
 metrics:

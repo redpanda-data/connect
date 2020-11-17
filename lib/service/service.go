@@ -162,9 +162,13 @@ func cmdService(
 	// Note: Only log to Stderr if our output is stdout, brokers aren't counted
 	// here as this is only a special circumstance for very basic use cases.
 	if !streamsMode && conf.Output.Type == "stdout" {
-		logger = log.New(os.Stderr, conf.Logger)
+		logger, err = log.NewV2(os.Stderr, conf.Logger)
 	} else {
-		logger = log.New(os.Stdout, conf.Logger)
+		logger, err = log.NewV2(os.Stdout, conf.Logger)
+	}
+	if err != nil {
+		fmt.Printf("Failed to create logger: %v\n", err)
+		return 1
 	}
 
 	if len(lints) > 0 {

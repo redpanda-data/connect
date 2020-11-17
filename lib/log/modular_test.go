@@ -1,18 +1,11 @@
 package log
 
 import (
-	"fmt"
+	"bytes"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
-
-type LogBuffer struct {
-	data string
-}
-
-func (l *LogBuffer) Write(p []byte) (n int, err error) {
-	l.data = fmt.Sprintf("%v%v", l.data, string(p))
-	return len(p), nil
-}
 
 func TestModules(t *testing.T) {
 	loggerConfig := NewConfig()
@@ -21,7 +14,7 @@ func TestModules(t *testing.T) {
 	loggerConfig.Prefix = "root"
 	loggerConfig.LogLevel = "WARN"
 
-	buf := LogBuffer{data: ""}
+	var buf bytes.Buffer
 
 	logger := New(&buf, loggerConfig)
 	logger.Warnln("Warning message root module")
@@ -40,9 +33,7 @@ func TestModules(t *testing.T) {
 		"WARN | root.foo2 | Warning message root.foo2 module\n" +
 		"WARN | root.foo.bar | Warning message root.foo.bar module\n"
 
-	if expected != buf.data {
-		t.Errorf("%v != %v", expected, buf.data)
-	}
+	assert.Equal(t, expected, buf.String())
 }
 
 func TestStaticFields(t *testing.T) {
@@ -56,7 +47,7 @@ func TestStaticFields(t *testing.T) {
 		"@system":  "foo",
 	}
 
-	buf := LogBuffer{data: ""}
+	var buf bytes.Buffer
 
 	logger := New(&buf, loggerConfig)
 	logger.Warnln("Warning message root module")
@@ -70,9 +61,7 @@ func TestStaticFields(t *testing.T) {
 {"@service":"benthos_service","@system":"foo","level":"WARN","component":"root.foo","message":"Warning message root.foo module"}
 `
 
-	if expected != buf.data {
-		t.Errorf("%v != %v", expected, buf.data)
-	}
+	assert.Equal(t, expected, buf.String())
 }
 
 func TestStaticFieldsOverride(t *testing.T) {
@@ -86,7 +75,7 @@ func TestStaticFieldsOverride(t *testing.T) {
 		"@system":  "foo",
 	}
 
-	buf := LogBuffer{data: ""}
+	var buf bytes.Buffer
 
 	logger := New(&buf, loggerConfig)
 	logger.Warnf("Warning message root module")
@@ -101,9 +90,7 @@ func TestStaticFieldsOverride(t *testing.T) {
 {"@service":"benthos_service","@system":"foo","level":"WARN","component":"root","message":"Warning message root module"}
 `
 
-	if expected != buf.data {
-		t.Errorf("%v != %v", expected, buf.data)
-	}
+	assert.Equal(t, expected, buf.String())
 }
 
 func TestStaticFieldsEmpty(t *testing.T) {
@@ -114,7 +101,7 @@ func TestStaticFieldsEmpty(t *testing.T) {
 	loggerConfig.LogLevel = "WARN"
 	loggerConfig.StaticFields = map[string]string{}
 
-	buf := LogBuffer{data: ""}
+	var buf bytes.Buffer
 
 	logger := New(&buf, loggerConfig)
 	logger.Warnln("Warning message root module")
@@ -128,9 +115,7 @@ func TestStaticFieldsEmpty(t *testing.T) {
 {"level":"WARN","component":"root.foo","message":"Warning message root.foo module"}
 `
 
-	if expected != buf.data {
-		t.Errorf("%v != %v", expected, buf.data)
-	}
+	assert.Equal(t, expected, buf.String())
 }
 
 func TestFormattedLogging(t *testing.T) {
@@ -140,7 +125,7 @@ func TestFormattedLogging(t *testing.T) {
 	loggerConfig.Prefix = "test"
 	loggerConfig.LogLevel = "WARN"
 
-	buf := LogBuffer{data: ""}
+	var buf bytes.Buffer
 
 	logger := New(&buf, loggerConfig)
 	logger.Fatalf("fatal test %v\n", 1)
@@ -152,9 +137,7 @@ func TestFormattedLogging(t *testing.T) {
 
 	expected := "FATAL | test | fatal test 1\nERROR | test | error test 2\nWARN | test | warn test 3\n"
 
-	if expected != buf.data {
-		t.Errorf("%v != %v", expected, buf.data)
-	}
+	assert.Equal(t, expected, buf.String())
 }
 
 func TestLineLogging(t *testing.T) {
@@ -164,7 +147,7 @@ func TestLineLogging(t *testing.T) {
 	loggerConfig.Prefix = "test"
 	loggerConfig.LogLevel = "WARN"
 
-	buf := LogBuffer{data: ""}
+	var buf bytes.Buffer
 
 	logger := New(&buf, loggerConfig)
 	logger.Fatalln("fatal test")
@@ -176,16 +159,14 @@ func TestLineLogging(t *testing.T) {
 
 	expected := "FATAL | test | fatal test\nERROR | test | error test\nWARN | test | warn test\n"
 
-	if expected != buf.data {
-		t.Errorf("%v != %v", expected, buf.data)
-	}
+	assert.Equal(t, expected, buf.String())
 }
 
-type LogCounter struct {
+type logCounter struct {
 	count int
 }
 
-func (l *LogCounter) Write(p []byte) (n int, err error) {
+func (l *logCounter) Write(p []byte) (n int, err error) {
 	l.count++
 	return len(p), nil
 }
@@ -196,7 +177,7 @@ func TestLogLevels(t *testing.T) {
 		loggerConfig.JSONFormat = false
 		loggerConfig.LogLevel = intToLogLevel(i)
 
-		buf := LogCounter{count: 0}
+		buf := logCounter{}
 
 		logger := New(&buf, loggerConfig)
 		logger.Fatalln("fatal test")

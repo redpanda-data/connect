@@ -8,10 +8,12 @@ Benthos logging prints to stdout (or stderr if your output is stdout), and is fo
 logger:
   prefix: benthos
   level: INFO
+  format: json
   add_timestamp: true
-  json_format: true
   static_fields:
     '@service': benthos
 ```
 
-Possible log levels are `OFF`, `FATAL`, `ERROR`, `WARN`, `INFO`, `DEBUG`, `TRACE` and `ALL`,
+Possible log levels are `OFF`, `FATAL`, `ERROR`, `WARN`, `INFO`, `DEBUG`, `TRACE` and `ALL`.
+
+Possible log formats are `json` and `logfmt`.

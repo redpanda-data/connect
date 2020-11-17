@@ -114,6 +114,12 @@ func (c Type) sanitised(skipDeprecated bool) (*SanitisedConfig, error) {
 		return nil, err
 	}
 
+	var logConf interface{}
+	logConf, err = c.Logger.Sanitised(skipDeprecated)
+	if err != nil {
+		return nil, err
+	}
+
 	return &SanitisedConfig{
 		HTTP:               c.HTTP,
 		Input:              inConf,
@@ -121,7 +127,7 @@ func (c Type) sanitised(skipDeprecated bool) (*SanitisedConfig, error) {
 		Pipeline:           pipeConf,
 		Output:             outConf,
 		Manager:            mgrConf,
-		Logger:             c.Logger,
+		Logger:             logConf,
 		Metrics:            metConf,
 		Tracer:             tracConf,
 		SystemCloseTimeout: c.SystemCloseTimeout,
