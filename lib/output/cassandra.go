@@ -329,17 +329,17 @@ func (s stringValue) MarshalCQL(info gocql.TypeInfo) ([]byte, error) {
 			return []byte{0}, nil
 		}
 	case gocql.TypeFloat:
-		f, err := strconv.ParseFloat(string(s), 64)
-		if err != nil {
-			return nil, err
-		}
-		return formatCassandraInt64(int64(f)), nil
-	case gocql.TypeDouble:
 		f, err := strconv.ParseFloat(string(s), 32)
 		if err != nil {
 			return nil, err
 		}
-		return formatCassandraInt32(int32(f)), nil
+		return formatCassandraInt32(int32(math.Float32bits(float32(f)))), nil
+	case gocql.TypeDouble:
+		f, err := strconv.ParseFloat(string(s), 64)
+		if err != nil {
+			return nil, err
+		}
+		return formatCassandraInt64(int64(math.Float64bits(f))), nil
 	}
 	return gocql.Marshal(info, string(s))
 }
