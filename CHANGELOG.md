@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Sync responses of >1 payloads should now get a correct rfc1341 multipart header.
+- The `cassandra` output now correctly marshals float and double values.
 
 ## 3.33.0 - 2020-11-16
 

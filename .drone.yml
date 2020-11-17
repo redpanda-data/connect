@@ -16,6 +16,40 @@ steps:
     - make deps
     - make test
 
+# Edge deployment (push a docker image with the edge tag)
+
+- name: docker-cgo-edge
+  image: plugins/docker
+  settings:
+    repo: jeffail/benthos
+    dockerfile: resources/docker/Dockerfile.cgo
+    tags: edge
+    username: jeffail
+    password:
+      from_secret: docker_password
+  when:
+    event: [ push, pull_request ]
+    ref:
+      exclude:
+      - refs/tags/*-rc*
+
+- name: docker-edge
+  image: plugins/docker
+  settings:
+    repo: jeffail/benthos
+    dockerfile: resources/docker/Dockerfile
+    tags: edge
+    username: jeffail
+    password:
+      from_secret: docker_password
+  when:
+    event: [ push, pull_request ]
+    ref:
+      exclude:
+      - refs/tags/*-rc*
+
+# Tagged deployment (push a docker images and upload binaries to GH releases)
+
 - name: release
   image: golang:1.15
   environment:
@@ -32,21 +66,7 @@ steps:
   commands:
     - make docker-cgo-tags
   when:
-    ref:
-      exclude:
-      - refs/tags/*-rc*
-
-- name: docker-cgo-dr
-  image: plugins/docker
-  settings:
-    repo: jeffail/benthos
-    dockerfile: resources/docker/Dockerfile.cgo
-    dry_run: true
-    username: jeffail
-    password:
-      from_secret: docker_password
-  when:
-    event: [ push, pull_request ]
+    event: tag
     ref:
       exclude:
       - refs/tags/*-rc*
@@ -70,21 +90,7 @@ steps:
   commands:
     - make docker-tags
   when:
-    ref:
-      exclude:
-      - refs/tags/*-rc*
-
-- name: docker-dr
-  image: plugins/docker
-  settings:
-    repo: jeffail/benthos
-    dockerfile: resources/docker/Dockerfile
-    dry_run: true
-    username: jeffail
-    password:
-      from_secret: docker_password
-  when:
-    event: [ push, pull_request ]
+    event: tag
     ref:
       exclude:
       - refs/tags/*-rc*
