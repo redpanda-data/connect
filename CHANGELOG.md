@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### New
+
+- New field `format` added to `logger` supporting `json` and `logfmt`.
+
 ### Fixed
 
 - Sync responses of >1 payloads should now get a correct rfc1341 multipart header.

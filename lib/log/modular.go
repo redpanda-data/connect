@@ -357,7 +357,7 @@ func getFormatter(conf Config) (logFormatter, error) {
 		return jsonFormatter(conf), nil
 	case "logfmt":
 		return logfmtFormatter(conf), nil
-	case "deprecated":
+	case "deprecated", "classic":
 		return deprecatedFormatter(conf), nil
 	}
 	return nil, fmt.Errorf("log format '%v' not recognized", conf.Format)

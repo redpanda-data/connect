@@ -16,4 +16,4 @@ logger:
 
 Possible log levels are `OFF`, `FATAL`, `ERROR`, `WARN`, `INFO`, `DEBUG`, `TRACE` and `ALL`.
 
-Possible log formats are `json` and `logfmt`.
+Possible log formats are `json`, `logfmt` and `classic`.
