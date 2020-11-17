@@ -23,7 +23,7 @@ steps:
   settings:
     repo: jeffail/benthos
     dockerfile: resources/docker/Dockerfile.cgo
-    tags: edge
+    tags: edge-cgo
     username: jeffail
     password:
       from_secret: docker_password
