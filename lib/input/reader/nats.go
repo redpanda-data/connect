@@ -19,6 +19,8 @@ import (
 // NATSConfig contains configuration fields for the NATS input type.
 type NATSConfig struct {
 	URLs          []string `json:"urls" yaml:"urls"`
+	UserName      string   `json:"user_name" yaml:"username"`
+	Password      string   `json:"password" yaml:"password"`
 	Subject       string   `json:"subject" yaml:"subject"`
 	QueueID       string   `json:"queue" yaml:"queue"`
 	PrefetchCount int      `json:"prefetch_count" yaml:"prefetch_count"`
@@ -87,7 +89,12 @@ func (n *NATS) ConnectWithContext(ctx context.Context) error {
 	var natsSub *nats.Subscription
 	var err error
 
-	if natsConn, err = nats.Connect(n.urls); err != nil {
+	opts := []nats.Option{}
+	if n.conf.UserName != "" || n.conf.Password != "" {
+		opts = append(opts, nats.UserInfo(n.conf.UserName, n.conf.Password))
+	}
+
+	if natsConn, err = nats.Connect(n.urls, opts...); err != nil {
 		return err
 	}
 	natsChan := make(chan *nats.Msg, n.conf.PrefetchCount)
