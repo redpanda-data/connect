@@ -18,7 +18,7 @@ func NewZMQ4Config() *ZMQ4Config {
 		URLs:          []string{"tcp://localhost:5555"},
 		Bind:          false,
 		SocketType:    "PULL",
-		SubFilters:    []string{},
+		SubFilters:    []string{""},
 		HighWaterMark: 0,
 		PollTimeout:   "5s",
 	}
