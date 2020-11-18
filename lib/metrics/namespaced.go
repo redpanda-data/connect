@@ -25,7 +25,7 @@ func Namespaced(t Type, ns string) Type {
 // Unwrap to the underlying metrics type.
 // TODO: V4 make this standard for Type
 func (d namespacedWrapper) Unwrap() Type {
-	return d.t
+	return unwrapMetric(d.t)
 }
 
 //------------------------------------------------------------------------------

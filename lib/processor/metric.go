@@ -214,15 +214,11 @@ func (l labels) values(index int, msg types.Message) []string {
 }
 
 func unwrapMetric(t metrics.Type) metrics.Type {
-	for {
-		u, ok := t.(interface {
-			Unwrap() metrics.Type
-		})
-		if ok {
-			t = u.Unwrap()
-		} else {
-			break
-		}
+	u, ok := t.(interface {
+		Unwrap() metrics.Type
+	})
+	if ok {
+		t = u.Unwrap()
 	}
 	return t
 }

@@ -21,24 +21,25 @@ func Combine(t1, t2 Type) Type {
 }
 
 func unwrapMetric(t Type) Type {
-	for {
-		u, ok := t.(interface {
-			Unwrap() Type
-		})
-		if ok {
-			t = u.Unwrap()
-		} else {
-			break
-		}
+	u, ok := t.(interface {
+		Unwrap() Type
+	})
+	if ok {
+		t = u.Unwrap()
 	}
 	return t
 }
 
 // Unwrap to the underlying metrics type.
 func (c *combinedWrapper) Unwrap() Type {
+	t1 := unwrapMetric(c.t1)
+	t2 := unwrapMetric(c.t2)
+	if t1 == t2 {
+		return t1
+	}
 	return &combinedWrapper{
-		t1: unwrapMetric(c.t1),
-		t2: unwrapMetric(c.t2),
+		t1: t1,
+		t2: t2,
 	}
 }
 
