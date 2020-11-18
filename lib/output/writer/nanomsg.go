@@ -120,10 +120,12 @@ func (s *Nanomsg) Connect() error {
 	}
 
 	// Set timeout to prevent endless lock.
-	if err = socket.SetOption(
-		mangos.OptionSendDeadline, s.timeout,
-	); nil != err {
-		return err
+	if s.conf.SocketType == "PUSH" {
+		if err = socket.SetOption(
+			mangos.OptionSendDeadline, s.timeout,
+		); nil != err {
+			return err
+		}
 	}
 
 	if s.conf.Bind {

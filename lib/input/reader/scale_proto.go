@@ -2,6 +2,7 @@ package reader
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -74,6 +75,10 @@ func NewScaleProto(conf ScaleProtoConfig, log log.Modular, stats metrics.Type) (
 				s.urls = append(s.urls, strings.Replace(splitU, "//*:", "//0.0.0.0:", 1))
 			}
 		}
+	}
+
+	if conf.SocketType == "SUB" && len(conf.SubFilters) == 0 {
+		return nil, errors.New("must provide at least one sub filter when connecting with a SUB socket, in order to subscribe to all messages add an empty string")
 	}
 
 	if tout := conf.PollTimeout; len(tout) > 0 {

@@ -4,6 +4,7 @@ package reader
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -48,6 +49,10 @@ func NewZMQ4(conf *ZMQ4Config, log log.Modular, stats metrics.Type) (*ZMQ4, erro
 	_, err := getZMQType(conf.SocketType)
 	if nil != err {
 		return nil, err
+	}
+
+	if conf.SocketType == "SUB" && len(conf.SubFilters) == 0 {
+		return nil, errors.New("must provide at least one sub filter when connecting with a SUB socket, in order to subscribe to all messages add an empty string")
 	}
 
 	if tout := conf.PollTimeout; len(tout) > 0 {

@@ -220,8 +220,16 @@ func (i integrationTestList) Run(t *testing.T, configTemplate string, opts ...te
 			opt(&env)
 		}
 
+		timeout := env.timeout
+		if deadline, ok := t.Deadline(); ok {
+			deadlineTimeout := time.Until(deadline) - (time.Second * 5)
+			if deadlineTimeout < timeout {
+				timeout = deadlineTimeout
+			}
+		}
+
 		var done func()
-		env.ctx, done = context.WithTimeout(env.ctx, env.timeout)
+		env.ctx, done = context.WithTimeout(env.ctx, timeout)
 		t.Cleanup(done)
 
 		if env.preTest != nil {
@@ -245,8 +253,16 @@ func (i integrationTestList) RunSequentially(t *testing.T, configTemplate string
 			opt(&env)
 		}
 
+		timeout := env.timeout
+		if deadline, ok := t.Deadline(); ok {
+			deadlineTimeout := time.Until(deadline) - (time.Second * 5)
+			if deadlineTimeout < timeout {
+				timeout = deadlineTimeout
+			}
+		}
+
 		var done func()
-		env.ctx, done = context.WithTimeout(env.ctx, env.timeout)
+		env.ctx, done = context.WithTimeout(env.ctx, timeout)
 		t.Cleanup(done)
 
 		if env.preTest != nil {

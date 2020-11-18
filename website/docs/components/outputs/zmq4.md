@@ -1,6 +1,8 @@
 ---
 title: zmq4
 type: output
+status: stable
+categories: ["Network"]
 ---
 
 <!--
@@ -10,27 +12,27 @@ type: output
      lib/output/zmq4.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 The zmq4 output type attempts to send messages to a ZMQ4 port, currently only
 PUSH and PUB sockets are supported.
 
-
-import Tabs from '@theme/Tabs';
 
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
 
-import TabItem from '@theme/TabItem';
-
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 output:
   zmq4:
     urls:
-    - tcp://*:5556
+      - tcp://*:5556
     bind: true
     socket_type: PUSH
     poll_timeout: 5s
@@ -40,10 +42,11 @@ output:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 output:
   zmq4:
     urls:
-    - tcp://*:5556
+      - tcp://*:5556
     bind: true
     socket_type: PUSH
     high_water_mark: 0
@@ -70,31 +73,50 @@ go install -tags "ZMQ4" github.com/Jeffail/benthos/v3/cmd/benthos
 
 ### `urls`
 
-`array` A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+
+
+Type: `array`  
+Default: `["tcp://*:5556"]`  
 
 ```yaml
 # Examples
 
 urls:
-- tcp://localhost:5556
+  - tcp://localhost:5556
 ```
 
 ### `bind`
 
-`bool` Whether the URLs listed should be bind (otherwise they are connected to).
+Whether the URLs listed should be bind (otherwise they are connected to).
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `socket_type`
 
-`string` The socket type to send with.
+The socket type to send with.
 
-Options are: `PUSH`, `PUB`.
+
+Type: `string`  
+Default: `"PUSH"`  
+Options: `PUSH`, `PUB`.
 
 ### `high_water_mark`
 
-`number` The message high water mark to use.
+The message high water mark to use.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `poll_timeout`
 
-`string` The maximum period of time to wait for a message to send before the request is abandoned and reattempted.
+The maximum period of time to wait for a message to send before the request is abandoned and reattempted.
+
+
+Type: `string`  
+Default: `"5s"`  
 
 

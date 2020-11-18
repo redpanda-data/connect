@@ -1,6 +1,8 @@
 ---
 title: zmq4
 type: input
+status: stable
+categories: ["Network"]
 ---
 
 <!--
@@ -10,26 +12,26 @@ type: input
      lib/input/zmq4.go
 -->
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 
 Consumes messages from a ZeroMQ socket.
 
-
-import Tabs from '@theme/Tabs';
 
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
 ]}>
 
-import TabItem from '@theme/TabItem';
-
 <TabItem value="common">
 
 ```yaml
+# Common config fields, showing default values
 input:
   zmq4:
     urls:
-    - tcp://localhost:5555
+      - tcp://localhost:5555
     bind: false
     socket_type: PULL
     sub_filters: []
@@ -39,10 +41,11 @@ input:
 <TabItem value="advanced">
 
 ```yaml
+# All config fields, showing default values
 input:
   zmq4:
     urls:
-    - tcp://localhost:5555
+      - tcp://localhost:5555
     bind: false
     socket_type: PULL
     sub_filters: []
@@ -73,28 +76,51 @@ socket types then they can be added easily.
 
 ### `urls`
 
-`array` A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.
+
+
+Type: `array`  
+Default: `["tcp://localhost:5555"]`  
 
 ### `bind`
 
-`bool` Whether to bind to the specified URLs or connect.
+Whether to bind to the specified URLs or connect.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `socket_type`
 
-`string` The socket type to connect as.
+The socket type to connect as.
 
-Options are: `PULL`, `SUB`.
+
+Type: `string`  
+Default: `"PULL"`  
+Options: `PULL`, `SUB`.
 
 ### `sub_filters`
 
-`array` A list of subcription topic filters to use when consuming from a SUB socket. Specifying a single sub_filter of `''` will subscribe to everything.
+A list of subscription topic filters to use when consuming from a SUB socket. Specifying a single sub_filter of `''` will subscribe to everything.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `high_water_mark`
 
-`number` The message high water mark to use.
+The message high water mark to use.
+
+
+Type: `number`  
+Default: `0`  
 
 ### `poll_timeout`
 
-`string` The poll timeout to use.
+The poll timeout to use.
+
+
+Type: `string`  
+Default: `"5s"`  
 
 

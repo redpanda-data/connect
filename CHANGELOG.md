@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 
 - Sync responses of >1 payloads should now get a correct rfc1341 multipart header.
 - The `cassandra` output now correctly marshals float and double values.
+- The `nanomsg` input with a `SUB` socket no longer attempts to set invalid timeout.
 
 ## 3.33.0 - 2020-11-16
 
