@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"os"
 	"reflect"
 	"testing"
 
@@ -65,8 +64,8 @@ func TestHashSample(t *testing.T) {
 			conf.HashSample.RetainMax = tc.max
 			conf.HashSample.Parts = []int{0}
 
-			testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-			proc, err := NewHashSample(conf, nil, testLog, metrics.DudType{})
+			testLog := log.Noop()
+			proc, err := NewHashSample(conf, nil, testLog, metrics.Noop())
 			if err != nil {
 				t.Error(err)
 				return
@@ -117,8 +116,8 @@ func TestHashSamplePartSelection(t *testing.T) {
 			conf.HashSample.RetainMax = 44.9
 			conf.HashSample.Parts = []int{tc.selectPart}
 
-			testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-			proc, err := NewHashSample(conf, nil, testLog, metrics.DudType{})
+			testLog := log.Noop()
+			proc, err := NewHashSample(conf, nil, testLog, metrics.Noop())
 			if err != nil {
 				t.Error(err)
 				return
@@ -147,8 +146,8 @@ func TestHashSampleBoundsCheck(t *testing.T) {
 	conf := NewConfig()
 	conf.HashSample.Parts = []int{5}
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewHashSample(conf, nil, testLog, metrics.DudType{})
+	testLog := log.Noop()
+	proc, err := NewHashSample(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,8 +167,8 @@ func TestHashSampleNegBoundsCheck(t *testing.T) {
 	conf := NewConfig()
 	conf.HashSample.Parts = []int{-5}
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewHashSample(conf, nil, testLog, metrics.DudType{})
+	testLog := log.Noop()
+	proc, err := NewHashSample(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

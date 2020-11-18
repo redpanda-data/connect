@@ -2,7 +2,6 @@ package output
 
 import (
 	"bytes"
-	"os"
 	"testing"
 	"time"
 
@@ -29,7 +28,7 @@ func TestLineWriterBasic(t *testing.T) {
 	msgChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	writer, err := NewLineWriter(&buf, true, []byte{}, "foo", log.New(os.Stdout, logConfig), metrics.DudType{})
+	writer, err := NewLineWriter(&buf, true, []byte{}, "foo", log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -103,7 +102,7 @@ func TestLineWriterCustomDelim(t *testing.T) {
 	msgChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	writer, err := NewLineWriter(&buf, true, []byte("<FOO>"), "foo", log.New(os.Stdout, logConfig), metrics.DudType{})
+	writer, err := NewLineWriter(&buf, true, []byte("<FOO>"), "foo", log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"os"
 	"reflect"
 	"testing"
 
@@ -13,8 +12,8 @@ import (
 )
 
 func TestFilterTextCheck(t *testing.T) {
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	testMet := metrics.DudType{}
+	testLog := log.Noop()
+	testMet := metrics.Noop()
 
 	type fields struct {
 		operator string

@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"os"
 	"reflect"
 	"testing"
 
@@ -17,9 +16,9 @@ func TestGrokAllParts(t *testing.T) {
 		"%{WORD:first},%{INT:second:int}",
 	}
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
-	gSet, err := NewGrok(conf, nil, testLog, metrics.DudType{})
+	gSet, err := NewGrok(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,8 +48,8 @@ func TestGrokAllParts(t *testing.T) {
 }
 
 func TestGrok(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	type gTest struct {
 		name        string

@@ -3,7 +3,6 @@ package broker
 import (
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"sort"
 	"sync"
@@ -45,7 +44,7 @@ func TestStaticBasicDynamicFanIn(t *testing.T) {
 		Inputs[fmt.Sprintf("testinput%v", i)] = mockInputs[i]
 	}
 
-	fanIn, err := NewDynamicFanIn(Inputs, log.New(os.Stdout, logConfig), metrics.DudType{})
+	fanIn, err := NewDynamicFanIn(Inputs, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -104,7 +103,7 @@ func TestBasicDynamicFanIn(t *testing.T) {
 		TChan: make(chan types.Transaction),
 	}
 
-	fanIn, err := NewDynamicFanIn(nil, log.New(os.Stdout, logConfig), metrics.DudType{})
+	fanIn, err := NewDynamicFanIn(nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -210,7 +209,7 @@ func TestStaticDynamicFanInShutdown(t *testing.T) {
 	inputRemovedList := []string{}
 
 	fanIn, err := NewDynamicFanIn(
-		Inputs, log.New(os.Stdout, logConfig), metrics.DudType{},
+		Inputs, log.Noop(), metrics.Noop(),
 		OptDynamicFanInSetOnAdd(func(label string) {
 			mapMut.Lock()
 			inputAddedList = append(inputAddedList, label)
@@ -286,7 +285,7 @@ func TestStaticDynamicFanInAsync(t *testing.T) {
 		Inputs[fmt.Sprintf("testinput%v", i)] = mockInputs[i]
 	}
 
-	fanIn, err := NewDynamicFanIn(Inputs, log.New(os.Stdout, logConfig), metrics.DudType{})
+	fanIn, err := NewDynamicFanIn(Inputs, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

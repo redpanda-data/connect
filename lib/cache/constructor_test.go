@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"os"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -19,10 +18,7 @@ func TestConstructorBadType(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = "not_exist"
 
-	logConfig := log.NewConfig()
-	logConfig.LogLevel = "NONE"
-
-	if _, err := New(conf, nil, log.New(os.Stdout, logConfig), metrics.DudType{}); err == nil {
+	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
 		t.Error("Expected error, received nil for invalid type")
 	}
 }

@@ -1,7 +1,6 @@
 package manager
 
 import (
-	"os"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/cache"
@@ -16,13 +15,13 @@ import (
 //------------------------------------------------------------------------------
 
 func TestManagerCache(t *testing.T) {
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	conf := NewConfig()
 	conf.Caches["foo"] = cache.NewConfig()
 	conf.Caches["bar"] = cache.NewConfig()
 
-	mgr, err := New(conf, nil, testLog, metrics.DudType{})
+	mgr, err := New(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,14 +38,14 @@ func TestManagerCache(t *testing.T) {
 }
 
 func TestManagerBadCache(t *testing.T) {
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	conf := NewConfig()
 	badConf := cache.NewConfig()
 	badConf.Type = "notexist"
 	conf.Caches["bad"] = badConf
 
-	if _, err := New(conf, nil, testLog, metrics.DudType{}); err == nil {
+	if _, err := New(conf, nil, testLog, metrics.Noop()); err == nil {
 		t.Fatal("Expected error from bad cache")
 	}
 }
@@ -84,13 +83,13 @@ func TestManagerBadRateLimit(t *testing.T) {
 }
 
 func TestManagerCondition(t *testing.T) {
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	conf := NewConfig()
 	conf.Conditions["foo"] = condition.NewConfig()
 	conf.Conditions["bar"] = condition.NewConfig()
 
-	mgr, err := New(conf, nil, testLog, metrics.DudType{})
+	mgr, err := New(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +129,7 @@ func TestManagerProcessor(t *testing.T) {
 func TestManagerConditionRecursion(t *testing.T) {
 	t.Skip("Not yet implemented")
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	conf := NewConfig()
 
@@ -144,20 +143,20 @@ func TestManagerConditionRecursion(t *testing.T) {
 	barConf.Resource = "foo"
 	conf.Conditions["bar"] = barConf
 
-	if _, err := New(conf, nil, testLog, metrics.DudType{}); err == nil {
+	if _, err := New(conf, nil, testLog, metrics.Noop()); err == nil {
 		t.Error("Expected error from recursive conditions")
 	}
 }
 
 func TestManagerBadCondition(t *testing.T) {
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	conf := NewConfig()
 	badConf := condition.NewConfig()
 	badConf.Type = "notexist"
 	conf.Conditions["bad"] = badConf
 
-	if _, err := New(conf, nil, testLog, metrics.DudType{}); err == nil {
+	if _, err := New(conf, nil, testLog, metrics.Noop()); err == nil {
 		t.Fatal("Expected error from bad condition")
 	}
 }

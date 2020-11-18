@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"fmt"
-	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -24,16 +23,16 @@ func TestPoolBasic(t *testing.T) {
 
 	constr := func(i *int) (types.Pipeline, error) {
 		return NewProcessor(
-			log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
-			metrics.DudType{},
+			log.Noop(),
+			metrics.Noop(),
 			mockProc,
 		), nil
 	}
 
 	proc, err := NewPool(
 		constr, 1,
-		log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
-		metrics.DudType{},
+		log.Noop(),
+		metrics.Noop(),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -138,16 +137,16 @@ func TestPoolMultiMsgs(t *testing.T) {
 
 	constr := func(i *int) (types.Pipeline, error) {
 		return NewProcessor(
-			log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
-			metrics.DudType{},
+			log.Noop(),
+			metrics.Noop(),
 			mockProc,
 		), nil
 	}
 
 	proc, err := NewPool(
 		constr, 1,
-		log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
-		metrics.DudType{},
+		log.Noop(),
+		metrics.Noop(),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -229,8 +228,8 @@ func TestPoolMultiThreads(t *testing.T) {
 
 	proc, err := New(
 		conf, nil,
-		log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
-		metrics.DudType{},
+		log.Noop(),
+		metrics.Noop(),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -306,8 +305,8 @@ func TestPoolMultiNaturalClose(t *testing.T) {
 
 	proc, err := New(
 		conf, nil,
-		log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
-		metrics.DudType{},
+		log.Noop(),
+		metrics.Noop(),
 	)
 	if err != nil {
 		t.Fatal(err)

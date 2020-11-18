@@ -1,7 +1,7 @@
 const {docuHash} = require('@docusaurus/utils');
 
 const redirects = [
-  ["/docs/", "/docs/about/", false],
+  ["/docs/", "/docs/about", false],
   ["/buffers", "/docs/components/buffers/", true],
   ["/caches", "/docs/components/caches/", true],
   ["/conditions", "/docs/components/conditions/", true],
@@ -12,7 +12,7 @@ const redirects = [
   ["/processors", "/docs/components/processors/", true],
   ["/rate_limits", "/docs/components/rate_limits/", true],
   ["/tracers", "/docs/components/tracers/", true],
-  ["/examples/kafka-delayed-retry", "/cookbooks/joining-streams/#adding-a-retry-queue", false],
+  ["/examples/kafka-delayed-retry", "/cookbooks/joining-streams#adding-a-retry-queue", false],
   ["/getting_started", "/docs/guides/getting_started", false],
   ["/serverless", "/docs/guides/serverless/about", false],
   ["/configuration", "/docs/configuration/about", false],

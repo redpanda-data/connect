@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"encoding/json"
-	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -95,13 +94,13 @@ func TestProcCtor(t *testing.T) {
 
 	pipe, err := New(
 		conf, nil,
-		log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
-		metrics.DudType{},
+		log.Noop(),
+		metrics.Noop(),
 		func() (types.Processor, error) {
 			return processor.New(
 				secondProc, nil,
-				log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
-				metrics.DudType{},
+				log.Noop(),
+				metrics.Noop(),
 			)
 		},
 	)

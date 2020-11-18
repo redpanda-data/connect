@@ -3,7 +3,6 @@ package manager
 import (
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -112,9 +111,9 @@ func New(opts ...func(*Type)) *Type {
 	t := &Type{
 		streams:    map[string]*StreamStatus{},
 		manager:    types.DudMgr{},
-		stats:      metrics.DudType{},
+		stats:      metrics.Noop(),
 		apiTimeout: time.Second * 5,
-		logger:     log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
+		logger:     log.Noop(),
 	}
 	for _, opt := range opts {
 		opt(t)

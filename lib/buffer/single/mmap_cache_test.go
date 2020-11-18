@@ -2,7 +2,6 @@ package single
 
 import (
 	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -24,7 +23,7 @@ func TestMmapCacheTracker(t *testing.T) {
 	conf.FileSize = 1000
 	conf.Path = dir
 
-	cache, err := NewMmapCache(conf, log.New(os.Stdout, logConfig), metrics.DudType{})
+	cache, err := NewMmapCache(conf, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -66,7 +65,7 @@ func TestMmapCacheTracker(t *testing.T) {
 	}
 
 	cache.L.Unlock()
-	cache, err = NewMmapCache(conf, log.New(os.Stdout, logConfig), metrics.DudType{})
+	cache, err = NewMmapCache(conf, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -114,7 +113,7 @@ func TestMmapCacheIndexes(t *testing.T) {
 	conf.FileSize = 1000
 	conf.Path = dir
 
-	cache, err := NewMmapCache(conf, log.New(os.Stdout, logConfig), metrics.DudType{})
+	cache, err := NewMmapCache(conf, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -161,7 +160,7 @@ func TestMmapCacheIndexes(t *testing.T) {
 	}
 
 	cache.L.Unlock()
-	cache, err = NewMmapCache(conf, log.New(os.Stdout, logConfig), metrics.DudType{})
+	cache, err = NewMmapCache(conf, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -214,7 +213,7 @@ func TestMmapCacheRaces(t *testing.T) {
 	conf.FileSize = 10
 	conf.Path = dir
 
-	cache, err := NewMmapCache(conf, log.New(os.Stdout, logConfig), metrics.DudType{})
+	cache, err := NewMmapCache(conf, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

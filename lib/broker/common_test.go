@@ -5,15 +5,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
-
-//------------------------------------------------------------------------------
-
-var logConfig = log.Config{
-	LogLevel: "NONE",
-}
 
 //------------------------------------------------------------------------------
 

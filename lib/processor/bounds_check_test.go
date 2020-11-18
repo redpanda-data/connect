@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"os"
 	"reflect"
 	"testing"
 
@@ -18,8 +17,8 @@ func TestBoundsCheck(t *testing.T) {
 	conf.BoundsCheck.MaxPartSize = 10
 	conf.BoundsCheck.MinPartSize = 1
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewBoundsCheck(conf, nil, testLog, metrics.DudType{})
+	testLog := log.Noop()
+	proc, err := NewBoundsCheck(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

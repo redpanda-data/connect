@@ -3,7 +3,6 @@ package broker
 import (
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -44,7 +43,7 @@ func TestBasicFanOut(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewFanOut(
-		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -170,7 +169,7 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewFanOut(
-		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -256,7 +255,7 @@ func TestFanOutShutDownFromErrorResponse(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewFanOut(
-		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -313,7 +312,7 @@ func TestFanOutShutDownFromReceive(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewFanOut(
-		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -362,7 +361,7 @@ func TestFanOutShutDownFromSend(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewFanOut(
-		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -411,7 +410,7 @@ func BenchmarkBasicFanOut(b *testing.B) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewFanOut(
-		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		b.Error(err)

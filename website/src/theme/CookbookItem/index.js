@@ -16,7 +16,7 @@ function CookbookItem(props) {
 
   return (
     <div>
-      <Link to={permalink + '/'} className={classnames(styles.cookbookPostItem)}>
+      <Link to={permalink} className={classnames(styles.cookbookPostItem)}>
         <article>
           <h2>{title}</h2>
           <div>{description}</div>

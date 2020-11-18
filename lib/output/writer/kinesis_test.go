@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	mockStats = metrics.DudType{}
+	mockStats = metrics.Noop()
 )
 
 var (

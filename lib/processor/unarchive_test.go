@@ -5,7 +5,6 @@ import (
 	"archive/zip"
 	"bytes"
 	"fmt"
-	"os"
 	"reflect"
 	"testing"
 
@@ -18,9 +17,9 @@ func TestUnarchiveBadAlgo(t *testing.T) {
 	conf := NewConfig()
 	conf.Unarchive.Format = "does not exist"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
-	_, err := NewUnarchive(conf, nil, testLog, metrics.DudType{})
+	_, err := NewUnarchive(conf, nil, testLog, metrics.Noop())
 	if err == nil {
 		t.Error("Expected error from bad algo")
 	}
@@ -30,7 +29,7 @@ func TestUnarchiveTar(t *testing.T) {
 	conf := NewConfig()
 	conf.Unarchive.Format = "tar"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	input := [][]byte{
 		[]byte("hello world first part"),
@@ -73,7 +72,7 @@ func TestUnarchiveTar(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewUnarchive(conf, nil, testLog, metrics.DudType{})
+	proc, err := NewUnarchive(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +97,7 @@ func TestUnarchiveZip(t *testing.T) {
 	conf := NewConfig()
 	conf.Unarchive.Format = "zip"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	input := [][]byte{
 		[]byte("hello world first part"),
@@ -138,7 +137,7 @@ func TestUnarchiveZip(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewUnarchive(conf, nil, testLog, metrics.DudType{})
+	proc, err := NewUnarchive(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +162,7 @@ func TestUnarchiveLines(t *testing.T) {
 	conf := NewConfig()
 	conf.Unarchive.Format = "lines"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	exp := [][]byte{
 		[]byte("hello world first part"),
@@ -173,7 +172,7 @@ func TestUnarchiveLines(t *testing.T) {
 		[]byte("5"),
 	}
 
-	proc, err := NewUnarchive(conf, nil, testLog, metrics.DudType{})
+	proc, err := NewUnarchive(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -320,8 +319,8 @@ func TestUnarchiveBinary(t *testing.T) {
 	conf := NewConfig()
 	conf.Unarchive.Format = "binary"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewUnarchive(conf, nil, testLog, metrics.DudType{})
+	testLog := log.Noop()
+	proc, err := NewUnarchive(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -356,7 +355,7 @@ func TestUnarchiveIndexBounds(t *testing.T) {
 	conf := NewConfig()
 	conf.Unarchive.Format = "tar"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	input := [][]byte{
 		[]byte("0"),
@@ -439,7 +438,7 @@ func TestUnarchiveIndexBounds(t *testing.T) {
 
 	for i, result := range tests {
 		conf.Unarchive.Parts = []int{i}
-		proc, err := NewUnarchive(conf, nil, testLog, metrics.DudType{})
+		proc, err := NewUnarchive(conf, nil, testLog, metrics.Noop())
 		if err != nil {
 			t.Fatal(err)
 		}

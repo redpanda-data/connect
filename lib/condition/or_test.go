@@ -1,7 +1,6 @@
 package condition
 
 import (
-	"os"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -10,8 +9,8 @@ import (
 )
 
 func TestOrCheck(t *testing.T) {
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	testMet := metrics.DudType{}
+	testLog := log.Noop()
+	testMet := metrics.Noop()
 
 	testMsg := message.New([][]byte{
 		[]byte("foo"),
@@ -96,8 +95,8 @@ func TestOrCheck(t *testing.T) {
 }
 
 func TestOrBadOperator(t *testing.T) {
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	testMet := metrics.DudType{}
+	testLog := log.Noop()
+	testMet := metrics.Noop()
 
 	cConf := NewConfig()
 	cConf.Type = "text"

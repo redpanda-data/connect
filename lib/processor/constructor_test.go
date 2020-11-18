@@ -2,7 +2,6 @@ package processor
 
 import (
 	"encoding/json"
-	"os"
 	"strings"
 	"testing"
 
@@ -22,10 +21,7 @@ func TestConstructorBadType(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = "not_exist"
 
-	logConfig := log.NewConfig()
-	logConfig.LogLevel = "NONE"
-
-	if _, err := New(conf, nil, log.New(os.Stdout, logConfig), metrics.DudType{}); err == nil {
+	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
 		t.Error("Expected error, received nil for invalid type")
 	}
 }

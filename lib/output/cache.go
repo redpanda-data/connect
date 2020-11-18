@@ -21,7 +21,7 @@ func init() {
 	}
 	sort.Strings(cachesSlice)
 	for _, k := range cachesSlice {
-		cachesList = cachesList + "- [`" + k + "`](/docs/components/caches/" + k + "/)\n"
+		cachesList = cachesList + "- [`" + k + "`](/docs/components/caches/" + k + ")\n"
 	}
 
 	Constructors[TypeCache] = TypeSpec{

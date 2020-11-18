@@ -5,7 +5,6 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
-	"os"
 	"reflect"
 	"strconv"
 	"testing"
@@ -382,8 +381,8 @@ func TestHashEmpty(t *testing.T) {
 	conf := NewConfig()
 	conf.Hash.Parts = []int{0, 1}
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewHash(conf, nil, testLog, metrics.DudType{})
+	testLog := log.Noop()
+	proc, err := NewHash(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

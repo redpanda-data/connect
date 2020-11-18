@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	firehoseMockStats = metrics.DudType{}
+	firehoseMockStats = metrics.Noop()
 )
 
 var (

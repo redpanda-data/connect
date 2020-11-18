@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"os"
 	"reflect"
 	"testing"
 
@@ -20,9 +19,9 @@ func TestArchiveBadAlgo(t *testing.T) {
 	conf := NewConfig()
 	conf.Archive.Format = "does not exist"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
-	_, err := NewArchive(conf, nil, testLog, metrics.DudType{})
+	_, err := NewArchive(conf, nil, testLog, metrics.Noop())
 	if err == nil {
 		t.Error("Expected error from bad algo")
 	}
@@ -33,7 +32,7 @@ func TestArchiveTar(t *testing.T) {
 	conf.Archive.Format = "tar"
 	conf.Archive.Path = "foo-${!meta(\"path\")}"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	exp := [][]byte{
 		[]byte("hello world first part"),
@@ -43,7 +42,7 @@ func TestArchiveTar(t *testing.T) {
 		[]byte("5"),
 	}
 
-	proc, err := NewArchive(conf, nil, testLog, metrics.DudType{})
+	proc, err := NewArchive(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +99,7 @@ func TestArchiveZip(t *testing.T) {
 	conf := NewConfig()
 	conf.Archive.Format = "zip"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	exp := [][]byte{
 		[]byte("hello world first part"),
@@ -110,7 +109,7 @@ func TestArchiveZip(t *testing.T) {
 		[]byte("5"),
 	}
 
-	proc, err := NewArchive(conf, nil, testLog, metrics.DudType{})
+	proc, err := NewArchive(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,9 +154,9 @@ func TestArchiveLines(t *testing.T) {
 	conf := NewConfig()
 	conf.Archive.Format = "lines"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
-	proc, err := NewArchive(conf, nil, testLog, metrics.DudType{})
+	proc, err := NewArchive(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,8 +226,8 @@ func TestArchiveBinary(t *testing.T) {
 	conf := NewConfig()
 	conf.Archive.Format = "binary"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewArchive(conf, nil, testLog, metrics.DudType{})
+	testLog := log.Noop()
+	proc, err := NewArchive(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -252,8 +251,8 @@ func TestArchiveBinary(t *testing.T) {
 func TestArchiveEmpty(t *testing.T) {
 	conf := NewConfig()
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewArchive(conf, nil, testLog, metrics.DudType{})
+	testLog := log.Noop()
+	proc, err := NewArchive(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

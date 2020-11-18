@@ -3,7 +3,6 @@ package output
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
@@ -20,7 +19,7 @@ func TestHTTPBasic(t *testing.T) {
 	conf.HTTPServer.Address = "localhost:1237"
 	conf.HTTPServer.Path = "/testpost"
 
-	h, err := NewHTTPServer(conf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
+	h, err := NewHTTPServer(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -81,7 +80,7 @@ func TestHTTPBadRequests(t *testing.T) {
 	conf.HTTPServer.Address = "localhost:1236"
 	conf.HTTPServer.Path = "/testpost"
 
-	h, err := NewHTTPServer(conf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
+	h, err := NewHTTPServer(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -113,7 +112,7 @@ func TestHTTPTimeout(t *testing.T) {
 	conf.HTTPServer.Path = "/testpost"
 	conf.HTTPServer.Timeout = "1ms"
 
-	h, err := NewHTTPServer(conf, nil, log.New(os.Stdout, logConfig), metrics.DudType{})
+	h, err := NewHTTPServer(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

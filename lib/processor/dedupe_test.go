@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
-	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -62,9 +61,9 @@ func TestDedupe(t *testing.T) {
 	doc2 := []byte(rndText1) // duplicate
 	doc3 := []byte(rndText2)
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
-	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
+	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.Noop())
 	if cacheErr != nil {
 		t.Fatal(cacheErr)
 	}
@@ -76,7 +75,7 @@ func TestDedupe(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Dedupe.Cache = "foocache"
-	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.DudType{})
+	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.Noop())
 	if err1 != nil {
 		t.Error(err1)
 		return
@@ -182,9 +181,9 @@ func TestDedupeXXHash(t *testing.T) {
 	doc2 := []byte(rndText1) // duplicate
 	doc3 := []byte(rndText2)
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
-	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
+	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.Noop())
 	if cacheErr != nil {
 		t.Fatal(cacheErr)
 	}
@@ -197,7 +196,7 @@ func TestDedupeXXHash(t *testing.T) {
 	conf := NewConfig()
 	conf.Dedupe.Cache = "foocache"
 	conf.Dedupe.HashType = "xxhash"
-	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.DudType{})
+	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.Noop())
 	if err1 != nil {
 		t.Error(err1)
 		return
@@ -239,9 +238,9 @@ func TestDedupePartSelection(t *testing.T) {
 	doc2 := []byte(rndText1) // duplicate
 	doc3 := []byte(rndText2)
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
-	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
+	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.Noop())
 	if cacheErr != nil {
 		t.Fatal(cacheErr)
 	}
@@ -254,7 +253,7 @@ func TestDedupePartSelection(t *testing.T) {
 	conf := NewConfig()
 	conf.Dedupe.Cache = "foocache"
 	conf.Dedupe.Parts = []int{1} // only take the 2nd part
-	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.DudType{})
+	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.Noop())
 	if err1 != nil {
 		t.Error(err1)
 		return
@@ -292,12 +291,12 @@ func TestDedupeBadCache(t *testing.T) {
 	conf := NewConfig()
 	conf.Dedupe.Cache = "foocache"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	mgr := &fakeMgr{
 		caches: map[string]types.Cache{},
 	}
-	if _, err := NewDedupe(conf, mgr, testLog, metrics.DudType{}); err == nil {
+	if _, err := NewDedupe(conf, mgr, testLog, metrics.Noop()); err == nil {
 		t.Error("Expected error from missing cache")
 	}
 }
@@ -338,7 +337,7 @@ func TestDedupeCacheErrors(t *testing.T) {
 	conf := NewConfig()
 	conf.Dedupe.Cache = "foocache"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	mgr := &fakeMgr{
 		caches: map[string]types.Cache{
@@ -346,7 +345,7 @@ func TestDedupeCacheErrors(t *testing.T) {
 		},
 	}
 
-	proc, err := NewDedupe(conf, mgr, testLog, metrics.DudType{})
+	proc, err := NewDedupe(conf, mgr, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,7 +357,7 @@ func TestDedupeCacheErrors(t *testing.T) {
 
 	conf.Dedupe.DropOnCacheErr = false
 
-	proc, err = NewDedupe(conf, mgr, testLog, metrics.DudType{})
+	proc, err = NewDedupe(conf, mgr, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,9 +373,9 @@ func TestDedupeBadHash(t *testing.T) {
 	conf.Dedupe.Cache = "foocache"
 	conf.Dedupe.HashType = "notexist"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
-	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
+	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.Noop())
 	if cacheErr != nil {
 		t.Fatal(cacheErr)
 	}
@@ -385,7 +384,7 @@ func TestDedupeBadHash(t *testing.T) {
 			"foocache": memCache,
 		},
 	}
-	if _, err := NewDedupe(conf, mgr, testLog, metrics.DudType{}); err == nil {
+	if _, err := NewDedupe(conf, mgr, testLog, metrics.Noop()); err == nil {
 		t.Error("Expected error from bad hash")
 	}
 }
@@ -395,9 +394,9 @@ func TestDedupeBoundsCheck(t *testing.T) {
 	conf.Dedupe.Cache = "foocache"
 	conf.Dedupe.Parts = []int{5}
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
-	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
+	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.Noop())
 	if cacheErr != nil {
 		t.Fatal(cacheErr)
 	}
@@ -407,7 +406,7 @@ func TestDedupeBoundsCheck(t *testing.T) {
 		},
 	}
 
-	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.DudType{})
+	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.Noop())
 	if err1 != nil {
 		t.Fatal(err1)
 	}
@@ -428,9 +427,9 @@ func TestDedupeNegBoundsCheck(t *testing.T) {
 	conf.Dedupe.Cache = "foocache"
 	conf.Dedupe.Parts = []int{-5}
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
-	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.DudType{})
+	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.Noop())
 	if cacheErr != nil {
 		t.Fatal(cacheErr)
 	}
@@ -440,7 +439,7 @@ func TestDedupeNegBoundsCheck(t *testing.T) {
 		},
 	}
 
-	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.DudType{})
+	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.Noop())
 	if err1 != nil {
 		t.Fatal(err1)
 	}

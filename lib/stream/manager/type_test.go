@@ -1,7 +1,6 @@
 package manager
 
 import (
-	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -48,8 +47,8 @@ func TestTypeProcsAndPipes(t *testing.T) {
 		})
 	}
 
-	logger := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	stats := metrics.DudType{}
+	logger := log.Noop()
+	stats := metrics.Noop()
 
 	mgr := New(
 		OptSetLogger(logger),
@@ -111,8 +110,8 @@ func TestTypeProcsAndPipes(t *testing.T) {
 
 func TestTypeBasicOperations(t *testing.T) {
 	mgr := New(
-		OptSetLogger(log.New(os.Stdout, log.Config{LogLevel: "NONE"})),
-		OptSetStats(metrics.DudType{}),
+		OptSetLogger(log.Noop()),
+		OptSetStats(metrics.Noop()),
 		OptSetManager(types.DudMgr{}),
 	)
 
@@ -171,8 +170,8 @@ func TestTypeBasicOperations(t *testing.T) {
 
 func TestTypeBasicClose(t *testing.T) {
 	mgr := New(
-		OptSetLogger(log.New(os.Stdout, log.Config{LogLevel: "NONE"})),
-		OptSetStats(metrics.DudType{}),
+		OptSetLogger(log.Noop()),
+		OptSetStats(metrics.Noop()),
 		OptSetManager(types.DudMgr{}),
 	)
 

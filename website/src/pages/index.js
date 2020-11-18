@@ -48,7 +48,7 @@ docker run --rm -v $(pwd)/config.yaml:/benthos.yaml jeffail/benthos`
 const snippets = [
   {
     label: 'Mapping',
-    further: '/docs/guides/bloblang/about/',
+    further: '/docs/guides/bloblang/about',
     config: `input:
   gcp_pubsub:
     project: foo
@@ -69,7 +69,7 @@ output:
   },
   {
     label: 'Multiplexing',
-    further: '/docs/components/outputs/about/#multiplexing-outputs',
+    further: '/docs/components/outputs/about#multiplexing-outputs',
     config: `input:
   kafka:
     addresses: [ TODO ]
@@ -93,7 +93,7 @@ output:
   },
   {
     label: 'Enrichments',
-    further: '/cookbooks/enrichments/',
+    further: '/cookbooks/enrichments',
     config: `input:
   mqtt:
     urls: [ tcp://TODO:1883 ]
@@ -141,7 +141,7 @@ const features = [
           Most stream processing tasks are actually just boring transformations, glueing APIs together, and multiplexing. Benthos specializes in these tasks, letting you focus on the more exciting features of your architecture.
         </p>
         <p>
-          It comes armed with a wide range of <a href="/docs/components/processors/about/">processors</a>, a <a href="/docs/guides/bloblang/about/">lit mapping language</a>, stateless <a href="/docs/configuration/windowed_processing/">windowed processing capabilities</a> and an <a href="/blobfish/">industry leading mascot</a>.
+          It comes armed with a wide range of <a href="/docs/components/processors/about">processors</a>, a <a href="/docs/guides/bloblang/about">lit mapping language</a>, stateless <a href="/docs/configuration/windowed_processing">windowed processing capabilities</a> and an <a href="/blobfish">industry leading mascot</a>.
         </p>
       </>
     ),
@@ -152,11 +152,11 @@ const features = [
     description: (
       <>
         <p>
-          Benthos is able to glue a wide range of <a href="/docs/components/inputs/about/">sources</a> and <a href="/docs/components/outputs/about/">sinks</a> together
-          and hook into a variety of <a href="/docs/components/processors/sql/">databases</a>, <a href="/docs/components/processors/cache/">caches</a>, <a href="/docs/components/processors/http/">HTTP APIs</a>, <a href="/docs/components/processors/lambda/">lambdas</a> and more, enabling you to seamlessly deploy it without changing your existing infrastructure.
+          Benthos is able to glue a wide range of <a href="/docs/components/inputs/about">sources</a> and <a href="/docs/components/outputs/about">sinks</a> together
+          and hook into a variety of <a href="/docs/components/processors/sql">databases</a>, <a href="/docs/components/processors/cache">caches</a>, <a href="/docs/components/processors/http">HTTP APIs</a>, <a href="/docs/components/processors/lambda">lambdas</a> and more, enabling you to seamlessly deploy it without changing your existing infrastructure.
         </p>
         <p>
-          Working with disparate APIs and services can be a daunting task, doubly so in a streaming data context. With Benthos it's possible to break these tasks down and automatically parallelize them as <a href="/cookbooks/enrichments/">a streaming workflow</a>.
+          Working with disparate APIs and services can be a daunting task, doubly so in a streaming data context. With Benthos it's possible to break these tasks down and automatically parallelize them as <a href="/cookbooks/enrichments">a streaming workflow</a>.
         </p>
       </>
     ),
@@ -170,10 +170,10 @@ const features = [
           Benthos runs fast and processes messages using a transaction model, making it able to guarantee at-least-once delivery even in the event of crashes or unexpected server faults.
         </p>
         <p>
-          It's completely stateless, allowing for easy deployment and liberal scaling. It also exposes <a href="/docs/components/metrics/about/">metrics</a> and <a href="/docs/components/tracers/about/">tracing</a> events to targets of your choice.
+          It's completely stateless, allowing for easy deployment and liberal scaling. It also exposes <a href="/docs/components/metrics/about">metrics</a> and <a href="/docs/components/tracers/about">tracing</a> events to targets of your choice.
         </p>
         <p>
-          At Meltwater it's enriching over 450 million documents per day with a network of more than 20 NLP services. It sounds very interesting but rest assured, <a href="https://underthehood.meltwater.com/blog/2019/08/26/enriching-450m-docs-daily-with-a-boring-stream-processor/">it's totally drab</a>.
+          At Meltwater it's enriching over 450 million documents per day with a network of more than 20 NLP services. It sounds very interesting but rest assured, <a href="https://underthehood.meltwater.com/blog/2019/08/26/enriching-450m-docs-daily-with-a-boring-stream-processor">it's totally drab</a>.
         </p>
       </>
     ),
@@ -190,7 +190,7 @@ const features = [
         </p>
         <p>
           You can either write plugins <a href="https://github.com/benthosdev/benthos-plugin-example">directly in Go (recommended)</a> or you can
-          configure Benthos to run your plugin as a <a href="/docs/components/processors/subprocess/">subprocess</a>.
+          configure Benthos to run your plugin as a <a href="/docs/components/processors/subprocess">subprocess</a>.
         </p>
       </>
     ),
@@ -232,7 +232,7 @@ function Home() {
                     'button button--outline button--primary button--lg',
                     styles.getStarted,
                   )}
-                  to={useBaseUrl('docs/guides/getting_started/')}>
+                  to={useBaseUrl('docs/guides/getting_started')}>
                   Get Started
                 </Link>
               </div>

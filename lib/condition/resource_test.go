@@ -2,7 +2,6 @@ package condition
 
 import (
 	"net/http"
-	"os"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -39,8 +38,8 @@ func (f *fakeMgr) SetPipe(name string, prod <-chan types.Transaction)   {}
 func (f *fakeMgr) UnsetPipe(name string, prod <-chan types.Transaction) {}
 
 func TestResourceCheck(t *testing.T) {
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	testMet := metrics.DudType{}
+	testLog := log.Noop()
+	testMet := metrics.Noop()
 
 	type fields struct {
 		operator string
@@ -270,8 +269,8 @@ func TestResourceCheck(t *testing.T) {
 }
 
 func TestResourceBadName(t *testing.T) {
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	testMet := metrics.DudType{}
+	testLog := log.Noop()
+	testMet := metrics.Noop()
 
 	mgr := &fakeMgr{
 		conds: map[string]Type{},

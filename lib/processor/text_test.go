@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"os"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -16,16 +15,16 @@ func TestTextValidation(t *testing.T) {
 	conf.Text.Arg = "foobar"
 	conf.Text.Value = "foo"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
-	if _, err := NewText(conf, nil, testLog, metrics.DudType{}); err == nil {
+	if _, err := NewText(conf, nil, testLog, metrics.Noop()); err == nil {
 		t.Error("Expected error from bad operator")
 	}
 }
 
 func TestTextPartBounds(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	conf := NewConfig()
 	conf.Text.Operator = "trim_space"
@@ -126,8 +125,8 @@ func TestTextSet(t *testing.T) {
 }
 
 func TestTextAppend(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	type jTest struct {
 		name   string
@@ -185,8 +184,8 @@ func TestTextAppend(t *testing.T) {
 }
 
 func TestTextPrepend(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	type jTest struct {
 		name   string
@@ -296,8 +295,8 @@ func TestTextQuote(t *testing.T) {
 }
 
 func TestTextTrimSpace(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	type jTest struct {
 		name   string
@@ -556,8 +555,8 @@ func TestTextUnescapeURLQuery(t *testing.T) {
 }
 
 func TestTextTrim(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	type jTest struct {
 		name   string
@@ -615,8 +614,8 @@ func TestTextTrim(t *testing.T) {
 }
 
 func TestTextRegexpExpand(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	type jTest struct {
 		name   string
@@ -679,8 +678,8 @@ func TestTextRegexpExpand(t *testing.T) {
 }
 
 func TestTextReplace(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	type jTest struct {
 		name   string
@@ -743,8 +742,8 @@ func TestTextReplace(t *testing.T) {
 }
 
 func TestTextReplaceRegexp(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	type jTest struct {
 		name   string
@@ -890,8 +889,8 @@ func TestTextFindRegexp(t *testing.T) {
 }
 
 func TestTextStripHTML(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	type jTest struct {
 		name   string

@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"os"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -18,9 +17,9 @@ func TestJSONValidation(t *testing.T) {
 	conf.JSON.Path = "foo.bar"
 	conf.JSON.Value = []byte(`this isnt valid json`)
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
-	if _, err := NewJSON(conf, nil, testLog, metrics.DudType{}); err == nil {
+	if _, err := NewJSON(conf, nil, testLog, metrics.Noop()); err == nil {
 		t.Error("Expected error from bad operator")
 	}
 
@@ -30,7 +29,7 @@ func TestJSONValidation(t *testing.T) {
 	conf.JSON.Path = "foo.bar"
 	conf.JSON.Value = []byte(`#%#@$his isnt valid json`)
 
-	if _, err := NewJSON(conf, nil, testLog, metrics.DudType{}); err == nil {
+	if _, err := NewJSON(conf, nil, testLog, metrics.Noop()); err == nil {
 		t.Error("Expected error from bad value")
 	}
 
@@ -40,7 +39,7 @@ func TestJSONValidation(t *testing.T) {
 	conf.JSON.Path = ""
 	conf.JSON.Value = []byte(`""`)
 
-	if _, err := NewJSON(conf, nil, testLog, metrics.DudType{}); err == nil {
+	if _, err := NewJSON(conf, nil, testLog, metrics.Noop()); err == nil {
 		t.Error("Expected error from empty move paths")
 	}
 
@@ -50,7 +49,7 @@ func TestJSONValidation(t *testing.T) {
 	conf.JSON.Path = ""
 	conf.JSON.Value = []byte(`"foo.bar"`)
 
-	if _, err := NewJSON(conf, nil, testLog, metrics.DudType{}); err == nil {
+	if _, err := NewJSON(conf, nil, testLog, metrics.Noop()); err == nil {
 		t.Error("Expected error from empty copy path")
 	}
 
@@ -60,7 +59,7 @@ func TestJSONValidation(t *testing.T) {
 	conf.JSON.Path = "foo.bar"
 	conf.JSON.Value = []byte(`""`)
 
-	if _, err := NewJSON(conf, nil, testLog, metrics.DudType{}); err == nil {
+	if _, err := NewJSON(conf, nil, testLog, metrics.Noop()); err == nil {
 		t.Error("Expected error from empty copy destination")
 	}
 
@@ -70,7 +69,7 @@ func TestJSONValidation(t *testing.T) {
 	conf.JSON.Path = "foo.bar"
 	conf.JSON.Value = []byte(`this isnt valid json`)
 
-	jSet, err := NewJSON(conf, nil, testLog, metrics.DudType{})
+	jSet, err := NewJSON(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +88,7 @@ func TestJSONValidation(t *testing.T) {
 
 	conf.JSON.Parts = []int{5}
 
-	jSet, err = NewJSON(conf, nil, testLog, metrics.DudType{})
+	jSet, err = NewJSON(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,8 +107,8 @@ func TestJSONValidation(t *testing.T) {
 }
 
 func TestJSONPartBounds(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	conf := NewConfig()
 	conf.JSON.Operator = "set"
@@ -429,8 +428,8 @@ func TestJSONFlatten(t *testing.T) {
 }
 
 func TestJSONAppend(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	type jTest struct {
 		name   string
@@ -740,8 +739,8 @@ func TestJSONExplode(t *testing.T) {
 }
 
 func TestJSONCopy(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	type jTest struct {
 		name   string
@@ -797,8 +796,8 @@ func TestJSONCopy(t *testing.T) {
 }
 
 func TestJSONClean(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	type jTest struct {
 		name   string
@@ -1092,8 +1091,8 @@ func TestJSONSetEdge(t *testing.T) {
 }
 
 func TestJSONConfigYAML(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	input := `{"foo":{"bar":5}}`
 
@@ -1149,8 +1148,8 @@ value:
 }
 
 func TestJSONConfigYAMLMarshal(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	tests := []string{
 		`parts:
@@ -1241,8 +1240,8 @@ value:
 }
 
 func TestJSONSelect(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	type jTest struct {
 		name   string
@@ -1324,8 +1323,8 @@ func TestJSONSelect(t *testing.T) {
 }
 
 func TestJSONDeletePartBounds(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	conf := NewConfig()
 	conf.JSON.Path = "foo.bar"
@@ -1368,8 +1367,8 @@ func TestJSONDeletePartBounds(t *testing.T) {
 }
 
 func TestJSONDelete(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	type jTest struct {
 		name   string

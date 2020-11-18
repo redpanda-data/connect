@@ -4,7 +4,6 @@ package reader
 
 import (
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -82,7 +81,7 @@ func testAMQPConnect(url string, t *testing.T) {
 		RoutingKey: key,
 	})
 
-	m, err := NewAMQP(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
+	m, err := NewAMQP(conf, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +275,7 @@ func testAMQPDisconnect(url string, t *testing.T) {
 	conf.URL = url
 	conf.QueueDeclare.Enabled = true
 
-	m, err := NewAMQP(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
+	m, err := NewAMQP(conf, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

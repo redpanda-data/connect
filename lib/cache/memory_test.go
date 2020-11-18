@@ -2,7 +2,6 @@ package cache
 
 import (
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -16,12 +15,12 @@ import (
 //------------------------------------------------------------------------------
 
 func TestMemoryCache(t *testing.T) {
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	conf := NewConfig()
 	conf.Type = "memory"
 
-	c, err := New(conf, nil, testLog, metrics.DudType{})
+	c, err := New(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,14 +78,14 @@ func TestMemoryCache(t *testing.T) {
 }
 
 func TestMemoryCacheCompaction(t *testing.T) {
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	conf := NewConfig()
 	conf.Type = "memory"
 	conf.Memory.TTL = 0
 	conf.Memory.CompactionInterval = "1ns"
 
-	c, err := New(conf, nil, testLog, metrics.DudType{})
+	c, err := New(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

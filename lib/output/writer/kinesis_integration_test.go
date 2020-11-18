@@ -86,7 +86,7 @@ func TestKinesisIntegration(t *testing.T) {
 }
 
 func testKinesisConnect(t *testing.T, c KinesisConfig, client *kinesis.Kinesis) {
-	met := metrics.DudType{}
+	met := metrics.Noop()
 	log := log.Noop()
 	r, err := NewKinesis(c, log, met)
 	if err != nil {

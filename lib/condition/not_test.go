@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -129,8 +128,8 @@ func TestNotConfigDefaultsYAML(t *testing.T) {
 }
 
 func TestNotCheck(t *testing.T) {
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	testMet := metrics.DudType{}
+	testLog := log.Noop()
+	testMet := metrics.Noop()
 
 	type fields struct {
 		operator string
@@ -349,8 +348,8 @@ func TestNotCheck(t *testing.T) {
 }
 
 func TestNotBadOperator(t *testing.T) {
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	testMet := metrics.DudType{}
+	testLog := log.Noop()
+	testMet := metrics.Noop()
 
 	cConf := NewConfig()
 	cConf.Type = "text"

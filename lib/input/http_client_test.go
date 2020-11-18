@@ -45,7 +45,7 @@ func TestHTTPClientGET(t *testing.T) {
 	conf.HTTPClient.URL = ts.URL + "/testpost"
 	conf.HTTPClient.Retry = "1ms"
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -110,7 +110,7 @@ func TestHTTPClientGETError(t *testing.T) {
 	conf.HTTPClient.URL = ts.URL + "/testpost"
 	conf.HTTPClient.Retry = "1ms"
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -137,7 +137,7 @@ func TestHTTPClientGETNotExist(t *testing.T) {
 	conf.HTTPClient.URL = "jgljksdfhjgkldfjglkf"
 	conf.HTTPClient.Retry = "1ms"
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -159,7 +159,7 @@ func TestHTTPClientGETStreamNotExist(t *testing.T) {
 	conf.HTTPClient.Retry = "1ms"
 	conf.HTTPClient.Stream.Enabled = true
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -191,7 +191,7 @@ func TestHTTPClientGETStreamError(t *testing.T) {
 	conf.HTTPClient.Retry = "1ms"
 	conf.HTTPClient.Stream.Enabled = true
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -247,7 +247,7 @@ func TestHTTPClientPOST(t *testing.T) {
 	conf.HTTPClient.Payload = "foobar"
 	conf.HTTPClient.Retry = "1ms"
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -333,7 +333,7 @@ func TestHTTPClientGETMultipart(t *testing.T) {
 	conf.HTTPClient.URL = ts.URL + "/testpost"
 	conf.HTTPClient.Retry = "1ms"
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -446,7 +446,7 @@ func TestHTTPClientGETMultipartLoop(t *testing.T) {
 	conf.HTTPClient.URL = tserve.URL + "/testpost"
 	conf.HTTPClient.Retry = "1ms"
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -546,7 +546,7 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 	conf.HTTPClient.Stream.Enabled = true
 	conf.HTTPClient.Stream.Multipart = true
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -617,7 +617,7 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 	conf.HTTPClient.Stream.Enabled = true
 	conf.HTTPClient.Stream.Multipart = true
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -683,7 +683,7 @@ func TestHTTPClientStreamGETRecover(t *testing.T) {
 	conf.HTTPClient.Stream.Enabled = true
 	conf.HTTPClient.Stream.Multipart = false
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -760,7 +760,7 @@ func BenchmarkHTTPClientGETMultipart(b *testing.B) {
 	conf.HTTPClient.URL = tserve.URL + "/testpost"
 	conf.HTTPClient.Retry = "1ms"
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.DudType{})
+	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		b.Error(err)
 		return

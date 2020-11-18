@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"os"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -13,8 +12,8 @@ import (
 func TestSplitToSingleParts(t *testing.T) {
 	conf := NewConfig()
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewSplit(conf, nil, testLog, metrics.DudType{})
+	testLog := log.Noop()
+	proc, err := NewSplit(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

@@ -2,7 +2,6 @@ package input
 
 import (
 	"errors"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -219,8 +218,8 @@ func (m mockProc) WaitForClose(timeout time.Duration) error {
 func TestBasicWrapProcessors(t *testing.T) {
 	mockIn := &mockInput{ts: make(chan types.Transaction)}
 
-	l := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	s := metrics.DudType{}
+	l := log.Noop()
+	s := metrics.Noop()
 
 	pipe1 := pipeline.NewProcessor(l, s, mockProc{value: "foo"})
 	pipe2 := pipeline.NewProcessor(l, s, mockProc{value: "bar"})
@@ -338,8 +337,8 @@ func TestBasicWrapProcessors(t *testing.T) {
 func TestBasicWrapDoubleProcessors(t *testing.T) {
 	mockIn := &mockInput{ts: make(chan types.Transaction)}
 
-	l := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	s := metrics.DudType{}
+	l := log.Noop()
+	s := metrics.Noop()
 
 	pipe1 := pipeline.NewProcessor(l, s, mockProc{value: "foo"}, mockProc{value: "bar"})
 

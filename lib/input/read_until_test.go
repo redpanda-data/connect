@@ -89,7 +89,7 @@ func testReadUntilBasic(inConf Config, t *testing.T) {
 	rConf.ReadUntil.Input = &inConf
 	rConf.ReadUntil.Check = `content() == "bar"`
 
-	in, err := New(rConf, nil, log.Noop(), metrics.DudType{})
+	in, err := New(rConf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func testReadUntilRetry(inConf Config, t *testing.T) {
 	rConf.ReadUntil.Input = &inConf
 	rConf.ReadUntil.Check = `content() == "bar"`
 
-	in, err := New(rConf, nil, log.Noop(), metrics.DudType{})
+	in, err := New(rConf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +262,7 @@ func testReadUntilDeprecatedBasic(inConf Config, t *testing.T) {
 	rConf.ReadUntil.Input = &inConf
 	rConf.ReadUntil.Condition = cond
 
-	in, err := New(rConf, nil, log.Noop(), metrics.DudType{})
+	in, err := New(rConf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,7 +328,7 @@ func testReadUntilDeprecatedRetry(inConf Config, t *testing.T) {
 	rConf.ReadUntil.Input = &inConf
 	rConf.ReadUntil.Condition = cond
 
-	in, err := New(rConf, nil, log.Noop(), metrics.DudType{})
+	in, err := New(rConf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -440,7 +440,7 @@ func testReadUntilDeprecatedEarlyClose(inConf Config, t *testing.T) {
 	rConf.ReadUntil.Input = &inConf
 	rConf.ReadUntil.Condition = cond
 
-	in, err := New(rConf, nil, log.Noop(), metrics.DudType{})
+	in, err := New(rConf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -484,7 +484,7 @@ func testReadUntilDeprecatedInputClose(inConf Config, t *testing.T) {
 	rConf.ReadUntil.Input = &inConf
 	rConf.ReadUntil.Condition = cond
 
-	in, err := New(rConf, nil, log.Noop(), metrics.DudType{})
+	in, err := New(rConf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -544,7 +544,7 @@ func testReadUntilDeprecatedInputCloseRestart(inConf Config, t *testing.T) {
 	rConf.ReadUntil.Condition = cond
 	rConf.ReadUntil.Restart = true
 
-	in, err := New(rConf, nil, log.Noop(), metrics.DudType{})
+	in, err := New(rConf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

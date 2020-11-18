@@ -2,7 +2,6 @@ package output
 
 import (
 	"errors"
-	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -132,30 +131,30 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 		func(i *int) (types.Pipeline, error) {
 			proc, err := processor.New(
 				firstProc, nil,
-				log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
-				metrics.DudType{},
+				log.Noop(),
+				metrics.Noop(),
 			)
 			if err != nil {
 				return nil, err
 			}
 			return pipeline.NewProcessor(
-				log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
-				metrics.DudType{},
+				log.Noop(),
+				metrics.Noop(),
 				proc,
 			), nil
 		},
 		func(i *int) (types.Pipeline, error) {
 			proc, err := processor.New(
 				secondProc, nil,
-				log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
-				metrics.DudType{},
+				log.Noop(),
+				metrics.Noop(),
 			)
 			if err != nil {
 				return nil, err
 			}
 			return pipeline.NewProcessor(
-				log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
-				metrics.DudType{},
+				log.Noop(),
+				metrics.Noop(),
 				proc,
 			), nil
 		},

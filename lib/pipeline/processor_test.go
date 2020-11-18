@@ -3,7 +3,6 @@ package pipeline
 import (
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"sync"
 	"testing"
@@ -61,8 +60,8 @@ func TestProcessorPipeline(t *testing.T) {
 	}()
 
 	proc := NewProcessor(
-		log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
-		metrics.DudType{},
+		log.Noop(),
+		metrics.Noop(),
 		mockProc,
 	)
 
@@ -215,8 +214,8 @@ func TestProcessorMultiMsgs(t *testing.T) {
 	mockProc := &mockMultiMsgProcessor{N: 3}
 
 	proc := NewProcessor(
-		log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
-		metrics.DudType{},
+		log.Noop(),
+		metrics.Noop(),
 		mockProc,
 	)
 
@@ -300,8 +299,8 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 	mockProc := &mockMultiMsgProcessor{N: 3}
 
 	proc := NewProcessor(
-		log.New(os.Stdout, log.Config{LogLevel: "NONE"}),
-		metrics.DudType{},
+		log.Noop(),
+		metrics.Noop(),
 		mockProc,
 	)
 

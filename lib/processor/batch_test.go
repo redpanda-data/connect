@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"os"
 	"reflect"
 	"testing"
 
@@ -16,8 +15,8 @@ func TestBatchBasic(t *testing.T) {
 	conf.Batch.Count = 2
 	conf.Batch.ByteSize = 0
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewBatch(conf, nil, testLog, metrics.DudType{})
+	testLog := log.Noop()
+	proc, err := NewBatch(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -41,8 +40,8 @@ func TestBatchTwoParts(t *testing.T) {
 	conf := NewConfig()
 	conf.Batch.ByteSize = 6
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewBatch(conf, nil, testLog, metrics.DudType{})
+	testLog := log.Noop()
+	proc, err := NewBatch(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -66,8 +65,8 @@ func TestBatchLotsOfParts(t *testing.T) {
 	conf := NewConfig()
 	conf.Batch.ByteSize = 1
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewBatch(conf, nil, testLog, metrics.DudType{})
+	testLog := log.Noop()
+	proc, err := NewBatch(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -94,8 +93,8 @@ func TestBatchTwoSingleParts(t *testing.T) {
 	conf := NewConfig()
 	conf.Batch.ByteSize = 5
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewBatch(conf, nil, testLog, metrics.DudType{})
+	testLog := log.Noop()
+	proc, err := NewBatch(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -160,8 +159,8 @@ func TestBatchTwoDiffParts(t *testing.T) {
 	conf := NewConfig()
 	conf.Batch.ByteSize = 5
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewBatch(conf, nil, testLog, metrics.DudType{})
+	testLog := log.Noop()
+	proc, err := NewBatch(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -226,8 +225,8 @@ func TestBatchCondition(t *testing.T) {
 	conf.Batch.ByteSize = 1000
 	conf.Batch.Condition = condConf
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewBatch(conf, nil, testLog, metrics.DudType{})
+	testLog := log.Noop()
+	proc, err := NewBatch(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

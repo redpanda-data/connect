@@ -3,7 +3,6 @@ package broker
 import (
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"sync"
 	"testing"
@@ -47,7 +46,7 @@ func TestBasicDynamicFanOut(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewDynamicFanOut(
-		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -116,7 +115,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewDynamicFanOut(
-		nil, log.New(os.Stdout, logConfig), metrics.DudType{},
+		nil, log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -409,7 +408,7 @@ func TestDynamicFanOutShutDownFromErrorResponse(t *testing.T) {
 	outputRemovedList := []string{}
 
 	oTM, err := NewDynamicFanOut(
-		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.Noop(), metrics.Noop(),
 		OptDynamicFanOutSetOnAdd(func(label string) {
 			outputAddedList = append(outputAddedList, label)
 		}), OptDynamicFanOutSetOnRemove(func(label string) {
@@ -479,7 +478,7 @@ func TestDynamicFanOutShutDownFromReceive(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewDynamicFanOut(
-		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -529,7 +528,7 @@ func TestDynamicFanOutShutDownFromSend(t *testing.T) {
 	resChan := make(chan types.Response)
 
 	oTM, err := NewDynamicFanOut(
-		outputs, log.New(os.Stdout, logConfig), metrics.DudType{},
+		outputs, log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)

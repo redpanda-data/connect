@@ -15,12 +15,12 @@ func TestInsertBoundaries(t *testing.T) {
 	conf := NewConfig()
 	conf.InsertPart.Content = "hello world"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	for i := 0; i < 10; i++ {
 		for j := -5; j <= 5; j++ {
 			conf.InsertPart.Index = j
-			proc, err := NewInsertPart(conf, nil, testLog, metrics.DudType{})
+			proc, err := NewInsertPart(conf, nil, testLog, metrics.Noop())
 			if err != nil {
 				t.Error(err)
 				return
@@ -48,7 +48,7 @@ func TestInsertPart(t *testing.T) {
 	conf := NewConfig()
 	conf.InsertPart.Content = "hello world"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	type test struct {
 		index int
@@ -164,7 +164,7 @@ func TestInsertPart(t *testing.T) {
 
 	for _, test := range tests {
 		conf.InsertPart.Index = test.index
-		proc, err := NewInsertPart(conf, nil, testLog, metrics.DudType{})
+		proc, err := NewInsertPart(conf, nil, testLog, metrics.Noop())
 		if err != nil {
 			t.Error(err)
 			return
@@ -188,8 +188,8 @@ func TestInsertPartInterpolation(t *testing.T) {
 
 	hostname, _ := os.Hostname()
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewInsertPart(conf, nil, testLog, metrics.DudType{})
+	testLog := log.Noop()
+	proc, err := NewInsertPart(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

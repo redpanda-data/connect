@@ -101,8 +101,8 @@ func parseGetBody(data *bytes.Buffer) getBody {
 
 func TestTypeAPIBadMethods(t *testing.T) {
 	mgr := New(
-		OptSetLogger(log.New(os.Stdout, log.Config{LogLevel: "NONE"})),
-		OptSetStats(metrics.DudType{}),
+		OptSetLogger(log.Noop()),
+		OptSetStats(metrics.Noop()),
 		OptSetManager(types.DudMgr{}),
 		OptSetAPITimeout(time.Millisecond*100),
 	)
@@ -266,7 +266,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 func TestTypeAPIPatch(t *testing.T) {
 	mgr := New(
 		OptSetLogger(log.Noop()),
-		OptSetStats(metrics.DudType{}),
+		OptSetStats(metrics.Noop()),
 		OptSetManager(types.DudMgr{}),
 		OptSetAPITimeout(time.Millisecond*100),
 	)
@@ -420,8 +420,8 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 
 func TestTypeAPIList(t *testing.T) {
 	mgr := New(
-		OptSetLogger(log.New(os.Stdout, log.Config{LogLevel: "NONE"})),
-		OptSetStats(metrics.DudType{}),
+		OptSetLogger(log.Noop()),
+		OptSetStats(metrics.Noop()),
 		OptSetManager(types.DudMgr{}),
 		OptSetAPITimeout(time.Millisecond*100),
 	)
@@ -457,8 +457,8 @@ func TestTypeAPIList(t *testing.T) {
 
 func TestTypeAPISetStreams(t *testing.T) {
 	mgr := New(
-		OptSetLogger(log.New(os.Stdout, log.Config{LogLevel: "NONE"})),
-		OptSetStats(metrics.DudType{}),
+		OptSetLogger(log.Noop()),
+		OptSetStats(metrics.Noop()),
 		OptSetManager(types.DudMgr{}),
 		OptSetAPITimeout(time.Millisecond*100),
 	)
@@ -551,8 +551,8 @@ func TestTypeAPISetStreams(t *testing.T) {
 
 func TestTypeAPIDefaultConf(t *testing.T) {
 	mgr := New(
-		OptSetLogger(log.New(os.Stdout, log.Config{LogLevel: "NONE"})),
-		OptSetStats(metrics.DudType{}),
+		OptSetLogger(log.Noop()),
+		OptSetStats(metrics.Noop()),
 		OptSetManager(types.DudMgr{}),
 		OptSetAPITimeout(time.Millisecond*100),
 	)

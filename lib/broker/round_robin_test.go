@@ -24,7 +24,7 @@ func TestRoundRobinInterfaces(t *testing.T) {
 }
 
 func TestRoundRobinDoubleClose(t *testing.T) {
-	oTM, err := NewRoundRobin([]types.Output{}, metrics.DudType{})
+	oTM, err := NewRoundRobin([]types.Output{}, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -54,7 +54,7 @@ func TestBasicRoundRobin(t *testing.T) {
 	readChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	oTM, err := NewRoundRobin(outputs, metrics.DudType{})
+	oTM, err := NewRoundRobin(outputs, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -132,7 +132,7 @@ func BenchmarkBasicRoundRobin(b *testing.B) {
 	readChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	oTM, err := NewRoundRobin(outputs, metrics.DudType{})
+	oTM, err := NewRoundRobin(outputs, metrics.Noop())
 	if err != nil {
 		b.Error(err)
 		return

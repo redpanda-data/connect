@@ -46,8 +46,8 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	testMet := metrics.DudType{}
+	testLog := log.Noop()
+	testMet := metrics.Noop()
 
 	type fields struct {
 		schemaPath string
@@ -135,8 +135,8 @@ func TestJSONSchemaInlineSchemaCheck(t *testing.T) {
 		}
 	}`
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	testMet := metrics.DudType{}
+	testLog := log.Noop()
+	testMet := metrics.Noop()
 
 	type fields struct {
 		schema string
@@ -241,8 +241,8 @@ func TestJSONSchemaLowercaseDescriptionCheck(t *testing.T) {
       }
 	}`
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	testMet := metrics.DudType{}
+	testLog := log.Noop()
+	testMet := metrics.Noop()
 
 	type fields struct {
 		schema string
@@ -312,8 +312,8 @@ func TestJSONSchemaLowercaseDescriptionCheck(t *testing.T) {
 }
 
 func TestJSONSchemaPathNotExist(t *testing.T) {
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	testMet := metrics.DudType{}
+	testLog := log.Noop()
+	testMet := metrics.Noop()
 
 	conf := NewConfig()
 	conf.Type = "jsonschema"
@@ -342,8 +342,8 @@ func TestJSONSchemaInvalidSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	testMet := metrics.DudType{}
+	testLog := log.Noop()
+	testMet := metrics.Noop()
 
 	conf := NewConfig()
 	conf.Type = "jsonschema"

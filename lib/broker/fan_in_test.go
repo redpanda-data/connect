@@ -42,7 +42,7 @@ func TestBasicFanIn(t *testing.T) {
 		Inputs = append(Inputs, mockInputs[i])
 	}
 
-	fanIn, err := NewFanIn(Inputs, metrics.DudType{})
+	fanIn, err := NewFanIn(Inputs, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -102,7 +102,7 @@ func TestFanInShutdown(t *testing.T) {
 		Inputs = append(Inputs, mockInputs[i])
 	}
 
-	fanIn, err := NewFanIn(Inputs, metrics.DudType{})
+	fanIn, err := NewFanIn(Inputs, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -141,7 +141,7 @@ func TestFanInAsync(t *testing.T) {
 		Inputs = append(Inputs, mockInputs[i])
 	}
 
-	fanIn, err := NewFanIn(Inputs, metrics.DudType{})
+	fanIn, err := NewFanIn(Inputs, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -208,7 +208,7 @@ func BenchmarkBasicFanIn(b *testing.B) {
 		Inputs = append(Inputs, mockInputs[i])
 	}
 
-	fanIn, err := NewFanIn(Inputs, metrics.DudType{})
+	fanIn, err := NewFanIn(Inputs, metrics.Noop())
 	if err != nil {
 		b.Error(err)
 		return

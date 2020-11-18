@@ -79,7 +79,7 @@ func (r readerCantConnect) WaitForClose(time.Duration) error {
 func TestReaderCantConnect(t *testing.T) {
 	r, err := NewReader(
 		"foo", readerCantConnect{},
-		log.Noop(), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -119,7 +119,7 @@ func TestReaderCantRead(t *testing.T) {
 
 	r, err := NewReader(
 		"foo", readerImpl,
-		log.Noop(), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -144,7 +144,7 @@ func TestReaderTypeClosedOnConn(t *testing.T) {
 
 	r, err := NewReader(
 		"foo", readerImpl,
-		log.Noop(), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -168,7 +168,7 @@ func TestReaderTypeClosedOnReconn(t *testing.T) {
 
 	r, err := NewReader(
 		"foo", readerImpl,
-		log.Noop(), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -200,7 +200,7 @@ func TestReaderTypeClosedOnReread(t *testing.T) {
 
 	r, err := NewReader(
 		"foo", readerImpl,
-		log.Noop(), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -237,7 +237,7 @@ func TestReaderCanReconnect(t *testing.T) {
 
 	r, err := NewReader(
 		"foo", readerImpl,
-		log.Noop(), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -305,7 +305,7 @@ func TestReaderFailsReconnect(t *testing.T) {
 
 	r, err := NewReader(
 		"foo", readerImpl,
-		log.Noop(), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -376,7 +376,7 @@ func TestReaderCloseDuringReconnect(t *testing.T) {
 
 	r, err := NewReader(
 		"foo", readerImpl,
-		log.Noop(), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -420,7 +420,7 @@ func TestReaderHappyPath(t *testing.T) {
 
 	r, err := NewReader(
 		"foo", readerImpl,
-		log.Noop(), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -490,7 +490,7 @@ func TestReaderSadPath(t *testing.T) {
 
 	r, err := NewReader(
 		"foo", readerImpl,
-		log.Noop(), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -564,7 +564,7 @@ func TestReaderSkipAcks(t *testing.T) {
 
 	r, err := NewReader(
 		"foo", readerImpl,
-		log.Noop(), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)

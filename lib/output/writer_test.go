@@ -3,7 +3,6 @@ package output
 import (
 	"context"
 	"errors"
-	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -73,7 +72,7 @@ func TestWriterCantConnect(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerCantConnect{},
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -125,7 +124,7 @@ func TestWriterCantSendClosed(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerImpl,
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -151,7 +150,7 @@ func TestWriterCantSendClosedChan(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerImpl,
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -179,7 +178,7 @@ func TestWriterStartClosed(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerImpl,
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -210,7 +209,7 @@ func TestWriterClosesOnReconn(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerImpl,
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -261,7 +260,7 @@ func TestWriterClosesOnResend(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerImpl,
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -319,7 +318,7 @@ func TestWriterCanReconnect(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerImpl,
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -388,7 +387,7 @@ func TestWriterCantReconnect(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerImpl,
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -453,7 +452,7 @@ func TestWriterHappyPath(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerImpl,
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -521,7 +520,7 @@ func TestWriterSadPath(t *testing.T) {
 
 	w, err := NewWriter(
 		"foo", writerImpl,
-		log.New(os.Stdout, logConfig), metrics.DudType{},
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)

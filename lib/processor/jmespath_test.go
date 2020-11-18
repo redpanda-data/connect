@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"os"
 	"strconv"
 	"testing"
 
@@ -16,9 +15,9 @@ func TestJMESPathAllParts(t *testing.T) {
 	conf.JMESPath.Parts = []int{}
 	conf.JMESPath.Query = "foo.bar"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
-	jSet, err := NewJMESPath(conf, nil, testLog, metrics.DudType{})
+	jSet, err := NewJMESPath(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,9 +46,9 @@ func TestJMESPathValidation(t *testing.T) {
 	conf.JMESPath.Parts = []int{0}
 	conf.JMESPath.Query = "foo.bar"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
-	jSet, err := NewJMESPath(conf, nil, testLog, metrics.DudType{})
+	jSet, err := NewJMESPath(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +67,7 @@ func TestJMESPathValidation(t *testing.T) {
 
 	conf.JMESPath.Parts = []int{5}
 
-	jSet, err = NewJMESPath(conf, nil, testLog, metrics.DudType{})
+	jSet, err = NewJMESPath(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,8 +117,8 @@ func TestJMESPathMutation(t *testing.T) {
 }
 
 func TestJMESPath(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	type jTest struct {
 		name   string

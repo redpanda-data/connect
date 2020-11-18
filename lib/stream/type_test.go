@@ -1,7 +1,6 @@
 package stream
 
 import (
-	"os"
 	"testing"
 	"time"
 
@@ -43,7 +42,7 @@ func TestTypeConstruction(t *testing.T) {
 	newStats := metrics.DudType{
 		ID: 1,
 	}
-	newLogger := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	newLogger := log.Noop()
 	newMgr := types.DudMgr{
 		ID: 2,
 	}

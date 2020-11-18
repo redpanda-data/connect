@@ -3,13 +3,8 @@ package output
 import (
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
-
-var logConfig = log.Config{
-	LogLevel: "NONE",
-}
 
 // MockOutputType implements the output.Type interface.
 type MockOutputType struct {

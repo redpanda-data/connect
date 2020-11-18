@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"os"
 	"reflect"
 	"testing"
 
@@ -11,8 +10,8 @@ import (
 )
 
 func TestMergeJSON(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	type jTest struct {
 		name   string
@@ -70,8 +69,8 @@ func TestMergeJSON(t *testing.T) {
 }
 
 func TestMergeJSONRetention(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	conf := NewConfig()
 	conf.MergeJSON.Parts = []int{}
@@ -168,8 +167,8 @@ func TestMergeJSONRetention(t *testing.T) {
 }
 
 func TestMergeJSONNoRetention(t *testing.T) {
-	tLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	tStats := metrics.DudType{}
+	tLog := log.Noop()
+	tStats := metrics.Noop()
 
 	conf := NewConfig()
 	conf.MergeJSON.Parts = []int{0, -1}

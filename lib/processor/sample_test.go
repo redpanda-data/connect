@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"os"
 	"reflect"
 	"testing"
 
@@ -14,8 +13,8 @@ func TestSample10Percent(t *testing.T) {
 	conf := NewConfig()
 	conf.Sample.Retain = 10.0
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewSample(conf, nil, testLog, metrics.DudType{})
+	testLog := log.Noop()
+	proc, err := NewSample(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -51,8 +50,8 @@ func TestSample24Percent(t *testing.T) {
 	conf := NewConfig()
 	conf.Sample.Retain = 24.0
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewSample(conf, nil, testLog, metrics.DudType{})
+	testLog := log.Noop()
+	proc, err := NewSample(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

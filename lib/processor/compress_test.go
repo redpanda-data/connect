@@ -5,7 +5,6 @@ import (
 	"compress/flate"
 	"compress/gzip"
 	"compress/zlib"
-	"os"
 	"reflect"
 	"testing"
 
@@ -18,9 +17,9 @@ func TestCompressBadAlgo(t *testing.T) {
 	conf := NewConfig()
 	conf.Compress.Algorithm = "does not exist"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
-	_, err := NewCompress(conf, nil, testLog, metrics.DudType{})
+	_, err := NewCompress(conf, nil, testLog, metrics.Noop())
 	if err == nil {
 		t.Error("Expected error from bad algo")
 	}
@@ -30,7 +29,7 @@ func TestCompressGZIP(t *testing.T) {
 	conf := NewConfig()
 	conf.Compress.Algorithm = "gzip"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	input := [][]byte{
 		[]byte("hello world first part"),
@@ -56,7 +55,7 @@ func TestCompressGZIP(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewCompress(conf, nil, testLog, metrics.DudType{})
+	proc, err := NewCompress(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +75,7 @@ func TestCompressZLIB(t *testing.T) {
 	conf := NewConfig()
 	conf.Compress.Algorithm = "zlib"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	input := [][]byte{
 		[]byte("hello world first part"),
@@ -102,7 +101,7 @@ func TestCompressZLIB(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewCompress(conf, nil, testLog, metrics.DudType{})
+	proc, err := NewCompress(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +121,7 @@ func TestCompressFlate(t *testing.T) {
 	conf := NewConfig()
 	conf.Compress.Algorithm = "flate"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	input := [][]byte{
 		[]byte("hello world first part"),
@@ -151,7 +150,7 @@ func TestCompressFlate(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewCompress(conf, nil, testLog, metrics.DudType{})
+	proc, err := NewCompress(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +169,7 @@ func TestCompressFlate(t *testing.T) {
 func TestCompressIndexBounds(t *testing.T) {
 	conf := NewConfig()
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	input := [][]byte{
 		[]byte("0"),
@@ -207,7 +206,7 @@ func TestCompressIndexBounds(t *testing.T) {
 
 	for i, expIndex := range tests {
 		conf.Compress.Parts = []int{i}
-		proc, err := NewCompress(conf, nil, testLog, metrics.DudType{})
+		proc, err := NewCompress(conf, nil, testLog, metrics.Noop())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -231,8 +230,8 @@ func TestCompressEmpty(t *testing.T) {
 	conf := NewConfig()
 	conf.Compress.Parts = []int{0, 1}
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewCompress(conf, nil, testLog, metrics.DudType{})
+	testLog := log.Noop()
+	proc, err := NewCompress(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

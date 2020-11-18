@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"os"
 	"reflect"
 	"testing"
 
@@ -11,8 +10,8 @@ import (
 )
 
 func TestConditionalWithStaticFalse(t *testing.T) {
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	testMet := metrics.DudType{}
+	testLog := log.Noop()
+	testMet := metrics.Noop()
 
 	conf := NewConfig()
 	conf.Type = "conditional"
@@ -53,8 +52,8 @@ func TestConditionalWithStaticFalse(t *testing.T) {
 }
 
 func TestConditionalWithStaticTrue(t *testing.T) {
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	testMet := metrics.DudType{}
+	testLog := log.Noop()
+	testMet := metrics.Noop()
 
 	conf := NewConfig()
 	conf.Type = "conditional"

@@ -5,7 +5,6 @@ import (
 	"encoding/ascii85"
 	"encoding/base64"
 	"encoding/hex"
-	"os"
 	"reflect"
 	"testing"
 
@@ -19,9 +18,9 @@ func TestDecodeBadAlgo(t *testing.T) {
 	conf := NewConfig()
 	conf.Decode.Scheme = "does not exist"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
-	_, err := NewDecode(conf, nil, testLog, metrics.DudType{})
+	_, err := NewDecode(conf, nil, testLog, metrics.Noop())
 	if err == nil {
 		t.Error("Expected error from bad algo")
 	}
@@ -31,7 +30,7 @@ func TestDecodeBase64(t *testing.T) {
 	conf := NewConfig()
 	conf.Decode.Scheme = "base64"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	exp := [][]byte{
 		[]byte("hello world first part"),
@@ -57,7 +56,7 @@ func TestDecodeBase64(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewDecode(conf, nil, testLog, metrics.DudType{})
+	proc, err := NewDecode(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +205,7 @@ func TestDecodeZ85(t *testing.T) {
 func TestDecodeIndexBounds(t *testing.T) {
 	conf := NewConfig()
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
 	input := [][]byte{}
 
@@ -243,7 +242,7 @@ func TestDecodeIndexBounds(t *testing.T) {
 
 	for i, expIndex := range tests {
 		conf.Decode.Parts = []int{i}
-		proc, err := NewDecode(conf, nil, testLog, metrics.DudType{})
+		proc, err := NewDecode(conf, nil, testLog, metrics.Noop())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -267,8 +266,8 @@ func TestDecodeEmpty(t *testing.T) {
 	conf := NewConfig()
 	conf.Decode.Parts = []int{0, 1}
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
-	proc, err := NewDecode(conf, nil, testLog, metrics.DudType{})
+	testLog := log.Noop()
+	proc, err := NewDecode(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

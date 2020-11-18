@@ -27,7 +27,7 @@ func TestTryInterfaces(t *testing.T) {
 }
 
 func TestTryDoubleClose(t *testing.T) {
-	oTM, err := NewTry([]types.Output{&MockOutputType{}}, metrics.DudType{})
+	oTM, err := NewTry([]types.Output{&MockOutputType{}}, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestTryHappyPath(t *testing.T) {
 	readChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	oTM, err := NewTry(outputs, metrics.DudType{})
+	oTM, err := NewTry(outputs, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -131,7 +131,7 @@ func TestTryHappyishPath(t *testing.T) {
 	readChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	oTM, err := NewTry(outputs, metrics.DudType{})
+	oTM, err := NewTry(outputs, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -231,7 +231,7 @@ func TestTryAllFail(t *testing.T) {
 	readChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
 
-	oTM, err := NewTry(outputs, metrics.DudType{})
+	oTM, err := NewTry(outputs, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

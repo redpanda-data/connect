@@ -9,7 +9,7 @@ import (
 )
 
 func TestSTDINClose(t *testing.T) {
-	s, err := NewSTDIN(NewConfig(), nil, log.Noop(), metrics.DudType{})
+	s, err := NewSTDIN(NewConfig(), nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

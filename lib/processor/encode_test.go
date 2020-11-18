@@ -5,7 +5,6 @@ import (
 	"encoding/ascii85"
 	"encoding/base64"
 	"encoding/hex"
-	"os"
 	"reflect"
 	"testing"
 
@@ -20,9 +19,9 @@ func TestEncodeBadAlgo(t *testing.T) {
 	conf := NewConfig()
 	conf.Encode.Scheme = "does not exist"
 
-	testLog := log.New(os.Stdout, log.Config{LogLevel: "NONE"})
+	testLog := log.Noop()
 
-	_, err := NewEncode(conf, nil, testLog, metrics.DudType{})
+	_, err := NewEncode(conf, nil, testLog, metrics.Noop())
 	if err == nil {
 		t.Error("Expected error from bad algo")
 	}

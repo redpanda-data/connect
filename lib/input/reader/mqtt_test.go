@@ -2,7 +2,6 @@ package reader
 
 import (
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -86,7 +85,7 @@ func testMQTTConnect(urls []string, t *testing.T) {
 	conf.Topics = []string{"test_input_1"}
 	conf.URLs = urls
 
-	m, err := NewMQTT(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
+	m, err := NewMQTT(conf, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +150,7 @@ func testMQTTDisconnect(urls []string, t *testing.T) {
 	conf.Topics = []string{"test_input_1"}
 	conf.URLs = urls
 
-	m, err := NewMQTT(conf, log.New(os.Stdout, log.Config{LogLevel: "NONE"}), metrics.DudType{})
+	m, err := NewMQTT(conf, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
