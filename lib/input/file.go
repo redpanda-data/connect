@@ -34,6 +34,17 @@ Consumes data from files on disk, emitting messages according to a chosen codec.
 			docs.FieldDeprecated("delimiter"),
 			docs.FieldAdvanced("delete_on_finish", "Whether to delete consumed files from the disk once they are fully consumed."),
 		},
+		Description: `
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+` + "```text" + `
+- path
+` + "```" + `
+
+You can access these metadata fields using
+[function interpolation](/docs/configuration/interpolation#metadata).`,
 		Categories: []Category{
 			CategoryLocal,
 		},
@@ -210,6 +221,8 @@ scanLoop:
 			}
 			return nil, nil, err
 		}
+
+		part.Metadata().Set("path", f.currentPath)
 
 		acks = append(acks, codecAckFn)
 		if f.multipart {

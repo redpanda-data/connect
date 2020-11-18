@@ -53,6 +53,7 @@ func TestFileSinglePartDeprecated(t *testing.T) {
 		case ts, open = <-f.TransactionChan():
 			require.True(t, open)
 			assert.Equal(t, exp, string(ts.Payload.Get(0).Get()))
+			assert.Equal(t, tmpfile.Name(), ts.Payload.Get(0).Metadata().Get("path"))
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for message")
 		}

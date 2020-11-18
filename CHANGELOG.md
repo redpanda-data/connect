@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### New
 
 - New field `format` added to `logger` supporting `json` and `logfmt`.
+- The `file` input now provides the metadata field `path` on payloads.
 
 ### Fixed
 

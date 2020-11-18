@@ -51,6 +51,17 @@ input:
 </TabItem>
 </Tabs>
 
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+```text
+- path
+```
+
+You can access these metadata fields using
+[function interpolation](/docs/configuration/interpolation#metadata).
+
 ## Examples
 
 <Tabs defaultValue="Read a Bunch of CSVs" values={[
