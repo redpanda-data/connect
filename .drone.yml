@@ -16,6 +16,38 @@ steps:
     - make deps
     - make test
 
+# Dry run image builds
+
+- name: docker-cgo-dr
+  image: plugins/docker
+  settings:
+    repo: jeffail/benthos
+    dockerfile: resources/docker/Dockerfile.cgo
+    dry_run: true
+    username: jeffail
+    password:
+      from_secret: docker_password
+  when:
+    event: [ pull_request ]
+    ref:
+      exclude:
+      - refs/tags/*-rc*
+
+- name: docker-dr
+  image: plugins/docker
+  settings:
+    repo: jeffail/benthos
+    dockerfile: resources/docker/Dockerfile
+    dry_run: true
+    username: jeffail
+    password:
+      from_secret: docker_password
+  when:
+    event: [ pull_request ]
+    ref:
+      exclude:
+      - refs/tags/*-rc*
+
 # Edge deployment (push a docker image with the edge tag)
 
 - name: docker-cgo-edge
@@ -28,7 +60,7 @@ steps:
     password:
       from_secret: docker_password
   when:
-    event: [ push, pull_request ]
+    event: [ push ]
     ref:
       exclude:
       - refs/tags/*-rc*
@@ -43,7 +75,7 @@ steps:
     password:
       from_secret: docker_password
   when:
-    event: [ push, pull_request ]
+    event: [ push ]
     ref:
       exclude:
       - refs/tags/*-rc*
