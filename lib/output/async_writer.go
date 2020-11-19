@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
@@ -215,7 +216,7 @@ func (w *AsyncWriter) loop() {
 				}
 			} else {
 				mSent.Incr(1)
-				mPartsSent.Incr(int64(ts.Payload.Len()))
+				mPartsSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
 				mBytesSent.Incr(int64(message.GetAllBytesLen(ts.Payload)))
 				mLatency.Timing(latency)
 				w.log.Tracef("Successfully wrote %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)

@@ -4,6 +4,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -122,7 +123,7 @@ func (i *Inproc) loop() {
 			mSent.Incr(1)
 			if ts.Payload != nil {
 				mPartsSendSucc.Incr(int64(ts.Payload.Len()))
-				mPartsSent.Incr(int64(ts.Payload.Len()))
+				mPartsSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
 			}
 		case <-i.closeChan:
 			return

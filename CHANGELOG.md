@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- The `output.sent` metric now properly represents the number of individual messages sent even after archiving batches.
 - Fixed a case where metric processors in streams mode pipelines and dynamic components would hang.
 - Sync responses of >1 payloads should now get a correct rfc1341 multipart header.
 - The `cassandra` output now correctly marshals float and double values.

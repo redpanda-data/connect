@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -296,7 +297,7 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 	h.mSendSucc.Incr(1)
 	h.mPartsSendSucc.Incr(int64(ts.Payload.Len()))
 	h.mSent.Incr(1)
-	h.mPartsSent.Incr(int64(ts.Payload.Len()))
+	h.mPartsSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
 	h.mGetSendSucc.Incr(1)
 
 	select {
@@ -367,7 +368,7 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 		h.mSendSucc.Incr(1)
 		h.mPartsSendSucc.Incr(int64(ts.Payload.Len()))
 		h.mSent.Incr(1)
-		h.mPartsSent.Incr(int64(ts.Payload.Len()))
+		h.mPartsSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
 	}
 }
 
@@ -419,7 +420,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 			h.mSendSucc.Incr(1)
 			h.mPartsSendSucc.Incr(int64(ts.Payload.Len()))
 			h.mSent.Incr(1)
-			h.mPartsSent.Incr(int64(ts.Payload.Len()))
+			h.mPartsSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
 		}
 
 		if werr != nil {

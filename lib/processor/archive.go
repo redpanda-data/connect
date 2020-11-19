@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -351,6 +352,7 @@ func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 		d.mErr.Incr(1)
 	} else {
 		d.mSucc.Incr(1)
+		newPart = batch.WithCollapsedCount(newPart, msg.Len())
 		newMsg.SetAll([]types.Part{newPart})
 	}
 	for _, s := range spans {

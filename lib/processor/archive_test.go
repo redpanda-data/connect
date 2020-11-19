@@ -9,10 +9,12 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/require"
 )
 
 func TestArchiveBadAlgo(t *testing.T) {
@@ -90,6 +92,7 @@ func TestArchiveTar(t *testing.T) {
 		i++
 	}
 
+	require.Equal(t, 5, batch.CollapsedCount(msgs[0].Get(0)))
 	if !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected output: %s != %s", act, exp)
 	}
@@ -145,6 +148,7 @@ func TestArchiveZip(t *testing.T) {
 		act = append(act, newPartBuf.Bytes())
 	}
 
+	require.Equal(t, 5, batch.CollapsedCount(msgs[0].Get(0)))
 	if !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected output: %s != %s", act, exp)
 	}
@@ -177,6 +181,7 @@ func TestArchiveLines(t *testing.T) {
 		t.Fatal("More parts than expected")
 	}
 
+	require.Equal(t, 5, batch.CollapsedCount(msgs[0].Get(0)))
 	exp := [][]byte{
 		[]byte(`hello world first part
 hello world second part
@@ -214,6 +219,7 @@ func TestArchiveJSONArray(t *testing.T) {
 		t.Fatal("More parts than expected")
 	}
 
+	require.Equal(t, 5, batch.CollapsedCount(msgs[0].Get(0)))
 	exp := [][]byte{[]byte(
 		`[{"foo":"bar"},5,"testing 123",["nested","array"],true]`,
 	)}

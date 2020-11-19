@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPolicyNoop(t *testing.T) {
@@ -44,9 +45,12 @@ func TestPolicyBasic(t *testing.T) {
 	conf.ByteSize = 0
 
 	pol, err := NewPolicy(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		pol.CloseAsync()
+		require.NoError(t, pol.WaitForClose(time.Second))
+	})
 
 	if v := pol.UntilNext(); v >= 0 {
 		t.Errorf("Non-negative period: %v", v)
@@ -92,6 +96,12 @@ func TestPolicyPeriod(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	t.Cleanup(func() {
+		pol.CloseAsync()
+		require.NoError(t, pol.WaitForClose(time.Second))
+	})
+
 	if pol.Add(message.NewPart(nil)) {
 		t.Error("Unexpected batch ready")
 	}
@@ -123,6 +133,11 @@ func TestPolicySize(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	t.Cleanup(func() {
+		pol.CloseAsync()
+		require.NoError(t, pol.WaitForClose(time.Second))
+	})
+
 	exp := [][]byte{[]byte("foo bar"), []byte("baz qux")}
 
 	if pol.Add(message.NewPart(exp[0])) {
@@ -151,6 +166,11 @@ func TestPolicyCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	t.Cleanup(func() {
+		pol.CloseAsync()
+		require.NoError(t, pol.WaitForClose(time.Second))
+	})
+
 	exp := [][]byte{[]byte("foo"), []byte("bar")}
 
 	if pol.Add(message.NewPart(exp[0])) {
@@ -178,6 +198,11 @@ func TestPolicyCheckAdvanced(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	t.Cleanup(func() {
+		pol.CloseAsync()
+		require.NoError(t, pol.WaitForClose(time.Second))
+	})
 
 	exp := [][]byte{[]byte("foo"), []byte("bar"), []byte("baz")}
 
@@ -215,6 +240,11 @@ func TestPolicyCondition(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	t.Cleanup(func() {
+		pol.CloseAsync()
+		require.NoError(t, pol.WaitForClose(time.Second))
+	})
+
 	exp := [][]byte{[]byte("foo"), []byte("bar")}
 
 	if pol.Add(message.NewPart(exp[0])) {
@@ -246,36 +276,27 @@ func TestPolicyArchived(t *testing.T) {
 	conf.Processors = append(conf.Processors, procConf)
 
 	pol, err := NewPolicy(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		pol.CloseAsync()
+		require.NoError(t, pol.WaitForClose(time.Second))
+	})
 
 	exp := [][]byte{[]byte("foo\nbar")}
 
-	if pol.Add(message.NewPart([]byte("foo"))) {
-		t.Error("Unexpected batch")
-	}
-	if exp, act := 1, pol.Count(); exp != act {
-		t.Errorf("Wrong count: %v != %v", act, exp)
-	}
-	if !pol.Add(message.NewPart([]byte("bar"))) {
-		t.Error("Expected batch")
-	}
-	if exp, act := 2, pol.Count(); exp != act {
-		t.Errorf("Wrong count: %v != %v", act, exp)
-	}
+	assert.False(t, pol.Add(message.NewPart([]byte("foo"))))
+	assert.Equal(t, 1, pol.Count())
+
+	assert.True(t, pol.Add(message.NewPart([]byte("bar"))))
+	assert.Equal(t, 2, pol.Count())
 
 	msg := pol.Flush()
-	if !reflect.DeepEqual(exp, message.GetAllBytes(msg)) {
-		t.Errorf("Wrong result: %s != %s", message.GetAllBytes(msg), exp)
-	}
-	if exp, act := 0, pol.Count(); exp != act {
-		t.Errorf("Wrong count: %v != %v", act, exp)
-	}
+	assert.Equal(t, exp, message.GetAllBytes(msg))
+	assert.Equal(t, 0, pol.Count())
 
-	if msg = pol.Flush(); msg != nil {
-		t.Error("Non-nil empty flush")
-	}
+	msg = pol.Flush()
+	assert.Nil(t, msg)
 }
 
 func TestPolicySplit(t *testing.T) {
@@ -292,6 +313,11 @@ func TestPolicySplit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	t.Cleanup(func() {
+		pol.CloseAsync()
+		require.NoError(t, pol.WaitForClose(time.Second))
+	})
 
 	exp := [][]byte{[]byte("foo"), []byte("bar")}
 
@@ -335,6 +361,52 @@ func TestPolicySplitAny(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	t.Cleanup(func() {
+		pol.CloseAsync()
+		require.NoError(t, pol.WaitForClose(time.Second))
+	})
+
+	if pol.Add(message.NewPart([]byte("foo"))) {
+		t.Error("Unexpected batch")
+	}
+	if exp, act := 1, pol.Count(); exp != act {
+		t.Errorf("Wrong count: %v != %v", act, exp)
+	}
+	if !pol.Add(message.NewPart([]byte("bar"))) {
+		t.Error("Expected batch")
+	}
+	if exp, act := 2, pol.Count(); exp != act {
+		t.Errorf("Wrong count: %v != %v", act, exp)
+	}
+
+	msgs := pol.FlushAny()
+	assert.Equal(t, 2, len(msgs))
+	assert.Equal(t, 1, msgs[0].Len())
+	assert.Equal(t, 1, msgs[1].Len())
+	assert.Equal(t, "foo", string(msgs[0].Get(0).Get()))
+	assert.Equal(t, "bar", string(msgs[1].Get(0).Get()))
+}
+
+func TestPolicySplitAnyDeprecated(t *testing.T) {
+	conf := NewPolicyConfig()
+	conf.Count = 2
+	conf.ByteSize = 0
+
+	procConf := processor.NewConfig()
+	procConf.Type = processor.TypeSplit
+
+	conf.Processors = append(conf.Processors, procConf)
+
+	pol, err := NewPolicy(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		pol.CloseAsync()
+		require.NoError(t, pol.WaitForClose(time.Second))
+	})
 
 	if pol.Add(message.NewPart([]byte("foo"))) {
 		t.Error("Unexpected batch")
