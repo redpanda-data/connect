@@ -22,6 +22,8 @@ import (
 // NATSStreamConfig contains configuration fields for the NATSStream input type.
 type NATSStreamConfig struct {
 	URLs            []string `json:"urls" yaml:"urls"`
+	Username        string   `json:"username" yaml:"username"`
+	Password        string   `json:"password" yaml:"password"`
 	ClusterID       string   `json:"cluster_id" yaml:"cluster_id"`
 	ClientID        string   `json:"client_id" yaml:"client_id"`
 	QueueID         string   `json:"queue" yaml:"queue"`
@@ -155,6 +157,15 @@ func (n *NATSStream) ConnectWithContext(ctx context.Context) error {
 		n.disconnect()
 	}
 
+	// if The url not contain username/password semantics. e.g. nats://jiang_wei:pass@localhost:4222
+	if (n.conf.Username != "" || n.conf.Password != "") && !strings.Contains(n.urls, "@") {
+		urlSlice := strings.Split(n.urls, "//")
+		if len(urlSlice) == 2 {
+			scheme := urlSlice[0]
+			ipPort := urlSlice[1]
+			n.urls = fmt.Sprintf("%s//%s:%s@%s", scheme, n.conf.Username, n.conf.Password, ipPort)
+		}
+	}
 	natsConn, err := stan.Connect(
 		n.conf.ClusterID,
 		n.conf.ClientID,

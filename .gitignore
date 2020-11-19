@@ -7,3 +7,4 @@ go.sum
 .DS_Store
 TODO.md
 release_notes.md
+.idea

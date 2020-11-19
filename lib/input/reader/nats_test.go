@@ -22,7 +22,7 @@ func TestNewNATSConnect(t *testing.T) {
 
 func TestNatsConnectAuth(t *testing.T)  {
 	conf := NewNATSConfig()
-	conf.UserName = "root"
+	conf.Username = "root"
 	conf.Password = "root"
 	conf.URLs = []string{"nats://127.0.0.1:4222"}
 
