@@ -19,7 +19,7 @@ import (
 // NATSConfig contains configuration fields for the NATS input type.
 type NATSConfig struct {
 	URLs          []string `json:"urls" yaml:"urls"`
-	UserName      string   `json:"user_name" yaml:"username"`
+	Username      string   `json:"username" yaml:"username"`
 	Password      string   `json:"password" yaml:"password"`
 	Subject       string   `json:"subject" yaml:"subject"`
 	QueueID       string   `json:"queue" yaml:"queue"`
