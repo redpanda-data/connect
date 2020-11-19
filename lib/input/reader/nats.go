@@ -90,7 +90,7 @@ func (n *NATS) ConnectWithContext(ctx context.Context) error {
 	var err error
 
 	opts := []nats.Option{}
-	if n.conf.UserName != "" || n.conf.Password != "" {
+	if n.conf.Username != "" || n.conf.Password != "" {
 		opts = append(opts, nats.UserInfo(n.conf.UserName, n.conf.Password))
 	}
 
