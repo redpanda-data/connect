@@ -20,7 +20,12 @@ This output will interpolate functions within the subject field, you
 can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`,
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs."),
+			docs.FieldCommon(
+				"urls",
+				"A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.",
+				[]string{"nats://127.0.0.1:4222"},
+				[]string{"nats://username:password@127.0.0.1:4222"},
+			),
 			docs.FieldCommon("subject", "The subject to publish to.").SupportsInterpolation(false),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		},

@@ -47,6 +47,16 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 Type: `array`  
 Default: `["nats://127.0.0.1:4222"]`  
 
+```yaml
+# Examples
+
+urls:
+  - nats://127.0.0.1:4222
+
+urls:
+  - nats://username:password@127.0.0.1:4222
+```
+
 ### `cluster_id`
 
 The cluster ID to publish to.

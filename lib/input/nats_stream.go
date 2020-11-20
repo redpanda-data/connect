@@ -42,7 +42,12 @@ You can access these metadata fields using
 		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldDeprecated("batching"),
-			docs.FieldCommon("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"nats://127.0.0.1:4222"}),
+			docs.FieldCommon(
+				"urls",
+				"A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.",
+				[]string{"nats://127.0.0.1:4222"},
+				[]string{"nats://username:password@127.0.0.1:4222"},
+			),
 			docs.FieldCommon("cluster_id", "The ID of the cluster to consume from."),
 			docs.FieldCommon("client_id", "A client ID to connect as."),
 			docs.FieldCommon("queue", "The queue to consume from."),

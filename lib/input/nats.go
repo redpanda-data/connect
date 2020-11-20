@@ -27,7 +27,12 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"nats://127.0.0.1:4222"}),
+			docs.FieldCommon(
+				"urls",
+				"A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.",
+				[]string{"nats://127.0.0.1:4222"},
+				[]string{"nats://username:password@127.0.0.1:4222"},
+			),
 			docs.FieldCommon("queue", "The queue to consume from."),
 			docs.FieldCommon("subject", "A subject to consume from."),
 			docs.FieldAdvanced("prefetch_count", "The maximum number of messages to pull at a time."),

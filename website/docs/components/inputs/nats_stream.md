@@ -100,6 +100,9 @@ Default: `["nats://127.0.0.1:4222"]`
 
 urls:
   - nats://127.0.0.1:4222
+
+urls:
+  - nats://username:password@127.0.0.1:4222
 ```
 
 ### `cluster_id`
