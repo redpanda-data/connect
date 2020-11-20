@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.34.0 - 2020-11-20
+
 ### New
 
 - New field `format` added to `logger` supporting `json` and `logfmt`.
