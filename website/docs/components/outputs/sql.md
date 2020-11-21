@@ -96,6 +96,7 @@ Batches can be formed at both the input and output level. You can find out more
 
 <Tabs defaultValue="Table Insert (MySQL)" values={[
 { label: 'Table Insert (MySQL)', value: 'Table Insert (MySQL)', },
+{ label: 'Table Insert (PostgreSQL)', value: 'Table Insert (PostgreSQL)', },
 ]}>
 
 <TabItem value="Table Insert (MySQL)">
@@ -110,6 +111,28 @@ output:
     driver: mysql
     data_source_name: foouser:foopassword@tcp(localhost:3306)/foodb
     query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
+    args:
+      - ${! json("document.foo") }
+      - ${! json("document.bar") }
+      - ${! meta("kafka_topic") }
+    batching:
+      count: 500
+```
+
+</TabItem>
+
+<TabItem value="Table Insert (PostgreSQL)">
+
+
+The following example inserts rows into the table footable with the columns foo,
+bar and baz populated with values extracted from messages:
+
+```yaml
+output:
+  sql:
+    driver: mysql
+    data_source_name: foouser:foopassword@tcp(localhost:3306)/foodb
+    query: "INSERT INTO footable (foo, bar, baz) VALUES ($1, $2, $3);"
     args:
       - ${! json("document.foo") }
       - ${! json("document.bar") }
