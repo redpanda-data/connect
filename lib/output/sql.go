@@ -79,6 +79,25 @@ output:
       count: 500
 `,
 			},
+			{
+				Title: "Table Insert (PostgreSQL)",
+				Summary: `
+The following example inserts rows into the table footable with the columns foo,
+bar and baz populated with values extracted from messages:`,
+				Config: `
+output:
+  sql:
+    driver: postgresql
+    data_source_name: postgres://foouser:foopassword@localhost:5432/foodb?sslmode=disable
+    query: "INSERT INTO footable (foo, bar, baz) VALUES ($1, $2, $3);"
+    args:
+      - ${! json("document.foo") }
+      - ${! json("document.bar") }
+      - ${! meta("kafka_topic") }
+    batching:
+      count: 500
+`,
+			},
 		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(

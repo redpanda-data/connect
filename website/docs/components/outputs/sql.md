@@ -120,7 +120,6 @@ output:
 ```
 
 </TabItem>
-
 <TabItem value="Table Insert (PostgreSQL)">
 
 
@@ -130,8 +129,8 @@ bar and baz populated with values extracted from messages:
 ```yaml
 output:
   sql:
-    driver: mysql
-    data_source_name: foouser:foopassword@tcp(localhost:3306)/foodb
+    driver: postgresql
+    data_source_name: postgres://foouser:foopassword@localhost:5432/foodb?sslmode=disable
     query: "INSERT INTO footable (foo, bar, baz) VALUES ($1, $2, $3);"
     args:
       - ${! json("document.foo") }
