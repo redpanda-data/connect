@@ -16,8 +16,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-The kafka output type writes a batch of messages to Kafka brokers and waits for
-acknowledgement before propagating it back to the input.
+The kafka output type writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
 
 
 <Tabs defaultValue="common" values={[
@@ -79,6 +78,7 @@ output:
     max_msg_bytes: 1000000
     timeout: 5s
     target_version: 1.0.0
+    retry_as_batch: false
     batching:
       count: 0
       byte_size: 0
@@ -95,13 +95,17 @@ output:
 </TabItem>
 </Tabs>
 
-The config field `ack_replicas` determines whether we wait for
-acknowledgement from all replicas or just a single broker.
+The config field `ack_replicas` determines whether we wait for acknowledgement from all replicas or just a single broker.
 
-Both the `key` and `topic` fields can be dynamically set using
-function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
-When sending batched messages these interpolations are performed per message
-part.
+Both the `key` and `topic` fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
+
+### Strict Ordering and Retries
+
+When strict ordering is required for messages written to topic partitions it is important to ensure that both the field `max_in_flight` is set to `1` and that the field `retry_as_batch` is set to `true`.
+
+You must also ensure that failed batches are never rerouted back to the same output. This can be done by setting the field `max_retries` to `0` and `backoff.max_elapsed_time` to empty, which will apply back pressure indefinitely until the batch is sent successfully.
+
+However, this also means that manual intervention will eventually be required in cases where the batch cannot be sent due to configuration problems such as an incorrect `max_msg_bytes` estimate. A less strict but automated alternative would be to route failed batches to a dead letter queue using a [`try` broker](/docs/components/outputs/try), but this would allow subsequent batches to be delivered in the meantime whilst those failed batches are dealt with.
 
 ## Performance
 
@@ -393,6 +397,14 @@ The version of the Kafka protocol to use.
 
 Type: `string`  
 Default: `"1.0.0"`  
+
+### `retry_as_batch`
+
+When enabled forces an entire batch of messages to be retried if any individual message fails on a send, otherwise only the individual messages that failed are retried. Disabling this helps to reduce message duplicates during intermittent errors, but also makes it impossible to guarantee strict ordering of messages.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `batching`
 

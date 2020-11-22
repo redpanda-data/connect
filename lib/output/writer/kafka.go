@@ -41,6 +41,7 @@ type KafkaConfig struct {
 	SASL           sasl.Config `json:"sasl" yaml:"sasl"`
 	MaxInFlight    int         `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config `json:",inline" yaml:",inline"`
+	RetryAsBatch   bool               `json:"retry_as_batch" yaml:"retry_as_batch"`
 	Batching       batch.PolicyConfig `json:"batching" yaml:"batching"`
 	StaticHeaders  map[string]string  `json:"static_headers" yaml:"static_headers"`
 
@@ -72,6 +73,7 @@ func NewKafkaConfig() KafkaConfig {
 		SASL:                 sasl.NewConfig(),
 		MaxInFlight:          1,
 		Config:               rConf,
+		RetryAsBatch:         false,
 		Batching:             batch.NewPolicyConfig(),
 	}
 }
@@ -300,15 +302,15 @@ func (k *Kafka) Connect() error {
 	return err
 }
 
-// WriteWithContext will attempt to write a message to Kafka, wait for
-// acknowledgement, and returns an error if applicable.
-func (k *Kafka) WriteWithContext(ctx context.Context, msg types.Message) error {
-	return k.Write(msg)
-}
-
 // Write will attempt to write a message to Kafka, wait for acknowledgement, and
 // returns an error if applicable.
 func (k *Kafka) Write(msg types.Message) error {
+	return k.WriteWithContext(context.Background(), msg)
+}
+
+// WriteWithContext will attempt to write a message to Kafka, wait for
+// acknowledgement, and returns an error if applicable.
+func (k *Kafka) WriteWithContext(ctx context.Context, msg types.Message) error {
 	k.connMut.RLock()
 	producer := k.producer
 	version := k.version
@@ -339,7 +341,7 @@ func (k *Kafka) Write(msg types.Message) error {
 
 	err := producer.SendMessages(msgs)
 	for err != nil {
-		if pErrs, ok := err.(sarama.ProducerErrors); ok {
+		if pErrs, ok := err.(sarama.ProducerErrors); !k.conf.RetryAsBatch && ok {
 			if len(pErrs) == 0 {
 				break
 			}
@@ -368,7 +370,11 @@ func (k *Kafka) Write(msg types.Message) error {
 		if tNext == backoff.Stop {
 			return err
 		}
-		<-time.After(tNext)
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(tNext):
+		}
 
 		// Recheck connection is alive
 		k.connMut.RLock()

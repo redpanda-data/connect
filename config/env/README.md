@@ -823,6 +823,7 @@ OUTPUT_KAFKA_MAX_IN_FLIGHT                            = 1
 OUTPUT_KAFKA_MAX_MSG_BYTES                            = 1000000
 OUTPUT_KAFKA_MAX_RETRIES                              = 0
 OUTPUT_KAFKA_PARTITIONER                              = fnv1a_hash
+OUTPUT_KAFKA_RETRY_AS_BATCH                           = false
 OUTPUT_KAFKA_ROUND_ROBIN_PARTITIONS                   = false
 OUTPUT_KAFKA_SASL_ACCESS_TOKEN
 OUTPUT_KAFKA_SASL_ENABLED                             = false

@@ -980,6 +980,7 @@ output:
           max_msg_bytes: ${OUTPUT_KAFKA_MAX_MSG_BYTES:1000000}
           max_retries: ${OUTPUT_KAFKA_MAX_RETRIES:0}
           partitioner: ${OUTPUT_KAFKA_PARTITIONER:fnv1a_hash}
+          retry_as_batch: ${OUTPUT_KAFKA_RETRY_AS_BATCH:false}
           round_robin_partitions: ${OUTPUT_KAFKA_ROUND_ROBIN_PARTITIONS:false}
           sasl:
             access_token: ${OUTPUT_KAFKA_SASL_ACCESS_TOKEN}

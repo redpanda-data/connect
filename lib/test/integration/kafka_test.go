@@ -149,6 +149,7 @@ output:
     addresses: [ %v ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
+    retry_as_batch: $VAR3
     batching:
       count: $OUTPUT_BATCH_COUNT
 
@@ -180,6 +181,7 @@ input:
 			t, template,
 			testOptVarOne(""),
 			testOptVarTwo("1"),
+			testOptVarThree("false"),
 		)
 
 		t.Run("checkpointed", func(t *testing.T) {
@@ -188,6 +190,17 @@ input:
 				t, template,
 				testOptVarOne(""),
 				testOptVarTwo("1000"),
+				testOptVarThree("false"),
+			)
+		})
+
+		t.Run("retry as batch", func(t *testing.T) {
+			t.Parallel()
+			suiteExt.Run(
+				t, template,
+				testOptVarOne(""),
+				testOptVarTwo("1"),
+				testOptVarThree("true"),
 			)
 		})
 
@@ -200,6 +213,7 @@ input:
 				}),
 				testOptVarOne(""),
 				testOptVarTwo("1"),
+				testOptVarThree("false"),
 			)
 
 			t.Run("checkpointed", func(t *testing.T) {
@@ -211,6 +225,7 @@ input:
 					}),
 					testOptVarOne(""),
 					testOptVarTwo("1000"),
+					testOptVarThree("false"),
 				)
 			})
 		})
@@ -222,6 +237,7 @@ input:
 			t, template,
 			testOptVarOne(":0"),
 			testOptVarTwo("1"),
+			testOptVarThree("false"),
 		)
 
 		t.Run("checkpointed", func(t *testing.T) {
@@ -230,6 +246,7 @@ input:
 				t, template,
 				testOptVarOne(":0"),
 				testOptVarTwo("1000"),
+				testOptVarThree("false"),
 			)
 		})
 
@@ -244,6 +261,7 @@ input:
 				}),
 				testOptSleepAfterInput(time.Second*3),
 				testOptVarTwo("1"),
+				testOptVarThree("false"),
 			)
 
 			t.Run("checkpointed", func(t *testing.T) {
@@ -257,6 +275,7 @@ input:
 					}),
 					testOptSleepAfterInput(time.Second*3),
 					testOptVarTwo("1000"),
+					testOptVarThree("false"),
 				)
 			})
 		})

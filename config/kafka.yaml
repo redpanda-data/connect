@@ -71,6 +71,7 @@ output:
     max_msg_bytes: 1000000
     max_retries: 0
     partitioner: fnv1a_hash
+    retry_as_batch: false
     sasl:
       access_token: ""
       enabled: false
