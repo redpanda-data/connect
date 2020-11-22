@@ -138,7 +138,7 @@ const features = [
     description: (
       <>
         <p>
-          Most stream processing tasks are actually just boring transformations, glueing APIs together, and multiplexing. Benthos specializes in these tasks, letting you focus on the more exciting features of your architecture.
+          Benthos solves common data engineering tasks such as transformations, integrations, and multiplexing with declarative configuration. This allows you to easily and incrementally adapt your data pipelines as requirements change, letting you focus on the more exciting stuff.
         </p>
         <p>
           It comes armed with a wide range of <a href="/docs/components/processors/about">processors</a>, a <a href="/docs/guides/bloblang/about">lit mapping language</a>, stateless <a href="/docs/configuration/windowed_processing">windowed processing capabilities</a> and an <a href="/blobfish">industry leading mascot</a>.
@@ -152,8 +152,7 @@ const features = [
     description: (
       <>
         <p>
-          Benthos is able to glue a wide range of <a href="/docs/components/inputs/about">sources</a> and <a href="/docs/components/outputs/about">sinks</a> together
-          and hook into a variety of <a href="/docs/components/processors/sql">databases</a>, <a href="/docs/components/processors/cache">caches</a>, <a href="/docs/components/processors/http">HTTP APIs</a>, <a href="/docs/components/processors/lambda">lambdas</a> and more, enabling you to seamlessly deploy it without changing your existing infrastructure.
+          Benthos is able to glue a wide range of <a href="/docs/components/inputs/about">sources</a> and <a href="/docs/components/outputs/about">sinks</a> together and hook into a variety of <a href="/docs/components/processors/sql">databases</a>, <a href="/docs/components/processors/cache">caches</a>, <a href="/docs/components/processors/http">HTTP APIs</a>, <a href="/docs/components/processors/lambda">lambdas</a> and <a href="/docs/components/processors/about">more</a>, enabling you to seamlessly drop it into your existing infrastructure.
         </p>
         <p>
           Working with disparate APIs and services can be a daunting task, doubly so in a streaming data context. With Benthos it's possible to break these tasks down and automatically parallelize them as <a href="/cookbooks/enrichments">a streaming workflow</a>.
@@ -184,13 +183,10 @@ const features = [
     description: (
       <>
         <p>
-          Sometimes the components that come with Benthos aren't enough.
-          Luckily, Benthos has been designed to be easily plugged with whatever
-          components you need.
+          Sometimes the components that come with Benthos aren't enough. Luckily, Benthos has been designed to be easily plugged with whatever components you need.
         </p>
         <p>
-          You can either write plugins <a href="https://github.com/benthosdev/benthos-plugin-example">directly in Go (recommended)</a> or you can
-          configure Benthos to run your plugin as a <a href="/docs/components/processors/subprocess">subprocess</a>.
+          You can either write plugins <a href="https://github.com/benthosdev/benthos-plugin-example">directly in Go (recommended)</a> or you can have Benthos run your plugin as a <a href="/docs/components/processors/subprocess">subprocess</a>.
         </p>
       </>
     ),
@@ -219,7 +215,7 @@ function Home() {
     <Layout
       title={`${siteConfig.title}`}
       description="The stream processor for mundane tasks"
-      keywords={["benthos","stream processor","event processor","go","golang"]}>
+      keywords={["benthos","stream processor","data engineering","ETL","ELT","event processor","go","golang"]}>
       <header className={classnames('hero', styles.heroBanner)}>
         <div className="container">
           <div className="row">

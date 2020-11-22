@@ -3,7 +3,7 @@ title: Getting Started
 description: Getting started with Benthos
 ---
 
-Woops! You fell for the marketing babble. Let's try and get through this together.
+Woops! You fell for the marketing hype. Let's try and get through this together.
 
 <div style={{textAlign: 'center'}}><img style={{maxWidth: '300px'}} src="/img/teacher-blob.svg" /></div>
 
