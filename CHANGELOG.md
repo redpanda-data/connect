@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - New field `retry_as_batch` added to the `kafka` output to assist in ensuring message ordering through retries.
 
+### Fixed
+
+- Add `Content-Type` headers in streams API responses
+
 ## 3.34.0 - 2020-11-20
 
 ### New
