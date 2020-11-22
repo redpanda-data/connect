@@ -91,6 +91,7 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		var resBytes []byte
 		if resBytes, serverErr = json.Marshal(infos); serverErr == nil {
+			w.Header().Set("Content-Type", "application/json")
 			w.Write(resBytes)
 		}
 		return
@@ -299,6 +300,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+			w.Header().Set("Content-Type", "application/json")
 			w.Write(bodyBytes)
 		}
 	case "PUT":
@@ -370,6 +372,7 @@ func (m *Type) HandleStreamStats(w http.ResponseWriter, r *http.Request) {
 				obj.SetP(time.Duration(v).String(), k+"_readable")
 			}
 			obj.SetP(fmt.Sprintf("%v", uptime), "uptime")
+			w.Header().Set("Content-Type", "application/json")
 			w.Write(obj.Bytes())
 		}
 	default:
