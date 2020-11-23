@@ -181,6 +181,31 @@ type objectTargetReader interface {
 
 //------------------------------------------------------------------------------
 
+func deleteObjectAckFn(
+	s3Client *s3.S3,
+	bucket, key string,
+	delete bool,
+	prev codec.ReaderAckFn,
+) codec.ReaderAckFn {
+	return func(ctx context.Context, err error) error {
+		if prev != nil {
+			if aerr := prev(ctx, err); aerr != nil {
+				return aerr
+			}
+		}
+		if !delete {
+			return nil
+		}
+		_, aerr := s3Client.DeleteObjectWithContext(ctx, &s3.DeleteObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(key),
+		})
+		return aerr
+	}
+}
+
+//------------------------------------------------------------------------------
+
 type staticTargetReader struct {
 	pending    []*objectTarget
 	s3         *s3.S3
@@ -210,7 +235,8 @@ func newStaticTargetReader(
 		conf: conf,
 	}
 	for _, obj := range output.Contents {
-		staticKeys.pending = append(staticKeys.pending, newObjectTarget(*obj.Key, conf.Bucket, nil))
+		ackFn := deleteObjectAckFn(s3Client, conf.Bucket, *obj.Key, conf.DeleteObjects, nil)
+		staticKeys.pending = append(staticKeys.pending, newObjectTarget(*obj.Key, conf.Bucket, ackFn))
 	}
 	if len(output.Contents) > 0 {
 		staticKeys.startAfter = output.Contents[len(output.Contents)-1].Key
@@ -234,7 +260,8 @@ func (s *staticTargetReader) Pop(ctx context.Context) (*objectTarget, error) {
 			return nil, fmt.Errorf("failed to list objects: %v", err)
 		}
 		for _, obj := range output.Contents {
-			s.pending = append(s.pending, newObjectTarget(*obj.Key, s.conf.Bucket, nil))
+			ackFn := deleteObjectAckFn(s.s3, s.conf.Bucket, *obj.Key, s.conf.DeleteObjects, nil)
+			s.pending = append(s.pending, newObjectTarget(*obj.Key, s.conf.Bucket, ackFn))
 		}
 		if len(output.Contents) > 0 {
 			s.startAfter = output.Contents[len(output.Contents)-1].Key
@@ -258,6 +285,7 @@ type sqsTargetReader struct {
 	conf AWSS3Config
 	log  log.Modular
 	sqs  *sqs.SQS
+	s3   *s3.S3
 
 	pending []*objectTarget
 }
@@ -265,9 +293,10 @@ type sqsTargetReader struct {
 func newSQSTargetReader(
 	conf AWSS3Config,
 	log log.Modular,
+	s3 *s3.S3,
 	sqs *sqs.SQS,
 ) *sqsTargetReader {
-	return &sqsTargetReader{conf, log, sqs, nil}
+	return &sqsTargetReader{conf, log, sqs, s3, nil}
 }
 
 func (s *sqsTargetReader) Pop(ctx context.Context) (*objectTarget, error) {
@@ -415,28 +444,31 @@ messageLoop:
 			ackOnce := sync.Once{}
 			pendingObjects = append(pendingObjects, newObjectTarget(
 				object.key, object.bucket,
-				func(ctx context.Context, err error) (aerr error) {
-					if err != nil {
-						nackOnce.Do(func() {
-							// Prevent future acks from triggering a delete.
-							atomic.StoreInt32(&pendingAcks, -1)
+				deleteObjectAckFn(
+					s.s3, object.bucket, object.key, s.conf.DeleteObjects,
+					func(ctx context.Context, err error) (aerr error) {
+						if err != nil {
+							nackOnce.Do(func() {
+								// Prevent future acks from triggering a delete.
+								atomic.StoreInt32(&pendingAcks, -1)
 
-							// It's possible that this is called for one message
-							// at the _exact_ same time as another is acked, but
-							// if the acked message triggers a full ack of the
-							// origin message then even though it shouldn't be
-							// possible, it's also harmless.
-							aerr = s.nackSQSMessage(ctx, sqsMsg)
-						})
-					} else {
-						ackOnce.Do(func() {
-							if atomic.AddInt32(&pendingAcks, -1) == 0 {
-								aerr = s.ackSQSMessage(ctx, sqsMsg)
-							}
-						})
-					}
-					return
-				},
+								// It's possible that this is called for one message
+								// at the _exact_ same time as another is acked, but
+								// if the acked message triggers a full ack of the
+								// origin message then even though it shouldn't be
+								// possible, it's also harmless.
+								aerr = s.nackSQSMessage(ctx, sqsMsg)
+							})
+						} else {
+							ackOnce.Do(func() {
+								if atomic.AddInt32(&pendingAcks, -1) == 0 {
+									aerr = s.ackSQSMessage(ctx, sqsMsg)
+								}
+							})
+						}
+						return
+					},
+				),
 			))
 		}
 	}
@@ -527,7 +559,7 @@ func newAmazonS3(
 
 func (a *awsS3) getTargetReader(ctx context.Context) (objectTargetReader, error) {
 	if a.sqs != nil {
-		return newSQSTargetReader(a.conf, a.log, a.sqs), nil
+		return newSQSTargetReader(a.conf, a.log, a.s3, a.sqs), nil
 	}
 	return newStaticTargetReader(ctx, a.conf, a.log, a.s3)
 }

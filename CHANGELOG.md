@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Add `Content-Type` headers in streams API responses
+- Field `delete_objects` is now respected by the experimental `aws_s3` input.
 
 ## 3.34.0 - 2020-11-20
 
