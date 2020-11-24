@@ -54,6 +54,17 @@ func NewReaderConfig() ReaderConfig {
 // the underlying io.ReadCloser is fully consumed.
 type ReaderAckFn func(context.Context, error) error
 
+func ackOnce(fn ReaderAckFn) ReaderAckFn {
+	var once sync.Once
+	return func(ctx context.Context, err error) error {
+		var ackErr error
+		once.Do(func() {
+			ackErr = fn(ctx, err)
+		})
+		return ackErr
+	}
+}
+
 // Reader is a codec type that reads message parts from a source.
 type Reader interface {
 	Next(context.Context) (types.Part, ReaderAckFn, error)
@@ -126,7 +137,12 @@ func autoCodec(conf ReaderConfig) ReaderConstructor {
 			codec = "csv-gzip"
 		case ".tar":
 			codec = "tar"
-		case ".tar.gz", ".tar.gzip", ".tgz":
+		case ".tgz":
+			codec = "tar-gzip"
+		}
+		if strings.HasSuffix(path, ".tar.gzip") {
+			codec = "tar-gzip"
+		} else if strings.HasSuffix(path, ".tar.gz") {
 			codec = "tar-gzip"
 		}
 
@@ -173,10 +189,10 @@ type linesReader struct {
 	buf       *bufio.Scanner
 	r         io.ReadCloser
 	sourceAck ReaderAckFn
+	ackOnce   sync.Once
 
 	mut      sync.Mutex
 	finished bool
-	total    int32
 	pending  int32
 }
 
@@ -188,7 +204,7 @@ func newLinesReader(conf ReaderConfig, r io.ReadCloser, ackFn ReaderAckFn) (Read
 	return &linesReader{
 		buf:       scanner,
 		r:         r,
-		sourceAck: ackFn,
+		sourceAck: ackOnce(ackFn),
 	}, nil
 }
 
@@ -213,7 +229,6 @@ func (a *linesReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error)
 
 	if a.buf.Scan() {
 		a.pending++
-		a.total++
 
 		bytesCopy := make([]byte, len(a.buf.Bytes()))
 		copy(bytesCopy, a.buf.Bytes())
@@ -234,7 +249,7 @@ func (a *linesReader) Close(ctx context.Context) error {
 	if !a.finished {
 		a.sourceAck(ctx, errors.New("service shutting down"))
 	}
-	if a.pending == 0 && a.total > 0 {
+	if a.pending == 0 {
 		a.sourceAck(ctx, nil)
 	}
 	return a.r.Close()
@@ -251,7 +266,6 @@ type csvReader struct {
 
 	mut      sync.Mutex
 	finished bool
-	total    int32
 	pending  int32
 }
 
@@ -272,7 +286,7 @@ func newCSVReader(r io.ReadCloser, ackFn ReaderAckFn) (Reader, error) {
 	return &csvReader{
 		scanner:   scanner,
 		r:         r,
-		sourceAck: ackFn,
+		sourceAck: ackOnce(ackFn),
 		headers:   headersCopy,
 	}, nil
 }
@@ -305,7 +319,6 @@ func (a *csvReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
 	}
 
 	a.pending++
-	a.total++
 
 	obj := make(map[string]interface{}, len(records))
 	for i, r := range records {
@@ -325,7 +338,7 @@ func (a *csvReader) Close(ctx context.Context) error {
 	if !a.finished {
 		a.sourceAck(ctx, errors.New("service shutting down"))
 	}
-	if a.pending == 0 && a.total > 0 {
+	if a.pending == 0 {
 		a.sourceAck(ctx, nil)
 	}
 	return a.r.Close()
@@ -340,7 +353,6 @@ type customDelimReader struct {
 
 	mut      sync.Mutex
 	finished bool
-	total    int32
 	pending  int32
 }
 
@@ -374,7 +386,7 @@ func newCustomDelimReader(conf ReaderConfig, r io.ReadCloser, delim string, ackF
 	return &customDelimReader{
 		buf:       scanner,
 		r:         r,
-		sourceAck: ackFn,
+		sourceAck: ackOnce(ackFn),
 	}, nil
 }
 
@@ -399,7 +411,6 @@ func (a *customDelimReader) Next(ctx context.Context) (types.Part, ReaderAckFn, 
 
 	if a.buf.Scan() {
 		a.pending++
-		a.total++
 
 		bytesCopy := make([]byte, len(a.buf.Bytes()))
 		copy(bytesCopy, a.buf.Bytes())
@@ -420,7 +431,7 @@ func (a *customDelimReader) Close(ctx context.Context) error {
 	if !a.finished {
 		a.sourceAck(ctx, errors.New("service shutting down"))
 	}
-	if a.pending == 0 && a.total > 0 {
+	if a.pending == 0 {
 		a.sourceAck(ctx, nil)
 	}
 	return a.r.Close()
@@ -435,7 +446,6 @@ type tarReader struct {
 
 	mut      sync.Mutex
 	finished bool
-	total    int32
 	pending  int32
 }
 
@@ -443,7 +453,7 @@ func newTarReader(path string, r io.ReadCloser, ackFn ReaderAckFn) (Reader, erro
 	return &tarReader{
 		buf:       tar.NewReader(r),
 		r:         r,
-		sourceAck: ackFn,
+		sourceAck: ackOnce(ackFn),
 	}, nil
 }
 
@@ -474,7 +484,6 @@ func (a *tarReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
 			return nil, nil, err
 		}
 		a.pending++
-		a.total++
 		return message.NewPart(fileBuf.Bytes()), a.ack, nil
 	}
 
@@ -491,7 +500,7 @@ func (a *tarReader) Close(ctx context.Context) error {
 	if !a.finished {
 		a.sourceAck(ctx, errors.New("service shutting down"))
 	}
-	if a.pending == 0 && a.total > 0 {
+	if a.pending == 0 {
 		a.sourceAck(ctx, nil)
 	}
 	return a.r.Close()

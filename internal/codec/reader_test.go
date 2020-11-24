@@ -22,8 +22,28 @@ func (n noopCloser) Close() error {
 	return nil
 }
 
-func testReaderOrdered(t *testing.T, codec, path string, buf io.ReadCloser, expected ...string) {
+func testReaderSuite(t *testing.T, codec, path string, data []byte, expected ...string) {
+	t.Run("close before reading", func(t *testing.T) {
+		buf := noopCloser{bytes.NewReader(data)}
+
+		ctor, err := GetReader(codec, NewReaderConfig())
+		require.NoError(t, err)
+
+		ack := errors.New("default err")
+
+		r, err := ctor(path, buf, func(ctx context.Context, err error) error {
+			ack = err
+			return nil
+		})
+		require.NoError(t, err)
+
+		assert.NoError(t, r.Close(context.Background()))
+		assert.EqualError(t, ack, "service shutting down")
+	})
+
 	t.Run("acks ordered reads", func(t *testing.T) {
+		buf := noopCloser{bytes.NewReader(data)}
+
 		ctor, err := GetReader(codec, NewReaderConfig())
 		require.NoError(t, err)
 
@@ -55,10 +75,10 @@ func testReaderOrdered(t *testing.T, codec, path string, buf io.ReadCloser, expe
 			assert.Equal(t, k, string(v), "Must not corrupt previous reads")
 		}
 	})
-}
 
-func testReaderUnordered(t *testing.T, codec, path string, buf io.ReadCloser, expected ...string) {
 	t.Run("acks unordered reads", func(t *testing.T) {
+		buf := noopCloser{bytes.NewReader(data)}
+
 		ctor, err := GetReader(codec, NewReaderConfig())
 		require.NoError(t, err)
 
@@ -95,42 +115,87 @@ func testReaderUnordered(t *testing.T, codec, path string, buf io.ReadCloser, ex
 			assert.Equal(t, k, string(v), "Must not corrupt previous reads")
 		}
 	})
+
+	if len(expected) > 0 {
+		t.Run("nacks unordered reads", func(t *testing.T) {
+			buf := noopCloser{bytes.NewReader(data)}
+
+			ctor, err := GetReader(codec, NewReaderConfig())
+			require.NoError(t, err)
+
+			ack := errors.New("default err")
+			exp := errors.New("real err")
+
+			r, err := ctor(path, buf, func(ctx context.Context, err error) error {
+				ack = err
+				return nil
+			})
+			require.NoError(t, err)
+
+			allReads := map[string][]byte{}
+
+			var ackFns []ReaderAckFn
+			for _, exp := range expected {
+				p, ackFn, err := r.Next(context.Background())
+				require.NoError(t, err)
+				ackFns = append(ackFns, ackFn)
+				assert.Equal(t, exp, string(p.Get()))
+				allReads[string(p.Get())] = p.Get()
+			}
+
+			_, _, err = r.Next(context.Background())
+			assert.EqualError(t, err, "EOF")
+			assert.NoError(t, r.Close(context.Background()))
+
+			for i, ackFn := range ackFns {
+				if i == 0 {
+					require.NoError(t, ackFn(context.Background(), exp))
+				} else {
+					require.NoError(t, ackFn(context.Background(), nil))
+				}
+			}
+
+			assert.EqualError(t, ack, exp.Error())
+
+			for k, v := range allReads {
+				assert.Equal(t, k, string(v), "Must not corrupt previous reads")
+			}
+		})
+	}
 }
 
 func TestLinesReader(t *testing.T) {
-	buf := noopCloser{bytes.NewReader([]byte("foo\nbar\nbaz"))}
-	testReaderOrdered(t, "lines", "", buf, "foo", "bar", "baz")
+	data := []byte("foo\nbar\nbaz")
+	testReaderSuite(t, "lines", "", data, "foo", "bar", "baz")
 
-	buf = noopCloser{bytes.NewReader([]byte("foo\nbar\nbaz"))}
-	testReaderUnordered(t, "lines", "", buf, "foo", "bar", "baz")
+	data = []byte("")
+	testReaderSuite(t, "lines", "", data)
 }
 
 func TestCSVReader(t *testing.T) {
-	buf := noopCloser{bytes.NewReader([]byte("col1,col2,col3\nfoo1,bar1,baz1\nfoo2,bar2,baz2\nfoo3,bar3,baz3"))}
-	testReaderOrdered(
-		t, "csv", "", buf,
+	data := []byte("col1,col2,col3\nfoo1,bar1,baz1\nfoo2,bar2,baz2\nfoo3,bar3,baz3")
+	testReaderSuite(
+		t, "csv", "", data,
 		`{"col1":"foo1","col2":"bar1","col3":"baz1"}`,
 		`{"col1":"foo2","col2":"bar2","col3":"baz2"}`,
 		`{"col1":"foo3","col2":"bar3","col3":"baz3"}`,
 	)
 
-	buf = noopCloser{bytes.NewReader([]byte("col1,col2,col3\nfoo1,bar1,baz1\nfoo2,bar2,baz2\nfoo3,bar3,baz3"))}
-	testReaderUnordered(
-		t, "csv", "", buf,
-		`{"col1":"foo1","col2":"bar1","col3":"baz1"}`,
-		`{"col1":"foo2","col2":"bar2","col3":"baz2"}`,
-		`{"col1":"foo3","col2":"bar3","col3":"baz3"}`,
-	)
+	data = []byte("col1,col2,col3")
+	testReaderSuite(t, "csv", "", data)
 }
 
 func TestAutoReader(t *testing.T) {
-	buf := noopCloser{bytes.NewReader([]byte("col1,col2,col3\nfoo1,bar1,baz1\nfoo2,bar2,baz2\nfoo3,bar3,baz3"))}
-	testReaderOrdered(
-		t, "auto", "foo.csv", buf,
+	data := []byte("col1,col2,col3\nfoo1,bar1,baz1\nfoo2,bar2,baz2\nfoo3,bar3,baz3")
+	testReaderSuite(
+		t, "auto", "foo.csv", data,
 		`{"col1":"foo1","col2":"bar1","col3":"baz1"}`,
 		`{"col1":"foo2","col2":"bar2","col3":"baz2"}`,
 		`{"col1":"foo3","col2":"bar3","col3":"baz3"}`,
 	)
+
+	data = []byte("col1,col2,col3")
+	testReaderSuite(t, "auto", "foo.csv", data)
 }
 
 func TestCSVGzipReader(t *testing.T) {
@@ -139,17 +204,8 @@ func TestCSVGzipReader(t *testing.T) {
 	zw.Write([]byte("col1,col2,col3\nfoo1,bar1,baz1\nfoo2,bar2,baz2\nfoo3,bar3,baz3"))
 	zw.Close()
 
-	buf := noopCloser{bytes.NewReader(gzipBuf.Bytes())}
-	testReaderOrdered(
-		t, "csv-gzip", "", buf,
-		`{"col1":"foo1","col2":"bar1","col3":"baz1"}`,
-		`{"col1":"foo2","col2":"bar2","col3":"baz2"}`,
-		`{"col1":"foo3","col2":"bar3","col3":"baz3"}`,
-	)
-
-	buf = noopCloser{bytes.NewReader(gzipBuf.Bytes())}
-	testReaderUnordered(
-		t, "csv-gzip", "", buf,
+	testReaderSuite(
+		t, "csv-gzip", "", gzipBuf.Bytes(),
 		`{"col1":"foo1","col2":"bar1","col3":"baz1"}`,
 		`{"col1":"foo2","col2":"bar2","col3":"baz2"}`,
 		`{"col1":"foo3","col2":"bar3","col3":"baz3"}`,
@@ -157,19 +213,16 @@ func TestCSVGzipReader(t *testing.T) {
 }
 
 func TestAllBytesReader(t *testing.T) {
-	buf := noopCloser{bytes.NewReader([]byte("foo\nbar\nbaz"))}
-	testReaderOrdered(t, "all-bytes", "", buf, "foo\nbar\nbaz")
-
-	buf = noopCloser{bytes.NewReader([]byte("foo\nbar\nbaz"))}
-	testReaderUnordered(t, "all-bytes", "", buf, "foo\nbar\nbaz")
+	data := []byte("foo\nbar\nbaz")
+	testReaderSuite(t, "all-bytes", "", data, "foo\nbar\nbaz")
 }
 
 func TestDelimReader(t *testing.T) {
-	buf := noopCloser{bytes.NewReader([]byte("fooXbarXbaz"))}
-	testReaderOrdered(t, "delim:X", "", buf, "foo", "bar", "baz")
+	data := []byte("fooXbarXbaz")
+	testReaderSuite(t, "delim:X", "", data, "foo", "bar", "baz")
 
-	buf = noopCloser{bytes.NewReader([]byte("fooXbarXbaz"))}
-	testReaderUnordered(t, "delim:X", "", buf, "foo", "bar", "baz")
+	data = []byte("")
+	testReaderSuite(t, "delim:X", "", data)
 }
 
 func TestTarReader(t *testing.T) {
@@ -196,13 +249,8 @@ func TestTarReader(t *testing.T) {
 	}
 	require.NoError(t, tw.Close())
 
-	inputBytes := tarBuf.Bytes()
-
-	buf := noopCloser{bytes.NewReader(inputBytes)}
-	testReaderOrdered(t, "tar", "", buf, input...)
-
-	buf = noopCloser{bytes.NewReader(inputBytes)}
-	testReaderUnordered(t, "tar", "", buf, input...)
+	testReaderSuite(t, "tar", "", tarBuf.Bytes(), input...)
+	testReaderSuite(t, "auto", "foo.tar", tarBuf.Bytes(), input...)
 }
 
 func TestTarGzipReader(t *testing.T) {
@@ -232,11 +280,8 @@ func TestTarGzipReader(t *testing.T) {
 	require.NoError(t, tw.Close())
 	require.NoError(t, zw.Close())
 
-	inputBytes := gzipBuf.Bytes()
-
-	buf := noopCloser{bytes.NewReader(inputBytes)}
-	testReaderOrdered(t, "tar-gzip", "", buf, input...)
-
-	buf = noopCloser{bytes.NewReader(inputBytes)}
-	testReaderUnordered(t, "tar-gzip", "", buf, input...)
+	testReaderSuite(t, "tar-gzip", "", gzipBuf.Bytes(), input...)
+	testReaderSuite(t, "auto", "foo.tar.gz", gzipBuf.Bytes(), input...)
+	testReaderSuite(t, "auto", "foo.tar.gzip", gzipBuf.Bytes(), input...)
+	testReaderSuite(t, "auto", "foo.tgz", gzipBuf.Bytes(), input...)
 }
