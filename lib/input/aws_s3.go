@@ -98,6 +98,11 @@ You can access these metadata fields using [function interpolation](/docs/config
 				docs.FieldCommon("key_path", "A [dot path](/docs/configuration/field_paths) whereby object keys are found in SQS messages."),
 				docs.FieldCommon("bucket_path", "A [dot path](/docs/configuration/field_paths) whereby the bucket name can be found in SQS messages."),
 				docs.FieldCommon("envelope_path", "A [dot path](/docs/configuration/field_paths) of a field to extract an enveloped JSON payload for further extracting the key and bucket from SQS messages. This is specifically useful when subscribing an SQS queue to an SNS topic that receives bucket events.", "Message"),
+				docs.FieldAdvanced(
+					"delay_period",
+					"An optional period of time to wait from when a notification was originally sent to when the target key download is attempted.",
+					"10s", "5m",
+				),
 				docs.FieldAdvanced("max_messages", "The maximum number of SQS messages to consume from each request."),
 			),
 		),
@@ -117,6 +122,7 @@ type AWSS3SQSConfig struct {
 	EnvelopePath string `json:"envelope_path" yaml:"envelope_path"`
 	KeyPath      string `json:"key_path" yaml:"key_path"`
 	BucketPath   string `json:"bucket_path" yaml:"bucket_path"`
+	DelayPeriod  string `json:"delay_period" yaml:"delay_period"`
 	MaxMessages  int64  `json:"max_messages" yaml:"max_messages"`
 }
 
@@ -128,6 +134,7 @@ func NewAWSS3SQSConfig() AWSS3SQSConfig {
 		EnvelopePath: "",
 		KeyPath:      "Records.*.s3.object.key",
 		BucketPath:   "Records.*.s3.bucket.name",
+		DelayPeriod:  "",
 		MaxMessages:  10,
 	}
 }
@@ -159,19 +166,20 @@ func NewAWSS3Config() AWSS3Config {
 //------------------------------------------------------------------------------
 
 type objectTarget struct {
-	key    string
-	bucket string
+	key            string
+	bucket         string
+	notificationAt time.Time
 
 	ackFn func(context.Context, error) error
 }
 
-func newObjectTarget(key, bucket string, ackFn codec.ReaderAckFn) *objectTarget {
+func newObjectTarget(key, bucket string, notificationAt time.Time, ackFn codec.ReaderAckFn) *objectTarget {
 	if ackFn == nil {
 		ackFn = func(context.Context, error) error {
 			return nil
 		}
 	}
-	return &objectTarget{key, bucket, ackFn}
+	return &objectTarget{key, bucket, notificationAt, ackFn}
 }
 
 type objectTargetReader interface {
@@ -236,7 +244,7 @@ func newStaticTargetReader(
 	}
 	for _, obj := range output.Contents {
 		ackFn := deleteObjectAckFn(s3Client, conf.Bucket, *obj.Key, conf.DeleteObjects, nil)
-		staticKeys.pending = append(staticKeys.pending, newObjectTarget(*obj.Key, conf.Bucket, ackFn))
+		staticKeys.pending = append(staticKeys.pending, newObjectTarget(*obj.Key, conf.Bucket, time.Time{}, ackFn))
 	}
 	if len(output.Contents) > 0 {
 		staticKeys.startAfter = output.Contents[len(output.Contents)-1].Key
@@ -261,7 +269,7 @@ func (s *staticTargetReader) Pop(ctx context.Context) (*objectTarget, error) {
 		}
 		for _, obj := range output.Contents {
 			ackFn := deleteObjectAckFn(s.s3, s.conf.Bucket, *obj.Key, s.conf.DeleteObjects, nil)
-			s.pending = append(s.pending, newObjectTarget(*obj.Key, s.conf.Bucket, ackFn))
+			s.pending = append(s.pending, newObjectTarget(*obj.Key, s.conf.Bucket, time.Time{}, ackFn))
 		}
 		if len(output.Contents) > 0 {
 			s.startAfter = output.Contents[len(output.Contents)-1].Key
@@ -409,6 +417,9 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*objectTarget, e
 	output, err := s.sqs.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(s.conf.SQS.URL),
 		MaxNumberOfMessages: aws.Int64(s.conf.SQS.MaxMessages),
+		AttributeNames: []*string{
+			aws.String("SentTimestamp"),
+		},
 	})
 	if err != nil {
 		return nil, err
@@ -419,6 +430,13 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*objectTarget, e
 messageLoop:
 	for _, sqsMsg := range output.Messages {
 		sqsMsg := sqsMsg
+
+		var notificationAt time.Time
+		if rcvd, ok := sqsMsg.Attributes["SentTimestamp"]; ok && rcvd != nil {
+			if millis, _ := strconv.Atoi(*rcvd); millis > 0 {
+				notificationAt = time.Unix(0, int64(millis*1e6))
+			}
+		}
 
 		if sqsMsg.Body == nil {
 			addDudFn(sqsMsg)
@@ -443,7 +461,7 @@ messageLoop:
 		for _, object := range objects {
 			ackOnce := sync.Once{}
 			pendingObjects = append(pendingObjects, newObjectTarget(
-				object.key, object.bucket,
+				object.key, object.bucket, notificationAt,
 				deleteObjectAckFn(
 					s.s3, object.bucket, object.key, s.conf.DeleteObjects,
 					func(ctx context.Context, err error) (aerr error) {
@@ -451,6 +469,8 @@ messageLoop:
 							nackOnce.Do(func() {
 								// Prevent future acks from triggering a delete.
 								atomic.StoreInt32(&pendingAcks, -1)
+
+								s.log.Debugf("Pushing SQS notification back into the queue due to error: %v\n", err)
 
 								// It's possible that this is called for one message
 								// at the _exact_ same time as another is acked, but
@@ -523,6 +543,8 @@ type awsS3 struct {
 	s3      *s3.S3
 	sqs     *sqs.SQS
 
+	gracePeriod time.Duration
+
 	objectMut sync.Mutex
 	object    *pendingObject
 
@@ -531,9 +553,10 @@ type awsS3 struct {
 }
 
 type pendingObject struct {
-	target  *objectTarget
-	obj     *s3.GetObjectOutput
-	scanner codec.Reader
+	target    *objectTarget
+	obj       *s3.GetObjectOutput
+	extracted int
+	scanner   codec.Reader
 }
 
 // NewAmazonS3 creates a new Amazon S3 bucket reader.Type.
@@ -553,6 +576,11 @@ func newAmazonS3(
 	var err error
 	if s.objectScannerCtor, err = codec.GetReader(conf.Codec, codec.NewReaderConfig()); err != nil {
 		return nil, err
+	}
+	if len(conf.SQS.DelayPeriod) > 0 {
+		if s.gracePeriod, err = time.ParseDuration(conf.SQS.DelayPeriod); err != nil {
+			return nil, fmt.Errorf("failed to parse grace period: %w", err)
+		}
 	}
 	return s, nil
 }
@@ -640,6 +668,17 @@ func (a *awsS3) getObjectTarget(ctx context.Context) (*pendingObject, error) {
 		return nil, err
 	}
 
+	if a.gracePeriod > 0 && !target.notificationAt.IsZero() {
+		waitFor := a.gracePeriod - time.Since(target.notificationAt)
+		if waitFor > 0 && waitFor < a.gracePeriod {
+			select {
+			case <-time.After(waitFor):
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+	}
+
 	obj, err := a.s3.GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(target.bucket),
 		Key:    aws.String(target.key),
@@ -691,6 +730,7 @@ func (a *awsS3) ReadWithContext(ctx context.Context) (msg types.Message, ackFn r
 scanLoop:
 	for {
 		if p, scnAckFn, err = object.scanner.Next(ctx); err == nil {
+			object.extracted++
 			break scanLoop
 		}
 		a.object = nil
@@ -699,6 +739,9 @@ scanLoop:
 		}
 		if err = object.scanner.Close(ctx); err != nil {
 			a.log.Warnf("Failed to close bucket object scanner cleanly: %v\n", err)
+		}
+		if object.extracted == 0 {
+			a.log.Debugf("Extracted zero messages from key %v\n", object.target.key)
 		}
 		if object, err = a.getObjectTarget(ctx); err != nil {
 			return

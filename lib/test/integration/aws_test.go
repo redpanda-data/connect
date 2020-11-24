@@ -211,6 +211,7 @@ input:
       url: http://localhost:$PORT_TWO/queue/queue-$ID
       key_path: Records.*.s3.object.key
       endpoint: http://localhost:$PORT_TWO
+      delay_period: 1s
     credentials:
       id: xxxxx
       secret: xxxxx
