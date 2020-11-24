@@ -265,6 +265,15 @@ func New(
 	for k := range conf.Outputs {
 		t.outputs[k] = nil
 	}
+	for k := range conf.RateLimits {
+		t.rateLimits[k] = nil
+	}
+	for k, conf := range conf.Plugins {
+		if _, exists := pluginSpecs[conf.Type]; !exists {
+			continue
+		}
+		t.plugins[k] = nil
+	}
 
 	for k, conf := range conf.Inputs {
 		newInput, err := input.New(conf, t, log.NewModule(".resource.input."+k), metrics.Namespaced(stats, "resource.input."+k))

@@ -303,10 +303,10 @@ deployment you can do so with the `lint` subcommand:
 For example, imagine we have a config `foo.yaml`, where we intend to read from
 AMQP, but there is a typo in our config struct:
 
-```yaml
+```text
 input:
   type: amqp_0_9
-  amqp_0_9:
+  amqq_0_9:
     url: amqp://guest:guest@rabbitmqserver:5672/
 ```
 
