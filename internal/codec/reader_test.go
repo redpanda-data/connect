@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -108,6 +109,51 @@ func testReaderSuite(t *testing.T, codec, path string, data []byte, expected ...
 		for _, ackFn := range ackFns {
 			require.NoError(t, ackFn(context.Background(), nil))
 		}
+
+		assert.NoError(t, ack)
+
+		for k, v := range allReads {
+			assert.Equal(t, k, string(v), "Must not corrupt previous reads")
+		}
+	})
+
+	t.Run("acks parallel reads", func(t *testing.T) {
+		buf := noopCloser{bytes.NewReader(data)}
+
+		ctor, err := GetReader(codec, NewReaderConfig())
+		require.NoError(t, err)
+
+		ack := errors.New("default err")
+
+		r, err := ctor(path, buf, func(ctx context.Context, err error) error {
+			ack = err
+			return nil
+		})
+		require.NoError(t, err)
+
+		allReads := map[string][]byte{}
+
+		wg := sync.WaitGroup{}
+		wg.Add(len(expected))
+
+		for _, exp := range expected {
+			exp := exp
+			p, ackFn, err := r.Next(context.Background())
+			require.NoError(t, err)
+			assert.Equal(t, exp, string(p.Get()))
+			allReads[string(p.Get())] = p.Get()
+
+			go func() {
+				defer wg.Done()
+				require.NoError(t, ackFn(context.Background(), nil))
+			}()
+		}
+
+		_, _, err = r.Next(context.Background())
+		assert.EqualError(t, err, "EOF")
+
+		wg.Wait()
+		assert.NoError(t, r.Close(context.Background()))
 
 		assert.NoError(t, ack)
 

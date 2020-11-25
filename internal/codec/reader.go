@@ -237,8 +237,10 @@ func (a *linesReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error)
 	err := a.buf.Err()
 	if err == nil {
 		err = io.EOF
+		a.finished = true
+	} else {
+		a.sourceAck(ctx, err)
 	}
-	a.finished = true
 	return nil, nil, err
 }
 
@@ -314,6 +316,8 @@ func (a *csvReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
 	if err != nil {
 		if err == io.EOF {
 			a.finished = true
+		} else {
+			a.sourceAck(ctx, err)
 		}
 		return nil, nil, err
 	}
@@ -419,8 +423,10 @@ func (a *customDelimReader) Next(ctx context.Context) (types.Part, ReaderAckFn, 
 	err := a.buf.Err()
 	if err == nil {
 		err = io.EOF
+		a.finished = true
+	} else {
+		a.sourceAck(ctx, err)
 	}
-	a.finished = true
 	return nil, nil, err
 }
 
@@ -479,8 +485,8 @@ func (a *tarReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
 	_, err := a.buf.Next()
 	if err == nil {
 		fileBuf := bytes.Buffer{}
-		_, err = fileBuf.ReadFrom(a.buf)
-		if err != nil {
+		if _, err = fileBuf.ReadFrom(a.buf); err != nil {
+			a.sourceAck(ctx, err)
 			return nil, nil, err
 		}
 		a.pending++
@@ -489,6 +495,8 @@ func (a *tarReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
 
 	if err == io.EOF {
 		a.finished = true
+	} else {
+		a.sourceAck(ctx, err)
 	}
 	return nil, nil, err
 }

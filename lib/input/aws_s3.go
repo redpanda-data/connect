@@ -201,7 +201,7 @@ func deleteObjectAckFn(
 				return aerr
 			}
 		}
-		if !delete {
+		if !delete || err != nil {
 			return nil
 		}
 		_, aerr := s3Client.DeleteObjectWithContext(ctx, &s3.DeleteObjectInput{
@@ -295,6 +295,8 @@ type sqsTargetReader struct {
 	sqs  *sqs.SQS
 	s3   *s3.S3
 
+	nextRequest time.Time
+
 	pending []*objectTarget
 }
 
@@ -304,7 +306,7 @@ func newSQSTargetReader(
 	s3 *s3.S3,
 	sqs *sqs.SQS,
 ) *sqsTargetReader {
-	return &sqsTargetReader{conf, log, sqs, s3, nil}
+	return &sqsTargetReader{conf, log, sqs, s3, time.Time{}, nil}
 }
 
 func (s *sqsTargetReader) Pop(ctx context.Context) (*objectTarget, error) {
@@ -313,13 +315,26 @@ func (s *sqsTargetReader) Pop(ctx context.Context) (*objectTarget, error) {
 		s.pending = s.pending[1:]
 		return t, nil
 	}
+
+	if !s.nextRequest.IsZero() {
+		if until := time.Until(s.nextRequest); until > 0 {
+			select {
+			case <-time.After(until):
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+	}
+
 	var err error
 	if s.pending, err = s.readSQSEvents(ctx); err != nil {
 		return nil, err
 	}
 	if len(s.pending) == 0 {
+		s.nextRequest = time.Now().Add(time.Millisecond * 500)
 		return nil, types.ErrTimeout
 	}
+	s.nextRequest = time.Time{}
 	t := s.pending[0]
 	s.pending = s.pending[1:]
 	return t, nil
@@ -679,7 +694,7 @@ func (a *awsS3) getObjectTarget(ctx context.Context) (*pendingObject, error) {
 		}
 	}
 
-	obj, err := a.s3.GetObjectWithContext(ctx, &s3.GetObjectInput{
+	obj, err := a.s3.GetObject(&s3.GetObjectInput{
 		Bucket: aws.String(target.bucket),
 		Key:    aws.String(target.key),
 	})
