@@ -69,6 +69,7 @@ input:
       key_path: Records.*.s3.object.key
       bucket_path: Records.*.s3.bucket.name
       envelope_path: ""
+      delay_period: ""
       max_messages: 10
 ```
 
@@ -299,6 +300,22 @@ Default: `""`
 # Examples
 
 envelope_path: Message
+```
+
+### `sqs.delay_period`
+
+An optional period of time to wait from when a notification was originally sent to when the target key download is attempted.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+delay_period: 10s
+
+delay_period: 5m
 ```
 
 ### `sqs.max_messages`

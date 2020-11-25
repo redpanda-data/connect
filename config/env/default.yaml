@@ -71,6 +71,7 @@ input:
           region: ${INPUT_AWS_S3_REGION:eu-west-1}
           sqs:
             bucket_path: ${INPUT_AWS_S3_SQS_BUCKET_PATH:Records.*.s3.bucket.name}
+            delay_period: ${INPUT_AWS_S3_SQS_DELAY_PERIOD}
             endpoint: ${INPUT_AWS_S3_SQS_ENDPOINT}
             envelope_path: ${INPUT_AWS_S3_SQS_ENVELOPE_PATH}
             key_path: ${INPUT_AWS_S3_SQS_KEY_PATH:Records.*.s3.object.key}

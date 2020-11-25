@@ -102,6 +102,7 @@ INPUT_AWS_S3_FORCE_PATH_STYLE_URLS                   = false
 INPUT_AWS_S3_PREFIX
 INPUT_AWS_S3_REGION                                  = eu-west-1
 INPUT_AWS_S3_SQS_BUCKET_PATH                         = Records.*.s3.bucket.name
+INPUT_AWS_S3_SQS_DELAY_PERIOD
 INPUT_AWS_S3_SQS_ENDPOINT
 INPUT_AWS_S3_SQS_ENVELOPE_PATH
 INPUT_AWS_S3_SQS_KEY_PATH                            = Records.*.s3.object.key
