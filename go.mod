@@ -41,6 +41,7 @@ require (
 	github.com/hashicorp/go-immutable-radix v1.3.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/influxdata/go-syslog/v3 v3.0.0
+	github.com/influxdata/influxdb1-client v0.0.0-20200827194710-b269163b24ab
 	github.com/itchyny/gojq v0.11.2
 	github.com/jhump/protoreflect v1.7.0
 	github.com/jmespath/go-jmespath v0.4.0

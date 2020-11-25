@@ -1,0 +1,27 @@
+version: '2'
+services:
+  influxdb:
+    image: influxdb:1.8
+    ports:
+      - 8086:8086
+    volumes:
+      - influxdb-volume:/var/lib/influxdb
+    environment:
+      - INFLUXDB_DB=db0
+      - INFLUXDB_ADMIN_USER=admin
+      - INFLUXDB_ADMIN_PASSWORD=admin
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - 3000:3000
+    volumes:
+      - grafana-volume:/var/lib/grafana
+      - ./grafana-provisioning/:/etc/grafana/provisioning
+    depends_on:
+      - influxdb
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+volumes:
+  influxdb-volume:
+  grafana-volume:
