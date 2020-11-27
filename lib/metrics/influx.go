@@ -55,6 +55,7 @@ func NewInfluxConfig() InfluxConfig {
 		Address: "http://localhost:8086",
 		DB:      "db",
 
+		Prefix:       "benthos.",
 		Precision:    "s",
 		Interval:     "1m",
 		PingInterval: "20s",
@@ -255,6 +256,10 @@ func (i *Influx) publish() error {
 			i.log.Errorf("problem with point %v", err)
 		}
 		points.AddPoint(p)
+	}
+
+	for _, v := range points.Points() {
+		i.log.Debugf("publishing %s\n", v.String())
 	}
 
 	return i.client.Write(points)
