@@ -69,9 +69,6 @@ type Influx struct {
 	client      client.Client
 	batchConfig client.BatchPointsConfig
 
-	tagKeys   []string
-	tagValues []string
-
 	interval     time.Duration
 	pingInterval time.Duration
 	timeout      time.Duration
@@ -96,13 +93,6 @@ func NewInflux(config Config, opts ...func(Type)) (Type, error) {
 
 	for _, opt := range opts {
 		opt(i)
-	}
-
-	i.tagKeys = make([]string, 0, len(config.Influx.Tags))
-	i.tagValues = make([]string, 0, len(config.Influx.Tags))
-	for k, v := range config.Influx.Tags {
-		i.tagKeys = append(i.tagKeys, k)
-		i.tagValues = append(i.tagValues, v)
 	}
 
 	var err error
