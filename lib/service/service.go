@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"os"
@@ -48,6 +49,22 @@ func OptSetServiceName(name string) func() {
 func OptOverrideConfigDefaults(fn func(c *config.Type)) func() {
 	return func() {
 		fn(&conf)
+	}
+}
+
+var apiOpts []api.OptFunc
+
+// OptWithAPIMiddleware adds an HTTP middleware to the Benthos API.
+func OptWithAPIMiddleware(m func(http.Handler) http.Handler) func() {
+	return func() {
+		apiOpts = append(apiOpts, api.OptWithMiddleware(m))
+	}
+}
+
+// OptWithAPITLS replaces the default TLS options of the Benthos API server.
+func OptWithAPITLS(c *tls.Config) func() {
+	return func() {
+		apiOpts = append(apiOpts, api.OptWithTLS(c))
 	}
 }
 
@@ -206,7 +223,7 @@ func cmdService(
 		logger.Warnf("Failed to generate sanitised config: %v\n", err)
 	}
 	var httpServer *api.Type
-	if httpServer, err = api.New(Version, DateBuilt, conf.HTTP, sanConf, logger, stats); err != nil {
+	if httpServer, err = api.New(Version, DateBuilt, conf.HTTP, sanConf, logger, stats, apiOpts...); err != nil {
 		logger.Errorf("Failed to initialise API: %v\n", err)
 		return 1
 	}

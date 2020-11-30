@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -40,6 +41,25 @@ func NewConfig() Config {
 
 //------------------------------------------------------------------------------
 
+// OptFunc applies an option to an API type during construction.
+type OptFunc func(t *Type)
+
+// OptWithMiddleware adds an HTTP middleware to the Benthos API.
+func OptWithMiddleware(m func(http.Handler) http.Handler) OptFunc {
+	return func(t *Type) {
+		t.server.Handler = m(t.server.Handler)
+	}
+}
+
+// OptWithTLS replaces the tls options of the HTTP server.
+func OptWithTLS(tls *tls.Config) OptFunc {
+	return func(t *Type) {
+		t.server.TLSConfig = tls
+	}
+}
+
+//------------------------------------------------------------------------------
+
 // Type implements the Benthos HTTP API.
 type Type struct {
 	conf         Config
@@ -64,8 +84,10 @@ func New(
 	wholeConf interface{},
 	log log.Modular,
 	stats metrics.Type,
+	opts ...OptFunc,
 ) (*Type, error) {
 	handler := mux.NewRouter()
+
 	server := &http.Server{
 		Addr:    conf.Address,
 		Handler: handler,
@@ -77,7 +99,6 @@ func New(
 			return nil, fmt.Errorf("failed to parse read timeout string: %v", err)
 		}
 	}
-
 	t := &Type{
 		conf:      conf,
 		endpoints: map[string]string{},
@@ -191,6 +212,10 @@ func New(
 		)
 	}
 
+	for _, opt := range opts {
+		opt(t)
+	}
+
 	return t, nil
 }
 
@@ -223,6 +248,9 @@ func (t *Type) ListenAndServe() error {
 	if !t.conf.Enabled {
 		<-t.ctx.Done()
 		return nil
+	}
+	if t.server.TLSConfig != nil {
+		return t.server.ListenAndServeTLS("", "")
 	}
 	return t.server.ListenAndServe()
 }
