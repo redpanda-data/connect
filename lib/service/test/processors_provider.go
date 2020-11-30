@@ -93,6 +93,32 @@ func confTargetID(jsonPtr string, environment map[string]string) string {
 	return fmt.Sprintf("%v-%v", jsonPtr, environment)
 }
 
+func setEnvironment(vars map[string]string) func() {
+	if vars == nil {
+		return func() {}
+	}
+
+	// Set custom environment vars.
+	ogEnvVars := map[string]string{}
+	for k, v := range vars {
+		if ogV, exists := os.LookupEnv(k); exists {
+			ogEnvVars[k] = ogV
+		}
+		os.Setenv(k, v)
+	}
+
+	// Reset env vars back to original values after config parse.
+	return func() {
+		for k := range vars {
+			if og, exists := ogEnvVars[k]; exists {
+				os.Setenv(k, og)
+			} else {
+				os.Unsetenv(k)
+			}
+		}
+	}
+}
+
 func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]string) (cachedConfig, error) {
 	cacheKey := confTargetID(jsonPtr, environment)
 
@@ -110,12 +136,8 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		}
 	}
 
-	// Reset env vars back to original values after config parse.
-	defer func() {
-		for k, v := range ogEnvVars {
-			os.Setenv(k, v)
-		}
-	}()
+	cleanupEnv := setEnvironment(environment)
+	defer cleanupEnv()
 
 	configBytes, err := config.ReadWithJSONPointers(p.targetPath, true)
 	if err != nil {

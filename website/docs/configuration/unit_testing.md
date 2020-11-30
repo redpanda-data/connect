@@ -56,7 +56,9 @@ Each test is run in complete isolation, including any resources defined by the c
 
 The field `target_processors` is a [JSON Pointer][json-pointer] that identifies the specific processors within the file which should be executed by the test. This allows you to target a specific processor (`/pipeline/processors/0`), or processors within a different section on your config (`/input/broker/inputs/0/processors`) if required.
 
-The field `environment` allows you to define an object of key/value pairs that set environment variables to be evaluated during the parsing of the target config file. These are unique to each test, allowing you to test different environment variable interpolation combinations. Note that these environment variables are not used during the execution of the tests, only during parse time.
+The field `environment` allows you to define an object of key/value pairs that set environment variables to be evaluated during the parsing of the target config file. These are unique to each test, allowing you to test different environment variable interpolation combinations.
+
+> When tests are run in parallel they will NOT retain their environment variables during execution. In order to retain custom environment variables ensure that `parallel` is set to `false`.
 
 The field `input_batch` lists one or more messages to be fed into the targeted processors as a batch. Each message of the batch may have its raw content defined as well as metadata key/value pairs.
 

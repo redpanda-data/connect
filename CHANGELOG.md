@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - Field `delay_period` added to the experimental `aws_s3` input.
 - Added service options for adding API middlewares and specify TLS options for plugin builds.
 
+### Changed
+
+- Unit tests that define environment variables that are run serially (`parallel: false`) will retain those environment variables during execution, as opposed to only at config parse time.
+
 ### Fixed
 
 - Add `Content-Type` headers in streams API responses

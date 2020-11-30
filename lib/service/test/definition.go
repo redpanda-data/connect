@@ -55,11 +55,14 @@ func (d Definition) execute(filepath string, resourcesPaths []string, logger log
 	var totalFailures []CaseFailure
 	if !d.Parallel {
 		for i, c := range d.Cases {
+			cleanupEnv := setEnvironment(c.Environment)
 			failures, err := c.Execute(procsProvider)
 			if err != nil {
+				cleanupEnv()
 				return nil, fmt.Errorf("test case %v failed: %v", i, err)
 			}
 			totalFailures = append(totalFailures, failures...)
+			cleanupEnv()
 		}
 	} else {
 		var g errgroup.Group
