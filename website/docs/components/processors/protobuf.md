@@ -113,4 +113,103 @@ counting backwards starting from -1.
 Type: `array`  
 Default: `[]`  
 
+## Examples
+
+<Tabs defaultValue="JSON to Protobuf" values={[
+{ label: 'JSON to Protobuf', value: 'JSON to Protobuf', },
+{ label: 'Protobuf to JSON', value: 'Protobuf to JSON', },
+]}>
+
+<TabItem value="JSON to Protobuf">
+
+
+If we have the following protobuf definition within a directory called `testing/schema`:
+
+```protobuf
+syntax = "proto3";
+package testing;
+
+import "google/protobuf/timestamp.proto";
+
+message Person {
+  string first_name = 1;
+  string last_name = 2;
+  string full_name = 3;
+  int32 age = 4;
+  int32 id = 5; // Unique ID number for this person.
+  string email = 6;
+
+  google.protobuf.Timestamp last_updated = 7;
+}
+```
+
+And a stream of JSON documents of the form:
+
+```json
+{
+	"firstName": "caleb",
+	"lastName": "quaye",
+	"email": "caleb@myspace.com"
+}
+```
+
+We can convert the documents into protobuf messages with the following config:
+
+```yaml
+pipeline:
+  processors:
+    - protobuf:
+        operator: from_json
+        message: testing.Person
+        import_path: testing/schema
+```
+
+</TabItem>
+<TabItem value="Protobuf to JSON">
+
+
+If we have the following protobuf definition within a directory called `testing/schema`:
+
+```proto
+syntax = "proto3";
+package testing;
+
+import "google/protobuf/timestamp.proto";
+
+message Person {
+  string first_name = 1;
+  string last_name = 2;
+  string full_name = 3;
+  int32 age = 4;
+  int32 id = 5; // Unique ID number for this person.
+  string email = 6;
+
+  google.protobuf.Timestamp last_updated = 7;
+}
+```
+
+And a stream of protobuf messages of the type `Person`, we could convert them into JSON documents of the format:
+
+```json
+{
+	"firstName": "caleb",
+	"lastName": "quaye",
+	"email": "caleb@myspace.com"
+}
+```
+
+With the following config:
+
+```yaml
+pipeline:
+  processors:
+    - protobuf:
+        operator: to_json
+        message: testing.Person
+        import_path: testing/schema
+```
+
+</TabItem>
+</Tabs>
+
 

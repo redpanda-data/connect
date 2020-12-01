@@ -58,6 +58,94 @@ Attempts to create a target protobuf message from a generic JSON structure.`,
 			docs.FieldCommon("import_path", "A path to a .proto file, or directory containing all .proto files required for parsing the target message. If left empty the current directory is used."),
 			partsFieldSpec,
 		},
+		Examples: []docs.AnnotatedExample{
+			{
+				Title: "JSON to Protobuf",
+				Summary: `
+If we have the following protobuf definition within a directory called ` + "`testing/schema`" + `:
+
+` + "```protobuf" + `
+syntax = "proto3";
+package testing;
+
+import "google/protobuf/timestamp.proto";
+
+message Person {
+  string first_name = 1;
+  string last_name = 2;
+  string full_name = 3;
+  int32 age = 4;
+  int32 id = 5; // Unique ID number for this person.
+  string email = 6;
+
+  google.protobuf.Timestamp last_updated = 7;
+}
+` + "```" + `
+
+And a stream of JSON documents of the form:
+
+` + "```json" + `
+{
+	"firstName": "caleb",
+	"lastName": "quaye",
+	"email": "caleb@myspace.com"
+}
+` + "```" + `
+
+We can convert the documents into protobuf messages with the following config:`,
+				Config: `
+pipeline:
+  processors:
+    - protobuf:
+        operator: from_json
+        message: testing.Person
+        import_path: testing/schema
+`,
+			},
+			{
+				Title: "Protobuf to JSON",
+				Summary: `
+If we have the following protobuf definition within a directory called ` + "`testing/schema`" + `:
+
+` + "```protobuf" + `
+syntax = "proto3";
+package testing;
+
+import "google/protobuf/timestamp.proto";
+
+message Person {
+  string first_name = 1;
+  string last_name = 2;
+  string full_name = 3;
+  int32 age = 4;
+  int32 id = 5; // Unique ID number for this person.
+  string email = 6;
+
+  google.protobuf.Timestamp last_updated = 7;
+}
+` + "```" + `
+
+And a stream of protobuf messages of the type ` + "`Person`" + `, we could convert them into JSON documents of the format:
+
+` + "```json" + `
+{
+	"firstName": "caleb",
+	"lastName": "quaye",
+	"email": "caleb@myspace.com"
+}
+` + "```" + `
+
+With the following config:`,
+				Config: `
+pipeline:
+  processors:
+    - protobuf:
+        operator: to_json
+        message: testing.Person
+        import_path: testing/schema
+`,
+			},
+		},
 	}
 }
 
