@@ -1,0 +1,49 @@
+pipeline:
+  processors:
+    - bloblang: |
+        root = {
+          "1": "1",
+          "2": if env("FOO") == "ENABLED" {
+            "foo"
+          },
+          "3": if this.count > 5 {
+            this.count
+          } else { 
+            deleted()
+          },
+          "4": [
+            "1",
+            if env("FOO") == "ENABLED" {
+              "foo"
+            },
+            if this.count > 5 {
+              this.count
+            } else {
+              deleted()
+            },
+            "4"
+          ]
+        }
+
+tests:
+  - name: With foos
+    target_processors: /pipeline/processors
+    environment:
+      FOO: ENABLED
+    input_batch:
+      - content: '{"count":10}'
+      - content: '{"count":3}'
+    output_batches:
+      - - content_equals: '{"1":"1","2":"foo","3":10,"4":["1","foo",10,"4"]}'
+        - content_equals: '{"1":"1","2":"foo","4":["1","foo","4"]}'
+
+  - name: Without foos
+    target_processors: /pipeline/processors
+    environment:
+      FOO: DISABLED
+    input_batch:
+      - content: '{"count":10}'
+      - content: '{"count":3}'
+    output_batches:
+      - - content_equals: '{"1":"1","3":10,"4":["1",10,"4"]}'
+        - content_equals: '{"1":"1","4":["1","4"]}'

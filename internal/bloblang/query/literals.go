@@ -36,13 +36,21 @@ func NewMapLiteral(values [][2]interface{}) (interface{}, error) {
 		case *Literal:
 			values[i][1] = t.Value
 			if !isDynamic {
-				staticValues[key] = t.Value
+				switch t.Value.(type) {
+				case Delete, Nothing:
+				default:
+					staticValues[key] = t.Value
+				}
 			}
 		case Function:
 			isDynamic = true
 		default:
 			if !isDynamic {
-				staticValues[key] = kv[1]
+				switch kv[1].(type) {
+				case Delete, Nothing:
+				default:
+					staticValues[key] = kv[1]
+				}
 			}
 		}
 	}
@@ -87,7 +95,11 @@ func (m *mapLiteral) Exec(ctx FunctionContext) (interface{}, error) {
 			value = kv[1]
 		}
 
-		dynMap[key] = value
+		switch value.(type) {
+		case Delete, Nothing:
+		default:
+			dynMap[key] = value
+		}
 	}
 	return dynMap, nil
 }
@@ -117,43 +129,43 @@ type arrayLiteral struct {
 // values are static then a static []interface{} value is returned. However, if
 // any values are dynamic a Function is returned.
 func NewArrayLiteral(values ...interface{}) interface{} {
+	var expandedValues []interface{}
 	isDynamic := false
-	for i, v := range values {
+	for _, v := range values {
 		switch t := v.(type) {
 		case *Literal:
-			values[i] = t.Value
+			switch t.Value.(type) {
+			case Delete, Nothing:
+			default:
+				expandedValues = append(expandedValues, t.Value)
+			}
+		case Delete, Nothing:
 		case Function:
 			isDynamic = true
+			expandedValues = append(expandedValues, v)
+		default:
+			expandedValues = append(expandedValues, v)
 		}
 	}
 	if !isDynamic {
-		return values
+		return expandedValues
 	}
-	return &arrayLiteral{values}
+	return &arrayLiteral{expandedValues}
 }
 
 func (a *arrayLiteral) Exec(ctx FunctionContext) (interface{}, error) {
-	dynArray := make([]interface{}, len(a.values))
-	var err error
-	for i, v := range a.values {
+	dynArray := make([]interface{}, 0, len(a.values))
+	for _, v := range a.values {
 		if fn, isFunction := v.(Function); isFunction {
-			fnRes, fnErr := fn.Exec(ctx)
-			if fnErr != nil {
-				if recovered, ok := fnErr.(*ErrRecoverable); ok {
-					dynArray[i] = recovered.Recovered
-					err = fnErr
-				}
-				return nil, fnErr
+			var err error
+			if v, err = fn.Exec(ctx); err != nil {
+				return nil, err
 			}
-			dynArray[i] = fnRes
-		} else {
-			dynArray[i] = v
 		}
-	}
-	if err != nil {
-		return nil, &ErrRecoverable{
-			Recovered: dynArray,
-			Err:       err,
+		switch v.(type) {
+		case Delete, Nothing:
+		default:
+			dynArray = append(dynArray, v)
 		}
 	}
 	return dynArray, nil

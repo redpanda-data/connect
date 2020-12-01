@@ -21,6 +21,7 @@ All notable changes to this project will be documented in this file.
 - Field `delete_objects` is now respected by the experimental `aws_s3` input.
 - Fixed a case where resource processors couldn't access rate limit resources.
 - Input files that are valid according to the codec but empty now trigger acknowledgements.
+- Mapping `deleted()` within Bloblang object and array literals now correctly omits the values.
 
 ## 3.34.0 - 2020-11-20
 

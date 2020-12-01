@@ -25,6 +25,8 @@ func TestLiterals(t *testing.T) {
 				[][2]interface{}{
 					{"test1", NewFieldFunction("first")},
 					{"test2", NewFieldFunction("second")},
+					{"deleteme", Delete(nil)},
+					{"donotmapme", Nothing(nil)},
 					{"test3", "static"},
 				},
 			)),
@@ -80,6 +82,8 @@ func TestLiterals(t *testing.T) {
 				[][2]interface{}{
 					{"test1", "static1"},
 					{"test2", "static2"},
+					{"deleteme", Delete(nil)},
+					{"donotmapme", Nothing(nil)},
 					{"test3", "static3"},
 				},
 			)),
@@ -93,7 +97,9 @@ func TestLiterals(t *testing.T) {
 			input: NewArrayLiteral(
 				NewFieldFunction("first"),
 				NewFieldFunction("second"),
+				Delete(nil),
 				"static",
+				Nothing(nil),
 				NewLiteralFunction("static literal"),
 			),
 			value: map[string]interface{}{
@@ -114,7 +120,9 @@ func TestLiterals(t *testing.T) {
 		"static array values": {
 			input: NewArrayLiteral(
 				"static1",
+				Delete(nil),
 				NewLiteralFunction("static2"),
+				Nothing(nil),
 				"static3",
 			),
 			output: []interface{}{
