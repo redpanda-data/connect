@@ -1268,9 +1268,6 @@ metrics:
     push_interval: ${METRICS_PROMETHEUS_PUSH_INTERVAL}
     push_job_name: ${METRICS_PROMETHEUS_PUSH_JOB_NAME:benthos_push}
     push_url: ${METRICS_PROMETHEUS_PUSH_URL}
-    push_basic_auth: ${METRICS_PROMETHEUS_PUSH_URL}
-      username: ${METRICS_PROMETHEUS_PUSH_BASIC_AUTH_USERNAME}
-      password: ${METRICS_PROMETHEUS_PUSH_BASIC_AUTH_PASSWORD}
   statsd:
     address: ${METRICS_STATSD_ADDRESS:localhost:4040}
     flush_period: ${METRICS_STATSD_FLUSH_PERIOD:100ms}
