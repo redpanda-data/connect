@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"sort"
 	"time"
 
@@ -19,7 +20,7 @@ func init() {
 Send metrics to InfluxDB 1.x using the /write endpoint.`,
 		Description: `description goes here`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("address", "host:port combination required to specify influx host."),
+			docs.FieldCommon("url", "(http|udp)://host:port combination required to specify influx host."),
 			docs.FieldCommon("db", "name of the influx database to use."),
 			docs.FieldAdvanced("username", "influx username."),
 			docs.FieldAdvanced("password", "influx password."),
@@ -27,7 +28,6 @@ Send metrics to InfluxDB 1.x using the /write endpoint.`,
 			docs.FieldAdvanced("interval", "how often to send metrics to influx."),
 			docs.FieldAdvanced("ping_interval", "how often to poll health of influx."),
 			docs.FieldAdvanced("timeout", "how long to wait for response from influx for both ping and writing metrics."),
-			docs.FieldAdvanced("protocol", "http or udp influx client. defaults to http."),
 			docs.FieldAdvanced("tags", "tags to add to each metric sent to influx."),
 			pathMappingDocs(true),
 		},
@@ -36,14 +36,13 @@ Send metrics to InfluxDB 1.x using the /write endpoint.`,
 
 // InfluxConfig is config for the influx v2 metrics type.
 type InfluxConfig struct {
-	Address string `json:"address" yaml:"address"`
-	DB      string `json:"db" yaml:"db"`
+	URL string `json:"url" yaml:"url"`
+	DB  string `json:"db" yaml:"db"`
 
 	Interval     string `json:"interval" yaml:"interval"`
 	Password     string `json:"password" yaml:"password"`
 	PingInterval string `json:"ping_interval" yaml:"ping_interval"`
 	Precision    string `json:"precision" yaml:"precision"`
-	Protocol     string `json:"protocol" yaml:"protocol"`
 	Timeout      string `json:"timeout" yaml:"timeout"`
 	Username     string `json:"username" yaml:"username"`
 
@@ -54,15 +53,14 @@ type InfluxConfig struct {
 // NewInfluxConfig creates an InfluxConfig struct with default values.
 func NewInfluxConfig() InfluxConfig {
 	return InfluxConfig{
-		Address: "http://localhost:8086",
-		DB:      "db",
+		URL: "http://localhost:8086",
+		DB:  "db",
 
 		Prefix:       "benthos.",
 		Precision:    "s",
 		Interval:     "1m",
 		PingInterval: "20s",
 		Timeout:      "5s",
-		Protocol:     "http",
 	}
 }
 
@@ -204,18 +202,23 @@ func (i *Influx) GetGaugeVec(path string, n []string) StatGaugeVec {
 func (i *Influx) makeClient() error {
 	var c client.Client
 	var err error
-	if i.config.Protocol == "http" {
+
+	u, err := url.Parse(i.config.URL)
+	if err != nil {
+		return fmt.Errorf("problem parsing url: %s", err)
+	}
+	if u.Scheme == "http" {
 		c, err = client.NewHTTPClient(client.HTTPConfig{
-			Addr:     i.config.Address,
+			Addr:     u.Host,
 			Username: i.config.Username,
 			Password: i.config.Password,
 		})
-	} else if i.config.Protocol == "udp" {
+	} else if u.Scheme == "udp" {
 		c, err = client.NewUDPClient(client.UDPConfig{
-			Addr: i.config.Address,
+			Addr: u.Host,
 		})
 	} else {
-		return fmt.Errorf("protocol needs to be http or udp and is %s", i.config.Protocol)
+		return fmt.Errorf("protocol needs to be http or udp and is %s", u.Scheme)
 	}
 
 	if err == nil {
