@@ -96,6 +96,46 @@ func TestSubprocessWithCat(t *testing.T) {
 	}
 }
 
+func TestSubprocessWithCatBinarySend(t *testing.T) {
+	//t.Skip("disabled for now")
+
+	conf := NewConfig()
+	conf.Type = TypeSubprocess
+	conf.Subprocess.Name = "cat"
+
+	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Skipf("Not sure if this is due to missing executable: %v", err)
+	}
+
+	exp := [][]byte{
+		[]byte(`hello bar world`),
+		[]byte(`hello baz world`),
+		[]byte(`bar`),
+	}
+	msgIn := message.New([][]byte{
+		[]byte(`hello bar world`),
+		[]byte(`hello baz world`),
+		[]byte(`bar`),
+	})
+	msgs, res := proc.ProcessMessage(msgIn)
+	if len(msgs) != 1 {
+		t.Fatal("Wrong count of messages")
+	}
+	if res != nil {
+		t.Fatalf("Non-nil result: %v", res.Error())
+	}
+
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong results: %s != %s", act, exp)
+	}
+
+	proc.CloseAsync()
+	if err := proc.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestSubprocessLineBreaks(t *testing.T) {
 	t.Skip("disabled for now")
 
@@ -188,17 +228,61 @@ func TestSubprocessHappy(t *testing.T) {
 	filePath := testProgram(t, `package main
 
 import (
-	"fmt"
 	"bufio"
-	"os"
+	"encoding/binary"
+	"flag"
+	"fmt"
 	"log"
+	"os"
 	"strings"
 )
 
+func binarySplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF {
+		return 0, nil, nil
+	}
+	if len(data) < 8 {
+		// request more data
+		return 0, nil, nil
+	}
+	l := binary.BigEndian.Uint32(data)
+	bytesToRead := int(l)
+
+	if len(data)-8 >= bytesToRead {
+		return 8 + bytesToRead, data[8 : 8+bytesToRead], nil
+	} else {
+		// request more data
+		return 0, nil, nil
+	}
+}
+
+var stdinFormat *string = flag.String("stdinFormat", "lines", "format to use for input")
+var stdoutFormat *string = flag.String("stdoutFormat", "lines", "format for use for output")
+
 func main() {
+	flag.Parse()
+
 	scanner := bufio.NewScanner(os.Stdin)
+	if *stdinFormat == "binary" {
+		scanner.Split(binarySplitFunc)
+	}
+
+	lenBuf := make([]byte, 8)
 	for scanner.Scan() {
-		fmt.Println(strings.ToUpper(scanner.Text()))
+		res := strings.ToUpper(scanner.Text())
+		switch *stdoutFormat {
+			case "binary":
+				buf := []byte(res)
+				binary.BigEndian.PutUint32(lenBuf, uint32(len(buf)))
+				_, _ = os.Stdout.Write(lenBuf)
+				_, _ = os.Stdout.Write(buf)
+				break
+			case "netstring":
+				fmt.Printf("%d:%s,",len(res),res)
+				break
+			default:
+				fmt.Println(res)
+		}
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -206,34 +290,52 @@ func main() {
 	}
 }
 `)
+	f := func(formatSend string, formatRecv string, extra bool) {
+		conf := NewConfig()
+		conf.Type = TypeSubprocess
+		conf.Subprocess.Name = "go"
+		conf.Subprocess.Args = []string{"run", filePath, "-stdinFormat", formatSend, "-stdoutFormat", formatRecv}
+		conf.Subprocess.FormatSend = formatSend
+		conf.Subprocess.FormatRecv = formatRecv
 
-	conf := NewConfig()
-	conf.Type = TypeSubprocess
-	conf.Subprocess.Name = "go"
-	conf.Subprocess.Args = []string{"run", filePath}
+		proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+		require.NoError(t, err)
 
-	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
-	require.NoError(t, err)
+		exp := [][]byte{
+			[]byte(`FOO`),
+			[]byte(`FOÖ`),
+			[]byte(`BAR`),
+			[]byte(`BAZ`),
+		}
+		if extra {
+			exp = append(exp, []byte(``))
+			exp = append(exp, []byte("|{O\n\r\nO}|"))
+		}
 
-	exp := [][]byte{
-		[]byte(`FOO`),
-		[]byte(`BAR`),
-		[]byte(`BAZ`),
+		msgIn := message.New([][]byte{
+			[]byte(`foo`),
+			[]byte(`foö`),
+			[]byte(`bar`),
+			[]byte(`baz`),
+		})
+		if extra {
+			msgIn.Append(message.NewPart([]byte(``)))
+			msgIn.Append(message.NewPart([]byte("|{o\n\r\no}|")))
+		}
+
+		msgs, res := proc.ProcessMessage(msgIn)
+		require.Len(t, msgs, 1)
+		require.Nil(t, res)
+
+		assert.Empty(t, msgs[0].Get(0).Metadata().Get(FailFlagKey))
+		assert.Equal(t, exp, message.GetAllBytes(msgs[0]))
+
+		proc.CloseAsync()
+		assert.NoError(t, proc.WaitForClose(time.Second))
 	}
-
-	msgIn := message.New([][]byte{
-		[]byte(`foo`),
-		[]byte(`bar`),
-		[]byte(`baz`),
-	})
-
-	msgs, res := proc.ProcessMessage(msgIn)
-	require.Len(t, msgs, 1)
-	require.Nil(t, res)
-
-	assert.Empty(t, msgs[0].Get(0).Metadata().Get(FailFlagKey))
-	assert.Equal(t, exp, message.GetAllBytes(msgs[0]))
-
-	proc.CloseAsync()
-	assert.NoError(t, proc.WaitForClose(time.Second))
+	f("lines", "lines", false)
+	f("binary", "lines", false)
+	f("lines", "binary", false)
+	f("binary", "netstring", true)
+	f("binary", "binary", true)
 }

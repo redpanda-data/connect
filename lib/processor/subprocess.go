@@ -63,23 +63,23 @@ If a message contains line breaks each line of the message is piped to the subpr
 
 // SubprocessConfig contains configuration fields for the Subprocess processor.
 type SubprocessConfig struct {
-	Parts       []int    `json:"parts" yaml:"parts"`
-	Name        string   `json:"name" yaml:"name"`
-	Args        []string `json:"args" yaml:"args"`
-	MaxBuffer   int      `json:"max_buffer" yaml:"max_buffer"`
-	Format_send string   `json:"format_send" yaml:"format_send"`
-	Format_recv string   `json:"format_recv" yaml:"format_recv"`
+	Parts      []int    `json:"parts" yaml:"parts"`
+	Name       string   `json:"name" yaml:"name"`
+	Args       []string `json:"args" yaml:"args"`
+	MaxBuffer  int      `json:"max_buffer" yaml:"max_buffer"`
+	FormatSend string   `json:"format_send" yaml:"format_send"`
+	FormatRecv string   `json:"format_recv" yaml:"format_recv"`
 }
 
 // NewSubprocessConfig returns a SubprocessConfig with default values.
 func NewSubprocessConfig() SubprocessConfig {
 	return SubprocessConfig{
-		Parts:       []int{},
-		Name:        "cat",
-		Args:        []string{},
-		MaxBuffer:   bufio.MaxScanTokenSize,
-		Format_send: "lines",
-		Format_recv: "lines",
+		Parts:      []int{},
+		Name:       "cat",
+		Args:       []string{},
+		MaxBuffer:  bufio.MaxScanTokenSize,
+		FormatSend: "lines",
+		FormatRecv: "lines",
 	}
 }
 
@@ -123,7 +123,7 @@ func newSubprocess(
 		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 	var err error
-	if e.subproc, err = newSubprocWrapper(conf.Name, conf.Args, e.conf.MaxBuffer, conf.Format_recv, log); err != nil {
+	if e.subproc, err = newSubprocWrapper(conf.Name, conf.Args, e.conf.MaxBuffer, conf.FormatRecv, log); err != nil {
 		return nil, err
 	}
 	return e, nil
@@ -205,20 +205,20 @@ var maxInt = (1<<bits.UintSize)/2 - 1
 
 func binarySplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if atEOF {
-		 return 0, nil, nil
-		 }
+		return 0, nil, nil
+	}
 	if len(data) < 8 {
 		// request more data
 		return 0, nil, nil
 	}
-	l := binary.LittleEndian.Uint64(data)
-	if l > uint64(maxInt)-8 {
+	l := binary.BigEndian.Uint32(data)
+	if l > uint32(maxInt)-8 {
 		return 0, nil, errors.New("number of bytes to read exceeds representable range of go int datatype")
 	}
 	bytesToRead := int(l)
 
 	if len(data)-8 >= bytesToRead {
-		return 8 + bytesToRead, data[8:8+bytesToRead], nil
+		return 8 + bytesToRead, data[8 : 8+bytesToRead], nil
 	} else {
 		// request more data
 		return 0, nil, nil
@@ -226,16 +226,16 @@ func binarySplitFunc(data []byte, atEOF bool) (advance int, token []byte, err er
 }
 func netstringSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if atEOF {
-		 return 0, nil, nil
-		 }
+		return 0, nil, nil
+	}
 
 	if i := bytes.IndexByte(data, ':'); i >= 0 {
 		if i == 0 {
 			return 0, nil, errors.New("encountered invalid netstring: netstring starts with colon (':')")
 		}
-		l, err := strconv.ParseUint(string(data[0:i]),10,bits.UintSize-1)
+		l, err := strconv.ParseUint(string(data[0:i]), 10, bits.UintSize-1)
 		if err != nil {
-			return 0, nil, errors.New(fmt.Sprintf("encountered invalid netstring: unable to decode length '%v'",string(data[0:i])))
+			return 0, nil, errors.New(fmt.Sprintf("encountered invalid netstring: unable to decode length '%v'", string(data[0:i])))
 		}
 		bytesToRead := int(l)
 
@@ -243,7 +243,7 @@ func netstringSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err
 			if data[i+1+bytesToRead] != ',' {
 				return 0, nil, errors.New("encountered invalid netstring: trailing comma-character is missing")
 			}
-			return i+1+bytesToRead+1, data[i+1:i+1+bytesToRead], nil
+			return i + 1 + bytesToRead + 1, data[i+1 : i+1+bytesToRead], nil
 		}
 	}
 	// request more data
@@ -459,7 +459,7 @@ func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		result.Get(i).Set(bytes.Join(results, newLineBytes))
 		return nil
 	}
-	switch e.conf.Format_send {
+	switch e.conf.FormatSend {
 	case "lines":
 		proc = procLines
 		break
@@ -470,12 +470,12 @@ func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 			lenBuf := make([]byte, 8)
 			m := result.Get(i).Get()
-			binary.LittleEndian.PutUint64(lenBuf, uint64(len(m)))
+			binary.BigEndian.PutUint32(lenBuf, uint32(len(m)))
 
 			res, err := e.subproc.Send(lenBuf, m, nil)
 			if err != nil {
 				e.log.Errorf("Failed to send message to subprocess: %v\n", err)
-				e.mErr.Incr(1)
+				_ = e.mErr.Incr(1)
 				span.LogFields(
 					olog.String("event", "error"),
 					olog.String("type", err.Error()),
@@ -495,7 +495,7 @@ func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 			lenBuf := make([]byte, 0)
 			m := result.Get(i).Get()
-			lenBuf = append(strconv.AppendUint(lenBuf, uint64(len(m)), 10),':')
+			lenBuf = append(strconv.AppendUint(lenBuf, uint64(len(m)), 10), ':')
 			res, err := e.subproc.Send(lenBuf, m, commaBytes)
 			if err != nil {
 				e.log.Errorf("Failed to send message to subprocess: %v\n", err)
@@ -513,7 +513,7 @@ func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		}
 		break
 	default:
-		e.log.Errorf("Invalid format_send option: '%v' is not one of ('lines','binary')\n", e.conf.Format_send)
+		e.log.Errorf("Invalid format_send option: '%v' is not one of ('lines','binary')\n", e.conf.FormatSend)
 		proc = procLines
 	}
 
