@@ -170,7 +170,7 @@ pipeline:
 
 If we have the following protobuf definition within a directory called `testing/schema`:
 
-```proto
+```protobuf
 syntax = "proto3";
 package testing;
 

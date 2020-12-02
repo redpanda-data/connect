@@ -1265,6 +1265,9 @@ metrics:
   prometheus:
     path_mapping: ${METRICS_PROMETHEUS_PATH_MAPPING}
     prefix: ${METRICS_PROMETHEUS_PREFIX:benthos}
+    push_basic_auth:
+      password: ${METRICS_PROMETHEUS_PUSH_BASIC_AUTH_PASSWORD}
+      username: ${METRICS_PROMETHEUS_PUSH_BASIC_AUTH_USERNAME}
     push_interval: ${METRICS_PROMETHEUS_PUSH_INTERVAL}
     push_job_name: ${METRICS_PROMETHEUS_PUSH_JOB_NAME:benthos_push}
     push_url: ${METRICS_PROMETHEUS_PUSH_URL}

@@ -45,6 +45,9 @@ metrics:
     push_url: ""
     push_interval: ""
     push_job_name: benthos_push
+    push_basic_auth:
+      username: ""
+      password: ""
 ```
 
 </TabItem>
@@ -113,6 +116,29 @@ An identifier for push jobs.
 Type: `string`  
 Default: `"benthos_push"`  
 
+### `push_basic_auth`
+
+The Basic Authentication credentials.
+
+
+Type: `object`  
+
+### `push_basic_auth.username`
+
+The Basic Authentication username.
+
+
+Type: `string`  
+Default: `""`  
+
+### `push_basic_auth.password`
+
+The Basic Authentication password.
+
+
+Type: `string`  
+Default: `""`  
+
 ## Push Gateway
 
 The field `push_url` is optional and when set will trigger a push of
@@ -122,4 +148,7 @@ once Benthos shuts down. It is also possible to specify a
 
 The Push Gateway is useful for when Benthos instances are short lived. Do not
 include the "/metrics/jobs/..." path in the push URL.
+
+If the Push Gateway requires HTTP Basic Authentication it can be configured with
+`push_basic_auth`.
 
