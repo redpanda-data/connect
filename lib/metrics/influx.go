@@ -3,11 +3,13 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	client "github.com/influxdata/influxdb1-client/v2"
+	"github.com/rcrowley/go-metrics"
 )
 
 func init() {
@@ -76,17 +78,19 @@ type Influx struct {
 	ctx    context.Context
 	cancel func()
 
-	local  *Local
-	config InfluxConfig
-	log    log.Modular
+	registry metrics.Registry
+	local    *Local
+	config   InfluxConfig
+	log      log.Modular
 }
 
 // NewInflux creates and returns a new Influx object.
 func NewInflux(config Config, opts ...func(Type)) (Type, error) {
 	i := &Influx{
-		config: config.Influx,
-		local:  NewLocal(),
-		log:    log.Noop(),
+		config:   config.Influx,
+		registry: metrics.NewRegistry(),
+		local:    NewLocal(),
+		log:      log.Noop(),
 	}
 
 	i.ctx, i.cancel = context.WithCancel(context.Background())
@@ -123,27 +127,78 @@ func NewInflux(config Config, opts ...func(Type)) (Type, error) {
 }
 
 func (i *Influx) GetCounter(path string) StatCounter {
-	return i.local.GetCounter(i.config.Prefix + path)
+	if len(path) == 0 {
+		return DudStat{}
+	}
+	return i.registry.GetOrRegister(i.config.Prefix+path, func() metrics.Counter {
+		return NewCounter()
+	}).(InfluxCounter)
 }
 
-func (i *Influx) GetCounterVec(path string, labelNames []string) StatCounterVec {
-	return i.local.GetCounterVec(i.config.Prefix+path, labelNames)
+func (i *Influx) GetCounterVec(path string, n []string) StatCounterVec {
+	if len(path) == 0 {
+		return fakeCounterVec(func([]string) StatCounter {
+			return DudStat{}
+		})
+	}
+	return &fCounterVec{
+		f: func(l []string) StatCounter {
+			encodedName := encodeName(i.config.Prefix+path, n, l)
+			//{"a":"something"}f("encodedName: %s\n", encodedName)
+			return i.registry.GetOrRegister(encodedName, func() metrics.Counter {
+				return NewCounter()
+			}).(InfluxCounter)
+		},
+	}
 }
 
 func (i *Influx) GetTimer(path string) StatTimer {
-	return i.local.GetTimer(i.config.Prefix + path)
+	if len(path) == 0 {
+		return DudStat{}
+	}
+	return i.registry.GetOrRegister(i.config.Prefix+path, func() metrics.Timer {
+		return NewTimer()
+	}).(InfluxTimer)
 }
 
-func (i *Influx) GetTimerVec(path string, labelNames []string) StatTimerVec {
-	return i.local.GetTimerVec(i.config.Prefix+path, labelNames)
+func (i *Influx) GetTimerVec(path string, n []string) StatTimerVec {
+	if len(path) == 0 {
+		return fakeTimerVec(func([]string) StatTimer {
+			return DudStat{}
+		})
+	}
+	return &fTimerVec{
+		f: func(l []string) StatTimer {
+			encodedName := encodeName(i.config.Prefix+path, n, l)
+			return i.registry.GetOrRegister(encodedName, func() metrics.Timer {
+				return NewTimer()
+			}).(InfluxTimer)
+		},
+	}
 }
 
 func (i *Influx) GetGauge(path string) StatGauge {
-	return i.local.GetGauge(i.config.Prefix + path)
+	var result = i.registry.GetOrRegister(i.config.Prefix+path, func() metrics.Gauge {
+		return NewGauge()
+	}).(InfluxGauge)
+	return result
 }
 
-func (i *Influx) GetGaugeVec(path string, labelNames []string) StatGaugeVec {
-	return i.local.GetGaugeVec(i.config.Prefix+path, labelNames)
+func (i *Influx) GetGaugeVec(path string, n []string) StatGaugeVec {
+	if len(path) == 0 {
+		return fakeGaugeVec(func([]string) StatGauge {
+			return DudStat{}
+		})
+	}
+	return &fGaugeVec{
+		f: func(l []string) StatGauge {
+			encodedName := encodeName(i.config.Prefix+path, n, l)
+			//fmt.Printf("encodedName: %s\n", encodedName)
+			return i.registry.GetOrRegister(encodedName, func() metrics.Gauge {
+				return NewGauge()
+			}).(InfluxGauge)
+		},
+	}
 }
 
 func (i *Influx) makeClient() error {
@@ -179,7 +234,7 @@ func (i *Influx) loop() {
 		case <-i.ctx.Done():
 			return
 		case <-ticker.C:
-			if err := i.publish(); err != nil {
+			if err := i.publishRegistry(); err != nil {
 				i.log.Errorf("failed to send metrics data: %v", err)
 			}
 		case <-pingTicker.C:
@@ -194,65 +249,73 @@ func (i *Influx) loop() {
 	}
 }
 
-func (i *Influx) publish() error {
-
+func (i *Influx) publishRegistry() error {
 	points, err := client.NewBatchPoints(i.batchConfig)
 	if err != nil {
 		return fmt.Errorf("problem creating batch points for influx: %s", err)
 	}
-
-	counters := i.local.GetCountersWithLabels()
-	timers := i.local.GetTimingsWithLabels()
 	now := time.Now()
-
-	for k, v := range counters {
-		tags := make(map[string]string, v.LabelLength()+len(i.config.Tags))
-		v.labelsAndValues.Range(func(key, value interface{}) bool {
-			tags[fmt.Sprintf("%s", key)] = fmt.Sprintf("%s", value)
-			return true
-		})
-
+	all := i.getAllMetrics()
+	for k, v := range all {
+		name, normalTags := decodeInfluxName(k)
+		//fmt.Printf("k: %s, name: %s, tags: %v\n", k, name, normalTags)
+		tags := make(map[string]string, len(i.config.Tags)+len(normalTags))
+		// add global tags
 		for k, v := range i.config.Tags {
 			tags[k] = v
 		}
-
-		fields := map[string]interface{}{
-			"count": *v.Value,
-		}
-
-		p, err := client.NewPoint(k, tags, fields, now)
-		if err != nil {
-			i.log.Errorf("problem with point %v", err)
-		}
-		points.AddPoint(p)
-	}
-
-	for k, v := range timers {
-		tags := make(map[string]string, v.LabelLength()+len(i.config.Tags))
-		v.labelsAndValues.Range(func(key, value interface{}) bool {
-			tags[fmt.Sprintf("%s", key)] = fmt.Sprintf("%s", value)
-			return true
-		})
-
-		for k, v := range i.config.Tags {
+		// override any actual tags
+		for k, v := range normalTags {
 			tags[k] = v
 		}
-
-		fields := map[string]interface{}{
-			"value": *v.Value,
-		}
-		p, err := client.NewPoint(k, tags, fields, now)
+		p, err := client.NewPoint(name, tags, v, now)
 		if err != nil {
-			i.log.Errorf("problem with point %v", err)
+			i.log.Errorf("problem formatting metrics: %s", err)
 		}
 		points.AddPoint(p)
 	}
-
-	for _, v := range points.Points() {
-		i.log.Debugf("publishing %s\n", v.String())
+	sortedPoints := make([]string, len(points.Points()))
+	for k, v := range points.Points() {
+		sortedPoints[k] = v.String()
 	}
+	sort.Strings(sortedPoints)
+	for _, v := range sortedPoints {
+		fmt.Printf("%s\n", v)
+	}
+	return nil
+}
 
-	return i.client.Write(points)
+func (i *Influx) getAllMetrics() map[string]map[string]interface{} {
+	data := make(map[string]map[string]interface{})
+	i.registry.Each(func(name string, i interface{}) {
+		values := make(map[string]interface{})
+		switch metric := i.(type) {
+		case metrics.Counter:
+			values["count"] = metric.Count()
+		case metrics.Gauge:
+			values["value"] = metric.Value()
+		case metrics.GaugeFloat64:
+			values["value"] = metric.Value()
+		case metrics.Timer:
+			t := metric.Snapshot()
+			ps := t.Percentiles([]float64{0.5, 0.95, 0.99, 0.999})
+			values["count"] = t.Count()
+			values["min"] = t.Min()
+			values["max"] = t.Max()
+			values["mean"] = t.Mean()
+			values["stddev"] = t.StdDev()
+			values["p50"] = ps[0]
+			values["p95"] = ps[1]
+			values["p99"] = ps[2]
+			values["p999"] = ps[3]
+			values["1m.rate"] = t.Rate1()
+			values["5m.rate"] = t.Rate5()
+			values["15m.rate"] = t.Rate15()
+			values["mean.rate"] = t.RateMean()
+		}
+		data[name] = values
+	})
+	return data
 }
 
 func (i *Influx) SetLogger(log log.Modular) {
