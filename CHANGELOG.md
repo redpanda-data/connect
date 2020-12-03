@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 - Field `delay_period` added to the experimental `aws_s3` input.
 - Added service options for adding API middlewares and specify TLS options for plugin builds.
 - Method `not_empty` added to Bloblang.
+- New `bloblang` predicate type added to unit tests.
+- Unit test case field `target_processors` now allows you to optionally specify a target file.
 
 ### Changed
 

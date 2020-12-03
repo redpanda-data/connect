@@ -2,7 +2,9 @@ package test
 
 import (
 	"fmt"
+	"net/url"
 	"os"
+	"path/filepath"
 
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -119,12 +121,43 @@ func setEnvironment(vars map[string]string) func() {
 	}
 }
 
+func resolveProcessorsPointer(targetFile string, jsonPtr string) (filePath, procPath string, err error) {
+	var u *url.URL
+	if u, err = url.Parse(jsonPtr); err != nil {
+		return
+	}
+	if u.Scheme != "" && u.Scheme != "file" {
+		err = fmt.Errorf("target processors '%v' contains non-path scheme value", jsonPtr)
+		return
+	}
+
+	if len(u.Fragment) > 0 {
+		procPath = u.Fragment
+		filePath = filepath.Join(filepath.Dir(targetFile), u.Path)
+	} else {
+		procPath = u.Path
+		filePath = targetFile
+	}
+	if len(procPath) == 0 {
+		err = fmt.Errorf("failed to target processors '%v': reference URI must contain a path or fragment", jsonPtr)
+	}
+	return
+}
+
 func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]string) (cachedConfig, error) {
 	cacheKey := confTargetID(jsonPtr, environment)
 
 	confs, exists := p.cachedConfigs[cacheKey]
 	if exists {
 		return confs, nil
+	}
+
+	targetPath, procPath, err := resolveProcessorsPointer(p.targetPath, jsonPtr)
+	if err != nil {
+		return confs, err
+	}
+	if len(targetPath) == 0 {
+		targetPath = p.targetPath
 	}
 
 	// Set custom environment vars.
@@ -139,9 +172,9 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 	cleanupEnv := setEnvironment(environment)
 	defer cleanupEnv()
 
-	configBytes, err := config.ReadWithJSONPointers(p.targetPath, true)
+	configBytes, err := config.ReadWithJSONPointers(targetPath, true)
 	if err != nil {
-		return confs, fmt.Errorf("failed to parse config file '%v': %v", p.targetPath, err)
+		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
 	}
 
 	mgrWrapper := struct {
@@ -150,7 +183,7 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		Manager: manager.NewConfig(),
 	}
 	if err = yaml.Unmarshal(configBytes, &mgrWrapper); err != nil {
-		return confs, fmt.Errorf("failed to parse config file '%v': %v", p.targetPath, err)
+		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
 	}
 
 	for _, path := range p.resourcesPaths {
@@ -175,28 +208,28 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 
 	var root interface{}
 	if err = yaml.Unmarshal(configBytes, &root); err != nil {
-		return confs, fmt.Errorf("failed to parse config file '%v': %v", p.targetPath, err)
+		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
 	}
 
 	var procs interface{}
-	if procs, err = config.JSONPointer(jsonPtr, root); err != nil {
-		return confs, fmt.Errorf("failed to resolve case processors from '%v': %v", p.targetPath, err)
+	if procs, err = config.JSONPointer(procPath, root); err != nil {
+		return confs, fmt.Errorf("failed to resolve case processors from '%v': %v", targetPath, err)
 	}
 
 	var rawBytes []byte
 	if rawBytes, err = yaml.Marshal(procs); err != nil {
-		return confs, fmt.Errorf("failed to resolve case processors from '%v': %v", p.targetPath, err)
+		return confs, fmt.Errorf("failed to resolve case processors from '%v': %v", targetPath, err)
 	}
 
 	switch procs.(type) {
 	case []interface{}:
 		if err = yaml.Unmarshal(rawBytes, &confs.procs); err != nil {
-			return confs, fmt.Errorf("failed to resolve case processors from '%v': %v", p.targetPath, err)
+			return confs, fmt.Errorf("failed to resolve case processors from '%v': %v", targetPath, err)
 		}
 	default:
 		var procConf processor.Config
 		if err = yaml.Unmarshal(rawBytes, &procConf); err != nil {
-			return confs, fmt.Errorf("failed to resolve case processors from '%v': %v", p.targetPath, err)
+			return confs, fmt.Errorf("failed to resolve case processors from '%v': %v", targetPath, err)
 		}
 		confs.procs = append(confs.procs, procConf)
 	}

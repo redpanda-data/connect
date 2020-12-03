@@ -31,7 +31,7 @@ output:
     path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
 ```
 
-In order to write unit tests for this config we must accompany it with a file of the same name and extension, but suffixed with `_benthos_test`, which in this case would be `foo_benthos_test.yaml`. We can generate an example definition for this config with `benthos test --generate ./foo.yaml`:
+One way to write our unit tests for this config is to accompany it with a file of the same name and extension but suffixed with `_benthos_test`, which in this case would be `foo_benthos_test.yaml`. We can generate an example definition for this config with `benthos test --generate ./foo.yaml` which gives:
 
 ```yml
 parallel: true
@@ -50,7 +50,7 @@ tests:
             example_key: example metadata value
 ```
 
-The field `parallel` instructs as to whether the tests listed in this definition should be executed in parallel. Under `tests` we then have a list of any number of unit tests to execute for the config file. 
+The field `parallel` instructs as to whether the tests listed in this definition should be executed in parallel. Under `tests` we then have a list of any number of unit tests to execute for the config file.
 
 Each test is run in complete isolation, including any resources defined by the config file. Tests should be allocated a unique `name` that identifies the feature being tested.
 
@@ -66,9 +66,41 @@ The field `output_batches` lists any number of batches of messages which are exp
 
 If the number of batches defined does not match the resulting number of batches the test will fail. If the number of messages defined in each batch does not match the number in the resulting batches the test will fail. If any condition of a message fails then the test fails.
 
-> Pro tip: for small configs it might be more convenient to place your tests within the same file. This is also supported, simply add a `tests` field to the bottom of your config file.
+### Inline Tests
+
+Sometimes it's more convenient to define your tests within the config being tested. This is fine, simply add the `tests` field to the end of the config being tested.
+
+### Fragmented Tests
+
+Sometimes the number of tests you need to define in order to cover a config file is so vast that it's necessary to split them across multiple test definition files. This is possible but Benthos still requires a way to detect the configuration file being targeted by these fragmented test definition files, which we can do by prefixing our `target_processors` field with the path of the target relative to the definition file.
+
+The syntax of `target_processors` in this case is a full [JSON Pointer][json-pointer] that should look something like `target.yaml#/pipeline/processors`. For example, if we saved our test definition above in an arbitrary location like `./tests/first.yaml` and wanted to target our original `foo.yaml` config file, we could do that with the following:
+
+```yml
+tests:
+  - name: example test
+    target_processors: '../foo.yaml#/pipeline/processors'
+    environment: {}
+    input_batch:
+      - content: 'example content'
+        metadata:
+          example_key: example metadata value
+    output_batches:
+      -
+        - content_equals: example content
+          metadata_equals:
+            example_key: example metadata value
+```
 
 ## Output Conditions
+
+### `bloblang`
+
+```yml
+bloblang: 'this.age > 10 && meta("foo").length() > 0'
+```
+
+Executes a [Bloblang expression][bloblang] on a message, if the result is anything other than a boolean equalling `true` the test fails.
 
 ### `content_equals`
 
@@ -102,3 +134,4 @@ Executing tests for a specific config can be done by pointing the subcommand `te
 In order to execute all tests of a directory simply point `test` to that directory, e.g. `benthos test ./foo` will execute all tests found in the directory `foo`. In order to walk a directory tree and execute all tests found you can use the shortcut `./...`, e.g. `benthos test ./...` will execute all tests found in the current directory, any child directories, and so on.
 
 [json-pointer]: https://tools.ietf.org/html/rfc6901
+[bloblang]: /docs/guides/bloblang/about

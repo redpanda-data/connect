@@ -1,10 +1,13 @@
 package test
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
 
+	"github.com/Jeffail/benthos/v3/lib/bloblang"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	yaml "gopkg.in/yaml.v3"
 )
@@ -33,6 +36,12 @@ func (c *ConditionsMap) UnmarshalYAML(value *yaml.Node) error {
 	for k, v := range rawMap {
 		var cond Condition
 		switch k {
+		case "bloblang":
+			b, err := parseBloblangCondition(v)
+			if err != nil {
+				return fmt.Errorf("line %v: %v", v.Line, err)
+			}
+			cond = b
 		case "content_equals":
 			val := ContentEqualsCondition("")
 			if err := v.Decode(&val); err != nil {
@@ -73,6 +82,41 @@ func (c ConditionsMap) CheckAll(part types.Part) (errs []error) {
 		}
 	}
 	return
+}
+
+//------------------------------------------------------------------------------
+
+type bloblangCondition struct {
+	m bloblang.Mapping
+}
+
+func parseBloblangCondition(n yaml.Node) (*bloblangCondition, error) {
+	var expr string
+
+	if err := n.Decode(&expr); err != nil {
+		return nil, err
+	}
+
+	m, err := bloblang.NewMapping(expr)
+	if err != nil {
+		return nil, err
+	}
+
+	return &bloblangCondition{m}, nil
+}
+
+// Check this condition against a message part.
+func (b *bloblangCondition) Check(p types.Part) error {
+	msg := message.New(nil)
+	msg.Append(p)
+	res, err := b.m.QueryPart(0, msg)
+	if err != nil {
+		return err
+	}
+	if !res {
+		return errors.New("bloblang expression was false")
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------

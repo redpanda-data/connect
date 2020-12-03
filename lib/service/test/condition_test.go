@@ -8,6 +8,8 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/fatih/color"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -38,6 +40,37 @@ tests:
 	if act := tests.Tests; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong conditions map: %s != %s", act, exp)
 	}
+}
+
+func TestBloblangConditionHappy(t *testing.T) {
+	conf := `
+tests:
+  bloblang: 'content() == "foo bar"'`
+
+	tests := struct {
+		Tests ConditionsMap
+	}{
+		Tests: ConditionsMap{},
+	}
+
+	require.NoError(t, yaml.Unmarshal([]byte(conf), &tests))
+
+	assert.Empty(t, tests.Tests.CheckAll(message.NewPart([]byte("foo bar"))))
+	assert.NotEmpty(t, tests.Tests.CheckAll(message.NewPart([]byte("bar baz"))))
+}
+
+func TestBloblangConditionSad(t *testing.T) {
+	conf := `
+tests:
+  bloblang: 'content() =='`
+
+	tests := struct {
+		Tests ConditionsMap
+	}{
+		Tests: ConditionsMap{},
+	}
+
+	require.EqualError(t, yaml.Unmarshal([]byte(conf), &tests), "line 3: expected query, but reached end of input")
 }
 
 func TestConditionUnmarshalUnknownCond(t *testing.T) {

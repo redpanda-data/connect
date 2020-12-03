@@ -168,25 +168,25 @@ make docker-cgo
 
 Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come and chat (links are on the [community page][community]), and watch your back.
 
-[inputs]: https://www.benthos.dev/docs/components/inputs/about/
-[processors]: https://www.benthos.dev/docs/components/processors/about/
-[outputs]: https://www.benthos.dev/docs/components/outputs/about/
-[metrics]: https://www.benthos.dev/docs/components/metrics/about/
-[tracers]: https://www.benthos.dev/docs/components/tracers/about/
+[inputs]: https://www.benthos.dev/docs/components/inputs/about
+[processors]: https://www.benthos.dev/docs/components/processors/about
+[outputs]: https://www.benthos.dev/docs/components/outputs/about
+[metrics]: https://www.benthos.dev/docs/components/metrics/about
+[tracers]: https://www.benthos.dev/docs/components/tracers/about
 [metrics-config]: config/metrics
-[config-interp]: https://www.benthos.dev/docs/configuration/interpolation/
+[config-interp]: https://www.benthos.dev/docs/configuration/interpolation
 [compose-examples]: resources/docker/compose_examples
-[streams-api]: https://www.benthos.dev/docs/guides/streams_mode/streams_api/
-[streams-mode]: https://www.benthos.dev/docs/guides/streams_mode/about/
-[general-docs]: https://www.benthos.dev/docs/about/
+[streams-api]: https://www.benthos.dev/docs/guides/streams_mode/streams_api
+[streams-mode]: https://www.benthos.dev/docs/guides/streams_mode/about
+[general-docs]: https://www.benthos.dev/docs/about
 [env-config]: config/env/README.md
-[bloblang-about]: https://www.benthos.dev/docs/guides/bloblang/about/
-[config-doc]: https://www.benthos.dev/docs/configuration/about/
-[serverless]: https://www.benthos.dev/docs/guides/serverless/about/
-[cookbooks]: https://www.benthos.dev/cookbooks/
+[bloblang-about]: https://www.benthos.dev/docs/guides/bloblang/about
+[config-doc]: https://www.benthos.dev/docs/configuration/about
+[serverless]: https://www.benthos.dev/docs/guides/serverless/about
+[cookbooks]: https://www.benthos.dev/cookbooks
 [releases]: https://github.com/Jeffail/benthos/releases
 [plugin-repo]: https://github.com/benthosdev/benthos-plugin-example
-[getting-started]: https://www.benthos.dev/docs/guides/getting_started/
+[getting-started]: https://www.benthos.dev/docs/guides/getting_started
 
 [godoc-badge]: https://godoc.org/github.com/Jeffail/benthos/lib/stream?status.svg
 [godoc-url]: https://godoc.org/github.com/Jeffail/benthos/lib/stream
@@ -195,6 +195,6 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come a
 [drone-badge]: https://cloud.drone.io/api/badges/Jeffail/benthos/status.svg
 [drone-url]: https://cloud.drone.io/Jeffail/benthos
 
-[community]: https://www.benthos.dev/community/
+[community]: https://www.benthos.dev/community
 
 [jaeger]: https://www.jaegertracing.io/
