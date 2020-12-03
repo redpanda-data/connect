@@ -3,6 +3,7 @@ package metrics
 import "testing"
 
 func TestInfluxStatInterface(t *testing.T) {
+
 	t.Run("InfluxGauge", func(t *testing.T) {
 		o := &InfluxGauge{}
 		if StatGauge(o) == nil {
@@ -16,6 +17,7 @@ func TestInfluxStatInterface(t *testing.T) {
 			t.Errorf("InfluxCounter does not satisfy StatCounter interface")
 		}
 	})
+
 	t.Run("InfluxTimer", func(t *testing.T) {
 		o := &InfluxTimer{}
 		if StatTimer(o) == nil {
