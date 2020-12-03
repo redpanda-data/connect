@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - New field `retry_as_batch` added to the `kafka` output to assist in ensuring message ordering through retries.
 - Field `delay_period` added to the experimental `aws_s3` input.
 - Added service options for adding API middlewares and specify TLS options for plugin builds.
+- Method `not_empty` added to Bloblang.
 
 ### Changed
 

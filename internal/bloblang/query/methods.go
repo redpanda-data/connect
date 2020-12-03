@@ -1283,6 +1283,61 @@ func notMethodCtor(target Function, _ ...interface{}) (Function, error) {
 
 var _ = RegisterMethod(
 	NewMethodSpec(
+		"not_empty", "",
+	).InCategory(
+		MethodCategoryCoercion,
+		"Ensures that the given string, array or object value is not empty, and if so returns it, otherwise an error is returned.",
+		NewExampleSpec("",
+			`root.a = this.a.not_empty()`,
+			`{"a":"foo"}`,
+			`{"a":"foo"}`,
+
+			`{"a":""}`,
+			`Error("failed to execute mapping query at line 1: string value is empty")`,
+
+			`{"a":["foo","bar"]}`,
+			`{"a":["foo","bar"]}`,
+
+			`{"a":[]}`,
+			`Error("failed to execute mapping query at line 1: array value is empty")`,
+
+			`{"a":{"b":"foo","c":"bar"}}`,
+			`{"a":{"b":"foo","c":"bar"}}`,
+
+			`{"a":{}}`,
+			`Error("failed to execute mapping query at line 1: object value is empty")`,
+		),
+	),
+	false, notEmptyMethod,
+	ExpectNArgs(0),
+)
+
+func notEmptyMethod(target Function, _ ...interface{}) (Function, error) {
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		switch t := v.(type) {
+		case string:
+			if len(t) == 0 {
+				return nil, errors.New("string value is empty")
+			}
+		case []interface{}:
+			if len(t) == 0 {
+				return nil, errors.New("array value is empty")
+			}
+		case map[string]interface{}:
+			if len(t) == 0 {
+				return nil, errors.New("object value is empty")
+			}
+		default:
+			return nil, NewTypeError(v, ValueString, ValueArray, ValueObject)
+		}
+		return v, nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
 		"not_null", "",
 	).InCategory(
 		MethodCategoryCoercion,

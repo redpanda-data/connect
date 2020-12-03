@@ -574,6 +574,32 @@ root.foo = this.thing.bool()
 root.bar = this.thing.bool(true)
 ```
 
+### `not_empty`
+
+Ensures that the given string, array or object value is not empty, and if so returns it, otherwise an error is returned.
+
+```coffee
+root.a = this.a.not_empty()
+
+# In:  {"a":"foo"}
+# Out: {"a":"foo"}
+
+# In:  {"a":""}
+# Out: Error("failed to execute mapping query at line 1: string value is empty")
+
+# In:  {"a":["foo","bar"]}
+# Out: {"a":["foo","bar"]}
+
+# In:  {"a":[]}
+# Out: Error("failed to execute mapping query at line 1: array value is empty")
+
+# In:  {"a":{"b":"foo","c":"bar"}}
+# Out: {"a":{"b":"foo","c":"bar"}}
+
+# In:  {"a":{}}
+# Out: Error("failed to execute mapping query at line 1: object value is empty")
+```
+
 ### `number`
 
 Attempt to parse a value into a number. An optional argument can be provided, in which case if the value cannot be parsed into a number the argument will be returned instead.
