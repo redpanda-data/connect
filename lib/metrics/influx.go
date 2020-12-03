@@ -57,7 +57,7 @@ type InfluxConfig struct {
 func NewInfluxConfig() InfluxConfig {
 	return InfluxConfig{
 		URL: "http://localhost:8086",
-		DB:  "db",
+		DB:  "db0",
 
 		Prefix:       "benthos.",
 		Precision:    "s",
