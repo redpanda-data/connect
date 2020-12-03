@@ -117,6 +117,8 @@ type Prometheus struct {
 	pathMapping *pathMapping
 	prefix      string
 
+	pusher *push.Pusher
+
 	counters map[string]*prometheus.CounterVec
 	gauges   map[string]*prometheus.GaugeVec
 	timers   map[string]*prometheus.SummaryVec
@@ -147,6 +149,12 @@ func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 	}
 
 	if len(p.config.PushURL) > 0 && len(p.config.PushInterval) > 0 {
+		p.pusher = push.New(p.config.PushURL, p.config.PushJobName).Gatherer(prometheus.DefaultGatherer)
+
+		if len(p.config.PushBasicAuth.Username) > 0 && len(p.config.PushBasicAuth.Password) > 0 {
+			p.pusher = p.pusher.BasicAuth(p.config.PushBasicAuth.Username, p.config.PushBasicAuth.Password)
+		}
+
 		interval, err := time.ParseDuration(p.config.PushInterval)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse push interval: %v", err)
@@ -157,13 +165,7 @@ func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 				case <-p.closedChan:
 					return
 				case <-time.After(interval):
-					var pusher = push.New(p.config.PushURL, p.config.PushJobName)
-
-					if len(p.config.PushBasicAuth.Username) > 0 && len(p.config.PushBasicAuth.Password) > 0 {
-						pusher.BasicAuth(p.config.PushBasicAuth.Username, p.config.PushBasicAuth.Password)
-					}
-
-					if err = pusher.Gatherer(prometheus.DefaultGatherer).Push(); err != nil {
+					if err = p.pusher.Push(); err != nil {
 						p.log.Errorf("Failed to push metrics: %v\n", err)
 					}
 				}
@@ -414,8 +416,8 @@ func (p *Prometheus) Close() error {
 	if atomic.CompareAndSwapInt32(&p.running, 1, 0) {
 		close(p.closedChan)
 	}
-	if len(p.config.PushURL) > 0 {
-		return push.New(p.config.PushURL, p.config.PushJobName).Gatherer(prometheus.DefaultGatherer).Push()
+	if p.pusher != nil {
+		return p.pusher.Push()
 	}
 	return nil
 }

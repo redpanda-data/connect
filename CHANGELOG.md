@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - Method `not_empty` added to Bloblang.
 - New `bloblang` predicate type added to unit tests.
 - Unit test case field `target_processors` now allows you to optionally specify a target file.
+- Basic auth support added to the `prometheus` metrics pusher.
 
 ### Changed
 
@@ -20,7 +21,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Add `Content-Type` headers in streams API responses
+- Add `Content-Type` headers in streams API responses.
 - Field `delete_objects` is now respected by the experimental `aws_s3` input.
 - Fixed a case where resource processors couldn't access rate limit resources.
 - Input files that are valid according to the codec but empty now trigger acknowledgements.
