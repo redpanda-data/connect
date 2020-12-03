@@ -40,6 +40,9 @@ metrics:
   prometheus:
     path_mapping: ""
     prefix: benthos
+    push_basic_auth:
+      password: ""
+      username: ""
     push_interval: ""
     push_job_name: benthos_push
     push_url: ""

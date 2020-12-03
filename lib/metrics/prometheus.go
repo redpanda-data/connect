@@ -157,7 +157,13 @@ func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 				case <-p.closedChan:
 					return
 				case <-time.After(interval):
-					if err = push.New(p.config.PushURL, p.config.PushJobName).Gatherer(prometheus.DefaultGatherer).Push(); err != nil {
+					var pusher = push.New(p.config.PushURL, p.config.PushJobName)
+
+					if len(p.config.PushBasicAuth.Username) > 0 && len(p.config.PushBasicAuth.Password) > 0 {
+						pusher.BasicAuth(p.config.PushBasicAuth.Username, p.config.PushBasicAuth.Password)
+					}
+
+					if err = pusher.Gatherer(prometheus.DefaultGatherer).Push(); err != nil {
 						p.log.Errorf("Failed to push metrics: %v\n", err)
 					}
 				}
