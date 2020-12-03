@@ -77,7 +77,6 @@ type Influx struct {
 	cancel func()
 
 	registry metrics.Registry
-	local    *Local
 	config   InfluxConfig
 	log      log.Modular
 }
@@ -87,7 +86,6 @@ func NewInflux(config Config, opts ...func(Type)) (Type, error) {
 	i := &Influx{
 		config:   config.Influx,
 		registry: metrics.NewRegistry(),
-		local:    NewLocal(),
 		log:      log.Noop(),
 	}
 
@@ -141,7 +139,7 @@ func (i *Influx) GetCounterVec(path string, n []string) StatCounterVec {
 	}
 	return &fCounterVec{
 		f: func(l []string) StatCounter {
-			encodedName := encodeName(i.config.Prefix+path, n, l)
+			encodedName := encodeInfluxName(i.config.Prefix+path, n, l)
 			//{"a":"something"}f("encodedName: %s\n", encodedName)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Counter {
 				return NewCounter()
@@ -167,7 +165,7 @@ func (i *Influx) GetTimerVec(path string, n []string) StatTimerVec {
 	}
 	return &fTimerVec{
 		f: func(l []string) StatTimer {
-			encodedName := encodeName(i.config.Prefix+path, n, l)
+			encodedName := encodeInfluxName(i.config.Prefix+path, n, l)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Timer {
 				return NewTimer()
 			}).(InfluxTimer)
@@ -190,7 +188,7 @@ func (i *Influx) GetGaugeVec(path string, n []string) StatGaugeVec {
 	}
 	return &fGaugeVec{
 		f: func(l []string) StatGauge {
-			encodedName := encodeName(i.config.Prefix+path, n, l)
+			encodedName := encodeInfluxName(i.config.Prefix+path, n, l)
 			//fmt.Printf("encodedName: %s\n", encodedName)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Gauge {
 				return NewGauge()

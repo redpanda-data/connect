@@ -71,12 +71,13 @@ func (i InfluxTimer) Timing(delta int64) error {
 	return nil
 }
 
-// encodeInfluxName takes a map of tag values and appends as an influx line protocol-formatted string
-func encodeName(name string, tagNames []string, tagValues []string) string {
+// encodeInfluxName accepts a measurement name and a map of tag values and
+// returns influx line protocol-formatted string.
+func encodeInfluxName(name string, tagNames []string, tagValues []string) string {
 	b := &strings.Builder{}
 	b.WriteString(escape.String(name))
 
-	// only add tags if they're equal length
+	// only add tags+values if they're equal length
 	if len(tagNames) == len(tagValues) {
 		tags := make(map[string]string, len(tagNames))
 		for k, v := range tagNames {
@@ -96,6 +97,8 @@ func encodeName(name string, tagNames []string, tagValues []string) string {
 	return b.String()
 }
 
+// decodeInfluxName accepts an ILP-formatted string (measurementName,tag=value) and
+// returns the measurement name along with a map of tags and their values.
 func decodeInfluxName(n string) (string, map[string]string) {
 	nameSplit := splitUnescaped(n, tagEncodingSeparator)
 	if len(nameSplit) == 0 {
