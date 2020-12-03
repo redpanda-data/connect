@@ -12,10 +12,6 @@ import (
 // not sure if this is necessary yet
 var tagEncodingSeparator = ","
 
-var _ StatGauge = (*InfluxGauge)(nil)
-var _ StatCounter = (*InfluxCounter)(nil)
-var _ StatTimer = (*InfluxTimer)(nil)
-
 type InfluxGauge struct {
 	metrics.Gauge
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"sort"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -140,7 +139,6 @@ func (i *Influx) GetCounterVec(path string, n []string) StatCounterVec {
 	return &fCounterVec{
 		f: func(l []string) StatCounter {
 			encodedName := encodeInfluxName(i.config.Prefix+path, n, l)
-			//{"a":"something"}f("encodedName: %s\n", encodedName)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Counter {
 				return NewCounter()
 			}).(InfluxCounter)
@@ -189,7 +187,6 @@ func (i *Influx) GetGaugeVec(path string, n []string) StatGaugeVec {
 	return &fGaugeVec{
 		f: func(l []string) StatGauge {
 			encodedName := encodeInfluxName(i.config.Prefix+path, n, l)
-			//fmt.Printf("encodedName: %s\n", encodedName)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Gauge {
 				return NewGauge()
 			}).(InfluxGauge)
@@ -199,8 +196,6 @@ func (i *Influx) GetGaugeVec(path string, n []string) StatGaugeVec {
 
 func (i *Influx) makeClient() error {
 	var c client.Client
-	var err error
-
 	u, err := url.Parse(i.config.URL)
 	if err != nil {
 		return fmt.Errorf("problem parsing url: %s", err)
@@ -222,7 +217,6 @@ func (i *Influx) makeClient() error {
 	if err == nil {
 		i.client = c
 	}
-
 	return err
 }
 
@@ -259,7 +253,6 @@ func (i *Influx) publishRegistry() error {
 	all := i.getAllMetrics()
 	for k, v := range all {
 		name, normalTags := decodeInfluxName(k)
-		//fmt.Printf("k: %s, name: %s, tags: %v\n", k, name, normalTags)
 		tags := make(map[string]string, len(i.config.Tags)+len(normalTags))
 		// add global tags
 		for k, v := range i.config.Tags {
@@ -275,15 +268,7 @@ func (i *Influx) publishRegistry() error {
 		}
 		points.AddPoint(p)
 	}
-	sortedPoints := make([]string, len(points.Points()))
-	for k, v := range points.Points() {
-		sortedPoints[k] = v.String()
-	}
-	sort.Strings(sortedPoints)
-	for _, v := range sortedPoints {
-		fmt.Printf("%s\n", v)
-	}
-	return nil
+	return i.client.Write(points)
 }
 
 func (i *Influx) getAllMetrics() map[string]map[string]interface{} {
@@ -299,15 +284,16 @@ func (i *Influx) getAllMetrics() map[string]map[string]interface{} {
 			values["value"] = metric.Value()
 		case metrics.Timer:
 			t := metric.Snapshot()
-			ps := t.Percentiles([]float64{0.5, 0.95, 0.99, 0.999})
+			ps := t.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
 			values["count"] = t.Count()
 			values["min"] = t.Min()
 			values["max"] = t.Max()
 			values["mean"] = t.Mean()
 			values["stddev"] = t.StdDev()
 			values["p50"] = ps[0]
-			values["p95"] = ps[1]
-			values["p99"] = ps[2]
+			values["p75"] = ps[1]
+			values["p95"] = ps[2]
+			values["p99"] = ps[3]
 			values["p999"] = ps[3]
 			values["1m.rate"] = t.Rate1()
 			values["5m.rate"] = t.Rate5()
