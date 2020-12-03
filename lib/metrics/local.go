@@ -40,15 +40,6 @@ func (l *LocalStat) Set(value int64) error {
 	return nil
 }
 
-func (l *LocalStat) LabelLength() int {
-	count := 0
-	l.labelsAndValues.Range(func(key, value interface{}) bool {
-		count++
-		return true
-	})
-	return count
-}
-
 func (l *LocalStat) setLabelsAndValues(ls, vs []string) *LocalStat {
 	for i, k := range ls {
 		l.labelsAndValues.Store(k, vs[i])
