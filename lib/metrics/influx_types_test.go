@@ -38,7 +38,7 @@ func Test_encodeInfluxName(t *testing.T) {
 		{"empty name", "", nil, nil, ""},
 		{"no tags", "name", nil, nil, "name"},
 		{"one tag", "name", []string{"tag"}, []string{"value"}, "name,tag=value"},
-		{"escaped", "name with spaces", []string{"tag ", "t ag2 "}, []string{"value ", "value2"}, `name\ with\ spaces,t\ ag2\ =value2,tag\ =value\ `},
+		{"escaped", "name, with spaces", []string{"tag ", "t ag2 "}, []string{"value ", "value2"}, `name\,\ with\ spaces,t\ ag2\ =value2,tag\ =value\ `},
 		{"bad length tags", "name", []string{"tag", ""}, []string{"value"}, "name"},
 	}
 	for _, tt := range tests {
@@ -64,7 +64,7 @@ func Test_decodeInfluxName(t *testing.T) {
 		{"empty name", "", nil, nil, ""},
 		{"no tags", "name", nil, nil, "name"},
 		{"one tag", "name", []string{"tag"}, []string{"value"}, "name,tag=value"},
-		{"escaped", "name with spaces", []string{"tag ", "t ag2 "}, []string{"value ", "value2"}, `name\ with\ spaces,t\ ag2\ =value2,tag\ =value\ `},
+		{"escaped", "name, with spaces", []string{"tag ", "t ag2 "}, []string{"value ", "value2"}, `name\,\ with\ spaces,t\ ag2\ =value2,tag\ =value\ `},
 	}
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
