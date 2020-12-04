@@ -13,8 +13,8 @@ import (
 )
 
 func init() {
-	Constructors[TypeInflux] = TypeSpec{
-		constructor: NewInflux,
+	Constructors[TypeInfluxV1] = TypeSpec{
+		constructor: NewInfluxV1,
 		Summary: `
 Send metrics to InfluxDB 1.x using the /write endpoint.`,
 		Description: `description goes here`,
@@ -35,8 +35,8 @@ Send metrics to InfluxDB 1.x using the /write endpoint.`,
 	}
 }
 
-// InfluxConfig is config for the influx v2 metrics type.
-type InfluxConfig struct {
+// InfluxV1Config is config for the influx metrics type.
+type InfluxV1Config struct {
 	URL string `json:"url" yaml:"url"`
 	DB  string `json:"db" yaml:"db"`
 
@@ -53,9 +53,9 @@ type InfluxConfig struct {
 	Tags   map[string]string `json:"tags" yaml:"tags"`
 }
 
-// NewInfluxConfig creates an InfluxConfig struct with default values.
-func NewInfluxConfig() InfluxConfig {
-	return InfluxConfig{
+// NewInfluxV1Config creates an InfluxV1Config struct with default values.
+func NewInfluxV1Config() InfluxV1Config {
+	return InfluxV1Config{
 		URL: "http://localhost:8086",
 		DB:  "db0",
 
@@ -67,8 +67,8 @@ func NewInfluxConfig() InfluxConfig {
 	}
 }
 
-// Influx is the stats and client holder
-type Influx struct {
+// InfluxV1 is the stats and client holder
+type InfluxV1 struct {
 	client      client.Client
 	batchConfig client.BatchPointsConfig
 
@@ -80,13 +80,13 @@ type Influx struct {
 	cancel func()
 
 	registry metrics.Registry
-	config   InfluxConfig
+	config   InfluxV1Config
 	log      log.Modular
 }
 
-// NewInflux creates and returns a new Influx object.
-func NewInflux(config Config, opts ...func(Type)) (Type, error) {
-	i := &Influx{
+// NewInfluxV1 creates and returns a new InfluxV1 object.
+func NewInfluxV1(config Config, opts ...func(Type)) (Type, error) {
+	i := &InfluxV1{
 		config:   config.Influx,
 		registry: metrics.NewRegistry(),
 		log:      log.Noop(),
@@ -127,7 +127,7 @@ func NewInflux(config Config, opts ...func(Type)) (Type, error) {
 	return i, nil
 }
 
-func (i *Influx) makeClient() error {
+func (i *InfluxV1) makeClient() error {
 	var c client.Client
 	u, err := url.Parse(i.config.URL)
 	if err != nil {
@@ -153,7 +153,7 @@ func (i *Influx) makeClient() error {
 	return err
 }
 
-func (i *Influx) loop() {
+func (i *InfluxV1) loop() {
 	ticker := time.NewTicker(i.interval)
 	pingTicker := time.NewTicker(i.pingInterval)
 	defer ticker.Stop()
@@ -177,7 +177,7 @@ func (i *Influx) loop() {
 	}
 }
 
-func (i *Influx) publishRegistry() error {
+func (i *InfluxV1) publishRegistry() error {
 	points, err := client.NewBatchPoints(i.batchConfig)
 	if err != nil {
 		return fmt.Errorf("problem creating batch points for influx: %s", err)
@@ -204,7 +204,7 @@ func (i *Influx) publishRegistry() error {
 	return i.client.Write(points)
 }
 
-func (i *Influx) getAllMetrics() map[string]map[string]interface{} {
+func (i *InfluxV1) getAllMetrics() map[string]map[string]interface{} {
 	data := make(map[string]map[string]interface{})
 	i.registry.Each(func(name string, i interface{}) {
 		values := make(map[string]interface{})
@@ -238,7 +238,7 @@ func (i *Influx) getAllMetrics() map[string]map[string]interface{} {
 	return data
 }
 
-func (i *Influx) GetCounter(path string) StatCounter {
+func (i *InfluxV1) GetCounter(path string) StatCounter {
 	if len(path) == 0 {
 		return DudStat{}
 	}
@@ -247,7 +247,7 @@ func (i *Influx) GetCounter(path string) StatCounter {
 	}).(InfluxCounter)
 }
 
-func (i *Influx) GetCounterVec(path string, n []string) StatCounterVec {
+func (i *InfluxV1) GetCounterVec(path string, n []string) StatCounterVec {
 	if len(path) == 0 {
 		return fakeCounterVec(func([]string) StatCounter {
 			return DudStat{}
@@ -263,7 +263,7 @@ func (i *Influx) GetCounterVec(path string, n []string) StatCounterVec {
 	}
 }
 
-func (i *Influx) GetTimer(path string) StatTimer {
+func (i *InfluxV1) GetTimer(path string) StatTimer {
 	if len(path) == 0 {
 		return DudStat{}
 	}
@@ -272,7 +272,7 @@ func (i *Influx) GetTimer(path string) StatTimer {
 	}).(InfluxTimer)
 }
 
-func (i *Influx) GetTimerVec(path string, n []string) StatTimerVec {
+func (i *InfluxV1) GetTimerVec(path string, n []string) StatTimerVec {
 	if len(path) == 0 {
 		return fakeTimerVec(func([]string) StatTimer {
 			return DudStat{}
@@ -288,14 +288,14 @@ func (i *Influx) GetTimerVec(path string, n []string) StatTimerVec {
 	}
 }
 
-func (i *Influx) GetGauge(path string) StatGauge {
+func (i *InfluxV1) GetGauge(path string) StatGauge {
 	var result = i.registry.GetOrRegister(i.config.Prefix+path, func() metrics.Gauge {
 		return NewGauge()
 	}).(InfluxGauge)
 	return result
 }
 
-func (i *Influx) GetGaugeVec(path string, n []string) StatGaugeVec {
+func (i *InfluxV1) GetGaugeVec(path string, n []string) StatGaugeVec {
 	if len(path) == 0 {
 		return fakeGaugeVec(func([]string) StatGauge {
 			return DudStat{}
@@ -311,11 +311,11 @@ func (i *Influx) GetGaugeVec(path string, n []string) StatGaugeVec {
 	}
 }
 
-func (i *Influx) SetLogger(log log.Modular) {
+func (i *InfluxV1) SetLogger(log log.Modular) {
 	i.log = log
 }
 
-func (i *Influx) Close() error {
+func (i *InfluxV1) Close() error {
 	i.client.Close()
 	return nil
 }
