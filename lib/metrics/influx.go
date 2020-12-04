@@ -199,10 +199,6 @@ func (i *InfluxV1) loop() {
 	for {
 		select {
 		case <-i.ctx.Done():
-			i.log.Infoln("i.publishRegistry() for last time")
-			if err := i.publishRegistry(); err != nil {
-				i.log.Errorf("failed to send metrics data: %s", err)
-			}
 			return
 		case <-ticker.C:
 			if err := i.publishRegistry(); err != nil {
@@ -299,10 +295,10 @@ func (i *InfluxV1) GetCounter(path string) StatCounter {
 	}
 	encodedName := encodeInfluxName(name, labels, values)
 	return i.registry.GetOrRegister(encodedName, func() metrics.Counter {
-		return InfluxCounter{
+		return influxCounter{
 			metrics.NewCounter(),
 		}
-	}).(InfluxCounter)
+	}).(influxCounter)
 }
 
 // GetCounterVec returns a stat counter object for a path with the labels
@@ -319,10 +315,10 @@ func (i *InfluxV1) GetCounterVec(path string, n []string) StatCounterVec {
 			values = append(values, l...)
 			encodedName := encodeInfluxName(path, labels, values)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Counter {
-				return InfluxCounter{
+				return influxCounter{
 					metrics.NewCounter(),
 				}
-			}).(InfluxCounter)
+			}).(influxCounter)
 		},
 	}
 }
@@ -335,10 +331,10 @@ func (i *InfluxV1) GetTimer(path string) StatTimer {
 	}
 	encodedName := encodeInfluxName(name, labels, values)
 	return i.registry.GetOrRegister(encodedName, func() metrics.Timer {
-		return InfluxTimer{
+		return influxTimer{
 			metrics.NewTimer(),
 		}
-	}).(InfluxTimer)
+	}).(influxTimer)
 }
 
 // GetTimerVec returns a stat timer object for a path with the labels
@@ -355,10 +351,10 @@ func (i *InfluxV1) GetTimerVec(path string, n []string) StatTimerVec {
 			values = append(values, l...)
 			encodedName := encodeInfluxName(name, labels, values)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Timer {
-				return InfluxTimer{
+				return influxTimer{
 					metrics.NewTimer(),
 				}
-			}).(InfluxTimer)
+			}).(influxTimer)
 		},
 	}
 }
@@ -371,10 +367,10 @@ func (i *InfluxV1) GetGauge(path string) StatGauge {
 	}
 	encodedName := encodeInfluxName(name, labels, values)
 	var result = i.registry.GetOrRegister(encodedName, func() metrics.Gauge {
-		return InfluxGauge{
+		return influxGauge{
 			metrics.NewGauge(),
 		}
-	}).(InfluxGauge)
+	}).(influxGauge)
 	return result
 }
 
@@ -392,19 +388,24 @@ func (i *InfluxV1) GetGaugeVec(path string, n []string) StatGaugeVec {
 			values = append(values, l...)
 			encodedName := encodeInfluxName(name, labels, values)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Gauge {
-				return InfluxGauge{
+				return influxGauge{
 					metrics.NewGauge(),
 				}
-			}).(InfluxGauge)
+			}).(influxGauge)
 		},
 	}
 }
 
+// SetLogger sets the logger used to print connection errors.
 func (i *InfluxV1) SetLogger(log log.Modular) {
 	i.log = log
 }
 
+// Close stops the InfluxV1 object and closes the underlying client connection
 func (i *InfluxV1) Close() error {
+	if err := i.publishRegistry(); err != nil {
+		i.log.Errorf("failed to send metrics data: %s", err)
+	}
 	i.client.Close()
 	return nil
 }

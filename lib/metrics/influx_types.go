@@ -12,57 +12,44 @@ import (
 // not sure if this is necessary yet
 var tagEncodingSeparator = ","
 
-type InfluxGauge struct {
+type influxGauge struct {
 	metrics.Gauge
 }
 
-func NewGauge() InfluxGauge {
-	return InfluxGauge{
-		metrics.NewGauge(),
-	}
-}
-
-func (g InfluxGauge) Set(value int64) error {
+// Set sets a gauge metric.
+func (g influxGauge) Set(value int64) error {
 	g.Update(value)
 	return nil
 }
 
-func (g InfluxGauge) Incr(count int64) error {
+// Incr increments a metric by an amount.
+func (g influxGauge) Incr(count int64) error {
 	g.Update(g.Value() + count)
 	return nil
 }
 
-func (g InfluxGauge) Decr(count int64) error {
+// Decr decrements a metric by an amount.
+func (g influxGauge) Decr(count int64) error {
 	g.Update(g.Value() - count)
 	return nil
 }
 
-type InfluxCounter struct {
+type influxCounter struct {
 	metrics.Counter
 }
 
-func NewCounter() InfluxCounter {
-	return InfluxCounter{
-		metrics.NewCounter(),
-	}
-}
-
-func (i InfluxCounter) Incr(count int64) error {
+// Incr increments a metric by an amount.
+func (i influxCounter) Incr(count int64) error {
 	i.Inc(count)
 	return nil
 }
 
-type InfluxTimer struct {
+type influxTimer struct {
 	metrics.Timer
 }
 
-func NewTimer() InfluxTimer {
-	return InfluxTimer{
-		metrics.NewTimer(),
-	}
-}
-
-func (i InfluxTimer) Timing(delta int64) error {
+// Timing sets a timing metric.
+func (i influxTimer) Timing(delta int64) error {
 	i.Update(time.Duration(delta))
 	return nil
 }

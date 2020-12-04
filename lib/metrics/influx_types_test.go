@@ -4,24 +4,24 @@ import "testing"
 
 func TestInfluxStatInterface(t *testing.T) {
 
-	t.Run("InfluxGauge", func(t *testing.T) {
-		o := &InfluxGauge{}
+	t.Run("influxGauge", func(t *testing.T) {
+		o := &influxGauge{}
 		if StatGauge(o) == nil {
-			t.Errorf("InfluxGauge does not satisfy StatGauge interface")
+			t.Errorf("influxGauge does not satisfy StatGauge interface")
 		}
 	})
 
-	t.Run("InfluxCounter", func(t *testing.T) {
-		o := &InfluxCounter{}
+	t.Run("influxCounter", func(t *testing.T) {
+		o := &influxCounter{}
 		if StatCounter(o) == nil {
-			t.Errorf("InfluxCounter does not satisfy StatCounter interface")
+			t.Errorf("influxCounter does not satisfy StatCounter interface")
 		}
 	})
 
-	t.Run("InfluxTimer", func(t *testing.T) {
-		o := &InfluxTimer{}
+	t.Run("influxTimer", func(t *testing.T) {
+		o := &influxTimer{}
 		if StatTimer(o) == nil {
-			t.Errorf("InfluxTimer does not satisfy StatTimer interface")
+			t.Errorf("influxTimer does not satisfy StatTimer interface")
 		}
 	})
 }
