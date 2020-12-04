@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"sort"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -241,15 +240,6 @@ func (i *InfluxV1) publishRegistry() error {
 		} else {
 			points.AddPoint(p)
 		}
-	}
-
-	sortedPoints := make([]string, len(points.Points()))
-	for k, v := range points.Points() {
-		sortedPoints[k] = v.String()
-	}
-	sort.Strings(sortedPoints)
-	for _, v := range sortedPoints {
-		fmt.Printf("%s\n", v)
 	}
 	return i.client.Write(points)
 }
