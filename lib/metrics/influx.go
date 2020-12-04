@@ -58,7 +58,7 @@ type InfluxV1Config struct {
 	RetentionPolicy        string `json:"retention_policy" yaml:"retention_policy"`
 	WriteConsistency       string `json:"write_consistency" yaml:"write_consistency"`
 
-	PathMapping string            `json:"path_mapping" yaml:"path_mapping""`
+	PathMapping string            `json:"path_mapping" yaml:"path_mapping"`
 	Prefix      string            `json:"prefix" yaml:"prefix"`
 	Tags        map[string]string `json:"tags" yaml:"tags"`
 }
@@ -291,6 +291,7 @@ func (i *InfluxV1) getAllMetrics() map[string]map[string]interface{} {
 	return data
 }
 
+// GetCounter returns a stat counter object for a path.
 func (i *InfluxV1) GetCounter(path string) StatCounter {
 	name, labels, values := i.toCMName(path)
 	if len(name) == 0 {
@@ -298,10 +299,13 @@ func (i *InfluxV1) GetCounter(path string) StatCounter {
 	}
 	encodedName := encodeInfluxName(name, labels, values)
 	return i.registry.GetOrRegister(encodedName, func() metrics.Counter {
-		return NewCounter()
+		return InfluxCounter{
+			metrics.NewCounter(),
+		}
 	}).(InfluxCounter)
 }
 
+// GetCounterVec returns a stat counter object for a path with the labels
 func (i *InfluxV1) GetCounterVec(path string, n []string) StatCounterVec {
 	name, labels, values := i.toCMName(path)
 	if len(name) == 0 {
@@ -315,12 +319,15 @@ func (i *InfluxV1) GetCounterVec(path string, n []string) StatCounterVec {
 			values = append(values, l...)
 			encodedName := encodeInfluxName(path, labels, values)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Counter {
-				return NewCounter()
+				return InfluxCounter{
+					metrics.NewCounter(),
+				}
 			}).(InfluxCounter)
 		},
 	}
 }
 
+// GetTimer returns a stat timer object for a path.
 func (i *InfluxV1) GetTimer(path string) StatTimer {
 	name, labels, values := i.toCMName(path)
 	if len(name) == 0 {
@@ -328,10 +335,13 @@ func (i *InfluxV1) GetTimer(path string) StatTimer {
 	}
 	encodedName := encodeInfluxName(name, labels, values)
 	return i.registry.GetOrRegister(encodedName, func() metrics.Timer {
-		return NewTimer()
+		return InfluxTimer{
+			metrics.NewTimer(),
+		}
 	}).(InfluxTimer)
 }
 
+// GetTimerVec returns a stat timer object for a path with the labels
 func (i *InfluxV1) GetTimerVec(path string, n []string) StatTimerVec {
 	name, labels, values := i.toCMName(path)
 	if len(name) == 0 {
@@ -345,12 +355,15 @@ func (i *InfluxV1) GetTimerVec(path string, n []string) StatTimerVec {
 			values = append(values, l...)
 			encodedName := encodeInfluxName(name, labels, values)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Timer {
-				return NewTimer()
+				return InfluxTimer{
+					metrics.NewTimer(),
+				}
 			}).(InfluxTimer)
 		},
 	}
 }
 
+// GetGauge returns a stat gauge object for a path.
 func (i *InfluxV1) GetGauge(path string) StatGauge {
 	name, labels, values := i.toCMName(path)
 	if len(name) == 0 {
@@ -358,11 +371,14 @@ func (i *InfluxV1) GetGauge(path string) StatGauge {
 	}
 	encodedName := encodeInfluxName(name, labels, values)
 	var result = i.registry.GetOrRegister(encodedName, func() metrics.Gauge {
-		return NewGauge()
+		return InfluxGauge{
+			metrics.NewGauge(),
+		}
 	}).(InfluxGauge)
 	return result
 }
 
+// GetGaugeVec returns a stat timer object for a path with the labels
 func (i *InfluxV1) GetGaugeVec(path string, n []string) StatGaugeVec {
 	name, labels, values := i.toCMName(path)
 	if len(name) == 0 {
@@ -376,7 +392,9 @@ func (i *InfluxV1) GetGaugeVec(path string, n []string) StatGaugeVec {
 			values = append(values, l...)
 			encodedName := encodeInfluxName(name, labels, values)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Gauge {
-				return NewGauge()
+				return InfluxGauge{
+					metrics.NewGauge(),
+				}
 			}).(InfluxGauge)
 		},
 	}
