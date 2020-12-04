@@ -1262,6 +1262,24 @@ metrics:
   http_server:
     path_mapping: ${METRICS_HTTP_SERVER_PATH_MAPPING}
     prefix: ${METRICS_HTTP_SERVER_PREFIX:benthos}
+  influxv1:
+    db: ${METRICS_INFLUXV1_DB:db0}
+    include_debug_gc: ${METRICS_INFLUXV1_INCLUDE_DEBUG_GC:false}
+    include_debug_gc_interval: ${METRICS_INFLUXV1_INCLUDE_DEBUG_GC_INTERVAL:1m}
+    include_runtime: ${METRICS_INFLUXV1_INCLUDE_RUNTIME:false}
+    include_runtime_interval: ${METRICS_INFLUXV1_INCLUDE_RUNTIME_INTERVAL:1m}
+    interval: ${METRICS_INFLUXV1_INTERVAL:1m}
+    password: ${METRICS_INFLUXV1_PASSWORD}
+    path_mapping: ${METRICS_INFLUXV1_PATH_MAPPING}
+    ping_interval: ${METRICS_INFLUXV1_PING_INTERVAL:20s}
+    precision: ${METRICS_INFLUXV1_PRECISION:s}
+    prefix: ${METRICS_INFLUXV1_PREFIX:benthos.}
+    retention_policy: ${METRICS_INFLUXV1_RETENTION_POLICY}
+    tags: ${METRICS_INFLUXV1_TAGS}
+    timeout: ${METRICS_INFLUXV1_TIMEOUT:5s}
+    url: ${METRICS_INFLUXV1_URL:http://localhost:8086}
+    username: ${METRICS_INFLUXV1_USERNAME}
+    write_consistency: ${METRICS_INFLUXV1_WRITE_CONSISTENCY}
   prometheus:
     path_mapping: ${METRICS_PROMETHEUS_PATH_MAPPING}
     prefix: ${METRICS_PROMETHEUS_PREFIX:benthos}
