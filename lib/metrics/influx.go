@@ -87,7 +87,7 @@ type InfluxV1 struct {
 // NewInfluxV1 creates and returns a new InfluxV1 object.
 func NewInfluxV1(config Config, opts ...func(Type)) (Type, error) {
 	i := &InfluxV1{
-		config:   config.Influx,
+		config:   config.InfluxV1,
 		registry: metrics.NewRegistry(),
 		log:      log.Noop(),
 	}
@@ -99,15 +99,15 @@ func NewInfluxV1(config Config, opts ...func(Type)) (Type, error) {
 	}
 
 	var err error
-	if i.interval, err = time.ParseDuration(config.Influx.Interval); err != nil {
+	if i.interval, err = time.ParseDuration(config.InfluxV1.Interval); err != nil {
 		return nil, fmt.Errorf("failed to parse interval: %v", err)
 	}
 
-	if i.pingInterval, err = time.ParseDuration(config.Influx.PingInterval); err != nil {
+	if i.pingInterval, err = time.ParseDuration(config.InfluxV1.PingInterval); err != nil {
 		return nil, fmt.Errorf("failed to parse ping interval: %v", err)
 	}
 
-	if i.timeout, err = time.ParseDuration(config.Influx.Timeout); err != nil {
+	if i.timeout, err = time.ParseDuration(config.InfluxV1.Timeout); err != nil {
 		return nil, fmt.Errorf("failed to parse timeout interval: %v", err)
 	}
 
@@ -116,10 +116,10 @@ func NewInfluxV1(config Config, opts ...func(Type)) (Type, error) {
 	}
 
 	i.batchConfig = client.BatchPointsConfig{
-		Precision:        config.Influx.Precision,
-		Database:         config.Influx.DB,
-		RetentionPolicy:  config.Influx.RetentionPolicy,
-		WriteConsistency: config.Influx.WriteConsistency,
+		Precision:        config.InfluxV1.Precision,
+		Database:         config.InfluxV1.DB,
+		RetentionPolicy:  config.InfluxV1.RetentionPolicy,
+		WriteConsistency: config.InfluxV1.WriteConsistency,
 	}
 
 	go i.loop()

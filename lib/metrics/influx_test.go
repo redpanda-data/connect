@@ -144,7 +144,7 @@ func TestInflux_makeClientUDP(t *testing.T) {
 	config := NewConfig()
 	influxConfig := NewInfluxV1Config()
 	influxConfig.URL = "udp://localhost:8065"
-	config.Influx = influxConfig
+	config.InfluxV1 = influxConfig
 	flux, err := NewInfluxV1(config)
 	if err != nil {
 		t.Errorf("unexpected error %s", err)
@@ -159,7 +159,7 @@ func TestInflux_makeClientInvalid(t *testing.T) {
 	config := NewConfig()
 	influxConfig := NewInfluxV1Config()
 	influxConfig.URL = "scheme://localhost:8065"
-	config.Influx = influxConfig
+	config.InfluxV1 = influxConfig
 	flux, err := NewInfluxV1(config)
 	if err == nil {
 		t.Errorf("expected error but did not receive one")
