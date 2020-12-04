@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"sort"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -24,6 +25,10 @@ Send metrics to InfluxDB 1.x using the /write endpoint.`,
 			docs.FieldAdvanced("username", "influx username."),
 			docs.FieldAdvanced("password", "influx password."),
 			docs.FieldAdvanced("prefix", "prefix all measurement names."),
+			docs.FieldAdvanced("include_runtime", "go runtime stats will be collected and reported."),
+			docs.FieldAdvanced("include_runtime_interval", "how often runtime stats are collected"),
+			docs.FieldAdvanced("include_debug_gc", "go gc stats will be collected and reported."),
+			docs.FieldAdvanced("include_debug_gc_interval", "how often gc stats are collected"),
 			docs.FieldAdvanced("interval", "how often to send metrics to influx."),
 			docs.FieldAdvanced("ping_interval", "how often to poll health of influx."),
 			docs.FieldAdvanced("timeout", "how long to wait for response from influx for both ping and writing metrics."),
@@ -40,17 +45,22 @@ type InfluxV1Config struct {
 	URL string `json:"url" yaml:"url"`
 	DB  string `json:"db" yaml:"db"`
 
-	Interval         string `json:"interval" yaml:"interval"`
-	Password         string `json:"password" yaml:"password"`
-	PingInterval     string `json:"ping_interval" yaml:"ping_interval"`
-	Precision        string `json:"precision" yaml:"precision"`
-	Timeout          string `json:"timeout" yaml:"timeout"`
-	Username         string `json:"username" yaml:"username"`
-	RetentionPolicy  string `json:"retention_policy" yaml:"retention_policy"`
-	WriteConsistency string `json:"write_consistency" yaml:"write_consistency"`
+	Interval               string `json:"interval" yaml:"interval"`
+	IncludeRuntime         bool   `json:"include_runtime" yaml:"include_runtime"`
+	IncludeRuntimeInterval string `json:"include_runtime_interval" yaml:"include_runtime_interval"`
+	IncludeDebugGC         bool   `json:"include_debug_gc" yaml:"include_debug_gc"`
+	IncludeDebugGCInterval string `json:"include_debug_gc_interval" yaml:"include_debug_gc_interval"`
+	Password               string `json:"password" yaml:"password"`
+	PingInterval           string `json:"ping_interval" yaml:"ping_interval"`
+	Precision              string `json:"precision" yaml:"precision"`
+	Timeout                string `json:"timeout" yaml:"timeout"`
+	Username               string `json:"username" yaml:"username"`
+	RetentionPolicy        string `json:"retention_policy" yaml:"retention_policy"`
+	WriteConsistency       string `json:"write_consistency" yaml:"write_consistency"`
 
-	Prefix string            `json:"prefix" yaml:"prefix"`
-	Tags   map[string]string `json:"tags" yaml:"tags"`
+	PathMapping string            `json:"path_mapping" yaml:"path_mapping""`
+	Prefix      string            `json:"prefix" yaml:"prefix"`
+	Tags        map[string]string `json:"tags" yaml:"tags"`
 }
 
 // NewInfluxV1Config creates an InfluxV1Config struct with default values.
@@ -59,11 +69,13 @@ func NewInfluxV1Config() InfluxV1Config {
 		URL: "http://localhost:8086",
 		DB:  "db0",
 
-		Prefix:       "benthos.",
-		Precision:    "s",
-		Interval:     "1m",
-		PingInterval: "20s",
-		Timeout:      "5s",
+		Prefix:                 "benthos.",
+		Precision:              "s",
+		Interval:               "1m",
+		PingInterval:           "20s",
+		Timeout:                "5s",
+		IncludeRuntimeInterval: "1m",
+		IncludeDebugGCInterval: "1m",
 	}
 }
 
@@ -79,9 +91,10 @@ type InfluxV1 struct {
 	ctx    context.Context
 	cancel func()
 
-	registry metrics.Registry
-	config   InfluxV1Config
-	log      log.Modular
+	pathMapping *pathMapping
+	registry    metrics.Registry
+	config      InfluxV1Config
+	log         log.Modular
 }
 
 // NewInfluxV1 creates and returns a new InfluxV1 object.
@@ -98,17 +111,39 @@ func NewInfluxV1(config Config, opts ...func(Type)) (Type, error) {
 		opt(i)
 	}
 
+	if config.InfluxV1.IncludeRuntime {
+		metrics.RegisterRuntimeMemStats(i.registry)
+		interval, err := time.ParseDuration(config.InfluxV1.IncludeRuntimeInterval)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse interval: %s", err)
+		}
+		go metrics.CaptureRuntimeMemStats(i.registry, interval)
+	}
+
+	if config.InfluxV1.IncludeDebugGC {
+		metrics.RegisterDebugGCStats(i.registry)
+		interval, err := time.ParseDuration(config.InfluxV1.IncludeDebugGCInterval)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse interval: %s", err)
+		}
+		go metrics.CaptureDebugGCStats(i.registry, interval)
+	}
+
 	var err error
+	if i.pathMapping, err = newPathMapping(config.InfluxV1.PathMapping, i.log); err != nil {
+		return nil, fmt.Errorf("failed to init path mapping: %v", err)
+	}
+
 	if i.interval, err = time.ParseDuration(config.InfluxV1.Interval); err != nil {
-		return nil, fmt.Errorf("failed to parse interval: %v", err)
+		return nil, fmt.Errorf("failed to parse interval: %s", err)
 	}
 
 	if i.pingInterval, err = time.ParseDuration(config.InfluxV1.PingInterval); err != nil {
-		return nil, fmt.Errorf("failed to parse ping interval: %v", err)
+		return nil, fmt.Errorf("failed to parse ping interval: %s", err)
 	}
 
 	if i.timeout, err = time.ParseDuration(config.InfluxV1.Timeout); err != nil {
-		return nil, fmt.Errorf("failed to parse timeout interval: %v", err)
+		return nil, fmt.Errorf("failed to parse timeout interval: %s", err)
 	}
 
 	if err = i.makeClient(); err != nil {
@@ -125,6 +160,10 @@ func NewInfluxV1(config Config, opts ...func(Type)) (Type, error) {
 	go i.loop()
 
 	return i, nil
+}
+
+func (i *InfluxV1) toCMName(dotSepName string) (string, []string, []string) {
+	return i.pathMapping.mapPathWithTags(dotSepName)
 }
 
 func (i *InfluxV1) makeClient() error {
@@ -160,17 +199,21 @@ func (i *InfluxV1) loop() {
 	for {
 		select {
 		case <-i.ctx.Done():
+			i.log.Infoln("i.publishRegistry() for last time")
+			if err := i.publishRegistry(); err != nil {
+				i.log.Errorf("failed to send metrics data: %s", err)
+			}
 			return
 		case <-ticker.C:
 			if err := i.publishRegistry(); err != nil {
-				i.log.Errorf("failed to send metrics data: %v", err)
+				i.log.Errorf("failed to send metrics data: %s", err)
 			}
 		case <-pingTicker.C:
 			_, _, err := i.client.Ping(i.timeout)
 			if err != nil {
-				i.log.Warnf("unable to ping influx endpoint: %v", err)
+				i.log.Warnf("unable to ping influx endpoint: %s", err)
 				if err = i.makeClient(); err != nil {
-					i.log.Errorf("unable to recreate client: %v", err)
+					i.log.Errorf("unable to recreate client: %s", err)
 				}
 			}
 		}
@@ -187,19 +230,29 @@ func (i *InfluxV1) publishRegistry() error {
 	for k, v := range all {
 		name, normalTags := decodeInfluxName(k)
 		tags := make(map[string]string, len(i.config.Tags)+len(normalTags))
-		// add global tags
-		for k, v := range i.config.Tags {
-			tags[k] = v
-		}
-		// override any actual tags
+		// apply normal tags
 		for k, v := range normalTags {
 			tags[k] = v
 		}
-		p, err := client.NewPoint(name, tags, v, now)
-		if err != nil {
-			i.log.Errorf("problem formatting metrics: %s", err)
+		// override with any global
+		for k, v := range i.config.Tags {
+			tags[k] = v
 		}
-		points.AddPoint(p)
+		p, err := client.NewPoint(i.config.Prefix+name, tags, v, now)
+		if err != nil {
+			i.log.Debugf("problem formatting metrics on %s: %s", name, err)
+		} else {
+			points.AddPoint(p)
+		}
+	}
+
+	sortedPoints := make([]string, len(points.Points()))
+	for k, v := range points.Points() {
+		sortedPoints[k] = v.String()
+	}
+	sort.Strings(sortedPoints)
+	for _, v := range sortedPoints {
+		fmt.Printf("%s\n", v)
 	}
 	return i.client.Write(points)
 }
@@ -239,23 +292,28 @@ func (i *InfluxV1) getAllMetrics() map[string]map[string]interface{} {
 }
 
 func (i *InfluxV1) GetCounter(path string) StatCounter {
-	if len(path) == 0 {
+	name, labels, values := i.toCMName(path)
+	if len(name) == 0 {
 		return DudStat{}
 	}
-	return i.registry.GetOrRegister(i.config.Prefix+path, func() metrics.Counter {
+	encodedName := encodeInfluxName(name, labels, values)
+	return i.registry.GetOrRegister(encodedName, func() metrics.Counter {
 		return NewCounter()
 	}).(InfluxCounter)
 }
 
 func (i *InfluxV1) GetCounterVec(path string, n []string) StatCounterVec {
-	if len(path) == 0 {
+	name, labels, values := i.toCMName(path)
+	if len(name) == 0 {
 		return fakeCounterVec(func([]string) StatCounter {
 			return DudStat{}
 		})
 	}
+	labels = append(labels, n...)
 	return &fCounterVec{
 		f: func(l []string) StatCounter {
-			encodedName := encodeInfluxName(i.config.Prefix+path, n, l)
+			values = append(values, l...)
+			encodedName := encodeInfluxName(path, labels, values)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Counter {
 				return NewCounter()
 			}).(InfluxCounter)
@@ -264,23 +322,28 @@ func (i *InfluxV1) GetCounterVec(path string, n []string) StatCounterVec {
 }
 
 func (i *InfluxV1) GetTimer(path string) StatTimer {
-	if len(path) == 0 {
+	name, labels, values := i.toCMName(path)
+	if len(name) == 0 {
 		return DudStat{}
 	}
-	return i.registry.GetOrRegister(i.config.Prefix+path, func() metrics.Timer {
+	encodedName := encodeInfluxName(name, labels, values)
+	return i.registry.GetOrRegister(encodedName, func() metrics.Timer {
 		return NewTimer()
 	}).(InfluxTimer)
 }
 
 func (i *InfluxV1) GetTimerVec(path string, n []string) StatTimerVec {
-	if len(path) == 0 {
+	name, labels, values := i.toCMName(path)
+	if len(name) == 0 {
 		return fakeTimerVec(func([]string) StatTimer {
 			return DudStat{}
 		})
 	}
+	labels = append(labels, n...)
 	return &fTimerVec{
 		f: func(l []string) StatTimer {
-			encodedName := encodeInfluxName(i.config.Prefix+path, n, l)
+			values = append(values, l...)
+			encodedName := encodeInfluxName(name, labels, values)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Timer {
 				return NewTimer()
 			}).(InfluxTimer)
@@ -289,21 +352,29 @@ func (i *InfluxV1) GetTimerVec(path string, n []string) StatTimerVec {
 }
 
 func (i *InfluxV1) GetGauge(path string) StatGauge {
-	var result = i.registry.GetOrRegister(i.config.Prefix+path, func() metrics.Gauge {
+	name, labels, values := i.toCMName(path)
+	if len(name) == 0 {
+		return DudStat{}
+	}
+	encodedName := encodeInfluxName(name, labels, values)
+	var result = i.registry.GetOrRegister(encodedName, func() metrics.Gauge {
 		return NewGauge()
 	}).(InfluxGauge)
 	return result
 }
 
 func (i *InfluxV1) GetGaugeVec(path string, n []string) StatGaugeVec {
-	if len(path) == 0 {
+	name, labels, values := i.toCMName(path)
+	if len(name) == 0 {
 		return fakeGaugeVec(func([]string) StatGauge {
 			return DudStat{}
 		})
 	}
+	labels = append(labels, n...)
 	return &fGaugeVec{
 		f: func(l []string) StatGauge {
-			encodedName := encodeInfluxName(i.config.Prefix+path, n, l)
+			values = append(values, l...)
+			encodedName := encodeInfluxName(name, labels, values)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Gauge {
 				return NewGauge()
 			}).(InfluxGauge)
