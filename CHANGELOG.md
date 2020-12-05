@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - Unit tests that define environment variables that are run serially (`parallel: false`) will retain those environment variables during execution, as opposed to only at config parse time.
+- Lambda distributions now look for config files relative to the binary location, allowing you to deploy configs from the same zip as the binary.
 
 ### Fixed
 

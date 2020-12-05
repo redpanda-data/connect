@@ -19,6 +19,8 @@ var handler *serverless.Handler
 func Run() {
 	// A list of default config paths to check for if not explicitly defined
 	defaultPaths := []string{
+		"./benthos.yaml",
+		"./config.yaml",
 		"/benthos.yaml",
 		"/etc/benthos/config.yaml",
 		"/etc/benthos.yaml",
