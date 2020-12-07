@@ -47,8 +47,8 @@ metrics:
     password: ""
     prefix: benthos.
     include:
-      debug_gc: ""
       runtime: ""
+      debug_gc: ""
     interval: 1m
     ping_interval: 20s
     precision: s
@@ -108,19 +108,37 @@ Default: `"benthos."`
 
 ### `include`
 
-a time duration that when specified, the according set of metrics will be polled and collected. 
-This collection may have some performance implications as it acquires a global semaphore and does stoptheworld.
+collecting these metrics may have some performance implications as it acquires a global semaphore and does stoptheworld().
 
 
 Type: `object`  
-Default: `{"debug_gc":"","runtime":""}`  
+
+### `include.runtime`
+
+how often to poll and collect runtime metrics at the duration set.
+
+
+Type: `string`  
+Default: `""`  
 
 ```yaml
 # Examples
 
-include:
-  debug_gc: ""
-  runtime: ""
+runtime: 1m
+```
+
+### `include.debug_gc`
+
+how often to poll and collect gc metrics at the duration set.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+debug_gc: 1m
 ```
 
 ### `interval`

@@ -24,12 +24,9 @@ Send metrics to InfluxDB 1.x using the /write endpoint.`,
 			docs.FieldAdvanced("username", "influx username."),
 			docs.FieldAdvanced("password", "influx password."),
 			docs.FieldAdvanced("prefix", "prefix all measurement names."),
-			docs.FieldAdvanced("include", `a time duration that when specified, the according set of metrics will be polled and collected. 
-This collection may have some performance implications as it acquires a global semaphore and does stoptheworld.`,
-				map[string]interface{}{
-					"runtime":  "",
-					"debug_gc": "",
-				},
+			docs.FieldAdvanced("include", `collecting these metrics may have some performance implications as it acquires a global semaphore and does stoptheworld().`).WithChildren(
+				docs.FieldCommon("runtime", "how often to poll and collect runtime metrics at the duration set.", "1m").HasDefault(""),
+				docs.FieldCommon("debug_gc", "how often to poll and collect gc metrics at the duration set.", "1m").HasDefault(""),
 			),
 			docs.FieldAdvanced("interval", "how often to send metrics to influx."),
 			docs.FieldAdvanced("ping_interval", "how often to poll health of influx."),
