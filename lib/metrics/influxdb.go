@@ -52,13 +52,13 @@ type InfluxDBConfig struct {
 	Username         string          `json:"username" yaml:"username"`
 	RetentionPolicy  string          `json:"retention_policy" yaml:"retention_policy"`
 	WriteConsistency string          `json:"write_consistency" yaml:"write_consistency"`
-	Include          IncludeInfluxDB `json:"include" yaml:"include"`
+	Include          InfluxDBInclude `json:"include" yaml:"include"`
 
 	PathMapping string            `json:"path_mapping" yaml:"path_mapping"`
 	Tags        map[string]string `json:"tags" yaml:"tags"`
 }
 
-type IncludeInfluxDB struct {
+type InfluxDBInclude struct {
 	Runtime string `json:"runtime" yaml:"runtime"`
 	DebugGC string `json:"debug_gc" yaml:"debug_gc"`
 }
@@ -88,18 +88,20 @@ type InfluxDB struct {
 	ctx    context.Context
 	cancel func()
 
-	pathMapping *pathMapping
-	registry    metrics.Registry
-	config      InfluxDBConfig
-	log         log.Modular
+	pathMapping     *pathMapping
+	registry        metrics.Registry
+	runtimeRegistry metrics.Registry
+	config          InfluxDBConfig
+	log             log.Modular
 }
 
 // NewInfluxDB creates and returns a new InfluxDB object.
 func NewInfluxDB(config Config, opts ...func(Type)) (Type, error) {
 	i := &InfluxDB{
-		config:   config.InfluxDB,
-		registry: metrics.NewRegistry(),
-		log:      log.Noop(),
+		config:          config.InfluxDB,
+		registry:        metrics.NewRegistry(),
+		runtimeRegistry: metrics.NewRegistry(),
+		log:             log.Noop(),
 	}
 
 	i.ctx, i.cancel = context.WithCancel(context.Background())
@@ -109,21 +111,21 @@ func NewInfluxDB(config Config, opts ...func(Type)) (Type, error) {
 	}
 
 	if config.InfluxDB.Include.Runtime != "" {
-		metrics.RegisterRuntimeMemStats(i.registry)
+		metrics.RegisterRuntimeMemStats(i.runtimeRegistry)
 		interval, err := time.ParseDuration(config.InfluxDB.Include.Runtime)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse interval: %s", err)
 		}
-		go metrics.CaptureRuntimeMemStats(i.registry, interval)
+		go metrics.CaptureRuntimeMemStats(i.runtimeRegistry, interval)
 	}
 
 	if config.InfluxDB.Include.DebugGC != "" {
-		metrics.RegisterDebugGCStats(i.registry)
+		metrics.RegisterDebugGCStats(i.runtimeRegistry)
 		interval, err := time.ParseDuration(config.InfluxDB.Include.DebugGC)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse interval: %s", err)
 		}
-		go metrics.CaptureDebugGCStats(i.registry, interval)
+		go metrics.CaptureDebugGCStats(i.runtimeRegistry, interval)
 	}
 
 	var err error
@@ -193,6 +195,7 @@ func (i *InfluxDB) loop() {
 	ticker := time.NewTicker(i.interval)
 	pingTicker := time.NewTicker(i.pingInterval)
 	defer ticker.Stop()
+	defer pingTicker.Stop()
 	for {
 		select {
 		case <-i.ctx.Done():
@@ -238,39 +241,68 @@ func (i *InfluxDB) publishRegistry() error {
 			points.AddPoint(p)
 		}
 	}
+
 	return i.client.Write(points)
+}
+
+func getMetricValues(i interface{}) map[string]interface{} {
+	var values map[string]interface{}
+	switch metric := i.(type) {
+	case metrics.Counter:
+		values = make(map[string]interface{}, 1)
+		values["count"] = metric.Count()
+	case metrics.Gauge:
+		values = make(map[string]interface{}, 1)
+		values["value"] = metric.Value()
+	case metrics.GaugeFloat64:
+		values = make(map[string]interface{}, 1)
+		values["value"] = metric.Value()
+	case metrics.Timer:
+		values = make(map[string]interface{}, 14)
+		t := metric.Snapshot()
+		ps := t.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
+		values["count"] = t.Count()
+		values["min"] = t.Min()
+		values["max"] = t.Max()
+		values["mean"] = t.Mean()
+		values["stddev"] = t.StdDev()
+		values["p50"] = ps[0]
+		values["p75"] = ps[1]
+		values["p95"] = ps[2]
+		values["p99"] = ps[3]
+		values["p999"] = ps[4]
+		values["1m.rate"] = t.Rate1()
+		values["5m.rate"] = t.Rate5()
+		values["15m.rate"] = t.Rate15()
+		values["mean.rate"] = t.RateMean()
+	case metrics.Histogram:
+		values = make(map[string]interface{}, 10)
+		t := metric.Snapshot()
+		ps := t.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
+		values["count"] = t.Count()
+		values["min"] = t.Min()
+		values["max"] = t.Max()
+		values["mean"] = t.Mean()
+		values["stddev"] = t.StdDev()
+		values["p50"] = ps[0]
+		values["p75"] = ps[1]
+		values["p95"] = ps[2]
+		values["p99"] = ps[3]
+		values["p999"] = ps[4]
+	}
+	return values
 }
 
 func (i *InfluxDB) getAllMetrics() map[string]map[string]interface{} {
 	data := make(map[string]map[string]interface{})
-	i.registry.Each(func(name string, i interface{}) {
-		values := make(map[string]interface{})
-		switch metric := i.(type) {
-		case metrics.Counter:
-			values["count"] = metric.Count()
-		case metrics.Gauge:
-			values["value"] = metric.Value()
-		case metrics.GaugeFloat64:
-			values["value"] = metric.Value()
-		case metrics.Timer:
-			t := metric.Snapshot()
-			ps := t.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
-			values["count"] = t.Count()
-			values["min"] = t.Min()
-			values["max"] = t.Max()
-			values["mean"] = t.Mean()
-			values["stddev"] = t.StdDev()
-			values["p50"] = ps[0]
-			values["p75"] = ps[1]
-			values["p95"] = ps[2]
-			values["p99"] = ps[3]
-			values["p999"] = ps[3]
-			values["1m.rate"] = t.Rate1()
-			values["5m.rate"] = t.Rate5()
-			values["15m.rate"] = t.Rate15()
-			values["mean.rate"] = t.RateMean()
-		}
+	i.registry.Each(func(name string, metric interface{}) {
+		values := getMetricValues(metric)
 		data[name] = values
+	})
+	i.runtimeRegistry.Each(func(name string, metric interface{}) {
+		pathMappedName := i.pathMapping.mapPathNoTags(name)
+		values := getMetricValues(metric)
+		data[pathMappedName] = values
 	})
 	return data
 }
