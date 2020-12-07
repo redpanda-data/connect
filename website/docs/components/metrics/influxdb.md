@@ -67,7 +67,7 @@ description goes here
 
 ### `url`
 
-[http|udp]://host:port combination required to specify influx host.
+[http|udp]://host:port combination required to specify host.
 
 
 Type: `string`  
@@ -75,7 +75,7 @@ Default: `"http://localhost:8086"`
 
 ### `db`
 
-name of the influx database to use.
+name of the database to use.
 
 
 Type: `string`  
@@ -83,7 +83,7 @@ Default: `"db0"`
 
 ### `username`
 
-influx username.
+username.
 
 
 Type: `string`  
@@ -91,7 +91,7 @@ Default: `""`
 
 ### `password`
 
-influx password.
+password.
 
 
 Type: `string`  
@@ -134,7 +134,7 @@ debug_gc: 1m
 
 ### `interval`
 
-how often to send metrics to influx.
+how often to send metrics.
 
 
 Type: `string`  
@@ -142,7 +142,7 @@ Default: `"1m"`
 
 ### `ping_interval`
 
-how often to poll health of influx.
+how often to poll health.
 
 
 Type: `string`  
@@ -150,7 +150,7 @@ Default: `"20s"`
 
 ### `precision`
 
-[ns|us|ms|s] timestamp precision passed to influx.
+[ns|us|ms|s] timestamp precision passed to write api.
 
 
 Type: `string`  
@@ -158,7 +158,7 @@ Default: `"s"`
 
 ### `timeout`
 
-how long to wait for response from influx for both ping and writing metrics.
+how long to wait for response for both ping and writing metrics.
 
 
 Type: `string`  
@@ -166,7 +166,7 @@ Default: `"5s"`
 
 ### `tags`
 
-tags to add to each metric sent to influx.
+global tags added to each metric.
 
 
 Type: `object`  
