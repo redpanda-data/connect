@@ -172,6 +172,14 @@ tags to add to each metric sent to influx.
 Type: `object`  
 Default: `{}`  
 
+```yaml
+# Examples
+
+tags:
+  hostname: localhost
+  zone: danger
+```
+
 ### `retention_policy`
 
 sets the retention policy for each write.
