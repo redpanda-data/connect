@@ -17,7 +17,7 @@ func init() {
 		constructor: NewInfluxDB,
 		Summary: `
 Send metrics to InfluxDB 1.x using the /write endpoint.`,
-		Description: `description goes here`,
+		Description: `see https://docs.influxdata.com/influxdb/v1.8/tools/api/#write-http-endpoint for further details on write the api`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("url", "[http|udp]://host:port combination required to specify host."),
 			docs.FieldCommon("db", "name of the database to use."),

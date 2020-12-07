@@ -61,7 +61,7 @@ metrics:
 </TabItem>
 </Tabs>
 
-description goes here
+see https://docs.influxdata.com/influxdb/v1.8/tools/api/#write-http-endpoint for further details on write the api
 
 ## Fields
 
