@@ -12,7 +12,7 @@ import (
 	"github.com/ory/dockertest/v3"
 )
 
-func TestInfluxV1Integration(t *testing.T) {
+func TestInfluxIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -64,17 +64,17 @@ func TestInfluxV1Integration(t *testing.T) {
 	}
 
 	globalConfig := NewConfig()
-	config := NewInfluxV1Config()
+	config := NewInfluxConfig()
 	config.URL = url
 	config.Interval = "1s"
 	config.Tags = map[string]string{"hostname": "localhost"}
-	globalConfig.InfluxV1 = config
+	globalConfig.Influx = config
 
-	flux, err := NewInfluxV1(globalConfig)
+	flux, err := NewInflux(globalConfig)
 	if err != nil {
-		t.Fatalf("problem creating to InfluxV1: %s", err)
+		t.Fatalf("problem creating to Influx: %s", err)
 	}
-	i := flux.(*InfluxV1)
+	i := flux.(*Influx)
 	i.client = c
 
 	t.Run("testInfluxConnect", func(t *testing.T) {

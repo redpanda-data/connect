@@ -46,7 +46,7 @@ const (
 	TypeBlackList  = "blacklist"
 	TypeCloudWatch = "cloudwatch"
 	TypeHTTPServer = "http_server"
-	TypeInfluxV1   = "influxv1"
+	TypeInflux     = "influx"
 	TypePrometheus = "prometheus"
 	TypeRename     = "rename"
 	TypeStatsd     = "statsd"
@@ -63,7 +63,7 @@ type Config struct {
 	Blacklist  BlacklistConfig  `json:"blacklist" yaml:"blacklist"`
 	CloudWatch CloudWatchConfig `json:"cloudwatch" yaml:"cloudwatch"`
 	HTTP       HTTPConfig       `json:"http_server" yaml:"http_server"`
-	InfluxV1   InfluxV1Config   `json:"influxv1" yaml:"influxv1"`
+	Influx     InfluxConfig     `json:"influx" yaml:"influx"`
 	Prometheus PrometheusConfig `json:"prometheus" yaml:"prometheus"`
 	Rename     RenameConfig     `json:"rename" yaml:"rename"`
 	Statsd     StatsdConfig     `json:"statsd" yaml:"statsd"`
@@ -78,7 +78,7 @@ func NewConfig() Config {
 		Blacklist:  NewBlacklistConfig(),
 		CloudWatch: NewCloudWatchConfig(),
 		HTTP:       NewHTTPConfig(),
-		InfluxV1:   NewInfluxV1Config(),
+		Influx:     NewInfluxConfig(),
 		Prometheus: NewPrometheusConfig(),
 		Rename:     NewRenameConfig(),
 		Statsd:     NewStatsdConfig(),

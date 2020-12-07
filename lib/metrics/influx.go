@@ -13,8 +13,8 @@ import (
 )
 
 func init() {
-	Constructors[TypeInfluxV1] = TypeSpec{
-		constructor: NewInfluxV1,
+	Constructors[TypeInflux] = TypeSpec{
+		constructor: NewInflux,
 		Summary: `
 Send metrics to InfluxDB 1.x using the /write endpoint.`,
 		Description: `description goes here`,
@@ -24,10 +24,13 @@ Send metrics to InfluxDB 1.x using the /write endpoint.`,
 			docs.FieldAdvanced("username", "influx username."),
 			docs.FieldAdvanced("password", "influx password."),
 			docs.FieldAdvanced("prefix", "prefix all measurement names."),
-			docs.FieldAdvanced("include_runtime", "go runtime stats will be collected and reported."),
-			docs.FieldAdvanced("include_runtime_interval", "how often runtime stats are collected"),
-			docs.FieldAdvanced("include_debug_gc", "go gc stats will be collected and reported."),
-			docs.FieldAdvanced("include_debug_gc_interval", "how often gc stats are collected"),
+			docs.FieldAdvanced("include", `a time duration that when specified, the according set of metrics will be polled and collected. 
+This collection may have some performance implications as it acquires a global semaphore and does stoptheworld.`,
+				map[string]interface{}{
+					"runtime":  "",
+					"debug_gc": "",
+				},
+			),
 			docs.FieldAdvanced("interval", "how often to send metrics to influx."),
 			docs.FieldAdvanced("ping_interval", "how often to poll health of influx."),
 			docs.FieldAdvanced("precision", "[ns|us|ms|s] timestamp precision passed to influx."),
@@ -40,47 +43,47 @@ Send metrics to InfluxDB 1.x using the /write endpoint.`,
 	}
 }
 
-// InfluxV1Config is config for the influx metrics type.
-type InfluxV1Config struct {
+// InfluxConfig is config for the influx metrics type.
+type InfluxConfig struct {
 	URL string `json:"url" yaml:"url"`
 	DB  string `json:"db" yaml:"db"`
 
-	Interval               string `json:"interval" yaml:"interval"`
-	IncludeRuntime         bool   `json:"include_runtime" yaml:"include_runtime"`
-	IncludeRuntimeInterval string `json:"include_runtime_interval" yaml:"include_runtime_interval"`
-	IncludeDebugGC         bool   `json:"include_debug_gc" yaml:"include_debug_gc"`
-	IncludeDebugGCInterval string `json:"include_debug_gc_interval" yaml:"include_debug_gc_interval"`
-	Password               string `json:"password" yaml:"password"`
-	PingInterval           string `json:"ping_interval" yaml:"ping_interval"`
-	Precision              string `json:"precision" yaml:"precision"`
-	Timeout                string `json:"timeout" yaml:"timeout"`
-	Username               string `json:"username" yaml:"username"`
-	RetentionPolicy        string `json:"retention_policy" yaml:"retention_policy"`
-	WriteConsistency       string `json:"write_consistency" yaml:"write_consistency"`
+	Interval         string  `json:"interval" yaml:"interval"`
+	Password         string  `json:"password" yaml:"password"`
+	PingInterval     string  `json:"ping_interval" yaml:"ping_interval"`
+	Precision        string  `json:"precision" yaml:"precision"`
+	Timeout          string  `json:"timeout" yaml:"timeout"`
+	Username         string  `json:"username" yaml:"username"`
+	RetentionPolicy  string  `json:"retention_policy" yaml:"retention_policy"`
+	WriteConsistency string  `json:"write_consistency" yaml:"write_consistency"`
+	Include          Include `json:"include" yaml:"include"`
 
 	PathMapping string            `json:"path_mapping" yaml:"path_mapping"`
 	Prefix      string            `json:"prefix" yaml:"prefix"`
 	Tags        map[string]string `json:"tags" yaml:"tags"`
 }
 
-// NewInfluxV1Config creates an InfluxV1Config struct with default values.
-func NewInfluxV1Config() InfluxV1Config {
-	return InfluxV1Config{
+type Include struct {
+	Runtime string `json:"runtime" yaml:"runtime"`
+	DebugGC string `json:"debug_gc" yaml:"debug_gc"`
+}
+
+// NewInfluxConfig creates an InfluxConfig struct with default values.
+func NewInfluxConfig() InfluxConfig {
+	return InfluxConfig{
 		URL: "http://localhost:8086",
 		DB:  "db0",
 
-		Prefix:                 "benthos.",
-		Precision:              "s",
-		Interval:               "1m",
-		PingInterval:           "20s",
-		Timeout:                "5s",
-		IncludeRuntimeInterval: "1m",
-		IncludeDebugGCInterval: "1m",
+		Prefix:       "benthos.",
+		Precision:    "s",
+		Interval:     "1m",
+		PingInterval: "20s",
+		Timeout:      "5s",
 	}
 }
 
-// InfluxV1 is the stats and client holder
-type InfluxV1 struct {
+// Influx is the stats and client holder
+type Influx struct {
 	client      client.Client
 	batchConfig client.BatchPointsConfig
 
@@ -93,14 +96,14 @@ type InfluxV1 struct {
 
 	pathMapping *pathMapping
 	registry    metrics.Registry
-	config      InfluxV1Config
+	config      InfluxConfig
 	log         log.Modular
 }
 
-// NewInfluxV1 creates and returns a new InfluxV1 object.
-func NewInfluxV1(config Config, opts ...func(Type)) (Type, error) {
-	i := &InfluxV1{
-		config:   config.InfluxV1,
+// NewInflux creates and returns a new Influx object.
+func NewInflux(config Config, opts ...func(Type)) (Type, error) {
+	i := &Influx{
+		config:   config.Influx,
 		registry: metrics.NewRegistry(),
 		log:      log.Noop(),
 	}
@@ -111,18 +114,18 @@ func NewInfluxV1(config Config, opts ...func(Type)) (Type, error) {
 		opt(i)
 	}
 
-	if config.InfluxV1.IncludeRuntime {
+	if config.Influx.Include.Runtime != "" {
 		metrics.RegisterRuntimeMemStats(i.registry)
-		interval, err := time.ParseDuration(config.InfluxV1.IncludeRuntimeInterval)
+		interval, err := time.ParseDuration(config.Influx.Include.Runtime)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse interval: %s", err)
 		}
 		go metrics.CaptureRuntimeMemStats(i.registry, interval)
 	}
 
-	if config.InfluxV1.IncludeDebugGC {
+	if config.Influx.Include.DebugGC != "" {
 		metrics.RegisterDebugGCStats(i.registry)
-		interval, err := time.ParseDuration(config.InfluxV1.IncludeDebugGCInterval)
+		interval, err := time.ParseDuration(config.Influx.Include.DebugGC)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse interval: %s", err)
 		}
@@ -130,19 +133,19 @@ func NewInfluxV1(config Config, opts ...func(Type)) (Type, error) {
 	}
 
 	var err error
-	if i.pathMapping, err = newPathMapping(config.InfluxV1.PathMapping, i.log); err != nil {
+	if i.pathMapping, err = newPathMapping(config.Influx.PathMapping, i.log); err != nil {
 		return nil, fmt.Errorf("failed to init path mapping: %v", err)
 	}
 
-	if i.interval, err = time.ParseDuration(config.InfluxV1.Interval); err != nil {
+	if i.interval, err = time.ParseDuration(config.Influx.Interval); err != nil {
 		return nil, fmt.Errorf("failed to parse interval: %s", err)
 	}
 
-	if i.pingInterval, err = time.ParseDuration(config.InfluxV1.PingInterval); err != nil {
+	if i.pingInterval, err = time.ParseDuration(config.Influx.PingInterval); err != nil {
 		return nil, fmt.Errorf("failed to parse ping interval: %s", err)
 	}
 
-	if i.timeout, err = time.ParseDuration(config.InfluxV1.Timeout); err != nil {
+	if i.timeout, err = time.ParseDuration(config.Influx.Timeout); err != nil {
 		return nil, fmt.Errorf("failed to parse timeout interval: %s", err)
 	}
 
@@ -151,10 +154,10 @@ func NewInfluxV1(config Config, opts ...func(Type)) (Type, error) {
 	}
 
 	i.batchConfig = client.BatchPointsConfig{
-		Precision:        config.InfluxV1.Precision,
-		Database:         config.InfluxV1.DB,
-		RetentionPolicy:  config.InfluxV1.RetentionPolicy,
-		WriteConsistency: config.InfluxV1.WriteConsistency,
+		Precision:        config.Influx.Precision,
+		Database:         config.Influx.DB,
+		RetentionPolicy:  config.Influx.RetentionPolicy,
+		WriteConsistency: config.Influx.WriteConsistency,
 	}
 
 	go i.loop()
@@ -162,11 +165,11 @@ func NewInfluxV1(config Config, opts ...func(Type)) (Type, error) {
 	return i, nil
 }
 
-func (i *InfluxV1) toCMName(dotSepName string) (string, []string, []string) {
+func (i *Influx) toCMName(dotSepName string) (string, []string, []string) {
 	return i.pathMapping.mapPathWithTags(dotSepName)
 }
 
-func (i *InfluxV1) makeClient() error {
+func (i *Influx) makeClient() error {
 	var c client.Client
 	u, err := url.Parse(i.config.URL)
 	if err != nil {
@@ -192,7 +195,7 @@ func (i *InfluxV1) makeClient() error {
 	return err
 }
 
-func (i *InfluxV1) loop() {
+func (i *Influx) loop() {
 	ticker := time.NewTicker(i.interval)
 	pingTicker := time.NewTicker(i.pingInterval)
 	defer ticker.Stop()
@@ -216,7 +219,7 @@ func (i *InfluxV1) loop() {
 	}
 }
 
-func (i *InfluxV1) publishRegistry() error {
+func (i *Influx) publishRegistry() error {
 	points, err := client.NewBatchPoints(i.batchConfig)
 	if err != nil {
 		return fmt.Errorf("problem creating batch points for influx: %s", err)
@@ -244,7 +247,7 @@ func (i *InfluxV1) publishRegistry() error {
 	return i.client.Write(points)
 }
 
-func (i *InfluxV1) getAllMetrics() map[string]map[string]interface{} {
+func (i *Influx) getAllMetrics() map[string]map[string]interface{} {
 	data := make(map[string]map[string]interface{})
 	i.registry.Each(func(name string, i interface{}) {
 		values := make(map[string]interface{})
@@ -279,7 +282,7 @@ func (i *InfluxV1) getAllMetrics() map[string]map[string]interface{} {
 }
 
 // GetCounter returns a stat counter object for a path.
-func (i *InfluxV1) GetCounter(path string) StatCounter {
+func (i *Influx) GetCounter(path string) StatCounter {
 	name, labels, values := i.toCMName(path)
 	if len(name) == 0 {
 		return DudStat{}
@@ -293,7 +296,7 @@ func (i *InfluxV1) GetCounter(path string) StatCounter {
 }
 
 // GetCounterVec returns a stat counter object for a path with the labels
-func (i *InfluxV1) GetCounterVec(path string, n []string) StatCounterVec {
+func (i *Influx) GetCounterVec(path string, n []string) StatCounterVec {
 	name, labels, values := i.toCMName(path)
 	if len(name) == 0 {
 		return fakeCounterVec(func([]string) StatCounter {
@@ -315,7 +318,7 @@ func (i *InfluxV1) GetCounterVec(path string, n []string) StatCounterVec {
 }
 
 // GetTimer returns a stat timer object for a path.
-func (i *InfluxV1) GetTimer(path string) StatTimer {
+func (i *Influx) GetTimer(path string) StatTimer {
 	name, labels, values := i.toCMName(path)
 	if len(name) == 0 {
 		return DudStat{}
@@ -329,7 +332,7 @@ func (i *InfluxV1) GetTimer(path string) StatTimer {
 }
 
 // GetTimerVec returns a stat timer object for a path with the labels
-func (i *InfluxV1) GetTimerVec(path string, n []string) StatTimerVec {
+func (i *Influx) GetTimerVec(path string, n []string) StatTimerVec {
 	name, labels, values := i.toCMName(path)
 	if len(name) == 0 {
 		return fakeTimerVec(func([]string) StatTimer {
@@ -351,7 +354,7 @@ func (i *InfluxV1) GetTimerVec(path string, n []string) StatTimerVec {
 }
 
 // GetGauge returns a stat gauge object for a path.
-func (i *InfluxV1) GetGauge(path string) StatGauge {
+func (i *Influx) GetGauge(path string) StatGauge {
 	name, labels, values := i.toCMName(path)
 	if len(name) == 0 {
 		return DudStat{}
@@ -366,7 +369,7 @@ func (i *InfluxV1) GetGauge(path string) StatGauge {
 }
 
 // GetGaugeVec returns a stat timer object for a path with the labels
-func (i *InfluxV1) GetGaugeVec(path string, n []string) StatGaugeVec {
+func (i *Influx) GetGaugeVec(path string, n []string) StatGaugeVec {
 	name, labels, values := i.toCMName(path)
 	if len(name) == 0 {
 		return fakeGaugeVec(func([]string) StatGauge {
@@ -388,12 +391,12 @@ func (i *InfluxV1) GetGaugeVec(path string, n []string) StatGaugeVec {
 }
 
 // SetLogger sets the logger used to print connection errors.
-func (i *InfluxV1) SetLogger(log log.Modular) {
+func (i *Influx) SetLogger(log log.Modular) {
 	i.log = log
 }
 
-// Close stops the InfluxV1 object and closes the underlying client connection
-func (i *InfluxV1) Close() error {
+// Close reports metrics one last time and stops the Influx object and closes the underlying client connection
+func (i *Influx) Close() error {
 	if err := i.publishRegistry(); err != nil {
 		i.log.Errorf("failed to send metrics data: %s", err)
 	}

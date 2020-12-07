@@ -7,7 +7,7 @@ import (
 )
 
 func TestInfluxInterface(t *testing.T) {
-	o := &InfluxV1{}
+	o := &Influx{}
 	if Type(o) == nil {
 		t.Errorf("Type does not satisfy Type interface.")
 	}
@@ -16,8 +16,8 @@ func TestInfluxInterface(t *testing.T) {
 func TestInfluxTimers(t *testing.T) {
 
 	config := NewConfig()
-	influx, err := NewInfluxV1(config)
-	i := influx.(*InfluxV1)
+	influx, err := NewInflux(config)
+	i := influx.(*Influx)
 
 	if err != nil {
 		t.Errorf("not expecting error: %s", err)
@@ -62,8 +62,8 @@ func TestInfluxTimers(t *testing.T) {
 func TestInfluxCounters(t *testing.T) {
 
 	config := NewConfig()
-	influx, err := NewInfluxV1(config)
-	i := influx.(*InfluxV1)
+	influx, err := NewInflux(config)
+	i := influx.(*Influx)
 
 	if err != nil {
 		t.Errorf("not expecting error: %s", err)
@@ -109,8 +109,8 @@ func TestInfluxCounters(t *testing.T) {
 func TestInfluxGauge(t *testing.T) {
 
 	config := NewConfig()
-	influx, err := NewInfluxV1(config)
-	i := influx.(*InfluxV1)
+	influx, err := NewInflux(config)
+	i := influx.(*Influx)
 	i.pathMapping, err = newPathMapping(`meta buz = "first"`, log.Noop())
 
 	if err != nil {
@@ -155,11 +155,11 @@ func TestInfluxGauge(t *testing.T) {
 
 func TestInflux_makeClientDefault(t *testing.T) {
 	config := NewConfig()
-	flux, err := NewInfluxV1(config)
+	flux, err := NewInflux(config)
 	if err != nil {
 		t.Errorf("unexpected error %s", err)
 	}
-	i := flux.(*InfluxV1)
+	i := flux.(*Influx)
 	if i.client == nil {
 		t.Errorf("expected a client")
 	}
@@ -167,14 +167,14 @@ func TestInflux_makeClientDefault(t *testing.T) {
 
 func TestInflux_makeClientUDP(t *testing.T) {
 	config := NewConfig()
-	influxConfig := NewInfluxV1Config()
+	influxConfig := NewInfluxConfig()
 	influxConfig.URL = "udp://localhost:8065"
-	config.InfluxV1 = influxConfig
-	flux, err := NewInfluxV1(config)
+	config.Influx = influxConfig
+	flux, err := NewInflux(config)
 	if err != nil {
 		t.Errorf("unexpected error %s", err)
 	}
-	i := flux.(*InfluxV1)
+	i := flux.(*Influx)
 	if i.client == nil {
 		t.Errorf("expected a client")
 	}
@@ -182,10 +182,10 @@ func TestInflux_makeClientUDP(t *testing.T) {
 
 func TestInflux_makeClientInvalid(t *testing.T) {
 	config := NewConfig()
-	influxConfig := NewInfluxV1Config()
+	influxConfig := NewInfluxConfig()
 	influxConfig.URL = "scheme://localhost:8065"
-	config.InfluxV1 = influxConfig
-	flux, err := NewInfluxV1(config)
+	config.Influx = influxConfig
+	flux, err := NewInflux(config)
 	if err == nil {
 		t.Errorf("expected error but did not receive one")
 	}
