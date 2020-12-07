@@ -13,8 +13,8 @@ import (
 )
 
 func init() {
-	Constructors[TypeInflux] = TypeSpec{
-		constructor: NewInflux,
+	Constructors[TypeInfluxDB] = TypeSpec{
+		constructor: NewInfluxDB,
 		Summary: `
 Send metrics to InfluxDB 1.x using the /write endpoint.`,
 		Description: `description goes here`,
@@ -23,7 +23,6 @@ Send metrics to InfluxDB 1.x using the /write endpoint.`,
 			docs.FieldCommon("db", "name of the influx database to use."),
 			docs.FieldAdvanced("username", "influx username."),
 			docs.FieldAdvanced("password", "influx password."),
-			docs.FieldAdvanced("prefix", "prefix all measurement names."),
 			docs.FieldAdvanced("include", `collecting these metrics may have some performance implications as it acquires a global semaphore and does stoptheworld().`).WithChildren(
 				docs.FieldCommon("runtime", "how often to poll and collect runtime metrics at the duration set.", "1m").HasDefault(""),
 				docs.FieldCommon("debug_gc", "how often to poll and collect gc metrics at the duration set.", "1m").HasDefault(""),
@@ -40,38 +39,36 @@ Send metrics to InfluxDB 1.x using the /write endpoint.`,
 	}
 }
 
-// InfluxConfig is config for the influx metrics type.
-type InfluxConfig struct {
+// InfluxDBConfig is config for the influx metrics type.
+type InfluxDBConfig struct {
 	URL string `json:"url" yaml:"url"`
 	DB  string `json:"db" yaml:"db"`
 
-	Interval         string  `json:"interval" yaml:"interval"`
-	Password         string  `json:"password" yaml:"password"`
-	PingInterval     string  `json:"ping_interval" yaml:"ping_interval"`
-	Precision        string  `json:"precision" yaml:"precision"`
-	Timeout          string  `json:"timeout" yaml:"timeout"`
-	Username         string  `json:"username" yaml:"username"`
-	RetentionPolicy  string  `json:"retention_policy" yaml:"retention_policy"`
-	WriteConsistency string  `json:"write_consistency" yaml:"write_consistency"`
-	Include          Include `json:"include" yaml:"include"`
+	Interval         string          `json:"interval" yaml:"interval"`
+	Password         string          `json:"password" yaml:"password"`
+	PingInterval     string          `json:"ping_interval" yaml:"ping_interval"`
+	Precision        string          `json:"precision" yaml:"precision"`
+	Timeout          string          `json:"timeout" yaml:"timeout"`
+	Username         string          `json:"username" yaml:"username"`
+	RetentionPolicy  string          `json:"retention_policy" yaml:"retention_policy"`
+	WriteConsistency string          `json:"write_consistency" yaml:"write_consistency"`
+	Include          IncludeInfluxDB `json:"include" yaml:"include"`
 
 	PathMapping string            `json:"path_mapping" yaml:"path_mapping"`
-	Prefix      string            `json:"prefix" yaml:"prefix"`
 	Tags        map[string]string `json:"tags" yaml:"tags"`
 }
 
-type Include struct {
+type IncludeInfluxDB struct {
 	Runtime string `json:"runtime" yaml:"runtime"`
 	DebugGC string `json:"debug_gc" yaml:"debug_gc"`
 }
 
-// NewInfluxConfig creates an InfluxConfig struct with default values.
-func NewInfluxConfig() InfluxConfig {
-	return InfluxConfig{
+// NewInfluxDBConfig creates an InfluxDBConfig struct with default values.
+func NewInfluxDBConfig() InfluxDBConfig {
+	return InfluxDBConfig{
 		URL: "http://localhost:8086",
 		DB:  "db0",
 
-		Prefix:       "benthos.",
 		Precision:    "s",
 		Interval:     "1m",
 		PingInterval: "20s",
@@ -79,8 +76,8 @@ func NewInfluxConfig() InfluxConfig {
 	}
 }
 
-// Influx is the stats and client holder
-type Influx struct {
+// InfluxDB is the stats and client holder
+type InfluxDB struct {
 	client      client.Client
 	batchConfig client.BatchPointsConfig
 
@@ -93,14 +90,14 @@ type Influx struct {
 
 	pathMapping *pathMapping
 	registry    metrics.Registry
-	config      InfluxConfig
+	config      InfluxDBConfig
 	log         log.Modular
 }
 
-// NewInflux creates and returns a new Influx object.
-func NewInflux(config Config, opts ...func(Type)) (Type, error) {
-	i := &Influx{
-		config:   config.Influx,
+// NewInfluxDB creates and returns a new InfluxDB object.
+func NewInfluxDB(config Config, opts ...func(Type)) (Type, error) {
+	i := &InfluxDB{
+		config:   config.InfluxDB,
 		registry: metrics.NewRegistry(),
 		log:      log.Noop(),
 	}
@@ -111,18 +108,18 @@ func NewInflux(config Config, opts ...func(Type)) (Type, error) {
 		opt(i)
 	}
 
-	if config.Influx.Include.Runtime != "" {
+	if config.InfluxDB.Include.Runtime != "" {
 		metrics.RegisterRuntimeMemStats(i.registry)
-		interval, err := time.ParseDuration(config.Influx.Include.Runtime)
+		interval, err := time.ParseDuration(config.InfluxDB.Include.Runtime)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse interval: %s", err)
 		}
 		go metrics.CaptureRuntimeMemStats(i.registry, interval)
 	}
 
-	if config.Influx.Include.DebugGC != "" {
+	if config.InfluxDB.Include.DebugGC != "" {
 		metrics.RegisterDebugGCStats(i.registry)
-		interval, err := time.ParseDuration(config.Influx.Include.DebugGC)
+		interval, err := time.ParseDuration(config.InfluxDB.Include.DebugGC)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse interval: %s", err)
 		}
@@ -130,19 +127,19 @@ func NewInflux(config Config, opts ...func(Type)) (Type, error) {
 	}
 
 	var err error
-	if i.pathMapping, err = newPathMapping(config.Influx.PathMapping, i.log); err != nil {
+	if i.pathMapping, err = newPathMapping(config.InfluxDB.PathMapping, i.log); err != nil {
 		return nil, fmt.Errorf("failed to init path mapping: %v", err)
 	}
 
-	if i.interval, err = time.ParseDuration(config.Influx.Interval); err != nil {
+	if i.interval, err = time.ParseDuration(config.InfluxDB.Interval); err != nil {
 		return nil, fmt.Errorf("failed to parse interval: %s", err)
 	}
 
-	if i.pingInterval, err = time.ParseDuration(config.Influx.PingInterval); err != nil {
+	if i.pingInterval, err = time.ParseDuration(config.InfluxDB.PingInterval); err != nil {
 		return nil, fmt.Errorf("failed to parse ping interval: %s", err)
 	}
 
-	if i.timeout, err = time.ParseDuration(config.Influx.Timeout); err != nil {
+	if i.timeout, err = time.ParseDuration(config.InfluxDB.Timeout); err != nil {
 		return nil, fmt.Errorf("failed to parse timeout interval: %s", err)
 	}
 
@@ -151,10 +148,10 @@ func NewInflux(config Config, opts ...func(Type)) (Type, error) {
 	}
 
 	i.batchConfig = client.BatchPointsConfig{
-		Precision:        config.Influx.Precision,
-		Database:         config.Influx.DB,
-		RetentionPolicy:  config.Influx.RetentionPolicy,
-		WriteConsistency: config.Influx.WriteConsistency,
+		Precision:        config.InfluxDB.Precision,
+		Database:         config.InfluxDB.DB,
+		RetentionPolicy:  config.InfluxDB.RetentionPolicy,
+		WriteConsistency: config.InfluxDB.WriteConsistency,
 	}
 
 	go i.loop()
@@ -162,11 +159,11 @@ func NewInflux(config Config, opts ...func(Type)) (Type, error) {
 	return i, nil
 }
 
-func (i *Influx) toCMName(dotSepName string) (string, []string, []string) {
+func (i *InfluxDB) toCMName(dotSepName string) (string, []string, []string) {
 	return i.pathMapping.mapPathWithTags(dotSepName)
 }
 
-func (i *Influx) makeClient() error {
+func (i *InfluxDB) makeClient() error {
 	var c client.Client
 	u, err := url.Parse(i.config.URL)
 	if err != nil {
@@ -192,7 +189,7 @@ func (i *Influx) makeClient() error {
 	return err
 }
 
-func (i *Influx) loop() {
+func (i *InfluxDB) loop() {
 	ticker := time.NewTicker(i.interval)
 	pingTicker := time.NewTicker(i.pingInterval)
 	defer ticker.Stop()
@@ -216,7 +213,7 @@ func (i *Influx) loop() {
 	}
 }
 
-func (i *Influx) publishRegistry() error {
+func (i *InfluxDB) publishRegistry() error {
 	points, err := client.NewBatchPoints(i.batchConfig)
 	if err != nil {
 		return fmt.Errorf("problem creating batch points for influx: %s", err)
@@ -224,7 +221,7 @@ func (i *Influx) publishRegistry() error {
 	now := time.Now()
 	all := i.getAllMetrics()
 	for k, v := range all {
-		name, normalTags := decodeInfluxName(k)
+		name, normalTags := decodeInfluxDBName(k)
 		tags := make(map[string]string, len(i.config.Tags)+len(normalTags))
 		// apply normal tags
 		for k, v := range normalTags {
@@ -234,7 +231,7 @@ func (i *Influx) publishRegistry() error {
 		for k, v := range i.config.Tags {
 			tags[k] = v
 		}
-		p, err := client.NewPoint(i.config.Prefix+name, tags, v, now)
+		p, err := client.NewPoint(name, tags, v, now)
 		if err != nil {
 			i.log.Debugf("problem formatting metrics on %s: %s", name, err)
 		} else {
@@ -244,7 +241,7 @@ func (i *Influx) publishRegistry() error {
 	return i.client.Write(points)
 }
 
-func (i *Influx) getAllMetrics() map[string]map[string]interface{} {
+func (i *InfluxDB) getAllMetrics() map[string]map[string]interface{} {
 	data := make(map[string]map[string]interface{})
 	i.registry.Each(func(name string, i interface{}) {
 		values := make(map[string]interface{})
@@ -279,21 +276,21 @@ func (i *Influx) getAllMetrics() map[string]map[string]interface{} {
 }
 
 // GetCounter returns a stat counter object for a path.
-func (i *Influx) GetCounter(path string) StatCounter {
+func (i *InfluxDB) GetCounter(path string) StatCounter {
 	name, labels, values := i.toCMName(path)
 	if len(name) == 0 {
 		return DudStat{}
 	}
-	encodedName := encodeInfluxName(name, labels, values)
+	encodedName := encodeInfluxDBName(name, labels, values)
 	return i.registry.GetOrRegister(encodedName, func() metrics.Counter {
-		return influxCounter{
+		return influxDBCounter{
 			metrics.NewCounter(),
 		}
-	}).(influxCounter)
+	}).(influxDBCounter)
 }
 
 // GetCounterVec returns a stat counter object for a path with the labels
-func (i *Influx) GetCounterVec(path string, n []string) StatCounterVec {
+func (i *InfluxDB) GetCounterVec(path string, n []string) StatCounterVec {
 	name, labels, values := i.toCMName(path)
 	if len(name) == 0 {
 		return fakeCounterVec(func([]string) StatCounter {
@@ -304,32 +301,32 @@ func (i *Influx) GetCounterVec(path string, n []string) StatCounterVec {
 	return &fCounterVec{
 		f: func(l []string) StatCounter {
 			values = append(values, l...)
-			encodedName := encodeInfluxName(path, labels, values)
+			encodedName := encodeInfluxDBName(path, labels, values)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Counter {
-				return influxCounter{
+				return influxDBCounter{
 					metrics.NewCounter(),
 				}
-			}).(influxCounter)
+			}).(influxDBCounter)
 		},
 	}
 }
 
 // GetTimer returns a stat timer object for a path.
-func (i *Influx) GetTimer(path string) StatTimer {
+func (i *InfluxDB) GetTimer(path string) StatTimer {
 	name, labels, values := i.toCMName(path)
 	if len(name) == 0 {
 		return DudStat{}
 	}
-	encodedName := encodeInfluxName(name, labels, values)
+	encodedName := encodeInfluxDBName(name, labels, values)
 	return i.registry.GetOrRegister(encodedName, func() metrics.Timer {
-		return influxTimer{
+		return influxDBTimer{
 			metrics.NewTimer(),
 		}
-	}).(influxTimer)
+	}).(influxDBTimer)
 }
 
 // GetTimerVec returns a stat timer object for a path with the labels
-func (i *Influx) GetTimerVec(path string, n []string) StatTimerVec {
+func (i *InfluxDB) GetTimerVec(path string, n []string) StatTimerVec {
 	name, labels, values := i.toCMName(path)
 	if len(name) == 0 {
 		return fakeTimerVec(func([]string) StatTimer {
@@ -340,33 +337,33 @@ func (i *Influx) GetTimerVec(path string, n []string) StatTimerVec {
 	return &fTimerVec{
 		f: func(l []string) StatTimer {
 			values = append(values, l...)
-			encodedName := encodeInfluxName(name, labels, values)
+			encodedName := encodeInfluxDBName(name, labels, values)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Timer {
-				return influxTimer{
+				return influxDBTimer{
 					metrics.NewTimer(),
 				}
-			}).(influxTimer)
+			}).(influxDBTimer)
 		},
 	}
 }
 
 // GetGauge returns a stat gauge object for a path.
-func (i *Influx) GetGauge(path string) StatGauge {
+func (i *InfluxDB) GetGauge(path string) StatGauge {
 	name, labels, values := i.toCMName(path)
 	if len(name) == 0 {
 		return DudStat{}
 	}
-	encodedName := encodeInfluxName(name, labels, values)
+	encodedName := encodeInfluxDBName(name, labels, values)
 	var result = i.registry.GetOrRegister(encodedName, func() metrics.Gauge {
-		return influxGauge{
+		return influxDBGauge{
 			metrics.NewGauge(),
 		}
-	}).(influxGauge)
+	}).(influxDBGauge)
 	return result
 }
 
 // GetGaugeVec returns a stat timer object for a path with the labels
-func (i *Influx) GetGaugeVec(path string, n []string) StatGaugeVec {
+func (i *InfluxDB) GetGaugeVec(path string, n []string) StatGaugeVec {
 	name, labels, values := i.toCMName(path)
 	if len(name) == 0 {
 		return fakeGaugeVec(func([]string) StatGauge {
@@ -377,23 +374,23 @@ func (i *Influx) GetGaugeVec(path string, n []string) StatGaugeVec {
 	return &fGaugeVec{
 		f: func(l []string) StatGauge {
 			values = append(values, l...)
-			encodedName := encodeInfluxName(name, labels, values)
+			encodedName := encodeInfluxDBName(name, labels, values)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Gauge {
-				return influxGauge{
+				return influxDBGauge{
 					metrics.NewGauge(),
 				}
-			}).(influxGauge)
+			}).(influxDBGauge)
 		},
 	}
 }
 
 // SetLogger sets the logger used to print connection errors.
-func (i *Influx) SetLogger(log log.Modular) {
+func (i *InfluxDB) SetLogger(log log.Modular) {
 	i.log = log
 }
 
-// Close reports metrics one last time and stops the Influx object and closes the underlying client connection
-func (i *Influx) Close() error {
+// Close reports metrics one last time and stops the InfluxDB object and closes the underlying client connection
+func (i *InfluxDB) Close() error {
 	if err := i.publishRegistry(); err != nil {
 		i.log.Errorf("failed to send metrics data: %s", err)
 	}

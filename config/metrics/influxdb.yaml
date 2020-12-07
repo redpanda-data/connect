@@ -36,8 +36,8 @@ logger:
   static_fields:
     '@service': benthos
 metrics:
-  type: influx
-  influx:
+  type: influxdb
+  influxdb:
     db: db0
     include:
       debug_gc: ""
@@ -47,7 +47,6 @@ metrics:
     path_mapping: ""
     ping_interval: 20s
     precision: s
-    prefix: benthos.
     retention_policy: ""
     tags: {}
     timeout: 5s

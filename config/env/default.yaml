@@ -1262,23 +1262,22 @@ metrics:
   http_server:
     path_mapping: ${METRICS_HTTP_SERVER_PATH_MAPPING}
     prefix: ${METRICS_HTTP_SERVER_PREFIX:benthos}
-  influx:
-    db: ${METRICS_INFLUX_DB:db0}
+  influxdb:
+    db: ${METRICS_INFLUXDB_DB:db0}
     include:
-      debug_gc: ${METRICS_INFLUX_INCLUDE_DEBUG_GC}
-      runtime: ${METRICS_INFLUX_INCLUDE_RUNTIME}
-    interval: ${METRICS_INFLUX_INTERVAL:1m}
-    password: ${METRICS_INFLUX_PASSWORD}
-    path_mapping: ${METRICS_INFLUX_PATH_MAPPING}
-    ping_interval: ${METRICS_INFLUX_PING_INTERVAL:20s}
-    precision: ${METRICS_INFLUX_PRECISION:s}
-    prefix: ${METRICS_INFLUX_PREFIX:benthos.}
-    retention_policy: ${METRICS_INFLUX_RETENTION_POLICY}
-    tags: ${METRICS_INFLUX_TAGS}
-    timeout: ${METRICS_INFLUX_TIMEOUT:5s}
-    url: ${METRICS_INFLUX_URL:http://localhost:8086}
-    username: ${METRICS_INFLUX_USERNAME}
-    write_consistency: ${METRICS_INFLUX_WRITE_CONSISTENCY}
+      debug_gc: ${METRICS_INFLUXDB_INCLUDE_DEBUG_GC}
+      runtime: ${METRICS_INFLUXDB_INCLUDE_RUNTIME}
+    interval: ${METRICS_INFLUXDB_INTERVAL:1m}
+    password: ${METRICS_INFLUXDB_PASSWORD}
+    path_mapping: ${METRICS_INFLUXDB_PATH_MAPPING}
+    ping_interval: ${METRICS_INFLUXDB_PING_INTERVAL:20s}
+    precision: ${METRICS_INFLUXDB_PRECISION:s}
+    retention_policy: ${METRICS_INFLUXDB_RETENTION_POLICY}
+    tags: ${METRICS_INFLUXDB_TAGS}
+    timeout: ${METRICS_INFLUXDB_TIMEOUT:5s}
+    url: ${METRICS_INFLUXDB_URL:http://localhost:8086}
+    username: ${METRICS_INFLUXDB_USERNAME}
+    write_consistency: ${METRICS_INFLUXDB_WRITE_CONSISTENCY}
   prometheus:
     path_mapping: ${METRICS_PROMETHEUS_PATH_MAPPING}
     prefix: ${METRICS_PROMETHEUS_PREFIX:benthos}

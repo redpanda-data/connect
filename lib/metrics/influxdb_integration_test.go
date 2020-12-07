@@ -64,17 +64,17 @@ func TestInfluxIntegration(t *testing.T) {
 	}
 
 	globalConfig := NewConfig()
-	config := NewInfluxConfig()
+	config := NewInfluxDBConfig()
 	config.URL = url
 	config.Interval = "1s"
 	config.Tags = map[string]string{"hostname": "localhost"}
-	globalConfig.Influx = config
+	globalConfig.InfluxDB = config
 
-	flux, err := NewInflux(globalConfig)
+	flux, err := NewInfluxDB(globalConfig)
 	if err != nil {
-		t.Fatalf("problem creating to Influx: %s", err)
+		t.Fatalf("problem creating to InfluxDB: %s", err)
 	}
-	i := flux.(*Influx)
+	i := flux.(*InfluxDB)
 	i.client = c
 
 	t.Run("testInfluxConnect", func(t *testing.T) {

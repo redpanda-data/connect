@@ -4,29 +4,29 @@ import "testing"
 
 func TestInfluxStatInterface(t *testing.T) {
 
-	t.Run("influxGauge", func(t *testing.T) {
-		o := &influxGauge{}
+	t.Run("influxDBGauge", func(t *testing.T) {
+		o := &influxDBGauge{}
 		if StatGauge(o) == nil {
-			t.Errorf("influxGauge does not satisfy StatGauge interface")
+			t.Errorf("influxDBGauge does not satisfy StatGauge interface")
 		}
 	})
 
-	t.Run("influxCounter", func(t *testing.T) {
-		o := &influxCounter{}
+	t.Run("influxDBCounter", func(t *testing.T) {
+		o := &influxDBCounter{}
 		if StatCounter(o) == nil {
-			t.Errorf("influxCounter does not satisfy StatCounter interface")
+			t.Errorf("influxDBCounter does not satisfy StatCounter interface")
 		}
 	})
 
-	t.Run("influxTimer", func(t *testing.T) {
-		o := &influxTimer{}
+	t.Run("influxDBTimer", func(t *testing.T) {
+		o := &influxDBTimer{}
 		if StatTimer(o) == nil {
-			t.Errorf("influxTimer does not satisfy StatTimer interface")
+			t.Errorf("influxDBTimer does not satisfy StatTimer interface")
 		}
 	})
 }
 
-func Test_encodeInfluxName(t *testing.T) {
+func Test_encodeInfluxDBName(t *testing.T) {
 
 	type test struct {
 		desc      string
@@ -45,7 +45,7 @@ func Test_encodeInfluxName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			result := encodeInfluxName(tt.name, tt.tagNames, tt.tagValues)
+			result := encodeInfluxDBName(tt.name, tt.tagNames, tt.tagValues)
 			if result != tt.encoded {
 				t.Errorf("encoded '%s' but received '%s'", tt.encoded, result)
 			}
@@ -53,7 +53,7 @@ func Test_encodeInfluxName(t *testing.T) {
 	}
 }
 
-func Test_decodeInfluxName(t *testing.T) {
+func Test_decodeInfluxDBName(t *testing.T) {
 
 	type test struct {
 		desc      string
@@ -70,7 +70,7 @@ func Test_decodeInfluxName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			name, tags := decodeInfluxName(tt.encoded)
+			name, tags := decodeInfluxDBName(tt.encoded)
 
 			if tt.name != name {
 				t.Errorf("expected measurement name %s but received %s", tt.name, name)

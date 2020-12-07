@@ -12,51 +12,51 @@ import (
 // not sure if this is necessary yet
 var tagEncodingSeparator = ","
 
-type influxGauge struct {
+type influxDBGauge struct {
 	metrics.Gauge
 }
 
 // Set sets a gauge metric.
-func (g influxGauge) Set(value int64) error {
+func (g influxDBGauge) Set(value int64) error {
 	g.Update(value)
 	return nil
 }
 
 // Incr increments a metric by an amount.
-func (g influxGauge) Incr(count int64) error {
+func (g influxDBGauge) Incr(count int64) error {
 	g.Update(g.Value() + count)
 	return nil
 }
 
 // Decr decrements a metric by an amount.
-func (g influxGauge) Decr(count int64) error {
+func (g influxDBGauge) Decr(count int64) error {
 	g.Update(g.Value() - count)
 	return nil
 }
 
-type influxCounter struct {
+type influxDBCounter struct {
 	metrics.Counter
 }
 
 // Incr increments a metric by an amount.
-func (i influxCounter) Incr(count int64) error {
+func (i influxDBCounter) Incr(count int64) error {
 	i.Inc(count)
 	return nil
 }
 
-type influxTimer struct {
+type influxDBTimer struct {
 	metrics.Timer
 }
 
 // Timing sets a timing metric.
-func (i influxTimer) Timing(delta int64) error {
+func (i influxDBTimer) Timing(delta int64) error {
 	i.Update(time.Duration(delta))
 	return nil
 }
 
-// encodeInfluxName accepts a measurement name and a map of tag values and
+// encodeInfluxDBName accepts a measurement name and a map of tag values and
 // returns influx line protocol-formatted string.
-func encodeInfluxName(name string, tagNames []string, tagValues []string) string {
+func encodeInfluxDBName(name string, tagNames []string, tagValues []string) string {
 	b := &strings.Builder{}
 	b.WriteString(escape.String(name))
 
@@ -80,9 +80,9 @@ func encodeInfluxName(name string, tagNames []string, tagValues []string) string
 	return b.String()
 }
 
-// decodeInfluxName accepts an ILP-formatted string (measurementName,tag=value) and
+// decodeInfluxDBName accepts an ILP-formatted string (measurementName,tag=value) and
 // returns the measurement name along with a map of tags and their values.
-func decodeInfluxName(n string) (string, map[string]string) {
+func decodeInfluxDBName(n string) (string, map[string]string) {
 	nameSplit := splitUnescaped(n, tagEncodingSeparator)
 	if len(nameSplit) == 0 {
 		return "", nil
