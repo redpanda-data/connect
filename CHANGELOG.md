@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.35.0 - 2020-12-07
+
 ### New
 
 - New field `retry_as_batch` added to the `kafka` output to assist in ensuring message ordering through retries.
