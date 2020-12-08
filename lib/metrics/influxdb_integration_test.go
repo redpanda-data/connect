@@ -68,6 +68,7 @@ func TestInfluxIntegration(t *testing.T) {
 	config.URL = url
 	config.Interval = "1s"
 	config.Tags = map[string]string{"hostname": "localhost"}
+	config.PathMapping = `root = "benthos." + this`
 	globalConfig.InfluxDB = config
 
 	flux, err := NewInfluxDB(globalConfig)
@@ -95,16 +96,16 @@ func testInfluxConnect(t *testing.T, i Type, c client.Client) {
 	}
 
 	if len(resp.Results) != 1 {
-		t.Errorf("expected 1 result.")
+		t.Fatal("expected 1 result.")
 	}
 	if len(resp.Results[0].Series) != 1 {
-		t.Errorf("expected 1 series.")
+		t.Fatal("expected 1 series.")
 	}
 	if len(resp.Results[0].Series[0].Values) != 1 {
-		t.Errorf("expected 1 values.")
+		t.Fatal("expected 1 values.")
 	}
 	if len(resp.Results[0].Series[0].Values[0]) != 3 {
-		t.Errorf("expected 3 values.")
+		t.Fatal("expected 3 values.")
 	}
 
 	// these show up as json.Number
