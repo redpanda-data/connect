@@ -1263,7 +1263,7 @@ metrics:
     path_mapping: ${METRICS_HTTP_SERVER_PATH_MAPPING}
     prefix: ${METRICS_HTTP_SERVER_PREFIX:benthos}
   influxdb:
-    db: ${METRICS_INFLUXDB_DB:db0}
+    db: ${METRICS_INFLUXDB_DB}
     include:
       debug_gc: ${METRICS_INFLUXDB_INCLUDE_DEBUG_GC}
       runtime: ${METRICS_INFLUXDB_INCLUDE_RUNTIME}
@@ -1275,7 +1275,7 @@ metrics:
     retention_policy: ${METRICS_INFLUXDB_RETENTION_POLICY}
     tags: ${METRICS_INFLUXDB_TAGS}
     timeout: ${METRICS_INFLUXDB_TIMEOUT:5s}
-    url: ${METRICS_INFLUXDB_URL:http://localhost:8086}
+    url: ${METRICS_INFLUXDB_URL}
     username: ${METRICS_INFLUXDB_USERNAME}
     write_consistency: ${METRICS_INFLUXDB_WRITE_CONSISTENCY}
   prometheus:

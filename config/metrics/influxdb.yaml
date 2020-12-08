@@ -50,7 +50,7 @@ metrics:
     retention_policy: ""
     tags: {}
     timeout: 5s
-    url: http://localhost:8086
+    url: ""
     username: ""
     write_consistency: ""
 tracer:

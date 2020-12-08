@@ -3,7 +3,7 @@ package metrics
 import (
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/stretchr/testify/require"
 )
 
 func TestInfluxInterface(t *testing.T) {
@@ -14,16 +14,15 @@ func TestInfluxInterface(t *testing.T) {
 }
 
 func TestInfluxTimers(t *testing.T) {
-
 	config := NewConfig()
+	config.InfluxDB.URL = "http://localhost:8086"
+	config.InfluxDB.DB = "db0"
+	config.InfluxDB.PathMapping = `meta buz = "first"`
+
 	influx, err := NewInfluxDB(config)
+	require.NoError(t, err)
+
 	i := influx.(*InfluxDB)
-
-	if err != nil {
-		t.Errorf("not expecting error: %s", err)
-	}
-
-	i.pathMapping, err = newPathMapping(`meta buz = "first"`, log.Noop())
 
 	expectedMetrics := 3
 	i.GetTimer("").Timing(100)
@@ -60,16 +59,15 @@ func TestInfluxTimers(t *testing.T) {
 }
 
 func TestInfluxCounters(t *testing.T) {
-
 	config := NewConfig()
+	config.InfluxDB.URL = "http://localhost:8086"
+	config.InfluxDB.DB = "db0"
+	config.InfluxDB.PathMapping = `meta buz = "first"`
+
 	influx, err := NewInfluxDB(config)
+	require.NoError(t, err)
+
 	i := influx.(*InfluxDB)
-
-	if err != nil {
-		t.Errorf("not expecting error: %s", err)
-	}
-
-	i.pathMapping, err = newPathMapping(`meta buz = "first"`, log.Noop())
 
 	expectedMetrics := 3
 	i.GetCounter("").Incr(1)
@@ -107,15 +105,15 @@ func TestInfluxCounters(t *testing.T) {
 }
 
 func TestInfluxGauge(t *testing.T) {
-
 	config := NewConfig()
-	influx, err := NewInfluxDB(config)
-	i := influx.(*InfluxDB)
-	i.pathMapping, err = newPathMapping(`meta buz = "first"`, log.Noop())
+	config.InfluxDB.URL = "http://localhost:8086"
+	config.InfluxDB.DB = "db0"
+	config.InfluxDB.PathMapping = `meta buz = "first"`
 
-	if err != nil {
-		t.Errorf("not expecting error: %s", err)
-	}
+	influx, err := NewInfluxDB(config)
+	require.NoError(t, err)
+
+	i := influx.(*InfluxDB)
 
 	expectedMetrics := 3
 	i.GetGauge("").Set(10)
@@ -155,10 +153,12 @@ func TestInfluxGauge(t *testing.T) {
 
 func TestInflux_makeClientDefault(t *testing.T) {
 	config := NewConfig()
+	config.InfluxDB.URL = "http://localhost:8086"
+	config.InfluxDB.DB = "db0"
+
 	flux, err := NewInfluxDB(config)
-	if err != nil {
-		t.Errorf("unexpected error %s", err)
-	}
+	require.NoError(t, err)
+
 	i := flux.(*InfluxDB)
 	if i.client == nil {
 		t.Errorf("expected a client")
@@ -167,9 +167,8 @@ func TestInflux_makeClientDefault(t *testing.T) {
 
 func TestInflux_makeClientUDP(t *testing.T) {
 	config := NewConfig()
-	influxConfig := NewInfluxDBConfig()
-	influxConfig.URL = "udp://localhost:8065"
-	config.InfluxDB = influxConfig
+	config.InfluxDB.URL = "udp://localhost:8065"
+	config.InfluxDB.DB = "db0"
 	flux, err := NewInfluxDB(config)
 	if err != nil {
 		t.Errorf("unexpected error %s", err)
@@ -184,6 +183,7 @@ func TestInflux_makeClientInvalid(t *testing.T) {
 	config := NewConfig()
 	influxConfig := NewInfluxDBConfig()
 	influxConfig.URL = "scheme://localhost:8065"
+	influxConfig.DB = "db0"
 	config.InfluxDB = influxConfig
 	flux, err := NewInfluxDB(config)
 	if err == nil {

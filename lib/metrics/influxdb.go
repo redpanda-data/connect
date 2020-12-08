@@ -15,29 +15,30 @@ import (
 func init() {
 	Constructors[TypeInfluxDB] = TypeSpec{
 		constructor: NewInfluxDB,
+		Status:      docs.StatusExperimental,
 		Summary: `
-Send metrics to InfluxDB 1.x using the /write endpoint.`,
-		Description: `see https://docs.influxdata.com/influxdb/v1.8/tools/api/#write-http-endpoint for further details on the write api`,
+Send metrics to InfluxDB 1.x using the ` + "`/write`" + ` endpoint.`,
+		Description: `See https://docs.influxdata.com/influxdb/v1.8/tools/api/#write-http-endpoint for further details on the write API.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("url", "[http|udp]://host:port combination required to specify host."),
-			docs.FieldCommon("db", "name of the database to use."),
-			docs.FieldAdvanced("username", "username."),
-			docs.FieldAdvanced("password", "password."),
-			docs.FieldAdvanced("include", "collecting these metrics may have some performance implications as it acquires a global semaphore and does stoptheworld().").WithChildren(
-				docs.FieldCommon("runtime", "how often to poll and collect runtime metrics at the duration set.", "1m").HasDefault(""),
-				docs.FieldCommon("debug_gc", "how often to poll and collect gc metrics at the duration set.", "1m").HasDefault(""),
+			docs.FieldCommon("url", "A URL of the format `[http|udp]://host:port` to the InfluxDB host."),
+			docs.FieldCommon("db", "The name of the database to use."),
+			docs.FieldAdvanced("username", "A username (when applicable)."),
+			docs.FieldAdvanced("password", "A password (when applicable)."),
+			docs.FieldAdvanced("include", "Optional additional metrics to collect, enabling these metrics may have some performance implications as it acquires a global semaphore and does `stoptheworld()`.").WithChildren(
+				docs.FieldCommon("runtime", "A duration string indicating how often to poll and collect runtime metrics. Leave empty to disable this metric", "1m").HasDefault(""),
+				docs.FieldCommon("debug_gc", "A duration string indicating how often to poll and collect GC metrics. Leave empty to disable this metric.", "1m").HasDefault(""),
 			),
-			docs.FieldAdvanced("interval", "how often to send metrics."),
-			docs.FieldAdvanced("ping_interval", "how often to poll health."),
+			docs.FieldAdvanced("interval", "A duration string indicating how often metrics should be flushed."),
+			docs.FieldAdvanced("ping_interval", "A duration string indicating how often to ping the host."),
 			docs.FieldAdvanced("precision", "[ns|us|ms|s] timestamp precision passed to write api."),
-			docs.FieldAdvanced("timeout", "how long to wait for response for both ping and writing metrics."),
-			docs.FieldAdvanced("tags", "global tags added to each metric.",
+			docs.FieldAdvanced("timeout", "How long to wait for response for both ping and writing metrics."),
+			docs.FieldAdvanced("tags", "Global tags added to each metric.",
 				map[string]string{
 					"hostname": "localhost",
 					"zone":     "danger",
 				},
 			),
-			docs.FieldAdvanced("retention_policy", "sets the retention policy for each write."),
+			docs.FieldAdvanced("retention_policy", "Sets the retention policy for each write."),
 			docs.FieldAdvanced("write_consistency", "[any|one|quorum|all] sets write consistency when available."),
 			pathMappingDocs(true),
 		},
@@ -63,6 +64,8 @@ type InfluxDBConfig struct {
 	Tags        map[string]string `json:"tags" yaml:"tags"`
 }
 
+// InfluxDBInclude contains configuration parameters for optional metrics to
+// include.
 type InfluxDBInclude struct {
 	Runtime string `json:"runtime" yaml:"runtime"`
 	DebugGC string `json:"debug_gc" yaml:"debug_gc"`
@@ -71,8 +74,8 @@ type InfluxDBInclude struct {
 // NewInfluxDBConfig creates an InfluxDBConfig struct with default values.
 func NewInfluxDBConfig() InfluxDBConfig {
 	return InfluxDBConfig{
-		URL: "http://localhost:8086",
-		DB:  "db0",
+		URL: "",
+		DB:  "",
 
 		Precision:    "s",
 		Interval:     "1m",

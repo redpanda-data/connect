@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### New
+
+- New `influxdb` metrics target.
+
 ## 3.35.0 - 2020-12-07
 
 ### New

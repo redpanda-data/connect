@@ -51,6 +51,8 @@ type PrometheusConfig struct {
 	PushJobName   string                        `json:"push_job_name" yaml:"push_job_name"`
 }
 
+// PrometheusPushBasicAuthConfig contains parameters for establishing basic
+// authentication against a push service.
 type PrometheusPushBasicAuthConfig struct {
 	Username string `json:"username" yaml:"username"`
 	Password string `json:"password" yaml:"password"`

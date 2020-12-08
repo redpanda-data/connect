@@ -66,6 +66,7 @@ func TestInfluxIntegration(t *testing.T) {
 	globalConfig := NewConfig()
 	config := NewInfluxDBConfig()
 	config.URL = url
+	config.DB = "db0"
 	config.Interval = "1s"
 	config.Tags = map[string]string{"hostname": "localhost"}
 	config.PathMapping = `root = "benthos." + this`

@@ -1,7 +1,7 @@
 ---
 title: influxdb
 type: metrics
-status: stable
+status: experimental
 ---
 
 <!--
@@ -14,8 +14,9 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+EXPERIMENTAL: This component is experimental and therefore subject to change or removal outside of major version releases.
 
-Send metrics to InfluxDB 1.x using the /write endpoint.
+Send metrics to InfluxDB 1.x using the `/write` endpoint.
 
 
 <Tabs defaultValue="common" values={[
@@ -29,8 +30,8 @@ Send metrics to InfluxDB 1.x using the /write endpoint.
 # Common config fields, showing default values
 metrics:
   influxdb:
-    url: http://localhost:8086
-    db: db0
+    url: ""
+    db: ""
     path_mapping: ""
 ```
 
@@ -41,8 +42,8 @@ metrics:
 # All config fields, showing default values
 metrics:
   influxdb:
-    url: http://localhost:8086
-    db: db0
+    url: ""
+    db: ""
     username: ""
     password: ""
     include:
@@ -61,29 +62,29 @@ metrics:
 </TabItem>
 </Tabs>
 
-see https://docs.influxdata.com/influxdb/v1.8/tools/api/#write-http-endpoint for further details on the write api
+See https://docs.influxdata.com/influxdb/v1.8/tools/api/#write-http-endpoint for further details on the write API.
 
 ## Fields
 
 ### `url`
 
-[http|udp]://host:port combination required to specify host.
+A URL of the format `[http|udp]://host:port` to the InfluxDB host.
 
 
 Type: `string`  
-Default: `"http://localhost:8086"`  
+Default: `""`  
 
 ### `db`
 
-name of the database to use.
+The name of the database to use.
 
 
 Type: `string`  
-Default: `"db0"`  
+Default: `""`  
 
 ### `username`
 
-username.
+A username (when applicable).
 
 
 Type: `string`  
@@ -91,7 +92,7 @@ Default: `""`
 
 ### `password`
 
-password.
+A password (when applicable).
 
 
 Type: `string`  
@@ -99,14 +100,14 @@ Default: `""`
 
 ### `include`
 
-collecting these metrics may have some performance implications as it acquires a global semaphore and does stoptheworld().
+Optional additional metrics to collect, enabling these metrics may have some performance implications as it acquires a global semaphore and does `stoptheworld()`.
 
 
 Type: `object`  
 
 ### `include.runtime`
 
-how often to poll and collect runtime metrics at the duration set.
+A duration string indicating how often to poll and collect runtime metrics. Leave empty to disable this metric
 
 
 Type: `string`  
@@ -120,7 +121,7 @@ runtime: 1m
 
 ### `include.debug_gc`
 
-how often to poll and collect gc metrics at the duration set.
+A duration string indicating how often to poll and collect GC metrics. Leave empty to disable this metric.
 
 
 Type: `string`  
@@ -134,7 +135,7 @@ debug_gc: 1m
 
 ### `interval`
 
-how often to send metrics.
+A duration string indicating how often metrics should be flushed.
 
 
 Type: `string`  
@@ -142,7 +143,7 @@ Default: `"1m"`
 
 ### `ping_interval`
 
-how often to poll health.
+A duration string indicating how often to ping the host.
 
 
 Type: `string`  
@@ -158,7 +159,7 @@ Default: `"s"`
 
 ### `timeout`
 
-how long to wait for response for both ping and writing metrics.
+How long to wait for response for both ping and writing metrics.
 
 
 Type: `string`  
@@ -166,7 +167,7 @@ Default: `"5s"`
 
 ### `tags`
 
-global tags added to each metric.
+Global tags added to each metric.
 
 
 Type: `object`  
@@ -182,7 +183,7 @@ tags:
 
 ### `retention_policy`
 
-sets the retention policy for each write.
+Sets the retention policy for each write.
 
 
 Type: `string`  
