@@ -41,6 +41,7 @@ require (
 	github.com/hashicorp/go-immutable-radix v1.3.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/influxdata/go-syslog/v3 v3.0.0
+	github.com/influxdata/influxdb1-client v0.0.0-20200827194710-b269163b24ab
 	github.com/itchyny/gojq v0.11.2
 	github.com/jhump/protoreflect v1.7.0
 	github.com/jmespath/go-jmespath v0.4.0
@@ -63,6 +64,7 @@ require (
 	github.com/prometheus/client_golang v1.8.0
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
 	github.com/quipo/statsd v0.0.0-20180118161217-3d6a5565f314
+	github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0
 	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.7.0 // indirect
 	github.com/smira/go-statsd v1.3.1
