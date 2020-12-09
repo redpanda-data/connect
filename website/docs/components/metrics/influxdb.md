@@ -68,7 +68,7 @@ See https://docs.influxdata.com/influxdb/v1.8/tools/api/#write-http-endpoint for
 
 ### `url`
 
-A URL of the format `[http|udp]://host:port` to the InfluxDB host.
+A URL of the format `[https|http|udp]://host:port` to the InfluxDB host.
 
 
 Type: `string`  

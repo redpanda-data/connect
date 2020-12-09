@@ -20,7 +20,7 @@ func init() {
 Send metrics to InfluxDB 1.x using the ` + "`/write`" + ` endpoint.`,
 		Description: `See https://docs.influxdata.com/influxdb/v1.8/tools/api/#write-http-endpoint for further details on the write API.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("url", "A URL of the format `[http|udp]://host:port` to the InfluxDB host."),
+			docs.FieldCommon("url", "A URL of the format `[https|http|udp]://host:port` to the InfluxDB host."),
 			docs.FieldCommon("db", "The name of the database to use."),
 			docs.FieldAdvanced("username", "A username (when applicable)."),
 			docs.FieldAdvanced("password", "A password (when applicable)."),
@@ -179,7 +179,7 @@ func (i *InfluxDB) makeClient() error {
 	if err != nil {
 		return fmt.Errorf("problem parsing url: %s", err)
 	}
-	if u.Scheme == "http" {
+	if u.Scheme == "http" || u.Scheme == "https" {
 		c, err = client.NewHTTPClient(client.HTTPConfig{
 			Addr:     u.String(),
 			Username: i.config.Username,
