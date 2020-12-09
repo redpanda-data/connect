@@ -2,12 +2,14 @@ package metrics
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/url"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	client "github.com/influxdata/influxdb1-client/v2"
 	"github.com/rcrowley/go-metrics"
 )
@@ -22,6 +24,7 @@ Send metrics to InfluxDB 1.x using the ` + "`/write`" + ` endpoint.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("url", "A URL of the format `[https|http|udp]://host:port` to the InfluxDB host."),
 			docs.FieldCommon("db", "The name of the database to use."),
+			btls.FieldSpec(),
 			docs.FieldAdvanced("username", "A username (when applicable)."),
 			docs.FieldAdvanced("password", "A password (when applicable)."),
 			docs.FieldAdvanced("include", "Optional additional metrics to collect, enabling these metrics may have some performance implications as it acquires a global semaphore and does `stoptheworld()`.").WithChildren(
@@ -50,6 +53,7 @@ type InfluxDBConfig struct {
 	URL string `json:"url" yaml:"url"`
 	DB  string `json:"db" yaml:"db"`
 
+	TLS              btls.Config     `json:"tls" yaml:"tls"`
 	Interval         string          `json:"interval" yaml:"interval"`
 	Password         string          `json:"password" yaml:"password"`
 	PingInterval     string          `json:"ping_interval" yaml:"ping_interval"`
@@ -76,6 +80,7 @@ func NewInfluxDBConfig() InfluxDBConfig {
 	return InfluxDBConfig{
 		URL: "",
 		DB:  "",
+		TLS: btls.NewConfig(),
 
 		Precision:    "s",
 		Interval:     "1m",
@@ -179,7 +184,22 @@ func (i *InfluxDB) makeClient() error {
 	if err != nil {
 		return fmt.Errorf("problem parsing url: %s", err)
 	}
-	if u.Scheme == "http" || u.Scheme == "https" {
+
+	if u.Scheme == "https" {
+		tlsConfig := &tls.Config{}
+		if i.config.TLS.Enabled {
+			tlsConfig, err = i.config.TLS.Get()
+			if err != nil {
+				return err
+			}
+		}
+		c, err = client.NewHTTPClient(client.HTTPConfig{
+			Addr:      u.String(),
+			TLSConfig: tlsConfig,
+			Username:  i.config.Username,
+			Password:  i.config.Password,
+		})
+	} else if u.Scheme == "http" {
 		c, err = client.NewHTTPClient(client.HTTPConfig{
 			Addr:     u.String(),
 			Username: i.config.Username,
@@ -190,7 +210,7 @@ func (i *InfluxDB) makeClient() error {
 			Addr: u.Host,
 		})
 	} else {
-		return fmt.Errorf("protocol needs to be http or udp and is %s", u.Scheme)
+		return fmt.Errorf("protocol needs to be http, https or udp and is %s", u.Scheme)
 	}
 
 	if err == nil {
