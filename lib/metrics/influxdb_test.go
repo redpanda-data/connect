@@ -165,6 +165,20 @@ func TestInflux_makeClientDefault(t *testing.T) {
 	}
 }
 
+func TestInflux_makeClientHTTPS(t *testing.T) {
+	config := NewConfig()
+	config.InfluxDB.URL = "https://localhost:8086"
+	config.InfluxDB.DB = "db0"
+
+	flux, err := NewInfluxDB(config)
+	require.NoError(t, err)
+
+	i := flux.(*InfluxDB)
+	if i.client == nil {
+		t.Errorf("expected a client")
+	}
+}
+
 func TestInflux_makeClientUDP(t *testing.T) {
 	config := NewConfig()
 	config.InfluxDB.URL = "udp://localhost:8065"
