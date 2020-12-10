@@ -43,6 +43,16 @@ func TestBloblangInterval(t *testing.T) {
 	b.CloseAsync()
 }
 
+func TestBloblangIntervalWithCron(t *testing.T) {
+	conf := NewBloblangConfig()
+	conf.Mapping = `root = "hello world"`
+	conf.Interval = "50ms"
+	conf.CronExpression = "0 0 * * *"
+
+	_, err := newBloblang(conf)
+	assert.EqualError(t, err, "only one of interval or cron_expression is allowed")
+}
+
 func TestBloblangMapping(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*100)
 	defer done()
