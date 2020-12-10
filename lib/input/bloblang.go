@@ -199,6 +199,9 @@ func (b *Bloblang) ReadWithContext(ctx context.Context) (types.Message, reader.A
 			if !open {
 				return nil, nil, types.ErrTypeClosed
 			}
+			if b.schedule != nil {
+				b.timer.Reset(getDurationTillNextSchedule(*b.schedule, b.location))
+			}
 		case <-ctx.Done():
 			return nil, nil, types.ErrTimeout
 		}
@@ -216,9 +219,6 @@ func (b *Bloblang) ReadWithContext(ctx context.Context) (types.Message, reader.A
 	msg := message.New(nil)
 	msg.Append(p)
 
-	if b.schedule != nil {
-		b.timer.Reset(getDurationTillNextSchedule(*b.schedule, b.location))
-	}
 	return msg, func(context.Context, types.Response) error { return nil }, nil
 }
 
