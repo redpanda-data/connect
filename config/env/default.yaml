@@ -1275,6 +1275,10 @@ metrics:
     retention_policy: ${METRICS_INFLUXDB_RETENTION_POLICY}
     tags: ${METRICS_INFLUXDB_TAGS}
     timeout: ${METRICS_INFLUXDB_TIMEOUT:5s}
+    tls:
+      enabled: ${METRICS_INFLUXDB_TLS_ENABLED:false}
+      root_cas_file: ${METRICS_INFLUXDB_TLS_ROOT_CAS_FILE}
+      skip_cert_verify: ${METRICS_INFLUXDB_TLS_SKIP_CERT_VERIFY:false}
     url: ${METRICS_INFLUXDB_URL}
     username: ${METRICS_INFLUXDB_USERNAME}
     write_consistency: ${METRICS_INFLUXDB_WRITE_CONSISTENCY}
