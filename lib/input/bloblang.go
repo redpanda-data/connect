@@ -78,7 +78,7 @@ input:
 type BloblangConfig struct {
 	Mapping        string `json:"mapping" yaml:"mapping"`
 	Interval       string `json:"interval" yaml:"interval"`
-	CronExpression string `json:"cron" yaml:"cron_expression"`
+	CronExpression string `json:"cron_expression" yaml:"cron_expression"`
 	Count          int    `json:"count" yaml:"count"`
 }
 
@@ -217,7 +217,7 @@ func (b *Bloblang) ReadWithContext(ctx context.Context) (types.Message, reader.A
 	msg.Append(p)
 
 	if b.schedule != nil {
-
+		b.timer.Reset(getDurationTillNextSchedule(*b.schedule, b.location))
 	}
 	return msg, func(context.Context, types.Response) error { return nil }, nil
 }
