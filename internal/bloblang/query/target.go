@@ -32,7 +32,9 @@ func aggregateTargetPaths(fns ...Function) func(ctx TargetsContext) []TargetPath
 	return func(ctx TargetsContext) []TargetPath {
 		var paths []TargetPath
 		for _, fn := range fns {
-			paths = append(paths, fn.QueryTargets(ctx)...)
+			if fn != nil {
+				paths = append(paths, fn.QueryTargets(ctx)...)
+			}
 		}
 		return paths
 	}

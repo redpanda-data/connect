@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - New `influxdb` metrics target.
 
+### Fixed
+
+- Fixed a panic on startup when using `if` statements within a `workflow` branch request or response map.
+
 ## 3.35.0 - 2020-12-07
 
 ### New
