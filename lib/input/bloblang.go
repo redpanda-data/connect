@@ -2,7 +2,6 @@ package input
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -76,19 +75,18 @@ input:
 
 // BloblangConfig contains configuration for the Bloblang input type.
 type BloblangConfig struct {
-	Mapping        string `json:"mapping" yaml:"mapping"`
-	Interval       string `json:"interval" yaml:"interval"`
-	CronExpression string `json:"cron_expression" yaml:"cron_expression"`
-	Count          int    `json:"count" yaml:"count"`
+	Mapping string `json:"mapping" yaml:"mapping"`
+	// internal can be both duration string or cron expression
+	Interval string `json:"interval" yaml:"interval"`
+	Count    int    `json:"count" yaml:"count"`
 }
 
 // NewBloblangConfig creates a new BloblangConfig with default values.
 func NewBloblangConfig() BloblangConfig {
 	return BloblangConfig{
-		Mapping:        "",
-		Interval:       "1s",
-		CronExpression: "",
-		Count:          0,
+		Mapping:  "",
+		Interval: "1s",
+		Count:    0,
 	}
 }
 
@@ -107,27 +105,22 @@ type Bloblang struct {
 // newBloblang creates a new bloblang input reader type.
 func newBloblang(conf BloblangConfig) (*Bloblang, error) {
 	var (
+		duration time.Duration
 		timer    *time.Ticker
 		schedule *cron.Schedule
 		location *time.Location
 		err      error
+		firstIsFree = true
 	)
-	if len(conf.Interval) > 0 && len(conf.CronExpression) > 0 {
-		return nil, errors.New("only one of interval or cron_expression is allowed")
-	}
-
-	if len(conf.CronExpression) > 0 {
-		schedule, location, err = parseCronExpression(conf.CronExpression)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse cron_expression: %w", err)
-		}
-		timer = time.NewTicker(getDurationTillNextSchedule(*schedule, location))
-	}
 
 	if len(conf.Interval) > 0 {
-		duration, err := time.ParseDuration(conf.Interval)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse interval: %w", err)
+		if duration, err = time.ParseDuration(conf.Interval); err != nil {
+			// interval is not duration so trying to parse as cron expression
+			if schedule, location, err = parseCronExpression(conf.Interval); err != nil {
+				return nil, fmt.Errorf("failed to parse interval: %w", err)
+			}
+			firstIsFree = false
+			duration = getDurationTillNextSchedule(*schedule, location)
 		}
 		timer = time.NewTicker(duration)
 	}
@@ -148,7 +141,7 @@ func newBloblang(conf BloblangConfig) (*Bloblang, error) {
 		timer:       timer,
 		schedule:    schedule,
 		location:    location,
-		firstIsFree: true,
+		firstIsFree: firstIsFree,
 	}, nil
 }
 
@@ -156,6 +149,7 @@ func getDurationTillNextSchedule(schedule cron.Schedule, location *time.Location
 	now := time.Now().In(location)
 	return schedule.Next(now).Sub(now)
 }
+
 func parseCronExpression(cronExpression string) (*cron.Schedule, *time.Location, error) {
 	// If time zone is not included, set default to UTC
 	if !strings.HasPrefix(cronExpression, "TZ=") {
