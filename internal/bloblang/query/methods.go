@@ -496,7 +496,8 @@ Exploding objects results in an object where the keys match the target object, a
 )
 
 func explodeMethod(target Function, args ...interface{}) (Function, error) {
-	path := gabs.DotPathToSlice(args[0].(string))
+	pathRaw := args[0].(string)
+	path := gabs.DotPathToSlice(pathRaw)
 
 	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		target := gabs.Wrap(v).Search(path...)
@@ -520,7 +521,7 @@ func explodeMethod(target Function, args ...interface{}) (Function, error) {
 			return result, nil
 		}
 
-		return nil, NewTypeError(v, ValueObject, ValueArray)
+		return nil, fmt.Errorf("expected array or object value at path '%v', found: %v", pathRaw, ITypeOf(target.Data()))
 	}), nil
 }
 

@@ -148,6 +148,22 @@ func TestMethods(t *testing.T) {
 			),
 			output: `{"key1":{"foo":{"also":"this","bar":["a","b"]},"id":"baz"},"key2":{"foo":{"also":"this","bar":{"c":3,"d":4}},"id":"baz"}}`,
 		},
+		"check explode error 1": {
+			input: methods(
+				jsonFn(`{"foo":"not an array","id":"bar"}`),
+				method("explode", "foo"),
+				method("string"),
+			),
+			err: "expected array or object value at path 'foo', found: string",
+		},
+		"check explode error 2": {
+			input: methods(
+				jsonFn(`{"id":"bar"}`),
+				method("explode", "foo"),
+				method("string"),
+			),
+			err: "expected array or object value at path 'foo', found: null",
+		},
 		"check without single": {
 			input: methods(
 				jsonFn(`{"a":"first","b":"second"}`),
