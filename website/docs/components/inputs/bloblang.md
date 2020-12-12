@@ -50,11 +50,27 @@ mapping: root = {"test":"message","id":uuid_v4()}
 
 ### `interval`
 
-The time interval at which messages should be generated. If set to an empty string messages will be generated as fast as downstream services can process them. The first message emitted is always instant.
+The time interval at which messages should be generated, expressed either as a duration string or as a cron expression. If set to an empty string messages will be generated as fast as downstream services can process them.
 
 
 Type: `string`  
 Default: `"1s"`  
+
+```yaml
+# Examples
+
+interval: 5s
+
+interval: 1m
+
+interval: 1h
+
+interval: '@every 1s'
+
+interval: 0,30 */2 * * * *
+
+interval: 30 3-6,20-23 * * *
+```
 
 ### `count`
 

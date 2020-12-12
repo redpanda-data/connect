@@ -41,7 +41,12 @@ testing your pipeline configs.`,
 				`root = "hello world"`,
 				`root = {"test":"message","id":uuid_v4()}`,
 			),
-			docs.FieldCommon("interval", "The time interval at which messages should be generated. If set to an empty string messages will be generated as fast as downstream services can process them. The first message emitted is always instant."),
+			docs.FieldCommon(
+				"interval",
+				"The time interval at which messages should be generated, expressed either as a duration string or as a cron expression. If set to an empty string messages will be generated as fast as downstream services can process them.",
+				"5s", "1m", "1h",
+				"@every 1s", "0,30 */2 * * * *", "30 3-6,20-23 * * *",
+			),
 			docs.FieldCommon("count", "An optional number of messages to generate, if set above 0 the specified number of messages is generated and then the input will shut down."),
 		},
 		Categories: []Category{
@@ -105,19 +110,20 @@ type Bloblang struct {
 // newBloblang creates a new bloblang input reader type.
 func newBloblang(conf BloblangConfig) (*Bloblang, error) {
 	var (
-		duration time.Duration
-		timer    *time.Ticker
-		schedule *cron.Schedule
-		location *time.Location
-		err      error
+		duration    time.Duration
+		timer       *time.Ticker
+		schedule    *cron.Schedule
+		location    *time.Location
+		err         error
 		firstIsFree = true
 	)
 
 	if len(conf.Interval) > 0 {
 		if duration, err = time.ParseDuration(conf.Interval); err != nil {
 			// interval is not duration so trying to parse as cron expression
-			if schedule, location, err = parseCronExpression(conf.Interval); err != nil {
-				return nil, fmt.Errorf("failed to parse interval: %w", err)
+			var cerr error
+			if schedule, location, cerr = parseCronExpression(conf.Interval); cerr != nil {
+				return nil, fmt.Errorf("failed to parse interval as duration string: %v, or as cron expression: %w", err, cerr)
 			}
 			firstIsFree = false
 			duration = getDurationTillNextSchedule(*schedule, location)
