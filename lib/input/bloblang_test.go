@@ -43,6 +43,35 @@ func TestBloblangInterval(t *testing.T) {
 	b.CloseAsync()
 }
 
+func TestBloblangCron(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*1100)
+	defer done()
+
+	conf := NewBloblangConfig()
+	conf.Mapping = `root = "hello world"`
+	conf.Interval = "@every 1s"
+
+	b, err := newBloblang(conf)
+	require.NoError(t, err)
+	assert.NotNil(t, b.schedule)
+	assert.NotNil(t, b.location)
+
+	err = b.ConnectWithContext(ctx)
+	require.NoError(t, err)
+
+	// First takes 1s so.
+	m, _, err := b.ReadWithContext(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, m.Len())
+	assert.Equal(t, "hello world", string(m.Get(0).Get()))
+
+	// Second takes another 1s and therefore times out.
+	m, _, err = b.ReadWithContext(ctx)
+	assert.EqualError(t, err, "action timed out")
+
+	b.CloseAsync()
+}
+
 func TestBloblangMapping(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*100)
 	defer done()

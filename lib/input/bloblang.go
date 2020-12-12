@@ -3,6 +3,7 @@ package input
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/robfig/cron/v3"
 )
 
 //------------------------------------------------------------------------------
@@ -73,7 +75,8 @@ input:
 
 // BloblangConfig contains configuration for the Bloblang input type.
 type BloblangConfig struct {
-	Mapping  string `json:"mapping" yaml:"mapping"`
+	Mapping string `json:"mapping" yaml:"mapping"`
+	// internal can be both duration string or cron expression
 	Interval string `json:"interval" yaml:"interval"`
 	Count    int    `json:"count" yaml:"count"`
 }
@@ -93,18 +96,31 @@ func NewBloblangConfig() BloblangConfig {
 type Bloblang struct {
 	remaining   int32
 	firstIsFree bool
-
-	exec  *mapping.Executor
-	timer *time.Ticker
+	exec        *mapping.Executor
+	timer       *time.Ticker
+	schedule    *cron.Schedule
+	location    *time.Location
 }
 
 // newBloblang creates a new bloblang input reader type.
 func newBloblang(conf BloblangConfig) (*Bloblang, error) {
-	var timer *time.Ticker
+	var (
+		duration time.Duration
+		timer    *time.Ticker
+		schedule *cron.Schedule
+		location *time.Location
+		err      error
+		firstIsFree = true
+	)
+
 	if len(conf.Interval) > 0 {
-		duration, err := time.ParseDuration(conf.Interval)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse interval: %w", err)
+		if duration, err = time.ParseDuration(conf.Interval); err != nil {
+			// interval is not duration so trying to parse as cron expression
+			if schedule, location, err = parseCronExpression(conf.Interval); err != nil {
+				return nil, fmt.Errorf("failed to parse interval: %w", err)
+			}
+			firstIsFree = false
+			duration = getDurationTillNextSchedule(*schedule, location)
 		}
 		timer = time.NewTicker(duration)
 	}
@@ -123,8 +139,39 @@ func newBloblang(conf BloblangConfig) (*Bloblang, error) {
 		exec:        exec,
 		remaining:   remaining,
 		timer:       timer,
-		firstIsFree: true,
+		schedule:    schedule,
+		location:    location,
+		firstIsFree: firstIsFree,
 	}, nil
+}
+
+func getDurationTillNextSchedule(schedule cron.Schedule, location *time.Location) time.Duration {
+	now := time.Now().In(location)
+	return schedule.Next(now).Sub(now)
+}
+
+func parseCronExpression(cronExpression string) (*cron.Schedule, *time.Location, error) {
+	// If time zone is not included, set default to UTC
+	if !strings.HasPrefix(cronExpression, "TZ=") {
+		cronExpression = fmt.Sprintf("TZ=%s %s", "UTC", cronExpression)
+	}
+
+	end := strings.Index(cronExpression, " ")
+	eq := strings.Index(cronExpression, "=")
+	tz := cronExpression[eq+1 : end]
+
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		return nil, nil, err
+	}
+	parser := cron.NewParser(cron.SecondOptional | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+
+	cronSchedule, err := parser.Parse(cronExpression)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &cronSchedule, loc, nil
 }
 
 // ConnectWithContext establishes a Bloblang reader.
@@ -145,6 +192,9 @@ func (b *Bloblang) ReadWithContext(ctx context.Context) (types.Message, reader.A
 		case _, open := <-b.timer.C:
 			if !open {
 				return nil, nil, types.ErrTypeClosed
+			}
+			if b.schedule != nil {
+				b.timer.Reset(getDurationTillNextSchedule(*b.schedule, b.location))
 			}
 		case <-ctx.Done():
 			return nil, nil, types.ErrTimeout
