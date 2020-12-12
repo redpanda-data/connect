@@ -238,18 +238,19 @@ import (
 )
 
 func binarySplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	const prefixBytes int = 4
 	if atEOF {
 		return 0, nil, nil
 	}
-	if len(data) < 8 {
+	if len(data) < prefixBytes {
 		// request more data
 		return 0, nil, nil
 	}
 	l := binary.BigEndian.Uint32(data)
 	bytesToRead := int(l)
 
-	if len(data)-8 >= bytesToRead {
-		return 8 + bytesToRead, data[8 : 8+bytesToRead], nil
+	if len(data)-prefixBytes >= bytesToRead {
+		return prefixBytes + bytesToRead, data[prefixBytes : prefixBytes+bytesToRead], nil
 	} else {
 		// request more data
 		return 0, nil, nil
@@ -267,7 +268,7 @@ func main() {
 		scanner.Split(binarySplitFunc)
 	}
 
-	lenBuf := make([]byte, 8)
+	lenBuf := make([]byte, 4)
 	for scanner.Scan() {
 		res := strings.ToUpper(scanner.Text())
 		switch *stdoutFormat {
@@ -327,7 +328,9 @@ func main() {
 		require.Len(t, msgs, 1)
 		require.Nil(t, res)
 
-		assert.Empty(t, msgs[0].Get(0).Metadata().Get(FailFlagKey))
+		for i := 0; i < msgIn.Len(); i++ {
+			assert.Empty(t, msgs[0].Get(i).Metadata().Get(FailFlagKey))
+		}
 		assert.Equal(t, exp, message.GetAllBytes(msgs[0]))
 
 		proc.CloseAsync()

@@ -204,21 +204,22 @@ func newSubprocWrapper(name string, args []string, maxBuf int, formatRecv string
 var maxInt = (1<<bits.UintSize)/2 - 1
 
 func binarySplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	const prefixBytes int = 4
 	if atEOF {
 		return 0, nil, nil
 	}
-	if len(data) < 8 {
+	if len(data) < prefixBytes {
 		// request more data
 		return 0, nil, nil
 	}
 	l := binary.BigEndian.Uint32(data)
-	if l > uint32(maxInt)-8 {
+	if l > (uint32(maxInt)-uint32(prefixBytes)) {
 		return 0, nil, errors.New("number of bytes to read exceeds representable range of go int datatype")
 	}
 	bytesToRead := int(l)
 
-	if len(data)-8 >= bytesToRead {
-		return 8 + bytesToRead, data[8 : 8+bytesToRead], nil
+	if len(data)-prefixBytes >= bytesToRead {
+		return prefixBytes + bytesToRead, data[prefixBytes : prefixBytes+bytesToRead], nil
 	} else {
 		// request more data
 		return 0, nil, nil
@@ -467,8 +468,9 @@ func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		proc = func(i int) error {
 			span := tracing.CreateChildSpan(TypeSubprocess, result.Get(i))
 			defer span.Finish()
+			const prefixBytes int = 4
 
-			lenBuf := make([]byte, 8)
+			lenBuf := make([]byte, prefixBytes)
 			m := result.Get(i).Get()
 			binary.BigEndian.PutUint32(lenBuf, uint32(len(m)))
 
