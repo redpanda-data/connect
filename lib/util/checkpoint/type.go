@@ -42,6 +42,11 @@ func (t *Type) Highest() int {
 	return t.base + t.maxResolved
 }
 
+// Pending returns the number of pending checkpoints.
+func (t *Type) Pending() int {
+	return len(t.pending)
+}
+
 // Track a new unresolved integer offset. This offset will be cached until it is
 // marked as resolved. While it is cached no higher valued offset will ever be
 // committed. If the provided value is lower than an already provided value an

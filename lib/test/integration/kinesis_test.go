@@ -2,41 +2,13 @@ package integration
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func createKinesisShards(ctx context.Context, awsPort, id string, numShards int) error {
-	endpoint := fmt.Sprintf("http://localhost:%v", awsPort)
-
-	client := kinesis.New(session.Must(session.NewSession(&aws.Config{
-		Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		Endpoint:    aws.String(endpoint),
-		Region:      aws.String("us-east-1"),
-	})))
-
-	_, err := client.CreateStreamWithContext(ctx, &kinesis.CreateStreamInput{
-		ShardCount: aws.Int64(int64(numShards)),
-		StreamName: aws.String("stream-" + id),
-	})
-	if err != nil {
-		return err
-	}
-
-	// wait for stream to exist
-	return client.WaitUntilStreamExistsWithContext(ctx, &kinesis.DescribeStreamInput{
-		StreamName: aws.String("stream-" + id),
-	})
-}
 
 var _ = registerIntegrationTest("kinesis", func(t *testing.T) {
 	// Skip until annoying logs can be removed.

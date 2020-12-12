@@ -63,7 +63,7 @@ func (c *Capped) Track(ctx context.Context, i int) error {
 		c.first = i
 	}
 
-	for (i-c.first > c.cap) && ((i - c.t.Highest()) > c.cap) {
+	for (i-c.first > c.cap) && (c.t.Pending() > 0) && ((i - c.t.Highest()) > c.cap) {
 		c.cond.Wait()
 		select {
 		case <-ctx.Done():

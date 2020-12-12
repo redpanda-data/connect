@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -214,35 +215,44 @@ func integrationTests(tests ...testDefinition) integrationTestList {
 }
 
 func (i integrationTestList) Run(t *testing.T, configTemplate string, opts ...testOptFunc) {
-	for _, test := range i {
-		env := newTestEnvironment(t, configTemplate)
+	envs := make([]testEnvironment, len(i))
+
+	wg := sync.WaitGroup{}
+	for j := range i {
+		envs[j] = newTestEnvironment(t, configTemplate)
 		for _, opt := range opts {
-			opt(&env)
+			opt(&envs[j])
 		}
 
-		timeout := env.timeout
+		timeout := envs[j].timeout
 		if deadline, ok := t.Deadline(); ok {
-			deadlineTimeout := time.Until(deadline) - (time.Second * 5)
-			if deadlineTimeout < timeout {
-				timeout = deadlineTimeout
-			}
+			timeout = time.Until(deadline) - (time.Second * 5)
 		}
 
 		var done func()
-		env.ctx, done = context.WithTimeout(env.ctx, timeout)
+		envs[j].ctx, done = context.WithTimeout(envs[j].ctx, timeout)
 		t.Cleanup(done)
 
-		if env.preTest != nil {
-			env.preTest(t, &env)
+		if envs[j].preTest != nil {
+			wg.Add(1)
+			env := &envs[j]
+			go func() {
+				defer wg.Done()
+				env.preTest(t, env)
+			}()
 		}
-		if len(env.configVars.port) == 0 {
+	}
+	wg.Wait()
+
+	for j, test := range i {
+		if len(envs[j].configVars.port) == 0 {
 			p, err := getFreePort()
 			if err != nil {
 				t.Fatal(err)
 			}
-			env.configVars.port = strconv.Itoa(p)
+			envs[j].configVars.port = strconv.Itoa(p)
 		}
-		test(t, &env)
+		test(t, &envs[j])
 	}
 }
 
@@ -255,10 +265,7 @@ func (i integrationTestList) RunSequentially(t *testing.T, configTemplate string
 
 		timeout := env.timeout
 		if deadline, ok := t.Deadline(); ok {
-			deadlineTimeout := time.Until(deadline) - (time.Second * 5)
-			if deadlineTimeout < timeout {
-				timeout = deadlineTimeout
-			}
+			timeout = time.Until(deadline) - (time.Second * 5)
 		}
 
 		var done func()

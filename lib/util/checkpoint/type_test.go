@@ -10,33 +10,40 @@ import (
 func TestSequential(t *testing.T) {
 	c := New(0)
 	assert.Equal(t, 0, c.Highest())
+	assert.Equal(t, 0, c.Pending())
 
 	require.NoError(t, c.Track(1))
 	require.NoError(t, c.Track(2))
 	require.NoError(t, c.Track(3))
 	assert.Equal(t, 0, c.Highest())
+	assert.Equal(t, 3, c.Pending())
 
 	v, err := c.Resolve(1)
 	require.NoError(t, err)
 	assert.Equal(t, 1, v)
 	assert.Equal(t, 1, c.Highest())
+	assert.Equal(t, 2, c.Pending())
 
 	v, err = c.Resolve(2)
 	require.NoError(t, err)
 	assert.Equal(t, 2, v)
 	assert.Equal(t, 2, c.Highest())
+	assert.Equal(t, 1, c.Pending())
 
 	v, err = c.Resolve(3)
 	require.NoError(t, err)
 	assert.Equal(t, 3, v)
 	assert.Equal(t, 3, c.Highest())
+	assert.Equal(t, 0, c.Pending())
 
 	require.NoError(t, c.Track(4))
+	assert.Equal(t, 1, c.Pending())
 
 	v, err = c.Resolve(4)
 	require.NoError(t, err)
 	assert.Equal(t, 4, v)
 	assert.Equal(t, 4, c.Highest())
+	assert.Equal(t, 0, c.Pending())
 }
 
 func TestOutOfSync(t *testing.T) {

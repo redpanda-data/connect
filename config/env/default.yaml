@@ -54,6 +54,32 @@ input:
             root_cas_file: ${INPUT_AMQP_1_TLS_ROOT_CAS_FILE}
             skip_cert_verify: ${INPUT_AMQP_1_TLS_SKIP_CERT_VERIFY:false}
           url: ${INPUT_AMQP_1_URL}
+        aws_kinesis:
+          batching:
+            byte_size: ${INPUT_AWS_KINESIS_BATCHING_BYTE_SIZE:0}
+            check: ${INPUT_AWS_KINESIS_BATCHING_CHECK}
+            count: ${INPUT_AWS_KINESIS_BATCHING_COUNT:0}
+            period: ${INPUT_AWS_KINESIS_BATCHING_PERIOD}
+          checkpoint_limit: ${INPUT_AWS_KINESIS_CHECKPOINT_LIMIT:1}
+          commit_period: ${INPUT_AWS_KINESIS_COMMIT_PERIOD:5s}
+          credentials:
+            id: ${INPUT_AWS_KINESIS_CREDENTIALS_ID}
+            profile: ${INPUT_AWS_KINESIS_CREDENTIALS_PROFILE}
+            role: ${INPUT_AWS_KINESIS_CREDENTIALS_ROLE}
+            role_external_id: ${INPUT_AWS_KINESIS_CREDENTIALS_ROLE_EXTERNAL_ID}
+            secret: ${INPUT_AWS_KINESIS_CREDENTIALS_SECRET}
+            token: ${INPUT_AWS_KINESIS_CREDENTIALS_TOKEN}
+          dynamodb:
+            billing_mode: ${INPUT_AWS_KINESIS_DYNAMODB_BILLING_MODE:PAY_PER_REQUEST}
+            create: ${INPUT_AWS_KINESIS_DYNAMODB_CREATE:false}
+            read_capacity_units: ${INPUT_AWS_KINESIS_DYNAMODB_READ_CAPACITY_UNITS:0}
+            table: ${INPUT_AWS_KINESIS_DYNAMODB_TABLE}
+            write_capacity_units: ${INPUT_AWS_KINESIS_DYNAMODB_WRITE_CAPACITY_UNITS:0}
+          endpoint: ${INPUT_AWS_KINESIS_ENDPOINT}
+          lease_period: ${INPUT_AWS_KINESIS_LEASE_PERIOD:30s}
+          rebalance_period: ${INPUT_AWS_KINESIS_REBALANCE_PERIOD:1m}
+          region: ${INPUT_AWS_KINESIS_REGION:eu-west-1}
+          start_from_oldest: ${INPUT_AWS_KINESIS_START_FROM_OLDEST:true}
         aws_s3:
           bucket: ${INPUT_AWS_S3_BUCKET}
           codec: ${INPUT_AWS_S3_CODEC:all-bytes}

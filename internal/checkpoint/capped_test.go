@@ -44,6 +44,30 @@ func TestSequential(t *testing.T) {
 	assert.Equal(t, 4, c.Highest())
 }
 
+func TestBigJumps(t *testing.T) {
+	c := NewCapped(1)
+	assert.Equal(t, 0, c.Highest())
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
+	require.NoError(t, c.Track(ctx, 1000))
+	assert.Equal(t, 0, c.Highest())
+
+	v, err := c.Resolve(1000)
+	require.NoError(t, err)
+	assert.Equal(t, 1000, v)
+	assert.Equal(t, 1000, c.Highest())
+
+	require.NoError(t, c.Track(ctx, 2000))
+	assert.Equal(t, 1000, c.Highest())
+
+	v, err = c.Resolve(2000)
+	require.NoError(t, err)
+	assert.Equal(t, 2000, v)
+	assert.Equal(t, 2000, c.Highest())
+}
+
 func TestStartBig(t *testing.T) {
 	c := NewCapped(100)
 	assert.Equal(t, 0, c.Highest())

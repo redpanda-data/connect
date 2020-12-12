@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - New `influxdb` metrics target.
 - The `bloblang` input field `interval` now supports cron expressions.
+- New experimental `aws_kinesis` input.
 
 ### Fixed
 
