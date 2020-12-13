@@ -37,7 +37,7 @@ input:
       create: false
     checkpoint_limit: 1
     commit_period: 5s
-    rebalance_period: 1m
+    rebalance_period: 30s
     lease_period: 30s
     start_from_oldest: true
     region: eu-west-1
@@ -64,7 +64,7 @@ input:
       write_capacity_units: 0
     checkpoint_limit: 1
     commit_period: 5s
-    rebalance_period: 1m
+    rebalance_period: 30s
     lease_period: 30s
     start_from_oldest: true
     region: eu-west-1
@@ -179,7 +179,7 @@ The period of time between each attempt to rebalance shards across clients.
 
 
 Type: `string`  
-Default: `"1m"`  
+Default: `"30s"`  
 
 ### `lease_period`
 

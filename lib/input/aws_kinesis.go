@@ -100,7 +100,7 @@ func NewAWSKinesisConfig() AWSKinesisConfig {
 		CheckpointLimit: 1,
 		CommitPeriod:    "5s",
 		LeasePeriod:     "30s",
-		RebalancePeriod: "1m",
+		RebalancePeriod: "30s",
 		StartFromOldest: true,
 		Batching:        batch.NewPolicyConfig(),
 	}
@@ -291,10 +291,6 @@ func (k *kinesisReader) getRecords(streamID, shardID, shardIter string) ([]*kine
 	if res.NextShardIterator != nil {
 		nextIter = *res.NextShardIterator
 	}
-	if len(nextIter) == 0 {
-		return nil, shardIter, errors.New("failed to obtain next shard iterator")
-	}
-
 	return res.Records, nextIter, nil
 }
 
@@ -500,6 +496,16 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 
 //------------------------------------------------------------------------------
 
+func isShardFinished(s *kinesis.Shard) bool {
+	if s.SequenceNumberRange == nil {
+		return false
+	}
+	if s.SequenceNumberRange.EndingSequenceNumber == nil {
+		return false
+	}
+	return *s.SequenceNumberRange.EndingSequenceNumber != "null"
+}
+
 func (k *kinesisReader) runBalancedShards() {
 	var wg sync.WaitGroup
 	defer func() {
@@ -532,7 +538,9 @@ func (k *kinesisReader) runBalancedShards() {
 			totalShards := len(shardsRes.Shards)
 			unclaimedShards := make(map[string]string, totalShards)
 			for _, s := range shardsRes.Shards {
-				unclaimedShards[*s.ShardId] = ""
+				if !isShardFinished(s) {
+					unclaimedShards[*s.ShardId] = ""
+				}
 			}
 			for clientID, claims := range clientClaims {
 				for _, claim := range claims {
@@ -581,7 +589,7 @@ func (k *kinesisReader) runBalancedShards() {
 				// more shards than we do then it's fair game. Using two here
 				// so that we don't play hot potatoes with an odd shard.
 				if len(claims) > (selfClaims + 1) {
-					randomShard := claims[(rand.Int()%len(claims))-1].ShardID
+					randomShard := claims[(rand.Int() % len(claims))].ShardID
 					k.log.Debugf(
 						"Attempting to steal stream '%v' shard '%v' from client '%v' as client '%v'\n",
 						streamID, randomShard, clientID, k.clientID,
