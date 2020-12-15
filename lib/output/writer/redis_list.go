@@ -39,7 +39,7 @@ type RedisList struct {
 
 	conf RedisListConfig
 
-	client  *redis.Client
+	client  redis.UniversalClient
 	connMut sync.RWMutex
 }
 

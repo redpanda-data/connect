@@ -86,7 +86,7 @@ type Redis struct {
 	mDelSuccess    metrics.StatCounter
 	mDelLatency    metrics.StatTimer
 
-	client      *redis.Client
+	client      redis.UniversalClient
 	ttl         time.Duration
 	prefix      string
 	retryPeriod time.Duration

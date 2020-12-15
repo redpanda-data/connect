@@ -106,7 +106,7 @@ type Redis struct {
 	key field.Expression
 
 	operator    redisOperator
-	client      *redis.Client
+	client      redis.UniversalClient
 	retryPeriod time.Duration
 
 	mCount      metrics.StatCounter

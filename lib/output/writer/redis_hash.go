@@ -53,7 +53,7 @@ type RedisHash struct {
 	keyStr field.Expression
 	fields map[string]field.Expression
 
-	client  *redis.Client
+	client  redis.UniversalClient
 	connMut sync.RWMutex
 }
 
