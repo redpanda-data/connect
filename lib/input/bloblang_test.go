@@ -44,6 +44,8 @@ func TestBloblangInterval(t *testing.T) {
 }
 
 func TestBloblangCron(t *testing.T) {
+	t.Skip()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*1100)
 	defer done()
 
