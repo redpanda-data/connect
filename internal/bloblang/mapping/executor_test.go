@@ -85,7 +85,7 @@ func TestAssignments(t *testing.T) {
 				NewStatement(nil, NewJSONAssignment("foo"), initFunc("meta", "foo")),
 			),
 			input: []part{{Content: `{}`}},
-			err:   errors.New("failed to execute mapping query at line 0: metadata value not found"),
+			err:   errors.New("failed to execute mapping query at line 0: metadata value 'foo' not found"),
 		},
 		"meta assignment": {
 			mapping: NewExecutor(nil, nil,
@@ -408,7 +408,7 @@ func TestQueries(t *testing.T) {
 				NewStatement(nil, NewJSONAssignment("foo"), initFunc("meta", "foo")),
 			),
 			input: []part{{Content: `{}`}},
-			err:   errors.New("failed to execute mapping query at line 0: metadata value not found"),
+			err:   errors.New("failed to execute mapping query at line 0: metadata value 'foo' not found"),
 		},
 	}
 

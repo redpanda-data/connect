@@ -436,7 +436,7 @@ func metadataFunction(args ...interface{}) (Function, error) {
 			if len(v) == 0 {
 				return nil, &ErrRecoverable{
 					Recovered: "",
-					Err:       errors.New("metadata value not found"),
+					Err:       fmt.Errorf("metadata value '%v' not found", field),
 				}
 			}
 			return v, nil

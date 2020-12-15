@@ -14,6 +14,8 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Fixed a panic on startup when using `if` statements within a `workflow` branch request or response map.
+- The `meta` bloblang function error messages now include the name of the required value.
+- Config unit tests now report processor errors when checks fail.
 
 ## 3.35.0 - 2020-12-07
 

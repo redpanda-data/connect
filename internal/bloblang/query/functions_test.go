@@ -91,7 +91,7 @@ func TestFunctions(t *testing.T) {
 		"check meta function error": {
 			input: mustFunc("meta", "foo"),
 			vars:  map[string]interface{}{},
-			err:   `metadata value not found`,
+			err:   `metadata value 'foo' not found`,
 		},
 	}
 
