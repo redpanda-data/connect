@@ -1,7 +1,6 @@
 package query
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -280,17 +279,12 @@ func IToBool(v interface{}) (bool, error) {
 	case json.Number:
 		return t.String() != "0", nil
 	case []byte:
-		if bytes.Equal(t, []byte("true")) {
-			return true, nil
-		} else if bytes.Equal(t, []byte("false")) {
-			return false, nil
+		if v, err := strconv.ParseBool(string(t)); err == nil {
+			return v, nil
 		}
 	case string:
-		switch t {
-		case "true":
-			return true, nil
-		case "false":
-			return false, nil
+		if v, err := strconv.ParseBool(t); err == nil {
+			return v, nil
 		}
 	}
 	return false, NewTypeError(v, ValueBool)
