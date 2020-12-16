@@ -62,7 +62,7 @@ type pendingRedisStreamMsg struct {
 
 // RedisStreams is an input type that reads Redis Streams messages.
 type RedisStreams struct {
-	client         *redis.Client
+	client         redis.UniversalClient
 	cMut           sync.Mutex
 	pendingMsgs    []pendingRedisStreamMsg
 	pendingMsgsMut sync.Mutex
@@ -131,7 +131,7 @@ func NewRedisStreams(
 
 func (r *RedisStreams) loop() {
 	defer func() {
-		var client *redis.Client
+		var client redis.UniversalClient
 		r.cMut.Lock()
 		client = r.client
 		r.client = nil
@@ -166,7 +166,7 @@ func (r *RedisStreams) addAsyncAcks(stream string, ids ...string) {
 }
 
 func (r *RedisStreams) sendAcks() {
-	var client *redis.Client
+	var client redis.UniversalClient
 	r.cMut.Lock()
 	client = r.client
 	r.cMut.Unlock()
@@ -233,7 +233,7 @@ func (r *RedisStreams) ConnectWithContext(ctx context.Context) error {
 }
 
 func (r *RedisStreams) read() (pendingRedisStreamMsg, error) {
-	var client *redis.Client
+	var client redis.UniversalClient
 	var msg pendingRedisStreamMsg
 
 	r.cMut.Lock()

@@ -37,7 +37,7 @@ func NewRedisListConfig() RedisListConfig {
 
 // RedisList is an input type that reads Redis List messages.
 type RedisList struct {
-	client *redis.Client
+	client redis.UniversalClient
 	cMut   sync.Mutex
 
 	url     *url.URL
@@ -109,7 +109,7 @@ func (r *RedisList) Read() (types.Message, error) {
 
 // ReadWithContext attempts to pop a message from a Redis list.
 func (r *RedisList) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
-	var client *redis.Client
+	var client redis.UniversalClient
 
 	r.cMut.Lock()
 	client = r.client
