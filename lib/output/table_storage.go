@@ -20,7 +20,7 @@ Stores message parts in an Azure Table Storage table.`,
 		Description: `
 Only one authentication method is required, ` + "`storage_connection_string`" + ` or ` + "`storage_account` and `storage_access_key`" + `. If both are set then the ` + "`storage_connection_string`" + ` is given priority.
 
-In order to set the ` + "`table_name`" + `,  ` + "`partition_key`" + ` and ` + "`row_key`" + ` 
+In order to set the ` + "`table_name`" + `,  ` + "`partition_key`" + ` and ` + "`row_key`" + `
 you can use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
 calculated per message of a batch.
 
@@ -102,18 +102,18 @@ properties:
 
 // NewAzureTableStorage creates a new NewAzureTableStorage output type.
 func NewAzureTableStorage(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	sthree, err := writer.NewAzureTableStorage(conf.TableStorage, log, stats)
+	tableStorage, err := writer.NewAzureTableStorage(conf.TableStorage, log, stats)
 	if err != nil {
 		return nil, err
 	}
 	var w Type
 	if conf.TableStorage.MaxInFlight == 1 {
 		w, err = NewWriter(
-			TypeTableStorage, sthree, log, stats,
+			TypeTableStorage, tableStorage, log, stats,
 		)
 	} else {
 		w, err = NewAsyncWriter(
-			TypeTableStorage, conf.TableStorage.MaxInFlight, sthree, log, stats,
+			TypeTableStorage, conf.TableStorage.MaxInFlight, tableStorage, log, stats,
 		)
 	}
 	if err != nil {

@@ -34,7 +34,7 @@ type AzureBlobStorage struct {
 	stats       metrics.Type
 }
 
-// NewAzureBlobStorage creates a new Amazon S3 bucket writer.Type.
+// NewAzureBlobStorage creates a new AzureBlobStorage writer.Type.
 func NewAzureBlobStorage(
 	conf AzureBlobStorageConfig,
 	log log.Modular,
