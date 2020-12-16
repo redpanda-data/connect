@@ -1143,6 +1143,7 @@ output:
             root_cas_file: ${OUTPUT_REDIS_STREAMS_TLS_ROOT_CAS_FILE}
             skip_cert_verify: ${OUTPUT_REDIS_STREAMS_TLS_SKIP_CERT_VERIFY:false}
           url: ${OUTPUT_REDIS_STREAMS_URL:tcp://localhost:6379}
+        reject: ${OUTPUT_REJECT}
         resource: ${OUTPUT_RESOURCE}
         s3:
           batching:

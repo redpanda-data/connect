@@ -27,6 +27,8 @@ func Run() {
 	}
 
 	conf := config.New()
+
+	// TODO: V4 Replace this and ensure processor errors fail the handler.
 	conf.Output.Type = serverless.ServerlessResponseType
 
 	if confStr := os.Getenv("BENTHOS_CONFIG"); len(confStr) > 0 {

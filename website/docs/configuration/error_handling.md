@@ -121,6 +121,25 @@ output:
           resource: bar # Everything else
 ```
 
+## Reject Messages
+
+Some inputs such as GCP Pub/Sub and AMQP support rejecting messages, in which case it can sometimes be more efficient to reject messages that have failed processing rather than route them to a dead letter queue. This can be achieved with the [`reject` output][output.reject]:
+
+```yaml
+output:
+  switch:
+    cases:
+      - check: errored()
+        output:
+          # Reject failed messages
+          reject: "Message failed due to: ${! error() }"
+
+      - output:
+          resource: bar # Everything else
+```
+
+When the source of a rejected message is a sequential input without support for conventional nacks, such as the Kafka or file inputs, a rejected message will be reprocessed from scratch, applying back pressure until it is successfully processed. This can also sometimes be a useful pattern.
+
 [processors]: /docs/components/processors/about
 [processor.bloblang]: /docs/components/processors/bloblang
 [processor.switch]: /docs/components/processors/switch
