@@ -103,6 +103,15 @@ input:
             key_path: ${INPUT_AWS_S3_SQS_KEY_PATH:Records.*.s3.object.key}
             max_messages: ${INPUT_AWS_S3_SQS_MAX_MESSAGES:10}
             url: ${INPUT_AWS_S3_SQS_URL}
+        blob_storage:
+          codec: ${INPUT_BLOB_STORAGE_CODEC:all-bytes}
+          container: ${INPUT_BLOB_STORAGE_CONTAINER}
+          delete_objects: ${INPUT_BLOB_STORAGE_DELETE_OBJECTS:false}
+          prefix: ${INPUT_BLOB_STORAGE_PREFIX}
+          storage_access_key: ${INPUT_BLOB_STORAGE_STORAGE_ACCESS_KEY}
+          storage_account: ${INPUT_BLOB_STORAGE_STORAGE_ACCOUNT}
+          storage_connection_string: ${INPUT_BLOB_STORAGE_STORAGE_CONNECTION_STRING}
+          timeout: ${INPUT_BLOB_STORAGE_TIMEOUT:0s}
         bloblang:
           count: ${INPUT_BLOBLANG_COUNT:0}
           interval: ${INPUT_BLOBLANG_INTERVAL:1s}

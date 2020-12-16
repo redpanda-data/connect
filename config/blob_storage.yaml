@@ -6,11 +6,16 @@ http:
   root_path: /benthos
   debug_endpoints: false
 input:
-  type: stdin
-  stdin:
-    delimiter: ""
-    max_buffer: 1000000
-    multipart: false
+  type: blob_storage
+  blob_storage:
+    codec: all-bytes
+    container: ""
+    delete_objects: false
+    prefix: ""
+    storage_access_key: ""
+    storage_account: ""
+    storage_connection_string: ""
+    timeout: 0s
 buffer:
   type: none
   none: {}
