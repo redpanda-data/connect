@@ -10,6 +10,8 @@ input:
   redis_pubsub:
     channels:
       - benthos_chan
+    kind: simple
+    master: ""
     tls:
       client_certs: []
       enabled: false
@@ -27,6 +29,8 @@ output:
   type: redis_pubsub
   redis_pubsub:
     channel: benthos_chan
+    kind: simple
+    master: ""
     max_in_flight: 1
     tls:
       client_certs: []

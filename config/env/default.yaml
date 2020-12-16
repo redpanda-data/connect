@@ -374,6 +374,8 @@ input:
           user_agent: ${INPUT_NSQ_USER_AGENT:benthos_consumer}
         redis_list:
           key: ${INPUT_REDIS_LIST_KEY:benthos_list}
+          kind: ${INPUT_REDIS_LIST_KIND:simple}
+          master: ${INPUT_REDIS_LIST_MASTER}
           timeout: ${INPUT_REDIS_LIST_TIMEOUT:5s}
           tls:
             enabled: ${INPUT_REDIS_LIST_TLS_ENABLED:false}
@@ -383,6 +385,8 @@ input:
         redis_pubsub:
           channels:
             - ${INPUT_REDIS_PUBSUB_CHANNELS:benthos_chan}
+          kind: ${INPUT_REDIS_PUBSUB_KIND:simple}
+          master: ${INPUT_REDIS_PUBSUB_MASTER}
           tls:
             enabled: ${INPUT_REDIS_PUBSUB_TLS_ENABLED:false}
             root_cas_file: ${INPUT_REDIS_PUBSUB_TLS_ROOT_CAS_FILE}
@@ -399,7 +403,9 @@ input:
           client_id: ${INPUT_REDIS_STREAMS_CLIENT_ID:benthos_consumer}
           commit_period: ${INPUT_REDIS_STREAMS_COMMIT_PERIOD:1s}
           consumer_group: ${INPUT_REDIS_STREAMS_CONSUMER_GROUP:benthos_group}
+          kind: ${INPUT_REDIS_STREAMS_KIND:simple}
           limit: ${INPUT_REDIS_STREAMS_LIMIT:10}
+          master: ${INPUT_REDIS_STREAMS_MASTER}
           start_from_oldest: ${INPUT_REDIS_STREAMS_START_FROM_OLDEST:true}
           streams:
             - ${INPUT_REDIS_STREAMS_STREAMS:benthos_stream}
@@ -743,6 +749,8 @@ pipeline:
         resource: ${PROCESSOR_RATE_LIMIT_RESOURCE}
       redis:
         key: ${PROCESSOR_REDIS_KEY}
+        kind: ${PROCESSOR_REDIS_KIND:simple}
+        master: ${PROCESSOR_REDIS_MASTER}
         operator: ${PROCESSOR_REDIS_OPERATOR:scard}
         retries: ${PROCESSOR_REDIS_RETRIES:3}
         retry_period: ${PROCESSOR_REDIS_RETRY_PERIOD:500ms}
@@ -1109,6 +1117,8 @@ output:
           user_agent: ${OUTPUT_NSQ_USER_AGENT:benthos_producer}
         redis_hash:
           key: ${OUTPUT_REDIS_HASH_KEY}
+          kind: ${OUTPUT_REDIS_HASH_KIND:simple}
+          master: ${OUTPUT_REDIS_HASH_MASTER}
           max_in_flight: ${OUTPUT_REDIS_HASH_MAX_IN_FLIGHT:1}
           tls:
             enabled: ${OUTPUT_REDIS_HASH_TLS_ENABLED:false}
@@ -1119,6 +1129,8 @@ output:
           walk_metadata: ${OUTPUT_REDIS_HASH_WALK_METADATA:false}
         redis_list:
           key: ${OUTPUT_REDIS_LIST_KEY:benthos_list}
+          kind: ${OUTPUT_REDIS_LIST_KIND:simple}
+          master: ${OUTPUT_REDIS_LIST_MASTER}
           max_in_flight: ${OUTPUT_REDIS_LIST_MAX_IN_FLIGHT:1}
           tls:
             enabled: ${OUTPUT_REDIS_LIST_TLS_ENABLED:false}
@@ -1127,6 +1139,8 @@ output:
           url: ${OUTPUT_REDIS_LIST_URL:tcp://localhost:6379}
         redis_pubsub:
           channel: ${OUTPUT_REDIS_PUBSUB_CHANNEL:benthos_chan}
+          kind: ${OUTPUT_REDIS_PUBSUB_KIND:simple}
+          master: ${OUTPUT_REDIS_PUBSUB_MASTER}
           max_in_flight: ${OUTPUT_REDIS_PUBSUB_MAX_IN_FLIGHT:1}
           tls:
             enabled: ${OUTPUT_REDIS_PUBSUB_TLS_ENABLED:false}
@@ -1135,6 +1149,8 @@ output:
           url: ${OUTPUT_REDIS_PUBSUB_URL:tcp://localhost:6379}
         redis_streams:
           body_key: ${OUTPUT_REDIS_STREAMS_BODY_KEY:body}
+          kind: ${OUTPUT_REDIS_STREAMS_KIND:simple}
+          master: ${OUTPUT_REDIS_STREAMS_MASTER}
           max_in_flight: ${OUTPUT_REDIS_STREAMS_MAX_IN_FLIGHT:1}
           max_length: ${OUTPUT_REDIS_STREAMS_MAX_LENGTH:0}
           stream: ${OUTPUT_REDIS_STREAMS_STREAM:benthos_stream}
