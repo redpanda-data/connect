@@ -119,10 +119,7 @@ func (a *AzureBlobStorage) createContainer(c *storage.Container, accessLevel str
 }
 
 // WriteWithContext attempts to write message contents to a target storage account as files.
-func (a *AzureBlobStorage) WriteWithContext(wctx context.Context, msg types.Message) error {
-	_, cancel := context.WithTimeout(wctx, a.timeout)
-	defer cancel()
-
+func (a *AzureBlobStorage) WriteWithContext(_ context.Context, msg types.Message) error {
 	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		c := a.client.GetContainerReference(a.container.String(i, msg))
 		b := c.GetBlobReference(a.path.String(i, msg))
