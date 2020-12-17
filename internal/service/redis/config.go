@@ -94,12 +94,12 @@ func (r Config) Client() (redis.UniversalClient, error) {
 func ConfigDocs() docs.FieldSpecs {
 	return docs.FieldSpecs{
 		docs.FieldCommon(
-			"url", "The URL of the target Redis server. Database is optional and is supplied as the URL path.",
+			"url", "The URL of the target Redis server. Database is optional and is supplied as the URL path. `tcp` scheme is the same as `redis`",
 			":6397",
 			"localhost:6397",
-			"tcp://localhost:6379",
-			"tcp://localhost:6379/1",
-			"tcp://localhost:6379/1,tcp://localhost:6380/1",
+			"redis://localhost:6379",
+			"redis://localhost:6379/1",
+			"redis://localhost:6379/1,redis://localhost:6380/1",
 		),
 		docs.FieldAdvanced("kind", "Specifies a simple, cluster-aware, or failover-aware redis client.", "simple", "cluster", "failover"),
 		docs.FieldAdvanced("master", "Name of the redis master when `kind` is `failover`", "mymaster"),

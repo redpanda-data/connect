@@ -104,7 +104,7 @@ pipeline:
 
 ### `url`
 
-The URL of the target Redis server. Database is optional and is supplied as the URL path.
+The URL of the target Redis server. Database is optional and is supplied as the URL path. `tcp` scheme is the same as `redis`
 
 
 Type: `string`  
@@ -117,11 +117,11 @@ url: :6397
 
 url: localhost:6397
 
-url: tcp://localhost:6379
+url: redis://localhost:6379
 
-url: tcp://localhost:6379/1
+url: redis://localhost:6379/1
 
-url: tcp://localhost:6379/1,tcp://localhost:6380/1
+url: redis://localhost:6379/1,redis://localhost:6380/1
 ```
 
 ### `kind`
