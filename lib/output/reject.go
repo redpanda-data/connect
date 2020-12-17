@@ -50,7 +50,8 @@ output:
             target_address: queue:/the_foos
 
       - output:
-          reject: "processing failed due to: ${! error() }"`,
+          reject: "processing failed due to: ${! error() }"
+`,
 			},
 		},
 	}
