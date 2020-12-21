@@ -20,6 +20,11 @@ All notable changes to this project will be documented in this file.
 - The `meta` bloblang function error messages now include the name of the required value.
 - Config unit tests now report processor errors when checks fail.
 
+### Changed
+
+- The experimental `aws_s3` input is now marked as beta.
+- The beta `kinesis_balanced` input is now deprecated.
+
 ## 3.35.0 - 2020-12-07
 
 ### New

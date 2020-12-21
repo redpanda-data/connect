@@ -15,11 +15,15 @@ import (
 func init() {
 	Constructors[TypeKinesisBalanced] = TypeSpec{
 		constructor: NewKinesisBalanced,
-		Status:      docs.StatusBeta,
+		Status:      docs.StatusDeprecated,
 		Summary: `
 Receives messages from a Kinesis stream and automatically balances shards across
 consumers.`,
 		Description: `
+## Alternatives
+
+This input is being replaced with the shiny new ` + "[`aws_kinesis` input](/docs/components/inputs/aws_kinesis)" + `, which has improved features, consider trying it out instead.
+
 ### Metadata
 
 This input adds the following metadata fields to each message:

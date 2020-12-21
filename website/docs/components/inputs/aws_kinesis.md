@@ -1,7 +1,7 @@
 ---
 title: aws_kinesis
 type: input
-status: experimental
+status: beta
 categories: ["Services","AWS"]
 ---
 
@@ -15,9 +15,9 @@ categories: ["Services","AWS"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-EXPERIMENTAL: This component is experimental and therefore subject to change or removal outside of major version releases.
+BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 
-Receive messages from a Kinesis streams.
+Receive messages from one or more Kinesis streams.
 
 
 <Tabs defaultValue="common" values={[
@@ -37,8 +37,6 @@ input:
       create: false
     checkpoint_limit: 1
     commit_period: 5s
-    rebalance_period: 30s
-    lease_period: 30s
     start_from_oldest: true
     region: eu-west-1
     batching:

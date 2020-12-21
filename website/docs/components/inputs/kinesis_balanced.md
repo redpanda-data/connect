@@ -1,7 +1,7 @@
 ---
 title: kinesis_balanced
 type: input
-status: beta
+status: deprecated
 categories: ["Services","AWS"]
 ---
 
@@ -15,7 +15,9 @@ categories: ["Services","AWS"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
 
 Receives messages from a Kinesis stream and automatically balances shards across
 consumers.
@@ -75,6 +77,10 @@ input:
 
 </TabItem>
 </Tabs>
+
+## Alternatives
+
+This input is being replaced with the shiny new [`aws_kinesis` input](/docs/components/inputs/aws_kinesis), which has improved features, consider trying it out instead.
 
 ### Metadata
 
