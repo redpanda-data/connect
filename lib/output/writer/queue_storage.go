@@ -69,25 +69,30 @@ const (
 )
 
 // parseConnectionString extracts the credentials from the connection string.
-func parseConnectionString(input string) (storageAccount, storageAccessKey string) {
+func parseConnectionString(input string) (storageAccount, storageAccessKey string, err error) {
 	// build a map of connection string key/value pairs
 	parts := map[string]string{}
 	for _, pair := range strings.Split(input, ";") {
 		if pair == "" {
 			continue
 		}
-
 		equalDex := strings.IndexByte(pair, '=')
 		if equalDex <= 0 {
 			fmt.Println(fmt.Errorf("invalid connection segment %q", pair))
 		}
-
 		value := strings.TrimSpace(pair[equalDex+1:])
 		key := strings.TrimSpace(strings.ToLower(pair[:equalDex]))
 		parts[key] = value
 	}
-
-	return parts[azAccountName], parts[azAccountKey]
+	accountName, ok := parts[azAccountName]
+	if !ok {
+		return "", "", errors.New("invalid connection string")
+	}
+	accountKey, ok := parts[azAccountKey]
+	if !ok {
+		return "", "", errors.New("invalid connection string")
+	}
+	return accountName, accountKey, nil
 }
 
 // NewAzureQueueStorage creates a new Azure Queue Storage writer type.
@@ -106,7 +111,10 @@ func NewAzureQueueStorage(
 	var storageAccessKey string
 	var endpointExp = azQueueEndpointExp
 	if len(conf.StorageConnectionString) > 0 {
-		storageAccount, storageAccessKey = parseConnectionString(conf.StorageConnectionString)
+		storageAccount, storageAccessKey, err = parseConnectionString(conf.StorageConnectionString)
+		if err != nil {
+			return nil, err
+		}
 		if strings.Contains(conf.StorageConnectionString, "UseDevelopmentStorage=true;") {
 			storageAccount = devAccountName
 			storageAccessKey = devAccountKey
