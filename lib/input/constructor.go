@@ -82,6 +82,7 @@ const (
 	TypeAMQP1           = "amqp_1"
 	TypeAWSKinesis      = "aws_kinesis"
 	TypeAWSS3           = "aws_s3"
+	TypeAWSSQS          = "aws_sqs"
 	TypeBloblang        = "bloblang"
 	TypeBlobStorage     = "blob_storage"
 	TypeBroker          = "broker"
@@ -132,6 +133,7 @@ type Config struct {
 	AMQP1           reader.AMQP1Config           `json:"amqp_1" yaml:"amqp_1"`
 	AWSKinesis      AWSKinesisConfig             `json:"aws_kinesis" yaml:"aws_kinesis"`
 	AWSS3           AWSS3Config                  `json:"aws_s3" yaml:"aws_s3"`
+	AWSSQS          AWSSQSConfig                 `json:"aws_sqs" yaml:"aws_sqs"`
 	Bloblang        BloblangConfig               `json:"bloblang" yaml:"bloblang"`
 	BlobStorage     AzureBlobStorageConfig       `json:"blob_storage" yaml:"blob_storage"`
 	Broker          BrokerConfig                 `json:"broker" yaml:"broker"`
@@ -183,6 +185,7 @@ func NewConfig() Config {
 		AMQP1:           reader.NewAMQP1Config(),
 		AWSKinesis:      NewAWSKinesisConfig(),
 		AWSS3:           NewAWSS3Config(),
+		AWSSQS:          NewAWSSQSConfig(),
 		Bloblang:        NewBloblangConfig(),
 		BlobStorage:     NewAzureBlobStorageConfig(),
 		Broker:          NewBrokerConfig(),

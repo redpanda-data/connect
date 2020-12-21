@@ -19,6 +19,10 @@ Downloads objects within an Amazon S3 bucket, optionally filtered by a prefix.
 If an SQS queue has been configured then only object keys read from the queue
 will be downloaded.`,
 		Description: `
+## Alternatives
+
+This input is being replaced with the shiny new ` + "[`aws_s3` input](/docs/components/inputs/aws_s3)" + `, which has improved features, consider trying it out instead.
+
 If an SQS queue is not specified the entire list of objects found when this
 input starts will be consumed. Note that the prefix configuration is only used
 when downloading objects without SQS configured.

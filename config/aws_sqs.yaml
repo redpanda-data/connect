@@ -6,16 +6,8 @@ http:
   root_path: /benthos
   debug_endpoints: false
 input:
-  type: aws_kinesis
-  aws_kinesis:
-    batching:
-      byte_size: 0
-      check: ""
-      count: 0
-      period: ""
-      processors: []
-    checkpoint_limit: 1
-    commit_period: 5s
+  type: aws_sqs
+  aws_sqs:
     credentials:
       id: ""
       profile: ""
@@ -23,18 +15,10 @@ input:
       role_external_id: ""
       secret: ""
       token: ""
-    dynamodb:
-      billing_mode: PAY_PER_REQUEST
-      create: false
-      read_capacity_units: 0
-      table: ""
-      write_capacity_units: 0
+    delete_message: true
     endpoint: ""
-    lease_period: 30s
-    rebalance_period: 30s
     region: eu-west-1
-    start_from_oldest: true
-    streams: []
+    url: ""
 buffer:
   type: none
   none: {}
