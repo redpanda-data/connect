@@ -55,7 +55,6 @@ calculated per message of a batch.`,
 				"BLOCK", "APPEND",
 			).SupportsInterpolation(false),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-			docs.FieldAdvanced("timeout", "The maximum period to wait on an upload before abandoning it and reattempting."),
 		},
 		Categories: []Category{
 			CategoryServices,
@@ -68,17 +67,17 @@ calculated per message of a batch.`,
 
 // NewAzureBlobStorage creates a new AzureBlobStorage output type.
 func NewAzureBlobStorage(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	sthree, err := writer.NewAzureBlobStorage(conf.BlobStorage, log, stats)
+	blobStorage, err := writer.NewAzureBlobStorage(conf.BlobStorage, log, stats)
 	if err != nil {
 		return nil, err
 	}
 	if conf.BlobStorage.MaxInFlight == 1 {
 		return NewWriter(
-			TypeBlobStorage, sthree, log, stats,
+			TypeBlobStorage, blobStorage, log, stats,
 		)
 	}
 	return NewAsyncWriter(
-		TypeBlobStorage, conf.BlobStorage.MaxInFlight, sthree, log, stats,
+		TypeBlobStorage, conf.BlobStorage.MaxInFlight, blobStorage, log, stats,
 	)
 }
 

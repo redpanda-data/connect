@@ -11,7 +11,6 @@ type AzureBlobStorageConfig struct {
 	Path                    string `json:"path" yaml:"path"`
 	BlobType                string `json:"blob_type" yaml:"blob_type"`
 	PublicAccessLevel       string `json:"public_access_level" yaml:"public_access_level"`
-	Timeout                 string `json:"timeout" yaml:"timeout"`
 	MaxInFlight             int    `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
@@ -25,7 +24,6 @@ func NewAzureBlobStorageConfig() AzureBlobStorageConfig {
 		Path:                    `${!count("files")}-${!timestamp_unix_nano()}.txt`,
 		BlobType:                "BLOCK",
 		PublicAccessLevel:       "PRIVATE",
-		Timeout:                 "5s",
 		MaxInFlight:             1,
 	}
 }

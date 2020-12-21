@@ -84,6 +84,7 @@ const (
 	TypeAWSS3           = "aws_s3"
 	TypeAWSSQS          = "aws_sqs"
 	TypeBloblang        = "bloblang"
+	TypeBlobStorage     = "blob_storage"
 	TypeBroker          = "broker"
 	TypeCSVFile         = "csv"
 	TypeDynamic         = "dynamic"
@@ -134,6 +135,7 @@ type Config struct {
 	AWSS3           AWSS3Config                  `json:"aws_s3" yaml:"aws_s3"`
 	AWSSQS          AWSSQSConfig                 `json:"aws_sqs" yaml:"aws_sqs"`
 	Bloblang        BloblangConfig               `json:"bloblang" yaml:"bloblang"`
+	BlobStorage     AzureBlobStorageConfig       `json:"blob_storage" yaml:"blob_storage"`
 	Broker          BrokerConfig                 `json:"broker" yaml:"broker"`
 	CSVFile         CSVFileConfig                `json:"csv" yaml:"csv"`
 	Dynamic         DynamicConfig                `json:"dynamic" yaml:"dynamic"`
@@ -185,6 +187,7 @@ func NewConfig() Config {
 		AWSS3:           NewAWSS3Config(),
 		AWSSQS:          NewAWSSQSConfig(),
 		Bloblang:        NewBloblangConfig(),
+		BlobStorage:     NewAzureBlobStorageConfig(),
 		Broker:          NewBrokerConfig(),
 		CSVFile:         NewCSVFileConfig(),
 		Dynamic:         NewDynamicConfig(),

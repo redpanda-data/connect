@@ -76,7 +76,7 @@ output:
 
 Only one authentication method is required, `storage_connection_string` or `storage_account` and `storage_access_key`. If both are set then the `storage_connection_string` is given priority.
 
-In order to set the `table_name`,  `partition_key` and `row_key` 
+In order to set the `table_name`,  `partition_key` and `row_key`
 you can use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
 calculated per message of a batch.
 
