@@ -21,14 +21,14 @@ import (
 )
 
 func init() {
-	Constructors[TypeBlobStorage] = TypeSpec{
+	Constructors[TypeAzureBlobStorage] = TypeSpec{
 		constructor: func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-			r, err := newAzureBlobStorage(conf.BlobStorage, log, stats)
+			r, err := newAzureBlobStorage(conf.AzureBlobStorage, log, stats)
 			if err != nil {
 				return nil, err
 			}
 			return NewAsyncReader(
-				TypeBlobStorage,
+				TypeAzureBlobStorage,
 				true,
 				reader.NewAsyncBundleUnacks(
 					reader.NewAsyncPreserver(r),
@@ -36,7 +36,7 @@ func init() {
 				log, stats,
 			)
 		},
-		Status: docs.StatusExperimental,
+		Status: docs.StatusBeta,
 		Summary: `
 Downloads objects within an Azure Blob Storage container, optionally filtered by
 a prefix.`,

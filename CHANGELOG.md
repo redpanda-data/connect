@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### New
 
 - New `influxdb` metrics target.
+- New `azure_blob_storage` input.
 - The `bloblang` input field `interval` now supports cron expressions.
 - New beta `aws_kinesis` and `aws_sqs` inputs.
 - The `bool` bloblang method now supports a wider range of string values.
@@ -24,6 +25,7 @@ All notable changes to this project will be documented in this file.
 
 - The experimental `aws_s3` input is now marked as beta.
 - The beta `kinesis_balanced` input is now deprecated.
+- The beta `blob_storage` and `table_storage` outputs have been renamed `azure_blob_storage` and `azure_table_storage` respectively. The old names can still be used for backwards compatibility.
 
 ## 3.35.0 - 2020-12-07
 

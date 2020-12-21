@@ -115,7 +115,7 @@ var _ = registerIntegrationTest("azure", func(t *testing.T) {
 	t.Run("blob_storage", func(t *testing.T) {
 		template := `
 output:
-  blob_storage:
+  azure_blob_storage:
     blob_type: BLOCK
     container: $VAR1-$ID
     max_in_flight: 1
@@ -124,7 +124,7 @@ output:
     storage_connection_string: "UseDevelopmentStorage=true;"
 
 input:
-  blob_storage:
+  azure_blob_storage:
     container: $VAR1-$ID
     prefix: $VAR2
     storage_connection_string: "UseDevelopmentStorage=true;"

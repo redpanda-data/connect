@@ -6,11 +6,15 @@ http:
   root_path: /benthos
   debug_endpoints: false
 input:
-  type: stdin
-  stdin:
-    delimiter: ""
-    max_buffer: 1000000
-    multipart: false
+  type: azure_blob_storage
+  azure_blob_storage:
+    codec: all-bytes
+    container: ""
+    delete_objects: false
+    prefix: ""
+    storage_access_key: ""
+    storage_account: ""
+    storage_connection_string: ""
 buffer:
   type: none
   none: {}
@@ -18,24 +22,16 @@ pipeline:
   processors: []
   threads: 1
 output:
-  type: table_storage
-  table_storage:
-    batching:
-      byte_size: 0
-      check: ""
-      count: 0
-      period: ""
-      processors: []
-    insert_type: INSERT
+  type: azure_blob_storage
+  azure_blob_storage:
+    blob_type: BLOCK
+    container: ""
     max_in_flight: 1
-    partition_key: ""
-    properties: {}
-    row_key: ""
+    path: ${!count("files")}-${!timestamp_unix_nano()}.txt
+    public_access_level: PRIVATE
     storage_access_key: ""
     storage_account: ""
     storage_connection_string: ""
-    table_name: ""
-    timeout: 5s
 resources:
   caches: {}
   conditions: {}

@@ -115,14 +115,14 @@ input:
           endpoint: ${INPUT_AWS_SQS_ENDPOINT}
           region: ${INPUT_AWS_SQS_REGION:eu-west-1}
           url: ${INPUT_AWS_SQS_URL}
-        blob_storage:
-          codec: ${INPUT_BLOB_STORAGE_CODEC:all-bytes}
-          container: ${INPUT_BLOB_STORAGE_CONTAINER}
-          delete_objects: ${INPUT_BLOB_STORAGE_DELETE_OBJECTS:false}
-          prefix: ${INPUT_BLOB_STORAGE_PREFIX}
-          storage_access_key: ${INPUT_BLOB_STORAGE_STORAGE_ACCESS_KEY}
-          storage_account: ${INPUT_BLOB_STORAGE_STORAGE_ACCOUNT}
-          storage_connection_string: ${INPUT_BLOB_STORAGE_STORAGE_CONNECTION_STRING}
+        azure_blob_storage:
+          codec: ${INPUT_AZURE_BLOB_STORAGE_CODEC:all-bytes}
+          container: ${INPUT_AZURE_BLOB_STORAGE_CONTAINER}
+          delete_objects: ${INPUT_AZURE_BLOB_STORAGE_DELETE_OBJECTS:false}
+          prefix: ${INPUT_AZURE_BLOB_STORAGE_PREFIX}
+          storage_access_key: ${INPUT_AZURE_BLOB_STORAGE_STORAGE_ACCESS_KEY}
+          storage_account: ${INPUT_AZURE_BLOB_STORAGE_STORAGE_ACCOUNT}
+          storage_connection_string: ${INPUT_AZURE_BLOB_STORAGE_STORAGE_CONNECTION_STRING}
         bloblang:
           count: ${INPUT_BLOBLANG_COUNT:0}
           interval: ${INPUT_BLOBLANG_INTERVAL:1s}
@@ -864,6 +864,30 @@ output:
             root_cas_file: ${OUTPUT_AMQP_1_TLS_ROOT_CAS_FILE}
             skip_cert_verify: ${OUTPUT_AMQP_1_TLS_SKIP_CERT_VERIFY:false}
           url: ${OUTPUT_AMQP_1_URL}
+        azure_blob_storage:
+          blob_type: ${OUTPUT_AZURE_BLOB_STORAGE_BLOB_TYPE:BLOCK}
+          container: ${OUTPUT_AZURE_BLOB_STORAGE_CONTAINER}
+          max_in_flight: ${OUTPUT_AZURE_BLOB_STORAGE_MAX_IN_FLIGHT:1}
+          path: ${OUTPUT_AZURE_BLOB_STORAGE_PATH:${!count("files")}-${!timestamp_unix_nano()}.txt}
+          public_access_level: ${OUTPUT_AZURE_BLOB_STORAGE_PUBLIC_ACCESS_LEVEL:PRIVATE}
+          storage_access_key: ${OUTPUT_AZURE_BLOB_STORAGE_STORAGE_ACCESS_KEY}
+          storage_account: ${OUTPUT_AZURE_BLOB_STORAGE_STORAGE_ACCOUNT}
+          storage_connection_string: ${OUTPUT_AZURE_BLOB_STORAGE_STORAGE_CONNECTION_STRING}
+        azure_table_storage:
+          batching:
+            byte_size: ${OUTPUT_AZURE_TABLE_STORAGE_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_AZURE_TABLE_STORAGE_BATCHING_CHECK}
+            count: ${OUTPUT_AZURE_TABLE_STORAGE_BATCHING_COUNT:0}
+            period: ${OUTPUT_AZURE_TABLE_STORAGE_BATCHING_PERIOD}
+          insert_type: ${OUTPUT_AZURE_TABLE_STORAGE_INSERT_TYPE:INSERT}
+          max_in_flight: ${OUTPUT_AZURE_TABLE_STORAGE_MAX_IN_FLIGHT:1}
+          partition_key: ${OUTPUT_AZURE_TABLE_STORAGE_PARTITION_KEY}
+          row_key: ${OUTPUT_AZURE_TABLE_STORAGE_ROW_KEY}
+          storage_access_key: ${OUTPUT_AZURE_TABLE_STORAGE_STORAGE_ACCESS_KEY}
+          storage_account: ${OUTPUT_AZURE_TABLE_STORAGE_STORAGE_ACCOUNT}
+          storage_connection_string: ${OUTPUT_AZURE_TABLE_STORAGE_STORAGE_CONNECTION_STRING}
+          table_name: ${OUTPUT_AZURE_TABLE_STORAGE_TABLE_NAME}
+          timeout: ${OUTPUT_AZURE_TABLE_STORAGE_TIMEOUT:5s}
         blob_storage:
           blob_type: ${OUTPUT_BLOB_STORAGE_BLOB_TYPE:BLOCK}
           container: ${OUTPUT_BLOB_STORAGE_CONTAINER}
