@@ -192,7 +192,8 @@ func (a *AzureQueueStorage) WriteWithContext(ctx context.Context, msg types.Mess
 			}
 			return 0
 		}()
-		_, err := msgURL.Enqueue(ctx, string(p.Get()), 0, timeToLive)
+		message := string(p.Get())
+		_, err := msgURL.Enqueue(ctx, message, 0, timeToLive)
 		if err != nil {
 			if cerr, ok := err.(azqueue.StorageError); ok {
 				if cerr.ServiceCode() == azqueue.ServiceCodeQueueNotFound {
@@ -201,7 +202,7 @@ func (a *AzureQueueStorage) WriteWithContext(ctx context.Context, msg types.Mess
 					if err != nil {
 						return fmt.Errorf("error creating queue: %v", err)
 					}
-					_, err := msgURL.Enqueue(ctx, string(p.Get()), 0, 0)
+					_, err := msgURL.Enqueue(ctx, message, 0, 0)
 					if err != nil {
 						return fmt.Errorf("error retrying to enqueu message: %v", err)
 					}
