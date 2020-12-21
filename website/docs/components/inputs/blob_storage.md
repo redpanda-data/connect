@@ -54,7 +54,6 @@ input:
     prefix: ""
     codec: all-bytes
     delete_objects: false
-    timeout: 0s
 ```
 
 </TabItem>
@@ -65,8 +64,6 @@ Downloads objects within an Azure Blob Storage container, optionally filtered by
 ## Downloading Large Files
 
 When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a [`codec`](#codec) can be specified that determines how to break the input into smaller individual messages.
-
-By default, the `timeout` parameter is set to 0 seconds, which disables timeouts on the Azure Storage side.
 
 ## Metadata
 
@@ -163,13 +160,5 @@ Whether to delete downloaded objects from the blob once they are processed.
 
 Type: `bool`  
 Default: `false`  
-
-### `timeout`
-
-The maximum period to wait on a download before abandoning it and reattempting.
-
-
-Type: `string`  
-Default: `"0s"`  
 
 

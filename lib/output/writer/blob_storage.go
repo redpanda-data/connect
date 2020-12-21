@@ -29,7 +29,6 @@ type AzureBlobStorage struct {
 	blobType    field.Expression
 	accessLevel field.Expression
 	client      storage.BlobStorageClient
-	timeout     time.Duration
 	log         log.Modular
 	stats       metrics.Type
 }
@@ -40,17 +39,11 @@ func NewAzureBlobStorage(
 	log log.Modular,
 	stats metrics.Type,
 ) (*AzureBlobStorage, error) {
-	var timeout time.Duration
-	var err error
-	if tout := conf.Timeout; len(tout) > 0 {
-		if timeout, err = time.ParseDuration(tout); err != nil {
-			return nil, fmt.Errorf("failed to parse timeout period string: %v", err)
-		}
-	}
 	if len(conf.StorageAccount) == 0 && len(conf.StorageConnectionString) == 0 {
 		return nil, errors.New("invalid azure storage account credentials")
 	}
 	var client storage.Client
+	var err error
 	if len(conf.StorageConnectionString) > 0 {
 		if strings.Contains(conf.StorageConnectionString, "UseDevelopmentStorage=true;") {
 			client, err = storage.NewEmulatorClient()
@@ -64,11 +57,10 @@ func NewAzureBlobStorage(
 		return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
 	}
 	a := &AzureBlobStorage{
-		conf:    conf,
-		log:     log,
-		stats:   stats,
-		timeout: timeout,
-		client:  client.GetBlobService(),
+		conf:   conf,
+		log:    log,
+		stats:  stats,
+		client: client.GetBlobService(),
 	}
 	if a.container, err = bloblang.NewField(conf.Container); err != nil {
 		return nil, fmt.Errorf("failed to parse container expression: %v", err)

@@ -111,7 +111,6 @@ input:
           storage_access_key: ${INPUT_BLOB_STORAGE_STORAGE_ACCESS_KEY}
           storage_account: ${INPUT_BLOB_STORAGE_STORAGE_ACCOUNT}
           storage_connection_string: ${INPUT_BLOB_STORAGE_STORAGE_CONNECTION_STRING}
-          timeout: ${INPUT_BLOB_STORAGE_TIMEOUT:0s}
         bloblang:
           count: ${INPUT_BLOBLANG_COUNT:0}
           interval: ${INPUT_BLOBLANG_INTERVAL:1s}
@@ -862,7 +861,6 @@ output:
           storage_access_key: ${OUTPUT_BLOB_STORAGE_STORAGE_ACCESS_KEY}
           storage_account: ${OUTPUT_BLOB_STORAGE_STORAGE_ACCOUNT}
           storage_connection_string: ${OUTPUT_BLOB_STORAGE_STORAGE_CONNECTION_STRING}
-          timeout: ${OUTPUT_BLOB_STORAGE_TIMEOUT:5s}
         cache:
           key: ${OUTPUT_CACHE_KEY:${!count("items")}-${!timestamp_unix_nano()}}
           max_in_flight: ${OUTPUT_CACHE_MAX_IN_FLIGHT:1}

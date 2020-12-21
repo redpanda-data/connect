@@ -122,14 +122,12 @@ output:
     path: $VAR2/${!count("$ID")}.txt
     public_access_level: PRIVATE
     storage_connection_string: "UseDevelopmentStorage=true;"
-    timeout: 5s
 
 input:
   blob_storage:
     container: $VAR1-$ID
     prefix: $VAR2
     storage_connection_string: "UseDevelopmentStorage=true;"
-    timeout: 5s
 `
 		integrationTests(
 			integrationTestOpenCloseIsolated(),

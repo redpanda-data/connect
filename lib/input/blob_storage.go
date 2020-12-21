@@ -47,8 +47,6 @@ Downloads objects within an Azure Blob Storage container, optionally filtered by
 
 When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a ` + "[`codec`](#codec)" + ` can be specified that determines how to break the input into smaller individual messages.
 
-By default, the ` + "`timeout`" + ` parameter is set to 0 seconds, which disables timeouts on the Azure Storage side.
-
 ## Metadata
 
 This input adds the following metadata fields to each message:
@@ -83,7 +81,6 @@ You can access these metadata fields using [function interpolation](/docs/config
 			docs.FieldCommon("prefix", "An optional path prefix, if set only objects with the prefix are consumed."),
 			codec.ReaderDocs,
 			docs.FieldAdvanced("delete_objects", "Whether to delete downloaded objects from the blob once they are processed."),
-			docs.FieldAdvanced("timeout", "The maximum period to wait on a download before abandoning it and reattempting."),
 		},
 		Categories: []Category{
 			CategoryServices,
@@ -104,15 +101,13 @@ type AzureBlobStorageConfig struct {
 	Prefix                  string `json:"prefix" yaml:"prefix"`
 	Codec                   string `json:"codec" yaml:"codec"`
 	DeleteObjects           bool   `json:"delete_objects" yaml:"delete_objects"`
-	Timeout                 string `json:"timeout" yaml:"timeout"`
 }
 
 // NewAzureBlobStorageConfig creates a new AzureBlobStorageConfig with default
 // values.
 func NewAzureBlobStorageConfig() AzureBlobStorageConfig {
 	return AzureBlobStorageConfig{
-		Codec:   "all-bytes",
-		Timeout: "0s",
+		Codec: "all-bytes",
 	}
 }
 
@@ -168,7 +163,6 @@ type targetReader struct {
 	pending    []*azureObjectTarget
 	container  *storage.Container
 	conf       AzureBlobStorageConfig
-	timeout    time.Duration
 	startAfter string
 }
 
@@ -177,7 +171,6 @@ func newTargetReader(
 	conf AzureBlobStorageConfig,
 	log log.Modular,
 	container *storage.Container,
-	timeout time.Duration,
 ) (*targetReader, error) {
 	params := storage.ListBlobsParameters{
 		MaxResults: 100,
@@ -192,7 +185,6 @@ func newTargetReader(
 	staticKeys := targetReader{
 		container: container,
 		conf:      conf,
-		timeout:   timeout,
 	}
 	for _, blob := range output.Blobs {
 		ackFn := deleteAzureObjectAckFn(container, blob.Name, conf.DeleteObjects, nil)
@@ -211,7 +203,6 @@ func (s *targetReader) Pop(ctx context.Context) (*azureObjectTarget, error) {
 		params := storage.ListBlobsParameters{
 			Marker:     s.startAfter,
 			MaxResults: 100,
-			Timeout:    uint(s.timeout.Seconds()),
 		}
 		if len(s.conf.Prefix) > 0 {
 			params.Prefix = s.conf.Prefix
@@ -255,7 +246,6 @@ type azureBlobStorage struct {
 	object    *azurePendingObject
 
 	container *storage.Container
-	timeout   time.Duration
 
 	log   log.Modular
 	stats metrics.Type
@@ -263,19 +253,12 @@ type azureBlobStorage struct {
 
 // newAzureBlobStorage creates a new Azure Blob Storage input type.
 func newAzureBlobStorage(conf AzureBlobStorageConfig, log log.Modular, stats metrics.Type) (*azureBlobStorage, error) {
-	var timeout time.Duration
-	var err error
-	if tout := conf.Timeout; len(tout) > 0 {
-		if timeout, err = time.ParseDuration(tout); err != nil {
-			return nil, fmt.Errorf("failed to parse timeout period string: %v", err)
-		}
-	}
-
 	if len(conf.StorageAccount) == 0 && len(conf.StorageConnectionString) == 0 {
 		return nil, errors.New("invalid azure storage account credentials")
 	}
 
 	var client storage.Client
+	var err error
 	if len(conf.StorageConnectionString) > 0 {
 		if strings.Contains(conf.StorageConnectionString, "UseDevelopmentStorage=true;") {
 			client, err = storage.NewEmulatorClient()
@@ -301,7 +284,6 @@ func newAzureBlobStorage(conf AzureBlobStorageConfig, log log.Modular, stats met
 		log:               log,
 		stats:             stats,
 		container:         blobService.GetContainerReference(conf.Container),
-		timeout:           timeout,
 	}
 
 	return a, nil
@@ -311,7 +293,7 @@ func newAzureBlobStorage(conf AzureBlobStorageConfig, log log.Modular, stats met
 // Blob Storage container.
 func (a *azureBlobStorage) ConnectWithContext(ctx context.Context) error {
 	var err error
-	a.keyReader, err = newTargetReader(ctx, a.conf, a.log, a.container, a.timeout)
+	a.keyReader, err = newTargetReader(ctx, a.conf, a.log, a.container)
 	return err
 }
 
@@ -337,7 +319,7 @@ func (a *azureBlobStorage) getObjectTarget(ctx context.Context) (*azurePendingOb
 		return nil, errors.New("blob does not exist")
 	}
 
-	obj, err := blobReference.Get(&storage.GetBlobOptions{Timeout: uint(a.timeout.Seconds())})
+	obj, err := blobReference.Get(nil)
 	if err != nil {
 		target.ackFn(ctx, err)
 		return nil, err
