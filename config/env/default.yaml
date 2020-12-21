@@ -103,6 +103,18 @@ input:
             key_path: ${INPUT_AWS_S3_SQS_KEY_PATH:Records.*.s3.object.key}
             max_messages: ${INPUT_AWS_S3_SQS_MAX_MESSAGES:10}
             url: ${INPUT_AWS_S3_SQS_URL}
+        aws_sqs:
+          credentials:
+            id: ${INPUT_AWS_SQS_CREDENTIALS_ID}
+            profile: ${INPUT_AWS_SQS_CREDENTIALS_PROFILE}
+            role: ${INPUT_AWS_SQS_CREDENTIALS_ROLE}
+            role_external_id: ${INPUT_AWS_SQS_CREDENTIALS_ROLE_EXTERNAL_ID}
+            secret: ${INPUT_AWS_SQS_CREDENTIALS_SECRET}
+            token: ${INPUT_AWS_SQS_CREDENTIALS_TOKEN}
+          delete_message: ${INPUT_AWS_SQS_DELETE_MESSAGE:true}
+          endpoint: ${INPUT_AWS_SQS_ENDPOINT}
+          region: ${INPUT_AWS_SQS_REGION:eu-west-1}
+          url: ${INPUT_AWS_SQS_URL}
         bloblang:
           count: ${INPUT_BLOBLANG_COUNT:0}
           interval: ${INPUT_BLOBLANG_INTERVAL:1s}

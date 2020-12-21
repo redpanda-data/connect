@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - New `influxdb` metrics target.
 - The `bloblang` input field `interval` now supports cron expressions.
-- New experimental `aws_kinesis` input.
+- New beta `aws_kinesis` and `aws_sqs` inputs.
 - The `bool` bloblang method now supports a wider range of string values.
 - New `reject` output type for conditionally rejecting messages.
 - All Redis components now support clustering and fail-over patterns.

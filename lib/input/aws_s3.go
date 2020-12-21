@@ -83,7 +83,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 		FieldSpecs: append(
 			append(docs.FieldSpecs{
 				docs.FieldCommon("bucket", "The bucket to consume from. If the field `sqs.url` is specified this field is optional."),
-				docs.FieldCommon("prefix", "An optional path prefix, if set only objects with the prefix are consumed."),
+				docs.FieldCommon("prefix", "An optional path prefix, if set only objects with the prefix are consumed when walking a bucket."),
 			}, sess.FieldSpecs()...),
 			docs.FieldAdvanced("force_path_style_urls", "Forces the client API to use path style URLs for downloading keys, which is often required when connecting to custom endpoints."),
 			docs.FieldAdvanced("delete_objects", "Whether to delete downloaded objects from the bucket once they are processed."),
@@ -578,6 +578,9 @@ func newAmazonS3(
 ) (*awsS3, error) {
 	if len(conf.Bucket) == 0 && len(conf.SQS.URL) == 0 {
 		return nil, errors.New("either a bucket or an sqs.url must be specified")
+	}
+	if len(conf.Prefix) > 0 && len(conf.SQS.URL) > 0 {
+		return nil, errors.New("cannot specify both a prefix and sqs.url")
 	}
 	s := &awsS3{
 		conf:  conf,

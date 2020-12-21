@@ -122,7 +122,7 @@ Default: `""`
 
 ### `prefix`
 
-An optional path prefix, if set only objects with the prefix are consumed.
+An optional path prefix, if set only objects with the prefix are consumed when walking a bucket.
 
 
 Type: `string`  

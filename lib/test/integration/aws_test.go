@@ -293,7 +293,7 @@ output:
       count: $OUTPUT_BATCH_COUNT
 
 input:
-  sqs:
+  aws_sqs:
     url: http://localhost:$PORT/queue/queue-$ID
     endpoint: http://localhost:$PORT
     region: eu-west-1
