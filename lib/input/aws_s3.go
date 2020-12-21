@@ -165,7 +165,7 @@ func NewAWSS3Config() AWSS3Config {
 
 //------------------------------------------------------------------------------
 
-type objectTarget struct {
+type s3ObjectTarget struct {
 	key            string
 	bucket         string
 	notificationAt time.Time
@@ -173,23 +173,23 @@ type objectTarget struct {
 	ackFn func(context.Context, error) error
 }
 
-func newObjectTarget(key, bucket string, notificationAt time.Time, ackFn codec.ReaderAckFn) *objectTarget {
+func newS3ObjectTarget(key, bucket string, notificationAt time.Time, ackFn codec.ReaderAckFn) *s3ObjectTarget {
 	if ackFn == nil {
 		ackFn = func(context.Context, error) error {
 			return nil
 		}
 	}
-	return &objectTarget{key, bucket, notificationAt, ackFn}
+	return &s3ObjectTarget{key, bucket, notificationAt, ackFn}
 }
 
-type objectTargetReader interface {
-	Pop(ctx context.Context) (*objectTarget, error)
+type s3ObjectTargetReader interface {
+	Pop(ctx context.Context) (*s3ObjectTarget, error)
 	Close(ctx context.Context) error
 }
 
 //------------------------------------------------------------------------------
 
-func deleteObjectAckFn(
+func deleteS3ObjectAckFn(
 	s3Client *s3.S3,
 	bucket, key string,
 	delete bool,
@@ -215,7 +215,7 @@ func deleteObjectAckFn(
 //------------------------------------------------------------------------------
 
 type staticTargetReader struct {
-	pending    []*objectTarget
+	pending    []*s3ObjectTarget
 	s3         *s3.S3
 	conf       AWSS3Config
 	startAfter *string
@@ -243,8 +243,8 @@ func newStaticTargetReader(
 		conf: conf,
 	}
 	for _, obj := range output.Contents {
-		ackFn := deleteObjectAckFn(s3Client, conf.Bucket, *obj.Key, conf.DeleteObjects, nil)
-		staticKeys.pending = append(staticKeys.pending, newObjectTarget(*obj.Key, conf.Bucket, time.Time{}, ackFn))
+		ackFn := deleteS3ObjectAckFn(s3Client, conf.Bucket, *obj.Key, conf.DeleteObjects, nil)
+		staticKeys.pending = append(staticKeys.pending, newS3ObjectTarget(*obj.Key, conf.Bucket, time.Time{}, ackFn))
 	}
 	if len(output.Contents) > 0 {
 		staticKeys.startAfter = output.Contents[len(output.Contents)-1].Key
@@ -252,7 +252,7 @@ func newStaticTargetReader(
 	return &staticKeys, nil
 }
 
-func (s *staticTargetReader) Pop(ctx context.Context) (*objectTarget, error) {
+func (s *staticTargetReader) Pop(ctx context.Context) (*s3ObjectTarget, error) {
 	if len(s.pending) == 0 && s.startAfter != nil {
 		s.pending = nil
 		listInput := &s3.ListObjectsV2Input{
@@ -268,8 +268,8 @@ func (s *staticTargetReader) Pop(ctx context.Context) (*objectTarget, error) {
 			return nil, fmt.Errorf("failed to list objects: %v", err)
 		}
 		for _, obj := range output.Contents {
-			ackFn := deleteObjectAckFn(s.s3, s.conf.Bucket, *obj.Key, s.conf.DeleteObjects, nil)
-			s.pending = append(s.pending, newObjectTarget(*obj.Key, s.conf.Bucket, time.Time{}, ackFn))
+			ackFn := deleteS3ObjectAckFn(s.s3, s.conf.Bucket, *obj.Key, s.conf.DeleteObjects, nil)
+			s.pending = append(s.pending, newS3ObjectTarget(*obj.Key, s.conf.Bucket, time.Time{}, ackFn))
 		}
 		if len(output.Contents) > 0 {
 			s.startAfter = output.Contents[len(output.Contents)-1].Key
@@ -297,7 +297,7 @@ type sqsTargetReader struct {
 
 	nextRequest time.Time
 
-	pending []*objectTarget
+	pending []*s3ObjectTarget
 }
 
 func newSQSTargetReader(
@@ -309,7 +309,7 @@ func newSQSTargetReader(
 	return &sqsTargetReader{conf, log, sqs, s3, time.Time{}, nil}
 }
 
-func (s *sqsTargetReader) Pop(ctx context.Context) (*objectTarget, error) {
+func (s *sqsTargetReader) Pop(ctx context.Context) (*s3ObjectTarget, error) {
 	if len(s.pending) > 0 {
 		t := s.pending[0]
 		s.pending = s.pending[1:]
@@ -363,7 +363,7 @@ func digStrsFromSlices(slice []interface{}) []string {
 	return strs
 }
 
-func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]objectTarget, error) {
+func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]s3ObjectTarget, error) {
 	gObj, err := gabs.ParseJSON([]byte(*sqsMsg))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse SQS message: %v", err)
@@ -398,7 +398,7 @@ func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]objectTarget, erro
 		}
 	}
 
-	objects := make([]objectTarget, 0, len(keys))
+	objects := make([]s3ObjectTarget, 0, len(keys))
 	for i, key := range keys {
 		if key, err = url.QueryUnescape(key); err != nil {
 			return nil, fmt.Errorf("failed to parse key from SQS message: %v", err)
@@ -410,7 +410,7 @@ func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]objectTarget, erro
 		if len(bucket) == 0 {
 			return nil, errors.New("required bucket was not found in SQS message")
 		}
-		objects = append(objects, objectTarget{
+		objects = append(objects, s3ObjectTarget{
 			key:    key,
 			bucket: bucket,
 		})
@@ -419,7 +419,7 @@ func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]objectTarget, erro
 	return objects, nil
 }
 
-func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*objectTarget, error) {
+func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget, error) {
 	var dudMessageHandles []*sqs.ChangeMessageVisibilityBatchRequestEntry
 	addDudFn := func(m *sqs.Message) {
 		dudMessageHandles = append(dudMessageHandles, &sqs.ChangeMessageVisibilityBatchRequestEntry{
@@ -440,7 +440,7 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*objectTarget, e
 		return nil, err
 	}
 
-	var pendingObjects []*objectTarget
+	var pendingObjects []*s3ObjectTarget
 
 messageLoop:
 	for _, sqsMsg := range output.Messages {
@@ -475,9 +475,9 @@ messageLoop:
 		var nackOnce sync.Once
 		for _, object := range objects {
 			ackOnce := sync.Once{}
-			pendingObjects = append(pendingObjects, newObjectTarget(
+			pendingObjects = append(pendingObjects, newS3ObjectTarget(
 				object.key, object.bucket, notificationAt,
-				deleteObjectAckFn(
+				deleteS3ObjectAckFn(
 					s.s3, object.bucket, object.key, s.conf.DeleteObjects,
 					func(ctx context.Context, err error) (aerr error) {
 						if err != nil {
@@ -552,7 +552,7 @@ type awsS3 struct {
 	conf AWSS3Config
 
 	objectScannerCtor codec.ReaderConstructor
-	keyReader         objectTargetReader
+	keyReader         s3ObjectTargetReader
 
 	session *session.Session
 	s3      *s3.S3
@@ -561,14 +561,14 @@ type awsS3 struct {
 	gracePeriod time.Duration
 
 	objectMut sync.Mutex
-	object    *pendingObject
+	object    *s3PendingObject
 
 	log   log.Modular
 	stats metrics.Type
 }
 
-type pendingObject struct {
-	target    *objectTarget
+type s3PendingObject struct {
+	target    *s3ObjectTarget
 	obj       *s3.GetObjectOutput
 	extracted int
 	scanner   codec.Reader
@@ -600,7 +600,7 @@ func newAmazonS3(
 	return s, nil
 }
 
-func (a *awsS3) getTargetReader(ctx context.Context) (objectTargetReader, error) {
+func (a *awsS3) getTargetReader(ctx context.Context) (s3ObjectTargetReader, error) {
 	if a.sqs != nil {
 		return newSQSTargetReader(a.conf, a.log, a.s3, a.sqs), nil
 	}
@@ -646,7 +646,7 @@ func (a *awsS3) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func s3MsgFromPart(p *pendingObject, part types.Part) types.Message {
+func s3MsgFromPart(p *s3PendingObject, part types.Part) types.Message {
 	msg := message.New(nil)
 	msg.Append(part)
 
@@ -673,7 +673,7 @@ func s3MsgFromPart(p *pendingObject, part types.Part) types.Message {
 	return msg
 }
 
-func (a *awsS3) getObjectTarget(ctx context.Context) (*pendingObject, error) {
+func (a *awsS3) getObjectTarget(ctx context.Context) (*s3PendingObject, error) {
 	if a.object != nil {
 		return a.object, nil
 	}
@@ -703,7 +703,7 @@ func (a *awsS3) getObjectTarget(ctx context.Context) (*pendingObject, error) {
 		return nil, err
 	}
 
-	object := &pendingObject{
+	object := &s3PendingObject{
 		target: target,
 		obj:    obj,
 	}
@@ -734,7 +734,7 @@ func (a *awsS3) ReadWithContext(ctx context.Context) (msg types.Message, ackFn r
 		}
 	}()
 
-	var object *pendingObject
+	var object *s3PendingObject
 	if object, err = a.getObjectTarget(ctx); err != nil {
 		return
 	}

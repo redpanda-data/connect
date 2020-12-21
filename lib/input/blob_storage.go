@@ -159,19 +159,19 @@ type azurePendingObject struct {
 	scanner   codec.Reader
 }
 
-type targetReader struct {
+type azureTargetReader struct {
 	pending    []*azureObjectTarget
 	container  *storage.Container
 	conf       AzureBlobStorageConfig
 	startAfter string
 }
 
-func newTargetReader(
+func newAzureTargetReader(
 	ctx context.Context,
 	conf AzureBlobStorageConfig,
 	log log.Modular,
 	container *storage.Container,
-) (*targetReader, error) {
+) (*azureTargetReader, error) {
 	params := storage.ListBlobsParameters{
 		MaxResults: 100,
 	}
@@ -182,7 +182,7 @@ func newTargetReader(
 	if err != nil {
 		return nil, fmt.Errorf("failed to list blobs: %v", err)
 	}
-	staticKeys := targetReader{
+	staticKeys := azureTargetReader{
 		container: container,
 		conf:      conf,
 	}
@@ -197,7 +197,7 @@ func newTargetReader(
 	return &staticKeys, nil
 }
 
-func (s *targetReader) Pop(ctx context.Context) (*azureObjectTarget, error) {
+func (s *azureTargetReader) Pop(ctx context.Context) (*azureObjectTarget, error) {
 	if len(s.pending) == 0 && s.startAfter != "" {
 		s.pending = nil
 		params := storage.ListBlobsParameters{
@@ -228,7 +228,7 @@ func (s *targetReader) Pop(ctx context.Context) (*azureObjectTarget, error) {
 	return obj, nil
 }
 
-func (s targetReader) Close(context.Context) error {
+func (s azureTargetReader) Close(context.Context) error {
 	return nil
 }
 
@@ -240,7 +240,7 @@ type azureBlobStorage struct {
 	conf AzureBlobStorageConfig
 
 	objectScannerCtor codec.ReaderConstructor
-	keyReader         *targetReader
+	keyReader         *azureTargetReader
 
 	objectMut sync.Mutex
 	object    *azurePendingObject
@@ -293,7 +293,7 @@ func newAzureBlobStorage(conf AzureBlobStorageConfig, log log.Modular, stats met
 // Blob Storage container.
 func (a *azureBlobStorage) ConnectWithContext(ctx context.Context) error {
 	var err error
-	a.keyReader, err = newTargetReader(ctx, a.conf, a.log, a.container)
+	a.keyReader, err = newAzureTargetReader(ctx, a.conf, a.log, a.container)
 	return err
 }
 
