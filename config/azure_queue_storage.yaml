@@ -18,8 +18,8 @@ pipeline:
   processors: []
   threads: 1
 output:
-  type: queue_storage
-  queue_storage:
+  type: azure_queue_storage
+  azure_queue_storage:
     batching:
       byte_size: 0
       check: ""

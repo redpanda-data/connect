@@ -1019,6 +1019,18 @@ output:
           storage_access_key: ${OUTPUT_AZURE_BLOB_STORAGE_STORAGE_ACCESS_KEY}
           storage_account: ${OUTPUT_AZURE_BLOB_STORAGE_STORAGE_ACCOUNT}
           storage_connection_string: ${OUTPUT_AZURE_BLOB_STORAGE_STORAGE_CONNECTION_STRING}
+        azure_queue_storage:
+          batching:
+            byte_size: ${OUTPUT_AZURE_QUEUE_STORAGE_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_AZURE_QUEUE_STORAGE_BATCHING_CHECK}
+            count: ${OUTPUT_AZURE_QUEUE_STORAGE_BATCHING_COUNT:0}
+            period: ${OUTPUT_AZURE_QUEUE_STORAGE_BATCHING_PERIOD}
+          max_in_flight: ${OUTPUT_AZURE_QUEUE_STORAGE_MAX_IN_FLIGHT:1}
+          queue_name: ${OUTPUT_AZURE_QUEUE_STORAGE_QUEUE_NAME}
+          storage_access_key: ${OUTPUT_AZURE_QUEUE_STORAGE_STORAGE_ACCESS_KEY}
+          storage_account: ${OUTPUT_AZURE_QUEUE_STORAGE_STORAGE_ACCOUNT}
+          storage_connection_string: ${OUTPUT_AZURE_QUEUE_STORAGE_STORAGE_CONNECTION_STRING}
+          ttl: ${OUTPUT_AZURE_QUEUE_STORAGE_TTL}
         azure_table_storage:
           batching:
             byte_size: ${OUTPUT_AZURE_TABLE_STORAGE_BATCHING_BYTE_SIZE:0}
@@ -1304,18 +1316,6 @@ output:
             skip_cert_verify: ${OUTPUT_NSQ_TLS_SKIP_CERT_VERIFY:false}
           topic: ${OUTPUT_NSQ_TOPIC:benthos_messages}
           user_agent: ${OUTPUT_NSQ_USER_AGENT:benthos_producer}
-        queue_storage:
-          batching:
-            byte_size: ${OUTPUT_QUEUE_STORAGE_BATCHING_BYTE_SIZE:0}
-            check: ${OUTPUT_QUEUE_STORAGE_BATCHING_CHECK}
-            count: ${OUTPUT_QUEUE_STORAGE_BATCHING_COUNT:0}
-            period: ${OUTPUT_QUEUE_STORAGE_BATCHING_PERIOD}
-          max_in_flight: ${OUTPUT_QUEUE_STORAGE_MAX_IN_FLIGHT:1}
-          queue_name: ${OUTPUT_QUEUE_STORAGE_QUEUE_NAME}
-          storage_access_key: ${OUTPUT_QUEUE_STORAGE_STORAGE_ACCESS_KEY}
-          storage_account: ${OUTPUT_QUEUE_STORAGE_STORAGE_ACCOUNT}
-          storage_connection_string: ${OUTPUT_QUEUE_STORAGE_STORAGE_CONNECTION_STRING}
-          ttl: ${OUTPUT_QUEUE_STORAGE_TTL}
         redis_hash:
           key: ${OUTPUT_REDIS_HASH_KEY}
           kind: ${OUTPUT_REDIS_HASH_KIND:simple}
