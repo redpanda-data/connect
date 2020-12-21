@@ -87,9 +87,7 @@ func parseConnectionString(input string) (storageAccount, storageAccessKey strin
 		parts[key] = value
 	}
 
-	a := parts[azAccountName]
-	b := parts[azAccountKey]
-	return a, b
+	return parts[azAccountName], parts[azAccountKey]
 }
 
 // NewAzureQueueStorage creates a new Azure Queue Storage writer type.
