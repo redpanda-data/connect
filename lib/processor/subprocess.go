@@ -52,8 +52,8 @@ If a message contains line breaks each line of the message is piped to the subpr
 			docs.FieldCommon("name", "The command to execute as a subprocess.", "cat", "sed", "awk"),
 			docs.FieldCommon("args", "A list of arguments to provide the command."),
 			docs.FieldAdvanced("max_buffer", "The maximum expected response size."),
-			docs.FieldAdvanced("format_send", "The data transfer format (stdin of the subprocess)"),
-			docs.FieldAdvanced("format_recv", "The data transfer format (stdout of the subprocess)"),
+			docs.FieldAdvanced("codec_send", "The data transfer codec (stdin of the subprocess)"),
+			docs.FieldAdvanced("codec_recv", "The data transfer codec (stdout of the subprocess)"),
 			partsFieldSpec,
 		},
 	}
@@ -63,23 +63,23 @@ If a message contains line breaks each line of the message is piped to the subpr
 
 // SubprocessConfig contains configuration fields for the Subprocess processor.
 type SubprocessConfig struct {
-	Parts      []int    `json:"parts" yaml:"parts"`
-	Name       string   `json:"name" yaml:"name"`
-	Args       []string `json:"args" yaml:"args"`
-	MaxBuffer  int      `json:"max_buffer" yaml:"max_buffer"`
-	FormatSend string   `json:"format_send" yaml:"format_send"`
-	FormatRecv string   `json:"format_recv" yaml:"format_recv"`
+	Parts     []int    `json:"parts" yaml:"parts"`
+	Name      string   `json:"name" yaml:"name"`
+	Args      []string `json:"args" yaml:"args"`
+	MaxBuffer int      `json:"max_buffer" yaml:"max_buffer"`
+	CodecSend string   `json:"codec_send" yaml:"codec_send"`
+	CodecRecv string   `json:"codec_recv" yaml:"codec_recv"`
 }
 
 // NewSubprocessConfig returns a SubprocessConfig with default values.
 func NewSubprocessConfig() SubprocessConfig {
 	return SubprocessConfig{
-		Parts:      []int{},
-		Name:       "cat",
-		Args:       []string{},
-		MaxBuffer:  bufio.MaxScanTokenSize,
-		FormatSend: "lines",
-		FormatRecv: "lines",
+		Parts:     []int{},
+		Name:      "cat",
+		Args:      []string{},
+		MaxBuffer: bufio.MaxScanTokenSize,
+		CodecSend: "lines",
+		CodecRecv: "lines",
 	}
 }
 
@@ -123,7 +123,7 @@ func newSubprocess(
 		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 	var err error
-	if e.subproc, err = newSubprocWrapper(conf.Name, conf.Args, e.conf.MaxBuffer, conf.FormatRecv, log); err != nil {
+	if e.subproc, err = newSubprocWrapper(conf.Name, conf.Args, e.conf.MaxBuffer, conf.CodecRecv, log); err != nil {
 		return nil, err
 	}
 	return e, nil
@@ -132,10 +132,10 @@ func newSubprocess(
 //------------------------------------------------------------------------------
 
 type subprocWrapper struct {
-	name       string
-	args       []string
-	maxBuf     int
-	formatRecv string
+	name      string
+	args      []string
+	maxBuf    int
+	codecRecv string
 
 	logger log.Modular
 
@@ -152,12 +152,12 @@ type subprocWrapper struct {
 	closedChan chan struct{}
 }
 
-func newSubprocWrapper(name string, args []string, maxBuf int, formatRecv string, log log.Modular) (*subprocWrapper, error) {
+func newSubprocWrapper(name string, args []string, maxBuf int, codecRecv string, log log.Modular) (*subprocWrapper, error) {
 	s := &subprocWrapper{
 		name:       name,
 		args:       args,
 		maxBuf:     maxBuf,
-		formatRecv: formatRecv,
+		codecRecv:  codecRecv,
 		logger:     log,
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
@@ -203,7 +203,7 @@ func newSubprocWrapper(name string, args []string, maxBuf int, formatRecv string
 
 var maxInt = (1<<bits.UintSize)/2 - 1
 
-func binarySplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
+func lengthPrefixedUInt32BESplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	const prefixBytes int = 4
 	if atEOF {
 		return 0, nil, nil
@@ -213,7 +213,7 @@ func binarySplitFunc(data []byte, atEOF bool) (advance int, token []byte, err er
 		return 0, nil, nil
 	}
 	l := binary.BigEndian.Uint32(data)
-	if l > (uint32(maxInt)-uint32(prefixBytes)) {
+	if l > (uint32(maxInt) - uint32(prefixBytes)) {
 		return 0, nil, errors.New("number of bytes to read exceeds representable range of go int datatype")
 	}
 	bytesToRead := int(l)
@@ -299,18 +299,18 @@ func (s *subprocWrapper) start() error {
 		}()
 
 		scanner := bufio.NewScanner(cmdStdout)
-		switch s.formatRecv {
+		switch s.codecRecv {
 		case "lines":
 			// bufio Scanner uses ScanLines as default function
 			break
-		case "binary":
-			scanner.Split(binarySplitFunc)
+		case "length_prefixed_uint32_be":
+			scanner.Split(lengthPrefixedUInt32BESplitFunc)
 			break
 		case "netstring":
 			scanner.Split(netstringSplitFunc)
 			break
 		default:
-			s.logger.Errorf("Invalid format_recv option: '%v' is not one of ('lines','binary')\n", s.formatRecv)
+			s.logger.Errorf("Invalid codec_recv option: '%v' is not one of ('lines','length_prefixed_uint32_be','netstring')\n", s.codecRecv)
 		}
 		if s.maxBuf != bufio.MaxScanTokenSize {
 			scanner.Buffer(nil, s.maxBuf)
@@ -460,11 +460,11 @@ func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		result.Get(i).Set(bytes.Join(results, newLineBytes))
 		return nil
 	}
-	switch e.conf.FormatSend {
+	switch e.conf.CodecSend {
 	case "lines":
 		proc = procLines
 		break
-	case "binary":
+	case "length_prefixed_uint32_be":
 		proc = func(i int) error {
 			span := tracing.CreateChildSpan(TypeSubprocess, result.Get(i))
 			defer span.Finish()
@@ -515,7 +515,7 @@ func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		}
 		break
 	default:
-		e.log.Errorf("Invalid format_send option: '%v' is not one of ('lines','binary')\n", e.conf.FormatSend)
+		e.log.Errorf("Invalid codec_send option: '%v' is not one of ('lines','length_prefixed_uint32_be','netstring^)\n", e.conf.CodecSend)
 		proc = procLines
 	}
 

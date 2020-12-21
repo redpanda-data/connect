@@ -237,7 +237,7 @@ import (
 	"strings"
 )
 
-func binarySplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
+func lengthPrefixedUInt32BESplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	const prefixBytes int = 4
 	if atEOF {
 		return 0, nil, nil
@@ -257,22 +257,22 @@ func binarySplitFunc(data []byte, atEOF bool) (advance int, token []byte, err er
 	}
 }
 
-var stdinFormat *string = flag.String("stdinFormat", "lines", "format to use for input")
-var stdoutFormat *string = flag.String("stdoutFormat", "lines", "format for use for output")
+var stdinCodec *string = flag.String("stdinCodec", "lines", "format to use for input")
+var stdoutCodec *string = flag.String("stdoutCodec", "lines", "format for use for output")
 
 func main() {
 	flag.Parse()
 
 	scanner := bufio.NewScanner(os.Stdin)
-	if *stdinFormat == "binary" {
-		scanner.Split(binarySplitFunc)
+	if *stdinCodec == "length_prefixed_uint32_be" {
+		scanner.Split(lengthPrefixedUInt32BESplitFunc)
 	}
 
 	lenBuf := make([]byte, 4)
 	for scanner.Scan() {
 		res := strings.ToUpper(scanner.Text())
-		switch *stdoutFormat {
-			case "binary":
+		switch *stdoutCodec {
+			case "length_prefixed_uint32_be":
 				buf := []byte(res)
 				binary.BigEndian.PutUint32(lenBuf, uint32(len(buf)))
 				_, _ = os.Stdout.Write(lenBuf)
@@ -295,9 +295,9 @@ func main() {
 		conf := NewConfig()
 		conf.Type = TypeSubprocess
 		conf.Subprocess.Name = "go"
-		conf.Subprocess.Args = []string{"run", filePath, "-stdinFormat", formatSend, "-stdoutFormat", formatRecv}
-		conf.Subprocess.FormatSend = formatSend
-		conf.Subprocess.FormatRecv = formatRecv
+		conf.Subprocess.Args = []string{"run", filePath, "-stdinCodec", formatSend, "-stdoutCodec", formatRecv}
+		conf.Subprocess.CodecSend = formatSend
+		conf.Subprocess.CodecRecv = formatRecv
 
 		proc, err := New(conf, nil, log.Noop(), metrics.Noop())
 		require.NoError(t, err)
@@ -337,8 +337,8 @@ func main() {
 		assert.NoError(t, proc.WaitForClose(time.Second))
 	}
 	f("lines", "lines", false)
-	f("binary", "lines", false)
-	f("lines", "binary", false)
-	f("binary", "netstring", true)
-	f("binary", "binary", true)
+	f("length_prefixed_uint32_be", "lines", false)
+	f("lines", "length_prefixed_uint32_be", false)
+	f("length_prefixed_uint32_be", "netstring", true)
+	f("length_prefixed_uint32_be", "length_prefixed_uint32_be", true)
 }
