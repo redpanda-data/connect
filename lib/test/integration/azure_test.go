@@ -58,6 +58,10 @@ func (t AzuriteTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 var _ = registerIntegrationTest("azure", func(t *testing.T) {
+	// Don't run this test by default, because it messes around with the
+	// http.DefaultClient
+	t.Skip()
+
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
