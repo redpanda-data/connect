@@ -4,6 +4,7 @@ require (
 	cloud.google.com/go v0.71.0 // indirect
 	cloud.google.com/go/pubsub v1.8.2
 	github.com/Azure/azure-sdk-for-go v48.0.0+incompatible
+	github.com/Azure/azure-storage-queue-go v0.0.0-20191125232315-636801874cdd
 	github.com/Azure/go-amqp v0.13.1
 	github.com/Azure/go-autorest/autorest v0.11.10 // indirect
 	github.com/Azure/go-autorest/autorest/to v0.4.0 // indirect
