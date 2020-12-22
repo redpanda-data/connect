@@ -131,7 +131,7 @@ var _ = registerIntegrationTest("aws", func(t *testing.T) {
 	t.Run("s3_to_sqs", func(t *testing.T) {
 		template := `
 output:
-  s3:
+  aws_s3:
     bucket: bucket-$ID
     endpoint: http://localhost:$PORT
     force_path_style_urls: true
@@ -183,7 +183,7 @@ input:
 	t.Run("s3_to_sqs_lines", func(t *testing.T) {
 		template := `
 output:
-  s3:
+  aws_s3:
     bucket: bucket-$ID
     endpoint: http://localhost:$PORT
     force_path_style_urls: true
@@ -239,7 +239,7 @@ input:
 	t.Run("s3", func(t *testing.T) {
 		template := `
 output:
-  s3:
+  aws_s3:
     bucket: bucket-$ID
     endpoint: http://localhost:$PORT
     force_path_style_urls: true
@@ -280,7 +280,7 @@ input:
 	t.Run("sqs", func(t *testing.T) {
 		template := `
 output:
-  sqs:
+  aws_sqs:
     url: http://localhost:$PORT/queue/queue-$ID
     endpoint: http://localhost:$PORT
     region: eu-west-1

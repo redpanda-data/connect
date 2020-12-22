@@ -324,8 +324,7 @@ A [`catch`][processor.catch] processor was added at the end of the pipeline whic
 [processor.unarchive]: /docs/components/processors/unarchive
 [processor.bloblang]: /docs/components/processors/bloblang
 [processor.subprocess]: /docs/components/processors/subprocess
-[processor.lambda]: /docs/components/processors/lambda
+[processor.lambda]: /docs/components/processors/aws_lambda
 [processor.http]: /docs/components/processors/http
-[processor.lambda]: /docs/components/processors/lambda
 [processor.branch]: /docs/components/processors/branch
 [processor.workflow]: /docs/components/processors/workflow

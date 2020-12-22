@@ -17,8 +17,9 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors[TypeLambda] = TypeSpec{
-		constructor: NewLambda,
+	Constructors[TypeAWSLambda] = TypeSpec{
+		constructor: NewAWSLambda,
+		Version:     "3.36.0",
 		Categories: []Category{
 			CategoryIntegration,
 		},
@@ -27,6 +28,64 @@ Invokes an AWS lambda for each message. The contents of the message is the
 payload of the request, and the result of the invocation will become the new
 contents of the message.`,
 		Description: `
+It is possible to perform requests per message of a batch in parallel by setting
+the ` + "`parallel`" + ` flag to ` + "`true`" + `. The ` + "`rate_limit`" + `
+field can be used to specify a rate limit [resource](/docs/components/rate_limits/about)
+to cap the rate of requests across parallel components service wide.
+
+In order to map or encode the payload to a specific request body, and map the
+response back into the original payload instead of replacing it entirely, you
+can use the ` + "[`branch` processor](/docs/components/processors/branch)" + `.
+
+### Error Handling
+
+When all retry attempts for a message are exhausted the processor cancels the
+attempt. These failed messages will continue through the pipeline unchanged, but
+can be dropped or placed in a dead letter queue according to your config, you
+can read about these patterns [here](/docs/configuration/error_handling).
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](/docs/guides/aws).`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("parallel", "Whether messages of a batch should be dispatched in parallel."),
+		}.Merge(client.FieldSpecs()),
+		Examples: []docs.AnnotatedExample{
+			{
+				Title: "Branched Invoke",
+				Summary: `
+This example uses a ` + "[`branch` processor](/docs/components/processors/branch/)" + ` to map a new payload for triggering a lambda function with an ID and username from the original message, and the result of the lambda is discarded, meaning the original message is unchanged.`,
+				Config: `
+pipeline:
+  processors:
+    - branch:
+        request_map: '{"id":this.doc.id,"username":this.user.name}'
+        processors:
+          - aws_lambda:
+              function: trigger_user_update
+`,
+			},
+		},
+	}
+
+	Constructors[TypeLambda] = TypeSpec{
+		constructor: NewLambda,
+		Status:      docs.StatusDeprecated,
+		Categories: []Category{
+			CategoryIntegration,
+		},
+		Summary: `
+Invokes an AWS lambda for each message. The contents of the message is the
+payload of the request, and the result of the invocation will become the new
+contents of the message.`,
+		Description: `
+## Alternatives
+
+This processor has been renamed to ` + "[`aws_lambda`](/docs/components/processors/aws_lambda)" + `.
+
 It is possible to perform requests per message of a batch in parallel by setting
 the ` + "`parallel`" + ` flag to ` + "`true`" + `. The ` + "`rate_limit`" + `
 field can be used to specify a rate limit [resource](/docs/components/rate_limits/about)
@@ -96,7 +155,7 @@ type Lambda struct {
 
 	parallel bool
 
-	conf  Config
+	conf  LambdaConfig
 	log   log.Modular
 	stats metrics.Type
 
@@ -107,16 +166,29 @@ type Lambda struct {
 	mBatchSent metrics.StatCounter
 }
 
+// NewAWSLambda returns a Lambda processor.
+func NewAWSLambda(
+	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
+	return newLambda(conf.AWSLambda, mgr, log, stats)
+}
+
 // NewLambda returns a Lambda processor.
 func NewLambda(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+) (Type, error) {
+	return newLambda(conf.Lambda, mgr, log, stats)
+}
+
+func newLambda(
+	conf LambdaConfig, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
 	l := &Lambda{
 		conf:  conf,
 		log:   log,
 		stats: stats,
 
-		parallel: conf.Lambda.Parallel,
+		parallel: conf.Parallel,
 
 		mCount:     stats.GetCounter("count"),
 		mErrLambda: stats.GetCounter("error.lambda"),
@@ -126,7 +198,7 @@ func NewLambda(
 	}
 	var err error
 	if l.client, err = client.New(
-		conf.Lambda.Config,
+		conf.Config,
 		client.OptSetLogger(l.log),
 		client.OptSetStats(metrics.Namespaced(l.stats, "client")),
 		client.OptSetManager(mgr),
@@ -150,7 +222,7 @@ func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		if responseMsg, err = l.client.Invoke(msg); err != nil {
 			l.mErr.Incr(1)
 			l.mErrLambda.Incr(1)
-			l.log.Errorf("Lambda function '%v' failed: %v\n", l.conf.Lambda.Config.Function, err)
+			l.log.Errorf("Lambda function '%v' failed: %v\n", l.conf.Config.Function, err)
 			responseMsg = msg
 			responseMsg.Iter(func(i int, p types.Part) error {
 				FlagErr(p, err)
@@ -176,7 +248,7 @@ func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 				if err != nil {
 					l.mErr.Incr(1)
 					l.mErrLambda.Incr(1)
-					l.log.Errorf("Lambda parallel request to '%v' failed: %v\n", l.conf.Lambda.Config.Function, err)
+					l.log.Errorf("Lambda parallel request to '%v' failed: %v\n", l.conf.Config.Function, err)
 					FlagErr(parts[index], err)
 				} else {
 					parts[index] = result.Get(0)
@@ -193,9 +265,9 @@ func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 
 	if responseMsg.Len() < 1 {
 		l.mErr.Incr(1)
-		l.log.Errorf("Lambda response from '%v' was empty", l.conf.Lambda.Config.Function)
+		l.log.Errorf("Lambda response from '%v' was empty", l.conf.Config.Function)
 		return nil, response.NewError(fmt.Errorf(
-			"lambda response from '%v' was empty", l.conf.Lambda.Config.Function,
+			"lambda response from '%v' was empty", l.conf.Config.Function,
 		))
 	}
 

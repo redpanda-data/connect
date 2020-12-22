@@ -26,7 +26,7 @@ pipeline:
   - bloblang: '"%vend".format(content().uppercase().string())'
 
 output:
-  s3:
+  aws_s3:
     bucket: TODO
     path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
 ```

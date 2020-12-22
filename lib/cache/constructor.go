@@ -36,45 +36,51 @@ var Constructors = map[string]TypeSpec{}
 
 // String constants representing each cache type.
 const (
-	TypeDynamoDB   = "dynamodb"
-	TypeFile       = "file"
-	TypeMemcached  = "memcached"
-	TypeMemory     = "memory"
-	TypeMultilevel = "multilevel"
-	TypeRedis      = "redis"
-	TypeRistretto  = "ristretto"
-	TypeS3         = "s3"
+	TypeAWSDynamoDB = "aws_dynamodb"
+	TypeAWSS3       = "aws_s3"
+	TypeDynamoDB    = "dynamodb"
+	TypeFile        = "file"
+	TypeMemcached   = "memcached"
+	TypeMemory      = "memory"
+	TypeMultilevel  = "multilevel"
+	TypeRedis       = "redis"
+	TypeRistretto   = "ristretto"
+	TypeS3          = "s3"
 )
 
 //------------------------------------------------------------------------------
 
 // Config is the all encompassing configuration struct for all cache types.
 type Config struct {
-	Type       string           `json:"type" yaml:"type"`
-	DynamoDB   DynamoDBConfig   `json:"dynamodb" yaml:"dynamodb"`
-	File       FileConfig       `json:"file" yaml:"file"`
-	Memcached  MemcachedConfig  `json:"memcached" yaml:"memcached"`
-	Memory     MemoryConfig     `json:"memory" yaml:"memory"`
-	Multilevel MultilevelConfig `json:"multilevel" yaml:"multilevel"`
-	Plugin     interface{}      `json:"plugin,omitempty" yaml:"plugin,omitempty"`
-	Redis      RedisConfig      `json:"redis" yaml:"redis"`
-	Ristretto  RistrettoConfig  `json:"ristretto" yaml:"ristretto"`
-	S3         S3Config         `json:"s3" yaml:"s3"`
+	Type        string           `json:"type" yaml:"type"`
+	AWSDynamoDB DynamoDBConfig   `json:"aws_dynamodb" yaml:"aws_dynamodb"`
+	AWSS3       S3Config         `json:"aws_s3" yaml:"aws_s3"`
+	DynamoDB    DynamoDBConfig   `json:"dynamodb" yaml:"dynamodb"`
+	File        FileConfig       `json:"file" yaml:"file"`
+	Memcached   MemcachedConfig  `json:"memcached" yaml:"memcached"`
+	Memory      MemoryConfig     `json:"memory" yaml:"memory"`
+	Multilevel  MultilevelConfig `json:"multilevel" yaml:"multilevel"`
+	Plugin      interface{}      `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	Redis       RedisConfig      `json:"redis" yaml:"redis"`
+	Ristretto   RistrettoConfig  `json:"ristretto" yaml:"ristretto"`
+	S3          S3Config         `json:"s3" yaml:"s3"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:       "memory",
-		DynamoDB:   NewDynamoDBConfig(),
-		File:       NewFileConfig(),
-		Memcached:  NewMemcachedConfig(),
-		Memory:     NewMemoryConfig(),
-		Multilevel: NewMultilevelConfig(),
-		Plugin:     nil,
-		Redis:      NewRedisConfig(),
-		Ristretto:  NewRistrettoConfig(),
-		S3:         NewS3Config(),
+		Type:        "memory",
+		AWSDynamoDB: NewDynamoDBConfig(),
+		AWSS3:       NewS3Config(),
+		DynamoDB:    NewDynamoDBConfig(),
+		File:        NewFileConfig(),
+		Memcached:   NewMemcachedConfig(),
+		Memory:      NewMemoryConfig(),
+		Multilevel:  NewMultilevelConfig(),
+		Plugin:      nil,
+		Redis:       NewRedisConfig(),
+		Ristretto:   NewRistrettoConfig(),
+		S3:          NewS3Config(),
 	}
 }
 

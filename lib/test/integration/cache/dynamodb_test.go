@@ -94,7 +94,7 @@ var _ = registerIntegrationTest("dynamodb", func(t *testing.T) {
 resources:
   caches:
     testcache:
-      dynamodb:
+      aws_dynamodb:
         endpoint: http://localhost:$PORT
         region: us-east-1
         consistent_read: true

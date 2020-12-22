@@ -1,7 +1,7 @@
 ---
 title: sqs
 type: output
-status: stable
+status: deprecated
 categories: ["Services","AWS"]
 ---
 
@@ -15,6 +15,9 @@ categories: ["Services","AWS"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
 
 Sends messages to an SQS queue.
 
@@ -77,6 +80,10 @@ output:
 
 </TabItem>
 </Tabs>
+
+## Alternatives
+
+This output has been renamed to [`aws_sqs`](/docs/components/outputs/aws_sqs).
 
 Metadata values are sent along with the payload as attributes with the data type
 String. If the number of metadata values in a message exceeds the message

@@ -1,7 +1,7 @@
 ---
 title: dynamodb
 type: output
-status: stable
+status: deprecated
 categories: ["Services","AWS"]
 ---
 
@@ -15,6 +15,9 @@ categories: ["Services","AWS"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
 
 Inserts items into a DynamoDB table.
 
@@ -79,6 +82,10 @@ output:
 
 </TabItem>
 </Tabs>
+
+## Alternatives
+
+This output has been renamed to [`aws_dynamodb`](/docs/components/outputs/aws_dynamodb).
 
 The field `string_columns` is a map of column names to string values,
 where the values are

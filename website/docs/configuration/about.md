@@ -34,8 +34,8 @@ pipeline:
       root.meta.link_count = this.links.length()
 
 output:
-  type: s3
-  s3:
+  type: aws_s3
+  aws_s3:
     bucket: TODO
     path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
 ```
@@ -66,8 +66,8 @@ pipeline:
       root.meta.link_count = this.links.length()
 
 output:
-  type: s3
-  s3:
+  type: aws_s3
+  aws_s3:
     bucket: TODO
     path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
 
@@ -131,7 +131,7 @@ pipeline:
       root.link_count = this.links.length()
 
 output:
-  s3:
+  aws_s3:
     bucket: TODO
     path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
 ```

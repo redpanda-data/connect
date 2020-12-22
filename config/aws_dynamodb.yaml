@@ -18,8 +18,8 @@ pipeline:
   processors: []
   threads: 1
 output:
-  type: kinesis_firehose
-  kinesis_firehose:
+  type: aws_dynamodb
+  aws_dynamodb:
     backoff:
       initial_interval: 1s
       max_elapsed_time: 30s
@@ -38,10 +38,14 @@ output:
       secret: ""
       token: ""
     endpoint: ""
+    json_map_columns: {}
     max_in_flight: 1
-    max_retries: 0
+    max_retries: 3
     region: eu-west-1
-    stream: ""
+    string_columns: {}
+    table: ""
+    ttl: ""
+    ttl_key: ""
 resources:
   caches: {}
   conditions: {}

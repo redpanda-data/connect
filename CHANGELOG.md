@@ -25,7 +25,8 @@ All notable changes to this project will be documented in this file.
 
 - The experimental `aws_s3` input is now marked as beta.
 - The beta `kinesis_balanced` input is now deprecated.
-- The beta `blob_storage` and `table_storage` outputs have been renamed `azure_blob_storage` and `azure_table_storage` respectively. The old names can still be used for backwards compatibility.
+- All Azure components have been renamed to include the prefix `azure_`, e.g. `blob_storage` is now `azure_blob_storage`. The old names can still be used for backwards compatibility.
+- All AWS components have been renamed to include the prefix `aws_`, e.g. `s3` is now `aws_s3`. The old names can still be used for backwards compatibility.
 
 ## 3.35.0 - 2020-12-07
 

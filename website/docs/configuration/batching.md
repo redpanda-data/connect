@@ -98,7 +98,7 @@ pipeline:
         algorithm: gzip
 
 output:
-  s3:
+  aws_s3:
     bucket: TODO
     path: docs/${! meta("kafka_partition") }/${! count("files") }-${! timestamp_unix_nano() }.tar.gz
 ```
@@ -134,7 +134,7 @@ This is also useful when your input source creates batches that are too large fo
 
 ```yaml
 input:
-  s3:
+  aws_s3:
     bucket: todo
 
 pipeline:

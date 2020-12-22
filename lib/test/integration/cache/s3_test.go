@@ -63,7 +63,7 @@ var _ = registerIntegrationTest("s3", func(t *testing.T) {
 resources:
   caches:
     testcache:
-      s3:
+      aws_s3:
         endpoint: http://localhost:$PORT
         region: eu-west-1
         force_path_style_urls: true

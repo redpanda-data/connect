@@ -18,9 +18,30 @@ pipeline:
   processors: []
   threads: 1
 output:
-  type: stdout
-  stdout:
-    delimiter: ""
+  type: aws_kinesis_firehose
+  aws_kinesis_firehose:
+    backoff:
+      initial_interval: 1s
+      max_elapsed_time: 30s
+      max_interval: 5s
+    batching:
+      byte_size: 0
+      check: ""
+      count: 0
+      period: ""
+      processors: []
+    credentials:
+      id: ""
+      profile: ""
+      role: ""
+      role_external_id: ""
+      secret: ""
+      token: ""
+    endpoint: ""
+    max_in_flight: 1
+    max_retries: 0
+    region: eu-west-1
+    stream: ""
 resources:
   caches: {}
   conditions: {}
@@ -36,20 +57,10 @@ logger:
   static_fields:
     '@service': benthos
 metrics:
-  type: cloudwatch
-  cloudwatch:
-    credentials:
-      id: ""
-      profile: ""
-      role: ""
-      role_external_id: ""
-      secret: ""
-      token: ""
-    endpoint: ""
-    flush_period: 100ms
-    namespace: Benthos
+  type: http_server
+  http_server:
     path_mapping: ""
-    region: eu-west-1
+    prefix: benthos
 tracer:
   type: none
   none: {}

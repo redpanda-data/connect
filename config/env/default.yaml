@@ -550,6 +550,21 @@ pipeline:
       awk:
         codec: ${PROCESSOR_AWK_CODEC:text}
         program: ${PROCESSOR_AWK_PROGRAM:BEGIN { x = 0 } { print $0, x; x++ }}
+      aws_lambda:
+        credentials:
+          id: ${PROCESSOR_AWS_LAMBDA_CREDENTIALS_ID}
+          profile: ${PROCESSOR_AWS_LAMBDA_CREDENTIALS_PROFILE}
+          role: ${PROCESSOR_AWS_LAMBDA_CREDENTIALS_ROLE}
+          role_external_id: ${PROCESSOR_AWS_LAMBDA_CREDENTIALS_ROLE_EXTERNAL_ID}
+          secret: ${PROCESSOR_AWS_LAMBDA_CREDENTIALS_SECRET}
+          token: ${PROCESSOR_AWS_LAMBDA_CREDENTIALS_TOKEN}
+        endpoint: ${PROCESSOR_AWS_LAMBDA_ENDPOINT}
+        function: ${PROCESSOR_AWS_LAMBDA_FUNCTION}
+        parallel: ${PROCESSOR_AWS_LAMBDA_PARALLEL:false}
+        rate_limit: ${PROCESSOR_AWS_LAMBDA_RATE_LIMIT}
+        region: ${PROCESSOR_AWS_LAMBDA_REGION:eu-west-1}
+        retries: ${PROCESSOR_AWS_LAMBDA_RETRIES:3}
+        timeout: ${PROCESSOR_AWS_LAMBDA_TIMEOUT:5s}
       batch:
         byte_size: ${PROCESSOR_BATCH_BYTE_SIZE:0}
         condition:
@@ -864,6 +879,137 @@ output:
             root_cas_file: ${OUTPUT_AMQP_1_TLS_ROOT_CAS_FILE}
             skip_cert_verify: ${OUTPUT_AMQP_1_TLS_SKIP_CERT_VERIFY:false}
           url: ${OUTPUT_AMQP_1_URL}
+        aws_dynamodb:
+          backoff:
+            initial_interval: ${OUTPUT_AWS_DYNAMODB_BACKOFF_INITIAL_INTERVAL:1s}
+            max_elapsed_time: ${OUTPUT_AWS_DYNAMODB_BACKOFF_MAX_ELAPSED_TIME:30s}
+            max_interval: ${OUTPUT_AWS_DYNAMODB_BACKOFF_MAX_INTERVAL:5s}
+          batching:
+            byte_size: ${OUTPUT_AWS_DYNAMODB_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_AWS_DYNAMODB_BATCHING_CHECK}
+            count: ${OUTPUT_AWS_DYNAMODB_BATCHING_COUNT:0}
+            period: ${OUTPUT_AWS_DYNAMODB_BATCHING_PERIOD}
+          credentials:
+            id: ${OUTPUT_AWS_DYNAMODB_CREDENTIALS_ID}
+            profile: ${OUTPUT_AWS_DYNAMODB_CREDENTIALS_PROFILE}
+            role: ${OUTPUT_AWS_DYNAMODB_CREDENTIALS_ROLE}
+            role_external_id: ${OUTPUT_AWS_DYNAMODB_CREDENTIALS_ROLE_EXTERNAL_ID}
+            secret: ${OUTPUT_AWS_DYNAMODB_CREDENTIALS_SECRET}
+            token: ${OUTPUT_AWS_DYNAMODB_CREDENTIALS_TOKEN}
+          endpoint: ${OUTPUT_AWS_DYNAMODB_ENDPOINT}
+          max_in_flight: ${OUTPUT_AWS_DYNAMODB_MAX_IN_FLIGHT:1}
+          max_retries: ${OUTPUT_AWS_DYNAMODB_MAX_RETRIES:3}
+          region: ${OUTPUT_AWS_DYNAMODB_REGION:eu-west-1}
+          table: ${OUTPUT_AWS_DYNAMODB_TABLE}
+          ttl: ${OUTPUT_AWS_DYNAMODB_TTL}
+          ttl_key: ${OUTPUT_AWS_DYNAMODB_TTL_KEY}
+        aws_kinesis:
+          backoff:
+            initial_interval: ${OUTPUT_AWS_KINESIS_BACKOFF_INITIAL_INTERVAL:1s}
+            max_elapsed_time: ${OUTPUT_AWS_KINESIS_BACKOFF_MAX_ELAPSED_TIME:30s}
+            max_interval: ${OUTPUT_AWS_KINESIS_BACKOFF_MAX_INTERVAL:5s}
+          batching:
+            byte_size: ${OUTPUT_AWS_KINESIS_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_AWS_KINESIS_BATCHING_CHECK}
+            count: ${OUTPUT_AWS_KINESIS_BATCHING_COUNT:0}
+            period: ${OUTPUT_AWS_KINESIS_BATCHING_PERIOD}
+          credentials:
+            id: ${OUTPUT_AWS_KINESIS_CREDENTIALS_ID}
+            profile: ${OUTPUT_AWS_KINESIS_CREDENTIALS_PROFILE}
+            role: ${OUTPUT_AWS_KINESIS_CREDENTIALS_ROLE}
+            role_external_id: ${OUTPUT_AWS_KINESIS_CREDENTIALS_ROLE_EXTERNAL_ID}
+            secret: ${OUTPUT_AWS_KINESIS_CREDENTIALS_SECRET}
+            token: ${OUTPUT_AWS_KINESIS_CREDENTIALS_TOKEN}
+          endpoint: ${OUTPUT_AWS_KINESIS_ENDPOINT}
+          hash_key: ${OUTPUT_AWS_KINESIS_HASH_KEY}
+          max_in_flight: ${OUTPUT_AWS_KINESIS_MAX_IN_FLIGHT:1}
+          max_retries: ${OUTPUT_AWS_KINESIS_MAX_RETRIES:0}
+          partition_key: ${OUTPUT_AWS_KINESIS_PARTITION_KEY}
+          region: ${OUTPUT_AWS_KINESIS_REGION:eu-west-1}
+          stream: ${OUTPUT_AWS_KINESIS_STREAM}
+        aws_kinesis_firehose:
+          backoff:
+            initial_interval: ${OUTPUT_AWS_KINESIS_FIREHOSE_BACKOFF_INITIAL_INTERVAL:1s}
+            max_elapsed_time: ${OUTPUT_AWS_KINESIS_FIREHOSE_BACKOFF_MAX_ELAPSED_TIME:30s}
+            max_interval: ${OUTPUT_AWS_KINESIS_FIREHOSE_BACKOFF_MAX_INTERVAL:5s}
+          batching:
+            byte_size: ${OUTPUT_AWS_KINESIS_FIREHOSE_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_AWS_KINESIS_FIREHOSE_BATCHING_CHECK}
+            count: ${OUTPUT_AWS_KINESIS_FIREHOSE_BATCHING_COUNT:0}
+            period: ${OUTPUT_AWS_KINESIS_FIREHOSE_BATCHING_PERIOD}
+          credentials:
+            id: ${OUTPUT_AWS_KINESIS_FIREHOSE_CREDENTIALS_ID}
+            profile: ${OUTPUT_AWS_KINESIS_FIREHOSE_CREDENTIALS_PROFILE}
+            role: ${OUTPUT_AWS_KINESIS_FIREHOSE_CREDENTIALS_ROLE}
+            role_external_id: ${OUTPUT_AWS_KINESIS_FIREHOSE_CREDENTIALS_ROLE_EXTERNAL_ID}
+            secret: ${OUTPUT_AWS_KINESIS_FIREHOSE_CREDENTIALS_SECRET}
+            token: ${OUTPUT_AWS_KINESIS_FIREHOSE_CREDENTIALS_TOKEN}
+          endpoint: ${OUTPUT_AWS_KINESIS_FIREHOSE_ENDPOINT}
+          max_in_flight: ${OUTPUT_AWS_KINESIS_FIREHOSE_MAX_IN_FLIGHT:1}
+          max_retries: ${OUTPUT_AWS_KINESIS_FIREHOSE_MAX_RETRIES:0}
+          region: ${OUTPUT_AWS_KINESIS_FIREHOSE_REGION:eu-west-1}
+          stream: ${OUTPUT_AWS_KINESIS_FIREHOSE_STREAM}
+        aws_s3:
+          batching:
+            byte_size: ${OUTPUT_AWS_S3_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_AWS_S3_BATCHING_CHECK}
+            count: ${OUTPUT_AWS_S3_BATCHING_COUNT:0}
+            period: ${OUTPUT_AWS_S3_BATCHING_PERIOD}
+          bucket: ${OUTPUT_AWS_S3_BUCKET}
+          content_encoding: ${OUTPUT_AWS_S3_CONTENT_ENCODING}
+          content_type: ${OUTPUT_AWS_S3_CONTENT_TYPE:application/octet-stream}
+          credentials:
+            id: ${OUTPUT_AWS_S3_CREDENTIALS_ID}
+            profile: ${OUTPUT_AWS_S3_CREDENTIALS_PROFILE}
+            role: ${OUTPUT_AWS_S3_CREDENTIALS_ROLE}
+            role_external_id: ${OUTPUT_AWS_S3_CREDENTIALS_ROLE_EXTERNAL_ID}
+            secret: ${OUTPUT_AWS_S3_CREDENTIALS_SECRET}
+            token: ${OUTPUT_AWS_S3_CREDENTIALS_TOKEN}
+          endpoint: ${OUTPUT_AWS_S3_ENDPOINT}
+          force_path_style_urls: ${OUTPUT_AWS_S3_FORCE_PATH_STYLE_URLS:false}
+          kms_key_id: ${OUTPUT_AWS_S3_KMS_KEY_ID}
+          max_in_flight: ${OUTPUT_AWS_S3_MAX_IN_FLIGHT:1}
+          path: ${OUTPUT_AWS_S3_PATH:${!count("files")}-${!timestamp_unix_nano()}.txt}
+          region: ${OUTPUT_AWS_S3_REGION:eu-west-1}
+          storage_class: ${OUTPUT_AWS_S3_STORAGE_CLASS:STANDARD}
+          timeout: ${OUTPUT_AWS_S3_TIMEOUT:5s}
+        aws_sns:
+          credentials:
+            id: ${OUTPUT_AWS_SNS_CREDENTIALS_ID}
+            profile: ${OUTPUT_AWS_SNS_CREDENTIALS_PROFILE}
+            role: ${OUTPUT_AWS_SNS_CREDENTIALS_ROLE}
+            role_external_id: ${OUTPUT_AWS_SNS_CREDENTIALS_ROLE_EXTERNAL_ID}
+            secret: ${OUTPUT_AWS_SNS_CREDENTIALS_SECRET}
+            token: ${OUTPUT_AWS_SNS_CREDENTIALS_TOKEN}
+          endpoint: ${OUTPUT_AWS_SNS_ENDPOINT}
+          max_in_flight: ${OUTPUT_AWS_SNS_MAX_IN_FLIGHT:1}
+          region: ${OUTPUT_AWS_SNS_REGION:eu-west-1}
+          timeout: ${OUTPUT_AWS_SNS_TIMEOUT:5s}
+          topic_arn: ${OUTPUT_AWS_SNS_TOPIC_ARN}
+        aws_sqs:
+          backoff:
+            initial_interval: ${OUTPUT_AWS_SQS_BACKOFF_INITIAL_INTERVAL:1s}
+            max_elapsed_time: ${OUTPUT_AWS_SQS_BACKOFF_MAX_ELAPSED_TIME:30s}
+            max_interval: ${OUTPUT_AWS_SQS_BACKOFF_MAX_INTERVAL:5s}
+          batching:
+            byte_size: ${OUTPUT_AWS_SQS_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_AWS_SQS_BATCHING_CHECK}
+            count: ${OUTPUT_AWS_SQS_BATCHING_COUNT:0}
+            period: ${OUTPUT_AWS_SQS_BATCHING_PERIOD}
+          credentials:
+            id: ${OUTPUT_AWS_SQS_CREDENTIALS_ID}
+            profile: ${OUTPUT_AWS_SQS_CREDENTIALS_PROFILE}
+            role: ${OUTPUT_AWS_SQS_CREDENTIALS_ROLE}
+            role_external_id: ${OUTPUT_AWS_SQS_CREDENTIALS_ROLE_EXTERNAL_ID}
+            secret: ${OUTPUT_AWS_SQS_CREDENTIALS_SECRET}
+            token: ${OUTPUT_AWS_SQS_CREDENTIALS_TOKEN}
+          endpoint: ${OUTPUT_AWS_SQS_ENDPOINT}
+          max_in_flight: ${OUTPUT_AWS_SQS_MAX_IN_FLIGHT:1}
+          max_retries: ${OUTPUT_AWS_SQS_MAX_RETRIES:0}
+          message_deduplication_id: ${OUTPUT_AWS_SQS_MESSAGE_DEDUPLICATION_ID}
+          message_group_id: ${OUTPUT_AWS_SQS_MESSAGE_GROUP_ID}
+          region: ${OUTPUT_AWS_SQS_REGION:eu-west-1}
+          url: ${OUTPUT_AWS_SQS_URL}
         azure_blob_storage:
           blob_type: ${OUTPUT_AZURE_BLOB_STORAGE_BLOB_TYPE:BLOCK}
           container: ${OUTPUT_AZURE_BLOB_STORAGE_CONTAINER}
@@ -1332,6 +1478,19 @@ logger:
   level: ${LOGGER_LEVEL:INFO}
   prefix: ${LOGGER_PREFIX:benthos}
 metrics:
+  aws_cloudwatch:
+    credentials:
+      id: ${METRICS_AWS_CLOUDWATCH_CREDENTIALS_ID}
+      profile: ${METRICS_AWS_CLOUDWATCH_CREDENTIALS_PROFILE}
+      role: ${METRICS_AWS_CLOUDWATCH_CREDENTIALS_ROLE}
+      role_external_id: ${METRICS_AWS_CLOUDWATCH_CREDENTIALS_ROLE_EXTERNAL_ID}
+      secret: ${METRICS_AWS_CLOUDWATCH_CREDENTIALS_SECRET}
+      token: ${METRICS_AWS_CLOUDWATCH_CREDENTIALS_TOKEN}
+    endpoint: ${METRICS_AWS_CLOUDWATCH_ENDPOINT}
+    flush_period: ${METRICS_AWS_CLOUDWATCH_FLUSH_PERIOD:100ms}
+    namespace: ${METRICS_AWS_CLOUDWATCH_NAMESPACE:Benthos}
+    path_mapping: ${METRICS_AWS_CLOUDWATCH_PATH_MAPPING}
+    region: ${METRICS_AWS_CLOUDWATCH_REGION:eu-west-1}
   cloudwatch:
     credentials:
       id: ${METRICS_CLOUDWATCH_CREDENTIALS_ID}

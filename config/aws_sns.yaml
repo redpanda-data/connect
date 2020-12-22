@@ -6,19 +6,11 @@ http:
   root_path: /benthos
   debug_endpoints: false
 input:
-  type: aws_sqs
-  aws_sqs:
-    credentials:
-      id: ""
-      profile: ""
-      role: ""
-      role_external_id: ""
-      secret: ""
-      token: ""
-    delete_message: true
-    endpoint: ""
-    region: eu-west-1
-    url: ""
+  type: stdin
+  stdin:
+    delimiter: ""
+    max_buffer: 1000000
+    multipart: false
 buffer:
   type: none
   none: {}
@@ -26,18 +18,8 @@ pipeline:
   processors: []
   threads: 1
 output:
-  type: aws_sqs
-  aws_sqs:
-    backoff:
-      initial_interval: 1s
-      max_elapsed_time: 30s
-      max_interval: 5s
-    batching:
-      byte_size: 0
-      check: ""
-      count: 0
-      period: ""
-      processors: []
+  type: aws_sns
+  aws_sns:
     credentials:
       id: ""
       profile: ""
@@ -47,11 +29,9 @@ output:
       token: ""
     endpoint: ""
     max_in_flight: 1
-    max_retries: 0
-    message_deduplication_id: ""
-    message_group_id: ""
     region: eu-west-1
-    url: ""
+    timeout: 5s
+    topic_arn: ""
 resources:
   caches: {}
   conditions: {}

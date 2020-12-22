@@ -37,9 +37,32 @@ pipeline:
   processors: []
   threads: 1
 output:
-  type: stdout
-  stdout:
-    delimiter: ""
+  type: aws_s3
+  aws_s3:
+    batching:
+      byte_size: 0
+      check: ""
+      count: 0
+      period: ""
+      processors: []
+    bucket: ""
+    content_encoding: ""
+    content_type: application/octet-stream
+    credentials:
+      id: ""
+      profile: ""
+      role: ""
+      role_external_id: ""
+      secret: ""
+      token: ""
+    endpoint: ""
+    force_path_style_urls: false
+    kms_key_id: ""
+    max_in_flight: 1
+    path: ${!count("files")}-${!timestamp_unix_nano()}.txt
+    region: eu-west-1
+    storage_class: STANDARD
+    timeout: 5s
 resources:
   caches: {}
   conditions: {}

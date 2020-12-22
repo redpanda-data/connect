@@ -1,7 +1,7 @@
 ---
 title: dynamodb
 type: cache
-status: stable
+status: deprecated
 ---
 
 <!--
@@ -14,6 +14,9 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
 
 Stores key/value pairs as a single document in a DynamoDB table. The key is
 stored as a string value and used as the table hash key. The value is stored as
@@ -66,6 +69,10 @@ dynamodb:
 
 </TabItem>
 </Tabs>
+
+## Alternatives
+
+This cache has been renamed to [`aws_dynamodb`](/docs/components/caches/aws_dynamodb).
 
 A prefix can be specified to allow multiple cache types to share a single
 DynamoDB table. An optional TTL duration (`ttl`) and field

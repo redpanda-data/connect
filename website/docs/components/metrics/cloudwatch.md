@@ -1,7 +1,7 @@
 ---
 title: cloudwatch
 type: metrics
-status: stable
+status: deprecated
 ---
 
 <!--
@@ -14,6 +14,9 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
 
 Send metrics to AWS CloudWatch using the PutMetricData endpoint.
 
@@ -57,6 +60,10 @@ metrics:
 
 </TabItem>
 </Tabs>
+
+## Alternatives
+
+This metrics type has been renamed to [`aws_cloudwatch`](/docs/components/metrics/aws_cloudwatch).
 
 It is STRONGLY recommended that you reduce the metrics that are exposed with a
 `path_mapping` like this:

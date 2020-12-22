@@ -16,8 +16,8 @@ buffer:
   none: {}
 pipeline:
   processors:
-    - type: lambda
-      lambda:
+    - type: aws_lambda
+      aws_lambda:
         credentials:
           id: ""
           profile: ""
