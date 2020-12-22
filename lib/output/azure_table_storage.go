@@ -15,6 +15,7 @@ func init() {
 	Constructors[TypeAzureTableStorage] = TypeSpec{
 		constructor: NewAzureTableStorage,
 		Status:      docs.StatusBeta,
+		Version:     "3.36.0",
 		Summary: `
 Stores message parts in an Azure Table Storage table.`,
 		Description: `

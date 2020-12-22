@@ -19,6 +19,8 @@ BETA: This component is mostly stable but breaking changes could still be made o
 
 Stores message parts in an Azure Table Storage table.
 
+Introduced in version 3.36.0.
+
 
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },

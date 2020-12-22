@@ -26,6 +26,7 @@ type TypeSpec struct {
 	Footnotes   string
 	FieldSpecs  docs.FieldSpecs
 	Status      docs.Status
+	Version     string
 }
 
 // Constructors is a map of all buffer types with their specs.

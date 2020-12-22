@@ -36,7 +36,8 @@ func init() {
 				log, stats,
 			)
 		},
-		Status: docs.StatusBeta,
+		Status:  docs.StatusBeta,
+		Version: "3.36.0",
 		Summary: `
 Downloads objects within an Azure Blob Storage container, optionally filtered by
 a prefix.`,

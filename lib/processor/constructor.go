@@ -43,6 +43,7 @@ type TypeSpec struct {
 	UsesBatches bool
 
 	Status      docs.Status
+	Version     string
 	Summary     string
 	Description string
 	Categories  []Category

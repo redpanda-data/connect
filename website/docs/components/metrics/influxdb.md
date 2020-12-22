@@ -18,6 +18,8 @@ EXPERIMENTAL: This component is experimental and therefore subject to change or 
 
 Send metrics to InfluxDB 1.x using the `/write` endpoint.
 
+Introduced in version 3.36.0.
+
 
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },

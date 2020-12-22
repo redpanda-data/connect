@@ -30,6 +30,7 @@ type TypeSpec struct {
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
 
 	Status      docs.Status
+	Version     string
 	Summary     string
 	Description string
 	Footnotes   string

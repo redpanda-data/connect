@@ -20,6 +20,8 @@ BETA: This component is mostly stable but breaking changes could still be made o
 Downloads objects within an Azure Blob Storage container, optionally filtered by
 a prefix.
 
+Introduced in version 3.36.0.
+
 
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },

@@ -62,6 +62,7 @@ type TypeSpec struct {
 	) (Type, error)
 
 	Status      docs.Status
+	Version     string
 	Summary     string
 	Description string
 	Categories  []Category

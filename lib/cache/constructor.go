@@ -26,6 +26,7 @@ type TypeSpec struct {
 	FieldSpecs        docs.FieldSpecs
 	Status            docs.Status
 	SupportsPerKeyTTL bool
+	Version           string
 }
 
 // Constructors is a map of all cache types with their specs.
