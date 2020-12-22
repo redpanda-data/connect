@@ -105,8 +105,6 @@ func NewAzureQueueStorage(
 	if len(conf.StorageAccount) == 0 && len(conf.StorageConnectionString) == 0 {
 		return nil, errors.New("invalid azure storage account credentials")
 	}
-
-	var credential azqueue.Credential
 	var storageAccount string
 	var storageAccessKey string
 	var endpointExp = azQueueEndpointExp
@@ -126,9 +124,10 @@ func NewAzureQueueStorage(
 		storageAccount = conf.StorageAccount
 		storageAccessKey = conf.StorageAccessKey
 	}
-	if err != nil {
+	if len(storageAccount) == 0 {
 		return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
 	}
+	var credential azqueue.Credential
 	if len(storageAccessKey) > 0 {
 		credential, _ = azqueue.NewSharedKeyCredential(storageAccount, storageAccessKey)
 	} else {
