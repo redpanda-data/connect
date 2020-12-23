@@ -35,9 +35,10 @@ func init() {
 			}
 			return NewAsyncReader(TypeKinesis, false, reader.NewAsyncPreserver(rdr), log, stats)
 		},
-		Status: docs.StatusExperimental,
+		Status:  docs.StatusBeta,
+		Version: "3.36.0",
 		Summary: `
-Receive messages from a Kinesis streams.`,
+Receive messages from one or more Kinesis streams.`,
 		Description: `
 Consumes messages from one or more Kinesis streams either by automatically balancing shards across other instances of this input, or by consuming shards listed explicitly. The latest message sequence consumed by this input is stored within a [DynamoDB table](#table-schema), which allows it to resume at the correct sequence of the shard during restarts. This table is also used for coordination across distributed inputs when shard balancing.
 
@@ -63,8 +64,8 @@ Use the ` + "`batching`" + ` fields to configure an optional [batching policy](/
 					"checkpoint_limit", "The maximum gap between the in flight sequence versus the latest acknowledged sequence at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual shards. Any given sequence will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.",
 				),
 				docs.FieldCommon("commit_period", "The period of time between each update to the checkpoint table."),
-				docs.FieldCommon("rebalance_period", "The period of time between each attempt to rebalance shards across clients."),
-				docs.FieldCommon("lease_period", "The period of time after which a client that has failed to update a shard checkpoint is assumed to be inactive."),
+				docs.FieldAdvanced("rebalance_period", "The period of time between each attempt to rebalance shards across clients."),
+				docs.FieldAdvanced("lease_period", "The period of time after which a client that has failed to update a shard checkpoint is assumed to be inactive."),
 				docs.FieldCommon("start_from_oldest", "Whether to consume from the oldest message when a sequence does not yet exist for the stream."),
 			}, session.FieldSpecs()...),
 			batch.FieldSpec(),

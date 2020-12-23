@@ -16,7 +16,7 @@ const installs = [
 curl -Lsf https://sh.benthos.dev | bash
 
 # Make a config
-benthos create nats/protobuf/sqs > ./config.yaml
+benthos create nats/protobuf/aws_sqs > ./config.yaml
 
 # Run
 benthos -c ./config.yaml`
@@ -27,7 +27,7 @@ benthos -c ./config.yaml`
 brew install benthos
 
 # Make a config
-benthos create nats/protobuf/sqs > ./config.yaml
+benthos create nats/protobuf/aws_sqs > ./config.yaml
 
 # Run
 benthos -c ./config.yaml`
@@ -38,7 +38,7 @@ benthos -c ./config.yaml`
 docker pull jeffail/benthos
 
 # Make a config
-docker run --rm jeffail/benthos create nats/protobuf/sqs > ./config.yaml
+docker run --rm jeffail/benthos create nats/protobuf/aws_sqs > ./config.yaml
 
 # Run
 docker run --rm -v $(pwd)/config.yaml:/benthos.yaml jeffail/benthos`
@@ -81,7 +81,7 @@ output:
     cases:
       - check: doc.tags.contains("AWS")
         output:
-          sqs:
+          aws_sqs:
             url: https://sqs.us-west-2.amazonaws.com/TODO/TODO
             max_in_flight: 20
 
@@ -106,12 +106,12 @@ pipeline:
           root.id = this.doc.id
           root.content = this.doc.body
         processors:
-          - lambda:
+          - aws_lambda:
               function: sentiment_analysis
         result_map: root.results.sentiment = this
 
 output:
-  s3:
+  aws_s3:
     bucket: TODO
     path: '\${! meta("partition") }/\${! timestamp_unix_nano() }.tar.gz'
     batching:
@@ -152,7 +152,7 @@ const features = [
     description: (
       <>
         <p>
-          Benthos is able to glue a wide range of <a href="/docs/components/inputs/about">sources</a> and <a href="/docs/components/outputs/about">sinks</a> together and hook into a variety of <a href="/docs/components/processors/sql">databases</a>, <a href="/docs/components/processors/cache">caches</a>, <a href="/docs/components/processors/http">HTTP APIs</a>, <a href="/docs/components/processors/lambda">lambdas</a> and <a href="/docs/components/processors/about">more</a>, enabling you to seamlessly drop it into your existing infrastructure.
+          Benthos is able to glue a wide range of <a href="/docs/components/inputs/about">sources</a> and <a href="/docs/components/outputs/about">sinks</a> together and hook into a variety of <a href="/docs/components/processors/sql">databases</a>, <a href="/docs/components/processors/cache">caches</a>, <a href="/docs/components/processors/http">HTTP APIs</a>, <a href="/docs/components/processors/aws_lambda">lambdas</a> and <a href="/docs/components/processors/about">more</a>, enabling you to seamlessly drop it into your existing infrastructure.
         </p>
         <p>
           Working with disparate APIs and services can be a daunting task, doubly so in a streaming data context. With Benthos it's possible to break these tasks down and automatically parallelize them as <a href="/cookbooks/enrichments">a streaming workflow</a>.

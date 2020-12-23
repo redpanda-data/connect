@@ -44,7 +44,7 @@ type RedisPubSub struct {
 	conf       RedisPubSubConfig
 	channelStr field.Expression
 
-	client  *redis.Client
+	client  redis.UniversalClient
 	connMut sync.RWMutex
 }
 

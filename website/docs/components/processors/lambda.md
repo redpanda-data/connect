@@ -1,7 +1,7 @@
 ---
 title: lambda
 type: processor
-status: stable
+status: deprecated
 categories: ["Integration"]
 ---
 
@@ -15,6 +15,9 @@ categories: ["Integration"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
 
 Invokes an AWS lambda for each message. The contents of the message is the
 payload of the request, and the result of the invocation will become the new
@@ -60,6 +63,10 @@ lambda:
 
 </TabItem>
 </Tabs>
+
+## Alternatives
+
+This processor has been renamed to [`aws_lambda`](/docs/components/processors/aws_lambda).
 
 It is possible to perform requests per message of a batch in parallel by setting
 the `parallel` flag to `true`. The `rate_limit`

@@ -21,6 +21,7 @@ type TypeSpec struct {
 	constructor func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (types.RateLimit, error)
 
 	Status      docs.Status
+	Version     string
 	Summary     string
 	Description string
 	Footnotes   string

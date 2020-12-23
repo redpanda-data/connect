@@ -6,37 +6,32 @@ http:
   root_path: /benthos
   debug_endpoints: false
 input:
-  type: stdin
-  stdin:
-    delimiter: ""
-    max_buffer: 1000000
-    multipart: false
+  type: azure_blob_storage
+  azure_blob_storage:
+    codec: all-bytes
+    container: ""
+    delete_objects: false
+    prefix: ""
+    storage_access_key: ""
+    storage_account: ""
+    storage_connection_string: ""
 buffer:
   type: none
   none: {}
 pipeline:
-  processors:
-    - type: lambda
-      lambda:
-        credentials:
-          id: ""
-          profile: ""
-          role: ""
-          role_external_id: ""
-          secret: ""
-          token: ""
-        endpoint: ""
-        function: ""
-        parallel: false
-        rate_limit: ""
-        region: eu-west-1
-        retries: 3
-        timeout: 5s
+  processors: []
   threads: 1
 output:
-  type: stdout
-  stdout:
-    delimiter: ""
+  type: azure_blob_storage
+  azure_blob_storage:
+    blob_type: BLOCK
+    container: ""
+    max_in_flight: 1
+    path: ${!count("files")}-${!timestamp_unix_nano()}.txt
+    public_access_level: PRIVATE
+    storage_access_key: ""
+    storage_account: ""
+    storage_connection_string: ""
 resources:
   caches: {}
   conditions: {}

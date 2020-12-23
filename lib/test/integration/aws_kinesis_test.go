@@ -64,7 +64,7 @@ var _ = registerIntegrationTest("aws_kinesis", func(t *testing.T) {
 
 	template := `
 output:
-  kinesis:
+  aws_kinesis:
     endpoint: http://localhost:$PORT
     region: us-east-1
     stream: stream-$ID

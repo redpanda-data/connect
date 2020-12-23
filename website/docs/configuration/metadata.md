@@ -22,6 +22,18 @@ pipeline:
       meta time = event.timestamp
 ```
 
+You can also use [Bloblang][guides.bloblang] to delete individual metadata keys with:
+
+```coffee
+meta foo = deleted()
+```
+
+Or do more interesting things like remove all metadata keys with a certain prefix:
+
+```coffee
+meta = meta().filter(!this.key.has_prefix("kafka_"))
+```
+
 ## Using Metadata
 
 Metadata values can be referenced in any field that supports [interpolation functions][interpolation]. For example, you can route messages to Kafka topics using interpolation of metadata keys:
@@ -57,3 +69,4 @@ Or, for more complex branches it might be best to use the [`awk` processor][proc
 [processors.switch]: /docs/components/processors/switch
 [processors.awk]: /docs/components/processors/awk
 [processors.bloblang]: /docs/components/processors/bloblang
+[guides.bloblang]: /docs/guides/bloblang/about

@@ -130,6 +130,23 @@ INPUT_AWS_S3_SQS_ENVELOPE_PATH
 INPUT_AWS_S3_SQS_KEY_PATH                            = Records.*.s3.object.key
 INPUT_AWS_S3_SQS_MAX_MESSAGES                        = 10
 INPUT_AWS_S3_SQS_URL
+INPUT_AWS_SQS_CREDENTIALS_ID
+INPUT_AWS_SQS_CREDENTIALS_PROFILE
+INPUT_AWS_SQS_CREDENTIALS_ROLE
+INPUT_AWS_SQS_CREDENTIALS_ROLE_EXTERNAL_ID
+INPUT_AWS_SQS_CREDENTIALS_SECRET
+INPUT_AWS_SQS_CREDENTIALS_TOKEN
+INPUT_AWS_SQS_DELETE_MESSAGE                         = true
+INPUT_AWS_SQS_ENDPOINT
+INPUT_AWS_SQS_REGION                                 = eu-west-1
+INPUT_AWS_SQS_URL
+INPUT_AZURE_BLOB_STORAGE_CODEC                       = all-bytes
+INPUT_AZURE_BLOB_STORAGE_CONTAINER
+INPUT_AZURE_BLOB_STORAGE_DELETE_OBJECTS              = false
+INPUT_AZURE_BLOB_STORAGE_PREFIX
+INPUT_AZURE_BLOB_STORAGE_STORAGE_ACCESS_KEY
+INPUT_AZURE_BLOB_STORAGE_STORAGE_ACCOUNT
+INPUT_AZURE_BLOB_STORAGE_STORAGE_CONNECTION_STRING
 INPUT_BLOBLANG_COUNT                                 = 0
 INPUT_BLOBLANG_INTERVAL                              = 1s
 INPUT_BLOBLANG_MAPPING
@@ -345,12 +362,16 @@ INPUT_NSQ_TLS_SKIP_CERT_VERIFY                       = false
 INPUT_NSQ_TOPIC                                      = benthos_messages
 INPUT_NSQ_USER_AGENT                                 = benthos_consumer
 INPUT_REDIS_LIST_KEY                                 = benthos_list
+INPUT_REDIS_LIST_KIND                                = simple
+INPUT_REDIS_LIST_MASTER
 INPUT_REDIS_LIST_TIMEOUT                             = 5s
 INPUT_REDIS_LIST_TLS_ENABLED                         = false
 INPUT_REDIS_LIST_TLS_ROOT_CAS_FILE
 INPUT_REDIS_LIST_TLS_SKIP_CERT_VERIFY                = false
 INPUT_REDIS_LIST_URL                                 = tcp://localhost:6379
 INPUT_REDIS_PUBSUB_CHANNELS                          = benthos_chan
+INPUT_REDIS_PUBSUB_KIND                              = simple
+INPUT_REDIS_PUBSUB_MASTER
 INPUT_REDIS_PUBSUB_TLS_ENABLED                       = false
 INPUT_REDIS_PUBSUB_TLS_ROOT_CAS_FILE
 INPUT_REDIS_PUBSUB_TLS_SKIP_CERT_VERIFY              = false
@@ -364,7 +385,9 @@ INPUT_REDIS_STREAMS_BODY_KEY                         = body
 INPUT_REDIS_STREAMS_CLIENT_ID                        = benthos_consumer
 INPUT_REDIS_STREAMS_COMMIT_PERIOD                    = 1s
 INPUT_REDIS_STREAMS_CONSUMER_GROUP                   = benthos_group
+INPUT_REDIS_STREAMS_KIND                             = simple
 INPUT_REDIS_STREAMS_LIMIT                            = 10
+INPUT_REDIS_STREAMS_MASTER
 INPUT_REDIS_STREAMS_START_FROM_OLDEST                = true
 INPUT_REDIS_STREAMS_STREAMS                          = benthos_stream
 INPUT_REDIS_STREAMS_TIMEOUT                          = 1s
@@ -473,6 +496,19 @@ PROCESSOR_AVRO_SCHEMA
 PROCESSOR_AVRO_SCHEMA_PATH
 PROCESSOR_AWK_CODEC                                  = text
 PROCESSOR_AWK_PROGRAM                                = BEGIN { x = 0 } { print $0, x; x++ }
+PROCESSOR_AWS_LAMBDA_CREDENTIALS_ID
+PROCESSOR_AWS_LAMBDA_CREDENTIALS_PROFILE
+PROCESSOR_AWS_LAMBDA_CREDENTIALS_ROLE
+PROCESSOR_AWS_LAMBDA_CREDENTIALS_ROLE_EXTERNAL_ID
+PROCESSOR_AWS_LAMBDA_CREDENTIALS_SECRET
+PROCESSOR_AWS_LAMBDA_CREDENTIALS_TOKEN
+PROCESSOR_AWS_LAMBDA_ENDPOINT
+PROCESSOR_AWS_LAMBDA_FUNCTION
+PROCESSOR_AWS_LAMBDA_PARALLEL                        = false
+PROCESSOR_AWS_LAMBDA_RATE_LIMIT
+PROCESSOR_AWS_LAMBDA_REGION                          = eu-west-1
+PROCESSOR_AWS_LAMBDA_RETRIES                         = 3
+PROCESSOR_AWS_LAMBDA_TIMEOUT                         = 5s
 PROCESSOR_BATCH_BYTE_SIZE                            = 0
 PROCESSOR_BATCH_CONDITION_BLOBLANG
 PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MAX_PARTS     = 100
@@ -637,6 +673,8 @@ PROCESSOR_PROTOBUF_MESSAGE
 PROCESSOR_PROTOBUF_OPERATOR                          = to_json
 PROCESSOR_RATE_LIMIT_RESOURCE
 PROCESSOR_REDIS_KEY
+PROCESSOR_REDIS_KIND                                 = simple
+PROCESSOR_REDIS_MASTER
 PROCESSOR_REDIS_OPERATOR                             = scard
 PROCESSOR_REDIS_RETRIES                              = 3
 PROCESSOR_REDIS_RETRY_PERIOD                         = 500ms
@@ -670,203 +708,333 @@ PROCESSOR_XML_OPERATOR                               = to_json
 ## OUTPUT
 
 ```
-OUTPUTS                                               = 1
-OUTPUTS_PATTERN                                       = greedy
-OUTPUT_TYPE                                           = dynamic
-OUTPUT_AMQP_0_9_EXCHANGE                              = benthos-exchange
-OUTPUT_AMQP_0_9_EXCHANGE_DECLARE_DURABLE              = true
-OUTPUT_AMQP_0_9_EXCHANGE_DECLARE_ENABLED              = false
-OUTPUT_AMQP_0_9_EXCHANGE_DECLARE_TYPE                 = direct
-OUTPUT_AMQP_0_9_IMMEDIATE                             = false
-OUTPUT_AMQP_0_9_KEY                                   = benthos-key
-OUTPUT_AMQP_0_9_MANDATORY                             = false
-OUTPUT_AMQP_0_9_MAX_IN_FLIGHT                         = 1
-OUTPUT_AMQP_0_9_PERSISTENT                            = false
-OUTPUT_AMQP_0_9_TLS_ENABLED                           = false
+OUTPUTS                                                  = 1
+OUTPUTS_PATTERN                                          = greedy
+OUTPUT_TYPE                                              = dynamic
+OUTPUT_AMQP_0_9_EXCHANGE                                 = benthos-exchange
+OUTPUT_AMQP_0_9_EXCHANGE_DECLARE_DURABLE                 = true
+OUTPUT_AMQP_0_9_EXCHANGE_DECLARE_ENABLED                 = false
+OUTPUT_AMQP_0_9_EXCHANGE_DECLARE_TYPE                    = direct
+OUTPUT_AMQP_0_9_IMMEDIATE                                = false
+OUTPUT_AMQP_0_9_KEY                                      = benthos-key
+OUTPUT_AMQP_0_9_MANDATORY                                = false
+OUTPUT_AMQP_0_9_MAX_IN_FLIGHT                            = 1
+OUTPUT_AMQP_0_9_PERSISTENT                               = false
+OUTPUT_AMQP_0_9_TLS_ENABLED                              = false
 OUTPUT_AMQP_0_9_TLS_ROOT_CAS_FILE
-OUTPUT_AMQP_0_9_TLS_SKIP_CERT_VERIFY                  = false
+OUTPUT_AMQP_0_9_TLS_SKIP_CERT_VERIFY                     = false
 OUTPUT_AMQP_0_9_TYPE
-OUTPUT_AMQP_0_9_URL                                   = amqp://guest:guest@localhost:5672/
-OUTPUT_AMQP_1_MAX_IN_FLIGHT                           = 1
-OUTPUT_AMQP_1_SASL_MECHANISM                          = none
+OUTPUT_AMQP_0_9_URL                                      = amqp://guest:guest@localhost:5672/
+OUTPUT_AMQP_1_MAX_IN_FLIGHT                              = 1
+OUTPUT_AMQP_1_SASL_MECHANISM                             = none
 OUTPUT_AMQP_1_SASL_PASSWORD
 OUTPUT_AMQP_1_SASL_USER
 OUTPUT_AMQP_1_TARGET_ADDRESS
-OUTPUT_AMQP_1_TLS_ENABLED                             = false
+OUTPUT_AMQP_1_TLS_ENABLED                                = false
 OUTPUT_AMQP_1_TLS_ROOT_CAS_FILE
-OUTPUT_AMQP_1_TLS_SKIP_CERT_VERIFY                    = false
+OUTPUT_AMQP_1_TLS_SKIP_CERT_VERIFY                       = false
 OUTPUT_AMQP_1_URL
-OUTPUT_AMQP_EXCHANGE                                  = benthos-exchange
-OUTPUT_AMQP_EXCHANGE_DECLARE_DURABLE                  = true
-OUTPUT_AMQP_EXCHANGE_DECLARE_ENABLED                  = false
-OUTPUT_AMQP_EXCHANGE_DECLARE_TYPE                     = direct
-OUTPUT_AMQP_IMMEDIATE                                 = false
-OUTPUT_AMQP_KEY                                       = benthos-key
-OUTPUT_AMQP_MANDATORY                                 = false
-OUTPUT_AMQP_MAX_IN_FLIGHT                             = 1
-OUTPUT_AMQP_PERSISTENT                                = false
-OUTPUT_AMQP_TLS_ENABLED                               = false
+OUTPUT_AMQP_EXCHANGE                                     = benthos-exchange
+OUTPUT_AMQP_EXCHANGE_DECLARE_DURABLE                     = true
+OUTPUT_AMQP_EXCHANGE_DECLARE_ENABLED                     = false
+OUTPUT_AMQP_EXCHANGE_DECLARE_TYPE                        = direct
+OUTPUT_AMQP_IMMEDIATE                                    = false
+OUTPUT_AMQP_KEY                                          = benthos-key
+OUTPUT_AMQP_MANDATORY                                    = false
+OUTPUT_AMQP_MAX_IN_FLIGHT                                = 1
+OUTPUT_AMQP_PERSISTENT                                   = false
+OUTPUT_AMQP_TLS_ENABLED                                  = false
 OUTPUT_AMQP_TLS_ROOT_CAS_FILE
-OUTPUT_AMQP_TLS_SKIP_CERT_VERIFY                      = false
+OUTPUT_AMQP_TLS_SKIP_CERT_VERIFY                         = false
 OUTPUT_AMQP_TYPE
-OUTPUT_AMQP_URL                                       = amqp://guest:guest@localhost:5672/
-OUTPUT_BLOB_STORAGE_BLOB_TYPE                         = BLOCK
+OUTPUT_AMQP_URL                                          = amqp://guest:guest@localhost:5672/
+OUTPUT_AWS_DYNAMODB_BACKOFF_INITIAL_INTERVAL             = 1s
+OUTPUT_AWS_DYNAMODB_BACKOFF_MAX_ELAPSED_TIME             = 30s
+OUTPUT_AWS_DYNAMODB_BACKOFF_MAX_INTERVAL                 = 5s
+OUTPUT_AWS_DYNAMODB_BATCHING_BYTE_SIZE                   = 0
+OUTPUT_AWS_DYNAMODB_BATCHING_CHECK
+OUTPUT_AWS_DYNAMODB_BATCHING_COUNT                       = 0
+OUTPUT_AWS_DYNAMODB_BATCHING_PERIOD
+OUTPUT_AWS_DYNAMODB_CREDENTIALS_ID
+OUTPUT_AWS_DYNAMODB_CREDENTIALS_PROFILE
+OUTPUT_AWS_DYNAMODB_CREDENTIALS_ROLE
+OUTPUT_AWS_DYNAMODB_CREDENTIALS_ROLE_EXTERNAL_ID
+OUTPUT_AWS_DYNAMODB_CREDENTIALS_SECRET
+OUTPUT_AWS_DYNAMODB_CREDENTIALS_TOKEN
+OUTPUT_AWS_DYNAMODB_ENDPOINT
+OUTPUT_AWS_DYNAMODB_MAX_IN_FLIGHT                        = 1
+OUTPUT_AWS_DYNAMODB_MAX_RETRIES                          = 3
+OUTPUT_AWS_DYNAMODB_REGION                               = eu-west-1
+OUTPUT_AWS_DYNAMODB_TABLE
+OUTPUT_AWS_DYNAMODB_TTL
+OUTPUT_AWS_DYNAMODB_TTL_KEY
+OUTPUT_AWS_KINESIS_BACKOFF_INITIAL_INTERVAL              = 1s
+OUTPUT_AWS_KINESIS_BACKOFF_MAX_ELAPSED_TIME              = 30s
+OUTPUT_AWS_KINESIS_BACKOFF_MAX_INTERVAL                  = 5s
+OUTPUT_AWS_KINESIS_BATCHING_BYTE_SIZE                    = 0
+OUTPUT_AWS_KINESIS_BATCHING_CHECK
+OUTPUT_AWS_KINESIS_BATCHING_COUNT                        = 0
+OUTPUT_AWS_KINESIS_BATCHING_PERIOD
+OUTPUT_AWS_KINESIS_CREDENTIALS_ID
+OUTPUT_AWS_KINESIS_CREDENTIALS_PROFILE
+OUTPUT_AWS_KINESIS_CREDENTIALS_ROLE
+OUTPUT_AWS_KINESIS_CREDENTIALS_ROLE_EXTERNAL_ID
+OUTPUT_AWS_KINESIS_CREDENTIALS_SECRET
+OUTPUT_AWS_KINESIS_CREDENTIALS_TOKEN
+OUTPUT_AWS_KINESIS_ENDPOINT
+OUTPUT_AWS_KINESIS_FIREHOSE_BACKOFF_INITIAL_INTERVAL     = 1s
+OUTPUT_AWS_KINESIS_FIREHOSE_BACKOFF_MAX_ELAPSED_TIME     = 30s
+OUTPUT_AWS_KINESIS_FIREHOSE_BACKOFF_MAX_INTERVAL         = 5s
+OUTPUT_AWS_KINESIS_FIREHOSE_BATCHING_BYTE_SIZE           = 0
+OUTPUT_AWS_KINESIS_FIREHOSE_BATCHING_CHECK
+OUTPUT_AWS_KINESIS_FIREHOSE_BATCHING_COUNT               = 0
+OUTPUT_AWS_KINESIS_FIREHOSE_BATCHING_PERIOD
+OUTPUT_AWS_KINESIS_FIREHOSE_CREDENTIALS_ID
+OUTPUT_AWS_KINESIS_FIREHOSE_CREDENTIALS_PROFILE
+OUTPUT_AWS_KINESIS_FIREHOSE_CREDENTIALS_ROLE
+OUTPUT_AWS_KINESIS_FIREHOSE_CREDENTIALS_ROLE_EXTERNAL_ID
+OUTPUT_AWS_KINESIS_FIREHOSE_CREDENTIALS_SECRET
+OUTPUT_AWS_KINESIS_FIREHOSE_CREDENTIALS_TOKEN
+OUTPUT_AWS_KINESIS_FIREHOSE_ENDPOINT
+OUTPUT_AWS_KINESIS_FIREHOSE_MAX_IN_FLIGHT                = 1
+OUTPUT_AWS_KINESIS_FIREHOSE_MAX_RETRIES                  = 0
+OUTPUT_AWS_KINESIS_FIREHOSE_REGION                       = eu-west-1
+OUTPUT_AWS_KINESIS_FIREHOSE_STREAM
+OUTPUT_AWS_KINESIS_HASH_KEY
+OUTPUT_AWS_KINESIS_MAX_IN_FLIGHT                         = 1
+OUTPUT_AWS_KINESIS_MAX_RETRIES                           = 0
+OUTPUT_AWS_KINESIS_PARTITION_KEY
+OUTPUT_AWS_KINESIS_REGION                                = eu-west-1
+OUTPUT_AWS_KINESIS_STREAM
+OUTPUT_AWS_S3_BATCHING_BYTE_SIZE                         = 0
+OUTPUT_AWS_S3_BATCHING_CHECK
+OUTPUT_AWS_S3_BATCHING_COUNT                             = 0
+OUTPUT_AWS_S3_BATCHING_PERIOD
+OUTPUT_AWS_S3_BUCKET
+OUTPUT_AWS_S3_CONTENT_ENCODING
+OUTPUT_AWS_S3_CONTENT_TYPE                               = application/octet-stream
+OUTPUT_AWS_S3_CREDENTIALS_ID
+OUTPUT_AWS_S3_CREDENTIALS_PROFILE
+OUTPUT_AWS_S3_CREDENTIALS_ROLE
+OUTPUT_AWS_S3_CREDENTIALS_ROLE_EXTERNAL_ID
+OUTPUT_AWS_S3_CREDENTIALS_SECRET
+OUTPUT_AWS_S3_CREDENTIALS_TOKEN
+OUTPUT_AWS_S3_ENDPOINT
+OUTPUT_AWS_S3_FORCE_PATH_STYLE_URLS                      = false
+OUTPUT_AWS_S3_KMS_KEY_ID
+OUTPUT_AWS_S3_MAX_IN_FLIGHT                              = 1
+OUTPUT_AWS_S3_PATH                                       = ${!count("files")}-${!timestamp_unix_nano()}.txt
+OUTPUT_AWS_S3_REGION                                     = eu-west-1
+OUTPUT_AWS_S3_STORAGE_CLASS                              = STANDARD
+OUTPUT_AWS_S3_TIMEOUT                                    = 5s
+OUTPUT_AWS_SNS_CREDENTIALS_ID
+OUTPUT_AWS_SNS_CREDENTIALS_PROFILE
+OUTPUT_AWS_SNS_CREDENTIALS_ROLE
+OUTPUT_AWS_SNS_CREDENTIALS_ROLE_EXTERNAL_ID
+OUTPUT_AWS_SNS_CREDENTIALS_SECRET
+OUTPUT_AWS_SNS_CREDENTIALS_TOKEN
+OUTPUT_AWS_SNS_ENDPOINT
+OUTPUT_AWS_SNS_MAX_IN_FLIGHT                             = 1
+OUTPUT_AWS_SNS_REGION                                    = eu-west-1
+OUTPUT_AWS_SNS_TIMEOUT                                   = 5s
+OUTPUT_AWS_SNS_TOPIC_ARN
+OUTPUT_AWS_SQS_BACKOFF_INITIAL_INTERVAL                  = 1s
+OUTPUT_AWS_SQS_BACKOFF_MAX_ELAPSED_TIME                  = 30s
+OUTPUT_AWS_SQS_BACKOFF_MAX_INTERVAL                      = 5s
+OUTPUT_AWS_SQS_BATCHING_BYTE_SIZE                        = 0
+OUTPUT_AWS_SQS_BATCHING_CHECK
+OUTPUT_AWS_SQS_BATCHING_COUNT                            = 0
+OUTPUT_AWS_SQS_BATCHING_PERIOD
+OUTPUT_AWS_SQS_CREDENTIALS_ID
+OUTPUT_AWS_SQS_CREDENTIALS_PROFILE
+OUTPUT_AWS_SQS_CREDENTIALS_ROLE
+OUTPUT_AWS_SQS_CREDENTIALS_ROLE_EXTERNAL_ID
+OUTPUT_AWS_SQS_CREDENTIALS_SECRET
+OUTPUT_AWS_SQS_CREDENTIALS_TOKEN
+OUTPUT_AWS_SQS_ENDPOINT
+OUTPUT_AWS_SQS_MAX_IN_FLIGHT                             = 1
+OUTPUT_AWS_SQS_MAX_RETRIES                               = 0
+OUTPUT_AWS_SQS_MESSAGE_DEDUPLICATION_ID
+OUTPUT_AWS_SQS_MESSAGE_GROUP_ID
+OUTPUT_AWS_SQS_REGION                                    = eu-west-1
+OUTPUT_AWS_SQS_URL
+OUTPUT_AZURE_BLOB_STORAGE_BLOB_TYPE                      = BLOCK
+OUTPUT_AZURE_BLOB_STORAGE_CONTAINER
+OUTPUT_AZURE_BLOB_STORAGE_MAX_IN_FLIGHT                  = 1
+OUTPUT_AZURE_BLOB_STORAGE_PATH                           = ${!count("files")}-${!timestamp_unix_nano()}.txt
+OUTPUT_AZURE_BLOB_STORAGE_PUBLIC_ACCESS_LEVEL            = PRIVATE
+OUTPUT_AZURE_BLOB_STORAGE_STORAGE_ACCESS_KEY
+OUTPUT_AZURE_BLOB_STORAGE_STORAGE_ACCOUNT
+OUTPUT_AZURE_BLOB_STORAGE_STORAGE_CONNECTION_STRING
+OUTPUT_AZURE_TABLE_STORAGE_BATCHING_BYTE_SIZE            = 0
+OUTPUT_AZURE_TABLE_STORAGE_BATCHING_CHECK
+OUTPUT_AZURE_TABLE_STORAGE_BATCHING_COUNT                = 0
+OUTPUT_AZURE_TABLE_STORAGE_BATCHING_PERIOD
+OUTPUT_AZURE_TABLE_STORAGE_INSERT_TYPE                   = INSERT
+OUTPUT_AZURE_TABLE_STORAGE_MAX_IN_FLIGHT                 = 1
+OUTPUT_AZURE_TABLE_STORAGE_PARTITION_KEY
+OUTPUT_AZURE_TABLE_STORAGE_ROW_KEY
+OUTPUT_AZURE_TABLE_STORAGE_STORAGE_ACCESS_KEY
+OUTPUT_AZURE_TABLE_STORAGE_STORAGE_ACCOUNT
+OUTPUT_AZURE_TABLE_STORAGE_STORAGE_CONNECTION_STRING
+OUTPUT_AZURE_TABLE_STORAGE_TABLE_NAME
+OUTPUT_AZURE_TABLE_STORAGE_TIMEOUT                       = 5s
+OUTPUT_BLOB_STORAGE_BLOB_TYPE                            = BLOCK
 OUTPUT_BLOB_STORAGE_CONTAINER
-OUTPUT_BLOB_STORAGE_MAX_IN_FLIGHT                     = 1
-OUTPUT_BLOB_STORAGE_PATH                              = ${!count("files")}-${!timestamp_unix_nano()}.txt
-OUTPUT_BLOB_STORAGE_PUBLIC_ACCESS_LEVEL               = PRIVATE
+OUTPUT_BLOB_STORAGE_MAX_IN_FLIGHT                        = 1
+OUTPUT_BLOB_STORAGE_PATH                                 = ${!count("files")}-${!timestamp_unix_nano()}.txt
+OUTPUT_BLOB_STORAGE_PUBLIC_ACCESS_LEVEL                  = PRIVATE
 OUTPUT_BLOB_STORAGE_STORAGE_ACCESS_KEY
 OUTPUT_BLOB_STORAGE_STORAGE_ACCOUNT
 OUTPUT_BLOB_STORAGE_STORAGE_CONNECTION_STRING
-OUTPUT_BLOB_STORAGE_TIMEOUT                           = 5s
-OUTPUT_CACHE_KEY                                      = ${!count("items")}-${!timestamp_unix_nano()}
-OUTPUT_CACHE_MAX_IN_FLIGHT                            = 1
+OUTPUT_CACHE_KEY                                         = ${!count("items")}-${!timestamp_unix_nano()}
+OUTPUT_CACHE_MAX_IN_FLIGHT                               = 1
 OUTPUT_CACHE_TARGET
 OUTPUT_CACHE_TTL
-OUTPUT_CASSANDRA_BACKOFF_INITIAL_INTERVAL             = 1s
-OUTPUT_CASSANDRA_BACKOFF_MAX_ELAPSED_TIME             = 30s
-OUTPUT_CASSANDRA_BACKOFF_MAX_INTERVAL                 = 5s
-OUTPUT_CASSANDRA_BATCHING_BYTE_SIZE                   = 0
+OUTPUT_CASSANDRA_BACKOFF_INITIAL_INTERVAL                = 1s
+OUTPUT_CASSANDRA_BACKOFF_MAX_ELAPSED_TIME                = 30s
+OUTPUT_CASSANDRA_BACKOFF_MAX_INTERVAL                    = 5s
+OUTPUT_CASSANDRA_BATCHING_BYTE_SIZE                      = 0
 OUTPUT_CASSANDRA_BATCHING_CHECK
-OUTPUT_CASSANDRA_BATCHING_COUNT                       = 0
+OUTPUT_CASSANDRA_BATCHING_COUNT                          = 0
 OUTPUT_CASSANDRA_BATCHING_PERIOD
-OUTPUT_CASSANDRA_CONSISTENCY                          = QUORUM
-OUTPUT_CASSANDRA_DISABLE_INITIAL_HOST_LOOKUP          = false
-OUTPUT_CASSANDRA_MAX_IN_FLIGHT                        = 1
-OUTPUT_CASSANDRA_MAX_RETRIES                          = 3
-OUTPUT_CASSANDRA_PASSWORD_AUTHENTICATOR_ENABLED       = false
+OUTPUT_CASSANDRA_CONSISTENCY                             = QUORUM
+OUTPUT_CASSANDRA_DISABLE_INITIAL_HOST_LOOKUP             = false
+OUTPUT_CASSANDRA_MAX_IN_FLIGHT                           = 1
+OUTPUT_CASSANDRA_MAX_RETRIES                             = 3
+OUTPUT_CASSANDRA_PASSWORD_AUTHENTICATOR_ENABLED          = false
 OUTPUT_CASSANDRA_PASSWORD_AUTHENTICATOR_PASSWORD
 OUTPUT_CASSANDRA_PASSWORD_AUTHENTICATOR_USERNAME
 OUTPUT_CASSANDRA_QUERY
-OUTPUT_CASSANDRA_TLS_ENABLED                          = false
+OUTPUT_CASSANDRA_TLS_ENABLED                             = false
 OUTPUT_CASSANDRA_TLS_ROOT_CAS_FILE
-OUTPUT_CASSANDRA_TLS_SKIP_CERT_VERIFY                 = false
-OUTPUT_DYNAMIC_MAX_IN_FLIGHT                          = 1
+OUTPUT_CASSANDRA_TLS_SKIP_CERT_VERIFY                    = false
+OUTPUT_DYNAMIC_MAX_IN_FLIGHT                             = 1
 OUTPUT_DYNAMIC_PREFIX
-OUTPUT_DYNAMIC_TIMEOUT                                = 5s
+OUTPUT_DYNAMIC_TIMEOUT                                   = 5s
 OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_ID
 OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_PROFILE
 OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_ROLE
 OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_ROLE_EXTERNAL_ID
 OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_SECRET
 OUTPUT_ELASTICSEARCH_AWS_CREDENTIALS_TOKEN
-OUTPUT_ELASTICSEARCH_AWS_ENABLED                      = false
+OUTPUT_ELASTICSEARCH_AWS_ENABLED                         = false
 OUTPUT_ELASTICSEARCH_AWS_ENDPOINT
-OUTPUT_ELASTICSEARCH_AWS_REGION                       = eu-west-1
-OUTPUT_ELASTICSEARCH_BACKOFF_INITIAL_INTERVAL         = 1s
-OUTPUT_ELASTICSEARCH_BACKOFF_MAX_ELAPSED_TIME         = 30s
-OUTPUT_ELASTICSEARCH_BACKOFF_MAX_INTERVAL             = 5s
-OUTPUT_ELASTICSEARCH_BASIC_AUTH_ENABLED               = false
+OUTPUT_ELASTICSEARCH_AWS_REGION                          = eu-west-1
+OUTPUT_ELASTICSEARCH_BACKOFF_INITIAL_INTERVAL            = 1s
+OUTPUT_ELASTICSEARCH_BACKOFF_MAX_ELAPSED_TIME            = 30s
+OUTPUT_ELASTICSEARCH_BACKOFF_MAX_INTERVAL                = 5s
+OUTPUT_ELASTICSEARCH_BASIC_AUTH_ENABLED                  = false
 OUTPUT_ELASTICSEARCH_BASIC_AUTH_PASSWORD
 OUTPUT_ELASTICSEARCH_BASIC_AUTH_USERNAME
-OUTPUT_ELASTICSEARCH_BATCHING_BYTE_SIZE               = 0
+OUTPUT_ELASTICSEARCH_BATCHING_BYTE_SIZE                  = 0
 OUTPUT_ELASTICSEARCH_BATCHING_CHECK
-OUTPUT_ELASTICSEARCH_BATCHING_COUNT                   = 0
+OUTPUT_ELASTICSEARCH_BATCHING_COUNT                      = 0
 OUTPUT_ELASTICSEARCH_BATCHING_PERIOD
-OUTPUT_ELASTICSEARCH_HEALTHCHECK                      = true
-OUTPUT_ELASTICSEARCH_ID                               = ${!count("elastic_ids")}-${!timestamp_unix()}
-OUTPUT_ELASTICSEARCH_INDEX                            = benthos_index
-OUTPUT_ELASTICSEARCH_MAX_IN_FLIGHT                    = 1
-OUTPUT_ELASTICSEARCH_MAX_RETRIES                      = 0
+OUTPUT_ELASTICSEARCH_HEALTHCHECK                         = true
+OUTPUT_ELASTICSEARCH_ID                                  = ${!count("elastic_ids")}-${!timestamp_unix()}
+OUTPUT_ELASTICSEARCH_INDEX                               = benthos_index
+OUTPUT_ELASTICSEARCH_MAX_IN_FLIGHT                       = 1
+OUTPUT_ELASTICSEARCH_MAX_RETRIES                         = 0
 OUTPUT_ELASTICSEARCH_PIPELINE
-OUTPUT_ELASTICSEARCH_SNIFF                            = true
-OUTPUT_ELASTICSEARCH_TIMEOUT                          = 5s
-OUTPUT_ELASTICSEARCH_TLS_ENABLED                      = false
+OUTPUT_ELASTICSEARCH_SNIFF                               = true
+OUTPUT_ELASTICSEARCH_TIMEOUT                             = 5s
+OUTPUT_ELASTICSEARCH_TLS_ENABLED                         = false
 OUTPUT_ELASTICSEARCH_TLS_ROOT_CAS_FILE
-OUTPUT_ELASTICSEARCH_TLS_SKIP_CERT_VERIFY             = false
-OUTPUT_ELASTICSEARCH_TYPE                             = doc
-OUTPUT_ELASTICSEARCH_URLS                             = http://localhost:9200
-OUTPUT_FILES_PATH                                     = ${!count("files")}-${!timestamp_unix_nano()}.txt
-OUTPUT_FILE_CODEC                                     = lines
+OUTPUT_ELASTICSEARCH_TLS_SKIP_CERT_VERIFY                = false
+OUTPUT_ELASTICSEARCH_TYPE                                = doc
+OUTPUT_ELASTICSEARCH_URLS                                = http://localhost:9200
+OUTPUT_FILES_PATH                                        = ${!count("files")}-${!timestamp_unix_nano()}.txt
+OUTPUT_FILE_CODEC                                        = lines
 OUTPUT_FILE_DELIMITER
 OUTPUT_FILE_PATH
-OUTPUT_GCP_PUBSUB_MAX_IN_FLIGHT                       = 1
+OUTPUT_GCP_PUBSUB_MAX_IN_FLIGHT                          = 1
 OUTPUT_GCP_PUBSUB_PROJECT
 OUTPUT_GCP_PUBSUB_TOPIC
 OUTPUT_HDFS_DIRECTORY
-OUTPUT_HDFS_HOSTS                                     = localhost:9000
-OUTPUT_HDFS_MAX_IN_FLIGHT                             = 1
-OUTPUT_HDFS_PATH                                      = ${!count("files")}-${!timestamp_unix_nano()}.txt
-OUTPUT_HDFS_USER                                      = benthos_hdfs
-OUTPUT_HTTP_CLIENT_BACKOFF_ON                         = 429
-OUTPUT_HTTP_CLIENT_BASIC_AUTH_ENABLED                 = false
+OUTPUT_HDFS_HOSTS                                        = localhost:9000
+OUTPUT_HDFS_MAX_IN_FLIGHT                                = 1
+OUTPUT_HDFS_PATH                                         = ${!count("files")}-${!timestamp_unix_nano()}.txt
+OUTPUT_HDFS_USER                                         = benthos_hdfs
+OUTPUT_HTTP_CLIENT_BACKOFF_ON                            = 429
+OUTPUT_HTTP_CLIENT_BASIC_AUTH_ENABLED                    = false
 OUTPUT_HTTP_CLIENT_BASIC_AUTH_PASSWORD
 OUTPUT_HTTP_CLIENT_BASIC_AUTH_USERNAME
-OUTPUT_HTTP_CLIENT_BATCHING_BYTE_SIZE                 = 0
+OUTPUT_HTTP_CLIENT_BATCHING_BYTE_SIZE                    = 0
 OUTPUT_HTTP_CLIENT_BATCHING_CHECK
-OUTPUT_HTTP_CLIENT_BATCHING_COUNT                     = 0
+OUTPUT_HTTP_CLIENT_BATCHING_COUNT                        = 0
 OUTPUT_HTTP_CLIENT_BATCHING_PERIOD
-OUTPUT_HTTP_CLIENT_COPY_RESPONSE_HEADERS              = false
-OUTPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE               = application/octet-stream
-OUTPUT_HTTP_CLIENT_MAX_IN_FLIGHT                      = 1
-OUTPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF                  = 300s
+OUTPUT_HTTP_CLIENT_COPY_RESPONSE_HEADERS                 = false
+OUTPUT_HTTP_CLIENT_HEADERS_CONTENT_TYPE                  = application/octet-stream
+OUTPUT_HTTP_CLIENT_MAX_IN_FLIGHT                         = 1
+OUTPUT_HTTP_CLIENT_MAX_RETRY_BACKOFF                     = 300s
 OUTPUT_HTTP_CLIENT_OAUTH2_CLIENT_KEY
 OUTPUT_HTTP_CLIENT_OAUTH2_CLIENT_SECRET
-OUTPUT_HTTP_CLIENT_OAUTH2_ENABLED                     = false
+OUTPUT_HTTP_CLIENT_OAUTH2_ENABLED                        = false
 OUTPUT_HTTP_CLIENT_OAUTH2_TOKEN_URL
 OUTPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN
 OUTPUT_HTTP_CLIENT_OAUTH_ACCESS_TOKEN_SECRET
 OUTPUT_HTTP_CLIENT_OAUTH_CONSUMER_KEY
 OUTPUT_HTTP_CLIENT_OAUTH_CONSUMER_SECRET
-OUTPUT_HTTP_CLIENT_OAUTH_ENABLED                      = false
+OUTPUT_HTTP_CLIENT_OAUTH_ENABLED                         = false
 OUTPUT_HTTP_CLIENT_OAUTH_REQUEST_URL
-OUTPUT_HTTP_CLIENT_PROPAGATE_RESPONSE                 = false
+OUTPUT_HTTP_CLIENT_PROPAGATE_RESPONSE                    = false
 OUTPUT_HTTP_CLIENT_PROXY_URL
 OUTPUT_HTTP_CLIENT_RATE_LIMIT
-OUTPUT_HTTP_CLIENT_RETRIES                            = 3
-OUTPUT_HTTP_CLIENT_RETRY_PERIOD                       = 1s
-OUTPUT_HTTP_CLIENT_TIMEOUT                            = 5s
-OUTPUT_HTTP_CLIENT_TLS_ENABLED                        = false
+OUTPUT_HTTP_CLIENT_RETRIES                               = 3
+OUTPUT_HTTP_CLIENT_RETRY_PERIOD                          = 1s
+OUTPUT_HTTP_CLIENT_TIMEOUT                               = 5s
+OUTPUT_HTTP_CLIENT_TLS_ENABLED                           = false
 OUTPUT_HTTP_CLIENT_TLS_ROOT_CAS_FILE
-OUTPUT_HTTP_CLIENT_TLS_SKIP_CERT_VERIFY               = false
-OUTPUT_HTTP_CLIENT_URL                                = http://localhost:4195/post
-OUTPUT_HTTP_CLIENT_VERB                               = POST
+OUTPUT_HTTP_CLIENT_TLS_SKIP_CERT_VERIFY                  = false
+OUTPUT_HTTP_CLIENT_URL                                   = http://localhost:4195/post
+OUTPUT_HTTP_CLIENT_VERB                                  = POST
 OUTPUT_HTTP_SERVER_ADDRESS
-OUTPUT_HTTP_SERVER_ALLOWED_VERBS                      = GET
+OUTPUT_HTTP_SERVER_ALLOWED_VERBS                         = GET
 OUTPUT_HTTP_SERVER_CERT_FILE
 OUTPUT_HTTP_SERVER_KEY_FILE
-OUTPUT_HTTP_SERVER_PATH                               = /get
-OUTPUT_HTTP_SERVER_STREAM_PATH                        = /get/stream
-OUTPUT_HTTP_SERVER_TIMEOUT                            = 5s
-OUTPUT_HTTP_SERVER_WS_PATH                            = /get/ws
+OUTPUT_HTTP_SERVER_PATH                                  = /get
+OUTPUT_HTTP_SERVER_STREAM_PATH                           = /get/stream
+OUTPUT_HTTP_SERVER_TIMEOUT                               = 5s
+OUTPUT_HTTP_SERVER_WS_PATH                               = /get/ws
 OUTPUT_INPROC
-OUTPUT_KAFKA_ACK_REPLICAS                             = false
-OUTPUT_KAFKA_ADDRESSES                                = localhost:9092
-OUTPUT_KAFKA_BACKOFF_INITIAL_INTERVAL                 = 3s
-OUTPUT_KAFKA_BACKOFF_MAX_ELAPSED_TIME                 = 30s
-OUTPUT_KAFKA_BACKOFF_MAX_INTERVAL                     = 10s
-OUTPUT_KAFKA_BATCHING_BYTE_SIZE                       = 0
+OUTPUT_KAFKA_ACK_REPLICAS                                = false
+OUTPUT_KAFKA_ADDRESSES                                   = localhost:9092
+OUTPUT_KAFKA_BACKOFF_INITIAL_INTERVAL                    = 3s
+OUTPUT_KAFKA_BACKOFF_MAX_ELAPSED_TIME                    = 30s
+OUTPUT_KAFKA_BACKOFF_MAX_INTERVAL                        = 10s
+OUTPUT_KAFKA_BATCHING_BYTE_SIZE                          = 0
 OUTPUT_KAFKA_BATCHING_CHECK
-OUTPUT_KAFKA_BATCHING_COUNT                           = 0
+OUTPUT_KAFKA_BATCHING_COUNT                              = 0
 OUTPUT_KAFKA_BATCHING_PERIOD
-OUTPUT_KAFKA_CLIENT_ID                                = benthos_kafka_output
-OUTPUT_KAFKA_COMPRESSION                              = none
+OUTPUT_KAFKA_CLIENT_ID                                   = benthos_kafka_output
+OUTPUT_KAFKA_COMPRESSION                                 = none
 OUTPUT_KAFKA_KEY
-OUTPUT_KAFKA_MAX_IN_FLIGHT                            = 1
-OUTPUT_KAFKA_MAX_MSG_BYTES                            = 1000000
-OUTPUT_KAFKA_MAX_RETRIES                              = 0
-OUTPUT_KAFKA_PARTITIONER                              = fnv1a_hash
-OUTPUT_KAFKA_RETRY_AS_BATCH                           = false
-OUTPUT_KAFKA_ROUND_ROBIN_PARTITIONS                   = false
+OUTPUT_KAFKA_MAX_IN_FLIGHT                               = 1
+OUTPUT_KAFKA_MAX_MSG_BYTES                               = 1000000
+OUTPUT_KAFKA_MAX_RETRIES                                 = 0
+OUTPUT_KAFKA_PARTITIONER                                 = fnv1a_hash
+OUTPUT_KAFKA_RETRY_AS_BATCH                              = false
+OUTPUT_KAFKA_ROUND_ROBIN_PARTITIONS                      = false
 OUTPUT_KAFKA_SASL_ACCESS_TOKEN
-OUTPUT_KAFKA_SASL_ENABLED                             = false
+OUTPUT_KAFKA_SASL_ENABLED                                = false
 OUTPUT_KAFKA_SASL_MECHANISM
 OUTPUT_KAFKA_SASL_PASSWORD
 OUTPUT_KAFKA_SASL_TOKEN_CACHE
 OUTPUT_KAFKA_SASL_TOKEN_KEY
 OUTPUT_KAFKA_SASL_USER
-OUTPUT_KAFKA_TARGET_VERSION                           = 1.0.0
-OUTPUT_KAFKA_TIMEOUT                                  = 5s
-OUTPUT_KAFKA_TLS_ENABLED                              = false
+OUTPUT_KAFKA_TARGET_VERSION                              = 1.0.0
+OUTPUT_KAFKA_TIMEOUT                                     = 5s
+OUTPUT_KAFKA_TLS_ENABLED                                 = false
 OUTPUT_KAFKA_TLS_ROOT_CAS_FILE
-OUTPUT_KAFKA_TLS_SKIP_CERT_VERIFY                     = false
-OUTPUT_KAFKA_TOPIC                                    = benthos_stream
-OUTPUT_KINESIS_BACKOFF_INITIAL_INTERVAL               = 1s
-OUTPUT_KINESIS_BACKOFF_MAX_ELAPSED_TIME               = 30s
-OUTPUT_KINESIS_BACKOFF_MAX_INTERVAL                   = 5s
-OUTPUT_KINESIS_BATCHING_BYTE_SIZE                     = 0
+OUTPUT_KAFKA_TLS_SKIP_CERT_VERIFY                        = false
+OUTPUT_KAFKA_TOPIC                                       = benthos_stream
+OUTPUT_KINESIS_BACKOFF_INITIAL_INTERVAL                  = 1s
+OUTPUT_KINESIS_BACKOFF_MAX_ELAPSED_TIME                  = 30s
+OUTPUT_KINESIS_BACKOFF_MAX_INTERVAL                      = 5s
+OUTPUT_KINESIS_BATCHING_BYTE_SIZE                        = 0
 OUTPUT_KINESIS_BATCHING_CHECK
-OUTPUT_KINESIS_BATCHING_COUNT                         = 0
+OUTPUT_KINESIS_BATCHING_COUNT                            = 0
 OUTPUT_KINESIS_BATCHING_PERIOD
 OUTPUT_KINESIS_CREDENTIALS_ID
 OUTPUT_KINESIS_CREDENTIALS_PROFILE
@@ -875,12 +1043,12 @@ OUTPUT_KINESIS_CREDENTIALS_ROLE_EXTERNAL_ID
 OUTPUT_KINESIS_CREDENTIALS_SECRET
 OUTPUT_KINESIS_CREDENTIALS_TOKEN
 OUTPUT_KINESIS_ENDPOINT
-OUTPUT_KINESIS_FIREHOSE_BACKOFF_INITIAL_INTERVAL      = 1s
-OUTPUT_KINESIS_FIREHOSE_BACKOFF_MAX_ELAPSED_TIME      = 30s
-OUTPUT_KINESIS_FIREHOSE_BACKOFF_MAX_INTERVAL          = 5s
-OUTPUT_KINESIS_FIREHOSE_BATCHING_BYTE_SIZE            = 0
+OUTPUT_KINESIS_FIREHOSE_BACKOFF_INITIAL_INTERVAL         = 1s
+OUTPUT_KINESIS_FIREHOSE_BACKOFF_MAX_ELAPSED_TIME         = 30s
+OUTPUT_KINESIS_FIREHOSE_BACKOFF_MAX_INTERVAL             = 5s
+OUTPUT_KINESIS_FIREHOSE_BATCHING_BYTE_SIZE               = 0
 OUTPUT_KINESIS_FIREHOSE_BATCHING_CHECK
-OUTPUT_KINESIS_FIREHOSE_BATCHING_COUNT                = 0
+OUTPUT_KINESIS_FIREHOSE_BATCHING_COUNT                   = 0
 OUTPUT_KINESIS_FIREHOSE_BATCHING_PERIOD
 OUTPUT_KINESIS_FIREHOSE_CREDENTIALS_ID
 OUTPUT_KINESIS_FIREHOSE_CREDENTIALS_PROFILE
@@ -889,79 +1057,88 @@ OUTPUT_KINESIS_FIREHOSE_CREDENTIALS_ROLE_EXTERNAL_ID
 OUTPUT_KINESIS_FIREHOSE_CREDENTIALS_SECRET
 OUTPUT_KINESIS_FIREHOSE_CREDENTIALS_TOKEN
 OUTPUT_KINESIS_FIREHOSE_ENDPOINT
-OUTPUT_KINESIS_FIREHOSE_MAX_IN_FLIGHT                 = 1
-OUTPUT_KINESIS_FIREHOSE_MAX_RETRIES                   = 0
-OUTPUT_KINESIS_FIREHOSE_REGION                        = eu-west-1
+OUTPUT_KINESIS_FIREHOSE_MAX_IN_FLIGHT                    = 1
+OUTPUT_KINESIS_FIREHOSE_MAX_RETRIES                      = 0
+OUTPUT_KINESIS_FIREHOSE_REGION                           = eu-west-1
 OUTPUT_KINESIS_FIREHOSE_STREAM
 OUTPUT_KINESIS_HASH_KEY
-OUTPUT_KINESIS_MAX_IN_FLIGHT                          = 1
-OUTPUT_KINESIS_MAX_RETRIES                            = 0
+OUTPUT_KINESIS_MAX_IN_FLIGHT                             = 1
+OUTPUT_KINESIS_MAX_RETRIES                               = 0
 OUTPUT_KINESIS_PARTITION_KEY
-OUTPUT_KINESIS_REGION                                 = eu-west-1
+OUTPUT_KINESIS_REGION                                    = eu-west-1
 OUTPUT_KINESIS_STREAM
-OUTPUT_MQTT_CLIENT_ID                                 = benthos_output
-OUTPUT_MQTT_MAX_IN_FLIGHT                             = 1
+OUTPUT_MQTT_CLIENT_ID                                    = benthos_output
+OUTPUT_MQTT_MAX_IN_FLIGHT                                = 1
 OUTPUT_MQTT_PASSWORD
-OUTPUT_MQTT_QOS                                       = 1
-OUTPUT_MQTT_TOPIC                                     = benthos_topic
-OUTPUT_MQTT_URLS                                      = tcp://localhost:1883
+OUTPUT_MQTT_QOS                                          = 1
+OUTPUT_MQTT_TOPIC                                        = benthos_topic
+OUTPUT_MQTT_URLS                                         = tcp://localhost:1883
 OUTPUT_MQTT_USER
-OUTPUT_NANOMSG_BIND                                   = false
-OUTPUT_NANOMSG_MAX_IN_FLIGHT                          = 1
-OUTPUT_NANOMSG_POLL_TIMEOUT                           = 5s
-OUTPUT_NANOMSG_SOCKET_TYPE                            = PUSH
-OUTPUT_NANOMSG_URLS                                   = tcp://localhost:5556
-OUTPUT_NATS_MAX_IN_FLIGHT                             = 1
-OUTPUT_NATS_STREAM_CLIENT_ID                          = benthos_client
-OUTPUT_NATS_STREAM_CLUSTER_ID                         = test-cluster
-OUTPUT_NATS_STREAM_MAX_IN_FLIGHT                      = 1
-OUTPUT_NATS_STREAM_SUBJECT                            = benthos_messages
-OUTPUT_NATS_STREAM_URLS                               = nats://127.0.0.1:4222
-OUTPUT_NATS_SUBJECT                                   = benthos_messages
-OUTPUT_NATS_URLS                                      = nats://127.0.0.1:4222
-OUTPUT_NSQ_MAX_IN_FLIGHT                              = 1
-OUTPUT_NSQ_NSQD_TCP_ADDRESS                           = localhost:4150
-OUTPUT_NSQ_TLS_ENABLED                                = false
+OUTPUT_NANOMSG_BIND                                      = false
+OUTPUT_NANOMSG_MAX_IN_FLIGHT                             = 1
+OUTPUT_NANOMSG_POLL_TIMEOUT                              = 5s
+OUTPUT_NANOMSG_SOCKET_TYPE                               = PUSH
+OUTPUT_NANOMSG_URLS                                      = tcp://localhost:5556
+OUTPUT_NATS_MAX_IN_FLIGHT                                = 1
+OUTPUT_NATS_STREAM_CLIENT_ID                             = benthos_client
+OUTPUT_NATS_STREAM_CLUSTER_ID                            = test-cluster
+OUTPUT_NATS_STREAM_MAX_IN_FLIGHT                         = 1
+OUTPUT_NATS_STREAM_SUBJECT                               = benthos_messages
+OUTPUT_NATS_STREAM_URLS                                  = nats://127.0.0.1:4222
+OUTPUT_NATS_SUBJECT                                      = benthos_messages
+OUTPUT_NATS_URLS                                         = nats://127.0.0.1:4222
+OUTPUT_NSQ_MAX_IN_FLIGHT                                 = 1
+OUTPUT_NSQ_NSQD_TCP_ADDRESS                              = localhost:4150
+OUTPUT_NSQ_TLS_ENABLED                                   = false
 OUTPUT_NSQ_TLS_ROOT_CAS_FILE
-OUTPUT_NSQ_TLS_SKIP_CERT_VERIFY                       = false
-OUTPUT_NSQ_TOPIC                                      = benthos_messages
-OUTPUT_NSQ_USER_AGENT                                 = benthos_producer
+OUTPUT_NSQ_TLS_SKIP_CERT_VERIFY                          = false
+OUTPUT_NSQ_TOPIC                                         = benthos_messages
+OUTPUT_NSQ_USER_AGENT                                    = benthos_producer
 OUTPUT_REDIS_HASH_KEY
-OUTPUT_REDIS_HASH_MAX_IN_FLIGHT                       = 1
-OUTPUT_REDIS_HASH_TLS_ENABLED                         = false
+OUTPUT_REDIS_HASH_KIND                                   = simple
+OUTPUT_REDIS_HASH_MASTER
+OUTPUT_REDIS_HASH_MAX_IN_FLIGHT                          = 1
+OUTPUT_REDIS_HASH_TLS_ENABLED                            = false
 OUTPUT_REDIS_HASH_TLS_ROOT_CAS_FILE
-OUTPUT_REDIS_HASH_TLS_SKIP_CERT_VERIFY                = false
-OUTPUT_REDIS_HASH_URL                                 = tcp://localhost:6379
-OUTPUT_REDIS_HASH_WALK_JSON_OBJECT                    = false
-OUTPUT_REDIS_HASH_WALK_METADATA                       = false
-OUTPUT_REDIS_LIST_KEY                                 = benthos_list
-OUTPUT_REDIS_LIST_MAX_IN_FLIGHT                       = 1
-OUTPUT_REDIS_LIST_TLS_ENABLED                         = false
+OUTPUT_REDIS_HASH_TLS_SKIP_CERT_VERIFY                   = false
+OUTPUT_REDIS_HASH_URL                                    = tcp://localhost:6379
+OUTPUT_REDIS_HASH_WALK_JSON_OBJECT                       = false
+OUTPUT_REDIS_HASH_WALK_METADATA                          = false
+OUTPUT_REDIS_LIST_KEY                                    = benthos_list
+OUTPUT_REDIS_LIST_KIND                                   = simple
+OUTPUT_REDIS_LIST_MASTER
+OUTPUT_REDIS_LIST_MAX_IN_FLIGHT                          = 1
+OUTPUT_REDIS_LIST_TLS_ENABLED                            = false
 OUTPUT_REDIS_LIST_TLS_ROOT_CAS_FILE
-OUTPUT_REDIS_LIST_TLS_SKIP_CERT_VERIFY                = false
-OUTPUT_REDIS_LIST_URL                                 = tcp://localhost:6379
-OUTPUT_REDIS_PUBSUB_CHANNEL                           = benthos_chan
-OUTPUT_REDIS_PUBSUB_MAX_IN_FLIGHT                     = 1
-OUTPUT_REDIS_PUBSUB_TLS_ENABLED                       = false
+OUTPUT_REDIS_LIST_TLS_SKIP_CERT_VERIFY                   = false
+OUTPUT_REDIS_LIST_URL                                    = tcp://localhost:6379
+OUTPUT_REDIS_PUBSUB_CHANNEL                              = benthos_chan
+OUTPUT_REDIS_PUBSUB_KIND                                 = simple
+OUTPUT_REDIS_PUBSUB_MASTER
+OUTPUT_REDIS_PUBSUB_MAX_IN_FLIGHT                        = 1
+OUTPUT_REDIS_PUBSUB_TLS_ENABLED                          = false
 OUTPUT_REDIS_PUBSUB_TLS_ROOT_CAS_FILE
-OUTPUT_REDIS_PUBSUB_TLS_SKIP_CERT_VERIFY              = false
-OUTPUT_REDIS_PUBSUB_URL                               = tcp://localhost:6379
-OUTPUT_REDIS_STREAMS_BODY_KEY                         = body
-OUTPUT_REDIS_STREAMS_MAX_IN_FLIGHT                    = 1
-OUTPUT_REDIS_STREAMS_MAX_LENGTH                       = 0
-OUTPUT_REDIS_STREAMS_STREAM                           = benthos_stream
-OUTPUT_REDIS_STREAMS_TLS_ENABLED                      = false
+OUTPUT_REDIS_PUBSUB_TLS_SKIP_CERT_VERIFY                 = false
+OUTPUT_REDIS_PUBSUB_URL                                  = tcp://localhost:6379
+OUTPUT_REDIS_STREAMS_BODY_KEY                            = body
+OUTPUT_REDIS_STREAMS_KIND                                = simple
+OUTPUT_REDIS_STREAMS_MASTER
+OUTPUT_REDIS_STREAMS_MAX_IN_FLIGHT                       = 1
+OUTPUT_REDIS_STREAMS_MAX_LENGTH                          = 0
+OUTPUT_REDIS_STREAMS_STREAM                              = benthos_stream
+OUTPUT_REDIS_STREAMS_TLS_ENABLED                         = false
 OUTPUT_REDIS_STREAMS_TLS_ROOT_CAS_FILE
-OUTPUT_REDIS_STREAMS_TLS_SKIP_CERT_VERIFY             = false
-OUTPUT_REDIS_STREAMS_URL                              = tcp://localhost:6379
+OUTPUT_REDIS_STREAMS_TLS_SKIP_CERT_VERIFY                = false
+OUTPUT_REDIS_STREAMS_URL                                 = tcp://localhost:6379
+OUTPUT_REJECT
 OUTPUT_RESOURCE
-OUTPUT_S3_BATCHING_BYTE_SIZE                          = 0
+OUTPUT_S3_BATCHING_BYTE_SIZE                             = 0
 OUTPUT_S3_BATCHING_CHECK
-OUTPUT_S3_BATCHING_COUNT                              = 0
+OUTPUT_S3_BATCHING_COUNT                                 = 0
 OUTPUT_S3_BATCHING_PERIOD
 OUTPUT_S3_BUCKET
 OUTPUT_S3_CONTENT_ENCODING
-OUTPUT_S3_CONTENT_TYPE                                = application/octet-stream
+OUTPUT_S3_CONTENT_TYPE                                   = application/octet-stream
 OUTPUT_S3_CREDENTIALS_ID
 OUTPUT_S3_CREDENTIALS_PROFILE
 OUTPUT_S3_CREDENTIALS_ROLE
@@ -969,13 +1146,13 @@ OUTPUT_S3_CREDENTIALS_ROLE_EXTERNAL_ID
 OUTPUT_S3_CREDENTIALS_SECRET
 OUTPUT_S3_CREDENTIALS_TOKEN
 OUTPUT_S3_ENDPOINT
-OUTPUT_S3_FORCE_PATH_STYLE_URLS                       = false
+OUTPUT_S3_FORCE_PATH_STYLE_URLS                          = false
 OUTPUT_S3_KMS_KEY_ID
-OUTPUT_S3_MAX_IN_FLIGHT                               = 1
-OUTPUT_S3_PATH                                        = ${!count("files")}-${!timestamp_unix_nano()}.txt
-OUTPUT_S3_REGION                                      = eu-west-1
-OUTPUT_S3_STORAGE_CLASS                               = STANDARD
-OUTPUT_S3_TIMEOUT                                     = 5s
+OUTPUT_S3_MAX_IN_FLIGHT                                  = 1
+OUTPUT_S3_PATH                                           = ${!count("files")}-${!timestamp_unix_nano()}.txt
+OUTPUT_S3_REGION                                         = eu-west-1
+OUTPUT_S3_STORAGE_CLASS                                  = STANDARD
+OUTPUT_S3_TIMEOUT                                        = 5s
 OUTPUT_SNS_CREDENTIALS_ID
 OUTPUT_SNS_CREDENTIALS_PROFILE
 OUTPUT_SNS_CREDENTIALS_ROLE
@@ -983,26 +1160,26 @@ OUTPUT_SNS_CREDENTIALS_ROLE_EXTERNAL_ID
 OUTPUT_SNS_CREDENTIALS_SECRET
 OUTPUT_SNS_CREDENTIALS_TOKEN
 OUTPUT_SNS_ENDPOINT
-OUTPUT_SNS_MAX_IN_FLIGHT                              = 1
-OUTPUT_SNS_REGION                                     = eu-west-1
-OUTPUT_SNS_TIMEOUT                                    = 5s
+OUTPUT_SNS_MAX_IN_FLIGHT                                 = 1
+OUTPUT_SNS_REGION                                        = eu-west-1
+OUTPUT_SNS_TIMEOUT                                       = 5s
 OUTPUT_SNS_TOPIC_ARN
-OUTPUT_SOCKET_ADDRESS                                 = /tmp/benthos.sock
-OUTPUT_SOCKET_NETWORK                                 = unix
-OUTPUT_SQL_BATCHING_BYTE_SIZE                         = 0
+OUTPUT_SOCKET_ADDRESS                                    = /tmp/benthos.sock
+OUTPUT_SOCKET_NETWORK                                    = unix
+OUTPUT_SQL_BATCHING_BYTE_SIZE                            = 0
 OUTPUT_SQL_BATCHING_CHECK
-OUTPUT_SQL_BATCHING_COUNT                             = 0
+OUTPUT_SQL_BATCHING_COUNT                                = 0
 OUTPUT_SQL_BATCHING_PERIOD
 OUTPUT_SQL_DATA_SOURCE_NAME
-OUTPUT_SQL_DRIVER                                     = mysql
-OUTPUT_SQL_MAX_IN_FLIGHT                              = 1
+OUTPUT_SQL_DRIVER                                        = mysql
+OUTPUT_SQL_MAX_IN_FLIGHT                                 = 1
 OUTPUT_SQL_QUERY
-OUTPUT_SQS_BACKOFF_INITIAL_INTERVAL                   = 1s
-OUTPUT_SQS_BACKOFF_MAX_ELAPSED_TIME                   = 30s
-OUTPUT_SQS_BACKOFF_MAX_INTERVAL                       = 5s
-OUTPUT_SQS_BATCHING_BYTE_SIZE                         = 0
+OUTPUT_SQS_BACKOFF_INITIAL_INTERVAL                      = 1s
+OUTPUT_SQS_BACKOFF_MAX_ELAPSED_TIME                      = 30s
+OUTPUT_SQS_BACKOFF_MAX_INTERVAL                          = 5s
+OUTPUT_SQS_BATCHING_BYTE_SIZE                            = 0
 OUTPUT_SQS_BATCHING_CHECK
-OUTPUT_SQS_BATCHING_COUNT                             = 0
+OUTPUT_SQS_BATCHING_COUNT                                = 0
 OUTPUT_SQS_BATCHING_PERIOD
 OUTPUT_SQS_CREDENTIALS_ID
 OUTPUT_SQS_CREDENTIALS_PROFILE
@@ -1011,45 +1188,45 @@ OUTPUT_SQS_CREDENTIALS_ROLE_EXTERNAL_ID
 OUTPUT_SQS_CREDENTIALS_SECRET
 OUTPUT_SQS_CREDENTIALS_TOKEN
 OUTPUT_SQS_ENDPOINT
-OUTPUT_SQS_MAX_IN_FLIGHT                              = 1
-OUTPUT_SQS_MAX_RETRIES                                = 0
+OUTPUT_SQS_MAX_IN_FLIGHT                                 = 1
+OUTPUT_SQS_MAX_RETRIES                                   = 0
 OUTPUT_SQS_MESSAGE_DEDUPLICATION_ID
 OUTPUT_SQS_MESSAGE_GROUP_ID
-OUTPUT_SQS_REGION                                     = eu-west-1
+OUTPUT_SQS_REGION                                        = eu-west-1
 OUTPUT_SQS_URL
 OUTPUT_STDOUT_DELIMITER
-OUTPUT_SUBPROCESS_CODEC                               = lines
+OUTPUT_SUBPROCESS_CODEC                                  = lines
 OUTPUT_SUBPROCESS_NAME
-OUTPUT_TABLE_STORAGE_BATCHING_BYTE_SIZE               = 0
+OUTPUT_TABLE_STORAGE_BATCHING_BYTE_SIZE                  = 0
 OUTPUT_TABLE_STORAGE_BATCHING_CHECK
-OUTPUT_TABLE_STORAGE_BATCHING_COUNT                   = 0
+OUTPUT_TABLE_STORAGE_BATCHING_COUNT                      = 0
 OUTPUT_TABLE_STORAGE_BATCHING_PERIOD
-OUTPUT_TABLE_STORAGE_INSERT_TYPE                      = INSERT
-OUTPUT_TABLE_STORAGE_MAX_IN_FLIGHT                    = 1
+OUTPUT_TABLE_STORAGE_INSERT_TYPE                         = INSERT
+OUTPUT_TABLE_STORAGE_MAX_IN_FLIGHT                       = 1
 OUTPUT_TABLE_STORAGE_PARTITION_KEY
 OUTPUT_TABLE_STORAGE_ROW_KEY
 OUTPUT_TABLE_STORAGE_STORAGE_ACCESS_KEY
 OUTPUT_TABLE_STORAGE_STORAGE_ACCOUNT
 OUTPUT_TABLE_STORAGE_STORAGE_CONNECTION_STRING
 OUTPUT_TABLE_STORAGE_TABLE_NAME
-OUTPUT_TABLE_STORAGE_TIMEOUT                          = 5s
-OUTPUT_TCP_ADDRESS                                    = localhost:4194
-OUTPUT_UDP_ADDRESS                                    = localhost:4194
-OUTPUT_WEBSOCKET_BASIC_AUTH_ENABLED                   = false
+OUTPUT_TABLE_STORAGE_TIMEOUT                             = 5s
+OUTPUT_TCP_ADDRESS                                       = localhost:4194
+OUTPUT_UDP_ADDRESS                                       = localhost:4194
+OUTPUT_WEBSOCKET_BASIC_AUTH_ENABLED                      = false
 OUTPUT_WEBSOCKET_BASIC_AUTH_PASSWORD
 OUTPUT_WEBSOCKET_BASIC_AUTH_USERNAME
 OUTPUT_WEBSOCKET_OAUTH_ACCESS_TOKEN
 OUTPUT_WEBSOCKET_OAUTH_ACCESS_TOKEN_SECRET
 OUTPUT_WEBSOCKET_OAUTH_CONSUMER_KEY
 OUTPUT_WEBSOCKET_OAUTH_CONSUMER_SECRET
-OUTPUT_WEBSOCKET_OAUTH_ENABLED                        = false
+OUTPUT_WEBSOCKET_OAUTH_ENABLED                           = false
 OUTPUT_WEBSOCKET_OAUTH_REQUEST_URL
-OUTPUT_WEBSOCKET_URL                                  = ws://localhost:4195/post/ws
-OUTPUT_ZMQ4_BIND                                      = true
-OUTPUT_ZMQ4_HIGH_WATER_MARK                           = 0
-OUTPUT_ZMQ4_POLL_TIMEOUT                              = 5s
-OUTPUT_ZMQ4_SOCKET_TYPE                               = PUSH
-OUTPUT_ZMQ4_URLS                                      = tcp://*:5556
+OUTPUT_WEBSOCKET_URL                                     = ws://localhost:4195/post/ws
+OUTPUT_ZMQ4_BIND                                         = true
+OUTPUT_ZMQ4_HIGH_WATER_MARK                              = 0
+OUTPUT_ZMQ4_POLL_TIMEOUT                                 = 5s
+OUTPUT_ZMQ4_SOCKET_TYPE                                  = PUSH
+OUTPUT_ZMQ4_URLS                                         = tcp://*:5556
 ```
 
 ## LOGGER
@@ -1065,7 +1242,18 @@ LOGGER_PREFIX        = benthos
 ## METRICS
 
 ```
-METRICS_TYPE                                    = http_server
+METRICS_TYPE                                        = http_server
+METRICS_AWS_CLOUDWATCH_CREDENTIALS_ID
+METRICS_AWS_CLOUDWATCH_CREDENTIALS_PROFILE
+METRICS_AWS_CLOUDWATCH_CREDENTIALS_ROLE
+METRICS_AWS_CLOUDWATCH_CREDENTIALS_ROLE_EXTERNAL_ID
+METRICS_AWS_CLOUDWATCH_CREDENTIALS_SECRET
+METRICS_AWS_CLOUDWATCH_CREDENTIALS_TOKEN
+METRICS_AWS_CLOUDWATCH_ENDPOINT
+METRICS_AWS_CLOUDWATCH_FLUSH_PERIOD                 = 100ms
+METRICS_AWS_CLOUDWATCH_NAMESPACE                    = Benthos
+METRICS_AWS_CLOUDWATCH_PATH_MAPPING
+METRICS_AWS_CLOUDWATCH_REGION                       = eu-west-1
 METRICS_CLOUDWATCH_CREDENTIALS_ID
 METRICS_CLOUDWATCH_CREDENTIALS_PROFILE
 METRICS_CLOUDWATCH_CREDENTIALS_ROLE
@@ -1073,44 +1261,44 @@ METRICS_CLOUDWATCH_CREDENTIALS_ROLE_EXTERNAL_ID
 METRICS_CLOUDWATCH_CREDENTIALS_SECRET
 METRICS_CLOUDWATCH_CREDENTIALS_TOKEN
 METRICS_CLOUDWATCH_ENDPOINT
-METRICS_CLOUDWATCH_FLUSH_PERIOD                 = 100ms
-METRICS_CLOUDWATCH_NAMESPACE                    = Benthos
+METRICS_CLOUDWATCH_FLUSH_PERIOD                     = 100ms
+METRICS_CLOUDWATCH_NAMESPACE                        = Benthos
 METRICS_CLOUDWATCH_PATH_MAPPING
-METRICS_CLOUDWATCH_REGION                       = eu-west-1
+METRICS_CLOUDWATCH_REGION                           = eu-west-1
 METRICS_HTTP_SERVER_PATH_MAPPING
-METRICS_HTTP_SERVER_PREFIX                      = benthos
+METRICS_HTTP_SERVER_PREFIX                          = benthos
 METRICS_INFLUXDB_DB
 METRICS_INFLUXDB_INCLUDE_DEBUG_GC
 METRICS_INFLUXDB_INCLUDE_RUNTIME
-METRICS_INFLUXDB_INTERVAL                       = 1m
+METRICS_INFLUXDB_INTERVAL                           = 1m
 METRICS_INFLUXDB_PASSWORD
 METRICS_INFLUXDB_PATH_MAPPING
-METRICS_INFLUXDB_PING_INTERVAL                  = 20s
-METRICS_INFLUXDB_PRECISION                      = s
+METRICS_INFLUXDB_PING_INTERVAL                      = 20s
+METRICS_INFLUXDB_PRECISION                          = s
 METRICS_INFLUXDB_RETENTION_POLICY
 METRICS_INFLUXDB_TAGS
-METRICS_INFLUXDB_TIMEOUT                        = 5s
-METRICS_INFLUXDB_TLS_ENABLED                    = false
+METRICS_INFLUXDB_TIMEOUT                            = 5s
+METRICS_INFLUXDB_TLS_ENABLED                        = false
 METRICS_INFLUXDB_TLS_ROOT_CAS_FILE
-METRICS_INFLUXDB_TLS_SKIP_CERT_VERIFY           = false
+METRICS_INFLUXDB_TLS_SKIP_CERT_VERIFY               = false
 METRICS_INFLUXDB_URL
 METRICS_INFLUXDB_USERNAME
 METRICS_INFLUXDB_WRITE_CONSISTENCY
 METRICS_PROMETHEUS_PATH_MAPPING
-METRICS_PROMETHEUS_PREFIX                       = benthos
+METRICS_PROMETHEUS_PREFIX                           = benthos
 METRICS_PROMETHEUS_PUSH_BASIC_AUTH_PASSWORD
 METRICS_PROMETHEUS_PUSH_BASIC_AUTH_USERNAME
 METRICS_PROMETHEUS_PUSH_INTERVAL
-METRICS_PROMETHEUS_PUSH_JOB_NAME                = benthos_push
+METRICS_PROMETHEUS_PUSH_JOB_NAME                    = benthos_push
 METRICS_PROMETHEUS_PUSH_URL
-METRICS_STATSD_ADDRESS                          = localhost:4040
-METRICS_STATSD_FLUSH_PERIOD                     = 100ms
-METRICS_STATSD_NETWORK                          = udp
+METRICS_STATSD_ADDRESS                              = localhost:4040
+METRICS_STATSD_FLUSH_PERIOD                         = 100ms
+METRICS_STATSD_NETWORK                              = udp
 METRICS_STATSD_PATH_MAPPING
-METRICS_STATSD_PREFIX                           = benthos
-METRICS_STATSD_TAG_FORMAT                       = legacy
-METRICS_STDOUT_FLUSH_METRICS                    = false
+METRICS_STATSD_PREFIX                               = benthos
+METRICS_STATSD_TAG_FORMAT                           = legacy
+METRICS_STDOUT_FLUSH_METRICS                        = false
 METRICS_STDOUT_PATH_MAPPING
 METRICS_STDOUT_PUSH_INTERVAL
-METRICS_STDOUT_STATIC_FIELDS_@SERVICE           = benthos
+METRICS_STDOUT_STATIC_FIELDS_@SERVICE               = benthos
 ```

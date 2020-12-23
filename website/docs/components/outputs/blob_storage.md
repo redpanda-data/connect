@@ -1,7 +1,7 @@
 ---
 title: blob_storage
 type: output
-status: beta
+status: deprecated
 categories: ["Services","Azure"]
 ---
 
@@ -15,11 +15,10 @@ categories: ["Services","Azure"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
-
-Sends message parts as objects to an Azure Blob Storage Account container. Each
-object is uploaded with the filename specified with the `container`
-field.
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
+This component has been renamed to [`azure_blob_storage`](/docs/components/outputs/azure_blob_storage).
 
 
 <Tabs defaultValue="common" values={[
@@ -56,17 +55,11 @@ output:
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     blob_type: BLOCK
     max_in_flight: 1
-    timeout: 5s
 ```
 
 </TabItem>
 </Tabs>
 
-Only one authentication method is required, `storage_connection_string` or `storage_account` and `storage_access_key`. If both are set then the `storage_connection_string` is given priority.
-
-In order to have a different path for each object you should use function
-interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
-calculated per message of a batch.
 
 ## Performance
 
@@ -160,13 +153,5 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 Type: `number`  
 Default: `1`  
-
-### `timeout`
-
-The maximum period to wait on an upload before abandoning it and reattempting.
-
-
-Type: `string`  
-Default: `"5s"`  
 
 

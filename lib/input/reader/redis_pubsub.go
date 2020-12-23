@@ -37,7 +37,7 @@ func NewRedisPubSubConfig() RedisPubSubConfig {
 
 // RedisPubSub is an input type that reads Redis Pub/Sub messages.
 type RedisPubSub struct {
-	client *redis.Client
+	client redis.UniversalClient
 	pubsub *redis.PubSub
 	cMut   sync.Mutex
 

@@ -1,7 +1,7 @@
 ---
 title: kinesis
 type: output
-status: stable
+status: deprecated
 categories: ["Services","AWS"]
 ---
 
@@ -15,6 +15,9 @@ categories: ["Services","AWS"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
 
 Sends messages to a Kinesis stream.
 
@@ -76,6 +79,10 @@ output:
 
 </TabItem>
 </Tabs>
+
+## Alternatives
+
+This output has been renamed to [`aws_kinesis`](/docs/components/outputs/aws_kinesis).
 
 Both the `partition_key`(required) and `hash_key` (optional)
 fields can be dynamically set using function interpolations described

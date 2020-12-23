@@ -19,6 +19,8 @@ pipeline:
     - type: redis
       redis:
         key: ""
+        kind: simple
+        master: ""
         operator: scard
         parts: []
         retries: 3

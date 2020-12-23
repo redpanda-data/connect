@@ -6,11 +6,30 @@ http:
   root_path: /benthos
   debug_endpoints: false
 input:
-  type: stdin
-  stdin:
-    delimiter: ""
-    max_buffer: 1000000
-    multipart: false
+  type: aws_s3
+  aws_s3:
+    bucket: ""
+    codec: all-bytes
+    credentials:
+      id: ""
+      profile: ""
+      role: ""
+      role_external_id: ""
+      secret: ""
+      token: ""
+    delete_objects: false
+    endpoint: ""
+    force_path_style_urls: false
+    prefix: ""
+    region: eu-west-1
+    sqs:
+      bucket_path: Records.*.s3.bucket.name
+      delay_period: ""
+      endpoint: ""
+      envelope_path: ""
+      key_path: Records.*.s3.object.key
+      max_messages: 10
+      url: ""
 buffer:
   type: none
   none: {}
@@ -18,18 +37,17 @@ pipeline:
   processors: []
   threads: 1
 output:
-  type: kinesis_firehose
-  kinesis_firehose:
-    backoff:
-      initial_interval: 1s
-      max_elapsed_time: 30s
-      max_interval: 5s
+  type: aws_s3
+  aws_s3:
     batching:
       byte_size: 0
       check: ""
       count: 0
       period: ""
       processors: []
+    bucket: ""
+    content_encoding: ""
+    content_type: application/octet-stream
     credentials:
       id: ""
       profile: ""
@@ -38,10 +56,13 @@ output:
       secret: ""
       token: ""
     endpoint: ""
+    force_path_style_urls: false
+    kms_key_id: ""
     max_in_flight: 1
-    max_retries: 0
+    path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     region: eu-west-1
-    stream: ""
+    storage_class: STANDARD
+    timeout: 5s
 resources:
   caches: {}
   conditions: {}

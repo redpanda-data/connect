@@ -19,11 +19,43 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors[TypeCloudWatch] = TypeSpec{
-		constructor: NewCloudWatch,
+	Constructors[TypeAWSCloudWatch] = TypeSpec{
+		constructor: NewAWSCloudWatch,
+		Version:     "3.36.0",
 		Summary: `
 Send metrics to AWS CloudWatch using the PutMetricData endpoint.`,
 		Description: `
+It is STRONGLY recommended that you reduce the metrics that are exposed with a
+` + "`path_mapping`" + ` like this:
+
+` + "```yaml" + `
+metrics:
+  cloudwatch:
+    namespace: Foo
+    path_mapping: |
+      if ![
+        "input.received",
+        "input.latency",
+        "output.sent",
+      ].contains(this) { deleted() }
+` + "```" + ``,
+		FieldSpecs: append(docs.FieldSpecs{
+			docs.FieldCommon("namespace", "The namespace used to distinguish metrics from other services."),
+			docs.FieldAdvanced("flush_period", "The period of time between PutMetricData requests."),
+			pathMappingDocs(true),
+		}, session.FieldSpecs()...),
+	}
+
+	Constructors[TypeCloudWatch] = TypeSpec{
+		constructor: NewCloudWatch,
+		Status:      docs.StatusDeprecated,
+		Summary: `
+Send metrics to AWS CloudWatch using the PutMetricData endpoint.`,
+		Description: `
+## Alternatives
+
+This metrics type has been renamed to ` + "[`aws_cloudwatch`](/docs/components/metrics/aws_cloudwatch)" + `.
+
 It is STRONGLY recommended that you reduce the metrics that are exposed with a
 ` + "`path_mapping`" + ` like this:
 
@@ -255,10 +287,19 @@ type CloudWatch struct {
 	log         log.Modular
 }
 
+// NewAWSCloudWatch creates and returns a new CloudWatch object.
+func NewAWSCloudWatch(config Config, opts ...func(Type)) (Type, error) {
+	return newCloudWatch(config.AWSCloudWatch, opts...)
+}
+
 // NewCloudWatch creates and returns a new CloudWatch object.
 func NewCloudWatch(config Config, opts ...func(Type)) (Type, error) {
+	return newCloudWatch(config.CloudWatch, opts...)
+}
+
+func newCloudWatch(config CloudWatchConfig, opts ...func(Type)) (Type, error) {
 	c := &CloudWatch{
-		config:    config.CloudWatch,
+		config:    config,
 		datumses:  map[string]*cloudWatchDatum{},
 		datumLock: &sync.Mutex{},
 		log:       log.Noop(),
@@ -270,16 +311,16 @@ func NewCloudWatch(config Config, opts ...func(Type)) (Type, error) {
 	}
 
 	var err error
-	if c.pathMapping, err = newPathMapping(config.CloudWatch.PathMapping, c.log); err != nil {
+	if c.pathMapping, err = newPathMapping(config.PathMapping, c.log); err != nil {
 		return nil, fmt.Errorf("failed to init path mapping: %v", err)
 	}
 
-	sess, err := config.CloudWatch.GetSession()
+	sess, err := config.GetSession()
 	if err != nil {
 		return nil, err
 	}
 
-	if c.flushPeriod, err = time.ParseDuration(config.CloudWatch.FlushPeriod); err != nil {
+	if c.flushPeriod, err = time.ParseDuration(config.FlushPeriod); err != nil {
 		return nil, fmt.Errorf("failed to parse flush period: %v", err)
 	}
 

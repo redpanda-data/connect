@@ -22,6 +22,8 @@ output:
   redis_hash:
     fields: {}
     key: ""
+    kind: simple
+    master: ""
     max_in_flight: 1
     tls:
       client_certs: []

@@ -9,6 +9,8 @@ input:
   type: redis_list
   redis_list:
     key: benthos_list
+    kind: simple
+    master: ""
     timeout: 5s
     tls:
       client_certs: []
@@ -26,6 +28,8 @@ output:
   type: redis_list
   redis_list:
     key: benthos_list
+    kind: simple
+    master: ""
     max_in_flight: 1
     tls:
       client_certs: []

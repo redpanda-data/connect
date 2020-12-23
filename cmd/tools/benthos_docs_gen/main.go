@@ -85,6 +85,7 @@ func doInputs(docsDir string) {
 			Examples:    v.Examples,
 			Fields:      v.FieldSpecs,
 			Status:      v.Status,
+			Version:     v.Version,
 		}
 		if len(v.Categories) > 0 {
 			spec.Categories = make([]string, 0, len(v.Categories))
@@ -114,6 +115,7 @@ func doBuffers(docsDir string) {
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
 			Status:      v.Status,
+			Version:     v.Version,
 		}
 
 		conf := buffer.NewConfig()
@@ -137,6 +139,7 @@ func doCaches(docsDir string) {
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
 			Status:      v.Status,
+			Version:     v.Version,
 		}
 
 		conf := cache.NewConfig()
@@ -191,6 +194,7 @@ func doMetrics(docsDir string) {
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
 			Status:      v.Status,
+			Version:     v.Version,
 		}
 
 		conf := metrics.NewConfig()
@@ -255,6 +259,7 @@ func doProcessors(docsDir string) {
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
 			Status:      v.Status,
+			Version:     v.Version,
 		}
 		if len(v.Categories) > 0 {
 			spec.Categories = make([]string, 0, len(v.Categories))
@@ -287,6 +292,7 @@ func doRateLimits(docsDir string) {
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
 			Status:      v.Status,
+			Version:     v.Version,
 		}
 
 		conf := ratelimit.NewConfig()
@@ -310,6 +316,7 @@ func doTracers(docsDir string) {
 			Footnotes:   v.Footnotes,
 			Fields:      v.FieldSpecs,
 			Status:      v.Status,
+			Version:     v.Version,
 		}
 
 		conf := tracer.NewConfig()

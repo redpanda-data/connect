@@ -61,12 +61,36 @@ of a batch that resulted from the invocation:
 - Multiple batches: `[[{},{}],[{}]]` (Array of arrays of JSON objects, batches
   of size one are a single object array in this case)
 
+#### Processing Errors
+
+The default behaviour of a Benthos lambda is that the handler will not return an
+error unless the output fails. This means that errors that occur within your
+processors will not result in the handler failing, which will instead return the
+final state of the message.
+
+In the next major version release (V4) this will change and the handler will
+fail if messages have encountered an uncaught error during execution. However,
+in the meantime it is possible to configure your output to use the new
+[`reject` output][output.reject] in order to trigger a handler error on
+processor errors:
+
+```yaml
+output:
+  switch:
+    cases:
+      - check: '!errored()'
+        output:
+          type: sync_response
+      - output:
+          reject: "processing failed due to: ${! error() }"
+```
+
 ### Running a combination
 
 It's possible to configure pipelines that send messages to third party
 destinations and also return a result back to the caller. This is done by
 configuring an output block and including an output of the type
-`serverless_response`.
+`sync_response`.
 
 For example, if we wished for our lambda function to send a payload to Kafka
 and also return the same payload back to the caller we could use a
@@ -82,7 +106,7 @@ output:
         - todo:9092
         client_id: benthos_serverless
         topic: example_topic
-    - type: serverless_response
+    - type: sync_response
 ```
 
 ## Upload to AWS
@@ -126,3 +150,4 @@ zip benthos-lambda.zip benthos-lambda
 [sam-template]: https://github.com/Jeffail/benthos/tree/master/resources/serverless/lambda/benthos-lambda-sam.yaml
 [tf-example]: https://github.com/Jeffail/benthos/tree/master/resources/serverless/lambda/benthos-lambda.tf
 [output-broker]: /docs/components/outputs/broker
+[output.reject]: /docs/components/outputs/reject

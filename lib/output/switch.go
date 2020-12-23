@@ -40,8 +40,9 @@ func init() {
 	Constructors[TypeSwitch] = TypeSpec{
 		constructor: NewSwitch,
 		Summary: `
-The switch output type allows you to route messages to different outputs based
-on their contents.`,
+The switch output type allows you to route messages to different outputs based on their contents.`,
+		Description: `
+Messages must successfully route to one or more outputs, otherwise this is considered an error and the message is reprocessed. In order to explicitly drop messages that do not match your cases add one final case with a [drop output](/docs/components/outputs/drop).`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldAdvanced(
 				"retry_until_success", `

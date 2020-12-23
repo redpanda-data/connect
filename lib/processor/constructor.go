@@ -43,6 +43,7 @@ type TypeSpec struct {
 	UsesBatches bool
 
 	Status      docs.Status
+	Version     string
 	Summary     string
 	Description string
 	Categories  []Category
@@ -85,6 +86,7 @@ const (
 	TypeArchive      = "archive"
 	TypeAvro         = "avro"
 	TypeAWK          = "awk"
+	TypeAWSLambda    = "aws_lambda"
 	TypeBatch        = "batch"
 	TypeBloblang     = "bloblang"
 	TypeBoundsCheck  = "bounds_check"
@@ -153,6 +155,7 @@ type Config struct {
 	Archive      ArchiveConfig      `json:"archive" yaml:"archive"`
 	Avro         AvroConfig         `json:"avro" yaml:"avro"`
 	AWK          AWKConfig          `json:"awk" yaml:"awk"`
+	AWSLambda    LambdaConfig       `json:"aws_lambda" yaml:"aws_lambda"`
 	Batch        BatchConfig        `json:"batch" yaml:"batch"`
 	Bloblang     BloblangConfig     `json:"bloblang" yaml:"bloblang"`
 	BoundsCheck  BoundsCheckConfig  `json:"bounds_check" yaml:"bounds_check"`
@@ -221,6 +224,7 @@ func NewConfig() Config {
 		Archive:      NewArchiveConfig(),
 		Avro:         NewAvroConfig(),
 		AWK:          NewAWKConfig(),
+		AWSLambda:    NewLambdaConfig(),
 		Batch:        NewBatchConfig(),
 		Bloblang:     NewBloblangConfig(),
 		BoundsCheck:  NewBoundsCheckConfig(),

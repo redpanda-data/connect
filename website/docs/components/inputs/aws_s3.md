@@ -1,7 +1,7 @@
 ---
 title: aws_s3
 type: input
-status: experimental
+status: beta
 categories: ["Services","AWS"]
 ---
 
@@ -15,9 +15,9 @@ categories: ["Services","AWS"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-EXPERIMENTAL: This component is experimental and therefore subject to change or removal outside of major version releases.
+BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 
-This input is a refactor of the current stable (and shorter named) [`s3` input](/docs/components/inputs/s3) which is still the recommended one to use until this input is considered stable. However, this input has improved capabilities and will eventually replace it.
+Downloads objects within an Amazon S3 bucket, optionally filtered by a prefix, either by walking the items in the bucket or by streaming upload notifications in realtime.
 
 
 <Tabs defaultValue="common" values={[
@@ -76,11 +76,7 @@ input:
 </TabItem>
 </Tabs>
 
-Downloads objects within an S3 bucket, optionally filtered by a prefix. If an SQS queue has been configured then only object keys read from the queue will be downloaded.
-
-If an SQS queue is not specified the entire list of objects found when this input starts will be consumed.
-
-## Downloading Objects on Upload with SQS
+## Streaming Objects on Upload with SQS
 
 A common pattern for consuming S3 objects is to emit upload notification events from the bucket either directly to an SQS queue, or to an SNS topic that is consumed by an SQS queue, and then have your consumer listen for events which prompt it to download the newly uploaded objects. More information about this pattern and how to set it up can be found at: https://docs.aws.amazon.com/AmazonS3/latest/dev/ways-to-add-notification-config-to-bucket.html.
 
@@ -126,7 +122,7 @@ Default: `""`
 
 ### `prefix`
 
-An optional path prefix, if set only objects with the prefix are consumed.
+An optional path prefix, if set only objects with the prefix are consumed when walking a bucket.
 
 
 Type: `string`  

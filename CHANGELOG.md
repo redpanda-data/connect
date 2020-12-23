@@ -8,12 +8,25 @@ All notable changes to this project will be documented in this file.
 ### New
 
 - New `influxdb` metrics target.
+- New `azure_blob_storage` input.
 - The `bloblang` input field `interval` now supports cron expressions.
-- New experimental `aws_kinesis` input.
+- New beta `aws_kinesis` and `aws_sqs` inputs.
+- The `bool` bloblang method now supports a wider range of string values.
+- New `reject` output type for conditionally rejecting messages.
+- All Redis components now support clustering and fail-over patterns.
 
 ### Fixed
 
 - Fixed a panic on startup when using `if` statements within a `workflow` branch request or response map.
+- The `meta` bloblang function error messages now include the name of the required value.
+- Config unit tests now report processor errors when checks fail.
+
+### Changed
+
+- The experimental `aws_s3` input is now marked as beta.
+- The beta `kinesis_balanced` input is now deprecated.
+- All Azure components have been renamed to include the prefix `azure_`, e.g. `blob_storage` is now `azure_blob_storage`. The old names can still be used for backwards compatibility.
+- All AWS components have been renamed to include the prefix `aws_`, e.g. `s3` is now `aws_s3`. The old names can still be used for backwards compatibility.
 
 ## 3.35.0 - 2020-12-07
 

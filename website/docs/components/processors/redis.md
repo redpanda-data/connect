@@ -44,6 +44,8 @@ redis:
 # All config fields, showing default values
 redis:
   url: tcp://localhost:6379
+  kind: simple
+  master: ""
   tls:
     enabled: false
     skip_cert_verify: false
@@ -102,7 +104,7 @@ pipeline:
 
 ### `url`
 
-The URL of the target Redis server. Database is optional and is supplied as the URL path.
+The URL of the target Redis server. Database is optional and is supplied as the URL path. `tcp` scheme is the same as `redis`
 
 
 Type: `string`  
@@ -111,9 +113,47 @@ Default: `"tcp://localhost:6379"`
 ```yaml
 # Examples
 
-url: tcp://localhost:6379
+url: :6397
 
-url: tcp://localhost:6379/1
+url: localhost:6397
+
+url: redis://localhost:6379
+
+url: redis://localhost:6379/1
+
+url: redis://localhost:6379/1,redis://localhost:6380/1
+```
+
+### `kind`
+
+Specifies a simple, cluster-aware, or failover-aware redis client.
+
+
+Type: `string`  
+Default: `"simple"`  
+
+```yaml
+# Examples
+
+kind: simple
+
+kind: cluster
+
+kind: failover
+```
+
+### `master`
+
+Name of the redis master when `kind` is `failover`
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+master: mymaster
 ```
 
 ### `tls`

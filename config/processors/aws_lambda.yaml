@@ -6,34 +6,32 @@ http:
   root_path: /benthos
   debug_endpoints: false
 input:
-  type: kinesis_balanced
-  kinesis_balanced:
-    batching:
-      byte_size: 0
-      check: ""
-      count: 0
-      period: ""
-      processors: []
-    credentials:
-      id: ""
-      profile: ""
-      role: ""
-      role_external_id: ""
-      secret: ""
-      token: ""
-    dynamodb_billing_mode: ""
-    dynamodb_read_provision: 0
-    dynamodb_table: ""
-    dynamodb_write_provision: 0
-    endpoint: ""
-    region: eu-west-1
-    start_from_oldest: true
-    stream: ""
+  type: stdin
+  stdin:
+    delimiter: ""
+    max_buffer: 1000000
+    multipart: false
 buffer:
   type: none
   none: {}
 pipeline:
-  processors: []
+  processors:
+    - type: aws_lambda
+      aws_lambda:
+        credentials:
+          id: ""
+          profile: ""
+          role: ""
+          role_external_id: ""
+          secret: ""
+          token: ""
+        endpoint: ""
+        function: ""
+        parallel: false
+        rate_limit: ""
+        region: eu-west-1
+        retries: 3
+        timeout: 5s
   threads: 1
 output:
   type: stdout

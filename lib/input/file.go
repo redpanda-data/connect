@@ -79,8 +79,9 @@ type FileConfig struct {
 // NewFileConfig creates a new FileConfig with default values.
 func NewFileConfig() FileConfig {
 	return FileConfig{
-		Path:           "",
-		Paths:          []string{},
+		Path:  "",
+		Paths: []string{},
+		// TODO: V4 change this default
 		Codec:          "lines",
 		Multipart:      false,
 		MaxBuffer:      1000000,

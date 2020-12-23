@@ -18,24 +18,34 @@ pipeline:
   processors: []
   threads: 1
 output:
-  type: table_storage
-  table_storage:
+  type: aws_dynamodb
+  aws_dynamodb:
+    backoff:
+      initial_interval: 1s
+      max_elapsed_time: 30s
+      max_interval: 5s
     batching:
       byte_size: 0
       check: ""
       count: 0
       period: ""
       processors: []
-    insert_type: INSERT
+    credentials:
+      id: ""
+      profile: ""
+      role: ""
+      role_external_id: ""
+      secret: ""
+      token: ""
+    endpoint: ""
+    json_map_columns: {}
     max_in_flight: 1
-    partition_key: ""
-    properties: {}
-    row_key: ""
-    storage_access_key: ""
-    storage_account: ""
-    storage_connection_string: ""
-    table_name: ""
-    timeout: 5s
+    max_retries: 3
+    region: eu-west-1
+    string_columns: {}
+    table: ""
+    ttl: ""
+    ttl_key: ""
 resources:
   caches: {}
   conditions: {}

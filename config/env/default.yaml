@@ -103,6 +103,26 @@ input:
             key_path: ${INPUT_AWS_S3_SQS_KEY_PATH:Records.*.s3.object.key}
             max_messages: ${INPUT_AWS_S3_SQS_MAX_MESSAGES:10}
             url: ${INPUT_AWS_S3_SQS_URL}
+        aws_sqs:
+          credentials:
+            id: ${INPUT_AWS_SQS_CREDENTIALS_ID}
+            profile: ${INPUT_AWS_SQS_CREDENTIALS_PROFILE}
+            role: ${INPUT_AWS_SQS_CREDENTIALS_ROLE}
+            role_external_id: ${INPUT_AWS_SQS_CREDENTIALS_ROLE_EXTERNAL_ID}
+            secret: ${INPUT_AWS_SQS_CREDENTIALS_SECRET}
+            token: ${INPUT_AWS_SQS_CREDENTIALS_TOKEN}
+          delete_message: ${INPUT_AWS_SQS_DELETE_MESSAGE:true}
+          endpoint: ${INPUT_AWS_SQS_ENDPOINT}
+          region: ${INPUT_AWS_SQS_REGION:eu-west-1}
+          url: ${INPUT_AWS_SQS_URL}
+        azure_blob_storage:
+          codec: ${INPUT_AZURE_BLOB_STORAGE_CODEC:all-bytes}
+          container: ${INPUT_AZURE_BLOB_STORAGE_CONTAINER}
+          delete_objects: ${INPUT_AZURE_BLOB_STORAGE_DELETE_OBJECTS:false}
+          prefix: ${INPUT_AZURE_BLOB_STORAGE_PREFIX}
+          storage_access_key: ${INPUT_AZURE_BLOB_STORAGE_STORAGE_ACCESS_KEY}
+          storage_account: ${INPUT_AZURE_BLOB_STORAGE_STORAGE_ACCOUNT}
+          storage_connection_string: ${INPUT_AZURE_BLOB_STORAGE_STORAGE_CONNECTION_STRING}
         bloblang:
           count: ${INPUT_BLOBLANG_COUNT:0}
           interval: ${INPUT_BLOBLANG_INTERVAL:1s}
@@ -374,6 +394,8 @@ input:
           user_agent: ${INPUT_NSQ_USER_AGENT:benthos_consumer}
         redis_list:
           key: ${INPUT_REDIS_LIST_KEY:benthos_list}
+          kind: ${INPUT_REDIS_LIST_KIND:simple}
+          master: ${INPUT_REDIS_LIST_MASTER}
           timeout: ${INPUT_REDIS_LIST_TIMEOUT:5s}
           tls:
             enabled: ${INPUT_REDIS_LIST_TLS_ENABLED:false}
@@ -383,6 +405,8 @@ input:
         redis_pubsub:
           channels:
             - ${INPUT_REDIS_PUBSUB_CHANNELS:benthos_chan}
+          kind: ${INPUT_REDIS_PUBSUB_KIND:simple}
+          master: ${INPUT_REDIS_PUBSUB_MASTER}
           tls:
             enabled: ${INPUT_REDIS_PUBSUB_TLS_ENABLED:false}
             root_cas_file: ${INPUT_REDIS_PUBSUB_TLS_ROOT_CAS_FILE}
@@ -399,7 +423,9 @@ input:
           client_id: ${INPUT_REDIS_STREAMS_CLIENT_ID:benthos_consumer}
           commit_period: ${INPUT_REDIS_STREAMS_COMMIT_PERIOD:1s}
           consumer_group: ${INPUT_REDIS_STREAMS_CONSUMER_GROUP:benthos_group}
+          kind: ${INPUT_REDIS_STREAMS_KIND:simple}
           limit: ${INPUT_REDIS_STREAMS_LIMIT:10}
+          master: ${INPUT_REDIS_STREAMS_MASTER}
           start_from_oldest: ${INPUT_REDIS_STREAMS_START_FROM_OLDEST:true}
           streams:
             - ${INPUT_REDIS_STREAMS_STREAMS:benthos_stream}
@@ -524,6 +550,21 @@ pipeline:
       awk:
         codec: ${PROCESSOR_AWK_CODEC:text}
         program: ${PROCESSOR_AWK_PROGRAM:BEGIN { x = 0 } { print $0, x; x++ }}
+      aws_lambda:
+        credentials:
+          id: ${PROCESSOR_AWS_LAMBDA_CREDENTIALS_ID}
+          profile: ${PROCESSOR_AWS_LAMBDA_CREDENTIALS_PROFILE}
+          role: ${PROCESSOR_AWS_LAMBDA_CREDENTIALS_ROLE}
+          role_external_id: ${PROCESSOR_AWS_LAMBDA_CREDENTIALS_ROLE_EXTERNAL_ID}
+          secret: ${PROCESSOR_AWS_LAMBDA_CREDENTIALS_SECRET}
+          token: ${PROCESSOR_AWS_LAMBDA_CREDENTIALS_TOKEN}
+        endpoint: ${PROCESSOR_AWS_LAMBDA_ENDPOINT}
+        function: ${PROCESSOR_AWS_LAMBDA_FUNCTION}
+        parallel: ${PROCESSOR_AWS_LAMBDA_PARALLEL:false}
+        rate_limit: ${PROCESSOR_AWS_LAMBDA_RATE_LIMIT}
+        region: ${PROCESSOR_AWS_LAMBDA_REGION:eu-west-1}
+        retries: ${PROCESSOR_AWS_LAMBDA_RETRIES:3}
+        timeout: ${PROCESSOR_AWS_LAMBDA_TIMEOUT:5s}
       batch:
         byte_size: ${PROCESSOR_BATCH_BYTE_SIZE:0}
         condition:
@@ -743,6 +784,8 @@ pipeline:
         resource: ${PROCESSOR_RATE_LIMIT_RESOURCE}
       redis:
         key: ${PROCESSOR_REDIS_KEY}
+        kind: ${PROCESSOR_REDIS_KIND:simple}
+        master: ${PROCESSOR_REDIS_MASTER}
         operator: ${PROCESSOR_REDIS_OPERATOR:scard}
         retries: ${PROCESSOR_REDIS_RETRIES:3}
         retry_period: ${PROCESSOR_REDIS_RETRY_PERIOD:500ms}
@@ -836,6 +879,161 @@ output:
             root_cas_file: ${OUTPUT_AMQP_1_TLS_ROOT_CAS_FILE}
             skip_cert_verify: ${OUTPUT_AMQP_1_TLS_SKIP_CERT_VERIFY:false}
           url: ${OUTPUT_AMQP_1_URL}
+        aws_dynamodb:
+          backoff:
+            initial_interval: ${OUTPUT_AWS_DYNAMODB_BACKOFF_INITIAL_INTERVAL:1s}
+            max_elapsed_time: ${OUTPUT_AWS_DYNAMODB_BACKOFF_MAX_ELAPSED_TIME:30s}
+            max_interval: ${OUTPUT_AWS_DYNAMODB_BACKOFF_MAX_INTERVAL:5s}
+          batching:
+            byte_size: ${OUTPUT_AWS_DYNAMODB_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_AWS_DYNAMODB_BATCHING_CHECK}
+            count: ${OUTPUT_AWS_DYNAMODB_BATCHING_COUNT:0}
+            period: ${OUTPUT_AWS_DYNAMODB_BATCHING_PERIOD}
+          credentials:
+            id: ${OUTPUT_AWS_DYNAMODB_CREDENTIALS_ID}
+            profile: ${OUTPUT_AWS_DYNAMODB_CREDENTIALS_PROFILE}
+            role: ${OUTPUT_AWS_DYNAMODB_CREDENTIALS_ROLE}
+            role_external_id: ${OUTPUT_AWS_DYNAMODB_CREDENTIALS_ROLE_EXTERNAL_ID}
+            secret: ${OUTPUT_AWS_DYNAMODB_CREDENTIALS_SECRET}
+            token: ${OUTPUT_AWS_DYNAMODB_CREDENTIALS_TOKEN}
+          endpoint: ${OUTPUT_AWS_DYNAMODB_ENDPOINT}
+          max_in_flight: ${OUTPUT_AWS_DYNAMODB_MAX_IN_FLIGHT:1}
+          max_retries: ${OUTPUT_AWS_DYNAMODB_MAX_RETRIES:3}
+          region: ${OUTPUT_AWS_DYNAMODB_REGION:eu-west-1}
+          table: ${OUTPUT_AWS_DYNAMODB_TABLE}
+          ttl: ${OUTPUT_AWS_DYNAMODB_TTL}
+          ttl_key: ${OUTPUT_AWS_DYNAMODB_TTL_KEY}
+        aws_kinesis:
+          backoff:
+            initial_interval: ${OUTPUT_AWS_KINESIS_BACKOFF_INITIAL_INTERVAL:1s}
+            max_elapsed_time: ${OUTPUT_AWS_KINESIS_BACKOFF_MAX_ELAPSED_TIME:30s}
+            max_interval: ${OUTPUT_AWS_KINESIS_BACKOFF_MAX_INTERVAL:5s}
+          batching:
+            byte_size: ${OUTPUT_AWS_KINESIS_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_AWS_KINESIS_BATCHING_CHECK}
+            count: ${OUTPUT_AWS_KINESIS_BATCHING_COUNT:0}
+            period: ${OUTPUT_AWS_KINESIS_BATCHING_PERIOD}
+          credentials:
+            id: ${OUTPUT_AWS_KINESIS_CREDENTIALS_ID}
+            profile: ${OUTPUT_AWS_KINESIS_CREDENTIALS_PROFILE}
+            role: ${OUTPUT_AWS_KINESIS_CREDENTIALS_ROLE}
+            role_external_id: ${OUTPUT_AWS_KINESIS_CREDENTIALS_ROLE_EXTERNAL_ID}
+            secret: ${OUTPUT_AWS_KINESIS_CREDENTIALS_SECRET}
+            token: ${OUTPUT_AWS_KINESIS_CREDENTIALS_TOKEN}
+          endpoint: ${OUTPUT_AWS_KINESIS_ENDPOINT}
+          hash_key: ${OUTPUT_AWS_KINESIS_HASH_KEY}
+          max_in_flight: ${OUTPUT_AWS_KINESIS_MAX_IN_FLIGHT:1}
+          max_retries: ${OUTPUT_AWS_KINESIS_MAX_RETRIES:0}
+          partition_key: ${OUTPUT_AWS_KINESIS_PARTITION_KEY}
+          region: ${OUTPUT_AWS_KINESIS_REGION:eu-west-1}
+          stream: ${OUTPUT_AWS_KINESIS_STREAM}
+        aws_kinesis_firehose:
+          backoff:
+            initial_interval: ${OUTPUT_AWS_KINESIS_FIREHOSE_BACKOFF_INITIAL_INTERVAL:1s}
+            max_elapsed_time: ${OUTPUT_AWS_KINESIS_FIREHOSE_BACKOFF_MAX_ELAPSED_TIME:30s}
+            max_interval: ${OUTPUT_AWS_KINESIS_FIREHOSE_BACKOFF_MAX_INTERVAL:5s}
+          batching:
+            byte_size: ${OUTPUT_AWS_KINESIS_FIREHOSE_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_AWS_KINESIS_FIREHOSE_BATCHING_CHECK}
+            count: ${OUTPUT_AWS_KINESIS_FIREHOSE_BATCHING_COUNT:0}
+            period: ${OUTPUT_AWS_KINESIS_FIREHOSE_BATCHING_PERIOD}
+          credentials:
+            id: ${OUTPUT_AWS_KINESIS_FIREHOSE_CREDENTIALS_ID}
+            profile: ${OUTPUT_AWS_KINESIS_FIREHOSE_CREDENTIALS_PROFILE}
+            role: ${OUTPUT_AWS_KINESIS_FIREHOSE_CREDENTIALS_ROLE}
+            role_external_id: ${OUTPUT_AWS_KINESIS_FIREHOSE_CREDENTIALS_ROLE_EXTERNAL_ID}
+            secret: ${OUTPUT_AWS_KINESIS_FIREHOSE_CREDENTIALS_SECRET}
+            token: ${OUTPUT_AWS_KINESIS_FIREHOSE_CREDENTIALS_TOKEN}
+          endpoint: ${OUTPUT_AWS_KINESIS_FIREHOSE_ENDPOINT}
+          max_in_flight: ${OUTPUT_AWS_KINESIS_FIREHOSE_MAX_IN_FLIGHT:1}
+          max_retries: ${OUTPUT_AWS_KINESIS_FIREHOSE_MAX_RETRIES:0}
+          region: ${OUTPUT_AWS_KINESIS_FIREHOSE_REGION:eu-west-1}
+          stream: ${OUTPUT_AWS_KINESIS_FIREHOSE_STREAM}
+        aws_s3:
+          batching:
+            byte_size: ${OUTPUT_AWS_S3_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_AWS_S3_BATCHING_CHECK}
+            count: ${OUTPUT_AWS_S3_BATCHING_COUNT:0}
+            period: ${OUTPUT_AWS_S3_BATCHING_PERIOD}
+          bucket: ${OUTPUT_AWS_S3_BUCKET}
+          content_encoding: ${OUTPUT_AWS_S3_CONTENT_ENCODING}
+          content_type: ${OUTPUT_AWS_S3_CONTENT_TYPE:application/octet-stream}
+          credentials:
+            id: ${OUTPUT_AWS_S3_CREDENTIALS_ID}
+            profile: ${OUTPUT_AWS_S3_CREDENTIALS_PROFILE}
+            role: ${OUTPUT_AWS_S3_CREDENTIALS_ROLE}
+            role_external_id: ${OUTPUT_AWS_S3_CREDENTIALS_ROLE_EXTERNAL_ID}
+            secret: ${OUTPUT_AWS_S3_CREDENTIALS_SECRET}
+            token: ${OUTPUT_AWS_S3_CREDENTIALS_TOKEN}
+          endpoint: ${OUTPUT_AWS_S3_ENDPOINT}
+          force_path_style_urls: ${OUTPUT_AWS_S3_FORCE_PATH_STYLE_URLS:false}
+          kms_key_id: ${OUTPUT_AWS_S3_KMS_KEY_ID}
+          max_in_flight: ${OUTPUT_AWS_S3_MAX_IN_FLIGHT:1}
+          path: ${OUTPUT_AWS_S3_PATH:${!count("files")}-${!timestamp_unix_nano()}.txt}
+          region: ${OUTPUT_AWS_S3_REGION:eu-west-1}
+          storage_class: ${OUTPUT_AWS_S3_STORAGE_CLASS:STANDARD}
+          timeout: ${OUTPUT_AWS_S3_TIMEOUT:5s}
+        aws_sns:
+          credentials:
+            id: ${OUTPUT_AWS_SNS_CREDENTIALS_ID}
+            profile: ${OUTPUT_AWS_SNS_CREDENTIALS_PROFILE}
+            role: ${OUTPUT_AWS_SNS_CREDENTIALS_ROLE}
+            role_external_id: ${OUTPUT_AWS_SNS_CREDENTIALS_ROLE_EXTERNAL_ID}
+            secret: ${OUTPUT_AWS_SNS_CREDENTIALS_SECRET}
+            token: ${OUTPUT_AWS_SNS_CREDENTIALS_TOKEN}
+          endpoint: ${OUTPUT_AWS_SNS_ENDPOINT}
+          max_in_flight: ${OUTPUT_AWS_SNS_MAX_IN_FLIGHT:1}
+          region: ${OUTPUT_AWS_SNS_REGION:eu-west-1}
+          timeout: ${OUTPUT_AWS_SNS_TIMEOUT:5s}
+          topic_arn: ${OUTPUT_AWS_SNS_TOPIC_ARN}
+        aws_sqs:
+          backoff:
+            initial_interval: ${OUTPUT_AWS_SQS_BACKOFF_INITIAL_INTERVAL:1s}
+            max_elapsed_time: ${OUTPUT_AWS_SQS_BACKOFF_MAX_ELAPSED_TIME:30s}
+            max_interval: ${OUTPUT_AWS_SQS_BACKOFF_MAX_INTERVAL:5s}
+          batching:
+            byte_size: ${OUTPUT_AWS_SQS_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_AWS_SQS_BATCHING_CHECK}
+            count: ${OUTPUT_AWS_SQS_BATCHING_COUNT:0}
+            period: ${OUTPUT_AWS_SQS_BATCHING_PERIOD}
+          credentials:
+            id: ${OUTPUT_AWS_SQS_CREDENTIALS_ID}
+            profile: ${OUTPUT_AWS_SQS_CREDENTIALS_PROFILE}
+            role: ${OUTPUT_AWS_SQS_CREDENTIALS_ROLE}
+            role_external_id: ${OUTPUT_AWS_SQS_CREDENTIALS_ROLE_EXTERNAL_ID}
+            secret: ${OUTPUT_AWS_SQS_CREDENTIALS_SECRET}
+            token: ${OUTPUT_AWS_SQS_CREDENTIALS_TOKEN}
+          endpoint: ${OUTPUT_AWS_SQS_ENDPOINT}
+          max_in_flight: ${OUTPUT_AWS_SQS_MAX_IN_FLIGHT:1}
+          max_retries: ${OUTPUT_AWS_SQS_MAX_RETRIES:0}
+          message_deduplication_id: ${OUTPUT_AWS_SQS_MESSAGE_DEDUPLICATION_ID}
+          message_group_id: ${OUTPUT_AWS_SQS_MESSAGE_GROUP_ID}
+          region: ${OUTPUT_AWS_SQS_REGION:eu-west-1}
+          url: ${OUTPUT_AWS_SQS_URL}
+        azure_blob_storage:
+          blob_type: ${OUTPUT_AZURE_BLOB_STORAGE_BLOB_TYPE:BLOCK}
+          container: ${OUTPUT_AZURE_BLOB_STORAGE_CONTAINER}
+          max_in_flight: ${OUTPUT_AZURE_BLOB_STORAGE_MAX_IN_FLIGHT:1}
+          path: ${OUTPUT_AZURE_BLOB_STORAGE_PATH:${!count("files")}-${!timestamp_unix_nano()}.txt}
+          public_access_level: ${OUTPUT_AZURE_BLOB_STORAGE_PUBLIC_ACCESS_LEVEL:PRIVATE}
+          storage_access_key: ${OUTPUT_AZURE_BLOB_STORAGE_STORAGE_ACCESS_KEY}
+          storage_account: ${OUTPUT_AZURE_BLOB_STORAGE_STORAGE_ACCOUNT}
+          storage_connection_string: ${OUTPUT_AZURE_BLOB_STORAGE_STORAGE_CONNECTION_STRING}
+        azure_table_storage:
+          batching:
+            byte_size: ${OUTPUT_AZURE_TABLE_STORAGE_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_AZURE_TABLE_STORAGE_BATCHING_CHECK}
+            count: ${OUTPUT_AZURE_TABLE_STORAGE_BATCHING_COUNT:0}
+            period: ${OUTPUT_AZURE_TABLE_STORAGE_BATCHING_PERIOD}
+          insert_type: ${OUTPUT_AZURE_TABLE_STORAGE_INSERT_TYPE:INSERT}
+          max_in_flight: ${OUTPUT_AZURE_TABLE_STORAGE_MAX_IN_FLIGHT:1}
+          partition_key: ${OUTPUT_AZURE_TABLE_STORAGE_PARTITION_KEY}
+          row_key: ${OUTPUT_AZURE_TABLE_STORAGE_ROW_KEY}
+          storage_access_key: ${OUTPUT_AZURE_TABLE_STORAGE_STORAGE_ACCESS_KEY}
+          storage_account: ${OUTPUT_AZURE_TABLE_STORAGE_STORAGE_ACCOUNT}
+          storage_connection_string: ${OUTPUT_AZURE_TABLE_STORAGE_STORAGE_CONNECTION_STRING}
+          table_name: ${OUTPUT_AZURE_TABLE_STORAGE_TABLE_NAME}
+          timeout: ${OUTPUT_AZURE_TABLE_STORAGE_TIMEOUT:5s}
         blob_storage:
           blob_type: ${OUTPUT_BLOB_STORAGE_BLOB_TYPE:BLOCK}
           container: ${OUTPUT_BLOB_STORAGE_CONTAINER}
@@ -845,7 +1043,6 @@ output:
           storage_access_key: ${OUTPUT_BLOB_STORAGE_STORAGE_ACCESS_KEY}
           storage_account: ${OUTPUT_BLOB_STORAGE_STORAGE_ACCOUNT}
           storage_connection_string: ${OUTPUT_BLOB_STORAGE_STORAGE_CONNECTION_STRING}
-          timeout: ${OUTPUT_BLOB_STORAGE_TIMEOUT:5s}
         cache:
           key: ${OUTPUT_CACHE_KEY:${!count("items")}-${!timestamp_unix_nano()}}
           max_in_flight: ${OUTPUT_CACHE_MAX_IN_FLIGHT:1}
@@ -1109,6 +1306,8 @@ output:
           user_agent: ${OUTPUT_NSQ_USER_AGENT:benthos_producer}
         redis_hash:
           key: ${OUTPUT_REDIS_HASH_KEY}
+          kind: ${OUTPUT_REDIS_HASH_KIND:simple}
+          master: ${OUTPUT_REDIS_HASH_MASTER}
           max_in_flight: ${OUTPUT_REDIS_HASH_MAX_IN_FLIGHT:1}
           tls:
             enabled: ${OUTPUT_REDIS_HASH_TLS_ENABLED:false}
@@ -1119,6 +1318,8 @@ output:
           walk_metadata: ${OUTPUT_REDIS_HASH_WALK_METADATA:false}
         redis_list:
           key: ${OUTPUT_REDIS_LIST_KEY:benthos_list}
+          kind: ${OUTPUT_REDIS_LIST_KIND:simple}
+          master: ${OUTPUT_REDIS_LIST_MASTER}
           max_in_flight: ${OUTPUT_REDIS_LIST_MAX_IN_FLIGHT:1}
           tls:
             enabled: ${OUTPUT_REDIS_LIST_TLS_ENABLED:false}
@@ -1127,6 +1328,8 @@ output:
           url: ${OUTPUT_REDIS_LIST_URL:tcp://localhost:6379}
         redis_pubsub:
           channel: ${OUTPUT_REDIS_PUBSUB_CHANNEL:benthos_chan}
+          kind: ${OUTPUT_REDIS_PUBSUB_KIND:simple}
+          master: ${OUTPUT_REDIS_PUBSUB_MASTER}
           max_in_flight: ${OUTPUT_REDIS_PUBSUB_MAX_IN_FLIGHT:1}
           tls:
             enabled: ${OUTPUT_REDIS_PUBSUB_TLS_ENABLED:false}
@@ -1135,6 +1338,8 @@ output:
           url: ${OUTPUT_REDIS_PUBSUB_URL:tcp://localhost:6379}
         redis_streams:
           body_key: ${OUTPUT_REDIS_STREAMS_BODY_KEY:body}
+          kind: ${OUTPUT_REDIS_STREAMS_KIND:simple}
+          master: ${OUTPUT_REDIS_STREAMS_MASTER}
           max_in_flight: ${OUTPUT_REDIS_STREAMS_MAX_IN_FLIGHT:1}
           max_length: ${OUTPUT_REDIS_STREAMS_MAX_LENGTH:0}
           stream: ${OUTPUT_REDIS_STREAMS_STREAM:benthos_stream}
@@ -1143,6 +1348,7 @@ output:
             root_cas_file: ${OUTPUT_REDIS_STREAMS_TLS_ROOT_CAS_FILE}
             skip_cert_verify: ${OUTPUT_REDIS_STREAMS_TLS_SKIP_CERT_VERIFY:false}
           url: ${OUTPUT_REDIS_STREAMS_URL:tcp://localhost:6379}
+        reject: ${OUTPUT_REJECT}
         resource: ${OUTPUT_RESOURCE}
         s3:
           batching:
@@ -1272,6 +1478,19 @@ logger:
   level: ${LOGGER_LEVEL:INFO}
   prefix: ${LOGGER_PREFIX:benthos}
 metrics:
+  aws_cloudwatch:
+    credentials:
+      id: ${METRICS_AWS_CLOUDWATCH_CREDENTIALS_ID}
+      profile: ${METRICS_AWS_CLOUDWATCH_CREDENTIALS_PROFILE}
+      role: ${METRICS_AWS_CLOUDWATCH_CREDENTIALS_ROLE}
+      role_external_id: ${METRICS_AWS_CLOUDWATCH_CREDENTIALS_ROLE_EXTERNAL_ID}
+      secret: ${METRICS_AWS_CLOUDWATCH_CREDENTIALS_SECRET}
+      token: ${METRICS_AWS_CLOUDWATCH_CREDENTIALS_TOKEN}
+    endpoint: ${METRICS_AWS_CLOUDWATCH_ENDPOINT}
+    flush_period: ${METRICS_AWS_CLOUDWATCH_FLUSH_PERIOD:100ms}
+    namespace: ${METRICS_AWS_CLOUDWATCH_NAMESPACE:Benthos}
+    path_mapping: ${METRICS_AWS_CLOUDWATCH_PATH_MAPPING}
+    region: ${METRICS_AWS_CLOUDWATCH_REGION:eu-west-1}
   cloudwatch:
     credentials:
       id: ${METRICS_CLOUDWATCH_CREDENTIALS_ID}

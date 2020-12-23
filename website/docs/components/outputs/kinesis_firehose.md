@@ -1,7 +1,7 @@
 ---
 title: kinesis_firehose
 type: output
-status: stable
+status: deprecated
 categories: ["Services","AWS"]
 ---
 
@@ -15,6 +15,9 @@ categories: ["Services","AWS"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
 
 Sends messages to a Kinesis Firehose delivery stream.
 
@@ -73,6 +76,10 @@ output:
 
 </TabItem>
 </Tabs>
+
+## Alternatives
+
+This output has been renamed to [`aws_kinesis_firehose`](/docs/components/outputs/aws_kinesis_firehose).
 
 ### Credentials
 

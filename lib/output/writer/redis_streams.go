@@ -43,7 +43,7 @@ type RedisStreams struct {
 
 	conf RedisStreamsConfig
 
-	client  *redis.Client
+	client  redis.UniversalClient
 	connMut sync.RWMutex
 }
 

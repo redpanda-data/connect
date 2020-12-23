@@ -22,12 +22,42 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors[TypeS3] = TypeSpec{
-		constructor: NewS3,
+	Constructors[TypeAWSS3] = TypeSpec{
+		constructor: NewAWSS3,
+		Version:     "3.36.0",
 		Summary: `
 Stores each item in an S3 bucket as a file, where an item ID is the path of the
 item within the bucket.`,
 		Description: `
+It is not possible to atomically upload S3 objects exclusively when the target
+does not already exist, therefore this cache is not suitable for deduplication.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](/docs/guides/aws).`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("bucket", "The S3 bucket to store items in."),
+			docs.FieldCommon("content_type", "The content type to set for each item."),
+			docs.FieldAdvanced("force_path_style_urls", "Forces the client API to use path style URLs, which helps when connecting to custom endpoints."),
+			docs.FieldAdvanced("timeout", "The maximum period to wait on requests before abandoning it."),
+			docs.FieldAdvanced("retries", "The maximum number of retry attempts to make before abandoning a request."),
+		}.Merge(sess.FieldSpecs()),
+	}
+
+	Constructors[TypeS3] = TypeSpec{
+		constructor: NewS3,
+		Status:      docs.StatusDeprecated,
+		Summary: `
+Stores each item in an S3 bucket as a file, where an item ID is the path of the
+item within the bucket.`,
+		Description: `
+## Alternatives
+
+This cache has been renamed to ` + "[`aws_s3`](/docs/components/caches/aws_s3)" + `.
+
 It is not possible to atomically upload S3 objects exclusively when the target
 does not already exist, therefore this cache is not suitable for deduplication.
 
@@ -116,14 +146,23 @@ type S3 struct {
 	mDelLatency      metrics.StatTimer
 }
 
+// NewAWSS3 creates a new S3 cache type.
+func NewAWSS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (types.Cache, error) {
+	return newS3(conf.AWSS3, mgr, log, stats)
+}
+
 // NewS3 creates a new S3 cache type.
 func NewS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (types.Cache, error) {
-	timeout, err := time.ParseDuration(conf.S3.Timeout)
+	return newS3(conf.S3, mgr, log, stats)
+}
+
+func newS3(conf S3Config, mgr types.Manager, log log.Modular, stats metrics.Type) (types.Cache, error) {
+	timeout, err := time.ParseDuration(conf.Timeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse timeout: %v", err)
 	}
-	sess, err := conf.S3.GetSession(func(c *aws.Config) {
-		c.S3ForcePathStyle = aws.Bool(conf.S3.ForcePathStyleURLs)
+	sess, err := conf.GetSession(func(c *aws.Config) {
+		c.S3ForcePathStyle = aws.Bool(conf.ForcePathStyleURLs)
 	})
 	if err != nil {
 		return nil, err
@@ -134,10 +173,10 @@ func NewS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) 
 		downloader: s3manager.NewDownloader(sess),
 		s3:         s3.New(sess),
 
-		bucket:      conf.S3.Bucket,
+		bucket:      conf.Bucket,
 		timeout:     timeout,
-		retries:     conf.S3.Retries,
-		contentType: conf.S3.ContentType,
+		retries:     conf.Retries,
+		contentType: conf.ContentType,
 
 		mLatency:         stats.GetTimer("latency"),
 		mGetCount:        stats.GetCounter("get.count"),

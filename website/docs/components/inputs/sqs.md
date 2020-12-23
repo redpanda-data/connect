@@ -59,6 +59,10 @@ input:
 </TabItem>
 </Tabs>
 
+## Alternatives
+
+This input is being replaced with the shiny new [`aws_sqs` input](/docs/components/inputs/aws_sqs), which has improved features, consider trying it out instead.
+
 ### Credentials
 
 By default Benthos will use a shared credentials file when connecting to AWS

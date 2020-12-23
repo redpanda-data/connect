@@ -18,6 +18,10 @@ func init() {
 		Summary: `
 Receive messages from a Kinesis stream.`,
 		Description: `
+## Alternatives
+
+This input is being replaced with the shiny new ` + "[`aws_kinesis` input](/docs/components/inputs/aws_kinesis)" + `, which has improved features, consider trying it out instead.
+
 It's possible to use DynamoDB for persisting shard iterators by setting the
 table name. Offsets will then be tracked per ` + "`client_id`" + ` per
 ` + "`shard_id`" + `. When using this mode you should create a table with

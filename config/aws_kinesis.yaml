@@ -31,7 +31,7 @@ input:
       write_capacity_units: 0
     endpoint: ""
     lease_period: 30s
-    rebalance_period: 1m
+    rebalance_period: 30s
     region: eu-west-1
     start_from_oldest: true
     streams: []
@@ -42,9 +42,32 @@ pipeline:
   processors: []
   threads: 1
 output:
-  type: stdout
-  stdout:
-    delimiter: ""
+  type: aws_kinesis
+  aws_kinesis:
+    backoff:
+      initial_interval: 1s
+      max_elapsed_time: 30s
+      max_interval: 5s
+    batching:
+      byte_size: 0
+      check: ""
+      count: 0
+      period: ""
+      processors: []
+    credentials:
+      id: ""
+      profile: ""
+      role: ""
+      role_external_id: ""
+      secret: ""
+      token: ""
+    endpoint: ""
+    hash_key: ""
+    max_in_flight: 1
+    max_retries: 0
+    partition_key: ""
+    region: eu-west-1
+    stream: ""
 resources:
   caches: {}
   conditions: {}

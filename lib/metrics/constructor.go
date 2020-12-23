@@ -30,6 +30,7 @@ type TypeSpec struct {
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
 
 	Status      docs.Status
+	Version     string
 	Summary     string
 	Description string
 	Footnotes   string
@@ -43,15 +44,16 @@ var Constructors = map[string]TypeSpec{}
 
 // String constants representing each metric type.
 const (
-	TypeBlackList  = "blacklist"
-	TypeCloudWatch = "cloudwatch"
-	TypeHTTPServer = "http_server"
-	TypeInfluxDB   = "influxdb"
-	TypePrometheus = "prometheus"
-	TypeRename     = "rename"
-	TypeStatsd     = "statsd"
-	TypeStdout     = "stdout"
-	TypeWhiteList  = "whitelist"
+	TypeAWSCloudWatch = "aws_cloudwatch"
+	TypeBlackList     = "blacklist"
+	TypeCloudWatch    = "cloudwatch"
+	TypeHTTPServer    = "http_server"
+	TypeInfluxDB      = "influxdb"
+	TypePrometheus    = "prometheus"
+	TypeRename        = "rename"
+	TypeStatsd        = "statsd"
+	TypeStdout        = "stdout"
+	TypeWhiteList     = "whitelist"
 )
 
 //------------------------------------------------------------------------------
@@ -59,31 +61,33 @@ const (
 // Config is the all encompassing configuration struct for all metric output
 // types.
 type Config struct {
-	Type       string           `json:"type" yaml:"type"`
-	Blacklist  BlacklistConfig  `json:"blacklist" yaml:"blacklist"`
-	CloudWatch CloudWatchConfig `json:"cloudwatch" yaml:"cloudwatch"`
-	HTTP       HTTPConfig       `json:"http_server" yaml:"http_server"`
-	InfluxDB   InfluxDBConfig   `json:"influxdb" yaml:"influxdb"`
-	Prometheus PrometheusConfig `json:"prometheus" yaml:"prometheus"`
-	Rename     RenameConfig     `json:"rename" yaml:"rename"`
-	Statsd     StatsdConfig     `json:"statsd" yaml:"statsd"`
-	Stdout     StdoutConfig     `json:"stdout" yaml:"stdout"`
-	Whitelist  WhitelistConfig  `json:"whitelist" yaml:"whitelist"`
+	Type          string           `json:"type" yaml:"type"`
+	AWSCloudWatch CloudWatchConfig `json:"aws_cloudwatch" yaml:"aws_cloudwatch"`
+	Blacklist     BlacklistConfig  `json:"blacklist" yaml:"blacklist"`
+	CloudWatch    CloudWatchConfig `json:"cloudwatch" yaml:"cloudwatch"`
+	HTTP          HTTPConfig       `json:"http_server" yaml:"http_server"`
+	InfluxDB      InfluxDBConfig   `json:"influxdb" yaml:"influxdb"`
+	Prometheus    PrometheusConfig `json:"prometheus" yaml:"prometheus"`
+	Rename        RenameConfig     `json:"rename" yaml:"rename"`
+	Statsd        StatsdConfig     `json:"statsd" yaml:"statsd"`
+	Stdout        StdoutConfig     `json:"stdout" yaml:"stdout"`
+	Whitelist     WhitelistConfig  `json:"whitelist" yaml:"whitelist"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:       "http_server",
-		Blacklist:  NewBlacklistConfig(),
-		CloudWatch: NewCloudWatchConfig(),
-		HTTP:       NewHTTPConfig(),
-		InfluxDB:   NewInfluxDBConfig(),
-		Prometheus: NewPrometheusConfig(),
-		Rename:     NewRenameConfig(),
-		Statsd:     NewStatsdConfig(),
-		Stdout:     NewStdoutConfig(),
-		Whitelist:  NewWhitelistConfig(),
+		Type:          "http_server",
+		AWSCloudWatch: NewCloudWatchConfig(),
+		Blacklist:     NewBlacklistConfig(),
+		CloudWatch:    NewCloudWatchConfig(),
+		HTTP:          NewHTTPConfig(),
+		InfluxDB:      NewInfluxDBConfig(),
+		Prometheus:    NewPrometheusConfig(),
+		Rename:        NewRenameConfig(),
+		Statsd:        NewStatsdConfig(),
+		Stdout:        NewStdoutConfig(),
+		Whitelist:     NewWhitelistConfig(),
 	}
 }
 

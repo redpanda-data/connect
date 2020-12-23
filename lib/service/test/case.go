@@ -145,8 +145,12 @@ func (c *Case) Execute(provider ProcProvider) (failures []CaseFailure, err error
 				reportFailure(fmt.Sprintf("unexpected message from batch %v: %s", i, part.Get()))
 				return nil
 			}
-			for _, condErr := range expectedBatch[i2].CheckAll(part) {
+			condErrs := expectedBatch[i2].CheckAll(part)
+			for _, condErr := range condErrs {
 				reportFailure(fmt.Sprintf("batch %v message %v: %v", i, i2, condErr))
+			}
+			if procErr := processor.GetFail(part); len(procErr) > 0 && len(condErrs) > 0 {
+				reportFailure(fmt.Sprintf("batch %v message %v: %v", i, i2, red(procErr)))
 			}
 			return nil
 		})

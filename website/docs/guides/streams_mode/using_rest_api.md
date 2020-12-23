@@ -61,7 +61,8 @@ input:
   kafka:
     addresses:
     - localhost:9092
-    topic: my_topic
+    topics:
+    - my_topic
 buffer:
   type: none
 pipeline:

@@ -73,7 +73,7 @@ resources:
         value: ${! json("download_count") }
 
 metrics:
-  cloudwatch:
+  aws_cloudwatch:
     namespace: BenthosAnalyticsStaging
     flush_period: 500ms
     region: eu-west-1

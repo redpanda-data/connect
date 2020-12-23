@@ -210,7 +210,11 @@ func (w *AsyncWriter) loop() {
 			}
 
 			if err != nil {
-				w.log.Errorf("Failed to send message to %v: %v\n", w.typeStr, err)
+				if w.typeStr != TypeReject {
+					w.log.Errorf("Failed to send message to %v: %v\n", w.typeStr, err)
+				} else {
+					w.log.Infof("Rejecting message: %v\n", err)
+				}
 				if !throt.Retry() {
 					return
 				}
