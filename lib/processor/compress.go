@@ -27,7 +27,7 @@ func init() {
 		},
 		Summary: `
 Compresses messages according to the selected algorithm. Supported compression
-algorithms are: gzip, zlib, flate.`,
+algorithms are: gzip, zlib, flate, snappy.`,
 		Description: `
 The 'level' field might not apply to all algorithms.`,
 		FieldSpecs: docs.FieldSpecs{
