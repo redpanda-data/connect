@@ -13,10 +13,10 @@ var escapedEnvRegex *regexp.Regexp
 
 func init() {
 	var err error
-	if envRegex, err = regexp.Compile(`\${[0-9A-Za-z_]+(:((\${[^}]+})|[^}])+)?}`); err != nil {
+	if envRegex, err = regexp.Compile(`\${[0-9A-Za-z_.]+(:((\${[^}]+})|[^}])+)?}`); err != nil {
 		panic(err)
 	}
-	if escapedEnvRegex, err = regexp.Compile(`\${({[0-9A-Za-z_]+(:((\${[^}]+})|[^}])+)?})}`); err != nil {
+	if escapedEnvRegex, err = regexp.Compile(`\${({[0-9A-Za-z_.]+(:((\${[^}]+})|[^}])+)?})}`); err != nil {
 		panic(err)
 	}
 }
