@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/golang/snappy"
 )
 
 func TestDecompressBadAlgo(t *testing.T) {
@@ -58,6 +59,45 @@ func TestDecompressGZIP(t *testing.T) {
 	}
 
 	proc, err := NewDecompress(conf, nil, testLog, metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New(input))
+	if len(msgs) != 1 {
+		t.Error("Decompress failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
+func TestDecompressSnappy(t *testing.T) {
+	conf := NewConfig()
+	conf.Decompress.Algorithm = "snappy"
+
+	input := [][]byte{
+		[]byte("hello world first part"),
+		[]byte("hello world second part"),
+		[]byte("third part"),
+		[]byte("fourth"),
+		[]byte("5"),
+	}
+
+	exp := [][]byte{}
+
+	for i := range input {
+		exp = append(exp, input[i])
+		input[i] = snappy.Encode(nil, input[i])
+	}
+
+	if reflect.DeepEqual(input, exp) {
+		t.Fatal("Input and exp output are the same")
+	}
+
+	proc, err := NewDecompress(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -55,7 +55,7 @@ The decompression algorithm to use.
 
 Type: `string`  
 Default: `"gzip"`  
-Options: `gzip`, `zlib`, `bzip2`, `flate`.
+Options: `gzip`, `zlib`, `bzip2`, `flate`, `snappy`.
 
 ### `parts`
 

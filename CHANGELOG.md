@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - The `bool` bloblang method now supports a wider range of string values.
 - New `reject` output type for conditionally rejecting messages.
 - All Redis components now support clustering and fail-over patterns.
+- The `compress` and `decompress` processors now support snappy.
 
 ### Fixed
 

@@ -15,6 +15,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/golang/snappy"
 	"github.com/opentracing/opentracing-go"
 )
 
@@ -30,7 +31,7 @@ func init() {
 Decompresses messages according to the selected algorithm. Supported
 decompression types are: gzip, zlib, bzip2, flate.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("algorithm", "The decompression algorithm to use.").HasOptions("gzip", "zlib", "bzip2", "flate"),
+			docs.FieldCommon("algorithm", "The decompression algorithm to use.").HasOptions("gzip", "zlib", "bzip2", "flate", "snappy"),
 			partsFieldSpec,
 		},
 	}
@@ -69,6 +70,10 @@ func gzipDecompress(b []byte) ([]byte, error) {
 	}
 	zr.Close()
 	return outBuf.Bytes(), nil
+}
+
+func snappyDecompress(b []byte) ([]byte, error) {
+	return snappy.Decode(nil, b)
 }
 
 func zlibDecompress(b []byte) ([]byte, error) {
@@ -119,6 +124,8 @@ func strToDecompressor(str string) (decompressFunc, error) {
 		return flateDecompress, nil
 	case "bzip2":
 		return bzip2Decompress, nil
+	case "snappy":
+		return snappyDecompress, nil
 	}
 	return nil, fmt.Errorf("decompression type not recognised: %v", str)
 }

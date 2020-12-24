@@ -17,7 +17,7 @@ import TabItem from '@theme/TabItem';
 
 
 Compresses messages according to the selected algorithm. Supported compression
-algorithms are: gzip, zlib, flate.
+algorithms are: gzip, zlib, flate, snappy.
 
 
 <Tabs defaultValue="common" values={[
@@ -59,7 +59,7 @@ The compression algorithm to use.
 
 Type: `string`  
 Default: `"gzip"`  
-Options: `gzip`, `zlib`, `flate`.
+Options: `gzip`, `zlib`, `flate`, `snappy`.
 
 ### `level`
 
