@@ -19,6 +19,8 @@ BETA: This component is mostly stable but breaking changes could still be made o
 
 Sends messages to an Azure Queue Storage queue.
 
+Introduced in version 3.36.0.
+
 
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
@@ -69,10 +71,7 @@ output:
 
 Only one authentication method is required, `storage_connection_string` or `storage_account` and `storage_access_key`. If both are set then the `storage_connection_string` is given priority.
 
-In order to set the `queue_name` you can use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
-calculated per message of a batch.
-
-
+In order to set the `queue_name` you can use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are calculated per message of a batch.
 
 ## Performance
 
@@ -113,6 +112,7 @@ Default: `""`
 ### `queue_name`
 
 The name of the target Queue Storage queue.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
@@ -121,6 +121,7 @@ Default: `""`
 ### `ttl`
 
 The TTL of each individual message as a duration string. Defaults to 0, meaning no retention period is set
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

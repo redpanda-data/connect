@@ -5,10 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.36.0 - 2020-12-24
+
 ### New
 
 - New `influxdb` metrics target.
 - New `azure_blob_storage` input.
+- New `azure_queue_storage` output.
 - The `bloblang` input field `interval` now supports cron expressions.
 - New beta `aws_kinesis` and `aws_sqs` inputs.
 - The `bool` bloblang method now supports a wider range of string values.
