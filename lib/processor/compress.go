@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/golang/snappy"
 	"github.com/opentracing/opentracing-go"
 )
 
@@ -26,11 +27,11 @@ func init() {
 		},
 		Summary: `
 Compresses messages according to the selected algorithm. Supported compression
-algorithms are: gzip, zlib, flate.`,
+algorithms are: gzip, zlib, flate, snappy.`,
 		Description: `
 The 'level' field might not apply to all algorithms.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("algorithm", "The compression algorithm to use.").HasOptions("gzip", "zlib", "flate"),
+			docs.FieldCommon("algorithm", "The compression algorithm to use.").HasOptions("gzip", "zlib", "flate", "snappy"),
 			docs.FieldCommon("level", "The level of compression to use. May not be applicable to all algorithms."),
 			partsFieldSpec,
 		},
@@ -101,6 +102,10 @@ func flateCompress(level int, b []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+func snappyCompress(level int, b []byte) ([]byte, error) {
+	return snappy.Encode(nil, b), nil
+}
+
 func strToCompressor(str string) (compressFunc, error) {
 	switch str {
 	case "gzip":
@@ -109,6 +114,8 @@ func strToCompressor(str string) (compressFunc, error) {
 		return zlibCompress, nil
 	case "flate":
 		return flateCompress, nil
+	case "snappy":
+		return snappyCompress, nil
 	}
 	return nil, fmt.Errorf("compression type not recognised: %v", str)
 }

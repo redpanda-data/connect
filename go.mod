@@ -33,7 +33,7 @@ require (
 	github.com/gocql/gocql v0.0.0-20201024154641-5913df4d474e
 	github.com/gofrs/uuid v3.3.0+incompatible
 	github.com/golang/protobuf v1.4.3
-	github.com/golang/snappy v0.0.2 // indirect
+	github.com/golang/snappy v0.0.2
 	github.com/google/go-cmp v0.5.2
 	github.com/google/gofuzz v1.2.0
 	github.com/gorilla/mux v1.8.0
