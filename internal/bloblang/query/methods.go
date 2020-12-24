@@ -532,7 +532,7 @@ var _ = RegisterMethod(
 		"filter", "",
 	).InCategory(
 		MethodCategoryObjectAndArray,
-		"Executes a mapping query argument for each element of an array or key/value pair of an object, and unless the mapping returns `true` the item is removed from the resulting array or object.",
+		"Executes a mapping query argument for each element of an array or key/value pair of an object. If the query returns `false` the item is removed from the resulting array or object. The item will also be removed if the query returns any non-boolean value.",
 		NewExampleSpec(``,
 			`root.new_nums = this.nums.filter(this > 10)`,
 			`{"nums":[3,11,4,17]}`,

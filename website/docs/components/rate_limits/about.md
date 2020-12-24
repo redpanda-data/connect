@@ -38,6 +38,8 @@ input:
         resource: foobar
 ```
 
+You can find out more about resources [in this document.][config.resources]
+
 import ComponentSelect from '@theme/ComponentSelect';
 
 <ComponentSelect type="rate_limits" singular="rate limit"></ComponentSelect>
@@ -45,3 +47,4 @@ import ComponentSelect from '@theme/ComponentSelect';
 [processor.rate_limit]: /docs/components/processors/rate_limit
 [input.csv]: /docs/components/input/csv
 [input.http_client]: /docs/components/inputs/http_client
+[config.resources]: /docs/configuration/resources

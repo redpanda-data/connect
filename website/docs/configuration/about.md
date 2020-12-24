@@ -4,8 +4,7 @@ sidebar_label: About
 description: Learn about Benthos configuration
 ---
 
-Benthos pipelines are configured in a YAML file that consists of a number of
-root sections, arranged like so:
+Benthos pipelines are configured in a YAML file that consists of a number of root sections, arranged like so:
 
 import Tabs from '@theme/Tabs';
 
@@ -72,10 +71,11 @@ output:
     path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
 
 resources:
+  inputs: {}
   caches: {}
-  conditions: {}
   processors: {}
   rate_limits: {}
+  outputs: {}
 
 logger:
   level: INFO
@@ -95,27 +95,19 @@ shutdown_timeout: 20s
 
 </Tabs>
 
-Most sections represent a component type, which you can read about in more
-detail in [this document][components].
+Most sections represent a component type, which you can read about in more detail in [this document][components].
 
-These types are hierarchical. For example, an `input` can have a list of child
-`processor` types attached to it, which in turn can have their own `condition`
-or even more `processor` children.
+These types are hierarchical. For example, an `input` can have a list of child `processor` types attached to it, which in turn can have their own `condition` or even more `processor` children.
 
-This is powerful but can potentially lead to large and cumbersome configuration
-files. This document outlines tooling provided by Benthos to help with writing
-and managing these more complex configuration files.
+This is powerful but can potentially lead to large and cumbersome configuration files. This document outlines tooling provided by Benthos to help with writing and managing these more complex configuration files.
 
 ### Testing
 
-For guidance on how to write and run unit tests for your configuration files
-read [this guide][config.testing].
+For guidance on how to write and run unit tests for your configuration files read [this guide][config.testing].
 
 ## Concise Configuration
 
-It's often possible to make your configuration files more concise but less
-explicit by omitting the `type` field in components as well as any fields that
-are default. For example, the above configuration could be written as:
+It's often possible to make your configuration files more concise but less explicit by omitting the `type` field in components as well as any fields that are default. For example, the above configuration could be written as:
 
 ```yaml
 input:
@@ -138,10 +130,7 @@ output:
 
 ## Customising Your Configuration
 
-Sometimes it's useful to write a configuration where certain fields can be
-defined during deployment. For this purpose Benthos supports
-[environment variable interpolation][config-interp], allowing you to set fields
-in your config with environment variables like so:
+Sometimes it's useful to write a configuration where certain fields can be defined during deployment. For this purpose Benthos supports [environment variable interpolation][config-interp], allowing you to set fields in your config with environment variables like so:
 
 ```yaml
 input:
@@ -153,102 +142,91 @@ input:
     - ${KAFKA_TOPIC:default-topic}
 ```
 
-This is very useful for sharing configuration files across different deployment
-environments.
+This is very useful for sharing configuration files across different deployment environments.
 
 ## Reusing Configuration Snippets
 
-It's possible to break a large configuration file into smaller parts with
-[JSON references][json-references]. Benthos doesn't yet support the full
-specification as it only resolves local or file path URIs, but this still allows
-you to break your configs down significantly.
+Sometimes it's necessary to use a rather large component multiple times. Instead of copy/pasting the configuration or using YAML anchors you can define your component [as a resource][config.resources].
 
-To reference a config snippet use the `$ref` keyword:
-
-```yml
-local_reference:
-  $ref: '#/path/to/field'
-
-file_reference:
-  $ref: './foo.yaml'
-
-file_field_reference:
-  $ref: './foo.yaml#/path/to/field'
-```
-
-For example, suppose we have a configuration snippet saved under
-`./config/foo.yaml`:
+In the following example we want to make an HTTP request with our payloads. Occasionally the payload might get rejected due to garbage within its contents, and so we catch these rejected requests, attempt to "cleanse" the contents and try to make the same HTTP request again. Since the HTTP request component is quite large (and likely to change over time) we make sure to avoid duplicating it by defining it as a resource `get_foo`:
 
 ```yaml
 pipeline:
   processors:
-  - cache:
-      operator: get
-      key: ${! json("id") }
-      resource: objects
-```
+    - resource: get_foo
+    - catch:
+      - bloblang: |
+          root = this
+          root.content = this.content.strip_html()
+      - resource: get_foo
 
-And we wished to use this snippet within a larger configuration file
-`./config/bar.yaml`. We can do so by adding an object with a key `$ref` and a
-string value which is the path to our snippet:
-
-```yml
-pipeline:
+resources:
   processors:
-  - decompress:
-      algorithm: gzip
-
-  - "$ref": "./foo.yaml#/pipeline/processors/0"
+    get_foo:
+      http:
+        url: http://example.com/foo
+        verb: POST
+        headers:
+          SomeThing: "set-to-this"
+          SomeThingElse: "set-to-something-else"
 ```
 
-When Benthos loads this config, it will resolve the reference, resulting in this
-configuration:
+### Feature Toggles
+
+Resources can be imported separately to your config file with the cli flag `-r` or `-resources`, which is a useful way to switch out resources with common names based on your chosen environment. For example, with a main configuration file `config.yaml`:
 
 ```yaml
 pipeline:
   processors:
-  - decompress:
-      algorithm: gzip
-
-  - cache:
-      operator: get
-      key: ${! json("id") }
-      resource: objects
+    - resource: get_foo
 ```
 
-Note that the path of a reference is relative to the configuration file
-containing the reference, therefore the path used above is `./foo.yaml` and not
-`./config/foo.yaml`.
+And then two resource files, one stored at the path `./staging/request.yaml`:
 
-If you like, these references can even be nested. 
-
-It is further possible to use environment variables to specify which snippet 
-to load. This works because environment variable interpolations within 
-configurations are resolved _before_ references are resolved.
-
-```yml
-pipeline:
+```yaml
+resources:
   processors:
-  - decompress:
-      algorithm: gzip
-
-  - "$ref": "./${TARGET_SNIPPET}#/pipeline/processors/0"
+    get_foo:
+      http:
+        url: http://example.com/foo
+        verb: POST
+        headers:
+          SomeThing: "set-to-this"
+          SomeThingElse: "set-to-something-else"
 ```
 
-Running the above with `TARGET_SNIPPET=foo.yaml benthos -c ./config/bar.yaml`
-would be equivalent to the previous example.
+And another stored at the path `./production/request.yaml`:
+
+```yaml
+resources:
+  processors:
+    get_foo:
+      http:
+        url: http://example.com/bar
+        verb: PUT
+        headers:
+          Desires: "are-empty"
+```
+
+We can select our chosen resource by changing which file we import, either running:
+
+```sh
+benthos -r ./staging/request.yaml -c ./config.yaml
+```
+
+Or:
+
+```sh
+benthos -r ./production/request.yaml -c ./config.yaml
+```
+
+These flags also support wildcards, which allows you to import an entire directory of resource files like `benthos -r "./staging/*.yaml" -c ./config.yaml`. You can find out more about configuration resources in the [resources document][config.resources].
 
 ## Enabling Discovery
 
-The discoverability of configuration fields is a common headache with any
-configuration driven application. The classic solution is to provide curated
-documentation that is often hosted on a dedicated site.
+The discoverability of configuration fields is a common headache with any configuration driven application. The classic solution is to provide curated documentation that is often hosted on a dedicated site.
 
-However, a user often only needs to get their hands on a short, runnable example
-config file for their use case. They just need to see the format and field names
-as the fields themselves are usually self explanatory. Forcing such a user to
-navigate a website, scrolling through paragraphs of text, seems inefficient when
-all they actually needed to see was something like:
+However, a user often only needs to get their hands on a short, runnable example config file for their use case. They just need to see the format and field names as the fields themselves are usually self explanatory. Forcing such a user to navigate a website, scrolling through paragraphs of text, seems inefficient when all they actually needed to see was something like:
 
 ```yaml
 input:
@@ -263,13 +241,9 @@ output:
   type: stdout
 ```
 
-In order to make this process easier Benthos is able to generate usable
-configuration examples for any types, and you can do this from the binary using
-the `create` subcommand.
+In order to make this process easier Benthos is able to generate usable configuration examples for any types, and you can do this from the binary using the `create` subcommand.
 
-If, for example, we wanted to generate a config with a websocket input, a Kafka
-output and a Bloblang processor in the middle, we could do it with the following
-command:
+If, for example, we wanted to generate a config with a websocket input, a Kafka output and a Bloblang processor in the middle, we could do it with the following command:
 
 ```text
 benthos create websocket/bloblang/kafka
@@ -277,31 +251,21 @@ benthos create websocket/bloblang/kafka
 
 > If you need a gentle reminder as to which components Benthos offers you can see those as well with `benthos list`.
 
-All of these generated configuration examples also include other useful config
-sections such as `metrics`, `logging`, etc with sensible defaults.
+All of these generated configuration examples also include other useful config sections such as `metrics`, `logging`, etc with sensible defaults.
 
 For more information read the output from `benthos create --help`.
 
 ## Help With Debugging
 
-Once you have a config written you now move onto the next headache of proving
-that it works, and understanding why it doesn't. Benthos, like most good config
-driven services, performs validation on configs and tries to provide sensible
-error messages.
+Once you have a config written you now move onto the next headache of proving that it works, and understanding why it doesn't. Benthos, like most good config driven services, performs validation on configs and tries to provide sensible error messages.
 
-However, with validation it can be hard to capture all problems, and the user
-usually understands their intentions better than the service. In order to help
-expose and diagnose config errors Benthos provides two mechanisms, linting and
-echoing.
+However, with validation it can be hard to capture all problems, and the user usually understands their intentions better than the service. In order to help expose and diagnose config errors Benthos provides two mechanisms, linting and echoing.
 
 ### Linting
 
-If you attempt to run a config that has linting errors Benthos will print the
-errors and halt execution. If, however, you want to test your configs before
-deployment you can do so with the `lint` subcommand:
+If you attempt to run a config that has linting errors Benthos will print the errors and halt execution. If, however, you want to test your configs before deployment you can do so with the `lint` subcommand:
 
-For example, imagine we have a config `foo.yaml`, where we intend to read from
-AMQP, but there is a typo in our config struct:
+For example, imagine we have a config `foo.yaml`, where we intend to read from AMQP, but there is a typo in our config struct:
 
 ```text
 input:
@@ -321,20 +285,17 @@ For more information read the output from `benthos lint --help`.
 
 ### Echoing
 
-Echoing is where Benthos can print back your configuration _after_ it has been
-parsed. It is done with the `echo` subcommand, which is able to show you a
-normalised version of your config, allowing you to see how it was interpreted:
+Echoing is where Benthos can print back your configuration _after_ it has been parsed. It is done with the `echo` subcommand, which is able to show you a normalised version of your config, allowing you to see how it was interpreted:
 
 ```sh
 benthos -c ./your-config.yaml echo
 ```
 
-You can check the output of the above command to see if certain sections are
-missing or fields are incorrect, which allows you to pinpoint typos in the
-config.
+You can check the output of the above command to see if certain sections are missing or fields are incorrect, which allows you to pinpoint typos in the config.
 
 [processors]: /docs/components/processors/about
 [config-interp]: /docs/configuration/interpolation
 [config.testing]: /docs/configuration/unit_testing
+[config.resources]: /docs/configuration/resources
 [json-references]: https://tools.ietf.org/html/draft-pbryan-zyp-json-ref-03
 [components]: /docs/components/about

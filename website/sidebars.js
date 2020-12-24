@@ -20,6 +20,7 @@ module.exports = {
       label: 'Configuration',
       items: [
         'configuration/about',
+        'configuration/resources',
         'configuration/batching',
         'configuration/windowed_processing',
         'configuration/metadata',

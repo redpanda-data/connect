@@ -31,8 +31,10 @@ For example, the config:
 ``` yaml
 pipeline:
   processors:
-    - jmespath:
-        query: foo
+    - bloblang: |
+        root.message = this
+        root.meta.link_count = this.links.length()
+        root.user.age = this.user.age.number()
 ```
 
 Is equivalent to:
@@ -45,12 +47,16 @@ pipeline:
 resources:
   processors:
     foo_proc:
-      jmespath:
-        query: foo
+      bloblang: |
+        root.message = this
+        root.meta.link_count = this.links.length()
+        root.user.age = this.user.age.number()
 ```
 
-But now the metrics path of the JMESPath processor will be
+But now the metrics path of the Bloblang processor will be
 `resources.processors.foo_proc`, this way of flattening observability
 labels becomes more useful as configs get larger and more nested.
+
+You can find out more about resources [in this document.](/docs/configuration/resources)
 
 

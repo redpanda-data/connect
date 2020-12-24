@@ -32,6 +32,8 @@ pipeline:
 
 For the simple case where you wish to store messages in a cache as an output destination for your pipeline check out the [`cache` output][output.cache]. To see examples of more advanced uses of caches such as hydration and deduplication check out the [`cache` processor][processor.cache]. 
 
+You can find out more about resources [in this document.][config.resources]
+
 import ComponentSelect from '@theme/ComponentSelect';
 
 <ComponentSelect type="caches"></ComponentSelect>
@@ -39,3 +41,4 @@ import ComponentSelect from '@theme/ComponentSelect';
 [cache.multilevel]: /docs/components/caches/multilevel
 [processor.cache]: /docs/components/processors/cache
 [output.cache]: /docs/components/outputs/cache
+[config.resources]: /docs/configuration/resources
