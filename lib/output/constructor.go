@@ -76,6 +76,7 @@ const (
 	TypeAWSSNS             = "aws_sns"
 	TypeAWSSQS             = "aws_sqs"
 	TypeAzureBlobStorage   = "azure_blob_storage"
+	TypeAzureQueueStorage  = "azure_queue_storage"
 	TypeAzureTableStorage  = "azure_table_storage"
 	TypeBlobStorage        = "blob_storage"
 	TypeBroker             = "broker"
@@ -140,6 +141,7 @@ type Config struct {
 	AWSSNS             writer.SNSConfig               `json:"aws_sns" yaml:"aws_sns"`
 	AWSSQS             writer.AmazonSQSConfig         `json:"aws_sqs" yaml:"aws_sqs"`
 	AzureBlobStorage   writer.AzureBlobStorageConfig  `json:"azure_blob_storage" yaml:"azure_blob_storage"`
+	AzureQueueStorage  writer.AzureQueueStorageConfig `json:"azure_queue_storage" yaml:"azure_queue_storage"`
 	AzureTableStorage  writer.AzureTableStorageConfig `json:"azure_table_storage" yaml:"azure_table_storage"`
 	BlobStorage        writer.AzureBlobStorageConfig  `json:"blob_storage" yaml:"blob_storage"`
 	Broker             BrokerConfig                   `json:"broker" yaml:"broker"`
@@ -205,6 +207,7 @@ func NewConfig() Config {
 		AWSSNS:             writer.NewSNSConfig(),
 		AWSSQS:             writer.NewAmazonSQSConfig(),
 		AzureBlobStorage:   writer.NewAzureBlobStorageConfig(),
+		AzureQueueStorage:  writer.NewAzureQueueStorageConfig(),
 		AzureTableStorage:  writer.NewAzureTableStorageConfig(),
 		BlobStorage:        writer.NewAzureBlobStorageConfig(),
 		Broker:             NewBrokerConfig(),

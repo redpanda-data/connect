@@ -1019,6 +1019,18 @@ output:
           storage_access_key: ${OUTPUT_AZURE_BLOB_STORAGE_STORAGE_ACCESS_KEY}
           storage_account: ${OUTPUT_AZURE_BLOB_STORAGE_STORAGE_ACCOUNT}
           storage_connection_string: ${OUTPUT_AZURE_BLOB_STORAGE_STORAGE_CONNECTION_STRING}
+        azure_queue_storage:
+          batching:
+            byte_size: ${OUTPUT_AZURE_QUEUE_STORAGE_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_AZURE_QUEUE_STORAGE_BATCHING_CHECK}
+            count: ${OUTPUT_AZURE_QUEUE_STORAGE_BATCHING_COUNT:0}
+            period: ${OUTPUT_AZURE_QUEUE_STORAGE_BATCHING_PERIOD}
+          max_in_flight: ${OUTPUT_AZURE_QUEUE_STORAGE_MAX_IN_FLIGHT:1}
+          queue_name: ${OUTPUT_AZURE_QUEUE_STORAGE_QUEUE_NAME}
+          storage_access_key: ${OUTPUT_AZURE_QUEUE_STORAGE_STORAGE_ACCESS_KEY}
+          storage_account: ${OUTPUT_AZURE_QUEUE_STORAGE_STORAGE_ACCOUNT}
+          storage_connection_string: ${OUTPUT_AZURE_QUEUE_STORAGE_STORAGE_CONNECTION_STRING}
+          ttl: ${OUTPUT_AZURE_QUEUE_STORAGE_TTL}
         azure_table_storage:
           batching:
             byte_size: ${OUTPUT_AZURE_TABLE_STORAGE_BATCHING_BYTE_SIZE:0}
