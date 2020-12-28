@@ -711,6 +711,8 @@ PROCESSOR_XML_OPERATOR                               = to_json
 OUTPUTS                                                  = 1
 OUTPUTS_PATTERN                                          = greedy
 OUTPUT_TYPE                                              = dynamic
+OUTPUT_AMQP_0_9_CONTENT_ENCODING
+OUTPUT_AMQP_0_9_CONTENT_TYPE                             = application/octet-stream
 OUTPUT_AMQP_0_9_EXCHANGE                                 = benthos-exchange
 OUTPUT_AMQP_0_9_EXCHANGE_DECLARE_DURABLE                 = true
 OUTPUT_AMQP_0_9_EXCHANGE_DECLARE_ENABLED                 = false
@@ -734,6 +736,8 @@ OUTPUT_AMQP_1_TLS_ENABLED                                = false
 OUTPUT_AMQP_1_TLS_ROOT_CAS_FILE
 OUTPUT_AMQP_1_TLS_SKIP_CERT_VERIFY                       = false
 OUTPUT_AMQP_1_URL
+OUTPUT_AMQP_CONTENT_ENCODING
+OUTPUT_AMQP_CONTENT_TYPE                                 = application/octet-stream
 OUTPUT_AMQP_EXCHANGE                                     = benthos-exchange
 OUTPUT_AMQP_EXCHANGE_DECLARE_DURABLE                     = true
 OUTPUT_AMQP_EXCHANGE_DECLARE_ENABLED                     = false

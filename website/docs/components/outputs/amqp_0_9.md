@@ -53,6 +53,8 @@ output:
       durable: true
     key: benthos-key
     type: ""
+    content_type: application/octet-stream
+    content_encoding: ""
     max_in_flight: 1
     persistent: false
     mandatory: false
@@ -155,6 +157,24 @@ Default: `"benthos-key"`
 ### `type`
 
 The type property to set for each message.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `content_type`
+
+The content type attribute to set for each message.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `"application/octet-stream"`  
+
+### `content_encoding`
+
+The content encoding attribute to set for each message.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 

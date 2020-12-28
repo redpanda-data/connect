@@ -32,6 +32,8 @@ pipeline:
 output:
   type: amqp_0_9
   amqp_0_9:
+    content_encoding: ""
+    content_type: application/octet-stream
     exchange: benthos-exchange
     exchange_declare:
       durable: true

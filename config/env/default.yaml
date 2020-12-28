@@ -834,6 +834,8 @@ output:
     copies: ${OUTPUTS:1}
     outputs:
       - amqp:
+          content_encoding: ${OUTPUT_AMQP_CONTENT_ENCODING}
+          content_type: ${OUTPUT_AMQP_CONTENT_TYPE:application/octet-stream}
           exchange: ${OUTPUT_AMQP_EXCHANGE:benthos-exchange}
           exchange_declare:
             durable: ${OUTPUT_AMQP_EXCHANGE_DECLARE_DURABLE:true}
@@ -851,6 +853,8 @@ output:
           type: ${OUTPUT_AMQP_TYPE}
           url: ${OUTPUT_AMQP_URL:amqp://guest:guest@localhost:5672/}
         amqp_0_9:
+          content_encoding: ${OUTPUT_AMQP_0_9_CONTENT_ENCODING}
+          content_type: ${OUTPUT_AMQP_0_9_CONTENT_TYPE:application/octet-stream}
           exchange: ${OUTPUT_AMQP_0_9_EXCHANGE:benthos-exchange}
           exchange_declare:
             durable: ${OUTPUT_AMQP_0_9_EXCHANGE_DECLARE_DURABLE:true}

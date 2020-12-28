@@ -46,6 +46,8 @@ The fields 'key' and 'type' can be dynamically set using function interpolations
 			),
 			docs.FieldCommon("key", "The binding key to set for each message.").SupportsInterpolation(false),
 			docs.FieldCommon("type", "The type property to set for each message.").SupportsInterpolation(false),
+			docs.FieldAdvanced("content_type", "The content type attribute to set for each message.").SupportsInterpolation(false),
+			docs.FieldAdvanced("content_encoding", "The content encoding attribute to set for each message.").SupportsInterpolation(false),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldAdvanced("persistent", "Whether message delivery should be persistent (transient by default)."),
 			docs.FieldAdvanced("mandatory", "Whether to set the mandatory flag on published messages. When set if a published message is routed to zero queues it is returned."),

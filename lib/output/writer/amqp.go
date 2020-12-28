@@ -36,6 +36,8 @@ type AMQPConfig struct {
 	ExchangeDeclare AMQPExchangeDeclareConfig `json:"exchange_declare" yaml:"exchange_declare"`
 	BindingKey      string                    `json:"key" yaml:"key"`
 	Type            string                    `json:"type" yaml:"type"`
+	ContentType     string                    `json:"content_type" yaml:"content_type"`
+	ContentEncoding string                    `json:"content_encoding" yaml:"content_encoding"`
 	Persistent      bool                      `json:"persistent" yaml:"persistent"`
 	Mandatory       bool                      `json:"mandatory" yaml:"mandatory"`
 	Immediate       bool                      `json:"immediate" yaml:"immediate"`
@@ -53,12 +55,14 @@ func NewAMQPConfig() AMQPConfig {
 			Type:    "direct",
 			Durable: true,
 		},
-		BindingKey: "benthos-key",
-		Type:       "",
-		Persistent: false,
-		Mandatory:  false,
-		Immediate:  false,
-		TLS:        btls.NewConfig(),
+		BindingKey:      "benthos-key",
+		Type:            "",
+		ContentType:     "application/octet-stream",
+		ContentEncoding: "",
+		Persistent:      false,
+		Mandatory:       false,
+		Immediate:       false,
+		TLS:             btls.NewConfig(),
 	}
 }
 
@@ -66,8 +70,10 @@ func NewAMQPConfig() AMQPConfig {
 
 // AMQP is an output type that serves AMQP messages.
 type AMQP struct {
-	key     field.Expression
-	msgType field.Expression
+	key             field.Expression
+	msgType         field.Expression
+	contentType     field.Expression
+	contentEncoding field.Expression
 
 	log   log.Modular
 	stats metrics.Type
@@ -99,6 +105,12 @@ func NewAMQP(conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error
 	}
 	if a.msgType, err = bloblang.NewField(conf.Type); err != nil {
 		return nil, fmt.Errorf("failed to parse type property expression: %v", err)
+	}
+	if a.contentType, err = bloblang.NewField(conf.ContentType); err != nil {
+		return nil, fmt.Errorf("failed to parse content_type property expression: %v", err)
+	}
+	if a.contentEncoding, err = bloblang.NewField(conf.ContentEncoding); err != nil {
+		return nil, fmt.Errorf("failed to parse content_encoding property expression: %v", err)
 	}
 	if conf.Persistent {
 		a.deliveryMode = amqp.Persistent
@@ -217,6 +229,8 @@ func (a *AMQP) Write(msg types.Message) error {
 	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		bindingKey := strings.Replace(a.key.String(i, msg), "/", ".", -1)
 		msgType := strings.Replace(a.msgType.String(i, msg), "/", ".", -1)
+		contentType := a.contentType.String(i, msg)
+		contentEncoding := a.contentEncoding.String(i, msg)
 
 		headers := amqp.Table{}
 		p.Metadata().Iter(func(k, v string) error {
@@ -231,8 +245,8 @@ func (a *AMQP) Write(msg types.Message) error {
 			a.conf.Immediate, // immediate
 			amqp.Publishing{
 				Headers:         headers,
-				ContentType:     "application/octet-stream",
-				ContentEncoding: "",
+				ContentType:     contentType,
+				ContentEncoding: contentEncoding,
 				Body:            p.Get(),
 				DeliveryMode:    a.deliveryMode, // 1=non-persistent, 2=persistent
 				Priority:        0,              // 0-9

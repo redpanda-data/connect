@@ -22,6 +22,8 @@ This component is deprecated and will be removed in the next major version relea
 # Config fields, showing default values
 output:
   amqp:
+    content_encoding: ""
+    content_type: application/octet-stream
     exchange: benthos-exchange
     exchange_declare:
       durable: true
