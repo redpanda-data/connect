@@ -1142,6 +1142,11 @@ output:
           project: ${OUTPUT_GCP_PUBSUB_PROJECT}
           topic: ${OUTPUT_GCP_PUBSUB_TOPIC}
         hdfs:
+          batching:
+            byte_size: ${OUTPUT_HDFS_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_HDFS_BATCHING_CHECK}
+            count: ${OUTPUT_HDFS_BATCHING_COUNT:0}
+            period: ${OUTPUT_HDFS_BATCHING_PERIOD}
           directory: ${OUTPUT_HDFS_DIRECTORY}
           hosts:
             - ${OUTPUT_HDFS_HOSTS:localhost:9000}

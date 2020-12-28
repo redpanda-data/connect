@@ -3,6 +3,7 @@ package output
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -18,8 +19,10 @@ Sends message parts as files to a HDFS directory.`,
 		Description: `
 Each file is written with the path specified with the 'path' field, in order to
 have a different path for each object you should use function interpolations
-described [here](/docs/configuration/interpolation#bloblang-queries). When sending
-batched messages the interpolations are performed per message part.`,
+described [here](/docs/configuration/interpolation#bloblang-queries).`,
+		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
+			return sanitiseWithBatch(conf.HDFS, conf.HDFS.Batching)
+		},
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("hosts", "A list of hosts to connect to.", "localhost:9000"),
@@ -30,6 +33,7 @@ batched messages the interpolations are performed per message part.`,
 				`${!count("files")}-${!timestamp_unix_nano()}.txt`,
 			).SupportsInterpolation(false),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			batch.FieldSpec(),
 		},
 		Categories: []Category{
 			CategoryServices,
@@ -45,14 +49,13 @@ func NewHDFS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type
 	if err != nil {
 		return nil, err
 	}
-	if conf.HDFS.MaxInFlight == 1 {
-		return NewWriter(
-			TypeHDFS, h, log, stats,
-		)
-	}
-	return NewAsyncWriter(
+	w, err := NewAsyncWriter(
 		TypeHDFS, conf.HDFS.MaxInFlight, h, log, stats,
 	)
+	if err != nil {
+		return nil, err
+	}
+	return newBatcherFromConf(conf.HDFS.Batching, w, mgr, log, stats)
 }
 
 //------------------------------------------------------------------------------

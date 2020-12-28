@@ -158,6 +158,59 @@ func integrationTestSendBatchCount(n int) testDefinition {
 	)
 }
 
+// The input is created after the output has written data.
+func integrationTestSendBatchCountIsolated(n int) testDefinition {
+	return namedTest(
+		"can send messages with an output batch count isolated",
+		func(t *testing.T, env *testEnvironment) {
+			t.Parallel()
+
+			env.configVars.outputBatchCount = n
+
+			tranChan := make(chan types.Transaction)
+			output := initOutput(t, tranChan, env)
+			t.Cleanup(func() {
+				closeConnectors(t, nil, output)
+			})
+
+			resChan := make(chan types.Response)
+
+			set := map[string][]string{}
+			for i := 0; i < n; i++ {
+				payload := fmt.Sprintf("hello world %v", i)
+				set[payload] = nil
+				msg := message.New(nil)
+				msg.Append(message.NewPart([]byte(payload)))
+				select {
+				case tranChan <- types.NewTransaction(msg, resChan):
+				case res := <-resChan:
+					t.Fatalf("premature response: %v", res.Error())
+				case <-env.ctx.Done():
+					t.Fatal("timed out on send")
+				}
+			}
+
+			for i := 0; i < n; i++ {
+				select {
+				case res := <-resChan:
+					assert.NoError(t, res.Error())
+				case <-env.ctx.Done():
+					t.Fatal("timed out on response")
+				}
+			}
+
+			input := initInput(t, env)
+			t.Cleanup(func() {
+				closeConnectors(t, input, nil)
+			})
+
+			for len(set) > 0 {
+				messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+			}
+		},
+	)
+}
+
 func integrationTestReceiveBatchCount(n int) testDefinition {
 	return namedTest(
 		"can send messages with an input batch count",

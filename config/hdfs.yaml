@@ -21,6 +21,12 @@ pipeline:
 output:
   type: hdfs
   hdfs:
+    batching:
+      byte_size: 0
+      check: ""
+      count: 0
+      period: ""
+      processors: []
     directory: ""
     hosts:
       - localhost:9000

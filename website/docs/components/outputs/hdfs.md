@@ -18,8 +18,16 @@ import TabItem from '@theme/TabItem';
 
 Sends message parts as files to a HDFS directory.
 
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yaml
-# Config fields, showing default values
+# Common config fields, showing default values
 output:
   hdfs:
     hosts:
@@ -28,12 +36,40 @@ output:
     directory: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     max_in_flight: 1
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
 ```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+# All config fields, showing default values
+output:
+  hdfs:
+    hosts:
+      - localhost:9000
+    user: benthos_hdfs
+    directory: ""
+    path: ${!count("files")}-${!timestamp_unix_nano()}.txt
+    max_in_flight: 1
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: []
+```
+
+</TabItem>
+</Tabs>
 
 Each file is written with the path specified with the 'path' field, in order to
 have a different path for each object you should use function interpolations
-described [here](/docs/configuration/interpolation#bloblang-queries). When sending
-batched messages the interpolations are performed per message part.
+described [here](/docs/configuration/interpolation#bloblang-queries).
 
 ## Performance
 
@@ -95,5 +131,101 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 Type: `number`  
 Default: `1`  
+
+### `batching`
+
+Allows you to configure a [batching policy](/docs/configuration/batching).
+
+
+Type: `object`  
+
+```yaml
+# Examples
+
+batching:
+  byte_size: 5000
+  count: 0
+  period: 1s
+
+batching:
+  count: 10
+  period: 1s
+
+batching:
+  check: this.contains("END BATCH")
+  count: 0
+  period: 1m
+```
+
+### `batching.count`
+
+A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+
+Type: `number`  
+Default: `0`  
+
+### `batching.byte_size`
+
+An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+
+Type: `number`  
+Default: `0`  
+
+### `batching.period`
+
+A period in which an incomplete batch should be flushed regardless of its size.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+period: 1s
+
+period: 1m
+
+period: 500ms
+```
+
+### `batching.check`
+
+A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should end a batch.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+check: this.type == "end_of_transaction"
+```
+
+### `batching.processors`
+
+A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+processors:
+  - archive:
+      format: lines
+
+processors:
+  - archive:
+      format: json_array
+
+processors:
+  - merge_json: {}
+```
 
 

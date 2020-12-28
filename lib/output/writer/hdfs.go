@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/colinmarc/hdfs"
@@ -18,11 +19,12 @@ import (
 
 // HDFSConfig contains configuration fields for the HDFS output type.
 type HDFSConfig struct {
-	Hosts       []string `json:"hosts" yaml:"hosts"`
-	User        string   `json:"user" yaml:"user"`
-	Directory   string   `json:"directory" yaml:"directory"`
-	Path        string   `json:"path" yaml:"path"`
-	MaxInFlight int      `json:"max_in_flight" yaml:"max_in_flight"`
+	Hosts       []string           `json:"hosts" yaml:"hosts"`
+	User        string             `json:"user" yaml:"user"`
+	Directory   string             `json:"directory" yaml:"directory"`
+	Path        string             `json:"path" yaml:"path"`
+	MaxInFlight int                `json:"max_in_flight" yaml:"max_in_flight"`
+	Batching    batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewHDFSConfig creates a new Config with default values.
@@ -33,6 +35,7 @@ func NewHDFSConfig() HDFSConfig {
 		Directory:   "",
 		Path:        `${!count("files")}-${!timestamp_unix_nano()}.txt`,
 		MaxInFlight: 1,
+		Batching:    batch.NewPolicyConfig(),
 	}
 }
 

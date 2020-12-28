@@ -71,6 +71,8 @@ output:
     directory: /$ID
     path: ${!count("$ID")}-${!timestamp_unix_nano()}.txt
     max_in_flight: $MAX_IN_FLIGHT
+    batching:
+      count: $OUTPUT_BATCH_COUNT
 
 input:
   hdfs:
@@ -81,5 +83,6 @@ input:
 	integrationTests(
 		integrationTestOpenCloseIsolated(),
 		integrationTestStreamIsolated(10),
+		integrationTestSendBatchCountIsolated(10),
 	).Run(t, template)
 })
