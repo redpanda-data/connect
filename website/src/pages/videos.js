@@ -1,10 +1,9 @@
 import React from 'react';
 import classnames from 'classnames';
 import Layout from '@theme/Layout';
-import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
-import useBaseUrl from '@docusaurus/useBaseUrl';
 import styles from './videos.module.css';
+import ReactPlayer from 'react-player/youtube'
 
 function Videos() {
   const context = useDocusaurusContext();
@@ -18,14 +17,24 @@ function Videos() {
           <div className="row">
             <div className={classnames('col col--6 col--offset-3')}>
               <h1 className={styles.videosTitle}>Benthos Videos</h1>
-              <p>Rated U for Underwhelming.</p>
+              <p>All videos are rated U for Underwhelming. If you'd rather access these videos directly from YouTube you can find them on <a href="https://www.youtube.com/channel/UCjIYEhBrw3GQwpRWe1asufg">the Jeffail channel</a>.</p>
             </div>
           </div>
         </div>
       </header>
       <main>
-        <div className={styles.videoContainer}>
-          <iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/videoseries?list=PL9hWaP-BQh2rvNuM29bTLlL0hYk6cqyT5" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+        <div className="container margin-vert--lg">
+          <div className="row">
+            <div className="col col--8 col--offset-2">
+              <h2>Tutorials</h2>
+              <p>This playlist contains tutorial videos covering various aspects of Benthos use.</p>
+            </div>
+            <ReactPlayer
+              className={classnames('col col--8 col--offset-2')}
+              url='https://www.youtube-nocookie.com/embed/videoseries?list=PL9hWaP-BQh2rvNuM29bTLlL0hYk6cqyT5'
+              controls='true'
+            />
+          </div>
         </div>
       </main>
     </Layout>
