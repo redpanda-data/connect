@@ -3,7 +3,6 @@ vendor
 tmp
 site
 .tags
-go.sum
 .DS_Store
 TODO.md
 release_notes.md
