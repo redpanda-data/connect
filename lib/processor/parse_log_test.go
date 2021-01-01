@@ -1,7 +1,9 @@
 package processor
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -40,7 +42,7 @@ func TestParseLogCases(t *testing.T) {
 			codec:   "json",
 			bestEff: true,
 			input:   `<28>Dec  2 16:49:23 host app[23410]: Test`,
-			output:  `{"appname":"app","facility":3,"hostname":"host","message":"Test","priority":28,"procid":"23410","severity":4,"timestamp":"2020-12-02T16:49:23Z"}`,
+			output:  fmt.Sprintf(`{"appname":"app","facility":3,"hostname":"host","message":"Test","priority":28,"procid":"23410","severity":4,"timestamp":"%v-12-02T16:49:23Z"}`, time.Now().Year()),
 		},
 	}
 
