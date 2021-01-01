@@ -4,10 +4,13 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"math/bits"
 	"os/exec"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -49,6 +52,8 @@ If a message contains line breaks each line of the message is piped to the subpr
 			docs.FieldCommon("name", "The command to execute as a subprocess.", "cat", "sed", "awk"),
 			docs.FieldCommon("args", "A list of arguments to provide the command."),
 			docs.FieldAdvanced("max_buffer", "The maximum expected response size."),
+			docs.FieldAdvanced("codec_send", "The data transfer codec (stdin of the subprocess)"),
+			docs.FieldAdvanced("codec_recv", "The data transfer codec (stdout of the subprocess)"),
 			partsFieldSpec,
 		},
 	}
@@ -62,6 +67,8 @@ type SubprocessConfig struct {
 	Name      string   `json:"name" yaml:"name"`
 	Args      []string `json:"args" yaml:"args"`
 	MaxBuffer int      `json:"max_buffer" yaml:"max_buffer"`
+	CodecSend string   `json:"codec_send" yaml:"codec_send"`
+	CodecRecv string   `json:"codec_recv" yaml:"codec_recv"`
 }
 
 // NewSubprocessConfig returns a SubprocessConfig with default values.
@@ -71,6 +78,8 @@ func NewSubprocessConfig() SubprocessConfig {
 		Name:      "cat",
 		Args:      []string{},
 		MaxBuffer: bufio.MaxScanTokenSize,
+		CodecSend: "lines",
+		CodecRecv: "lines",
 	}
 }
 
@@ -114,7 +123,7 @@ func newSubprocess(
 		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 	var err error
-	if e.subproc, err = newSubprocWrapper(conf.Name, conf.Args, e.conf.MaxBuffer, log); err != nil {
+	if e.subproc, err = newSubprocWrapper(conf.Name, conf.Args, e.conf.MaxBuffer, conf.CodecRecv, log); err != nil {
 		return nil, err
 	}
 	return e, nil
@@ -123,9 +132,10 @@ func newSubprocess(
 //------------------------------------------------------------------------------
 
 type subprocWrapper struct {
-	name   string
-	args   []string
-	maxBuf int
+	name      string
+	args      []string
+	maxBuf    int
+	codecRecv string
 
 	logger log.Modular
 
@@ -142,11 +152,12 @@ type subprocWrapper struct {
 	closedChan chan struct{}
 }
 
-func newSubprocWrapper(name string, args []string, maxBuf int, log log.Modular) (*subprocWrapper, error) {
+func newSubprocWrapper(name string, args []string, maxBuf int, codecRecv string, log log.Modular) (*subprocWrapper, error) {
 	s := &subprocWrapper{
 		name:       name,
 		args:       args,
 		maxBuf:     maxBuf,
+		codecRecv:  codecRecv,
 		logger:     log,
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
@@ -188,6 +199,56 @@ func newSubprocWrapper(name string, args []string, maxBuf int, log log.Modular) 
 		}
 	}()
 	return s, nil
+}
+
+var maxInt = (1<<bits.UintSize)/2 - 1
+
+func lengthPrefixedUInt32BESplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	const prefixBytes int = 4
+	if atEOF {
+		return 0, nil, nil
+	}
+	if len(data) < prefixBytes {
+		// request more data
+		return 0, nil, nil
+	}
+	l := binary.BigEndian.Uint32(data)
+	if l > (uint32(maxInt) - uint32(prefixBytes)) {
+		return 0, nil, errors.New("number of bytes to read exceeds representable range of go int datatype")
+	}
+	bytesToRead := int(l)
+
+	if len(data)-prefixBytes >= bytesToRead {
+		return prefixBytes + bytesToRead, data[prefixBytes : prefixBytes+bytesToRead], nil
+	} else {
+		// request more data
+		return 0, nil, nil
+	}
+}
+func netstringSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF {
+		return 0, nil, nil
+	}
+
+	if i := bytes.IndexByte(data, ':'); i >= 0 {
+		if i == 0 {
+			return 0, nil, errors.New("encountered invalid netstring: netstring starts with colon (':')")
+		}
+		l, err := strconv.ParseUint(string(data[0:i]), 10, bits.UintSize-1)
+		if err != nil {
+			return 0, nil, errors.New(fmt.Sprintf("encountered invalid netstring: unable to decode length '%v'", string(data[0:i])))
+		}
+		bytesToRead := int(l)
+
+		if len(data) > i+1+bytesToRead {
+			if data[i+1+bytesToRead] != ',' {
+				return 0, nil, errors.New("encountered invalid netstring: trailing comma-character is missing")
+			}
+			return i + 1 + bytesToRead + 1, data[i+1 : i+1+bytesToRead], nil
+		}
+	}
+	// request more data
+	return 0, nil, nil
 }
 
 func (s *subprocWrapper) start() error {
@@ -238,6 +299,19 @@ func (s *subprocWrapper) start() error {
 		}()
 
 		scanner := bufio.NewScanner(cmdStdout)
+		switch s.codecRecv {
+		case "lines":
+			// bufio Scanner uses ScanLines as default function
+			break
+		case "length_prefixed_uint32_be":
+			scanner.Split(lengthPrefixedUInt32BESplitFunc)
+			break
+		case "netstring":
+			scanner.Split(netstringSplitFunc)
+			break
+		default:
+			s.logger.Errorf("Invalid codec_recv option: '%v' is not one of ('lines','length_prefixed_uint32_be','netstring')\n", s.codecRecv)
+		}
 		if s.maxBuf != bufio.MaxScanTokenSize {
 			scanner.Buffer(nil, s.maxBuf)
 		}
@@ -292,7 +366,7 @@ func (s *subprocWrapper) stop() error {
 	return err
 }
 
-func (s *subprocWrapper) Send(line []byte) ([]byte, error) {
+func (s *subprocWrapper) Send(prolog []byte, payload []byte, epilog []byte) ([]byte, error) {
 	s.cmdMut.Lock()
 	stdin := s.cmdStdin
 	outChan := s.stdoutChan
@@ -302,11 +376,18 @@ func (s *subprocWrapper) Send(line []byte) ([]byte, error) {
 	if stdin == nil {
 		return nil, types.ErrTypeClosed
 	}
-	if _, err := stdin.Write(line); err != nil {
+	if prolog != nil {
+		if _, err := stdin.Write(prolog); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := stdin.Write(payload); err != nil {
 		return nil, err
 	}
-	if _, err := stdin.Write([]byte("\n")); err != nil {
-		return nil, err
+	if epilog != nil {
+		if _, err := stdin.Write(epilog); err != nil {
+			return nil, err
+		}
 	}
 
 	var outBytes, errBytes []byte
@@ -339,6 +420,8 @@ func (s *subprocWrapper) Send(line []byte) ([]byte, error) {
 }
 
 //------------------------------------------------------------------------------
+var newLineBytes = []byte("\n")
+var commaBytes = []byte(",")
 
 // ProcessMessage logs an event and returns the message unchanged.
 func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
@@ -348,18 +431,19 @@ func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 	result := msg.Copy()
 
-	proc := func(i int) error {
+	var proc func(int) error
+	procLines := func(i int) error {
 		span := tracing.CreateChildSpan(TypeSubprocess, result.Get(i))
 		defer span.Finish()
 
 		results := [][]byte{}
-		splitMsg := bytes.Split(result.Get(i).Get(), []byte("\n"))
+		splitMsg := bytes.Split(result.Get(i).Get(), newLineBytes)
 		for j, p := range splitMsg {
 			if len(p) == 0 && len(splitMsg) > 1 && j == (len(splitMsg)-1) {
 				results = append(results, []byte(""))
 				continue
 			}
-			res, err := e.subproc.Send(p)
+			res, err := e.subproc.Send(nil, p, newLineBytes)
 			if err != nil {
 				e.log.Errorf("Failed to send message to subprocess: %v\n", err)
 				e.mErr.Incr(1)
@@ -373,8 +457,66 @@ func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.R
 				results = append(results, res)
 			}
 		}
-		result.Get(i).Set(bytes.Join(results, []byte("\n")))
+		result.Get(i).Set(bytes.Join(results, newLineBytes))
 		return nil
+	}
+	switch e.conf.CodecSend {
+	case "lines":
+		proc = procLines
+		break
+	case "length_prefixed_uint32_be":
+		proc = func(i int) error {
+			span := tracing.CreateChildSpan(TypeSubprocess, result.Get(i))
+			defer span.Finish()
+			const prefixBytes int = 4
+
+			lenBuf := make([]byte, prefixBytes)
+			m := result.Get(i).Get()
+			binary.BigEndian.PutUint32(lenBuf, uint32(len(m)))
+
+			res, err := e.subproc.Send(lenBuf, m, nil)
+			if err != nil {
+				e.log.Errorf("Failed to send message to subprocess: %v\n", err)
+				_ = e.mErr.Incr(1)
+				span.LogFields(
+					olog.String("event", "error"),
+					olog.String("type", err.Error()),
+				)
+				FlagErr(result.Get(i), err)
+				result.Get(i).Set(m)
+			} else {
+				result.Get(i).Set(res)
+			}
+			return nil
+		}
+		break
+	case "netstring":
+		proc = func(i int) error {
+			span := tracing.CreateChildSpan(TypeSubprocess, result.Get(i))
+			defer span.Finish()
+
+			lenBuf := make([]byte, 0)
+			m := result.Get(i).Get()
+			lenBuf = append(strconv.AppendUint(lenBuf, uint64(len(m)), 10), ':')
+			res, err := e.subproc.Send(lenBuf, m, commaBytes)
+			if err != nil {
+				e.log.Errorf("Failed to send message to subprocess: %v\n", err)
+				e.mErr.Incr(1)
+				span.LogFields(
+					olog.String("event", "error"),
+					olog.String("type", err.Error()),
+				)
+				FlagErr(result.Get(i), err)
+				result.Get(i).Set(m)
+			} else {
+				result.Get(i).Set(res)
+			}
+			return nil
+		}
+		break
+	default:
+		e.log.Errorf("Invalid codec_send option: '%v' is not one of ('lines','length_prefixed_uint32_be','netstring^)\n", e.conf.CodecSend)
+		proc = procLines
 	}
 
 	if len(e.conf.Parts) == 0 {
