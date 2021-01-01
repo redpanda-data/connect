@@ -813,6 +813,8 @@ pipeline:
         query: ${PROCESSOR_SQL_QUERY}
         result_codec: ${PROCESSOR_SQL_RESULT_CODEC:none}
       subprocess:
+        codec_recv: ${PROCESSOR_SUBPROCESS_CODEC_RECV:lines}
+        codec_send: ${PROCESSOR_SUBPROCESS_CODEC_SEND:lines}
         max_buffer: ${PROCESSOR_SUBPROCESS_MAX_BUFFER:65536}
         name: ${PROCESSOR_SUBPROCESS_NAME:cat}
       text:

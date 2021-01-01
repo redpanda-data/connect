@@ -694,6 +694,8 @@ PROCESSOR_SQL_DRIVER                                 = mysql
 PROCESSOR_SQL_DSN
 PROCESSOR_SQL_QUERY
 PROCESSOR_SQL_RESULT_CODEC                           = none
+PROCESSOR_SUBPROCESS_CODEC_RECV                      = lines
+PROCESSOR_SUBPROCESS_CODEC_SEND                      = lines
 PROCESSOR_SUBPROCESS_MAX_BUFFER                      = 65536
 PROCESSOR_SUBPROCESS_NAME                            = cat
 PROCESSOR_TEXT_ARG

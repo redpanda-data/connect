@@ -96,46 +96,6 @@ func TestSubprocessWithCat(t *testing.T) {
 	}
 }
 
-func TestSubprocessWithCatBinarySend(t *testing.T) {
-	//t.Skip("disabled for now")
-
-	conf := NewConfig()
-	conf.Type = TypeSubprocess
-	conf.Subprocess.Name = "cat"
-
-	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Skipf("Not sure if this is due to missing executable: %v", err)
-	}
-
-	exp := [][]byte{
-		[]byte(`hello bar world`),
-		[]byte(`hello baz world`),
-		[]byte(`bar`),
-	}
-	msgIn := message.New([][]byte{
-		[]byte(`hello bar world`),
-		[]byte(`hello baz world`),
-		[]byte(`bar`),
-	})
-	msgs, res := proc.ProcessMessage(msgIn)
-	if len(msgs) != 1 {
-		t.Fatal("Wrong count of messages")
-	}
-	if res != nil {
-		t.Fatalf("Non-nil result: %v", res.Error())
-	}
-
-	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong results: %s != %s", act, exp)
-	}
-
-	proc.CloseAsync()
-	if err := proc.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
-}
-
 func TestSubprocessLineBreaks(t *testing.T) {
 	t.Skip("disabled for now")
 

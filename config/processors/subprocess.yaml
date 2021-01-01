@@ -19,6 +19,8 @@ pipeline:
     - type: subprocess
       subprocess:
         args: []
+        codec_recv: lines
+        codec_send: lines
         max_buffer: 65536
         name: cat
         parts: []

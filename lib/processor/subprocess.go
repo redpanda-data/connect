@@ -17,11 +17,9 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	olog "github.com/opentracing/opentracing-go/log"
+	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -36,6 +34,8 @@ func init() {
 Executes a command as a subprocess and, for each message, will pipe its contents to the stdin stream of the process followed by a newline.`,
 		Description: `
 The subprocess must then either return a line over stdout or stderr. If a response is returned over stdout then its contents will replace the message. If a response is instead returned from stderr it will be logged and the message will continue unchanged and will be [marked as failed](/docs/configuration/error_handling).
+
+Rather than separating data by a newline it's possible to specify alternative ` + "[`codec_send`](#codec_send) and [`codec_recv`](#codec_recv)" + ` values, which allow binary messages to be encoded for logical separation.
 
 The execution environment of the subprocess is the same as the Benthos instance, including environment variables and the current working directory.
 
@@ -52,8 +52,12 @@ If a message contains line breaks each line of the message is piped to the subpr
 			docs.FieldCommon("name", "The command to execute as a subprocess.", "cat", "sed", "awk"),
 			docs.FieldCommon("args", "A list of arguments to provide the command."),
 			docs.FieldAdvanced("max_buffer", "The maximum expected response size."),
-			docs.FieldAdvanced("codec_send", "The data transfer codec (stdin of the subprocess)"),
-			docs.FieldAdvanced("codec_recv", "The data transfer codec (stdout of the subprocess)"),
+			docs.FieldAdvanced(
+				"codec_send", "Determines how messages written to the subprocess are encoded, which allows them to be logically separated.",
+			).HasOptions("lines", "length_prefixed_uint32_be", "netstring").AtVersion("3.37.0"),
+			docs.FieldAdvanced(
+				"codec_recv", "Determines how messages read from the subprocess are decoded, which allows them to be logically separated.",
+			).HasOptions("lines", "length_prefixed_uint32_be", "netstring").AtVersion("3.37.0"),
 			partsFieldSpec,
 		},
 	}
@@ -92,10 +96,10 @@ type Subprocess struct {
 	log   log.Modular
 	stats metrics.Type
 
-	conf    SubprocessConfig
-	subproc *subprocWrapper
-
-	mut sync.Mutex
+	conf     SubprocessConfig
+	subproc  *subprocWrapper
+	procFunc func(index int, span opentracing.Span, part types.Part) error
+	mut      sync.Mutex
 
 	mCount     metrics.StatCounter
 	mErr       metrics.StatCounter
@@ -126,18 +130,78 @@ func newSubprocess(
 	if e.subproc, err = newSubprocWrapper(conf.Name, conf.Args, e.conf.MaxBuffer, conf.CodecRecv, log); err != nil {
 		return nil, err
 	}
+	if e.procFunc, err = e.getSendSubprocessorFunc(conf.CodecSend); err != nil {
+		return nil, err
+	}
 	return e, nil
 }
 
 //------------------------------------------------------------------------------
 
-type subprocWrapper struct {
-	name      string
-	args      []string
-	maxBuf    int
-	codecRecv string
+func (e *Subprocess) getSendSubprocessorFunc(codec string) (func(index int, span opentracing.Span, part types.Part) error, error) {
+	switch codec {
+	case "length_prefixed_uint32_be":
+		return func(_ int, _ opentracing.Span, part types.Part) error {
+			const prefixBytes int = 4
 
-	logger log.Modular
+			lenBuf := make([]byte, prefixBytes)
+			m := part.Get()
+			binary.BigEndian.PutUint32(lenBuf, uint32(len(m)))
+
+			res, err := e.subproc.Send(lenBuf, m, nil)
+			if err != nil {
+				e.log.Errorf("Failed to send message to subprocess: %v\n", err)
+				e.mErr.Incr(1)
+				return err
+			}
+			part.Set(res)
+			return nil
+		}, nil
+	case "netstring":
+		return func(_ int, _ opentracing.Span, part types.Part) error {
+			lenBuf := make([]byte, 0)
+			m := part.Get()
+			lenBuf = append(strconv.AppendUint(lenBuf, uint64(len(m)), 10), ':')
+			res, err := e.subproc.Send(lenBuf, m, commaBytes)
+			if err != nil {
+				e.log.Errorf("Failed to send message to subprocess: %v\n", err)
+				e.mErr.Incr(1)
+				return err
+			}
+			part.Set(res)
+			return nil
+		}, nil
+	case "lines":
+		return func(_ int, _ opentracing.Span, part types.Part) error {
+			results := [][]byte{}
+			splitMsg := bytes.Split(part.Get(), newLineBytes)
+			for j, p := range splitMsg {
+				if len(p) == 0 && len(splitMsg) > 1 && j == (len(splitMsg)-1) {
+					results = append(results, []byte(""))
+					continue
+				}
+				res, err := e.subproc.Send(nil, p, newLineBytes)
+				if err != nil {
+					e.log.Errorf("Failed to send message to subprocess: %v\n", err)
+					e.mErr.Incr(1)
+					return err
+				}
+				results = append(results, res)
+			}
+			part.Set(bytes.Join(results, newLineBytes))
+			return nil
+		}, nil
+	}
+	return nil, fmt.Errorf("unrecognized codec_send value: %v", codec)
+}
+
+type subprocWrapper struct {
+	name   string
+	args   []string
+	maxBuf int
+
+	splitFunc bufio.SplitFunc
+	logger    log.Modular
 
 	cmdMut      sync.Mutex
 	cmdExitChan chan struct{}
@@ -157,10 +221,19 @@ func newSubprocWrapper(name string, args []string, maxBuf int, codecRecv string,
 		name:       name,
 		args:       args,
 		maxBuf:     maxBuf,
-		codecRecv:  codecRecv,
 		logger:     log,
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
+	}
+	switch codecRecv {
+	case "lines":
+		s.splitFunc = bufio.ScanLines
+	case "length_prefixed_uint32_be":
+		s.splitFunc = lengthPrefixedUInt32BESplitFunc
+	case "netstring":
+		s.splitFunc = netstringSplitFunc
+	default:
+		return nil, fmt.Errorf("invalid codec_recv option: %v", codecRecv)
 	}
 	if err := s.start(); err != nil {
 		return nil, err
@@ -220,11 +293,10 @@ func lengthPrefixedUInt32BESplitFunc(data []byte, atEOF bool) (advance int, toke
 
 	if len(data)-prefixBytes >= bytesToRead {
 		return prefixBytes + bytesToRead, data[prefixBytes : prefixBytes+bytesToRead], nil
-	} else {
-		// request more data
-		return 0, nil, nil
 	}
+	return 0, nil, nil
 }
+
 func netstringSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if atEOF {
 		return 0, nil, nil
@@ -236,7 +308,7 @@ func netstringSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err
 		}
 		l, err := strconv.ParseUint(string(data[0:i]), 10, bits.UintSize-1)
 		if err != nil {
-			return 0, nil, errors.New(fmt.Sprintf("encountered invalid netstring: unable to decode length '%v'", string(data[0:i])))
+			return 0, nil, fmt.Errorf("encountered invalid netstring: unable to decode length '%v'", string(data[0:i]))
 		}
 		bytesToRead := int(l)
 
@@ -299,19 +371,7 @@ func (s *subprocWrapper) start() error {
 		}()
 
 		scanner := bufio.NewScanner(cmdStdout)
-		switch s.codecRecv {
-		case "lines":
-			// bufio Scanner uses ScanLines as default function
-			break
-		case "length_prefixed_uint32_be":
-			scanner.Split(lengthPrefixedUInt32BESplitFunc)
-			break
-		case "netstring":
-			scanner.Split(netstringSplitFunc)
-			break
-		default:
-			s.logger.Errorf("Invalid codec_recv option: '%v' is not one of ('lines','length_prefixed_uint32_be','netstring')\n", s.codecRecv)
-		}
+		scanner.Split(s.splitFunc)
 		if s.maxBuf != bufio.MaxScanTokenSize {
 			scanner.Buffer(nil, s.maxBuf)
 		}
@@ -420,6 +480,7 @@ func (s *subprocWrapper) Send(prolog []byte, payload []byte, epilog []byte) ([]b
 }
 
 //------------------------------------------------------------------------------
+
 var newLineBytes = []byte("\n")
 var commaBytes = []byte(",")
 
@@ -431,109 +492,7 @@ func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 	result := msg.Copy()
 
-	var proc func(int) error
-	procLines := func(i int) error {
-		span := tracing.CreateChildSpan(TypeSubprocess, result.Get(i))
-		defer span.Finish()
-
-		results := [][]byte{}
-		splitMsg := bytes.Split(result.Get(i).Get(), newLineBytes)
-		for j, p := range splitMsg {
-			if len(p) == 0 && len(splitMsg) > 1 && j == (len(splitMsg)-1) {
-				results = append(results, []byte(""))
-				continue
-			}
-			res, err := e.subproc.Send(nil, p, newLineBytes)
-			if err != nil {
-				e.log.Errorf("Failed to send message to subprocess: %v\n", err)
-				e.mErr.Incr(1)
-				span.LogFields(
-					olog.String("event", "error"),
-					olog.String("type", err.Error()),
-				)
-				FlagErr(result.Get(i), err)
-				results = append(results, p)
-			} else {
-				results = append(results, res)
-			}
-		}
-		result.Get(i).Set(bytes.Join(results, newLineBytes))
-		return nil
-	}
-	switch e.conf.CodecSend {
-	case "lines":
-		proc = procLines
-		break
-	case "length_prefixed_uint32_be":
-		proc = func(i int) error {
-			span := tracing.CreateChildSpan(TypeSubprocess, result.Get(i))
-			defer span.Finish()
-			const prefixBytes int = 4
-
-			lenBuf := make([]byte, prefixBytes)
-			m := result.Get(i).Get()
-			binary.BigEndian.PutUint32(lenBuf, uint32(len(m)))
-
-			res, err := e.subproc.Send(lenBuf, m, nil)
-			if err != nil {
-				e.log.Errorf("Failed to send message to subprocess: %v\n", err)
-				_ = e.mErr.Incr(1)
-				span.LogFields(
-					olog.String("event", "error"),
-					olog.String("type", err.Error()),
-				)
-				FlagErr(result.Get(i), err)
-				result.Get(i).Set(m)
-			} else {
-				result.Get(i).Set(res)
-			}
-			return nil
-		}
-		break
-	case "netstring":
-		proc = func(i int) error {
-			span := tracing.CreateChildSpan(TypeSubprocess, result.Get(i))
-			defer span.Finish()
-
-			lenBuf := make([]byte, 0)
-			m := result.Get(i).Get()
-			lenBuf = append(strconv.AppendUint(lenBuf, uint64(len(m)), 10), ':')
-			res, err := e.subproc.Send(lenBuf, m, commaBytes)
-			if err != nil {
-				e.log.Errorf("Failed to send message to subprocess: %v\n", err)
-				e.mErr.Incr(1)
-				span.LogFields(
-					olog.String("event", "error"),
-					olog.String("type", err.Error()),
-				)
-				FlagErr(result.Get(i), err)
-				result.Get(i).Set(m)
-			} else {
-				result.Get(i).Set(res)
-			}
-			return nil
-		}
-		break
-	default:
-		e.log.Errorf("Invalid codec_send option: '%v' is not one of ('lines','length_prefixed_uint32_be','netstring^)\n", e.conf.CodecSend)
-		proc = procLines
-	}
-
-	if len(e.conf.Parts) == 0 {
-		for i := 0; i < msg.Len(); i++ {
-			if err := proc(i); err != nil {
-				e.mErr.Incr(1)
-				return nil, response.NewError(err)
-			}
-		}
-	} else {
-		for _, i := range e.conf.Parts {
-			if err := proc(i); err != nil {
-				e.mErr.Incr(1)
-				return nil, response.NewError(err)
-			}
-		}
-	}
+	IteratePartsWithSpan(TypeSubprocess, e.conf.Parts, result, e.procFunc)
 
 	e.mSent.Incr(int64(result.Len()))
 	e.mBatchSent.Incr(1)

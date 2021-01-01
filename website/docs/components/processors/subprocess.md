@@ -42,6 +42,8 @@ subprocess:
   name: cat
   args: []
   max_buffer: 65536
+  codec_send: lines
+  codec_recv: lines
   parts: []
 ```
 
@@ -49,6 +51,8 @@ subprocess:
 </Tabs>
 
 The subprocess must then either return a line over stdout or stderr. If a response is returned over stdout then its contents will replace the message. If a response is instead returned from stderr it will be logged and the message will continue unchanged and will be [marked as failed](/docs/configuration/error_handling).
+
+Rather than separating data by a newline it's possible to specify alternative [`codec_send`](#codec_send) and [`codec_recv`](#codec_recv) values, which allow binary messages to be encoded for logical separation.
 
 The execution environment of the subprocess is the same as the Benthos instance, including environment variables and the current working directory.
 
@@ -97,6 +101,26 @@ The maximum expected response size.
 
 Type: `number`  
 Default: `65536`  
+
+### `codec_send`
+
+Determines how messages written to the subprocess are encoded, which allows them to be logically separated.
+
+
+Type: `string`  
+Default: `"lines"`  
+Requires version 3.37.0 or newer  
+Options: `lines`, `length_prefixed_uint32_be`, `netstring`.
+
+### `codec_recv`
+
+Determines how messages read from the subprocess are decoded, which allows them to be logically separated.
+
+
+Type: `string`  
+Default: `"lines"`  
+Requires version 3.37.0 or newer  
+Options: `lines`, `length_prefixed_uint32_be`, `netstring`.
 
 ### `parts`
 
