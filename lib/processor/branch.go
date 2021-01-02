@@ -459,7 +459,7 @@ func (b *Branch) createResult(parts []types.Part, referenceMsg types.Message) ([
 	if alignedResult, err = alignBranchResult(originalLen, skipped, failed, procResults); err != nil {
 		b.mErrAlign.Incr(1)
 		b.mErr.Incr(1)
-		b.log.Errorf("Processor result mis-aligned with original batch: %v\n", err)
+		b.log.Errorf("Failed to align branch result: %v. Avoid using filters or archive/unarchive processors within your branch, or anything that increases or reduces the number of messages. These processors should instead be applied before or after the branch processor.\n", err)
 		return nil, mapErrs, err
 	}
 
@@ -481,7 +481,10 @@ func (b *Branch) createResult(parts []types.Part, referenceMsg types.Message) ([
 func (b *Branch) overlayResult(payload types.Message, results []types.Part) ([]branchMapError, error) {
 	if exp, act := payload.Len(), len(results); exp != act {
 		b.mErr.Incr(1)
-		return nil, fmt.Errorf("message count returned from branch has diverged from the request: %v != %v", act, exp)
+		return nil, fmt.Errorf(
+			"message count returned from branch has diverged from the request, started with %v messages, finished with %v",
+			act, exp,
+		)
 	}
 
 	resultMsg := message.New(nil)
@@ -542,7 +545,10 @@ func alignBranchResult(length int, skipped []int, failed []int, result []types.M
 
 	// Check that size of response is aligned with payload.
 	if rLen, pLen := len(resMsgParts)+len(skippedOrFailed), length; rLen != pLen {
-		return nil, fmt.Errorf("message count returned from branch does not match request: %v != %v", rLen, pLen)
+		return nil, fmt.Errorf(
+			"message count from branch processors does not match request, started with %v messages, finished with %v",
+			rLen, pLen,
+		)
 	}
 
 	var resultParts []types.Part

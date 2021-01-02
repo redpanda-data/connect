@@ -185,17 +185,17 @@ func TestBranchBasic(t *testing.T) {
 				msg(
 					`{"id":0,"name":"first"}`,
 					FailFlagKey,
-					"message count returned from branch does not match request: 4 != 5",
+					"message count from branch processors does not match request, started with 4 messages, finished with 5",
 				),
 				msg(
 					`{"id":1,"name":"second"}`,
 					FailFlagKey,
-					"message count returned from branch does not match request: 4 != 5",
+					"message count from branch processors does not match request, started with 4 messages, finished with 5",
 				),
 				msg(
 					`{"id":2,"name":"third"}`,
 					FailFlagKey,
-					"message count returned from branch does not match request: 4 != 5",
+					"message count from branch processors does not match request, started with 4 messages, finished with 5",
 				),
 				msg(
 					`{"id":3,"name":"fourth"}`,
@@ -205,7 +205,7 @@ func TestBranchBasic(t *testing.T) {
 				msg(
 					`{"id":4,"name":"fifth"}`,
 					FailFlagKey,
-					"message count returned from branch does not match request: 4 != 5",
+					"message count from branch processors does not match request, started with 4 messages, finished with 5",
 				),
 			},
 		},
