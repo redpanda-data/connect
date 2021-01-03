@@ -1,3 +1,5 @@
+// +build !wasm
+
 package writer
 
 import (
@@ -12,38 +14,9 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
-
-//------------------------------------------------------------------------------
-
-// AzureQueueStorageConfig contains configuration fields for the output Azure Queue Storage type.
-type AzureQueueStorageConfig struct {
-	StorageAccount          string             `json:"storage_account" yaml:"storage_account"`
-	StorageAccessKey        string             `json:"storage_access_key" yaml:"storage_access_key"`
-	StorageConnectionString string             `json:"storage_connection_string" yaml:"storage_connection_string"`
-	QueueName               string             `json:"queue_name" yaml:"queue_name"`
-	TTL                     string             `json:"ttl" yaml:"ttl"`
-	MaxInFlight             int                `json:"max_in_flight" yaml:"max_in_flight"`
-	Batching                batch.PolicyConfig `json:"batching" yaml:"batching"`
-}
-
-// NewAzureQueueStorageConfig creates a new Config with default values.
-func NewAzureQueueStorageConfig() AzureQueueStorageConfig {
-	return AzureQueueStorageConfig{
-		StorageAccount:          "",
-		StorageAccessKey:        "",
-		StorageConnectionString: "",
-		QueueName:               "",
-		TTL:                     "",
-		MaxInFlight:             1,
-		Batching:                batch.NewPolicyConfig(),
-	}
-}
-
-//------------------------------------------------------------------------------
 
 // AzureQueueStorage is a benthos writer.Type implementation that writes messages to an
 // Azure Queue Storage queue.
