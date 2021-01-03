@@ -8,12 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
-
 	"github.com/Azure/azure-storage-queue-go/azqueue"
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
