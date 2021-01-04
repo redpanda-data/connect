@@ -1,16 +1,21 @@
 package processor
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/filepath"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/gabs/v2"
+	"github.com/Jeffail/grok"
 	"github.com/opentracing/opentracing-go"
-	"github.com/trivago/grok"
 )
 
 //------------------------------------------------------------------------------
@@ -22,30 +27,22 @@ func init() {
 			CategoryParsing,
 		},
 		Summary: `
-Parses messages into a structured format by attempting to apply a list of Grok
-patterns, if a pattern returns at least one value a resulting structured object
-is created according to the chosen output format.`,
+Parses messages into a structured format by attempting to apply a list of Grok expressions, the first expression to result in at least one value replaces the original message with a JSON object containing the values.`,
 		Description: `
-Currently only json is a supported output format.
-
-Type hints within patterns are respected, therefore with the pattern
-` + "`%{WORD:first},%{INT:second:int}`" + ` and a payload of ` + "`foo,1`" + `
-the resulting payload would be ` + "`{\"first\":\"foo\",\"second\":1}`" + `.
+Type hints within patterns are respected, therefore with the pattern ` + "`%{WORD:first},%{INT:second:int}`" + ` and a payload of ` + "`foo,1`" + ` the resulting payload would be ` + "`{\"first\":\"foo\",\"second\":1}`" + `.
 
 ### Performance
 
-This processor currently uses the [Go RE2](https://golang.org/s/re2syntax)
-regular expression engine, which is guaranteed to run in time linear to the size
-of the input. However, this property often makes it less performant than pcre
-based implementations of grok. For more information see
-[https://swtch.com/~rsc/regexp/regexp1.html](https://swtch.com/~rsc/regexp/regexp1.html).`,
+This processor currently uses the [Go RE2](https://golang.org/s/re2syntax) regular expression engine, which is guaranteed to run in time linear to the size of the input. However, this property often makes it less performant than pcre based implementations of grok. For more information see [https://swtch.com/~rsc/regexp/regexp1.html](https://swtch.com/~rsc/regexp/regexp1.html).`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("patterns", "A list of patterns to attempt against the incoming messages."),
+			docs.FieldCommon("expressions", "One or more Grok expressions to attempt against incoming messages. The first expression to match at least one value will be used to form a result."),
 			docs.FieldCommon("pattern_definitions", "A map of pattern definitions that can be referenced within `patterns`."),
-			docs.FieldCommon("output_format", "The structured output format.").HasOptions("json"),
+			docs.FieldCommon("pattern_paths", "A list of paths to load Grok patterns from. This field supports wildcards."),
 			docs.FieldAdvanced("named_captures_only", "Whether to only capture values from named patterns."),
 			docs.FieldAdvanced("use_default_patterns", "Whether to use a [default set of patterns](#default-patterns)."),
 			docs.FieldAdvanced("remove_empty_values", "Whether to remove values that are empty from the resulting structure."),
+			docs.FieldDeprecated("patterns"),
+			docs.FieldDeprecated("output_format"),
 			partsFieldSpec,
 		},
 		Examples: []docs.AnnotatedExample{
@@ -69,8 +66,7 @@ With the following config:`,
 pipeline:
   processors:
     - grok:
-        output_format: json
-        patterns:
+        expressions:
           - '%{VPCFLOWLOG}'
         pattern_definitions:
           VPCFLOWLOG: '%{NUMBER:version:int} %{NUMBER:accountid} %{NOTSPACE:interfaceid} %{NOTSPACE:srcaddr} %{NOTSPACE:dstaddr} %{NOTSPACE:srcport:int} %{NOTSPACE:dstport:int} %{NOTSPACE:protocol:int} %{NOTSPACE:packets:int} %{NOTSPACE:bytes:int} %{NUMBER:start:int} %{NUMBER:end:int} %{NOTSPACE:action} %{NOTSPACE:logstatus}'
@@ -80,7 +76,7 @@ pipeline:
 		Footnotes: `
 ## Default Patterns
 
-A summary of the default patterns on offer can be [found here](https://github.com/trivago/grok/blob/master/patterns.go#L5).`,
+A summary of the default patterns on offer can be [found here](https://github.com/Jeffail/grok/blob/master/patterns.go#L5).`,
 	}
 }
 
@@ -89,24 +85,31 @@ A summary of the default patterns on offer can be [found here](https://github.co
 // GrokConfig contains configuration fields for the Grok processor.
 type GrokConfig struct {
 	Parts              []int             `json:"parts" yaml:"parts"`
-	Patterns           []string          `json:"patterns" yaml:"patterns"`
+	Expressions        []string          `json:"expressions" yaml:"expressions"`
 	RemoveEmpty        bool              `json:"remove_empty_values" yaml:"remove_empty_values"`
 	NamedOnly          bool              `json:"named_captures_only" yaml:"named_captures_only"`
 	UseDefaults        bool              `json:"use_default_patterns" yaml:"use_default_patterns"`
 	To                 string            `json:"output_format" yaml:"output_format"`
+	PatternPaths       []string          `json:"pattern_paths" yaml:"pattern_paths"`
 	PatternDefinitions map[string]string `json:"pattern_definitions" yaml:"pattern_definitions"`
+
+	// TODO: V4 Remove this
+	Patterns []string `json:"patterns" yaml:"patterns"`
 }
 
 // NewGrokConfig returns a GrokConfig with default values.
 func NewGrokConfig() GrokConfig {
 	return GrokConfig{
 		Parts:              []int{},
-		Patterns:           []string{},
+		Expressions:        []string{},
 		RemoveEmpty:        true,
 		NamedOnly:          true,
 		UseDefaults:        true,
 		To:                 "json",
+		PatternPaths:       []string{},
 		PatternDefinitions: make(map[string]string),
+
+		Patterns: []string{},
 	}
 }
 
@@ -134,18 +137,37 @@ type Grok struct {
 func NewGrok(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	gcompiler, err := grok.New(grok.Config{
+	if len(conf.Grok.Expressions) > 0 && len(conf.Grok.Patterns) > 0 {
+		return nil, errors.New("cannot specify grok expressions in both the field `expressions` and the deprecated field `patterns`")
+	}
+
+	grokConf := grok.Config{
 		RemoveEmptyValues:   conf.Grok.RemoveEmpty,
 		NamedCapturesOnly:   conf.Grok.NamedOnly,
 		SkipDefaultPatterns: !conf.Grok.UseDefaults,
 		Patterns:            conf.Grok.PatternDefinitions,
-	})
+	}
+
+	for _, path := range conf.Grok.PatternPaths {
+		if err := addGrokPatternsFromPath(path, grokConf.Patterns); err != nil {
+			return nil, fmt.Errorf("failed to parse patterns from path '%v': %v", path, err)
+		}
+	}
+
+	gcompiler, err := grok.New(grokConf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create grok compiler: %v", err)
 	}
 
 	var compiled []*grok.CompiledGrok
 	for _, pattern := range conf.Grok.Patterns {
+		var gcompiled *grok.CompiledGrok
+		if gcompiled, err = gcompiler.Compile(pattern); err != nil {
+			return nil, fmt.Errorf("failed to compile Grok pattern '%v': %v", pattern, err)
+		}
+		compiled = append(compiled, gcompiled)
+	}
+	for _, pattern := range conf.Grok.Expressions {
 		var gcompiled *grok.CompiledGrok
 		if gcompiled, err = gcompiler.Compile(pattern); err != nil {
 			return nil, fmt.Errorf("failed to compile Grok pattern '%v': %v", pattern, err)
@@ -171,6 +193,40 @@ func NewGrok(
 }
 
 //------------------------------------------------------------------------------
+
+func addGrokPatternsFromPath(path string, patterns map[string]string) error {
+	if s, err := os.Stat(path); err != nil {
+		return err
+	} else if s.IsDir() {
+		path = path + "/*"
+	}
+
+	files, err := filepath.Globs([]string{path})
+	if err != nil {
+		return err
+	}
+
+	for _, f := range files {
+		file, err := os.Open(f)
+		if err != nil {
+			return err
+		}
+
+		scanner := bufio.NewScanner(file)
+
+		for scanner.Scan() {
+			l := scanner.Text()
+			if len(l) > 0 && l[0] != '#' {
+				names := strings.SplitN(l, " ", 2)
+				patterns[names[0]] = names[1]
+			}
+		}
+
+		file.Close()
+	}
+
+	return nil
+}
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
@@ -200,7 +256,12 @@ func (g *Grok) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 			return errors.New("no pattern matches found")
 		}
 
-		if err := newMsg.Get(index).SetJSON(values); err != nil {
+		gObj := gabs.New()
+		for k, v := range values {
+			gObj.SetP(v, k)
+		}
+
+		if err := newMsg.Get(index).SetJSON(gObj.Data()); err != nil {
 			g.mErrJSONS.Incr(1)
 			g.mErr.Incr(1)
 			g.log.Debugf("Failed to convert grok result into json: %v\n", err)

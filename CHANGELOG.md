@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 - Batching fields added to the `hdfs` output.
 - Field `codec_send` and `codec_recv` added to the `subprocess` processor.
 - Methods `min`, `max`, `abs`, `log`, `log10` and `ceil` added to Bloblang.
+- Added field `pattern_paths` to the `grok` processor.
+- The `grok` processor now supports dots within field names for nested values.
 
 ## 3.36.0 - 2020-12-24
 

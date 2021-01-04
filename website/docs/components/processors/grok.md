@@ -16,9 +16,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Parses messages into a structured format by attempting to apply a list of Grok
-patterns, if a pattern returns at least one value a resulting structured object
-is created according to the chosen output format.
+Parses messages into a structured format by attempting to apply a list of Grok expressions, the first expression to result in at least one value replaces the original message with a JSON object containing the values.
 
 
 <Tabs defaultValue="common" values={[
@@ -31,9 +29,9 @@ is created according to the chosen output format.
 ```yaml
 # Common config fields, showing default values
 grok:
-  patterns: []
+  expressions: []
   pattern_definitions: {}
-  output_format: json
+  pattern_paths: []
 ```
 
 </TabItem>
@@ -42,9 +40,9 @@ grok:
 ```yaml
 # All config fields, showing default values
 grok:
-  patterns: []
+  expressions: []
   pattern_definitions: {}
-  output_format: json
+  pattern_paths: []
   named_captures_only: true
   use_default_patterns: true
   remove_empty_values: true
@@ -54,19 +52,11 @@ grok:
 </TabItem>
 </Tabs>
 
-Currently only json is a supported output format.
-
-Type hints within patterns are respected, therefore with the pattern
-`%{WORD:first},%{INT:second:int}` and a payload of `foo,1`
-the resulting payload would be `{"first":"foo","second":1}`.
+Type hints within patterns are respected, therefore with the pattern `%{WORD:first},%{INT:second:int}` and a payload of `foo,1` the resulting payload would be `{"first":"foo","second":1}`.
 
 ### Performance
 
-This processor currently uses the [Go RE2](https://golang.org/s/re2syntax)
-regular expression engine, which is guaranteed to run in time linear to the size
-of the input. However, this property often makes it less performant than pcre
-based implementations of grok. For more information see
-[https://swtch.com/~rsc/regexp/regexp1.html](https://swtch.com/~rsc/regexp/regexp1.html).
+This processor currently uses the [Go RE2](https://golang.org/s/re2syntax) regular expression engine, which is guaranteed to run in time linear to the size of the input. However, this property often makes it less performant than pcre based implementations of grok. For more information see [https://swtch.com/~rsc/regexp/regexp1.html](https://swtch.com/~rsc/regexp/regexp1.html).
 
 ## Examples
 
@@ -95,8 +85,7 @@ With the following config:
 pipeline:
   processors:
     - grok:
-        output_format: json
-        patterns:
+        expressions:
           - '%{VPCFLOWLOG}'
         pattern_definitions:
           VPCFLOWLOG: '%{NUMBER:version:int} %{NUMBER:accountid} %{NOTSPACE:interfaceid} %{NOTSPACE:srcaddr} %{NOTSPACE:dstaddr} %{NOTSPACE:srcport:int} %{NOTSPACE:dstport:int} %{NOTSPACE:protocol:int} %{NOTSPACE:packets:int} %{NOTSPACE:bytes:int} %{NUMBER:start:int} %{NUMBER:end:int} %{NOTSPACE:action} %{NOTSPACE:logstatus}'
@@ -107,9 +96,9 @@ pipeline:
 
 ## Fields
 
-### `patterns`
+### `expressions`
 
-A list of patterns to attempt against the incoming messages.
+One or more Grok expressions to attempt against incoming messages. The first expression to match at least one value will be used to form a result.
 
 
 Type: `array`  
@@ -123,14 +112,13 @@ A map of pattern definitions that can be referenced within `patterns`.
 Type: `object`  
 Default: `{}`  
 
-### `output_format`
+### `pattern_paths`
 
-The structured output format.
+A list of paths to load Grok patterns from. This field supports wildcards.
 
 
-Type: `string`  
-Default: `"json"`  
-Options: `json`.
+Type: `array`  
+Default: `[]`  
 
 ### `named_captures_only`
 
@@ -171,5 +159,5 @@ Default: `[]`
 
 ## Default Patterns
 
-A summary of the default patterns on offer can be [found here](https://github.com/trivago/grok/blob/master/patterns.go#L5).
+A summary of the default patterns on offer can be [found here](https://github.com/Jeffail/grok/blob/master/patterns.go#L5).
 

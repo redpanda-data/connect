@@ -1,12 +1,17 @@
 package processor
 
 import (
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGrokAllParts(t *testing.T) {
@@ -75,6 +80,12 @@ func TestGrok(t *testing.T) {
 			pattern: "%{ACTION:action} connection from %{IPV4:ipv4}",
 			output:  `{"action":"pass","ipv4":"127.0.0.1"}`,
 		},
+		{
+			name:    "Test dot path in name definition",
+			input:   `foo 5 bazes from 192.0.1.11`,
+			pattern: "%{WORD:nested.name} %{INT:nested.value:int} bazes from %{IPV4:nested.ipv4}",
+			output:  `{"nested":{"ipv4":"192.0.1.11","name":"foo","value":5}}`,
+		},
 	}
 
 	for _, test := range tests {
@@ -84,22 +95,61 @@ func TestGrok(t *testing.T) {
 		conf.Grok.PatternDefinitions = test.definitions
 
 		gSet, err := NewGrok(conf, nil, tLog, tStats)
-		if err != nil {
-			t.Fatalf("Error for test '%v': %v", test.name, err)
-		}
+		require.NoError(t, err)
 
-		inMsg := message.New(
-			[][]byte{
-				[]byte(test.input),
-			},
-		)
+		inMsg := message.New([][]byte{[]byte(test.input)})
 		msgs, _ := gSet.ProcessMessage(inMsg)
-		if len(msgs) != 1 {
-			t.Fatalf("Test '%v' did not succeed", test.name)
-		}
+		require.Len(t, msgs, 1)
 
-		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
-			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
-		}
+		assert.Equal(t, test.output, string(msgs[0].Get(0).Get()))
 	}
+
+	for _, test := range tests {
+		conf := NewConfig()
+		conf.Grok.Parts = []int{0}
+		conf.Grok.Expressions = []string{test.pattern}
+		conf.Grok.PatternDefinitions = test.definitions
+
+		gSet, err := NewGrok(conf, nil, tLog, tStats)
+		require.NoError(t, err)
+
+		inMsg := message.New([][]byte{[]byte(test.input)})
+		msgs, _ := gSet.ProcessMessage(inMsg)
+		require.Len(t, msgs, 1)
+
+		assert.Equal(t, test.output, string(msgs[0].Get(0).Get()))
+	}
+}
+
+func TestGrokFileImports(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "grok_test")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	err = ioutil.WriteFile(filepath.Join(tmpDir, "foos"), []byte(`
+FOOFLAT %{WORD:first} %{WORD:second} %{WORD:third}
+FOONESTED %{INT:nested.first:int} %{WORD:nested.second} %{WORD:nested.third}
+`), 0777)
+	require.NoError(t, err)
+
+	conf := NewConfig()
+	conf.Grok.Parts = []int{0}
+	conf.Grok.Expressions = []string{`%{FOONESTED}`, `%{FOOFLAT}`}
+	conf.Grok.PatternPaths = []string{tmpDir}
+
+	gSet, err := NewGrok(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	inMsg := message.New([][]byte{[]byte(`hello foo bar`)})
+	msgs, _ := gSet.ProcessMessage(inMsg)
+	require.Len(t, msgs, 1)
+	assert.Equal(t, `{"first":"hello","second":"foo","third":"bar"}`, string(msgs[0].Get(0).Get()))
+
+	inMsg = message.New([][]byte{[]byte(`10 foo bar`)})
+	msgs, _ = gSet.ProcessMessage(inMsg)
+	require.Len(t, msgs, 1)
+	assert.Equal(t, `{"nested":{"first":10,"second":"foo","third":"bar"}}`, string(msgs[0].Get(0).Get()))
 }

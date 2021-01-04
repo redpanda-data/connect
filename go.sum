@@ -75,6 +75,8 @@ github.com/HdrHistogram/hdrhistogram-go v1.0.0 h1:jivTvI9tBw5B8wW9Qd0uoQ2qaajb29
 github.com/HdrHistogram/hdrhistogram-go v1.0.0/go.mod h1:YzE1EgsuAz8q9lfGdlxBZo2Ma655+PfKp2mlzcAqIFw=
 github.com/Jeffail/gabs/v2 v2.6.0 h1:WdCnGaDhNa4LSRTMwhLZzJ7SRDXjABNP13SOKvCpL5w=
 github.com/Jeffail/gabs/v2 v2.6.0/go.mod h1:xCn81vdHKxFUuWWAaD5jCTQDNPBMh5pPs9IJ+NcziBI=
+github.com/Jeffail/grok v1.1.0 h1:kiHmZ+0J5w/XUihRgU3DY9WIxKrNQCDjnfAb6bMLFaE=
+github.com/Jeffail/grok v1.1.0/go.mod h1:dm0hLksrDwOMa6To7ORXCuLbuNtASIZTfYheavLpsuE=
 github.com/Knetic/govaluate v3.0.1-0.20171022003610-9aa49832a739+incompatible/go.mod h1:r7JcOSlj0wfOMncg0iLm8Leh48TZaKVeNIfJntJ2wa0=
 github.com/Masterminds/semver v1.5.0/go.mod h1:MB6lktGJrhw8PrUyiEoblNEGEQ+RzHPF078ddwwvV3Y=
 github.com/Microsoft/go-winio v0.4.11/go.mod h1:VhR8bwka0BXejwEJY73c50VrPtXAaKcyvVC4A4RozmA=

@@ -11,6 +11,7 @@ require (
 	github.com/ClickHouse/clickhouse-go v1.4.3
 	github.com/HdrHistogram/hdrhistogram-go v1.0.0 // indirect
 	github.com/Jeffail/gabs/v2 v2.6.0
+	github.com/Jeffail/grok v1.1.0
 	github.com/OneOfOne/xxhash v1.2.8
 	github.com/Shopify/sarama v1.27.2
 	github.com/armon/go-metrics v0.3.4 // indirect
@@ -74,8 +75,6 @@ require (
 	github.com/streadway/amqp v1.0.0
 	github.com/stretchr/testify v1.6.1
 	github.com/tilinna/z85 v1.0.0
-	github.com/trivago/grok v1.0.0
-	github.com/trivago/tgo v1.0.7 // indirect
 	github.com/uber/jaeger-client-go v2.25.0+incompatible
 	github.com/uber/jaeger-lib v2.4.0+incompatible // indirect
 	github.com/urfave/cli/v2 v2.3.0
