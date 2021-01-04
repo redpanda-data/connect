@@ -346,6 +346,34 @@ root.description = this.description.trim()
 
 ## Number Manipulation
 
+### `abs`
+
+Returns the absolute value of a number.
+
+```coffee
+root.new_value = this.value.abs()
+
+# In:  {"value":5.3}
+# Out: {"new_value":5.3}
+
+# In:  {"value":-5.9}
+# Out: {"new_value":5.9}
+```
+
+### `ceil`
+
+Returns the least integer value greater than or equal to a number.
+
+```coffee
+root.new_value = this.value.ceil()
+
+# In:  {"value":5.3}
+# Out: {"new_value":6}
+
+# In:  {"value":-5.9}
+# Out: {"new_value":-5}
+```
+
 ### `floor`
 
 Returns the greatest integer value less than or equal to the target number.
@@ -355,6 +383,76 @@ root.new_value = this.value.floor()
 
 # In:  {"value":5.7}
 # Out: {"new_value":5}
+```
+
+### `log`
+
+Returns the natural logarithm of a number.
+
+```coffee
+root.new_value = this.value.log().round()
+
+# In:  {"value":1}
+# Out: {"new_value":0}
+
+# In:  {"value":2.7183}
+# Out: {"new_value":1}
+```
+
+### `log10`
+
+Returns the decimal logarithm of a number.
+
+```coffee
+root.new_value = this.value.log10()
+
+# In:  {"value":100}
+# Out: {"new_value":2}
+
+# In:  {"value":1000}
+# Out: {"new_value":3}
+```
+
+### `max`
+
+Returns the largest numerical value found within an array. All values must be numerical and the array must not be empty, otherwise an error is returned.
+
+```coffee
+root.biggest = this.values.max()
+
+# In:  {"values":[0,3,2.5,7,5]}
+# Out: {"biggest":7}
+```
+
+```coffee
+root.new_value = [0,this.value].max()
+
+# In:  {"value":-1}
+# Out: {"new_value":0}
+
+# In:  {"value":7}
+# Out: {"new_value":7}
+```
+
+### `min`
+
+Returns the smallest numerical value found within an array. All values must be numerical and the array must not be empty, otherwise an error is returned.
+
+```coffee
+root.smallest = this.values.min()
+
+# In:  {"values":[0,3,-2.5,7,5]}
+# Out: {"smallest":-2.5}
+```
+
+```coffee
+root.new_value = [10,this.value].min()
+
+# In:  {"value":2}
+# Out: {"new_value":2}
+
+# In:  {"value":23}
+# Out: {"new_value":10}
 ```
 
 ### `round`

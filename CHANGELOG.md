@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Field `content_type` and `content_encoding` added to the `amqp_0_9` output.
 - Batching fields added to the `hdfs` output.
 - Field `codec_send` and `codec_recv` added to the `subprocess` processor.
+- Methods `min`, `max`, `abs`, `log`, `log10` and `ceil` added to Bloblang.
 
 ## 3.36.0 - 2020-12-24
 
