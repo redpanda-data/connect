@@ -87,7 +87,7 @@ output:
 			},
 		},
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldAdvanced(
+			docs.FieldCommon(
 				"addresses",
 				"A list of Cassandra nodes to connect to. Multiple comma separated addresses can be specified on a single line.",
 				[]string{"localhost:9042"},
@@ -107,7 +107,7 @@ output:
 				"disable_initial_host_lookup",
 				"If enabled the driver will not attempt to get host info from the system.peers table. This can speed up queries but will mean that data_centre, rack and token information will not be available.",
 			),
-			docs.FieldAdvanced("query", "A query to execute for each message."),
+			docs.FieldCommon("query", "A query to execute for each message."),
 			docs.FieldCommon(
 				"args",
 				"A list of arguments for the query to be resolved for each message.",

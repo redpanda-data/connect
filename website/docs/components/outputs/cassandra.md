@@ -30,6 +30,8 @@ Runs a query against a Cassandra database for each message in order to insert da
 # Common config fields, showing default values
 output:
   cassandra:
+    addresses: []
+    query: ""
     args: []
     max_in_flight: 1
     batching:
