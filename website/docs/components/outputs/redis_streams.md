@@ -158,11 +158,17 @@ Default: `false`
 
 ### `tls.root_cas_file`
 
-The path of a root certificate authority file to use.
+An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
 
 
 Type: `string`  
 Default: `""`  
+
+```yaml
+# Examples
+
+root_cas_file: ./root_cas.pem
+```
 
 ### `tls.client_certs`
 
