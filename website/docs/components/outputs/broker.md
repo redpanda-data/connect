@@ -227,6 +227,10 @@ If an output applies back pressure it will block all subsequent messages, and if
 an output fails to send a message it will be retried continuously until
 completion or service shut down.
 
+Sometimes it is useful to disable the back pressure or retries of certain fan
+out outputs and instead drop messages that have failed or were blocked. In this
+case you can wrap outputs with a [`drop_on` output](/docs/components/outputs/drop_on).
+
 ### `fan_out_sequential`
 
 Similar to the fan out pattern except outputs are written to sequentially,
