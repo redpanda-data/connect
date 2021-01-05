@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -18,10 +19,15 @@ import (
 func init() {
 	Constructors[TypeDropOnError] = TypeSpec{
 		constructor: NewDropOnError,
+		Status:      docs.StatusDeprecated,
 		Summary: `
 Attempts to write messages to a child output and if the write fails for any
 reason the message is dropped instead of being reattempted.`,
 		Description: `
+## Alternatives
+
+This output has been replaced with the more explicit and configurable ` + "[`drop_on`](/docs/components/outputs/drop_on)" + ` output.
+
 This output can be combined with a child [` + "`retry`" + `](/docs/components/outputs/retry)
 output in order to set an explicit number of retry attempts before dropping a
 message.

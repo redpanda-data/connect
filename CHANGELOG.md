@@ -13,6 +13,11 @@ All notable changes to this project will be documented in this file.
 - Methods `min`, `max`, `abs`, `log`, `log10` and `ceil` added to Bloblang.
 - Added field `pattern_paths` to the `grok` processor.
 - The `grok` processor now supports dots within field names for nested values.
+- New `drop_on` output.
+
+### Changed
+
+- The `drop_on_error` output has been deprecated in favour of the new `drop_on` output.
 
 ## 3.36.0 - 2020-12-24
 

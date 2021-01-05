@@ -1,7 +1,7 @@
 ---
 title: drop_on_error
 type: output
-status: stable
+status: deprecated
 ---
 
 <!--
@@ -14,6 +14,9 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
 
 Attempts to write messages to a child output and if the write fails for any
 reason the message is dropped instead of being reattempted.
@@ -23,6 +26,10 @@ reason the message is dropped instead of being reattempted.
 output:
   drop_on_error: {}
 ```
+
+## Alternatives
+
+This output has been replaced with the more explicit and configurable [`drop_on`](/docs/components/outputs/drop_on) output.
 
 This output can be combined with a child [`retry`](/docs/components/outputs/retry)
 output in order to set an explicit number of retry attempts before dropping a

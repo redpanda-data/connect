@@ -18,8 +18,11 @@ pipeline:
   processors: []
   threads: 1
 output:
-  type: drop_on_error
-  drop_on_error: {}
+  type: drop_on
+  drop_on:
+    back_pressure: ""
+    error: false
+    output: {}
 resources:
   caches: {}
   conditions: {}

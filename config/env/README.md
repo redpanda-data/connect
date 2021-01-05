@@ -925,6 +925,8 @@ OUTPUT_CASSANDRA_QUERY
 OUTPUT_CASSANDRA_TLS_ENABLED                             = false
 OUTPUT_CASSANDRA_TLS_ROOT_CAS_FILE
 OUTPUT_CASSANDRA_TLS_SKIP_CERT_VERIFY                    = false
+OUTPUT_DROP_ON_BACK_PRESSURE
+OUTPUT_DROP_ON_ERROR                                     = false
 OUTPUT_DYNAMIC_MAX_IN_FLIGHT                             = 1
 OUTPUT_DYNAMIC_PREFIX
 OUTPUT_DYNAMIC_TIMEOUT                                   = 5s

@@ -83,6 +83,7 @@ const (
 	TypeCache              = "cache"
 	TypeCassandra          = "cassandra"
 	TypeDrop               = "drop"
+	TypeDropOn             = "drop_on"
 	TypeDropOnError        = "drop_on_error"
 	TypeDynamic            = "dynamic"
 	TypeDynamoDB           = "dynamodb"
@@ -148,6 +149,7 @@ type Config struct {
 	Cache              writer.CacheConfig             `json:"cache" yaml:"cache"`
 	Cassandra          CassandraConfig                `json:"cassandra" yaml:"cassandra"`
 	Drop               writer.DropConfig              `json:"drop" yaml:"drop"`
+	DropOn             DropOnConfig                   `json:"drop_on" yaml:"drop_on"`
 	DropOnError        DropOnErrorConfig              `json:"drop_on_error" yaml:"drop_on_error"`
 	Dynamic            DynamicConfig                  `json:"dynamic" yaml:"dynamic"`
 	DynamoDB           writer.DynamoDBConfig          `json:"dynamodb" yaml:"dynamodb"`
@@ -214,6 +216,7 @@ func NewConfig() Config {
 		Cache:              writer.NewCacheConfig(),
 		Cassandra:          NewCassandraConfig(),
 		Drop:               writer.NewDropConfig(),
+		DropOn:             NewDropOnConfig(),
 		DropOnError:        NewDropOnErrorConfig(),
 		Dynamic:            NewDynamicConfig(),
 		DynamoDB:           writer.NewDynamoDBConfig(),

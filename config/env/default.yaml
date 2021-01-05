@@ -1089,6 +1089,9 @@ output:
             enabled: ${OUTPUT_CASSANDRA_TLS_ENABLED:false}
             root_cas_file: ${OUTPUT_CASSANDRA_TLS_ROOT_CAS_FILE}
             skip_cert_verify: ${OUTPUT_CASSANDRA_TLS_SKIP_CERT_VERIFY:false}
+        drop_on:
+          back_pressure: ${OUTPUT_DROP_ON_BACK_PRESSURE}
+          error: ${OUTPUT_DROP_ON_ERROR:false}
         dynamic:
           max_in_flight: ${OUTPUT_DYNAMIC_MAX_IN_FLIGHT:1}
           prefix: ${OUTPUT_DYNAMIC_PREFIX}
