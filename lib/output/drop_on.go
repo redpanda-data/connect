@@ -57,7 +57,7 @@ Regular Benthos outputs will apply back pressure when downstream services aren't
 		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("error", "Whether messages should be dropped when the child output returns an error. For example, this could be when an http_client output gets a 4XX response code."),
-			docs.FieldCommon("back_pressure", "An optional duration string that determines the maximum length of time to wait for a given message to be accepted by the child output before the message should be dropped instead. The most common reason for an output to block is when waiting for a lost connection to be re-established. Once a message has been dropped due to back pressure all subsequent messages are dropped immediately until the output is ready to process them again.", "30s", "1m"),
+			docs.FieldCommon("back_pressure", "An optional duration string that determines the maximum length of time to wait for a given message to be accepted by the child output before the message should be dropped instead. The most common reason for an output to block is when waiting for a lost connection to be re-established. Once a message has been dropped due to back pressure all subsequent messages are dropped immediately until the output is ready to process them again. Note that if `error` is set to `false` and this field is specified then messages dropped due to back pressure will return an error response.", "30s", "1m"),
 			docs.FieldCommon("output", "A child output."),
 		},
 		Examples: []docs.AnnotatedExample{
@@ -233,36 +233,53 @@ func (d *dropOn) loop() {
 
 		var res types.Response
 		if d.onBackpressure > 0 {
-			if gotBackPressure {
-				select {
-				case d.transactionsOut <- types.NewTransaction(ts.Payload, resChan):
-					gotBackPressure = false
-				default:
-				}
-			} else {
+			if !func() bool {
 				// Use a ticker here and call Stop explicitly.
 				ticker := time.NewTicker(d.onBackpressure)
-				select {
-				case d.transactionsOut <- types.NewTransaction(ts.Payload, resChan):
-				case <-ticker.C:
-					gotBackPressure = true
-				case <-d.ctx.Done():
-					ticker.Stop()
-					return
+				defer ticker.Stop()
+
+				if gotBackPressure {
+					select {
+					case d.transactionsOut <- types.NewTransaction(ts.Payload, resChan):
+						gotBackPressure = false
+					default:
+					}
+				} else {
+					select {
+					case d.transactionsOut <- types.NewTransaction(ts.Payload, resChan):
+					case <-ticker.C:
+						gotBackPressure = true
+					case <-d.ctx.Done():
+						return false
+					}
 				}
-				ticker.Stop()
-			}
-			if !gotBackPressure {
-				select {
-				case res = <-resChan:
-				case <-d.ctx.Done():
-					return
+				if !gotBackPressure {
+					select {
+					case res = <-resChan:
+					case <-ticker.C:
+						gotBackPressure = true
+						go func() {
+							// We must pull the response that we're due, since
+							// the component isn't being shut down.
+							<-resChan
+						}()
+					case <-d.ctx.Done():
+						return false
+					}
 				}
-			} else {
-				mDropped.Incr(int64(ts.Payload.Len()))
-				mDroppedBatch.Incr(1)
-				d.log.Warnln("Message dropped due to back pressure.")
-				res = response.NewAck()
+				if gotBackPressure {
+					mDropped.Incr(int64(ts.Payload.Len()))
+					mDroppedBatch.Incr(1)
+					d.log.Warnln("Message dropped due to back pressure.")
+					if d.onError {
+						res = response.NewAck()
+					} else {
+						res = response.NewError(fmt.Errorf("experienced back pressure beyond: %v", d.onBackpressure))
+					}
+				}
+				return true
+			}() {
+				return
 			}
 		} else {
 			// Push data as usual, if the output blocks due to a disconnect then

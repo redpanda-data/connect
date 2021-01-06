@@ -22,7 +22,9 @@ func TestDropOnNothing(t *testing.T) {
 		http.Error(w, "test error", http.StatusForbidden)
 		return
 	}))
-	defer ts.Close()
+	t.Cleanup(func() {
+		ts.Close()
+	})
 
 	childConf := NewConfig()
 	childConf.Type = TypeHTTPClient
@@ -72,7 +74,9 @@ func TestDropOnError(t *testing.T) {
 		http.Error(w, "test error", http.StatusForbidden)
 		return
 	}))
-	defer ts.Close()
+	t.Cleanup(func() {
+		ts.Close()
+	})
 
 	childConf := NewConfig()
 	childConf.Type = TypeHTTPClient
@@ -117,7 +121,7 @@ func TestDropOnError(t *testing.T) {
 	assert.NoError(t, res.Error())
 }
 
-func TestDropOnBackpressure(t *testing.T) {
+func TestDropOnBackpressureWithErrors(t *testing.T) {
 	// Skip this test in most runs as it relies on awkward timers.
 	t.Skip()
 
@@ -151,7 +155,9 @@ func TestDropOnBackpressure(t *testing.T) {
 			wsMut.Unlock()
 		}
 	}))
-	defer ts.Close()
+	t.Cleanup(func() {
+		ts.Close()
+	})
 
 	childConf := NewConfig()
 	childConf.Type = TypeWebsocket
@@ -180,6 +186,101 @@ func TestDropOnBackpressure(t *testing.T) {
 	require.NoError(t, d.Consume(tChan))
 
 	sendAndGet := func(msg string, expErr string) {
+		t.Helper()
+
+		select {
+		case tChan <- types.NewTransaction(message.New([][]byte{[]byte(msg)}), rChan):
+		case <-time.After(time.Second):
+			t.Fatal("timed out")
+		}
+
+		var res types.Response
+		select {
+		case res = <-rChan:
+		case <-time.After(time.Second):
+			t.Fatal("timed out")
+		}
+
+		if len(expErr) == 0 {
+			assert.NoError(t, res.Error())
+		} else {
+			assert.EqualError(t, res.Error(), expErr)
+		}
+	}
+
+	sendAndGet("first", "experienced back pressure beyond: 100ms")
+	sendAndGet("second", "experienced back pressure beyond: 100ms")
+	wsMut.Lock()
+	wsAllow = true
+	wsMut.Unlock()
+	<-time.After(time.Second)
+
+	sendAndGet("third", "")
+	sendAndGet("fourth", "")
+
+	<-time.After(time.Second)
+	wsMut.Lock()
+	assert.Equal(t, []string{"third", "fourth"}, wsReceived)
+	wsMut.Unlock()
+}
+
+func TestDropOnDisconnectBackpressureNoErrors(t *testing.T) {
+	// Skip this test in most runs as it relies on awkward timers.
+	t.Skip()
+
+	var wsReceived []string
+	var ws *websocket.Conn
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upgrader := websocket.Upgrader{}
+
+		var err error
+		if ws, err = upgrader.Upgrade(w, r, nil); err != nil {
+			return
+		}
+		defer ws.Close()
+
+		for {
+			_, actBytes, err := ws.ReadMessage()
+			if err != nil {
+				return
+			}
+			wsReceived = append(wsReceived, string(actBytes))
+		}
+	}))
+	t.Cleanup(func() {
+		ts.Close()
+	})
+
+	childConf := NewConfig()
+	childConf.Type = TypeWebsocket
+	childConf.Websocket.URL = "ws://" + strings.TrimPrefix(ts.URL, "http://")
+
+	child, err := New(childConf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		child.CloseAsync()
+		assert.NoError(t, child.WaitForClose(time.Second*5))
+	})
+
+	dropConf := NewDropOnConfig()
+	dropConf.Error = true
+	dropConf.BackPressure = "100ms"
+
+	d, err := newDropOn(dropConf.DropOnConditions, child, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		d.CloseAsync()
+		assert.NoError(t, d.WaitForClose(time.Second*5))
+	})
+
+	tChan := make(chan types.Transaction)
+	rChan := make(chan types.Response)
+
+	require.NoError(t, d.Consume(tChan))
+
+	sendAndGet := func(msg string, expErr string) {
+		t.Helper()
+
 		select {
 		case tChan <- types.NewTransaction(message.New([][]byte{[]byte(msg)}), rChan):
 		case <-time.After(time.Second):
@@ -202,16 +303,15 @@ func TestDropOnBackpressure(t *testing.T) {
 
 	sendAndGet("first", "")
 	sendAndGet("second", "")
-	wsMut.Lock()
-	wsAllow = true
-	wsMut.Unlock()
+
+	ts.Close()
+	ws.Close()
 	<-time.After(time.Second)
 
 	sendAndGet("third", "")
 	sendAndGet("fourth", "")
 
 	<-time.After(time.Second)
-	wsMut.Lock()
-	assert.Equal(t, []string{"third", "fourth"}, wsReceived)
-	wsMut.Unlock()
+
+	assert.Equal(t, []string{"first", "second"}, wsReceived)
 }
