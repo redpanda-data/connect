@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.37.0 - 2021-01-06
+
 ### New
 
 - Field `content_type` and `content_encoding` added to the `amqp_0_9` output.
