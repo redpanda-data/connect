@@ -15,6 +15,10 @@ All notable changes to this project will be documented in this file.
 - The `grok` processor now supports dots within field names for nested values.
 - New `drop_on` output.
 
+### Fixed
+
+- The `xml` processor now supports non UTF-8 encoding schemes.
+
 ### Changed
 
 - The `drop_on_error` output has been deprecated in favour of the new `drop_on` output.

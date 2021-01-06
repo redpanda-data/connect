@@ -83,7 +83,7 @@ require (
 	github.com/xeipuuv/gojsonschema v1.2.0
 	go.nanomsg.org/mangos/v3 v3.1.3
 	go.uber.org/atomic v1.7.0 // indirect
-	golang.org/x/net v0.0.0-20201031054903-ff519b6c9102 // indirect
+	golang.org/x/net v0.0.0-20201031054903-ff519b6c9102
 	golang.org/x/oauth2 v0.0.0-20200902213428-5d25da1a8d43
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	golang.org/x/text v0.3.4 // indirect

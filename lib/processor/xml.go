@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/clbanning/mxj"
 	"github.com/opentracing/opentracing-go"
+	"golang.org/x/net/html/charset"
 )
 
 //------------------------------------------------------------------------------
@@ -18,6 +19,7 @@ import (
 func init() {
 	dec := xml.NewDecoder(nil)
 	dec.Strict = false
+	dec.CharsetReader = charset.NewReaderLabel
 	mxj.CustomDecoder = dec
 
 	Constructors[TypeXML] = TypeSpec{

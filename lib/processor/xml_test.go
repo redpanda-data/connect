@@ -76,6 +76,12 @@ func TestXMLCases(t *testing.T) {
 </root>`,
 			output: `{"root":{"description":{"#text":"This is a description","-tone":"boring"},"elements":[{"#text":"foo1","-id":"1"},{"#text":"foo2","-id":"2"},"foo3"],"title":"This is a title"}}`,
 		},
+		{
+			name: "contains non utf-8 encoding",
+			input: `<?xml version="1.0" encoding="ISO-8859-1"?>
+<a><b>Hello world!</b></a>`,
+			output: `{"a":{"b":"Hello world!"}}`,
+		},
 	}
 
 	conf := NewConfig()
@@ -94,6 +100,9 @@ func TestXMLCases(t *testing.T) {
 			}
 			if exp, act := test.output, string(msgsOut[0].Get(0).Get()); exp != act {
 				tt.Errorf("Wrong result: %v != %v", act, exp)
+			}
+			if errStr := GetFail(msgsOut[0].Get(0)); len(errStr) > 0 {
+				tt.Error(errStr)
 			}
 		})
 	}
