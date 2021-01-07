@@ -118,7 +118,7 @@ It is possible to select fields inside a configuration file to be set via [envir
 
 ## Build
 
-Build with Go (1.11 or later):
+Build with Go (1.15 or later):
 
 ```shell
 git clone git@github.com:Jeffail/benthos
