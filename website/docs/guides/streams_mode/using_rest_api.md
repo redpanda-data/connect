@@ -30,9 +30,12 @@ buffer:
 pipeline:
   threads: 4
   processors:
-  - type: jmespath
-    jmespath:
-      query: "{id: user.id, content: body.content}"
+  - type: bloblang
+    bloblang: |
+      root = {
+        "id": this.user.id,
+        "content": this.body.content
+      }
 output:
   type: http_server
 EOF
@@ -52,6 +55,12 @@ $ curl http://localhost:4195/streams | jq '.'
 }
 ```
 
+And we can send data to our new stream via it's namespaced URL:
+
+```
+$ curl http://localhost:4195/foo/post -d '{"user":{"id":"foo"},"body":{"content":"bar"}}'
+```
+
 Good, now let's add another stream `bar` the same way:
 
 ```bash
@@ -68,9 +77,8 @@ buffer:
 pipeline:
   threads: 1
   processors:
-  - type: sample
-    sample:
-      retain: 10
+  - type: bloblang
+    bloblang: 'root = this.uppercase()'
 output:
   type: elasticsearch
   elasticsearch:
@@ -140,9 +148,12 @@ buffer:
 pipeline:
   threads: 4
   processors:
-  - type: jmespath
-    jmespath:
-      query: "{id: user.id, content: body.content}"
+  - type: bloblang
+    bloblang: |
+      root = {
+        "id": this.user.id,
+        "content": this.body.content
+      }
 output:
   type: http_server
 EOF

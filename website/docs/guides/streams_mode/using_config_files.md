@@ -24,9 +24,8 @@ buffer:
 pipeline:
   threads: 4
   processors:
-  - type: jmespath
-    jmespath:
-      query: "{id: user.id, content: body.content}"
+  - type: bloblang
+    bloblang: 'root = {"id": this.user.id, "content": this.body.content}'
 output:
   type: http_server
 EOF
@@ -44,9 +43,8 @@ buffer:
 pipeline:
   threads: 1
   processors:
-  - type: sample
-    sample:
-      retain: 10
+  - type: bloblang
+    bloblang: 'root = this.uppercase()'
 output:
   type: elasticsearch
   elasticsearch:
@@ -107,11 +105,8 @@ $ curl http://localhost:4195/streams/foo | jq '.'
     "pipeline": {
       "processors": [
         {
-          "type": "jmespath",
-          "jmespath": {
-            "parts": [],
-            "query": "{id: user.id, content: body.content}"
-          }
+          "type": "bloblang",
+          "bloblang": "root = {\"id\": this.user.id, \"content\": this.body.content}",
         }
       ],
       "threads": 4
@@ -131,10 +126,10 @@ $ curl http://localhost:4195/streams/foo | jq '.'
 }
 ```
 
-You can send data to the stream via it's namespaced URL:
+You can then send data to the stream via it's namespaced URL:
+
 ```
-$ curl -F "foo=bar" localhost:4195/foo/post
-$
+$ curl http://localhost:4195/foo/post -d '{"user":{"id":"foo"},"body":{"content":"bar"}}'
 ```
 
 There are other endpoints [in the REST API][rest-api] for creating, updating and

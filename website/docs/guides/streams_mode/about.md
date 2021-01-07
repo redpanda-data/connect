@@ -24,12 +24,9 @@ delete streams that were created with static files.
 
 ## Resources
 
-The `resource` section of a Benthos config defines named resources (`caches`,
-`rate_limits`, etc) that can be referenced throughout a stream configuration.
-When running in streams mode these resources are also shared across streams.
+The [`resource`][resources] section of a Benthos config defines named resources (`caches`, `rate_limits`, etc) that can be referenced throughout a stream configuration. When running in streams mode these resources are also shared across streams.
 
-An individual stream config should not define any resources. Instead, they
-should be defined in a service-wide config:
+An individual stream config should not define any resources. Instead, they should be defined in a service-wide config:
 
 ```yaml
 resources:
@@ -84,3 +81,4 @@ metrics:
 [static-files]: /docs/guides/streams_mode/using_config_files
 [rest-api]: /docs/guides/streams_mode/using_rest_api
 [metrics]: /docs/components/metrics/about
+[resources]: /docs/configuration/resources
