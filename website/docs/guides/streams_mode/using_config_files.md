@@ -131,6 +131,12 @@ $ curl http://localhost:4195/streams/foo | jq '.'
 }
 ```
 
+You can send data to the stream via it's namespaced URL:
+```
+$ curl -F "foo=bar" localhost:4195/foo/post
+$
+```
+
 There are other endpoints [in the REST API][rest-api] for creating, updating and
 deleting streams.
 
