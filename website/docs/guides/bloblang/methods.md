@@ -645,6 +645,17 @@ root.a = this.a.not_null()
 # Out: Error("failed to execute mapping query at line 1: value is null")
 ```
 
+### `bytes`
+
+Marshal a value into a byte array. If the value is already a byte array it is unchanged.
+
+```coffee
+root.first_byte = this.name.bytes().index(0)
+
+# In:  {"name":"foobar bazson"}
+# Out: {"first_byte":102}
+```
+
 ### `string`
 
 Marshal a value into a string. If the value is already a string it is unchanged.
@@ -936,6 +947,15 @@ root.last_name = this.names.index(-1)
 
 # In:  {"names":["rachel","stevens"]}
 # Out: {"last_name":"stevens"}
+```
+
+It is also possible to use this method on byte arrays, in which case the selected element will be returned as an integer.
+
+```coffee
+root.last_byte = this.name.bytes().index(-1)
+
+# In:  {"name":"foobar bazson"}
+# Out: {"last_byte":110}
 ```
 
 ### `keys`

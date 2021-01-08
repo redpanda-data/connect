@@ -875,6 +875,11 @@ var _ = RegisterMethod(
 			`{"names":["rachel","stevens"]}`,
 			`{"last_name":"stevens"}`,
 		),
+		NewExampleSpec("It is also possible to use this method on byte arrays, in which case the selected element will be returned as an integer.",
+			`root.last_byte = this.name.bytes().index(-1)`,
+			`{"name":"foobar bazson"}`,
+			`{"last_byte":110}`,
+		),
 	),
 	true, indexMethod,
 	ExpectNArgs(1),
@@ -884,19 +889,28 @@ var _ = RegisterMethod(
 func indexMethod(target Function, args ...interface{}) (Function, error) {
 	index := args[0].(int64)
 	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		array, ok := v.([]interface{})
-		if !ok {
+		switch array := v.(type) {
+		case []interface{}:
+			i := int(index)
+			if i < 0 {
+				i = len(array) + i
+			}
+			if i < 0 || i >= len(array) {
+				return nil, fmt.Errorf("index '%v' was out of bounds for array size: %v", i, len(array))
+			}
+			return array[i], nil
+		case []byte:
+			i := int(index)
+			if i < 0 {
+				i = len(array) + i
+			}
+			if i < 0 || i >= len(array) {
+				return nil, fmt.Errorf("index '%v' was out of bounds for array size: %v", i, len(array))
+			}
+			return int64(array[i]), nil
+		default:
 			return nil, NewTypeError(v, ValueArray)
 		}
-
-		i := int(index)
-		if i < 0 {
-			i = len(array) + i
-		}
-		if i < 0 || i >= len(array) {
-			return nil, fmt.Errorf("index '%v' was out of bounds for array size: %v", i, len(array))
-		}
-		return array[i], nil
 	}), nil
 }
 

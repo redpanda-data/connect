@@ -29,6 +29,27 @@ import (
 	"github.com/tilinna/z85"
 )
 
+var _ = RegisterMethod(
+	NewMethodSpec(
+		"bytes", "",
+	).InCategory(
+		MethodCategoryCoercion,
+		"Marshal a value into a byte array. If the value is already a byte array it is unchanged.",
+		NewExampleSpec("",
+			`root.first_byte = this.name.bytes().index(0)`,
+			`{"name":"foobar bazson"}`,
+			`{"first_byte":102}`,
+		),
+	),
+	false,
+	func(target Function, _ ...interface{}) (Function, error) {
+		return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			return IToBytes(v), nil
+		}), nil
+	},
+	ExpectNArgs(0),
+)
+
 //------------------------------------------------------------------------------
 
 var _ = RegisterMethod(

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### New
+
+- New bloblang method `bytes`.
+- The bloblang method `index` now works on byte arrays.
+
 ## 3.37.0 - 2021-01-06
 
 ### New
