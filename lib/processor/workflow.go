@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -14,7 +13,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/opentracing/opentracing-go"
-	"github.com/quipo/dependencysolver"
 )
 
 //------------------------------------------------------------------------------
@@ -90,9 +88,17 @@ If a field ` + "`<meta_path>.apply`" + ` exists in the meta object for a message
 
 ## Resources
 
-It's common to configure processors (and other components) as resources in order to keep the pipeline configuration cleaner. With the workflow processor you can include branch processors configured as resources within your workflow by specifying them by name in the field ` + "`order`" + `, if Benthos doesn't find a branch within the workflow configuration of that name it'll refer to the resources.
+It's common to configure processors (and other components) [as resources][configuration.resources] in order to keep the pipeline configuration cleaner. With the workflow processor you can include branch processors configured as resources within your workflow either by specifying them by name in the field ` + "`order`" + `, if Benthos doesn't find a branch within the workflow configuration of that name it'll refer to the resources.
 
-However, it's not possible to use resource branches in a workflow without specifying an explicit ordering.
+Alternatively, if you do not wish to have an explicit ordering, you can add resource names to the field ` + "`branch_resources`" + ` and they will be included in the workflow with automatic DAG resolution along with any branches configured in the ` + "`branches`" + ` field.
+
+### Resource Error Conditions
+
+There are two error conditions that could potentially occur when resources included in your workflow are mutated, and if you are planning to mutate resources in your workflow it is important that you understand them.
+
+The first error case is that a resource in the workflow is removed and not replaced, when this happens the workflow will still be executed but the individual branch will fail. This should only happen if you explicitly delete a branch resource, as any mutation operation will create the new resource before removing the old one.
+
+The second error case is when automatic DAG resolution is being used and a resource in the workflow is changed in a way that breaks the DAG (circular dependencies, etc). When this happens it is impossible to execute the workflow and therefore the processor will fail, which is possible to capture and handle using [standard error handling patterns][configuration.error-handling].
 
 ## Error Handling
 
@@ -111,6 +117,7 @@ However, if structured metadata is disabled by setting the field ` + "`meta_path
 [guides.bloblang]: /docs/guides/bloblang/about
 [configuration.pipelines]: /docs/configuration/processing_pipelines
 [configuration.error-handling]: /docs/configuration/error_handling
+[configuration.resources]: /docs/configuration/resources
 `,
 		Examples: []docs.AnnotatedExample{
 			{
@@ -239,6 +246,10 @@ resources:
 				[][]string{{"foo", "bar"}, {"baz"}},
 				[][]string{{"foo"}, {"bar"}, {"baz"}},
 			),
+			docs.FieldAdvanced(
+				"branch_resources",
+				"An optional list of [`branch` processor](/docs/components/processors/branch) names that are configured as [resources](#resources). These resources will be included in the workflow with any branches configured inline within the [`branches`](#branches) field. The order and parallelism in which branches are executed is automatically resolved based on the mappings of each branch. When using resources with an explicit order it is not necessary to list resources in this field.",
+			),
 			docs.FieldCommon(
 				"branches",
 				"An object of named [`branch` processors](/docs/components/processors/branch) that make up the workflow. The order and parallelism in which branches are executed can either be made explicit with the field `order`, or if omitted an attempt is made to automatically resolve an ordering based on the mappings of each branch.",
@@ -254,9 +265,10 @@ resources:
 				sanitBranches[k] = sanit
 			}
 			m := map[string]interface{}{
-				"meta_path": conf.Workflow.MetaPath,
-				"order":     conf.Workflow.Order,
-				"branches":  sanitBranches,
+				"meta_path":        conf.Workflow.MetaPath,
+				"order":            conf.Workflow.Order,
+				"branch_resources": conf.Workflow.BranchResources,
+				"branches":         sanitBranches,
 			}
 			if len(conf.Workflow.Stages) > 0 {
 				sanitChildren := map[string]interface{}{}
@@ -281,93 +293,23 @@ resources:
 // WorkflowConfig is a config struct containing fields for the Workflow
 // processor.
 type WorkflowConfig struct {
-	MetaPath string                         `json:"meta_path" yaml:"meta_path"`
-	Order    [][]string                     `json:"order" yaml:"order"`
-	Branches map[string]BranchConfig        `json:"branches" yaml:"branches"`
-	Stages   map[string]DepProcessMapConfig `json:"stages" yaml:"stages"`
+	MetaPath        string                         `json:"meta_path" yaml:"meta_path"`
+	Order           [][]string                     `json:"order" yaml:"order"`
+	BranchResources []string                       `json:"branch_resources" yaml:"branch_resources"`
+	Branches        map[string]BranchConfig        `json:"branches" yaml:"branches"`
+	Stages          map[string]DepProcessMapConfig `json:"stages" yaml:"stages"`
 }
 
 // NewWorkflowConfig returns a default WorkflowConfig.
 func NewWorkflowConfig() WorkflowConfig {
 	return WorkflowConfig{
-		MetaPath: "meta.workflow",
-		Order:    [][]string{},
-		Branches: map[string]BranchConfig{},
-		Stages:   map[string]DepProcessMapConfig{},
+		MetaPath:        "meta.workflow",
+		Order:           [][]string{},
+		BranchResources: []string{},
+		Branches:        map[string]BranchConfig{},
+		Stages:          map[string]DepProcessMapConfig{},
 	}
 }
-
-//------------------------------------------------------------------------------
-
-type workflowBranch interface {
-	targetsUsed() [][]string
-	targetsProvided() [][]string
-	createResult([]types.Part, types.Message) ([]types.Part, []branchMapError, error)
-	overlayResult(types.Message, []types.Part) ([]branchMapError, error)
-	lock()
-	unlock()
-	CloseAsync()
-	WaitForClose(time.Duration) error
-}
-
-type resourcedBranch struct {
-	name string
-	mgr  procProvider
-
-	p types.Processor
-}
-
-func (r *resourcedBranch) targetsUsed() [][]string {
-	return nil
-}
-
-func (r *resourcedBranch) targetsProvided() [][]string {
-	return nil
-}
-
-func (r *resourcedBranch) createResult(parts []types.Part, referenceMsg types.Message) ([]types.Part, []branchMapError, error) {
-	if r.p == nil {
-		return nil, nil, fmt.Errorf("failed to obtain branch resource '%v'", r.name)
-	}
-	b, ok := r.p.(*Branch)
-	if !ok {
-		return nil, nil, fmt.Errorf("branch resource '%v' found incorrect processor type %T", r.name, r.p)
-	}
-	return b.createResult(parts, referenceMsg)
-}
-
-func (r *resourcedBranch) overlayResult(msg types.Message, parts []types.Part) ([]branchMapError, error) {
-	if r.p == nil {
-		return nil, fmt.Errorf("failed to obtain branch resource '%v'", r.name)
-	}
-	b, ok := r.p.(*Branch)
-	if !ok {
-		return nil, fmt.Errorf("branch resource '%v' found incorrect processor type %T", r.name, r.p)
-	}
-	return b.overlayResult(msg, parts)
-}
-
-// TODO: Once manager supports locking and updates.
-func (r *resourcedBranch) lock() {
-	r.p, _ = r.mgr.GetProcessor(r.name)
-}
-
-func (r *resourcedBranch) unlock() {
-	r.p = nil
-}
-
-// Not needed as the manager handles shut down.
-func (r *resourcedBranch) CloseAsync() {}
-func (r *resourcedBranch) WaitForClose(time.Duration) error {
-	return nil
-}
-
-type normalBranch struct {
-	*Branch
-}
-
-func (r *normalBranch) lock()   {}
-func (r *normalBranch) unlock() {}
 
 //------------------------------------------------------------------------------
 
@@ -378,8 +320,7 @@ type Workflow struct {
 	log   log.Modular
 	stats metrics.Type
 
-	children  map[string]workflowBranch
-	dag       [][]string
+	children  *workflowBranchMap
 	allStages map[string]struct{}
 	metaPath  []string
 
@@ -421,64 +362,12 @@ func NewWorkflow(
 		w.metaPath = gabs.DotPathToSlice(conf.Workflow.MetaPath)
 	}
 
-	w.children = map[string]workflowBranch{}
-	for k, v := range conf.Workflow.Branches {
-		if len(processDAGStageName.FindString(k)) != len(k) {
-			return nil, fmt.Errorf("workflow branch name '%v' contains invalid characters", k)
-		}
-
-		nsLog := log.NewModule(fmt.Sprintf(".%v", k))
-		nsStats := metrics.Namespaced(stats, k)
-
-		child, err := newBranch(v, mgr, nsLog, nsStats)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create branch '%v': %v", k, err)
-		}
-
-		w.children[k] = &normalBranch{child}
+	var err error
+	if w.children, err = newWorkflowBranchMap(conf.Workflow, mgr, log, stats); err != nil {
+		return nil, err
+	}
+	for k := range w.children.branches {
 		w.allStages[k] = struct{}{}
-	}
-
-	// Any explicit order names that aren't within our
-	for _, tier := range conf.Workflow.Order {
-		for _, k := range tier {
-			if _, exists := w.children[k]; !exists {
-				// TODO: V4 Remove this
-				pProvider, ok := mgr.(procProvider)
-				if !ok {
-					return nil, errors.New("manager does not support processor resources")
-				}
-
-				// If we haven't specified the processor
-				if p, err := pProvider.GetProcessor(k); err != nil {
-					return nil, fmt.Errorf("branch specified in order not found: %v", k)
-				} else if _, ok := p.(*Branch); !ok {
-					return nil, fmt.Errorf(
-						"found resource named '%v' with wrong type, expected a branch processor, found: %T",
-						k, p,
-					)
-				} else {
-					w.children[k] = &resourcedBranch{
-						name: k,
-						mgr:  pProvider,
-					}
-					w.allStages[k] = struct{}{}
-				}
-			}
-		}
-	}
-
-	if len(conf.Workflow.Order) > 0 {
-		w.dag = conf.Workflow.Order
-		if err := verifyStaticBranchDAG(conf.Workflow.Order, w.children); err != nil {
-			return nil, err
-		}
-	} else {
-		var err error
-		if w.dag, err = resolveDynamicBranchDAG(w.children); err != nil {
-			return nil, err
-		}
-		w.log.Infof("Automatically resolved workflow DAG: %v\n", w.dag)
 	}
 
 	w.mCount = stats.GetCounter("count")
@@ -491,104 +380,6 @@ func NewWorkflow(
 	w.mErrOverlay = stats.GetCounter("error.overlay")
 
 	return w, nil
-}
-
-//------------------------------------------------------------------------------
-
-func depHasPrefix(wanted, provided []string) bool {
-	if len(wanted) < len(provided) {
-		return false
-	}
-	for i, s := range provided {
-		if wanted[i] != s {
-			return false
-		}
-	}
-	return true
-}
-
-func getBranchDeps(id string, wanted [][]string, branches map[string]workflowBranch) []string {
-	dependencies := []string{}
-
-eLoop:
-	for k, b := range branches {
-		if k == id {
-			continue
-		}
-		for _, tp := range b.targetsProvided() {
-			for _, tn := range wanted {
-				if depHasPrefix(tn, tp) {
-					dependencies = append(dependencies, k)
-					continue eLoop
-				}
-			}
-		}
-	}
-
-	return dependencies
-}
-
-func verifyStaticBranchDAG(order [][]string, branches map[string]workflowBranch) error {
-	remaining := map[string]struct{}{}
-	seen := map[string]struct{}{}
-	for id := range branches {
-		remaining[id] = struct{}{}
-	}
-	for i, tier := range order {
-		if len(tier) == 0 {
-			return fmt.Errorf("explicit order tier '%v' was empty", i)
-		}
-		for _, t := range tier {
-			if _, exists := seen[t]; exists {
-				return fmt.Errorf("branch specified in order listed multiple times: %v", t)
-			}
-			seen[t] = struct{}{}
-			delete(remaining, t)
-		}
-	}
-	if len(remaining) > 0 {
-		names := make([]string, 0, len(remaining))
-		for k := range remaining {
-			names = append(names, k)
-		}
-		return fmt.Errorf("the following branches were missing from order: %v", names)
-	}
-	return nil
-}
-
-func resolveDynamicBranchDAG(branches map[string]workflowBranch) ([][]string, error) {
-	if branches == nil || len(branches) == 0 {
-		return [][]string{}, nil
-	}
-	remaining := map[string]struct{}{}
-
-	var entries []dependencysolver.Entry
-	for id, b := range branches {
-		wanted := b.targetsUsed()
-
-		remaining[id] = struct{}{}
-		entries = append(entries, dependencysolver.Entry{
-			ID: id, Deps: getBranchDeps(id, wanted, branches),
-		})
-	}
-
-	layers := dependencysolver.LayeredTopologicalSort(entries)
-	for _, l := range layers {
-		for _, id := range l {
-			delete(remaining, id)
-		}
-	}
-
-	if len(remaining) > 0 {
-		var tProcs []string
-		for k := range remaining {
-			tProcs = append(tProcs, k)
-		}
-		sort.Strings(tProcs)
-		return nil, fmt.Errorf("failed to automatically resolve DAG, circular dependencies detected for branches: %v", tProcs)
-	}
-
-	return layers, nil
 }
 
 //------------------------------------------------------------------------------
@@ -746,18 +537,25 @@ func (w *Workflow) skipFromMeta(root interface{}) map[string]struct{} {
 func (w *Workflow) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	w.mCount.Incr(1)
 
+	payload := msg.DeepCopy()
+
 	// Prevent resourced branches from being updated mid-flow.
-	for _, b := range w.children {
-		b.lock()
+	dag, children, err := w.children.Lock()
+	defer w.children.Unlock()
+	if err != nil {
+		w.mErr.Incr(1)
+		w.log.Errorf("Failed to establish workflow: %v\n", err)
+
+		payload.Iter(func(i int, p types.Part) error {
+			FlagErr(p, err)
+			return nil
+		})
+		w.mSentParts.Incr(int64(payload.Len()))
+		w.mSent.Incr(1)
+		return []types.Message{payload}, nil
 	}
-	defer func() {
-		for _, b := range w.children {
-			b.unlock()
-		}
-	}()
 
 	skipOnMeta := make([]map[string]struct{}, msg.Len())
-	payload := msg.DeepCopy()
 	payload.Iter(func(i int, p types.Part) error {
 		p.Get()
 		p.Metadata()
@@ -773,10 +571,10 @@ func (w *Workflow) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 
 	records := make([]*resultTracker, payload.Len())
 	for i := range records {
-		records[i] = trackerFromTree(w.dag)
+		records[i] = trackerFromTree(dag)
 	}
 
-	for _, layer := range w.dag {
+	for _, layer := range dag {
 		results := make([][]types.Part, len(layer))
 		errors := make([]error, len(layer))
 
@@ -799,7 +597,7 @@ func (w *Workflow) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 				var mapErrs []branchMapError
 				var requestSpans []opentracing.Span
 				requestParts, requestSpans = tracing.PartsWithChildSpans(id, requestParts)
-				results[index], mapErrs, errors[index] = w.children[id].createResult(requestParts, propMsg)
+				results[index], mapErrs, errors[index] = children[id].createResult(requestParts, propMsg)
 				for _, s := range requestSpans {
 					s.Finish()
 				}
@@ -820,7 +618,7 @@ func (w *Workflow) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 			var failed []branchMapError
 			err := errors[i]
 			if err == nil {
-				if failed, err = w.children[id].overlayResult(payload, results[i]); err != nil {
+				if failed, err = children[id].overlayResult(payload, results[i]); err != nil {
 					w.mErrOverlay.Incr(1)
 				}
 			}
@@ -887,20 +685,12 @@ func (w *Workflow) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 
 // CloseAsync shuts down the processor and stops processing requests.
 func (w *Workflow) CloseAsync() {
-	for _, c := range w.children {
-		c.CloseAsync()
-	}
+	w.children.CloseAsync()
 }
 
 // WaitForClose blocks until the processor has closed down.
 func (w *Workflow) WaitForClose(timeout time.Duration) error {
-	stopBy := time.Now().Add(timeout)
-	for _, c := range w.children {
-		if err := c.WaitForClose(time.Until(stopBy)); err != nil {
-			return err
-		}
-	}
-	return nil
+	return w.children.WaitForClose(timeout)
 }
 
 //------------------------------------------------------------------------------

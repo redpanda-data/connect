@@ -18,6 +18,7 @@ pipeline:
   processors:
     - type: workflow
       workflow:
+        branch_resources: []
         branches: {}
         meta_path: meta.workflow
         order: []

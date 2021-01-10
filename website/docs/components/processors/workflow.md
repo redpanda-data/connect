@@ -20,13 +20,36 @@ BETA: This component is mostly stable but breaking changes could still be made o
 Executes a topology of [`branch` processors][processors.branch],
 performing them in parallel where possible.
 
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yaml
-# Config fields, showing default values
+# Common config fields, showing default values
 workflow:
   meta_path: meta.workflow
   order: []
   branches: {}
 ```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+# All config fields, showing default values
+workflow:
+  meta_path: meta.workflow
+  order: []
+  branch_resources: []
+  branches: {}
+```
+
+</TabItem>
+</Tabs>
 
 ## Why Use a Workflow
 
@@ -93,6 +116,14 @@ order:
   - - bar
   - - baz
 ```
+
+### `branch_resources`
+
+An optional list of [`branch` processor](/docs/components/processors/branch) names that are configured as [resources](#resources). These resources will be included in the workflow with any branches configured inline within the [`branches`](#branches) field. The order and parallelism in which branches are executed is automatically resolved based on the mappings of each branch. When using resources with an explicit order it is not necessary to list resources in this field.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `branches`
 
@@ -260,9 +291,17 @@ If a field `<meta_path>.apply` exists in the meta object for a message and is an
 
 ## Resources
 
-It's common to configure processors (and other components) as resources in order to keep the pipeline configuration cleaner. With the workflow processor you can include branch processors configured as resources within your workflow by specifying them by name in the field `order`, if Benthos doesn't find a branch within the workflow configuration of that name it'll refer to the resources.
+It's common to configure processors (and other components) [as resources][configuration.resources] in order to keep the pipeline configuration cleaner. With the workflow processor you can include branch processors configured as resources within your workflow either by specifying them by name in the field `order`, if Benthos doesn't find a branch within the workflow configuration of that name it'll refer to the resources.
 
-However, it's not possible to use resource branches in a workflow without specifying an explicit ordering.
+Alternatively, if you do not wish to have an explicit ordering, you can add resource names to the field `branch_resources` and they will be included in the workflow with automatic DAG resolution along with any branches configured in the `branches` field.
+
+### Resource Error Conditions
+
+There are two error conditions that could potentially occur when resources included in your workflow are mutated, and if you are planning to mutate resources in your workflow it is important that you understand them.
+
+The first error case is that a resource in the workflow is removed and not replaced, when this happens Benthos will log an error once, but will then proceed to process the workflow as if the branch were a no-op until either the service is stopped or the resource is re-created. This should only happen if you explicitly delete a branch resource, as any mutation operation will create the new resource before removing the old one.
+
+The second error case is when automatic DAG resolution is being used and a resource in the workflow is changed in a way that breaks the DAG (circular dependencies, etc). When this happens it is impossible to execute the workflow and therefore the processor will fail, which is possible to capture and handle using [standard error handling patterns][configuration.error-handling].
 
 ## Error Handling
 
@@ -281,5 +320,6 @@ However, if structured metadata is disabled by setting the field `meta_path` to 
 [guides.bloblang]: /docs/guides/bloblang/about
 [configuration.pipelines]: /docs/configuration/processing_pipelines
 [configuration.error-handling]: /docs/configuration/error_handling
+[configuration.resources]: /docs/configuration/resources
 
 
