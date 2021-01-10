@@ -299,7 +299,7 @@ Alternatively, if you do not wish to have an explicit ordering, you can add reso
 
 There are two error conditions that could potentially occur when resources included in your workflow are mutated, and if you are planning to mutate resources in your workflow it is important that you understand them.
 
-The first error case is that a resource in the workflow is removed and not replaced, when this happens Benthos will log an error once, but will then proceed to process the workflow as if the branch were a no-op until either the service is stopped or the resource is re-created. This should only happen if you explicitly delete a branch resource, as any mutation operation will create the new resource before removing the old one.
+The first error case is that a resource in the workflow is removed and not replaced, when this happens the workflow will still be executed but the individual branch will fail. This should only happen if you explicitly delete a branch resource, as any mutation operation will create the new resource before removing the old one.
 
 The second error case is when automatic DAG resolution is being used and a resource in the workflow is changed in a way that breaks the DAG (circular dependencies, etc). When this happens it is impossible to execute the workflow and therefore the processor will fail, which is possible to capture and handle using [standard error handling patterns][configuration.error-handling].
 

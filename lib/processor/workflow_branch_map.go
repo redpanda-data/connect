@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -20,10 +21,10 @@ type workflowBranch interface {
 	CloseAsync()
 	WaitForClose(time.Duration) error
 
-	// Returns true if the underlying branch has actually changed since the last
-	// lock, which means the dependency graph ought to be re-calculated.
-	lock() bool
-	unlock()
+	// Returns a closure that unlocks the branch resource, and a boolean that is
+	// true if the underlying branch has actually changed since the last lock,
+	// which means the dependency graph ought to be re-calculated.
+	lock() (func(), bool)
 }
 
 //------------------------------------------------------------------------------
@@ -32,35 +33,51 @@ type workflowBranchMap struct {
 	static   bool
 	dag      [][]string
 	branches map[string]workflowBranch
+	m        sync.Mutex
 }
 
-// Locks all branches contained in the branch map and returns the latest DAG. If
+// Locks all branches contained in the branch map and returns the latest DAG, a
+// map of resources, and a func to unlock the resources that were locked. If
 // any error occurs in locked each branch (the resource is missing, or the DAG
-// is malformed) then an error is returned. Calling Unlock is always required
-// after this method, even if an error is returned.
-func (w *workflowBranchMap) Lock() ([][]string, map[string]workflowBranch, error) {
+// is malformed) then an error is returned instead.
+func (w *workflowBranchMap) Lock() ([][]string, map[string]workflowBranch, func(), error) {
+	// Only allow one processing thread to mutate the cached DAG at a time, but
+	// once they're resolved allow any number of threads to keep a reference to
+	// the branch resources.
+	w.m.Lock()
+	defer w.m.Unlock()
+
+	var unlocks []func()
+	unlockFn := func() {
+		for _, u := range unlocks {
+			u()
+		}
+	}
 	needsRefresh := false
 	for _, b := range w.branches {
-		r := b.lock()
+		fn, r := b.lock()
+		if fn != nil {
+			// Try not to allocate unlocks unless there are actual resources to
+			// unlock.
+			if unlocks == nil {
+				unlocks = make([]func(), 0, len(w.branches))
+			}
+			unlocks = append(unlocks, fn)
+		}
 		needsRefresh = needsRefresh || r
 	}
 	if w.static {
-		return w.dag, w.branches, nil
+		return w.dag, w.branches, unlockFn, nil
 	}
+
 	if len(w.dag) == 0 || needsRefresh {
 		var err error
 		if w.dag, err = resolveDynamicBranchDAG(w.branches); err != nil {
-			return nil, nil, fmt.Errorf("failed to resolve DAG: %w", err)
+			unlockFn()
+			return nil, nil, nil, fmt.Errorf("failed to resolve DAG: %w", err)
 		}
-		fmt.Printf("The dag: %v\n", w.dag)
 	}
-	return w.dag, w.branches, nil
-}
-
-func (w *workflowBranchMap) Unlock() {
-	for _, b := range w.branches {
-		b.unlock()
-	}
+	return w.dag, w.branches, unlockFn, nil
 }
 
 func (w *workflowBranchMap) CloseAsync() {
@@ -221,13 +238,10 @@ func (r *resourcedBranch) overlayResult(msg types.Message, parts []types.Part) (
 }
 
 // TODO: Expand this once manager supports locking and updates.
-func (r *resourcedBranch) lock() bool {
+func (r *resourcedBranch) lock() (func(), bool) {
 	prevP := r.p
 	r.p, _ = r.mgr.GetProcessor(r.name)
-	return r.p != prevP
-}
-
-func (r *resourcedBranch) unlock() {
+	return func() {}, r.p != prevP
 }
 
 // Not needed as the manager handles shut down.
@@ -242,11 +256,9 @@ type normalBranch struct {
 	*Branch
 }
 
-func (r *normalBranch) lock() bool {
-	return false
+func (r *normalBranch) lock() (func(), bool) {
+	return nil, false
 }
-
-func (r *normalBranch) unlock() {}
 
 //------------------------------------------------------------------------------
 

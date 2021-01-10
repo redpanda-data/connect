@@ -540,8 +540,7 @@ func (w *Workflow) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	payload := msg.DeepCopy()
 
 	// Prevent resourced branches from being updated mid-flow.
-	dag, children, err := w.children.Lock()
-	defer w.children.Unlock()
+	dag, children, unlock, err := w.children.Lock()
 	if err != nil {
 		w.mErr.Incr(1)
 		w.log.Errorf("Failed to establish workflow: %v\n", err)
@@ -554,6 +553,7 @@ func (w *Workflow) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 		w.mSent.Incr(1)
 		return []types.Message{payload}, nil
 	}
+	defer unlock()
 
 	skipOnMeta := make([]map[string]struct{}, msg.Len())
 	payload.Iter(func(i int, p types.Part) error {
