@@ -313,6 +313,8 @@ type workflowBranch interface {
 type resourcedBranch struct {
 	name string
 	mgr  procProvider
+
+	p types.Processor
 }
 
 func (r *resourcedBranch) targetsUsed() [][]string {
@@ -324,32 +326,35 @@ func (r *resourcedBranch) targetsProvided() [][]string {
 }
 
 func (r *resourcedBranch) createResult(parts []types.Part, referenceMsg types.Message) ([]types.Part, []branchMapError, error) {
-	p, err := r.mgr.GetProcessor(r.name)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to obtain branch resource '%v': %w", r.name, err)
+	if r.p == nil {
+		return nil, nil, fmt.Errorf("failed to obtain branch resource '%v'", r.name)
 	}
-	b, ok := p.(*Branch)
+	b, ok := r.p.(*Branch)
 	if !ok {
-		return nil, nil, fmt.Errorf("branch resource '%v' found incorrect processor type %T", r.name, p)
+		return nil, nil, fmt.Errorf("branch resource '%v' found incorrect processor type %T", r.name, r.p)
 	}
 	return b.createResult(parts, referenceMsg)
 }
 
 func (r *resourcedBranch) overlayResult(msg types.Message, parts []types.Part) ([]branchMapError, error) {
-	p, err := r.mgr.GetProcessor(r.name)
-	if err != nil {
-		return nil, fmt.Errorf("failed to obtain branch resource '%v': %w", r.name, err)
+	if r.p == nil {
+		return nil, fmt.Errorf("failed to obtain branch resource '%v'", r.name)
 	}
-	b, ok := p.(*Branch)
+	b, ok := r.p.(*Branch)
 	if !ok {
-		return nil, fmt.Errorf("branch resource '%v' found incorrect processor type %T", r.name, p)
+		return nil, fmt.Errorf("branch resource '%v' found incorrect processor type %T", r.name, r.p)
 	}
 	return b.overlayResult(msg, parts)
 }
 
 // TODO: Once manager supports locking and updates.
-func (r *resourcedBranch) lock()   {}
-func (r *resourcedBranch) unlock() {}
+func (r *resourcedBranch) lock() {
+	r.p, _ = r.mgr.GetProcessor(r.name)
+}
+
+func (r *resourcedBranch) unlock() {
+	r.p = nil
+}
 
 // Not needed as the manager handles shut down.
 func (r *resourcedBranch) CloseAsync() {}
@@ -434,57 +439,43 @@ func NewWorkflow(
 		w.allStages[k] = struct{}{}
 	}
 
+	// Any explicit order names that aren't within our
+	for _, tier := range conf.Workflow.Order {
+		for _, k := range tier {
+			if _, exists := w.children[k]; !exists {
+				// TODO: V4 Remove this
+				pProvider, ok := mgr.(procProvider)
+				if !ok {
+					return nil, errors.New("manager does not support processor resources")
+				}
+
+				// If we haven't specified the processor
+				if p, err := pProvider.GetProcessor(k); err != nil {
+					return nil, fmt.Errorf("branch specified in order not found: %v", k)
+				} else if _, ok := p.(*Branch); !ok {
+					return nil, fmt.Errorf(
+						"found resource named '%v' with wrong type, expected a branch processor, found: %T",
+						k, p,
+					)
+				} else {
+					w.children[k] = &resourcedBranch{
+						name: k,
+						mgr:  pProvider,
+					}
+					w.allStages[k] = struct{}{}
+				}
+			}
+		}
+	}
+
 	if len(conf.Workflow.Order) > 0 {
-		remaining := map[string]struct{}{}
-		seen := map[string]struct{}{}
-		for id := range w.children {
-			remaining[id] = struct{}{}
-		}
-		for i, tier := range conf.Workflow.Order {
-			if len(tier) == 0 {
-				return nil, fmt.Errorf("explicit order tier '%v' was empty", i)
-			}
-			for _, t := range tier {
-				if _, exists := seen[t]; exists {
-					return nil, fmt.Errorf("branch specified in order listed multiple times: %v", t)
-				}
-				if _, exists := remaining[t]; !exists {
-					// TODO: V4 Remove this
-					pProvider, ok := mgr.(procProvider)
-					if !ok {
-						return nil, errors.New("manager does not support processor resources")
-					}
-					// If we haven't specified the processor
-					if p, err := pProvider.GetProcessor(t); err != nil {
-						return nil, fmt.Errorf("branch specified in order not found: %v", t)
-					} else if _, ok := p.(*Branch); !ok {
-						return nil, fmt.Errorf(
-							"found resource named '%v' with wrong type, expected a branch processor, found: %T",
-							t, p,
-						)
-					} else {
-						w.children[t] = &resourcedBranch{
-							name: t,
-							mgr:  pProvider,
-						}
-						w.allStages[t] = struct{}{}
-					}
-				}
-				seen[t] = struct{}{}
-				delete(remaining, t)
-			}
-		}
-		if len(remaining) > 0 {
-			names := make([]string, 0, len(remaining))
-			for k := range remaining {
-				names = append(names, k)
-			}
-			return nil, fmt.Errorf("the following branches were missing from order: %v", names)
-		}
 		w.dag = conf.Workflow.Order
+		if err := verifyStaticBranchDAG(conf.Workflow.Order, w.children); err != nil {
+			return nil, err
+		}
 	} else {
 		var err error
-		if w.dag, err = resolveBranchDAG(w.children); err != nil {
+		if w.dag, err = resolveDynamicBranchDAG(w.children); err != nil {
 			return nil, err
 		}
 		w.log.Infof("Automatically resolved workflow DAG: %v\n", w.dag)
@@ -537,7 +528,35 @@ eLoop:
 	return dependencies
 }
 
-func resolveBranchDAG(branches map[string]workflowBranch) ([][]string, error) {
+func verifyStaticBranchDAG(order [][]string, branches map[string]workflowBranch) error {
+	remaining := map[string]struct{}{}
+	seen := map[string]struct{}{}
+	for id := range branches {
+		remaining[id] = struct{}{}
+	}
+	for i, tier := range order {
+		if len(tier) == 0 {
+			return fmt.Errorf("explicit order tier '%v' was empty", i)
+		}
+		for _, t := range tier {
+			if _, exists := seen[t]; exists {
+				return fmt.Errorf("branch specified in order listed multiple times: %v", t)
+			}
+			seen[t] = struct{}{}
+			delete(remaining, t)
+		}
+	}
+	if len(remaining) > 0 {
+		names := make([]string, 0, len(remaining))
+		for k := range remaining {
+			names = append(names, k)
+		}
+		return fmt.Errorf("the following branches were missing from order: %v", names)
+	}
+	return nil
+}
+
+func resolveDynamicBranchDAG(branches map[string]workflowBranch) ([][]string, error) {
 	if branches == nil || len(branches) == 0 {
 		return [][]string{}, nil
 	}
