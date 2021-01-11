@@ -36,7 +36,7 @@ func ITypeOf(i interface{}) ValueType {
 		return ValueString
 	case []byte:
 		return ValueBytes
-	case int64, uint64, float64, json.Number:
+	case int, int64, uint64, float64, json.Number:
 		return ValueNumber
 	case bool:
 		return ValueBool
