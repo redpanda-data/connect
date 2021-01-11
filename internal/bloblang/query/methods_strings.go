@@ -1080,7 +1080,7 @@ func formatTimestampMethod(target Function, args ...interface{}) (Function, erro
 	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var target time.Time
 
-		switch t := v.(type) {
+		switch t := ISanitize(v).(type) {
 		case int64:
 			target = time.Unix(t, 0)
 		case uint64:

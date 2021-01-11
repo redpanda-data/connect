@@ -1483,7 +1483,7 @@ var _ = RegisterMethod(
 func sortMethod(target Function, args ...interface{}) (Function, error) {
 	compareFn := func(ctx FunctionContext, values []interface{}, i, j int) (bool, error) {
 		switch values[i].(type) {
-		case float64, int64, uint64, json.Number:
+		case float64, int, int64, uint64, json.Number:
 			var lhs, rhs float64
 			var err error
 			if lhs, err = IGetNumber(values[i]); err == nil {
@@ -1690,7 +1690,7 @@ func sumMethod(target Function, _ ...interface{}) (Function, error) {
 				Err:       err,
 			}
 		}
-		switch t := v.(type) {
+		switch t := ISanitize(v).(type) {
 		case float64, int64, uint64, json.Number:
 			return v, nil
 		case []interface{}:
@@ -1813,7 +1813,7 @@ func uniqueMethod(target Function, args ...interface{}) (Function, error) {
 				}
 			}
 			var unique bool
-			switch t := check.(type) {
+			switch t := ISanitize(check).(type) {
 			case string:
 				unique = checkStr(t)
 			case []byte:

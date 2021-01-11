@@ -68,6 +68,8 @@ type Nothing *struct{}
 // from it.
 func IGetNumber(v interface{}) (float64, error) {
 	switch t := v.(type) {
+	case int:
+		return float64(t), nil
 	case int64:
 		return float64(t), nil
 	case uint64:
@@ -84,6 +86,8 @@ func IGetNumber(v interface{}) (float64, error) {
 // it.
 func IGetInt(v interface{}) (int64, error) {
 	switch t := v.(type) {
+	case int:
+		return int64(t), nil
 	case int64:
 		return t, nil
 	case uint64:
@@ -101,6 +105,8 @@ func IGetBool(v interface{}) (bool, error) {
 	switch t := v.(type) {
 	case bool:
 		return t, nil
+	case int:
+		return t != 0, nil
 	case int64:
 		return t != 0, nil
 	case uint64:
@@ -222,6 +228,8 @@ func IToString(i interface{}) string {
 // from it or parse one.
 func IToNumber(v interface{}) (float64, error) {
 	switch t := v.(type) {
+	case int:
+		return float64(t), nil
 	case int64:
 		return float64(t), nil
 	case uint64:
@@ -245,6 +253,8 @@ const maxInt = uint64(maxUint >> 1)
 // or parse one.
 func IToInt(v interface{}) (int64, error) {
 	switch t := v.(type) {
+	case int:
+		return int64(t), nil
 	case int64:
 		return t, nil
 	case uint64:
@@ -270,6 +280,8 @@ func IToBool(v interface{}) (bool, error) {
 	switch t := v.(type) {
 	case bool:
 		return t, nil
+	case int:
+		return t != 0, nil
 	case int64:
 		return t != 0, nil
 	case uint64:

@@ -62,6 +62,7 @@ func arithmeticFunc(lhs, rhs Function, op arithmeticOpFunc) (Function, error) {
 //------------------------------------------------------------------------------
 
 func restrictForComparison(v interface{}) interface{} {
+	v = ISanitize(v)
 	switch t := v.(type) {
 	case int64:
 		return float64(t)
@@ -145,7 +146,7 @@ func sumOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
 		return func(left, right interface{}) (interface{}, error) {
 			var err error
 			switch left.(type) {
-			case float64, int64, uint64, json.Number:
+			case float64, int, int64, uint64, json.Number:
 				var lhs, rhs float64
 				if lhs, err = IGetNumber(left); err == nil {
 					rhs, err = IGetNumber(right)
