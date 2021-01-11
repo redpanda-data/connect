@@ -249,7 +249,7 @@ func TestWorkflowMissingResources(t *testing.T) {
 	})
 
 	_, err := NewWorkflow(conf, mgr, log.Noop(), metrics.Noop())
-	require.EqualError(t, err, "branch specified in order not found: foo")
+	require.EqualError(t, err, "branch resource not found: foo")
 
 	badConf := NewConfig()
 	badConf.Type = TypeAWK

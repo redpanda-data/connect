@@ -122,10 +122,9 @@ func newWorkflowBranchMap(conf WorkflowConfig, mgr types.Manager, log log.Modula
 		if pProvider == nil {
 			return errors.New("manager does not support processor resources")
 		}
-		// If we haven't specified the processor
 		if p, err := pProvider.GetProcessor(key); err != nil {
-			return fmt.Errorf("branch specified in order not found: %v", key)
-		} else if _, ok := p.(*Branch); !ok {
+			return fmt.Errorf("branch resource not found: %v", key)
+		} else if _, ok := p.(*Branch); p != nil && !ok {
 			return fmt.Errorf(
 				"found resource named '%v' with wrong type, expected a branch processor, found: %T",
 				key, p,
