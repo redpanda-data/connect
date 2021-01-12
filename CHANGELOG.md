@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - New bloblang method `bytes`.
 - The bloblang method `index` now works on byte arrays.
 - Field `branch_resources` added to the `workflow` processor.
+- Field `storage_sas_token` added to the `azure_blob_storage` input and output.
 
 ## 3.37.0 - 2021-01-06
 
