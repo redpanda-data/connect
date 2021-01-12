@@ -44,6 +44,7 @@ tracer:
   type: jaeger
   jaeger:
     agent_address: localhost:6831
+    collector_address: ""
     flush_interval: ""
     sampler_manager_address: ""
     sampler_param: 1

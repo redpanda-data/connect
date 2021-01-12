@@ -20,8 +20,9 @@ func init() {
 		Summary: `
 Send spans to a [Jaeger](https://www.jaegertracing.io/) agent.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("agent_address", "The address of a Jaeger agent to send tracing events to."),
-			docs.FieldCommon("collector_address", "The address of a Jaeger collector to send tracing events to.", "https://jaeger-collector:14268/api/traces"),
+			docs.FieldCommon("agent_address", "The address of a Jaeger agent to send tracing events to.", "jaeger-agent:6831"),
+			docs.FieldCommon("collector_address", "The address of a Jaeger collector to send tracing events to. If set, this will override `agent_address`.",
+				"https://jaeger-collector:14268/api/traces"),
 			docs.FieldCommon("service_name", "A name to provide for this service."),
 			docs.FieldCommon("sampler_type", "The sampler type to use.").HasAnnotatedOptions(
 				"const", "A constant decision for all traces, either 1 or 0.",

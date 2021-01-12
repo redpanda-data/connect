@@ -1,0 +1,13 @@
+version: '3.7'
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "6831:6831/udp"
+      - "14268:14268"
+      - "16686:16686"
+    networks:
+      - jaeger-example
+
+networks:
+  jaeger-example:
