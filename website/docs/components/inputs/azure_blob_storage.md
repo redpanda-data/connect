@@ -36,6 +36,7 @@ input:
   azure_blob_storage:
     storage_account: ""
     storage_access_key: ""
+    storage_sas_token: ""
     storage_connection_string: ""
     container: ""
     prefix: ""
@@ -51,6 +52,7 @@ input:
   azure_blob_storage:
     storage_account: ""
     storage_access_key: ""
+    storage_sas_token: ""
     storage_connection_string: ""
     container: ""
     prefix: ""
@@ -101,9 +103,17 @@ The storage account access key. This field is ignored if `storage_connection_str
 Type: `string`  
 Default: `""`  
 
+### `storage_sas_token`
+
+The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` are set.
+
+
+Type: `string`  
+Default: `""`  
+
 ### `storage_connection_string`
 
-A storage account connection string. This field is required if `storage_account` and `storage_access_key` are not set.
+A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.
 
 
 Type: `string`  

@@ -15,6 +15,7 @@ input:
     storage_access_key: ""
     storage_account: ""
     storage_connection_string: ""
+    storage_sas_token: ""
 buffer:
   type: none
   none: {}
@@ -32,6 +33,7 @@ output:
     storage_access_key: ""
     storage_account: ""
     storage_connection_string: ""
+    storage_sas_token: ""
 resources:
   caches: {}
   conditions: {}

@@ -7,12 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -173,8 +175,16 @@ func newAzureBlobStorage(conf AzureBlobStorageConfig, log log.Modular, stats met
 		} else {
 			client, err = storage.NewClientFromConnectionString(conf.StorageConnectionString)
 		}
-	} else {
+	} else if len(conf.StorageAccessKey) > 0 {
 		client, err = storage.NewBasicClient(conf.StorageAccount, conf.StorageAccessKey)
+	} else {
+		// The SAS token in the Azure UI is provided as an URL query string with
+		// the '?' prepended to it which confuses url.ParseQuery
+		token, err := url.ParseQuery(strings.TrimPrefix(conf.StorageSASToken, "?"))
+		if err != nil {
+			return nil, fmt.Errorf("invalid azure storage SAS token: %v", err)
+		}
+		client = storage.NewAccountSASClient(conf.StorageAccount, token, azure.PublicCloud)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
