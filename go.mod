@@ -6,7 +6,7 @@ require (
 	github.com/Azure/azure-sdk-for-go v48.0.0+incompatible
 	github.com/Azure/azure-storage-queue-go v0.0.0-20191125232315-636801874cdd
 	github.com/Azure/go-amqp v0.13.1
-	github.com/Azure/go-autorest/autorest v0.11.10 // indirect
+	github.com/Azure/go-autorest/autorest v0.11.10
 	github.com/Azure/go-autorest/autorest/to v0.4.0 // indirect
 	github.com/ClickHouse/clickhouse-go v1.4.3
 	github.com/HdrHistogram/hdrhistogram-go v1.0.0 // indirect
