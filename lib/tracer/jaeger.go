@@ -127,13 +127,13 @@ func NewJaeger(config Config, opts ...func(Type)) (Type, error) {
 		cfg.Reporter = reporterConf
 	}
 
-	if i := config.Jaeger.CollectorAddress; len(i) > 0 {
-		reporterConf.CollectorEndpoint = i
-	}
-
 	if i := config.Jaeger.AgentAddress; len(i) > 0 {
 		reporterConf.LocalAgentHostPort = i
 		cfg.Reporter = reporterConf
+	}
+
+	if i := config.Jaeger.CollectorAddress; len(i) > 0 {
+		reporterConf.CollectorEndpoint = i
 	}
 
 	tracer, closer, err := cfg.NewTracer()
