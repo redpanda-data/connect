@@ -6,6 +6,7 @@ package writer
 type AzureBlobStorageConfig struct {
 	StorageAccount          string `json:"storage_account" yaml:"storage_account"`
 	StorageAccessKey        string `json:"storage_access_key" yaml:"storage_access_key"`
+	StorageSASToken         string `json:"storage_sas_token" yaml:"storage_sas_token"`
 	StorageConnectionString string `json:"storage_connection_string" yaml:"storage_connection_string"`
 	Container               string `json:"container" yaml:"container"`
 	Path                    string `json:"path" yaml:"path"`
