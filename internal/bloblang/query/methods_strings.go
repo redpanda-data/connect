@@ -5,6 +5,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
+	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -624,7 +625,7 @@ var _ = RegisterMethod(
 		`
 Hashes a string or byte array according to a chosen algorithm and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method `+"[`string`][methods.string], or encoded using the method [`encode`][methods.encode]"+`, otherwise it will be base64 encoded by default.
 
-Available algorithms are: `+"`hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `sha1`, `sha256`, `sha512`, `xxhash64`"+`.
+Available algorithms are: `+"`hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `md5`, `sha1`, `sha256`, `sha512`, `xxhash64`"+`.
 
 The following algorithms require a key, which is specified as a second argument: `+"`hmac_sha1`, `hmac_sha256`, `hmac_sha512`"+`.`,
 		NewExampleSpec("",
@@ -671,6 +672,12 @@ func hashMethod(target Function, args ...interface{}) (Function, error) {
 		}
 		hashFn = func(b []byte) ([]byte, error) {
 			hasher := hmac.New(sha512.New, key)
+			hasher.Write(b)
+			return hasher.Sum(nil), nil
+		}
+	case "md5":
+		hashFn = func(b []byte) ([]byte, error) {
+			hasher := md5.New()
 			hasher.Write(b)
 			return hasher.Sum(nil), nil
 		}
