@@ -1138,7 +1138,7 @@ func TestMethods(t *testing.T) {
 				literalFn(1),
 				method("parse_timestamp_unix", "2006-Jan-02"),
 			),
-			err: `expected string value, found unknown`,
+			err: `expected string value, found number: 1`,
 		},
 		"check append": {
 			input: methods(
@@ -1790,7 +1790,7 @@ func TestMethods(t *testing.T) {
 				literalFn(1),
 				method("parse_timestamp", "2006-Jan-02"),
 			),
-			err: `expected string value, found unknown`,
+			err: `expected string value, found number: 1`,
 		},
 		"check format timestamp string default": {
 			input: methods(
