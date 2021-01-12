@@ -21,6 +21,7 @@ func init() {
 Send spans to a [Jaeger](https://www.jaegertracing.io/) agent.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("agent_address", "The address of a Jaeger agent to send tracing events to."),
+			docs.FieldCommon("collector_address", "The address of a Jaeger collector to send tracing events to.", "https://jaeger-collector:14268/api/traces"),
 			docs.FieldCommon("service_name", "A name to provide for this service."),
 			docs.FieldCommon("sampler_type", "The sampler type to use.").HasAnnotatedOptions(
 				"const", "A constant decision for all traces, either 1 or 0.",
@@ -41,6 +42,7 @@ Send spans to a [Jaeger](https://www.jaegertracing.io/) agent.`,
 // JaegerConfig is config for the Jaeger metrics type.
 type JaegerConfig struct {
 	AgentAddress          string            `json:"agent_address" yaml:"agent_address"`
+	CollectorAddress      string            `json:"collector_address" yaml:"collector_address"`
 	ServiceName           string            `json:"service_name" yaml:"service_name"`
 	SamplerType           string            `json:"sampler_type" yaml:"sampler_type"`
 	SamplerManagerAddress string            `json:"sampler_manager_address" yaml:"sampler_manager_address"`
@@ -122,6 +124,10 @@ func NewJaeger(config Config, opts ...func(Type)) (Type, error) {
 		}
 		reporterConf.BufferFlushInterval = flushInterval
 		cfg.Reporter = reporterConf
+	}
+
+	if i := config.Jaeger.CollectorAddress; len(i) > 0 {
+		reporterConf.CollectorEndpoint = i
 	}
 
 	if i := config.Jaeger.AgentAddress; len(i) > 0 {
