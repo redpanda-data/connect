@@ -461,6 +461,22 @@ input:
           sqs_max_messages: ${INPUT_S3_SQS_MAX_MESSAGES:10}
           sqs_url: ${INPUT_S3_SQS_URL}
           timeout: ${INPUT_S3_TIMEOUT:5s}
+        sftp:
+          credentials:
+            secret: ${INPUT_SFTP_CREDENTIALS_SECRET}
+            username: ${INPUT_SFTP_CREDENTIALS_USERNAME}
+          directory_mode: ${INPUT_SFTP_DIRECTORY_MODE:false}
+          directory_path: ${INPUT_SFTP_DIRECTORY_PATH}
+          file_check_max_attempts: ${INPUT_SFTP_FILE_CHECK_MAX_ATTEMPTS:10}
+          file_check_sleep_duration: ${INPUT_SFTP_FILE_CHECK_SLEEP_DURATION:1}
+          filepath: ${INPUT_SFTP_FILEPATH}
+          include_header: ${INPUT_SFTP_INCLUDE_HEADER:false}
+          max_connection_attempts: ${INPUT_SFTP_MAX_CONNECTION_ATTEMPTS:10}
+          message_delimiter: ${INPUT_SFTP_MESSAGE_DELIMITER}
+          port: ${INPUT_SFTP_PORT:0}
+          process_existing_records: ${INPUT_SFTP_PROCESS_EXISTING_RECORDS:true}
+          server: ${INPUT_SFTP_SERVER}
+          watcher_mode: ${INPUT_SFTP_WATCHER_MODE:false}
         socket:
           address: ${INPUT_SOCKET_ADDRESS:/tmp/benthos.sock}
           delimiter: ${INPUT_SOCKET_DELIMITER}

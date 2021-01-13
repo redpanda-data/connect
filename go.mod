@@ -50,6 +50,7 @@ require (
 	github.com/klauspost/compress v1.11.2 // indirect
 	github.com/lib/pq v1.8.0
 	github.com/linkedin/goavro/v2 v2.9.8
+	github.com/machinebox/progress v0.2.0
 	github.com/microcosm-cc/bluemonday v1.0.4
 	github.com/moby/term v0.0.0-20201101162038-25d840ce174a // indirect
 	github.com/nats-io/jwt v1.2.0 // indirect
@@ -59,10 +60,11 @@ require (
 	github.com/nsqio/go-nsq v1.0.8
 	github.com/olivere/elastic/v7 v7.0.21
 	github.com/opentracing/opentracing-go v1.2.0
-	github.com/ory/dockertest/v3 v3.6.2
+	github.com/ory/dockertest/v3 v3.6.3
 	github.com/patrobinson/gokini v0.1.0
 	github.com/pebbe/zmq4 v1.2.1
 	github.com/pierrec/lz4 v2.6.0+incompatible // indirect
+	github.com/pkg/sftp v1.12.0
 	github.com/prometheus/client_golang v1.8.0
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
 	github.com/quipo/statsd v0.0.0-20180118161217-3d6a5565f314
@@ -83,6 +85,7 @@ require (
 	github.com/xeipuuv/gojsonschema v1.2.0
 	go.nanomsg.org/mangos/v3 v3.1.3
 	go.uber.org/atomic v1.7.0 // indirect
+	golang.org/x/crypto v0.0.0-20201016220609-9e8e0b390897
 	golang.org/x/net v0.0.0-20201031054903-ff519b6c9102
 	golang.org/x/oauth2 v0.0.0-20200902213428-5d25da1a8d43
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
