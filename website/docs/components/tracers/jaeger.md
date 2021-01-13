@@ -30,6 +30,7 @@ Send spans to a [Jaeger](https://www.jaegertracing.io/) agent.
 tracer:
   jaeger:
     agent_address: localhost:6831
+    collector_url: ""
     service_name: benthos
     sampler_type: const
     flush_interval: ""
@@ -43,6 +44,7 @@ tracer:
 tracer:
   jaeger:
     agent_address: localhost:6831
+    collector_url: ""
     service_name: benthos
     sampler_type: const
     sampler_manager_address: ""
@@ -63,6 +65,26 @@ The address of a Jaeger agent to send tracing events to.
 
 Type: `string`  
 Default: `"localhost:6831"`  
+
+```yaml
+# Examples
+
+agent_address: jaeger-agent:6831
+```
+
+### `collector_url`
+
+The URL of a Jaeger collector to send tracing events to. If set, this will override `agent_address`.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+collector_url: https://jaeger-collector:14268/api/traces
+```
 
 ### `service_name`
 
