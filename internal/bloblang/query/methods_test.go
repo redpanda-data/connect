@@ -733,6 +733,14 @@ func TestMethods(t *testing.T) {
 			),
 			output: `5020219685658847592`,
 		},
+		"check md5 hash": {
+			input: methods(
+				literalFn("hello world"),
+				method("hash", "md5"),
+				method("encode", "hex"),
+			),
+			output: `5eb63bbbe01eeed093cb22bb8f5acdc3`,
+		},
 		"check hex encode": {
 			input: methods(
 				literalFn("hello world"),

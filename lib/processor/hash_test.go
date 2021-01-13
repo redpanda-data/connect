@@ -2,6 +2,7 @@ package processor
 
 import (
 	"crypto/hmac"
+	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -317,6 +318,51 @@ func TestHashXXHash64(t *testing.T) {
 		t.Error("Hash failed")
 	} else if res != nil {
 		t.Errorf("Expected nil response: %v", res)
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
+func TestHashMD5(t *testing.T) {
+	conf := NewConfig()
+	conf.Hash.Algorithm = "md5"
+
+	input := [][]byte{
+		[]byte("hello world first part"),
+		[]byte("hello world second part"),
+		[]byte("third part"),
+		[]byte("fourth"),
+		[]byte("5"),
+	}
+
+	exp := [][]byte{}
+
+	for i := range input {
+		h := md5.New()
+		h.Write(input[i])
+		exp = append(exp, h.Sum(nil))
+	}
+
+	if reflect.DeepEqual(input, exp) {
+		t.Fatal("Input and exp output are the same")
+	}
+
+	proc, err := NewHash(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New(input))
+	if len(msgs) != 1 {
+		t.Error("Hash failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	for i, part := range message.GetAllBytes(msgs[0]) {
+		if !hmac.Equal(part, exp[i]) {
+			t.Errorf("Unexpected output for input (%s): %s != %s", input[i], part, exp[i])
+		}
 	}
 	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected output: %s != %s", act, exp)
