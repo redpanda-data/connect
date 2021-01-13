@@ -1,7 +1,6 @@
 package integration
 
 import (
-
 	"log"
 	"strconv"
 	"testing"
@@ -9,7 +8,7 @@ import (
 	"github.com/ory/dockertest/v3"
 )
 
-var _ = registerIntegrationTest("sftp", func(t *testing.T){
+var _ = registerIntegrationTest("sftp", func(t *testing.T) {
 	//t.Skip()
 
 	t.Parallel()
@@ -21,7 +20,7 @@ var _ = registerIntegrationTest("sftp", func(t *testing.T){
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository: "atmoz/sftp",
-		Tag: "alpine",
+		Tag:        "alpine",
 		Cmd: []string{
 			"foo:pass:1001:100:upload",
 		},

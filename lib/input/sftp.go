@@ -78,13 +78,13 @@ You can access these metadata fields using [function interpolation](/docs/config
 			),
 			docs.FieldCommon(
 				"watcher_mode",
-				"If true, will watch for changes on the file(s) and send messages as updates are added to the file(s). " +
-					       "Otherwise, it will exit after processing the file(s)",
+				"If true, will watch for changes on the file(s) and send messages as updates are added to the file(s). "+
+					"Otherwise, it will exit after processing the file(s)",
 			),
 			docs.FieldCommon(
 				"process_existing_records",
-				"If true, the entire file(s) will be processed. " +
-					"If false, only the changes made after the Benthos pipeline has been running will be processed." +
+				"If true, the entire file(s) will be processed. "+
+					"If false, only the changes made after the Benthos pipeline has been running will be processed."+
 					"Only used if watcher_mode is set to true.",
 			),
 			docs.FieldCommon(
@@ -124,7 +124,6 @@ You can access these metadata fields using [function interpolation](/docs/config
 }
 
 //------------------------------------------------------------------------------
-
 
 // SFTPConfig contains configuration fields for the SFTP input type.
 type SFTPConfig struct {

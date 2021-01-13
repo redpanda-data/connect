@@ -16,7 +16,6 @@ import (
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/ssh"
-
 )
 
 type scenario struct {
@@ -38,7 +37,7 @@ func TestMain(m *testing.M) {
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository: "atmoz/sftp",
-		Tag: "alpine",
+		Tag:        "alpine",
 		Cmd: []string{
 			"foo:pass:1001:100:upload",
 		},
@@ -671,21 +670,21 @@ func UpdateTestFile(filepath string, data string) {
 	}
 }
 
-func DeleteTestFile(filepath string){
+func DeleteTestFile(filepath string) {
 	err := sshClient.Remove(filepath)
 	if err != nil {
 		log.Printf("Error deleting file %s on SSH server", filepath)
 	}
 }
 
-func GenerateTestDirectory(dirPath string){
+func GenerateTestDirectory(dirPath string) {
 	err := sshClient.Mkdir(dirPath)
 	if err != nil {
 		log.Printf("Error creating directory %s on SSH server", dirPath)
 	}
 }
 
-func DeleteTestDirectory(dirPath string){
+func DeleteTestDirectory(dirPath string) {
 	err := sshClient.RemoveDirectory(dirPath)
 	if err != nil {
 		log.Printf("Error removing directory %s on SSH server", dirPath)
