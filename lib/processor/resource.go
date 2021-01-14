@@ -27,7 +27,7 @@ places.`,
 Resource processors also have the advantage of name based metrics and logging.
 For example, the config:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 pipeline:
   processors:
     - bloblang: |

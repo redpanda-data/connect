@@ -39,7 +39,7 @@ field to specify how many copies of the list of inputs should be created.
 Adding more input types allows you to merge streams from multiple sources into
 one. For example, reading from both RabbitMQ and Kafka:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 input:
   broker:
     copies: 1

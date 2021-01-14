@@ -30,10 +30,12 @@ This processor executes once per message batch. In order to execute once for
 each message of a batch place it within a
 [`for_each`](/docs/components/processors/for_each) processor:
 
-``` yaml
-for_each:
-- sleep:
-    duration: ${! meta("sleep_for") }
+```yaml
+pipeline:
+  processors:
+    - for_each:
+      - sleep:
+          duration: ${! meta("sleep_for") }
 ```
 
 ## Fields

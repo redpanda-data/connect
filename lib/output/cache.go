@@ -35,7 +35,7 @@ and can target any of the following types:
 ` + cachesList + `
 The ` + "`target`" + ` field must point to a configured cache like follows:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 output:
   cache:
     target: foo

@@ -27,7 +27,7 @@ It is safe to combine this output with others using broker types. For example,
 with the ` + "`http_server`" + ` input we could send the payload to a Kafka
 topic and also send a modified payload back with:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 input:
   http_server:
     path: /post

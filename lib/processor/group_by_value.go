@@ -40,7 +40,7 @@ If we were consuming Kafka messages and needed to group them by their key,
 archive the groups, and send them to S3 with the key as part of the path we
 could achieve that with the following:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 pipeline:
   processors:
   - group_by_value:

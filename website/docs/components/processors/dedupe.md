@@ -67,10 +67,12 @@ For example, the following config would deduplicate based on the concatenated
 values of the metadata field `kafka_key` and the value of the JSON
 path `id` within the message contents:
 
-``` yaml
-dedupe:
-  cache: foocache
-  key: ${! meta("kafka_key") }-${! json("id") }
+```yaml
+pipeline:
+  processors:
+    - dedupe:
+        cache: foocache
+        key: ${! meta("kafka_key") }-${! json("id") }
 ```
 
 Caches should be configured as a resource, for more information check out the

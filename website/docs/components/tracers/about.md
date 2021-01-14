@@ -12,7 +12,7 @@ a work in progress and should eventually expand so that all inputs have a way of
 
 A tracer config section looks like this:
 
-``` yaml
+```yaml
 tracer:
   jaeger:
     agent_address: localhost:6831

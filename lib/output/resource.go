@@ -23,7 +23,7 @@ allows you to run the same configured output resource in multiple places.`,
 Resource outputs also have the advantage of name based metrics and logging. For
 example, the config:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 output:
   broker:
     pattern: fan_out

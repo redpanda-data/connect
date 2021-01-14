@@ -26,7 +26,7 @@ where the values are
 batch. This allows you to populate string columns of an item by extracting
 fields within the document payload or metadata like follows:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 string_columns:
   id: ${!json("id")}
   title: ${!json("body.title")}
@@ -40,7 +40,7 @@ converted into a map value. Both an empty path and the path ` + "`.`" + ` are
 interpreted as the root of the document. This allows you to populate map columns
 of an item like follows:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 json_map_columns:
   user: path.to.user
   whole_document: .
@@ -48,7 +48,7 @@ json_map_columns:
 
 A column name can be empty:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 json_map_columns:
   "": .
 ` + "```" + `
