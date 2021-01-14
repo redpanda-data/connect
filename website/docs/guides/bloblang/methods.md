@@ -1158,6 +1158,24 @@ root.doc = this.doc.parse_json()
 # Out: {"doc":{"foo":"bar"}}
 ```
 
+### `parse_xml`
+
+BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+
+Attempts to parse a string as an XML document and returns a structured result, where elements appear as keys of an object according to the following rules:
+
+- If an element contains attributes they are parsed by prefixing a hyphen, `-`, to the attribute label.
+- If the element is a simple element and has attributes, the element value is given the key `#text`.
+- XML comments, directives, and process instructions are ignored.
+- When elements are repeated the resulting JSON value is an array.
+
+```coffee
+root.doc = this.doc.parse_xml()
+
+# In:  {"doc":"<root><title>This is a title</title><content>This is some content</content></root>"}
+# Out: {"doc":{"root":{"content":"This is some content","title":"This is a title"}}}
+```
+
 ## Encoding and Encryption
 
 ### `encode`

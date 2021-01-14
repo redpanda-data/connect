@@ -1,27 +1,18 @@
 package processor
 
 import (
-	"encoding/xml"
 	"fmt"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/xml"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/clbanning/mxj"
 	"github.com/opentracing/opentracing-go"
-	"golang.org/x/net/html/charset"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
-	dec := xml.NewDecoder(nil)
-	dec.Strict = false
-	dec.CharsetReader = charset.NewReaderLabel
-	mxj.CustomDecoder = dec
-
 	Constructors[TypeXML] = TypeSpec{
 		constructor: NewXML,
 		Status:      docs.StatusBeta,
@@ -146,13 +137,13 @@ func (p *XML) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 	newMsg := msg.Copy()
 
 	proc := func(index int, span opentracing.Span, part types.Part) error {
-		root, err := mxj.NewMapXml(part.Get())
+		root, err := xml.ToMap(part.Get())
 		if err != nil {
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to parse part as XML: %v\n", err)
 			return err
 		}
-		if err = part.SetJSON(map[string]interface{}(root)); err != nil {
+		if err = part.SetJSON(root); err != nil {
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to marshal XML as JSON: %v\n", err)
 			return err
@@ -175,5 +166,3 @@ func (p *XML) CloseAsync() {
 func (p *XML) WaitForClose(timeout time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

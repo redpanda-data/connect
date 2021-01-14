@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/xml"
 	"github.com/OneOfOne/xxhash"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/tilinna/z85"
@@ -935,6 +936,48 @@ func parseJSONMethod(target Function, _ ...interface{}) (Function, error) {
 			return nil, fmt.Errorf("failed to parse value as JSON: %w", err)
 		}
 		return jObj, nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
+		"parse_xml", "",
+	).InCategory(
+		MethodCategoryParsing,
+		`Attempts to parse a string as an XML document and returns a structured result, where elements appear as keys of an object according to the following rules:
+
+- If an element contains attributes they are parsed by prefixing a hyphen, `+"`-`"+`, to the attribute label.
+- If the element is a simple element and has attributes, the element value is given the key `+"`#text`"+`.
+- XML comments, directives, and process instructions are ignored.
+- When elements are repeated the resulting JSON value is an array.`,
+		NewExampleSpec("",
+			`root.doc = this.doc.parse_xml()`,
+			`{"doc":"<root><title>This is a title</title><content>This is some content</content></root>"}`,
+			`{"doc":{"root":{"content":"This is some content","title":"This is a title"}}}`,
+		),
+	).Beta(),
+	false, parseXMLMethod,
+	ExpectNArgs(0),
+)
+
+func parseXMLMethod(target Function, _ ...interface{}) (Function, error) {
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		var xmlBytes []byte
+		switch t := v.(type) {
+		case string:
+			xmlBytes = []byte(t)
+		case []byte:
+			xmlBytes = t
+		default:
+			return nil, NewTypeError(v, ValueString)
+		}
+		xmlObj, err := xml.ToMap(xmlBytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse value as XML: %w", err)
+		}
+		return xmlObj, nil
 	}), nil
 }
 
