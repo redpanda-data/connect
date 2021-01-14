@@ -38,9 +38,14 @@ These are the main components within Benthos and they provide the majority of us
 
 ## Observability Components
 
-There are also the observability components [logger][logger], [metrics][metrics], and [tracing][tracers], which allow you to specify how Benthos exposes observability data:
+There are also the observability components [http][http], [logger][logger], [metrics][metrics], and [tracing][tracers], which allow you to specify how Benthos exposes observability data:
 
 ```yaml
+http:
+  address: 0.0.0.0:4195
+  enabled: true
+  debug_endpoints: false
+
 logger:
   prefix: benthos
   level: WARN
@@ -115,5 +120,6 @@ For more information about any of these component types check out their sections
 [metrics]: /docs/components/metrics/about
 [tracers]: /docs/components/tracers/about
 [logger]: /docs/components/logger/about
+[http]: /docs/components/http/about
 [caches]: /docs/components/caches/about
 [rate_limits]: /docs/components/rate_limits/about

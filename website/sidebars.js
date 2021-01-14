@@ -37,6 +37,7 @@ module.exports = {
       label: 'Components',
       items: [
         'components/about',
+        'components/http/about',
         {
           type: 'category',
           label: 'Inputs',
