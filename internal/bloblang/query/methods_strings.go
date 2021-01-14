@@ -1614,13 +1614,31 @@ var _ = RegisterMethod(
 			`{"value":"<p>the plain <strong>old text</strong></p>"}`,
 			`{"stripped":"the plain old text"}`,
 		),
+		NewExampleSpec("It's also possible to provide an explicit list of element types to preserve in the output.",
+			`root.stripped = this.value.strip_html(["article"])`,
+			`{"value":"<article><p>the plain <strong>old text</strong></p></article>"}`,
+			`{"stripped":"<article>the plain old text</article>"}`,
+		),
 	),
-	false, stripHTMLMethod,
-	ExpectNArgs(0),
+	true, stripHTMLMethod,
+	ExpectOneOrZeroArgs(),
 )
 
-func stripHTMLMethod(target Function, _ ...interface{}) (Function, error) {
+func stripHTMLMethod(target Function, args ...interface{}) (Function, error) {
 	p := bluemonday.NewPolicy()
+	if len(args) > 0 {
+		tags, ok := args[0].([]interface{})
+		if !ok {
+			return nil, NewTypeError(args[0], ValueArray)
+		}
+		tagStrs := make([]string, len(tags))
+		for i, ele := range tags {
+			if tagStrs[i], ok = ele.(string); !ok {
+				return nil, fmt.Errorf("invalid arg at index %v: %w", i, NewTypeError(ele, ValueString))
+			}
+		}
+		p = p.AllowElements(tagStrs...)
+	}
 	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		switch t := v.(type) {
 		case string:

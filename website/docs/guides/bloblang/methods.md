@@ -332,6 +332,15 @@ root.stripped = this.value.strip_html()
 # Out: {"stripped":"the plain old text"}
 ```
 
+It's also possible to provide an explicit list of element types to preserve in the output.
+
+```coffee
+root.stripped = this.value.strip_html(["article"])
+
+# In:  {"value":"<article><p>the plain <strong>old text</strong></p></article>"}
+# Out: {"stripped":"<article>the plain old text</article>"}
+```
+
 ### `trim`
 
 Remove all leading and trailing characters from a string that are contained within an argument cutset. If no arguments are provided then whitespace is removed.
@@ -1205,7 +1214,7 @@ root.decrypted = this.value.decode("hex").decrypt_aes("ctr", $key, $vector).stri
 
 Hashes a string or byte array according to a chosen algorithm and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.
 
-Available algorithms are: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `sha1`, `sha256`, `sha512`, `xxhash64`.
+Available algorithms are: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `md5`, `sha1`, `sha256`, `sha512`, `xxhash64`.
 
 The following algorithms require a key, which is specified as a second argument: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`.
 

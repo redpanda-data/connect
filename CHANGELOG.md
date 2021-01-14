@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - Field `storage_sas_token` added to the `azure_blob_storage` input and output.
 - The bloblang method `hash` and the `hash` processor now support `md5`.
 - Field `collector_url` added to the `jaeger` tracer.
+- The bloblang method `strip_html` now allows you to specify a list of allowed elements.
 
 ## 3.37.0 - 2021-01-06
 
