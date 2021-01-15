@@ -111,6 +111,7 @@ const (
 	TypeResource           = "resource"
 	TypeRetry              = "retry"
 	TypeS3                 = "s3"
+	TypeSFTP               = "sftp"
 	TypeSNS                = "sns"
 	TypeSQL                = "sql"
 	TypeSQS                = "sqs"
@@ -178,6 +179,7 @@ type Config struct {
 	Resource           string                         `json:"resource" yaml:"resource"`
 	Retry              RetryConfig                    `json:"retry" yaml:"retry"`
 	S3                 writer.AmazonS3Config          `json:"s3" yaml:"s3"`
+	SFTP               writer.SFTPConfig              `json:"sftp" yaml:"sftp"`
 	SNS                writer.SNSConfig               `json:"sns" yaml:"sns"`
 	SQL                SQLConfig                      `json:"sql" yaml:"sql"`
 	SQS                writer.AmazonSQSConfig         `json:"sqs" yaml:"sqs"`
@@ -245,6 +247,7 @@ func NewConfig() Config {
 		Resource:           "",
 		Retry:              NewRetryConfig(),
 		S3:                 writer.NewAmazonS3Config(),
+		SFTP:               writer.NewSFTPConfig(),
 		SNS:                writer.NewSNSConfig(),
 		SQL:                NewSQLConfig(),
 		SQS:                writer.NewAmazonSQSConfig(),

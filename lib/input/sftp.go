@@ -2,12 +2,13 @@ package input
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/Jeffail/benthos/v3/internal/codec"
 	"io"
 	"io/ioutil"
 	"net"
 	"path"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -18,7 +19,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/machinebox/progress"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
@@ -77,37 +77,6 @@ You can access these metadata fields using [function interpolation](/docs/config
 				"The path of the file to pull messages from. Filepath is only used if directory_mode is set to false.",
 			),
 			docs.FieldCommon(
-				"watcher_mode",
-				"If true, will watch for changes on the file(s) and send messages as updates are added to the file(s). "+
-					"Otherwise, it will exit after processing the file(s)",
-			),
-			docs.FieldCommon(
-				"process_existing_records",
-				"If true, the entire file(s) will be processed. "+
-					"If false, only the changes made after the Benthos pipeline has been running will be processed."+
-					"Only used if watcher_mode is set to true.",
-			),
-			docs.FieldCommon(
-				"include_header",
-				"Whether the first line in the file(s) is sent as a message.",
-			),
-			docs.FieldCommon(
-				"message_delimiter",
-				"The delimiter that separates messages, defaults to new line.",
-			),
-			docs.FieldCommon(
-				"max_connection_attempts",
-				"Number of times it will try to connect to the server before exiting.",
-			),
-			docs.FieldCommon(
-				"file_check_sleep_duration",
-				"How long it will sleep after failing to connect to the file or directory.",
-			),
-			docs.FieldCommon(
-				"file_check_max_attempts",
-				"Number of times it will try opening the file or directory before exiting.",
-			),
-			docs.FieldCommon(
 				"directory_mode",
 				"Whether it is processing a directory of files or a single file.",
 			),
@@ -115,6 +84,8 @@ You can access these metadata fields using [function interpolation](/docs/config
 				"directory_path",
 				"The path of the directory that it will process. This field is only used if directory_mode is set to true.",
 			),
+			codec.ReaderDocs,
+			docs.FieldAdvanced("delete_objects", "Whether to delete downloaded objects from the blob once they are processed."),
 		},
 		Categories: []Category{
 			CategoryServices,
@@ -127,19 +98,15 @@ You can access these metadata fields using [function interpolation](/docs/config
 
 // SFTPConfig contains configuration fields for the SFTP input type.
 type SFTPConfig struct {
-	Server                 string          `json:"server" yaml:"server"`
-	Port                   int             `json:"port" yaml:"port"`
-	Filepath               string          `json:"filepath" yaml:"filepath"`
-	Credentials            SFTPCredentials `json:"credentials" yaml:"credentials"`
-	WatcherMode            bool            `json:"watcher_mode" yaml:"watcher_mode"`
-	ProcessExistingRecords bool            `json:"process_existing_records" yaml:"process_existing_records"`
-	IncludeHeader          bool            `json:"include_header" yaml:"include_header"`
-	MessageDelimiter       string          `json:"message_delimiter" yaml:"message_delimiter"`
-	MaxConnectionAttempts  int             `json:"max_connection_attempts" yaml:"max_connection_attempts"`
-	FileCheckSleepDuration int             `json:"file_check_sleep_duration" yaml:"file_check_sleep_duration"`
-	FileCheckMaxAttempts   int             `json:"file_check_max_attempts" yaml:"file_check_max_attempts"`
-	DirectoryPath          string          `json:"directory_path" yaml:"directory_path"`
-	DirectoryMode          bool            `json:"directory_mode" yaml:"directory_mode"`
+	Server                string          `json:"server" yaml:"server"`
+	Port                  int             `json:"port" yaml:"port"`
+	Filepath              string          `json:"filepath" yaml:"filepath"`
+	Credentials           SFTPCredentials `json:"credentials" yaml:"credentials"`
+	DirectoryPath         string          `json:"directory_path" yaml:"directory_path"`
+	DirectoryMode         bool            `json:"directory_mode" yaml:"directory_mode"`
+	MaxConnectionAttempts int             `json:"max_connection_attempts" yaml:"max_connection_attempts"`
+	Codec                 string          `json:"codec" yaml:"codec"`
+	DeleteObjects         bool            `json:"delete_objects" yaml:"delete_objects"`
 }
 
 type SFTPCredentials struct {
@@ -150,449 +117,253 @@ type SFTPCredentials struct {
 // NewSFTPConfig creates a new SFTPConfig with default values.
 func NewSFTPConfig() SFTPConfig {
 	return SFTPConfig{
-		Server:                 "",
-		Port:                   0,
-		Filepath:               "",
-		Credentials:            SFTPCredentials{},
-		WatcherMode:            false,
-		ProcessExistingRecords: true,
-		IncludeHeader:          false,
-		MessageDelimiter:       "",
-		MaxConnectionAttempts:  10,
-		FileCheckSleepDuration: 1,
-		FileCheckMaxAttempts:   10,
-		DirectoryPath:          "",
-		DirectoryMode:          false,
+		Server:                "",
+		Port:                  0,
+		Filepath:              "",
+		Credentials:           SFTPCredentials{},
+		MaxConnectionAttempts: 10,
+		DirectoryPath:         "",
+		DirectoryMode:         false,
+		Codec:                 "lines",
+		DeleteObjects:         false,
 	}
 }
 
 //------------------------------------------------------------------------------
 
 type SFTP struct {
-	server                 string
-	port                   int
-	filepath               string
-	credentials            SFTPCredentials
-	watcherMode            bool
-	processExistingRecords bool
-	includeHeader          bool
-	messageDelimiter       string
-	maxConnectionAttempts  int
-	fileCheckSleepDuration int
-	fileCheckMaxAttempts   int
-	directoryPath          string
-	directoryMode          bool
-
-	transactionsChan chan types.Transaction
+	conf SFTPConfig
 
 	log   log.Modular
 	stats metrics.Type
 
-	connected bool
+	client *sftp.Client
 
-	startTime time.Time
+	objectScannerCtor codec.ReaderConstructor
+	keyReader         *sftpTargetReader
 
-	bytesProcessed      int64
-	totalBytesToProcess int64
-
-	closeOnce  sync.Once
-	closeChan  chan struct{}
-	closedChan chan struct{}
+	objectMut sync.Mutex
+	object    *sftpPendingObject
 }
 
 func NewSFTP(conf SFTPConfig, log log.Modular, stats metrics.Type) (*SFTP, error) {
-	e := &SFTP{
-		server:                 conf.Server,
-		port:                   conf.Port,
-		filepath:               conf.Filepath,
-		credentials:            conf.Credentials,
-		watcherMode:            conf.WatcherMode,
-		processExistingRecords: conf.ProcessExistingRecords,
-		includeHeader:          conf.IncludeHeader,
-		messageDelimiter:       conf.MessageDelimiter,
-		maxConnectionAttempts:  conf.MaxConnectionAttempts,
-		fileCheckSleepDuration: conf.FileCheckSleepDuration,
-		fileCheckMaxAttempts:   conf.FileCheckMaxAttempts,
-		directoryPath:          conf.DirectoryPath,
-		directoryMode:          conf.DirectoryMode,
-
-		log:   log,
-		stats: stats,
-
-		connected:           false,
-		bytesProcessed:      0,
-		totalBytesToProcess: 0,
-		startTime:           time.Now(),
-
-		transactionsChan: make(chan types.Transaction),
-		closeChan:        make(chan struct{}),
-		closedChan:       make(chan struct{}),
+	var err error
+	var objectScannerCtor codec.ReaderConstructor
+	if objectScannerCtor, err = codec.GetReader(conf.Codec, codec.NewReaderConfig()); err != nil {
+		return nil, fmt.Errorf("invalid sftp codec: %v", err)
 	}
 
-	if conf.WatcherMode && conf.DirectoryMode {
-		go e.watchDirectory()
-	} else if !conf.WatcherMode && conf.DirectoryMode {
-		go e.processDirectory()
-	} else if conf.WatcherMode && !conf.DirectoryMode {
-		go e.watchForChanges()
-	} else {
-		go e.processAndClose()
+	s := &SFTP{
+		conf:              conf,
+		log:               log,
+		stats:             stats,
+		objectScannerCtor: objectScannerCtor,
 	}
 
-	return e, nil
+	err = s.initSFTPConnection()
+
+	return s, err
 }
 
-// TODO
-func (e *SFTP) ConnectWithContext(ctx context.Context) error {
-	return nil
+type sftpObjectTarget struct {
+	key   string
+	ackFn func(context.Context, error) error
 }
 
-// TODO
-func (e *SFTP) ReadWithContext(ctx context.Context) (msg types.Message, ackFn reader.AsyncAckFn, err error) {
-	return nil, nil, nil
+func (s *SFTP) ConnectWithContext(ctx context.Context) error {
+	var err error
+	s.keyReader, err = newSFTPTargetReader(ctx, s.conf, s.log, s.client)
+	return err
 }
 
-func (e *SFTP) processAndClose() {
-	defer func() {
-		close(e.transactionsChan)
-		close(e.closedChan)
-	}()
+func deleteSFTPObjectAckFn(
+	client *sftp.Client,
+	key string,
+	delete bool,
+	prev codec.ReaderAckFn,
+) codec.ReaderAckFn {
+	return func(ctx context.Context, err error) error {
+		if prev != nil {
+			if aerr := prev(ctx, err); aerr != nil {
+				return aerr
+			}
+		}
+		if !delete || err != nil {
+			return nil
+		}
 
-	resChan := make(chan types.Response)
-
-	_, _, client := e.initSFTPConnection()
-
-	defer client.Close()
-
-	bytesProcessedGauge := e.stats.GetGauge("bytes_processed")
-	bytesProcessedGauge.Set(0)
-
-	percentCompleteGauge := e.stats.GetGauge("percent_complete")
-	percentCompleteGauge.Set(0)
-
-	e.processFile(e.filepath, client, resChan)
-}
-
-func (e *SFTP) watchForChanges() {
-	defer func() {
-		close(e.transactionsChan)
-		close(e.closedChan)
-	}()
-
-	_, _, client := e.initSFTPConnection()
-	resChan := make(chan types.Response)
-
-	defer client.Close()
-
-	fileData := &FileData{
-		Path:    e.filepath,
-		Cursor:  int64(0),
-		Size:    int64(0),
-		LineNum: uint64(1),
-	}
-
-	e.connected = true
-
-	for {
-		e.processWatchedFile(fileData, e.filepath, client, resChan)
-	}
-}
-
-func (e *SFTP) processDirectory() {
-	defer func() {
-		close(e.transactionsChan)
-		close(e.closedChan)
-	}()
-
-	_, _, client := e.initSFTPConnection()
-	resChan := make(chan types.Response)
-
-	defer client.Close()
-
-	e.connected = true
-
-	files, err := client.ReadDir(e.directoryPath)
-	if err != nil {
-		return
-	}
-
-	totalBytes := int64(0)
-	for _, f := range files {
-		totalBytes += f.Size()
-	}
-
-	// Set initial values for stats gauges
-	totalBytesGauge := e.stats.GetGauge("total_bytes")
-	totalBytesGauge.Set(totalBytes)
-	e.totalBytesToProcess = totalBytes
-
-	bytesProcessedGauge := e.stats.GetGauge("bytes_processed")
-	bytesProcessedGauge.Set(0)
-	e.bytesProcessed = 0
-
-	percentCompleteGauge := e.stats.GetGauge("percent_complete")
-	percentCompleteGauge.Set(0)
-
-	for _, f := range files {
-		filePath := path.Join(e.directoryPath, f.Name())
-		e.processFile(filePath, client, resChan)
-	}
-}
-
-func (e *SFTP) watchDirectory() {
-	defer func() {
-		close(e.transactionsChan)
-		close(e.closedChan)
-	}()
-
-	_, _, client := e.initSFTPConnection()
-	resChan := make(chan types.Response)
-
-	defer client.Close()
-
-	fileData := map[string]*FileData{}
-
-	e.connected = true
-
-	for {
-		files, err := client.ReadDir(e.directoryPath)
+		_, err = client.Stat(key)
 		if err != nil {
-			e.log.Errorf("Error reading directory: %s", e.directoryPath)
-			continue
+			return nil
 		}
 
-		for _, f := range files {
-			data, ok := fileData[f.Name()]
-			if ok {
-				if data.Size == f.Size() {
-					continue
-				}
-			} else {
-				data = &FileData{
-					Path:    f.Name(),
-					Cursor:  int64(0),
-					Size:    int64(0),
-					LineNum: uint64(1),
-				}
-				fileData[f.Name()] = data
-			}
-			filePath := path.Join(e.directoryPath, f.Name())
+		aerr := client.Remove(key)
 
-			e.processWatchedFile(data, filePath, client, resChan)
-		}
+		return aerr
 	}
 }
 
-func (e *SFTP) processFile(filePath string, client *sftp.Client, resChan chan types.Response) {
-	// read from file
-	fileErrorCounter := e.stats.GetCounter("file_does_not_exist_errors")
-	info, err := client.Stat(filePath)
-	fileCheckAttempts := 0
-	for err != nil {
-		fileCheckAttempts++
-		fileErrorCounter.Incr(1)
-		e.log.Errorf("File %s does not exist on server", filePath)
-		time.Sleep(time.Second * time.Duration(e.fileCheckSleepDuration))
-		info, err = client.Stat(filePath)
+//------------------------------------------------------------------------------
 
-		if fileCheckAttempts >= e.fileCheckMaxAttempts {
-			e.log.Errorf("Exiting after %i attempts to read file %s", fileCheckAttempts, filePath)
+type sftpTargetReader struct {
+	pending    []*sftpObjectTarget
+	conf       SFTPConfig
+	startAfter string
+}
+
+type sftpPendingObject struct {
+	target    *sftpObjectTarget
+	obj       *sftp.File
+	extracted int
+	scanner   codec.Reader
+}
+
+func newSFTPTargetReader(
+	ctx context.Context,
+	conf SFTPConfig,
+	log log.Modular,
+	client *sftp.Client,
+) (*sftpTargetReader, error) {
+	var files []*sftp.File
+
+	if !conf.DirectoryMode {
+		file, err := client.Open(conf.Filepath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open file: %v", err)
+		}
+		files = append(files, file)
+	} else {
+		fileInfos, err := client.ReadDir(conf.DirectoryPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open directory: %v", err)
+		}
+		for _, fileInfo := range fileInfos {
+			filepath := path.Join(conf.DirectoryPath, fileInfo.Name())
+			file, err := client.Open(filepath)
+			if err != nil {
+				continue
+			}
+			files = append(files, file)
 		}
 	}
 
-	e.connected = true
-
-	fileSize := info.Size()
-
-	// Only set the total bytes to the file size if it's not in directory mode
-	if !e.directoryMode {
-		totalBytesGauge := e.stats.GetGauge("total_bytes")
-		totalBytesGauge.Set(fileSize)
-		e.totalBytesToProcess = fileSize
+	staticKeys := sftpTargetReader{
+		conf: conf,
 	}
 
-	file, err := client.Open(filePath)
-	if err != nil {
-		e.log.Errorf("Error opening file %s: %s", filePath, err.Error())
-		return
+	for _, file := range files {
+		filepath := conf.Filepath
+		if conf.DirectoryMode {
+			filepath = path.Join(conf.DirectoryPath, file.Name())
+		}
+		ackFn := deleteSFTPObjectAckFn(client, filepath, conf.DeleteObjects, nil)
+		staticKeys.pending = append(staticKeys.pending, newSFTPObjectTarget(file.Name(), ackFn))
 	}
 
-	reader := progress.NewReader(file)
+	return &staticKeys, nil
+}
 
-	bytesProcessedGauge := e.stats.GetGauge("bytes_processed")
-	percentCompleteGauge := e.stats.GetGauge("percent_complete")
+func (s *sftpTargetReader) Pop(ctx context.Context) (*sftpObjectTarget, error) {
+	if len(s.pending) == 0 {
+		return nil, io.EOF
+	}
+	obj := s.pending[0]
+	s.pending = s.pending[1:]
+	return obj, nil
+}
 
-	go func() {
-		ctx := context.Background()
-		progressChan := progress.NewTicker(ctx, reader, fileSize, 1*time.Second)
+//------------------------------------------------------------------------------
 
-		previousBytes := int64(0)
-		for p := range progressChan {
-			bytesProcessed := p.N()
-			newBytesProcessed := bytesProcessed - previousBytes
-			bytesProcessedGauge.Incr(newBytesProcessed)
-			e.bytesProcessed += newBytesProcessed
+func newSFTPObjectTarget(key string, ackFn codec.ReaderAckFn) *sftpObjectTarget {
+	if ackFn == nil {
+		ackFn = func(context.Context, error) error {
+			return nil
+		}
+	}
+	return &sftpObjectTarget{key: key, ackFn: ackFn}
+}
 
-			percent := (float64(e.bytesProcessed) / float64(e.totalBytesToProcess)) * 100
-			percentCompleteGauge.Set(int64(percent))
-			previousBytes = bytesProcessed
+func (s *SFTP) ReadWithContext(ctx context.Context) (msg types.Message, ackFn reader.AsyncAckFn, err error) {
+	s.objectMut.Lock()
+	defer s.objectMut.Unlock()
+
+	defer func() {
+		if errors.Is(err, io.EOF) {
+			err = types.ErrTypeClosed
+		} else if errors.Is(err, context.Canceled) ||
+			errors.Is(err, context.DeadlineExceeded) ||
+			(err != nil && strings.HasSuffix(err.Error(), "context canceled")) {
+			err = types.ErrTimeout
 		}
 	}()
 
-	b, _ := ioutil.ReadAll(reader)
-	var messageBytes [][]byte
-
-	if e.messageDelimiter != "" {
-		fileString := string(b)
-		messages := strings.Split(fileString, e.messageDelimiter)
-		for i, m := range messages {
-			if i == 0 && !e.includeHeader {
-				continue
-			}
-			if strings.TrimSpace(m) != "" {
-				messageBytes = append(messageBytes, []byte(m))
-			}
-		}
-	} else {
-		messageBytes = append(messageBytes, b)
+	var object *sftpPendingObject
+	if object, err = s.getObjectTarget(ctx); err != nil {
+		return
 	}
 
-	for i, m := range messageBytes {
-		benthosMessage := e.generateMessage(m, uint64(i+1), filePath)
+	var p types.Part
+	var scnAckFn codec.ReaderAckFn
 
-		// send batch to downstream processors
-		select {
-		case e.transactionsChan <- types.NewTransaction(
-			benthosMessage,
-			resChan,
-		):
-		case <-e.closeChan:
+scanLoop:
+	for {
+		if p, scnAckFn, err = object.scanner.Next(ctx); err == nil {
+			object.extracted++
+			break scanLoop
+		}
+		s.object = nil
+		if err != io.EOF {
 			return
 		}
-
-		// check transaction success
-		select {
-		case result := <-resChan:
-			if nil != result.Error() {
-				e.log.Errorln(result.Error().Error())
-				return
-			}
-		case <-e.closeChan:
+		if err = object.scanner.Close(ctx); err != nil {
+			s.log.Warnf("Failed to close sftp object scanner cleanly: %v\n", err)
+		}
+		if object.extracted == 0 {
+			s.log.Debugf("Extracted zero messages from key %v\n", object.target.key)
+		}
+		if object, err = s.getObjectTarget(ctx); err != nil {
 			return
 		}
 	}
+
+	return sftpMsgFromPart(object, p), func(rctx context.Context, res types.Response) error {
+		return scnAckFn(rctx, res.Error())
+	}, nil
 }
 
-func (e *SFTP) processWatchedFile(fileData *FileData, filePath string, client *sftp.Client, resChan chan types.Response) {
-	fileInfo, err := client.Stat(filePath)
-	if err != nil {
-		e.log.Errorf("Error getting file info for file %s: %s", filePath, err.Error())
-		return
-	}
+func sftpMsgFromPart(p *sftpPendingObject, part types.Part) types.Message {
+	msg := message.New(nil)
+	msg.Append(part)
 
-	newFileSize := fileInfo.Size()
-	if fileData.Size == newFileSize {
-		return
-	}
+	meta := msg.Get(0).Metadata()
 
-	file, err := client.Open(filePath)
-	if err != nil {
-		e.log.Errorf("Error opening file %s: %s", filePath, err.Error())
-		return
-	}
+	fileInfo, _ := p.obj.Stat()
 
-	_, err = file.Seek(fileData.Cursor, io.SeekStart)
-	if err != nil {
-		e.log.Errorf("Error calling file. Seek: %s", err.Error())
-		return
-	}
+	meta.Set("sftp_file_path", p.target.key)
+	meta.Set("sftp_file_modification_time", fileInfo.ModTime().String())
+	//meta.Set("line_num", strconv.Itoa(int(lineNum)))
 
-	length := fileInfo.Size() - fileData.Cursor
-	if length <= 0 {
-		return
-	}
-
-	if fileInfo.ModTime().Before(e.startTime) && !e.processExistingRecords && fileData.Size != newFileSize {
-		fileData.Cursor = newFileSize
-		if e.messageDelimiter != "" {
-			bytes := make([]byte, length)
-			_, err = file.Read(bytes)
-			fileString := string(bytes)
-			lines := strings.Split(fileString, e.messageDelimiter)
-
-			fileData.LineNum = uint64(len(lines) + 1)
-		}
-		return
-	}
-
-	bytes := make([]byte, length)
-	_, err = file.Read(bytes)
-
-	var messageBytes [][]byte
-
-	if e.messageDelimiter != "" {
-		fileString := string(bytes)
-		messages := strings.Split(fileString, e.messageDelimiter)
-		for i, m := range messages {
-			if fileData.Cursor == 0 && i == 0 && !e.includeHeader {
-				continue
-			}
-			if strings.TrimSpace(m) != "" {
-				messageBytes = append(messageBytes, []byte(m))
-			}
-		}
-	} else {
-		messageBytes = append(messageBytes, bytes)
-	}
-
-	for _, m := range messageBytes {
-		benthosMessage := e.generateMessage(m, fileData.LineNum, filePath)
-		fileData.LineNum++
-
-		// send batch to downstream processors
-		select {
-		case e.transactionsChan <- types.NewTransaction(
-			benthosMessage,
-			resChan,
-		):
-		case <-e.closeChan:
-			return
-		}
-
-		// check transaction success
-		select {
-		case result := <-resChan:
-			if nil != result.Error() {
-				e.log.Errorln(result.Error().Error())
-				return
-			}
-		case <-e.closeChan:
-			return
-		}
-	}
-
-	fileData.Cursor = newFileSize
-	fileData.Size = newFileSize
+	return msg
 }
 
-func (e *SFTP) initSFTPConnection() (*SSHServer, *ssh.CertChecker, *sftp.Client) {
+func (s *SFTP) initSFTPConnection() error {
 	// create sftp client and establish connection
-	s := &SSHServer{
-		Host: e.server,
-		Port: e.port,
+	server := &SFTPServer{
+		Host: s.conf.Server,
+		Port: s.conf.Port,
 	}
 
 	certCheck := &ssh.CertChecker{
 		IsHostAuthority: hostAuthCallback(),
-		IsRevoked:       certCallback(s),
-		HostKeyFallback: hostCallback(s),
+		IsRevoked:       certCallback(server),
+		HostKeyFallback: hostCallback(server),
 	}
 
-	addr := fmt.Sprintf("%s:%d", e.server, e.port)
+	addr := fmt.Sprintf("%s:%d", s.conf.Server, s.conf.Port)
 	config := &ssh.ClientConfig{
-		User: e.credentials.Username,
+		User: s.conf.Credentials.Username,
 		Auth: []ssh.AuthMethod{
-			ssh.Password(e.credentials.Secret),
+			ssh.Password(s.conf.Credentials.Secret),
 		},
 		HostKeyCallback: certCheck.CheckHostKey,
 	}
@@ -604,11 +375,12 @@ func (e *SFTP) initSFTPConnection() (*SSHServer, *ssh.CertChecker, *sftp.Client)
 		connectionAttempts++
 		conn, err = ssh.Dial("tcp", addr, config)
 		if err != nil {
-			connectionErrorsCounter := e.stats.GetCounter("connection_errors")
+			connectionErrorsCounter := s.stats.GetCounter("connection_errors")
 			connectionErrorsCounter.Incr(1)
-			e.log.Errorf("Failed to dial: %s", err.Error())
-			if connectionAttempts >= e.maxConnectionAttempts {
-				e.log.Errorf("Failed to connect after %i attempts, stopping", connectionAttempts)
+			s.log.Errorf("Failed to dial: %s", err.Error())
+			if connectionAttempts >= s.conf.MaxConnectionAttempts {
+				s.log.Errorf("Failed to connect after %i attempts, stopping", connectionAttempts)
+				return errors.New("failed to connect to SFTP server")
 			}
 			time.Sleep(time.Second * 5)
 		} else {
@@ -619,27 +391,55 @@ func (e *SFTP) initSFTPConnection() (*SSHServer, *ssh.CertChecker, *sftp.Client)
 	client, err := sftp.NewClient(conn)
 
 	if err != nil {
-		clientErrorsCounter := e.stats.GetCounter("client_errors")
+		clientErrorsCounter := s.stats.GetCounter("client_errors")
 		clientErrorsCounter.Incr(1)
-		e.log.Errorf("Failed to create client: %s", err.Error())
-		time.Sleep(time.Second * 5)
-		e.initSFTPConnection()
+		s.log.Errorf("Failed to create client: %s", err.Error())
 	}
 
-	return s, certCheck, client
+	s.client = client
+
+	return err
 }
 
-func (e *SFTP) generateMessage(messageBytes []byte, lineNum uint64, filePath string) *message.Type {
-	benthosMessage := message.New([][]byte{messageBytes})
-	part := benthosMessage.Get(0)
-	metadata := part.Metadata()
-	metadata.Set("date_created", time.Now().String())
-	metadata.Set("file_path", filePath)
-	metadata.Set("line_num", strconv.Itoa(int(lineNum)))
-	return benthosMessage
+func (s *SFTP) getObjectTarget(ctx context.Context) (*sftpPendingObject, error) {
+	if s.object != nil {
+		return s.object, nil
+	}
+
+	target, err := s.keyReader.Pop(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = s.client.Stat(target.key)
+	if err != nil {
+		target.ackFn(ctx, err)
+		return nil, fmt.Errorf("target file does not exist: %v", err)
+	}
+
+	file, err := s.client.Open(target.key)
+	if err != nil {
+		target.ackFn(ctx, err)
+		return nil, err
+	}
+
+	obj := ioutil.NopCloser(file)
+
+	object := &sftpPendingObject{
+		target: target,
+		obj:    file,
+	}
+
+	if object.scanner, err = s.objectScannerCtor(target.key, obj, target.ackFn); err != nil {
+		target.ackFn(ctx, err)
+		return nil, err
+	}
+
+	s.object = object
+	return object, nil
 }
 
-type SSHServer struct {
+type SFTPServer struct {
 	Address   string          // host:port
 	Host      string          // IP address
 	Port      int             // port
@@ -659,7 +459,7 @@ func hostAuthCallback() HostAuthorityCallBack {
 	}
 }
 
-func certCallback(s *SSHServer) IsRevokedCallback {
+func certCallback(s *SFTPServer) IsRevokedCallback {
 	return func(cert *ssh.Certificate) bool {
 		s.Cert = *cert
 		s.IsSSH = true
@@ -668,7 +468,7 @@ func certCallback(s *SSHServer) IsRevokedCallback {
 	}
 }
 
-func hostCallback(s *SSHServer) ssh.HostKeyCallback {
+func hostCallback(s *SFTPServer) ssh.HostKeyCallback {
 	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 		s.Hostname = hostname
 		s.PublicKey = key
@@ -676,32 +476,17 @@ func hostCallback(s *SSHServer) ssh.HostKeyCallback {
 	}
 }
 
-func (e *SFTP) Connected() bool {
-	return e.connected
+func (s *SFTP) CloseAsync() {
+	go func() {
+		s.objectMut.Lock()
+		if s.object != nil {
+			s.object.scanner.Close(context.Background())
+			s.object = nil
+		}
+		s.objectMut.Unlock()
+	}()
 }
 
-func (e *SFTP) TransactionChan() <-chan types.Transaction {
-	return e.transactionsChan
-}
-
-func (e *SFTP) CloseAsync() {
-	e.closeOnce.Do(func() {
-		close(e.closeChan)
-	})
-}
-
-func (e *SFTP) WaitForClose(timeout time.Duration) error {
-	select {
-	case <-e.closedChan:
-	case <-time.After(timeout):
-		return types.ErrTimeout
-	}
+func (s *SFTP) WaitForClose(timeout time.Duration) error {
 	return nil
-}
-
-type FileData struct {
-	Path    string
-	Cursor  int64
-	Size    int64
-	LineNum uint64
 }

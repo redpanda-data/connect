@@ -1,11 +1,10 @@
 package integration
 
 import (
+	"github.com/ory/dockertest/v3"
 	"log"
 	"strconv"
 	"testing"
-
-	"github.com/ory/dockertest/v3"
 )
 
 var _ = registerIntegrationTest("sftp", func(t *testing.T) {
@@ -48,29 +47,31 @@ var _ = registerIntegrationTest("sftp", func(t *testing.T) {
 	t.Run("sftp", func(t *testing.T) {
 		template := `
 output:
-  stdout:
-    delimiter: \n
+  sftp:
+    server: localhost
+    port: $VAR1
+    filepath: upload/file-$ID.txt
+    credentials:
+        username: foo
+        secret: pass
+    max_in_flight: 1
 
 input:
   sftp:
     server: localhost
     port: $VAR1
-    filepath: upload/test.txt
+    filepath: upload/file-$ID.txt
     credentials:
         username: foo
         secret: pass
-    watcher_mode: false
-    process_existing_records: true
-    include_header: true
-    message_delimiter: \n
     max_connection_attempts: 10
-    file_check_sleep_duration: 5
-    file_check_max_attempts: 10
     directory_mode: false
+    codec: lines
+    delete_objects: false
 `
 		integrationTests(
-			integrationTestOpenCloseIsolated(),
-			integrationTestStreamIsolated(10),
+			//integrationTestOpenCloseIsolated(),
+			integrationTestStreamIsolated(2),
 		).Run(
 			t, template,
 			testOptVarOne(strconv.Itoa(sshPort)),
