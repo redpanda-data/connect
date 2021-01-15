@@ -1,6 +1,8 @@
 package test
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -9,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/bloblang"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/nsf/jsondiff"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -51,6 +54,18 @@ func (c *ConditionsMap) UnmarshalYAML(value *yaml.Node) error {
 		case "content_matches":
 			val := ContentMatchesCondition("")
 			if err := v.Decode(&val); err != nil {
+				return fmt.Errorf("line %v: %v", v.Line, err)
+			}
+			cond = val
+		case "json_equals":
+			val := ContentJSONEqualsCondition("")
+			if err := yamlNodeToTestString(&v, (*string)(&val)); err != nil {
+				return fmt.Errorf("line %v: %v", v.Line, err)
+			}
+			cond = val
+		case "json_contains":
+			val := ContentJSONContainsCondition("")
+			if err := yamlNodeToTestString(&v, (*string)(&val)); err != nil {
 				return fmt.Errorf("line %v: %v", v.Line, err)
 			}
 			cond = val
@@ -150,6 +165,40 @@ func (c ContentMatchesCondition) Check(p types.Part) error {
 
 //------------------------------------------------------------------------------
 
+// ContentJSONEqualsCondition is a string condition that tests the string against
+// the contents of a message using JSON comparison and is true if the expected
+// and actual documents are both valid JSON and deeply equal.
+type ContentJSONEqualsCondition string
+
+// Check this condition against a message part.
+func (c ContentJSONEqualsCondition) Check(p types.Part) error {
+	jdopts := jsondiff.DefaultConsoleOptions()
+	diff, explanation := jsondiff.Compare(p.Get(), ([]byte)(c), &jdopts)
+	if diff != jsondiff.FullMatch {
+		return fmt.Errorf("JSON content mismatch\n%v", explanation)
+	}
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
+// ContentJSONContainsCondition is a string condition that tests the string against
+// the contents of a message using JSON comparison and is true if the expected
+// and actual documents are both valid JSON, and the actual is a superset of the expected
+type ContentJSONContainsCondition string
+
+// Check this condition against a message part.
+func (c ContentJSONContainsCondition) Check(p types.Part) error {
+	jdopts := jsondiff.DefaultConsoleOptions()
+	diff, explanation := jsondiff.Compare(p.Get(), ([]byte)(c), &jdopts)
+	if diff != jsondiff.FullMatch && diff != jsondiff.SupersetMatch {
+		return fmt.Errorf("JSON superset mismatch\n%v", explanation)
+	}
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
 // MetadataEqualsCondition checks whether a metadata keys contents matches a
 // value.
 type MetadataEqualsCondition map[string]string
@@ -165,3 +214,37 @@ func (m MetadataEqualsCondition) Check(p types.Part) error {
 }
 
 //------------------------------------------------------------------------------
+
+// Helper function for converting yaml.Node to a string
+// simple nodes are converted to their string equivalents
+// complex nodes are converted to a JSON representation
+// assumption is that only the subset of YAML compatible
+// with JSON will be present; decode errors will trigger
+// if this is not the case
+func yamlNodeToTestString(n *yaml.Node, tgt *string) error {
+	switch n.Kind {
+	case yaml.SequenceNode:
+		var aval []interface{}
+		err := n.Decode(&aval)
+		if err != nil {
+			return err
+		}
+		bval, err := json.Marshal(aval)
+		*tgt = bytes.NewBuffer(bval).String()
+		return err
+	case yaml.MappingNode:
+		var mval map[string]interface{}
+		err := n.Decode(&mval)
+		if err != nil {
+			return err
+		}
+		bval, err := json.Marshal(mval)
+		*tgt = bytes.NewBuffer(bval).String()
+		return err
+	case yaml.ScalarNode:
+		return n.Decode(tgt)
+	case yaml.AliasNode:
+		return yamlNodeToTestString(n.Alias, tgt)
+	}
+	return fmt.Errorf("unsupported yaml node type %s", n.ShortTag())
+}

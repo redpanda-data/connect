@@ -93,6 +93,19 @@ input_batch:
 output_batches: []`,
 		},
 		{
+			name: "json positive 4",
+			conf: `
+name: json positive 4
+input_batch:
+- json_content:
+    foo: bar
+output_batches:
+-
+  - json_equals:
+      foo: bar
+`,
+		},
+		{
 			name: "negative 1",
 			conf: `
 name: negative 1
