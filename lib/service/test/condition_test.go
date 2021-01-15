@@ -8,6 +8,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/fatih/color"
+	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
@@ -186,7 +187,7 @@ func TestContentCondition(t *testing.T) {
 				return
 			}
 			if exp, act := test.expected.Error(), actErr.Error(); exp != act {
-				tt.Errorf("Wrong result, expected %v, received %v", act, exp)
+				tt.Errorf("Wrong result, expected %v, received %v", exp, act)
 			}
 		})
 	}
@@ -237,7 +238,7 @@ func TestContentMatchesCondition(t *testing.T) {
 				return
 			}
 			if exp, act := test.expected.Error(), actErr.Error(); exp != act {
-				tt.Errorf("Wrong result, expected %v, received %v", act, exp)
+				tt.Errorf("Wrong result, expected %v, received %v", exp, act)
 			}
 		})
 	}
@@ -297,7 +298,121 @@ func TestMetadataEqualsCondition(t *testing.T) {
 				return
 			}
 			if exp, act := test.expected.Error(), actErr.Error(); exp != act {
-				tt.Errorf("Wrong result, expected %v, received %v", act, exp)
+				tt.Errorf("Wrong result, expected %v, received %v", exp, act)
+			}
+		})
+	}
+}
+
+func TestJSONEqualsCondition(t *testing.T) {
+	color.NoColor = true
+
+	cond := ContentJSONEqualsCondition(`{"foo":"bar","bim":"bam"}`)
+
+	type testCase struct {
+		name  string
+		input string
+	}
+
+	tests := []testCase{
+		{
+			name:  "positive 1",
+			input: `{"foo":"bar","bim":"bam"}`,
+		},
+		{
+			name:  "positive 2",
+			input: `{ "bim": "bam", "foo": "bar" }`,
+		},
+		{
+			name:  "negative 1",
+			input: "foo",
+		},
+		{
+			name:  "negative 2",
+			input: `{"foo":"bar"}`,
+		},
+	}
+
+	jdopts := jsondiff.DefaultConsoleOptions()
+	for _, test := range tests {
+		var expected error
+		diff, explanation := jsondiff.Compare([]byte(test.input), []byte(cond), &jdopts)
+		if diff != jsondiff.FullMatch {
+			expected = fmt.Errorf("JSON content mismatch\n%v", explanation)
+		}
+
+		t.Run(test.name, func(tt *testing.T) {
+			actErr := cond.Check(message.NewPart([]byte(test.input)))
+			if expected == nil && actErr == nil {
+				return
+			}
+			if expected == nil && actErr != nil {
+				tt.Errorf("Wrong result, expected %v, received %v", expected, actErr)
+				return
+			}
+			if expected != nil && actErr == nil {
+				tt.Errorf("Wrong result, expected %v, received %v", expected, actErr)
+				return
+			}
+			if exp, act := expected.Error(), actErr.Error(); exp != act {
+				tt.Errorf("Wrong result, expected %v, received %v", exp, act)
+			}
+		})
+	}
+}
+
+func TestJSONContainsCondition(t *testing.T) {
+	color.NoColor = true
+
+	cond := ContentJSONContainsCondition(`{"foo":"bar","bim":"bam"}`)
+
+	type testCase struct {
+		name  string
+		input string
+	}
+
+	tests := []testCase{
+		{
+			name:  "positive 1",
+			input: `{"foo":"bar","bim":"bam"}`,
+		},
+		{
+			name:  "positive 2",
+			input: `{ "bim": "bam", "foo": "bar", "baz": [1, 2, 3] }`,
+		},
+		{
+			name:  "negative 1",
+			input: `{"foo":"baz","bim":"bam"}`,
+		},
+		{
+			name:  "negative 2",
+			input: `{"foo":"bar"}`,
+		},
+	}
+
+	jdopts := jsondiff.DefaultConsoleOptions()
+	for _, test := range tests {
+		var expected error
+		diff, explanation := jsondiff.Compare([]byte(test.input), []byte(cond), &jdopts)
+		if diff != jsondiff.FullMatch && diff != jsondiff.SupersetMatch {
+			expected = fmt.Errorf("JSON superset mismatch\n%v", explanation)
+		}
+
+		t.Run(test.name, func(tt *testing.T) {
+			actErr := cond.Check(message.NewPart([]byte(test.input)))
+			if expected == nil && actErr == nil {
+				return
+			}
+			if expected == nil && actErr != nil {
+				tt.Errorf("Wrong result, expected %v, received %v", expected, actErr)
+				return
+			}
+			if expected != nil && actErr == nil {
+				tt.Errorf("Wrong result, expected %v, received %v", expected, actErr)
+				return
+			}
+			if exp, act := expected.Error(), actErr.Error(); exp != act {
+				tt.Errorf("Wrong result, expected %v, received %v", exp, act)
 			}
 		})
 	}

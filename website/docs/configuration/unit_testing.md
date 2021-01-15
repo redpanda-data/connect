@@ -62,6 +62,8 @@ The field `environment` allows you to define an object of key/value pairs that s
 
 The field `input_batch` lists one or more messages to be fed into the targeted processors as a batch. Each message of the batch may have its raw content defined as well as metadata key/value pairs.
 
+For the common case where the messages are in JSON format, you can use `json_content` instead of `content` to specify the message structurally rather than verbatim.
+
 The field `output_batches` lists any number of batches of messages which are expected to result from the target processors. Each batch lists any number of messages, each one defining [`conditions`](#output-conditions) to describe the expected contents of the message.
 
 If the number of batches defined does not match the resulting number of batches the test will fail. If the number of messages defined in each batch does not match the number in the resulting batches the test will fail. If any condition of a message fails then the test fails.
@@ -126,6 +128,29 @@ metadata_equals:
 ```
 
 Checks a map of metadata keys to values against the metadata stored in the message. If there is a value mismatch between a key of the condition versus the message metadata this condition will fail.
+
+### `json_equals`
+
+```yml
+json_equals: { "key": "value" }
+```
+
+Checks that both the message and the condition are valid JSON documents, and that they are structurally equivalent. Will ignore formatting and ordering differences.
+
+You can also structure the condition content as YAML and it will be converted to the equivalent JSON document for testing:
+
+```yml
+json_equals:
+  key: value
+```
+
+### `json_contains`
+
+```yml
+json_contains: { "key": "value" }
+```
+
+Checks that both the message and the condition are valid JSON documents, and that the message is a superset of the condition.
 
 ## Running Tests
 
