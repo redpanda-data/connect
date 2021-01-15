@@ -985,6 +985,69 @@ func parseXMLMethod(target Function, _ ...interface{}) (Function, error) {
 
 var _ = RegisterMethod(
 	NewMethodSpec(
+		"parse_xml_html", "",
+	).InCategory(
+		MethodCategoryParsing,
+		`Attempts to parse a string as an XML document while escaping HTML tags and returns a structured result, where elements appear as keys of an object according to the following rules:
+
+- If an element contains attributes they are parsed by prefixing a hyphen, `+"`-`"+`, to the attribute label.
+- If the element is a simple element and has attributes, the element value is given the key `+"`#text`"+`.
+- XML comments, directives, and process instructions are ignored.
+- When elements are repeated the resulting JSON value is an array.
+- The default list of HTML tags that are escaped are here https://github.com/Jeffail/benthos/blob/master/internal/xml/package.go`,
+		NewExampleSpec("",
+			`root.doc = this.doc.parse_xml_html()`,
+			`{"doc":"<root><title>This is a title</title><content>This is some <b>bold</b> and <i>italic</i> content</content></root>"}`,
+			`{"doc":{"root":{"content":"This is some <b>bold</b> and <i>italic</i> content","title":"This is a title"}}}`,
+		),
+		NewExampleSpec("It's also possible to provide an explicit list of html tags to escape in the output.",
+			`root.doc = this.doc.parse_xml_html(["b"])`,
+			`{"doc":"<root><title>This is a title</title><content>This is some <b>bold</b> and <i>italic</i> content</content></root>"}`,
+			`{"doc":{"root":{"content":"This is some <b>bold</b> and","title":"This is a title"}}}`,
+		),
+	).Beta(),
+	false, parseXMLHTMLMethod,
+	ExpectOneOrZeroArgs(),
+)
+
+func parseXMLHTMLMethod(target Function, args ...interface{}) (Function, error) {
+	htmlToEscape := []string{}
+	if len(args) > 0 {
+		tags, ok := args[0].([]interface{})
+		if !ok {
+			return nil, NewTypeError(args[0], ValueArray)
+		}
+		tagStrs := make([]string, len(tags))
+		for i, ele := range tags {
+			if tagStrs[i], ok = ele.(string); !ok {
+				return nil, fmt.Errorf("invalid arg at index %v: %w", i, NewTypeError(ele, ValueString))
+			}
+		}
+		htmlToEscape = tagStrs
+	}
+
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		var xmlBytes []byte
+		switch t := v.(type) {
+		case string:
+			xmlBytes = []byte(t)
+		case []byte:
+			xmlBytes = t
+		default:
+			return nil, NewTypeError(v, ValueString)
+		}
+		xmlObj, err := xml.ToMapWithHTML(xmlBytes, htmlToEscape)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse value as XML: %w", err)
+		}
+		return xmlObj, nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
 		"parse_timestamp_unix", "",
 	).InCategory(
 		MethodCategoryTime,
