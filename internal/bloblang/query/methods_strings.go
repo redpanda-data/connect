@@ -1271,6 +1271,69 @@ func replaceMethod(target Function, args ...interface{}) (Function, error) {
 
 var _ = RegisterMethod(
 	NewMethodSpec(
+		"replace_many", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Replaces all occurrences of the map of <source, target> strings",
+		NewExampleSpec("",
+			`root.new_value = this.value.replace_many(["<b>","&lt;b&gt;","</b>","&lt;/b&gt;"])`,
+			`{"value":"Hello <b>World</b>"}`,
+			`{"new_value":"Hello &lt;b&gt;World&lt;/b&gt;"}`,
+		),
+	),
+	true, replaceManyMethod,
+	ExpectAtLeastOneArg(),
+)
+
+func replaceManyMethod(target Function, args ...interface{}) (Function, error) {
+
+	items, ok := args[0].([]interface{})
+	if !ok {
+		return nil, NewTypeError(args[0], ValueArray)
+	}
+
+	if len(items)%2 != 0 {
+		return nil, fmt.Errorf("invalid arg, the arg length should be even %v", items)
+	}
+
+	itemStrs := make([]string, len(items))
+	for i, ele := range items {
+		if itemStrs[i], ok = ele.(string); !ok {
+			return nil, fmt.Errorf("invalid arg at index %v: %w", i, NewTypeError(ele, ValueString))
+		}
+	}
+
+	var htmlToEscape [][]string
+	for i := 0; i < len(itemStrs); i += 2 {
+		end := i + 2
+		if end > len(itemStrs) {
+			end = len(itemStrs)
+		}
+
+		htmlToEscape = append(htmlToEscape, itemStrs[i:end])
+	}
+
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		switch t := v.(type) {
+		case string:
+			for _, val := range htmlToEscape {
+				t = strings.ReplaceAll(t, val[0], val[1])
+			}
+			return t, nil
+		case []byte:
+			for _, val := range htmlToEscape {
+				t = bytes.ReplaceAll(t, []byte(val[0]), []byte(val[1]))
+			}
+			return t, nil
+		}
+		return nil, NewTypeError(v, ValueString)
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
 		"re_find_all", "",
 	).InCategory(
 		MethodCategoryRegexp,
