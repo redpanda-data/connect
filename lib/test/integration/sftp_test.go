@@ -29,10 +29,10 @@ var _ = registerIntegrationTest("sftp", func(t *testing.T) {
 		log.Fatalf("Could not start resource: %s", err)
 	}
 
-	var sshPort int
+	var sftpPort int
 
 	if err := pool.Retry(func() error {
-		sshPort, err = strconv.Atoi(resource.GetPort("22/tcp"))
+		sftpPort, err = strconv.Atoi(resource.GetPort("22/tcp"))
 		if err != nil {
 			return err
 		}
@@ -70,11 +70,11 @@ input:
     delete_objects: false
 `
 		integrationTests(
-			//integrationTestOpenCloseIsolated(),
+			integrationTestOpenCloseIsolated(),
 			integrationTestStreamIsolated(2),
 		).Run(
 			t, template,
-			testOptVarOne(strconv.Itoa(sshPort)),
+			testOptVarOne(strconv.Itoa(sftpPort)),
 		)
 	})
 })

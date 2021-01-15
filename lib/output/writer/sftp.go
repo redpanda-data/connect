@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 	"net"
+	"os"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
@@ -83,17 +84,19 @@ func (s *SFTP) WriteWithContext(_ context.Context, msg types.Message) error {
 				return err
 			}
 		} else {
-			file, err = s.client.Open(s.conf.Filepath)
+			file, err = s.client.OpenFile(s.conf.Filepath, os.O_APPEND|os.O_RDWR)
 			if err != nil {
 				s.log.Errorf("Error opening file: %v", err)
 				return err
 			}
 		}
 
-		_, err = file.Write(p.Get())
+		str := string(p.Get()) + "\n"
+		_, err = file.Write([]byte(str))
+
 		if err != nil {
 			s.log.Errorf("Error writing to file: %v", err)
-			//return err
+			return err
 		}
 
 		return nil

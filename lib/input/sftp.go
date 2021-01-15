@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"github.com/Jeffail/benthos/v3/internal/codec"
 	"io"
-	"io/ioutil"
 	"net"
+	"os"
 	"path"
 	"strings"
 	"sync"
@@ -206,9 +206,8 @@ func deleteSFTPObjectAckFn(
 //------------------------------------------------------------------------------
 
 type sftpTargetReader struct {
-	pending    []*sftpObjectTarget
-	conf       SFTPConfig
-	startAfter string
+	pending []*sftpObjectTarget
+	conf    SFTPConfig
 }
 
 type sftpPendingObject struct {
@@ -224,10 +223,10 @@ func newSFTPTargetReader(
 	log log.Modular,
 	client *sftp.Client,
 ) (*sftpTargetReader, error) {
-	var files []*sftp.File
+	var files []os.FileInfo
 
 	if !conf.DirectoryMode {
-		file, err := client.Open(conf.Filepath)
+		file, err := client.Stat(conf.Filepath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open file: %v", err)
 		}
@@ -237,14 +236,7 @@ func newSFTPTargetReader(
 		if err != nil {
 			return nil, fmt.Errorf("failed to open directory: %v", err)
 		}
-		for _, fileInfo := range fileInfos {
-			filepath := path.Join(conf.DirectoryPath, fileInfo.Name())
-			file, err := client.Open(filepath)
-			if err != nil {
-				continue
-			}
-			files = append(files, file)
-		}
+		files = append(files, fileInfos...)
 	}
 
 	staticKeys := sftpTargetReader{
@@ -257,7 +249,7 @@ func newSFTPTargetReader(
 			filepath = path.Join(conf.DirectoryPath, file.Name())
 		}
 		ackFn := deleteSFTPObjectAckFn(client, filepath, conf.DeleteObjects, nil)
-		staticKeys.pending = append(staticKeys.pending, newSFTPObjectTarget(file.Name(), ackFn))
+		staticKeys.pending = append(staticKeys.pending, newSFTPObjectTarget(filepath, ackFn))
 	}
 
 	return &staticKeys, nil
@@ -337,11 +329,7 @@ func sftpMsgFromPart(p *sftpPendingObject, part types.Part) types.Message {
 
 	meta := msg.Get(0).Metadata()
 
-	fileInfo, _ := p.obj.Stat()
-
 	meta.Set("sftp_file_path", p.target.key)
-	meta.Set("sftp_file_modification_time", fileInfo.ModTime().String())
-	//meta.Set("line_num", strconv.Itoa(int(lineNum)))
 
 	return msg
 }
@@ -423,14 +411,12 @@ func (s *SFTP) getObjectTarget(ctx context.Context) (*sftpPendingObject, error) 
 		return nil, err
 	}
 
-	obj := ioutil.NopCloser(file)
-
 	object := &sftpPendingObject{
 		target: target,
 		obj:    file,
 	}
 
-	if object.scanner, err = s.objectScannerCtor(target.key, obj, target.ackFn); err != nil {
+	if object.scanner, err = s.objectScannerCtor(target.key, file, target.ackFn); err != nil {
 		target.ackFn(ctx, err)
 		return nil, err
 	}
