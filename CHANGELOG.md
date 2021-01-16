@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - The bloblang method `strip_html` now allows you to specify a list of allowed elements.
 - New bloblang method `parse_xml`.
 - New bloblang method `replace_many`.
+- New bloblang methods `filepath_split` and `filepath_join`.
 
 ## 3.37.0 - 2021-01-06
 

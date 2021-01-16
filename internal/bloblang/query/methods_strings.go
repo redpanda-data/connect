@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"math"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -517,6 +518,69 @@ func unescapeURLQueryMethod(target Function, args ...interface{}) (Function, err
 		return res, err
 	}), nil
 }
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
+		"filepath_join", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Joins an array of path elements into a single file path. The separator depends on the operating system of the machine.",
+		NewExampleSpec("",
+			`root.path = this.path_elements.filepath_join()`,
+			strings.Replace(`{"path_elements":["/foo/","bar.txt"]}`, "/", string(filepath.Separator), -1),
+			strings.Replace(`{"path":"/foo/bar.txt"}`, "/", string(filepath.Separator), -1),
+		),
+	),
+	false,
+	func(target Function, args ...interface{}) (Function, error) {
+		return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			arr, ok := v.([]interface{})
+			if !ok {
+				return nil, NewTypeError(v, ValueArray)
+			}
+			strs := make([]string, 0, len(arr))
+			for i, ele := range arr {
+				str, err := IGetString(ele)
+				if err != nil {
+					return nil, fmt.Errorf("path element %v: %w", i, err)
+				}
+				strs = append(strs, str)
+			}
+			return filepath.Join(strs...), nil
+		}), nil
+	},
+	ExpectNArgs(0),
+)
+
+var _ = RegisterMethod(
+	NewMethodSpec(
+		"filepath_split", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Splits a file path immediately following the final Separator, separating it into a directory and file name component returned as a two element array of strings. If there is no Separator in the path, the first element will be empty and the second will contain the path. The separator depends on the operating system of the machine.",
+		NewExampleSpec("",
+			`root.path_sep = this.path.filepath_split()`,
+			strings.Replace(`{"path":"/foo/bar.txt"}`, "/", string(filepath.Separator), -1),
+			strings.Replace(`{"path_sep":["/foo/","bar.txt"]}`, "/", string(filepath.Separator), -1),
+			`{"path":"baz.txt"}`,
+			`{"path_sep":["","baz.txt"]}`,
+		),
+	),
+	false,
+	func(target Function, args ...interface{}) (Function, error) {
+		return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			str, err := IGetString(v)
+			if err != nil {
+				return nil, err
+			}
+			dir, file := filepath.Split(str)
+			return []interface{}{dir, file}, nil
+		}), nil
+	},
+	ExpectNArgs(0),
+)
 
 //------------------------------------------------------------------------------
 

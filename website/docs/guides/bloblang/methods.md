@@ -218,6 +218,31 @@ root.unescaped = this.value.unescape_url_query()
 # Out: {"unescaped":"foo & bar"}
 ```
 
+### `filepath_join`
+
+Joins an array of path elements into a single file path. The separator depends on the operating system of the machine.
+
+```coffee
+root.path = this.path_elements.filepath_join()
+
+# In:  {"path_elements":["/foo/","bar.txt"]}
+# Out: {"path":"/foo/bar.txt"}
+```
+
+### `filepath_split`
+
+Splits a file path immediately following the final Separator, separating it into a directory and file name component returned as a two element array of strings. If there is no Separator in the path, the first element will be empty and the second will contain the path. The separator depends on the operating system of the machine.
+
+```coffee
+root.path_sep = this.path.filepath_split()
+
+# In:  {"path":"/foo/bar.txt"}
+# Out: {"path_sep":["/foo/","bar.txt"]}
+
+# In:  {"path":"baz.txt"}
+# Out: {"path_sep":["","baz.txt"]}
+```
+
 ### `format`
 
 Use a value string as a format specifier in order to produce a new string, using any number of provided arguments.
