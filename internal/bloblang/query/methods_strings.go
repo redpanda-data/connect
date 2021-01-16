@@ -1274,55 +1274,57 @@ var _ = RegisterMethod(
 		"replace_many", "",
 	).InCategory(
 		MethodCategoryStrings,
-		"Replaces all occurrences of the map of <source, target> strings",
+		"For each pair of strings in an argument array, replaces all occurrences of the first item of the pair with the second. This is a more compact way of chaining a series of `replace` methods.",
 		NewExampleSpec("",
-			`root.new_value = this.value.replace_many(["<b>","&lt;b&gt;","</b>","&lt;/b&gt;"])`,
-			`{"value":"Hello <b>World</b>"}`,
-			`{"new_value":"Hello &lt;b&gt;World&lt;/b&gt;"}`,
+			`root.new_value = this.value.replace_many([
+  "<b>", "&lt;b&gt;",
+  "</b>", "&lt;/b&gt;",
+  "<i>", "&lt;i&gt;",
+  "</i>", "&lt;/i&gt;",
+])`,
+			`{"value":"<i>Hello</i> <b>World</b>"}`,
+			`{"new_value":"&lt;i&gt;Hello&lt;/i&gt; &lt;b&gt;World&lt;/b&gt;"}`,
 		),
 	),
 	true, replaceManyMethod,
-	ExpectAtLeastOneArg(),
+	ExpectNArgs(1),
 )
 
 func replaceManyMethod(target Function, args ...interface{}) (Function, error) {
-
 	items, ok := args[0].([]interface{})
 	if !ok {
 		return nil, NewTypeError(args[0], ValueArray)
 	}
-
 	if len(items)%2 != 0 {
-		return nil, fmt.Errorf("invalid arg, the arg length should be even %v", items)
+		return nil, fmt.Errorf("invalid arg, replacements should be in pairs and must therefore be even: %v", items)
 	}
 
-	itemStrs := make([]string, len(items))
-	for i, ele := range items {
-		if itemStrs[i], ok = ele.(string); !ok {
-			return nil, fmt.Errorf("invalid arg at index %v: %w", i, NewTypeError(ele, ValueString))
-		}
-	}
+	var replacePairs [][2]string
+	var replacePairsBytes [][2][]byte
 
-	var htmlToEscape [][]string
-	for i := 0; i < len(itemStrs); i += 2 {
-		end := i + 2
-		if end > len(itemStrs) {
-			end = len(itemStrs)
+	for i := 0; i < len(items); i += 2 {
+		from, err := IGetString(items[i])
+		if err != nil {
+			return nil, fmt.Errorf("invalid replacement value at index %v: %w", i, err)
 		}
-
-		htmlToEscape = append(htmlToEscape, itemStrs[i:end])
+		to, err := IGetString(items[i+1])
+		if err != nil {
+			return nil, fmt.Errorf("invalid replacement value at index %v: %w", i+1, err)
+		}
+		replacePairs = append(replacePairs, [2]string{from, to})
+		replacePairsBytes = append(replacePairsBytes, [2][]byte{[]byte(from), []byte(to)})
 	}
 
 	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		switch t := v.(type) {
 		case string:
-			for _, val := range htmlToEscape {
-				t = strings.ReplaceAll(t, val[0], val[1])
+			for _, pair := range replacePairs {
+				t = strings.ReplaceAll(t, pair[0], pair[1])
 			}
 			return t, nil
 		case []byte:
-			for _, val := range htmlToEscape {
-				t = bytes.ReplaceAll(t, []byte(val[0]), []byte(val[1]))
+			for _, pair := range replacePairsBytes {
+				t = bytes.ReplaceAll(t, pair[0], pair[1])
 			}
 			return t, nil
 		}

@@ -1856,6 +1856,24 @@ func TestMethods(t *testing.T) {
 			input:  methods(literalFn(5.3), method("round")),
 			output: 5.0,
 		},
+		"check replace_many string": {
+			input: methods(literalFn("<i>hello</i> <b>world</b>"), method("replace_many", []interface{}{
+				"<b>", "BOLD",
+				"</b>", "!BOLD",
+				"<i>", "ITA",
+				"</i>", "!ITA",
+			})),
+			output: "ITAhello!ITA BOLDworld!BOLD",
+		},
+		"check replace_many bytes": {
+			input: methods(literalFn([]byte("<i>hello</i> <b>world</b>")), method("replace_many", []interface{}{
+				"<b>", "BOLD",
+				"</b>", "!BOLD",
+				"<i>", "ITA",
+				"</i>", "!ITA",
+			})),
+			output: []byte("ITAhello!ITA BOLDworld!BOLD"),
+		},
 	}
 
 	for name, test := range tests {

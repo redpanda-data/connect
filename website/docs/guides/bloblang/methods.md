@@ -310,6 +310,22 @@ root.new_value = this.value.replace("foo","dog")
 # Out: {"new_value":"The dog ate my homework"}
 ```
 
+### `replace_many`
+
+For each pair of strings in an argument array, replaces all occurrences of the first item of the pair with the second. This is a more compact way of chaining a series of `replace` methods.
+
+```coffee
+root.new_value = this.value.replace_many([
+  "<b>", "&lt;b&gt;",
+  "</b>", "&lt;/b&gt;",
+  "<i>", "&lt;i&gt;",
+  "</i>", "&lt;/i&gt;",
+])
+
+# In:  {"value":"<i>Hello</i> <b>World</b>"}
+# Out: {"new_value":"&lt;i&gt;Hello&lt;/i&gt; &lt;b&gt;World&lt;/b&gt;"}
+```
+
 ### `split`
 
 Split a string value into an array of strings by splitting it on a string separator.
