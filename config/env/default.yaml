@@ -1072,7 +1072,7 @@ output:
         cassandra:
           backoff:
             initial_interval: ${OUTPUT_CASSANDRA_BACKOFF_INITIAL_INTERVAL:1s}
-            max_elapsed_time: ${OUTPUT_CASSANDRA_BACKOFF_MAX_ELAPSED_TIME:30s}
+            max_elapsed_time: ${OUTPUT_CASSANDRA_BACKOFF_MAX_ELAPSED_TIME}
             max_interval: ${OUTPUT_CASSANDRA_BACKOFF_MAX_INTERVAL:5s}
           batching:
             byte_size: ${OUTPUT_CASSANDRA_BATCHING_BYTE_SIZE:0}

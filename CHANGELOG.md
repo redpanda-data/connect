@@ -18,6 +18,10 @@ All notable changes to this project will be documented in this file.
 - New bloblang method `replace_many`.
 - New bloblang methods `filepath_split` and `filepath_join`.
 
+### Changed
+
+- The `cassandra` outputs `backoff.max_elapsed_time` field was unused and has been hidden from docs.
+
 ## 3.37.0 - 2021-01-06
 
 ### New
