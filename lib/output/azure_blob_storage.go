@@ -38,7 +38,7 @@ calculated per message of a batch.`,
 			docs.FieldCommon(
 				"storage_sas_token",
 				"The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` / `storage_sas_token` are set.",
-			),
+			).AtVersion("3.38.0"),
 			docs.FieldCommon(
 				"storage_connection_string",
 				"A storage account connection string. This field is required if `storage_account` and `storage_access_key` are not set.",

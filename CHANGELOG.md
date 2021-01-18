@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.38.0 - 2021-01-18
+
 ### New
 
 - New bloblang method `bytes`.

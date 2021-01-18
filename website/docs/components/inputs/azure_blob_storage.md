@@ -110,6 +110,7 @@ The storage account SAS token. This field is ignored if `storage_connection_stri
 
 Type: `string`  
 Default: `""`  
+Requires version 3.38.0 or newer  
 
 ### `storage_connection_string`
 
