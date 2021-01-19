@@ -35,11 +35,6 @@ func TestLiteralParserErrors(t *testing.T) {
 }
 
 func TestLiteralParser(t *testing.T) {
-	type easyMsg struct {
-		content string
-		meta    map[string]string
-	}
-
 	tests := map[string]struct {
 		mapping  string
 		result   interface{}

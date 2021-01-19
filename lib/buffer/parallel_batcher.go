@@ -16,7 +16,6 @@ import (
 type ParallelBatcher struct {
 	stats metrics.Type
 	log   log.Modular
-	conf  Config
 
 	child   Type
 	batcher *batch.Policy

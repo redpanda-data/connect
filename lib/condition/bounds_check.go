@@ -51,7 +51,6 @@ func NewBoundsCheckConfig() BoundsCheckConfig {
 
 // BoundsCheck is a condition that checks a message against a set of bounds.
 type BoundsCheck struct {
-	conf  Config
 	log   log.Modular
 	stats metrics.Type
 

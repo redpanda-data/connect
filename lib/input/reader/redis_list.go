@@ -3,7 +3,6 @@ package reader
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"sync"
 	"time"
 
@@ -40,7 +39,6 @@ type RedisList struct {
 	client redis.UniversalClient
 	cMut   sync.Mutex
 
-	url     *url.URL
 	conf    RedisListConfig
 	timeout time.Duration
 

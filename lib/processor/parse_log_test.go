@@ -72,12 +72,9 @@ func TestParseLogCases(t *testing.T) {
 
 func TestParseLogRFC5424(t *testing.T) {
 	type testCase struct {
-		name    string
-		input   string
-		output  string
-		format  string
-		codec   string
-		bestEff bool
+		name   string
+		input  string
+		output string
 	}
 	tests := []testCase{
 		{

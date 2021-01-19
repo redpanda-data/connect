@@ -37,7 +37,6 @@ type DynamicFanIn struct {
 	log   log.Modular
 
 	transactionChan chan types.Transaction
-	internalTsChan  chan types.Transaction
 
 	onAdd    func(label string)
 	onRemove func(label string)

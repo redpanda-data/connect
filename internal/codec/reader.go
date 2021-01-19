@@ -189,7 +189,6 @@ type linesReader struct {
 	buf       *bufio.Scanner
 	r         io.ReadCloser
 	sourceAck ReaderAckFn
-	ackOnce   sync.Once
 
 	mut      sync.Mutex
 	finished bool
