@@ -53,7 +53,6 @@ Downloads objects via an SFTP connection.
 This input adds the following metadata fields to each message:
 ` + "```" + `
 - sftp_file_path
-- All user defined metadata
 ` + "```" + `
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).`,
 
@@ -71,16 +70,20 @@ You can access these metadata fields using [function interpolation](/docs/config
 				"The credentials to use to log into the server.",
 			).WithChildren(credentialsFields...),
 			docs.FieldCommon(
-				"filepath",
-				"The path of the file to pull messages from. Ignored if directory_path has a value.",
+				"filename",
+				"The name of the file to pull messages from. If not provided, all the files in the path will be processed.",
 			),
 			docs.FieldCommon(
-				"directory_path",
-				"The path of the directory that it will process. This field overrides the filepath field.",
+				"path",
+				"The path of the directory or file that it will process.",
 			),
 			docs.FieldCommon(
 				"max_connection_attempts",
 				"How many times it will try to connect to the server before exiting with an error.",
+			),
+			docs.FieldCommon(
+				"retry_sleep_duration",
+				"How long (in milliseconds) it will sleep after failing to connect to the server before trying again.",
 			),
 			codec.ReaderDocs,
 			docs.FieldAdvanced("delete_objects", "Whether to delete files from the server once they are processed."),
@@ -98,10 +101,11 @@ You can access these metadata fields using [function interpolation](/docs/config
 type SFTPConfig struct {
 	Server                string          `json:"server" yaml:"server"`
 	Port                  int             `json:"port" yaml:"port"`
-	Filepath              string          `json:"filepath" yaml:"filepath"`
+	Filename              string          `json:"filename" yaml:"filename"`
 	Credentials           SFTPCredentials `json:"credentials" yaml:"credentials"`
-	DirectoryPath         string          `json:"directory_path" yaml:"directory_path"`
+	Path                  string          `json:"path" yaml:"path"`
 	MaxConnectionAttempts int             `json:"max_connection_attempts" yaml:"max_connection_attempts"`
+	RetrySleepDuration    int             `json:"retry_sleep_duration" yaml:"retry_sleep_duration"`
 	Codec                 string          `json:"codec" yaml:"codec"`
 	DeleteObjects         bool            `json:"delete_objects" yaml:"delete_objects"`
 }
@@ -116,10 +120,11 @@ func NewSFTPConfig() SFTPConfig {
 	return SFTPConfig{
 		Server:                "",
 		Port:                  0,
-		Filepath:              "",
+		Filename:              "",
 		Credentials:           SFTPCredentials{},
 		MaxConnectionAttempts: 10,
-		DirectoryPath:         "",
+		RetrySleepDuration:    5000,
+		Path:                  "",
 		Codec:                 "lines",
 		DeleteObjects:         false,
 	}
@@ -221,15 +226,15 @@ func newSFTPTargetReader(
 ) (*sftpTargetReader, error) {
 	var files []os.FileInfo
 
-	directoryMode := conf.DirectoryPath != ""
+	directoryMode := conf.Filename == ""
 	if !directoryMode {
-		file, err := client.Stat(conf.Filepath)
+		file, err := client.Stat(conf.Filename)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open file: %v", err)
 		}
 		files = append(files, file)
 	} else {
-		fileInfos, err := client.ReadDir(conf.DirectoryPath)
+		fileInfos, err := client.ReadDir(conf.Path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open directory: %v", err)
 		}
@@ -241,9 +246,9 @@ func newSFTPTargetReader(
 	}
 
 	for _, file := range files {
-		filepath := conf.Filepath
+		filepath := conf.Filename
 		if directoryMode {
-			filepath = path.Join(conf.DirectoryPath, file.Name())
+			filepath = path.Join(conf.Path, file.Name())
 		}
 		ackFn := deleteSFTPObjectAckFn(client, filepath, conf.DeleteObjects, nil)
 		staticKeys.pending = append(staticKeys.pending, newSFTPObjectTarget(filepath, ackFn))
@@ -367,7 +372,7 @@ func (s *SFTP) initSFTPConnection() error {
 				s.log.Errorf("Failed to connect after %i attempts, stopping", connectionAttempts)
 				return errors.New("failed to connect to SFTP server")
 			}
-			time.Sleep(time.Second * 5)
+			time.Sleep(time.Millisecond * time.Duration(s.conf.RetrySleepDuration))
 		} else {
 			break
 		}

@@ -29,8 +29,8 @@ type SFTP struct {
 
 	client *sftp.Client
 
-	server   field.Expression
-	filepath field.Expression
+	server field.Expression
+	path   field.Expression
 
 	log   log.Modular
 	stats metrics.Type
@@ -53,8 +53,8 @@ func NewSFTP(
 		return nil, fmt.Errorf("failed to connect to SFTP server: %v", err)
 	}
 
-	if s.filepath, err = bloblang.NewField(conf.Filepath); err != nil {
-		return nil, fmt.Errorf("failed to parse filepath expression: %v", err)
+	if s.path, err = bloblang.NewField(conf.Path); err != nil {
+		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}
 
 	return s, nil
@@ -79,7 +79,7 @@ func (s *SFTP) Write(msg types.Message) error {
 func (s *SFTP) WriteWithContext(_ context.Context, msg types.Message) error {
 	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		var file *sftp.File
-		path := s.filepath.String(i, msg)
+		path := s.path.String(i, msg)
 		_, err := s.client.Stat(path)
 
 		if err != nil {
@@ -147,11 +147,11 @@ func (s *SFTP) initSFTPConnection() error {
 			connectionErrorsCounter := s.stats.GetCounter("connection_errors")
 			connectionErrorsCounter.Incr(1)
 			s.log.Errorf("Failed to dial: %s", err.Error())
-			if connectionAttempts >= 10 {
+			if connectionAttempts >= s.conf.MaxConnectionAttempts {
 				s.log.Errorf("Failed to connect after %i attempts, stopping", connectionAttempts)
 				return errors.New("failed to connect to SFTP server")
 			}
-			time.Sleep(time.Second * 5)
+			time.Sleep(time.Millisecond * time.Duration(s.conf.RetrySleepDuration))
 		} else {
 			break
 		}

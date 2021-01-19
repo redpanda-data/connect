@@ -81,13 +81,13 @@ func TestProcessFile(t *testing.T) {
 		Conf: &SFTPConfig{
 			Server:   "localhost",
 			Port:     sftpPort,
-			Filepath: filePath,
+			Filename: filePath,
 			Credentials: SFTPCredentials{
 				Username: "foo",
 				Secret:   "pass",
 			},
 			MaxConnectionAttempts: 10,
-			DirectoryPath:         "",
+			Path:                  "",
 			Codec:                 "lines",
 			DeleteObjects:         false,
 		},
@@ -117,13 +117,13 @@ func TestNoServer(t *testing.T) {
 		Conf: &SFTPConfig{
 			Server:   "invalid_server",
 			Port:     sftpPort,
-			Filepath: filepath,
+			Filename: filepath,
 			Credentials: SFTPCredentials{
 				Username: sftpUsername,
 				Secret:   sftpPassword,
 			},
 			MaxConnectionAttempts: 3,
-			DirectoryPath:         "",
+			Path:                  "",
 			Codec:                 "lines",
 		},
 	}
@@ -139,13 +139,13 @@ func TestInvalidCredentials(t *testing.T) {
 		Conf: &SFTPConfig{
 			Server:   "localhost",
 			Port:     sftpPort,
-			Filepath: path.Join(sftpDirectory, "test.txt"),
+			Filename: path.Join(sftpDirectory, "test.txt"),
 			Credentials: SFTPCredentials{
 				Username: "invaliduser",
 				Secret:   "invalidsecret",
 			},
 			MaxConnectionAttempts: 3,
-			DirectoryPath:         "",
+			Path:                  "",
 			Codec:                 "lines",
 		},
 	}
@@ -161,13 +161,13 @@ func TestFileNotFound(t *testing.T) {
 		Conf: &SFTPConfig{
 			Server:   "localhost",
 			Port:     sftpPort,
-			Filepath: path.Join(sftpDirectory, "missingfile.txt"),
+			Filename: path.Join(sftpDirectory, "missingfile.txt"),
 			Credentials: SFTPCredentials{
 				Username: sftpUsername,
 				Secret:   sftpPassword,
 			},
 			MaxConnectionAttempts: 10,
-			DirectoryPath:         "",
+			Path:                  "",
 			Codec:                 "lines",
 		},
 	}
@@ -195,13 +195,13 @@ func TestProcessDirectory(t *testing.T) {
 		Conf: &SFTPConfig{
 			Server:   "localhost",
 			Port:     sftpPort,
-			Filepath: "",
+			Filename: "",
 			Credentials: SFTPCredentials{
 				Username: sftpUsername,
 				Secret:   sftpPassword,
 			},
 			MaxConnectionAttempts: 10,
-			DirectoryPath:         dirPath,
+			Path:                  dirPath,
 			Codec:                 "lines",
 		},
 	}

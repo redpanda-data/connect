@@ -13,10 +13,11 @@ input:
       secret: ""
       username: ""
     delete_objects: false
-    directory_path: ""
-    filepath: ""
+    filename: ""
     max_connection_attempts: 10
+    path: ""
     port: 0
+    retry_sleep_duration: 5000
     server: ""
 buffer:
   type: none
@@ -30,9 +31,11 @@ output:
     credentials:
       secret: ""
       username: ""
-    filepath: ""
+    max_connection_attempts: 10
     max_in_flight: 1
+    path: ""
     port: 0
+    retry_sleep_duration: 5000
     server: ""
 resources:
   caches: {}

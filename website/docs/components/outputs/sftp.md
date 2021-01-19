@@ -27,11 +27,13 @@ output:
   sftp:
     server: ""
     port: 0
-    filepath: ""
+    path: ""
     credentials:
       username: ""
       secret: ""
     max_in_flight: 1
+    max_connection_attempts: 10
+    retry_sleep_duration: 5000
 ```
 
 In order to have a different path for each object you should use function
@@ -62,7 +64,7 @@ The port to connect to on the server.
 Type: `number`  
 Default: `0`  
 
-### `filepath`
+### `path`
 
 The file to save the messages to on the server.
 
@@ -100,5 +102,21 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 Type: `number`  
 Default: `1`  
+
+### `max_connection_attempts`
+
+How many times it will try to connect to the server before exiting with an error.
+
+
+Type: `number`  
+Default: `10`  
+
+### `retry_sleep_duration`
+
+How long (in milliseconds) it will sleep after failing to connect to the server before trying again.
+
+
+Type: `number`  
+Default: `5000`  
 
 

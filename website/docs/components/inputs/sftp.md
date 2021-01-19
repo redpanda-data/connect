@@ -36,9 +36,10 @@ input:
     credentials:
       username: ""
       secret: ""
-    filepath: ""
-    directory_path: ""
+    filename: ""
+    path: ""
     max_connection_attempts: 10
+    retry_sleep_duration: 5000
     codec: lines
 ```
 
@@ -54,9 +55,10 @@ input:
     credentials:
       username: ""
       secret: ""
-    filepath: ""
-    directory_path: ""
+    filename: ""
+    path: ""
     max_connection_attempts: 10
+    retry_sleep_duration: 5000
     codec: lines
     delete_objects: false
 ```
@@ -69,7 +71,6 @@ Downloads objects via an SFTP connection.
 This input adds the following metadata fields to each message:
 ```
 - sftp_file_path
-- All user defined metadata
 ```
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
 
@@ -114,17 +115,17 @@ The secret/password for the username to connect to the SFTP server.
 Type: `string`  
 Default: `""`  
 
-### `filepath`
+### `filename`
 
-The path of the file to pull messages from. Ignored if directory_path has a value.
+The name of the file to pull messages from. If not provided, all the files in the path will be processed.
 
 
 Type: `string`  
 Default: `""`  
 
-### `directory_path`
+### `path`
 
-The path of the directory that it will process. This field overrides the filepath field.
+The path of the directory or file that it will process.
 
 
 Type: `string`  
@@ -137,6 +138,14 @@ How many times it will try to connect to the server before exiting with an error
 
 Type: `number`  
 Default: `10`  
+
+### `retry_sleep_duration`
+
+How long (in milliseconds) it will sleep after failing to connect to the server before trying again.
+
+
+Type: `number`  
+Default: `5000`  
 
 ### `codec`
 

@@ -303,7 +303,7 @@ scanLoop:
 			return
 		}
 		if err = object.scanner.Close(ctx); err != nil {
-			a.log.Warnf("Failed to close sftp object scanner cleanly: %v\n", err)
+			a.log.Warnf("Failed to close blob object scanner cleanly: %v\n", err)
 		}
 		if object.extracted == 0 {
 			a.log.Debugf("Extracted zero messages from key %v\n", object.target.key)

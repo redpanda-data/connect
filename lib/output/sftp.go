@@ -38,7 +38,7 @@ calculated per message of a batch.`,
 				"The port to connect to on the server.",
 			),
 			docs.FieldCommon(
-				"filepath",
+				"path",
 				"The file to save the messages to on the server.",
 			),
 			docs.FieldCommon(
@@ -46,6 +46,14 @@ calculated per message of a batch.`,
 				"The credentials to use to log into the server.",
 			).WithChildren(credentialsFields...),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldCommon(
+				"max_connection_attempts",
+				"How many times it will try to connect to the server before exiting with an error.",
+			),
+			docs.FieldCommon(
+				"retry_sleep_duration",
+				"How long (in milliseconds) it will sleep after failing to connect to the server before trying again.",
+			),
 		},
 		Categories: []Category{
 			CategoryNetwork,

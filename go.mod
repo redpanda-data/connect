@@ -50,7 +50,6 @@ require (
 	github.com/klauspost/compress v1.11.2 // indirect
 	github.com/lib/pq v1.8.0
 	github.com/linkedin/goavro/v2 v2.9.8
-	github.com/machinebox/progress v0.2.0
 	github.com/microcosm-cc/bluemonday v1.0.4
 	github.com/moby/term v0.0.0-20201101162038-25d840ce174a // indirect
 	github.com/nats-io/jwt v1.2.0 // indirect

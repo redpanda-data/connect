@@ -50,23 +50,26 @@ output:
   sftp:
     server: localhost
     port: $VAR1
-    filepath: $VAR2/test-$ID/${!count("$ID")}.txt
+    path: $VAR2/test-$ID/${!count("$ID")}.txt
     credentials:
         username: foo
         secret: pass
     max_in_flight: 1
+    max_connection_attempts: 3
+    retry_sleep_duration: 5000
 
 input:
   sftp:
     server: localhost
     port: $VAR1
-    directory_path: $VAR2/test-$ID
+    path: $VAR2/test-$ID
     credentials:
         username: foo
         secret: pass
-    max_connection_attempts: 10
     codec: all-bytes
     delete_objects: false
+    max_connection_attempts: 3
+    retry_sleep_duration: 5000
 `
 		integrationTests(
 			integrationTestOpenCloseIsolated(),
