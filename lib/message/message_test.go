@@ -432,6 +432,7 @@ func TestMessageSplitJSON(t *testing.T) {
 	}
 }
 
+/*
 type dummyCond struct {
 	call  func(m types.Message) bool
 	calls int
@@ -442,7 +443,6 @@ func (d *dummyCond) Check(m types.Message) bool {
 	return d.call(m)
 }
 
-/*
 func TestMessageConditionCaching(t *testing.T) {
 	msg := New([][]byte{
 		[]byte(`foo`),

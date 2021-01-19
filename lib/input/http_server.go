@@ -216,9 +216,6 @@ type HTTPServer struct {
 	mWSRateLimited metrics.StatCounter
 	mRcvd          metrics.StatCounter
 	mPartsRcvd     metrics.StatCounter
-	mSyncCount     metrics.StatCounter
-	mSyncErr       metrics.StatCounter
-	mSyncSucc      metrics.StatCounter
 	mWSCount       metrics.StatCounter
 	mTimeout       metrics.StatCounter
 	mErr           metrics.StatCounter

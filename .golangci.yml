@@ -1,0 +1,31 @@
+run:
+  build-tags:
+    # Extracted with `grep -rho '\+build.*' --include \*.go . | tr -d '!' | cut -d' ' -f2 | sort | uniq`
+    # Can't enable ZMQ4 because golangci-lint gets confused due to CGo deps
+    # - ZMQ4
+    - fuzz
+    - integration
+    # If we enable these, then files starting with `+build !windows` and
+    # `+build !wasm` will not be scanned
+    # - wasm
+    # - windows
+  timeout: 30s
+
+linters:
+  disable-all: true
+  enable:
+    # Default linters reported by golangci-lint help linters` in v1.35.2
+    # - deadcode
+    # - errcheck
+    # - gosimple
+    - govet
+    # - ineffassign
+    # - staticcheck
+    - structcheck
+    - typecheck
+    # - unused
+    - varcheck
+    # Extra linters:
+    - gofmt
+    - goimports
+    # - bodyclose

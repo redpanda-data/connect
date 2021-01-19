@@ -8,7 +8,6 @@ import (
 )
 
 type tag struct {
-	index int
 }
 
 type tagType *tag

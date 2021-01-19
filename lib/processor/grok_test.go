@@ -89,35 +89,39 @@ func TestGrok(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		conf := NewConfig()
-		conf.Grok.Parts = []int{0}
-		conf.Grok.Patterns = []string{test.pattern}
-		conf.Grok.PatternDefinitions = test.definitions
+		t.Run(test.name, func(t *testing.T) {
+			conf := NewConfig()
+			conf.Grok.Parts = []int{0}
+			conf.Grok.Patterns = []string{test.pattern}
+			conf.Grok.PatternDefinitions = test.definitions
 
-		gSet, err := NewGrok(conf, nil, tLog, tStats)
-		require.NoError(t, err)
+			gSet, err := NewGrok(conf, nil, tLog, tStats)
+			require.NoError(t, err)
 
-		inMsg := message.New([][]byte{[]byte(test.input)})
-		msgs, _ := gSet.ProcessMessage(inMsg)
-		require.Len(t, msgs, 1)
+			inMsg := message.New([][]byte{[]byte(test.input)})
+			msgs, _ := gSet.ProcessMessage(inMsg)
+			require.Len(t, msgs, 1)
 
-		assert.Equal(t, test.output, string(msgs[0].Get(0).Get()))
+			assert.Equal(t, test.output, string(msgs[0].Get(0).Get()))
+		})
 	}
 
 	for _, test := range tests {
-		conf := NewConfig()
-		conf.Grok.Parts = []int{0}
-		conf.Grok.Expressions = []string{test.pattern}
-		conf.Grok.PatternDefinitions = test.definitions
+		t.Run(test.name, func(t *testing.T) {
+			conf := NewConfig()
+			conf.Grok.Parts = []int{0}
+			conf.Grok.Expressions = []string{test.pattern}
+			conf.Grok.PatternDefinitions = test.definitions
 
-		gSet, err := NewGrok(conf, nil, tLog, tStats)
-		require.NoError(t, err)
+			gSet, err := NewGrok(conf, nil, tLog, tStats)
+			require.NoError(t, err)
 
-		inMsg := message.New([][]byte{[]byte(test.input)})
-		msgs, _ := gSet.ProcessMessage(inMsg)
-		require.Len(t, msgs, 1)
+			inMsg := message.New([][]byte{[]byte(test.input)})
+			msgs, _ := gSet.ProcessMessage(inMsg)
+			require.Len(t, msgs, 1)
 
-		assert.Equal(t, test.output, string(msgs[0].Get(0).Get()))
+			assert.Equal(t, test.output, string(msgs[0].Get(0).Get()))
+		})
 	}
 }
 

@@ -97,10 +97,9 @@ type Elasticsearch struct {
 	timeout     time.Duration
 	tlsConf     *tls.Config
 
-	idStr             field.Expression
-	indexStr          field.Expression
-	pipelineStr       field.Expression
-	interpolatedIndex bool
+	idStr       field.Expression
+	indexStr    field.Expression
+	pipelineStr field.Expression
 
 	eJSONErr metrics.StatCounter
 

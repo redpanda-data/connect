@@ -124,19 +124,21 @@ func TestJQ(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		conf := NewConfig()
-		conf.JQ.Query = test.path
+		t.Run(test.name, func(t *testing.T) {
+			conf := NewConfig()
+			conf.JQ.Query = test.path
 
-		jSet, err := NewJQ(conf, nil, log.Noop(), metrics.Noop())
-		require.NoError(t, err)
+			jSet, err := NewJQ(conf, nil, log.Noop(), metrics.Noop())
+			require.NoError(t, err)
 
-		inMsg := message.New(
-			[][]byte{
-				[]byte(test.input),
-			},
-		)
-		msgs, _ := jSet.ProcessMessage(inMsg)
-		require.Len(t, msgs, 1)
-		assert.Equal(t, test.output, string(message.GetAllBytes(msgs[0])[0]))
+			inMsg := message.New(
+				[][]byte{
+					[]byte(test.input),
+				},
+			)
+			msgs, _ := jSet.ProcessMessage(inMsg)
+			require.Len(t, msgs, 1)
+			assert.Equal(t, test.output, string(message.GetAllBytes(msgs[0])[0]))
+		})
 	}
 }

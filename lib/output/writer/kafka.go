@@ -95,8 +95,6 @@ type Kafka struct {
 	version   sarama.KafkaVersion
 	conf      KafkaConfig
 
-	mDroppedMaxBytes metrics.StatCounter
-
 	key   field.Expression
 	topic field.Expression
 

@@ -32,7 +32,6 @@ type Writer struct {
 
 	transactions <-chan types.Transaction
 
-	closeOnce      sync.Once
 	closeChan      chan struct{}
 	fullyCloseOnce sync.Once
 	fullyCloseChan chan struct{}
