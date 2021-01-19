@@ -2,9 +2,12 @@ package writer
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	bredis "github.com/Jeffail/benthos/v3/internal/service/redis"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -39,6 +42,8 @@ type RedisList struct {
 
 	conf RedisListConfig
 
+	keyStr field.Expression
+
 	client  redis.UniversalClient
 	connMut sync.RWMutex
 }
@@ -49,13 +54,16 @@ func NewRedisList(
 	log log.Modular,
 	stats metrics.Type,
 ) (*RedisList, error) {
-
 	r := &RedisList{
-		log:   log,
-		stats: stats,
-		conf:  conf,
+		log:    log,
+		stats:  stats,
+		conf:   conf,
 	}
 
+	var err error
+	if r.keyStr, err = bloblang.NewField(conf.Key); err != nil {
+		return nil, fmt.Errorf("failed to parse key expression: %v", err)
+	}
 	if _, err := conf.Config.Client(); err != nil {
 		return nil, err
 	}
@@ -83,8 +91,6 @@ func (r *RedisList) Connect() error {
 		return err
 	}
 
-	r.log.Infof("Pushing messages to Redis list: %v\n", r.conf.Key)
-
 	r.client = client
 	return nil
 }
@@ -108,7 +114,8 @@ func (r *RedisList) Write(msg types.Message) error {
 	}
 
 	return IterateBatchedSend(msg, func(i int, p types.Part) error {
-		if err := client.RPush(r.conf.Key, p.Get()).Err(); err != nil {
+		key := r.keyStr.String(i, msg)
+		if err := client.RPush(key, p.Get()).Err(); err != nil {
 			r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
 			return types.ErrNotConnected

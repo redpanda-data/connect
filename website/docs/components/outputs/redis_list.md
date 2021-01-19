@@ -58,6 +58,9 @@ output:
 </TabItem>
 </Tabs>
 
+The field `key` supports
+[interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing
+you to create a unique key for each message.
 
 ## Performance
 
@@ -211,11 +214,24 @@ Default: `""`
 
 ### `key`
 
-The key of a Redis list.
+The key for each message, function interpolations can be optionally used to create a unique key per message.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
 Default: `"benthos_list"`  
+
+```yaml
+# Examples
+
+key: benthos_list
+
+key: ${!meta("kafka_key")}
+
+key: ${!json("doc.id")}
+
+key: ${!count("msgs")}
+```
 
 ### `max_in_flight`
 
