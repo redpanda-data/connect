@@ -84,6 +84,7 @@ fmt:
 	@go mod tidy
 
 lint:
+	@go vet $(GO_FLAGS) ./...
 	@golangci-lint run cmd/... lib/...
 
 test: $(APPS)
