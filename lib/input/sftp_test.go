@@ -88,7 +88,6 @@ func TestProcessFile(t *testing.T) {
 			},
 			MaxConnectionAttempts: 10,
 			DirectoryPath:         "",
-			DirectoryMode:         false,
 			Codec:                 "lines",
 			DeleteObjects:         false,
 		},
@@ -125,7 +124,6 @@ func TestNoServer(t *testing.T) {
 			},
 			MaxConnectionAttempts: 3,
 			DirectoryPath:         "",
-			DirectoryMode:         false,
 			Codec:                 "lines",
 		},
 	}
@@ -148,7 +146,6 @@ func TestInvalidCredentials(t *testing.T) {
 			},
 			MaxConnectionAttempts: 3,
 			DirectoryPath:         "",
-			DirectoryMode:         false,
 			Codec:                 "lines",
 		},
 	}
@@ -171,7 +168,6 @@ func TestFileNotFound(t *testing.T) {
 			},
 			MaxConnectionAttempts: 10,
 			DirectoryPath:         "",
-			DirectoryMode:         false,
 			Codec:                 "lines",
 		},
 	}
@@ -206,7 +202,6 @@ func TestProcessDirectory(t *testing.T) {
 			},
 			MaxConnectionAttempts: 10,
 			DirectoryPath:         dirPath,
-			DirectoryMode:         true,
 			Codec:                 "lines",
 		},
 	}
@@ -328,15 +323,4 @@ func DeleteTestDirectory(dirPath string) {
 	if err != nil {
 		log.Printf("Error removing directory %s on SSH server", dirPath)
 	}
-}
-
-type TestResponse struct {
-}
-
-func (TestResponse) Error() error {
-	return nil
-}
-
-func (TestResponse) SkipAck() bool {
-	return true
 }

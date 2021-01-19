@@ -50,7 +50,7 @@ output:
   sftp:
     server: localhost
     port: $VAR1
-    filepath: upload/file-$ID.txt
+    filepath: $VAR2/test-$ID/${!count("$ID")}.txt
     credentials:
         username: foo
         secret: pass
@@ -60,13 +60,12 @@ input:
   sftp:
     server: localhost
     port: $VAR1
-    filepath: upload/file-$ID.txt
+    directory_path: $VAR2/test-$ID
     credentials:
         username: foo
         secret: pass
     max_connection_attempts: 10
-    directory_mode: false
-    codec: lines
+    codec: all-bytes
     delete_objects: false
 `
 		integrationTests(
@@ -75,6 +74,7 @@ input:
 		).Run(
 			t, template,
 			testOptVarOne(strconv.Itoa(sftpPort)),
+			testOptVarTwo("upload"),
 		)
 	})
 })

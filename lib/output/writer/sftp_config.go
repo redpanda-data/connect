@@ -2,7 +2,7 @@ package writer
 
 //------------------------------------------------------------------------------
 
-// AzureBlobStorageConfig contains configuration fields for the AzureBlobStorage output type.
+// SFTPConfig contains configuration fields for the SFTP output type.
 type SFTPConfig struct {
 	Server      string          `json:"server" yaml:"server"`
 	Port        int             `json:"port" yaml:"port"`
@@ -16,7 +16,7 @@ type SFTPCredentials struct {
 	Secret   string `json:"secret" yaml:"secret"`
 }
 
-// NewAzureBlobStorageConfig creates a new Config with default values.
+// NewSFTPConfig creates a new Config with default values.
 func NewSFTPConfig() SFTPConfig {
 	return SFTPConfig{
 		Server:   "",

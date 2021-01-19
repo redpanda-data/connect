@@ -418,20 +418,15 @@ INPUT_S3_SQS_ENVELOPE_PATH
 INPUT_S3_SQS_MAX_MESSAGES                            = 10
 INPUT_S3_SQS_URL
 INPUT_S3_TIMEOUT                                     = 5s
+INPUT_SFTP_CODEC                                     = lines
 INPUT_SFTP_CREDENTIALS_SECRET
 INPUT_SFTP_CREDENTIALS_USERNAME
-INPUT_SFTP_DIRECTORY_MODE                            = false
+INPUT_SFTP_DELETE_OBJECTS                            = false
 INPUT_SFTP_DIRECTORY_PATH
 INPUT_SFTP_FILEPATH
-INPUT_SFTP_FILE_CHECK_MAX_ATTEMPTS                   = 10
-INPUT_SFTP_FILE_CHECK_SLEEP_DURATION                 = 1
-INPUT_SFTP_INCLUDE_HEADER                            = false
 INPUT_SFTP_MAX_CONNECTION_ATTEMPTS                   = 10
-INPUT_SFTP_MESSAGE_DELIMITER
 INPUT_SFTP_PORT                                      = 0
-INPUT_SFTP_PROCESS_EXISTING_RECORDS                  = true
 INPUT_SFTP_SERVER
-INPUT_SFTP_WATCHER_MODE                              = false
 INPUT_SOCKET_ADDRESS                                 = /tmp/benthos.sock
 INPUT_SOCKET_DELIMITER
 INPUT_SOCKET_MAX_BUFFER                              = 1000000
@@ -1189,6 +1184,12 @@ OUTPUT_S3_PATH                                           = ${!count("files")}-${
 OUTPUT_S3_REGION                                         = eu-west-1
 OUTPUT_S3_STORAGE_CLASS                                  = STANDARD
 OUTPUT_S3_TIMEOUT                                        = 5s
+OUTPUT_SFTP_CREDENTIALS_SECRET
+OUTPUT_SFTP_CREDENTIALS_USERNAME
+OUTPUT_SFTP_FILEPATH
+OUTPUT_SFTP_MAX_IN_FLIGHT                                = 1
+OUTPUT_SFTP_PORT                                         = 0
+OUTPUT_SFTP_SERVER
 OUTPUT_SNS_CREDENTIALS_ID
 OUTPUT_SNS_CREDENTIALS_PROFILE
 OUTPUT_SNS_CREDENTIALS_ROLE

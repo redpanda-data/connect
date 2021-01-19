@@ -19,7 +19,7 @@ type dummy interface {
 	WriteWithContext(ctx context.Context, msg types.Message) error
 }
 
-// NewAzureBlobStorage returns an error as it is not supported in WASM builds.
+// NewSFTP returns an error as it is not supported in WASM builds.
 func NewSFTP(
 	conf SFTPConfig,
 	log log.Modular,

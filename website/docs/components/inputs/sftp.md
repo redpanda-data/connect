@@ -19,8 +19,16 @@ EXPERIMENTAL: This component is experimental and therefore subject to change or 
 
 Downloads objects via an SFTP connection.
 
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yaml
-# Config fields, showing default values
+# Common config fields, showing default values
 input:
   sftp:
     server: ""
@@ -29,24 +37,38 @@ input:
       username: ""
       secret: ""
     filepath: ""
-    watcher_mode: false
-    process_existing_records: true
-    include_header: false
-    message_delimiter: ""
-    max_connection_attempts: 10
-    file_check_sleep_duration: 1
-    file_check_max_attempts: 10
-    directory_mode: false
     directory_path: ""
+    max_connection_attempts: 10
+    codec: lines
 ```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+# All config fields, showing default values
+input:
+  sftp:
+    server: ""
+    port: 0
+    credentials:
+      username: ""
+      secret: ""
+    filepath: ""
+    directory_path: ""
+    max_connection_attempts: 10
+    codec: lines
+    delete_objects: false
+```
+
+</TabItem>
+</Tabs>
 
 Downloads objects via an SFTP connection.
 ## Metadata
 This input adds the following metadata fields to each message:
 ```
-- date_created
-- file_path
-- line_num
+- sftp_file_path
 - All user defined metadata
 ```
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
@@ -71,7 +93,7 @@ Default: `0`
 
 ### `credentials`
 
-The credentials to use to log into the SFTP server.
+The credentials to use to log into the server.
 
 
 Type: `object`  
@@ -94,39 +116,15 @@ Default: `""`
 
 ### `filepath`
 
-The path of the file to pull messages from. Filepath is only used if directory_mode is set to false.
+The path of the file to pull messages from. Ignored if directory_path has a value.
 
 
 Type: `string`  
 Default: `""`  
 
-### `watcher_mode`
+### `directory_path`
 
-If true, will watch for changes on the file(s) and send messages as updates are added to the file(s). Otherwise, it will exit after processing the file(s)
-
-
-Type: `bool`  
-Default: `false`  
-
-### `process_existing_records`
-
-If true, the entire file(s) will be processed. If false, only the changes made after the Benthos pipeline has been running will be processed.Only used if watcher_mode is set to true.
-
-
-Type: `bool`  
-Default: `true`  
-
-### `include_header`
-
-Whether the first line in the file(s) is sent as a message.
-
-
-Type: `bool`  
-Default: `false`  
-
-### `message_delimiter`
-
-The delimiter that separates messages, defaults to new line.
+The path of the directory that it will process. This field overrides the filepath field.
 
 
 Type: `string`  
@@ -134,42 +132,48 @@ Default: `""`
 
 ### `max_connection_attempts`
 
-Number of times it will try to connect to the server before exiting.
+How many times it will try to connect to the server before exiting with an error.
 
 
 Type: `number`  
 Default: `10`  
 
-### `file_check_sleep_duration`
+### `codec`
 
-How long it will sleep after failing to connect to the file or directory.
-
-
-Type: `number`  
-Default: `1`  
-
-### `file_check_max_attempts`
-
-Number of times it will try opening the file or directory before exiting.
+The way in which the bytes of consumed files are converted into messages, codecs are useful for specifying how large files might be processed in small chunks rather than loading it all in memory. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.
 
 
-Type: `number`  
-Default: `10`  
+Type: `string`  
+Default: `"lines"`  
 
-### `directory_mode`
+| Option | Summary |
+|---|---|
+| `auto` | EXPERIMENTAL: Attempts to derive a codec for each file based on information such as the extension. For example, a .tar.gz file would be consumed with the tar-gzip codec. Defaults to all-bytes. |
+| `all-bytes` | Consume the entire file as a single binary message. |
+| `csv` | Consume structured rows as comma separated values, the first row must be a header row. |
+| `csv-gzip` | Consume structured rows as comma separated values from a gzip compressed file, the first row must be a header row. |
+| `delim:x` | Consume the file in segments divided by a custom delimter. |
+| `lines` | Consume the file in segments divided by linebreaks. |
+| `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
+| `tar-gzip` | Parse the file as a gzip compressed tar archive, and consume each file of the archive as a message. |
 
-Whether it is processing a directory of files or a single file.
+
+```yaml
+# Examples
+
+codec: lines
+
+codec: "delim:\t"
+
+codec: delim:foobar
+```
+
+### `delete_objects`
+
+Whether to delete files from the server once they are processed.
 
 
 Type: `bool`  
 Default: `false`  
-
-### `directory_path`
-
-The path of the directory that it will process. This field is only used if directory_mode is set to true.
-
-
-Type: `string`  
-Default: `""`  
 
 

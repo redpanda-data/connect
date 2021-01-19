@@ -52,9 +52,7 @@ Downloads objects via an SFTP connection.
 ## Metadata
 This input adds the following metadata fields to each message:
 ` + "```" + `
-- date_created
-- file_path
-- line_num
+- sftp_file_path
 - All user defined metadata
 ` + "```" + `
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).`,
@@ -70,22 +68,22 @@ You can access these metadata fields using [function interpolation](/docs/config
 			),
 			docs.FieldCommon(
 				"credentials",
-				"The credentials to use to log into the SFTP server.",
+				"The credentials to use to log into the server.",
 			).WithChildren(credentialsFields...),
 			docs.FieldCommon(
 				"filepath",
-				"The path of the file to pull messages from. Filepath is only used if directory_mode is set to false.",
-			),
-			docs.FieldCommon(
-				"directory_mode",
-				"Whether it is processing a directory of files or a single file.",
+				"The path of the file to pull messages from. Ignored if directory_path has a value.",
 			),
 			docs.FieldCommon(
 				"directory_path",
-				"The path of the directory that it will process. This field is only used if directory_mode is set to true.",
+				"The path of the directory that it will process. This field overrides the filepath field.",
+			),
+			docs.FieldCommon(
+				"max_connection_attempts",
+				"How many times it will try to connect to the server before exiting with an error.",
 			),
 			codec.ReaderDocs,
-			docs.FieldAdvanced("delete_objects", "Whether to delete downloaded objects from the blob once they are processed."),
+			docs.FieldAdvanced("delete_objects", "Whether to delete files from the server once they are processed."),
 		},
 		Categories: []Category{
 			CategoryServices,
@@ -103,7 +101,6 @@ type SFTPConfig struct {
 	Filepath              string          `json:"filepath" yaml:"filepath"`
 	Credentials           SFTPCredentials `json:"credentials" yaml:"credentials"`
 	DirectoryPath         string          `json:"directory_path" yaml:"directory_path"`
-	DirectoryMode         bool            `json:"directory_mode" yaml:"directory_mode"`
 	MaxConnectionAttempts int             `json:"max_connection_attempts" yaml:"max_connection_attempts"`
 	Codec                 string          `json:"codec" yaml:"codec"`
 	DeleteObjects         bool            `json:"delete_objects" yaml:"delete_objects"`
@@ -123,7 +120,6 @@ func NewSFTPConfig() SFTPConfig {
 		Credentials:           SFTPCredentials{},
 		MaxConnectionAttempts: 10,
 		DirectoryPath:         "",
-		DirectoryMode:         false,
 		Codec:                 "lines",
 		DeleteObjects:         false,
 	}
@@ -225,7 +221,8 @@ func newSFTPTargetReader(
 ) (*sftpTargetReader, error) {
 	var files []os.FileInfo
 
-	if !conf.DirectoryMode {
+	directoryMode := conf.DirectoryPath != ""
+	if !directoryMode {
 		file, err := client.Stat(conf.Filepath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open file: %v", err)
@@ -245,7 +242,7 @@ func newSFTPTargetReader(
 
 	for _, file := range files {
 		filepath := conf.Filepath
-		if conf.DirectoryMode {
+		if directoryMode {
 			filepath = path.Join(conf.DirectoryPath, file.Name())
 		}
 		ackFn := deleteSFTPObjectAckFn(client, filepath, conf.DeleteObjects, nil)

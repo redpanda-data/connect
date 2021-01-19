@@ -462,21 +462,16 @@ input:
           sqs_url: ${INPUT_S3_SQS_URL}
           timeout: ${INPUT_S3_TIMEOUT:5s}
         sftp:
+          codec: ${INPUT_SFTP_CODEC:lines}
           credentials:
             secret: ${INPUT_SFTP_CREDENTIALS_SECRET}
             username: ${INPUT_SFTP_CREDENTIALS_USERNAME}
-          directory_mode: ${INPUT_SFTP_DIRECTORY_MODE:false}
+          delete_objects: ${INPUT_SFTP_DELETE_OBJECTS:false}
           directory_path: ${INPUT_SFTP_DIRECTORY_PATH}
-          file_check_max_attempts: ${INPUT_SFTP_FILE_CHECK_MAX_ATTEMPTS:10}
-          file_check_sleep_duration: ${INPUT_SFTP_FILE_CHECK_SLEEP_DURATION:1}
           filepath: ${INPUT_SFTP_FILEPATH}
-          include_header: ${INPUT_SFTP_INCLUDE_HEADER:false}
           max_connection_attempts: ${INPUT_SFTP_MAX_CONNECTION_ATTEMPTS:10}
-          message_delimiter: ${INPUT_SFTP_MESSAGE_DELIMITER}
           port: ${INPUT_SFTP_PORT:0}
-          process_existing_records: ${INPUT_SFTP_PROCESS_EXISTING_RECORDS:true}
           server: ${INPUT_SFTP_SERVER}
-          watcher_mode: ${INPUT_SFTP_WATCHER_MODE:false}
         socket:
           address: ${INPUT_SOCKET_ADDRESS:/tmp/benthos.sock}
           delimiter: ${INPUT_SOCKET_DELIMITER}
@@ -1416,6 +1411,14 @@ output:
           region: ${OUTPUT_S3_REGION:eu-west-1}
           storage_class: ${OUTPUT_S3_STORAGE_CLASS:STANDARD}
           timeout: ${OUTPUT_S3_TIMEOUT:5s}
+        sftp:
+          credentials:
+            secret: ${OUTPUT_SFTP_CREDENTIALS_SECRET}
+            username: ${OUTPUT_SFTP_CREDENTIALS_USERNAME}
+          filepath: ${OUTPUT_SFTP_FILEPATH}
+          max_in_flight: ${OUTPUT_SFTP_MAX_IN_FLIGHT:1}
+          port: ${OUTPUT_SFTP_PORT:0}
+          server: ${OUTPUT_SFTP_SERVER}
         sns:
           credentials:
             id: ${OUTPUT_SNS_CREDENTIALS_ID}

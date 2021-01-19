@@ -6,10 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
@@ -27,10 +29,8 @@ type SFTP struct {
 
 	client *sftp.Client
 
-	container   field.Expression
-	path        field.Expression
-	blobType    field.Expression
-	accessLevel field.Expression
+	server   field.Expression
+	filepath field.Expression
 
 	log   log.Modular
 	stats metrics.Type
@@ -53,6 +53,10 @@ func NewSFTP(
 		return nil, fmt.Errorf("failed to connect to SFTP server: %v", err)
 	}
 
+	if s.filepath, err = bloblang.NewField(conf.Filepath); err != nil {
+		return nil, fmt.Errorf("failed to parse filepath expression: %v", err)
+	}
+
 	return s, nil
 }
 
@@ -71,27 +75,35 @@ func (s *SFTP) Write(msg types.Message) error {
 	return s.WriteWithContext(context.Background(), msg)
 }
 
-// WriteWithContext attempts to write message contents to a target storage account as files.
+// WriteWithContext attempts to write message contents to a target file via an SFTP connection.
 func (s *SFTP) WriteWithContext(_ context.Context, msg types.Message) error {
 	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		var file *sftp.File
-		_, err := s.client.Stat(s.conf.Filepath)
+		path := s.filepath.String(i, msg)
+		_, err := s.client.Stat(path)
 
 		if err != nil {
-			file, err = s.client.Create(s.conf.Filepath)
+			dir := filepath.Dir(path)
+			err = s.client.MkdirAll(dir)
+			if err != nil {
+				s.log.Errorf("Error creating directories: %v", err)
+				return err
+			}
+
+			file, err = s.client.Create(path)
 			if err != nil {
 				s.log.Errorf("Error creating file: %v", err)
 				return err
 			}
 		} else {
-			file, err = s.client.OpenFile(s.conf.Filepath, os.O_APPEND|os.O_RDWR)
+			file, err = s.client.OpenFile(path, os.O_APPEND|os.O_RDWR)
 			if err != nil {
 				s.log.Errorf("Error opening file: %v", err)
 				return err
 			}
 		}
 
-		str := string(p.Get()) + "\n"
+		str := string(p.Get())
 		_, err = file.Write([]byte(str))
 
 		if err != nil {
