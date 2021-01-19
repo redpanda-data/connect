@@ -55,9 +55,9 @@ func NewRedisList(
 	stats metrics.Type,
 ) (*RedisList, error) {
 	r := &RedisList{
-		log:    log,
-		stats:  stats,
-		conf:   conf,
+		log:   log,
+		stats: stats,
+		conf:  conf,
 	}
 
 	var err error

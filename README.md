@@ -126,6 +126,16 @@ cd benthos
 make
 ```
 
+## Lint
+
+Benthos uses [golangci-lint][golangci-lint] for linting, which you can install with:
+
+```shell
+curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.35.2
+```
+
+And then run it with `make lint`.
+
 ### Plugins
 
 It's pretty easy to write your own custom plugins for Benthos, take a look at [this repo][plugin-repo] for examples and build instructions.
@@ -197,4 +207,5 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come a
 
 [community]: https://www.benthos.dev/community
 
+[golangci-lint]: https://golangci-lint.run/
 [jaeger]: https://www.jaegertracing.io/
