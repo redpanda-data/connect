@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - The `cassandra` outputs `backoff.max_elapsed_time` field was unused and has been hidden from docs.
+- Field `key` in output `redis_list` now supports interpolation functions.
 
 ## 3.37.0 - 2021-01-06
 
