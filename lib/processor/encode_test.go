@@ -212,6 +212,9 @@ func TestEncodeZ85(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Errorf("Expected to process a message")
 	}
+	if res != nil {
+		t.Errorf("Expected nil response")
+	}
 	msgs[0].Iter(func(i int, p types.Part) error {
 		if len(input[i])%4 == 0 && HasFailed(p) {
 			t.Errorf("Unexpected fail flag on part %d", i)

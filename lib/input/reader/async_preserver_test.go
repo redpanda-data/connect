@@ -315,7 +315,7 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	aFn(ctx, response.NewAck())
 	aFn2(ctx, response.NewAck())
 
-	msg, aFn, err = pres.ReadWithContext(ctx)
+	msg, _, err = pres.ReadWithContext(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
