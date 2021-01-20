@@ -151,7 +151,12 @@ func (s *SFTP) initSFTPConnection() error {
 				s.log.Errorf("Failed to connect after %i attempts, stopping", connectionAttempts)
 				return errors.New("failed to connect to SFTP server")
 			}
-			time.Sleep(time.Millisecond * time.Duration(s.conf.RetrySleepDuration))
+
+			var sleepDuration time.Duration
+			if sleepDuration, err = time.ParseDuration(s.conf.RetrySleepDuration); err != nil {
+				return fmt.Errorf("failed to parse retry sleep duration: %v", err)
+			}
+			time.Sleep(sleepDuration)
 		} else {
 			break
 		}

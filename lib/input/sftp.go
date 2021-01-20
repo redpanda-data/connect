@@ -81,9 +81,10 @@ You can access these metadata fields using [function interpolation](/docs/config
 				"max_connection_attempts",
 				"How many times it will try to connect to the server before exiting with an error.",
 			),
-			docs.FieldCommon(
+			docs.FieldAdvanced(
 				"retry_sleep_duration",
-				"How long (in milliseconds) it will sleep after failing to connect to the server before trying again.",
+				"How long it will sleep after failing to connect to the server before trying again, defaults to 5s if not provided.",
+				"10s", "5m",
 			),
 			codec.ReaderDocs,
 			docs.FieldAdvanced("delete_objects", "Whether to delete files from the server once they are processed."),
@@ -105,7 +106,7 @@ type SFTPConfig struct {
 	Credentials           SFTPCredentials `json:"credentials" yaml:"credentials"`
 	Path                  string          `json:"path" yaml:"path"`
 	MaxConnectionAttempts int             `json:"max_connection_attempts" yaml:"max_connection_attempts"`
-	RetrySleepDuration    int             `json:"retry_sleep_duration" yaml:"retry_sleep_duration"`
+	RetrySleepDuration    string          `json:"retry_sleep_duration" yaml:"retry_sleep_duration"`
 	Codec                 string          `json:"codec" yaml:"codec"`
 	DeleteObjects         bool            `json:"delete_objects" yaml:"delete_objects"`
 }
@@ -123,7 +124,7 @@ func NewSFTPConfig() SFTPConfig {
 		Filename:              "",
 		Credentials:           SFTPCredentials{},
 		MaxConnectionAttempts: 10,
-		RetrySleepDuration:    5000,
+		RetrySleepDuration:    "5s",
 		Path:                  "",
 		Codec:                 "lines",
 		DeleteObjects:         false,
@@ -372,7 +373,11 @@ func (s *SFTP) initSFTPConnection() error {
 				s.log.Errorf("Failed to connect after %i attempts, stopping", connectionAttempts)
 				return errors.New("failed to connect to SFTP server")
 			}
-			time.Sleep(time.Millisecond * time.Duration(s.conf.RetrySleepDuration))
+			var sleepDuration time.Duration
+			if sleepDuration, err = time.ParseDuration(s.conf.RetrySleepDuration); err != nil {
+				return fmt.Errorf("failed to parse retry sleep duration: %v", err)
+			}
+			time.Sleep(sleepDuration)
 		} else {
 			break
 		}

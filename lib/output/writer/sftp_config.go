@@ -10,7 +10,7 @@ type SFTPConfig struct {
 	Credentials           SFTPCredentials `json:"credentials" yaml:"credentials"`
 	MaxInFlight           int             `json:"max_in_flight" yaml:"max_in_flight"`
 	MaxConnectionAttempts int             `json:"max_connection_attempts" yaml:"max_connection_attempts"`
-	RetrySleepDuration    int             `json:"retry_sleep_duration" yaml:"retry_sleep_duration"`
+	RetrySleepDuration    string          `json:"retry_sleep_duration" yaml:"retry_sleep_duration"`
 }
 
 type SFTPCredentials struct {
@@ -30,7 +30,7 @@ func NewSFTPConfig() SFTPConfig {
 		},
 		MaxInFlight:           1,
 		MaxConnectionAttempts: 10,
-		RetrySleepDuration:    5000,
+		RetrySleepDuration:    "5s",
 	}
 }
 

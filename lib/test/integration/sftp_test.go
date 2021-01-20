@@ -56,7 +56,7 @@ output:
         secret: pass
     max_in_flight: 1
     max_connection_attempts: 3
-    retry_sleep_duration: 5000
+    retry_sleep_duration: 5s
 
 input:
   sftp:
@@ -69,7 +69,7 @@ input:
     codec: all-bytes
     delete_objects: false
     max_connection_attempts: 3
-    retry_sleep_duration: 5000
+    retry_sleep_duration: 5s
 `
 		integrationTests(
 			integrationTestOpenCloseIsolated(),

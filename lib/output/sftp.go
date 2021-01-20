@@ -50,9 +50,10 @@ calculated per message of a batch.`,
 				"max_connection_attempts",
 				"How many times it will try to connect to the server before exiting with an error.",
 			),
-			docs.FieldCommon(
+			docs.FieldAdvanced(
 				"retry_sleep_duration",
-				"How long (in milliseconds) it will sleep after failing to connect to the server before trying again.",
+				"How long it will sleep after failing to connect to the server before trying again, defaults to 5s if not provided.",
+				"10s", "5m",
 			),
 		},
 		Categories: []Category{
