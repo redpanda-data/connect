@@ -175,6 +175,7 @@ func (s *SFTP) initSFTPConnection() error {
 	return err
 }
 
+// SFTPServer contains connection data for connecting to an SFTP server
 type SFTPServer struct {
 	Address   string          // host:port
 	Host      string          // IP address
@@ -186,16 +187,16 @@ type SFTPServer struct {
 	PublicKey ssh.PublicKey   // server's public key
 }
 
-type HostAuthorityCallBack func(ssh.PublicKey, string) bool
-type IsRevokedCallback func(cert *ssh.Certificate) bool
+type hostAuthorityCallBack func(ssh.PublicKey, string) bool
+type isRevokedCallback func(cert *ssh.Certificate) bool
 
-func hostAuthCallback() HostAuthorityCallBack {
+func hostAuthCallback() hostAuthorityCallBack {
 	return func(p ssh.PublicKey, addr string) bool {
 		return true
 	}
 }
 
-func certCallback(s *SFTPServer) IsRevokedCallback {
+func certCallback(s *SFTPServer) isRevokedCallback {
 	return func(cert *ssh.Certificate) bool {
 		s.Cert = *cert
 		s.IsSSH = true

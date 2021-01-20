@@ -111,6 +111,7 @@ type SFTPConfig struct {
 	DeleteObjects         bool            `json:"delete_objects" yaml:"delete_objects"`
 }
 
+// SFTPCredentials contains the credentials for connecting to the SFTP server
 type SFTPCredentials struct {
 	Username string `json:"username" yaml:"username"`
 	Secret   string `json:"secret" yaml:"secret"`
@@ -133,6 +134,8 @@ func NewSFTPConfig() SFTPConfig {
 
 //------------------------------------------------------------------------------
 
+// SFTP is a benthos reader.Type implementation that reads messages
+// from file(s) on an SFTP server.
 type SFTP struct {
 	conf SFTPConfig
 
@@ -148,6 +151,7 @@ type SFTP struct {
 	object    *sftpPendingObject
 }
 
+// NewSFTP creates a new SFTP input type.
 func NewSFTP(conf SFTPConfig, log log.Modular, stats metrics.Type) (*SFTP, error) {
 	var err error
 	var objectScannerCtor codec.ReaderConstructor
@@ -172,6 +176,7 @@ type sftpObjectTarget struct {
 	ackFn func(context.Context, error) error
 }
 
+// ConnectWithContext attempts to establish a connection to the target SFTP server.
 func (s *SFTP) ConnectWithContext(ctx context.Context) error {
 	var err error
 	s.keyReader, err = newSFTPTargetReader(ctx, s.conf, s.log, s.client)
@@ -278,6 +283,7 @@ func newSFTPObjectTarget(key string, ackFn codec.ReaderAckFn) *sftpObjectTarget 
 	return &sftpObjectTarget{key: key, ackFn: ackFn}
 }
 
+// ReadWithContext attempts to read a new message from the target file(s) on the server.
 func (s *SFTP) ReadWithContext(ctx context.Context) (msg types.Message, ackFn reader.AsyncAckFn, err error) {
 	s.objectMut.Lock()
 	defer s.objectMut.Unlock()
@@ -432,6 +438,7 @@ func (s *SFTP) getObjectTarget(ctx context.Context) (*sftpPendingObject, error) 
 	return object, nil
 }
 
+// SFTPServer contains connection data for connecting to an SFTP server
 type SFTPServer struct {
 	Address   string          // host:port
 	Host      string          // IP address
@@ -443,16 +450,16 @@ type SFTPServer struct {
 	PublicKey ssh.PublicKey   // server's public key
 }
 
-type HostAuthorityCallBack func(ssh.PublicKey, string) bool
-type IsRevokedCallback func(cert *ssh.Certificate) bool
+type hostAuthorityCallBack func(ssh.PublicKey, string) bool
+type isRevokedCallback func(cert *ssh.Certificate) bool
 
-func hostAuthCallback() HostAuthorityCallBack {
+func hostAuthCallback() hostAuthorityCallBack {
 	return func(p ssh.PublicKey, addr string) bool {
 		return true
 	}
 }
 
-func certCallback(s *SFTPServer) IsRevokedCallback {
+func certCallback(s *SFTPServer) isRevokedCallback {
 	return func(cert *ssh.Certificate) bool {
 		s.Cert = *cert
 		s.IsSSH = true
@@ -469,6 +476,7 @@ func hostCallback(s *SFTPServer) ssh.HostKeyCallback {
 	}
 }
 
+// CloseAsync begins cleaning up resources used by this reader asynchronously.
 func (s *SFTP) CloseAsync() {
 	go func() {
 		s.objectMut.Lock()
@@ -480,6 +488,8 @@ func (s *SFTP) CloseAsync() {
 	}()
 }
 
+// WaitForClose will block until either the reader is closed or a specified
+// timeout occurs.
 func (s *SFTP) WaitForClose(timeout time.Duration) error {
 	return nil
 }

@@ -13,6 +13,7 @@ type SFTPConfig struct {
 	RetrySleepDuration    string          `json:"retry_sleep_duration" yaml:"retry_sleep_duration"`
 }
 
+// SFTPCredentials contains the credentials for connecting to the SFTP server
 type SFTPCredentials struct {
 	Username string `json:"username" yaml:"username"`
 	Secret   string `json:"secret" yaml:"secret"`
