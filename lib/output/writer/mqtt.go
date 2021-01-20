@@ -155,7 +155,7 @@ func (m *MQTT) Write(msg types.Message) error {
 		mtok := client.Publish(m.topic.String(i, msg), byte(m.conf.QoS), false, p.Get())
 		mtok.Wait()
 		sendErr := mtok.Error()
-		if sendErr != nil && strings.Contains(sendErr.Error(), "Not Connected") {
+		if sendErr == mqtt.ErrNotConnected {
 			m.connMut.RLock()
 			m.client = nil
 			m.connMut.RUnlock()
