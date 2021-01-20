@@ -8,8 +8,6 @@ import (
 )
 
 var _ = registerIntegrationTest("sftp", func(t *testing.T) {
-	//t.Skip()
-
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
