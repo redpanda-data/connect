@@ -426,7 +426,7 @@ INPUT_SFTP_FILENAME
 INPUT_SFTP_MAX_CONNECTION_ATTEMPTS                   = 10
 INPUT_SFTP_PATH
 INPUT_SFTP_PORT                                      = 0
-INPUT_SFTP_RETRY_SLEEP_DURATION                      = 5000
+INPUT_SFTP_RETRY_SLEEP_DURATION                      = 5s
 INPUT_SFTP_SERVER
 INPUT_SOCKET_ADDRESS                                 = /tmp/benthos.sock
 INPUT_SOCKET_DELIMITER
@@ -1191,7 +1191,7 @@ OUTPUT_SFTP_MAX_CONNECTION_ATTEMPTS                      = 10
 OUTPUT_SFTP_MAX_IN_FLIGHT                                = 1
 OUTPUT_SFTP_PATH
 OUTPUT_SFTP_PORT                                         = 0
-OUTPUT_SFTP_RETRY_SLEEP_DURATION                         = 5000
+OUTPUT_SFTP_RETRY_SLEEP_DURATION                         = 5s
 OUTPUT_SFTP_SERVER
 OUTPUT_SNS_CREDENTIALS_ID
 OUTPUT_SNS_CREDENTIALS_PROFILE

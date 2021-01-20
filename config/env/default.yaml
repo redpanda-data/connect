@@ -471,7 +471,7 @@ input:
           max_connection_attempts: ${INPUT_SFTP_MAX_CONNECTION_ATTEMPTS:10}
           path: ${INPUT_SFTP_PATH}
           port: ${INPUT_SFTP_PORT:0}
-          retry_sleep_duration: ${INPUT_SFTP_RETRY_SLEEP_DURATION:5000}
+          retry_sleep_duration: ${INPUT_SFTP_RETRY_SLEEP_DURATION:5s}
           server: ${INPUT_SFTP_SERVER}
         socket:
           address: ${INPUT_SOCKET_ADDRESS:/tmp/benthos.sock}
@@ -1420,7 +1420,7 @@ output:
           max_in_flight: ${OUTPUT_SFTP_MAX_IN_FLIGHT:1}
           path: ${OUTPUT_SFTP_PATH}
           port: ${OUTPUT_SFTP_PORT:0}
-          retry_sleep_duration: ${OUTPUT_SFTP_RETRY_SLEEP_DURATION:5000}
+          retry_sleep_duration: ${OUTPUT_SFTP_RETRY_SLEEP_DURATION:5s}
           server: ${OUTPUT_SFTP_SERVER}
         sns:
           credentials:

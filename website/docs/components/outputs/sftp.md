@@ -21,8 +21,16 @@ Sends message parts as objects to a file via an SFTP connection.
 
 Introduced in version 3.36.0.
 
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yaml
-# Config fields, showing default values
+# Common config fields, showing default values
 output:
   sftp:
     server: ""
@@ -33,8 +41,28 @@ output:
       secret: ""
     max_in_flight: 1
     max_connection_attempts: 10
-    retry_sleep_duration: 5000
 ```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+# All config fields, showing default values
+output:
+  sftp:
+    server: ""
+    port: 0
+    path: ""
+    credentials:
+      username: ""
+      secret: ""
+    max_in_flight: 1
+    max_connection_attempts: 10
+    retry_sleep_duration: 5s
+```
+
+</TabItem>
+</Tabs>
 
 In order to have a different path for each object you should use function
 interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
@@ -113,10 +141,18 @@ Default: `10`
 
 ### `retry_sleep_duration`
 
-How long (in milliseconds) it will sleep after failing to connect to the server before trying again.
+How long it will sleep after failing to connect to the server before trying again, defaults to 5s if not provided.
 
 
-Type: `number`  
-Default: `5000`  
+Type: `string`  
+Default: `"5s"`  
+
+```yaml
+# Examples
+
+retry_sleep_duration: 10s
+
+retry_sleep_duration: 5m
+```
 
 

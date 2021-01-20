@@ -39,7 +39,6 @@ input:
     filename: ""
     path: ""
     max_connection_attempts: 10
-    retry_sleep_duration: 5000
     codec: lines
 ```
 
@@ -58,7 +57,7 @@ input:
     filename: ""
     path: ""
     max_connection_attempts: 10
-    retry_sleep_duration: 5000
+    retry_sleep_duration: 5s
     codec: lines
     delete_objects: false
 ```
@@ -141,11 +140,19 @@ Default: `10`
 
 ### `retry_sleep_duration`
 
-How long (in milliseconds) it will sleep after failing to connect to the server before trying again.
+How long it will sleep after failing to connect to the server before trying again, defaults to 5s if not provided.
 
 
-Type: `number`  
-Default: `5000`  
+Type: `string`  
+Default: `"5s"`  
+
+```yaml
+# Examples
+
+retry_sleep_duration: 10s
+
+retry_sleep_duration: 5m
+```
 
 ### `codec`
 

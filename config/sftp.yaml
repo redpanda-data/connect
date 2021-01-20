@@ -17,7 +17,7 @@ input:
     max_connection_attempts: 10
     path: ""
     port: 0
-    retry_sleep_duration: 5000
+    retry_sleep_duration: 5s
     server: ""
 buffer:
   type: none
@@ -35,7 +35,7 @@ output:
     max_in_flight: 1
     path: ""
     port: 0
-    retry_sleep_duration: 5000
+    retry_sleep_duration: 5s
     server: ""
 resources:
   caches: {}
