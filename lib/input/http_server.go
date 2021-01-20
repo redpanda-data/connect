@@ -349,7 +349,6 @@ func extractMessageFromRequest(r *http.Request) (types.Message, error) {
 			var p *multipart.Part
 			if p, err = mr.NextPart(); err != nil {
 				if err == io.EOF {
-					err = nil
 					break
 				}
 				return nil, err

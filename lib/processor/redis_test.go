@@ -116,10 +116,16 @@ func testRedisSAdd(t *testing.T, client *redis.Client, url string) {
 	}
 
 	res, err := client.SCard("foo1").Result()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if exp, act := 2, int(res); exp != act {
 		t.Errorf("Wrong cardinality of set 1: %v != %v", act, exp)
 	}
 	res, err = client.SCard("foo2").Result()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if exp, act := 3, int(res); exp != act {
 		t.Errorf("Wrong cardinality of set 2: %v != %v", act, exp)
 	}
