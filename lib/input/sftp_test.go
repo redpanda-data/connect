@@ -29,8 +29,6 @@ var sftpDirectory = "/upload"
 var sftpPort int
 
 func TestMain(m *testing.M) {
-	os.Exit(0)
-
 	//pool, err := dockertest.NewPool("")
 	//if err != nil {
 	//	log.Fatalf("Could not connect to docker: %s", err)
