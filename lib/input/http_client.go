@@ -41,7 +41,7 @@ then line feed (\n) is used.`).HasType("string"),
 
 func init() {
 	Constructors[TypeHTTPClient] = TypeSpec{
-		constructor: NewHTTPClient,
+		constructor: fromSimpleConstructor(NewHTTPClient),
 		Summary: `
 Connects to a server and continuously performs requests for a single message.`,
 		Description: `

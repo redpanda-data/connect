@@ -21,7 +21,7 @@ import (
 
 func init() {
 	Constructors[TypeSocketServer] = TypeSpec{
-		constructor: NewSocketServer,
+		constructor: fromSimpleConstructor(NewSocketServer),
 		Summary: `
 Creates a server that receives messages over a (tcp/udp/unix) socket. Each
 connection is parsed as a continuous stream of line delimited messages.`,

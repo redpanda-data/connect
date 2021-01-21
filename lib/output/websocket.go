@@ -13,7 +13,7 @@ import (
 
 func init() {
 	Constructors[TypeWebsocket] = TypeSpec{
-		constructor: NewWebsocket,
+		constructor: fromSimpleConstructor(NewWebsocket),
 		Summary: `
 Sends messages to an HTTP server via a websocket connection.`,
 		FieldSpecs: docs.FieldSpecs{

@@ -13,7 +13,7 @@ import (
 
 func init() {
 	Constructors[TypeNSQ] = TypeSpec{
-		constructor: NewNSQ,
+		constructor: fromSimpleConstructor(NewNSQ),
 		Summary: `
 Publish to an NSQ topic.`,
 		Description: `

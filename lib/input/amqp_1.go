@@ -14,7 +14,7 @@ import (
 
 func init() {
 	Constructors[TypeAMQP1] = TypeSpec{
-		constructor: NewAMQP1,
+		constructor: fromSimpleConstructor(NewAMQP1),
 		Status:      docs.StatusBeta,
 		Summary: `
 Reads messages from an AMQP (1.0) server.`,

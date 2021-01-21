@@ -21,7 +21,7 @@ import (
 
 func init() {
 	Constructors[TypeReadUntil] = TypeSpec{
-		constructor: NewReadUntil,
+		constructor: fromSimpleConstructor(NewReadUntil),
 		Summary: `
 Reads messages from a child input until a consumed message passes a [Bloblang query](/docs/guides/bloblang/about/), at which point the input closes.`,
 		Description: `

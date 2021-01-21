@@ -15,9 +15,8 @@ import (
 
 func init() {
 	Constructors[TypeKafkaBalanced] = TypeSpec{
-		constructor:                  NewKafkaBalanced,
-		constructorHasBatchProcessor: newKafkaBalancedHasBatchProcessor,
-		Status:                       docs.StatusDeprecated,
+		constructor: fromBatchAwareConstructor(newKafkaBalancedHasBatchProcessor),
+		Status:      docs.StatusDeprecated,
 		Summary: `
 Connects to Kafka brokers and consumes topics by automatically sharing
 partitions across other consumers of the same consumer group.`,

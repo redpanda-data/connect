@@ -17,7 +17,7 @@ import (
 
 func init() {
 	Constructors[TypeElasticsearch] = TypeSpec{
-		constructor: NewElasticsearch,
+		constructor: fromSimpleConstructor(NewElasticsearch),
 		Summary: `
 Publishes messages into an Elasticsearch index. If the index does not exist then
 it is created with a dynamic mapping.`,

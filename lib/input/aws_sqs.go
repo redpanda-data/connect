@@ -24,13 +24,13 @@ import (
 func init() {
 	Constructors[TypeAWSSQS] = TypeSpec{
 		Status: docs.StatusBeta,
-		constructor: func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 			r, err := newAWSSQS(conf.AWSSQS, log, stats)
 			if err != nil {
 				return nil, err
 			}
 			return NewAsyncReader(TypeAWSSQS, false, r, log, stats)
-		},
+		}),
 		Summary: `
 Consume messages from an AWS SQS URL.`,
 		Description: `

@@ -12,7 +12,7 @@ import (
 
 func init() {
 	Constructors[TypeAzureBlobStorage] = TypeSpec{
-		constructor: NewAzureBlobStorage,
+		constructor: fromSimpleConstructor(NewAzureBlobStorage),
 		Status:      docs.StatusBeta,
 		Version:     "3.36.0",
 		Summary: `
@@ -68,7 +68,7 @@ calculated per message of a batch.`,
 	}
 
 	Constructors[TypeBlobStorage] = TypeSpec{
-		constructor: newDeprecatedBlobStorage,
+		constructor: fromSimpleConstructor(newDeprecatedBlobStorage),
 		Status:      docs.StatusDeprecated,
 		Summary:     "This component has been renamed to [`azure_blob_storage`](/docs/components/outputs/azure_blob_storage).",
 		Async:       true,

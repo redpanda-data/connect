@@ -17,7 +17,7 @@ import (
 
 func init() {
 	Constructors[TypeSequence] = TypeSpec{
-		constructor: NewSequence,
+		constructor: fromSimpleConstructor(NewSequence),
 		Summary: `
 Reads messages from a sequence of child inputs, starting with the first and once
 that input gracefully terminates starts consuming from the next, and so on.`,

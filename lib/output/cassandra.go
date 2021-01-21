@@ -26,7 +26,7 @@ import (
 
 func init() {
 	Constructors[TypeCassandra] = TypeSpec{
-		constructor: func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 			c, err := newCassandraWriter(conf.Cassandra, log, stats)
 			if err != nil {
 				return nil, err
@@ -38,7 +38,7 @@ func init() {
 				return nil, err
 			}
 			return newBatcherFromConf(conf.Cassandra.Batching, w, mgr, log, stats)
-		},
+		}),
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
 			return sanitiseWithBatch(conf.Cassandra, conf.Cassandra.Batching)
 		},

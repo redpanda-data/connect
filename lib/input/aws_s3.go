@@ -29,7 +29,7 @@ import (
 
 func init() {
 	Constructors[TypeAWSS3] = TypeSpec{
-		constructor: func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 			r, err := newAmazonS3(conf.AWSS3, log, stats)
 			if err != nil {
 				return nil, err
@@ -42,7 +42,7 @@ func init() {
 				),
 				log, stats,
 			)
-		},
+		}),
 		Status: docs.StatusBeta,
 		Summary: `
 Downloads objects within an Amazon S3 bucket, optionally filtered by a prefix, either by walking the items in the bucket or by streaming upload notifications in realtime.`,

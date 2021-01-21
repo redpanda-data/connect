@@ -14,7 +14,7 @@ import (
 
 func init() {
 	Constructors[TypeHTTPClient] = TypeSpec{
-		constructor: NewHTTPClient,
+		constructor: fromSimpleConstructor(NewHTTPClient),
 		Summary: `
 Sends messages to an HTTP server.`,
 		Description: `

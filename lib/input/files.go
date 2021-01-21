@@ -12,7 +12,7 @@ import (
 
 func init() {
 	Constructors[TypeFiles] = TypeSpec{
-		constructor: NewFiles,
+		constructor: fromSimpleConstructor(NewFiles),
 		Status:      docs.StatusDeprecated,
 		Summary: `
 Reads files from a path, where each discrete file will be consumed as a single

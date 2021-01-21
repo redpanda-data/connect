@@ -14,7 +14,7 @@ import (
 
 func init() {
 	Constructors[TypeKinesisBalanced] = TypeSpec{
-		constructor: NewKinesisBalanced,
+		constructor: fromSimpleConstructor(NewKinesisBalanced),
 		Status:      docs.StatusDeprecated,
 		Summary: `
 Receives messages from a Kinesis stream and automatically balances shards across

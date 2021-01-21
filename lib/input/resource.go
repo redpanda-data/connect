@@ -14,7 +14,7 @@ import (
 
 func init() {
 	Constructors[TypeResource] = TypeSpec{
-		constructor: NewResource,
+		constructor: fromSimpleConstructor(NewResource),
 		Summary: `
 Resource is an input type that runs a resource input by its name. This input
 allows you to run the same configured input resource in multiple places.`,

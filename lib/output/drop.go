@@ -11,7 +11,7 @@ import (
 
 func init() {
 	Constructors[TypeDrop] = TypeSpec{
-		constructor: NewDrop,
+		constructor: fromSimpleConstructor(NewDrop),
 		Summary: `
 Drops all messages.`,
 		Categories: []Category{

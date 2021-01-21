@@ -13,7 +13,7 @@ import (
 
 func init() {
 	Constructors[TypeInproc] = TypeSpec{
-		constructor: NewInproc,
+		constructor: fromSimpleConstructor(NewInproc),
 		Description: `
 Directly connect to an output within a Benthos process by referencing it by a
 chosen ID. This allows you to hook up isolated streams whilst running Benthos in

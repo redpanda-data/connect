@@ -21,7 +21,7 @@ import (
 
 func init() {
 	Constructors[TypeFile] = TypeSpec{
-		constructor: NewFile,
+		constructor: fromSimpleConstructor(NewFile),
 		Summary: `
 Writes messages to files on disk based on a chosen codec.`,
 		Description: `

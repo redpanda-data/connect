@@ -27,8 +27,7 @@ var (
 
 func init() {
 	Constructors[TypeBroker] = TypeSpec{
-		brokerConstructor:                  NewBroker,
-		brokerConstructorHasBatchProcessor: newBrokerHasBatchProcessor,
+		constructor: newBrokerHasBatchProcessor,
 		Summary: `
 Allows you to combine multiple inputs, where each input will be read in
 parallel.`,

@@ -13,7 +13,7 @@ import (
 
 func init() {
 	Constructors[TypeRedisPubSub] = TypeSpec{
-		constructor: NewRedisPubSub,
+		constructor: fromSimpleConstructor(NewRedisPubSub),
 		Summary: `
 Consume from a Redis publish/subscribe channel using either the SUBSCRIBE or
 PSUBSCRIBE commands.`,

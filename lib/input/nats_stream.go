@@ -12,7 +12,7 @@ import (
 
 func init() {
 	Constructors[TypeNATSStream] = TypeSpec{
-		constructor: NewNATSStream,
+		constructor: fromSimpleConstructor(NewNATSStream),
 		Summary: `
 Subscribe to a NATS Stream subject. Joining a queue is optional and allows
 multiple clients of a subject to consume using queue semantics.`,

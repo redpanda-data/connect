@@ -13,7 +13,7 @@ import (
 
 func init() {
 	Constructors[TypeNSQ] = TypeSpec{
-		constructor: NewNSQ,
+		constructor: fromSimpleConstructor(NewNSQ),
 		Summary: `
 Subscribe to an NSQ instance topic and channel.`,
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {

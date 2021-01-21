@@ -22,13 +22,13 @@ import (
 
 func init() {
 	Constructors[TypeSubprocess] = TypeSpec{
-		constructor: func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 			b, err := newSubprocess(conf.Subprocess)
 			if err != nil {
 				return nil, err
 			}
 			return NewAsyncReader(TypeSubprocess, true, b, log, stats)
-		},
+		}),
 		Status: docs.StatusBeta,
 		Summary: `
 Executes a command, runs it as a subprocess, and consumes messages from it over stdout.`,

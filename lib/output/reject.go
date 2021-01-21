@@ -17,13 +17,13 @@ import (
 
 func init() {
 	Constructors[TypeReject] = TypeSpec{
-		constructor: func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 			f, err := newRejectWriter(string(conf.Reject))
 			if err != nil {
 				return nil, err
 			}
 			return NewAsyncWriter(TypeReject, 1, f, log, stats)
-		},
+		}),
 		Status: docs.StatusBeta,
 		Summary: `
 Rejects all messages, treating them as though the output destination failed to publish them.`,

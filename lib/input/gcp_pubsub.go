@@ -12,7 +12,7 @@ import (
 
 func init() {
 	Constructors[TypeGCPPubSub] = TypeSpec{
-		constructor: NewGCPPubSub,
+		constructor: fromSimpleConstructor(NewGCPPubSub),
 		Summary: `
 Consumes messages from a GCP Cloud Pub/Sub subscription.`,
 		Description: `

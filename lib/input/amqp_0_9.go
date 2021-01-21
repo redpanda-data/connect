@@ -13,7 +13,7 @@ import (
 
 func init() {
 	Constructors[TypeAMQP09] = TypeSpec{
-		constructor: NewAMQP09,
+		constructor: fromSimpleConstructor(NewAMQP09),
 		Summary: `
 Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various
 message brokers, including RabbitMQ.`,

@@ -28,13 +28,13 @@ import (
 
 func init() {
 	Constructors[TypeAWSKinesis] = TypeSpec{
-		constructor: func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 			rdr, err := newKinesisReader(conf.AWSKinesis, mgr, log, stats)
 			if err != nil {
 				return nil, err
 			}
 			return NewAsyncReader(TypeKinesis, false, reader.NewAsyncPreserver(rdr), log, stats)
-		},
+		}),
 		Status:  docs.StatusBeta,
 		Version: "3.36.0",
 		Summary: `

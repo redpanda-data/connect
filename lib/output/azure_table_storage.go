@@ -13,7 +13,7 @@ import (
 
 func init() {
 	Constructors[TypeAzureTableStorage] = TypeSpec{
-		constructor: NewAzureTableStorage,
+		constructor: fromSimpleConstructor(NewAzureTableStorage),
 		Status:      docs.StatusBeta,
 		Version:     "3.36.0",
 		Summary: `
@@ -99,7 +99,7 @@ properties:
 	}
 
 	Constructors[TypeTableStorage] = TypeSpec{
-		constructor: newDeprecatedTableStorage,
+		constructor: fromSimpleConstructor(newDeprecatedTableStorage),
 		Status:      docs.StatusDeprecated,
 		Summary:     "This component has been renamed to [`azure_table_storage`](/docs/components/outputs/azure_table_storage).",
 		sanitiseConfigFunc: func(conf Config) (interface{}, error) {

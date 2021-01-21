@@ -17,13 +17,13 @@ import (
 
 func init() {
 	Constructors[TypeSubprocess] = TypeSpec{
-		constructor: func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 			s, err := newSubprocess(conf.Subprocess, log)
 			if err != nil {
 				return nil, err
 			}
 			return NewAsyncWriter(TypeSubprocess, 1, s, log, stats)
-		},
+		}),
 		Status: docs.StatusBeta,
 		Summary: `
 Executes a command, runs it as a subprocess, and writes messages to it over stdin.`,

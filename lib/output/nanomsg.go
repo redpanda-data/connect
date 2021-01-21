@@ -12,7 +12,7 @@ import (
 
 func init() {
 	Constructors["nanomsg"] = TypeSpec{
-		constructor: NewNanomsg,
+		constructor: fromSimpleConstructor(NewNanomsg),
 		Summary: `
 Send messages over a Nanomsg socket.`,
 		Description: `

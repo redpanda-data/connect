@@ -11,7 +11,7 @@ import (
 
 func init() {
 	Constructors[TypeAzureBlobStorage] = TypeSpec{
-		constructor: func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 			r, err := newAzureBlobStorage(conf.AzureBlobStorage, log, stats)
 			if err != nil {
 				return nil, err
@@ -24,7 +24,7 @@ func init() {
 				),
 				log, stats,
 			)
-		},
+		}),
 		Status:  docs.StatusBeta,
 		Version: "3.36.0",
 		Summary: `

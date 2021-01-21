@@ -15,7 +15,7 @@ import (
 
 func init() {
 	Constructors[TypeAWSKinesis] = TypeSpec{
-		constructor: NewAWSKinesis,
+		constructor: fromSimpleConstructor(NewAWSKinesis),
 		Version:     "3.36.0",
 		Summary: `
 Sends messages to a Kinesis stream.`,
@@ -50,7 +50,7 @@ allowing you to transfer data across accounts. You can find out more
 	}
 
 	Constructors[TypeKinesis] = TypeSpec{
-		constructor: NewKinesis,
+		constructor: fromSimpleConstructor(NewKinesis),
 		Status:      docs.StatusDeprecated,
 		Summary: `
 Sends messages to a Kinesis stream.`,

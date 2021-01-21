@@ -15,7 +15,7 @@ import (
 
 func init() {
 	Constructors[TypeAWSDynamoDB] = TypeSpec{
-		constructor: NewAWSDynamoDB,
+		constructor: fromSimpleConstructor(NewAWSDynamoDB),
 		Version:     "3.36.0",
 		Summary: `
 Inserts items into a DynamoDB table.`,
@@ -99,7 +99,7 @@ allowing you to transfer data across accounts. You can find out more
 	}
 
 	Constructors[TypeDynamoDB] = TypeSpec{
-		constructor: NewDynamoDB,
+		constructor: fromSimpleConstructor(NewDynamoDB),
 		Status:      docs.StatusDeprecated,
 		Summary: `
 Inserts items into a DynamoDB table.`,

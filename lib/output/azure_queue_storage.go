@@ -13,7 +13,7 @@ import (
 
 func init() {
 	Constructors[TypeAzureQueueStorage] = TypeSpec{
-		constructor: NewAzureQueueStorage,
+		constructor: fromSimpleConstructor(NewAzureQueueStorage),
 		Status:      docs.StatusBeta,
 		Version:     "3.36.0",
 		Summary: `

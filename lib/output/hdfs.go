@@ -13,7 +13,7 @@ import (
 
 func init() {
 	Constructors[TypeHDFS] = TypeSpec{
-		constructor: NewHDFS,
+		constructor: fromSimpleConstructor(NewHDFS),
 		Summary: `
 Sends message parts as files to a HDFS directory.`,
 		Description: `

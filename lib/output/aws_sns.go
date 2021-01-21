@@ -13,7 +13,7 @@ import (
 
 func init() {
 	Constructors[TypeAWSSNS] = TypeSpec{
-		constructor: NewAWSSNS,
+		constructor: fromSimpleConstructor(NewAWSSNS),
 		Version:     "3.36.0",
 		Summary: `
 Sends messages to an AWS SNS topic.`,
@@ -37,7 +37,7 @@ allowing you to transfer data across accounts. You can find out more
 	}
 
 	Constructors[TypeSNS] = TypeSpec{
-		constructor: NewAmazonSNS,
+		constructor: fromSimpleConstructor(NewAmazonSNS),
 		Status:      docs.StatusDeprecated,
 		Summary: `
 Sends messages to an AWS SNS topic.`,

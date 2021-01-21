@@ -32,14 +32,7 @@ var (
 
 // TypeSpec is a constructor and a usage description for each output type.
 type TypeSpec struct {
-	brokerConstructor func(
-		conf Config,
-		mgr types.Manager,
-		log log.Modular,
-		stats metrics.Type,
-		pipelineConstructors ...types.PipelineConstructorFunc,
-	) (Type, error)
-	constructor        func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error)
+	constructor        outputConstructor
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
 
 	// Async indicates whether this output benefits from sending multiple
@@ -57,6 +50,32 @@ type TypeSpec struct {
 	FieldSpecs  docs.FieldSpecs
 	Examples    []docs.AnnotatedExample
 	Version     string
+}
+
+type simpleConstructor func(Config, types.Manager, log.Modular, metrics.Type) (Type, error)
+
+type outputConstructor func(
+	conf Config,
+	mgr types.Manager,
+	log log.Modular,
+	stats metrics.Type,
+	pipelines ...types.PipelineConstructorFunc,
+) (Type, error)
+
+func fromSimpleConstructor(fn simpleConstructor) outputConstructor {
+	return func(
+		conf Config,
+		mgr types.Manager,
+		log log.Modular,
+		stats metrics.Type,
+		pipelines ...types.PipelineConstructorFunc,
+	) (Type, error) {
+		output, err := fn(conf, mgr, log, stats)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create output '%v': %v", conf.Type, err)
+		}
+		return WrapWithPipelines(output, pipelines...)
+	}
 }
 
 // Constructors is a map of all output types with their specs.
@@ -397,14 +416,7 @@ func New(
 		}}...)
 	}
 	if c, ok := Constructors[conf.Type]; ok {
-		if c.brokerConstructor != nil {
-			return c.brokerConstructor(conf, mgr, log, stats, pipelines...)
-		}
-		output, err := c.constructor(conf, mgr, log, stats)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create output '%v': %v", conf.Type, err)
-		}
-		return WrapWithPipelines(output, pipelines...)
+		return c.constructor(conf, mgr, log, stats, pipelines...)
 	}
 	if c, ok := pluginSpecs[conf.Type]; ok {
 		output, err := c.constructor(conf.Plugin, mgr, log, stats)

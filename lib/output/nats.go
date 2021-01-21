@@ -12,7 +12,7 @@ import (
 
 func init() {
 	Constructors[TypeNATS] = TypeSpec{
-		constructor: NewNATS,
+		constructor: fromSimpleConstructor(NewNATS),
 		Summary: `
 Publish to an NATS subject.`,
 		Description: `

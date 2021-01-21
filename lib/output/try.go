@@ -13,7 +13,7 @@ import (
 
 func init() {
 	Constructors[TypeTry] = TypeSpec{
-		brokerConstructor: NewTry,
+		constructor: NewTry,
 		Summary: `
 Attempts to send each message to a child output, starting from the first output
 on the list. If an output attempt fails then the next output in the list is

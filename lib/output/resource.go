@@ -15,7 +15,7 @@ import (
 
 func init() {
 	Constructors[TypeResource] = TypeSpec{
-		constructor: NewResource,
+		constructor: fromSimpleConstructor(NewResource),
 		Summary: `
 Resource is an output type that runs a resource output by its name. This output
 allows you to run the same configured output resource in multiple places.`,
