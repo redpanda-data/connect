@@ -2,14 +2,12 @@ package input
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/pkg/sftp"
 	"log"
 	"os"
 	"path"
-	"strconv"
 	"testing"
 	"time"
 
