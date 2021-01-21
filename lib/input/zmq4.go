@@ -14,7 +14,7 @@ import (
 
 func init() {
 	Constructors[TypeZMQ4] = TypeSpec{
-		constructor: NewZMQ4,
+		constructor: fromSimpleConstructor(NewZMQ4),
 		Summary: `
 Consumes messages from a ZeroMQ socket.`,
 		Description: `
