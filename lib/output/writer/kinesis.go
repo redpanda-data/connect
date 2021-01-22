@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
@@ -27,10 +26,6 @@ import (
 const (
 	kinesisMaxRecordsCount = 500
 	mebibyte               = 1048576
-)
-
-var (
-	kinesisPayloadLimitExceeded = regexp.MustCompile("Member must have length less than or equal to")
 )
 
 type sessionConfig struct {
@@ -78,7 +73,6 @@ type Kinesis struct {
 	kinesis kinesisiface.KinesisAPI
 
 	backoffCtor  func() backoff.BackOff
-	endpoint     *string
 	hashKey      field.Expression
 	partitionKey field.Expression
 	streamName   *string

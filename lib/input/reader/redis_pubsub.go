@@ -2,7 +2,6 @@ package reader
 
 import (
 	"context"
-	"net/url"
 	"sync"
 	"time"
 
@@ -41,7 +40,6 @@ type RedisPubSub struct {
 	pubsub *redis.PubSub
 	cMut   sync.Mutex
 
-	url  *url.URL
 	conf RedisPubSubConfig
 
 	stats metrics.Type

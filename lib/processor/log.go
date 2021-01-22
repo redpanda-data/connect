@@ -34,11 +34,13 @@ pipeline in order to expose the JSON field ` + "`foo.bar`" + ` as well as the
 metadata field ` + "`kafka_partition`" + ` we can achieve that with the
 following config:
 
-` + "``` yaml" + `
-for_each:
-- log:
-    level: DEBUG
-    message: 'field: ${! json("foo.bar") }, part: ${! meta("kafka_partition") }'
+` + "```yaml" + `
+pipeline:
+  processors:
+    - for_each:
+      - log:
+          level: DEBUG
+          message: 'field: ${! json("foo.bar") }, part: ${! meta("kafka_partition") }'
 ` + "```" + `
 
 The ` + "`level`" + ` field determines the log level of the printed events and
@@ -51,13 +53,15 @@ the service log is set to output as JSON. The field values are function
 interpolated, meaning it's possible to output structured fields containing
 message contents and metadata, e.g.:
 
-` + "``` yaml" + `
-log:
-  level: DEBUG
-  message: "foo"
-  fields:
-    id: '${! json("id") }'
-    kafka_topic: '${! meta("kafka_topic") }'
+` + "```yaml" + `
+pipeline:
+  processors:
+    - log:
+        level: DEBUG
+        message: "foo"
+        fields:
+          id: '${! json("id") }'
+          kafka_topic: '${! meta("kafka_topic") }'
 ` + "```" + ``,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("level", "The log level to use.").HasOptions("FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE", "ALL"),

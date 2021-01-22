@@ -123,6 +123,7 @@ input:
           storage_access_key: ${INPUT_AZURE_BLOB_STORAGE_STORAGE_ACCESS_KEY}
           storage_account: ${INPUT_AZURE_BLOB_STORAGE_STORAGE_ACCOUNT}
           storage_connection_string: ${INPUT_AZURE_BLOB_STORAGE_STORAGE_CONNECTION_STRING}
+          storage_sas_token: ${INPUT_AZURE_BLOB_STORAGE_STORAGE_SAS_TOKEN}
         bloblang:
           count: ${INPUT_BLOBLANG_COUNT:0}
           interval: ${INPUT_BLOBLANG_INTERVAL:1s}
@@ -1036,6 +1037,7 @@ output:
           storage_access_key: ${OUTPUT_AZURE_BLOB_STORAGE_STORAGE_ACCESS_KEY}
           storage_account: ${OUTPUT_AZURE_BLOB_STORAGE_STORAGE_ACCOUNT}
           storage_connection_string: ${OUTPUT_AZURE_BLOB_STORAGE_STORAGE_CONNECTION_STRING}
+          storage_sas_token: ${OUTPUT_AZURE_BLOB_STORAGE_STORAGE_SAS_TOKEN}
         azure_queue_storage:
           batching:
             byte_size: ${OUTPUT_AZURE_QUEUE_STORAGE_BATCHING_BYTE_SIZE:0}
@@ -1072,6 +1074,7 @@ output:
           storage_access_key: ${OUTPUT_BLOB_STORAGE_STORAGE_ACCESS_KEY}
           storage_account: ${OUTPUT_BLOB_STORAGE_STORAGE_ACCOUNT}
           storage_connection_string: ${OUTPUT_BLOB_STORAGE_STORAGE_CONNECTION_STRING}
+          storage_sas_token: ${OUTPUT_BLOB_STORAGE_STORAGE_SAS_TOKEN}
         cache:
           key: ${OUTPUT_CACHE_KEY:${!count("items")}-${!timestamp_unix_nano()}}
           max_in_flight: ${OUTPUT_CACHE_MAX_IN_FLIGHT:1}
@@ -1080,7 +1083,7 @@ output:
         cassandra:
           backoff:
             initial_interval: ${OUTPUT_CASSANDRA_BACKOFF_INITIAL_INTERVAL:1s}
-            max_elapsed_time: ${OUTPUT_CASSANDRA_BACKOFF_MAX_ELAPSED_TIME:30s}
+            max_elapsed_time: ${OUTPUT_CASSANDRA_BACKOFF_MAX_ELAPSED_TIME}
             max_interval: ${OUTPUT_CASSANDRA_BACKOFF_MAX_INTERVAL:5s}
           batching:
             byte_size: ${OUTPUT_CASSANDRA_BATCHING_BYTE_SIZE:0}

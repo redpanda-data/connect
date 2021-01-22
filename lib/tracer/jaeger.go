@@ -20,7 +20,9 @@ func init() {
 		Summary: `
 Send spans to a [Jaeger](https://www.jaegertracing.io/) agent.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("agent_address", "The address of a Jaeger agent to send tracing events to."),
+			docs.FieldCommon("agent_address", "The address of a Jaeger agent to send tracing events to.", "jaeger-agent:6831"),
+			docs.FieldCommon("collector_url", "The URL of a Jaeger collector to send tracing events to. If set, this will override `agent_address`.",
+				"https://jaeger-collector:14268/api/traces").AtVersion("3.38.0"),
 			docs.FieldCommon("service_name", "A name to provide for this service."),
 			docs.FieldCommon("sampler_type", "The sampler type to use.").HasAnnotatedOptions(
 				"const", "A constant decision for all traces, either 1 or 0.",
@@ -41,6 +43,7 @@ Send spans to a [Jaeger](https://www.jaegertracing.io/) agent.`,
 // JaegerConfig is config for the Jaeger metrics type.
 type JaegerConfig struct {
 	AgentAddress          string            `json:"agent_address" yaml:"agent_address"`
+	CollectorURL          string            `json:"collector_url" yaml:"collector_url"`
 	ServiceName           string            `json:"service_name" yaml:"service_name"`
 	SamplerType           string            `json:"sampler_type" yaml:"sampler_type"`
 	SamplerManagerAddress string            `json:"sampler_manager_address" yaml:"sampler_manager_address"`
@@ -127,6 +130,10 @@ func NewJaeger(config Config, opts ...func(Type)) (Type, error) {
 	if i := config.Jaeger.AgentAddress; len(i) > 0 {
 		reporterConf.LocalAgentHostPort = i
 		cfg.Reporter = reporterConf
+	}
+
+	if i := config.Jaeger.CollectorURL; len(i) > 0 {
+		reporterConf.CollectorEndpoint = i
 	}
 
 	tracer, closer, err := cfg.NewTracer()

@@ -19,7 +19,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
-	"github.com/cenkalti/backoff/v4"
 	"github.com/gocql/gocql"
 )
 
@@ -118,7 +117,13 @@ output:
 			).HasOptions(
 				"ANY", "ONE", "TWO", "THREE", "QUORUM", "ALL", "LOCAL_QUORUM", "EACH_QUORUM", "LOCAL_ONE",
 			),
-		}.Merge(retries.FieldSpecs()).Merge(docs.FieldSpecs{
+			docs.FieldAdvanced("max_retries", "The maximum number of retries before giving up on a request."),
+			docs.FieldAdvanced("backoff", "Control time intervals between retry attempts.").WithChildren(
+				docs.FieldAdvanced("initial_interval", "The initial period to wait between retry attempts."),
+				docs.FieldAdvanced("max_interval", "The maximum period to wait between retry attempts."),
+				docs.FieldDeprecated("max_elapsed_time"),
+			),
+		}.Merge(docs.FieldSpecs{
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			batch.FieldSpec(),
 		}),
@@ -144,9 +149,10 @@ type CassandraConfig struct {
 	Query                    string                `json:"query" yaml:"query"`
 	Args                     []string              `json:"args" yaml:"args"`
 	Consistency              string                `json:"consistency" yaml:"consistency"`
-	retries.Config           `json:",inline" yaml:",inline"`
-	MaxInFlight              int                `json:"max_in_flight" yaml:"max_in_flight"`
-	Batching                 batch.PolicyConfig `json:"batching" yaml:"batching"`
+	// TODO: V4 Remove this and replace with explicit values.
+	retries.Config `json:",inline" yaml:",inline"`
+	MaxInFlight    int                `json:"max_in_flight" yaml:"max_in_flight"`
+	Batching       batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewCassandraConfig creates a new CassandraConfig with default values.
@@ -155,7 +161,7 @@ func NewCassandraConfig() CassandraConfig {
 	rConf.MaxRetries = 3
 	rConf.Backoff.InitialInterval = "1s"
 	rConf.Backoff.MaxInterval = "5s"
-	rConf.Backoff.MaxElapsedTime = "30s"
+	rConf.Backoff.MaxElapsedTime = ""
 
 	return CassandraConfig{
 		Addresses: []string{},
@@ -181,9 +187,11 @@ type cassandraWriter struct {
 	stats   metrics.Type
 	tlsConf *tls.Config
 
+	backoffMin time.Duration
+	backoffMax time.Duration
+
 	args          []field.Expression
 	session       *gocql.Session
-	boff          backoff.ExponentialBackOff
 	mQueryLatency metrics.StatTimer
 	connLock      sync.RWMutex
 }
@@ -210,6 +218,12 @@ func newCassandraWriter(conf CassandraConfig, log log.Modular, stats metrics.Typ
 		if c.tlsConf, err = conf.TLS.Get(); err != nil {
 			return nil, err
 		}
+	}
+	if c.backoffMin, err = time.ParseDuration(c.conf.Config.Backoff.InitialInterval); err != nil {
+		return nil, fmt.Errorf("parsing backoff initial interval: %w", err)
+	}
+	if c.backoffMax, err = time.ParseDuration(c.conf.Config.Backoff.MaxInterval); err != nil {
+		return nil, fmt.Errorf("parsing backoff max interval: %w", err)
 	}
 	return &c, nil
 }
@@ -242,20 +256,10 @@ func (c *cassandraWriter) ConnectWithContext(ctx context.Context) error {
 		return fmt.Errorf("parsing consistency: %w", err)
 	}
 
-	min, err := time.ParseDuration(c.conf.Config.Backoff.InitialInterval)
-	if err != nil {
-		return fmt.Errorf("parsing backoff initial interval: %w", err)
-	}
-
-	max, err := time.ParseDuration(c.conf.Config.Backoff.MaxInterval)
-	if err != nil {
-		return fmt.Errorf("parsing backoff max interval: %w", err)
-	}
-
 	conn.RetryPolicy = &decorator{
 		NumRetries: int(c.conf.Config.MaxRetries),
-		Min:        min,
-		Max:        max,
+		Min:        c.backoffMin,
+		Max:        c.backoffMax,
 	}
 	session, err := conn.CreateSession()
 	if err != nil {
@@ -407,17 +411,11 @@ func (d *decorator) Attempt(q gocql.RetryableQuery) bool {
 	if q.Attempts() > d.NumRetries {
 		return false
 	}
-	time.Sleep(d.napTime(q.Attempts()))
+	time.Sleep(getExponentialTime(d.Min, d.Max, q.Attempts()))
 	return true
 }
 
 func getExponentialTime(min time.Duration, max time.Duration, attempts int) time.Duration {
-	if min <= 0 {
-		min = 100 * time.Millisecond
-	}
-	if max <= 0 {
-		max = 10 * time.Second
-	}
 	minFloat := float64(min)
 	napDuration := minFloat * math.Pow(2, float64(attempts-1))
 
@@ -427,10 +425,6 @@ func getExponentialTime(min time.Duration, max time.Duration, attempts int) time
 		return time.Duration(max)
 	}
 	return time.Duration(napDuration)
-}
-
-func (d *decorator) napTime(attempts int) time.Duration {
-	return getExponentialTime(d.Min, d.Max, attempts)
 }
 
 func (d *decorator) GetRetryType(err error) gocql.RetryType {

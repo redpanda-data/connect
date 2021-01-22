@@ -56,7 +56,7 @@ The hash algorithm to use.
 
 Type: `string`  
 Default: `"sha256"`  
-Options: `sha256`, `sha512`, `sha1`, `xxhash64`, `hmac-sha1`, `hmac-sha256`, `hmac-sha512`.
+Options: `sha256`, `sha512`, `sha1`, `xxhash64`, `hmac-sha1`, `hmac-sha256`, `hmac-sha512`, `md5`.
 
 ### `key`
 

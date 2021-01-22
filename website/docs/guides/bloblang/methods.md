@@ -218,6 +218,31 @@ root.unescaped = this.value.unescape_url_query()
 # Out: {"unescaped":"foo & bar"}
 ```
 
+### `filepath_join`
+
+Joins an array of path elements into a single file path. The separator depends on the operating system of the machine.
+
+```coffee
+root.path = this.path_elements.filepath_join()
+
+# In:  {"path_elements":["/foo/","bar.txt"]}
+# Out: {"path":"/foo/bar.txt"}
+```
+
+### `filepath_split`
+
+Splits a file path immediately following the final Separator, separating it into a directory and file name component returned as a two element array of strings. If there is no Separator in the path, the first element will be empty and the second will contain the path. The separator depends on the operating system of the machine.
+
+```coffee
+root.path_sep = this.path.filepath_split()
+
+# In:  {"path":"/foo/bar.txt"}
+# Out: {"path_sep":["/foo/","bar.txt"]}
+
+# In:  {"path":"baz.txt"}
+# Out: {"path_sep":["","baz.txt"]}
+```
+
 ### `format`
 
 Use a value string as a format specifier in order to produce a new string, using any number of provided arguments.
@@ -310,6 +335,22 @@ root.new_value = this.value.replace("foo","dog")
 # Out: {"new_value":"The dog ate my homework"}
 ```
 
+### `replace_many`
+
+For each pair of strings in an argument array, replaces all occurrences of the first item of the pair with the second. This is a more compact way of chaining a series of `replace` methods.
+
+```coffee
+root.new_value = this.value.replace_many([
+  "<b>", "&lt;b&gt;",
+  "</b>", "&lt;/b&gt;",
+  "<i>", "&lt;i&gt;",
+  "</i>", "&lt;/i&gt;",
+])
+
+# In:  {"value":"<i>Hello</i> <b>World</b>"}
+# Out: {"new_value":"&lt;i&gt;Hello&lt;/i&gt; &lt;b&gt;World&lt;/b&gt;"}
+```
+
 ### `split`
 
 Split a string value into an array of strings by splitting it on a string separator.
@@ -330,6 +371,15 @@ root.stripped = this.value.strip_html()
 
 # In:  {"value":"<p>the plain <strong>old text</strong></p>"}
 # Out: {"stripped":"the plain old text"}
+```
+
+It's also possible to provide an explicit list of element types to preserve in the output.
+
+```coffee
+root.stripped = this.value.strip_html(["article"])
+
+# In:  {"value":"<article><p>the plain <strong>old text</strong></p></article>"}
+# Out: {"stripped":"<article>the plain old text</article>"}
 ```
 
 ### `trim`
@@ -1149,6 +1199,24 @@ root.doc = this.doc.parse_json()
 # Out: {"doc":{"foo":"bar"}}
 ```
 
+### `parse_xml`
+
+BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+
+Attempts to parse a string as an XML document and returns a structured result, where elements appear as keys of an object according to the following rules:
+
+- If an element contains attributes they are parsed by prefixing a hyphen, `-`, to the attribute label.
+- If the element is a simple element and has attributes, the element value is given the key `#text`.
+- XML comments, directives, and process instructions are ignored.
+- When elements are repeated the resulting JSON value is an array.
+
+```coffee
+root.doc = this.doc.parse_xml()
+
+# In:  {"doc":"<root><title>This is a title</title><content>This is some content</content></root>"}
+# Out: {"doc":{"root":{"content":"This is some content","title":"This is a title"}}}
+```
+
 ## Encoding and Encryption
 
 ### `encode`
@@ -1205,7 +1273,7 @@ root.decrypted = this.value.decode("hex").decrypt_aes("ctr", $key, $vector).stri
 
 Hashes a string or byte array according to a chosen algorithm and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.
 
-Available algorithms are: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `sha1`, `sha256`, `sha512`, `xxhash64`.
+Available algorithms are: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `md5`, `sha1`, `sha256`, `sha512`, `xxhash64`.
 
 The following algorithms require a key, which is specified as a second argument: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`.
 

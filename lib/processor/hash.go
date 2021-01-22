@@ -2,6 +2,7 @@ package processor
 
 import (
 	"crypto/hmac"
+	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -30,7 +31,7 @@ func init() {
 All functionality of this processor has been superseded by the
 [bloblang](/docs/components/processors/bloblang) processor.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("algorithm", "The hash algorithm to use.").HasOptions("sha256", "sha512", "sha1", "xxhash64", "hmac-sha1", "hmac-sha256", "hmac-sha512"),
+			docs.FieldCommon("algorithm", "The hash algorithm to use.").HasOptions("sha256", "sha512", "sha1", "xxhash64", "hmac-sha1", "hmac-sha256", "hmac-sha512", "md5"),
 			docs.FieldCommon("key", "key used for HMAC algorithms"),
 			partsFieldSpec,
 		},
@@ -82,6 +83,12 @@ func hmacsha512Hash(key string) hashFunc {
 	}
 }
 
+func md5Hash(b []byte) ([]byte, error) {
+	hasher := md5.New()
+	hasher.Write(b)
+	return hasher.Sum(nil), nil
+}
+
 func sha1Hash(b []byte) ([]byte, error) {
 	hasher := sha1.New()
 	hasher.Write(b)
@@ -114,6 +121,8 @@ func strToHashr(conf HashConfig) (hashFunc, error) {
 		return hmacsha256Hash(conf.Key), nil
 	case "hmac-sha512":
 		return hmacsha512Hash(conf.Key), nil
+	case "md5":
+		return md5Hash, nil
 	case "sha1":
 		return sha1Hash, nil
 	case "sha256":

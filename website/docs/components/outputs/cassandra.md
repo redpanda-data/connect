@@ -66,7 +66,6 @@ output:
     backoff:
       initial_interval: 1s
       max_interval: 5s
-      max_elapsed_time: 30s
     max_in_flight: 1
     batching:
       count: 0
@@ -317,7 +316,7 @@ Options: `ANY`, `ONE`, `TWO`, `THREE`, `QUORUM`, `ALL`, `LOCAL_QUORUM`, `EACH_QU
 
 ### `max_retries`
 
-The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
+The maximum number of retries before giving up on a request.
 
 
 Type: `number`  
@@ -345,14 +344,6 @@ The maximum period to wait between retry attempts.
 
 Type: `string`  
 Default: `"5s"`  
-
-### `backoff.max_elapsed_time`
-
-The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
-
-
-Type: `string`  
-Default: `"30s"`  
 
 ### `max_in_flight`
 

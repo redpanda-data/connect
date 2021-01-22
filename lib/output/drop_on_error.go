@@ -36,7 +36,7 @@ For example, the following configuration attempts to send to a hypothetical
 output type ` + "`foo`" + ` three times, but if all three attempts fail the
 message is dropped entirely:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 output:
   drop_on_error:
     retry:

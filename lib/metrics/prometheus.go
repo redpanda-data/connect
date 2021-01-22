@@ -148,29 +148,31 @@ func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 		return nil, fmt.Errorf("failed to init path mapping: %v", err)
 	}
 
-	if len(p.config.PushURL) > 0 && len(p.config.PushInterval) > 0 {
+	if len(p.config.PushURL) > 0 {
 		p.pusher = push.New(p.config.PushURL, p.config.PushJobName).Gatherer(prometheus.DefaultGatherer)
 
 		if len(p.config.PushBasicAuth.Username) > 0 && len(p.config.PushBasicAuth.Password) > 0 {
 			p.pusher = p.pusher.BasicAuth(p.config.PushBasicAuth.Username, p.config.PushBasicAuth.Password)
 		}
 
-		interval, err := time.ParseDuration(p.config.PushInterval)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse push interval: %v", err)
-		}
-		go func() {
-			for {
-				select {
-				case <-p.closedChan:
-					return
-				case <-time.After(interval):
-					if err = p.pusher.Push(); err != nil {
-						p.log.Errorf("Failed to push metrics: %v\n", err)
+		if len(p.config.PushInterval) > 0 {
+			interval, err := time.ParseDuration(p.config.PushInterval)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse push interval: %v", err)
+			}
+			go func() {
+				for {
+					select {
+					case <-p.closedChan:
+						return
+					case <-time.After(interval):
+						if err = p.pusher.Push(); err != nil {
+							p.log.Errorf("Failed to push metrics: %v\n", err)
+						}
 					}
 				}
-			}
-		}()
+			}()
+		}
 	}
 
 	return p, nil

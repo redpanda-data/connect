@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/Azure/go-amqp"
-	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -44,9 +43,6 @@ type AMQP1 struct {
 	client  *amqp.Client
 	session *amqp.Session
 	sender  *amqp.Sender
-
-	key     field.Expression
-	msgType field.Expression
 
 	log   log.Modular
 	stats metrics.Type

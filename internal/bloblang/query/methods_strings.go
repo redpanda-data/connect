@@ -5,6 +5,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
+	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -19,11 +20,13 @@ import (
 	"io/ioutil"
 	"math"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/xml"
 	"github.com/OneOfOne/xxhash"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/tilinna/z85"
@@ -520,6 +523,69 @@ func unescapeURLQueryMethod(target Function, args ...interface{}) (Function, err
 
 var _ = RegisterMethod(
 	NewMethodSpec(
+		"filepath_join", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Joins an array of path elements into a single file path. The separator depends on the operating system of the machine.",
+		NewExampleSpec("",
+			`root.path = this.path_elements.filepath_join()`,
+			strings.Replace(`{"path_elements":["/foo/","bar.txt"]}`, "/", string(filepath.Separator), -1),
+			strings.Replace(`{"path":"/foo/bar.txt"}`, "/", string(filepath.Separator), -1),
+		),
+	),
+	false,
+	func(target Function, args ...interface{}) (Function, error) {
+		return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			arr, ok := v.([]interface{})
+			if !ok {
+				return nil, NewTypeError(v, ValueArray)
+			}
+			strs := make([]string, 0, len(arr))
+			for i, ele := range arr {
+				str, err := IGetString(ele)
+				if err != nil {
+					return nil, fmt.Errorf("path element %v: %w", i, err)
+				}
+				strs = append(strs, str)
+			}
+			return filepath.Join(strs...), nil
+		}), nil
+	},
+	ExpectNArgs(0),
+)
+
+var _ = RegisterMethod(
+	NewMethodSpec(
+		"filepath_split", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Splits a file path immediately following the final Separator, separating it into a directory and file name component returned as a two element array of strings. If there is no Separator in the path, the first element will be empty and the second will contain the path. The separator depends on the operating system of the machine.",
+		NewExampleSpec("",
+			`root.path_sep = this.path.filepath_split()`,
+			strings.Replace(`{"path":"/foo/bar.txt"}`, "/", string(filepath.Separator), -1),
+			strings.Replace(`{"path_sep":["/foo/","bar.txt"]}`, "/", string(filepath.Separator), -1),
+			`{"path":"baz.txt"}`,
+			`{"path_sep":["","baz.txt"]}`,
+		),
+	),
+	false,
+	func(target Function, args ...interface{}) (Function, error) {
+		return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			str, err := IGetString(v)
+			if err != nil {
+				return nil, err
+			}
+			dir, file := filepath.Split(str)
+			return []interface{}{dir, file}, nil
+		}), nil
+	},
+	ExpectNArgs(0),
+)
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
 		"format", "",
 	).InCategory(
 		MethodCategoryStrings,
@@ -624,7 +690,7 @@ var _ = RegisterMethod(
 		`
 Hashes a string or byte array according to a chosen algorithm and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method `+"[`string`][methods.string], or encoded using the method [`encode`][methods.encode]"+`, otherwise it will be base64 encoded by default.
 
-Available algorithms are: `+"`hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `sha1`, `sha256`, `sha512`, `xxhash64`"+`.
+Available algorithms are: `+"`hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `md5`, `sha1`, `sha256`, `sha512`, `xxhash64`"+`.
 
 The following algorithms require a key, which is specified as a second argument: `+"`hmac_sha1`, `hmac_sha256`, `hmac_sha512`"+`.`,
 		NewExampleSpec("",
@@ -671,6 +737,12 @@ func hashMethod(target Function, args ...interface{}) (Function, error) {
 		}
 		hashFn = func(b []byte) ([]byte, error) {
 			hasher := hmac.New(sha512.New, key)
+			hasher.Write(b)
+			return hasher.Sum(nil), nil
+		}
+	case "md5":
+		hashFn = func(b []byte) ([]byte, error) {
+			hasher := md5.New()
 			hasher.Write(b)
 			return hasher.Sum(nil), nil
 		}
@@ -928,6 +1000,48 @@ func parseJSONMethod(target Function, _ ...interface{}) (Function, error) {
 			return nil, fmt.Errorf("failed to parse value as JSON: %w", err)
 		}
 		return jObj, nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
+		"parse_xml", "",
+	).InCategory(
+		MethodCategoryParsing,
+		`Attempts to parse a string as an XML document and returns a structured result, where elements appear as keys of an object according to the following rules:
+
+- If an element contains attributes they are parsed by prefixing a hyphen, `+"`-`"+`, to the attribute label.
+- If the element is a simple element and has attributes, the element value is given the key `+"`#text`"+`.
+- XML comments, directives, and process instructions are ignored.
+- When elements are repeated the resulting JSON value is an array.`,
+		NewExampleSpec("",
+			`root.doc = this.doc.parse_xml()`,
+			`{"doc":"<root><title>This is a title</title><content>This is some content</content></root>"}`,
+			`{"doc":{"root":{"content":"This is some content","title":"This is a title"}}}`,
+		),
+	).Beta(),
+	false, parseXMLMethod,
+	ExpectNArgs(0),
+)
+
+func parseXMLMethod(target Function, _ ...interface{}) (Function, error) {
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		var xmlBytes []byte
+		switch t := v.(type) {
+		case string:
+			xmlBytes = []byte(t)
+		case []byte:
+			xmlBytes = t
+		default:
+			return nil, NewTypeError(v, ValueString)
+		}
+		xmlObj, err := xml.ToMap(xmlBytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse value as XML: %w", err)
+		}
+		return xmlObj, nil
 	}), nil
 }
 
@@ -1212,6 +1326,71 @@ func replaceMethod(target Function, args ...interface{}) (Function, error) {
 			return strings.ReplaceAll(t, match, with), nil
 		case []byte:
 			return bytes.ReplaceAll(t, matchB, withB), nil
+		}
+		return nil, NewTypeError(v, ValueString)
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
+		"replace_many", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"For each pair of strings in an argument array, replaces all occurrences of the first item of the pair with the second. This is a more compact way of chaining a series of `replace` methods.",
+		NewExampleSpec("",
+			`root.new_value = this.value.replace_many([
+  "<b>", "&lt;b&gt;",
+  "</b>", "&lt;/b&gt;",
+  "<i>", "&lt;i&gt;",
+  "</i>", "&lt;/i&gt;",
+])`,
+			`{"value":"<i>Hello</i> <b>World</b>"}`,
+			`{"new_value":"&lt;i&gt;Hello&lt;/i&gt; &lt;b&gt;World&lt;/b&gt;"}`,
+		),
+	),
+	true, replaceManyMethod,
+	ExpectNArgs(1),
+)
+
+func replaceManyMethod(target Function, args ...interface{}) (Function, error) {
+	items, ok := args[0].([]interface{})
+	if !ok {
+		return nil, NewTypeError(args[0], ValueArray)
+	}
+	if len(items)%2 != 0 {
+		return nil, fmt.Errorf("invalid arg, replacements should be in pairs and must therefore be even: %v", items)
+	}
+
+	var replacePairs [][2]string
+	var replacePairsBytes [][2][]byte
+
+	for i := 0; i < len(items); i += 2 {
+		from, err := IGetString(items[i])
+		if err != nil {
+			return nil, fmt.Errorf("invalid replacement value at index %v: %w", i, err)
+		}
+		to, err := IGetString(items[i+1])
+		if err != nil {
+			return nil, fmt.Errorf("invalid replacement value at index %v: %w", i+1, err)
+		}
+		replacePairs = append(replacePairs, [2]string{from, to})
+		replacePairsBytes = append(replacePairsBytes, [2][]byte{[]byte(from), []byte(to)})
+	}
+
+	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		switch t := v.(type) {
+		case string:
+			for _, pair := range replacePairs {
+				t = strings.ReplaceAll(t, pair[0], pair[1])
+			}
+			return t, nil
+		case []byte:
+			for _, pair := range replacePairsBytes {
+				t = bytes.ReplaceAll(t, pair[0], pair[1])
+			}
+			return t, nil
 		}
 		return nil, NewTypeError(v, ValueString)
 	}), nil
@@ -1607,13 +1786,31 @@ var _ = RegisterMethod(
 			`{"value":"<p>the plain <strong>old text</strong></p>"}`,
 			`{"stripped":"the plain old text"}`,
 		),
+		NewExampleSpec("It's also possible to provide an explicit list of element types to preserve in the output.",
+			`root.stripped = this.value.strip_html(["article"])`,
+			`{"value":"<article><p>the plain <strong>old text</strong></p></article>"}`,
+			`{"stripped":"<article>the plain old text</article>"}`,
+		),
 	),
-	false, stripHTMLMethod,
-	ExpectNArgs(0),
+	true, stripHTMLMethod,
+	ExpectOneOrZeroArgs(),
 )
 
-func stripHTMLMethod(target Function, _ ...interface{}) (Function, error) {
+func stripHTMLMethod(target Function, args ...interface{}) (Function, error) {
 	p := bluemonday.NewPolicy()
+	if len(args) > 0 {
+		tags, ok := args[0].([]interface{})
+		if !ok {
+			return nil, NewTypeError(args[0], ValueArray)
+		}
+		tagStrs := make([]string, len(tags))
+		for i, ele := range tags {
+			if tagStrs[i], ok = ele.(string); !ok {
+				return nil, fmt.Errorf("invalid arg at index %v: %w", i, NewTypeError(ele, ValueString))
+			}
+		}
+		p = p.AllowElements(tagStrs...)
+	}
 	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		switch t := v.(type) {
 		case string:

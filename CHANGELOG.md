@@ -7,9 +7,26 @@ All notable changes to this project will be documented in this file.
 
 ### New
 
+- Field `key` in output `redis_list` now supports interpolation functions.
+
+## 3.38.0 - 2021-01-18
+
+### New
+
 - New bloblang method `bytes`.
 - The bloblang method `index` now works on byte arrays.
 - Field `branch_resources` added to the `workflow` processor.
+- Field `storage_sas_token` added to the `azure_blob_storage` input and output.
+- The bloblang method `hash` and the `hash` processor now support `md5`.
+- Field `collector_url` added to the `jaeger` tracer.
+- The bloblang method `strip_html` now allows you to specify a list of allowed elements.
+- New bloblang method `parse_xml`.
+- New bloblang method `replace_many`.
+- New bloblang methods `filepath_split` and `filepath_join`.
+
+### Changed
+
+- The `cassandra` outputs `backoff.max_elapsed_time` field was unused and has been hidden from docs.
 
 ## 3.37.0 - 2021-01-06
 

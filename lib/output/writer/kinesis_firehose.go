@@ -20,10 +20,6 @@ import (
 
 //------------------------------------------------------------------------------
 
-const (
-	kinesisFirehoseMaxRecordsCount = 500
-)
-
 // KinesisFirehoseConfig contains configuration fields for the KinesisFirehose output type.
 type KinesisFirehoseConfig struct {
 	sessionConfig  `json:",inline" yaml:",inline"`
@@ -62,7 +58,6 @@ type KinesisFirehose struct {
 	firehose firehoseiface.FirehoseAPI
 
 	backoffCtor func() backoff.BackOff
-	endpoint    *string
 	streamName  *string
 
 	log   log.Modular

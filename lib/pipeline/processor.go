@@ -31,9 +31,6 @@ type Processor struct {
 
 	messagesIn <-chan types.Transaction
 
-	mSndSucc metrics.StatCounter
-	mSndErr  metrics.StatCounter
-
 	closeChan chan struct{}
 	closed    chan struct{}
 }

@@ -12,7 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/patrobinson/gokini"
 )
 
@@ -55,10 +54,7 @@ func NewKinesisBalancedConfig() KinesisBalancedConfig {
 type KinesisBalanced struct {
 	conf KinesisBalancedConfig
 
-	session *session.Session
-
 	lastSequences map[string]*string
-	namespace     string
 
 	log     log.Modular
 	stats   metrics.Type

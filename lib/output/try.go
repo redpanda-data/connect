@@ -24,7 +24,7 @@ targets have broken. For example, if you had an output type ` + "`http_client`" 
 but wished to reroute messages whenever the endpoint becomes unreachable you
 could use this pattern:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 output:
   try:
   - http_client:

@@ -241,12 +241,4 @@ func (h *HTTPClient) doRequest() (*http.Response, error) {
 	return h.client.Do(h.payload)
 }
 
-func (h *HTTPClient) parseResponse(res *http.Response) (types.Message, error) {
-	msg, err := h.client.ParseResponse(res)
-	if err != nil {
-		return nil, err
-	}
-	return msg, nil
-}
-
 //------------------------------------------------------------------------------

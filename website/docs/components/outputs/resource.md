@@ -28,7 +28,7 @@ output:
 Resource outputs also have the advantage of name based metrics and logging. For
 example, the config:
 
-``` yaml
+```yaml
 output:
   broker:
     pattern: fan_out

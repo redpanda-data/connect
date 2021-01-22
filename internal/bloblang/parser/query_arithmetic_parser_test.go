@@ -332,11 +332,6 @@ func TestArithmeticParser(t *testing.T) {
 }
 
 func TestArithmeticLiteralsParser(t *testing.T) {
-	type easyMsg struct {
-		content string
-		meta    map[string]string
-	}
-
 	tests := map[string]string{
 		`2 == 3`:               `false`,
 		`"2".number() == 2`:    `true`,

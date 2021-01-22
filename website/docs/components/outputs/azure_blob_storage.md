@@ -37,6 +37,7 @@ output:
   azure_blob_storage:
     storage_account: ""
     storage_access_key: ""
+    storage_sas_token: ""
     storage_connection_string: ""
     container: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
@@ -52,6 +53,7 @@ output:
   azure_blob_storage:
     storage_account: ""
     storage_access_key: ""
+    storage_sas_token: ""
     storage_connection_string: ""
     public_access_level: PRIVATE
     container: ""
@@ -92,6 +94,15 @@ The storage account access key. This field is ignored if `storage_connection_str
 
 Type: `string`  
 Default: `""`  
+
+### `storage_sas_token`
+
+The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` / `storage_sas_token` are set.
+
+
+Type: `string`  
+Default: `""`  
+Requires version 3.38.0 or newer  
 
 ### `storage_connection_string`
 

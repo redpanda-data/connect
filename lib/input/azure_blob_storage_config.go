@@ -62,8 +62,12 @@ You can access these metadata fields using [function interpolation](/docs/config
 				"The storage account access key. This field is ignored if `storage_connection_string` is set.",
 			),
 			docs.FieldCommon(
+				"storage_sas_token",
+				"The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` are set.",
+			).AtVersion("3.38.0"),
+			docs.FieldCommon(
 				"storage_connection_string",
-				"A storage account connection string. This field is required if `storage_account` and `storage_access_key` are not set.",
+				"A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.",
 			),
 			docs.FieldCommon(
 				"container", "The name of the container from which to download blobs.",
@@ -86,6 +90,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 type AzureBlobStorageConfig struct {
 	StorageAccount          string `json:"storage_account" yaml:"storage_account"`
 	StorageAccessKey        string `json:"storage_access_key" yaml:"storage_access_key"`
+	StorageSASToken         string `json:"storage_sas_token" yaml:"storage_sas_token"`
 	StorageConnectionString string `json:"storage_connection_string" yaml:"storage_connection_string"`
 	Container               string `json:"container" yaml:"container"`
 	Prefix                  string `json:"prefix" yaml:"prefix"`

@@ -18,6 +18,35 @@ type InputPart struct {
 	Metadata map[string]string `yaml:"metadata"`
 }
 
+// UnmarshalYAML extracts an InputPart from a YAML node.
+func (i *InputPart) UnmarshalYAML(value *yaml.Node) error {
+	rawMap := map[string]yaml.Node{}
+	if err := value.Decode(&rawMap); err != nil {
+		return fmt.Errorf("line %v: %v", value.Line, err)
+	}
+	for k, v := range rawMap {
+		switch k {
+		case "content":
+			if err := v.Decode(&i.Content); err != nil {
+				return fmt.Errorf("line %v: %v", v.Line, err)
+			}
+		case "json_content":
+			if err := yamlNodeToTestString(&v, &i.Content); err != nil {
+				return fmt.Errorf("line %v: %v", v.Line, err)
+			}
+		case "metadata":
+			if err := v.Decode(&i.Metadata); err != nil {
+				return fmt.Errorf("line %v: %v", v.Line, err)
+			}
+		default:
+			return fmt.Errorf("line %v: input part field not recognised: %v", v.Line, k)
+		}
+	}
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
 // Case contains a definition of a single Benthos config test case.
 type Case struct {
 	Name             string            `yaml:"name"`
