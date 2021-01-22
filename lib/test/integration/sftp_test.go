@@ -1,10 +1,11 @@
 package integration
 
 import (
-	"github.com/ory/dockertest/v3"
 	"log"
 	"strconv"
 	"testing"
+
+	"github.com/ory/dockertest/v3"
 )
 
 var _ = registerIntegrationTest("sftp", func(t *testing.T) {
