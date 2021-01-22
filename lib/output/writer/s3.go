@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -174,10 +175,10 @@ func (a *AmazonS3) WriteWithContext(wctx context.Context, msg types.Message) err
 			contentEncoding = aws.String(ce)
 		}
 
-		// Prepare tags.
+		// Prepare tags, escaping keys and values to ensure they're valid query string parameters.
 		tags := []string{}
 		for k, v := range a.tags {
-			tags = append(tags, k+"="+v.String(i, msg))
+			tags = append(tags, url.QueryEscape(k)+"="+url.QueryEscape(v.String(i, msg)))
 		}
 		tagging := strings.Join(tags, "&")
 
