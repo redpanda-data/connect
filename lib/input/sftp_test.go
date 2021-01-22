@@ -2,10 +2,8 @@ package input
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/ory/dockertest/v3"
 	"github.com/pkg/sftp"
 	"log"
 	"os"
@@ -31,48 +29,48 @@ var sftpPassword = "pass"
 var sftpDirectory = "/upload"
 var sftpPort string
 
-func TestMain(m *testing.M) {
-	pool, err := dockertest.NewPool("")
-	if err != nil {
-		log.Fatalf("Could not connect to docker: %s", err)
-	}
-
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "atmoz/sftp",
-		Tag:        "alpine",
-		Cmd: []string{
-			"foo:pass:1001:100:upload",
-		},
-	})
-
-	if err != nil {
-		log.Fatalf("Could not start resource: %s", err)
-	}
-
-	if err := pool.Retry(func() error {
-		sftpPort = resource.GetPort("22/tcp")
-		if err != nil {
-			return err
-		}
-
-		isConnected := ConnectToSFTPServer("localhost", sftpPort)
-		if !isConnected {
-			return errors.New("failed to connect to SSH server")
-		}
-
-		return nil
-	}); err != nil {
-		log.Fatalf("Could not connect to docker: %s", err)
-	}
-
-	code := m.Run()
-
-	if err := pool.Purge(resource); err != nil {
-		log.Fatalf("Could not purge resource: %s", err)
-	}
-
-	os.Exit(code)
-}
+//func TestMain(m *testing.M) {
+//	pool, err := dockertest.NewPool("")
+//	if err != nil {
+//		log.Fatalf("Could not connect to docker: %s", err)
+//	}
+//
+//	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
+//		Repository: "atmoz/sftp",
+//		Tag:        "alpine",
+//		Cmd: []string{
+//			"foo:pass:1001:100:upload",
+//		},
+//	})
+//
+//	if err != nil {
+//		log.Fatalf("Could not start resource: %s", err)
+//	}
+//
+//	if err := pool.Retry(func() error {
+//		sftpPort = resource.GetPort("22/tcp")
+//		if err != nil {
+//			return err
+//		}
+//
+//		isConnected := ConnectToSFTPServer("localhost", sftpPort)
+//		if !isConnected {
+//			return errors.New("failed to connect to SSH server")
+//		}
+//
+//		return nil
+//	}); err != nil {
+//		log.Fatalf("Could not connect to docker: %s", err)
+//	}
+//
+//	code := m.Run()
+//
+//	if err := pool.Purge(resource); err != nil {
+//		log.Fatalf("Could not purge resource: %s", err)
+//	}
+//
+//	os.Exit(code)
+//}
 
 func TestProcessFile(t *testing.T) {
 	t.Skip()
