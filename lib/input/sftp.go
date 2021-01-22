@@ -36,9 +36,7 @@ func init() {
 			return NewAsyncReader(
 				TypeSFTP,
 				true,
-				reader.NewAsyncBundleUnacks(
-					reader.NewAsyncPreserver(r),
-				),
+				reader.NewAsyncPreserver(r),
 				log, stats,
 			)
 		},
@@ -108,6 +106,7 @@ func NewSFTPConfig() SFTPConfig {
 	return SFTPConfig{
 		Address:               "",
 		Credentials:           sftpSetup.Credentials{},
+		Paths:                 []string{},
 		MaxConnectionAttempts: 10,
 		RetrySleepDuration:    "5s",
 		Codec:                 "lines",
