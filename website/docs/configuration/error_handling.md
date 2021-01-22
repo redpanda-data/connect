@@ -150,4 +150,5 @@ When the source of a rejected message is a sequential input without support for 
 [processor.log]: /docs/components/processors/log
 [output.switch]: /docs/components/outputs/switch
 [output.broker]: /docs/components/outputs/broker
+[output.reject]: /docs/components/outputs/reject
 [configuration.interpolation]: /docs/configuration/interpolation#bloblang-queries
