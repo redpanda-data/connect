@@ -471,7 +471,6 @@ input:
           max_buffer: ${INPUT_SFTP_MAX_BUFFER:1000000}
           max_connection_attempts: ${INPUT_SFTP_MAX_CONNECTION_ATTEMPTS:10}
           multipart: ${INPUT_SFTP_MULTIPART:false}
-          paths: ${INPUT_SFTP_PATHS}
           retry_sleep_duration: ${INPUT_SFTP_RETRY_SLEEP_DURATION:5s}
         socket:
           address: ${INPUT_SOCKET_ADDRESS:/tmp/benthos.sock}

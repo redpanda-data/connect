@@ -426,7 +426,6 @@ INPUT_SFTP_DELETE_ON_FINISH                          = false
 INPUT_SFTP_MAX_BUFFER                                = 1000000
 INPUT_SFTP_MAX_CONNECTION_ATTEMPTS                   = 10
 INPUT_SFTP_MULTIPART                                 = false
-INPUT_SFTP_PATHS
 INPUT_SFTP_RETRY_SLEEP_DURATION                      = 5s
 INPUT_SOCKET_ADDRESS                                 = /tmp/benthos.sock
 INPUT_SOCKET_DELIMITER
