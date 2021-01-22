@@ -2,8 +2,10 @@ package input
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/ory/dockertest/v3"
 	"github.com/pkg/sftp"
 	"log"
 	"os"
@@ -11,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	sftpSetup "github.com/Jeffail/benthos/v3/internal/service/sftp"
 	benthosLog "github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/assert"
@@ -26,50 +29,50 @@ var sftpClient *sftp.Client
 var sftpUsername = "foo"
 var sftpPassword = "pass"
 var sftpDirectory = "/upload"
-var sftpPort int
+var sftpPort string
 
-//func TestMain(m *testing.M) {
-//	pool, err := dockertest.NewPool("")
-//	if err != nil {
-//		log.Fatalf("Could not connect to docker: %s", err)
-//	}
-//
-//	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-//		Repository: "atmoz/sftp",
-//		Tag:        "alpine",
-//		Cmd: []string{
-//			"foo:pass:1001:100:upload",
-//		},
-//	})
-//
-//	if err != nil {
-//		log.Fatalf("Could not start resource: %s", err)
-//	}
-//
-//	if err := pool.Retry(func() error {
-//		sftpPort, err = strconv.Atoi(resource.GetPort("22/tcp"))
-//		if err != nil {
-//			return err
-//		}
-//
-//		isConnected := ConnectToSFTPServer("localhost", sftpPort)
-//		if !isConnected {
-//			return errors.New("failed to connect to SSH server")
-//		}
-//
-//		return nil
-//	}); err != nil {
-//		log.Fatalf("Could not connect to docker: %s", err)
-//	}
-//
-//	code := m.Run()
-//
-//	if err := pool.Purge(resource); err != nil {
-//		log.Fatalf("Could not purge resource: %s", err)
-//	}
-//
-//	os.Exit(code)
-//}
+func TestMain(m *testing.M) {
+	pool, err := dockertest.NewPool("")
+	if err != nil {
+		log.Fatalf("Could not connect to docker: %s", err)
+	}
+
+	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
+		Repository: "atmoz/sftp",
+		Tag:        "alpine",
+		Cmd: []string{
+			"foo:pass:1001:100:upload",
+		},
+	})
+
+	if err != nil {
+		log.Fatalf("Could not start resource: %s", err)
+	}
+
+	if err := pool.Retry(func() error {
+		sftpPort = resource.GetPort("22/tcp")
+		if err != nil {
+			return err
+		}
+
+		isConnected := ConnectToSFTPServer("localhost", sftpPort)
+		if !isConnected {
+			return errors.New("failed to connect to SSH server")
+		}
+
+		return nil
+	}); err != nil {
+		log.Fatalf("Could not connect to docker: %s", err)
+	}
+
+	code := m.Run()
+
+	if err := pool.Purge(resource); err != nil {
+		log.Fatalf("Could not purge resource: %s", err)
+	}
+
+	os.Exit(code)
+}
 
 func TestProcessFile(t *testing.T) {
 	t.Skip()
@@ -78,17 +81,17 @@ func TestProcessFile(t *testing.T) {
 	testCase := scenario{
 		Name: "good conf",
 		Conf: &SFTPConfig{
-			Server:   "localhost",
-			Port:     sftpPort,
-			Filename: filePath,
-			Credentials: SFTPCredentials{
+			Address: "http://localhost:" + sftpPort,
+			Paths:   []string{filePath},
+			Credentials: sftpSetup.Credentials{
 				Username: "foo",
-				Secret:   "pass",
+				Password: "pass",
 			},
 			MaxConnectionAttempts: 10,
-			Path:                  "",
+			RetrySleepDuration:    "5s",
 			Codec:                 "lines",
-			DeleteObjects:         false,
+			DeleteOnFinish:        false,
+			MaxBuffer:             1000000,
 		},
 	}
 
@@ -116,22 +119,24 @@ func TestNoServer(t *testing.T) {
 	testCase := scenario{
 		Name: "no server",
 		Conf: &SFTPConfig{
-			Server:   "invalid_server",
-			Port:     sftpPort,
-			Filename: filepath,
-			Credentials: SFTPCredentials{
+			Address: "http:///localhost:" + sftpPort,
+			Paths:   []string{filepath},
+			Credentials: sftpSetup.Credentials{
 				Username: sftpUsername,
-				Secret:   sftpPassword,
+				Password: sftpPassword,
 			},
 			MaxConnectionAttempts: 3,
-			Path:                  "",
+			RetrySleepDuration:    "5s",
 			Codec:                 "lines",
+			MaxBuffer:             1000000,
 		},
 	}
 
 	proc, err := NewSFTP(*testCase.Conf, benthosLog.Noop(), metrics.Noop())
-	assert.Error(t, err, "config should not error")
 	assert.NotNil(t, proc, "should return non-nil data")
+	assert.NoError(t, err, "config should not error")
+	err = proc.ConnectWithContext(context.Background())
+	assert.Error(t, err, "connection should error")
 }
 
 func TestInvalidCredentials(t *testing.T) {
@@ -140,22 +145,24 @@ func TestInvalidCredentials(t *testing.T) {
 	testCase := scenario{
 		Name: "invalid credentials",
 		Conf: &SFTPConfig{
-			Server:   "localhost",
-			Port:     sftpPort,
-			Filename: path.Join(sftpDirectory, "test.txt"),
-			Credentials: SFTPCredentials{
+			Address: "http://localhost:" + sftpPort,
+			Paths:   []string{path.Join(sftpDirectory, "test.txt")},
+			Credentials: sftpSetup.Credentials{
 				Username: "invaliduser",
-				Secret:   "invalidsecret",
+				Password: "invalidpass",
 			},
 			MaxConnectionAttempts: 3,
-			Path:                  "",
+			RetrySleepDuration:    "5s",
+			MaxBuffer:             1000000,
 			Codec:                 "lines",
 		},
 	}
 
 	proc, err := NewSFTP(*testCase.Conf, benthosLog.Noop(), metrics.Noop())
-	assert.Error(t, err, "config should error")
 	assert.NotNil(t, proc, "should return non-nil data")
+	assert.NoError(t, err, "config should not error")
+	err = proc.ConnectWithContext(context.Background())
+	assert.Error(t, err, "connection should error")
 }
 
 func TestFileNotFound(t *testing.T) {
@@ -164,15 +171,15 @@ func TestFileNotFound(t *testing.T) {
 	testCase := scenario{
 		Name: "file not found",
 		Conf: &SFTPConfig{
-			Server:   "localhost",
-			Port:     sftpPort,
-			Filename: path.Join(sftpDirectory, "missingfile.txt"),
-			Credentials: SFTPCredentials{
+			Address: "http://localhost:" + sftpPort,
+			Paths:   []string{path.Join(sftpDirectory, "missingfile.txt")},
+			Credentials: sftpSetup.Credentials{
 				Username: sftpUsername,
-				Secret:   sftpPassword,
+				Password: sftpPassword,
 			},
 			MaxConnectionAttempts: 10,
-			Path:                  "",
+			RetrySleepDuration:    "5s",
+			MaxBuffer:             1000000,
 			Codec:                 "lines",
 		},
 	}
@@ -200,15 +207,15 @@ func TestProcessDirectory(t *testing.T) {
 	testCase := scenario{
 		Name: "process directory",
 		Conf: &SFTPConfig{
-			Server:   "localhost",
-			Port:     sftpPort,
-			Filename: "",
-			Credentials: SFTPCredentials{
+			Address: "http://localhost:" + sftpPort,
+			Paths:   []string{path.Join(dirPath, "*.txt")},
+			Credentials: sftpSetup.Credentials{
 				Username: sftpUsername,
-				Secret:   sftpPassword,
+				Password: sftpPassword,
 			},
 			MaxConnectionAttempts: 10,
-			Path:                  dirPath,
+			RetrySleepDuration:    "5s",
+			MaxBuffer:             1000000,
 			Codec:                 "lines",
 		},
 	}
@@ -232,6 +239,13 @@ func TestProcessDirectory(t *testing.T) {
 	ValidateMessage(t, msg, "Another test line", file1Path)
 
 	msg, _, err = proc.ReadWithContext(context.Background())
+	assert.Errorf(t, err, "should reach end of file")
+
+	// move to the next file
+	err = proc.ConnectWithContext(context.Background())
+	assert.NoError(t, err, "ConnectWithContext should not error")
+
+	msg, _, err = proc.ReadWithContext(context.Background())
 	assert.NoError(t, err, "ReadWithContext should not error")
 	ValidateMessage(t, msg, "This is the other test file", file2Path)
 
@@ -246,23 +260,23 @@ func ValidateMessage(t *testing.T, msg types.Message, expectedMessage string, ex
 	part := msg.Get(0)
 	messageString := string(part.Get())
 	assert.Equal(t, expectedMessage, messageString)
-	assert.Equal(t, expectedFilePath, part.Metadata().Get("sftp_file_path"))
+	assert.Equal(t, expectedFilePath, part.Metadata().Get("path"))
 }
 
-func ConnectToSFTPServer(server string, port int) bool {
+func ConnectToSFTPServer(server string, port string) bool {
 	// create sftp client and establish connection
-	s := &SFTPServer{
+	s := &sftpSetup.Server{
 		Host: server,
 		Port: port,
 	}
 
 	certCheck := &ssh.CertChecker{
-		IsHostAuthority: hostAuthCallback(),
-		IsRevoked:       certCallback(s),
-		HostKeyFallback: hostCallback(s),
+		IsHostAuthority: sftpSetup.HostAuthCallback(),
+		IsRevoked:       sftpSetup.CertCallback(s),
+		HostKeyFallback: sftpSetup.HostCallback(s),
 	}
 
-	addr := fmt.Sprintf("%s:%d", server, port)
+	addr := fmt.Sprintf("%s:%s", server, port)
 	config := &ssh.ClientConfig{
 		User: sftpUsername,
 		Auth: []ssh.AuthMethod{

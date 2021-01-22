@@ -8,17 +8,17 @@ http:
 input:
   type: sftp
   sftp:
+    address: ""
     codec: lines
     credentials:
-      secret: ""
+      password: ""
       username: ""
-    delete_objects: false
-    filename: ""
+    delete_on_finish: false
+    max_buffer: 1000000
     max_connection_attempts: 10
-    path: ""
-    port: 0
+    multipart: false
+    paths: []
     retry_sleep_duration: 5s
-    server: ""
 buffer:
   type: none
   none: {}
@@ -28,15 +28,14 @@ pipeline:
 output:
   type: sftp
   sftp:
+    address: ""
     credentials:
-      secret: ""
+      password: ""
       username: ""
     max_connection_attempts: 10
     max_in_flight: 1
     path: ""
-    port: 0
     retry_sleep_duration: 5s
-    server: ""
 resources:
   caches: {}
   conditions: {}

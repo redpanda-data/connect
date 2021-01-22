@@ -14,7 +14,7 @@ func init() {
 
 	var credentialsFields = docs.FieldSpecs{
 		docs.FieldCommon("username", "The username to connect to the SFTP server."),
-		docs.FieldCommon("secret", "The secret/password for the username to connect to the SFTP server."),
+		docs.FieldCommon("password", "The password for the username to connect to the SFTP server."),
 	}
 
 	Constructors[TypeSFTP] = TypeSpec{
@@ -30,12 +30,8 @@ calculated per message of a batch.`,
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(
-				"server",
-				"The server to connect to and save files on.",
-			),
-			docs.FieldCommon(
-				"port",
-				"The port to connect to on the server.",
+				"address",
+				"The address of the server to connect to that has the target files.",
 			),
 			docs.FieldCommon(
 				"path",

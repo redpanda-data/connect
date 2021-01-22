@@ -6,18 +6,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
-	"github.com/pkg/sftp"
-	"golang.org/x/crypto/ssh"
-	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	sftpSetup "github.com/Jeffail/benthos/v3/internal/service/sftp"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/pkg/sftp"
+	"golang.org/x/crypto/ssh"
 )
 
 //------------------------------------------------------------------------------
@@ -48,11 +49,7 @@ func NewSFTP(
 		stats: stats,
 	}
 
-	err := s.initSFTPConnection()
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to SFTP server: %v", err)
-	}
-
+	var err error
 	if s.path, err = bloblang.NewField(conf.Path); err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}
@@ -67,7 +64,8 @@ func (s *SFTP) ConnectWithContext(ctx context.Context) error {
 
 // Connect attempts to establish a connection to the target SFTP server.
 func (s *SFTP) Connect() error {
-	return nil
+	err := s.initSFTPConnection()
+	return err
 }
 
 // Write attempts to write message contents to a target SFTP server as files.
@@ -116,29 +114,33 @@ func (s *SFTP) WriteWithContext(_ context.Context, msg types.Message) error {
 }
 
 func (s *SFTP) initSFTPConnection() error {
+	serverURL, err := url.Parse(s.conf.Address)
+	if err != nil {
+		return fmt.Errorf("failed to parse address: %v", err)
+	}
+
 	// create sftp client and establish connection
-	server := &SFTPServer{
-		Host: s.conf.Server,
-		Port: s.conf.Port,
+	server := &sftpSetup.Server{
+		Host: serverURL.Hostname(),
+		Port: serverURL.Port(),
 	}
 
 	certCheck := &ssh.CertChecker{
-		IsHostAuthority: hostAuthCallback(),
-		IsRevoked:       certCallback(server),
-		HostKeyFallback: hostCallback(server),
+		IsHostAuthority: sftpSetup.HostAuthCallback(),
+		IsRevoked:       sftpSetup.CertCallback(server),
+		HostKeyFallback: sftpSetup.HostCallback(server),
 	}
 
-	addr := fmt.Sprintf("%s:%d", s.conf.Server, s.conf.Port)
+	addr := fmt.Sprintf("%s:%s", server.Host, server.Port)
 	config := &ssh.ClientConfig{
 		User: s.conf.Credentials.Username,
 		Auth: []ssh.AuthMethod{
-			ssh.Password(s.conf.Credentials.Secret),
+			ssh.Password(s.conf.Credentials.Password),
 		},
 		HostKeyCallback: certCheck.CheckHostKey,
 	}
 
 	var conn *ssh.Client
-	var err error
 	connectionAttempts := 0
 	for {
 		connectionAttempts++
@@ -173,44 +175,6 @@ func (s *SFTP) initSFTPConnection() error {
 	s.client = client
 
 	return err
-}
-
-// SFTPServer contains connection data for connecting to an SFTP server
-type SFTPServer struct {
-	Address   string          // host:port
-	Host      string          // IP address
-	Port      int             // port
-	IsSSH     bool            // true if server is running SSH on address:port
-	Banner    string          // banner text, if any
-	Cert      ssh.Certificate // server's certificate
-	Hostname  string          // hostname
-	PublicKey ssh.PublicKey   // server's public key
-}
-
-type hostAuthorityCallBack func(ssh.PublicKey, string) bool
-type isRevokedCallback func(cert *ssh.Certificate) bool
-
-func hostAuthCallback() hostAuthorityCallBack {
-	return func(p ssh.PublicKey, addr string) bool {
-		return true
-	}
-}
-
-func certCallback(s *SFTPServer) isRevokedCallback {
-	return func(cert *ssh.Certificate) bool {
-		s.Cert = *cert
-		s.IsSSH = true
-
-		return false
-	}
-}
-
-func hostCallback(s *SFTPServer) ssh.HostKeyCallback {
-	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-		s.Hostname = hostname
-		s.PublicKey = key
-		return nil
-	}
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.

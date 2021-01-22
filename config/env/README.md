@@ -418,16 +418,16 @@ INPUT_S3_SQS_ENVELOPE_PATH
 INPUT_S3_SQS_MAX_MESSAGES                            = 10
 INPUT_S3_SQS_URL
 INPUT_S3_TIMEOUT                                     = 5s
+INPUT_SFTP_ADDRESS
 INPUT_SFTP_CODEC                                     = lines
-INPUT_SFTP_CREDENTIALS_SECRET
+INPUT_SFTP_CREDENTIALS_PASSWORD
 INPUT_SFTP_CREDENTIALS_USERNAME
-INPUT_SFTP_DELETE_OBJECTS                            = false
-INPUT_SFTP_FILENAME
+INPUT_SFTP_DELETE_ON_FINISH                          = false
+INPUT_SFTP_MAX_BUFFER                                = 1000000
 INPUT_SFTP_MAX_CONNECTION_ATTEMPTS                   = 10
-INPUT_SFTP_PATH
-INPUT_SFTP_PORT                                      = 0
+INPUT_SFTP_MULTIPART                                 = false
+INPUT_SFTP_PATHS
 INPUT_SFTP_RETRY_SLEEP_DURATION                      = 5s
-INPUT_SFTP_SERVER
 INPUT_SOCKET_ADDRESS                                 = /tmp/benthos.sock
 INPUT_SOCKET_DELIMITER
 INPUT_SOCKET_MAX_BUFFER                              = 1000000
@@ -1185,14 +1185,13 @@ OUTPUT_S3_PATH                                           = ${!count("files")}-${
 OUTPUT_S3_REGION                                         = eu-west-1
 OUTPUT_S3_STORAGE_CLASS                                  = STANDARD
 OUTPUT_S3_TIMEOUT                                        = 5s
-OUTPUT_SFTP_CREDENTIALS_SECRET
+OUTPUT_SFTP_ADDRESS
+OUTPUT_SFTP_CREDENTIALS_PASSWORD
 OUTPUT_SFTP_CREDENTIALS_USERNAME
 OUTPUT_SFTP_MAX_CONNECTION_ATTEMPTS                      = 10
 OUTPUT_SFTP_MAX_IN_FLIGHT                                = 1
 OUTPUT_SFTP_PATH
-OUTPUT_SFTP_PORT                                         = 0
 OUTPUT_SFTP_RETRY_SLEEP_DURATION                         = 5s
-OUTPUT_SFTP_SERVER
 OUTPUT_SNS_CREDENTIALS_ID
 OUTPUT_SNS_CREDENTIALS_PROFILE
 OUTPUT_SNS_CREDENTIALS_ROLE

@@ -46,26 +46,25 @@ var _ = registerIntegrationTest("sftp", func(t *testing.T) {
 		template := `
 output:
   sftp:
-    server: localhost
-    port: $VAR1
+    address: http://localhost:$VAR1
     path: $VAR2/test-$ID/${!count("$ID")}.txt
     credentials:
         username: foo
-        secret: pass
+        password: pass
     max_in_flight: 1
     max_connection_attempts: 3
     retry_sleep_duration: 5s
 
 input:
   sftp:
-    server: localhost
-    port: $VAR1
-    path: $VAR2/test-$ID
+    address: http://localhost:$VAR1
+    paths:
+      - /$VAR2/test-$ID/*.txt
     credentials:
         username: foo
-        secret: pass
+        password: pass
     codec: all-bytes
-    delete_objects: false
+    delete_on_finish: false
     max_connection_attempts: 3
     retry_sleep_duration: 5s
 `

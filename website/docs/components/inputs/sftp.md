@@ -31,13 +31,11 @@ Downloads objects via an SFTP connection.
 # Common config fields, showing default values
 input:
   sftp:
-    server: ""
-    port: 0
+    address: ""
     credentials:
       username: ""
-      secret: ""
-    filename: ""
-    path: ""
+      password: ""
+    paths: []
     max_connection_attempts: 10
     codec: lines
 ```
@@ -49,17 +47,17 @@ input:
 # All config fields, showing default values
 input:
   sftp:
-    server: ""
-    port: 0
+    address: ""
     credentials:
       username: ""
-      secret: ""
-    filename: ""
-    path: ""
+      password: ""
+    paths: []
     max_connection_attempts: 10
     retry_sleep_duration: 5s
     codec: lines
-    delete_objects: false
+    delete_on_finish: false
+    max_buffer: 1000000
+    multipart: false
 ```
 
 </TabItem>
@@ -75,21 +73,13 @@ You can access these metadata fields using [function interpolation](/docs/config
 
 ## Fields
 
-### `server`
+### `address`
 
-The server to connect to that has the target files.
+The address of the server to connect to that has the target files.
 
 
 Type: `string`  
 Default: `""`  
-
-### `port`
-
-The port to connect to on the server.
-
-
-Type: `number`  
-Default: `0`  
 
 ### `credentials`
 
@@ -106,29 +96,21 @@ The username to connect to the SFTP server.
 Type: `string`  
 Default: `""`  
 
-### `credentials.secret`
+### `credentials.password`
 
-The secret/password for the username to connect to the SFTP server.
-
-
-Type: `string`  
-Default: `""`  
-
-### `filename`
-
-The name of the file to pull messages from. If not provided, all the files in the path will be processed.
+The password for the username to connect to the SFTP server.
 
 
 Type: `string`  
 Default: `""`  
 
-### `path`
+### `paths`
 
-The path of the directory or file that it will process.
+A list of paths to consume sequentially. Glob patterns are supported.
 
 
-Type: `string`  
-Default: `""`  
+Type: `array`  
+Default: `[]`  
 
 ### `max_connection_attempts`
 
@@ -184,9 +166,25 @@ codec: "delim:\t"
 codec: delim:foobar
 ```
 
-### `delete_objects`
+### `delete_on_finish`
 
 Whether to delete files from the server once they are processed.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `max_buffer`
+
+The largest token size expected when consuming delimited files.
+
+
+Type: `number`  
+Default: `1000000`  
+
+### `multipart`
+
+Consume multipart messages from the codec by interpretting empty lines as the end of the message. Multipart messages are processed as a batch within Benthos. Not all codecs are appropriate for multipart messages.
 
 
 Type: `bool`  

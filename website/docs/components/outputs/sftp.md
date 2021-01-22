@@ -33,12 +33,11 @@ Introduced in version 3.36.0.
 # Common config fields, showing default values
 output:
   sftp:
-    server: ""
-    port: 0
+    address: ""
     path: ""
     credentials:
       username: ""
-      secret: ""
+      password: ""
     max_in_flight: 1
     max_connection_attempts: 10
 ```
@@ -50,12 +49,11 @@ output:
 # All config fields, showing default values
 output:
   sftp:
-    server: ""
-    port: 0
+    address: ""
     path: ""
     credentials:
       username: ""
-      secret: ""
+      password: ""
     max_in_flight: 1
     max_connection_attempts: 10
     retry_sleep_duration: 5s
@@ -76,21 +74,13 @@ field `max_in_flight`.
 
 ## Fields
 
-### `server`
+### `address`
 
-The server to connect to and save files on.
+The address of the server to connect to that has the target files.
 
 
 Type: `string`  
 Default: `""`  
-
-### `port`
-
-The port to connect to on the server.
-
-
-Type: `number`  
-Default: `0`  
 
 ### `path`
 
@@ -115,9 +105,9 @@ The username to connect to the SFTP server.
 Type: `string`  
 Default: `""`  
 
-### `credentials.secret`
+### `credentials.password`
 
-The secret/password for the username to connect to the SFTP server.
+The password for the username to connect to the SFTP server.
 
 
 Type: `string`  

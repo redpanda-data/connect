@@ -1,33 +1,27 @@
 package writer
 
+import sftpSetup "github.com/Jeffail/benthos/v3/internal/service/sftp"
+
 //------------------------------------------------------------------------------
 
 // SFTPConfig contains configuration fields for the SFTP output type.
 type SFTPConfig struct {
-	Server                string          `json:"server" yaml:"server"`
-	Port                  int             `json:"port" yaml:"port"`
-	Path                  string          `json:"path" yaml:"path"`
-	Credentials           SFTPCredentials `json:"credentials" yaml:"credentials"`
-	MaxInFlight           int             `json:"max_in_flight" yaml:"max_in_flight"`
-	MaxConnectionAttempts int             `json:"max_connection_attempts" yaml:"max_connection_attempts"`
-	RetrySleepDuration    string          `json:"retry_sleep_duration" yaml:"retry_sleep_duration"`
-}
-
-// SFTPCredentials contains the credentials for connecting to the SFTP server
-type SFTPCredentials struct {
-	Username string `json:"username" yaml:"username"`
-	Secret   string `json:"secret" yaml:"secret"`
+	Address               string           `json:"address" yaml:"address"`
+	Path                  string           `json:"path" yaml:"path"`
+	Credentials           sftpSetup.Credentials `json:"credentials" yaml:"credentials"`
+	MaxInFlight           int              `json:"max_in_flight" yaml:"max_in_flight"`
+	MaxConnectionAttempts int              `json:"max_connection_attempts" yaml:"max_connection_attempts"`
+	RetrySleepDuration    string           `json:"retry_sleep_duration" yaml:"retry_sleep_duration"`
 }
 
 // NewSFTPConfig creates a new Config with default values.
 func NewSFTPConfig() SFTPConfig {
 	return SFTPConfig{
-		Server: "",
-		Port:   0,
-		Path:   "",
-		Credentials: SFTPCredentials{
+		Address: "",
+		Path:    "",
+		Credentials: sftpSetup.Credentials{
 			Username: "",
-			Secret:   "",
+			Password: "",
 		},
 		MaxInFlight:           1,
 		MaxConnectionAttempts: 10,
