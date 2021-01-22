@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
@@ -26,6 +27,7 @@ type AmazonS3Config struct {
 	Bucket             string             `json:"bucket" yaml:"bucket"`
 	ForcePathStyleURLs bool               `json:"force_path_style_urls" yaml:"force_path_style_urls"`
 	Path               string             `json:"path" yaml:"path"`
+	Tags               map[string]string  `json:"tags" yaml:"tags"`
 	ContentType        string             `json:"content_type" yaml:"content_type"`
 	ContentEncoding    string             `json:"content_encoding" yaml:"content_encoding"`
 	StorageClass       string             `json:"storage_class" yaml:"storage_class"`
@@ -42,6 +44,7 @@ func NewAmazonS3Config() AmazonS3Config {
 		Bucket:             "",
 		ForcePathStyleURLs: false,
 		Path:               `${!count("files")}-${!timestamp_unix_nano()}.txt`,
+		Tags:               map[string]string{},
 		ContentType:        "application/octet-stream",
 		ContentEncoding:    "",
 		StorageClass:       "STANDARD",
@@ -60,6 +63,7 @@ type AmazonS3 struct {
 	conf AmazonS3Config
 
 	path            field.Expression
+	tags            map[string]field.Expression
 	contentType     field.Expression
 	contentEncoding field.Expression
 	storageClass    field.Expression
@@ -104,6 +108,14 @@ func NewAmazonS3(
 	if a.storageClass, err = bloblang.NewField(conf.StorageClass); err != nil {
 		return nil, fmt.Errorf("failed to parse storage class expression: %v", err)
 	}
+
+	a.tags = map[string]field.Expression{}
+	for k, v := range conf.Tags {
+		if a.tags[k], err = bloblang.NewField(v); err != nil {
+			return nil, fmt.Errorf("failed to parse tags expression: %v", err)
+		}
+	}
+
 	return a, nil
 }
 
@@ -162,9 +174,17 @@ func (a *AmazonS3) WriteWithContext(wctx context.Context, msg types.Message) err
 			contentEncoding = aws.String(ce)
 		}
 
+		// Prepare tags.
+		tags := []string{}
+		for k, v := range a.tags {
+			tags = append(tags, k+"="+v.String(i, msg))
+		}
+		tagging := strings.Join(tags, "&")
+
 		uploadInput := &s3manager.UploadInput{
 			Bucket:          &a.conf.Bucket,
 			Key:             aws.String(a.path.String(i, msg)),
+			Tagging:         aws.String(tagging),
 			Body:            bytes.NewReader(p.Get()),
 			ContentType:     aws.String(a.contentType.String(i, msg)),
 			ContentEncoding: contentEncoding,

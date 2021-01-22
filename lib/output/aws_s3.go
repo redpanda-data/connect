@@ -28,6 +28,20 @@ calculated per message of a batch.
 
 Metadata fields on messages will be sent as headers, in order to mutate these values (or remove them) check out the [metadata docs](/docs/configuration/metadata).
 
+### Tags
+
+Tag fields will be stored as object tags against the S3 object. For example:
+
+` + "```yaml" + `
+output:
+	aws_s3:
+		bucket: TODO
+    	path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
+		tags:
+			Key1: Value1
+			Timestamp: ${!meta("Timestamp")}
+` + "```" + `
+
 ### Credentials
 
 By default Benthos will use a shared credentials file when connecting to AWS
@@ -87,6 +101,13 @@ output:
 				`${!meta("kafka_key")}.json`,
 				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
 			).SupportsInterpolation(false),
+			docs.FieldCommon(
+				"tags", "Tags to provide to the object in S3.",
+				map[string]string{
+					"Key1":      "Value1",
+					"Timestamp": `${!meta("Timestamp")}`,
+				},
+			).SupportsInterpolation(false),
 			docs.FieldCommon("content_type", "The content type to set for each object.").SupportsInterpolation(false),
 			docs.FieldAdvanced("content_encoding", "An optional content encoding to set for each object.").SupportsInterpolation(false),
 			docs.FieldAdvanced("storage_class", "The storage class to set for each object.").HasOptions(
@@ -122,6 +143,20 @@ calculated per message of a batch.
 ### Metadata
 
 Metadata fields on messages will be sent as headers, in order to mutate these values (or remove them) check out the [metadata docs](/docs/configuration/metadata).
+
+### Tags
+
+Tag fields will be stored as object tags against the S3 object. For example:
+
+` + "```yaml" + `
+output:
+	aws_s3:
+		bucket: TODO
+    	path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
+		tags:
+			Key1: Value1
+			Timestamp: ${!meta("Timestamp")}
+` + "```" + `
 
 ### Credentials
 
@@ -181,6 +216,13 @@ output:
 				`${!count("files")}-${!timestamp_unix_nano()}.txt`,
 				`${!meta("kafka_key")}.json`,
 				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
+			).SupportsInterpolation(false),
+			docs.FieldCommon(
+				"tags", "Tags to provide to the object in S3.",
+				map[string]string{
+					"Key1":      "Value1",
+					"Timestamp": `${!meta("Timestamp")}`,
+				},
 			).SupportsInterpolation(false),
 			docs.FieldCommon("content_type", "The content type to set for each object.").SupportsInterpolation(false),
 			docs.FieldAdvanced("content_encoding", "An optional content encoding to set for each object.").SupportsInterpolation(false),
