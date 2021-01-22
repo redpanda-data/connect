@@ -28,7 +28,7 @@ func init() {
 	}
 
 	Constructors[TypeSFTP] = TypeSpec{
-		constructor: func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 			r, err := NewSFTP(conf.SFTP, log, stats)
 			if err != nil {
 				return nil, err
@@ -39,7 +39,7 @@ func init() {
 				reader.NewAsyncPreserver(r),
 				log, stats,
 			)
-		},
+		}),
 		Status: docs.StatusExperimental,
 		Summary: `
 Downloads objects via an SFTP connection.`,

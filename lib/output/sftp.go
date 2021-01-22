@@ -18,7 +18,7 @@ func init() {
 	}
 
 	Constructors[TypeSFTP] = TypeSpec{
-		constructor: NewSFTP,
+		constructor: fromSimpleConstructor(NewSFTP),
 		Status:      docs.StatusBeta,
 		Version:     "3.36.0",
 		Summary: `
