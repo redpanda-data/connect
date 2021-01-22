@@ -1,8 +1,9 @@
 package sftp
 
 import (
-	"golang.org/x/crypto/ssh"
 	"net"
+
+	"golang.org/x/crypto/ssh"
 )
 
 // Credentials contains the credentials for connecting to the SFTP server

@@ -30,7 +30,6 @@ type SFTP struct {
 
 	client *sftp.Client
 
-	server field.Expression
 	path   field.Expression
 
 	log   log.Modular

@@ -3,8 +3,6 @@ package input
 import (
 	"context"
 	"fmt"
-	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/pkg/sftp"
 	"log"
 	"os"
 	"path"
@@ -14,6 +12,8 @@ import (
 	sftpSetup "github.com/Jeffail/benthos/v3/internal/service/sftp"
 	benthosLog "github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/pkg/sftp"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/ssh"
 )
@@ -236,7 +236,7 @@ func TestProcessDirectory(t *testing.T) {
 	assert.NoError(t, err, "ReadWithContext should not error")
 	ValidateMessage(t, msg, "Another test line", file1Path)
 
-	msg, _, err = proc.ReadWithContext(context.Background())
+	_, _, err = proc.ReadWithContext(context.Background())
 	assert.Errorf(t, err, "should reach end of file")
 
 	// move to the next file
