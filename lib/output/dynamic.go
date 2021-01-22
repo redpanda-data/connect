@@ -20,7 +20,7 @@ import (
 
 func init() {
 	Constructors[TypeDynamic] = TypeSpec{
-		constructor: NewDynamic,
+		constructor: fromSimpleConstructor(NewDynamic),
 		Summary: `
 A special broker type where the outputs are identified by unique labels and can
 be created, changed and removed during runtime via a REST API.`,

@@ -12,7 +12,7 @@ import (
 
 func init() {
 	Constructors[TypeSocket] = TypeSpec{
-		constructor: NewSocket,
+		constructor: fromSimpleConstructor(NewSocket),
 		Summary: `
 Sends messages as a continuous stream of line delimited data over a
 (tcp/udp/unix) socket by connecting to a server.`,

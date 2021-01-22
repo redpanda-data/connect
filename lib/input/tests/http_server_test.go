@@ -160,7 +160,9 @@ func TestHTTPBasic(t *testing.T) {
 		go func(input, output string) {
 			req, err := http.NewRequest(
 				"POST", server.URL+"/testpost", bytes.NewBuffer([]byte(input)))
-
+			if err != nil {
+				t.Fatal(err)
+			}
 			res, err := client.Do(req)
 			if err != nil {
 				t.Fatal(err)
@@ -643,7 +645,6 @@ func readMultipart(res *http.Response) ([]string, error) {
 		var p *multipart.Part
 		if p, err = mr.NextPart(); err != nil {
 			if err == io.EOF {
-				err = nil
 				break
 			}
 			return nil, err

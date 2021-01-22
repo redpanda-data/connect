@@ -12,7 +12,7 @@ import (
 
 func init() {
 	Constructors[TypeFiles] = TypeSpec{
-		constructor: NewFiles,
+		constructor: fromSimpleConstructor(NewFiles),
 		Status:      docs.StatusDeprecated,
 		Summary: `
 Writes each individual message to a new file.`,

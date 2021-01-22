@@ -16,7 +16,7 @@ import (
 
 func init() {
 	Constructors[TypeKafka] = TypeSpec{
-		constructor: NewKafka,
+		constructor: fromSimpleConstructor(NewKafka),
 		Summary: `
 The kafka output type writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.`,
 		Description: `

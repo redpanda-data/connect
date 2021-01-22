@@ -15,7 +15,7 @@ import (
 
 func init() {
 	Constructors[TypeSTDIN] = TypeSpec{
-		constructor: NewSTDIN,
+		constructor: fromSimpleConstructor(NewSTDIN),
 		Summary: `
 Consumes data piped to stdin as line delimited messages.`,
 		Description: `

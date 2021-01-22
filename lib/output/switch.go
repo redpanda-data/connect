@@ -38,7 +38,7 @@ var (
 
 func init() {
 	Constructors[TypeSwitch] = TypeSpec{
-		constructor: NewSwitch,
+		constructor: fromSimpleConstructor(NewSwitch),
 		Summary: `
 The switch output type allows you to route messages to different outputs based on their contents.`,
 		Description: `

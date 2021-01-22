@@ -21,7 +21,7 @@ import (
 
 func init() {
 	Constructors[TypeRetry] = TypeSpec{
-		constructor: NewRetry,
+		constructor: fromSimpleConstructor(NewRetry),
 		Summary: `
 Attempts to write messages to a child output and if the write fails for any
 reason the message is retried either until success or, if the retries or max

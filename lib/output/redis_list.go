@@ -13,7 +13,7 @@ import (
 
 func init() {
 	Constructors[TypeRedisList] = TypeSpec{
-		constructor: NewRedisList,
+		constructor: fromSimpleConstructor(NewRedisList),
 		Summary: `
 Pushes messages onto the end of a Redis list (which is created if it doesn't
 already exist) using the RPUSH command.`,

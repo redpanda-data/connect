@@ -25,7 +25,7 @@ import (
 
 func init() {
 	Constructors[TypeSQL] = TypeSpec{
-		constructor: func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 			s, err := newSQLWriter(conf.SQL, log)
 			if err != nil {
 				return nil, err
@@ -35,7 +35,7 @@ func init() {
 				return nil, err
 			}
 			return newBatcherFromConf(conf.SQL.Batching, w, mgr, log, stats)
-		},
+		}),
 		Status:  docs.StatusBeta,
 		Batches: true,
 		Async:   true,

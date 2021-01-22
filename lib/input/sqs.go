@@ -13,7 +13,7 @@ import (
 
 func init() {
 	Constructors[TypeSQS] = TypeSpec{
-		constructor: NewAmazonSQS,
+		constructor: fromSimpleConstructor(NewAmazonSQS),
 		Summary: `
 Receive messages from an Amazon SQS URL.`,
 		Description: `

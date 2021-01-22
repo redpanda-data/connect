@@ -15,7 +15,7 @@ import (
 
 func init() {
 	Constructors[TypeTCP] = TypeSpec{
-		constructor: NewTCP,
+		constructor: fromSimpleConstructor(NewTCP),
 		Description: `
 Connects to a TCP server and consumes a continuous stream of messages.
 

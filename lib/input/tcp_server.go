@@ -20,7 +20,7 @@ import (
 
 func init() {
 	Constructors[TypeTCPServer] = TypeSpec{
-		constructor: NewTCPServer,
+		constructor: fromSimpleConstructor(NewTCPServer),
 		Description: `
 Creates a server that receives messages over TCP. Each connection is parsed as a
 continuous stream of line delimited messages.

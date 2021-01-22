@@ -23,13 +23,13 @@ import (
 
 func init() {
 	Constructors[TypeBloblang] = TypeSpec{
-		constructor: func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 			b, err := newBloblang(conf.Bloblang)
 			if err != nil {
 				return nil, err
 			}
 			return NewAsyncReader(TypeBloblang, true, b, log, stats)
-		},
+		}),
 		Status: docs.StatusBeta,
 		Summary: `
 Generates messages at a given interval using a [Bloblang](/docs/guides/bloblang/about)

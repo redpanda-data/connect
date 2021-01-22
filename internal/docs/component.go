@@ -261,7 +261,8 @@ func (c *ComponentSpec) createConfigs(root string, fullConfigExample interface{}
 
 	var err error
 	if len(c.Fields) > 0 && !isEmptyRootArray {
-		advancedConfig, err := c.Fields.ConfigAdvanced(fullConfigExample)
+		var advancedConfig interface{}
+		advancedConfig, err = c.Fields.ConfigAdvanced(fullConfigExample)
 		if err == nil {
 			tmp := map[string]interface{}{
 				c.Name: advancedConfig,

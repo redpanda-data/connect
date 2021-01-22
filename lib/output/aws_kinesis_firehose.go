@@ -15,7 +15,7 @@ import (
 
 func init() {
 	Constructors[TypeAWSKinesisFirehose] = TypeSpec{
-		constructor: NewAWSKinesisFirehose,
+		constructor: fromSimpleConstructor(NewAWSKinesisFirehose),
 		Version:     "3.36.0",
 		Summary: `
 Sends messages to a Kinesis Firehose delivery stream.`,
@@ -43,7 +43,7 @@ allowing you to transfer data across accounts. You can find out more
 	}
 
 	Constructors[TypeKinesisFirehose] = TypeSpec{
-		constructor: NewKinesisFirehose,
+		constructor: fromSimpleConstructor(NewKinesisFirehose),
 		Status:      docs.StatusDeprecated,
 		Summary: `
 Sends messages to a Kinesis Firehose delivery stream.`,

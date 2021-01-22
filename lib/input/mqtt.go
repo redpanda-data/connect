@@ -12,7 +12,7 @@ import (
 
 func init() {
 	Constructors[TypeMQTT] = TypeSpec{
-		constructor: NewMQTT,
+		constructor: fromSimpleConstructor(NewMQTT),
 		Summary: `
 Subscribe to topics on MQTT brokers.`,
 		Description: `

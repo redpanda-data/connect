@@ -19,7 +19,7 @@ linters:
     # - errcheck
     # - gosimple
     - govet
-    # - ineffassign
+    - ineffassign
     # - staticcheck
     - structcheck
     - typecheck

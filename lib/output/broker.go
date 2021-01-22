@@ -24,7 +24,7 @@ var (
 
 func init() {
 	Constructors[TypeBroker] = TypeSpec{
-		brokerConstructor: NewBroker,
+		constructor: NewBroker,
 		Summary: `
 Allows you to route messages to multiple child outputs using a range of
 brokering [patterns](#patterns).`,

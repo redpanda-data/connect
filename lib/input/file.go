@@ -22,7 +22,7 @@ import (
 
 func init() {
 	Constructors[TypeFile] = TypeSpec{
-		constructor: NewFile,
+		constructor: fromSimpleConstructor(NewFile),
 		Summary: `
 Consumes data from files on disk, emitting messages according to a chosen codec.`,
 		FieldSpecs: docs.FieldSpecs{

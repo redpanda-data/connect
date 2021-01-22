@@ -13,7 +13,7 @@ import (
 
 func init() {
 	Constructors[TypeRedisPubSub] = TypeSpec{
-		constructor: NewRedisPubSub,
+		constructor: fromSimpleConstructor(NewRedisPubSub),
 		Summary: `
 Publishes messages through the Redis PubSub model. It is not possible to
 guarantee that messages have been received.`,

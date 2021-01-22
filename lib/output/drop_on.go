@@ -18,7 +18,7 @@ import (
 
 func init() {
 	Constructors[TypeDropOn] = TypeSpec{
-		constructor: func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 			if conf.DropOn.Output == nil {
 				return nil, errors.New("cannot create a drop_on output without a child")
 			}
@@ -27,7 +27,7 @@ func init() {
 				return nil, fmt.Errorf("failed to create output '%v': %v", conf.DropOn.Output.Type, err)
 			}
 			return newDropOn(conf.DropOn.DropOnConditions, wrapped, log, stats)
-		},
+		}),
 		Summary: `
 Attempts to write messages to a child output and if the write fails for one of a list of configurable reasons the message is dropped instead of being reattempted.`,
 		Description: `

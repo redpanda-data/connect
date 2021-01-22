@@ -15,7 +15,7 @@ import (
 
 func init() {
 	Constructors[TypeAWSSQS] = TypeSpec{
-		constructor: NewAWSSQS,
+		constructor: fromSimpleConstructor(NewAWSSQS),
 		Version:     "3.36.0",
 		Summary: `
 Sends messages to an SQS queue.`,
@@ -55,7 +55,7 @@ allowing you to transfer data across accounts. You can find out more
 	}
 
 	Constructors[TypeSQS] = TypeSpec{
-		constructor: NewAmazonSQS,
+		constructor: fromSimpleConstructor(NewAmazonSQS),
 		Status:      docs.StatusDeprecated,
 		Summary: `
 Sends messages to an SQS queue.`,

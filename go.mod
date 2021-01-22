@@ -27,7 +27,7 @@ require (
 	github.com/containerd/continuity v0.0.0-20200928162600-f2cc35102c2a // indirect
 	github.com/dgraph-io/ristretto v0.0.3
 	github.com/dnaeon/go-vcr v1.1.0 // indirect
-	github.com/eclipse/paho.mqtt.golang v1.2.0
+	github.com/eclipse/paho.mqtt.golang v1.3.1
 	github.com/edsrzf/mmap-go v1.0.0
 	github.com/fatih/color v1.10.0
 	github.com/go-redis/redis/v7 v7.4.0
@@ -37,7 +37,6 @@ require (
 	github.com/golang/protobuf v1.4.3
 	github.com/golang/snappy v0.0.2
 	github.com/google/go-cmp v0.5.2
-	github.com/google/gofuzz v1.2.0
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/hashicorp/go-immutable-radix v1.3.0 // indirect

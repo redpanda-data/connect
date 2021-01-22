@@ -13,7 +13,7 @@ import (
 
 func init() {
 	Constructors[TypeSTDOUT] = TypeSpec{
-		constructor: NewSTDOUT,
+		constructor: fromSimpleConstructor(NewSTDOUT),
 		Summary: `
 The stdout output type prints messages to stdout.`,
 		Description: `

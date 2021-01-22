@@ -16,7 +16,7 @@ import (
 
 func init() {
 	Constructors[TypeSocket] = TypeSpec{
-		constructor: NewSocket,
+		constructor: fromSimpleConstructor(NewSocket),
 		Summary: `
 Connects to a (tcp/unix) socket and consumes a continuous stream of messages.`,
 		Description: `

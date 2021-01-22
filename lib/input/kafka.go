@@ -27,7 +27,7 @@ import (
 
 func init() {
 	Constructors[TypeKafka] = TypeSpec{
-		constructor: NewKafka,
+		constructor: fromSimpleConstructor(NewKafka),
 		Summary: `
 Connects to Kafka brokers and consumes one or more topics.`,
 		Description: `

@@ -25,7 +25,7 @@ func init() {
 	}
 
 	Constructors[TypeCache] = TypeSpec{
-		constructor: NewCache,
+		constructor: fromSimpleConstructor(NewCache),
 		Summary: `
 Stores each message in a [cache](/docs/components/caches/about).`,
 		Description: `

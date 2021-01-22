@@ -18,7 +18,7 @@ import (
 
 func init() {
 	Constructors[TypeDropOnError] = TypeSpec{
-		constructor: NewDropOnError,
+		constructor: fromSimpleConstructor(NewDropOnError),
 		Status:      docs.StatusDeprecated,
 		Summary: `
 Attempts to write messages to a child output and if the write fails for any

@@ -14,7 +14,7 @@ import (
 
 func init() {
 	Constructors[TypeAWSS3] = TypeSpec{
-		constructor: NewAWSS3,
+		constructor: fromSimpleConstructor(NewAWSS3),
 		Version:     "3.36.0",
 		Summary: `
 Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
@@ -105,7 +105,7 @@ output:
 	}
 
 	Constructors[TypeS3] = TypeSpec{
-		constructor: NewAmazonS3,
+		constructor: fromSimpleConstructor(NewAmazonS3),
 		Status:      docs.StatusDeprecated,
 		Summary: `
 Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded

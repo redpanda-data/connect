@@ -13,7 +13,7 @@ import (
 
 func init() {
 	Constructors[TypeRedisHash] = TypeSpec{
-		constructor: NewRedisHash,
+		constructor: fromSimpleConstructor(NewRedisHash),
 		Summary: `
 Sets Redis hash objects using the HMSET command.`,
 		Description: `

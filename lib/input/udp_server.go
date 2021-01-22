@@ -19,7 +19,7 @@ import (
 
 func init() {
 	Constructors[TypeUDPServer] = TypeSpec{
-		constructor: NewUDPServer,
+		constructor: fromSimpleConstructor(NewUDPServer),
 		Description: `
 Creates a server that receives messages over UDP as a continuous stream of data.
 Each line is interpretted as an individual message, if the delimiter field is

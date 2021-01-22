@@ -13,7 +13,7 @@ import (
 
 func init() {
 	Constructors[TypeRedisStreams] = TypeSpec{
-		constructor: NewRedisStreams,
+		constructor: fromSimpleConstructor(NewRedisStreams),
 		Summary: `
 Pushes messages to a Redis (v5.0+) Stream (which is created if it doesn't
 already exist) using the XADD command.`,
