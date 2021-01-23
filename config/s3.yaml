@@ -63,6 +63,7 @@ output:
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     region: eu-west-1
     storage_class: STANDARD
+    tags: {}
     timeout: 5s
 resources:
   caches: {}

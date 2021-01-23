@@ -35,6 +35,7 @@ output:
   aws_s3:
     bucket: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
+    tags: {}
     content_type: application/octet-stream
     max_in_flight: 1
     batching:
@@ -54,6 +55,7 @@ output:
   aws_s3:
     bucket: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
+    tags: {}
     content_type: application/octet-stream
     content_encoding: ""
     storage_class: STANDARD
@@ -88,6 +90,20 @@ calculated per message of a batch.
 ### Metadata
 
 Metadata fields on messages will be sent as headers, in order to mutate these values (or remove them) check out the [metadata docs](/docs/configuration/metadata).
+
+### Tags
+
+Tag fields will be stored as object tags against the S3 object. For example:
+
+```yaml
+output:
+    aws_s3:
+        bucket: TODO
+        path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
+        tags:
+            Key1: Value1
+            Timestamp: ${!meta("Timestamp")}
+```
 
 ### Credentials
 
@@ -170,6 +186,23 @@ path: ${!count("files")}-${!timestamp_unix_nano()}.txt
 path: ${!meta("kafka_key")}.json
 
 path: ${!json("doc.namespace")}/${!json("doc.id")}.json
+```
+
+### `tags`
+
+Tags to provide to the object in S3.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `object`  
+Default: `{}`  
+
+```yaml
+# Examples
+
+tags:
+  Key1: Value1
+  Timestamp: ${!meta("Timestamp")}
 ```
 
 ### `content_type`
