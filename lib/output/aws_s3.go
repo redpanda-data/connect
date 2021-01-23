@@ -34,12 +34,12 @@ Tag fields will be stored as object tags against the S3 object. For example:
 
 ` + "```yaml" + `
 output:
-	aws_s3:
-		bucket: TODO
-    	path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
-		tags:
-			Key1: Value1
-			Timestamp: ${!meta("Timestamp")}
+    aws_s3:
+        bucket: TODO
+        path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
+        tags:
+            Key1: Value1
+            Timestamp: ${!meta("Timestamp")}
 ` + "```" + `
 
 ### Credentials
@@ -150,12 +150,12 @@ Tag fields will be stored as object tags against the S3 object. For example:
 
 ` + "```yaml" + `
 output:
-	aws_s3:
-		bucket: TODO
-    	path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
-		tags:
-			Key1: Value1
-			Timestamp: ${!meta("Timestamp")}
+    aws_s3:
+        bucket: TODO
+        path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
+        tags:
+            Key1: Value1
+            Timestamp: ${!meta("Timestamp")}
 ` + "```" + `
 
 ### Credentials
