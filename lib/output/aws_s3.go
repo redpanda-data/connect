@@ -30,7 +30,8 @@ Metadata fields on messages will be sent as headers, in order to mutate these va
 
 ### Tags
 
-Tag fields will be stored as object tags against the S3 object. For example:
+The tags field allows you to specify key/value pairs to attach to objects as tags, where the values support
+[interpolation functions](/docs/configuration/interpolation#bloblang-queries):
 
 ` + "```yaml" + `
 output:
@@ -102,7 +103,7 @@ output:
 				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
 			).SupportsInterpolation(false),
 			docs.FieldCommon(
-				"tags", "Tags to provide to the object in S3.",
+				"tags", "Key/value pairs to store with the object as tags.",
 				map[string]string{
 					"Key1":      "Value1",
 					"Timestamp": `${!meta("Timestamp")}`,
@@ -146,7 +147,8 @@ Metadata fields on messages will be sent as headers, in order to mutate these va
 
 ### Tags
 
-Tag fields will be stored as object tags against the S3 object. For example:
+The tags field allows you to specify key/value pairs to attach to objects as tags, where the values support
+[interpolation functions](/docs/configuration/interpolation#bloblang-queries):
 
 ` + "```yaml" + `
 output:
@@ -218,7 +220,7 @@ output:
 				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
 			).SupportsInterpolation(false),
 			docs.FieldCommon(
-				"tags", "Tags to provide to the object in S3.",
+				"tags", "Key/value pairs to store with the object as tags.",
 				map[string]string{
 					"Key1":      "Value1",
 					"Timestamp": `${!meta("Timestamp")}`,

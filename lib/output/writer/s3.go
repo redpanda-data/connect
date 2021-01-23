@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -58,13 +59,18 @@ func NewAmazonS3Config() AmazonS3Config {
 
 //------------------------------------------------------------------------------
 
+type s3TagPair struct {
+	key   string
+	value field.Expression
+}
+
 // AmazonS3 is a benthos writer.Type implementation that writes messages to an
 // Amazon S3 bucket.
 type AmazonS3 struct {
 	conf AmazonS3Config
 
 	path            field.Expression
-	tags            map[string]field.Expression
+	tags            []s3TagPair
 	contentType     field.Expression
 	contentEncoding field.Expression
 	storageClass    field.Expression
@@ -110,12 +116,20 @@ func NewAmazonS3(
 		return nil, fmt.Errorf("failed to parse storage class expression: %v", err)
 	}
 
-	a.tags = map[string]field.Expression{}
+	a.tags = make([]s3TagPair, 0, len(conf.Tags))
 	for k, v := range conf.Tags {
-		if a.tags[k], err = bloblang.NewField(v); err != nil {
-			return nil, fmt.Errorf("failed to parse tags expression: %v", err)
+		vExpr, err := bloblang.NewField(v)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse tag expression for key '%v': %v", k, err)
 		}
+		a.tags = append(a.tags, s3TagPair{
+			key:   k,
+			value: vExpr,
+		})
 	}
+	sort.Slice(a.tags, func(i, j int) bool {
+		return a.tags[i].key < a.tags[j].key
+	})
 
 	return a, nil
 }
@@ -187,9 +201,9 @@ func (a *AmazonS3) WriteWithContext(wctx context.Context, msg types.Message) err
 
 		// Prepare tags, escaping keys and values to ensure they're valid query string parameters.
 		if len(a.tags) > 0 {
-			tags := []string{}
-			for k, v := range a.tags {
-				tags = append(tags, url.QueryEscape(k)+"="+url.QueryEscape(v.String(i, msg)))
+			tags := make([]string, len(a.tags))
+			for i, pair := range a.tags {
+				tags[i] = url.QueryEscape(pair.key) + "=" + url.QueryEscape(pair.value.String(i, msg))
 			}
 			uploadInput.Tagging = aws.String(strings.Join(tags, "&"))
 		}
