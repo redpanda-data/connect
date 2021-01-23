@@ -134,6 +134,7 @@ const (
 	TypeResource         = "resource"
 	TypeS3               = "s3"
 	TypeSequence         = "sequence"
+	TypeSFTP             = "sftp"
 	TypeSocket           = "socket"
 	TypeSocketServer     = "socket_server"
 	TypeSQS              = "sqs"
@@ -186,6 +187,7 @@ type Config struct {
 	Resource         string                       `json:"resource" yaml:"resource"`
 	S3               reader.AmazonS3Config        `json:"s3" yaml:"s3"`
 	Sequence         SequenceConfig               `json:"sequence" yaml:"sequence"`
+	SFTP             SFTPConfig                   `json:"sftp" yaml:"sftp"`
 	Socket           SocketConfig                 `json:"socket" yaml:"socket"`
 	SocketServer     SocketServerConfig           `json:"socket_server" yaml:"socket_server"`
 	SQS              reader.AmazonSQSConfig       `json:"sqs" yaml:"sqs"`
@@ -238,6 +240,7 @@ func NewConfig() Config {
 		Resource:         "",
 		S3:               reader.NewAmazonS3Config(),
 		Sequence:         NewSequenceConfig(),
+		SFTP:             NewSFTPConfig(),
 		Socket:           NewSocketConfig(),
 		SocketServer:     NewSocketServerConfig(),
 		SQS:              reader.NewAmazonSQSConfig(),
