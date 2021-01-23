@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/checkpoint"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
@@ -36,6 +38,8 @@ Offsets are managed within Kafka under the specified consumer group, and partiti
 The Kafka input allows parallel processing of messages from different topic partitions, but by default messages of the same topic partition are processed in lockstep in order to enforce ordered processing. This protection often means that batching messages at the output level can stall, in which case it can be tuned by increasing the field ` + "[`checkpoint_limit`](#checkpoint_limit)" + `, ideally to a value greater than the number of messages you expect to batch.
 
 Alternatively, if you perform batching at the input level using the ` + "[`batching`](#batching)" + ` field it is done per-partition and therefore avoids stalling.
+
+The field ` + "`consumer_group`" + `supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing you to create a unique key for each message.
 
 ### Metadata
 
@@ -69,7 +73,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 			).AtVersion("3.33.0"),
 			btls.FieldSpec(),
 			sasl.FieldSpec(),
-			docs.FieldCommon("consumer_group", "An identifier for the consumer group of the connection."),
+			docs.FieldCommon("consumer_group", "An identifier for the consumer group of the connection, function interpolations can be optionally used to create a unique key per session.").SupportsInterpolation(true),
 			docs.FieldCommon("client_id", "An identifier for the client connection."),
 			docs.FieldAdvanced("start_from_oldest", "If an offset is not found for a topic parition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset."),
 			docs.FieldCommon(
@@ -171,6 +175,8 @@ type kafkaReader struct {
 	log   log.Modular
 	mgr   types.Manager
 
+	consumerGroupStr field.Expression
+
 	closeOnce  sync.Once
 	closedChan chan struct{}
 }
@@ -265,6 +271,9 @@ func newKafkaReader(
 	var err error
 	if k.version, err = sarama.ParseKafkaVersion(conf.TargetVersion); err != nil {
 		return nil, err
+	}
+	if k.consumerGroupStr, err = bloblang.NewField(conf.ConsumerGroup); err != nil {
+		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
 	return &k, nil
 }

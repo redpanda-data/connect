@@ -89,6 +89,8 @@ The Kafka input allows parallel processing of messages from different topic part
 
 Alternatively, if you perform batching at the input level using the [`batching`](#batching) field it is done per-partition and therefore avoids stalling.
 
+The field `consumer_group`supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing you to create a unique key for each message.
+
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -324,7 +326,8 @@ Default: `""`
 
 ### `consumer_group`
 
-An identifier for the consumer group of the connection.
+An identifier for the consumer group of the connection, function interpolations can be optionally used to create a unique key per session.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

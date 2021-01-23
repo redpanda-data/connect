@@ -5,6 +5,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Shopify/sarama"
@@ -91,7 +92,7 @@ func (k *kafkaReader) ConsumeClaim(sess sarama.ConsumerGroupSession, claim saram
 
 func (k *kafkaReader) connectBalancedTopics(ctx context.Context, config *sarama.Config) error {
 	// Start a new consumer group
-	group, err := sarama.NewConsumerGroup(k.addresses, k.conf.ConsumerGroup, config)
+	group, err := sarama.NewConsumerGroup(k.addresses, k.consumerGroupStr.String(0, message.New(nil)), config)
 	if err != nil {
 		return err
 	}
