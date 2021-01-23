@@ -175,22 +175,23 @@ func (a *AmazonS3) WriteWithContext(wctx context.Context, msg types.Message) err
 			contentEncoding = aws.String(ce)
 		}
 
-		// Prepare tags, escaping keys and values to ensure they're valid query string parameters.
-		tags := []string{}
-		for k, v := range a.tags {
-			tags = append(tags, url.QueryEscape(k)+"="+url.QueryEscape(v.String(i, msg)))
-		}
-		tagging := strings.Join(tags, "&")
-
 		uploadInput := &s3manager.UploadInput{
 			Bucket:          &a.conf.Bucket,
 			Key:             aws.String(a.path.String(i, msg)),
-			Tagging:         aws.String(tagging),
 			Body:            bytes.NewReader(p.Get()),
 			ContentType:     aws.String(a.contentType.String(i, msg)),
 			ContentEncoding: contentEncoding,
 			StorageClass:    aws.String(a.storageClass.String(i, msg)),
 			Metadata:        metadata,
+		}
+
+		// Prepare tags, escaping keys and values to ensure they're valid query string parameters.
+		if len(a.tags) > 0 {
+			tags := []string{}
+			for k, v := range a.tags {
+				tags = append(tags, url.QueryEscape(k)+"="+url.QueryEscape(v.String(i, msg)))
+			}
+			uploadInput.Tagging = aws.String(strings.Join(tags, "&"))
 		}
 
 		if a.conf.KMSKeyID != "" {
