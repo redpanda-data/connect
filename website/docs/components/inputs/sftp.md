@@ -2,7 +2,7 @@
 title: sftp
 type: input
 status: experimental
-categories: ["Services","Network"]
+categories: ["Network"]
 ---
 
 <!--
@@ -16,8 +16,9 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 EXPERIMENTAL: This component is experimental and therefore subject to change or removal outside of major version releases.
+Consumes files from a server over SFTP.
 
-Downloads objects via an SFTP connection.
+Introduced in version 3.39.0.
 
 
 <Tabs defaultValue="common" values={[
@@ -36,8 +37,7 @@ input:
       username: ""
       password: ""
     paths: []
-    max_connection_attempts: 10
-    codec: lines
+    codec: all-bytes
 ```
 
 </TabItem>
@@ -52,23 +52,22 @@ input:
       username: ""
       password: ""
     paths: []
-    max_connection_attempts: 10
-    retry_sleep_duration: 5s
-    codec: lines
+    codec: all-bytes
     delete_on_finish: false
     max_buffer: 1000000
-    multipart: false
 ```
 
 </TabItem>
 </Tabs>
 
-Downloads objects via an SFTP connection.
 ## Metadata
+
 This input adds the following metadata fields to each message:
+
 ```
-- sftp_file_path
+- sftp_path
 ```
+
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
 
 ## Fields
@@ -112,37 +111,13 @@ A list of paths to consume sequentially. Glob patterns are supported.
 Type: `array`  
 Default: `[]`  
 
-### `max_connection_attempts`
-
-How many times it will try to connect to the server before exiting with an error.
-
-
-Type: `number`  
-Default: `10`  
-
-### `retry_sleep_duration`
-
-How long it will sleep after failing to connect to the server before trying again, defaults to 5s if not provided.
-
-
-Type: `string`  
-Default: `"5s"`  
-
-```yaml
-# Examples
-
-retry_sleep_duration: 10s
-
-retry_sleep_duration: 5m
-```
-
 ### `codec`
 
 The way in which the bytes of consumed files are converted into messages, codecs are useful for specifying how large files might be processed in small chunks rather than loading it all in memory. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.
 
 
 Type: `string`  
-Default: `"lines"`  
+Default: `"all-bytes"`  
 
 | Option | Summary |
 |---|---|
@@ -181,13 +156,5 @@ The largest token size expected when consuming delimited files.
 
 Type: `number`  
 Default: `1000000`  
-
-### `multipart`
-
-Consume multipart messages from the codec by interpretting empty lines as the end of the message. Multipart messages are processed as a batch within Benthos. Not all codecs are appropriate for multipart messages.
-
-
-Type: `bool`  
-Default: `false`  
 
 

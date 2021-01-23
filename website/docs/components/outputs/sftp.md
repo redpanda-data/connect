@@ -1,7 +1,7 @@
 ---
 title: sftp
 type: output
-status: beta
+status: experimental
 categories: ["Network"]
 ---
 
@@ -15,56 +15,25 @@ categories: ["Network"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
+EXPERIMENTAL: This component is experimental and therefore subject to change or removal outside of major version releases.
+Writes files to a server over SFTP.
 
-Sends message parts as objects to a file via an SFTP connection.
-
-Introduced in version 3.36.0.
-
-
-<Tabs defaultValue="common" values={[
-  { label: 'Common', value: 'common', },
-  { label: 'Advanced', value: 'advanced', },
-]}>
-
-<TabItem value="common">
+Introduced in version 3.39.0.
 
 ```yaml
-# Common config fields, showing default values
+# Config fields, showing default values
 output:
   sftp:
     address: ""
     path: ""
+    codec: all-bytes
     credentials:
       username: ""
       password: ""
     max_in_flight: 1
-    max_connection_attempts: 10
 ```
 
-</TabItem>
-<TabItem value="advanced">
-
-```yaml
-# All config fields, showing default values
-output:
-  sftp:
-    address: ""
-    path: ""
-    credentials:
-      username: ""
-      password: ""
-    max_in_flight: 1
-    max_connection_attempts: 10
-    retry_sleep_duration: 5s
-```
-
-</TabItem>
-</Tabs>
-
-In order to have a different path for each object you should use function
-interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
-calculated per message of a batch.
+In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 
 ## Performance
 
@@ -89,6 +58,31 @@ The file to save the messages to on the server.
 
 Type: `string`  
 Default: `""`  
+
+### `codec`
+
+The way in which the bytes of messages should be written out into the output file. It's possible to write lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.
+
+
+Type: `string`  
+Default: `"all-bytes"`  
+
+| Option | Summary |
+|---|---|
+| `all-bytes` | Write the message to the file in full. If the file already exists the old content is deleted. |
+| `lines` | Append messages to the file followed by a line break. |
+| `delim:x` | Append messages to the file followed by a custom delimiter. |
+
+
+```yaml
+# Examples
+
+codec: lines
+
+codec: "delim:\t"
+
+codec: delim:foobar
+```
 
 ### `credentials`
 
@@ -120,29 +114,5 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 Type: `number`  
 Default: `1`  
-
-### `max_connection_attempts`
-
-How many times it will try to connect to the server before exiting with an error.
-
-
-Type: `number`  
-Default: `10`  
-
-### `retry_sleep_duration`
-
-How long it will sleep after failing to connect to the server before trying again, defaults to 5s if not provided.
-
-
-Type: `string`  
-Default: `"5s"`  
-
-```yaml
-# Examples
-
-retry_sleep_duration: 10s
-
-retry_sleep_duration: 5m
-```
 
 

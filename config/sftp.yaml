@@ -9,16 +9,13 @@ input:
   type: sftp
   sftp:
     address: ""
-    codec: lines
+    codec: all-bytes
     credentials:
       password: ""
       username: ""
     delete_on_finish: false
     max_buffer: 1000000
-    max_connection_attempts: 10
-    multipart: false
     paths: []
-    retry_sleep_duration: 5s
 buffer:
   type: none
   none: {}
@@ -29,13 +26,12 @@ output:
   type: sftp
   sftp:
     address: ""
+    codec: all-bytes
     credentials:
       password: ""
       username: ""
-    max_connection_attempts: 10
     max_in_flight: 1
     path: ""
-    retry_sleep_duration: 5s
 resources:
   caches: {}
   conditions: {}

@@ -1,21 +1,21 @@
 package integration
 
 import (
-	"log"
-	"strconv"
 	"testing"
+	"time"
 
 	"github.com/ory/dockertest/v3"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var _ = registerIntegrationTest("sftp", func(t *testing.T) {
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
-	if err != nil {
-		log.Fatalf("Could not connect to docker: %s", err)
-	}
+	require.NoError(t, err)
 
+	pool.MaxWait = time.Second * 30
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository: "atmoz/sftp",
 		Tag:        "alpine",
@@ -23,23 +23,15 @@ var _ = registerIntegrationTest("sftp", func(t *testing.T) {
 			"foo:pass:1001:100:upload",
 		},
 	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, pool.Purge(resource))
+	})
 
-	if err != nil {
-		log.Fatalf("Could not start resource: %s", err)
-	}
-
-	var sftpPort int
-
-	if err := pool.Retry(func() error {
-		sftpPort, err = strconv.Atoi(resource.GetPort("22/tcp"))
-		if err != nil {
-			return err
-		}
-
+	resource.Expire(900)
+	require.NoError(t, pool.Retry(func() error {
 		return nil
-	}); err != nil {
-		log.Fatalf("Could not connect to docker: %s", err)
-	}
+	}))
 
 	resource.Expire(900)
 
@@ -47,35 +39,40 @@ var _ = registerIntegrationTest("sftp", func(t *testing.T) {
 		template := `
 output:
   sftp:
-    address: http://localhost:$VAR1
-    path: $VAR2/test-$ID/${!count("$ID")}.txt
+    address: localhost:$PORT
+    path: /upload/test-$ID/$VAR2.txt
     credentials:
-        username: foo
-        password: pass
+      username: foo
+      password: pass
+    codec: $VAR1
     max_in_flight: 1
-    max_connection_attempts: 3
-    retry_sleep_duration: 5s
 
 input:
   sftp:
-    address: http://localhost:$VAR1
+    address: localhost:$PORT
     paths:
-      - /$VAR2/test-$ID/*.txt
+      - /upload/test-$ID/*.txt
     credentials:
-        username: foo
-        password: pass
-    codec: all-bytes
+      username: foo
+      password: pass
+    codec: $VAR1
     delete_on_finish: false
-    max_connection_attempts: 3
-    retry_sleep_duration: 5s
 `
-		integrationTests(
+		suite := integrationTests(
 			integrationTestOpenCloseIsolated(),
-			integrationTestStreamIsolated(2),
-		).Run(
+			integrationTestStreamIsolated(100),
+		)
+		suite.Run(
 			t, template,
-			testOptVarOne(strconv.Itoa(sftpPort)),
-			testOptVarTwo("upload"),
+			testOptPort(resource.GetPort("22/tcp")),
+			testOptVarOne("all-bytes"),
+			testOptVarTwo(`${!count("$ID")}`),
+		)
+		suite.Run(
+			t, template,
+			testOptPort(resource.GetPort("22/tcp")),
+			testOptVarOne("lines"),
+			testOptVarTwo(`all-in-one-file`),
 		)
 	})
 })

@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Field `key` in output `redis_list` now supports interpolation functions.
 - Field `tags` added to output `aws_s3`.
+- New experimental `sftp` input and output.
 
 ## 3.38.0 - 2021-01-18
 

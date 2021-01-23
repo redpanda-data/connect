@@ -464,15 +464,12 @@ input:
           timeout: ${INPUT_S3_TIMEOUT:5s}
         sftp:
           address: ${INPUT_SFTP_ADDRESS}
-          codec: ${INPUT_SFTP_CODEC:lines}
+          codec: ${INPUT_SFTP_CODEC:all-bytes}
           credentials:
             password: ${INPUT_SFTP_CREDENTIALS_PASSWORD}
             username: ${INPUT_SFTP_CREDENTIALS_USERNAME}
           delete_on_finish: ${INPUT_SFTP_DELETE_ON_FINISH:false}
           max_buffer: ${INPUT_SFTP_MAX_BUFFER:1000000}
-          max_connection_attempts: ${INPUT_SFTP_MAX_CONNECTION_ATTEMPTS:10}
-          multipart: ${INPUT_SFTP_MULTIPART:false}
-          retry_sleep_duration: ${INPUT_SFTP_RETRY_SLEEP_DURATION:5s}
         socket:
           address: ${INPUT_SOCKET_ADDRESS:/tmp/benthos.sock}
           delimiter: ${INPUT_SOCKET_DELIMITER}
@@ -1416,13 +1413,12 @@ output:
           timeout: ${OUTPUT_S3_TIMEOUT:5s}
         sftp:
           address: ${OUTPUT_SFTP_ADDRESS}
+          codec: ${OUTPUT_SFTP_CODEC:all-bytes}
           credentials:
             password: ${OUTPUT_SFTP_CREDENTIALS_PASSWORD}
             username: ${OUTPUT_SFTP_CREDENTIALS_USERNAME}
-          max_connection_attempts: ${OUTPUT_SFTP_MAX_CONNECTION_ATTEMPTS:10}
           max_in_flight: ${OUTPUT_SFTP_MAX_IN_FLIGHT:1}
           path: ${OUTPUT_SFTP_PATH}
-          retry_sleep_duration: ${OUTPUT_SFTP_RETRY_SLEEP_DURATION:5s}
         sns:
           credentials:
             id: ${OUTPUT_SNS_CREDENTIALS_ID}
