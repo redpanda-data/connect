@@ -55,7 +55,7 @@ plugin:
 	}
 
 	_, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err != errTest {
+	if !errors.Is(err, errTest) {
 		t.Errorf("Wrong error returned: %v != %v", err, errTest)
 	}
 }
@@ -146,7 +146,7 @@ plugin:
 	}
 
 	_, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err != errTest {
+	if !errors.Is(err, errTest) {
 		t.Errorf("Wrong error returned: %v != %v", err, errTest)
 	}
 }

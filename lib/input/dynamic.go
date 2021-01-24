@@ -28,7 +28,8 @@ func init() {
 			stats metrics.Type,
 			pipelines ...types.PipelineConstructorFunc,
 		) (Type, error) {
-			return NewDynamic(conf, mgr, log, stats)
+			_, pipelines = constructProcessors(hasBatchProc, conf, mgr, log, stats, pipelines...)
+			return NewDynamic(conf, mgr, log, stats, pipelines...)
 		},
 		Summary: `
 A special broker type where the inputs are identified by unique labels and can

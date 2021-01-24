@@ -16,9 +16,11 @@ import (
 
 //------------------------------------------------------------------------------
 
+type cacheConstructor func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (types.Cache, error)
+
 // TypeSpec is a constructor and a usage description for each cache type.
 type TypeSpec struct {
-	constructor func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (types.Cache, error)
+	constructor cacheConstructor
 
 	Summary           string
 	Description       string
@@ -262,7 +264,7 @@ func New(
 		return cache, nil
 	}
 	if c, ok := pluginSpecs[conf.Type]; ok {
-		rl, err := c.constructor(conf.Plugin, mgr, log.NewModule("."+conf.Type), stats)
+		rl, err := c.constructor(conf, mgr, log.NewModule("."+conf.Type), stats)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create cache '%v': %v", conf.Type, err)
 		}

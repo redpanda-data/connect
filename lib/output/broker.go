@@ -160,6 +160,8 @@ func NewBroker(
 	stats metrics.Type,
 	pipelines ...types.PipelineConstructorFunc,
 ) (Type, error) {
+	pipelines = constructProcessors(conf, mgr, log, stats, pipelines...)
+
 	outputConfs := conf.Broker.Outputs
 
 	lOutputs := len(outputConfs) * conf.Broker.Copies

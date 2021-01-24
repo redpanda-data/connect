@@ -251,6 +251,8 @@ func newBrokerHasBatchProcessor(
 	stats metrics.Type,
 	pipelines ...types.PipelineConstructorFunc,
 ) (Type, error) {
+	hasBatchProc, pipelines = constructProcessors(hasBatchProc, conf, mgr, log, stats, pipelines...)
+
 	lInputs := len(conf.Broker.Inputs) * conf.Broker.Copies
 
 	if lInputs <= 0 {

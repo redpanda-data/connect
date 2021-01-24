@@ -42,7 +42,7 @@ type PluginConfigConstructor func() interface{}
 type PluginConfigSanitiser func(conf interface{}) interface{}
 
 type pluginSpec struct {
-	constructor     PluginConstructor
+	constructor     cacheConstructor
 	confConstructor PluginConfigConstructor
 	confSanitiser   PluginConfigSanitiser
 	description     string
@@ -61,7 +61,9 @@ func RegisterPlugin(
 	constructor PluginConstructor,
 ) {
 	spec := pluginSpecs[typeString]
-	spec.constructor = constructor
+	spec.constructor = func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (types.Cache, error) {
+		return constructor(conf.Plugin, mgr, log, stats)
+	}
 	spec.confConstructor = configConstructor
 	pluginSpecs[typeString] = spec
 }

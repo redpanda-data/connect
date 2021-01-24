@@ -28,14 +28,16 @@ var (
 	CategoryUtility     Category = "Utility"
 )
 
+type procConstructor func(
+	conf Config,
+	mgr types.Manager,
+	log log.Modular,
+	stats metrics.Type,
+) (Type, error)
+
 // TypeSpec Constructor and a usage description for each processor type.
 type TypeSpec struct {
-	constructor func(
-		conf Config,
-		mgr types.Manager,
-		log log.Modular,
-		stats metrics.Type,
-	) (Type, error)
+	constructor        procConstructor
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
 
 	// UsesBatches indicates whether this processors functionality is best
@@ -511,7 +513,7 @@ func New(
 		return c.constructor(conf, mgr, log, stats)
 	}
 	if c, ok := pluginSpecs[conf.Type]; ok {
-		return c.constructor(conf.Plugin, mgr, log, stats)
+		return c.constructor(conf, mgr, log, stats)
 	}
 	return nil, types.ErrInvalidProcessorType
 }

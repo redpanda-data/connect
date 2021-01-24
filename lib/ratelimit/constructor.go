@@ -16,9 +16,11 @@ import (
 
 //------------------------------------------------------------------------------
 
+type ratelimitConstructor func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (types.RateLimit, error)
+
 // TypeSpec is a constructor and a usage description for each ratelimit type.
 type TypeSpec struct {
-	constructor func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (types.RateLimit, error)
+	constructor ratelimitConstructor
 
 	Status      docs.Status
 	Version     string
@@ -239,7 +241,7 @@ func New(
 		return rl, nil
 	}
 	if c, ok := pluginSpecs[conf.Type]; ok {
-		rl, err := c.constructor(conf.Plugin, mgr, log.NewModule("."+conf.Type), stats)
+		rl, err := c.constructor(conf, mgr, log.NewModule("."+conf.Type), stats)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create rate limit '%v': %v", conf.Type, err)
 		}

@@ -52,6 +52,35 @@ type TypeSpec struct {
 	Version     string
 }
 
+func constructProcessors(
+	conf Config,
+	mgr types.Manager,
+	log log.Modular,
+	stats metrics.Type,
+	pipelines ...types.PipelineConstructorFunc,
+) []types.PipelineConstructorFunc {
+	if len(conf.Processors) > 0 {
+		pipelines = append(pipelines, []types.PipelineConstructorFunc{func(i *int) (types.Pipeline, error) {
+			if i == nil {
+				procs := 0
+				i = &procs
+			}
+			processors := make([]types.Processor, len(conf.Processors))
+			for j, procConf := range conf.Processors {
+				prefix := fmt.Sprintf("processor.%v", *i)
+				var err error
+				processors[j], err = processor.New(procConf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
+				if err != nil {
+					return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
+				}
+				*i++
+			}
+			return pipeline.NewProcessor(log, stats, processors...), nil
+		}}...)
+	}
+	return pipelines
+}
+
 type simpleConstructor func(Config, types.Manager, log.Modular, metrics.Type) (Type, error)
 
 type outputConstructor func(
@@ -72,8 +101,9 @@ func fromSimpleConstructor(fn simpleConstructor) outputConstructor {
 	) (Type, error) {
 		output, err := fn(conf, mgr, log, stats)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create output '%v': %v", conf.Type, err)
+			return nil, fmt.Errorf("failed to create output '%v': %w", conf.Type, err)
 		}
+		pipelines = constructProcessors(conf, mgr, log, stats, pipelines...)
 		return WrapWithPipelines(output, pipelines...)
 	}
 }
@@ -399,34 +429,11 @@ func New(
 	stats metrics.Type,
 	pipelines ...types.PipelineConstructorFunc,
 ) (Type, error) {
-	if len(conf.Processors) > 0 {
-		pipelines = append(pipelines, []types.PipelineConstructorFunc{func(i *int) (types.Pipeline, error) {
-			if i == nil {
-				procs := 0
-				i = &procs
-			}
-			processors := make([]types.Processor, len(conf.Processors))
-			for j, procConf := range conf.Processors {
-				prefix := fmt.Sprintf("processor.%v", *i)
-				var err error
-				processors[j], err = processor.New(procConf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
-				if err != nil {
-					return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
-				}
-				*i++
-			}
-			return pipeline.NewProcessor(log, stats, processors...), nil
-		}}...)
-	}
 	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(conf, mgr, log, stats, pipelines...)
 	}
 	if c, ok := pluginSpecs[conf.Type]; ok {
-		output, err := c.constructor(conf.Plugin, mgr, log, stats)
-		if err != nil {
-			return nil, err
-		}
-		return WrapWithPipelines(output, pipelines...)
+		return c.constructor(conf, mgr, log, stats, pipelines...)
 	}
 	return nil, types.ErrInvalidOutputType
 }
