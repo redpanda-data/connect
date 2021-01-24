@@ -1,0 +1,91 @@
+package query
+
+import (
+	"fmt"
+	"sort"
+)
+
+// MethodSet contains an explicit set of methods to be available in a Bloblang
+// query.
+type MethodSet struct {
+	constructors map[string]MethodCtor
+	specs        []MethodSpec
+}
+
+// Add a new method to this set by providing a spec (name and documentation),
+// a constructor to be called for each instantiation of the method, and
+// information regarding the arguments of the method.
+func (m *MethodSet) Add(spec MethodSpec, ctor MethodCtor, allowDynamicArgs bool, checks ...ArgCheckFn) error {
+	if len(checks) > 0 {
+		ctor = checkMethodArgs(ctor, checks...)
+	}
+	if allowDynamicArgs {
+		ctor = enableMethodDynamicArgs(ctor)
+	}
+	if _, exists := m.constructors[spec.Name]; exists {
+		return fmt.Errorf("conflicting method name: %v", spec.Name)
+	}
+	m.constructors[spec.Name] = ctor
+	m.specs = append(m.specs, spec)
+	return nil
+}
+
+// Docs returns a slice of method specs, which document each method.
+func (m *MethodSet) Docs() []MethodSpec {
+	return m.specs
+}
+
+// List returns a slice of method names in alphabetical order.
+func (m *MethodSet) List() []string {
+	methodNames := make([]string, 0, len(m.constructors))
+	for k := range m.constructors {
+		methodNames = append(methodNames, k)
+	}
+	sort.Strings(methodNames)
+	return methodNames
+}
+
+// Init attempts to initialize a method of the set by name from a target
+// function and zero or more arguments.
+func (m *MethodSet) Init(name string, target Function, args ...interface{}) (Function, error) {
+	ctor, exists := m.constructors[name]
+	if !exists {
+		return nil, badMethodErr(name)
+	}
+	expandLiteralArgs(args)
+	return ctor(target, args...)
+}
+
+//------------------------------------------------------------------------------
+
+// AllMethods is a set containing every single method declared by this package,
+// and any globally declared plugin methods.
+var AllMethods = &MethodSet{
+	constructors: map[string]MethodCtor{},
+	specs:        []MethodSpec{},
+}
+
+// RegisterMethod to be accessible from Bloblang queries. Returns an empty
+// struct in order to allow inline calls.
+func RegisterMethod(spec MethodSpec, allowDynamicArgs bool, ctor MethodCtor, checks ...ArgCheckFn) struct{} {
+	if err := AllMethods.Add(spec, ctor, allowDynamicArgs, checks...); err != nil {
+		panic(err)
+	}
+	return struct{}{}
+}
+
+// InitMethod attempts to initialise a method by its name, target function and
+// arguments.
+func InitMethod(name string, target Function, args ...interface{}) (Function, error) {
+	return AllMethods.Init(name, target, args...)
+}
+
+// ListMethods returns a slice of method names, sorted alphabetically.
+func ListMethods() []string {
+	return AllMethods.List()
+}
+
+// MethodDocs returns a slice of specs, one for each method.
+func MethodDocs() []MethodSpec {
+	return AllMethods.Docs()
+}

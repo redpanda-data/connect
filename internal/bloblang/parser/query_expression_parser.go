@@ -4,7 +4,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 )
 
-func matchCaseParser() Func {
+func matchCaseParser(pCtx Context) Func {
 	whitespace := SpacesAndTabs()
 
 	p := Sequence(
@@ -19,7 +19,7 @@ func matchCaseParser() Func {
 			),
 			Sequence(
 				Expect(
-					ParseQuery,
+					queryParser(pCtx),
 					"match case",
 				),
 				Optional(whitespace),
@@ -27,7 +27,7 @@ func matchCaseParser() Func {
 			),
 		),
 		Optional(whitespace),
-		ParseQuery,
+		queryParser(pCtx),
 	)
 
 	return func(input []rune) Result {
@@ -63,7 +63,7 @@ func matchCaseParser() Func {
 	}
 }
 
-func matchExpressionParser() Func {
+func matchExpressionParser(pCtx Context) Func {
 	whitespace := DiscardAll(
 		OneOf(
 			SpacesAndTabs(),
@@ -75,7 +75,7 @@ func matchExpressionParser() Func {
 		res := Sequence(
 			Term("match"),
 			SpacesAndTabs(),
-			Optional(ParseQuery),
+			Optional(queryParser(pCtx)),
 			whitespace,
 			MustBe(
 				DelimitedPattern(
@@ -83,7 +83,7 @@ func matchExpressionParser() Func {
 						Char('{'),
 						whitespace,
 					),
-					matchCaseParser(),
+					matchCaseParser(pCtx),
 					Sequence(
 						Discard(SpacesAndTabs()),
 						OneOf(
@@ -117,7 +117,7 @@ func matchExpressionParser() Func {
 	}
 }
 
-func ifExpressionParser() Func {
+func ifExpressionParser(pCtx Context) Func {
 	optionalWhitespace := DiscardAll(
 		OneOf(
 			SpacesAndTabs(),
@@ -129,11 +129,11 @@ func ifExpressionParser() Func {
 		res := Sequence(
 			Term("if"),
 			SpacesAndTabs(),
-			MustBe(ParseQuery),
+			MustBe(queryParser(pCtx)),
 			optionalWhitespace,
 			MustBe(Char('{')),
 			optionalWhitespace,
-			MustBe(ParseQuery),
+			MustBe(queryParser(pCtx)),
 			optionalWhitespace,
 			MustBe(Char('}')),
 			Optional(
@@ -143,7 +143,7 @@ func ifExpressionParser() Func {
 					optionalWhitespace,
 					MustBe(Char('{')),
 					optionalWhitespace,
-					MustBe(ParseQuery),
+					MustBe(queryParser(pCtx)),
 					optionalWhitespace,
 					MustBe(Char('}')),
 				),
@@ -168,7 +168,7 @@ func ifExpressionParser() Func {
 	}
 }
 
-func bracketsExpressionParser() Func {
+func bracketsExpressionParser(pCtx Context) Func {
 	whitespace := DiscardAll(
 		OneOf(
 			SpacesAndTabs(),
@@ -182,7 +182,7 @@ func bracketsExpressionParser() Func {
 				"function",
 			),
 			whitespace,
-			ParseQuery,
+			queryParser(pCtx),
 			whitespace,
 			MustBe(Expect(Char(')'), "closing bracket")),
 		)(input)

@@ -8,7 +8,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-func functionArgsParser() Func {
+func functionArgsParser(pCtx Context) Func {
 	open, comma, close := Char('('), Char(','), Char(')')
 	whitespace := DiscardAll(
 		OneOf(
@@ -20,7 +20,7 @@ func functionArgsParser() Func {
 	return func(input []rune) Result {
 		return DelimitedPattern(
 			Expect(Sequence(open, whitespace), "function arguments"),
-			MustBe(Expect(ParseQuery, "function argument")),
+			MustBe(Expect(queryParser(pCtx), "function argument")),
 			MustBe(Expect(Sequence(Discard(SpacesAndTabs()), comma, whitespace), "comma")),
 			MustBe(Expect(Sequence(whitespace, close), "closing bracket")),
 			true,
@@ -28,7 +28,7 @@ func functionArgsParser() Func {
 	}
 }
 
-func parseFunctionTail(fn query.Function) Func {
+func parseFunctionTail(fn query.Function, pCtx Context) Func {
 	openBracket := Char('(')
 	closeBracket := Char(')')
 
@@ -44,11 +44,11 @@ func parseFunctionTail(fn query.Function) Func {
 			Sequence(
 				Expect(openBracket, "method"),
 				whitespace,
-				ParseQuery,
+				queryParser(pCtx),
 				whitespace,
 				closeBracket,
 			),
-			methodParser(fn),
+			methodParser(fn, pCtx),
 			fieldLiteralMapParser(fn),
 		)(input)
 		if seqSlice, isSlice := res.Payload.([]interface{}); isSlice {
@@ -64,7 +64,7 @@ func parseFunctionTail(fn query.Function) Func {
 	}
 }
 
-func parseLiteralWithTails(litParser Func) Func {
+func parseLiteralWithTails(litParser Func, pCtx Context) Func {
 	delim := Sequence(
 		Char('.'),
 		Discard(
@@ -94,7 +94,7 @@ func parseLiteralWithTails(litParser Func) Func {
 			if fn == nil {
 				fn = query.NewLiteralFunction(lit)
 			}
-			if res = MustBe(parseFunctionTail(fn))(res.Remaining); res.Err != nil {
+			if res = MustBe(parseFunctionTail(fn, pCtx))(res.Remaining); res.Err != nil {
 				return Fail(res.Err, input)
 			}
 			fn = res.Payload.(query.Function)
@@ -102,7 +102,7 @@ func parseLiteralWithTails(litParser Func) Func {
 	}
 }
 
-func parseWithTails(fnParser Func) Func {
+func parseWithTails(fnParser Func, pCtx Context) Func {
 	delim := Sequence(
 		Char('.'),
 		Discard(
@@ -137,7 +137,7 @@ func parseWithTails(fnParser Func) Func {
 				}
 				return Success(fn, res.Remaining)
 			}
-			if res = MustBe(parseFunctionTail(fn))(res.Remaining); res.Err != nil {
+			if res = MustBe(parseFunctionTail(fn, pCtx))(res.Remaining); res.Err != nil {
 				return Fail(res.Err, input)
 			}
 			fn = res.Payload.(query.Function)
@@ -272,13 +272,13 @@ func fieldLiteralRootParser() Func {
 	}
 }
 
-func methodParser(fn query.Function) Func {
+func methodParser(fn query.Function, pCtx Context) Func {
 	p := Sequence(
 		Expect(
 			SnakeCase(),
 			"method",
 		),
-		functionArgsParser(),
+		functionArgsParser(pCtx),
 	)
 
 	return func(input []rune) Result {
@@ -292,7 +292,7 @@ func methodParser(fn query.Function) Func {
 		targetMethod := seqSlice[0].(string)
 		args := seqSlice[1].([]interface{})
 
-		method, err := query.InitMethod(targetMethod, fn, args...)
+		method, err := pCtx.InitMethod(targetMethod, fn, args...)
 		if err != nil {
 			return Fail(NewFatalError(input, err), input)
 		}
@@ -300,13 +300,13 @@ func methodParser(fn query.Function) Func {
 	}
 }
 
-func functionParser() Func {
+func functionParser(pCtx Context) Func {
 	p := Sequence(
 		Expect(
 			SnakeCase(),
 			"function",
 		),
-		functionArgsParser(),
+		functionArgsParser(pCtx),
 	)
 
 	return func(input []rune) Result {
@@ -320,7 +320,7 @@ func functionParser() Func {
 		targetFunc := seqSlice[0].(string)
 		args := seqSlice[1].([]interface{})
 
-		fn, err := query.InitFunction(targetFunc, args...)
+		fn, err := pCtx.InitFunction(targetFunc, args...)
 		if err != nil {
 			return Fail(NewFatalError(input, err), input)
 		}

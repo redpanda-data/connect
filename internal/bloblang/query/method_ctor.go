@@ -3,10 +3,10 @@ package query
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
 )
 
-//------------------------------------------------------------------------------
+// MethodCtor constructs a new method from a target function and input args.
+type MethodCtor func(target Function, args ...interface{}) (Function, error)
 
 func methodWithDynamicArgs(args []interface{}, target Function, ctor MethodCtor) Function {
 	fns := []Function{target}
@@ -108,56 +108,3 @@ func numberMethod(
 		return fn(f, i, ui, ctx)
 	}, target.QueryTargets)
 }
-
-//------------------------------------------------------------------------------
-
-// MethodCtor constructs a new method from a target function and input args.
-type MethodCtor func(target Function, args ...interface{}) (Function, error)
-
-// RegisterMethod to be accessible from Bloblang queries. Returns an empty
-// struct in order to allow inline calls.
-func RegisterMethod(spec MethodSpec, allowDynamicArgs bool, ctor MethodCtor, checks ...ArgCheckFn) struct{} {
-	if len(checks) > 0 {
-		ctor = checkMethodArgs(ctor, checks...)
-	}
-	if allowDynamicArgs {
-		ctor = enableMethodDynamicArgs(ctor)
-	}
-	if _, exists := methods[spec.Name]; exists {
-		panic(fmt.Sprintf("Conflicting method name: %v", spec.Name))
-	}
-	methods[spec.Name] = ctor
-	methodSpecs = append(methodSpecs, spec)
-	return struct{}{}
-}
-
-// InitMethod attempts to initialise a method by its name, target function and
-// arguments.
-func InitMethod(name string, target Function, args ...interface{}) (Function, error) {
-	ctor, exists := methods[name]
-	if !exists {
-		return nil, badMethodErr(name)
-	}
-	expandLiteralArgs(args)
-	return ctor(target, args...)
-}
-
-var methods = map[string]MethodCtor{}
-var methodSpecs = []MethodSpec{}
-
-// ListMethods returns a slice of method names, sorted alphabetically.
-func ListMethods() []string {
-	methodNames := make([]string, 0, len(methods))
-	for k := range methods {
-		methodNames = append(methodNames, k)
-	}
-	sort.Strings(methodNames)
-	return methodNames
-}
-
-// MethodDocs returns a slice of specs, one for each method.
-func MethodDocs() []MethodSpec {
-	return methodSpecs
-}
-
-//------------------------------------------------------------------------------

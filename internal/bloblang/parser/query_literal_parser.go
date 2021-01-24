@@ -4,7 +4,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 )
 
-func dynamicArrayParser() Func {
+func dynamicArrayParser(pCtx Context) Func {
 	open, comma, close := Char('['), Char(','), Char(']')
 	whitespace := DiscardAll(
 		OneOf(
@@ -18,7 +18,7 @@ func dynamicArrayParser() Func {
 				open,
 				whitespace,
 			), "array"),
-			Expect(ParseQuery, "object"),
+			Expect(queryParser(pCtx), "object"),
 			Sequence(
 				Discard(SpacesAndTabs()),
 				comma,
@@ -39,7 +39,7 @@ func dynamicArrayParser() Func {
 	}
 }
 
-func dynamicObjectParser() Func {
+func dynamicObjectParser(pCtx Context) Func {
 	open, comma, close := Char('{'), Char(','), Char('}')
 	whitespace := DiscardAll(
 		OneOf(
@@ -57,12 +57,12 @@ func dynamicObjectParser() Func {
 			Sequence(
 				OneOf(
 					QuotedString(),
-					Expect(ParseQuery, "object"),
+					Expect(queryParser(pCtx), "object"),
 				),
 				Discard(SpacesAndTabs()),
 				Char(':'),
 				Discard(whitespace),
-				Expect(ParseQuery, "object"),
+				Expect(queryParser(pCtx), "object"),
 			),
 			Sequence(
 				Discard(SpacesAndTabs()),
@@ -97,15 +97,15 @@ func dynamicObjectParser() Func {
 	}
 }
 
-func literalValueParser() Func {
+func literalValueParser(pCtx Context) Func {
 	p := OneOf(
 		Boolean(),
 		Number(),
 		TripleQuoteString(),
 		QuotedString(),
 		Null(),
-		dynamicArrayParser(),
-		dynamicObjectParser(),
+		dynamicArrayParser(pCtx),
+		dynamicObjectParser(pCtx),
 	)
 
 	return func(input []rune) Result {

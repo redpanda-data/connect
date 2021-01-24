@@ -1982,7 +1982,7 @@ func TestMethodTargets(t *testing.T) {
 func TestMethodNoArgsTargets(t *testing.T) {
 	fn := NewFieldFunction("foo.bar.baz")
 	exp := NewTargetPath(TargetValue, "foo", "bar", "baz")
-	for k := range methods {
+	for k := range AllMethods.constructors {
 		// Only tests methods that do not need arguments, we need manual checks
 		// for other methods.
 		m, err := InitMethod(k, fn)

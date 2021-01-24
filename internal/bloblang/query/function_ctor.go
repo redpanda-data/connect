@@ -4,8 +4,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 )
+
+// Function takes a set of contextual arguments and returns the result of the
+// query.
+type Function interface {
+	// Execute this function for a message of a batch.
+	Exec(ctx FunctionContext) (interface{}, error)
+
+	// Return a map of target types to path segments for any targets that this
+	// query function references.
+	QueryTargets(ctx TargetsContext) []TargetPath
+}
+
+// FunctionCtor constructs a new function from input arguments.
+type FunctionCtor func(args ...interface{}) (Function, error)
 
 //------------------------------------------------------------------------------
 
@@ -258,55 +271,3 @@ func ExpectBoolArg(i int) ArgCheckFn {
 		return nil
 	}
 }
-
-//------------------------------------------------------------------------------
-
-// FunctionCtor constructs a new function from input arguments.
-type FunctionCtor func(args ...interface{}) (Function, error)
-
-// RegisterFunction to be accessible from Bloblang queries. Returns an empty
-// struct in order to allow inline calls.
-func RegisterFunction(spec FunctionSpec, allowDynamicArgs bool, ctor FunctionCtor, checks ...ArgCheckFn) struct{} {
-	if len(checks) > 0 {
-		ctor = checkArgs(ctor, checks...)
-	}
-	if allowDynamicArgs {
-		ctor = enableDynamicArgs(ctor)
-	}
-	if _, exists := functions[spec.Name]; exists {
-		panic(fmt.Sprintf("Conflicting function name: %v", spec.Name))
-	}
-	functions[spec.Name] = ctor
-	functionSpecs = append(functionSpecs, spec)
-	return struct{}{}
-}
-
-// InitFunction attempts to initialise a function by its name and arguments.
-func InitFunction(name string, args ...interface{}) (Function, error) {
-	ctor, exists := functions[name]
-	if !exists {
-		return nil, badFunctionErr(name)
-	}
-	expandLiteralArgs(args)
-	return ctor(args...)
-}
-
-var functions = map[string]FunctionCtor{}
-var functionSpecs = []FunctionSpec{}
-
-// FunctionDocs returns a slice of specs, one for each function.
-func FunctionDocs() []FunctionSpec {
-	return functionSpecs
-}
-
-// ListFunctions returns a slice of function names, sorted alphabetically.
-func ListFunctions() []string {
-	functionNames := make([]string, 0, len(functions))
-	for k := range functions {
-		functionNames = append(functionNames, k)
-	}
-	sort.Strings(functionNames)
-	return functionNames
-}
-
-//------------------------------------------------------------------------------

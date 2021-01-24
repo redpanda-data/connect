@@ -3,6 +3,7 @@ package parser
 import (
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -225,7 +226,10 @@ not this`,
 			if test.deprecated {
 				res = ParseDeprecatedQuery([]rune(test.input))
 			} else {
-				res = ParseQuery([]rune(test.input))
+				res = queryParser(Context{
+					Functions: query.AllFunctions,
+					Methods:   query.AllMethods,
+				})([]rune(test.input))
 			}
 			require.Nil(t, res.Err)
 			assert.Equal(t, test.remaining, string(res.Remaining))

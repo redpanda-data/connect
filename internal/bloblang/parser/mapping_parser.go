@@ -17,15 +17,15 @@ import (
 //
 // The filepath is optional and used for relative file imports and error
 // messages.
-func ParseMapping(filepath string, expr string) (*mapping.Executor, *Error) {
+func ParseMapping(filepath string, expr string, pCtx Context) (*mapping.Executor, *Error) {
 	in := []rune(expr)
 	dir := ""
 	if len(filepath) > 0 {
 		dir = path.Dir(filepath)
 	}
 	res := BestMatch(
-		parseExecutor(dir),
-		singleRootMapping(),
+		parseExecutor(dir, pCtx),
+		singleRootMapping(pCtx),
 	)(in)
 	if res.Err != nil {
 		return nil, res.Err
@@ -35,7 +35,7 @@ func ParseMapping(filepath string, expr string) (*mapping.Executor, *Error) {
 
 //------------------------------------------------------------------------------'
 
-func parseExecutor(baseDir string) Func {
+func parseExecutor(baseDir string, pCtx Context) Func {
 	newline := NewlineAllowComment()
 	whitespace := SpacesAndTabs()
 	allWhitespace := DiscardAll(OneOf(whitespace, newline))
@@ -45,11 +45,11 @@ func parseExecutor(baseDir string) Func {
 		statements := []mapping.Statement{}
 
 		statement := OneOf(
-			importParser(baseDir, maps),
-			mapParser(maps),
-			letStatementParser(),
-			metaStatementParser(false),
-			plainMappingStatementParser(),
+			importParser(baseDir, maps, pCtx),
+			mapParser(maps, pCtx),
+			letStatementParser(pCtx),
+			metaStatementParser(false, pCtx),
+			plainMappingStatementParser(pCtx),
 		)
 
 		res := allWhitespace(input)
@@ -89,12 +89,12 @@ func parseExecutor(baseDir string) Func {
 	}
 }
 
-func singleRootMapping() Func {
+func singleRootMapping(pCtx Context) Func {
 	whitespace := SpacesAndTabs()
 	allWhitespace := DiscardAll(OneOf(whitespace, Newline()))
 
 	return func(input []rune) Result {
-		res := ParseQuery(input)
+		res := queryParser(pCtx)(input)
 		if res.Err != nil {
 			return res
 		}
@@ -128,7 +128,7 @@ func varNameParser() Func {
 	)
 }
 
-func importParser(baseDir string, maps map[string]query.Function) Func {
+func importParser(baseDir string, maps map[string]query.Function, pCtx Context) Func {
 	p := Sequence(
 		Term("import"),
 		SpacesAndTabs(),
@@ -154,7 +154,7 @@ func importParser(baseDir string, maps map[string]query.Function) Func {
 		}
 
 		importContent := []rune(string(contents))
-		execRes := parseExecutor(path.Dir(filepath))(importContent)
+		execRes := parseExecutor(path.Dir(filepath), pCtx)(importContent)
 		if execRes.Err != nil {
 			return Fail(NewFatalError(input, NewImportError(filepath, importContent, execRes.Err)), input)
 		}
@@ -182,7 +182,7 @@ func importParser(baseDir string, maps map[string]query.Function) Func {
 	}
 }
 
-func mapParser(maps map[string]query.Function) Func {
+func mapParser(maps map[string]query.Function, pCtx Context) Func {
 	newline := NewlineAllowComment()
 	whitespace := SpacesAndTabs()
 	allWhitespace := DiscardAll(OneOf(whitespace, newline))
@@ -207,9 +207,9 @@ func mapParser(maps map[string]query.Function) Func {
 				allWhitespace,
 			),
 			OneOf(
-				letStatementParser(),
-				metaStatementParser(true), // Prevented for now due to .from(int)
-				plainMappingStatementParser(),
+				letStatementParser(pCtx),
+				metaStatementParser(true, pCtx), // Prevented for now due to .from(int)
+				plainMappingStatementParser(pCtx),
 			),
 			Sequence(
 				Discard(whitespace),
@@ -249,7 +249,7 @@ func mapParser(maps map[string]query.Function) Func {
 	}
 }
 
-func letStatementParser() Func {
+func letStatementParser(pCtx Context) Func {
 	p := Sequence(
 		Expect(Term("let"), "assignment"),
 		SpacesAndTabs(),
@@ -266,7 +266,7 @@ func letStatementParser() Func {
 		SpacesAndTabs(),
 		Char('='),
 		SpacesAndTabs(),
-		ParseQuery,
+		queryParser(pCtx),
 	)
 
 	return func(input []rune) Result {
@@ -303,7 +303,7 @@ func nameLiteralParser() Func {
 	)
 }
 
-func metaStatementParser(disabled bool) Func {
+func metaStatementParser(disabled bool, pCtx Context) Func {
 	p := Sequence(
 		Expect(Term("meta"), "assignment"),
 		SpacesAndTabs(),
@@ -314,7 +314,7 @@ func metaStatementParser(disabled bool) Func {
 		Optional(SpacesAndTabs()),
 		Char('='),
 		SpacesAndTabs(),
-		ParseQuery,
+		queryParser(pCtx),
 	)
 
 	return func(input []rune) Result {
@@ -421,13 +421,13 @@ func pathParser() Func {
 	}
 }
 
-func plainMappingStatementParser() Func {
+func plainMappingStatementParser(pCtx Context) Func {
 	p := Sequence(
 		pathParser(),
 		SpacesAndTabs(),
 		Char('='),
 		SpacesAndTabs(),
-		ParseQuery,
+		queryParser(pCtx),
 	)
 
 	return func(input []rune) Result {

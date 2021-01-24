@@ -92,17 +92,6 @@ type TargetsContext struct {
 
 //------------------------------------------------------------------------------
 
-// Function takes a set of contextual arguments and returns the result of the
-// query.
-type Function interface {
-	// Execute this function for a message of a batch.
-	Exec(ctx FunctionContext) (interface{}, error)
-
-	// Return a map of target types to path segments for any targets that this
-	// query function references.
-	QueryTargets(ctx TargetsContext) []TargetPath
-}
-
 // ExecToString returns a string from a function exection.
 func ExecToString(fn Function, ctx FunctionContext) string {
 	v, err := fn.Exec(ctx)
@@ -126,5 +115,3 @@ func ExecToBytes(fn Function, ctx FunctionContext) []byte {
 	}
 	return IToBytes(v)
 }
-
-//------------------------------------------------------------------------------

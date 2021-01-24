@@ -4,52 +4,70 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 )
 
-//------------------------------------------------------------------------------
-
-// NewQuery parses a new query function from a query string.
-func NewQuery(queryStr string) (query.Function, *Error) {
-	res := ParseQuery([]rune(queryStr))
-	if res.Err != nil {
-		return nil, res.Err
-	}
-	fn := res.Payload.(query.Function)
-
-	// Remove all tailing whitespace and ensure no remaining input.
-	res = DiscardAll(OneOf(SpacesAndTabs(), Newline()))(res.Remaining)
-	if len(res.Remaining) > 0 {
-		return nil, NewError(res.Remaining, "end of input")
-	}
-	return fn, nil
+// FunctionSet provides constructors to the functions available in this query.
+type FunctionSet interface {
+	Init(string, ...interface{}) (query.Function, error)
 }
 
-// ParseQuery parses an input into a query.Function.
-func ParseQuery(input []rune) Result {
+// MethodSet provides constructors to the methods available in this query.
+type MethodSet interface {
+	Init(string, query.Function, ...interface{}) (query.Function, error)
+}
+
+// Context contains context used throughout a Bloblang parser for
+// accessing function and method constructors.
+type Context struct {
+	Functions FunctionSet
+	Methods   MethodSet
+}
+
+// InitFunction attempts to initialise a function from the available
+// constructors of the parser context.
+func (pCtx Context) InitFunction(name string, args ...interface{}) (query.Function, error) {
+	return pCtx.Functions.Init(name, args...)
+}
+
+// InitMethod attempts to initialise a method from the available constructors of
+// the parser context.
+func (pCtx Context) InitMethod(name string, target query.Function, args ...interface{}) (query.Function, error) {
+	return pCtx.Methods.Init(name, target, args...)
+}
+
+func queryParser(pCtx Context) func(input []rune) Result {
 	rootParser := parseWithTails(Expect(
 		OneOf(
-			matchExpressionParser(),
-			ifExpressionParser(),
-			bracketsExpressionParser(),
-			literalValueParser(),
-			functionParser(),
+			matchExpressionParser(pCtx),
+			ifExpressionParser(pCtx),
+			bracketsExpressionParser(pCtx),
+			literalValueParser(pCtx),
+			functionParser(pCtx),
 			variableLiteralParser(),
 			fieldLiteralRootParser(),
 		),
 		"query",
-	))
-	res := SpacesAndTabs()(input)
-	return arithmeticParser(rootParser)(res.Remaining)
+	), pCtx)
+	return func(input []rune) Result {
+		res := SpacesAndTabs()(input)
+		return arithmeticParser(rootParser)(res.Remaining)
+	}
 }
 
 // ParseDeprecatedQuery parses an input into a query.Function, but permits
 // deprecated function interpolations. In order to support old functions this
 // parser does not include field literals.
+//
+// TODO: V4 Remove this
 func ParseDeprecatedQuery(input []rune) Result {
+	pCtx := Context{
+		Functions: query.AllFunctions,
+		Methods:   query.AllMethods,
+	}
 	rootParser := OneOf(
-		matchExpressionParser(),
-		ifExpressionParser(),
-		parseWithTails(bracketsExpressionParser()),
-		parseWithTails(literalValueParser()),
-		parseWithTails(functionParser()),
+		matchExpressionParser(pCtx),
+		ifExpressionParser(pCtx),
+		parseWithTails(bracketsExpressionParser(pCtx), pCtx),
+		parseWithTails(literalValueParser(pCtx), pCtx),
+		parseWithTails(functionParser(pCtx), pCtx),
 		parseDeprecatedFunction,
 	)
 
@@ -70,7 +88,10 @@ func tryParseQuery(expr string, deprecated bool) (query.Function, *Error) {
 	if deprecated {
 		res = ParseDeprecatedQuery([]rune(expr))
 	} else {
-		res = ParseQuery([]rune(expr))
+		res = queryParser(Context{
+			Functions: query.AllFunctions,
+			Methods:   query.AllMethods,
+		})([]rune(expr))
 	}
 	if res.Err != nil {
 		return nil, res.Err
