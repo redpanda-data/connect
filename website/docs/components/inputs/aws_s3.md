@@ -229,7 +229,8 @@ Default: `"all-bytes"`
 | `all-bytes` | Consume the entire file as a single binary message. |
 | `csv` | Consume structured rows as comma separated values, the first row must be a header row. |
 | `csv-gzip` | Consume structured rows as comma separated values from a gzip compressed file, the first row must be a header row. |
-| `delim:x` | Consume the file in segments divided by a custom delimter. |
+| `delim:x` | Consume the file in segments divided by a custom delimiter. |
+| `chunker:x` | Consume the file in chunks of a given number of bytes. |
 | `lines` | Consume the file in segments divided by linebreaks. |
 | `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
 | `tar-gzip` | Parse the file as a gzip compressed tar archive, and consume each file of the archive as a message. |

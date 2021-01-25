@@ -12,6 +12,7 @@ import (
 	"io"
 	"io/ioutil"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -28,7 +29,8 @@ var ReaderDocs = docs.FieldCommon(
 	"all-bytes", "Consume the entire file as a single binary message.",
 	"csv", "Consume structured rows as comma separated values, the first row must be a header row.",
 	"csv-gzip", "Consume structured rows as comma separated values from a gzip compressed file, the first row must be a header row.",
-	"delim:x", "Consume the file in segments divided by a custom delimter.",
+	"delim:x", "Consume the file in segments divided by a custom delimiter.",
+	"chunker:x", "Consume the file in chunks of a given number of bytes.",
 	"lines", "Consume the file in segments divided by linebreaks.",
 	"tar", "Parse the file as a tar archive, and consume each file of the archive as a message.",
 	"tar-gzip", "Parse the file as a gzip compressed tar archive, and consume each file of the archive as a message.",
@@ -122,6 +124,15 @@ func GetReader(codec string, conf ReaderConfig) (ReaderConstructor, error) {
 		}
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			return newCustomDelimReader(conf, r, by, fn)
+		}, nil
+	}
+	if strings.HasPrefix(codec, "chunker:") {
+		chunkSize, err := strconv.ParseUint(strings.TrimPrefix(codec, "chunker:"), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid chunk size for chunker codec: %w", err)
+		}
+		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+			return newChunkerReader(conf, r, chunkSize, fn)
 		}, nil
 	}
 	return nil, fmt.Errorf("codec was not recognised: %v", codec)
@@ -430,6 +441,79 @@ func (a *customDelimReader) Next(ctx context.Context) (types.Part, ReaderAckFn, 
 }
 
 func (a *customDelimReader) Close(ctx context.Context) error {
+	a.mut.Lock()
+	defer a.mut.Unlock()
+
+	if !a.finished {
+		a.sourceAck(ctx, errors.New("service shutting down"))
+	}
+	if a.pending == 0 {
+		a.sourceAck(ctx, nil)
+	}
+	return a.r.Close()
+}
+
+//------------------------------------------------------------------------------
+
+type chunkerReader struct {
+	chunkSize uint64
+	buf       []byte
+	r         io.ReadCloser
+	sourceAck ReaderAckFn
+
+	mut      sync.Mutex
+	finished bool
+	pending  int32
+}
+
+func newChunkerReader(conf ReaderConfig, r io.ReadCloser, chunkSize uint64, ackFn ReaderAckFn) (Reader, error) {
+	return &chunkerReader{
+		chunkSize: chunkSize,
+		buf:       make([]byte, chunkSize),
+		r:         r,
+		sourceAck: ackOnce(ackFn),
+	}, nil
+}
+
+func (a *chunkerReader) ack(ctx context.Context, err error) error {
+	a.mut.Lock()
+	a.pending--
+	doAck := a.pending == 0 && a.finished
+	a.mut.Unlock()
+
+	if err != nil {
+		return a.sourceAck(ctx, err)
+	}
+	if doAck {
+		return a.sourceAck(ctx, nil)
+	}
+	return nil
+}
+
+func (a *chunkerReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
+	a.mut.Lock()
+	defer a.mut.Unlock()
+
+	if a.finished {
+		return nil, nil, io.EOF
+	}
+
+	n, err := a.r.Read(a.buf)
+	if err == nil {
+		a.pending++
+
+		bytesCopy := make([]byte, n)
+		copy(bytesCopy, a.buf)
+		return message.NewPart(bytesCopy), a.ack, nil
+	} else if err == io.EOF {
+		a.finished = true
+	} else {
+		a.sourceAck(ctx, err)
+	}
+	return nil, nil, err
+}
+
+func (a *chunkerReader) Close(ctx context.Context) error {
 	a.mut.Lock()
 	defer a.mut.Unlock()
 
