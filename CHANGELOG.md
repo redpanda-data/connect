@@ -10,6 +10,11 @@ All notable changes to this project will be documented in this file.
 - Field `key` in output `redis_list` now supports interpolation functions.
 - Field `tags` added to output `aws_s3`.
 - New experimental `sftp` input and output.
+- New input codec `chunker`.
+
+### Fixed
+
+- Fixed an issue with the `azure_blob_storage` output where `blob_type` set to `APPEND` could result in send failures.
 
 ## 3.38.0 - 2021-01-18
 
