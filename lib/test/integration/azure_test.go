@@ -139,4 +139,30 @@ input:
 		)
 	})
 
+	// TODO: Re-enable this after https://github.com/Azure/Azurite/issues/682 is fixed
+	// 	t.Run("blob_storage_append", func(t *testing.T) {
+	// 		template := `
+	// output:
+	//   azure_blob_storage:
+	//     blob_type: APPEND
+	//     container: $VAR1
+	//     max_in_flight: 1
+	//     path: $VAR2/data.txt
+	//     public_access_level: PRIVATE
+	//     storage_connection_string: "UseDevelopmentStorage=true;"
+
+	// input:
+	//   azure_blob_storage:
+	//     container: $VAR1
+	//     prefix: $VAR2/data.txt
+	//     storage_connection_string: "UseDevelopmentStorage=true;"
+	// `
+	// 		integrationTests(
+	// 			integrationTestOpenCloseIsolated(),
+	// 		).Run(
+	// 			t, template,
+	// 			testOptVarOne(dummyContainer),
+	// 			testOptVarTwo(dummyPrefix),
+	// 		)
+	// 	})
 })

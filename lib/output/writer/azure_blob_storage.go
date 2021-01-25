@@ -104,6 +104,15 @@ func (a *AzureBlobStorage) Write(msg types.Message) error {
 
 func (a *AzureBlobStorage) uploadBlob(b *storage.Blob, blobType string, message []byte) error {
 	if blobType == "APPEND" {
+		exists, err := b.Exists()
+		if err != nil {
+			return err
+		}
+		if !exists {
+			if err = b.PutAppendBlob(nil); err != nil {
+				return err
+			}
+		}
 		return b.AppendBlock(message, nil)
 	}
 	return b.CreateBlockBlobFromReader(bytes.NewReader(message), nil)
