@@ -271,6 +271,14 @@ func TestDelimReader(t *testing.T) {
 	testReaderSuite(t, "delim:X", "", data)
 }
 
+func TestChunkerReader(t *testing.T) {
+	data := []byte("foobarbaz")
+	testReaderSuite(t, "chunker:3", "", data, "foo", "bar", "baz")
+
+	data = []byte("")
+	testReaderSuite(t, "chunker:1", "", data)
+}
+
 func TestTarReader(t *testing.T) {
 	input := []string{
 		"first document",
