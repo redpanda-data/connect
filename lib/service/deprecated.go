@@ -59,7 +59,7 @@ func cmdDeprecatedPrintConfig(conf *config.Type, examples string, showAll bool, 
 
 	if !showAll {
 		if outConf, err = conf.Sanitised(); err != nil {
-			fmt.Fprintln(os.Stderr, fmt.Sprintf("Configuration sanitise error: %v", err))
+			fmt.Fprintf(os.Stderr, "Configuration sanitise error: %v\n", err)
 			os.Exit(1)
 		}
 	} else {
@@ -76,13 +76,13 @@ func cmdDeprecatedPrintConfig(conf *config.Type, examples string, showAll bool, 
 		if configJSON, err := json.Marshal(outConf); err == nil {
 			fmt.Println(string(configJSON))
 		} else {
-			fmt.Fprintln(os.Stderr, fmt.Sprintf("Configuration marshal error: %v", err))
+			fmt.Fprintf(os.Stderr, "Configuration marshal error: %v\n", err)
 		}
 	} else {
 		if configYAML, err := uconfig.MarshalYAML(outConf); err == nil {
 			fmt.Println(string(configYAML))
 		} else {
-			fmt.Fprintln(os.Stderr, fmt.Sprintf("Configuration marshal error: %v", err))
+			fmt.Fprintf(os.Stderr, "Configuration marshal error: %v\n", err)
 		}
 	}
 
