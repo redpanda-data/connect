@@ -499,17 +499,23 @@ func (a *chunkerReader) Next(ctx context.Context) (types.Part, ReaderAckFn, erro
 	}
 
 	n, err := a.r.Read(a.buf)
-	if err == nil {
+	if err != nil {
+		if err == io.EOF {
+			a.finished = true
+		} else {
+			a.sourceAck(ctx, err)
+			return nil, nil, err
+		}
+	}
+
+	if n > 0 {
 		a.pending++
 
 		bytesCopy := make([]byte, n)
 		copy(bytesCopy, a.buf)
 		return message.NewPart(bytesCopy), a.ack, nil
-	} else if err == io.EOF {
-		a.finished = true
-	} else {
-		a.sourceAck(ctx, err)
 	}
+
 	return nil, nil, err
 }
 
