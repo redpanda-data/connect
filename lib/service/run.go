@@ -235,7 +235,7 @@ func Run() {
 						}
 					}
 					if err != nil {
-						fmt.Fprintln(os.Stderr, fmt.Sprintf("Echo error: %v", err))
+						fmt.Fprintf(os.Stderr, "Echo error: %v\n", err)
 						os.Exit(1)
 					}
 					return nil
@@ -311,7 +311,7 @@ func Run() {
 				Action: func(c *cli.Context) error {
 					if expression := c.Args().First(); len(expression) > 0 {
 						if err := addExpression(&conf, expression); err != nil {
-							fmt.Fprintln(os.Stderr, fmt.Sprintf("Generate error: %v", err))
+							fmt.Fprintf(os.Stderr, "Generate error: %v\n", err)
 							os.Exit(1)
 						}
 					}
@@ -323,7 +323,7 @@ func Run() {
 						}
 					}
 					if err != nil {
-						fmt.Fprintln(os.Stderr, fmt.Sprintf("Generate error: %v", err))
+						fmt.Fprintf(os.Stderr, "Generate error: %v\n", err)
 						os.Exit(1)
 					}
 					return nil

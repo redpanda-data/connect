@@ -162,11 +162,9 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 
 	// Set custom environment vars.
 	ogEnvVars := map[string]string{}
-	if environment != nil {
-		for k, v := range environment {
-			ogEnvVars[k] = os.Getenv(k)
-			os.Setenv(k, v)
-		}
+	for k, v := range environment {
+		ogEnvVars[k] = os.Getenv(k)
+		os.Setenv(k, v)
 	}
 
 	cleanupEnv := setEnvironment(environment)

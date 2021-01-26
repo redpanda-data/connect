@@ -431,21 +431,17 @@ func trackerFromTree(tree [][]string) *resultTracker {
 
 func (r *resultTracker) Skipped(k string) {
 	r.Lock()
-	if _, exists := r.succeeded[k]; exists {
-		delete(r.succeeded, k)
-	}
+	delete(r.succeeded, k)
+
 	r.skipped[k] = struct{}{}
 	r.Unlock()
 }
 
 func (r *resultTracker) Failed(k, why string) {
 	r.Lock()
-	if _, exists := r.succeeded[k]; exists {
-		delete(r.succeeded, k)
-	}
-	if _, exists := r.skipped[k]; exists {
-		delete(r.skipped, k)
-	}
+	delete(r.succeeded, k)
+	delete(r.skipped, k)
+
 	r.failed[k] = why
 	r.Unlock()
 }

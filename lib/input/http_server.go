@@ -541,8 +541,6 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-
-	return
 }
 
 func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
@@ -554,7 +552,6 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			http.Error(w, "Bad request", http.StatusBadRequest)
 			h.log.Warnf("Websocket request failed: %v\n", err)
-			return
 		}
 	}()
 

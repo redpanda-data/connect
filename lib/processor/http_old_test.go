@@ -19,7 +19,6 @@ func TestHTTPOldClientRetries(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddUint32(&reqCount, 1)
 		http.Error(w, "test error", http.StatusForbidden)
-		return
 	}))
 	defer ts.Close()
 

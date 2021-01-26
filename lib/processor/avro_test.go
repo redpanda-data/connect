@@ -324,7 +324,7 @@ func TestAvroSchemaPath(t *testing.T) {
 func TestAvroSchemaPathNotExist(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = TypeAvro
-	conf.Avro.SchemaPath = fmt.Sprintf("file://path_does_not_exist")
+	conf.Avro.SchemaPath = "file://path_does_not_exist"
 
 	_, err := New(conf, nil, log.Noop(), metrics.Noop())
 	if err == nil {

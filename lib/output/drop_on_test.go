@@ -20,7 +20,6 @@ import (
 func TestDropOnNothing(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "test error", http.StatusForbidden)
-		return
 	}))
 	t.Cleanup(func() {
 		ts.Close()
@@ -72,7 +71,6 @@ func TestDropOnNothing(t *testing.T) {
 func TestDropOnError(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "test error", http.StatusForbidden)
-		return
 	}))
 	t.Cleanup(func() {
 		ts.Close()

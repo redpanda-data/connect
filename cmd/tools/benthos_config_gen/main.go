@@ -157,9 +157,7 @@ func envify(rootPath string, conf interface{}, paths map[string]string) (newConf
 			return
 		}
 		for alias := range aliases {
-			if strings.Contains(path, alias) {
-				path = strings.Replace(path, alias, aliases[alias], 1)
-			}
+			path = strings.Replace(path, alias, aliases[alias], 1)
 		}
 		var valStr string
 		switch t := from.(type) {

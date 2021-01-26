@@ -386,7 +386,7 @@ func (k *KafkaCG) ConnectWithContext(ctx context.Context) error {
 		k.cMut.Unlock()
 	}()
 
-	k.msgChan = make(chan asyncMessage, 0)
+	k.msgChan = make(chan asyncMessage)
 
 	k.log.Infof("Receiving kafka messages from brokers %s as group '%v'\n", k.addresses, k.conf.ConsumerGroup)
 	return nil

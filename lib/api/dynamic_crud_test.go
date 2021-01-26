@@ -221,7 +221,7 @@ func TestDynamicListing(t *testing.T) {
 		`","config":{"test":"sanitised"}},"foo":{"uptime":"`,
 		`","config":{"test":"second sanitised"}}}`,
 	}
-	res := string(response.Body.Bytes())
+	res := response.Body.String()
 	for _, exp := range expSections {
 		if !strings.Contains(res, exp) {
 			t.Errorf("Response does not contain substr: %v > %v", res, exp)

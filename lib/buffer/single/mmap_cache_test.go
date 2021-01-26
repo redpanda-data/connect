@@ -230,7 +230,7 @@ func TestMmapCacheRaces(t *testing.T) {
 
 	for i := 0; i < 1000; i++ {
 		bytes := cache.Get(20)
-		if bytes == nil || len(bytes) == 0 {
+		if len(bytes) == 0 {
 			t.Errorf("Index %v bytes were nil or empty", i)
 			return
 		}

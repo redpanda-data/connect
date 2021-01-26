@@ -1538,9 +1538,8 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 		}
 		if m, ok := v.([]interface{}); ok {
 			values := make([]interface{}, 0, len(m))
-			for _, e := range m {
-				values = append(values, e)
-			}
+			values = append(values, m...)
+
 			sort.Slice(values, func(i, j int) bool {
 				if err == nil {
 					var b bool

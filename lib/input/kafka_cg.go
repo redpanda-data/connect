@@ -153,7 +153,7 @@ func (k *kafkaReader) connectBalancedTopics(ctx context.Context, config *sarama.
 		k.cMut.Unlock()
 	}()
 
-	k.msgChan = make(chan asyncMessage, 0)
+	k.msgChan = make(chan asyncMessage)
 	k.consumerDoneCtx = consumerDoneCtx
 	k.log.Infof("Consuming kafka topics %v from brokers %s as group '%v'\n", k.balancedTopics, k.addresses, k.conf.ConsumerGroup)
 	return nil
