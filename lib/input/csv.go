@@ -303,9 +303,7 @@ func (r *csvReader) ReadWithContext(ctx context.Context) (types.Message, reader.
 
 		if r.expectHeaders && headers == nil {
 			headers = make([]string, 0, len(records))
-			for _, r := range records {
-				headers = append(headers, r)
-			}
+			headers = append(headers, records...)
 
 			r.mut.Lock()
 			r.headers = headers
