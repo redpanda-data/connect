@@ -291,9 +291,7 @@ func newCSVReader(r io.ReadCloser, ackFn ReaderAckFn) (Reader, error) {
 	}
 
 	headersCopy := make([]string, len(headers))
-	for i, hdr := range headers {
-		headersCopy[i] = hdr
-	}
+	copy(headersCopy, headers)
 
 	return &csvReader{
 		scanner:   scanner,
