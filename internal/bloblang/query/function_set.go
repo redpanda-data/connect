@@ -15,7 +15,7 @@ type FunctionSet struct {
 // Add a new function to this set by providing a spec (name and documentation),
 // a constructor to be called for each instantiation of the function, and
 // information regarding the arguments of the function.
-func (f *FunctionSet) Add(spec FunctionSpec, allowDynamicArgs bool, ctor FunctionCtor, checks ...ArgCheckFn) error {
+func (f *FunctionSet) Add(spec FunctionSpec, ctor FunctionCtor, allowDynamicArgs bool, checks ...ArgCheckFn) error {
 	if len(checks) > 0 {
 		ctor = checkArgs(ctor, checks...)
 	}
@@ -68,7 +68,7 @@ var AllFunctions = &FunctionSet{
 // RegisterFunction to be accessible from Bloblang queries. Returns an empty
 // struct in order to allow inline calls.
 func RegisterFunction(spec FunctionSpec, allowDynamicArgs bool, ctor FunctionCtor, checks ...ArgCheckFn) struct{} {
-	if err := AllFunctions.Add(spec, allowDynamicArgs, ctor, checks...); err != nil {
+	if err := AllFunctions.Add(spec, ctor, allowDynamicArgs, checks...); err != nil {
 		panic(err)
 	}
 	return struct{}{}

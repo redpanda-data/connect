@@ -47,6 +47,7 @@ var (
 	FunctionCategoryMessage     FunctionCategory = "Message Info"
 	FunctionCategoryEnvironment FunctionCategory = "Environment"
 	FunctionCategoryDeprecated  FunctionCategory = "Deprecated"
+	FunctionCategoryPlugin      FunctionCategory = "Plugin"
 )
 
 // FunctionSpec describes a Bloblang function.
@@ -119,6 +120,7 @@ var (
 	MethodCategoryParsing        MethodCategory = "Parsing"
 	MethodCategoryObjectAndArray MethodCategory = "Object & Array Manipulation"
 	MethodCategoryDeprecated     MethodCategory = "Deprecated"
+	MethodCategoryPlugin         MethodCategory = "Plugin"
 )
 
 // MethodCatSpec describes how a method behaves in the context of a given
