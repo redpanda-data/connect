@@ -62,6 +62,7 @@ Requires version 3.33.0 or newer
 | Option | Summary |
 |---|---|
 | `all-bytes` | Write the message to the file in full. If the file already exists the old content is deleted. |
+| `append` | Append messages to the file. |
 | `lines` | Append messages to the file followed by a line break. |
 | `delim:x` | Append messages to the file followed by a custom delimiter. |
 
