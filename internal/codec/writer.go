@@ -16,6 +16,7 @@ var WriterDocs = docs.FieldCommon(
 	"codec", "The way in which the bytes of messages should be written out into the output file. It's possible to write lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.", "lines", "delim:\t", "delim:foobar",
 ).HasAnnotatedOptions(
 	"all-bytes", "Write the message to the file in full. If the file already exists the old content is deleted.",
+	"append", "Append messages to the file.",
 	"lines", "Append messages to the file followed by a line break.",
 	"delim:x", "Append messages to the file followed by a custom delimiter.",
 )
@@ -50,6 +51,10 @@ func GetWriter(codec string) (WriterConstructor, WriterConfig, error) {
 		return func(w io.WriteCloser) (Writer, error) {
 			return &allBytesWriter{w}, nil
 		}, allBytesConfig, nil
+	case "append":
+		return func(w io.WriteCloser) (Writer, error) {
+			return newCustomDelimWriter(w, "")
+		}, customDelimConfig, nil
 	case "lines":
 		return newLinesWriter, linesWriterConfig, nil
 	}

@@ -17,6 +17,20 @@ import (
 
 type noopCloser struct {
 	io.Reader
+	returnEOFOnRead bool
+}
+
+func (n noopCloser) Read(p []byte) (int, error) {
+	byteCount, err := n.Reader.Read(p)
+	if err != nil {
+		return byteCount, err
+	}
+
+	if n.returnEOFOnRead {
+		return byteCount, io.EOF
+	}
+
+	return byteCount, err
 }
 
 func (n noopCloser) Close() error {
@@ -25,7 +39,7 @@ func (n noopCloser) Close() error {
 
 func testReaderSuite(t *testing.T, codec, path string, data []byte, expected ...string) {
 	t.Run("close before reading", func(t *testing.T) {
-		buf := noopCloser{bytes.NewReader(data)}
+		buf := noopCloser{bytes.NewReader(data), false}
 
 		ctor, err := GetReader(codec, NewReaderConfig())
 		require.NoError(t, err)
@@ -42,8 +56,46 @@ func testReaderSuite(t *testing.T, codec, path string, data []byte, expected ...
 		assert.EqualError(t, ack, "service shutting down")
 	})
 
+	t.Run("returns all data even if EOF is encountered during the last read", func(t *testing.T) {
+		buf := noopCloser{bytes.NewReader(data), false}
+
+		ctor, err := GetReader(codec, NewReaderConfig())
+		require.NoError(t, err)
+
+		ack := errors.New("default err")
+
+		r, err := ctor(path, &buf, func(ctx context.Context, err error) error {
+			ack = err
+			return nil
+		})
+		require.NoError(t, err)
+
+		allReads := map[string][]byte{}
+
+		for i, exp := range expected {
+			if i == len(expected)-1 {
+				buf.returnEOFOnRead = true
+			}
+			p, ackFn, err := r.Next(context.Background())
+			require.NoError(t, err)
+			require.NoError(t, ackFn(context.Background(), nil))
+			assert.Equal(t, exp, string(p.Get()))
+			allReads[string(p.Get())] = p.Get()
+		}
+
+		_, _, err = r.Next(context.Background())
+		assert.EqualError(t, err, "EOF")
+
+		assert.NoError(t, r.Close(context.Background()))
+		assert.NoError(t, ack)
+
+		for k, v := range allReads {
+			assert.Equal(t, k, string(v), "Must not corrupt previous reads")
+		}
+	})
+
 	t.Run("acks ordered reads", func(t *testing.T) {
-		buf := noopCloser{bytes.NewReader(data)}
+		buf := noopCloser{bytes.NewReader(data), false}
 
 		ctor, err := GetReader(codec, NewReaderConfig())
 		require.NoError(t, err)
@@ -78,7 +130,7 @@ func testReaderSuite(t *testing.T, codec, path string, data []byte, expected ...
 	})
 
 	t.Run("acks unordered reads", func(t *testing.T) {
-		buf := noopCloser{bytes.NewReader(data)}
+		buf := noopCloser{bytes.NewReader(data), false}
 
 		ctor, err := GetReader(codec, NewReaderConfig())
 		require.NoError(t, err)
@@ -118,7 +170,7 @@ func testReaderSuite(t *testing.T, codec, path string, data []byte, expected ...
 	})
 
 	t.Run("acks parallel reads", func(t *testing.T) {
-		buf := noopCloser{bytes.NewReader(data)}
+		buf := noopCloser{bytes.NewReader(data), false}
 
 		ctor, err := GetReader(codec, NewReaderConfig())
 		require.NoError(t, err)
@@ -164,7 +216,7 @@ func testReaderSuite(t *testing.T, codec, path string, data []byte, expected ...
 
 	if len(expected) > 0 {
 		t.Run("nacks unordered reads", func(t *testing.T) {
-			buf := noopCloser{bytes.NewReader(data)}
+			buf := noopCloser{bytes.NewReader(data), false}
 
 			ctor, err := GetReader(codec, NewReaderConfig())
 			require.NoError(t, err)
@@ -274,6 +326,9 @@ func TestDelimReader(t *testing.T) {
 func TestChunkerReader(t *testing.T) {
 	data := []byte("foobarbaz")
 	testReaderSuite(t, "chunker:3", "", data, "foo", "bar", "baz")
+
+	data = []byte("fooxbarybaz")
+	testReaderSuite(t, "chunker:3", "", data, "foo", "xba", "ryb", "az")
 
 	data = []byte("")
 	testReaderSuite(t, "chunker:1", "", data)
