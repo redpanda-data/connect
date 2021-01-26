@@ -202,8 +202,8 @@ func (a *AmazonS3) WriteWithContext(wctx context.Context, msg types.Message) err
 		// Prepare tags, escaping keys and values to ensure they're valid query string parameters.
 		if len(a.tags) > 0 {
 			tags := make([]string, len(a.tags))
-			for i, pair := range a.tags {
-				tags[i] = url.QueryEscape(pair.key) + "=" + url.QueryEscape(pair.value.String(i, msg))
+			for j, pair := range a.tags {
+				tags[j] = url.QueryEscape(pair.key) + "=" + url.QueryEscape(pair.value.String(i, msg))
 			}
 			uploadInput.Tagging = aws.String(strings.Join(tags, "&"))
 		}
