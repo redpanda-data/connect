@@ -323,7 +323,7 @@ func verifyStaticBranchDAG(order [][]string, branches map[string]workflowBranch)
 }
 
 func resolveDynamicBranchDAG(branches map[string]workflowBranch) ([][]string, error) {
-	if branches == nil || len(branches) == 0 {
+	if len(branches) == 0 {
 		return [][]string{}, nil
 	}
 	remaining := map[string]struct{}{}

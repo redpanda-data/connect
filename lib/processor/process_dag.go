@@ -332,7 +332,7 @@ eLoop:
 }
 
 func resolveProcessMapDAG(explicitDeps map[string][]string, procs map[string]*ProcessMap) ([][]string, error) {
-	if procs == nil || len(procs) == 0 {
+	if len(procs) == 0 {
 		return [][]string{}, nil
 	}
 	targetProcs := map[string]struct{}{}
