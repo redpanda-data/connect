@@ -184,7 +184,7 @@ func TestJSONSchemaPathNotExist(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Type = "jsonschema"
-	conf.JSONSchema.SchemaPath = fmt.Sprintf("file://path_does_not_exist")
+	conf.JSONSchema.SchemaPath = "file://path_does_not_exist"
 
 	_, err := NewJSONSchema(conf, nil, testLog, testMet)
 	if err == nil {
