@@ -80,8 +80,7 @@ func Example_base64Encoder() {
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	// Wait for termination signal
-	select {
-	case <-sigChan:
-		log.Println("Received SIGTERM, the service is closing.")
-	}
+	<-sigChan
+
+	log.Println("Received SIGTERM, the service is closing.")
 }
