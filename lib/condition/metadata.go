@@ -114,7 +114,7 @@ func metadataEqualsOperator(key string, arg interface{}) (metadataOperator, erro
 		return nil, fmt.Errorf("failed to parse argument as string: %v", err)
 	}
 	return func(md types.Metadata) bool {
-		return strings.ToLower(md.Get(key)) == strings.ToLower(argStr)
+		return strings.EqualFold(md.Get(key), argStr)
 	}, nil
 }
 
