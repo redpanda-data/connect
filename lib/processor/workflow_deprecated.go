@@ -138,21 +138,17 @@ func deprecatedTrackerFromTree(tree [][]string) *deprecatedResultTracker {
 
 func (r *deprecatedResultTracker) Skipped(k string) {
 	r.Lock()
-	if _, exists := r.succeeded[k]; exists {
-		delete(r.succeeded, k)
-	}
+	delete(r.succeeded, k)
+
 	r.skipped[k] = struct{}{}
 	r.Unlock()
 }
 
 func (r *deprecatedResultTracker) Failed(k string) {
 	r.Lock()
-	if _, exists := r.succeeded[k]; exists {
-		delete(r.succeeded, k)
-	}
-	if _, exists := r.skipped[k]; exists {
-		delete(r.skipped, k)
-	}
+	delete(r.succeeded, k)
+	delete(r.skipped, k)
+
 	r.failed[k] = struct{}{}
 	r.Unlock()
 }
