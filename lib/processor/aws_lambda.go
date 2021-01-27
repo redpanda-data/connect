@@ -9,9 +9,9 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/aws/lambda/client"
+	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -39,10 +39,32 @@ can use the ` + "[`branch` processor](/docs/components/processors/branch)" + `.
 
 ### Error Handling
 
-When all retry attempts for a message are exhausted the processor cancels the
-attempt. These failed messages will continue through the pipeline unchanged, but
-can be dropped or placed in a dead letter queue according to your config, you
-can read about these patterns [here](/docs/configuration/error_handling).
+When Benthos is unable to connect to the AWS endpoint or is otherwise unable to invoke the target lambda function it will retry the request according to the configured number of retries. Once these attempts have been exhausted the failed message will continue through the pipeline with it's contents unchanged, but flagged as having failed, allowing you to use [standard processor error handling patterns](/docs/configuration/error_handling).
+
+However, if the invocation of the function is successful but the function itself throws an error, then the message will have it's contents updated with a JSON payload describing the reason for the failure, and a metadata field ` + "`lambda_function_error`" + ` will be added to the message allowing you to detect and handle function errors with a ` + "[`branch`](/docs/components/processors/branch)" + `:
+
+` + "```yaml" + `
+pipeline:
+  processors:
+    - branch:
+        processors:
+          - aws_lambda:
+              function: foo
+        result_map: |
+          root = if meta().exists("lambda_function_error") {
+            throw("Invocation failed due to %v: %v".format(this.errorType, this.errorMessage))
+          } else {
+            this
+          }
+output:
+  switch:
+    cases:
+      - check: errored()
+        output:
+          reject: ${! error() }
+      - output:
+          resource: somewhere_else
+` + "```" + `
 
 ### Credentials
 
@@ -214,21 +236,19 @@ func newLambda(
 // resulting messages or a response to be sent back to the message source.
 func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	l.mCount.Incr(1)
-	var responseMsg types.Message
 
+	var resultMsg types.Message
 	if !l.parallel || msg.Len() == 1 {
-		// Easy, just do a single request.
-		var err error
-		if responseMsg, err = l.client.Invoke(msg); err != nil {
-			l.mErr.Incr(1)
-			l.mErrLambda.Incr(1)
-			l.log.Errorf("Lambda function '%v' failed: %v\n", l.conf.Config.Function, err)
-			responseMsg = msg
-			responseMsg.Iter(func(i int, p types.Part) error {
-				FlagErr(p, err)
-				return nil
-			})
-		}
+		resultMsg = msg.Copy()
+		IteratePartsWithSpan("aws_lambda", nil, resultMsg, func(i int, _ opentracing.Span, p types.Part) error {
+			if err := l.client.InvokeV2(p); err != nil {
+				l.mErr.Incr(1)
+				l.mErrLambda.Incr(1)
+				l.log.Errorf("Lambda function '%v' failed: %v\n", l.conf.Config.Function, err)
+				return err
+			}
+			return nil
+		})
 	} else {
 		parts := make([]types.Part, msg.Len())
 		msg.Iter(func(i int, p types.Part) error {
@@ -259,22 +279,14 @@ func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		}
 
 		wg.Wait()
-		responseMsg = message.New(nil)
-		responseMsg.SetAll(parts)
+		resultMsg = message.New(nil)
+		resultMsg.SetAll(parts)
 	}
 
-	if responseMsg.Len() < 1 {
-		l.mErr.Incr(1)
-		l.log.Errorf("Lambda response from '%v' was empty", l.conf.Config.Function)
-		return nil, response.NewError(fmt.Errorf(
-			"lambda response from '%v' was empty", l.conf.Config.Function,
-		))
-	}
-
-	msgs := [1]types.Message{responseMsg}
+	msgs := [1]types.Message{resultMsg}
 
 	l.mBatchSent.Incr(1)
-	l.mSent.Incr(int64(responseMsg.Len()))
+	l.mSent.Incr(int64(resultMsg.Len()))
 	return msgs[:], nil
 }
 

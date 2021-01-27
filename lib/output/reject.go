@@ -42,6 +42,7 @@ This input is particularly useful for routing messages that have failed during p
 				Config: `
 output:
   switch:
+    retry_until_success: false
     cases:
       - check: '!errored()'
         output:

@@ -43,6 +43,7 @@ This input is particularly useful for routing messages that have failed during p
 ```yaml
 output:
   switch:
+    retry_until_success: false
     cases:
       - check: '!errored()'
         output:

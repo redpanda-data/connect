@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 - New experimental `sftp` input and output.
 - New input codec `chunker`.
 
+### Changed
+
+- The `aws_lambda` processor now adds a metadata field `lambda_function_error` to messages when the function invocation suffers a runtime error.
+
 ### Fixed
 
 - Fixed an issue with the `azure_blob_storage` output where `blob_type` set to `APPEND` could result in send failures.

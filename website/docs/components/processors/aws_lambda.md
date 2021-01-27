@@ -74,10 +74,32 @@ can use the [`branch` processor](/docs/components/processors/branch).
 
 ### Error Handling
 
-When all retry attempts for a message are exhausted the processor cancels the
-attempt. These failed messages will continue through the pipeline unchanged, but
-can be dropped or placed in a dead letter queue according to your config, you
-can read about these patterns [here](/docs/configuration/error_handling).
+When Benthos is unable to connect to the AWS endpoint or is otherwise unable to invoke the target lambda function it will retry the request according to the configured number of retries. Once these attempts have been exhausted the failed message will continue through the pipeline with it's contents unchanged, but flagged as having failed, allowing you to use [standard processor error handling patterns](/docs/configuration/error_handling).
+
+However, if the invocation of the function is successful but the function itself throws an error, then the message will have it's contents updated with a JSON payload describing the reason for the failure, and a metadata field `lambda_function_error` will be added to the message allowing you to detect and handle function errors with a [`branch`](/docs/components/processors/branch):
+
+```yaml
+pipeline:
+  processors:
+    - branch:
+        processors:
+          - aws_lambda:
+              function: foo
+        result_map: |
+          root = if meta().exists("lambda_function_error") {
+            throw("Invocation failed due to %v: %v".format(this.errorType, this.errorMessage))
+          } else {
+            this
+          }
+output:
+  switch:
+    cases:
+      - check: errored()
+        output:
+          reject: ${! error() }
+      - output:
+          resource: somewhere_else
+```
 
 ### Credentials
 

@@ -161,42 +161,55 @@ func (l *Type) waitForAccess() bool {
 // Invoke attempts to invoke lambda function with a message as its payload.
 func (l *Type) Invoke(msg types.Message) (types.Message, error) {
 	l.mCount.Incr(1)
-	response := msg.Copy()
 
-	if err := msg.Iter(func(i int, p types.Part) error {
+	response := msg.Copy()
+	_ = response.Iter(func(i int, p types.Part) error {
 		s, _ := opentracing.StartSpanFromContext(message.GetContext(p), "lambda_invoke")
 		defer s.Finish()
 
-		remainingRetries := l.conf.NumRetries
-		for {
-			l.waitForAccess()
-
-			ctx, done := context.WithTimeout(context.Background(), l.timeout)
-			result, err := l.lambda.InvokeWithContext(ctx, &lambda.InvokeInput{
-				FunctionName: aws.String(l.conf.Function),
-				Payload:      p.Get(),
-			})
-			done()
-
-			if err == nil {
-				l.mSucc.Incr(1)
-				response.Get(i).Set(result.Payload)
-				return nil
-			}
-			l.mErr.Incr(1)
+		if err := l.InvokeV2(p); err != nil {
 			s.LogFields(
 				olog.String("event", "error"),
 				olog.String("type", err.Error()),
 			)
-			remainingRetries--
-			if remainingRetries < 0 {
-				return err
-			}
+			return err
 		}
-	}); err != nil {
-		return nil, err
-	}
+		return nil
+	})
+
 	return response, nil
+}
+
+// InvokeV2 attempts to invoke a lambda function with a message and replaces
+// its contents with the result on success, or returns an error.
+func (l *Type) InvokeV2(p types.Part) error {
+	l.mCount.Incr(1)
+
+	remainingRetries := l.conf.NumRetries
+	for {
+		l.waitForAccess()
+
+		ctx, done := context.WithTimeout(context.Background(), l.timeout)
+		result, err := l.lambda.InvokeWithContext(ctx, &lambda.InvokeInput{
+			FunctionName: aws.String(l.conf.Function),
+			Payload:      p.Get(),
+		})
+		done()
+		if err == nil {
+			if result.FunctionError != nil {
+				p.Metadata().Set("lambda_function_error", *result.FunctionError)
+			}
+			l.mSucc.Incr(1)
+			p.Set(result.Payload)
+			return nil
+		}
+
+		l.mErr.Incr(1)
+		remainingRetries--
+		if remainingRetries < 0 {
+			return err
+		}
+	}
 }
 
 //------------------------------------------------------------------------------
