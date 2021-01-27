@@ -44,7 +44,7 @@ of the batch.`,
 		},
 		UsesBatches: true,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("format", "The archiving [format](#formats) to apply.").HasOptions("tar", "zip", "binary", "lines", "json_array"),
+			docs.FieldCommon("format", "The archiving [format](#formats) to apply.").HasOptions("tar", "zip", "binary", "lines", "json_array", "all-bytes"),
 			docs.FieldCommon(
 				"path", "The path to set for each message in the archive (when applicable).",
 				"${!count(\"files\")}-${!timestamp_unix_nano()}.txt", "${!meta(\"kafka_key\")}-${!json(\"id\")}.json",
@@ -73,6 +73,10 @@ Archive messages to a binary blob format consisting of:
 ### ` + "`lines`" + `
 
 Join the raw contents of each message and insert a line break between each one.
+
+### ` + "`all-bytes`" + `
+
+Join the raw contents of each message.
 
 ### ` + "`json_array`" + `
 
@@ -198,6 +202,39 @@ func linesArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
 	return newPart, nil
 }
 
+func concatenate(slices [][]byte) []byte {
+	if len(slices) == 0 {
+		return []byte{}
+	}
+	if len(slices) == 1 {
+		return append([]byte(nil), slices[0]...)
+	}
+	totalLen := 0
+	for _, slice := range slices {
+		totalLen += len(slice)
+	}
+
+	retr := make([]byte, totalLen, totalLen)
+	pos := 0
+	for _, slice := range slices {
+		pos += copy(retr[pos:], slice)
+	}
+	return retr
+}
+func allBytesArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
+	tmpParts := make([][]byte, msg.Len())
+	err := msg.Iter(func(i int, part types.Part) error {
+		tmpParts[i] = part.Get()
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	newPart := msg.Get(0).Copy()
+	newPart.Set(concatenate(tmpParts))
+	return newPart, nil
+}
+
 func jsonArrayArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
 	var array []interface{}
 
@@ -233,6 +270,8 @@ func strToArchiver(str string) (archiveFunc, error) {
 		return linesArchive, nil
 	case "json_array":
 		return jsonArrayArchive, nil
+	case "all-bytes":
+		return allBytesArchive, nil
 	}
 	return nil, fmt.Errorf("archive format not recognised: %v", str)
 }
