@@ -61,6 +61,7 @@ type ComponentSpec struct {
 	// Examples demonstrating use cases for the component.
 	Examples []AnnotatedExample
 
+	// A summary of each field in the component configuration.
 	Fields FieldSpecs
 
 	// Version is the Benthos version this component was introduced.

@@ -56,6 +56,30 @@ func (m *MethodSet) Init(name string, target Function, args ...interface{}) (Fun
 	return ctor(target, args...)
 }
 
+// Without creates a clone of the method set that can be mutated in isolation,
+// where a variadic list of methods will be excluded from the set.
+func (m *MethodSet) Without(methods ...string) *MethodSet {
+	excludeMap := make(map[string]struct{}, len(methods))
+	for _, k := range methods {
+		excludeMap[k] = struct{}{}
+	}
+
+	constructors := make(map[string]MethodCtor, len(m.constructors))
+	for k, v := range m.constructors {
+		if _, exists := excludeMap[k]; !exists {
+			constructors[k] = v
+		}
+	}
+
+	specs := make([]MethodSpec, 0, len(m.specs))
+	for _, v := range m.specs {
+		if _, exists := excludeMap[v.Name]; !exists {
+			specs = append(specs, v)
+		}
+	}
+	return &MethodSet{constructors, specs}
+}
+
 //------------------------------------------------------------------------------
 
 // AllMethods is a set containing every single method declared by this package,

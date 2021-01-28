@@ -56,6 +56,30 @@ func (f *FunctionSet) Init(name string, args ...interface{}) (Function, error) {
 	return ctor(args...)
 }
 
+// Without creates a clone of the function set that can be mutated in isolation,
+// where a variadic list of functions will be excluded from the set.
+func (f *FunctionSet) Without(functions ...string) *FunctionSet {
+	excludeMap := make(map[string]struct{}, len(functions))
+	for _, k := range functions {
+		excludeMap[k] = struct{}{}
+	}
+
+	constructors := make(map[string]FunctionCtor, len(f.constructors))
+	for k, v := range f.constructors {
+		if _, exists := excludeMap[k]; !exists {
+			constructors[k] = v
+		}
+	}
+
+	specs := make([]FunctionSpec, 0, len(f.specs))
+	for _, v := range f.specs {
+		if _, exists := excludeMap[v.Name]; !exists {
+			specs = append(specs, v)
+		}
+	}
+	return &FunctionSet{constructors, specs}
+}
+
 //------------------------------------------------------------------------------
 
 // AllFunctions is a set containing every single function declared by this
