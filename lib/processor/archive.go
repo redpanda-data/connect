@@ -222,7 +222,7 @@ func concatenate(slices [][]byte) []byte {
 	return retr
 }
 func allBytesArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
-	tmpParts := make([][]byte, msg.Len())
+	var buf bytes.Buffer
 	err := msg.Iter(func(i int, part types.Part) error {
 		buf.Write(part.Get())
 		return nil
