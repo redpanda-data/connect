@@ -18,7 +18,7 @@ pipeline:
   processors:
     - type: protobuf
       protobuf:
-        import_path: ""
+        import_paths: []
         message: ""
         operator: to_json
         parts: []

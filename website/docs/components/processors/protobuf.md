@@ -34,7 +34,7 @@ files.
 protobuf:
   operator: to_json
   message: ""
-  import_path: ""
+  import_paths: []
 ```
 
 </TabItem>
@@ -45,7 +45,7 @@ protobuf:
 protobuf:
   operator: to_json
   message: ""
-  import_path: ""
+  import_paths: []
   parts: []
 ```
 
@@ -92,13 +92,13 @@ The fully qualified name of the protobuf message to convert to/from.
 Type: `string`  
 Default: `""`  
 
-### `import_path`
+### `import_paths`
 
-A path to a .proto file, or directory containing all .proto files required for parsing the target message. If left empty the current directory is used.
+A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.
 
 
-Type: `string`  
-Default: `""`  
+Type: `array`  
+Default: `[]`  
 
 ### `parts`
 
@@ -161,7 +161,7 @@ pipeline:
     - protobuf:
         operator: from_json
         message: testing.Person
-        import_path: testing/schema
+        import_paths: [ testing/schema ]
 ```
 
 </TabItem>
@@ -206,7 +206,7 @@ pipeline:
     - protobuf:
         operator: to_json
         message: testing.Person
-        import_path: testing/schema
+        import_paths: [ testing/schema ]
 ```
 
 </TabItem>

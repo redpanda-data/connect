@@ -70,7 +70,7 @@ func TestProtobuf(t *testing.T) {
 			conf.Type = TypeProtobuf
 			conf.Protobuf.Operator = test.operator
 			conf.Protobuf.Message = test.message
-			conf.Protobuf.ImportPath = test.importPath
+			conf.Protobuf.ImportPaths = []string{test.importPath}
 
 			proc, err := New(conf, nil, log.Noop(), metrics.Noop())
 			require.NoError(t, err)
@@ -130,7 +130,7 @@ func TestProtobufErrors(t *testing.T) {
 			conf.Type = TypeProtobuf
 			conf.Protobuf.Operator = test.operator
 			conf.Protobuf.Message = test.message
-			conf.Protobuf.ImportPath = test.importPath
+			conf.Protobuf.ImportPaths = []string{test.importPath}
 
 			proc, err := New(conf, nil, log.Noop(), metrics.Noop())
 			require.NoError(t, err)

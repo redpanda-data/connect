@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Field `tags` added to output `aws_s3`.
 - New experimental `sftp` input and output.
 - New input codec `chunker`.
+- New field `import_paths` added to the `protobuf` processor, replaces the now deprecated `import_path` field.
 
 ### Changed
 

@@ -16,8 +16,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Allows you to combine multiple inputs, where each input will be read in
-parallel.
+Allows you to combine multiple inputs into a single stream of data, where each input will be read in parallel.
 
 
 <Tabs defaultValue="common" values={[
@@ -60,11 +59,9 @@ input:
 </TabItem>
 </Tabs>
 
-A broker type is configured with its own list of input configurations and a
-field to specify how many copies of the list of inputs should be created.
+A broker type is configured with its own list of input configurations and a field to specify how many copies of the list of inputs should be created.
 
-Adding more input types allows you to merge streams from multiple sources into
-one. For example, reading from both RabbitMQ and Kafka:
+Adding more input types allows you to combine streams from multiple sources into one. For example, reading from both RabbitMQ and Kafka:
 
 ```yaml
 input:
@@ -78,16 +75,17 @@ input:
 
       # Optional list of input specific processing steps
       processors:
-        - jmespath:
-            query: '{ message: @, meta: { link_count: length(links) } }'
+        - bloblang: |
+            root.message = this
+            root.meta.link_count = this.links.length()
+            root.user.age = this.user.age.number()
 
     - kafka:
         addresses:
-        - localhost:9092
+          - localhost:9092
         client_id: benthos_kafka_input
         consumer_group: benthos_consumer_group
-        partition: 0
-        topic: benthos_stream
+        topics: [ benthos_stream:0 ]
 ```
 
 If the number of copies is greater than zero the list will be copied that number
