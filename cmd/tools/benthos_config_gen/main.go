@@ -24,17 +24,21 @@ import (
 
 //------------------------------------------------------------------------------
 
+var verbose bool
+
 func create(t, path string, resBytes []byte) {
 	if existing, err := ioutil.ReadFile(path); err == nil {
 		if bytes.Equal(existing, resBytes) {
-			fmt.Printf("Skipping '%v' at: %v\n", t, path)
+			if verbose {
+				fmt.Printf("Skipping '%v' at: %v\n", t, path)
+			}
 			return
 		}
 	}
 	if err := ioutil.WriteFile(path, resBytes, 0644); err != nil {
 		panic(err)
 	}
-	fmt.Printf("Generated '%v' at: %v\n", t, path)
+	fmt.Printf("Configuration for '%v' has changed, updating: %v\n", t, path)
 }
 
 func createYAML(t, path string, disableLint bool, sanit interface{}) {
@@ -53,14 +57,16 @@ func createYAML(t, path string, disableLint bool, sanit interface{}) {
 
 	if existing, err := ioutil.ReadFile(path); err == nil {
 		if bytes.Equal(existing, resBytes) {
-			fmt.Printf("Skipping '%v' at: %v\n", t, path)
+			if verbose {
+				fmt.Printf("Skipping '%v' at: %v\n", t, path)
+			}
 			return
 		}
 	}
 	if err := ioutil.WriteFile(path, resBytes, 0644); err != nil {
 		panic(err)
 	}
-	fmt.Printf("Generated '%v' config at: %v\n", t, path)
+	fmt.Printf("Configuration for '%v' has changed, updating: %v\n", t, path)
 }
 
 func envify(rootPath string, conf interface{}, paths map[string]string) (newConf interface{}) {
@@ -372,6 +378,7 @@ func createEnvConf(configsDir string) {
 func main() {
 	configsDir := "./config"
 	flag.StringVar(&configsDir, "dir", configsDir, "The directory to write config examples")
+	flag.BoolVar(&verbose, "v", false, "Writes more information to stdout, including configs that aren't updated")
 	flag.Parse()
 
 	// Get list of all types (both input and output).
