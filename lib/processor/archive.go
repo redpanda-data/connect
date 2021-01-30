@@ -231,7 +231,7 @@ func allBytesArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
 		return nil, err
 	}
 	newPart := msg.Get(0).Copy()
-	newPart.Set(concatenate(tmpParts))
+	newPart.Set(buf.Bytes())
 	return newPart, nil
 }
 
