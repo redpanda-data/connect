@@ -1,8 +1,8 @@
 ---
 title: pulsar
 type: input
+status: beta
 categories: ["Services"]
-beta: true
 ---
 
 <!--
@@ -15,8 +15,7 @@ beta: true
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-BETA: This component is experimental and therefore subject to change outside of
-major version releases.
+BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 
 Reads messages from an Apache Pulsar server.
 
