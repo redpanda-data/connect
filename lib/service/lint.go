@@ -7,7 +7,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/fatih/color"
@@ -162,17 +164,37 @@ func lintCliCommand() *cli.Command {
 			if conf := c.String("config"); len(conf) > 0 {
 				targets = append(targets, conf)
 			}
+
+			var pathLintMut sync.Mutex
 			var pathLints []pathLint
-			for _, target := range targets {
-				if len(target) == 0 {
-					continue
-				}
-				if path.Ext(target) == ".md" {
-					pathLints = append(pathLints, lintMDSnippets(target)...)
-				} else {
-					pathLints = append(pathLints, lintFile(target)...)
-				}
+			threads := runtime.NumCPU()
+			var wg sync.WaitGroup
+			wg.Add(threads)
+			for i := 0; i < threads; i++ {
+				go func(threadID int) {
+					defer wg.Done()
+					for j, target := range targets {
+						if j%threads != threadID {
+							continue
+						}
+						if len(target) == 0 {
+							continue
+						}
+						var lints []pathLint
+						if path.Ext(target) == ".md" {
+							lints = lintMDSnippets(target)
+						} else {
+							lints = lintFile(target)
+						}
+						if len(lints) > 0 {
+							pathLintMut.Lock()
+							pathLints = append(pathLints, lints...)
+							pathLintMut.Unlock()
+						}
+					}
+				}(i)
 			}
+			wg.Wait()
 			if len(pathLints) == 0 {
 				os.Exit(0)
 			}
