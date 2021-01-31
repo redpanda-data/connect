@@ -395,7 +395,6 @@ input:
           user_agent: ${INPUT_NSQ_USER_AGENT:benthos_consumer}
         pulsar:
           subscription_name: ${INPUT_PULSAR_SUBSCRIPTION_NAME}
-          topic: ${INPUT_PULSAR_TOPIC}
           url: ${INPUT_PULSAR_URL}
         redis_list:
           key: ${INPUT_REDIS_LIST_KEY:benthos_list}

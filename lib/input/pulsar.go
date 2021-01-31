@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	bpulsar "github.com/Jeffail/benthos/v3/internal/service/pulsar"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -54,7 +55,7 @@ You can access these metadata fields using
 				"pulsar://pulsar.us-west.example.com:6650",
 				"pulsar+ssl://pulsar.us-west.example.com:6651",
 			),
-			docs.FieldCommon("topic", "A topic to subscribe to."),
+			docs.FieldCommon("topics", "A list of topics to subscribe to."),
 			docs.FieldCommon("subscription_name", "Specify the subscription name for this consumer."),
 		},
 	}
@@ -64,16 +65,16 @@ You can access these metadata fields using
 
 // PulsarConfig contains configuration for the Pulsar input type.
 type PulsarConfig struct {
-	URL              string `json:"url" yaml:"url"`
-	Topic            string `json:"topic" yaml:"topic"`
-	SubscriptionName string `json:"subscription_name" yaml:"subscription_name"`
+	URL              string   `json:"url" yaml:"url"`
+	Topics           []string `json:"topics" yaml:"topics"`
+	SubscriptionName string   `json:"subscription_name" yaml:"subscription_name"`
 }
 
 // NewPulsarConfig creates a new PulsarConfig with default values.
 func NewPulsarConfig() PulsarConfig {
 	return PulsarConfig{
 		URL:              "",
-		Topic:            "",
+		Topics:           []string{},
 		SubscriptionName: "",
 	}
 }
@@ -95,8 +96,8 @@ func newPulsar(conf PulsarConfig, log log.Modular, stats metrics.Type) (*pulsarR
 	if len(conf.URL) == 0 {
 		return nil, errors.New("field url must not be empty")
 	}
-	if len(conf.Topic) == 0 {
-		return nil, errors.New("field topic must not be empty")
+	if len(conf.Topics) == 0 {
+		return nil, errors.New("field topics must not be empty")
 	}
 	if len(conf.SubscriptionName) == 0 {
 		return nil, errors.New("field subscription_name must not be empty")
@@ -127,13 +128,15 @@ func (p *pulsarReader) ConnectWithContext(ctx context.Context) error {
 	)
 
 	if client, err = pulsar.NewClient(pulsar.ClientOptions{
-		URL: p.conf.URL,
+		Logger:            bpulsar.NoopLogger(),
+		ConnectionTimeout: time.Second * 3,
+		URL:               p.conf.URL,
 	}); err != nil {
 		return err
 	}
 
 	if consumer, err = client.Subscribe(pulsar.ConsumerOptions{
-		Topic:            p.conf.Topic,
+		Topics:           p.conf.Topics,
 		SubscriptionName: p.conf.SubscriptionName,
 		Type:             pulsar.Shared,
 	}); err != nil {

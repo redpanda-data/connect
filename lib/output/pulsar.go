@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	bpulsar "github.com/Jeffail/benthos/v3/internal/service/pulsar"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
@@ -109,7 +110,8 @@ func (p *pulsarWriter) ConnectWithContext(ctx context.Context) error {
 	)
 
 	if client, err = pulsar.NewClient(pulsar.ClientOptions{
-		URL: p.conf.URL,
+		URL:    p.conf.URL,
+		Logger: bpulsar.NoopLogger(),
 	}); err != nil {
 		return err
 	}

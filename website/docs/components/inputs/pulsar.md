@@ -24,7 +24,7 @@ Reads messages from an Apache Pulsar server.
 input:
   pulsar:
     url: ""
-    topic: ""
+    topics: []
     subscription_name: ""
 ```
 
@@ -61,13 +61,13 @@ url: pulsar://pulsar.us-west.example.com:6650
 url: pulsar+ssl://pulsar.us-west.example.com:6651
 ```
 
-### `topic`
+### `topics`
 
-A topic to subscribe to.
+A list of topics to subscribe to.
 
 
-Type: `string`  
-Default: `""`  
+Type: `array`  
+Default: `[]`  
 
 ### `subscription_name`
 

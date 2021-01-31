@@ -363,7 +363,6 @@ INPUT_NSQ_TLS_SKIP_CERT_VERIFY                       = false
 INPUT_NSQ_TOPIC                                      = benthos_messages
 INPUT_NSQ_USER_AGENT                                 = benthos_consumer
 INPUT_PULSAR_SUBSCRIPTION_NAME
-INPUT_PULSAR_TOPIC
 INPUT_PULSAR_URL
 INPUT_REDIS_LIST_KEY                                 = benthos_list
 INPUT_REDIS_LIST_KIND                                = simple
