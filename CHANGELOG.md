@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - New experimental `sftp` input and output.
 - New input codec `chunker`.
 - New field `import_paths` added to the `protobuf` processor, replaces the now deprecated `import_path` field.
+- Added format `concatenate` to the `archive` processor.
 
 ### Changed
 

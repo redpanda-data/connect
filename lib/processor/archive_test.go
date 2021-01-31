@@ -194,6 +194,42 @@ fourth
 	}
 }
 
+func TestArchiveConcatenate(t *testing.T) {
+	conf := NewConfig()
+	conf.Archive.Format = "concatenate"
+
+	testLog := log.Noop()
+
+	proc, err := NewArchive(conf, nil, testLog, metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New([][]byte{
+		{},
+		{0},
+		{1, 2},
+		{3, 4, 5},
+		{6},
+	}))
+	if len(msgs) != 1 {
+		t.Error("Archive failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if msgs[0].Len() != 1 {
+		t.Fatal("More parts than expected")
+	}
+
+	require.Equal(t, 5, batch.CollapsedCount(msgs[0].Get(0)))
+	exp := [][]byte{
+		{0, 1, 2, 3, 4, 5, 6},
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
 func TestArchiveJSONArray(t *testing.T) {
 	conf := NewConfig()
 	conf.Archive.Format = "json_array"

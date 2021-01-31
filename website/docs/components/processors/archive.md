@@ -48,7 +48,7 @@ The archiving [format](#formats) to apply.
 
 Type: `string`  
 Default: `"binary"`  
-Options: `tar`, `zip`, `binary`, `lines`, `json_array`.
+Options: `tar`, `zip`, `binary`, `lines`, `json_array`, `concatenate`.
 
 ### `path`
 
@@ -68,6 +68,10 @@ path: ${!meta("kafka_key")}-${!json("id")}.json
 ```
 
 ## Formats
+
+### `concatenate`
+
+Join the raw contents of each message into a single binary message.
 
 ### `tar`
 

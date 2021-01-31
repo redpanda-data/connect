@@ -44,7 +44,7 @@ of the batch.`,
 		},
 		UsesBatches: true,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("format", "The archiving [format](#formats) to apply.").HasOptions("tar", "zip", "binary", "lines", "json_array"),
+			docs.FieldCommon("format", "The archiving [format](#formats) to apply.").HasOptions("tar", "zip", "binary", "lines", "json_array", "concatenate"),
 			docs.FieldCommon(
 				"path", "The path to set for each message in the archive (when applicable).",
 				"${!count(\"files\")}-${!timestamp_unix_nano()}.txt", "${!meta(\"kafka_key\")}-${!json(\"id\")}.json",
@@ -52,6 +52,10 @@ of the batch.`,
 		},
 		Footnotes: `
 ## Formats
+
+### ` + "`concatenate`" + `
+
+Join the raw contents of each message into a single binary message.
 
 ### ` + "`tar`" + `
 
@@ -198,6 +202,17 @@ func linesArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
 	return newPart, nil
 }
 
+func concatenateArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
+	var buf bytes.Buffer
+	_ = msg.Iter(func(i int, part types.Part) error {
+		buf.Write(part.Get())
+		return nil
+	})
+	newPart := msg.Get(0).Copy()
+	newPart.Set(buf.Bytes())
+	return newPart, nil
+}
+
 func jsonArrayArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
 	var array []interface{}
 
@@ -233,6 +248,8 @@ func strToArchiver(str string) (archiveFunc, error) {
 		return linesArchive, nil
 	case "json_array":
 		return jsonArrayArchive, nil
+	case "concatenate":
+		return concatenateArchive, nil
 	}
 	return nil, fmt.Errorf("archive format not recognised: %v", str)
 }
