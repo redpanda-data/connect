@@ -3,11 +3,12 @@ package input
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -86,8 +87,6 @@ func (w *wrapPacketConn) Read(p []byte) (n int, err error) {
 // SocketServer is an input type that binds to an address and consumes streams of
 // messages over Socket.
 type SocketServer struct {
-	running int32
-
 	conf  SocketServerConfig
 	stats metrics.Type
 	log   log.Modular
@@ -98,7 +97,8 @@ type SocketServer struct {
 
 	transactions chan types.Transaction
 
-	closeChan  chan struct{}
+	ctx        context.Context
+	closeFn    func()
 	closedChan chan struct{}
 }
 
@@ -125,19 +125,18 @@ func NewSocketServer(conf Config, mgr types.Manager, log log.Modular, stats metr
 		delim = []byte(conf.SocketServer.Delim)
 	}
 	t := SocketServer{
-		running: 1,
-		conf:    conf.SocketServer,
-		stats:   stats,
-		log:     log,
+		conf:  conf.SocketServer,
+		stats: stats,
+		log:   log,
 
 		delim:    delim,
 		listener: ln,
 		conn:     cn,
 
 		transactions: make(chan types.Transaction),
-		closeChan:    make(chan struct{}),
 		closedChan:   make(chan struct{}),
 	}
+	t.ctx, t.closeFn = context.WithCancel(context.Background())
 
 	if ln == nil {
 		go t.udpLoop()
@@ -193,8 +192,10 @@ func (t *SocketServer) loop() {
 		mLatency   = t.stats.GetTimer("latency")
 	)
 
+	var wg sync.WaitGroup
+
 	defer func() {
-		atomic.StoreInt32(&t.running, 0)
+		wg.Wait()
 
 		if t.listener != nil {
 			t.listener.Close()
@@ -206,6 +207,11 @@ func (t *SocketServer) loop() {
 
 	t.log.Infof("Receiving %v socket messages from address: %v\n", t.conf.Network, t.listener.Addr())
 
+	go func() {
+		<-t.ctx.Done()
+		t.listener.Close()
+	}()
+
 	sendMsg := func(msg types.Message) error {
 		tStarted := time.Now()
 		mPartsRcvd.Incr(int64(msg.Len()))
@@ -214,7 +220,7 @@ func (t *SocketServer) loop() {
 		resChan := make(chan types.Response)
 		select {
 		case t.transactions <- types.NewTransaction(msg, resChan):
-		case <-t.closeChan:
+		case <-t.ctx.Done():
 			return types.ErrTypeClosed
 		}
 
@@ -228,65 +234,85 @@ func (t *SocketServer) loop() {
 					return res.Error()
 				}
 			}
-		case <-t.closeChan:
+		case <-t.ctx.Done():
 			return types.ErrTypeClosed
 		}
 		mLatency.Timing(time.Since(tStarted).Nanoseconds())
 		return nil
 	}
 
-	go func() {
-		for {
-			conn, err := t.listener.Accept()
-			if err != nil {
-				if !strings.Contains(err.Error(), "use of closed network connection") {
-					t.log.Errorf("Failed to accept Socket connection: %v\n", err)
-				}
+acceptLoop:
+	for {
+		conn, err := t.listener.Accept()
+		if err != nil {
+			if !strings.Contains(err.Error(), "use of closed network connection") {
+				t.log.Errorf("Failed to accept Socket connection: %v\n", err)
+			}
+			select {
+			case <-time.After(time.Second):
+				continue acceptLoop
+			case <-t.ctx.Done():
 				return
 			}
-			go func(c net.Conn) {
-				defer c.Close()
-				scanner := t.newScanner(c)
-				var msg types.Message
-				msgLoop := func() {
-					for msg != nil {
-						sendErr := sendMsg(msg)
-						if sendErr == nil || sendErr == types.ErrTypeClosed {
-							msg = nil
+		}
+		connCtx, connDone := context.WithCancel(t.ctx)
+		go func() {
+			<-connCtx.Done()
+			conn.Close()
+		}()
+		wg.Add(1)
+		go func(c net.Conn) {
+			defer func() {
+				connDone()
+				wg.Done()
+				c.Close()
+			}()
+			scanner := t.newScanner(c)
+			var msg types.Message
+			msgLoop := func() bool {
+				for msg != nil {
+					sendErr := sendMsg(msg)
+					if sendErr == nil || sendErr == types.ErrTypeClosed {
+						msg = nil
+						return sendErr != types.ErrTypeClosed
+					}
+					t.log.Errorf("Failed to send message: %v\n", sendErr)
+					<-time.After(time.Second)
+				}
+				return true
+			}
+			for scanner.Scan() {
+				mCount.Incr(1)
+				if len(scanner.Bytes()) == 0 {
+					if t.conf.Multipart && msg != nil {
+						if !msgLoop() {
 							return
 						}
-						t.log.Errorf("Failed to send message: %v\n", sendErr)
-						<-time.After(time.Second)
+					}
+					continue
+				}
+				if msg == nil {
+					msg = message.New(nil)
+				}
+				msg.Append(message.NewPart(scanner.Bytes()))
+				if !t.conf.Multipart {
+					if !msgLoop() {
+						return
 					}
 				}
-				for scanner.Scan() {
-					mCount.Incr(1)
-					if len(scanner.Bytes()) == 0 {
-						if t.conf.Multipart && msg != nil {
-							msgLoop()
-						}
-						continue
-					}
-					if msg == nil {
-						msg = message.New(nil)
-					}
-					msg.Append(message.NewPart(scanner.Bytes()))
-					if !t.conf.Multipart {
-						msgLoop()
-					}
+			}
+			if msg != nil {
+				if !msgLoop() {
+					return
 				}
-				if msg != nil {
-					msgLoop()
+			}
+			if cerr := scanner.Err(); cerr != nil {
+				if cerr != io.EOF {
+					t.log.Errorf("Connection error due to: %v\n", cerr)
 				}
-				if cerr := scanner.Err(); cerr != nil {
-					if cerr != io.EOF {
-						t.log.Errorf("Connection error due to: %v\n", cerr)
-					}
-				}
-			}(conn)
-		}
-	}()
-	<-t.closeChan
+			}
+		}(conn)
+	}
 }
 
 func (t *SocketServer) udpLoop() {
@@ -298,14 +324,15 @@ func (t *SocketServer) udpLoop() {
 	)
 
 	defer func() {
-		atomic.StoreInt32(&t.running, 0)
+		close(t.transactions)
+		close(t.closedChan)
+	}()
 
+	go func() {
+		<-t.ctx.Done()
 		if t.conn != nil {
 			t.conn.Close()
 		}
-
-		close(t.transactions)
-		close(t.closedChan)
 	}()
 
 	t.log.Infof("Receiving udp socket messages from address: %v\n", t.conn.LocalAddr())
@@ -318,7 +345,7 @@ func (t *SocketServer) udpLoop() {
 		resChan := make(chan types.Response)
 		select {
 		case t.transactions <- types.NewTransaction(msg, resChan):
-		case <-t.closeChan:
+		case <-t.ctx.Done():
 			return types.ErrTypeClosed
 		}
 
@@ -332,50 +359,53 @@ func (t *SocketServer) udpLoop() {
 					return res.Error()
 				}
 			}
-		case <-t.closeChan:
+		case <-t.ctx.Done():
 			return types.ErrTypeClosed
 		}
 		mLatency.Timing(time.Since(tStarted).Nanoseconds())
 		return nil
 	}
 
-	go func() {
-		var msg types.Message
-		msgLoop := func() {
-			for msg != nil {
-				sendErr := sendMsg(msg)
-				if sendErr == nil || sendErr == types.ErrTypeClosed {
-					msg = nil
-					return
-				}
-				t.log.Errorf("Failed to send message: %v\n", sendErr)
-				<-time.After(time.Second)
+	var msg types.Message
+	msgLoop := func() bool {
+		for msg != nil {
+			sendErr := sendMsg(msg)
+			if sendErr == nil || sendErr == types.ErrTypeClosed {
+				msg = nil
+				return sendErr != types.ErrTypeClosed
+			}
+			t.log.Errorf("Failed to send message: %v\n", sendErr)
+			<-time.After(time.Second)
+		}
+		return true
+	}
+	for {
+		scanner := t.newScanner(&wrapPacketConn{PacketConn: t.conn})
+		for scanner.Scan() {
+			mCount.Incr(1)
+			if len(scanner.Bytes()) == 0 {
+				continue
+			}
+			if msg == nil {
+				msg = message.New(nil)
+			}
+			msg.Append(message.NewPart(scanner.Bytes()))
+			if !msgLoop() {
+				return
 			}
 		}
-		for {
-			scanner := t.newScanner(&wrapPacketConn{PacketConn: t.conn})
-			for scanner.Scan() {
-				mCount.Incr(1)
-				if len(scanner.Bytes()) == 0 {
-					continue
-				}
-				if msg == nil {
-					msg = message.New(nil)
-				}
-				msg.Append(message.NewPart(scanner.Bytes()))
-				msgLoop()
-			}
-			if msg != nil {
-				msgLoop()
-			}
-			if cerr := scanner.Err(); cerr != nil {
-				if cerr != io.EOF {
-					t.log.Errorf("Connection error due to: %v\n", cerr)
-				}
+		if msg != nil {
+			if !msgLoop() {
+				return
 			}
 		}
-	}()
-	<-t.closeChan
+		if cerr := scanner.Err(); cerr != nil {
+			if cerr != io.EOF && !strings.Contains(cerr.Error(), "use of closed network connection") {
+				t.log.Errorf("Connection error due to: %v\n", cerr)
+			}
+			return
+		}
+	}
 }
 
 // TransactionChan returns a transactions channel for consuming messages from
@@ -392,9 +422,7 @@ func (t *SocketServer) Connected() bool {
 
 // CloseAsync shuts down the SocketServer input and stops processing requests.
 func (t *SocketServer) CloseAsync() {
-	if atomic.CompareAndSwapInt32(&t.running, 1, 0) {
-		close(t.closeChan)
-	}
+	t.closeFn()
 }
 
 // WaitForClose blocks until the SocketServer input has closed down.

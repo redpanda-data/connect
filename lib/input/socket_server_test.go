@@ -2,8 +2,10 @@ package input
 
 import (
 	"errors"
+	"io/ioutil"
 	"net"
-	"reflect"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -13,44 +15,47 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSocketServerBasic(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "benthos_socket_test")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
 	conf := NewConfig()
 	conf.SocketServer.Network = "unix"
-	conf.SocketServer.Address = "/tmp/benthos.sock"
+	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	addr := rdr.(*SocketServer).Addr()
 
 	defer func() {
 		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, rdr.WaitForClose(time.Second))
 	}()
 
 	conn, err := net.Dial("unix", addr.String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-		if _, cerr := conn.Write([]byte("foo\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("bar\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("baz\n")); cerr != nil {
-			t.Error(cerr)
-		}
+		_, cerr := conn.Write([]byte("foo\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("bar\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("baz\n"))
+		require.NoError(t, cerr)
 		wg.Done()
 	}()
 
@@ -71,75 +76,98 @@ func TestSocketServerBasic(t *testing.T) {
 
 	exp := [][]byte{[]byte("foo")}
 	msg, err := readNextMsg()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	exp = [][]byte{[]byte("bar")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	exp = [][]byte{[]byte("baz")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	wg.Wait()
 	conn.Close()
 }
 
-func TestSocketServerReconnect(t *testing.T) {
+func TestSocketServerWriteToClosed(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "benthos_socket_test")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
 	conf := NewConfig()
 	conf.SocketServer.Network = "unix"
-	conf.SocketServer.Address = "/tmp/benthos.sock"
+	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
+	addr := rdr.(*SocketServer).Addr()
+
+	conn, err := net.Dial("unix", addr.String())
+	require.NoError(t, err)
+
+	conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+
+	rdr.CloseAsync()
+	assert.NoError(t, rdr.WaitForClose(time.Second*3))
+
+	_, cerr := conn.Write([]byte("bar\n"))
+	require.Error(t, cerr)
+
+	_, open := <-rdr.TransactionChan()
+	assert.False(t, open)
+
+	conn.Close()
+}
+
+func TestSocketServerReconnect(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "benthos_socket_test")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	conf := NewConfig()
+	conf.SocketServer.Network = "unix"
+	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
+
+	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	addr := rdr.(*SocketServer).Addr()
 
 	defer func() {
 		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, rdr.WaitForClose(time.Second))
 	}()
 
 	conn, err := net.Dial("unix", addr.String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 		_, cerr := conn.Write([]byte("foo\n"))
-		if cerr != nil {
-			t.Error(cerr)
-		}
+		require.NoError(t, cerr)
+
 		conn.Close()
 		conn, cerr = net.Dial("unix", addr.String())
-		if cerr != nil {
-			t.Fatal(cerr)
-		}
-		if _, cerr := conn.Write([]byte("bar\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("baz\n")); cerr != nil {
-			t.Error(cerr)
-		}
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("bar\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("baz\n"))
+		require.NoError(t, cerr)
 
 		wg.Done()
 	}()
@@ -167,13 +195,11 @@ func TestSocketServerReconnect(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		msg, err := readNextMsg()
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+
 		act := string(msg.Get(0).Get())
-		if _, exists := expMsgs[act]; !exists {
-			t.Errorf("Unexpected message: %v", act)
-		}
+		assert.Contains(t, expMsgs, act)
+
 		delete(expMsgs, act)
 	}
 
@@ -182,45 +208,47 @@ func TestSocketServerReconnect(t *testing.T) {
 }
 
 func TestSocketServerMultipart(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "benthos_socket_test")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
 	conf := NewConfig()
 	conf.SocketServer.Network = "unix"
-	conf.SocketServer.Address = "/tmp/benthos.sock"
+	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
 	conf.SocketServer.Multipart = true
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	addr := rdr.(*SocketServer).Addr()
 
 	defer func() {
 		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, rdr.WaitForClose(time.Second))
 	}()
 
 	conn, err := net.Dial("unix", addr.String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-		if _, cerr := conn.Write([]byte("foo\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("bar\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("baz\n\n")); cerr != nil {
-			t.Error(cerr)
-		}
+		_, cerr := conn.Write([]byte("foo\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("bar\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("baz\n\n"))
+		require.NoError(t, cerr)
+
 		wg.Done()
 	}()
 
@@ -241,66 +269,61 @@ func TestSocketServerMultipart(t *testing.T) {
 
 	exp := [][]byte{[]byte("foo"), []byte("bar")}
 	msg, err := readNextMsg()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	exp = [][]byte{[]byte("baz")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	wg.Wait()
 	conn.Close()
 }
 
 func TestSocketServerMultipartCustomDelim(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "benthos_socket_test")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
 	conf := NewConfig()
 	conf.SocketServer.Network = "unix"
-	conf.SocketServer.Address = "/tmp/benthos.sock"
+	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
 	conf.SocketServer.Multipart = true
 	conf.SocketServer.Delim = "@"
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	addr := rdr.(*SocketServer).Addr()
 
 	defer func() {
 		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, rdr.WaitForClose(time.Second))
 	}()
 
 	conn, err := net.Dial("unix", addr.String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-		if _, cerr := conn.Write([]byte("foo@")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("bar@")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("@")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("baz\n@@")); cerr != nil {
-			t.Error(cerr)
-		}
+		_, cerr := conn.Write([]byte("foo@"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("bar@"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("@"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("baz\n@@"))
+		require.NoError(t, cerr)
+
 		wg.Done()
 	}()
 
@@ -321,65 +344,61 @@ func TestSocketServerMultipartCustomDelim(t *testing.T) {
 
 	exp := [][]byte{[]byte("foo"), []byte("bar")}
 	msg, err := readNextMsg()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	exp = [][]byte{[]byte("baz\n")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	wg.Wait()
 	conn.Close()
 }
 
 func TestSocketServerMultipartShutdown(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "benthos_socket_test")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
 	conf := NewConfig()
 	conf.SocketServer.Network = "unix"
-	conf.SocketServer.Address = "/tmp/benthos.sock"
+	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
 	conf.SocketServer.Multipart = true
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	addr := rdr.(*SocketServer).Addr()
 
 	defer func() {
 		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, rdr.WaitForClose(time.Second))
 	}()
 
 	conn, err := net.Dial("unix", addr.String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-		if _, cerr := conn.Write([]byte("foo\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("bar\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("baz\n")); cerr != nil {
-			t.Error(cerr)
-		}
+
+		_, cerr := conn.Write([]byte("foo\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("bar\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("baz\n"))
+		require.NoError(t, cerr)
+
 		conn.Close()
 		wg.Done()
 	}()
@@ -401,20 +420,13 @@ func TestSocketServerMultipartShutdown(t *testing.T) {
 
 	exp := [][]byte{[]byte("foo"), []byte("bar")}
 	msg, err := readNextMsg()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	exp = [][]byte{[]byte("baz")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	wg.Wait()
 }
@@ -425,36 +437,32 @@ func TestSocketUDPServerBasic(t *testing.T) {
 	conf.SocketServer.Address = "127.0.0.1:0"
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	addr := rdr.(*SocketServer).Addr()
 
 	defer func() {
 		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, rdr.WaitForClose(time.Second))
 	}()
 
 	conn, err := net.Dial("udp", addr.String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-		if _, cerr := conn.Write([]byte("foo\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("bar\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("baz\n")); cerr != nil {
-			t.Error(cerr)
-		}
+
+		_, cerr := conn.Write([]byte("foo\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("bar\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("baz\n"))
+		require.NoError(t, cerr)
+
 		wg.Done()
 	}()
 
@@ -475,30 +483,47 @@ func TestSocketUDPServerBasic(t *testing.T) {
 
 	exp := [][]byte{[]byte("foo")}
 	msg, err := readNextMsg()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	exp = [][]byte{[]byte("bar")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	exp = [][]byte{[]byte("baz")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	wg.Wait()
+	conn.Close()
+}
+
+func TestUDPServerWriteToClosed(t *testing.T) {
+	conf := NewConfig()
+	conf.SocketServer.Network = "udp"
+	conf.SocketServer.Address = "127.0.0.1:0"
+
+	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	addr := rdr.(*SocketServer).Addr()
+
+	conn, err := net.Dial("udp", addr.String())
+	require.NoError(t, err)
+
+	conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+
+	rdr.CloseAsync()
+	assert.NoError(t, rdr.WaitForClose(time.Second*3))
+
+	// Just make sure data written doesn't panic
+	_, _ = conn.Write([]byte("bar\n"))
+
+	_, open := <-rdr.TransactionChan()
+	assert.False(t, open)
+
 	conn.Close()
 }
 
@@ -508,42 +533,36 @@ func TestSocketUDPServerReconnect(t *testing.T) {
 	conf.SocketServer.Address = "127.0.0.1:0"
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	addr := rdr.(*SocketServer).Addr()
 
 	defer func() {
 		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, rdr.WaitForClose(time.Second))
 	}()
 
 	conn, err := net.Dial("udp", addr.String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 		_, cerr := conn.Write([]byte("foo\n"))
-		if cerr != nil {
-			t.Error(cerr)
-		}
+		require.NoError(t, cerr)
+
 		conn.Close()
+
 		conn, cerr = net.Dial("udp", addr.String())
-		if cerr != nil {
-			t.Fatal(cerr)
-		}
-		if _, cerr = conn.Write([]byte("bar\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr = conn.Write([]byte("baz\n")); cerr != nil {
-			t.Error(cerr)
-		}
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("bar\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("baz\n"))
+		require.NoError(t, cerr)
+
 		wg.Done()
 	}()
 
@@ -564,28 +583,18 @@ func TestSocketUDPServerReconnect(t *testing.T) {
 
 	exp := [][]byte{[]byte("foo")}
 	msg, err := readNextMsg()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	exp = [][]byte{[]byte("bar")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	exp = [][]byte{[]byte("baz")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	wg.Wait()
 	conn.Close()
@@ -598,39 +607,35 @@ func TestSocketUDPServerCustomDelim(t *testing.T) {
 	conf.SocketServer.Delim = "@"
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	addr := rdr.(*SocketServer).Addr()
 
 	defer func() {
 		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, rdr.WaitForClose(time.Second))
 	}()
 
 	conn, err := net.Dial("udp", addr.String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-		if _, cerr := conn.Write([]byte("foo@")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("bar@")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("@")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("baz\n@@")); cerr != nil {
-			t.Error(cerr)
-		}
+
+		_, cerr := conn.Write([]byte("foo@"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("bar@"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("@"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("baz\n@@"))
+		require.NoError(t, cerr)
+
 		wg.Done()
 	}()
 
@@ -651,28 +656,18 @@ func TestSocketUDPServerCustomDelim(t *testing.T) {
 
 	exp := [][]byte{[]byte("foo")}
 	msg, err := readNextMsg()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	exp = [][]byte{[]byte("bar")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	exp = [][]byte{[]byte("baz\n")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	wg.Wait()
 	conn.Close()
@@ -684,39 +679,35 @@ func TestSocketUDPServerShutdown(t *testing.T) {
 	conf.SocketServer.Address = "127.0.0.1:0"
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	addr := rdr.(*SocketServer).Addr()
 
 	defer func() {
 		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, rdr.WaitForClose(time.Second))
 	}()
 
 	conn, err := net.Dial("udp", addr.String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-		if _, cerr := conn.Write([]byte("foo\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("bar\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("baz\n")); cerr != nil {
-			t.Error(cerr)
-		}
+
+		_, cerr := conn.Write([]byte("foo\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("bar\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("baz\n"))
+		require.NoError(t, cerr)
+
 		conn.Close()
 		wg.Done()
 	}()
@@ -738,28 +729,18 @@ func TestSocketUDPServerShutdown(t *testing.T) {
 
 	exp := [][]byte{[]byte("foo")}
 	msg, err := readNextMsg()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	exp = [][]byte{[]byte("bar")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	exp = [][]byte{[]byte("baz")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	wg.Wait()
 }
@@ -770,36 +751,32 @@ func TestTCPSocketServerBasic(t *testing.T) {
 	conf.SocketServer.Address = "127.0.0.1:0"
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	addr := rdr.(*SocketServer).Addr()
 
 	defer func() {
 		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, rdr.WaitForClose(time.Second))
 	}()
 
 	conn, err := net.Dial("tcp", addr.String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-		if _, cerr := conn.Write([]byte("foo\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("bar\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("baz\n")); cerr != nil {
-			t.Error(cerr)
-		}
+
+		_, cerr := conn.Write([]byte("foo\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("bar\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("baz\n"))
+		require.NoError(t, cerr)
+
 		wg.Done()
 	}()
 
@@ -820,28 +797,18 @@ func TestTCPSocketServerBasic(t *testing.T) {
 
 	exp := [][]byte{[]byte("foo")}
 	msg, err := readNextMsg()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	exp = [][]byte{[]byte("bar")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	exp = [][]byte{[]byte("baz")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	wg.Wait()
 	conn.Close()
@@ -853,42 +820,36 @@ func TestTCPSocketServerReconnect(t *testing.T) {
 	conf.SocketServer.Address = "127.0.0.1:0"
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	addr := rdr.(*SocketServer).Addr()
 
 	defer func() {
 		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, rdr.WaitForClose(time.Second))
 	}()
 
 	conn, err := net.Dial("tcp", addr.String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+
 		_, cerr := conn.Write([]byte("foo\n"))
-		if cerr != nil {
-			t.Error(cerr)
-		}
+		require.NoError(t, cerr)
+
 		conn.Close()
+
 		conn, cerr = net.Dial("tcp", addr.String())
-		if cerr != nil {
-			t.Fatal(cerr)
-		}
-		if _, cerr := conn.Write([]byte("bar\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("baz\n")); cerr != nil {
-			t.Error(cerr)
-		}
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("bar\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("baz\n"))
+		require.NoError(t, cerr)
 
 		wg.Done()
 	}()
@@ -916,13 +877,10 @@ func TestTCPSocketServerReconnect(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		msg, err := readNextMsg()
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+
 		act := string(msg.Get(0).Get())
-		if _, exists := expMsgs[act]; !exists {
-			t.Errorf("Unexpected message: %v", act)
-		}
+		assert.Contains(t, expMsgs, act)
 		delete(expMsgs, act)
 	}
 
@@ -937,39 +895,35 @@ func TestTCPSocketServerMultipart(t *testing.T) {
 	conf.SocketServer.Multipart = true
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	addr := rdr.(*SocketServer).Addr()
 
 	defer func() {
 		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, rdr.WaitForClose(time.Second))
 	}()
 
 	conn, err := net.Dial("tcp", addr.String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-		if _, cerr := conn.Write([]byte("foo\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("bar\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("baz\n\n")); cerr != nil {
-			t.Error(cerr)
-		}
+
+		_, cerr := conn.Write([]byte("foo\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("bar\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("baz\n\n"))
+		require.NoError(t, cerr)
+
 		wg.Done()
 	}()
 
@@ -990,20 +944,13 @@ func TestTCPSocketServerMultipart(t *testing.T) {
 
 	exp := [][]byte{[]byte("foo"), []byte("bar")}
 	msg, err := readNextMsg()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	exp = [][]byte{[]byte("baz")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	wg.Wait()
 	conn.Close()
@@ -1017,39 +964,35 @@ func TestTCPSocketServerMultipartCustomDelim(t *testing.T) {
 	conf.SocketServer.Delim = "@"
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	addr := rdr.(*SocketServer).Addr()
 
 	defer func() {
 		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, rdr.WaitForClose(time.Second))
 	}()
 
 	conn, err := net.Dial("tcp", addr.String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-		if _, cerr := conn.Write([]byte("foo@")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("bar@")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("@")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("baz\n@@")); cerr != nil {
-			t.Error(cerr)
-		}
+
+		_, cerr := conn.Write([]byte("foo@"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("bar@"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("@"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("baz\n@@"))
+		require.NoError(t, cerr)
+
 		wg.Done()
 	}()
 
@@ -1070,20 +1013,13 @@ func TestTCPSocketServerMultipartCustomDelim(t *testing.T) {
 
 	exp := [][]byte{[]byte("foo"), []byte("bar")}
 	msg, err := readNextMsg()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	exp = [][]byte{[]byte("baz\n")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	wg.Wait()
 	conn.Close()
@@ -1096,39 +1032,35 @@ func TestTCPSocketServerMultipartShutdown(t *testing.T) {
 	conf.SocketServer.Multipart = true
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	addr := rdr.(*SocketServer).Addr()
 
 	defer func() {
 		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, rdr.WaitForClose(time.Second))
 	}()
 
 	conn, err := net.Dial("tcp", addr.String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-		if _, cerr := conn.Write([]byte("foo\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("bar\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("\n")); cerr != nil {
-			t.Error(cerr)
-		}
-		if _, cerr := conn.Write([]byte("baz\n")); cerr != nil {
-			t.Error(cerr)
-		}
+
+		_, cerr := conn.Write([]byte("foo\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("bar\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("baz\n"))
+		require.NoError(t, cerr)
+
 		conn.Close()
 		wg.Done()
 	}()
@@ -1150,20 +1082,13 @@ func TestTCPSocketServerMultipartShutdown(t *testing.T) {
 
 	exp := [][]byte{[]byte("foo"), []byte("bar")}
 	msg, err := readNextMsg()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	exp = [][]byte{[]byte("baz")}
-	if msg, err = readNextMsg(); err != nil {
-		t.Fatal(err)
-	}
-	if act := message.GetAllBytes(msg); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong message contents: %s != %s", act, exp)
-	}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	wg.Wait()
 }
