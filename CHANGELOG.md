@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.39.0 - 2021-02-01
+
 ### New
 
 - Field `key` in output `redis_list` now supports interpolation functions.
