@@ -41,7 +41,7 @@ At the end of switch processing the resulting batch will follow the same orderin
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(
 				"check",
-				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should have the processors of this case executed on it. If left empty the case always passes.",
+				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should have the processors of this case executed on it. If left empty the case always passes. If the check mapping throws an error the message will be flagged [as having failed](/docs/configuration/error_handling) and will not be tested against any other cases.",
 				`this.type == "foo"`,
 				`this.contents.urls.contains("https://benthos.dev/")`,
 			).HasDefault(""),
@@ -319,13 +319,16 @@ func (s *Switch) ProcessMessage(msg types.Message) (msgs []types.Message, res ty
 		testMsg := message.New(nil)
 		testMsg.Append(remaining...)
 
+	remainingParts:
 		for j, p := range remaining {
 			test := switchCase.check == nil
 			if !test {
 				var err error
 				if test, err = switchCase.check.QueryPart(j, testMsg); err != nil {
-					test = false
 					s.log.Errorf("Failed to test case %v: %v\n", i, err)
+					FlagErr(p, err)
+					result = append(result, p)
+					continue remainingParts
 				}
 			}
 			if test {

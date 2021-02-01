@@ -21,6 +21,8 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Fixed an issue with the `azure_blob_storage` output where `blob_type` set to `APPEND` could result in send failures.
+- Fixed a potential panic when shutting down a `socket_server` input with messages in flight.
+- The `switch` processor now correctly flags errors on messages that cause a check to throw an error.
 
 ## 3.38.0 - 2021-01-18
 

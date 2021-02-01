@@ -139,6 +139,67 @@ func TestSwitchCases(t *testing.T) {
 	}
 }
 
+func TestSwitchError(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = TypeSwitch
+
+	procConf := NewConfig()
+	procConf.Type = TypeBloblang
+	procConf.Bloblang = `root = "Hit case 0: " + content().string()`
+
+	conf.Switch = append(conf.Switch, SwitchCaseConfig{
+		Condition:   defaultCaseCond(),
+		Check:       `this.id.not_empty().contains("foo")`,
+		Processors:  []Config{procConf},
+		Fallthrough: false,
+	})
+
+	procConf = NewConfig()
+	procConf.Type = TypeBloblang
+	procConf.Bloblang = `root = "Hit case 1: " + content().string()`
+
+	conf.Switch = append(conf.Switch, SwitchCaseConfig{
+		Condition:   defaultCaseCond(),
+		Check:       `this.content.contains("bar")`,
+		Processors:  []Config{procConf},
+		Fallthrough: false,
+	})
+
+	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	defer func() {
+		c.CloseAsync()
+		assert.NoError(t, c.WaitForClose(time.Second))
+	}()
+
+	msg := message.New(nil)
+	msg.Append(message.NewPart([]byte(`{"id":"foo","content":"just a foo"}`)))
+	msg.Append(message.NewPart([]byte(`{"content":"bar but doesnt have an id!"}`)))
+	msg.Append(message.NewPart([]byte(`{"id":"buz","content":"a real foobar"}`)))
+
+	msgs, res := c.ProcessMessage(msg)
+	require.Nil(t, res)
+
+	assert.Len(t, msgs, 1)
+	assert.Equal(t, 3, msgs[0].Len())
+
+	resStrs := []string{}
+	for _, b := range message.GetAllBytes(msgs[0]) {
+		resStrs = append(resStrs, string(b))
+	}
+
+	assert.Equal(t, "", GetFail(msgs[0].Get(0)))
+	assert.Equal(t, "failed to execute mapping query at line 1: expected string, array or object value, found null", GetFail(msgs[0].Get(1)))
+	assert.Equal(t, "", GetFail(msgs[0].Get(2)))
+
+	assert.Equal(t, []string{
+		`Hit case 0: {"id":"foo","content":"just a foo"}`,
+		`{"content":"bar but doesnt have an id!"}`,
+		`Hit case 1: {"id":"buz","content":"a real foobar"}`,
+	}, resStrs)
+}
+
 func BenchmarkSwitch10(b *testing.B) {
 	conf := NewConfig()
 	conf.Type = TypeSwitch
