@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 )
 
@@ -12,10 +13,16 @@ type FunctionSet struct {
 	specs        []FunctionSpec
 }
 
+var nameRegexpRaw = `^[a-z0-9]+(_[a-z0-9]+)*$`
+var nameRegexp = regexp.MustCompile(nameRegexpRaw)
+
 // Add a new function to this set by providing a spec (name and documentation),
 // a constructor to be called for each instantiation of the function, and
 // information regarding the arguments of the function.
 func (f *FunctionSet) Add(spec FunctionSpec, ctor FunctionCtor, allowDynamicArgs bool, checks ...ArgCheckFn) error {
+	if !nameRegexp.MatchString(spec.Name) {
+		return fmt.Errorf("function name '%v' does not match the required regular expression /%v/", spec.Name, nameRegexpRaw)
+	}
 	if len(checks) > 0 {
 		ctor = checkArgs(ctor, checks...)
 	}

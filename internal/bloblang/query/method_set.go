@@ -16,6 +16,9 @@ type MethodSet struct {
 // a constructor to be called for each instantiation of the method, and
 // information regarding the arguments of the method.
 func (m *MethodSet) Add(spec MethodSpec, ctor MethodCtor, allowDynamicArgs bool, checks ...ArgCheckFn) error {
+	if !nameRegexp.MatchString(spec.Name) {
+		return fmt.Errorf("method name '%v' does not match the required regular expression /%v/", spec.Name, nameRegexpRaw)
+	}
 	if len(checks) > 0 {
 		ctor = checkMethodArgs(ctor, checks...)
 	}

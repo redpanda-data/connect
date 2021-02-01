@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
+	"time"
 
 	"github.com/Jeffail/gabs/v2"
 )
@@ -131,6 +133,49 @@ func IGetString(v interface{}) (string, error) {
 	return "", NewTypeError(v, ValueString)
 }
 
+// IGetBytes takes a boxed value and attempts to return a byte slice value.
+// Returns an error if the value is not a string or byte slice.
+func IGetBytes(v interface{}) ([]byte, error) {
+	switch t := v.(type) {
+	case string:
+		return []byte(t), nil
+	case []byte:
+		return t, nil
+	}
+	return nil, NewTypeError(v, ValueBytes)
+}
+
+// IGetTimestamp takes a boxed value and attempts to coerce it into a timestamp,
+// either by interpretting a numerical value as a unix timestamp, or by parsing
+// a string value as RFC3339Nano.
+func IGetTimestamp(v interface{}) (time.Time, error) {
+	switch t := ISanitize(v).(type) {
+	case int64:
+		return time.Unix(t, 0), nil
+	case uint64:
+		return time.Unix(int64(t), 0), nil
+	case float64:
+		fint := math.Trunc(t)
+		fdec := t - fint
+		return time.Unix(int64(fint), int64(fdec*1e9)), nil
+	case json.Number:
+		if i, err := t.Int64(); err == nil {
+			return time.Unix(i, 0), nil
+		} else if f, err := t.Float64(); err == nil {
+			fint := math.Trunc(f)
+			fdec := f - fint
+			return time.Unix(int64(fint), int64(fdec*1e9)), nil
+		} else {
+			return time.Time{}, fmt.Errorf("failed to parse value '%v' as number", v)
+		}
+	case []byte:
+		return time.Parse(time.RFC3339Nano, string(t))
+	case string:
+		return time.Parse(time.RFC3339Nano, t)
+	}
+	return time.Time{}, NewTypeError(v, ValueNumber, ValueString)
+}
+
 // IIsNull returns whether a bloblang type is null, this includes Delete and
 // Nothing types.
 func IIsNull(i interface{}) bool {
@@ -161,6 +206,8 @@ func ISanitize(i interface{}) interface{} {
 			return f
 		}
 		return t.String()
+	case time.Time:
+		return t.Format(time.RFC3339Nano)
 	case int:
 		return int64(t)
 	case int32:

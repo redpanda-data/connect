@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"html"
 	"io/ioutil"
-	"math"
 	"net/url"
 	"path/filepath"
 	"regexp"
@@ -1190,44 +1189,11 @@ func formatTimestampMethod(target Function, args ...interface{}) (Function, erro
 			return nil, fmt.Errorf("failed to parse timezone location name: %w", err)
 		}
 	}
-
 	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		var target time.Time
-
-		switch t := ISanitize(v).(type) {
-		case int64:
-			target = time.Unix(t, 0)
-		case uint64:
-			target = time.Unix(int64(t), 0)
-		case float64:
-			fint := math.Trunc(t)
-			fdec := t - fint
-			target = time.Unix(int64(fint), int64(fdec*1e9))
-		case json.Number:
-			if i, err := t.Int64(); err == nil {
-				target = time.Unix(i, 0)
-			} else if f, err := t.Float64(); err == nil {
-				fint := math.Trunc(f)
-				fdec := f - fint
-				target = time.Unix(int64(fint), int64(fdec*1e9))
-			} else {
-				return nil, fmt.Errorf("failed to parse value '%v' as number", v)
-			}
-		case []byte:
-			str := string(t)
-			var err error
-			if target, err = time.Parse(time.RFC3339Nano, str); err != nil {
-				return nil, err
-			}
-		case string:
-			var err error
-			if target, err = time.Parse(time.RFC3339Nano, t); err != nil {
-				return nil, err
-			}
-		default:
-			return nil, NewTypeError(v, ValueNumber)
+		target, err := IGetTimestamp(v)
+		if err != nil {
+			return nil, err
 		}
-
 		if timezone != nil {
 			target = target.In(timezone)
 		}

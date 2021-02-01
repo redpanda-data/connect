@@ -69,23 +69,6 @@ If the result of a target query fails (due to incorrect types, failed parsing, e
 root.doc.id = this.thing.id.string().catch(uuid_v4())
 ```
 
-### `exists`
-
-Checks that a field, identified via a [dot path][field_paths], exists in an object.
-
-```coffee
-root.result = this.foo.exists("bar.baz")
-
-# In:  {"foo":{"bar":{"baz":"yep, I exist"}}}
-# Out: {"result":true}
-
-# In:  {"foo":{"bar":{}}}
-# Out: {"result":false}
-
-# In:  {"foo":{}}
-# Out: {"result":false}
-```
-
 ### `from`
 
 Execute a query from the context of another message in the batch. This allows you to mutate events based on the contents of other messages.
@@ -114,54 +97,24 @@ If the result of the target query fails or resolves to `null`, returns the argum
 root.doc.id = this.thing.id.or(uuid_v4())
 ```
 
+### `exists`
+
+Checks that a field, identified via a [dot path][field_paths], exists in an object.
+
+```coffee
+root.result = this.foo.exists("bar.baz")
+
+# In:  {"foo":{"bar":{"baz":"yep, I exist"}}}
+# Out: {"result":true}
+
+# In:  {"foo":{"bar":{}}}
+# Out: {"result":false}
+
+# In:  {"foo":{}}
+# Out: {"result":false}
+```
+
 ## String Manipulation
-
-### `contains`
-
-Checks whether a string contains a substring and returns a boolean result.
-
-```coffee
-root.has_foo = this.thing.contains("foo")
-
-# In:  {"thing":"this foo that"}
-# Out: {"has_foo":true}
-
-# In:  {"thing":"this bar that"}
-# Out: {"has_foo":false}
-```
-
-### `length`
-
-Returns the length of a string.
-
-```coffee
-root.foo_len = this.foo.length()
-
-# In:  {"foo":"hello world"}
-# Out: {"foo_len":11}
-```
-
-### `slice`
-
-Extract a slice from a string by specifying two indices, a low and high bound, which selects a half-open range that includes the first character, but excludes the last one. If the second index is omitted then it defaults to the length of the input sequence.
-
-```coffee
-root.beginning = this.value.slice(0, 2)
-root.end = this.value.slice(4)
-
-# In:  {"value":"foo bar"}
-# Out: {"beginning":"fo","end":"bar"}
-```
-
-A negative low index can be used, indicating an offset from the end of the sequence. If the low index is greater than the length of the sequence then an empty result is returned.
-
-```coffee
-root.last_chunk = this.value.slice(-4)
-root.the_rest = this.value.slice(0, -4)
-
-# In:  {"value":"foo bar"}
-# Out: {"last_chunk":" bar","the_rest":"foo"}
-```
 
 ### `capitalize`
 
@@ -392,6 +345,53 @@ root.description = this.description.trim()
 
 # In:  {"description":"  something happened and its amazing! ","title":"!!!watch out!?"}
 # Out: {"description":"something happened and its amazing!","title":"watch out"}
+```
+
+### `contains`
+
+Checks whether a string contains a substring and returns a boolean result.
+
+```coffee
+root.has_foo = this.thing.contains("foo")
+
+# In:  {"thing":"this foo that"}
+# Out: {"has_foo":true}
+
+# In:  {"thing":"this bar that"}
+# Out: {"has_foo":false}
+```
+
+### `length`
+
+Returns the length of a string.
+
+```coffee
+root.foo_len = this.foo.length()
+
+# In:  {"foo":"hello world"}
+# Out: {"foo_len":11}
+```
+
+### `slice`
+
+Extract a slice from a string by specifying two indices, a low and high bound, which selects a half-open range that includes the first character, but excludes the last one. If the second index is omitted then it defaults to the length of the input sequence.
+
+```coffee
+root.beginning = this.value.slice(0, 2)
+root.end = this.value.slice(4)
+
+# In:  {"value":"foo bar"}
+# Out: {"beginning":"fo","end":"bar"}
+```
+
+A negative low index can be used, indicating an offset from the end of the sequence. If the low index is greater than the length of the sequence then an empty result is returned.
+
+```coffee
+root.last_chunk = this.value.slice(-4)
+root.the_rest = this.value.slice(0, -4)
+
+# In:  {"value":"foo bar"}
+# Out: {"last_chunk":" bar","the_rest":"foo"}
 ```
 
 ## Number Manipulation
@@ -733,6 +733,27 @@ root.foo = this.thing.bool()
 root.bar = this.thing.bool(true)
 ```
 
+### `number`
+
+Attempt to parse a value into a number. An optional argument can be provided, in which case if the value cannot be parsed into a number the argument will be returned instead.
+
+```coffee
+root.foo = this.thing.number() + 10
+root.bar = this.thing.number(5) * 10
+```
+
+### `type`
+
+Returns the type of a value as a string, providing one of the following values: `string`, `bytes`, `number`, `bool`, `array`, `object` or `null`.
+
+```coffee
+root.bar_type = this.bar.type()
+root.foo_type = this.foo.type()
+
+# In:  {"bar":10,"foo":"is a string"}
+# Out: {"bar_type":"number","foo_type":"string"}
+```
+
 ### `not_empty`
 
 Ensures that the given string, array or object value is not empty, and if so returns it, otherwise an error is returned.
@@ -759,28 +780,21 @@ root.a = this.a.not_empty()
 # Out: Error("failed to execute mapping query at line 1: object value is empty")
 ```
 
-### `number`
-
-Attempt to parse a value into a number. An optional argument can be provided, in which case if the value cannot be parsed into a number the argument will be returned instead.
-
-```coffee
-root.foo = this.thing.number() + 10
-root.bar = this.thing.number(5) * 10
-```
-
-### `type`
-
-Returns the type of a value as a string, providing one of the following values: `string`, `bytes`, `number`, `bool`, `array`, `object` or `null`.
-
-```coffee
-root.bar_type = this.bar.type()
-root.foo_type = this.foo.type()
-
-# In:  {"bar":10,"foo":"is a string"}
-# Out: {"bar_type":"number","foo_type":"string"}
-```
-
 ## Object & Array Manipulation
+
+### `get`
+
+Extract a field value, identified via a [dot path][field_paths], from an object.
+
+```coffee
+root.result = this.foo.get(this.target)
+
+# In:  {"foo":{"bar":"from bar","baz":"from baz"},"target":"bar"}
+# Out: {"result":"from bar"}
+
+# In:  {"foo":{"bar":"from bar","baz":"from baz"},"target":"baz"}
+# Out: {"result":"from baz"}
+```
 
 ### `collapse`
 
@@ -800,20 +814,6 @@ root.result = this.collapse(true)
 
 # In:  {"foo":[{"bar":"1"},{"bar":{}},{"bar":"2"},{"bar":[]}]}
 # Out: {"result":{"foo.0.bar":"1","foo.1.bar":{},"foo.2.bar":"2","foo.3.bar":[]}}
-```
-
-### `get`
-
-Extract a field value, identified via a [dot path][field_paths], from an object.
-
-```coffee
-root.result = this.foo.get(this.target)
-
-# In:  {"foo":{"bar":"from bar","baz":"from baz"},"target":"bar"}
-# Out: {"result":"from bar"}
-
-# In:  {"foo":{"bar":"from bar","baz":"from baz"},"target":"baz"}
-# Out: {"result":"from baz"}
 ```
 
 ### `json_schema`
@@ -843,6 +843,18 @@ In order to load a schema from a file use the `file` function.
 
 ```coffee
 root = this.json_schema(file(var("BENTHOS_TEST_BLOBLANG_SCHEMA_FILE")))
+```
+
+### `join`
+
+Join an array of strings with an optional delimiter into a single string.
+
+```coffee
+root.joined_words = this.words.join()
+root.joined_numbers = this.numbers.map_each(this.string()).join(",")
+
+# In:  {"words":["hello","world"],"numbers":[3,8,11]}
+# Out: {"joined_numbers":"3,8,11","joined_words":"helloworld"}
 ```
 
 ### `all`
@@ -1161,18 +1173,6 @@ root = this.without("inner.a","inner.c","d")
 
 # In:  {"inner":{"a":"first","b":"second","c":"third"},"d":"fourth","e":"fifth"}
 # Out: {"e":"fifth","inner":{"b":"second"}}
-```
-
-### `join`
-
-Join an array of strings with an optional delimiter into a single string.
-
-```coffee
-root.joined_words = this.words.join()
-root.joined_numbers = this.numbers.map_each(this.string()).join(",")
-
-# In:  {"words":["hello","world"],"numbers":[3,8,11]}
-# Out: {"joined_numbers":"3,8,11","joined_words":"helloworld"}
 ```
 
 ## Parsing
