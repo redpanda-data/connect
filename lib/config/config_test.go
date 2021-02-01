@@ -70,16 +70,20 @@ func CheckTagsOfType(v reflect.Type, checkedTypes map[string]struct{}, t *testin
 			jTag := field.Tag.Get("json")
 			yTag := field.Tag.Get("yaml")
 
+			if len(field.PkgPath) > 0 {
+				continue
+			}
+
 			if len(yTag) == 0 {
-				t.Errorf("Empty field tag in type %v", tPath)
+				t.Errorf("Empty field '%v' tag in type %v", field.Name, tPath)
 			}
 
 			if strings.ToLower(yTag) != yTag {
-				t.Errorf("Non-lower case field tag in type %v: %v", tPath, yTag)
+				t.Errorf("Non-lower case field '%v' tag in type %v: %v", field.Name, tPath, yTag)
 			}
 
 			if jTag != yTag {
-				t.Errorf("Mismatched config tags in type %v: json(%v) != yaml(%v)", tPath, jTag, yTag)
+				t.Errorf("Mismatched field '%v' config tags in type %v: json(%v) != yaml(%v)", field.Name, tPath, jTag, yTag)
 			}
 
 			CheckTagsOfType(field.Type, checkedTypes, t)

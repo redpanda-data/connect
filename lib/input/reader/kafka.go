@@ -17,6 +17,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/kafka/sasl"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Shopify/sarama"
+	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -41,6 +42,14 @@ type KafkaConfig struct {
 	TLS           btls.Config        `json:"tls" yaml:"tls"`
 	SASL          sasl.Config        `json:"sasl" yaml:"sasl"`
 	Batching      batch.PolicyConfig `json:"batching" yaml:"batching"`
+
+	deprecated bool
+}
+
+// IsDeprecated returns a boolean indicating whether this configuration uses the
+// old topic/partition fields.
+func (k KafkaConfig) IsDeprecated() bool {
+	return k.deprecated || k.Topic != "benthos_stream" || k.Partition != 0
 }
 
 // NewKafkaConfig creates a new KafkaConfig with default values.
@@ -64,6 +73,35 @@ func NewKafkaConfig() KafkaConfig {
 		SASL:                sasl.NewConfig(),
 		Batching:            batch.NewPolicyConfig(),
 	}
+}
+
+// UnmarshalYAML checks while parsing a Kafka config whether any deprecated
+// fields (topic, partition) have been specified.
+func (k *KafkaConfig) UnmarshalYAML(value *yaml.Node) error {
+	type confAlias KafkaConfig
+	aliased := confAlias(NewKafkaConfig())
+
+	if err := value.Decode(&aliased); err != nil {
+		return fmt.Errorf("line %v: %v", value.Line, err)
+	}
+
+	var raw interface{}
+	var deprecated bool
+	if err := value.Decode(&raw); err != nil {
+		return fmt.Errorf("line %v: %v", value.Line, err)
+	}
+	if m, ok := raw.(map[string]interface{}); ok {
+		if _, exists := m["topic"]; exists {
+			deprecated = true
+		}
+		if _, exists := m["partition"]; exists {
+			deprecated = true
+		}
+	}
+
+	*k = KafkaConfig(aliased)
+	k.deprecated = deprecated
+	return nil
 }
 
 //------------------------------------------------------------------------------

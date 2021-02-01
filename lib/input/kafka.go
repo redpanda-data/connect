@@ -105,7 +105,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 
 // NewKafka creates a new Kafka input type.
 func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	if len(conf.Kafka.Topics) > 0 {
+	if !conf.Kafka.IsDeprecated() || len(conf.Kafka.Topics) > 0 {
 		rdr, err := newKafkaReader(conf.Kafka, mgr, log, stats)
 		if err != nil {
 			return nil, err
@@ -186,7 +186,7 @@ func newKafkaReader(
 	k := kafkaReader{
 		conf:            conf,
 		stats:           stats,
-		consumerCloseFn: func() {},
+		consumerCloseFn: nil,
 		log:             log,
 		mgr:             mgr,
 		mRebalanced:     stats.GetCounter("rebalanced"),
@@ -205,6 +205,9 @@ func newKafkaReader(
 				k.addresses = append(k.addresses, trimmed)
 			}
 		}
+	}
+	if len(conf.Topics) == 0 {
+		return nil, errors.New("must specify at least one topic in the topics field")
 	}
 	for _, t := range conf.Topics {
 		for _, splitTopics := range strings.Split(t, ",") {
