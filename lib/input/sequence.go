@@ -125,7 +125,7 @@ messages sharing the ID. At the end of each iteration the joined messages are fl
 			).WithChildren(
 				docs.FieldCommon("iterations", "The total number of iterations (shards), increasing this number will increase the overall time taken to process the data, but reduces the memory used in the process. A rough estimate for how large this should be is the total size of the data being consumed divided by the amount of available memory, multiplied by a factor of ten in order to provide a safe margin."),
 				docs.FieldCommon("id_field", "A common identifier field used to join messages from fragmented datasets. Messages that are not structured or are missing this field will be dropped."),
-			),
+			).AtVersion("3.40.0"),
 			docs.FieldCommon("inputs", "An array of inputs to read from sequentially."),
 		},
 		Categories: []Category{

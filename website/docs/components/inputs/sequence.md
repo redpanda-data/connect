@@ -67,6 +67,7 @@ messages sharing the ID. At the end of each iteration the joined messages are fl
 
 
 Type: `object`  
+Requires version 3.40.0 or newer  
 
 ### `sharded_join.iterations`
 

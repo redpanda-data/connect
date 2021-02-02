@@ -21,6 +21,8 @@ Generates messages at a given interval using a [Bloblang](/docs/guides/bloblang/
 mapping executed without a context. This allows you to generate messages for
 testing your pipeline configs.
 
+Introduced in version 3.40.0.
+
 ```yaml
 # Config fields, showing default values
 input:
