@@ -19,17 +19,70 @@ import TabItem from '@theme/TabItem';
 Reads messages from a sequence of child inputs, starting with the first and once
 that input gracefully terminates starts consuming from the next, and so on.
 
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yaml
-# Config fields, showing default values
+# Common config fields, showing default values
 input:
   sequence:
     inputs: []
 ```
 
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+# All config fields, showing default values
+input:
+  sequence:
+    sharded_join:
+      iterations: 0
+      id_field: ""
+    inputs: []
+```
+
+</TabItem>
+</Tabs>
+
 This input is useful for consuming from inputs that have an explicit end but
 must not be consumed in parallel.
 
 ## Fields
+
+### `sharded_join`
+
+EXPERIMENTAL: Provides a way to perform sharded joins of structured data resulting from the input sequence. This is a
+way to merge the structured fields of fragmented datasets within memory even when the overall size of the data surpasses the memory available on the machine.
+
+When configured the sequence of inputs will be consumed multiple times according to the number of iterations, and each iteration will process an entirely different set of messages by sharding them by the ID field.
+
+Each message must be structured (JSON or otherwise processed into a structured form) and the fields will be aggregated with those of other
+messages sharing the ID. At the end of each iteration the joined messages are flushed downstream before the next iteration begins, hence keeping memory usage limited.
+
+
+Type: `object`  
+
+### `sharded_join.iterations`
+
+The total number of iterations (shards), increasing this number will increase the overall time taken to process the data, but reduces the memory used in the process. A rough estimate for how large this should be is the total size of the data being consumed divided by the amount of available memory, multiplied by a factor of ten in order to provide a safe margin.
+
+
+Type: `number`  
+Default: `0`  
+
+### `sharded_join.id_field`
+
+A common identifier field used to join messages from fragmented datasets. Messages that are not structured or are missing this field will be dropped.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `inputs`
 
@@ -43,6 +96,7 @@ Default: `[]`
 
 <Tabs defaultValue="End of Stream Message" values={[
 { label: 'End of Stream Message', value: 'End of Stream Message', },
+{ label: 'Joining Fragmented CSV Files', value: 'Joining Fragmented CSV Files', },
 ]}>
 
 <TabItem value="End of Stream Message">
@@ -58,6 +112,50 @@ input:
       - bloblang:
           count: 1
           mapping: 'root = {"status":"finished"}'
+```
+
+</TabItem>
+<TabItem value="Joining Fragmented CSV Files">
+
+Benthos can be used to join data from fragmented datasets in memory by specifying a common identifier field and a number of sharded iterations. For example, given two CSV files, the first called "main.csv", which contains rows of user data:
+
+```csv
+uuid,name,age
+AAA,Melanie,34
+BBB,Emma,28
+CCC,Geri,45
+```
+
+And the second called "hobbies.csv" that, for each user, contains zero or more rows of hobbies:
+
+```csv
+uuid,hobby
+CCC,pokemon go
+AAA,rowing
+AAA,golf
+```
+
+We can parse and join this data into a single dataset:
+
+```json
+{"uuid":"AAA","name":"Melanie","age":34,"hobbies":["rowing","golf"]}
+{"uuid":"BBB","name":"Emma","age":28}
+{"uuid":"CCC","name":"Geri","age":45,"hobbies":["pokemon go"]}
+```
+
+With the following config:
+
+```yaml
+input:
+  sequence:
+    sharded_join:
+      iterations: 10
+      id_field: uuid
+    inputs:
+      - csv:
+          paths:
+            - ./hobbies.csv
+            - ./main.csv
 ```
 
 </TabItem>

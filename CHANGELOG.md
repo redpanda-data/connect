@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### New
+
+- Experimental `sharded_join` fields added to the `sequence` input.
+
 ## 3.39.0 - 2021-02-01
 
 ### New

@@ -9,6 +9,9 @@ input:
   type: sequence
   sequence:
     inputs: []
+    sharded_join:
+      id_field: ""
+      iterations: 0
 buffer:
   type: none
   none: {}

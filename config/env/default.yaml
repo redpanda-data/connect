@@ -462,6 +462,10 @@ input:
           sqs_max_messages: ${INPUT_S3_SQS_MAX_MESSAGES:10}
           sqs_url: ${INPUT_S3_SQS_URL}
           timeout: ${INPUT_S3_TIMEOUT:5s}
+        sequence:
+          sharded_join:
+            id_field: ${INPUT_SEQUENCE_SHARDED_JOIN_ID_FIELD}
+            iterations: ${INPUT_SEQUENCE_SHARDED_JOIN_ITERATIONS:0}
         sftp:
           address: ${INPUT_SFTP_ADDRESS}
           codec: ${INPUT_SFTP_CODEC:all-bytes}
