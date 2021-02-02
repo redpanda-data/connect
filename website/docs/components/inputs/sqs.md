@@ -1,7 +1,7 @@
 ---
 title: sqs
 type: input
-status: stable
+status: deprecated
 categories: ["Services","AWS"]
 ---
 
@@ -15,6 +15,9 @@ categories: ["Services","AWS"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
 
 Receive messages from an Amazon SQS URL.
 

@@ -1,7 +1,7 @@
 ---
 title: aws_s3
 type: input
-status: beta
+status: stable
 categories: ["Services","AWS"]
 ---
 
@@ -15,7 +15,6 @@ categories: ["Services","AWS"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 
 Downloads objects within an Amazon S3 bucket, optionally filtered by a prefix, either by walking the items in the bucket or by streaming upload notifications in realtime.
 
