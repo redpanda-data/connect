@@ -14,6 +14,7 @@ import (
 func init() {
 	Constructors[TypeS3] = TypeSpec{
 		constructor: fromSimpleConstructor(NewAmazonS3),
+		Status:      docs.StatusDeprecated,
 		Summary: `
 Downloads objects within an Amazon S3 bucket, optionally filtered by a prefix.
 If an SQS queue has been configured then only object keys read from the queue

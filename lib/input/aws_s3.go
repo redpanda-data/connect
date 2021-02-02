@@ -43,7 +43,7 @@ func init() {
 				log, stats,
 			)
 		}),
-		Status: docs.StatusBeta,
+		Status: docs.StatusStable,
 		Summary: `
 Downloads objects within an Amazon S3 bucket, optionally filtered by a prefix, either by walking the items in the bucket or by streaming upload notifications in realtime.`,
 		Description: `

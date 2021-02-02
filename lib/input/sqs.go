@@ -14,6 +14,7 @@ import (
 func init() {
 	Constructors[TypeSQS] = TypeSpec{
 		constructor: fromSimpleConstructor(NewAmazonSQS),
+		Status:      docs.StatusDeprecated,
 		Summary: `
 Receive messages from an Amazon SQS URL.`,
 		Description: `

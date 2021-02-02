@@ -23,7 +23,7 @@ import (
 
 func init() {
 	Constructors[TypeAWSSQS] = TypeSpec{
-		Status: docs.StatusBeta,
+		Status: docs.StatusStable,
 		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 			r, err := newAWSSQS(conf.AWSSQS, log, stats)
 			if err != nil {
