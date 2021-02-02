@@ -1,7 +1,7 @@
 ---
 title: bloblang
 type: input
-status: beta
+status: deprecated
 categories: ["Utility"]
 ---
 
@@ -15,7 +15,9 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
 
 Generates messages at a given interval using a [Bloblang](/docs/guides/bloblang/about)
 mapping executed without a context. This allows you to generate messages for
@@ -29,6 +31,11 @@ input:
     interval: 1s
     count: 0
 ```
+
+## Alternatives
+
+This input has been [renamed to `generate`](/docs/components/inputs/generate).
+
 
 ## Fields
 
@@ -80,24 +87,4 @@ An optional number of messages to generate, if set above 0 the specified number 
 Type: `number`  
 Default: `0`  
 
-## Examples
-
-You can use Bloblang to generate payloads of differing structure at random:
-
-```yaml
-input:
-  bloblang:
-    mapping: |
-      root = if random_int() % 2 == 0 {
-        {
-          "type": "foo",
-          "foo": "is yummy"
-        }
-      } else {
-        {
-          "type": "bar",
-          "bar": "is gross"
-        }
-      }
-```
 

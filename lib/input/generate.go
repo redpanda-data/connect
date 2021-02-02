@@ -22,13 +22,13 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	Constructors[TypeBloblang] = TypeSpec{
+	Constructors[TypeGenerate] = TypeSpec{
 		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-			b, err := newBloblang(conf.Bloblang)
+			b, err := newBloblang(conf.Generate)
 			if err != nil {
 				return nil, err
 			}
-			return NewAsyncReader(TypeBloblang, true, b, log, stats)
+			return NewAsyncReader(TypeGenerate, true, b, log, stats)
 		}),
 		Status: docs.StatusBeta,
 		Summary: `
@@ -52,14 +52,31 @@ testing your pipeline configs.`,
 		Categories: []Category{
 			CategoryUtility,
 		},
-		Footnotes: `
-## Examples
-
-You can use Bloblang to generate payloads of differing structure at random:
-
-` + "```yaml" + `
+		Examples: []docs.AnnotatedExample{
+			{
+				Title:   "Cron Scheduled Processing",
+				Summary: "A common use case for the generate input is to trigger processors on a schedule so that the processors themselves can behave similarly to an input. The following configuration reads rows from a PostgreSQL table every 5 minutes.",
+				Config: `
 input:
-  bloblang:
+  generate:
+    interval: '@every 5m'
+    mapping: 'root = {}'
+  processors:
+    - sql:
+        driver: postgresql
+        data_source_name: postgres://foouser:foopass@localhost:5432/testdb?sslmode=disable
+        query: "select * from foo;"
+        result_codec: json_array
+`,
+			},
+			{
+				Title:   "Generate 100 Rows",
+				Summary: "The generate input can be used as a convenient way to generate test data. The following example generates 100 rows of structured data by setting an explicit count. The interval field is set to empty, which means data is generated as fast as the downstream components can consume it.",
+				Config: `
+input:
+  generate:
+    count: 100
+    interval: ""
     mapping: |
       root = if random_int() % 2 == 0 {
         {
@@ -72,7 +89,46 @@ input:
           "bar": "is gross"
         }
       }
-` + "```" + ``,
+`,
+			},
+		},
+	}
+
+	Constructors[TypeBloblang] = TypeSpec{
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+			b, err := newBloblang(conf.Bloblang)
+			if err != nil {
+				return nil, err
+			}
+			return NewAsyncReader(TypeBloblang, true, b, log, stats)
+		}),
+		Status: docs.StatusDeprecated,
+		Summary: `
+Generates messages at a given interval using a [Bloblang](/docs/guides/bloblang/about)
+mapping executed without a context. This allows you to generate messages for
+testing your pipeline configs.`,
+		Description: `
+## Alternatives
+
+This input has been ` + "[renamed to `generate`](/docs/components/inputs/generate)" + `.
+`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon(
+				"mapping", "A [bloblang](/docs/guides/bloblang/about) mapping to use for generating messages.",
+				`root = "hello world"`,
+				`root = {"test":"message","id":uuid_v4()}`,
+			),
+			docs.FieldCommon(
+				"interval",
+				"The time interval at which messages should be generated, expressed either as a duration string or as a cron expression. If set to an empty string messages will be generated as fast as downstream services can process them.",
+				"5s", "1m", "1h",
+				"@every 1s", "0,30 */2 * * * *", "30 3-6,20-23 * * *",
+			),
+			docs.FieldCommon("count", "An optional number of messages to generate, if set above 0 the specified number of messages is generated and then the input will shut down."),
+		},
+		Categories: []Category{
+			CategoryUtility,
+		},
 	}
 }
 

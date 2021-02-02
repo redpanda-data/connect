@@ -156,6 +156,10 @@ input:
           max_outstanding_messages: ${INPUT_GCP_PUBSUB_MAX_OUTSTANDING_MESSAGES:1000}
           project: ${INPUT_GCP_PUBSUB_PROJECT}
           subscription: ${INPUT_GCP_PUBSUB_SUBSCRIPTION}
+        generate:
+          count: ${INPUT_GENERATE_COUNT:0}
+          interval: ${INPUT_GENERATE_INTERVAL:1s}
+          mapping: ${INPUT_GENERATE_MAPPING}
         hdfs:
           directory: ${INPUT_HDFS_DIRECTORY}
           hosts:

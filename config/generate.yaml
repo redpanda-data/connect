@@ -6,8 +6,8 @@ http:
   root_path: /benthos
   debug_endpoints: false
 input:
-  type: bloblang
-  bloblang:
+  type: generate
+  generate:
     count: 0
     interval: 1s
     mapping: ""

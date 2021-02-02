@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - Experimental `sharded_join` fields added to the `sequence` input.
 
+### Changed
+
+- The `bloblang` input has been renamed to `generate`. This change is backwards compatible and `bloblang` will still be recognized until the next major version release.
+
 ## 3.39.0 - 2021-02-01
 
 ### New
@@ -309,7 +313,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- The `http` processor field `max_parallel` has been deprecated in favour of rate limits, and the fields within `request` have been moved to the root of the `http` namespace. This change is backwards compatible and `http.request` fields will still be recognized until the next version release.
+- The `http` processor field `max_parallel` has been deprecated in favour of rate limits, and the fields within `request` have been moved to the root of the `http` namespace. This change is backwards compatible and `http.request` fields will still be recognized until the next major version release.
 - The `process_field` processor is now deprecated, and `branch` should be used instead.
 
 ### Fixed

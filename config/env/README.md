@@ -173,6 +173,9 @@ INPUT_GCP_PUBSUB_MAX_OUTSTANDING_BYTES               = 1000000000
 INPUT_GCP_PUBSUB_MAX_OUTSTANDING_MESSAGES            = 1000
 INPUT_GCP_PUBSUB_PROJECT
 INPUT_GCP_PUBSUB_SUBSCRIPTION
+INPUT_GENERATE_COUNT                                 = 0
+INPUT_GENERATE_INTERVAL                              = 1s
+INPUT_GENERATE_MAPPING
 INPUT_HDFS_DIRECTORY
 INPUT_HDFS_HOSTS                                     = localhost:9000
 INPUT_HDFS_USER                                      = benthos_hdfs

@@ -152,6 +152,7 @@ const (
 	TypeFile             = "file"
 	TypeFiles            = "files"
 	TypeGCPPubSub        = "gcp_pubsub"
+	TypeGenerate         = "generate"
 	TypeHDFS             = "hdfs"
 	TypeHTTPClient       = "http_client"
 	TypeHTTPServer       = "http_server"
@@ -204,6 +205,7 @@ type Config struct {
 	File             FileConfig                   `json:"file" yaml:"file"`
 	Files            reader.FilesConfig           `json:"files" yaml:"files"`
 	GCPPubSub        reader.GCPPubSubConfig       `json:"gcp_pubsub" yaml:"gcp_pubsub"`
+	Generate         BloblangConfig               `json:"generate" yaml:"generate"`
 	HDFS             reader.HDFSConfig            `json:"hdfs" yaml:"hdfs"`
 	HTTPClient       HTTPClientConfig             `json:"http_client" yaml:"http_client"`
 	HTTPServer       HTTPServerConfig             `json:"http_server" yaml:"http_server"`
@@ -257,6 +259,7 @@ func NewConfig() Config {
 		File:             NewFileConfig(),
 		Files:            reader.NewFilesConfig(),
 		GCPPubSub:        reader.NewGCPPubSubConfig(),
+		Generate:         NewBloblangConfig(),
 		HDFS:             reader.NewHDFSConfig(),
 		HTTPClient:       NewHTTPClientConfig(),
 		HTTPServer:       NewHTTPServerConfig(),
