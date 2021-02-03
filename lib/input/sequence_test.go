@@ -103,7 +103,7 @@ func TestSequenceJoins(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Type = TypeSequence
-	conf.Sequence.ShardedJoin.IDField = "id"
+	conf.Sequence.ShardedJoin.IDPath = "id"
 	conf.Sequence.ShardedJoin.Iterations = 1
 
 	csvConf := NewConfig()
@@ -175,7 +175,7 @@ func TestSequenceJoinsBig(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Type = TypeSequence
-	conf.Sequence.ShardedJoin.IDField = "id"
+	conf.Sequence.ShardedJoin.IDPath = "id"
 	conf.Sequence.ShardedJoin.Iterations = 5
 
 	csvConf := NewConfig()

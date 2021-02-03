@@ -468,7 +468,7 @@ input:
           timeout: ${INPUT_S3_TIMEOUT:5s}
         sequence:
           sharded_join:
-            id_field: ${INPUT_SEQUENCE_SHARDED_JOIN_ID_FIELD}
+            id_path: ${INPUT_SEQUENCE_SHARDED_JOIN_ID_PATH}
             iterations: ${INPUT_SEQUENCE_SHARDED_JOIN_ITERATIONS:0}
         sftp:
           address: ${INPUT_SFTP_ADDRESS}

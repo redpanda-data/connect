@@ -43,7 +43,7 @@ input:
   sequence:
     sharded_join:
       iterations: 0
-      id_field: ""
+      id_path: ""
     inputs: []
 ```
 
@@ -71,15 +71,15 @@ Requires version 3.40.0 or newer
 
 ### `sharded_join.iterations`
 
-The total number of iterations (shards), increasing this number will increase the overall time taken to process the data, but reduces the memory used in the process. A rough estimate for how large this should be is the total size of the data being consumed divided by the amount of available memory, multiplied by a factor of ten in order to provide a safe margin.
+The total number of iterations (shards), increasing this number will increase the overall time taken to process the data, but reduces the memory used in the process. The real memory usage required is significantly higher than the real size of the data and therefore the number of iterations should be at least an order of magnitude higher than the available memory divided by the overall size of the dataset.
 
 
 Type: `number`  
 Default: `0`  
 
-### `sharded_join.id_field`
+### `sharded_join.id_path`
 
-A common identifier field used to join messages from fragmented datasets. Messages that are not structured or are missing this field will be dropped.
+A [dot path](/docs/configuration/field_paths) that points to a common field within messages of each fragmented data set and can be used to join them. Messages that are not structured or are missing this field will be dropped.
 
 
 Type: `string`  
@@ -97,7 +97,8 @@ Default: `[]`
 
 <Tabs defaultValue="End of Stream Message" values={[
 { label: 'End of Stream Message', value: 'End of Stream Message', },
-{ label: 'Joining Fragmented CSV Files', value: 'Joining Fragmented CSV Files', },
+{ label: 'Joining Data (Simple)', value: 'Joining Data (Simple)', },
+{ label: 'Joining Data (Advanced)', value: 'Joining Data (Advanced)', },
 ]}>
 
 <TabItem value="End of Stream Message">
@@ -116,7 +117,7 @@ input:
 ```
 
 </TabItem>
-<TabItem value="Joining Fragmented CSV Files">
+<TabItem value="Joining Data (Simple)">
 
 Benthos can be used to join data from fragmented datasets in memory by specifying a common identifier field and a number of sharded iterations. For example, given two CSV files, the first called "main.csv", which contains rows of user data:
 
@@ -151,12 +152,61 @@ input:
   sequence:
     sharded_join:
       iterations: 10
-      id_field: uuid
+      id_path: uuid
     inputs:
       - csv:
           paths:
             - ./hobbies.csv
             - ./main.csv
+```
+
+</TabItem>
+<TabItem value="Joining Data (Advanced)">
+
+In this example we are able to join fragmented data from a combination of CSV files and newline-delimited JSON documents by specifying multiple sequence inputs with their own processors for extracting the structured data.
+
+The first file "main.csv" contains straight forward CSV data:
+
+```csv
+uuid,name,age
+AAA,Melanie,34
+BBB,Emma,28
+CCC,Geri,45
+```
+
+And the second file called "hobbies.ndjson" contains JSON documents, one per line, that associate an identifer with an array of hobbies. However, these data objects are in a nested format:
+
+```json
+{"document":{"uuid":"CCC","hobbies":[{"type":"pokemon go"}]}}
+{"document":{"uuid":"AAA","hobbies":[{"type":"rowing"},{"type":"golf"}]}}
+```
+
+And so we will want to map these into a flattened structure before the join, and then we will end up with a single dataset that looks like this:
+
+```json
+{"uuid":"AAA","name":"Melanie","age":34,"hobbies":["rowing","golf"]}
+{"uuid":"BBB","name":"Emma","age":28}
+{"uuid":"CCC","name":"Geri","age":45,"hobbies":["pokemon go"]}
+```
+
+With the following config:
+
+```yaml
+input:
+  sequence:
+    sharded_join:
+      iterations: 10
+      id_path: uuid
+    inputs:
+      - csv:
+          paths: [ ./main.csv ]
+      - file:
+          codec: lines
+          paths: [ ./hobbies.ndjson ]
+        processors:
+          - bloblang: |
+              root.uuid = this.document.uuid
+              root.hobbies = this.document.hobbies.map_each(this.type)
 ```
 
 </TabItem>

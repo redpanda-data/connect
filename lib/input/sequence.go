@@ -45,7 +45,7 @@ input:
 `,
 			},
 			{
-				Title: "Joining Fragmented CSV Files",
+				Title: "Joining Data (Simple)",
 				Summary: `Benthos can be used to join data from fragmented datasets in memory by specifying a common identifier field and a number of sharded iterations. For example, given two CSV files, the first called "main.csv", which contains rows of user data:
 
 ` + "```csv" + `
@@ -78,12 +78,59 @@ input:
   sequence:
     sharded_join:
       iterations: 10
-      id_field: uuid
+      id_path: uuid
     inputs:
       - csv:
           paths:
             - ./hobbies.csv
             - ./main.csv
+`,
+			},
+			{
+				Title: "Joining Data (Advanced)",
+				Summary: `In this example we are able to join fragmented data from a combination of CSV files and newline-delimited JSON documents by specifying multiple sequence inputs with their own processors for extracting the structured data.
+
+The first file "main.csv" contains straight forward CSV data:
+
+` + "```csv" + `
+uuid,name,age
+AAA,Melanie,34
+BBB,Emma,28
+CCC,Geri,45
+` + "```" + `
+
+And the second file called "hobbies.ndjson" contains JSON documents, one per line, that associate an identifer with an array of hobbies. However, these data objects are in a nested format:
+
+` + "```json" + `
+{"document":{"uuid":"CCC","hobbies":[{"type":"pokemon go"}]}}
+{"document":{"uuid":"AAA","hobbies":[{"type":"rowing"},{"type":"golf"}]}}
+` + "```" + `
+
+And so we will want to map these into a flattened structure before the join, and then we will end up with a single dataset that looks like this:
+
+` + "```json" + `
+{"uuid":"AAA","name":"Melanie","age":34,"hobbies":["rowing","golf"]}
+{"uuid":"BBB","name":"Emma","age":28}
+{"uuid":"CCC","name":"Geri","age":45,"hobbies":["pokemon go"]}
+` + "```" + `
+
+With the following config:`,
+				Config: `
+input:
+  sequence:
+    sharded_join:
+      iterations: 10
+      id_path: uuid
+    inputs:
+      - csv:
+          paths: [ ./main.csv ]
+      - file:
+          codec: lines
+          paths: [ ./hobbies.ndjson ]
+        processors:
+          - bloblang: |
+              root.uuid = this.document.uuid
+              root.hobbies = this.document.hobbies.map_each(this.type)
 `,
 			},
 		},
@@ -123,8 +170,8 @@ When configured the sequence of inputs will be consumed multiple times according
 Each message must be structured (JSON or otherwise processed into a structured form) and the fields will be aggregated with those of other
 messages sharing the ID. At the end of each iteration the joined messages are flushed downstream before the next iteration begins, hence keeping memory usage limited.`,
 			).WithChildren(
-				docs.FieldCommon("iterations", "The total number of iterations (shards), increasing this number will increase the overall time taken to process the data, but reduces the memory used in the process. A rough estimate for how large this should be is the total size of the data being consumed divided by the amount of available memory, multiplied by a factor of ten in order to provide a safe margin."),
-				docs.FieldCommon("id_field", "A common identifier field used to join messages from fragmented datasets. Messages that are not structured or are missing this field will be dropped."),
+				docs.FieldCommon("iterations", "The total number of iterations (shards), increasing this number will increase the overall time taken to process the data, but reduces the memory used in the process. The real memory usage required is significantly higher than the real size of the data and therefore the number of iterations should be at least an order of magnitude higher than the available memory divided by the overall size of the dataset."),
+				docs.FieldCommon("id_path", "A [dot path](/docs/configuration/field_paths) that points to a common field within messages of each fragmented data set and can be used to join them. Messages that are not structured or are missing this field will be dropped."),
 			).AtVersion("3.40.0"),
 			docs.FieldCommon("inputs", "An array of inputs to read from sequentially."),
 		},
@@ -152,7 +199,7 @@ messages sharing the ID. At the end of each iteration the joined messages are fl
 // flushed downstream before the next iteration begins.
 type SequenceShardedJoinConfig struct {
 	Iterations int    `json:"iterations" yaml:"iterations"`
-	IDField    string `json:"id_field" yaml:"id_field"`
+	IDPath     string `json:"id_path" yaml:"id_path"`
 }
 
 // NewSequenceShardedJoinConfig creates a new sequence sharding configuration
@@ -160,7 +207,7 @@ type SequenceShardedJoinConfig struct {
 func NewSequenceShardedJoinConfig() SequenceShardedJoinConfig {
 	return SequenceShardedJoinConfig{
 		Iterations: 0,
-		IDField:    "",
+		IDPath:     "",
 	}
 }
 
@@ -171,12 +218,12 @@ func (s SequenceShardedJoinConfig) validate() (*messageJoiner, error) {
 	if s.Iterations < 0 {
 		return nil, fmt.Errorf("invalid number of iterations: %v", s.Iterations)
 	}
-	if len(s.IDField) == 0 {
-		return nil, errors.New("the id field must not be empty")
+	if len(s.IDPath) == 0 {
+		return nil, errors.New("the id path must not be empty")
 	}
 	return &messageJoiner{
 		totalIterations: s.Iterations,
-		idField:         s.IDField,
+		idPath:          s.IDPath,
 		messages:        map[string]*joinedMessage{},
 	}, nil
 }
@@ -205,7 +252,7 @@ type joinedMessage struct {
 type messageJoiner struct {
 	currentIteration int
 	totalIterations  int
-	idField          string
+	idPath           string
 	messages         map[string]*joinedMessage
 }
 
@@ -225,7 +272,8 @@ func (m *messageJoiner) Add(msg types.Message) {
 			return nil
 		}
 
-		id, _ := incomingObj[m.idField].(string)
+		gIncoming := gabs.Wrap(incomingObj)
+		id, _ := gIncoming.Path(m.idPath).Data().(string)
 		if len(id) == 0 {
 			// TODO: Propagate errors?
 			return nil
@@ -239,15 +287,14 @@ func (m *messageJoiner) Add(msg types.Message) {
 		jObj := m.messages[id]
 		if jObj == nil {
 			jObj = &joinedMessage{
-				fields:   gabs.Wrap(incomingObj),
+				fields:   gIncoming,
 				metadata: p.Metadata().Copy(),
 			}
 			m.messages[id] = jObj
 			return nil
 		}
 
-		gIncoming := gabs.Wrap(incomingObj)
-		_ = gIncoming.Delete(m.idField)
+		_ = gIncoming.Delete(m.idPath)
 		_ = jObj.fields.Merge(gIncoming)
 
 		p.Metadata().Iter(func(k, v string) error {
@@ -382,6 +429,7 @@ func (r *Sequence) createNextTarget() (Type, error) {
 		}
 	}
 	if target != nil {
+		r.log.Debugf("Initialized sequence input %v.", len(r.spent)-1)
 		r.target = target
 	}
 	r.targetMut.Unlock()
@@ -461,13 +509,15 @@ runLoop:
 		}
 		if target == nil {
 			if r.joiner != nil {
+				r.log.Debugf("Finished sharded iteration %v.", r.joiner.currentIteration)
+
 				var wg sync.WaitGroup
 				lastIteration := r.joiner.Empty(func(msg types.Message) {
 					r.dispatchJoinedMessage(&wg, msg)
 				})
 				wg.Wait()
 				if lastIteration {
-					r.log.Infoln("Finished sharded iterations and exhausted all sequence inputs, shutting down.")
+					r.log.Infoln("Finished all sharded iterations and exhausted all sequence inputs, shutting down.")
 					return
 				}
 				r.resetTargets()

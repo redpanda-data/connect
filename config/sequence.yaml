@@ -10,7 +10,7 @@ input:
   sequence:
     inputs: []
     sharded_join:
-      id_field: ""
+      id_path: ""
       iterations: 0
 buffer:
   type: none
