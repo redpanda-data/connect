@@ -264,13 +264,31 @@ func TestWorkflowMissingResources(t *testing.T) {
 }
 
 func TestWorkflows(t *testing.T) {
+	type mockMsg struct {
+		content string
+		meta    map[string]string
+	}
+	msg := func(content string, meta ...string) mockMsg {
+		t.Helper()
+		m := mockMsg{
+			content: content,
+			meta:    map[string]string{},
+		}
+		for i, v := range meta {
+			if i%2 == 1 {
+				m.meta[meta[i-1]] = v
+			}
+		}
+		return m
+	}
+
 	// To make configs simpler they break branches down into three mappings, the
 	// request map, a bloblang processor, and a result map.
 	tests := []struct {
 		branches [][3]string
 		order    [][]string
-		input    []string
-		output   []string
+		input    []mockMsg
+		output   []mockMsg
 		err      string
 	}{
 		{
@@ -281,44 +299,15 @@ func TestWorkflows(t *testing.T) {
 					"root.bar = this.foo.number()",
 				},
 			},
-			input: []string{
-				`{}`,
-				`{"foo":"not a number"}`,
-				`{"foo":"5"}`,
+			input: []mockMsg{
+				msg(`{}`),
+				msg(`{"foo":"not a number"}`),
+				msg(`{"foo":"5"}`),
 			},
-			output: []string{
-				`{"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null"}}}}`,
-				`{"foo":"not a number","meta":{"workflow":{"failed":{"0":"result map: failed to execute mapping query at line 1: strconv.ParseFloat: parsing \"not a number\": invalid syntax"}}}}`,
-				`{"bar":5,"foo":"5","meta":{"workflow":{"succeeded":["0"]}}}`,
-			},
-		},
-		{
-			branches: [][3]string{
-				{
-					"root.foo = this.foo.not_null()",
-					"root = this",
-					"root.bar = this.foo.number()",
-				},
-				{
-					"root.bar = this.bar.not_null()",
-					"root = this",
-					"root.baz = this.bar.number() + 5",
-				},
-				{
-					"root.baz = this.baz.not_null()",
-					"root = this",
-					"root.buz = this.baz.number() + 2",
-				},
-			},
-			input: []string{
-				`{}`,
-				`{"foo":"not a number"}`,
-				`{"foo":"5"}`,
-			},
-			output: []string{
-				`{"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null","1":"request map: failed to execute mapping query at line 1: value is null","2":"request map: failed to execute mapping query at line 1: value is null"}}}}`,
-				`{"foo":"not a number","meta":{"workflow":{"failed":{"0":"result map: failed to execute mapping query at line 1: strconv.ParseFloat: parsing \"not a number\": invalid syntax","1":"request map: failed to execute mapping query at line 1: value is null","2":"request map: failed to execute mapping query at line 1: value is null"}}}}`,
-				`{"bar":5,"baz":10,"buz":12,"foo":"5","meta":{"workflow":{"succeeded":["0","1","2"]}}}`,
+			output: []mockMsg{
+				msg(`{"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null"}}}}`),
+				msg(`{"foo":"not a number","meta":{"workflow":{"failed":{"0":"result map: failed to execute mapping query at line 1: strconv.ParseFloat: parsing \"not a number\": invalid syntax"}}}}`),
+				msg(`{"bar":5,"foo":"5","meta":{"workflow":{"succeeded":["0"]}}}`),
 			},
 		},
 		{
@@ -339,15 +328,44 @@ func TestWorkflows(t *testing.T) {
 					"root.buz = this.baz.number() + 2",
 				},
 			},
-			input: []string{
-				`{"meta":{"workflow":{"apply":["2"]}},"baz":2}`,
-				`{"meta":{"workflow":{"skipped":["0"]}},"bar":3}`,
-				`{"meta":{"workflow":{"succeeded":["1"]}},"baz":9}`,
+			input: []mockMsg{
+				msg(`{}`),
+				msg(`{"foo":"not a number"}`),
+				msg(`{"foo":"5"}`),
 			},
-			output: []string{
-				`{"baz":2,"buz":4,"meta":{"workflow":{"previous":{"apply":["2"]},"skipped":["0","1"],"succeeded":["2"]}}}`,
-				`{"bar":3,"baz":8,"buz":10,"meta":{"workflow":{"previous":{"skipped":["0"]},"skipped":["0"],"succeeded":["1","2"]}}}`,
-				`{"baz":9,"buz":11,"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null"},"previous":{"succeeded":["1"]},"skipped":["1"],"succeeded":["2"]}}}`,
+			output: []mockMsg{
+				msg(`{"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null","1":"request map: failed to execute mapping query at line 1: value is null","2":"request map: failed to execute mapping query at line 1: value is null"}}}}`),
+				msg(`{"foo":"not a number","meta":{"workflow":{"failed":{"0":"result map: failed to execute mapping query at line 1: strconv.ParseFloat: parsing \"not a number\": invalid syntax","1":"request map: failed to execute mapping query at line 1: value is null","2":"request map: failed to execute mapping query at line 1: value is null"}}}}`),
+				msg(`{"bar":5,"baz":10,"buz":12,"foo":"5","meta":{"workflow":{"succeeded":["0","1","2"]}}}`),
+			},
+		},
+		{
+			branches: [][3]string{
+				{
+					"root.foo = this.foo.not_null()",
+					"root = this",
+					"root.bar = this.foo.number()",
+				},
+				{
+					"root.bar = this.bar.not_null()",
+					"root = this",
+					"root.baz = this.bar.number() + 5",
+				},
+				{
+					"root.baz = this.baz.not_null()",
+					"root = this",
+					"root.buz = this.baz.number() + 2",
+				},
+			},
+			input: []mockMsg{
+				msg(`{"meta":{"workflow":{"apply":["2"]}},"baz":2}`),
+				msg(`{"meta":{"workflow":{"skipped":["0"]}},"bar":3}`),
+				msg(`{"meta":{"workflow":{"succeeded":["1"]}},"baz":9}`),
+			},
+			output: []mockMsg{
+				msg(`{"baz":2,"buz":4,"meta":{"workflow":{"previous":{"apply":["2"]},"skipped":["0","1"],"succeeded":["2"]}}}`),
+				msg(`{"bar":3,"baz":8,"buz":10,"meta":{"workflow":{"previous":{"skipped":["0"]},"skipped":["0"],"succeeded":["1","2"]}}}`),
+				msg(`{"baz":9,"buz":11,"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null"},"previous":{"succeeded":["1"]},"skipped":["1"],"succeeded":["2"]}}}`),
 			},
 		},
 		{
@@ -369,15 +387,57 @@ func TestWorkflows(t *testing.T) {
 					"root.buz = this.bar + this.baz",
 				},
 			},
-			input: []string{
-				`{"foo":2}`,
-				`{}`,
-				`not even a json object`,
+			input: []mockMsg{
+				msg(`{"foo":2}`),
+				msg(`{}`),
+				msg(`not even a json object`),
 			},
-			output: []string{
-				`{"bar":4,"baz":5,"buz":9,"foo":2,"meta":{"workflow":{"succeeded":["0","1","2"]}}}`,
-				`{"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null","1":"request map: failed to execute mapping query at line 1: value is null","2":"request map: failed to execute mapping query at line 1: value is null"}}}}`,
-				`not even a json object`,
+			output: []mockMsg{
+				msg(`{"bar":4,"baz":5,"buz":9,"foo":2,"meta":{"workflow":{"succeeded":["0","1","2"]}}}`),
+				msg(`{"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null","1":"request map: failed to execute mapping query at line 1: value is null","2":"request map: failed to execute mapping query at line 1: value is null"}}}}`),
+				msg(
+					`not even a json object`,
+					FailFlagKey,
+					"invalid character 'o' in literal null (expecting 'u')",
+				),
+			},
+		},
+		{
+			branches: [][3]string{
+				{
+					`root = this`,
+					`root = this
+					 root.name_upper = this.name.uppercase()`,
+					`root.result = if this.failme.bool(false) {
+						throw("this is a branch error")
+					} else {
+						this.name_upper
+					}`,
+				},
+			},
+			input: []mockMsg{
+				msg(
+					`{"id":0,"name":"first"}`,
+					FailFlagKey, "this is a pre-existing failure",
+				),
+				msg(`{"failme":true,"id":1,"name":"second"}`),
+				msg(
+					`{"failme":true,"id":2,"name":"third"}`,
+					FailFlagKey, "this is a pre-existing failure",
+				),
+			},
+			output: []mockMsg{
+				msg(
+					`{"id":0,"meta":{"workflow":{"succeeded":["0"]}},"name":"first","result":"FIRST"}`,
+					FailFlagKey, "this is a pre-existing failure",
+				),
+				msg(
+					`{"failme":true,"id":1,"meta":{"workflow":{"failed":{"0":"result map: failed to execute mapping query at line 1: this is a branch error"}}},"name":"second"}`,
+				),
+				msg(
+					`{"failme":true,"id":2,"meta":{"workflow":{"failed":{"0":"result map: failed to execute mapping query at line 1: this is a branch error"}}},"name":"third"}`,
+					FailFlagKey, "this is a pre-existing failure",
+				),
 			},
 		},
 	}
@@ -401,22 +461,42 @@ func TestWorkflows(t *testing.T) {
 			p, err := NewWorkflow(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
-			var parts [][]byte
-			for _, input := range test.input {
-				parts = append(parts, []byte(input))
+			inputMsg := message.New(nil)
+			for _, m := range test.input {
+				part := message.NewPart([]byte(m.content))
+				if m.meta != nil {
+					for k, v := range m.meta {
+						part.Metadata().Set(k, v)
+					}
+				}
+				inputMsg.Append(part)
 			}
 
-			msgs, res := p.ProcessMessage(message.New(parts))
+			msgs, res := p.ProcessMessage(inputMsg)
 			if len(test.err) > 0 {
 				require.NotNil(t, res)
 				require.EqualError(t, res.Error(), test.err)
 			} else {
 				require.Len(t, msgs, 1)
-				var output []string
-				for _, b := range message.GetAllBytes(msgs[0]) {
-					output = append(output, string(b))
+				assert.Equal(t, len(test.output), msgs[0].Len())
+				for i, out := range test.output {
+					comparePart := mockMsg{
+						content: string(msgs[0].Get(i).Get()),
+						meta:    map[string]string{},
+					}
+
+					msgs[0].Get(i).Metadata().Iter(func(k, v string) error {
+						comparePart.meta[k] = v
+						return nil
+					})
+
+					assert.Equal(t, out, comparePart)
 				}
-				assert.Equal(t, test.output, output)
+			}
+
+			// Ensure nothing changed
+			for i, m := range test.input {
+				assert.Equal(t, m.content, string(inputMsg.Get(i).Get()))
 			}
 
 			p.CloseAsync()

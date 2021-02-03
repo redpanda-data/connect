@@ -77,6 +77,41 @@ func TestBranchBasic(t *testing.T) {
 				),
 			},
 		},
+		"do not carry error into branch": {
+			requestMap: `root = this`,
+			processorMap: `root = this
+				root.name_upper = this.name.uppercase()`,
+			resultMap: `root.result = if this.failme.bool(false) {
+					throw("this is a branch error")
+				} else {
+					this.name_upper
+				}`,
+			input: []mockMsg{
+				msg(
+					`{"id":0,"name":"first"}`,
+					FailFlagKey, "this is a pre-existing failure",
+				),
+				msg(`{"failme":true,"id":1,"name":"second"}`),
+				msg(
+					`{"failme":true,"id":2,"name":"third"}`,
+					FailFlagKey, "this is a pre-existing failure",
+				),
+			},
+			output: []mockMsg{
+				msg(
+					`{"id":0,"name":"first","result":"FIRST"}`,
+					FailFlagKey, "this is a pre-existing failure",
+				),
+				msg(
+					`{"failme":true,"id":1,"name":"second"}`,
+					FailFlagKey, "response failed: result map: failed to execute mapping query at line 1: this is a branch error",
+				),
+				msg(
+					`{"failme":true,"id":2,"name":"third"}`,
+					FailFlagKey, "response failed: result map: failed to execute mapping query at line 1: this is a branch error",
+				),
+			},
+		},
 		"filtered and failed mappings": {
 			requestMap: `root = match {
 				this.id == 0 => throw("i dont like zero"),
@@ -240,26 +275,24 @@ func TestBranchBasic(t *testing.T) {
 				msg.Append(part)
 			}
 
-			for i := 0; i < 10; i++ {
-				outMsgs, res := proc.ProcessMessage(msg)
+			outMsgs, res := proc.ProcessMessage(msg)
 
-				require.Nil(t, res)
-				require.Len(t, outMsgs, 1)
+			require.Nil(t, res)
+			require.Len(t, outMsgs, 1)
 
-				assert.Equal(t, len(test.output), outMsgs[0].Len(), i)
-				for i, out := range test.output {
-					comparePart := mockMsg{
-						content: string(outMsgs[0].Get(i).Get()),
-						meta:    map[string]string{},
-					}
-
-					outMsgs[0].Get(i).Metadata().Iter(func(k, v string) error {
-						comparePart.meta[k] = v
-						return nil
-					})
-
-					assert.Equal(t, out, comparePart, i)
+			assert.Equal(t, len(test.output), outMsgs[0].Len())
+			for i, out := range test.output {
+				comparePart := mockMsg{
+					content: string(outMsgs[0].Get(i).Get()),
+					meta:    map[string]string{},
 				}
+
+				outMsgs[0].Get(i).Metadata().Iter(func(k, v string) error {
+					comparePart.meta[k] = v
+					return nil
+				})
+
+				assert.Equal(t, out, comparePart)
 			}
 
 			// Ensure nothing changed

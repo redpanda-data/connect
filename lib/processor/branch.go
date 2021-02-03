@@ -343,7 +343,7 @@ func (b *Branch) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		return nil
 	})
 
-	resultParts, mapErrs, err := b.createResult(parts, msg)
+	resultParts, mapErrs, err := b.createResult(parts, branchMsg)
 	if err != nil {
 		result := msg.Copy()
 		// Add general error to all messages.

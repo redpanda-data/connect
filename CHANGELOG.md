@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - Experimental `sharded_join` fields added to the `sequence` input.
 
+### Fixed
+
+- Prevented pre-existing errors from failing/aborting branch execution in the `branch` and `workflow` processors.
+
 ### Changed
 
 - The `bloblang` input has been renamed to `generate`. This change is backwards compatible and `bloblang` will still be recognized until the next major version release.
