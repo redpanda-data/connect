@@ -105,6 +105,7 @@ func TestSequenceJoins(t *testing.T) {
 	conf.Type = TypeSequence
 	conf.Sequence.ShardedJoin.IDPath = "id"
 	conf.Sequence.ShardedJoin.Iterations = 1
+	conf.Sequence.ShardedJoin.Type = "full-outter"
 
 	csvConf := NewConfig()
 	csvConf.Type = TypeCSVFile
@@ -156,6 +157,134 @@ consumeLoop:
 	assert.NoError(t, rdr.WaitForClose(time.Second))
 }
 
+func TestSequenceJoinsMergeStrategies(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name         string
+		flushOnFinal bool
+		mergeStrat   string
+		files        map[string]string
+		finalFile    string
+		result       []string
+	}{
+		{
+			name:         "array from final",
+			flushOnFinal: true,
+			mergeStrat:   "array",
+			files: map[string]string{
+				"csv1": "id,name,age\naaa,A,20\nbbb,B,21\nccc,B,22\n",
+				"csv2": "id,hobby\nccc,fencing\naaa,running\naaa,gaming\n",
+			},
+			finalFile: "id,stuff\naaa,first\nccc,second\naaa,third\n",
+			result: []string{
+				`{"age":"20","hobby":["running","gaming"],"id":"aaa","name":"A","stuff":"first"}`,
+				`{"age":"22","hobby":"fencing","id":"ccc","name":"B","stuff":"second"}`,
+				`{"age":"20","hobby":["running","gaming"],"id":"aaa","name":"A","stuff":["first","third"]}`,
+			},
+		},
+		{
+			name:         "replace from final",
+			flushOnFinal: true,
+			mergeStrat:   "replace",
+			files: map[string]string{
+				"csv1": "id,name,age\naaa,A,20\nbbb,B,21\nccc,B,22\n",
+				"csv2": "id,hobby\nccc,fencing\naaa,running\naaa,gaming\n",
+			},
+			finalFile: "id,stuff\naaa,first\nccc,second\naaa,third\n",
+			result: []string{
+				`{"age":"20","hobby":"gaming","id":"aaa","name":"A","stuff":"first"}`,
+				`{"age":"20","hobby":"gaming","id":"aaa","name":"A","stuff":"third"}`,
+				`{"age":"22","hobby":"fencing","id":"ccc","name":"B","stuff":"second"}`,
+			},
+		},
+		{
+			name:         "keep from final",
+			flushOnFinal: true,
+			mergeStrat:   "keep",
+			files: map[string]string{
+				"csv1": "id,name,age\naaa,A,20\nbbb,B,21\nccc,B,22\n",
+				"csv2": "id,hobby\nccc,fencing\naaa,running\naaa,gaming\n",
+			},
+			finalFile: "id,stuff\naaa,first\nccc,second\naaa,third\n",
+			result: []string{
+				`{"age":"20","hobby":"running","id":"aaa","name":"A","stuff":"first"}`,
+				`{"age":"20","hobby":"running","id":"aaa","name":"A","stuff":"first"}`,
+				`{"age":"22","hobby":"fencing","id":"ccc","name":"B","stuff":"second"}`,
+			},
+		},
+	}
+
+	for _, test := range testCases {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			tmpDir, err := ioutil.TempDir("", "benthos_sequence_joins_test")
+			require.NoError(t, err)
+
+			t.Cleanup(func() { os.RemoveAll(tmpDir) })
+
+			writeFiles(t, tmpDir, test.files)
+			writeFiles(t, tmpDir, map[string]string{
+				"final.csv": test.finalFile,
+			})
+
+			conf := NewConfig()
+			conf.Type = TypeSequence
+			conf.Sequence.ShardedJoin.IDPath = "id"
+			conf.Sequence.ShardedJoin.MergeStrategy = test.mergeStrat
+			if test.flushOnFinal {
+				conf.Sequence.ShardedJoin.Type = "outter"
+			} else {
+				conf.Sequence.ShardedJoin.Type = "full-outter"
+			}
+			conf.Sequence.ShardedJoin.Iterations = 1
+
+			csvConf := NewConfig()
+			csvConf.Type = TypeCSVFile
+			for k := range test.files {
+				csvConf.CSVFile.Paths = append(csvConf.CSVFile.Paths, filepath.Join(tmpDir, k))
+			}
+			conf.Sequence.Inputs = append(conf.Sequence.Inputs, csvConf)
+
+			finalConf := NewConfig()
+			finalConf.Type = TypeCSVFile
+			finalConf.CSVFile.Paths = []string{filepath.Join(tmpDir, "final.csv")}
+			conf.Sequence.Inputs = append(conf.Sequence.Inputs, finalConf)
+
+			rdr, err := New(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+			require.NoError(t, err)
+
+			exp, act := test.result, []string{}
+
+		consumeLoop:
+			for {
+				select {
+				case tran, open := <-rdr.TransactionChan():
+					if !open {
+						break consumeLoop
+					}
+					assert.Equal(t, 1, tran.Payload.Len())
+					act = append(act, string(tran.Payload.Get(0).Get()))
+					select {
+					case tran.ResponseChan <- response.NewAck():
+					case <-time.After(time.Second):
+						t.Fatalf("failed to ack after: %v", act)
+					}
+				case <-time.After(time.Second):
+					t.Fatalf("Failed to consume message after: %v", act)
+				}
+			}
+
+			sort.Strings(exp)
+			sort.Strings(act)
+			assert.Equal(t, exp, act)
+
+			rdr.CloseAsync()
+			assert.NoError(t, rdr.WaitForClose(time.Second))
+		})
+	}
+}
+
 func TestSequenceJoinsBig(t *testing.T) {
 	t.Parallel()
 
@@ -177,6 +306,7 @@ func TestSequenceJoinsBig(t *testing.T) {
 	conf.Type = TypeSequence
 	conf.Sequence.ShardedJoin.IDPath = "id"
 	conf.Sequence.ShardedJoin.Iterations = 5
+	conf.Sequence.ShardedJoin.Type = "full-outter"
 
 	csvConf := NewConfig()
 	csvConf.Type = TypeCSVFile

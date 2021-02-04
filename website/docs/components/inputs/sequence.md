@@ -42,8 +42,10 @@ input:
 input:
   sequence:
     sharded_join:
-      iterations: 0
+      type: none
       id_path: ""
+      iterations: 1
+      merge_strategy: array
     inputs: []
 ```
 
@@ -52,46 +54,6 @@ input:
 
 This input is useful for consuming from inputs that have an explicit end but
 must not be consumed in parallel.
-
-## Fields
-
-### `sharded_join`
-
-EXPERIMENTAL: Provides a way to perform sharded joins of structured data resulting from the input sequence. This is a
-way to merge the structured fields of fragmented datasets within memory even when the overall size of the data surpasses the memory available on the machine.
-
-When configured the sequence of inputs will be consumed multiple times according to the number of iterations, and each iteration will process an entirely different set of messages by sharding them by the ID field.
-
-Each message must be structured (JSON or otherwise processed into a structured form) and the fields will be aggregated with those of other
-messages sharing the ID. At the end of each iteration the joined messages are flushed downstream before the next iteration begins, hence keeping memory usage limited.
-
-
-Type: `object`  
-Requires version 3.40.0 or newer  
-
-### `sharded_join.iterations`
-
-The total number of iterations (shards), increasing this number will increase the overall time taken to process the data, but reduces the memory used in the process. The real memory usage required is significantly higher than the real size of the data and therefore the number of iterations should be at least an order of magnitude higher than the available memory divided by the overall size of the dataset.
-
-
-Type: `number`  
-Default: `0`  
-
-### `sharded_join.id_path`
-
-A [dot path](/docs/configuration/field_paths) that points to a common field within messages of each fragmented data set and can be used to join them. Messages that are not structured or are missing this field will be dropped.
-
-
-Type: `string`  
-Default: `""`  
-
-### `inputs`
-
-An array of inputs to read from sequentially.
-
-
-Type: `array`  
-Default: `[]`  
 
 ## Examples
 
@@ -119,7 +81,7 @@ input:
 </TabItem>
 <TabItem value="Joining Data (Simple)">
 
-Benthos can be used to join data from fragmented datasets in memory by specifying a common identifier field and a number of sharded iterations. For example, given two CSV files, the first called "main.csv", which contains rows of user data:
+Benthos can be used to join unordered data from fragmented datasets in memory by specifying a common identifier field and a number of sharded iterations. For example, given two CSV files, the first called "main.csv", which contains rows of user data:
 
 ```csv
 uuid,name,age
@@ -151,8 +113,9 @@ With the following config:
 input:
   sequence:
     sharded_join:
-      iterations: 10
+      type: full-outter
       id_path: uuid
+      merge_strategy: array
     inputs:
       - csv:
           paths:
@@ -163,7 +126,7 @@ input:
 </TabItem>
 <TabItem value="Joining Data (Advanced)">
 
-In this example we are able to join fragmented data from a combination of CSV files and newline-delimited JSON documents by specifying multiple sequence inputs with their own processors for extracting the structured data.
+In this example we are able to join unordered and fragmented data from a combination of CSV files and newline-delimited JSON documents by specifying multiple sequence inputs with their own processors for extracting the structured data.
 
 The first file "main.csv" contains straight forward CSV data:
 
@@ -195,8 +158,10 @@ With the following config:
 input:
   sequence:
     sharded_join:
-      iterations: 10
+      type: full-outter
       id_path: uuid
+      iterations: 10
+      merge_strategy: array
     inputs:
       - csv:
           paths: [ ./main.csv ]
@@ -211,5 +176,61 @@ input:
 
 </TabItem>
 </Tabs>
+
+## Fields
+
+### `sharded_join`
+
+EXPERIMENTAL: Provides a way to perform outter joins of arbitrarily structured and unordered data resulting from the input sequence, even when the overall size of the data surpasses the memory available on the machine.
+
+When configured the sequence of inputs will be consumed one or more times according to the number of iterations, and when more than one iteration is specified each iteration will process an entirely different set of messages by sharding them by the ID field. Increasing the number of iterations reduces the memory consumption at the cost of needing to fully parse the data each time.
+
+Each message must be structured (JSON or otherwise processed into a structured form) and the fields will be aggregated with those of other messages sharing the ID. At the end of each iteration the joined messages are flushed downstream before the next iteration begins, hence keeping memory usage limited.
+
+
+Type: `object`  
+Requires version 3.40.0 or newer  
+
+### `sharded_join.type`
+
+The type of join to perform. A `full-outter` ensures that all identifiers seen in any of the input sequences are sent, and is performed by consuming all input sequences before flushing the joined results. An `outter` join consumes all input sequences but only writes data joined from the last input in the sequence, similar to a left or right outter join. With an `outter` join if an identifier appears multiple times within the final sequence input it will be flushed each time it appears.
+
+
+Type: `string`  
+Default: `"none"`  
+Options: `none`, `full-outter`, `outter`.
+
+### `sharded_join.id_path`
+
+A [dot path](/docs/configuration/field_paths) that points to a common field within messages of each fragmented data set and can be used to join them. Messages that are not structured or are missing this field will be dropped. This field must be set in order to enable joins.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sharded_join.iterations`
+
+The total number of iterations (shards), increasing this number will increase the overall time taken to process the data, but reduces the memory used in the process. The real memory usage required is significantly higher than the real size of the data and therefore the number of iterations should be at least an order of magnitude higher than the available memory divided by the overall size of the dataset.
+
+
+Type: `number`  
+Default: `1`  
+
+### `sharded_join.merge_strategy`
+
+The chosen strategy to use when a data join would otherwise result in a collision of field values. The strategy `array` means non-array colliding values are placed into an array and colliding arrays are merged. The strategy `replace` replaces old values with new values. The strategy `keep` keeps the old value.
+
+
+Type: `string`  
+Default: `"array"`  
+Options: `array`, `replace`, `keep`.
+
+### `inputs`
+
+An array of inputs to read from sequentially.
+
+
+Type: `array`  
+Default: `[]`  
 
 

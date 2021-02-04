@@ -11,7 +11,9 @@ input:
     inputs: []
     sharded_join:
       id_path: ""
-      iterations: 0
+      iterations: 1
+      merge_strategy: array
+      type: none
 buffer:
   type: none
   none: {}

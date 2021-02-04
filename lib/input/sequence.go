@@ -46,7 +46,7 @@ input:
 			},
 			{
 				Title: "Joining Data (Simple)",
-				Summary: `Benthos can be used to join data from fragmented datasets in memory by specifying a common identifier field and a number of sharded iterations. For example, given two CSV files, the first called "main.csv", which contains rows of user data:
+				Summary: `Benthos can be used to join unordered data from fragmented datasets in memory by specifying a common identifier field and a number of sharded iterations. For example, given two CSV files, the first called "main.csv", which contains rows of user data:
 
 ` + "```csv" + `
 uuid,name,age
@@ -77,8 +77,9 @@ With the following config:`,
 input:
   sequence:
     sharded_join:
-      iterations: 10
+      type: full-outter
       id_path: uuid
+      merge_strategy: array
     inputs:
       - csv:
           paths:
@@ -88,7 +89,7 @@ input:
 			},
 			{
 				Title: "Joining Data (Advanced)",
-				Summary: `In this example we are able to join fragmented data from a combination of CSV files and newline-delimited JSON documents by specifying multiple sequence inputs with their own processors for extracting the structured data.
+				Summary: `In this example we are able to join unordered and fragmented data from a combination of CSV files and newline-delimited JSON documents by specifying multiple sequence inputs with their own processors for extracting the structured data.
 
 The first file "main.csv" contains straight forward CSV data:
 
@@ -119,8 +120,10 @@ With the following config:`,
 input:
   sequence:
     sharded_join:
-      iterations: 10
+      type: full-outter
       id_path: uuid
+      iterations: 10
+      merge_strategy: array
     inputs:
       - csv:
           paths: [ ./main.csv ]
@@ -162,16 +165,19 @@ input:
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldAdvanced(
 				"sharded_join",
-				`EXPERIMENTAL: Provides a way to perform sharded joins of structured data resulting from the input sequence. This is a
-way to merge the structured fields of fragmented datasets within memory even when the overall size of the data surpasses the memory available on the machine.
+				`EXPERIMENTAL: Provides a way to perform outter joins of arbitrarily structured and unordered data resulting from the input sequence, even when the overall size of the data surpasses the memory available on the machine.
 
-When configured the sequence of inputs will be consumed multiple times according to the number of iterations, and each iteration will process an entirely different set of messages by sharding them by the ID field.
+When configured the sequence of inputs will be consumed one or more times according to the number of iterations, and when more than one iteration is specified each iteration will process an entirely different set of messages by sharding them by the ID field. Increasing the number of iterations reduces the memory consumption at the cost of needing to fully parse the data each time.
 
-Each message must be structured (JSON or otherwise processed into a structured form) and the fields will be aggregated with those of other
-messages sharing the ID. At the end of each iteration the joined messages are flushed downstream before the next iteration begins, hence keeping memory usage limited.`,
+Each message must be structured (JSON or otherwise processed into a structured form) and the fields will be aggregated with those of other messages sharing the ID. At the end of each iteration the joined messages are flushed downstream before the next iteration begins, hence keeping memory usage limited.`,
 			).WithChildren(
+				docs.FieldCommon("type", "The type of join to perform. A `full-outter` ensures that all identifiers seen in any of the input sequences are sent, and is performed by consuming all input sequences before flushing the joined results. An `outter` join consumes all input sequences but only writes data joined from the last input in the sequence, similar to a left or right outter join. With an `outter` join if an identifier appears multiple times within the final sequence input it will be flushed each time it appears.").HasOptions("none", "full-outter", "outter"),
+				docs.FieldCommon("id_path", "A [dot path](/docs/configuration/field_paths) that points to a common field within messages of each fragmented data set and can be used to join them. Messages that are not structured or are missing this field will be dropped. This field must be set in order to enable joins."),
 				docs.FieldCommon("iterations", "The total number of iterations (shards), increasing this number will increase the overall time taken to process the data, but reduces the memory used in the process. The real memory usage required is significantly higher than the real size of the data and therefore the number of iterations should be at least an order of magnitude higher than the available memory divided by the overall size of the dataset."),
-				docs.FieldCommon("id_path", "A [dot path](/docs/configuration/field_paths) that points to a common field within messages of each fragmented data set and can be used to join them. Messages that are not structured or are missing this field will be dropped."),
+				docs.FieldCommon(
+					"merge_strategy",
+					"The chosen strategy to use when a data join would otherwise result in a collision of field values. The strategy `array` means non-array colliding values are placed into an array and colliding arrays are merged. The strategy `replace` replaces old values with new values. The strategy `keep` keeps the old value.",
+				).HasOptions("array", "replace", "keep"),
 			).AtVersion("3.40.0"),
 			docs.FieldCommon("inputs", "An array of inputs to read from sequentially."),
 		},
@@ -198,33 +204,51 @@ messages sharing the ID. At the end of each iteration the joined messages are fl
 // messages sharing the ID. At the end of each iteration the joined messages are
 // flushed downstream before the next iteration begins.
 type SequenceShardedJoinConfig struct {
-	Iterations int    `json:"iterations" yaml:"iterations"`
-	IDPath     string `json:"id_path" yaml:"id_path"`
+	Type          string `json:"type" yaml:"type"`
+	IDPath        string `json:"id_path" yaml:"id_path"`
+	Iterations    int    `json:"iterations" yaml:"iterations"`
+	MergeStrategy string `json:"merge_strategy" yaml:"merge_strategy"`
 }
 
 // NewSequenceShardedJoinConfig creates a new sequence sharding configuration
 // with default values.
 func NewSequenceShardedJoinConfig() SequenceShardedJoinConfig {
 	return SequenceShardedJoinConfig{
-		Iterations: 0,
-		IDPath:     "",
+		Type:          "none",
+		IDPath:        "",
+		Iterations:    1,
+		MergeStrategy: "array",
 	}
 }
 
 func (s SequenceShardedJoinConfig) validate() (*messageJoiner, error) {
-	if s.Iterations == 0 {
+	var flushOnLast bool
+	switch s.Type {
+	case "none":
 		return nil, nil
-	}
-	if s.Iterations < 0 {
-		return nil, fmt.Errorf("invalid number of iterations: %v", s.Iterations)
+	case "full-outter":
+		flushOnLast = false
+	case "outter":
+		flushOnLast = true
+	default:
+		return nil, fmt.Errorf("join type '%v' was not recognized", s.Type)
 	}
 	if len(s.IDPath) == 0 {
 		return nil, errors.New("the id path must not be empty")
+	}
+	if s.Iterations <= 0 {
+		return nil, fmt.Errorf("invalid number of iterations: %v", s.Iterations)
+	}
+	collisionFn, err := getMessageJoinerCollisionFn(s.MergeStrategy)
+	if err != nil {
+		return nil, err
 	}
 	return &messageJoiner{
 		totalIterations: s.Iterations,
 		idPath:          s.IDPath,
 		messages:        map[string]*joinedMessage{},
+		collisionFn:     collisionFn,
+		flushOnLast:     flushOnLast,
 	}, nil
 }
 
@@ -249,14 +273,56 @@ type joinedMessage struct {
 	fields   *gabs.Container
 }
 
+func (j *joinedMessage) ToMsg() types.Message {
+	part := message.NewPart(nil)
+	part.SetJSON(j.fields)
+	part.SetMetadata(j.metadata)
+	msg := message.New(nil)
+	msg.Append(part)
+	return msg
+}
+
+type messageJoinerCollisionFn func(dest, source interface{}) interface{}
+
+func getMessageJoinerCollisionFn(name string) (messageJoinerCollisionFn, error) {
+	switch name {
+	case "array":
+		return func(dest, source interface{}) interface{} {
+			destArr, destIsArray := dest.([]interface{})
+			sourceArr, sourceIsArray := source.([]interface{})
+			if destIsArray {
+				if sourceIsArray {
+					return append(destArr, sourceArr...)
+				}
+				return append(destArr, source)
+			}
+			if sourceIsArray {
+				return append(append([]interface{}{}, dest), sourceArr...)
+			}
+			return []interface{}{dest, source}
+		}, nil
+	case "replace":
+		return func(dest, source interface{}) interface{} {
+			return source
+		}, nil
+	case "keep":
+		return func(dest, source interface{}) interface{} {
+			return dest
+		}, nil
+	}
+	return nil, fmt.Errorf("merge strategy '%v' was not recognised", name)
+}
+
 type messageJoiner struct {
 	currentIteration int
 	totalIterations  int
 	idPath           string
 	messages         map[string]*joinedMessage
+	collisionFn      messageJoinerCollisionFn
+	flushOnLast      bool
 }
 
-func (m *messageJoiner) Add(msg types.Message) {
+func (m *messageJoiner) Add(msg types.Message, lastInSequence bool, fn func(msg types.Message)) {
 	if m.messages == nil {
 		m.messages = map[string]*joinedMessage{}
 	}
@@ -291,33 +357,45 @@ func (m *messageJoiner) Add(msg types.Message) {
 				metadata: p.Metadata().Copy(),
 			}
 			m.messages[id] = jObj
+
+			if m.flushOnLast && lastInSequence {
+				fn(jObj.ToMsg().DeepCopy())
+			}
 			return nil
 		}
 
 		_ = gIncoming.Delete(m.idPath)
-		_ = jObj.fields.Merge(gIncoming)
+		_ = jObj.fields.MergeFn(gIncoming, m.collisionFn)
 
 		p.Metadata().Iter(func(k, v string) error {
 			jObj.metadata.Set(k, v)
 			return nil
 		})
+
+		if m.flushOnLast && lastInSequence {
+			fn(jObj.ToMsg().DeepCopy())
+		}
 		return nil
 	})
 }
 
-func (m *messageJoiner) Empty(fn func(msg types.Message)) bool {
+func (m *messageJoiner) GetIteration() (int, bool) {
+	return m.currentIteration, m.currentIteration == (m.totalIterations - 1)
+}
+
+func (m *messageJoiner) Empty(fn func(types.Message)) bool {
 	for k, v := range m.messages {
-		part := message.NewPart(nil)
-		part.SetJSON(v.fields)
-		part.SetMetadata(v.metadata)
-		msg := message.New(nil)
-		msg.Append(part)
-		fn(msg)
+		if !m.flushOnLast {
+			msg := v.ToMsg()
+			fn(msg)
+		}
 		delete(m.messages, k)
 	}
 	m.currentIteration++
 	return m.currentIteration >= m.totalIterations
 }
+
+//------------------------------------------------------------------------------
 
 // Sequence is an input type that reads from a sequence of inputs, starting with
 // the first, and when it ends gracefully it moves onto the next, and so on.
@@ -390,7 +468,7 @@ func NewSequence(
 		return nil, fmt.Errorf("invalid sharded join config: %w", err)
 	}
 
-	if target, err := rdr.createNextTarget(); err != nil {
+	if target, _, err := rdr.createNextTarget(); err != nil {
 		return nil, err
 	} else if target == nil {
 		return nil, errors.New("failed to initialize first input")
@@ -402,14 +480,15 @@ func NewSequence(
 
 //------------------------------------------------------------------------------
 
-func (r *Sequence) getTarget() Type {
+func (r *Sequence) getTarget() (Type, bool) {
 	r.targetMut.Lock()
 	target := r.target
+	final := len(r.remaining) == 0
 	r.targetMut.Unlock()
-	return target
+	return target, final
 }
 
-func (r *Sequence) createNextTarget() (Type, error) {
+func (r *Sequence) createNextTarget() (Type, bool, error) {
 	var target Type
 	var err error
 
@@ -432,9 +511,10 @@ func (r *Sequence) createNextTarget() (Type, error) {
 		r.log.Debugf("Initialized sequence input %v.", len(r.spent)-1)
 		r.target = target
 	}
+	final := len(r.remaining) == 0
 	r.targetMut.Unlock()
 
-	return target, err
+	return target, final, err
 }
 
 func (r *Sequence) resetTargets() {
@@ -480,8 +560,10 @@ func (r *Sequence) dispatchJoinedMessage(wg *sync.WaitGroup, msg types.Message) 
 }
 
 func (r *Sequence) loop() {
+	var shardJoinWG sync.WaitGroup
 	defer func() {
-		if t := r.getTarget(); t != nil {
+		shardJoinWG.Wait()
+		if t, _ := r.getTarget(); t != nil {
 			t.CloseAsync()
 			err := t.WaitForClose(time.Second)
 			for ; err != nil; err = t.WaitForClose(time.Second) {
@@ -491,13 +573,13 @@ func (r *Sequence) loop() {
 		close(r.closedChan)
 	}()
 
-	target := r.getTarget()
+	target, finalInSequence := r.getTarget()
 
 runLoop:
 	for {
 		if target == nil {
 			var err error
-			if target, err = r.createNextTarget(); err != nil {
+			if target, finalInSequence, err = r.createNextTarget(); err != nil {
 				r.log.Errorf("Unable to start next sequence: %v\n", err)
 				select {
 				case <-time.After(time.Second):
@@ -509,13 +591,16 @@ runLoop:
 		}
 		if target == nil {
 			if r.joiner != nil {
-				r.log.Debugf("Finished sharded iteration %v.", r.joiner.currentIteration)
+				iteration, _ := r.joiner.GetIteration()
+				r.log.Debugf("Finished sharded iteration %v.", iteration)
 
-				var wg sync.WaitGroup
+				// Wait for pending transactions before adding more.
+				shardJoinWG.Wait()
+
 				lastIteration := r.joiner.Empty(func(msg types.Message) {
-					r.dispatchJoinedMessage(&wg, msg)
+					r.dispatchJoinedMessage(&shardJoinWG, msg)
 				})
-				wg.Wait()
+				shardJoinWG.Wait()
 				if lastIteration {
 					r.log.Infoln("Finished all sharded iterations and exhausted all sequence inputs, shutting down.")
 					return
@@ -542,7 +627,9 @@ runLoop:
 		}
 
 		if r.joiner != nil {
-			r.joiner.Add(tran.Payload.DeepCopy())
+			r.joiner.Add(tran.Payload.DeepCopy(), finalInSequence, func(msg types.Message) {
+				r.dispatchJoinedMessage(&shardJoinWG, msg)
+			})
 			select {
 			case tran.ResponseChan <- response.NewAck():
 			case <-r.ctx.Done():
@@ -567,7 +654,7 @@ func (r *Sequence) TransactionChan() <-chan types.Transaction {
 // Connected returns a boolean indicating whether this input is currently
 // connected to its target.
 func (r *Sequence) Connected() bool {
-	if t := r.getTarget(); t != nil {
+	if t, _ := r.getTarget(); t != nil {
 		return t.Connected()
 	}
 	return false

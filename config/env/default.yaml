@@ -469,7 +469,9 @@ input:
         sequence:
           sharded_join:
             id_path: ${INPUT_SEQUENCE_SHARDED_JOIN_ID_PATH}
-            iterations: ${INPUT_SEQUENCE_SHARDED_JOIN_ITERATIONS:0}
+            iterations: ${INPUT_SEQUENCE_SHARDED_JOIN_ITERATIONS:1}
+            merge_strategy: ${INPUT_SEQUENCE_SHARDED_JOIN_MERGE_STRATEGY:array}
+            type: ${INPUT_SEQUENCE_SHARDED_JOIN_TYPE:none}
         sftp:
           address: ${INPUT_SFTP_ADDRESS}
           codec: ${INPUT_SFTP_CODEC:all-bytes}

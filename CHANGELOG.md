@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - The `bloblang` input has been renamed to `generate`. This change is backwards compatible and `bloblang` will still be recognized until the next major version release.
+- Bloblang more often preserves integer precision in arithmetic operations.
 
 ## 3.39.0 - 2021-02-01
 
