@@ -1,6 +1,7 @@
 package query
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -8,6 +9,111 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestArithmeticNumberDegradation(t *testing.T) {
+	fn := numberDegradationFunc(
+		func(left, right int64) (int64, error) {
+			return left / right, nil
+		},
+		func(left, right float64) (float64, error) {
+			return left / right, nil
+		},
+	)
+
+	testCases := []struct {
+		name   string
+		left   interface{}
+		right  interface{}
+		result interface{}
+		err    string
+	}{
+		{
+			name:   "two ints",
+			left:   int64(12),
+			right:  uint32(3),
+			result: int64(4),
+		},
+		{
+			name:   "two floats",
+			left:   8.0,
+			right:  3.2,
+			result: 2.5,
+		},
+		{
+			name:   "left is float",
+			left:   12.0,
+			right:  uint32(3),
+			result: 4.0,
+		},
+		{
+			name:   "right is float",
+			left:   int32(12),
+			right:  3.0,
+			result: 4.0,
+		},
+		{
+			name:   "both are int json",
+			left:   json.Number("12"),
+			right:  json.Number("3"),
+			result: int64(4),
+		},
+		{
+			name:   "both are float json",
+			left:   json.Number("8.0"),
+			right:  json.Number("3.2"),
+			result: 2.5,
+		},
+		{
+			name:   "left is int json",
+			left:   json.Number("12"),
+			right:  json.Number("3.0"),
+			result: 4.0,
+		},
+		{
+			name:   "right is int json",
+			left:   json.Number("12.0"),
+			right:  json.Number("3"),
+			result: 4.0,
+		},
+		{
+			name:  "left is invalid int",
+			left:  "not a number",
+			right: 3,
+			err:   "expected number value, found string: not a number",
+		},
+		{
+			name:  "right is invalid int",
+			left:  3,
+			right: "not a number",
+			err:   "expected number value, found string: not a number",
+		},
+		{
+			name:  "left is invalid float",
+			left:  "not a number",
+			right: 3.0,
+			err:   "expected number value, found string: not a number",
+		},
+		{
+			name:  "right is invalid float",
+			left:  3.0,
+			right: "not a number",
+			err:   "expected number value, found string: not a number",
+		},
+	}
+
+	for _, test := range testCases {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			res, err := fn(test.left, test.right)
+			if len(test.err) > 0 {
+				assert.EqualError(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, test.result, res)
+			}
+		})
+	}
+}
 
 func TestArithmetic(t *testing.T) {
 	type easyMsg struct {

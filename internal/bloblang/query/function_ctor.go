@@ -227,7 +227,11 @@ func ExpectIntArg(i int) ArgCheckFn {
 		case json.Number:
 			var err error
 			if args[i], err = t.Int64(); err != nil {
-				return fmt.Errorf("expected int argument, failed to parse: %w", err)
+				if fValue, ferr := t.Float64(); ferr == nil {
+					args[i] = int64(fValue)
+				} else {
+					return fmt.Errorf("expected int argument, failed to parse: %w", err)
+				}
 			}
 		default:
 			return fmt.Errorf("expected int argument, received %T", args[i])

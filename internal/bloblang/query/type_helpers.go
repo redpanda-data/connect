@@ -97,7 +97,14 @@ func IGetInt(v interface{}) (int64, error) {
 	case float64:
 		return int64(t), nil
 	case json.Number:
-		return t.Int64()
+		i, err := t.Int64()
+		if err == nil {
+			return i, nil
+		}
+		if f, ferr := t.Float64(); ferr == nil {
+			return int64(f), nil
+		}
+		return 0, err
 	}
 	return 0, NewTypeError(v, ValueNumber)
 }

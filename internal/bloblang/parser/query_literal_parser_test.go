@@ -57,13 +57,13 @@ func TestLiteralParser(t *testing.T) {
 		"dynamic map": {
 			mapping: `{"foo":(5 + 5)}`,
 			result: map[string]interface{}{
-				"foo": float64(10),
+				"foo": int64(10),
 			},
 		},
 		"dynamic map trailing comma": {
 			mapping: `{"foo":(5 + 5),}`,
 			result: map[string]interface{}{
-				"foo": float64(10),
+				"foo": int64(10),
 			},
 		},
 		"dynamic map dynamic key": {
@@ -76,26 +76,26 @@ func TestLiteralParser(t *testing.T) {
 			mapping: `{"foo":{"bar":(5 + 5)}}`,
 			result: map[string]interface{}{
 				"foo": map[string]interface{}{
-					"bar": float64(10),
+					"bar": int64(10),
 				},
 			},
 		},
 		"dynamic array": {
 			mapping: `["foo",(5 + 5),null]`,
 			result: []interface{}{
-				"foo", float64(10), nil,
+				"foo", int64(10), nil,
 			},
 		},
 		"dynamic array trailing comma": {
 			mapping: `["foo",(5 + 5),null,]`,
 			result: []interface{}{
-				"foo", float64(10), nil,
+				"foo", int64(10), nil,
 			},
 		},
 		"dynamic array nested": {
 			mapping: `["foo",[(5 + 5),"bar"],null]`,
 			result: []interface{}{
-				"foo", []interface{}{float64(10), "bar"}, nil,
+				"foo", []interface{}{int64(10), "bar"}, nil,
 			},
 		},
 		"bad array element": {

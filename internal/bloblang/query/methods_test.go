@@ -1830,7 +1830,7 @@ func TestMethods(t *testing.T) {
 		},
 		"check floor": {
 			input:  methods(literalFn(5.8), method("floor")),
-			output: 5.0,
+			output: int64(5),
 		},
 		"check floor bad value": {
 			input: methods(literalFn("nope"), method("floor")),
@@ -1846,15 +1846,15 @@ func TestMethods(t *testing.T) {
 		},
 		"check floor json.Number": {
 			input:  methods(literalFn(json.Number("5.8")), method("floor")),
-			output: 5.0,
+			output: int64(5),
 		},
 		"check round up": {
 			input:  methods(literalFn(5.8), method("round")),
-			output: 6.0,
+			output: int64(6),
 		},
 		"check round down": {
 			input:  methods(literalFn(5.3), method("round")),
-			output: 5.0,
+			output: int64(5),
 		},
 		"check replace_many string": {
 			input: methods(literalFn("<i>hello</i> <b>world</b>"), method("replace_many", []interface{}{

@@ -61,42 +61,62 @@ func arithmeticFunc(lhs, rhs Function, op arithmeticOpFunc) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-func restrictForComparison(v interface{}) interface{} {
-	v = ISanitize(v)
-	switch t := v.(type) {
-	case int64:
-		return float64(t)
-	case uint64:
-		return float64(t)
-	case json.Number:
-		if f, err := IGetNumber(t); err == nil {
-			return f
-		}
-	case []byte:
-		return string(t)
-	}
-	return v
-}
-
 // ErrDivideByZero occurs when an arithmetic operator is prevented from dividing
 // a value by zero.
 var ErrDivideByZero = errors.New("attempted to divide by zero")
 
-func prodOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
-	switch op {
-	case ArithmeticMul:
-		return func(left, right interface{}) (interface{}, error) {
-			var err error
-			var lhs, rhs float64
-			if lhs, err = IGetNumber(left); err == nil {
-				rhs, err = IGetNumber(right)
-			}
+type intArithmeticFunc func(left, right int64) (int64, error)
+type floatArithmeticFunc func(left, right float64) (float64, error)
+
+// Takes two arithmetic funcs, one for integer values and one for float values
+// and returns a generic arithmetic func. If both values can be represented as
+// integers the integer func is called, otherwise the float func is called.
+func numberDegradationFunc(iFn intArithmeticFunc, fFn floatArithmeticFunc) arithmeticOpFunc {
+	return func(left, right interface{}) (interface{}, error) {
+		left = ISanitize(left)
+		right = ISanitize(right)
+
+		if leftFloat, leftIsFloat := left.(float64); leftIsFloat {
+			rightFloat, err := IGetNumber(right)
 			if err != nil {
 				return nil, err
 			}
-			return lhs * rhs, nil
-		}, true
+			return fFn(leftFloat, rightFloat)
+		}
+		if rightFloat, rightIsFloat := right.(float64); rightIsFloat {
+			leftFloat, err := IGetNumber(left)
+			if err != nil {
+				return nil, err
+			}
+			return fFn(leftFloat, rightFloat)
+		}
+
+		leftInt, err := IGetInt(left)
+		if err != nil {
+			return nil, err
+		}
+		rightInt, err := IGetInt(right)
+		if err != nil {
+			return nil, err
+		}
+
+		return iFn(leftInt, rightInt)
+	}
+}
+
+func prodOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
+	switch op {
+	case ArithmeticMul:
+		return numberDegradationFunc(
+			func(lhs, rhs int64) (int64, error) {
+				return lhs * rhs, nil
+			},
+			func(lhs, rhs float64) (float64, error) {
+				return lhs * rhs, nil
+			},
+		), true
 	case ArithmeticDiv:
+		// Only executes on float values.
 		return func(left, right interface{}) (interface{}, error) {
 			var err error
 			var lhs, rhs float64
@@ -112,6 +132,7 @@ func prodOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
 			return lhs / rhs, nil
 		}, true
 	case ArithmeticMod:
+		// Only executes on integer values.
 		return func(left, right interface{}) (interface{}, error) {
 			var err error
 			var lhs, rhs int64
@@ -130,31 +151,22 @@ func prodOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
 	return nil, false
 }
 
-func coalesce(lhs, rhs Function) Function {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		lhsV, err := lhs.Exec(ctx)
-		if err == nil && !IIsNull(lhsV) {
-			return lhsV, nil
-		}
-		return rhs.Exec(ctx)
-	}, aggregateTargetPaths(lhs, rhs))
-}
-
 func sumOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
 	switch op {
 	case ArithmeticAdd:
+		numberAdd := numberDegradationFunc(
+			func(left, right int64) (int64, error) {
+				return left + right, nil
+			},
+			func(left, right float64) (float64, error) {
+				return left + right, nil
+			},
+		)
 		return func(left, right interface{}) (interface{}, error) {
 			var err error
 			switch left.(type) {
 			case float64, int, int64, uint64, json.Number:
-				var lhs, rhs float64
-				if lhs, err = IGetNumber(left); err == nil {
-					rhs, err = IGetNumber(right)
-				}
-				if err != nil {
-					return nil, err
-				}
-				return lhs + rhs, nil
+				return numberAdd(left, right)
 			case string, []byte:
 				var lhs, rhs string
 				if lhs, err = IGetString(left); err == nil {
@@ -168,20 +180,19 @@ func sumOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
 			return nil, NewTypeError(left, ValueNumber, ValueString)
 		}, true
 	case ArithmeticSub:
-		return func(left, right interface{}) (interface{}, error) {
-			var err error
-			var lhs, rhs float64
-			if lhs, err = IGetNumber(left); err == nil {
-				rhs, err = IGetNumber(right)
-			}
-			if err != nil {
-				return nil, err
-			}
-			return lhs - rhs, nil
-		}, true
+		return numberDegradationFunc(
+			func(lhs, rhs int64) (int64, error) {
+				return lhs - rhs, nil
+			},
+			func(lhs, rhs float64) (float64, error) {
+				return lhs - rhs, nil
+			},
+		), true
 	}
 	return nil, false
 }
+
+//------------------------------------------------------------------------------
 
 func compareNumFn(op ArithmeticOperator) func(lhs, rhs float64) bool {
 	switch op {
@@ -269,6 +280,23 @@ func compareGenericFn(op ArithmeticOperator) func(lhs, rhs interface{}) bool {
 		}
 	}
 	return nil
+}
+
+func restrictForComparison(v interface{}) interface{} {
+	v = ISanitize(v)
+	switch t := v.(type) {
+	case int64:
+		return float64(t)
+	case uint64:
+		return float64(t)
+	case json.Number:
+		if f, err := IGetNumber(t); err == nil {
+			return f
+		}
+	case []byte:
+		return string(t)
+	}
+	return v
 }
 
 func compareOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
@@ -377,6 +405,16 @@ func boolAnd(lhs, rhs Function) Function {
 			return nil, err
 		}
 		return b, nil
+	}, aggregateTargetPaths(lhs, rhs))
+}
+
+func coalesce(lhs, rhs Function) Function {
+	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+		lhsV, err := lhs.Exec(ctx)
+		if err == nil && !IIsNull(lhsV) {
+			return lhsV, nil
+		}
+		return rhs.Exec(ctx)
 	}, aggregateTargetPaths(lhs, rhs))
 }
 
