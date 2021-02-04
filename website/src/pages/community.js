@@ -75,7 +75,7 @@ function Community() {
                   <p>Join us on the &#35;benthos channel in the Gophers slack</p>
                 </div>
                 <div class="card__footer">
-                  <Link to="https://gophersinvite.herokuapp.com/" class="button button--outline button--success button--block">Get an invite</Link>
+                  <Link to="https://invite.slack.golangbridge.org/" class="button button--outline button--success button--block">Get an invite</Link>
                 </div>
                 <div class="card__footer">
                   <Link to="https://app.slack.com/client/T029RQSE6/CLWCBK7FY" class="button button--outline button--primary button--block">Open</Link>
