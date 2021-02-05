@@ -154,7 +154,9 @@ func (e *Subprocess) getSendSubprocessorFunc(codec string) (func(index int, span
 				e.mErr.Incr(1)
 				return err
 			}
-			part.Set(res)
+			res2 := make([]byte, len(res))
+			copy(res2, res)
+			part.Set(res2)
 			return nil
 		}, nil
 	case "netstring":
@@ -168,7 +170,9 @@ func (e *Subprocess) getSendSubprocessorFunc(codec string) (func(index int, span
 				e.mErr.Incr(1)
 				return err
 			}
-			part.Set(res)
+			res2 := make([]byte, len(res))
+			copy(res2, res)
+			part.Set(res2)
 			return nil
 		}, nil
 	case "lines":
