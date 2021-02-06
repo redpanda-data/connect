@@ -770,6 +770,7 @@ pipeline:
         retries: ${PROCESSOR_LAMBDA_RETRIES:3}
         timeout: ${PROCESSOR_LAMBDA_TIMEOUT:5s}
       log:
+        fields_mapping: ${PROCESSOR_LOG_FIELDS_MAPPING}
         level: ${PROCESSOR_LOG_LEVEL:INFO}
         message: ${PROCESSOR_LOG_MESSAGE}
       merge_json:

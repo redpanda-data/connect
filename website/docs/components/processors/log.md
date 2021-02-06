@@ -26,6 +26,7 @@ contents and metadata of messages.
 log:
   level: INFO
   fields: {}
+  fields_mapping: ""
   message: ""
 ```
 
@@ -51,21 +52,36 @@ can be any of the following values: TRACE, DEBUG, INFO, WARN, ERROR.
 
 ### Structured Fields
 
-It's also possible to output a map of structured fields, this only works when
-the service log is set to output as JSON. The field values are function
-interpolated, meaning it's possible to output structured fields containing
-message contents and metadata, e.g.:
+It's also possible add custom fields to logs when the format is set to a structured form such as `json` or `logfmt`. The config field `fields` allows you to provide a map of key/value string pairs, where the values support [interpolation functions](/docs/configuration/interpolation#bloblang-queries) allowing you to extract message contents and metadata like this:
 
 ```yaml
 pipeline:
   processors:
     - log:
         level: DEBUG
-        message: "foo"
+        message: hello world
         fields:
-          id: '${! json("id") }'
-          kafka_topic: '${! meta("kafka_topic") }'
+          reason: cus I wana
+          id: ${! json("id") }
+          age: ${! json("user.age") }
+          kafka_topic: ${! meta("kafka_topic") }
 ```
+
+However, these values will always be output as string types. In cases where you want to add other types such as integers or booleans you can use the field `fields_mapping` to define a [Bloblang mapping](/docs/guides/bloblang/about) that outputs a map of key/values like this:
+
+```yaml
+pipeline:
+  processors:
+    - log:
+        level: DEBUG
+        message: hello world
+        fields_mapping: |
+          root.reason = "cus I wana"
+          root.id = this.id
+          root.age = this.user.age
+          root.kafka_topic = meta("kafka_topic")
+```
+
 
 ## Fields
 
@@ -86,6 +102,25 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `object`  
 Default: `{}`  
+
+### `fields_mapping`
+
+An optional [Bloblang mapping](/docs/guides/bloblang/about) that can be used to specify extra fields to add to the log. If log fields are also added with the `fields` field then those values will override matching keys from this mapping.
+
+
+Type: `string`  
+Default: `""`  
+Requires version 3.40.0 or newer  
+
+```yaml
+# Examples
+
+fields_mapping: |-
+  root.reason = "cus I wana"
+  root.id = this.id
+  root.age = this.user.age.number()
+  root.kafka_topic = meta("kafka_topic")
+```
 
 ### `message`
 

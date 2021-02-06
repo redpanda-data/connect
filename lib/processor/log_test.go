@@ -9,22 +9,29 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 //------------------------------------------------------------------------------
 
 type mockLog struct {
-	traces []string
-	debugs []string
-	infos  []string
-	warns  []string
-	errors []string
-	fields []map[string]string
+	traces        []string
+	debugs        []string
+	infos         []string
+	warns         []string
+	errors        []string
+	fields        []map[string]string
+	mappingFields []interface{}
 }
 
 func (m *mockLog) NewModule(prefix string) log.Modular { return m }
 func (m *mockLog) WithFields(fields map[string]string) log.Modular {
 	m.fields = append(m.fields, fields)
+	return m
+}
+func (m *mockLog) With(args ...interface{}) log.Modular {
+	m.mappingFields = append(m.mappingFields, args...)
 	return m
 }
 
@@ -168,6 +175,37 @@ func TestLogWithFields(t *testing.T) {
 	if exp, act := map[string]string{"dynamic": "with fields 2", "static": "foo"}, logMock.fields[1]; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong field output: %v != %v", act, exp)
 	}
+}
+
+func TestLogWithFieldsMapping(t *testing.T) {
+	conf := NewConfig()
+	conf.Type = TypeLog
+	conf.Log.Message = "hello world"
+	conf.Log.FieldsMapping = `
+root.static = "static value"
+root.age = this.age + 2
+root.is_cool = this.is_cool`
+
+	logMock := &mockLog{}
+
+	conf.Log.Level = "INFO"
+	l, err := New(conf, nil, logMock, metrics.Noop())
+	require.NoError(t, err)
+
+	input := message.New([][]byte{[]byte(
+		`{"age":10,"is_cool":true,"ignore":"this value please"}`,
+	)})
+	expMsgs := []types.Message{input}
+	actMsgs, res := l.ProcessMessage(input)
+	require.Nil(t, res)
+	assert.Equal(t, expMsgs, actMsgs)
+
+	assert.Equal(t, []string{"hello world"}, logMock.infos)
+	assert.Equal(t, []interface{}{
+		"age", int64(12),
+		"is_cool", true,
+		"static", "static value",
+	}, logMock.mappingFields)
 }
 
 //------------------------------------------------------------------------------

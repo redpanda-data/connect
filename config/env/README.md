@@ -663,6 +663,7 @@ PROCESSOR_LAMBDA_RATE_LIMIT
 PROCESSOR_LAMBDA_REGION                              = eu-west-1
 PROCESSOR_LAMBDA_RETRIES                             = 3
 PROCESSOR_LAMBDA_TIMEOUT                             = 5s
+PROCESSOR_LOG_FIELDS_MAPPING
 PROCESSOR_LOG_LEVEL                                  = INFO
 PROCESSOR_LOG_MESSAGE
 PROCESSOR_MERGE_JSON_RETAIN_PARTS                    = false

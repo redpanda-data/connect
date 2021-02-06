@@ -19,6 +19,7 @@ pipeline:
     - type: log
       log:
         fields: {}
+        fields_mapping: ""
         level: INFO
         message: ""
   threads: 1

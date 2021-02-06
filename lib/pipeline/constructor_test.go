@@ -44,6 +44,7 @@ func TestSanitise(t *testing.T) {
 		`"type":"log",` +
 		`"log":{` +
 		`"fields":{},` +
+		`"fields_mapping":"",` +
 		`"level":"INFO",` +
 		`"message":""` +
 		`}` +

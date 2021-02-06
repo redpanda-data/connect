@@ -8,7 +8,8 @@ All notable changes to this project will be documented in this file.
 ### New
 
 - Experimental `sharded_join` fields added to the `sequence` input.
-- Added a new API for writing Bloblang plugins in Go at [`./public/bloblang`](https://pkg.go.dev/github.com/Jeffail/benthos/v3/public/bloblang). 
+- Added a new API for writing Bloblang plugins in Go at [`./public/bloblang`](https://pkg.go.dev/github.com/Jeffail/benthos/v3/public/bloblang).
+- Field `fields_mapping` added to the `log` processor.
 
 ### Fixed
 
