@@ -3,6 +3,7 @@ package log
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -115,8 +116,10 @@ func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
 		return nil, err
 	}
 
-	if removeDeprecated && conf.JSONFormat {
-		delete(hashMap, "json_format")
+	if removeDeprecated {
+		if conf.JSONFormat {
+			delete(hashMap, "json_format")
+		}
 	}
 
 	return hashMap, nil
@@ -169,10 +172,13 @@ func (conf *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // Logger is an object with support for levelled logging and modular components.
 type Logger struct {
-	stream    io.Writer
-	config    Config
-	level     int
-	formatter logFormatter
+	stream       io.Writer
+	prefix       string
+	fields       map[string]interface{}
+	format       string
+	addTimestamp bool
+	level        int
+	formatter    logFormatter
 }
 
 // New creates and returns a new logger object.
@@ -181,16 +187,27 @@ func New(stream io.Writer, config Config) Modular {
 	if !config.JSONFormat {
 		config.Format = "deprecated"
 	}
-
-	logger := Logger{
-		stream: stream,
-		config: config,
-		level:  logLevelToInt(config.LogLevel),
+	if len(config.Prefix) > 0 {
+		config.StaticFields["component"] = strings.TrimLeft(config.Prefix, ".")
 	}
 
-	logger.formatter, _ = getFormatter(config)
+	fields := map[string]interface{}{}
+	for k, v := range config.StaticFields {
+		fields[k] = v
+	}
+
+	logger := Logger{
+		stream:       stream,
+		prefix:       config.Prefix,
+		fields:       fields,
+		format:       config.Format,
+		addTimestamp: config.AddTimeStamp,
+		level:        logLevelToInt(config.LogLevel),
+	}
+
+	logger.formatter, _ = getFormatter(config.Format, config.Prefix, config.AddTimeStamp, fields)
 	if logger.formatter == nil {
-		logger.formatter = deprecatedFormatter(config)
+		logger.formatter = deprecatedFormatter(config.Prefix, config.AddTimeStamp)
 	}
 	return &logger
 }
@@ -201,15 +218,26 @@ func NewV2(stream io.Writer, config Config) (Modular, error) {
 	if !config.JSONFormat {
 		config.Format = "deprecated"
 	}
+	if len(config.Prefix) > 0 {
+		config.StaticFields["component"] = strings.TrimLeft(config.Prefix, ".")
+	}
+
+	fields := map[string]interface{}{}
+	for k, v := range config.StaticFields {
+		fields[k] = v
+	}
 
 	logger := Logger{
-		stream: stream,
-		config: config,
-		level:  logLevelToInt(config.LogLevel),
+		stream:       stream,
+		prefix:       config.Prefix,
+		fields:       fields,
+		format:       config.Format,
+		addTimestamp: config.AddTimeStamp,
+		level:        logLevelToInt(config.LogLevel),
 	}
 
 	var err error
-	if logger.formatter, err = getFormatter(config); err != nil {
+	if logger.formatter, err = getFormatter(config.Format, config.Prefix, config.AddTimeStamp, fields); err != nil {
 		return nil, err
 	}
 	return &logger, nil
@@ -220,53 +248,73 @@ func NewV2(stream io.Writer, config Config) (Modular, error) {
 // Noop creates and returns a new logger object that writes nothing.
 func Noop() Modular {
 	return &Logger{
-		stream:    ioutil.Discard,
-		config:    NewConfig(),
-		level:     LogOff,
-		formatter: deprecatedFormatter(NewConfig()),
+		stream:       ioutil.Discard,
+		prefix:       "benthos",
+		fields:       map[string]interface{}{},
+		level:        LogOff,
+		format:       "deprecated",
+		addTimestamp: true,
+		formatter:    deprecatedFormatter("benthos", true),
 	}
 }
 
 // NewModule creates a new logger object from the previous, using the same
 // configuration, but adds an extra prefix to represent a submodule.
-func (l *Logger) NewModule(prefix string) Modular {
-	config := l.config
-	config.Prefix = fmt.Sprintf("%v%v", config.Prefix, prefix)
+func (l *Logger) NewModule(name string) Modular {
+	newPrefix := fmt.Sprintf("%v%v", l.prefix, name)
+	newFields := make(map[string]interface{}, len(l.fields))
+	for k, v := range l.fields {
+		if k == "component" {
+			if str, ok := v.(string); ok {
+				newFields[k] = strings.TrimLeft(str+name, ".")
+			} else {
+				newFields[k] = v
+			}
+		} else {
+			newFields[k] = v
+		}
+	}
 
-	formatter, _ := getFormatter(config)
+	formatter, _ := getFormatter(l.format, newPrefix, l.addTimestamp, newFields)
 	if formatter == nil {
-		formatter = deprecatedFormatter(config)
+		formatter = deprecatedFormatter(newPrefix, l.addTimestamp)
 	}
 
 	return &Logger{
-		stream:    l.stream,
-		config:    config,
-		level:     l.level,
-		formatter: formatter,
+		stream:       l.stream,
+		prefix:       newPrefix,
+		fields:       newFields,
+		level:        l.level,
+		format:       l.format,
+		addTimestamp: l.addTimestamp,
+		formatter:    formatter,
 	}
 }
 
 // WithFields returns a logger with new fields added to the JSON formatted
 // output.
-func (l *Logger) WithFields(fields map[string]string) Modular {
-	newConfig := l.config
-	newConfig.StaticFields = fields
-	for k, v := range l.config.StaticFields {
-		if _, exists := fields[k]; !exists {
-			newConfig.StaticFields[k] = v
-		}
+func (l *Logger) WithFields(inboundFields map[string]string) Modular {
+	newFields := make(map[string]interface{}, len(l.fields))
+	for k, v := range l.fields {
+		newFields[k] = v
+	}
+	for k, v := range inboundFields {
+		newFields[k] = v
 	}
 
-	formatter, _ := getFormatter(newConfig)
+	formatter, _ := getFormatter(l.format, l.prefix, l.addTimestamp, newFields)
 	if formatter == nil {
-		formatter = deprecatedFormatter(newConfig)
+		formatter = deprecatedFormatter(l.prefix, l.addTimestamp)
 	}
 
 	return &Logger{
-		stream:    l.stream,
-		config:    newConfig,
-		level:     l.level,
-		formatter: formatter,
+		stream:       l.stream,
+		prefix:       l.prefix,
+		fields:       newFields,
+		level:        l.level,
+		format:       l.format,
+		addTimestamp: l.addTimestamp,
+		formatter:    formatter,
 	}
 }
 
@@ -276,14 +324,55 @@ func WithFields(l Modular, fields map[string]string) Modular {
 	return l.WithFields(fields)
 }
 
+// With returns a logger with new fields.
+func (l *Logger) With(args ...interface{}) Modular {
+	newFields := make(map[string]interface{}, len(l.fields))
+	for k, v := range l.fields {
+		newFields[k] = v
+	}
+	for i := 0; i < (len(args) - 1); i += 2 {
+		key, ok := args[i].(string)
+		if !ok {
+			continue
+		}
+		newFields[key] = args[i+1]
+	}
+
+	formatter, _ := getFormatter(l.format, l.prefix, l.addTimestamp, newFields)
+	if formatter == nil {
+		formatter = deprecatedFormatter(l.prefix, l.addTimestamp)
+	}
+
+	return &Logger{
+		stream:       l.stream,
+		prefix:       l.prefix,
+		fields:       newFields,
+		level:        l.level,
+		format:       l.format,
+		addTimestamp: l.addTimestamp,
+		formatter:    formatter,
+	}
+}
+
+// With attempts to cast the Modular implementation into an interface that
+// implements With, and if successful returns the result.
+func With(l Modular, args ...interface{}) (Modular, error) {
+	if m, ok := l.(interface {
+		With(args ...interface{}) Modular
+	}); ok {
+		return m.With(args...), nil
+	}
+	return nil, errors.New("the logger does not support typed fields")
+}
+
 //------------------------------------------------------------------------------
 
 type logFormatter func(w io.Writer, message string, level string, other ...interface{})
 
-func jsonFormatter(conf Config) logFormatter {
+func jsonFormatter(addTimestamp bool, fields map[string]interface{}) logFormatter {
 	var staticFieldsRawJSON string
-	if len(conf.StaticFields) > 0 {
-		jBytes, _ := json.Marshal(conf.StaticFields)
+	if len(fields) > 0 {
+		jBytes, _ := json.Marshal(fields)
 		if len(jBytes) > 2 {
 			staticFieldsRawJSON = string(jBytes[1:len(jBytes)-1]) + ","
 		}
@@ -292,30 +381,38 @@ func jsonFormatter(conf Config) logFormatter {
 	return func(w io.Writer, message string, level string, other ...interface{}) {
 		message = strings.TrimSuffix(message, "\n")
 		timestampStr := ""
-		if conf.AddTimeStamp {
+		if addTimestamp {
 			timestampStr = fmt.Sprintf("\"@timestamp\":\"%v\",", time.Now().Format(time.RFC3339))
 		}
 		fmt.Fprintf(
 			w,
-			"{%v%v\"level\":\"%v\",\"component\":\"%v\",\"message\":%v}\n",
-			timestampStr, staticFieldsRawJSON, level, conf.Prefix,
+			"{%v%v\"level\":\"%v\",\"message\":%v}\n",
+			timestampStr, staticFieldsRawJSON, level,
 			strconv.QuoteToASCII(fmt.Sprintf(message, other...)),
 		)
 	}
 }
 
-func logfmtFormatter(conf Config) logFormatter {
+func logfmtFormatter(addTimestamp bool, fields map[string]interface{}) logFormatter {
 	var staticFieldsRaw string
-	if len(conf.StaticFields) > 0 {
-		keys := make([]string, 0, len(conf.StaticFields))
-		for k := range conf.StaticFields {
+	if len(fields) > 0 {
+		keys := make([]string, 0, len(fields))
+		for k := range fields {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
 
 		var buf bytes.Buffer
 		for _, k := range keys {
-			buf.WriteString(fmt.Sprintf("%v=%v ", k, conf.StaticFields[k]))
+			v := fields[k]
+			vStr, ok := v.(string)
+			if ok {
+				if strings.Contains(vStr, " ") {
+					vStr = strconv.QuoteToASCII(vStr)
+				}
+				v = vStr
+			}
+			buf.WriteString(fmt.Sprintf("%v=%v ", k, v))
 		}
 		staticFieldsRaw = buf.String()
 	}
@@ -323,44 +420,44 @@ func logfmtFormatter(conf Config) logFormatter {
 	return func(w io.Writer, message string, level string, other ...interface{}) {
 		message = strings.TrimSuffix(message, "\n")
 		timestampStr := ""
-		if conf.AddTimeStamp {
+		if addTimestamp {
 			timestampStr = fmt.Sprintf("timestamp=\"%v\" ", time.Now().Format(time.RFC3339))
 		}
 		fmt.Fprintf(
 			w,
-			"%v%vlevel=%v component=%v msg=%v\n",
-			timestampStr, staticFieldsRaw, level, conf.Prefix,
+			"%v%vlevel=%v msg=%v\n",
+			timestampStr, staticFieldsRaw, level,
 			strconv.QuoteToASCII(fmt.Sprintf(message, other...)),
 		)
 	}
 }
 
-func deprecatedFormatter(conf Config) logFormatter {
+func deprecatedFormatter(component string, addTimestamp bool) logFormatter {
 	return func(w io.Writer, message string, level string, other ...interface{}) {
 		if !strings.HasSuffix(message, "\n") {
 			message = message + "\n"
 		}
 		timestampStr := ""
-		if conf.AddTimeStamp {
+		if addTimestamp {
 			timestampStr = fmt.Sprintf("%v | ", time.Now().Format(time.RFC3339))
 		}
 		fmt.Fprintf(w, fmt.Sprintf(
 			"%v%v | %v | %v",
-			timestampStr, level, conf.Prefix, message,
+			timestampStr, level, component, message,
 		), other...)
 	}
 }
 
-func getFormatter(conf Config) (logFormatter, error) {
-	switch conf.Format {
+func getFormatter(format, component string, addTimestamp bool, fields map[string]interface{}) (logFormatter, error) {
+	switch format {
 	case "json":
-		return jsonFormatter(conf), nil
+		return jsonFormatter(addTimestamp, fields), nil
 	case "logfmt":
-		return logfmtFormatter(conf), nil
+		return logfmtFormatter(addTimestamp, fields), nil
 	case "deprecated", "classic":
-		return deprecatedFormatter(conf), nil
+		return deprecatedFormatter(component, addTimestamp), nil
 	}
-	return nil, fmt.Errorf("log format '%v' not recognized", conf.Format)
+	return nil, fmt.Errorf("log format '%v' not recognized", format)
 }
 
 // write prints a log message with any configured extras prepended.

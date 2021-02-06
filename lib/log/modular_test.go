@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestModules(t *testing.T) {
@@ -56,9 +57,9 @@ func TestStaticFields(t *testing.T) {
 	logger2 := logger.NewModule(".foo")
 	logger2.Warnln("Warning message root.foo module")
 
-	expected := `{"@service":"benthos_service","@system":"foo","level":"WARN","component":"root","message":"Warning message root module"}
-{"@service":"benthos_service","@system":"foo","level":"WARN","component":"root","message":"Warning message root module"}
-{"@service":"benthos_service","@system":"foo","level":"WARN","component":"root.foo","message":"Warning message root.foo module"}
+	expected := `{"@service":"benthos_service","@system":"foo","component":"root","level":"WARN","message":"Warning message root module"}
+{"@service":"benthos_service","@system":"foo","component":"root","level":"WARN","message":"Warning message root module"}
+{"@service":"benthos_service","@system":"foo","component":"root.foo","level":"WARN","message":"Warning message root.foo module"}
 `
 
 	assert.Equal(t, expected, buf.String())
@@ -85,9 +86,9 @@ func TestStaticFieldsOverride(t *testing.T) {
 
 	logger.Warnf("Warning message root module\n")
 
-	expected := `{"@service":"benthos_service","@system":"foo","level":"WARN","component":"root","message":"Warning message root module"}
-{"@service":"fooserve","@system":"foo","foo":"bar","level":"WARN","component":"root","message":"Warning message foo fields"}
-{"@service":"benthos_service","@system":"foo","level":"WARN","component":"root","message":"Warning message root module"}
+	expected := `{"@service":"benthos_service","@system":"foo","component":"root","level":"WARN","message":"Warning message root module"}
+{"@service":"fooserve","@system":"foo","component":"root","foo":"bar","level":"WARN","message":"Warning message foo fields"}
+{"@service":"benthos_service","@system":"foo","component":"root","level":"WARN","message":"Warning message root module"}
 `
 
 	assert.Equal(t, expected, buf.String())
@@ -110,9 +111,92 @@ func TestStaticFieldsEmpty(t *testing.T) {
 	logger2 := logger.NewModule(".foo")
 	logger2.Warnln("Warning message root.foo module")
 
-	expected := `{"level":"WARN","component":"root","message":"Warning message root module"}
-{"level":"WARN","component":"root","message":"Warning message root module"}
-{"level":"WARN","component":"root.foo","message":"Warning message root.foo module"}
+	expected := `{"component":"root","level":"WARN","message":"Warning message root module"}
+{"component":"root","level":"WARN","message":"Warning message root module"}
+{"component":"root.foo","level":"WARN","message":"Warning message root.foo module"}
+`
+
+	assert.Equal(t, expected, buf.String())
+}
+
+func TestLoggerWith(t *testing.T) {
+	loggerConfig := NewConfig()
+	loggerConfig.AddTimeStamp = false
+	loggerConfig.Format = "logfmt"
+	loggerConfig.LogLevel = "WARN"
+	loggerConfig.StaticFields = map[string]string{
+		"@service": "benthos_service",
+		"@system":  "foo",
+	}
+
+	var buf bytes.Buffer
+
+	logger, err := NewV2(&buf, loggerConfig)
+	require.NoError(t, err)
+
+	logger.Warnf("Warning message root module")
+
+	logger2, err := With(logger, "foo", "bar", "count", 10, "thing", "is a string", "iscool", true)
+	require.NoError(t, err)
+	logger2.Warnln("Warning message foo fields")
+
+	logger.Warnf("Warning message root module\n")
+
+	expected := `@service=benthos_service @system=foo component=benthos level=WARN msg="Warning message root module"
+@service=benthos_service @system=foo component=benthos count=10 foo=bar iscool=true thing="is a string" level=WARN msg="Warning message foo fields"
+@service=benthos_service @system=foo component=benthos level=WARN msg="Warning message root module"
+`
+
+	assert.Equal(t, expected, buf.String())
+}
+
+func TestLoggerWithOddArgs(t *testing.T) {
+	loggerConfig := NewConfig()
+	loggerConfig.AddTimeStamp = false
+	loggerConfig.Format = "logfmt"
+	loggerConfig.LogLevel = "WARN"
+	loggerConfig.StaticFields = map[string]string{
+		"@service": "benthos_service",
+		"@system":  "foo",
+	}
+
+	var buf bytes.Buffer
+
+	logger, err := NewV2(&buf, loggerConfig)
+	require.NoError(t, err)
+
+	logger, err = With(logger, "foo", "bar", "count", 10, "thing", "is a string", "iscool", true, "woops")
+	require.NoError(t, err)
+
+	logger.Warnln("Warning message foo fields")
+
+	expected := `@service=benthos_service @system=foo component=benthos count=10 foo=bar iscool=true thing="is a string" level=WARN msg="Warning message foo fields"
+`
+
+	assert.Equal(t, expected, buf.String())
+}
+
+func TestLoggerWithNonStringKeys(t *testing.T) {
+	loggerConfig := NewConfig()
+	loggerConfig.AddTimeStamp = false
+	loggerConfig.Format = "logfmt"
+	loggerConfig.LogLevel = "WARN"
+	loggerConfig.StaticFields = map[string]string{
+		"@service": "benthos_service",
+		"@system":  "foo",
+	}
+
+	var buf bytes.Buffer
+
+	logger, err := NewV2(&buf, loggerConfig)
+	require.NoError(t, err)
+
+	logger, err = With(logger, "foo", "bar", 10, "count", "thing", "is a string", "iscool", true)
+	require.NoError(t, err)
+
+	logger.Warnln("Warning message foo fields")
+
+	expected := `@service=benthos_service @system=foo component=benthos foo=bar iscool=true thing="is a string" level=WARN msg="Warning message foo fields"
 `
 
 	assert.Equal(t, expected, buf.String())
