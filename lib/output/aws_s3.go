@@ -35,12 +35,12 @@ The tags field allows you to specify key/value pairs to attach to objects as tag
 
 ` + "```yaml" + `
 output:
-    aws_s3:
-        bucket: TODO
-        path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
-        tags:
-            Key1: Value1
-            Timestamp: ${!meta("Timestamp")}
+  aws_s3:
+    bucket: TODO
+    path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
+    tags:
+      Key1: Value1
+      Timestamp: ${!meta("Timestamp")}
 ` + "```" + `
 
 ### Credentials
@@ -152,12 +152,12 @@ The tags field allows you to specify key/value pairs to attach to objects as tag
 
 ` + "```yaml" + `
 output:
-    aws_s3:
-        bucket: TODO
-        path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
-        tags:
-            Key1: Value1
-            Timestamp: ${!meta("Timestamp")}
+  aws_s3:
+    bucket: TODO
+    path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
+    tags:
+      Key1: Value1
+      Timestamp: ${!meta("Timestamp")}
 ` + "```" + `
 
 ### Credentials
