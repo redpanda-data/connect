@@ -8,10 +8,12 @@ All notable changes to this project will be documented in this file.
 ### New
 
 - Experimental `sharded_join` fields added to the `sequence` input.
+- Added a new API for writing Bloblang plugins in Go at [`./public/bloblang`](https://pkg.go.dev/github.com/Jeffail/benthos/v3/public/bloblang). 
 
 ### Fixed
 
 - Prevented pre-existing errors from failing/aborting branch execution in the `branch` and `workflow` processors.
+- Fixed `subprocess` processor message corruption with codecs `length_prefixed_uint32_be` and `netstring`.
 
 ### Changed
 
