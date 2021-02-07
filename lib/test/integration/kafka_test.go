@@ -52,7 +52,7 @@ func createKafkaTopic(address, id string, partitions int32) error {
 		meta, err = b.GetMetadata(&sarama.MetadataRequest{
 			Topics: []string{topicName},
 		})
-		if err == nil && len(meta.Topics) == 1 && len(meta.Topics[0].Partitions) == 4 {
+		if err == nil && len(meta.Topics) == 1 && len(meta.Topics[0].Partitions) == int(partitions) {
 			break
 		}
 		<-time.After(time.Millisecond * 100)
@@ -60,7 +60,7 @@ func createKafkaTopic(address, id string, partitions int32) error {
 	if err != nil {
 		return err
 	}
-	if len(meta.Topics) == 0 || len(meta.Topics[0].Partitions) != 4 {
+	if len(meta.Topics) == 0 || len(meta.Topics[0].Partitions) != int(partitions) {
 		return fmt.Errorf("failed to create topic: %v", topicName)
 	}
 

@@ -93,7 +93,7 @@ Default: `[]`
 
 ### `result_map`
 
-A [Bloblang mapping](/docs/guides/bloblang/about) that describes how the resulting messages from branched processing should be mapped back into the original payload. If left empty the origin message will remain unchanged  (including metadata).
+A [Bloblang mapping](/docs/guides/bloblang/about) that describes how the resulting messages from branched processing should be mapped back into the original payload. If left empty the origin message will remain unchanged (including metadata).
 
 
 Type: `string`  
@@ -111,6 +111,8 @@ result_map: |-
   root.bar.body = this.body
   root.bar.id = this.user.id
 
+result_map: root.raw_result = content().string()
+
 result_map: |-
   root.enrichments.foo = if errored() {
   	throw(error())
@@ -123,6 +125,7 @@ result_map: |-
 
 <Tabs defaultValue="HTTP Request" values={[
 { label: 'HTTP Request', value: 'HTTP Request', },
+{ label: 'Non Structured Results', value: 'Non Structured Results', },
 { label: 'Lambda Function', value: 'Lambda Function', },
 { label: 'Conditional Caching', value: 'Conditional Caching', },
 ]}>
@@ -144,6 +147,25 @@ pipeline:
               url: https://hub.docker.com/v2/repositories/jeffail/benthos
               verb: GET
         result_map: root.repo.status = this
+```
+
+</TabItem>
+<TabItem value="Non Structured Results">
+
+
+When the result of your branch processors is unstructured and you wish to simply set a resulting field to the raw output use the content function to obtain the raw bytes of the resulting message and then coerce it into your value type of choice:
+
+```yaml
+pipeline:
+  processors:
+    - branch:
+        request_map: 'root = this.document.id'
+        processors:
+          - cache:
+              resource: descriptions_cache
+              key: ${! content() }
+              operator: get
+        result_map: root.document.description = content().string()
 ```
 
 </TabItem>
