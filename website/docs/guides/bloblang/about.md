@@ -4,7 +4,7 @@ sidebar_label: About
 description: The Benthos native mapping language
 ---
 
-Bloblang, or blobl for short, is a language designed for mapping data of a wide variety of forms. It's a safe, fast, and powerful way to perform document mapping within Benthos.
+Bloblang, or blobl for short, is a language designed for mapping data of a wide variety of forms. It's a safe, fast, and powerful way to perform document mapping within Benthos. It also has a [Go API for writing your own functions and methods][plugin-api] as plugins.
 
 Bloblang is available as a [processor][blobl.proc] and it's also possible to use blobl queries in [function interpolations][blobl.interp].
 
@@ -360,3 +360,4 @@ root.foo = this.bar.index(5).or("default")
 [blobl.methods]: /docs/guides/bloblang/methods
 [methods.catch]: /docs/guides/bloblang/methods#catch
 [methods.or]: /docs/guides/bloblang/methods#or
+[plugin-api]: https://pkg.go.dev/github.com/Jeffail/benthos/v3/public/bloblang

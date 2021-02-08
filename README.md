@@ -198,8 +198,8 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come a
 [plugin-repo]: https://github.com/benthosdev/benthos-plugin-example
 [getting-started]: https://www.benthos.dev/docs/guides/getting_started
 
-[godoc-badge]: https://godoc.org/github.com/Jeffail/benthos/lib/stream?status.svg
-[godoc-url]: https://godoc.org/github.com/Jeffail/benthos/lib/stream
+[godoc-badge]: https://pkg.go.dev/github.com/Jeffail/benthos/v3/public?status.svg
+[godoc-url]: https://pkg.go.dev/github.com/Jeffail/benthos/v3/public
 [goreport-badge]: https://goreportcard.com/badge/github.com/Jeffail/benthos
 [goreport-url]: https://goreportcard.com/report/Jeffail/benthos
 [drone-badge]: https://cloud.drone.io/api/badges/Jeffail/benthos/status.svg
