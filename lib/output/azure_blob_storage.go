@@ -122,9 +122,13 @@ func NewAzureBlobStorage(conf Config, mgr types.Manager, log log.Modular, stats 
 	if err != nil {
 		return nil, err
 	}
-	return NewAsyncWriter(
+	a, err := NewAsyncWriter(
 		TypeAzureBlobStorage, conf.AzureBlobStorage.MaxInFlight, blobStorage, log, stats,
 	)
+	if err != nil {
+		return nil, err
+	}
+	return onlySinglePayloads(a), nil
 }
 
 func newDeprecatedBlobStorage(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {

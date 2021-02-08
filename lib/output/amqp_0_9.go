@@ -68,12 +68,13 @@ func NewAMQP09(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 	if err != nil {
 		return nil, err
 	}
-	if conf.AMQP09.MaxInFlight == 1 {
-		return NewWriter(TypeAMQP09, a, log, stats)
-	}
-	return NewAsyncWriter(
+	w, err := NewAsyncWriter(
 		TypeAMQP09, conf.AMQP09.MaxInFlight, a, log, stats,
 	)
+	if err != nil {
+		return nil, err
+	}
+	return onlySinglePayloads(w), nil
 }
 
 //------------------------------------------------------------------------------

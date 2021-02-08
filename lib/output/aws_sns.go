@@ -82,10 +82,11 @@ func newAmazonSNS(name string, conf writer.SNSConfig, mgr types.Manager, log log
 	if err != nil {
 		return nil, err
 	}
-	if conf.MaxInFlight == 1 {
-		return NewWriter(name, s, log, stats)
+	a, err := NewAsyncWriter(name, conf.MaxInFlight, s, log, stats)
+	if err != nil {
+		return nil, err
 	}
-	return NewAsyncWriter(name, conf.MaxInFlight, s, log, stats)
+	return onlySinglePayloads(a), nil
 }
 
 //------------------------------------------------------------------------------
