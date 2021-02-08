@@ -48,6 +48,13 @@ func (e *Error) IndexedErrors() int {
 	return len(e.partErrors)
 }
 
+// WalkableError is an interface implemented by batch errors that allows you to
+// walk the messages of the batch and dig into the individual errors.
+type WalkableError interface {
+	WalkParts(fn func(int, types.Part, error) bool)
+	error
+}
+
 // WalkParts applies a closure to each message that was part of the request that
 // caused this error. The closure is provided the message part index, a pointer
 // to the part, and its individual error, which may be nil if the message itself

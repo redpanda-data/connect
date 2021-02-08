@@ -1167,6 +1167,7 @@ output:
         gcp_pubsub:
           max_in_flight: ${OUTPUT_GCP_PUBSUB_MAX_IN_FLIGHT:1}
           project: ${OUTPUT_GCP_PUBSUB_PROJECT}
+          publish_timeout: ${OUTPUT_GCP_PUBSUB_PUBLISH_TIMEOUT:60s}
           topic: ${OUTPUT_GCP_PUBSUB_TOPIC}
         hdfs:
           batching:

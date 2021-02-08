@@ -19,14 +19,38 @@ import TabItem from '@theme/TabItem';
 Sends messages to a GCP Cloud Pub/Sub topic. [Metadata](/docs/configuration/metadata)
 from messages are sent as attributes.
 
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yaml
-# Config fields, showing default values
+# Common config fields, showing default values
 output:
   gcp_pubsub:
     project: ""
     topic: ""
     max_in_flight: 1
 ```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+# All config fields, showing default values
+output:
+  gcp_pubsub:
+    project: ""
+    topic: ""
+    max_in_flight: 1
+    publish_timeout: 60s
+```
+
+</TabItem>
+</Tabs>
 
 For information on how to set up credentials check out
 [this guide](https://cloud.google.com/docs/authentication/production).
@@ -63,5 +87,23 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 Type: `number`  
 Default: `1`  
+
+### `publish_timeout`
+
+The maximum length of time to wait before abandoning a publish attempt for a message.
+
+
+Type: `string`  
+Default: `"60s"`  
+
+```yaml
+# Examples
+
+publish_timeout: 10s
+
+publish_timeout: 5m
+
+publish_timeout: 60m
+```
 
 

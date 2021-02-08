@@ -23,6 +23,7 @@ output:
   gcp_pubsub:
     max_in_flight: 1
     project: ""
+    publish_timeout: 60s
     topic: ""
 resources:
   caches: {}

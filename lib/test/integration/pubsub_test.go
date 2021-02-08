@@ -86,11 +86,12 @@ input:
 
 			client.Close()
 		}),
+		testOptLogging("INFO"),
 	}
 	suite := integrationTests(
 		integrationTestOpenClose(),
 		integrationTestMetadata(),
-		integrationTestSendBatch(10),
+		integrationTestSendBatches(10, 1000, 10),
 		integrationTestStreamSequential(1000),
 		integrationTestStreamParallel(1000),
 		integrationTestStreamParallelLossy(1000),

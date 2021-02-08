@@ -8,9 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 //------------------------------------------------------------------------------
@@ -218,6 +221,69 @@ func TestAsyncPreserverErrorProp(t *testing.T) {
 			t.Errorf("Wrong error returned: %v != %v", actErr, expErr)
 		}
 	}
+}
+
+func TestAsyncPreserverBatchError(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+	defer cancel()
+
+	readerImpl := newMockAsyncReader()
+	pres := NewAsyncPreserver(readerImpl)
+
+	go func() {
+		select {
+		case readerImpl.connChan <- nil:
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+		readerImpl.msgsToSnd = []types.Message{
+			message.New([][]byte{
+				[]byte("foo"),
+				[]byte("bar"),
+				[]byte("baz"),
+				[]byte("buz"),
+				[]byte("bev"),
+			})}
+		select {
+		case readerImpl.readChan <- nil:
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+		select {
+		case readerImpl.ackChan <- errors.New("ack propagated"):
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+	}()
+
+	require.NoError(t, pres.ConnectWithContext(ctx))
+
+	msg, ackFn, err := pres.ReadWithContext(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, [][]byte{
+		[]byte("foo"),
+		[]byte("bar"),
+		[]byte("baz"),
+		[]byte("buz"),
+		[]byte("bev"),
+	}, message.GetAllBytes(msg))
+
+	bErr := batch.NewError(msg, errors.New("first"))
+	bErr.Failed(1, errors.New("second"))
+	bErr.Failed(3, errors.New("third"))
+
+	require.NoError(t, ackFn(ctx, response.NewError(bErr)))
+
+	msg, ackFn, err = pres.ReadWithContext(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, [][]byte{
+		[]byte("bar"),
+		[]byte("buz"),
+	}, message.GetAllBytes(msg))
+
+	require.EqualError(t, ackFn(ctx, response.NewAck()), "ack propagated")
 }
 
 //------------------------------------------------------------------------------

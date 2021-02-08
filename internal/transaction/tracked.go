@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/Jeffail/benthos/v3/internal/batch"
 	imessage "github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -52,12 +53,7 @@ func (t *Tracked) ResponseChan() chan<- types.Response {
 	return t.resChan
 }
 
-type walkableError interface {
-	WalkParts(fn func(int, types.Part, error) bool)
-	error
-}
-
-func getResFromTags(tags []*imessage.Tag, walkable walkableError) types.Response {
+func getResFromTags(tags []*imessage.Tag, walkable batch.WalkableError) types.Response {
 	remainingTags := make(map[*imessage.Tag]struct{}, len(tags))
 	for _, tag := range tags {
 		remainingTags[tag] = struct{}{}
@@ -89,7 +85,7 @@ func getResFromTags(tags []*imessage.Tag, walkable walkableError) types.Response
 	return response.NewAck()
 }
 
-func getResFromTag(tag *imessage.Tag, walkable walkableError) types.Response {
+func getResFromTag(tag *imessage.Tag, walkable batch.WalkableError) types.Response {
 	var res types.Response
 	walkable.WalkParts(func(_ int, p types.Part, err error) bool {
 		if imessage.HasTag(tag, p) {
@@ -111,7 +107,7 @@ func getResFromTag(tag *imessage.Tag, walkable walkableError) types.Response {
 func (t *Tracked) resFromError(err error) types.Response {
 	var res types.Response = response.NewAck()
 	if err != nil {
-		if walkable, ok := err.(walkableError); ok {
+		if walkable, ok := err.(batch.WalkableError); ok {
 			if len(t.tags) == 1 {
 				res = getResFromTag(t.tags[0], walkable)
 			} else {

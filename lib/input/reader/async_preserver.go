@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -52,9 +54,23 @@ func (p *AsyncPreserver) ConnectWithContext(ctx context.Context) error {
 func (p *AsyncPreserver) wrapAckFn(msg types.Message, ackFn AsyncAckFn) AsyncAckFn {
 	return func(ctx context.Context, res types.Response) error {
 		if res.Error() != nil {
+			resendMsg := msg
+			walkable, ok := res.Error().(batch.WalkableError)
+			if ok && msg.Len() > 1 {
+				tmpMsg := message.New(nil)
+				walkable.WalkParts(func(i int, p types.Part, e error) bool {
+					if e != nil {
+						tmpMsg.Append(msg.Get(i))
+					}
+					return true
+				})
+				if tmpMsg.Len() > 0 {
+					resendMsg = tmpMsg
+				}
+			}
 			p.msgsMut.Lock()
 			p.resendMessages = append(p.resendMessages, asyncPreserverResend{
-				msg:   msg,
+				msg:   resendMsg,
 				ackFn: ackFn,
 			})
 			p.resendInterrupt()

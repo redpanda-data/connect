@@ -24,6 +24,7 @@ For information on how to set up credentials check out
 			docs.FieldCommon("project", "The project ID of the topic to publish to."),
 			docs.FieldCommon("topic", "The topic to publish to.").SupportsInterpolation(false),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldAdvanced("publish_timeout", "The maximum length of time to wait before abandoning a publish attempt for a message.", "10s", "5m", "60m"),
 		},
 		Categories: []Category{
 			CategoryServices,
@@ -40,14 +41,13 @@ func NewGCPPubSub(conf Config, mgr types.Manager, log log.Modular, stats metrics
 	if err != nil {
 		return nil, err
 	}
-	if conf.GCPPubSub.MaxInFlight == 1 {
-		return NewWriter(
-			TypeGCPPubSub, a, log, stats,
-		)
-	}
-	return NewAsyncWriter(
+	w, err := NewAsyncWriter(
 		TypeGCPPubSub, conf.GCPPubSub.MaxInFlight, a, log, stats,
 	)
+	if err != nil {
+		return nil, err
+	}
+	return notBatched(w), nil
 }
 
 //------------------------------------------------------------------------------

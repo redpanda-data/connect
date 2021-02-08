@@ -112,7 +112,7 @@ func (c *GCPPubSub) ConnectWithContext(ignored context.Context) error {
 				}
 			}
 		})
-		if rerr != context.Canceled {
+		if rerr != nil && rerr != context.Canceled {
 			c.log.Errorf("Subscription error: %v\n", rerr)
 		}
 		c.subMut.Lock()

@@ -111,6 +111,68 @@ func integrationTestSendBatch(n int) testDefinition {
 	)
 }
 
+func integrationTestSendBatches(batchSize, batches, parallelism int) testDefinition {
+	return namedTest(
+		"can send many message batches",
+		func(t *testing.T, env *testEnvironment) {
+			t.Parallel()
+
+			require.Greater(t, parallelism, 0)
+
+			tranChan := make(chan types.Transaction)
+			input, output := initConnectors(t, tranChan, env)
+			t.Cleanup(func() {
+				closeConnectors(t, input, output)
+			})
+
+			set := map[string][]string{}
+			for j := 0; j < batches; j++ {
+				for i := 0; i < batchSize; i++ {
+					payload := fmt.Sprintf("hello world %v", j*batches+i)
+					set[payload] = nil
+				}
+			}
+
+			batchChan := make(chan []string)
+
+			var wg sync.WaitGroup
+			for k := 0; k < parallelism; k++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					for {
+						batch, open := <-batchChan
+						if !open {
+							return
+						}
+						assert.NoError(t, sendBatch(env.ctx, t, tranChan, batch))
+					}
+				}()
+			}
+
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for len(set) > 0 {
+					messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+				}
+			}()
+
+			for j := 0; j < batches; j++ {
+				payloads := []string{}
+				for i := 0; i < batchSize; i++ {
+					payload := fmt.Sprintf("hello world %v", j*batches+i)
+					payloads = append(payloads, payload)
+				}
+				batchChan <- payloads
+			}
+			close(batchChan)
+
+			wg.Wait()
+		},
+	)
+}
+
 func integrationTestSendBatchCount(n int) testDefinition {
 	return namedTest(
 		"can send messages with an output batch count",

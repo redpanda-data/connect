@@ -1,0 +1,177 @@
+package output
+
+import (
+	"context"
+	"sync"
+	"time"
+
+	"github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/response"
+	"github.com/Jeffail/benthos/v3/lib/types"
+)
+
+type notBatchedOutput struct {
+	out Type
+
+	inChan  <-chan types.Transaction
+	outChan chan types.Transaction
+
+	ctx   context.Context
+	close func()
+
+	fullyCloseCtx context.Context
+	fullyClose    func()
+
+	closedChan chan struct{}
+}
+
+func notBatched(out Type) Type {
+	n := &notBatchedOutput{
+		out:        out,
+		outChan:    make(chan types.Transaction),
+		closedChan: make(chan struct{}),
+	}
+	n.ctx, n.close = context.WithCancel(context.Background())
+	n.fullyCloseCtx, n.fullyClose = context.WithCancel(context.Background())
+	return n
+}
+
+//------------------------------------------------------------------------------
+
+func (n *notBatchedOutput) breakMessageOut(msg types.Message) error {
+	var wg sync.WaitGroup
+
+	var batchErr *batch.Error
+	var batchErrMut sync.Mutex
+	addBatchErr := func(i int, err error) {
+		if err != nil {
+			batchErrMut.Lock()
+			if batchErr == nil {
+				batchErr = batch.NewError(msg, err)
+			}
+			batchErr.Failed(i, err)
+			batchErrMut.Unlock()
+		}
+	}
+
+	if err := msg.Iter(func(i int, p types.Part) error {
+		index := i
+
+		tmpResChan := make(chan types.Response)
+		tmpMsg := message.New(nil)
+		tmpMsg.Append(p)
+
+		select {
+		case n.outChan <- types.NewTransaction(tmpMsg, tmpResChan):
+		case <-n.ctx.Done():
+			if index == 0 {
+				return types.ErrTypeClosed
+			}
+			addBatchErr(index, types.ErrTypeClosed)
+			return nil
+		}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			var err error
+			select {
+			case res := <-tmpResChan:
+				err = res.Error()
+			case <-n.fullyCloseCtx.Done():
+				err = types.ErrTypeClosed
+			}
+			addBatchErr(index, err)
+		}()
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	wg.Wait()
+	if batchErr != nil {
+		return batchErr
+	}
+	return nil
+}
+
+func (n *notBatchedOutput) loop() {
+	defer func() {
+		n.out.CloseAsync()
+		err := n.out.WaitForClose(time.Second)
+		for ; err != nil; err = n.out.WaitForClose(time.Second) {
+		}
+		close(n.closedChan)
+	}()
+
+	for {
+		var tran types.Transaction
+		var open bool
+		select {
+		case tran, open = <-n.inChan:
+			if !open {
+				return
+			}
+		case <-n.ctx.Done():
+			return
+		}
+
+		if tran.Payload.Len() == 1 {
+			select {
+			case n.outChan <- tran:
+			case <-n.ctx.Done():
+				return
+			}
+		} else {
+			var res types.Response = response.NewAck()
+			if err := n.breakMessageOut(tran.Payload); err != nil {
+				if err == types.ErrTypeClosed {
+					return
+				}
+				res = response.NewError(err)
+			}
+			select {
+			case tran.ResponseChan <- res:
+			case <-n.fullyCloseCtx.Done():
+				return
+			}
+		}
+	}
+}
+
+//------------------------------------------------------------------------------
+
+func (n *notBatchedOutput) Consume(ts <-chan types.Transaction) error {
+	if n.inChan != nil {
+		return types.ErrAlreadyStarted
+	}
+	if err := n.out.Consume(n.outChan); err != nil {
+		return err
+	}
+	n.inChan = ts
+	go n.loop()
+	return nil
+}
+
+func (n *notBatchedOutput) Connected() bool {
+	return n.out.Connected()
+}
+
+func (n *notBatchedOutput) CloseAsync() {
+	n.close()
+}
+
+// WaitForClose blocks until the File output has closed down.
+func (n *notBatchedOutput) WaitForClose(timeout time.Duration) error {
+	go func() {
+		<-time.After(timeout - time.Second)
+		n.fullyClose()
+	}()
+	select {
+	case <-n.closedChan:
+	case <-time.After(timeout):
+		return types.ErrTimeout
+	}
+	return nil
+}

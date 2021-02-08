@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/pubsub"
+	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -18,17 +19,19 @@ import (
 
 // GCPPubSubConfig contains configuration fields for the output GCPPubSub type.
 type GCPPubSubConfig struct {
-	ProjectID   string `json:"project" yaml:"project"`
-	TopicID     string `json:"topic" yaml:"topic"`
-	MaxInFlight int    `json:"max_in_flight" yaml:"max_in_flight"`
+	ProjectID      string `json:"project" yaml:"project"`
+	TopicID        string `json:"topic" yaml:"topic"`
+	MaxInFlight    int    `json:"max_in_flight" yaml:"max_in_flight"`
+	PublishTimeout string `json:"publish_timeout" yaml:"publish_timeout"`
 }
 
 // NewGCPPubSubConfig creates a new Config with default values.
 func NewGCPPubSubConfig() GCPPubSubConfig {
 	return GCPPubSubConfig{
-		ProjectID:   "",
-		TopicID:     "",
-		MaxInFlight: 1,
+		ProjectID:      "",
+		TopicID:        "",
+		MaxInFlight:    1,
+		PublishTimeout: "60s",
 	}
 }
 
@@ -39,7 +42,8 @@ func NewGCPPubSubConfig() GCPPubSubConfig {
 type GCPPubSub struct {
 	conf GCPPubSubConfig
 
-	client *pubsub.Client
+	client         *pubsub.Client
+	publishTimeout time.Duration
 
 	topicID  field.Expression
 	topics   map[string]*pubsub.Topic
@@ -63,12 +67,17 @@ func NewGCPPubSub(
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
+	pubTimeout, err := time.ParseDuration(conf.PublishTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse publish timeout duration: %w", err)
+	}
 	return &GCPPubSub{
-		conf:    conf,
-		log:     log,
-		client:  client,
-		stats:   stats,
-		topicID: topic,
+		conf:           conf,
+		log:            log,
+		client:         client,
+		publishTimeout: pubTimeout,
+		stats:          stats,
+		topicID:        topic,
 	}, nil
 }
 
@@ -96,9 +105,6 @@ func (c *GCPPubSub) getTopic(ctx context.Context, t string) (*pubsub.Topic, erro
 		return t, nil
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
-
 	topic := c.client.Topic(t)
 	exists, err := topic.Exists(ctx)
 	if err != nil {
@@ -107,6 +113,7 @@ func (c *GCPPubSub) getTopic(ctx context.Context, t string) (*pubsub.Topic, erro
 	if !exists {
 		return nil, fmt.Errorf("topic '%v' does not exist", t)
 	}
+	topic.PublishSettings.Timeout = c.publishTimeout
 	c.topics[t] = topic
 	return topic, nil
 }
@@ -147,14 +154,17 @@ func (c *GCPPubSub) WriteWithContext(ctx context.Context, msg types.Message) err
 		return nil
 	})
 
-	var errs []error
-	for _, r := range results {
+	var batchErr *batch.Error
+	for i, r := range results {
 		if _, err := r.Get(ctx); err != nil {
-			errs = append(errs, err)
+			if batchErr == nil {
+				batchErr = batch.NewError(msg, err)
+			}
+			batchErr.Failed(i, err)
 		}
 	}
-	if len(errs) > 0 {
-		return fmt.Errorf("failed to send messages: %v", errs)
+	if batchErr != nil {
+		return batchErr
 	}
 	return nil
 }
