@@ -26,7 +26,7 @@ type notBatchedOutput struct {
 	closedChan chan struct{}
 }
 
-func notBatched(out Type) Type {
+func onlySinglePayloads(out Type) Type {
 	n := &notBatchedOutput{
 		out:        out,
 		outChan:    make(chan types.Transaction),

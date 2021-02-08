@@ -70,7 +70,7 @@ func TestNotBatchedSingleMessages(t *testing.T) {
 	out, err := NewAsyncWriter("foo", 1, w, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	nbOut := notBatched(out)
+	nbOut := onlySinglePayloads(out)
 
 	resChan := make(chan types.Response)
 	tChan := make(chan types.Transaction)
@@ -109,7 +109,7 @@ func TestShutdown(t *testing.T) {
 	out, err := NewAsyncWriter("foo", 1, w, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	nbOut := notBatched(out)
+	nbOut := onlySinglePayloads(out)
 
 	resChan := make(chan types.Response)
 	tChan := make(chan types.Transaction)
@@ -149,7 +149,7 @@ func TestNotBatchedBreakOutMessages(t *testing.T) {
 	out, err := NewAsyncWriter("foo", 1, w, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	nbOut := notBatched(out)
+	nbOut := onlySinglePayloads(out)
 
 	resChan := make(chan types.Response)
 	tChan := make(chan types.Transaction)
@@ -190,7 +190,7 @@ func TestNotBatchedBreakOutMessagesErrors(t *testing.T) {
 	out, err := NewAsyncWriter("foo", 1, w, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	nbOut := notBatched(out)
+	nbOut := onlySinglePayloads(out)
 
 	resChan := make(chan types.Response)
 	tChan := make(chan types.Transaction)
@@ -247,7 +247,7 @@ func TestNotBatchedBreakOutMessagesErrorsAsync(t *testing.T) {
 	out, err := NewAsyncWriter("foo", 5, w, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	nbOut := notBatched(out)
+	nbOut := onlySinglePayloads(out)
 
 	resChan := make(chan types.Response)
 	tChan := make(chan types.Transaction)

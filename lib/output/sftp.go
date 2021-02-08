@@ -28,9 +28,13 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return NewAsyncWriter(
+			a, err := NewAsyncWriter(
 				TypeSFTP, conf.SFTP.MaxInFlight, sftp, log, stats,
 			)
+			if err != nil {
+				return nil, err
+			}
+			return onlySinglePayloads(a), nil
 		}),
 		Status:  docs.StatusExperimental,
 		Version: "3.39.0",

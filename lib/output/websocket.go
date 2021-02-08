@@ -33,7 +33,11 @@ func NewWebsocket(conf Config, mgr types.Manager, log log.Modular, stats metrics
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter(TypeWebsocket, w, log, stats)
+	a, err := NewWriter(TypeWebsocket, w, log, stats)
+	if err != nil {
+		return nil, err
+	}
+	return onlySinglePayloads(a), nil
 }
 
 //------------------------------------------------------------------------------

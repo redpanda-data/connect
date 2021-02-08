@@ -52,9 +52,13 @@ func NewZMQ4(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter(
+	s, err := NewWriter(
 		"zmq4", z, log, stats,
 	)
+	if err != nil {
+		return nil, err
+	}
+	return onlySinglePayloads(s), nil
 }
 
 //------------------------------------------------------------------------------

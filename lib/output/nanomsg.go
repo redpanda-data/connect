@@ -39,10 +39,11 @@ func NewNanomsg(conf Config, mgr types.Manager, log log.Modular, stats metrics.T
 	if err != nil {
 		return nil, err
 	}
-	if conf.Nanomsg.MaxInFlight == 1 {
-		return NewWriter(TypeNanomsg, s, log, stats)
+	a, err := NewAsyncWriter(TypeNanomsg, conf.Nanomsg.MaxInFlight, s, log, stats)
+	if err != nil {
+		return nil, err
 	}
-	return NewAsyncWriter(TypeNanomsg, conf.Nanomsg.MaxInFlight, s, log, stats)
+	return onlySinglePayloads(a), nil
 }
 
 //------------------------------------------------------------------------------

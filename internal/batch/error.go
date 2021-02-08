@@ -52,6 +52,7 @@ func (e *Error) IndexedErrors() int {
 // walk the messages of the batch and dig into the individual errors.
 type WalkableError interface {
 	WalkParts(fn func(int, types.Part, error) bool)
+	IndexedErrors() int
 	error
 }
 

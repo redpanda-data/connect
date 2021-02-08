@@ -55,7 +55,7 @@ func NewHDFS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type
 	if err != nil {
 		return nil, err
 	}
-	return newBatcherFromConf(conf.HDFS.Batching, w, mgr, log, stats)
+	return newBatcherFromConf(conf.HDFS.Batching, onlySinglePayloads(w), mgr, log, stats)
 }
 
 //------------------------------------------------------------------------------

@@ -286,6 +286,76 @@ func TestAsyncPreserverBatchError(t *testing.T) {
 	require.EqualError(t, ackFn(ctx, response.NewAck()), "ack propagated")
 }
 
+func TestAsyncPreserverBatchErrorUnordered(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+	defer cancel()
+
+	readerImpl := newMockAsyncReader()
+	pres := NewAsyncPreserver(readerImpl)
+
+	go func() {
+		select {
+		case readerImpl.connChan <- nil:
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+		readerImpl.msgsToSnd = []types.Message{
+			message.New([][]byte{
+				[]byte("foo"),
+				[]byte("bar"),
+				[]byte("baz"),
+				[]byte("buz"),
+				[]byte("bev"),
+			})}
+		select {
+		case readerImpl.readChan <- nil:
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+		select {
+		case readerImpl.ackChan <- errors.New("ack propagated"):
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+	}()
+
+	require.NoError(t, pres.ConnectWithContext(ctx))
+
+	msg, ackFn, err := pres.ReadWithContext(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, [][]byte{
+		[]byte("foo"),
+		[]byte("bar"),
+		[]byte("baz"),
+		[]byte("buz"),
+		[]byte("bev"),
+	}, message.GetAllBytes(msg))
+
+	bMsg := message.New(nil)
+	bMsg.Append(msg.Get(1))
+	bMsg.Append(msg.Get(3))
+	bMsg.Append(msg.Get(0))
+	bMsg.Append(msg.Get(4))
+	bMsg.Append(msg.Get(2))
+
+	bErr := batch.NewError(bMsg, errors.New("first"))
+	bErr.Failed(1, errors.New("second"))
+	bErr.Failed(2, errors.New("third"))
+
+	require.NoError(t, ackFn(ctx, response.NewError(bErr)))
+
+	msg, ackFn, err = pres.ReadWithContext(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, [][]byte{
+		[]byte("buz"),
+		[]byte("foo"),
+	}, message.GetAllBytes(msg))
+
+	require.EqualError(t, ackFn(ctx, response.NewAck()), "ack propagated")
+}
+
 //------------------------------------------------------------------------------
 
 func TestAsyncPreserverBuffer(t *testing.T) {
