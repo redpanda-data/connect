@@ -52,7 +52,7 @@ Sometimes it's useful to consume a sequence of inputs, where an input is only co
 
 ## Generating Messages
 
-Sometimes it's useful to generate data, in which case the most convenient option is the [`bloblang` input][input.bloblang].
+It's possible to generate data with Benthos using the [`generate` input][input.generate], which is also a convenient way to trigger scheduled pipelines.
 
 import ComponentsByCategory from '@theme/ComponentsByCategory';
 
@@ -66,7 +66,7 @@ import ComponentSelect from '@theme/ComponentSelect';
 
 [processors]: /docs/components/processors/about
 [input.broker]: /docs/components/inputs/broker
-[input.bloblang]: /docs/components/inputs/bloblang
+[input.generate]: /docs/components/inputs/generate
 [input.csv]: /docs/components/inputs/csv
 [input.sequence]: /docs/components/inputs/sequence
 [input.read_until]: /docs/components/inputs/read_until

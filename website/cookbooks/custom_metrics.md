@@ -10,7 +10,7 @@ You can't build cool graphs without metrics, and [Benthos emits many][internal-m
 
 Firstly, we need to target an API so let's start with the nice and simple Homebrew API, which we'll poll every 60 seconds.
 
-We can either do it with an [`http_client` input][inputs.http_client] and a [rate limit][rate_limits] that restricts us to one request per 60 seconds, or we can use a [`bloblang` input][inputs.bloblang] to generate a message every 60 seconds that triggers an [`http` processor][processors.http]:
+We can either do it with an [`http_client` input][inputs.http_client] and a [rate limit][rate_limits] that restricts us to one request per 60 seconds, or we can use a [`generate` input][inputs.generate] to generate a message every 60 seconds that triggers an [`http` processor][processors.http]:
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -360,17 +360,17 @@ metrics:
     path_mapping: if this != "downloads" { deleted() }
 ```
 
-[serverless.lambda]: /docs/guides/serverless/lambda/
-[internal-metrics]: /docs/components/metrics/about/
-[inputs.http_client]: /docs/components/inputs/http_client/
-[inputs.bloblang]: /docs/components/inputs/bloblang/
-[processors.workflow]: /docs/components/processors/workflow/
-[processors.branch]: /docs/components/processors/branch/
-[processors.unarchive]: /docs/components/processors/unarchive/
-[processors.bloblang]: /docs/components/processors/bloblang/
-[processors.http]: /docs/components/processors/http/
-[processors.metric]: /docs/components/processors/metric/
-[rate_limits]: /docs/components/rate_limits/about/
-[metrics.prometheus]: /docs/components/metrics/prometheus/
-[metrics.prometheus.path_mapping]: /docs/components/metrics/prometheus/#path_mapping
+[serverless.lambda]: /docs/guides/serverless/lambda
+[internal-metrics]: /docs/components/metrics/about
+[inputs.http_client]: /docs/components/inputs/http_client
+[inputs.generate]: /docs/components/inputs/generate
+[processors.workflow]: /docs/components/processors/workflow
+[processors.branch]: /docs/components/processors/branch
+[processors.unarchive]: /docs/components/processors/unarchive
+[processors.bloblang]: /docs/components/processors/bloblang
+[processors.http]: /docs/components/processors/http
+[processors.metric]: /docs/components/processors/metric
+[rate_limits]: /docs/components/rate_limits/about
+[metrics.prometheus]: /docs/components/metrics/prometheus
+[metrics.prometheus.path_mapping]: /docs/components/metrics/prometheus#path_mapping
 [prometheus]: https://prometheus.io/
