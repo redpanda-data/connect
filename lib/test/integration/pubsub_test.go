@@ -86,7 +86,6 @@ input:
 
 			client.Close()
 		}),
-		testOptLogging("INFO"),
 	}
 	suite := integrationTests(
 		integrationTestOpenClose(),

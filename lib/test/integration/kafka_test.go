@@ -15,8 +15,209 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var _ = registerIntegrationTest("kafka_redpanda", func(t *testing.T) {
+	t.Parallel()
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+
+	pool.MaxWait = time.Second * 30
+
+	kafkaPort, err := getFreePort()
+	require.NoError(t, err)
+
+	kafkaPortStr := strconv.Itoa(kafkaPort)
+
+	options := &dockertest.RunOptions{
+		Repository:   "vectorized/redpanda",
+		Tag:          "latest",
+		Hostname:     "redpanda",
+		ExposedPorts: []string{"9092"},
+		PortBindings: map[docker.Port][]docker.PortBinding{
+			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr}},
+		},
+		Cmd: []string{
+			"redpanda", "start", "--smp 2",
+			"--kafka-addr 0.0.0.0:9092",
+			fmt.Sprintf("--advertise-kafka-addr localhost:%v", kafkaPort),
+		},
+	}
+	resource, err := pool.RunWithOptions(options)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, pool.Purge(resource))
+	})
+
+	resource.Expire(900)
+	require.NoError(t, pool.Retry(func() error {
+		outConf := writer.NewKafkaConfig()
+		outConf.TargetVersion = "2.1.0"
+		outConf.Addresses = []string{"localhost:" + kafkaPortStr}
+		outConf.Topic = "pls_ignore_just_testing_connection"
+		tmpOutput, serr := writer.NewKafka(outConf, types.NoopMgr(), log.Noop(), metrics.Noop())
+		if serr != nil {
+			return serr
+		}
+		defer tmpOutput.CloseAsync()
+		if serr = tmpOutput.Connect(); serr != nil {
+			return serr
+		}
+		return tmpOutput.Write(message.New([][]byte{
+			[]byte("foo message"),
+		}))
+	}))
+
+	template := `
+output:
+  kafka:
+    addresses: [ localhost:$PORT ]
+    topic: topic-$ID
+    max_in_flight: $MAX_IN_FLIGHT
+    retry_as_batch: $VAR3
+    batching:
+      count: $OUTPUT_BATCH_COUNT
+
+input:
+  kafka:
+    addresses: [ localhost:$PORT ]
+    topics: [ topic-$ID$VAR1 ]
+    consumer_group: consumer-$ID
+    checkpoint_limit: $VAR2
+    batching:
+      count: $INPUT_BATCH_COUNT
+`
+
+	suite := integrationTests(
+		integrationTestOpenClose(),
+		integrationTestMetadata(),
+		integrationTestSendBatch(10),
+		integrationTestStreamSequential(1000),
+		integrationTestStreamParallel(1000),
+		integrationTestStreamParallelLossy(1000),
+		integrationTestSendBatchCount(10),
+	)
+	// In some tests include testing input level batching
+	suiteExt := append(suite, integrationTestReceiveBatchCount(10))
+
+	t.Run("balanced", func(t *testing.T) {
+		t.Parallel()
+		suiteExt.Run(
+			t, template,
+			testOptPort(kafkaPortStr),
+			testOptVarOne(""),
+			testOptVarTwo("1"),
+			testOptVarThree("false"),
+		)
+
+		t.Run("checkpointed", func(t *testing.T) {
+			t.Parallel()
+			suiteExt.Run(
+				t, template,
+				testOptPort(kafkaPortStr),
+				testOptVarOne(""),
+				testOptVarTwo("1000"),
+				testOptVarThree("false"),
+			)
+		})
+
+		t.Run("retry as batch", func(t *testing.T) {
+			t.Parallel()
+			suiteExt.Run(
+				t, template,
+				testOptPort(kafkaPortStr),
+				testOptVarOne(""),
+				testOptVarTwo("1"),
+				testOptVarThree("true"),
+			)
+		})
+
+		t.Run("with four partitions", func(t *testing.T) {
+			t.Parallel()
+			suite.Run(
+				t, template,
+				testOptPreTest(func(t *testing.T, env *testEnvironment) {
+					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
+				}),
+				testOptPort(kafkaPortStr),
+				testOptVarOne(""),
+				testOptVarTwo("1"),
+				testOptVarThree("false"),
+			)
+
+			t.Run("checkpointed", func(t *testing.T) {
+				t.Parallel()
+				suite.Run(
+					t, template,
+					testOptPreTest(func(t *testing.T, env *testEnvironment) {
+						require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
+					}),
+					testOptPort(kafkaPortStr),
+					testOptVarOne(""),
+					testOptVarTwo("1000"),
+					testOptVarThree("false"),
+				)
+			})
+		})
+	})
+
+	t.Run("partitions", func(t *testing.T) {
+		t.Parallel()
+		suiteExt.Run(
+			t, template,
+			testOptPort(kafkaPortStr),
+			testOptVarOne(":0"),
+			testOptVarTwo("1"),
+			testOptVarThree("false"),
+		)
+
+		t.Run("checkpointed", func(t *testing.T) {
+			t.Parallel()
+			suiteExt.Run(
+				t, template,
+				testOptPort(kafkaPortStr),
+				testOptVarOne(":0"),
+				testOptVarTwo("1000"),
+				testOptVarThree("false"),
+			)
+		})
+
+		t.Run("with four partitions", func(t *testing.T) {
+			t.Parallel()
+			suite.Run(
+				t, template,
+				testOptPreTest(func(t *testing.T, env *testEnvironment) {
+					topicName := "topic-" + env.configVars.id
+					env.configVars.var1 = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
+					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
+				}),
+				testOptPort(kafkaPortStr),
+				testOptSleepAfterInput(time.Second*3),
+				testOptVarTwo("1"),
+				testOptVarThree("false"),
+			)
+
+			t.Run("checkpointed", func(t *testing.T) {
+				t.Parallel()
+				suite.Run(
+					t, template,
+					testOptPreTest(func(t *testing.T, env *testEnvironment) {
+						topicName := "topic-" + env.configVars.id
+						env.configVars.var1 = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
+						require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
+					}),
+					testOptPort(kafkaPortStr),
+					testOptSleepAfterInput(time.Second*3),
+					testOptVarTwo("1000"),
+					testOptVarThree("false"),
+				)
+			})
+		})
+	})
+})
 
 func createKafkaTopic(address, id string, partitions int32) error {
 	topicName := fmt.Sprintf("topic-%v", id)
@@ -67,7 +268,7 @@ func createKafkaTopic(address, id string, partitions int32) error {
 	return nil
 }
 
-var _ = registerIntegrationTest("kafka", func(t *testing.T) {
+var _ = registerIntegrationTest("kafka_old", func(t *testing.T) {
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

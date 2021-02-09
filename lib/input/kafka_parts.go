@@ -2,7 +2,9 @@ package input
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -139,7 +141,11 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 
 	var offsetRes *sarama.OffsetFetchResponse
 	if offsetRes, err = coordinator.FetchOffset(&offsetGetReq); err != nil {
-		return fmt.Errorf("failed to acquire offsets from broker: %v", err)
+		if errors.Is(err, io.EOF) {
+			offsetRes = &sarama.OffsetFetchResponse{}
+		} else {
+			return fmt.Errorf("failed to acquire offsets from broker: %v", err)
+		}
 	}
 
 	offsetPutReq := &sarama.OffsetCommitRequest{
