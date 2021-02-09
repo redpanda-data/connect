@@ -100,42 +100,32 @@ input:
 		integrationTestStreamParallelLossy(1000),
 		integrationTestSendBatchCount(10),
 	)
-	// In some tests include testing input level batching
+	// In some modes include testing input level batching
 	suiteExt := append(suite, integrationTestReceiveBatchCount(10))
 
 	t.Run("balanced", func(t *testing.T) {
 		t.Parallel()
-		suiteExt.Run(
+		suite.Run(
 			t, template,
+			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+				require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
+			}),
 			testOptPort(kafkaPortStr),
-			testOptVarOne(""),
 			testOptVarTwo("1"),
 			testOptVarThree("false"),
 		)
 
-		t.Run("checkpointed", func(t *testing.T) {
+		t.Run("only one partition", func(t *testing.T) {
 			t.Parallel()
 			suiteExt.Run(
 				t, template,
 				testOptPort(kafkaPortStr),
-				testOptVarOne(""),
-				testOptVarTwo("1000"),
+				testOptVarTwo("1"),
 				testOptVarThree("false"),
 			)
 		})
 
-		t.Run("retry as batch", func(t *testing.T) {
-			t.Parallel()
-			suiteExt.Run(
-				t, template,
-				testOptPort(kafkaPortStr),
-				testOptVarOne(""),
-				testOptVarTwo("1"),
-				testOptVarThree("true"),
-			)
-		})
-
-		t.Run("with four partitions", func(t *testing.T) {
+		t.Run("checkpointed", func(t *testing.T) {
 			t.Parallel()
 			suite.Run(
 				t, template,
@@ -143,49 +133,41 @@ input:
 					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
 				}),
 				testOptPort(kafkaPortStr),
-				testOptVarOne(""),
-				testOptVarTwo("1"),
-				testOptVarThree("false"),
-			)
-
-			t.Run("checkpointed", func(t *testing.T) {
-				t.Parallel()
-				suite.Run(
-					t, template,
-					testOptPreTest(func(t *testing.T, env *testEnvironment) {
-						require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
-					}),
-					testOptPort(kafkaPortStr),
-					testOptVarOne(""),
-					testOptVarTwo("1000"),
-					testOptVarThree("false"),
-				)
-			})
-		})
-	})
-
-	t.Run("partitions", func(t *testing.T) {
-		t.Parallel()
-		suiteExt.Run(
-			t, template,
-			testOptPort(kafkaPortStr),
-			testOptVarOne(":0"),
-			testOptVarTwo("1"),
-			testOptVarThree("false"),
-		)
-
-		t.Run("checkpointed", func(t *testing.T) {
-			t.Parallel()
-			suiteExt.Run(
-				t, template,
-				testOptPort(kafkaPortStr),
-				testOptVarOne(":0"),
 				testOptVarTwo("1000"),
 				testOptVarThree("false"),
 			)
 		})
 
-		t.Run("with four partitions", func(t *testing.T) {
+		t.Run("retry as batch", func(t *testing.T) {
+			t.Parallel()
+			suite.Run(
+				t, template,
+				testOptPreTest(func(t *testing.T, env *testEnvironment) {
+					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
+				}),
+				testOptPort(kafkaPortStr),
+				testOptVarTwo("1"),
+				testOptVarThree("true"),
+			)
+		})
+	})
+
+	t.Run("explicit partitions", func(t *testing.T) {
+		t.Parallel()
+		suite.Run(
+			t, template,
+			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+				topicName := "topic-" + env.configVars.id
+				env.configVars.var1 = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
+				require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
+			}),
+			testOptPort(kafkaPortStr),
+			testOptSleepAfterInput(time.Second*3),
+			testOptVarTwo("1"),
+			testOptVarThree("false"),
+		)
+
+		t.Run("checkpointed", func(t *testing.T) {
 			t.Parallel()
 			suite.Run(
 				t, template,
@@ -196,25 +178,9 @@ input:
 				}),
 				testOptPort(kafkaPortStr),
 				testOptSleepAfterInput(time.Second*3),
-				testOptVarTwo("1"),
+				testOptVarTwo("1000"),
 				testOptVarThree("false"),
 			)
-
-			t.Run("checkpointed", func(t *testing.T) {
-				t.Parallel()
-				suite.Run(
-					t, template,
-					testOptPreTest(func(t *testing.T, env *testEnvironment) {
-						topicName := "topic-" + env.configVars.id
-						env.configVars.var1 = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
-						require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
-					}),
-					testOptPort(kafkaPortStr),
-					testOptSleepAfterInput(time.Second*3),
-					testOptVarTwo("1000"),
-					testOptVarThree("false"),
-				)
-			})
 		})
 	})
 })
