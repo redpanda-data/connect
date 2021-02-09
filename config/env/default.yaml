@@ -480,6 +480,7 @@ input:
             username: ${INPUT_SFTP_CREDENTIALS_USERNAME}
           delete_on_finish: ${INPUT_SFTP_DELETE_ON_FINISH:false}
           max_buffer: ${INPUT_SFTP_MAX_BUFFER:1000000}
+          watcher_mode: ${INPUT_SFTP_WATCHER_MODE:false}
         socket:
           address: ${INPUT_SOCKET_ADDRESS:/tmp/benthos.sock}
           delimiter: ${INPUT_SOCKET_DELIMITER}

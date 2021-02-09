@@ -38,6 +38,7 @@ input:
       password: ""
     paths: []
     codec: all-bytes
+    watcher_mode: false
 ```
 
 </TabItem>
@@ -55,6 +56,7 @@ input:
     codec: all-bytes
     delete_on_finish: false
     max_buffer: 1000000
+    watcher_mode: false
 ```
 
 </TabItem>
@@ -157,5 +159,13 @@ The largest token size expected when consuming delimited files.
 
 Type: `number`  
 Default: `1000000`  
+
+### `watcher_mode`
+
+Whether it keeps running after processing all the files in the paths to watch for new files.
+
+
+Type: `bool`  
+Default: `false`  
 
 

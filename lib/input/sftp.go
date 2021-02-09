@@ -61,6 +61,10 @@ You can access these metadata fields using [function interpolation](/docs/config
 			codec.ReaderDocs,
 			docs.FieldAdvanced("delete_on_finish", "Whether to delete files from the server once they are processed."),
 			docs.FieldAdvanced("max_buffer", "The largest token size expected when consuming delimited files."),
+			docs.FieldCommon(
+				"watcher_mode",
+				"Whether it keeps running after processing all the files in the paths to watch for new files.",
+			),
 		},
 		Categories: []Category{
 			CategoryNetwork,
@@ -78,6 +82,7 @@ type SFTPConfig struct {
 	Codec          string                `json:"codec" yaml:"codec"`
 	DeleteOnFinish bool                  `json:"delete_on_finish" yaml:"delete_on_finish"`
 	MaxBuffer      int                   `json:"max_buffer" yaml:"max_buffer"`
+	WatcherMode    bool                  `json:"watcher_mode" yaml:"watcher_mode"`
 }
 
 // NewSFTPConfig creates a new SFTPConfig with default values.
@@ -89,6 +94,7 @@ func NewSFTPConfig() SFTPConfig {
 		Codec:          "all-bytes",
 		DeleteOnFinish: false,
 		MaxBuffer:      1000000,
+		WatcherMode:    false,
 	}
 }
 
@@ -102,8 +108,9 @@ type sftpReader struct {
 
 	client *sftp.Client
 
-	paths       []string
-	scannerCtor codec.ReaderConstructor
+	paths          []string
+	filesProcessed map[string]struct{}
+	scannerCtor    codec.ReaderConstructor
 
 	scannerMut  sync.Mutex
 	scanner     codec.Reader
@@ -119,10 +126,11 @@ func newSFTPReader(conf SFTPConfig, log log.Modular, stats metrics.Type) (*sftpR
 	}
 
 	s := &sftpReader{
-		conf:        conf,
-		log:         log,
-		stats:       stats,
-		scannerCtor: ctor,
+		conf:           conf,
+		log:            log,
+		stats:          stats,
+		scannerCtor:    ctor,
+		filesProcessed: map[string]struct{}{},
 	}
 
 	return s, err
@@ -142,22 +150,18 @@ func (s *sftpReader) ConnectWithContext(ctx context.Context) error {
 		if s.client, err = s.conf.Credentials.GetClient(s.conf.Address); err != nil {
 			return err
 		}
-		var filepaths []string
-		for _, p := range s.conf.Paths {
-			paths, err := s.client.Glob(p)
-			if err != nil {
-				s.log.Warnf("Failed to scan files from path %v: %v\n", p, err)
-				continue
-			}
-			filepaths = append(filepaths, paths...)
-		}
-		s.paths = filepaths
+		s.paths = s.getFilePaths()
 	}
 
 	if len(s.paths) == 0 {
-		s.client.Close()
-		s.client = nil
-		return types.ErrTypeClosed
+		if !s.conf.WatcherMode {
+			s.client.Close()
+			s.client = nil
+			return types.ErrTypeClosed
+		} else {
+			s.paths = s.getFilePaths()
+			return nil
+		}
 	}
 
 	nextPath := s.paths[0]
@@ -200,6 +204,7 @@ func (s *sftpReader) ReadWithContext(ctx context.Context) (types.Message, reader
 			err = types.ErrTimeout
 		}
 		if err != types.ErrTimeout {
+			s.filesProcessed[s.currentPath] = struct{}{}
 			s.scanner.Close(ctx)
 			s.scanner = nil
 		}
@@ -239,4 +244,21 @@ func (s *sftpReader) CloseAsync() {
 // timeout occurs.
 func (s *sftpReader) WaitForClose(timeout time.Duration) error {
 	return nil
+}
+
+func (s *sftpReader) getFilePaths() []string {
+	var filepaths []string
+	for _, p := range s.conf.Paths {
+		paths, err := s.client.Glob(p)
+		if err != nil {
+			s.log.Warnf("Failed to scan files from path %v: %v\n", p, err)
+			continue
+		}
+		for _, path := range paths {
+			if _, ok := s.filesProcessed[path]; !ok {
+				filepaths = append(filepaths, path)
+			}
+		}
+	}
+	return filepaths
 }

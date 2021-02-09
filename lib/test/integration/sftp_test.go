@@ -1,13 +1,27 @@
 package integration
 
 import (
+	"log"
 	"testing"
 	"time"
 
+	sftpSetup "github.com/Jeffail/benthos/v3/internal/service/sftp"
+	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/ory/dockertest/v3"
+	"github.com/pkg/sftp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const (
+	dialTimeout = 10 * time.Second
+)
+
+var sftpUsername = "foo"
+var sftpPassword = "pass"
+
+var sftpClient *sftp.Client
+var sftpPort string
 
 var _ = registerIntegrationTest("sftp", func(t *testing.T) {
 	t.Parallel()
@@ -20,7 +34,7 @@ var _ = registerIntegrationTest("sftp", func(t *testing.T) {
 		Repository: "atmoz/sftp",
 		Tag:        "alpine",
 		Cmd: []string{
-			"foo:pass:1001:100:upload",
+			sftpUsername + ":" + sftpPassword + ":1001:100:upload",
 		},
 	})
 	require.NoError(t, err)
@@ -34,6 +48,27 @@ var _ = registerIntegrationTest("sftp", func(t *testing.T) {
 	}))
 
 	resource.Expire(900)
+
+	creds := sftpSetup.Credentials{
+		Username: sftpUsername,
+		Password: sftpPassword,
+	}
+
+	sftpPort = resource.GetPort("22/tcp")
+	sftpEndpoint := "localhost:" + sftpPort
+	deadline := time.Now().Add(dialTimeout)
+	for time.Now().Before(deadline) {
+		t.Logf("waiting for SFTP server to come up on '%v'...", "localhost:"+sftpPort)
+
+		sftpClient, err = creds.GetClient(sftpEndpoint)
+		if err != nil {
+			t.Logf("err: %v", err)
+			time.Sleep(time.Second)
+			continue
+		}
+
+		break
+	}
 
 	t.Run("sftp", func(t *testing.T) {
 		template := `
@@ -57,22 +92,63 @@ input:
       password: pass
     codec: $VAR1
     delete_on_finish: false
+    watcher_mode: true
 `
 		suite := integrationTests(
 			integrationTestOpenCloseIsolated(),
+			integrationTestWatcherMode(),
 			integrationTestStreamIsolated(100),
 		)
 		suite.Run(
 			t, template,
-			testOptPort(resource.GetPort("22/tcp")),
+			testOptPort(sftpPort),
 			testOptVarOne("all-bytes"),
 			testOptVarTwo(`${!count("$ID")}`),
 		)
 		suite.Run(
 			t, template,
-			testOptPort(resource.GetPort("22/tcp")),
+			testOptPort(sftpPort),
 			testOptVarOne("lines"),
 			testOptVarTwo(`all-in-one-file`),
 		)
 	})
 })
+
+func integrationTestWatcherMode() testDefinition {
+	return namedTest(
+		"test watcher mode",
+		func(t *testing.T, env *testEnvironment) {
+			t.Parallel()
+
+			tranChan := make(chan types.Transaction)
+			output := initOutput(t, tranChan, env)
+			t.Cleanup(func() {
+				closeConnectors(t, nil, output)
+			})
+			require.NoError(t, sendMessage(env.ctx, t, tranChan, "hello world"))
+
+			input := initInput(t, env)
+			t.Cleanup(func() {
+				closeConnectors(t, input, nil)
+			})
+			messageMatch(t, receiveMessage(env.ctx, t, input.TransactionChan(), nil), "hello world")
+
+			generateTestFile("/upload/test-"+env.configVars.id+"/watcher_test.txt", "hello world 2")
+			messageMatch(t, receiveMessage(env.ctx, t, input.TransactionChan(), nil), "hello world 2")
+
+			input.CloseAsync()
+		},
+	)
+}
+
+func generateTestFile(filepath string, data string) {
+	file, err := sftpClient.Create(filepath)
+	if err != nil {
+		log.Fatalf("Error creating file %s on SSH server", filepath)
+		return
+	}
+	_, err = file.Write([]byte(data))
+	if err != nil {
+		log.Fatalf("Error writing to file %s on SSH server", filepath)
+	}
+}
