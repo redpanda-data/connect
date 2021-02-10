@@ -76,7 +76,6 @@ type testEnvironment struct {
 	// Ugly work arounds for slow connectors.
 	sleepAfterInput  time.Duration
 	sleepAfterOutput time.Duration
-	sleepAfterCaches time.Duration
 }
 
 func getFreePort() (int, error) {
