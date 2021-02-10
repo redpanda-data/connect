@@ -155,9 +155,7 @@ func integrationTestWatcherMode() testDefinition {
 			})
 			require.NoError(t, sendMessage(env.ctx, t, tranChan, "hello world"))
 
-			caches := initCaches(t, env)
-
-			input := initInput(t, env, caches)
+			input := initInput(t, env)
 			t.Cleanup(func() {
 				closeConnectors(t, input, nil)
 			})

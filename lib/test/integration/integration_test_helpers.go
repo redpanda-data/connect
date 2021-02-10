@@ -315,11 +315,11 @@ func initConnectors(
 	t.Helper()
 
 	out := initOutput(t, trans, env)
-	in := initInput(t, env, nil)
+	in := initInput(t, env)
 	return in, out
 }
 
-func initInput(t *testing.T, env *testEnvironment, caches map[string]types.Cache) types.Input {
+func initInput(t *testing.T, env *testEnvironment) types.Input {
 	t.Helper()
 
 	confBytes := []byte(env.RenderConfig())
@@ -333,8 +333,15 @@ func initInput(t *testing.T, env *testEnvironment, caches map[string]types.Cache
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
+	caches := map[string]types.Cache{}
+	for name, c := range s.Manager.Caches {
+		cacheObj, err := cache.New(c, types.NoopMgr(), env.log, env.stats)
+		require.NoError(t, err)
+		caches[name] = cacheObj
+	}
+
 	var mgr types.Manager
-	if caches != nil {
+	if len(caches) > 0 {
 		mgr = types.NoopCacheMgr(caches)
 	} else {
 		mgr = types.NoopMgr()
@@ -374,35 +381,6 @@ func initOutput(t *testing.T, trans <-chan types.Transaction, env *testEnvironme
 	}
 
 	return output
-}
-
-func initCaches(t *testing.T, env *testEnvironment) map[string]types.Cache {
-	t.Helper()
-
-	result := map[string]types.Cache{}
-
-	confBytes := []byte(env.RenderConfig())
-
-	s := config.New()
-	dec := yaml.NewDecoder(bytes.NewReader(confBytes))
-	dec.KnownFields(true)
-	require.NoError(t, dec.Decode(&s))
-
-	lints, err := config.Lint(confBytes, s)
-	require.NoError(t, err)
-	assert.Empty(t, lints)
-
-	for name, c := range s.Manager.Caches {
-		cacheObj, err := cache.New(c, types.NoopMgr(), env.log, env.stats)
-		require.NoError(t, err)
-		result[name] = cacheObj
-	}
-
-	if env.sleepAfterCaches > 0 {
-		time.Sleep(env.sleepAfterCaches)
-	}
-
-	return result
 }
 
 func closeConnectors(t *testing.T, input types.Input, output types.Output) {
