@@ -238,8 +238,6 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 //------------------------------------------------------------------------------
 
 func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-
 	h.mGetReqRcvd.Incr(1)
 
 	if atomic.LoadInt32(&h.running) != 1 {
@@ -308,8 +306,6 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-
 	h.mStrmReqRcvd.Incr(1)
 
 	flusher, ok := w.(http.Flusher)
