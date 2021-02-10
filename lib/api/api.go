@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/pprof"
@@ -26,6 +27,8 @@ type Config struct {
 	ReadTimeout    string `json:"read_timeout" yaml:"read_timeout"`
 	RootPath       string `json:"root_path" yaml:"root_path"`
 	DebugEndpoints bool   `json:"debug_endpoints" yaml:"debug_endpoints"`
+	CertFile       string `json:"cert_file" yaml:"cert_file"`
+	KeyFile        string `json:"key_file" yaml:"key_file"`
 }
 
 // NewConfig creates a new API config with default values.
@@ -36,6 +39,8 @@ func NewConfig() Config {
 		ReadTimeout:    "5s",
 		RootPath:       "/benthos",
 		DebugEndpoints: false,
+		CertFile:       "",
+		KeyFile:        "",
 	}
 }
 
@@ -91,6 +96,12 @@ func New(
 	server := &http.Server{
 		Addr:    conf.Address,
 		Handler: handler,
+	}
+
+	if len(conf.CertFile) > 0 || len(conf.KeyFile) > 0 {
+		if len(conf.CertFile) == 0 || len(conf.KeyFile) == 0 {
+			return nil, errors.New("both cert_file and key_file must be specified, or neither")
+		}
 	}
 
 	if tout := conf.ReadTimeout; len(tout) > 0 {
@@ -251,6 +262,9 @@ func (t *Type) ListenAndServe() error {
 	}
 	if t.server.TLSConfig != nil {
 		return t.server.ListenAndServeTLS("", "")
+	}
+	if len(t.conf.CertFile) > 0 {
+		return t.server.ListenAndServeTLS(t.conf.CertFile, t.conf.KeyFile)
 	}
 	return t.server.ListenAndServe()
 }

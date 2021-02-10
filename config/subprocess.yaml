@@ -5,6 +5,8 @@ http:
   read_timeout: 5s
   root_path: /benthos
   debug_endpoints: false
+  cert_file: ""
+  key_file: ""
 input:
   type: subprocess
   subprocess:

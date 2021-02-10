@@ -13,11 +13,19 @@ http:
   read_timeout: 5s
   root_path: /benthos
   debug_endpoints: false
+  cert_file: ""
+  key_file: ""
 ```
 
 The field `enabled` can be set to `false` in order to disable the server.
 
 The field `root_path` specifies a general prefix for all endpoints, this can help isolate the service endpoints when using a reverse proxy with other shared services. All endpoints will still be registered at the root as well as behind the prefix, e.g. with a `root_path` set to `/foo` the endpoint `/version` will be accessible from both `/version` and `/foo/version`.
+
+## Enabling HTTPS
+
+By default Benthos will serve traffic over HTTP. In order to enforce TLS and serve traffic exclusively over HTTPS you must provide a `cert_file` and `key_file` path in your config, which point to a file containing a certificate and a matching private key for the server respectively.
+
+If the certificate is signed by a certificate authority, the `cert_file` should be the concatenation of the server's certificate, any intermediates, and the CA's certificate.
 
 ## Endpoints
 

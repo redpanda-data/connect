@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### New
+
+- New `http` fields `cert_file` and `key_file`, which when specified enforce HTTPS for the general Benthos server.
+
 ## 3.40.0 - 2021-02-08
 
 ### New
