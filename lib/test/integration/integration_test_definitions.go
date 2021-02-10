@@ -46,7 +46,7 @@ func integrationTestOpenCloseIsolated() testDefinition {
 			})
 			require.NoError(t, sendMessage(env.ctx, t, tranChan, "hello world"))
 
-			input := initInput(t, env)
+			input := initInput(t, env, nil)
 			t.Cleanup(func() {
 				closeConnectors(t, input, nil)
 			})
@@ -199,7 +199,7 @@ func integrationTestSendBatchCountIsolated(n int) testDefinition {
 				}
 			}
 
-			input := initInput(t, env)
+			input := initInput(t, env, nil)
 			t.Cleanup(func() {
 				closeConnectors(t, input, nil)
 			})
@@ -303,7 +303,7 @@ func integrationTestStreamIsolated(n int) testDefinition {
 				require.NoError(t, sendMessage(env.ctx, t, tranChan, payload))
 			}
 
-			input := initInput(t, env)
+			input := initInput(t, env, nil)
 			t.Cleanup(func() {
 				closeConnectors(t, input, nil)
 			})
@@ -459,7 +459,7 @@ func integrationTestStreamParallelLossyThroughReconnect(n int) testDefinition {
 
 				closeConnectors(t, input, nil)
 
-				input = initInput(t, env)
+				input = initInput(t, env, nil)
 				t.Cleanup(func() {
 					closeConnectors(t, input, nil)
 				})

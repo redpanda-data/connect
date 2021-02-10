@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -23,7 +24,7 @@ import (
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	yaml "gopkg.in/yaml.v3"
+	"gopkg.in/yaml.v3"
 )
 
 type testConfigVars struct {
@@ -75,6 +76,7 @@ type testEnvironment struct {
 	// Ugly work arounds for slow connectors.
 	sleepAfterInput  time.Duration
 	sleepAfterOutput time.Duration
+	sleepAfterCaches time.Duration
 }
 
 func getFreePort() (int, error) {
@@ -313,11 +315,11 @@ func initConnectors(
 	t.Helper()
 
 	out := initOutput(t, trans, env)
-	in := initInput(t, env)
+	in := initInput(t, env, nil)
 	return in, out
 }
 
-func initInput(t *testing.T, env *testEnvironment) types.Input {
+func initInput(t *testing.T, env *testEnvironment, caches map[string]types.Cache) types.Input {
 	t.Helper()
 
 	confBytes := []byte(env.RenderConfig())
@@ -331,7 +333,14 @@ func initInput(t *testing.T, env *testEnvironment) types.Input {
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	input, err := input.New(s.Input, types.NoopMgr(), env.log, env.stats)
+	var mgr types.Manager
+	if caches != nil {
+		mgr = types.NoopCacheMgr(caches)
+	} else {
+		mgr = types.NoopMgr()
+	}
+
+	input, err := input.New(s.Input, mgr, env.log, env.stats)
 	require.NoError(t, err)
 
 	if env.sleepAfterInput > 0 {
@@ -365,6 +374,35 @@ func initOutput(t *testing.T, trans <-chan types.Transaction, env *testEnvironme
 	}
 
 	return output
+}
+
+func initCaches(t *testing.T, env *testEnvironment) map[string]types.Cache {
+	t.Helper()
+
+	result := map[string]types.Cache{}
+
+	confBytes := []byte(env.RenderConfig())
+
+	s := config.New()
+	dec := yaml.NewDecoder(bytes.NewReader(confBytes))
+	dec.KnownFields(true)
+	require.NoError(t, dec.Decode(&s))
+
+	lints, err := config.Lint(confBytes, s)
+	require.NoError(t, err)
+	assert.Empty(t, lints)
+
+	for name, c := range s.Manager.Caches {
+		cacheObj, err := cache.New(c, types.NoopMgr(), env.log, env.stats)
+		require.NoError(t, err)
+		result[name] = cacheObj
+	}
+
+	if env.sleepAfterCaches > 0 {
+		time.Sleep(env.sleepAfterCaches)
+	}
+
+	return result
 }
 
 func closeConnectors(t *testing.T, input types.Input, output types.Output) {

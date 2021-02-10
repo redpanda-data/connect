@@ -92,11 +92,19 @@ input:
       password: pass
     codec: $VAR1
     delete_on_finish: false
-    watcher_mode: true
+    watcher:
+      enabled: $VAR3
+      poll_interval: 1s
+      cache: files-memory
+
+resources:
+  caches:
+    files-memory:
+      memory:
+        ttl: 900
 `
 		suite := integrationTests(
 			integrationTestOpenCloseIsolated(),
-			integrationTestWatcherMode(),
 			integrationTestStreamIsolated(100),
 		)
 		suite.Run(
@@ -104,12 +112,32 @@ input:
 			testOptPort(sftpPort),
 			testOptVarOne("all-bytes"),
 			testOptVarTwo(`${!count("$ID")}`),
+			testOptVarThree("false"),
 		)
 		suite.Run(
 			t, template,
 			testOptPort(sftpPort),
 			testOptVarOne("lines"),
 			testOptVarTwo(`all-in-one-file`),
+			testOptVarThree("false"),
+		)
+
+		watcherSuite := integrationTests(
+			integrationTestWatcherMode(),
+		)
+		watcherSuite.Run(
+			t, template,
+			testOptPort(sftpPort),
+			testOptVarOne("all-bytes"),
+			testOptVarTwo(`${!count("$ID")}`),
+			testOptVarThree("true"),
+		)
+		watcherSuite.Run(
+			t, template,
+			testOptPort(sftpPort),
+			testOptVarOne("lines"),
+			testOptVarTwo(`all-in-one-file`),
+			testOptVarThree("true"),
 		)
 	})
 })
@@ -127,7 +155,9 @@ func integrationTestWatcherMode() testDefinition {
 			})
 			require.NoError(t, sendMessage(env.ctx, t, tranChan, "hello world"))
 
-			input := initInput(t, env)
+			caches := initCaches(t, env)
+
+			input := initInput(t, env, caches)
 			t.Cleanup(func() {
 				closeConnectors(t, input, nil)
 			})
