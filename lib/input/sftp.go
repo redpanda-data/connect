@@ -20,6 +20,21 @@ import (
 )
 
 func init() {
+	watcherDocs := docs.FieldSpecs{
+		docs.FieldCommon(
+			"enabled",
+			"Whether it keeps running after processing all the files in the paths to watch for new files.",
+		),
+		docs.FieldCommon(
+			"poll_interval",
+			"How long it waits before it starts a new iteration of processing the files in the paths.",
+		),
+		docs.FieldCommon(
+			"cache",
+			"The name of the cache that it will use to keep track of the files that it has already processed.",
+		),
+	}
+
 	Constructors[TypeSFTP] = TypeSpec{
 		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 			r, err := newSFTPReader(conf.SFTP, mgr, log, stats)
@@ -63,9 +78,9 @@ You can access these metadata fields using [function interpolation](/docs/config
 			docs.FieldAdvanced("delete_on_finish", "Whether to delete files from the server once they are processed."),
 			docs.FieldAdvanced("max_buffer", "The largest token size expected when consuming delimited files."),
 			docs.FieldCommon(
-				"watcher_mode",
-				"Whether it keeps running after processing all the files in the paths to watch for new files.",
-			),
+				"watcher",
+				"The settings for watcher mode.",
+			).WithChildren(watcherDocs...),
 		},
 		Categories: []Category{
 			CategoryNetwork,
@@ -75,10 +90,10 @@ You can access these metadata fields using [function interpolation](/docs/config
 
 //------------------------------------------------------------------------------
 
-type WatcherConfig struct {
-	Enabled bool `json:"enabled" yaml:"enabled"`
+type watcherConfig struct {
+	Enabled      bool   `json:"enabled" yaml:"enabled"`
 	PollInterval string `json:"poll_interval" yaml:"poll_interval"`
-	Cache string `json:"cache" yaml:"cache"`
+	Cache        string `json:"cache" yaml:"cache"`
 }
 
 // SFTPConfig contains configuration fields for the SFTP input type.
@@ -89,7 +104,7 @@ type SFTPConfig struct {
 	Codec          string                `json:"codec" yaml:"codec"`
 	DeleteOnFinish bool                  `json:"delete_on_finish" yaml:"delete_on_finish"`
 	MaxBuffer      int                   `json:"max_buffer" yaml:"max_buffer"`
-	Watcher        WatcherConfig		 `json:"watcher" yaml:"watcher"`
+	Watcher        watcherConfig         `json:"watcher" yaml:"watcher"`
 }
 
 // NewSFTPConfig creates a new SFTPConfig with default values.
@@ -101,8 +116,10 @@ func NewSFTPConfig() SFTPConfig {
 		Codec:          "all-bytes",
 		DeleteOnFinish: false,
 		MaxBuffer:      1000000,
-		Watcher:    WatcherConfig{
+		Watcher: watcherConfig{
 			Enabled:      false,
+			PollInterval: "1s",
+			Cache:        "",
 		},
 	}
 }
@@ -117,15 +134,15 @@ type sftpReader struct {
 
 	client *sftp.Client
 
-	paths          []string
-	scannerCtor    codec.ReaderConstructor
+	paths       []string
+	scannerCtor codec.ReaderConstructor
 
 	scannerMut  sync.Mutex
 	scanner     codec.Reader
 	currentPath string
 
 	watcherPollInterval time.Duration
-	watcherCache 		types.Cache
+	watcherCache        types.Cache
 }
 
 func newSFTPReader(conf SFTPConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*sftpReader, error) {
@@ -153,14 +170,13 @@ func newSFTPReader(conf SFTPConfig, mgr types.Manager, log log.Modular, stats me
 		}
 	}
 
-
 	s := &sftpReader{
-		conf:           conf,
-		log:            log,
-		stats:          stats,
-		scannerCtor:    ctor,
+		conf:                conf,
+		log:                 log,
+		stats:               stats,
+		scannerCtor:         ctor,
 		watcherPollInterval: watcherPollInterval,
-		watcherCache: cache,
+		watcherCache:        cache,
 	}
 
 	return s, err
@@ -188,11 +204,10 @@ func (s *sftpReader) ConnectWithContext(ctx context.Context) error {
 			s.client.Close()
 			s.client = nil
 			return types.ErrTypeClosed
-		} else {
-			time.Sleep(s.watcherPollInterval)
-			s.paths = s.getFilePaths()
-			return nil
 		}
+		time.Sleep(s.watcherPollInterval)
+		s.paths = s.getFilePaths()
+		return nil
 	}
 
 	nextPath := s.paths[0]

@@ -51,7 +51,7 @@ func NoopMgr() Manager {
 
 // CacheMgr is a noop implementation of a types.Manager.
 type CacheMgr struct {
-	ID int
+	ID     int
 	Caches map[string]Cache
 }
 
@@ -59,13 +59,14 @@ type CacheMgr struct {
 func (f CacheMgr) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
 }
 
-// GetCache always returns ErrCacheNotFound.
+// GetCache returns the result from the Cache map or returns ErrCacheNotFound.
 func (f CacheMgr) GetCache(name string) (Cache, error) {
-	if result, ok := f.Caches[name]; !ok {
+	var ok bool
+	var result Cache
+	if result, ok = f.Caches[name]; !ok {
 		return nil, ErrCacheNotFound
-	} else {
-		return result, nil
 	}
+	return result, nil
 }
 
 // GetCondition always returns ErrConditionNotFound.
@@ -94,7 +95,7 @@ func (f CacheMgr) SetPipe(name string, t <-chan Transaction) {}
 // UnsetPipe removes a named pipe.
 func (f CacheMgr) UnsetPipe(name string, t <-chan Transaction) {}
 
-// NoopMgr returns a Manager implementation that does nothing.
+// NoopCacheMgr returns a Manager implementation that does nothing.
 func NoopCacheMgr(caches map[string]Cache) Manager {
 	return CacheMgr{
 		Caches: caches,
