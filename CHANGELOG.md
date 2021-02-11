@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - New `http` fields `cert_file` and `key_file`, which when specified enforce HTTPS for the general Benthos server.
 
+### Fixed
+
+- Fixed an issue with custom labels becoming stagnant with the `influxdb` metrics type.
+
 ## 3.40.0 - 2021-02-08
 
 ### New
