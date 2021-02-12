@@ -286,6 +286,7 @@ func TestSequenceJoinsMergeStrategies(t *testing.T) {
 }
 
 func TestSequenceJoinsBig(t *testing.T) {
+	t.Skip()
 	t.Parallel()
 
 	tmpDir, err := ioutil.TempDir("", "benthos_sequence_joins_big_test")
