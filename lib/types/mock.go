@@ -48,27 +48,3 @@ func (f DudMgr) UnsetPipe(name string, t <-chan Transaction) {}
 func NoopMgr() Manager {
 	return DudMgr{}
 }
-
-// CacheDudMgr is a noop implementation of a types.Manager.
-type CacheDudMgr struct {
-	DudMgr
-	Caches map[string]Cache
-}
-
-// GetCache returns the result from the Cache map or returns ErrCacheNotFound.
-func (f CacheDudMgr) GetCache(name string) (Cache, error) {
-	var ok bool
-	var result Cache
-	if result, ok = f.Caches[name]; !ok {
-		return nil, ErrCacheNotFound
-	}
-	return result, nil
-}
-
-// NoopCacheMgr returns a Manager implementation that does nothing.
-func NoopCacheMgr(caches map[string]Cache) Manager {
-	return CacheDudMgr{
-		DudMgr: DudMgr{},
-		Caches: caches,
-	}
-}

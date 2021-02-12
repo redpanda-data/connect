@@ -131,6 +131,7 @@ type sftpReader struct {
 
 	log   log.Modular
 	stats metrics.Type
+	mgr   types.Manager
 
 	client *sftp.Client
 
@@ -142,7 +143,6 @@ type sftpReader struct {
 	currentPath string
 
 	watcherPollInterval time.Duration
-	watcherCache        types.Cache
 }
 
 func newSFTPReader(conf SFTPConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*sftpReader, error) {
@@ -154,7 +154,6 @@ func newSFTPReader(conf SFTPConfig, mgr types.Manager, log log.Modular, stats me
 	}
 
 	var watcherPollInterval time.Duration
-	var cache types.Cache
 	if conf.Watcher.Enabled {
 		if watcherPollInterval, err = time.ParseDuration(conf.Watcher.PollInterval); err != nil {
 			return nil, fmt.Errorf("failed to parse watcher poll interval string: %v", err)
@@ -164,7 +163,7 @@ func newSFTPReader(conf SFTPConfig, mgr types.Manager, log log.Modular, stats me
 			return nil, fmt.Errorf("watcher cache is required if watcher mode is enabled")
 		}
 
-		cache, err = mgr.GetCache(conf.Watcher.Cache)
+		_, err = mgr.GetCache(conf.Watcher.Cache)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get the cache for sftp watcher mode: %v", err)
 		}
@@ -174,9 +173,9 @@ func newSFTPReader(conf SFTPConfig, mgr types.Manager, log log.Modular, stats me
 		conf:                conf,
 		log:                 log,
 		stats:               stats,
+		mgr:                 mgr,
 		scannerCtor:         ctor,
 		watcherPollInterval: watcherPollInterval,
-		watcherCache:        cache,
 	}
 
 	return s, err
@@ -184,6 +183,8 @@ func newSFTPReader(conf SFTPConfig, mgr types.Manager, log log.Modular, stats me
 
 // ConnectWithContext attempts to establish a connection to the target SFTP server.
 func (s *sftpReader) ConnectWithContext(ctx context.Context) error {
+	var err error
+
 	s.scannerMut.Lock()
 	defer s.scannerMut.Unlock()
 
@@ -192,11 +193,13 @@ func (s *sftpReader) ConnectWithContext(ctx context.Context) error {
 	}
 
 	if s.client == nil {
-		var err error
 		if s.client, err = s.conf.Credentials.GetClient(s.conf.Address); err != nil {
 			return err
 		}
-		s.paths = s.getFilePaths()
+		s.paths, err = s.getFilePaths()
+		if err != nil {
+			return err
+		}
 	}
 
 	if len(s.paths) == 0 {
@@ -206,8 +209,8 @@ func (s *sftpReader) ConnectWithContext(ctx context.Context) error {
 			return types.ErrTypeClosed
 		}
 		time.Sleep(s.watcherPollInterval)
-		s.paths = s.getFilePaths()
-		return nil
+		s.paths, err = s.getFilePaths()
+		return err
 	}
 
 	nextPath := s.paths[0]
@@ -251,7 +254,14 @@ func (s *sftpReader) ReadWithContext(ctx context.Context) (types.Message, reader
 		}
 		if err != types.ErrTimeout {
 			if s.conf.Watcher.Enabled {
-				err = s.watcherCache.Set(s.currentPath, []byte{})
+				cache, err := s.mgr.GetCache(s.conf.Watcher.Cache)
+				if err != nil {
+					return nil, nil, fmt.Errorf("failed to get the cache for sftp watcher mode: %v", err)
+				}
+				err = cache.Set(s.currentPath, []byte("@"))
+				if err != nil {
+					return nil, nil, fmt.Errorf("failed to update path in cache %s: %v", s.currentPath, err)
+				}
 			}
 			s.scanner.Close(ctx)
 			s.scanner = nil
@@ -294,8 +304,18 @@ func (s *sftpReader) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-func (s *sftpReader) getFilePaths() []string {
+func (s *sftpReader) getFilePaths() ([]string, error) {
 	var filepaths []string
+	var cache types.Cache
+	var err error
+
+	if s.conf.Watcher.Enabled {
+		cache, err = s.mgr.GetCache(s.conf.Watcher.Cache)
+		if err != nil {
+			return nil, fmt.Errorf("error getting cache in getFilePaths: %v", err)
+		}
+	}
+
 	for _, p := range s.conf.Paths {
 		paths, err := s.client.Glob(p)
 		if err != nil {
@@ -305,11 +325,11 @@ func (s *sftpReader) getFilePaths() []string {
 
 		for _, path := range paths {
 			if s.conf.Watcher.Enabled {
-				if _, err := s.watcherCache.Get(path); err != nil {
+				if _, err := cache.Get(path); err != nil {
 					filepaths = append(filepaths, path)
 				} else {
 					// Reset the TTL for the path
-					err = s.watcherCache.Set(path, []byte{})
+					err = cache.Set(path, []byte("@"))
 					if err != nil {
 						s.log.Warnf("Failed to set key in cache for path %v: %v\n", path, err)
 					}
@@ -319,5 +339,5 @@ func (s *sftpReader) getFilePaths() []string {
 			}
 		}
 	}
-	return filepaths
+	return filepaths, nil
 }

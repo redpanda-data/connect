@@ -13,10 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	dialTimeout = 10 * time.Second
-)
-
 var sftpUsername = "foo"
 var sftpPassword = "pass"
 
@@ -43,32 +39,26 @@ var _ = registerIntegrationTest("sftp", func(t *testing.T) {
 	})
 
 	resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		return nil
-	}))
-
-	resource.Expire(900)
 
 	creds := sftpSetup.Credentials{
 		Username: sftpUsername,
 		Password: sftpPassword,
 	}
-
 	sftpPort = resource.GetPort("22/tcp")
 	sftpEndpoint := "localhost:" + sftpPort
-	deadline := time.Now().Add(dialTimeout)
-	for time.Now().Before(deadline) {
+
+	require.NoError(t, pool.Retry(func() error {
 		t.Logf("waiting for SFTP server to come up on '%v'...", "localhost:"+sftpPort)
 
 		sftpClient, err = creds.GetClient(sftpEndpoint)
 		if err != nil {
 			t.Logf("err: %v", err)
 			time.Sleep(time.Second)
-			continue
+			return err
 		}
 
-		break
-	}
+		return nil
+	}))
 
 	t.Run("sftp", func(t *testing.T) {
 		template := `
