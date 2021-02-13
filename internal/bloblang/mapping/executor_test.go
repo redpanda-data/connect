@@ -166,7 +166,16 @@ func TestAssignments(t *testing.T) {
 				NewStatement(nil, NewJSONAssignment("zed"), query.NewLiteralFunction(query.Delete(nil))),
 			),
 			input: []part{{Content: `{@#$ not valid json`}},
-			err:   errors.New("failed to execute mapping query at line 0: failed to parse message as JSON: invalid character '@' looking for beginning of object key string"),
+			err:   errors.New("failed to execute mapping query at line 0: unable to reference message as structured (with 'this'): parse as json: invalid character '@' looking for beginning of object key string"),
+		},
+		"json parse empty message": {
+			mapping: NewExecutor(nil, nil,
+				NewStatement(nil, NewJSONAssignment("bar"), query.NewLiteralFunction("test2")),
+				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("bar")),
+				NewStatement(nil, NewJSONAssignment("zed"), query.NewLiteralFunction(query.Delete(nil))),
+			),
+			input: []part{{Content: ``}},
+			err:   errors.New("failed to execute mapping query at line 0: unable to reference message as structured (with 'this'): message is empty"),
 		},
 	}
 
@@ -176,6 +185,9 @@ func TestAssignments(t *testing.T) {
 			msg := message.New(nil)
 			for _, p := range test.input {
 				part := message.NewPart([]byte(p.Content))
+				if len(p.Content) == 0 {
+					part = message.NewPart(nil)
+				}
 				for k, v := range p.Meta {
 					part.Metadata().Set(k, v)
 				}

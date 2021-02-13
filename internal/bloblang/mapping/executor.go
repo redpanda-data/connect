@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -94,7 +95,11 @@ func (e *Executor) QueryPart(index int, msg Message) (bool, error) {
 			if jObj, err := msg.Get(index).JSON(); err == nil {
 				valuePtr = &jObj
 			} else {
-				parseErr = err
+				if errors.Is(err, message.ErrMessagePartNotExist) {
+					parseErr = errors.New("message is empty")
+				} else {
+					parseErr = fmt.Errorf("parse as json: %w", err)
+				}
 			}
 		}
 		return valuePtr
@@ -116,7 +121,7 @@ func (e *Executor) QueryPart(index int, msg Message) (bool, error) {
 				line, _ = LineAndColOf(e.input, stmt.input)
 			}
 			if parseErr != nil && errors.Is(err, query.ErrNoContext) {
-				err = fmt.Errorf("failed to parse message as JSON: %w", parseErr)
+				err = fmt.Errorf("unable to reference message as structured (with 'this'): %w", parseErr)
 			}
 			return false, fmt.Errorf("failed to execute mapping query at line %v: %w", line, err)
 		}
@@ -173,7 +178,11 @@ func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (t
 			if jObj, err := reference.Get(index).JSON(); err == nil {
 				valuePtr = &jObj
 			} else {
-				parseErr = err
+				if errors.Is(err, message.ErrMessagePartNotExist) {
+					parseErr = errors.New("message is empty")
+				} else {
+					parseErr = fmt.Errorf("parse as json: %w", err)
+				}
 			}
 		}
 		return valuePtr
@@ -208,7 +217,7 @@ func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (t
 				line, _ = LineAndColOf(e.input, stmt.input)
 			}
 			if parseErr != nil && errors.Is(err, query.ErrNoContext) {
-				err = fmt.Errorf("failed to parse message as JSON: %w", parseErr)
+				err = fmt.Errorf("unable to reference message as structured (with 'this'): %w", parseErr)
 			}
 			return nil, fmt.Errorf("failed to execute mapping query at line %v: %w", line, err)
 		}
