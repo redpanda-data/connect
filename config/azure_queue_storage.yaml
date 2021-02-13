@@ -8,11 +8,13 @@ http:
   cert_file: ""
   key_file: ""
 input:
-  type: stdin
-  stdin:
-    delimiter: ""
-    max_buffer: 1000000
-    multipart: false
+  type: azure_queue_storage
+  azure_queue_storage:
+    queue_name: ""
+    storage_access_key: ""
+    storage_account: ""
+    storage_connection_string: ""
+    storage_sas_token: ""
 buffer:
   type: none
   none: {}
