@@ -175,7 +175,7 @@ func (a *AzureQueueStorage) WriteWithContext(ctx context.Context, msg types.Mess
 					}
 					_, err := msgURL.Enqueue(ctx, message, 0, 0)
 					if err != nil {
-						return fmt.Errorf("error retrying to enque message: %v", err)
+						return fmt.Errorf("error retrying to enqueue message: %v", err)
 					}
 				} else {
 					return fmt.Errorf("storage error message: %v", err)
