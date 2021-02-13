@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### New
 
 - New `http` fields `cert_file` and `key_file`, which when specified enforce HTTPS for the general Benthos server.
+- Bloblang method `catch` now supports `deleted()` as an argument.
 
 ### Fixed
 

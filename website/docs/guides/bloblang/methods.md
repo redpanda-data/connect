@@ -69,6 +69,18 @@ If the result of a target query fails (due to incorrect types, failed parsing, e
 root.doc.id = this.thing.id.string().catch(uuid_v4())
 ```
 
+When the input document is not structured attempting to reference structured fields with `this` will result in an error. Therefore, a convenient way to delete non-structured data is with a catch.
+
+```coffee
+root = this.catch(deleted())
+
+# In:  {"doc":{"foo":"bar"}}
+# Out: {"doc":{"foo":"bar"}}
+
+# In:  not structured data
+# Out: <Message deleted>
+```
+
 ### `from`
 
 Execute a query from the context of another message in the batch. This allows you to mutate events based on the contents of other messages.

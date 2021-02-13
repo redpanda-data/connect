@@ -93,6 +93,9 @@ func TestMethodExamples(t *testing.T) {
 					if strings.HasPrefix(exp, "Error(") {
 						exp = exp[7 : len(exp)-2]
 						require.EqualError(t, err, exp, fmt.Sprintf("%v-%v", i, j))
+					} else if exp == "<Message deleted>" {
+						require.NoError(t, err)
+						require.Nil(t, p)
 					} else {
 						require.NoError(t, err)
 						assert.Equal(t, exp, string(p.Get()), fmt.Sprintf("%v-%v", i, j))
