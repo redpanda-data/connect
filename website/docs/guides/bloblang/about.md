@@ -41,9 +41,19 @@ root.foo = "added value"
 # Out: {"id":"wat1","message":"hello world","foo":"added value"}
 ```
 
-### Non-structured Results
+### Non-structured Data
 
-Your newly mapped document doesn't need to be a structured object, simply assign a value type to the `root` of your document:
+Bloblang is able to map data that is unstructured, whether it's a log line or a binary blob, by referencing it with the [`content` function][blobl.functions.content]:
+
+```coffee
+# Parse a base64 encoded JSON document
+root = content().decode("base64").parse_json()
+
+# In:  eyJmb28iOiJiYXIifQ==
+# Out: {"foo":"bar"}
+```
+
+And your newly mapped document can also be unstructured, simply assign a value type to the `root` of your document:
 
 ```coffee
 root = this.foo
@@ -357,6 +367,7 @@ root.foo = this.bar.index(5).or("default")
 [blobl.proc]: /docs/components/processors/bloblang
 [blobl.interp]: /docs/configuration/interpolation#bloblang-queries
 [blobl.functions]: /docs/guides/bloblang/functions
+[blobl.functions.content]: /docs/guides/bloblang/functions#content
 [blobl.methods]: /docs/guides/bloblang/methods
 [methods.catch]: /docs/guides/bloblang/methods#catch
 [methods.or]: /docs/guides/bloblang/methods#or

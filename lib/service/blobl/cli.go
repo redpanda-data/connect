@@ -2,6 +2,7 @@ package blobl
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -128,23 +129,38 @@ func run(c *cli.Context) error {
 
 				msg := message.New([][]byte{input})
 
-				var value interface{}
-				if raw {
-					value = input
-				} else {
-					var err error
-					if value, err = msg.Get(0).JSON(); err != nil {
-						fmt.Fprintln(os.Stderr, red(fmt.Sprintf("failed to parse JSON: %v", err)))
-						continue
+				var valuePtr *interface{}
+				var parseErr error
+
+				lazyValue := func() *interface{} {
+					if valuePtr == nil && parseErr == nil {
+						if raw {
+							var value interface{} = input
+							valuePtr = &value
+						} else {
+							if jObj, err := msg.Get(0).JSON(); err == nil {
+								valuePtr = &jObj
+							} else {
+								if errors.Is(err, message.ErrMessagePartNotExist) {
+									parseErr = errors.New("message is empty")
+								} else {
+									parseErr = fmt.Errorf("parse as json: %w", err)
+								}
+							}
+						}
 					}
+					return valuePtr
 				}
 
 				result, err := exec.Exec(query.FunctionContext{
 					Maps:     exec.Maps(),
 					Vars:     map[string]interface{}{},
 					MsgBatch: msg,
-				}.WithValue(value))
+				}.WithValueFunc(lazyValue))
 				if err != nil {
+					if parseErr != nil && errors.Is(err, query.ErrNoContext) {
+						err = fmt.Errorf("unable to reference message as structured (with 'this'): %w", parseErr)
+					}
 					fmt.Fprintln(os.Stderr, red(fmt.Sprintf("failed to execute map: %v", err)))
 					continue
 				}
@@ -160,11 +176,15 @@ func run(c *cli.Context) error {
 					continue inputsLoop
 				case query.Nothing:
 					// Do not change the original contents
-					gObj := gabs.Wrap(value)
-					if pretty {
-						resultStr = gObj.StringIndent("", "  ")
+					if v := lazyValue(); v != nil {
+						gObj := gabs.Wrap(v)
+						if pretty {
+							resultStr = gObj.StringIndent("", "  ")
+						} else {
+							resultStr = gObj.String()
+						}
 					} else {
-						resultStr = gObj.String()
+						resultStr = string(input)
 					}
 				default:
 					gObj := gabs.Wrap(result)
