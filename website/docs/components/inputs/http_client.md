@@ -416,7 +416,7 @@ Default: `3`
 
 ### `backoff_on`
 
-A list of status codes whereby retries should be attempted but the period between them should be increased gradually.
+A list of status codes whereby the request should be considered to have failed and retries should be attempted, but the period between them should be increased gradually.
 
 
 Type: `array`  
@@ -424,7 +424,7 @@ Default: `[429]`
 
 ### `drop_on`
 
-A list of status codes whereby the attempt should be considered failed but retries should not be attempted.
+A list of status codes whereby the request should be considered to have failed but retries should not be attempted. This is useful for preventing wasted retries for requests that will never succeed. Note that with these status codes the _request_ is dropped, but _message_ that caused the request will not be dropped.
 
 
 Type: `array`  
@@ -432,7 +432,7 @@ Default: `[]`
 
 ### `successful_on`
 
-A list of status codes whereby the attempt should be considered successful (allows you to configure non-2XX codes).
+A list of status codes whereby the attempt should be considered successful, this is useful for dropping requests that return non-2XX codes indicating that the message has been dealt with, such as a 303 See Other or a 409 Conflict. All 2XX codes are considered successful unless they are present within `backoff_on` or `drop_on`, regardless of this field.
 
 
 Type: `array`  
