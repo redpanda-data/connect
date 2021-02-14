@@ -38,6 +38,7 @@ This input adds the following metadata fields to each message:
 
 ```
 - queue_storage_insertion_time
+- All user defined queue metadata
 ```
 
 Only one authentication method is required, `storage_connection_string` or `storage_account` and `storage_access_key`. If both are set then the `storage_connection_string` is given priority.

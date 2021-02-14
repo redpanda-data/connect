@@ -134,6 +134,8 @@ func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg types.Mess
 		return nil, nil, fmt.Errorf("error dequeing message: %v", err)
 	}
 	if n := dequeue.NumMessages(); n > 0 {
+		props, _ := a.queueURL.GetProperties(ctx)
+		metadata := props.NewMetadata()
 		msg := message.New(nil)
 		for m := int32(0); m < dequeue.NumMessages(); m++ {
 			queueMsg := dequeue.Message(m)
@@ -141,6 +143,9 @@ func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg types.Mess
 			msg.Append(part)
 			meta := msg.Get(0).Metadata()
 			meta.Set("queue_storage_insertion_time", queueMsg.InsertionTime.Format(time.RFC3339))
+			for k, v := range metadata {
+				meta.Set(k, v)
+			}
 			msgIDURL := messageURL.NewMessageIDURL(queueMsg.ID)
 			_, err = msgIDURL.Delete(ctx, queueMsg.PopReceipt)
 		}
