@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/Azure/azure-storage-queue-go/azqueue"
@@ -26,16 +27,21 @@ func GetQueueServiceURL(storageAccount, storageAccessKey, storageConnectionStrin
 	var endpointExp = azQueueEndpointExp
 	var err error
 	if len(storageConnectionString) > 0 {
-		storageAccount, storageAccessKey, err = parseConnectionString(storageConnectionString)
-		if err != nil {
-			return nil, err
-		}
 		if strings.Contains(storageConnectionString, "UseDevelopmentStorage=true;") {
 			storageAccount = devAccountName
 			storageAccessKey = devAccountKey
 			endpointExp = devQueueEndpointExp
-		} else if strings.Contains(storageConnectionString, devAccountName) {
-			endpointExp = devQueueEndpointExp
+			if ap := os.Getenv("AZURITE_QUEUE_ENDPOINT_PORT"); ap != "" {
+				endpointExp = strings.ReplaceAll(devQueueEndpointExp, "10001", ap)
+			}
+		} else {
+			storageAccount, storageAccessKey, err = parseConnectionString(storageConnectionString)
+			if err != nil {
+				return nil, err
+			}
+			if strings.Contains(storageConnectionString, devAccountName) {
+				endpointExp = devQueueEndpointExp
+			}
 		}
 	}
 	if len(storageAccount) == 0 {
