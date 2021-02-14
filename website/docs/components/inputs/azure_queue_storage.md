@@ -19,7 +19,7 @@ BETA: This component is mostly stable but breaking changes could still be made o
 
 Dequeue objects from an Azure Storage Queue.
 
-Introduced in version 3.40.0.
+Introduced in version 3.41.0.
 
 ```yaml
 # Config fields, showing default values
