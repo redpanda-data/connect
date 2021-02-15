@@ -90,7 +90,7 @@ outputs.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldAdvanced("copies", "The number of copies of each configured output to spawn."),
 			docs.FieldCommon("pattern", "The brokering pattern to use.").HasOptions(
-				"fan_out", "fan_out_sequential", "round_robin", "greedy", "try",
+				"fan_out", "fan_out_sequential", "round_robin", "greedy",
 			),
 			docs.FieldCommon(
 				"max_in_flight",
