@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### New
+
+- New `azure_queue_storage` input.
+
 ## 3.41.1 - 2021-02-15
 
 ### Fixed
