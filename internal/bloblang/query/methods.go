@@ -1,7 +1,6 @@
 package query
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -142,14 +141,17 @@ var _ = RegisterMethod(
 )
 
 func catchMethod(fn Function, args ...interface{}) (Function, error) {
-	catchVal := args[0]
+	catchFn, isFn := args[0].(Function)
+	if !isFn {
+		catchFn = NewLiteralFunction(args[0])
+	}
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		res, err := fn.Exec(ctx)
 		if err != nil {
-			return catchVal, nil
+			return catchFn.Exec(ctx)
 		}
 		return res, err
-	}, fn.QueryTargets), nil
+	}, aggregateTargetPaths(fn, catchFn)), nil
 }
 
 //------------------------------------------------------------------------------
@@ -459,19 +461,14 @@ var _ = RegisterMethod(
 )
 
 func orMethod(fn Function, args ...interface{}) (Function, error) {
-	var orFn Function
-	switch t := args[0].(type) {
-	case uint64, int64, float64, json.Number, string, []byte, bool, []interface{}, map[string]interface{}:
-		orFn = NewLiteralFunction(t)
-	case Function:
-		orFn = t
-	default:
-		return nil, fmt.Errorf("expected query or literal argument, received %T", args[0])
+	orFn, isFn := args[0].(Function)
+	if !isFn {
+		orFn = NewLiteralFunction(args[0])
 	}
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
 		res, err := fn.Exec(ctx)
 		if err != nil || IIsNull(res) {
-			res, err = orFn.Exec(ctx)
+			return orFn.Exec(ctx)
 		}
 		return res, err
 	}, aggregateTargetPaths(fn, orFn)), nil

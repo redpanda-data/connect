@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.41.1 - 2021-02-15
+
+### Fixed
+
+- The `catch` method now properly executes dynamic argument functions.
+
 ## 3.41.0 - 2021-02-15
 
 ### New
