@@ -86,7 +86,12 @@ potentially disproportionate message allocations to those outputs. Each message
 is sent to a single output, which is determined by allowing outputs to claim
 messages as soon as they are able to process them. This results in certain
 faster outputs potentially processing more messages at the cost of slower
-outputs.`,
+outputs.
+
+### ` + "`try`" + `
+
+The try pattern will attempt to send each message to a single output,
+but on failure will attempt the next output in the list.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldAdvanced("copies", "The number of copies of each configured output to spawn."),
 			docs.FieldCommon("pattern", "The brokering pattern to use.").HasOptions(
