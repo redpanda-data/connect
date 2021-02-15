@@ -37,7 +37,7 @@ func methodWithDynamicArgs(args []interface{}, target Function, ctor MethodCtor)
 	}, aggregateTargetPaths(fns...))
 }
 
-func enableMethodDynamicArgs(fn MethodCtor) MethodCtor {
+func methodWithAutoResolvedFunctionArgs(fn MethodCtor) MethodCtor {
 	return func(target Function, args ...interface{}) (Function, error) {
 		for i, arg := range args {
 			switch t := arg.(type) {

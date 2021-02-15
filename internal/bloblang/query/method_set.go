@@ -15,15 +15,15 @@ type MethodSet struct {
 // Add a new method to this set by providing a spec (name and documentation),
 // a constructor to be called for each instantiation of the method, and
 // information regarding the arguments of the method.
-func (m *MethodSet) Add(spec MethodSpec, ctor MethodCtor, allowDynamicArgs bool, checks ...ArgCheckFn) error {
+func (m *MethodSet) Add(spec MethodSpec, ctor MethodCtor, autoResolveFunctionArgs bool, checks ...ArgCheckFn) error {
 	if !nameRegexp.MatchString(spec.Name) {
 		return fmt.Errorf("method name '%v' does not match the required regular expression /%v/", spec.Name, nameRegexpRaw)
 	}
 	if len(checks) > 0 {
 		ctor = checkMethodArgs(ctor, checks...)
 	}
-	if allowDynamicArgs {
-		ctor = enableMethodDynamicArgs(ctor)
+	if autoResolveFunctionArgs {
+		ctor = methodWithAutoResolvedFunctionArgs(ctor)
 	}
 	if _, exists := m.constructors[spec.Name]; exists {
 		return fmt.Errorf("conflicting method name: %v", spec.Name)
@@ -94,8 +94,8 @@ var AllMethods = &MethodSet{
 
 // RegisterMethod to be accessible from Bloblang queries. Returns an empty
 // struct in order to allow inline calls.
-func RegisterMethod(spec MethodSpec, allowDynamicArgs bool, ctor MethodCtor, checks ...ArgCheckFn) struct{} {
-	if err := AllMethods.Add(spec, ctor, allowDynamicArgs, checks...); err != nil {
+func RegisterMethod(spec MethodSpec, autoResolveFunctionArgs bool, ctor MethodCtor, checks ...ArgCheckFn) struct{} {
+	if err := AllMethods.Add(spec, ctor, autoResolveFunctionArgs, checks...); err != nil {
 		panic(err)
 	}
 	return struct{}{}

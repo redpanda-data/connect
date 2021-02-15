@@ -19,15 +19,15 @@ var nameRegexp = regexp.MustCompile(nameRegexpRaw)
 // Add a new function to this set by providing a spec (name and documentation),
 // a constructor to be called for each instantiation of the function, and
 // information regarding the arguments of the function.
-func (f *FunctionSet) Add(spec FunctionSpec, ctor FunctionCtor, allowDynamicArgs bool, checks ...ArgCheckFn) error {
+func (f *FunctionSet) Add(spec FunctionSpec, ctor FunctionCtor, autoResolveFunctionArgs bool, checks ...ArgCheckFn) error {
 	if !nameRegexp.MatchString(spec.Name) {
 		return fmt.Errorf("function name '%v' does not match the required regular expression /%v/", spec.Name, nameRegexpRaw)
 	}
 	if len(checks) > 0 {
 		ctor = checkArgs(ctor, checks...)
 	}
-	if allowDynamicArgs {
-		ctor = enableDynamicArgs(ctor)
+	if autoResolveFunctionArgs {
+		ctor = functionWithAutoResolvedFunctionArgs(ctor)
 	}
 	if _, exists := f.constructors[spec.Name]; exists {
 		return fmt.Errorf("conflicting function name: %v", spec.Name)
@@ -98,8 +98,8 @@ var AllFunctions = &FunctionSet{
 
 // RegisterFunction to be accessible from Bloblang queries. Returns an empty
 // struct in order to allow inline calls.
-func RegisterFunction(spec FunctionSpec, allowDynamicArgs bool, ctor FunctionCtor, checks ...ArgCheckFn) struct{} {
-	if err := AllFunctions.Add(spec, ctor, allowDynamicArgs, checks...); err != nil {
+func RegisterFunction(spec FunctionSpec, autoResolveFunctionArgs bool, ctor FunctionCtor, checks ...ArgCheckFn) struct{} {
+	if err := AllFunctions.Add(spec, ctor, autoResolveFunctionArgs, checks...); err != nil {
 		panic(err)
 	}
 	return struct{}{}

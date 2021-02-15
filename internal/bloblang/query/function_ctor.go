@@ -88,7 +88,7 @@ func withDynamicArgs(args []interface{}, fn FunctionCtor) Function {
 	}, aggregateTargetPaths(fns...))
 }
 
-func enableDynamicArgs(fn FunctionCtor) FunctionCtor {
+func functionWithAutoResolvedFunctionArgs(fn FunctionCtor) FunctionCtor {
 	return func(args ...interface{}) (Function, error) {
 		for i, arg := range args {
 			switch t := arg.(type) {
