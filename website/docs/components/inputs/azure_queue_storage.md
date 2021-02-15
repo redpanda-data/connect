@@ -19,7 +19,7 @@ BETA: This component is mostly stable but breaking changes could still be made o
 
 Dequeue objects from an Azure Storage Queue.
 
-Introduced in version 3.41.0.
+Introduced in version 3.42.0.
 
 ```yaml
 # Config fields, showing default values
@@ -68,7 +68,6 @@ The storage account SAS token. This field is ignored if `storage_connection_stri
 
 Type: `string`  
 Default: `""`  
-Requires version 3.38.0 or newer  
 
 ### `storage_connection_string`
 
