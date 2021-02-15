@@ -126,6 +126,12 @@ input:
           storage_account: ${INPUT_AZURE_BLOB_STORAGE_STORAGE_ACCOUNT}
           storage_connection_string: ${INPUT_AZURE_BLOB_STORAGE_STORAGE_CONNECTION_STRING}
           storage_sas_token: ${INPUT_AZURE_BLOB_STORAGE_STORAGE_SAS_TOKEN}
+        azure_queue_storage:
+          queue_name: ${INPUT_AZURE_QUEUE_STORAGE_QUEUE_NAME}
+          storage_access_key: ${INPUT_AZURE_QUEUE_STORAGE_STORAGE_ACCESS_KEY}
+          storage_account: ${INPUT_AZURE_QUEUE_STORAGE_STORAGE_ACCOUNT}
+          storage_connection_string: ${INPUT_AZURE_QUEUE_STORAGE_STORAGE_CONNECTION_STRING}
+          storage_sas_token: ${INPUT_AZURE_QUEUE_STORAGE_STORAGE_SAS_TOKEN}
         bloblang:
           count: ${INPUT_BLOBLANG_COUNT:0}
           interval: ${INPUT_BLOBLANG_INTERVAL:1s}

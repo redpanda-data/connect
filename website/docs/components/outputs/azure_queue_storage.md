@@ -17,7 +17,7 @@ import TabItem from '@theme/TabItem';
 
 BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 
-Sends messages to an Azure Queue Storage queue.
+Sends messages to an Azure Storage Queue.
 
 Introduced in version 3.36.0.
 

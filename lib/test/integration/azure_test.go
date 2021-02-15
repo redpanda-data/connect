@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -77,8 +78,7 @@ var _ = registerIntegrationTest("azure", func(t *testing.T) {
 		Tag:        "3.9.0",
 		// Expose Azurite ports in the random port range, so we don't clash with
 		// other apps.
-		// Add "10001/tcp" if the queue service is also needed.
-		ExposedPorts: []string{"10000/tcp"},
+		ExposedPorts: []string{"10000/tcp", "10001/tcp"},
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -165,4 +165,27 @@ input:
 	// 			testOptVarTwo(dummyPrefix),
 	// 		)
 	// 	})
+
+	os.Setenv("AZURITE_QUEUE_ENDPOINT_PORT", resource.GetPort("10001/tcp"))
+	dummyQueue := "foo"
+	t.Run("queue_storage", func(t *testing.T) {
+		template := `
+output:
+ azure_queue_storage:
+   queue_name: $VAR1$ID
+   storage_connection_string: "UseDevelopmentStorage=true;"
+
+input:
+ azure_queue_storage:
+   queue_name: $VAR1$ID
+   storage_connection_string: "UseDevelopmentStorage=true;"
+`
+		integrationTests(
+			integrationTestOpenCloseIsolated(),
+			integrationTestStreamIsolated(10),
+		).Run(
+			t, template,
+			testOptVarOne(dummyQueue),
+		)
+	})
 })
