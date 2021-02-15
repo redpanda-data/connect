@@ -17,7 +17,7 @@ func init() {
 			return NewAsyncReader(TypeAzureQueueStorage, false, r, log, stats)
 		}),
 		Status:  docs.StatusBeta,
-		Version: "3.41.0",
+		Version: "3.42.0",
 		Summary: `
 Dequeue objects from an Azure Storage Queue.`,
 		Description: `
