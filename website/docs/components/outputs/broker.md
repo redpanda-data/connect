@@ -99,7 +99,7 @@ The brokering pattern to use.
 
 Type: `string`  
 Default: `"fan_out"`  
-Options: `fan_out`, `fan_out_sequential`, `round_robin`, `greedy`, `try`.
+Options: `fan_out`, `fan_out_sequential`, `round_robin`, `greedy`.
 
 ### `max_in_flight`
 
