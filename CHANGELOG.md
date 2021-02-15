@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.41.0 - 2021-02-15
+
 ### New
 
 - New `http` fields `cert_file` and `key_file`, which when specified enforce HTTPS for the general Benthos server.
@@ -13,6 +15,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Fixed an issue with custom labels becoming stagnant with the `influxdb` metrics type.
+- Fixed a potential unhandled error when writing to the `azure_queue_storage` output.
 
 ## 3.40.0 - 2021-02-08
 
