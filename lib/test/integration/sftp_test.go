@@ -6,16 +6,12 @@ import (
 
 	sftpSetup "github.com/Jeffail/benthos/v3/internal/service/sftp"
 	"github.com/ory/dockertest/v3"
-	"github.com/pkg/sftp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 var sftpUsername = "foo"
 var sftpPassword = "pass"
-
-var sftpClient *sftp.Client
-var sftpPort string
 
 var _ = registerIntegrationTest("sftp", func(t *testing.T) {
 	t.Parallel()
@@ -42,11 +38,9 @@ var _ = registerIntegrationTest("sftp", func(t *testing.T) {
 		Username: sftpUsername,
 		Password: sftpPassword,
 	}
-	sftpPort = resource.GetPort("22/tcp")
-	sftpEndpoint := "localhost:" + sftpPort
 
 	require.NoError(t, pool.Retry(func() error {
-		_, err = creds.GetClient(sftpEndpoint)
+		_, err = creds.GetClient("localhost:" + resource.GetPort("22/tcp"))
 		return err
 	}))
 
@@ -90,7 +84,7 @@ resources:
 		)
 		suite.Run(
 			t, template,
-			testOptPort(sftpPort),
+			testOptPort(resource.GetPort("22/tcp")),
 			testOptVarOne("all-bytes"),
 			testOptVarTwo("false"),
 		)
@@ -103,7 +97,7 @@ resources:
 		)
 		watcherSuite.Run(
 			t, template,
-			testOptPort(sftpPort),
+			testOptPort(resource.GetPort("22/tcp")),
 			testOptVarOne("all-bytes"),
 			testOptVarTwo("true"),
 		)

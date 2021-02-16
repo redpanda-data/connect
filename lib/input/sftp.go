@@ -264,7 +264,7 @@ func (s *sftpReader) ReadWithContext(ctx context.Context) (types.Message, reader
 		return nil, nil, types.ErrNotConnected
 	}
 
-	part, codecAckFn, err := s.scanner.Next(ctx)
+	parts, codecAckFn, err := s.scanner.Next(ctx)
 	if err != nil {
 		if errors.Is(err, context.Canceled) ||
 			errors.Is(err, context.DeadlineExceeded) {
@@ -290,9 +290,11 @@ func (s *sftpReader) ReadWithContext(ctx context.Context) (types.Message, reader
 		return nil, nil, err
 	}
 
-	part.Metadata().Set("sftp_path", s.currentPath)
+	for _, part := range parts {
+		part.Metadata().Set("sftp_path", s.currentPath)
+	}
 	msg := message.New(nil)
-	msg.Append(part)
+	msg.Append(parts...)
 
 	return msg, func(ctx context.Context, res types.Response) error {
 		return codecAckFn(ctx, res.Error())

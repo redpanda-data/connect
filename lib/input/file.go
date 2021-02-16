@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,10 +29,10 @@ Consumes data from files on disk, emitting messages according to a chosen codec.
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("paths", "A list of paths to consume sequentially. Glob patterns are supported."),
 			codec.ReaderDocs,
-			docs.FieldAdvanced("multipart", "Consume multipart messages from the codec by interpretting empty lines as the end of the message. Multipart messages are processed as a batch within Benthos. Not all codecs are appropriate for multipart messages."),
 			docs.FieldAdvanced("max_buffer", "The largest token size expected when consuming delimited files."),
 			docs.FieldDeprecated("path"),
 			docs.FieldDeprecated("delimiter"),
+			docs.FieldDeprecated("multipart"),
 			docs.FieldAdvanced("delete_on_finish", "Whether to delete consumed files from the disk once they are fully consumed."),
 		},
 		Description: `
@@ -99,6 +100,9 @@ func NewFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type
 	}
 	if len(conf.File.Delim) > 0 {
 		conf.File.Codec = "delim:" + conf.File.Delim
+	}
+	if conf.File.Multipart && !strings.HasSuffix(conf.File.Codec, "/multipart") {
+		conf.File.Codec = conf.File.Codec + "/multipart"
 	}
 	rdr, err := newFileConsumer(conf.File, log)
 	if err != nil {
@@ -192,56 +196,37 @@ func (f *fileConsumer) ReadWithContext(ctx context.Context) (types.Message, read
 		return nil, nil, types.ErrNotConnected
 	}
 
+	parts, codecAckFn, err := f.scanner.Next(ctx)
+	if err != nil {
+		if errors.Is(err, context.Canceled) ||
+			errors.Is(err, context.DeadlineExceeded) {
+			err = types.ErrTimeout
+		}
+		if err != types.ErrTimeout {
+			f.scanner.Close(ctx)
+			f.scanner = nil
+		}
+		if errors.Is(err, io.EOF) {
+			return nil, nil, types.ErrTimeout
+		}
+		return nil, nil, err
+	}
+
 	msg := message.New(nil)
-	acks := []codec.ReaderAckFn{}
-
-	ackFn := func(ctx context.Context, res types.Response) error {
-		for _, fn := range acks {
-			fn(ctx, res.Error())
-		}
-		return nil
-	}
-
-scanLoop:
-	for {
-		part, codecAckFn, err := f.scanner.Next(ctx)
-		if err != nil {
-			if errors.Is(err, context.Canceled) ||
-				errors.Is(err, context.DeadlineExceeded) {
-				err = types.ErrTimeout
-			}
-			if err != types.ErrTimeout {
-				f.scanner.Close(ctx)
-				f.scanner = nil
-			}
-			if errors.Is(err, io.EOF) {
-				if msg.Len() > 0 {
-					return msg, ackFn, nil
-				}
-				return nil, nil, types.ErrTimeout
-			}
-			return nil, nil, err
-		}
-
-		part.Metadata().Set("path", f.currentPath)
-
-		acks = append(acks, codecAckFn)
-		if f.multipart {
-			if len(part.Get()) == 0 {
-				break scanLoop
-			}
+	for _, part := range parts {
+		if len(part.Get()) > 0 {
+			part.Metadata().Set("path", f.currentPath)
 			msg.Append(part)
-		} else if len(part.Get()) > 0 {
-			msg.Append(part)
-			break scanLoop
 		}
 	}
-
 	if msg.Len() == 0 {
+		codecAckFn(ctx, nil)
 		return nil, nil, types.ErrTimeout
 	}
 
-	return msg, ackFn, nil
+	return msg, func(rctx context.Context, res types.Response) error {
+		return codecAckFn(rctx, res.Error())
+	}, nil
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.

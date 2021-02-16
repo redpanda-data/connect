@@ -645,30 +645,30 @@ func (a *awsS3) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func s3MsgFromPart(p *s3PendingObject, part types.Part) types.Message {
+func s3MsgFromParts(p *s3PendingObject, parts []types.Part) types.Message {
 	msg := message.New(nil)
-	msg.Append(part)
-
-	meta := msg.Get(0).Metadata()
-
-	meta.Set("s3_key", p.target.key)
-	meta.Set("s3_bucket", p.target.bucket)
-	if p.obj.LastModified != nil {
-		meta.Set("s3_last_modified", p.obj.LastModified.Format(time.RFC3339))
-		meta.Set("s3_last_modified_unix", strconv.FormatInt(p.obj.LastModified.Unix(), 10))
-	}
-	if p.obj.ContentType != nil {
-		meta.Set("s3_content_type", *p.obj.ContentType)
-	}
-	if p.obj.ContentEncoding != nil {
-		meta.Set("s3_content_encoding", *p.obj.ContentEncoding)
-	}
-	for k, v := range p.obj.Metadata {
-		if v != nil {
-			meta.Set(k, *v)
+	msg.Append(parts...)
+	msg.Iter(func(_ int, part types.Part) error {
+		meta := part.Metadata()
+		meta.Set("s3_key", p.target.key)
+		meta.Set("s3_bucket", p.target.bucket)
+		if p.obj.LastModified != nil {
+			meta.Set("s3_last_modified", p.obj.LastModified.Format(time.RFC3339))
+			meta.Set("s3_last_modified_unix", strconv.FormatInt(p.obj.LastModified.Unix(), 10))
 		}
-	}
-
+		if p.obj.ContentType != nil {
+			meta.Set("s3_content_type", *p.obj.ContentType)
+		}
+		if p.obj.ContentEncoding != nil {
+			meta.Set("s3_content_encoding", *p.obj.ContentEncoding)
+		}
+		for k, v := range p.obj.Metadata {
+			if v != nil {
+				meta.Set(k, *v)
+			}
+		}
+		return nil
+	})
 	return msg
 }
 
@@ -738,12 +738,12 @@ func (a *awsS3) ReadWithContext(ctx context.Context) (msg types.Message, ackFn r
 		return
 	}
 
-	var p types.Part
+	var parts []types.Part
 	var scnAckFn codec.ReaderAckFn
 
 scanLoop:
 	for {
-		if p, scnAckFn, err = object.scanner.Next(ctx); err == nil {
+		if parts, scnAckFn, err = object.scanner.Next(ctx); err == nil {
 			object.extracted++
 			break scanLoop
 		}
@@ -762,7 +762,7 @@ scanLoop:
 		}
 	}
 
-	return s3MsgFromPart(object, p), func(rctx context.Context, res types.Response) error {
+	return s3MsgFromParts(object, parts), func(rctx context.Context, res types.Response) error {
 		return scnAckFn(rctx, res.Error())
 	}, nil
 }

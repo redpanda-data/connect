@@ -23,17 +23,17 @@ import (
 
 // ReaderDocs is a static field documentation for input codecs.
 var ReaderDocs = docs.FieldCommon(
-	"codec", "The way in which the bytes of consumed files are converted into messages, codecs are useful for specifying how large files might be processed in small chunks rather than loading it all in memory. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.", "lines", "delim:\t", "delim:foobar",
+	"codec", "The way in which the bytes of consumed files are converted into messages, codecs are useful for specifying how large files might be processed in small chunks rather than loading it all in memory. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter. Codecs can be chained using `/`, for example a gzip compressed CSV file can be consumed with the codec `gzip/csv`.", "lines", "delim:\t", "delim:foobar", "gzip/csv",
 ).HasAnnotatedOptions(
-	"auto", "EXPERIMENTAL: Attempts to derive a codec for each file based on information such as the extension. For example, a .tar.gz file would be consumed with the tar-gzip codec. Defaults to all-bytes.",
+	"auto", "EXPERIMENTAL: Attempts to derive a codec for each file based on information such as the extension. For example, a .tar.gz file would be consumed with the `gzip/tar` codec. Defaults to all-bytes.",
 	"all-bytes", "Consume the entire file as a single binary message.",
-	"csv", "Consume structured rows as comma separated values, the first row must be a header row.",
-	"csv-gzip", "Consume structured rows as comma separated values from a gzip compressed file, the first row must be a header row.",
-	"delim:x", "Consume the file in segments divided by a custom delimiter.",
 	"chunker:x", "Consume the file in chunks of a given number of bytes.",
+	"csv", "Consume structured rows as comma separated values, the first row must be a header row.",
+	"delim:x", "Consume the file in segments divided by a custom delimiter.",
+	"gzip", "Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc.",
 	"lines", "Consume the file in segments divided by linebreaks.",
+	"multipart", "Consumes the output of another codec and batches messages together. A batch ends when an empty message is consumed. For example, the codec `lines/multipart` could be used to consume multipart messages where an empty line indicates the end of each batch.",
 	"tar", "Parse the file as a tar archive, and consume each file of the archive as a message.",
-	"tar-gzip", "Parse the file as a gzip compressed tar archive, and consume each file of the archive as a message.",
 )
 
 //------------------------------------------------------------------------------
@@ -69,9 +69,11 @@ func ackOnce(fn ReaderAckFn) ReaderAckFn {
 
 // Reader is a codec type that reads message parts from a source.
 type Reader interface {
-	Next(context.Context) (types.Part, ReaderAckFn, error)
+	Next(context.Context) ([]types.Part, ReaderAckFn, error)
 	Close(context.Context) error
 }
+
+type ioReaderConstructor func(string, io.ReadCloser) (io.ReadCloser, error)
 
 // ReaderConstructor creates a reader from a filename, an io.ReadCloser and an
 // ack func which is called by the reader once the io.ReadCloser is finished
@@ -79,63 +81,184 @@ type Reader interface {
 // necessary for certain codecs.
 type ReaderConstructor func(string, io.ReadCloser, ReaderAckFn) (Reader, error)
 
-// GetReader returns a constructor that creates reader codecs.
-func GetReader(codec string, conf ReaderConfig) (ReaderConstructor, error) {
+// readerReaderConstructor is a private constructor for readers that _must_
+// consume from other readers.
+type readerReaderConstructor func(string, Reader) (Reader, error)
+
+func chainIOCtors(first, second ioReaderConstructor) ioReaderConstructor {
+	return func(s string, rc io.ReadCloser) (io.ReadCloser, error) {
+		r1, err := first(s, rc)
+		if err != nil {
+			return nil, err
+		}
+		r2, err := second(s, r1)
+		if err != nil {
+			r1.Close()
+			return nil, err
+		}
+		return r2, nil
+	}
+}
+
+func chainIOIntoPartCtor(first ioReaderConstructor, second ReaderConstructor) ReaderConstructor {
+	return func(s string, rc io.ReadCloser, aFn ReaderAckFn) (Reader, error) {
+		r1, err := first(s, rc)
+		if err != nil {
+			return nil, err
+		}
+		r2, err := second(s, r1, aFn)
+		if err != nil {
+			r1.Close()
+			return nil, err
+		}
+		return r2, nil
+	}
+}
+
+func chainPartIntoReaderCtor(first ReaderConstructor, second readerReaderConstructor) ReaderConstructor {
+	return func(s string, rc io.ReadCloser, aFn ReaderAckFn) (Reader, error) {
+		r1, err := first(s, rc, aFn)
+		if err != nil {
+			return nil, err
+		}
+		r2, err := second(s, r1)
+		if err != nil {
+			r1.Close(context.Background())
+			return nil, err
+		}
+		return r2, nil
+	}
+}
+
+func chainedReader(codec string, conf ReaderConfig) (ReaderConstructor, error) {
+	codecs := strings.Split(codec, "/")
+
+	var ioCtor ioReaderConstructor
+	var partCtor ReaderConstructor
+
+codecLoop:
+	for i, codec := range codecs {
+		if tmpIOCtor, ok := ioReader(codec, conf); ok {
+			if partCtor != nil {
+				return nil, fmt.Errorf("unable to follow codec '%v' with '%v'", codecs[i-1], codec)
+			}
+			if ioCtor != nil {
+				ioCtor = chainIOCtors(ioCtor, tmpIOCtor)
+			} else {
+				ioCtor = tmpIOCtor
+			}
+			continue codecLoop
+		}
+		tmpPartCtor, ok, err := partReader(codec, conf)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			if partCtor != nil {
+				return nil, fmt.Errorf("unable to follow codec '%v' with '%v'", codecs[i-1], codec)
+			}
+			if ioCtor != nil {
+				tmpPartCtor = chainIOIntoPartCtor(ioCtor, tmpPartCtor)
+				ioCtor = nil
+			}
+			partCtor = tmpPartCtor
+			continue codecLoop
+		}
+		tmpReaderCtor, ok := readerReader(codec, conf)
+		if !ok {
+			return nil, fmt.Errorf("codec was not recognised: %v", codec)
+		}
+		if partCtor == nil {
+			return nil, fmt.Errorf("unable to codec '%v' must be preceded by a structured codec", codec)
+		}
+		partCtor = chainPartIntoReaderCtor(partCtor, tmpReaderCtor)
+	}
+	if partCtor == nil {
+		return nil, fmt.Errorf("codec was not recognised: %v", codecs)
+	}
+	return partCtor, nil
+}
+
+func ioReader(codec string, conf ReaderConfig) (ioReaderConstructor, bool) {
 	switch codec {
-	case "auto":
-		return autoCodec(conf), nil
+	case "gzip":
+		return func(_ string, r io.ReadCloser) (io.ReadCloser, error) {
+			g, err := gzip.NewReader(r)
+			if err != nil {
+				r.Close()
+				return nil, err
+			}
+			return g, nil
+		}, true
+	}
+	return nil, false
+}
+
+func readerReader(codec string, conf ReaderConfig) (readerReaderConstructor, bool) {
+	switch codec {
+	case "multipart":
+		return func(_ string, r Reader) (Reader, error) {
+			return newMultipartReader(r)
+		}, true
+	}
+	return nil, false
+}
+
+func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error) {
+	switch codec {
 	case "all-bytes":
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			return &allBytesReader{r, fn, false}, nil
-		}, nil
+		}, true, nil
 	case "lines":
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			return newLinesReader(conf, r, fn)
-		}, nil
+		}, true, nil
 	case "csv":
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			return newCSVReader(r, fn)
-		}, nil
-	case "csv-gzip":
-		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
-			g, err := gzip.NewReader(r)
-			if err != nil {
-				r.Close()
-				return nil, err
-			}
-			return newCSVReader(g, fn)
-		}, nil
+		}, true, nil
 	case "tar":
-		return newTarReader, nil
-	case "tar-gzip":
-		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
-			g, err := gzip.NewReader(r)
-			if err != nil {
-				r.Close()
-				return nil, err
-			}
-			return newTarReader("", g, fn)
-		}, nil
+		return newTarReader, true, nil
 	}
 	if strings.HasPrefix(codec, "delim:") {
 		by := strings.TrimPrefix(codec, "delim:")
 		if len(by) == 0 {
-			return nil, errors.New("custom delimiter codec requires a non-empty delimiter")
+			return nil, false, errors.New("custom delimiter codec requires a non-empty delimiter")
 		}
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			return newCustomDelimReader(conf, r, by, fn)
-		}, nil
+		}, true, nil
 	}
 	if strings.HasPrefix(codec, "chunker:") {
 		chunkSize, err := strconv.ParseUint(strings.TrimPrefix(codec, "chunker:"), 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("invalid chunk size for chunker codec: %w", err)
+			return nil, false, fmt.Errorf("invalid chunk size for chunker codec: %w", err)
 		}
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			return newChunkerReader(conf, r, chunkSize, fn)
-		}, nil
+		}, true, nil
 	}
-	return nil, fmt.Errorf("codec was not recognised: %v", codec)
+	return nil, false, nil
+}
+
+func convertDeprecatedCodec(codec string) string {
+	switch codec {
+	case "csv-gzip":
+		return "gzip/csv"
+	case "tar-gzip":
+		return "gzip/tar"
+	}
+	return codec
+}
+
+// GetReader returns a constructor that creates reader codecs.
+func GetReader(codec string, conf ReaderConfig) (ReaderConstructor, error) {
+	codec = convertDeprecatedCodec(codec)
+	if codec == "auto" {
+		return autoCodec(conf), nil
+	}
+	return chainedReader(codec, conf)
 }
 
 func autoCodec(conf ReaderConfig) ReaderConstructor {
@@ -145,16 +268,16 @@ func autoCodec(conf ReaderConfig) ReaderConstructor {
 		case ".csv":
 			codec = "csv"
 		case ".csv.gz", ".csv.gzip":
-			codec = "csv-gzip"
+			codec = "gzip/csv"
 		case ".tar":
 			codec = "tar"
 		case ".tgz":
-			codec = "tar-gzip"
+			codec = "gzip/tar"
 		}
 		if strings.HasSuffix(path, ".tar.gzip") {
-			codec = "tar-gzip"
+			codec = "gzip/tar"
 		} else if strings.HasSuffix(path, ".tar.gz") {
-			codec = "tar-gzip"
+			codec = "gzip/tar"
 		}
 
 		ctor, err := GetReader(codec, conf)
@@ -173,7 +296,7 @@ type allBytesReader struct {
 	consumed bool
 }
 
-func (a *allBytesReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
+func (a *allBytesReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
 	if a.consumed {
 		return nil, nil, io.EOF
 	}
@@ -184,7 +307,7 @@ func (a *allBytesReader) Next(ctx context.Context) (types.Part, ReaderAckFn, err
 		return nil, nil, err
 	}
 	p := message.NewPart(b)
-	return p, a.ack, nil
+	return []types.Part{p}, a.ack, nil
 }
 
 func (a *allBytesReader) Close(ctx context.Context) error {
@@ -233,7 +356,7 @@ func (a *linesReader) ack(ctx context.Context, err error) error {
 	return nil
 }
 
-func (a *linesReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
+func (a *linesReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
 	a.mut.Lock()
 	defer a.mut.Unlock()
 
@@ -242,7 +365,7 @@ func (a *linesReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error)
 
 		bytesCopy := make([]byte, len(a.buf.Bytes()))
 		copy(bytesCopy, a.buf.Bytes())
-		return message.NewPart(bytesCopy), a.ack, nil
+		return []types.Part{message.NewPart(bytesCopy)}, a.ack, nil
 	}
 	err := a.buf.Err()
 	if err == nil {
@@ -316,7 +439,7 @@ func (a *csvReader) ack(ctx context.Context, err error) error {
 	return nil
 }
 
-func (a *csvReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
+func (a *csvReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
 	a.mut.Lock()
 	defer a.mut.Unlock()
 
@@ -340,7 +463,7 @@ func (a *csvReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
 	part := message.NewPart(nil)
 	part.SetJSON(obj)
 
-	return part, a.ack, nil
+	return []types.Part{part}, a.ack, nil
 }
 
 func (a *csvReader) Close(ctx context.Context) error {
@@ -417,7 +540,7 @@ func (a *customDelimReader) ack(ctx context.Context, err error) error {
 	return nil
 }
 
-func (a *customDelimReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
+func (a *customDelimReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
 	a.mut.Lock()
 	defer a.mut.Unlock()
 
@@ -426,7 +549,7 @@ func (a *customDelimReader) Next(ctx context.Context) (types.Part, ReaderAckFn, 
 
 		bytesCopy := make([]byte, len(a.buf.Bytes()))
 		copy(bytesCopy, a.buf.Bytes())
-		return message.NewPart(bytesCopy), a.ack, nil
+		return []types.Part{message.NewPart(bytesCopy)}, a.ack, nil
 	}
 	err := a.buf.Err()
 	if err == nil {
@@ -488,7 +611,7 @@ func (a *chunkerReader) ack(ctx context.Context, err error) error {
 	return nil
 }
 
-func (a *chunkerReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
+func (a *chunkerReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
 	a.mut.Lock()
 	defer a.mut.Unlock()
 
@@ -511,7 +634,7 @@ func (a *chunkerReader) Next(ctx context.Context) (types.Part, ReaderAckFn, erro
 
 		bytesCopy := make([]byte, n)
 		copy(bytesCopy, a.buf)
-		return message.NewPart(bytesCopy), a.ack, nil
+		return []types.Part{message.NewPart(bytesCopy)}, a.ack, nil
 	}
 
 	return nil, nil, err
@@ -565,7 +688,7 @@ func (a *tarReader) ack(ctx context.Context, err error) error {
 	return nil
 }
 
-func (a *tarReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
+func (a *tarReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
 	a.mut.Lock()
 	defer a.mut.Unlock()
 
@@ -577,7 +700,7 @@ func (a *tarReader) Next(ctx context.Context) (types.Part, ReaderAckFn, error) {
 			return nil, nil, err
 		}
 		a.pending++
-		return message.NewPart(fileBuf.Bytes()), a.ack, nil
+		return []types.Part{message.NewPart(fileBuf.Bytes())}, a.ack, nil
 	}
 
 	if err == io.EOF {
@@ -599,4 +722,62 @@ func (a *tarReader) Close(ctx context.Context) error {
 		a.sourceAck(ctx, nil)
 	}
 	return a.r.Close()
+}
+
+//------------------------------------------------------------------------------
+
+type multipartReader struct {
+	child Reader
+}
+
+func newMultipartReader(r Reader) (Reader, error) {
+	return &multipartReader{
+		child: r,
+	}, nil
+}
+
+func isEmpty(p []types.Part) bool {
+	if len(p) == 0 {
+		return true
+	}
+	if len(p) == 1 && len(p[0].Get()) == 0 {
+		return true
+	}
+	return false
+}
+
+func (m *multipartReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
+	var parts []types.Part
+	var acks []ReaderAckFn
+
+	ackFn := func(ctx context.Context, err error) error {
+		for _, fn := range acks {
+			fn(ctx, err)
+		}
+		return nil
+	}
+
+	for {
+		newParts, ack, err := m.child.Next(ctx)
+		if err != nil {
+			if errors.Is(err, io.EOF) && len(parts) > 0 {
+				return parts, ackFn, nil
+			}
+			return nil, nil, err
+		}
+		if isEmpty(newParts) {
+			ack(ctx, nil)
+			if len(parts) > 0 {
+				// Empty message signals batch end.
+				return parts, ackFn, nil
+			}
+		} else {
+			parts = append(parts, newParts...)
+			acks = append(acks, ack)
+		}
+	}
+}
+
+func (m *multipartReader) Close(ctx context.Context) error {
+	return m.child.Close(ctx)
 }

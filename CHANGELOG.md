@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### New
 
 - New `azure_queue_storage` input.
+- All inputs with a `codec` field now support multipart.
 
 ### Fixed
 

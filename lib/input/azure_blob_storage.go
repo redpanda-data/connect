@@ -256,24 +256,26 @@ func (a *azureBlobStorage) getObjectTarget(ctx context.Context) (*azurePendingOb
 	return object, nil
 }
 
-func blobStorageMsgFromPart(p *azurePendingObject, part types.Part) types.Message {
+func blobStorageMsgFromParts(p *azurePendingObject, parts []types.Part) types.Message {
 	msg := message.New(nil)
-	msg.Append(part)
+	msg.Append(parts...)
+	msg.Iter(func(_ int, part types.Part) error {
+		meta := part.Metadata()
 
-	meta := msg.Get(0).Metadata()
+		meta.Set("blob_storage_key", p.target.key)
+		if p.obj.Container != nil {
+			meta.Set("blob_storage_container", p.obj.Container.Name)
+		}
+		meta.Set("blob_storage_last_modified", time.Time(p.obj.Properties.LastModified).Format(time.RFC3339))
+		meta.Set("blob_storage_last_modified_unix", strconv.FormatInt(time.Time(p.obj.Properties.LastModified).Unix(), 10))
+		meta.Set("blob_storage_content_type", p.obj.Properties.ContentType)
+		meta.Set("blob_storage_content_encoding", p.obj.Properties.ContentEncoding)
 
-	meta.Set("blob_storage_key", p.target.key)
-	if p.obj.Container != nil {
-		meta.Set("blob_storage_container", p.obj.Container.Name)
-	}
-	meta.Set("blob_storage_last_modified", time.Time(p.obj.Properties.LastModified).Format(time.RFC3339))
-	meta.Set("blob_storage_last_modified_unix", strconv.FormatInt(time.Time(p.obj.Properties.LastModified).Unix(), 10))
-	meta.Set("blob_storage_content_type", p.obj.Properties.ContentType)
-	meta.Set("blob_storage_content_encoding", p.obj.Properties.ContentEncoding)
-
-	for k, v := range p.obj.Metadata {
-		meta.Set(k, v)
-	}
+		for k, v := range p.obj.Metadata {
+			meta.Set(k, v)
+		}
+		return nil
+	})
 
 	return msg
 }
@@ -299,12 +301,12 @@ func (a *azureBlobStorage) ReadWithContext(ctx context.Context) (msg types.Messa
 		return
 	}
 
-	var p types.Part
+	var parts []types.Part
 	var scnAckFn codec.ReaderAckFn
 
 scanLoop:
 	for {
-		if p, scnAckFn, err = object.scanner.Next(ctx); err == nil {
+		if parts, scnAckFn, err = object.scanner.Next(ctx); err == nil {
 			object.extracted++
 			break scanLoop
 		}
@@ -323,7 +325,7 @@ scanLoop:
 		}
 	}
 
-	return blobStorageMsgFromPart(object, p), func(rctx context.Context, res types.Response) error {
+	return blobStorageMsgFromParts(object, parts), func(rctx context.Context, res types.Response) error {
 		return scnAckFn(rctx, res.Error())
 	}, nil
 }
