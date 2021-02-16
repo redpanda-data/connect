@@ -491,6 +491,7 @@ input:
           watcher:
             cache: ${INPUT_SFTP_WATCHER_CACHE}
             enabled: ${INPUT_SFTP_WATCHER_ENABLED:false}
+            minimum_age: ${INPUT_SFTP_WATCHER_MINIMUM_AGE:1s}
             poll_interval: ${INPUT_SFTP_WATCHER_POLL_INTERVAL:1s}
         socket:
           address: ${INPUT_SOCKET_ADDRESS:/tmp/benthos.sock}

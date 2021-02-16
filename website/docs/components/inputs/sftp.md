@@ -40,6 +40,7 @@ input:
     codec: all-bytes
     watcher:
       enabled: false
+      minimum_age: 1s
       poll_interval: 1s
       cache: ""
 ```
@@ -61,6 +62,7 @@ input:
     max_buffer: 1000000
     watcher:
       enabled: false
+      minimum_age: 1s
       poll_interval: 1s
       cache: ""
 ```
@@ -168,30 +170,57 @@ Default: `1000000`
 
 ### `watcher`
 
-The settings for watcher mode.
+An experimental mode whereby the input will periodically scan the target paths for new files and consume them, when all files are consumed the input will continue polling for new files.
 
 
 Type: `object`  
+Requires version 3.42.0 or newer  
 
 ### `watcher.enabled`
 
-Whether it keeps running after processing all the files in the paths to watch for new files.
+Whether file watching is enabled.
 
 
 Type: `bool`  
 Default: `false`  
 
-### `watcher.poll_interval`
+### `watcher.minimum_age`
 
-How long it waits before it starts a new iteration of processing the files in the paths.
+The minimum period of time since a file was last updated before attempting to consume it. Increasing this period decreases the likelihood that a file will be consumed whilst it is still being written to.
 
 
 Type: `string`  
 Default: `"1s"`  
 
+```yaml
+# Examples
+
+minimum_age: 10s
+
+minimum_age: 1m
+
+minimum_age: 10m
+```
+
+### `watcher.poll_interval`
+
+The interval between each attempt to scan the target paths for new files.
+
+
+Type: `string`  
+Default: `"1s"`  
+
+```yaml
+# Examples
+
+poll_interval: 100ms
+
+poll_interval: 1s
+```
+
 ### `watcher.cache`
 
-The name of the cache that it will use to keep track of the files that it has already processed.
+A [cache resource](/docs/components/caches/about) for storing the paths of files already consumed.
 
 
 Type: `string`  

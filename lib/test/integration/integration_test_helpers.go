@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -333,20 +332,8 @@ func initInput(t *testing.T, env *testEnvironment) types.Input {
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	caches := map[string]types.Cache{}
-	for name, c := range s.Manager.Caches {
-		cacheObj, err := cache.New(c, types.NoopMgr(), env.log, env.stats)
-		require.NoError(t, err)
-		caches[name] = cacheObj
-	}
-
-	var mgr types.Manager
-	if len(caches) > 0 {
-		mgr, err = manager.New(s.Manager, nil, log.Noop(), metrics.Noop())
-		require.NoError(t, err)
-	} else {
-		mgr = types.NoopMgr()
-	}
+	mgr, err := manager.New(s.Manager, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
 
 	input, err := input.New(s.Input, mgr, env.log, env.stats)
 	require.NoError(t, err)
@@ -372,7 +359,10 @@ func initOutput(t *testing.T, trans <-chan types.Transaction, env *testEnvironme
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	output, err := output.New(s.Output, types.NoopMgr(), env.log, env.stats)
+	mgr, err := manager.New(s.Manager, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	output, err := output.New(s.Output, mgr, env.log, env.stats)
 	require.NoError(t, err)
 
 	require.NoError(t, output.Consume(trans))

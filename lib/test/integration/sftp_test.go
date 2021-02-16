@@ -1,12 +1,10 @@
 package integration
 
 import (
-	"log"
 	"testing"
 	"time"
 
 	sftpSetup "github.com/Jeffail/benthos/v3/internal/service/sftp"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/ory/dockertest/v3"
 	"github.com/pkg/sftp"
 	"github.com/stretchr/testify/assert"
@@ -48,16 +46,8 @@ var _ = registerIntegrationTest("sftp", func(t *testing.T) {
 	sftpEndpoint := "localhost:" + sftpPort
 
 	require.NoError(t, pool.Retry(func() error {
-		t.Logf("waiting for SFTP server to come up on '%v'...", "localhost:"+sftpPort)
-
-		sftpClient, err = creds.GetClient(sftpEndpoint)
-		if err != nil {
-			t.Logf("err: %v", err)
-			time.Sleep(time.Second)
-			return err
-		}
-
-		return nil
+		_, err = creds.GetClient(sftpEndpoint)
+		return err
 	}))
 
 	t.Run("sftp", func(t *testing.T) {
@@ -65,7 +55,7 @@ var _ = registerIntegrationTest("sftp", func(t *testing.T) {
 output:
   sftp:
     address: localhost:$PORT
-    path: /upload/test-$ID/$VAR2.txt
+    path: /upload/test-$ID/${!uuid_v4()}.txt
     credentials:
       username: foo
       password: pass
@@ -83,8 +73,9 @@ input:
     codec: $VAR1
     delete_on_finish: false
     watcher:
-      enabled: $VAR3
-      poll_interval: 1s
+      enabled: $VAR2
+      minimum_age: 100ms
+      poll_interval: 100ms
       cache: files-memory
 
 resources:
@@ -101,72 +92,20 @@ resources:
 			t, template,
 			testOptPort(sftpPort),
 			testOptVarOne("all-bytes"),
-			testOptVarTwo(`${!count("$ID")}`),
-			testOptVarThree("false"),
-		)
-		suite.Run(
-			t, template,
-			testOptPort(sftpPort),
-			testOptVarOne("lines"),
-			testOptVarTwo(`all-in-one-file`),
-			testOptVarThree("false"),
+			testOptVarTwo("false"),
 		)
 
 		watcherSuite := integrationTests(
-			integrationTestWatcherMode(),
+			integrationTestOpenClose(),
+			integrationTestStreamParallel(50),
+			integrationTestStreamSequential(20),
+			integrationTestStreamParallelLossyThroughReconnect(20),
 		)
 		watcherSuite.Run(
 			t, template,
 			testOptPort(sftpPort),
 			testOptVarOne("all-bytes"),
-			testOptVarTwo(`${!count("$ID")}`),
-			testOptVarThree("true"),
-		)
-		watcherSuite.Run(
-			t, template,
-			testOptPort(sftpPort),
-			testOptVarOne("lines"),
-			testOptVarTwo(`all-in-one-file`),
-			testOptVarThree("true"),
+			testOptVarTwo("true"),
 		)
 	})
 })
-
-func integrationTestWatcherMode() testDefinition {
-	return namedTest(
-		"test watcher mode",
-		func(t *testing.T, env *testEnvironment) {
-			t.Parallel()
-
-			tranChan := make(chan types.Transaction)
-			output := initOutput(t, tranChan, env)
-			t.Cleanup(func() {
-				closeConnectors(t, nil, output)
-			})
-			require.NoError(t, sendMessage(env.ctx, t, tranChan, "hello world"))
-
-			input := initInput(t, env)
-			t.Cleanup(func() {
-				closeConnectors(t, input, nil)
-			})
-			messageMatch(t, receiveMessage(env.ctx, t, input.TransactionChan(), nil), "hello world")
-
-			generateTestFile("/upload/test-"+env.configVars.id+"/watcher_test.txt", "hello world 2")
-			messageMatch(t, receiveMessage(env.ctx, t, input.TransactionChan(), nil), "hello world 2")
-
-			input.CloseAsync()
-		},
-	)
-}
-
-func generateTestFile(filepath string, data string) {
-	file, err := sftpClient.Create(filepath)
-	if err != nil {
-		log.Fatalf("Error creating file %s on SSH server", filepath)
-		return
-	}
-	_, err = file.Write([]byte(data))
-	if err != nil {
-		log.Fatalf("Error writing to file %s on SSH server", filepath)
-	}
-}

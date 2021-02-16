@@ -12,6 +12,7 @@ import (
 )
 
 var _ = registerIntegrationTest("hdfs", func(t *testing.T) {
+	t.Skip() // Skip until we fix the static port bindings
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
