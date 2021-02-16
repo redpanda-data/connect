@@ -12,9 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
@@ -23,7 +25,7 @@ import (
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	yaml "gopkg.in/yaml.v3"
+	"gopkg.in/yaml.v3"
 )
 
 type testConfigVars struct {
@@ -331,7 +333,22 @@ func initInput(t *testing.T, env *testEnvironment) types.Input {
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	input, err := input.New(s.Input, types.NoopMgr(), env.log, env.stats)
+	caches := map[string]types.Cache{}
+	for name, c := range s.Manager.Caches {
+		cacheObj, err := cache.New(c, types.NoopMgr(), env.log, env.stats)
+		require.NoError(t, err)
+		caches[name] = cacheObj
+	}
+
+	var mgr types.Manager
+	if len(caches) > 0 {
+		mgr, err = manager.New(s.Manager, nil, log.Noop(), metrics.Noop())
+		require.NoError(t, err)
+	} else {
+		mgr = types.NoopMgr()
+	}
+
+	input, err := input.New(s.Input, mgr, env.log, env.stats)
 	require.NoError(t, err)
 
 	if env.sleepAfterInput > 0 {

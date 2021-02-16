@@ -439,6 +439,9 @@ INPUT_SFTP_CREDENTIALS_PASSWORD
 INPUT_SFTP_CREDENTIALS_USERNAME
 INPUT_SFTP_DELETE_ON_FINISH                          = false
 INPUT_SFTP_MAX_BUFFER                                = 1000000
+INPUT_SFTP_WATCHER_CACHE
+INPUT_SFTP_WATCHER_ENABLED                           = false
+INPUT_SFTP_WATCHER_POLL_INTERVAL                     = 1s
 INPUT_SOCKET_ADDRESS                                 = /tmp/benthos.sock
 INPUT_SOCKET_DELIMITER
 INPUT_SOCKET_MAX_BUFFER                              = 1000000
