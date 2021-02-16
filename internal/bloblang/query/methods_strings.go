@@ -89,11 +89,20 @@ var _ = RegisterMethod(
 		"encode", "",
 	).InCategory(
 		MethodCategoryEncoding,
-		"Encodes a string or byte array target according to a chosen scheme and returns a string result. Available schemes are: `base64`, `base64url`, `hex`, `ascii85`, `z85`.",
+		"Encodes a string or byte array target according to a chosen scheme and returns a string result. Available schemes are: `base64`, `base64url`, `hex`, `ascii85`.",
+		// NOTE: z85 has been removed from the list until we can support
+		// misaligned data automatically. It'll still be supported for backwards
+		// compatibility, but given it behaves differently to `ascii85` I think
+		// it's a poor user experience to expose it.
 		NewExampleSpec("",
 			`root.encoded = this.value.encode("hex")`,
 			`{"value":"hello world"}`,
 			`{"encoded":"68656c6c6f20776f726c64"}`,
+		),
+		NewExampleSpec("",
+			`root.encoded = content().encode("ascii85")`,
+			`this is totally unstructured data`,
+			"{\"encoded\":\"FD,B0+DGm>FDl80Ci\\\"A>F`)8BEckl6F`M&(+Cno&@/\"}",
 		),
 	),
 	true, encodeMethod,
@@ -131,18 +140,20 @@ func encodeMethod(target Function, args ...interface{}) (Function, error) {
 		}
 	case "ascii85":
 		schemeFn = func(b []byte) (string, error) {
-			if len(b)%4 != 0 {
-				return "", z85.ErrLength
-			}
 			var buf bytes.Buffer
 			e := ascii85.NewEncoder(&buf)
 			if _, err := e.Write(b); err != nil {
+				return "", err
+			}
+			if err := e.Close(); err != nil {
 				return "", err
 			}
 			return buf.String(), nil
 		}
 	case "z85":
 		schemeFn = func(b []byte) (string, error) {
+			// TODO: Update this to support misaligned input data similar to the
+			// ascii85 encoder.
 			enc := make([]byte, z85.EncodedLen(len(b)))
 			if _, err := z85.Encode(enc, b); err != nil {
 				return "", err
@@ -174,11 +185,20 @@ var _ = RegisterMethod(
 		"decode", "",
 	).InCategory(
 		MethodCategoryEncoding,
-		"Decodes an encoded string target according to a chosen scheme and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.\n\nAvailable schemes are: `base64`, `base64url`, `hex`, `ascii85`, `z85`.",
+		"Decodes an encoded string target according to a chosen scheme and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.\n\nAvailable schemes are: `base64`, `base64url`, `hex`, `ascii85`.",
+		// NOTE: z85 has been removed from the list until we can support
+		// misaligned data automatically. It'll still be supported for backwards
+		// compatibility, but given it behaves differently to `ascii85` I think
+		// it's a poor user experience to expose it.
 		NewExampleSpec("",
 			`root.decoded = this.value.decode("hex").string()`,
 			`{"value":"68656c6c6f20776f726c64"}`,
 			`{"decoded":"hello world"}`,
+		),
+		NewExampleSpec("",
+			`root = this.encoded.decode("ascii85")`,
+			"{\"encoded\":\"FD,B0+DGm>FDl80Ci\\\"A>F`)8BEckl6F`M&(+Cno&@/\"}",
+			`this is totally unstructured data`,
 		),
 	),
 	true, decodeMethod,
@@ -211,6 +231,8 @@ func decodeMethod(target Function, args ...interface{}) (Function, error) {
 		}
 	case "z85":
 		schemeFn = func(b []byte) ([]byte, error) {
+			// TODO: Update this to support misaligned input data similar to the
+			// ascii85 decoder.
 			dec := make([]byte, z85.DecodedLen(len(b)))
 			if _, err := z85.Decode(dec, b); err != nil {
 				return nil, err

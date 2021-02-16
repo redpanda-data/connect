@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - New `azure_queue_storage` input.
 
+### Fixed
+
+- The bloblang `encode` method algorithm `ascii85` no longer returns an error when the input is misaligned.
+
 ## 3.41.1 - 2021-02-15
 
 ### Fixed

@@ -801,6 +801,23 @@ func TestMethods(t *testing.T) {
 			),
 			output: `hello world!`,
 		},
+		/*
+			"check z85 encode misaligned": {
+				input: methods(
+					literalFn("hello world"),
+					method("encode", "z85"),
+				),
+				output: `xK#0@zY<mxA+]m`,
+			},
+			"check z85 decode misaligned": {
+				input: methods(
+					literalFn("xK#0@zY<mxA+]m"),
+					method("decode", "z85"),
+					method("string"),
+				),
+				output: `hello world`,
+			},
+		*/
 		"check ascii85 encode": {
 			input: methods(
 				literalFn("hello world!"),
@@ -815,6 +832,21 @@ func TestMethods(t *testing.T) {
 				method("string"),
 			),
 			output: `hello world!`,
+		},
+		"check ascii85 encode misaligned": {
+			input: methods(
+				literalFn("hello world"),
+				method("encode", "ascii85"),
+			),
+			output: `BOu!rD]j7BEbo7`,
+		},
+		"check ascii85 decode misaligned": {
+			input: methods(
+				literalFn("BOu!rD]j7BEbo7"),
+				method("decode", "ascii85"),
+				method("string"),
+			),
+			output: `hello world`,
 		},
 		"check hex encode bytes": {
 			input: methods(
