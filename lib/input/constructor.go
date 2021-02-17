@@ -324,7 +324,7 @@ func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
 		}
 	}
 	if removeDeprecated {
-		Constructors[conf.Type].FieldSpecs.RemoveDeprecated(outputMap)
+		Constructors[conf.Type].FieldSpecs.RemoveDeprecated(outputMap[conf.Type])
 	}
 
 	if len(conf.Processors) == 0 {

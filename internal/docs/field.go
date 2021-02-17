@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/Jeffail/benthos/v3/lib/util/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -206,13 +205,16 @@ func (f FieldSpecs) Add(specs ...FieldSpec) FieldSpecs {
 }
 
 // RemoveDeprecated fields from a sanitized config.
-func (f FieldSpecs) RemoveDeprecated(s config.Sanitised) {
-	typeStr, _ := s["type"].(string)
-	if m, ok := s[typeStr].(map[string]interface{}); ok {
-		for _, spec := range f {
-			if spec.Deprecated {
-				delete(m, spec.Name)
-			}
+func (f FieldSpecs) RemoveDeprecated(s interface{}) {
+	m, ok := s.(map[string]interface{})
+	if !ok {
+		return
+	}
+	for _, spec := range f {
+		if spec.Deprecated {
+			delete(m, spec.Name)
+		} else if len(spec.Children) > 0 {
+			spec.Children.RemoveDeprecated(m[spec.Name])
 		}
 	}
 }

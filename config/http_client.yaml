@@ -40,10 +40,9 @@ input:
     retries: 3
     retry_period: 1s
     stream:
-      delimiter: ""
+      codec: lines
       enabled: false
       max_buffer: 1000000
-      multipart: false
       reconnect: true
     successful_on: []
     timeout: 5s

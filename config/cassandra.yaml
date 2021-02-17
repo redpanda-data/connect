@@ -26,7 +26,6 @@ output:
     args: []
     backoff:
       initial_interval: 1s
-      max_elapsed_time: ""
       max_interval: 5s
     batching:
       byte_size: 0

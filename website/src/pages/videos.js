@@ -24,7 +24,7 @@ function Videos() {
       </header>
       <main>
         <div className="container margin-vert--lg">
-          <div className="row">
+          <div className="row margin-bottom--lg">
             <div className="col col--8 col--offset-2">
               <h2>Tutorials</h2>
               <p>This playlist contains tutorial videos covering various aspects of Benthos use.</p>
@@ -32,6 +32,17 @@ function Videos() {
             <ReactPlayer
               className={classnames('col col--8 col--offset-2')}
               url='https://www.youtube-nocookie.com/embed/videoseries?list=PL9hWaP-BQh2rvNuM29bTLlL0hYk6cqyT5'
+              controls='true'
+            />
+          </div>
+          <div className="row margin-bottom--lg">
+            <div className="col col--8 col--offset-2">
+              <h2>Code Streams</h2>
+              <p>This playlist contains live coding sessions on the Benthos codebase.</p>
+            </div>
+            <ReactPlayer
+              className={classnames('col col--8 col--offset-2')}
+              url='https://www.youtube-nocookie.com/embed/videoseries?list=PL9hWaP-BQh2ovI1iwEKxzNFF8dVAZgHCA'
               controls='true'
             />
           </div>

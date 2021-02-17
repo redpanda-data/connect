@@ -43,7 +43,6 @@ input:
   file:
     paths: []
     codec: lines
-    multipart: false
     max_buffer: 1000000
     delete_on_finish: false
 ```
@@ -61,6 +60,65 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).
+
+## Fields
+
+### `paths`
+
+A list of paths to consume sequentially. Glob patterns are supported.
+
+
+Type: `array`  
+Default: `[]`  
+
+### `codec`
+
+The way in which the bytes of consumed files are converted into messages, codecs are useful for specifying how large files might be processed in small chunks rather than loading it all in memory. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter. Codecs can be chained using `/`, for example a gzip compressed CSV file can be consumed with the codec `gzip/csv`.
+
+
+Type: `string`  
+Default: `"lines"`  
+
+| Option | Summary |
+|---|---|
+| `auto` | EXPERIMENTAL: Attempts to derive a codec for each file based on information such as the extension. For example, a .tar.gz file would be consumed with the `gzip/tar` codec. Defaults to all-bytes. |
+| `all-bytes` | Consume the entire file as a single binary message. |
+| `chunker:x` | Consume the file in chunks of a given number of bytes. |
+| `csv` | Consume structured rows as comma separated values, the first row must be a header row. |
+| `delim:x` | Consume the file in segments divided by a custom delimiter. |
+| `gzip` | Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc. |
+| `lines` | Consume the file in segments divided by linebreaks. |
+| `multipart` | Consumes the output of another codec and batches messages together. A batch ends when an empty message is consumed. For example, the codec `lines/multipart` could be used to consume multipart messages where an empty line indicates the end of each batch. |
+| `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
+
+
+```yaml
+# Examples
+
+codec: lines
+
+codec: "delim:\t"
+
+codec: delim:foobar
+
+codec: gzip/csv
+```
+
+### `max_buffer`
+
+The largest token size expected when consuming delimited files.
+
+
+Type: `number`  
+Default: `1000000`  
+
+### `delete_on_finish`
+
+Whether to delete consumed files from the disk once they are fully consumed.
+
+
+Type: `bool`  
+Default: `false`  
 
 ## Examples
 
@@ -81,70 +139,5 @@ input:
 
 </TabItem>
 </Tabs>
-
-## Fields
-
-### `paths`
-
-A list of paths to consume sequentially. Glob patterns are supported.
-
-
-Type: `array`  
-Default: `[]`  
-
-### `codec`
-
-The way in which the bytes of consumed files are converted into messages, codecs are useful for specifying how large files might be processed in small chunks rather than loading it all in memory. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.
-
-
-Type: `string`  
-Default: `"lines"`  
-
-| Option | Summary |
-|---|---|
-| `auto` | EXPERIMENTAL: Attempts to derive a codec for each file based on information such as the extension. For example, a .tar.gz file would be consumed with the tar-gzip codec. Defaults to all-bytes. |
-| `all-bytes` | Consume the entire file as a single binary message. |
-| `csv` | Consume structured rows as comma separated values, the first row must be a header row. |
-| `csv-gzip` | Consume structured rows as comma separated values from a gzip compressed file, the first row must be a header row. |
-| `delim:x` | Consume the file in segments divided by a custom delimiter. |
-| `chunker:x` | Consume the file in chunks of a given number of bytes. |
-| `lines` | Consume the file in segments divided by linebreaks. |
-| `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
-| `tar-gzip` | Parse the file as a gzip compressed tar archive, and consume each file of the archive as a message. |
-
-
-```yaml
-# Examples
-
-codec: lines
-
-codec: "delim:\t"
-
-codec: delim:foobar
-```
-
-### `multipart`
-
-Consume multipart messages from the codec by interpretting empty lines as the end of the message. Multipart messages are processed as a batch within Benthos. Not all codecs are appropriate for multipart messages.
-
-
-Type: `bool`  
-Default: `false`  
-
-### `max_buffer`
-
-The largest token size expected when consuming delimited files.
-
-
-Type: `number`  
-Default: `1000000`  
-
-### `delete_on_finish`
-
-Whether to delete consumed files from the disk once they are fully consumed.
-
-
-Type: `bool`  
-Default: `false`  
 
 

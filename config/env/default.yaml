@@ -203,6 +203,7 @@ input:
           retries: ${INPUT_HTTP_CLIENT_RETRIES:3}
           retry_period: ${INPUT_HTTP_CLIENT_RETRY_PERIOD:1s}
           stream:
+            codec: ${INPUT_HTTP_CLIENT_STREAM_CODEC:lines}
             delimiter: ${INPUT_HTTP_CLIENT_STREAM_DELIMITER}
             enabled: ${INPUT_HTTP_CLIENT_STREAM_ENABLED:false}
             max_buffer: ${INPUT_HTTP_CLIENT_STREAM_MAX_BUFFER:1000000}

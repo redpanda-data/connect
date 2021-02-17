@@ -13,7 +13,6 @@ input:
     codec: lines
     delete_on_finish: false
     max_buffer: 1000000
-    multipart: false
     paths: []
 buffer:
   type: none
