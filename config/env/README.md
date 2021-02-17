@@ -466,6 +466,7 @@ INPUT_SQS_MAX_NUMBER_OF_MESSAGES                     = 1
 INPUT_SQS_REGION                                     = eu-west-1
 INPUT_SQS_TIMEOUT                                    = 5s
 INPUT_SQS_URL
+INPUT_STDIN_CODEC                                    = lines
 INPUT_STDIN_DELIMITER
 INPUT_STDIN_MAX_BUFFER                               = 1000000
 INPUT_STDIN_MULTIPART                                = false

@@ -10,9 +10,8 @@ http:
 input:
   type: stdin
   stdin:
-    delimiter: ""
+    codec: lines
     max_buffer: 1000000
-    multipart: false
 buffer:
   type: none
   none: {}

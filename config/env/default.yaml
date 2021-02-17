@@ -521,6 +521,7 @@ input:
           timeout: ${INPUT_SQS_TIMEOUT:5s}
           url: ${INPUT_SQS_URL}
         stdin:
+          codec: ${INPUT_STDIN_CODEC:lines}
           delimiter: ${INPUT_STDIN_DELIMITER}
           max_buffer: ${INPUT_STDIN_MAX_BUFFER:1000000}
           multipart: ${INPUT_STDIN_MULTIPART:false}
