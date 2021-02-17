@@ -1,12 +1,18 @@
 package input
 
 import (
+	"context"
+	"errors"
 	"io"
 	"os"
+	"strings"
+	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -24,9 +30,10 @@ parts, and an empty line indicates the end of the message.
 
 If the delimiter field is left empty then line feed (\n) is used.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldAdvanced("multipart", "Whether messages should be consumed as multiple parts. If so, each line is consumed as a message parts and the full message ends with an empty line."),
+			codec.ReaderDocs,
 			docs.FieldAdvanced("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed."),
-			docs.FieldAdvanced("delimiter", "The delimiter to use to detect the end of each message. If left empty line breaks are used."),
+			docs.FieldDeprecated("delimiter"),
+			docs.FieldDeprecated("multipart"),
 		},
 		Categories: []Category{
 			CategoryLocal,
@@ -38,6 +45,7 @@ If the delimiter field is left empty then line feed (\n) is used.`,
 
 // STDINConfig contains config fields for the STDIN input type.
 type STDINConfig struct {
+	Codec     string `json:"codec" yaml:"codec"`
 	Multipart bool   `json:"multipart" yaml:"multipart"`
 	MaxBuffer int    `json:"max_buffer" yaml:"max_buffer"`
 	Delim     string `json:"delimiter" yaml:"delimiter"`
@@ -46,6 +54,7 @@ type STDINConfig struct {
 // NewSTDINConfig creates a STDINConfig populated with default values.
 func NewSTDINConfig() STDINConfig {
 	return STDINConfig{
+		Codec:     "lines",
 		Multipart: false,
 		MaxBuffer: 1000000,
 		Delim:     "",
@@ -56,28 +65,7 @@ func NewSTDINConfig() STDINConfig {
 
 // NewSTDIN creates a new STDIN input type.
 func NewSTDIN(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	delim := conf.STDIN.Delim
-	if len(delim) == 0 {
-		delim = "\n"
-	}
-
-	stdin := os.Stdin
-	rdr, err := reader.NewLines(
-		func() (io.Reader, error) {
-			// Swap so this only works once since we don't want to read stdin
-			// multiple times.
-			if stdin == nil {
-				return nil, io.EOF
-			}
-			sendStdin := stdin
-			stdin = nil
-			return sendStdin, nil
-		},
-		func() {},
-		reader.OptLinesSetDelimiter(delim),
-		reader.OptLinesSetMaxBuffer(conf.STDIN.MaxBuffer),
-		reader.OptLinesSetMultipart(conf.STDIN.Multipart),
-	)
+	rdr, err := newStdinConsumer(conf.STDIN)
 	if err != nil {
 		return nil, err
 	}
@@ -89,3 +77,82 @@ func NewSTDIN(conf Config, mgr types.Manager, log log.Modular, stats metrics.Typ
 }
 
 //------------------------------------------------------------------------------
+
+type stdinConsumer struct {
+	scanner codec.Reader
+}
+
+func newStdinConsumer(conf STDINConfig) (*stdinConsumer, error) {
+	if len(conf.Delim) > 0 {
+		conf.Codec = "delim:" + conf.Delim
+	}
+	if conf.Multipart && !strings.HasSuffix(conf.Codec, "/multipart") {
+		conf.Codec = conf.Codec + "/multipart"
+	}
+
+	codecConf := codec.NewReaderConfig()
+	codecConf.MaxScanTokenSize = conf.MaxBuffer
+	ctor, err := codec.GetReader(conf.Codec, codecConf)
+	if err != nil {
+		return nil, err
+	}
+
+	scanner, err := ctor("", os.Stdin, func(_ context.Context, err error) error {
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &stdinConsumer{scanner}, nil
+}
+
+// ConnectWithContext attempts to establish a connection to the target S3 bucket
+// and any relevant queues used to traverse the objects (SQS, etc).
+func (s *stdinConsumer) ConnectWithContext(ctx context.Context) error {
+	return nil
+}
+
+// ReadWithContext attempts to read a new message from the target S3 bucket.
+func (s *stdinConsumer) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+	parts, codecAckFn, err := s.scanner.Next(ctx)
+	if err != nil {
+		if errors.Is(err, context.Canceled) ||
+			errors.Is(err, context.DeadlineExceeded) {
+			err = types.ErrTimeout
+		}
+		if err != types.ErrTimeout {
+			s.scanner.Close(ctx)
+		}
+		if errors.Is(err, io.EOF) {
+			return nil, nil, types.ErrTypeClosed
+		}
+		return nil, nil, err
+	}
+	codecAckFn(ctx, nil)
+
+	msg := message.New(nil)
+	msg.Append(parts...)
+
+	if msg.Len() == 0 {
+		return nil, nil, types.ErrTimeout
+	}
+
+	return msg, func(rctx context.Context, res types.Response) error {
+		return nil
+	}, nil
+}
+
+// CloseAsync begins cleaning up resources used by this reader asynchronously.
+func (s *stdinConsumer) CloseAsync() {
+	go func() {
+		if s.scanner != nil {
+			s.scanner.Close(context.Background())
+		}
+	}()
+}
+
+// WaitForClose will block until either the reader is closed or a specified
+// timeout occurs.
+func (s *stdinConsumer) WaitForClose(time.Duration) error {
+	return nil
+}
