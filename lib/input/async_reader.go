@@ -20,7 +20,6 @@ import (
 // AsyncReader is an input implementation that reads messages from a
 // reader.Async component.
 type AsyncReader struct {
-	running   int32
 	connected int32
 
 	allowSkipAcks bool
@@ -54,7 +53,6 @@ func NewAsyncReader(
 	ctx, cancelFn := context.WithCancel(context.Background())
 	fullyCloseCtx, fullyCancelFn := context.WithCancel(context.Background())
 	rdr := &AsyncReader{
-		running:       1,
 		allowSkipAcks: allowSkipAcks,
 		typeStr:       typeStr,
 		reader:        r,
@@ -112,7 +110,7 @@ func (r *AsyncReader) loop() {
 
 	for {
 		if err := r.reader.ConnectWithContext(r.ctx); err != nil {
-			if err == types.ErrTypeClosed {
+			if r.ctx.Err() != nil || err == types.ErrTypeClosed {
 				return
 			}
 			r.log.Errorf("Failed to connect to %v: %v\n", r.typeStr, err)
@@ -128,7 +126,7 @@ func (r *AsyncReader) loop() {
 	mConn.Incr(1)
 	atomic.StoreInt32(&r.connected, 1)
 
-	for atomic.LoadInt32(&r.running) == 1 {
+	for {
 		msg, ackFn, err := r.reader.ReadWithContext(r.ctx)
 
 		// If our reader says it is not connected.
@@ -137,10 +135,10 @@ func (r *AsyncReader) loop() {
 			atomic.StoreInt32(&r.connected, 0)
 
 			// Continue to try to reconnect while still active.
-			for atomic.LoadInt32(&r.running) == 1 {
+			for {
 				if err = r.reader.ConnectWithContext(r.ctx); err != nil {
 					// Close immediately if our reader is closed.
-					if err == types.ErrTypeClosed {
+					if r.ctx.Err() != nil || err == types.ErrTypeClosed {
 						return
 					}
 
@@ -159,7 +157,7 @@ func (r *AsyncReader) loop() {
 		}
 
 		// Close immediately if our reader is closed.
-		if err == types.ErrTypeClosed {
+		if r.ctx.Err() != nil || err == types.ErrTypeClosed {
 			return
 		}
 
@@ -239,9 +237,7 @@ func (r *AsyncReader) Connected() bool {
 
 // CloseAsync shuts down the AsyncReader input and stops processing requests.
 func (r *AsyncReader) CloseAsync() {
-	if atomic.CompareAndSwapInt32(&r.running, 1, 0) {
-		r.closeFn()
-	}
+	r.closeFn()
 }
 
 // WaitForClose blocks until the AsyncReader input has closed down.

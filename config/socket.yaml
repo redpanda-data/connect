@@ -11,9 +11,8 @@ input:
   type: socket
   socket:
     address: /tmp/benthos.sock
-    delimiter: ""
+    codec: lines
     max_buffer: 1000000
-    multipart: false
     network: unix
 buffer:
   type: none

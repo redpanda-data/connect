@@ -118,7 +118,6 @@ type fileConsumer struct {
 
 	paths       []string
 	scannerCtor codec.ReaderConstructor
-	multipart   bool
 
 	scannerMut  sync.Mutex
 	scanner     codec.Reader
@@ -144,7 +143,6 @@ func newFileConsumer(conf FileConfig, log log.Modular) (*fileConsumer, error) {
 		log:         log,
 		scannerCtor: ctor,
 		paths:       expandedPaths,
-		multipart:   conf.Multipart,
 		delete:      conf.DeleteOnFinish,
 	}, nil
 }

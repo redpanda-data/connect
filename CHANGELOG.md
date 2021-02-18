@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - New `azure_queue_storage` input.
 - All inputs with a `codec` field now support multipart.
-- New `codec` field to the `http_client` and `stdin` input.
+- New `codec` field to the `http_client`, `socket` and `stdin` inputs.
 
 ### Fixed
 

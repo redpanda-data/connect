@@ -18,20 +18,23 @@ type asyncCutOffMsg struct {
 // WaitForClose immediately. This is only useful when the underlying readable
 // resource cannot be closed reliably and can block forever.
 type AsyncCutOff struct {
-	msgChan   chan asyncCutOffMsg
-	errChan   chan error
-	closeChan chan struct{}
+	msgChan chan asyncCutOffMsg
+	errChan chan error
+	ctx     context.Context
+	close   func()
 
 	r Async
 }
 
 // NewAsyncCutOff returns a new AsyncCutOff wrapper around a reader.Async.
 func NewAsyncCutOff(r Async) *AsyncCutOff {
+	ctx, done := context.WithCancel(context.Background())
 	return &AsyncCutOff{
-		msgChan:   make(chan asyncCutOffMsg),
-		errChan:   make(chan error),
-		closeChan: make(chan struct{}),
-		r:         r,
+		msgChan: make(chan asyncCutOffMsg),
+		errChan: make(chan error),
+		ctx:     ctx,
+		close:   done,
+		r:       r,
 	}
 }
 
@@ -49,12 +52,18 @@ func (c *AsyncCutOff) ReadWithContext(ctx context.Context) (types.Message, Async
 	go func() {
 		msg, ackFn, err := c.r.ReadWithContext(ctx)
 		if err == nil {
-			c.msgChan <- asyncCutOffMsg{
+			select {
+			case c.msgChan <- asyncCutOffMsg{
 				msg:   msg,
 				ackFn: ackFn,
+			}:
+			case <-ctx.Done():
 			}
 		} else {
-			c.errChan <- err
+			select {
+			case c.errChan <- err:
+			case <-ctx.Done():
+			}
 		}
 	}()
 	select {
@@ -63,8 +72,8 @@ func (c *AsyncCutOff) ReadWithContext(ctx context.Context) (types.Message, Async
 	case e := <-c.errChan:
 		return nil, nil, e
 	case <-ctx.Done():
-		return nil, nil, types.ErrTimeout
-	case <-c.closeChan:
+		c.r.CloseAsync()
+	case <-c.ctx.Done():
 	}
 	return nil, nil, types.ErrTypeClosed
 }
@@ -72,7 +81,7 @@ func (c *AsyncCutOff) ReadWithContext(ctx context.Context) (types.Message, Async
 // CloseAsync triggers the asynchronous closing of the reader.
 func (c *AsyncCutOff) CloseAsync() {
 	c.r.CloseAsync()
-	close(c.closeChan)
+	c.close()
 }
 
 // WaitForClose blocks until either the reader is finished closing or a timeout

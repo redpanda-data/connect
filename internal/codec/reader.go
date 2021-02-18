@@ -357,16 +357,17 @@ func (a *linesReader) ack(ctx context.Context, err error) error {
 }
 
 func (a *linesReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
+	scanned := a.buf.Scan()
 	a.mut.Lock()
 	defer a.mut.Unlock()
 
-	if a.buf.Scan() {
+	if scanned {
 		a.pending++
-
 		bytesCopy := make([]byte, len(a.buf.Bytes()))
 		copy(bytesCopy, a.buf.Bytes())
 		return []types.Part{message.NewPart(bytesCopy)}, a.ack, nil
 	}
+
 	err := a.buf.Err()
 	if err == nil {
 		err = io.EOF
@@ -440,10 +441,11 @@ func (a *csvReader) ack(ctx context.Context, err error) error {
 }
 
 func (a *csvReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
+	records, err := a.scanner.Read()
+
 	a.mut.Lock()
 	defer a.mut.Unlock()
 
-	records, err := a.scanner.Read()
 	if err != nil {
 		if err == io.EOF {
 			a.finished = true
@@ -541,10 +543,12 @@ func (a *customDelimReader) ack(ctx context.Context, err error) error {
 }
 
 func (a *customDelimReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
+	scanned := a.buf.Scan()
+
 	a.mut.Lock()
 	defer a.mut.Unlock()
 
-	if a.buf.Scan() {
+	if scanned {
 		a.pending++
 
 		bytesCopy := make([]byte, len(a.buf.Bytes()))
@@ -612,14 +616,15 @@ func (a *chunkerReader) ack(ctx context.Context, err error) error {
 }
 
 func (a *chunkerReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
-	a.mut.Lock()
-	defer a.mut.Unlock()
-
 	if a.finished {
 		return nil, nil, io.EOF
 	}
 
 	n, err := a.r.Read(a.buf)
+
+	a.mut.Lock()
+	defer a.mut.Unlock()
+
 	if err != nil {
 		if err == io.EOF {
 			a.finished = true
@@ -689,10 +694,11 @@ func (a *tarReader) ack(ctx context.Context, err error) error {
 }
 
 func (a *tarReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
+	_, err := a.buf.Next()
+
 	a.mut.Lock()
 	defer a.mut.Unlock()
 
-	_, err := a.buf.Next()
 	if err == nil {
 		fileBuf := bytes.Buffer{}
 		if _, err = fileBuf.ReadFrom(a.buf); err != nil {
