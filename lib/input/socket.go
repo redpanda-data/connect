@@ -25,17 +25,7 @@ func init() {
 	Constructors[TypeSocket] = TypeSpec{
 		constructor: fromSimpleConstructor(NewSocket),
 		Summary: `
-Connects to a (tcp/unix) socket and consumes a continuous stream of messages.`,
-		Description: `
-If multipart is set to false each line of data is read as a separate message. If
-multipart is set to true each line is read as a message part, and an empty line
-indicates the end of a message.
-
-Messages consumed by this input can be processed in parallel, meaning a single
-instance of this input can utilise any number of threads within a
-` + "`pipeline`" + ` section of a config.
-
-If the delimiter field is left empty then line feed (\n) is used.`,
+Connects to a tcp or unix socket and consumes a continuous stream of messages.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("network", "A network type to assume (unix|tcp).").HasOptions(
 				"unix", "tcp",
@@ -206,14 +196,12 @@ func (s *socketClient) ReadWithContext(ctx context.Context) (types.Message, read
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.
 func (s *socketClient) CloseAsync() {
-	go func() {
-		s.codecMut.Lock()
-		if s.codec != nil {
-			s.codec.Close(context.Background())
-			s.codec = nil
-		}
-		s.codecMut.Unlock()
-	}()
+	s.codecMut.Lock()
+	if s.codec != nil {
+		s.codec.Close(context.Background())
+		s.codec = nil
+	}
+	s.codecMut.Unlock()
 }
 
 // WaitForClose will block until either the reader is closed or a specified

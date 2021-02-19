@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -34,14 +35,12 @@ func TestSocketServerBasic(t *testing.T) {
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	addr := rdr.(*SocketServer).Addr()
-
 	defer func() {
 		rdr.CloseAsync()
 		assert.NoError(t, rdr.WaitForClose(time.Second))
 	}()
 
-	conn, err := net.Dial("unix", addr.String())
+	conn, err := net.Dial("unix", conf.SocketServer.Address)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -93,6 +92,93 @@ func TestSocketServerBasic(t *testing.T) {
 	conn.Close()
 }
 
+func TestSocketServerRetries(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "benthos_socket_test")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	conf := NewConfig()
+	conf.SocketServer.Network = "unix"
+	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
+
+	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	defer func() {
+		rdr.CloseAsync()
+		assert.NoError(t, rdr.WaitForClose(time.Second))
+	}()
+
+	conn, err := net.Dial("unix", conf.SocketServer.Address)
+	require.NoError(t, err)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_, cerr := conn.Write([]byte("foo\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("bar\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("baz\n"))
+		require.NoError(t, cerr)
+		wg.Done()
+	}()
+
+	readNextMsg := func(reject bool) (types.Message, error) {
+		var tran types.Transaction
+		select {
+		case tran = <-rdr.TransactionChan():
+			var res types.Response = response.NewAck()
+			if reject {
+				res = response.NewError(errors.New("test err"))
+			}
+			select {
+			case tran.ResponseChan <- res:
+			case <-time.After(time.Second * 5):
+				return nil, errors.New("timed out")
+			}
+		case <-time.After(time.Second * 5):
+			return nil, errors.New("timed out")
+		}
+		return tran.Payload, nil
+	}
+
+	exp := [][]byte{[]byte("foo")}
+	msg, err := readNextMsg(false)
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
+
+	exp = [][]byte{[]byte("bar")}
+	msg, err = readNextMsg(true)
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
+
+	expRemaining := []string{"bar", "baz"}
+	actRemaining := []string{}
+
+	msg, err = readNextMsg(false)
+	require.NoError(t, err)
+	require.Equal(t, 1, msg.Len())
+	actRemaining = append(actRemaining, string(msg.Get(0).Get()))
+
+	msg, err = readNextMsg(false)
+	require.NoError(t, err)
+	require.Equal(t, 1, msg.Len())
+	actRemaining = append(actRemaining, string(msg.Get(0).Get()))
+
+	sort.Strings(actRemaining)
+	assert.Equal(t, expRemaining, actRemaining)
+
+	wg.Wait()
+	conn.Close()
+}
+
 func TestSocketServerWriteToClosed(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "benthos_socket_test")
 	require.NoError(t, err)
@@ -108,9 +194,7 @@ func TestSocketServerWriteToClosed(t *testing.T) {
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	addr := rdr.(*SocketServer).Addr()
-
-	conn, err := net.Dial("unix", addr.String())
+	conn, err := net.Dial("unix", conf.SocketServer.Address)
 	require.NoError(t, err)
 
 	conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
@@ -223,14 +307,12 @@ func TestSocketServerMultipart(t *testing.T) {
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	addr := rdr.(*SocketServer).Addr()
-
 	defer func() {
 		rdr.CloseAsync()
 		assert.NoError(t, rdr.WaitForClose(time.Second))
 	}()
 
-	conn, err := net.Dial("unix", addr.String())
+	conn, err := net.Dial("unix", conf.SocketServer.Address)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -298,14 +380,12 @@ func TestSocketServerMultipartCustomDelim(t *testing.T) {
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	addr := rdr.(*SocketServer).Addr()
-
 	defer func() {
 		rdr.CloseAsync()
 		assert.NoError(t, rdr.WaitForClose(time.Second))
 	}()
 
-	conn, err := net.Dial("unix", addr.String())
+	conn, err := net.Dial("unix", conf.SocketServer.Address)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -372,14 +452,12 @@ func TestSocketServerMultipartShutdown(t *testing.T) {
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	addr := rdr.(*SocketServer).Addr()
-
 	defer func() {
 		rdr.CloseAsync()
 		assert.NoError(t, rdr.WaitForClose(time.Second))
 	}()
 
-	conn, err := net.Dial("unix", addr.String())
+	conn, err := net.Dial("unix", conf.SocketServer.Address)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -495,6 +573,90 @@ func TestSocketUDPServerBasic(t *testing.T) {
 	msg, err = readNextMsg()
 	require.NoError(t, err)
 	assert.Equal(t, exp, message.GetAllBytes(msg))
+
+	wg.Wait()
+	conn.Close()
+}
+
+func TestSocketUDPServerRetries(t *testing.T) {
+	conf := NewConfig()
+	conf.SocketServer.Network = "udp"
+	conf.SocketServer.Address = "127.0.0.1:0"
+
+	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	addr := rdr.(*SocketServer).Addr()
+
+	defer func() {
+		rdr.CloseAsync()
+		assert.NoError(t, rdr.WaitForClose(time.Second))
+	}()
+
+	conn, err := net.Dial("udp", addr.String())
+	require.NoError(t, err)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+
+		_, cerr := conn.Write([]byte("foo\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("bar\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("baz\n"))
+		require.NoError(t, cerr)
+
+		wg.Done()
+	}()
+
+	readNextMsg := func(reject bool) (types.Message, error) {
+		var tran types.Transaction
+		select {
+		case tran = <-rdr.TransactionChan():
+			var res types.Response = response.NewAck()
+			if reject {
+				res = response.NewError(errors.New("test err"))
+			}
+			select {
+			case tran.ResponseChan <- res:
+			case <-time.After(time.Second * 5):
+				return nil, errors.New("timed out")
+			}
+		case <-time.After(time.Second * 5):
+			return nil, errors.New("timed out")
+		}
+		return tran.Payload, nil
+	}
+
+	exp := [][]byte{[]byte("foo")}
+	msg, err := readNextMsg(false)
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
+
+	exp = [][]byte{[]byte("bar")}
+	msg, err = readNextMsg(true)
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
+
+	expRemaining := []string{"bar", "baz"}
+	actRemaining := []string{}
+
+	msg, err = readNextMsg(false)
+	require.NoError(t, err)
+	require.Equal(t, 1, msg.Len())
+	actRemaining = append(actRemaining, string(msg.Get(0).Get()))
+
+	msg, err = readNextMsg(false)
+	require.NoError(t, err)
+	require.Equal(t, 1, msg.Len())
+	actRemaining = append(actRemaining, string(msg.Get(0).Get()))
+
+	sort.Strings(actRemaining)
+	assert.Equal(t, expRemaining, actRemaining)
 
 	wg.Wait()
 	conn.Close()
@@ -664,6 +826,11 @@ func TestSocketUDPServerCustomDelim(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, exp, message.GetAllBytes(msg))
 
+	exp = [][]byte{[]byte("")}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
+
 	exp = [][]byte{[]byte("baz\n")}
 	msg, err = readNextMsg()
 	require.NoError(t, err)
@@ -733,6 +900,11 @@ func TestSocketUDPServerShutdown(t *testing.T) {
 	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	exp = [][]byte{[]byte("bar")}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
+
+	exp = [][]byte{[]byte("")}
 	msg, err = readNextMsg()
 	require.NoError(t, err)
 	assert.Equal(t, exp, message.GetAllBytes(msg))

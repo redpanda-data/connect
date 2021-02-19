@@ -451,6 +451,7 @@ INPUT_SOCKET_MAX_BUFFER                              = 1000000
 INPUT_SOCKET_MULTIPART                               = false
 INPUT_SOCKET_NETWORK                                 = unix
 INPUT_SOCKET_SERVER_ADDRESS                          = /tmp/benthos.sock
+INPUT_SOCKET_SERVER_CODEC                            = lines
 INPUT_SOCKET_SERVER_DELIMITER
 INPUT_SOCKET_SERVER_MAX_BUFFER                       = 1000000
 INPUT_SOCKET_SERVER_MULTIPART                        = false

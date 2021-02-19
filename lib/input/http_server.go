@@ -210,6 +210,7 @@ type HTTPServer struct {
 
 	allowedVerbs map[string]struct{}
 
+	// TODO: V4 Reduce this way down
 	mCount         metrics.StatCounter
 	mLatency       metrics.StatTimer
 	mRateLimited   metrics.StatCounter

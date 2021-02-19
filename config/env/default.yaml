@@ -503,6 +503,7 @@ input:
           network: ${INPUT_SOCKET_NETWORK:unix}
         socket_server:
           address: ${INPUT_SOCKET_SERVER_ADDRESS:/tmp/benthos.sock}
+          codec: ${INPUT_SOCKET_SERVER_CODEC:lines}
           delimiter: ${INPUT_SOCKET_SERVER_DELIMITER}
           max_buffer: ${INPUT_SOCKET_SERVER_MAX_BUFFER:1000000}
           multipart: ${INPUT_SOCKET_SERVER_MULTIPART:false}

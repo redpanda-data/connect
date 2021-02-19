@@ -1,8 +1,6 @@
 package input
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -11,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -23,27 +22,18 @@ import (
 func init() {
 	Constructors[TypeSocketServer] = TypeSpec{
 		constructor: fromSimpleConstructor(NewSocketServer),
-		Summary: `
-Creates a server that receives messages over a (tcp/udp/unix) socket. Each
-connection is parsed as a continuous stream of line delimited messages.`,
+		Summary:     `Creates a server that receives a stream of messages over a tcp, udp or unix socket.`,
 		Description: `
-If multipart is set to false each line of data is read as a separate message. If
-multipart is set to true each line is read as a message part, and an empty line
-indicates the end of a message.
-
-If the delimiter field is left empty then line feed (\n) is used.
-
-The field ` + "`max_buffer`" + ` specifies the maximum amount of memory to
-allocate _per connection_ for buffering lines of data. If a line of data from a
-connection exceeds this value then the connection will be closed.`,
+The field ` + "`max_buffer`" + ` specifies the maximum amount of memory to allocate _per connection_ for buffering lines of data. If a line of data from a connection exceeds this value then the connection will be closed.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("network", "A network type to accept (unix|tcp|udp).").HasOptions(
 				"unix", "tcp", "udp",
 			),
 			docs.FieldCommon("address", "The address to listen from.", "/tmp/benthos.sock", "0.0.0.0:6000"),
-			docs.FieldAdvanced("multipart", "Whether messages should be consumed as multiple parts. If so, each line is consumed as a message parts and the full message ends with an empty line."),
+			codec.ReaderDocs,
 			docs.FieldAdvanced("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed."),
-			docs.FieldAdvanced("delimiter", "The delimiter to use to detect the end of each message. If left empty line breaks are used."),
+			docs.FieldDeprecated("multipart"),
+			docs.FieldDeprecated("delimiter"),
 		},
 		Categories: []Category{
 			CategoryNetwork,
@@ -57,8 +47,9 @@ connection exceeds this value then the connection will be closed.`,
 type SocketServerConfig struct {
 	Network   string `json:"network" yaml:"network"`
 	Address   string `json:"address" yaml:"address"`
-	Multipart bool   `json:"multipart" yaml:"multipart"`
+	Codec     string `json:"codec" yaml:"codec"`
 	MaxBuffer int    `json:"max_buffer" yaml:"max_buffer"`
+	Multipart bool   `json:"multipart" yaml:"multipart"`
 	Delim     string `json:"delimiter" yaml:"delimiter"`
 }
 
@@ -67,8 +58,11 @@ func NewSocketServerConfig() SocketServerConfig {
 	return SocketServerConfig{
 		Network:   "unix",
 		Address:   "/tmp/benthos.sock",
-		Multipart: false,
+		Codec:     "lines",
 		MaxBuffer: 1000000,
+
+		// TODO: V4 Remove these fields
+		Multipart: false,
 		Delim:     "",
 	}
 }
@@ -91,15 +85,18 @@ type SocketServer struct {
 	stats metrics.Type
 	log   log.Modular
 
-	delim    []byte
-	listener net.Listener
-	conn     net.PacketConn
+	codecCtor codec.ReaderConstructor
+	listener  net.Listener
+	conn      net.PacketConn
 
+	retriesMut   sync.RWMutex
 	transactions chan types.Transaction
 
 	ctx        context.Context
 	closeFn    func()
 	closedChan chan struct{}
+
+	mLatency metrics.StatTimer
 }
 
 // NewSocketServer creates a new SocketServer input type.
@@ -108,33 +105,46 @@ func NewSocketServer(conf Config, mgr types.Manager, log log.Modular, stats metr
 	var cn net.PacketConn
 	var err error
 
-	switch conf.SocketServer.Network {
+	sconf := conf.SocketServer
+	if len(sconf.Delim) > 0 {
+		sconf.Codec = "delim:" + sconf.Delim
+	}
+	if sconf.Multipart && !strings.HasSuffix(sconf.Codec, "/multipart") {
+		sconf.Codec = sconf.Codec + "/multipart"
+	}
+
+	codecConf := codec.NewReaderConfig()
+	codecConf.MaxScanTokenSize = sconf.MaxBuffer
+	ctor, err := codec.GetReader(sconf.Codec, codecConf)
+	if err != nil {
+		return nil, err
+	}
+
+	switch sconf.Network {
 	case "tcp", "unix":
-		ln, err = net.Listen(conf.SocketServer.Network, conf.SocketServer.Address)
+		ln, err = net.Listen(sconf.Network, sconf.Address)
 	case "udp":
-		cn, err = net.ListenPacket(conf.SocketServer.Network, conf.SocketServer.Address)
+		cn, err = net.ListenPacket(sconf.Network, sconf.Address)
 	default:
-		return nil, fmt.Errorf("socket network '%v' is not supported by this input", conf.SocketServer.Network)
+		return nil, fmt.Errorf("socket network '%v' is not supported by this input", sconf.Network)
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	delim := []byte("\n")
-	if len(conf.SocketServer.Delim) > 0 {
-		delim = []byte(conf.SocketServer.Delim)
-	}
 	t := SocketServer{
 		conf:  conf.SocketServer,
 		stats: stats,
 		log:   log,
 
-		delim:    delim,
-		listener: ln,
-		conn:     cn,
+		codecCtor: ctor,
+		listener:  ln,
+		conn:      cn,
 
 		transactions: make(chan types.Transaction),
 		closedChan:   make(chan struct{}),
+
+		mLatency: stats.GetTimer("latency"),
 	}
 	t.ctx, t.closeFn = context.WithCancel(context.Background())
 
@@ -156,32 +166,63 @@ func (t *SocketServer) Addr() net.Addr {
 	return t.conn.LocalAddr()
 }
 
-func (t *SocketServer) newScanner(r io.Reader) *bufio.Scanner {
-	scanner := bufio.NewScanner(r)
-	if t.conf.MaxBuffer != bufio.MaxScanTokenSize {
-		scanner.Buffer([]byte{}, t.conf.MaxBuffer)
+func (t *SocketServer) sendMsg(msg types.Message) bool {
+	tStarted := time.Now()
+
+	// Block whilst retries are happening
+	t.retriesMut.Lock()
+	t.retriesMut.Unlock()
+
+	resChan := make(chan types.Response)
+	select {
+	case t.transactions <- types.NewTransaction(msg, resChan):
+	case <-t.ctx.Done():
+		return false
 	}
 
-	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
-		if atEOF && len(data) == 0 {
-			return 0, nil, nil
+	go func() {
+		hasLocked := false
+		for {
+			select {
+			case res, open := <-resChan:
+				if !open {
+					return
+				}
+				var sendErr error
+				if res != nil {
+					sendErr = res.Error()
+				}
+				if sendErr == nil || sendErr == types.ErrTypeClosed {
+					if sendErr == nil {
+						t.mLatency.Timing(time.Since(tStarted).Nanoseconds())
+					}
+					return
+				}
+				if !hasLocked {
+					t.retriesMut.RLock()
+					defer t.retriesMut.RUnlock()
+				}
+				t.log.Errorf("failed to send message: %v\n", sendErr)
+
+				// Wait before attempting again
+				select {
+				case <-time.After(time.Second):
+				case <-t.ctx.Done():
+					return
+				}
+
+				// And then resend the transaction
+				select {
+				case t.transactions <- types.NewTransaction(msg, resChan):
+				case <-t.ctx.Done():
+					return
+				}
+			case <-t.ctx.Done():
+				return
+			}
 		}
-
-		if i := bytes.Index(data, t.delim); i >= 0 {
-			// We have a full terminated line.
-			return i + len(t.delim), data[0:i], nil
-		}
-
-		// If we're at EOF, we have a final, non-terminated line. Return it.
-		if atEOF {
-			return len(data), data, nil
-		}
-
-		// Request more data.
-		return 0, nil, nil
-	})
-
-	return scanner
+	}()
+	return true
 }
 
 func (t *SocketServer) loop() {
@@ -189,7 +230,6 @@ func (t *SocketServer) loop() {
 		mCount     = t.stats.GetCounter("count")
 		mRcvd      = t.stats.GetCounter("batch.received")
 		mPartsRcvd = t.stats.GetCounter("received")
-		mLatency   = t.stats.GetTimer("latency")
 	)
 
 	var wg sync.WaitGroup
@@ -197,9 +237,10 @@ func (t *SocketServer) loop() {
 	defer func() {
 		wg.Wait()
 
-		if t.listener != nil {
-			t.listener.Close()
-		}
+		t.retriesMut.Lock()
+		t.retriesMut.Unlock()
+
+		t.listener.Close()
 
 		close(t.transactions)
 		close(t.closedChan)
@@ -211,35 +252,6 @@ func (t *SocketServer) loop() {
 		<-t.ctx.Done()
 		t.listener.Close()
 	}()
-
-	sendMsg := func(msg types.Message) error {
-		tStarted := time.Now()
-		mPartsRcvd.Incr(int64(msg.Len()))
-		mRcvd.Incr(1)
-
-		resChan := make(chan types.Response)
-		select {
-		case t.transactions <- types.NewTransaction(msg, resChan):
-		case <-t.ctx.Done():
-			return types.ErrTypeClosed
-		}
-
-		select {
-		case res, open := <-resChan:
-			if !open {
-				return types.ErrTypeClosed
-			}
-			if res != nil {
-				if res.Error() != nil {
-					return res.Error()
-				}
-			}
-		case <-t.ctx.Done():
-			return types.ErrTypeClosed
-		}
-		mLatency.Timing(time.Since(tStarted).Nanoseconds())
-		return nil
-	}
 
 acceptLoop:
 	for {
@@ -267,48 +279,34 @@ acceptLoop:
 				wg.Done()
 				c.Close()
 			}()
-			scanner := t.newScanner(c)
-			var msg types.Message
-			msgLoop := func() bool {
-				for msg != nil {
-					sendErr := sendMsg(msg)
-					if sendErr == nil || sendErr == types.ErrTypeClosed {
-						msg = nil
-						return sendErr != types.ErrTypeClosed
-					}
-					t.log.Errorf("Failed to send message: %v\n", sendErr)
-					<-time.After(time.Second)
-				}
-				return true
+			codec, err := t.codecCtor("", c, func(ctx context.Context, err error) error {
+				return nil
+			})
+			if err != nil {
+				t.log.Errorf("Failed to create codec for new connection: %v\n", err)
+				return
 			}
-			for scanner.Scan() {
-				mCount.Incr(1)
-				if len(scanner.Bytes()) == 0 {
-					if t.conf.Multipart && msg != nil {
-						if !msgLoop() {
-							return
-						}
+
+			for {
+				parts, ackFn, err := codec.Next(t.ctx)
+				if err != nil {
+					if err != io.EOF && err != types.ErrTimeout {
+						t.log.Errorf("Connection dropped due to: %v\n", err)
 					}
-					continue
-				}
-				if msg == nil {
-					msg = message.New(nil)
-				}
-				msg.Append(message.NewPart(scanner.Bytes()))
-				if !t.conf.Multipart {
-					if !msgLoop() {
-						return
-					}
-				}
-			}
-			if msg != nil {
-				if !msgLoop() {
 					return
 				}
-			}
-			if cerr := scanner.Err(); cerr != nil {
-				if cerr != io.EOF {
-					t.log.Errorf("Connection error due to: %v\n", cerr)
+				mCount.Incr(1)
+				mRcvd.Incr(1)
+				mPartsRcvd.Incr(int64(len(parts)))
+
+				// We simply bounce rejected messages in a loop downstream so
+				// there's no benefit to aggregating acks.
+				ackFn(t.ctx, nil)
+
+				msg := message.New(nil)
+				msg.Append(parts...)
+				if !t.sendMsg(msg) {
+					return
 				}
 			}
 		}(conn)
@@ -320,89 +318,51 @@ func (t *SocketServer) udpLoop() {
 		mCount     = t.stats.GetCounter("count")
 		mRcvd      = t.stats.GetCounter("batch.received")
 		mPartsRcvd = t.stats.GetCounter("received")
-		mLatency   = t.stats.GetTimer("latency")
 	)
 
 	defer func() {
+		t.retriesMut.Lock()
+		t.retriesMut.Unlock()
+
 		close(t.transactions)
 		close(t.closedChan)
 	}()
 
+	codec, err := t.codecCtor("", &wrapPacketConn{PacketConn: t.conn}, func(ctx context.Context, err error) error {
+		return nil
+	})
+	if err != nil {
+		t.log.Errorf("Connection error due to: %v\n", err)
+		return
+	}
+
 	go func() {
 		<-t.ctx.Done()
-		if t.conn != nil {
-			t.conn.Close()
-		}
+		codec.Close(context.Background())
+		t.conn.Close()
 	}()
 
 	t.log.Infof("Receiving udp socket messages from address: %v\n", t.conn.LocalAddr())
 
-	sendMsg := func(msg types.Message) error {
-		tStarted := time.Now()
-		mPartsRcvd.Incr(int64(msg.Len()))
-		mRcvd.Incr(1)
-
-		resChan := make(chan types.Response)
-		select {
-		case t.transactions <- types.NewTransaction(msg, resChan):
-		case <-t.ctx.Done():
-			return types.ErrTypeClosed
-		}
-
-		select {
-		case res, open := <-resChan:
-			if !open {
-				return types.ErrTypeClosed
-			}
-			if res != nil {
-				if res.Error() != nil {
-					return res.Error()
-				}
-			}
-		case <-t.ctx.Done():
-			return types.ErrTypeClosed
-		}
-		mLatency.Timing(time.Since(tStarted).Nanoseconds())
-		return nil
-	}
-
-	var msg types.Message
-	msgLoop := func() bool {
-		for msg != nil {
-			sendErr := sendMsg(msg)
-			if sendErr == nil || sendErr == types.ErrTypeClosed {
-				msg = nil
-				return sendErr != types.ErrTypeClosed
-			}
-			t.log.Errorf("Failed to send message: %v\n", sendErr)
-			<-time.After(time.Second)
-		}
-		return true
-	}
 	for {
-		scanner := t.newScanner(&wrapPacketConn{PacketConn: t.conn})
-		for scanner.Scan() {
-			mCount.Incr(1)
-			if len(scanner.Bytes()) == 0 {
-				continue
+		parts, ackFn, err := codec.Next(t.ctx)
+		if err != nil {
+			if err != io.EOF && err != types.ErrTimeout {
+				t.log.Errorf("Connection dropped due to: %v\n", err)
 			}
-			if msg == nil {
-				msg = message.New(nil)
-			}
-			msg.Append(message.NewPart(scanner.Bytes()))
-			if !msgLoop() {
-				return
-			}
+			return
 		}
-		if msg != nil {
-			if !msgLoop() {
-				return
-			}
-		}
-		if cerr := scanner.Err(); cerr != nil {
-			if cerr != io.EOF && !strings.Contains(cerr.Error(), "use of closed network connection") {
-				t.log.Errorf("Connection error due to: %v\n", cerr)
-			}
+		mCount.Incr(1)
+		mRcvd.Incr(1)
+		mPartsRcvd.Incr(int64(len(parts)))
+
+		// We simply bounce rejected messages in a loop downstream so
+		// there's no benefit to aggregating acks.
+		ackFn(t.ctx, nil)
+
+		msg := message.New(nil)
+		msg.Append(parts...)
+		if !t.sendMsg(msg) {
 			return
 		}
 	}
