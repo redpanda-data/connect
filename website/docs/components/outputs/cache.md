@@ -60,6 +60,7 @@ and can target any of the following types:
 - [`file`](/docs/components/caches/file)
 - [`memcached`](/docs/components/caches/memcached)
 - [`memory`](/docs/components/caches/memory)
+- [`mongodb`](/docs/components/caches/mongodb)
 - [`multilevel`](/docs/components/caches/multilevel)
 - [`redis`](/docs/components/caches/redis)
 - [`ristretto`](/docs/components/caches/ristretto)

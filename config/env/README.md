@@ -515,16 +515,16 @@ BUFFER_MEMORY_LIMIT = 524288000
 ## PROCESSOR
 
 ```
-PROCESSOR_THREADS                                    = 1
-PROCESSOR_TYPE                                       = noop
-PROCESSOR_ARCHIVE_FORMAT                             = binary
-PROCESSOR_ARCHIVE_PATH                               = ${!count("files")}-${!timestamp_unix_nano()}.txt
-PROCESSOR_AVRO_ENCODING                              = textual
-PROCESSOR_AVRO_OPERATOR                              = to_json
+PROCESSOR_THREADS                                      = 1
+PROCESSOR_TYPE                                         = noop
+PROCESSOR_ARCHIVE_FORMAT                               = binary
+PROCESSOR_ARCHIVE_PATH                                 = ${!count("files")}-${!timestamp_unix_nano()}.txt
+PROCESSOR_AVRO_ENCODING                                = textual
+PROCESSOR_AVRO_OPERATOR                                = to_json
 PROCESSOR_AVRO_SCHEMA
 PROCESSOR_AVRO_SCHEMA_PATH
-PROCESSOR_AWK_CODEC                                  = text
-PROCESSOR_AWK_PROGRAM                                = BEGIN { x = 0 } { print $0, x; x++ }
+PROCESSOR_AWK_CODEC                                    = text
+PROCESSOR_AWK_PROGRAM                                  = BEGIN { x = 0 } { print $0, x; x++ }
 PROCESSOR_AWS_LAMBDA_CREDENTIALS_ID
 PROCESSOR_AWS_LAMBDA_CREDENTIALS_PROFILE
 PROCESSOR_AWS_LAMBDA_CREDENTIALS_ROLE
@@ -533,134 +533,134 @@ PROCESSOR_AWS_LAMBDA_CREDENTIALS_SECRET
 PROCESSOR_AWS_LAMBDA_CREDENTIALS_TOKEN
 PROCESSOR_AWS_LAMBDA_ENDPOINT
 PROCESSOR_AWS_LAMBDA_FUNCTION
-PROCESSOR_AWS_LAMBDA_PARALLEL                        = false
+PROCESSOR_AWS_LAMBDA_PARALLEL                          = false
 PROCESSOR_AWS_LAMBDA_RATE_LIMIT
-PROCESSOR_AWS_LAMBDA_REGION                          = eu-west-1
-PROCESSOR_AWS_LAMBDA_RETRIES                         = 3
-PROCESSOR_AWS_LAMBDA_TIMEOUT                         = 5s
-PROCESSOR_BATCH_BYTE_SIZE                            = 0
+PROCESSOR_AWS_LAMBDA_REGION                            = eu-west-1
+PROCESSOR_AWS_LAMBDA_RETRIES                           = 3
+PROCESSOR_AWS_LAMBDA_TIMEOUT                           = 5s
+PROCESSOR_BATCH_BYTE_SIZE                              = 0
 PROCESSOR_BATCH_CONDITION_BLOBLANG
-PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MAX_PARTS     = 100
-PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MAX_PART_SIZE = 1073741824
-PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MIN_PARTS     = 1
-PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MIN_PART_SIZE = 1
+PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MAX_PARTS       = 100
+PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MAX_PART_SIZE   = 1073741824
+PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MIN_PARTS       = 1
+PROCESSOR_BATCH_CONDITION_BOUNDS_CHECK_MIN_PART_SIZE   = 1
 PROCESSOR_BATCH_CONDITION_CHECK_INTERPOLATION_VALUE
-PROCESSOR_BATCH_CONDITION_COUNT_ARG                  = 100
-PROCESSOR_BATCH_CONDITION_JMESPATH_PART              = 0
+PROCESSOR_BATCH_CONDITION_COUNT_ARG                    = 100
+PROCESSOR_BATCH_CONDITION_JMESPATH_PART                = 0
 PROCESSOR_BATCH_CONDITION_JMESPATH_QUERY
 PROCESSOR_BATCH_CONDITION_JSON_ARG
-PROCESSOR_BATCH_CONDITION_JSON_OPERATOR              = exists
-PROCESSOR_BATCH_CONDITION_JSON_PART                  = 0
+PROCESSOR_BATCH_CONDITION_JSON_OPERATOR                = exists
+PROCESSOR_BATCH_CONDITION_JSON_PART                    = 0
 PROCESSOR_BATCH_CONDITION_JSON_PATH
-PROCESSOR_BATCH_CONDITION_JSON_SCHEMA_PART           = 0
+PROCESSOR_BATCH_CONDITION_JSON_SCHEMA_PART             = 0
 PROCESSOR_BATCH_CONDITION_JSON_SCHEMA_SCHEMA
 PROCESSOR_BATCH_CONDITION_JSON_SCHEMA_SCHEMA_PATH
 PROCESSOR_BATCH_CONDITION_METADATA_ARG
 PROCESSOR_BATCH_CONDITION_METADATA_KEY
-PROCESSOR_BATCH_CONDITION_METADATA_OPERATOR          = equals_cs
-PROCESSOR_BATCH_CONDITION_METADATA_PART              = 0
-PROCESSOR_BATCH_CONDITION_NUMBER_ARG                 = 0
-PROCESSOR_BATCH_CONDITION_NUMBER_OPERATOR            = equals
-PROCESSOR_BATCH_CONDITION_NUMBER_PART                = 0
-PROCESSOR_BATCH_CONDITION_PROCESSOR_FAILED_PART      = 0
+PROCESSOR_BATCH_CONDITION_METADATA_OPERATOR            = equals_cs
+PROCESSOR_BATCH_CONDITION_METADATA_PART                = 0
+PROCESSOR_BATCH_CONDITION_NUMBER_ARG                   = 0
+PROCESSOR_BATCH_CONDITION_NUMBER_OPERATOR              = equals
+PROCESSOR_BATCH_CONDITION_NUMBER_PART                  = 0
+PROCESSOR_BATCH_CONDITION_PROCESSOR_FAILED_PART        = 0
 PROCESSOR_BATCH_CONDITION_RESOURCE
-PROCESSOR_BATCH_CONDITION_STATIC                     = false
+PROCESSOR_BATCH_CONDITION_STATIC                       = false
 PROCESSOR_BATCH_CONDITION_TEXT_ARG
-PROCESSOR_BATCH_CONDITION_TEXT_OPERATOR              = equals_cs
-PROCESSOR_BATCH_CONDITION_TEXT_PART                  = 0
-PROCESSOR_BATCH_CONDITION_TYPE                       = static
-PROCESSOR_BATCH_COUNT                                = 0
+PROCESSOR_BATCH_CONDITION_TEXT_OPERATOR                = equals_cs
+PROCESSOR_BATCH_CONDITION_TEXT_PART                    = 0
+PROCESSOR_BATCH_CONDITION_TYPE                         = static
+PROCESSOR_BATCH_COUNT                                  = 0
 PROCESSOR_BATCH_PERIOD
 PROCESSOR_BLOBLANG
-PROCESSOR_BOUNDS_CHECK_MAX_PARTS                     = 100
-PROCESSOR_BOUNDS_CHECK_MAX_PART_SIZE                 = 1073741824
-PROCESSOR_BOUNDS_CHECK_MIN_PARTS                     = 1
-PROCESSOR_BOUNDS_CHECK_MIN_PART_SIZE                 = 1
+PROCESSOR_BOUNDS_CHECK_MAX_PARTS                       = 100
+PROCESSOR_BOUNDS_CHECK_MAX_PART_SIZE                   = 1073741824
+PROCESSOR_BOUNDS_CHECK_MIN_PARTS                       = 1
+PROCESSOR_BOUNDS_CHECK_MIN_PART_SIZE                   = 1
 PROCESSOR_BRANCH_REQUEST_MAP
 PROCESSOR_BRANCH_RESULT_MAP
 PROCESSOR_CACHE_CACHE
 PROCESSOR_CACHE_KEY
-PROCESSOR_CACHE_OPERATOR                             = set
+PROCESSOR_CACHE_OPERATOR                               = set
 PROCESSOR_CACHE_RESOURCE
 PROCESSOR_CACHE_TTL
 PROCESSOR_CACHE_VALUE
-PROCESSOR_COMPRESS_ALGORITHM                         = gzip
-PROCESSOR_COMPRESS_LEVEL                             = -1
-PROCESSOR_DECODE_SCHEME                              = base64
-PROCESSOR_DECOMPRESS_ALGORITHM                       = gzip
-PROCESSOR_ENCODE_SCHEME                              = base64
-PROCESSOR_GROK_NAMED_CAPTURES_ONLY                   = true
-PROCESSOR_GROK_OUTPUT_FORMAT                         = json
-PROCESSOR_GROK_REMOVE_EMPTY_VALUES                   = true
-PROCESSOR_GROK_USE_DEFAULT_PATTERNS                  = true
-PROCESSOR_GROUP_BY_VALUE_VALUE                       = ${! meta("example") }
-PROCESSOR_HASH_ALGORITHM                             = sha256
+PROCESSOR_COMPRESS_ALGORITHM                           = gzip
+PROCESSOR_COMPRESS_LEVEL                               = -1
+PROCESSOR_DECODE_SCHEME                                = base64
+PROCESSOR_DECOMPRESS_ALGORITHM                         = gzip
+PROCESSOR_ENCODE_SCHEME                                = base64
+PROCESSOR_GROK_NAMED_CAPTURES_ONLY                     = true
+PROCESSOR_GROK_OUTPUT_FORMAT                           = json
+PROCESSOR_GROK_REMOVE_EMPTY_VALUES                     = true
+PROCESSOR_GROK_USE_DEFAULT_PATTERNS                    = true
+PROCESSOR_GROUP_BY_VALUE_VALUE                         = ${! meta("example") }
+PROCESSOR_HASH_ALGORITHM                               = sha256
 PROCESSOR_HASH_KEY
-PROCESSOR_HASH_SAMPLE_PARTS                          = 0
-PROCESSOR_HASH_SAMPLE_RETAIN_MAX                     = 10
-PROCESSOR_HASH_SAMPLE_RETAIN_MIN                     = 0
-PROCESSOR_HTTP_BACKOFF_ON                            = 429
-PROCESSOR_HTTP_BASIC_AUTH_ENABLED                    = false
+PROCESSOR_HASH_SAMPLE_PARTS                            = 0
+PROCESSOR_HASH_SAMPLE_RETAIN_MAX                       = 10
+PROCESSOR_HASH_SAMPLE_RETAIN_MIN                       = 0
+PROCESSOR_HTTP_BACKOFF_ON                              = 429
+PROCESSOR_HTTP_BASIC_AUTH_ENABLED                      = false
 PROCESSOR_HTTP_BASIC_AUTH_PASSWORD
 PROCESSOR_HTTP_BASIC_AUTH_USERNAME
-PROCESSOR_HTTP_COPY_RESPONSE_HEADERS                 = false
-PROCESSOR_HTTP_HEADERS_CONTENT_TYPE                  = application/octet-stream
-PROCESSOR_HTTP_MAX_PARALLEL                          = 0
-PROCESSOR_HTTP_MAX_RETRY_BACKOFF                     = 300s
+PROCESSOR_HTTP_COPY_RESPONSE_HEADERS                   = false
+PROCESSOR_HTTP_HEADERS_CONTENT_TYPE                    = application/octet-stream
+PROCESSOR_HTTP_MAX_PARALLEL                            = 0
+PROCESSOR_HTTP_MAX_RETRY_BACKOFF                       = 300s
 PROCESSOR_HTTP_OAUTH2_CLIENT_KEY
 PROCESSOR_HTTP_OAUTH2_CLIENT_SECRET
-PROCESSOR_HTTP_OAUTH2_ENABLED                        = false
+PROCESSOR_HTTP_OAUTH2_ENABLED                          = false
 PROCESSOR_HTTP_OAUTH2_TOKEN_URL
 PROCESSOR_HTTP_OAUTH_ACCESS_TOKEN
 PROCESSOR_HTTP_OAUTH_ACCESS_TOKEN_SECRET
 PROCESSOR_HTTP_OAUTH_CONSUMER_KEY
 PROCESSOR_HTTP_OAUTH_CONSUMER_SECRET
-PROCESSOR_HTTP_OAUTH_ENABLED                         = false
+PROCESSOR_HTTP_OAUTH_ENABLED                           = false
 PROCESSOR_HTTP_OAUTH_REQUEST_URL
-PROCESSOR_HTTP_PARALLEL                              = false
+PROCESSOR_HTTP_PARALLEL                                = false
 PROCESSOR_HTTP_PROXY_URL
 PROCESSOR_HTTP_RATE_LIMIT
-PROCESSOR_HTTP_REQUEST_BACKOFF_ON                    = 429
-PROCESSOR_HTTP_REQUEST_BASIC_AUTH_ENABLED            = false
+PROCESSOR_HTTP_REQUEST_BACKOFF_ON                      = 429
+PROCESSOR_HTTP_REQUEST_BASIC_AUTH_ENABLED              = false
 PROCESSOR_HTTP_REQUEST_BASIC_AUTH_PASSWORD
 PROCESSOR_HTTP_REQUEST_BASIC_AUTH_USERNAME
-PROCESSOR_HTTP_REQUEST_COPY_RESPONSE_HEADERS         = false
-PROCESSOR_HTTP_REQUEST_HEADERS_CONTENT_TYPE          = application/octet-stream
-PROCESSOR_HTTP_REQUEST_MAX_RETRY_BACKOFF             = 300s
+PROCESSOR_HTTP_REQUEST_COPY_RESPONSE_HEADERS           = false
+PROCESSOR_HTTP_REQUEST_HEADERS_CONTENT_TYPE            = application/octet-stream
+PROCESSOR_HTTP_REQUEST_MAX_RETRY_BACKOFF               = 300s
 PROCESSOR_HTTP_REQUEST_OAUTH2_CLIENT_KEY
 PROCESSOR_HTTP_REQUEST_OAUTH2_CLIENT_SECRET
-PROCESSOR_HTTP_REQUEST_OAUTH2_ENABLED                = false
+PROCESSOR_HTTP_REQUEST_OAUTH2_ENABLED                  = false
 PROCESSOR_HTTP_REQUEST_OAUTH2_TOKEN_URL
 PROCESSOR_HTTP_REQUEST_OAUTH_ACCESS_TOKEN
 PROCESSOR_HTTP_REQUEST_OAUTH_ACCESS_TOKEN_SECRET
 PROCESSOR_HTTP_REQUEST_OAUTH_CONSUMER_KEY
 PROCESSOR_HTTP_REQUEST_OAUTH_CONSUMER_SECRET
-PROCESSOR_HTTP_REQUEST_OAUTH_ENABLED                 = false
+PROCESSOR_HTTP_REQUEST_OAUTH_ENABLED                   = false
 PROCESSOR_HTTP_REQUEST_OAUTH_REQUEST_URL
 PROCESSOR_HTTP_REQUEST_PROXY_URL
 PROCESSOR_HTTP_REQUEST_RATE_LIMIT
-PROCESSOR_HTTP_REQUEST_RETRIES                       = 3
-PROCESSOR_HTTP_REQUEST_RETRY_PERIOD                  = 1s
-PROCESSOR_HTTP_REQUEST_TIMEOUT                       = 5s
-PROCESSOR_HTTP_REQUEST_TLS_ENABLED                   = false
+PROCESSOR_HTTP_REQUEST_RETRIES                         = 3
+PROCESSOR_HTTP_REQUEST_RETRY_PERIOD                    = 1s
+PROCESSOR_HTTP_REQUEST_TIMEOUT                         = 5s
+PROCESSOR_HTTP_REQUEST_TLS_ENABLED                     = false
 PROCESSOR_HTTP_REQUEST_TLS_ROOT_CAS_FILE
-PROCESSOR_HTTP_REQUEST_TLS_SKIP_CERT_VERIFY          = false
-PROCESSOR_HTTP_REQUEST_URL                           = http://localhost:4195/post
-PROCESSOR_HTTP_REQUEST_VERB                          = POST
-PROCESSOR_HTTP_RETRIES                               = 3
-PROCESSOR_HTTP_RETRY_PERIOD                          = 1s
-PROCESSOR_HTTP_TIMEOUT                               = 5s
-PROCESSOR_HTTP_TLS_ENABLED                           = false
+PROCESSOR_HTTP_REQUEST_TLS_SKIP_CERT_VERIFY            = false
+PROCESSOR_HTTP_REQUEST_URL                             = http://localhost:4195/post
+PROCESSOR_HTTP_REQUEST_VERB                            = POST
+PROCESSOR_HTTP_RETRIES                                 = 3
+PROCESSOR_HTTP_RETRY_PERIOD                            = 1s
+PROCESSOR_HTTP_TIMEOUT                                 = 5s
+PROCESSOR_HTTP_TLS_ENABLED                             = false
 PROCESSOR_HTTP_TLS_ROOT_CAS_FILE
-PROCESSOR_HTTP_TLS_SKIP_CERT_VERIFY                  = false
-PROCESSOR_HTTP_URL                                   = http://localhost:4195/post
-PROCESSOR_HTTP_VERB                                  = POST
+PROCESSOR_HTTP_TLS_SKIP_CERT_VERIFY                    = false
+PROCESSOR_HTTP_URL                                     = http://localhost:4195/post
+PROCESSOR_HTTP_VERB                                    = POST
 PROCESSOR_INSERT_PART_CONTENT
-PROCESSOR_INSERT_PART_INDEX                          = -1
+PROCESSOR_INSERT_PART_INDEX                            = -1
 PROCESSOR_JMESPATH_QUERY
-PROCESSOR_JQ_QUERY                                   = .
-PROCESSOR_JQ_RAW                                     = false
-PROCESSOR_JSON_OPERATOR                              = clean
+PROCESSOR_JQ_QUERY                                     = .
+PROCESSOR_JQ_RAW                                       = false
+PROCESSOR_JSON_OPERATOR                                = clean
 PROCESSOR_JSON_PATH
 PROCESSOR_JSON_SCHEMA_SCHEMA
 PROCESSOR_JSON_SCHEMA_SCHEMA_PATH
@@ -673,68 +673,83 @@ PROCESSOR_LAMBDA_CREDENTIALS_SECRET
 PROCESSOR_LAMBDA_CREDENTIALS_TOKEN
 PROCESSOR_LAMBDA_ENDPOINT
 PROCESSOR_LAMBDA_FUNCTION
-PROCESSOR_LAMBDA_PARALLEL                            = false
+PROCESSOR_LAMBDA_PARALLEL                              = false
 PROCESSOR_LAMBDA_RATE_LIMIT
-PROCESSOR_LAMBDA_REGION                              = eu-west-1
-PROCESSOR_LAMBDA_RETRIES                             = 3
-PROCESSOR_LAMBDA_TIMEOUT                             = 5s
+PROCESSOR_LAMBDA_REGION                                = eu-west-1
+PROCESSOR_LAMBDA_RETRIES                               = 3
+PROCESSOR_LAMBDA_TIMEOUT                               = 5s
 PROCESSOR_LOG_FIELDS_MAPPING
-PROCESSOR_LOG_LEVEL                                  = INFO
+PROCESSOR_LOG_LEVEL                                    = INFO
 PROCESSOR_LOG_MESSAGE
-PROCESSOR_MERGE_JSON_RETAIN_PARTS                    = false
-PROCESSOR_METADATA_KEY                               = example
-PROCESSOR_METADATA_OPERATOR                          = set
-PROCESSOR_METADATA_VALUE                             = ${!hostname()}
+PROCESSOR_MERGE_JSON_RETAIN_PARTS                      = false
+PROCESSOR_METADATA_KEY                                 = example
+PROCESSOR_METADATA_OPERATOR                            = set
+PROCESSOR_METADATA_VALUE                               = ${!hostname()}
 PROCESSOR_METRIC_NAME
 PROCESSOR_METRIC_PATH
-PROCESSOR_METRIC_TYPE                                = counter
+PROCESSOR_METRIC_TYPE                                  = counter
 PROCESSOR_METRIC_VALUE
-PROCESSOR_NUMBER_OPERATOR                            = add
-PROCESSOR_NUMBER_VALUE                               = 0
-PROCESSOR_PARALLEL_CAP                               = 0
-PROCESSOR_PARSE_LOG_ALLOW_RFC3339                    = true
-PROCESSOR_PARSE_LOG_BEST_EFFORT                      = true
-PROCESSOR_PARSE_LOG_CODEC                            = json
-PROCESSOR_PARSE_LOG_DEFAULT_TIMEZONE                 = UTC
-PROCESSOR_PARSE_LOG_DEFAULT_YEAR                     = current
-PROCESSOR_PARSE_LOG_FORMAT                           = syslog_rfc5424
+PROCESSOR_MONGODB_DOCUMENT_MAP
+PROCESSOR_MONGODB_HINT_MAP
+PROCESSOR_MONGODB_MONGODB_COLLECTION
+PROCESSOR_MONGODB_MONGODB_DATABASE
+PROCESSOR_MONGODB_MONGODB_PASSWORD
+PROCESSOR_MONGODB_MONGODB_URL                          = mongodb://localhost:27017
+PROCESSOR_MONGODB_MONGODB_USERNAME
+PROCESSOR_MONGODB_OPERATION                            = insert
+PROCESSOR_MONGODB_RETRYCONFIG_BACKOFF_INITIAL_INTERVAL = 1s
+PROCESSOR_MONGODB_RETRYCONFIG_BACKOFF_MAX_ELAPSED_TIME = 30s
+PROCESSOR_MONGODB_RETRYCONFIG_BACKOFF_MAX_INTERVAL     = 5s
+PROCESSOR_MONGODB_RETRYCONFIG_MAX_RETRIES              = 3
+PROCESSOR_MONGODB_WRITE_CONCERN_J                      = false
+PROCESSOR_MONGODB_WRITE_CONCERN_W
+PROCESSOR_MONGODB_WRITE_CONCERN_W_TIMEOUT
+PROCESSOR_NUMBER_OPERATOR                              = add
+PROCESSOR_NUMBER_VALUE                                 = 0
+PROCESSOR_PARALLEL_CAP                                 = 0
+PROCESSOR_PARSE_LOG_ALLOW_RFC3339                      = true
+PROCESSOR_PARSE_LOG_BEST_EFFORT                        = true
+PROCESSOR_PARSE_LOG_CODEC                              = json
+PROCESSOR_PARSE_LOG_DEFAULT_TIMEZONE                   = UTC
+PROCESSOR_PARSE_LOG_DEFAULT_YEAR                       = current
+PROCESSOR_PARSE_LOG_FORMAT                             = syslog_rfc5424
 PROCESSOR_PROTOBUF_IMPORT_PATH
 PROCESSOR_PROTOBUF_MESSAGE
-PROCESSOR_PROTOBUF_OPERATOR                          = to_json
+PROCESSOR_PROTOBUF_OPERATOR                            = to_json
 PROCESSOR_RATE_LIMIT_RESOURCE
 PROCESSOR_REDIS_KEY
-PROCESSOR_REDIS_KIND                                 = simple
+PROCESSOR_REDIS_KIND                                   = simple
 PROCESSOR_REDIS_MASTER
-PROCESSOR_REDIS_OPERATOR                             = scard
-PROCESSOR_REDIS_RETRIES                              = 3
-PROCESSOR_REDIS_RETRY_PERIOD                         = 500ms
-PROCESSOR_REDIS_TLS_ENABLED                          = false
+PROCESSOR_REDIS_OPERATOR                               = scard
+PROCESSOR_REDIS_RETRIES                                = 3
+PROCESSOR_REDIS_RETRY_PERIOD                           = 500ms
+PROCESSOR_REDIS_TLS_ENABLED                            = false
 PROCESSOR_REDIS_TLS_ROOT_CAS_FILE
-PROCESSOR_REDIS_TLS_SKIP_CERT_VERIFY                 = false
-PROCESSOR_REDIS_URL                                  = tcp://localhost:6379
+PROCESSOR_REDIS_TLS_SKIP_CERT_VERIFY                   = false
+PROCESSOR_REDIS_URL                                    = tcp://localhost:6379
 PROCESSOR_RESOURCE
-PROCESSOR_SAMPLE_RETAIN                              = 10
-PROCESSOR_SAMPLE_SEED                                = 0
-PROCESSOR_SELECT_PARTS_PARTS                         = 0
-PROCESSOR_SLEEP_DURATION                             = 100us
-PROCESSOR_SPLIT_BYTE_SIZE                            = 0
-PROCESSOR_SPLIT_SIZE                                 = 1
+PROCESSOR_SAMPLE_RETAIN                                = 10
+PROCESSOR_SAMPLE_SEED                                  = 0
+PROCESSOR_SELECT_PARTS_PARTS                           = 0
+PROCESSOR_SLEEP_DURATION                               = 100us
+PROCESSOR_SPLIT_BYTE_SIZE                              = 0
+PROCESSOR_SPLIT_SIZE                                   = 1
 PROCESSOR_SQL_DATA_SOURCE_NAME
-PROCESSOR_SQL_DRIVER                                 = mysql
+PROCESSOR_SQL_DRIVER                                   = mysql
 PROCESSOR_SQL_DSN
 PROCESSOR_SQL_QUERY
-PROCESSOR_SQL_RESULT_CODEC                           = none
-PROCESSOR_SUBPROCESS_CODEC_RECV                      = lines
-PROCESSOR_SUBPROCESS_CODEC_SEND                      = lines
-PROCESSOR_SUBPROCESS_MAX_BUFFER                      = 65536
-PROCESSOR_SUBPROCESS_NAME                            = cat
+PROCESSOR_SQL_RESULT_CODEC                             = none
+PROCESSOR_SUBPROCESS_CODEC_RECV                        = lines
+PROCESSOR_SUBPROCESS_CODEC_SEND                        = lines
+PROCESSOR_SUBPROCESS_MAX_BUFFER                        = 65536
+PROCESSOR_SUBPROCESS_NAME                              = cat
 PROCESSOR_TEXT_ARG
-PROCESSOR_TEXT_OPERATOR                              = trim_space
+PROCESSOR_TEXT_OPERATOR                                = trim_space
 PROCESSOR_TEXT_VALUE
-PROCESSOR_THROTTLE_PERIOD                            = 100us
-PROCESSOR_UNARCHIVE_FORMAT                           = binary
-PROCESSOR_WORKFLOW_META_PATH                         = meta.workflow
-PROCESSOR_XML_OPERATOR                               = to_json
+PROCESSOR_THROTTLE_PERIOD                              = 100us
+PROCESSOR_UNARCHIVE_FORMAT                             = binary
+PROCESSOR_WORKFLOW_META_PATH                           = meta.workflow
+PROCESSOR_XML_OPERATOR                                 = to_json
 ```
 
 ## OUTPUT
@@ -1122,6 +1137,26 @@ OUTPUT_KINESIS_MAX_RETRIES                               = 0
 OUTPUT_KINESIS_PARTITION_KEY
 OUTPUT_KINESIS_REGION                                    = eu-west-1
 OUTPUT_KINESIS_STREAM
+OUTPUT_MONGODB_BATCHING_BYTE_SIZE                        = 0
+OUTPUT_MONGODB_BATCHING_CHECK
+OUTPUT_MONGODB_BATCHING_COUNT                            = 0
+OUTPUT_MONGODB_BATCHING_PERIOD
+OUTPUT_MONGODB_DOCUMENT_MAP
+OUTPUT_MONGODB_HINT_MAP
+OUTPUT_MONGODB_MAX_IN_FLIGHT                             = 1
+OUTPUT_MONGODB_MONGOCONFIG_COLLECTION
+OUTPUT_MONGODB_MONGOCONFIG_DATABASE
+OUTPUT_MONGODB_MONGOCONFIG_PASSWORD
+OUTPUT_MONGODB_MONGOCONFIG_URL                           = mongodb://localhost:27017
+OUTPUT_MONGODB_MONGOCONFIG_USERNAME
+OUTPUT_MONGODB_OPERATION                                 = update-one
+OUTPUT_MONGODB_RETRYCONFIG_BACKOFF_INITIAL_INTERVAL      = 1s
+OUTPUT_MONGODB_RETRYCONFIG_BACKOFF_MAX_ELAPSED_TIME      = 30s
+OUTPUT_MONGODB_RETRYCONFIG_BACKOFF_MAX_INTERVAL          = 5s
+OUTPUT_MONGODB_RETRYCONFIG_MAX_RETRIES                   = 3
+OUTPUT_MONGODB_WRITE_CONCERN_J                           = false
+OUTPUT_MONGODB_WRITE_CONCERN_W
+OUTPUT_MONGODB_WRITE_CONCERN_W_TIMEOUT
 OUTPUT_MQTT_CLIENT_ID                                    = benthos_output
 OUTPUT_MQTT_MAX_IN_FLIGHT                                = 1
 OUTPUT_MQTT_PASSWORD

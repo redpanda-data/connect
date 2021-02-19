@@ -801,6 +801,26 @@ pipeline:
         path: ${PROCESSOR_METRIC_PATH}
         type: ${PROCESSOR_METRIC_TYPE:counter}
         value: ${PROCESSOR_METRIC_VALUE}
+      mongodb:
+        MongoDB:
+          collection: ${PROCESSOR_MONGODB_MONGODB_COLLECTION}
+          database: ${PROCESSOR_MONGODB_MONGODB_DATABASE}
+          password: ${PROCESSOR_MONGODB_MONGODB_PASSWORD}
+          url: ${PROCESSOR_MONGODB_MONGODB_URL:mongodb://localhost:27017}
+          username: ${PROCESSOR_MONGODB_MONGODB_USERNAME}
+        RetryConfig:
+          backoff:
+            initial_interval: ${PROCESSOR_MONGODB_RETRYCONFIG_BACKOFF_INITIAL_INTERVAL:1s}
+            max_elapsed_time: ${PROCESSOR_MONGODB_RETRYCONFIG_BACKOFF_MAX_ELAPSED_TIME:30s}
+            max_interval: ${PROCESSOR_MONGODB_RETRYCONFIG_BACKOFF_MAX_INTERVAL:5s}
+          max_retries: ${PROCESSOR_MONGODB_RETRYCONFIG_MAX_RETRIES:3}
+        document_map: ${PROCESSOR_MONGODB_DOCUMENT_MAP}
+        hint_map: ${PROCESSOR_MONGODB_HINT_MAP}
+        operation: ${PROCESSOR_MONGODB_OPERATION:insert}
+        write_concern:
+          j: ${PROCESSOR_MONGODB_WRITE_CONCERN_J:false}
+          w: ${PROCESSOR_MONGODB_WRITE_CONCERN_W}
+          w_timeout: ${PROCESSOR_MONGODB_WRITE_CONCERN_W_TIMEOUT}
       number:
         operator: ${PROCESSOR_NUMBER_OPERATOR:add}
         value: ${PROCESSOR_NUMBER_VALUE:0}
@@ -1333,6 +1353,32 @@ output:
           max_retries: ${OUTPUT_KINESIS_FIREHOSE_MAX_RETRIES:0}
           region: ${OUTPUT_KINESIS_FIREHOSE_REGION:eu-west-1}
           stream: ${OUTPUT_KINESIS_FIREHOSE_STREAM}
+        mongodb:
+          MongoConfig:
+            collection: ${OUTPUT_MONGODB_MONGOCONFIG_COLLECTION}
+            database: ${OUTPUT_MONGODB_MONGOCONFIG_DATABASE}
+            password: ${OUTPUT_MONGODB_MONGOCONFIG_PASSWORD}
+            url: ${OUTPUT_MONGODB_MONGOCONFIG_URL:mongodb://localhost:27017}
+            username: ${OUTPUT_MONGODB_MONGOCONFIG_USERNAME}
+          RetryConfig:
+            backoff:
+              initial_interval: ${OUTPUT_MONGODB_RETRYCONFIG_BACKOFF_INITIAL_INTERVAL:1s}
+              max_elapsed_time: ${OUTPUT_MONGODB_RETRYCONFIG_BACKOFF_MAX_ELAPSED_TIME:30s}
+              max_interval: ${OUTPUT_MONGODB_RETRYCONFIG_BACKOFF_MAX_INTERVAL:5s}
+            max_retries: ${OUTPUT_MONGODB_RETRYCONFIG_MAX_RETRIES:3}
+          batching:
+            byte_size: ${OUTPUT_MONGODB_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_MONGODB_BATCHING_CHECK}
+            count: ${OUTPUT_MONGODB_BATCHING_COUNT:0}
+            period: ${OUTPUT_MONGODB_BATCHING_PERIOD}
+          document_map: ${OUTPUT_MONGODB_DOCUMENT_MAP}
+          hint_map: ${OUTPUT_MONGODB_HINT_MAP}
+          max_in_flight: ${OUTPUT_MONGODB_MAX_IN_FLIGHT:1}
+          operation: ${OUTPUT_MONGODB_OPERATION:update-one}
+          write_concern:
+            j: ${OUTPUT_MONGODB_WRITE_CONCERN_J:false}
+            w: ${OUTPUT_MONGODB_WRITE_CONCERN_W}
+            w_timeout: ${OUTPUT_MONGODB_WRITE_CONCERN_W_TIMEOUT}
         mqtt:
           client_id: ${OUTPUT_MQTT_CLIENT_ID:benthos_output}
           max_in_flight: ${OUTPUT_MQTT_MAX_IN_FLIGHT:1}
