@@ -68,7 +68,7 @@ You can access these metadata fields using
 			docs.FieldCommon("topics", "A list of topics to consume from. If an item of the list contains commas it will be expanded into multiple topics."),
 			docs.FieldCommon("client_id", "An identifier for the client connection."),
 			docs.FieldCommon("consumer_group", "An identifier for the consumer group of the connection."),
-			docs.FieldAdvanced("start_from_oldest", "If an offset is not found for a topic parition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset."),
+			docs.FieldAdvanced("start_from_oldest", "If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset."),
 			docs.FieldAdvanced("commit_period", "The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown."),
 			docs.FieldAdvanced("max_processing_period", "A maximum estimate for the time taken to process a message, this is used for tuning consumer group synchronization."),
 			docs.FieldAdvanced("group", "Tuning parameters for consumer group synchronization.").WithChildren(
