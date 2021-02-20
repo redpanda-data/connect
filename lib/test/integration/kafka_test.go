@@ -41,7 +41,7 @@ var _ = registerIntegrationTest("kafka_redpanda", func(t *testing.T) {
 			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr}},
 		},
 		Cmd: []string{
-			"redpanda", "start", "--smp 2",
+			"redpanda", "start", "--smp 1", "--overprovisioned",
 			"--kafka-addr 0.0.0.0:9092",
 			fmt.Sprintf("--advertise-kafka-addr localhost:%v", kafkaPort),
 		},
@@ -85,8 +85,9 @@ input:
   kafka:
     addresses: [ localhost:$PORT ]
     topics: [ topic-$ID$VAR1 ]
-    consumer_group: consumer-$ID
+    consumer_group: "$VAR4"
     checkpoint_limit: $VAR2
+    start_from_oldest: true
     batching:
       count: $INPUT_BATCH_COUNT
 `
@@ -108,6 +109,7 @@ input:
 		suite.Run(
 			t, template,
 			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+				env.configVars.var4 = "group" + env.configVars.id
 				require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
 			}),
 			testOptPort(kafkaPortStr),
@@ -119,6 +121,9 @@ input:
 			t.Parallel()
 			suiteExt.Run(
 				t, template,
+				testOptPreTest(func(t *testing.T, env *testEnvironment) {
+					env.configVars.var4 = "group" + env.configVars.id
+				}),
 				testOptPort(kafkaPortStr),
 				testOptVarTwo("1"),
 				testOptVarThree("false"),
@@ -130,6 +135,7 @@ input:
 			suite.Run(
 				t, template,
 				testOptPreTest(func(t *testing.T, env *testEnvironment) {
+					env.configVars.var4 = "group" + env.configVars.id
 					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
 				}),
 				testOptPort(kafkaPortStr),
@@ -143,6 +149,7 @@ input:
 			suite.Run(
 				t, template,
 				testOptPreTest(func(t *testing.T, env *testEnvironment) {
+					env.configVars.var4 = "group" + env.configVars.id
 					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
 				}),
 				testOptPort(kafkaPortStr),
@@ -157,6 +164,7 @@ input:
 		suite.Run(
 			t, template,
 			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+				env.configVars.var4 = "group" + env.configVars.id
 				topicName := "topic-" + env.configVars.id
 				env.configVars.var1 = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
 				require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
@@ -172,16 +180,31 @@ input:
 			suite.Run(
 				t, template,
 				testOptPreTest(func(t *testing.T, env *testEnvironment) {
-					topicName := "topic-" + env.configVars.id
-					env.configVars.var1 = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
+					env.configVars.var4 = "group" + env.configVars.id
 					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
 				}),
 				testOptPort(kafkaPortStr),
 				testOptSleepAfterInput(time.Second*3),
+				testOptVarOne(":0-3"),
 				testOptVarTwo("1000"),
 				testOptVarThree("false"),
 			)
 		})
+	})
+
+	t.Run("without consumer group", func(t *testing.T) {
+		t.Parallel()
+		suite.Run(
+			t, template,
+			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+				require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
+			}),
+			testOptPort(kafkaPortStr),
+			testOptSleepAfterInput(time.Second*3),
+			testOptVarOne(":0-3"),
+			testOptVarTwo("1"),
+			testOptVarThree("false"),
+		)
 	})
 })
 

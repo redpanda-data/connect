@@ -133,7 +133,7 @@ addresses:
 
 ### `topics`
 
-A list of topics to consume from. Multiple comma separated topics can be listed in a single element. Partitions are automatically distributed across consumers of a topic. Alternatively, it's possible to specify an explicit partition to consume from with a colon after the topic name, e.g. `foo:0` would consume the partition 0 of the topic foo.
+A list of topics to consume from. Multiple comma separated topics can be listed in a single element. Partitions are automatically distributed across consumers of a topic. Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name, e.g. `foo:0` would consume the partition 0 of the topic foo. This syntax supports ranges, e.g. `foo:0-10` would consume partitions 0 through to 10 inclusive.
 
 
 Type: `array`  
@@ -157,6 +157,9 @@ topics:
 
 topics:
   - foo:0,bar:1,bar:3
+
+topics:
+  - foo:0-5
 ```
 
 ### `tls`
@@ -324,7 +327,7 @@ Default: `""`
 
 ### `consumer_group`
 
-An identifier for the consumer group of the connection.
+An identifier for the consumer group of the connection. This field can be explicitly made empty in order to disable stored offsets for the consumed topic partitions.
 
 
 Type: `string`  
@@ -340,7 +343,7 @@ Default: `"benthos_kafka_input"`
 
 ### `start_from_oldest`
 
-If an offset is not found for a topic parition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.
+If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.
 
 
 Type: `bool`  

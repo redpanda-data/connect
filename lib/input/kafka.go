@@ -64,14 +64,18 @@ You can access these metadata fields using [function interpolation](/docs/config
 			),
 			docs.FieldCommon(
 				"topics",
-				"A list of topics to consume from. Multiple comma separated topics can be listed in a single element. Partitions are automatically distributed across consumers of a topic. Alternatively, it's possible to specify an explicit partition to consume from with a colon after the topic name, e.g. `foo:0` would consume the partition 0 of the topic foo.",
-				[]string{"foo", "bar"}, []string{"foo,bar"}, []string{"foo:0", "bar:1", "bar:3"}, []string{"foo:0,bar:1,bar:3"},
+				"A list of topics to consume from. Multiple comma separated topics can be listed in a single element. Partitions are automatically distributed across consumers of a topic. Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name, e.g. `foo:0` would consume the partition 0 of the topic foo. This syntax supports ranges, e.g. `foo:0-10` would consume partitions 0 through to 10 inclusive.",
+				[]string{"foo", "bar"},
+				[]string{"foo,bar"},
+				[]string{"foo:0", "bar:1", "bar:3"},
+				[]string{"foo:0,bar:1,bar:3"},
+				[]string{"foo:0-5"},
 			).AtVersion("3.33.0"),
 			btls.FieldSpec(),
 			sasl.FieldSpec(),
-			docs.FieldCommon("consumer_group", "An identifier for the consumer group of the connection."),
+			docs.FieldCommon("consumer_group", "An identifier for the consumer group of the connection. This field can be explicitly made empty in order to disable stored offsets for the consumed topic partitions."),
 			docs.FieldCommon("client_id", "An identifier for the client connection."),
-			docs.FieldAdvanced("start_from_oldest", "If an offset is not found for a topic parition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset."),
+			docs.FieldAdvanced("start_from_oldest", "If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset."),
 			docs.FieldCommon(
 				"checkpoint_limit", "EXPERIMENTAL: The maximum number of messages of the same topic and partition that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual partitions. Any given offset will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.",
 			).AtVersion("3.33.0"),
@@ -177,6 +181,36 @@ type kafkaReader struct {
 
 var errCannotMixBalanced = errors.New("it is not currently possible to include balanced and explicit partition topics in the same kafka input")
 
+func parsePartitions(expr string) ([]int32, error) {
+	rangeExpr := strings.Split(expr, "-")
+	if len(rangeExpr) > 2 {
+		return nil, fmt.Errorf("partition '%v' is invalid, only one range can be specified", expr)
+	}
+
+	if len(rangeExpr) == 1 {
+		partition, err := strconv.ParseInt(expr, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse partition number: %w", err)
+		}
+		return []int32{int32(partition)}, nil
+	}
+
+	start, err := strconv.ParseInt(rangeExpr[0], 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse start of range: %w", err)
+	}
+	end, err := strconv.ParseInt(rangeExpr[1], 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse end of range: %w", err)
+	}
+
+	var parts []int32
+	for i := start; i <= end; i++ {
+		parts = append(parts, int32(i))
+	}
+	return parts, nil
+}
+
 func newKafkaReader(
 	conf reader.KafkaConfig, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (*kafkaReader, error) {
@@ -219,12 +253,13 @@ func newKafkaReader(
 					if len(withParts) > 2 {
 						return nil, fmt.Errorf("topic '%v' is invalid, only one partition should be specified and the same topic can be listed multiple times, e.g. use `foo:0,foo:1` not `foo:0:1`", trimmed)
 					}
+
 					topic := strings.TrimSpace(withParts[0])
-					partition, err := strconv.ParseInt(withParts[1], 10, 32)
+					parts, err := parsePartitions(withParts[1])
 					if err != nil {
-						return nil, fmt.Errorf("failed to parse partition number: %w", err)
+						return nil, err
 					}
-					k.topicPartitions[topic] = append(k.topicPartitions[topic], int32(partition))
+					k.topicPartitions[topic] = append(k.topicPartitions[topic], parts...)
 				} else {
 					if len(k.topicPartitions) > 0 {
 						return nil, errCannotMixBalanced
@@ -263,6 +298,9 @@ func newKafkaReader(
 		if k.maxProcPeriod, err = time.ParseDuration(tout); err != nil {
 			return nil, fmt.Errorf("failed to parse max processing period string: %v", err)
 		}
+	}
+	if len(conf.ConsumerGroup) == 0 && len(k.balancedTopics) > 0 {
+		return nil, errors.New("a consumer group must be specified when consuming balanced topics")
 	}
 
 	var err error

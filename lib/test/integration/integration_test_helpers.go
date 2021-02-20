@@ -58,6 +58,7 @@ type testConfigVars struct {
 	var1 string
 	var2 string
 	var3 string
+	var4 string
 }
 
 type testEnvironment struct {
@@ -121,6 +122,7 @@ func (e testEnvironment) RenderConfig() string {
 		"$VAR1", e.configVars.var1,
 		"$VAR2", e.configVars.var2,
 		"$VAR3", e.configVars.var3,
+		"$VAR4", e.configVars.var4,
 		"$INPUT_BATCH_COUNT", strconv.Itoa(e.configVars.inputBatchCount),
 		"$OUTPUT_BATCH_COUNT", strconv.Itoa(e.configVars.outputBatchCount),
 		"$MAX_IN_FLIGHT", strconv.Itoa(e.configVars.maxInFlight),
