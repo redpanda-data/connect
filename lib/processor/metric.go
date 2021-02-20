@@ -60,7 +60,7 @@ pipeline:
         type: counter
         labels:
           topic: ${! meta("kafka_topic") }
-          parition: ${! meta("kafka_partition") }
+          partition: ${! meta("kafka_partition") }
           type: ${! json("document.type").or("unknown") }
 
 metrics:
