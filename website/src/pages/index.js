@@ -245,7 +245,7 @@ function Home() {
             <div className={classnames(`${styles.pitch} col col--6`)}>
               <h2>It's boringly easy to use</h2>
               <p>
-                Written in Go, deployed as a static binary, declarative configuration. Cloud native as utter heck.
+                Written in Go, deployed as a static binary, declarative configuration. <a href="https://github.com/Jeffail/benthos">Open source</a> and cloud native as utter heck.
               </p>
               {installs && installs.length && (
                 <Tabs defaultValue={installs[0].label} values={installs.map((props, idx) => {

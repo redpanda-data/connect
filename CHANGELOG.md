@@ -5,11 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.42.1 - 2021-02-22
+
 ### New
 
 - New `azure_queue_storage` input.
 - All inputs with a `codec` field now support multipart.
-- New `codec` field to the `http_client`, `socket`, `socket_server` and `stdin` inputs.
+- New `codec` field added to the `http_client`, `socket`, `socket_server` and `stdin` inputs.
 - The `kafka` input now allows an empty consumer group for operating without stored offsets.
 - The `kafka` input now supports partition ranges.
 
