@@ -123,8 +123,10 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 	if client, err = sarama.NewClient(k.addresses, config); err != nil {
 		return err
 	}
-	if coordinator, err = client.Coordinator(k.conf.ConsumerGroup); err != nil {
-		return err
+	if len(k.conf.ConsumerGroup) > 0 {
+		if coordinator, err = client.Coordinator(k.conf.ConsumerGroup); err != nil {
+			return err
+		}
 	}
 	if consumer, err = sarama.NewConsumerFromClient(client); err != nil {
 		return err
@@ -140,12 +142,16 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 	}
 
 	var offsetRes *sarama.OffsetFetchResponse
-	if offsetRes, err = coordinator.FetchOffset(&offsetGetReq); err != nil {
-		if errors.Is(err, io.EOF) {
-			offsetRes = &sarama.OffsetFetchResponse{}
-		} else {
-			return fmt.Errorf("failed to acquire offsets from broker: %v", err)
+	if coordinator != nil {
+		if offsetRes, err = coordinator.FetchOffset(&offsetGetReq); err != nil {
+			if errors.Is(err, io.EOF) {
+				offsetRes = &sarama.OffsetFetchResponse{}
+			} else {
+				return fmt.Errorf("failed to acquire offsets from broker: %v", err)
+			}
 		}
+	} else {
+		offsetRes = &sarama.OffsetFetchResponse{}
 	}
 
 	offsetPutReq := &sarama.OffsetCommitRequest{
@@ -184,6 +190,7 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 
 			var partConsumer sarama.PartitionConsumer
 			if partConsumer, err = consumer.ConsumePartition(topic, partition, offset); err != nil {
+				// TODO: Actually verify the error was caused by a non-existent offset
 				if k.conf.StartFromOldest {
 					offset = sarama.OffsetOldest
 					k.log.Warnf("Failed to read from stored offset, restarting from oldest offset: %v\n", err)
@@ -222,8 +229,10 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 				ConsumerID:    k.conf.ClientID,
 			}
 			k.cMut.Unlock()
-			if _, err := coordinator.CommitOffset(putReq); err != nil {
-				k.log.Errorf("Failed to commit offsets: %v\n", err)
+			if coordinator != nil {
+				if _, err := coordinator.CommitOffset(putReq); err != nil {
+					k.log.Errorf("Failed to commit offsets: %v\n", err)
+				}
 			}
 		}
 		for _, consumer := range partConsumers {
@@ -238,7 +247,9 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 		}
 		k.cMut.Unlock()
 
-		coordinator.Close()
+		if coordinator != nil {
+			coordinator.Close()
+		}
 		client.Close()
 	}()
 

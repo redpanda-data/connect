@@ -414,7 +414,7 @@ func jsonFunction(args ...interface{}) (Function, error) {
 var _ = RegisterFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "meta",
-		"Returns the value of a metadata key from a message identified by a key. Values are extracted from the referenced input message and therefore do NOT reflect changes made from within the map.",
+		"Returns the value of a metadata key from the input message. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. If you wish to store the results of queries to be reused within the same mapping then instead [use variables](/docs/guides/bloblang/about#variables).",
 		NewExampleSpec("",
 			`root.topic = meta("kafka_topic")`,
 		),

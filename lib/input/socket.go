@@ -154,7 +154,7 @@ func (s *socketClient) ReadWithContext(ctx context.Context) (types.Message, read
 	codec := s.codec
 	s.codecMut.Unlock()
 
-	if s.codec == nil {
+	if codec == nil {
 		return nil, nil, types.ErrNotConnected
 	}
 

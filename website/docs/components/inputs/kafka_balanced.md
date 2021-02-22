@@ -342,7 +342,7 @@ Default: `"benthos_consumer_group"`
 
 ### `start_from_oldest`
 
-If an offset is not found for a topic parition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.
+If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.
 
 
 Type: `bool`  
