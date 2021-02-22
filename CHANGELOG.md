@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## 3.42.1 - 2021-02-22
+## 3.42.0 - 2021-02-22
 
 ### New
 
