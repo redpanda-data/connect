@@ -153,6 +153,11 @@ input:
         files:
           delete_files: ${INPUT_FILES_DELETE_FILES:false}
           path: ${INPUT_FILES_PATH}
+        gcp_cloud_storage:
+          bucket: ${INPUT_GCP_CLOUD_STORAGE_BUCKET}
+          codec: ${INPUT_GCP_CLOUD_STORAGE_CODEC:all-bytes}
+          delete_objects: ${INPUT_GCP_CLOUD_STORAGE_DELETE_OBJECTS:false}
+          prefix: ${INPUT_GCP_CLOUD_STORAGE_PREFIX}
         gcp_pubsub:
           batching:
             byte_size: ${INPUT_GCP_PUBSUB_BATCHING_BYTE_SIZE:0}
@@ -1181,6 +1186,19 @@ output:
           path: ${OUTPUT_FILE_PATH}
         files:
           path: ${OUTPUT_FILES_PATH:${!count("files")}-${!timestamp_unix_nano()}.txt}
+        gcp_cloud_storage:
+          batching:
+            byte_size: ${OUTPUT_GCP_CLOUD_STORAGE_BATCHING_BYTE_SIZE:0}
+            check: ${OUTPUT_GCP_CLOUD_STORAGE_BATCHING_CHECK}
+            count: ${OUTPUT_GCP_CLOUD_STORAGE_BATCHING_COUNT:0}
+            period: ${OUTPUT_GCP_CLOUD_STORAGE_BATCHING_PERIOD}
+          bucket: ${OUTPUT_GCP_CLOUD_STORAGE_BUCKET}
+          chunk_size: ${OUTPUT_GCP_CLOUD_STORAGE_CHUNK_SIZE:16777216}
+          content_encoding: ${OUTPUT_GCP_CLOUD_STORAGE_CONTENT_ENCODING}
+          content_type: ${OUTPUT_GCP_CLOUD_STORAGE_CONTENT_TYPE:application/octet-stream}
+          max_in_flight: ${OUTPUT_GCP_CLOUD_STORAGE_MAX_IN_FLIGHT:1}
+          path: ${OUTPUT_GCP_CLOUD_STORAGE_PATH:${!count("files")}-${!timestamp_unix_nano()}.txt}
+          timeout: ${OUTPUT_GCP_CLOUD_STORAGE_TIMEOUT:5s}
         gcp_pubsub:
           max_in_flight: ${OUTPUT_GCP_PUBSUB_MAX_IN_FLIGHT:1}
           project: ${OUTPUT_GCP_PUBSUB_PROJECT}

@@ -1,7 +1,9 @@
 module github.com/Jeffail/benthos/v3
 
 require (
+	cloud.google.com/go v0.77.0 // indirect
 	cloud.google.com/go/pubsub v1.9.1
+	cloud.google.com/go/storage v1.13.0
 	github.com/Azure/azure-sdk-for-go v48.0.0+incompatible
 	github.com/Azure/azure-storage-queue-go v0.0.0-20191125232315-636801874cdd
 	github.com/Azure/go-amqp v0.13.1
@@ -83,12 +85,16 @@ require (
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0
 	go.nanomsg.org/mangos/v3 v3.1.3
+	go.opencensus.io v0.22.6 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	golang.org/x/crypto v0.0.0-20201016220609-9e8e0b390897
-	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
-	golang.org/x/oauth2 v0.0.0-20201208152858-08078c50e5b5
+	golang.org/x/net v0.0.0-20210119194325-5f4716e94777
+	golang.org/x/oauth2 v0.0.0-20210218202405-ba52d332ba99
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
-	golang.org/x/tools v0.1.0 // indirect
+	golang.org/x/sys v0.0.0-20210217090653-ed5674b6da4a // indirect
+	golang.org/x/xerrors v0.0.0-20200806184451-1a77d5e9f316 // indirect
+	google.golang.org/api v0.40.0
+	google.golang.org/genproto v0.0.0-20210218151259-fe80b386bf06 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
 )
 

@@ -206,6 +206,7 @@ const (
 	TypeDynamic           = "dynamic"
 	TypeFile              = "file"
 	TypeFiles             = "files"
+	TypeGCPCloudStorage   = "gcp_cloud_storage"
 	TypeGCPPubSub         = "gcp_pubsub"
 	TypeGenerate          = "generate"
 	TypeHDFS              = "hdfs"
@@ -261,6 +262,7 @@ type Config struct {
 	Dynamic           DynamicConfig                `json:"dynamic" yaml:"dynamic"`
 	File              FileConfig                   `json:"file" yaml:"file"`
 	Files             reader.FilesConfig           `json:"files" yaml:"files"`
+	GCPCloudStorage   GCPCloudStorageConfig        `json:"gcp_cloud_storage" yaml:"gcp_cloud_storage"`
 	GCPPubSub         reader.GCPPubSubConfig       `json:"gcp_pubsub" yaml:"gcp_pubsub"`
 	Generate          BloblangConfig               `json:"generate" yaml:"generate"`
 	HDFS              reader.HDFSConfig            `json:"hdfs" yaml:"hdfs"`
@@ -317,6 +319,7 @@ func NewConfig() Config {
 		Dynamic:           NewDynamicConfig(),
 		File:              NewFileConfig(),
 		Files:             reader.NewFilesConfig(),
+		GCPCloudStorage:   NewGCPCloudStorageConfig(),
 		GCPPubSub:         reader.NewGCPPubSubConfig(),
 		Generate:          NewBloblangConfig(),
 		HDFS:              reader.NewHDFSConfig(),
