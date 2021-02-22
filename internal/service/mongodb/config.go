@@ -81,3 +81,8 @@ func WriteConcernDocs() docs.FieldSpecs {
 		docs.FieldCommon("w_timeout", "The write concern timeout."),
 	}
 }
+
+func MapExamples() []interface{}{
+	examples := []interface{}{"root.a = this.foo\nroot.b = this.bar"}
+	return examples
+}
