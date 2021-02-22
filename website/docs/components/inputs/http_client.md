@@ -489,6 +489,7 @@ The way in which the bytes of a continuous stream are converted into messages. I
 
 Type: `string`  
 Default: `"lines"`  
+Requires version 3.42.0 or newer  
 
 | Option | Summary |
 |---|---|

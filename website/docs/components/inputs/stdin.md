@@ -61,6 +61,7 @@ The way in which the bytes of a data source should be converted into discrete me
 
 Type: `string`  
 Default: `"lines"`  
+Requires version 3.42.0 or newer  
 
 | Option | Summary |
 |---|---|

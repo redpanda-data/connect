@@ -19,7 +19,7 @@ import (
 )
 
 func httpClientSpecs() docs.FieldSpecs {
-	codecDocs := codec.ReaderDocs
+	codecDocs := codec.ReaderDocs.AtVersion("3.42.0")
 	codecDocs.Description = "The way in which the bytes of a continuous stream are converted into messages. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter. It's not necessary to add gzip in the codec when the response headers specify it as it will be decompressed automatically."
 	codecDocs.Examples = []interface{}{"lines", "delim:\t", "delim:foobar", "csv"}
 

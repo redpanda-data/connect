@@ -30,7 +30,7 @@ parts, and an empty line indicates the end of the message.
 
 If the delimiter field is left empty then line feed (\n) is used.`,
 		FieldSpecs: docs.FieldSpecs{
-			codec.ReaderDocs,
+			codec.ReaderDocs.AtVersion("3.42.0"),
 			docs.FieldAdvanced("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed."),
 			docs.FieldDeprecated("delimiter"),
 			docs.FieldDeprecated("multipart"),
