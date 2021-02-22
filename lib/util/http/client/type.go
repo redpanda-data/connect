@@ -27,6 +27,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/opentracing/opentracing-go"
 	olog "github.com/opentracing/opentracing-go/log"
+	"golang.org/x/oauth2"
 )
 
 //------------------------------------------------------------------------------
@@ -110,6 +111,8 @@ type Type struct {
 	mCodes   map[int]metrics.StatCounter
 	codesMut sync.RWMutex
 
+	oauthTokenSource oauth2.TokenSource
+
 	ctx       context.Context
 	done      func()
 	closeChan <-chan struct{}
@@ -135,7 +138,9 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		host:      nil,
 	}
 	h.ctx, h.done = context.WithCancel(context.Background())
-	h.client = conf.OAuth2.Client(h.ctx)
+	h.client = &http.Client{}
+
+	h.oauthTokenSource = conf.OAuth2.GetTokenSource()
 
 	if tout := conf.Timeout; len(tout) > 0 {
 		var err error
@@ -565,7 +570,15 @@ func (h *Type) DoWithContext(ctx context.Context, msg types.Message) (res *http.
 
 	rateLimited := false
 	numRetries := h.conf.NumRetries
-	if res, err = h.client.Do(req.WithContext(ctx)); err == nil {
+
+	var localClient = h.client
+	if h.conf.OAuth2.Enabled {
+		// add existing client to context and let oauth library wrap it
+		ctx = context.WithValue(ctx, oauth2.HTTPClient, h.client)
+		localClient = oauth2.NewClient(ctx, h.oauthTokenSource)
+	}
+
+	if res, err = localClient.Do(req.WithContext(ctx)); err == nil {
 		h.incrCode(res.StatusCode)
 		if resolved, retryStrat := h.checkStatus(res.StatusCode); !resolved {
 			rateLimited = retryStrat == retryBackoff
@@ -607,7 +620,7 @@ func (h *Type) DoWithContext(ctx context.Context, msg types.Message) (res *http.
 			return nil, types.ErrTypeClosed
 		}
 		rateLimited = false
-		if res, err = h.client.Do(req.WithContext(ctx)); err == nil {
+		if res, err = localClient.Do(req.WithContext(ctx)); err == nil {
 			h.incrCode(res.StatusCode)
 			if resolved, retryStrat := h.checkStatus(res.StatusCode); !resolved {
 				rateLimited = retryStrat == retryBackoff

@@ -3,7 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
-	"net/http"
+	"sync"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
@@ -47,32 +47,53 @@ func NewOAuth2Config() OAuth2Config {
 	}
 }
 
-//------------------------------------------------------------------------------
+type ROPCTokenSource struct {
+	conf OAuth2Config
+	mu   sync.RWMutex
+	t    *oauth2.Token
+}
 
-// Client returns an http.Client with OAuth2 configured.
-func (oauth OAuth2Config) Client(ctx context.Context) *http.Client {
-	if !oauth.Enabled {
-		var client http.Client
-		return &client
+func (s *ROPCTokenSource) Token() (*oauth2.Token, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.t != nil && s.t.Valid() {
+		return s.t, nil
 	}
 
+	// refresh token
+	conf := &oauth2.Config{
+		ClientID:     s.conf.ClientKey,
+		ClientSecret: s.conf.ClientSecret,
+		Endpoint: oauth2.Endpoint{
+			TokenURL: s.conf.TokenURL,
+		},
+		Scopes: s.conf.Scopes,
+	}
+
+	t, err := conf.PasswordCredentialsToken(context.Background(), s.conf.ROPC.Username, s.conf.ROPC.Password)
+	if err != nil {
+		return nil, fmt.Errorf("problem refreshing password credentials token: %s", err)
+	}
+
+	s.t = t
+	return t, nil
+}
+
+//------------------------------------------------------------------------------
+
+func (oauth OAuth2Config) GetTokenSource() oauth2.TokenSource {
+	if !oauth.Enabled {
+		return nil
+	}
+	ctx := context.Background()
+
 	if oauth.ROPC.Enabled {
-		conf := &oauth2.Config{
-			ClientID:     oauth.ClientKey,
-			ClientSecret: oauth.ClientSecret,
-			Endpoint: oauth2.Endpoint{
-				TokenURL: oauth.TokenURL,
-			},
-			Scopes: oauth.Scopes,
+		rts := &ROPCTokenSource{
+			conf: oauth,
+			mu:   sync.RWMutex{},
 		}
-		ctx := context.Background()
-		token, err := conf.PasswordCredentialsToken(ctx, oauth.ROPC.Username, oauth.ROPC.Password)
-		if err != nil {
-			//hmmm this probably needs to go elsewhere
-			fmt.Println("problem with PasswordCredentialsToken: " + err.Error())
-		}
-		token.TokenType = oauth.ROPC.TokenType
-		return conf.Client(ctx, token)
+		return rts
 	}
 
 	conf := &clientcredentials.Config{
@@ -81,5 +102,6 @@ func (oauth OAuth2Config) Client(ctx context.Context) *http.Client {
 		TokenURL:     oauth.TokenURL,
 		Scopes:       oauth.Scopes,
 	}
-	return conf.Client(ctx)
+
+	return conf.TokenSource(ctx)
 }
