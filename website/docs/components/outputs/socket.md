@@ -25,6 +25,7 @@ output:
   socket:
     network: unix
     address: /tmp/benthos.sock
+    codec: lines
 ```
 
 Each message written is followed by a delimiter (defaults to '\n' if left empty)
@@ -70,6 +71,32 @@ Default: `"/tmp/benthos.sock"`
 address: /tmp/benthos.sock
 
 address: localhost:9000
+```
+
+### `codec`
+
+The way in which the bytes of messages should be written out into the output file. It's possible to write lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.
+
+
+Type: `string`  
+Default: `"lines"`  
+
+| Option | Summary |
+|---|---|
+| `all-bytes` | Write the message to the file in full. If the file already exists the old content is deleted. |
+| `append` | Append messages to the file. |
+| `lines` | Append messages to the file followed by a line break. |
+| `delim:x` | Append messages to the file followed by a custom delimiter. |
+
+
+```yaml
+# Examples
+
+codec: lines
+
+codec: "delim:\t"
+
+codec: delim:foobar
 ```
 
 

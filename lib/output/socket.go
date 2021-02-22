@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -39,6 +40,7 @@ baz\n\n
 				"unix", "tcp", "udp",
 			),
 			docs.FieldCommon("address", "The address (or path) to connect to.", "/tmp/benthos.sock", "localhost:9000"),
+			codec.WriterDocs,
 		},
 		Categories: []Category{
 			CategoryNetwork,
