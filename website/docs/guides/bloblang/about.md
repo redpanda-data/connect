@@ -89,7 +89,7 @@ root.new_doc.type = $foo
 
 ### Metadata
 
-Benthos messages contain metadata that is separate from the main payload, in Bloblang you can query and modify the metadata of messages with the `meta` assignment keyword and query function:
+Benthos messages contain metadata that is separate from the main payload, in Bloblang you can modify the metadata of the resulting message with the `meta` assignment keyword, and you can query the metadata of the input message with the [`meta` function][blobl.functions.meta]:
 
 ```coffee
 # Delete all existing metadata
@@ -101,6 +101,10 @@ meta bar = "hello world"
 # Reference a metadata value from the input message
 root.new_doc.bar = meta("kafka_topic")
 ```
+
+The [`meta` function][blobl.functions.meta] returns the read-only metadata of the input message, so it will not reflect changes you've made within the same mapping. This is why it's possible to begin a mapping by removing all old metadata `meta = deleted()` and still be able to query the original metadata.
+
+If you wish to store query values in your mapping to be reused then [use variables][blobl.variables]. 
 
 ### Special Characters in Paths
 
@@ -328,7 +332,7 @@ root = match {
 
 ## Error Handling
 
-Functions and methods can fail under certain circumstances, such as when they receive types they aren't able to act upon. These failures, when not caught, will cause the entire mapping to fail. However, the [method `catch`][methods.catch] can be used in order to return a value when a failure occurs instead:
+Functions and methods can fail under certain circumstances, such as when they receive types they aren't able to act upon. These failures, when not caught, will cause the entire mapping to fail. However, the [method `catch`][blobl.methods.catch] can be used in order to return a value when a failure occurs instead:
 
 ```coffee
 # Map an empty array to `foo` if the field `bar` is not a string.
@@ -355,7 +359,7 @@ root.things = this.foo.split(",").map_each( this.parse_json() ).catch([])
 root.things = this.foo.split(",").map_each( this.parse_json().catch({}) )
 ```
 
-However, the `catch` method only acts on errors, sometimes it's also useful to set a fall back value when a query returns `null` in which case the [method `or`][methods.or] can be used the same way:
+However, the `catch` method only acts on errors, sometimes it's also useful to set a fall back value when a query returns `null` in which case the [method `or`][blobl.methods.or] can be used the same way:
 
 ```coffee
 # Map "default" if either the element index 5 does not exist, or the underlying
@@ -364,11 +368,13 @@ root.foo = this.bar.index(5).or("default")
 ```
 
 [field_paths]: /docs/configuration/field_paths
+[blobl.variables]: #variables
 [blobl.proc]: /docs/components/processors/bloblang
 [blobl.interp]: /docs/configuration/interpolation#bloblang-queries
 [blobl.functions]: /docs/guides/bloblang/functions
+[blobl.functions.meta]: /docs/guides/bloblang/functions#meta
 [blobl.functions.content]: /docs/guides/bloblang/functions#content
 [blobl.methods]: /docs/guides/bloblang/methods
-[methods.catch]: /docs/guides/bloblang/methods#catch
-[methods.or]: /docs/guides/bloblang/methods#or
+[blobl.methods.catch]: /docs/guides/bloblang/methods#catch
+[blobl.methods.or]: /docs/guides/bloblang/methods#or
 [plugin-api]: https://pkg.go.dev/github.com/Jeffail/benthos/v3/public/bloblang
