@@ -72,21 +72,21 @@ allowing you to store or retrieve data within message payloads.`,
 			).WithChildren(bmongo.WriteConcernDocs()...),
 			docs.FieldCommon(
 				"document_map",
-				"A bloblang map representing the records in the mongo db. Used to generate the document for mongodb by " +
-					"mapping the fields in the message to the mongodb fields. The document map is required for the operations " +
+				"A bloblang map representing the records in the mongo db. Used to generate the document for mongodb by "+
+					"mapping the fields in the message to the mongodb fields. The document map is required for the operations "+
 					"insert-one, replace-one and update-one.",
 				bmongo.MapExamples(),
 			),
 			docs.FieldCommon(
 				"filter_map",
-				"A bloblang map representing the filter for the mongo db command. The filter map is required for all operations except " +
-					"insert-one. It is used to find the document(s) for the operation. For example in a delete-one case, the filter map should " +
+				"A bloblang map representing the filter for the mongo db command. The filter map is required for all operations except "+
+					"insert-one. It is used to find the document(s) for the operation. For example in a delete-one case, the filter map should "+
 					"have the fields required to locate the document to delete.",
 				bmongo.MapExamples(),
 			),
 			docs.FieldCommon(
 				"hint_map",
-				"A bloblang map representing the hint for the mongo db command. This map is optional and is used with all operations " +
+				"A bloblang map representing the hint for the mongo db command. This map is optional and is used with all operations "+
 					"except insert-one. It is used to improve performance of finding the documents in the mongodb.",
 				bmongo.MapExamples(),
 			),
@@ -104,7 +104,7 @@ type MongoDBConfig struct {
 
 	Parts       []int          `json:"parts" yaml:"parts"`
 	Operation   string         `json:"operation" yaml:"operation"`
-	FilterMap	string		   `json:"filter_map" yaml:"filter_map"`
+	FilterMap   string         `json:"filter_map" yaml:"filter_map"`
 	DocumentMap string         `json:"document_map" yaml:"document_map"`
 	HintMap     string         `json:"hint_map" yaml:"hint_map"`
 	RetryConfig retries.Config `json:",inline" yaml:",inline"`

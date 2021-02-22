@@ -82,7 +82,7 @@ func WriteConcernDocs() docs.FieldSpecs {
 	}
 }
 
-func MapExamples() []interface{}{
+func MapExamples() []interface{} {
 	examples := []interface{}{"root.a = this.foo\nroot.b = this.bar"}
 	return examples
 }
