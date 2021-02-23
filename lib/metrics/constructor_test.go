@@ -1,11 +1,14 @@
-package metrics
+package metrics_test
 
 import (
 	"reflect"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/util/config"
 	yaml "gopkg.in/yaml.v3"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 func TestSanitise(t *testing.T) {
@@ -17,10 +20,10 @@ func TestSanitise(t *testing.T) {
 		},
 	}
 
-	conf := NewConfig()
+	conf := metrics.NewConfig()
 	conf.Type = "http_server"
 
-	act, err := SanitiseConfig(conf)
+	act, err := metrics.SanitiseConfig(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,11 +43,11 @@ func TestSanitise(t *testing.T) {
 		},
 	}
 
-	conf = NewConfig()
+	conf = metrics.NewConfig()
 	conf.Type = "statsd"
 	conf.Statsd.Address = "foo"
 
-	act, err = SanitiseConfig(conf)
+	act, err = metrics.SanitiseConfig(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +57,7 @@ func TestSanitise(t *testing.T) {
 }
 
 func TestConstructorConfigYAMLInference(t *testing.T) {
-	conf := []Config{}
+	conf := []metrics.Config{}
 
 	if err := yaml.Unmarshal([]byte(`[
 		{
@@ -83,7 +86,7 @@ func TestConstructorConfigYAMLInference(t *testing.T) {
 		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
 		return
 	}
-	if exp, act := TypePrometheus, conf[0].Type; exp != act {
+	if exp, act := metrics.TypePrometheus, conf[0].Type; exp != act {
 		t.Errorf("Wrong inferred type: %v != %v", act, exp)
 	}
 	if exp, act := "benthos_push", conf[0].Prometheus.PushJobName; exp != act {

@@ -1,4 +1,4 @@
-package manager
+package manager_test
 
 import (
 	"bytes"
@@ -14,13 +14,18 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/stream"
+	"github.com/Jeffail/benthos/v3/lib/stream/manager"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gorilla/mux"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
-func router(m *Type) *mux.Router {
+func router(m *manager.Type) *mux.Router {
 	router := mux.NewRouter()
 	router.HandleFunc("/streams", m.HandleStreamsCRUD)
 	router.HandleFunc("/streams/{id}", m.HandleStreamCRUD)
@@ -89,22 +94,23 @@ type getBody struct {
 	Config    stream.Config `json:"config"`
 }
 
-func parseGetBody(data *bytes.Buffer) getBody {
+func parseGetBody(t *testing.T, data *bytes.Buffer) getBody {
+	t.Helper()
 	result := getBody{
 		Config: stream.NewConfig(),
 	}
 	if err := json.Unmarshal(data.Bytes(), &result); err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	return result
 }
 
 func TestTypeAPIBadMethods(t *testing.T) {
-	mgr := New(
-		OptSetLogger(log.Noop()),
-		OptSetStats(metrics.Noop()),
-		OptSetManager(types.DudMgr{}),
-		OptSetAPITimeout(time.Millisecond*100),
+	mgr := manager.New(
+		manager.OptSetLogger(log.Noop()),
+		manager.OptSetStats(metrics.Noop()),
+		manager.OptSetManager(types.DudMgr{}),
+		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
 	r := router(mgr)
@@ -124,102 +130,93 @@ func TestTypeAPIBadMethods(t *testing.T) {
 	}
 }
 
+func harmlessConf() stream.Config {
+	c := stream.NewConfig()
+	c.Input.Type = "http_server"
+	c.Output.Type = "http_server"
+	return c
+}
+
 func TestTypeAPIBasicOperations(t *testing.T) {
-	mgr := New(
-		OptSetLogger(log.Noop()),
-		OptSetStats(metrics.Noop()),
-		OptSetManager(types.NoopMgr()),
-		OptSetAPITimeout(time.Second*10),
+	mgr := manager.New(
+		manager.OptSetLogger(log.Noop()),
+		manager.OptSetStats(metrics.Noop()),
+		manager.OptSetManager(types.NoopMgr()),
+		manager.OptSetAPITimeout(time.Second*10),
 	)
 
 	r := router(mgr)
-	conf := harmlessConf()
+	conf, err := harmlessConf().Sanitised()
+	require.NoError(t, err)
 
 	request := genRequest("PUT", "/streams/foo", conf)
 	response := httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusNotFound, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	require.Equal(t, http.StatusNotFound, response.Code, response.Body.String())
 
 	request = genRequest("GET", "/streams/foo", nil)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusNotFound, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusNotFound, response.Code)
 
 	request = genRequest("POST", "/streams/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusOK, response.Code)
 
 	request = genRequest("POST", "/streams/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusBadRequest, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusBadRequest, response.Code)
 
 	request = genRequest("GET", "/streams/bar", nil)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusNotFound, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusNotFound, response.Code)
 
 	request = genRequest("GET", "/streams/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
-	info := parseGetBody(response.Body)
-	if !info.Active {
-		t.Error("Stream not active")
-	} else if act, exp := info.Config, conf; !reflect.DeepEqual(act, exp) {
-		t.Errorf("Unexpected config: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusOK, response.Code)
+
+	info := parseGetBody(t, response.Body)
+	assert.True(t, info.Active)
+
+	actSanit, err := info.Config.Sanitised()
+	require.NoError(t, err)
+	assert.Equal(t, conf, actSanit)
 
 	newConf := harmlessConf()
 	newConf.Buffer.Type = "memory"
+	newConfSanit, err := newConf.Sanitised()
+	require.NoError(t, err)
 
-	request = genRequest("PUT", "/streams/foo", newConf)
+	request = genRequest("PUT", "/streams/foo", newConfSanit)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-		t.Logf("Error message: %v", response.Body.String())
-	}
+	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
 
 	request = genRequest("GET", "/streams/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
-	info = parseGetBody(response.Body)
-	if !info.Active {
-		t.Error("Stream not active")
-	} else if act, exp := info.Config, newConf; !reflect.DeepEqual(act, exp) {
-		t.Errorf("Unexpected config: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
+
+	info = parseGetBody(t, response.Body)
+	assert.True(t, info.Active)
+
+	actSanit, err = info.Config.Sanitised()
+	require.NoError(t, err)
+	assert.Equal(t, newConfSanit, actSanit)
 
 	request = genRequest("DELETE", "/streams/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
 
 	request = genRequest("DELETE", "/streams/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusNotFound, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusNotFound, response.Code, response.Body.String())
 
 	testVar := "__TEST_INPUT_TYPE"
 	originalEnv, orignalSet := os.LookupEnv(testVar)
@@ -236,39 +233,32 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	request = genRequest("POST", "/streams/fooEnv", newConf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
 
-	request = genRequest("GET", "/streams/fooEnv", conf)
+	request = genRequest("GET", "/streams/fooEnv", nil)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
-	info = parseGetBody(response.Body)
+	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
+
+	info = parseGetBody(t, response.Body)
 	// replace the env var with the expected value in the struct
 	// because we will be comparing it to the rendered version.
 	newConf.Input.Type = "http_server"
-	if !info.Active {
-		t.Error("Stream not active")
-	} else if act, exp := info.Config, newConf; !reflect.DeepEqual(act, exp) {
-		t.Errorf("Unexpected config: %v != %v", act, exp)
-	}
+	assert.True(t, info.Active)
+	assert.Equal(t, newConf, info.Config)
+
 	request = genRequest("DELETE", "/streams/fooEnv", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
 }
 
 func TestTypeAPIPatch(t *testing.T) {
-	mgr := New(
-		OptSetLogger(log.Noop()),
-		OptSetStats(metrics.Noop()),
-		OptSetManager(types.DudMgr{}),
-		OptSetAPITimeout(time.Millisecond*100),
+	mgr := manager.New(
+		manager.OptSetLogger(log.Noop()),
+		manager.OptSetStats(metrics.Noop()),
+		manager.OptSetManager(types.DudMgr{}),
+		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
 	r := router(mgr)
@@ -309,7 +299,7 @@ func TestTypeAPIPatch(t *testing.T) {
 	if exp, act := http.StatusOK, response.Code; exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
-	info := parseGetBody(response.Body)
+	info := parseGetBody(t, response.Body)
 	if !info.Active {
 		t.Fatal("Stream not active")
 	}
@@ -322,11 +312,11 @@ func TestTypeAPIPatch(t *testing.T) {
 }
 
 func TestTypeAPIBasicOperationsYAML(t *testing.T) {
-	mgr := New(
-		OptSetLogger(log.Noop()),
-		OptSetStats(metrics.Noop()),
-		OptSetManager(types.NoopMgr()),
-		OptSetAPITimeout(time.Second*10),
+	mgr := manager.New(
+		manager.OptSetLogger(log.Noop()),
+		manager.OptSetStats(metrics.Noop()),
+		manager.OptSetManager(types.NoopMgr()),
+		manager.OptSetAPITimeout(time.Second*10),
 	)
 
 	r := router(mgr)
@@ -373,7 +363,7 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 	if exp, act := http.StatusOK, response.Code; exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
-	info := parseGetBody(response.Body)
+	info := parseGetBody(t, response.Body)
 	if !info.Active {
 		t.Error("Stream not active")
 	} else if act, exp := info.Config, conf; !reflect.DeepEqual(act, exp) {
@@ -396,7 +386,7 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 	if exp, act := http.StatusOK, response.Code; exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
-	info = parseGetBody(response.Body)
+	info = parseGetBody(t, response.Body)
 	if !info.Active {
 		t.Error("Stream not active")
 	} else if act, exp := info.Config, newConf; !reflect.DeepEqual(act, exp) {
@@ -419,11 +409,11 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 }
 
 func TestTypeAPIList(t *testing.T) {
-	mgr := New(
-		OptSetLogger(log.Noop()),
-		OptSetStats(metrics.Noop()),
-		OptSetManager(types.DudMgr{}),
-		OptSetAPITimeout(time.Millisecond*100),
+	mgr := manager.New(
+		manager.OptSetLogger(log.Noop()),
+		manager.OptSetStats(metrics.Noop()),
+		manager.OptSetManager(types.DudMgr{}),
+		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
 	r := router(mgr)
@@ -456,42 +446,33 @@ func TestTypeAPIList(t *testing.T) {
 }
 
 func TestTypeAPISetStreams(t *testing.T) {
-	mgr := New(
-		OptSetLogger(log.Noop()),
-		OptSetStats(metrics.Noop()),
-		OptSetManager(types.DudMgr{}),
-		OptSetAPITimeout(time.Millisecond*100),
+	mgr := manager.New(
+		manager.OptSetLogger(log.Noop()),
+		manager.OptSetStats(metrics.Noop()),
+		manager.OptSetManager(types.DudMgr{}),
+		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
 	r := router(mgr)
 
-	if err := mgr.Create("foo", harmlessConf()); err != nil {
-		t.Fatal(err)
-	}
-	if err := mgr.Create("bar", harmlessConf()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, mgr.Create("foo", harmlessConf()))
+	require.NoError(t, mgr.Create("bar", harmlessConf()))
 
 	request := genRequest("GET", "/streams", nil)
 	response := httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusOK, response.Code)
+
 	info := parseListBody(response.Body)
-	if exp, act := true, info["foo"].Active; !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong list response: %v != %v", act, exp)
-	}
-	if exp, act := true, info["bar"].Active; !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong list response: %v != %v", act, exp)
-	}
+	assert.True(t, info["foo"].Active)
+	assert.True(t, info["bar"].Active)
 
 	barConf := harmlessConf()
-	barConf.Input.File.Path = "BAR_ONE"
+	barConf.Input.HTTPServer.Path = "BAR_ONE"
 	bar2Conf := harmlessConf()
-	bar2Conf.Input.File.Path = "BAR_TWO"
+	bar2Conf.Input.HTTPServer.Path = "BAR_TWO"
 	bazConf := harmlessConf()
-	bazConf.Input.File.Path = "BAZ_ONE"
+	bazConf.Input.HTTPServer.Path = "BAZ_ONE"
 	streamsBody := map[string]stream.Config{
 		"bar":  barConf,
 		"bar2": bar2Conf,
@@ -501,60 +482,49 @@ func TestTypeAPISetStreams(t *testing.T) {
 	request = genRequest("POST", "/streams", streamsBody)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-		t.Logf("Message: %v", response.Body.String())
-	}
+	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
 
 	request = genRequest("GET", "/streams", nil)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-		t.Logf("Message: %v", response.Body.String())
-	}
+	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
+
 	info = parseListBody(response.Body)
-	if _, exists := info["foo"]; exists {
-		t.Error("Expected foo to be deleted")
-	}
-	if exp, act := true, info["bar"].Active; !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong list response: %v != %v", act, exp)
-	}
-	if exp, act := true, info["baz"].Active; !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong list response: %v != %v", act, exp)
-	}
+	assert.NotContains(t, info, "foo")
+	assert.Contains(t, info, "bar")
+	assert.Contains(t, info, "baz")
 
-	var barVal, bar2Val, bazVal string
+	request = genRequest("GET", "/streams/bar", nil)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
 
-	mgr.lock.Lock()
-	if val, exists := mgr.streams["bar"]; exists {
-		barVal = val.Config().Input.File.Path
-	}
-	if val, exists := mgr.streams["bar2"]; exists {
-		bar2Val = val.Config().Input.File.Path
-	}
-	if val, exists := mgr.streams["baz"]; exists {
-		bazVal = val.Config().Input.File.Path
-	}
-	mgr.lock.Unlock()
+	conf := parseGetBody(t, response.Body)
+	assert.Equal(t, "BAR_ONE", conf.Config.Input.HTTPServer.Path)
 
-	if act, exp := barVal, "BAR_ONE"; act != exp {
-		t.Errorf("Bar was not updated: %v != %v", act, exp)
-	}
-	if act, exp := bar2Val, "BAR_TWO"; act != exp {
-		t.Errorf("Bar2 was not created: %v != %v", act, exp)
-	}
-	if act, exp := bazVal, "BAZ_ONE"; act != exp {
-		t.Errorf("Baz was not created: %v != %v", act, exp)
-	}
+	request = genRequest("GET", "/streams/bar2", nil)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
+
+	conf = parseGetBody(t, response.Body)
+	assert.Equal(t, "BAR_TWO", conf.Config.Input.HTTPServer.Path)
+
+	request = genRequest("GET", "/streams/baz", nil)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
+
+	conf = parseGetBody(t, response.Body)
+	assert.Equal(t, "BAZ_ONE", conf.Config.Input.HTTPServer.Path)
 }
 
 func TestTypeAPIDefaultConf(t *testing.T) {
-	mgr := New(
-		OptSetLogger(log.Noop()),
-		OptSetStats(metrics.Noop()),
-		OptSetManager(types.DudMgr{}),
-		OptSetAPITimeout(time.Millisecond*100),
+	mgr := manager.New(
+		manager.OptSetLogger(log.Noop()),
+		manager.OptSetStats(metrics.Noop()),
+		manager.OptSetManager(types.DudMgr{}),
+		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
 	r := router(mgr)
@@ -580,11 +550,11 @@ func TestTypeAPIDefaultConf(t *testing.T) {
 }
 
 func TestTypeAPIGetStats(t *testing.T) {
-	mgr := New(
-		OptSetLogger(log.Noop()),
-		OptSetStats(metrics.Noop()),
-		OptSetManager(types.DudMgr{}),
-		OptSetAPITimeout(time.Millisecond*100),
+	mgr := manager.New(
+		manager.OptSetLogger(log.Noop()),
+		manager.OptSetStats(metrics.Noop()),
+		manager.OptSetManager(types.DudMgr{}),
+		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
 	r := router(mgr)

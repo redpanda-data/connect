@@ -188,6 +188,7 @@ func parseInputConfsWithDefaults(rawInputs []interface{}) ([]Config, error) {
 		newConfigs := make([]Config, 1)
 		label := broker.GetGenericType(boxedConfig)
 
+		// TODO: V4 Remove ditto
 		if i > 0 && strings.Index(label, "ditto") == 0 {
 			broker.RemoveGenericType(boxedConfig)
 

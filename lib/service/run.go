@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/output"
@@ -14,6 +15,10 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/service/test"
 	uconfig "github.com/Jeffail/benthos/v3/lib/util/config"
 	"github.com/urfave/cli/v2"
+
+	// TODO: V4 Remove this as it's a temporary work around to ensure current
+	// plugin users automatically import all components.
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 //------------------------------------------------------------------------------
@@ -87,7 +92,7 @@ func addExpression(conf *config.Type, expression string) error {
 
 	if lInputs := len(inputTypes); lInputs == 1 {
 		t := inputTypes[0]
-		if _, exists := input.Constructors[t]; exists {
+		if _, exists := bundle.AllInputs.DocsFor(t); exists {
 			conf.Input.Type = t
 		} else {
 			return fmt.Errorf("unrecognised input type '%v'", t)
@@ -96,7 +101,7 @@ func addExpression(conf *config.Type, expression string) error {
 		conf.Input.Type = input.TypeBroker
 		for _, t := range inputTypes {
 			c := input.NewConfig()
-			if _, exists := input.Constructors[t]; exists {
+			if _, exists := bundle.AllInputs.DocsFor(t); exists {
 				c.Type = t
 			} else {
 				return fmt.Errorf("unrecognised input type '%v'", t)
@@ -107,7 +112,7 @@ func addExpression(conf *config.Type, expression string) error {
 
 	for _, t := range processorTypes {
 		c := processor.NewConfig()
-		if _, exists := processor.Constructors[t]; exists {
+		if _, exists := bundle.AllProcessors.DocsFor(t); exists {
 			c.Type = t
 		} else {
 			return fmt.Errorf("unrecognised processor type '%v'", t)
@@ -117,7 +122,7 @@ func addExpression(conf *config.Type, expression string) error {
 
 	if lOutputs := len(outputTypes); lOutputs == 1 {
 		t := outputTypes[0]
-		if _, exists := output.Constructors[t]; exists {
+		if _, exists := bundle.AllOutputs.DocsFor(t); exists {
 			conf.Output.Type = t
 		} else {
 			return fmt.Errorf("unrecognised output type '%v'", t)
@@ -126,7 +131,7 @@ func addExpression(conf *config.Type, expression string) error {
 		conf.Output.Type = output.TypeBroker
 		for _, t := range outputTypes {
 			c := output.NewConfig()
-			if _, exists := output.Constructors[t]; exists {
+			if _, exists := bundle.AllOutputs.DocsFor(t); exists {
 				c.Type = t
 			} else {
 				return fmt.Errorf("unrecognised output type '%v'", t)

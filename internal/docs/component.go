@@ -33,7 +33,37 @@ var (
 	StatusBeta         Status = "beta"
 	StatusExperimental Status = "experimental"
 	StatusDeprecated   Status = "deprecated"
+	StatusPlugin       Status = "plugin"
 )
+
+// Type of a component.
+type Type string
+
+// Component types.
+var (
+	TypeBuffer    Type = "buffer"
+	TypeCache     Type = "cache"
+	TypeInput     Type = "input"
+	TypeMetrics   Type = "metrics"
+	TypeOutput    Type = "output"
+	TypeProcessor Type = "processor"
+	TypeRateLimit Type = "rate_limit"
+	TypeTracer    Type = "tracer"
+)
+
+// Types returns a slice containing all component types.
+func Types() []Type {
+	return []Type{
+		TypeBuffer,
+		TypeCache,
+		TypeInput,
+		TypeMetrics,
+		TypeOutput,
+		TypeProcessor,
+		TypeRateLimit,
+		TypeTracer,
+	}
+}
 
 // ComponentSpec describes a Benthos component.
 type ComponentSpec struct {
@@ -41,7 +71,7 @@ type ComponentSpec struct {
 	Name string
 
 	// Type of the component (input, output, etc)
-	Type string
+	Type Type
 
 	// The status of the component.
 	Status Status
@@ -320,7 +350,7 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 
 	ctx := componentContext{
 		Name:        c.Name,
-		Type:        c.Type,
+		Type:        string(c.Type),
 		Summary:     c.Summary,
 		Description: c.Description,
 		Examples:    c.Examples,
@@ -348,7 +378,7 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 
 	root := ""
 	if nest {
-		root = c.Type
+		root = string(c.Type)
 	}
 
 	advancedConfigBytes, commonConfigBytes := c.createConfigs(root, fullConfigExample)

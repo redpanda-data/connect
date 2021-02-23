@@ -1,11 +1,15 @@
 package manager
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"path"
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bundle"
+	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/input"
@@ -15,8 +19,16 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/config"
 )
+
+// ErrResourceNotFound represents an error where a named resource could not be
+// accessed because it was not found by the manager.
+type ErrResourceNotFound string
+
+// Error implements the standard error interface.
+func (e ErrResourceNotFound) Error() string {
+	return fmt.Sprintf("unable to locate resource: %v", string(e))
+}
 
 //------------------------------------------------------------------------------
 
@@ -27,202 +39,47 @@ type APIReg interface {
 
 //------------------------------------------------------------------------------
 
-// Config contains all configuration fields for a Benthos service manager.
-type Config struct {
-	Inputs     map[string]input.Config     `json:"inputs" yaml:"inputs"`
-	Conditions map[string]condition.Config `json:"conditions" yaml:"conditions"`
-	Processors map[string]processor.Config `json:"processors" yaml:"processors"`
-	Outputs    map[string]output.Config    `json:"outputs" yaml:"outputs"`
-	Caches     map[string]cache.Config     `json:"caches" yaml:"caches"`
-	RateLimits map[string]ratelimit.Config `json:"rate_limits" yaml:"rate_limits"`
-	Plugins    map[string]PluginConfig     `json:"plugins,omitempty" yaml:"plugins,omitempty"`
-}
-
-// NewConfig returns a Config with default values.
-func NewConfig() Config {
-	return Config{
-		Inputs:     map[string]input.Config{},
-		Conditions: map[string]condition.Config{},
-		Processors: map[string]processor.Config{},
-		Outputs:    map[string]output.Config{},
-		Caches:     map[string]cache.Config{},
-		RateLimits: map[string]ratelimit.Config{},
-		Plugins:    map[string]PluginConfig{},
-	}
-}
-
-// AddFrom takes another Config and adds all of its resources to itself. If
-// there are any resource name collisions an error is returned.
-func (c *Config) AddFrom(extra *Config) error {
-	for k, v := range extra.Inputs {
-		if _, exists := c.Inputs[k]; exists {
-			return fmt.Errorf("resource input name collision: %v", k)
-		}
-		c.Inputs[k] = v
-	}
-	for k, v := range extra.Conditions {
-		if _, exists := c.Conditions[k]; exists {
-			return fmt.Errorf("resource condition name collision: %v", k)
-		}
-		c.Conditions[k] = v
-	}
-	for k, v := range extra.Processors {
-		if _, exists := c.Processors[k]; exists {
-			return fmt.Errorf("resource processor name collision: %v", k)
-		}
-		c.Processors[k] = v
-	}
-	for k, v := range extra.Outputs {
-		if _, exists := c.Outputs[k]; exists {
-			return fmt.Errorf("resource output name collision: %v", k)
-		}
-		c.Outputs[k] = v
-	}
-	for k, v := range extra.Caches {
-		if _, exists := c.Caches[k]; exists {
-			return fmt.Errorf("resource cache name collision: %v", k)
-		}
-		c.Caches[k] = v
-	}
-	for k, v := range extra.RateLimits {
-		if _, exists := c.RateLimits[k]; exists {
-			return fmt.Errorf("resource ratelimit name collision: %v", k)
-		}
-		c.RateLimits[k] = v
-	}
-	for k, v := range extra.Plugins {
-		if _, exists := c.Plugins[k]; exists {
-			return fmt.Errorf("resource plugin name collision: %v", k)
-		}
-		c.Plugins[k] = v
-	}
-	return nil
-}
-
-// AddExamples inserts example caches and conditions if none exist in the
-// config.
-func AddExamples(c *Config) {
-	if len(c.Inputs) == 0 {
-		c.Inputs["example"] = input.NewConfig()
-	}
-	if len(c.Conditions) == 0 {
-		c.Conditions["example"] = condition.NewConfig()
-	}
-	if len(c.Processors) == 0 {
-		c.Processors["example"] = processor.NewConfig()
-	}
-	if len(c.Outputs) == 0 {
-		c.Outputs["example"] = output.NewConfig()
-	}
-	if len(c.Caches) == 0 {
-		c.Caches["example"] = cache.NewConfig()
-	}
-	if len(c.RateLimits) == 0 {
-		c.RateLimits["example"] = ratelimit.NewConfig()
-	}
-}
-
-//------------------------------------------------------------------------------
-
-// SanitiseConfig creates a sanitised version of a manager config.
-func SanitiseConfig(conf Config) (interface{}, error) {
-	return conf.Sanitised(false)
-}
-
-// Sanitised returns a sanitised version of the config, meaning sections that
-// aren't relevant to behaviour are removed. Also optionally removes deprecated
-// fields.
-func (c Config) Sanitised(removeDeprecated bool) (interface{}, error) {
-	var err error
-
-	inputs := map[string]interface{}{}
-	for k, v := range c.Inputs {
-		if inputs[k], err = v.Sanitised(removeDeprecated); err != nil {
-			return nil, err
-		}
-	}
-
-	caches := map[string]interface{}{}
-	for k, v := range c.Caches {
-		if caches[k], err = v.Sanitised(removeDeprecated); err != nil {
-			return nil, err
-		}
-	}
-
-	conditions := map[string]interface{}{}
-	for k, v := range c.Conditions {
-		if conditions[k], err = v.Sanitised(removeDeprecated); err != nil {
-			return nil, err
-		}
-	}
-
-	processors := map[string]interface{}{}
-	for k, v := range c.Processors {
-		if processors[k], err = v.Sanitised(removeDeprecated); err != nil {
-			return nil, err
-		}
-	}
-
-	outputs := map[string]interface{}{}
-	for k, v := range c.Outputs {
-		if outputs[k], err = v.Sanitised(removeDeprecated); err != nil {
-			return nil, err
-		}
-	}
-
-	rateLimits := map[string]interface{}{}
-	for k, v := range c.RateLimits {
-		if rateLimits[k], err = v.Sanitised(removeDeprecated); err != nil {
-			return nil, err
-		}
-	}
-
-	plugins := map[string]interface{}{}
-	for k, v := range c.Plugins {
-		if spec, exists := pluginSpecs[v.Type]; exists {
-			if spec.confSanitiser != nil {
-				outputMap := config.Sanitised{}
-				outputMap["type"] = v.Type
-				outputMap["plugin"] = spec.confSanitiser(v.Plugin)
-				plugins[k] = outputMap
-			} else {
-				plugins[k] = v
-			}
-		}
-	}
-
-	m := map[string]interface{}{
-		"inputs":      inputs,
-		"conditions":  conditions,
-		"processors":  processors,
-		"outputs":     outputs,
-		"caches":      caches,
-		"rate_limits": rateLimits,
-	}
-	if len(plugins) > 0 {
-		m["plugins"] = plugins
-	}
-	return m, nil
-}
-
-//------------------------------------------------------------------------------
-
 // Type is an implementation of types.Manager, which is expected by Benthos
 // components that need to register service wide behaviours such as HTTP
 // endpoints and event listeners, and obtain service wide shared resources such
-// as caches and labelled conditions.
+// as caches and other resources.
 type Type struct {
-	apiReg     APIReg
-	inputs     map[string]types.Input
-	caches     map[string]types.Cache
-	conditions map[string]types.Condition
-	processors map[string]types.Processor
-	outputs    map[string]types.OutputWriter
-	rateLimits map[string]types.RateLimit
-	plugins    map[string]interface{}
+	// An optional identifier given to a manager that is used by a unique stream
+	// and if specified should be used as a path prefix for API endpoints, and
+	// added as a label to logs and metrics.
+	stream string
+
+	// An optional identifier given to a manager that is used by a component and
+	// if specified should be added as a label to logs and metrics.
+	component string
+
+	apiReg APIReg
+
+	inputs       map[string]types.Input
+	caches       map[string]types.Cache
+	processors   map[string]types.Processor
+	outputs      map[string]types.OutputWriter
+	rateLimits   map[string]types.RateLimit
+	plugins      map[string]interface{}
+	resourceLock *sync.RWMutex
+
+	// Collections of component constructors
+	bufferBundle    *bundle.BufferSet
+	cacheBundle     *bundle.CacheSet
+	inputBundle     *bundle.InputSet
+	metricsBundle   *bundle.MetricsSet
+	outputBundle    *bundle.OutputSet
+	processorBundle *bundle.ProcessorSet
+	rateLimitBundle *bundle.RateLimitSet
+
+	logger log.Modular
+	stats  metrics.Type
 
 	pipes    map[string]<-chan types.Transaction
-	pipeLock sync.RWMutex
+	pipeLock *sync.RWMutex
+
+	// TODO: V4 Remove this
+	conditions map[string]types.Condition
 }
 
 // New returns an instance of manager.Type, which can be shared amongst
@@ -234,15 +91,32 @@ func New(
 	stats metrics.Type,
 ) (*Type, error) {
 	t := &Type{
-		apiReg:     apiReg,
-		inputs:     map[string]types.Input{},
-		caches:     map[string]types.Cache{},
+		apiReg: apiReg,
+
+		inputs:       map[string]types.Input{},
+		caches:       map[string]types.Cache{},
+		processors:   map[string]types.Processor{},
+		outputs:      map[string]types.OutputWriter{},
+		rateLimits:   map[string]types.RateLimit{},
+		plugins:      map[string]interface{}{},
+		resourceLock: &sync.RWMutex{},
+
+		// All bundles default to everything that was imported.
+		bufferBundle:    bundle.AllBuffers,
+		cacheBundle:     bundle.AllCaches,
+		inputBundle:     bundle.AllInputs,
+		metricsBundle:   bundle.AllMetrics,
+		outputBundle:    bundle.AllOutputs,
+		processorBundle: bundle.AllProcessors,
+		rateLimitBundle: bundle.AllRateLimits,
+
+		logger: log,
+		stats:  stats,
+
+		pipes:    map[string]<-chan types.Transaction{},
+		pipeLock: &sync.RWMutex{},
+
 		conditions: map[string]types.Condition{},
-		processors: map[string]types.Processor{},
-		outputs:    map[string]types.OutputWriter{},
-		rateLimits: map[string]types.RateLimit{},
-		plugins:    map[string]interface{}{},
-		pipes:      map[string]<-chan types.Transaction{},
 	}
 
 	// Sometimes resources of a type might refer to other resources of the same
@@ -276,25 +150,15 @@ func New(
 	}
 
 	for k, conf := range conf.Inputs {
-		newInput, err := input.New(conf, t, log.NewModule(".resource.input."+k), metrics.Namespaced(stats, "resource.input."+k))
-		if err != nil {
-			return nil, fmt.Errorf(
-				"failed to create input resource '%v' of type '%v': %v",
-				k, conf.Type, err,
-			)
+		if err := t.StoreInput(context.Background(), k, conf); err != nil {
+			return nil, err
 		}
-		t.inputs[k] = newInput
 	}
 
 	for k, conf := range conf.Caches {
-		newCache, err := cache.New(conf, t, log.NewModule(".resource.cache."+k), metrics.Namespaced(stats, "resource.cache."+k))
-		if err != nil {
-			return nil, fmt.Errorf(
-				"failed to create cache resource '%v' of type '%v': %v",
-				k, conf.Type, err,
-			)
+		if err := t.StoreCache(context.Background(), k, conf); err != nil {
+			return nil, err
 		}
-		t.caches[k] = newCache
 	}
 
 	// TODO: Prevent recursive conditions.
@@ -311,39 +175,21 @@ func New(
 	}
 
 	// TODO: Prevent recursive processors.
-	for k, newConf := range conf.Processors {
-		newProc, err := processor.New(newConf, t, log.NewModule(".resource.processor."+k), metrics.Namespaced(stats, "resource.processor."+k))
-		if err != nil {
-			return nil, fmt.Errorf(
-				"failed to create processor resource '%v' of type '%v': %v",
-				k, newConf.Type, err,
-			)
+	for k, conf := range conf.Processors {
+		if err := t.StoreProcessor(context.Background(), k, conf); err != nil {
+			return nil, err
 		}
-
-		t.processors[k] = newProc
 	}
 
 	for k, conf := range conf.RateLimits {
-		newRL, err := ratelimit.New(conf, t, log.NewModule(".resource.rate_limit."+k), metrics.Namespaced(stats, "resource.rate_limit."+k))
-		if err != nil {
-			return nil, fmt.Errorf(
-				"failed to create rate_limit resource '%v' of type '%v': %v",
-				k, conf.Type, err,
-			)
+		if err := t.StoreRateLimit(context.Background(), k, conf); err != nil {
+			return nil, err
 		}
-		t.rateLimits[k] = newRL
 	}
 
 	for k, conf := range conf.Outputs {
-		newOutput, err := output.New(conf, t, log.NewModule(".resource.output."+k), metrics.Namespaced(stats, "resource.output."+k))
-		if err == nil {
-			t.outputs[k], err = wrapOutput(newOutput)
-		}
-		if err != nil {
-			return nil, fmt.Errorf(
-				"failed to create output resource '%v' of type '%v': %v",
-				k, conf.Type, err,
-			)
+		if err := t.StoreOutput(context.Background(), k, conf); err != nil {
+			return nil, err
 		}
 	}
 
@@ -362,18 +208,579 @@ func New(
 		t.plugins[k] = newP
 	}
 
-	// Note: Resources are considered READONLY from this point onwards and are
-	// therefore NOT protected by mutexes or channels.
-
 	return t, nil
 }
 
 //------------------------------------------------------------------------------
 
-// RegisterEndpoint registers a server wide HTTP endpoint.
-func (t *Type) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
-	t.apiReg.RegisterEndpoint(path, desc, h)
+func unwrapMetric(t metrics.Type) metrics.Type {
+	u, ok := t.(interface {
+		Unwrap() metrics.Type
+	})
+	if ok {
+		t = u.Unwrap()
+	}
+	return t
 }
+
+// ForStream returns a variant of this manager to be used by a particular stream
+// identifer, where APIs registered will be namespaced by that id.
+func (t *Type) ForStream(id string) types.Manager {
+	return t.forStream(id)
+}
+
+func (t *Type) forStream(id string) *Type {
+	newT := *t
+	newT.stream = id
+	newT.logger = t.logger.WithFields(map[string]string{
+		"stream": id,
+	})
+	newT.stats = metrics.Namespaced(unwrapMetric(t.stats), id)
+	return &newT
+}
+
+// ForComponent returns a variant of this manager to be used by a particular
+// component identifer, where observability components will be automatically
+// tagged with the label.
+func (t *Type) ForComponent(id string) types.Manager {
+	return t.forComponent(id)
+}
+
+func (t *Type) forComponent(id string) *Type {
+	newT := *t
+	newT.component = id
+	newT.logger = t.logger.WithFields(map[string]string{
+		"component": id,
+	})
+
+	statsPrefix := id
+	if len(newT.stream) > 0 {
+		statsPrefix = newT.stream + "." + statsPrefix
+	}
+	newT.stats = metrics.Namespaced(unwrapMetric(t.stats), statsPrefix)
+	return &newT
+}
+
+// ForChildComponent returns a variant of this manager to be used by a
+// particular component identifer, which is a child of the current component,
+// where observability components will be automatically tagged with the label.
+func (t *Type) ForChildComponent(id string) types.Manager {
+	return t.forChildComponent(id)
+}
+
+func (t *Type) forChildComponent(id string) *Type {
+	newT := *t
+	newT.logger = t.logger.NewModule("." + id)
+	newT.stats = metrics.Namespaced(t.stats, id)
+
+	if len(newT.component) > 0 {
+		id = newT.component + "." + id
+	}
+	newT.component = id
+	return &newT
+}
+
+// Label returns the current component label held by a manager.
+func (t *Type) Label() string {
+	return t.component
+}
+
+//------------------------------------------------------------------------------
+
+// RegisterEndpoint registers a server wide HTTP endpoint.
+func (t *Type) RegisterEndpoint(apiPath, desc string, h http.HandlerFunc) {
+	if len(t.stream) > 0 {
+		apiPath = path.Join("/", t.stream, apiPath)
+	}
+	if t.apiReg != nil {
+		t.apiReg.RegisterEndpoint(apiPath, desc, h)
+	}
+}
+
+// SetPipe registers a new transaction chan to a named pipe.
+func (t *Type) SetPipe(name string, tran <-chan types.Transaction) {
+	t.pipeLock.Lock()
+	t.pipes[name] = tran
+	t.pipeLock.Unlock()
+}
+
+// GetPipe attempts to obtain and return a named output Pipe
+func (t *Type) GetPipe(name string) (<-chan types.Transaction, error) {
+	t.pipeLock.RLock()
+	pipe, exists := t.pipes[name]
+	t.pipeLock.RUnlock()
+	if exists {
+		return pipe, nil
+	}
+	return nil, types.ErrPipeNotFound
+}
+
+// UnsetPipe removes a named pipe transaction chan.
+func (t *Type) UnsetPipe(name string, tran <-chan types.Transaction) {
+	t.pipeLock.Lock()
+	if otran, exists := t.pipes[name]; exists && otran == tran {
+		delete(t.pipes, name)
+	}
+	t.pipeLock.Unlock()
+}
+
+//------------------------------------------------------------------------------
+
+// Metrics returns an aggregator preset with the current component context.
+func (t *Type) Metrics() metrics.Type {
+	return t.stats
+}
+
+// Logger returns a logger preset with the current component context.
+func (t *Type) Logger() log.Modular {
+	return t.logger
+}
+
+//------------------------------------------------------------------------------
+
+func closeWithContext(ctx context.Context, c types.Closable) error {
+	c.CloseAsync()
+	waitFor := time.Second
+	deadline, hasDeadline := ctx.Deadline()
+	if hasDeadline {
+		waitFor = time.Until(deadline)
+	}
+	err := c.WaitForClose(waitFor)
+	for err != nil && !hasDeadline {
+		err = c.WaitForClose(time.Second)
+	}
+	return err
+}
+
+//------------------------------------------------------------------------------
+
+// NewBuffer attempts to create a new buffer component from a config.
+func (t *Type) NewBuffer(conf buffer.Config) (buffer.Type, error) {
+	mgr := t
+	/*
+		// TODO
+		// A configured label overrides any previously set component label.
+		if len(conf.Label) > 0 && t.component != conf.Label {
+			mgr = t.ForComponent(conf.Label)
+		}
+	*/
+	return t.bufferBundle.Init(conf, mgr)
+}
+
+//------------------------------------------------------------------------------
+
+// AccessCache attempts to access a cache resource by a unique identifier and
+// executes a closure function with the cache as an argument. Returns an error
+// if the cache does not exist (or is otherwise inaccessible).
+//
+// During the execution of the provided closure it is guaranteed that the
+// resource will not be closed or removed. However, it is possible for the
+// resource to be accessed by any number of components in parallel.
+func (t *Type) AccessCache(ctx context.Context, name string, fn func(types.Cache)) error {
+	// TODO: Eventually use ctx to cancel blocking on the mutex lock. Needs
+	// profiling for heavy use within a busy loop.
+	t.resourceLock.RLock()
+	defer t.resourceLock.RUnlock()
+	c, ok := t.caches[name]
+	if !ok {
+		return ErrResourceNotFound(name)
+	}
+	fn(c)
+	return nil
+}
+
+// NewCache attempts to create a new cache component from a config.
+func (t *Type) NewCache(conf cache.Config) (types.Cache, error) {
+	mgr := t
+	/*
+		// TODO
+		// A configured label overrides any previously set component label.
+		if len(conf.Label) > 0 && t.component != conf.Label {
+			mgr = t.ForComponent(conf.Label)
+		}
+	*/
+	return t.cacheBundle.Init(conf, mgr)
+}
+
+// StoreCache attempts to store a new cache resource. If an existing resource
+// has the same name it is closed and removed _before_ the new one is
+// initialized in order to avoid duplicate connections.
+func (t *Type) StoreCache(ctx context.Context, name string, conf cache.Config) error {
+	t.resourceLock.Lock()
+	defer t.resourceLock.Unlock()
+
+	c, ok := t.caches[name]
+	if ok && c != nil {
+		// If a previous resource exists with the same name then we do NOT allow
+		// it to be replaced unless it can be successfully closed. This ensures
+		// that we do not leak connections.
+		if err := closeWithContext(ctx, c); err != nil {
+			return err
+		}
+	}
+
+	newCache, err := t.forComponent("resource.cache." + name).NewCache(conf)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to create cache resource '%v' of type '%v': %w",
+			name, conf.Type, err,
+		)
+	}
+
+	t.caches[name] = newCache
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
+// AccessInput attempts to access an input resource by a unique identifier and
+// executes a closure function with the input as an argument. Returns an error
+// if the input does not exist (or is otherwise inaccessible).
+//
+// During the execution of the provided closure it is guaranteed that the
+// resource will not be closed or removed. However, it is possible for the
+// resource to be accessed by any number of components in parallel.
+func (t *Type) AccessInput(ctx context.Context, name string, fn func(types.Input)) error {
+	// TODO: Eventually use ctx to cancel blocking on the mutex lock. Needs
+	// profiling for heavy use within a busy loop.
+	t.resourceLock.RLock()
+	defer t.resourceLock.RUnlock()
+	i, ok := t.inputs[name]
+	if !ok {
+		return ErrResourceNotFound(name)
+	}
+	fn(i)
+	return nil
+}
+
+// NewInput attempts to create a new input component from a config.
+//
+// TODO: V4 Remove the dumb batch field.
+func (t *Type) NewInput(conf input.Config, hasBatchProc bool, pipelines ...types.PipelineConstructorFunc) (types.Input, error) {
+	mgr := t
+	/*
+		// TODO
+		// A configured label overrides any previously set component label.
+		if len(conf.Label) > 0 && t.component != conf.Label {
+			mgr = t.ForComponent(conf.Label)
+		}
+	*/
+	return t.inputBundle.Init(hasBatchProc, conf, mgr, pipelines...)
+}
+
+// StoreInput attempts to store a new input resource. If an existing resource
+// has the same name it is closed and removed _before_ the new one is
+// initialized in order to avoid duplicate connections.
+func (t *Type) StoreInput(ctx context.Context, name string, conf input.Config) error {
+	t.resourceLock.Lock()
+	defer t.resourceLock.Unlock()
+
+	i, ok := t.inputs[name]
+	if ok && i != nil {
+		// If a previous resource exists with the same name then we do NOT allow
+		// it to be replaced unless it can be successfully closed. This ensures
+		// that we do not leak connections.
+		if err := closeWithContext(ctx, i); err != nil {
+			return err
+		}
+	}
+
+	newInput, err := t.forComponent("resource.input."+name).NewInput(conf, false)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to create input resource '%v' of type '%v': %w",
+			name, conf.Type, err,
+		)
+	}
+
+	t.inputs[name] = newInput
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
+// AccessProcessor attempts to access a processor resource by a unique
+// identifier and executes a closure function with the processor as an argument.
+// Returns an error if the processor does not exist (or is otherwise
+// inaccessible).
+//
+// During the execution of the provided closure it is guaranteed that the
+// resource will not be closed or removed. However, it is possible for the
+// resource to be accessed by any number of components in parallel.
+func (t *Type) AccessProcessor(ctx context.Context, name string, fn func(types.Processor)) error {
+	// TODO: Eventually use ctx to cancel blocking on the mutex lock. Needs
+	// profiling for heavy use within a busy loop.
+	t.resourceLock.RLock()
+	defer t.resourceLock.RUnlock()
+	p, ok := t.processors[name]
+	if !ok {
+		return ErrResourceNotFound(name)
+	}
+	fn(p)
+	return nil
+}
+
+// NewProcessor attempts to create a new processor component from a config.
+func (t *Type) NewProcessor(conf processor.Config) (types.Processor, error) {
+	mgr := t
+	/*
+		// TODO
+		// A configured label overrides any previously set component label.
+		if len(conf.Label) > 0 && t.component != conf.Label {
+			mgr = t.ForComponent(conf.Label)
+		}
+	*/
+	return t.processorBundle.Init(conf, mgr)
+}
+
+// StoreProcessor attempts to store a new processor resource. If an existing
+// resource has the same name it is closed and removed _before_ the new one is
+// initialized in order to avoid duplicate connections.
+func (t *Type) StoreProcessor(ctx context.Context, name string, conf processor.Config) error {
+	t.resourceLock.Lock()
+	defer t.resourceLock.Unlock()
+
+	p, ok := t.processors[name]
+	if ok && p != nil {
+		// If a previous resource exists with the same name then we do NOT allow
+		// it to be replaced unless it can be successfully closed. This ensures
+		// that we do not leak connections.
+		if err := closeWithContext(ctx, p); err != nil {
+			return err
+		}
+	}
+
+	newProcessor, err := t.forComponent("resource.processor." + name).NewProcessor(conf)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to create processor resource '%v' of type '%v': %w",
+			name, conf.Type, err,
+		)
+	}
+
+	t.processors[name] = newProcessor
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
+// AccessOutput attempts to access an output resource by a unique identifier and
+// executes a closure function with the output as an argument. Returns an error
+// if the output does not exist (or is otherwise inaccessible).
+//
+// During the execution of the provided closure it is guaranteed that the
+// resource will not be closed or removed. However, it is possible for the
+// resource to be accessed by any number of components in parallel.
+func (t *Type) AccessOutput(ctx context.Context, name string, fn func(types.OutputWriter)) error {
+	// TODO: Eventually use ctx to cancel blocking on the mutex lock. Needs
+	// profiling for heavy use within a busy loop.
+	t.resourceLock.RLock()
+	defer t.resourceLock.RUnlock()
+	o, ok := t.outputs[name]
+	if !ok {
+		return ErrResourceNotFound(name)
+	}
+	fn(o)
+	return nil
+}
+
+// NewOutput attempts to create a new output component from a config.
+func (t *Type) NewOutput(conf output.Config, pipelines ...types.PipelineConstructorFunc) (types.Output, error) {
+	mgr := t
+	/*
+		// TODO
+		// A configured label overrides any previously set component label.
+		if len(conf.Label) > 0 && t.component != conf.Label {
+			mgr = t.ForComponent(conf.Label)
+		}
+	*/
+	return t.outputBundle.Init(conf, mgr, pipelines...)
+}
+
+// StoreOutput attempts to store a new output resource. If an existing resource
+// has the same name it is closed and removed _before_ the new one is
+// initialized in order to avoid duplicate connections.
+func (t *Type) StoreOutput(ctx context.Context, name string, conf output.Config) error {
+	t.resourceLock.Lock()
+	defer t.resourceLock.Unlock()
+
+	o, ok := t.outputs[name]
+	if ok && o != nil {
+		// If a previous resource exists with the same name then we do NOT allow
+		// it to be replaced unless it can be successfully closed. This ensures
+		// that we do not leak connections.
+		if err := closeWithContext(ctx, o); err != nil {
+			return err
+		}
+	}
+
+	tmpOutput, err := t.forComponent("resource.output." + name).NewOutput(conf)
+	if err == nil {
+		if t.outputs[name], err = wrapOutput(tmpOutput); err != nil {
+			tmpOutput.CloseAsync()
+		}
+	}
+	if err != nil {
+		return fmt.Errorf(
+			"failed to create output resource '%v' of type '%v': %w",
+			name, conf.Type, err,
+		)
+	}
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
+// AccessRateLimit attempts to access a rate limit resource by a unique
+// identifier and executes a closure function with the rate limit as an
+// argument. Returns an error if the rate limit does not exist (or is otherwise
+// inaccessible).
+//
+// During the execution of the provided closure it is guaranteed that the
+// resource will not be closed or removed. However, it is possible for the
+// resource to be accessed by any number of components in parallel.
+func (t *Type) AccessRateLimit(ctx context.Context, name string, fn func(types.RateLimit)) error {
+	// TODO: Eventually use ctx to cancel blocking on the mutex lock. Needs
+	// profiling for heavy use within a busy loop.
+	t.resourceLock.RLock()
+	defer t.resourceLock.RUnlock()
+	r, ok := t.rateLimits[name]
+	if !ok {
+		return ErrResourceNotFound(name)
+	}
+	fn(r)
+	return nil
+}
+
+// NewRateLimit attempts to create a new rate limit component from a config.
+func (t *Type) NewRateLimit(conf ratelimit.Config) (types.RateLimit, error) {
+	mgr := t
+	/*
+		// TODO
+		// A configured label overrides any previously set component label.
+		if len(conf.Label) > 0 && t.component != conf.Label {
+			mgr = t.ForComponent(conf.Label)
+		}
+	*/
+	return t.rateLimitBundle.Init(conf, mgr)
+}
+
+// StoreRateLimit attempts to store a new rate limit resource. If an existing
+// resource has the same name it is closed and removed _before_ the new one is
+// initialized in order to avoid duplicate connections.
+func (t *Type) StoreRateLimit(ctx context.Context, name string, conf ratelimit.Config) error {
+	t.resourceLock.Lock()
+	defer t.resourceLock.Unlock()
+
+	r, ok := t.rateLimits[name]
+	if ok && r != nil {
+		// If a previous resource exists with the same name then we do NOT allow
+		// it to be replaced unless it can be successfully closed. This ensures
+		// that we do not leak connections.
+		if err := closeWithContext(ctx, r); err != nil {
+			return err
+		}
+	}
+
+	newRateLimit, err := t.forComponent("resource.rate_limit." + name).NewRateLimit(conf)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to create rate limit resource '%v' of type '%v': %w",
+			name, conf.Type, err,
+		)
+	}
+
+	t.rateLimits[name] = newRateLimit
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
+// CloseAsync triggers the shut down of all resource types that implement the
+// lifetime interface types.Closable.
+func (t *Type) CloseAsync() {
+	t.resourceLock.Lock()
+	defer t.resourceLock.Unlock()
+
+	for _, c := range t.inputs {
+		c.CloseAsync()
+	}
+	for _, c := range t.caches {
+		c.CloseAsync()
+	}
+	for _, c := range t.conditions {
+		if closer, ok := c.(types.Closable); ok {
+			closer.CloseAsync()
+		}
+	}
+	for _, p := range t.processors {
+		p.CloseAsync()
+	}
+	for _, c := range t.plugins {
+		if closer, ok := c.(types.Closable); ok {
+			closer.CloseAsync()
+		}
+	}
+	for _, c := range t.rateLimits {
+		c.CloseAsync()
+	}
+	for _, c := range t.outputs {
+		c.CloseAsync()
+	}
+}
+
+// WaitForClose blocks until either all closable resource types are shut down or
+// a timeout occurs.
+func (t *Type) WaitForClose(timeout time.Duration) error {
+	t.resourceLock.Lock()
+	defer t.resourceLock.Unlock()
+
+	timesOut := time.Now().Add(timeout)
+	for k, c := range t.inputs {
+		if err := c.WaitForClose(time.Until(timesOut)); err != nil {
+			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
+		}
+		delete(t.inputs, k)
+	}
+	for k, c := range t.caches {
+		if err := c.WaitForClose(time.Until(timesOut)); err != nil {
+			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
+		}
+		delete(t.caches, k)
+	}
+	for k, p := range t.processors {
+		if err := p.WaitForClose(time.Until(timesOut)); err != nil {
+			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
+		}
+		delete(t.processors, k)
+	}
+	for k, c := range t.rateLimits {
+		if err := c.WaitForClose(time.Until(timesOut)); err != nil {
+			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
+		}
+		delete(t.rateLimits, k)
+	}
+	for k, c := range t.outputs {
+		if err := c.WaitForClose(time.Until(timesOut)); err != nil {
+			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
+		}
+		delete(t.outputs, k)
+	}
+	for k, c := range t.plugins {
+		if closer, ok := c.(types.Closable); ok {
+			if err := closer.WaitForClose(time.Until(timesOut)); err != nil {
+				return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
+			}
+		}
+		delete(t.plugins, k)
+	}
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
+// DEPRECATED
+// TODO: V4 Remove this
 
 // GetInput attempts to find a service wide input by its name.
 func (t *Type) GetInput(name string) (types.Input, error) {
@@ -389,33 +796,6 @@ func (t *Type) GetCache(name string) (types.Cache, error) {
 		return c, nil
 	}
 	return nil, types.ErrCacheNotFound
-}
-
-// GetPipe attempts to obtain and return a named output Pipe
-func (t *Type) GetPipe(name string) (<-chan types.Transaction, error) {
-	t.pipeLock.RLock()
-	pipe, exists := t.pipes[name]
-	t.pipeLock.RUnlock()
-	if exists {
-		return pipe, nil
-	}
-	return nil, types.ErrPipeNotFound
-}
-
-// SetPipe registers a new transaction chan to a named pipe.
-func (t *Type) SetPipe(name string, tran <-chan types.Transaction) {
-	t.pipeLock.Lock()
-	t.pipes[name] = tran
-	t.pipeLock.Unlock()
-}
-
-// UnsetPipe removes a named pipe transaction chan.
-func (t *Type) UnsetPipe(name string, tran <-chan types.Transaction) {
-	t.pipeLock.Lock()
-	if otran, exists := t.pipes[name]; exists && otran == tran {
-		delete(t.pipes, name)
-	}
-	t.pipeLock.Unlock()
 }
 
 // GetCondition attempts to find a service wide condition by its name.
@@ -457,83 +837,3 @@ func (t *Type) GetPlugin(name string) (interface{}, error) {
 	}
 	return nil, types.ErrPluginNotFound
 }
-
-//------------------------------------------------------------------------------
-
-// CloseAsync triggers the shut down of all resource types that implement the
-// lifetime interface types.Closable.
-func (t *Type) CloseAsync() {
-	for _, c := range t.inputs {
-		c.CloseAsync()
-	}
-	for _, c := range t.caches {
-		c.CloseAsync()
-	}
-	for _, c := range t.conditions {
-		if closer, ok := c.(types.Closable); ok {
-			closer.CloseAsync()
-		}
-	}
-	for _, p := range t.processors {
-		p.CloseAsync()
-	}
-	for _, c := range t.plugins {
-		if closer, ok := c.(types.Closable); ok {
-			closer.CloseAsync()
-		}
-	}
-	for _, c := range t.rateLimits {
-		c.CloseAsync()
-	}
-	for _, c := range t.outputs {
-		c.CloseAsync()
-	}
-}
-
-// WaitForClose blocks until either all closable resource types are shut down or
-// a timeout occurs.
-func (t *Type) WaitForClose(timeout time.Duration) error {
-	timesOut := time.Now().Add(timeout)
-	for k, c := range t.inputs {
-		if err := c.WaitForClose(time.Until(timesOut)); err != nil {
-			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
-		}
-	}
-	for k, c := range t.caches {
-		if err := c.WaitForClose(time.Until(timesOut)); err != nil {
-			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
-		}
-	}
-	for k, c := range t.conditions {
-		if closer, ok := c.(types.Closable); ok {
-			if err := closer.WaitForClose(time.Until(timesOut)); err != nil {
-				return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
-			}
-		}
-	}
-	for k, p := range t.processors {
-		if err := p.WaitForClose(time.Until(timesOut)); err != nil {
-			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
-		}
-	}
-	for k, c := range t.rateLimits {
-		if err := c.WaitForClose(time.Until(timesOut)); err != nil {
-			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
-		}
-	}
-	for k, c := range t.outputs {
-		if err := c.WaitForClose(time.Until(timesOut)); err != nil {
-			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
-		}
-	}
-	for k, c := range t.plugins {
-		if closer, ok := c.(types.Closable); ok {
-			if err := closer.WaitForClose(time.Until(timesOut)); err != nil {
-				return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
-			}
-		}
-	}
-	return nil
-}
-
-//------------------------------------------------------------------------------

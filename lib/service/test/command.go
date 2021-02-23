@@ -23,7 +23,9 @@ var blue = color.New(color.FgBlue).SprintFunc()
 
 //------------------------------------------------------------------------------
 
-func getBothPaths(fullPath, testSuffix string) (configPath string, definitionPath string) {
+// GetPathPair returns the config path and expected accompanying test definition
+// path for a given syntax and a path for either file.
+func GetPathPair(fullPath, testSuffix string) (configPath string, definitionPath string) {
 	path, file := filepath.Split(fullPath)
 	ext := filepath.Ext(file)
 	filename := strings.TrimSuffix(file, ext)
@@ -61,15 +63,16 @@ func getDefinition(targetPath, definitionPath string) (*Definition, error) {
 	return &definition, nil
 }
 
-// Searches for test definition targets.
-func getTestTargets(targetPath, testSuffix string, recurse bool) (map[string]Definition, error) {
+// GetTestTargets searches for test definition targets in a path with a given
+// test suffix.
+func GetTestTargets(targetPath, testSuffix string, recurse bool) (map[string]Definition, error) {
 	targetPath = filepath.Clean(targetPath)
 	info, err := os.Stat(targetPath)
 	if err != nil {
 		return nil, err
 	}
 	if !info.IsDir() {
-		configPath, definitionPath := getBothPaths(targetPath, testSuffix)
+		configPath, definitionPath := GetPathPair(targetPath, testSuffix)
 		def, err := getDefinition(configPath, definitionPath)
 		if err != nil {
 			return nil, err
@@ -93,7 +96,7 @@ func getTestTargets(targetPath, testSuffix string, recurse bool) (map[string]Def
 			}
 			return filepath.SkipDir
 		}
-		configPath, definitionPath := getBothPaths(path, testSuffix)
+		configPath, definitionPath := GetPathPair(path, testSuffix)
 		if _, exists := pathMap[configPath]; exists {
 			return nil
 		}
@@ -120,7 +123,7 @@ func getTestTargets(targetPath, testSuffix string, recurse bool) (map[string]Def
 // Lints the config target of a test definition and either returns linting
 // errors (false for failed) or returns an error.
 func lintTarget(path, testSuffix string) ([]string, error) {
-	confPath, _ := getBothPaths(path, testSuffix)
+	confPath, _ := GetPathPair(path, testSuffix)
 	dummyConf := config.New()
 	lints, err := config.Read(confPath, true, &dummyConf)
 	if err != nil {
@@ -171,7 +174,7 @@ func runAll(paths []string, testSuffix string, lint bool, logger log.Modular, re
 	for _, path := range paths {
 		var recurse bool
 		path, recurse = resolveTestPath(path)
-		lTargets, err := getTestTargets(path, testSuffix, recurse)
+		lTargets, err := GetTestTargets(path, testSuffix, recurse)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to obtain test targets: %v\n", err)
 			return false

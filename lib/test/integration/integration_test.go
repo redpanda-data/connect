@@ -4,6 +4,8 @@ package integration
 
 import (
 	"testing"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 // Placing this in its own function allows us to only execute under the

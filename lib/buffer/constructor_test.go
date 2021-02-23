@@ -1,32 +1,35 @@
-package buffer
+package buffer_test
 
 import (
 	"encoding/json"
 	"reflect"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	yaml "gopkg.in/yaml.v3"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 func TestConstructorDescription(t *testing.T) {
-	if len(Descriptions()) == 0 {
+	if len(buffer.Descriptions()) == 0 {
 		t.Error("package descriptions were empty")
 	}
 }
 
 func TestConstructorBadType(t *testing.T) {
-	conf := NewConfig()
+	conf := buffer.NewConfig()
 	conf.Type = "not_exist"
 
-	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
+	if _, err := buffer.New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
 		t.Error("Expected error, received nil for invalid type")
 	}
 }
 
 func TestConstructorConfigYAMLInference(t *testing.T) {
-	conf := []Config{}
+	conf := []buffer.Config{}
 
 	if err := yaml.Unmarshal([]byte(`[
 		{
@@ -55,7 +58,7 @@ func TestConstructorConfigYAMLInference(t *testing.T) {
 		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
 		return
 	}
-	if exp, act := TypeMemory, conf[0].Type; exp != act {
+	if exp, act := buffer.TypeMemory, conf[0].Type; exp != act {
 		t.Errorf("Wrong inferred type: %v != %v", act, exp)
 	}
 	if exp, act := 10, conf[0].Memory.Limit; exp != act {
@@ -73,11 +76,11 @@ func TestSanitise(t *testing.T) {
 		`"none":{}` +
 		`}`
 
-	conf := NewConfig()
+	conf := buffer.NewConfig()
 	conf.Type = "none"
 	conf.Memory.Limit = 10
 
-	if actObj, err = SanitiseConfig(conf); err != nil {
+	if actObj, err = buffer.SanitiseConfig(conf); err != nil {
 		t.Fatal(err)
 	}
 	if act, err = json.Marshal(actObj); err != nil {
@@ -95,11 +98,11 @@ func TestSanitise(t *testing.T) {
 		`}` +
 		`}`
 
-	conf = NewConfig()
+	conf = buffer.NewConfig()
 	conf.Type = "memory"
 	conf.Memory.Limit = 20
 
-	if actObj, err = SanitiseConfig(conf); err != nil {
+	if actObj, err = buffer.SanitiseConfig(conf); err != nil {
 		t.Fatal(err)
 	}
 	if act, err = json.Marshal(actObj); err != nil {

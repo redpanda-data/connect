@@ -1,14 +1,17 @@
-package input
+package input_test
 
 import (
 	"encoding/json"
 	"errors"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	yaml "gopkg.in/yaml.v3"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 func TestBrokerConfigDefaults(t *testing.T) {
@@ -34,7 +37,7 @@ func TestBrokerConfigDefaults(t *testing.T) {
 		}
 	}`)
 
-	var conf Config
+	var conf input.Config
 	check := func() {
 		inputConfs := conf.Broker.Inputs
 
@@ -71,13 +74,13 @@ func TestBrokerConfigDefaults(t *testing.T) {
 		}
 	}
 
-	conf = NewConfig()
+	conf = input.NewConfig()
 	if err := json.Unmarshal(testConf, &conf); err != nil {
 		t.Fatal(err)
 	}
 	check()
 
-	conf = NewConfig()
+	conf = input.NewConfig()
 	if err := yaml.Unmarshal(testConf, &conf); err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +115,7 @@ func TestBrokerConfigDitto(t *testing.T) {
 		}
 	}`)
 
-	var conf Config
+	var conf input.Config
 
 	check := func() {
 		inputConfs := conf.Broker.Inputs
@@ -153,13 +156,13 @@ func TestBrokerConfigDitto(t *testing.T) {
 		}
 	}
 
-	conf = NewConfig()
+	conf = input.NewConfig()
 	if err := json.Unmarshal(testConf, &conf); err != nil {
 		t.Fatal(err)
 	}
 	check()
 
-	conf = NewConfig()
+	conf = input.NewConfig()
 	if err := yaml.Unmarshal(testConf, &conf); err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +186,7 @@ func newExampleConfig() *exampleConfig {
 func TestBrokerConfigPluginDitto(t *testing.T) {
 	t.Parallel()
 
-	RegisterPlugin(
+	input.RegisterPlugin(
 		"example",
 		func() interface{} {
 			return newExampleConfig()
@@ -219,7 +222,7 @@ func TestBrokerConfigPluginDitto(t *testing.T) {
 		}
 	}`)
 
-	conf := NewConfig()
+	conf := input.NewConfig()
 	if err := json.Unmarshal(testConf, &conf); err != nil {
 		t.Error(err)
 		return
@@ -307,7 +310,7 @@ func TestBrokerConfigDittoMulti(t *testing.T) {
 		}
 	}`)
 
-	conf := NewConfig()
+	conf := input.NewConfig()
 	if err := json.Unmarshal(testConf, &conf); err != nil {
 		t.Error(err)
 		return
@@ -373,7 +376,7 @@ func TestBrokerConfigDittoZeroed(t *testing.T) {
 		}
 	}`)
 
-	conf := NewConfig()
+	conf := input.NewConfig()
 	if err := json.Unmarshal(testConf, &conf); err != nil {
 		t.Error(err)
 		return

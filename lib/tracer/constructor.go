@@ -34,6 +34,26 @@ type TypeSpec struct {
 	FieldSpecs  docs.FieldSpecs
 }
 
+// ConstructorFunc is a func signature able to construct a tracer.
+type ConstructorFunc func(Config, ...func(Type)) (Type, error)
+
+// WalkConstructors iterates each component constructor.
+func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
+	for k, v := range Constructors {
+		spec := docs.ComponentSpec{
+			Type:        docs.TypeTracer,
+			Name:        k,
+			Summary:     v.Summary,
+			Description: v.Description,
+			Footnotes:   v.Footnotes,
+			Fields:      v.FieldSpecs,
+			Status:      v.Status,
+			Version:     v.Version,
+		}
+		fn(ConstructorFunc(v.constructor), spec)
+	}
+}
+
 // Constructors is a map of all tracer types with their specs.
 var Constructors = map[string]TypeSpec{}
 
@@ -104,7 +124,8 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 	type confAlias Config
 	aliased := confAlias(NewConfig())
 
-	if err := value.Decode(&aliased); err != nil {
+	err := value.Decode(&aliased)
+	if err != nil {
 		return fmt.Errorf("line %v: %v", value.Line, err)
 	}
 
@@ -112,23 +133,9 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 	if err := value.Decode(&raw); err != nil {
 		return fmt.Errorf("line %v: %v", value.Line, err)
 	}
-	if typeCandidates := config.GetInferenceCandidates(raw); len(typeCandidates) > 0 {
-		var inferredType string
-		for _, tc := range typeCandidates {
-			if _, exists := Constructors[tc]; exists {
-				if len(inferredType) > 0 {
-					return fmt.Errorf("line %v: unable to infer type, multiple candidates '%v' and '%v'", value.Line, inferredType, tc)
-				}
-				inferredType = tc
-			}
-		}
-		if len(inferredType) == 0 {
-			return fmt.Errorf("line %v: unable to infer type, candidates were: %v", value.Line, typeCandidates)
-		}
-		aliased.Type = inferredType
-	}
-	if _, exists := Constructors[aliased.Type]; !exists {
-		return fmt.Errorf("line %v: type '%v' was not recognised", value.Line, aliased.Type)
+
+	if aliased.Type, _, err = docs.GetInferenceCandidate(docs.TypeTracer, aliased.Type, raw); err != nil {
+		return fmt.Errorf("line %v: %w", value.Line, err)
 	}
 
 	*conf = Config(aliased)

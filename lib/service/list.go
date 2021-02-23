@@ -8,16 +8,9 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
+	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/buffer"
-	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/condition"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/ratelimit"
-	"github.com/Jeffail/benthos/v3/lib/tracer"
 	"github.com/urfave/cli/v2"
 )
 
@@ -82,16 +75,16 @@ func listComponents(c *cli.Context) {
 		}
 	}()
 
-	for t, c := range input.Constructors {
+	for _, c := range bundle.AllInputs.Docs() {
 		if listableStatus(c.Status) {
-			components = append(components, t)
+			components = append(components, c.Name)
 		}
 	}
 	printAll("Inputs")
 
-	for t, c := range processor.Constructors {
+	for _, c := range bundle.AllProcessors.Docs() {
 		if listableStatus(c.Status) {
-			components = append(components, t)
+			components = append(components, c.Name)
 		}
 	}
 	printAll("Processors")
@@ -101,44 +94,44 @@ func listComponents(c *cli.Context) {
 	}
 	printAll("Conditions")
 
-	for t, c := range output.Constructors {
+	for _, c := range bundle.AllOutputs.Docs() {
 		if listableStatus(c.Status) {
-			components = append(components, t)
+			components = append(components, c.Name)
 		}
 	}
 	printAll("Outputs")
 
-	for t, c := range cache.Constructors {
+	for _, c := range bundle.AllCaches.Docs() {
 		if listableStatus(c.Status) {
-			components = append(components, t)
+			components = append(components, c.Name)
 		}
 	}
 	printAll("Caches")
 
-	for t, c := range ratelimit.Constructors {
+	for _, c := range bundle.AllRateLimits.Docs() {
 		if listableStatus(c.Status) {
-			components = append(components, t)
+			components = append(components, c.Name)
 		}
 	}
 	printAll("Rate Limits")
 
-	for t, c := range buffer.Constructors {
+	for _, c := range bundle.AllBuffers.Docs() {
 		if listableStatus(c.Status) {
-			components = append(components, t)
+			components = append(components, c.Name)
 		}
 	}
 	printAll("Buffers")
 
-	for t, c := range metrics.Constructors {
+	for _, c := range bundle.AllMetrics.Docs() {
 		if listableStatus(c.Status) {
-			components = append(components, t)
+			components = append(components, c.Name)
 		}
 	}
 	printAll("Metrics")
 
-	for t, c := range tracer.Constructors {
+	for _, c := range bundle.AllTracers.Docs() {
 		if listableStatus(c.Status) {
-			components = append(components, t)
+			components = append(components, c.Name)
 		}
 	}
 	printAll("Tracers")

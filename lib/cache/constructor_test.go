@@ -1,30 +1,33 @@
-package cache
+package cache_test
 
 import (
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	yaml "gopkg.in/yaml.v3"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 func TestConstructorDescription(t *testing.T) {
-	if len(Descriptions()) == 0 {
+	if len(cache.Descriptions()) == 0 {
 		t.Error("package descriptions were empty")
 	}
 }
 
 func TestConstructorBadType(t *testing.T) {
-	conf := NewConfig()
+	conf := cache.NewConfig()
 	conf.Type = "not_exist"
 
-	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
+	if _, err := cache.New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
 		t.Error("Expected error, received nil for invalid type")
 	}
 }
 
 func TestConstructorConfigYAMLInference(t *testing.T) {
-	conf := []Config{}
+	conf := []cache.Config{}
 
 	if err := yaml.Unmarshal([]byte(`[
 		{
@@ -53,7 +56,7 @@ func TestConstructorConfigYAMLInference(t *testing.T) {
 		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
 		return
 	}
-	if exp, act := TypeMemcached, conf[0].Type; exp != act {
+	if exp, act := cache.TypeMemcached, conf[0].Type; exp != act {
 		t.Errorf("Wrong inferred type: %v != %v", act, exp)
 	}
 	if exp, act := "500ms", conf[0].Memcached.RetryPeriod; exp != act {
@@ -65,7 +68,7 @@ func TestConstructorConfigYAMLInference(t *testing.T) {
 }
 
 func TestConstructorConfigDefaultsYAML(t *testing.T) {
-	conf := []Config{}
+	conf := []cache.Config{}
 
 	if err := yaml.Unmarshal([]byte(`[
 		{

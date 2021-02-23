@@ -1,4 +1,4 @@
-package cache
+package cache_test
 
 import (
 	"encoding/json"
@@ -6,10 +6,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	yaml "gopkg.in/yaml.v3"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 type mockPluginConf struct {
@@ -29,7 +32,7 @@ func newMockPluginConf() interface{} {
 func TestYAMLPlugin(t *testing.T) {
 	errTest := errors.New("test err")
 
-	RegisterPlugin("foo", newMockPluginConf,
+	cache.RegisterPlugin("foo", newMockPluginConf,
 		func(conf interface{}, mgr types.Manager, logger log.Modular, stats metrics.Type) (types.Cache, error) {
 			mConf, ok := conf.(*mockPluginConf)
 			if !ok {
@@ -51,21 +54,21 @@ func TestYAMLPlugin(t *testing.T) {
 plugin:
   bar: custom`
 
-	conf := NewConfig()
+	conf := cache.NewConfig()
 	if err := yaml.Unmarshal([]byte(confStr), &conf); err != nil {
 		t.Fatal(err)
 	}
 
-	_, err := New(conf, nil, log.Noop(), metrics.Noop())
+	_, err := cache.New(conf, nil, log.Noop(), metrics.Noop())
 	if !strings.Contains(err.Error(), "test err") {
 		t.Errorf("Wrong error returned: %v != %v", err, errTest)
 	}
 }
 
 func TestPluginDescriptions(t *testing.T) {
-	RegisterPlugin("foo", newMockPluginConf, nil)
-	RegisterPlugin("bar", newMockPluginConf, nil)
-	DocumentPlugin("bar", "This is a bar plugin.", func(conf interface{}) interface{} {
+	cache.RegisterPlugin("foo", newMockPluginConf, nil)
+	cache.RegisterPlugin("bar", newMockPluginConf, nil)
+	cache.DocumentPlugin("bar", "This is a bar plugin.", func(conf interface{}) interface{} {
 		mConf, ok := conf.(*mockPluginConf)
 		if !ok {
 			t.Fatalf("failed to cast config: %T", conf)
@@ -75,9 +78,9 @@ func TestPluginDescriptions(t *testing.T) {
 			"bar": mConf.Bar,
 		}
 	})
-	RegisterPlugin("foo_no_conf", nil, nil)
-	DocumentPlugin("foo_no_conf", "This is a plugin without config.", nil)
-	RegisterPlugin("foo_no_conf_no_desc", nil, nil)
+	cache.RegisterPlugin("foo_no_conf", nil, nil)
+	cache.DocumentPlugin("foo_no_conf", "This is a plugin without config.", nil)
+	cache.RegisterPlugin("foo_no_conf_no_desc", nil, nil)
 
 	exp := `Cache Plugins
 =============
@@ -122,7 +125,7 @@ This is a plugin without config.
 ## ` + "`foo_no_conf_no_desc`" + `
 `
 
-	act := PluginDescriptions()
+	act := cache.PluginDescriptions()
 	if exp != act {
 		t.Logf("Expected:\n%v\n", exp)
 		t.Logf("Actual:\n%v\n", act)
@@ -133,7 +136,7 @@ This is a plugin without config.
 func TestYAMLPluginNilConf(t *testing.T) {
 	errTest := errors.New("test err")
 
-	RegisterPlugin("foo", func() interface{} { return &struct{}{} },
+	cache.RegisterPlugin("foo", func() interface{} { return &struct{}{} },
 		func(conf interface{}, mgr types.Manager, logger log.Modular, stats metrics.Type) (types.Cache, error) {
 			return nil, errTest
 		})
@@ -142,12 +145,12 @@ func TestYAMLPluginNilConf(t *testing.T) {
 plugin:
   foo: this will be ignored`
 
-	conf := NewConfig()
+	conf := cache.NewConfig()
 	if err := yaml.Unmarshal([]byte(confStr), &conf); err != nil {
 		t.Fatal(err)
 	}
 
-	_, err := New(conf, nil, log.Noop(), metrics.Noop())
+	_, err := cache.New(conf, nil, log.Noop(), metrics.Noop())
 	if !strings.Contains(err.Error(), "test err") {
 		t.Errorf("Wrong error returned: %v != %v", err, errTest)
 	}
@@ -156,7 +159,7 @@ plugin:
 func TestJSONPluginNilConf(t *testing.T) {
 	errTest := errors.New("test err")
 
-	RegisterPlugin("foo", func() interface{} { return &struct{}{} },
+	cache.RegisterPlugin("foo", func() interface{} { return &struct{}{} },
 		func(conf interface{}, mgr types.Manager, logger log.Modular, stats metrics.Type) (types.Cache, error) {
 			return nil, errTest
 		})
@@ -168,12 +171,12 @@ func TestJSONPluginNilConf(t *testing.T) {
   }
 }`
 
-	conf := NewConfig()
+	conf := cache.NewConfig()
 	if err := json.Unmarshal([]byte(confStr), &conf); err != nil {
 		t.Fatal(err)
 	}
 
-	_, err := New(conf, nil, log.Noop(), metrics.Noop())
+	_, err := cache.New(conf, nil, log.Noop(), metrics.Noop())
 	if !strings.Contains(err.Error(), "test err") {
 		t.Errorf("Wrong error returned: %v != %v", err, errTest)
 	}

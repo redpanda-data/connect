@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - Field `codec` added to the `socket` output.
 
+### Changed
+
+- Go API: Component implementations now require explicit import from `./public/components/all` in order to be invokable. This should be done automatically at all plugin and custom build entry points. If, however, you notice that your builds have begun complaining that known components do not exist then you will need to explicitly import the package with `_ "github.com/Jeffail/benthos/v3/public/components/all"`, if this is the case then please report it as an issue so that it can be dealt with.
+
 ## 3.42.0 - 2021-02-22
 
 ### New

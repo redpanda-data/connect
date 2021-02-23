@@ -232,6 +232,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+
 		return
 	}
 	patchConfig := func(confIn stream.Config) (confOut stream.Config, err error) {

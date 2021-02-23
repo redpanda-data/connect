@@ -54,6 +54,44 @@ type TypeSpec struct {
 	Examples    []docs.AnnotatedExample
 }
 
+// ConstructorFunc is a func signature able to construct a processor.
+type ConstructorFunc func(Config, types.Manager, log.Modular, metrics.Type) (Type, error)
+
+// WalkConstructors iterates each component constructor.
+func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
+	for k, v := range Constructors {
+		spec := docs.ComponentSpec{
+			Type:        docs.TypeProcessor,
+			Name:        k,
+			Summary:     v.Summary,
+			Description: v.Description,
+			Examples:    v.Examples,
+			Footnotes:   v.Footnotes,
+			Fields:      v.FieldSpecs,
+			Status:      v.Status,
+			Version:     v.Version,
+		}
+		if len(v.Categories) > 0 {
+			spec.Categories = make([]string, 0, len(v.Categories))
+			for _, cat := range v.Categories {
+				spec.Categories = append(spec.Categories, string(cat))
+			}
+		}
+		if v.UsesBatches {
+			spec.Description = spec.Description + "\n" + DocsUsesBatches
+		}
+		fn(ConstructorFunc(v.constructor), spec)
+	}
+	for k, v := range pluginSpecs {
+		spec := docs.ComponentSpec{
+			Type:   docs.TypeProcessor,
+			Name:   k,
+			Status: docs.StatusPlugin,
+		}
+		fn(ConstructorFunc(v.constructor), spec)
+	}
+}
+
 // Constructors is a map of all processor types with their specs.
 var Constructors = map[string]TypeSpec{}
 
@@ -327,7 +365,8 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 	type confAlias Config
 	aliased := confAlias(NewConfig())
 
-	if err := value.Decode(&aliased); err != nil {
+	err := value.Decode(&aliased)
+	if err != nil {
 		if strings.HasPrefix(err.Error(), "line ") {
 			return err
 		}
@@ -335,45 +374,32 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 	}
 
 	var raw interface{}
-	if err := value.Decode(&raw); err != nil {
+	if err = value.Decode(&raw); err != nil {
 		if strings.HasPrefix(err.Error(), "line ") {
 			return err
 		}
 		return fmt.Errorf("line %v: %v", value.Line, err)
 	}
-	if typeCandidates := config.GetInferenceCandidates(raw); len(typeCandidates) > 0 {
-		var inferredType string
-		for _, tc := range typeCandidates {
-			if _, exists := Constructors[tc]; exists {
-				if len(inferredType) > 0 {
-					return fmt.Errorf("line %v: unable to infer type, multiple candidates '%v' and '%v'", value.Line, inferredType, tc)
-				}
-				inferredType = tc
-			}
-		}
-		if len(inferredType) == 0 {
-			return fmt.Errorf("line %v: unable to infer type, candidates were: %v", value.Line, typeCandidates)
-		}
-		aliased.Type = inferredType
+
+	var spec docs.ComponentSpec
+	if aliased.Type, spec, err = docs.GetInferenceCandidate(docs.TypeProcessor, aliased.Type, raw); err != nil {
+		return fmt.Errorf("line %v: %w", value.Line, err)
 	}
 
-	if spec, exists := pluginSpecs[aliased.Type]; exists && spec.confConstructor != nil {
-		confBytes, err := yaml.Marshal(aliased.Plugin)
-		if err != nil {
-			return fmt.Errorf("line %v: %v", value.Line, err)
-		}
-
-		conf := spec.confConstructor()
-		if err = yaml.Unmarshal(confBytes, conf); err != nil {
-			return fmt.Errorf("line %v: %v", value.Line, err)
-		}
-		aliased.Plugin = conf
-	} else {
-		if !exists {
-			if _, exists = Constructors[aliased.Type]; !exists {
-				return fmt.Errorf("line %v: processor type '%v' was not recognised", value.Line, aliased.Type)
+	if spec.Status == docs.StatusPlugin {
+		if spec, exists := pluginSpecs[aliased.Type]; exists && spec.confConstructor != nil {
+			confBytes, err := yaml.Marshal(aliased.Plugin)
+			if err != nil {
+				return fmt.Errorf("line %v: %v", value.Line, err)
 			}
+
+			conf := spec.confConstructor()
+			if err = yaml.Unmarshal(confBytes, conf); err != nil {
+				return fmt.Errorf("line %v: %v", value.Line, err)
+			}
+			aliased.Plugin = conf
 		}
+	} else {
 		aliased.Plugin = nil
 	}
 
@@ -509,6 +535,11 @@ func New(
 	log log.Modular,
 	stats metrics.Type,
 ) (Type, error) {
+	if mgrV2, ok := mgr.(interface {
+		NewProcessor(conf Config) (Type, error)
+	}); ok {
+		return mgrV2.NewProcessor(conf)
+	}
 	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(conf, mgr, log, stats)
 	}

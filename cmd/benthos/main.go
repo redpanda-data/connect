@@ -1,6 +1,10 @@
 package main
 
-import "github.com/Jeffail/benthos/v3/lib/service"
+import (
+	"github.com/Jeffail/benthos/v3/lib/service"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
+)
 
 //------------------------------------------------------------------------------
 

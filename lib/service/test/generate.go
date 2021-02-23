@@ -40,7 +40,7 @@ func generateDefinitions(targetPath, testSuffix string, recurse bool) error {
 		return fmt.Errorf("failed to inspect target file '%v': %v", targetPath, err)
 	}
 	if !info.IsDir() {
-		_, definitionPath := getBothPaths(targetPath, testSuffix)
+		_, definitionPath := GetPathPair(targetPath, testSuffix)
 		if _, err = os.Stat(definitionPath); err != nil {
 			if !os.IsNotExist(err) {
 				return fmt.Errorf("unable to access existing test definition file '%v': %v", definitionPath, err)
@@ -65,7 +65,7 @@ func generateDefinitions(targetPath, testSuffix string, recurse bool) error {
 			return filepath.SkipDir
 		}
 
-		configPath, definitionPath := getBothPaths(path, testSuffix)
+		configPath, definitionPath := GetPathPair(path, testSuffix)
 		if _, exists := seenConfigs[configPath]; exists {
 			return nil
 		}

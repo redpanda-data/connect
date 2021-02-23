@@ -1,4 +1,4 @@
-package output
+package output_test
 
 import (
 	"encoding/json"
@@ -7,7 +7,10 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/types"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 func TestOutBrokerConfigDefaults(t *testing.T) {
@@ -33,7 +36,7 @@ func TestOutBrokerConfigDefaults(t *testing.T) {
 		}
 	}`)
 
-	conf := NewConfig()
+	conf := output.NewConfig()
 	if err := json.Unmarshal(testConf, &conf); err != nil {
 		t.Error(err)
 		return
@@ -103,7 +106,7 @@ func TestOutBrokerConfigDitto(t *testing.T) {
 		}
 	}`)
 
-	conf := NewConfig()
+	conf := output.NewConfig()
 	if err := json.Unmarshal(testConf, &conf); err != nil {
 		t.Error(err)
 		return
@@ -164,7 +167,7 @@ func newExampleConfig() *exampleConfig {
 func TestBrokerConfigPluginDitto(t *testing.T) {
 	t.Parallel()
 
-	RegisterPlugin(
+	output.RegisterPlugin(
 		"example",
 		func() interface{} {
 			return newExampleConfig()
@@ -200,7 +203,7 @@ func TestBrokerConfigPluginDitto(t *testing.T) {
 		}
 	}`)
 
-	conf := NewConfig()
+	conf := output.NewConfig()
 	if err := json.Unmarshal(testConf, &conf); err != nil {
 		t.Error(err)
 		return
@@ -288,7 +291,7 @@ func TestOutBrokerConfigDittoMulti(t *testing.T) {
 		}
 	}`)
 
-	conf := NewConfig()
+	conf := output.NewConfig()
 	if err := json.Unmarshal(testConf, &conf); err != nil {
 		t.Error(err)
 		return
@@ -354,7 +357,7 @@ func TestOutBrokerConfigDittoZeroed(t *testing.T) {
 		}
 	}`)
 
-	conf := NewConfig()
+	conf := output.NewConfig()
 	if err := json.Unmarshal(testConf, &conf); err != nil {
 		t.Error(err)
 		return

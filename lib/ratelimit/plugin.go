@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Jeffail/benthos/v3/internal/interop/plugins"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -51,6 +52,15 @@ type pluginSpec struct {
 // pluginSpecs is a map of all rate limit plugin type specs.
 var pluginSpecs = map[string]pluginSpec{}
 
+// GetDeprecatedPlugin returns a constructor for an old plugin if it exists.
+func GetDeprecatedPlugin(name string) (ConstructorFunc, bool) {
+	spec, ok := pluginSpecs[name]
+	if !ok {
+		return nil, false
+	}
+	return ConstructorFunc(spec.constructor), true
+}
+
 // RegisterPlugin registers a plugin by a unique name so that it can be
 // constructed similar to regular rate limits. If configuration is not needed
 // for this plugin then configConstructor can be nil. A constructor for the
@@ -66,6 +76,7 @@ func RegisterPlugin(
 	}
 	spec.confConstructor = configConstructor
 	pluginSpecs[typeString] = spec
+	plugins.Add(typeString, "rate_limit")
 }
 
 // DocumentPlugin adds a description and an optional configuration sanitiser

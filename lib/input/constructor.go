@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -46,6 +47,41 @@ type TypeSpec struct {
 	Examples    []docs.AnnotatedExample
 }
 
+// ConstructorFunc is a func signature able to construct an input.
+type ConstructorFunc func(bool, Config, types.Manager, log.Modular, metrics.Type, ...types.PipelineConstructorFunc) (Type, error)
+
+// WalkConstructors iterates each component constructor.
+func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
+	for k, v := range Constructors {
+		spec := docs.ComponentSpec{
+			Type:        docs.TypeInput,
+			Name:        k,
+			Summary:     v.Summary,
+			Description: v.Description,
+			Footnotes:   v.Footnotes,
+			Examples:    v.Examples,
+			Fields:      v.FieldSpecs,
+			Status:      v.Status,
+			Version:     v.Version,
+		}
+		if len(v.Categories) > 0 {
+			spec.Categories = make([]string, 0, len(v.Categories))
+			for _, cat := range v.Categories {
+				spec.Categories = append(spec.Categories, string(cat))
+			}
+		}
+		fn(ConstructorFunc(v.constructor), spec)
+	}
+	for k, v := range pluginSpecs {
+		spec := docs.ComponentSpec{
+			Type:   docs.TypeInput,
+			Name:   k,
+			Status: docs.StatusPlugin,
+		}
+		fn(ConstructorFunc(v.constructor), spec)
+	}
+}
+
 func constructProcessors(
 	hasBatchProc bool,
 	conf Config,
@@ -68,9 +104,9 @@ func constructProcessors(
 			}
 			processors := make([]types.Processor, len(conf.Processors))
 			for j, procConf := range conf.Processors {
-				prefix := fmt.Sprintf("processor.%v", *i)
+				newMgr, newLog, newStats := interop.LabelChild(fmt.Sprintf("processor.%v", *i), mgr, log, stats)
 				var err error
-				processors[j], err = processor.New(procConf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
+				processors[j], err = processor.New(procConf, newMgr, newLog, newStats)
 				if err != nil {
 					return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
 				}
@@ -352,47 +388,35 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 	type confAlias Config
 	aliased := confAlias(NewConfig())
 
-	if err := value.Decode(&aliased); err != nil {
+	err := value.Decode(&aliased)
+	if err != nil {
 		return fmt.Errorf("line %v: %v", value.Line, err)
 	}
 
 	var raw interface{}
-	if err := value.Decode(&raw); err != nil {
+	if err = value.Decode(&raw); err != nil {
 		return fmt.Errorf("line %v: %v", value.Line, err)
 	}
-	if typeCandidates := config.GetInferenceCandidates(raw); len(typeCandidates) > 0 {
-		var inferredType string
-		for _, tc := range typeCandidates {
-			if _, exists := Constructors[tc]; exists {
-				if len(inferredType) > 0 {
-					return fmt.Errorf("line %v: unable to infer type, multiple candidates '%v' and '%v'", value.Line, inferredType, tc)
-				}
-				inferredType = tc
-			}
-		}
-		if len(inferredType) == 0 {
-			return fmt.Errorf("line %v: unable to infer type, candidates were: %v", value.Line, typeCandidates)
-		}
-		aliased.Type = inferredType
+
+	var spec docs.ComponentSpec
+	if aliased.Type, spec, err = docs.GetInferenceCandidate(docs.TypeInput, aliased.Type, raw); err != nil {
+		return fmt.Errorf("line %v: %w", value.Line, err)
 	}
 
-	if spec, exists := pluginSpecs[aliased.Type]; exists && spec.confConstructor != nil {
-		confBytes, err := yaml.Marshal(aliased.Plugin)
-		if err != nil {
-			return fmt.Errorf("line %v: %v", value.Line, err)
-		}
-
-		conf := spec.confConstructor()
-		if err = yaml.Unmarshal(confBytes, conf); err != nil {
-			return fmt.Errorf("line %v: %v", value.Line, err)
-		}
-		aliased.Plugin = conf
-	} else {
-		if !exists {
-			if _, exists = Constructors[aliased.Type]; !exists {
-				return fmt.Errorf("line %v: type '%v' was not recognised", value.Line, aliased.Type)
+	if spec.Status == docs.StatusPlugin {
+		if spec, exists := pluginSpecs[aliased.Type]; exists && spec.confConstructor != nil {
+			confBytes, err := yaml.Marshal(aliased.Plugin)
+			if err != nil {
+				return fmt.Errorf("line %v: %v", value.Line, err)
 			}
+
+			conf := spec.confConstructor()
+			if err = yaml.Unmarshal(confBytes, conf); err != nil {
+				return fmt.Errorf("line %v: %v", value.Line, err)
+			}
+			aliased.Plugin = conf
 		}
+	} else {
 		aliased.Plugin = nil
 	}
 
@@ -423,6 +447,11 @@ func newHasBatchProcessor(
 	stats metrics.Type,
 	pipelines ...types.PipelineConstructorFunc,
 ) (Type, error) {
+	if mgrV2, ok := mgr.(interface {
+		NewInput(bool, Config, ...types.PipelineConstructorFunc) (Type, error)
+	}); ok {
+		return mgrV2.NewInput(hasBatchProc, conf, pipelines...)
+	}
 	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(hasBatchProc, conf, mgr, log, stats, pipelines...)
 	}

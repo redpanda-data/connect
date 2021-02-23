@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 
+	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/cache"
@@ -19,6 +20,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/tracer"
 	"github.com/Jeffail/benthos/v3/lib/util/config"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 //------------------------------------------------------------------------------
@@ -80,89 +83,38 @@ func main() {
 }
 
 func doInputs(docsDir string) {
-	for k, v := range input.Constructors {
-		spec := docs.ComponentSpec{
-			Type:        "input",
-			Name:        k,
-			Summary:     v.Summary,
-			Description: v.Description,
-			Footnotes:   v.Footnotes,
-			Examples:    v.Examples,
-			Fields:      v.FieldSpecs,
-			Status:      v.Status,
-			Version:     v.Version,
-		}
-		if len(v.Categories) > 0 {
-			spec.Categories = make([]string, 0, len(v.Categories))
-			for _, cat := range v.Categories {
-				spec.Categories = append(spec.Categories, string(cat))
-			}
-		}
-
+	for _, v := range bundle.AllInputs.Docs() {
 		conf := input.NewConfig()
-		conf.Type = k
+		conf.Type = v.Name
 		confSanit, err := input.SanitiseConfig(conf)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to generate docs for '%v': %v", k, err))
+			panic(fmt.Sprintf("Failed to generate docs for '%v': %v", v.Name, err))
 		}
-
-		render(path.Join(docsDir, "./inputs", k+".md"), true, confSanit, spec)
+		render(path.Join(docsDir, "./inputs", v.Name+".md"), true, confSanit, v)
 	}
 }
 
 func doBuffers(docsDir string) {
-	for k, v := range buffer.Constructors {
-		spec := docs.ComponentSpec{
-			Type:        "buffer",
-			Name:        k,
-			Summary:     v.Summary,
-			Description: v.Description,
-			Footnotes:   v.Footnotes,
-			Fields:      v.FieldSpecs,
-			Status:      v.Status,
-			Version:     v.Version,
-		}
-
+	for _, v := range bundle.AllBuffers.Docs() {
 		conf := buffer.NewConfig()
-		conf.Type = k
+		conf.Type = v.Name
 		confSanit, err := buffer.SanitiseConfig(conf)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to generate docs for '%v': %v", k, err))
+			panic(fmt.Sprintf("Failed to generate docs for '%v': %v", v.Name, err))
 		}
-
-		render(path.Join(docsDir, "./buffers", k+".md"), true, confSanit, spec)
+		render(path.Join(docsDir, "./buffers", v.Name+".md"), true, confSanit, v)
 	}
 }
 
 func doCaches(docsDir string) {
-	for k, v := range cache.Constructors {
-		spec := docs.ComponentSpec{
-			Type:        "cache",
-			Name:        k,
-			Summary:     v.Summary,
-			Description: v.Description,
-			Footnotes:   v.Footnotes,
-			Fields:      v.FieldSpecs,
-			Status:      v.Status,
-			Version:     v.Version,
-		}
-
+	for _, v := range bundle.AllCaches.Docs() {
 		conf := cache.NewConfig()
-		conf.Type = k
+		conf.Type = v.Name
 		confSanit, err := cache.SanitiseConfig(conf)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to generate docs for '%v': %v", k, err))
+			panic(fmt.Sprintf("Failed to generate docs for '%v': %v", v.Name, err))
 		}
-
-		if v.SupportsPerKeyTTL {
-			spec.Description = spec.Description + `
-
-This cache type supports setting the TTL individually per key by using the
-dynamic ` + "`ttl`" + ` field of a cache processor or output in order to
-override the general TTL configured at the cache resource level.`
-		}
-
-		render(path.Join(docsDir, "./caches", k+".md"), false, confSanit, spec)
+		render(path.Join(docsDir, "./caches", v.Name+".md"), false, confSanit, v)
 	}
 }
 
@@ -190,148 +142,62 @@ func doConditions(docsDir string) {
 }
 
 func doMetrics(docsDir string) {
-	for k, v := range metrics.Constructors {
-		spec := docs.ComponentSpec{
-			Type:        "metrics",
-			Name:        k,
-			Summary:     v.Summary,
-			Description: v.Description,
-			Footnotes:   v.Footnotes,
-			Fields:      v.FieldSpecs,
-			Status:      v.Status,
-			Version:     v.Version,
-		}
-
+	for _, v := range bundle.AllMetrics.Docs() {
 		conf := metrics.NewConfig()
-		conf.Type = k
+		conf.Type = v.Name
 		confSanit, err := metrics.SanitiseConfig(conf)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to generate docs for '%v': %v", k, err))
+			panic(fmt.Sprintf("Failed to generate docs for '%v': %v", v.Name, err))
 		}
-
-		render(path.Join(docsDir, "./metrics", k+".md"), true, confSanit, spec)
+		render(path.Join(docsDir, "./metrics", v.Name+".md"), true, confSanit, v)
 	}
 }
 
 func doOutputs(docsDir string) {
-	for k, v := range output.Constructors {
-		spec := docs.ComponentSpec{
-			Type:        "output",
-			Name:        k,
-			Summary:     v.Summary,
-			Description: v.Description,
-			Footnotes:   v.Footnotes,
-			Fields:      v.FieldSpecs,
-			Examples:    v.Examples,
-			Status:      v.Status,
-			Version:     v.Version,
-		}
-		if len(v.Categories) > 0 {
-			spec.Categories = make([]string, 0, len(v.Categories))
-			for _, cat := range v.Categories {
-				spec.Categories = append(spec.Categories, string(cat))
-			}
-		}
-		if v.Async || v.Batches {
-			spec.Description = spec.Description + "\n\n## Performance"
-		}
-		if v.Async {
-			spec.Description = spec.Description + "\n" + output.DocsAsync
-		}
-		if v.Batches {
-			spec.Description = spec.Description + "\n" + output.DocsBatches
-		}
-
+	for _, v := range bundle.AllOutputs.Docs() {
 		conf := output.NewConfig()
-		conf.Type = k
+		conf.Type = v.Name
 		confSanit, err := output.SanitiseConfig(conf)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to generate docs for '%v': %v", k, err))
+			panic(fmt.Sprintf("Failed to generate docs for '%v': %v", v.Name, err))
 		}
-
-		render(path.Join(docsDir, "./outputs", k+".md"), true, confSanit, spec)
+		render(path.Join(docsDir, "./outputs", v.Name+".md"), true, confSanit, v)
 	}
 }
 
 func doProcessors(docsDir string) {
-	for k, v := range processor.Constructors {
-		spec := docs.ComponentSpec{
-			Type:        "processor",
-			Name:        k,
-			Summary:     v.Summary,
-			Description: v.Description,
-			Examples:    v.Examples,
-			Footnotes:   v.Footnotes,
-			Fields:      v.FieldSpecs,
-			Status:      v.Status,
-			Version:     v.Version,
-		}
-		if len(v.Categories) > 0 {
-			spec.Categories = make([]string, 0, len(v.Categories))
-			for _, cat := range v.Categories {
-				spec.Categories = append(spec.Categories, string(cat))
-			}
-		}
-		if v.UsesBatches {
-			spec.Description = spec.Description + "\n" + processor.DocsUsesBatches
-		}
-
+	for _, v := range bundle.AllProcessors.Docs() {
 		conf := processor.NewConfig()
-		conf.Type = k
+		conf.Type = v.Name
 		confSanit, err := processor.SanitiseConfig(conf)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to generate docs for '%v': %v", k, err))
+			panic(fmt.Sprintf("Failed to generate docs for '%v': %v", v.Name, err))
 		}
-
-		render(path.Join(docsDir, "./processors", k+".md"), false, confSanit, spec)
+		render(path.Join(docsDir, "./processors", v.Name+".md"), false, confSanit, v)
 	}
 }
 
 func doRateLimits(docsDir string) {
-	for k, v := range ratelimit.Constructors {
-		spec := docs.ComponentSpec{
-			Type:        "rate_limit",
-			Name:        k,
-			Summary:     v.Summary,
-			Description: v.Description,
-			Footnotes:   v.Footnotes,
-			Fields:      v.FieldSpecs,
-			Status:      v.Status,
-			Version:     v.Version,
-		}
-
+	for _, v := range bundle.AllRateLimits.Docs() {
 		conf := ratelimit.NewConfig()
-		conf.Type = k
+		conf.Type = v.Name
 		confSanit, err := ratelimit.SanitiseConfig(conf)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to generate docs for '%v': %v", k, err))
+			panic(fmt.Sprintf("Failed to generate docs for '%v': %v", v.Name, err))
 		}
-
-		render(path.Join(docsDir, "./rate_limits", k+".md"), false, confSanit, spec)
+		render(path.Join(docsDir, "./rate_limits", v.Name+".md"), false, confSanit, v)
 	}
 }
 
 func doTracers(docsDir string) {
-	for k, v := range tracer.Constructors {
-		spec := docs.ComponentSpec{
-			Type:        "tracer",
-			Name:        k,
-			Summary:     v.Summary,
-			Description: v.Description,
-			Footnotes:   v.Footnotes,
-			Fields:      v.FieldSpecs,
-			Status:      v.Status,
-			Version:     v.Version,
-		}
-
+	for _, v := range bundle.AllTracers.Docs() {
 		conf := tracer.NewConfig()
-		conf.Type = k
+		conf.Type = v.Name
 		confSanit, err := tracer.SanitiseConfig(conf)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to generate docs for '%v': %v", k, err))
+			panic(fmt.Sprintf("Failed to generate docs for '%v': %v", v.Name, err))
 		}
-
-		render(path.Join(docsDir, "./tracers", k+".md"), true, confSanit, spec)
+		render(path.Join(docsDir, "./tracers", v.Name+".md"), true, confSanit, v)
 	}
 }
 

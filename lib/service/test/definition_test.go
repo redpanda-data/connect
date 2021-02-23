@@ -1,10 +1,11 @@
-package test
+package test_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/lib/service/test"
 	"github.com/fatih/color"
 )
 
@@ -23,14 +24,14 @@ pipeline:
 	}
 	defer os.RemoveAll(testDir)
 
-	def := Definition{
+	def := test.Definition{
 		Parallel: false,
-		Cases: []Case{
-			{
+		Cases: []test.Case{
+			(test.Case{
 				Name:             "foo test 1",
 				Environment:      map[string]string{},
 				TargetProcessors: "/pipeline/processors",
-				InputBatch: []InputPart{
+				InputBatch: []test.InputPart{
 					{
 						Content: "foo bar baz",
 						Metadata: map[string]string{
@@ -44,24 +45,23 @@ pipeline:
 						},
 					},
 				},
-				OutputBatches: [][]ConditionsMap{
+				OutputBatches: [][]test.ConditionsMap{
 					{
 						{
-							"content_equals": ContentEqualsCondition("FOO BAR baz"),
-							"metadata_equals": MetadataEqualsCondition{
+							"content_equals": test.ContentEqualsCondition("FOO BAR baz"),
+							"metadata_equals": test.MetadataEqualsCondition{
 								"key1": "value1",
 							},
 						},
 						{
-							"content_equals": ContentEqualsCondition("ONE TWO THREE"),
-							"metadata_equals": MetadataEqualsCondition{
+							"content_equals": test.ContentEqualsCondition("ONE TWO THREE"),
+							"metadata_equals": test.MetadataEqualsCondition{
 								"key1": "value3",
 							},
 						},
 					},
 				},
-				line: 10,
-			},
+			}).AtLine(10),
 		},
 	}
 
@@ -96,14 +96,14 @@ pipeline:
 	}
 	defer os.RemoveAll(testDir)
 
-	def := Definition{
+	def := test.Definition{
 		Parallel: true,
-		Cases: []Case{
-			{
+		Cases: []test.Case{
+			(test.Case{
 				Name:             "foo test 1",
 				Environment:      map[string]string{},
 				TargetProcessors: "/pipeline/processors",
-				InputBatch: []InputPart{
+				InputBatch: []test.InputPart{
 					{
 						Content: "foo bar baz",
 						Metadata: map[string]string{
@@ -111,23 +111,22 @@ pipeline:
 						},
 					},
 				},
-				OutputBatches: [][]ConditionsMap{
+				OutputBatches: [][]test.ConditionsMap{
 					{
 						{
-							"content_equals": ContentEqualsCondition("FOO BAR baz"),
-							"metadata_equals": MetadataEqualsCondition{
+							"content_equals": test.ContentEqualsCondition("FOO BAR baz"),
+							"metadata_equals": test.MetadataEqualsCondition{
 								"key1": "value1",
 							},
 						},
 					},
 				},
-				line: 10,
-			},
-			{
+			}).AtLine(10),
+			(test.Case{
 				Name:             "foo test 2",
 				Environment:      map[string]string{},
 				TargetProcessors: "/pipeline/processors",
-				InputBatch: []InputPart{
+				InputBatch: []test.InputPart{
 					{
 						Content: "one two three",
 						Metadata: map[string]string{
@@ -135,18 +134,17 @@ pipeline:
 						},
 					},
 				},
-				OutputBatches: [][]ConditionsMap{
+				OutputBatches: [][]test.ConditionsMap{
 					{
 						{
-							"content_equals": ContentEqualsCondition("ONE TWO THREE"),
-							"metadata_equals": MetadataEqualsCondition{
+							"content_equals": test.ContentEqualsCondition("ONE TWO THREE"),
+							"metadata_equals": test.MetadataEqualsCondition{
 								"key1": "value3",
 							},
 						},
 					},
 				},
-				line: 20,
-			},
+			}).AtLine(20),
 		},
 	}
 

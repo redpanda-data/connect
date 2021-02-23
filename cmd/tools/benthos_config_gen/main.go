@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/input"
@@ -18,8 +19,9 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
 	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/tracer"
 	yaml "gopkg.in/yaml.v3"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 //------------------------------------------------------------------------------
@@ -383,14 +385,14 @@ func main() {
 
 	// Get list of all types (both input and output).
 	typeMap := map[string]struct{}{}
-	for t, info := range input.Constructors {
+	for _, info := range bundle.AllInputs.Docs() {
 		if info.Status != docs.StatusDeprecated && info.Status != docs.StatusExperimental {
-			typeMap[t] = struct{}{}
+			typeMap[info.Name] = struct{}{}
 		}
 	}
-	for t, info := range output.Constructors {
+	for _, info := range bundle.AllOutputs.Docs() {
 		if info.Status != docs.StatusDeprecated && info.Status != docs.StatusExperimental {
-			typeMap[t] = struct{}{}
+			typeMap[info.Name] = struct{}{}
 		}
 	}
 
@@ -417,7 +419,7 @@ func main() {
 	}
 
 	// Create processor configs for all types.
-	for t, info := range processor.Constructors {
+	for _, info := range bundle.AllProcessors.Docs() {
 		if info.Status == docs.StatusDeprecated || info.Status == docs.StatusExperimental {
 			continue
 		}
@@ -427,7 +429,7 @@ func main() {
 		conf.Output.Processors = nil
 
 		procConf := processor.NewConfig()
-		procConf.Type = t
+		procConf.Type = info.Name
 
 		conf.Pipeline.Processors = append(conf.Pipeline.Processors, procConf)
 
@@ -436,11 +438,11 @@ func main() {
 			panic(err)
 		}
 
-		createYAML(t, filepath.Join(configsDir, "processors", t+".yaml"), false, sanit)
+		createYAML(info.Name, filepath.Join(configsDir, "processors", info.Name+".yaml"), false, sanit)
 	}
 
 	// Create metrics configs for all types.
-	for t, info := range metrics.Constructors {
+	for _, info := range bundle.AllMetrics.Docs() {
 		if info.Status == docs.StatusDeprecated || info.Status == docs.StatusExperimental {
 			continue
 		}
@@ -450,18 +452,18 @@ func main() {
 		conf.Output.Processors = nil
 		conf.Pipeline.Processors = nil
 
-		conf.Metrics.Type = t
+		conf.Metrics.Type = info.Name
 
 		sanit, err := conf.SanitisedNoDeprecated()
 		if err != nil {
 			panic(err)
 		}
 
-		createYAML(t, filepath.Join(configsDir, "metrics", t+".yaml"), false, sanit)
+		createYAML(info.Name, filepath.Join(configsDir, "metrics", info.Name+".yaml"), false, sanit)
 	}
 
 	// Create tracer configs for all types.
-	for t, info := range tracer.Constructors {
+	for _, info := range bundle.AllTracers.Docs() {
 		if info.Status == docs.StatusDeprecated || info.Status == docs.StatusExperimental {
 			continue
 		}
@@ -471,14 +473,14 @@ func main() {
 		conf.Output.Processors = nil
 		conf.Pipeline.Processors = nil
 
-		conf.Tracer.Type = t
+		conf.Tracer.Type = info.Name
 
 		sanit, err := conf.SanitisedNoDeprecated()
 		if err != nil {
 			panic(err)
 		}
 
-		createYAML(t, filepath.Join(configsDir, "tracers", t+".yaml"), false, sanit)
+		createYAML(info.Name, filepath.Join(configsDir, "tracers", info.Name+".yaml"), false, sanit)
 	}
 
 	// Create Environment Vars Config

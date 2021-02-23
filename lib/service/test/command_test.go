@@ -1,10 +1,12 @@
-package test
+package test_test
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/Jeffail/benthos/v3/lib/service/test"
 )
 
 func TestGetBothPaths(t *testing.T) {
@@ -72,13 +74,13 @@ func TestGetBothPaths(t *testing.T) {
 		},
 	}
 
-	for i, test := range tests {
+	for i, testDef := range tests {
 		t.Run(fmt.Sprintf("Test case %v", i), func(tt *testing.T) {
-			cPath, dPath := getBothPaths(test.input, "_benthos_test")
-			if exp, act := test.output[0], cPath; exp != act {
+			cPath, dPath := test.GetPathPair(testDef.input, "_benthos_test")
+			if exp, act := testDef.output[0], cPath; exp != act {
 				tt.Errorf("Wrong config path: %v != %v", act, exp)
 			}
-			if exp, act := test.output[1], dPath; exp != act {
+			if exp, act := testDef.output[1], dPath; exp != act {
 				tt.Errorf("Wrong definition path: %v != %v", act, exp)
 			}
 		})
@@ -95,7 +97,7 @@ func TestGetTargetsSingle(t *testing.T) {
 	}
 	defer os.RemoveAll(testDir)
 
-	paths, err := getTestTargets(filepath.Join(testDir, "foo.yaml"), "_benthos_test", false)
+	paths, err := test.GetTestTargets(filepath.Join(testDir, "foo.yaml"), "_benthos_test", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +108,7 @@ func TestGetTargetsSingle(t *testing.T) {
 		t.Errorf("Wrong path returned: %v does not contain foo.yaml", paths)
 	}
 
-	paths, err = getTestTargets(filepath.Join(testDir, "foo_benthos_test.yaml"), "_benthos_test", false)
+	paths, err = test.GetTestTargets(filepath.Join(testDir, "foo_benthos_test.yaml"), "_benthos_test", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,13 +130,13 @@ func TestGetTargetsSingleError(t *testing.T) {
 	}
 	defer os.RemoveAll(testDir)
 
-	if _, err = getTestTargets(filepath.Join(testDir, "foo.yaml"), "_benthos_test", false); err == nil {
+	if _, err = test.GetTestTargets(filepath.Join(testDir, "foo.yaml"), "_benthos_test", false); err == nil {
 		t.Error("Expected error")
 	}
-	if _, err = getTestTargets(filepath.Join(testDir, "bar_benthos_test.yaml"), "_benthos_test", false); err == nil {
+	if _, err = test.GetTestTargets(filepath.Join(testDir, "bar_benthos_test.yaml"), "_benthos_test", false); err == nil {
 		t.Error("Expected error")
 	}
-	if _, err = getTestTargets("/does/not/exist/foo.yaml", "_benthos_test", false); err == nil {
+	if _, err = test.GetTestTargets("/does/not/exist/foo.yaml", "_benthos_test", false); err == nil {
 		t.Error("Expected error")
 	}
 }
@@ -155,7 +157,7 @@ func TestGetTargetsDir(t *testing.T) {
 	}
 	defer os.RemoveAll(testDir)
 
-	paths, err := getTestTargets(testDir, "_benthos_test", false)
+	paths, err := test.GetTestTargets(testDir, "_benthos_test", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +171,7 @@ func TestGetTargetsDir(t *testing.T) {
 		t.Errorf("Wrong path returned: %v does not contain bar.yaml", paths)
 	}
 
-	paths, err = getTestTargets(testDir, "_benthos_test", true)
+	paths, err = test.GetTestTargets(testDir, "_benthos_test", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +200,7 @@ func TestGetTargetsDirError(t *testing.T) {
 	}
 	defer os.RemoveAll(testDir)
 
-	if _, err = getTestTargets(testDir, "_benthos_test", false); err == nil {
+	if _, err = test.GetTestTargets(testDir, "_benthos_test", false); err == nil {
 		t.Error("Expected error")
 	}
 }
@@ -216,7 +218,7 @@ func TestGetTargetsDirRecurseError(t *testing.T) {
 	}
 	defer os.RemoveAll(testDir)
 
-	if _, err = getTestTargets(testDir, "_benthos_test", true); err == nil {
+	if _, err = test.GetTestTargets(testDir, "_benthos_test", true); err == nil {
 		t.Error("Expected error")
 	}
 }
@@ -260,15 +262,15 @@ tests:
 	}
 	defer os.RemoveAll(testDir)
 
-	if !Run(filepath.Join(testDir, "foo.yaml"), "_benthos_test", false) {
+	if !test.Run(filepath.Join(testDir, "foo.yaml"), "_benthos_test", false) {
 		t.Error("Unexpected result")
 	}
 
-	if Run(filepath.Join(testDir, "foo.yaml"), "_benthos_test", true) {
+	if test.Run(filepath.Join(testDir, "foo.yaml"), "_benthos_test", true) {
 		t.Error("Unexpected result")
 	}
 
-	if Run(testDir, "_benthos_test", true) {
+	if test.Run(testDir, "_benthos_test", true) {
 		t.Error("Unexpected result")
 	}
 }

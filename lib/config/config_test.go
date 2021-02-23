@@ -1,4 +1,4 @@
-package config
+package config_test
 
 import (
 	"bytes"
@@ -7,29 +7,32 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	yaml "gopkg.in/yaml.v3"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 func TestComponentExamples(t *testing.T) {
 	testComponent := func(componentType, typeName, title, conf string) {
-		s := New()
+		s := config.New()
 		dec := yaml.NewDecoder(bytes.NewReader([]byte(conf)))
 		dec.KnownFields(true)
 		assert.NoError(t, dec.Decode(&s), "%v:%v:%v", componentType, typeName, title)
 
-		lints, err := Lint([]byte(conf), s)
+		lints, err := config.Lint([]byte(conf), s)
 		assert.NoError(t, err, "%v:%v:%v", componentType, typeName, title)
 		for _, lint := range lints {
 			t.Errorf("%v %v:%v:%v", lint, componentType, typeName, title)
 		}
 
-		type confAlias Type
-		sAliased := confAlias(New())
+		type confAlias config.Type
+		sAliased := confAlias(config.New())
 		dec = yaml.NewDecoder(bytes.NewReader([]byte(conf)))
 		dec.KnownFields(true)
 		assert.NoError(t, dec.Decode(&sAliased), "%v:%v:%v", componentType, typeName, title)
@@ -92,15 +95,15 @@ func CheckTagsOfType(v reflect.Type, checkedTypes map[string]struct{}, t *testin
 }
 
 func TestConfigTags(t *testing.T) {
-	v := reflect.TypeOf(New())
+	v := reflect.TypeOf(config.New())
 
 	checkedTypes := map[string]struct{}{}
 	CheckTagsOfType(v, checkedTypes, t)
 }
 
 func TestExampleGen(t *testing.T) {
-	conf := New()
-	AddExamples(&conf, "files", "memory", "jmespath", "file")
+	conf := config.New()
+	config.AddExamples(&conf, "files", "memory", "jmespath", "file")
 
 	jBytes, err := json.Marshal(conf)
 	if err != nil {

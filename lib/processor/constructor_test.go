@@ -1,59 +1,34 @@
-package processor
+package processor_test
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/processor"
 	yaml "gopkg.in/yaml.v3"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 func TestConstructorDescription(t *testing.T) {
-	if len(Descriptions()) == 0 {
+	if len(processor.Descriptions()) == 0 {
 		t.Error("package descriptions were empty")
 	}
 }
 
 func TestConstructorBadType(t *testing.T) {
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "not_exist"
 
-	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
+	if _, err := processor.New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
 		t.Error("Expected error, received nil for invalid type")
 	}
 }
 
-func TestConstructorBlockType(t *testing.T) {
-	Constructors["footype"] = TypeSpec{
-		constructor: func(
-			conf Config,
-			mgr types.Manager,
-			log log.Modular,
-			stats metrics.Type,
-		) (Type, error) {
-			return nil, nil
-		},
-	}
-
-	conf := NewConfig()
-	conf.Type = "footype"
-
-	Block("footype", "because testing")
-
-	_, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err == nil {
-		t.Fatal("Expected error, received nil for blocked type")
-	}
-	if !strings.Contains(err.Error(), "because testing") {
-		t.Errorf("Unexpected error: %v", err)
-	}
-}
-
 func TestConstructorConfigYAMLInference(t *testing.T) {
-	conf := []Config{}
+	conf := []processor.Config{}
 
 	if err := yaml.Unmarshal([]byte(`[
 		{
@@ -82,7 +57,7 @@ func TestConstructorConfigYAMLInference(t *testing.T) {
 		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
 		return
 	}
-	if exp, act := TypeText, conf[0].Type; exp != act {
+	if exp, act := processor.TypeText, conf[0].Type; exp != act {
 		t.Errorf("Wrong inferred type: %v != %v", act, exp)
 	}
 	if exp, act := "trim_space", conf[0].Text.Operator; exp != act {
@@ -94,7 +69,7 @@ func TestConstructorConfigYAMLInference(t *testing.T) {
 }
 
 func TestConstructorConfigDefaultsYAML(t *testing.T) {
-	conf := []Config{}
+	conf := []processor.Config{}
 
 	if err := yaml.Unmarshal([]byte(`[
 		{
@@ -132,11 +107,11 @@ func TestSanitise(t *testing.T) {
 		`}` +
 		`}`
 
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "archive"
 	conf.Archive.Path = "nope"
 
-	if actObj, err = SanitiseConfig(conf); err != nil {
+	if actObj, err = processor.SanitiseConfig(conf); err != nil {
 		t.Fatal(err)
 	}
 	if act, err = json.Marshal(actObj); err != nil {

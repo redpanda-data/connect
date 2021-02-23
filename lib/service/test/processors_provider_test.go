@@ -1,4 +1,4 @@
-package test
+package test_test
 
 import (
 	"fmt"
@@ -9,8 +9,11 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/processor"
+	"github.com/Jeffail/benthos/v3/lib/service/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 func initTestFiles(files map[string]string) (string, error) {
@@ -54,16 +57,16 @@ pipeline:
 	}
 	defer os.RemoveAll(testDir)
 
-	if _, err = NewProcessorsProvider(filepath.Join(testDir, "doesnotexist.yaml")).Provide("/pipeline/processors", nil); err == nil {
+	if _, err = test.NewProcessorsProvider(filepath.Join(testDir, "doesnotexist.yaml")).Provide("/pipeline/processors", nil); err == nil {
 		t.Error("Expected error from bad filepath")
 	}
-	if _, err = NewProcessorsProvider(filepath.Join(testDir, "config1.yaml")).Provide("/pipeline/processors", nil); err == nil {
+	if _, err = test.NewProcessorsProvider(filepath.Join(testDir, "config1.yaml")).Provide("/pipeline/processors", nil); err == nil {
 		t.Error("Expected error from bad config file")
 	}
-	if _, err = NewProcessorsProvider(filepath.Join(testDir, "config2.yaml")).Provide("/not/a/valid/path", nil); err == nil {
+	if _, err = test.NewProcessorsProvider(filepath.Join(testDir, "config2.yaml")).Provide("/not/a/valid/path", nil); err == nil {
 		t.Error("Expected error from bad processors path")
 	}
-	if _, err = NewProcessorsProvider(filepath.Join(testDir, "config3.yaml")).Provide("/pipeline/processors", nil); err == nil {
+	if _, err = test.NewProcessorsProvider(filepath.Join(testDir, "config3.yaml")).Provide("/pipeline/processors", nil); err == nil {
 		t.Error("Expected error from bad processor type")
 	}
 }
@@ -111,7 +114,7 @@ pipeline:
 	}
 	defer os.RemoveAll(testDir)
 
-	provider := NewProcessorsProvider(filepath.Join(testDir, "config1.yaml"))
+	provider := test.NewProcessorsProvider(filepath.Join(testDir, "config1.yaml"))
 	procs, err := provider.Provide("/pipeline/processors", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -142,7 +145,7 @@ pipeline:
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 
-	provider = NewProcessorsProvider(filepath.Join(testDir, "config2.yaml"))
+	provider = test.NewProcessorsProvider(filepath.Join(testDir, "config2.yaml"))
 	if procs, err = provider.Provide("/pipeline/processors", map[string]string{
 		"FOO_VAR": "thirdvalue",
 	}); err != nil {
@@ -216,9 +219,9 @@ pipeline:
 	require.NoError(t, err)
 	defer os.RemoveAll(testDir)
 
-	provider := NewProcessorsProvider(
+	provider := test.NewProcessorsProvider(
 		filepath.Join(testDir, "config1.yaml"),
-		OptAddResourcesPaths([]string{
+		test.OptAddResourcesPaths([]string{
 			filepath.Join(testDir, "resources1.yaml"),
 			filepath.Join(testDir, "resources2.yaml"),
 		}),
@@ -267,9 +270,9 @@ pipeline:
 	require.NoError(t, err)
 	defer os.RemoveAll(testDir)
 
-	provider := NewProcessorsProvider(
+	provider := test.NewProcessorsProvider(
 		filepath.Join(testDir, "config1.yaml"),
-		OptAddResourcesPaths([]string{
+		test.OptAddResourcesPaths([]string{
 			filepath.Join(testDir, "resources1.yaml"),
 			filepath.Join(testDir, "resources2.yaml"),
 		}),

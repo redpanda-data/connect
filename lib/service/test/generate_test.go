@@ -1,4 +1,4 @@
-package test
+package test_test
 
 import (
 	"io/ioutil"
@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/lib/service/test"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -43,12 +44,12 @@ tests:
 	defer os.RemoveAll(testDir)
 
 	var defaultDefBytes []byte
-	if defaultDefBytes, err = yaml.Marshal(ExampleDefinition()); err != nil {
+	if defaultDefBytes, err = yaml.Marshal(test.ExampleDefinition()); err != nil {
 		t.Fatal(err)
 	}
 	defaultDef := string(defaultDefBytes)
 
-	if err = Generate(testDir, "_benthos_test"); err != nil {
+	if err = test.Generate(testDir, "_benthos_test"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -91,12 +92,12 @@ pipeline:
 	defer os.RemoveAll(testDir)
 
 	var defaultDefBytes []byte
-	if defaultDefBytes, err = yaml.Marshal(ExampleDefinition()); err != nil {
+	if defaultDefBytes, err = yaml.Marshal(test.ExampleDefinition()); err != nil {
 		t.Fatal(err)
 	}
 	defaultDef := string(defaultDefBytes)
 
-	if err = Generate(filepath.Join(testDir, "foo.yaml"), "_benthos_test"); err != nil {
+	if err = test.Generate(filepath.Join(testDir, "foo.yaml"), "_benthos_test"); err != nil {
 		t.Fatal(err)
 	}
 

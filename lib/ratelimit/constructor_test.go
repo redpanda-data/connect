@@ -1,30 +1,33 @@
-package ratelimit
+package ratelimit_test
 
 import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	yaml "gopkg.in/yaml.v3"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 func TestConstructorDescription(t *testing.T) {
-	if len(Descriptions()) == 0 {
+	if len(ratelimit.Descriptions()) == 0 {
 		t.Error("package descriptions were empty")
 	}
 }
 
 func TestConstructorBadType(t *testing.T) {
-	conf := NewConfig()
+	conf := ratelimit.NewConfig()
 	conf.Type = "not_exist"
 
-	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
+	if _, err := ratelimit.New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
 		t.Error("Expected error, received nil for invalid type")
 	}
 }
 
 func TestConstructorConfigDefaultsYAML(t *testing.T) {
-	conf := []Config{}
+	conf := []ratelimit.Config{}
 
 	if err := yaml.Unmarshal([]byte(`[
 		{
@@ -50,7 +53,7 @@ func TestConstructorConfigDefaultsYAML(t *testing.T) {
 }
 
 func TestConstructorConfigYAMLInference(t *testing.T) {
-	conf := []Config{}
+	conf := []ratelimit.Config{}
 
 	if err := yaml.Unmarshal([]byte(`[
 		{
@@ -66,7 +69,7 @@ func TestConstructorConfigYAMLInference(t *testing.T) {
 		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
 		return
 	}
-	if exp, act := TypeLocal, conf[0].Type; exp != act {
+	if exp, act := ratelimit.TypeLocal, conf[0].Type; exp != act {
 		t.Errorf("Wrong inferred type: %v != %v", act, exp)
 	}
 	if exp, act := "1s", conf[0].Local.Interval; exp != act {

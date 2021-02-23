@@ -10,6 +10,8 @@ import (
 
 //------------------------------------------------------------------------------
 
+// TODO: V4 Delete this
+
 // NamespacedManager is a types.Manager implementation that wraps an underlying
 // implementation with a namespace that prefixes registered endpoints, etc.
 type NamespacedManager struct {
@@ -17,7 +19,12 @@ type NamespacedManager struct {
 	mgr types.Manager
 }
 
-func namespacedMgr(ns string, mgr types.Manager) *NamespacedManager {
+func namespacedMgr(ns string, mgr types.Manager) types.Manager {
+	if forStream, ok := mgr.(interface {
+		ForStream(id string) types.Manager
+	}); ok {
+		return forStream.ForStream(ns)
+	}
 	return &NamespacedManager{
 		ns:  "/" + ns,
 		mgr: mgr,

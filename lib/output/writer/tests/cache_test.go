@@ -10,6 +10,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 func TestCacheBasic(t *testing.T) {

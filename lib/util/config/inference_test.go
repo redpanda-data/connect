@@ -8,6 +8,7 @@ import (
 func TestInference(t *testing.T) {
 	type testCase struct {
 		input         interface{}
+		ignore        []string
 		expCandidates []string
 	}
 
@@ -24,6 +25,16 @@ func TestInference(t *testing.T) {
 				},
 			},
 			expCandidates: nil,
+		},
+		{
+			input: map[string]interface{}{
+				"bar": map[string]interface{}{
+					"baz": "test",
+				},
+				"ignoreme": "hello",
+			},
+			ignore:        []string{"ignoreme"},
+			expCandidates: []string{"bar"},
 		},
 		{
 			input: map[string]interface{}{
@@ -77,7 +88,7 @@ func TestInference(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		actCandidates := GetInferenceCandidates(test.input)
+		actCandidates := GetInferenceCandidates(test.input, test.ignore...)
 		if !reflect.DeepEqual(actCandidates, test.expCandidates) {
 			t.Errorf("Wrong candidates inferred '%v': %v != %v", i, actCandidates, test.expCandidates)
 		}

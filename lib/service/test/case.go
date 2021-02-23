@@ -58,6 +58,12 @@ type Case struct {
 	line int
 }
 
+// AtLine returns a test case at a given line.
+func (c Case) AtLine(l int) Case {
+	c.line = l
+	return c
+}
+
 // NewCase returns a default test case.
 func NewCase() Case {
 	return Case{

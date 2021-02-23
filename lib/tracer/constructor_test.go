@@ -1,11 +1,14 @@
-package tracer
+package tracer_test
 
 import (
 	"reflect"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/lib/tracer"
 	"github.com/Jeffail/benthos/v3/lib/util/config"
 	yaml "gopkg.in/yaml.v3"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 func TestSanitise(t *testing.T) {
@@ -14,10 +17,10 @@ func TestSanitise(t *testing.T) {
 		"none": map[string]interface{}{},
 	}
 
-	conf := NewConfig()
-	conf.Type = TypeNone
+	conf := tracer.NewConfig()
+	conf.Type = tracer.TypeNone
 
-	act, err := SanitiseConfig(conf)
+	act, err := tracer.SanitiseConfig(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +30,7 @@ func TestSanitise(t *testing.T) {
 }
 
 func TestConstructorConfigYAMLInference(t *testing.T) {
-	conf := []Config{}
+	conf := []tracer.Config{}
 
 	if err := yaml.Unmarshal([]byte(`[
 		{
@@ -56,7 +59,7 @@ func TestConstructorConfigYAMLInference(t *testing.T) {
 		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
 		return
 	}
-	if exp, act := TypeJaeger, conf[0].Type; exp != act {
+	if exp, act := tracer.TypeJaeger, conf[0].Type; exp != act {
 		t.Errorf("Wrong inferred type: %v != %v", act, exp)
 	}
 	if exp, act := "benthos", conf[0].Jaeger.ServiceName; exp != act {

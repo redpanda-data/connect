@@ -1,4 +1,4 @@
-package manager
+package manager_test
 
 import (
 	"testing"
@@ -6,10 +6,13 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/types"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 //------------------------------------------------------------------------------
@@ -17,11 +20,11 @@ import (
 func TestManagerCache(t *testing.T) {
 	testLog := log.Noop()
 
-	conf := NewConfig()
+	conf := manager.NewConfig()
 	conf.Caches["foo"] = cache.NewConfig()
 	conf.Caches["bar"] = cache.NewConfig()
 
-	mgr, err := New(conf, nil, testLog, metrics.Noop())
+	mgr, err := manager.New(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,22 +43,22 @@ func TestManagerCache(t *testing.T) {
 func TestManagerBadCache(t *testing.T) {
 	testLog := log.Noop()
 
-	conf := NewConfig()
+	conf := manager.NewConfig()
 	badConf := cache.NewConfig()
 	badConf.Type = "notexist"
 	conf.Caches["bad"] = badConf
 
-	if _, err := New(conf, nil, testLog, metrics.Noop()); err == nil {
+	if _, err := manager.New(conf, nil, testLog, metrics.Noop()); err == nil {
 		t.Fatal("Expected error from bad cache")
 	}
 }
 
 func TestManagerRateLimit(t *testing.T) {
-	conf := NewConfig()
+	conf := manager.NewConfig()
 	conf.RateLimits["foo"] = ratelimit.NewConfig()
 	conf.RateLimits["bar"] = ratelimit.NewConfig()
 
-	mgr, err := New(conf, nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,12 +75,12 @@ func TestManagerRateLimit(t *testing.T) {
 }
 
 func TestManagerBadRateLimit(t *testing.T) {
-	conf := NewConfig()
+	conf := manager.NewConfig()
 	badConf := ratelimit.NewConfig()
 	badConf.Type = "notexist"
 	conf.RateLimits["bad"] = badConf
 
-	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
+	if _, err := manager.New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
 		t.Fatal("Expected error from bad rate limit")
 	}
 }
@@ -85,11 +88,11 @@ func TestManagerBadRateLimit(t *testing.T) {
 func TestManagerCondition(t *testing.T) {
 	testLog := log.Noop()
 
-	conf := NewConfig()
+	conf := manager.NewConfig()
 	conf.Conditions["foo"] = condition.NewConfig()
 	conf.Conditions["bar"] = condition.NewConfig()
 
-	mgr, err := New(conf, nil, testLog, metrics.Noop())
+	mgr, err := manager.New(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,11 +109,11 @@ func TestManagerCondition(t *testing.T) {
 }
 
 func TestManagerProcessor(t *testing.T) {
-	conf := NewConfig()
+	conf := manager.NewConfig()
 	conf.Processors["foo"] = processor.NewConfig()
 	conf.Processors["bar"] = processor.NewConfig()
 
-	mgr, err := New(conf, nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +134,7 @@ func TestManagerConditionRecursion(t *testing.T) {
 
 	testLog := log.Noop()
 
-	conf := NewConfig()
+	conf := manager.NewConfig()
 
 	fooConf := condition.NewConfig()
 	fooConf.Type = "resource"
@@ -143,7 +146,7 @@ func TestManagerConditionRecursion(t *testing.T) {
 	barConf.Resource = "foo"
 	conf.Conditions["bar"] = barConf
 
-	if _, err := New(conf, nil, testLog, metrics.Noop()); err == nil {
+	if _, err := manager.New(conf, nil, testLog, metrics.Noop()); err == nil {
 		t.Error("Expected error from recursive conditions")
 	}
 }
@@ -151,19 +154,19 @@ func TestManagerConditionRecursion(t *testing.T) {
 func TestManagerBadCondition(t *testing.T) {
 	testLog := log.Noop()
 
-	conf := NewConfig()
+	conf := manager.NewConfig()
 	badConf := condition.NewConfig()
 	badConf.Type = "notexist"
 	conf.Conditions["bad"] = badConf
 
-	if _, err := New(conf, nil, testLog, metrics.Noop()); err == nil {
+	if _, err := manager.New(conf, nil, testLog, metrics.Noop()); err == nil {
 		t.Fatal("Expected error from bad condition")
 	}
 }
 
 func TestManagerPipeErrors(t *testing.T) {
-	conf := NewConfig()
-	mgr, err := New(conf, nil, log.Noop(), metrics.Noop())
+	conf := manager.NewConfig()
+	mgr, err := manager.New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,8 +177,8 @@ func TestManagerPipeErrors(t *testing.T) {
 }
 
 func TestManagerPipeGetSet(t *testing.T) {
-	conf := NewConfig()
-	mgr, err := New(conf, nil, log.Noop(), metrics.Noop())
+	conf := manager.NewConfig()
+	mgr, err := manager.New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

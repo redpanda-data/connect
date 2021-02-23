@@ -37,6 +37,26 @@ type TypeSpec struct {
 	FieldSpecs  docs.FieldSpecs
 }
 
+// ConstructorFunc is a func signature able to construct a metrics output.
+type ConstructorFunc func(Config, ...func(Type)) (Type, error)
+
+// WalkConstructors iterates each component constructor.
+func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
+	for k, v := range Constructors {
+		spec := docs.ComponentSpec{
+			Type:        docs.TypeMetrics,
+			Name:        k,
+			Summary:     v.Summary,
+			Description: v.Description,
+			Footnotes:   v.Footnotes,
+			Fields:      v.FieldSpecs,
+			Status:      v.Status,
+			Version:     v.Version,
+		}
+		fn(ConstructorFunc(v.constructor), spec)
+	}
+}
+
 // Constructors is a map of all metrics types with their specs.
 var Constructors = map[string]TypeSpec{}
 
@@ -49,6 +69,7 @@ const (
 	TypeCloudWatch    = "cloudwatch"
 	TypeHTTPServer    = "http_server"
 	TypeInfluxDB      = "influxdb"
+	TypeNone          = "none"
 	TypePrometheus    = "prometheus"
 	TypeRename        = "rename"
 	TypeStatsd        = "statsd"
@@ -67,6 +88,7 @@ type Config struct {
 	CloudWatch    CloudWatchConfig `json:"cloudwatch" yaml:"cloudwatch"`
 	HTTP          HTTPConfig       `json:"http_server" yaml:"http_server"`
 	InfluxDB      InfluxDBConfig   `json:"influxdb" yaml:"influxdb"`
+	None          struct{}         `json:"none" yaml:"none"`
 	Prometheus    PrometheusConfig `json:"prometheus" yaml:"prometheus"`
 	Rename        RenameConfig     `json:"rename" yaml:"rename"`
 	Statsd        StatsdConfig     `json:"statsd" yaml:"statsd"`
@@ -83,6 +105,7 @@ func NewConfig() Config {
 		CloudWatch:    NewCloudWatchConfig(),
 		HTTP:          NewHTTPConfig(),
 		InfluxDB:      NewInfluxDBConfig(),
+		None:          struct{}{},
 		Prometheus:    NewPrometheusConfig(),
 		Rename:        NewRenameConfig(),
 		Statsd:        NewStatsdConfig(),
@@ -138,31 +161,18 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 	type confAlias Config
 	aliased := confAlias(NewConfig())
 
-	if err := value.Decode(&aliased); err != nil {
+	err := value.Decode(&aliased)
+	if err != nil {
 		return fmt.Errorf("line %v: %v", value.Line, err)
 	}
 
 	var raw interface{}
-	if err := value.Decode(&raw); err != nil {
+	if err = value.Decode(&raw); err != nil {
 		return fmt.Errorf("line %v: %v", value.Line, err)
 	}
-	if typeCandidates := config.GetInferenceCandidates(raw); len(typeCandidates) > 0 {
-		var inferredType string
-		for _, tc := range typeCandidates {
-			if _, exists := Constructors[tc]; exists {
-				if len(inferredType) > 0 {
-					return fmt.Errorf("unable to infer type, multiple candidates '%v' and '%v'", inferredType, tc)
-				}
-				inferredType = tc
-			}
-		}
-		if len(inferredType) == 0 {
-			return fmt.Errorf("unable to infer type, candidates were: %v", typeCandidates)
-		}
-		aliased.Type = inferredType
-	}
-	if _, exists := Constructors[aliased.Type]; !exists {
-		return fmt.Errorf("line %v: type '%v' was not recognised", value.Line, aliased.Type)
+
+	if aliased.Type, _, err = docs.GetInferenceCandidate(docs.TypeMetrics, aliased.Type, raw); err != nil {
+		return fmt.Errorf("line %v: %w", value.Line, err)
 	}
 
 	*conf = Config(aliased)
@@ -246,9 +256,6 @@ func Descriptions() string {
 
 // New creates a metric output type based on a configuration.
 func New(conf Config, opts ...func(Type)) (Type, error) {
-	if conf.Type == "none" {
-		return DudType{}, nil
-	}
 	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(conf, opts...)
 	}

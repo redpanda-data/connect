@@ -10,6 +10,9 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/aws/aws-lambda-go/lambda"
 	"gopkg.in/yaml.v3"
+
+	// TODO: V4 Remove this.
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 var handler *serverless.Handler
