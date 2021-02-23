@@ -67,8 +67,8 @@ func TestTypeConstruction(t *testing.T) {
 
 func TestTypeCloseGracefully(t *testing.T) {
 	conf := NewConfig()
-	conf.Input.Type = input.TypeNanomsg
-	conf.Output.Type = output.TypeNanomsg
+	conf.Input.Type = input.TypeHTTPServer
+	conf.Output.Type = output.TypeHTTPServer
 
 	strm, err := New(conf)
 	if err != nil {

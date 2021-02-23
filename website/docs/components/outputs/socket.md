@@ -16,8 +16,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Sends messages as a continuous stream of line delimited data over a
-(tcp/udp/unix) socket by connecting to a server.
+Connects to a (tcp/udp/unix) server and sends a continuous stream of data, dividing messages according to the specified codec.
 
 ```yaml
 # Config fields, showing default values
@@ -26,24 +25,6 @@ output:
     network: unix
     address: /tmp/benthos.sock
     codec: lines
-```
-
-Each message written is followed by a delimiter (defaults to '\n' if left empty)
-and when sending multipart messages (message batches) the last message ends with
-double delimiters. E.g. the messages "foo", "bar" and "baz" would be written as:
-
-```
-foo\n
-bar\n
-baz\n
-```
-
-Whereas a multipart message [ "foo", "bar", "baz" ] would be written as:
-
-```
-foo\n
-bar\n
-baz\n\n
 ```
 
 ## Fields
@@ -75,7 +56,7 @@ address: localhost:9000
 
 ### `codec`
 
-The way in which the bytes of messages should be written out into the output file. It's possible to write lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.
+The way in which the bytes of messages should be written out into the output data stream. It's possible to write lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.
 
 
 Type: `string`  

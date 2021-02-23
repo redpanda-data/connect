@@ -36,9 +36,6 @@ func NewSocketConfig() SocketConfig {
 // Socket is an output type that sends messages as a continuous steam of line
 // delimied messages over socket.
 type Socket struct {
-	connMut sync.Mutex
-	conn    net.Conn
-
 	network   string
 	address   string
 	codec     codec.WriterConstructor
@@ -47,8 +44,8 @@ type Socket struct {
 	stats metrics.Type
 	log   log.Modular
 
-	handle    codec.Writer
-	handleMut sync.Mutex
+	writer    codec.Writer
+	writerMut sync.Mutex
 }
 
 // NewSocket creates a new Socket writer type.
@@ -80,24 +77,31 @@ func NewSocket(
 
 //------------------------------------------------------------------------------
 
-// Connect does nothing.
+// Connect establises a connection to the target socket server.
 func (s *Socket) Connect() error {
 	return s.ConnectWithContext(context.Background())
 }
 
+// ConnectWithContext establises a connection to the target socket server.
 func (s *Socket) ConnectWithContext(ctx context.Context) error {
-	s.connMut.Lock()
-	defer s.connMut.Unlock()
-	if s.conn != nil {
+	s.writerMut.Lock()
+	defer s.writerMut.Unlock()
+	if s.writer != nil {
 		return nil
 	}
 
-	var err error
-	if s.conn, err = net.Dial(s.network, s.address); err != nil {
+	conn, err := net.Dial(s.network, s.address)
+	if err != nil {
 		return err
 	}
 
-	s.log.Infof("Sending messages over socket to: %s\n", s.address)
+	s.writer, err = s.codec(conn)
+	if err != nil {
+		conn.Close()
+		return err
+	}
+
+	s.log.Infof("Sending messages over %v socket to: %s\n", s.network, s.address)
 	return nil
 }
 
@@ -106,74 +110,45 @@ func (s *Socket) Write(msg types.Message) error {
 	return s.WriteWithContext(context.Background(), msg)
 }
 
+// WriteWithContext attempts to write a message.
 func (s *Socket) WriteWithContext(ctx context.Context, msg types.Message) error {
-	s.connMut.Lock()
-	conn := s.conn
-	s.connMut.Unlock()
+	s.writerMut.Lock()
+	w := s.writer
+	s.writerMut.Unlock()
 
-	if conn == nil {
+	if w == nil {
 		return types.ErrNotConnected
 	}
 
 	err := msg.Iter(func(i int, part types.Part) error {
-		s.handleMut.Lock()
-		defer s.handleMut.Unlock()
-
-		if s.handle != nil {
-			return s.handle.Write(ctx, part)
+		serr := w.Write(ctx, part)
+		if serr != nil || s.codecConf.CloseAfter {
+			s.writerMut.Lock()
+			s.writer.Close(ctx)
+			s.writer = nil
+			s.writerMut.Unlock()
 		}
-
-		handle, err := s.codec(conn)
-		if err != nil {
-			return err
-		}
-
-		if err = handle.Write(ctx, part); err != nil {
-			handle.Close(ctx)
-			return err
-		}
-
-		if !s.codecConf.CloseAfter {
-			s.handle = handle
-		} else {
-			handle.Close(ctx)
-		}
-		return nil
+		return serr
 	})
 	if err == nil && msg.Len() > 1 {
-		s.handleMut.Lock()
-		if s.handle != nil {
-			s.handle.EndBatch()
+		if err = w.EndBatch(); err != nil {
+			s.writerMut.Lock()
+			s.writer.Close(ctx)
+			s.writer = nil
+			s.writerMut.Unlock()
 		}
-		s.handleMut.Unlock()
-	}
-	if err != nil {
-		s.connMut.Lock()
-		s.handleMut.Lock()
-		s.handle.Close(ctx)
-		s.conn.Close()
-		s.handle = nil
-		s.conn = nil
-		s.handleMut.Unlock()
-		s.connMut.Unlock()
 	}
 	return err
 }
 
 // CloseAsync shuts down the socket output and stops processing messages.
 func (s *Socket) CloseAsync() {
-	s.handleMut.Lock()
-	if s.handle != nil {
-		s.handle.Close(context.Background())
-		s.handle = nil
+	s.writerMut.Lock()
+	if s.writer != nil {
+		s.writer.Close(context.Background())
+		s.writer = nil
 	}
-	s.handleMut.Unlock()
-	s.connMut.Lock()
-	if s.conn != nil {
-		s.conn.Close()
-		s.conn = nil
-	}
-	s.connMut.Unlock()
+	s.writerMut.Unlock()
 }
 
 // WaitForClose blocks until the socket output has closed down.

@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### New
+
+- Field `codec` added to the `socket` output.
+
 ## 3.42.0 - 2021-02-22
 
 ### New

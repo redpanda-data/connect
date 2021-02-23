@@ -61,7 +61,7 @@ Default: `""`
 
 ### `codec`
 
-The way in which the bytes of messages should be written out into the output file. It's possible to write lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.
+The way in which the bytes of messages should be written out into the output data stream. It's possible to write lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.
 
 
 Type: `string`  

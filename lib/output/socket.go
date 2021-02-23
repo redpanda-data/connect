@@ -15,26 +15,7 @@ func init() {
 	Constructors[TypeSocket] = TypeSpec{
 		constructor: fromSimpleConstructor(NewSocket),
 		Summary: `
-Sends messages as a continuous stream of line delimited data over a
-(tcp/udp/unix) socket by connecting to a server.`,
-		Description: `
-Each message written is followed by a delimiter (defaults to '\n' if left empty)
-and when sending multipart messages (message batches) the last message ends with
-double delimiters. E.g. the messages "foo", "bar" and "baz" would be written as:
-
-` + "```" + `
-foo\n
-bar\n
-baz\n
-` + "```" + `
-
-Whereas a multipart message [ "foo", "bar", "baz" ] would be written as:
-
-` + "```" + `
-foo\n
-bar\n
-baz\n\n
-` + "```" + ``,
+Connects to a (tcp/udp/unix) server and sends a continuous stream of data, dividing messages according to the specified codec.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("network", "The network type to connect as.").HasOptions(
 				"unix", "tcp", "udp",
@@ -54,7 +35,7 @@ func NewSocket(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter(TypeSocket, t, log, stats)
+	return NewAsyncWriter(TypeSocket, 1, t, log, stats)
 }
 
 //------------------------------------------------------------------------------
