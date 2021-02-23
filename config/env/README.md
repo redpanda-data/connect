@@ -1226,6 +1226,7 @@ OUTPUT_SNS_REGION                                        = eu-west-1
 OUTPUT_SNS_TIMEOUT                                       = 5s
 OUTPUT_SNS_TOPIC_ARN
 OUTPUT_SOCKET_ADDRESS                                    = /tmp/benthos.sock
+OUTPUT_SOCKET_CODEC                                      = lines
 OUTPUT_SOCKET_NETWORK                                    = unix
 OUTPUT_SQL_BATCHING_BYTE_SIZE                            = 0
 OUTPUT_SQL_BATCHING_CHECK

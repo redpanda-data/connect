@@ -24,6 +24,7 @@ output:
   type: socket
   socket:
     address: /tmp/benthos.sock
+    codec: lines
     network: unix
 resources:
   caches: {}

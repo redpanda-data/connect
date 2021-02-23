@@ -1463,6 +1463,7 @@ output:
           topic_arn: ${OUTPUT_SNS_TOPIC_ARN}
         socket:
           address: ${OUTPUT_SOCKET_ADDRESS:/tmp/benthos.sock}
+          codec: ${OUTPUT_SOCKET_CODEC:lines}
           network: ${OUTPUT_SOCKET_NETWORK:unix}
         sql:
           batching:

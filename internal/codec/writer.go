@@ -1,6 +1,7 @@
 package codec
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -109,11 +110,15 @@ func newLinesWriter(w io.WriteCloser) (Writer, error) {
 }
 
 func (l *linesWriter) Write(ctx context.Context, p types.Part) error {
-	if _, err := l.w.Write(p.Get()); err != nil {
+	partBytes := p.Get()
+	if _, err := l.w.Write(partBytes); err != nil {
 		return err
 	}
-	_, err := l.w.Write([]byte("\n"))
-	return err
+	if !bytes.HasSuffix(partBytes, []byte("\n")) {
+		_, err := l.w.Write([]byte("\n"))
+		return err
+	}
+	return nil
 }
 
 func (l *linesWriter) EndBatch() error {
@@ -142,11 +147,15 @@ func newCustomDelimWriter(w io.WriteCloser, delim string) (Writer, error) {
 }
 
 func (d *customDelimWriter) Write(ctx context.Context, p types.Part) error {
-	if _, err := d.w.Write(p.Get()); err != nil {
+	partBytes := p.Get()
+	if _, err := d.w.Write(partBytes); err != nil {
 		return err
 	}
-	_, err := d.w.Write(d.delim)
-	return err
+	if !bytes.HasSuffix(partBytes, d.delim) {
+		_, err := d.w.Write(d.delim)
+		return err
+	}
+	return nil
 }
 
 func (d *customDelimWriter) EndBatch() error {
