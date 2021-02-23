@@ -276,10 +276,11 @@ Methods provide most of the power in Bloblang as they allow you to augment query
 
 ```coffee
 root.doc.id = this.thing.id.string().catch(uuid_v4())
-root.doc.reduced_nums = this.thing.nums.for_each(
-  match this {
-    this < 10 => deleted()
-    _ => this - 10
+root.doc.reduced_nums = this.thing.nums.map_each(
+  if this < 10 {
+    deleted()
+  } else {
+    this - 10
   }
 )
 root.has_good_taste = ["pikachu","mewtwo","magmar"].contains(this.user.fav_pokemon)
