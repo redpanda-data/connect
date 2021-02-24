@@ -34,7 +34,7 @@ var (
 // TypeSpec is a struct containing constructors, markdown descriptions and an
 // optional sanitisation function for each input type.
 type TypeSpec struct {
-	constructor        inputConstructor
+	constructor        ConstructorFunc
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
 
 	Status      docs.Status
@@ -82,7 +82,40 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 	}
 }
 
-func constructProcessors(
+// AppendProcessorsFromConfig takes a variant arg of pipeline constructor
+// functions and returns a new slice of them where the processors of the
+// provided input configuration will also be initialized.
+func AppendProcessorsFromConfig(
+	conf Config,
+	mgr types.Manager,
+	log log.Modular,
+	stats metrics.Type,
+	pipelines ...types.PipelineConstructorFunc,
+) []types.PipelineConstructorFunc {
+	if len(conf.Processors) > 0 {
+		pipelines = append([]types.PipelineConstructorFunc{func(i *int) (types.Pipeline, error) {
+			if i == nil {
+				procs := 0
+				i = &procs
+			}
+			processors := make([]types.Processor, len(conf.Processors))
+			for j, procConf := range conf.Processors {
+				newMgr, newLog, newStats := interop.LabelChild(fmt.Sprintf("processor.%v", *i), mgr, log, stats)
+				var err error
+				processors[j], err = processor.New(procConf, newMgr, newLog, newStats)
+				if err != nil {
+					return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
+				}
+				*i++
+			}
+			return pipeline.NewProcessor(log, stats, processors...), nil
+		}}, pipelines...)
+	}
+	return pipelines
+}
+
+// TODO: V4 Remove this.
+func appendProcessorsFromConfigBatchAware(
 	hasBatchProc bool,
 	conf Config,
 	mgr types.Manager,
@@ -91,7 +124,6 @@ func constructProcessors(
 	pipelines ...types.PipelineConstructorFunc,
 ) (bool, []types.PipelineConstructorFunc) {
 	if len(conf.Processors) > 0 {
-		// TODO: V4 Remove this.
 		for _, procConf := range conf.Processors {
 			if procConf.Type == processor.TypeBatch {
 				hasBatchProc = true
@@ -118,20 +150,7 @@ func constructProcessors(
 	return hasBatchProc, pipelines
 }
 
-type simpleConstructor func(Config, types.Manager, log.Modular, metrics.Type) (Type, error)
-
-type batchAwareConstructor func(bool, Config, types.Manager, log.Modular, metrics.Type) (Type, error)
-
-type inputConstructor func(
-	hasBatchProc bool,
-	conf Config,
-	mgr types.Manager,
-	log log.Modular,
-	stats metrics.Type,
-	pipelines ...types.PipelineConstructorFunc,
-) (Type, error)
-
-func fromSimpleConstructor(fn simpleConstructor) inputConstructor {
+func fromSimpleConstructor(fn func(Config, types.Manager, log.Modular, metrics.Type) (Type, error)) ConstructorFunc {
 	return func(
 		hasBatchProc bool,
 		conf Config,
@@ -144,12 +163,12 @@ func fromSimpleConstructor(fn simpleConstructor) inputConstructor {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create input '%v': %w", conf.Type, err)
 		}
-		_, pipelines = constructProcessors(hasBatchProc, conf, mgr, log, stats, pipelines...)
+		pipelines = AppendProcessorsFromConfig(conf, mgr, log, stats, pipelines...)
 		return WrapWithPipelines(input, pipelines...)
 	}
 }
 
-func fromBatchAwareConstructor(fn batchAwareConstructor) inputConstructor {
+func fromBatchAwareConstructor(fn func(bool, Config, types.Manager, log.Modular, metrics.Type) (Type, error)) ConstructorFunc {
 	return func(
 		hasBatchProc bool,
 		conf Config,
@@ -162,7 +181,7 @@ func fromBatchAwareConstructor(fn batchAwareConstructor) inputConstructor {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create input '%v': %w", conf.Type, err)
 		}
-		_, pipelines = constructProcessors(hasBatchProc, conf, mgr, log, stats, pipelines...)
+		pipelines = AppendProcessorsFromConfig(conf, mgr, log, stats, pipelines...)
 		return WrapWithPipelines(input, pipelines...)
 	}
 }
@@ -448,9 +467,9 @@ func newHasBatchProcessor(
 	pipelines ...types.PipelineConstructorFunc,
 ) (Type, error) {
 	if mgrV2, ok := mgr.(interface {
-		NewInput(bool, Config, ...types.PipelineConstructorFunc) (Type, error)
+		NewInput(Config, bool, ...types.PipelineConstructorFunc) (types.Input, error)
 	}); ok {
-		return mgrV2.NewInput(hasBatchProc, conf, pipelines...)
+		return mgrV2.NewInput(conf, hasBatchProc, pipelines...)
 	}
 	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(hasBatchProc, conf, mgr, log, stats, pipelines...)

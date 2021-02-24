@@ -75,9 +75,15 @@ func TestInitialization(t *testing.T) {
 	_, err = mgr.NewBuffer(bConf)
 	assert.EqualError(t, err, "not this buffer")
 
+	_, err = buffer.New(bConf, mgr, log.Noop(), metrics.Noop())
+	assert.EqualError(t, err, "not this buffer")
+
 	cConf := cache.NewConfig()
 	cConf.Type = "testcache"
 	_, err = mgr.NewCache(cConf)
+	assert.EqualError(t, err, "not this cache")
+
+	_, err = cache.New(cConf, mgr, log.Noop(), metrics.Noop())
 	assert.EqualError(t, err, "not this cache")
 
 	iConf := input.NewConfig()
@@ -86,19 +92,31 @@ func TestInitialization(t *testing.T) {
 	assert.EqualError(t, err, "not this input")
 	assert.Equal(t, 2, lenInputProcs)
 
+	_, err = input.New(iConf, mgr, log.Noop(), metrics.Noop())
+	assert.EqualError(t, err, "not this input")
+
 	oConf := output.NewConfig()
 	oConf.Type = "testoutput"
 	_, err = mgr.NewOutput(oConf, nil, nil, nil)
 	assert.EqualError(t, err, "not this output")
 	assert.Equal(t, 3, lenOutputProcs)
 
+	_, err = output.New(oConf, mgr, log.Noop(), metrics.Noop())
+	assert.EqualError(t, err, "not this output")
+
 	pConf := processor.NewConfig()
 	pConf.Type = "testprocessor"
 	_, err = mgr.NewProcessor(pConf)
 	assert.EqualError(t, err, "not this processor")
 
+	_, err = processor.New(pConf, mgr, log.Noop(), metrics.Noop())
+	assert.EqualError(t, err, "not this processor")
+
 	rConf := ratelimit.NewConfig()
 	rConf.Type = "testratelimit"
 	_, err = mgr.NewRateLimit(rConf)
+	assert.EqualError(t, err, "not this rate limit")
+
+	_, err = ratelimit.New(rConf, mgr, log.Noop(), metrics.Noop())
 	assert.EqualError(t, err, "not this rate limit")
 }

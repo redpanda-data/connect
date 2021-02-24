@@ -28,7 +28,7 @@ func init() {
 			stats metrics.Type,
 			pipelines ...types.PipelineConstructorFunc,
 		) (Type, error) {
-			_, pipelines = constructProcessors(hasBatchProc, conf, mgr, log, stats, pipelines...)
+			_, pipelines = appendProcessorsFromConfigBatchAware(hasBatchProc, conf, mgr, log, stats, pipelines...)
 			return NewDynamic(conf, mgr, log, stats, pipelines...)
 		},
 		Summary: `

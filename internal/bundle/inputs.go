@@ -16,6 +16,21 @@ var AllInputs = &InputSet{
 
 //------------------------------------------------------------------------------
 
+// InputConstructorFromSimple provides a way to define an input constructor
+// without manually initializing processors of the config.
+func InputConstructorFromSimple(fn func(input.Config, NewManagement) (input.Type, error)) InputConstructor {
+	return func(b bool, c input.Config, nm NewManagement, pcf ...types.PipelineConstructorFunc) (input.Type, error) {
+		i, err := fn(c, nm)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create input '%v': %w", c.Type, err)
+		}
+		pcf = input.AppendProcessorsFromConfig(c, nm, nm.Logger(), nm.Metrics(), pcf...)
+		return input.WrapWithPipelines(i, pcf...)
+	}
+}
+
+//------------------------------------------------------------------------------
+
 // InputConstructor constructs an input component.
 type InputConstructor func(bool, input.Config, NewManagement, ...types.PipelineConstructorFunc) (input.Type, error)
 
@@ -29,8 +44,7 @@ type InputSet struct {
 	specs map[string]inputSpec
 }
 
-// Add a new input to this set by providing a spec (name, documentation, and
-// constructor).
+// Add a new input to this set by providing a constructor and documentation.
 func (s *InputSet) Add(constructor InputConstructor, spec docs.ComponentSpec) error {
 	if s.specs == nil {
 		s.specs = map[string]inputSpec{}

@@ -32,7 +32,7 @@ var (
 
 // TypeSpec is a constructor and a usage description for each output type.
 type TypeSpec struct {
-	constructor        outputConstructor
+	constructor        ConstructorFunc
 	sanitiseConfigFunc func(conf Config) (interface{}, error)
 
 	// Async indicates whether this output benefits from sending multiple
@@ -52,7 +52,10 @@ type TypeSpec struct {
 	Version     string
 }
 
-func constructProcessors(
+// AppendProcessorsFromConfig takes a variant arg of pipeline constructor
+// functions and returns a new slice of them where the processors of the
+// provided output configuration will also be initialized.
+func AppendProcessorsFromConfig(
 	conf Config,
 	mgr types.Manager,
 	log log.Modular,
@@ -81,17 +84,7 @@ func constructProcessors(
 	return pipelines
 }
 
-type simpleConstructor func(Config, types.Manager, log.Modular, metrics.Type) (Type, error)
-
-type outputConstructor func(
-	conf Config,
-	mgr types.Manager,
-	log log.Modular,
-	stats metrics.Type,
-	pipelines ...types.PipelineConstructorFunc,
-) (Type, error)
-
-func fromSimpleConstructor(fn simpleConstructor) outputConstructor {
+func fromSimpleConstructor(fn func(Config, types.Manager, log.Modular, metrics.Type) (Type, error)) ConstructorFunc {
 	return func(
 		conf Config,
 		mgr types.Manager,
@@ -103,7 +96,7 @@ func fromSimpleConstructor(fn simpleConstructor) outputConstructor {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create output '%v': %w", conf.Type, err)
 		}
-		pipelines = constructProcessors(conf, mgr, log, stats, pipelines...)
+		pipelines = AppendProcessorsFromConfig(conf, mgr, log, stats, pipelines...)
 		return WrapWithPipelines(output, pipelines...)
 	}
 }
@@ -462,7 +455,7 @@ func New(
 	pipelines ...types.PipelineConstructorFunc,
 ) (Type, error) {
 	if mgrV2, ok := mgr.(interface {
-		NewOutput(Config, ...types.PipelineConstructorFunc) (Type, error)
+		NewOutput(Config, ...types.PipelineConstructorFunc) (types.Output, error)
 	}); ok {
 		return mgrV2.NewOutput(conf, pipelines...)
 	}

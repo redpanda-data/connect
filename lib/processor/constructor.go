@@ -536,7 +536,7 @@ func New(
 	stats metrics.Type,
 ) (Type, error) {
 	if mgrV2, ok := mgr.(interface {
-		NewProcessor(conf Config) (Type, error)
+		NewProcessor(conf Config) (types.Processor, error)
 	}); ok {
 		return mgrV2.NewProcessor(conf)
 	}

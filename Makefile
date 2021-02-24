@@ -35,7 +35,7 @@ deps:
 	@go mod tidy
 	@go mod vendor
 
-SOURCE_FILES = $(shell find lib internal cmd -type f -name "*.go")
+SOURCE_FILES = $(shell find lib internal public cmd -type f -name "*.go")
 
 $(PATHINSTBIN)/%: $(SOURCE_FILES)
 	@mkdir -p $(dir $@)

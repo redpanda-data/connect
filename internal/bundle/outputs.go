@@ -16,6 +16,21 @@ var AllOutputs = &OutputSet{
 
 //------------------------------------------------------------------------------
 
+// OutputConstructorFromSimple provides a way to define an output constructor
+// without manually initializing processors of the config.
+func OutputConstructorFromSimple(fn func(output.Config, NewManagement) (output.Type, error)) OutputConstructor {
+	return func(c output.Config, nm NewManagement, pcf ...types.PipelineConstructorFunc) (output.Type, error) {
+		o, err := fn(c, nm)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create output '%v': %w", c.Type, err)
+		}
+		pcf = output.AppendProcessorsFromConfig(c, nm, nm.Logger(), nm.Metrics(), pcf...)
+		return output.WrapWithPipelines(o, pcf...)
+	}
+}
+
+//------------------------------------------------------------------------------
+
 // OutputConstructor constructs an output component.
 type OutputConstructor func(output.Config, NewManagement, ...types.PipelineConstructorFunc) (output.Type, error)
 

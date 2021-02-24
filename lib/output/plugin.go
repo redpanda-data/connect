@@ -43,7 +43,7 @@ type PluginConfigConstructor func() interface{}
 type PluginConfigSanitiser func(conf interface{}) interface{}
 
 type pluginSpec struct {
-	constructor     outputConstructor
+	constructor     ConstructorFunc
 	confConstructor PluginConfigConstructor
 	confSanitiser   PluginConfigSanitiser
 	description     string
