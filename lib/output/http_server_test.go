@@ -60,15 +60,15 @@ func TestHTTPBasic(t *testing.T) {
 			}
 		}()
 
-		if res, err := http.Get("http://localhost:1237/testpost"); err != nil {
+		res, err := http.Get("http://localhost:1237/testpost")
+		if err != nil {
 			t.Error(err)
 			return
-		} else {
-			res.Body.Close()
-			if res.StatusCode != 200 {
-				t.Errorf("Wrong error code returned: %v", res.StatusCode)
-				return
-			}
+		}
+		res.Body.Close()
+		if res.StatusCode != 200 {
+			t.Errorf("Wrong error code returned: %v", res.StatusCode)
+			return
 		}
 	}
 

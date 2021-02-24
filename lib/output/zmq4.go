@@ -58,7 +58,7 @@ func NewZMQ4(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type
 	if err != nil {
 		return nil, err
 	}
-	return onlySinglePayloads(s), nil
+	return OnlySinglePayloads(s), nil
 }
 
 //------------------------------------------------------------------------------
