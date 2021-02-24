@@ -34,7 +34,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return onlySinglePayloads(a), nil
+			return OnlySinglePayloads(a), nil
 		}),
 		Status:  docs.StatusExperimental,
 		Version: "3.39.0",

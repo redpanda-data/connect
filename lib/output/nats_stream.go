@@ -46,7 +46,7 @@ func NewNATSStream(conf Config, mgr types.Manager, log log.Modular, stats metric
 	if err != nil {
 		return nil, err
 	}
-	return onlySinglePayloads(a), nil
+	return OnlySinglePayloads(a), nil
 }
 
 //------------------------------------------------------------------------------

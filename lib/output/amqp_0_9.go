@@ -74,7 +74,7 @@ func NewAMQP09(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 	if err != nil {
 		return nil, err
 	}
-	return onlySinglePayloads(w), nil
+	return OnlySinglePayloads(w), nil
 }
 
 //------------------------------------------------------------------------------

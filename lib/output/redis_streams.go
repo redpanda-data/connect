@@ -51,7 +51,7 @@ func NewRedisStreams(conf Config, mgr types.Manager, log log.Modular, stats metr
 	if err != nil {
 		return nil, err
 	}
-	return onlySinglePayloads(a), nil
+	return OnlySinglePayloads(a), nil
 }
 
 //------------------------------------------------------------------------------

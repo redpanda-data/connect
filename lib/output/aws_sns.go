@@ -86,7 +86,7 @@ func newAmazonSNS(name string, conf writer.SNSConfig, mgr types.Manager, log log
 	if err != nil {
 		return nil, err
 	}
-	return onlySinglePayloads(a), nil
+	return OnlySinglePayloads(a), nil
 }
 
 //------------------------------------------------------------------------------

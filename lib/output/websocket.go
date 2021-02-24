@@ -37,7 +37,7 @@ func NewWebsocket(conf Config, mgr types.Manager, log log.Modular, stats metrics
 	if err != nil {
 		return nil, err
 	}
-	return onlySinglePayloads(a), nil
+	return OnlySinglePayloads(a), nil
 }
 
 //------------------------------------------------------------------------------

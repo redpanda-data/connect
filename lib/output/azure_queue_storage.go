@@ -60,7 +60,7 @@ func NewAzureQueueStorage(conf Config, mgr types.Manager, log log.Modular, stats
 	if err != nil {
 		return nil, err
 	}
-	return newBatcherFromConf(conf.AzureQueueStorage.Batching, onlySinglePayloads(w), mgr, log, stats)
+	return newBatcherFromConf(conf.AzureQueueStorage.Batching, OnlySinglePayloads(w), mgr, log, stats)
 }
 
 //------------------------------------------------------------------------------

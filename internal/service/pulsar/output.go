@@ -22,7 +22,11 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return output.NewAsyncWriter(output.TypePulsar, c.Pulsar.MaxInFlight, w, nm.Logger(), nm.Metrics())
+		o, err := output.NewAsyncWriter(output.TypePulsar, c.Pulsar.MaxInFlight, w, nm.Logger(), nm.Metrics())
+		if err != nil {
+			return nil, err
+		}
+		return output.OnlySinglePayloads(o), nil
 	}), docs.ComponentSpec{
 		Name:   output.TypePulsar,
 		Type:   docs.TypeOutput,

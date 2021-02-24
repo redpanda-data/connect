@@ -47,7 +47,7 @@ func NewGCPPubSub(conf Config, mgr types.Manager, log log.Modular, stats metrics
 	if err != nil {
 		return nil, err
 	}
-	return onlySinglePayloads(w), nil
+	return OnlySinglePayloads(w), nil
 }
 
 //------------------------------------------------------------------------------
