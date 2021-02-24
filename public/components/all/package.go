@@ -15,6 +15,9 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/tracer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+
+	// Import new service packages.
+	_ "github.com/Jeffail/benthos/v3/internal/service/pulsar"
 )
 
 func init() {

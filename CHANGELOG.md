@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 
 ### New
 
+- New (experimental) Apache Pulsar input and output.
 - Field `codec` added to the `socket` output.
 
 ### Changed
