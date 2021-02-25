@@ -37,7 +37,7 @@ func TestTCPBasic(t *testing.T) {
 
 	go func() {
 		if cerr := wtr.Connect(); cerr != nil {
-			t.Fatal(cerr)
+			t.Error(cerr)
 		}
 	}()
 
@@ -101,7 +101,7 @@ func TestTCPMultipart(t *testing.T) {
 
 	go func() {
 		if cerr := wtr.Connect(); cerr != nil {
-			t.Fatal(cerr)
+			t.Error(cerr)
 		}
 	}()
 

@@ -141,11 +141,11 @@ func TestRateLimitErroredOut(t *testing.T) {
 	go func() {
 		output, res := proc.ProcessMessage(input)
 		if res != nil {
-			t.Fatal(res.Error())
+			t.Error(res.Error())
 		}
 
 		if len(output) != 1 {
-			t.Fatalf("Wrong count of result messages: %v", len(output))
+			t.Errorf("Wrong count of result messages: %v", len(output))
 		}
 
 		if exp, act := message.GetAllBytes(input), message.GetAllBytes(output[0]); !reflect.DeepEqual(exp, act) {
@@ -190,11 +190,11 @@ func TestRateLimitBlocked(t *testing.T) {
 	go func() {
 		output, res := proc.ProcessMessage(input)
 		if res != nil {
-			t.Fatal(res.Error())
+			t.Error(res.Error())
 		}
 
 		if len(output) != 1 {
-			t.Fatalf("Wrong count of result messages: %v", len(output))
+			t.Errorf("Wrong count of result messages: %v", len(output))
 		}
 
 		if exp, act := message.GetAllBytes(input), message.GetAllBytes(output[0]); !reflect.DeepEqual(exp, act) {

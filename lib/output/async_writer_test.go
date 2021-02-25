@@ -183,12 +183,12 @@ func TestAsyncWriterClosesOnReconn(t *testing.T) {
 		select {
 		case writerImpl.writeChan <- types.ErrNotConnected:
 		case <-time.After(time.Second):
-			t.Fatal("Timed out")
+			t.Error("Timed out")
 		}
 		select {
 		case writerImpl.connChan <- types.ErrTypeClosed:
 		case <-time.After(time.Second):
-			t.Fatal("Timed out")
+			t.Error("Timed out")
 		}
 	}()
 
@@ -234,17 +234,17 @@ func TestAsyncWriterClosesOnResend(t *testing.T) {
 		select {
 		case writerImpl.writeChan <- types.ErrNotConnected:
 		case <-time.After(time.Second):
-			t.Fatal("Timed out")
+			t.Error("Timed out")
 		}
 		select {
 		case writerImpl.connChan <- nil:
 		case <-time.After(time.Second):
-			t.Fatal("Timed out")
+			t.Error("Timed out")
 		}
 		select {
 		case writerImpl.writeChan <- types.ErrTypeClosed:
 		case <-time.After(time.Second):
-			t.Fatal("Timed out")
+			t.Error("Timed out")
 		}
 	}()
 
@@ -292,17 +292,17 @@ func TestAsyncWriterCanReconnect(t *testing.T) {
 		select {
 		case writerImpl.writeChan <- types.ErrNotConnected:
 		case <-time.After(time.Second):
-			t.Fatal("Timed out")
+			t.Error("Timed out")
 		}
 		select {
 		case writerImpl.connChan <- nil:
 		case <-time.After(time.Second):
-			t.Fatal("Timed out")
+			t.Error("Timed out")
 		}
 		select {
 		case writerImpl.writeChan <- nil:
 		case <-time.After(time.Second):
-			t.Fatal("Timed out")
+			t.Error("Timed out")
 		}
 	}()
 

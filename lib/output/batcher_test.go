@@ -97,7 +97,7 @@ func TestBatcherBasic(t *testing.T) {
 			select {
 			case tInChan <- types.NewTransaction(message.New([][]byte{batch}), resChan):
 			case <-time.After(time.Second):
-				t.Fatal("timed out")
+				t.Error("timed out")
 			}
 		}
 		for range firstBatchExpected {
@@ -106,7 +106,7 @@ func TestBatcherBasic(t *testing.T) {
 			case actRes := <-resChan:
 				act = actRes.Error()
 			case <-time.After(time.Second):
-				t.Fatal("timed out")
+				t.Error("timed out")
 			}
 			if exp := firstErr; exp != act {
 				t.Errorf("Unexpected response: %v != %v", act, exp)
@@ -116,7 +116,7 @@ func TestBatcherBasic(t *testing.T) {
 			select {
 			case tInChan <- types.NewTransaction(message.New([][]byte{batch}), resChan):
 			case <-time.After(time.Second):
-				t.Fatal("timed out")
+				t.Error("timed out")
 			}
 		}
 		for range secondBatchExpected {
@@ -125,7 +125,7 @@ func TestBatcherBasic(t *testing.T) {
 			case actRes := <-resChan:
 				act = actRes.Error()
 			case <-time.After(time.Second):
-				t.Fatal("timed out")
+				t.Error("timed out")
 			}
 			if exp := secondErr; exp != act {
 				t.Errorf("Unexpected response: %v != %v", act, exp)
@@ -135,7 +135,7 @@ func TestBatcherBasic(t *testing.T) {
 			select {
 			case tInChan <- types.NewTransaction(message.New([][]byte{batch}), resChan):
 			case <-time.After(time.Second):
-				t.Fatal("timed out")
+				t.Error("timed out")
 			}
 		}
 		for range finalBatchExpected {
@@ -144,7 +144,7 @@ func TestBatcherBasic(t *testing.T) {
 			case actRes := <-resChan:
 				act = actRes.Error()
 			case <-time.After(time.Second):
-				t.Fatal("timed out")
+				t.Error("timed out")
 			}
 			if exp := finalErr; exp != act {
 				t.Errorf("Unexpected response: %v != %v", act, exp)
@@ -254,7 +254,7 @@ func TestBatcherBatchError(t *testing.T) {
 		select {
 		case outTr = <-tOutChan:
 		case <-time.After(time.Second):
-			t.Fatal("Timed out waiting for message read")
+			t.Error("Timed out waiting for message read")
 		}
 		assert.Equal(t, [][]byte{
 			[]byte("foo0"),

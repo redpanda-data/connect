@@ -109,7 +109,7 @@ func TestPoolBasic(t *testing.T) {
 		select {
 		case procT.ResponseChan <- response.NewAck():
 		case <-time.After(time.Second * 5):
-			t.Fatal("Timed out")
+			t.Error("Timed out")
 		}
 	}()
 
@@ -274,7 +274,7 @@ func TestPoolMultiThreads(t *testing.T) {
 			select {
 			case tran.ResponseChan <- response.NewAck():
 			case <-time.After(time.Second * 5):
-				t.Fatal("Timed out")
+				t.Error("Timed out")
 			}
 		}(procT)
 	}

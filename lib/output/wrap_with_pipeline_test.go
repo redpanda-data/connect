@@ -194,7 +194,7 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 	go func() {
 		select {
 		case <-time.After(time.Second):
-			t.Fatal("timed out")
+			t.Error("timed out")
 		case tran.ResponseChan <- response.NewAck():
 		}
 	}()

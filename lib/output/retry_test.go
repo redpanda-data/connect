@@ -61,7 +61,7 @@ func TestRetryBasic(t *testing.T) {
 		select {
 		case tChan <- types.NewTransaction(testMsg, resChan):
 		case <-time.After(time.Second):
-			t.Fatal("timed out")
+			t.Error("timed out")
 		}
 	}()
 
@@ -134,7 +134,7 @@ func TestRetrySadPath(t *testing.T) {
 		select {
 		case tChan <- tran:
 		case <-time.After(time.Second):
-			t.Fatal("timed out")
+			t.Error("timed out")
 		}
 	}()
 

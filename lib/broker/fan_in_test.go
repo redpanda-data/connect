@@ -65,12 +65,12 @@ func TestBasicFanIn(t *testing.T) {
 						t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
 					}
 				case <-time.After(time.Second * 5):
-					t.Fatalf("Timed out waiting for broker propagate: %v, %v", i, j)
+					t.Errorf("Timed out waiting for broker propagate: %v, %v", i, j)
 				}
 				select {
 				case ts.ResponseChan <- response.NewAck():
 				case <-time.After(time.Second * 5):
-					t.Fatalf("Timed out waiting for response to broker: %v, %v", i, j)
+					t.Errorf("Timed out waiting for response to broker: %v, %v", i, j)
 				}
 			}()
 			select {

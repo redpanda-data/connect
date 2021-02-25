@@ -73,13 +73,13 @@ func TestHTTPBasic(t *testing.T) {
 				bytes.NewBuffer([]byte(input)),
 			)
 			if err != nil {
-				t.Fatal(err)
+				t.Error(err)
 			} else if res.StatusCode != 200 {
-				t.Fatalf("Wrong error code returned: %v", res.StatusCode)
+				t.Errorf("Wrong error code returned: %v", res.StatusCode)
 			}
 			resBytes, err := ioutil.ReadAll(res.Body)
 			if err != nil {
-				t.Fatal(err)
+				t.Error(err)
 			}
 			if exp, act := output, string(resBytes); exp != act {
 				t.Errorf("Wrong sync response: %v != %v", act, exp)
@@ -126,9 +126,9 @@ func TestHTTPBasic(t *testing.T) {
 				"multipart/mixed; boundary=foo",
 				bytes.NewBuffer([]byte(testStr)),
 			); err != nil {
-				t.Fatal(err)
+				t.Error(err)
 			} else if res.StatusCode != 200 {
-				t.Fatalf("Wrong error code returned: %v", res.StatusCode)
+				t.Errorf("Wrong error code returned: %v", res.StatusCode)
 			}
 		}()
 
@@ -163,17 +163,17 @@ func TestHTTPBasic(t *testing.T) {
 			req, err := http.NewRequest(
 				"POST", server.URL+"/testpost", bytes.NewBuffer([]byte(input)))
 			if err != nil {
-				t.Fatal(err)
+				t.Error(err)
 			}
 			res, err := client.Do(req)
 			if err != nil {
-				t.Fatal(err)
+				t.Error(err)
 			} else if res.StatusCode != 200 {
-				t.Fatalf("Wrong error code returned: %v", res.StatusCode)
+				t.Errorf("Wrong error code returned: %v", res.StatusCode)
 			}
 			resBytes, err := ioutil.ReadAll(res.Body)
 			if err != nil {
-				t.Fatal(err)
+				t.Error(err)
 			}
 			if exp, act := output, string(resBytes); exp != act {
 				t.Errorf("Wrong sync response: %v != %v", act, exp)
@@ -388,7 +388,7 @@ func TestHTTPServerWebsockets(t *testing.T) {
 		if clientErr := client.WriteMessage(
 			websocket.BinaryMessage, []byte("hello world 1"),
 		); clientErr != nil {
-			t.Fatal(clientErr)
+			t.Error(clientErr)
 		}
 		wg.Done()
 	}()
@@ -414,7 +414,7 @@ func TestHTTPServerWebsockets(t *testing.T) {
 		if closeErr := client.WriteMessage(
 			websocket.BinaryMessage, []byte("hello world 2"),
 		); closeErr != nil {
-			t.Fatal(closeErr)
+			t.Error(closeErr)
 		}
 		wg.Done()
 	}()
@@ -564,13 +564,13 @@ func TestHTTPSyncResponseHeaders(t *testing.T) {
 			bytes.NewBuffer([]byte(input)),
 		)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		} else if res.StatusCode != 200 {
-			t.Fatalf("Wrong error code returned: %v", res.StatusCode)
+			t.Errorf("Wrong error code returned: %v", res.StatusCode)
 		}
 		resBytes, err := ioutil.ReadAll(res.Body)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		if exp, act := input, string(resBytes); exp != act {
 			t.Errorf("Wrong sync response: %v != %v", act, exp)
@@ -773,13 +773,13 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 			bytes.NewBuffer([]byte(input)),
 		)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		} else if res.StatusCode != 200 {
-			t.Fatalf("Wrong error code returned: %v", res.StatusCode)
+			t.Errorf("Wrong error code returned: %v", res.StatusCode)
 		}
 		resBytes, err := ioutil.ReadAll(res.Body)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		if exp, act := input, string(resBytes); exp != act {
 			t.Errorf("Wrong sync response: %v != %v", act, exp)
@@ -797,13 +797,13 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 			bytes.NewBuffer([]byte(input)),
 		)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		} else if res.StatusCode != 400 {
-			t.Fatalf("Wrong error code returned: %v", res.StatusCode)
+			t.Errorf("Wrong error code returned: %v", res.StatusCode)
 		}
 		resBytes, err = ioutil.ReadAll(res.Body)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 		if exp, act := input, string(resBytes); exp != act {
 			t.Errorf("Wrong sync response: %v != %v", act, exp)

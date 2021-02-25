@@ -36,7 +36,7 @@ func TestSocketBasic(t *testing.T) {
 
 	go func() {
 		if cerr := wtr.Connect(); cerr != nil {
-			t.Fatal(cerr)
+			t.Error(cerr)
 		}
 	}()
 
@@ -99,7 +99,7 @@ func TestSocketMultipart(t *testing.T) {
 
 	go func() {
 		if cerr := wtr.Connect(); cerr != nil {
-			t.Fatal(cerr)
+			t.Error(cerr)
 		}
 	}()
 
@@ -283,7 +283,7 @@ func TestTCPSocketBasic(t *testing.T) {
 
 	go func() {
 		if cerr := wtr.Connect(); cerr != nil {
-			t.Fatal(cerr)
+			t.Error(cerr)
 		}
 	}()
 
@@ -348,7 +348,7 @@ func TestTCPSocketMultipart(t *testing.T) {
 
 	go func() {
 		if cerr := wtr.Connect(); cerr != nil {
-			t.Fatal(cerr)
+			t.Error(cerr)
 		}
 	}()
 
@@ -409,7 +409,7 @@ func TestSocketCustomDelimeter(t *testing.T) {
 
 	go func() {
 		if cerr := wtr.Connect(); cerr != nil {
-			t.Fatal(cerr)
+			t.Error(cerr)
 		}
 	}()
 

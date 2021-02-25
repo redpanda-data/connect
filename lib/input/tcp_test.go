@@ -145,7 +145,7 @@ func TestTCPReconnect(t *testing.T) {
 		conn.Close()
 		conn, cerr = ln.Accept()
 		if cerr != nil {
-			t.Fatal(cerr)
+			t.Error(cerr)
 		}
 		if _, cerr := conn.Write([]byte("bar\n")); cerr != nil {
 			t.Error(cerr)

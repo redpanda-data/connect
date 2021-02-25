@@ -130,7 +130,7 @@ func TestUDPServerReconnect(t *testing.T) {
 		conn.Close()
 		conn, cerr = net.Dial("udp", addr.String())
 		if cerr != nil {
-			t.Fatal(cerr)
+			t.Error(cerr)
 		}
 		if _, cerr = conn.Write([]byte("bar\n")); cerr != nil {
 			t.Error(cerr)
