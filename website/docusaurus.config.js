@@ -104,9 +104,6 @@ module.exports = {
       ],
       copyright: `Copyright © ${new Date().getFullYear()} Ashley Jeffs.`,
     },
-    googleAnalytics: {
-      trackingID: 'UA-135959729-1',
-    },
     algolia: {
       apiKey: '358e5d3135579871ceecd50c6cb7ce9e',
       indexName: 'benthos',
