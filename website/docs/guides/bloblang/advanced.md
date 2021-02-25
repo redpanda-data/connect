@@ -6,35 +6,41 @@ description: Some advanced Bloblang patterns
 
 ## Map Parameters
 
-A map definition isn't able to formally specify input parameters:
+A map definition only has one input parameter, which is the context that it is called upon:
 
 ```coffee
-map formating {
-  root = this
-  foo = "(%v)".format(foo)
-  bar = "(%v)".format(bar)
+map formatting {
+  root = "(%v)".format(this)
 }
 
-first = doc.apply("formating")
+root.a = this.a.apply("formatting")
+root.b = this.b.apply("formatting")
 
-# In:  {"doc":{"foo":"f","bar":"b","baz":"bz"}}
-# Out: {"first":{"bar":"(b)","baz":"bz","foo":"(f)"}}
+# In:  {"a":"foo","b":"bar"}
+# Out: {"a":"(foo)","b":"(bar)"}
 ```
+
+However, in cases where we wish to provide multiple named parameters to a mapping we can execute them on object literals for the same effect:
 
 However, we can still use object literals for this purpose. Imagine if we wanted a map that is the exact same as above except the pattern is `[%v]` instead, with the potential for even more patterns in the future. To do that we can pass an object with a field `value` with our target to map and a field `pattern` which allows us to specify the pattern to apply:
 
 ```coffee
 map formatting {
-  root = value
-  foo = pattern.format(value.foo)
-  bar = pattern.format(value.bar)
+  root = this.pattern.format(this.value)
 }
 
-first = {"value":doc,"pattern":"(%v)"}.apply("formatting")
-second = {"value":doc,"pattern":"[%v]"}.apply("formatting")
+root.a = {
+  "value":this.a,
+  "pattern":this.pattern,
+}.apply("formatting")
 
-# In:  {"doc":{"foo":"f","bar":"b","baz":"bz"}}
-# Out: {"first":{"bar":"(b)","baz":"bz","foo":"(f)"},"second":{"bar":"[b]","baz":"bz","foo":"[f]"}}
+root.b = {
+  "value":this.b,
+  "pattern":this.pattern,
+}.apply("formatting")
+
+# In:  {"a":"foo","b":"bar","pattern":"[%v]"}
+# Out: {"a":"[foo]","b":"[bar]"}
 ```
 
 ## Walking the Tree
@@ -59,7 +65,7 @@ root = this.apply("unescape_values")
 
 ## Message Expansion
 
-Expanding a message into >1 messages can be done by using Bloblang to map messages into an array and following it up with an [`unarchive` processor][processors.unarchive]. For example, given documents of this format:
+Expanding a single message into multiple messages can be done by mapping messages into an array and following it up with an [`unarchive` processor][processors.unarchive]. For example, given documents of this format:
 
 ```json
 {
@@ -72,12 +78,12 @@ Expanding a message into >1 messages can be done by using Bloblang to map messag
 }
 ```
 
-In the simple case we can simply pull `items` out to the root with `root = items` in a [`bloblang` processor][processors.bloblang] and follow it with an [`unarchive` processor][processors.unarchive] to expand each element into its own independent message:
+We can pull `items` out to the root with `root = items` with a [`bloblang` processor][processors.bloblang] and follow it with an [`unarchive` processor][processors.unarchive] to expand each element into its own independent message:
 
 ```yaml
 pipeline:
   processors:
-    - bloblang: root = items
+    - bloblang: root = this.items
     - unarchive:
         format: json_array
 ```
@@ -86,7 +92,7 @@ However, most of the time we also need to map the elements before expanding them
 
 ```coffee
 let doc_root = this.without("items")
-root = items.map_each($doc_root.merge(this))
+root = this.items.map_each($doc_root.merge(this))
 
 # In:  {"id":"foobar","items":[{"content":"foo"},{"content":"bar"},{"content":"baz"}]}
 # Out: [{"content":"foo","id":"foobar"},{"content":"bar","id":"foobar"},{"content":"baz","id":"foobar"}]
@@ -99,7 +105,7 @@ pipeline:
   processors:
     - bloblang: |
         let doc_root = this.without("items")
-        root = items.map_each($doc_root.merge(this))
+        root = this.items.map_each($doc_root.merge(this))
     - unarchive:
         format: json_array
 ```
