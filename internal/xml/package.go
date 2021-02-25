@@ -7,7 +7,7 @@ package xml
 import (
 	"encoding/xml"
 
-	"github.com/clbanning/mxj"
+	"github.com/clbanning/mxj/v2"
 	"golang.org/x/net/html/charset"
 )
 

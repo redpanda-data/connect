@@ -22,7 +22,7 @@ require (
 	github.com/bradfitz/gomemcache v0.0.0-20190913173617-a41fca850d0b
 	github.com/cenkalti/backoff/v3 v3.2.2 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.0
-	github.com/clbanning/mxj v1.8.4
+	github.com/clbanning/mxj/v2 v2.5.3
 	github.com/colinmarc/hdfs v1.1.3
 	github.com/containerd/continuity v0.0.0-20200928162600-f2cc35102c2a // indirect
 	github.com/dgraph-io/ristretto v0.0.3
