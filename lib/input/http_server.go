@@ -116,8 +116,8 @@ You can access these metadata fields using
 					"status",
 					"Specify the status code to return with synchronous responses. This is a string value, which allows you to customize it based on resulting payloads and their metadata.",
 					"200", `${! json("status") }`, `${! meta("status") }`,
-				).SupportsInterpolation(true),
-				docs.FieldCommon("headers", "Specify headers to return with synchronous responses.").SupportsInterpolation(true),
+				).IsInterpolated(),
+				docs.FieldCommon("headers", "Specify headers to return with synchronous responses.").IsInterpolated(),
 			),
 		},
 		Categories: []Category{

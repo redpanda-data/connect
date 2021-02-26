@@ -10,16 +10,6 @@ import (
 
 //------------------------------------------------------------------------------
 
-// FieldInterpolation represents a type of interpolation supported by a field.
-type FieldInterpolation int
-
-// Interpolation types.
-const (
-	FieldInterpolationNone FieldInterpolation = iota
-	FieldInterpolationBatchWide
-	FieldInterpolationIndividual
-)
-
 // FieldSpec describes a component config field.
 type FieldSpec struct {
 	// Name of the field (as it appears in config).
@@ -50,9 +40,8 @@ type FieldSpec struct {
 	// IsMap indicates whether this field is a map of keys to the FieldType.
 	IsMap bool
 
-	// Interpolation indicates the type of interpolation that this field
-	// supports.
-	Interpolation FieldInterpolation
+	// Interpolation indicates that the field supports interpolation functions.
+	Interpolated bool
 
 	// Examples is a slice of optional example values for a field.
 	Examples []interface{}
@@ -72,14 +61,9 @@ type FieldSpec struct {
 	omitWhen func(v interface{}) bool
 }
 
-// SupportsInterpolation returns a new FieldSpec that specifies whether it
-// supports function interpolation (batch wide or not).
-func (f FieldSpec) SupportsInterpolation(batchWide bool) FieldSpec {
-	if batchWide {
-		f.Interpolation = FieldInterpolationBatchWide
-	} else {
-		f.Interpolation = FieldInterpolationIndividual
-	}
+// IsInterpolated indicates that the field supports interpolation functions.
+func (f FieldSpec) IsInterpolated() FieldSpec {
+	f.Interpolated = true
 	return f
 }
 

@@ -105,7 +105,7 @@ type fieldContext struct {
 	Default          string
 	Advanced         bool
 	Deprecated       bool
-	Interpolation    FieldInterpolation
+	Interpolated     bool
 	Examples         []string
 	AnnotatedOptions [][2]string
 	Options          []string
@@ -128,14 +128,6 @@ type componentContext struct {
 	Version            string
 }
 
-func (ctx fieldContext) InterpolationBatchWide() FieldInterpolation {
-	return FieldInterpolationBatchWide
-}
-
-func (ctx fieldContext) InterpolationIndividual() FieldInterpolation {
-	return FieldInterpolationIndividual
-}
-
 var componentTemplate = `{{define "field_docs" -}}
 ## Fields
 
@@ -143,10 +135,7 @@ var componentTemplate = `{{define "field_docs" -}}
 ### ` + "`{{$field.Name}}`" + `
 
 {{$field.Description}}
-{{if eq $field.Interpolation .InterpolationBatchWide -}}
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-{{end -}}
-{{if eq $field.Interpolation .InterpolationIndividual -}}
+{{if $field.Interpolated -}}
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 {{end}}
 
@@ -508,7 +497,7 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 			Examples:         examples,
 			AnnotatedOptions: v.AnnotatedOptions,
 			Options:          v.Options,
-			Interpolation:    v.Interpolation,
+			Interpolated:     v.Interpolated,
 			Version:          v.Version,
 		}
 

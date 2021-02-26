@@ -35,8 +35,8 @@ allowing you to transfer data across accounts. You can find out more
 		Batches: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("stream", "The stream to publish messages to."),
-			docs.FieldCommon("partition_key", "A required key for partitioning messages.").SupportsInterpolation(false),
-			docs.FieldAdvanced("hash_key", "A optional hash key for partitioning messages.").SupportsInterpolation(false),
+			docs.FieldCommon("partition_key", "A required key for partitioning messages.").IsInterpolated(),
+			docs.FieldAdvanced("hash_key", "A optional hash key for partitioning messages.").IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			batch.FieldSpec(),
 		}.Merge(session.FieldSpecs()).Merge(retries.FieldSpecs()),
@@ -71,8 +71,8 @@ allowing you to transfer data across accounts. You can find out more
 		Batches: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("stream", "The stream to publish messages to."),
-			docs.FieldCommon("partition_key", "A required key for partitioning messages.").SupportsInterpolation(false),
-			docs.FieldAdvanced("hash_key", "A optional hash key for partitioning messages.").SupportsInterpolation(false),
+			docs.FieldCommon("partition_key", "A required key for partitioning messages.").IsInterpolated(),
+			docs.FieldAdvanced("hash_key", "A optional hash key for partitioning messages.").IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			batch.FieldSpec(),
 		}.Merge(session.FieldSpecs()).Merge(retries.FieldSpecs()),

@@ -24,7 +24,7 @@ The functionality of this output is now supported by the ` + "[`file`](/docs/com
 In order for each message to create a new file the path must use function
 interpolations as described [here](/docs/configuration/interpolation#bloblang-queries).`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("path", "The file to write to, if the file does not yet exist it will be created.").SupportsInterpolation(false),
+			docs.FieldCommon("path", "The file to write to, if the file does not yet exist it will be created.").IsInterpolated(),
 		},
 		Categories: []Category{
 			CategoryLocal,

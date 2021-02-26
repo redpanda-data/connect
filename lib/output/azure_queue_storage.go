@@ -28,11 +28,11 @@ In order to set the ` + "`queue_name`" + ` you can use function interpolations d
 			docs.FieldCommon("storage_account", "The storage account to upload messages to. This field is ignored if `storage_connection_string` is set."),
 			docs.FieldCommon("storage_access_key", "The storage account access key. This field is ignored if `storage_connection_string` is set."),
 			docs.FieldCommon("storage_connection_string", "A storage account connection string. This field is required if `storage_account` and `storage_access_key` are not set."),
-			docs.FieldCommon("queue_name", "The name of the target Queue Storage queue.").SupportsInterpolation(false),
+			docs.FieldCommon("queue_name", "The name of the target Queue Storage queue.").IsInterpolated(),
 			docs.FieldAdvanced(
 				"ttl", "The TTL of each individual message as a duration string. Defaults to 0, meaning no retention period is set",
 				"60s", "5m", "36h",
-			).SupportsInterpolation(false),
+			).IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			batch.FieldSpec(),
 		},

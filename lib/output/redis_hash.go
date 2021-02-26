@@ -54,10 +54,10 @@ Where latter stages will overwrite matching field names of a former stage.`,
 			docs.FieldCommon(
 				"key", "The key for each message, function interpolations should be used to create a unique key per message.",
 				"${!meta(\"kafka_key\")}", "${!json(\"doc.id\")}", "${!count(\"msgs\")}",
-			).SupportsInterpolation(false),
+			).IsInterpolated(),
 			docs.FieldCommon("walk_metadata", "Whether all metadata fields of messages should be walked and added to the list of hash fields to set."),
 			docs.FieldCommon("walk_json_object", "Whether to walk each message as a JSON object and add each key/value pair to the list of hash fields to set."),
-			docs.FieldCommon("fields", "A map of key/value pairs to set as hash fields.").SupportsInterpolation(false),
+			docs.FieldCommon("fields", "A map of key/value pairs to set as hash fields.").IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		),
 		Categories: []Category{

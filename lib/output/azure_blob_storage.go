@@ -49,16 +49,16 @@ calculated per message of a batch.`,
 			docs.FieldCommon(
 				"container", "The container for uploading the messages to.",
 				`messages-${!timestamp("2006")}`,
-			).SupportsInterpolation(false),
+			).IsInterpolated(),
 			docs.FieldCommon(
 				"path", "The path of each message to upload.",
 				`${!count("files")}-${!timestamp_unix_nano()}.json`,
 				`${!meta("kafka_key")}.json`,
 				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
-			).SupportsInterpolation(false),
+			).IsInterpolated(),
 			docs.FieldAdvanced("blob_type", "Block and Append blobs are comprised of blocks, and each blob can support up to 50,000 blocks. The default value is `+\"`BLOCK`\"+`.`").HasOptions(
 				"BLOCK", "APPEND",
-			).SupportsInterpolation(false),
+			).IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		},
 		Categories: []Category{
@@ -95,16 +95,16 @@ calculated per message of a batch.`,
 			docs.FieldCommon(
 				"container", "The container for uploading the messages to.",
 				`messages-${!timestamp("2006")}`,
-			).SupportsInterpolation(false),
+			).IsInterpolated(),
 			docs.FieldCommon(
 				"path", "The path of each message to upload.",
 				`${!count("files")}-${!timestamp_unix_nano()}.json`,
 				`${!meta("kafka_key")}.json`,
 				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
-			).SupportsInterpolation(false),
+			).IsInterpolated(),
 			docs.FieldAdvanced("blob_type", "Block and Append blobs are comprised of blocks, and each blob can support up to 50,000 blocks. The default value is `+\"`BLOCK`\"+`.`").HasOptions(
 				"BLOCK", "APPEND",
-			).SupportsInterpolation(false),
+			).IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		},
 		Categories: []Category{

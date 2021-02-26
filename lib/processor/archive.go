@@ -48,7 +48,7 @@ of the batch.`,
 			docs.FieldCommon(
 				"path", "The path to set for each message in the archive (when applicable).",
 				"${!count(\"files\")}-${!timestamp_unix_nano()}.txt", "${!meta(\"kafka_key\")}-${!json(\"id\")}.json",
-			).SupportsInterpolation(false),
+			).IsInterpolated(),
 		},
 		Footnotes: `
 ## Formats

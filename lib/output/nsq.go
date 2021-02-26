@@ -23,7 +23,7 @@ batched messages these interpolations are performed per message part.`,
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("nsqd_tcp_address", "The address of the target NSQD server."),
-			docs.FieldCommon("topic", "The topic to publish to.").SupportsInterpolation(false),
+			docs.FieldCommon("topic", "The topic to publish to.").IsInterpolated(),
 			docs.FieldCommon("user_agent", "A user agent string to connect with."),
 			tls.FieldSpec(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),

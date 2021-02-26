@@ -84,7 +84,7 @@ pipeline:
 `,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("level", "The log level to use.").HasOptions("FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE", "ALL"),
-			docs.FieldCommon("fields", "A map of fields to print along with the log message.").SupportsInterpolation(true),
+			docs.FieldCommon("fields", "A map of fields to print along with the log message.").IsInterpolated(),
 			docs.FieldCommon(
 				"fields_mapping", "An optional [Bloblang mapping](/docs/guides/bloblang/about) that can be used to specify extra fields to add to the log. If log fields are also added with the `fields` field then those values will override matching keys from this mapping.",
 				`root.reason = "cus I wana"
@@ -92,7 +92,7 @@ root.id = this.id
 root.age = this.user.age.number()
 root.kafka_topic = meta("kafka_topic")`,
 			).AtVersion("3.40.0"),
-			docs.FieldCommon("message", "The message to print.").SupportsInterpolation(true),
+			docs.FieldCommon("message", "The message to print.").IsInterpolated(),
 		},
 	}
 }

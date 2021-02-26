@@ -32,7 +32,7 @@ Messages can be written to different files by using [interpolation functions](/d
 				"/tmp/data.txt",
 				"/tmp/${! timestamp_unix() }.txt",
 				`/tmp/${! json("document.id") }.json`,
-			).SupportsInterpolation(true).AtVersion("3.33.0"),
+			).IsInterpolated().AtVersion("3.33.0"),
 			codec.WriterDocs.AtVersion("3.33.0"),
 			docs.FieldDeprecated("delimiter"),
 		},

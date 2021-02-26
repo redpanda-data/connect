@@ -31,7 +31,7 @@ instead.`,
 				`${! json("doc.title") }`,
 				`${! meta("kafka_topic") }`,
 				`${! json("doc.id") }-${! meta("kafka_key") }`,
-			).SupportsInterpolation(true),
+			).IsInterpolated(),
 			docs.FieldCommon("condition", "A child condition to test the field contents against."),
 		},
 	}

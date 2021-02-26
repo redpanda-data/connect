@@ -58,7 +58,7 @@ output:
 			docs.FieldCommon(
 				"value", "The interpolated string to group based on.",
 				"${! meta(\"kafka_key\") }", "${! json(\"foo.bar\") }-${! meta(\"baz\") }",
-			).SupportsInterpolation(false),
+			).IsInterpolated(),
 		},
 		UsesBatches: true,
 	}

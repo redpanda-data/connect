@@ -40,8 +40,8 @@ allowing you to transfer data across accounts. You can find out more
 		Batches: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("url", "The URL of the target SQS queue."),
-			docs.FieldCommon("message_group_id", "An optional group ID to set for messages.").SupportsInterpolation(false),
-			docs.FieldCommon("message_deduplication_id", "An optional deduplication ID to set for messages.").SupportsInterpolation(false),
+			docs.FieldCommon("message_group_id", "An optional group ID to set for messages.").IsInterpolated(),
+			docs.FieldCommon("message_deduplication_id", "An optional deduplication ID to set for messages.").IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			batch.FieldSpec(),
 		}.Merge(session.FieldSpecs()).Merge(retries.FieldSpecs()),
@@ -81,8 +81,8 @@ allowing you to transfer data across accounts. You can find out more
 		Batches: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("url", "The URL of the target SQS queue."),
-			docs.FieldCommon("message_group_id", "An optional group ID to set for messages.").SupportsInterpolation(false),
-			docs.FieldCommon("message_deduplication_id", "An optional deduplication ID to set for messages.").SupportsInterpolation(false),
+			docs.FieldCommon("message_group_id", "An optional group ID to set for messages.").IsInterpolated(),
+			docs.FieldCommon("message_deduplication_id", "An optional deduplication ID to set for messages.").IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			batch.FieldSpec(),
 		}.Merge(session.FieldSpecs()).Merge(retries.FieldSpecs()),

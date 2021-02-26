@@ -74,7 +74,7 @@ allowing you to transfer data across accounts. You can find out more
 					"topic":        "${!meta(\"kafka_topic\")}",
 					"full_content": "${!content()}",
 				},
-			).SupportsInterpolation(false),
+			).IsInterpolated(),
 			docs.FieldCommon("json_map_columns", "A map of column keys to [field paths](/docs/configuration/field_paths) pointing to value data within messages.",
 				map[string]string{
 					"user":           "path.to.user",
@@ -159,7 +159,7 @@ allowing you to transfer data across accounts. You can find out more
 					"topic":        "${!meta(\"kafka_topic\")}",
 					"full_content": "${!content()}",
 				},
-			).SupportsInterpolation(false),
+			).IsInterpolated(),
 			docs.FieldCommon("json_map_columns", "A map of column keys to [field paths](/docs/configuration/field_paths) pointing to value data within messages.",
 				map[string]string{
 					"user":           "path.to.user",

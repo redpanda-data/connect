@@ -107,7 +107,7 @@ output:
 			docs.FieldCommon(
 				"args",
 				"A list of arguments for the query to be resolved for each message.",
-			).SupportsInterpolation(true),
+			).IsInterpolated(),
 			docs.FieldAdvanced(
 				"consistency",
 				"The consistency level to use.",

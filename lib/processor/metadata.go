@@ -27,8 +27,8 @@ All functionality of this processor has been superseded by the
 [bloblang](/docs/components/processors/bloblang) processor.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("operator", "The operator to apply to messages.").HasOptions("set", "delete", "delete_all", "delete_prefix"),
-			docs.FieldCommon("key", "The metadata key to target with the chosen operator.").SupportsInterpolation(true),
-			docs.FieldCommon("value", "The metadata value to use with the chosen operator.").SupportsInterpolation(true),
+			docs.FieldCommon("key", "The metadata key to target with the chosen operator.").IsInterpolated(),
+			docs.FieldCommon("value", "The metadata value to use with the chosen operator.").IsInterpolated(),
 			partsFieldSpec,
 		},
 	}

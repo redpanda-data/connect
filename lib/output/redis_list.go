@@ -26,7 +26,7 @@ you to create a unique key for each message.`,
 			docs.FieldCommon(
 				"key", "The key for each message, function interpolations can be optionally used to create a unique key per message.",
 				"benthos_list", "${!meta(\"kafka_key\")}", "${!json(\"doc.id\")}", "${!count(\"msgs\")}",
-			).SupportsInterpolation(false),
+			).IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		),
 		Categories: []Category{

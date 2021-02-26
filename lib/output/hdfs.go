@@ -28,7 +28,7 @@ described [here](/docs/configuration/interpolation#bloblang-queries).`,
 			docs.FieldCommon(
 				"path", "The path to upload messages as, interpolation functions should be used in order to generate unique file paths.",
 				`${!count("files")}-${!timestamp_unix_nano()}.txt`,
-			).SupportsInterpolation(false),
+			).IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			batch.FieldSpec(),
 		},

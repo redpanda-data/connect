@@ -111,7 +111,7 @@ pipeline:
 			docs.FieldCommon(
 				"args",
 				"A list of arguments for the query to be resolved for each message.",
-			).SupportsInterpolation(true),
+			).IsInterpolated(),
 			docs.FieldCommon(
 				"result_codec",
 				"A [codec](#result-codecs) to determine how resulting rows are converted into messages.",
