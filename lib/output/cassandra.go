@@ -39,9 +39,6 @@ func init() {
 			}
 			return newBatcherFromConf(conf.Cassandra.Batching, w, mgr, log, stats)
 		}),
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return sanitiseWithBatch(conf.Cassandra, conf.Cassandra.Batching)
-		},
 		Status:  docs.StatusBeta,
 		Batches: true,
 		Async:   true,

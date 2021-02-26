@@ -17,11 +17,42 @@ import (
 
 //------------------------------------------------------------------------------
 
+var processMapFields = docs.FieldSpecs{
+	docs.FieldCommon("conditions", "A list of [conditions](/docs/components/conditions/about) to test against messages. If any condition fails then the message will not be mapped and processed.",
+		[]interface{}{
+			map[string]interface{}{
+				"bloblang": "document.urls.length() > 0",
+			},
+		},
+	).Array().HasType(docs.FieldCondition),
+	docs.FieldCommon(
+		"premap", "A map of source to destination [paths](/docs/configuration/field_paths) used to create a new object from the original. An empty (or dot `.`) path indicates the root of the object. If a map source is not found then the message will not be processed, for optional sources use the field [`premap_optional`](#premap_optional).",
+		map[string]string{
+			".": "field.from.document",
+		},
+		map[string]string{
+			"foo":     "root.body.foo",
+			"bar.baz": "root.extra.baz",
+		},
+	),
+	docs.FieldCommon("premap_optional", "A map of optional source to destination [paths](/docs/configuration/field_paths) used to create a new object from the original."),
+	docs.FieldCommon("processors", "A list of processors to apply to mapped payloads.").Array().HasType(docs.FieldProcessor),
+	docs.FieldCommon(
+		"postmap", "A map of destination to source [paths](/docs/configuration/field_paths) used to map results from processing back into the original payload. An empty (or dot `.`) path indicates the root of the object. If a source is not found then the mapping is abandoned, for optional sources use the [`postmap_optional`](#postmap_optional) field.",
+		map[string]string{
+			"results.foo": ".",
+		},
+	),
+	docs.FieldCommon("postmap_optional", "A map of optional destination to source [paths](/docs/configuration/field_paths) used to map results from processing back into the original payload."),
+	partsFieldSpec,
+}
+
 func init() {
 	Constructors[TypeProcessMap] = TypeSpec{
 		constructor: func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 			return NewProcessMap(conf.ProcessMap, mgr, log, stats)
 		},
+		FieldSpecs: processMapFields,
 		Summary: `
 A processor that extracts and maps fields identified via
 [dot path](/docs/configuration/field_paths) from the original payload into a new
@@ -69,35 +100,6 @@ remain unchanged, the errors are logged, and the message is flagged as having
 failed, allowing you to use
 [standard processor error handling patterns](/docs/configuration/error_handling)
 for recovery.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("conditions", "A list of [conditions](/docs/components/conditions/about) to test against messages. If any condition fails then the message will not be mapped and processed.",
-				[]interface{}{
-					map[string]interface{}{
-						"bloblang": "document.urls.length() > 0",
-					},
-				},
-			),
-			docs.FieldCommon(
-				"premap", "A map of source to destination [paths](/docs/configuration/field_paths) used to create a new object from the original. An empty (or dot `.`) path indicates the root of the object. If a map source is not found then the message will not be processed, for optional sources use the field [`premap_optional`](#premap_optional).",
-				map[string]string{
-					".": "field.from.document",
-				},
-				map[string]string{
-					"foo":     "root.body.foo",
-					"bar.baz": "root.extra.baz",
-				},
-			),
-			docs.FieldCommon("premap_optional", "A map of optional source to destination [paths](/docs/configuration/field_paths) used to create a new object from the original."),
-			docs.FieldCommon("processors", "A list of processors to apply to mapped payloads."),
-			docs.FieldCommon(
-				"postmap", "A map of destination to source [paths](/docs/configuration/field_paths) used to map results from processing back into the original payload. An empty (or dot `.`) path indicates the root of the object. If a source is not found then the mapping is abandoned, for optional sources use the [`postmap_optional`](#postmap_optional) field.",
-				map[string]string{
-					"results.foo": ".",
-				},
-			),
-			docs.FieldCommon("postmap_optional", "A map of optional destination to source [paths](/docs/configuration/field_paths) used to map results from processing back into the original payload."),
-			partsFieldSpec,
-		},
 		Footnotes: `
 ## Examples
 
@@ -150,9 +152,6 @@ will get mapped into our original document:
   }
 }
 ` + "```" + ``,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return conf.ProcessMap.Sanitise()
-		},
 	}
 }
 

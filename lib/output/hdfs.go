@@ -20,9 +20,6 @@ Sends message parts as files to a HDFS directory.`,
 Each file is written with the path specified with the 'path' field, in order to
 have a different path for each object you should use function interpolations
 described [here](/docs/configuration/interpolation#bloblang-queries).`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return sanitiseWithBatch(conf.HDFS, conf.HDFS.Batching)
-		},
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("hosts", "A list of hosts to connect to.", "localhost:9000"),

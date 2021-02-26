@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/assert"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -121,11 +122,7 @@ This is a plugin without config.
 `
 
 	act := PluginDescriptions()
-	if exp != act {
-		t.Logf("Expected:\n%v\n", exp)
-		t.Logf("Actual:\n%v\n", act)
-		t.Error("Wrong descriptions")
-	}
+	assert.Equal(t, exp, act)
 }
 
 func TestYAMLPluginNilConf(t *testing.T) {

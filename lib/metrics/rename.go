@@ -41,7 +41,7 @@ renamed path into the label values.`,
 					},
 				},
 			),
-			docs.FieldCommon("child", "A child metric type, this is where renamed metrics will be routed."),
+			docs.FieldCommon("child", "A child metric type, this is where renamed metrics will be routed.").HasType(docs.FieldMetrics),
 		},
 		Description: `
 Metrics must be matched using dot notation even if the chosen output uses a
@@ -78,21 +78,6 @@ set via renaming.
 
 In order to see logs breaking down which metrics are registered and whether they
 are renamed enable logging at the TRACE level.`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			var childSanit interface{}
-			var err error
-			if conf.Rename.Child != nil {
-				if childSanit, err = SanitiseConfig(*conf.Rename.Child); err != nil {
-					return nil, err
-				}
-			} else {
-				childSanit = struct{}{}
-			}
-			return map[string]interface{}{
-				"by_regexp": conf.Rename.ByRegexp,
-				"child":     childSanit,
-			}, nil
-		},
 	}
 }
 

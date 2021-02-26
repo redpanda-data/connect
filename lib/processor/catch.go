@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -45,16 +46,7 @@ is useful for when it's possible to recover failed messages, or when special
 actions (such as logging/metrics) are required before dropping them.
 
 More information about error handing can be found [here](/docs/configuration/error_handling).`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			var err error
-			procConfs := make([]interface{}, len(conf.Catch))
-			for i, pConf := range conf.Catch {
-				if procConfs[i], err = SanitiseConfig(pConf); err != nil {
-					return nil, err
-				}
-			}
-			return procConfs, nil
-		},
+		Config: docs.FieldComponent().Array().HasType(docs.FieldProcessor),
 	}
 }
 

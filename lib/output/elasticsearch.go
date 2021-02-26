@@ -31,9 +31,6 @@ sending batched messages these interpolations are performed per message part.
 It's possible to enable AWS connectivity with this output using the ` + "`aws`" + `
 fields. However, you may need to set ` + "`sniff` and `healthcheck`" + ` to
 false for connections to succeed.`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return sanitiseWithBatch(conf.Elasticsearch, conf.Elasticsearch.Batching)
-		},
 		Async:   true,
 		Batches: true,
 		FieldSpecs: docs.FieldSpecs{

@@ -31,9 +31,6 @@ By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](/docs/guides/aws).`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return sanitiseWithBatch(conf.AWSKinesis, conf.AWSKinesis.Batching)
-		},
 		Async:   true,
 		Batches: true,
 		FieldSpecs: docs.FieldSpecs{
@@ -70,9 +67,6 @@ By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](/docs/guides/aws).`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return sanitiseWithBatch(conf.Kinesis, conf.Kinesis.Batching)
-		},
 		Async:   true,
 		Batches: true,
 		FieldSpecs: docs.FieldSpecs{

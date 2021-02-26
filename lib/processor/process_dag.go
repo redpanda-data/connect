@@ -88,18 +88,11 @@ process_dag:
 
 With this config the DAG would determine that the children foo and bar can be
 executed in parallel, and once they are both finished we may proceed onto baz.`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			sanitChildren := map[string]interface{}{}
-			for k, v := range conf.ProcessDAG {
-				sanit, err := v.Sanitise()
-				if err != nil {
-					return nil, err
-				}
-				sanit["dependencies"] = v.Dependencies
-				sanitChildren[k] = sanit
-			}
-			return sanitChildren, nil
-		},
+		Config: docs.FieldComponent().Map().WithChildren(
+			docs.FieldDeprecated("premap"),
+			docs.FieldDeprecated("processors").Array().HasType(docs.FieldProcessor),
+			docs.FieldDeprecated("postmap"),
+		),
 	}
 }
 

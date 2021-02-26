@@ -66,7 +66,7 @@ by_regexp:
 A child metric type, this is where renamed metrics will be routed.
 
 
-Type: `object`  
+Type: `metrics`  
 Default: `{}`  
 
 ## Examples

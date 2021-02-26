@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 	"github.com/google/go-cmp/cmp"
+	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -73,7 +73,17 @@ can read about these patterns [here](/docs/configuration/error_handling).`,
 		FieldSpecs: append(docs.FieldSpecs{
 			docs.FieldCommon("parallel", "When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent within a single request."),
 			docs.FieldDeprecated("max_parallel"),
-			docs.FieldDeprecated("request"),
+			docs.FieldDeprecated("request").OmitWhen(func(v interface{}) bool {
+				defaultBytes, err := yaml.Marshal(client.NewConfig())
+				if err != nil {
+					return false
+				}
+				var iDefault interface{}
+				if err = yaml.Unmarshal(defaultBytes, &iDefault); err != nil {
+					return false
+				}
+				return cmp.Equal(v, iDefault)
+			}),
 		}, client.FieldSpecs()...),
 		Examples: []docs.AnnotatedExample{
 			{
@@ -92,23 +102,6 @@ pipeline:
         result_map: 'root.repo.status = this'
 `,
 			},
-		},
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			cBytes, err := json.Marshal(conf.HTTP)
-			if err != nil {
-				return nil, err
-			}
-
-			hashMap := map[string]interface{}{}
-			if err = json.Unmarshal(cBytes, &hashMap); err != nil {
-				return nil, err
-			}
-
-			if cmp.Equal(conf.HTTP.Client, client.NewConfig()) {
-				delete(hashMap, "request")
-			}
-
-			return hashMap, nil
 		},
 	}
 }

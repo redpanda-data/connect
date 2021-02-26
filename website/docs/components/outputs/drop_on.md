@@ -60,7 +60,7 @@ back_pressure: 1m
 A child output.
 
 
-Type: `object`  
+Type: `output`  
 Default: `{}`  
 
 ## Examples

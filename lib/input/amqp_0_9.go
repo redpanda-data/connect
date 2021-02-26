@@ -48,9 +48,6 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return sanitiseWithBatch(conf.AMQP09, conf.AMQP09.Batching)
-		},
 		Categories: []Category{
 			CategoryServices,
 		},

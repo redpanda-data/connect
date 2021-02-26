@@ -38,7 +38,14 @@ For each switch case a [Bloblang query](/docs/guides/bloblang/about/) is checked
 When a switch processor executes on a [batch of messages](/docs/configuration/batching/) they are checked individually and can be matched independently against cases. During processing the messages matched against a case are processed as a batch, although the ordering of messages during case processing cannot be guaranteed to match the order as received.
 
 At the end of switch processing the resulting batch will follow the same ordering as the batch was received. If any child processors have split or otherwise grouped messages this grouping will be lost as the result of a switch is always a single batch. In order to perform conditional grouping and/or splitting use the [` + "`group_by`" + ` processor](/docs/components/processors/group_by/).`,
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().Array().WithChildren(
+			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v interface{}) bool {
+				m, ok := v.(map[string]interface{})
+				if !ok {
+					return false
+				}
+				return m["type"] == "static" && m["static"] == true
+			}),
 			docs.FieldCommon(
 				"check",
 				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should have the processors of this case executed on it. If left empty the case always passes. If the check mapping throws an error the message will be flagged [as having failed](/docs/configuration/error_handling) and will not be tested against any other cases.",
@@ -48,12 +55,12 @@ At the end of switch processing the resulting batch will follow the same orderin
 			docs.FieldCommon(
 				"processors",
 				"A list of [processors](/docs/components/processors/about/) to execute on a message.",
-			).HasDefault([]interface{}{}),
+			).HasDefault([]interface{}{}).Array().HasType(docs.FieldProcessor),
 			docs.FieldAdvanced(
 				"fallthrough",
 				"Indicates whether, if this case passes for a message, the next case should also be executed.",
 			).HasDefault(false),
-		},
+		),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title: "I Hate George",
@@ -79,40 +86,6 @@ pipeline:
             - bloblang: root = deleted()
 `,
 			},
-		},
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			switchSlice := []interface{}{}
-			deprecated := false
-			for _, switchCase := range conf.Switch {
-				if !isDefaultCaseCond(switchCase.Condition) {
-					deprecated = true
-					break
-				}
-			}
-			for _, switchCase := range conf.Switch {
-				var sanProcs []interface{}
-				for _, proc := range switchCase.Processors {
-					sanProc, err := SanitiseConfig(proc)
-					if err != nil {
-						return nil, err
-					}
-					sanProcs = append(sanProcs, sanProc)
-				}
-				sanit := map[string]interface{}{
-					"check":       switchCase.Check,
-					"processors":  sanProcs,
-					"fallthrough": switchCase.Fallthrough,
-				}
-				if deprecated {
-					sanCond, err := condition.SanitiseConfig(switchCase.Condition)
-					if err != nil {
-						return nil, err
-					}
-					sanit["condition"] = sanCond
-				}
-				switchSlice = append(switchSlice, sanit)
-			}
-			return switchSlice, nil
 		},
 	}
 }

@@ -35,32 +35,9 @@ the ` + "`else_processors`" + ` are applied.
 In order to conditionally process each message of a batch individually use this
 processor with the ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("condition", "The [`condition`](/docs/components/conditions/about) to check against messages."),
-			docs.FieldCommon("processors", "A list of processors to apply when the condition passes."),
-			docs.FieldCommon("else_processors", "A list of processors to apply when the condition does not pass."),
-		},
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			condSanit, err := condition.SanitiseConfig(conf.Conditional.Condition)
-			if err != nil {
-				return nil, err
-			}
-			procConfs := make([]interface{}, len(conf.Conditional.Processors))
-			for i, pConf := range conf.Conditional.Processors {
-				if procConfs[i], err = SanitiseConfig(pConf); err != nil {
-					return nil, err
-				}
-			}
-			elseProcConfs := make([]interface{}, len(conf.Conditional.ElseProcessors))
-			for i, pConf := range conf.Conditional.ElseProcessors {
-				if elseProcConfs[i], err = SanitiseConfig(pConf); err != nil {
-					return nil, err
-				}
-			}
-			return map[string]interface{}{
-				"condition":       condSanit,
-				"processors":      procConfs,
-				"else_processors": elseProcConfs,
-			}, nil
+			docs.FieldCommon("condition", "The [`condition`](/docs/components/conditions/about) to check against messages.").HasType(docs.FieldCondition),
+			docs.FieldCommon("processors", "A list of processors to apply when the condition passes.").Array().HasType(docs.FieldProcessor),
+			docs.FieldCommon("else_processors", "A list of processors to apply when the condition does not pass.").Array().HasType(docs.FieldProcessor),
 		},
 	}
 }

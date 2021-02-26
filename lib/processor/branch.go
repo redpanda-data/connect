@@ -19,6 +19,41 @@ import (
 
 //------------------------------------------------------------------------------
 
+var branchFields = docs.FieldSpecs{
+	docs.FieldCommon(
+		"request_map",
+		"A [Bloblang mapping](/docs/guides/bloblang/about) that describes how to create a request payload suitable for the child processors of this branch. If left empty then the branch will begin with an exact copy of the origin message (including metadata).",
+		`root = {
+	"id": this.doc.id,
+	"content": this.doc.body.text
+}`,
+		`root = if this.type == "foo" {
+	this.foo.request
+} else {
+	deleted()
+}`,
+	).HasDefault(""),
+	docs.FieldCommon(
+		"processors",
+		"A list of processors to apply to mapped requests. When processing message batches the resulting batch must match the size and ordering of the input batch, therefore filtering, grouping should not be performed within these processors.",
+	).Array().HasType(docs.FieldProcessor).HasDefault([]interface{}{}),
+	docs.FieldCommon(
+		"result_map",
+		"A [Bloblang mapping](/docs/guides/bloblang/about) that describes how the resulting messages from branched processing should be mapped back into the original payload. If left empty the origin message will remain unchanged (including metadata).",
+		`meta foo_code = meta("code")
+root.foo_result = this`,
+		`meta = meta()
+root.bar.body = this.body
+root.bar.id = this.user.id`,
+		`root.raw_result = content().string()`,
+		`root.enrichments.foo = if errored() {
+	throw(error())
+} else {
+	this
+}`,
+	).HasDefault(""),
+}
+
 func init() {
 	Constructors[TypeBranch] = TypeSpec{
 		Status:      docs.StatusBeta,
@@ -134,43 +169,7 @@ pipeline:
 `,
 			},
 		},
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon(
-				"request_map",
-				"A [Bloblang mapping](/docs/guides/bloblang/about) that describes how to create a request payload suitable for the child processors of this branch. If left empty then the branch will begin with an exact copy of the origin message (including metadata).",
-				`root = {
-	"id": this.doc.id,
-	"content": this.doc.body.text
-}`,
-				`root = if this.type == "foo" {
-	this.foo.request
-} else {
-	deleted()
-}`,
-			),
-			docs.FieldCommon(
-				"processors",
-				"A list of processors to apply to mapped requests. When processing message batches the resulting batch must match the size and ordering of the input batch, therefore filtering, grouping should not be performed within these processors.",
-			),
-			docs.FieldCommon(
-				"result_map",
-				"A [Bloblang mapping](/docs/guides/bloblang/about) that describes how the resulting messages from branched processing should be mapped back into the original payload. If left empty the origin message will remain unchanged (including metadata).",
-				`meta foo_code = meta("code")
-root.foo_result = this`,
-				`meta = meta()
-root.bar.body = this.body
-root.bar.id = this.user.id`,
-				`root.raw_result = content().string()`,
-				`root.enrichments.foo = if errored() {
-	throw(error())
-} else {
-	this
-}`,
-			),
-		},
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return conf.Branch.Sanitise()
-		},
+		FieldSpecs: branchFields,
 	}
 }
 

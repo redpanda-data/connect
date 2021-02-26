@@ -42,19 +42,6 @@ It is possible to batch up messages sent from this buffer using a
 				}, batch.FieldSpec().Children...)...,
 			),
 		},
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			bSanit, err := batch.SanitisePolicyConfig(batch.PolicyConfig(conf.Memory.BatchPolicy.PolicyConfig))
-			if err != nil {
-				return nil, err
-			}
-			if bSanitObj, ok := bSanit.(map[string]interface{}); ok {
-				bSanitObj["enabled"] = conf.Memory.BatchPolicy.Enabled
-			}
-			return map[string]interface{}{
-				"limit":        conf.Memory.Limit,
-				"batch_policy": bSanit,
-			}, nil
-		},
 	}
 }
 

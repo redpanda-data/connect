@@ -30,9 +30,6 @@ table name. Offsets will then be tracked per ` + "`client_id`" + ` per
 Use the ` + "`batching`" + ` fields to configure an optional
 [batching policy](/docs/configuration/batching#batch-policy). Any other batching
 mechanism will stall with this input due its sequential transaction model.`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return sanitiseWithBatch(conf.Kinesis, conf.Kinesis.Batching)
-		},
 		FieldSpecs: append(
 			append(docs.FieldSpecs{
 				docs.FieldCommon("stream", "The Kinesis stream to consume from."),

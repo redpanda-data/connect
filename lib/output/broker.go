@@ -96,30 +96,8 @@ outputs.`,
 				"max_in_flight",
 				"The maximum number of messages to dispatch at any given time. Only relevant for `fan_out`, `fan_out_sequential` brokers.",
 			),
-			docs.FieldCommon("outputs", "A list of child outputs to broker."),
+			docs.FieldCommon("outputs", "A list of child outputs to broker.").Array().HasType(docs.FieldOutput),
 			batch.FieldSpec(),
-		},
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			nestedOutputs := conf.Broker.Outputs
-			outSlice := []interface{}{}
-			for _, output := range nestedOutputs {
-				sanOutput, err := SanitiseConfig(output)
-				if err != nil {
-					return nil, err
-				}
-				outSlice = append(outSlice, sanOutput)
-			}
-			batchSanit, err := batch.SanitisePolicyConfig(conf.Broker.Batching)
-			if err != nil {
-				return nil, err
-			}
-			return map[string]interface{}{
-				"copies":        conf.Broker.Copies,
-				"pattern":       conf.Broker.Pattern,
-				"max_in_flight": conf.Broker.MaxInFlight,
-				"outputs":       outSlice,
-				"batching":      batchSanit,
-			}, nil
 		},
 		Categories: []Category{
 			CategoryUtility,

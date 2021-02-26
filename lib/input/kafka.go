@@ -54,9 +54,6 @@ This input adds the following metadata fields to each message:
 The field ` + "`kafka_lag`" + ` is the calculated difference between the high water mark offset of the partition at the time of ingestion and the current message offset.
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return sanitiseWithBatch(conf.Kafka, conf.Kafka.Batching)
-		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(
 				"addresses", "A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.",

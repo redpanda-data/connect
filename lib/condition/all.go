@@ -28,12 +28,6 @@ all:
     operator: contains
     arg: foo
 ` + "```" + ``,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			if conf.All.Config == nil {
-				return struct{}{}, nil
-			}
-			return SanitiseConfig(*conf.All.Config)
-		},
 	}
 }
 

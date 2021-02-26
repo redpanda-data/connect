@@ -1,4 +1,4 @@
-package pipeline
+package pipeline_test
 
 import (
 	"encoding/json"
@@ -9,9 +9,12 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/pipeline"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 func TestSanitise(t *testing.T) {
@@ -24,11 +27,11 @@ func TestSanitise(t *testing.T) {
 		`"threads":10` +
 		`}`
 
-	conf := NewConfig()
+	conf := pipeline.NewConfig()
 	conf.Threads = 10
 	conf.Processors = nil
 
-	if actObj, err = SanitiseConfig(conf); err != nil {
+	if actObj, err = pipeline.SanitiseConfig(conf); err != nil {
 		t.Fatal(err)
 	}
 	if act, err = json.Marshal(actObj); err != nil {
@@ -69,7 +72,7 @@ func TestSanitise(t *testing.T) {
 	proc.Archive.Path = "nope"
 	conf.Processors = append(conf.Processors, proc)
 
-	if actObj, err = SanitiseConfig(conf); err != nil {
+	if actObj, err = pipeline.SanitiseConfig(conf); err != nil {
 		t.Fatal(err)
 	}
 	if act, err = json.Marshal(actObj); err != nil {
@@ -90,10 +93,10 @@ func TestProcCtor(t *testing.T) {
 	secondProc.InsertPart.Content = "1"
 	secondProc.InsertPart.Index = 0
 
-	conf := NewConfig()
+	conf := pipeline.NewConfig()
 	conf.Processors = append(conf.Processors, firstProc)
 
-	pipe, err := New(
+	pipe, err := pipeline.New(
 		conf, nil,
 		log.Noop(),
 		metrics.Noop(),

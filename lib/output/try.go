@@ -3,6 +3,7 @@ package output
 import (
 	"fmt"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/broker"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -69,20 +70,10 @@ However, depending on the output and the error returned it is sometimes not
 possible to determine the individual messages that failed, in which case the
 whole batch is passed to the next tier in order to preserve at-least-once
 guarantees.`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			outSlice := []interface{}{}
-			for _, output := range conf.Try {
-				sanOutput, err := SanitiseConfig(output)
-				if err != nil {
-					return nil, err
-				}
-				outSlice = append(outSlice, sanOutput)
-			}
-			return outSlice, nil
-		},
 		Categories: []Category{
 			CategoryUtility,
 		},
+		config: docs.FieldComponent().Array().HasType(docs.FieldOutput),
 	}
 }
 

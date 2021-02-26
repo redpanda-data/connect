@@ -1,10 +1,13 @@
-package config
+package config_test
 
 import (
 	"reflect"
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/Jeffail/benthos/v3/lib/config"
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 //------------------------------------------------------------------------------
@@ -97,11 +100,11 @@ pipeline:
 
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
-			config := New()
-			if err := yaml.Unmarshal([]byte(test.conf), &config); err != nil {
+			conf := config.New()
+			if err := yaml.Unmarshal([]byte(test.conf), &conf); err != nil {
 				tt.Fatal(err)
 			}
-			lints, err := Lint([]byte(test.conf), config)
+			lints, err := config.Lint([]byte(test.conf), conf)
 			if err != nil {
 				tt.Fatal(err)
 			}

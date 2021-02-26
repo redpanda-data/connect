@@ -36,7 +36,7 @@ Write messages to an Apache Pulsar server.`,
 		Categories: []string{
 			string(output.CategoryServices),
 		},
-		Fields: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldCommon("url",
 				"A URL to connect to.",
 				"pulsar://localhost:6650",
@@ -45,7 +45,7 @@ Write messages to an Apache Pulsar server.`,
 			),
 			docs.FieldCommon("topic", "A topic to publish to."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-		},
+		),
 	})
 }
 

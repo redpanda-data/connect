@@ -42,7 +42,7 @@ A metadata key `benthos_read_until` containing the value `final` is added to the
 The child input to consume from.
 
 
-Type: `object`  
+Type: `input`  
 Default: `{}`  
 
 ### `check`

@@ -110,7 +110,10 @@ output:
 				"foouser:foopassword@tcp(localhost:3306)/foodb",
 				"postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable",
 			),
-			docs.FieldDeprecated("dsn"),
+			docs.FieldDeprecated("dsn").OmitWhen(func(v interface{}) bool {
+				s, ok := v.(string)
+				return ok && len(s) == 0
+			}),
 			docs.FieldCommon(
 				"query", "The query to run against the database.",
 				"INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);",

@@ -56,9 +56,6 @@ properties:
   device: '${! json("device") }'
   timestamp: '${! json("timestamp") }'
 ` + "```" + ``,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return sanitiseWithBatch(conf.AzureTableStorage, conf.AzureTableStorage.Batching)
-		},
 		Async:   true,
 		Batches: true,
 		FieldSpecs: docs.FieldSpecs{
@@ -102,11 +99,8 @@ properties:
 		constructor: fromSimpleConstructor(newDeprecatedTableStorage),
 		Status:      docs.StatusDeprecated,
 		Summary:     "This component has been renamed to [`azure_table_storage`](/docs/components/outputs/azure_table_storage).",
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return sanitiseWithBatch(conf.TableStorage, conf.TableStorage.Batching)
-		},
-		Async:   true,
-		Batches: true,
+		Async:       true,
+		Batches:     true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(
 				"storage_account",

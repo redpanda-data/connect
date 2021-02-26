@@ -34,8 +34,7 @@ var (
 // TypeSpec is a struct containing constructors, markdown descriptions and an
 // optional sanitisation function for each input type.
 type TypeSpec struct {
-	constructor        ConstructorFunc
-	sanitiseConfigFunc func(conf Config) (interface{}, error)
+	constructor ConstructorFunc
 
 	Status      docs.Status
 	Version     string
@@ -60,7 +59,7 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
 			Examples:    v.Examples,
-			Fields:      v.FieldSpecs,
+			Config:      docs.FieldComponent().WithChildren(v.FieldSpecs...),
 			Status:      v.Status,
 			Version:     v.Version,
 		}
@@ -371,34 +370,18 @@ func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	if sfunc := Constructors[conf.Type].sanitiseConfigFunc; sfunc != nil {
-		if outputMap[conf.Type], err = sfunc(conf); err != nil {
-			return nil, err
-		}
-	}
 	if spec, exists := pluginSpecs[conf.Type]; exists {
 		if spec.confSanitiser != nil {
 			outputMap["plugin"] = spec.confSanitiser(conf.Plugin)
 		}
 	}
-	if removeDeprecated {
-		Constructors[conf.Type].FieldSpecs.RemoveDeprecated(outputMap[conf.Type])
+	if err = docs.SanitiseComponentConfig(
+		docs.TypeInput,
+		(map[string]interface{})(outputMap),
+		docs.ShouldDropDeprecated(removeDeprecated),
+	); err != nil {
+		return nil, err
 	}
-
-	if len(conf.Processors) == 0 {
-		return outputMap, nil
-	}
-	procSlice := []interface{}{}
-	for _, proc := range conf.Processors {
-		var procSanitised interface{}
-		procSanitised, err = proc.Sanitised(removeDeprecated)
-		if err != nil {
-			return nil, err
-		}
-		procSlice = append(procSlice, procSanitised)
-	}
-	outputMap["processors"] = procSlice
-
 	return outputMap, nil
 }
 

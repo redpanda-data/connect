@@ -92,7 +92,7 @@ type ComponentSpec struct {
 	Examples []AnnotatedExample
 
 	// A summary of each field in the component configuration.
-	Fields FieldSpecs
+	Config FieldSpec
 
 	// Version is the Benthos version this component was introduced.
 	Version string
@@ -291,9 +291,9 @@ func (c *ComponentSpec) createConfigs(root string, fullConfigExample interface{}
 	isEmptyRootArray := isRootArray && len(rootArray) == 0
 
 	var err error
-	if len(c.Fields) > 0 && !isEmptyRootArray {
+	if len(c.Config.Children) > 0 && !isEmptyRootArray {
 		var advancedConfig interface{}
-		advancedConfig, err = c.Fields.ConfigAdvanced(fullConfigExample)
+		advancedConfig, err = c.Config.Children.ConfigAdvanced(fullConfigExample)
 		if err == nil {
 			tmp := map[string]interface{}{
 				c.Name: advancedConfig,
@@ -307,7 +307,7 @@ func (c *ComponentSpec) createConfigs(root string, fullConfigExample interface{}
 		}
 		var commonConfig interface{}
 		if err == nil {
-			commonConfig, err = c.Fields.ConfigCommon(advancedConfig)
+			commonConfig, err = c.Config.Children.ConfigCommon(advancedConfig)
 		}
 		if err == nil {
 			tmp := map[string]interface{}{
@@ -324,7 +324,7 @@ func (c *ComponentSpec) createConfigs(root string, fullConfigExample interface{}
 	if err != nil {
 		panic(err)
 	}
-	if isEmptyRootArray || len(c.Fields) == 0 {
+	if isEmptyRootArray || len(c.Config.Children) == 0 {
 		tmp := map[string]interface{}{
 			c.Name: fullConfigExample,
 		}
@@ -417,8 +417,10 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 			flattenedFields = append(flattenedFields, newV)
 			if len(v.Children) > 0 {
 				newPath := path + v.Name
-				if newV.Type == FieldArray {
+				if newV.IsArray {
 					newPath = newPath + "[]"
+				} else if newV.IsMap {
+					newPath = newPath + ".<name>"
 				}
 				tmpMissing, tmpDuplicate := walkFields(newPath+".", gConf.S(v.Name), v.Children)
 				missingFields = append(missingFields, tmpMissing...)
@@ -430,12 +432,12 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 		}
 		return missingFields, duplicateFields
 	}
-	if len(c.Fields) > 0 {
+	if len(c.Config.Children) > 0 {
 		rootPath := ""
 		if _, isArray := gConf.Data().([]interface{}); isArray {
 			rootPath = "[]."
 		}
-		if missing, duplicates := walkFields(rootPath, gConf, c.Fields); len(missing) > 0 {
+		if missing, duplicates := walkFields(rootPath, gConf, c.Config.Children); len(missing) > 0 {
 			return nil, fmt.Errorf("spec missing fields: %v", missing)
 		} else if len(duplicates) > 0 {
 			return nil, fmt.Errorf("spec duplicate fields: %v", duplicates)
@@ -448,7 +450,7 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 		}
 
 		// TODO: Find another way to verify array element fields
-		if !strings.Contains(v.Name, "[].") && !gConf.ExistsP(v.Name) {
+		if !strings.Contains(v.Name, "[].") && !strings.Contains(v.Name, "<name>") && !gConf.ExistsP(v.Name) {
 			return nil, fmt.Errorf("unrecognised field '%v'", v.Name)
 		}
 
@@ -457,7 +459,7 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 			defaultValue = gConf.Path(v.Name).Data()
 		}
 		if defaultValue == nil {
-			return nil, fmt.Errorf("field '%v' not found in config example", v.Name)
+			return nil, fmt.Errorf("field '%v' not found in config example and no default value was provided in the spec", v.Name)
 		}
 
 		defaultValueStr := gabs.Wrap(defaultValue).String()
@@ -466,12 +468,20 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 		}
 
 		fieldType := v.Type
+		isArray := v.IsArray
 		if len(fieldType) == 0 {
 			if len(v.Examples) > 0 {
-				fieldType = GetFieldType(v.Examples[0])
+				fieldType, isArray = getFieldTypeFromInterface(v.Examples[0])
 			} else {
-				fieldType = GetFieldType(defaultValue)
+				fieldType, isArray = getFieldTypeFromInterface(defaultValue)
 			}
+		}
+		fieldTypeStr := string(fieldType)
+		if isArray {
+			fieldTypeStr = "array"
+		}
+		if v.IsMap {
+			fieldTypeStr = "object"
 		}
 
 		var examples []string
@@ -491,7 +501,7 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 
 		fieldCtx := fieldContext{
 			Name:             v.Name,
-			Type:             string(fieldType),
+			Type:             fieldTypeStr,
 			Description:      v.Description,
 			Default:          defaultValueStr,
 			Advanced:         v.Advanced,

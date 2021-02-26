@@ -43,7 +43,7 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 			Summary:     v.Summary,
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
-			Fields:      v.FieldSpecs,
+			Config:      docs.FieldComponent().WithChildren(v.FieldSpecs...),
 			Status:      v.Status,
 			Version:     v.Version,
 		}
@@ -143,8 +143,12 @@ func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
 			outputMap["plugin"] = spec.confSanitiser(conf.Plugin)
 		}
 	}
-	if removeDeprecated {
-		Constructors[conf.Type].FieldSpecs.RemoveDeprecated(outputMap[conf.Type])
+	if err = docs.SanitiseComponentConfig(
+		docs.TypeCache,
+		(map[string]interface{})(outputMap),
+		docs.ShouldDropDeprecated(removeDeprecated),
+	); err != nil {
+		return nil, err
 	}
 	return outputMap, nil
 }

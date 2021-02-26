@@ -86,7 +86,7 @@ The maximum number of parallel message batches to have in flight at any given ti
 						},
 					},
 				},
-			).HasType(docs.FieldArray).WithChildren(
+			).Array().WithChildren(
 				docs.FieldCommon(
 					"check",
 					"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should be routed to the case output. If left empty the case always passes.",
@@ -95,13 +95,20 @@ The maximum number of parallel message batches to have in flight at any given ti
 				).HasDefault(""),
 				docs.FieldCommon(
 					"output", "An [output](/docs/components/outputs/about/) for messages that pass the check to be routed to.",
-				).HasDefault(map[string]interface{}{}),
+				).HasDefault(map[string]interface{}{}).HasType(docs.FieldOutput),
 				docs.FieldAdvanced(
 					"continue",
 					"Indicates whether, if this case passes for a message, the next case should also be tested.",
 				).HasDefault(false),
 			),
-			docs.FieldDeprecated("outputs"),
+			docs.FieldDeprecated("outputs").Array().WithChildren(
+				docs.FieldDeprecated("condition").HasType(docs.FieldCondition),
+				docs.FieldDeprecated("fallthrough"),
+				docs.FieldDeprecated("output").HasType(docs.FieldOutput),
+			).OmitWhen(func(v interface{}) bool {
+				arr, ok := v.([]interface{})
+				return ok && len(arr) == 0
+			}),
 		},
 		Categories: []Category{
 			CategoryUtility,
@@ -163,48 +170,6 @@ output:
             topic: that_i_dont_want_to_hang_with
 `,
 			},
-		},
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			m := map[string]interface{}{
-				"retry_until_success": conf.Switch.RetryUntilSuccess,
-				"strict_mode":         conf.Switch.StrictMode,
-				"max_in_flight":       conf.Switch.MaxInFlight,
-			}
-			casesSlice := []interface{}{}
-			for _, c := range conf.Switch.Cases {
-				sanOutput, err := SanitiseConfig(c.Output)
-				if err != nil {
-					return nil, err
-				}
-				sanit := map[string]interface{}{
-					"check":    c.Check,
-					"output":   sanOutput,
-					"continue": c.Continue,
-				}
-				casesSlice = append(casesSlice, sanit)
-			}
-			m["cases"] = casesSlice
-			if len(conf.Switch.Outputs) > 0 {
-				outSlice := []interface{}{}
-				for _, out := range conf.Switch.Outputs {
-					sanOutput, err := SanitiseConfig(out.Output)
-					if err != nil {
-						return nil, err
-					}
-					var sanCond interface{}
-					if sanCond, err = condition.SanitiseConfig(out.Condition); err != nil {
-						return nil, err
-					}
-					sanit := map[string]interface{}{
-						"output":      sanOutput,
-						"fallthrough": out.Fallthrough,
-						"condition":   sanCond,
-					}
-					outSlice = append(outSlice, sanit)
-				}
-				m["outputs"] = outSlice
-			}
-			return m, nil
 		},
 	}
 }

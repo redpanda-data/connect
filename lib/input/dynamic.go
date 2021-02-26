@@ -45,24 +45,8 @@ already exists it will be changed.`,
 		Categories: []Category{
 			CategoryUtility,
 		},
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			nestedInputs := conf.Dynamic.Inputs
-			inMap := map[string]interface{}{}
-			for k, input := range nestedInputs {
-				sanInput, err := SanitiseConfig(input)
-				if err != nil {
-					return nil, err
-				}
-				inMap[k] = sanInput
-			}
-			return map[string]interface{}{
-				"inputs":  inMap,
-				"prefix":  conf.Dynamic.Prefix,
-				"timeout": conf.Dynamic.Timeout,
-			}, nil
-		},
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("inputs", "A map of inputs to statically create."),
+			docs.FieldCommon("inputs", "A map of inputs to statically create.").Map().HasType(docs.FieldInput),
 			docs.FieldCommon("prefix", "A path prefix for HTTP endpoints that are registered."),
 			docs.FieldCommon("timeout", "The server side timeout of HTTP requests."),
 		},

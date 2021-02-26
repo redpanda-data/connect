@@ -90,9 +90,6 @@ output:
         - archive:
             format: json_array
 ` + "```" + ``,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return sanitiseWithBatch(conf.AWSS3, conf.AWSS3.Batching)
-		},
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("bucket", "The bucket to upload messages to."),
@@ -207,9 +204,6 @@ output:
         - archive:
             format: json_array
 ` + "```" + ``,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return sanitiseWithBatch(conf.S3, conf.S3.Batching)
-		},
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("bucket", "The bucket to upload messages to."),

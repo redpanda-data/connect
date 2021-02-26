@@ -34,9 +34,6 @@ You can access these metadata fields using
 			CategoryServices,
 			CategoryGCP,
 		},
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return sanitiseWithBatch(conf.GCPPubSub, conf.GCPPubSub.Batching)
-		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("project", "The project ID of the target subscription."),
 			docs.FieldCommon("subscription", "The target subscription ID."),

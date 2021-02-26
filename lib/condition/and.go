@@ -28,16 +28,6 @@ and:
       operator: contains
       arg: bar
 ` + "```" + ``,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			var err error
-			condConfs := make([]interface{}, len(conf.And))
-			for i, cConf := range conf.And {
-				if condConfs[i], err = SanitiseConfig(cConf); err != nil {
-					return nil, err
-				}
-			}
-			return condConfs, nil
-		},
 	}
 }
 

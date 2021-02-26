@@ -15,6 +15,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/google/go-cmp/cmp"
+	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -49,37 +50,25 @@ input:
 `,
 			},
 		},
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			var inputSanit interface{} = struct{}{}
-			if conf.ReadUntil.Input != nil {
-				var err error
-				if inputSanit, err = SanitiseConfig(*conf.ReadUntil.Input); err != nil {
-					return nil, err
-				}
-			}
-			iSanit := map[string]interface{}{
-				"input":         inputSanit,
-				"check":         conf.ReadUntil.Check,
-				"restart_input": conf.ReadUntil.Restart,
-			}
-			if !isDefaultCond(conf.ReadUntil.Condition) {
-				condSanit, err := condition.SanitiseConfig(conf.ReadUntil.Condition)
-				if err != nil {
-					return nil, err
-				}
-				iSanit["condition"] = condSanit
-			}
-			return iSanit, nil
-		},
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("input", "The child input to consume from."),
+			docs.FieldCommon("input", "The child input to consume from.").HasType(docs.FieldInput),
 			docs.FieldCommon(
 				"check",
 				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether the input should now be closed.",
 				`this.type == "foo"`,
 				`count("messages") >= 100`,
 			).HasDefault(""),
-			docs.FieldDeprecated("condition"),
+			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v interface{}) bool {
+				defaultBytes, err := yaml.Marshal(condition.NewConfig())
+				if err != nil {
+					return false
+				}
+				var iDefault interface{}
+				if err = yaml.Unmarshal(defaultBytes, &iDefault); err != nil {
+					return false
+				}
+				return cmp.Equal(v, iDefault)
+			}),
 			docs.FieldCommon("restart_input", "Whether the input should be reopened if it closes itself before the condition has resolved to true."),
 		},
 		Categories: []Category{

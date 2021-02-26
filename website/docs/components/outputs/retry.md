@@ -111,7 +111,7 @@ Default: `"0s"`
 A child output.
 
 
-Type: `object`  
+Type: `output`  
 Default: `{}`  
 
 

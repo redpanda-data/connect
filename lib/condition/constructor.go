@@ -24,7 +24,6 @@ type TypeSpec struct {
 		log log.Modular,
 		stats metrics.Type,
 	) (Type, error)
-	sanitiseConfigFunc func(conf Config) (interface{}, error)
 
 	Status      docs.Status
 	Summary     string
@@ -129,18 +128,17 @@ func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	if sfunc := Constructors[conf.Type].sanitiseConfigFunc; sfunc != nil {
-		if outputMap[conf.Type], err = sfunc(conf); err != nil {
-			return nil, err
-		}
-	}
 	if spec, exists := pluginSpecs[conf.Type]; exists {
 		if spec.confSanitiser != nil {
 			outputMap["plugin"] = spec.confSanitiser(conf.Plugin)
 		}
 	}
-	if removeDeprecated {
-		Constructors[conf.Type].FieldSpecs.RemoveDeprecated(outputMap[conf.Type])
+	if err = docs.SanitiseComponentConfig(
+		"condition",
+		(map[string]interface{})(outputMap),
+		docs.ShouldDropDeprecated(removeDeprecated),
+	); err != nil {
+		return nil, err
 	}
 	return outputMap, nil
 }

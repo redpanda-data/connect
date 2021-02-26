@@ -21,9 +21,6 @@ Pulls messages from Redis (v5.0+) streams with the XREADGROUP command. The
 Redis stream entries are key/value pairs, as such it is necessary to specify the
 key that contains the body of the message. All other keys/value pairs are saved
 as metadata fields.`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return sanitiseWithBatch(conf.RedisStreams, conf.RedisStreams.Batching)
-		},
 		FieldSpecs: redis.ConfigDocs().Add(
 			docs.FieldDeprecated("batching"),
 			docs.FieldCommon("body_key", "The field key to extract the raw message from. All other keys will be stored in the message as metadata."),

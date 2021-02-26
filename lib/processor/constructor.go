@@ -37,8 +37,7 @@ type procConstructor func(
 
 // TypeSpec Constructor and a usage description for each processor type.
 type TypeSpec struct {
-	constructor        procConstructor
-	sanitiseConfigFunc func(conf Config) (interface{}, error)
+	constructor procConstructor
 
 	// UsesBatches indicates whether this processors functionality is best
 	// applied on messages that are already batched.
@@ -50,6 +49,7 @@ type TypeSpec struct {
 	Description string
 	Categories  []Category
 	Footnotes   string
+	Config      docs.FieldSpec
 	FieldSpecs  docs.FieldSpecs
 	Examples    []docs.AnnotatedExample
 }
@@ -60,6 +60,10 @@ type ConstructorFunc func(Config, types.Manager, log.Modular, metrics.Type) (Typ
 // WalkConstructors iterates each component constructor.
 func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 	for k, v := range Constructors {
+		conf := v.Config
+		if len(v.FieldSpecs) > 0 {
+			conf = docs.FieldComponent().WithChildren(v.FieldSpecs...)
+		}
 		spec := docs.ComponentSpec{
 			Type:        docs.TypeProcessor,
 			Name:        k,
@@ -67,7 +71,7 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 			Description: v.Description,
 			Examples:    v.Examples,
 			Footnotes:   v.Footnotes,
-			Fields:      v.FieldSpecs,
+			Config:      conf,
 			Status:      v.Status,
 			Version:     v.Version,
 		}
@@ -341,18 +345,17 @@ func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	if sfunc := Constructors[conf.Type].sanitiseConfigFunc; sfunc != nil {
-		if outputMap[conf.Type], err = sfunc(conf); err != nil {
-			return nil, err
-		}
-	}
 	if spec, exists := pluginSpecs[conf.Type]; exists {
 		if spec.confSanitiser != nil {
 			outputMap["plugin"] = spec.confSanitiser(conf.Plugin)
 		}
 	}
-	if removeDeprecated {
-		Constructors[conf.Type].FieldSpecs.RemoveDeprecated(outputMap[conf.Type])
+	if err = docs.SanitiseComponentConfig(
+		docs.TypeProcessor,
+		(map[string]interface{})(outputMap),
+		docs.ShouldDropDeprecated(removeDeprecated),
+	); err != nil {
+		return nil, err
 	}
 	return outputMap, nil
 }

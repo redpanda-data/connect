@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/util/config"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSwitchDeprecatedCases(t *testing.T) {
@@ -213,30 +214,29 @@ func TestSwitchDeprecatedSanitised(t *testing.T) {
 switch:
   - check: ""
     condition:
-      type: bloblang
       bloblang: this.contains("A")
+      type: bloblang
     fallthrough: false
     processors:
-      - type: bloblang
-        bloblang: root = "Hit case 0:" + content().string()
+      - bloblang: root = "Hit case 0:" + content().string()
+        type: bloblang
   - check: ""
     condition:
-      type: bloblang
       bloblang: this.contains("B")
+      type: bloblang
     fallthrough: true
     processors:
-      - type: bloblang
-        bloblang: root = "Hit case 1:" + content().string()
+      - bloblang: root = "Hit case 1:" + content().string()
+        type: bloblang
   - check: ""
     condition:
-      type: bloblang
       bloblang: this.contains("C")
+      type: bloblang
     fallthrough: false
     processors:
-      - type: bloblang
-        bloblang: root = "Hit case 2:" + content().string()
+      - bloblang: root = "Hit case 2:" + content().string()
+        type: bloblang
 `
-	if act := string(sanitBytes); exp != act {
-		t.Errorf("Wrong sanitised config output: %v != %v", act, exp)
-	}
+
+	assert.Equal(t, exp, string(sanitBytes))
 }

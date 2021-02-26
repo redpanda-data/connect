@@ -37,9 +37,6 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return sanitiseWithBatch(conf.NATSStream, conf.NATSStream.Batching)
-		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldDeprecated("batching"),
 			docs.FieldCommon(

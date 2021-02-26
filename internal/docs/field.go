@@ -44,6 +44,12 @@ type FieldSpec struct {
 	// a field.
 	Type FieldType
 
+	// IsArray indicates whether this field is an array of the FieldType.
+	IsArray bool
+
+	// IsMap indicates whether this field is a map of keys to the FieldType.
+	IsMap bool
+
 	// Interpolation indicates the type of interpolation that this field
 	// supports.
 	Interpolation FieldInterpolation
@@ -62,6 +68,8 @@ type FieldSpec struct {
 
 	// Version lists an explicit Benthos release where this fields behaviour was last modified.
 	Version string
+
+	omitWhen func(v interface{}) bool
 }
 
 // SupportsInterpolation returns a new FieldSpec that specifies whether it
@@ -78,6 +86,20 @@ func (f FieldSpec) SupportsInterpolation(batchWide bool) FieldSpec {
 // HasType returns a new FieldSpec that specifies a specific type.
 func (f FieldSpec) HasType(t FieldType) FieldSpec {
 	f.Type = t
+	return f
+}
+
+// Array determines that this field is an array of the field type.
+func (f FieldSpec) Array() FieldSpec {
+	f.IsMap = false
+	f.IsArray = true
+	return f
+}
+
+// Map determines that this field is a map of arbitrary keys to a field type.
+func (f FieldSpec) Map() FieldSpec {
+	f.IsMap = true
+	f.IsArray = false
 	return f
 }
 
@@ -123,9 +145,17 @@ func (f FieldSpec) HasOptions(options ...string) FieldSpec {
 // WithChildren returns a new FieldSpec that has child fields.
 func (f FieldSpec) WithChildren(children ...FieldSpec) FieldSpec {
 	if len(f.Type) == 0 {
-		f.Type = "object"
+		f.Type = FieldObject
 	}
 	f.Children = append(f.Children, children...)
+	return f
+}
+
+// OmitWhen specifies a custom func that, when provided a generic config struct,
+// returns a boolean indicating when the field can be safely omitted from a
+// config.
+func (f FieldSpec) OmitWhen(fn func(c interface{}) bool) FieldSpec {
+	f.omitWhen = fn
 	return f
 }
 
@@ -148,12 +178,54 @@ func FieldCommon(name, description string, examples ...interface{}) FieldSpec {
 	}
 }
 
+// FieldComponent returns a field spec for a component.
+func FieldComponent() FieldSpec {
+	return FieldSpec{}
+}
+
 // FieldDeprecated returns a field spec for a deprecated field.
 func FieldDeprecated(name string) FieldSpec {
 	return FieldSpec{
 		Name:        name,
 		Description: "DEPRECATED: Do not use.",
 		Deprecated:  true,
+	}
+}
+
+func (f FieldSpec) sanitise(s interface{}, filter FieldFilter) {
+	if coreType, isCore := coreComponentType(f.Type); isCore {
+		if f.IsArray {
+			if arr, ok := s.([]interface{}); ok {
+				for _, ele := range arr {
+					_ = SanitiseComponentConfig(coreType, ele, filter)
+				}
+			}
+		} else if f.IsMap {
+			if obj, ok := s.(map[string]interface{}); ok {
+				for _, v := range obj {
+					_ = SanitiseComponentConfig(coreType, v, filter)
+				}
+			}
+		} else {
+			SanitiseComponentConfig(coreType, s, filter)
+		}
+	}
+	if len(f.Children) > 0 {
+		if f.IsArray {
+			if arr, ok := s.([]interface{}); ok {
+				for _, ele := range arr {
+					f.Children.sanitise(ele, filter)
+				}
+			}
+		} else if f.IsMap {
+			if obj, ok := s.(map[string]interface{}); ok {
+				for _, v := range obj {
+					f.Children.sanitise(v, filter)
+				}
+			}
+		} else {
+			f.Children.sanitise(s, filter)
+		}
 	}
 }
 
@@ -167,26 +239,52 @@ var (
 	FieldString  FieldType = "string"
 	FieldNumber  FieldType = "number"
 	FieldBool    FieldType = "bool"
-	FieldArray   FieldType = "array"
 	FieldObject  FieldType = "object"
 	FieldUnknown FieldType = "unknown"
+
+	// Core component types, only components that can be a child of another
+	// component config are listed here.
+	FieldInput     FieldType = "input"
+	FieldCondition FieldType = "condition"
+	FieldProcessor FieldType = "processor"
+	FieldOutput    FieldType = "output"
+	FieldMetrics   FieldType = "metrics"
 )
 
-// GetFieldType attempts to extract a field type from a general value.
-func GetFieldType(v interface{}) FieldType {
-	switch reflect.TypeOf(v).Kind().String() {
-	case "map":
-		return FieldObject
-	case "slice":
-		return FieldArray
-	case "float64", "int", "int64":
-		return FieldNumber
-	case "string":
-		return FieldString
-	case "bool":
-		return FieldBool
+func coreComponentType(t FieldType) (Type, bool) {
+	switch t {
+	case FieldInput:
+		return TypeInput, true
+	case FieldCondition:
+		// TODO: V4 Remove this
+		return "condition", true
+	case FieldProcessor:
+		return TypeProcessor, true
+	case FieldOutput:
+		return TypeOutput, true
 	}
-	return FieldUnknown
+	return "", false
+}
+
+func getFieldTypeFromInterface(v interface{}) (FieldType, bool) {
+	return getFieldTypeFromReflect(reflect.TypeOf(v))
+}
+
+func getFieldTypeFromReflect(t reflect.Type) (FieldType, bool) {
+	switch t.Kind().String() {
+	case "map":
+		return FieldObject, false
+	case "slice":
+		ft, _ := getFieldTypeFromReflect(t.Elem())
+		return ft, true
+	case "float64", "int", "int64":
+		return FieldNumber, false
+	case "string":
+		return FieldString, false
+	case "bool":
+		return FieldBool, false
+	}
+	return FieldUnknown, false
 }
 
 //------------------------------------------------------------------------------
@@ -204,17 +302,43 @@ func (f FieldSpecs) Add(specs ...FieldSpec) FieldSpecs {
 	return append(f, specs...)
 }
 
-// RemoveDeprecated fields from a sanitized config.
-func (f FieldSpecs) RemoveDeprecated(s interface{}) {
+// FieldFilter defines a filter closure that returns a boolean for a component
+// field indicating whether the field should be kept within a generated config.
+type FieldFilter func(spec FieldSpec) bool
+
+func (f FieldFilter) shouldDrop(spec FieldSpec) bool {
+	if f == nil {
+		return false
+	}
+	return !f(spec)
+}
+
+// ShouldDropDeprecated returns a field filter that removes all deprecated
+// fields when the boolean argument is true.
+func ShouldDropDeprecated(b bool) FieldFilter {
+	if !b {
+		return nil
+	}
+	return func(spec FieldSpec) bool {
+		return !spec.Deprecated
+	}
+}
+
+func (f FieldSpecs) sanitise(s interface{}, filter FieldFilter) {
 	m, ok := s.(map[string]interface{})
 	if !ok {
 		return
 	}
 	for _, spec := range f {
-		if spec.Deprecated {
+		if filter.shouldDrop(spec) {
 			delete(m, spec.Name)
-		} else if len(spec.Children) > 0 {
-			spec.Children.RemoveDeprecated(m[spec.Name])
+			continue
+		}
+		v := m[spec.Name]
+		if spec.omitWhen != nil && spec.omitWhen(v) {
+			delete(m, spec.Name)
+		} else {
+			spec.sanitise(v, filter)
 		}
 	}
 }
@@ -295,7 +419,7 @@ func (f FieldSpecs) configFilteredFromNode(node yaml.Node, filter func(FieldSpec
 		for i := 0; i < len(node.Content); i += 2 {
 			if node.Content[i].Value == field.Name {
 				nextNode := node.Content[i+1]
-				if len(field.Children) > 0 && field.Type != FieldArray {
+				if len(field.Children) > 0 && !field.IsArray {
 					if nextNode.Kind != yaml.MappingNode {
 						return nil, fmt.Errorf("expected mapping node kind: %v", nextNode.Kind)
 					}

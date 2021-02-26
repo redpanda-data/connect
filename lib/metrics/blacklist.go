@@ -33,29 +33,13 @@ Benthos registers can be found in
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("paths", `A list of path prefixes to exclude. This can be used, for example, to allow none of the child specific metrics paths from an output broker with the path `+"`output.broker`"+`.`),
 			docs.FieldCommon("patterns", `A list of RE2 regular expressions to exclude. This can be used, for example, to allow none of the latency based metrics with the pattern `+"`.*\\.latency`"+`.`),
-			docs.FieldCommon("child", "A child metric type, this is where non-blacklisted metrics will be routed."),
+			docs.FieldCommon("child", "A child metric type, this is where non-blacklisted metrics will be routed.").HasType(docs.FieldMetrics),
 		},
 		Footnotes: `
 ## Debugging
 
 In order to see logs breaking down which metrics are registered and whether they
 are blocked by your blacklists enable logging at the TRACE level.`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			var childSanit interface{}
-			var err error
-			if conf.Blacklist.Child != nil {
-				if childSanit, err = SanitiseConfig(*conf.Blacklist.Child); err != nil {
-					return nil, err
-				}
-			} else {
-				childSanit = struct{}{}
-			}
-			return map[string]interface{}{
-				"paths":    conf.Blacklist.Paths,
-				"patterns": conf.Blacklist.Patterns,
-				"child":    childSanit,
-			}, nil
-		},
 	}
 }
 

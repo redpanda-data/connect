@@ -25,19 +25,6 @@ func init() {
 
 Consider using the [bloblang](/docs/components/conditions/bloblang) condition
 instead.`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			var condConf interface{} = struct{}{}
-			if conf.CheckInterpolation.Condition != nil {
-				var err error
-				if condConf, err = SanitiseConfig(*conf.CheckInterpolation.Condition); err != nil {
-					return nil, err
-				}
-			}
-			return map[string]interface{}{
-				"value":     conf.CheckInterpolation.Value,
-				"condition": condConf,
-			}, nil
-		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(
 				"value", "The value to check against the child condition.",

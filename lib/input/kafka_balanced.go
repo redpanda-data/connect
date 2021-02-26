@@ -57,9 +57,6 @@ message offset.
 
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return sanitiseWithBatch(conf.KafkaBalanced, conf.KafkaBalanced.Batching)
-		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldDeprecated("max_batch_count"),
 			docs.FieldCommon("addresses", "A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.", []string{"localhost:9092"}, []string{"localhost:9041,localhost:9042"}, []string{"localhost:9041", "localhost:9042"}),

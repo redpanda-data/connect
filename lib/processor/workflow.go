@@ -252,37 +252,7 @@ resources:
 			docs.FieldCommon(
 				"branches",
 				"An object of named [`branch` processors](/docs/components/processors/branch) that make up the workflow. The order and parallelism in which branches are executed can either be made explicit with the field `order`, or if omitted an attempt is made to automatically resolve an ordering based on the mappings of each branch.",
-			),
-		},
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			sanitBranches := map[string]interface{}{}
-			for k, v := range conf.Workflow.Branches {
-				sanit, err := v.Sanitise()
-				if err != nil {
-					return nil, err
-				}
-				sanitBranches[k] = sanit
-			}
-			m := map[string]interface{}{
-				"meta_path":        conf.Workflow.MetaPath,
-				"order":            conf.Workflow.Order,
-				"branch_resources": conf.Workflow.BranchResources,
-				"branches":         sanitBranches,
-			}
-			if len(conf.Workflow.Stages) > 0 {
-				sanitChildren := map[string]interface{}{}
-				for k, v := range conf.Workflow.Stages {
-					sanit, err := v.Sanitise()
-					if err != nil {
-						return nil, err
-					}
-					sanit["dependencies"] = v.Dependencies
-					sanitChildren[k] = sanit
-				}
-				m["stages"] = sanitChildren
-			}
-
-			return m, nil
+			).Map().WithChildren(branchFields...),
 		},
 	}
 }

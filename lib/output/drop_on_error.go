@@ -44,12 +44,6 @@ output:
       output:
         type: foo
 ` + "```" + ``,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			if conf.DropOnError.Config == nil {
-				return struct{}{}, nil
-			}
-			return SanitiseConfig(*conf.DropOnError.Config)
-		},
 	}
 }
 

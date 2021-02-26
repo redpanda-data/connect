@@ -31,33 +31,15 @@ on individual message parts of a batch instead.
 
 Please note that most processors already process per message of a batch, and
 this processor is not needed in those cases.`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			var err error
-			procConfs := make([]interface{}, len(conf.ForEach))
-			for i, pConf := range conf.ForEach {
-				if procConfs[i], err = SanitiseConfig(pConf); err != nil {
-					return nil, err
-				}
-			}
-			return procConfs, nil
-		},
+		Config: docs.FieldComponent().Array().HasType(docs.FieldProcessor),
 	}
 	Constructors[TypeProcessBatch] = TypeSpec{
 		constructor: NewProcessBatch,
 		Description: `
 Alias for the ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor, which should be used
 instead.`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			var err error
-			procConfs := make([]interface{}, len(conf.ProcessBatch))
-			for i, pConf := range conf.ProcessBatch {
-				if procConfs[i], err = SanitiseConfig(pConf); err != nil {
-					return nil, err
-				}
-			}
-			return procConfs, nil
-		},
 		Status: docs.StatusDeprecated,
+		Config: docs.FieldComponent().Array().HasType(docs.FieldProcessor),
 	}
 }
 

@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/OneOfOne/xxhash"
-	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -137,31 +136,6 @@ input:
 `,
 			},
 		},
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			inputsSanit := make([]interface{}, 0, len(conf.Sequence.Inputs))
-			for _, in := range conf.Sequence.Inputs {
-				sanit, err := SanitiseConfig(in)
-				if err != nil {
-					return nil, err
-				}
-				inputsSanit = append(inputsSanit, sanit)
-			}
-
-			shardedJoinBytes, err := yaml.Marshal(conf.Sequence.ShardedJoin)
-			if err != nil {
-				return nil, err
-			}
-
-			shardedJoinMap := map[string]interface{}{}
-			if err = yaml.Unmarshal(shardedJoinBytes, &shardedJoinMap); err != nil {
-				return nil, err
-			}
-
-			return map[string]interface{}{
-				"sharded_join": shardedJoinMap,
-				"inputs":       inputsSanit,
-			}, nil
-		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldAdvanced(
 				"sharded_join",
@@ -179,7 +153,7 @@ Each message must be structured (JSON or otherwise processed into a structured f
 					"The chosen strategy to use when a data join would otherwise result in a collision of field values. The strategy `array` means non-array colliding values are placed into an array and colliding arrays are merged. The strategy `replace` replaces old values with new values. The strategy `keep` keeps the old value.",
 				).HasOptions("array", "replace", "keep"),
 			).AtVersion("3.40.0"),
-			docs.FieldCommon("inputs", "An array of inputs to read from sequentially."),
+			docs.FieldCommon("inputs", "An array of inputs to read from sequentially.").Array().HasType(docs.FieldInput),
 		},
 		Categories: []Category{
 			CategoryUtility,

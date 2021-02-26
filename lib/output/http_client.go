@@ -36,9 +36,6 @@ It's possible to propagate the response from each HTTP request back to the input
 source by setting ` + "`propagate_response` to `true`" + `. Only inputs that
 support [synchronous responses](/docs/guides/sync_responses) are able to make use of
 these propagated responses.`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return sanitiseWithBatch(conf.HTTPClient, conf.HTTPClient.Batching)
-		},
 		Async:   true,
 		Batches: true,
 		FieldSpecs: client.FieldSpecs().Add(

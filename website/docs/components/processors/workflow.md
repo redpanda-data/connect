@@ -85,55 +85,6 @@ A --|          /--> E --|
 
 And imagine doing so knowing that the diagram is subject to change over time. Yikes! Instead, with a workflow we can either trust it to automatically resolve the DAG or express it manually as simply as `order: [ [ A ], [ B, C ], [ E ], [ D, F ] ]`, and the conditional logic for determining if a stage is executed is defined as part of the branch itself.
 
-## Fields
-
-### `meta_path`
-
-A [dot path](/docs/configuration/field_paths) indicating where to store and reference [structured metadata](#structured-metadata) about the workflow execution.
-
-
-Type: `string`  
-Default: `"meta.workflow"`  
-
-### `order`
-
-An explicit declaration of branch ordered tiers, which describes the order in which parallel tiers of branches should be executed. Branches should be identified by the name as they are configured in the field `branches`. It's also possible to specify branch processors configured [as a resource](#resources). 
-
-
-Type: `array`  
-Default: `[]`  
-
-```yaml
-# Examples
-
-order:
-  - - foo
-    - bar
-  - - baz
-
-order:
-  - - foo
-  - - bar
-  - - baz
-```
-
-### `branch_resources`
-
-An optional list of [`branch` processor](/docs/components/processors/branch) names that are configured as [resources](#resources). These resources will be included in the workflow with any branches configured inline within the [`branches`](#branches) field. The order and parallelism in which branches are executed is automatically resolved based on the mappings of each branch. When using resources with an explicit order it is not necessary to list resources in this field.
-
-
-Type: `array`  
-Default: `[]`  
-Requires version 3.38.0 or newer  
-
-### `branches`
-
-An object of named [`branch` processors](/docs/components/processors/branch) that make up the workflow. The order and parallelism in which branches are executed can either be made explicit with the field `order`, or if omitted an attempt is made to automatically resolve an ordering based on the mappings of each branch.
-
-
-Type: `object`  
-Default: `{}`  
-
 ## Examples
 
 <Tabs defaultValue="Automatic Ordering" values={[
@@ -265,6 +216,117 @@ resources:
 
 </TabItem>
 </Tabs>
+
+## Fields
+
+### `meta_path`
+
+A [dot path](/docs/configuration/field_paths) indicating where to store and reference [structured metadata](#structured-metadata) about the workflow execution.
+
+
+Type: `string`  
+Default: `"meta.workflow"`  
+
+### `order`
+
+An explicit declaration of branch ordered tiers, which describes the order in which parallel tiers of branches should be executed. Branches should be identified by the name as they are configured in the field `branches`. It's also possible to specify branch processors configured [as a resource](#resources). 
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+order:
+  - - foo
+    - bar
+  - - baz
+
+order:
+  - - foo
+  - - bar
+  - - baz
+```
+
+### `branch_resources`
+
+An optional list of [`branch` processor](/docs/components/processors/branch) names that are configured as [resources](#resources). These resources will be included in the workflow with any branches configured inline within the [`branches`](#branches) field. The order and parallelism in which branches are executed is automatically resolved based on the mappings of each branch. When using resources with an explicit order it is not necessary to list resources in this field.
+
+
+Type: `array`  
+Default: `[]`  
+Requires version 3.38.0 or newer  
+
+### `branches`
+
+An object of named [`branch` processors](/docs/components/processors/branch) that make up the workflow. The order and parallelism in which branches are executed can either be made explicit with the field `order`, or if omitted an attempt is made to automatically resolve an ordering based on the mappings of each branch.
+
+
+Type: `object`  
+
+### `branches.<name>.request_map`
+
+A [Bloblang mapping](/docs/guides/bloblang/about) that describes how to create a request payload suitable for the child processors of this branch. If left empty then the branch will begin with an exact copy of the origin message (including metadata).
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+request_map: |-
+  root = {
+  	"id": this.doc.id,
+  	"content": this.doc.body.text
+  }
+
+request_map: |-
+  root = if this.type == "foo" {
+  	this.foo.request
+  } else {
+  	deleted()
+  }
+```
+
+### `branches.<name>.processors`
+
+A list of processors to apply to mapped requests. When processing message batches the resulting batch must match the size and ordering of the input batch, therefore filtering, grouping should not be performed within these processors.
+
+
+Type: `array`  
+Default: `[]`  
+
+### `branches.<name>.result_map`
+
+A [Bloblang mapping](/docs/guides/bloblang/about) that describes how the resulting messages from branched processing should be mapped back into the original payload. If left empty the origin message will remain unchanged (including metadata).
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+result_map: |-
+  meta foo_code = meta("code")
+  root.foo_result = this
+
+result_map: |-
+  meta = meta()
+  root.bar.body = this.body
+  root.bar.id = this.user.id
+
+result_map: root.raw_result = content().string()
+
+result_map: |-
+  root.enrichments.foo = if errored() {
+  	throw(error())
+  } else {
+  	this
+  }
+```
 
 ## Structured Metadata
 

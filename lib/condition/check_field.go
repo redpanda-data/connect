@@ -21,20 +21,6 @@ func init() {
 Extracts the value of a field identified via [dot path](/docs/configuration/field_paths)
 within messages (currently only JSON format is supported) and then tests the
 extracted value against a child condition.`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			var condConf interface{} = struct{}{}
-			if conf.CheckField.Condition != nil {
-				var err error
-				if condConf, err = SanitiseConfig(*conf.CheckField.Condition); err != nil {
-					return nil, err
-				}
-			}
-			return map[string]interface{}{
-				"parts":     conf.CheckField.Parts,
-				"path":      conf.CheckField.Path,
-				"condition": condConf,
-			}, nil
-		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("path", "A [field path](/docs/configuration/field_paths) to check against the child condition."),
 			docs.FieldCommon("condition", "A child condition to test the field contents against."),

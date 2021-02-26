@@ -62,7 +62,7 @@ Default: `[]`
 A child metric type, this is where whitelisted metrics will be routed.
 
 
-Type: `object`  
+Type: `metrics`  
 Default: `{}`  
 
 ## Debugging

@@ -198,7 +198,7 @@ check: this.contents.urls.contains("https://benthos.dev/")
 An [output](/docs/components/outputs/about/) for messages that pass the check to be routed to.
 
 
-Type: `object`  
+Type: `output`  
 Default: `{}`  
 
 ### `cases[].continue`

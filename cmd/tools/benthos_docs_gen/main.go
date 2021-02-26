@@ -126,7 +126,7 @@ func doConditions(docsDir string) {
 			Summary:     v.Summary,
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
-			Fields:      v.FieldSpecs,
+			Config:      docs.FieldComponent().WithChildren(v.FieldSpecs...),
 			Status:      v.Status,
 		}
 

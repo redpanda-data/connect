@@ -16,9 +16,6 @@ func init() {
 		constructor: fromSimpleConstructor(NewNSQ),
 		Summary: `
 Subscribe to an NSQ instance topic and channel.`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return sanitiseWithBatch(conf.NSQ, conf.NSQ.Batching)
-		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldDeprecated("batching"),
 			docs.FieldCommon("nsqd_tcp_addresses", "A list of nsqd addresses to connect to."),

@@ -81,29 +81,9 @@ child nodes processors.`,
 		Categories: []Category{
 			CategoryUtility,
 		},
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			var err error
-			inSlice := []interface{}{}
-			for _, input := range conf.Broker.Inputs {
-				var sanInput interface{}
-				if sanInput, err = SanitiseConfig(input); err != nil {
-					return nil, err
-				}
-				inSlice = append(inSlice, sanInput)
-			}
-			var batchSanit interface{}
-			if batchSanit, err = batch.SanitisePolicyConfig(conf.Broker.Batching); err != nil {
-				return nil, err
-			}
-			return map[string]interface{}{
-				"copies":   conf.Broker.Copies,
-				"inputs":   inSlice,
-				"batching": batchSanit,
-			}, nil
-		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("copies", "Whatever is specified within `inputs` will be created this many times."),
-			docs.FieldCommon("inputs", "A list of inputs to create."),
+			docs.FieldCommon("inputs", "A list of inputs to create.").Array().HasType(docs.FieldInput),
 			batch.FieldSpec(),
 		},
 	}

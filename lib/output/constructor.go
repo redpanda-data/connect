@@ -32,8 +32,7 @@ var (
 
 // TypeSpec is a constructor and a usage description for each output type.
 type TypeSpec struct {
-	constructor        ConstructorFunc
-	sanitiseConfigFunc func(conf Config) (interface{}, error)
+	constructor ConstructorFunc
 
 	// Async indicates whether this output benefits from sending multiple
 	// messages asynchronously over the protocol.
@@ -47,6 +46,7 @@ type TypeSpec struct {
 	Description string
 	Categories  []Category
 	Footnotes   string
+	config      docs.FieldSpec
 	FieldSpecs  docs.FieldSpecs
 	Examples    []docs.AnnotatedExample
 	Version     string
@@ -107,13 +107,17 @@ type ConstructorFunc func(Config, types.Manager, log.Modular, metrics.Type, ...t
 // WalkConstructors iterates each component constructor.
 func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 	for k, v := range Constructors {
+		conf := v.config
+		if len(v.FieldSpecs) > 0 {
+			conf = docs.FieldComponent().WithChildren(v.FieldSpecs...)
+		}
 		spec := docs.ComponentSpec{
 			Type:        docs.TypeOutput,
 			Name:        k,
 			Summary:     v.Summary,
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
-			Fields:      v.FieldSpecs,
+			Config:      conf,
 			Examples:    v.Examples,
 			Status:      v.Status,
 			Version:     v.Version,
@@ -371,35 +375,18 @@ func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	if sfunc := Constructors[conf.Type].sanitiseConfigFunc; sfunc != nil {
-		if outputMap[conf.Type], err = sfunc(conf); err != nil {
-			return nil, err
-		}
-	}
 	if spec, exists := pluginSpecs[conf.Type]; exists {
 		if spec.confSanitiser != nil {
 			outputMap["plugin"] = spec.confSanitiser(conf.Plugin)
 		}
 	}
-	if removeDeprecated {
-		Constructors[conf.Type].FieldSpecs.RemoveDeprecated(outputMap[conf.Type])
+	if err = docs.SanitiseComponentConfig(
+		docs.TypeOutput,
+		(map[string]interface{})(outputMap),
+		docs.ShouldDropDeprecated(removeDeprecated),
+	); err != nil {
+		return nil, err
 	}
-
-	if len(conf.Processors) == 0 {
-		return outputMap, nil
-	}
-
-	procSlice := []interface{}{}
-	for _, proc := range conf.Processors {
-		var procSanitised interface{}
-		procSanitised, err = processor.SanitiseConfig(proc)
-		if err != nil {
-			return nil, err
-		}
-		procSlice = append(procSlice, procSanitised)
-	}
-	outputMap["processors"] = procSlice
-
 	return outputMap, nil
 }
 

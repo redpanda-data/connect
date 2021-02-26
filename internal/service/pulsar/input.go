@@ -48,7 +48,7 @@ You can access these metadata fields using
 		Categories: []string{
 			string(input.CategoryServices),
 		},
-		Fields: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldCommon("url",
 				"A URL to connect to.",
 				"pulsar://localhost:6650",
@@ -57,7 +57,7 @@ You can access these metadata fields using
 			),
 			docs.FieldCommon("topics", "A list of topics to subscribe to."),
 			docs.FieldCommon("subscription_name", "Specify the subscription name for this consumer."),
-		},
+		),
 	})
 }
 

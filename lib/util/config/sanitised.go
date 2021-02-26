@@ -3,7 +3,6 @@ package config
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"sort"
 
 	"gopkg.in/yaml.v3"
@@ -25,20 +24,7 @@ func SanitizeComponent(conf interface{}) (Sanitised, error) {
 		return nil, err
 	}
 
-	typeStr, exists := hashMap["type"].(string)
-	if !exists {
-		return nil, errors.New("attempted to sanitize config without a type field")
-	}
-
-	sanitMap := Sanitised{}
-	sanitMap["type"] = typeStr
-
-	if _, exists := hashMap[typeStr]; exists {
-		sanitMap[typeStr] = hashMap[typeStr]
-	} else if pluginConf, exists := hashMap["plugin"]; exists && pluginConf != nil {
-		sanitMap["plugin"] = pluginConf
-	}
-	return sanitMap, nil
+	return Sanitised(hashMap), nil
 }
 
 //------------------------------------------------------------------------------

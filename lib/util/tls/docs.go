@@ -21,7 +21,7 @@ func FieldSpec() docs.FieldSpec {
 					"key_file":  "./example.key",
 				},
 			},
-		).HasType(docs.FieldArray).WithChildren(
+		).Array().WithChildren(
 			docs.FieldCommon("cert", "A plain text certificate to use.").HasDefault(""),
 			docs.FieldCommon("key", "A plain text certificate key to use.").HasDefault(""),
 			docs.FieldCommon("cert_file", "The path to a certificate to use.").HasDefault(""),

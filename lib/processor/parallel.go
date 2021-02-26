@@ -30,23 +30,10 @@ processed in parallel.`,
 		Description: `
 The field ` + "`cap`" + `, if greater than zero, caps the maximum number of
 parallel processing threads.`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			var err error
-			procConfs := make([]interface{}, len(conf.Parallel.Processors))
-			for i, pConf := range conf.Parallel.Processors {
-				if procConfs[i], err = SanitiseConfig(pConf); err != nil {
-					return nil, err
-				}
-			}
-			return map[string]interface{}{
-				"cap":        conf.Parallel.Cap,
-				"processors": procConfs,
-			}, nil
-		},
 		UsesBatches: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("cap", "The maximum number of messages to have processing at a given time."),
-			docs.FieldCommon("processors", "A list of child processors to apply."),
+			docs.FieldCommon("processors", "A list of child processors to apply.").Array().HasType(docs.FieldProcessor),
 		},
 	}
 }

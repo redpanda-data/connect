@@ -54,7 +54,7 @@ processor with the [`for_each`](/docs/components/processors/for_each) processor.
 The [`condition`](/docs/components/conditions/about) to check against messages.
 
 
-Type: `object`  
+Type: `condition`  
 Default: `{"text":{"arg":"","operator":"equals_cs","part":0},"type":"text"}`  
 
 ### `processors`

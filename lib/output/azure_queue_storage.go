@@ -22,9 +22,6 @@ Sends messages to an Azure Storage Queue.`,
 Only one authentication method is required, ` + "`storage_connection_string`" + ` or ` + "`storage_account` and `storage_access_key`" + `. If both are set then the ` + "`storage_connection_string`" + ` is given priority.
 
 In order to set the ` + "`queue_name`" + ` you can use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are calculated per message of a batch.`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return sanitiseWithBatch(conf.AzureQueueStorage, conf.AzureQueueStorage.Batching)
-		},
 		Async:   true,
 		Batches: true,
 		FieldSpecs: docs.FieldSpecs{

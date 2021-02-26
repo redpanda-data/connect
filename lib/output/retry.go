@@ -38,28 +38,8 @@ we want to avoid reapplying to the same message more than once in the pipeline.
 Rather than retrying the same output you may wish to retry the send using a
 different output target (a dead letter queue). In which case you should instead
 use the ` + "[`try`](/docs/components/outputs/try)" + ` output type.`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			confBytes, err := json.Marshal(conf.Retry)
-			if err != nil {
-				return nil, err
-			}
-
-			confMap := map[string]interface{}{}
-			if err = json.Unmarshal(confBytes, &confMap); err != nil {
-				return nil, err
-			}
-
-			var outputSanit interface{} = struct{}{}
-			if conf.Retry.Output != nil {
-				if outputSanit, err = SanitiseConfig(*conf.Retry.Output); err != nil {
-					return nil, err
-				}
-			}
-			confMap["output"] = outputSanit
-			return confMap, nil
-		},
 		FieldSpecs: retries.FieldSpecs().Add(
-			docs.FieldCommon("output", "A child output."),
+			docs.FieldCommon("output", "A child output.").HasType(docs.FieldOutput),
 		),
 		Categories: []Category{
 			CategoryUtility,

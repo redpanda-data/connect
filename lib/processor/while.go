@@ -15,6 +15,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/google/go-cmp/cmp"
+	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -42,31 +44,18 @@ If following a loop execution the number of messages in a batch is reduced to ze
 				`errored()`,
 				`this.urls.unprocessed.length() > 0`,
 			).HasDefault(""),
-			docs.FieldDeprecated("condition"),
-			docs.FieldCommon("processors", "A list of child processors to execute on each loop."),
-		},
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			procConfs := make([]interface{}, len(conf.While.Processors))
-			for i, pConf := range conf.While.Processors {
-				var err error
-				if procConfs[i], err = SanitiseConfig(pConf); err != nil {
-					return nil, err
-				}
-			}
-			whileSanit := map[string]interface{}{
-				"check":         conf.While.Check,
-				"at_least_once": conf.While.AtLeastOnce,
-				"max_loops":     conf.While.MaxLoops,
-				"processors":    procConfs,
-			}
-			if !isDefaultGroupCond(conf.While.Condition) {
-				condSanit, err := condition.SanitiseConfig(conf.While.Condition)
+			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v interface{}) bool {
+				defaultBytes, err := yaml.Marshal(condition.NewConfig())
 				if err != nil {
-					return nil, err
+					return false
 				}
-				whileSanit["condition"] = condSanit
-			}
-			return whileSanit, nil
+				var iDefault interface{}
+				if err = yaml.Unmarshal(defaultBytes, &iDefault); err != nil {
+					return false
+				}
+				return cmp.Equal(v, iDefault)
+			}),
+			docs.FieldCommon("processors", "A list of child processors to execute on each loop.").Array().HasType(docs.FieldProcessor),
 		},
 	}
 }

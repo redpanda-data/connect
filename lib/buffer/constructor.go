@@ -18,8 +18,7 @@ import (
 
 // TypeSpec is a constructor and usage description for each buffer type.
 type TypeSpec struct {
-	constructor        func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error)
-	sanitiseConfigFunc func(conf Config) (interface{}, error)
+	constructor func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error)
 
 	Summary     string
 	Description string
@@ -41,7 +40,7 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 			Summary:     v.Summary,
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
-			Fields:      v.FieldSpecs,
+			Config:      docs.FieldComponent().WithChildren(v.FieldSpecs...),
 			Status:      v.Status,
 			Version:     v.Version,
 		}
@@ -92,13 +91,12 @@ func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	if sfunc := Constructors[conf.Type].sanitiseConfigFunc; sfunc != nil {
-		if outputMap[conf.Type], err = sfunc(conf); err != nil {
-			return nil, err
-		}
-	}
-	if removeDeprecated {
-		Constructors[conf.Type].FieldSpecs.RemoveDeprecated(outputMap[conf.Type])
+	if err = docs.SanitiseComponentConfig(
+		docs.TypeBuffer,
+		(map[string]interface{})(outputMap),
+		docs.ShouldDropDeprecated(removeDeprecated),
+	); err != nil {
+		return nil, err
 	}
 	return outputMap, nil
 }

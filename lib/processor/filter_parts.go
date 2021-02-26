@@ -26,9 +26,7 @@ func init() {
 
 All functionality of this processor has been superseded by the
 [bloblang](/docs/components/processors/bloblang) processor.`,
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			return condition.SanitiseConfig(conf.FilterParts.Config)
-		},
+		Config: docs.FieldComponent().HasType(docs.FieldCondition),
 	}
 }
 

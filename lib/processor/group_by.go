@@ -18,6 +18,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/google/go-cmp/cmp"
 	olog "github.com/opentracing/opentracing-go/log"
+	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -71,37 +72,21 @@ output:
 				`this.contents.urls.contains("https://benthos.dev/")`,
 				`true`,
 			).HasDefault(""),
-			docs.FieldDeprecated("condition"),
+			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v interface{}) bool {
+				defaultBytes, err := yaml.Marshal(condition.NewConfig())
+				if err != nil {
+					return false
+				}
+				var iDefault interface{}
+				if err = yaml.Unmarshal(defaultBytes, &iDefault); err != nil {
+					return false
+				}
+				return cmp.Equal(v, iDefault)
+			}),
 			docs.FieldCommon(
 				"processors",
 				"A list of [processors](/docs/components/processors/about/) to execute on the newly formed group.",
-			).HasDefault([]interface{}{}),
-		},
-		sanitiseConfigFunc: func(conf Config) (interface{}, error) {
-			groups := []interface{}{}
-			for _, g := range conf.GroupBy {
-				procsSanit := []interface{}{}
-				for _, p := range g.Processors {
-					procSanit, err := SanitiseConfig(p)
-					if err != nil {
-						return nil, err
-					}
-					procsSanit = append(procsSanit, procSanit)
-				}
-				groupSanit := map[string]interface{}{
-					"processors": procsSanit,
-					"check":      g.Check,
-				}
-				if !isDefaultGroupCond(g.Condition) {
-					condSanit, err := condition.SanitiseConfig(g.Condition)
-					if err != nil {
-						return nil, err
-					}
-					groupSanit["condition"] = condSanit
-				}
-				groups = append(groups, groupSanit)
-			}
-			return groups, nil
+			).HasDefault([]interface{}{}).Array().HasType(docs.FieldProcessor),
 		},
 		UsesBatches: true,
 	}
