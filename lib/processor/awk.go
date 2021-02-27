@@ -711,8 +711,6 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 					mutableJSONParts[i] = jsonPart
 				}
 			}
-			if err == nil {
-			}
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse message into json: %v", err)
 			}

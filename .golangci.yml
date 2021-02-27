@@ -20,7 +20,7 @@ linters:
     - gosimple
     - govet
     - ineffassign
-    # - staticcheck
+    - staticcheck
     - structcheck
     - typecheck
     # - unused

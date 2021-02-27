@@ -150,6 +150,8 @@ func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		id := fmt.Sprintf("foo-%v", i+1)
+		// SA1019 Ignore Type is deprecated warning for .Index()
+		// nolint:staticcheck
 		get, err := client.Get().
 			Index("does_not_exist").
 			Type("_doc").
@@ -213,6 +215,8 @@ func testElasticParallelWrites(urls []string, client *elastic.Client, t *testing
 	wg.Wait()
 
 	for id, exp := range docs {
+		// SA1019 Ignore Type is deprecated warning for .Index()
+		// nolint:staticcheck
 		get, err := client.Get().
 			Index("new_index_parallel_writes").
 			Type("_doc").
@@ -308,6 +312,8 @@ func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
 	}
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("foo-%v", i+1)
+		// SA1019 Ignore Type is deprecated warning for .Index()
+		// nolint:staticcheck
 		get, err := client.Get().
 			Index("test_conn_index").
 			Type("_doc").
@@ -373,6 +379,8 @@ func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *tes
 	}
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("bar-%v", i+1)
+		// SA1019 Ignore Type is deprecated warning for .Index()
+		// nolint:staticcheck
 		get, err := client.Get().
 			Index("test_conn_index").
 			Type("_doc").
@@ -438,6 +446,8 @@ func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
 	}
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("bar-%v", i+1)
+		// SA1019 Ignore Type is deprecated warning for .Index()
+		// nolint:staticcheck
 		get, err := client.Get().
 			Index("test_conn_index").
 			Type("_doc").

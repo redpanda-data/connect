@@ -11,7 +11,11 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+
+	// SA1019 Ignore deprecation warning until we can switch to "google.golang.org/protobuf/types/dynamicpb"
+	// nolint:staticcheck
 	"github.com/golang/protobuf/proto"
+
 	"github.com/jhump/protoreflect/desc"
 	"github.com/jhump/protoreflect/desc/protoparse"
 	"github.com/jhump/protoreflect/dynamic"

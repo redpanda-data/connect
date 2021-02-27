@@ -72,7 +72,7 @@ func TestBasicWrapPipeline(t *testing.T) {
 	}
 
 	procs := 0
-	newInput, err := WrapWithPipeline(&procs, mockIn, func(i *int) (types.Pipeline, error) {
+	_, err := WrapWithPipeline(&procs, mockIn, func(i *int) (types.Pipeline, error) {
 		return nil, errors.New("nope")
 	})
 
@@ -80,7 +80,7 @@ func TestBasicWrapPipeline(t *testing.T) {
 		t.Error("Expected error from back constructor")
 	}
 
-	newInput, err = WrapWithPipeline(&procs, mockIn, func(i *int) (types.Pipeline, error) {
+	newInput, err := WrapWithPipeline(&procs, mockIn, func(i *int) (types.Pipeline, error) {
 		return mockPi, nil
 	})
 	if err != nil {
@@ -135,14 +135,14 @@ func TestBasicWrapMultiPipelines(t *testing.T) {
 		ts: make(chan types.Transaction),
 	}
 
-	newInput, err := WrapWithPipelines(mockIn, func(i *int) (types.Pipeline, error) {
+	_, err := WrapWithPipelines(mockIn, func(i *int) (types.Pipeline, error) {
 		return nil, errors.New("nope")
 	})
 	if err == nil {
 		t.Error("Expected error from back constructor")
 	}
 
-	newInput, err = WrapWithPipelines(mockIn, func(i *int) (types.Pipeline, error) {
+	newInput, err := WrapWithPipelines(mockIn, func(i *int) (types.Pipeline, error) {
 		return mockPi1, nil
 	}, func(i *int) (types.Pipeline, error) {
 		return mockPi2, nil
