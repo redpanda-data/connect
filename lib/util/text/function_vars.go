@@ -273,17 +273,15 @@ func replaceFunctionVariables(
 	replaced := functionRegex.ReplaceAllFunc(inBytes, func(content []byte) []byte {
 		if len(content) > 4 {
 			if colonIndex := bytes.IndexByte(content, ':'); colonIndex == -1 {
-				targetFunc := string(content[3 : len(content)-1])
-				if ftor, exists := functionVars[targetFunc]; exists {
+				if ftor, exists := functionVars[string(content[3:len(content)-1])]; exists {
 					if escape {
 						return escapeBytes(ftor(msg, index, ""))
 					}
 					return ftor(msg, index, "")
 				}
 			} else {
-				targetFunc := string(content[3:colonIndex])
 				argVal := string(content[colonIndex+1 : len(content)-1])
-				if ftor, exists := functionVars[targetFunc]; exists {
+				if ftor, exists := functionVars[string(content[3:colonIndex])]; exists {
 					if escape {
 						return escapeBytes(ftor(msg, index, argVal))
 					}
