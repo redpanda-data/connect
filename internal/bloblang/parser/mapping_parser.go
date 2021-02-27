@@ -122,7 +122,6 @@ func varNameParser() Func {
 				InRange('A', 'Z'),
 				InRange('0', '9'),
 				Char('_'),
-				Char('-'),
 			),
 		),
 	)
@@ -293,11 +292,7 @@ func nameLiteralParser() Func {
 				InRange('a', 'z'),
 				InRange('A', 'Z'),
 				InRange('0', '9'),
-				InRange('*', '+'),
-				Char('.'),
 				Char('_'),
-				Char('-'),
-				Char('~'),
 			),
 		),
 	)
@@ -311,6 +306,7 @@ func metaStatementParser(disabled bool, pCtx Context) Func {
 			QuotedString(),
 			nameLiteralParser(),
 		)),
+		// TODO: Break out root assignment so we can make this mandatory
 		Optional(SpacesAndTabs()),
 		Char('='),
 		SpacesAndTabs(),
@@ -353,10 +349,7 @@ func pathLiteralSegmentParser() Func {
 				InRange('a', 'z'),
 				InRange('A', 'Z'),
 				InRange('0', '9'),
-				InRange('*', '+'),
 				Char('_'),
-				Char('-'),
-				Char('~'),
 			),
 		),
 	)

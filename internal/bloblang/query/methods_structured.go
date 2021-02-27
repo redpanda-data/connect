@@ -765,16 +765,15 @@ var _ = RegisterMethod(
 	NewMethodSpec(
 		"map_each", "",
 	).InCategory(
-		MethodCategoryObjectAndArray, "Returns the length of an array or object (number of keys).",
+		MethodCategoryObjectAndArray, "",
 		NewExampleSpec(`#### On arrays
 
 Apply a mapping to each element of an array and replace the element with the result. Within the argument mapping the context is the value of the element being mapped.`,
-			`root.new_nums = this.nums.map_each(
-  match this {
-    this < 10 => deleted()
-    _ => this - 10
-  }
-)`,
+			`root.new_nums = this.nums.map_each(if this < 10 {
+  deleted()
+} else {
+  this - 10
+})`,
 			`{"nums":[3,11,4,17]}`,
 			`{"new_nums":[1,7]}`,
 		),
@@ -862,6 +861,65 @@ func mapEachMethod(target Function, args ...interface{}) (Function, error) {
 			}
 		}
 		return resValue, nil
+	}), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterMethod(
+	NewMethodSpec(
+		"map_each_key", "",
+	).InCategory(
+		MethodCategoryObjectAndArray, `Apply a mapping to each key of an object, and replace the key with the result, which must be a string.`,
+		NewExampleSpec(``,
+			`root.new_dict = this.dict.map_each_key(this.uppercase())`,
+			`{"dict":{"keya":"hello","keyb":"world"}}`,
+			`{"new_dict":{"KEYA":"hello","KEYB":"world"}}`,
+		),
+		NewExampleSpec(``,
+			`root = this.map_each_key(if this.contains("kafka") { "_" + this })`,
+			`{"amqp_key":"foo","kafka_key":"bar","kafka_topic":"baz"}`,
+			`{"_kafka_key":"bar","_kafka_topic":"baz","amqp_key":"foo"}`,
+		),
+	),
+	false, mapEachKeyMethod,
+	ExpectNArgs(1),
+	ExpectFunctionArg(0),
+)
+
+func mapEachKeyMethod(target Function, args ...interface{}) (Function, error) {
+	mapFn, ok := args[0].(Function)
+	if !ok {
+		return nil, fmt.Errorf("expected query argument, received %T", args[0])
+	}
+
+	return simpleMethod(target, func(res interface{}, ctx FunctionContext) (interface{}, error) {
+		obj, ok := res.(map[string]interface{})
+		if !ok {
+			return nil, NewTypeError(res, ValueObject)
+		}
+
+		newMap := make(map[string]interface{}, len(obj))
+		for k, v := range obj {
+			var ctxVal interface{} = k
+
+			newKey, mapErr := mapFn.Exec(ctx.WithValue(ctxVal))
+			if mapErr != nil {
+				return nil, mapErr
+			}
+
+			switch t := newKey.(type) {
+			// TODO: Revise whether we want this.
+			// case Delete:
+			case Nothing:
+				newMap[k] = v
+			case string:
+				newMap[t] = v
+			default:
+				return nil, fmt.Errorf("unexpected result from key mapping: %w", NewTypeError(newKey, ValueString))
+			}
+		}
+		return newMap, nil
 	}), nil
 }
 

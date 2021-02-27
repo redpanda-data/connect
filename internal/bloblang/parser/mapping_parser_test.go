@@ -32,6 +32,14 @@ func TestMappingErrors(t *testing.T) {
 		mapping string
 		err     string
 	}{
+		"bad variable name": {
+			mapping: `let foo+bar = baz`,
+			err:     "line 1 char 8: expected whitespace",
+		},
+		"bad meta name": {
+			mapping: `meta foo+bar = baz`,
+			err:     "line 1 char 9: expected =",
+		},
 		"no mappings": {
 			mapping: ``,
 			err:     `line 1 char 1: expected import, map, or assignment`,
@@ -186,6 +194,24 @@ func TestMappings(t *testing.T) {
 		mapping string
 		output  part
 	}{
+		"compressed arithmetic": {
+			mapping: `this.foo+this.bar`,
+			input: []part{
+				{Content: `{"foo":5,"bar":3}`},
+			},
+			output: part{
+				Content: `8`,
+			},
+		},
+		"compressed arithmetic 2": {
+			mapping: `this.foo-this.bar`,
+			input: []part{
+				{Content: `{"foo":5,"bar":3}`},
+			},
+			output: part{
+				Content: `2`,
+			},
+		},
 		"simple json map": {
 			mapping: `foo = foo + 2
 bar = "test1"

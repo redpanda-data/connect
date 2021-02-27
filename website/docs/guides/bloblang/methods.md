@@ -1060,19 +1060,18 @@ root.foo_len = this.foo.length()
 
 ### `map_each`
 
-Returns the length of an array or object (number of keys).
+
 
 #### On arrays
 
 Apply a mapping to each element of an array and replace the element with the result. Within the argument mapping the context is the value of the element being mapped.
 
 ```coffee
-root.new_nums = this.nums.map_each(
-  match this {
-    this < 10 => deleted()
-    _ => this - 10
-  }
-)
+root.new_nums = this.nums.map_each(if this < 10 {
+  deleted()
+} else {
+  this - 10
+})
 
 # In:  {"nums":[3,11,4,17]}
 # Out: {"new_nums":[1,7]}
@@ -1087,6 +1086,24 @@ root.new_dict = this.dict.map_each(this.value.uppercase())
 
 # In:  {"dict":{"foo":"hello","bar":"world"}}
 # Out: {"new_dict":{"bar":"WORLD","foo":"HELLO"}}
+```
+
+### `map_each_key`
+
+Apply a mapping to each key of an object, and replace the key with the result, which must be a string.
+
+```coffee
+root.new_dict = this.dict.map_each_key(this.uppercase())
+
+# In:  {"dict":{"keya":"hello","keyb":"world"}}
+# Out: {"new_dict":{"KEYA":"hello","KEYB":"world"}}
+```
+
+```coffee
+root = this.map_each_key(if this.contains("kafka") { "_" + this })
+
+# In:  {"amqp_key":"foo","kafka_key":"bar","kafka_topic":"baz"}
+# Out: {"_kafka_key":"bar","_kafka_topic":"baz","amqp_key":"foo"}
 ```
 
 ### `merge`

@@ -9,10 +9,12 @@ All notable changes to this project will be documented in this file.
 
 - New (experimental) Apache Pulsar input and output.
 - Field `codec` added to the `socket` output.
+- New Bloblang method `map_each_key`.
 
 ### Fixed
 
 - Corrected ack behaviour for the beta `azure_queue_storage` input.
+- Bloblang compressed arithmetic expressions with field names (`foo+bar`) now correctly parse.
 
 ### Changed
 
