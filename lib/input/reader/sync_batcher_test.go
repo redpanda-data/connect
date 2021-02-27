@@ -279,7 +279,7 @@ func TestSyncBatcherTimeout(t *testing.T) {
 		rdr.connChan <- nil
 		rdr.readChan <- types.ErrTimeout
 		rdr.closeAsyncChan <- struct{}{}
-		rdr.waitForCloseChan <- nil
+		close(rdr.waitForCloseChan)
 	}()
 
 	if err = batcher.ConnectWithContext(ctx); err != nil {

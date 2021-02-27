@@ -1,9 +1,7 @@
 package docs
 
 import (
-	"fmt"
 	"reflect"
-	"sort"
 
 	"gopkg.in/yaml.v3"
 )
@@ -177,7 +175,7 @@ func FieldDeprecated(name string) FieldSpec {
 }
 
 func (f FieldSpec) sanitise(s interface{}, filter FieldFilter) {
-	if coreType, isCore := coreComponentType(f.Type); isCore {
+	if coreType, isCore := f.Type.IsCoreComponent(); isCore {
 		if f.IsArray {
 			if arr, ok := s.([]interface{}); ok {
 				for _, ele := range arr {
@@ -193,8 +191,7 @@ func (f FieldSpec) sanitise(s interface{}, filter FieldFilter) {
 		} else {
 			SanitiseComponentConfig(coreType, s, filter)
 		}
-	}
-	if len(f.Children) > 0 {
+	} else if len(f.Children) > 0 {
 		if f.IsArray {
 			if arr, ok := s.([]interface{}); ok {
 				for _, ele := range arr {
@@ -211,6 +208,43 @@ func (f FieldSpec) sanitise(s interface{}, filter FieldFilter) {
 			f.Children.sanitise(s, filter)
 		}
 	}
+}
+
+func (f FieldSpec) configOrderedFromNode(node *yaml.Node, removeTypeField bool) error {
+	if coreType, isCore := f.Type.IsCoreComponent(); isCore {
+		if f.IsArray {
+			// TODO
+		} else if f.IsMap {
+			for i := 0; i < len(node.Content); i += 2 {
+				newNode, err := OrderComponentConfig(coreType, f, node.Content[i+1], removeTypeField)
+				if err != nil {
+					return err
+				}
+				node.Content[i+1] = newNode
+			}
+		} else {
+			newNode, err := OrderComponentConfig(coreType, f, node, removeTypeField)
+			if err != nil {
+				return err
+			}
+			node.Content = newNode.Content
+		}
+	} else if len(f.Children) > 0 {
+		if f.IsArray {
+			// TODO
+		} else if f.IsMap {
+			for i := 0; i < len(node.Content); i += 2 {
+				if err := f.Children.configOrderedFromNode(node.Content[i+1], removeTypeField); err != nil {
+					return err
+				}
+			}
+		} else {
+			if err := f.Children.configOrderedFromNode(node, removeTypeField); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 //------------------------------------------------------------------------------
@@ -235,7 +269,8 @@ var (
 	FieldMetrics   FieldType = "metrics"
 )
 
-func coreComponentType(t FieldType) (Type, bool) {
+// IsCoreComponent returns the core component type of a field if applicable.
+func (t FieldType) IsCoreComponent() (Type, bool) {
 	switch t {
 	case FieldInput:
 		return TypeInput, true
@@ -327,90 +362,16 @@ func (f FieldSpecs) sanitise(s interface{}, filter FieldFilter) {
 	}
 }
 
-// ConfigCommon takes a sanitised configuration of a component, a map of field
-// docs, and removes all fields that aren't common or are deprecated.
-func (f FieldSpecs) ConfigCommon(config interface{}) (interface{}, error) {
-	return f.configFiltered(config, func(field FieldSpec) bool {
-		return !(field.Advanced || field.Deprecated)
-	})
-}
-
-// ConfigAdvanced takes a sanitised configuration of a component, a map of field
-// docs, and removes all fields that are deprecated.
-func (f FieldSpecs) ConfigAdvanced(config interface{}) (interface{}, error) {
-	return f.configFiltered(config, func(field FieldSpec) bool {
-		return !field.Deprecated
-	})
-}
-
-func (f FieldSpecs) configFiltered(config interface{}, filter func(f FieldSpec) bool) (interface{}, error) {
-	var asNode yaml.Node
-	var ok bool
-	if asNode, ok = config.(yaml.Node); !ok {
-		rawBytes, err := yaml.Marshal(config)
-		if err != nil {
-			return asNode, err
-		}
-		if err = yaml.Unmarshal(rawBytes, &asNode); err != nil {
-			return asNode, err
-		}
-	}
-	if asNode.Kind != yaml.DocumentNode {
-		return asNode, fmt.Errorf("expected document node kind: %v", asNode.Kind)
-	}
-	if asNode.Content[0].Kind != yaml.MappingNode {
-		return asNode, fmt.Errorf("expected mapping node child kind: %v", asNode.Content[0].Kind)
-	}
-	newChild, err := f.configFilteredFromNode(*asNode.Content[0], filter)
-	if err != nil {
-		return asNode, err
-	}
-	return &newChild, nil
-}
-
-func orderNode(node *yaml.Node) {
-	sourceNodes := [][2]*yaml.Node{}
-	for i := 0; i < len(node.Content); i += 2 {
-		sourceNodes = append(sourceNodes, [2]*yaml.Node{
-			node.Content[i],
-			node.Content[i+1],
-		})
-	}
-	sort.Slice(sourceNodes, func(i, j int) bool {
-		return sourceNodes[i][0].Value < sourceNodes[j][0].Value
-	})
-	for i, nodes := range sourceNodes {
-		if nodes[1].Kind == yaml.MappingNode {
-			orderNode(nodes[1])
-		}
-		node.Content[i*2] = nodes[0]
-		node.Content[i*2+1] = nodes[1]
-	}
-}
-
-func (f FieldSpecs) configFilteredFromNode(node yaml.Node, filter func(FieldSpec) bool) (*yaml.Node, error) {
-	// First, order the nodes as they currently exist.
-	orderNode(&node)
-
-	// Next, following the order of our field specs, extract the fields we're
-	// targetting.
+func (f FieldSpecs) configOrderedFromNode(node *yaml.Node, removeTypeField bool) error {
+	// Following the order of our field specs, extract each field.
 	newNodes := []*yaml.Node{}
 	for _, field := range f {
-		if !filter(field) {
-			continue
-		}
 	searchLoop:
 		for i := 0; i < len(node.Content); i += 2 {
 			if node.Content[i].Value == field.Name {
 				nextNode := node.Content[i+1]
-				if len(field.Children) > 0 && !field.IsArray {
-					if nextNode.Kind != yaml.MappingNode {
-						return nil, fmt.Errorf("expected mapping node kind: %v", nextNode.Kind)
-					}
-					var err error
-					if nextNode, err = field.Children.configFilteredFromNode(*nextNode, filter); err != nil {
-						return nil, err
-					}
+				if err := field.configOrderedFromNode(nextNode, removeTypeField); err != nil {
+					return err
 				}
 				newNodes = append(newNodes, node.Content[i])
 				newNodes = append(newNodes, nextNode)
@@ -419,7 +380,7 @@ func (f FieldSpecs) configFilteredFromNode(node yaml.Node, filter func(FieldSpec
 		}
 	}
 	node.Content = newNodes
-	return &node, nil
+	return nil
 }
 
 //------------------------------------------------------------------------------

@@ -9,7 +9,6 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/util/config"
 	"github.com/Jeffail/gabs/v2"
-	"gopkg.in/yaml.v3"
 )
 
 // AnnotatedExample is an isolated example for a component.
@@ -273,61 +272,64 @@ Introduced in version {{.Version}}.
 {{end}}
 `
 
-func (c *ComponentSpec) createConfigs(root string, fullConfigExample interface{}) (
-	advancedConfigBytes, commonConfigBytes []byte,
-) {
-	rootArray, isRootArray := fullConfigExample.([]interface{})
-	isEmptyRootArray := isRootArray && len(rootArray) == 0
-
-	var err error
-	if len(c.Config.Children) > 0 && !isEmptyRootArray {
-		var advancedConfig interface{}
-		advancedConfig, err = c.Config.Children.ConfigAdvanced(fullConfigExample)
-		if err == nil {
-			tmp := map[string]interface{}{
-				c.Name: advancedConfig,
-			}
-			if len(root) > 0 {
-				tmp = map[string]interface{}{
-					root: tmp,
-				}
-			}
-			advancedConfigBytes, err = config.MarshalYAML(tmp)
+func iClone(root interface{}) interface{} {
+	switch t := root.(type) {
+	case map[string]interface{}:
+		newMap := make(map[string]interface{}, len(t))
+		for k, v := range t {
+			newMap[k] = iClone(v)
 		}
-		var commonConfig interface{}
-		if err == nil {
-			commonConfig, err = c.Config.Children.ConfigCommon(advancedConfig)
+		return newMap
+	case []interface{}:
+		newSlice := make([]interface{}, len(t))
+		for i, v := range t {
+			newSlice[i] = iClone(v)
 		}
-		if err == nil {
-			tmp := map[string]interface{}{
-				c.Name: commonConfig,
-			}
-			if len(root) > 0 {
-				tmp = map[string]interface{}{
-					root: tmp,
-				}
-			}
-			commonConfigBytes, err = config.MarshalYAML(tmp)
-		}
+		return newSlice
 	}
+	return root
+}
+
+func genExampleConfigs(t Type, spec FieldSpec, nest bool, fullConfigExample interface{}) (string, string, error) {
+	advConfig, commonConfig := iClone(fullConfigExample), iClone(fullConfigExample)
+	if err := SanitiseComponentConfig(t, advConfig, func(f FieldSpec) bool {
+		return !f.Deprecated
+	}); err != nil {
+		panic(err)
+	}
+	if err := SanitiseComponentConfig(t, commonConfig, func(f FieldSpec) bool {
+		return !f.Advanced && !f.Deprecated
+	}); err != nil {
+		panic(err)
+	}
+
+	advConfigOrdered, err := OrderComponentConfig(t, spec, advConfig, true)
 	if err != nil {
 		panic(err)
 	}
-	if isEmptyRootArray || len(c.Config.Children) == 0 {
-		tmp := map[string]interface{}{
-			c.Name: fullConfigExample,
-		}
-		if len(root) > 0 {
-			tmp = map[string]interface{}{
-				root: tmp,
-			}
-		}
-		if advancedConfigBytes, err = config.MarshalYAML(tmp); err != nil {
-			panic(err)
-		}
-		commonConfigBytes = advancedConfigBytes
+	commonConfigOrdered, err := OrderComponentConfig(t, spec, commonConfig, true)
+	if err != nil {
+		panic(err)
 	}
-	return
+
+	if nest {
+		advConfig = map[string]interface{}{string(t): advConfigOrdered}
+		commonConfig = map[string]interface{}{string(t): commonConfigOrdered}
+	} else {
+		advConfig = advConfigOrdered
+		commonConfig = commonConfigOrdered
+	}
+
+	advancedConfigBytes, err := config.MarshalYAML(advConfig)
+	if err != nil {
+		panic(err)
+	}
+	commonConfigBytes, err := config.MarshalYAML(commonConfig)
+	if err != nil {
+		panic(err)
+	}
+
+	return string(commonConfigBytes), string(advancedConfigBytes), nil
 }
 
 // AsMarkdown renders the spec of a component, along with a full configuration
@@ -356,25 +358,10 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 		ctx.Categories = string(cats)
 	}
 
-	if tmpBytes, err := yaml.Marshal(fullConfigExample); err == nil {
-		fullConfigExample = map[string]interface{}{}
-		if err = yaml.Unmarshal(tmpBytes, &fullConfigExample); err != nil {
-			panic(err)
-		}
-	} else {
-		panic(err)
+	var err error
+	if ctx.CommonConfig, ctx.AdvancedConfig, err = genExampleConfigs(c.Type, c.Config, nest, fullConfigExample); err != nil {
+		return nil, err
 	}
-
-	root := ""
-	if nest {
-		root = string(c.Type)
-	}
-
-	advancedConfigBytes, commonConfigBytes := c.createConfigs(root, fullConfigExample)
-	ctx.CommonConfig = string(commonConfigBytes)
-	ctx.AdvancedConfig = string(advancedConfigBytes)
-
-	gConf := gabs.Wrap(fullConfigExample)
 
 	if len(c.Description) > 0 && c.Description[0] == '\n' {
 		ctx.Description = c.Description[1:]
@@ -384,22 +371,10 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 	}
 
 	flattenedFields := FieldSpecs{}
-	var walkFields func(path string, gObj *gabs.Container, f FieldSpecs) ([]string, []string)
-	walkFields = func(path string, gObj *gabs.Container, f FieldSpecs) ([]string, []string) {
-		var missingFields []string
-		expectedFields := map[string]struct{}{}
-		for k := range gObj.ChildrenMap() {
-			expectedFields[k] = struct{}{}
-		}
-		seenFields := map[string]struct{}{}
-		var duplicateFields []string
+	var walkFields func(path string, f FieldSpecs)
+	walkFields = func(path string, f FieldSpecs) {
 		for _, v := range f {
-			if _, seen := seenFields[v.Name]; seen {
-				duplicateFields = append(duplicateFields, v.Name)
-			}
-			seenFields[v.Name] = struct{}{}
 			newV := v
-			delete(expectedFields, v.Name)
 			if len(path) > 0 {
 				newV.Name = path + newV.Name
 			}
@@ -411,36 +386,22 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 				} else if newV.IsMap {
 					newPath = newPath + ".<name>"
 				}
-				tmpMissing, tmpDuplicate := walkFields(newPath+".", gConf.S(v.Name), v.Children)
-				missingFields = append(missingFields, tmpMissing...)
-				duplicateFields = append(duplicateFields, tmpDuplicate...)
+				walkFields(newPath+".", v.Children)
 			}
 		}
-		for k := range expectedFields {
-			missingFields = append(missingFields, path+k)
-		}
-		return missingFields, duplicateFields
 	}
-	if len(c.Config.Children) > 0 {
-		rootPath := ""
-		if _, isArray := gConf.Data().([]interface{}); isArray {
-			rootPath = "[]."
-		}
-		if missing, duplicates := walkFields(rootPath, gConf, c.Config.Children); len(missing) > 0 {
-			return nil, fmt.Errorf("spec missing fields: %v", missing)
-		} else if len(duplicates) > 0 {
-			return nil, fmt.Errorf("spec duplicate fields: %v", duplicates)
-		}
+	rootPath := ""
+	if c.Config.IsArray {
+		rootPath = "[]."
+	} else if c.Config.IsMap {
+		rootPath = "<name>."
 	}
+	walkFields(rootPath, c.Config.Children)
 
+	gConf := gabs.Wrap(fullConfigExample).S(c.Name)
 	for _, v := range flattenedFields {
 		if v.Deprecated {
 			continue
-		}
-
-		// TODO: Find another way to verify array element fields
-		if !strings.Contains(v.Name, "[].") && !strings.Contains(v.Name, "<name>") && !gConf.ExistsP(v.Name) {
-			return nil, fmt.Errorf("unrecognised field '%v'", v.Name)
 		}
 
 		defaultValue := v.Default
@@ -513,7 +474,7 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 	}
 
 	var buf bytes.Buffer
-	err := template.Must(template.New("component").Parse(componentTemplate)).Execute(&buf, ctx)
+	err = template.Must(template.New("component").Parse(componentTemplate)).Execute(&buf, ctx)
 
 	return buf.Bytes(), err
 }

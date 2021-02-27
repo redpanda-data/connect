@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/Jeffail/benthos/v3/internal/interop/plugins"
+	"gopkg.in/yaml.v3"
 )
 
 func reservedFieldsByType(t Type) map[string]FieldSpec {
@@ -148,30 +149,85 @@ func SanitiseComponentConfig(componentType Type, raw interface{}, filter FieldFi
 	}
 
 	for name, fieldSpec := range reservedFields {
-		coreType, isCore := coreComponentType(fieldSpec.Type)
-		if !isCore {
-			continue
+		fieldSpec.sanitise(m[name], filter)
+	}
+	return nil
+}
+
+// OrderComponentConfig takes a raw configuration object and returns a yaml node
+// type with the fields ordered by the field spec. Also optionally removes the
+// `type` field from this and all nested components.
+func OrderComponentConfig(cType Type, spec FieldSpec, raw interface{}, removeTypeField bool) (*yaml.Node, error) {
+	var node *yaml.Node
+	var ok bool
+	if node, ok = raw.(*yaml.Node); !ok {
+		rawBytes, err := yaml.Marshal(raw)
+		if err != nil {
+			return nil, err
 		}
-		rawCoreType, exists := m[name]
-		if !exists {
-			continue
+		var newNode yaml.Node
+		if err = yaml.Unmarshal(rawBytes, &newNode); err != nil {
+			return nil, err
 		}
-		if fieldSpec.IsArray {
-			if arr, ok := rawCoreType.([]interface{}); ok {
-				for _, ele := range arr {
-					_ = SanitiseComponentConfig(coreType, ele, filter)
-				}
+		if newNode.Kind != yaml.DocumentNode {
+			return nil, fmt.Errorf("expected document node kind: %v", newNode.Kind)
+		}
+		if newNode.Content[0].Kind != yaml.MappingNode {
+			return nil, fmt.Errorf("expected mapping node child kind: %v", newNode.Content[0].Kind)
+		}
+		node = newNode.Content[0]
+	}
+
+	if cType == "condition" {
+		return node, nil
+	}
+
+	newNodes := []*yaml.Node{}
+
+	var name string
+	for i := 0; i < len(node.Content); i += 2 {
+		if node.Content[i].Value == "type" {
+			name = node.Content[i+1].Value
+			if !removeTypeField {
+				newNodes = append(newNodes, node.Content[i])
+				newNodes = append(newNodes, node.Content[i+1])
 			}
-		} else if fieldSpec.IsMap {
-			if obj, ok := rawCoreType.(map[string]interface{}); ok {
-				for _, v := range obj {
-					_ = SanitiseComponentConfig(coreType, v, filter)
-				}
+			break
+		}
+	}
+	if len(name) == 0 {
+		if len(node.Content) == 0 {
+			return node, nil
+		}
+		return nil, fmt.Errorf("type field not found for component %v config", cType)
+	}
+
+	for i := 0; i < len(node.Content); i += 2 {
+		if node.Content[i].Value == name {
+			if err := spec.configOrderedFromNode(node.Content[i+1], removeTypeField); err != nil {
+				return nil, err
 			}
-		} else {
-			_ = SanitiseComponentConfig(coreType, rawCoreType, filter)
+			newNodes = append(newNodes, node.Content[i])
+			newNodes = append(newNodes, node.Content[i+1])
+			break
 		}
 	}
 
-	return nil
+	reservedFields := reservedFieldsByType(cType)
+	for i := 0; i < len(node.Content); i += 2 {
+		if node.Content[i].Value == name || node.Content[i].Value == "type" {
+			continue
+		}
+		spec, exists := reservedFields[node.Content[i].Value]
+		if exists {
+			if err := spec.configOrderedFromNode(node.Content[i+1], removeTypeField); err != nil {
+				return nil, err
+			}
+		}
+		newNodes = append(newNodes, node.Content[i])
+		newNodes = append(newNodes, node.Content[i+1])
+	}
+
+	node.Content = newNodes
+	return node, nil
 }

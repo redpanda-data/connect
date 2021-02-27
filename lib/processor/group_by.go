@@ -64,7 +64,7 @@ output:
 `,
 			},
 		},
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().Array().WithChildren(
 			docs.FieldCommon(
 				"check",
 				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message belongs to a given group.",
@@ -87,7 +87,7 @@ output:
 				"processors",
 				"A list of [processors](/docs/components/processors/about/) to execute on the newly formed group.",
 			).HasDefault([]interface{}{}).Array().HasType(docs.FieldProcessor),
-		},
+		),
 		UsesBatches: true,
 	}
 }

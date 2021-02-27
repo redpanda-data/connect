@@ -44,17 +44,11 @@ func create(t, path string, resBytes []byte) {
 }
 
 func render(dir string, embed bool, confSanit interface{}, spec docs.ComponentSpec) {
-	var segment interface{}
-	switch t := confSanit.(type) {
-	case map[string]interface{}:
-		segment = t[spec.Name]
-	case config.Sanitised:
-		segment = t[spec.Name]
-	default:
-		panic(fmt.Sprintf("Failed to generate docs for '%v': sanitised config wrong type: %T", spec.Name, confSanit))
+	if s, ok := confSanit.(config.Sanitised); ok {
+		confSanit = map[string]interface{}(s)
 	}
 
-	mdSpec, err := spec.AsMarkdown(embed, segment)
+	mdSpec, err := spec.AsMarkdown(embed, confSanit)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to generate docs for '%v': %v", spec.Name, err))
 	}
@@ -71,7 +65,10 @@ func main() {
 	doInputs(docsDir)
 	doBuffers(docsDir)
 	doCaches(docsDir)
-	doConditions(docsDir)
+	// Note, disabling condition docs generation now as a convenience, but we
+	// can add it back in if there are automated changes required.
+	// TODO: V4 Delete entirely
+	// doConditions(docsDir)
 	doMetrics(docsDir)
 	doOutputs(docsDir)
 	doProcessors(docsDir)
