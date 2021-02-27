@@ -72,12 +72,12 @@ func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg types.Mess
 		for i := int32(0); i < n; i++ {
 			queueMsg := dequeue.Message(i)
 			part := message.NewPart([]byte(queueMsg.Text))
-			msg.Append(part)
-			meta := msg.Get(0).Metadata()
+			meta := part.Metadata()
 			meta.Set("queue_storage_insertion_time", queueMsg.InsertionTime.Format(time.RFC3339))
 			for k, v := range metadata {
 				meta.Set(k, v)
 			}
+			msg.Append(part)
 			dqm[i] = queueMsg
 		}
 		return msg, func(rctx context.Context, res types.Response) error {
