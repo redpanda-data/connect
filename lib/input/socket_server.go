@@ -171,6 +171,8 @@ func (t *SocketServer) sendMsg(msg types.Message) bool {
 
 	// Block whilst retries are happening
 	t.retriesMut.Lock()
+	// Ignore SA2001: empty critical section
+	// nolint:staticcheck
 	t.retriesMut.Unlock()
 
 	resChan := make(chan types.Response)
@@ -239,6 +241,8 @@ func (t *SocketServer) loop() {
 		wg.Wait()
 
 		t.retriesMut.Lock()
+		// Ignore SA2001: empty critical section
+		// nolint:staticcheck
 		t.retriesMut.Unlock()
 
 		t.listener.Close()
@@ -323,6 +327,8 @@ func (t *SocketServer) udpLoop() {
 
 	defer func() {
 		t.retriesMut.Lock()
+		// Ignore SA2001: empty critical section
+		// nolint:staticcheck
 		t.retriesMut.Unlock()
 
 		close(t.transactions)
