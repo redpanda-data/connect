@@ -248,7 +248,7 @@ func TestBatchCondition(t *testing.T) {
 		t.Error("Expected skip ack")
 	}
 
-	msgs, res = proc.ProcessMessage(message.New([][]byte{[]byte("baz: end_batch")}))
+	msgs, _ = proc.ProcessMessage(message.New([][]byte{[]byte("baz: end_batch")}))
 	if len(msgs) != 1 {
 		t.Fatal("Expected batch")
 	}

@@ -54,12 +54,10 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).`,
-		FieldSpecs: append(
-			append(docs.FieldSpecs{
-				docs.FieldCommon("url", "The SQS URL to consume from."),
-				docs.FieldAdvanced("delete_message", "Whether to delete the consumed message once it is acked. Disabling allows you to handle the deletion using a different mechanism."),
-			}, sess.FieldSpecs()...),
-		),
+		FieldSpecs: append(docs.FieldSpecs{
+			docs.FieldCommon("url", "The SQS URL to consume from."),
+			docs.FieldAdvanced("delete_message", "Whether to delete the consumed message once it is acked. Disabling allows you to handle the deletion using a different mechanism."),
+		}, sess.FieldSpecs()...),
 		Categories: []Category{
 			CategoryServices,
 			CategoryAWS,

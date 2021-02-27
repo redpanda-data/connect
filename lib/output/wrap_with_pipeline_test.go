@@ -79,14 +79,14 @@ func TestBasicWrapPipeline(t *testing.T) {
 	}
 
 	procs := 0
-	newOutput, err := WrapWithPipeline(&procs, mockOut, func(i *int) (types.Pipeline, error) {
+	_, err := WrapWithPipeline(&procs, mockOut, func(i *int) (types.Pipeline, error) {
 		return nil, errors.New("nope")
 	})
 	if err == nil {
 		t.Error("expected error from back constructor")
 	}
 
-	newOutput, err = WrapWithPipeline(&procs, mockOut, func(i *int) (types.Pipeline, error) {
+	newOutput, err := WrapWithPipeline(&procs, mockOut, func(i *int) (types.Pipeline, error) {
 		return mockPi, nil
 	})
 	if err != nil {
