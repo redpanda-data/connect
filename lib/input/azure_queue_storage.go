@@ -68,8 +68,9 @@ func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg types.Mess
 		props, _ := a.queueURL.GetProperties(ctx)
 		metadata := props.NewMetadata()
 		msg := message.New(nil)
-		for m := int32(0); m < dequeue.NumMessages(); m++ {
-			queueMsg := dequeue.Message(m)
+		dqm := make([]*azqueue.DequeuedMessage, n)
+		for i := int32(0); i < n; i++ {
+			queueMsg := dequeue.Message(i)
 			part := message.NewPart([]byte(queueMsg.Text))
 			msg.Append(part)
 			meta := msg.Get(0).Metadata()
@@ -77,10 +78,16 @@ func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg types.Mess
 			for k, v := range metadata {
 				meta.Set(k, v)
 			}
-			msgIDURL := messageURL.NewMessageIDURL(queueMsg.ID)
-			_, err = msgIDURL.Delete(ctx, queueMsg.PopReceipt)
+			dqm[i] = queueMsg
 		}
 		return msg, func(rctx context.Context, res types.Response) error {
+			for i := int32(0); i < n; i++ {
+				msgIDURL := messageURL.NewMessageIDURL(dqm[i].ID)
+				_, err = msgIDURL.Delete(ctx, dqm[i].PopReceipt)
+				if err != nil {
+					return fmt.Errorf("error deleting message: %v", err)
+				}
+			}
 			return nil
 		}, nil
 	}
