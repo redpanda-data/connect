@@ -199,6 +199,7 @@ func (t *SocketServer) sendMsg(msg types.Message) bool {
 					return
 				}
 				if !hasLocked {
+					hasLocked = true
 					t.retriesMut.RLock()
 					defer t.retriesMut.RUnlock()
 				}
