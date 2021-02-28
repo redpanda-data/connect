@@ -37,6 +37,10 @@ var _ = registerIntegrationTest("redis_failover", func(t *testing.T) {
 	net, err := pool.CreateNetwork("redis-sentinel")
 	require.NoError(t, err)
 
+	t.Cleanup(func() {
+		pool.RemoveNetwork(net)
+	})
+
 	master, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Name:         "redis-master",
 		Repository:   "bitnami/redis",
