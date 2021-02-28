@@ -20,13 +20,16 @@ func LintBloblangMapping(v interface{}) []Lint {
 		// return []Lint{NewLintError(0, fmt.Sprintf("expected string value, got %T", v))}
 		return nil
 	}
+	if len(str) == 0 {
+		return nil
+	}
 	_, err := bloblang.NewMapping("", str)
 	if err == nil {
 		return nil
 	}
 	if mErr, ok := err.(*parser.Error); ok {
 		line, col := parser.LineAndColOf([]rune(str), mErr.Input)
-		lint := NewLintError(line, mErr.Error())
+		lint := NewLintError(line, mErr.ErrorAtPositionStructured("", []rune(str)))
 		lint.Column = col
 		return []Lint{lint}
 	}
@@ -43,13 +46,16 @@ func LintBloblangField(v interface{}) []Lint {
 		// return []Lint{NewLintError(0, fmt.Sprintf("expected string value, got %T", v))}
 		return nil
 	}
+	if len(str) == 0 {
+		return nil
+	}
 	_, err := bloblang.NewField(str)
 	if err == nil {
 		return nil
 	}
 	if mErr, ok := err.(*parser.Error); ok {
 		line, col := parser.LineAndColOf([]rune(str), mErr.Input)
-		lint := NewLintError(line, mErr.Error())
+		lint := NewLintError(line, mErr.ErrorAtPositionStructured("", []rune(str)))
 		lint.Column = col
 		return []Lint{lint}
 	}
