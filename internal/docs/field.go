@@ -58,6 +58,8 @@ type FieldSpec struct {
 	Version string
 
 	omitWhenFn func(field, parent interface{}) (string, bool)
+
+	customLintFn func(v interface{}) []Lint
 }
 
 // IsInterpolated indicates that the field supports interpolation functions.
@@ -139,6 +141,14 @@ func (f FieldSpec) WithChildren(children ...FieldSpec) FieldSpec {
 // config.
 func (f FieldSpec) OmitWhen(fn func(field, parent interface{}) (string, bool)) FieldSpec {
 	f.omitWhenFn = fn
+	return f
+}
+
+// Linter adds a linting function to a field. When linting is performed on a
+// config the provided function will be called with a boxed variant of the field
+// value, allowing it to perform linting on that value.
+func (f FieldSpec) Linter(fn func(v interface{}) []Lint) FieldSpec {
+	f.customLintFn = fn
 	return f
 }
 
@@ -275,11 +285,13 @@ type Lint struct {
 	What  string
 }
 
-func lintError(line int, msg string) Lint {
+// NewLintError returns an error lint.
+func NewLintError(line int, msg string) Lint {
 	return Lint{Line: line, Level: LintError, What: msg}
 }
 
-func lintWarning(line int, msg string) Lint {
+// NewLintWarning returns a warning lint.
+func NewLintWarning(line int, msg string) Lint {
 	return Lint{Line: line, Level: LintWarning, What: msg}
 }
 
@@ -288,17 +300,19 @@ func (f FieldSpec) lintNode(node *yaml.Node) []Lint {
 	if coreType, isCore := f.Type.IsCoreComponent(); isCore {
 		if f.IsArray {
 			if node.Kind != yaml.SequenceNode {
-				lints = append(lints, lintError(node.Line, "expected array value"))
-			}
-			for i := 0; i < len(node.Content); i++ {
-				lints = append(lints, LintNode(coreType, node.Content[i])...)
+				lints = append(lints, NewLintError(node.Line, "expected array value"))
+			} else {
+				for i := 0; i < len(node.Content); i++ {
+					lints = append(lints, LintNode(coreType, node.Content[i])...)
+				}
 			}
 		} else if f.IsMap {
 			if node.Kind != yaml.MappingNode {
-				lints = append(lints, lintError(node.Line, "expected object value"))
-			}
-			for i := 0; i < len(node.Content); i += 2 {
-				lints = append(lints, LintNode(coreType, node.Content[i+1])...)
+				lints = append(lints, NewLintError(node.Line, "expected object value"))
+			} else {
+				for i := 0; i < len(node.Content); i += 2 {
+					lints = append(lints, LintNode(coreType, node.Content[i+1])...)
+				}
 			}
 		} else {
 			lints = append(lints, LintNode(coreType, node)...)
@@ -306,23 +320,25 @@ func (f FieldSpec) lintNode(node *yaml.Node) []Lint {
 	} else if len(f.Children) > 0 {
 		if f.IsArray {
 			if node.Kind != yaml.SequenceNode {
-				lints = append(lints, lintError(node.Line, "expected array value"))
-			}
-			for i := 0; i < len(node.Content); i++ {
-				lints = append(lints, f.Children.LintNode(node.Content[i])...)
+				lints = append(lints, NewLintError(node.Line, "expected array value"))
+			} else {
+				for i := 0; i < len(node.Content); i++ {
+					lints = append(lints, f.Children.LintNode(node.Content[i])...)
+				}
 			}
 		} else if f.IsMap {
 			if node.Kind != yaml.MappingNode {
-				lints = append(lints, lintError(node.Line, "expected object value"))
-			}
-			for i := 0; i < len(node.Content); i += 2 {
-				lints = append(lints, f.Children.LintNode(node.Content[i+1])...)
+				lints = append(lints, NewLintError(node.Line, "expected object value"))
+			} else {
+				for i := 0; i < len(node.Content); i += 2 {
+					lints = append(lints, f.Children.LintNode(node.Content[i+1])...)
+				}
 			}
 		} else {
 			lints = append(lints, f.Children.LintNode(node)...)
 		}
 	}
-	// TODO: Add lint fn for the spec itself.
+	lints = append(lints, customLint(f, node)...)
 	return lints
 }
 
@@ -486,6 +502,41 @@ func nodeToInterface(node *yaml.Node) (interface{}, error) {
 	return i, nil
 }
 
+func lintFromOmit(spec FieldSpec, parent, node *yaml.Node) []Lint {
+	var lints []Lint
+	if spec.omitWhenFn != nil {
+		fieldValue, err := nodeToInterface(node)
+		if err != nil {
+			lints = append(lints, NewLintWarning(node.Line, "failed to marshal value"))
+			return lints
+		}
+		parentMap, err := nodeToInterface(parent)
+		if err != nil {
+			lints = append(lints, NewLintWarning(node.Line, "failed to marshal parent"))
+			return lints
+		}
+		if why, omit := spec.shouldOmit(fieldValue, parentMap); omit {
+			lints = append(lints, NewLintError(node.Line, why))
+		}
+	}
+	return lints
+}
+
+func customLint(spec FieldSpec, node *yaml.Node) []Lint {
+	if spec.customLintFn == nil {
+		return nil
+	}
+	fieldValue, err := nodeToInterface(node)
+	if err != nil {
+		return []Lint{NewLintWarning(node.Line, "failed to marshal value")}
+	}
+	lints := spec.customLintFn(fieldValue)
+	for i := range lints {
+		lints[i].Line = node.Line
+	}
+	return lints
+}
+
 // LintNode walks a yaml node and returns a list of linting errors found.
 func (f FieldSpecs) LintNode(node *yaml.Node) []Lint {
 	var lints []Lint
@@ -498,28 +549,10 @@ func (f FieldSpecs) LintNode(node *yaml.Node) []Lint {
 	for i := 0; i < len(node.Content); i += 2 {
 		spec, exists := specNames[node.Content[i].Value]
 		if !exists {
-			lints = append(lints, lintError(node.Content[i].Line, fmt.Sprintf("field %v not recognised", node.Content[i].Value)))
+			lints = append(lints, NewLintError(node.Content[i].Line, fmt.Sprintf("field %v not recognised", node.Content[i].Value)))
 			continue
 		}
-		if spec.omitWhenFn != nil {
-			fieldValue, err := nodeToInterface(node.Content[i+1])
-			if err != nil {
-				lints = append(lints, lintWarning(
-					node.Content[i].Line, fmt.Sprintf("failed to marshal key %v", node.Content[i].Value),
-				))
-				continue
-			}
-			parentMap, err := nodeToInterface(node)
-			if err != nil {
-				lints = append(lints, lintWarning(
-					node.Content[i].Line, fmt.Sprintf("failed to marshal key %v parent", node.Content[i].Value),
-				))
-				continue
-			}
-			if why, omit := spec.shouldOmit(fieldValue, parentMap); omit {
-				lints = append(lints, lintError(node.Content[i].Line, why))
-			}
-		}
+		lints = append(lints, lintFromOmit(spec, node, node.Content[i+1])...)
 		lints = append(lints, spec.lintNode(node.Content[i+1])...)
 	}
 	return lints

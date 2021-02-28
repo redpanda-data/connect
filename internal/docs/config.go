@@ -257,14 +257,14 @@ func LintNode(cType Type, node *yaml.Node) []Lint {
 		}
 		var err error
 		if name, _, err = getInferenceCandidateFromList(cType, "", keys); err != nil {
-			lints = append(lints, lintWarning(node.Line, "unable to infer component type"))
+			lints = append(lints, NewLintWarning(node.Line, "unable to infer component type"))
 			return lints
 		}
 	}
 
 	cSpec, exists := GetDocs(name, cType)
 	if !exists {
-		lints = append(lints, lintWarning(node.Line, fmt.Sprintf("failed to obtain docs for %v type %v", cType, name)))
+		lints = append(lints, NewLintWarning(node.Line, fmt.Sprintf("failed to obtain docs for %v type %v", cType, name)))
 		return lints
 	}
 
@@ -282,9 +282,10 @@ func LintNode(cType Type, node *yaml.Node) []Lint {
 		}
 		spec, exists := reservedFields[node.Content[i].Value]
 		if exists {
+			lints = append(lints, lintFromOmit(spec, node, node.Content[i+1])...)
 			lints = append(lints, spec.lintNode(node.Content[i+1])...)
 		} else {
-			lints = append(lints, lintError(
+			lints = append(lints, NewLintError(
 				node.Content[i].Line,
 				fmt.Sprintf("field %v is invalid when the component type is %v", node.Content[i].Value, name),
 			))
