@@ -56,7 +56,7 @@ type FieldSpec struct {
 	// Version lists an explicit Benthos release where this fields behaviour was last modified.
 	Version string
 
-	omitWhen func(v interface{}) bool
+	omitWhen func(field, parent interface{}) bool
 }
 
 // IsInterpolated indicates that the field supports interpolation functions.
@@ -136,7 +136,7 @@ func (f FieldSpec) WithChildren(children ...FieldSpec) FieldSpec {
 // OmitWhen specifies a custom func that, when provided a generic config struct,
 // returns a boolean indicating when the field can be safely omitted from a
 // config.
-func (f FieldSpec) OmitWhen(fn func(c interface{}) bool) FieldSpec {
+func (f FieldSpec) OmitWhen(fn func(field, parent interface{}) bool) FieldSpec {
 	f.omitWhen = fn
 	return f
 }
@@ -354,7 +354,7 @@ func (f FieldSpecs) sanitise(s interface{}, filter FieldFilter) {
 			continue
 		}
 		v := m[spec.Name]
-		if spec.omitWhen != nil && spec.omitWhen(v) {
+		if spec.omitWhen != nil && spec.omitWhen(v, m) {
 			delete(m, spec.Name)
 		} else {
 			spec.sanitise(v, filter)

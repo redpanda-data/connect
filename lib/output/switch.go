@@ -105,7 +105,7 @@ The maximum number of parallel message batches to have in flight at any given ti
 				docs.FieldDeprecated("condition").HasType(docs.FieldCondition),
 				docs.FieldDeprecated("fallthrough"),
 				docs.FieldDeprecated("output").HasType(docs.FieldOutput),
-			).OmitWhen(func(v interface{}) bool {
+			).OmitWhen(func(v, _ interface{}) bool {
 				arr, ok := v.([]interface{})
 				return ok && len(arr) == 0
 			}),

@@ -17,8 +17,8 @@ func reservedFieldsByType(t Type) map[string]FieldSpec {
 	case TypeInput:
 		fallthrough
 	case TypeOutput:
-		m["processors"] = FieldCommon("processors", "").Array().HasType(FieldProcessor).OmitWhen(func(v interface{}) bool {
-			if arr, ok := v.([]interface{}); ok && len(arr) == 0 {
+		m["processors"] = FieldCommon("processors", "").Array().HasType(FieldProcessor).OmitWhen(func(field, _ interface{}) bool {
+			if arr, ok := field.([]interface{}); ok && len(arr) == 0 {
 				return true
 			}
 			return false
@@ -143,7 +143,7 @@ func SanitiseComponentConfig(componentType Type, raw interface{}, filter FieldFi
 		if !exists {
 			delete(m, k)
 		}
-		if spec.omitWhen != nil && spec.omitWhen(v) {
+		if spec.omitWhen != nil && spec.omitWhen(v, m) {
 			delete(m, k)
 		}
 	}

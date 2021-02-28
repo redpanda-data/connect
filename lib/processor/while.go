@@ -45,7 +45,7 @@ If following a loop execution the number of messages in a batch is reduced to ze
 				`errored()`,
 				`this.urls.unprocessed.length() > 0`,
 			).HasDefault(""),
-			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v interface{}) bool {
+			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v, _ interface{}) bool {
 				defaultBytes, err := yaml.Marshal(condition.NewConfig())
 				if err != nil {
 					return false

@@ -72,7 +72,7 @@ output:
 				`this.contents.urls.contains("https://benthos.dev/")`,
 				`true`,
 			).HasDefault(""),
-			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v interface{}) bool {
+			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v, _ interface{}) bool {
 				defaultBytes, err := yaml.Marshal(condition.NewConfig())
 				if err != nil {
 					return false

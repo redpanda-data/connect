@@ -20,6 +20,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/kafka/sasl"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
+	"github.com/Jeffail/gabs/v2"
 	"github.com/Shopify/sarama"
 )
 
@@ -93,8 +94,12 @@ You can access these metadata fields using [function interpolation](/docs/config
 
 			// TODO: Remove V4
 			docs.FieldDeprecated("max_batch_count"),
-			docs.FieldDeprecated("topic"),
-			docs.FieldDeprecated("partition"),
+			docs.FieldDeprecated("topic").OmitWhen(func(field, parent interface{}) bool {
+				return len(gabs.Wrap(parent).S("topics").Children()) > 0
+			}),
+			docs.FieldDeprecated("partition").OmitWhen(func(field, parent interface{}) bool {
+				return len(gabs.Wrap(parent).S("topics").Children()) > 0
+			}),
 		},
 		Categories: []Category{
 			CategoryServices,
