@@ -9,6 +9,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/util/config"
 	"github.com/Jeffail/gabs/v2"
+	"gopkg.in/yaml.v3"
 )
 
 // AnnotatedExample is an isolated example for a component.
@@ -290,34 +291,50 @@ func iClone(root interface{}) interface{} {
 	return root
 }
 
-func genExampleConfigs(t Type, spec FieldSpec, nest bool, fullConfigExample interface{}) (string, string, error) {
-	advConfig, commonConfig := iClone(fullConfigExample), iClone(fullConfigExample)
-	if err := SanitiseComponentConfig(t, advConfig, func(f FieldSpec) bool {
+func createOrderedConfig(t Type, rawExample interface{}, filter FieldFilter) (*yaml.Node, error) {
+	rawConfig := iClone(rawExample)
+	if err := SanitiseComponentConfig(t, rawConfig, filter); err != nil {
+		return nil, err
+	}
+
+	rawBytes, err := yaml.Marshal(rawConfig)
+	if err != nil {
+		return nil, err
+	}
+	var newNode yaml.Node
+	if err = yaml.Unmarshal(rawBytes, &newNode); err != nil {
+		return nil, err
+	}
+	if newNode.Kind != yaml.DocumentNode {
+		return nil, fmt.Errorf("expected document node kind: %v", newNode.Kind)
+	}
+	if newNode.Content[0].Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("expected mapping node child kind: %v", newNode.Content[0].Kind)
+	}
+
+	if err = SortNode(t, newNode.Content[0], true); err != nil {
+		return nil, err
+	}
+	return newNode.Content[0], nil
+}
+
+func genExampleConfigs(t Type, nest bool, fullConfigExample interface{}) (string, string, error) {
+	var advConfig, commonConfig interface{}
+	var err error
+	if advConfig, err = createOrderedConfig(t, fullConfigExample, func(f FieldSpec) bool {
 		return !f.Deprecated
 	}); err != nil {
 		panic(err)
 	}
-	if err := SanitiseComponentConfig(t, commonConfig, func(f FieldSpec) bool {
+	if commonConfig, err = createOrderedConfig(t, fullConfigExample, func(f FieldSpec) bool {
 		return !f.Advanced && !f.Deprecated
 	}); err != nil {
 		panic(err)
 	}
 
-	advConfigOrdered, err := OrderComponentConfig(t, spec, advConfig, true)
-	if err != nil {
-		panic(err)
-	}
-	commonConfigOrdered, err := OrderComponentConfig(t, spec, commonConfig, true)
-	if err != nil {
-		panic(err)
-	}
-
 	if nest {
-		advConfig = map[string]interface{}{string(t): advConfigOrdered}
-		commonConfig = map[string]interface{}{string(t): commonConfigOrdered}
-	} else {
-		advConfig = advConfigOrdered
-		commonConfig = commonConfigOrdered
+		advConfig = map[string]interface{}{string(t): advConfig}
+		commonConfig = map[string]interface{}{string(t): commonConfig}
 	}
 
 	advancedConfigBytes, err := config.MarshalYAML(advConfig)
@@ -359,7 +376,7 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 	}
 
 	var err error
-	if ctx.CommonConfig, ctx.AdvancedConfig, err = genExampleConfigs(c.Type, c.Config, nest, fullConfigExample); err != nil {
+	if ctx.CommonConfig, ctx.AdvancedConfig, err = genExampleConfigs(c.Type, nest, fullConfigExample); err != nil {
 		return nil, err
 	}
 

@@ -58,16 +58,16 @@ input:
 				`this.type == "foo"`,
 				`count("messages") >= 100`,
 			).HasDefault(""),
-			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(field, _ interface{}) bool {
+			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(field, _ interface{}) (string, bool) {
 				defaultBytes, err := yaml.Marshal(condition.NewConfig())
 				if err != nil {
-					return false
+					return "", false
 				}
 				var iDefault interface{}
 				if err = yaml.Unmarshal(defaultBytes, &iDefault); err != nil {
-					return false
+					return "", false
 				}
-				return cmp.Equal(field, iDefault)
+				return "the condition field is deprecated in favour of check", cmp.Equal(field, iDefault)
 			}),
 			docs.FieldCommon("restart_input", "Whether the input should be reopened if it closes itself before the condition has resolved to true."),
 		},

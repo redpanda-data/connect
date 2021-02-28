@@ -73,16 +73,16 @@ can read about these patterns [here](/docs/configuration/error_handling).`,
 		FieldSpecs: append(docs.FieldSpecs{
 			docs.FieldCommon("parallel", "When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent within a single request."),
 			docs.FieldDeprecated("max_parallel"),
-			docs.FieldDeprecated("request").OmitWhen(func(v, _ interface{}) bool {
+			docs.FieldDeprecated("request").OmitWhen(func(v, _ interface{}) (string, bool) {
 				defaultBytes, err := yaml.Marshal(client.NewConfig())
 				if err != nil {
-					return false
+					return "", false
 				}
 				var iDefault interface{}
 				if err = yaml.Unmarshal(defaultBytes, &iDefault); err != nil {
-					return false
+					return "", false
 				}
-				return cmp.Equal(v, iDefault)
+				return "field request is deprecated", cmp.Equal(v, iDefault)
 			}),
 		}, client.FieldSpecs()...),
 		Examples: []docs.AnnotatedExample{

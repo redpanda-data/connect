@@ -1,6 +1,7 @@
 package docs
 
 import (
+	"fmt"
 	"reflect"
 
 	"gopkg.in/yaml.v3"
@@ -56,7 +57,7 @@ type FieldSpec struct {
 	// Version lists an explicit Benthos release where this fields behaviour was last modified.
 	Version string
 
-	omitWhen func(field, parent interface{}) bool
+	omitWhenFn func(field, parent interface{}) (string, bool)
 }
 
 // IsInterpolated indicates that the field supports interpolation functions.
@@ -136,9 +137,16 @@ func (f FieldSpec) WithChildren(children ...FieldSpec) FieldSpec {
 // OmitWhen specifies a custom func that, when provided a generic config struct,
 // returns a boolean indicating when the field can be safely omitted from a
 // config.
-func (f FieldSpec) OmitWhen(fn func(field, parent interface{}) bool) FieldSpec {
-	f.omitWhen = fn
+func (f FieldSpec) OmitWhen(fn func(field, parent interface{}) (string, bool)) FieldSpec {
+	f.omitWhenFn = fn
 	return f
+}
+
+func (f FieldSpec) shouldOmit(field, parent interface{}) (string, bool) {
+	if f.omitWhenFn == nil {
+		return "", false
+	}
+	return f.omitWhenFn(field, parent)
 }
 
 // FieldAdvanced returns a field spec for an advanced field.
@@ -210,41 +218,112 @@ func (f FieldSpec) sanitise(s interface{}, filter FieldFilter) {
 	}
 }
 
-func (f FieldSpec) configOrderedFromNode(node *yaml.Node, removeTypeField bool) error {
+func (f FieldSpec) sortNode(node *yaml.Node, removeTypeField bool) error {
 	if coreType, isCore := f.Type.IsCoreComponent(); isCore {
 		if f.IsArray {
-			// TODO
-		} else if f.IsMap {
-			for i := 0; i < len(node.Content); i += 2 {
-				newNode, err := OrderComponentConfig(coreType, f, node.Content[i+1], removeTypeField)
-				if err != nil {
+			for i := 0; i < len(node.Content); i++ {
+				if err := SortNode(coreType, node.Content[i], removeTypeField); err != nil {
 					return err
 				}
-				node.Content[i+1] = newNode
+			}
+		} else if f.IsMap {
+			for i := 0; i < len(node.Content); i += 2 {
+				if err := SortNode(coreType, node.Content[i+1], removeTypeField); err != nil {
+					return err
+				}
 			}
 		} else {
-			newNode, err := OrderComponentConfig(coreType, f, node, removeTypeField)
-			if err != nil {
+			if err := SortNode(coreType, node, removeTypeField); err != nil {
 				return err
 			}
-			node.Content = newNode.Content
 		}
 	} else if len(f.Children) > 0 {
 		if f.IsArray {
-			// TODO
+			for i := 0; i < len(node.Content); i++ {
+				if err := f.Children.sortNode(node.Content[i], removeTypeField); err != nil {
+					return err
+				}
+			}
 		} else if f.IsMap {
 			for i := 0; i < len(node.Content); i += 2 {
-				if err := f.Children.configOrderedFromNode(node.Content[i+1], removeTypeField); err != nil {
+				if err := f.Children.sortNode(node.Content[i+1], removeTypeField); err != nil {
 					return err
 				}
 			}
 		} else {
-			if err := f.Children.configOrderedFromNode(node, removeTypeField); err != nil {
+			if err := f.Children.sortNode(node, removeTypeField); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+// LintLevel describes the severity level of a linting error.
+type LintLevel int
+
+// Lint levels
+const (
+	LintError   LintLevel = iota
+	LintWarning LintLevel = iota
+)
+
+// Lint describes a single linting issue found with a Benthos config.
+type Lint struct {
+	Line  int
+	Level LintLevel
+	What  string
+}
+
+func lintError(line int, msg string) Lint {
+	return Lint{Line: line, Level: LintError, What: msg}
+}
+
+func lintWarning(line int, msg string) Lint {
+	return Lint{Line: line, Level: LintWarning, What: msg}
+}
+
+func (f FieldSpec) lintNode(node *yaml.Node) []Lint {
+	var lints []Lint
+	if coreType, isCore := f.Type.IsCoreComponent(); isCore {
+		if f.IsArray {
+			if node.Kind != yaml.SequenceNode {
+				lints = append(lints, lintError(node.Line, "expected array value"))
+			}
+			for i := 0; i < len(node.Content); i++ {
+				lints = append(lints, LintNode(coreType, node.Content[i])...)
+			}
+		} else if f.IsMap {
+			if node.Kind != yaml.MappingNode {
+				lints = append(lints, lintError(node.Line, "expected object value"))
+			}
+			for i := 0; i < len(node.Content); i += 2 {
+				lints = append(lints, LintNode(coreType, node.Content[i+1])...)
+			}
+		} else {
+			lints = append(lints, LintNode(coreType, node)...)
+		}
+	} else if len(f.Children) > 0 {
+		if f.IsArray {
+			if node.Kind != yaml.SequenceNode {
+				lints = append(lints, lintError(node.Line, "expected array value"))
+			}
+			for i := 0; i < len(node.Content); i++ {
+				lints = append(lints, f.Children.LintNode(node.Content[i])...)
+			}
+		} else if f.IsMap {
+			if node.Kind != yaml.MappingNode {
+				lints = append(lints, lintError(node.Line, "expected object value"))
+			}
+			for i := 0; i < len(node.Content); i += 2 {
+				lints = append(lints, f.Children.LintNode(node.Content[i+1])...)
+			}
+		} else {
+			lints = append(lints, f.Children.LintNode(node)...)
+		}
+	}
+	// TODO: Add lint fn for the spec itself.
+	return lints
 }
 
 //------------------------------------------------------------------------------
@@ -263,10 +342,14 @@ var (
 	// Core component types, only components that can be a child of another
 	// component config are listed here.
 	FieldInput     FieldType = "input"
+	FieldBuffer    FieldType = "buffer"
+	FieldCache     FieldType = "cache"
 	FieldCondition FieldType = "condition"
 	FieldProcessor FieldType = "processor"
+	FieldRateLimit FieldType = "rate_limit"
 	FieldOutput    FieldType = "output"
 	FieldMetrics   FieldType = "metrics"
+	FieldTracer    FieldType = "tracer"
 )
 
 // IsCoreComponent returns the core component type of a field if applicable.
@@ -274,13 +357,21 @@ func (t FieldType) IsCoreComponent() (Type, bool) {
 	switch t {
 	case FieldInput:
 		return TypeInput, true
+	case FieldBuffer:
+		return TypeBuffer, true
+	case FieldCache:
+		return TypeCache, true
 	case FieldCondition:
 		// TODO: V4 Remove this
 		return "condition", true
 	case FieldProcessor:
 		return TypeProcessor, true
+	case FieldRateLimit:
+		return TypeRateLimit, true
 	case FieldOutput:
 		return TypeOutput, true
+	case FieldTracer:
+		return TypeTracer, true
 	}
 	return "", false
 }
@@ -354,7 +445,7 @@ func (f FieldSpecs) sanitise(s interface{}, filter FieldFilter) {
 			continue
 		}
 		v := m[spec.Name]
-		if spec.omitWhen != nil && spec.omitWhen(v, m) {
+		if _, omit := spec.shouldOmit(v, m); omit {
 			delete(m, spec.Name)
 		} else {
 			spec.sanitise(v, filter)
@@ -362,7 +453,7 @@ func (f FieldSpecs) sanitise(s interface{}, filter FieldFilter) {
 	}
 }
 
-func (f FieldSpecs) configOrderedFromNode(node *yaml.Node, removeTypeField bool) error {
+func (f FieldSpecs) sortNode(node *yaml.Node, removeTypeField bool) error {
 	// Following the order of our field specs, extract each field.
 	newNodes := []*yaml.Node{}
 	for _, field := range f {
@@ -370,7 +461,7 @@ func (f FieldSpecs) configOrderedFromNode(node *yaml.Node, removeTypeField bool)
 		for i := 0; i < len(node.Content); i += 2 {
 			if node.Content[i].Value == field.Name {
 				nextNode := node.Content[i+1]
-				if err := field.configOrderedFromNode(nextNode, removeTypeField); err != nil {
+				if err := field.sortNode(nextNode, removeTypeField); err != nil {
 					return err
 				}
 				newNodes = append(newNodes, node.Content[i])
@@ -381,6 +472,57 @@ func (f FieldSpecs) configOrderedFromNode(node *yaml.Node, removeTypeField bool)
 	}
 	node.Content = newNodes
 	return nil
+}
+
+func nodeToInterface(node *yaml.Node) (interface{}, error) {
+	nodeBytes, err := yaml.Marshal(node)
+	if err != nil {
+		return nil, err
+	}
+	var i interface{}
+	if err = yaml.Unmarshal(nodeBytes, &i); err != nil {
+		return nil, err
+	}
+	return i, nil
+}
+
+// LintNode walks a yaml node and returns a list of linting errors found.
+func (f FieldSpecs) LintNode(node *yaml.Node) []Lint {
+	var lints []Lint
+
+	specNames := map[string]FieldSpec{}
+	for _, field := range f {
+		specNames[field.Name] = field
+	}
+
+	for i := 0; i < len(node.Content); i += 2 {
+		spec, exists := specNames[node.Content[i].Value]
+		if !exists {
+			lints = append(lints, lintError(node.Content[i].Line, fmt.Sprintf("field %v not recognised", node.Content[i].Value)))
+			continue
+		}
+		if spec.omitWhenFn != nil {
+			fieldValue, err := nodeToInterface(node.Content[i+1])
+			if err != nil {
+				lints = append(lints, lintWarning(
+					node.Content[i].Line, fmt.Sprintf("failed to marshal key %v", node.Content[i].Value),
+				))
+				continue
+			}
+			parentMap, err := nodeToInterface(node)
+			if err != nil {
+				lints = append(lints, lintWarning(
+					node.Content[i].Line, fmt.Sprintf("failed to marshal key %v parent", node.Content[i].Value),
+				))
+				continue
+			}
+			if why, omit := spec.shouldOmit(fieldValue, parentMap); omit {
+				lints = append(lints, lintError(node.Content[i].Line, why))
+			}
+		}
+		lints = append(lints, spec.lintNode(node.Content[i+1])...)
+	}
+	return lints
 }
 
 //------------------------------------------------------------------------------

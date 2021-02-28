@@ -110,9 +110,9 @@ output:
 				"foouser:foopassword@tcp(localhost:3306)/foodb",
 				"postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable",
 			),
-			docs.FieldDeprecated("dsn").OmitWhen(func(v, _ interface{}) bool {
+			docs.FieldDeprecated("dsn").OmitWhen(func(v, _ interface{}) (string, bool) {
 				s, ok := v.(string)
-				return ok && len(s) == 0
+				return "field dsn is deprecated in favour of data_source_name", ok && len(s) == 0
 			}),
 			docs.FieldCommon(
 				"query", "The query to run against the database.",

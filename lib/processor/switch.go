@@ -39,12 +39,12 @@ When a switch processor executes on a [batch of messages](/docs/configuration/ba
 
 At the end of switch processing the resulting batch will follow the same ordering as the batch was received. If any child processors have split or otherwise grouped messages this grouping will be lost as the result of a switch is always a single batch. In order to perform conditional grouping and/or splitting use the [` + "`group_by`" + ` processor](/docs/components/processors/group_by/).`,
 		Config: docs.FieldComponent().Array().WithChildren(
-			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v, _ interface{}) bool {
+			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v, _ interface{}) (string, bool) {
 				m, ok := v.(map[string]interface{})
 				if !ok {
-					return false
+					return "", false
 				}
-				return m["type"] == "static" && m["static"] == true
+				return "field condition is deprecated in favour of check", m["type"] == "static" && m["static"] == true
 			}),
 			docs.FieldCommon(
 				"check",

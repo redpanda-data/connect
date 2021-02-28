@@ -72,16 +72,16 @@ output:
 				`this.contents.urls.contains("https://benthos.dev/")`,
 				`true`,
 			).HasDefault(""),
-			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v, _ interface{}) bool {
+			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v, _ interface{}) (string, bool) {
 				defaultBytes, err := yaml.Marshal(condition.NewConfig())
 				if err != nil {
-					return false
+					return "", false
 				}
 				var iDefault interface{}
 				if err = yaml.Unmarshal(defaultBytes, &iDefault); err != nil {
-					return false
+					return "", false
 				}
-				return cmp.Equal(v, iDefault)
+				return "field condition is deprecated in favour of check", cmp.Equal(v, iDefault)
 			}),
 			docs.FieldCommon(
 				"processors",

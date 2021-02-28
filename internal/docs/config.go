@@ -17,11 +17,11 @@ func reservedFieldsByType(t Type) map[string]FieldSpec {
 	case TypeInput:
 		fallthrough
 	case TypeOutput:
-		m["processors"] = FieldCommon("processors", "").Array().HasType(FieldProcessor).OmitWhen(func(field, _ interface{}) bool {
+		m["processors"] = FieldCommon("processors", "").Array().HasType(FieldProcessor).OmitWhen(func(field, _ interface{}) (string, bool) {
 			if arr, ok := field.([]interface{}); ok && len(arr) == 0 {
-				return true
+				return "field processors is empty and can be removed", true
 			}
-			return false
+			return "", false
 		})
 	}
 	return m
@@ -55,12 +55,21 @@ func GetInferenceCandidate(t Type, defaultType string, raw interface{}) (string,
 		return tStr, spec, nil
 	}
 
+	var keys []string
+	for k := range m {
+		keys = append(keys, k)
+	}
+
+	return getInferenceCandidateFromList(t, defaultType, keys)
+}
+
+func getInferenceCandidateFromList(t Type, defaultType string, l []string) (string, ComponentSpec, error) {
 	ignore := reservedFieldsByType(t)
 
 	var candidates []string
 	var inferred string
 	var inferredSpec ComponentSpec
-	for k := range m {
+	for _, k := range l {
 		if _, exists := ignore[k]; exists {
 			continue
 		}
@@ -143,7 +152,7 @@ func SanitiseComponentConfig(componentType Type, raw interface{}, filter FieldFi
 		if !exists {
 			delete(m, k)
 		}
-		if spec.omitWhen != nil && spec.omitWhen(v, m) {
+		if _, omit := spec.shouldOmit(v, m); omit {
 			delete(m, k)
 		}
 	}
@@ -154,37 +163,18 @@ func SanitiseComponentConfig(componentType Type, raw interface{}, filter FieldFi
 	return nil
 }
 
-// OrderComponentConfig takes a raw configuration object and returns a yaml node
-// type with the fields ordered by the field spec. Also optionally removes the
-// `type` field from this and all nested components.
-func OrderComponentConfig(cType Type, spec FieldSpec, raw interface{}, removeTypeField bool) (*yaml.Node, error) {
-	var node *yaml.Node
-	var ok bool
-	if node, ok = raw.(*yaml.Node); !ok {
-		rawBytes, err := yaml.Marshal(raw)
-		if err != nil {
-			return nil, err
-		}
-		var newNode yaml.Node
-		if err = yaml.Unmarshal(rawBytes, &newNode); err != nil {
-			return nil, err
-		}
-		if newNode.Kind != yaml.DocumentNode {
-			return nil, fmt.Errorf("expected document node kind: %v", newNode.Kind)
-		}
-		if newNode.Content[0].Kind != yaml.MappingNode {
-			return nil, fmt.Errorf("expected mapping node child kind: %v", newNode.Content[0].Kind)
-		}
-		node = newNode.Content[0]
-	}
-
+// SortNode takes a yaml.Node and a config spec and sorts the fields of the node
+// according to the spec. Also optionally removes the `type` field from this and
+// all nested components.
+func SortNode(cType Type, node *yaml.Node, removeTypeField bool) error {
 	if cType == "condition" {
-		return node, nil
+		return nil
 	}
 
 	newNodes := []*yaml.Node{}
 
 	var name string
+	var keys []string
 	for i := 0; i < len(node.Content); i += 2 {
 		if node.Content[i].Value == "type" {
 			name = node.Content[i+1].Value
@@ -193,19 +183,29 @@ func OrderComponentConfig(cType Type, spec FieldSpec, raw interface{}, removeTyp
 				newNodes = append(newNodes, node.Content[i+1])
 			}
 			break
+		} else {
+			keys = append(keys, node.Content[i].Value)
 		}
 	}
 	if len(name) == 0 {
 		if len(node.Content) == 0 {
-			return node, nil
+			return nil
 		}
-		return nil, fmt.Errorf("type field not found for component %v config", cType)
+		var err error
+		if name, _, err = getInferenceCandidateFromList(cType, "", keys); err != nil {
+			return err
+		}
+	}
+
+	cSpec, exists := GetDocs(name, cType)
+	if !exists {
+		return fmt.Errorf("failed to obtain docs for %v type %v", cType, name)
 	}
 
 	for i := 0; i < len(node.Content); i += 2 {
 		if node.Content[i].Value == name {
-			if err := spec.configOrderedFromNode(node.Content[i+1], removeTypeField); err != nil {
-				return nil, err
+			if err := cSpec.Config.sortNode(node.Content[i+1], removeTypeField); err != nil {
+				return err
 			}
 			newNodes = append(newNodes, node.Content[i])
 			newNodes = append(newNodes, node.Content[i+1])
@@ -220,8 +220,8 @@ func OrderComponentConfig(cType Type, spec FieldSpec, raw interface{}, removeTyp
 		}
 		spec, exists := reservedFields[node.Content[i].Value]
 		if exists {
-			if err := spec.configOrderedFromNode(node.Content[i+1], removeTypeField); err != nil {
-				return nil, err
+			if err := spec.sortNode(node.Content[i+1], removeTypeField); err != nil {
+				return err
 			}
 		}
 		newNodes = append(newNodes, node.Content[i])
@@ -229,5 +229,67 @@ func OrderComponentConfig(cType Type, spec FieldSpec, raw interface{}, removeTyp
 	}
 
 	node.Content = newNodes
-	return node, nil
+	return nil
+}
+
+// LintNode takes a yaml.Node and a config spec and returns a list of linting
+// errors found in the config.
+func LintNode(cType Type, node *yaml.Node) []Lint {
+	if cType == "condition" {
+		return nil
+	}
+
+	var lints []Lint
+
+	var name string
+	var keys []string
+	for i := 0; i < len(node.Content); i += 2 {
+		if node.Content[i].Value == "type" {
+			name = node.Content[i+1].Value
+			break
+		} else {
+			keys = append(keys, node.Content[i].Value)
+		}
+	}
+	if len(name) == 0 {
+		if len(node.Content) == 0 {
+			return nil
+		}
+		var err error
+		if name, _, err = getInferenceCandidateFromList(cType, "", keys); err != nil {
+			lints = append(lints, lintWarning(node.Line, "unable to infer component type"))
+			return lints
+		}
+	}
+
+	cSpec, exists := GetDocs(name, cType)
+	if !exists {
+		lints = append(lints, lintWarning(node.Line, fmt.Sprintf("failed to obtain docs for %v type %v", cType, name)))
+		return lints
+	}
+
+	for i := 0; i < len(node.Content); i += 2 {
+		if node.Content[i].Value == name {
+			lints = append(lints, cSpec.Config.lintNode(node.Content[i+1])...)
+			break
+		}
+	}
+
+	reservedFields := reservedFieldsByType(cType)
+	for i := 0; i < len(node.Content); i += 2 {
+		if node.Content[i].Value == name || node.Content[i].Value == "type" {
+			continue
+		}
+		spec, exists := reservedFields[node.Content[i].Value]
+		if exists {
+			lints = append(lints, spec.lintNode(node.Content[i+1])...)
+		} else {
+			lints = append(lints, lintError(
+				node.Content[i].Line,
+				fmt.Sprintf("field %v is invalid when the component type is %v", node.Content[i].Value, name),
+			))
+		}
+	}
+
+	return lints
 }

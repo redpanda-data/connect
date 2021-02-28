@@ -43,12 +43,12 @@ Allows you to configure a [batching policy](/docs/configuration/batching).`,
 				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should end a batch.",
 				`this.type == "end_of_transaction"`,
 			).HasDefault(""),
-			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v, _ interface{}) bool {
+			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v, _ interface{}) (string, bool) {
 				m, ok := v.(map[string]interface{})
 				if !ok {
-					return false
+					return "", false
 				}
-				return m["type"] == "static" && m["static"] == false
+				return "field condition is deprecated in favour of check", m["type"] == "static" && m["static"] == false
 			}),
 			docs.FieldAdvanced(
 				"processors",

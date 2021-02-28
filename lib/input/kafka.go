@@ -94,11 +94,13 @@ You can access these metadata fields using [function interpolation](/docs/config
 
 			// TODO: Remove V4
 			docs.FieldDeprecated("max_batch_count"),
-			docs.FieldDeprecated("topic").OmitWhen(func(field, parent interface{}) bool {
-				return len(gabs.Wrap(parent).S("topics").Children()) > 0
+			docs.FieldDeprecated("topic").OmitWhen(func(field, parent interface{}) (string, bool) {
+				return "field topic is deprecated and should be omitted when topics is used",
+					len(gabs.Wrap(parent).S("topics").Children()) > 0
 			}),
-			docs.FieldDeprecated("partition").OmitWhen(func(field, parent interface{}) bool {
-				return len(gabs.Wrap(parent).S("topics").Children()) > 0
+			docs.FieldDeprecated("partition").OmitWhen(func(field, parent interface{}) (string, bool) {
+				return "field partition is deprecated and should be omitted when topics is used",
+					len(gabs.Wrap(parent).S("topics").Children()) > 0
 			}),
 		},
 		Categories: []Category{
