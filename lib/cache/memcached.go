@@ -23,7 +23,7 @@ func init() {
 Connects to a cluster of memcached services, a prefix can be specified to allow
 multiple cache types to share a memcached cluster under different namespaces.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("addresses", "A list of addresses of memcached servers to use."),
+			docs.FieldCommon("addresses", "A list of addresses of memcached servers to use.").Array().HasType(docs.FieldString),
 			docs.FieldCommon("prefix", "An optional string to prefix item keys with in order to prevent collisions with similar services."),
 			docs.FieldCommon("ttl", "A TTL in seconds to set for items, after this period keys will be removed."),
 			docs.FieldAdvanced("retries", "The maximum number of retry attempts to make before abandoning a request."),

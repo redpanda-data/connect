@@ -47,8 +47,8 @@ input:
     url: amqp://guest:guest@localhost:5672/
     queue: benthos-queue
     queue_declare:
-      durable: true
       enabled: false
+      durable: true
     bindings_declare: []
     consumer_tag: benthos-consumer
     auto_ack: false
@@ -128,15 +128,22 @@ then the declaration passively verifies that they match the target fields.
 
 
 Type: `object`  
-Default: `{"durable":true,"enabled":false}`  
 
-```yaml
-# Examples
+### `queue_declare.enabled`
 
-queue_declare:
-  durable: false
-  enabled: true
-```
+Whether to enable queue declaration.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `queue_declare.durable`
+
+Whether the declared queue is durable.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `bindings_declare`
 
@@ -144,7 +151,6 @@ Allows you to passively declare bindings for the target queue.
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yaml
 # Examples
@@ -153,6 +159,22 @@ bindings_declare:
   - exchange: foo
     key: bar
 ```
+
+### `bindings_declare[].exchange`
+
+The exchange of the declared binding.
+
+
+Type: `string`  
+Default: `""`  
+
+### `bindings_declare[].key`
+
+The key of the declared binding.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `consumer_tag`
 

@@ -36,7 +36,7 @@ meta processor = $matches.0.1 | deleted()
 root = $matches.0.2 | deleted()`)
 		summary = summary + " BETA FEATURE: Labels can also be created for the metric path by mapping meta fields."
 	}
-	return docs.FieldCommon("path_mapping", summary, examples...)
+	return docs.FieldCommon("path_mapping", summary, examples...).Linter(docs.LintBloblangMapping)
 }
 
 func newPathMapping(mapping string, logger log.Modular) (*pathMapping, error) {

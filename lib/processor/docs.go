@@ -18,6 +18,6 @@ batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.`,
-)
+).Array()
 
 //------------------------------------------------------------------------------

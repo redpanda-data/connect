@@ -92,7 +92,7 @@ The maximum number of parallel message batches to have in flight at any given ti
 					"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should be routed to the case output. If left empty the case always passes.",
 					`this.type == "foo"`,
 					`this.contents.urls.contains("https://benthos.dev/")`,
-				).HasDefault(""),
+				).HasDefault("").Linter(docs.LintBloblangMapping),
 				docs.FieldCommon(
 					"output", "An [output](/docs/components/outputs/about/) for messages that pass the check to be routed to.",
 				).HasDefault(map[string]interface{}{}).HasType(docs.FieldOutput),

@@ -50,7 +50,7 @@ TTL is respected as usual.`,
 					"Spice Girls":      "1994",
 					"The Human League": "1977",
 				},
-			),
+			).Map(),
 		},
 	}
 }

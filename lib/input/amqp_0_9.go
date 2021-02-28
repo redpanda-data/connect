@@ -61,10 +61,9 @@ You can access these metadata fields using
 			docs.FieldAdvanced("queue_declare", `
 Allows you to passively declare the target queue. If the queue already exists
 then the declaration passively verifies that they match the target fields.`,
-				map[string]interface{}{
-					"enabled": true,
-					"durable": false,
-				},
+			).WithChildren(
+				docs.FieldAdvanced("enabled", "Whether to enable queue declaration.").HasDefault(false),
+				docs.FieldAdvanced("durable", "Whether the declared queue is durable.").HasDefault(false),
 			),
 			docs.FieldAdvanced("bindings_declare",
 				"Allows you to passively declare bindings for the target queue.",
@@ -74,6 +73,9 @@ then the declaration passively verifies that they match the target fields.`,
 						"key":      "bar",
 					},
 				},
+			).Array().WithChildren(
+				docs.FieldAdvanced("exchange", "The exchange of the declared binding.").HasDefault(""),
+				docs.FieldAdvanced("key", "The key of the declared binding.").HasDefault(""),
 			),
 			docs.FieldCommon("consumer_tag", "A consumer tag."),
 			docs.FieldAdvanced("auto_ack", "Acknowledge messages automatically as they are consumed rather than waiting for acknowledgments from downstream. This can improve throughput and prevent the pipeline from blocking but at the cost of eliminating delivery guarantees."),

@@ -4,6 +4,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -26,6 +27,7 @@ If the output layer is hit with back pressure it will propagate all the way to
 the input layer, and further up the data stream. If you need to relieve your
 pipeline of this back pressure consider using a more robust buffering solution
 such as Kafka before resorting to alternatives.`,
+		Config: docs.FieldComponent().Map(),
 	}
 }
 

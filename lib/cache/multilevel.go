@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -57,6 +58,7 @@ resources:
 
 Using this config when a target key already exists in our local memory cache we
 won't bother hitting the remote memcached instance.`,
+		Config: docs.FieldComponent().Array().HasType(docs.FieldString),
 	}
 }
 

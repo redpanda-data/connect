@@ -5,8 +5,56 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 )
+
+// LintBloblangMapping is function for linting a config field expected to be a
+// bloblang mapping.
+func LintBloblangMapping(v interface{}) []Lint {
+	str, ok := v.(string)
+	if !ok {
+		// TODO: Re-enable this once all fields are checked for scalar vs
+		// structured.
+		// return []Lint{NewLintError(0, fmt.Sprintf("expected string value, got %T", v))}
+		return nil
+	}
+	_, err := bloblang.NewMapping("", str)
+	if err == nil {
+		return nil
+	}
+	if mErr, ok := err.(*parser.Error); ok {
+		line, col := parser.LineAndColOf([]rune(str), mErr.Input)
+		lint := NewLintError(line, mErr.Error())
+		lint.Column = col
+		return []Lint{lint}
+	}
+	return []Lint{NewLintError(0, err.Error())}
+}
+
+// LintBloblangField is function for linting a config field expected to be an
+// interpolation string.
+func LintBloblangField(v interface{}) []Lint {
+	str, ok := v.(string)
+	if !ok {
+		// TODO: Re-enable this once all fields are checked for scalar vs
+		// structured.
+		// return []Lint{NewLintError(0, fmt.Sprintf("expected string value, got %T", v))}
+		return nil
+	}
+	_, err := bloblang.NewField(str)
+	if err == nil {
+		return nil
+	}
+	if mErr, ok := err.(*parser.Error); ok {
+		line, col := parser.LineAndColOf([]rune(str), mErr.Input)
+		lint := NewLintError(line, mErr.Error())
+		lint.Column = col
+		return []Lint{lint}
+	}
+	return []Lint{NewLintError(0, err.Error())}
+}
 
 type functionCategory struct {
 	Name  string

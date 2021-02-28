@@ -65,6 +65,7 @@ type FieldSpec struct {
 // IsInterpolated indicates that the field supports interpolation functions.
 func (f FieldSpec) IsInterpolated() FieldSpec {
 	f.Interpolated = true
+	f.customLintFn = LintBloblangField
 	return f
 }
 
@@ -280,9 +281,10 @@ const (
 
 // Lint describes a single linting issue found with a Benthos config.
 type Lint struct {
-	Line  int
-	Level LintLevel
-	What  string
+	Line   int
+	Column int // Optional, omitted from lint report unless >= 1
+	Level  LintLevel
+	What   string
 }
 
 // NewLintError returns an error lint.
@@ -297,48 +299,50 @@ func NewLintWarning(line int, msg string) Lint {
 
 func (f FieldSpec) lintNode(node *yaml.Node) []Lint {
 	var lints []Lint
+	if f.IsArray {
+		if node.Kind != yaml.SequenceNode {
+			lints = append(lints, NewLintError(node.Line, "expected array value"))
+			return lints
+		}
+		for i := 0; i < len(node.Content); i++ {
+			lints = append(lints, customLint(f, node.Content[i])...)
+		}
+	} else if f.IsMap {
+		if node.Kind != yaml.MappingNode {
+			lints = append(lints, NewLintError(node.Line, "expected object value"))
+			return lints
+		}
+		for i := 0; i < len(node.Content); i += 2 {
+			lints = append(lints, customLint(f, node.Content[i+1])...)
+		}
+	} else {
+		lints = append(lints, customLint(f, node)...)
+	}
 	if coreType, isCore := f.Type.IsCoreComponent(); isCore {
 		if f.IsArray {
-			if node.Kind != yaml.SequenceNode {
-				lints = append(lints, NewLintError(node.Line, "expected array value"))
-			} else {
-				for i := 0; i < len(node.Content); i++ {
-					lints = append(lints, LintNode(coreType, node.Content[i])...)
-				}
+			for i := 0; i < len(node.Content); i++ {
+				lints = append(lints, LintNode(coreType, node.Content[i])...)
 			}
 		} else if f.IsMap {
-			if node.Kind != yaml.MappingNode {
-				lints = append(lints, NewLintError(node.Line, "expected object value"))
-			} else {
-				for i := 0; i < len(node.Content); i += 2 {
-					lints = append(lints, LintNode(coreType, node.Content[i+1])...)
-				}
+			for i := 0; i < len(node.Content); i += 2 {
+				lints = append(lints, LintNode(coreType, node.Content[i+1])...)
 			}
 		} else {
 			lints = append(lints, LintNode(coreType, node)...)
 		}
 	} else if len(f.Children) > 0 {
 		if f.IsArray {
-			if node.Kind != yaml.SequenceNode {
-				lints = append(lints, NewLintError(node.Line, "expected array value"))
-			} else {
-				for i := 0; i < len(node.Content); i++ {
-					lints = append(lints, f.Children.LintNode(node.Content[i])...)
-				}
+			for i := 0; i < len(node.Content); i++ {
+				lints = append(lints, f.Children.LintNode(node.Content[i])...)
 			}
 		} else if f.IsMap {
-			if node.Kind != yaml.MappingNode {
-				lints = append(lints, NewLintError(node.Line, "expected object value"))
-			} else {
-				for i := 0; i < len(node.Content); i += 2 {
-					lints = append(lints, f.Children.LintNode(node.Content[i+1])...)
-				}
+			for i := 0; i < len(node.Content); i += 2 {
+				lints = append(lints, f.Children.LintNode(node.Content[i+1])...)
 			}
 		} else {
 			lints = append(lints, f.Children.LintNode(node)...)
 		}
 	}
-	lints = append(lints, customLint(f, node)...)
 	return lints
 }
 
@@ -532,7 +536,14 @@ func customLint(spec FieldSpec, node *yaml.Node) []Lint {
 	}
 	lints := spec.customLintFn(fieldValue)
 	for i := range lints {
-		lints[i].Line = node.Line
+		if lints[i].Line > 0 {
+			lints[i].Line += node.Line - 1
+		} else {
+			lints[i].Line = node.Line
+		}
+		if lints[i].Column > 0 {
+			lints[i].Column += node.Column - 1
+		}
 	}
 	return lints
 }

@@ -41,7 +41,7 @@ testing your pipeline configs.`,
 				"mapping", "A [bloblang](/docs/guides/bloblang/about) mapping to use for generating messages.",
 				`root = "hello world"`,
 				`root = {"test":"message","id":uuid_v4()}`,
-			),
+			).Linter(docs.LintBloblangMapping),
 			docs.FieldCommon(
 				"interval",
 				"The time interval at which messages should be generated, expressed either as a duration string or as a cron expression. If set to an empty string messages will be generated as fast as downstream services can process them.",
@@ -118,7 +118,7 @@ This input has been ` + "[renamed to `generate`](/docs/components/inputs/generat
 				"mapping", "A [bloblang](/docs/guides/bloblang/about) mapping to use for generating messages.",
 				`root = "hello world"`,
 				`root = {"test":"message","id":uuid_v4()}`,
-			),
+			).Linter(docs.LintBloblangMapping),
 			docs.FieldCommon(
 				"interval",
 				"The time interval at which messages should be generated, expressed either as a duration string or as a cron expression. If set to an empty string messages will be generated as fast as downstream services can process them.",

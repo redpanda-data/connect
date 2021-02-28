@@ -32,7 +32,7 @@ var branchFields = docs.FieldSpecs{
 } else {
 	deleted()
 }`,
-	).HasDefault(""),
+	).HasDefault("").Linter(docs.LintBloblangMapping),
 	docs.FieldCommon(
 		"processors",
 		"A list of processors to apply to mapped requests. When processing message batches the resulting batch must match the size and ordering of the input batch, therefore filtering, grouping should not be performed within these processors.",
@@ -51,7 +51,7 @@ root.bar.id = this.user.id`,
 } else {
 	this
 }`,
-	).HasDefault(""),
+	).HasDefault("").Linter(docs.LintBloblangMapping),
 }
 
 func init() {
