@@ -46,7 +46,7 @@ var _ = registerIntegrationTest("s3", func(t *testing.T) {
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository:   "localstack/localstack",
-		ExposedPorts: []string{"4572/tcp"},
+		ExposedPorts: []string{"4566/tcp"},
 		Env:          []string{"SERVICES=s3"},
 	})
 	require.NoError(t, err)
@@ -54,9 +54,11 @@ var _ = registerIntegrationTest("s3", func(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
+	servicePort := resource.GetPort("4566/tcp")
+
 	resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		return createBucket(context.Background(), resource.GetPort("4572/tcp"), "probe-bucket")
+		return createBucket(context.Background(), servicePort, "probe-bucket")
 	}))
 
 	template := `
@@ -82,9 +84,9 @@ resources:
 	)
 	suite.Run(
 		t, template,
-		testOptPort(resource.GetPort("4572/tcp")),
+		testOptPort(servicePort),
 		testOptPreTest(func(t *testing.T, env *testEnvironment) {
-			require.NoError(t, createBucket(env.ctx, resource.GetPort("4572/tcp"), env.configVars.id))
+			require.NoError(t, createBucket(env.ctx, servicePort, env.configVars.id))
 		}),
 	)
 })
