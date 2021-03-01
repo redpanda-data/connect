@@ -3,6 +3,7 @@ package processor
 import (
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -27,6 +28,7 @@ even when combining input types that might not have support for sync responses.
 An example of an input able to utilise this is the ` + "`http_server`" + `.
 
 For more information please read [Synchronous Responses](/docs/guides/sync_responses).`,
+		config: docs.FieldComponent().Map(),
 	}
 }
 

@@ -18,32 +18,271 @@ import TabItem from '@theme/TabItem';
 This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
 :::
 
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yaml
-# Config fields, showing default values
+# Common config fields, showing default values
 output:
   amqp:
-    content_encoding: ""
-    content_type: application/octet-stream
+    url: amqp://guest:guest@localhost:5672/
+    exchange: benthos-exchange
+    key: benthos-key
+    type: ""
+    max_in_flight: 1
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+# All config fields, showing default values
+output:
+  amqp:
+    url: amqp://guest:guest@localhost:5672/
     exchange: benthos-exchange
     exchange_declare:
-      durable: true
       enabled: false
       type: direct
-    immediate: false
+      durable: true
     key: benthos-key
-    mandatory: false
+    type: ""
+    content_type: application/octet-stream
+    content_encoding: ""
     max_in_flight: 1
     persistent: false
+    mandatory: false
+    immediate: false
     tls:
-      client_certs: []
       enabled: false
-      root_cas_file: ""
       skip_cert_verify: false
-    type: ""
-    url: amqp://guest:guest@localhost:5672/
+      root_cas_file: ""
+      client_certs: []
 ```
+
+</TabItem>
+</Tabs>
 
 DEPRECATED: This output is deprecated and scheduled for removal in Benthos V4.
 Please use [`amqp_0_9`](amqp_0_9) instead.
+
+## Fields
+
+### `url`
+
+A URL to connect to.
+
+
+Type: `string`  
+Default: `"amqp://guest:guest@localhost:5672/"`  
+
+```yaml
+# Examples
+
+url: amqp://localhost:5672/
+
+url: amqps://guest:guest@localhost:5672/
+```
+
+### `exchange`
+
+An AMQP exchange to publish to.
+
+
+Type: `string`  
+Default: `"benthos-exchange"`  
+
+### `exchange_declare`
+
+Optionally declare the target exchange (passive).
+
+
+Type: `object`  
+
+### `exchange_declare.enabled`
+
+Whether to declare the exchange.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `exchange_declare.type`
+
+The type of the exchange.
+
+
+Type: `string`  
+Default: `"direct"`  
+Options: `direct`, `fanout`, `topic`, `x-custom`.
+
+### `exchange_declare.durable`
+
+Whether the exchange should be durable.
+
+
+Type: `bool`  
+Default: `true`  
+
+### `key`
+
+The binding key to set for each message.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `"benthos-key"`  
+
+### `type`
+
+The type property to set for each message.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `content_type`
+
+The content type attribute to set for each message.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `"application/octet-stream"`  
+
+### `content_encoding`
+
+The content encoding attribute to set for each message.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `max_in_flight`
+
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+
+Type: `number`  
+Default: `1`  
+
+### `persistent`
+
+Whether message delivery should be persistent (transient by default).
+
+
+Type: `bool`  
+Default: `false`  
+
+### `mandatory`
+
+Whether to set the mandatory flag on published messages. When set if a published message is routed to zero queues it is returned.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `immediate`
+
+Whether to set the immediate flag on published messages. When set if there are no ready consumers of a queue then the message is dropped instead of waiting.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `tls`
+
+Custom TLS settings can be used to override system defaults.
+
+
+Type: `object`  
+
+### `tls.enabled`
+
+Whether custom TLS settings are enabled.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `tls.skip_cert_verify`
+
+Whether to skip server side certificate verification.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `tls.root_cas_file`
+
+An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+root_cas_file: ./root_cas.pem
+```
+
+### `tls.client_certs`
+
+A list of client certificates to use. For each certificate either the fields `cert` and `key`, or `cert_file` and `key_file` should be specified, but not both.
+
+
+Type: `array`  
+
+```yaml
+# Examples
+
+client_certs:
+  - cert: foo
+    key: bar
+
+client_certs:
+  - cert_file: ./example.pem
+    key_file: ./example.key
+```
+
+### `tls.client_certs[].cert`
+
+A plain text certificate to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].key`
+
+A plain text certificate key to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].cert_file`
+
+The path to a certificate to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].key_file`
+
+The path of a certificate key to use.
+
+
+Type: `string`  
+Default: `""`  
 
 

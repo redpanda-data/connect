@@ -50,7 +50,7 @@ It is required that subprocesses flush their stdout and stderr pipes for each li
 If a message contains line breaks each line of the message is piped to the subprocess and flushed, and a response is expected from the subprocess before another line is fed in.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("name", "The command to execute as a subprocess.", "cat", "sed", "awk"),
-			docs.FieldCommon("args", "A list of arguments to provide the command."),
+			docs.FieldCommon("args", "A list of arguments to provide the command.").Array(),
 			docs.FieldAdvanced("max_buffer", "The maximum expected response size."),
 			docs.FieldAdvanced(
 				"codec_send", "Determines how messages written to the subprocess are encoded, which allows them to be logically separated.",

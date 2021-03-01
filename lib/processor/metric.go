@@ -44,7 +44,7 @@ Custom metrics such as these are emitted along with Benthos internal metrics, wh
 					"type":  "${! json(\"doc.type\") }",
 					"topic": "${! meta(\"kafka_topic\") }",
 				},
-			).IsInterpolated(),
+			).IsInterpolated().Map(),
 			docs.FieldCommon("value", "For some metric types specifies a value to set, increment.").IsInterpolated(),
 			partsFieldSpec,
 		},

@@ -55,7 +55,7 @@ You can access these metadata fields using
 				"pulsar://pulsar.us-west.example.com:6650",
 				"pulsar+ssl://pulsar.us-west.example.com:6651",
 			),
-			docs.FieldCommon("topics", "A list of topics to subscribe to."),
+			docs.FieldCommon("topics", "A list of topics to subscribe to.").Array(),
 			docs.FieldCommon("subscription_name", "Specify the subscription name for this consumer."),
 		),
 	})

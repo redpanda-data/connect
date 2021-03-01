@@ -18,28 +18,244 @@ import TabItem from '@theme/TabItem';
 This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
 :::
 
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yaml
-# Config fields, showing default values
+# Common config fields, showing default values
 input:
   amqp:
-    bindings_declare: []
+    url: amqp://guest:guest@localhost:5672/
+    queue: benthos-queue
     consumer_tag: benthos-consumer
-    max_batch_count: 1
     prefetch_count: 10
-    prefetch_size: 0
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+# All config fields, showing default values
+input:
+  amqp:
+    url: amqp://guest:guest@localhost:5672/
     queue: benthos-queue
     queue_declare:
+      enabled: false
       durable: true
-      enabled: false
+    bindings_declare: []
+    consumer_tag: benthos-consumer
+    prefetch_count: 10
+    prefetch_size: 0
     tls:
-      client_certs: []
       enabled: false
-      root_cas_file: ""
       skip_cert_verify: false
-    url: amqp://guest:guest@localhost:5672/
+      root_cas_file: ""
+      client_certs: []
 ```
+
+</TabItem>
+</Tabs>
 
 DEPRECATED: This input is deprecated and scheduled for removal in Benthos V4.
 Please use [`amqp_0_9`](amqp_0_9) instead.
+
+## Fields
+
+### `url`
+
+A URL to connect to.
+
+
+Type: `string`  
+Default: `"amqp://guest:guest@localhost:5672/"`  
+
+```yaml
+# Examples
+
+url: amqp://localhost:5672/
+
+url: amqps://guest:guest@localhost:5672/
+```
+
+### `queue`
+
+An AMQP queue to consume from.
+
+
+Type: `string`  
+Default: `"benthos-queue"`  
+
+### `queue_declare`
+
+Allows you to passively declare the target queue. If the queue already exists
+then the declaration passively verifies that they match the target fields.
+
+
+Type: `object`  
+
+### `queue_declare.enabled`
+
+Whether to enable queue declaration.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `queue_declare.durable`
+
+Whether the declared queue is durable.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `bindings_declare`
+
+Allows you to passively declare bindings for the target queue.
+
+
+Type: `array`  
+
+```yaml
+# Examples
+
+bindings_declare:
+  - exchange: foo
+    key: bar
+```
+
+### `bindings_declare[].exchange`
+
+The exchange of the declared binding.
+
+
+Type: `string`  
+Default: `""`  
+
+### `bindings_declare[].key`
+
+The key of the declared binding.
+
+
+Type: `string`  
+Default: `""`  
+
+### `consumer_tag`
+
+A consumer tag.
+
+
+Type: `string`  
+Default: `"benthos-consumer"`  
+
+### `prefetch_count`
+
+The maximum number of pending messages to have consumed at a time.
+
+
+Type: `number`  
+Default: `10`  
+
+### `prefetch_size`
+
+The maximum amount of pending messages measured in bytes to have consumed at a time.
+
+
+Type: `number`  
+Default: `0`  
+
+### `tls`
+
+Custom TLS settings can be used to override system defaults.
+
+
+Type: `object`  
+
+### `tls.enabled`
+
+Whether custom TLS settings are enabled.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `tls.skip_cert_verify`
+
+Whether to skip server side certificate verification.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `tls.root_cas_file`
+
+An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+root_cas_file: ./root_cas.pem
+```
+
+### `tls.client_certs`
+
+A list of client certificates to use. For each certificate either the fields `cert` and `key`, or `cert_file` and `key_file` should be specified, but not both.
+
+
+Type: `array`  
+
+```yaml
+# Examples
+
+client_certs:
+  - cert: foo
+    key: bar
+
+client_certs:
+  - cert_file: ./example.pem
+    key_file: ./example.key
+```
+
+### `tls.client_certs[].cert`
+
+A plain text certificate to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].key`
+
+A plain text certificate key to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].cert_file`
+
+The path to a certificate to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].key_file`
+
+The path of a certificate key to use.
+
+
+Type: `string`  
+Default: `""`  
 
 

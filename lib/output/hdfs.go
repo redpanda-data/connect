@@ -22,7 +22,7 @@ have a different path for each object you should use function interpolations
 described [here](/docs/configuration/interpolation#bloblang-queries).`,
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("hosts", "A list of hosts to connect to.", "localhost:9000"),
+			docs.FieldCommon("hosts", "A list of hosts to connect to.", "localhost:9000").Array(),
 			docs.FieldCommon("user", "A user identifier."),
 			docs.FieldCommon("directory", "A directory to store message files within. If the directory does not exist it will be created."),
 			docs.FieldCommon(

@@ -25,7 +25,7 @@ can find a list of functions [here](/docs/configuration/interpolation#bloblang-q
 				"A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.",
 				[]string{"nats://127.0.0.1:4222"},
 				[]string{"nats://username:password@127.0.0.1:4222"},
-			),
+			).Array(),
 			docs.FieldCommon("subject", "The subject to publish to.").IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		},

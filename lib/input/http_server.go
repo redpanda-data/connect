@@ -106,7 +106,7 @@ You can access these metadata fields using
 			docs.FieldCommon("ws_path", "The endpoint path to create websocket connections from."),
 			docs.FieldAdvanced("ws_welcome_message", "An optional message to deliver to fresh websocket connections."),
 			docs.FieldAdvanced("ws_rate_limit_message", "An optional message to delivery to websocket connections that are rate limited."),
-			docs.FieldCommon("allowed_verbs", "An array of verbs that are allowed for the `path` endpoint.").AtVersion("3.33.0"),
+			docs.FieldCommon("allowed_verbs", "An array of verbs that are allowed for the `path` endpoint.").AtVersion("3.33.0").Array(),
 			docs.FieldCommon("timeout", "Timeout for requests. If a consumed messages takes longer than this to be delivered the connection is closed, but the message may still be delivered."),
 			docs.FieldCommon("rate_limit", "An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by."),
 			docs.FieldAdvanced("cert_file", "Only valid with a custom `address`."),
@@ -117,7 +117,7 @@ You can access these metadata fields using
 					"Specify the status code to return with synchronous responses. This is a string value, which allows you to customize it based on resulting payloads and their metadata.",
 					"200", `${! json("status") }`, `${! meta("status") }`,
 				).IsInterpolated(),
-				docs.FieldCommon("headers", "Specify headers to return with synchronous responses.").IsInterpolated(),
+				docs.FieldCommon("headers", "Specify headers to return with synchronous responses.").IsInterpolated().Map(),
 			),
 		},
 		Categories: []Category{

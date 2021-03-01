@@ -29,6 +29,11 @@ The field ` + "`max_buffer`" + ` specifies the maximum amount of memory to
 allocate for buffering lines of data, this must exceed the largest expected
 message size.`,
 		Status: docs.StatusDeprecated,
+		config: docs.FieldComponent().WithChildren(
+			docs.FieldCommon("address", ""),
+			docs.FieldCommon("max_buffer", ""),
+			docs.FieldCommon("delimiter", ""),
+		),
 	}
 }
 

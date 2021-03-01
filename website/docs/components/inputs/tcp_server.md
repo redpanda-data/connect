@@ -23,9 +23,9 @@ This component is deprecated and will be removed in the next major version relea
 input:
   tcp_server:
     address: 127.0.0.1:0
-    delimiter: ""
-    max_buffer: 1000000
     multipart: false
+    max_buffer: 1000000
+    delimiter: ""
 ```
 
 Creates a server that receives messages over TCP. Each connection is parsed as a
@@ -40,5 +40,39 @@ If the delimiter field is left empty then line feed (\n) is used.
 The field `max_buffer` specifies the maximum amount of memory to
 allocate _per connection_ for buffering lines of data. If a line of data from a
 connection exceeds this value then the connection will be closed.
+
+## Fields
+
+### `address`
+
+Sorry! This field is missing documentation.
+
+
+Type: `string`  
+Default: `"127.0.0.1:0"`  
+
+### `multipart`
+
+Sorry! This field is missing documentation.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `max_buffer`
+
+Sorry! This field is missing documentation.
+
+
+Type: `number`  
+Default: `1000000`  
+
+### `delimiter`
+
+Sorry! This field is missing documentation.
+
+
+Type: `string`  
+Default: `""`  
 
 

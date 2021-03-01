@@ -35,6 +35,12 @@ The field ` + "`max_buffer`" + ` specifies the maximum amount of memory to
 allocate _per connection_ for buffering lines of data. If a line of data from a
 connection exceeds this value then the connection will be closed.`,
 		Status: docs.StatusDeprecated,
+		config: docs.FieldComponent().WithChildren(
+			docs.FieldCommon("address", ""),
+			docs.FieldCommon("multipart", ""),
+			docs.FieldCommon("max_buffer", ""),
+			docs.FieldCommon("delimiter", ""),
+		),
 	}
 }
 

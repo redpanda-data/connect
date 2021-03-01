@@ -50,7 +50,7 @@ This behaviour can be overridden by
 			docs.FieldCommon("path", "The path from which discrete messages can be consumed."),
 			docs.FieldCommon("stream_path", "The path from which a continuous stream of messages can be consumed."),
 			docs.FieldCommon("ws_path", "The path from which websocket connections can be established."),
-			docs.FieldCommon("allowed_verbs", "An array of verbs that are allowed for the `path` and `stream_path` HTTP endpoint."),
+			docs.FieldCommon("allowed_verbs", "An array of verbs that are allowed for the `path` and `stream_path` HTTP endpoint.").Array(),
 			docs.FieldAdvanced("timeout", "The maximum time to wait before a blocking, inactive connection is dropped (only applies to the `path` endpoint)."),
 			docs.FieldAdvanced("cert_file", "An optional certificate file to use for TLS connections. Only applicable when an `address` is specified."),
 			docs.FieldAdvanced("key_file", "An optional certificate key file to use for TLS connections. Only applicable when an `address` is specified."),

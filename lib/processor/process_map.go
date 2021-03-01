@@ -34,16 +34,16 @@ var processMapFields = docs.FieldSpecs{
 			"foo":     "root.body.foo",
 			"bar.baz": "root.extra.baz",
 		},
-	),
-	docs.FieldCommon("premap_optional", "A map of optional source to destination [paths](/docs/configuration/field_paths) used to create a new object from the original."),
+	).Map(),
+	docs.FieldCommon("premap_optional", "A map of optional source to destination [paths](/docs/configuration/field_paths) used to create a new object from the original.").Map(),
 	docs.FieldCommon("processors", "A list of processors to apply to mapped payloads.").Array().HasType(docs.FieldProcessor),
 	docs.FieldCommon(
 		"postmap", "A map of destination to source [paths](/docs/configuration/field_paths) used to map results from processing back into the original payload. An empty (or dot `.`) path indicates the root of the object. If a source is not found then the mapping is abandoned, for optional sources use the [`postmap_optional`](#postmap_optional) field.",
 		map[string]string{
 			"results.foo": ".",
 		},
-	),
-	docs.FieldCommon("postmap_optional", "A map of optional destination to source [paths](/docs/configuration/field_paths) used to map results from processing back into the original payload."),
+	).Map(),
+	docs.FieldCommon("postmap_optional", "A map of optional destination to source [paths](/docs/configuration/field_paths) used to map results from processing back into the original payload.").Map(),
 	partsFieldSpec,
 }
 

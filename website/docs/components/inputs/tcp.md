@@ -23,9 +23,9 @@ This component is deprecated and will be removed in the next major version relea
 input:
   tcp:
     address: localhost:4194
-    delimiter: ""
-    max_buffer: 1000000
     multipart: false
+    max_buffer: 1000000
+    delimiter: ""
 ```
 
 Connects to a TCP server and consumes a continuous stream of messages.
@@ -39,5 +39,39 @@ instance of this input can utilise any number of threads within a
 `pipeline` section of a config.
 
 If the delimiter field is left empty then line feed (\n) is used.
+
+## Fields
+
+### `address`
+
+Sorry! This field is missing documentation.
+
+
+Type: `string`  
+Default: `"localhost:4194"`  
+
+### `multipart`
+
+Sorry! This field is missing documentation.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `max_buffer`
+
+Sorry! This field is missing documentation.
+
+
+Type: `number`  
+Default: `1000000`  
+
+### `delimiter`
+
+Sorry! This field is missing documentation.
+
+
+Type: `string`  
+Default: `""`  
 
 

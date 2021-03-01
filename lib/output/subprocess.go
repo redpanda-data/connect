@@ -35,7 +35,7 @@ If the subprocess exits unexpectedly then Benthos will log anything printed to s
 The execution environment of the subprocess is the same as the Benthos instance, including environment variables and the current working directory.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("name", "The command to execute as a subprocess."),
-			docs.FieldCommon("args", "A list of arguments to provide the command."),
+			docs.FieldCommon("args", "A list of arguments to provide the command.").Array(),
 			docs.FieldCommon(
 				"codec", "The way in which messages should be written to the subprocess.",
 			).HasOptions("lines"),

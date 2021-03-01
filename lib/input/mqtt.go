@@ -31,8 +31,8 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs."),
-			docs.FieldCommon("topics", "A list of topics to consume from."),
+			docs.FieldCommon("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").Array(),
+			docs.FieldCommon("topics", "A list of topics to consume from.").Array(),
 			docs.FieldCommon("client_id", "An identifier for the client connection."),
 			docs.FieldAdvanced("qos", "The level of delivery guarantee to enforce.").HasOptions("0", "1", "2"),
 			docs.FieldAdvanced("clean_session", "Set whether the connection is non-persistent."),

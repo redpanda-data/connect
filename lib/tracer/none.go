@@ -1,5 +1,7 @@
 package tracer
 
+import "github.com/Jeffail/benthos/v3/internal/docs"
+
 //------------------------------------------------------------------------------
 
 func init() {
@@ -7,6 +9,7 @@ func init() {
 		constructor: NewNone,
 		Summary: `
 Do not send opentracing events anywhere.`,
+		config: docs.FieldComponent().Map(),
 	}
 }
 

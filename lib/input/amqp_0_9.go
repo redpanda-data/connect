@@ -4,6 +4,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
@@ -82,7 +83,11 @@ then the declaration passively verifies that they match the target fields.`,
 			docs.FieldCommon("prefetch_count", "The maximum number of pending messages to have consumed at a time."),
 			docs.FieldAdvanced("prefetch_size", "The maximum amount of pending messages measured in bytes to have consumed at a time."),
 			tls.FieldSpec(),
-			docs.FieldDeprecated("batching"),
+			func() docs.FieldSpec {
+				b := batch.FieldSpec()
+				b.Deprecated = true
+				return b
+			}(),
 		},
 	}
 }

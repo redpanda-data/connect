@@ -34,7 +34,7 @@ false for connections to succeed.`,
 		Async:   true,
 		Batches: true,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"http://localhost:9200"}),
+			docs.FieldCommon("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"http://localhost:9200"}).Array(),
 			docs.FieldCommon("index", "The index to place messages.").IsInterpolated(),
 			docs.FieldAdvanced("pipeline", "An optional pipeline id to preprocess incoming documents.").IsInterpolated(),
 			docs.FieldCommon("id", "The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.").IsInterpolated(),

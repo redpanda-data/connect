@@ -4,6 +4,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -38,13 +39,17 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldDeprecated("batching"),
+			func() docs.FieldSpec {
+				b := batch.FieldSpec()
+				b.Deprecated = true
+				return b
+			}(),
 			docs.FieldCommon(
 				"urls",
 				"A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.",
 				[]string{"nats://127.0.0.1:4222"},
 				[]string{"nats://username:password@127.0.0.1:4222"},
-			),
+			).Array(),
 			docs.FieldCommon("cluster_id", "The ID of the cluster to consume from."),
 			docs.FieldCommon("client_id", "A client ID to connect as."),
 			docs.FieldCommon("queue", "The queue to consume from."),

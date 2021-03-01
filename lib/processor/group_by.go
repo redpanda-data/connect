@@ -64,14 +64,14 @@ output:
 `,
 			},
 		},
-		Config: docs.FieldComponent().Array().WithChildren(
+		config: docs.FieldComponent().Array().WithChildren(
 			docs.FieldCommon(
 				"check",
 				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message belongs to a given group.",
 				`this.type == "foo"`,
 				`this.contents.urls.contains("https://benthos.dev/")`,
 				`true`,
-			).HasDefault(""),
+			).HasDefault("").Linter(docs.LintBloblangMapping),
 			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v, _ interface{}) (string, bool) {
 				defaultBytes, err := yaml.Marshal(condition.NewConfig())
 				if err != nil {

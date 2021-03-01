@@ -3,6 +3,7 @@ package processor
 import (
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -14,6 +15,7 @@ func init() {
 	Constructors[TypeNoop] = TypeSpec{
 		constructor: NewNoop,
 		Summary:     "Noop is a processor that does nothing, the message passes through unchanged. Why? Sometimes doing nothing is the braver option.",
+		config:      docs.FieldComponent().Map(),
 	}
 }
 

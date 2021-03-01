@@ -20,6 +20,9 @@ connecting to a server.
 If batched messages are sent the final message of the batch will be followed by
 two line breaks in order to indicate the end of the batch.`,
 		Status: docs.StatusDeprecated,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon("address", ""),
+		},
 	}
 }
 

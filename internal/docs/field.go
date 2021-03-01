@@ -392,6 +392,8 @@ func (t FieldType) IsCoreComponent() (Type, bool) {
 		return TypeOutput, true
 	case FieldTracer:
 		return TypeTracer, true
+	case FieldMetrics:
+		return TypeMetrics, true
 	}
 	return "", false
 }
@@ -495,12 +497,8 @@ func (f FieldSpecs) sortNode(node *yaml.Node, removeTypeField bool) error {
 }
 
 func nodeToInterface(node *yaml.Node) (interface{}, error) {
-	nodeBytes, err := yaml.Marshal(node)
-	if err != nil {
-		return nil, err
-	}
 	var i interface{}
-	if err = yaml.Unmarshal(nodeBytes, &i); err != nil {
+	if err := node.Decode(&i); err != nil {
 		return nil, err
 	}
 	return i, nil

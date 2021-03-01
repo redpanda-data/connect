@@ -59,7 +59,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 			docs.FieldCommon(
 				"addresses", "A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.",
 				[]string{"localhost:9092"}, []string{"localhost:9041,localhost:9042"}, []string{"localhost:9041", "localhost:9042"},
-			),
+			).Array(),
 			docs.FieldCommon(
 				"topics",
 				"A list of topics to consume from. Multiple comma separated topics can be listed in a single element. Partitions are automatically distributed across consumers of a topic. Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name, e.g. `foo:0` would consume the partition 0 of the topic foo. This syntax supports ranges, e.g. `foo:0-10` would consume partitions 0 through to 10 inclusive.",
@@ -68,7 +68,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 				[]string{"foo:0", "bar:1", "bar:3"},
 				[]string{"foo:0,bar:1,bar:3"},
 				[]string{"foo:0-5"},
-			).AtVersion("3.33.0"),
+			).AtVersion("3.33.0").Array(),
 			btls.FieldSpec(),
 			sasl.FieldSpec(),
 			docs.FieldCommon("consumer_group", "An identifier for the consumer group of the connection. This field can be explicitly made empty in order to disable stored offsets for the consumed topic partitions."),

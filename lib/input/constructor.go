@@ -42,6 +42,7 @@ type TypeSpec struct {
 	Description string
 	Categories  []Category
 	Footnotes   string
+	config      docs.FieldSpec
 	FieldSpecs  docs.FieldSpecs
 	Examples    []docs.AnnotatedExample
 }
@@ -52,14 +53,18 @@ type ConstructorFunc func(bool, Config, types.Manager, log.Modular, metrics.Type
 // WalkConstructors iterates each component constructor.
 func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 	for k, v := range Constructors {
+		conf := v.config
+		if len(v.FieldSpecs) > 0 {
+			conf = docs.FieldComponent().WithChildren(v.FieldSpecs...)
+		}
 		spec := docs.ComponentSpec{
 			Type:        docs.TypeInput,
 			Name:        k,
 			Summary:     v.Summary,
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
+			Config:      conf,
 			Examples:    v.Examples,
-			Config:      docs.FieldComponent().WithChildren(v.FieldSpecs...),
 			Status:      v.Status,
 			Version:     v.Version,
 		}

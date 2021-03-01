@@ -59,10 +59,10 @@ You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldDeprecated("max_batch_count"),
-			docs.FieldCommon("addresses", "A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.", []string{"localhost:9092"}, []string{"localhost:9041,localhost:9042"}, []string{"localhost:9041", "localhost:9042"}),
+			docs.FieldCommon("addresses", "A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.", []string{"localhost:9092"}, []string{"localhost:9041,localhost:9042"}, []string{"localhost:9041", "localhost:9042"}).Array(),
 			tls.FieldSpec(),
 			sasl.FieldSpec(),
-			docs.FieldCommon("topics", "A list of topics to consume from. If an item of the list contains commas it will be expanded into multiple topics."),
+			docs.FieldCommon("topics", "A list of topics to consume from. If an item of the list contains commas it will be expanded into multiple topics.").Array(),
 			docs.FieldCommon("client_id", "An identifier for the client connection."),
 			docs.FieldCommon("consumer_group", "An identifier for the consumer group of the connection."),
 			docs.FieldAdvanced("start_from_oldest", "If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset."),

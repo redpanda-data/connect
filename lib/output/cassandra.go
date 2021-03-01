@@ -89,7 +89,7 @@ output:
 				[]string{"localhost:9042"},
 				[]string{"foo:9042", "bar:9042"},
 				[]string{"foo:9042,bar:9042"},
-			),
+			).Array(),
 			btls.FieldSpec(),
 			docs.FieldAdvanced(
 				"password_authenticator",
@@ -107,7 +107,7 @@ output:
 			docs.FieldCommon(
 				"args",
 				"A list of arguments for the query to be resolved for each message.",
-			).IsInterpolated(),
+			).IsInterpolated().Array(),
 			docs.FieldAdvanced(
 				"consistency",
 				"The consistency level to use.",

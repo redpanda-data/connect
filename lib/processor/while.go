@@ -44,7 +44,7 @@ If following a loop execution the number of messages in a batch is reduced to ze
 				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether the while loop should execute again.",
 				`errored()`,
 				`this.urls.unprocessed.length() > 0`,
-			).HasDefault(""),
+			).HasDefault("").Linter(docs.LintBloblangMapping),
 			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v, _ interface{}) (string, bool) {
 				defaultBytes, err := yaml.Marshal(condition.NewConfig())
 				if err != nil {

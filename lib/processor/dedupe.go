@@ -77,7 +77,7 @@ service restarts increase the chances of duplicates passing undetected.`,
 			docs.FieldCommon("hash", "The hash type to used.").HasOptions("none", "xxhash"),
 			docs.FieldCommon("key", "An optional key to use for deduplication (instead of the entire message contents).").IsInterpolated(),
 			docs.FieldCommon("drop_on_err", "Whether messages should be dropped when the cache returns an error."),
-			docs.FieldAdvanced("parts", "An array of message indexes within the batch to deduplicate based on. If left empty all messages included. This field is only applicable when batching messages [at the input level](/docs/configuration/batching)."),
+			docs.FieldAdvanced("parts", "An array of message indexes within the batch to deduplicate based on. If left empty all messages are included. This field is only applicable when batching messages [at the input level](/docs/configuration/batching).").Array(),
 		},
 	}
 }

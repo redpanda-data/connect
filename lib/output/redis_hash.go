@@ -57,7 +57,7 @@ Where latter stages will overwrite matching field names of a former stage.`,
 			).IsInterpolated(),
 			docs.FieldCommon("walk_metadata", "Whether all metadata fields of messages should be walked and added to the list of hash fields to set."),
 			docs.FieldCommon("walk_json_object", "Whether to walk each message as a JSON object and add each key/value pair to the list of hash fields to set."),
-			docs.FieldCommon("fields", "A map of key/value pairs to set as hash fields.").IsInterpolated(),
+			docs.FieldCommon("fields", "A map of key/value pairs to set as hash fields.").IsInterpolated().Map(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		),
 		Categories: []Category{

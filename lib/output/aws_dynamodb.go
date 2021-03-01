@@ -74,7 +74,7 @@ allowing you to transfer data across accounts. You can find out more
 					"topic":        "${!meta(\"kafka_topic\")}",
 					"full_content": "${!content()}",
 				},
-			).IsInterpolated(),
+			).IsInterpolated().Map(),
 			docs.FieldCommon("json_map_columns", "A map of column keys to [field paths](/docs/configuration/field_paths) pointing to value data within messages.",
 				map[string]string{
 					"user":           "path.to.user",
@@ -83,7 +83,7 @@ allowing you to transfer data across accounts. You can find out more
 				map[string]string{
 					"": ".",
 				},
-			),
+			).Map(),
 			docs.FieldAdvanced("ttl", "An optional TTL to set for items, calculated from the moment the message is sent."),
 			docs.FieldAdvanced("ttl_key", "The column key to place the TTL value within."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
@@ -159,7 +159,7 @@ allowing you to transfer data across accounts. You can find out more
 					"topic":        "${!meta(\"kafka_topic\")}",
 					"full_content": "${!content()}",
 				},
-			).IsInterpolated(),
+			).IsInterpolated().Map(),
 			docs.FieldCommon("json_map_columns", "A map of column keys to [field paths](/docs/configuration/field_paths) pointing to value data within messages.",
 				map[string]string{
 					"user":           "path.to.user",
@@ -168,7 +168,7 @@ allowing you to transfer data across accounts. You can find out more
 				map[string]string{
 					"": ".",
 				},
-			),
+			).Map(),
 			docs.FieldAdvanced("ttl", "An optional TTL to set for items, calculated from the moment the message is sent."),
 			docs.FieldAdvanced("ttl_key", "The column key to place the TTL value within."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),

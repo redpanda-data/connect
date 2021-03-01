@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
@@ -17,6 +18,7 @@ Drops all messages.`,
 		Categories: []Category{
 			CategoryUtility,
 		},
+		config: docs.FieldComponent().Map(),
 	}
 }
 

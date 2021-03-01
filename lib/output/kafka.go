@@ -35,7 +35,7 @@ However, this also means that manual intervention will eventually be required in
 		Batches: true,
 		FieldSpecs: append(docs.FieldSpecs{
 			docs.FieldDeprecated("round_robin_partitions"),
-			docs.FieldCommon("addresses", "A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.", []string{"localhost:9092"}, []string{"localhost:9041,localhost:9042"}, []string{"localhost:9041", "localhost:9042"}),
+			docs.FieldCommon("addresses", "A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.", []string{"localhost:9092"}, []string{"localhost:9041,localhost:9042"}, []string{"localhost:9041", "localhost:9042"}).Array(),
 			tls.FieldSpec(),
 			sasl.FieldSpec(),
 			docs.FieldCommon("topic", "The topic to publish messages to.").IsInterpolated(),
@@ -43,7 +43,7 @@ However, this also means that manual intervention will eventually be required in
 			docs.FieldCommon("key", "The key to publish messages with.").IsInterpolated(),
 			docs.FieldCommon("partitioner", "The partitioning algorithm to use.").HasOptions("fnv1a_hash", "murmur2_hash", "random", "round_robin"),
 			docs.FieldCommon("compression", "The compression algorithm to use.").HasOptions("none", "snappy", "lz4", "gzip"),
-			docs.FieldCommon("static_headers", "An optional map of static headers that should be added to messages in addition to metadata.", map[string]string{"first-static-header": "value-1", "second-static-header": "value-2"}),
+			docs.FieldCommon("static_headers", "An optional map of static headers that should be added to messages in addition to metadata.", map[string]string{"first-static-header": "value-1", "second-static-header": "value-2"}).Map(),
 			docs.FieldCommon("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 			docs.FieldAdvanced("ack_replicas", "Ensure that messages have been copied across all replicas before acknowledging receipt."),
 			docs.FieldAdvanced("max_msg_bytes", "The maximum size in bytes of messages sent to the target topic."),

@@ -68,7 +68,7 @@ Default: `10`
 
 ### `parts`
 
-An array of message indexes within the batch to sample based on. If left empty all messages included. This field is only applicable when batching messages [at the input level](/docs/configuration/batching).
+An array of message indexes within the batch to sample based on. If left empty all messages are included. This field is only applicable when batching messages [at the input level](/docs/configuration/batching).
 
 
 Type: `array`  

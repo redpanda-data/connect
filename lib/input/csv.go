@@ -30,7 +30,7 @@ func init() {
 			docs.FieldCommon(
 				"paths", "A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported.",
 				[]string{"/tmp/foo.csv", "/tmp/bar/*.csv"},
-			),
+			).Array(),
 			docs.FieldCommon("parse_header_row", "Whether to reference the first row as a header row. If set to true the output structure for messages will be an object where field keys are determined by the header row."),
 			docs.FieldCommon("delimiter", `The delimiter to use for splitting values in each record, must be a single character.`),
 			docs.FieldAdvanced("batch_count", `Optionally process records in batches. This can help to speed up the consumption of exceptionally large CSV files. When the end of the file is reached the remaining records are processed as a (potentially smaller) batch.`),

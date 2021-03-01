@@ -26,6 +26,12 @@ please check out [this document](/docs/configuration/batching).
 
 This processor is scheduled to be removed in Benthos V4`,
 		Status: docs.StatusDeprecated,
+		config: docs.FieldComponent().WithChildren(
+			docs.FieldDeprecated("byte_size"),
+			docs.FieldDeprecated("count"),
+			docs.FieldDeprecated("condition").HasType(docs.FieldCondition),
+			docs.FieldDeprecated("period"),
+		),
 	}
 }
 

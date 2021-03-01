@@ -391,6 +391,9 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 	var walkFields func(path string, f FieldSpecs)
 	walkFields = func(path string, f FieldSpecs) {
 		for _, v := range f {
+			if v.Deprecated {
+				continue
+			}
 			newV := v
 			if len(path) > 0 {
 				newV.Name = path + newV.Name
@@ -417,10 +420,6 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 
 	gConf := gabs.Wrap(fullConfigExample).S(c.Name)
 	for _, v := range flattenedFields {
-		if v.Deprecated {
-			continue
-		}
-
 		defaultValue := v.Default
 		if defaultValue == nil {
 			defaultValue = gConf.Path(v.Name).Data()

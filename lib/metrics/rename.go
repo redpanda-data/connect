@@ -40,7 +40,11 @@ renamed path into the label values.`,
 						},
 					},
 				},
-			),
+			).WithChildren(
+				docs.FieldDeprecated("pattern"),
+				docs.FieldDeprecated("value"),
+				docs.FieldDeprecated("to_label").Map(),
+			).Array(),
 			docs.FieldCommon("child", "A child metric type, this is where renamed metrics will be routed.").HasType(docs.FieldMetrics),
 		},
 		Description: `

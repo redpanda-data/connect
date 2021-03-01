@@ -2,6 +2,7 @@ package docs
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"text/template"
 
@@ -15,10 +16,7 @@ import (
 func LintBloblangMapping(v interface{}) []Lint {
 	str, ok := v.(string)
 	if !ok {
-		// TODO: Re-enable this once all fields are checked for scalar vs
-		// structured.
-		// return []Lint{NewLintError(0, fmt.Sprintf("expected string value, got %T", v))}
-		return nil
+		return []Lint{NewLintWarning(0, fmt.Sprintf("expected string value, got %T", v))}
 	}
 	if len(str) == 0 {
 		return nil
@@ -41,10 +39,7 @@ func LintBloblangMapping(v interface{}) []Lint {
 func LintBloblangField(v interface{}) []Lint {
 	str, ok := v.(string)
 	if !ok {
-		// TODO: Re-enable this once all fields are checked for scalar vs
-		// structured.
-		// return []Lint{NewLintError(0, fmt.Sprintf("expected string value, got %T", v))}
-		return nil
+		return []Lint{NewLintWarning(0, fmt.Sprintf("expected string value, got %T", v))}
 	}
 	if len(str) == 0 {
 		return nil

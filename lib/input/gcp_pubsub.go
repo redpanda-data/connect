@@ -4,6 +4,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -39,7 +40,11 @@ You can access these metadata fields using
 			docs.FieldCommon("subscription", "The target subscription ID."),
 			docs.FieldCommon("max_outstanding_messages", "The maximum number of outstanding pending messages to be consumed at a given time."),
 			docs.FieldCommon("max_outstanding_bytes", "The maximum number of outstanding pending messages to be consumed measured in bytes."),
-			docs.FieldDeprecated("batching"),
+			func() docs.FieldSpec {
+				b := batch.FieldSpec()
+				b.Deprecated = true
+				return b
+			}(),
 			docs.FieldDeprecated("max_batch_count"),
 		},
 	}

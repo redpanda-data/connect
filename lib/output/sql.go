@@ -121,7 +121,7 @@ output:
 			docs.FieldCommon(
 				"args",
 				"A list of arguments for the query to be resolved for each message.",
-			).IsInterpolated(),
+			).IsInterpolated().Array(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			batch.FieldSpec(),
 		},

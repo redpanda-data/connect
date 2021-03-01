@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -52,6 +53,7 @@ For more information please read [Synchronous Responses](/docs/guides/sync_respo
 		Categories: []Category{
 			CategoryUtility,
 		},
+		config: docs.FieldComponent().Map(),
 	}
 }
 

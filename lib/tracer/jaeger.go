@@ -32,7 +32,7 @@ Send spans to a [Jaeger](https://www.jaegertracing.io/) agent.`,
 			),
 			docs.FieldAdvanced("sampler_manager_address", "An optional address of a sampler manager."),
 			docs.FieldAdvanced("sampler_param", "A parameter to use for sampling. This field is unused for some sampling types."),
-			docs.FieldAdvanced("tags", "A map of tags to add to tracing spans."),
+			docs.FieldAdvanced("tags", "A map of tags to add to tracing spans.").Map(),
 			docs.FieldCommon("flush_interval", "The period of time between each flush of tracing spans."),
 		},
 	}

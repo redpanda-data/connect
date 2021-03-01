@@ -38,7 +38,7 @@ For each switch case a [Bloblang query](/docs/guides/bloblang/about/) is checked
 When a switch processor executes on a [batch of messages](/docs/configuration/batching/) they are checked individually and can be matched independently against cases. During processing the messages matched against a case are processed as a batch, although the ordering of messages during case processing cannot be guaranteed to match the order as received.
 
 At the end of switch processing the resulting batch will follow the same ordering as the batch was received. If any child processors have split or otherwise grouped messages this grouping will be lost as the result of a switch is always a single batch. In order to perform conditional grouping and/or splitting use the [` + "`group_by`" + ` processor](/docs/components/processors/group_by/).`,
-		Config: docs.FieldComponent().Array().WithChildren(
+		config: docs.FieldComponent().Array().WithChildren(
 			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v, _ interface{}) (string, bool) {
 				m, ok := v.(map[string]interface{})
 				if !ok {

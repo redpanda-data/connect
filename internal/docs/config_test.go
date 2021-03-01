@@ -502,6 +502,36 @@ func TestLinting(t *testing.T) {
 
 	tests := []testCase{
 		{
+			name:      "ignores comments",
+			inputType: docs.TypeInput,
+			inputConf: `
+testlintfooinput:
+  # comment here
+  foo1: hello world # And what's this?`,
+		},
+		{
+			name:      "allows anchors",
+			inputType: docs.TypeInput,
+			inputConf: `
+testlintfooinput: &test-anchor
+  foo1: hello world
+processors:
+  - testlintfooprocessor: *test-anchor`,
+		},
+		{
+			name:      "lints through anchors",
+			inputType: docs.TypeInput,
+			inputConf: `
+testlintfooinput: &test-anchor
+  foo1: hello world
+  nope: bad field
+processors:
+  - testlintfooprocessor: *test-anchor`,
+			res: []docs.Lint{
+				docs.NewLintError(4, "field nope not recognised"),
+			},
+		},
+		{
 			name:      "unknown fields",
 			inputType: docs.TypeInput,
 			inputConf: `

@@ -105,7 +105,7 @@ output:
 					"Key1":      "Value1",
 					"Timestamp": `${!meta("Timestamp")}`,
 				},
-			).IsInterpolated(),
+			).IsInterpolated().Map(),
 			docs.FieldCommon("content_type", "The content type to set for each object.").IsInterpolated(),
 			docs.FieldAdvanced("content_encoding", "An optional content encoding to set for each object.").IsInterpolated(),
 			docs.FieldAdvanced("storage_class", "The storage class to set for each object.").HasOptions(
@@ -219,7 +219,7 @@ output:
 					"Key1":      "Value1",
 					"Timestamp": `${!meta("Timestamp")}`,
 				},
-			).IsInterpolated(),
+			).IsInterpolated().Map(),
 			docs.FieldCommon("content_type", "The content type to set for each object.").IsInterpolated(),
 			docs.FieldAdvanced("content_encoding", "An optional content encoding to set for each object.").IsInterpolated(),
 			docs.FieldAdvanced("storage_class", "The storage class to set for each object.").HasOptions(

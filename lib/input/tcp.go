@@ -29,6 +29,12 @@ instance of this input can utilise any number of threads within a
 
 If the delimiter field is left empty then line feed (\n) is used.`,
 		Status: docs.StatusDeprecated,
+		config: docs.FieldComponent().WithChildren(
+			docs.FieldCommon("address", ""),
+			docs.FieldCommon("multipart", ""),
+			docs.FieldCommon("max_buffer", ""),
+			docs.FieldCommon("delimiter", ""),
+		),
 	}
 }
 

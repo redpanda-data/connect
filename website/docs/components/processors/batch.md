@@ -20,62 +20,7 @@ This component is deprecated and will be removed in the next major version relea
 
 ```yaml
 # Config fields, showing default values
-batch:
-  byte_size: 0
-  condition:
-    all: {}
-    and: []
-    any: {}
-    bloblang: ""
-    bounds_check:
-      max_part_size: 1073741824
-      max_parts: 100
-      min_part_size: 1
-      min_parts: 1
-    check_field:
-      condition: {}
-      parts: []
-      path: ""
-    check_interpolation:
-      condition: {}
-      value: ""
-    count:
-      arg: 100
-    jmespath:
-      part: 0
-      query: ""
-    json:
-      arg: ""
-      operator: exists
-      part: 0
-      path: ""
-    json_schema:
-      part: 0
-      schema: ""
-      schema_path: ""
-    metadata:
-      arg: ""
-      key: ""
-      operator: equals_cs
-      part: 0
-    not: {}
-    number:
-      arg: 0
-      operator: equals
-      part: 0
-    or: []
-    processor_failed:
-      part: 0
-    resource: ""
-    static: false
-    text:
-      arg: ""
-      operator: equals_cs
-      part: 0
-    type: static
-    xor: []
-  count: 0
-  period: ""
+batch: {}
 ```
 
 DEPRECATED: This processor is no longer supported and has been replaced with

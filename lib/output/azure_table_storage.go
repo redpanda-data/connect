@@ -80,7 +80,7 @@ properties:
 			docs.FieldCommon("row_key", "The row key.",
 				`${!json("device")}-${!uuid_v4()}`,
 			).IsInterpolated(),
-			docs.FieldCommon("properties", "A map of properties to store into the table.").IsInterpolated(),
+			docs.FieldCommon("properties", "A map of properties to store into the table.").IsInterpolated().Map(),
 			docs.FieldAdvanced("insert_type", "Type of insert operation").HasOptions(
 				"INSERT", "INSERT_MERGE", "INSERT_REPLACE",
 			).IsInterpolated(),
@@ -123,7 +123,7 @@ properties:
 			docs.FieldCommon("row_key", "The row key.",
 				`${!json("device")}-${!uuid_v4()}`,
 			).IsInterpolated(),
-			docs.FieldCommon("properties", "A map of properties to store into the table.").IsInterpolated(),
+			docs.FieldCommon("properties", "A map of properties to store into the table.").IsInterpolated().Map(),
 			docs.FieldAdvanced("insert_type", "Type of insert operation").HasOptions(
 				"INSERT", "INSERT_MERGE", "INSERT_REPLACE",
 			).IsInterpolated(),

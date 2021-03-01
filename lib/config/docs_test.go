@@ -62,15 +62,13 @@ func walkSpec(t *testing.T, prefix string, spec docs.FieldSpec, conf interface{}
 		for k := range obj {
 			t.Errorf("%v: field found in config but not documented", prefix+"."+k)
 		}
-	} /* else {
-		// TODO: Re-enable this test once all fields are documented fully.
+	} else {
 		_, isArray := conf.([]interface{})
 		assert.False(t, isArray, "%v: documented as scalar but is %T", prefix, conf)
 
 		_, isObj := conf.(map[string]interface{})
 		assert.False(t, isObj, "%v: documented as scalar but is %T", prefix, conf)
 	}
-	*/
 }
 
 func TestDocumentationCoverage(t *testing.T) {

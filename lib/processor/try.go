@@ -43,7 +43,7 @@ output of previous processors. This processor can be followed with a
 only to failed messages.
 
 More information about error handing can be found [here](/docs/configuration/error_handling).`,
-		Config: docs.FieldComponent().Array().HasType(docs.FieldProcessor),
+		config: docs.FieldComponent().Array().HasType(docs.FieldProcessor),
 	}
 }
 

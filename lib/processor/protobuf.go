@@ -59,7 +59,7 @@ Attempts to create a target protobuf message from a generic JSON structure.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("operator", "The [operator](#operators) to execute").HasOptions("to_json", "from_json"),
 			docs.FieldCommon("message", "The fully qualified name of the protobuf message to convert to/from."),
-			docs.FieldCommon("import_paths", "A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported."),
+			docs.FieldCommon("import_paths", "A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.").Array(),
 			docs.FieldDeprecated("import_path"),
 			partsFieldSpec,
 		},

@@ -34,7 +34,7 @@ You can access these metadata fields using
 			CategoryServices,
 		},
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("hosts", "A list of target host addresses to connect to."),
+			docs.FieldCommon("hosts", "A list of target host addresses to connect to.").Array(),
 			docs.FieldCommon("user", "A user ID to connect as."),
 			docs.FieldCommon("directory", "The directory to consume from."),
 		},
