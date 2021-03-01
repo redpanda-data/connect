@@ -1,11 +1,11 @@
-// +build integration
-
 package writer
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sync"
 	"testing"
 	"time"
@@ -18,6 +18,10 @@ import (
 )
 
 func TestElasticIntegration(t *testing.T) {
+	if m := flag.Lookup("test.run").Value.String(); m == "" || !regexp.MustCompile(m).MatchString(t.Name()) {
+		t.Skip("Skipping as execution was not requested explicitly using go test -run ^TestIntegration$")
+	}
+
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}

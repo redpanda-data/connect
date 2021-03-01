@@ -108,7 +108,7 @@ var _ = registerIntegrationTest("aws", func(t *testing.T) {
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository:   "localstack/localstack",
-		ExposedPorts: []string{"4572/tcp"},
+		ExposedPorts: []string{"4566/tcp"},
 		Env:          []string{"SERVICES=s3,sqs"},
 	})
 	require.NoError(t, err)
@@ -118,14 +118,13 @@ var _ = registerIntegrationTest("aws", func(t *testing.T) {
 
 	resource.Expire(900)
 
-	s3Port := resource.GetPort("4572/tcp")
-	sqsPort := resource.GetPort("4576/tcp")
+	servicePort := resource.GetPort("4566/tcp")
 
 	require.NoError(t, pool.Retry(func() error {
 		u4, err := uuid.NewV4()
 		require.NoError(t, err)
 
-		return createBucketQueue(s3Port, sqsPort, u4.String())
+		return createBucketQueue(servicePort, servicePort, u4.String())
 	}))
 
 	t.Run("s3_to_sqs", func(t *testing.T) {
@@ -152,9 +151,9 @@ input:
     region: eu-west-1
     delete_objects: true
     sqs:
-      url: http://localhost:$PORT_TWO/queue/queue-$ID
+      url: http://localhost:$PORT/queue/queue-$ID
       key_path: Records.*.s3.object.key
-      endpoint: http://localhost:$PORT_TWO
+      endpoint: http://localhost:$PORT
     credentials:
       id: xxxxx
       secret: xxxxx
@@ -172,10 +171,9 @@ input:
 		).Run(
 			t, template,
 			testOptPreTest(func(t *testing.T, env *testEnvironment) {
-				require.NoError(t, createBucketQueue(s3Port, sqsPort, env.configVars.id))
+				require.NoError(t, createBucketQueue(servicePort, servicePort, env.configVars.id))
 			}),
-			testOptPort(s3Port),
-			testOptPortTwo(sqsPort),
+			testOptPort(servicePort),
 			testOptAllowDupes(),
 		)
 	})
@@ -208,9 +206,9 @@ input:
     delete_objects: true
     codec: lines
     sqs:
-      url: http://localhost:$PORT_TWO/queue/queue-$ID
+      url: http://localhost:$PORT/queue/queue-$ID
       key_path: Records.*.s3.object.key
-      endpoint: http://localhost:$PORT_TWO
+      endpoint: http://localhost:$PORT
       delay_period: 1s
     credentials:
       id: xxxxx
@@ -228,10 +226,9 @@ input:
 				if env.configVars.outputBatchCount == 0 {
 					env.configVars.outputBatchCount = 1
 				}
-				require.NoError(t, createBucketQueue(s3Port, sqsPort, env.configVars.id))
+				require.NoError(t, createBucketQueue(servicePort, servicePort, env.configVars.id))
 			}),
-			testOptPort(s3Port),
-			testOptPortTwo(sqsPort),
+			testOptPort(servicePort),
 			testOptAllowDupes(),
 		)
 	})
@@ -270,9 +267,9 @@ input:
 		).Run(
 			t, template,
 			testOptPreTest(func(t *testing.T, env *testEnvironment) {
-				require.NoError(t, createBucketQueue(s3Port, "", env.configVars.id))
+				require.NoError(t, createBucketQueue(servicePort, "", env.configVars.id))
 			}),
-			testOptPort(s3Port),
+			testOptPort(servicePort),
 			testOptVarOne("false"),
 		)
 	})
@@ -312,9 +309,9 @@ input:
 		).Run(
 			t, template,
 			testOptPreTest(func(t *testing.T, env *testEnvironment) {
-				require.NoError(t, createBucketQueue("", sqsPort, env.configVars.id))
+				require.NoError(t, createBucketQueue("", servicePort, env.configVars.id))
 			}),
-			testOptPort(sqsPort),
+			testOptPort(servicePort),
 		)
 	})
 })
