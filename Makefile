@@ -96,7 +96,7 @@ test-wasm-build:
 	@GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o $(DEST_DIR)/wasm_test ./cmd/benthos
 
 test-integration:
-	@go test $(GO_FLAGS) -tags "integration" -timeout 3m ./...
+	@go test $(GO_FLAGS) -run "^Test.*Integration$$" -timeout 3m ./...
 
 clean:
 	rm -rf $(PATHINSTBIN)

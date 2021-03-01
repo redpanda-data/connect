@@ -1,11 +1,11 @@
-// +build integration
-
 package processor
 
 import (
 	"database/sql"
+	"flag"
 	"fmt"
 	"reflect"
+	"regexp"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -16,10 +16,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSQLClickhouseIntegration(t *testing.T) {
+func TestSQLIntegration(t *testing.T) {
+	if m := flag.Lookup("test.run").Value.String(); m == "" || !regexp.MustCompile(m).MatchString(t.Name()) {
+		t.Skip("Skipping as execution was not requested explicitly using go test -run ^TestIntegration$")
+	}
+
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
+
+	t.Run("TestSQLClickhouseIntegration", SQLClickhouseIntegration)
+	t.Run("TestSQLPostgresIntegration", SQLPostgresIntegration)
+	t.Run("TestSQLMySQLIntegration", SQLMySQLIntegration)
+}
+
+func SQLClickhouseIntegration(t *testing.T) {
+	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	if err != nil {
@@ -113,10 +125,8 @@ func testSQLClickhouse(t *testing.T, dsn string) {
 	assert.Equal(t, expParts, message.GetAllBytes(resMsgs[0]))
 }
 
-func TestSQLPostgresIntegration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
+func SQLPostgresIntegration(t *testing.T) {
+	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	if err != nil {
@@ -285,10 +295,8 @@ func testSQLPostgresDeprecated(t *testing.T, dsn string) {
 	}
 }
 
-func TestSQLMySQLIntegration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
+func SQLMySQLIntegration(t *testing.T) {
+	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	if err != nil {
