@@ -260,7 +260,7 @@ func newAmazonS3(name string, conf writer.AmazonS3Config, mgr types.Manager, log
 	if err != nil {
 		return nil, err
 	}
-	return newBatcherFromConf(conf.Batching, w, mgr, log, stats)
+	return NewBatcherFromConfig(conf.Batching, w, mgr, log, stats)
 }
 
 //------------------------------------------------------------------------------

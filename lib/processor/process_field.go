@@ -33,7 +33,7 @@ payloads to the processed result.`,
 				"result_type", "The final data type to marshal the processing result into. The `discard` type is a special case that discards the result of the processing steps entirely.",
 			).HasOptions("string", "int", "float", "bool", "object", "discard"),
 			docs.FieldCommon("processors", "A list of child processors to execute on the extracted value.").Array().HasType(docs.FieldProcessor),
-			partsFieldSpec,
+			PartsFieldSpec,
 		},
 		Description: `
 The result can be marshalled into a specific data type with the field

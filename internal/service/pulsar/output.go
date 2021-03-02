@@ -28,11 +28,10 @@ func init() {
 		}
 		return output.OnlySinglePayloads(o), nil
 	}), docs.ComponentSpec{
-		Name:   output.TypePulsar,
-		Type:   docs.TypeOutput,
-		Status: docs.StatusExperimental,
-		Summary: `
-Write messages to an Apache Pulsar server.`,
+		Name:    output.TypePulsar,
+		Type:    docs.TypeOutput,
+		Status:  docs.StatusExperimental,
+		Summary: `Write messages to an Apache Pulsar server.`,
 		Categories: []string{
 			string(output.CategoryServices),
 		},

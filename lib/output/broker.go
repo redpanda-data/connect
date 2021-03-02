@@ -152,7 +152,7 @@ func NewBroker(
 		if err != nil {
 			return nil, err
 		}
-		if b, err = newBatcherFromConf(conf.Broker.Batching, b, mgr, log, stats); err != nil {
+		if b, err = NewBatcherFromConfig(conf.Broker.Batching, b, mgr, log, stats); err != nil {
 			return nil, err
 		}
 		return b, nil

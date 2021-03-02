@@ -3,6 +3,7 @@ package cache
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -57,6 +58,7 @@ func integrationTestDoubleAdd() testDefinition {
 			})
 
 			require.NoError(t, cache.Add("addkey", []byte("first")))
+			time.Sleep(time.Second)
 			assert.EqualError(t, cache.Add("addkey", []byte("second")), "key already exists")
 
 			res, err := cache.Get("addkey")

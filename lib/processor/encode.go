@@ -30,7 +30,7 @@ All functionality of this processor has been superseded by the
 [bloblang](/docs/components/processors/bloblang) processor.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("scheme", "The decoding scheme to use.").HasOptions("hex", "base64", "ascii85", "z85"),
-			partsFieldSpec,
+			PartsFieldSpec,
 		},
 	}
 }

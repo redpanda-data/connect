@@ -10,7 +10,8 @@ var DocsUsesBatches = `
 The functionality of this processor depends on being applied across messages
 that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).`
 
-var partsFieldSpec = docs.FieldAdvanced(
+// PartsFieldSpec documents the parts field common to many processor types.
+var PartsFieldSpec = docs.FieldAdvanced(
 	"parts",
 	`An optional array of message indexes of a batch that the processor should apply to.
 If left empty all messages are processed. This field is only applicable when

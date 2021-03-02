@@ -10,8 +10,8 @@ All notable changes to this project will be documented in this file.
 - New (experimental) Apache Pulsar input and output.
 - Field `codec` added to the `socket` output.
 - New Bloblang method `map_each_key`.
-- General config linting improvements
-- Bloblang mappings and interpolated fields within configs are now compile checked during linting
+- General config linting improvements.
+- Bloblang mappings and interpolated fields within configs are now compile checked during linting.
 
 ### Fixed
 

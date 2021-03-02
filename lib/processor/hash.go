@@ -33,7 +33,7 @@ All functionality of this processor has been superseded by the
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("algorithm", "The hash algorithm to use.").HasOptions("sha256", "sha512", "sha1", "xxhash64", "hmac-sha1", "hmac-sha256", "hmac-sha512", "md5"),
 			docs.FieldCommon("key", "key used for HMAC algorithms"),
-			partsFieldSpec,
+			PartsFieldSpec,
 		},
 	}
 }

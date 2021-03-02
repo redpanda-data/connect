@@ -294,7 +294,7 @@ optional, and if omitted the level ` + "`INFO`" + ` will be used.
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("codec", "A [codec](#codecs) defines how messages should be inserted into the AWK program as variables. The codec does not change which [custom Benthos functions](#awk-functions) are available. The `text` codec is the closest to a typical AWK use case.").HasOptions("none", "text", "json"),
 			docs.FieldCommon("program", "An AWK program to execute"),
-			partsFieldSpec,
+			PartsFieldSpec,
 		},
 		Examples: []docs.AnnotatedExample{
 			{

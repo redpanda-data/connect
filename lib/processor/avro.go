@@ -49,7 +49,7 @@ specified encoding.`,
 				"file://path/to/spec.avsc",
 				"http://localhost:8081/path/to/spec/versions/1",
 			),
-			partsFieldSpec,
+			PartsFieldSpec,
 		},
 	}
 }

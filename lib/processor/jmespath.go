@@ -66,7 +66,7 @@ pipeline:
 		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("query", "The JMESPath query to apply to messages."),
-			partsFieldSpec,
+			PartsFieldSpec,
 		},
 	}
 }

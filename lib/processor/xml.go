@@ -69,7 +69,7 @@ The resulting JSON structure would look like this:
 ` + "```" + ``,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("operator", "An XML [operation](#operators) to apply to messages.").HasOptions("to_json"),
-			partsFieldSpec,
+			PartsFieldSpec,
 		},
 	}
 }

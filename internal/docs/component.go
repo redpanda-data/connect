@@ -192,6 +192,7 @@ BETA: This component is mostly stable but breaking changes could still be made o
 {{end -}}
 {{if eq .Status "experimental" -}}
 EXPERIMENTAL: This component is experimental and therefore subject to change or removal outside of major version releases.
+
 {{end -}}
 {{if eq .Status "deprecated" -}}
 :::warning DEPRECATED

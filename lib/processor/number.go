@@ -29,7 +29,7 @@ All functionality of this processor has been superseded by the
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("operator", "The [operator](#operators) to apply."),
 			docs.FieldCommon("value", "A value used by the operator.").IsInterpolated(),
-			partsFieldSpec,
+			PartsFieldSpec,
 		},
 	}
 }

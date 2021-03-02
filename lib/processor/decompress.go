@@ -32,7 +32,7 @@ Decompresses messages according to the selected algorithm. Supported
 decompression types are: gzip, zlib, bzip2, flate.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("algorithm", "The decompression algorithm to use.").HasOptions("gzip", "zlib", "bzip2", "flate", "snappy"),
-			partsFieldSpec,
+			PartsFieldSpec,
 		},
 	}
 }

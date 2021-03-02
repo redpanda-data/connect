@@ -33,7 +33,7 @@ The 'level' field might not apply to all algorithms.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("algorithm", "The compression algorithm to use.").HasOptions("gzip", "zlib", "flate", "snappy"),
 			docs.FieldCommon("level", "The level of compression to use. May not be applicable to all algorithms."),
-			partsFieldSpec,
+			PartsFieldSpec,
 		},
 	}
 }

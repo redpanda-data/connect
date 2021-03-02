@@ -153,7 +153,7 @@ func NewAzureTableStorage(conf Config, mgr types.Manager, log log.Modular, stats
 	if err != nil {
 		return nil, err
 	}
-	return newBatcherFromConf(conf.AzureTableStorage.Batching, w, mgr, log, stats)
+	return NewBatcherFromConfig(conf.AzureTableStorage.Batching, w, mgr, log, stats)
 }
 
 func newDeprecatedTableStorage(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
@@ -174,7 +174,7 @@ func newDeprecatedTableStorage(conf Config, mgr types.Manager, log log.Modular, 
 	if err != nil {
 		return nil, err
 	}
-	return newBatcherFromConf(conf.TableStorage.Batching, w, mgr, log, stats)
+	return NewBatcherFromConfig(conf.TableStorage.Batching, w, mgr, log, stats)
 }
 
 //------------------------------------------------------------------------------

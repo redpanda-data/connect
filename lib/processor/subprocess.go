@@ -58,7 +58,7 @@ If a message contains line breaks each line of the message is piped to the subpr
 			docs.FieldAdvanced(
 				"codec_recv", "Determines how messages read from the subprocess are decoded, which allows them to be logically separated.",
 			).HasOptions("lines", "length_prefixed_uint32_be", "netstring").AtVersion("3.37.0"),
-			partsFieldSpec,
+			PartsFieldSpec,
 		},
 	}
 }

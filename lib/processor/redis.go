@@ -44,7 +44,7 @@ Adds a new member to a set. Returns ` + "`1`" + ` if the member was added.`,
 			docs.FieldCommon("key", "A key to use for the target operator.").IsInterpolated(),
 			docs.FieldAdvanced("retries", "The maximum number of retries before abandoning a request."),
 			docs.FieldAdvanced("retry_period", "The time to wait before consecutive retry attempts."),
-			partsFieldSpec,
+			PartsFieldSpec,
 		),
 		Examples: []docs.AnnotatedExample{
 			{

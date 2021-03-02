@@ -16,6 +16,7 @@ import TabItem from '@theme/TabItem';
 
 EXPERIMENTAL: This component is experimental and therefore subject to change or removal outside of major version releases.
 
+
 Send metrics to InfluxDB 1.x using the `/write` endpoint.
 
 Introduced in version 3.36.0.

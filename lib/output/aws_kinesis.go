@@ -109,7 +109,7 @@ func newKinesis(name string, conf writer.KinesisConfig, mgr types.Manager, log l
 	if err != nil {
 		return w, err
 	}
-	return newBatcherFromConf(conf.Batching, w, mgr, log, stats)
+	return NewBatcherFromConfig(conf.Batching, w, mgr, log, stats)
 }
 
 //------------------------------------------------------------------------------

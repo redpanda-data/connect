@@ -63,7 +63,7 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 	if err != nil {
 		return w, err
 	}
-	return newBatcherFromConf(conf.HTTPClient.Batching, w, mgr, log, stats)
+	return NewBatcherFromConfig(conf.HTTPClient.Batching, w, mgr, log, stats)
 }
 
 //------------------------------------------------------------------------------

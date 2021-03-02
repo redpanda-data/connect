@@ -37,7 +37,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return newBatcherFromConf(conf.Cassandra.Batching, w, mgr, log, stats)
+			return NewBatcherFromConfig(conf.Cassandra.Batching, w, mgr, log, stats)
 		}),
 		Status:  docs.StatusBeta,
 		Batches: true,

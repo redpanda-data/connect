@@ -207,7 +207,7 @@ func newDynamoDB(name string, conf writer.DynamoDBConfig, mgr types.Manager, log
 	if err != nil {
 		return w, err
 	}
-	return newBatcherFromConf(conf.Batching, w, mgr, log, stats)
+	return NewBatcherFromConfig(conf.Batching, w, mgr, log, stats)
 }
 
 //------------------------------------------------------------------------------

@@ -27,11 +27,10 @@ func init() {
 		a = reader.NewAsyncBundleUnacks(a)
 		return input.NewAsyncReader(input.TypePulsar, true, a, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
-		Name:   input.TypePulsar,
-		Type:   docs.TypeInput,
-		Status: docs.StatusExperimental,
-		Summary: `
-Reads messages from an Apache Pulsar server.`,
+		Name:    input.TypePulsar,
+		Type:    docs.TypeInput,
+		Status:  docs.StatusExperimental,
+		Summary: `Reads messages from an Apache Pulsar server.`,
 		Description: `
 ### Metadata
 

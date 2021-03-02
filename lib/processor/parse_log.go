@@ -41,7 +41,7 @@ easier and often much faster than ` + "[`grok`](/docs/components/processors/grok
 			docs.FieldAdvanced("default_timezone", "Sets the strategy to decide the timezone for rfc3164 timestamps."+
 				" Applicable to format `syslog_rfc3164`. This value should follow the [time.LoadLocation](https://golang.org/pkg/time/#LoadLocation) format."),
 
-			partsFieldSpec,
+			PartsFieldSpec,
 		},
 		Footnotes: `
 ## Codecs

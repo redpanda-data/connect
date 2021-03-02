@@ -43,7 +43,7 @@ This processor currently uses the [Go RE2](https://golang.org/s/re2syntax) regul
 			docs.FieldAdvanced("remove_empty_values", "Whether to remove values that are empty from the resulting structure."),
 			docs.FieldDeprecated("patterns").Array(),
 			docs.FieldDeprecated("output_format"),
-			partsFieldSpec,
+			PartsFieldSpec,
 		},
 		Examples: []docs.AnnotatedExample{
 			{

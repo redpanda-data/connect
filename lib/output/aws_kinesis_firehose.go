@@ -95,7 +95,7 @@ func newKinesisFirehose(name string, conf writer.KinesisFirehoseConfig, mgr type
 	if err != nil {
 		return w, err
 	}
-	return newBatcherFromConf(conf.Batching, w, mgr, log, stats)
+	return NewBatcherFromConfig(conf.Batching, w, mgr, log, stats)
 }
 
 //------------------------------------------------------------------------------

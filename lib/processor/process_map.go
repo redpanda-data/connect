@@ -44,7 +44,7 @@ var processMapFields = docs.FieldSpecs{
 		},
 	).Map(),
 	docs.FieldCommon("postmap_optional", "A map of optional destination to source [paths](/docs/configuration/field_paths) used to map results from processing back into the original payload.").Map(),
-	partsFieldSpec,
+	PartsFieldSpec,
 }
 
 func init() {

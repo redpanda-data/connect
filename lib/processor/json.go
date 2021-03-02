@@ -41,7 +41,7 @@ All functionality of this processor has been superseded by the
 				"foo", "${!metadata:kafka_key}", false, 10,
 				map[string]interface{}{"topic": "${!metadata:kafka_topic}", "key": "${!metadata:kafka_key}"},
 			),
-			partsFieldSpec,
+			PartsFieldSpec,
 		},
 	}
 }

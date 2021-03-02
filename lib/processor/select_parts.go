@@ -36,7 +36,7 @@ part will be the last part of the message, if index = -2 then the part before
 the last element with be selected, and so on.`,
 		UsesBatches: true,
 		FieldSpecs: docs.FieldSpecs{
-			partsFieldSpec,
+			PartsFieldSpec,
 		},
 	}
 }

@@ -80,7 +80,7 @@ func NewElasticsearch(conf Config, mgr types.Manager, log log.Modular, stats met
 	if err != nil {
 		return w, err
 	}
-	return newBatcherFromConf(conf.Elasticsearch.Batching, w, mgr, log, stats)
+	return NewBatcherFromConfig(conf.Elasticsearch.Batching, w, mgr, log, stats)
 }
 
 //------------------------------------------------------------------------------

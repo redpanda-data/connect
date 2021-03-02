@@ -38,7 +38,7 @@ All functionality of this processor has been superseded by the
 			),
 			docs.FieldCommon("arg", "An argument for the operator (not always applicable)."),
 			docs.FieldCommon("value", "A value to use with the operator.").IsInterpolated(),
-			partsFieldSpec,
+			PartsFieldSpec,
 		},
 	}
 }

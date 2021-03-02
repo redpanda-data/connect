@@ -79,7 +79,7 @@ func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Typ
 	if err != nil {
 		return nil, err
 	}
-	return newBatcherFromConf(conf.Kafka.Batching, w, mgr, log, stats)
+	return NewBatcherFromConfig(conf.Kafka.Batching, w, mgr, log, stats)
 }
 
 //------------------------------------------------------------------------------

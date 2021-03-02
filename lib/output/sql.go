@@ -34,7 +34,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return newBatcherFromConf(conf.SQL.Batching, w, mgr, log, stats)
+			return NewBatcherFromConfig(conf.SQL.Batching, w, mgr, log, stats)
 		}),
 		Status:  docs.StatusBeta,
 		Batches: true,

@@ -42,7 +42,7 @@ extracted filename.`,
 			docs.FieldCommon("format", "The unarchive [format](#formats) to use.").HasOptions(
 				"tar", "zip", "binary", "lines", "json_documents", "json_array", "json_map",
 			),
-			partsFieldSpec,
+			PartsFieldSpec,
 		},
 		Footnotes: `
 ## Formats

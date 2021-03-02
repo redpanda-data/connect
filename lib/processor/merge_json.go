@@ -26,7 +26,7 @@ All functionality of this processor has been superseded by the
 		UsesBatches: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("retain_parts", "Whether messages that are merged should also have their original contents preserved."),
-			partsFieldSpec,
+			PartsFieldSpec,
 		},
 	}
 }

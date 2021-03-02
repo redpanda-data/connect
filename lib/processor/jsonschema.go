@@ -85,7 +85,7 @@ dropped.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("schema", "A schema to apply. Use either this or the `schema_path` field."),
 			docs.FieldCommon("schema_path", "The path of a schema document to apply. Use either this or the `schema` field."),
-			partsFieldSpec,
+			PartsFieldSpec,
 		},
 	}
 }

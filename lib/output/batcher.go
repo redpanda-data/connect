@@ -36,7 +36,9 @@ type Batcher struct {
 	closedChan chan struct{}
 }
 
-func newBatcherFromConf(
+// NewBatcherFromConfig creates a new output preceded by a batching mechanism
+// that enforces a given batching policy configuration.
+func NewBatcherFromConfig(
 	conf batch.PolicyConfig,
 	child Type,
 	mgr types.Manager,
@@ -53,7 +55,8 @@ func newBatcherFromConf(
 	return child, nil
 }
 
-// NewBatcher creates a new Producer/Consumer around a buffer.
+// NewBatcher creates a new output preceded by a batching mechanism that
+// enforces a given batching policy.
 func NewBatcher(
 	batcher *batch.Policy,
 	child Type,
