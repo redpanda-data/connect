@@ -163,6 +163,7 @@ const (
 	TypeMergeJSON    = "merge_json"
 	TypeMetadata     = "metadata"
 	TypeMetric       = "metric"
+	TypeMongoDB      = "mongodb"
 	TypeNoop         = "noop"
 	TypeNumber       = "number"
 	TypeParallel     = "parallel"
@@ -232,6 +233,7 @@ type Config struct {
 	MergeJSON    MergeJSONConfig    `json:"merge_json" yaml:"merge_json"`
 	Metadata     MetadataConfig     `json:"metadata" yaml:"metadata"`
 	Metric       MetricConfig       `json:"metric" yaml:"metric"`
+	MongoDB      MongoDBConfig      `json:"mongodb" yaml:"mongodb"`
 	Noop         NoopConfig         `json:"noop" yaml:"noop"`
 	Number       NumberConfig       `json:"number" yaml:"number"`
 	Plugin       interface{}        `json:"plugin,omitempty" yaml:"plugin,omitempty"`
@@ -301,6 +303,7 @@ func NewConfig() Config {
 		MergeJSON:    NewMergeJSONConfig(),
 		Metadata:     NewMetadataConfig(),
 		Metric:       NewMetricConfig(),
+		MongoDB:      NewMongoDBConfig(),
 		Noop:         NewNoopConfig(),
 		Number:       NewNumberConfig(),
 		Plugin:       nil,

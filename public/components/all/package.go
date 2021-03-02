@@ -17,6 +17,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 
 	// Import new service packages.
+	_ "github.com/Jeffail/benthos/v3/internal/service/mongodb"
 	_ "github.com/Jeffail/benthos/v3/internal/service/pulsar"
 )
 
