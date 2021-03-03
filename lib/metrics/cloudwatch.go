@@ -42,7 +42,7 @@ metrics:
 		FieldSpecs: append(docs.FieldSpecs{
 			docs.FieldCommon("namespace", "The namespace used to distinguish metrics from other services."),
 			docs.FieldAdvanced("flush_period", "The period of time between PutMetricData requests."),
-			pathMappingDocs(true),
+			pathMappingDocs(true, false),
 		}, session.FieldSpecs()...),
 	}
 
@@ -73,7 +73,7 @@ metrics:
 		FieldSpecs: append(docs.FieldSpecs{
 			docs.FieldCommon("namespace", "The namespace used to distinguish metrics from other services."),
 			docs.FieldAdvanced("flush_period", "The period of time between PutMetricData requests."),
-			pathMappingDocs(true),
+			pathMappingDocs(true, false),
 		}, session.FieldSpecs()...),
 	}
 }

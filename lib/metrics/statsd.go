@@ -30,7 +30,7 @@ rely on sending Statsd metrics over TCP and want it to be supported long term
 please [raise an issue](https://github.com/Jeffail/benthos/issues).`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("prefix", "A string prefix to add to all metrics."),
-			pathMappingDocs(false),
+			pathMappingDocs(false, false),
 			docs.FieldCommon("address", "The address to send metrics to."),
 			docs.FieldCommon("flush_period", "The time interval between metrics flushes."),
 			docs.FieldCommon("tag_format", "Metrics tagging is supported in a variety of formats. The format 'legacy' is a special case that forces Benthos to use a deprecated library for backwards compatibility.").HasOptions(

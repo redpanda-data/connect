@@ -30,7 +30,7 @@ periodically.`,
 			docs.FieldCommon("push_interval", "An optional period of time to continuously print metrics."),
 			docs.FieldCommon("static_fields", "A map of static fields to add to each flushed metric object.").Map(),
 			docs.FieldCommon("flush_metrics", "Whether counters and timing metrics should be reset to 0 each time metrics are printed."),
-			pathMappingDocs(false),
+			pathMappingDocs(false, false),
 		},
 	}
 }

@@ -19,16 +19,24 @@ type pathMapping struct {
 	logger log.Modular
 }
 
-func pathMappingDocs(allowLabels bool) docs.FieldSpec {
+func pathMappingDocs(allowLabels, forPrometheus bool) docs.FieldSpec {
 	examples := []interface{}{
 		`this.replace("input", "source").replace("output", "sink")`,
-		`if ![
+	}
+	if forPrometheus {
+		examples = append(examples, `if ![
   "benthos_input_received",
   "benthos_input_latency",
   "benthos_output_sent"
-].contains(this) { deleted() }`,
+].contains(this) { deleted() }`)
+	} else {
+		examples = append(examples, `if ![
+  "benthos.input.received",
+  "benthos.input.latency",
+  "benthos.output.sent"
+].contains(this) { deleted() }`)
 	}
-	summary := "An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported."
+	summary := "An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported. When metric paths are created, renamed and dropped a trace log is written, enabling TRACE level logging is therefore a good way to diagnose path mappings."
 
 	if allowLabels {
 		examples = append(examples, `let matches = this.re_find_all_submatch("resource_processor_([a-zA-Z]+)_(.*)")

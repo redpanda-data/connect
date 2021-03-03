@@ -43,7 +43,7 @@ like this:
 ` + "```" + ``,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("prefix", "A string prefix to add to all metrics."),
-			pathMappingDocs(false),
+			pathMappingDocs(false, false),
 		},
 	}
 }

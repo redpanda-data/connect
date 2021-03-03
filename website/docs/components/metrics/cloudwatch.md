@@ -100,7 +100,7 @@ Default: `"100ms"`
 
 ### `path_mapping`
 
-An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported. BETA FEATURE: Labels can also be created for the metric path by mapping meta fields.
+An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported. When metric paths are created, renamed and dropped a trace log is written, enabling TRACE level logging is therefore a good way to diagnose path mappings. BETA FEATURE: Labels can also be created for the metric path by mapping meta fields.
 
 
 Type: `string`  
@@ -113,9 +113,9 @@ path_mapping: this.replace("input", "source").replace("output", "sink")
 
 path_mapping: |-
   if ![
-    "benthos_input_received",
-    "benthos_input_latency",
-    "benthos_output_sent"
+    "benthos.input.received",
+    "benthos.input.latency",
+    "benthos.output.sent"
   ].contains(this) { deleted() }
 
 path_mapping: |-

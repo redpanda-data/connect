@@ -44,7 +44,7 @@ Send metrics to InfluxDB 1.x using the ` + "`/write`" + ` endpoint.`,
 			).Map(),
 			docs.FieldAdvanced("retention_policy", "Sets the retention policy for each write."),
 			docs.FieldAdvanced("write_consistency", "[any|one|quorum|all] sets write consistency when available."),
-			pathMappingDocs(true),
+			pathMappingDocs(true, false),
 		},
 	}
 }
