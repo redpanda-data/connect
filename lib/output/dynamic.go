@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/api"
 	"github.com/Jeffail/benthos/v3/lib/broker"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -134,12 +135,9 @@ func NewDynamic(
 		if err := yaml.Unmarshal(c, &newConf); err != nil {
 			return err
 		}
-		ns := fmt.Sprintf("dynamic.outputs.%v", id)
-		newOutput, err := New(
-			newConf, mgr,
-			log.NewModule("."+ns),
-			metrics.Combine(stats, metrics.Namespaced(stats, ns)),
-		)
+		oMgr, oLog, oStats := interop.LabelChild(fmt.Sprintf("dynamic.outputs.%v", id), mgr, log, stats)
+		oStats = metrics.Combine(stats, oStats)
+		newOutput, err := New(newConf, oMgr, oLog, oStats)
 		if err != nil {
 			return err
 		}

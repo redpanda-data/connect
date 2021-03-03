@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -183,11 +184,8 @@ func NewReadUntil(
 
 	var cond condition.Type
 	if !isDefaultCond(conf.ReadUntil.Condition) {
-		if cond, err = condition.New(
-			conf.ReadUntil.Condition, mgr,
-			log.NewModule(".read_until.condition"),
-			metrics.Namespaced(stats, "read_until.condition"),
-		); err != nil {
+		cMgr, cLog, cStats := interop.LabelChild("read_until.condition", mgr, log, stats)
+		if cond, err = condition.New(conf.ReadUntil.Condition, cMgr, cLog, cStats); err != nil {
 			return nil, fmt.Errorf("failed to create condition '%v': %v", conf.ReadUntil.Condition.Type, err)
 		}
 	}
@@ -207,6 +205,7 @@ func NewReadUntil(
 		return nil, errors.New("cannot specify both a condition and a check query")
 	}
 
+	_, rLog, rStats := interop.LabelChild("read_until", mgr, log, stats)
 	rdr := &ReadUntil{
 		running: 1,
 		conf:    conf.ReadUntil,
@@ -215,8 +214,8 @@ func NewReadUntil(
 		wrapperStats: stats,
 		wrapperMgr:   mgr,
 
-		log:          log.NewModule(".read_until"),
-		stats:        metrics.Namespaced(stats, "read_until"),
+		log:          rLog,
+		stats:        rStats,
 		wrapped:      wrapped,
 		cond:         cond,
 		check:        check,

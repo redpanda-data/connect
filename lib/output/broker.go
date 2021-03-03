@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/broker"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -168,17 +169,13 @@ func NewBroker(
 	var err error
 	for j := 0; j < conf.Broker.Copies; j++ {
 		for i, oConf := range outputConfs {
-			ns := fmt.Sprintf("broker.outputs.%v", i)
 			var pipes []types.PipelineConstructorFunc
 			if isThreaded {
 				pipes = pipelines
 			}
-			outputs[j*len(outputConfs)+i], err = New(
-				oConf, mgr,
-				log.NewModule("."+ns),
-				metrics.Combine(stats, metrics.Namespaced(stats, ns)),
-				pipes...)
-			if err != nil {
+			oMgr, oLog, oStats := interop.LabelChild(fmt.Sprintf("broker.outputs.%v", i), mgr, log, stats)
+			oStats = metrics.Combine(stats, oStats)
+			if outputs[j*len(outputConfs)+i], err = New(oConf, oMgr, oLog, oStats, pipes...); err != nil {
 				return nil, fmt.Errorf("failed to create output '%v' type '%v': %v", i, oConf.Type, err)
 			}
 		}
@@ -210,7 +207,8 @@ func NewBroker(
 	}
 
 	if !conf.Broker.Batching.IsNoop() {
-		policy, err := batch.NewPolicy(conf.Broker.Batching, mgr, log.NewModule(".batching"), metrics.Namespaced(stats, "batching"))
+		bMgr, bLog, bStats := interop.LabelChild("batching", mgr, log, stats)
+		policy, err := batch.NewPolicy(conf.Broker.Batching, bMgr, bLog, bStats)
 		if err != nil {
 			return nil, fmt.Errorf("failed to construct batch policy: %v", err)
 		}

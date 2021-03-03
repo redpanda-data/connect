@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -77,8 +78,8 @@ func NewParallel(
 ) (Type, error) {
 	var children []types.Processor
 	for i, pconf := range conf.Parallel.Processors {
-		prefix := fmt.Sprintf("%v", i)
-		proc, err := New(pconf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
+		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("%v", i), mgr, log, stats)
+		proc, err := New(pconf, pMgr, pLog, pStats)
 		if err != nil {
 			return nil, err
 		}

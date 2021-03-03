@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -196,10 +197,8 @@ func NewProcessDAG(
 			return nil, fmt.Errorf("workflow stage name '%v' contains invalid characters", k)
 		}
 
-		nsLog := log.NewModule(fmt.Sprintf(".%v", k))
-		nsStats := metrics.Namespaced(stats, k)
-
-		child, err := NewProcessMap(v.ProcessMapConfig, mgr, nsLog, nsStats)
+		mMgr, mLog, mStats := interop.LabelChild(k, mgr, log, stats)
+		child, err := NewProcessMap(v.ProcessMapConfig, mMgr, mLog, mStats)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create child process_map '%v': %v", k, err)
 		}

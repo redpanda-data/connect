@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -421,6 +422,7 @@ func NewSequence(
 		})
 	}
 
+	_, rLog, rStats := interop.LabelChild("sequence", mgr, log, stats)
 	rdr := &Sequence{
 		conf: conf.Sequence,
 
@@ -430,8 +432,8 @@ func NewSequence(
 		wrapperStats: stats,
 		wrapperMgr:   mgr,
 
-		log:          log.NewModule(".sequence"),
-		stats:        metrics.Namespaced(stats, "sequence"),
+		log:          rLog,
+		stats:        rStats,
 		transactions: make(chan types.Transaction),
 		closedChan:   make(chan struct{}),
 	}

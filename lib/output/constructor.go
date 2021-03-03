@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
@@ -70,9 +71,9 @@ func AppendProcessorsFromConfig(
 			}
 			processors := make([]types.Processor, len(conf.Processors))
 			for j, procConf := range conf.Processors {
-				prefix := fmt.Sprintf("processor.%v", *i)
+				pMgr, pLog, pMetrics := interop.LabelChild(fmt.Sprintf("processor.%v", *i), mgr, log, stats)
 				var err error
-				processors[j], err = processor.New(procConf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
+				processors[j], err = processor.New(procConf, pMgr, pLog, pMetrics)
 				if err != nil {
 					return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
 				}

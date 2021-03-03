@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -105,10 +106,8 @@ func newWorkflowBranchMap(conf WorkflowConfig, mgr types.Manager, log log.Modula
 			return nil, fmt.Errorf("workflow branch name '%v' contains invalid characters", k)
 		}
 
-		nsLog := log.NewModule(fmt.Sprintf(".%v", k))
-		nsStats := metrics.Namespaced(stats, k)
-
-		child, err := newBranch(v, mgr, nsLog, nsStats)
+		bMgr, bLog, bStats := interop.LabelChild(k, mgr, log, stats)
+		child, err := newBranch(v, bMgr, bLog, bStats)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create branch '%v': %v", k, err)
 		}

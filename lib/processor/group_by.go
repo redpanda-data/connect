@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -153,14 +154,10 @@ func NewGroupBy(
 
 	for i, gConf := range conf.GroupBy {
 		groupPrefix := fmt.Sprintf("groups.%v", i)
-		nsLog := log.NewModule("." + groupPrefix)
-		nsStats := metrics.Namespaced(stats, groupPrefix)
 
 		if !isDefaultGroupCond(gConf.Condition) {
-			if groups[i].Condition, err = condition.New(
-				gConf.Condition, mgr,
-				nsLog.NewModule(".condition"), metrics.Namespaced(nsStats, "condition"),
-			); err != nil {
+			cMgr, cLog, cStats := interop.LabelChild(groupPrefix+".condition", mgr, log, stats)
+			if groups[i].Condition, err = condition.New(gConf.Condition, cMgr, cLog, cStats); err != nil {
 				return nil, fmt.Errorf("failed to create condition for group '%v': %v", i, err)
 			}
 		}
@@ -180,12 +177,9 @@ func NewGroupBy(
 		}
 
 		for j, pConf := range gConf.Processors {
-			prefix := fmt.Sprintf("processor.%v", j)
+			pMgr, pLog, pStats := interop.LabelChild(groupPrefix+fmt.Sprintf(".processor.%v", j), mgr, log, stats)
 			var proc Type
-			if proc, err = New(
-				pConf, mgr,
-				nsLog.NewModule("."+prefix), metrics.Namespaced(nsStats, prefix),
-			); err != nil {
+			if proc, err = New(pConf, pMgr, pLog, pStats); err != nil {
 				return nil, fmt.Errorf("failed to create processor '%v' for group '%v': %v", j, i, err)
 			}
 			groups[i].Processors = append(groups[i].Processors, proc)

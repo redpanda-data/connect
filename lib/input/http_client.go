@@ -10,6 +10,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -153,11 +154,12 @@ func newHTTPClient(conf HTTPClientConfig, mgr types.Manager, log log.Modular, st
 		payload = message.New([][]byte{[]byte(conf.Payload)})
 	}
 
+	cMgr, cLog, cStats := interop.LabelChild("client", mgr, log, stats)
 	client, err := client.New(
 		conf.Config,
-		client.OptSetLogger(log.NewModule(".client")),
-		client.OptSetManager(mgr),
-		client.OptSetStats(metrics.Namespaced(stats, "client")),
+		client.OptSetManager(cMgr),
+		client.OptSetLogger(cLog),
+		client.OptSetStats(cStats),
 	)
 	if err != nil {
 		return nil, err

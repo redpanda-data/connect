@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
@@ -114,11 +115,8 @@ func NewWhile(
 	var err error
 
 	if !isDefaultGroupCond(conf.While.Condition) {
-		if cond, err = condition.New(
-			conf.While.Condition, mgr,
-			log.NewModule(".condition"),
-			metrics.Namespaced(stats, "condition"),
-		); err != nil {
+		cMgr, cLog, cStats := interop.LabelChild("condition", mgr, log, stats)
+		if cond, err = condition.New(conf.While.Condition, cMgr, cLog, cStats); err != nil {
 			return nil, err
 		}
 	}
@@ -138,11 +136,9 @@ func NewWhile(
 
 	var children []types.Processor
 	for i, pconf := range conf.While.Processors {
-		ns := fmt.Sprintf("while.%v", i)
-		nsStats := metrics.Namespaced(stats, ns)
-		nsLog := log.NewModule("." + ns)
+		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("while.%v", i), mgr, log, stats)
 		var proc Type
-		if proc, err = New(pconf, mgr, nsLog, nsStats); err != nil {
+		if proc, err = New(pconf, pMgr, pLog, pStats); err != nil {
 			return nil, err
 		}
 		children = append(children, proc)

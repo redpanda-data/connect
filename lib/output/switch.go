@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -281,30 +282,22 @@ func NewSwitch(
 	var err error
 	for i, oConf := range conf.Switch.Outputs {
 		ns := fmt.Sprintf("switch.%v", i)
-		if o.outputs[i], err = New(
-			oConf.Output, mgr,
-			logger.NewModule("."+ns+".output"),
-			metrics.Combine(stats, metrics.Namespaced(stats, ns+".output")),
-		); err != nil {
+		oMgr, oLog, oStats := interop.LabelChild(ns+".output", mgr, logger, stats)
+		oStats = metrics.Combine(stats, oStats)
+		if o.outputs[i], err = New(oConf.Output, oMgr, oLog, oStats); err != nil {
 			return nil, fmt.Errorf("failed to create output '%v' type '%v': %v", i, oConf.Output.Type, err)
 		}
-		if o.conditions[i], err = condition.New(
-			oConf.Condition, mgr,
-			logger.NewModule("."+ns+".condition"),
-			metrics.Namespaced(stats, ns+".condition"),
-		); err != nil {
+		cMgr, cLog, cStats := interop.LabelChild(ns+".condition", mgr, logger, stats)
+		if o.conditions[i], err = condition.New(oConf.Condition, cMgr, cLog, cStats); err != nil {
 			return nil, fmt.Errorf("failed to create output '%v' condition '%v': %v", i, oConf.Condition.Type, err)
 		}
 		o.fallthroughs[i] = oConf.Fallthrough
 	}
 
 	for i, cConf := range conf.Switch.Cases {
-		ns := fmt.Sprintf("switch.%v", i)
-		if o.outputs[i], err = New(
-			cConf.Output, mgr,
-			logger.NewModule("."+ns+".output"),
-			metrics.Combine(stats, metrics.Namespaced(stats, ns+".output")),
-		); err != nil {
+		oMgr, oLog, oStats := interop.LabelChild(fmt.Sprintf("switch.%v.output", i), mgr, logger, stats)
+		oStats = metrics.Combine(stats, oStats)
+		if o.outputs[i], err = New(cConf.Output, oMgr, oLog, oStats); err != nil {
 			return nil, fmt.Errorf("failed to create case '%v' output type '%v': %v", i, cConf.Output.Type, err)
 		}
 		if len(cConf.Check) > 0 {

@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	imessage "github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -214,13 +215,9 @@ func NewSwitch(
 		}
 
 		for j, procConf := range caseConf.Processors {
-			procPrefix := prefix + "." + strconv.Itoa(j)
+			pMgr, pLog, pStats := interop.LabelChild(prefix+"."+strconv.Itoa(j), mgr, log, stats)
 			var proc types.Processor
-			if proc, err = New(
-				procConf, mgr,
-				log.NewModule("."+procPrefix),
-				metrics.Namespaced(stats, procPrefix),
-			); err != nil {
+			if proc, err = New(procConf, pMgr, pLog, pStats); err != nil {
 				return nil, fmt.Errorf("case [%v] processor [%v]: %w", i, j, err)
 			}
 			procs = append(procs, proc)

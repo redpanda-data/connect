@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/broker"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -249,12 +250,10 @@ func newBrokerHasBatchProcessor(
 
 		for j := 0; j < conf.Broker.Copies; j++ {
 			for i, iConf := range conf.Broker.Inputs {
-				ns := fmt.Sprintf("broker.inputs.%v", i)
+				iMgr, iLog, iStats := interop.LabelChild(fmt.Sprintf("broker.inputs.%v", i), mgr, log, stats)
+				iStats = metrics.Combine(stats, iStats)
 				inputs[len(conf.Broker.Inputs)*j+i], err = newHasBatchProcessor(
-					hasBatchProc,
-					iConf, mgr,
-					log.NewModule("."+ns),
-					metrics.Combine(stats, metrics.Namespaced(stats, ns)),
+					hasBatchProc, iConf, iMgr, iLog, iStats,
 					pipelines...,
 				)
 				if err != nil {
@@ -272,7 +271,8 @@ func newBrokerHasBatchProcessor(
 		return b, nil
 	}
 
-	policy, err := batch.NewPolicy(conf.Broker.Batching, mgr, log.NewModule(".batching"), metrics.Namespaced(stats, "batching"))
+	bMgr, bLog, bStats := interop.LabelChild("batching", mgr, log, stats)
+	policy, err := batch.NewPolicy(conf.Broker.Batching, bMgr, bLog, bStats)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct batch policy: %v", err)
 	}

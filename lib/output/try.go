@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/broker"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -108,14 +109,9 @@ func NewTry(
 
 	var err error
 	for i, oConf := range outputConfs {
-		ns := fmt.Sprintf("try.%v", i)
-		var pipes []types.PipelineConstructorFunc
-		outputs[i], err = New(
-			oConf, mgr,
-			log.NewModule("."+ns),
-			metrics.Combine(stats, metrics.Namespaced(stats, ns)),
-			pipes...)
-		if err != nil {
+		oMgr, oLog, oStats := interop.LabelChild(fmt.Sprintf("try.%v", i), mgr, log, stats)
+		oStats = metrics.Combine(stats, oStats)
+		if outputs[i], err = New(oConf, oMgr, oLog, oStats); err != nil {
 			return nil, fmt.Errorf("failed to create output '%v' type '%v': %v", i, oConf.Type, err)
 		}
 	}

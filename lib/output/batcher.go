@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/transaction"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -46,7 +47,8 @@ func NewBatcherFromConfig(
 	stats metrics.Type,
 ) (Type, error) {
 	if !conf.IsNoop() {
-		policy, err := batch.NewPolicy(conf, mgr, log.NewModule(".batching"), metrics.Namespaced(stats, "batching"))
+		bMgr, bLog, bStats := interop.LabelChild("batching", mgr, log, stats)
+		policy, err := batch.NewPolicy(conf, bMgr, bLog, bStats)
 		if err != nil {
 			return nil, fmt.Errorf("failed to construct batch policy: %v", err)
 		}

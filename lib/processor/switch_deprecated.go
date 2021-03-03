@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
@@ -39,22 +40,15 @@ func newSwitchDeprecated(
 		var cond types.Condition
 		var procs []types.Processor
 
-		if cond, err = condition.New(
-			caseConf.Condition, mgr,
-			log.NewModule("."+prefix+".condition"),
-			metrics.Namespaced(stats, prefix+".condition"),
-		); err != nil {
+		cMgr, cLog, cStats := interop.LabelChild(prefix+".condition", mgr, log, stats)
+		if cond, err = condition.New(caseConf.Condition, cMgr, cLog, cStats); err != nil {
 			return nil, fmt.Errorf("case [%v] condition: %w", i, err)
 		}
 
 		for j, procConf := range caseConf.Processors {
-			procPrefix := prefix + "." + strconv.Itoa(j)
+			pMgr, pLog, pStats := interop.LabelChild(prefix+"."+strconv.Itoa(j), mgr, log, stats)
 			var proc types.Processor
-			if proc, err = New(
-				procConf, mgr,
-				log.NewModule("."+procPrefix),
-				metrics.Namespaced(stats, procPrefix),
-			); err != nil {
+			if proc, err = New(procConf, pMgr, pLog, pStats); err != nil {
 				return nil, fmt.Errorf("case [%v] processor [%v]: %w", i, j, err)
 			}
 			procs = append(procs, proc)

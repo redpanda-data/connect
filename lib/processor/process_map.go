@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/mapper"
@@ -267,8 +268,8 @@ func NewProcessMap(
 ) (*ProcessMap, error) {
 	var children []types.Processor
 	for i, pconf := range conf.Processors {
-		prefix := fmt.Sprintf("processor.%v", i)
-		proc, err := New(pconf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
+		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("processor.%v", i), mgr, log, stats)
+		proc, err := New(pconf, pMgr, pLog, pStats)
 		if err != nil {
 			return nil, err
 		}
@@ -277,8 +278,8 @@ func NewProcessMap(
 
 	var conditions []types.Condition
 	for i, cconf := range conf.Conditions {
-		prefix := fmt.Sprintf("condition.%v", i)
-		cond, err := condition.New(cconf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
+		cMgr, cLog, cStats := interop.LabelChild(fmt.Sprintf("condition.%v", i), mgr, log, stats)
+		cond, err := condition.New(cconf, cMgr, cLog, cStats)
 		if err != nil {
 			return nil, err
 		}

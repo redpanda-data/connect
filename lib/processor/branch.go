@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
@@ -245,8 +246,8 @@ func newBranch(
 ) (*Branch, error) {
 	children := make([]types.Processor, 0, len(conf.Processors))
 	for i, pconf := range conf.Processors {
-		prefix := fmt.Sprintf("processor.%v", i)
-		proc, err := New(pconf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
+		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("processor.%v", i), mgr, log, stats)
+		proc, err := New(pconf, pMgr, pLog, pStats)
 		if err != nil {
 			return nil, fmt.Errorf("failed to init processor %v: %w", i, err)
 		}

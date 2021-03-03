@@ -6,6 +6,7 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -139,33 +140,24 @@ func (t *Type) IsReady() bool {
 
 func (t *Type) start() (err error) {
 	// Constructors
-	if t.inputLayer, err = input.New(
-		t.conf.Input, t.manager,
-		t.logger.NewModule(".input"), metrics.Namespaced(t.stats, "input"),
-	); err != nil {
+	iMgr, iLog, iStats := interop.LabelChild("input", t.manager, t.logger, t.stats)
+	if t.inputLayer, err = input.New(t.conf.Input, iMgr, iLog, iStats); err != nil {
 		return
 	}
 	if t.conf.Buffer.Type != buffer.TypeNone {
-		if t.bufferLayer, err = buffer.New(
-			t.conf.Buffer, t.manager,
-			t.logger.NewModule(".buffer"), metrics.Namespaced(t.stats, "buffer"),
-		); err != nil {
+		bMgr, bLog, bStats := interop.LabelChild("buffer", t.manager, t.logger, t.stats)
+		if t.bufferLayer, err = buffer.New(t.conf.Buffer, bMgr, bLog, bStats); err != nil {
 			return
 		}
 	}
 	if tLen := len(t.complementaryProcs) + len(t.conf.Pipeline.Processors); tLen > 0 {
-		if t.pipelineLayer, err = pipeline.New(
-			t.conf.Pipeline, t.manager,
-			t.logger.NewModule(".pipeline"), metrics.Namespaced(t.stats, "pipeline"),
-			t.complementaryProcs...,
-		); err != nil {
+		pMgr, pLog, pStats := interop.LabelChild("pipeline", t.manager, t.logger, t.stats)
+		if t.pipelineLayer, err = pipeline.New(t.conf.Pipeline, pMgr, pLog, pStats, t.complementaryProcs...); err != nil {
 			return
 		}
 	}
-	if t.outputLayer, err = output.New(
-		t.conf.Output, t.manager,
-		t.logger.NewModule(".output"), metrics.Namespaced(t.stats, "output"),
-	); err != nil {
+	oMgr, oLog, oStats := interop.LabelChild("output", t.manager, t.logger, t.stats)
+	if t.outputLayer, err = output.New(t.conf.Output, oMgr, oLog, oStats); err != nil {
 		return
 	}
 

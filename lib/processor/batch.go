@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -148,7 +149,8 @@ func NewBatch(
 ) (Type, error) {
 	log.Warnln("The batch processor is deprecated and is scheduled for removal in Benthos V4. For more information about batching in Benthos check out https://benthos.dev/docs/configuration/batching")
 
-	cond, err := condition.New(conf.Batch.Condition, mgr, log.NewModule(".condition"), metrics.Namespaced(stats, "condition"))
+	cMgr, cLog, cStats := interop.LabelChild("condition", mgr, log, stats)
+	cond, err := condition.New(conf.Batch.Condition, cMgr, cLog, cStats)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create condition: %v", err)
 	}

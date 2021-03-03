@@ -296,14 +296,14 @@ func New(
 		return mgrV2.NewCache(conf)
 	}
 	if c, ok := Constructors[conf.Type]; ok {
-		cache, err := c.constructor(conf, mgr, log.NewModule("."+conf.Type), stats)
+		cache, err := c.constructor(conf, mgr, log, stats)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create cache '%v': %v", conf.Type, err)
 		}
 		return cache, nil
 	}
 	if c, ok := pluginSpecs[conf.Type]; ok {
-		rl, err := c.constructor(conf, mgr, log.NewModule("."+conf.Type), stats)
+		rl, err := c.constructor(conf, mgr, log, stats)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create cache '%v': %v", conf.Type, err)
 		}

@@ -266,7 +266,7 @@ func New(
 		return rl, nil
 	}
 	if c, ok := pluginSpecs[conf.Type]; ok {
-		rl, err := c.constructor(conf, mgr, log.NewModule("."+conf.Type), stats)
+		rl, err := c.constructor(conf, mgr, log, stats)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create rate limit '%v': %v", conf.Type, err)
 		}

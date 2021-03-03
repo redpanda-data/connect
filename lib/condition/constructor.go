@@ -319,10 +319,10 @@ func Descriptions() string {
 // New creates a condition type based on a condition configuration.
 func New(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	if c, ok := Constructors[conf.Type]; ok {
-		return c.constructor(conf, mgr, log.NewModule("."+conf.Type), stats)
+		return c.constructor(conf, mgr, log, stats)
 	}
 	if c, ok := pluginSpecs[conf.Type]; ok {
-		return c.constructor(conf.Plugin, mgr, log.NewModule("."+conf.Type), stats)
+		return c.constructor(conf.Plugin, mgr, log, stats)
 	}
 	return nil, types.ErrInvalidConditionType
 }

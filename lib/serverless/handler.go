@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
@@ -152,23 +153,21 @@ func NewHandler(conf config.Type) (*Handler, error) {
 
 	transactionChan := make(chan types.Transaction, 1)
 
-	pipelineLayer, err = pipeline.New(
-		conf.Pipeline, manager,
-		logger.NewModule(".pipeline"), metrics.Namespaced(stats, "pipeline"),
-	)
-	if err == nil {
-		outputLayer, err = output.New(
-			conf.Output, manager,
-			logger.NewModule(".output"), metrics.Namespaced(stats, "output"),
-		)
+	pMgr, pLog, pStats := interop.LabelChild("pipeline", manager, logger, stats)
+	if pipelineLayer, err = pipeline.New(conf.Pipeline, pMgr, pLog, pStats); err != nil {
+		return nil, fmt.Errorf("failed to create resource pipeline: %w", err)
 	}
-	if err == nil {
-		err = pipelineLayer.Consume(transactionChan)
+
+	oMgr, oLog, oStats := interop.LabelChild("output", manager, logger, stats)
+	if outputLayer, err = output.New(conf.Output, oMgr, oLog, oStats); err != nil {
+		return nil, fmt.Errorf("failed to create resource output: %w", err)
 	}
-	if err == nil {
-		err = outputLayer.Consume(pipelineLayer.TransactionChan())
+
+	if err = pipelineLayer.Consume(transactionChan); err != nil {
+		return nil, fmt.Errorf("failed to create resource: %v", err)
 	}
-	if err != nil {
+
+	if err = outputLayer.Consume(pipelineLayer.TransactionChan()); err != nil {
 		return nil, fmt.Errorf("failed to create resource: %v", err)
 	}
 

@@ -163,7 +163,8 @@ func New(
 
 	// TODO: Prevent recursive conditions.
 	for k, newConf := range conf.Conditions {
-		newCond, err := condition.New(newConf, t, log.NewModule(".resource.condition."+k), metrics.Namespaced(stats, "resource.condition."+k))
+		cMgr := t.forChildComponent("resource.condition." + k)
+		newCond, err := condition.New(newConf, cMgr, cMgr.Logger(), cMgr.Metrics())
 		if err != nil {
 			return nil, fmt.Errorf(
 				"failed to create condition resource '%v' of type '%v': %v",
@@ -198,7 +199,8 @@ func New(
 		if !exists {
 			return nil, fmt.Errorf("unrecognised plugin type '%v'", conf.Type)
 		}
-		newP, err := spec.constructor(conf.Plugin, t, log.NewModule(".resource.plugin."+k), metrics.Namespaced(stats, "resource.plugin."+k))
+		pMgr := t.forChildComponent("resource.plugin." + k)
+		newP, err := spec.constructor(conf.Plugin, pMgr, pMgr.Logger(), pMgr.Metrics())
 		if err != nil {
 			return nil, fmt.Errorf(
 				"failed to create plugin resource '%v' of type '%v': %v",

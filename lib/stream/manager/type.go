@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/stream"
@@ -197,16 +198,17 @@ func (m *Type) Create(id string, conf stream.Config) error {
 		}(ctor)
 	}
 
-	strmLogger := m.logger.NewModule("." + id)
+	sMgr, sLog, sStats := interop.LabelChild(id, m.manager, m.logger, m.stats)
 	strmFlatMetrics := metrics.NewLocal()
+	sStats = metrics.Combine(sStats, strmFlatMetrics)
 
 	var wrapper *StreamStatus
 	strm, err := stream.New(
 		conf,
 		stream.OptAddProcessors(procCtors...),
-		stream.OptSetLogger(strmLogger),
-		stream.OptSetStats(metrics.Combine(metrics.Namespaced(m.stats, id), strmFlatMetrics)),
-		stream.OptSetManager(namespacedMgr(id, m.manager)),
+		stream.OptSetLogger(sLog),
+		stream.OptSetStats(sStats),
+		stream.OptSetManager(sMgr),
 		stream.OptOnClose(func() {
 			wrapper.setClosed()
 		}),
@@ -215,7 +217,7 @@ func (m *Type) Create(id string, conf stream.Config) error {
 		return err
 	}
 
-	wrapper = NewStreamStatus(conf, strm, strmLogger, strmFlatMetrics)
+	wrapper = NewStreamStatus(conf, strm, sLog, strmFlatMetrics)
 	m.streams[id] = wrapper
 	return nil
 }

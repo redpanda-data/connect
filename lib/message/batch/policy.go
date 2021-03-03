@@ -7,6 +7,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -170,9 +171,8 @@ func NewPolicy(
 	var cond types.Condition
 	var err error
 	if !isNoopCondition(conf.Condition) {
-		if cond, err = condition.New(
-			conf.Condition, mgr, log.NewModule(".condition"), metrics.Namespaced(stats, "condition"),
-		); err != nil {
+		cMgr, cLog, cStats := interop.LabelChild("condition", mgr, log, stats)
+		if cond, err = condition.New(conf.Condition, cMgr, cLog, cStats); err != nil {
 			return nil, fmt.Errorf("failed to create condition: %v", err)
 		}
 	}
@@ -190,8 +190,8 @@ func NewPolicy(
 	}
 	var procs []types.Processor
 	for i, pconf := range conf.Processors {
-		prefix := fmt.Sprintf("%v", i)
-		proc, err := processor.New(pconf, mgr, log.NewModule("."+prefix), metrics.Namespaced(stats, prefix))
+		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("%v", i), mgr, log, stats)
+		proc, err := processor.New(pconf, pMgr, pLog, pStats)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create processor '%v': %v", i, err)
 		}

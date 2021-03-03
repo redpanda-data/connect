@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
@@ -83,18 +84,17 @@ type Conditional struct {
 func NewConditional(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	cond, err := condition.New(conf.Conditional.Condition, mgr, log.NewModule(".condition"), metrics.Namespaced(stats, "condition"))
+	cMgr, cLog, cStats := interop.LabelChild("condition", mgr, log, stats)
+	cond, err := condition.New(conf.Conditional.Condition, cMgr, cLog, cStats)
 	if err != nil {
 		return nil, err
 	}
 
 	var children []types.Processor
 	for i, pconf := range conf.Conditional.Processors {
-		ns := fmt.Sprintf("if.%v", i)
-		nsStats := metrics.Namespaced(stats, ns)
-		nsLog := log.NewModule("." + ns)
+		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("if.%v", i), mgr, log, stats)
 		var proc Type
-		if proc, err = New(pconf, mgr, nsLog, nsStats); err != nil {
+		if proc, err = New(pconf, pMgr, pLog, pStats); err != nil {
 			return nil, err
 		}
 		children = append(children, proc)
@@ -102,11 +102,9 @@ func NewConditional(
 
 	var elseChildren []types.Processor
 	for i, pconf := range conf.Conditional.ElseProcessors {
-		ns := fmt.Sprintf("else.%v", i)
-		nsStats := metrics.Namespaced(stats, ns)
-		nsLog := log.NewModule("." + ns)
+		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("else.%v", i), mgr, log, stats)
 		var proc Type
-		if proc, err = New(pconf, mgr, nsLog, nsStats); err != nil {
+		if proc, err = New(pconf, pMgr, pLog, pStats); err != nil {
 			return nil, err
 		}
 		elseChildren = append(elseChildren, proc)
