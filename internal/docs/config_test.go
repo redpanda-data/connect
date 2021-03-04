@@ -161,6 +161,18 @@ func TestInference(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, test.res, res, "test: %v", i)
 		}
+
+		var node yaml.Node
+		require.NoError(t, node.Encode(test.inputConf))
+		res, spec, err = docs.GetInferenceCandidateFromNode(test.inputType, test.inputDefault, &node)
+		if len(test.err) > 0 {
+			assert.Error(t, err)
+		} else {
+			assert.Equal(t, test.res, spec.Name)
+			assert.Equal(t, test.inputType, spec.Type)
+			assert.NoError(t, err)
+			assert.Equal(t, test.res, res, "test: %v", i)
+		}
 	}
 }
 

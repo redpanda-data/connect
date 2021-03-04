@@ -119,12 +119,7 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 		return fmt.Errorf("line %v: %v", value.Line, err)
 	}
 
-	var raw interface{}
-	if err = value.Decode(&raw); err != nil {
-		return fmt.Errorf("line %v: %v", value.Line, err)
-	}
-
-	if aliased.Type, _, err = docs.GetInferenceCandidate(docs.TypeBuffer, aliased.Type, raw); err != nil {
+	if aliased.Type, _, err = docs.GetInferenceCandidateFromNode(docs.TypeBuffer, aliased.Type, value); err != nil {
 		return fmt.Errorf("line %v: %w", value.Line, err)
 	}
 

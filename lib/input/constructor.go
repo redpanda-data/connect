@@ -403,13 +403,8 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 		return fmt.Errorf("line %v: %v", value.Line, err)
 	}
 
-	var raw interface{}
-	if err = value.Decode(&raw); err != nil {
-		return fmt.Errorf("line %v: %v", value.Line, err)
-	}
-
 	var spec docs.ComponentSpec
-	if aliased.Type, spec, err = docs.GetInferenceCandidate(docs.TypeInput, aliased.Type, raw); err != nil {
+	if aliased.Type, spec, err = docs.GetInferenceCandidateFromNode(docs.TypeInput, aliased.Type, value); err != nil {
 		return fmt.Errorf("line %v: %w", value.Line, err)
 	}
 

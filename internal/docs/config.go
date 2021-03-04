@@ -63,6 +63,32 @@ func GetInferenceCandidate(t Type, defaultType string, raw interface{}) (string,
 	return getInferenceCandidateFromList(t, defaultType, keys)
 }
 
+// GetInferenceCandidateFromNode checks a yaml node config structure for a
+// component and returns either the inferred type name or an error if one cannot
+// be inferred.
+func GetInferenceCandidateFromNode(t Type, defaultType string, node *yaml.Node) (string, ComponentSpec, error) {
+	refreshOldPlugins()
+
+	if node.Kind != yaml.MappingNode {
+		return "", ComponentSpec{}, fmt.Errorf("invalid type %v, expected object", node.Kind)
+	}
+
+	var keys []string
+	for i := 0; i < len(node.Content); i += 2 {
+		if node.Content[i].Value == "type" {
+			tStr := node.Content[i+1].Value
+			spec, exists := GetDocs(tStr, t)
+			if !exists {
+				return "", ComponentSpec{}, fmt.Errorf("%v type '%v' was not recognised", string(t), tStr)
+			}
+			return tStr, spec, nil
+		}
+		keys = append(keys, node.Content[i].Value)
+	}
+
+	return getInferenceCandidateFromList(t, defaultType, keys)
+}
+
 func getInferenceCandidateFromList(t Type, defaultType string, l []string) (string, ComponentSpec, error) {
 	ignore := reservedFieldsByType(t)
 
