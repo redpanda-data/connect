@@ -16,19 +16,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-//------------------------------------------------------------------------------
-
-func TestStaticDynamicFanInInterfaces(t *testing.T) {
-	f := &DynamicFanIn{}
-	if types.Producer(f) == nil {
-		t.Errorf("DynamicFanIn: nil types.Producer")
-	}
-	if types.Closable(f) == nil {
-		t.Errorf("DynamicFanIn: nil types.Closable")
-	}
-}
-
-//------------------------------------------------------------------------------
+var _ types.Producer = &DynamicFanIn{}
+var _ types.Closable = &DynamicFanIn{}
 
 func TestStaticBasicDynamicFanIn(t *testing.T) {
 	nInputs, nMsgs := 10, 1000

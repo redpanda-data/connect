@@ -17,19 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//------------------------------------------------------------------------------
-
-func TestDynamicFanOutInterfaces(t *testing.T) {
-	f := &DynamicFanOut{}
-	if types.Consumer(f) == nil {
-		t.Errorf("DynamicFanOut: nil types.Consumer")
-	}
-	if types.Closable(f) == nil {
-		t.Errorf("DynamicFanOut: nil types.Closable")
-	}
-}
-
-//------------------------------------------------------------------------------
+var _ types.Consumer = &DynamicFanOut{}
+var _ types.Closable = &DynamicFanOut{}
 
 func TestBasicDynamicFanOut(t *testing.T) {
 	nOutputs, nMsgs := 10, 1000

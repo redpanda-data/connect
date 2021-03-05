@@ -11,17 +11,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-//------------------------------------------------------------------------------
-
-func TestRoundRobinInterfaces(t *testing.T) {
-	f := &RoundRobin{}
-	if types.Consumer(f) == nil {
-		t.Errorf("RoundRobin: nil types.Consumer")
-	}
-	if types.Closable(f) == nil {
-		t.Errorf("RoundRobin: nil types.Closable")
-	}
-}
+var _ types.Consumer = &RoundRobin{}
+var _ types.Closable = &RoundRobin{}
 
 func TestRoundRobinDoubleClose(t *testing.T) {
 	oTM, err := NewRoundRobin([]types.Output{}, metrics.Noop())

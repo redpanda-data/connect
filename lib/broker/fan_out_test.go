@@ -14,17 +14,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-//------------------------------------------------------------------------------
-
-func TestFanOutInterfaces(t *testing.T) {
-	f := &FanOut{}
-	if types.Consumer(f) == nil {
-		t.Errorf("FanOut: nil types.Consumer")
-	}
-	if types.Closable(f) == nil {
-		t.Errorf("FanOut: nil types.Closable")
-	}
-}
+var _ types.Consumer = &FanOut{}
+var _ types.Closable = &FanOut{}
 
 //------------------------------------------------------------------------------
 

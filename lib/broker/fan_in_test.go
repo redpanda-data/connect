@@ -13,17 +13,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-//------------------------------------------------------------------------------
-
-func TestFanInInterfaces(t *testing.T) {
-	f := &FanIn{}
-	if types.Producer(f) == nil {
-		t.Errorf("FanIn: nil types.Producer")
-	}
-	if types.Closable(f) == nil {
-		t.Errorf("FanIn: nil types.Closable")
-	}
-}
+var _ types.Producer = &FanIn{}
+var _ types.Closable = &FanIn{}
 
 //------------------------------------------------------------------------------
 

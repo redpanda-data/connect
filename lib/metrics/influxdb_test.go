@@ -6,13 +6,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestInfluxInterface(t *testing.T) {
-	o := &InfluxDB{}
-	if Type(o) == nil {
-		t.Errorf("Type does not satisfy Type interface.")
-	}
-}
-
 func TestInfluxTimers(t *testing.T) {
 	config := NewConfig()
 	config.InfluxDB.URL = "http://localhost:8086"

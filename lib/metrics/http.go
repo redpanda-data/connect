@@ -12,8 +12,6 @@ import (
 	"github.com/Jeffail/gabs/v2"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
 	Constructors[TypeHTTPServer] = TypeSpec{
 		constructor: NewHTTP,

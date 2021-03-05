@@ -2,8 +2,6 @@ package metrics
 
 import "github.com/Jeffail/benthos/v3/lib/log"
 
-//------------------------------------------------------------------------------
-
 // DudStat implements the Stat interface but doesn't actual do anything.
 type DudStat struct{}
 
@@ -20,6 +18,8 @@ func (d DudStat) Timing(delta int64) error { return nil }
 func (d DudStat) Set(value int64) error { return nil }
 
 //------------------------------------------------------------------------------
+
+var _ Type = DudType{}
 
 // DudType implements the Type interface but doesn't actual do anything.
 type DudType struct {

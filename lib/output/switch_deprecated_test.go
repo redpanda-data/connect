@@ -14,20 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//------------------------------------------------------------------------------
-
-func TestSwitchDeprecatedInterfaces(t *testing.T) {
-	f := &Switch{}
-	if types.Consumer(f) == nil {
-		t.Errorf("Switch: nil types.Consumer")
-	}
-	if types.Closable(f) == nil {
-		t.Errorf("Switch: nil types.Closable")
-	}
-}
-
-//------------------------------------------------------------------------------
-
 func TestSwitchDeprecatedNoConditions(t *testing.T) {
 	nOutputs, nMsgs := 10, 1000
 

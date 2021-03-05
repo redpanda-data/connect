@@ -10,17 +10,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-//------------------------------------------------------------------------------
-
-func TestGreedyInterfaces(t *testing.T) {
-	f := &Greedy{}
-	if types.Consumer(f) == nil {
-		t.Errorf("Greedy: nil types.Consumer")
-	}
-	if types.Closable(f) == nil {
-		t.Errorf("Greedy: nil types.Closable")
-	}
-}
+var _ types.Consumer = &Greedy{}
+var _ types.Closable = &Greedy{}
 
 func TestGreedyDoubleClose(t *testing.T) {
 	oTM, err := NewGreedy([]types.Output{})

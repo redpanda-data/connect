@@ -2,32 +2,7 @@ package metrics
 
 import "testing"
 
-func TestInfluxStatInterface(t *testing.T) {
-
-	t.Run("influxDBGauge", func(t *testing.T) {
-		o := &influxDBGauge{}
-		if StatGauge(o) == nil {
-			t.Errorf("influxDBGauge does not satisfy StatGauge interface")
-		}
-	})
-
-	t.Run("influxDBCounter", func(t *testing.T) {
-		o := &influxDBCounter{}
-		if StatCounter(o) == nil {
-			t.Errorf("influxDBCounter does not satisfy StatCounter interface")
-		}
-	})
-
-	t.Run("influxDBTimer", func(t *testing.T) {
-		o := &influxDBTimer{}
-		if StatTimer(o) == nil {
-			t.Errorf("influxDBTimer does not satisfy StatTimer interface")
-		}
-	})
-}
-
 func Test_encodeInfluxDBName(t *testing.T) {
-
 	type test struct {
 		desc      string
 		name      string

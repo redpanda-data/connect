@@ -14,17 +14,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-//------------------------------------------------------------------------------
-
-func TestTryInterfaces(t *testing.T) {
-	f := &Try{}
-	if types.Consumer(f) == nil {
-		t.Errorf("Try: nil types.Consumer")
-	}
-	if types.Closable(f) == nil {
-		t.Errorf("Try: nil types.Closable")
-	}
-}
+var _ types.Consumer = &Try{}
+var _ types.Closable = &Try{}
 
 func TestTryDoubleClose(t *testing.T) {
 	oTM, err := NewTry([]types.Output{&MockOutputType{}}, metrics.Noop())
