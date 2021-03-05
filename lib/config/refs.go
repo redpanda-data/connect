@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"gopkg.in/yaml.v3"
@@ -19,9 +20,25 @@ import (
 // generic parse, resolves any JSON Pointers, marshals the result back into
 // bytes and returns it so that it can be unmarshalled into a typed structure.
 func ReadWithJSONPointers(path string, replaceEnvs bool) ([]byte, error) {
+	b, _, err := ReadWithJSONPointersLinted(path, replaceEnvs)
+	return b, err
+}
+
+// ReadWithJSONPointersLinted takes a config file path, reads the contents,
+// performs a generic parse, resolves any JSON Pointers, marshals the result
+// back into bytes and returns it so that it can be unmarshalled into a typed
+// structure.
+//
+// If any non-fatal errors occur lints are returned along with the result.
+func ReadWithJSONPointersLinted(path string, replaceEnvs bool) ([]byte, []string, error) {
 	configBytes, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	var lints []string
+	if !utf8.Valid(configBytes) {
+		lints = append(lints, "Detected invalid utf-8 encoding in config, this may result in interpolation functions not working as expected")
 	}
 
 	if replaceEnvs {
@@ -30,21 +47,21 @@ func ReadWithJSONPointers(path string, replaceEnvs bool) ([]byte, error) {
 
 	var gen interface{}
 	if err = yaml.Unmarshal(configBytes, &gen); err != nil {
-		return nil, err
+		return nil, lints, err
 	}
 
 	refFound, err := refWalk(path, 0, gen, gen)
 	if err != nil {
-		return nil, err
+		return nil, lints, err
 	}
 	if !refFound {
-		return configBytes, nil
+		return configBytes, lints, nil
 	}
 	if configBytes, err = yaml.Marshal(gen); err != nil {
-		return nil, fmt.Errorf("failed to marshal ref evaluated structure: %v", err)
+		return nil, lints, fmt.Errorf("failed to marshal ref evaluated structure: %v", err)
 	}
 
-	return configBytes, nil
+	return configBytes, lints, nil
 }
 
 //------------------------------------------------------------------------------

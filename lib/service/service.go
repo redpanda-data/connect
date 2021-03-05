@@ -122,10 +122,13 @@ func readConfig(path string, resourcesPaths []string) (lints []string) {
 	}
 
 	for _, rPath := range resourcesPaths {
-		resourceBytes, err := config.ReadWithJSONPointers(rPath, true)
+		resourceBytes, rLints, err := config.ReadWithJSONPointersLinted(rPath, true)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Resource configuration file read error: %v\n", err)
 			os.Exit(1)
+		}
+		for _, l := range rLints {
+			lints = append(lints, fmt.Sprintf("resource file %v: %v", rPath, l))
 		}
 		extraMgrWrapper := struct {
 			Manager manager.Config `yaml:"resources"`
