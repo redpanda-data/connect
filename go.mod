@@ -12,8 +12,8 @@ require (
 	github.com/Jeffail/gabs/v2 v2.6.0
 	github.com/Jeffail/grok v1.1.0
 	github.com/OneOfOne/xxhash v1.2.8
-	github.com/Shopify/sarama v1.27.2
-	github.com/apache/pulsar-client-go v0.3.0
+	github.com/Shopify/sarama v1.28.0
+	github.com/apache/pulsar-client-go v0.4.0
 	github.com/armon/go-metrics v0.3.4 // indirect
 	github.com/armon/go-radix v1.0.0
 	github.com/aws/aws-lambda-go v1.20.0
@@ -35,7 +35,7 @@ require (
 	github.com/gocql/gocql v0.0.0-20201024154641-5913df4d474e
 	github.com/gofrs/uuid v3.3.0+incompatible
 	github.com/golang/protobuf v1.4.3
-	github.com/golang/snappy v0.0.2
+	github.com/golang/snappy v0.0.3
 	github.com/google/go-cmp v0.5.4
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.4.2
@@ -46,7 +46,7 @@ require (
 	github.com/itchyny/gojq v0.11.2
 	github.com/jhump/protoreflect v1.7.0
 	github.com/jmespath/go-jmespath v0.4.0
-	github.com/klauspost/compress v1.11.2 // indirect
+	github.com/klauspost/compress v1.11.12 // indirect
 	github.com/lib/pq v1.8.0
 	github.com/linkedin/goavro/v2 v2.9.8
 	github.com/microcosm-cc/bluemonday v1.0.4
@@ -62,19 +62,18 @@ require (
 	github.com/ory/dockertest/v3 v3.6.3
 	github.com/patrobinson/gokini v0.1.0
 	github.com/pebbe/zmq4 v1.2.1
-	github.com/pierrec/lz4 v2.6.0+incompatible // indirect
 	github.com/pkg/sftp v1.12.0
 	github.com/prometheus/client_golang v1.8.0
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
 	github.com/quipo/statsd v0.0.0-20180118161217-3d6a5565f314
-	github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0
+	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.7.0 // indirect
 	github.com/smira/go-statsd v1.3.1
 	github.com/spf13/cast v1.3.1
 	github.com/streadway/amqp v1.0.0
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.7.0
 	github.com/tilinna/z85 v1.0.0
 	github.com/uber/jaeger-client-go v2.25.0+incompatible
 	github.com/uber/jaeger-lib v2.4.0+incompatible // indirect
@@ -83,13 +82,12 @@ require (
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0
 	go.nanomsg.org/mangos/v3 v3.1.3
-	go.uber.org/atomic v1.7.0 // indirect
-	golang.org/x/crypto v0.0.0-20201016220609-9e8e0b390897
-	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
+	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83
+	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
 	golang.org/x/oauth2 v0.0.0-20201208152858-08078c50e5b5
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 	golang.org/x/tools v0.1.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
+	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 )
 
 go 1.15
