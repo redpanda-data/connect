@@ -87,10 +87,17 @@ type Condition interface {
 // message, and returns either a slice of >= 1 resulting messages or a response
 // to return to the message origin.
 type Processor interface {
-	// ProcessMessage attempts to process a message. Since processing can fail
-	// this call returns both a slice of messages in case of success or a
-	// response in case of failure. If the slice of messages is empty the
-	// response will be returned to the source.
+	// ProcessMessage attempts to process a message. This method returns both a
+	// slice of messages or a response indicating whether messages were dropped
+	// due to an intermittent error (response.NewError) or were intentionally
+	// filtered (response.NewAck).
+	//
+	// If an error occurs due to the contents of a message being invalid and you
+	// wish to expose this as a recoverable fault you can use processor.FlagErr
+	// to flag a message as having failed without dropping it.
+	//
+	// More information about this form of error handling can be found at:
+	// https://www.benthos.dev/docs/configuration/error_handling
 	ProcessMessage(Message) ([]Message, Response)
 
 	Closable
