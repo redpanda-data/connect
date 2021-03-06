@@ -57,9 +57,9 @@ type FieldSpec struct {
 	// Version lists an explicit Benthos release where this fields behaviour was last modified.
 	Version string
 
-	omitWhenFn func(field, parent interface{}) (string, bool)
-
+	omitWhenFn   func(field, parent interface{}) (string, bool)
 	customLintFn func(v interface{}) []Lint
+	skipLint     bool
 }
 
 // IsInterpolated indicates that the field supports interpolation functions.
@@ -150,6 +150,13 @@ func (f FieldSpec) OmitWhen(fn func(field, parent interface{}) (string, bool)) F
 // value, allowing it to perform linting on that value.
 func (f FieldSpec) Linter(fn func(v interface{}) []Lint) FieldSpec {
 	f.customLintFn = fn
+	return f
+}
+
+// Unlinted returns a field spec that will not be lint checked during a config
+// parse.
+func (f FieldSpec) Unlinted() FieldSpec {
+	f.skipLint = true
 	return f
 }
 
@@ -298,6 +305,9 @@ func NewLintWarning(line int, msg string) Lint {
 }
 
 func (f FieldSpec) lintNode(node *yaml.Node) []Lint {
+	if f.skipLint {
+		return nil
+	}
 	var lints []Lint
 	if f.IsArray {
 		if node.Kind != yaml.SequenceNode {

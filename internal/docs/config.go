@@ -294,8 +294,12 @@ func LintNode(cType Type, node *yaml.Node) []Lint {
 		return lints
 	}
 
+	lintTarget := name
+	if cSpec.Status == StatusPlugin {
+		lintTarget = "plugin"
+	}
 	for i := 0; i < len(node.Content); i += 2 {
-		if node.Content[i].Value == name {
+		if node.Content[i].Value == lintTarget {
 			lints = append(lints, cSpec.Config.lintNode(node.Content[i+1])...)
 			break
 		}

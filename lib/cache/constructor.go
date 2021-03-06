@@ -68,6 +68,7 @@ override the general TTL configured at the cache resource level.`
 			Type:   docs.TypeCache,
 			Name:   k,
 			Status: docs.StatusPlugin,
+			Config: docs.FieldComponent().Unlinted(),
 		}
 		fn(ConstructorFunc(v.constructor), spec)
 	}

@@ -53,6 +53,7 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 			Type:   docs.TypeRateLimit,
 			Name:   k,
 			Status: docs.StatusPlugin,
+			Config: docs.FieldComponent().Unlinted(),
 		}
 		fn(ConstructorFunc(v.constructor), spec)
 	}

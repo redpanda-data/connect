@@ -81,6 +81,7 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 			Type:   docs.TypeInput,
 			Name:   k,
 			Status: docs.StatusPlugin,
+			Config: docs.FieldComponent().Unlinted(),
 		}
 		fn(ConstructorFunc(v.constructor), spec)
 	}
