@@ -91,9 +91,8 @@ type awsSQS struct {
 	session *session.Session
 	sqs     *sqs.SQS
 
-	pending     []*sqs.Message
-	pendingMut  sync.Mutex
-	nextRequest time.Time
+	pending    []*sqs.Message
+	pendingMut sync.Mutex
 
 	log   log.Modular
 	stats metrics.Type
@@ -154,15 +153,7 @@ func (a *awsSQS) ReadWithContext(ctx context.Context) (types.Message, reader.Asy
 	if len(a.pending) > 0 {
 		next = a.pending[0]
 		a.pending = a.pending[1:]
-	} else if !a.nextRequest.IsZero() {
-		if until := time.Until(a.nextRequest); until > 0 {
-			select {
-			case <-time.After(until):
-			case <-ctx.Done():
-				return nil, nil, types.ErrTimeout
-			}
-		}
-
+	} else {
 		output, err := a.sqs.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
 			QueueUrl:              aws.String(a.conf.URL),
 			MaxNumberOfMessages:   aws.Int64(10),
@@ -181,12 +172,9 @@ func (a *awsSQS) ReadWithContext(ctx context.Context) (types.Message, reader.Asy
 			a.pending = output.Messages[1:]
 		}
 	}
-
 	if next == nil {
-		a.nextRequest = time.Now().Add(time.Millisecond * 500)
 		return nil, nil, types.ErrTimeout
 	}
-	a.nextRequest = time.Time{}
 
 	msg := message.New(nil)
 	if next.Body != nil {
