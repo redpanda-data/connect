@@ -34,6 +34,8 @@ output:
     exchange: benthos-exchange
     key: benthos-key
     type: ""
+    metadata:
+      exclude_prefixes: []
     max_in_flight: 1
 ```
 
@@ -54,6 +56,8 @@ output:
     type: ""
     content_type: application/octet-stream
     content_encoding: ""
+    metadata:
+      exclude_prefixes: []
     max_in_flight: 1
     persistent: false
     mandatory: false
@@ -164,6 +168,21 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `""`  
+
+### `metadata`
+
+Specify criteria for which metadata values are attached to objects as headers.
+
+
+Type: `object`  
+
+### `metadata.exclude_prefixes`
+
+Provide a list of explicit metadata key prefixes to be excluded when adding metadata to sent messages.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `max_in_flight`
 

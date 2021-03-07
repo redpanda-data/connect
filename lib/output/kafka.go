@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -24,6 +25,8 @@ The config field ` + "`ack_replicas`" + ` determines whether we wait for acknowl
 
 Both the ` + "`key` and `topic`" + ` fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 
+[Metadata](/docs/configuration/metadata) will be added to each message sent as headers, but can be restricted using the field ` + "[`metadata`](#metadata)" + `.
+
 ### Strict Ordering and Retries
 
 When strict ordering is required for messages written to topic partitions it is important to ensure that both the field ` + "`max_in_flight` is set to `1` and that the field `retry_as_batch` is set to `true`" + `.
@@ -44,6 +47,7 @@ However, this also means that manual intervention will eventually be required in
 			docs.FieldCommon("partitioner", "The partitioning algorithm to use.").HasOptions("fnv1a_hash", "murmur2_hash", "random", "round_robin"),
 			docs.FieldCommon("compression", "The compression algorithm to use.").HasOptions("none", "snappy", "lz4", "gzip"),
 			docs.FieldCommon("static_headers", "An optional map of static headers that should be added to messages in addition to metadata.", map[string]string{"first-static-header": "value-1", "second-static-header": "value-2"}).Map(),
+			docs.FieldCommon("metadata", "Specify criteria for which metadata values are sent with messages as headers.").WithChildren(output.MetadataFields()...),
 			docs.FieldCommon("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 			docs.FieldAdvanced("ack_replicas", "Ensure that messages have been copied across all replicas before acknowledging receipt."),
 			docs.FieldAdvanced("max_msg_bytes", "The maximum size in bytes of messages sent to the target topic."),

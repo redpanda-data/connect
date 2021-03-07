@@ -2,9 +2,11 @@ package writer
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	bredis "github.com/Jeffail/benthos/v3/internal/service/redis"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -17,10 +19,11 @@ import (
 // RedisStreamsConfig contains configuration fields for the RedisStreams output type.
 type RedisStreamsConfig struct {
 	bredis.Config `json:",inline" yaml:",inline"`
-	Stream        string `json:"stream" yaml:"stream"`
-	BodyKey       string `json:"body_key" yaml:"body_key"`
-	MaxLenApprox  int64  `json:"max_length" yaml:"max_length"`
-	MaxInFlight   int    `json:"max_in_flight" yaml:"max_in_flight"`
+	Stream        string          `json:"stream" yaml:"stream"`
+	BodyKey       string          `json:"body_key" yaml:"body_key"`
+	MaxLenApprox  int64           `json:"max_length" yaml:"max_length"`
+	MaxInFlight   int             `json:"max_in_flight" yaml:"max_in_flight"`
+	Metadata      output.Metadata `json:"metadata" yaml:"metadata"`
 }
 
 // NewRedisStreamsConfig creates a new RedisStreamsConfig with default values.
@@ -31,6 +34,7 @@ func NewRedisStreamsConfig() RedisStreamsConfig {
 		BodyKey:      "body",
 		MaxLenApprox: 0,
 		MaxInFlight:  1,
+		Metadata:     output.NewMetadata(),
 	}
 }
 
@@ -41,7 +45,8 @@ type RedisStreams struct {
 	log   log.Modular
 	stats metrics.Type
 
-	conf RedisStreamsConfig
+	conf       RedisStreamsConfig
+	metaFilter *output.MetadataFilter
 
 	client  redis.UniversalClient
 	connMut sync.RWMutex
@@ -60,7 +65,12 @@ func NewRedisStreams(
 		conf:  conf,
 	}
 
-	if _, err := conf.Config.Client(); err != nil {
+	var err error
+	if r.metaFilter, err = conf.Metadata.Filter(); err != nil {
+		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
+	}
+
+	if _, err = conf.Config.Client(); err != nil {
 		return nil, err
 	}
 	return r, nil
@@ -111,7 +121,7 @@ func (r *RedisStreams) Write(msg types.Message) error {
 
 	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		values := map[string]interface{}{}
-		p.Metadata().Iter(func(k, v string) error {
+		r.metaFilter.Iter(p.Metadata(), func(k, v string) error {
 			values[k] = v
 			return nil
 		})

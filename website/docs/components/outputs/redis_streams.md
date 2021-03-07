@@ -36,6 +36,8 @@ output:
     body_key: body
     max_length: 0
     max_in_flight: 1
+    metadata:
+      exclude_prefixes: []
 ```
 
 </TabItem>
@@ -57,6 +59,8 @@ output:
     body_key: body
     max_length: 0
     max_in_flight: 1
+    metadata:
+      exclude_prefixes: []
 ```
 
 </TabItem>
@@ -252,5 +256,20 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 Type: `number`  
 Default: `1`  
+
+### `metadata`
+
+Specify criteria for which metadata values are included in the message body.
+
+
+Type: `object`  
+
+### `metadata.exclude_prefixes`
+
+Provide a list of explicit metadata key prefixes to be excluded when adding metadata to sent messages.
+
+
+Type: `array`  
+Default: `[]`  
 
 

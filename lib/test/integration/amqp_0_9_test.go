@@ -45,6 +45,8 @@ output:
       enabled: true
       type: direct
       durable: true
+    metadata:
+      exclude_prefixes: [ $OUTPUT_META_EXCLUDE_PREFIX ]
 
 input:
   amqp_0_9:
@@ -61,6 +63,7 @@ input:
 	suite := integrationTests(
 		integrationTestOpenClose(),
 		integrationTestMetadata(),
+		integrationTestMetadataFilter(),
 		integrationTestSendBatch(10),
 		integrationTestStreamSequential(1000),
 		integrationTestStreamParallel(1000),

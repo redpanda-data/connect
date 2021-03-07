@@ -83,6 +83,34 @@ func integrationTestMetadata() testDefinition {
 	)
 }
 
+func integrationTestMetadataFilter() testDefinition {
+	return namedTest(
+		"can send and receive metadata filtered",
+		func(t *testing.T, env *testEnvironment) {
+			t.Parallel()
+
+			env.configVars.outputMetaExcludePrefix = "f"
+
+			tranChan := make(chan types.Transaction)
+			input, output := initConnectors(t, tranChan, env)
+			t.Cleanup(func() {
+				closeConnectors(t, input, output)
+			})
+
+			require.NoError(t, sendMessage(
+				env.ctx, t, tranChan,
+				"hello world",
+				"foo", "foo_value",
+				"bar", "bar_value",
+			))
+
+			p := receiveMessage(env.ctx, t, input.TransactionChan(), nil)
+			assert.Empty(t, p.Metadata().Get("foo"))
+			messageMatch(t, p, "hello world", "bar", "bar_value")
+		},
+	)
+}
+
 func integrationTestSendBatch(n int) testDefinition {
 	return namedTest(
 		"can send a message batch",

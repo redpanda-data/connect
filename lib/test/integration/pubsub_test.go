@@ -57,6 +57,8 @@ output:
     project: benthos-test-project
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
+    metadata:
+      exclude_prefixes: [ $OUTPUT_META_EXCLUDE_PREFIX ]
 
 input:
   gcp_pubsub:
@@ -90,6 +92,7 @@ input:
 	suite := integrationTests(
 		integrationTestOpenClose(),
 		integrationTestMetadata(),
+		integrationTestMetadataFilter(),
 		integrationTestSendBatches(10, 1000, 10),
 		integrationTestStreamSequential(1000),
 		integrationTestStreamParallel(1000),

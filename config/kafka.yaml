@@ -71,6 +71,8 @@ output:
     max_in_flight: 1
     max_msg_bytes: 1000000
     max_retries: 0
+    metadata:
+      exclude_prefixes: []
     partitioner: fnv1a_hash
     retry_as_batch: false
     sasl:

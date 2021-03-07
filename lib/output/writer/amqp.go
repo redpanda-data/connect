@@ -10,6 +10,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -38,6 +39,7 @@ type AMQPConfig struct {
 	Type            string                    `json:"type" yaml:"type"`
 	ContentType     string                    `json:"content_type" yaml:"content_type"`
 	ContentEncoding string                    `json:"content_encoding" yaml:"content_encoding"`
+	Metadata        output.Metadata           `json:"metadata" yaml:"metadata"`
 	Persistent      bool                      `json:"persistent" yaml:"persistent"`
 	Mandatory       bool                      `json:"mandatory" yaml:"mandatory"`
 	Immediate       bool                      `json:"immediate" yaml:"immediate"`
@@ -59,6 +61,7 @@ func NewAMQPConfig() AMQPConfig {
 		Type:            "",
 		ContentType:     "application/octet-stream",
 		ContentEncoding: "",
+		Metadata:        output.NewMetadata(),
 		Persistent:      false,
 		Mandatory:       false,
 		Immediate:       false,
@@ -74,6 +77,7 @@ type AMQP struct {
 	msgType         field.Expression
 	contentType     field.Expression
 	contentEncoding field.Expression
+	metaFilter      *output.MetadataFilter
 
 	log   log.Modular
 	stats metrics.Type
@@ -100,6 +104,9 @@ func NewAMQP(conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error
 		deliveryMode: amqp.Transient,
 	}
 	var err error
+	if a.metaFilter, err = conf.Metadata.Filter(); err != nil {
+		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
+	}
 	if a.key, err = bloblang.NewField(conf.BindingKey); err != nil {
 		return nil, fmt.Errorf("failed to parse binding key expression: %v", err)
 	}
@@ -233,7 +240,7 @@ func (a *AMQP) Write(msg types.Message) error {
 		contentEncoding := a.contentEncoding.String(i, msg)
 
 		headers := amqp.Table{}
-		p.Metadata().Iter(func(k, v string) error {
+		a.metaFilter.Iter(p.Metadata(), func(k, v string) error {
 			headers[strings.Replace(k, "_", "-", -1)] = v
 			return nil
 		})

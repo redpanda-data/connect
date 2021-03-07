@@ -24,6 +24,8 @@ output:
   type: gcp_pubsub
   gcp_pubsub:
     max_in_flight: 1
+    metadata:
+      exclude_prefixes: []
     project: ""
     publish_timeout: 60s
     topic: ""

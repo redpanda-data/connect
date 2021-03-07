@@ -52,6 +52,8 @@ output:
     max_retries: 0
     message_deduplication_id: ""
     message_group_id: ""
+    metadata:
+      exclude_prefixes: []
     region: eu-west-1
     url: ""
 resources:

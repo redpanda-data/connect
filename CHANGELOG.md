@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - New Bloblang method `map_each_key`.
 - General config linting improvements.
 - Bloblang mappings and interpolated fields within configs are now compile checked during linting.
+- New output level `metadata.exclude_prefixes` config field for restricting metadata values sent to the following outputs: `kafka`, `aws_s3`, `amqp_0_9`, `redis_streams`, `aws_sqs`, `gcp_pubsub`.
 
 ### Fixed
 

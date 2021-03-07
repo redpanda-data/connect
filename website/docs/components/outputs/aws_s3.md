@@ -37,6 +37,8 @@ output:
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     tags: {}
     content_type: application/octet-stream
+    metadata:
+      exclude_prefixes: []
     max_in_flight: 1
     batching:
       count: 0
@@ -58,6 +60,8 @@ output:
     tags: {}
     content_type: application/octet-stream
     content_encoding: ""
+    metadata:
+      exclude_prefixes: []
     storage_class: STANDARD
     kms_key_id: ""
     force_path_style_urls: false
@@ -223,6 +227,21 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `""`  
+
+### `metadata`
+
+Specify criteria for which metadata values are attached to objects as headers.
+
+
+Type: `object`  
+
+### `metadata.exclude_prefixes`
+
+Provide a list of explicit metadata key prefixes to be excluded when adding metadata to sent messages.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `storage_class`
 

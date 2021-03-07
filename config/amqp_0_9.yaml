@@ -45,6 +45,8 @@ output:
     key: benthos-key
     mandatory: false
     max_in_flight: 1
+    metadata:
+      exclude_prefixes: []
     persistent: false
     tls:
       client_certs: []

@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -43,6 +44,7 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldCommon("message_group_id", "An optional group ID to set for messages.").IsInterpolated(),
 			docs.FieldCommon("message_deduplication_id", "An optional deduplication ID to set for messages.").IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldCommon("metadata", "Specify criteria for which metadata values are sent as headers.").WithChildren(output.MetadataFields()...),
 			batch.FieldSpec(),
 		}.Merge(session.FieldSpecs()).Merge(retries.FieldSpecs()),
 		Categories: []Category{
@@ -84,6 +86,7 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldCommon("message_group_id", "An optional group ID to set for messages.").IsInterpolated(),
 			docs.FieldCommon("message_deduplication_id", "An optional deduplication ID to set for messages.").IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldCommon("metadata", "Specify criteria for which metadata values are sent as headers.").WithChildren(output.MetadataFields()...),
 			batch.FieldSpec(),
 		}.Merge(session.FieldSpecs()).Merge(retries.FieldSpecs()),
 		Categories: []Category{

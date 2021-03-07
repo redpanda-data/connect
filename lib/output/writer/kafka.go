@@ -11,6 +11,7 @@ import (
 	batchInternal "github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -44,6 +45,7 @@ type KafkaConfig struct {
 	RetryAsBatch   bool               `json:"retry_as_batch" yaml:"retry_as_batch"`
 	Batching       batch.PolicyConfig `json:"batching" yaml:"batching"`
 	StaticHeaders  map[string]string  `json:"static_headers" yaml:"static_headers"`
+	Metadata       output.Metadata    `json:"metadata" yaml:"metadata"`
 
 	// TODO: V4 remove this.
 	RoundRobinPartitions bool `json:"round_robin_partitions" yaml:"round_robin_partitions"`
@@ -69,6 +71,7 @@ func NewKafkaConfig() KafkaConfig {
 		AckReplicas:          false,
 		TargetVersion:        sarama.V1_0_0_0.String(),
 		StaticHeaders:        map[string]string{},
+		Metadata:             output.NewMetadata(),
 		TLS:                  btls.NewConfig(),
 		SASL:                 sasl.NewConfig(),
 		MaxInFlight:          1,
@@ -103,6 +106,7 @@ type Kafka struct {
 	partitioner sarama.PartitionerConstructor
 
 	staticHeaders map[string]string
+	metaFilter    *output.MetadataFilter
 
 	connMut sync.RWMutex
 }
@@ -133,6 +137,10 @@ func NewKafka(conf KafkaConfig, mgr types.Manager, log log.Modular, stats metric
 		compression:   compression,
 		partitioner:   partitioner,
 		staticHeaders: conf.StaticHeaders,
+	}
+
+	if k.metaFilter, err = conf.Metadata.Filter(); err != nil {
+		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
 
 	if k.key, err = bloblang.NewField(conf.Key); err != nil {
@@ -212,11 +220,10 @@ func strToPartitioner(str string) (sarama.PartitionerConstructor, error) {
 
 //------------------------------------------------------------------------------
 
-func buildSystemHeaders(version sarama.KafkaVersion, part types.Part) []sarama.RecordHeader {
-	if version.IsAtLeast(sarama.V0_11_0_0) {
+func (k *Kafka) buildSystemHeaders(part types.Part) []sarama.RecordHeader {
+	if k.version.IsAtLeast(sarama.V0_11_0_0) {
 		out := []sarama.RecordHeader{}
-		meta := part.Metadata()
-		meta.Iter(func(k, v string) error {
+		k.metaFilter.Iter(part.Metadata(), func(k, v string) error {
 			out = append(out, sarama.RecordHeader{
 				Key:   []byte(k),
 				Value: []byte(v),
@@ -232,8 +239,8 @@ func buildSystemHeaders(version sarama.KafkaVersion, part types.Part) []sarama.R
 
 //------------------------------------------------------------------------------
 
-func buildUserDefinedHeaders(version sarama.KafkaVersion, staticHeaders map[string]string) []sarama.RecordHeader {
-	if version.IsAtLeast(sarama.V0_11_0_0) {
+func (k *Kafka) buildUserDefinedHeaders(staticHeaders map[string]string) []sarama.RecordHeader {
+	if k.version.IsAtLeast(sarama.V0_11_0_0) {
 		out := make([]sarama.RecordHeader, 0, len(staticHeaders))
 
 		for name, value := range staticHeaders {
@@ -311,7 +318,6 @@ func (k *Kafka) Write(msg types.Message) error {
 func (k *Kafka) WriteWithContext(ctx context.Context, msg types.Message) error {
 	k.connMut.RLock()
 	producer := k.producer
-	version := k.version
 	k.connMut.RUnlock()
 
 	if producer == nil {
@@ -320,14 +326,14 @@ func (k *Kafka) WriteWithContext(ctx context.Context, msg types.Message) error {
 
 	boff := k.backoffCtor()
 
-	userDefinedHeaders := buildUserDefinedHeaders(version, k.staticHeaders)
+	userDefinedHeaders := k.buildUserDefinedHeaders(k.staticHeaders)
 	msgs := []*sarama.ProducerMessage{}
 	msg.Iter(func(i int, p types.Part) error {
 		key := k.key.Bytes(i, msg)
 		nextMsg := &sarama.ProducerMessage{
 			Topic:    k.topic.String(i, msg),
 			Value:    sarama.ByteEncoder(p.Get()),
-			Headers:  append(buildSystemHeaders(version, p), userDefinedHeaders...),
+			Headers:  append(k.buildSystemHeaders(p), userDefinedHeaders...),
 			Metadata: i, // Store the original index for later reference.
 		}
 		if len(key) > 0 {

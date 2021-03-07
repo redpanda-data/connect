@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -48,6 +49,7 @@ The fields 'key' and 'type' can be dynamically set using function interpolations
 			docs.FieldCommon("type", "The type property to set for each message.").IsInterpolated(),
 			docs.FieldAdvanced("content_type", "The content type attribute to set for each message.").IsInterpolated(),
 			docs.FieldAdvanced("content_encoding", "The content encoding attribute to set for each message.").IsInterpolated(),
+			docs.FieldCommon("metadata", "Specify criteria for which metadata values are attached to messages as headers.").WithChildren(output.MetadataFields()...),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldAdvanced("persistent", "Whether message delivery should be persistent (transient by default)."),
 			docs.FieldAdvanced("mandatory", "Whether to set the mandatory flag on published messages. When set if a published message is routed to zero queues it is returned."),

@@ -34,6 +34,8 @@ output:
     project: ""
     topic: ""
     max_in_flight: 1
+    metadata:
+      exclude_prefixes: []
 ```
 
 </TabItem>
@@ -47,6 +49,8 @@ output:
     topic: ""
     max_in_flight: 1
     publish_timeout: 60s
+    metadata:
+      exclude_prefixes: []
 ```
 
 </TabItem>
@@ -105,5 +109,20 @@ publish_timeout: 5m
 
 publish_timeout: 60m
 ```
+
+### `metadata`
+
+Specify criteria for which metadata values are sent as attributes.
+
+
+Type: `object`  
+
+### `metadata.exclude_prefixes`
+
+Provide a list of explicit metadata key prefixes to be excluded when adding metadata to sent messages.
+
+
+Type: `array`  
+Default: `[]`  
 
 

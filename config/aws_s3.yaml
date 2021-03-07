@@ -61,6 +61,8 @@ output:
     force_path_style_urls: false
     kms_key_id: ""
     max_in_flight: 1
+    metadata:
+      exclude_prefixes: []
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     region: eu-west-1
     storage_class: STANDARD

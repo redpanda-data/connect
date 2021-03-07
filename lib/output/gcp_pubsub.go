@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -25,6 +26,7 @@ For information on how to set up credentials check out
 			docs.FieldCommon("topic", "The topic to publish to.").IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldAdvanced("publish_timeout", "The maximum length of time to wait before abandoning a publish attempt for a message.", "10s", "5m", "60m"),
+			docs.FieldCommon("metadata", "Specify criteria for which metadata values are sent as attributes.").WithChildren(output.MetadataFields()...),
 		},
 		Categories: []Category{
 			CategoryServices,

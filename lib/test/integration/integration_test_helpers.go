@@ -51,6 +51,9 @@ type testConfigVars struct {
 	// Used by batching testers to check the output honours batching fields.
 	outputBatchCount int
 
+	// Used by metadata filter tests to check that filters work.
+	outputMetaExcludePrefix string
+
 	// Used by testers to check the max in flight option of outputs.
 	maxInFlight int
 
@@ -125,6 +128,7 @@ func (e testEnvironment) RenderConfig() string {
 		"$VAR4", e.configVars.var4,
 		"$INPUT_BATCH_COUNT", strconv.Itoa(e.configVars.inputBatchCount),
 		"$OUTPUT_BATCH_COUNT", strconv.Itoa(e.configVars.outputBatchCount),
+		"$OUTPUT_META_EXCLUDE_PREFIX", e.configVars.outputMetaExcludePrefix,
 		"$MAX_IN_FLIGHT", strconv.Itoa(e.configVars.maxInFlight),
 	).Replace(e.configTemplate)
 }

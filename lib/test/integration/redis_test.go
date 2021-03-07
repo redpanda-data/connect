@@ -53,6 +53,8 @@ output:
     body_key: body
     max_length: 0
     max_in_flight: $MAX_IN_FLIGHT
+    metadata:
+      exclude_prefixes: [ $OUTPUT_META_EXCLUDE_PREFIX ]
 
 input:
   redis_streams:
@@ -66,6 +68,7 @@ input:
 		suite := integrationTests(
 			integrationTestOpenClose(),
 			integrationTestMetadata(),
+			integrationTestMetadataFilter(),
 			integrationTestSendBatch(10),
 			integrationTestStreamSequential(1000),
 			integrationTestStreamParallel(1000),

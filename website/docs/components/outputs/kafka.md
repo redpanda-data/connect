@@ -38,6 +38,8 @@ output:
     partitioner: fnv1a_hash
     compression: none
     static_headers: {}
+    metadata:
+      exclude_prefixes: []
     max_in_flight: 1
     batching:
       count: 0
@@ -73,6 +75,8 @@ output:
     partitioner: fnv1a_hash
     compression: none
     static_headers: {}
+    metadata:
+      exclude_prefixes: []
     max_in_flight: 1
     ack_replicas: false
     max_msg_bytes: 1000000
@@ -98,6 +102,8 @@ output:
 The config field `ack_replicas` determines whether we wait for acknowledgement from all replicas or just a single broker.
 
 Both the `key` and `topic` fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
+
+[Metadata](/docs/configuration/metadata) will be added to each message sent as headers, but can be restricted using the field [`metadata`](#metadata).
 
 ### Strict Ordering and Retries
 
@@ -363,6 +369,21 @@ static_headers:
   first-static-header: value-1
   second-static-header: value-2
 ```
+
+### `metadata`
+
+Specify criteria for which metadata values are sent with messages as headers.
+
+
+Type: `object`  
+
+### `metadata.exclude_prefixes`
+
+Provide a list of explicit metadata key prefixes to be excluded when adding metadata to sent messages.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `max_in_flight`
 

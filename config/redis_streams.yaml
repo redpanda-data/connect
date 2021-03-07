@@ -41,6 +41,8 @@ output:
     master: ""
     max_in_flight: 1
     max_length: 0
+    metadata:
+      exclude_prefixes: []
     stream: benthos_stream
     tls:
       client_certs: []

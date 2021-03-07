@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -19,10 +20,11 @@ import (
 
 // GCPPubSubConfig contains configuration fields for the output GCPPubSub type.
 type GCPPubSubConfig struct {
-	ProjectID      string `json:"project" yaml:"project"`
-	TopicID        string `json:"topic" yaml:"topic"`
-	MaxInFlight    int    `json:"max_in_flight" yaml:"max_in_flight"`
-	PublishTimeout string `json:"publish_timeout" yaml:"publish_timeout"`
+	ProjectID      string          `json:"project" yaml:"project"`
+	TopicID        string          `json:"topic" yaml:"topic"`
+	MaxInFlight    int             `json:"max_in_flight" yaml:"max_in_flight"`
+	PublishTimeout string          `json:"publish_timeout" yaml:"publish_timeout"`
+	Metadata       output.Metadata `json:"metadata" yaml:"metadata"`
 }
 
 // NewGCPPubSubConfig creates a new Config with default values.
@@ -32,6 +34,7 @@ func NewGCPPubSubConfig() GCPPubSubConfig {
 		TopicID:        "",
 		MaxInFlight:    1,
 		PublishTimeout: "60s",
+		Metadata:       output.NewMetadata(),
 	}
 }
 
@@ -44,6 +47,7 @@ type GCPPubSub struct {
 
 	client         *pubsub.Client
 	publishTimeout time.Duration
+	metaFilter     *output.MetadataFilter
 
 	topicID  field.Expression
 	topics   map[string]*pubsub.Topic
@@ -71,9 +75,14 @@ func NewGCPPubSub(
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse publish timeout duration: %w", err)
 	}
+	metaFilter, err := conf.Metadata.Filter()
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
+	}
 	return &GCPPubSub{
 		conf:           conf,
 		log:            log,
+		metaFilter:     metaFilter,
 		client:         client,
 		publishTimeout: pubTimeout,
 		stats:          stats,
@@ -140,7 +149,7 @@ func (c *GCPPubSub) WriteWithContext(ctx context.Context, msg types.Message) err
 	msg.Iter(func(i int, part types.Part) error {
 		topic := topics[i]
 		attr := map[string]string{}
-		part.Metadata().Iter(func(k, v string) error {
+		c.metaFilter.Iter(part.Metadata(), func(k, v string) error {
 			attr[k] = v
 			return nil
 		})

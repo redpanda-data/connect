@@ -11,6 +11,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -32,6 +33,7 @@ type AmazonS3Config struct {
 	Tags               map[string]string  `json:"tags" yaml:"tags"`
 	ContentType        string             `json:"content_type" yaml:"content_type"`
 	ContentEncoding    string             `json:"content_encoding" yaml:"content_encoding"`
+	Metadata           output.Metadata    `json:"metadata" yaml:"metadata"`
 	StorageClass       string             `json:"storage_class" yaml:"storage_class"`
 	Timeout            string             `json:"timeout" yaml:"timeout"`
 	KMSKeyID           string             `json:"kms_key_id" yaml:"kms_key_id"`
@@ -49,6 +51,7 @@ func NewAmazonS3Config() AmazonS3Config {
 		Tags:               map[string]string{},
 		ContentType:        "application/octet-stream",
 		ContentEncoding:    "",
+		Metadata:           output.NewMetadata(),
 		StorageClass:       "STANDARD",
 		Timeout:            "5s",
 		KMSKeyID:           "",
@@ -74,6 +77,7 @@ type AmazonS3 struct {
 	contentType     field.Expression
 	contentEncoding field.Expression
 	storageClass    field.Expression
+	metaFilter      *output.MetadataFilter
 
 	session  *session.Session
 	uploader *s3manager.Uploader
@@ -179,7 +183,7 @@ func (a *AmazonS3) WriteWithContext(wctx context.Context, msg types.Message) err
 
 	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		metadata := map[string]*string{}
-		p.Metadata().Iter(func(k, v string) error {
+		a.metaFilter.Iter(p.Metadata(), func(k, v string) error {
 			metadata[k] = aws.String(v)
 			return nil
 		})

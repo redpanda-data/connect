@@ -12,6 +12,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -35,10 +36,11 @@ const (
 // AmazonSQSConfig contains configuration fields for the output AmazonSQS type.
 type AmazonSQSConfig struct {
 	sessionConfig          `json:",inline" yaml:",inline"`
-	URL                    string `json:"url" yaml:"url"`
-	MessageGroupID         string `json:"message_group_id" yaml:"message_group_id"`
-	MessageDeduplicationID string `json:"message_deduplication_id" yaml:"message_deduplication_id"`
-	MaxInFlight            int    `json:"max_in_flight" yaml:"max_in_flight"`
+	URL                    string          `json:"url" yaml:"url"`
+	MessageGroupID         string          `json:"message_group_id" yaml:"message_group_id"`
+	MessageDeduplicationID string          `json:"message_deduplication_id" yaml:"message_deduplication_id"`
+	Metadata               output.Metadata `json:"metadata" yaml:"metadata"`
+	MaxInFlight            int             `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config         `json:",inline" yaml:",inline"`
 	Batching               batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
@@ -57,6 +59,7 @@ func NewAmazonSQSConfig() AmazonSQSConfig {
 		URL:                    "",
 		MessageGroupID:         "",
 		MessageDeduplicationID: "",
+		Metadata:               output.NewMetadata(),
 		MaxInFlight:            1,
 		Config:                 rConf,
 		Batching:               batch.NewPolicyConfig(),
@@ -75,8 +78,9 @@ type AmazonSQS struct {
 
 	backoffCtor func() backoff.BackOff
 
-	groupID  field.Expression
-	dedupeID field.Expression
+	groupID    field.Expression
+	dedupeID   field.Expression
+	metaFilter *output.MetadataFilter
 
 	closer    sync.Once
 	closeChan chan struct{}
@@ -108,6 +112,9 @@ func NewAmazonSQS(
 		if s.dedupeID, err = bloblang.NewField(id); err != nil {
 			return nil, fmt.Errorf("failed to parse dedupe ID expression: %v", err)
 		}
+	}
+	if s.metaFilter, err = conf.Metadata.Filter(); err != nil {
+		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
 
 	if s.backoffCtor, err = conf.Config.GetCtor(); err != nil {
@@ -155,7 +162,7 @@ func isValidSQSAttribute(k, v string) bool {
 func (a *AmazonSQS) getSQSAttributes(msg types.Message, i int) sqsAttributes {
 	p := msg.Get(i)
 	keys := []string{}
-	p.Metadata().Iter(func(k, v string) error {
+	a.metaFilter.Iter(p.Metadata(), func(k, v string) error {
 		if isValidSQSAttribute(k, v) {
 			keys = append(keys, k)
 		} else {
