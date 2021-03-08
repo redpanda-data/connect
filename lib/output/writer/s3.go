@@ -116,6 +116,9 @@ func NewAmazonS3(
 	if a.contentEncoding, err = bloblang.NewField(conf.ContentEncoding); err != nil {
 		return nil, fmt.Errorf("failed to parse content encoding expression: %v", err)
 	}
+	if a.metaFilter, err = conf.Metadata.Filter(); err != nil {
+		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
+	}
 	if a.storageClass, err = bloblang.NewField(conf.StorageClass); err != nil {
 		return nil, fmt.Errorf("failed to parse storage class expression: %v", err)
 	}
