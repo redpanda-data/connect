@@ -63,10 +63,48 @@ pipeline:
             - ${! meta("kafka_topic") }
 ```
 
-Or, for more complex branches it might be best to use the [`awk` processor][processors.awk].
+## Restricting Metadata
+
+Outputs that support metadata, headers or some other variant of enriched fields on messages will attempt to send all metadata key/value pairs by default. However, sometimes it's useful to refer to metadata fields at the output level even though we do not wish to send them with our data. In this case it's possible to restrict the metadata keys that are sent with the field `metadata.exclude_prefixes` within the respective output config.
+
+For example, if we were sending messages to kafka using a metadata key `target_topic` to determine the topic but we wished to prevent that metadata key from being sent as a header we could use the following configuration:
+
+```yaml
+output:
+  kafka:
+    addresses: [ TODO ]
+    topic: ${! meta("target_topic")
+    metadata:
+      exclude_prefixes:
+        - target_topic
+```
+
+And when the list of metadata keys that we do _not_ want to send is large it can be helpful to use a [Bloblang mapping][guides.bloblang] in order to give all of these "private" keys a common prefix:
+
+```yaml
+pipeline:
+  processors:
+    # Has an explicit list of public metadata keys, and everything else is given
+    # an underscore prefix.
+    - bloblang: |
+        let allowed_meta = [
+          "foo",
+          "bar",
+          "baz",
+        ]
+        meta = meta().map_each_key(if !$allowed_meta.contains(this) {
+          "_" + this
+        })
+
+output:
+  kafka:
+    addresses: [ TODO ]
+    topic: ${! meta("_target_topic")
+    metadata:
+      exclude_prefixes: [ "_" ]
+```
 
 [interpolation]: /docs/configuration/interpolation
 [processors.switch]: /docs/components/processors/switch
-[processors.awk]: /docs/components/processors/awk
 [processors.bloblang]: /docs/components/processors/bloblang
 [guides.bloblang]: /docs/guides/bloblang/about
