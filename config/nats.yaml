@@ -13,6 +13,11 @@ input:
     prefetch_count: 32
     queue: benthos_queue
     subject: benthos_messages
+    tls:
+      client_certs: []
+      enabled: false
+      root_cas_file: ""
+      skip_cert_verify: false
     urls:
       - nats://127.0.0.1:4222
 buffer:
@@ -26,6 +31,11 @@ output:
   nats:
     max_in_flight: 1
     subject: benthos_messages
+    tls:
+      client_certs: []
+      enabled: false
+      root_cas_file: ""
+      skip_cert_verify: false
     urls:
       - nats://127.0.0.1:4222
 resources:
