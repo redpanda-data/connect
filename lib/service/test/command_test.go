@@ -184,7 +184,7 @@ func TestGetTargetsDir(t *testing.T) {
 	if _, exists := paths[filepath.Join(testDir, "bar.yaml")]; !exists {
 		t.Errorf("Wrong path returned: %v does not contain bar.yaml", paths)
 	}
-	if _, exists := paths[filepath.Join(testDir, "nested/baz.yaml")]; !exists {
+	if _, exists := paths[filepath.Join(testDir, "nested", "baz.yaml")]; !exists {
 		t.Errorf("Wrong path returned: %v does not contain nested/baz.yaml", paths)
 	}
 }

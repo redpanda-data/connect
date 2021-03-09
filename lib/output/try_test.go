@@ -26,7 +26,7 @@ func TestTryOutputBasic(t *testing.T) {
 	outOne.HTTPClient.URL = "http://localhost:11111111/badurl"
 	outOne.HTTPClient.NumRetries = 1
 	outOne.HTTPClient.Retry = "1ms"
-	outTwo.Files.Path = filepath.Join(dir, "two", "bar-${!count(\"tofoo\")}-${!count(\"tobar\")}.txt")
+	outTwo.Files.Path = filepath.Join(dir, "two", `bar-${!count("tofoo")}-${!count("tobar")}.txt`)
 	outThree.File.Path = "/dev/null"
 
 	procOne, procTwo, procThree := processor.NewConfig(), processor.NewConfig(), processor.NewConfig()
