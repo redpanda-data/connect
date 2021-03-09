@@ -2,7 +2,10 @@ package writer
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
+	"github.com/nats-io/nats.go"
 	"math/rand"
 	"strings"
 	"sync"
@@ -19,11 +22,12 @@ import (
 // NATSStreamConfig contains configuration fields for the NATSStream output
 // type.
 type NATSStreamConfig struct {
-	URLs        []string `json:"urls" yaml:"urls"`
-	ClusterID   string   `json:"cluster_id" yaml:"cluster_id"`
-	ClientID    string   `json:"client_id" yaml:"client_id"`
-	Subject     string   `json:"subject" yaml:"subject"`
-	MaxInFlight int      `json:"max_in_flight" yaml:"max_in_flight"`
+	URLs        []string    `json:"urls" yaml:"urls"`
+	ClusterID   string      `json:"cluster_id" yaml:"cluster_id"`
+	ClientID    string      `json:"client_id" yaml:"client_id"`
+	Subject     string      `json:"subject" yaml:"subject"`
+	MaxInFlight int         `json:"max_in_flight" yaml:"max_in_flight"`
+	TLS         btls.Config `json:"tls" yaml:"tls"`
 }
 
 // NewNATSStreamConfig creates a new NATSStreamConfig with default values.
@@ -34,6 +38,7 @@ func NewNATSStreamConfig() NATSStreamConfig {
 		ClientID:    "benthos_client",
 		Subject:     "benthos_messages",
 		MaxInFlight: 1,
+		TLS:         btls.NewConfig(),
 	}
 }
 
@@ -43,11 +48,13 @@ func NewNATSStreamConfig() NATSStreamConfig {
 type NATSStream struct {
 	log log.Modular
 
-	natsConn stan.Conn
+	stanConn stan.Conn
+	natsConn *nats.Conn
 	connMut  sync.RWMutex
 
-	urls string
-	conf NATSStreamConfig
+	urls    string
+	conf    NATSStreamConfig
+	tlsConf *tls.Config
 }
 
 // NewNATSStream creates a new NATS Stream output type.
@@ -66,6 +73,12 @@ func NewNATSStream(conf NATSStreamConfig, log log.Modular, stats metrics.Type) (
 		conf: conf,
 	}
 	n.urls = strings.Join(conf.URLs, ",")
+	var err error
+	if conf.TLS.Enabled {
+		if n.tlsConf, err = conf.TLS.Get(); err != nil {
+			return nil, err
+		}
+	}
 
 	return &n, nil
 }
@@ -86,11 +99,21 @@ func (n *NATSStream) Connect() error {
 		return nil
 	}
 
+	var opts []nats.Option
 	var err error
-	n.natsConn, err = stan.Connect(
+
+	if n.tlsConf != nil {
+		opts = append(opts, nats.Secure(n.tlsConf))
+	}
+
+	if n.natsConn, err = nats.Connect(n.urls, opts...); err != nil {
+		return err
+	}
+
+	n.stanConn, err = stan.Connect(
 		n.conf.ClusterID,
 		n.conf.ClientID,
-		stan.NatsURL(n.urls),
+		stan.NatsConn(n.natsConn),
 	)
 	if err == nil {
 		n.log.Infof("Sending NATS messages to subject: %v\n", n.conf.Subject)

@@ -6,6 +6,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
 //------------------------------------------------------------------------------
@@ -36,6 +37,7 @@ You can access these metadata fields using
 			docs.FieldCommon("queue", "The queue to consume from."),
 			docs.FieldCommon("subject", "A subject to consume from."),
 			docs.FieldAdvanced("prefetch_count", "The maximum number of messages to pull at a time."),
+			tls.FieldSpec(),
 		},
 		Categories: []Category{
 			CategoryServices,

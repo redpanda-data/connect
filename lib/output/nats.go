@@ -6,6 +6,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
 //------------------------------------------------------------------------------
@@ -28,6 +29,7 @@ can find a list of functions [here](/docs/configuration/interpolation#bloblang-q
 			).Array(),
 			docs.FieldCommon("subject", "The subject to publish to.").IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			tls.FieldSpec(),
 		},
 		Categories: []Category{
 			CategoryServices,

@@ -2,7 +2,10 @@ package reader
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
+	"github.com/nats-io/nats.go"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,16 +24,17 @@ import (
 
 // NATSStreamConfig contains configuration fields for the NATSStream input type.
 type NATSStreamConfig struct {
-	URLs            []string `json:"urls" yaml:"urls"`
-	ClusterID       string   `json:"cluster_id" yaml:"cluster_id"`
-	ClientID        string   `json:"client_id" yaml:"client_id"`
-	QueueID         string   `json:"queue" yaml:"queue"`
-	DurableName     string   `json:"durable_name" yaml:"durable_name"`
-	UnsubOnClose    bool     `json:"unsubscribe_on_close" yaml:"unsubscribe_on_close"`
-	StartFromOldest bool     `json:"start_from_oldest" yaml:"start_from_oldest"`
-	Subject         string   `json:"subject" yaml:"subject"`
-	MaxInflight     int      `json:"max_inflight" yaml:"max_inflight"`
-	AckWait         string   `json:"ack_wait" yaml:"ack_wait"`
+	URLs            []string    `json:"urls" yaml:"urls"`
+	ClusterID       string      `json:"cluster_id" yaml:"cluster_id"`
+	ClientID        string      `json:"client_id" yaml:"client_id"`
+	QueueID         string      `json:"queue" yaml:"queue"`
+	DurableName     string      `json:"durable_name" yaml:"durable_name"`
+	UnsubOnClose    bool        `json:"unsubscribe_on_close" yaml:"unsubscribe_on_close"`
+	StartFromOldest bool        `json:"start_from_oldest" yaml:"start_from_oldest"`
+	Subject         string      `json:"subject" yaml:"subject"`
+	MaxInflight     int         `json:"max_inflight" yaml:"max_inflight"`
+	AckWait         string      `json:"ack_wait" yaml:"ack_wait"`
+	TLS             btls.Config `json:"tls" yaml:"tls"`
 
 	// TODO: V4 remove this.
 	Batching batch.PolicyConfig `json:"batching" yaml:"batching"`
@@ -50,6 +54,7 @@ func NewNATSStreamConfig() NATSStreamConfig {
 		MaxInflight:     1024,
 		AckWait:         "30s",
 		Batching:        batch.NewPolicyConfig(),
+		TLS:             btls.NewConfig(),
 	}
 }
 
@@ -66,12 +71,14 @@ type NATSStream struct {
 
 	unAckMsgs []*stan.Msg
 
-	natsConn stan.Conn
+	stanConn stan.Conn
+	natsConn *nats.Conn
 	natsSub  stan.Subscription
 	cMut     sync.Mutex
 
 	msgChan       chan *stan.Msg
 	interruptChan chan struct{}
+	tlsConf       *tls.Config
 }
 
 // NewNATSStream creates a new NATSStream input type.
@@ -100,8 +107,15 @@ func NewNATSStream(conf NATSStreamConfig, log log.Modular, stats metrics.Type) (
 		msgChan:       make(chan *stan.Msg),
 		interruptChan: make(chan struct{}),
 	}
+
 	close(n.msgChan)
 	n.urls = strings.Join(conf.URLs, ",")
+	var err error
+	if conf.TLS.Enabled {
+		if n.tlsConf, err = conf.TLS.Get(); err != nil {
+			return nil, err
+		}
+	}
 
 	return &n, nil
 }
@@ -138,6 +152,18 @@ func (n *NATSStream) ConnectWithContext(ctx context.Context) error {
 		return nil
 	}
 
+	var natsConn *nats.Conn
+	var err error
+	var opts []nats.Option
+
+	if n.tlsConf != nil {
+		opts = append(opts, nats.Secure(n.tlsConf))
+	}
+
+	if natsConn, err = nats.Connect(n.urls, opts...); err != nil {
+		return err
+	}
+
 	newMsgChan := make(chan *stan.Msg)
 	handler := func(m *stan.Msg) {
 		select {
@@ -155,10 +181,10 @@ func (n *NATSStream) ConnectWithContext(ctx context.Context) error {
 		n.disconnect()
 	}
 
-	natsConn, err := stan.Connect(
+	stanConn, err := stan.Connect(
 		n.conf.ClusterID,
 		n.conf.ClientID,
-		stan.NatsURL(n.urls),
+		stan.NatsConn(natsConn),
 		stan.SetConnectionLostHandler(func(_ stan.Conn, reason error) {
 			n.log.Errorf("Connection lost: %v", reason)
 			dcHandler()
@@ -188,14 +214,14 @@ func (n *NATSStream) ConnectWithContext(ctx context.Context) error {
 
 	var natsSub stan.Subscription
 	if len(n.conf.QueueID) > 0 {
-		natsSub, err = natsConn.QueueSubscribe(
+		natsSub, err = stanConn.QueueSubscribe(
 			n.conf.Subject,
 			n.conf.QueueID,
 			handler,
 			options...,
 		)
 	} else {
-		natsSub, err = natsConn.Subscribe(
+		natsSub, err = stanConn.Subscribe(
 			n.conf.Subject,
 			handler,
 			options...,
@@ -207,6 +233,7 @@ func (n *NATSStream) ConnectWithContext(ctx context.Context) error {
 	}
 
 	n.natsConn = natsConn
+	n.stanConn = stanConn
 	n.natsSub = natsSub
 	n.msgChan = newMsgChan
 	n.log.Infof("Receiving NATS Streaming messages from subject: %v\n", n.conf.Subject)
