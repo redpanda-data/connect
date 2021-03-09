@@ -4,10 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"strings"
 	"sync"
 	"time"
+
+	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"

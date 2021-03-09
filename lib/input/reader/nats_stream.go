@@ -4,12 +4,13 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
-	"github.com/nats-io/nats.go"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
+	"github.com/nats-io/nats.go"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
