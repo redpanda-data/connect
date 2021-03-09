@@ -38,51 +38,6 @@ This processor is scheduled to be removed in Benthos V4`,
 
 //------------------------------------------------------------------------------
 
-func (b *Batch) add(part types.Part) bool {
-	b.sizeTally += len(part.Get())
-	b.parts = append(b.parts, part)
-
-	if !b.triggered && b.count > 0 && len(b.parts) >= b.count {
-		b.triggered = true
-		b.mCountBatch.Incr(1)
-		b.log.Traceln("Batching based on count")
-	}
-	if !b.triggered && b.byteSize > 0 && b.sizeTally >= b.byteSize {
-		b.triggered = true
-		b.mSizeBatch.Incr(1)
-		b.log.Traceln("Batching based on byte_size")
-	}
-	tmpMsg := message.New(nil)
-	tmpMsg.Append(part)
-	if !b.triggered && b.cond.Check(tmpMsg) {
-		b.triggered = true
-		b.mCondBatch.Incr(1)
-		b.log.Traceln("Batching based on condition")
-	}
-
-	return b.triggered || (b.period > 0 && time.Since(b.lastBatch) > b.period)
-}
-
-func (b *Batch) flush() types.Message {
-	var newMsg types.Message
-	if len(b.parts) > 0 {
-		if !b.triggered && b.period > 0 && time.Since(b.lastBatch) > b.period {
-			b.mPeriodBatch.Incr(1)
-			b.log.Traceln("Batching based on period")
-		}
-		newMsg = message.New(nil)
-		newMsg.Append(b.parts...)
-	}
-	b.parts = nil
-	b.sizeTally = 0
-	b.lastBatch = time.Now()
-	b.triggered = false
-
-	return newMsg
-}
-
-//------------------------------------------------------------------------------
-
 // BatchConfig contains configuration fields for the Batch processor.
 type BatchConfig struct {
 	ByteSize  int              `json:"byte_size" yaml:"byte_size"`
@@ -223,6 +178,51 @@ func (b *Batch) CloseAsync() {
 // WaitForClose blocks until the processor has closed down.
 func (b *Batch) WaitForClose(timeout time.Duration) error {
 	return nil
+}
+
+//------------------------------------------------------------------------------
+
+func (b *Batch) add(part types.Part) bool {
+	b.sizeTally += len(part.Get())
+	b.parts = append(b.parts, part)
+
+	if !b.triggered && b.count > 0 && len(b.parts) >= b.count {
+		b.triggered = true
+		b.mCountBatch.Incr(1)
+		b.log.Traceln("Batching based on count")
+	}
+	if !b.triggered && b.byteSize > 0 && b.sizeTally >= b.byteSize {
+		b.triggered = true
+		b.mSizeBatch.Incr(1)
+		b.log.Traceln("Batching based on byte_size")
+	}
+	tmpMsg := message.New(nil)
+	tmpMsg.Append(part)
+	if !b.triggered && b.cond.Check(tmpMsg) {
+		b.triggered = true
+		b.mCondBatch.Incr(1)
+		b.log.Traceln("Batching based on condition")
+	}
+
+	return b.triggered || (b.period > 0 && time.Since(b.lastBatch) > b.period)
+}
+
+func (b *Batch) flush() types.Message {
+	var newMsg types.Message
+	if len(b.parts) > 0 {
+		if !b.triggered && b.period > 0 && time.Since(b.lastBatch) > b.period {
+			b.mPeriodBatch.Incr(1)
+			b.log.Traceln("Batching based on period")
+		}
+		newMsg = message.New(nil)
+		newMsg.Append(b.parts...)
+	}
+	b.parts = nil
+	b.sizeTally = 0
+	b.lastBatch = time.Now()
+	b.triggered = false
+
+	return newMsg
 }
 
 //------------------------------------------------------------------------------
