@@ -2,10 +2,13 @@ package reader
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"strings"
 	"sync"
 	"time"
+
+	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -18,10 +21,11 @@ import (
 
 // NATSConfig contains configuration fields for the NATS input type.
 type NATSConfig struct {
-	URLs          []string `json:"urls" yaml:"urls"`
-	Subject       string   `json:"subject" yaml:"subject"`
-	QueueID       string   `json:"queue" yaml:"queue"`
-	PrefetchCount int      `json:"prefetch_count" yaml:"prefetch_count"`
+	URLs          []string    `json:"urls" yaml:"urls"`
+	Subject       string      `json:"subject" yaml:"subject"`
+	QueueID       string      `json:"queue" yaml:"queue"`
+	PrefetchCount int         `json:"prefetch_count" yaml:"prefetch_count"`
+	TLS           btls.Config `json:"tls" yaml:"tls"`
 }
 
 // NewNATSConfig creates a new NATSConfig with default values.
@@ -31,6 +35,7 @@ func NewNATSConfig() NATSConfig {
 		Subject:       "benthos_messages",
 		QueueID:       "benthos_queue",
 		PrefetchCount: 32,
+		TLS:           btls.NewConfig(),
 	}
 }
 
@@ -49,6 +54,7 @@ type NATS struct {
 	natsSub       *nats.Subscription
 	natsChan      chan *nats.Msg
 	interruptChan chan struct{}
+	tlsConf       *tls.Config
 }
 
 // NewNATS creates a new NATS input type.
@@ -62,6 +68,12 @@ func NewNATS(conf NATSConfig, log log.Modular, stats metrics.Type) (*NATS, error
 	n.urls = strings.Join(conf.URLs, ",")
 	if conf.PrefetchCount < 0 {
 		return nil, errors.New("prefetch count must be greater than or equal to zero")
+	}
+	var err error
+	if conf.TLS.Enabled {
+		if n.tlsConf, err = conf.TLS.Get(); err != nil {
+			return nil, err
+		}
 	}
 
 	return &n, nil
@@ -86,8 +98,13 @@ func (n *NATS) ConnectWithContext(ctx context.Context) error {
 	var natsConn *nats.Conn
 	var natsSub *nats.Subscription
 	var err error
+	var opts []nats.Option
 
-	if natsConn, err = nats.Connect(n.urls); err != nil {
+	if n.tlsConf != nil {
+		opts = append(opts, nats.Secure(n.tlsConf))
+	}
+
+	if natsConn, err = nats.Connect(n.urls, opts...); err != nil {
 		return err
 	}
 	natsChan := make(chan *nats.Msg, n.conf.PrefetchCount)

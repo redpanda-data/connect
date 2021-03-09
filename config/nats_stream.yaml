@@ -18,6 +18,11 @@ input:
     queue: benthos_queue
     start_from_oldest: true
     subject: benthos_messages
+    tls:
+      client_certs: []
+      enabled: false
+      root_cas_file: ""
+      skip_cert_verify: false
     unsubscribe_on_close: false
     urls:
       - nats://127.0.0.1:4222
@@ -34,6 +39,11 @@ output:
     cluster_id: test-cluster
     max_in_flight: 1
     subject: benthos_messages
+    tls:
+      client_certs: []
+      enabled: false
+      root_cas_file: ""
+      skip_cert_verify: false
     urls:
       - nats://127.0.0.1:4222
 resources:

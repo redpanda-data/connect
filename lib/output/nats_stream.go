@@ -6,6 +6,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
 //------------------------------------------------------------------------------
@@ -27,6 +28,7 @@ Publish to a NATS Stream subject.`,
 			docs.FieldCommon("subject", "The subject to publish to."),
 			docs.FieldCommon("client_id", "The client ID to connect with."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			tls.FieldSpec(),
 		},
 		Categories: []Category{
 			CategoryServices,

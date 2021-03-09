@@ -2,10 +2,13 @@ package writer
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
+
+	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
@@ -19,9 +22,10 @@ import (
 
 // NATSConfig contains configuration fields for the NATS output type.
 type NATSConfig struct {
-	URLs        []string `json:"urls" yaml:"urls"`
-	Subject     string   `json:"subject" yaml:"subject"`
-	MaxInFlight int      `json:"max_in_flight" yaml:"max_in_flight"`
+	URLs        []string    `json:"urls" yaml:"urls"`
+	Subject     string      `json:"subject" yaml:"subject"`
+	MaxInFlight int         `json:"max_in_flight" yaml:"max_in_flight"`
+	TLS         btls.Config `json:"tls" yaml:"tls"`
 }
 
 // NewNATSConfig creates a new NATSConfig with default values.
@@ -30,6 +34,7 @@ func NewNATSConfig() NATSConfig {
 		URLs:        []string{nats.DefaultURL},
 		Subject:     "benthos_messages",
 		MaxInFlight: 1,
+		TLS:         btls.NewConfig(),
 	}
 }
 
@@ -45,6 +50,7 @@ type NATS struct {
 	urls       string
 	conf       NATSConfig
 	subjectStr field.Expression
+	tlsConf    *tls.Config
 }
 
 // NewNATS creates a new NATS output type.
@@ -58,6 +64,12 @@ func NewNATS(conf NATSConfig, log log.Modular, stats metrics.Type) (*NATS, error
 		return nil, fmt.Errorf("failed to parse subject expression: %v", err)
 	}
 	n.urls = strings.Join(conf.URLs, ",")
+
+	if conf.TLS.Enabled {
+		if n.tlsConf, err = conf.TLS.Get(); err != nil {
+			return nil, err
+		}
+	}
 
 	return &n, nil
 }
@@ -79,7 +91,16 @@ func (n *NATS) Connect() error {
 	}
 
 	var err error
-	n.natsConn, err = nats.Connect(n.urls)
+	var opts []nats.Option
+
+	if n.tlsConf != nil {
+		opts = append(opts, nats.Secure(n.tlsConf))
+	}
+
+	if n.natsConn, err = nats.Connect(n.urls, opts...); err != nil {
+		return err
+	}
+
 	if err == nil {
 		n.log.Infof("Sending NATS messages to subject: %v\n", n.conf.Subject)
 	}
