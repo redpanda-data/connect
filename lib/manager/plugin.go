@@ -67,7 +67,7 @@ func (p *PluginConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		}
 
 		conf := spec.confConstructor()
-		if err = yaml.Unmarshal(confBytes, conf); err != nil {
+		if err := yaml.Unmarshal(confBytes, conf); err != nil {
 			return err
 		}
 		aliased.Plugin = conf

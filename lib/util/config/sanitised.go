@@ -20,7 +20,7 @@ func SanitizeComponent(conf interface{}) (Sanitised, error) {
 	}
 
 	hashMap := map[string]interface{}{}
-	if err = yaml.Unmarshal(cBytes, &hashMap); err != nil {
+	if err := yaml.Unmarshal(cBytes, &hashMap); err != nil {
 		return nil, err
 	}
 

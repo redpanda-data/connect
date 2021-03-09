@@ -109,7 +109,7 @@ func (a *AzureBlobStorage) uploadBlob(b *storage.Blob, blobType string, message 
 			return err
 		}
 		if !exists {
-			if err = b.PutAppendBlob(nil); err != nil {
+			if err := b.PutAppendBlob(nil); err != nil {
 				return err
 			}
 		}

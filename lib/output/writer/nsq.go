@@ -99,7 +99,7 @@ func (n *NSQ) Connect() error {
 
 	producer.SetLogger(llog.New(ioutil.Discard, "", llog.Flags()), nsq.LogLevelError)
 
-	if err = producer.Ping(); err != nil {
+	if err := producer.Ping(); err != nil {
 		return err
 	}
 	n.producer = producer

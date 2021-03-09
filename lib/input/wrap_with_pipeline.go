@@ -24,7 +24,7 @@ func WrapWithPipeline(procs *int, in Type, pipeConstructor types.PipelineConstru
 		return nil, err
 	}
 
-	if err = pipe.Consume(in.TransactionChan()); err != nil {
+	if err := pipe.Consume(in.TransactionChan()); err != nil {
 		return nil, err
 	}
 	return &WithPipeline{

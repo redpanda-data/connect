@@ -84,7 +84,7 @@ func NewCache(
 		return nil, err
 	}
 
-	if err = client.Connect(context.Background()); err != nil {
+	if err := client.Connect(context.Background()); err != nil {
 		return nil, err
 	}
 

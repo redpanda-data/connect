@@ -67,7 +67,7 @@ func TestProcessorIntegration(t *testing.T) {
 			}
 		}
 
-		if err = mongoClient.Connect(context.Background()); err != nil {
+		if err := mongoClient.Connect(context.Background()); err != nil {
 			return err
 		}
 

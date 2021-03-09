@@ -112,7 +112,7 @@ func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
 	}
 
 	hashMap := map[string]interface{}{}
-	if err = yaml.Unmarshal(cBytes, &hashMap); err != nil {
+	if err := yaml.Unmarshal(cBytes, &hashMap); err != nil {
 		return nil, err
 	}
 

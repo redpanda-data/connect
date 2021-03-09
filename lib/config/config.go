@@ -226,7 +226,7 @@ func Read(path string, replaceEnvs bool, config *Type) ([]string, error) {
 		return nil, err
 	}
 
-	if err = yaml.Unmarshal(configBytes, config); err != nil {
+	if err := yaml.Unmarshal(configBytes, config); err != nil {
 		return nil, err
 	}
 

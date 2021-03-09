@@ -84,7 +84,7 @@ func (w *Websocket) Connect() error {
 		return err
 	}
 
-	if err = w.conf.Sign(&http.Request{
+	if err := w.conf.Sign(&http.Request{
 		URL:    purl,
 		Header: headers,
 	}); err != nil {

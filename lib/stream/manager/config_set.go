@@ -25,7 +25,7 @@ func (c ConfigSet) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		if err != nil {
 			return err
 		}
-		if err = yaml.Unmarshal(confBytes, &conf); err != nil {
+		if err := yaml.Unmarshal(confBytes, &conf); err != nil {
 			return err
 		}
 		c[k] = conf

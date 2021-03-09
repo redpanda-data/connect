@@ -46,7 +46,7 @@ func ReadWithJSONPointersLinted(path string, replaceEnvs bool) ([]byte, []string
 	}
 
 	var gen interface{}
-	if err = yaml.Unmarshal(configBytes, &gen); err != nil {
+	if err := yaml.Unmarshal(configBytes, &gen); err != nil {
 		return nil, lints, err
 	}
 
@@ -172,7 +172,7 @@ func expandRefVal(path string, level int, root, v interface{}) (interface{}, err
 		configBytes = text.ReplaceEnvVariables(configBytes)
 
 		var gen interface{}
-		if err = yaml.Unmarshal(configBytes, &gen); err != nil {
+		if err := yaml.Unmarshal(configBytes, &gen); err != nil {
 			return nil, err
 		}
 

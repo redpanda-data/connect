@@ -147,7 +147,7 @@ func (s *Subprocess) ConnectWithContext(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err = cmd.Start(); err != nil {
+	if err := cmd.Start(); err != nil {
 		return err
 	}
 

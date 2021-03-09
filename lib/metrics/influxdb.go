@@ -159,7 +159,7 @@ func NewInfluxDB(config Config, opts ...func(Type)) (Type, error) {
 		return nil, fmt.Errorf("failed to parse timeout interval: %s", err)
 	}
 
-	if err = i.makeClient(); err != nil {
+	if err := i.makeClient(); err != nil {
 		return nil, err
 	}
 

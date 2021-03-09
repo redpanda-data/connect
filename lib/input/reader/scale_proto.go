@@ -171,7 +171,7 @@ func (s *ScaleProto) ConnectWithContext(ctx context.Context) error {
 	}
 
 	for _, filter := range s.conf.SubFilters {
-		if err = socket.SetOption(mangos.OptionSubscribe, []byte(filter)); err != nil {
+		if err := socket.SetOption(mangos.OptionSubscribe, []byte(filter)); err != nil {
 			return err
 		}
 	}

@@ -219,7 +219,7 @@ func (d *Dynamic) handlePOSTInput(w http.ResponseWriter, r *http.Request) error 
 		return nil
 	}
 
-	if err = d.onUpdate(id, reqBytes); err != nil {
+	if err := d.onUpdate(id, reqBytes); err != nil {
 		return err
 	}
 

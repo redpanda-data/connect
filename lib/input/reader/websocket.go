@@ -93,7 +93,7 @@ func (w *Websocket) ConnectWithContext(ctx context.Context) error {
 		return err
 	}
 
-	if err = w.conf.Sign(&http.Request{
+	if err := w.conf.Sign(&http.Request{
 		URL:    purl,
 		Header: headers,
 	}); err != nil {
@@ -106,7 +106,7 @@ func (w *Websocket) ConnectWithContext(ctx context.Context) error {
 	}
 
 	if len(w.conf.OpenMsg) > 0 {
-		if err = client.WriteMessage(
+		if err := client.WriteMessage(
 			websocket.BinaryMessage, []byte(w.conf.OpenMsg),
 		); err != nil {
 			return err

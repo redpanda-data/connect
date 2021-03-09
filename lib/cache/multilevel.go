@@ -147,11 +147,11 @@ func (l *Multilevel) SetWithTTL(key string, value []byte, ttl *time.Duration) er
 			return fmt.Errorf("unable to access cache '%v': %v", name, err)
 		}
 		if cttl, ok := c.(types.CacheWithTTL); ok {
-			if err = cttl.SetWithTTL(key, value, ttl); err != nil {
+			if err := cttl.SetWithTTL(key, value, ttl); err != nil {
 				return err
 			}
 		} else {
-			if err = c.Set(key, value); err != nil {
+			if err := c.Set(key, value); err != nil {
 				return err
 			}
 		}
@@ -173,7 +173,7 @@ func (l *Multilevel) SetMultiWithTTL(items map[string]types.CacheTTLItem) error 
 			return fmt.Errorf("unable to access cache '%v': %v", name, err)
 		}
 		if cttl, ok := c.(types.CacheWithTTL); ok {
-			if err = cttl.SetMultiWithTTL(items); err != nil {
+			if err := cttl.SetMultiWithTTL(items); err != nil {
 				return err
 			}
 		} else {
@@ -181,7 +181,7 @@ func (l *Multilevel) SetMultiWithTTL(items map[string]types.CacheTTLItem) error 
 			for k, v := range items {
 				sitems[k] = v.Value
 			}
-			if err = c.SetMulti(sitems); err != nil {
+			if err := c.SetMulti(sitems); err != nil {
 				return err
 			}
 		}
@@ -223,11 +223,11 @@ func (l *Multilevel) AddWithTTL(key string, value []byte, ttl *time.Duration) er
 	}
 
 	if cttl, ok := c.(types.CacheWithTTL); ok {
-		if err = cttl.AddWithTTL(key, value, ttl); err != nil {
+		if err := cttl.AddWithTTL(key, value, ttl); err != nil {
 			return err
 		}
 	} else {
-		if err = c.Add(key, value); err != nil {
+		if err := c.Add(key, value); err != nil {
 			return err
 		}
 	}
@@ -237,11 +237,11 @@ func (l *Multilevel) AddWithTTL(key string, value []byte, ttl *time.Duration) er
 			return fmt.Errorf("unable to access cache '%v': %v", l.caches[i], err)
 		}
 		if cttl, ok := c.(types.CacheWithTTL); ok {
-			if err = cttl.AddWithTTL(key, value, ttl); err != nil {
+			if err := cttl.AddWithTTL(key, value, ttl); err != nil {
 				return err
 			}
 		} else {
-			if err = c.Set(key, value); err != nil {
+			if err := c.Set(key, value); err != nil {
 				return err
 			}
 		}

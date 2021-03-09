@@ -351,7 +351,7 @@ func (s *subprocWrapper) start() error {
 	if cmdStderr, err = cmd.StderrPipe(); err != nil {
 		return err
 	}
-	if err = cmd.Start(); err != nil {
+	if err := cmd.Start(); err != nil {
 		return err
 	}
 
