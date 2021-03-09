@@ -338,7 +338,7 @@ func initInput(t *testing.T, env *testEnvironment) types.Input {
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	mgr, err := manager.New(s.Manager, nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(s.Manager, nil, env.log, env.stats)
 	require.NoError(t, err)
 
 	input, err := input.New(s.Input, mgr, env.log, env.stats)
@@ -365,7 +365,7 @@ func initOutput(t *testing.T, trans <-chan types.Transaction, env *testEnvironme
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	mgr, err := manager.New(s.Manager, nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(s.Manager, nil, env.log, env.stats)
 	require.NoError(t, err)
 
 	output, err := output.New(s.Output, mgr, env.log, env.stats)

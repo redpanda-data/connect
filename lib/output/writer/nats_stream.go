@@ -101,25 +101,29 @@ func (n *NATSStream) Connect() error {
 	}
 
 	var opts []nats.Option
-	var err error
-
 	if n.tlsConf != nil {
 		opts = append(opts, nats.Secure(n.tlsConf))
 	}
 
-	if n.natsConn, err = nats.Connect(n.urls, opts...); err != nil {
+	natsConn, err := nats.Connect(n.urls, opts...)
+	if err != nil {
 		return err
 	}
 
-	n.stanConn, err = stan.Connect(
+	stanConn, err := stan.Connect(
 		n.conf.ClusterID,
 		n.conf.ClientID,
-		stan.NatsConn(n.natsConn),
+		stan.NatsConn(natsConn),
 	)
-	if err == nil {
-		n.log.Infof("Sending NATS messages to subject: %v\n", n.conf.Subject)
+	if err != nil {
+		natsConn.Close()
+		return err
 	}
-	return err
+
+	n.stanConn = stanConn
+	n.natsConn = natsConn
+	n.log.Infof("Sending NATS messages to subject: %v\n", n.conf.Subject)
+	return nil
 }
 
 // WriteWithContext attempts to write a message.
@@ -130,7 +134,7 @@ func (n *NATSStream) WriteWithContext(ctx context.Context, msg types.Message) er
 // Write attempts to write a message.
 func (n *NATSStream) Write(msg types.Message) error {
 	n.connMut.RLock()
-	conn := n.natsConn
+	conn := n.stanConn
 	n.connMut.RUnlock()
 
 	if conn == nil {
@@ -142,6 +146,8 @@ func (n *NATSStream) Write(msg types.Message) error {
 		if err == stan.ErrConnectionClosed {
 			conn.Close()
 			n.connMut.Lock()
+			n.stanConn = nil
+			n.natsConn.Close()
 			n.natsConn = nil
 			n.connMut.Unlock()
 			return types.ErrNotConnected
@@ -156,6 +162,10 @@ func (n *NATSStream) CloseAsync() {
 	if n.natsConn != nil {
 		n.natsConn.Close()
 		n.natsConn = nil
+	}
+	if n.stanConn != nil {
+		n.stanConn.Close()
+		n.stanConn = nil
 	}
 	n.connMut.Unlock()
 }

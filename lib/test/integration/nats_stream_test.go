@@ -69,7 +69,6 @@ input:
 		testOptSleepAfterInput(100*time.Millisecond),
 		testOptSleepAfterOutput(100*time.Millisecond),
 		testOptPort(resource.GetPort("4222/tcp")),
-		testOptTimeout(time.Second*60),
 	)
 	t.Run("with max in flight", func(t *testing.T) {
 		t.Parallel()

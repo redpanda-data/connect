@@ -132,9 +132,11 @@ func (n *NATSStream) disconnect() {
 			n.natsSub.Unsubscribe()
 		}
 		n.natsConn.Close()
+		n.stanConn.Close()
 
 		n.natsSub = nil
 		n.natsConn = nil
+		n.stanConn = nil
 	}
 }
 
@@ -153,15 +155,13 @@ func (n *NATSStream) ConnectWithContext(ctx context.Context) error {
 		return nil
 	}
 
-	var natsConn *nats.Conn
-	var err error
 	var opts []nats.Option
-
 	if n.tlsConf != nil {
 		opts = append(opts, nats.Secure(n.tlsConf))
 	}
 
-	if natsConn, err = nats.Connect(n.urls, opts...); err != nil {
+	natsConn, err := nats.Connect(n.urls, opts...)
+	if err != nil {
 		return err
 	}
 
