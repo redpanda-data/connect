@@ -30,18 +30,18 @@ import (
 func init() {
 	Constructors[TypeAWSS3] = TypeSpec{
 		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-			r, err := newAmazonS3(conf.AWSS3, log, stats)
-			if err != nil {
+			var r reader.Async
+			var err error
+			if r, err = newAmazonS3(conf.AWSS3, log, stats); err != nil {
 				return nil, err
 			}
-			return NewAsyncReader(
-				TypeAWSS3,
-				true,
-				reader.NewAsyncBundleUnacks(
-					reader.NewAsyncPreserver(r),
-				),
-				log, stats,
-			)
+			// If we're not pulling events directly from an SQS queue then
+			// there's no concept of propagating nacks upstream, therefore wrap
+			// our reader within a preserver in order to retry indefinitely.
+			if len(conf.AWSS3.SQS.URL) == 0 {
+				r = reader.NewAsyncPreserver(r)
+			}
+			return NewAsyncReader(TypeAWSS3, false, r, log, stats)
 		}),
 		Status: docs.StatusStable,
 		Summary: `
