@@ -72,8 +72,8 @@ input:
 	)
 	suite.Run(
 		t, template,
-		testOptSleepAfterInput(100*time.Millisecond),
-		testOptSleepAfterOutput(100*time.Millisecond),
+		testOptSleepAfterInput(500*time.Millisecond),
+		testOptSleepAfterOutput(500*time.Millisecond),
 		testOptPort(resource.GetPort("5672/tcp")),
 		testOptVarOne("false"),
 	)
@@ -81,8 +81,8 @@ input:
 		t.Parallel()
 		suite.Run(
 			t, template,
-			testOptSleepAfterInput(100*time.Millisecond),
-			testOptSleepAfterOutput(100*time.Millisecond),
+			testOptSleepAfterInput(500*time.Millisecond),
+			testOptSleepAfterOutput(500*time.Millisecond),
 			testOptPort(resource.GetPort("5672/tcp")),
 			testOptVarOne("false"),
 			testOptMaxInFlight(10),

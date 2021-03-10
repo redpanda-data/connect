@@ -68,16 +68,16 @@ input:
 	)
 	suite.Run(
 		t, template,
-		testOptSleepAfterInput(100*time.Millisecond),
-		testOptSleepAfterOutput(100*time.Millisecond),
+		testOptSleepAfterInput(500*time.Millisecond),
+		testOptSleepAfterOutput(500*time.Millisecond),
 		testOptPort(resource.GetPort("6650/tcp")),
 	)
 	t.Run("with max in flight", func(t *testing.T) {
 		t.Parallel()
 		suite.Run(
 			t, template,
-			testOptSleepAfterInput(100*time.Millisecond),
-			testOptSleepAfterOutput(100*time.Millisecond),
+			testOptSleepAfterInput(500*time.Millisecond),
+			testOptSleepAfterOutput(500*time.Millisecond),
 			testOptPort(resource.GetPort("6650/tcp")),
 			testOptMaxInFlight(10),
 		)
