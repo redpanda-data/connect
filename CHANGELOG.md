@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 
 - Corrected ack behaviour for the beta `azure_queue_storage` input.
 - Bloblang compressed arithmetic expressions with field names (`foo+bar`) now correctly parse.
+- Fixed throughput issues with the `aws_sqs` input.
 
 ### Changed
 

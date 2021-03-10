@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -17,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/cenkalti/backoff/v4"
 )
 
 //------------------------------------------------------------------------------
@@ -91,8 +93,10 @@ type awsSQS struct {
 	session *session.Session
 	sqs     *sqs.SQS
 
-	pending    []*sqs.Message
-	pendingMut sync.Mutex
+	messagesChan     chan *sqs.Message
+	ackMessagesChan  chan sqsMessageHandle
+	nackMessagesChan chan sqsMessageHandle
+	closeSignal      *shutdown.Signaller
 
 	log   log.Modular
 	stats metrics.Type
@@ -100,9 +104,13 @@ type awsSQS struct {
 
 func newAWSSQS(conf AWSSQSConfig, log log.Modular, stats metrics.Type) (*awsSQS, error) {
 	return &awsSQS{
-		conf:  conf,
-		log:   log,
-		stats: stats,
+		conf:             conf,
+		log:              log,
+		stats:            stats,
+		messagesChan:     make(chan *sqs.Message),
+		ackMessagesChan:  make(chan sqsMessageHandle),
+		nackMessagesChan: make(chan sqsMessageHandle),
+		closeSignal:      shutdown.NewSignaller(),
 	}, nil
 }
 
@@ -121,7 +129,211 @@ func (a *awsSQS) ConnectWithContext(ctx context.Context) error {
 	a.sqs = sqs.New(sess)
 	a.session = sess
 
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go a.readLoop(&wg)
+	go a.ackLoop(&wg)
+	go func() {
+		wg.Wait()
+		a.closeSignal.ShutdownComplete()
+	}()
+
 	a.log.Infof("Receiving Amazon SQS messages from URL: %v\n", a.conf.URL)
+	return nil
+}
+
+func (a *awsSQS) ackLoop(wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	var pendingAcks []sqsMessageHandle
+	var pendingNacks []sqsMessageHandle
+
+	flushAcks := func() {
+		tmpAcks := pendingAcks
+		pendingAcks = nil
+		if len(tmpAcks) == 0 {
+			return
+		}
+
+		ctx, done := a.closeSignal.CloseNowCtx(context.Background())
+		defer done()
+		if err := a.deleteMessages(ctx, tmpAcks...); err != nil {
+			a.log.Errorf("Failed to delete messages: %v", err)
+		}
+	}
+
+	flushNacks := func() {
+		tmpNacks := pendingNacks
+		pendingNacks = nil
+		if len(tmpNacks) == 0 {
+			return
+		}
+
+		ctx, done := a.closeSignal.CloseNowCtx(context.Background())
+		defer done()
+		if err := a.resetMessages(ctx, tmpNacks...); err != nil {
+			a.log.Errorf("Failed to reset the visibility timeout of messages: %v", err)
+		}
+	}
+
+	flushTimer := time.NewTicker(time.Second)
+	defer flushTimer.Stop()
+
+ackLoop:
+	for {
+		select {
+		case h := <-a.ackMessagesChan:
+			pendingAcks = append(pendingAcks, h)
+			if len(pendingAcks) >= 10 {
+				flushAcks()
+			}
+		case h := <-a.nackMessagesChan:
+			pendingNacks = append(pendingNacks, h)
+			if len(pendingNacks) >= 10 {
+				flushNacks()
+			}
+		case <-flushTimer.C:
+			flushAcks()
+			flushNacks()
+		case <-a.closeSignal.CloseAtLeisureChan():
+			break ackLoop
+		}
+	}
+
+	flushAcks()
+	flushNacks()
+}
+
+func (a *awsSQS) readLoop(wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	var pendingMsgs []*sqs.Message
+	defer func() {
+		if len(pendingMsgs) > 0 {
+			tmpNacks := make([]sqsMessageHandle, 0, len(pendingMsgs))
+			for _, m := range pendingMsgs {
+				if m.MessageId == nil || m.ReceiptHandle == nil {
+					continue
+				}
+				tmpNacks = append(tmpNacks, sqsMessageHandle{
+					id:            *m.MessageId,
+					receiptHandle: *m.ReceiptHandle,
+				})
+			}
+			ctx, done := a.closeSignal.CloseNowCtx(context.Background())
+			defer done()
+			if err := a.resetMessages(ctx, tmpNacks...); err != nil {
+				a.log.Errorf("Failed to reset visibility timeout for pending messages: %v", err)
+			}
+		}
+	}()
+
+	backoff := backoff.NewExponentialBackOff()
+	backoff.InitialInterval = time.Millisecond
+	backoff.MaxInterval = time.Second
+
+	getMsgs := func() {
+		ctx, done := a.closeSignal.CloseAtLeisureCtx(context.Background())
+		defer done()
+		res, err := a.sqs.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
+			QueueUrl:              aws.String(a.conf.URL),
+			MaxNumberOfMessages:   aws.Int64(10),
+			AttributeNames:        []*string{aws.String("All")},
+			MessageAttributeNames: []*string{aws.String("All")},
+		})
+		if err != nil {
+			if aerr, ok := err.(awserr.Error); !ok || aerr.Code() != request.CanceledErrorCode {
+				a.log.Errorf("Failed to pull new SQS messages: %v", aerr)
+			}
+			return
+		}
+		if len(res.Messages) > 0 {
+			pendingMsgs = append(pendingMsgs, res.Messages...)
+			backoff.Reset()
+		}
+	}
+
+	for {
+		if len(pendingMsgs) == 0 {
+			getMsgs()
+			if len(pendingMsgs) == 0 {
+				select {
+				case <-time.After(backoff.NextBackOff()):
+				case <-a.closeSignal.CloseAtLeisureChan():
+					return
+				}
+				continue
+			}
+		}
+		select {
+		case a.messagesChan <- pendingMsgs[0]:
+			pendingMsgs = pendingMsgs[1:]
+		case <-a.closeSignal.CloseAtLeisureChan():
+			return
+		}
+	}
+}
+
+type sqsMessageHandle struct {
+	id, receiptHandle string
+}
+
+func (a *awsSQS) deleteMessages(ctx context.Context, msgs ...sqsMessageHandle) error {
+	for len(msgs) > 0 {
+		input := sqs.DeleteMessageBatchInput{
+			QueueUrl: aws.String(a.conf.URL),
+			Entries:  []*sqs.DeleteMessageBatchRequestEntry{},
+		}
+
+		for _, msg := range msgs {
+			input.Entries = append(input.Entries, &sqs.DeleteMessageBatchRequestEntry{
+				Id:            aws.String(msg.id),
+				ReceiptHandle: aws.String(msg.receiptHandle),
+			})
+			if len(input.Entries) == 10 {
+				break
+			}
+		}
+
+		msgs = msgs[len(input.Entries):]
+		response, err := a.sqs.DeleteMessageBatchWithContext(ctx, &input)
+		if err != nil {
+			return err
+		}
+		for _, fail := range response.Failed {
+			a.log.Errorf("Failed to delete consumed SQS message '%v', response code: %v\n", *fail.Id, *fail.Code)
+		}
+	}
+	return nil
+}
+
+func (a *awsSQS) resetMessages(ctx context.Context, msgs ...sqsMessageHandle) error {
+	for len(msgs) > 0 {
+		input := sqs.ChangeMessageVisibilityBatchInput{
+			QueueUrl: aws.String(a.conf.URL),
+			Entries:  []*sqs.ChangeMessageVisibilityBatchRequestEntry{},
+		}
+
+		for _, msg := range msgs {
+			input.Entries = append(input.Entries, &sqs.ChangeMessageVisibilityBatchRequestEntry{
+				Id:                aws.String(msg.id),
+				ReceiptHandle:     aws.String(msg.receiptHandle),
+				VisibilityTimeout: aws.Int64(0),
+			})
+			if len(input.Entries) == 10 {
+				break
+			}
+		}
+
+		msgs = msgs[len(input.Entries):]
+		response, err := a.sqs.ChangeMessageVisibilityBatchWithContext(ctx, &input)
+		if err != nil {
+			return err
+		}
+		for _, fail := range response.Failed {
+			a.log.Errorf("Failed to delete consumed SQS message '%v', response code: %v\n", *fail.Id, *fail.Code)
+		}
+	}
 	return nil
 }
 
@@ -146,34 +358,16 @@ func (a *awsSQS) ReadWithContext(ctx context.Context) (types.Message, reader.Asy
 	}
 
 	var next *sqs.Message
-
-	a.pendingMut.Lock()
-	defer a.pendingMut.Unlock()
-
-	if len(a.pending) > 0 {
-		next = a.pending[0]
-		a.pending = a.pending[1:]
-	} else {
-		output, err := a.sqs.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
-			QueueUrl:              aws.String(a.conf.URL),
-			MaxNumberOfMessages:   aws.Int64(10),
-			AttributeNames:        []*string{aws.String("All")},
-			MessageAttributeNames: []*string{aws.String("All")},
-		})
-		if err != nil {
-			if aerr, ok := err.(awserr.Error); ok && aerr.Code() == request.CanceledErrorCode {
-				return nil, nil, types.ErrTimeout
-			}
-			return nil, nil, err
+	var open bool
+	select {
+	case next, open = <-a.messagesChan:
+		if !open {
+			return nil, nil, types.ErrTypeClosed
 		}
-
-		if len(output.Messages) > 0 {
-			next = output.Messages[0]
-			a.pending = output.Messages[1:]
-		}
-	}
-	if next == nil {
-		return nil, nil, types.ErrTimeout
+	case <-a.closeSignal.CloseAtLeisureChan():
+		return nil, nil, types.ErrTypeClosed
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
 	}
 
 	msg := message.New(nil)
@@ -186,36 +380,37 @@ func (a *awsSQS) ReadWithContext(ctx context.Context) (types.Message, reader.Asy
 		return nil, nil, types.ErrTimeout
 	}
 
+	mHandle := sqsMessageHandle{
+		id: *next.MessageId,
+	}
+	if next.ReceiptHandle != nil {
+		mHandle.receiptHandle = *next.ReceiptHandle
+	}
 	return msg, func(rctx context.Context, res types.Response) error {
+		if mHandle.receiptHandle == "" {
+			return nil
+		}
+
 		if res.Error() == nil {
-			if !a.conf.DeleteMessage || next.ReceiptHandle == nil {
+			if !a.conf.DeleteMessage {
 				return nil
 			}
-			_, serr := a.sqs.DeleteMessageWithContext(rctx, &sqs.DeleteMessageInput{
-				QueueUrl:      aws.String(a.conf.URL),
-				ReceiptHandle: aws.String(*next.ReceiptHandle),
-			})
-			if serr != nil {
-				if aerr, ok := serr.(awserr.Error); !ok && aerr.Code() != request.CanceledErrorCode {
-					a.log.Errorf("Failed to delete consumed SQS messages: %v\n", serr)
-				}
-				return serr
+			select {
+			case <-rctx.Done():
+				return rctx.Err()
+			case <-a.closeSignal.CloseAtLeisureChan():
+				return a.deleteMessages(rctx, mHandle)
+			case a.ackMessagesChan <- mHandle:
 			}
 			return nil
 		}
-		if next.ReceiptHandle == nil {
-			return nil
-		}
-		_, serr := a.sqs.ChangeMessageVisibilityWithContext(rctx, &sqs.ChangeMessageVisibilityInput{
-			QueueUrl:          aws.String(a.conf.URL),
-			ReceiptHandle:     aws.String(*next.ReceiptHandle),
-			VisibilityTimeout: aws.Int64(0),
-		})
-		if serr != nil {
-			if aerr, ok := serr.(awserr.Error); !ok && aerr.Code() != request.CanceledErrorCode {
-				a.log.Errorf("Failed to change consumed SQS message visibility: %v\n", serr)
-			}
-			return serr
+
+		select {
+		case <-rctx.Done():
+			return rctx.Err()
+		case <-a.closeSignal.CloseAtLeisureChan():
+			return a.resetMessages(rctx, mHandle)
+		case a.nackMessagesChan <- mHandle:
 		}
 		return nil
 	}, nil
@@ -223,27 +418,24 @@ func (a *awsSQS) ReadWithContext(ctx context.Context) (types.Message, reader.Asy
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.
 func (a *awsSQS) CloseAsync() {
-	go func() {
-		a.pendingMut.Lock()
-		defer a.pendingMut.Unlock()
-
-		for _, next := range a.pending {
-			_, serr := a.sqs.ChangeMessageVisibility(&sqs.ChangeMessageVisibilityInput{
-				QueueUrl:          aws.String(a.conf.URL),
-				ReceiptHandle:     aws.String(*next.ReceiptHandle),
-				VisibilityTimeout: aws.Int64(0),
-			})
-			if serr != nil {
-				if aerr, ok := serr.(awserr.Error); !ok && aerr.Code() != request.CanceledErrorCode {
-					a.log.Errorf("Failed to change consumed SQS message visibility: %v\n", serr)
-				}
-			}
-		}
-	}()
+	a.closeSignal.ShouldCloseAtLeisure()
 }
 
 // WaitForClose will block until either the reader is closed or a specified
 // timeout occurs.
-func (a *awsSQS) WaitForClose(time.Duration) error {
-	return nil
+func (a *awsSQS) WaitForClose(tout time.Duration) error {
+	go func() {
+		closeNowAt := tout - time.Second
+		if closeNowAt < time.Second {
+			closeNowAt = time.Second
+		}
+		<-time.After(closeNowAt)
+		a.closeSignal.ShouldCloseNow()
+	}()
+	select {
+	case <-time.After(tout):
+		return types.ErrTimeout
+	case <-a.closeSignal.HasClosedChan():
+		return nil
+	}
 }
