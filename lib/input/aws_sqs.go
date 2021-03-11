@@ -418,7 +418,7 @@ func (a *awsSQS) ReadWithContext(ctx context.Context) (types.Message, reader.Asy
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.
 func (a *awsSQS) CloseAsync() {
-	a.closeSignal.ShouldCloseAtLeisure()
+	a.closeSignal.CloseAtLeisure()
 }
 
 // WaitForClose will block until either the reader is closed or a specified
@@ -430,7 +430,7 @@ func (a *awsSQS) WaitForClose(tout time.Duration) error {
 			closeNowAt = time.Second
 		}
 		<-time.After(closeNowAt)
-		a.closeSignal.ShouldCloseNow()
+		a.closeSignal.CloseNow()
 	}()
 	select {
 	case <-time.After(tout):

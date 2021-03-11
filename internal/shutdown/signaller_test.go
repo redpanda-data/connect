@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func assertOpen(t *testing.T, c <-chan struct{}) {
@@ -26,42 +28,76 @@ func assertClosed(t *testing.T, c <-chan struct{}) {
 
 func TestSignallerNotClosed(t *testing.T) {
 	s := NewSignaller()
+
 	assertOpen(t, s.CloseAtLeisureChan())
+	assert.False(t, s.ShouldCloseAtLeisure())
+
 	assertOpen(t, s.CloseNowChan())
+	assert.False(t, s.ShouldCloseNow())
+
 	assertOpen(t, s.HasClosedChan())
+	assert.False(t, s.HasClosed())
 
 	s.ShutdownComplete()
+
 	assertOpen(t, s.CloseAtLeisureChan())
+	assert.False(t, s.ShouldCloseAtLeisure())
+
 	assertOpen(t, s.CloseNowChan())
+	assert.False(t, s.ShouldCloseNow())
+
 	assertClosed(t, s.HasClosedChan())
+	assert.True(t, s.HasClosed())
 }
 
 func TestSignallerAtLeisure(t *testing.T) {
 	s := NewSignaller()
-	s.ShouldCloseAtLeisure()
+	s.CloseAtLeisure()
 
 	assertClosed(t, s.CloseAtLeisureChan())
+	assert.True(t, s.ShouldCloseAtLeisure())
+
 	assertOpen(t, s.CloseNowChan())
+	assert.False(t, s.ShouldCloseNow())
+
 	assertOpen(t, s.HasClosedChan())
+	assert.False(t, s.HasClosed())
 
 	s.ShutdownComplete()
+
 	assertClosed(t, s.CloseAtLeisureChan())
+	assert.True(t, s.ShouldCloseAtLeisure())
+
 	assertOpen(t, s.CloseNowChan())
+	assert.False(t, s.ShouldCloseNow())
+
 	assertClosed(t, s.HasClosedChan())
+	assert.True(t, s.HasClosed())
 }
 
 func TestSignallerNow(t *testing.T) {
 	s := NewSignaller()
-	s.ShouldCloseNow()
+	s.CloseNow()
 
 	assertClosed(t, s.CloseAtLeisureChan())
+	assert.True(t, s.ShouldCloseAtLeisure())
+
 	assertClosed(t, s.CloseNowChan())
+	assert.True(t, s.ShouldCloseNow())
+
 	assertOpen(t, s.HasClosedChan())
+	assert.False(t, s.HasClosed())
 
 	s.ShutdownComplete()
+
 	assertClosed(t, s.CloseAtLeisureChan())
+	assert.True(t, s.ShouldCloseAtLeisure())
+
 	assertClosed(t, s.CloseNowChan())
+	assert.True(t, s.ShouldCloseNow())
+
 	assertClosed(t, s.HasClosedChan())
+	assert.True(t, s.HasClosed())
 }
 
 func TestSignallerAtLeisureCtx(t *testing.T) {
@@ -87,7 +123,7 @@ func TestSignallerAtLeisureCtx(t *testing.T) {
 	inCtx, inDone = context.WithCancel(context.Background())
 	ctx, done = s.CloseAtLeisureCtx(inCtx)
 	assertOpen(t, ctx.Done())
-	s.ShouldCloseAtLeisure()
+	s.CloseAtLeisure()
 	assertClosed(t, ctx.Done())
 	done()
 	inDone()
@@ -96,7 +132,7 @@ func TestSignallerAtLeisureCtx(t *testing.T) {
 	inCtx, inDone = context.WithCancel(context.Background())
 	ctx, done = s.CloseAtLeisureCtx(inCtx)
 	assertOpen(t, ctx.Done())
-	s.ShouldCloseNow()
+	s.CloseNow()
 	assertClosed(t, ctx.Done())
 	done()
 	inDone()
@@ -125,7 +161,7 @@ func TestSignallerNowCtx(t *testing.T) {
 	inCtx, inDone = context.WithCancel(context.Background())
 	ctx, done = s.CloseNowCtx(inCtx)
 	assertOpen(t, ctx.Done())
-	s.ShouldCloseAtLeisure()
+	s.CloseAtLeisure()
 	assertOpen(t, ctx.Done())
 	done()
 	assertClosed(t, ctx.Done())
@@ -135,7 +171,7 @@ func TestSignallerNowCtx(t *testing.T) {
 	inCtx, inDone = context.WithCancel(context.Background())
 	ctx, done = s.CloseNowCtx(inCtx)
 	assertOpen(t, ctx.Done())
-	s.ShouldCloseNow()
+	s.CloseNow()
 	assertClosed(t, ctx.Done())
 	done()
 	inDone()

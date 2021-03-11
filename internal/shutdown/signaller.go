@@ -40,19 +40,19 @@ func NewSignaller() *Signaller {
 	}
 }
 
-// ShouldCloseAtLeisure signals to the owner of this Signaller that it should
+// CloseAtLeisure signals to the owner of this Signaller that it should
 // terminate at its own leisure, meaning it's okay to complete any tasks that
 // are in progress but no new work should be started.
-func (s *Signaller) ShouldCloseAtLeisure() {
+func (s *Signaller) CloseAtLeisure() {
 	s.closeAtLeisureOnce.Do(func() {
 		close(s.closeAtLeisureChan)
 	})
 }
 
-// ShouldCloseNow signals to the owner of this Signaller that it should
-// terminate right now regardless of any in progress tasks.
-func (s *Signaller) ShouldCloseNow() {
-	s.ShouldCloseAtLeisure()
+// CloseNow signals to the owner of this Signaller that it should terminate
+// right now regardless of any in progress tasks.
+func (s *Signaller) CloseNow() {
+	s.CloseAtLeisure()
 	s.closeNowOnce.Do(func() {
 		close(s.closeNowChan)
 	})
@@ -67,6 +67,17 @@ func (s *Signaller) ShutdownComplete() {
 }
 
 //------------------------------------------------------------------------------
+
+// ShouldCloseAtLeisure returns true if the signaller has received the signal to
+// shut down at leisure or immediately.
+func (s *Signaller) ShouldCloseAtLeisure() bool {
+	select {
+	case <-s.CloseAtLeisureChan():
+		return true
+	default:
+	}
+	return false
+}
 
 // CloseAtLeisureChan returns a channel that will be closed when the signal to
 // shut down either at leisure or immediately has been made.
@@ -90,6 +101,17 @@ func (s *Signaller) CloseAtLeisureCtx(ctx context.Context) (context.Context, con
 	return ctx, cancel
 }
 
+// ShouldCloseNow returns true if the signaller has received the signal to shut
+// down immediately.
+func (s *Signaller) ShouldCloseNow() bool {
+	select {
+	case <-s.CloseNowChan():
+		return true
+	default:
+	}
+	return false
+}
+
 // CloseNowChan returns a channel that will be closed when the signal to shut
 // down immediately has been made.
 func (s *Signaller) CloseNowChan() <-chan struct{} {
@@ -110,6 +132,17 @@ func (s *Signaller) CloseNowCtx(ctx context.Context) (context.Context, context.C
 		cancel()
 	}()
 	return ctx, cancel
+}
+
+// HasClosed returns true if the signaller has received the signal that the
+// component has terminated.
+func (s *Signaller) HasClosed() bool {
+	select {
+	case <-s.HasClosedChan():
+		return true
+	default:
+	}
+	return false
 }
 
 // HasClosedChan returns a channel that will be closed when the signal that the

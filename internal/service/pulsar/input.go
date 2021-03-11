@@ -8,6 +8,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -70,7 +71,8 @@ type pulsarReader struct {
 	stats metrics.Type
 	log   log.Modular
 
-	m sync.RWMutex
+	m       sync.RWMutex
+	shutSig *shutdown.Signaller
 }
 
 func newPulsarReader(conf input.PulsarConfig, log log.Modular, stats metrics.Type) (*pulsarReader, error) {
@@ -84,9 +86,10 @@ func newPulsarReader(conf input.PulsarConfig, log log.Modular, stats metrics.Typ
 		return nil, errors.New("field subscription_name must not be empty")
 	}
 	p := pulsarReader{
-		conf:  conf,
-		stats: stats,
-		log:   log,
+		conf:    conf,
+		stats:   stats,
+		log:     log,
+		shutSig: shutdown.NewSignaller(),
 	}
 	return &p, nil
 }
@@ -147,6 +150,9 @@ func (p *pulsarReader) disconnect(ctx context.Context) error {
 	p.consumer = nil
 	p.client = nil
 
+	if p.shutSig.ShouldCloseAtLeisure() {
+		p.shutSig.ShutdownComplete()
+	}
 	return nil
 }
 
@@ -212,11 +218,17 @@ func (p *pulsarReader) ReadWithContext(ctx context.Context) (types.Message, read
 
 // CloseAsync shuts down the Pulsar input and stops processing requests.
 func (p *pulsarReader) CloseAsync() {
-	p.disconnect(context.Background())
+	p.shutSig.CloseAtLeisure()
+	go p.disconnect(context.Background())
 }
 
 // WaitForClose blocks until the Pulsar input has closed down.
 func (p *pulsarReader) WaitForClose(timeout time.Duration) error {
+	select {
+	case <-p.shutSig.HasClosedChan():
+	case <-time.After(timeout):
+		return types.ErrTimeout
+	}
 	return nil
 }
 

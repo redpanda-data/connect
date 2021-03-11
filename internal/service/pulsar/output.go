@@ -8,6 +8,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
@@ -58,7 +59,8 @@ type pulsarWriter struct {
 	stats metrics.Type
 	log   log.Modular
 
-	m sync.RWMutex
+	m       sync.RWMutex
+	shutSig *shutdown.Signaller
 }
 
 func newPulsarWriter(conf output.PulsarConfig, log log.Modular, stats metrics.Type) (*pulsarWriter, error) {
@@ -69,9 +71,10 @@ func newPulsarWriter(conf output.PulsarConfig, log log.Modular, stats metrics.Ty
 		return nil, errors.New("field topic must not be empty")
 	}
 	p := pulsarWriter{
-		conf:  conf,
-		stats: stats,
-		log:   log,
+		conf:    conf,
+		stats:   stats,
+		log:     log,
+		shutSig: shutdown.NewSignaller(),
 	}
 	return &p, nil
 }
@@ -129,6 +132,9 @@ func (p *pulsarWriter) disconnect(ctx context.Context) error {
 	p.producer = nil
 	p.client = nil
 
+	if p.shutSig.ShouldCloseAtLeisure() {
+		p.shutSig.ShutdownComplete()
+	}
 	return nil
 }
 
@@ -159,10 +165,16 @@ func (p *pulsarWriter) WriteWithContext(ctx context.Context, msg types.Message) 
 
 // CloseAsync shuts down the Pulsar input and stops processing requests.
 func (p *pulsarWriter) CloseAsync() {
-	p.disconnect(context.Background())
+	p.shutSig.CloseAtLeisure()
+	go p.disconnect(context.Background())
 }
 
 // WaitForClose blocks until the Pulsar input has closed down.
 func (p *pulsarWriter) WaitForClose(timeout time.Duration) error {
+	select {
+	case <-p.shutSig.HasClosedChan():
+	case <-time.After(timeout):
+		return types.ErrTimeout
+	}
 	return nil
 }
