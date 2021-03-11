@@ -3,6 +3,7 @@ package output
 import (
 	"fmt"
 
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -129,15 +130,7 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 				spec.Categories = append(spec.Categories, string(cat))
 			}
 		}
-		if v.Async || v.Batches {
-			spec.Description = spec.Description + "\n\n## Performance"
-		}
-		if v.Async {
-			spec.Description = spec.Description + "\n" + DocsAsync
-		}
-		if v.Batches {
-			spec.Description = spec.Description + "\n" + DocsBatches
-		}
+		spec.Description = output.Description(v.Async, v.Batches, spec.Description)
 		fn(ConstructorFunc(v.constructor), spec)
 	}
 	for k, v := range pluginSpecs {

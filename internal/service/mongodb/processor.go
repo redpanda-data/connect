@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/service/mongodb/client"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/bloblang"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -18,7 +18,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
-	"github.com/cenkalti/backoff/v4"
+	"github.com/opentracing/opentracing-go"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
@@ -113,21 +113,12 @@ type Processor struct {
 	client     *mongo.Client
 	collection *mongo.Collection
 
+	parts       []int
 	filterMap   bloblang.Mapping
 	documentMap bloblang.Mapping
 	hintMap     bloblang.Mapping
 
-	parts []int
-
-	mu          sync.Mutex
-	backoffCtor func() backoff.BackOff
-
-	boffPool sync.Pool
-
-	closedChan <-chan struct{}
-	runningCh  chan struct{}
-	closingCh  chan struct{}
-	closeOnce  sync.Once
+	shutSig *shutdown.Signaller
 
 	mCount            metrics.StatCounter
 	mErr              metrics.StatCounter
@@ -147,6 +138,7 @@ func NewProcessor(
 
 		parts: conf.MongoDB.Parts,
 
+		shutSig:           shutdown.NewSignaller(),
 		mCount:            stats.GetCounter("count"),
 		mErr:              stats.GetCounter("error"),
 		mKeyAlreadyExists: stats.GetCounter("key_already_exists"),
@@ -187,9 +179,7 @@ func NewProcessor(
 		if conf.MongoDB.FilterMap == "" {
 			return nil, errors.New("mongodb filter_map must be specified")
 		}
-
-		m.filterMap, err = bloblang.NewMapping(conf.MongoDB.FilterMap)
-		if err != nil {
+		if m.filterMap, err = bloblang.NewMapping(conf.MongoDB.FilterMap); err != nil {
 			return nil, fmt.Errorf("failed to parse filter_map: %v", err)
 		}
 	} else if conf.MongoDB.FilterMap != "" {
@@ -200,9 +190,7 @@ func NewProcessor(
 		if conf.MongoDB.DocumentMap == "" {
 			return nil, errors.New("mongodb document_map must be specified")
 		}
-
-		m.documentMap, err = bloblang.NewMapping(conf.MongoDB.DocumentMap)
-		if err != nil {
+		if m.documentMap, err = bloblang.NewMapping(conf.MongoDB.DocumentMap); err != nil {
 			return nil, fmt.Errorf("failed to parse document_map: %v", err)
 		}
 	} else if conf.MongoDB.DocumentMap != "" {
@@ -210,23 +198,30 @@ func NewProcessor(
 	}
 
 	if hintAllowed && conf.MongoDB.HintMap != "" {
-		m.hintMap, err = bloblang.NewMapping(conf.MongoDB.HintMap)
-		if err != nil {
+		if m.hintMap, err = bloblang.NewMapping(conf.MongoDB.HintMap); err != nil {
 			return nil, fmt.Errorf("failed to parse hint_map: %v", err)
 		}
 	} else if conf.MongoDB.HintMap != "" {
 		return nil, fmt.Errorf("mongodb hint_map not allowed for '%s' operation", conf.MongoDB.Operation)
 	}
 
-	m.client, err = conf.MongoDB.MongoDB.Client()
-	if err != nil {
+	if m.client, err = conf.MongoDB.MongoDB.Client(); err != nil {
 		return nil, fmt.Errorf("failed to create mongodb client: %v", err)
+	}
+
+	if err = m.client.Connect(context.Background()); err != nil {
+		return nil, fmt.Errorf("failed to connect: %v", err)
+	}
+
+	if err = m.client.Ping(context.Background(), nil); err != nil {
+		return nil, fmt.Errorf("ping failed: %v", err)
 	}
 
 	var timeout time.Duration
 	if timeout, err = time.ParseDuration(conf.MongoDB.WriteConcern.WTimeout); err != nil {
 		return nil, fmt.Errorf("failed to parse wtimeout string: %v", err)
 	}
+
 	writeConcern := writeconcern.New(
 		writeconcern.J(conf.MongoDB.WriteConcern.J),
 		writeconcern.WTimeout(timeout))
@@ -247,96 +242,7 @@ func NewProcessor(
 		Database(conf.MongoDB.MongoDB.Database).
 		Collection(conf.MongoDB.MongoDB.Collection, options.Collection().SetWriteConcern(writeConcern))
 
-	if m.backoffCtor, err = conf.MongoDB.RetryConfig.GetCtor(); err != nil {
-		return nil, err
-	}
-
-	m.boffPool = sync.Pool{
-		New: func() interface{} {
-			return m.backoffCtor()
-		},
-	}
-
-	closedChan := make(chan struct{})
-	m.closedChan = closedChan
-	close(closedChan) // starts closed
-
-	err = m.connect()
-	if err != nil {
-		return nil, err
-	}
 	return m, nil
-}
-
-func (m *Processor) connect() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if m.client == nil {
-		return errors.New("client is nil") // shouldn't happen
-	}
-
-	if m.collection == nil {
-		return errors.New("collection is nil") // shouldn't happen
-	}
-
-	if m.closingCh != nil {
-		select {
-		case <-m.closingCh:
-			return types.ErrTypeClosed
-		default:
-		}
-	}
-
-	if m.runningCh != nil {
-		select {
-		default:
-			return nil // already connected
-		case <-m.runningCh:
-		}
-	}
-
-	m.runningCh = make(chan struct{})
-	m.closingCh = make(chan struct{})
-
-	ctxTimeout, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	err := m.client.Connect(ctxTimeout)
-	if err != nil {
-		close(m.runningCh)
-		return fmt.Errorf("failed to connect: %v", err)
-	}
-
-	go func() {
-		<-m.closingCh
-
-		m.mu.Lock()
-		defer m.mu.Unlock()
-
-		defer close(m.runningCh)
-
-		if err := m.client.Disconnect(context.Background()); err != nil {
-			m.log.Warnf("error disconnecting: %v\n", err)
-		}
-	}()
-
-	ctxTimeout, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	err = m.client.Ping(ctxTimeout, nil)
-	if err != nil {
-		m.close() // clean up
-		return fmt.Errorf("ping failed: %v", err)
-	}
-
-	return nil
-}
-
-func (m *Processor) close() {
-	m.closeOnce.Do(func() {
-		close(m.closingCh)
-	})
 }
 
 // ProcessMessage applies the processor to a message, either creating >0
@@ -345,15 +251,8 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 	m.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	boff := m.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		m.boffPool.Put(boff)
-	}()
-
 	var writeModels []mongo.WriteModel
-
-	iterErr := newMsg.Iter(func(i int, part types.Part) error {
+	processor.IteratePartsWithSpan("mongodb", m.parts, newMsg, func(i int, s opentracing.Span, p types.Part) error {
 		var err error
 		var filterVal, documentVal types.Part
 		var filterValWanted, documentValWanted bool
@@ -362,16 +261,13 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 		documentValWanted = documentMapOps[m.conf.Operation]
 
 		if filterValWanted {
-			filterVal, err = m.filterMap.MapPart(i, msg)
-			if err != nil {
+			if filterVal, err = m.filterMap.MapPart(i, msg); err != nil {
 				return fmt.Errorf("failed to execute filter_map: %v", err)
 			}
 		}
 
-		// deleted()
 		if (filterVal != nil || !filterValWanted) && documentValWanted {
-			documentVal, err = m.documentMap.MapPart(i, msg)
-			if err != nil {
+			if documentVal, err = m.documentMap.MapPart(i, msg); err != nil {
 				return fmt.Errorf("failed to execute document_map: %v", err)
 			}
 		}
@@ -387,15 +283,13 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 		var docJSON, filterJSON, hintJSON interface{}
 
 		if filterValWanted {
-			filterJSON, err = filterVal.JSON()
-			if err != nil {
+			if filterJSON, err = filterVal.JSON(); err != nil {
 				return err
 			}
 		}
 
 		if documentValWanted {
-			docJSON, err = documentVal.JSON()
-			if err != nil {
+			if docJSON, err = documentVal.JSON(); err != nil {
 				return err
 			}
 		}
@@ -406,9 +300,7 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 			if err != nil {
 				return fmt.Errorf("failed to execute hint_map: %v", err)
 			}
-
-			hintJSON, err = hintVal.JSON()
-			if err != nil {
+			if hintJSON, err = hintVal.JSON(); err != nil {
 				return err
 			}
 			findOptions.Hint = hintJSON
@@ -465,28 +357,22 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 				value := e.Value().String()
 				data[key] = value
 			}
-			return part.SetJSON(data)
+			return p.SetJSON(data)
 		}
 
-		if writeModel == nil {
-			return nil
+		if writeModel != nil {
+			writeModels = append(writeModels, writeModel)
 		}
-
-		writeModels = append(writeModels, writeModel)
 		return nil
 	})
 
-	if iterErr != nil {
-		m.log.Errorf("error iterating through message parts: %v", iterErr)
-	}
-
 	if len(writeModels) > 0 {
-		res, err := m.collection.BulkWrite(context.Background(), writeModels)
-		if err != nil {
-			m.log.Errorf("bulk write failed in mongo processor: %v", err)
+		if _, err := m.collection.BulkWrite(context.Background(), writeModels); err != nil {
+			m.log.Errorf("Bulk write failed in mongodb processor: %v", err)
+			for _, n := range m.parts {
+				processor.FlagErr(newMsg.Get(n), err)
+			}
 		}
-		_ = res
-		// TODO: Set error for individual messages that failed.
 	}
 
 	m.mBatchSent.Incr(1)
@@ -497,10 +383,19 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 
 // CloseAsync shuts down the processor and stops processing requests.
 func (m *Processor) CloseAsync() {
+	go func() {
+		m.client.Disconnect(context.Background())
+		m.shutSig.ShutdownComplete()
+	}()
 }
 
 // WaitForClose blocks until the processor has closed down.
-func (m *Processor) WaitForClose(_ time.Duration) error {
+func (m *Processor) WaitForClose(timeout time.Duration) error {
+	select {
+	case <-time.After(timeout):
+		return types.ErrTimeout
+	case <-m.shutSig.HasClosedChan():
+	}
 	return nil
 }
 

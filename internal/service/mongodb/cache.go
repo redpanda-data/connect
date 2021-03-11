@@ -7,8 +7,10 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/service/mongodb/client"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -23,11 +25,11 @@ func init() {
 	bundle.AllCaches.Add(func(c cache.Config, nm bundle.NewManagement) (types.Cache, error) {
 		return NewCache(c, nm, nm.Logger(), nm.Metrics())
 	}, docs.ComponentSpec{
-		Name:    cache.TypeMongoDB,
-		Type:    docs.TypeCache,
-		Status:  docs.StatusExperimental,
-		Summary: `Use a MongoDB instance as a cache.`,
-		// TODO: Document that it doesn't support per item TTLs
+		Name:        cache.TypeMongoDB,
+		Type:        docs.TypeCache,
+		Status:      docs.StatusExperimental,
+		Summary:     `Use a MongoDB instance as a cache.`,
+		Description: icache.Description(false, ""),
 		Config: docs.FieldComponent().WithChildren(
 			client.ConfigDocs().Add(
 				docs.FieldCommon("key_field", "The field in the document that is used as the key."),
@@ -47,6 +49,8 @@ type Cache struct {
 
 	client     *mongo.Client
 	collection *mongo.Collection
+
+	shutSig *shutdown.Signaller
 }
 
 // NewCache returns a MongoDB cache.
@@ -78,8 +82,7 @@ func NewCache(
 		return nil, err
 	}
 
-	err = client.Connect(context.Background())
-	if err != nil {
+	if err = client.Connect(context.Background()); err != nil {
 		return nil, err
 	}
 
@@ -92,6 +95,8 @@ func NewCache(
 
 		client:     client,
 		collection: collection,
+
+		shutSig: shutdown.NewSignaller(),
 	}, nil
 }
 
@@ -171,11 +176,19 @@ func (m *Cache) Delete(key string) error {
 
 // CloseAsync shuts down the cache.
 func (m *Cache) CloseAsync() {
-	m.client.Disconnect(context.Background())
+	go func() {
+		m.client.Disconnect(context.Background())
+		m.shutSig.ShutdownComplete()
+	}()
 }
 
 // WaitForClose blocks until the cache has closed down.
 func (m *Cache) WaitForClose(timeout time.Duration) error {
+	select {
+	case <-time.After(timeout):
+		return types.ErrTimeout
+	case <-m.shutSig.HasClosedChan():
+	}
 	return nil
 }
 

@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -53,15 +54,7 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 			Status:      v.Status,
 			Version:     v.Version,
 		}
-
-		if v.SupportsPerKeyTTL {
-			spec.Description = spec.Description + `
-
-This cache type supports setting the TTL individually per key by using the
-dynamic ` + "`ttl`" + ` field of a cache processor or output in order to
-override the general TTL configured at the cache resource level.`
-		}
-
+		spec.Description = cache.Description(v.SupportsPerKeyTTL, spec.Description)
 		fn(ConstructorFunc(v.constructor), spec)
 	}
 	for k, v := range pluginSpecs {

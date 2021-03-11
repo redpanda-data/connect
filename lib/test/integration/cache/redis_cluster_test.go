@@ -17,6 +17,7 @@ import (
 )
 
 var _ = registerIntegrationTest("redis_cluster", func(t *testing.T) {
+	t.Skip("Skipping as networking often fails for this test")
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

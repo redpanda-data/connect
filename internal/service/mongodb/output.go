@@ -8,17 +8,20 @@ import (
 	"sync"
 	"time"
 
+	ibatch "github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/service/mongodb/client"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/bloblang"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
+	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
-	"github.com/cenkalti/backoff/v4"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
@@ -34,7 +37,8 @@ func init() {
 		Categories: []string{
 			string(output.CategoryServices),
 		},
-		Summary: `Inserts items into a MongoDB collection.`,
+		Summary:     `Inserts items into a MongoDB collection.`,
+		Description: ioutput.Description(true, true, ""),
 		Config: docs.FieldComponent().WithChildren(
 			client.ConfigDocs().Add(
 				docs.FieldCommon(
@@ -97,9 +101,10 @@ func NewWriter(
 	stats metrics.Type,
 ) (*Writer, error) {
 	db := &Writer{
-		conf:  conf,
-		log:   log,
-		stats: stats,
+		conf:    conf,
+		log:     log,
+		stats:   stats,
+		shutSig: shutdown.NewSignaller(),
 	}
 
 	if conf.MongoConfig.URL == "" {
@@ -131,9 +136,7 @@ func NewWriter(
 		if conf.FilterMap == "" {
 			return nil, errors.New("mongodb filter_map must be specified")
 		}
-
-		db.filterMap, err = bloblang.NewMapping(conf.FilterMap)
-		if err != nil {
+		if db.filterMap, err = bloblang.NewMapping(conf.FilterMap); err != nil {
 			return nil, fmt.Errorf("failed to parse filter_map: %v", err)
 		}
 	} else if conf.FilterMap != "" {
@@ -144,9 +147,7 @@ func NewWriter(
 		if conf.DocumentMap == "" {
 			return nil, errors.New("mongodb document_map must be specified")
 		}
-
-		db.documentMap, err = bloblang.NewMapping(conf.DocumentMap)
-		if err != nil {
+		if db.documentMap, err = bloblang.NewMapping(conf.DocumentMap); err != nil {
 			return nil, fmt.Errorf("failed to parse document_map: %v", err)
 		}
 	} else if conf.DocumentMap != "" {
@@ -154,181 +155,100 @@ func NewWriter(
 	}
 
 	if hintAllowed && conf.HintMap != "" {
-		db.hintMap, err = bloblang.NewMapping(conf.HintMap)
-		if err != nil {
+		if db.hintMap, err = bloblang.NewMapping(conf.HintMap); err != nil {
 			return nil, fmt.Errorf("failed to parse hint_map: %v", err)
 		}
 	} else if conf.HintMap != "" {
 		return nil, fmt.Errorf("mongodb hint_map not allowed for '%s' operation", conf.Operation)
 	}
 
-	db.client, err = conf.MongoConfig.Client()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create mongodb client: %v", err)
+	if db.wcTimeout, err = time.ParseDuration(conf.WriteConcern.WTimeout); err != nil {
+		return nil, fmt.Errorf("failed to parse write concern wtimeout string: %v", err)
 	}
-
-	var timeout time.Duration
-	if timeout, err = time.ParseDuration(conf.WriteConcern.WTimeout); err != nil {
-		return nil, fmt.Errorf("failed to parse wtimeout string: %v", err)
-	}
-
-	writeConcern := writeconcern.New(
-		writeconcern.J(conf.WriteConcern.J),
-		writeconcern.WTimeout(timeout))
-
-	w, err := strconv.Atoi(conf.WriteConcern.W)
-	if err != nil {
-		writeconcern.WTagSet(conf.WriteConcern.W)
-	} else {
-		writeconcern.W(w)(writeConcern)
-	}
-
-	// This does some validation so we don't have to
-	if _, _, err = writeConcern.MarshalBSONValue(); err != nil {
-		return nil, fmt.Errorf("write_concern validation error: %w", err)
-	}
-
-	db.collection = db.client.
-		Database(conf.MongoConfig.Database).
-		Collection(conf.MongoConfig.Collection, options.Collection().SetWriteConcern(writeConcern))
-
-	if db.backoffCtor, err = conf.RetryConfig.GetCtor(); err != nil {
-		return nil, err
-	}
-
-	db.boffPool = sync.Pool{
-		New: func() interface{} {
-			return db.backoffCtor()
-		},
-	}
-
-	closedChan := make(chan struct{})
-	db.closedChan = closedChan
-	close(closedChan) // starts closed
-
 	return db, nil
 }
 
 // Writer is a benthos writer.Type implementation that writes messages to an
 // Writer database.
 type Writer struct {
-	client     *mongo.Client
-	collection *mongo.Collection
-	conf       output.MongoDBConfig
-	log        log.Modular
-	stats      metrics.Type
+	conf  output.MongoDBConfig
+	log   log.Modular
+	stats metrics.Type
+
+	wcTimeout time.Duration
 
 	filterMap   bloblang.Mapping
 	documentMap bloblang.Mapping
 	hintMap     bloblang.Mapping
 
-	mu          sync.Mutex
-	backoffCtor func() backoff.BackOff
+	mu         sync.Mutex
+	client     *mongo.Client
+	collection *mongo.Collection
 
-	boffPool sync.Pool
-
-	closedChan <-chan struct{}
-	runningCh  chan struct{}
-	closingCh  chan struct{}
-	closeOnce  sync.Once
-}
-
-// Connect attempts to establish a connection to the target mongo DB
-func (m *Writer) Connect() error {
-	return m.ConnectWithContext(context.Background())
+	shutSig *shutdown.Signaller
 }
 
 // ConnectWithContext attempts to establish a connection to the target mongo DB
-func (m *Writer) ConnectWithContext(ctx context.Context) (err error) {
+func (m *Writer) ConnectWithContext(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.client == nil {
-		return errors.New("client is nil") // shouldn't happen
+	if m.client != nil && m.collection != nil {
+		return nil
+	}
+	if m.client != nil {
+		_ = m.client.Disconnect(ctx)
 	}
 
-	if m.collection == nil {
-		return errors.New("collection is nil") // shouldn't happen
-	}
-
-	if m.closingCh != nil {
-		select {
-		case <-m.closingCh:
-			return types.ErrTypeClosed
-		default:
-		}
-	}
-
-	if m.runningCh != nil {
-		select {
-		default:
-			return nil // already connected
-		case <-m.runningCh:
-		}
-	}
-
-	m.runningCh = make(chan struct{})
-	m.closingCh = make(chan struct{})
-
-	ctxTimeout, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	err = m.client.Connect(ctxTimeout)
+	client, err := m.conf.MongoConfig.Client()
 	if err != nil {
-		close(m.runningCh)
-		return fmt.Errorf("failed to connect: %v", err)
+		return fmt.Errorf("failed to create mongodb client: %v", err)
 	}
 
-	go func() {
-		<-m.closingCh
+	if err = client.Connect(ctx); err != nil {
+		return fmt.Errorf("failed to connect: %w", err)
+	}
 
-		m.mu.Lock()
-		defer m.mu.Unlock()
-
-		defer close(m.runningCh)
-
-		if err := m.client.Disconnect(context.Background()); err != nil {
-			m.log.Warnf("error disconnecting: %v\n", err)
-		}
-	}()
-
-	ctxTimeout, cancel = context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	err = m.client.Ping(ctxTimeout, nil)
-	if err != nil {
-		m.close() // clean up
+	if err = client.Ping(ctx, nil); err != nil {
 		return fmt.Errorf("ping failed: %v", err)
 	}
 
+	writeConcern := writeconcern.New(
+		writeconcern.J(m.conf.WriteConcern.J),
+		writeconcern.WTimeout(m.wcTimeout))
+
+	w, err := strconv.Atoi(m.conf.WriteConcern.W)
+	if err != nil {
+		writeconcern.WTagSet(m.conf.WriteConcern.W)
+	} else {
+		writeconcern.W(w)(writeConcern)
+	}
+
+	// This does some validation so we don't have to
+	if _, _, err = writeConcern.MarshalBSONValue(); err != nil {
+		_ = client.Disconnect(ctx)
+		return fmt.Errorf("write_concern validation error: %w", err)
+	}
+
+	m.collection = client.
+		Database(m.conf.MongoConfig.Database).
+		Collection(m.conf.MongoConfig.Collection, options.Collection().SetWriteConcern(writeConcern))
+	m.client = client
 	return nil
-}
-
-func (m *Writer) Write(msg types.Message) error {
-	return m.WriteWithContext(context.Background(), msg)
-}
-
-func (m *Writer) close() {
-	m.closeOnce.Do(func() {
-		close(m.closingCh)
-	})
 }
 
 // WriteWithContext attempts to perform the designated operation to the mongo DB collection.
 func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error {
-	if m.runningCh == nil {
+	m.mu.Lock()
+	collection := m.collection
+	m.mu.Unlock()
+
+	if collection == nil {
 		return types.ErrNotConnected
 	}
 
-	boff := m.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		m.boffPool.Put(boff)
-	}()
-
 	var writeModels []mongo.WriteModel
-
-	iterErr := msg.Iter(func(i int, part types.Part) error {
+	err := writer.IterateBatchedSend(msg, func(i int, _ types.Part) error {
 		var err error
 		var filterVal, documentVal types.Part
 		var filterValWanted, documentValWanted bool
@@ -337,16 +257,13 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error 
 		documentValWanted = documentMapOps[m.conf.Operation]
 
 		if filterValWanted {
-			filterVal, err = m.filterMap.MapPart(i, msg)
-			if err != nil {
+			if filterVal, err = m.filterMap.MapPart(i, msg); err != nil {
 				return fmt.Errorf("failed to execute filter_map: %v", err)
 			}
 		}
 
-		// deleted()
 		if (filterVal != nil || !filterValWanted) && documentValWanted {
-			documentVal, err = m.documentMap.MapPart(i, msg)
-			if err != nil {
+			if documentVal, err = m.documentMap.MapPart(i, msg); err != nil {
 				return fmt.Errorf("failed to execute document_map: %v", err)
 			}
 		}
@@ -362,15 +279,13 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error 
 		var docJSON, filterJSON, hintJSON interface{}
 
 		if filterValWanted {
-			filterJSON, err = filterVal.JSON()
-			if err != nil {
+			if filterJSON, err = filterVal.JSON(); err != nil {
 				return err
 			}
 		}
 
 		if documentValWanted {
-			docJSON, err = documentVal.JSON()
-			if err != nil {
+			if docJSON, err = documentVal.JSON(); err != nil {
 				return err
 			}
 		}
@@ -380,9 +295,7 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error 
 			if err != nil {
 				return fmt.Errorf("failed to execute hint_map: %v", err)
 			}
-
-			hintJSON, err = hintVal.JSON()
-			if err != nil {
+			if hintJSON, err = hintVal.JSON(); err != nil {
 				return err
 			}
 		}
@@ -420,42 +333,52 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error 
 			}
 		}
 
-		if writeModel == nil {
-			return nil
+		if writeModel != nil {
+			writeModels = append(writeModels, writeModel)
 		}
-
-		writeModels = append(writeModels, writeModel)
-
 		return nil
 	})
-	if iterErr != nil {
-		return iterErr
-	}
 
-	_, err := m.collection.BulkWrite(ctx, writeModels)
+	var batchErr *ibatch.Error
 	if err != nil {
-		return err
+		if !errors.As(err, &batchErr) {
+			return err
+		}
 	}
 
+	if len(writeModels) > 0 {
+		if _, err = collection.BulkWrite(ctx, writeModels); err != nil {
+			return err
+		}
+	}
+
+	if batchErr != nil {
+		return batchErr
+	}
 	return nil
 }
 
 // CloseAsync begins cleaning up resources used by this writer asynchronously.
 func (m *Writer) CloseAsync() {
-	m.close()
+	go func() {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		if m.client != nil {
+			_ = m.client.Disconnect(context.Background())
+			m.client = nil
+		}
+		m.collection = nil
+		m.shutSig.ShutdownComplete()
+	}()
 }
 
 // WaitForClose will block until either the writer is closed or a specified
 // timeout occurs.
 func (m *Writer) WaitForClose(timeout time.Duration) error {
-	if m.runningCh == nil { // not running
-		return nil
-	}
-
 	select {
-	case <-m.runningCh:
-		return nil
+	case <-m.shutSig.HasClosedChan():
 	case <-time.After(timeout):
 		return types.ErrTimeout
 	}
+	return nil
 }
