@@ -325,7 +325,7 @@ func TestBestMatch(t *testing.T) {
 					Remaining: []rune("foobar"),
 				},
 				{
-					Err:       NewFatalError([]rune("ar"), errors.New("this is a real error")),
+					Err:       NewFatalError([]rune("r"), errors.New("this is a real error")),
 					Remaining: []rune("foobar"),
 				},
 				{
@@ -334,7 +334,7 @@ func TestBestMatch(t *testing.T) {
 				},
 			},
 			result: Result{
-				Err:       NewFatalError([]rune("ar"), errors.New("this is a real error")),
+				Err:       NewFatalError([]rune("r"), errors.New("this is a real error")),
 				Remaining: []rune("foobar"),
 			},
 		},

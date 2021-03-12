@@ -23,10 +23,14 @@ func ParseMapping(filepath string, expr string, pCtx Context) (*mapping.Executor
 	if len(filepath) > 0 {
 		dir = path.Dir(filepath)
 	}
-	res := BestMatch(
-		parseExecutor(dir, pCtx),
-		singleRootMapping(pCtx),
-	)(in)
+
+	resExe := parseExecutor(dir, pCtx)(in)
+	if resExe.Err != nil && resExe.Err.IsFatal() {
+		return nil, resExe.Err
+	}
+	resSingle := singleRootMapping(pCtx)(in)
+
+	res := bestMatch(resExe, resSingle)
 	if res.Err != nil {
 		return nil, res.Err
 	}

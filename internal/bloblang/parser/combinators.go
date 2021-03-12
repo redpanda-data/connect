@@ -620,38 +620,31 @@ func OneOf(parsers ...Func) Func {
 	}
 }
 
-func bestMatch(left, right Result) (Result, bool) {
+func bestMatch(left, right Result) Result {
 	remainingLeft := len(left.Remaining)
 	remainingRight := len(right.Remaining)
 	if left.Err != nil {
-		if left.Err.IsFatal() {
-			return left, false
-		}
 		remainingLeft = len(left.Err.Input)
 	}
 	if right.Err != nil {
-		if right.Err.IsFatal() {
-			return right, false
-		}
 		remainingRight = len(right.Err.Input)
 	}
 	if remainingRight == remainingLeft {
 		if left.Err == nil {
-			return left, true
+			return left
 		}
 		if right.Err == nil {
-			return right, true
+			return right
 		}
 	}
 	if remainingRight < remainingLeft {
-		return right, true
+		return right
 	}
-	return left, true
+	return left
 }
 
 // BestMatch accepts one or more parsers and tries them all against an input.
-// If any parser returns a non ExpectedError error then it is returned. If all
-// parsers return either a result or an ExpectedError then the parser that got
+// If all parsers return either a result or an error then the parser that got
 // further through the input will have its result returned. This means that an
 // error may be returned even if a parser was successful.
 //
@@ -667,10 +660,7 @@ func BestMatch(parsers ...Func) Func {
 		res := parsers[0](input)
 		for _, p := range parsers[1:] {
 			resTmp := p(input)
-			var cont bool
-			if res, cont = bestMatch(res, resTmp); !cont {
-				return res
-			}
+			res = bestMatch(res, resTmp)
 		}
 		return res
 	}

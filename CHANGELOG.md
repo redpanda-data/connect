@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - Corrected ack behaviour for the beta `azure_queue_storage` input.
 - Bloblang compressed arithmetic expressions with field names (`foo+bar`) now correctly parse.
 - Fixed throughput issues with the `aws_sqs` input.
+- Prevented using the `root` keyword within Bloblang queries, returning an error message explaining alternative options. Eventually `root` references within queries will be fully supported and so returning clear errors messages is a temporary fix.
 
 ### Changed
 
