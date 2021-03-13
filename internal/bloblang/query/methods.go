@@ -64,12 +64,15 @@ func applyMethod(target Function, args ...interface{}) (Function, error) {
 		// ISOLATED VARIABLES
 		ctx.Vars = map[string]interface{}{}
 		return m.Exec(ctx)
-	}, func(ctx TargetsContext) []TargetPath {
-		m, ok := ctx.Maps[targetMap]
+	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
+		mapFn, ok := ctx.Maps[targetMap]
 		if !ok {
 			return target.QueryTargets(ctx)
 		}
-		return expandTargetPaths(target.QueryTargets(ctx), m.QueryTargets(ctx))
+		mapCtx, targets := target.QueryTargets(ctx)
+		mapCtx = mapCtx.WithMainContext(targets)
+		returnCtx, mapTargets := mapFn.QueryTargets(mapCtx)
+		return returnCtx, append(targets, mapTargets...)
 	}), nil
 }
 
@@ -181,12 +184,17 @@ type fromMethod struct {
 	target Function
 }
 
+func (f *fromMethod) ContextCapture(ctx FunctionContext, v interface{}) (FunctionContext, error) {
+	return ctx.WithValue(v), nil
+}
+
 func (f *fromMethod) Exec(ctx FunctionContext) (interface{}, error) {
 	ctx.Index = f.index
 	return f.target.Exec(ctx)
 }
 
-func (f *fromMethod) QueryTargets(ctx TargetsContext) []TargetPath {
+func (f *fromMethod) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetPath) {
+	// TODO: Modify context to represent new index.
 	return f.target.QueryTargets(ctx)
 }
 
@@ -258,6 +266,10 @@ type getMethod struct {
 	path []string
 }
 
+func (g *getMethod) ContextCapture(ctx FunctionContext, v interface{}) (FunctionContext, error) {
+	return ctx.WithValue(v), nil
+}
+
 func (g *getMethod) Exec(ctx FunctionContext) (interface{}, error) {
 	v, err := g.fn.Exec(ctx)
 	if err != nil {
@@ -266,15 +278,18 @@ func (g *getMethod) Exec(ctx FunctionContext) (interface{}, error) {
 	return gabs.Wrap(v).S(g.path...).Data(), nil
 }
 
-func (g *getMethod) QueryTargets(ctx TargetsContext) []TargetPath {
-	targets := g.fn.QueryTargets(ctx)
-	for i, t := range targets {
-		tmpPath := make([]string, 0, len(t.Path)+len(g.path))
-		tmpPath = append(tmpPath, t.Path...)
-		tmpPath = append(tmpPath, g.path...)
-		targets[i].Path = tmpPath
+func (g *getMethod) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetPath) {
+	ctx, fnPaths := g.fn.QueryTargets(ctx)
+
+	basePaths := ctx.CurrentValues
+	paths := make([]TargetPath, len(basePaths))
+	for i, p := range basePaths {
+		paths[i] = p
+		paths[i].Path = append(paths[i].Path, g.path...)
 	}
-	return targets
+	ctx.CurrentValues = paths
+
+	return ctx, append(fnPaths, paths...)
 }
 
 // NewGetMethod creates a new get method.
@@ -293,11 +308,7 @@ func getMethodCtor(target Function, args ...interface{}) (Function, error) {
 			path: newPath,
 		}, nil
 	case *fieldFunction:
-		newPath := append([]string{}, t.path...)
-		newPath = append(newPath, path...)
-		return &fieldFunction{
-			path: newPath,
-		}, nil
+		return t.expand(path...), nil
 	}
 	return &getMethod{
 		fn:   target,
@@ -328,9 +339,16 @@ func mapMethod(target Function, args ...interface{}) (Function, error) {
 		if err != nil {
 			return nil, err
 		}
-		return mapFn.Exec(ctx.WithValue(res))
-	}, func(ctx TargetsContext) []TargetPath {
-		return expandTargetPaths(target.QueryTargets(ctx), mapFn.QueryTargets(ctx))
+		mapCtx, err := mapFn.ContextCapture(ctx, res)
+		if err != nil {
+			return nil, err
+		}
+		return mapFn.Exec(mapCtx)
+	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
+		mapCtx, targets := target.QueryTargets(ctx)
+		mapCtx = mapCtx.WithMainContext(targets)
+		returnCtx, mapTargets := mapFn.QueryTargets(mapCtx)
+		return returnCtx, append(targets, mapTargets...)
 	}), nil
 }
 
@@ -352,6 +370,10 @@ func Not(fn Function) Function {
 	}
 }
 
+func (n *notMethod) ContextCapture(ctx FunctionContext, v interface{}) (FunctionContext, error) {
+	return n.fn.ContextCapture(ctx, v)
+}
+
 func (n *notMethod) Exec(ctx FunctionContext) (interface{}, error) {
 	v, err := n.fn.Exec(ctx)
 	if err != nil {
@@ -364,7 +386,7 @@ func (n *notMethod) Exec(ctx FunctionContext) (interface{}, error) {
 	return !b, nil
 }
 
-func (n *notMethod) QueryTargets(ctx TargetsContext) []TargetPath {
+func (n *notMethod) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetPath) {
 	return n.fn.QueryTargets(ctx)
 }
 

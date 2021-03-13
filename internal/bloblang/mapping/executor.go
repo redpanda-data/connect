@@ -262,15 +262,18 @@ func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (t
 
 // QueryTargets returns a slice of all targets referenced by queries within the
 // mapping.
-func (e *Executor) QueryTargets(ctx query.TargetsContext) []query.TargetPath {
+func (e *Executor) QueryTargets(ctx query.TargetsContext) (query.TargetsContext, []query.TargetPath) {
 	// Reset maps to our own.
-	ctx.Maps = e.maps
+	childCtx := ctx
+	childCtx.Maps = e.maps
 
 	var paths []query.TargetPath
 	for _, stmt := range e.statements {
-		paths = append(paths, stmt.query.QueryTargets(ctx)...)
+		_, tmpPaths := stmt.query.QueryTargets(childCtx)
+		paths = append(paths, tmpPaths...)
 	}
-	return paths
+
+	return ctx, paths
 }
 
 // AssignmentTargets returns a slice of all targets assigned to by statements
@@ -281,6 +284,10 @@ func (e *Executor) AssignmentTargets() []TargetPath {
 		paths = append(paths, stmt.assignment.Target())
 	}
 	return paths
+}
+
+func (e *Executor) ContextCapture(ctx query.FunctionContext, v interface{}) (query.FunctionContext, error) {
+	return ctx.WithValue(v), nil
 }
 
 // Exec this function with a context struct.

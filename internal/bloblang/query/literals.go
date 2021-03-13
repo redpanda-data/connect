@@ -60,6 +60,10 @@ func NewMapLiteral(values [][2]interface{}) (interface{}, error) {
 	return staticValues, nil
 }
 
+func (m *mapLiteral) ContextCapture(ctx FunctionContext, v interface{}) (FunctionContext, error) {
+	return ctx.WithValue(v), nil
+}
+
 func (m *mapLiteral) Exec(ctx FunctionContext) (interface{}, error) {
 	dynMap := make(map[string]interface{}, len(m.keyValues))
 	for _, kv := range m.keyValues {
@@ -104,17 +108,20 @@ func (m *mapLiteral) Exec(ctx FunctionContext) (interface{}, error) {
 	return dynMap, nil
 }
 
-func (m *mapLiteral) QueryTargets(ctx TargetsContext) []TargetPath {
+func (m *mapLiteral) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetPath) {
 	var targetPaths []TargetPath
 	for _, kv := range m.keyValues {
 		if fn, ok := kv[0].(Function); ok {
-			targetPaths = append(targetPaths, fn.QueryTargets(ctx)...)
+			_, paths := fn.QueryTargets(ctx)
+			targetPaths = append(targetPaths, paths...)
 		}
 		if fn, ok := kv[1].(Function); ok {
-			targetPaths = append(targetPaths, fn.QueryTargets(ctx)...)
+			_, paths := fn.QueryTargets(ctx)
+			targetPaths = append(targetPaths, paths...)
 		}
 	}
-	return targetPaths
+	// TODO: Mark next context with aliases?
+	return ctx, targetPaths
 }
 
 //------------------------------------------------------------------------------
@@ -153,6 +160,10 @@ func NewArrayLiteral(values ...interface{}) interface{} {
 	return &arrayLiteral{expandedValues}
 }
 
+func (a *arrayLiteral) ContextCapture(ctx FunctionContext, v interface{}) (FunctionContext, error) {
+	return ctx.WithValue(v), nil
+}
+
 func (a *arrayLiteral) Exec(ctx FunctionContext) (interface{}, error) {
 	dynArray := make([]interface{}, 0, len(a.values))
 	for _, v := range a.values {
@@ -171,12 +182,14 @@ func (a *arrayLiteral) Exec(ctx FunctionContext) (interface{}, error) {
 	return dynArray, nil
 }
 
-func (a *arrayLiteral) QueryTargets(ctx TargetsContext) []TargetPath {
+func (a *arrayLiteral) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetPath) {
 	var targetPaths []TargetPath
 	for _, v := range a.values {
 		if fn, ok := v.(Function); ok {
-			targetPaths = append(targetPaths, fn.QueryTargets(ctx)...)
+			_, paths := fn.QueryTargets(ctx)
+			targetPaths = append(targetPaths, paths...)
 		}
 	}
-	return targetPaths
+	// TODO: Mark next context with aliases?
+	return ctx, targetPaths
 }

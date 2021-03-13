@@ -1972,18 +1972,21 @@ func TestMethodTargets(t *testing.T) {
 		"get from json": {
 			input: method(function("json", "foo.bar"), "get", "baz.buz"),
 			output: []TargetPath{
+				NewTargetPath(TargetValue, "foo", "bar"),
 				NewTargetPath(TargetValue, "foo", "bar", "baz", "buz"),
 			},
 		},
 		"get from get from json": {
 			input: method(method(function("json", "foo.bar"), "get", "baz"), "get", "buz"),
 			output: []TargetPath{
+				NewTargetPath(TargetValue, "foo", "bar"),
 				NewTargetPath(TargetValue, "foo", "bar", "baz", "buz"),
 			},
 		},
 		"mapping get from json": {
 			input: method(NewFieldFunction("foo.bar"), "map", NewFieldFunction("baz")),
 			output: []TargetPath{
+				NewTargetPath(TargetValue, "foo", "bar"),
 				NewTargetPath(TargetValue, "foo", "bar", "baz"),
 			},
 		},
@@ -1993,6 +1996,7 @@ func TestMethodTargets(t *testing.T) {
 				"foomap": NewFieldFunction("baz"),
 			},
 			output: []TargetPath{
+				NewTargetPath(TargetValue, "foo", "bar"),
 				NewTargetPath(TargetValue, "foo", "bar", "baz"),
 			},
 		},
@@ -2003,7 +2007,7 @@ func TestMethodTargets(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			res := test.input.QueryTargets(TargetsContext{
+			_, res := test.input.QueryTargets(TargetsContext{
 				Maps: test.maps,
 			})
 			assert.Equal(t, test.output, res)
@@ -2021,9 +2025,9 @@ func TestMethodNoArgsTargets(t *testing.T) {
 		if err != nil {
 			continue
 		}
-		targets := m.QueryTargets(TargetsContext{
+		_, targets := m.QueryTargets(TargetsContext{
 			Maps: map[string]Function{},
 		})
-		assert.Contains(t, targets, exp)
+		assert.Contains(t, targets, exp, "method: %v", k)
 	}
 }

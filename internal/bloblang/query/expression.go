@@ -36,30 +36,36 @@ func NewMatchFunction(contextFn Function, cases ...MatchCase) Function {
 		if err != nil {
 			return nil, err
 		}
-		ctx = ctx.WithValue(ctxVal)
 		for i, c := range cases {
+			caseCtx, err := c.caseFn.ContextCapture(ctx, ctxVal)
+			if err != nil {
+				return nil, fmt.Errorf("failed to capture match case %v context: %w", i, err)
+			}
 			var caseVal interface{}
-			if caseVal, err = c.caseFn.Exec(ctx); err != nil {
+			if caseVal, err = c.caseFn.Exec(caseCtx); err != nil {
 				return nil, fmt.Errorf("failed to check match case %v: %w", i, err)
 			}
 			if matched, _ := caseVal.(bool); matched {
-				return c.queryFn.Exec(ctx)
+				return c.queryFn.Exec(caseCtx)
 			}
 		}
 		return Nothing(nil), nil
-	}, func(ctx TargetsContext) []TargetPath {
-		contextTargets := contextFn.QueryTargets(ctx)
+	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
+		contextCtx, contextTargets := contextFn.QueryTargets(ctx)
+		contextCtx = contextCtx.WithMainContext(contextTargets)
 
 		var targets []TargetPath
 		for _, c := range cases {
-			var cTargets []TargetPath
-			cTargets = append(cTargets, c.caseFn.QueryTargets(ctx)...)
-			cTargets = append(cTargets, c.queryFn.QueryTargets(ctx)...)
-			targets = append(targets, rebaseTargetPaths(cTargets, contextTargets)...)
+			_, caseTargets := c.caseFn.QueryTargets(contextCtx)
+			targets = append(targets, caseTargets...)
+
+			// TODO: Include new current targets in returned context
+			_, queryTargets := c.queryFn.QueryTargets(contextCtx)
+			targets = append(targets, queryTargets...)
 		}
 
 		targets = append(targets, contextTargets...)
-		return targets
+		return ctx, targets
 	})
 }
 

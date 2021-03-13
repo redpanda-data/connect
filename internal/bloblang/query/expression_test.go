@@ -233,8 +233,8 @@ func TestExpressionTargets(t *testing.T) {
 			),
 			output: []TargetPath{
 				NewTargetPath(TargetMetadata, "bar"),
-				NewTargetPath(TargetValue, "baz"),
-				NewTargetPath(TargetValue, "buz"),
+				NewTargetPath(TargetMetadata, "foo", "baz"),
+				NewTargetPath(TargetMetadata, "foo", "buz"),
 				NewTargetPath(TargetMetadata, "foo"),
 			},
 		},
@@ -264,7 +264,7 @@ func TestExpressionTargets(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			res := test.input.QueryTargets(TargetsContext{
+			_, res := test.input.QueryTargets(TargetsContext{
 				Maps: map[string]Function{},
 			})
 			assert.Equal(t, test.output, res)

@@ -28,72 +28,73 @@ func NewTargetPath(t TargetType, Path ...string) TargetPath {
 	}
 }
 
-func aggregateTargetPaths(fns ...Function) func(ctx TargetsContext) []TargetPath {
-	return func(ctx TargetsContext) []TargetPath {
+func aggregateTargetPaths(fns ...Function) func(ctx TargetsContext) (TargetsContext, []TargetPath) {
+	return func(ctx TargetsContext) (TargetsContext, []TargetPath) {
 		var paths []TargetPath
 		for _, fn := range fns {
 			if fn != nil {
-				paths = append(paths, fn.QueryTargets(ctx)...)
+				_, tmpPaths := fn.QueryTargets(ctx)
+				paths = append(paths, tmpPaths...)
 			}
 		}
-		return paths
+		return ctx, paths
 	}
 }
 
-// Rebase a collection of targets as though they are executing on the context
-// of the base targets, but do not include the base targets themselves in the
-// results.
-func rebaseTargetPaths(paths, base []TargetPath) []TargetPath {
-	var refValuePaths [][]string
-	for _, refTarget := range base {
-		if refTarget.Type == TargetValue {
-			refValuePaths = append(refValuePaths, refTarget.Path)
-		}
+func methodTargetPaths(target, method Function) func(ctx TargetsContext) (TargetsContext, []TargetPath) {
+	return func(ctx TargetsContext) (TargetsContext, []TargetPath) {
+		methodCtx, targets := target.QueryTargets(ctx)
+		returnCtx, methodTargets := method.QueryTargets(methodCtx)
+		return returnCtx, append(targets, methodTargets...)
 	}
-	if len(refValuePaths) == 0 {
-		return paths
-	}
-
-	var expandedPaths []TargetPath
-	for _, target := range paths {
-		if target.Type == TargetValue {
-			for _, refValuePath := range refValuePaths {
-				var newPath []string
-				newPath = append(newPath, refValuePath...)
-				newPath = append(newPath, target.Path...)
-				expandedPaths = append(expandedPaths, NewTargetPath(TargetValue, newPath...))
-			}
-		} else {
-			expandedPaths = append(expandedPaths, target)
-		}
-	}
-	return expandedPaths
 }
 
-// Expand a slice of target paths with another, as if the base targets make up
-// the context of those paths.
-func expandTargetPaths(base, expand []TargetPath) []TargetPath {
-	var baseValuePaths [][]string
-	var expandedPaths []TargetPath
-	for _, baseTarget := range base {
-		if baseTarget.Type == TargetValue {
-			baseValuePaths = append(baseValuePaths, baseTarget.Path)
-		} else {
-			expandedPaths = append(expandedPaths, baseTarget)
-		}
-	}
+// TargetsContext provides access to a range of query targets for functions to
+// reference when determining their targets.
+type TargetsContext struct {
+	Maps          map[string]Function
+	CurrentValues []TargetPath
 
-	for _, target := range expand {
-		if target.Type == TargetValue && len(baseValuePaths) > 0 {
-			for _, baseValuePath := range baseValuePaths {
-				var newPath []string
-				newPath = append(newPath, baseValuePath...)
-				newPath = append(newPath, target.Path...)
-				expandedPaths = append(expandedPaths, NewTargetPath(TargetValue, newPath...))
-			}
-		} else {
-			expandedPaths = append(expandedPaths, target)
+	mainContext  []TargetPath
+	namedContext *namedContextPath
+}
+
+type namedContextPath struct {
+	name  string
+	paths []TargetPath
+	next  *namedContextPath
+}
+
+// NamedContext returns the path of a named context if it exists.
+func (ctx TargetsContext) NamedContext(name string) []TargetPath {
+	current := ctx.namedContext
+	for current != nil {
+		if current.name == name {
+			return current.paths
 		}
+		current = current.next
 	}
-	return expandedPaths
+	return nil
+}
+
+// MainContext returns the path of the main context.
+func (ctx TargetsContext) MainContext() []TargetPath {
+	return ctx.mainContext
+}
+
+// WithMainContext returns a TargetsContext with a new main context path.
+func (ctx TargetsContext) WithMainContext(paths []TargetPath) TargetsContext {
+	ctx.mainContext = paths
+	return ctx
+}
+
+// WithNamedContext returns a TargetsContext with a named value path.
+func (ctx TargetsContext) WithNamedContext(name string, paths []TargetPath) TargetsContext {
+	previous := ctx.namedContext
+	ctx.namedContext = &namedContextPath{
+		name:  name,
+		paths: paths,
+		next:  previous,
+	}
+	return ctx
 }

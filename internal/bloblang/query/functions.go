@@ -17,49 +17,88 @@ import (
 //------------------------------------------------------------------------------
 
 type fieldFunction struct {
-	path []string
+	namedContext string
+	path         []string
+}
+
+func (f *fieldFunction) expand(path ...string) *fieldFunction {
+	newFn := *f
+	newPath := make([]string, 0, len(f.path)+len(path))
+	newPath = append(newPath, f.path...)
+	newPath = append(newPath, path...)
+	newFn.path = newPath
+	return &newFn
+}
+
+func (f *fieldFunction) ContextCapture(ctx FunctionContext, v interface{}) (FunctionContext, error) {
+	return ctx.WithValue(v), nil
 }
 
 func (f *fieldFunction) Exec(ctx FunctionContext) (interface{}, error) {
-	v := ctx.Value()
-	if v == nil {
-		return nil, &ErrRecoverable{
-			Recovered: nil,
-			Err:       ErrNoContext,
+	var target interface{}
+	if f.namedContext == "" {
+		v := ctx.Value()
+		if v == nil {
+			return nil, &ErrRecoverable{
+				Recovered: nil,
+				Err:       ErrNoContext,
+			}
+		}
+		target = *v
+	} else {
+		var ok bool
+		if target, ok = ctx.NamedValue(f.namedContext); !ok {
+			return ctx, fmt.Errorf("named context %v was not found", f.namedContext)
 		}
 	}
 	if len(f.path) == 0 {
-		return *v, nil
+		return target, nil
 	}
-	return gabs.Wrap(*v).S(f.path...).Data(), nil
+	return gabs.Wrap(target).S(f.path...).Data(), nil
 }
 
-func (f *fieldFunction) QueryTargets(ctx TargetsContext) []TargetPath {
-	return []TargetPath{
-		NewTargetPath(TargetValue, f.path...),
+func (f *fieldFunction) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetPath) {
+	var basePaths []TargetPath
+	if f.namedContext == "" {
+		if basePaths = ctx.MainContext(); len(basePaths) == 0 {
+			basePaths = []TargetPath{NewTargetPath(TargetValue)}
+		}
+	} else {
+		basePaths = ctx.NamedContext(f.namedContext)
 	}
+	paths := make([]TargetPath, len(basePaths))
+	for i, p := range basePaths {
+		paths[i] = p
+		paths[i].Path = append(paths[i].Path, f.path...)
+	}
+	ctx.CurrentValues = paths
+	return ctx, paths
 }
 
 func (f *fieldFunction) Close(ctx context.Context) error {
 	return nil
 }
 
-// NewFieldFunction creates a query function that returns a path from a JSON
-// input document.
+// NewNamedContextFieldFunction creates a query function that attempts to
+// return a field from a named context.
+func NewNamedContextFieldFunction(namedContext, pathStr string) Function {
+	var path []string
+	if len(pathStr) > 0 {
+		path = gabs.DotPathToSlice(pathStr)
+	}
+	return &fieldFunction{namedContext, path}
+}
+
+// NewFieldFunction creates a query function that returns a field from the
+// current context.
 func NewFieldFunction(pathStr string) Function {
 	var path []string
 	if len(pathStr) > 0 {
 		path = gabs.DotPathToSlice(pathStr)
 	}
-	return &fieldFunction{path}
-}
-
-func fieldFunctionCtor(args ...interface{}) (Function, error) {
-	var path []string
-	if len(args) > 0 {
-		path = gabs.DotPathToSlice(args[0].(string))
+	return &fieldFunction{
+		path: path,
 	}
-	return &fieldFunction{path}, nil
 }
 
 //------------------------------------------------------------------------------
@@ -70,14 +109,19 @@ type Literal struct {
 	Value interface{}
 }
 
+// ContextCapture is a simple pass through.
+func (l *Literal) ContextCapture(ctx FunctionContext, v interface{}) (FunctionContext, error) {
+	return ctx.WithValue(v), nil
+}
+
 // Exec returns a literal value.
 func (l *Literal) Exec(ctx FunctionContext) (interface{}, error) {
 	return l.Value, nil
 }
 
 // QueryTargets returns nothing.
-func (l *Literal) QueryTargets(ctx TargetsContext) []TargetPath {
-	return nil
+func (l *Literal) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetPath) {
+	return ctx, nil
 }
 
 // Close does nothing.
@@ -402,10 +446,12 @@ func jsonFunction(args ...interface{}) (Function, error) {
 			gPart = gPart.Search(argPath...)
 		}
 		return ISanitize(gPart.Data()), nil
-	}, func(ctx TargetsContext) []TargetPath {
-		return []TargetPath{
+	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
+		paths := []TargetPath{
 			NewTargetPath(TargetValue, argPath...),
 		}
+		ctx.CurrentValues = paths
+		return ctx, paths
 	}), nil
 }
 
@@ -440,10 +486,12 @@ func metadataFunction(args ...interface{}) (Function, error) {
 				}
 			}
 			return v, nil
-		}, func(ctx TargetsContext) []TargetPath {
-			return []TargetPath{
+		}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
+			paths := []TargetPath{
 				NewTargetPath(TargetMetadata, field),
 			}
+			ctx.CurrentValues = paths
+			return ctx, paths
 		}), nil
 	}
 	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
@@ -455,10 +503,12 @@ func metadataFunction(args ...interface{}) (Function, error) {
 			return nil
 		})
 		return kvs, nil
-	}, func(ctx TargetsContext) []TargetPath {
-		return []TargetPath{
+	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
+		paths := []TargetPath{
 			NewTargetPath(TargetMetadata),
 		}
+		ctx.CurrentValues = paths
+		return ctx, paths
 	}), nil
 }
 
@@ -674,10 +724,12 @@ func varFunction(args ...interface{}) (Function, error) {
 			Recovered: nil,
 			Err:       fmt.Errorf("variable '%v' undefined", name),
 		}
-	}, func(ctx TargetsContext) []TargetPath {
-		return []TargetPath{
+	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
+		paths := []TargetPath{
 			NewTargetPath(TargetVariable, name),
 		}
+		ctx.CurrentValues = paths
+		return ctx, paths
 	}), nil
 }
 

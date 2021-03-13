@@ -203,9 +203,11 @@ func TestMappings(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, test.assignmentTargets, m.AssignmentTargets())
-			assert.Equal(t, test.queryTargets, m.QueryTargets(query.TargetsContext{
+
+			_, targets := m.QueryTargets(query.TargetsContext{
 				Maps: map[string]query.Function{},
-			}))
+			})
+			assert.Equal(t, test.queryTargets, targets)
 
 			res, err := m.Exec(query.FunctionContext{
 				MsgBatch: message.New(nil),

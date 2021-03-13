@@ -58,7 +58,37 @@ type FunctionContext struct {
 	MsgBatch MessageBatch
 	Legacy   bool
 
-	valueFn func() *interface{}
+	valueFn    func() *interface{}
+	namedValue *namedContextValue
+}
+
+type namedContextValue struct {
+	name  string
+	value interface{}
+	next  *namedContextValue
+}
+
+// NamedValue returns the value of a named context if it exists.
+func (ctx FunctionContext) NamedValue(name string) (interface{}, bool) {
+	current := ctx.namedValue
+	for current != nil {
+		if current.name == name {
+			return current.value, true
+		}
+		current = current.next
+	}
+	return nil, false
+}
+
+// WithNamedValue returns a FunctionContext with a named value.
+func (ctx FunctionContext) WithNamedValue(name string, value interface{}) FunctionContext {
+	previous := ctx.namedValue
+	ctx.namedValue = &namedContextValue{
+		name:  name,
+		value: value,
+		next:  previous,
+	}
+	return ctx
 }
 
 // Value returns a lazily evaluated context value. A context value is not always
@@ -82,12 +112,6 @@ func (ctx FunctionContext) WithValue(v interface{}) FunctionContext {
 		return &v
 	}
 	return ctx
-}
-
-// TargetsContext provides access to a range of query targets for functions to
-// reference when determining their targets.
-type TargetsContext struct {
-	Maps map[string]Function
 }
 
 //------------------------------------------------------------------------------

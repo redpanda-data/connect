@@ -33,7 +33,6 @@ func methodWithDynamicArgs(args []interface{}, target Function, ctor MethodCtor)
 			return nil, err
 		}
 		return dynFunc.Exec(ctx)
-
 	}, aggregateTargetPaths(fns...))
 }
 

@@ -9,12 +9,23 @@ import (
 // Function takes a set of contextual arguments and returns the result of the
 // query.
 type Function interface {
+	// ContextCapture defines how this query function would prefer to capture a
+	// fresh contextual value into a FunctionContext. This allows it to prevent
+	// overriding the previous context by capturing the new context as a
+	// variable, metadata, or anything else.
+	ContextCapture(ctx FunctionContext, value interface{}) (FunctionContext, error)
+
 	// Execute this function for a message of a batch.
 	Exec(ctx FunctionContext) (interface{}, error)
 
-	// Return a map of target types to path segments for any targets that this
-	// query function references.
-	QueryTargets(ctx TargetsContext) []TargetPath
+	// Returns a list of targets that this function attempts (or may attempt) to
+	// access. A context must be provided that describes the current execution
+	// context that this function will be executed upon, which is how it is able
+	// to determine the full path and origin of values that it targets.
+	//
+	// A new context is returned which should be provided to methods that act
+	// upon this function when querying their own targets.
+	QueryTargets(ctx TargetsContext) (TargetsContext, []TargetPath)
 }
 
 // FunctionCtor constructs a new function from input arguments.
@@ -27,17 +38,26 @@ type FunctionCtor func(args ...interface{}) (Function, error)
 // state.
 func ClosureFunction(
 	exec func(ctx FunctionContext) (interface{}, error),
-	queryTargets func(ctx TargetsContext) []TargetPath,
+	queryTargets func(ctx TargetsContext) (TargetsContext, []TargetPath),
 ) Function {
 	if queryTargets == nil {
-		queryTargets = func(TargetsContext) []TargetPath { return nil }
+		queryTargets = func(ctx TargetsContext) (TargetsContext, []TargetPath) { return ctx, nil }
 	}
-	return closureFunction{exec, queryTargets}
+	ctxCapture := func(ctx FunctionContext, v interface{}) (FunctionContext, error) {
+		return ctx.WithValue(v), nil
+	}
+	return closureFunction{ctxCapture, exec, queryTargets}
 }
 
 type closureFunction struct {
+	ctxCapture   func(ctx FunctionContext, value interface{}) (FunctionContext, error)
 	exec         func(ctx FunctionContext) (interface{}, error)
-	queryTargets func(ctx TargetsContext) []TargetPath
+	queryTargets func(ctx TargetsContext) (TargetsContext, []TargetPath)
+}
+
+// ContextCapture captures a new value into a FunctionContext.
+func (f closureFunction) ContextCapture(ctx FunctionContext, v interface{}) (FunctionContext, error) {
+	return f.ctxCapture(ctx, v)
 }
 
 // Exec the underlying closure.
@@ -46,7 +66,7 @@ func (f closureFunction) Exec(ctx FunctionContext) (interface{}, error) {
 }
 
 // QueryTargets returns nothing.
-func (f closureFunction) QueryTargets(ctx TargetsContext) []TargetPath {
+func (f closureFunction) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetPath) {
 	return f.queryTargets(ctx)
 }
 
