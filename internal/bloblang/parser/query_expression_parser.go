@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"fmt"
+
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 )
 
@@ -190,6 +192,56 @@ func bracketsExpressionParser(pCtx Context) Func {
 			return res
 		}
 		res.Payload = res.Payload.([]interface{})[2]
+		return res
+	}
+}
+
+func lambdaExpressionParser(pCtx Context) Func {
+	contextNameParser := Expect(
+		JoinStringPayloads(
+			UntilFail(
+				OneOf(
+					InRange('a', 'z'),
+					InRange('A', 'Z'),
+					InRange('0', '9'),
+					Char('_'),
+				),
+			),
+		),
+		"context name",
+	)
+
+	return func(input []rune) Result {
+		res := Expect(
+			Sequence(
+				contextNameParser,
+				SpacesAndTabs(),
+				Term("->"),
+				SpacesAndTabs(),
+			),
+			"function",
+		)(input)
+		if res.Err != nil {
+			return res
+		}
+
+		seqSlice := res.Payload.([]interface{})
+		name := seqSlice[0].(string)
+
+		if name != "_" {
+			if pCtx.HasNamedContext(name) {
+				return Fail(NewFatalError(input, fmt.Errorf("context label %v would shadow a parent context", name)), input)
+			}
+			pCtx = pCtx.WithNamedContext(name)
+		}
+
+		res = MustBe(queryParser(pCtx))(res.Remaining)
+		if res.Err != nil {
+			return res
+		}
+
+		queryFn := res.Payload.(query.Function)
+		res.Payload = query.NewNamedContextFunction(name, queryFn)
 		return res
 	}
 }

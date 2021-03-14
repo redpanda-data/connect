@@ -20,16 +20,12 @@ Methods provide most of the power in Bloblang as they allow you to augment value
 
 ```coffee
 root.doc.id = this.thing.id.string().catch(uuid_v4())
-root.doc.reduced_nums = this.thing.nums.map_each(
-  if this < 10 {
-    deleted()
-  } else {
-    this - 10
-  }
-)
-root.has_good_taste = ["pikachu","mewtwo","magmar"].contains(
-  this.user.fav_pokemon
-)
+root.doc.reduced_nums = this.thing.nums.map_each(num -> if num < 10 {
+  deleted()
+} else {
+  num - 10
+})
+root.has_good_taste = ["pikachu","mewtwo","magmar"].contains(this.user.fav_pokemon)
 ```
 
 ## General
@@ -875,7 +871,7 @@ root.joined_numbers = this.numbers.map_each(this.string()).join(",")
 Checks each element of an array against a query and returns true if all elements passed. An error occurs if the target is not an array, or if any element results in the provided query returning a non-boolean result. Returns false if the target array is empty.
 
 ```coffee
-root.all_over_21 = this.patrons.all(this.age >= 21)
+root.all_over_21 = this.patrons.all(patron -> patron.age >= 21)
 
 # In:  {"patrons":[{"id":"1","age":18},{"id":"2","age":23}]}
 # Out: {"all_over_21":false}
@@ -889,7 +885,7 @@ root.all_over_21 = this.patrons.all(this.age >= 21)
 Checks the elements of an array against a query and returns true if any element passes. An error occurs if the target is not an array, or if an element results in the provided query returning a non-boolean result. Returns false if the target array is empty.
 
 ```coffee
-root.any_over_21 = this.patrons.any(this.age >= 21)
+root.any_over_21 = this.patrons.any(patron -> patron.age >= 21)
 
 # In:  {"patrons":[{"id":"1","age":18},{"id":"2","age":23}]}
 # Out: {"any_over_21":true}
@@ -965,7 +961,7 @@ root = this.explode("value")
 Executes a mapping query argument for each element of an array or key/value pair of an object. If the query returns `false` the item is removed from the resulting array or object. The item will also be removed if the query returns any non-boolean value.
 
 ```coffee
-root.new_nums = this.nums.filter(this > 10)
+root.new_nums = this.nums.filter(num -> num > 10)
 
 # In:  {"nums":[3,11,4,17]}
 # Out: {"new_nums":[11,17]}
@@ -976,7 +972,7 @@ root.new_nums = this.nums.filter(this > 10)
 When filtering objects the mapping query argument is provided a context with a field `key` containing the value key, and a field `value` containing the value.
 
 ```coffee
-root.new_dict = this.dict.filter(this.value.contains("foo"))
+root.new_dict = this.dict.filter(item -> item.value.contains("foo"))
 
 # In:  {"dict":{"first":"hello foo","second":"world","third":"this foo is great"}}
 # Out: {"new_dict":{"first":"hello foo","third":"this foo is great"}}
@@ -1000,14 +996,14 @@ Takes two arguments: an initial value, and a mapping query. For each element of 
 The first argument is the value that `tally` will have on the first call.
 
 ```coffee
-root.sum = this.foo.fold(0, this.tally + this.value)
+root.sum = this.foo.fold(0, item -> item.tally + item.value)
 
 # In:  {"foo":[3,8,11]}
 # Out: {"sum":22}
 ```
 
 ```coffee
-root.result = this.foo.fold("", "%v%v".format(this.tally, this.value))
+root.result = this.foo.fold("", item -> "%v%v".format(item.tally, item.value))
 
 # In:  {"foo":["hello ", "world"]}
 # Out: {"result":"hello world"}
@@ -1067,10 +1063,10 @@ root.foo_len = this.foo.length()
 Apply a mapping to each element of an array and replace the element with the result. Within the argument mapping the context is the value of the element being mapped.
 
 ```coffee
-root.new_nums = this.nums.map_each(if this < 10 {
+root.new_nums = this.nums.map_each(num -> if num < 10 {
   deleted()
 } else {
-  this - 10
+  num - 10
 })
 
 # In:  {"nums":[3,11,4,17]}
@@ -1082,7 +1078,7 @@ root.new_nums = this.nums.map_each(if this < 10 {
 Apply a mapping to each value of an object and replace the value with the result. Within the argument mapping the context is an object with a field `key` containing the value key, and a field `value`.
 
 ```coffee
-root.new_dict = this.dict.map_each(this.value.uppercase())
+root.new_dict = this.dict.map_each(item -> item.value.uppercase())
 
 # In:  {"dict":{"foo":"hello","bar":"world"}}
 # Out: {"new_dict":{"bar":"WORLD","foo":"HELLO"}}
@@ -1093,14 +1089,14 @@ root.new_dict = this.dict.map_each(this.value.uppercase())
 Apply a mapping to each key of an object, and replace the key with the result, which must be a string.
 
 ```coffee
-root.new_dict = this.dict.map_each_key(this.uppercase())
+root.new_dict = this.dict.map_each_key(key -> key.uppercase())
 
 # In:  {"dict":{"keya":"hello","keyb":"world"}}
 # Out: {"new_dict":{"KEYA":"hello","KEYB":"world"}}
 ```
 
 ```coffee
-root = this.map_each_key(if this.contains("kafka") { "_" + this })
+root = this.map_each_key(key -> if key.contains("kafka") { "_" + key })
 
 # In:  {"amqp_key":"foo","kafka_key":"bar","kafka_topic":"baz"}
 # Out: {"_kafka_key":"bar","_kafka_topic":"baz","amqp_key":"foo"}
@@ -1131,7 +1127,7 @@ root.sorted = this.foo.sort()
 It's also possible to specify a mapping argument, which is provided an object context with fields `left` and `right`, the mapping must return a boolean indicating whether the `left` value is less than `right`. This allows you to sort arrays containing non-string or non-number values.
 
 ```coffee
-root.sorted = this.foo.sort(this.left.v < this.right.v)
+root.sorted = this.foo.sort(item -> item.left.v < item.right.v)
 
 # In:  {"foo":[{"id":"foo","v":"bbb"},{"id":"bar","v":"ccc"},{"id":"baz","v":"aaa"}]}
 # Out: {"sorted":[{"id":"baz","v":"aaa"},{"id":"foo","v":"bbb"},{"id":"bar","v":"ccc"}]}

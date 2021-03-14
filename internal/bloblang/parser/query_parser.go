@@ -17,8 +17,33 @@ type MethodSet interface {
 // Context contains context used throughout a Bloblang parser for
 // accessing function and method constructors.
 type Context struct {
-	Functions FunctionSet
-	Methods   MethodSet
+	Functions    FunctionSet
+	Methods      MethodSet
+	namedContext *namedContext
+}
+
+type namedContext struct {
+	name string
+	next *namedContext
+}
+
+// WithNamedContext returns a Context with a named execution context.
+func (pCtx Context) WithNamedContext(name string) Context {
+	next := pCtx.namedContext
+	pCtx.namedContext = &namedContext{name, next}
+	return pCtx
+}
+
+// HasNamedContext returns true if a given name exists as a named context.
+func (pCtx Context) HasNamedContext(name string) bool {
+	tmp := pCtx.namedContext
+	for tmp != nil {
+		if tmp.name == name {
+			return true
+		}
+		tmp = tmp.next
+	}
+	return false
 }
 
 // InitFunction attempts to initialise a function from the available
@@ -38,11 +63,12 @@ func queryParser(pCtx Context) func(input []rune) Result {
 		OneOf(
 			matchExpressionParser(pCtx),
 			ifExpressionParser(pCtx),
+			lambdaExpressionParser(pCtx),
 			bracketsExpressionParser(pCtx),
 			literalValueParser(pCtx),
 			functionParser(pCtx),
 			variableLiteralParser(),
-			fieldLiteralRootParser(),
+			fieldLiteralRootParser(pCtx),
 		),
 		"query",
 	), pCtx)

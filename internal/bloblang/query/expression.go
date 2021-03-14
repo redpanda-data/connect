@@ -52,7 +52,7 @@ func NewMatchFunction(contextFn Function, cases ...MatchCase) Function {
 		return Nothing(nil), nil
 	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
 		contextCtx, contextTargets := contextFn.QueryTargets(ctx)
-		contextCtx = contextCtx.WithMainContext(contextTargets)
+		contextCtx = contextCtx.WithValues(contextTargets).WithValuesAsContext()
 
 		var targets []TargetPath
 		for _, c := range cases {
@@ -86,4 +86,38 @@ func NewIfFunction(queryFn Function, ifFn Function, elseFn Function) Function {
 		}
 		return Nothing(nil), nil
 	}, aggregateTargetPaths(queryFn, ifFn, elseFn))
+}
+
+// NewNamedContextFunction wraps a function and ensures that when the function
+// is executed with a new context the context is captured under a new name, with
+// the "main" context left intact.
+func NewNamedContextFunction(name string, fn Function) Function {
+	return &namedContextFunction{name, fn}
+}
+
+type namedContextFunction struct {
+	name string
+	fn   Function
+}
+
+func (n *namedContextFunction) ContextCapture(ctx FunctionContext, value interface{}) (FunctionContext, error) {
+	if n.name == "_" {
+		// Special case means we totally disregard the context.
+		return ctx, nil
+	}
+	ctx = ctx.WithNamedValue(n.name, value)
+	return ctx, nil
+}
+
+func (n *namedContextFunction) Exec(ctx FunctionContext) (interface{}, error) {
+	return n.fn.Exec(ctx)
+}
+
+func (n *namedContextFunction) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetPath) {
+	if n.name == "_" {
+		ctx = ctx.PopContext()
+	} else {
+		ctx = ctx.WithContextAsNamed(n.name)
+	}
+	return n.fn.QueryTargets(ctx)
 }

@@ -55,12 +55,7 @@ root.bar = deleted()
 Since the result is a value it can be used to do things like remove elements of an array within `map_each`.
 
 ```coffee
-root.new_nums = this.nums.map_each(
-  match this {
-    this < 10 => deleted()
-    _ => this - 10
-  }
-)
+root.new_nums = this.nums.map_each(num -> if num < 10 { deleted() } else { num - 10 })
 
 # In:  {"nums":[3,11,4,17]}
 # Out: {"new_nums":[1,7]}

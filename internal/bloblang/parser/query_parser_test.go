@@ -106,6 +106,10 @@ func TestFunctionParserErrors(t *testing.T) {
 			input: `match json("foo") what is this?`,
 			err:   `line 1 char 19: required: expected {`,
 		},
+		"shadowed context": {
+			input: `this.(foo -> foo.(foo -> foo.bar))`,
+			err:   `line 1 char 19: context label foo would shadow a parent context`,
+		},
 	}
 
 	for name, test := range tests {

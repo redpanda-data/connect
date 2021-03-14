@@ -14,7 +14,7 @@ type Executor struct {
 // Query executes a Bloblang mapping against a value and returns the result. The
 // argument and return values can be structured using the same
 // map[string]interface{} and []interface{} types as would be returned by the Go
-// standard json package unmarshaller.
+// standard json package unmarshaler.
 func (e *Executor) Query(v interface{}) (interface{}, error) {
 	msg := message.New(nil)
 	part := message.NewPart(nil)

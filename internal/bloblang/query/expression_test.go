@@ -134,6 +134,67 @@ func TestExpressions(t *testing.T) {
 			),
 			output: Nothing(nil),
 		},
+		"named context map arithmetic": {
+			input: mustFunc(NewMapMethod(
+				NewFieldFunction("foo"),
+				NewNamedContextFunction("next", mustFunc(NewArithmeticExpression(
+					[]Function{
+						NewNamedContextFieldFunction("next", "bar"),
+						NewFieldFunction("baz"),
+					},
+					[]ArithmeticOperator{
+						ArithmeticAdd,
+					},
+				))),
+			)),
+			value: func() *interface{} {
+				var v interface{} = map[string]interface{}{
+					"foo": map[string]interface{}{
+						"bar": 7,
+					},
+					"baz": 23,
+				}
+				return &v
+			}(),
+			output: int64(30),
+		},
+		"named context map to literal": {
+			input: mustFunc(NewMapMethod(
+				NewFieldFunction("foo"),
+				NewNamedContextFunction("next", NewArrayLiteral(
+					NewNamedContextFieldFunction("next", "bar"),
+					NewFieldFunction("baz"),
+				).(Function)),
+			)),
+			value: func() *interface{} {
+				var v interface{} = map[string]interface{}{
+					"foo": map[string]interface{}{
+						"bar": 7,
+					},
+					"baz": 23,
+				}
+				return &v
+			}(),
+			output: []interface{}{7, 23},
+		},
+		"dropped context map to literal": {
+			input: mustFunc(NewMapMethod(
+				NewFieldFunction("foo"),
+				NewNamedContextFunction("_", NewArrayLiteral(
+					NewFieldFunction("baz"),
+				).(Function)),
+			)),
+			value: func() *interface{} {
+				var v interface{} = map[string]interface{}{
+					"foo": map[string]interface{}{
+						"bar": 7,
+					},
+					"baz": 23,
+				}
+				return &v
+			}(),
+			output: []interface{}{23},
+		},
 	}
 
 	for name, test := range tests {
@@ -189,6 +250,51 @@ func TestExpressionTargets(t *testing.T) {
 		input  Function
 		output []TargetPath
 	}{
+		"named context map arithmetic": {
+			input: mustFunc(NewMapMethod(
+				NewFieldFunction("foo"),
+				NewNamedContextFunction("next", mustFunc(NewArithmeticExpression(
+					[]Function{
+						NewNamedContextFieldFunction("next", "bar"),
+						NewFieldFunction("baz"),
+					},
+					[]ArithmeticOperator{
+						ArithmeticAdd,
+					},
+				))),
+			)),
+			output: []TargetPath{
+				NewTargetPath(TargetValue, "foo"),
+				NewTargetPath(TargetValue, "foo", "bar"),
+				NewTargetPath(TargetValue, "baz"),
+			},
+		},
+		"named context map to literal": {
+			input: mustFunc(NewMapMethod(
+				NewFieldFunction("foo"),
+				NewNamedContextFunction("next", NewArrayLiteral(
+					NewNamedContextFieldFunction("next", "bar"),
+					NewFieldFunction("baz"),
+				).(Function)),
+			)),
+			output: []TargetPath{
+				NewTargetPath(TargetValue, "foo"),
+				NewTargetPath(TargetValue, "foo", "bar"),
+				NewTargetPath(TargetValue, "baz"),
+			},
+		},
+		"dropped context map to literal": {
+			input: mustFunc(NewMapMethod(
+				NewFieldFunction("foo"),
+				NewNamedContextFunction("_", NewArrayLiteral(
+					NewFieldFunction("baz"),
+				).(Function)),
+			)),
+			output: []TargetPath{
+				NewTargetPath(TargetValue, "foo"),
+				NewTargetPath(TargetValue, "baz"),
+			},
+		},
 		"if query path": {
 			input: NewIfFunction(
 				mustFunc(InitFunction("json", "foo.bar")),

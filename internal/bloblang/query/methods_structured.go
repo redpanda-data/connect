@@ -22,7 +22,7 @@ var _ = RegisterMethod(
 		MethodCategoryObjectAndArray,
 		"",
 		NewExampleSpec("",
-			`root.all_over_21 = this.patrons.all(this.age >= 21)`,
+			`root.all_over_21 = this.patrons.all(patron -> patron.age >= 21)`,
 			`{"patrons":[{"id":"1","age":18},{"id":"2","age":23}]}`,
 			`{"all_over_21":false}`,
 			`{"patrons":[{"id":"1","age":45},{"id":"2","age":23}]}`,
@@ -80,7 +80,7 @@ var _ = RegisterMethod(
 		MethodCategoryObjectAndArray,
 		"",
 		NewExampleSpec("",
-			`root.any_over_21 = this.patrons.any(this.age >= 21)`,
+			`root.any_over_21 = this.patrons.any(patron -> patron.age >= 21)`,
 			`{"patrons":[{"id":"1","age":18},{"id":"2","age":23}]}`,
 			`{"any_over_21":true}`,
 			`{"patrons":[{"id":"1","age":10},{"id":"2","age":12}]}`,
@@ -393,14 +393,14 @@ var _ = RegisterMethod(
 		MethodCategoryObjectAndArray,
 		"Executes a mapping query argument for each element of an array or key/value pair of an object. If the query returns `false` the item is removed from the resulting array or object. The item will also be removed if the query returns any non-boolean value.",
 		NewExampleSpec(``,
-			`root.new_nums = this.nums.filter(this > 10)`,
+			`root.new_nums = this.nums.filter(num -> num > 10)`,
 			`{"nums":[3,11,4,17]}`,
 			`{"new_nums":[11,17]}`,
 		),
 		NewExampleSpec(`#### On objects
 
 When filtering objects the mapping query argument is provided a context with a field `+"`key`"+` containing the value key, and a field `+"`value`"+` containing the value.`,
-			`root.new_dict = this.dict.filter(this.value.contains("foo"))`,
+			`root.new_dict = this.dict.filter(item -> item.value.contains("foo"))`,
 			`{"dict":{"first":"hello foo","second":"world","third":"this foo is great"}}`,
 			`{"new_dict":{"first":"hello foo","third":"this foo is great"}}`,
 		),
@@ -510,12 +510,12 @@ var _ = RegisterMethod(
 	).InCategory(
 		MethodCategoryObjectAndArray, "",
 		NewExampleSpec(``,
-			`root.sum = this.foo.fold(0, this.tally + this.value)`,
+			`root.sum = this.foo.fold(0, item -> item.tally + item.value)`,
 			`{"foo":[3,8,11]}`,
 			`{"sum":22}`,
 		),
 		NewExampleSpec(``,
-			`root.result = this.foo.fold("", "%v%v".format(this.tally, this.value))`,
+			`root.result = this.foo.fold("", item -> "%v%v".format(item.tally, item.value))`,
 			`{"foo":["hello ", "world"]}`,
 			`{"result":"hello world"}`,
 		),
@@ -787,10 +787,10 @@ var _ = RegisterMethod(
 		NewExampleSpec(`#### On arrays
 
 Apply a mapping to each element of an array and replace the element with the result. Within the argument mapping the context is the value of the element being mapped.`,
-			`root.new_nums = this.nums.map_each(if this < 10 {
+			`root.new_nums = this.nums.map_each(num -> if num < 10 {
   deleted()
 } else {
-  this - 10
+  num - 10
 })`,
 			`{"nums":[3,11,4,17]}`,
 			`{"new_nums":[1,7]}`,
@@ -798,7 +798,7 @@ Apply a mapping to each element of an array and replace the element with the res
 		NewExampleSpec(`#### On objects
 
 Apply a mapping to each value of an object and replace the value with the result. Within the argument mapping the context is an object with a field `+"`key`"+` containing the value key, and a field `+"`value`"+`.`,
-			`root.new_dict = this.dict.map_each(this.value.uppercase())`,
+			`root.new_dict = this.dict.map_each(item -> item.value.uppercase())`,
 			`{"dict":{"foo":"hello","bar":"world"}}`,
 			`{"new_dict":{"bar":"WORLD","foo":"HELLO"}}`,
 		),
@@ -898,12 +898,12 @@ var _ = RegisterMethod(
 	).InCategory(
 		MethodCategoryObjectAndArray, `Apply a mapping to each key of an object, and replace the key with the result, which must be a string.`,
 		NewExampleSpec(``,
-			`root.new_dict = this.dict.map_each_key(this.uppercase())`,
+			`root.new_dict = this.dict.map_each_key(key -> key.uppercase())`,
 			`{"dict":{"keya":"hello","keyb":"world"}}`,
 			`{"new_dict":{"KEYA":"hello","KEYB":"world"}}`,
 		),
 		NewExampleSpec(``,
-			`root = this.map_each_key(if this.contains("kafka") { "_" + this })`,
+			`root = this.map_each_key(key -> if key.contains("kafka") { "_" + key })`,
 			`{"amqp_key":"foo","kafka_key":"bar","kafka_topic":"baz"}`,
 			`{"_kafka_key":"bar","_kafka_topic":"baz","amqp_key":"foo"}`,
 		),
@@ -1085,7 +1085,7 @@ var _ = RegisterMethod(
 			`{"sorted":["aaa","bbb","ccc"]}`,
 		),
 		NewExampleSpec("It's also possible to specify a mapping argument, which is provided an object context with fields `left` and `right`, the mapping must return a boolean indicating whether the `left` value is less than `right`. This allows you to sort arrays containing non-string or non-number values.",
-			`root.sorted = this.foo.sort(this.left.v < this.right.v)`,
+			`root.sorted = this.foo.sort(item -> item.left.v < item.right.v)`,
 			`{"foo":[{"id":"foo","v":"bbb"},{"id":"bar","v":"ccc"},{"id":"baz","v":"aaa"}]}`,
 			`{"sorted":[{"id":"baz","v":"aaa"},{"id":"foo","v":"bbb"},{"id":"bar","v":"ccc"}]}`,
 		),

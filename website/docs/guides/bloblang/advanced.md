@@ -50,8 +50,8 @@ Sometimes it's necessary to perform a mapping on all values within an unknown tr
 ```coffee
 map unescape_values {
   root = match {
-    this.type() == "object" => this.map_each(this.value.apply("unescape_values")),
-    this.type() == "array" => this.map_each(this.apply("unescape_values")),
+    this.type() == "object" => this.map_each(item -> item.value.apply("unescape_values")),
+    this.type() == "array" => this.map_each(ele -> ele.apply("unescape_values")),
     this.type() == "string" => this.unescape_html(),
     this.type() == "bytes" => this.unescape_html(),
     _ => this,
@@ -88,7 +88,16 @@ pipeline:
         format: json_array
 ```
 
-However, most of the time we also need to map the elements before expanding them, and often that includes copying fields outside of our target array. We can do that with context variables:
+However, most of the time we also need to map the elements before expanding them, and often that includes copying fields outside of our target array. We can do that with methods such as `map_each` and `merge`:
+
+```coffee
+root = this.items.map_each(ele -> this.without("items").merge(ele))
+
+# In:  {"id":"foobar","items":[{"content":"foo"},{"content":"bar"},{"content":"baz"}]}
+# Out: [{"content":"foo","id":"foobar"},{"content":"bar","id":"foobar"},{"content":"baz","id":"foobar"}]
+```
+
+However, the above mapping is slightly inefficient as we would create a copy of our source object for each element with the `this.without("items")` part. A more efficient way to do this would be to capture that query within a variable:
 
 ```coffee
 let doc_root = this.without("items")

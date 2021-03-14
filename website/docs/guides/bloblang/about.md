@@ -276,13 +276,11 @@ Methods provide most of the power in Bloblang as they allow you to augment query
 
 ```coffee
 root.doc.id = this.thing.id.string().catch(uuid_v4())
-root.doc.reduced_nums = this.thing.nums.map_each(
-  if this < 10 {
-    deleted()
-  } else {
-    this - 10
-  }
-)
+root.doc.reduced_nums = this.thing.nums.map_each(num -> if num < 10 {
+  deleted()
+} else {
+  num - 10
+})
 root.has_good_taste = ["pikachu","mewtwo","magmar"].contains(this.user.fav_pokemon)
 ```
 
@@ -326,9 +324,7 @@ By assigning the root of a mapped document to the `deleted()` function you can d
 
 ```coffee
 # Filter all messages that have fewer than 10 URLs.
-root = match {
-  this.doc.urls.length() < 10 => deleted()
-}
+root = if this.doc.urls.length() < 10 { deleted() }
 ```
 
 ## Error Handling
@@ -354,10 +350,10 @@ And one of the more powerful features of Bloblang is that a single `catch` metho
 # - foo not existing
 # - foo not being a string
 # - an element from split foo not being a valid JSON string
-root.things = this.foo.split(",").map_each( this.parse_json() ).catch([])
+root.things = this.foo.split(",").map_each( ele -> ele.parse_json() ).catch([])
 
 # Specifically catch a JSON parse error
-root.things = this.foo.split(",").map_each( this.parse_json().catch({}) )
+root.things = this.foo.split(",").map_each( ele -> ele.parse_json().catch({}) )
 ```
 
 However, the `catch` method only acts on errors, sometimes it's also useful to set a fall back value when a query returns `null` in which case the [method `or`][blobl.methods.or] can be used the same way:

@@ -71,7 +71,7 @@ func (f *fieldFunction) QueryTargets(ctx TargetsContext) (TargetsContext, []Targ
 		paths[i] = p
 		paths[i].Path = append(paths[i].Path, f.path...)
 	}
-	ctx.CurrentValues = paths
+	ctx = ctx.WithValues(paths)
 	return ctx, paths
 }
 
@@ -245,12 +245,7 @@ root.bar = deleted()`,
 		),
 		NewExampleSpec(
 			"Since the result is a value it can be used to do things like remove elements of an array within `map_each`.",
-			`root.new_nums = this.nums.map_each(
-  match this {
-    this < 10 => deleted()
-    _ => this - 10
-  }
-)`,
+			`root.new_nums = this.nums.map_each(num -> if num < 10 { deleted() } else { num - 10 })`,
 			`{"nums":[3,11,4,17]}`,
 			`{"new_nums":[1,7]}`,
 		),
@@ -450,7 +445,7 @@ func jsonFunction(args ...interface{}) (Function, error) {
 		paths := []TargetPath{
 			NewTargetPath(TargetValue, argPath...),
 		}
-		ctx.CurrentValues = paths
+		ctx = ctx.WithValues(paths)
 		return ctx, paths
 	}), nil
 }
@@ -490,7 +485,7 @@ func metadataFunction(args ...interface{}) (Function, error) {
 			paths := []TargetPath{
 				NewTargetPath(TargetMetadata, field),
 			}
-			ctx.CurrentValues = paths
+			ctx = ctx.WithValues(paths)
 			return ctx, paths
 		}), nil
 	}
@@ -507,7 +502,7 @@ func metadataFunction(args ...interface{}) (Function, error) {
 		paths := []TargetPath{
 			NewTargetPath(TargetMetadata),
 		}
-		ctx.CurrentValues = paths
+		ctx = ctx.WithValues(paths)
 		return ctx, paths
 	}), nil
 }
@@ -728,7 +723,7 @@ func varFunction(args ...interface{}) (Function, error) {
 		paths := []TargetPath{
 			NewTargetPath(TargetVariable, name),
 		}
-		ctx.CurrentValues = paths
+		ctx = ctx.WithValues(paths)
 		return ctx, paths
 	}), nil
 }

@@ -69,8 +69,10 @@ func applyMethod(target Function, args ...interface{}) (Function, error) {
 		if !ok {
 			return target.QueryTargets(ctx)
 		}
+
 		mapCtx, targets := target.QueryTargets(ctx)
-		mapCtx = mapCtx.WithMainContext(targets)
+		mapCtx = mapCtx.WithValues(targets).WithValuesAsContext()
+
 		returnCtx, mapTargets := mapFn.QueryTargets(mapCtx)
 		return returnCtx, append(targets, mapTargets...)
 	}), nil
@@ -281,13 +283,13 @@ func (g *getMethod) Exec(ctx FunctionContext) (interface{}, error) {
 func (g *getMethod) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetPath) {
 	ctx, fnPaths := g.fn.QueryTargets(ctx)
 
-	basePaths := ctx.CurrentValues
+	basePaths := ctx.Value()
 	paths := make([]TargetPath, len(basePaths))
 	for i, p := range basePaths {
 		paths[i] = p
 		paths[i].Path = append(paths[i].Path, g.path...)
 	}
-	ctx.CurrentValues = paths
+	ctx = ctx.WithValues(paths)
 
 	return ctx, append(fnPaths, paths...)
 }
@@ -346,7 +348,8 @@ func mapMethod(target Function, args ...interface{}) (Function, error) {
 		return mapFn.Exec(mapCtx)
 	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
 		mapCtx, targets := target.QueryTargets(ctx)
-		mapCtx = mapCtx.WithMainContext(targets)
+		mapCtx = mapCtx.WithValues(targets).WithValuesAsContext()
+
 		returnCtx, mapTargets := mapFn.QueryTargets(mapCtx)
 		return returnCtx, append(targets, mapTargets...)
 	}), nil
