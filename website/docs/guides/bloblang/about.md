@@ -41,9 +41,11 @@ root.foo = "added value"
 # Out: {"id":"wat1","message":"hello world","foo":"added value"}
 ```
 
+If the new document `root` is never assigned to or otherwise mutated then the original document remains unchanged.
+
 ### Non-structured Data
 
-Bloblang is able to map data that is unstructured, whether it's a log line or a binary blob, by referencing it with the [`content` function][blobl.functions.content]:
+Bloblang is able to map data that is unstructured, whether it's a log line or a binary blob, by referencing it with the [`content` function][blobl.functions.content], which returns the raw bytes of the input document:
 
 ```coffee
 # Parse a base64 encoded JSON document
@@ -104,7 +106,7 @@ root.new_doc.bar = meta("kafka_topic")
 
 The [`meta` function][blobl.functions.meta] returns the read-only metadata of the input message, so it will not reflect changes you've made within the same mapping. This is why it's possible to begin a mapping by removing all old metadata `meta = deleted()` and still be able to query the original metadata.
 
-If you wish to store query values in your mapping to be reused then [use variables][blobl.variables]. 
+If you wish to set a metadata value and then refer back to it later then first set it [as a variable][blobl.variables].
 
 ### Special Characters in Paths
 
@@ -121,7 +123,7 @@ root."foo.bar".baz = this."buz bev".fub
 
 ## Coalesce
 
-The pipe operator (`|`) used within brackets allows you to coalesce values within a path:
+The pipe operator (`|`) used within brackets allows you to coalesce multiple candidates for a path segment. The first field that exists and has a non-null value will be selected:
 
 ```coffee
 root.new_doc.type = this.thing.(article | comment | this).type
@@ -136,7 +138,7 @@ root.new_doc.type = this.thing.(article | comment | this).type
 # Out: {"new_doc":{"type":"baz"}}
 ```
 
-This is a called a bracketed mapping and within it the context changes to the path value it is added to, therefore in the above example `this` within the brackets refers to the contents of `this.thing`.
+Opening brackets on a field begins a query where the context of `this` changes to value of the path it is opened upon, therefore in the above example `this` within the brackets refers to the contents of `this.thing`.
 
 ## Literals
 
@@ -156,6 +158,8 @@ string"""
 # In:  {}
 # Out: [7,false,"string",null,{"first":11,"second":{"foo":"bar"},"third":"multiple\nlines on this\nstring"}]
 ```
+
+The values within literal arrays and objects can be dynamic query expressions, as well as the keys of object literals.
 
 ## Comments
 
@@ -213,7 +217,7 @@ root.foo = if this.exists("foo") {
 
 ## Pattern Matching
 
-A `match` expression allows you to perform conditional mappings on a value using boolean logic:
+A `match` expression allows you to perform conditional mappings on a value, each case should be either a boolean expression, a literal value to compare against the target value, or an underscore (`_`) which captures values that have not matched a prior case:
 
 ```coffee
 root.new_doc = match this.doc {
@@ -288,7 +292,7 @@ You can find a full list of methods in [this doc][blobl.methods].
 
 ## Maps
 
-It's possible to declare reusable maps for common operations:
+Defining named maps allows you to reuse common mappings on values with the [`apply` method][blobl.methods.apply]:
 
 ```coffee
 map things {
@@ -303,7 +307,7 @@ root.bar = this.value_two.apply("things")
 # Out: {"foo":{"first":"hey","second":"yo"},"bar":{"first":"sup","second":"waddup"}}
 ```
 
-Within a map the keyword `root` refers to a newly created document, and `this` refers to whatever the map is applied to.
+Within a map the keyword `root` refers to a newly created document that will replace the target of the map, and `this` refers to the original value of the target. The argument of `apply` is a string, which allows you to dynamically resolve the mapping to apply.
 
 ## Import Maps
 
@@ -372,6 +376,7 @@ root.foo = this.bar.index(5).or("default")
 [blobl.functions.meta]: /docs/guides/bloblang/functions#meta
 [blobl.functions.content]: /docs/guides/bloblang/functions#content
 [blobl.methods]: /docs/guides/bloblang/methods
+[blobl.methods.apply]: /docs/guides/bloblang/methods#apply
 [blobl.methods.catch]: /docs/guides/bloblang/methods#catch
 [blobl.methods.or]: /docs/guides/bloblang/methods#or
 [plugin-api]: https://pkg.go.dev/github.com/Jeffail/benthos/v3/public/bloblang

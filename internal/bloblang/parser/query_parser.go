@@ -58,12 +58,16 @@ func (pCtx Context) InitMethod(name string, target query.Function, args ...inter
 	return pCtx.Methods.Init(name, target, args...)
 }
 
-func queryParser(pCtx Context) func(input []rune) Result {
+func queryParser(allowLambda bool, pCtx Context) func(input []rune) Result {
+	lambdaParser := lambdaExpressionParser(pCtx)
+	if !allowLambda {
+		lambdaParser = Expect(Nothing(), "query")
+	}
 	rootParser := parseWithTails(Expect(
 		OneOf(
 			matchExpressionParser(pCtx),
 			ifExpressionParser(pCtx),
-			lambdaExpressionParser(pCtx),
+			lambdaParser,
 			bracketsExpressionParser(pCtx),
 			literalValueParser(pCtx),
 			functionParser(pCtx),
@@ -114,7 +118,7 @@ func tryParseQuery(expr string, deprecated bool) (query.Function, *Error) {
 	if deprecated {
 		res = ParseDeprecatedQuery([]rune(expr))
 	} else {
-		res = queryParser(Context{
+		res = queryParser(true, Context{
 			Functions: query.AllFunctions,
 			Methods:   query.AllMethods,
 		})([]rune(expr))

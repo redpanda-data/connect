@@ -113,7 +113,7 @@ func TestLiteralParser(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			res := queryParser(Context{
+			res := queryParser(true, Context{
 				Functions: query.AllFunctions,
 				Methods:   query.AllMethods,
 			})([]rune(test.mapping))

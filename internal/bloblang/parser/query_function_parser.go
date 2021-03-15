@@ -21,7 +21,7 @@ func functionArgsParser(pCtx Context) Func {
 	return func(input []rune) Result {
 		return DelimitedPattern(
 			Expect(Sequence(open, whitespace), "function arguments"),
-			MustBe(Expect(queryParser(pCtx), "function argument")),
+			MustBe(Expect(queryParser(true, pCtx), "function argument")),
 			MustBe(Expect(Sequence(Discard(SpacesAndTabs()), comma, whitespace), "comma")),
 			MustBe(Expect(Sequence(whitespace, close), "closing bracket")),
 			true,
@@ -45,7 +45,7 @@ func parseFunctionTail(fn query.Function, pCtx Context) Func {
 			Sequence(
 				Expect(openBracket, "method"),
 				whitespace,
-				queryParser(pCtx),
+				queryParser(true, pCtx),
 				whitespace,
 				closeBracket,
 			),

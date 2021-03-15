@@ -108,7 +108,15 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"shadowed context": {
 			input: `this.(foo -> foo.(foo -> foo.bar))`,
-			err:   `line 1 char 19: context label foo would shadow a parent context`,
+			err:   "line 1 char 19: context label `foo` would shadow a parent context",
+		},
+		"shadowed this context": {
+			input: `this.(this -> this.foo)`,
+			err:   "line 1 char 7: context label `this` is not allowed",
+		},
+		"shadowed root context": {
+			input: `this.(root -> root.foo)`,
+			err:   "line 1 char 7: context label `root` is not allowed",
 		},
 	}
 
@@ -230,7 +238,7 @@ not this`,
 			if test.deprecated {
 				res = ParseDeprecatedQuery([]rune(test.input))
 			} else {
-				res = queryParser(Context{
+				res = queryParser(true, Context{
 					Functions: query.AllFunctions,
 					Methods:   query.AllMethods,
 				})([]rune(test.input))

@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -57,6 +58,76 @@ func CliCommand() *cli.Command {
 		},
 		Action: run,
 	}
+}
+
+func executeMapping(exec *mapping.Executor, rawInput, prettyOutput bool, input []byte) (string, error) {
+	msg := message.New([][]byte{[]byte(input)})
+
+	var valuePtr *interface{}
+	var parseErr error
+
+	lazyValue := func() *interface{} {
+		if valuePtr == nil && parseErr == nil {
+			if rawInput {
+				var value interface{} = input
+				valuePtr = &value
+			} else {
+				if jObj, err := msg.Get(0).JSON(); err == nil {
+					valuePtr = &jObj
+				} else {
+					if errors.Is(err, message.ErrMessagePartNotExist) {
+						parseErr = errors.New("message is empty")
+					} else {
+						parseErr = fmt.Errorf("parse as json: %w", err)
+					}
+				}
+			}
+		}
+		return valuePtr
+	}
+
+	result, err := exec.Exec(query.FunctionContext{
+		Maps:     exec.Maps(),
+		Vars:     map[string]interface{}{},
+		MsgBatch: msg,
+	}.WithValueFunc(lazyValue))
+	if err != nil {
+		if parseErr != nil && errors.Is(err, query.ErrNoContext) {
+			err = fmt.Errorf("unable to reference message as structured (with 'this'): %w", parseErr)
+		}
+		return "", err
+	}
+
+	var resultStr string
+	switch t := result.(type) {
+	case string:
+		resultStr = t
+	case []byte:
+		resultStr = string(t)
+	case query.Delete:
+		return "", nil
+	case query.Nothing:
+		// Do not change the original contents
+		if v := lazyValue(); v != nil {
+			gObj := gabs.Wrap(v)
+			if prettyOutput {
+				resultStr = gObj.StringIndent("", "  ")
+			} else {
+				resultStr = gObj.String()
+			}
+		} else {
+			resultStr = string(input)
+		}
+	default:
+		gObj := gabs.Wrap(result)
+		if prettyOutput {
+			resultStr = gObj.StringIndent("", "  ")
+		} else {
+			resultStr = gObj.String()
+		}
+	}
+
+	return resultStr, nil
 }
 
 func run(c *cli.Context) error {
@@ -120,79 +191,16 @@ func run(c *cli.Context) error {
 		go func() {
 			defer wg.Done()
 
-		inputsLoop:
 			for {
 				input, open := <-inputsChan
 				if !open {
 					return
 				}
 
-				msg := message.New([][]byte{input})
-
-				var valuePtr *interface{}
-				var parseErr error
-
-				lazyValue := func() *interface{} {
-					if valuePtr == nil && parseErr == nil {
-						if raw {
-							var value interface{} = input
-							valuePtr = &value
-						} else {
-							if jObj, err := msg.Get(0).JSON(); err == nil {
-								valuePtr = &jObj
-							} else {
-								if errors.Is(err, message.ErrMessagePartNotExist) {
-									parseErr = errors.New("message is empty")
-								} else {
-									parseErr = fmt.Errorf("parse as json: %w", err)
-								}
-							}
-						}
-					}
-					return valuePtr
-				}
-
-				result, err := exec.Exec(query.FunctionContext{
-					Maps:     exec.Maps(),
-					Vars:     map[string]interface{}{},
-					MsgBatch: msg,
-				}.WithValueFunc(lazyValue))
+				resultStr, err := executeMapping(exec, raw, pretty, input)
 				if err != nil {
-					if parseErr != nil && errors.Is(err, query.ErrNoContext) {
-						err = fmt.Errorf("unable to reference message as structured (with 'this'): %w", parseErr)
-					}
 					fmt.Fprintln(os.Stderr, red(fmt.Sprintf("failed to execute map: %v", err)))
 					continue
-				}
-
-				var resultStr string
-				switch t := result.(type) {
-				case string:
-					resultStr = t
-				case []byte:
-					resultStr = string(t)
-				case query.Delete:
-					// Return nothing (filter the message)
-					continue inputsLoop
-				case query.Nothing:
-					// Do not change the original contents
-					if v := lazyValue(); v != nil {
-						gObj := gabs.Wrap(v)
-						if pretty {
-							resultStr = gObj.StringIndent("", "  ")
-						} else {
-							resultStr = gObj.String()
-						}
-					} else {
-						resultStr = string(input)
-					}
-				default:
-					gObj := gabs.Wrap(result)
-					if pretty {
-						resultStr = gObj.StringIndent("", "  ")
-					} else {
-						resultStr = gObj.String()
-					}
 				}
 				resultsChan <- resultStr
 			}

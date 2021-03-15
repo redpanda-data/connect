@@ -575,6 +575,14 @@ func DiscardAll(parser Func) Func {
 	}
 }
 
+// Nothing is a parser that always returns an error. This can be useful for
+// disabling parsers.
+func Nothing() Func {
+	return func(input []rune) Result {
+		return Fail(NewError(input, "nothing"), input)
+	}
+}
+
 // MustBe applies a parser and if the result is a non-fatal error then it is
 // upgraded to a fatal one.
 func MustBe(parser Func) Func {

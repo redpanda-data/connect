@@ -21,7 +21,7 @@ func matchCaseParser(pCtx Context) Func {
 			),
 			Sequence(
 				Expect(
-					queryParser(pCtx),
+					queryParser(true, pCtx),
 					"match case",
 				),
 				Optional(whitespace),
@@ -29,7 +29,7 @@ func matchCaseParser(pCtx Context) Func {
 			),
 		),
 		Optional(whitespace),
-		queryParser(pCtx),
+		queryParser(true, pCtx),
 	)
 
 	return func(input []rune) Result {
@@ -77,7 +77,7 @@ func matchExpressionParser(pCtx Context) Func {
 		res := Sequence(
 			Term("match"),
 			SpacesAndTabs(),
-			Optional(queryParser(pCtx)),
+			Optional(queryParser(true, pCtx)),
 			whitespace,
 			MustBe(
 				DelimitedPattern(
@@ -131,11 +131,11 @@ func ifExpressionParser(pCtx Context) Func {
 		res := Sequence(
 			Term("if"),
 			SpacesAndTabs(),
-			MustBe(queryParser(pCtx)),
+			MustBe(queryParser(true, pCtx)),
 			optionalWhitespace,
 			MustBe(Char('{')),
 			optionalWhitespace,
-			MustBe(queryParser(pCtx)),
+			MustBe(queryParser(true, pCtx)),
 			optionalWhitespace,
 			MustBe(Char('}')),
 			Optional(
@@ -145,7 +145,7 @@ func ifExpressionParser(pCtx Context) Func {
 					optionalWhitespace,
 					MustBe(Char('{')),
 					optionalWhitespace,
-					MustBe(queryParser(pCtx)),
+					MustBe(queryParser(true, pCtx)),
 					optionalWhitespace,
 					MustBe(Char('}')),
 				),
@@ -184,7 +184,7 @@ func bracketsExpressionParser(pCtx Context) Func {
 				"function",
 			),
 			whitespace,
-			queryParser(pCtx),
+			queryParser(true, pCtx),
 			whitespace,
 			MustBe(Expect(Char(')'), "closing bracket")),
 		)(input)
@@ -230,12 +230,18 @@ func lambdaExpressionParser(pCtx Context) Func {
 
 		if name != "_" {
 			if pCtx.HasNamedContext(name) {
-				return Fail(NewFatalError(input, fmt.Errorf("context label %v would shadow a parent context", name)), input)
+				return Fail(NewFatalError(input, fmt.Errorf("context label `%v` would shadow a parent context", name)), input)
+			}
+			if _, exists := map[string]struct{}{
+				"root": {},
+				"this": {},
+			}[name]; exists {
+				return Fail(NewFatalError(input, fmt.Errorf("context label `%v` is not allowed", name)), input)
 			}
 			pCtx = pCtx.WithNamedContext(name)
 		}
 
-		res = MustBe(queryParser(pCtx))(res.Remaining)
+		res = MustBe(queryParser(true, pCtx))(res.Remaining)
 		if res.Err != nil {
 			return res
 		}

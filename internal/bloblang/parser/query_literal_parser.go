@@ -18,7 +18,7 @@ func dynamicArrayParser(pCtx Context) Func {
 				open,
 				whitespace,
 			), "array"),
-			Expect(queryParser(pCtx), "object"),
+			Expect(queryParser(true, pCtx), "object"),
 			Sequence(
 				Discard(SpacesAndTabs()),
 				comma,
@@ -57,12 +57,12 @@ func dynamicObjectParser(pCtx Context) Func {
 			Sequence(
 				OneOf(
 					QuotedString(),
-					Expect(queryParser(pCtx), "object"),
+					Expect(queryParser(true, pCtx), "object"),
 				),
 				Discard(SpacesAndTabs()),
 				Char(':'),
 				Discard(whitespace),
-				Expect(queryParser(pCtx), "object"),
+				Expect(queryParser(true, pCtx), "object"),
 			),
 			Sequence(
 				Discard(SpacesAndTabs()),
