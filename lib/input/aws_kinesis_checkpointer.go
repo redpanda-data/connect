@@ -151,8 +151,7 @@ func (k *awsKinesisCheckpointer) getCheckpoint(ctx context.Context, streamID, sh
 	})
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case dynamodb.ErrCodeResourceNotFoundException:
+			if aerr.Code() == dynamodb.ErrCodeResourceNotFoundException {
 				return nil, nil
 			}
 		}

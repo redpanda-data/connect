@@ -76,8 +76,7 @@ type subprocCodec func(SubprocessConfig, io.Reader, io.Reader) (subprocScanner, 
 
 func codecFromStr(codec string) (subprocCodec, error) {
 	// TODO: Flesh this out with more options based on s.conf.Codec.
-	switch codec {
-	case "lines":
+	if codec == "lines" {
 		return linesSubprocCodec, nil
 	}
 	return nil, fmt.Errorf("codec not recognised: %v", codec)

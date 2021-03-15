@@ -466,8 +466,7 @@ func (d *DynamoDB) add(key string, value []byte) error {
 
 	if _, err = d.client.PutItem(input); err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case dynamodb.ErrCodeConditionalCheckFailedException:
+			if aerr.Code() == dynamodb.ErrCodeConditionalCheckFailedException {
 				return types.ErrKeyAlreadyExists
 			}
 		}
