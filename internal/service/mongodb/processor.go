@@ -57,9 +57,10 @@ func init() {
 	bundle.AllProcessors.Add(func(c processor.Config, nm bundle.NewManagement) (processor.Type, error) {
 		return NewProcessor(c, nm, nm.Logger(), nm.Metrics())
 	}, docs.ComponentSpec{
-		Name:   cache.TypeMongoDB,
-		Type:   docs.TypeProcessor,
-		Status: docs.StatusExperimental,
+		Name:    cache.TypeMongoDB,
+		Type:    docs.TypeProcessor,
+		Status:  docs.StatusExperimental,
+		Version: "3.43.0",
 		Categories: []string{
 			string(processor.CategoryIntegration),
 		},

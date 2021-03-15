@@ -28,6 +28,7 @@ func init() {
 		Name:        cache.TypeMongoDB,
 		Type:        docs.TypeCache,
 		Status:      docs.StatusExperimental,
+		Version:     "3.43.0",
 		Summary:     `Use a MongoDB instance as a cache.`,
 		Description: icache.Description(false, ""),
 		Config: docs.FieldComponent().WithChildren(

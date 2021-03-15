@@ -19,6 +19,8 @@ EXPERIMENTAL: This component is experimental and therefore subject to change or 
 
 Performs operations against MongoDB for each message, allowing you to store or retrieve data within message payloads.
 
+Introduced in version 3.43.0.
+
 
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },

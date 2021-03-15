@@ -31,9 +31,10 @@ func init() {
 	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (output.Type, error) {
 		return NewOutput(c.MongoDB, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
-		Name:   output.TypeMongoDB,
-		Type:   docs.TypeOutput,
-		Status: docs.StatusExperimental,
+		Name:    output.TypeMongoDB,
+		Type:    docs.TypeOutput,
+		Status:  docs.StatusExperimental,
+		Version: "3.43.0",
 		Categories: []string{
 			string(output.CategoryServices),
 		},

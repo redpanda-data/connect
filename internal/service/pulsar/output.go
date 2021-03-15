@@ -32,6 +32,7 @@ func init() {
 		Name:    output.TypePulsar,
 		Type:    docs.TypeOutput,
 		Status:  docs.StatusExperimental,
+		Version: "3.43.0",
 		Summary: `Write messages to an Apache Pulsar server.`,
 		Categories: []string{
 			string(output.CategoryServices),

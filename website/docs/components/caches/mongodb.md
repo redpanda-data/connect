@@ -18,6 +18,8 @@ EXPERIMENTAL: This component is experimental and therefore subject to change or 
 
 Use a MongoDB instance as a cache.
 
+Introduced in version 3.43.0.
+
 ```yaml
 # Config fields, showing default values
 mongodb:

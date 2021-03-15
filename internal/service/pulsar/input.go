@@ -31,6 +31,7 @@ func init() {
 		Name:    input.TypePulsar,
 		Type:    docs.TypeInput,
 		Status:  docs.StatusExperimental,
+		Version: "3.43.0",
 		Summary: `Reads messages from an Apache Pulsar server.`,
 		Description: `
 ### Metadata

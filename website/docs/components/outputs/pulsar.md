@@ -19,6 +19,8 @@ EXPERIMENTAL: This component is experimental and therefore subject to change or 
 
 Write messages to an Apache Pulsar server.
 
+Introduced in version 3.43.0.
+
 ```yaml
 # Config fields, showing default values
 output:

@@ -19,6 +19,8 @@ EXPERIMENTAL: This component is experimental and therefore subject to change or 
 
 Inserts items into a MongoDB collection.
 
+Introduced in version 3.43.0.
+
 
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },
