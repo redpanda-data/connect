@@ -136,7 +136,6 @@ func parserRFC5424(bestEffort bool) parserFormat {
 		}
 		if res.Timestamp != nil {
 			resMap["timestamp"] = res.Timestamp.Format(time.RFC3339Nano)
-			// resMap["timestamp_unix"] = res.Timestamp().Unix()
 		}
 		if res.Facility != nil {
 			resMap["facility"] = *res.Facility
@@ -213,7 +212,6 @@ func parserRFC3164(bestEffort, wrfc3339 bool, year, tz string) (parserFormat, er
 		}
 		if res.Timestamp != nil {
 			resMap["timestamp"] = res.Timestamp.Format(time.RFC3339Nano)
-			// resMap["timestamp_unix"] = res.Timestamp().Unix()
 		}
 		if res.Facility != nil {
 			resMap["facility"] = *res.Facility
