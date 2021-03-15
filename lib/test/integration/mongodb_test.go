@@ -17,8 +17,7 @@ import (
 )
 
 func generateCollectionName(testID string) string {
-	reg, _ := regexp.Compile("[^a-zA-Z]+")
-	return reg.ReplaceAllString(testID, "")
+	return regexp.MustCompile("[^a-zA-Z]+").ReplaceAllString(testID, "")
 }
 
 func createCollection(resource *dockertest.Resource, collectionName string, username string, password string) error {
