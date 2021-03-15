@@ -183,7 +183,7 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 	}
 
 	for k, v := range conf.Headers {
-		if strings.ToLower(k) == "host" {
+		if strings.EqualFold(k, "host") {
 			if h.host, err = bloblang.NewField(v); err != nil {
 				return nil, fmt.Errorf("failed to parse header 'host' expression: %v", err)
 			}
