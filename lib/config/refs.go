@@ -85,26 +85,27 @@ func JSONPointer(path string, object interface{}) (interface{}, error) {
 
 	for target := 0; target < len(hierarchy); target++ {
 		pathSeg := hierarchy[target]
-		if mmap, ok := object.(map[string]interface{}); ok {
-			object, ok = mmap[pathSeg]
-			if !ok {
+		switch typedObject := object.(type) {
+		case map[string]interface{}:
+			var ok bool
+			if object, ok = typedObject[pathSeg]; !ok {
 				return nil, fmt.Errorf("failed to resolve JSON pointer: index '%v' value '%v' was not found", target, pathSeg)
 			}
-		} else if mmap, ok := object.(map[interface{}]interface{}); ok {
-			object, ok = mmap[pathSeg]
-			if !ok {
+		case map[interface{}]interface{}:
+			var ok bool
+			if object, ok = typedObject[pathSeg]; !ok {
 				return nil, fmt.Errorf("failed to resolve JSON pointer: index '%v' value '%v' was not found", target, pathSeg)
 			}
-		} else if marray, ok := object.([]interface{}); ok {
+		case []interface{}:
 			index, err := strconv.Atoi(pathSeg)
 			if err != nil {
 				return nil, fmt.Errorf("failed to resolve JSON pointer: could not parse index '%v' value '%v' into array index: %v", target, pathSeg, err)
 			}
-			if len(marray) <= index {
-				return nil, fmt.Errorf("failed to resolve JSON pointer: index '%v' value '%v' exceeded target array size of '%v'", target, pathSeg, len(marray))
+			if len(typedObject) <= index {
+				return nil, fmt.Errorf("failed to resolve JSON pointer: index '%v' value '%v' exceeded target array size of '%v'", target, pathSeg, len(typedObject))
 			}
-			object = marray[index]
-		} else {
+			object = typedObject[index]
+		default:
 			return nil, fmt.Errorf("failed to resolve JSON pointer: index '%v' field '%v' was not found", target, pathSeg)
 		}
 	}
