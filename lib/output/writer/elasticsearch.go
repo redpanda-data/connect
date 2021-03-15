@@ -246,8 +246,7 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 
 	if msg.Len() == 1 {
 		index := e.indexStr.String(0, msg)
-		// SA1019 Ignore Type is deprecated warning for .Index()
-		// nolint:staticcheck
+		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		_, err := e.client.Index().
 			Index(index).
 			Pipeline(e.pipelineStr.String(0, msg)).
