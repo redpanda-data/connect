@@ -57,6 +57,31 @@ func CliCommand() *cli.Command {
 			},
 		},
 		Action: run,
+		Subcommands: []*cli.Command{
+			{
+				Name:        "server",
+				Usage:       "EXPERIMENTAL: Run a web server that hosts a Bloblang app",
+				Description: "Run a web server that provides an interactive application for writing and testing Bloblang mappings.",
+				Action:      runServer,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "host",
+						Value: "localhost",
+						Usage: "the host to bind to.",
+					},
+					&cli.StringFlag{
+						Name:  "port",
+						Value: "4195",
+						Usage: "the port to bind to.",
+					},
+					&cli.BoolFlag{
+						Name:  "no-open",
+						Value: false,
+						Usage: "do not open the app in the browser automatically.",
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -86,11 +111,20 @@ func executeMapping(exec *mapping.Executor, rawInput, prettyOutput bool, input [
 		return valuePtr
 	}
 
-	result, err := exec.Exec(query.FunctionContext{
+	vars := map[string]interface{}{}
+	meta := msg.Get(0).Metadata().Copy()
+
+	var result interface{} = query.Nothing(nil)
+	err := exec.ExecOnto(query.FunctionContext{
 		Maps:     exec.Maps(),
-		Vars:     map[string]interface{}{},
+		Vars:     vars,
 		MsgBatch: msg,
-	}.WithValueFunc(lazyValue))
+	}.WithValueFunc(lazyValue), mapping.AssignmentContext{
+		Maps:  exec.Maps(),
+		Vars:  vars,
+		Meta:  meta,
+		Value: &result,
+	})
 	if err != nil {
 		if parseErr != nil && errors.Is(err, query.ErrNoContext) {
 			err = fmt.Errorf("unable to reference message as structured (with 'this'): %w", parseErr)
@@ -127,6 +161,7 @@ func executeMapping(exec *mapping.Executor, rawInput, prettyOutput bool, input [
 		}
 	}
 
+	// TODO: Return metadata as well?
 	return resultStr, nil
 }
 

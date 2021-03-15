@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - New output level `metadata.exclude_prefixes` config field for restricting metadata values sent to the following outputs: `kafka`, `aws_s3`, `amqp_0_9`, `redis_streams`, `aws_sqs`, `gcp_pubsub`.
 - All NATS components now have `tls` support.
 - Bloblang now supports context capture in query lambdas.
+- New subcommand `benthos blobl server` that hosts a Bloblang editor web application.
 
 ### Fixed
 
