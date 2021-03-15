@@ -2,6 +2,7 @@ module github.com/Jeffail/benthos/v3
 
 require (
 	cloud.google.com/go/pubsub v1.9.1
+	cloud.google.com/go/storage v1.10.0
 	github.com/Azure/azure-sdk-for-go v48.0.0+incompatible
 	github.com/Azure/azure-storage-queue-go v0.0.0-20191125232315-636801874cdd
 	github.com/Azure/go-amqp v0.13.1
@@ -88,6 +89,7 @@ require (
 	golang.org/x/oauth2 v0.0.0-20201208152858-08078c50e5b5
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 	golang.org/x/tools v0.1.0 // indirect
+	google.golang.org/api v0.36.0
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 )
 

@@ -13,8 +13,8 @@ steps:
     GOPATH: /drone
     GO111MODULE: on
   commands:
-    - make deps
-    - make docs && git diff-index --quiet HEAD || { >&2 echo "Stale docs detected, this can be fixed with 'make docs'."; exit 1; }
+    - make deps && git diff-index --quiet HEAD || { >&2 echo "Stale go.mod / go.sum detected. This can be fixed with 'make deps'."; exit 1; }
+    - make docs && git diff-index --quiet HEAD || { >&2 echo "Stale docs detected. This can be fixed with 'make docs'."; exit 1; }
     - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b /usr/local/go/bin v1.35.2
     - make lint
     - make test

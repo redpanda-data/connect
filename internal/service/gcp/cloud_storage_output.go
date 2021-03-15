@@ -1,0 +1,251 @@
+package gcp
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"time"
+
+	"cloud.google.com/go/storage"
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/bundle"
+	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
+	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/lib/input"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/output"
+	"github.com/Jeffail/benthos/v3/lib/output/writer"
+	"github.com/Jeffail/benthos/v3/lib/types"
+)
+
+func init() {
+	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (output.Type, error) {
+		g, err := newGCPCloudStorageOutput(c.GCPCloudStorage, nm.Logger(), nm.Metrics())
+		if err != nil {
+			return nil, err
+		}
+		w, err := output.NewAsyncWriter(output.TypeGCPCloudStorage, c.GCPCloudStorage.MaxInFlight, g, nm.Logger(), nm.Metrics())
+		if err != nil {
+			return nil, err
+		}
+		return output.NewBatcherFromConfig(c.GCPCloudStorage.Batching, w, nm, nm.Logger(), nm.Metrics())
+	}), docs.ComponentSpec{
+		Name:    output.TypeGCPCloudStorage,
+		Type:    docs.TypeOutput,
+		Status:  docs.StatusExperimental,
+		Version: "3.43.0",
+		Categories: []string{
+			string(input.CategoryServices),
+			string(input.CategoryGCP),
+		},
+		Summary: `
+Sends message parts as objects to a Google Cloud Storage bucket. Each object is
+uploaded with the path specified with the ` + "`path`" + ` field.`,
+		Description: ioutput.Description(true, true, `
+In order to have a different path for each object you should use function
+interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
+calculated per message of a batch.
+
+### Metadata
+
+Metadata fields on messages will be sent as headers, in order to mutate these values (or remove them) check out the [metadata docs](/docs/configuration/metadata).
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to GCP
+services. You can find out more [in this document](/docs/guides/gcp.md).
+
+### Batching
+
+It's common to want to upload messages to Google Cloud Storage as batched
+archives, the easiest way to do this is to batch your messages at the output
+level and join the batch of messages with an
+`+"[`archive`](/docs/components/processors/archive)"+` and/or
+`+"[`compress`](/docs/components/processors/compress)"+` processor.
+
+For example, if we wished to upload messages as a .tar.gz archive of documents
+we could achieve that with the following config:
+
+`+"```yaml"+`
+output:
+  gcp_cloud_storage:
+    bucket: TODO
+    path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
+    batching:
+      count: 100
+      period: 10s
+      processors:
+        - archive:
+            format: tar
+        - compress:
+            algorithm: gzip
+`+"```"+`
+
+Alternatively, if we wished to upload JSON documents as a single large document
+containing an array of objects we can do that with:
+
+`+"```yaml"+`
+output:
+  gcp_cloud_storage:
+    bucket: TODO
+    path: ${!count("files")}-${!timestamp_unix_nano()}.json
+    batching:
+      count: 100
+      processors:
+        - archive:
+            format: json_array
+`+"```"+``),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldCommon("bucket", "The bucket to upload messages to."),
+			docs.FieldCommon(
+				"path", "The path of each message to upload.",
+				`${!count("files")}-${!timestamp_unix_nano()}.txt`,
+				`${!meta("kafka_key")}.json`,
+				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
+			).IsInterpolated(),
+			docs.FieldCommon("content_type", "The content type to set for each object.").IsInterpolated(),
+			docs.FieldAdvanced("content_encoding", "An optional content encoding to set for each object.").IsInterpolated(),
+			docs.FieldAdvanced("chunk_size", "An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled."),
+			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldAdvanced("timeout", "The maximum period to wait on an upload before abandoning it and reattempting."),
+			batch.FieldSpec(),
+		),
+	})
+}
+
+// gcpCloudStorageOutput is a benthos writer.Type implementation that writes
+// messages to a GCP Cloud Storage bucket.
+type gcpCloudStorageOutput struct {
+	conf output.GCPCloudStorageConfig
+
+	path            field.Expression
+	contentType     field.Expression
+	contentEncoding field.Expression
+
+	client  *storage.Client
+	connMut sync.RWMutex
+	timeout time.Duration
+
+	log   log.Modular
+	stats metrics.Type
+}
+
+// newGCPCloudStorageOutput creates a new GCP Cloud Storage bucket writer.Type.
+func newGCPCloudStorageOutput(
+	conf output.GCPCloudStorageConfig,
+	log log.Modular,
+	stats metrics.Type,
+) (*gcpCloudStorageOutput, error) {
+	var timeout time.Duration
+	if tout := conf.Timeout; len(tout) > 0 {
+		var err error
+		if timeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse timeout period string: %v", err)
+		}
+	}
+	g := &gcpCloudStorageOutput{
+		conf:    conf,
+		log:     log,
+		stats:   stats,
+		timeout: timeout,
+	}
+	var err error
+	if g.path, err = bloblang.NewField(conf.Path); err != nil {
+		return nil, fmt.Errorf("failed to parse path expression: %v", err)
+	}
+	if g.contentType, err = bloblang.NewField(conf.ContentType); err != nil {
+		return nil, fmt.Errorf("failed to parse content type expression: %v", err)
+	}
+	if g.contentEncoding, err = bloblang.NewField(conf.ContentEncoding); err != nil {
+		return nil, fmt.Errorf("failed to parse content encoding expression: %v", err)
+	}
+
+	return g, nil
+}
+
+// ConnectWithContext attempts to establish a connection to the target Google
+// Cloud Storage bucket.
+func (g *gcpCloudStorageOutput) ConnectWithContext(ctx context.Context) error {
+	g.connMut.Lock()
+	defer g.connMut.Unlock()
+
+	var err error
+	g.client, err = NewStorageClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	g.log.Infof("Uploading message parts as objects to GCP Cloud Storage bucket: %v\n", g.conf.Bucket)
+	return nil
+}
+
+// Connect attempts to establish a connection to the target GCP Cloud Storage
+// bucket.
+func (g *gcpCloudStorageOutput) Connect() error {
+	if g.client != nil {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), g.timeout)
+	defer cancel()
+	return g.ConnectWithContext(ctx)
+}
+
+// Write attempts to write message contents to a target GCP Cloud Storage bucket
+// as files.
+func (g *gcpCloudStorageOutput) Write(msg types.Message) error {
+	return g.WriteWithContext(context.Background(), msg)
+}
+
+// WriteWithContext attempts to write message contents to a target GCP Cloud
+// Storage bucket as files.
+func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg types.Message) error {
+	g.connMut.RLock()
+	client := g.client
+	g.connMut.RUnlock()
+
+	if client == nil {
+		return types.ErrNotConnected
+	}
+
+	return writer.IterateBatchedSend(msg, func(i int, p types.Part) error {
+		metadata := map[string]string{}
+		p.Metadata().Iter(func(k, v string) error {
+			metadata[k] = v
+			return nil
+		})
+
+		w := client.Bucket(g.conf.Bucket).Object(g.path.String(i, msg)).NewWriter(ctx)
+		w.ChunkSize = g.conf.ChunkSize
+		w.ContentType = g.contentType.String(i, msg)
+		w.ContentEncoding = g.contentEncoding.String(i, msg)
+		w.Metadata = metadata
+		_, err := w.Write(p.Get())
+		if err != nil {
+			return err
+		}
+
+		return w.Close()
+	})
+}
+
+// CloseAsync begins cleaning up resources used by this reader asynchronously.
+func (g *gcpCloudStorageOutput) CloseAsync() {
+	go func() {
+		g.connMut.Lock()
+		if g.client != nil {
+			g.client.Close()
+			g.client = nil
+		}
+		g.connMut.Unlock()
+	}()
+}
+
+// WaitForClose will block until either the reader is closed or a specified
+// timeout occurs.
+func (g *gcpCloudStorageOutput) WaitForClose(time.Duration) error {
+	return nil
+}

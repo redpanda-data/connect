@@ -100,6 +100,7 @@ module.exports = {
         'guides/performance_tuning',
         'guides/sync_responses',
         'guides/aws',
+        'guides/gcp',
         {
           type: 'category',
           label: 'Serverless',
