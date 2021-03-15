@@ -43,10 +43,8 @@ func TestInfluxTimers(t *testing.T) {
 				keys = append(keys, k)
 			}
 			t.Errorf("expected to find %s in %v", measurementName, keys)
-		} else {
-			if len(values) != 14 {
-				t.Errorf("number of values was not expected %d", len(values))
-			}
+		} else if len(values) != 14 {
+			t.Errorf("number of values was not expected %d", len(values))
 		}
 	}
 }
@@ -89,10 +87,8 @@ func TestInfluxCounters(t *testing.T) {
 				keys = append(keys, k)
 			}
 			t.Errorf("expected to find %s in %v", measurementName, keys)
-		} else {
-			if len(values) != 1 {
-				t.Errorf("number of values was not expected %d", len(values))
-			}
+		} else if len(values) != 1 {
+			t.Errorf("number of values was not expected %d", len(values))
 		}
 	}
 }
@@ -136,10 +132,8 @@ func TestInfluxGauge(t *testing.T) {
 				keys = append(keys, k)
 			}
 			t.Errorf("expected to find %s in %v", measurementName, keys)
-		} else {
-			if len(values) != 1 {
-				t.Errorf("number of values was not expected %d", len(values))
-			}
+		} else if len(values) != 1 {
+			t.Errorf("number of values was not expected %d", len(values))
 		}
 	}
 }

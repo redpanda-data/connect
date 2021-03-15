@@ -284,10 +284,8 @@ func (f FieldSpec) SanitiseNode(node *yaml.Node, conf SanitiseConfig) error {
 					return err
 				}
 			}
-		} else {
-			if err := SanitiseNode(coreType, node, conf); err != nil {
-				return err
-			}
+		} else if err := SanitiseNode(coreType, node, conf); err != nil {
+			return err
 		}
 	} else if len(f.Children) > 0 {
 		if f.IsArray {
@@ -302,10 +300,8 @@ func (f FieldSpec) SanitiseNode(node *yaml.Node, conf SanitiseConfig) error {
 					return err
 				}
 			}
-		} else {
-			if err := f.Children.SanitiseNode(node, conf); err != nil {
-				return err
-			}
+		} else if err := f.Children.SanitiseNode(node, conf); err != nil {
+			return err
 		}
 	}
 	return nil

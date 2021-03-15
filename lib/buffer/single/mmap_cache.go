@@ -175,13 +175,10 @@ func (f *MmapCache) EnsureCached(index int) error {
 		if uint64(f.config.FileSize)+f.config.ReservedDiskSpace >
 			disk.TotalRemaining(f.config.Path) {
 			err = ErrNotEnoughSpace
-		} else {
-			// If not then we create it with our configured file size
-			if cache.f, err = os.Create(fPath); err == nil {
-				block := make([]byte, f.config.FileSize)
-				if _, err = cache.f.Write(block); err != nil {
-					os.Remove(fPath)
-				}
+		} else if cache.f, err = os.Create(fPath); err == nil { // If not then we create it with our configured file size
+			block := make([]byte, f.config.FileSize)
+			if _, err = cache.f.Write(block); err != nil {
+				os.Remove(fPath)
 			}
 		}
 	} else if err == nil {

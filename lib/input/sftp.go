@@ -355,11 +355,8 @@ func (s *sftpReader) getFilePaths() ([]string, error) {
 				}
 				if _, err := cache.Get(path); err != nil {
 					filepaths = append(filepaths, path)
-				} else {
-					// Reset the TTL for the path
-					if err = cache.Set(path, []byte("@")); err != nil {
-						s.log.Warnf("Failed to set key in cache for path %v: %v\n", path, err)
-					}
+				} else if err = cache.Set(path, []byte("@")); err != nil { // Reset the TTL for the path
+					s.log.Warnf("Failed to set key in cache for path %v: %v\n", path, err)
 				}
 			} else {
 				filepaths = append(filepaths, path)

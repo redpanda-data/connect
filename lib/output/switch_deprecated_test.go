@@ -136,10 +136,8 @@ func TestSwitchDeprecatedNoRetries(t *testing.T) {
 		case res := <-resChan:
 			if res.Error() == nil {
 				t.Error("Received nil error from broker")
-			} else {
-				if exp, act := "test", res.Error().Error(); exp != act {
-					t.Errorf("Wrong error message from broker: %v != %v", act, exp)
-				}
+			} else if exp, act := "test", res.Error().Error(); exp != act {
+				t.Errorf("Wrong error message from broker: %v != %v", act, exp)
 			}
 		case <-time.After(time.Second):
 			t.Fatal("Timed out responding to broker")

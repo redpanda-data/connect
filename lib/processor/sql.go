@@ -244,10 +244,8 @@ func NewSQL(
 		if s.resCodecDeprecated, err = strToSQLResultCodecDeprecated(conf.SQL.ResultCodec); err != nil {
 			return nil, err
 		}
-	} else {
-		if s.resCodec, err = strToSQLResultCodec(conf.SQL.ResultCodec); err != nil {
-			return nil, err
-		}
+	} else if s.resCodec, err = strToSQLResultCodec(conf.SQL.ResultCodec); err != nil {
+		return nil, err
 	}
 
 	if s.db, err = sql.Open(conf.SQL.Driver, dsn); err != nil {
