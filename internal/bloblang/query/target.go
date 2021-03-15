@@ -21,10 +21,10 @@ type TargetPath struct {
 
 // NewTargetPath constructs a new target path from a type and zero or more path
 // segments.
-func NewTargetPath(t TargetType, Path ...string) TargetPath {
+func NewTargetPath(t TargetType, path ...string) TargetPath {
 	return TargetPath{
 		Type: t,
-		Path: Path,
+		Path: path,
 	}
 }
 
