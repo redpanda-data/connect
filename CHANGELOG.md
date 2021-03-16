@@ -16,6 +16,8 @@ All notable changes to this project will be documented in this file.
 - All NATS components now have `tls` support.
 - Bloblang now supports context capture in query lambdas.
 - New subcommand `benthos blobl server` that hosts a Bloblang editor web application.
+- New (experimental) `mongodb` output, cache and processor.
+- New (experimental) `gcp_cloud_storage` input and output.
 
 ### Fixed
 

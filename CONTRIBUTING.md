@@ -43,6 +43,10 @@ If your change impacts inputs, outputs or other connectors then try to test them
 
 If your change has an impact on documentation then make sure it is generated with `make docs`. You can test out the documentation site locally by running `yarn && yarn start` in the `./website` directory.
 
+### Adding New Components
+
+The APIs for adding new components (inputs, outputs, processors, caches, etc) has recently been simplified. If you are planning to create a new component you should use the latest implementations within `./internal/service` as inspiration rather than those found under `./lib`.
+
 ### Plugins
 
 The core components within Benthos (inputs, processors, conditions and outputs) are all easily pluggable. If you are interested in adding new components please raise a ticket and we can discuss whether it's a good fit for the project.
