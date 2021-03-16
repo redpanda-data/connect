@@ -22,6 +22,7 @@ resources:
                 root.source = "docker"
                 root.dist = "docker"
                 root.download_count = this.pull_count
+                root.version = "all"
             - resource: metric.gauge
 
     github:
@@ -31,18 +32,16 @@ resources:
           - try:
             # Grab github latest release dl count
             - http:
-                url: https://api.github.com/repos/Jeffail/benthos/releases/latest
+                url: https://api.github.com/repos/Jeffail/benthos/releases
                 verb: GET
                 retries: 0
             - bloblang: |
-                root = this.assets.map_each(match {
-                  "source":"github",
-                  "dist": this.name.re_replace("^benthos-?((lambda_)|_)[0-9\\.]+_([^\\.]+).*", "$2$3"),
-                  "download_count": this.download_count
-                } {
-                  this.dist != "checksums" => this
-                  _ => deleted()
-                })
+                root = this.map_each(release -> release.assets.map_each(asset -> {
+                  "source":         "github",
+                  "dist":           asset.name.re_replace("^benthos-?((lambda_)|_)[0-9\\.]+(-rc1)?_([^\\.]+).*", "$2$4"),
+                  "download_count": asset.download_count,
+                  "version":        release.tag_name.trim("v"),
+                }).filter(asset -> asset.dist != "checksums")).flatten()
             - unarchive:
                 format: json_array
             - resource: metric.gauge
@@ -61,6 +60,7 @@ resources:
                 root.source = "homebrew"
                 root.dist = "brew"
                 root.download_count = this.analytics.install.30d.benthos
+                root.version = "all"
             - resource: metric.gauge
 
     metric.gauge:
@@ -70,6 +70,7 @@ resources:
         labels:
           dist: ${! json("dist") }
           source: ${! json("source") }
+          version: ${! json("version") }
         value: ${! json("download_count") }
 
 metrics:
