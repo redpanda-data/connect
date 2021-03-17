@@ -61,7 +61,7 @@ const bloblangEditorPage = `<!DOCTYPE html>
   <body>
     <div class="panel" style="top:0;bottom:50%;left:0;right:50%;padding:0 5px 5px 0">
       <h2 style="left:50%;bottom:0;margin-left:-50px;">Input</h2>
-      <textarea id="input">{"input":"document"}</textarea>
+      <textarea id="input">{"message":"hello world"}</textarea>
     </div>
     <div class="panel" style="top:0;bottom:50%;left:50%;right:0;padding:0 0 5px 5px">
       <h2 style="left:50%;bottom:0;margin-left:-50px;">Output</h2>
@@ -212,5 +212,8 @@ func runServer(c *cli.Context) error {
 	}
 
 	fmt.Printf("Serving at: http://%v\n", bindAddress)
-	return http.ListenAndServe(bindAddress, nil)
+	if err := http.ListenAndServe(bindAddress, nil); err != nil {
+		panic(err)
+	}
+	return nil
 }
