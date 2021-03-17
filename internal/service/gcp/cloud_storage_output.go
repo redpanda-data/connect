@@ -56,7 +56,7 @@ Metadata fields on messages will be sent as headers, in order to mutate these va
 ### Credentials
 
 By default Benthos will use a shared credentials file when connecting to GCP
-services. You can find out more [in this document](/docs/guides/gcp.md).
+services. You can find out more [in this document](/docs/guides/gcp).
 
 ### Batching
 
