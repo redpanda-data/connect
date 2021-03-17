@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.43.0 - TBD
+
 ### New
 
 - New (experimental) Apache Pulsar input and output.

@@ -82,20 +82,20 @@ func init() {
 						"mapping the fields in the message to the mongodb fields. The document map is required for the operations "+
 						"insert-one, replace-one and update-one.",
 					mapExamples(),
-				),
+				).Linter(docs.LintBloblangMapping),
 				docs.FieldCommon(
 					"filter_map",
 					"A bloblang map representing the filter for the mongo db command. The filter map is required for all operations except "+
 						"insert-one. It is used to find the document(s) for the operation. For example in a delete-one case, the filter map should "+
 						"have the fields required to locate the document to delete.",
 					mapExamples(),
-				),
+				).Linter(docs.LintBloblangMapping),
 				docs.FieldCommon(
 					"hint_map",
 					"A bloblang map representing the hint for the mongo db command. This map is optional and is used with all operations "+
 						"except insert-one. It is used to improve performance of finding the documents in the mongodb.",
 					mapExamples(),
-				),
+				).Linter(docs.LintBloblangMapping),
 				processor.PartsFieldSpec,
 			).Merge(retries.FieldSpecs())...,
 		),
