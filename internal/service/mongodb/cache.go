@@ -17,6 +17,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 const mongoDuplicateKeyErrCode = 11000
@@ -131,10 +132,11 @@ func (m *Cache) Set(key string, value []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	opts := options.Update().SetUpsert(true)
 	filter := bson.M{m.conf.KeyField: key}
 	update := bson.M{"$set": bson.M{m.conf.ValueField: string(value)}}
 
-	_, err := m.collection.UpdateOne(ctx, filter, update)
+	_, err := m.collection.UpdateOne(ctx, filter, update, opts)
 	return err
 }
 
