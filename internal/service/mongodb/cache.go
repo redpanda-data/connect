@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
@@ -18,6 +17,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 const mongoDuplicateKeyErrCode = 11000
