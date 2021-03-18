@@ -38,7 +38,6 @@ deps:
 SOURCE_FILES = $(shell find lib internal public cmd -type f -name "*.go")
 
 $(PATHINSTBIN)/%: $(SOURCE_FILES)
-	@mkdir -p $(dir $@)
 	@go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/$*
 
 $(APPS): %: $(PATHINSTBIN)/%
@@ -47,7 +46,6 @@ TOOLS = benthos_config_gen benthos_docs_gen
 tools: $(TOOLS)
 
 $(PATHINSTTOOLS)/%: $(SOURCE_FILES)
-	@mkdir -p $(dir $@)
 	@go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/tools/$*
 
 $(TOOLS): %: $(PATHINSTTOOLS)/%
@@ -56,7 +54,6 @@ SERVERLESS = benthos-lambda
 serverless: $(SERVERLESS)
 
 $(PATHINSTSERVERLESS)/%: $(SOURCE_FILES)
-	@mkdir -p $(dir $@)
 	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 		go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/serverless/$*
 	@zip -m -j $@.zip $@

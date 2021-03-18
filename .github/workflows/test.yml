@@ -1,0 +1,78 @@
+name: Test
+
+on: [ push, pull_request ]
+
+jobs:
+  cross-build:
+    strategy:
+      matrix:
+        go-version: [1.15.x, 1.16.x]
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+          ~/Library/Caches/go-build
+          %LocalAppData%\go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Build
+      run: make
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.16.x
+
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+          ~/Library/Caches/go-build
+          %LocalAppData%\go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Deps
+      run: make deps && git diff-index --quiet HEAD || { >&2 echo "Stale go.{mod,sum} detected. This can be fixed with 'make deps'."; exit 1; }
+
+    - name: Docs
+      run: make docs && git diff-index --quiet HEAD || { >&2 echo "Stale docs detected. This can be fixed with 'make docs'."; exit 1; }
+
+    - name: Test
+      run: make test
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Lint
+      uses: golangci/golangci-lint-action@v2
+      with:
+        version: latest
+        args: --timeout 10m cmd/... lib/... internal/... public/...
