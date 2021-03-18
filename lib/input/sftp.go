@@ -276,7 +276,7 @@ func (s *sftpReader) ReadWithContext(ctx context.Context) (types.Message, reader
 				if err != nil {
 					return nil, nil, fmt.Errorf("failed to get the cache for sftp watcher mode: %v", err)
 				}
-				err = cache.Set(s.currentPath, []byte("@"))
+				err = cache.Add(s.currentPath, []byte("@"))
 				if err != nil {
 					return nil, nil, fmt.Errorf("failed to update path in cache %s: %v", s.currentPath, err)
 				}
