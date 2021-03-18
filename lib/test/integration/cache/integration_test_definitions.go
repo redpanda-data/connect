@@ -107,7 +107,7 @@ func integrationTestGetAndSet(n int) testDefinition {
 			for i := 0; i < n; i++ {
 				key := fmt.Sprintf("key:%v", i)
 				value := fmt.Sprintf("value:%v", i)
-				require.NoError(t, cache.Add(key, []byte(value)))
+				require.NoError(t, cache.Set(key, []byte(value)))
 			}
 
 			for i := 0; i < n; i++ {
