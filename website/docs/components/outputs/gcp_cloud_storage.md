@@ -59,7 +59,6 @@ output:
     content_encoding: ""
     chunk_size: 16777216
     max_in_flight: 1
-    timeout: 5s
     batching:
       count: 0
       byte_size: 0
@@ -197,14 +196,6 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 Type: `number`  
 Default: `1`  
-
-### `timeout`
-
-The maximum period to wait on an upload before abandoning it and reattempting.
-
-
-Type: `string`  
-Default: `"5s"`  
 
 ### `batching`
 

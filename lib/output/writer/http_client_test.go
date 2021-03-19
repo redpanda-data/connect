@@ -207,6 +207,7 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 		t.Error(err)
 	}
 }
+
 func TestHTTPClientMultipart(t *testing.T) {
 	nTestLoops := 1000
 
@@ -296,5 +297,3 @@ func TestHTTPClientMultipart(t *testing.T) {
 		t.Error(err)
 	}
 }
-
-//------------------------------------------------------------------------------

@@ -18,6 +18,7 @@ import (
 // type.
 type HTTPClientConfig struct {
 	client.Config     `json:",inline" yaml:",inline"`
+	BatchAsMultipart  bool               `json:"batch_as_multipart" yaml:"batch_as_multipart"`
 	MaxInFlight       int                `json:"max_in_flight" yaml:"max_in_flight"`
 	PropagateResponse bool               `json:"propagate_response" yaml:"propagate_response"`
 	Batching          batch.PolicyConfig `json:"batching" yaml:"batching"`
@@ -27,7 +28,8 @@ type HTTPClientConfig struct {
 func NewHTTPClientConfig() HTTPClientConfig {
 	return HTTPClientConfig{
 		Config:            client.NewConfig(),
-		MaxInFlight:       1, // TODO: Increase this default?
+		BatchAsMultipart:  true, // TODO: V4 Set false by default.
+		MaxInFlight:       1,    // TODO: Increase this default?
 		PropagateResponse: false,
 		Batching:          batch.NewPolicyConfig(),
 	}

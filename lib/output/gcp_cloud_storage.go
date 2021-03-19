@@ -13,7 +13,6 @@ type GCPCloudStorageConfig struct {
 	ContentType     string             `json:"content_type" yaml:"content_type"`
 	ContentEncoding string             `json:"content_encoding" yaml:"content_encoding"`
 	ChunkSize       int                `json:"chunk_size" yaml:"chunk_size"`
-	Timeout         string             `json:"timeout" yaml:"timeout"`
 	MaxInFlight     int                `json:"max_in_flight" yaml:"max_in_flight"`
 	Batching        batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
@@ -26,7 +25,6 @@ func NewGCPCloudStorageConfig() GCPCloudStorageConfig {
 		ContentType:     "application/octet-stream",
 		ContentEncoding: "",
 		ChunkSize:       googleapi.DefaultUploadChunkSize,
-		Timeout:         "5s",
 		MaxInFlight:     1,
 		Batching:        batch.NewPolicyConfig(),
 	}

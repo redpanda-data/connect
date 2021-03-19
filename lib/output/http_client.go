@@ -10,8 +10,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
 	Constructors[TypeHTTPClient] = TypeSpec{
 		constructor: fromSimpleConstructor(NewHTTPClient),
@@ -28,7 +26,7 @@ interpolations described [here](/docs/configuration/interpolation#bloblang-queri
 The body of the HTTP request is the raw contents of the message payload. If the
 message has multiple parts (is a batch) the request will be sent according to
 [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). This
-behaviour can be overridden by [archiving your batches](/docs/configuration/batching#post-batch-processing).
+behaviour can be disabled by setting the field ` + "[`batch_as_multipart`](#batch_as_multipart) to `false`" + `.
 
 ### Propagating Responses
 
@@ -39,6 +37,7 @@ these propagated responses.`,
 		Async:   true,
 		Batches: true,
 		FieldSpecs: client.FieldSpecs().Add(
+			docs.FieldAdvanced("batch_as_multipart", "Send message batches as a single request using [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). If disabled messages in batches will be sent as individual requests."),
 			docs.FieldAdvanced("propagate_response", "Whether responses from the server should be [propagated back](/docs/guides/sync_responses) to the input."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		).Add(batch.FieldSpec()),
@@ -54,16 +53,12 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 	if err != nil {
 		return nil, err
 	}
-	var w Type
-	if conf.HTTPClient.MaxInFlight == 1 {
-		w, err = NewWriter(TypeHTTPClient, h, log, stats)
-	} else {
-		w, err = NewAsyncWriter(TypeHTTPClient, conf.HTTPClient.MaxInFlight, h, log, stats)
-	}
+	w, err := NewAsyncWriter(TypeHTTPClient, conf.HTTPClient.MaxInFlight, h, log, stats)
 	if err != nil {
 		return w, err
 	}
+	if !conf.HTTPClient.BatchAsMultipart {
+		w = OnlySinglePayloads(w)
+	}
 	return NewBatcherFromConfig(conf.HTTPClient.Batching, w, mgr, log, stats)
 }
-
-//------------------------------------------------------------------------------

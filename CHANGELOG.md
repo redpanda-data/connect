@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - New subcommand `benthos blobl server` that hosts a Bloblang editor web application.
 - New (experimental) `mongodb` output, cache and processor.
 - New (experimental) `gcp_cloud_storage` input and output.
+- Field `batch_as_multipart` added to the `http_client` output.
 
 ### Fixed
 

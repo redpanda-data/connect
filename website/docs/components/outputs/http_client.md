@@ -87,6 +87,7 @@ output:
     drop_on: []
     successful_on: []
     proxy_url: ""
+    batch_as_multipart: true
     propagate_response: false
     max_in_flight: 1
     batching:
@@ -110,7 +111,7 @@ interpolations described [here](/docs/configuration/interpolation#bloblang-queri
 The body of the HTTP request is the raw contents of the message payload. If the
 message has multiple parts (is a batch) the request will be sent according to
 [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). This
-behaviour can be overridden by [archiving your batches](/docs/configuration/batching#post-batch-processing).
+behaviour can be disabled by setting the field [`batch_as_multipart`](#batch_as_multipart) to `false`.
 
 ### Propagating Responses
 
@@ -466,6 +467,14 @@ An optional HTTP proxy URL.
 
 Type: `string`  
 Default: `""`  
+
+### `batch_as_multipart`
+
+Send message batches as a single request using [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). If disabled messages in batches will be sent as individual requests.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `propagate_response`
 

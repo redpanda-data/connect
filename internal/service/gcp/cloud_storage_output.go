@@ -31,6 +31,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
+		w = output.OnlySinglePayloads(w)
 		return output.NewBatcherFromConfig(c.GCPCloudStorage.Batching, w, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    output.TypeGCPCloudStorage,
@@ -110,7 +111,6 @@ output:
 			docs.FieldAdvanced("content_encoding", "An optional content encoding to set for each object.").IsInterpolated(),
 			docs.FieldAdvanced("chunk_size", "An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-			docs.FieldAdvanced("timeout", "The maximum period to wait on an upload before abandoning it and reattempting."),
 			batch.FieldSpec(),
 		),
 	})
@@ -127,7 +127,6 @@ type gcpCloudStorageOutput struct {
 
 	client  *storage.Client
 	connMut sync.RWMutex
-	timeout time.Duration
 
 	log   log.Modular
 	stats metrics.Type
@@ -139,18 +138,10 @@ func newGCPCloudStorageOutput(
 	log log.Modular,
 	stats metrics.Type,
 ) (*gcpCloudStorageOutput, error) {
-	var timeout time.Duration
-	if tout := conf.Timeout; len(tout) > 0 {
-		var err error
-		if timeout, err = time.ParseDuration(tout); err != nil {
-			return nil, fmt.Errorf("failed to parse timeout period string: %v", err)
-		}
-	}
 	g := &gcpCloudStorageOutput{
-		conf:    conf,
-		log:     log,
-		stats:   stats,
-		timeout: timeout,
+		conf:  conf,
+		log:   log,
+		stats: stats,
 	}
 	var err error
 	if g.path, err = bloblang.NewField(conf.Path); err != nil {
@@ -180,24 +171,6 @@ func (g *gcpCloudStorageOutput) ConnectWithContext(ctx context.Context) error {
 
 	g.log.Infof("Uploading message parts as objects to GCP Cloud Storage bucket: %v\n", g.conf.Bucket)
 	return nil
-}
-
-// Connect attempts to establish a connection to the target GCP Cloud Storage
-// bucket.
-func (g *gcpCloudStorageOutput) Connect() error {
-	if g.client != nil {
-		return nil
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), g.timeout)
-	defer cancel()
-	return g.ConnectWithContext(ctx)
-}
-
-// Write attempts to write message contents to a target GCP Cloud Storage bucket
-// as files.
-func (g *gcpCloudStorageOutput) Write(msg types.Message) error {
-	return g.WriteWithContext(context.Background(), msg)
 }
 
 // WriteWithContext attempts to write message contents to a target GCP Cloud

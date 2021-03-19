@@ -26,7 +26,7 @@ func createGCPCloudStorageBucket(var1, id string) error {
 	return client.Bucket(var1+"-"+id).Create(ctx, "", nil)
 }
 
-var _ = registerIntegrationTest("gcp", func(t *testing.T) {
+var _ = registerIntegrationTest("gcp_cloud_storage", func(t *testing.T) {
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -85,7 +85,6 @@ output:
     bucket: $VAR1-$ID
     path: $VAR2/${!count("$ID")}.txt
     max_in_flight: 1
-    timeout: 5s
 
 input:
   gcp_cloud_storage:
