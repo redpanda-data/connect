@@ -9,13 +9,25 @@ import (
 	imessage "github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/cenkalti/backoff/v4"
 )
 
 //------------------------------------------------------------------------------
 
 type asyncPreserverResend struct {
-	msg   types.Message
-	ackFn AsyncAckFn
+	boff     backoff.BackOff
+	attempts int
+	msg      types.Message
+	ackFn    AsyncAckFn
+}
+
+func newResendMsg(msg types.Message, ackFn AsyncAckFn) asyncPreserverResend {
+	boff := backoff.NewExponentialBackOff()
+	boff.InitialInterval = time.Millisecond
+	boff.MaxInterval = time.Second
+	boff.Multiplier = 1.1
+	boff.MaxElapsedTime = 0
+	return asyncPreserverResend{boff, 0, msg, ackFn}
 }
 
 // AsyncPreserver is a wrapper for reader.Async implementations that keeps a
@@ -52,17 +64,17 @@ func (p *AsyncPreserver) ConnectWithContext(ctx context.Context) error {
 	return p.r.ConnectWithContext(ctx)
 }
 
-func (p *AsyncPreserver) wrapAckFn(msg types.Message, ackFn AsyncAckFn) (types.Message, AsyncAckFn) {
-	if msg.Len() == 1 {
-		return p.wrapSingleAckFn(msg, ackFn)
+func (p *AsyncPreserver) wrapAckFn(m asyncPreserverResend) (types.Message, AsyncAckFn) {
+	if m.msg.Len() == 1 {
+		return p.wrapSingleAckFn(m)
 	}
-	return p.wrapBatchAckFn(msg, ackFn)
+	return p.wrapBatchAckFn(m)
 }
 
-func (p *AsyncPreserver) wrapBatchAckFn(msg types.Message, ackFn AsyncAckFn) (types.Message, AsyncAckFn) {
-	tags := make([]*imessage.Tag, msg.Len())
-	taggedParts := make([]types.Part, msg.Len())
-	msg.Iter(func(i int, p types.Part) error {
+func (p *AsyncPreserver) wrapBatchAckFn(m asyncPreserverResend) (types.Message, AsyncAckFn) {
+	tags := make([]*imessage.Tag, m.msg.Len())
+	taggedParts := make([]types.Part, m.msg.Len())
+	m.msg.Iter(func(i int, p types.Part) error {
 		tag := imessage.NewTag(i)
 		tags[i] = tag
 		taggedParts[i] = imessage.WithTag(tag, p)
@@ -73,8 +85,8 @@ func (p *AsyncPreserver) wrapBatchAckFn(msg types.Message, ackFn AsyncAckFn) (ty
 
 	return trackedMsg, func(ctx context.Context, res types.Response) error {
 		if res.Error() != nil {
-			resendMsg := msg
-			if walkable, ok := res.Error().(batch.WalkableError); ok && walkable.IndexedErrors() < msg.Len() {
+			resendMsg := m.msg
+			if walkable, ok := res.Error().(batch.WalkableError); ok && walkable.IndexedErrors() < m.msg.Len() {
 				resendMsg = message.New(nil)
 				walkable.WalkParts(func(i int, p types.Part, e error) bool {
 					if e == nil {
@@ -82,47 +94,42 @@ func (p *AsyncPreserver) wrapBatchAckFn(msg types.Message, ackFn AsyncAckFn) (ty
 					}
 					for tagIndex, tag := range tags {
 						if imessage.HasTag(tag, p) {
-							resendMsg.Append(msg.Get(tagIndex))
+							resendMsg.Append(m.msg.Get(tagIndex))
 							return true
 						}
 					}
 
 					// If we couldn't link the errored part back to an original
 					// message then we need to retry all of them.
-					resendMsg = msg
+					resendMsg = m.msg
 					return false
 				})
 				if resendMsg.Len() == 0 {
-					resendMsg = msg
+					resendMsg = m.msg
 				}
 			}
+			m.msg = resendMsg
 
 			p.msgsMut.Lock()
-			p.resendMessages = append(p.resendMessages, asyncPreserverResend{
-				msg:   resendMsg,
-				ackFn: ackFn,
-			})
+			p.resendMessages = append(p.resendMessages, m)
 			p.resendInterrupt()
 			p.msgsMut.Unlock()
 			return nil
 		}
-		return ackFn(ctx, res)
+		return m.ackFn(ctx, res)
 	}
 }
 
-func (p *AsyncPreserver) wrapSingleAckFn(msg types.Message, ackFn AsyncAckFn) (types.Message, AsyncAckFn) {
-	return msg, func(ctx context.Context, res types.Response) error {
+func (p *AsyncPreserver) wrapSingleAckFn(m asyncPreserverResend) (types.Message, AsyncAckFn) {
+	return m.msg, func(ctx context.Context, res types.Response) error {
 		if res.Error() != nil {
 			p.msgsMut.Lock()
-			p.resendMessages = append(p.resendMessages, asyncPreserverResend{
-				msg:   msg,
-				ackFn: ackFn,
-			})
+			p.resendMessages = append(p.resendMessages, m)
 			p.resendInterrupt()
 			p.msgsMut.Unlock()
 			return nil
 		}
-		return ackFn(ctx, res)
+		return m.ackFn(ctx, res)
 	}
 }
 
@@ -143,7 +150,19 @@ func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (types.Message, As
 			p.resendMessages = nil
 		}
 		p.msgsMut.Unlock()
-		sendMsg, ackFn := p.wrapAckFn(resend.msg, resend.ackFn)
+
+		resend.attempts++
+		if resend.attempts > 2 {
+			// This sleep prevents a busy loop on permanently failed messages.
+			if tout := resend.boff.NextBackOff(); tout > 0 {
+				select {
+				case <-time.After(tout):
+				case <-ctx.Done():
+					return nil, nil, ctx.Err()
+				}
+			}
+		}
+		sendMsg, ackFn := p.wrapAckFn(resend)
 		return sendMsg, ackFn, nil
 	}
 	p.resendInterrupt = cancel
@@ -153,7 +172,7 @@ func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (types.Message, As
 	if err != nil {
 		return nil, nil, err
 	}
-	sendMsg, ackFn := p.wrapAckFn(msg, aFn)
+	sendMsg, ackFn := p.wrapAckFn(newResendMsg(msg, aFn))
 	return sendMsg, ackFn, nil
 }
 

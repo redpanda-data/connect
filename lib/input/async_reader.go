@@ -6,13 +6,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/throttle"
+	"github.com/cenkalti/backoff/v4"
 )
 
 //------------------------------------------------------------------------------
@@ -20,7 +21,8 @@ import (
 // AsyncReader is an input implementation that reads messages from a
 // reader.Async component.
 type AsyncReader struct {
-	connected int32
+	connected   int32
+	connBackoff backoff.BackOff
 
 	allowSkipAcks bool
 
@@ -30,16 +32,8 @@ type AsyncReader struct {
 	stats metrics.Type
 	log   log.Modular
 
-	connThrot *throttle.Type
-
 	transactions chan types.Transaction
-
-	ctx           context.Context
-	closeFn       func()
-	fullyCloseCtx context.Context
-	fullyCloseFn  func()
-
-	closedChan chan struct{}
+	shutSig      *shutdown.Signaller
 }
 
 // NewAsyncReader creates a new AsyncReader input type.
@@ -50,23 +44,21 @@ func NewAsyncReader(
 	log log.Modular,
 	stats metrics.Type,
 ) (Type, error) {
-	ctx, cancelFn := context.WithCancel(context.Background())
-	fullyCloseCtx, fullyCancelFn := context.WithCancel(context.Background())
+	boff := backoff.NewExponentialBackOff()
+	boff.InitialInterval = time.Millisecond * 100
+	boff.MaxInterval = time.Second
+	boff.MaxElapsedTime = 0
+
 	rdr := &AsyncReader{
+		connBackoff:   boff,
 		allowSkipAcks: allowSkipAcks,
 		typeStr:       typeStr,
 		reader:        r,
 		log:           log,
 		stats:         stats,
 		transactions:  make(chan types.Transaction),
-		ctx:           ctx,
-		closeFn:       cancelFn,
-		fullyCloseCtx: fullyCloseCtx,
-		fullyCloseFn:  fullyCancelFn,
-		closedChan:    make(chan struct{}),
+		shutSig:       shutdown.NewSignaller(),
 	}
-
-	rdr.connThrot = throttle.New(throttle.OptCloseChan(ctx.Done()))
 
 	go rdr.loop()
 	return rdr, nil
@@ -97,7 +89,7 @@ func (r *AsyncReader) loop() {
 		atomic.StoreInt32(&r.connected, 0)
 
 		close(r.transactions)
-		close(r.closedChan)
+		r.shutSig.ShutdownComplete()
 	}()
 	mRunning.Incr(1)
 
@@ -108,26 +100,37 @@ func (r *AsyncReader) loop() {
 		r.log.Debugln("Pending acks resolved.")
 	}()
 
-	for {
-		if err := r.reader.ConnectWithContext(r.ctx); err != nil {
-			if r.ctx.Err() != nil || err == types.ErrTypeClosed {
-				return
+	initConnection := func() bool {
+		initConnCtx, initConnDone := r.shutSig.CloseAtLeisureCtx(context.Background())
+		defer initConnDone()
+		for {
+			if err := r.reader.ConnectWithContext(initConnCtx); err != nil {
+				if r.shutSig.ShouldCloseAtLeisure() || err == types.ErrTypeClosed {
+					return false
+				}
+				r.log.Errorf("Failed to connect to %v: %v\n", r.typeStr, err)
+				mFailedConn.Incr(1)
+				select {
+				case <-time.After(r.connBackoff.NextBackOff()):
+				case <-initConnCtx.Done():
+					return false
+				}
+			} else {
+				r.connBackoff.Reset()
+				return true
 			}
-			r.log.Errorf("Failed to connect to %v: %v\n", r.typeStr, err)
-			mFailedConn.Incr(1)
-			if !r.connThrot.Retry() {
-				return
-			}
-		} else {
-			r.connThrot.Reset()
-			break
 		}
+	}
+	if !initConnection() {
+		return
 	}
 	mConn.Incr(1)
 	atomic.StoreInt32(&r.connected, 1)
 
 	for {
-		msg, ackFn, err := r.reader.ReadWithContext(r.ctx)
+		readCtx, readDone := r.shutSig.CloseAtLeisureCtx(context.Background())
+		msg, ackFn, err := r.reader.ReadWithContext(readCtx)
+		readDone()
 
 		// If our reader says it is not connected.
 		if err == types.ErrNotConnected {
@@ -135,29 +138,15 @@ func (r *AsyncReader) loop() {
 			atomic.StoreInt32(&r.connected, 0)
 
 			// Continue to try to reconnect while still active.
-			for {
-				if err = r.reader.ConnectWithContext(r.ctx); err != nil {
-					// Close immediately if our reader is closed.
-					if r.ctx.Err() != nil || err == types.ErrTypeClosed {
-						return
-					}
-
-					r.log.Errorf("Failed to reconnect to %v: %v\n", r.typeStr, err)
-					mFailedConn.Incr(1)
-				} else if msg, ackFn, err = r.reader.ReadWithContext(r.ctx); err != types.ErrNotConnected {
-					mConn.Incr(1)
-					atomic.StoreInt32(&r.connected, 1)
-					r.connThrot.Reset()
-					break
-				}
-				if !r.connThrot.Retry() {
-					return
-				}
+			if !initConnection() {
+				return
 			}
+			mConn.Incr(1)
+			atomic.StoreInt32(&r.connected, 1)
 		}
 
 		// Close immediately if our reader is closed.
-		if r.ctx.Err() != nil || err == types.ErrTypeClosed {
+		if r.shutSig.ShouldCloseAtLeisure() || err == types.ErrTypeClosed {
 			return
 		}
 
@@ -165,12 +154,14 @@ func (r *AsyncReader) loop() {
 			if err != nil && err != types.ErrTimeout && err != types.ErrNotConnected {
 				r.log.Errorf("Failed to read message: %v\n", err)
 			}
-			if !r.connThrot.Retry() {
+			select {
+			case <-time.After(r.connBackoff.NextBackOff()):
+			case <-r.shutSig.CloseAtLeisureChan():
 				return
 			}
 			continue
 		} else {
-			r.connThrot.Reset()
+			r.connBackoff.Reset()
 			mCount.Incr(1)
 			mPartsRcvd.Incr(int64(msg.Len()))
 			mRcvd.Incr(1)
@@ -181,7 +172,7 @@ func (r *AsyncReader) loop() {
 		tracing.InitSpans("input_"+r.typeStr, msg)
 		select {
 		case r.transactions <- types.NewTransaction(msg, resChan):
-		case <-r.ctx.Done():
+		case <-r.shutSig.CloseAtLeisureChan():
 			return
 		}
 
@@ -197,14 +188,10 @@ func (r *AsyncReader) loop() {
 			var open bool
 			select {
 			case res, open = <-rChan:
-			case <-r.ctx.Done():
-				// The pipeline is terminating but we still want to attempt to
-				// propagate an acknowledgement from in-transit messages.
-				select {
-				case res, open = <-rChan:
-				case <-r.fullyCloseCtx.Done():
-					return
-				}
+			case <-r.shutSig.CloseNowChan():
+				// Even if the pipeline is terminating we still want to attempt
+				// to propagate an acknowledgement from in-transit messages.
+				return
 			}
 			if !open {
 				return
@@ -216,9 +203,12 @@ func (r *AsyncReader) loop() {
 			}
 			mLatency.Timing(time.Since(m.CreatedAt()).Nanoseconds())
 			tracing.FinishSpans(m)
-			if err = aFn(r.fullyCloseCtx, res); err != nil {
+
+			ackCtx, ackDone := r.shutSig.CloseNowCtx(context.Background())
+			if err = aFn(ackCtx, res); err != nil {
 				r.log.Errorf("Failed to acknowledge message: %v\n", err)
 			}
+			ackDone()
 		}(msg, ackFn, resChan)
 	}
 }
@@ -237,17 +227,17 @@ func (r *AsyncReader) Connected() bool {
 
 // CloseAsync shuts down the AsyncReader input and stops processing requests.
 func (r *AsyncReader) CloseAsync() {
-	r.closeFn()
+	r.shutSig.CloseAtLeisure()
 }
 
 // WaitForClose blocks until the AsyncReader input has closed down.
 func (r *AsyncReader) WaitForClose(timeout time.Duration) error {
 	go func() {
 		<-time.After(timeout - time.Second)
-		r.fullyCloseFn()
+		r.shutSig.CloseNow()
 	}()
 	select {
-	case <-r.closedChan:
+	case <-r.shutSig.HasClosedChan():
 	case <-time.After(timeout):
 		return types.ErrTimeout
 	}

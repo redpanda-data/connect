@@ -7,16 +7,15 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/throttle"
+	"github.com/cenkalti/backoff/v4"
 )
-
-//------------------------------------------------------------------------------
 
 // AsyncSink is a type that writes Benthos messages to a third party sink. If
 // the protocol supports a form of acknowledgement then it will be returned by
@@ -37,7 +36,6 @@ type AsyncSink interface {
 
 // AsyncWriter is an output type that writes messages to a writer.Type.
 type AsyncWriter struct {
-	running     int32
 	isConnected int32
 
 	typeStr     string
@@ -49,12 +47,7 @@ type AsyncWriter struct {
 
 	transactions <-chan types.Transaction
 
-	ctx           context.Context
-	close         func()
-	fullyCloseCtx context.Context
-	fullyClose    func()
-
-	closedChan chan struct{}
+	shutSig *shutdown.Signaller
 }
 
 // NewAsyncWriter creates a new AsyncWriter output type.
@@ -66,19 +59,14 @@ func NewAsyncWriter(
 	stats metrics.Type,
 ) (Type, error) {
 	aWriter := &AsyncWriter{
-		running:      1,
 		typeStr:      typeStr,
 		maxInflight:  maxInflight,
 		writer:       w,
 		log:          log,
 		stats:        stats,
 		transactions: nil,
-		closedChan:   make(chan struct{}),
+		shutSig:      shutdown.NewSignaller(),
 	}
-
-	aWriter.ctx, aWriter.close = context.WithCancel(context.Background())
-	aWriter.fullyCloseCtx, aWriter.fullyClose = context.WithCancel(context.Background())
-
 	return aWriter, nil
 }
 
@@ -86,7 +74,9 @@ func NewAsyncWriter(
 
 func (w *AsyncWriter) latencyMeasuringWrite(msg types.Message) (latencyNs int64, err error) {
 	t0 := time.Now()
-	err = w.writer.WriteWithContext(w.ctx, msg)
+	ctx, done := w.shutSig.CloseAtLeisureCtx(context.Background())
+	defer done()
+	err = w.writer.WriteWithContext(ctx, msg)
 	latencyNs = time.Since(t0).Nanoseconds()
 	return latencyNs, err
 }
@@ -112,26 +102,37 @@ func (w *AsyncWriter) loop() {
 			w.log.Warnf("Waiting for output to close, blocked by: %v\n", err)
 		}
 		atomic.StoreInt32(&w.isConnected, 0)
-		close(w.closedChan)
+		w.shutSig.ShutdownComplete()
 	}()
 
-	throt := throttle.New(throttle.OptCloseChan(w.ctx.Done()))
+	connBackoff := backoff.NewExponentialBackOff()
+	connBackoff.InitialInterval = time.Millisecond * 500
+	connBackoff.MaxInterval = time.Second
+	connBackoff.MaxElapsedTime = 0
 
-	for {
-		if err := w.writer.ConnectWithContext(w.ctx); err != nil {
-			// Close immediately if our writer is closed.
-			if err == types.ErrTypeClosed {
-				return
+	initConnection := func() bool {
+		initConnCtx, initConnDone := w.shutSig.CloseAtLeisureCtx(context.Background())
+		defer initConnDone()
+		for {
+			if err := w.writer.ConnectWithContext(initConnCtx); err != nil {
+				if w.shutSig.ShouldCloseAtLeisure() || err == types.ErrTypeClosed {
+					return false
+				}
+				w.log.Errorf("Failed to connect to %v: %v\n", w.typeStr, err)
+				mFailedConn.Incr(1)
+				select {
+				case <-time.After(connBackoff.NextBackOff()):
+				case <-initConnCtx.Done():
+					return false
+				}
+			} else {
+				connBackoff.Reset()
+				return true
 			}
-
-			w.log.Errorf("Failed to connect to %v: %v\n", w.typeStr, err)
-			mFailedConn.Incr(1)
-			if !throt.Retry() {
-				return
-			}
-		} else {
-			break
 		}
+	}
+	if !initConnection() {
+		return
 	}
 	mConn.Incr(1)
 	atomic.StoreInt32(&w.isConnected, 1)
@@ -156,33 +157,23 @@ func (w *AsyncWriter) loop() {
 		mLostConn.Incr(1)
 
 		// Continue to try to reconnect while still active.
-		for atomic.LoadInt32(&w.running) == 1 {
-			if err = w.writer.ConnectWithContext(w.ctx); err != nil {
-				// Close immediately if our writer is closed.
-				if err == types.ErrTypeClosed {
-					return
-				}
-
-				w.log.Errorf("Failed to reconnect to %v: %v\n", w.typeStr, err)
-				mFailedConn.Incr(1)
-				if !throt.Retry() {
-					return
-				}
-			} else if latency, err = w.latencyMeasuringWrite(msg); err != types.ErrNotConnected {
+		for {
+			if !initConnection() {
+				err = types.ErrTypeClosed
+				return
+			}
+			if latency, err = w.latencyMeasuringWrite(msg); err != types.ErrNotConnected {
 				atomic.StoreInt32(&w.isConnected, 1)
 				mConn.Incr(1)
-				break
-			} else if !throt.Retry() {
 				return
 			}
 		}
-		return
 	}
 
 	writerLoop := func() {
 		defer wg.Done()
 
-		for atomic.LoadInt32(&w.running) == 1 {
+		for {
 			var ts types.Transaction
 			var open bool
 			select {
@@ -191,7 +182,7 @@ func (w *AsyncWriter) loop() {
 					return
 				}
 				mCount.Incr(1)
-			case <-w.ctx.Done():
+			case <-w.shutSig.CloseAtLeisureChan():
 				return
 			}
 
@@ -211,12 +202,11 @@ func (w *AsyncWriter) loop() {
 
 			if err != nil {
 				if w.typeStr != TypeReject {
+					// TODO: Maybe reintroduce a sleep here if we encounter a
+					// busy retry loop.
 					w.log.Errorf("Failed to send message to %v: %v\n", w.typeStr, err)
 				} else {
 					w.log.Infof("Rejecting message: %v\n", err)
-				}
-				if !throt.Retry() {
-					return
 				}
 			} else {
 				mSent.Incr(1)
@@ -224,7 +214,6 @@ func (w *AsyncWriter) loop() {
 				mBytesSent.Incr(int64(message.GetAllBytesLen(ts.Payload)))
 				mLatency.Timing(latency)
 				w.log.Tracef("Successfully wrote %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
-				throt.Reset() // TODO BAD PAYLOAD NAUGHTY RESETS
 			}
 
 			for _, s := range spans {
@@ -233,13 +222,7 @@ func (w *AsyncWriter) loop() {
 
 			select {
 			case ts.ResponseChan <- response.NewError(err):
-			case <-w.ctx.Done():
-				// The pipeline is terminating but we still want to attempt to
-				// propagate an acknowledgement from in-transit messages.
-				select {
-				case ts.ResponseChan <- response.NewError(err):
-				case <-w.fullyCloseCtx.Done():
-				}
+			case <-w.shutSig.CloseNowChan():
 				return
 			}
 		}
@@ -269,22 +252,19 @@ func (w *AsyncWriter) Connected() bool {
 
 // CloseAsync shuts down the File output and stops processing messages.
 func (w *AsyncWriter) CloseAsync() {
-	w.close()
-	atomic.StoreInt32(&w.running, 0)
+	w.shutSig.CloseAtLeisure()
 }
 
 // WaitForClose blocks until the File output has closed down.
 func (w *AsyncWriter) WaitForClose(timeout time.Duration) error {
 	go func() {
 		<-time.After(timeout - time.Second)
-		w.fullyClose()
+		w.shutSig.CloseNow()
 	}()
 	select {
-	case <-w.closedChan:
+	case <-w.shutSig.HasClosedChan():
 	case <-time.After(timeout):
 		return types.ErrTimeout
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

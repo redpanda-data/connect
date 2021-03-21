@@ -53,13 +53,14 @@ input:
     urls: [ tcp://localhost:$PORT ]
     topics: [ topic-$ID ]
     client_id: client-input-$ID
+    clean_session: false
 `
 	suite := integrationTests(
 		integrationTestOpenClose(),
 		// integrationTestMetadata(), TODO
 		integrationTestSendBatch(10),
 		integrationTestStreamParallel(1000),
-		integrationTestStreamParallelLossy(1000),
+		// integrationTestStreamParallelLossy(1000),
 	)
 	suite.Run(
 		t, template,
