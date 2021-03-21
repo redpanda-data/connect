@@ -148,6 +148,37 @@ func sanitiseConditionConfig(raw interface{}, removeDeprecated bool) error {
 	return nil
 }
 
+// TODO: V4 Remove this.
+func sanitiseConditionConfigNode(node *yaml.Node) error {
+	// This is a nasty hack until Benthos v4.
+	newNodes := []*yaml.Node{}
+
+	var name string
+	for i := 0; i < len(node.Content); i += 2 {
+		if node.Content[i].Value == "type" {
+			name = node.Content[i+1].Value
+			newNodes = append(newNodes, node.Content[i])
+			newNodes = append(newNodes, node.Content[i+1])
+			break
+		}
+	}
+
+	if name == "" {
+		return nil
+	}
+
+	for i := 0; i < len(node.Content); i += 2 {
+		if node.Content[i].Value == name {
+			newNodes = append(newNodes, node.Content[i])
+			newNodes = append(newNodes, node.Content[i+1])
+			break
+		}
+	}
+
+	node.Content = newNodes
+	return nil
+}
+
 // SanitiseComponentConfig reduces a raw component configuration into only the
 // fields for the component name configured.
 func SanitiseComponentConfig(componentType Type, raw interface{}, filter FieldFilter) error {
@@ -189,12 +220,19 @@ func SanitiseComponentConfig(componentType Type, raw interface{}, filter FieldFi
 	return nil
 }
 
-// SortNode takes a yaml.Node and a config spec and sorts the fields of the node
-// according to the spec. Also optionally removes the `type` field from this and
-// all nested components.
-func SortNode(cType Type, node *yaml.Node, removeTypeField bool) error {
+// SanitiseConfig contains fields describing the desired behaviour of the config
+// sanitiser such as removing certain fields.
+type SanitiseConfig struct {
+	RemoveTypeField  bool
+	RemoveDeprecated bool
+}
+
+// SanitiseNode takes a yaml.Node and a config spec and sorts the fields of the
+// node according to the spec. Also optionally removes the `type` field from
+// this and all nested components.
+func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 	if cType == "condition" {
-		return nil
+		return sanitiseConditionConfigNode(node)
 	}
 
 	newNodes := []*yaml.Node{}
@@ -202,9 +240,16 @@ func SortNode(cType Type, node *yaml.Node, removeTypeField bool) error {
 	var name string
 	var keys []string
 	for i := 0; i < len(node.Content); i += 2 {
+		if node.Content[i].Value == "label" {
+			newNodes = append(newNodes, node.Content[i])
+			newNodes = append(newNodes, node.Content[i+1])
+			break
+		}
+	}
+	for i := 0; i < len(node.Content); i += 2 {
 		if node.Content[i].Value == "type" {
 			name = node.Content[i+1].Value
-			if !removeTypeField {
+			if !conf.RemoveTypeField {
 				newNodes = append(newNodes, node.Content[i])
 				newNodes = append(newNodes, node.Content[i+1])
 			}
@@ -230,7 +275,7 @@ func SortNode(cType Type, node *yaml.Node, removeTypeField bool) error {
 
 	for i := 0; i < len(node.Content); i += 2 {
 		if node.Content[i].Value == name {
-			if err := cSpec.Config.sortNode(node.Content[i+1], removeTypeField); err != nil {
+			if err := cSpec.Config.SanitiseNode(node.Content[i+1], conf); err != nil {
 				return err
 			}
 			newNodes = append(newNodes, node.Content[i])
@@ -241,17 +286,19 @@ func SortNode(cType Type, node *yaml.Node, removeTypeField bool) error {
 
 	reservedFields := reservedFieldsByType(cType)
 	for i := 0; i < len(node.Content); i += 2 {
-		if node.Content[i].Value == name || node.Content[i].Value == "type" {
+		if node.Content[i].Value == name || node.Content[i].Value == "type" || node.Content[i].Value == "label" {
 			continue
 		}
-		spec, exists := reservedFields[node.Content[i].Value]
-		if exists {
-			if err := spec.sortNode(node.Content[i+1], removeTypeField); err != nil {
+		if spec, exists := reservedFields[node.Content[i].Value]; exists {
+			if _, omit := spec.shouldOmitNode(node.Content[i+1], node); omit {
+				continue
+			}
+			if err := spec.SanitiseNode(node.Content[i+1], conf); err != nil {
 				return err
 			}
+			newNodes = append(newNodes, node.Content[i])
+			newNodes = append(newNodes, node.Content[i+1])
 		}
-		newNodes = append(newNodes, node.Content[i])
-		newNodes = append(newNodes, node.Content[i+1])
 	}
 
 	node.Content = newNodes

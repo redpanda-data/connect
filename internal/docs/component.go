@@ -313,7 +313,9 @@ func createOrderedConfig(t Type, rawExample interface{}, filter FieldFilter) (*y
 		return nil, fmt.Errorf("expected mapping node child kind: %v", newNode.Content[0].Kind)
 	}
 
-	if err = SortNode(t, newNode.Content[0], true); err != nil {
+	if err = SanitiseNode(t, newNode.Content[0], SanitiseConfig{
+		RemoveTypeField: true,
+	}); err != nil {
 		return nil, err
 	}
 	return newNode.Content[0], nil

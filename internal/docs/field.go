@@ -167,6 +167,20 @@ func (f FieldSpec) shouldOmit(field, parent interface{}) (string, bool) {
 	return f.omitWhenFn(field, parent)
 }
 
+func (f FieldSpec) shouldOmitNode(fieldNode, parentNode *yaml.Node) (string, bool) {
+	if f.omitWhenFn == nil {
+		return "", false
+	}
+	var field, parent interface{}
+	if err := fieldNode.Decode(&field); err != nil {
+		return "", false
+	}
+	if err := parentNode.Decode(&parent); err != nil {
+		return "", false
+	}
+	return f.omitWhenFn(field, parent)
+}
+
 // FieldAdvanced returns a field spec for an advanced field.
 func FieldAdvanced(name, description string, examples ...interface{}) FieldSpec {
 	return FieldSpec{
@@ -236,40 +250,43 @@ func (f FieldSpec) sanitise(s interface{}, filter FieldFilter) {
 	}
 }
 
-func (f FieldSpec) sortNode(node *yaml.Node, removeTypeField bool) error {
+// SanitiseNode attempts to reduce a parsed config (as a *yaml.Node) down into a
+// minimal representation without changing the behaviour of the config. The
+// fields of the result will also be sorted according to the field spec.
+func (f FieldSpec) SanitiseNode(node *yaml.Node, conf SanitiseConfig) error {
 	if coreType, isCore := f.Type.IsCoreComponent(); isCore {
 		if f.IsArray {
 			for i := 0; i < len(node.Content); i++ {
-				if err := SortNode(coreType, node.Content[i], removeTypeField); err != nil {
+				if err := SanitiseNode(coreType, node.Content[i], conf); err != nil {
 					return err
 				}
 			}
 		} else if f.IsMap {
 			for i := 0; i < len(node.Content); i += 2 {
-				if err := SortNode(coreType, node.Content[i+1], removeTypeField); err != nil {
+				if err := SanitiseNode(coreType, node.Content[i+1], conf); err != nil {
 					return err
 				}
 			}
 		} else {
-			if err := SortNode(coreType, node, removeTypeField); err != nil {
+			if err := SanitiseNode(coreType, node, conf); err != nil {
 				return err
 			}
 		}
 	} else if len(f.Children) > 0 {
 		if f.IsArray {
 			for i := 0; i < len(node.Content); i++ {
-				if err := f.Children.sortNode(node.Content[i], removeTypeField); err != nil {
+				if err := f.Children.SanitiseNode(node.Content[i], conf); err != nil {
 					return err
 				}
 			}
 		} else if f.IsMap {
 			for i := 0; i < len(node.Content); i += 2 {
-				if err := f.Children.sortNode(node.Content[i+1], removeTypeField); err != nil {
+				if err := f.Children.SanitiseNode(node.Content[i+1], conf); err != nil {
 					return err
 				}
 			}
 		} else {
-			if err := f.Children.sortNode(node, removeTypeField); err != nil {
+			if err := f.Children.SanitiseNode(node, conf); err != nil {
 				return err
 			}
 		}
@@ -485,15 +502,21 @@ func (f FieldSpecs) sanitise(s interface{}, filter FieldFilter) {
 	}
 }
 
-func (f FieldSpecs) sortNode(node *yaml.Node, removeTypeField bool) error {
+// SanitiseNode attempts to reduce a parsed config (as a *yaml.Node) down into a
+// minimal representation without changing the behaviour of the config. The
+// fields of the result will also be sorted according to the field spec.
+func (f FieldSpecs) SanitiseNode(node *yaml.Node, conf SanitiseConfig) error {
 	// Following the order of our field specs, extract each field.
 	newNodes := []*yaml.Node{}
 	for _, field := range f {
+		if field.Deprecated && conf.RemoveDeprecated {
+			continue
+		}
 	searchLoop:
 		for i := 0; i < len(node.Content); i += 2 {
 			if node.Content[i].Value == field.Name {
 				nextNode := node.Content[i+1]
-				if err := field.sortNode(nextNode, removeTypeField); err != nil {
+				if err := field.SanitiseNode(nextNode, conf); err != nil {
 					return err
 				}
 				newNodes = append(newNodes, node.Content[i])

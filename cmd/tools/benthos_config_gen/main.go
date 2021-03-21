@@ -98,12 +98,19 @@ func main() {
 			conf.Output.Type = t
 		}
 
-		sanit, err := conf.SanitisedNoDeprecated()
-		if err != nil {
+		var rawNode yaml.Node
+		if err := rawNode.Encode(&conf); err != nil {
 			panic(err)
 		}
 
-		createYAML(t, filepath.Join(configsDir, t+".yaml"), false, sanit)
+		if err := config.Spec().SanitiseNode(&rawNode, docs.SanitiseConfig{
+			RemoveTypeField:  true,
+			RemoveDeprecated: true,
+		}); err != nil {
+			panic(err)
+		}
+
+		createYAML(t, filepath.Join(configsDir, t+".yaml"), false, rawNode)
 	}
 
 	// Create processor configs for all types.
@@ -121,12 +128,19 @@ func main() {
 
 		conf.Pipeline.Processors = append(conf.Pipeline.Processors, procConf)
 
-		sanit, err := conf.SanitisedNoDeprecated()
-		if err != nil {
+		var rawNode yaml.Node
+		if err := rawNode.Encode(&conf); err != nil {
 			panic(err)
 		}
 
-		createYAML(info.Name, filepath.Join(configsDir, "processors", info.Name+".yaml"), false, sanit)
+		if err := config.Spec().SanitiseNode(&rawNode, docs.SanitiseConfig{
+			RemoveTypeField:  true,
+			RemoveDeprecated: true,
+		}); err != nil {
+			panic(err)
+		}
+
+		createYAML(info.Name, filepath.Join(configsDir, "processors", info.Name+".yaml"), false, rawNode)
 	}
 
 	// Create metrics configs for all types.
@@ -142,12 +156,19 @@ func main() {
 
 		conf.Metrics.Type = info.Name
 
-		sanit, err := conf.SanitisedNoDeprecated()
-		if err != nil {
+		var rawNode yaml.Node
+		if err := rawNode.Encode(&conf); err != nil {
 			panic(err)
 		}
 
-		createYAML(info.Name, filepath.Join(configsDir, "metrics", info.Name+".yaml"), false, sanit)
+		if err := config.Spec().SanitiseNode(&rawNode, docs.SanitiseConfig{
+			RemoveTypeField:  true,
+			RemoveDeprecated: true,
+		}); err != nil {
+			panic(err)
+		}
+
+		createYAML(info.Name, filepath.Join(configsDir, "metrics", info.Name+".yaml"), false, rawNode)
 	}
 
 	// Create tracer configs for all types.
@@ -163,12 +184,19 @@ func main() {
 
 		conf.Tracer.Type = info.Name
 
-		sanit, err := conf.SanitisedNoDeprecated()
-		if err != nil {
+		var rawNode yaml.Node
+		if err := rawNode.Encode(&conf); err != nil {
 			panic(err)
 		}
 
-		createYAML(info.Name, filepath.Join(configsDir, "tracers", info.Name+".yaml"), false, sanit)
+		if err := config.Spec().SanitiseNode(&rawNode, docs.SanitiseConfig{
+			RemoveTypeField:  true,
+			RemoveDeprecated: true,
+		}); err != nil {
+			panic(err)
+		}
+
+		createYAML(info.Name, filepath.Join(configsDir, "tracers", info.Name+".yaml"), false, rawNode)
 	}
 }
 
