@@ -16,8 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//------------------------------------------------------------------------------
-
 type mockAsyncReader struct {
 	msgsToSnd []types.Message
 	ackRcvd   []error
@@ -46,6 +44,7 @@ func (r *mockAsyncReader) ConnectWithContext(ctx context.Context) error {
 	}
 	return cerr
 }
+
 func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
 	select {
 	case <-ctx.Done():
@@ -75,9 +74,11 @@ func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (types.Message, A
 		return <-r.ackChan
 	}, nil
 }
+
 func (r *mockAsyncReader) CloseAsync() {
 	<-r.closeAsyncChan
 }
+
 func (r *mockAsyncReader) WaitForClose(time.Duration) error {
 	return <-r.waitForCloseChan
 }
@@ -221,6 +222,58 @@ func TestAsyncPreserverErrorProp(t *testing.T) {
 			t.Errorf("Wrong error returned: %v != %v", actErr, expErr)
 		}
 	}
+}
+
+func TestAsyncPreserverErrorBackoff(t *testing.T) {
+	t.Parallel()
+
+	readerImpl := newMockAsyncReader()
+	pres := NewAsyncPreserver(readerImpl)
+
+	go func() {
+		select {
+		case readerImpl.connChan <- nil:
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+		select {
+		case readerImpl.readChan <- nil:
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+		select {
+		case readerImpl.closeAsyncChan <- struct{}{}:
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+		select {
+		case readerImpl.waitForCloseChan <- nil:
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*500)
+	defer cancel()
+
+	require.NoError(t, pres.ConnectWithContext(ctx))
+
+	i := 0
+	for {
+		_, aFn, actErr := pres.ReadWithContext(ctx)
+		if actErr != nil {
+			assert.EqualError(t, actErr, "context deadline exceeded")
+			break
+		}
+		require.NoError(t, aFn(ctx, response.NewError(errors.New("no thanks"))))
+		if i++; i == 10 {
+			t.Error("Expected backoff to prevent this")
+			break
+		}
+	}
+
+	pres.CloseAsync()
+	require.NoError(t, pres.WaitForClose(time.Second))
 }
 
 func TestAsyncPreserverBatchError(t *testing.T) {
@@ -534,5 +587,3 @@ func TestAsyncPreserverBufferBatchedAcks(t *testing.T) {
 		sendAck()
 	}
 }
-
-//------------------------------------------------------------------------------

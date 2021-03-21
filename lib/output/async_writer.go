@@ -206,7 +206,7 @@ func (w *AsyncWriter) loop() {
 					// busy retry loop.
 					w.log.Errorf("Failed to send message to %v: %v\n", w.typeStr, err)
 				} else {
-					w.log.Infof("Rejecting message: %v\n", err)
+					w.log.Debugf("Rejecting message: %v\n", err)
 				}
 			} else {
 				mSent.Incr(1)
@@ -222,7 +222,7 @@ func (w *AsyncWriter) loop() {
 
 			select {
 			case ts.ResponseChan <- response.NewError(err):
-			case <-w.shutSig.CloseNowChan():
+			case <-w.shutSig.CloseAtLeisureChan():
 				return
 			}
 		}
@@ -257,10 +257,6 @@ func (w *AsyncWriter) CloseAsync() {
 
 // WaitForClose blocks until the File output has closed down.
 func (w *AsyncWriter) WaitForClose(timeout time.Duration) error {
-	go func() {
-		<-time.After(timeout - time.Second)
-		w.shutSig.CloseNow()
-	}()
 	select {
 	case <-w.shutSig.HasClosedChan():
 	case <-time.After(timeout):
