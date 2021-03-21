@@ -21,11 +21,11 @@ This component is deprecated and will be removed in the next major version relea
 ```yaml
 # Config fields, showing default values
 filter:
+  type: text
   text:
     arg: ""
     operator: equals_cs
     part: 0
-  type: text
 ```
 
 ## Alternatives

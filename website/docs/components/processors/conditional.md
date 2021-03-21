@@ -25,11 +25,11 @@ passes for a message batch, otherwise a different set of processors are applied.
 # Config fields, showing default values
 conditional:
   condition:
+    type: text
     text:
       arg: ""
       operator: equals_cs
       part: 0
-    type: text
   processors: []
   else_processors: []
 ```
