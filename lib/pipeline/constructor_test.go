@@ -1,7 +1,6 @@
 package pipeline_test
 
 import (
-	"encoding/json"
 	"reflect"
 	"testing"
 	"time"
@@ -16,72 +15,6 @@ import (
 
 	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
-
-func TestSanitise(t *testing.T) {
-	var actObj interface{}
-	var act []byte
-	var err error
-
-	exp := `{` +
-		`"processors":[],` +
-		`"threads":10` +
-		`}`
-
-	conf := pipeline.NewConfig()
-	conf.Threads = 10
-	conf.Processors = nil
-
-	if actObj, err = pipeline.SanitiseConfig(conf); err != nil {
-		t.Fatal(err)
-	}
-	if act, err = json.Marshal(actObj); err != nil {
-		t.Fatal(err)
-	}
-	if string(act) != exp {
-		t.Errorf("Wrong sanitised output: %s != %v", act, exp)
-	}
-
-	exp = `{` +
-		`"processors":[` +
-		`{` +
-		`"type":"log",` +
-		`"log":{` +
-		`"fields":{},` +
-		`"fields_mapping":"",` +
-		`"level":"INFO",` +
-		`"message":""` +
-		`}` +
-		`},` +
-		`{` +
-		`"type":"archive",` +
-		`"archive":{` +
-		`"format":"binary",` +
-		`"path":"nope"` +
-		`}` +
-		`}` +
-		`],` +
-		`"threads":10` +
-		`}`
-
-	proc := processor.NewConfig()
-	proc.Type = "log"
-	conf.Processors = append(conf.Processors, proc)
-
-	proc = processor.NewConfig()
-	proc.Type = "archive"
-	proc.Archive.Path = "nope"
-	conf.Processors = append(conf.Processors, proc)
-
-	if actObj, err = pipeline.SanitiseConfig(conf); err != nil {
-		t.Fatal(err)
-	}
-	if act, err = json.Marshal(actObj); err != nil {
-		t.Fatal(err)
-	}
-	if string(act) != exp {
-		t.Errorf("Wrong sanitised output: %s != %v", act, exp)
-	}
-}
 
 func TestProcCtor(t *testing.T) {
 	firstProc := processor.NewConfig()

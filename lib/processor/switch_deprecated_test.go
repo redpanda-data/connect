@@ -9,8 +9,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/util/config"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestSwitchDeprecatedCases(t *testing.T) {
@@ -152,91 +150,4 @@ func TestSwitchDeprecatedCases(t *testing.T) {
 			t.Errorf("Wrong result for test '%s': %s != %s", test.name, act, exp)
 		}
 	}
-}
-
-func TestSwitchDeprecatedSanitised(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = "switch"
-
-	condConf := condition.NewConfig()
-	condConf.Type = condition.TypeBloblang
-	condConf.Bloblang = `this.contains("A")`
-
-	procConf := NewConfig()
-	procConf.Type = TypeBloblang
-	procConf.Bloblang = `root = "Hit case 0:" + content().string()`
-
-	conf.Switch = append(conf.Switch, SwitchCaseConfig{
-		Condition:   condConf,
-		Processors:  []Config{procConf},
-		Fallthrough: false,
-	})
-
-	condConf = condition.NewConfig()
-	condConf.Type = condition.TypeBloblang
-	condConf.Bloblang = `this.contains("B")`
-
-	procConf = NewConfig()
-	procConf.Type = TypeBloblang
-	procConf.Bloblang = `root = "Hit case 1:" + content().string()`
-
-	conf.Switch = append(conf.Switch, SwitchCaseConfig{
-		Condition:   condConf,
-		Processors:  []Config{procConf},
-		Fallthrough: true,
-	})
-
-	condConf = condition.NewConfig()
-	condConf.Type = condition.TypeBloblang
-	condConf.Bloblang = `this.contains("C")`
-
-	procConf = NewConfig()
-	procConf.Type = TypeBloblang
-	procConf.Bloblang = `root = "Hit case 2:" + content().string()`
-
-	conf.Switch = append(conf.Switch, SwitchCaseConfig{
-		Condition:   condConf,
-		Processors:  []Config{procConf},
-		Fallthrough: false,
-	})
-
-	sanit, err := SanitiseConfig(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	sanitBytes, err := config.MarshalYAML(sanit)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	exp := `type: switch
-switch:
-  - check: ""
-    condition:
-      bloblang: this.contains("A")
-      type: bloblang
-    fallthrough: false
-    processors:
-      - bloblang: root = "Hit case 0:" + content().string()
-        type: bloblang
-  - check: ""
-    condition:
-      bloblang: this.contains("B")
-      type: bloblang
-    fallthrough: true
-    processors:
-      - bloblang: root = "Hit case 1:" + content().string()
-        type: bloblang
-  - check: ""
-    condition:
-      bloblang: this.contains("C")
-      type: bloblang
-    fallthrough: false
-    processors:
-      - bloblang: root = "Hit case 2:" + content().string()
-        type: bloblang
-`
-
-	assert.Equal(t, exp, string(sanitBytes))
 }

@@ -1,7 +1,6 @@
 package processor_test
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -91,33 +90,5 @@ func TestConstructorConfigDefaultsYAML(t *testing.T) {
 	}
 	if exp, act := 50, conf[0].BoundsCheck.MaxPartSize; exp != act {
 		t.Errorf("Wrong overridden part size: %v != %v", act, exp)
-	}
-}
-
-func TestSanitise(t *testing.T) {
-	var actObj interface{}
-	var act []byte
-	var err error
-
-	exp := `{` +
-		`"type":"archive",` +
-		`"archive":{` +
-		`"format":"binary",` +
-		`"path":"nope"` +
-		`}` +
-		`}`
-
-	conf := processor.NewConfig()
-	conf.Type = "archive"
-	conf.Archive.Path = "nope"
-
-	if actObj, err = processor.SanitiseConfig(conf); err != nil {
-		t.Fatal(err)
-	}
-	if act, err = json.Marshal(actObj); err != nil {
-		t.Fatal(err)
-	}
-	if string(act) != exp {
-		t.Errorf("Wrong sanitised output: %s != %v", act, exp)
 	}
 }
