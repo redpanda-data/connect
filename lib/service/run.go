@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/output"
@@ -15,6 +16,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/service/test"
 	uconfig "github.com/Jeffail/benthos/v3/lib/util/config"
 	"github.com/urfave/cli/v2"
+	"gopkg.in/yaml.v3"
 
 	// TODO: V4 Remove this as it's a temporary work around to ensure current
 	// plugin users automatically import all components.
@@ -232,10 +234,17 @@ func Run() {
    benthos -c ./config.yaml echo | less`[4:],
 				Action: func(c *cli.Context) error {
 					readConfig(c.String("config"), c.StringSlice("resources"))
-					outConf, err := conf.Sanitised()
+
+					var node yaml.Node
+					err := node.Encode(conf)
+					if err == nil {
+						err = config.Spec().SanitiseNode(&node, docs.SanitiseConfig{
+							RemoveTypeField: true,
+						})
+					}
 					if err == nil {
 						var configYAML []byte
-						if configYAML, err = uconfig.MarshalYAML(outConf); err == nil {
+						if configYAML, err = uconfig.MarshalYAML(node); err == nil {
 							fmt.Println(string(configYAML))
 						}
 					}
