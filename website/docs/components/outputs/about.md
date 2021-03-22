@@ -9,6 +9,8 @@ An output config section looks like this:
 
 ```yaml
 output:
+  label: my_s3_output
+
   s3:
     bucket: TODO
     path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
@@ -93,6 +95,10 @@ output:
                 root.type = this.type.not_null() | "unknown"
 ```
 
+## Labels
+
+Outputs have an optional field `label` that can uniquely identify them in observability data such as metrics and logs. This can be useful when running configs with multiple outputs, otherwise their metrics labels will be generated based on their composition. For more information check out the [metrics documentation][metrics.about].
+
 import ComponentsByCategory from '@theme/ComponentsByCategory';
 
 ## Categories
@@ -110,3 +116,4 @@ import ComponentSelect from '@theme/ComponentSelect';
 [output.retry]: /docs/components/outputs/retry
 [output.try]: /docs/components/outputs/try
 [interpolation]: /docs/configuration/interpolation
+[metrics.about]: /docs/components/metrics/about
