@@ -22,6 +22,7 @@ Executes a command, runs it as a subprocess, and writes messages to it over stdi
 ```yaml
 # Config fields, showing default values
 output:
+  label: ""
   subprocess:
     name: ""
     args: []

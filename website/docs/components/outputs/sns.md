@@ -32,6 +32,7 @@ Sends messages to an AWS SNS topic.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   sns:
     topic_arn: ""
     max_in_flight: 1
@@ -44,6 +45,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   sns:
     topic_arn: ""
     max_in_flight: 1

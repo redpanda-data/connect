@@ -29,6 +29,7 @@ Allows you to combine multiple inputs into a single stream of data, where each i
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   broker:
     copies: 1
     inputs: []
@@ -45,6 +46,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   broker:
     copies: 1
     inputs: []

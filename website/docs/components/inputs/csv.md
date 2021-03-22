@@ -29,6 +29,7 @@ Reads one or more CSV files as structured records following the format described
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   csv:
     paths: []
     parse_header_row: true
@@ -41,6 +42,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   csv:
     paths: []
     parse_header_row: true

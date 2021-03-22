@@ -24,6 +24,7 @@ Introduced in version 3.39.0.
 ```yaml
 # Config fields, showing default values
 output:
+  label: ""
   sftp:
     address: ""
     path: ""

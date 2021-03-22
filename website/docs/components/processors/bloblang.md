@@ -20,6 +20,7 @@ Executes a [Bloblang](/docs/guides/bloblang/about) mapping on messages.
 
 ```yaml
 # Config fields, showing default values
+label: ""
 bloblang: ""
 ```
 

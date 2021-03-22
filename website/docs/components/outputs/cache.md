@@ -29,6 +29,7 @@ Stores each message in a [cache](/docs/components/caches/about).
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   cache:
     target: ""
     key: ${!count("items")}-${!timestamp_unix_nano()}
@@ -41,6 +42,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   cache:
     target: ""
     key: ${!count("items")}-${!timestamp_unix_nano()}

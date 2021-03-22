@@ -29,6 +29,7 @@ Subscribe to an NSQ instance topic and channel.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   nsq:
     nsqd_tcp_addresses:
       - localhost:4150
@@ -46,6 +47,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   nsq:
     nsqd_tcp_addresses:
       - localhost:4150

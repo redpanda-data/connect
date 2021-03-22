@@ -20,6 +20,7 @@ Conditionally processes messages based on their contents.
 
 ```yaml
 # Config fields, showing default values
+label: ""
 switch: []
 ```
 

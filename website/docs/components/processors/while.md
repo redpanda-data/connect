@@ -28,6 +28,7 @@ While is a processor that checks a [Bloblang query](/docs/guides/bloblang/about/
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 while:
   at_least_once: false
   check: ""
@@ -39,6 +40,7 @@ while:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 while:
   at_least_once: false
   max_loops: 0

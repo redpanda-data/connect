@@ -21,6 +21,7 @@ This component is deprecated and will be removed in the next major version relea
 ```yaml
 # Config fields, showing default values
 output:
+  label: ""
   udp:
     address: localhost:4194
 ```

@@ -29,6 +29,7 @@ Sets Redis hash objects using the HMSET command.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   redis_hash:
     url: tcp://localhost:6379
     key: ""
@@ -44,6 +45,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   redis_hash:
     url: tcp://localhost:6379
     kind: simple

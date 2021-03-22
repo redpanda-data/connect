@@ -29,6 +29,7 @@ the number of messages are simply ignored.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 select_parts: {}
 ```
 
@@ -37,6 +38,7 @@ select_parts: {}
 
 ```yaml
 # All config fields, showing default values
+label: ""
 select_parts:
   parts:
     - 0

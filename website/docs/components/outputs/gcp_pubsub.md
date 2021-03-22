@@ -30,6 +30,7 @@ from messages are sent as attributes.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   gcp_pubsub:
     project: ""
     topic: ""
@@ -44,6 +45,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   gcp_pubsub:
     project: ""
     topic: ""

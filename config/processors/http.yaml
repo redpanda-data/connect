@@ -7,6 +7,7 @@ http:
   cert_file: ""
   key_file: ""
 input:
+  label: ""
   stdin:
     codec: lines
     max_buffer: 1000000
@@ -15,7 +16,8 @@ buffer:
 pipeline:
   threads: 1
   processors:
-    - http:
+    - label: ""
+      http:
         parallel: false
         url: http://localhost:4195/post
         verb: POST
@@ -54,6 +56,7 @@ pipeline:
         successful_on: []
         proxy_url: ""
 output:
+  label: ""
   stdout:
     delimiter: ""
 resources:

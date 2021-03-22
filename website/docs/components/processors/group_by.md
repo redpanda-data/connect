@@ -20,6 +20,7 @@ Splits a [batch of messages](/docs/configuration/batching/) into N batches, wher
 
 ```yaml
 # Config fields, showing default values
+label: ""
 group_by: []
 ```
 

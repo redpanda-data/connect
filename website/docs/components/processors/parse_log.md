@@ -29,6 +29,7 @@ easier and often much faster than [`grok`](/docs/components/processors/grok).
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 parse_log:
   format: syslog_rfc5424
   codec: json
@@ -39,6 +40,7 @@ parse_log:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 parse_log:
   format: syslog_rfc5424
   codec: json

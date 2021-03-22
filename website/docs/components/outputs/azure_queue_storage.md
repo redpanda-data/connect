@@ -32,6 +32,7 @@ Introduced in version 3.36.0.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   azure_queue_storage:
     storage_account: ""
     storage_access_key: ""
@@ -51,6 +52,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   azure_queue_storage:
     storage_account: ""
     storage_access_key: ""

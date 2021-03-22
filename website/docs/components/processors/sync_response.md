@@ -21,6 +21,7 @@ source, where it is dealt with according to that specific input type.
 
 ```yaml
 # Config fields, showing default values
+label: ""
 sync_response: {}
 ```
 

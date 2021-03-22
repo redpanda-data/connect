@@ -22,6 +22,7 @@ be created, changed and removed during runtime via a REST HTTP interface.
 ```yaml
 # Config fields, showing default values
 input:
+  label: ""
   dynamic:
     inputs: {}
     prefix: ""

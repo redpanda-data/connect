@@ -29,6 +29,7 @@ This component is deprecated and will be removed in the next major version relea
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   amqp:
     url: amqp://guest:guest@localhost:5672/
     exchange: benthos-exchange
@@ -45,6 +46,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   amqp:
     url: amqp://guest:guest@localhost:5672/
     exchange: benthos-exchange

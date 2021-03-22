@@ -30,6 +30,7 @@ already exist) using the RPUSH command.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   redis_list:
     url: tcp://localhost:6379
     key: benthos_list
@@ -42,6 +43,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   redis_list:
     url: tcp://localhost:6379
     kind: simple

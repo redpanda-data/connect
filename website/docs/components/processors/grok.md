@@ -28,6 +28,7 @@ Parses messages into a structured format by attempting to apply a list of Grok e
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 grok:
   expressions: []
   pattern_definitions: {}
@@ -39,6 +40,7 @@ grok:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 grok:
   expressions: []
   pattern_definitions: {}

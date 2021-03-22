@@ -31,6 +31,7 @@ elapsed time fields are non-zero, either is reached.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   retry:
     output: {}
 ```
@@ -41,6 +42,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   retry:
     max_retries: 0
     backoff:

@@ -32,6 +32,7 @@ Sends messages to a Kinesis Firehose delivery stream.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   kinesis_firehose:
     stream: ""
     max_in_flight: 1
@@ -49,6 +50,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   kinesis_firehose:
     stream: ""
     max_in_flight: 1

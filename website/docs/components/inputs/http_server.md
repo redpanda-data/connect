@@ -30,6 +30,7 @@ which is enabled when key and cert files are specified.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   http_server:
     address: ""
     path: /post
@@ -46,6 +47,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   http_server:
     address: ""
     path: /post

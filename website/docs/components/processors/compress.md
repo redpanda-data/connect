@@ -29,6 +29,7 @@ algorithms are: gzip, zlib, flate, snappy.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 compress:
   algorithm: gzip
   level: -1
@@ -39,6 +40,7 @@ compress:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 compress:
   algorithm: gzip
   level: -1

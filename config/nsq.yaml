@@ -7,6 +7,7 @@ http:
   cert_file: ""
   key_file: ""
 input:
+  label: ""
   nsq:
     nsqd_tcp_addresses:
       - localhost:4150
@@ -27,6 +28,7 @@ pipeline:
   threads: 1
   processors: []
 output:
+  label: ""
   nsq:
     nsqd_tcp_address: localhost:4150
     topic: benthos_messages

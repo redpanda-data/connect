@@ -29,6 +29,7 @@ The kafka output type writes a batch of messages to Kafka brokers and waits for 
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   kafka:
     addresses:
       - localhost:9092
@@ -54,6 +55,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   kafka:
     addresses:
       - localhost:9092

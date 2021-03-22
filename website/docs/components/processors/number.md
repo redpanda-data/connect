@@ -28,6 +28,7 @@ This component is deprecated and will be removed in the next major version relea
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 number:
   operator: add
   value: 0
@@ -38,6 +39,7 @@ number:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 number:
   operator: add
   value: 0

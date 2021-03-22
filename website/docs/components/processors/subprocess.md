@@ -28,6 +28,7 @@ Executes a command as a subprocess and, for each message, will pipe its contents
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 subprocess:
   name: cat
   args: []
@@ -38,6 +39,7 @@ subprocess:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 subprocess:
   name: cat
   args: []

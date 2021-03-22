@@ -30,6 +30,7 @@ it is created with a dynamic mapping.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   elasticsearch:
     urls:
       - http://localhost:9200
@@ -50,6 +51,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   elasticsearch:
     urls:
       - http://localhost:9200

@@ -29,6 +29,7 @@ Connects to Kafka brokers and consumes one or more topics.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   kafka:
     addresses:
       - localhost:9092
@@ -44,6 +45,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   kafka:
     addresses:
       - localhost:9092

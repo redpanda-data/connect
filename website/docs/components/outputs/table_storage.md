@@ -31,6 +31,7 @@ This component has been renamed to [`azure_table_storage`](/docs/components/outp
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   table_storage:
     storage_account: ""
     storage_access_key: ""
@@ -53,6 +54,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   table_storage:
     storage_account: ""
     storage_access_key: ""

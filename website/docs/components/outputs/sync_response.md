@@ -22,6 +22,7 @@ it is dealt with according to that specific input type.
 ```yaml
 # Config fields, showing default values
 output:
+  label: ""
   sync_response: {}
 ```
 

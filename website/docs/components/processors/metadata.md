@@ -28,6 +28,7 @@ This component is deprecated and will be removed in the next major version relea
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 metadata:
   operator: set
   key: example
@@ -39,6 +40,7 @@ metadata:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 metadata:
   operator: set
   key: example

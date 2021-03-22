@@ -21,6 +21,7 @@ failed.
 
 ```yaml
 # Config fields, showing default values
+label: ""
 catch: []
 ```
 

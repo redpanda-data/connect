@@ -29,6 +29,7 @@ Connects to a server and continuously performs requests for a single message.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   http_client:
     url: http://localhost:4195/get
     verb: GET
@@ -49,6 +50,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   http_client:
     url: http://localhost:4195/get
     verb: GET

@@ -29,6 +29,7 @@ the original message parts with the body of the response.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 http:
   parallel: false
   url: http://localhost:4195/post
@@ -44,6 +45,7 @@ http:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 http:
   parallel: false
   url: http://localhost:4195/post

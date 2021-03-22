@@ -25,6 +25,7 @@ message.
 ```yaml
 # Config fields, showing default values
 input:
+  label: ""
   files:
     path: ""
     delete_files: false

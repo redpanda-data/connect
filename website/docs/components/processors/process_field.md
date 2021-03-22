@@ -33,6 +33,7 @@ payloads to the processed result.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 process_field:
   codec: json
   path: ""
@@ -45,6 +46,7 @@ process_field:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 process_field:
   codec: json
   path: ""

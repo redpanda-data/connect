@@ -29,6 +29,7 @@ Receive messages from a Kinesis stream.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   kinesis:
     stream: ""
     shard: "0"
@@ -50,6 +51,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   kinesis:
     stream: ""
     shard: "0"

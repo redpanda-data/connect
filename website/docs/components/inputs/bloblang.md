@@ -26,6 +26,7 @@ testing your pipeline configs.
 ```yaml
 # Config fields, showing default values
 input:
+  label: ""
   bloblang:
     mapping: ""
     interval: 1s

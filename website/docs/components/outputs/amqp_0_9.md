@@ -30,6 +30,7 @@ various message brokers, including RabbitMQ.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   amqp_0_9:
     url: amqp://guest:guest@localhost:5672/
     exchange: benthos-exchange
@@ -46,6 +47,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   amqp_0_9:
     url: amqp://guest:guest@localhost:5672/
     exchange: benthos-exchange

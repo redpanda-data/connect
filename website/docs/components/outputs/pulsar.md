@@ -24,6 +24,7 @@ Introduced in version 3.43.0.
 ```yaml
 # Config fields, showing default values
 output:
+  label: ""
   pulsar:
     url: ""
     topic: ""

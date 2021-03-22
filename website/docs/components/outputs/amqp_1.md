@@ -30,6 +30,7 @@ Sends messages to an AMQP (1.0) server.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   amqp_1:
     url: ""
     target_address: ""
@@ -42,6 +43,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   amqp_1:
     url: ""
     target_address: ""

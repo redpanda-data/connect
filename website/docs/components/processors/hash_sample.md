@@ -28,6 +28,7 @@ This component is deprecated and will be removed in the next major version relea
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 hash_sample:
   retain_min: 0
   retain_max: 10
@@ -38,6 +39,7 @@ hash_sample:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 hash_sample:
   retain_min: 0
   retain_max: 10

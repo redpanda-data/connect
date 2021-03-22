@@ -7,6 +7,7 @@ http:
   cert_file: ""
   key_file: ""
 input:
+  label: ""
   mqtt:
     urls:
       - tcp://localhost:1883
@@ -23,6 +24,7 @@ pipeline:
   threads: 1
   processors: []
 output:
+  label: ""
   mqtt:
     urls:
       - tcp://localhost:1883

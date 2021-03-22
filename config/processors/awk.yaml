@@ -7,6 +7,7 @@ http:
   cert_file: ""
   key_file: ""
 input:
+  label: ""
   stdin:
     codec: lines
     max_buffer: 1000000
@@ -15,11 +16,13 @@ buffer:
 pipeline:
   threads: 1
   processors:
-    - awk:
+    - label: ""
+      awk:
         codec: text
         program: BEGIN { x = 0 } { print $0, x; x++ }
         parts: []
 output:
+  label: ""
   stdout:
     delimiter: ""
 resources:

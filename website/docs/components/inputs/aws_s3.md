@@ -29,6 +29,7 @@ Downloads objects within an Amazon S3 bucket, optionally filtered by a prefix, e
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   aws_s3:
     bucket: ""
     prefix: ""
@@ -47,6 +48,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   aws_s3:
     bucket: ""
     prefix: ""

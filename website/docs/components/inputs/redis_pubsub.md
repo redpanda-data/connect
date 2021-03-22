@@ -30,6 +30,7 @@ PSUBSCRIBE commands.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   redis_pubsub:
     url: tcp://localhost:6379
     channels:
@@ -43,6 +44,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   redis_pubsub:
     url: tcp://localhost:6379
     kind: simple

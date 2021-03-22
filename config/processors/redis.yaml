@@ -7,6 +7,7 @@ http:
   cert_file: ""
   key_file: ""
 input:
+  label: ""
   stdin:
     codec: lines
     max_buffer: 1000000
@@ -15,7 +16,8 @@ buffer:
 pipeline:
   threads: 1
   processors:
-    - redis:
+    - label: ""
+      redis:
         url: tcp://localhost:6379
         kind: simple
         master: ""
@@ -30,6 +32,7 @@ pipeline:
         retry_period: 500ms
         parts: []
 output:
+  label: ""
   stdout:
     delimiter: ""
 resources:

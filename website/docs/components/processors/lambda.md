@@ -33,6 +33,7 @@ contents of the message.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 lambda:
   parallel: false
   function: ""
@@ -44,6 +45,7 @@ lambda:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 lambda:
   parallel: false
   function: ""

@@ -32,6 +32,7 @@ Introduced in version 3.36.0.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   aws_kinesis:
     streams: []
     dynamodb:
@@ -54,6 +55,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   aws_kinesis:
     streams: []
     dynamodb:

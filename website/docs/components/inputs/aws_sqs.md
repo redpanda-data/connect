@@ -29,6 +29,7 @@ Consume messages from an AWS SQS URL.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   aws_sqs:
     url: ""
     region: eu-west-1
@@ -40,6 +41,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   aws_sqs:
     url: ""
     delete_message: true

@@ -23,6 +23,7 @@ passes for a message batch, otherwise a different set of processors are applied.
 
 ```yaml
 # Config fields, showing default values
+label: ""
 conditional:
   condition:
     type: text

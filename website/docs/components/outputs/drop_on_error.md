@@ -24,6 +24,7 @@ reason the message is dropped instead of being reattempted.
 ```yaml
 # Config fields, showing default values
 output:
+  label: ""
   drop_on_error: {}
 ```
 

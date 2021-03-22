@@ -31,6 +31,7 @@ result.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 redis:
   url: tcp://localhost:6379
   operator: scard
@@ -42,6 +43,7 @@ redis:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 redis:
   url: tcp://localhost:6379
   kind: simple

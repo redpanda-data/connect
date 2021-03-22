@@ -32,6 +32,7 @@ Inserts items into a DynamoDB table.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   dynamodb:
     table: ""
     string_columns: {}
@@ -51,6 +52,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   dynamodb:
     table: ""
     string_columns: {}

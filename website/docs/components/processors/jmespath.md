@@ -29,6 +29,7 @@ the message with the resulting document.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 jmespath:
   query: ""
 ```
@@ -38,6 +39,7 @@ jmespath:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 jmespath:
   query: ""
   parts: []

@@ -32,6 +32,7 @@ Introduced in version 3.39.0.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   sftp:
     address: ""
     credentials:
@@ -52,6 +53,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   sftp:
     address: ""
     credentials:

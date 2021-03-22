@@ -7,6 +7,7 @@ http:
   cert_file: ""
   key_file: ""
 input:
+  label: ""
   websocket:
     url: ws://localhost:4195/get/ws
     open_message: ""
@@ -27,6 +28,7 @@ pipeline:
   threads: 1
   processors: []
 output:
+  label: ""
   websocket:
     url: ws://localhost:4195/post/ws
     oauth:

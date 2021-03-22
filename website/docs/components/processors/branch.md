@@ -24,6 +24,7 @@ message using another mapping.
 
 ```yaml
 # Config fields, showing default values
+label: ""
 branch:
   request_map: ""
   processors: []

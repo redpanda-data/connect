@@ -29,6 +29,7 @@ Connects to a tcp or unix socket and consumes a continuous stream of messages.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   socket:
     network: unix
     address: /tmp/benthos.sock
@@ -41,6 +42,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   socket:
     network: unix
     address: /tmp/benthos.sock

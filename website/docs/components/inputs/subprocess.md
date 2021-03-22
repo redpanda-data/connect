@@ -30,6 +30,7 @@ Executes a command, runs it as a subprocess, and consumes messages from it over 
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   subprocess:
     name: ""
     args: []
@@ -43,6 +44,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   subprocess:
     name: ""
     args: []

@@ -30,6 +30,7 @@ that input gracefully terminates starts consuming from the next, and so on.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   sequence:
     inputs: []
 ```
@@ -40,6 +41,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   sequence:
     sharded_join:
       type: none

@@ -33,6 +33,7 @@ consumers.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   kinesis_balanced:
     stream: ""
     dynamodb_table: ""
@@ -51,6 +52,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   kinesis_balanced:
     stream: ""
     dynamodb_table: ""

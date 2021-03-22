@@ -31,6 +31,7 @@ Introduced in version 3.36.0.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   aws_kinesis:
     stream: ""
     partition_key: ""
@@ -49,6 +50,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   aws_kinesis:
     stream: ""
     partition_key: ""

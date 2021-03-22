@@ -23,6 +23,7 @@ per message.
 
 ```yaml
 # Config fields, showing default values
+label: ""
 group_by_value:
   value: ${! meta("example") }
 ```

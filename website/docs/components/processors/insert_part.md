@@ -21,6 +21,7 @@ than the length of the existing batch it will be appended to the end.
 
 ```yaml
 # Config fields, showing default values
+label: ""
 insert_part:
   index: -1
   content: ""

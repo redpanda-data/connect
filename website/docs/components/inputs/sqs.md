@@ -32,6 +32,7 @@ Receive messages from an Amazon SQS URL.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   sqs:
     url: ""
     region: eu-west-1
@@ -43,6 +44,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   sqs:
     url: ""
     delete_message: true

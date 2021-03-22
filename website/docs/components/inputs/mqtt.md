@@ -29,6 +29,7 @@ Subscribe to topics on MQTT brokers.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   mqtt:
     urls:
       - tcp://localhost:1883
@@ -43,6 +44,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   mqtt:
     urls:
       - tcp://localhost:1883

@@ -29,6 +29,7 @@ Sends messages to an HTTP server.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   http_client:
     url: http://localhost:4195/post
     verb: POST
@@ -50,6 +51,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   http_client:
     url: http://localhost:4195/post
     verb: POST

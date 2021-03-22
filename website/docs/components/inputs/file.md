@@ -29,6 +29,7 @@ Consumes data from files on disk, emitting messages according to a chosen codec.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   file:
     paths: []
     codec: lines
@@ -40,6 +41,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   file:
     paths: []
     codec: lines

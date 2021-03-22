@@ -29,6 +29,7 @@ messages, dropping batches that are already cached.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 dedupe:
   cache: ""
   hash: none
@@ -41,6 +42,7 @@ dedupe:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 dedupe:
   cache: ""
   hash: none
