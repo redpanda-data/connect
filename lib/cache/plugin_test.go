@@ -10,7 +10,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/stretchr/testify/assert"
 	yaml "gopkg.in/yaml.v3"
 
 	_ "github.com/Jeffail/benthos/v3/public/components/all"
@@ -64,70 +63,6 @@ plugin:
 	if !strings.Contains(err.Error(), "test err") {
 		t.Errorf("Wrong error returned: %v != %v", err, errTest)
 	}
-}
-
-func TestPluginDescriptions(t *testing.T) {
-	cache.RegisterPlugin("foo", newMockPluginConf, nil)
-	cache.RegisterPlugin("bar", newMockPluginConf, nil)
-	cache.DocumentPlugin("bar", "This is a bar plugin.", func(conf interface{}) interface{} {
-		mConf, ok := conf.(*mockPluginConf)
-		if !ok {
-			t.Fatalf("failed to cast config: %T", conf)
-		}
-		return map[string]interface{}{
-			"foo": mConf.Foo,
-			"bar": mConf.Bar,
-		}
-	})
-	cache.RegisterPlugin("foo_no_conf", nil, nil)
-	cache.DocumentPlugin("foo_no_conf", "This is a plugin without config.", nil)
-	cache.RegisterPlugin("foo_no_conf_no_desc", nil, nil)
-
-	exp := `Cache Plugins
-=============
-
-This document was generated with ` + "`benthos --list-cache-plugins`" + `.
-
-This document lists any cache plugins that this flavour of Benthos offers beyond
-the standard set.
-
-### Contents
-
-1. [` + "`bar`" + `](#bar)
-2. [` + "`foo`" + `](#foo)
-3. [` + "`foo_no_conf`" + `](#foo_no_conf)
-4. [` + "`foo_no_conf_no_desc`" + `](#foo_no_conf_no_desc)
-
-## ` + "`bar`" + `
-
-` + "``` yaml" + `
-type: bar
-plugin:
-  bar: change this
-  foo: default
-` + "```" + `
-
-This is a bar plugin.
-
-## ` + "`foo`" + `
-
-` + "``` yaml" + `
-type: foo
-plugin:
-  bar: change this
-  baz: 10
-  foo: default
-` + "```" + `
-
-## ` + "`foo_no_conf`" + `
-
-This is a plugin without config.
-
-## ` + "`foo_no_conf_no_desc`" + `
-`
-
-	act := cache.PluginDescriptions()
-	assert.Equal(t, exp, act)
 }
 
 func TestYAMLPluginNilConf(t *testing.T) {
