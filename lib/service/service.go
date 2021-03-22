@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/filepath"
 	"github.com/Jeffail/benthos/v3/lib/api"
 	"github.com/Jeffail/benthos/v3/lib/config"
@@ -221,12 +222,18 @@ func cmdService(
 	defer trac.Close()
 
 	// Create HTTP API with a sanitised service config.
-	sanConf, err := conf.Sanitised()
+	var sanitNode yaml.Node
+	err = sanitNode.Encode(conf)
+	if err == nil {
+		err = config.Spec().SanitiseNode(&sanitNode, docs.SanitiseConfig{
+			RemoveTypeField: false,
+		})
+	}
 	if err != nil {
 		logger.Warnf("Failed to generate sanitised config: %v\n", err)
 	}
 	var httpServer *api.Type
-	if httpServer, err = api.New(Version, DateBuilt, conf.HTTP, sanConf, logger, stats, apiOpts...); err != nil {
+	if httpServer, err = api.New(Version, DateBuilt, conf.HTTP, sanitNode, logger, stats, apiOpts...); err != nil {
 		logger.Errorf("Failed to initialise API: %v\n", err)
 		return 1
 	}

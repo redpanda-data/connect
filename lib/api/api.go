@@ -130,7 +130,17 @@ func New(
 	}
 
 	handlePrintJSONConfig := func(w http.ResponseWriter, r *http.Request) {
-		resBytes, err := json.Marshal(wholeConf)
+		var g interface{}
+		var err error
+		if node, ok := wholeConf.(yaml.Node); ok {
+			err = node.Decode(&g)
+		} else {
+			g = node
+		}
+		var resBytes []byte
+		if err == nil {
+			resBytes, err = json.Marshal(g)
+		}
 		if err != nil {
 			w.WriteHeader(http.StatusBadGateway)
 			return

@@ -329,10 +329,18 @@ func Run() {
 							os.Exit(1)
 						}
 					}
-					outConf, err := conf.SanitisedNoDeprecated()
+
+					var node yaml.Node
+					err := node.Encode(conf)
+					if err == nil {
+						err = config.Spec().SanitiseNode(&node, docs.SanitiseConfig{
+							RemoveTypeField:  true,
+							RemoveDeprecated: true,
+						})
+					}
 					if err == nil {
 						var configYAML []byte
-						if configYAML, err = uconfig.MarshalYAML(outConf); err == nil {
+						if configYAML, err = uconfig.MarshalYAML(node); err == nil {
 							fmt.Println(string(configYAML))
 						}
 					}
