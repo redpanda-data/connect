@@ -297,14 +297,28 @@ func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 		return fmt.Errorf("failed to obtain docs for %v type %v", cType, name)
 	}
 
+	nameFound := false
 	for i := 0; i < len(node.Content); i += 2 {
 		if node.Content[i].Value == name {
+			nameFound = true
 			if err := cSpec.Config.SanitiseNode(node.Content[i+1], conf); err != nil {
 				return err
 			}
 			newNodes = append(newNodes, node.Content[i])
 			newNodes = append(newNodes, node.Content[i+1])
 			break
+		}
+	}
+
+	// If the type field was omitted but we didn't see a config under the name
+	// then we need to add it back in as it cannot be inferred.
+	if !nameFound && conf.RemoveTypeField {
+		for i := 0; i < len(node.Content); i += 2 {
+			if node.Content[i].Value == "type" {
+				newNodes = append(newNodes, node.Content[i])
+				newNodes = append(newNodes, node.Content[i+1])
+				break
+			}
 		}
 	}
 
