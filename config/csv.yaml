@@ -7,6 +7,7 @@ http:
   cert_file: ""
   key_file: ""
 input:
+  label: ""
   csv:
     paths: []
     parse_header_row: true
@@ -18,6 +19,7 @@ pipeline:
   threads: 1
   processors: []
 output:
+  label: ""
   stdout:
     delimiter: ""
 resources:

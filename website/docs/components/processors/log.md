@@ -23,6 +23,7 @@ contents and metadata of messages.
 
 ```yaml
 # Config fields, showing default values
+label: ""
 log:
   level: INFO
   fields: {}

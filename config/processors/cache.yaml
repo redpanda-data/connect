@@ -7,6 +7,7 @@ http:
   cert_file: ""
   key_file: ""
 input:
+  label: ""
   stdin:
     codec: lines
     max_buffer: 1000000
@@ -15,7 +16,8 @@ buffer:
 pipeline:
   threads: 1
   processors:
-    - cache:
+    - label: ""
+      cache:
         resource: ""
         operator: set
         key: ""
@@ -23,6 +25,7 @@ pipeline:
         ttl: ""
         parts: []
 output:
+  label: ""
   stdout:
     delimiter: ""
 resources:

@@ -19,6 +19,7 @@ import TabItem from '@theme/TabItem';
 ```yaml
 # Config fields, showing default values
 output:
+  label: ""
   inproc: ""
 ```
 

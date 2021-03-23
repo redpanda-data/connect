@@ -21,6 +21,7 @@ Reads messages from a child input until a consumed message passes a [Bloblang qu
 ```yaml
 # Config fields, showing default values
 input:
+  label: ""
   read_until:
     input: {}
     check: ""

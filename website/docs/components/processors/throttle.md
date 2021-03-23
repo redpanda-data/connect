@@ -22,6 +22,7 @@ each with a throttle would result in four times the rate specified.
 
 ```yaml
 # Config fields, showing default values
+label: ""
 throttle:
   period: 100us
 ```

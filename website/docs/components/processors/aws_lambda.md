@@ -32,6 +32,7 @@ Introduced in version 3.36.0.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 aws_lambda:
   parallel: false
   function: ""
@@ -43,6 +44,7 @@ aws_lambda:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 aws_lambda:
   parallel: false
   function: ""

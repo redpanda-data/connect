@@ -253,6 +253,7 @@ const (
 
 // Config is the all encompassing configuration struct for all input types.
 type Config struct {
+	Label             string                       `json:"label" yaml:"label"`
 	Type              string                       `json:"type" yaml:"type"`
 	AMQP              reader.AMQPConfig            `json:"amqp" yaml:"amqp"`
 	AMQP09            reader.AMQP09Config          `json:"amqp_0_9" yaml:"amqp_0_9"`
@@ -310,6 +311,7 @@ type Config struct {
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
+		Label:             "",
 		Type:              "stdin",
 		AMQP:              reader.NewAMQPConfig(),
 		AMQP09:            reader.NewAMQP09Config(),

@@ -27,6 +27,7 @@ Emit custom metrics by extracting values from messages.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 metric:
   type: counter
   name: ""
@@ -39,6 +40,7 @@ metric:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 metric:
   type: counter
   name: ""

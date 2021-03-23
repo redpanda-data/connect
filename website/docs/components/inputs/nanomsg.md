@@ -29,6 +29,7 @@ Consumes messages via Nanomsg sockets (scalability protocols).
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   nanomsg:
     urls:
       - tcp://*:5555
@@ -43,6 +44,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   nanomsg:
     urls:
       - tcp://*:5555

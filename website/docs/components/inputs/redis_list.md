@@ -29,6 +29,7 @@ Pops messages from the beginning of a Redis list using the BLPop command.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   redis_list:
     url: tcp://localhost:6379
     key: benthos_list
@@ -40,6 +41,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   redis_list:
     url: tcp://localhost:6379
     kind: simple

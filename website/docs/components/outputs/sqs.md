@@ -32,6 +32,7 @@ Sends messages to an SQS queue.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   sqs:
     url: ""
     message_group_id: ""
@@ -53,6 +54,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   sqs:
     url: ""
     message_group_id: ""

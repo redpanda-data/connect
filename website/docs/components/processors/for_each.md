@@ -21,6 +21,7 @@ though they were each a batch of one message.
 
 ```yaml
 # Config fields, showing default values
+label: ""
 for_each: []
 ```
 

@@ -24,6 +24,7 @@ Writes each individual message to a new file.
 ```yaml
 # Config fields, showing default values
 output:
+  label: ""
   files:
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
 ```

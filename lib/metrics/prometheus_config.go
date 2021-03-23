@@ -10,7 +10,7 @@ func init() {
 		Summary: `
 Host endpoints (` + "`/metrics` and `/stats`" + `) for Prometheus scraping.`,
 		Description: `
-Metrics paths will differ from [the list](/docs/components/metrics/about#paths) in that dot separators will
+Metrics paths will differ from [the list](/docs/components/metrics/about#metric_names) in that dot separators will
 instead be underscores.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("prefix", "A string prefix to add to all metrics."),

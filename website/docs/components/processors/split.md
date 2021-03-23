@@ -20,6 +20,7 @@ Breaks message batches (synonymous with multiple part messages) into smaller bat
 
 ```yaml
 # Config fields, showing default values
+label: ""
 split:
   size: 1
   byte_size: 0

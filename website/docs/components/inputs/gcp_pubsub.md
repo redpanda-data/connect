@@ -21,6 +21,7 @@ Consumes messages from a GCP Cloud Pub/Sub subscription.
 ```yaml
 # Config fields, showing default values
 input:
+  label: ""
   gcp_pubsub:
     project: ""
     subscription: ""

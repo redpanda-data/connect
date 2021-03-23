@@ -28,6 +28,7 @@ Creates a server that receives a stream of messages over a tcp, udp or unix sock
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   socket_server:
     network: unix
     address: /tmp/benthos.sock
@@ -40,6 +41,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   socket_server:
     network: unix
     address: /tmp/benthos.sock

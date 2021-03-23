@@ -30,6 +30,7 @@ Pulls messages from Redis (v5.0+) streams with the XREADGROUP command. The
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   redis_streams:
     url: tcp://localhost:6379
     body_key: body
@@ -46,6 +47,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   redis_streams:
     url: tcp://localhost:6379
     kind: simple

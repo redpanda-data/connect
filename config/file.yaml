@@ -7,6 +7,7 @@ http:
   cert_file: ""
   key_file: ""
 input:
+  label: ""
   file:
     paths: []
     codec: lines
@@ -18,6 +19,7 @@ pipeline:
   threads: 1
   processors: []
 output:
+  label: ""
   file:
     path: ""
     codec: lines

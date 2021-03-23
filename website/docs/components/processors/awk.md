@@ -30,6 +30,7 @@ message contents and metadata.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 awk:
   codec: text
   program: BEGIN { x = 0 } { print $0, x; x++ }
@@ -40,6 +41,7 @@ awk:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 awk:
   codec: text
   program: BEGIN { x = 0 } { print $0, x; x++ }

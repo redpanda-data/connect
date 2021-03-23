@@ -29,6 +29,7 @@ Sends messages to an HTTP server via a websocket connection.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   websocket:
     url: ws://localhost:4195/post/ws
 ```
@@ -39,6 +40,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   websocket:
     url: ws://localhost:4195/post/ws
     oauth:

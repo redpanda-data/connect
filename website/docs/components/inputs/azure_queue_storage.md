@@ -24,6 +24,7 @@ Introduced in version 3.42.0.
 ```yaml
 # Config fields, showing default values
 input:
+  label: ""
   azure_queue_storage:
     storage_account: ""
     storage_access_key: ""

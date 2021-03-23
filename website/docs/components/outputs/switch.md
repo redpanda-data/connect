@@ -29,6 +29,7 @@ The switch output type allows you to route messages to different outputs based o
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   switch:
     max_in_flight: 1
     cases: []
@@ -40,6 +41,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   switch:
     retry_until_success: true
     strict_mode: false

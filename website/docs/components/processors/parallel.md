@@ -23,6 +23,7 @@ processed in parallel.
 
 ```yaml
 # Config fields, showing default values
+label: ""
 parallel:
   cap: 0
   processors: []

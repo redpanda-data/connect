@@ -31,6 +31,7 @@ files.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 protobuf:
   operator: to_json
   message: ""
@@ -42,6 +43,7 @@ protobuf:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 protobuf:
   operator: to_json
   message: ""

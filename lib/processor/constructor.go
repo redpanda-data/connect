@@ -197,6 +197,7 @@ const (
 
 // Config is the all encompassing configuration struct for all processor types.
 type Config struct {
+	Label        string             `json:"label" yaml:"label"`
 	Type         string             `json:"type" yaml:"type"`
 	Archive      ArchiveConfig      `json:"archive" yaml:"archive"`
 	Avro         AvroConfig         `json:"avro" yaml:"avro"`
@@ -267,6 +268,7 @@ type Config struct {
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
+		Label:        "",
 		Type:         "bounds_check",
 		Archive:      NewArchiveConfig(),
 		Avro:         NewAvroConfig(),

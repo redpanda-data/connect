@@ -30,6 +30,7 @@ performing them in parallel where possible.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 workflow:
   meta_path: meta.workflow
   order: []
@@ -41,6 +42,7 @@ workflow:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 workflow:
   meta_path: meta.workflow
   order: []

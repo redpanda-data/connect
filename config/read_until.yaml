@@ -7,6 +7,7 @@ http:
   cert_file: ""
   key_file: ""
 input:
+  label: ""
   read_until:
     input: {}
     check: ""
@@ -17,6 +18,7 @@ pipeline:
   threads: 1
   processors: []
 output:
+  label: ""
   stdout:
     delimiter: ""
 resources:

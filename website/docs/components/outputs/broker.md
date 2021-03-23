@@ -30,6 +30,7 @@ brokering [patterns](#patterns).
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   broker:
     pattern: fan_out
     max_in_flight: 1
@@ -47,6 +48,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   broker:
     copies: 1
     pattern: fan_out

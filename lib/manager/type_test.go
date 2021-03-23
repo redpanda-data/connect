@@ -11,11 +11,54 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 //------------------------------------------------------------------------------
+
+func TestManagerProcessorLabels(t *testing.T) {
+	goodLabels := []string{
+		"foo",
+		"foo_bar",
+		"foo_bar_baz_buz",
+		"foo__",
+		"foo123__45",
+	}
+	for _, l := range goodLabels {
+		conf := processor.NewConfig()
+		conf.Type = processor.TypeBloblang
+		conf.Bloblang = "root = this"
+		conf.Label = l
+
+		mgr, err := manager.New(manager.NewConfig(), nil, log.Noop(), metrics.Noop())
+		require.NoError(t, err)
+
+		_, err = mgr.NewProcessor(conf)
+		assert.NoError(t, err, "label: %v", l)
+	}
+
+	badLabels := []string{
+		"_foo",
+		"foo-bar",
+		"FOO",
+		"foo.bar",
+	}
+	for _, l := range badLabels {
+		conf := processor.NewConfig()
+		conf.Type = processor.TypeBloblang
+		conf.Bloblang = "root = this"
+		conf.Label = l
+
+		mgr, err := manager.New(manager.NewConfig(), nil, log.Noop(), metrics.Noop())
+		require.NoError(t, err)
+
+		_, err = mgr.NewProcessor(conf)
+		assert.EqualError(t, err, manager.ErrBadLabel.Error(), "label: %v", l)
+	}
+}
 
 func TestManagerCache(t *testing.T) {
 	testLog := log.Noop()

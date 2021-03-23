@@ -32,6 +32,7 @@ Introduced in version 3.33.0.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   sql:
     driver: mysql
     data_source_name: ""
@@ -51,6 +52,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   sql:
     driver: mysql
     data_source_name: ""

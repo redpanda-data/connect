@@ -22,6 +22,7 @@ queries that return rows, replaces it with the result according to a
 
 ```yaml
 # Config fields, showing default values
+label: ""
 sql:
   driver: mysql
   data_source_name: ""

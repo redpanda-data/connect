@@ -30,6 +30,7 @@ overwrites the previous contents with the new value.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 xml:
   operator: to_json
 ```
@@ -39,6 +40,7 @@ xml:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 xml:
   operator: to_json
   parts: []

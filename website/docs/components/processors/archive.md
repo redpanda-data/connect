@@ -21,6 +21,7 @@ selected archive [format](#formats).
 
 ```yaml
 # Config fields, showing default values
+label: ""
 archive:
   format: binary
   path: ${!count("files")}-${!timestamp_unix_nano()}.txt

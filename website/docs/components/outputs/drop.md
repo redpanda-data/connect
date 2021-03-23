@@ -21,6 +21,7 @@ Drops all messages.
 ```yaml
 # Config fields, showing default values
 output:
+  label: ""
   drop: {}
 ```
 

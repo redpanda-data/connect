@@ -22,6 +22,7 @@ a single message payload.
 ```yaml
 # Config fields, showing default values
 input:
+  label: ""
   hdfs:
     hosts:
       - localhost:9000

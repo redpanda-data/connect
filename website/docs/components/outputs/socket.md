@@ -21,6 +21,7 @@ Connects to a (tcp/udp/unix) server and sends a continuous stream of data, divid
 ```yaml
 # Config fields, showing default values
 output:
+  label: ""
   socket:
     network: unix
     address: /tmp/benthos.sock

@@ -30,6 +30,7 @@ already exist) using the XADD command.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   redis_streams:
     url: tcp://localhost:6379
     stream: benthos_stream
@@ -46,6 +47,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   redis_streams:
     url: tcp://localhost:6379
     kind: simple

@@ -33,6 +33,7 @@ Introduced in version 3.43.0.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   gcp_cloud_storage:
     bucket: ""
     prefix: ""
@@ -45,6 +46,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   gcp_cloud_storage:
     bucket: ""
     prefix: ""

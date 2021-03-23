@@ -21,6 +21,7 @@ Writes messages to files on disk based on a chosen codec.
 ```yaml
 # Config fields, showing default values
 output:
+  label: ""
   file:
     path: ""
     codec: lines

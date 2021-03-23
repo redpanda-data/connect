@@ -23,6 +23,7 @@ attempted, and so on.
 ```yaml
 # Config fields, showing default values
 output:
+  label: ""
   try: []
 ```
 

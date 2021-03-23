@@ -7,6 +7,7 @@ http:
   cert_file: ""
   key_file: ""
 input:
+  label: ""
   kafka:
     addresses:
       - localhost:9092
@@ -47,6 +48,7 @@ pipeline:
   threads: 1
   processors: []
 output:
+  label: ""
   kafka:
     addresses:
       - localhost:9092

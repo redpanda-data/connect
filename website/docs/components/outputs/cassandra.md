@@ -29,6 +29,7 @@ Runs a query against a Cassandra database for each message in order to insert da
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   cassandra:
     addresses: []
     query: ""
@@ -47,6 +48,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   cassandra:
     addresses: []
     tls:

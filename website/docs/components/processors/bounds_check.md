@@ -28,6 +28,7 @@ Removes messages (and batches) that do not fit within certain size boundaries.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 bounds_check:
   max_part_size: 1073741824
   min_part_size: 1
@@ -38,6 +39,7 @@ bounds_check:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 bounds_check:
   max_part_size: 1073741824
   min_part_size: 1

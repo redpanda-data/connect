@@ -30,6 +30,7 @@ Reads messages from an AMQP (1.0) server.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   amqp_1:
     url: ""
     source_address: ""
@@ -41,6 +42,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   amqp_1:
     url: ""
     source_address: ""

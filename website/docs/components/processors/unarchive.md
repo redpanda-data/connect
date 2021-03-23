@@ -29,6 +29,7 @@ multiple messages within a [batch](/docs/configuration/batching).
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 unarchive:
   format: binary
 ```
@@ -38,6 +39,7 @@ unarchive:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 unarchive:
   format: binary
   parts: []

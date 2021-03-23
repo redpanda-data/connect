@@ -29,6 +29,7 @@ for each message, allowing you to store or retrieve data within message payloads
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 cache:
   resource: ""
   operator: set
@@ -41,6 +42,7 @@ cache:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 cache:
   resource: ""
   operator: set

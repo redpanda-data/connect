@@ -7,6 +7,7 @@ http:
   cert_file: ""
   key_file: ""
 input:
+  label: ""
   http_client:
     url: http://localhost:4195/get
     verb: GET
@@ -57,6 +58,7 @@ pipeline:
   threads: 1
   processors: []
 output:
+  label: ""
   http_client:
     url: http://localhost:4195/post
     verb: POST

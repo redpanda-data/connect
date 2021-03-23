@@ -53,7 +53,7 @@ metrics:
 </TabItem>
 </Tabs>
 
-Metrics paths will differ from [the list](/docs/components/metrics/about#paths) in that dot separators will
+Metrics paths will differ from [the list](/docs/components/metrics/about#metric_names) in that dot separators will
 instead be underscores.
 
 ## Fields

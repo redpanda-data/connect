@@ -7,6 +7,7 @@ http:
   cert_file: ""
   key_file: ""
 input:
+  label: ""
   stdin:
     codec: lines
     max_buffer: 1000000
@@ -16,6 +17,7 @@ pipeline:
   threads: 1
   processors: []
 output:
+  label: ""
   aws_sns:
     topic_arn: ""
     max_in_flight: 1

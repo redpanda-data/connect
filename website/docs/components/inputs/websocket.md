@@ -29,6 +29,7 @@ Connects to a websocket server and continuously receives messages.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   websocket:
     url: ws://localhost:4195/get/ws
 ```
@@ -39,6 +40,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   websocket:
     url: ws://localhost:4195/get/ws
     open_message: ""

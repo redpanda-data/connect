@@ -11,12 +11,17 @@ Processors are set via config, and depending on where in the config they are pla
 pipeline:
   threads: 1
   processors:
-    - bloblang: |
+    - label: my_cool_mapping
+      bloblang: |
         root.message = this
         root.meta.link_count = this.links.length()
 ```
 
 The `threads` field in the pipeline section determines how many parallel processing threads are created. You can read more about parallel processing in the [pipeline guide][pipelines].
+
+## Labels
+
+Processors have an optional field `label` that can uniquely identify them in observability data such as metrics and logs. This can be useful when running configs with multiple nested processors, otherwise their metrics labels will be generated based on their composition. For more information check out the [metrics documentation][metrics.about].
 
 import ComponentsByCategory from '@theme/ComponentsByCategory';
 

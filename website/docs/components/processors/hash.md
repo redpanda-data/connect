@@ -28,6 +28,7 @@ This component is deprecated and will be removed in the next major version relea
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 hash:
   algorithm: sha256
   key: ""
@@ -38,6 +39,7 @@ hash:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 hash:
   algorithm: sha256
   key: ""

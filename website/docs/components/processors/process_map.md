@@ -33,6 +33,7 @@ finally maps the result back into the original payload.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 process_map:
   conditions: []
   premap: {}
@@ -47,6 +48,7 @@ process_map:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 process_map:
   conditions: []
   premap: {}

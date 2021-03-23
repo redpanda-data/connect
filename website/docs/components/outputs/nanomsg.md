@@ -21,6 +21,7 @@ Send messages over a Nanomsg socket.
 ```yaml
 # Config fields, showing default values
 output:
+  label: ""
   nanomsg:
     urls:
       - tcp://localhost:5556

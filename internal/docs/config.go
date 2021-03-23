@@ -5,8 +5,22 @@ import (
 	"sort"
 
 	"github.com/Jeffail/benthos/v3/internal/interop/plugins"
+	"github.com/Jeffail/gabs/v2"
 	"gopkg.in/yaml.v3"
 )
+
+var labelField = FieldCommon(
+	"label", "An optional label to use as an identifier for observability data such as metrics and logging.",
+).OmitWhen(func(field, parent interface{}) (string, bool) {
+	gObj := gabs.Wrap(parent)
+	if typeStr, exists := gObj.S("type").Data().(string); exists && typeStr == "resource" {
+		return "label field should be omitted when pointing to a resource", true
+	}
+	if resourceStr, exists := gObj.S("resource").Data().(string); exists && resourceStr != "" {
+		return "label field should be omitted when pointing to a resource", true
+	}
+	return "", false
+}).AtVersion("3.44.0")
 
 func reservedFieldsByType(t Type) map[string]FieldSpec {
 	m := map[string]FieldSpec{
@@ -23,6 +37,13 @@ func reservedFieldsByType(t Type) map[string]FieldSpec {
 			}
 			return "", false
 		})
+	}
+	if _, isLabelType := map[Type]struct{}{
+		TypeInput:     {},
+		TypeProcessor: {},
+		TypeOutput:    {},
+	}[t]; isLabelType {
+		m["label"] = labelField
 	}
 	return m
 }
@@ -242,8 +263,10 @@ func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 	var keys []string
 	for i := 0; i < len(node.Content); i += 2 {
 		if node.Content[i].Value == "label" {
-			newNodes = append(newNodes, node.Content[i])
-			newNodes = append(newNodes, node.Content[i+1])
+			if _, omit := labelField.shouldOmitNode(node.Content[i+1], node); !omit {
+				newNodes = append(newNodes, node.Content[i])
+				newNodes = append(newNodes, node.Content[i+1])
+			}
 			break
 		}
 	}

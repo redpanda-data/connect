@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -215,6 +217,25 @@ func New(
 
 //------------------------------------------------------------------------------
 
+const labelExpression = `^[a-z0-9_]+$`
+
+var (
+	labelRe = regexp.MustCompile(labelExpression)
+
+	// ErrBadLabel is returned when creating a component with a bad label.
+	ErrBadLabel = fmt.Errorf("label name should match the regular expression /%v/ and must not start with an underscore", labelExpression)
+)
+
+func validateLabel(label string) error {
+	if strings.HasPrefix(label, "_") {
+		return ErrBadLabel
+	}
+	if !labelRe.MatchString(label) {
+		return ErrBadLabel
+	}
+	return nil
+}
+
 func unwrapMetric(t metrics.Type) metrics.Type {
 	u, ok := t.(interface {
 		Unwrap() metrics.Type
@@ -358,15 +379,7 @@ func closeWithContext(ctx context.Context, c types.Closable) error {
 
 // NewBuffer attempts to create a new buffer component from a config.
 func (t *Type) NewBuffer(conf buffer.Config) (buffer.Type, error) {
-	mgr := t
-	/*
-		// TODO
-		// A configured label overrides any previously set component label.
-		if len(conf.Label) > 0 && t.component != conf.Label {
-			mgr = t.ForComponent(conf.Label)
-		}
-	*/
-	return t.bufferBundle.Init(conf, mgr)
+	return t.bufferBundle.Init(conf, t)
 }
 
 //------------------------------------------------------------------------------
@@ -393,15 +406,7 @@ func (t *Type) AccessCache(ctx context.Context, name string, fn func(types.Cache
 
 // NewCache attempts to create a new cache component from a config.
 func (t *Type) NewCache(conf cache.Config) (types.Cache, error) {
-	mgr := t
-	/*
-		// TODO
-		// A configured label overrides any previously set component label.
-		if len(conf.Label) > 0 && t.component != conf.Label {
-			mgr = t.ForComponent(conf.Label)
-		}
-	*/
-	return t.cacheBundle.Init(conf, mgr)
+	return t.cacheBundle.Init(conf, t)
 }
 
 // StoreCache attempts to store a new cache resource. If an existing resource
@@ -460,13 +465,13 @@ func (t *Type) AccessInput(ctx context.Context, name string, fn func(types.Input
 // TODO: V4 Remove the dumb batch field.
 func (t *Type) NewInput(conf input.Config, hasBatchProc bool, pipelines ...types.PipelineConstructorFunc) (types.Input, error) {
 	mgr := t
-	/*
-		// TODO
-		// A configured label overrides any previously set component label.
-		if len(conf.Label) > 0 && t.component != conf.Label {
-			mgr = t.ForComponent(conf.Label)
+	// A configured label overrides any previously set component label.
+	if len(conf.Label) > 0 && t.component != conf.Label {
+		if err := validateLabel(conf.Label); err != nil {
+			return nil, err
 		}
-	*/
+		mgr = t.forComponent(conf.Label)
+	}
 	return t.inputBundle.Init(hasBatchProc, conf, mgr, pipelines...)
 }
 
@@ -485,6 +490,10 @@ func (t *Type) StoreInput(ctx context.Context, name string, conf input.Config) e
 		if err := closeWithContext(ctx, i); err != nil {
 			return err
 		}
+	}
+
+	if conf.Label != "" && conf.Label != name {
+		return fmt.Errorf("label '%v' must be empty or match the resource name '%v'", conf.Label, name)
 	}
 
 	newInput, err := t.forComponent("resource.input."+name).NewInput(conf, false)
@@ -525,13 +534,13 @@ func (t *Type) AccessProcessor(ctx context.Context, name string, fn func(types.P
 // NewProcessor attempts to create a new processor component from a config.
 func (t *Type) NewProcessor(conf processor.Config) (types.Processor, error) {
 	mgr := t
-	/*
-		// TODO
-		// A configured label overrides any previously set component label.
-		if len(conf.Label) > 0 && t.component != conf.Label {
-			mgr = t.ForComponent(conf.Label)
+	// A configured label overrides any previously set component label.
+	if len(conf.Label) > 0 && t.component != conf.Label {
+		if err := validateLabel(conf.Label); err != nil {
+			return nil, err
 		}
-	*/
+		mgr = t.forComponent(conf.Label)
+	}
 	return t.processorBundle.Init(conf, mgr)
 }
 
@@ -550,6 +559,10 @@ func (t *Type) StoreProcessor(ctx context.Context, name string, conf processor.C
 		if err := closeWithContext(ctx, p); err != nil {
 			return err
 		}
+	}
+
+	if conf.Label != "" && conf.Label != name {
+		return fmt.Errorf("label '%v' must be empty or match the resource name '%v'", conf.Label, name)
 	}
 
 	newProcessor, err := t.forComponent("resource.processor." + name).NewProcessor(conf)
@@ -589,13 +602,13 @@ func (t *Type) AccessOutput(ctx context.Context, name string, fn func(types.Outp
 // NewOutput attempts to create a new output component from a config.
 func (t *Type) NewOutput(conf output.Config, pipelines ...types.PipelineConstructorFunc) (types.Output, error) {
 	mgr := t
-	/*
-		// TODO
-		// A configured label overrides any previously set component label.
-		if len(conf.Label) > 0 && t.component != conf.Label {
-			mgr = t.ForComponent(conf.Label)
+	// A configured label overrides any previously set component label.
+	if len(conf.Label) > 0 && t.component != conf.Label {
+		if err := validateLabel(conf.Label); err != nil {
+			return nil, err
 		}
-	*/
+		mgr = t.forComponent(conf.Label)
+	}
 	return t.outputBundle.Init(conf, mgr, pipelines...)
 }
 
@@ -614,6 +627,10 @@ func (t *Type) StoreOutput(ctx context.Context, name string, conf output.Config)
 		if err := closeWithContext(ctx, o); err != nil {
 			return err
 		}
+	}
+
+	if conf.Label != "" && conf.Label != name {
+		return fmt.Errorf("label '%v' must be empty or match the resource name '%v'", conf.Label, name)
 	}
 
 	tmpOutput, err := t.forComponent("resource.output." + name).NewOutput(conf)
@@ -656,15 +673,7 @@ func (t *Type) AccessRateLimit(ctx context.Context, name string, fn func(types.R
 
 // NewRateLimit attempts to create a new rate limit component from a config.
 func (t *Type) NewRateLimit(conf ratelimit.Config) (types.RateLimit, error) {
-	mgr := t
-	/*
-		// TODO
-		// A configured label overrides any previously set component label.
-		if len(conf.Label) > 0 && t.component != conf.Label {
-			mgr = t.ForComponent(conf.Label)
-		}
-	*/
-	return t.rateLimitBundle.Init(conf, mgr)
+	return t.rateLimitBundle.Init(conf, t)
 }
 
 // StoreRateLimit attempts to store a new rate limit resource. If an existing

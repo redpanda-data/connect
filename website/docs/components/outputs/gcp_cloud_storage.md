@@ -34,6 +34,7 @@ Introduced in version 3.43.0.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   gcp_cloud_storage:
     bucket: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
@@ -52,6 +53,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   gcp_cloud_storage:
     bucket: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt

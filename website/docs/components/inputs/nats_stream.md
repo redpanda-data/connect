@@ -30,6 +30,7 @@ multiple clients of a subject to consume using queue semantics.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   nats_stream:
     urls:
       - nats://127.0.0.1:4222
@@ -47,6 +48,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   nats_stream:
     urls:
       - nats://127.0.0.1:4222

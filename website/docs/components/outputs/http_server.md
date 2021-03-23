@@ -31,6 +31,7 @@ specified.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   http_server:
     address: ""
     path: /get
@@ -46,6 +47,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   http_server:
     address: ""
     path: /get

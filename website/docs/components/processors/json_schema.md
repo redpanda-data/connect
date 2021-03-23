@@ -30,6 +30,7 @@ be caught using error handling methods outlined [here](/docs/configuration/error
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 json_schema:
   schema: ""
   schema_path: ""
@@ -40,6 +41,7 @@ json_schema:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 json_schema:
   schema: ""
   schema_path: ""

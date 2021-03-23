@@ -31,6 +31,7 @@ Introduced in version 3.36.0.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   aws_sqs:
     url: ""
     message_group_id: ""
@@ -52,6 +53,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   aws_sqs:
     url: ""
     message_group_id: ""

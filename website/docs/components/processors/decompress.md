@@ -29,6 +29,7 @@ decompression types are: gzip, zlib, bzip2, flate.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 decompress:
   algorithm: gzip
 ```
@@ -38,6 +39,7 @@ decompress:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 decompress:
   algorithm: gzip
   parts: []

@@ -23,6 +23,7 @@ processors.
 
 ```yaml
 # Config fields, showing default values
+label: ""
 try: []
 ```
 

@@ -7,6 +7,7 @@ http:
   cert_file: ""
   key_file: ""
 input:
+  label: ""
   amqp_0_9:
     url: amqp://guest:guest@localhost:5672/
     queue: benthos-queue
@@ -29,6 +30,7 @@ pipeline:
   threads: 1
   processors: []
 output:
+  label: ""
   amqp_0_9:
     url: amqp://guest:guest@localhost:5672/
     exchange: benthos-exchange

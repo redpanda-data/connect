@@ -21,6 +21,7 @@ The stdout output type prints messages to stdout.
 ```yaml
 # Config fields, showing default values
 output:
+  label: ""
   stdout:
     delimiter: ""
 ```

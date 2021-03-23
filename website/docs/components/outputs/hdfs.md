@@ -29,6 +29,7 @@ Sends message parts as files to a HDFS directory.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   hdfs:
     hosts:
       - localhost:9000
@@ -49,6 +50,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   hdfs:
     hosts:
       - localhost:9000

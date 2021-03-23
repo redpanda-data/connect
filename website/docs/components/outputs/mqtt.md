@@ -29,6 +29,7 @@ Pushes messages to an MQTT broker.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   mqtt:
     urls:
       - tcp://localhost:1883
@@ -44,6 +45,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   mqtt:
     urls:
       - tcp://localhost:1883

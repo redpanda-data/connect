@@ -29,6 +29,7 @@ Performs Avro based operations on messages based on a schema.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 avro:
   operator: to_json
   encoding: textual
@@ -41,6 +42,7 @@ avro:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 avro:
   operator: to_json
   encoding: textual

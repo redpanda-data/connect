@@ -7,6 +7,7 @@ http:
   cert_file: ""
   key_file: ""
 input:
+  label: ""
   stdin:
     codec: lines
     max_buffer: 1000000
@@ -15,8 +16,10 @@ buffer:
 pipeline:
   threads: 1
   processors:
-    - sync_response: {}
+    - label: ""
+      sync_response: {}
 output:
+  label: ""
   stdout:
     delimiter: ""
 resources:

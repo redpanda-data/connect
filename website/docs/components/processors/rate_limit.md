@@ -23,6 +23,7 @@ pipelines.
 
 ```yaml
 # Config fields, showing default values
+label: ""
 rate_limit:
   resource: ""
 ```

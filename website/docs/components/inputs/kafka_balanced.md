@@ -33,6 +33,7 @@ partitions across other consumers of the same consumer group.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   kafka_balanced:
     addresses:
       - localhost:9092
@@ -53,6 +54,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   kafka_balanced:
     addresses:
       - localhost:9092

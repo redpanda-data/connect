@@ -29,6 +29,7 @@ Subscribe to a NATS subject.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   nats:
     urls:
       - nats://127.0.0.1:4222
@@ -42,6 +43,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   nats:
     urls:
       - nats://127.0.0.1:4222

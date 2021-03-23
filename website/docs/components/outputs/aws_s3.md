@@ -32,6 +32,7 @@ Introduced in version 3.36.0.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   aws_s3:
     bucket: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
@@ -54,6 +55,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   aws_s3:
     bucket: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt

@@ -32,6 +32,7 @@ Sends messages to a Kinesis stream.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   kinesis:
     stream: ""
     partition_key: ""
@@ -50,6 +51,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   kinesis:
     stream: ""
     partition_key: ""

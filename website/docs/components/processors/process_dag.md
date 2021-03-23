@@ -25,6 +25,7 @@ fields.
 
 ```yaml
 # Config fields, showing default values
+label: ""
 process_dag: {}
 ```
 

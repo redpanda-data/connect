@@ -31,6 +31,7 @@ Introduced in version 3.43.0.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 mongodb:
   url: mongodb://localhost:27017
   database: ""
@@ -52,6 +53,7 @@ mongodb:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 mongodb:
   url: mongodb://localhost:27017
   database: ""

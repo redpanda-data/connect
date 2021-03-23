@@ -29,6 +29,7 @@ Publish to an NATS subject.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   nats:
     urls:
       - nats://127.0.0.1:4222
@@ -42,6 +43,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   nats:
     urls:
       - nats://127.0.0.1:4222

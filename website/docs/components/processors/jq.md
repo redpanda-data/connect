@@ -29,6 +29,7 @@ Transforms and filters messages using jq queries.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 jq:
   query: .
 ```
@@ -38,6 +39,7 @@ jq:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 jq:
   query: .
   raw: false

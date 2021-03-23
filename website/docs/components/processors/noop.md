@@ -18,6 +18,7 @@ Noop is a processor that does nothing, the message passes through unchanged. Why
 
 ```yaml
 # Config fields, showing default values
+label: ""
 noop: {}
 ```
 

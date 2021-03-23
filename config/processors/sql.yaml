@@ -7,6 +7,7 @@ http:
   cert_file: ""
   key_file: ""
 input:
+  label: ""
   stdin:
     codec: lines
     max_buffer: 1000000
@@ -15,13 +16,15 @@ buffer:
 pipeline:
   threads: 1
   processors:
-    - sql:
+    - label: ""
+      sql:
         driver: mysql
         data_source_name: ""
         query: ""
         args: []
         result_codec: none
 output:
+  label: ""
   stdout:
     delimiter: ""
 resources:

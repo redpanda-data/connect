@@ -31,6 +31,7 @@ This component has been renamed to [`azure_blob_storage`](/docs/components/outpu
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   blob_storage:
     storage_account: ""
     storage_access_key: ""
@@ -47,6 +48,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   blob_storage:
     storage_account: ""
     storage_access_key: ""

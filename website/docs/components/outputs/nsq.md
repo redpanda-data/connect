@@ -29,6 +29,7 @@ Publish to an NSQ topic.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   nsq:
     nsqd_tcp_address: localhost:4150
     topic: benthos_messages
@@ -42,6 +43,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   nsq:
     nsqd_tcp_address: localhost:4150
     topic: benthos_messages

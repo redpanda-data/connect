@@ -22,6 +22,7 @@ Rejects all messages, treating them as though the output destination failed to p
 ```yaml
 # Config fields, showing default values
 output:
+  label: ""
   reject: ""
 ```
 

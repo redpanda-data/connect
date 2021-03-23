@@ -30,6 +30,7 @@ guarantee that messages have been received.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   redis_pubsub:
     url: tcp://localhost:6379
     channel: benthos_chan
@@ -42,6 +43,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   redis_pubsub:
     url: tcp://localhost:6379
     kind: simple

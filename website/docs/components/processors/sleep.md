@@ -22,6 +22,7 @@ of functions [here](/docs/configuration/interpolation#bloblang-queries).
 
 ```yaml
 # Config fields, showing default values
+label: ""
 sleep:
   duration: 100us
 ```

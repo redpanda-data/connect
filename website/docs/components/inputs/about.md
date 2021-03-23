@@ -7,6 +7,8 @@ An input is a source of data piped through an array of optional [processors][pro
 
 ```yaml
 input:
+  label: my_redis_input
+
   redis_streams:
     url: tcp://localhost:6379
     streams:
@@ -46,6 +48,10 @@ input:
           consumer_group: benthos_group
 ```
 
+## Labels
+
+Inputs have an optional field `label` that can uniquely identify them in observability data such as metrics and logs. This can be useful when running configs with multiple inputs, otherwise their metrics labels will be generated based on their composition. For more information check out the [metrics documentation][metrics.about].
+
 ### Sequential Reads
 
 Sometimes it's useful to consume a sequence of inputs, where an input is only consumed once its predecessor is drained fully, you can achieve this with the [`sequence` input][input.sequence].
@@ -70,3 +76,4 @@ import ComponentSelect from '@theme/ComponentSelect';
 [input.csv]: /docs/components/inputs/csv
 [input.sequence]: /docs/components/inputs/sequence
 [input.read_until]: /docs/components/inputs/read_until
+[metrics.about]: /docs/components/metrics/about

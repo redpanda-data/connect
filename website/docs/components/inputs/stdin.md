@@ -29,6 +29,7 @@ Consumes data piped to stdin as line delimited messages.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   stdin:
     codec: lines
 ```
@@ -39,6 +40,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   stdin:
     codec: lines
     max_buffer: 1000000

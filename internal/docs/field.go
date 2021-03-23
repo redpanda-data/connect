@@ -519,6 +519,9 @@ func (f FieldSpecs) SanitiseNode(node *yaml.Node, conf SanitiseConfig) error {
 		for i := 0; i < len(node.Content); i += 2 {
 			if node.Content[i].Value == field.Name {
 				nextNode := node.Content[i+1]
+				if _, omit := field.shouldOmitNode(nextNode, node); omit {
+					break searchLoop
+				}
 				if err := field.SanitiseNode(nextNode, conf); err != nil {
 					return err
 				}

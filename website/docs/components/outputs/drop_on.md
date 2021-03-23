@@ -21,6 +21,7 @@ Attempts to write messages to a child output and if the write fails for one of a
 ```yaml
 # Config fields, showing default values
 output:
+  label: ""
   drop_on:
     error: false
     back_pressure: ""

@@ -26,6 +26,7 @@ Introduced in version 3.40.0.
 ```yaml
 # Config fields, showing default values
 input:
+  label: ""
   generate:
     mapping: ""
     interval: 1s

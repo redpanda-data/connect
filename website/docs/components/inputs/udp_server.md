@@ -21,6 +21,7 @@ This component is deprecated and will be removed in the next major version relea
 ```yaml
 # Config fields, showing default values
 input:
+  label: ""
   udp_server:
     address: 127.0.0.1:0
     max_buffer: 1000000

@@ -33,6 +33,7 @@ Introduced in version 3.36.0.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   azure_blob_storage:
     storage_account: ""
     storage_access_key: ""
@@ -49,6 +50,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   azure_blob_storage:
     storage_account: ""
     storage_access_key: ""
