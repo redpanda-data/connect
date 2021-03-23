@@ -266,7 +266,8 @@ func TestAsyncPreserverErrorBackoff(t *testing.T) {
 			break
 		}
 		require.NoError(t, aFn(ctx, response.NewError(errors.New("no thanks"))))
-		if i++; i == 10 {
+		i++
+		if i == 10 {
 			t.Error("Expected backoff to prevent this")
 			break
 		}
