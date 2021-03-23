@@ -225,6 +225,7 @@ func SanitiseComponentConfig(componentType Type, raw interface{}, filter FieldFi
 type SanitiseConfig struct {
 	RemoveTypeField  bool
 	RemoveDeprecated bool
+	Filter           FieldFilter
 }
 
 // SanitiseNode takes a yaml.Node and a config spec and sorts the fields of the

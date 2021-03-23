@@ -512,6 +512,9 @@ func (f FieldSpecs) SanitiseNode(node *yaml.Node, conf SanitiseConfig) error {
 		if field.Deprecated && conf.RemoveDeprecated {
 			continue
 		}
+		if conf.Filter.shouldDrop(field) {
+			continue
+		}
 	searchLoop:
 		for i := 0; i < len(node.Content); i += 2 {
 			if node.Content[i].Value == field.Name {

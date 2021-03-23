@@ -274,51 +274,20 @@ Introduced in version {{.Version}}.
 {{end}}
 `
 
-func iClone(root interface{}) interface{} {
-	switch t := root.(type) {
-	case map[string]interface{}:
-		newMap := make(map[string]interface{}, len(t))
-		for k, v := range t {
-			newMap[k] = iClone(v)
-		}
-		return newMap
-	case []interface{}:
-		newSlice := make([]interface{}, len(t))
-		for i, v := range t {
-			newSlice[i] = iClone(v)
-		}
-		return newSlice
-	}
-	return root
-}
-
 func createOrderedConfig(t Type, rawExample interface{}, filter FieldFilter) (*yaml.Node, error) {
-	rawConfig := iClone(rawExample)
-	if err := SanitiseComponentConfig(t, rawConfig, filter); err != nil {
-		return nil, err
-	}
-
-	rawBytes, err := yaml.Marshal(rawConfig)
-	if err != nil {
-		return nil, err
-	}
 	var newNode yaml.Node
-	if err = yaml.Unmarshal(rawBytes, &newNode); err != nil {
+	if err := newNode.Encode(rawExample); err != nil {
 		return nil, err
 	}
-	if newNode.Kind != yaml.DocumentNode {
-		return nil, fmt.Errorf("expected document node kind: %v", newNode.Kind)
-	}
-	if newNode.Content[0].Kind != yaml.MappingNode {
-		return nil, fmt.Errorf("expected mapping node child kind: %v", newNode.Content[0].Kind)
-	}
 
-	if err = SanitiseNode(t, newNode.Content[0], SanitiseConfig{
+	if err := SanitiseNode(t, &newNode, SanitiseConfig{
 		RemoveTypeField: true,
+		Filter:          filter,
 	}); err != nil {
 		return nil, err
 	}
-	return newNode.Content[0], nil
+
+	return &newNode, nil
 }
 
 func genExampleConfigs(t Type, nest bool, fullConfigExample interface{}) (string, string, error) {
