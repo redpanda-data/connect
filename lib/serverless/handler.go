@@ -142,7 +142,7 @@ func NewHandler(conf config.Type) (*Handler, error) {
 	}
 
 	// Create resource manager.
-	manager, err := manager.New(conf.Manager, types.NoopMgr(), logger, stats)
+	manager, err := manager.NewV2(conf.ResourceConfig, types.NoopMgr(), logger, stats)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create resource: %v", err)
 	}

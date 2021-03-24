@@ -19,14 +19,14 @@ import (
 
 // Type is the Benthos service configuration struct.
 type Type struct {
-	HTTP               api.Config `json:"http" yaml:"http"`
-	stream.Config      `json:",inline" yaml:",inline"`
-	Manager            manager.Config `json:"resources" yaml:"resources"`
-	Logger             log.Config     `json:"logger" yaml:"logger"`
-	Metrics            metrics.Config `json:"metrics" yaml:"metrics"`
-	Tracer             tracer.Config  `json:"tracer" yaml:"tracer"`
-	SystemCloseTimeout string         `json:"shutdown_timeout" yaml:"shutdown_timeout"`
-	Tests              interface{}    `json:"tests,omitempty" yaml:"tests,omitempty"`
+	HTTP                   api.Config `json:"http" yaml:"http"`
+	stream.Config          `json:",inline" yaml:",inline"`
+	manager.ResourceConfig `json:",inline" yaml:",inline"`
+	Logger                 log.Config     `json:"logger" yaml:"logger"`
+	Metrics                metrics.Config `json:"metrics" yaml:"metrics"`
+	Tracer                 tracer.Config  `json:"tracer" yaml:"tracer"`
+	SystemCloseTimeout     string         `json:"shutdown_timeout" yaml:"shutdown_timeout"`
+	Tests                  interface{}    `json:"tests,omitempty" yaml:"tests,omitempty"`
 }
 
 // New returns a new configuration with default values.
@@ -34,7 +34,7 @@ func New() Type {
 	return Type{
 		HTTP:               api.NewConfig(),
 		Config:             stream.NewConfig(),
-		Manager:            manager.NewConfig(),
+		ResourceConfig:     manager.NewResourceConfig(),
 		Logger:             log.NewConfig(),
 		Metrics:            metrics.NewConfig(),
 		Tracer:             tracer.NewConfig(),
@@ -43,8 +43,9 @@ func New() Type {
 	}
 }
 
-// SanitisedConfig is a config struct of generic types, this is returned by
-// Sanitised() and is a generic structure containing only fields of relevance.
+// SanitisedConfig is deprecated and will be removed in V4.
+//
+// TODO: V4 Remove this
 type SanitisedConfig struct {
 	HTTP               interface{} `json:"http" yaml:"http"`
 	Input              interface{} `json:"input" yaml:"input"`
@@ -59,15 +60,16 @@ type SanitisedConfig struct {
 	Tests              interface{} `json:"tests,omitempty" yaml:"tests,omitempty"`
 }
 
-// Sanitised returns a sanitised copy of the Benthos configuration, meaning
-// fields of no consequence (unused inputs, outputs, processors etc) are
-// excluded.
+// Sanitised is deprecated and will be removed in V4.
+//
+// TODO: V4 Remove this
 func (c Type) Sanitised() (*SanitisedConfig, error) {
 	return c.sanitised(false)
 }
 
-// SanitisedNoDeprecated returns a sanitised copy of the Benthos configuration
-// also omitting any fields that are deprecated.
+// SanitisedNoDeprecated is deprecated and will be removed in V4.
+//
+// TODO: V4 Remove this
 func (c Type) SanitisedNoDeprecated() (*SanitisedConfig, error) {
 	return c.sanitised(true)
 }

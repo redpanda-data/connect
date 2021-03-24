@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/lib/cache"
@@ -12,14 +13,133 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/config"
 )
 
+type ResourceConfig struct {
+	// Called manager for backwards compatibility.
+	Manager            Config             `json:"resources,omitempty" yaml:"resources,omitempty"`
+	ResourceInputs     []input.Config     `json:"resource_inputs,omitempty" yaml:"resource_inputs,omitempty"`
+	ResourceProcessors []processor.Config `json:"resource_processors,omitempty" yaml:"resource_processors,omitempty"`
+	ResourceOutputs    []output.Config    `json:"resource_outputs,omitempty" yaml:"resource_outputs,omitempty"`
+	ResourceCaches     []cache.Config     `json:"resource_caches,omitempty" yaml:"resource_caches,omitempty"`
+	ResourceRateLimits []ratelimit.Config `json:"resource_rate_limits,omitempty" yaml:"resource_rate_limits,omitempty"`
+}
+
+func NewResourceConfig() ResourceConfig {
+	return ResourceConfig{
+		Manager:            NewConfig(),
+		ResourceInputs:     []input.Config{},
+		ResourceProcessors: []processor.Config{},
+		ResourceOutputs:    []output.Config{},
+		ResourceCaches:     []cache.Config{},
+		ResourceRateLimits: []ratelimit.Config{},
+	}
+}
+
+// Collapses all the slice based resources into maps, returning an error if any
+// labels are duplicated or empty.
+func (r *ResourceConfig) collapsed() (ResourceConfig, error) {
+	newMaps := NewConfig()
+
+	for k, v := range r.Manager.Caches {
+		newMaps.Caches[k] = v
+	}
+	for _, c := range r.ResourceCaches {
+		if c.Label == "" {
+			return *r, errors.New("cache resource has an empty label")
+		}
+		if _, exists := newMaps.Caches[c.Label]; exists {
+			return *r, fmt.Errorf("cache resource label '%v' collides with a previously defined resource", c.Label)
+		}
+		newMaps.Caches[c.Label] = c
+	}
+
+	for k, v := range r.Manager.Conditions {
+		newMaps.Conditions[k] = v
+	}
+
+	for k, v := range r.Manager.Inputs {
+		newMaps.Inputs[k] = v
+	}
+	for _, c := range r.ResourceInputs {
+		if c.Label == "" {
+			return *r, errors.New("input resource has an empty label")
+		}
+		if _, exists := newMaps.Inputs[c.Label]; exists {
+			return *r, fmt.Errorf("input resource label '%v' collides with a previously defined resource", c.Label)
+		}
+		newMaps.Inputs[c.Label] = c
+	}
+
+	for k, v := range r.Manager.Outputs {
+		newMaps.Outputs[k] = v
+	}
+	for _, c := range r.ResourceOutputs {
+		if c.Label == "" {
+			return *r, errors.New("output resource has an empty label")
+		}
+		if _, exists := newMaps.Outputs[c.Label]; exists {
+			return *r, fmt.Errorf("output resource label '%v' collides with a previously defined resource", c.Label)
+		}
+		newMaps.Outputs[c.Label] = c
+	}
+
+	for k, v := range r.Manager.Plugins {
+		newMaps.Plugins[k] = v
+	}
+
+	for k, v := range r.Manager.Processors {
+		newMaps.Processors[k] = v
+	}
+	for _, c := range r.ResourceProcessors {
+		if c.Label == "" {
+			return *r, errors.New("processor resource has an empty label")
+		}
+		if _, exists := newMaps.Processors[c.Label]; exists {
+			return *r, fmt.Errorf("processor resource label '%v' collides with a previously defined resource", c.Label)
+		}
+		newMaps.Processors[c.Label] = c
+	}
+
+	for k, v := range r.Manager.RateLimits {
+		newMaps.RateLimits[k] = v
+	}
+	for _, c := range r.ResourceRateLimits {
+		if c.Label == "" {
+			return *r, errors.New("rate limit resource has an empty label")
+		}
+		if _, exists := newMaps.RateLimits[c.Label]; exists {
+			return *r, fmt.Errorf("rate limit resource label '%v' collides with a previously defined resource", c.Label)
+		}
+		newMaps.RateLimits[c.Label] = c
+	}
+
+	return ResourceConfig{
+		Manager: newMaps,
+	}, nil
+}
+
+// AddFrom takes another Config and adds all of its resources to itself. If
+// there are any resource name collisions an error is returned.
+func (r *ResourceConfig) AddFrom(extra *ResourceConfig) error {
+	if err := r.Manager.AddFrom(&extra.Manager); err != nil {
+		return err
+	}
+	// TODO: Detect duplicates.
+	r.ResourceInputs = append(r.ResourceInputs, extra.ResourceInputs...)
+	r.ResourceProcessors = append(r.ResourceProcessors, extra.ResourceProcessors...)
+	r.ResourceOutputs = append(r.ResourceOutputs, extra.ResourceOutputs...)
+	r.ResourceCaches = append(r.ResourceCaches, extra.ResourceCaches...)
+	r.ResourceRateLimits = append(r.ResourceRateLimits, extra.ResourceRateLimits...)
+	return nil
+}
+
 // Config contains all configuration fields for a Benthos service manager.
 type Config struct {
-	Inputs     map[string]input.Config     `json:"inputs" yaml:"inputs"`
-	Conditions map[string]condition.Config `json:"conditions" yaml:"conditions"`
-	Processors map[string]processor.Config `json:"processors" yaml:"processors"`
-	Outputs    map[string]output.Config    `json:"outputs" yaml:"outputs"`
-	Caches     map[string]cache.Config     `json:"caches" yaml:"caches"`
-	RateLimits map[string]ratelimit.Config `json:"rate_limits" yaml:"rate_limits"`
+	Inputs     map[string]input.Config     `json:"inputs,omitempty" yaml:"inputs,omitempty"`
+	Conditions map[string]condition.Config `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+	Processors map[string]processor.Config `json:"processors,omitempty" yaml:"processors,omitempty"`
+	Outputs    map[string]output.Config    `json:"outputs,omitempty" yaml:"outputs,omitempty"`
+	Caches     map[string]cache.Config     `json:"caches,omitempty" yaml:"caches,omitempty"`
+	RateLimits map[string]ratelimit.Config `json:"rate_limits,omitempty" yaml:"rate_limits,omitempty"`
 	Plugins    map[string]PluginConfig     `json:"plugins,omitempty" yaml:"plugins,omitempty"`
 }
 

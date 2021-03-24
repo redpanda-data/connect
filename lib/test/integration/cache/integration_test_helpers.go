@@ -173,7 +173,7 @@ func initCache(t *testing.T, env *testEnvironment) types.Cache {
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	manager, err := manager.New(s.Manager, types.NoopMgr(), env.log, env.stats)
+	manager, err := manager.NewV2(s.ResourceConfig, types.NoopMgr(), env.log, env.stats)
 	require.NoError(t, err)
 
 	cache, err := manager.GetCache("testcache")

@@ -131,16 +131,12 @@ func readConfig(path string, resourcesPaths []string) (lints []string) {
 		for _, l := range rLints {
 			lints = append(lints, fmt.Sprintf("resource file %v: %v", rPath, l))
 		}
-		extraMgrWrapper := struct {
-			Manager manager.Config `yaml:"resources"`
-		}{
-			Manager: manager.NewConfig(),
-		}
+		extraMgrWrapper := manager.NewResourceConfig()
 		if err = yaml.Unmarshal(resourceBytes, &extraMgrWrapper); err != nil {
 			fmt.Fprintf(os.Stderr, "Resource configuration file read error: %v\n", err)
 			os.Exit(1)
 		}
-		if err = conf.Manager.AddFrom(&extraMgrWrapper.Manager); err != nil {
+		if err = conf.ResourceConfig.AddFrom(&extraMgrWrapper); err != nil {
 			fmt.Fprintf(os.Stderr, "Resource configuration file read error: %v\n", err)
 			os.Exit(1)
 		}
@@ -239,7 +235,7 @@ func cmdService(
 	}
 
 	// Create resource manager.
-	manager, err := manager.New(conf.Manager, httpServer, logger, stats)
+	manager, err := manager.NewV2(conf.ResourceConfig, httpServer, logger, stats)
 	if err != nil {
 		logger.Errorf("Failed to create resource: %v\n", err)
 		return 1

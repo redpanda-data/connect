@@ -1,13 +1,16 @@
 package manager_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/condition"
+	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -83,6 +86,52 @@ func TestManagerCache(t *testing.T) {
 	}
 }
 
+func TestManagerCacheList(t *testing.T) {
+	cacheFoo := cache.NewConfig()
+	cacheFoo.Label = "foo"
+
+	cacheBar := cache.NewConfig()
+	cacheBar.Label = "bar"
+
+	conf := manager.NewResourceConfig()
+	conf.ResourceCaches = append(conf.ResourceCaches, cacheFoo)
+	conf.ResourceCaches = append(conf.ResourceCaches, cacheBar)
+
+	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	err = mgr.AccessCache(context.Background(), "foo", func(types.Cache) {})
+	require.NoError(t, err)
+
+	err = mgr.AccessCache(context.Background(), "bar", func(types.Cache) {})
+	require.NoError(t, err)
+
+	err = mgr.AccessCache(context.Background(), "baz", func(types.Cache) {})
+	assert.EqualError(t, err, "unable to locate resource: baz")
+}
+
+func TestManagerCacheListErrors(t *testing.T) {
+	cFoo := cache.NewConfig()
+	cFoo.Label = "foo"
+
+	cBar := cache.NewConfig()
+	cBar.Label = "foo"
+
+	conf := manager.NewResourceConfig()
+	conf.ResourceCaches = append(conf.ResourceCaches, cFoo)
+	conf.ResourceCaches = append(conf.ResourceCaches, cBar)
+
+	_, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	require.EqualError(t, err, "cache resource label 'foo' collides with a previously defined resource")
+
+	cEmpty := cache.NewConfig()
+	conf = manager.NewResourceConfig()
+	conf.ResourceCaches = append(conf.ResourceCaches, cEmpty)
+
+	_, err = manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	require.EqualError(t, err, "cache resource has an empty label")
+}
+
 func TestManagerBadCache(t *testing.T) {
 	testLog := log.Noop()
 
@@ -115,6 +164,52 @@ func TestManagerRateLimit(t *testing.T) {
 	if _, err := mgr.GetRateLimit("baz"); err != types.ErrRateLimitNotFound {
 		t.Errorf("Wrong error returned: %v != %v", err, types.ErrRateLimitNotFound)
 	}
+}
+
+func TestManagerRateLimitList(t *testing.T) {
+	cFoo := ratelimit.NewConfig()
+	cFoo.Label = "foo"
+
+	cBar := ratelimit.NewConfig()
+	cBar.Label = "bar"
+
+	conf := manager.NewResourceConfig()
+	conf.ResourceRateLimits = append(conf.ResourceRateLimits, cFoo)
+	conf.ResourceRateLimits = append(conf.ResourceRateLimits, cBar)
+
+	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	err = mgr.AccessRateLimit(context.Background(), "foo", func(types.RateLimit) {})
+	require.NoError(t, err)
+
+	err = mgr.AccessRateLimit(context.Background(), "bar", func(types.RateLimit) {})
+	require.NoError(t, err)
+
+	err = mgr.AccessRateLimit(context.Background(), "baz", func(types.RateLimit) {})
+	assert.EqualError(t, err, "unable to locate resource: baz")
+}
+
+func TestManagerRateLimitListErrors(t *testing.T) {
+	cFoo := ratelimit.NewConfig()
+	cFoo.Label = "foo"
+
+	cBar := ratelimit.NewConfig()
+	cBar.Label = "foo"
+
+	conf := manager.NewResourceConfig()
+	conf.ResourceRateLimits = append(conf.ResourceRateLimits, cFoo)
+	conf.ResourceRateLimits = append(conf.ResourceRateLimits, cBar)
+
+	_, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	require.EqualError(t, err, "rate limit resource label 'foo' collides with a previously defined resource")
+
+	cEmpty := ratelimit.NewConfig()
+	conf = manager.NewResourceConfig()
+	conf.ResourceRateLimits = append(conf.ResourceRateLimits, cEmpty)
+
+	_, err = manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	require.EqualError(t, err, "rate limit resource has an empty label")
 }
 
 func TestManagerBadRateLimit(t *testing.T) {
@@ -170,6 +265,148 @@ func TestManagerProcessor(t *testing.T) {
 	if _, err := mgr.GetProcessor("baz"); err != types.ErrProcessorNotFound {
 		t.Errorf("Wrong error returned: %v != %v", err, types.ErrProcessorNotFound)
 	}
+}
+
+func TestManagerProcessorList(t *testing.T) {
+	cFoo := processor.NewConfig()
+	cFoo.Label = "foo"
+
+	cBar := processor.NewConfig()
+	cBar.Label = "bar"
+
+	conf := manager.NewResourceConfig()
+	conf.ResourceProcessors = append(conf.ResourceProcessors, cFoo)
+	conf.ResourceProcessors = append(conf.ResourceProcessors, cBar)
+
+	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	err = mgr.AccessProcessor(context.Background(), "foo", func(types.Processor) {})
+	require.NoError(t, err)
+
+	err = mgr.AccessProcessor(context.Background(), "bar", func(types.Processor) {})
+	require.NoError(t, err)
+
+	err = mgr.AccessProcessor(context.Background(), "baz", func(types.Processor) {})
+	assert.EqualError(t, err, "unable to locate resource: baz")
+}
+
+func TestManagerProcessorListErrors(t *testing.T) {
+	cFoo := processor.NewConfig()
+	cFoo.Label = "foo"
+
+	cBar := processor.NewConfig()
+	cBar.Label = "foo"
+
+	conf := manager.NewResourceConfig()
+	conf.ResourceProcessors = append(conf.ResourceProcessors, cFoo)
+	conf.ResourceProcessors = append(conf.ResourceProcessors, cBar)
+
+	_, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	require.EqualError(t, err, "processor resource label 'foo' collides with a previously defined resource")
+
+	cEmpty := processor.NewConfig()
+	conf = manager.NewResourceConfig()
+	conf.ResourceProcessors = append(conf.ResourceProcessors, cEmpty)
+
+	_, err = manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	require.EqualError(t, err, "processor resource has an empty label")
+}
+
+func TestManagerInputList(t *testing.T) {
+	cFoo := input.NewConfig()
+	cFoo.Type = input.TypeHTTPServer
+	cFoo.Label = "foo"
+
+	cBar := input.NewConfig()
+	cBar.Type = input.TypeHTTPServer
+	cBar.Label = "bar"
+
+	conf := manager.NewResourceConfig()
+	conf.ResourceInputs = append(conf.ResourceInputs, cFoo)
+	conf.ResourceInputs = append(conf.ResourceInputs, cBar)
+
+	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	err = mgr.AccessInput(context.Background(), "foo", func(i types.Input) {})
+	require.NoError(t, err)
+
+	err = mgr.AccessInput(context.Background(), "bar", func(i types.Input) {})
+	require.NoError(t, err)
+
+	err = mgr.AccessInput(context.Background(), "baz", func(i types.Input) {})
+	assert.EqualError(t, err, "unable to locate resource: baz")
+}
+
+func TestManagerInputListErrors(t *testing.T) {
+	cFoo := input.NewConfig()
+	cFoo.Label = "foo"
+
+	cBar := input.NewConfig()
+	cBar.Label = "foo"
+
+	conf := manager.NewResourceConfig()
+	conf.ResourceInputs = append(conf.ResourceInputs, cFoo)
+	conf.ResourceInputs = append(conf.ResourceInputs, cBar)
+
+	_, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	require.EqualError(t, err, "input resource label 'foo' collides with a previously defined resource")
+
+	cEmpty := input.NewConfig()
+	conf = manager.NewResourceConfig()
+	conf.ResourceInputs = append(conf.ResourceInputs, cEmpty)
+
+	_, err = manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	require.EqualError(t, err, "input resource has an empty label")
+}
+
+func TestManagerOutputList(t *testing.T) {
+	cFoo := output.NewConfig()
+	cFoo.Type = output.TypeHTTPServer
+	cFoo.Label = "foo"
+
+	cBar := output.NewConfig()
+	cBar.Type = output.TypeHTTPServer
+	cBar.Label = "bar"
+
+	conf := manager.NewResourceConfig()
+	conf.ResourceOutputs = append(conf.ResourceOutputs, cFoo)
+	conf.ResourceOutputs = append(conf.ResourceOutputs, cBar)
+
+	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	err = mgr.AccessOutput(context.Background(), "foo", func(ow types.OutputWriter) {})
+	require.NoError(t, err)
+
+	err = mgr.AccessOutput(context.Background(), "bar", func(ow types.OutputWriter) {})
+	require.NoError(t, err)
+
+	err = mgr.AccessOutput(context.Background(), "baz", func(ow types.OutputWriter) {})
+	assert.EqualError(t, err, "unable to locate resource: baz")
+}
+
+func TestManagerOutputListErrors(t *testing.T) {
+	cFoo := output.NewConfig()
+	cFoo.Label = "foo"
+
+	cBar := output.NewConfig()
+	cBar.Label = "foo"
+
+	conf := manager.NewResourceConfig()
+	conf.ResourceOutputs = append(conf.ResourceOutputs, cFoo)
+	conf.ResourceOutputs = append(conf.ResourceOutputs, cBar)
+
+	_, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	require.EqualError(t, err, "output resource label 'foo' collides with a previously defined resource")
+
+	cEmpty := output.NewConfig()
+	conf = manager.NewResourceConfig()
+	conf.ResourceOutputs = append(conf.ResourceOutputs, cEmpty)
+
+	_, err = manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	require.EqualError(t, err, "output resource has an empty label")
 }
 
 func TestManagerConditionRecursion(t *testing.T) {

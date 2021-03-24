@@ -556,7 +556,7 @@ definitely_not_recognised: huh`,
 			res: []docs.Lint{
 				docs.NewLintError(4, "field not_recognised not recognised"),
 				docs.NewLintError(6, "field also_not_recognised not recognised"),
-				docs.NewLintError(7, "field definitely_not_recognised is invalid when the component type is testlintfooinput"),
+				docs.NewLintError(7, "field definitely_not_recognised is invalid when the component type is testlintfooinput (input)"),
 			},
 		},
 		{

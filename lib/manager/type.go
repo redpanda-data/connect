@@ -86,12 +86,13 @@ type Type struct {
 
 // New returns an instance of manager.Type, which can be shared amongst
 // components and logical threads of a Benthos service.
-func New(
-	conf Config,
-	apiReg APIReg,
-	log log.Modular,
-	stats metrics.Type,
-) (*Type, error) {
+func New(conf Config, apiReg APIReg, log log.Modular, stats metrics.Type) (*Type, error) {
+	return NewV2(ResourceConfig{Manager: conf}, apiReg, log, stats)
+}
+
+// NewV2 returns an instance of manager.Type, which can be shared amongst
+// components and logical threads of a Benthos service.
+func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Type) (*Type, error) {
 	t := &Type{
 		apiReg: apiReg,
 
@@ -121,50 +122,55 @@ func New(
 		conditions: map[string]types.Condition{},
 	}
 
+	conf, err := conf.collapsed()
+	if err != nil {
+		return nil, err
+	}
+
 	// Sometimes resources of a type might refer to other resources of the same
 	// type. When they are constructed they will check with the manager to
 	// ensure the resource they point to is valid, but not keep the reference.
 	// Since we cannot guarantee an order of initialisation we create
 	// placeholders during construction.
-	for k := range conf.Inputs {
+	for k := range conf.Manager.Inputs {
 		t.inputs[k] = nil
 	}
-	for k := range conf.Caches {
+	for k := range conf.Manager.Caches {
 		t.caches[k] = nil
 	}
-	for k := range conf.Conditions {
+	for k := range conf.Manager.Conditions {
 		t.conditions[k] = nil
 	}
-	for k := range conf.Processors {
+	for k := range conf.Manager.Processors {
 		t.processors[k] = nil
 	}
-	for k := range conf.Outputs {
+	for k := range conf.Manager.Outputs {
 		t.outputs[k] = nil
 	}
-	for k := range conf.RateLimits {
+	for k := range conf.Manager.RateLimits {
 		t.rateLimits[k] = nil
 	}
-	for k, conf := range conf.Plugins {
+	for k, conf := range conf.Manager.Plugins {
 		if _, exists := pluginSpecs[conf.Type]; !exists {
 			continue
 		}
 		t.plugins[k] = nil
 	}
 
-	for k, conf := range conf.Inputs {
+	for k, conf := range conf.Manager.Inputs {
 		if err := t.StoreInput(context.Background(), k, conf); err != nil {
 			return nil, err
 		}
 	}
 
-	for k, conf := range conf.Caches {
+	for k, conf := range conf.Manager.Caches {
 		if err := t.StoreCache(context.Background(), k, conf); err != nil {
 			return nil, err
 		}
 	}
 
 	// TODO: Prevent recursive conditions.
-	for k, newConf := range conf.Conditions {
+	for k, newConf := range conf.Manager.Conditions {
 		cMgr := t.forChildComponent("resource.condition." + k)
 		newCond, err := condition.New(newConf, cMgr, cMgr.Logger(), cMgr.Metrics())
 		if err != nil {
@@ -178,25 +184,25 @@ func New(
 	}
 
 	// TODO: Prevent recursive processors.
-	for k, conf := range conf.Processors {
+	for k, conf := range conf.Manager.Processors {
 		if err := t.StoreProcessor(context.Background(), k, conf); err != nil {
 			return nil, err
 		}
 	}
 
-	for k, conf := range conf.RateLimits {
+	for k, conf := range conf.Manager.RateLimits {
 		if err := t.StoreRateLimit(context.Background(), k, conf); err != nil {
 			return nil, err
 		}
 	}
 
-	for k, conf := range conf.Outputs {
+	for k, conf := range conf.Manager.Outputs {
 		if err := t.StoreOutput(context.Background(), k, conf); err != nil {
 			return nil, err
 		}
 	}
 
-	for k, conf := range conf.Plugins {
+	for k, conf := range conf.Manager.Plugins {
 		spec, exists := pluginSpecs[conf.Type]
 		if !exists {
 			return nil, fmt.Errorf("unrecognised plugin type '%v'", conf.Type)
@@ -406,7 +412,15 @@ func (t *Type) AccessCache(ctx context.Context, name string, fn func(types.Cache
 
 // NewCache attempts to create a new cache component from a config.
 func (t *Type) NewCache(conf cache.Config) (types.Cache, error) {
-	return t.cacheBundle.Init(conf, t)
+	mgr := t
+	// A configured label overrides any previously set component label.
+	if len(conf.Label) > 0 && t.component != conf.Label {
+		if err := validateLabel(conf.Label); err != nil {
+			return nil, err
+		}
+		mgr = t.forComponent(conf.Label)
+	}
+	return t.cacheBundle.Init(conf, mgr)
 }
 
 // StoreCache attempts to store a new cache resource. If an existing resource
@@ -673,7 +687,15 @@ func (t *Type) AccessRateLimit(ctx context.Context, name string, fn func(types.R
 
 // NewRateLimit attempts to create a new rate limit component from a config.
 func (t *Type) NewRateLimit(conf ratelimit.Config) (types.RateLimit, error) {
-	return t.rateLimitBundle.Init(conf, t)
+	mgr := t
+	// A configured label overrides any previously set component label.
+	if len(conf.Label) > 0 && t.component != conf.Label {
+		if err := validateLabel(conf.Label); err != nil {
+			return nil, err
+		}
+		mgr = t.forComponent(conf.Label)
+	}
+	return t.rateLimitBundle.Init(conf, mgr)
 }
 
 // StoreRateLimit attempts to store a new rate limit resource. If an existing

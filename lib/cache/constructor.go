@@ -92,6 +92,7 @@ const (
 
 // Config is the all encompassing configuration struct for all cache types.
 type Config struct {
+	Label       string           `json:"label" yaml:"label"`
 	Type        string           `json:"type" yaml:"type"`
 	AWSDynamoDB DynamoDBConfig   `json:"aws_dynamodb" yaml:"aws_dynamodb"`
 	AWSS3       S3Config         `json:"aws_s3" yaml:"aws_s3"`
@@ -110,6 +111,7 @@ type Config struct {
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
+		Label:       "",
 		Type:        "memory",
 		AWSDynamoDB: NewDynamoDBConfig(),
 		AWSS3:       NewS3Config(),

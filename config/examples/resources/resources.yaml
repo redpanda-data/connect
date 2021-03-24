@@ -1,4 +1,3 @@
-resources:
-  caches:
-    foocache:
-      memory: {}
+resource_caches:
+  - label: foocache
+    memory: {}

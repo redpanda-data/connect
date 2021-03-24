@@ -262,7 +262,7 @@ func (f FieldSpec) SanitiseNode(node *yaml.Node, conf SanitiseConfig) error {
 				}
 			}
 		} else if f.IsMap {
-			for i := 0; i < len(node.Content); i += 2 {
+			for i := 0; i < len(node.Content)-1; i += 2 {
 				if err := SanitiseNode(coreType, node.Content[i+1], conf); err != nil {
 					return err
 				}
@@ -280,7 +280,7 @@ func (f FieldSpec) SanitiseNode(node *yaml.Node, conf SanitiseConfig) error {
 				}
 			}
 		} else if f.IsMap {
-			for i := 0; i < len(node.Content); i += 2 {
+			for i := 0; i < len(node.Content)-1; i += 2 {
 				if err := f.Children.SanitiseNode(node.Content[i+1], conf); err != nil {
 					return err
 				}
@@ -339,7 +339,7 @@ func (f FieldSpec) lintNode(node *yaml.Node) []Lint {
 			lints = append(lints, NewLintError(node.Line, "expected object value"))
 			return lints
 		}
-		for i := 0; i < len(node.Content); i += 2 {
+		for i := 0; i < len(node.Content)-1; i += 2 {
 			lints = append(lints, customLint(f, node.Content[i+1])...)
 		}
 	} else {
@@ -351,7 +351,7 @@ func (f FieldSpec) lintNode(node *yaml.Node) []Lint {
 				lints = append(lints, LintNode(coreType, node.Content[i])...)
 			}
 		} else if f.IsMap {
-			for i := 0; i < len(node.Content); i += 2 {
+			for i := 0; i < len(node.Content)-1; i += 2 {
 				lints = append(lints, LintNode(coreType, node.Content[i+1])...)
 			}
 		} else {
@@ -363,7 +363,7 @@ func (f FieldSpec) lintNode(node *yaml.Node) []Lint {
 				lints = append(lints, f.Children.LintNode(node.Content[i])...)
 			}
 		} else if f.IsMap {
-			for i := 0; i < len(node.Content); i += 2 {
+			for i := 0; i < len(node.Content)-1; i += 2 {
 				lints = append(lints, f.Children.LintNode(node.Content[i+1])...)
 			}
 		} else {
@@ -516,7 +516,7 @@ func (f FieldSpecs) SanitiseNode(node *yaml.Node, conf SanitiseConfig) error {
 			continue
 		}
 	searchLoop:
-		for i := 0; i < len(node.Content); i += 2 {
+		for i := 0; i < len(node.Content)-1; i += 2 {
 			if node.Content[i].Value == field.Name {
 				nextNode := node.Content[i+1]
 				if _, omit := field.shouldOmitNode(nextNode, node); omit {
@@ -594,10 +594,12 @@ func (f FieldSpecs) LintNode(node *yaml.Node) []Lint {
 		specNames[field.Name] = field
 	}
 
-	for i := 0; i < len(node.Content); i += 2 {
+	for i := 0; i < len(node.Content)-1; i += 2 {
 		spec, exists := specNames[node.Content[i].Value]
 		if !exists {
-			lints = append(lints, NewLintError(node.Content[i].Line, fmt.Sprintf("field %v not recognised", node.Content[i].Value)))
+			if node.Content[i+1].Kind != yaml.AliasNode {
+				lints = append(lints, NewLintError(node.Content[i].Line, fmt.Sprintf("field %v not recognised", node.Content[i].Value)))
+			}
 			continue
 		}
 		lints = append(lints, lintFromOmit(spec, node, node.Content[i+1])...)

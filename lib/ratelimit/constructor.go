@@ -73,6 +73,7 @@ const (
 
 // Config is the all encompassing configuration struct for all cache types.
 type Config struct {
+	Label  string      `json:"label" yaml:"label"`
 	Type   string      `json:"type" yaml:"type"`
 	Local  LocalConfig `json:"local" yaml:"local"`
 	Plugin interface{} `json:"plugin,omitempty" yaml:"plugin,omitempty"`
@@ -81,6 +82,7 @@ type Config struct {
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
+		Label:  "",
 		Type:   "local",
 		Local:  NewLocalConfig(),
 		Plugin: nil,

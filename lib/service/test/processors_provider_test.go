@@ -71,7 +71,7 @@ pipeline:
 	}
 }
 
-func TestProcessorsProvider(t *testing.T) {
+func TestProcessorsProviderDeprecated(t *testing.T) {
 	files := map[string]string{
 		"config1.yaml": `
 resources:
@@ -175,7 +175,7 @@ pipeline:
 	}
 }
 
-func TestProcessorsExtraResources(t *testing.T) {
+func TestProcessorsExtraResourcesDeprecated(t *testing.T) {
 	files := map[string]string{
 		"resources1.yaml": `
 resources:
@@ -231,7 +231,7 @@ pipeline:
 	assert.Len(t, procs, 3)
 }
 
-func TestProcessorsExtraResourcesError(t *testing.T) {
+func TestProcessorsExtraResourcesErrorDeprecated(t *testing.T) {
 	files := map[string]string{
 		"resources1.yaml": `
 resources:
@@ -279,4 +279,206 @@ pipeline:
 	)
 	_, err = provider.Provide("/pipeline/processors", nil)
 	require.EqualError(t, err, fmt.Sprintf("failed to merge resources from '%v/resources2.yaml': resource cache name collision: barcache", testDir))
+}
+
+func TestProcessorsProvider(t *testing.T) {
+	files := map[string]string{
+		"config1.yaml": `
+resource_caches:
+  - label: foocache
+    memory: {}
+
+pipeline:
+  processors:
+  - metadata:
+      operator: set
+      key: foo
+      value: ${BAR_VAR:defaultvalue}
+  - cache:
+      cache: foocache
+      operator: set
+      key: defaultkey
+      value: ${! meta("foo") }
+  - cache:
+      cache: foocache
+      operator: get
+      key: defaultkey
+  - text:
+      operator: to_upper`,
+
+		"config2.yaml": `
+resource_caches:
+  - label: foocache
+    memory: {}
+
+pipeline:
+  processors:
+    $ref: ./config1.yaml#/pipeline/processors`,
+	}
+
+	testDir, err := initTestFiles(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(testDir)
+
+	provider := test.NewProcessorsProvider(filepath.Join(testDir, "config1.yaml"))
+	procs, err := provider.Provide("/pipeline/processors", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := 4, len(procs); exp != act {
+		t.Fatalf("Unexpected processor count: %v != %v", act, exp)
+	}
+	msgs, res := processor.ExecuteAll(procs, message.New([][]byte{[]byte("hello world")}))
+	if res != nil {
+		t.Fatal(res.Error())
+	}
+	if exp, act := "DEFAULTVALUE", string(msgs[0].Get(0).Get()); exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+
+	if procs, err = provider.Provide("/pipeline/processors", map[string]string{
+		"BAR_VAR": "newvalue",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := 4, len(procs); exp != act {
+		t.Fatalf("Unexpected processor count: %v != %v", act, exp)
+	}
+	if msgs, res = processor.ExecuteAll(procs, message.New([][]byte{[]byte("hello world")})); res != nil {
+		t.Fatal(res.Error())
+	}
+	if exp, act := "NEWVALUE", string(msgs[0].Get(0).Get()); exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+
+	provider = test.NewProcessorsProvider(filepath.Join(testDir, "config2.yaml"))
+	if procs, err = provider.Provide("/pipeline/processors", map[string]string{
+		"BAR_VAR": "thirdvalue",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := 4, len(procs); exp != act {
+		t.Fatalf("Unexpected processor count: %v != %v", act, exp)
+	}
+	if msgs, res = processor.ExecuteAll(procs, message.New([][]byte{[]byte("hello world")})); res != nil {
+		t.Fatal(res.Error())
+	}
+	if exp, act := "THIRDVALUE", string(msgs[0].Get(0).Get()); exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+
+	if procs, err = provider.Provide("/pipeline/processors/3", nil); err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := 1, len(procs); exp != act {
+		t.Fatalf("Unexpected processor count: %v != %v", act, exp)
+	}
+	if msgs, res = processor.ExecuteAll(procs, message.New([][]byte{[]byte("hello world")})); res != nil {
+		t.Fatal(res.Error())
+	}
+	if exp, act := "HELLO WORLD", string(msgs[0].Get(0).Get()); exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+}
+
+func TestProcessorsExtraResources(t *testing.T) {
+	files := map[string]string{
+		"resources1.yaml": `
+resource_caches:
+  - label: barcache
+    memory: {}
+`,
+		"resources2.yaml": `
+resource_caches:
+  - label: bazcache
+    memory: {}
+`,
+		"config1.yaml": `
+resource_caches:
+  - label: foocache
+    memory: {}
+
+pipeline:
+  processors:
+  - cache:
+      cache: foocache
+      operator: set
+      key: defaultkey
+      value: foo
+  - cache:
+      cache: barcache
+      operator: set
+      key: defaultkey
+      value: bar
+  - cache:
+      cache: bazcache
+      operator: set
+      key: defaultkey
+      value: bar
+`,
+	}
+
+	testDir, err := initTestFiles(files)
+	require.NoError(t, err)
+	defer os.RemoveAll(testDir)
+
+	provider := test.NewProcessorsProvider(
+		filepath.Join(testDir, "config1.yaml"),
+		test.OptAddResourcesPaths([]string{
+			filepath.Join(testDir, "resources1.yaml"),
+			filepath.Join(testDir, "resources2.yaml"),
+		}),
+	)
+	procs, err := provider.Provide("/pipeline/processors", nil)
+	require.NoError(t, err)
+	assert.Len(t, procs, 3)
+}
+
+func TestProcessorsExtraResourcesError(t *testing.T) {
+	files := map[string]string{
+		"resources1.yaml": `
+resource_caches:
+  - label: barcache
+    memory: {}
+`,
+		"resources2.yaml": `
+resource_caches:
+  - label: barcache
+    memory: {}
+`,
+		"config1.yaml": `
+resource_caches:
+  - label: foocache
+    memory: {}
+
+pipeline:
+  processors:
+  - cache:
+      cache: foocache
+      operator: set
+      key: defaultkey
+      value: foo
+  - cache:
+      cache: barcache
+      operator: set
+      key: defaultkey
+      value: bar
+`,
+	}
+
+	testDir, err := initTestFiles(files)
+	require.NoError(t, err)
+	defer os.RemoveAll(testDir)
+
+	provider := test.NewProcessorsProvider(
+		filepath.Join(testDir, "config1.yaml"),
+		test.OptAddResourcesPaths([]string{
+			filepath.Join(testDir, "resources1.yaml"),
+			filepath.Join(testDir, "resources2.yaml"),
+		}),
+	)
+	_, err = provider.Provide("/pipeline/processors", nil)
+	require.EqualError(t, err, "failed to initialise resources: cache resource label 'barcache' collides with a previously defined resource")
 }

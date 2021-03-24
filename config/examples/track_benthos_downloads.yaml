@@ -6,72 +6,71 @@ pipeline:
         meta_path: results
         order: [ [ dockerhub, github, homebrew ] ]
 
-resources:
-  processors:
-    dockerhub:
-      branch:
-        request_map: 'root = ""'
-        processors:
-          - try:
-            # Grab docker dl count
-            - http:
-                url: https://hub.docker.com/v2/repositories/jeffail/benthos/
-                verb: GET
-                retries: 0
-            - bloblang: |
-                root.source = "docker"
-                root.dist = "docker"
-                root.download_count = this.pull_count
-                root.version = "all"
-            - resource: metric.gauge
+resource_processors:
+  - label: dockerhub
+    branch:
+      request_map: 'root = ""'
+      processors:
+        - try:
+          # Grab docker dl count
+          - http:
+              url: https://hub.docker.com/v2/repositories/jeffail/benthos/
+              verb: GET
+              retries: 0
+          - bloblang: |
+              root.source = "docker"
+              root.dist = "docker"
+              root.download_count = this.pull_count
+              root.version = "all"
+          - resource: metric.gauge
 
-    github:
-      branch:
-        request_map: 'root = ""'
-        processors:
-          - try:
-            # Grab github latest release dl count
-            - http:
-                url: https://api.github.com/repos/Jeffail/benthos/releases
-                verb: GET
-                retries: 0
-            - bloblang: |
-                root = this.map_each(release -> release.assets.map_each(asset -> {
-                  "source":         "github",
-                  "dist":           asset.name.re_replace("^benthos-?((lambda_)|_)[0-9\\.]+(-rc[0-9]+)?_([^\\.]+).*", "$2$4"),
-                  "download_count": asset.download_count,
-                  "version":        release.tag_name.trim("v"),
-                }).filter(asset -> asset.dist != "checksums")).flatten()
-            - unarchive:
-                format: json_array
-            - resource: metric.gauge
-            - bloblang: 'root = if batch_index() != 0 { deleted() }'
+  - label: github
+    branch:
+      request_map: 'root = ""'
+      processors:
+        - try:
+          # Grab github latest release dl count
+          - http:
+              url: https://api.github.com/repos/Jeffail/benthos/releases
+              verb: GET
+              retries: 0
+          - bloblang: |
+              root = this.map_each(release -> release.assets.map_each(asset -> {
+                "source":         "github",
+                "dist":           asset.name.re_replace("^benthos-?((lambda_)|_)[0-9\\.]+(-rc[0-9]+)?_([^\\.]+).*", "$2$4"),
+                "download_count": asset.download_count,
+                "version":        release.tag_name.trim("v"),
+              }).filter(asset -> asset.dist != "checksums")).flatten()
+          - unarchive:
+              format: json_array
+          - resource: metric.gauge
+          - bloblang: 'root = if batch_index() != 0 { deleted() }'
 
-    homebrew:
-      branch:
-        request_map: 'root = ""'
-        processors:
-          - try:
-            - http:
-                url: https://formulae.brew.sh/api/formula/benthos.json
-                verb: GET
-                retries: 0
-            - bloblang: |
-                root.source = "homebrew"
-                root.dist = "brew"
-                root.download_count = this.analytics.install.30d.benthos
-                root.version = "all"
-            - resource: metric.gauge
+  - label: homebrew
+    branch:
+      request_map: 'root = ""'
+      processors:
+        - try:
+          - http:
+              url: https://formulae.brew.sh/api/formula/benthos.json
+              verb: GET
+              retries: 0
+          - bloblang: |
+              root.source = "homebrew"
+              root.dist = "brew"
+              root.download_count = this.analytics.install.30d.benthos
+              root.version = "all"
+          - resource: metric.gauge
 
-    metric.gauge:
-      metric:
-        type: gauge
-        name: BenthosDownloadGauge
-        labels:
-          dist: ${! json("dist") }
-          source: ${! json("source") }
-          version: ${! json("version") }
-        value: ${! json("download_count") }
+  - label: metric.gauge
+    metric:
+      type: gauge
+      name: BenthosDownloadGauge
+      labels:
+        dist: ${! json("dist") }
+        source: ${! json("source") }
+        version: ${! json("version") }
+      value: ${! json("download_count") }
 
 metrics:
   aws_cloudwatch:

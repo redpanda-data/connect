@@ -18,7 +18,7 @@ import (
 //------------------------------------------------------------------------------
 
 type cachedConfig struct {
-	mgr   manager.Config
+	mgr   manager.ResourceConfig
 	procs []processor.Config
 }
 
@@ -77,7 +77,7 @@ func (p *ProcessorsProvider) Provide(jsonPtr string, environment map[string]stri
 //------------------------------------------------------------------------------
 
 func (p *ProcessorsProvider) initProcs(confs cachedConfig) ([]types.Processor, error) {
-	mgr, err := manager.New(confs.mgr, types.NoopMgr(), p.logger, metrics.Noop())
+	mgr, err := manager.NewV2(confs.mgr, types.NoopMgr(), p.logger, metrics.Noop())
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialise resources: %v", err)
 	}
@@ -175,11 +175,7 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
 	}
 
-	mgrWrapper := struct {
-		Manager manager.Config `yaml:"resources"`
-	}{
-		Manager: manager.NewConfig(),
-	}
+	mgrWrapper := manager.NewResourceConfig()
 	if err = yaml.Unmarshal(configBytes, &mgrWrapper); err != nil {
 		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
 	}
@@ -189,20 +185,16 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		if err != nil {
 			return confs, fmt.Errorf("failed to parse resources config file '%v': %v", path, err)
 		}
-		extraMgrWrapper := struct {
-			Manager manager.Config `yaml:"resources"`
-		}{
-			Manager: manager.NewConfig(),
-		}
+		extraMgrWrapper := manager.NewResourceConfig()
 		if err = yaml.Unmarshal(resourceBytes, &extraMgrWrapper); err != nil {
 			return confs, fmt.Errorf("failed to parse resources config file '%v': %v", path, err)
 		}
-		if err = mgrWrapper.Manager.AddFrom(&extraMgrWrapper.Manager); err != nil {
+		if err = mgrWrapper.AddFrom(&extraMgrWrapper); err != nil {
 			return confs, fmt.Errorf("failed to merge resources from '%v': %v", path, err)
 		}
 	}
 
-	confs.mgr = mgrWrapper.Manager
+	confs.mgr = mgrWrapper
 
 	var root interface{}
 	if err = yaml.Unmarshal(configBytes, &root); err != nil {

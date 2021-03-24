@@ -42,6 +42,8 @@ func reservedFieldsByType(t Type) map[string]FieldSpec {
 		TypeInput:     {},
 		TypeProcessor: {},
 		TypeOutput:    {},
+		TypeCache:     {},
+		TypeRateLimit: {},
 	}[t]; isLabelType {
 		m["label"] = labelField
 	}
@@ -95,7 +97,7 @@ func GetInferenceCandidateFromNode(t Type, defaultType string, node *yaml.Node) 
 	}
 
 	var keys []string
-	for i := 0; i < len(node.Content); i += 2 {
+	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == "type" {
 			tStr := node.Content[i+1].Value
 			spec, exists := GetDocs(tStr, t)
@@ -175,7 +177,7 @@ func sanitiseConditionConfigNode(node *yaml.Node) error {
 	newNodes := []*yaml.Node{}
 
 	var name string
-	for i := 0; i < len(node.Content); i += 2 {
+	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == "type" {
 			name = node.Content[i+1].Value
 			newNodes = append(newNodes, node.Content[i])
@@ -188,7 +190,7 @@ func sanitiseConditionConfigNode(node *yaml.Node) error {
 		return nil
 	}
 
-	for i := 0; i < len(node.Content); i += 2 {
+	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == name {
 			newNodes = append(newNodes, node.Content[i])
 			newNodes = append(newNodes, node.Content[i+1])
@@ -261,7 +263,7 @@ func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 
 	var name string
 	var keys []string
-	for i := 0; i < len(node.Content); i += 2 {
+	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == "label" {
 			if _, omit := labelField.shouldOmitNode(node.Content[i+1], node); !omit {
 				newNodes = append(newNodes, node.Content[i])
@@ -270,7 +272,7 @@ func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 			break
 		}
 	}
-	for i := 0; i < len(node.Content); i += 2 {
+	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == "type" {
 			name = node.Content[i+1].Value
 			if !conf.RemoveTypeField {
@@ -298,7 +300,7 @@ func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 	}
 
 	nameFound := false
-	for i := 0; i < len(node.Content); i += 2 {
+	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == name {
 			nameFound = true
 			if err := cSpec.Config.SanitiseNode(node.Content[i+1], conf); err != nil {
@@ -313,7 +315,7 @@ func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 	// If the type field was omitted but we didn't see a config under the name
 	// then we need to add it back in as it cannot be inferred.
 	if !nameFound && conf.RemoveTypeField {
-		for i := 0; i < len(node.Content); i += 2 {
+		for i := 0; i < len(node.Content)-1; i += 2 {
 			if node.Content[i].Value == "type" {
 				newNodes = append(newNodes, node.Content[i])
 				newNodes = append(newNodes, node.Content[i+1])
@@ -323,7 +325,7 @@ func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 	}
 
 	reservedFields := reservedFieldsByType(cType)
-	for i := 0; i < len(node.Content); i += 2 {
+	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == name || node.Content[i].Value == "type" || node.Content[i].Value == "label" {
 			continue
 		}
@@ -354,7 +356,7 @@ func LintNode(cType Type, node *yaml.Node) []Lint {
 
 	var name string
 	var keys []string
-	for i := 0; i < len(node.Content); i += 2 {
+	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == "type" {
 			name = node.Content[i+1].Value
 			break
@@ -383,7 +385,7 @@ func LintNode(cType Type, node *yaml.Node) []Lint {
 	if cSpec.Status == StatusPlugin {
 		lintTarget = "plugin"
 	}
-	for i := 0; i < len(node.Content); i += 2 {
+	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == lintTarget {
 			lints = append(lints, cSpec.Config.lintNode(node.Content[i+1])...)
 			break
@@ -391,7 +393,7 @@ func LintNode(cType Type, node *yaml.Node) []Lint {
 	}
 
 	reservedFields := reservedFieldsByType(cType)
-	for i := 0; i < len(node.Content); i += 2 {
+	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == name || node.Content[i].Value == "type" {
 			continue
 		}
@@ -402,7 +404,7 @@ func LintNode(cType Type, node *yaml.Node) []Lint {
 		} else {
 			lints = append(lints, NewLintError(
 				node.Content[i].Line,
-				fmt.Sprintf("field %v is invalid when the component type is %v", node.Content[i].Value, name),
+				fmt.Sprintf("field %v is invalid when the component type is %v (%v)", node.Content[i].Value, name, cType),
 			))
 		}
 	}

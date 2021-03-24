@@ -28,7 +28,7 @@ func TestConfigLints(t *testing.T) {
 			conf: `input:
   type: stdin
   kafka: {}`,
-			lints: []string{"line 3: field kafka is invalid when the component type is stdin"},
+			lints: []string{"line 3: field kafka is invalid when the component type is stdin (input)"},
 		},
 		{
 			name: "ignore tests section",
@@ -47,7 +47,7 @@ tests:
     inputs:
     - type: stdin
       kafka: {}`,
-			lints: []string{"line 6: field kafka is invalid when the component type is stdin"},
+			lints: []string{"line 6: field kafka is invalid when the component type is stdin (input)"},
 		},
 		{
 			name: "broker object type within resources",
@@ -59,7 +59,7 @@ tests:
         inputs:
           - type: stdin
             kafka: {}`,
-			lints: []string{"line 8: field kafka is invalid when the component type is stdin"},
+			lints: []string{"line 8: field kafka is invalid when the component type is stdin (input)"},
 		},
 		{
 			name: "broker object multiple types",
@@ -75,8 +75,8 @@ tests:
     - type: stdin
       stdin: {}`,
 			lints: []string{
-				"line 6: field kafka is invalid when the component type is stdin",
-				"line 8: field stdin is invalid when the component type is amqp",
+				"line 6: field kafka is invalid when the component type is stdin (input)",
+				"line 8: field stdin is invalid when the component type is amqp (input)",
 			},
 		},
 		{
