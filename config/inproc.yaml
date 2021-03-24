@@ -17,13 +17,6 @@ pipeline:
 output:
   label: ""
   inproc: ""
-resources:
-  inputs: {}
-  conditions: {}
-  processors: {}
-  outputs: {}
-  caches: {}
-  rate_limits: {}
 logger:
   level: INFO
   format: json

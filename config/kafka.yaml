@@ -89,13 +89,6 @@ output:
       initial_interval: 3s
       max_interval: 10s
       max_elapsed_time: 30s
-resources:
-  inputs: {}
-  conditions: {}
-  processors: {}
-  outputs: {}
-  caches: {}
-  rate_limits: {}
 logger:
   level: INFO
   format: json

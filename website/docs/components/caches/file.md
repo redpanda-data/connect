@@ -20,6 +20,7 @@ to the configured directory.
 
 ```yaml
 # Config fields, showing default values
+label: ""
 file:
   directory: ""
 ```

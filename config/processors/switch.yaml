@@ -22,13 +22,6 @@ output:
   label: ""
   stdout:
     delimiter: ""
-resources:
-  inputs: {}
-  conditions: {}
-  processors: {}
-  outputs: {}
-  caches: {}
-  rate_limits: {}
 logger:
   level: INFO
   format: json

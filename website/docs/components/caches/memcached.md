@@ -28,6 +28,7 @@ multiple cache types to share a memcached cluster under different namespaces.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 memcached:
   addresses:
     - localhost:11211
@@ -40,6 +41,7 @@ memcached:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 memcached:
   addresses:
     - localhost:11211

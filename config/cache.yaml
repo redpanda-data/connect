@@ -23,13 +23,6 @@ output:
     key: ${!count("items")}-${!timestamp_unix_nano()}
     ttl: ""
     max_in_flight: 1
-resources:
-  inputs: {}
-  conditions: {}
-  processors: {}
-  outputs: {}
-  caches: {}
-  rate_limits: {}
 logger:
   level: INFO
   format: json

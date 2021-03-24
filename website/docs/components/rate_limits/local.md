@@ -21,6 +21,7 @@ distributed rate limits across multiple running instances of Benthos.
 
 ```yaml
 # Config fields, showing default values
+label: ""
 local:
   count: 1000
   interval: 1s

@@ -35,13 +35,6 @@ output:
       period: ""
       check: ""
       processors: []
-resources:
-  inputs: {}
-  conditions: {}
-  processors: {}
-  outputs: {}
-  caches: {}
-  rate_limits: {}
 logger:
   level: INFO
   format: json

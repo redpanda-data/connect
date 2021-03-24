@@ -23,13 +23,6 @@ output:
     strict_mode: false
     max_in_flight: 1
     cases: []
-resources:
-  inputs: {}
-  conditions: {}
-  processors: {}
-  outputs: {}
-  caches: {}
-  rate_limits: {}
 logger:
   level: INFO
   format: json

@@ -32,6 +32,7 @@ a binary value using the `data_key` field name.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 dynamodb:
   table: ""
   hash_key: ""
@@ -44,6 +45,7 @@ dynamodb:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 dynamodb:
   table: ""
   hash_key: ""

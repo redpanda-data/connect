@@ -34,13 +34,6 @@ output:
     user: ""
     password: ""
     max_in_flight: 1
-resources:
-  inputs: {}
-  conditions: {}
-  processors: {}
-  outputs: {}
-  caches: {}
-  rate_limits: {}
 logger:
   level: INFO
   format: json

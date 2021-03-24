@@ -20,6 +20,7 @@ operations across them.
 
 ```yaml
 # Config fields, showing default values
+label: ""
 multilevel: []
 ```
 

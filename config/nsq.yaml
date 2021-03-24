@@ -39,13 +39,6 @@ output:
       root_cas_file: ""
       client_certs: []
     max_in_flight: 1
-resources:
-  inputs: {}
-  conditions: {}
-  processors: {}
-  outputs: {}
-  caches: {}
-  rate_limits: {}
 logger:
   level: INFO
   format: json

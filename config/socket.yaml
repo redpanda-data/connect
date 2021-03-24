@@ -24,13 +24,6 @@ output:
     network: unix
     address: /tmp/benthos.sock
     codec: lines
-resources:
-  inputs: {}
-  conditions: {}
-  processors: {}
-  outputs: {}
-  caches: {}
-  rate_limits: {}
 logger:
   level: INFO
   format: json

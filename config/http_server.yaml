@@ -41,13 +41,6 @@ output:
     timeout: 5s
     cert_file: ""
     key_file: ""
-resources:
-  inputs: {}
-  conditions: {}
-  processors: {}
-  outputs: {}
-  caches: {}
-  rate_limits: {}
 logger:
   level: INFO
   format: json

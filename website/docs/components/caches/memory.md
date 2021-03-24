@@ -30,6 +30,7 @@ compaction.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 memory:
   ttl: 300
   compaction_interval: 60s
@@ -41,6 +42,7 @@ memory:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 memory:
   ttl: 300
   compaction_interval: 60s

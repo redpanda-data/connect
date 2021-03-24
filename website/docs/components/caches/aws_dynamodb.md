@@ -31,6 +31,7 @@ Introduced in version 3.36.0.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 aws_dynamodb:
   table: ""
   hash_key: ""
@@ -43,6 +44,7 @@ aws_dynamodb:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 aws_dynamodb:
   table: ""
   hash_key: ""

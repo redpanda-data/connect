@@ -30,6 +30,7 @@ Introduced in version 3.36.0.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 aws_s3:
   bucket: ""
   content_type: application/octet-stream
@@ -41,6 +42,7 @@ aws_s3:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 aws_s3:
   bucket: ""
   content_type: application/octet-stream

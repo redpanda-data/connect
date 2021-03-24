@@ -29,6 +29,7 @@ Stores key/value pairs in a map held in the memory-bound
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 ristretto:
   ttl: ""
 ```
@@ -38,6 +39,7 @@ ristretto:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 ristretto:
   ttl: ""
   retries: 0

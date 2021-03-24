@@ -28,6 +28,7 @@ string in order to set no expiration.
 
 ```yaml
 # Common config fields, showing default values
+label: ""
 redis:
   url: tcp://localhost:6379
   prefix: ""
@@ -39,6 +40,7 @@ redis:
 
 ```yaml
 # All config fields, showing default values
+label: ""
 redis:
   url: tcp://localhost:6379
   kind: simple

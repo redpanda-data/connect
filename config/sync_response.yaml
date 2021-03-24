@@ -19,13 +19,6 @@ pipeline:
 output:
   label: ""
   sync_response: {}
-resources:
-  inputs: {}
-  conditions: {}
-  processors: {}
-  outputs: {}
-  caches: {}
-  rate_limits: {}
 logger:
   level: INFO
   format: json

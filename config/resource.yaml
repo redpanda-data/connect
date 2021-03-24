@@ -15,13 +15,6 @@ pipeline:
   processors: []
 output:
   resource: ""
-resources:
-  inputs: {}
-  conditions: {}
-  processors: {}
-  outputs: {}
-  caches: {}
-  rate_limits: {}
 logger:
   level: INFO
   format: json

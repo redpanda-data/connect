@@ -22,13 +22,6 @@ output:
     error: false
     back_pressure: ""
     output: {}
-resources:
-  inputs: {}
-  conditions: {}
-  processors: {}
-  outputs: {}
-  caches: {}
-  rate_limits: {}
 logger:
   level: INFO
   format: json

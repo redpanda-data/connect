@@ -37,13 +37,6 @@ output:
       client_certs: []
     key: benthos_list
     max_in_flight: 1
-resources:
-  inputs: {}
-  conditions: {}
-  processors: {}
-  outputs: {}
-  caches: {}
-  rate_limits: {}
 logger:
   level: INFO
   format: json

@@ -34,13 +34,6 @@ output:
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     blob_type: BLOCK
     max_in_flight: 1
-resources:
-  inputs: {}
-  conditions: {}
-  processors: {}
-  outputs: {}
-  caches: {}
-  rate_limits: {}
 logger:
   level: INFO
   format: json

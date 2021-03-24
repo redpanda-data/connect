@@ -42,13 +42,6 @@ output:
       enabled: false
       username: ""
       password: ""
-resources:
-  inputs: {}
-  conditions: {}
-  processors: {}
-  outputs: {}
-  caches: {}
-  rate_limits: {}
 logger:
   level: INFO
   format: json

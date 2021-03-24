@@ -48,13 +48,6 @@ output:
     max_in_flight: 1
     metadata:
       exclude_prefixes: []
-resources:
-  inputs: {}
-  conditions: {}
-  processors: {}
-  outputs: {}
-  caches: {}
-  rate_limits: {}
 logger:
   level: INFO
   format: json

@@ -29,13 +29,6 @@ output:
     socket_type: PUSH
     poll_timeout: 5s
     max_in_flight: 1
-resources:
-  inputs: {}
-  conditions: {}
-  processors: {}
-  outputs: {}
-  caches: {}
-  rate_limits: {}
 logger:
   level: INFO
   format: json
