@@ -82,18 +82,17 @@ pipeline:
         value: "x"
     - bloblang: root = if errored() { deleted() }
 
-resources:
-  rate_limits:
-    foo_ratelimit:
-      local:
-        count: 500
-        interval: 1s
+resource_rate_limits:
+  - label: foo_ratelimit
+    local:
+      count: 500
+      interval: 1s
 
-  caches:
-    baz_cache:
-      memcached:
-        addresses: [ localhost:11211 ]
-        ttl: 60
+resource_caches:
+  - label: baz_cache
+    memcached:
+      addresses: [ localhost:11211 ]
+      ttl: 60
 ```
 
 It's also possible to configure inputs, outputs and processors as resources which allows them to be reused throughout a configuration with the [`resource` input][inputs.resource], [`resource` output][outputs.resource] and [`resource` processor][processors.resource] respectively.

@@ -29,11 +29,10 @@ The [`resource`][resources] section of a Benthos config defines named resources 
 An individual stream config should not define any resources. Instead, they should be defined in a service-wide config:
 
 ```yaml
-resources:
-  caches:
-    foo:
-      memory:
-        ttl: 3600
+resource_caches:
+  - label: foo
+    memory:
+      ttl: 3600
 ```
 
 ```sh

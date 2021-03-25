@@ -296,63 +296,62 @@ pipeline:
         meta_path: results
         order: [ [ dockerhub, github, homebrew ] ]
 
-resources:
-  processors:
-    dockerhub:
-      branch:
-        request_map: 'root = ""'
-        processors:
-          - try:
-            - http:
-                url: https://hub.docker.com/v2/repositories/jeffail/benthos/
-                verb: GET
-            - bloblang: |
-                root.source = "docker"
-                root.dist = "docker"
-                root.download_count = this.pull_count
-            - resource: metric.gauge
+resource_processors:
+  - label: dockerhub
+    branch:
+      request_map: 'root = ""'
+      processors:
+        - try:
+          - http:
+              url: https://hub.docker.com/v2/repositories/jeffail/benthos/
+              verb: GET
+          - bloblang: |
+              root.source = "docker"
+              root.dist = "docker"
+              root.download_count = this.pull_count
+          - resource: metric_gauge
 
-    github:
-      branch:
-        request_map: 'root = ""'
-        processors:
-          - try:
-            - http:
-                url: https://api.github.com/repos/Jeffail/benthos/releases/latest
-                verb: GET
-            - bloblang: |
-                root = this.assets.map_each({
-                  "source":"github",
-                  "dist": this.name.re_replace("^benthos-?((lambda_)|_)[0-9\\.]+_([^\\.]+).*", "$2$3"),
-                  "download_count": this.download_count
-                }).filter(this.dist != "checksums")
-            - unarchive:
-                format: json_array
-            - resource: metric.gauge
-            - bloblang: 'root = if batch_index() != 0 { deleted() }'
+  - label: github
+    branch:
+      request_map: 'root = ""'
+      processors:
+        - try:
+          - http:
+              url: https://api.github.com/repos/Jeffail/benthos/releases/latest
+              verb: GET
+          - bloblang: |
+              root = this.assets.map_each({
+                "source":"github",
+                "dist": this.name.re_replace("^benthos-?((lambda_)|_)[0-9\\.]+_([^\\.]+).*", "$2$3"),
+                "download_count": this.download_count
+              }).filter(this.dist != "checksums")
+          - unarchive:
+              format: json_array
+          - resource: metric_gauge
+          - bloblang: 'root = if batch_index() != 0 { deleted() }'
 
-    homebrew:
-      branch:
-        request_map: 'root = ""'
-        processors:
-          - try:
-            - http:
-                url: https://formulae.brew.sh/api/formula/benthos.json
-                verb: GET
-            - bloblang: |
-                root.source = "homebrew"
-                root.dist = "homebrew"
-                root.download_count = this.analytics.install.30d.benthos
-            - resource: metric.gauge
+  - label: homebrew
+    branch:
+      request_map: 'root = ""'
+      processors:
+        - try:
+          - http:
+              url: https://formulae.brew.sh/api/formula/benthos.json
+              verb: GET
+          - bloblang: |
+              root.source = "homebrew"
+              root.dist = "homebrew"
+              root.download_count = this.analytics.install.30d.benthos
+          - resource: metric_gauge
 
-    metric.gauge:
-      metric:
-        type: gauge
-        name: downloads
-        labels:
-          dist: ${! json("dist") }
-          source: ${! json("source") }
-        value: ${! json("download_count") }
+  - label: metric_gauge
+    metric:
+      type: gauge
+      name: downloads
+      labels:
+        dist: ${! json("dist") }
+        source: ${! json("source") }
+      value: ${! json("download_count") }
 
 metrics:
   prometheus:

@@ -41,19 +41,18 @@ pipeline:
             - bloblang: 'root = {"err":error()}'
         result_map: 'root.result = this'
 
-resources:
-  caches:
-    leveled:
-      multilevel: [ hot, cold ]
+resource_caches:
+  - label: leveled
+    multilevel: [ hot, cold ]
 
-    hot:
-      memory:
-        ttl: 300
+  - label: hot
+    memory:
+      ttl: 300
 
-    cold:
-      memcached:
-        addresses: [ TODO:11211 ]
-        ttl: 3600
+  - label: cold
+    memcached:
+      addresses: [ TODO:11211 ]
+      ttl: 3600
 ` + "```" + `
 
 Using this config when a target key already exists in our local memory cache we

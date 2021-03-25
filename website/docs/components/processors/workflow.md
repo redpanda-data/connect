@@ -193,27 +193,26 @@ pipeline:
                   function: TODO
             result_map: 'root.bar = this'
 
-resources:
-  processors:
-    foo:
-      branch:
-        request_map: 'root = ""'
-        processors:
-          - http:
-              url: TODO
-        result_map: 'root.foo = this'
+resource_processors:
+  - label: foo
+    branch:
+      request_map: 'root = ""'
+      processors:
+        - http:
+            url: TODO
+      result_map: 'root.foo = this'
 
-    baz:
-      branch:
-        request_map: |
-          root.fooid = this.foo.id
-          root.barstuff = this.bar.content
-        processors:
-          - cache:
-              resource: TODO
-              operator: set
-              key: ${! json("fooid") }
-              value: ${! json("barstuff") }
+  - label: baz
+    branch:
+      request_map: |
+        root.fooid = this.foo.id
+        root.barstuff = this.bar.content
+      processors:
+        - cache:
+            resource: TODO
+            operator: set
+            key: ${! json("fooid") }
+            value: ${! json("barstuff") }
 ```
 
 </TabItem>

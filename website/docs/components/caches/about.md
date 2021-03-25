@@ -6,13 +6,12 @@ sidebar_label: About
 A cache is a key/value store which can be used by certain components for applications such as deduplication or data joins. Caches are configured as a named resource:
 
 ```yaml
-resources:
-  caches:
-    foobar:
-      memcached:
-        addresses:
-          - localhost:11211
-        ttl: 60
+resource_caches:
+  - label: foobar
+    memcached:
+      addresses:
+        - localhost:11211
+      ttl: 60
 ```
 
 > It's possible to layer caches with read-through and write-through behaviour using the [`multilevel` cache][cache.multilevel].

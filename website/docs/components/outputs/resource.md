@@ -16,8 +16,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Resource is an output type that runs a resource output by its name. This output
-allows you to run the same configured output resource in multiple places.
+Resource is an output type that runs a resource output by its name.
 
 ```yaml
 # Config fields, showing default values
@@ -25,8 +24,7 @@ output:
   resource: ""
 ```
 
-Resource outputs also have the advantage of name based metrics and logging. For
-example, the config:
+This output allows you to reference the same configured output resource in multiple places, and can also tidy up large nested configs. For example, the config:
 
 ```yaml
 output:
@@ -41,7 +39,7 @@ output:
         topic: baz
 ```
 
-Is equivalent to:
+Could also be expressed as:
 
 ``` yaml
 output:
@@ -51,22 +49,17 @@ output:
     - resource: foo
     - resource: bar
 
-resources:
-  outputs:
-    foo:
-      kafka:
-        addresses: [ TODO ]
-        topic: foo
+resource_outputs:
+  - label: foo
+    kafka:
+      addresses: [ TODO ]
+      topic: foo
 
-    bar:
-      gcp_pubsub:
-        project: bar
-        topic: baz
+  - label: bar
+    gcp_pubsub:
+      project: bar
+      topic: baz
  ```
-
-But now the metrics path of Kafka output will be
-`resources.outputs.foo`, this way of flattening observability
-labels becomes more useful as configs get larger and more nested.
 
 You can find out more about resources [in this document.](/docs/configuration/resources)
 

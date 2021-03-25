@@ -3,18 +3,17 @@ title: Rate Limits
 sidebar_label: About
 ---
 
-A rate limit is a strategy for limiting the usage of a shared resource across parallel components in a Benthos instance, or potentially across multiple instances. They are configured as a named resource:
+A rate limit is a strategy for limiting the usage of a shared resource across parallel components in a Benthos instance, or potentially across multiple instances. They are configured as a resource:
 
 ```yaml
-resources:
-  rate_limits:
-    foobar:
-      local:
-        count: 500
-        interval: 1s
+resource_rate_limits:
+  - label: foobar
+    local:
+      count: 500
+      interval: 1s
 ```
 
-And most components that hit external services have a field `rate_limit` for specifying a rate limit resource to use. For example, if we wanted to use our `foobar` rate limit with an [`http_client`][input.http_client] input it would look like this:
+And most components that hit external services have a field `rate_limit` for specifying a rate limit resource to use, identified by the `label` field. For example, if we wanted to use our `foobar` rate limit with an [`http_client`][input.http_client] input it would look like this:
 
 ```yaml
 input:

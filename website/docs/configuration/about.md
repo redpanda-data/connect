@@ -70,12 +70,11 @@ output:
     bucket: TODO
     path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
 
-resources:
-  inputs: {}
-  caches: {}
-  processors: {}
-  rate_limits: {}
-  outputs: {}
+resource_inputs: []
+resource_caches: []
+resource_processors: []
+resource_rate_limits: []
+resource_outputs: []
 
 logger:
   level: INFO
@@ -160,15 +159,14 @@ pipeline:
           root.content = this.content.strip_html()
       - resource: get_foo
 
-resources:
-  processors:
-    get_foo:
-      http:
-        url: http://example.com/foo
-        verb: POST
-        headers:
-          SomeThing: "set-to-this"
-          SomeThingElse: "set-to-something-else"
+resource_processors:
+  - label: get_foo
+    http:
+      url: http://example.com/foo
+      verb: POST
+      headers:
+        SomeThing: "set-to-this"
+        SomeThingElse: "set-to-something-else"
 ```
 
 ### Feature Toggles
@@ -184,28 +182,26 @@ pipeline:
 And then two resource files, one stored at the path `./staging/request.yaml`:
 
 ```yaml
-resources:
-  processors:
-    get_foo:
-      http:
-        url: http://example.com/foo
-        verb: POST
-        headers:
-          SomeThing: "set-to-this"
-          SomeThingElse: "set-to-something-else"
+resource_processors:
+  - label: get_foo
+    http:
+      url: http://example.com/foo
+      verb: POST
+      headers:
+        SomeThing: "set-to-this"
+        SomeThingElse: "set-to-something-else"
 ```
 
 And another stored at the path `./production/request.yaml`:
 
 ```yaml
-resources:
-  processors:
-    get_foo:
-      http:
-        url: http://example.com/bar
-        verb: PUT
-        headers:
-          Desires: "are-empty"
+resource_processors:
+  - label: get_foo
+    http:
+      url: http://example.com/bar
+      verb: PUT
+      headers:
+        Desires: "are-empty"
 ```
 
 We can select our chosen resource by changing which file we import, either running:

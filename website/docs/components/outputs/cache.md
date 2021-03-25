@@ -53,8 +53,7 @@ output:
 </TabItem>
 </Tabs>
 
-Caches are configured within the [resources section](/docs/components/caches/about)
-and can target any of the following types:
+Caches are configured as [resources](/docs/components/caches/about) and can target any of the following types:
 
 - [`aws_dynamodb`](/docs/components/caches/aws_dynamodb)
 - [`aws_s3`](/docs/components/caches/aws_s3)
@@ -75,13 +74,12 @@ output:
     target: foo
     key: ${!json("document.id")}
 
-resources:
-  caches:
-    foo:
-      memcached:
-        addresses:
-          - localhost:11211
-        ttl: 60
+resource_caches:
+  - label: foo
+    memcached:
+      addresses:
+        - localhost:11211
+      ttl: 60
 ```
 
 In order to create a unique `key` value per item you should use

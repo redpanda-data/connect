@@ -16,8 +16,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Performs operations against a [cache resource](/docs/components/caches/about)
-for each message, allowing you to store or retrieve data within message payloads.
+Performs operations against a [cache resource](/docs/components/caches/about) for each message, allowing you to store or retrieve data within message payloads.
 
 
 <Tabs defaultValue="common" values={[
@@ -55,10 +54,7 @@ cache:
 </TabItem>
 </Tabs>
 
-This processor will interpolate functions within the `key` and `value`
-fields individually for each message. This allows you to specify dynamic keys
-and values based on the contents of the message payloads and metadata. You can
-find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
+This processor will interpolate functions within the `key` and `value` fields individually for each message. This allows you to specify dynamic keys and values based on the contents of the message payloads and metadata. You can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
 
 ## Examples
 
@@ -85,11 +81,10 @@ pipeline:
         value: "storeme"
     - bloblang: root = if errored() { deleted() }
 
-resources:
-  caches:
-    foocache:
-      redis:
-        url: tcp://TODO:6379
+resource_caches:
+  - label: foocache
+    redis:
+      url: tcp://TODO:6379
 ```
 
 </TabItem>
@@ -110,11 +105,10 @@ pipeline:
               key: '${! json("message.document_id") }'
         result_map: 'root.message.document = this'
 
-resources:
-  caches:
-    foocache:
-      memcached:
-        addresses: [ "TODO:11211" ]
+resource_caches:
+  - label: foocache
+    memcached:
+      addresses: [ "TODO:11211" ]
 ```
 
 </TabItem>

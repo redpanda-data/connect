@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/input"
@@ -59,7 +60,7 @@ func TestManagerProcessorLabels(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = mgr.NewProcessor(conf)
-		assert.EqualError(t, err, manager.ErrBadLabel.Error(), "label: %v", l)
+		assert.EqualError(t, err, docs.ErrBadLabel.Error(), "label: %v", l)
 	}
 }
 

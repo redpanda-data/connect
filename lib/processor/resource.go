@@ -20,12 +20,9 @@ func init() {
 			CategoryUtility,
 		},
 		Summary: `
-Resource is a processor type that runs a processor resource by its name. This
-processor allows you to run the same configured processor resource in multiple
-places.`,
+Resource is a processor type that runs a processor resource identified by its label.`,
 		Description: `
-Resource processors also have the advantage of name based metrics and logging.
-For example, the config:
+This processor allows you to reference the same configured processor resource in multiple places, and can also tidy up large nested configs. For example, the config:
 
 ` + "```yaml" + `
 pipeline:
@@ -43,18 +40,13 @@ pipeline:
   processors:
     - resource: foo_proc
 
-resources:
-  processors:
-    foo_proc:
-      bloblang: |
-        root.message = this
-        root.meta.link_count = this.links.length()
-        root.user.age = this.user.age.number()
+resource_processors:
+  - label: foo_proc
+    bloblang: |
+      root.message = this
+      root.meta.link_count = this.links.length()
+      root.user.age = this.user.age.number()
 ` + "```" + `
-
-But now the metrics path of the Bloblang processor will be
-` + "`resources.processors.foo_proc`" + `, this way of flattening observability
-labels becomes more useful as configs get larger and more nested.
 
 You can find out more about resources [in this document.](/docs/configuration/resources)`,
 	}

@@ -21,7 +21,8 @@ All notable changes to this project will be documented in this file.
 - New (experimental) `mongodb` output, cache and processor.
 - New (experimental) `gcp_cloud_storage` input and output.
 - Field `batch_as_multipart` added to the `http_client` output.
-- Inputs, outputs and processors now have a component level config field `label`, which sets the metrics and logging prefix.
+- Inputs, outputs, processors, caches and rate limits now have a component level config field `label`, which sets the metrics and logging prefix.
+- Resources can now be declared in the new `resource_<component>s` fields at the root of config files, the old `resources.<component>s.<label>` style is still valid for backwards compatibility reasons.
 
 ### Fixed
 

@@ -2,12 +2,34 @@ package docs
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/interop/plugins"
 	"github.com/Jeffail/gabs/v2"
 	"gopkg.in/yaml.v3"
 )
+
+const labelExpression = `^[a-z0-9_]+$`
+
+var (
+	labelRe = regexp.MustCompile(labelExpression)
+
+	// ErrBadLabel is returned when creating a component with a bad label.
+	ErrBadLabel = fmt.Errorf("should match the regular expression /%v/ and must not start with an underscore", labelExpression)
+)
+
+// ValidateLabel attempts to validate the contents of a component label.
+func ValidateLabel(label string) error {
+	if strings.HasPrefix(label, "_") {
+		return ErrBadLabel
+	}
+	if !labelRe.MatchString(label) {
+		return ErrBadLabel
+	}
+	return nil
+}
 
 var labelField = FieldCommon(
 	"label", "An optional label to use as an identifier for observability data such as metrics and logging.",
@@ -20,7 +42,18 @@ var labelField = FieldCommon(
 		return "label field should be omitted when pointing to a resource", true
 	}
 	return "", false
-}).AtVersion("3.44.0")
+}).AtVersion("3.44.0").Linter(func(v interface{}) []Lint {
+	l, _ := v.(string)
+	if l == "" {
+		return nil
+	}
+	if err := ValidateLabel(l); err != nil {
+		return []Lint{
+			NewLintError(0, fmt.Sprintf("Invalid label '%v': %v", l, err)),
+		}
+	}
+	return nil
+})
 
 func reservedFieldsByType(t Type) map[string]FieldSpec {
 	m := map[string]FieldSpec{

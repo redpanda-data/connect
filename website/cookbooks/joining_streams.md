@@ -91,14 +91,13 @@ pipeline:
 output:
   type: drop
 
-resources:
-  caches:
-    hydration_cache:
-      redis:
-        expiration: 168h
-        retries: 3
-        retry_period: 500ms
-        url: TODO
+resource_caches:
+  - label: hydration_cache
+    redis:
+      expiration: 168h
+      retries: 3
+      retry_period: 500ms
+      url: TODO
 ```
 
 ## Hydrating Comments
@@ -147,14 +146,13 @@ output:
     addresses: [ TODO ]
     topic: comments_hydrated
 
-resources:
-  caches:
-    hydration_cache:
-      redis:
-        expiration: 168h
-        retries: 3
-        retry_period: 500ms
-        url: TODO
+resource_caches:
+  - label: hydration_cache
+    redis:
+      expiration: 168h
+      retries: 3
+      retry_period: 500ms
+      url: TODO
 ```
 
 This pipeline satisfies our basic needs but errors aren't handled at all, meaning intermittent cache connectivity problems that span beyond our cache retries will result in failed documents entering our `comments_hydrated` topic. This is also the case if a comment arrives in our pipeline before its parent.
@@ -218,10 +216,9 @@ output:
     addresses: [ TODO ]
     topic: '${!meta("output_topic")}'
 
-resources:
-  caches:
-    hydration_cache:
-      {} # Omitted
+resource_caches:
+  - label: hydration_cache
+    redis: {} # Omitted
 ```
 
 With this config we can deploy as many instances of Benthos as we need.

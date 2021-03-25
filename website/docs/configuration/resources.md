@@ -2,7 +2,7 @@
 title: Resources
 ---
 
-A Benthos configuration file has an optional section called `resources`, in which it's possible to specify one or more named instances of inputs, caches, processors, rate limits and outputs. When components are declared as a resource they can be referenced by their name throughout your configuration. Only one instance of each named resource is created, but it is safe to use it in multiple places as they can be shared without consequence.
+Resources are components within Benthos that are declared with a unique label and can be referenced any number of times within a configuration. Only one instance of each named resource is created, but it is safe to use it in multiple places as they can be shared without consequence.
 
 Some components such as caches and rate limits can _only_ be created as a resource. However, for components where it's optional there are a few reasons why it might be advantageous to do so.
 
@@ -22,25 +22,24 @@ pipeline:
 output:
   resource: buz
 
-resources:
-  inputs:
-    foo:
-      file:
-        paths: [ ./in.txt ]
+resource_inputs:
+  - label: foo
+    file:
+      paths: [ ./in.txt ]
 
-  processors:
-    bar:
-      bloblang: 'root = content.lowercase()'
+resource_processors:
+  - label: bar
+    bloblang: 'root = content.lowercase()'
 
-  caches:
-    baz:
-      memory:
-        ttl: 300
+resource_caches:
+  - label: baz
+    memory:
+      ttl: 300
 
-  outputs:
-    buz:
-      file:
-        path: ./out.txt
+resource_outputs:
+  - label: buz
+    file:
+      path: ./out.txt
 ```
 
 ## Reusability
@@ -59,15 +58,14 @@ pipeline:
           root.content = this.content.strip_html()
       - resource: get_foo
 
-resources:
-  processors:
-    get_foo:
-      http:
-        url: http://example.com/foo
-        verb: POST
-        headers:
-          SomeThing: "set-to-this"
-          SomeThingElse: "set-to-something-else"
+resource_processors:
+  - label: get_foo
+    http:
+      url: http://example.com/foo
+      verb: POST
+      headers:
+        SomeThing: "set-to-this"
+        SomeThingElse: "set-to-something-else"
 ```
 
 ## Feature Toggling
@@ -81,22 +79,21 @@ pipeline:
   processors:
     - resource: ${ FEATURE_REQUEST }
 
-resources:
-  processors:
-    get_foo:
-      http:
-        url: http://example.com/foo
-        verb: POST
-        headers:
-          SomeThing: "set-to-this"
-          SomeThingElse: "set-to-something-else"
+resource_processors:
+  - label: get_foo
+    http:
+      url: http://example.com/foo
+      verb: POST
+      headers:
+        SomeThing: "set-to-this"
+        SomeThingElse: "set-to-something-else"
 
-    get_bar:
-      http:
-        url: http://example.com/bar
-        verb: PUT
-        headers:
-          Desires: "are-empty"
+  - label: get_bar
+    http:
+      url: http://example.com/bar
+      verb: PUT
+      headers:
+        Desires: "are-empty"
 ```
 
 Then when you execute Benthos use the environment variable to choose your resource: `FEATURE_REQUEST=get_foo benthos -c ./your_config.yaml`.
@@ -114,28 +111,26 @@ pipeline:
 And then two resource files, one stored at the path `./staging/request.yaml`:
 
 ```yaml
-resources:
-  processors:
-    get_foo:
-      http:
-        url: http://example.com/foo
-        verb: POST
-        headers:
-          SomeThing: "set-to-this"
-          SomeThingElse: "set-to-something-else"
+resource_processors:
+  - label: get_foo
+    http:
+      url: http://example.com/foo
+      verb: POST
+      headers:
+        SomeThing: "set-to-this"
+        SomeThingElse: "set-to-something-else"
 ```
 
 And another stored at the path `./production/request.yaml`:
 
 ```yaml
-resources:
-  processors:
-    get_foo:
-      http:
-        url: http://example.com/bar
-        verb: PUT
-        headers:
-          Desires: "are-empty"
+resource_processors:
+  - label: get_foo
+    http:
+      url: http://example.com/bar
+      verb: PUT
+      headers:
+        Desires: "are-empty"
 ```
 
 We can select our chosen resource by changing which file we import, either running:
@@ -151,5 +146,3 @@ benthos -r ./production/request.yaml -c ./config.yaml
 ```
 
 These flags also support wildcards, which allows you to import an entire directory of resource files like `benthos -r "./staging/*.yaml" -c ./config.yaml`.
-
-[processor.switch]: /docs/components/processors/switch

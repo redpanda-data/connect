@@ -10,8 +10,7 @@ func init() {
 		Summary: `
 Host endpoints (` + "`/metrics` and `/stats`" + `) for Prometheus scraping.`,
 		Description: `
-Metrics paths will differ from [the list](/docs/components/metrics/about#metric_names) in that dot separators will
-instead be underscores.`,
+Metrics paths will differ from [the standard list](/docs/components/metrics/about#metric_names) in order to comply with Prometheus naming restrictions, where dots are replaced with underscores (and underscores replaced with double underscores). This change is made _before_ the mapping from ` + "`path_mapping`" + ` is applied.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("prefix", "A string prefix to add to all metrics."),
 			pathMappingDocs(true, true),

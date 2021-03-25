@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"path"
-	"regexp"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/condition"
@@ -223,25 +222,6 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 
 //------------------------------------------------------------------------------
 
-const labelExpression = `^[a-z0-9_]+$`
-
-var (
-	labelRe = regexp.MustCompile(labelExpression)
-
-	// ErrBadLabel is returned when creating a component with a bad label.
-	ErrBadLabel = fmt.Errorf("label name should match the regular expression /%v/ and must not start with an underscore", labelExpression)
-)
-
-func validateLabel(label string) error {
-	if strings.HasPrefix(label, "_") {
-		return ErrBadLabel
-	}
-	if !labelRe.MatchString(label) {
-		return ErrBadLabel
-	}
-	return nil
-}
-
 func unwrapMetric(t metrics.Type) metrics.Type {
 	u, ok := t.(interface {
 		Unwrap() metrics.Type
@@ -415,7 +395,7 @@ func (t *Type) NewCache(conf cache.Config) (types.Cache, error) {
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
-		if err := validateLabel(conf.Label); err != nil {
+		if err := docs.ValidateLabel(conf.Label); err != nil {
 			return nil, err
 		}
 		mgr = t.forComponent(conf.Label)
@@ -481,7 +461,7 @@ func (t *Type) NewInput(conf input.Config, hasBatchProc bool, pipelines ...types
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
-		if err := validateLabel(conf.Label); err != nil {
+		if err := docs.ValidateLabel(conf.Label); err != nil {
 			return nil, err
 		}
 		mgr = t.forComponent(conf.Label)
@@ -550,7 +530,7 @@ func (t *Type) NewProcessor(conf processor.Config) (types.Processor, error) {
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
-		if err := validateLabel(conf.Label); err != nil {
+		if err := docs.ValidateLabel(conf.Label); err != nil {
 			return nil, err
 		}
 		mgr = t.forComponent(conf.Label)
@@ -618,7 +598,7 @@ func (t *Type) NewOutput(conf output.Config, pipelines ...types.PipelineConstruc
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
-		if err := validateLabel(conf.Label); err != nil {
+		if err := docs.ValidateLabel(conf.Label); err != nil {
 			return nil, err
 		}
 		mgr = t.forComponent(conf.Label)
@@ -690,7 +670,7 @@ func (t *Type) NewRateLimit(conf ratelimit.Config) (types.RateLimit, error) {
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
-		if err := validateLabel(conf.Label); err != nil {
+		if err := docs.ValidateLabel(conf.Label); err != nil {
 			return nil, err
 		}
 		mgr = t.forComponent(conf.Label)

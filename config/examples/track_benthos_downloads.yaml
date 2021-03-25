@@ -22,7 +22,7 @@ resource_processors:
               root.dist = "docker"
               root.download_count = this.pull_count
               root.version = "all"
-          - resource: metric.gauge
+          - resource: metric_gauge
 
   - label: github
     branch:
@@ -43,7 +43,7 @@ resource_processors:
               }).filter(asset -> asset.dist != "checksums")).flatten()
           - unarchive:
               format: json_array
-          - resource: metric.gauge
+          - resource: metric_gauge
           - bloblang: 'root = if batch_index() != 0 { deleted() }'
 
   - label: homebrew
@@ -60,9 +60,9 @@ resource_processors:
               root.dist = "brew"
               root.download_count = this.analytics.install.30d.benthos
               root.version = "all"
-          - resource: metric.gauge
+          - resource: metric_gauge
 
-  - label: metric.gauge
+  - label: metric_gauge
     metric:
       type: gauge
       name: BenthosDownloadGauge

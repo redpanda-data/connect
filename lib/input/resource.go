@@ -16,10 +16,9 @@ func init() {
 	Constructors[TypeResource] = TypeSpec{
 		constructor: fromSimpleConstructor(NewResource),
 		Summary: `
-Resource is an input type that runs a resource input by its name. This input
-allows you to run the same configured input resource in multiple places.`,
+Resource is an input type that runs a resource input by its name.`,
 		Description: `
-Resource inputs also have the advantage of name based metrics and logging. For
+This input allows you to reference the same configured input resource in multiple places, and can also tidy up large nested configs. For
 example, the config:
 
 ` + "```yaml" + `
@@ -35,7 +34,7 @@ input:
           subscription: baz
 ` + "```" + `
 
-Is equivalent to:
+Could also be expressed as:
 
 ` + "```yaml" + `
 input:
@@ -44,23 +43,18 @@ input:
       - resource: foo
       - resource: bar
 
-resources:
-  inputs:
-    foo:
-      kafka:
-        addresses: [ TODO ]
-        topics: [ foo ]
-        consumer_group: foogroup
+resource_inputs:
+  - label: foo
+    kafka:
+      addresses: [ TODO ]
+      topics: [ foo ]
+      consumer_group: foogroup
 
-    bar:
-      gcp_pubsub:
-        project: bar
-        subscription: baz
+  - label: bar
+    gcp_pubsub:
+      project: bar
+      subscription: baz
  ` + "```" + `
-
-But now the metrics path of Kafka input will be
-` + "`resources.inputs.foo`" + `, this way of flattening observability
-labels becomes more useful as configs get larger and more nested.
 
 You can find out more about resources [in this document.](/docs/configuration/resources)`,
 		Categories: []Category{
