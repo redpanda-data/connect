@@ -164,14 +164,11 @@ func (n *notBatchedOutput) Connected() bool {
 
 func (n *notBatchedOutput) CloseAsync() {
 	n.close()
+	n.fullyClose()
 }
 
 // WaitForClose blocks until the File output has closed down.
 func (n *notBatchedOutput) WaitForClose(timeout time.Duration) error {
-	go func() {
-		<-time.After(timeout - time.Second)
-		n.fullyClose()
-	}()
 	select {
 	case <-n.closedChan:
 	case <-time.After(timeout):
