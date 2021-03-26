@@ -28,7 +28,7 @@ func Lint(rawBytes []byte, _ Type) ([]string, error) {
 	}
 
 	var lintStrs []string
-	for _, lint := range Spec().LintNode(rawNode.Content[0]) {
+	for _, lint := range Spec().LintNode(docs.NewLintContext(), rawNode.Content[0]) {
 		if lint.Level == docs.LintError {
 			lintStrs = append(lintStrs, fmt.Sprintf("line %v: %v", lint.Line, lint.What))
 		}

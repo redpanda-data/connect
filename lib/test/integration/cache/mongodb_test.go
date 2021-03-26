@@ -84,17 +84,16 @@ var _ = registerIntegrationTest("mongodb", func(t *testing.T) {
 	}))
 
 	template := `
-resources:
-  caches:
-    testcache:
-      mongodb:
-        url: mongodb://localhost:$PORT
-        database: TestDB
-        collection: $VAR1
-        key_field: key
-        value_field: value
-        username: mongoadmin
-        password: secret
+resource_caches:
+  - label: testcache
+    mongodb:
+      url: mongodb://localhost:$PORT
+      database: TestDB
+      collection: $VAR1
+      key_field: key
+      value_field: value
+      username: mongoadmin
+      password: secret
 `
 	suite := integrationTests(
 		integrationTestOpenClose(),

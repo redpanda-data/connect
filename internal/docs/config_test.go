@@ -476,10 +476,10 @@ func TestLinting(t *testing.T) {
 			Name: fmt.Sprintf("testlintfoo%v", string(t)),
 			Type: t,
 			Config: docs.FieldComponent().WithChildren(
-				docs.FieldCommon("foo1", "").Linter(func(v interface{}) []docs.Lint {
+				docs.FieldCommon("foo1", "").Linter(func(ctx docs.LintContext, line, col int, v interface{}) []docs.Lint {
 					if v == "lint me please" {
 						return []docs.Lint{
-							docs.NewLintError(0, "this is a custom lint"),
+							docs.NewLintError(line, "this is a custom lint"),
 						}
 					}
 					return nil
@@ -572,6 +572,22 @@ processors:
 			res: []docs.Lint{
 				docs.NewLintError(3, "field not_recognised not recognised"),
 				docs.NewLintError(7, "field also_not_recognised not recognised"),
+			},
+		},
+		{
+			name:      "collision of labels",
+			inputType: docs.TypeInput,
+			inputConf: `
+label: foo
+testlintfooinput:
+  foo1: hello world
+processors:
+  - label: bar
+    testlintfooprocessor: {}
+  - label: foo
+    testlintfooprocessor: {}`,
+			res: []docs.Lint{
+				docs.NewLintError(8, "Label 'foo' collides with a previously defined label at line 2"),
 			},
 		},
 		{
@@ -730,7 +746,7 @@ testlintfooinput:
 		t.Run(test.name, func(t *testing.T) {
 			var node yaml.Node
 			require.NoError(t, yaml.Unmarshal([]byte(test.inputConf), &node))
-			lints := docs.LintNode(test.inputType, node.Content[0])
+			lints := docs.LintNode(docs.NewLintContext(), test.inputType, node.Content[0])
 			assert.Equal(t, test.res, lints)
 		})
 	}

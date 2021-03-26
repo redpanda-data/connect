@@ -42,16 +42,23 @@ var labelField = FieldCommon(
 		return "label field should be omitted when pointing to a resource", true
 	}
 	return "", false
-}).AtVersion("3.44.0").Linter(func(v interface{}) []Lint {
+}).AtVersion("3.44.0").Linter(func(ctx LintContext, line, col int, v interface{}) []Lint {
 	l, _ := v.(string)
 	if l == "" {
 		return nil
 	}
 	if err := ValidateLabel(l); err != nil {
 		return []Lint{
-			NewLintError(0, fmt.Sprintf("Invalid label '%v': %v", l, err)),
+			NewLintError(line, fmt.Sprintf("Invalid label '%v': %v", l, err)),
 		}
 	}
+	prevLine, exists := ctx.Labels[l]
+	if exists {
+		return []Lint{
+			NewLintError(line, fmt.Sprintf("Label '%v' collides with a previously defined label at line %v", l, prevLine)),
+		}
+	}
+	ctx.Labels[l] = line
 	return nil
 })
 
@@ -380,7 +387,7 @@ func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 
 // LintNode takes a yaml.Node and a config spec and returns a list of linting
 // errors found in the config.
-func LintNode(cType Type, node *yaml.Node) []Lint {
+func LintNode(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 	if cType == "condition" {
 		return nil
 	}
@@ -420,7 +427,7 @@ func LintNode(cType Type, node *yaml.Node) []Lint {
 	}
 	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == lintTarget {
-			lints = append(lints, cSpec.Config.lintNode(node.Content[i+1])...)
+			lints = append(lints, cSpec.Config.lintNode(ctx, node.Content[i+1])...)
 			break
 		}
 	}
@@ -433,7 +440,7 @@ func LintNode(cType Type, node *yaml.Node) []Lint {
 		spec, exists := reservedFields[node.Content[i].Value]
 		if exists {
 			lints = append(lints, lintFromOmit(spec, node, node.Content[i+1])...)
-			lints = append(lints, spec.lintNode(node.Content[i+1])...)
+			lints = append(lints, spec.lintNode(ctx, node.Content[i+1])...)
 		} else {
 			lints = append(lints, NewLintError(
 				node.Content[i].Line,

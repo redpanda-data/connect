@@ -373,6 +373,7 @@ func initOutput(t *testing.T, trans <-chan types.Transaction, env *testEnvironme
 
 	require.NoError(t, output.Consume(trans))
 
+	require.Error(t, output.WaitForClose(time.Millisecond*100))
 	if env.sleepAfterOutput > 0 {
 		time.Sleep(env.sleepAfterOutput)
 	}

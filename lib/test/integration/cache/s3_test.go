@@ -62,18 +62,17 @@ var _ = registerIntegrationTest("s3", func(t *testing.T) {
 	}))
 
 	template := `
-resources:
-  caches:
-    testcache:
-      aws_s3:
-        endpoint: http://localhost:$PORT
-        region: eu-west-1
-        force_path_style_urls: true
-        bucket: $ID
-        credentials:
-          id: xxxxx
-          secret: xxxxx
-          token: xxxxx
+resource_caches:
+  - label: testcache
+    aws_s3:
+      endpoint: http://localhost:$PORT
+      region: eu-west-1
+      force_path_style_urls: true
+      bucket: $ID
+      credentials:
+        id: xxxxx
+        secret: xxxxx
+        token: xxxxx
 `
 	suite := integrationTests(
 		integrationTestOpenClose(),

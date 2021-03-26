@@ -7,6 +7,23 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// LintContext is provided to linting functions, and provides context about the
+// wider configuration.
+type LintContext struct {
+	// A map of label names to the line they were defined at.
+	Labels map[string]int
+}
+
+// NewLintContext creates a new linting context.
+func NewLintContext() LintContext {
+	return LintContext{
+		Labels: map[string]int{},
+	}
+}
+
+// LintFunc is a common linting function for field values.
+type LintFunc func(ctx LintContext, line, col int, value interface{}) []Lint
+
 //------------------------------------------------------------------------------
 
 // FieldSpec describes a component config field.
@@ -58,7 +75,7 @@ type FieldSpec struct {
 	Version string
 
 	omitWhenFn   func(field, parent interface{}) (string, bool)
-	customLintFn func(v interface{}) []Lint
+	customLintFn LintFunc
 	skipLint     bool
 }
 
@@ -148,7 +165,7 @@ func (f FieldSpec) OmitWhen(fn func(field, parent interface{}) (string, bool)) F
 // Linter adds a linting function to a field. When linting is performed on a
 // config the provided function will be called with a boxed variant of the field
 // value, allowing it to perform linting on that value.
-func (f FieldSpec) Linter(fn func(v interface{}) []Lint) FieldSpec {
+func (f FieldSpec) Linter(fn LintFunc) FieldSpec {
 	f.customLintFn = fn
 	return f
 }
@@ -321,7 +338,7 @@ func NewLintWarning(line int, msg string) Lint {
 	return Lint{Line: line, Level: LintWarning, What: msg}
 }
 
-func (f FieldSpec) lintNode(node *yaml.Node) []Lint {
+func (f FieldSpec) lintNode(ctx LintContext, node *yaml.Node) []Lint {
 	if f.skipLint {
 		return nil
 	}
@@ -332,7 +349,7 @@ func (f FieldSpec) lintNode(node *yaml.Node) []Lint {
 			return lints
 		}
 		for i := 0; i < len(node.Content); i++ {
-			lints = append(lints, customLint(f, node.Content[i])...)
+			lints = append(lints, customLint(ctx, f, node.Content[i])...)
 		}
 	} else if f.IsMap {
 		if node.Kind != yaml.MappingNode {
@@ -340,34 +357,34 @@ func (f FieldSpec) lintNode(node *yaml.Node) []Lint {
 			return lints
 		}
 		for i := 0; i < len(node.Content)-1; i += 2 {
-			lints = append(lints, customLint(f, node.Content[i+1])...)
+			lints = append(lints, customLint(ctx, f, node.Content[i+1])...)
 		}
 	} else {
-		lints = append(lints, customLint(f, node)...)
+		lints = append(lints, customLint(ctx, f, node)...)
 	}
 	if coreType, isCore := f.Type.IsCoreComponent(); isCore {
 		if f.IsArray {
 			for i := 0; i < len(node.Content); i++ {
-				lints = append(lints, LintNode(coreType, node.Content[i])...)
+				lints = append(lints, LintNode(ctx, coreType, node.Content[i])...)
 			}
 		} else if f.IsMap {
 			for i := 0; i < len(node.Content)-1; i += 2 {
-				lints = append(lints, LintNode(coreType, node.Content[i+1])...)
+				lints = append(lints, LintNode(ctx, coreType, node.Content[i+1])...)
 			}
 		} else {
-			lints = append(lints, LintNode(coreType, node)...)
+			lints = append(lints, LintNode(ctx, coreType, node)...)
 		}
 	} else if len(f.Children) > 0 {
 		if f.IsArray {
 			for i := 0; i < len(node.Content); i++ {
-				lints = append(lints, f.Children.LintNode(node.Content[i])...)
+				lints = append(lints, f.Children.LintNode(ctx, node.Content[i])...)
 			}
 		} else if f.IsMap {
 			for i := 0; i < len(node.Content)-1; i += 2 {
-				lints = append(lints, f.Children.LintNode(node.Content[i+1])...)
+				lints = append(lints, f.Children.LintNode(ctx, node.Content[i+1])...)
 			}
 		} else {
-			lints = append(lints, f.Children.LintNode(node)...)
+			lints = append(lints, f.Children.LintNode(ctx, node)...)
 		}
 	}
 	return lints
@@ -563,7 +580,7 @@ func lintFromOmit(spec FieldSpec, parent, node *yaml.Node) []Lint {
 	return lints
 }
 
-func customLint(spec FieldSpec, node *yaml.Node) []Lint {
+func customLint(ctx LintContext, spec FieldSpec, node *yaml.Node) []Lint {
 	if spec.customLintFn == nil {
 		return nil
 	}
@@ -571,22 +588,12 @@ func customLint(spec FieldSpec, node *yaml.Node) []Lint {
 	if err != nil {
 		return []Lint{NewLintWarning(node.Line, "failed to marshal value")}
 	}
-	lints := spec.customLintFn(fieldValue)
-	for i := range lints {
-		if lints[i].Line > 0 {
-			lints[i].Line += node.Line - 1
-		} else {
-			lints[i].Line = node.Line
-		}
-		if lints[i].Column > 0 {
-			lints[i].Column += node.Column - 1
-		}
-	}
+	lints := spec.customLintFn(ctx, node.Line, node.Column, fieldValue)
 	return lints
 }
 
 // LintNode walks a yaml node and returns a list of linting errors found.
-func (f FieldSpecs) LintNode(node *yaml.Node) []Lint {
+func (f FieldSpecs) LintNode(ctx LintContext, node *yaml.Node) []Lint {
 	var lints []Lint
 
 	specNames := map[string]FieldSpec{}
@@ -603,7 +610,7 @@ func (f FieldSpecs) LintNode(node *yaml.Node) []Lint {
 			continue
 		}
 		lints = append(lints, lintFromOmit(spec, node, node.Content[i+1])...)
-		lints = append(lints, spec.lintNode(node.Content[i+1])...)
+		lints = append(lints, spec.lintNode(ctx, node.Content[i+1])...)
 	}
 	return lints
 }

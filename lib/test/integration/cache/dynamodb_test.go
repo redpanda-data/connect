@@ -91,20 +91,19 @@ var _ = registerIntegrationTest("dynamodb", func(t *testing.T) {
 	}))
 
 	template := `
-resources:
-  caches:
-    testcache:
-      aws_dynamodb:
-        endpoint: http://localhost:$PORT
-        region: us-east-1
-        consistent_read: true
-        data_key: data
-        hash_key: id
-        table: $ID
-        credentials:
-          id: xxxxx
-          secret: xxxxx
-          token: xxxxx
+resource_caches:
+  - label: testcache
+    aws_dynamodb:
+      endpoint: http://localhost:$PORT
+      region: us-east-1
+      consistent_read: true
+      data_key: data
+      hash_key: id
+      table: $ID
+      credentials:
+        id: xxxxx
+        secret: xxxxx
+        token: xxxxx
 `
 	suite := integrationTests(
 		integrationTestOpenClose(),

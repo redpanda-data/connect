@@ -42,12 +42,11 @@ var _ = registerIntegrationTest("redis", func(t *testing.T) {
 	}))
 
 	template := `
-resources:
-  caches:
-    testcache:
-      redis:
-        url: tcp://localhost:$PORT/1
-        prefix: $ID
+resource_caches:
+  - label: testcache
+    redis:
+      url: tcp://localhost:$PORT/1
+      prefix: $ID
 `
 	suite := integrationTests(
 		integrationTestOpenClose(),

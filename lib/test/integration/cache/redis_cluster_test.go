@@ -82,13 +82,12 @@ var _ = registerIntegrationTest("redis_cluster", func(t *testing.T) {
 	}))
 
 	template := `
-resources:
-  caches:
-    testcache:
-      redis:
-        url: $VAR1
-        kind: cluster
-        prefix: $ID
+resource_caches:
+  - label: testcache
+    redis:
+      url: $VAR1
+      kind: cluster
+      prefix: $ID
 `
 	suite := integrationTests(
 		integrationTestOpenClose(),

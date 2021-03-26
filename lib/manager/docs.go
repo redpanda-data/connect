@@ -5,12 +5,12 @@ import (
 	"github.com/Jeffail/gabs/v2"
 )
 
-func lintResource(v interface{}) []docs.Lint {
+func lintResource(ctx docs.LintContext, line, col int, v interface{}) []docs.Lint {
 	gObj := gabs.Wrap(v)
 	label, _ := gObj.S("label").Data().(string)
 	if label == "" {
 		return []docs.Lint{
-			docs.NewLintError(0, "The label field for resources must be unique and not empty"),
+			docs.NewLintError(line, "The label field for resources must be unique and not empty"),
 		}
 	}
 	return nil

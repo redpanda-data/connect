@@ -13,10 +13,10 @@ import (
 
 // LintBloblangMapping is function for linting a config field expected to be a
 // bloblang mapping.
-func LintBloblangMapping(v interface{}) []Lint {
+func LintBloblangMapping(ctx LintContext, line, col int, v interface{}) []Lint {
 	str, ok := v.(string)
 	if !ok {
-		return []Lint{NewLintWarning(0, fmt.Sprintf("expected string value, got %T", v))}
+		return []Lint{NewLintWarning(line, fmt.Sprintf("expected string value, got %T", v))}
 	}
 	if len(str) == 0 {
 		return nil
@@ -26,20 +26,20 @@ func LintBloblangMapping(v interface{}) []Lint {
 		return nil
 	}
 	if mErr, ok := err.(*parser.Error); ok {
-		line, col := parser.LineAndColOf([]rune(str), mErr.Input)
-		lint := NewLintError(line, mErr.ErrorAtPositionStructured("", []rune(str)))
-		lint.Column = col
+		bline, bcol := parser.LineAndColOf([]rune(str), mErr.Input)
+		lint := NewLintError(line+bline, mErr.ErrorAtPositionStructured("", []rune(str)))
+		lint.Column = col + bcol
 		return []Lint{lint}
 	}
-	return []Lint{NewLintError(0, err.Error())}
+	return []Lint{NewLintError(line, err.Error())}
 }
 
 // LintBloblangField is function for linting a config field expected to be an
 // interpolation string.
-func LintBloblangField(v interface{}) []Lint {
+func LintBloblangField(ctx LintContext, line, col int, v interface{}) []Lint {
 	str, ok := v.(string)
 	if !ok {
-		return []Lint{NewLintWarning(0, fmt.Sprintf("expected string value, got %T", v))}
+		return []Lint{NewLintWarning(line, fmt.Sprintf("expected string value, got %T", v))}
 	}
 	if len(str) == 0 {
 		return nil
@@ -49,12 +49,12 @@ func LintBloblangField(v interface{}) []Lint {
 		return nil
 	}
 	if mErr, ok := err.(*parser.Error); ok {
-		line, col := parser.LineAndColOf([]rune(str), mErr.Input)
-		lint := NewLintError(line, mErr.ErrorAtPositionStructured("", []rune(str)))
-		lint.Column = col
+		bline, bcol := parser.LineAndColOf([]rune(str), mErr.Input)
+		lint := NewLintError(line+bline, mErr.ErrorAtPositionStructured("", []rune(str)))
+		lint.Column = col + bcol
 		return []Lint{lint}
 	}
-	return []Lint{NewLintError(0, err.Error())}
+	return []Lint{NewLintError(line, err.Error())}
 }
 
 type functionCategory struct {
