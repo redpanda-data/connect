@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.42.1 - 2021-03-26
+
+### Fixed
+
+- Fixed a potential pipeline stall that would occur when non-batched outputs receive message batches.
+
 ## 3.42.0 - 2021-02-22
 
 ### New
