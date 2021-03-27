@@ -198,7 +198,7 @@ func (m *Type) Create(id string, conf stream.Config) error {
 		}(ctor)
 	}
 
-	sMgr, sLog, sStats := interop.LabelChild(id, m.manager, m.logger, m.stats)
+	sMgr, sLog, sStats := interop.LabelStream(id, m.manager, m.logger, m.stats)
 	strmFlatMetrics := metrics.NewLocal()
 	sStats = metrics.Combine(sStats, strmFlatMetrics)
 

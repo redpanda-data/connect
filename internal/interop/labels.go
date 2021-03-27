@@ -71,3 +71,22 @@ func GetLabel(mgr types.Manager) string {
 	}
 	return ""
 }
+
+// LabelStream expands the label of the provided observability components with
+// a stream identifier.
+func LabelStream(label string, mgr types.Manager, logger log.Modular, stats metrics.Type) (types.Manager, log.Modular, metrics.Type) {
+	if m, ok := mgr.(interface {
+		ForStream(id string) types.Manager
+	}); ok {
+		newMgr := m.ForStream(label)
+		if m2, ok := newMgr.(interface {
+			Logger() log.Modular
+			Metrics() metrics.Type
+		}); ok {
+			return newMgr, m2.Logger(), m2.Metrics()
+		}
+	}
+	newLog := logger.NewModule("." + label)
+	newStats := metrics.Namespaced(stats, label)
+	return mgr, newLog, newStats
+}

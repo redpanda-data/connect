@@ -19,18 +19,6 @@ type NamespacedManager struct {
 	mgr types.Manager
 }
 
-func namespacedMgr(ns string, mgr types.Manager) types.Manager {
-	if forStream, ok := mgr.(interface {
-		ForStream(id string) types.Manager
-	}); ok {
-		return forStream.ForStream(ns)
-	}
-	return &NamespacedManager{
-		ns:  "/" + ns,
-		mgr: mgr,
-	}
-}
-
 // RegisterEndpoint registers a server wide HTTP endpoint.
 func (n *NamespacedManager) RegisterEndpoint(p, desc string, h http.HandlerFunc) {
 	n.mgr.RegisterEndpoint(path.Join(n.ns, p), desc, h)
