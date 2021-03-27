@@ -42,7 +42,7 @@ var _ = registerIntegrationTest("redis", func(t *testing.T) {
 	}))
 
 	template := `
-resource_caches:
+cache_resources:
   - label: testcache
     redis:
       url: tcp://localhost:$PORT/1

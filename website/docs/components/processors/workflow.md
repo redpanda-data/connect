@@ -193,7 +193,7 @@ pipeline:
                   function: TODO
             result_map: 'root.bar = this'
 
-resource_processors:
+processor_resources:
   - label: foo
     branch:
       request_map: 'root = ""'

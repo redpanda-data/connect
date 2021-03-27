@@ -101,7 +101,7 @@ var _ = registerIntegrationTest("redis_failover", func(t *testing.T) {
 	}))
 
 	template := `
-resource_caches:
+cache_resources:
   - label: testcache
     redis:
       url: $VAR1

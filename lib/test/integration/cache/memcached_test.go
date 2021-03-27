@@ -49,7 +49,7 @@ var _ = registerIntegrationTest("memcached", func(t *testing.T) {
 	}))
 
 	template := `
-resource_caches:
+cache_resources:
   - label: testcache
     memcached:
       addresses: [ localhost:$PORT ]

@@ -81,7 +81,7 @@ pipeline:
         value: "storeme"
     - bloblang: root = if errored() { deleted() }
 
-resource_caches:
+cache_resources:
   - label: foocache
     redis:
       url: tcp://TODO:6379
@@ -105,7 +105,7 @@ pipeline:
               key: '${! json("message.document_id") }'
         result_map: 'root.message.document = this'
 
-resource_caches:
+cache_resources:
   - label: foocache
     memcached:
       addresses: [ "TODO:11211" ]

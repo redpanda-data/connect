@@ -41,7 +41,7 @@ pipeline:
   processors:
     - resource: foo_proc
 
-resource_processors:
+processor_resources:
   - label: foo_proc
     bloblang: |
       root.message = this

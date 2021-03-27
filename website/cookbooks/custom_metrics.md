@@ -296,7 +296,7 @@ pipeline:
         meta_path: results
         order: [ [ dockerhub, github, homebrew ] ]
 
-resource_processors:
+processor_resources:
   - label: dockerhub
     branch:
       request_map: 'root = ""'

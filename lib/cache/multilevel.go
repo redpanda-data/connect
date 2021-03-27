@@ -41,7 +41,7 @@ pipeline:
             - bloblang: 'root = {"err":error()}'
         result_map: 'root.result = this'
 
-resource_caches:
+cache_resources:
   - label: leveled
     multilevel: [ hot, cold ]
 

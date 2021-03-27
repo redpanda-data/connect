@@ -91,7 +91,7 @@ var _ = registerIntegrationTest("dynamodb", func(t *testing.T) {
 	}))
 
 	template := `
-resource_caches:
+cache_resources:
   - label: testcache
     aws_dynamodb:
       endpoint: http://localhost:$PORT

@@ -37,23 +37,23 @@ func Spec() docs.FieldSpecs {
 		}),
 
 		docs.FieldCommon(
-			"resource_inputs", "A list of input resources, each must have a unique label.",
+			"input_resources", "A list of input resources, each must have a unique label.",
 		).Array().HasType(docs.FieldInput).Linter(lintResource),
 
 		docs.FieldCommon(
-			"resource_processors", "A list of processor resources, each must have a unique label.",
+			"processor_resources", "A list of processor resources, each must have a unique label.",
 		).Array().HasType(docs.FieldProcessor).Linter(lintResource),
 
 		docs.FieldCommon(
-			"resource_outputs", "A list of output resources, each must have a unique label.",
+			"output_resources", "A list of output resources, each must have a unique label.",
 		).Array().HasType(docs.FieldOutput).Linter(lintResource),
 
 		docs.FieldCommon(
-			"resource_caches", "A list of cache resources, each must have a unique label.",
+			"cache_resources", "A list of cache resources, each must have a unique label.",
 		).Array().HasType(docs.FieldCache).Linter(lintResource),
 
 		docs.FieldCommon(
-			"resource_rate_limits", "A list of rate limit resources, each must have a unique label.",
+			"rate_limit_resources", "A list of rate limit resources, each must have a unique label.",
 		).Array().HasType(docs.FieldRateLimit).Linter(lintResource),
 	}
 }

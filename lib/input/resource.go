@@ -43,7 +43,7 @@ input:
       - resource: foo
       - resource: bar
 
-resource_inputs:
+input_resources:
   - label: foo
     kafka:
       addresses: [ TODO ]

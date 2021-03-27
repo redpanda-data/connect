@@ -62,7 +62,7 @@ var _ = registerIntegrationTest("s3", func(t *testing.T) {
 	}))
 
 	template := `
-resource_caches:
+cache_resources:
   - label: testcache
     aws_s3:
       endpoint: http://localhost:$PORT

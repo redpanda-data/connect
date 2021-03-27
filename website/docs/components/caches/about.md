@@ -6,7 +6,7 @@ sidebar_label: About
 A cache is a key/value store which can be used by certain components for applications such as deduplication or data joins. Caches are configured as a named resource:
 
 ```yaml
-resource_caches:
+cache_resources:
   - label: foobar
     memcached:
       addresses:

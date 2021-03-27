@@ -91,7 +91,7 @@ pipeline:
 output:
   type: drop
 
-resource_caches:
+cache_resources:
   - label: hydration_cache
     redis:
       expiration: 168h
@@ -146,7 +146,7 @@ output:
     addresses: [ TODO ]
     topic: comments_hydrated
 
-resource_caches:
+cache_resources:
   - label: hydration_cache
     redis:
       expiration: 168h
@@ -216,7 +216,7 @@ output:
     addresses: [ TODO ]
     topic: '${!meta("output_topic")}'
 
-resource_caches:
+cache_resources:
   - label: hydration_cache
     redis: {} # Omitted
 ```

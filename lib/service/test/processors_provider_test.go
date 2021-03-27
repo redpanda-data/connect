@@ -284,7 +284,7 @@ pipeline:
 func TestProcessorsProvider(t *testing.T) {
 	files := map[string]string{
 		"config1.yaml": `
-resource_caches:
+cache_resources:
   - label: foocache
     memory: {}
 
@@ -307,7 +307,7 @@ pipeline:
       operator: to_upper`,
 
 		"config2.yaml": `
-resource_caches:
+cache_resources:
   - label: foocache
     memory: {}
 
@@ -386,17 +386,17 @@ pipeline:
 func TestProcessorsExtraResources(t *testing.T) {
 	files := map[string]string{
 		"resources1.yaml": `
-resource_caches:
+cache_resources:
   - label: barcache
     memory: {}
 `,
 		"resources2.yaml": `
-resource_caches:
+cache_resources:
   - label: bazcache
     memory: {}
 `,
 		"config1.yaml": `
-resource_caches:
+cache_resources:
   - label: foocache
     memory: {}
 
@@ -439,17 +439,17 @@ pipeline:
 func TestProcessorsExtraResourcesError(t *testing.T) {
 	files := map[string]string{
 		"resources1.yaml": `
-resource_caches:
+cache_resources:
   - label: barcache
     memory: {}
 `,
 		"resources2.yaml": `
-resource_caches:
+cache_resources:
   - label: barcache
     memory: {}
 `,
 		"config1.yaml": `
-resource_caches:
+cache_resources:
   - label: foocache
     memory: {}
 

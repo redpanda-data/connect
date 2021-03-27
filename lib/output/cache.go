@@ -40,7 +40,7 @@ output:
     target: foo
     key: ${!json("document.id")}
 
-resource_caches:
+cache_resources:
   - label: foo
     memcached:
       addresses:

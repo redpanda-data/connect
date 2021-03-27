@@ -84,7 +84,7 @@ var _ = registerIntegrationTest("mongodb", func(t *testing.T) {
 	}))
 
 	template := `
-resource_caches:
+cache_resources:
   - label: testcache
     mongodb:
       url: mongodb://localhost:$PORT

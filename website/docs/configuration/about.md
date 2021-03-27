@@ -70,11 +70,11 @@ output:
     bucket: TODO
     path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
 
-resource_inputs: []
-resource_caches: []
-resource_processors: []
-resource_rate_limits: []
-resource_outputs: []
+input_resources: []
+cache_resources: []
+processor_resources: []
+rate_limit_resources: []
+output_resources: []
 
 logger:
   level: INFO
@@ -159,7 +159,7 @@ pipeline:
           root.content = this.content.strip_html()
       - resource: get_foo
 
-resource_processors:
+processor_resources:
   - label: get_foo
     http:
       url: http://example.com/foo
@@ -182,7 +182,7 @@ pipeline:
 And then two resource files, one stored at the path `./staging/request.yaml`:
 
 ```yaml
-resource_processors:
+processor_resources:
   - label: get_foo
     http:
       url: http://example.com/foo
@@ -195,7 +195,7 @@ resource_processors:
 And another stored at the path `./production/request.yaml`:
 
 ```yaml
-resource_processors:
+processor_resources:
   - label: get_foo
     http:
       url: http://example.com/bar

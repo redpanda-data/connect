@@ -49,7 +49,7 @@ output:
     - resource: foo
     - resource: bar
 
-resource_outputs:
+output_resources:
   - label: foo
     kafka:
       addresses: [ TODO ]

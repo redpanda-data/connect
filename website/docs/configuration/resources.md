@@ -22,21 +22,21 @@ pipeline:
 output:
   resource: buz
 
-resource_inputs:
+input_resources:
   - label: foo
     file:
       paths: [ ./in.txt ]
 
-resource_processors:
+processor_resources:
   - label: bar
     bloblang: 'root = content.lowercase()'
 
-resource_caches:
+cache_resources:
   - label: baz
     memory:
       ttl: 300
 
-resource_outputs:
+output_resources:
   - label: buz
     file:
       path: ./out.txt
@@ -58,7 +58,7 @@ pipeline:
           root.content = this.content.strip_html()
       - resource: get_foo
 
-resource_processors:
+processor_resources:
   - label: get_foo
     http:
       url: http://example.com/foo
@@ -79,7 +79,7 @@ pipeline:
   processors:
     - resource: ${ FEATURE_REQUEST }
 
-resource_processors:
+processor_resources:
   - label: get_foo
     http:
       url: http://example.com/foo
@@ -111,7 +111,7 @@ pipeline:
 And then two resource files, one stored at the path `./staging/request.yaml`:
 
 ```yaml
-resource_processors:
+processor_resources:
   - label: get_foo
     http:
       url: http://example.com/foo
@@ -124,7 +124,7 @@ resource_processors:
 And another stored at the path `./production/request.yaml`:
 
 ```yaml
-resource_processors:
+processor_resources:
   - label: get_foo
     http:
       url: http://example.com/bar

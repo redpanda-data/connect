@@ -82,13 +82,13 @@ pipeline:
         value: "x"
     - bloblang: root = if errored() { deleted() }
 
-resource_rate_limits:
+rate_limit_resources:
   - label: foo_ratelimit
     local:
       count: 500
       interval: 1s
 
-resource_caches:
+cache_resources:
   - label: baz_cache
     memcached:
       addresses: [ localhost:11211 ]

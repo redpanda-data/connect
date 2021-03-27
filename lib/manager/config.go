@@ -16,11 +16,11 @@ import (
 type ResourceConfig struct {
 	// Called manager for backwards compatibility.
 	Manager            Config             `json:"resources,omitempty" yaml:"resources,omitempty"`
-	ResourceInputs     []input.Config     `json:"resource_inputs,omitempty" yaml:"resource_inputs,omitempty"`
-	ResourceProcessors []processor.Config `json:"resource_processors,omitempty" yaml:"resource_processors,omitempty"`
-	ResourceOutputs    []output.Config    `json:"resource_outputs,omitempty" yaml:"resource_outputs,omitempty"`
-	ResourceCaches     []cache.Config     `json:"resource_caches,omitempty" yaml:"resource_caches,omitempty"`
-	ResourceRateLimits []ratelimit.Config `json:"resource_rate_limits,omitempty" yaml:"resource_rate_limits,omitempty"`
+	ResourceInputs     []input.Config     `json:"input_resources,omitempty" yaml:"input_resources,omitempty"`
+	ResourceProcessors []processor.Config `json:"processor_resources,omitempty" yaml:"processor_resources,omitempty"`
+	ResourceOutputs    []output.Config    `json:"output_resources,omitempty" yaml:"output_resources,omitempty"`
+	ResourceCaches     []cache.Config     `json:"cache_resources,omitempty" yaml:"cache_resources,omitempty"`
+	ResourceRateLimits []ratelimit.Config `json:"rate_limit_resources,omitempty" yaml:"rate_limit_resources,omitempty"`
 }
 
 func NewResourceConfig() ResourceConfig {
