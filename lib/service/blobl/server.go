@@ -53,23 +53,41 @@ const bloblangEditorPage = `<!DOCTYPE html>
         color: #fff;
         border: solid #33352e 2px;
       }
+      #ace-mapping, #ace-input {
+        font-size: 14pt;
+        overflow: auto;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        border: solid #33352e 2px;
+      }
       textarea {
         resize: none;
       }
     </style>
   </head>
   <body>
-    <div class="panel" style="top:0;bottom:50%;left:0;right:50%;padding:0 5px 5px 0">
+    <div class="panel" id="default-input-panel" style="top:0;bottom:50%;left:0;right:50%;padding:0 5px 5px 0">
       <h2 style="left:50%;bottom:0;margin-left:-50px;">Input</h2>
       <textarea id="input">{"message":"hello world"}</textarea>
+    </div>
+    <div class="panel" id="ace-input-panel" style="top:0;bottom:50%;left:0;right:50%;padding:0 5px 5px 0;display:none">
+      <h2 style="left:50%;bottom:0;margin-left:-50px;z-index:100;background-color:#272822;">Input</h2>
+      <div id="ace-input">{"message":"hello world"}</div>
     </div>
     <div class="panel" style="top:0;bottom:50%;left:50%;right:0;padding:0 0 5px 5px">
       <h2 style="left:50%;bottom:0;margin-left:-50px;">Output</h2>
       <pre id="output"></pre>
     </div>
-    <div class="panel" style="top:50%;bottom:0;left:0;right:0;padding: 5px 0 0 0">
+    <div class="panel" id="default-mapping-panel" style="top:50%;bottom:0;left:0;right:0;padding: 5px 0 0 0">
       <h2 style="left:50%;bottom:0;margin-left:-50px;">Mapping</h2>
       <textarea id="mapping">root = this</textarea>
+    </div>
+    <div class="panel" id="ace-mapping-panel" style="top:50%;bottom:0;left:0;right:0;padding: 5px 0 0 0;display:none">
+      <h2 style="left:50%;bottom:0;margin-left:-50px;z-index:100;background-color:#272822;">Mapping</h2>
+      <div id="ace-mapping">root = this</div>
     </div>
   </body>
   <script>
@@ -77,8 +95,8 @@ const bloblangEditorPage = `<!DOCTYPE html>
         const request = new Request(window.location.href + 'execute', {
             method: 'POST',
             body: JSON.stringify({
-                mapping: mappingArea.value,
-                input: inputArea.value,
+                mapping: getMapping(),
+                input: getInput(),
             }),
         });
         fetch(request)
@@ -113,8 +131,24 @@ const bloblangEditorPage = `<!DOCTYPE html>
             });
     }
 
-    const mappingArea = document.getElementById("mapping");
-    const inputArea = document.getElementById("input");
+    var mappingArea = document.getElementById("mapping");
+    var aceMappingEditor = null;
+    function getMapping() {
+      if (aceMappingEditor !== null) {
+        return aceMappingEditor.getValue();
+      }
+      return mappingArea.value;
+    }
+
+    var inputArea = document.getElementById("input");
+    var aceInputEditor = null;
+    function getInput() {
+      if (aceInputEditor !== null) {
+        return aceInputEditor.getValue();
+      }
+      return inputArea.value;
+    }
+
     const outputArea = document.getElementById("output");
     const inputs = document.getElementsByTagName('textarea');
     for (let input of inputs) {
@@ -129,7 +163,7 @@ const bloblangEditorPage = `<!DOCTYPE html>
                     "\t" + this.value.substring(end);
 
                 // put caret at right position again
-                this.selectionStart =
+                this.selectionStart = start + 1;
                 this.selectionEnd = start + 1;
             }
         });
@@ -138,6 +172,32 @@ const bloblangEditorPage = `<!DOCTYPE html>
         })
     }
     execute();
+  </script>
+
+  <script src="https://pagecdn.io/lib/ace/1.4.12/ace.min.js" crossorigin="anonymous" integrity="sha256-T5QdmsCQO5z8tBAXMrCZ4f3RX8wVdiA0Fu17FGnU1vU="></script>
+  <script src="https://pagecdn.io/lib/ace/1.4.12/theme-monokai.min.js" crossorigin="anonymous"></script>
+  <script src="https://pagecdn.io/lib/ace/1.4.12/mode-coffee.min.js" crossorigin="anonymous"></script>
+  <script src="https://pagecdn.io/lib/ace/1.4.12/mode-json.min.js" crossorigin="anonymous"></script>
+  <script>
+      aceMappingEditor = ace.edit("ace-mapping");
+      aceMappingEditor.setTheme("ace/theme/monokai");
+      aceMappingEditor.session.setUseWorker(false);
+      aceMappingEditor.session.setMode("ace/mode/coffee");
+      aceMappingEditor.on('change', execute);
+      mappingArea = document.getElementById("ace-mapping");
+
+      document.getElementById("default-mapping-panel").style.display = "none";
+      document.getElementById("ace-mapping-panel").style.display = "initial";
+
+      aceInputEditor = ace.edit("ace-input");
+      aceInputEditor.setTheme("ace/theme/monokai");
+      aceInputEditor.session.setUseWorker(false);
+      aceInputEditor.session.setMode("ace/mode/json");
+      aceInputEditor.on('change', execute);
+      inputArea = document.getElementById("ace-input");
+
+      document.getElementById("default-input-panel").style.display = "none";
+      document.getElementById("ace-input-panel").style.display = "initial";
   </script>
 </html>`
 
