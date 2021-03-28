@@ -100,6 +100,29 @@ partMsgLoop:
 	}
 }
 
+func (k *kafkaReader) offsetVersion() int16 {
+	// - 0 (kafka 0.8.1 and later)
+	// - 1 (kafka 0.8.2 and later)
+	// - 2 (kafka 0.9.0 and later)
+	// - 3 (kafka 0.11.0 and later)
+	// - 4 (kafka 2.0.0 and later)
+	var v int16 = 1
+	// TODO: Increase this if we drop support for v0.8.2, or if we allow a
+	// custom retention period.
+	return v
+}
+
+func (k *kafkaReader) offsetPartitionPutRequest(consumerGroup string) *sarama.OffsetCommitRequest {
+	v := k.offsetVersion()
+	req := &sarama.OffsetCommitRequest{
+		ConsumerGroup:           consumerGroup,
+		Version:                 v,
+		ConsumerGroupGeneration: sarama.GroupGenerationUndefined,
+		ConsumerID:              "",
+	}
+	return req
+}
+
 func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.Config) error {
 	var coordinator *sarama.Broker
 	var consumer sarama.Consumer
@@ -133,6 +156,7 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 	}
 
 	offsetGetReq := sarama.OffsetFetchRequest{
+		Version:       k.offsetVersion(),
 		ConsumerGroup: k.conf.ConsumerGroup,
 	}
 	for topic, parts := range k.topicPartitions {
@@ -154,10 +178,7 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 		offsetRes = &sarama.OffsetFetchResponse{}
 	}
 
-	offsetPutReq := &sarama.OffsetCommitRequest{
-		ConsumerGroup: k.conf.ConsumerGroup,
-		ConsumerID:    k.conf.ClientID,
-	}
+	offsetPutReq := k.offsetPartitionPutRequest(k.conf.ConsumerGroup)
 	offsetTracker := &closureOffsetTracker{
 		// Note: We don't need to wrap this call in a mutex lock because the
 		// checkpointer that uses it already does this, but it's not
@@ -180,7 +201,9 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 			}
 			if block := offsetRes.GetBlock(topic, partition); block != nil {
 				if block.Err == sarama.ErrNoError {
-					offset = block.Offset
+					if block.Offset > 0 {
+						offset = block.Offset
+					}
 				} else {
 					k.log.Debugf("Failed to acquire offset for topic %v partition %v: %v\n", topic, partition, block.Err)
 				}
@@ -224,10 +247,7 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 			}
 			k.cMut.Lock()
 			putReq := offsetPutReq
-			offsetPutReq = &sarama.OffsetCommitRequest{
-				ConsumerGroup: k.conf.ConsumerGroup,
-				ConsumerID:    k.conf.ClientID,
-			}
+			offsetPutReq = k.offsetPartitionPutRequest(k.conf.ConsumerGroup)
 			k.cMut.Unlock()
 			if coordinator != nil {
 				if _, err := coordinator.CommitOffset(putReq); err != nil {

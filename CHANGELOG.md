@@ -30,6 +30,7 @@ All notable changes to this project will be documented in this file.
 - Bloblang compressed arithmetic expressions with field names (`foo+bar`) now correctly parse.
 - Fixed throughput issues with the `aws_sqs` input.
 - Prevented using the `root` keyword within Bloblang queries, returning an error message explaining alternative options. Eventually `root` references within queries will be fully supported and so returning clear errors messages is a temporary fix.
+- Increased the offset commit API version used by the `kafka` input to v0.8.2 when consuming explicit partitions.
 
 ### Changed
 
