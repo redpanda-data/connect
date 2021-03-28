@@ -1,12 +1,22 @@
 package blobl
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"html/template"
+	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
+	"os/signal"
 	"runtime"
+	"sync"
+	"syscall"
+	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
@@ -71,7 +81,7 @@ const bloblangEditorPage = `<!DOCTYPE html>
   <body>
     <div class="panel" id="default-input-panel" style="top:0;bottom:50%;left:0;right:50%;padding:0 5px 5px 0">
       <h2 style="left:50%;bottom:0;margin-left:-50px;">Input</h2>
-      <textarea id="input">{"message":"hello world"}</textarea>
+      <textarea id="input">{{.InitialInput}}</textarea>
     </div>
     <div class="panel" id="ace-input-panel" style="top:0;bottom:50%;left:0;right:50%;padding:0 5px 5px 0;display:none">
       <h2 style="left:50%;bottom:0;margin-left:-50px;z-index:100;background-color:#272822;">Input</h2>
@@ -83,7 +93,7 @@ const bloblangEditorPage = `<!DOCTYPE html>
     </div>
     <div class="panel" id="default-mapping-panel" style="top:50%;bottom:0;left:0;right:0;padding: 5px 0 0 0">
       <h2 style="left:50%;bottom:0;margin-left:-50px;">Mapping</h2>
-      <textarea id="mapping">root = this</textarea>
+      <textarea id="mapping">{{.InitialMapping}}</textarea>
     </div>
     <div class="panel" id="ace-mapping-panel" style="top:50%;bottom:0;left:0;right:0;padding: 5px 0 0 0;display:none">
       <h2 style="left:50%;bottom:0;margin-left:-50px;z-index:100;background-color:#272822;">Mapping</h2>
@@ -219,7 +229,66 @@ func openBrowserAt(url string) {
 }
 
 func runServer(c *cli.Context) error {
-	http.HandleFunc("/execute", func(w http.ResponseWriter, r *http.Request) {
+	writeBack := c.Bool("write")
+	mappingFile := c.String("mapping-file")
+	inputFile := c.String("input-file")
+
+	var valuesMut sync.Mutex
+	inputString, mappingString := `{"message":"hello world"}`, "root = this"
+	if inputFile != "" {
+		inputBytes, err := ioutil.ReadFile(inputFile)
+		if err != nil {
+			if !writeBack || !errors.Is(err, os.ErrNotExist) {
+				log.Fatal(err)
+			}
+		} else {
+			inputString = string(inputBytes)
+		}
+	}
+	if mappingFile != "" {
+		mappingBytes, err := ioutil.ReadFile(mappingFile)
+		if err != nil {
+			if !writeBack || !errors.Is(err, os.ErrNotExist) {
+				log.Fatal(err)
+			}
+		} else {
+			mappingString = string(mappingBytes)
+		}
+	}
+
+	writeFiles := func() {}
+	if writeBack {
+		lastWrite := time.Now()
+
+		writeFiles = func() {
+			if !lastWrite.IsZero() && time.Since(lastWrite) < time.Second*5 {
+				return
+			}
+			lastWrite = time.Now()
+			if inputFile != "" {
+				if err := ioutil.WriteFile(inputFile, []byte(inputString), 0655); err != nil {
+					log.Printf("Failed to write input file: %v\n", err)
+				}
+			}
+			if mappingFile != "" {
+				if err := ioutil.WriteFile(mappingFile, []byte(mappingString), 0655); err != nil {
+					log.Printf("Failed to write mapping file: %v\n", err)
+				}
+			}
+		}
+
+		defer func() {
+			lastWrite = time.Time{}
+			writeFiles()
+		}()
+	}
+
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/execute", func(w http.ResponseWriter, r *http.Request) {
+		valuesMut.Lock()
+		defer valuesMut.Unlock()
+
 		req := struct {
 			Mapping string `json:"mapping"`
 			Input   string `json:"input"`
@@ -229,6 +298,10 @@ func runServer(c *cli.Context) error {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
+		mappingString = req.Mapping
+		inputString = req.Input
+		writeFiles()
 
 		res := struct {
 			ParseError   string `json:"parse_error"`
@@ -262,8 +335,19 @@ func runServer(c *cli.Context) error {
 		}
 	})
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(bloblangEditorPage))
+	indexTemplate := template.Must(template.New("index").Parse(bloblangEditorPage))
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		err := indexTemplate.Execute(w, struct {
+			InitialInput   string
+			InitialMapping string
+		}{
+			inputString,
+			mappingString,
+		})
+		if err != nil {
+			http.Error(w, "Template error", http.StatusBadGateway)
+		}
 	})
 
 	host, port := c.String("host"), c.String("port")
@@ -272,14 +356,29 @@ func runServer(c *cli.Context) error {
 	if !c.Bool("no-open") {
 		u, err := url.Parse("http://localhost:" + port)
 		if err != nil {
-			panic(err)
+			log.Fatal(err)
 		}
 		openBrowserAt(u.String())
 	}
 
 	fmt.Printf("Serving at: http://%v\n", bindAddress)
-	if err := http.ListenAndServe(bindAddress, nil); err != nil {
-		panic(err)
+
+	server := http.Server{
+		Addr:    bindAddress,
+		Handler: mux,
+	}
+
+	go func() {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+		// Wait for termination signal
+		<-sigChan
+		_ = server.Shutdown(context.Background())
+	}()
+
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatal(err)
 	}
 	return nil
 }
