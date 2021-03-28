@@ -58,8 +58,15 @@ type FunctionContext struct {
 	MsgBatch MessageBatch
 	Legacy   bool
 
-	valueFn    func() *interface{}
-	namedValue *namedContextValue
+	valueFn      func() *interface{}
+	defaultValue *defaultContextValue
+	namedValue   *namedContextValue
+}
+
+type defaultContextValue struct {
+	identifier string
+	value      interface{}
+	next       *defaultContextValue
 }
 
 type namedContextValue struct {
@@ -94,6 +101,9 @@ func (ctx FunctionContext) WithNamedValue(name string, value interface{}) Functi
 // Value returns a lazily evaluated context value. A context value is not always
 // available and can therefore be nil.
 func (ctx FunctionContext) Value() *interface{} {
+	if ctx.defaultValue != nil {
+		return &ctx.defaultValue.value
+	}
 	if ctx.valueFn == nil {
 		return nil
 	}
@@ -107,11 +117,28 @@ func (ctx FunctionContext) WithValueFunc(fn func() *interface{}) FunctionContext
 }
 
 // WithValue returns a function context with a new value.
-func (ctx FunctionContext) WithValue(v interface{}) FunctionContext {
-	ctx.valueFn = func() *interface{} {
-		return &v
+func (ctx FunctionContext) WithValue(identifier string, value interface{}) FunctionContext {
+	nextCtx := ctx
+	nextCtx.defaultValue = &defaultContextValue{
+		identifier, value, ctx.defaultValue,
 	}
-	return ctx
+	return nextCtx
+}
+
+// PopValue returns the current default value, and a function context with the
+// top value removed from the context stack. If the value returned is the
+// absolute root value function then the context returned is unchanged. If there
+// is no current default value then a nil value is returned and the context
+// returned is unchanged.
+func (ctx FunctionContext) PopValue() (*interface{}, FunctionContext) {
+	retValue := ctx.Value()
+
+	nextCtx := ctx
+	if ctx.defaultValue != nil {
+		nextCtx.defaultValue = ctx.defaultValue.next
+	}
+
+	return retValue, nextCtx
 }
 
 //------------------------------------------------------------------------------

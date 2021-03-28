@@ -37,10 +37,7 @@ func NewMatchFunction(contextFn Function, cases ...MatchCase) Function {
 			return nil, err
 		}
 		for i, c := range cases {
-			caseCtx, err := c.caseFn.ContextCapture(ctx, ctxVal)
-			if err != nil {
-				return nil, fmt.Errorf("failed to capture match case %v context: %w", i, err)
-			}
+			caseCtx := ctx.WithValue("", ctxVal)
 			var caseVal interface{}
 			if caseVal, err = c.caseFn.Exec(caseCtx); err != nil {
 				return nil, fmt.Errorf("failed to check match case %v: %w", i, err)
@@ -92,28 +89,37 @@ func NewIfFunction(queryFn Function, ifFn Function, elseFn Function) Function {
 // is executed with a new context the context is captured under a new name, with
 // the "main" context left intact.
 func NewNamedContextFunction(name string, fn Function) Function {
-	return &namedContextFunction{name, fn}
+	return &NamedContextFunction{name, fn}
 }
 
-type namedContextFunction struct {
+// NamedContextFunction wraps a query function in a mechanism that captures the
+// current context under an alias.
+type NamedContextFunction struct {
 	name string
 	fn   Function
 }
 
-func (n *namedContextFunction) ContextCapture(ctx FunctionContext, value interface{}) (FunctionContext, error) {
-	if n.name == "_" {
-		// Special case means we totally disregard the context.
-		return ctx, nil
+// Name returns the alias under which the context will be captured.
+func (n *NamedContextFunction) Name() string {
+	return n.name
+}
+
+// Exec executes the wrapped query function with the context captured under an
+// alias.
+func (n *NamedContextFunction) Exec(ctx FunctionContext) (interface{}, error) {
+	v, nextCtx := ctx.PopValue()
+	if v == nil {
+		return nil, fmt.Errorf("failed to capture context %v: %w", n.name, ErrNoContext)
 	}
-	ctx = ctx.WithNamedValue(n.name, value)
-	return ctx, nil
+	if n.name != "_" {
+		nextCtx = nextCtx.WithNamedValue(n.name, *v)
+	}
+	return n.fn.Exec(nextCtx)
 }
 
-func (n *namedContextFunction) Exec(ctx FunctionContext) (interface{}, error) {
-	return n.fn.Exec(ctx)
-}
-
-func (n *namedContextFunction) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetPath) {
+// QueryTargets provides a summary of which fields the underlying query function
+// targets.
+func (n *NamedContextFunction) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetPath) {
 	if n.name == "_" {
 		ctx = ctx.PopContext()
 	} else {

@@ -51,11 +51,7 @@ func allMethod(target Function, args ...interface{}) (Function, error) {
 		}
 
 		for i, v := range arr {
-			queryCtx, err := queryFn.ContextCapture(ctx, v)
-			if err != nil {
-				return nil, fmt.Errorf("failed to capture context for element %v: %w", i, err)
-			}
-			res, err := queryFn.Exec(queryCtx)
+			res, err := queryFn.Exec(ctx.WithValue("", v))
 			if err != nil {
 				return nil, fmt.Errorf("element %v: %w", i, err)
 			}
@@ -109,11 +105,7 @@ func anyMethod(target Function, args ...interface{}) (Function, error) {
 		}
 
 		for i, v := range arr {
-			queryCtx, err := queryFn.ContextCapture(ctx, v)
-			if err != nil {
-				return nil, fmt.Errorf("failed to capture context for element %v: %w", i, err)
-			}
-			res, err := queryFn.Exec(queryCtx)
+			res, err := queryFn.Exec(ctx.WithValue("", v))
 			if err != nil {
 				return nil, fmt.Errorf("element %v: %w", i, err)
 			}
@@ -423,12 +415,8 @@ func filterMethod(target Function, args ...interface{}) (Function, error) {
 		switch t := res.(type) {
 		case []interface{}:
 			newSlice := make([]interface{}, 0, len(t))
-			for i, v := range t {
-				mapCtx, err := mapFn.ContextCapture(ctx, v)
-				if err != nil {
-					return nil, fmt.Errorf("failed to capture context for element %v: %w", i, err)
-				}
-				f, err := mapFn.Exec(mapCtx)
+			for _, v := range t {
+				f, err := mapFn.Exec(ctx.WithValue("", v))
 				if err != nil {
 					return nil, err
 				}
@@ -444,11 +432,7 @@ func filterMethod(target Function, args ...interface{}) (Function, error) {
 					"key":   k,
 					"value": v,
 				}
-				mapCtx, err := mapFn.ContextCapture(ctx, ctxMap)
-				if err != nil {
-					return nil, fmt.Errorf("failed to capture context for key %v: %w", k, err)
-				}
-				f, err := mapFn.Exec(mapCtx)
+				f, err := mapFn.Exec(ctx.WithValue("", ctxMap))
 				if err != nil {
 					return nil, err
 				}
@@ -563,15 +547,11 @@ func foldMethod(target Function, args ...interface{}) (Function, error) {
 			"value": struct{}{},
 		}
 
-		for i, v := range resArray {
+		for _, v := range resArray {
 			tmpObj["tally"] = tally
 			tmpObj["value"] = v
 
-			foldCtx, err := foldFn.ContextCapture(ctx, tmpObj)
-			if err != nil {
-				return nil, fmt.Errorf("failed to capture context for element %v: %w", i, err)
-			}
-			newV, mapErr := foldFn.Exec(foldCtx)
+			newV, mapErr := foldFn.Exec(ctx.WithValue("", tmpObj))
 			if mapErr != nil {
 				return nil, mapErr
 			}
@@ -823,11 +803,7 @@ func mapEachMethod(target Function, args ...interface{}) (Function, error) {
 		case []interface{}:
 			newSlice := make([]interface{}, 0, len(t))
 			for i, v := range t {
-				mapCtx, mapErr := mapFn.ContextCapture(ctx, v)
-				if mapErr != nil {
-					return nil, fmt.Errorf("failed to capture context for element %v: %w", i, mapErr)
-				}
-				newV, mapErr := mapFn.Exec(mapCtx)
+				newV, mapErr := mapFn.Exec(ctx.WithValue("", v))
 				if mapErr != nil {
 					if recover, ok := mapErr.(*ErrRecoverable); ok {
 						newV = recover.Recovered
@@ -852,11 +828,7 @@ func mapEachMethod(target Function, args ...interface{}) (Function, error) {
 					"key":   k,
 					"value": v,
 				}
-				mapCtx, mapErr := mapFn.ContextCapture(ctx, ctxMap)
-				if mapErr != nil {
-					return nil, fmt.Errorf("failed to capture context for key %v: %w", k, mapErr)
-				}
-				newV, mapErr := mapFn.Exec(mapCtx)
+				newV, mapErr := mapFn.Exec(ctx.WithValue("", ctxMap))
 				if mapErr != nil {
 					if recover, ok := mapErr.(*ErrRecoverable); ok {
 						newV = recover.Recovered
@@ -928,11 +900,7 @@ func mapEachKeyMethod(target Function, args ...interface{}) (Function, error) {
 		newMap := make(map[string]interface{}, len(obj))
 		for k, v := range obj {
 			var ctxVal interface{} = k
-			mapCtx, err := mapFn.ContextCapture(ctx, ctxVal)
-			if err != nil {
-				return nil, fmt.Errorf("failed to capture context for key %v: %w", k, err)
-			}
-			newKey, mapErr := mapFn.Exec(mapCtx)
+			newKey, mapErr := mapFn.Exec(ctx.WithValue("", ctxVal))
 			if mapErr != nil {
 				return nil, mapErr
 			}
@@ -1132,11 +1100,7 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 				"left":  values[i],
 				"right": values[j],
 			}
-			mapCtx, err := mapFn.ContextCapture(ctx, ctxValue)
-			if err != nil {
-				return false, fmt.Errorf("failed to capture context for element %v and %v comparison: %w", i, j, err)
-			}
-			v, err := mapFn.Exec(mapCtx)
+			v, err := mapFn.Exec(ctx.WithValue("", ctxValue))
 			if err != nil {
 				return false, err
 			}
@@ -1400,11 +1364,8 @@ func uniqueMethod(target Function, args ...interface{}) (Function, error) {
 		for i, v := range slice {
 			check := v
 			if emitFn != nil {
-				emitCtx, err := emitFn.ContextCapture(ctx, v)
-				if err != nil {
-					return false, fmt.Errorf("failed to capture context for element %v: %w", i, err)
-				}
-				if check, err = emitFn.Exec(emitCtx); err != nil {
+				var err error
+				if check, err = emitFn.Exec(ctx.WithValue("", v)); err != nil {
 					return nil, fmt.Errorf("index %v: %w", i, err)
 				}
 			}

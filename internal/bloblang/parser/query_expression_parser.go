@@ -21,7 +21,7 @@ func matchCaseParser(pCtx Context) Func {
 			),
 			Sequence(
 				Expect(
-					queryParser(true, pCtx),
+					queryParser(pCtx),
 					"match case",
 				),
 				Optional(whitespace),
@@ -29,7 +29,7 @@ func matchCaseParser(pCtx Context) Func {
 			),
 		),
 		Optional(whitespace),
-		queryParser(true, pCtx),
+		queryParser(pCtx),
 	)
 
 	return func(input []rune) Result {
@@ -77,7 +77,7 @@ func matchExpressionParser(pCtx Context) Func {
 		res := Sequence(
 			Term("match"),
 			SpacesAndTabs(),
-			Optional(queryParser(true, pCtx)),
+			Optional(queryParser(pCtx)),
 			whitespace,
 			MustBe(
 				DelimitedPattern(
@@ -131,11 +131,11 @@ func ifExpressionParser(pCtx Context) Func {
 		res := Sequence(
 			Term("if"),
 			SpacesAndTabs(),
-			MustBe(queryParser(true, pCtx)),
+			MustBe(queryParser(pCtx)),
 			optionalWhitespace,
 			MustBe(Char('{')),
 			optionalWhitespace,
-			MustBe(queryParser(true, pCtx)),
+			MustBe(queryParser(pCtx)),
 			optionalWhitespace,
 			MustBe(Char('}')),
 			Optional(
@@ -145,7 +145,7 @@ func ifExpressionParser(pCtx Context) Func {
 					optionalWhitespace,
 					MustBe(Char('{')),
 					optionalWhitespace,
-					MustBe(queryParser(true, pCtx)),
+					MustBe(queryParser(pCtx)),
 					optionalWhitespace,
 					MustBe(Char('}')),
 				),
@@ -184,7 +184,7 @@ func bracketsExpressionParser(pCtx Context) Func {
 				"function",
 			),
 			whitespace,
-			queryParser(true, pCtx),
+			queryParser(pCtx),
 			whitespace,
 			MustBe(Expect(Char(')'), "closing bracket")),
 		)(input)
@@ -241,12 +241,17 @@ func lambdaExpressionParser(pCtx Context) Func {
 			pCtx = pCtx.WithNamedContext(name)
 		}
 
-		res = MustBe(queryParser(true, pCtx))(res.Remaining)
+		res = MustBe(queryParser(pCtx))(res.Remaining)
 		if res.Err != nil {
 			return res
 		}
 
 		queryFn := res.Payload.(query.Function)
+		if chained, isChained := queryFn.(*query.NamedContextFunction); isChained {
+			err := fmt.Errorf("it would be in poor taste to capture the same context under both '%v' and '%v'", name, chained.Name())
+			return Fail(NewFatalError(input, err), input)
+		}
+
 		res.Payload = query.NewNamedContextFunction(name, queryFn)
 		return res
 	}

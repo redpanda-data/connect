@@ -85,7 +85,7 @@ func (m *pathMapping) mapPath(path string, allowLabels bool) (string, []string, 
 		Maps:     map[string]query.Function{},
 		Vars:     vars,
 		MsgBatch: message.New(nil),
-	}.WithValue(input), mapping.AssignmentContext{
+	}.WithValue("", input), mapping.AssignmentContext{
 		Maps:  map[string]query.Function{},
 		Vars:  vars,
 		Meta:  meta,

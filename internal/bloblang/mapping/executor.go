@@ -286,10 +286,6 @@ func (e *Executor) AssignmentTargets() []TargetPath {
 	return paths
 }
 
-func (e *Executor) ContextCapture(ctx query.FunctionContext, v interface{}) (query.FunctionContext, error) {
-	return ctx.WithValue(v), nil
-}
-
 // Exec this function with a context struct.
 func (e *Executor) Exec(ctx query.FunctionContext) (interface{}, error) {
 	var newObj interface{} = query.Nothing(nil)

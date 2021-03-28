@@ -135,17 +135,25 @@ func TestExpressions(t *testing.T) {
 			output: Nothing(nil),
 		},
 		"named context map arithmetic": {
-			input: mustFunc(NewMapMethod(
-				NewFieldFunction("foo"),
-				NewNamedContextFunction("next", mustFunc(NewArithmeticExpression(
-					[]Function{
-						NewNamedContextFieldFunction("next", "bar"),
-						NewFieldFunction("baz"),
-					},
-					[]ArithmeticOperator{
-						ArithmeticAdd,
-					},
-				))),
+			input: mustFunc(NewArithmeticExpression(
+				[]Function{
+					mustFunc(NewMapMethod(
+						NewFieldFunction("foo"),
+						NewNamedContextFunction("next", mustFunc(NewArithmeticExpression(
+							[]Function{
+								NewNamedContextFieldFunction("next", "bar"),
+								NewFieldFunction("baz"),
+							},
+							[]ArithmeticOperator{
+								ArithmeticAdd,
+							},
+						))),
+					)),
+					NewFieldFunction("foo.bar"),
+				},
+				[]ArithmeticOperator{
+					ArithmeticAdd,
+				},
 			)),
 			value: func() *interface{} {
 				var v interface{} = map[string]interface{}{
@@ -156,7 +164,7 @@ func TestExpressions(t *testing.T) {
 				}
 				return &v
 			}(),
-			output: int64(30),
+			output: int64(37),
 		},
 		"named context map to literal": {
 			input: mustFunc(NewMapMethod(

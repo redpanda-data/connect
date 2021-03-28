@@ -30,10 +30,6 @@ func (f *fieldFunction) expand(path ...string) *fieldFunction {
 	return &newFn
 }
 
-func (f *fieldFunction) ContextCapture(ctx FunctionContext, v interface{}) (FunctionContext, error) {
-	return ctx.WithValue(v), nil
-}
-
 func (f *fieldFunction) Exec(ctx FunctionContext) (interface{}, error) {
 	var target interface{}
 	if f.namedContext == "" {
@@ -107,11 +103,6 @@ func NewFieldFunction(pathStr string) Function {
 // function.
 type Literal struct {
 	Value interface{}
-}
-
-// ContextCapture is a simple pass through.
-func (l *Literal) ContextCapture(ctx FunctionContext, v interface{}) (FunctionContext, error) {
-	return ctx.WithValue(v), nil
 }
 
 // Exec returns a literal value.

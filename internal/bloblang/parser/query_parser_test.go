@@ -118,6 +118,10 @@ func TestFunctionParserErrors(t *testing.T) {
 			input: `this.(root -> root.foo)`,
 			err:   "line 1 char 7: context label `root` is not allowed",
 		},
+		"chained captured context": {
+			input: `this.(foo -> bar -> baz -> baz.foo)`,
+			err:   "line 1 char 14: it would be in poor taste to capture the same context under both 'bar' and 'baz'",
+		},
 	}
 
 	for name, test := range tests {
@@ -238,7 +242,7 @@ not this`,
 			if test.deprecated {
 				res = ParseDeprecatedQuery([]rune(test.input))
 			} else {
-				res = queryParser(true, Context{
+				res = queryParser(Context{
 					Functions: query.AllFunctions,
 					Methods:   query.AllMethods,
 				})([]rune(test.input))

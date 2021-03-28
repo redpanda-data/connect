@@ -98,7 +98,7 @@ func singleRootMapping(pCtx Context) Func {
 	allWhitespace := DiscardAll(OneOf(whitespace, Newline()))
 
 	return func(input []rune) Result {
-		res := queryParser(false, pCtx)(input)
+		res := queryParser(pCtx)(input)
 		if res.Err != nil {
 			return res
 		}
@@ -269,7 +269,7 @@ func letStatementParser(pCtx Context) Func {
 		SpacesAndTabs(),
 		Char('='),
 		SpacesAndTabs(),
-		queryParser(false, pCtx),
+		queryParser(pCtx),
 	)
 
 	return func(input []rune) Result {
@@ -314,7 +314,7 @@ func metaStatementParser(disabled bool, pCtx Context) Func {
 		Optional(SpacesAndTabs()),
 		Char('='),
 		SpacesAndTabs(),
-		queryParser(false, pCtx),
+		queryParser(pCtx),
 	)
 
 	return func(input []rune) Result {
@@ -424,7 +424,7 @@ func plainMappingStatementParser(pCtx Context) Func {
 		SpacesAndTabs(),
 		Char('='),
 		SpacesAndTabs(),
-		queryParser(false, pCtx),
+		queryParser(pCtx),
 	)
 
 	return func(input []rune) Result {

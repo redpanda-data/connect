@@ -349,7 +349,7 @@ func TestExec(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res, err := test.mapping.Exec(query.FunctionContext{
 				MsgBatch: message.New(nil),
-			}.WithValue(test.input))
+			}.WithValue("", test.input))
 			if len(test.err) > 0 {
 				require.EqualError(t, err, test.err)
 			} else {
@@ -357,11 +357,11 @@ func TestExec(t *testing.T) {
 			}
 			resString := test.mapping.ToString(query.FunctionContext{
 				MsgBatch: message.New(nil),
-			}.WithValue(test.input))
+			}.WithValue("", test.input))
 			assert.Equal(t, test.outputString, resString)
 			resBytes := test.mapping.ToBytes(query.FunctionContext{
 				MsgBatch: message.New(nil),
-			}.WithValue(test.input))
+			}.WithValue("", test.input))
 			assert.Equal(t, test.outputString, string(resBytes))
 		})
 	}

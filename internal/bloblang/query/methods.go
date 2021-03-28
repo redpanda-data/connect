@@ -45,7 +45,7 @@ func applyMethod(target Function, args ...interface{}) (Function, error) {
 		if err != nil {
 			return nil, err
 		}
-		ctx = ctx.WithValue(res)
+		ctx = ctx.WithValue("", res)
 
 		if ctx.Maps == nil {
 			return nil, &ErrRecoverable{
@@ -186,10 +186,6 @@ type fromMethod struct {
 	target Function
 }
 
-func (f *fromMethod) ContextCapture(ctx FunctionContext, v interface{}) (FunctionContext, error) {
-	return ctx.WithValue(v), nil
-}
-
 func (f *fromMethod) Exec(ctx FunctionContext) (interface{}, error) {
 	ctx.Index = f.index
 	return f.target.Exec(ctx)
@@ -268,10 +264,6 @@ type getMethod struct {
 	path []string
 }
 
-func (g *getMethod) ContextCapture(ctx FunctionContext, v interface{}) (FunctionContext, error) {
-	return ctx.WithValue(v), nil
-}
-
 func (g *getMethod) Exec(ctx FunctionContext) (interface{}, error) {
 	v, err := g.fn.Exec(ctx)
 	if err != nil {
@@ -341,11 +333,7 @@ func mapMethod(target Function, args ...interface{}) (Function, error) {
 		if err != nil {
 			return nil, err
 		}
-		mapCtx, err := mapFn.ContextCapture(ctx, res)
-		if err != nil {
-			return nil, err
-		}
-		return mapFn.Exec(mapCtx)
+		return mapFn.Exec(ctx.WithValue("", res))
 	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
 		mapCtx, targets := target.QueryTargets(ctx)
 		mapCtx = mapCtx.WithValues(targets).WithValuesAsContext()
@@ -371,10 +359,6 @@ func Not(fn Function) Function {
 	return &notMethod{
 		fn: fn,
 	}
-}
-
-func (n *notMethod) ContextCapture(ctx FunctionContext, v interface{}) (FunctionContext, error) {
-	return n.fn.ContextCapture(ctx, v)
 }
 
 func (n *notMethod) Exec(ctx FunctionContext) (interface{}, error) {

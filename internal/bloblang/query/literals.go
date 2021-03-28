@@ -60,10 +60,6 @@ func NewMapLiteral(values [][2]interface{}) (interface{}, error) {
 	return staticValues, nil
 }
 
-func (m *mapLiteral) ContextCapture(ctx FunctionContext, v interface{}) (FunctionContext, error) {
-	return ctx.WithValue(v), nil
-}
-
 func (m *mapLiteral) Exec(ctx FunctionContext) (interface{}, error) {
 	dynMap := make(map[string]interface{}, len(m.keyValues))
 	for _, kv := range m.keyValues {
@@ -158,10 +154,6 @@ func NewArrayLiteral(values ...interface{}) interface{} {
 		return expandedValues
 	}
 	return &arrayLiteral{expandedValues}
-}
-
-func (a *arrayLiteral) ContextCapture(ctx FunctionContext, v interface{}) (FunctionContext, error) {
-	return ctx.WithValue(v), nil
 }
 
 func (a *arrayLiteral) Exec(ctx FunctionContext) (interface{}, error) {
