@@ -75,7 +75,7 @@ const bloblangEditorPage = `<!DOCTYPE html>
     </div>
     <div class="panel" id="ace-input-panel" style="top:0;bottom:50%;left:0;right:50%;padding:0 5px 5px 0;display:none">
       <h2 style="left:50%;bottom:0;margin-left:-50px;z-index:100;background-color:#272822;">Input</h2>
-      <div id="ace-input">{"message":"hello world"}</div>
+      <div id="ace-input"></div>
     </div>
     <div class="panel" style="top:0;bottom:50%;left:50%;right:0;padding:0 0 5px 5px">
       <h2 style="left:50%;bottom:0;margin-left:-50px;">Output</h2>
@@ -87,7 +87,7 @@ const bloblangEditorPage = `<!DOCTYPE html>
     </div>
     <div class="panel" id="ace-mapping-panel" style="top:50%;bottom:0;left:0;right:0;padding: 5px 0 0 0;display:none">
       <h2 style="left:50%;bottom:0;margin-left:-50px;z-index:100;background-color:#272822;">Mapping</h2>
-      <div id="ace-mapping">root = this</div>
+      <div id="ace-mapping"></div>
     </div>
   </body>
   <script>
@@ -160,11 +160,11 @@ const bloblangEditorPage = `<!DOCTYPE html>
 
                 // set textarea value to: text before caret + tab + text after caret
                 this.value = this.value.substring(0, start) +
-                    "\t" + this.value.substring(end);
+                    "    " + this.value.substring(end);
 
                 // put caret at right position again
-                this.selectionStart = start + 1;
-                this.selectionEnd = start + 1;
+                this.selectionStart = start + 4;
+                this.selectionEnd = end + 4;
             }
         });
         input.addEventListener('input', function(e) {
@@ -179,25 +179,31 @@ const bloblangEditorPage = `<!DOCTYPE html>
   <script src="https://pagecdn.io/lib/ace/1.4.12/mode-coffee.min.js" crossorigin="anonymous"></script>
   <script src="https://pagecdn.io/lib/ace/1.4.12/mode-json.min.js" crossorigin="anonymous"></script>
   <script>
+      currentMapping = getMapping();
       aceMappingEditor = ace.edit("ace-mapping");
-      aceMappingEditor.setTheme("ace/theme/monokai");
-      aceMappingEditor.session.setUseWorker(false);
+      aceMappingEditor.setValue(currentMapping, 1);
       aceMappingEditor.session.setMode("ace/mode/coffee");
-      aceMappingEditor.on('change', execute);
       mappingArea = document.getElementById("ace-mapping");
 
       document.getElementById("default-mapping-panel").style.display = "none";
       document.getElementById("ace-mapping-panel").style.display = "initial";
 
+      currentInput = getInput();
       aceInputEditor = ace.edit("ace-input");
-      aceInputEditor.setTheme("ace/theme/monokai");
-      aceInputEditor.session.setUseWorker(false);
+      aceInputEditor.setValue(currentInput, 1);
       aceInputEditor.session.setMode("ace/mode/json");
-      aceInputEditor.on('change', execute);
       inputArea = document.getElementById("ace-input");
 
       document.getElementById("default-input-panel").style.display = "none";
       document.getElementById("ace-input-panel").style.display = "initial";
+
+      [aceMappingEditor, aceInputEditor].forEach(function(editor) {
+          editor.on('change', execute);
+          editor.setTheme("ace/theme/monokai");
+          editor.session.setTabSize(4);
+          editor.session.setUseSoftTabs(true);
+          editor.session.setUseWorker(false);
+      });
   </script>
 </html>`
 
