@@ -131,7 +131,7 @@ bar and baz populated with values extracted from messages:
 ```yaml
 output:
   sql:
-    driver: postgresql
+    driver: postgres
     data_source_name: postgres://foouser:foopassword@localhost:5432/foodb?sslmode=disable
     query: "INSERT INTO footable (foo, bar, baz) VALUES ($1, $2, $3);"
     args:

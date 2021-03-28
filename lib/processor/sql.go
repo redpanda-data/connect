@@ -82,7 +82,7 @@ pipeline:
     - branch:
         processors:
           - sql:
-              driver: postgresql
+              driver: postgres
               result_codec: json_array
               data_source_name: postgres://foouser:foopass@localhost:5432/testdb?sslmode=disable
               query: "SELECT * FROM footable WHERE user_id = $1;"
