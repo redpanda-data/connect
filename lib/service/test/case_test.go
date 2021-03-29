@@ -23,6 +23,13 @@ func (m mockProvider) Provide(ptr string, env map[string]string) ([]types.Proces
 	return nil, errors.New("processors not found")
 }
 
+func (m mockProvider) ProvideBloblang(name string) ([]types.Processor, error) {
+	if procs, ok := m[name]; ok {
+		return procs, nil
+	}
+	return nil, errors.New("mapping not found")
+}
+
 func TestCase(t *testing.T) {
 	color.NoColor = true
 

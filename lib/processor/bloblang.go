@@ -31,9 +31,9 @@ func init() {
 		Summary: `
 Executes a [Bloblang](/docs/guides/bloblang/about) mapping on messages.`,
 		Description: `
-Bloblang is a powerful language that enables a wide range of mapping,
-transformation and filtering tasks. For more information
-[check out the docs](/docs/guides/bloblang/about).`,
+Bloblang is a powerful language that enables a wide range of mapping, transformation and filtering tasks. For more information [check out the docs](/docs/guides/bloblang/about).
+
+If your mapping is large and you'd prefer for it to live in a separate file then you can execute a mapping directly from a file with the expression ` + "`from \"<path>\"`" + `, where the path must be absolute, or relative from the location that Benthos is executed from.`,
 		Footnotes: `
 ## Error Handling
 
@@ -82,10 +82,7 @@ pipeline:
   processors:
   - bloblang: |
       root = this
-      fans = fans.map_each(match {
-        this.obsession > 0.5 => this
-        _ => deleted()
-      })
+      root.fans = this.fans.filter(fan -> fan.obsession > 0.5)
 `,
 			},
 			{
@@ -114,7 +111,11 @@ With the following config:`,
 				Config: `
 pipeline:
   processors:
-    - bloblang: '{"Cities":this.locations.filter(this.state == "WA").map_each(this.name).sort().join(", ")}'
+    - bloblang: |
+        root.Cities = this.locations.
+                        filter(loc -> loc.state == "WA").
+                        map_each(loc -> loc.name).
+                        sort().join(", ")
 `,
 			},
 		},
@@ -158,7 +159,11 @@ func NewBloblang(
 		}
 		return nil, err
 	}
+	return NewBloblangFromExecutor(exec, log, stats), nil
+}
 
+// NewBloblangFromExecutor returns a Bloblang processor.
+func NewBloblangFromExecutor(exec *mapping.Executor, log log.Modular, stats metrics.Type) Type {
 	return &Bloblang{
 		exec: exec,
 
@@ -170,7 +175,7 @@ func NewBloblang(
 		mSent:      stats.GetCounter("sent"),
 		mBatchSent: stats.GetCounter("batch.sent"),
 		mDropped:   stats.GetCounter("dropped"),
-	}, nil
+	}
 }
 
 //------------------------------------------------------------------------------

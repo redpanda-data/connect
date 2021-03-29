@@ -3,6 +3,7 @@ package mapping
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -132,6 +133,36 @@ func NewJSONAssignment(path ...string) *JSONAssignment {
 	}
 }
 
+func sliceToDotPath(path ...string) string {
+	escapes := make([]string, len(path))
+	for i, s := range path {
+		s = strings.Replace(s, "~", "~0", -1)
+		s = strings.Replace(s, ".", "~1", -1)
+		escapes[i] = s
+	}
+	return strings.Join(escapes, ".")
+}
+
+func findTheNonObject(gObj *gabs.Container, allowArray bool, paths ...string) (culprit string, typeStr string) {
+	if _, isObj := gObj.Data().(map[string]interface{}); !isObj {
+		return "", string(query.ITypeOf(gObj.Data()))
+	}
+
+	var culpritSlice []string
+	for _, path := range paths {
+		culpritSlice = append(culpritSlice, sliceToDotPath(path))
+		gObj = gObj.S(path)
+
+		_, isObj := gObj.Data().(map[string]interface{})
+		_, isArray := gObj.Data().([]interface{})
+		if !isObj && (!isArray || !allowArray) {
+			return strings.Join(culpritSlice, "."), string(query.ITypeOf(gObj.Data()))
+		}
+	}
+
+	return strings.Join(culpritSlice, "."), string(query.ITypeOf(gObj.Data()))
+}
+
 // Apply a value to the target JSON path.
 func (j *JSONAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 	_, deleted := value.(query.Delete)
@@ -144,11 +175,30 @@ func (j *JSONAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 	if _, isNothing := (*ctx.Value).(query.Nothing); isNothing || *ctx.Value == nil {
 		*ctx.Value = map[string]interface{}{}
 	}
+
 	gObj := gabs.Wrap(*ctx.Value)
 	if deleted {
-		gObj.Delete(j.path...)
+		if len(j.path) > 0 {
+			_ = gObj.Delete(j.path...)
+		}
 	} else {
-		gObj.Set(value, j.path...)
+		if _, err := gObj.Set(value, j.path...); err != nil {
+			if errors.Is(err, gabs.ErrPathCollision) {
+				culprit, typeStr := findTheNonObject(gObj, false, j.path...)
+				if len(culprit) == 0 {
+					return fmt.Errorf(
+						"unable to set target path %v as the value of the root was a non-object type (%v)",
+						sliceToDotPath(j.path...), typeStr,
+					)
+				}
+				return fmt.Errorf(
+					"unable to set target path %v as the value of %v was a non-object type (%v)",
+					sliceToDotPath(j.path...), culprit, typeStr,
+				)
+			} else {
+				return fmt.Errorf("unable to set target path %v: %w", sliceToDotPath(j.path...), err)
+			}
+		}
 	}
 	*ctx.Value = gObj.Data()
 	return nil

@@ -342,6 +342,38 @@ func TestExec(t *testing.T) {
 			err:          "failed to execute mapping assignment at line 0: target message part does not exist",
 			outputString: "",
 		},
+		"null get and set": {
+			mapping: NewExecutor(nil, nil,
+				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("does.not.exist")),
+			),
+			input:        `{"message":"hello world"}`,
+			output:       map[string]interface{}{"foo": nil},
+			outputString: `{"foo":null}`,
+		},
+		"null get and set root": {
+			mapping: NewExecutor(nil, nil,
+				NewStatement(nil, NewJSONAssignment(), query.NewFieldFunction("does.not.exist")),
+			),
+			input:        `{"message":"hello world"}`,
+			output:       nil,
+			outputString: `null`,
+		},
+		"colliding set at root": {
+			mapping: NewExecutor(nil, nil,
+				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("hello world")),
+				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("bar")),
+			),
+			input: map[string]interface{}{"bar": "baz"},
+			err:   "failed to assign mapping result at line 0: unable to set target path foo as the value of the root was a non-object type (string)",
+		},
+		"colliding set at path": {
+			mapping: NewExecutor(nil, nil,
+				NewStatement(nil, NewJSONAssignment("foo"), query.NewLiteralFunction("hello world")),
+				NewStatement(nil, NewJSONAssignment("foo", "bar"), query.NewFieldFunction("bar")),
+			),
+			input: map[string]interface{}{"bar": "baz"},
+			err:   "failed to assign mapping result at line 0: unable to set target path foo.bar as the value of foo was a non-object type (string)",
+		},
 	}
 
 	for name, test := range tests {

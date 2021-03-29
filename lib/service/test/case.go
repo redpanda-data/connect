@@ -52,6 +52,7 @@ type Case struct {
 	Name             string            `yaml:"name"`
 	Environment      map[string]string `yaml:"environment"`
 	TargetProcessors string            `yaml:"target_processors"`
+	TargetMapping    string            `yaml:"target_mapping"`
 	InputBatch       []InputPart       `yaml:"input_batch"`
 	OutputBatches    [][]ConditionsMap `yaml:"output_batches"`
 
@@ -70,6 +71,7 @@ func NewCase() Case {
 		Name:             "Example test case",
 		Environment:      map[string]string{},
 		TargetProcessors: "/pipeline/processors",
+		TargetMapping:    "",
 		InputBatch: []InputPart{
 			{
 				Content: "A sample document",
@@ -123,12 +125,17 @@ func (c CaseFailure) String() string {
 // using a JSON Pointer.
 type ProcProvider interface {
 	Provide(jsonPtr string, environment map[string]string) ([]types.Processor, error)
+	ProvideBloblang(path string) ([]types.Processor, error)
 }
 
 // Execute attempts to execute a test case against a Benthos configuration.
 func (c *Case) Execute(provider ProcProvider) (failures []CaseFailure, err error) {
 	var procSet []types.Processor
-	if procSet, err = provider.Provide(c.TargetProcessors, c.Environment); err != nil {
+	if c.TargetMapping != "" {
+		if procSet, err = provider.ProvideBloblang(c.TargetMapping); err != nil {
+			return nil, fmt.Errorf("failed to initialise Bloblang mapping '%v': %v", c.TargetMapping, err)
+		}
+	} else if procSet, err = provider.Provide(c.TargetProcessors, c.Environment); err != nil {
 		return nil, fmt.Errorf("failed to initialise processors '%v': %v", c.TargetProcessors, err)
 	}
 

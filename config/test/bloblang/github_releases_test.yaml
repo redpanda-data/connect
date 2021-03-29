@@ -1,0 +1,60 @@
+tests:
+  - name: Github releases mapping
+    target_mapping: ./github_releases.blobl
+    input_batch:
+      - content: |
+          [
+            {
+              "tag_name": "1.23.4",
+              "assets": [
+                {
+                  "name": "benthos-lambda_1.23.4_linux_amd64.zip",
+                  "download_count": 123
+                },
+                {
+                  "name": "benthos_1.23.4_checksums.txt",
+                  "download_count": 456
+                },
+                {
+                  "name": "benthos_1.23.4_darwin_amd64.tar.gz",
+                  "download_count": 789
+                },
+                {
+                  "name": "benthos_1.23.4_linux_amd64.tar.gz",
+                  "download_count": 101112
+                },
+                {
+                  "name": "benthos_1.23.4_linux_arm64.tar.gz",
+                  "download_count": 131415
+                }
+              ]
+            }
+          ]
+    output_batches:
+      - - json_equals:
+            [
+                {
+                    "dist": "lambda_linux_amd64",
+                    "download_count": 123,
+                    "source": "github",
+                    "version": "1.23.4"
+                },
+                {
+                    "version": "1.23.4",
+                    "dist": "darwin_amd64",
+                    "download_count": 789,
+                    "source": "github"
+                },
+                {
+                    "dist": "linux_amd64",
+                    "download_count": 101112,
+                    "source": "github",
+                    "version": "1.23.4"
+                },
+                {
+                    "dist": "linux_arm64",
+                    "download_count": 131415,
+                    "source": "github",
+                    "version": "1.23.4"
+                }
+            ]

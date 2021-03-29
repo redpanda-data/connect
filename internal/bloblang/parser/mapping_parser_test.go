@@ -183,6 +183,9 @@ func TestMappings(t *testing.T) {
   nested = this
 }`), 0777))
 
+	directMapFile := filepath.Join(dir, "direct_map.blobl")
+	require.NoError(t, ioutil.WriteFile(directMapFile, []byte(`root.nested = this`), 0777))
+
 	type part struct {
 		Content string
 		Meta    map[string]string
@@ -459,6 +462,15 @@ root = this.apply("foo")`, goodMapFile),
 			},
 			output: part{
 				Content: `{"foo":"this is valid","nested":{"outter":{"inner":"hello world"}}}`,
+			},
+		},
+		"test directly imported map": {
+			mapping: fmt.Sprintf(`from "%v"`, directMapFile),
+			input: []part{
+				{Content: `{"inner":"hello world"}`},
+			},
+			output: part{
+				Content: `{"nested":{"inner":"hello world"}}`,
 			},
 		},
 	}

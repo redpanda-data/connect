@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - Field `batch_as_multipart` added to the `http_client` output.
 - Inputs, outputs, processors, caches and rate limits now have a component level config field `label`, which sets the metrics and logging prefix.
 - Resources can now be declared in the new `<component>_resources` fields at the root of config files, the old `resources.<component>s.<label>` style is still valid for backwards compatibility reasons.
+- Bloblang mappings now support importing the entirety of a map from a path using `from "<path>"` syntax.
 
 ### Fixed
 

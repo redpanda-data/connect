@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
@@ -22,6 +23,14 @@ func ParseMapping(filepath string, expr string, pCtx Context) (*mapping.Executor
 	dir := ""
 	if len(filepath) > 0 {
 		dir = path.Dir(filepath)
+	}
+
+	resDirectImport := singleRootImport(dir, pCtx)(in)
+	if resDirectImport.Err != nil && resDirectImport.Err.IsFatal() {
+		return nil, resDirectImport.Err
+	}
+	if resDirectImport.Err == nil && len(resDirectImport.Remaining) == 0 {
+		return resDirectImport.Payload.(*mapping.Executor), nil
 	}
 
 	resExe := parseExecutor(dir, pCtx)(in)
@@ -93,6 +102,43 @@ func parseExecutor(baseDir string, pCtx Context) Func {
 	}
 }
 
+func singleRootImport(baseDir string, pCtx Context) Func {
+	whitespace := SpacesAndTabs()
+	allWhitespace := DiscardAll(OneOf(whitespace, Newline()))
+
+	parser := Sequence(
+		allWhitespace,
+		Term("from"),
+		whitespace,
+		QuotedString(),
+		allWhitespace,
+	)
+
+	return func(input []rune) Result {
+		res := parser(input)
+		if res.Err != nil {
+			return res
+		}
+
+		fpath := res.Payload.([]interface{})[3].(string)
+		if !filepath.IsAbs(fpath) {
+			fpath = path.Join(baseDir, fpath)
+		}
+
+		contents, err := ioutil.ReadFile(fpath)
+		if err != nil {
+			return Fail(NewFatalError(input, fmt.Errorf("failed to read import: %w", err)), input)
+		}
+
+		importContent := []rune(string(contents))
+		execRes := parseExecutor(path.Dir(fpath), pCtx)(importContent)
+		if execRes.Err != nil {
+			return Fail(NewFatalError(input, NewImportError(fpath, importContent, execRes.Err)), input)
+		}
+		return Success(execRes.Payload.(*mapping.Executor), res.Remaining)
+	}
+}
+
 func singleRootMapping(pCtx Context) Func {
 	whitespace := SpacesAndTabs()
 	allWhitespace := DiscardAll(OneOf(whitespace, Newline()))
@@ -149,22 +195,24 @@ func importParser(baseDir string, maps map[string]query.Function, pCtx Context) 
 			return res
 		}
 
-		filepath := res.Payload.([]interface{})[2].(string)
-		filepath = path.Join(baseDir, filepath)
-		contents, err := ioutil.ReadFile(filepath)
+		fpath := res.Payload.([]interface{})[2].(string)
+		if !filepath.IsAbs(fpath) {
+			fpath = path.Join(baseDir, fpath)
+		}
+		contents, err := ioutil.ReadFile(fpath)
 		if err != nil {
 			return Fail(NewFatalError(input, fmt.Errorf("failed to read import: %w", err)), input)
 		}
 
 		importContent := []rune(string(contents))
-		execRes := parseExecutor(path.Dir(filepath), pCtx)(importContent)
+		execRes := parseExecutor(path.Dir(fpath), pCtx)(importContent)
 		if execRes.Err != nil {
-			return Fail(NewFatalError(input, NewImportError(filepath, importContent, execRes.Err)), input)
+			return Fail(NewFatalError(input, NewImportError(fpath, importContent, execRes.Err)), input)
 		}
 
 		exec := execRes.Payload.(*mapping.Executor)
 		if len(exec.Maps()) == 0 {
-			err := fmt.Errorf("no maps to import from '%v'", filepath)
+			err := fmt.Errorf("no maps to import from '%v'", fpath)
 			return Fail(NewFatalError(input, err), input)
 		}
 
@@ -177,11 +225,11 @@ func importParser(baseDir string, maps map[string]query.Function, pCtx Context) 
 			}
 		}
 		if len(collisions) > 0 {
-			err := fmt.Errorf("map name collisions from import '%v': %v", filepath, collisions)
+			err := fmt.Errorf("map name collisions from import '%v': %v", fpath, collisions)
 			return Fail(NewFatalError(input, err), input)
 		}
 
-		return Success(filepath, res.Remaining)
+		return Success(fpath, res.Remaining)
 	}
 }
 

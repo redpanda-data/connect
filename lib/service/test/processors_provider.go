@@ -2,10 +2,13 @@ package test
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
@@ -72,6 +75,31 @@ func (p *ProcessorsProvider) Provide(jsonPtr string, environment map[string]stri
 		return nil, err
 	}
 	return p.initProcs(confs)
+}
+
+// ProvideBloblang attempts to parse a Bloblang mapping and returns a processor
+// slice that executes it.
+func (p *ProcessorsProvider) ProvideBloblang(path string) ([]types.Processor, error) {
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(filepath.Dir(p.targetPath), path)
+	}
+
+	mappingBytes, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	exec, mapErr := parser.ParseMapping(path, string(mappingBytes), parser.Context{
+		Functions: query.AllFunctions,
+		Methods:   query.AllMethods,
+	})
+	if mapErr != nil {
+		return nil, mapErr
+	}
+
+	return []types.Processor{
+		processor.NewBloblangFromExecutor(exec, p.logger, metrics.Noop()),
+	}, nil
 }
 
 //------------------------------------------------------------------------------
