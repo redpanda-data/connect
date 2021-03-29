@@ -228,13 +228,27 @@ func openBrowserAt(url string) {
 	}
 }
 
-func runServer(c *cli.Context) error {
-	writeBack := c.Bool("write")
-	mappingFile := c.String("mapping-file")
-	inputFile := c.String("input-file")
+type fileSync struct {
+	mut sync.Mutex
 
-	var valuesMut sync.Mutex
-	inputString, mappingString := `{"message":"hello world"}`, "root = this"
+	dirty         bool
+	mappingString string
+	inputString   string
+
+	writeBack   bool
+	mappingFile string
+	inputFile   string
+}
+
+func newFileSync(inputFile, mappingFile string, writeBack bool) *fileSync {
+	f := &fileSync{
+		inputString:   `{"message":"hello world"}`,
+		mappingString: "root = this",
+		writeBack:     writeBack,
+		inputFile:     inputFile,
+		mappingFile:   mappingFile,
+	}
+
 	if inputFile != "" {
 		inputBytes, err := ioutil.ReadFile(inputFile)
 		if err != nil {
@@ -242,9 +256,10 @@ func runServer(c *cli.Context) error {
 				log.Fatal(err)
 			}
 		} else {
-			inputString = string(inputBytes)
+			f.inputString = string(inputBytes)
 		}
 	}
+
 	if mappingFile != "" {
 		mappingBytes, err := ioutil.ReadFile(mappingFile)
 		if err != nil {
@@ -252,43 +267,73 @@ func runServer(c *cli.Context) error {
 				log.Fatal(err)
 			}
 		} else {
-			mappingString = string(mappingBytes)
+			f.mappingString = string(mappingBytes)
 		}
 	}
 
-	writeFiles := func() {}
 	if writeBack {
-		lastWrite := time.Now()
-
-		writeFiles = func() {
-			if !lastWrite.IsZero() && time.Since(lastWrite) < time.Second*5 {
-				return
+		go func() {
+			t := time.NewTicker(time.Second * 5)
+			for {
+				<-t.C
+				f.write()
 			}
-			lastWrite = time.Now()
-			if inputFile != "" {
-				if err := ioutil.WriteFile(inputFile, []byte(inputString), 0655); err != nil {
-					log.Printf("Failed to write input file: %v\n", err)
-				}
-			}
-			if mappingFile != "" {
-				if err := ioutil.WriteFile(mappingFile, []byte(mappingString), 0655); err != nil {
-					log.Printf("Failed to write mapping file: %v\n", err)
-				}
-			}
-		}
-
-		defer func() {
-			lastWrite = time.Time{}
-			writeFiles()
 		}()
 	}
+
+	return f
+}
+
+func (f *fileSync) update(input, mapping string) {
+	f.mut.Lock()
+	if mapping != f.mappingString || input != f.inputString {
+		f.dirty = true
+	}
+	f.mappingString = mapping
+	f.inputString = input
+	f.mut.Unlock()
+}
+
+func (f *fileSync) write() {
+	f.mut.Lock()
+	defer f.mut.Unlock()
+
+	if !f.writeBack || !f.dirty {
+		return
+	}
+
+	if f.inputFile != "" {
+		if err := ioutil.WriteFile(f.inputFile, []byte(f.inputString), 0644); err != nil {
+			log.Printf("Failed to write input file: %v\n", err)
+		}
+	}
+	if f.mappingFile != "" {
+		if err := ioutil.WriteFile(f.mappingFile, []byte(f.mappingString), 0644); err != nil {
+			log.Printf("Failed to write mapping file: %v\n", err)
+		}
+	}
+	f.dirty = false
+}
+
+func (f *fileSync) input() string {
+	f.mut.Lock()
+	defer f.mut.Unlock()
+	return f.inputString
+}
+
+func (f *fileSync) mapping() string {
+	f.mut.Lock()
+	defer f.mut.Unlock()
+	return f.mappingString
+}
+
+func runServer(c *cli.Context) error {
+	fSync := newFileSync(c.String("input-file"), c.String("mapping-file"), c.Bool("write"))
+	defer fSync.write()
 
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/execute", func(w http.ResponseWriter, r *http.Request) {
-		valuesMut.Lock()
-		defer valuesMut.Unlock()
-
 		req := struct {
 			Mapping string `json:"mapping"`
 			Input   string `json:"input"`
@@ -299,9 +344,7 @@ func runServer(c *cli.Context) error {
 			return
 		}
 
-		mappingString = req.Mapping
-		inputString = req.Input
-		writeFiles()
+		fSync.update(req.Input, req.Mapping)
 
 		res := struct {
 			ParseError   string `json:"parse_error"`
@@ -342,8 +385,8 @@ func runServer(c *cli.Context) error {
 			InitialInput   string
 			InitialMapping string
 		}{
-			inputString,
-			mappingString,
+			fSync.input(),
+			fSync.mapping(),
 		})
 		if err != nil {
 			http.Error(w, "Template error", http.StatusBadGateway)
@@ -361,7 +404,7 @@ func runServer(c *cli.Context) error {
 		openBrowserAt(u.String())
 	}
 
-	fmt.Printf("Serving at: http://%v\n", bindAddress)
+	log.Printf("Serving at: http://%v\n", bindAddress)
 
 	server := http.Server{
 		Addr:    bindAddress,
