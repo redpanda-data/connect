@@ -70,7 +70,44 @@ If the number of batches defined does not match the resulting number of batches 
 
 ### Inline Tests
 
-Sometimes it's more convenient to define your tests within the config being tested. This is fine, simply add the `tests` field to the end of the config being tested.
+Sometimes it's more convenient to define your tests within the config being tested. This is fine, simply add the `tests` field to the end of the config being tested. When defining inline tests the field `parallel` is not supported.
+
+### Bloblang Tests
+
+Sometimes when working with large [Bloblang mappings][bloblang] it's preferred to have the full mapping in a separate file to your Benthos configuration. In this case it's possible to write unit tests that target and execute the mapping directly with the field `target_mapping`, which when specified is interpreted as either an absolute path or a path relative to the test definition file that points to a file containing only a Bloblang mapping.
+
+For example, if we were to have a file `cities.blobl` containing a mapping:
+
+```coffee
+root.Cities = this.locations.
+                filter(loc -> loc.state == "WA").
+                map_each(loc -> loc.name).
+                sort().join(", ")
+```
+
+We can accompany it with a test file `cities_test.yaml` containing a regular test definition:
+
+```yml
+tests:
+  - name: test cities mapping
+    target_mapping: './cities.blobl'
+    environment: {}
+    input_batch:
+      - content: |
+          {
+            "locations": [
+              {"name": "Seattle", "state": "WA"},
+              {"name": "New York", "state": "NY"},
+              {"name": "Bellevue", "state": "WA"},
+              {"name": "Olympia", "state": "WA"}
+            ]
+          }
+    output_batches:
+      -
+        - json_equals: {"Cities": "Bellevue, Olympia, Seattle"}
+```
+
+And execute this test the same way we execute other Benthos tests (`benthos test ./dir/foo_test.yaml`, `benthos test ./dir/...`, etc).
 
 ### Fragmented Tests
 

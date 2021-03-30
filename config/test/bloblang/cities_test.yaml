@@ -1,0 +1,17 @@
+tests:
+  - name: test cities mapping
+    target_mapping: './cities.blobl'
+    environment: {}
+    input_batch:
+      - content: |
+          {
+            "locations": [
+              {"name": "Seattle", "state": "WA"},
+              {"name": "New York", "state": "NY"},
+              {"name": "Bellevue", "state": "WA"},
+              {"name": "Olympia", "state": "WA"}
+            ]
+          }
+    output_batches:
+      -
+        - json_equals: {"Cities": "Bellevue, Olympia, Seattle"}
