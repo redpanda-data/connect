@@ -64,9 +64,8 @@ type FunctionContext struct {
 }
 
 type defaultContextValue struct {
-	identifier string
-	value      interface{}
-	next       *defaultContextValue
+	value interface{}
+	next  *defaultContextValue
 }
 
 type namedContextValue struct {
@@ -117,10 +116,10 @@ func (ctx FunctionContext) WithValueFunc(fn func() *interface{}) FunctionContext
 }
 
 // WithValue returns a function context with a new value.
-func (ctx FunctionContext) WithValue(identifier string, value interface{}) FunctionContext {
+func (ctx FunctionContext) WithValue(value interface{}) FunctionContext {
 	nextCtx := ctx
 	nextCtx.defaultValue = &defaultContextValue{
-		identifier, value, ctx.defaultValue,
+		value, ctx.defaultValue,
 	}
 	return nextCtx
 }

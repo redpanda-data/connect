@@ -63,19 +63,21 @@ func NewTypeError(actual interface{}, exp ...ValueType) *TypeError {
 // TypeMismatch represents an error where two values should be a comparable type
 // but are not.
 type TypeMismatch struct {
-	Left  ValueType
-	Right ValueType
+	Left      ValueType
+	Right     ValueType
+	Operation string
 }
 
 // Error implements the standard error interface.
 func (t *TypeMismatch) Error() string {
-	return fmt.Sprintf("found incomparable types %v and %v", t.Left, t.Right)
+	return fmt.Sprintf("cannot %v types %v and %v", t.Operation, t.Left, t.Right)
 }
 
 // NewTypeMismatch creates a new type mismatch error.
-func NewTypeMismatch(left, right interface{}) *TypeMismatch {
+func NewTypeMismatch(operation string, left, right interface{}) *TypeMismatch {
 	return &TypeMismatch{
-		Left:  ITypeOf(left),
-		Right: ITypeOf(right),
+		Left:      ITypeOf(left),
+		Right:     ITypeOf(right),
+		Operation: operation,
 	}
 }

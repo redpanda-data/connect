@@ -45,7 +45,7 @@ func applyMethod(target Function, args ...interface{}) (Function, error) {
 		if err != nil {
 			return nil, err
 		}
-		ctx = ctx.WithValue("", res)
+		ctx = ctx.WithValue(res)
 
 		if ctx.Maps == nil {
 			return nil, &ErrRecoverable{
@@ -333,7 +333,7 @@ func mapMethod(target Function, args ...interface{}) (Function, error) {
 		if err != nil {
 			return nil, err
 		}
-		return mapFn.Exec(ctx.WithValue("", res))
+		return mapFn.Exec(ctx.WithValue(res))
 	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
 		mapCtx, targets := target.QueryTargets(ctx)
 		mapCtx = mapCtx.WithValues(targets).WithValuesAsContext()

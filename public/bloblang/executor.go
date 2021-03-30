@@ -29,5 +29,5 @@ func (e *Executor) Query(v interface{}) (interface{}, error) {
 		Vars:     map[string]interface{}{},
 		Index:    0,
 		MsgBatch: msg,
-	}.WithValue("", v))
+	}.WithValue(v))
 }

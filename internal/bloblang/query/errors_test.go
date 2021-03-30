@@ -84,26 +84,29 @@ func TestTypeError(t *testing.T) {
 
 func TestTypeMismatchError(t *testing.T) {
 	tests := map[string]struct {
-		left  interface{}
-		right interface{}
-		exp   string
+		operator string
+		left     interface{}
+		right    interface{}
+		exp      string
 	}{
 		"string to number": {
-			left:  "foo",
-			right: 10.0,
-			exp:   `found incomparable types string and number`,
+			operator: "compare",
+			left:     "foo",
+			right:    10.0,
+			exp:      `cannot compare types string and number`,
 		},
 		"bool to array": {
-			left:  false,
-			right: []interface{}{"foo"},
-			exp:   `found incomparable types bool and array`,
+			operator: "compare",
+			left:     false,
+			right:    []interface{}{"foo"},
+			exp:      `cannot compare types bool and array`,
 		},
 	}
 
 	for name, test := range tests {
 		test := test
 		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, test.exp, NewTypeMismatch(test.left, test.right).Error())
+			assert.Equal(t, test.exp, NewTypeMismatch(test.operator, test.left, test.right).Error())
 		})
 	}
 }

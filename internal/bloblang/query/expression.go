@@ -37,7 +37,7 @@ func NewMatchFunction(contextFn Function, cases ...MatchCase) Function {
 			return nil, err
 		}
 		for i, c := range cases {
-			caseCtx := ctx.WithValue("", ctxVal)
+			caseCtx := ctx.WithValue(ctxVal)
 			var caseVal interface{}
 			if caseVal, err = c.caseFn.Exec(caseCtx); err != nil {
 				return nil, fmt.Errorf("failed to check match case %v: %w", i, err)
