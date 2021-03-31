@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -90,7 +91,7 @@ func newAzureTargetReader(
 	}
 	output, err := container.ListBlobs(params)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list blobs: %v", err)
+		return nil, fmt.Errorf("failed to list blobs: %w", err)
 	}
 	staticKeys := azureTargetReader{
 		container: container,
@@ -119,7 +120,7 @@ func (s *azureTargetReader) Pop(ctx context.Context) (*azureObjectTarget, error)
 		}
 		output, err := s.container.ListBlobs(params)
 		if err != nil {
-			return nil, fmt.Errorf("failed to list blobs: %v", err)
+			return nil, fmt.Errorf("failed to list blobs: %w", err)
 		}
 		for _, blob := range output.Blobs {
 			ackFn := deleteAzureObjectAckFn(s.container, blob.Name, s.conf.DeleteObjects, nil)
@@ -182,17 +183,17 @@ func newAzureBlobStorage(conf AzureBlobStorageConfig, log log.Modular, stats met
 		// the '?' prepended to it which confuses url.ParseQuery
 		token, err := url.ParseQuery(strings.TrimPrefix(conf.StorageSASToken, "?"))
 		if err != nil {
-			return nil, fmt.Errorf("invalid azure storage SAS token: %v", err)
+			return nil, fmt.Errorf("invalid azure storage SAS token: %w", err)
 		}
 		client = storage.NewAccountSASClient(conf.StorageAccount, token, azure.PublicCloud)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
+		return nil, fmt.Errorf("invalid azure storage account credentials: %w", err)
 	}
 
 	var objectScannerCtor codec.ReaderConstructor
 	if objectScannerCtor, err = codec.GetReader(conf.Codec, codec.NewReaderConfig()); err != nil {
-		return nil, fmt.Errorf("invalid azure storage codec: %v", err)
+		return nil, fmt.Errorf("invalid azure storage codec: %w", err)
 	}
 
 	blobService := client.GetBlobService()
@@ -229,7 +230,7 @@ func (a *azureBlobStorage) getObjectTarget(ctx context.Context) (*azurePendingOb
 	exists, err := blobReference.Exists()
 	if err != nil {
 		target.ackFn(ctx, err)
-		return nil, fmt.Errorf("failed to get blob reference: %v", err)
+		return nil, fmt.Errorf("failed to get blob reference: %w", err)
 	}
 
 	if !exists {
@@ -288,6 +289,9 @@ func (a *azureBlobStorage) ReadWithContext(ctx context.Context) (msg types.Messa
 
 	defer func() {
 		if errors.Is(err, io.EOF) {
+			err = types.ErrTypeClosed
+		} else if serr, ok := err.(storage.AzureStorageServiceError); ok && serr.StatusCode == http.StatusForbidden {
+			a.log.Warnf("error downloading blob: %v", err)
 			err = types.ErrTypeClosed
 		} else if errors.Is(err, context.Canceled) ||
 			errors.Is(err, context.DeadlineExceeded) ||
