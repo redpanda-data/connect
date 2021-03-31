@@ -76,7 +76,7 @@ func (a *AzureQueueStorage) Write(msg types.Message) error {
 
 // WriteWithContext attempts to write message contents to a target Queue Storage
 func (a *AzureQueueStorage) WriteWithContext(ctx context.Context, msg types.Message) error {
-	return msg.Iter(func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		queueURL := a.serviceURL.NewQueueURL(a.queueName.String(i, msg))
 		msgURL := queueURL.NewMessagesURL()
 		var ttl *time.Duration
