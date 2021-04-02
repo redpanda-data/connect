@@ -264,7 +264,7 @@ func (g *gcpCloudStorageInput) getObjectTarget(ctx context.Context) (*gcpCloudSt
 		return nil, err
 	}
 
-	objReader, err := objReference.NewReader(ctx)
+	objReader, err := objReference.NewReader(context.Background())
 	if err != nil {
 		target.ackFn(ctx, err)
 		return nil, err

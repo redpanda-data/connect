@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Prevented the experimental `gcp_cloud_storage` input from closing early during large file consumption.
+
 ## 3.43.0 - 2021-03-31
 
 ### New
