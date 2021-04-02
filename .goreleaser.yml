@@ -10,12 +10,17 @@ builds:
         goarch: arm
       - goos: darwin
         goarch: arm
+    env:
+      - CGO_ENABLED=0
     ldflags: >
+      -s -w
       -X github.com/Jeffail/benthos/v3/lib/service.Version={{.Version}}
       -X github.com/Jeffail/benthos/v3/lib/service.DateBuilt={{.Date}}
   - id: benthos-lambda
     main: cmd/serverless/benthos-lambda/main.go
     binary: benthos-lambda
+    env:
+      - CGO_ENABLED=0
     goos: [ linux ]
     goarch: [ amd64 ]
 archives:
