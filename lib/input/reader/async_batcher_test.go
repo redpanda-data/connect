@@ -13,6 +13,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAsyncBatcherZero(t *testing.T) {
@@ -212,22 +214,16 @@ func TestAsyncBatcherSadThenHappy(t *testing.T) {
 }
 
 func TestAsyncBatcherTimeout(t *testing.T) {
-	ctx, done := context.WithTimeout(context.Background(), time.Millisecond)
-	defer done()
-
 	rdr := newMockAsyncReader()
 
 	conf := batch.NewPolicyConfig()
 	conf.Count = 5
 	batcher, err := NewAsyncBatcher(conf, rdr, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	defer func() {
 		batcher.CloseAsync()
-		if err = batcher.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, batcher.WaitForClose(time.Second))
 	}()
 
 	go func() {
@@ -237,13 +233,12 @@ func TestAsyncBatcherTimeout(t *testing.T) {
 		rdr.waitForCloseChan <- nil
 	}()
 
-	if err = batcher.ConnectWithContext(ctx); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, batcher.ConnectWithContext(context.Background()))
 
-	if _, _, err = batcher.ReadWithContext(ctx); err != types.ErrTimeout {
-		t.Fatalf("Expected '%v', received: %v", types.ErrTimeout, err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Millisecond)
+	defer done()
+	_, _, err = batcher.ReadWithContext(ctx)
+	assert.EqualError(t, err, types.ErrTimeout.Error())
 }
 
 func TestAsyncBatcherTimedBatches(t *testing.T) {
