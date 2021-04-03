@@ -90,7 +90,7 @@ root.doc.contents = (this.body.content | this.thing.body)
 # Out: {"doc":{"contents":"hello world","type":"foo"}}
 
 # In:  {"nothing":"matches"}
-# Out: Error("failed to execute mapping query at line 1: unknown type")
+# Out: Error("failed assignment (line 1): unknown type")
 ```
 
 ### `uuid_v4`

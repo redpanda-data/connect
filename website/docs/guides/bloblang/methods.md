@@ -701,7 +701,7 @@ root.a = this.a.not_null()
 # Out: {"a":"foobar"}
 
 # In:  {"b":"barbaz"}
-# Out: Error("failed to execute mapping query at line 1: value is null")
+# Out: Error("failed assignment (line 1): field `this.a`: value is null")
 ```
 
 ### `bytes`
@@ -774,19 +774,19 @@ root.a = this.a.not_empty()
 # Out: {"a":"foo"}
 
 # In:  {"a":""}
-# Out: Error("failed to execute mapping query at line 1: string value is empty")
+# Out: Error("failed assignment (line 1): field `this.a`: string value is empty")
 
 # In:  {"a":["foo","bar"]}
 # Out: {"a":["foo","bar"]}
 
 # In:  {"a":[]}
-# Out: Error("failed to execute mapping query at line 1: array value is empty")
+# Out: Error("failed assignment (line 1): field `this.a`: array value is empty")
 
 # In:  {"a":{"b":"foo","c":"bar"}}
 # Out: {"a":{"b":"foo","c":"bar"}}
 
 # In:  {"a":{}}
-# Out: Error("failed to execute mapping query at line 1: object value is empty")
+# Out: Error("failed assignment (line 1): field `this.a`: object value is empty")
 ```
 
 ## Object & Array Manipulation
@@ -845,7 +845,7 @@ root = this.json_schema("""{
 # Out: {"foo":"bar"}
 
 # In:  {"foo":5}
-# Out: Error("failed to execute mapping query at line 1: foo invalid type. expected: string, given: integer")
+# Out: Error("failed assignment (line 1): field `this`: foo invalid type. expected: string, given: integer")
 ```
 
 In order to load a schema from a file use the `file` function.
