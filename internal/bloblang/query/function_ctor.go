@@ -12,6 +12,17 @@ type Function interface {
 	// Execute this function for a message of a batch.
 	Exec(ctx FunctionContext) (interface{}, error)
 
+	// Annotation returns a string token to identify the function within error
+	// messages. The returned token is not valid Bloblang and cannot be used to
+	// recreate the function.
+	Annotation() string
+
+	// MarshalString returns a string representation of the function that could
+	// be parsed back into the exact equivalent function. The result will be
+	// normalized, which means the representation may not match the original
+	// input from the user.
+	// MarshalString() string
+
 	// Returns a list of targets that this function attempts (or may attempt) to
 	// access. A context must be provided that describes the current execution
 	// context that this function will be executed upon, which is how it is able
@@ -31,18 +42,24 @@ type FunctionCtor func(args ...interface{}) (Function, error)
 // convenient constructor for function implementations that don't manage complex
 // state.
 func ClosureFunction(
+	annotation string,
 	exec func(ctx FunctionContext) (interface{}, error),
 	queryTargets func(ctx TargetsContext) (TargetsContext, []TargetPath),
 ) Function {
 	if queryTargets == nil {
 		queryTargets = func(ctx TargetsContext) (TargetsContext, []TargetPath) { return ctx, nil }
 	}
-	return closureFunction{exec, queryTargets}
+	return closureFunction{annotation, exec, queryTargets}
 }
 
 type closureFunction struct {
+	annotation   string
 	exec         func(ctx FunctionContext) (interface{}, error)
 	queryTargets func(ctx TargetsContext) (TargetsContext, []TargetPath)
+}
+
+func (f closureFunction) Annotation() string {
+	return f.annotation
 }
 
 // Exec the underlying closure.
@@ -65,14 +82,14 @@ func expandLiteralArgs(args []interface{}) {
 	}
 }
 
-func withDynamicArgs(args []interface{}, fn FunctionCtor) Function {
+func withDynamicArgs(annotation string, args []interface{}, fn FunctionCtor) Function {
 	fns := []Function{}
 	for _, dArg := range args {
 		if fArg, isDyn := dArg.(Function); isDyn {
 			fns = append(fns, fArg)
 		}
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(annotation, func(ctx FunctionContext) (interface{}, error) {
 		dynArgs := make([]interface{}, 0, len(args))
 		for i, dArg := range args {
 			if fArg, isDyn := dArg.(Function); isDyn {
@@ -93,14 +110,14 @@ func withDynamicArgs(args []interface{}, fn FunctionCtor) Function {
 	}, aggregateTargetPaths(fns...))
 }
 
-func functionWithAutoResolvedFunctionArgs(fn FunctionCtor) FunctionCtor {
+func functionWithAutoResolvedFunctionArgs(annotation string, fn FunctionCtor) FunctionCtor {
 	return func(args ...interface{}) (Function, error) {
 		for i, arg := range args {
 			switch t := arg.(type) {
 			case *Literal:
 				args[i] = t.Value
 			case Function:
-				return withDynamicArgs(args, fn), nil
+				return withDynamicArgs(annotation, args, fn), nil
 			}
 		}
 		return fn(args...)
@@ -196,7 +213,7 @@ func ExpectFunctionArg(i int) ArgCheckFn {
 		if _, ok := args[i].(Function); ok {
 			return nil
 		}
-		args[i] = NewLiteralFunction(args[i])
+		args[i] = NewLiteralFunction("", args[i])
 		return nil
 	}
 }

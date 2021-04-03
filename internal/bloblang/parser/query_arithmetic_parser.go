@@ -105,7 +105,7 @@ func arithmeticParser(fnParser Func) Func {
 				var err error
 				if fn, err = query.NewArithmeticExpression(
 					[]query.Function{
-						query.NewLiteralFunction(int64(0)),
+						query.NewLiteralFunction("", int64(0)),
 						fn,
 					},
 					[]query.ArithmeticOperator{

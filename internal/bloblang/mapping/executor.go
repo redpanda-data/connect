@@ -61,6 +61,7 @@ func NewStatement(input []rune, assignment Assignment, query query.Function) Sta
 // Executor is a parsed bloblang mapping that can be executed on a Benthos
 // message.
 type Executor struct {
+	annotation string
 	input      []rune
 	maps       map[string]query.Function
 	statements []Statement
@@ -70,10 +71,13 @@ type Executor struct {
 // and a list of assignments to be executed on each mapping. The input parameter
 // is an optional slice pointing to the parsed expression that created the
 // executor.
-func NewExecutor(input []rune, maps map[string]query.Function, statements ...Statement) *Executor {
-	return &Executor{
-		input, maps, statements,
-	}
+func NewExecutor(annotation string, input []rune, maps map[string]query.Function, statements ...Statement) *Executor {
+	return &Executor{annotation, input, maps, statements}
+}
+
+// Annotation returns a string annotation that describes the mapping executor.
+func (e *Executor) Annotation() string {
+	return e.annotation
 }
 
 // Maps returns any map definitions contained within the mapping.
@@ -121,9 +125,9 @@ func (e *Executor) QueryPart(index int, msg Message) (bool, error) {
 				line, _ = LineAndColOf(e.input, stmt.input)
 			}
 			if parseErr != nil && errors.Is(err, query.ErrNoContext) {
-				err = fmt.Errorf("unable to reference message as structured (with 'this'): %w", parseErr)
+				err = fmt.Errorf("unable to reference message as structured (with `this`): %w", parseErr)
 			}
-			return false, fmt.Errorf("failed to execute mapping query at line %v: %w", line, err)
+			return false, fmt.Errorf("failed assignment (line %v): %w", line, err)
 		}
 		if _, isNothing := res.(query.Nothing); isNothing {
 			// Skip assignment entirely
@@ -138,14 +142,14 @@ func (e *Executor) QueryPart(index int, msg Message) (bool, error) {
 			if len(e.input) > 0 && len(stmt.input) > 0 {
 				line, _ = LineAndColOf(e.input, stmt.input)
 			}
-			return false, fmt.Errorf("failed to assign query result at line %v: %w", line, err)
+			return false, fmt.Errorf("failed to assign result (line %v): %w", line, err)
 		}
 	}
 
 	if b, ok := newValue.(bool); ok {
 		return b, nil
 	}
-	return false, query.NewTypeError(newValue, query.ValueBool)
+	return false, query.NewTypeErrorFrom("mapping", newValue, query.ValueBool)
 }
 
 // MapPart executes the bloblang mapping on a particular message index of a
@@ -219,7 +223,7 @@ func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (t
 			if parseErr != nil && errors.Is(err, query.ErrNoContext) {
 				err = fmt.Errorf("unable to reference message as structured (with 'this'): %w", parseErr)
 			}
-			return nil, fmt.Errorf("failed to execute mapping query at line %v: %w", line, err)
+			return nil, fmt.Errorf("failed assignment (line %v): %w", line, err)
 		}
 		if _, isNothing := res.(query.Nothing); isNothing {
 			// Skip assignment entirely
@@ -235,7 +239,7 @@ func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (t
 			if len(e.input) > 0 && len(stmt.input) > 0 {
 				line, _ = LineAndColOf(e.input, stmt.input)
 			}
-			return nil, fmt.Errorf("failed to assign query result at line %v: %w", line, err)
+			return nil, fmt.Errorf("failed to assign result (line %v): %w", line, err)
 		}
 	}
 
@@ -296,7 +300,7 @@ func (e *Executor) Exec(ctx query.FunctionContext) (interface{}, error) {
 			if len(e.input) > 0 && len(stmt.input) > 0 {
 				line, _ = LineAndColOf(e.input, stmt.input)
 			}
-			return nil, fmt.Errorf("failed to execute mapping assignment at line %v: %w", line, err)
+			return nil, fmt.Errorf("failed assignment (line %v): %w", line, err)
 		}
 		if _, isNothing := res.(query.Nothing); isNothing {
 			// Skip assignment entirely
@@ -312,7 +316,7 @@ func (e *Executor) Exec(ctx query.FunctionContext) (interface{}, error) {
 			if len(e.input) > 0 && len(stmt.input) > 0 {
 				line, _ = LineAndColOf(e.input, stmt.input)
 			}
-			return nil, fmt.Errorf("failed to assign mapping result at line %v: %w", line, err)
+			return nil, fmt.Errorf("failed to assign result (line %v): %w", line, err)
 		}
 	}
 
@@ -328,7 +332,7 @@ func (e *Executor) ExecOnto(ctx query.FunctionContext, onto AssignmentContext) e
 			if len(e.input) > 0 && len(stmt.input) > 0 {
 				line, _ = LineAndColOf(e.input, stmt.input)
 			}
-			return fmt.Errorf("failed to execute mapping assignment at line %v: %w", line, err)
+			return fmt.Errorf("failed assignment (line %v): %w", line, err)
 		}
 		if _, isNothing := res.(query.Nothing); isNothing {
 			// Skip assignment entirely
@@ -339,7 +343,7 @@ func (e *Executor) ExecOnto(ctx query.FunctionContext, onto AssignmentContext) e
 			if len(e.input) > 0 && len(stmt.input) > 0 {
 				line, _ = LineAndColOf(e.input, stmt.input)
 			}
-			return fmt.Errorf("failed to assign mapping result at line %v: %w", line, err)
+			return fmt.Errorf("failed to assign result (line %v): %w", line, err)
 		}
 	}
 	return nil

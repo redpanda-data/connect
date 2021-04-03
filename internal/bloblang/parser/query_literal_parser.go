@@ -118,7 +118,7 @@ func literalValueParser(pCtx Context) Func {
 			return res
 		}
 
-		res.Payload = query.NewLiteralFunction(res.Payload)
+		res.Payload = query.NewLiteralFunction("", res.Payload)
 		return res
 	}
 }

@@ -98,7 +98,7 @@ func parseExecutor(baseDir string, pCtx Context) Func {
 				statements = append(statements, mStmt)
 			}
 		}
-		return Success(mapping.NewExecutor(input, maps, statements...), res.Remaining)
+		return Success(mapping.NewExecutor("", input, maps, statements...), res.Remaining)
 	}
 }
 
@@ -158,7 +158,7 @@ func singleRootMapping(pCtx Context) Func {
 		}
 
 		stmt := mapping.NewStatement(input, mapping.NewJSONAssignment(), fn)
-		return Success(mapping.NewExecutor(input, map[string]query.Function{}, stmt), nil)
+		return Success(mapping.NewExecutor("", input, map[string]query.Function{}, stmt), nil)
 	}
 }
 
@@ -294,7 +294,7 @@ func mapParser(maps map[string]query.Function, pCtx Context) Func {
 			statements[i] = v.(mapping.Statement)
 		}
 
-		maps[ident] = mapping.NewExecutor(input, maps, statements...)
+		maps[ident] = mapping.NewExecutor("map "+ident, input, maps, statements...)
 
 		return Success(ident, res.Remaining)
 	}

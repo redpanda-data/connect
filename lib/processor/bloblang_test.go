@@ -208,5 +208,5 @@ func TestBloblangJSONError(t *testing.T) {
 	resPart := outMsgs[0].Get(0)
 
 	assert.Equal(t, `this is not valid json`, string(resPart.Get()))
-	assert.Equal(t, `failed to execute mapping query at line 2: invalid character 'h' in literal true (expecting 'r')`, resPart.Metadata().Get(types.FailFlagKey))
+	assert.Equal(t, `failed assignment (line 2): invalid character 'h' in literal true (expecting 'r')`, resPart.Metadata().Get(types.FailFlagKey))
 }

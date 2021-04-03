@@ -44,7 +44,7 @@ func matchCaseParser(pCtx Context) Func {
 		switch t := seqSlice[0].([]interface{})[0].(type) {
 		case query.Function:
 			if lit, isLiteral := t.(*query.Literal); isLiteral {
-				caseFn = query.ClosureFunction(func(ctx query.FunctionContext) (interface{}, error) {
+				caseFn = query.ClosureFunction("case statement", func(ctx query.FunctionContext) (interface{}, error) {
 					v := ctx.Value()
 					if v == nil {
 						return false, nil
@@ -55,7 +55,7 @@ func matchCaseParser(pCtx Context) Func {
 				caseFn = t
 			}
 		case string:
-			caseFn = query.NewLiteralFunction(true)
+			caseFn = query.NewLiteralFunction("", true)
 		}
 
 		return Success(

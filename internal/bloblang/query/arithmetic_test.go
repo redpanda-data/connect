@@ -11,7 +11,7 @@ import (
 )
 
 func TestArithmeticNumberDegradation(t *testing.T) {
-	fn := numberDegradationFunc(
+	fn := numberDegradationFunc(ArithmeticAdd,
 		func(left, right int64) (int64, error) {
 			return left / right, nil
 		},
@@ -79,32 +79,32 @@ func TestArithmeticNumberDegradation(t *testing.T) {
 			name:  "left is invalid int",
 			left:  "not a number",
 			right: 3,
-			err:   "expected number value, found string: not a number",
+			err:   "cannot add types string (from left) and number (from right)",
 		},
 		{
 			name:  "right is invalid int",
 			left:  3,
 			right: "not a number",
-			err:   "expected number value, found string: not a number",
+			err:   "cannot add types number (from left) and string (from right)",
 		},
 		{
 			name:  "left is invalid float",
 			left:  "not a number",
 			right: 3.0,
-			err:   "expected number value, found string: not a number",
+			err:   "cannot add types string (from left) and number (from right)",
 		},
 		{
 			name:  "right is invalid float",
 			left:  3.0,
 			right: "not a number",
-			err:   "expected number value, found string: not a number",
+			err:   "cannot add types number (from left) and string (from right)",
 		},
 	}
 
 	for _, test := range testCases {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			res, err := fn(test.left, test.right)
+			res, err := fn(NewLiteralFunction("left", test.left), NewLiteralFunction("right", test.right), test.left, test.right)
 			if len(test.err) > 0 {
 				assert.EqualError(t, err, test.err)
 			} else {
@@ -134,7 +134,7 @@ func TestArithmetic(t *testing.T) {
 		return fn
 	}
 	opaqueLit := func(v interface{}) Function {
-		return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+		return ClosureFunction("foobar", func(ctx FunctionContext) (interface{}, error) {
 			return v, nil
 		}, nil)
 	}
@@ -149,8 +149,8 @@ func TestArithmetic(t *testing.T) {
 		"compare string to int": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction("foo"),
-					NewLiteralFunction(int64(5)),
+					NewLiteralFunction("", "foo"),
+					NewLiteralFunction("", int64(5)),
 				},
 				[]ArithmeticOperator{
 					ArithmeticNeq,
@@ -161,32 +161,32 @@ func TestArithmetic(t *testing.T) {
 		"dont divide by zero": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(int64(5)),
+					NewLiteralFunction("", int64(5)),
 					opaqueLit(int64(0)),
 				},
 				[]ArithmeticOperator{
 					ArithmeticDiv,
 				},
 			),
-			err: errors.New("attempted to divide by zero"),
+			err: errors.New("foobar: attempted to divide by zero"),
 		},
 		"dont divide by zero 2": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(int64(5)),
+					NewLiteralFunction("left thing", int64(5)),
 					opaqueLit(int64(0)),
 				},
 				[]ArithmeticOperator{
 					ArithmeticMod,
 				},
 			),
-			err: errors.New("attempted to divide by zero"),
+			err: errors.New("foobar: attempted to divide by zero"),
 		},
 		"compare string to null": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction("foo"),
-					NewLiteralFunction(nil),
+					NewLiteralFunction("", "foo"),
+					NewLiteralFunction("", nil),
 				},
 				[]ArithmeticOperator{
 					ArithmeticNeq,
@@ -197,8 +197,8 @@ func TestArithmetic(t *testing.T) {
 		"compare string to int 2": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(int64(5)),
-					NewLiteralFunction("foo"),
+					NewLiteralFunction("", int64(5)),
+					NewLiteralFunction("", "foo"),
 				},
 				[]ArithmeticOperator{
 					ArithmeticNeq,
@@ -209,8 +209,8 @@ func TestArithmetic(t *testing.T) {
 		"compare string to null 2": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(nil),
-					NewLiteralFunction("foo"),
+					NewLiteralFunction("", nil),
+					NewLiteralFunction("", "foo"),
 				},
 				[]ArithmeticOperator{
 					ArithmeticNeq,
@@ -221,9 +221,9 @@ func TestArithmetic(t *testing.T) {
 		"add strings": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction("foo"),
-					NewLiteralFunction("bar"),
-					NewLiteralFunction("baz"),
+					NewLiteralFunction("", "foo"),
+					NewLiteralFunction("", "bar"),
+					NewLiteralFunction("", "baz"),
 				},
 				[]ArithmeticOperator{
 					ArithmeticAdd,
@@ -235,8 +235,8 @@ func TestArithmetic(t *testing.T) {
 		"comparisons with not": {
 			input: arithmetic(
 				[]Function{
-					Not(NewLiteralFunction(true)),
-					NewLiteralFunction(false),
+					Not(NewLiteralFunction("", true)),
+					NewLiteralFunction("", false),
 				},
 				[]ArithmeticOperator{
 					ArithmeticOr,
@@ -247,8 +247,8 @@ func TestArithmetic(t *testing.T) {
 		"comparisons with not 2": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(false),
-					Not(NewLiteralFunction(false)),
+					NewLiteralFunction("", false),
+					Not(NewLiteralFunction("", false)),
 				},
 				[]ArithmeticOperator{
 					ArithmeticOr,
@@ -259,8 +259,8 @@ func TestArithmetic(t *testing.T) {
 		"mod two ints": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(int64(5)),
-					NewLiteralFunction(int64(2)),
+					NewLiteralFunction("", int64(5)),
+					NewLiteralFunction("", int64(2)),
 				},
 				[]ArithmeticOperator{
 					ArithmeticMod,
@@ -271,8 +271,8 @@ func TestArithmetic(t *testing.T) {
 		"number comparisons": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(5.0),
-					NewLiteralFunction(5.0),
+					NewLiteralFunction("", 5.0),
+					NewLiteralFunction("", 5.0),
 				},
 				[]ArithmeticOperator{
 					ArithmeticNeq,
@@ -283,10 +283,10 @@ func TestArithmetic(t *testing.T) {
 		"comparisons": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(true),
-					NewLiteralFunction(false),
-					NewLiteralFunction(true),
-					NewLiteralFunction(false),
+					NewLiteralFunction("", true),
+					NewLiteralFunction("", false),
+					NewLiteralFunction("", true),
+					NewLiteralFunction("", false),
 				},
 				[]ArithmeticOperator{
 					ArithmeticAnd,
@@ -299,10 +299,10 @@ func TestArithmetic(t *testing.T) {
 		"comparisons 2": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(false),
-					NewLiteralFunction(true),
-					NewLiteralFunction(true),
-					NewLiteralFunction(false),
+					NewLiteralFunction("", false),
+					NewLiteralFunction("", true),
+					NewLiteralFunction("", true),
+					NewLiteralFunction("", false),
 				},
 				[]ArithmeticOperator{
 					ArithmeticOr,
@@ -315,9 +315,9 @@ func TestArithmetic(t *testing.T) {
 		"comparisons 3": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(true),
-					NewLiteralFunction(false),
-					NewLiteralFunction(true),
+					NewLiteralFunction("", true),
+					NewLiteralFunction("", false),
+					NewLiteralFunction("", true),
 				},
 				[]ArithmeticOperator{
 					ArithmeticOr,
@@ -329,20 +329,20 @@ func TestArithmetic(t *testing.T) {
 		"err comparison": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction("not a number"),
+					NewLiteralFunction("", "not a number"),
 					opaqueLit(int64(0)),
 				},
 				[]ArithmeticOperator{
 					ArithmeticGt,
 				},
 			),
-			err: errors.New("expected string value, found number: 0"),
+			err: errors.New("cannot compare types string (from string literal) and number (from foobar)"),
 		},
 		"numbers comparison": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(float64(15)),
-					NewLiteralFunction(uint64(0)),
+					NewLiteralFunction("", float64(15)),
+					NewLiteralFunction("", uint64(0)),
 				},
 				[]ArithmeticOperator{
 					ArithmeticGt,
@@ -353,8 +353,8 @@ func TestArithmetic(t *testing.T) {
 		"numbers comparison 2": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(int64(0)),
-					NewLiteralFunction(float64(15)),
+					NewLiteralFunction("", int64(0)),
+					NewLiteralFunction("", float64(15)),
 				},
 				[]ArithmeticOperator{
 					ArithmeticGt,
@@ -365,8 +365,8 @@ func TestArithmetic(t *testing.T) {
 		"numbers comparison 3": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(uint64(15)),
-					NewLiteralFunction(int64(15)),
+					NewLiteralFunction("", uint64(15)),
+					NewLiteralFunction("", int64(15)),
 				},
 				[]ArithmeticOperator{
 					ArithmeticGte,
@@ -377,8 +377,8 @@ func TestArithmetic(t *testing.T) {
 		"numbers comparison 4": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(uint64(15)),
-					NewLiteralFunction(float64(15)),
+					NewLiteralFunction("", uint64(15)),
+					NewLiteralFunction("", float64(15)),
 				},
 				[]ArithmeticOperator{
 					ArithmeticLte,
@@ -389,8 +389,8 @@ func TestArithmetic(t *testing.T) {
 		"numbers comparison 5": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(int64(15)),
-					NewLiteralFunction(float64(15)),
+					NewLiteralFunction("", int64(15)),
+					NewLiteralFunction("", float64(15)),
 				},
 				[]ArithmeticOperator{
 					ArithmeticLt,
@@ -401,10 +401,10 @@ func TestArithmetic(t *testing.T) {
 		"and exit early": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(false),
+					NewLiteralFunction("", false),
 					arithmetic(
 						[]Function{
-							NewLiteralFunction("not a number"),
+							NewLiteralFunction("", "not a number"),
 							opaqueLit(int64(0)),
 						},
 						[]ArithmeticOperator{
@@ -421,11 +421,11 @@ func TestArithmetic(t *testing.T) {
 		"and second exit early": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(true),
-					NewLiteralFunction(false),
+					NewLiteralFunction("", true),
+					NewLiteralFunction("", false),
 					arithmetic(
 						[]Function{
-							NewLiteralFunction("not a number"),
+							NewLiteralFunction("", "not a number"),
 							opaqueLit(int64(0)),
 						},
 						[]ArithmeticOperator{
@@ -443,10 +443,10 @@ func TestArithmetic(t *testing.T) {
 		"or exit early": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(true),
+					NewLiteralFunction("", true),
 					arithmetic(
 						[]Function{
-							NewLiteralFunction("not a number"),
+							NewLiteralFunction("", "not a number"),
 							opaqueLit(int64(0)),
 						},
 						[]ArithmeticOperator{
@@ -463,11 +463,11 @@ func TestArithmetic(t *testing.T) {
 		"or second exit early": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(false),
-					NewLiteralFunction(true),
+					NewLiteralFunction("", false),
+					NewLiteralFunction("", true),
 					arithmetic(
 						[]Function{
-							NewLiteralFunction("not a number"),
+							NewLiteralFunction("", "not a number"),
 							opaqueLit(int64(0)),
 						},
 						[]ArithmeticOperator{
@@ -485,11 +485,11 @@ func TestArithmetic(t *testing.T) {
 		"multiply and additions of ints 3": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(int64(2)),
-					NewLiteralFunction(int64(3)),
-					NewLiteralFunction(float64(2)),
-					NewLiteralFunction(uint64(1)),
-					NewLiteralFunction(uint64(3)),
+					NewLiteralFunction("", int64(2)),
+					NewLiteralFunction("", int64(3)),
+					NewLiteralFunction("", float64(2)),
+					NewLiteralFunction("", uint64(1)),
+					NewLiteralFunction("", uint64(3)),
 				},
 				[]ArithmeticOperator{
 					ArithmeticAdd,
@@ -503,10 +503,10 @@ func TestArithmetic(t *testing.T) {
 		"division and subtractions of ints": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(int64(6)),
-					NewLiteralFunction(int64(6)),
-					NewLiteralFunction(float64(2)),
-					NewLiteralFunction(uint64(1)),
+					NewLiteralFunction("", int64(6)),
+					NewLiteralFunction("", int64(6)),
+					NewLiteralFunction("", float64(2)),
+					NewLiteralFunction("", uint64(1)),
 				},
 				[]ArithmeticOperator{
 					ArithmeticSub,
@@ -535,7 +535,7 @@ func TestArithmetic(t *testing.T) {
 			input: arithmetic(
 				[]Function{
 					function("json", "foo"),
-					NewLiteralFunction("not this"),
+					NewLiteralFunction("", "not this"),
 				},
 				[]ArithmeticOperator{
 					ArithmeticPipe,
@@ -549,9 +549,9 @@ func TestArithmetic(t *testing.T) {
 		"coalesce delete unmapped": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(Delete(nil)),
-					NewLiteralFunction(Nothing(nil)),
-					NewLiteralFunction("this"),
+					NewLiteralFunction("", Delete(nil)),
+					NewLiteralFunction("", Nothing(nil)),
+					NewLiteralFunction("", "this"),
 				},
 				[]ArithmeticOperator{
 					ArithmeticPipe,
@@ -563,10 +563,10 @@ func TestArithmetic(t *testing.T) {
 		"compare maps": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(map[string]interface{}{
+					NewLiteralFunction("", map[string]interface{}{
 						"foo": "bar",
 					}),
-					NewLiteralFunction(map[string]interface{}{
+					NewLiteralFunction("", map[string]interface{}{
 						"foo": "bar",
 					}),
 				},
@@ -579,10 +579,10 @@ func TestArithmetic(t *testing.T) {
 		"compare maps neg": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(map[string]interface{}{
+					NewLiteralFunction("", map[string]interface{}{
 						"foo": "bar",
 					}),
-					NewLiteralFunction(map[string]interface{}{
+					NewLiteralFunction("", map[string]interface{}{
 						"foo": "baz",
 					}),
 				},
@@ -638,7 +638,7 @@ func TestArithmeticTargets(t *testing.T) {
 		return fn
 	}
 	opaqueLit := func(v interface{}) Function {
-		return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+		return ClosureFunction("", func(ctx FunctionContext) (interface{}, error) {
 			return v, nil
 		}, nil)
 	}
@@ -650,7 +650,7 @@ func TestArithmeticTargets(t *testing.T) {
 		"no targets": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction(int64(5)),
+					NewLiteralFunction("", int64(5)),
 					opaqueLit("bar"),
 				},
 				[]ArithmeticOperator{
@@ -678,9 +678,9 @@ func TestArithmeticTargets(t *testing.T) {
 			input: arithmetic(
 				[]Function{
 					function("meta", "buz"),
-					NewLiteralFunction(int64(5)),
+					NewLiteralFunction("", int64(5)),
 					function("json", "foo.bar"),
-					NewLiteralFunction("bar"),
+					NewLiteralFunction("", "bar"),
 					NewFieldFunction("qux.quz"),
 				},
 				[]ArithmeticOperator{

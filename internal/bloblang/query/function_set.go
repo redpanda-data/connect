@@ -27,7 +27,7 @@ func (f *FunctionSet) Add(spec FunctionSpec, ctor FunctionCtor, autoResolveFunct
 		ctor = checkArgs(ctor, checks...)
 	}
 	if autoResolveFunctionArgs {
-		ctor = functionWithAutoResolvedFunctionArgs(ctor)
+		ctor = functionWithAutoResolvedFunctionArgs("function "+spec.Name, ctor)
 	}
 	if _, exists := f.constructors[spec.Name]; exists {
 		return fmt.Errorf("conflicting function name: %v", spec.Name)
@@ -100,6 +100,15 @@ var AllFunctions = &FunctionSet{
 // struct in order to allow inline calls.
 func RegisterFunction(spec FunctionSpec, autoResolveFunctionArgs bool, ctor FunctionCtor, checks ...ArgCheckFn) struct{} {
 	if err := AllFunctions.Add(spec, ctor, autoResolveFunctionArgs, checks...); err != nil {
+		panic(err)
+	}
+	return struct{}{}
+}
+
+func registerSimpleFunction(spec FunctionSpec, fn func(ctx FunctionContext) (interface{}, error)) struct{} {
+	if err := AllFunctions.Add(spec, func(...interface{}) (Function, error) {
+		return ClosureFunction("function "+spec.Name, fn, nil), nil
+	}, false); err != nil {
 		panic(err)
 	}
 	return struct{}{}

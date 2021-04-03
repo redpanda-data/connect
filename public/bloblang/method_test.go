@@ -22,7 +22,7 @@ func TestTypedMethods(t *testing.T) {
 				return i, nil
 			}),
 			in:  "not an int",
-			err: "expected number value, found string: not an int",
+			err: `expected number value, got string ("not an int")`,
 		},
 		{
 			name: "good int64",
@@ -38,7 +38,7 @@ func TestTypedMethods(t *testing.T) {
 				return f, nil
 			}),
 			in:  "not a float",
-			err: "expected number value, found string: not a float",
+			err: `expected number value, got string ("not a float")`,
 		},
 		{
 			name: "good float64",
@@ -54,7 +54,7 @@ func TestTypedMethods(t *testing.T) {
 				return s, nil
 			}),
 			in:  5,
-			err: "expected string value, found number: 5",
+			err: "expected string value, got number (5)",
 		},
 		{
 			name: "good string",
@@ -70,7 +70,7 @@ func TestTypedMethods(t *testing.T) {
 				return s, nil
 			}),
 			in:  5,
-			err: "expected bytes value, found number: 5",
+			err: "expected bytes value, got number (5)",
 		},
 		{
 			name: "good bytes",
@@ -86,7 +86,7 @@ func TestTypedMethods(t *testing.T) {
 				return b, nil
 			}),
 			in:  "nope",
-			err: "expected bool value, found string: nope",
+			err: `expected bool value, got string ("nope")`,
 		},
 		{
 			name: "good bool",
@@ -102,7 +102,7 @@ func TestTypedMethods(t *testing.T) {
 				return o, nil
 			}),
 			in:  5,
-			err: "expected object value, found number: 5",
+			err: "expected object value, got number (5)",
 		},
 		{
 			name: "bad array",
@@ -110,7 +110,7 @@ func TestTypedMethods(t *testing.T) {
 				return a, nil
 			}),
 			in:  5,
-			err: "expected array value, found number: 5",
+			err: "expected array value, got number (5)",
 		},
 		{
 			name: "bad timestamp",

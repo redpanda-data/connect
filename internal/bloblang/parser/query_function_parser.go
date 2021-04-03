@@ -93,7 +93,7 @@ func parseLiteralWithTails(litParser Func, pCtx Context) Func {
 				return Success(payload, res.Remaining)
 			}
 			if fn == nil {
-				fn = query.NewLiteralFunction(lit)
+				fn = query.NewLiteralFunction("", lit)
 			}
 			if res = MustBe(parseFunctionTail(fn, pCtx))(res.Remaining); res.Err != nil {
 				return Fail(res.Err, input)

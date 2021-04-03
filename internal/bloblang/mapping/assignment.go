@@ -133,16 +133,6 @@ func NewJSONAssignment(path ...string) *JSONAssignment {
 	}
 }
 
-func sliceToDotPath(path ...string) string {
-	escapes := make([]string, len(path))
-	for i, s := range path {
-		s = strings.Replace(s, "~", "~0", -1)
-		s = strings.Replace(s, ".", "~1", -1)
-		escapes[i] = s
-	}
-	return strings.Join(escapes, ".")
-}
-
 func findTheNonObject(gObj *gabs.Container, allowArray bool, paths ...string) (culprit string, typeStr string) {
 	if _, isObj := gObj.Data().(map[string]interface{}); !isObj {
 		return "", string(query.ITypeOf(gObj.Data()))
@@ -150,7 +140,7 @@ func findTheNonObject(gObj *gabs.Container, allowArray bool, paths ...string) (c
 
 	var culpritSlice []string
 	for _, path := range paths {
-		culpritSlice = append(culpritSlice, sliceToDotPath(path))
+		culpritSlice = append(culpritSlice, query.SliceToDotPath(path))
 		gObj = gObj.S(path)
 
 		_, isObj := gObj.Data().(map[string]interface{})
@@ -188,15 +178,15 @@ func (j *JSONAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 				if len(culprit) == 0 {
 					return fmt.Errorf(
 						"unable to set target path %v as the value of the root was a non-object type (%v)",
-						sliceToDotPath(j.path...), typeStr,
+						query.SliceToDotPath(j.path...), typeStr,
 					)
 				}
 				return fmt.Errorf(
 					"unable to set target path %v as the value of %v was a non-object type (%v)",
-					sliceToDotPath(j.path...), culprit, typeStr,
+					query.SliceToDotPath(j.path...), culprit, typeStr,
 				)
 			} else {
-				return fmt.Errorf("unable to set target path %v: %w", sliceToDotPath(j.path...), err)
+				return fmt.Errorf("unable to set target path %v: %w", query.SliceToDotPath(j.path...), err)
 			}
 		}
 	}

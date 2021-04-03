@@ -15,8 +15,8 @@ import (
 
 //------------------------------------------------------------------------------
 
-func wrapDeprecatedFunction(d deprecatedFunction) Function {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+func wrapDeprecatedFunction(annotation string, d deprecatedFunction) Function {
+	return ClosureFunction(annotation, func(ctx FunctionContext) (interface{}, error) {
 		return d(ctx.Index, ctx.MsgBatch, ctx.Legacy), nil
 	}, nil)
 }
@@ -147,7 +147,7 @@ func DeprecatedFunction(name, arg string) (Function, bool) {
 	if !ok {
 		return nil, false
 	}
-	return wrapDeprecatedFunction(fn(arg)), true
+	return wrapDeprecatedFunction("function "+name, fn(arg)), true
 }
 
 var deprecatedFunctions = map[string]func(arg string) deprecatedFunction{

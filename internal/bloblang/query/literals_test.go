@@ -67,8 +67,8 @@ func TestLiterals(t *testing.T) {
 		"object literal function keys and values": {
 			input: mustVal(NewMapLiteral(
 				[][2]interface{}{
-					{NewLiteralFunction("first"), NewLiteralFunction("second")},
-					{NewLiteralFunction("third"), NewLiteralFunction("fourth")},
+					{NewLiteralFunction("", "first"), NewLiteralFunction("", "second")},
+					{NewLiteralFunction("", "third"), NewLiteralFunction("", "fourth")},
 				},
 			)),
 			value: map[string]interface{}{},
@@ -100,7 +100,7 @@ func TestLiterals(t *testing.T) {
 				Delete(nil),
 				"static",
 				Nothing(nil),
-				NewLiteralFunction("static literal"),
+				NewLiteralFunction("", "static literal"),
 			),
 			value: map[string]interface{}{
 				"first":  "foo",
@@ -121,7 +121,7 @@ func TestLiterals(t *testing.T) {
 			input: NewArrayLiteral(
 				"static1",
 				Delete(nil),
-				NewLiteralFunction("static2"),
+				NewLiteralFunction("", "static2"),
 				Nothing(nil),
 				"static3",
 			),

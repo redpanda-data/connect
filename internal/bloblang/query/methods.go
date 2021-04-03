@@ -3,11 +3,12 @@ package query
 import (
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/Jeffail/gabs/v2"
 )
 
-var _ = RegisterMethod(
+var _ = registerMethod(
 	NewMethodSpec(
 		"apply",
 		"Apply a declared map on a value.",
@@ -40,7 +41,7 @@ root.foo = null.apply("create_foo")`,
 func applyMethod(target Function, args ...interface{}) (Function, error) {
 	targetMap := args[0].(string)
 
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("map "+targetMap, func(ctx FunctionContext) (interface{}, error) {
 		res, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -48,17 +49,11 @@ func applyMethod(target Function, args ...interface{}) (Function, error) {
 		ctx = ctx.WithValue(res)
 
 		if ctx.Maps == nil {
-			return nil, &ErrRecoverable{
-				Err:       errors.New("no maps were found"),
-				Recovered: res,
-			}
+			return nil, errors.New("no maps were found")
 		}
 		m, ok := ctx.Maps[targetMap]
 		if !ok {
-			return nil, &ErrRecoverable{
-				Err:       fmt.Errorf("map %v was not found", targetMap),
-				Recovered: res,
-			}
+			return nil, fmt.Errorf("map %v was not found", targetMap)
 		}
 
 		// ISOLATED VARIABLES
@@ -80,7 +75,7 @@ func applyMethod(target Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerMethod(
 	NewMethodSpec("bool", "").InCategory(
 		MethodCategoryCoercion,
 		"Attempt to parse a value into a boolean. An optional argument can be provided, in which case if the value cannot be parsed the argument will be returned instead. If the value is a number then any non-zero value will resolve to `true`, if the value is a string then any of the following values are considered valid: `1, t, T, TRUE, true, True, 0, f, F, FALSE`.",
@@ -99,26 +94,20 @@ func boolMethod(target Function, args ...interface{}) (Function, error) {
 	if len(args) > 0 {
 		defaultBool = args[0].(bool)
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("method bool", func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			if len(args) > 0 {
 				return defaultBool, nil
 			}
-			return nil, &ErrRecoverable{
-				Recovered: defaultBool,
-				Err:       err,
-			}
+			return nil, err
 		}
 		f, err := IToBool(v)
 		if err != nil {
 			if len(args) > 0 {
 				return defaultBool, nil
 			}
-			return nil, &ErrRecoverable{
-				Recovered: defaultBool,
-				Err:       err,
-			}
+			return nil, ErrFrom(err, target)
 		}
 		return f, nil
 	}, target.QueryTargets), nil
@@ -126,7 +115,7 @@ func boolMethod(target Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerMethod(
 	NewMethodSpec(
 		"catch",
 		"If the result of a target query fails (due to incorrect types, failed parsing, etc) the argument is returned instead.",
@@ -148,9 +137,9 @@ var _ = RegisterMethod(
 func catchMethod(fn Function, args ...interface{}) (Function, error) {
 	catchFn, isFn := args[0].(Function)
 	if !isFn {
-		catchFn = NewLiteralFunction(args[0])
+		catchFn = NewLiteralFunction("", args[0])
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("method catch", func(ctx FunctionContext) (interface{}, error) {
 		res, err := fn.Exec(ctx)
 		if err != nil {
 			return catchFn.Exec(ctx)
@@ -161,7 +150,7 @@ func catchMethod(fn Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerMethod(
 	NewMethodSpec(
 		"from",
 		"Execute a query from the context of another message in the batch. This allows you to mutate events based on the contents of other messages.",
@@ -186,6 +175,10 @@ type fromMethod struct {
 	target Function
 }
 
+func (f *fromMethod) Annotation() string {
+	return f.target.Annotation() + " from " + strconv.Itoa(f.index)
+}
+
 func (f *fromMethod) Exec(ctx FunctionContext) (interface{}, error) {
 	ctx.Index = f.index
 	return f.target.Exec(ctx)
@@ -198,7 +191,7 @@ func (f *fromMethod) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetP
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerMethod(
 	NewMethodSpec(
 		"from_all",
 		"Execute a query for all messages of the batch, and return an array of all results.",
@@ -212,7 +205,7 @@ root.foo_summed = json("foo").from_all().sum()`,
 )
 
 func fromAllMethod(target Function, _ ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("method from_all", func(ctx FunctionContext) (interface{}, error) {
 		values := make([]interface{}, ctx.MsgBatch.Len())
 		var err error
 		for i := 0; i < ctx.MsgBatch.Len(); i++ {
@@ -240,7 +233,7 @@ func fromAllMethod(target Function, _ ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerMethod(
 	NewMethodSpec(
 		"get",
 		"Extract a field value, identified via a [dot path][field_paths], from an object.",
@@ -262,6 +255,10 @@ var _ = RegisterMethod(
 type getMethod struct {
 	fn   Function
 	path []string
+}
+
+func (g *getMethod) Annotation() string {
+	return "path `" + SliceToDotPath(g.path...) + "`"
 }
 
 func (g *getMethod) Exec(ctx FunctionContext) (interface{}, error) {
@@ -312,7 +309,7 @@ func getMethodCtor(target Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerMethod(
 	NewHiddenMethodSpec("map"), false, mapMethod,
 	ExpectNArgs(1),
 	ExpectFunctionArg(0),
@@ -328,7 +325,7 @@ func mapMethod(target Function, args ...interface{}) (Function, error) {
 	if !ok {
 		return nil, fmt.Errorf("expected query argument, received %T", args[0])
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(mapFn.Annotation(), func(ctx FunctionContext) (interface{}, error) {
 		res, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -345,7 +342,7 @@ func mapMethod(target Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerMethod(
 	NewHiddenMethodSpec("not"), false, notMethodCtor,
 	ExpectNArgs(0),
 )
@@ -361,6 +358,10 @@ func Not(fn Function) Function {
 	}
 }
 
+func (n *notMethod) Annotation() string {
+	return "not " + n.fn.Annotation()
+}
+
 func (n *notMethod) Exec(ctx FunctionContext) (interface{}, error) {
 	v, err := n.fn.Exec(ctx)
 	if err != nil {
@@ -368,7 +369,7 @@ func (n *notMethod) Exec(ctx FunctionContext) (interface{}, error) {
 	}
 	b, ok := v.(bool)
 	if !ok {
-		return nil, NewTypeError(v, ValueBool)
+		return nil, NewTypeErrorFrom(n.fn.Annotation(), v, ValueBool)
 	}
 	return !b, nil
 }
@@ -383,7 +384,7 @@ func notMethodCtor(target Function, _ ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"not_null", "",
 	).InCategory(
@@ -394,25 +395,24 @@ var _ = RegisterMethod(
 			`{"a":"foobar","b":"barbaz"}`,
 			`{"a":"foobar"}`,
 			`{"b":"barbaz"}`,
-			`Error("failed to execute mapping query at line 1: value is null")`,
+			`Error("failed assignment (line 1): field `+"`this.a`"+`: value is null")`,
 		),
 	),
-	false, notNullMethod,
+	func(...interface{}) (simpleMethod, error) {
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			if v == nil {
+				return nil, errors.New("value is null")
+			}
+			return v, nil
+		}, nil
+	},
+	false,
 	ExpectNArgs(0),
 )
 
-func notNullMethod(target Function, _ ...interface{}) (Function, error) {
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		if v == nil {
-			return nil, errors.New("value is null")
-		}
-		return v, nil
-	}), nil
-}
-
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerMethod(
 	NewMethodSpec(
 		"number", "",
 	).InCategory(
@@ -433,26 +433,20 @@ func numberCoerceMethod(target Function, args ...interface{}) (Function, error) 
 	if len(args) > 0 {
 		defaultNum = args[0].(float64)
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("method number", func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			if len(args) > 0 {
 				return defaultNum, nil
 			}
-			return nil, &ErrRecoverable{
-				Recovered: defaultNum,
-				Err:       err,
-			}
+			return nil, err
 		}
 		f, err := IToNumber(v)
 		if err != nil {
 			if len(args) > 0 {
 				return defaultNum, nil
 			}
-			return nil, &ErrRecoverable{
-				Recovered: defaultNum,
-				Err:       err,
-			}
+			return nil, ErrFrom(err, target)
 		}
 		return f, nil
 	}, target.QueryTargets), nil
@@ -460,7 +454,7 @@ func numberCoerceMethod(target Function, args ...interface{}) (Function, error) 
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerMethod(
 	NewMethodSpec(
 		"or", "If the result of the target query fails or resolves to `null`, returns the argument instead. This is an explicit method alternative to the coalesce pipe operator `|`.",
 		NewExampleSpec("", `root.doc.id = this.thing.id.or(uuid_v4())`),
@@ -472,9 +466,9 @@ var _ = RegisterMethod(
 func orMethod(fn Function, args ...interface{}) (Function, error) {
 	orFn, isFn := args[0].(Function)
 	if !isFn {
-		orFn = NewLiteralFunction(args[0])
+		orFn = NewLiteralFunction("", args[0])
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("method or", func(ctx FunctionContext) (interface{}, error) {
 		res, err := fn.Exec(ctx)
 		if err != nil || IIsNull(res) {
 			return orFn.Exec(ctx)
@@ -485,7 +479,7 @@ func orMethod(fn Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"type", "",
 	).InCategory(
@@ -498,12 +492,11 @@ root.foo_type = this.foo.type()`,
 			`{"bar_type":"number","foo_type":"string"}`,
 		),
 	),
-	false, typeMethod,
+	func(...interface{}) (simpleMethod, error) {
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			return string(ITypeOf(v)), nil
+		}, nil
+	},
+	false,
 	ExpectNArgs(0),
 )
-
-func typeMethod(target Function, _ ...interface{}) (Function, error) {
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		return string(ITypeOf(v)), nil
-	}), nil
-}

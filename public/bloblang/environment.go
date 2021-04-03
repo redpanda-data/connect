@@ -54,7 +54,7 @@ func (e *Environment) RegisterMethod(name string, ctor MethodConstructor) error 
 			if err != nil {
 				return nil, err
 			}
-			return query.ClosureFunction(func(ctx query.FunctionContext) (interface{}, error) {
+			return query.ClosureFunction("method "+name, func(ctx query.FunctionContext) (interface{}, error) {
 				v, err := target.Exec(ctx)
 				if err != nil {
 					return nil, err
@@ -97,7 +97,7 @@ func (e *Environment) RegisterFunction(name string, ctor FunctionConstructor) er
 			if err != nil {
 				return nil, err
 			}
-			return query.ClosureFunction(func(ctx query.FunctionContext) (interface{}, error) {
+			return query.ClosureFunction("function "+name, func(ctx query.FunctionContext) (interface{}, error) {
 				return fn()
 			}, nil), nil
 		},
@@ -131,7 +131,7 @@ func RegisterMethod(name string, ctor MethodConstructor) error {
 			if err != nil {
 				return nil, err
 			}
-			return query.ClosureFunction(func(ctx query.FunctionContext) (interface{}, error) {
+			return query.ClosureFunction("method "+name, func(ctx query.FunctionContext) (interface{}, error) {
 				v, err := target.Exec(ctx)
 				if err != nil {
 					return nil, err
@@ -154,7 +154,7 @@ func RegisterFunction(name string, ctor FunctionConstructor) error {
 			if err != nil {
 				return nil, err
 			}
-			return query.ClosureFunction(func(ctx query.FunctionContext) (interface{}, error) {
+			return query.ClosureFunction("function "+name, func(ctx query.FunctionContext) (interface{}, error) {
 				return fn()
 			}, nil), nil
 		},

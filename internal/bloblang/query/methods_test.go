@@ -22,14 +22,14 @@ func TestMethods(t *testing.T) {
 	}
 
 	literalFn := func(val interface{}) Function {
-		fn := NewLiteralFunction(val)
+		fn := NewLiteralFunction("", val)
 		return fn
 	}
 	jsonFn := func(json string) Function {
 		t.Helper()
 		gObj, err := gabs.ParseJSON([]byte(json))
 		require.NoError(t, err)
-		fn := NewLiteralFunction(gObj.Data())
+		fn := NewLiteralFunction("", gObj.Data())
 		return fn
 	}
 	function := func(name string, args ...interface{}) Function {
@@ -114,7 +114,7 @@ func TestMethods(t *testing.T) {
 				literalFn("foo,bar,baz\n1,2,3,4"),
 				method("parse_csv"),
 			),
-			err: "record on line 2: wrong number of fields",
+			err: "string literal: record on line 2: wrong number of fields",
 		},
 		"check explode 1": {
 			input: methods(
@@ -154,7 +154,7 @@ func TestMethods(t *testing.T) {
 				method("explode", "foo"),
 				method("string"),
 			),
-			err: "expected array or object value at path 'foo', found: string",
+			err: "object literal: expected array or object value at path 'foo', found: string",
 		},
 		"check explode error 2": {
 			input: methods(
@@ -162,7 +162,7 @@ func TestMethods(t *testing.T) {
 				method("explode", "foo"),
 				method("string"),
 			),
-			err: "expected array or object value at path 'foo', found: null",
+			err: "object literal: expected array or object value at path 'foo', found: null",
 		},
 		"check without single": {
 			input: methods(
@@ -224,14 +224,14 @@ func TestMethods(t *testing.T) {
 				jsonFn(`[{"v":"a"},{"v":"b"},{"v":"c"},{"v":"b"},{"v":"d"},{"v":"a"}]`),
 				method("unique"),
 			),
-			err: "index 0: expected string or number value, found object",
+			err: "array literal: index 0: expected string or number value, got object",
 		},
 		"check unique not array": {
 			input: methods(
 				literalFn("foo"),
 				method("unique"),
 			),
-			err: "expected array value, found string: foo",
+			err: "expected array value, got string from string literal (\"foo\")",
 		},
 		"check unique": {
 			input: methods(
@@ -300,7 +300,7 @@ func TestMethods(t *testing.T) {
 				jsonFn(`[3,22,{"foo":"bar"},7,null]`),
 				method("sort"),
 			),
-			err: "expected number or string value, found object",
+			err: "element 2: expected number or string value, got object",
 		},
 		"check sort strings custom": {
 			input: methods(
@@ -342,14 +342,14 @@ func TestMethods(t *testing.T) {
 				literalFn("foo"),
 				method("join", ","),
 			),
-			err: "expected array value, found string: foo",
+			err: "expected array value, got string from string literal (\"foo\")",
 		},
 		"check join fail number": {
 			input: methods(
 				jsonFn(`["foo",10,"bar"]`),
 				method("join", ","),
 			),
-			err: "failed to join element 1: expected string value, found number: 10",
+			err: "array literal: failed to join element 1: expected string value, got number (10)",
 		},
 		"check regexp find all submatch": {
 			input: methods(
@@ -485,7 +485,7 @@ func TestMethods(t *testing.T) {
 				literalFn("nope"),
 				method("bool"),
 			),
-			err: `expected bool value, found string: nope`,
+			err: `expected bool value, got string from string literal ("nope")`,
 		},
 		"check bool 8": {
 			input: methods(
@@ -513,7 +513,7 @@ func TestMethods(t *testing.T) {
 				literalFn("nope"),
 				method("number"),
 			),
-			err: `strconv.ParseFloat: parsing "nope": invalid syntax`,
+			err: `string literal: strconv.ParseFloat: parsing "nope": invalid syntax`,
 		},
 		"check number 3": {
 			input: methods(
@@ -541,7 +541,7 @@ func TestMethods(t *testing.T) {
 				literalFn(nil),
 				method("not_null"),
 			),
-			err: `value is null`,
+			err: `null literal: value is null`,
 		},
 		"check index": {
 			input: methods(
@@ -1079,7 +1079,7 @@ func TestMethods(t *testing.T) {
 				literalFn(10.0),
 				method("slice", 8.0),
 			),
-			err: `expected array or string value, found number: 10`,
+			err: `expected array or string value, got number from number literal (10)`,
 		},
 		"check slice array": {
 			input: methods(
@@ -1143,7 +1143,7 @@ func TestMethods(t *testing.T) {
 				literalFn("not valid json"),
 				method("parse_json"),
 			),
-			err: `failed to parse value as JSON: invalid character 'o' in literal null (expecting 'u')`,
+			err: `string literal: failed to parse value as JSON: invalid character 'o' in literal null (expecting 'u')`,
 		},
 		"check parse timestamp unix": {
 			input: methods(
@@ -1164,21 +1164,21 @@ func TestMethods(t *testing.T) {
 				literalFn("not valid timestamp"),
 				method("parse_timestamp_unix"),
 			),
-			err: `parsing time "not valid timestamp" as "2006-01-02T15:04:05.999999999Z07:00": cannot parse "not valid timestamp" as "2006"`,
+			err: `string literal: parsing time "not valid timestamp" as "2006-01-02T15:04:05.999999999Z07:00": cannot parse "not valid timestamp" as "2006"`,
 		},
 		"check parse timestamp unix with invalid format": {
 			input: methods(
 				literalFn("invalid format"),
 				method("parse_timestamp_unix", "2006-Jan-02"),
 			),
-			err: `parsing time "invalid format" as "2006-Jan-02": cannot parse "invalid format" as "2006"`,
+			err: `string literal: parsing time "invalid format" as "2006-Jan-02": cannot parse "invalid format" as "2006"`,
 		},
 		"check parse timestamp unix with invalid literal type": {
 			input: methods(
 				literalFn(1),
 				method("parse_timestamp_unix", "2006-Jan-02"),
 			),
-			err: `expected string value, found number: 1`,
+			err: `expected string value, got number from number literal (1)`,
 		},
 		"check append": {
 			input: methods(
@@ -1365,7 +1365,7 @@ func TestMethods(t *testing.T) {
 				method("contains", "foo"),
 			),
 			messages: []easyMsg{{content: `{"nope":false}`}},
-			err:      "expected string, array or object value, found bool: false",
+			err:      "expected string, array or object value, got bool from json path `nope` (false)",
 		},
 		"check substr": {
 			input: methods(
@@ -1422,7 +1422,7 @@ func TestMethods(t *testing.T) {
 				jsonFn(`[2,14,4,11,7]`),
 				method("filter", arithmetic(
 					NewFieldFunction(""),
-					NewLiteralFunction(10.0),
+					NewLiteralFunction("", 10.0),
 					ArithmeticGt,
 				)),
 			),
@@ -1472,14 +1472,14 @@ func TestMethods(t *testing.T) {
 			input: methods(
 				jsonFn(`["foo","bar"]`),
 				method("fold", jsonFn(`{"values":[]}`), methods(
-					NewFieldFunction("this.does.not.exist"),
+					NewFieldFunction("does.not.exist"),
 					method("number"),
 				)),
 			),
 			messages: []easyMsg{
 				{content: `{}`},
 			},
-			err: "expected number value, found null",
+			err: "expected number value, got null from field `this.does.not.exist`",
 		},
 		"check keys literal": {
 			input: methods(
@@ -1514,7 +1514,7 @@ func TestMethods(t *testing.T) {
 				method("sort"),
 			),
 			messages: []easyMsg{{content: `{"bar":2,"foo":1}`}},
-			err:      `expected object value, found string: foo`,
+			err:      `expected object value, got string from string literal ("foo")`,
 		},
 		"check values literal": {
 			input: methods(
@@ -1549,7 +1549,7 @@ func TestMethods(t *testing.T) {
 				method("sort"),
 			),
 			messages: []easyMsg{{content: `{"bar":2,"foo":1}`}},
-			err:      `expected object value, found string: foo`,
+			err:      `expected object value, got string from string literal ("foo")`,
 		},
 		"check aes-ctr encryption": {
 			input: methods(
@@ -1660,7 +1660,7 @@ func TestMethods(t *testing.T) {
 				),
 				method("encode", "hex"),
 			),
-			err: `plaintext is not a multiple of the block size`,
+			err: `string literal: plaintext is not a multiple of the block size`,
 		},
 		"check aes-cbc decryption": {
 			input: methods(
@@ -1700,32 +1700,32 @@ func TestMethods(t *testing.T) {
 				method("string"),
 				method("encode", "hex"),
 			),
-			err: `ciphertext is not a multiple of the block size`,
+			err: `method decode: ciphertext is not a multiple of the block size`,
 		},
 		"check any no array": {
 			input: methods(
 				literalFn("foo"),
 				method("any", arithmetic(
 					NewFieldFunction(""),
-					NewLiteralFunction("bar"),
+					NewLiteralFunction("", "bar"),
 					ArithmeticEq,
 				)),
 			),
-			err: "expected array value, found string: foo",
+			err: "expected array value, got string from string literal (\"foo\")",
 		},
 		"check any bad mapping": {
 			input: methods(
 				literalFn([]interface{}{false, "bar", true}),
 				method("any", NewFieldFunction("")),
 			),
-			err: "element 1: expected bool value, found string: bar",
+			err: "array literal: element 1: expected bool value, got string (\"bar\")",
 		},
 		"check any true": {
 			input: methods(
 				literalFn([]interface{}{"foo", "bar", "baz"}),
 				method("any", arithmetic(
 					NewFieldFunction(""),
-					NewLiteralFunction("bar"),
+					NewLiteralFunction("", "bar"),
 					ArithmeticEq,
 				)),
 			),
@@ -1736,7 +1736,7 @@ func TestMethods(t *testing.T) {
 				literalFn([]interface{}{"foo", "buz", "baz"}),
 				method("any", arithmetic(
 					NewFieldFunction(""),
-					NewLiteralFunction("bar"),
+					NewLiteralFunction("", "bar"),
 					ArithmeticEq,
 				)),
 			),
@@ -1747,7 +1747,7 @@ func TestMethods(t *testing.T) {
 				literalFn([]interface{}{}),
 				method("any", arithmetic(
 					NewFieldFunction(""),
-					NewLiteralFunction(9.0),
+					NewLiteralFunction("", 9.0),
 					ArithmeticLt,
 				)),
 			),
@@ -1758,7 +1758,7 @@ func TestMethods(t *testing.T) {
 				literalFn([]interface{}{10.0, 11.0, 12.0}),
 				method("all", arithmetic(
 					NewFieldFunction(""),
-					NewLiteralFunction(9.0),
+					NewLiteralFunction("", 9.0),
 					ArithmeticGt,
 				)),
 			),
@@ -1769,7 +1769,7 @@ func TestMethods(t *testing.T) {
 				literalFn([]interface{}{10.0, 8.0, 12.0}),
 				method("all", arithmetic(
 					NewFieldFunction(""),
-					NewLiteralFunction(9.0),
+					NewLiteralFunction("", 9.0),
 					ArithmeticGt,
 				)),
 			),
@@ -1780,7 +1780,7 @@ func TestMethods(t *testing.T) {
 				literalFn([]interface{}{}),
 				method("all", arithmetic(
 					NewFieldFunction(""),
-					NewLiteralFunction(9.0),
+					NewLiteralFunction("", 9.0),
 					ArithmeticLt,
 				)),
 			),
@@ -1791,18 +1791,18 @@ func TestMethods(t *testing.T) {
 				literalFn([]interface{}{true, "bar", false}),
 				method("all", NewFieldFunction("")),
 			),
-			err: "element 1: expected bool value, found string: bar",
+			err: "array literal: element 1: expected bool value, got string (\"bar\")",
 		},
 		"check all no array": {
 			input: methods(
 				literalFn("foo"),
 				method("any", arithmetic(
 					NewFieldFunction(""),
-					NewLiteralFunction("bar"),
+					NewLiteralFunction("", "bar"),
 					ArithmeticEq,
 				)),
 			),
-			err: "expected array value, found string: foo",
+			err: "expected array value, got string from string literal (\"foo\")",
 		},
 		"check parse timestamp with format": {
 			input: methods(
@@ -1816,21 +1816,21 @@ func TestMethods(t *testing.T) {
 				literalFn("not valid timestamp"),
 				method("parse_timestamp", "2006-01-02T15:04:05Z07:00"),
 			),
-			err: `parsing time "not valid timestamp" as "2006-01-02T15:04:05Z07:00": cannot parse "not valid timestamp" as "2006"`,
+			err: `string literal: parsing time "not valid timestamp" as "2006-01-02T15:04:05Z07:00": cannot parse "not valid timestamp" as "2006"`,
 		},
 		"check parse timestamp with invalid format": {
 			input: methods(
 				literalFn("invalid format"),
 				method("parse_timestamp", "2006-Jan-02"),
 			),
-			err: `parsing time "invalid format" as "2006-Jan-02": cannot parse "invalid format" as "2006"`,
+			err: `string literal: parsing time "invalid format" as "2006-Jan-02": cannot parse "invalid format" as "2006"`,
 		},
 		"check parse timestamp with invalid literal type": {
 			input: methods(
 				literalFn(1),
 				method("parse_timestamp", "2006-Jan-02"),
 			),
-			err: `expected string value, found number: 1`,
+			err: `expected string value, got number from number literal (1)`,
 		},
 		"check format timestamp string default": {
 			input: methods(
@@ -1866,7 +1866,7 @@ func TestMethods(t *testing.T) {
 		},
 		"check floor bad value": {
 			input: methods(literalFn("nope"), method("floor")),
-			err:   "expected number value, found string: nope",
+			err:   "expected number value, got string from string literal (\"nope\")",
 		},
 		"check floor int": {
 			input:  methods(literalFn(int64(5)), method("floor")),
