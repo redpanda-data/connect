@@ -8,7 +8,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec("abs", "Returns the absolute value of a number.").InCategory(
 		MethodCategoryNumbers, "",
 		NewExampleSpec("",
@@ -18,9 +18,9 @@ var _ = RegisterMethod(
 			`{"value":-5.9}`,
 			`{"new_value":5.9}`,
 		),
-	), false,
-	func(target Function, args ...interface{}) (Function, error) {
-		return numberMethod(target, func(f *float64, i *int64, ui *uint64, ctx FunctionContext) (interface{}, error) {
+	),
+	func(...interface{}) (simpleMethod, error) {
+		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
 			var v float64
 			if f != nil {
 				v = *f
@@ -32,10 +32,11 @@ var _ = RegisterMethod(
 			return math.Abs(v), nil
 		}), nil
 	},
+	false,
 	ExpectNArgs(0),
 )
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec("ceil", "Returns the least integer value greater than or equal to a number.").InCategory(
 		MethodCategoryNumbers, "",
 		NewExampleSpec("",
@@ -45,9 +46,9 @@ var _ = RegisterMethod(
 			`{"value":-5.9}`,
 			`{"new_value":-5}`,
 		),
-	), false,
-	func(target Function, args ...interface{}) (Function, error) {
-		return numberMethod(target, func(f *float64, i *int64, ui *uint64, ctx FunctionContext) (interface{}, error) {
+	),
+	func(...interface{}) (simpleMethod, error) {
+		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
 			if f != nil {
 				return int64(math.Ceil(*f)), nil
 			}
@@ -57,10 +58,11 @@ var _ = RegisterMethod(
 			return *ui, nil
 		}), nil
 	},
+	false,
 	ExpectNArgs(0),
 )
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"floor", "Returns the greatest integer value less than or equal to the target number.",
 	).InCategory(
@@ -72,9 +74,8 @@ var _ = RegisterMethod(
 			`{"new_value":5}`,
 		),
 	),
-	false,
-	func(target Function, args ...interface{}) (Function, error) {
-		return numberMethod(target, func(f *float64, i *int64, ui *uint64, ctx FunctionContext) (interface{}, error) {
+	func(...interface{}) (simpleMethod, error) {
+		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
 			if f != nil {
 				return int64(math.Floor(*f)), nil
 			}
@@ -84,10 +85,11 @@ var _ = RegisterMethod(
 			return *ui, nil
 		}), nil
 	},
+	false,
 	ExpectNArgs(0),
 )
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec("log", "Returns the natural logarithm of a number.").InCategory(
 		MethodCategoryNumbers, "",
 		NewExampleSpec("",
@@ -97,9 +99,9 @@ var _ = RegisterMethod(
 			`{"value":2.7183}`,
 			`{"new_value":1}`,
 		),
-	), false,
-	func(target Function, args ...interface{}) (Function, error) {
-		return numberMethod(target, func(f *float64, i *int64, ui *uint64, ctx FunctionContext) (interface{}, error) {
+	),
+	func(...interface{}) (simpleMethod, error) {
+		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
 			var v float64
 			if f != nil {
 				v = *f
@@ -111,10 +113,11 @@ var _ = RegisterMethod(
 			return math.Log(v), nil
 		}), nil
 	},
+	false,
 	ExpectNArgs(0),
 )
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec("log10", "Returns the decimal logarithm of a number.").InCategory(
 		MethodCategoryNumbers, "",
 		NewExampleSpec("",
@@ -124,9 +127,9 @@ var _ = RegisterMethod(
 			`{"value":1000}`,
 			`{"new_value":3}`,
 		),
-	), false,
-	func(target Function, args ...interface{}) (Function, error) {
-		return numberMethod(target, func(f *float64, i *int64, ui *uint64, ctx FunctionContext) (interface{}, error) {
+	),
+	func(...interface{}) (simpleMethod, error) {
+		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
 			var v float64
 			if f != nil {
 				v = *f
@@ -138,10 +141,11 @@ var _ = RegisterMethod(
 			return math.Log10(v), nil
 		}), nil
 	},
+	false,
 	ExpectNArgs(0),
 )
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"max",
 		"Returns the largest numerical value found within an array. All values must be numerical and the array must not be empty, otherwise an error is returned.",
@@ -159,9 +163,9 @@ var _ = RegisterMethod(
 			`{"value":7}`,
 			`{"new_value":7}`,
 		),
-	), false,
-	func(target Function, args ...interface{}) (Function, error) {
-		return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+	),
+	func(...interface{}) (simpleMethod, error) {
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			arr, ok := v.([]interface{})
 			if !ok {
 				return nil, NewTypeError(v, ValueArray)
@@ -180,12 +184,13 @@ var _ = RegisterMethod(
 				}
 			}
 			return max, nil
-		}), nil
+		}, nil
 	},
+	false,
 	ExpectNArgs(0),
 )
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"min",
 		"Returns the smallest numerical value found within an array. All values must be numerical and the array must not be empty, otherwise an error is returned.",
@@ -203,9 +208,9 @@ var _ = RegisterMethod(
 			`{"value":23}`,
 			`{"new_value":10}`,
 		),
-	), false,
-	func(target Function, args ...interface{}) (Function, error) {
-		return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+	),
+	func(...interface{}) (simpleMethod, error) {
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			arr, ok := v.([]interface{})
 			if !ok {
 				return nil, NewTypeError(v, ValueArray)
@@ -224,12 +229,13 @@ var _ = RegisterMethod(
 				}
 			}
 			return max, nil
-		}), nil
+		}, nil
 	},
+	false,
 	ExpectNArgs(0),
 )
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"round", "Rounds numbers to the nearest integer, rounding half away from zero.",
 	).InCategory(
@@ -243,9 +249,8 @@ var _ = RegisterMethod(
 			`{"new_value":6}`,
 		),
 	),
-	false,
-	func(target Function, args ...interface{}) (Function, error) {
-		return numberMethod(target, func(f *float64, i *int64, ui *uint64, ctx FunctionContext) (interface{}, error) {
+	func(...interface{}) (simpleMethod, error) {
+		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
 			if f != nil {
 				return int64(math.Round(*f)), nil
 			}
@@ -255,5 +260,6 @@ var _ = RegisterMethod(
 			return *ui, nil
 		}), nil
 	},
+	false,
 	ExpectNArgs(0),
 )

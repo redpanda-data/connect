@@ -6,10 +6,22 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Jeffail/gabs/v2"
 )
+
+// SliceToDotPath returns a valid dot path from a slice of path segments.
+func SliceToDotPath(path ...string) string {
+	escapes := make([]string, len(path))
+	for i, s := range path {
+		s = strings.Replace(s, "~", "~0", -1)
+		s = strings.Replace(s, ".", "~1", -1)
+		escapes[i] = s
+	}
+	return strings.Join(escapes, ".")
+}
 
 //------------------------------------------------------------------------------
 

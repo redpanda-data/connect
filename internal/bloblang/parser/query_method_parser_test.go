@@ -252,7 +252,7 @@ func TestMethodParser(t *testing.T) {
 		},
 		"map each not an array": {
 			input:  `json("foo").map_each(this + 10)`,
-			output: `not an array`,
+			output: ``,
 			messages: []easyMsg{
 				{content: `{"foo":"not an array"}`},
 			},
@@ -292,14 +292,14 @@ func TestMethodParser(t *testing.T) {
 		},
 		"test sum standard array 2": {
 			input:  `json("foo").sum()`,
-			output: `8`,
+			output: ``,
 			messages: []easyMsg{
 				{content: `{"foo":[1,2,2,"nah",3]}`},
 			},
 		},
 		"test sum standard array 3": {
 			input:  `json("foo").sum()`,
-			output: `8`,
+			output: ``,
 			messages: []easyMsg{
 				{content: `{"foo":[1,2,2,"4",3]}`},
 			},
@@ -316,7 +316,7 @@ func TestMethodParser(t *testing.T) {
 		},
 		"test sum standard array 5": {
 			input:  `json("foo").from_all().sum()`,
-			output: `13`,
+			output: ``,
 			messages: []easyMsg{
 				{content: `{"foo":1}`},
 				{content: `{"foo":"3"}`},
@@ -363,7 +363,7 @@ func TestMethodParser(t *testing.T) {
 		},
 		"test uppercase method recovered": {
 			input:    `["foo"].uppercase()`,
-			output:   `["FOO"]`,
+			output:   ``,
 			messages: []easyMsg{{}},
 		},
 		"test lowercase method": {
@@ -373,7 +373,7 @@ func TestMethodParser(t *testing.T) {
 		},
 		"test lowercase method recovered": {
 			input:    `["FOO"].lowercase()`,
-			output:   `["foo"]`,
+			output:   ``,
 			messages: []easyMsg{{}},
 		},
 		"test format method": {
@@ -489,7 +489,7 @@ func TestMethodErrors(t *testing.T) {
 	}{
 		"literal function": {
 			input:    `"not a number".number()`,
-			errStr:   "strconv.ParseFloat: parsing \"not a number\": invalid syntax",
+			errStr:   "string literal: strconv.ParseFloat: parsing \"not a number\": invalid syntax",
 			messages: []easyMsg{{}},
 		},
 	}
@@ -551,7 +551,7 @@ func TestMethodMaps(t *testing.T) {
 			input:  `"foo".apply("foo")`,
 			output: "hello world",
 			maps: map[string]query.Function{
-				"foo": query.NewLiteralFunction("hello world"),
+				"foo": query.NewLiteralFunction("", "hello world"),
 			},
 			messages: []easyMsg{{}},
 		},

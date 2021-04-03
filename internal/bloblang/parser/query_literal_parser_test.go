@@ -100,11 +100,11 @@ func TestLiteralParser(t *testing.T) {
 		},
 		"bad array element": {
 			mapping:  `["foo",(5 + "not a number"),"bar"]`,
-			parseErr: "expected number value, found string: not a number: 5 + \"",
+			parseErr: "cannot add types number (from number literal) and string (from string literal): 5 + \"",
 		},
 		"bad object value": {
 			mapping:  `{"foo":(5 + "not a number")}`,
-			parseErr: "expected number value, found string: not a number: 5 + \"",
+			parseErr: "cannot add types number (from number literal) and string (from string literal): 5 + \"",
 		},
 	}
 

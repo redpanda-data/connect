@@ -23,7 +23,7 @@ func (m *MethodSet) Add(spec MethodSpec, ctor MethodCtor, autoResolveFunctionArg
 		ctor = checkMethodArgs(ctor, checks...)
 	}
 	if autoResolveFunctionArgs {
-		ctor = methodWithAutoResolvedFunctionArgs(ctor)
+		ctor = methodWithAutoResolvedFunctionArgs("method "+spec.Name, ctor)
 	}
 	if _, exists := m.constructors[spec.Name]; exists {
 		return fmt.Errorf("conflicting method name: %v", spec.Name)
@@ -90,15 +90,6 @@ func (m *MethodSet) Without(methods ...string) *MethodSet {
 var AllMethods = &MethodSet{
 	constructors: map[string]MethodCtor{},
 	specs:        []MethodSpec{},
-}
-
-// RegisterMethod to be accessible from Bloblang queries. Returns an empty
-// struct in order to allow inline calls.
-func RegisterMethod(spec MethodSpec, autoResolveFunctionArgs bool, ctor MethodCtor, checks ...ArgCheckFn) struct{} {
-	if err := AllMethods.Add(spec, ctor, autoResolveFunctionArgs, checks...); err != nil {
-		panic(err)
-	}
-	return struct{}{}
 }
 
 // InitMethod attempts to initialise a method by its name, target function and

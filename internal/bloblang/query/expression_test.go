@@ -33,14 +33,14 @@ func TestExpressions(t *testing.T) {
 			input: NewIfFunction(
 				mustFunc(NewArithmeticExpression(
 					[]Function{
-						NewLiteralFunction(int64(10)),
-						NewLiteralFunction(int64(20)),
+						NewLiteralFunction("", int64(10)),
+						NewLiteralFunction("", int64(20)),
 					},
 					[]ArithmeticOperator{
 						ArithmeticGt,
 					},
 				)),
-				NewLiteralFunction("foo"),
+				NewLiteralFunction("", "foo"),
 				nil,
 			),
 			output: Nothing(nil),
@@ -49,15 +49,15 @@ func TestExpressions(t *testing.T) {
 			input: NewIfFunction(
 				mustFunc(NewArithmeticExpression(
 					[]Function{
-						NewLiteralFunction(int64(10)),
-						NewLiteralFunction(int64(20)),
+						NewLiteralFunction("", int64(10)),
+						NewLiteralFunction("", int64(20)),
 					},
 					[]ArithmeticOperator{
 						ArithmeticGt,
 					},
 				)),
-				NewLiteralFunction("foo"),
-				NewLiteralFunction("bar"),
+				NewLiteralFunction("", "foo"),
+				NewLiteralFunction("", "bar"),
 			),
 			output: "bar",
 		},
@@ -65,53 +65,53 @@ func TestExpressions(t *testing.T) {
 			input: NewIfFunction(
 				mustFunc(NewArithmeticExpression(
 					[]Function{
-						NewLiteralFunction(int64(10)),
-						NewLiteralFunction(int64(20)),
+						NewLiteralFunction("", int64(10)),
+						NewLiteralFunction("", int64(20)),
 					},
 					[]ArithmeticOperator{
 						ArithmeticLt,
 					},
 				)),
-				NewLiteralFunction("foo"),
-				NewLiteralFunction(Nothing(nil)),
+				NewLiteralFunction("", "foo"),
+				NewLiteralFunction("", Nothing(nil)),
 			),
 			output: "foo",
 		},
 		"if query fails": {
 			input: NewIfFunction(
 				NewVarFunction("doesnt exist"),
-				NewLiteralFunction("foo"),
-				NewLiteralFunction("bar"),
+				NewLiteralFunction("", "foo"),
+				NewLiteralFunction("", "bar"),
 			),
 			err: errors.New("failed to check if condition: variables were undefined"),
 		},
 		"match context fails": {
 			input: NewMatchFunction(
 				NewVarFunction("doesnt exist"),
-				NewMatchCase(NewLiteralFunction(true), NewLiteralFunction("foo")),
+				NewMatchCase(NewLiteralFunction("", true), NewLiteralFunction("", "foo")),
 			),
 			err: errors.New("variables were undefined"),
 		},
 		"match first case fails": {
 			input: NewMatchFunction(
-				NewLiteralFunction("context"),
-				NewMatchCase(NewVarFunction("doesnt exist"), NewLiteralFunction("foo")),
-				NewMatchCase(NewLiteralFunction(true), NewLiteralFunction("bar")),
+				NewLiteralFunction("", "context"),
+				NewMatchCase(NewVarFunction("doesnt exist"), NewLiteralFunction("", "foo")),
+				NewMatchCase(NewLiteralFunction("", true), NewLiteralFunction("", "bar")),
 			),
 			err: errors.New("failed to check match case 0: variables were undefined"),
 		},
 		"match second case fails": {
 			input: NewMatchFunction(
-				NewLiteralFunction("context"),
-				NewMatchCase(NewLiteralFunction(true), NewLiteralFunction("bar")),
-				NewMatchCase(NewVarFunction("doesnt exist"), NewLiteralFunction("foo")),
+				NewLiteralFunction("", "context"),
+				NewMatchCase(NewLiteralFunction("", true), NewLiteralFunction("", "bar")),
+				NewMatchCase(NewVarFunction("doesnt exist"), NewLiteralFunction("", "foo")),
 			),
 			output: "bar",
 		},
 		"match context empty": {
 			input: NewMatchFunction(
 				nil,
-				NewMatchCase(NewLiteralFunction(true), NewFieldFunction("")),
+				NewMatchCase(NewLiteralFunction("", true), NewFieldFunction("")),
 			),
 			value: func() *interface{} {
 				var v interface{} = "context"
@@ -121,16 +121,16 @@ func TestExpressions(t *testing.T) {
 		},
 		"match context": {
 			input: NewMatchFunction(
-				NewLiteralFunction("context"),
-				NewMatchCase(NewLiteralFunction(true), NewFieldFunction("")),
+				NewLiteralFunction("", "context"),
+				NewMatchCase(NewLiteralFunction("", true), NewFieldFunction("")),
 			),
 			output: "context",
 		},
 		"match context all fail": {
 			input: NewMatchFunction(
-				NewLiteralFunction("context"),
-				NewMatchCase(NewLiteralFunction(false), NewLiteralFunction("foo")),
-				NewMatchCase(NewLiteralFunction(false), NewLiteralFunction("bar")),
+				NewLiteralFunction("", "context"),
+				NewMatchCase(NewLiteralFunction("", false), NewLiteralFunction("", "foo")),
+				NewMatchCase(NewLiteralFunction("", false), NewLiteralFunction("", "bar")),
 			),
 			output: Nothing(nil),
 		},
@@ -306,7 +306,7 @@ func TestExpressionTargets(t *testing.T) {
 		"if query path": {
 			input: NewIfFunction(
 				mustFunc(InitFunction("json", "foo.bar")),
-				NewLiteralFunction("foo"),
+				NewLiteralFunction("", "foo"),
 				mustFunc(InitFunction("var", "baz")),
 			),
 			output: []TargetPath{
@@ -342,7 +342,7 @@ func TestExpressionTargets(t *testing.T) {
 				),
 				NewMatchCase(
 					NewFieldFunction("buz"),
-					NewLiteralFunction("qux"),
+					NewLiteralFunction("", "qux"),
 				),
 			),
 			output: []TargetPath{
@@ -361,7 +361,7 @@ func TestExpressionTargets(t *testing.T) {
 				),
 				NewMatchCase(
 					NewFieldFunction("qux.quz"),
-					NewLiteralFunction("quack"),
+					NewLiteralFunction("", "quack"),
 				),
 			),
 			output: []TargetPath{

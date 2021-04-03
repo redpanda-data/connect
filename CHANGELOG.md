@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Vastly improved Bloblang mapping errors.
+
 ### Fixed
 
 - Prevented the experimental `gcp_cloud_storage` input from closing early during large file consumption.

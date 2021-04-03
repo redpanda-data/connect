@@ -30,6 +30,17 @@ func (f *fieldFunction) expand(path ...string) *fieldFunction {
 	return &newFn
 }
 
+func (f *fieldFunction) Annotation() string {
+	path := f.namedContext
+	if path == "" {
+		path = "this"
+	}
+	if len(f.path) > 0 {
+		path = path + "." + SliceToDotPath(f.path...)
+	}
+	return "field `" + path + "`"
+}
+
 func (f *fieldFunction) Exec(ctx FunctionContext) (interface{}, error) {
 	var target interface{}
 	if f.namedContext == "" {
@@ -102,7 +113,16 @@ func NewFieldFunction(pathStr string) Function {
 // Literal wraps a static value and returns it for each invocation of the
 // function.
 type Literal struct {
-	Value interface{}
+	annotation string
+	Value      interface{}
+}
+
+// Annotation returns a token identifier of the function.
+func (l *Literal) Annotation() string {
+	if l.annotation == "" {
+		return string(ITypeOf(l.Value)) + " literal"
+	}
+	return l.annotation
 }
 
 // Exec returns a literal value.
@@ -122,13 +142,13 @@ func (l *Literal) Close(ctx context.Context) error {
 
 // NewLiteralFunction creates a query function that returns a static, literal
 // value.
-func NewLiteralFunction(v interface{}) *Literal {
-	return &Literal{v}
+func NewLiteralFunction(annotation string, v interface{}) *Literal {
+	return &Literal{annotation, v}
 }
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
+var _ = registerSimpleFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "batch_index",
 		"Returns the index of the mapped message within a batch. This is useful for applying maps only on certain messages of a batch.",
@@ -136,16 +156,14 @@ var _ = RegisterFunction(
 			`root = if batch_index() > 0 { deleted() }`,
 		),
 	),
-	false, func(...interface{}) (Function, error) {
-		return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-			return int64(ctx.Index), nil
-		}, nil), nil
+	func(ctx FunctionContext) (interface{}, error) {
+		return int64(ctx.Index), nil
 	},
 )
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
+var _ = registerSimpleFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "batch_size",
 		"Returns the size of the message batch.",
@@ -153,16 +171,14 @@ var _ = RegisterFunction(
 			`root.foo = batch_size()`,
 		),
 	),
-	false, func(...interface{}) (Function, error) {
-		return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-			return int64(ctx.MsgBatch.Len()), nil
-		}, nil), nil
+	func(ctx FunctionContext) (interface{}, error) {
+		return int64(ctx.MsgBatch.Len()), nil
 	},
 )
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
+var _ = registerSimpleFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "content",
 		"Returns the full raw contents of the mapping target message as a byte array. When mapping to a JSON field the value should be encoded using the method [`encode`][methods.encode], or cast to a string directly using the method [`string`][methods.string], otherwise it will be base64 encoded by default.",
@@ -172,14 +188,10 @@ var _ = RegisterFunction(
 			`{"doc":"{\"foo\":\"bar\"}"}`,
 		),
 	),
-	false, contentFunction,
-)
-
-func contentFunction(...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	func(ctx FunctionContext) (interface{}, error) {
 		return ctx.MsgBatch.Get(ctx.Index).Get(), nil
-	}, nil), nil
-}
+	},
+)
 
 //------------------------------------------------------------------------------
 
@@ -202,7 +214,7 @@ root.id = count("bloblang_function_example")`,
 )
 
 func countFunction(args ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("function count", func(ctx FunctionContext) (interface{}, error) {
 		name := args[0].(string)
 
 		countersMux.Lock()
@@ -242,7 +254,7 @@ root.bar = deleted()`,
 		),
 	),
 	false, func(...interface{}) (Function, error) {
-		return NewLiteralFunction(Delete(nil)), nil
+		return NewLiteralFunction("delete", Delete(nil)), nil
 	},
 )
 
@@ -263,12 +275,12 @@ var _ = RegisterFunction(
 
 func envFunction(args ...interface{}) (Function, error) {
 	key := os.Getenv(args[0].(string))
-	return NewLiteralFunction(key), nil
+	return NewLiteralFunction("env "+key, key), nil
 }
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
+var _ = registerSimpleFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "error",
 		"If an error has occurred during the processing of a message this function returns the reported cause of the error. For more information about error handling patterns read [here][error_handling].",
@@ -276,16 +288,12 @@ var _ = RegisterFunction(
 			`root.doc.error = error()`,
 		),
 	),
-	false, errorFunction,
+	func(ctx FunctionContext) (interface{}, error) {
+		return ctx.MsgBatch.Get(ctx.Index).Metadata().Get(types.FailFlagKey), nil
+	},
 )
 
-func errorFunction(...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		return ctx.MsgBatch.Get(ctx.Index).Metadata().Get(types.FailFlagKey), nil
-	}, nil), nil
-}
-
-var _ = RegisterFunction(
+var _ = registerSimpleFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "errored",
 		"Returns a boolean value indicating whether an error has occurred during the processing of a message. For more information about error handling patterns read [here][error_handling].",
@@ -293,14 +301,10 @@ var _ = RegisterFunction(
 			`root.doc.status = if errored() { 400 } else { 200 }`,
 		),
 	),
-	false, erroredFunction,
-)
-
-func erroredFunction(...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	func(ctx FunctionContext) (interface{}, error) {
 		return len(ctx.MsgBatch.Get(ctx.Index).Metadata().Get(types.FailFlagKey)) > 0, nil
-	}, nil), nil
-}
+	},
+)
 
 //------------------------------------------------------------------------------
 
@@ -320,11 +324,12 @@ var _ = RegisterFunction(
 )
 
 func fileFunction(args ...interface{}) (Function, error) {
+	path := args[0].(string)
 	pathBytes, err := ioutil.ReadFile(args[0].(string))
 	if err != nil {
 		return nil, err
 	}
-	return NewLiteralFunction(pathBytes), nil
+	return NewLiteralFunction("file "+path, pathBytes), nil
 }
 
 //------------------------------------------------------------------------------
@@ -360,14 +365,14 @@ func rangeFunction(args ...interface{}) (Function, error) {
 	for i := 0; i < len(r); i++ {
 		r[i] = start + step*int64(i)
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("function range", func(ctx FunctionContext) (interface{}, error) {
 		return r, nil
 	}, nil), nil
 }
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
+var _ = registerSimpleFunction(
 	NewFunctionSpec(
 		FunctionCategoryEnvironment, "hostname",
 		"Returns a string matching the hostname of the machine running Benthos.",
@@ -375,11 +380,7 @@ var _ = RegisterFunction(
 			`root.thing.host = hostname()`,
 		),
 	),
-	false, hostnameFunction,
-)
-
-func hostnameFunction(...interface{}) (Function, error) {
-	return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
+	func(_ FunctionContext) (interface{}, error) {
 		hn, err := os.Hostname()
 		if err != nil {
 			return nil, &ErrRecoverable{
@@ -388,8 +389,8 @@ func hostnameFunction(...interface{}) (Function, error) {
 			}
 		}
 		return hn, err
-	}, nil), nil
-}
+	},
+)
 
 //------------------------------------------------------------------------------
 
@@ -419,7 +420,7 @@ func jsonFunction(args ...interface{}) (Function, error) {
 	if len(args) > 0 {
 		argPath = gabs.DotPathToSlice(args[0].(string))
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("json path `"+SliceToDotPath(argPath...)+"`", func(ctx FunctionContext) (interface{}, error) {
 		jPart, err := ctx.MsgBatch.Get(ctx.Index).JSON()
 		if err != nil {
 			return nil, &ErrRecoverable{
@@ -463,7 +464,7 @@ var _ = RegisterFunction(
 func metadataFunction(args ...interface{}) (Function, error) {
 	if len(args) > 0 {
 		field := args[0].(string)
-		return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+		return ClosureFunction("meta field "+field, func(ctx FunctionContext) (interface{}, error) {
 			v := ctx.MsgBatch.Get(ctx.Index).Metadata().Get(field)
 			if len(v) == 0 {
 				return nil, &ErrRecoverable{
@@ -480,7 +481,7 @@ func metadataFunction(args ...interface{}) (Function, error) {
 			return ctx, paths
 		}), nil
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("metadata object", func(ctx FunctionContext) (interface{}, error) {
 		kvs := map[string]interface{}{}
 		ctx.MsgBatch.Get(ctx.Index).Metadata().Iter(func(k, v string) error {
 			if len(v) > 0 {
@@ -503,7 +504,7 @@ func metadataFunction(args ...interface{}) (Function, error) {
 var _ = RegisterFunction(
 	NewHiddenFunctionSpec("nothing"),
 	false, func(...interface{}) (Function, error) {
-		return NewLiteralFunction(Nothing(nil)), nil
+		return NewLiteralFunction("nothing", Nothing(nil)), nil
 	},
 )
 
@@ -532,7 +533,7 @@ func randomIntFunction(args ...interface{}) (Function, error) {
 		}
 	}
 	r := rand.New(rand.NewSource(seed))
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("function random_int", func(ctx FunctionContext) (interface{}, error) {
 		return int64(r.Int()), nil
 	}, nil), nil
 }
@@ -551,7 +552,7 @@ var _ = RegisterFunction(
 		),
 	),
 	true, func(args ...interface{}) (Function, error) {
-		return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
+		return ClosureFunction("function now", func(_ FunctionContext) (interface{}, error) {
 			return time.Now().Format(time.RFC3339Nano), nil
 		}, nil), nil
 	},
@@ -571,7 +572,7 @@ var _ = RegisterFunction(
 		if len(args) > 0 {
 			format = args[0].(string)
 		}
-		return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
+		return ClosureFunction("function timestamp", func(_ FunctionContext) (interface{}, error) {
 			return time.Now().Format(format), nil
 		}, nil), nil
 	},
@@ -592,7 +593,7 @@ var _ = RegisterFunction(
 		if len(args) > 0 {
 			format = args[0].(string)
 		}
-		return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
+		return ClosureFunction("function timestamp_utc", func(_ FunctionContext) (interface{}, error) {
 			return time.Now().In(time.UTC).Format(format), nil
 		}, nil), nil
 	},
@@ -600,7 +601,7 @@ var _ = RegisterFunction(
 	ExpectStringArg(0),
 )
 
-var _ = RegisterFunction(
+var _ = registerSimpleFunction(
 	NewFunctionSpec(
 		FunctionCategoryEnvironment, "timestamp_unix",
 		"Returns the current unix timestamp in seconds.",
@@ -608,14 +609,12 @@ var _ = RegisterFunction(
 			`root.received_at = timestamp_unix()`,
 		),
 	),
-	false, func(...interface{}) (Function, error) {
-		return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
-			return time.Now().Unix(), nil
-		}, nil), nil
+	func(_ FunctionContext) (interface{}, error) {
+		return time.Now().Unix(), nil
 	},
 )
 
-var _ = RegisterFunction(
+var _ = registerSimpleFunction(
 	NewFunctionSpec(
 		FunctionCategoryEnvironment, "timestamp_unix_nano",
 		"Returns the current unix timestamp in nanoseconds.",
@@ -623,10 +622,8 @@ var _ = RegisterFunction(
 			`root.received_at = timestamp_unix_nano()`,
 		),
 	),
-	false, func(...interface{}) (Function, error) {
-		return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
-			return time.Now().UnixNano(), nil
-		}, nil), nil
+	func(_ FunctionContext) (interface{}, error) {
+		return time.Now().UnixNano(), nil
 	},
 )
 
@@ -646,12 +643,12 @@ root.doc.contents = (this.body.content | this.thing.body)`,
 			`{"header":{"id":"first"},"thing":{"body":"hello world"}}`,
 			`{"doc":{"contents":"hello world","type":"foo"}}`,
 			`{"nothing":"matches"}`,
-			`Error("failed to execute mapping query at line 1: unknown type")`,
+			`Error("failed assignment (line 1): unknown type")`,
 		),
 	),
 	true, func(args ...interface{}) (Function, error) {
 		msg := args[0].(string)
-		return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
+		return ClosureFunction("function throw", func(_ FunctionContext) (interface{}, error) {
 			return nil, errors.New(msg)
 		}, nil), nil
 	},
@@ -661,24 +658,20 @@ root.doc.contents = (this.body.content | this.thing.body)`,
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
+var _ = registerSimpleFunction(
 	NewFunctionSpec(
 		FunctionCategoryGeneral, "uuid_v4",
 		"Generates a new RFC-4122 UUID each time it is invoked and prints a string representation.",
 		NewExampleSpec("", `root.id = uuid_v4()`),
 	),
-	false, uuidFunction,
-)
-
-func uuidFunction(...interface{}) (Function, error) {
-	return ClosureFunction(func(_ FunctionContext) (interface{}, error) {
+	func(_ FunctionContext) (interface{}, error) {
 		u4, err := uuid.NewV4()
 		if err != nil {
 			panic(err)
 		}
 		return u4.String(), nil
-	}, nil), nil
-}
+	},
+)
 
 //------------------------------------------------------------------------------
 
@@ -696,7 +689,7 @@ func NewVarFunction(path string) Function {
 
 func varFunction(args ...interface{}) (Function, error) {
 	name := args[0].(string)
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("variable "+name, func(ctx FunctionContext) (interface{}, error) {
 		if ctx.Vars == nil {
 			return nil, &ErrRecoverable{
 				Recovered: nil,

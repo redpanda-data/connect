@@ -14,7 +14,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"all",
 		"Checks each element of an array against a query and returns true if all elements passed. An error occurs if the target is not an array, or if any element results in the provided query returning a non-boolean result. Returns false if the target array is empty.",
@@ -29,46 +29,41 @@ var _ = RegisterMethod(
 			`{"all_over_21":true}`,
 		),
 	),
-	false, allMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		queryFn, ok := args[0].(Function)
+		if !ok {
+			return nil, fmt.Errorf("expected query argument, received %T", args[0])
+		}
+		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
+			arr, ok := res.([]interface{})
+			if !ok {
+				return nil, NewTypeError(res, ValueArray)
+			}
+			if len(arr) == 0 {
+				return false, nil
+			}
+			for i, v := range arr {
+				res, err := queryFn.Exec(ctx.WithValue(v))
+				if err != nil {
+					return nil, fmt.Errorf("element %v: %w", i, err)
+				}
+				b, ok := res.(bool)
+				if !ok {
+					return nil, fmt.Errorf("element %v: %w", i, NewTypeError(res, ValueBool))
+				}
+				if !b {
+					return false, nil
+				}
+			}
+			return true, nil
+		}, nil
+	},
+	false,
 	ExpectNArgs(1),
 	ExpectFunctionArg(0),
 )
 
-func allMethod(target Function, args ...interface{}) (Function, error) {
-	queryFn, ok := args[0].(Function)
-	if !ok {
-		return nil, fmt.Errorf("expected query argument, received %T", args[0])
-	}
-
-	return simpleMethod(target, func(res interface{}, ctx FunctionContext) (interface{}, error) {
-		arr, ok := res.([]interface{})
-		if !ok {
-			return nil, NewTypeError(res, ValueArray)
-		}
-
-		if len(arr) == 0 {
-			return false, nil
-		}
-
-		for i, v := range arr {
-			res, err := queryFn.Exec(ctx.WithValue(v))
-			if err != nil {
-				return nil, fmt.Errorf("element %v: %w", i, err)
-			}
-			b, ok := res.(bool)
-			if !ok {
-				return nil, fmt.Errorf("element %v: %w", i, NewTypeError(res, ValueBool))
-			}
-			if !b {
-				return false, nil
-			}
-		}
-
-		return true, nil
-	}), nil
-}
-
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"any",
 		"Checks the elements of an array against a query and returns true if any element passes. An error occurs if the target is not an array, or if an element results in the provided query returning a non-boolean result. Returns false if the target array is empty.",
@@ -83,48 +78,46 @@ var _ = RegisterMethod(
 			`{"any_over_21":false}`,
 		),
 	),
-	false, anyMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		queryFn, ok := args[0].(Function)
+		if !ok {
+			return nil, fmt.Errorf("expected query argument, received %T", args[0])
+		}
+		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
+			arr, ok := res.([]interface{})
+			if !ok {
+				return nil, NewTypeError(res, ValueArray)
+			}
+
+			if len(arr) == 0 {
+				return false, nil
+			}
+
+			for i, v := range arr {
+				res, err := queryFn.Exec(ctx.WithValue(v))
+				if err != nil {
+					return nil, fmt.Errorf("element %v: %w", i, err)
+				}
+				b, ok := res.(bool)
+				if !ok {
+					return nil, fmt.Errorf("element %v: %w", i, NewTypeError(res, ValueBool))
+				}
+				if b {
+					return true, nil
+				}
+			}
+
+			return false, nil
+		}, nil
+	},
+	false,
 	ExpectNArgs(1),
 	ExpectFunctionArg(0),
 )
 
-func anyMethod(target Function, args ...interface{}) (Function, error) {
-	queryFn, ok := args[0].(Function)
-	if !ok {
-		return nil, fmt.Errorf("expected query argument, received %T", args[0])
-	}
-
-	return simpleMethod(target, func(res interface{}, ctx FunctionContext) (interface{}, error) {
-		arr, ok := res.([]interface{})
-		if !ok {
-			return nil, NewTypeError(res, ValueArray)
-		}
-
-		if len(arr) == 0 {
-			return false, nil
-		}
-
-		for i, v := range arr {
-			res, err := queryFn.Exec(ctx.WithValue(v))
-			if err != nil {
-				return nil, fmt.Errorf("element %v: %w", i, err)
-			}
-			b, ok := res.(bool)
-			if !ok {
-				return nil, fmt.Errorf("element %v: %w", i, NewTypeError(res, ValueBool))
-			}
-			if b {
-				return true, nil
-			}
-		}
-
-		return false, nil
-	}), nil
-}
-
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"append",
 		"Returns an array with new elements appended to the end.",
@@ -137,25 +130,24 @@ var _ = RegisterMethod(
 			`{"foo":["bar","baz","and","this"]}`,
 		),
 	),
-	true, appendMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
+			arr, ok := res.([]interface{})
+			if !ok {
+				return nil, NewTypeError(res, ValueArray)
+			}
+			copied := make([]interface{}, 0, len(arr)+len(args))
+			copied = append(copied, arr...)
+			return append(copied, args...), nil
+		}, nil
+	},
+	true,
 	ExpectAtLeastOneArg(),
 )
 
-func appendMethod(target Function, args ...interface{}) (Function, error) {
-	return simpleMethod(target, func(res interface{}, ctx FunctionContext) (interface{}, error) {
-		arr, ok := res.([]interface{})
-		if !ok {
-			return nil, NewTypeError(res, ValueArray)
-		}
-		copied := make([]interface{}, 0, len(arr)+len(args))
-		copied = append(copied, arr...)
-		return append(copied, args...), nil
-	}), nil
-}
-
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"collapse", "",
 	).InCategory(
@@ -173,28 +165,27 @@ var _ = RegisterMethod(
 			`{"result":{"foo.0.bar":"1","foo.1.bar":{},"foo.2.bar":"2","foo.3.bar":[]}}`,
 		),
 	),
-	true, collapseMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		includeEmpty := false
+		if len(args) > 0 {
+			includeEmpty = args[0].(bool)
+		}
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			gObj := gabs.Wrap(v)
+			if includeEmpty {
+				return gObj.FlattenIncludeEmpty()
+			}
+			return gObj.Flatten()
+		}, nil
+	},
+	true,
 	ExpectOneOrZeroArgs(),
 	ExpectBoolArg(0),
 )
 
-func collapseMethod(target Function, args ...interface{}) (Function, error) {
-	includeEmpty := false
-	if len(args) > 0 {
-		includeEmpty = args[0].(bool)
-	}
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		gObj := gabs.Wrap(v)
-		if includeEmpty {
-			return gObj.FlattenIncludeEmpty()
-		}
-		return gObj.Flatten()
-	}), nil
-}
-
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"contains", "",
 	).InCategory(
@@ -218,45 +209,41 @@ var _ = RegisterMethod(
 			`{"has_foo":false}`,
 		),
 	),
-	true, containsMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		compareRight := args[0]
+		sub := IToString(args[0])
+		bsub := IToBytes(args[0])
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			switch t := v.(type) {
+			case string:
+				return strings.Contains(t, sub), nil
+			case []byte:
+				return bytes.Contains(t, bsub), nil
+			case []interface{}:
+				for _, compareLeft := range t {
+					if compareRight == compareLeft {
+						return true, nil
+					}
+				}
+			case map[string]interface{}:
+				for _, compareLeft := range t {
+					if compareRight == compareLeft {
+						return true, nil
+					}
+				}
+			default:
+				return nil, NewTypeError(v, ValueString, ValueArray, ValueObject)
+			}
+			return false, nil
+		}, nil
+	},
+	true,
 	ExpectNArgs(1),
 )
 
-func containsMethod(target Function, args ...interface{}) (Function, error) {
-	compareRight := args[0]
-	sub := IToString(args[0])
-	bsub := IToBytes(args[0])
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		switch t := v.(type) {
-		case string:
-			return strings.Contains(t, sub), nil
-		case []byte:
-			return bytes.Contains(t, bsub), nil
-		case []interface{}:
-			for _, compareLeft := range t {
-				if compareRight == compareLeft {
-					return true, nil
-				}
-			}
-		case map[string]interface{}:
-			for _, compareLeft := range t {
-				if compareRight == compareLeft {
-					return true, nil
-				}
-			}
-		default:
-			return nil, &ErrRecoverable{
-				Recovered: false,
-				Err:       NewTypeError(v, ValueString, ValueArray, ValueObject),
-			}
-		}
-		return false, nil
-	}), nil
-}
-
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"enumerated",
 		"Converts an array into a new array of objects, where each object has a field index containing the `index` of the element and a field `value` containing the original value of the element.",
@@ -268,30 +255,29 @@ var _ = RegisterMethod(
 			`{"foo":[{"index":0,"value":"bar"},{"index":1,"value":"baz"}]}`,
 		),
 	),
-	false, enumerateMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			arr, ok := v.([]interface{})
+			if !ok {
+				return nil, NewTypeError(v, ValueArray)
+			}
+			enumerated := make([]interface{}, 0, len(arr))
+			for i, ele := range arr {
+				enumerated = append(enumerated, map[string]interface{}{
+					"index": int64(i),
+					"value": ele,
+				})
+			}
+			return enumerated, nil
+		}, nil
+	},
+	false,
 	ExpectNArgs(0),
 )
 
-func enumerateMethod(target Function, args ...interface{}) (Function, error) {
-	return simpleMethod(target, func(res interface{}, ctx FunctionContext) (interface{}, error) {
-		arr, ok := res.([]interface{})
-		if !ok {
-			return nil, NewTypeError(res, ValueArray)
-		}
-		enumerated := make([]interface{}, 0, len(arr))
-		for i, ele := range arr {
-			enumerated = append(enumerated, map[string]interface{}{
-				"index": int64(i),
-				"value": ele,
-			})
-		}
-		return enumerated, nil
-	}), nil
-}
-
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"exists",
 		"Checks that a field, identified via a [dot path][field_paths], exists in an object.",
@@ -305,22 +291,21 @@ var _ = RegisterMethod(
 			`{"result":false}`,
 		),
 	),
-	true, existsMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		pathStr := args[0].(string)
+		path := gabs.DotPathToSlice(pathStr)
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			return gabs.Wrap(v).Exists(path...), nil
+		}, nil
+	},
+	true,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
 )
 
-func existsMethod(target Function, args ...interface{}) (Function, error) {
-	pathStr := args[0].(string)
-	path := gabs.DotPathToSlice(pathStr)
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		return gabs.Wrap(v).Exists(path...), nil
-	}), nil
-}
-
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"explode", "",
 	).InCategory(
@@ -341,44 +326,42 @@ Exploding objects results in an object where the keys match the target object, a
 			`{"bar":{"id":1,"value":[3,4]},"baz":{"id":1,"value":{"bev":5}},"foo":{"id":1,"value":2}}`,
 		),
 	),
-	true, explodeMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		pathRaw := args[0].(string)
+		path := gabs.DotPathToSlice(pathRaw)
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			target := gabs.Wrap(v).Search(path...)
+
+			switch t := target.Data().(type) {
+			case []interface{}:
+				result := make([]interface{}, len(t))
+				for i, ele := range t {
+					gExploded := gabs.Wrap(IClone(v))
+					gExploded.Set(ele, path...)
+					result[i] = gExploded.Data()
+				}
+				return result, nil
+			case map[string]interface{}:
+				result := make(map[string]interface{}, len(t))
+				for key, ele := range t {
+					gExploded := gabs.Wrap(IClone(v))
+					gExploded.Set(ele, path...)
+					result[key] = gExploded.Data()
+				}
+				return result, nil
+			}
+
+			return nil, fmt.Errorf("expected array or object value at path '%v', found: %v", pathRaw, ITypeOf(target.Data()))
+		}, nil
+	},
+	true,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
 )
 
-func explodeMethod(target Function, args ...interface{}) (Function, error) {
-	pathRaw := args[0].(string)
-	path := gabs.DotPathToSlice(pathRaw)
-
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		target := gabs.Wrap(v).Search(path...)
-
-		switch t := target.Data().(type) {
-		case []interface{}:
-			result := make([]interface{}, len(t))
-			for i, ele := range t {
-				gExploded := gabs.Wrap(IClone(v))
-				gExploded.Set(ele, path...)
-				result[i] = gExploded.Data()
-			}
-			return result, nil
-		case map[string]interface{}:
-			result := make(map[string]interface{}, len(t))
-			for key, ele := range t {
-				gExploded := gabs.Wrap(IClone(v))
-				gExploded.Set(ele, path...)
-				result[key] = gExploded.Data()
-			}
-			return result, nil
-		}
-
-		return nil, fmt.Errorf("expected array or object value at path '%v', found: %v", pathRaw, ITypeOf(target.Data()))
-	}), nil
-}
-
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"filter", "",
 	).InCategory(
@@ -397,60 +380,56 @@ When filtering objects the mapping query argument is provided a context with a f
 			`{"new_dict":{"first":"hello foo","third":"this foo is great"}}`,
 		),
 	),
-	false, filterMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		mapFn, ok := args[0].(Function)
+		if !ok {
+			return nil, fmt.Errorf("expected query argument, received %T", args[0])
+		}
+		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
+			var resValue interface{}
+			switch t := res.(type) {
+			case []interface{}:
+				newSlice := make([]interface{}, 0, len(t))
+				for _, v := range t {
+					f, err := mapFn.Exec(ctx.WithValue(v))
+					if err != nil {
+						return nil, err
+					}
+					if b, _ := f.(bool); b {
+						newSlice = append(newSlice, v)
+					}
+				}
+				resValue = newSlice
+			case map[string]interface{}:
+				newMap := make(map[string]interface{}, len(t))
+				for k, v := range t {
+					var ctxMap interface{} = map[string]interface{}{
+						"key":   k,
+						"value": v,
+					}
+					f, err := mapFn.Exec(ctx.WithValue(ctxMap))
+					if err != nil {
+						return nil, err
+					}
+					if b, _ := f.(bool); b {
+						newMap[k] = v
+					}
+				}
+				resValue = newMap
+			default:
+				return nil, NewTypeError(res, ValueArray, ValueObject)
+			}
+			return resValue, nil
+		}, nil
+	},
+	false,
 	ExpectNArgs(1),
 	ExpectFunctionArg(0),
 )
 
-func filterMethod(target Function, args ...interface{}) (Function, error) {
-	mapFn, ok := args[0].(Function)
-	if !ok {
-		return nil, fmt.Errorf("expected query argument, received %T", args[0])
-	}
-
-	// TODO: Query targets do not take the mapping function into account as it's
-	// dynamic.
-	return simpleMethod(target, func(res interface{}, ctx FunctionContext) (interface{}, error) {
-		var resValue interface{}
-		switch t := res.(type) {
-		case []interface{}:
-			newSlice := make([]interface{}, 0, len(t))
-			for _, v := range t {
-				f, err := mapFn.Exec(ctx.WithValue(v))
-				if err != nil {
-					return nil, err
-				}
-				if b, _ := f.(bool); b {
-					newSlice = append(newSlice, v)
-				}
-			}
-			resValue = newSlice
-		case map[string]interface{}:
-			newMap := make(map[string]interface{}, len(t))
-			for k, v := range t {
-				var ctxMap interface{} = map[string]interface{}{
-					"key":   k,
-					"value": v,
-				}
-				f, err := mapFn.Exec(ctx.WithValue(ctxMap))
-				if err != nil {
-					return nil, err
-				}
-				if b, _ := f.(bool); b {
-					newMap[k] = v
-				}
-			}
-			resValue = newMap
-		default:
-			return nil, NewTypeError(res, ValueArray, ValueObject)
-		}
-		return resValue, nil
-	}), nil
-}
-
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"flatten",
 		"Iterates an array and any element that is itself an array is removed and has its elements inserted directly in the resulting array.",
@@ -462,32 +441,31 @@ var _ = RegisterMethod(
 			`{"result":["foo","bar","baz","buz"]}`,
 		),
 	),
-	false, flattenMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			array, isArray := v.([]interface{})
+			if !isArray {
+				return nil, NewTypeError(v, ValueArray)
+			}
+			result := make([]interface{}, 0, len(array))
+			for _, child := range array {
+				switch t := child.(type) {
+				case []interface{}:
+					result = append(result, t...)
+				default:
+					result = append(result, t)
+				}
+			}
+			return result, nil
+		}, nil
+	},
+	false,
 	ExpectNArgs(0),
 )
 
-func flattenMethod(target Function, args ...interface{}) (Function, error) {
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		array, isArray := v.([]interface{})
-		if !isArray {
-			return nil, NewTypeError(v, ValueArray)
-		}
-		result := make([]interface{}, 0, len(array))
-		for _, child := range array {
-			switch t := child.(type) {
-			case []interface{}:
-				result = append(result, t...)
-			default:
-				result = append(result, t)
-			}
-		}
-		return result, nil
-	}), nil
-}
-
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"fold",
 		"Takes two arguments: an initial value, and a mapping query. For each element of an array the mapping context is an object with two fields `tally` and `value`, where `tally` contains the current accumulated value and `value` is the value of the current element. The mapping must return the result of adding the value to the tally.\n\nThe first argument is the value that `tally` will have on the first call.",
@@ -504,67 +482,62 @@ var _ = RegisterMethod(
 			`{"result":"hello world"}`,
 		),
 	),
-	false, foldMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		var foldTallyStart interface{}
+		switch t := args[0].(type) {
+		case *Literal:
+			foldTallyStart = t.Value
+		default:
+			foldTallyStart = t
+		}
+		foldFn, ok := args[1].(Function)
+		if !ok {
+			return nil, fmt.Errorf("expected query argument, received %T", args[1])
+		}
+		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
+			resArray, ok := res.([]interface{})
+			if !ok {
+				return nil, NewTypeError(res, ValueArray)
+			}
+
+			var tally interface{}
+			var err error
+			switch t := foldTallyStart.(type) {
+			case Function:
+				if tally, err = t.Exec(ctx); err != nil {
+					return nil, fmt.Errorf("failed to extract tally initial value: %w", err)
+				}
+			default:
+				tally = IClone(foldTallyStart)
+			}
+
+			tmpObj := map[string]interface{}{
+				"tally": struct{}{},
+				"value": struct{}{},
+			}
+
+			for _, v := range resArray {
+				tmpObj["tally"] = tally
+				tmpObj["value"] = v
+
+				newV, mapErr := foldFn.Exec(ctx.WithValue(tmpObj))
+				if mapErr != nil {
+					return nil, mapErr
+				}
+
+				tally = newV
+			}
+			return tally, nil
+		}, nil
+	},
+	false,
 	ExpectNArgs(2),
 	ExpectFunctionArg(1),
 )
 
-func foldMethod(target Function, args ...interface{}) (Function, error) {
-	var foldTallyStart interface{}
-	switch t := args[0].(type) {
-	case *Literal:
-		foldTallyStart = t.Value
-	default:
-		foldTallyStart = t
-	}
-	foldFn, ok := args[1].(Function)
-	if !ok {
-		return nil, fmt.Errorf("expected query argument, received %T", args[1])
-	}
-
-	// TODO: Query targets do not take the fold function into account as it's
-	// dynamic. We could work it out by expanding targets with the fold targets
-	// less the value prefix.
-	return simpleMethod(target, func(res interface{}, ctx FunctionContext) (interface{}, error) {
-		resArray, ok := res.([]interface{})
-		if !ok {
-			return nil, NewTypeError(res, ValueArray)
-		}
-
-		var tally interface{}
-		var err error
-		switch t := foldTallyStart.(type) {
-		case Function:
-			if tally, err = t.Exec(ctx); err != nil {
-				return nil, fmt.Errorf("failed to extract tally initial value: %w", err)
-			}
-		default:
-			tally = IClone(foldTallyStart)
-		}
-
-		tmpObj := map[string]interface{}{
-			"tally": struct{}{},
-			"value": struct{}{},
-		}
-
-		for _, v := range resArray {
-			tmpObj["tally"] = tally
-			tmpObj["value"] = v
-
-			newV, mapErr := foldFn.Exec(ctx.WithValue(tmpObj))
-			if mapErr != nil {
-				return nil, mapErr
-			}
-
-			tally = newV
-		}
-		return tally, nil
-	}), nil
-}
-
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"index",
 		"Extract an element from an array by an index. The index can be negative, and if so the element will be selected from the end counting backwards starting from -1. E.g. an index of -1 returns the last element, an index of -2 returns the element before the last, and so on.",
@@ -581,42 +554,41 @@ var _ = RegisterMethod(
 			`{"last_byte":110}`,
 		),
 	),
-	true, indexMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		index := args[0].(int64)
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			switch array := v.(type) {
+			case []interface{}:
+				i := int(index)
+				if i < 0 {
+					i = len(array) + i
+				}
+				if i < 0 || i >= len(array) {
+					return nil, fmt.Errorf("index '%v' was out of bounds for array size: %v", i, len(array))
+				}
+				return array[i], nil
+			case []byte:
+				i := int(index)
+				if i < 0 {
+					i = len(array) + i
+				}
+				if i < 0 || i >= len(array) {
+					return nil, fmt.Errorf("index '%v' was out of bounds for array size: %v", i, len(array))
+				}
+				return int64(array[i]), nil
+			default:
+				return nil, NewTypeError(v, ValueArray)
+			}
+		}, nil
+	},
+	true,
 	ExpectNArgs(1),
 	ExpectIntArg(0),
 )
 
-func indexMethod(target Function, args ...interface{}) (Function, error) {
-	index := args[0].(int64)
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		switch array := v.(type) {
-		case []interface{}:
-			i := int(index)
-			if i < 0 {
-				i = len(array) + i
-			}
-			if i < 0 || i >= len(array) {
-				return nil, fmt.Errorf("index '%v' was out of bounds for array size: %v", i, len(array))
-			}
-			return array[i], nil
-		case []byte:
-			i := int(index)
-			if i < 0 {
-				i = len(array) + i
-			}
-			if i < 0 || i >= len(array) {
-				return nil, fmt.Errorf("index '%v' was out of bounds for array size: %v", i, len(array))
-			}
-			return int64(array[i]), nil
-		default:
-			return nil, NewTypeError(v, ValueArray)
-		}
-	}), nil
-}
-
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"json_schema",
 		"Checks a [JSON schema](https://json-schema.org/) against a value and returns the value if it matches or throws and error if it does not.",
@@ -635,49 +607,48 @@ var _ = RegisterMethod(
 			`{"foo":"bar"}`,
 			`{"foo":"bar"}`,
 			`{"foo":5}`,
-			`Error("failed to execute mapping query at line 1: foo invalid type. expected: string, given: integer")`,
+			`Error("failed assignment (line 1): field `+"`this`"+`: foo invalid type. expected: string, given: integer")`,
 		),
 		NewExampleSpec(
 			"In order to load a schema from a file use the `file` function.",
 			`root = this.json_schema(file(var("BENTHOS_TEST_BLOBLANG_SCHEMA_FILE")))`,
 		),
 	).Beta(),
-	true, jsonSchemaMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		schema, err := jsonschema.NewSchema(jsonschema.NewStringLoader(args[0].(string)))
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse json schema definition: %w", err)
+		}
+		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
+			result, err := schema.Validate(jsonschema.NewGoLoader(res))
+			if err != nil {
+				return nil, err
+			}
+			if !result.Valid() {
+				var errStr string
+				for i, desc := range result.Errors() {
+					if i > 0 {
+						errStr = errStr + "\n"
+					}
+					description := strings.ToLower(desc.Description())
+					if property := desc.Details()["property"]; property != nil {
+						description = property.(string) + strings.TrimPrefix(description, strings.ToLower(property.(string)))
+					}
+					errStr = errStr + desc.Field() + " " + description
+				}
+				return nil, errors.New(errStr)
+			}
+			return res, nil
+		}, nil
+	},
+	true,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
 )
 
-func jsonSchemaMethod(target Function, args ...interface{}) (Function, error) {
-	schema, err := jsonschema.NewSchema(jsonschema.NewStringLoader(args[0].(string)))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse json schema definition: %w", err)
-	}
-	return simpleMethod(target, func(res interface{}, ctx FunctionContext) (interface{}, error) {
-		result, err := schema.Validate(jsonschema.NewGoLoader(res))
-		if err != nil {
-			return nil, err
-		}
-		if !result.Valid() {
-			var errStr string
-			for i, desc := range result.Errors() {
-				if i > 0 {
-					errStr = errStr + "\n"
-				}
-				description := strings.ToLower(desc.Description())
-				if property := desc.Details()["property"]; property != nil {
-					description = property.(string) + strings.TrimPrefix(description, strings.ToLower(property.(string)))
-				}
-				errStr = errStr + desc.Field() + " " + description
-			}
-			return nil, errors.New(errStr)
-		}
-		return res, nil
-	}), nil
-}
-
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"keys",
 		"Returns the keys of an object as an array. The order of the resulting array will be random.",
@@ -689,29 +660,28 @@ var _ = RegisterMethod(
 			`{"foo_keys":["bar","baz"]}`,
 		),
 	),
-	false, keysMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			if m, ok := v.(map[string]interface{}); ok {
+				keys := make([]interface{}, 0, len(m))
+				for k := range m {
+					keys = append(keys, k)
+				}
+				sort.Slice(keys, func(i, j int) bool {
+					return keys[i].(string) < keys[j].(string)
+				})
+				return keys, nil
+			}
+			return nil, NewTypeError(v, ValueObject)
+		}, nil
+	},
+	false,
 	ExpectNArgs(0),
 )
 
-func keysMethod(target Function, args ...interface{}) (Function, error) {
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		if m, ok := v.(map[string]interface{}); ok {
-			keys := make([]interface{}, 0, len(m))
-			for k := range m {
-				keys = append(keys, k)
-			}
-			sort.Slice(keys, func(i, j int) bool {
-				return keys[i].(string) < keys[j].(string)
-			})
-			return keys, nil
-		}
-		return nil, NewTypeError(v, ValueObject)
-	}), nil
-}
-
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"length", "",
 	).InCategory(
@@ -731,35 +701,31 @@ var _ = RegisterMethod(
 			`{"foo_len":2}`,
 		),
 	),
-	false, lengthMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			var length int64
+			switch t := v.(type) {
+			case string:
+				length = int64(len(t))
+			case []byte:
+				length = int64(len(t))
+			case []interface{}:
+				length = int64(len(t))
+			case map[string]interface{}:
+				length = int64(len(t))
+			default:
+				return nil, NewTypeError(v, ValueString, ValueArray, ValueObject)
+			}
+			return length, nil
+		}, nil
+	},
+	false,
 	ExpectNArgs(0),
 )
 
-func lengthMethod(target Function, _ ...interface{}) (Function, error) {
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		var length int64
-		switch t := v.(type) {
-		case string:
-			length = int64(len(t))
-		case []byte:
-			length = int64(len(t))
-		case []interface{}:
-			length = int64(len(t))
-		case map[string]interface{}:
-			length = int64(len(t))
-		default:
-			return nil, &ErrRecoverable{
-				Recovered: length,
-				Err:       NewTypeError(v, ValueString, ValueArray, ValueObject),
-			}
-		}
-		return length, nil
-	}), nil
-}
-
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"map_each", "",
 	).InCategory(
@@ -783,88 +749,68 @@ Apply a mapping to each value of an object and replace the value with the result
 			`{"new_dict":{"bar":"WORLD","foo":"HELLO"}}`,
 		),
 	),
-	false, mapEachMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		mapFn, ok := args[0].(Function)
+		if !ok {
+			return nil, fmt.Errorf("expected query argument, received %T", args[0])
+		}
+		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
+			var resValue interface{}
+			var err error
+			switch t := res.(type) {
+			case []interface{}:
+				newSlice := make([]interface{}, 0, len(t))
+				for i, v := range t {
+					newV, mapErr := mapFn.Exec(ctx.WithValue(v))
+					if mapErr != nil {
+						return nil, fmt.Errorf("failed to process element %v: %w", i, ErrFrom(mapErr, mapFn))
+					}
+					switch newV.(type) {
+					case Delete:
+					case Nothing:
+						newSlice = append(newSlice, v)
+					default:
+						newSlice = append(newSlice, newV)
+					}
+				}
+				resValue = newSlice
+			case map[string]interface{}:
+				newMap := make(map[string]interface{}, len(t))
+				for k, v := range t {
+					var ctxMap interface{} = map[string]interface{}{
+						"key":   k,
+						"value": v,
+					}
+					newV, mapErr := mapFn.Exec(ctx.WithValue(ctxMap))
+					if mapErr != nil {
+						return nil, fmt.Errorf("failed to process element %v: %w", k, ErrFrom(mapErr, mapFn))
+					}
+					switch newV.(type) {
+					case Delete:
+					case Nothing:
+						newMap[k] = v
+					default:
+						newMap[k] = newV
+					}
+				}
+				resValue = newMap
+			default:
+				return nil, NewTypeError(res, ValueArray)
+			}
+			if err != nil {
+				return nil, err
+			}
+			return resValue, nil
+		}, nil
+	},
+	false,
 	ExpectNArgs(1),
 	ExpectFunctionArg(0),
 )
 
-func mapEachMethod(target Function, args ...interface{}) (Function, error) {
-	mapFn, ok := args[0].(Function)
-	if !ok {
-		return nil, fmt.Errorf("expected query argument, received %T", args[0])
-	}
-
-	// TODO: Query targets do not take the mapping function into account as it's
-	// dynamic.
-	return simpleMethod(target, func(res interface{}, ctx FunctionContext) (interface{}, error) {
-		var resValue interface{}
-		var err error
-		switch t := res.(type) {
-		case []interface{}:
-			newSlice := make([]interface{}, 0, len(t))
-			for i, v := range t {
-				newV, mapErr := mapFn.Exec(ctx.WithValue(v))
-				if mapErr != nil {
-					if recover, ok := mapErr.(*ErrRecoverable); ok {
-						newV = recover.Recovered
-						err = fmt.Errorf("failed to process element %v: %w", i, recover.Err)
-					} else {
-						return nil, mapErr
-					}
-				}
-				switch newV.(type) {
-				case Delete:
-				case Nothing:
-					newSlice = append(newSlice, v)
-				default:
-					newSlice = append(newSlice, newV)
-				}
-			}
-			resValue = newSlice
-		case map[string]interface{}:
-			newMap := make(map[string]interface{}, len(t))
-			for k, v := range t {
-				var ctxMap interface{} = map[string]interface{}{
-					"key":   k,
-					"value": v,
-				}
-				newV, mapErr := mapFn.Exec(ctx.WithValue(ctxMap))
-				if mapErr != nil {
-					if recover, ok := mapErr.(*ErrRecoverable); ok {
-						newV = recover.Recovered
-						err = fmt.Errorf("failed to process element %v: %w", k, recover.Err)
-					} else {
-						return nil, mapErr
-					}
-				}
-				switch newV.(type) {
-				case Delete:
-				case Nothing:
-					newMap[k] = v
-				default:
-					newMap[k] = newV
-				}
-			}
-			resValue = newMap
-		default:
-			return nil, &ErrRecoverable{
-				Recovered: res,
-				Err:       NewTypeError(res, ValueArray),
-			}
-		}
-		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: resValue,
-				Err:       err,
-			}
-		}
-		return resValue, nil
-	}), nil
-}
-
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"map_each_key", "",
 	).InCategory(
@@ -880,49 +826,47 @@ var _ = RegisterMethod(
 			`{"_kafka_key":"bar","_kafka_topic":"baz","amqp_key":"foo"}`,
 		),
 	),
-	false, mapEachKeyMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		mapFn, ok := args[0].(Function)
+		if !ok {
+			return nil, fmt.Errorf("expected query argument, received %T", args[0])
+		}
+		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
+			obj, ok := res.(map[string]interface{})
+			if !ok {
+				return nil, NewTypeError(res, ValueObject)
+			}
+
+			newMap := make(map[string]interface{}, len(obj))
+			for k, v := range obj {
+				var ctxVal interface{} = k
+				newKey, mapErr := mapFn.Exec(ctx.WithValue(ctxVal))
+				if mapErr != nil {
+					return nil, mapErr
+				}
+
+				switch t := newKey.(type) {
+				// TODO: Revise whether we want this.
+				// case Delete:
+				case Nothing:
+					newMap[k] = v
+				case string:
+					newMap[t] = v
+				default:
+					return nil, fmt.Errorf("unexpected result from key mapping: %w", NewTypeError(newKey, ValueString))
+				}
+			}
+			return newMap, nil
+		}, nil
+	},
+	false,
 	ExpectNArgs(1),
 	ExpectFunctionArg(0),
 )
 
-func mapEachKeyMethod(target Function, args ...interface{}) (Function, error) {
-	mapFn, ok := args[0].(Function)
-	if !ok {
-		return nil, fmt.Errorf("expected query argument, received %T", args[0])
-	}
-
-	return simpleMethod(target, func(res interface{}, ctx FunctionContext) (interface{}, error) {
-		obj, ok := res.(map[string]interface{})
-		if !ok {
-			return nil, NewTypeError(res, ValueObject)
-		}
-
-		newMap := make(map[string]interface{}, len(obj))
-		for k, v := range obj {
-			var ctxVal interface{} = k
-			newKey, mapErr := mapFn.Exec(ctx.WithValue(ctxVal))
-			if mapErr != nil {
-				return nil, mapErr
-			}
-
-			switch t := newKey.(type) {
-			// TODO: Revise whether we want this.
-			// case Delete:
-			case Nothing:
-				newMap[k] = v
-			case string:
-				newMap[t] = v
-			default:
-				return nil, fmt.Errorf("unexpected result from key mapping: %w", NewTypeError(newKey, ValueString))
-			}
-		}
-		return newMap, nil
-	}), nil
-}
-
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerMethod(
 	NewMethodSpec(
 		"merge", "Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the result will be an array containing both values, where values that are already arrays will be expanded into the resulting array.",
 	).InCategory(
@@ -943,9 +887,9 @@ func mergeMethod(target Function, args ...interface{}) (Function, error) {
 	case Function:
 		mapFn = t
 	default:
-		mapFn = NewLiteralFunction(t)
+		mapFn = NewLiteralFunction("", t)
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("method merge", func(ctx FunctionContext) (interface{}, error) {
 		mergeInto, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -964,10 +908,7 @@ func mergeMethod(target Function, args ...interface{}) (Function, error) {
 		}
 
 		if _, isObject := mergeInto.(map[string]interface{}); !isObject {
-			return nil, &ErrRecoverable{
-				Recovered: mergeInto,
-				Err:       NewTypeError(mergeInto, ValueObject, ValueArray),
-			}
+			return nil, NewTypeErrorFrom(target.Annotation(), mergeInto, ValueObject, ValueArray)
 		}
 
 		root := gabs.New()
@@ -975,10 +916,7 @@ func mergeMethod(target Function, args ...interface{}) (Function, error) {
 			err = root.Merge(gabs.Wrap(mergeFrom))
 		}
 		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: mergeInto,
-				Err:       err,
-			}
+			return nil, err
 		}
 		return root.Data(), nil
 	}, aggregateTargetPaths(target, mapFn)), nil
@@ -986,7 +924,7 @@ func mergeMethod(target Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"not_empty", "",
 	).InCategory(
@@ -998,50 +936,49 @@ var _ = RegisterMethod(
 			`{"a":"foo"}`,
 
 			`{"a":""}`,
-			`Error("failed to execute mapping query at line 1: string value is empty")`,
+			`Error("failed assignment (line 1): field `+"`this.a`"+`: string value is empty")`,
 
 			`{"a":["foo","bar"]}`,
 			`{"a":["foo","bar"]}`,
 
 			`{"a":[]}`,
-			`Error("failed to execute mapping query at line 1: array value is empty")`,
+			`Error("failed assignment (line 1): field `+"`this.a`"+`: array value is empty")`,
 
 			`{"a":{"b":"foo","c":"bar"}}`,
 			`{"a":{"b":"foo","c":"bar"}}`,
 
 			`{"a":{}}`,
-			`Error("failed to execute mapping query at line 1: object value is empty")`,
+			`Error("failed assignment (line 1): field `+"`this.a`"+`: object value is empty")`,
 		),
 	),
-	false, notEmptyMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			switch t := v.(type) {
+			case string:
+				if len(t) == 0 {
+					return nil, errors.New("string value is empty")
+				}
+			case []interface{}:
+				if len(t) == 0 {
+					return nil, errors.New("array value is empty")
+				}
+			case map[string]interface{}:
+				if len(t) == 0 {
+					return nil, errors.New("object value is empty")
+				}
+			default:
+				return nil, NewTypeError(v, ValueString, ValueArray, ValueObject)
+			}
+			return v, nil
+		}, nil
+	},
+	false,
 	ExpectNArgs(0),
 )
 
-func notEmptyMethod(target Function, _ ...interface{}) (Function, error) {
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		switch t := v.(type) {
-		case string:
-			if len(t) == 0 {
-				return nil, errors.New("string value is empty")
-			}
-		case []interface{}:
-			if len(t) == 0 {
-				return nil, errors.New("array value is empty")
-			}
-		case map[string]interface{}:
-			if len(t) == 0 {
-				return nil, errors.New("object value is empty")
-			}
-		default:
-			return nil, NewTypeError(v, ValueString, ValueArray, ValueObject)
-		}
-		return v, nil
-	}), nil
-}
-
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerMethod(
 	NewMethodSpec(
 		"sort", "",
 	).InCategory(
@@ -1073,7 +1010,7 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 				rhs, err = IGetNumber(values[j])
 			}
 			if err != nil {
-				return false, err
+				return false, fmt.Errorf("element %v: %w", j, err)
 			}
 			return lhs < rhs, nil
 		case string, []byte:
@@ -1083,11 +1020,11 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 				rhs, err = IGetString(values[j])
 			}
 			if err != nil {
-				return false, err
+				return false, fmt.Errorf("element %v: %w", j, err)
 			}
 			return lhs < rhs, nil
 		}
-		return false, NewTypeError(values[i], ValueNumber, ValueString)
+		return false, fmt.Errorf("element %v: %w", i, NewTypeError(values[i], ValueNumber, ValueString))
 	}
 	var mapFn Function
 	if len(args) > 0 {
@@ -1114,7 +1051,7 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 		targets = aggregateTargetPaths(target, mapFn)
 	}
 
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("method sort", func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -1142,7 +1079,7 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"slice", "",
 	).InCategory(
@@ -1177,13 +1114,14 @@ root.the_rest = this.value.slice(0, -2)`,
 			`{"last_chunk":["buz","bev"],"the_rest":["foo","bar","baz"]}`,
 		),
 	),
-	true, sliceMethod,
+	sliceMethod,
+	true,
 	ExpectAtLeastOneArg(),
 	ExpectIntArg(0),
 	ExpectIntArg(1),
 )
 
-func sliceMethod(target Function, args ...interface{}) (Function, error) {
+func sliceMethod(args ...interface{}) (simpleMethod, error) {
 	start := args[0].(int64)
 	var end *int64
 	if len(args) > 1 {
@@ -1220,7 +1158,7 @@ func sliceMethod(target Function, args ...interface{}) (Function, error) {
 		}
 		return
 	}
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		switch t := v.(type) {
 		case string:
 			start, end, err := getBounds(int64(len(t)))
@@ -1242,12 +1180,12 @@ func sliceMethod(target Function, args ...interface{}) (Function, error) {
 			return t[start:end], nil
 		}
 		return nil, NewTypeError(v, ValueArray, ValueString)
-	}), nil
+	}, nil
 }
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerMethod(
 	NewMethodSpec(
 		"sum", "",
 	).InCategory(
@@ -1264,13 +1202,10 @@ var _ = RegisterMethod(
 )
 
 func sumMethod(target Function, _ ...interface{}) (Function, error) {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("method sum", func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: int64(0),
-				Err:       err,
-			}
+			return nil, err
 		}
 		switch t := ISanitize(v).(type) {
 		case float64, int64, uint64, json.Number:
@@ -1286,23 +1221,17 @@ func sumMethod(target Function, _ ...interface{}) (Function, error) {
 				}
 			}
 			if err != nil {
-				return nil, &ErrRecoverable{
-					Recovered: total,
-					Err:       err,
-				}
+				return nil, err
 			}
 			return total, nil
 		}
-		return nil, &ErrRecoverable{
-			Recovered: int64(0),
-			Err:       NewTypeError(v, ValueArray),
-		}
+		return nil, NewTypeErrorFrom(target.Annotation(), v, ValueArray)
 	}, target.QueryTargets), nil
 }
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"unique", "",
 	).InCategory(
@@ -1314,12 +1243,13 @@ var _ = RegisterMethod(
 			`{"uniques":["a","b","c"]}`,
 		),
 	),
-	false, uniqueMethod,
+	uniqueMethod,
+	false,
 	ExpectOneOrZeroArgs(),
 	ExpectFunctionArg(0),
 )
 
-func uniqueMethod(target Function, args ...interface{}) (Function, error) {
+func uniqueMethod(args ...interface{}) (simpleMethod, error) {
 	var emitFn Function
 	if len(args) > 0 {
 		var ok bool
@@ -1329,7 +1259,7 @@ func uniqueMethod(target Function, args ...interface{}) (Function, error) {
 		}
 	}
 
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
+	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		slice, ok := v.([]interface{})
 		if !ok {
 			return nil, NewTypeError(v, ValueArray)
@@ -1401,12 +1331,12 @@ func uniqueMethod(target Function, args ...interface{}) (Function, error) {
 			}
 		}
 		return uniqueSlice, nil
-	}), nil
+	}, nil
 }
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"values", "",
 	).InCategory(
@@ -1418,26 +1348,25 @@ var _ = RegisterMethod(
 			`{"foo_vals":[1,2]}`,
 		),
 	),
-	false, valuesMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			if m, ok := v.(map[string]interface{}); ok {
+				values := make([]interface{}, 0, len(m))
+				for _, e := range m {
+					values = append(values, e)
+				}
+				return values, nil
+			}
+			return nil, NewTypeError(v, ValueObject)
+		}, nil
+	},
+	false,
 	ExpectNArgs(0),
 )
 
-func valuesMethod(target Function, args ...interface{}) (Function, error) {
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		if m, ok := v.(map[string]interface{}); ok {
-			values := make([]interface{}, 0, len(m))
-			for _, e := range m {
-				values = append(values, e)
-			}
-			return values, nil
-		}
-		return nil, NewTypeError(v, ValueObject)
-	}), nil
-}
-
 //------------------------------------------------------------------------------
 
-var _ = RegisterMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"without", "",
 	).InCategory(
@@ -1451,7 +1380,20 @@ If a key within a nested path does not exist or is not an object then it is not 
 			`{"e":"fifth","inner":{"b":"second"}}`,
 		),
 	),
-	true, withoutMethod,
+	func(args ...interface{}) (simpleMethod, error) {
+		excludeList := make([][]string, 0, len(args))
+		for _, arg := range args {
+			excludeList = append(excludeList, gabs.DotPathToSlice(arg.(string)))
+		}
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			m, ok := v.(map[string]interface{})
+			if !ok {
+				return nil, NewTypeError(v, ValueObject)
+			}
+			return mapWithout(m, excludeList), nil
+		}, nil
+	},
+	true,
 	ExpectAtLeastOneArg(),
 	ExpectAllStringArgs(),
 )
@@ -1484,21 +1426,6 @@ func mapWithout(m map[string]interface{}, paths [][]string) map[string]interface
 		}
 	}
 	return newMap
-}
-
-func withoutMethod(target Function, args ...interface{}) (Function, error) {
-	excludeList := make([][]string, 0, len(args))
-	for _, arg := range args {
-		excludeList = append(excludeList, gabs.DotPathToSlice(arg.(string)))
-	}
-
-	return simpleMethod(target, func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		m, ok := v.(map[string]interface{})
-		if !ok {
-			return nil, NewTypeError(v, ValueObject)
-		}
-		return mapWithout(m, excludeList), nil
-	}), nil
 }
 
 //------------------------------------------------------------------------------

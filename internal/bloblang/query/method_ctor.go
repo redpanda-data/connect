@@ -8,14 +8,14 @@ import (
 // MethodCtor constructs a new method from a target function and input args.
 type MethodCtor func(target Function, args ...interface{}) (Function, error)
 
-func methodWithDynamicArgs(args []interface{}, target Function, ctor MethodCtor) Function {
+func methodWithDynamicArgs(annotation string, args []interface{}, target Function, ctor MethodCtor) Function {
 	fns := []Function{target}
 	for _, dArg := range args {
 		if fArg, isDyn := dArg.(Function); isDyn {
 			fns = append(fns, fArg)
 		}
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(annotation, func(ctx FunctionContext) (interface{}, error) {
 		dynArgs := make([]interface{}, 0, len(args))
 		for i, dArg := range args {
 			if fArg, isDyn := dArg.(Function); isDyn {
@@ -36,14 +36,14 @@ func methodWithDynamicArgs(args []interface{}, target Function, ctor MethodCtor)
 	}, aggregateTargetPaths(fns...))
 }
 
-func methodWithAutoResolvedFunctionArgs(fn MethodCtor) MethodCtor {
+func methodWithAutoResolvedFunctionArgs(annotation string, fn MethodCtor) MethodCtor {
 	return func(target Function, args ...interface{}) (Function, error) {
 		for i, arg := range args {
 			switch t := arg.(type) {
 			case *Literal:
 				args[i] = t.Value
 			case Function:
-				return methodWithDynamicArgs(args, target, fn), nil
+				return methodWithDynamicArgs(annotation, args, target, fn), nil
 			}
 		}
 		return fn(target, args...)
@@ -61,28 +61,58 @@ func checkMethodArgs(fn MethodCtor, checks ...ArgCheckFn) MethodCtor {
 	}
 }
 
-func simpleMethod(
-	target Function,
-	fn func(interface{}, FunctionContext) (interface{}, error),
-) Function {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return fn(v, ctx)
-	}, target.QueryTargets)
+//------------------------------------------------------------------------------
+
+func registerMethod(spec MethodSpec, autoResolveFunctionArgs bool, ctor MethodCtor, checks ...ArgCheckFn) struct{} {
+	if err := AllMethods.Add(spec, ctor, autoResolveFunctionArgs, checks...); err != nil {
+		panic(err)
+	}
+	return struct{}{}
 }
 
-func numberMethod(
-	target Function,
-	fn func(f *float64, i *int64, ui *uint64, ctx FunctionContext) (interface{}, error),
-) Function {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
-		v, err := target.Exec(ctx)
+type simpleMethod func(v interface{}, ctx FunctionContext) (interface{}, error)
+
+type simpleMethodConstructor func(args ...interface{}) (simpleMethod, error)
+
+func registerSimpleMethod(spec MethodSpec, ctor simpleMethodConstructor, autoResolveFunctionArgs bool, checks ...ArgCheckFn) struct{} {
+	if err := AllMethods.Add(spec,
+		func(target Function, args ...interface{}) (Function, error) {
+			fn, err := ctor(args...)
+			if err != nil {
+				return nil, err
+			}
+			return ClosureFunction("method "+spec.Name, func(ctx FunctionContext) (interface{}, error) {
+				v, err := target.Exec(ctx)
+				if err != nil {
+					return nil, err
+				}
+				res, err := fn(v, ctx)
+				if err != nil {
+					return nil, ErrFrom(err, target)
+				}
+				return res, nil
+			}, target.QueryTargets), nil
+		},
+		autoResolveFunctionArgs,
+		checks...,
+	); err != nil {
+		panic(err)
+	}
+	return struct{}{}
+}
+
+func stringMethod(fn func(v string) (interface{}, error)) simpleMethod {
+	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		s, err := IGetString(v)
 		if err != nil {
 			return nil, err
 		}
+		return fn(s)
+	}
+}
+
+func numberMethod(fn func(f *float64, i *int64, ui *uint64) (interface{}, error)) simpleMethod {
+	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var f *float64
 		var i *int64
 		var ui *uint64
@@ -104,6 +134,6 @@ func numberMethod(
 		default:
 			return nil, NewTypeError(v, ValueNumber)
 		}
-		return fn(f, i, ui, ctx)
-	}, target.QueryTargets)
+		return fn(f, i, ui)
+	}
 }

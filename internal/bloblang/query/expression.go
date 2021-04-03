@@ -23,7 +23,7 @@ func NewMatchCase(caseFn, queryFn Function) MatchCase {
 // the function is executed
 func NewMatchFunction(contextFn Function, cases ...MatchCase) Function {
 	if contextFn == nil {
-		contextFn = ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+		contextFn = ClosureFunction("this", func(ctx FunctionContext) (interface{}, error) {
 			var value interface{}
 			if v := ctx.Value(); v != nil {
 				value = *v
@@ -31,7 +31,7 @@ func NewMatchFunction(contextFn Function, cases ...MatchCase) Function {
 			return value, nil
 		}, nil)
 	}
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("match expression", func(ctx FunctionContext) (interface{}, error) {
 		ctxVal, err := contextFn.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -70,7 +70,7 @@ func NewMatchFunction(contextFn Function, cases ...MatchCase) Function {
 // return a boolean value. If the returned boolean is true then the ifFn is
 // executed and returned, otherwise elseFn is executed and returned.
 func NewIfFunction(queryFn Function, ifFn Function, elseFn Function) Function {
-	return ClosureFunction(func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("if expression", func(ctx FunctionContext) (interface{}, error) {
 		queryVal, err := queryFn.Exec(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check if condition: %w", err)
@@ -102,6 +102,11 @@ type NamedContextFunction struct {
 // Name returns the alias under which the context will be captured.
 func (n *NamedContextFunction) Name() string {
 	return n.name
+}
+
+// Annotation returns the annotation of the underlying function.
+func (n *NamedContextFunction) Annotation() string {
+	return n.fn.Annotation()
 }
 
 // Exec executes the wrapped query function with the context captured under an

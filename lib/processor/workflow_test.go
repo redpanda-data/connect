@@ -305,8 +305,8 @@ func TestWorkflows(t *testing.T) {
 				msg(`{"foo":"5"}`),
 			},
 			output: []mockMsg{
-				msg(`{"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null"}}}}`),
-				msg(`{"foo":"not a number","meta":{"workflow":{"failed":{"0":"result map: failed to execute mapping query at line 1: strconv.ParseFloat: parsing \"not a number\": invalid syntax"}}}}`),
+				msg(`{"meta":{"workflow":{"failed":{"0":"request map: failed assignment (line 1): field ` + "`this.foo`" + `: value is null"}}}}`),
+				msg(`{"foo":"not a number","meta":{"workflow":{"failed":{"0":"result map: failed assignment (line 1): field ` + "`this.foo`" + `: strconv.ParseFloat: parsing \"not a number\": invalid syntax"}}}}`),
 				msg(`{"bar":5,"foo":"5","meta":{"workflow":{"succeeded":["0"]}}}`),
 			},
 		},
@@ -334,8 +334,8 @@ func TestWorkflows(t *testing.T) {
 				msg(`{"foo":"5"}`),
 			},
 			output: []mockMsg{
-				msg(`{"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null","1":"request map: failed to execute mapping query at line 1: value is null","2":"request map: failed to execute mapping query at line 1: value is null"}}}}`),
-				msg(`{"foo":"not a number","meta":{"workflow":{"failed":{"0":"result map: failed to execute mapping query at line 1: strconv.ParseFloat: parsing \"not a number\": invalid syntax","1":"request map: failed to execute mapping query at line 1: value is null","2":"request map: failed to execute mapping query at line 1: value is null"}}}}`),
+				msg(`{"meta":{"workflow":{"failed":{"0":"request map: failed assignment (line 1): field ` + "`this.foo`" + `: value is null","1":"request map: failed assignment (line 1): field ` + "`this.bar`" + `: value is null","2":"request map: failed assignment (line 1): field ` + "`this.baz`" + `: value is null"}}}}`),
+				msg(`{"foo":"not a number","meta":{"workflow":{"failed":{"0":"result map: failed assignment (line 1): field ` + "`this.foo`" + `: strconv.ParseFloat: parsing \"not a number\": invalid syntax","1":"request map: failed assignment (line 1): field ` + "`this.bar`" + `: value is null","2":"request map: failed assignment (line 1): field ` + "`this.baz`" + `: value is null"}}}}`),
 				msg(`{"bar":5,"baz":10,"buz":12,"foo":"5","meta":{"workflow":{"succeeded":["0","1","2"]}}}`),
 			},
 		},
@@ -365,7 +365,7 @@ func TestWorkflows(t *testing.T) {
 			output: []mockMsg{
 				msg(`{"baz":2,"buz":4,"meta":{"workflow":{"previous":{"apply":["2"]},"skipped":["0","1"],"succeeded":["2"]}}}`),
 				msg(`{"bar":3,"baz":8,"buz":10,"meta":{"workflow":{"previous":{"skipped":["0"]},"skipped":["0"],"succeeded":["1","2"]}}}`),
-				msg(`{"baz":9,"buz":11,"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null"},"previous":{"succeeded":["1"]},"skipped":["1"],"succeeded":["2"]}}}`),
+				msg(`{"baz":9,"buz":11,"meta":{"workflow":{"failed":{"0":"request map: failed assignment (line 1): field ` + "`this.foo`" + `: value is null"},"previous":{"succeeded":["1"]},"skipped":["1"],"succeeded":["2"]}}}`),
 			},
 		},
 		{
@@ -394,7 +394,7 @@ func TestWorkflows(t *testing.T) {
 			},
 			output: []mockMsg{
 				msg(`{"bar":4,"baz":5,"buz":9,"foo":2,"meta":{"workflow":{"succeeded":["0","1","2"]}}}`),
-				msg(`{"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null","1":"request map: failed to execute mapping query at line 1: value is null","2":"request map: failed to execute mapping query at line 1: value is null"}}}}`),
+				msg(`{"meta":{"workflow":{"failed":{"0":"request map: failed assignment (line 1): field ` + "`this.foo`" + `: value is null","1":"request map: failed assignment (line 1): field ` + "`this.foo`" + `: value is null","2":"request map: failed assignment (line 1): field ` + "`this.bar`" + `: value is null"}}}}`),
 				msg(
 					`not even a json object`,
 					FailFlagKey,
@@ -432,10 +432,10 @@ func TestWorkflows(t *testing.T) {
 					FailFlagKey, "this is a pre-existing failure",
 				),
 				msg(
-					`{"failme":true,"id":1,"meta":{"workflow":{"failed":{"0":"result map: failed to execute mapping query at line 1: this is a branch error"}}},"name":"second"}`,
+					`{"failme":true,"id":1,"meta":{"workflow":{"failed":{"0":"result map: failed assignment (line 1): this is a branch error"}}},"name":"second"}`,
 				),
 				msg(
-					`{"failme":true,"id":2,"meta":{"workflow":{"failed":{"0":"result map: failed to execute mapping query at line 1: this is a branch error"}}},"name":"third"}`,
+					`{"failme":true,"id":2,"meta":{"workflow":{"failed":{"0":"result map: failed assignment (line 1): this is a branch error"}}},"name":"third"}`,
 					FailFlagKey, "this is a pre-existing failure",
 				),
 			},
@@ -490,7 +490,7 @@ func TestWorkflows(t *testing.T) {
 						return nil
 					})
 
-					assert.Equal(t, out, comparePart)
+					assert.Equal(t, out, comparePart, "part: %v", i)
 				}
 			}
 
@@ -529,8 +529,8 @@ func TestWorkflowsWithResources(t *testing.T) {
 				`{"foo":"5"}`,
 			},
 			output: []string{
-				`{"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null"}}}}`,
-				`{"foo":"not a number","meta":{"workflow":{"failed":{"0":"result map: failed to execute mapping query at line 1: strconv.ParseFloat: parsing \"not a number\": invalid syntax"}}}}`,
+				`{"meta":{"workflow":{"failed":{"0":"request map: failed assignment (line 1): field ` + "`this.foo`" + `: value is null"}}}}`,
+				`{"foo":"not a number","meta":{"workflow":{"failed":{"0":"result map: failed assignment (line 1): field ` + "`this.foo`" + `: strconv.ParseFloat: parsing \"not a number\": invalid syntax"}}}}`,
 				`{"bar":5,"foo":"5","meta":{"workflow":{"succeeded":["0"]}}}`,
 			},
 		},
@@ -561,8 +561,8 @@ func TestWorkflowsWithResources(t *testing.T) {
 				`{"foo":"5"}`,
 			},
 			output: []string{
-				`{"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null","1":"request map: failed to execute mapping query at line 1: value is null","2":"request map: failed to execute mapping query at line 1: value is null"}}}}`,
-				`{"foo":"not a number","meta":{"workflow":{"failed":{"0":"result map: failed to execute mapping query at line 1: strconv.ParseFloat: parsing \"not a number\": invalid syntax","1":"request map: failed to execute mapping query at line 1: value is null","2":"request map: failed to execute mapping query at line 1: value is null"}}}}`,
+				`{"meta":{"workflow":{"failed":{"0":"request map: failed assignment (line 1): field ` + "`this.foo`" + `: value is null","1":"request map: failed assignment (line 1): field ` + "`this.bar`" + `: value is null","2":"request map: failed assignment (line 1): field ` + "`this.baz`" + `: value is null"}}}}`,
+				`{"foo":"not a number","meta":{"workflow":{"failed":{"0":"result map: failed assignment (line 1): field ` + "`this.foo`" + `: strconv.ParseFloat: parsing \"not a number\": invalid syntax","1":"request map: failed assignment (line 1): field ` + "`this.bar`" + `: value is null","2":"request map: failed assignment (line 1): field ` + "`this.baz`" + `: value is null"}}}}`,
 				`{"bar":5,"baz":10,"buz":12,"foo":"5","meta":{"workflow":{"succeeded":["0","1","2"]}}}`,
 			},
 		},
@@ -595,7 +595,7 @@ func TestWorkflowsWithResources(t *testing.T) {
 			output: []string{
 				`{"baz":2,"buz":4,"meta":{"workflow":{"previous":{"apply":["2"]},"skipped":["0","1"],"succeeded":["2"]}}}`,
 				`{"bar":3,"baz":8,"buz":10,"meta":{"workflow":{"previous":{"skipped":["0"]},"skipped":["0"],"succeeded":["1","2"]}}}`,
-				`{"baz":9,"buz":11,"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null"},"previous":{"succeeded":["1"]},"skipped":["1"],"succeeded":["2"]}}}`,
+				`{"baz":9,"buz":11,"meta":{"workflow":{"failed":{"0":"request map: failed assignment (line 1): field ` + "`this.foo`" + `: value is null"},"previous":{"succeeded":["1"]},"skipped":["1"],"succeeded":["2"]}}}`,
 			},
 		},
 		{
@@ -627,7 +627,7 @@ func TestWorkflowsWithResources(t *testing.T) {
 			},
 			output: []string{
 				`{"bar":4,"baz":5,"buz":9,"foo":2,"meta":{"workflow":{"succeeded":["0","1","2"]}}}`,
-				`{"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null","1":"request map: failed to execute mapping query at line 1: value is null","2":"request map: failed to execute mapping query at line 1: value is null"}}}}`,
+				`{"meta":{"workflow":{"failed":{"0":"request map: failed assignment (line 1): field ` + "`this.foo`" + `: value is null","1":"request map: failed assignment (line 1): field ` + "`this.foo`" + `: value is null","2":"request map: failed assignment (line 1): field ` + "`this.bar`" + `: value is null"}}}}`,
 				`not even a json object`,
 			},
 		},
@@ -698,8 +698,8 @@ func TestWorkflowsWithOrderResources(t *testing.T) {
 				`{"foo":"5"}`,
 			},
 			output: []string{
-				`{"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null"}}}}`,
-				`{"foo":"not a number","meta":{"workflow":{"failed":{"0":"result map: failed to execute mapping query at line 1: strconv.ParseFloat: parsing \"not a number\": invalid syntax"}}}}`,
+				`{"meta":{"workflow":{"failed":{"0":"request map: failed assignment (line 1): field ` + "`this.foo`" + `: value is null"}}}}`,
+				`{"foo":"not a number","meta":{"workflow":{"failed":{"0":"result map: failed assignment (line 1): field ` + "`this.foo`" + `: strconv.ParseFloat: parsing \"not a number\": invalid syntax"}}}}`,
 				`{"bar":5,"foo":"5","meta":{"workflow":{"succeeded":["0"]}}}`,
 			},
 		},
@@ -735,8 +735,8 @@ func TestWorkflowsWithOrderResources(t *testing.T) {
 				`{"foo":"5"}`,
 			},
 			output: []string{
-				`{"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null","1":"request map: failed to execute mapping query at line 1: value is null","2":"request map: failed to execute mapping query at line 1: value is null"}}}}`,
-				`{"foo":"not a number","meta":{"workflow":{"failed":{"0":"result map: failed to execute mapping query at line 1: strconv.ParseFloat: parsing \"not a number\": invalid syntax","1":"request map: failed to execute mapping query at line 1: value is null","2":"request map: failed to execute mapping query at line 1: value is null"}}}}`,
+				`{"meta":{"workflow":{"failed":{"0":"request map: failed assignment (line 1): field ` + "`this.foo`" + `: value is null","1":"request map: failed assignment (line 1): field ` + "`this.bar`" + `: value is null","2":"request map: failed assignment (line 1): field ` + "`this.baz`" + `: value is null"}}}}`,
+				`{"foo":"not a number","meta":{"workflow":{"failed":{"0":"result map: failed assignment (line 1): field ` + "`this.foo`" + `: strconv.ParseFloat: parsing \"not a number\": invalid syntax","1":"request map: failed assignment (line 1): field ` + "`this.bar`" + `: value is null","2":"request map: failed assignment (line 1): field ` + "`this.baz`" + `: value is null"}}}}`,
 				`{"bar":5,"baz":10,"buz":12,"foo":"5","meta":{"workflow":{"succeeded":["0","1","2"]}}}`,
 			},
 		},
@@ -774,7 +774,7 @@ func TestWorkflowsWithOrderResources(t *testing.T) {
 			output: []string{
 				`{"baz":2,"buz":4,"meta":{"workflow":{"previous":{"apply":["2"]},"skipped":["0","1"],"succeeded":["2"]}}}`,
 				`{"bar":3,"baz":8,"buz":10,"meta":{"workflow":{"previous":{"skipped":["0"]},"skipped":["0"],"succeeded":["1","2"]}}}`,
-				`{"baz":9,"buz":11,"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null"},"previous":{"succeeded":["1"]},"skipped":["1"],"succeeded":["2"]}}}`,
+				`{"baz":9,"buz":11,"meta":{"workflow":{"failed":{"0":"request map: failed assignment (line 1): field ` + "`this.foo`" + `: value is null"},"previous":{"succeeded":["1"]},"skipped":["1"],"succeeded":["2"]}}}`,
 			},
 		},
 		{
@@ -810,7 +810,7 @@ func TestWorkflowsWithOrderResources(t *testing.T) {
 			},
 			output: []string{
 				`{"bar":4,"baz":5,"buz":9,"foo":2,"meta":{"workflow":{"succeeded":["0","1","2"]}}}`,
-				`{"meta":{"workflow":{"failed":{"0":"request map: failed to execute mapping query at line 1: value is null","1":"request map: failed to execute mapping query at line 1: value is null","2":"request map: failed to execute mapping query at line 1: value is null"}}}}`,
+				`{"meta":{"workflow":{"failed":{"0":"request map: failed assignment (line 1): field ` + "`this.foo`" + `: value is null","1":"request map: failed assignment (line 1): field ` + "`this.foo`" + `: value is null","2":"request map: failed assignment (line 1): field ` + "`this.bar`" + `: value is null"}}}}`,
 				`not even a json object`,
 			},
 		},

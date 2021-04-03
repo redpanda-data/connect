@@ -190,7 +190,7 @@ func TestSwitchError(t *testing.T) {
 	}
 
 	assert.Equal(t, "", GetFail(msgs[0].Get(0)))
-	assert.Equal(t, "failed to execute mapping query at line 1: expected string, array or object value, found null", GetFail(msgs[0].Get(1)))
+	assert.Equal(t, "failed assignment (line 1): expected string, array or object value, got null from field `this.id`", GetFail(msgs[0].Get(1)))
 	assert.Equal(t, "", GetFail(msgs[0].Get(2)))
 
 	assert.Equal(t, []string{

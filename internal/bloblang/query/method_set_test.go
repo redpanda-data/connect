@@ -13,13 +13,13 @@ func TestMethodSetWithout(t *testing.T) {
 	assert.Contains(t, setOne.List(), "explode")
 	assert.NotContains(t, setTwo.List(), "explode")
 
-	_, err := setOne.Init("explode", NewLiteralFunction(nil), "foo.bar")
+	_, err := setOne.Init("explode", NewLiteralFunction("", nil), "foo.bar")
 	assert.NoError(t, err)
 
-	_, err = setTwo.Init("explode", NewLiteralFunction(nil), "foo.bar")
+	_, err = setTwo.Init("explode", NewLiteralFunction("", nil), "foo.bar")
 	assert.EqualError(t, err, "unrecognised method 'explode'")
 
-	_, err = setTwo.Init("map_each", NewLiteralFunction(nil), NewFieldFunction("foo"))
+	_, err = setTwo.Init("map_each", NewLiteralFunction("", nil), NewFieldFunction("foo"))
 	assert.NoError(t, err)
 }
 

@@ -36,60 +36,60 @@ func TestAssignments(t *testing.T) {
 		err     error
 	}{
 		"simple json map": {
-			mapping: NewExecutor(nil, nil,
+			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("bar")),
-				NewStatement(nil, NewJSONAssignment("bar"), query.NewLiteralFunction("test2")),
-				NewStatement(nil, NewJSONAssignment("zed"), query.NewLiteralFunction(query.Delete(nil))),
+				NewStatement(nil, NewJSONAssignment("bar"), query.NewLiteralFunction("", "test2")),
+				NewStatement(nil, NewJSONAssignment("zed"), query.NewLiteralFunction("", query.Delete(nil))),
 			),
 			input:  []part{{Content: `{"bar":"test1","zed":"gone"}`}},
 			output: &part{Content: `{"bar":"test2","foo":"test1"}`},
 		},
 		"map to root": {
-			mapping: NewExecutor(nil, nil,
-				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("bar")),
+			mapping: NewExecutor("", nil, nil,
+				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("", "bar")),
 			),
 			input:  []part{{Content: `{"bar":"test1","zed":"gone"}`}},
 			output: &part{Content: `bar`},
 		},
 		"delete root": {
-			mapping: NewExecutor(nil, nil,
-				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction(query.Delete(nil))),
+			mapping: NewExecutor("", nil, nil,
+				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("", query.Delete(nil))),
 			),
 			input:  []part{{Content: `{"bar":"test1","zed":"gone"}`}},
 			output: nil,
 		},
 		"no mapping to root": {
-			mapping: NewExecutor(nil, nil,
-				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction(query.Nothing(nil))),
+			mapping: NewExecutor("", nil, nil,
+				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("", query.Nothing(nil))),
 			),
 			input:  []part{{Content: `{"bar":"test1","zed":"gone"}`}},
 			output: &part{Content: `{"bar":"test1","zed":"gone"}`},
 		},
 		"variable error DNE": {
-			mapping: NewExecutor(nil, nil,
+			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewVarFunction("doesnt exist")),
 			),
 			input: []part{{Content: `{}`}},
-			err:   errors.New("failed to execute mapping query at line 0: variable 'doesnt exist' undefined"),
+			err:   errors.New("failed assignment (line 0): variable 'doesnt exist' undefined"),
 		},
 		"variable assignment": {
-			mapping: NewExecutor(nil, nil,
-				NewStatement(nil, NewVarAssignment("foo"), query.NewLiteralFunction("does exist")),
+			mapping: NewExecutor("", nil, nil,
+				NewStatement(nil, NewVarAssignment("foo"), query.NewLiteralFunction("", "does exist")),
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewVarFunction("foo")),
 			),
 			input:  []part{{Content: `{}`}},
 			output: &part{Content: `{"foo":"does exist"}`},
 		},
 		"meta query error": {
-			mapping: NewExecutor(nil, nil,
+			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment("foo"), initFunc("meta", "foo")),
 			),
 			input: []part{{Content: `{}`}},
-			err:   errors.New("failed to execute mapping query at line 0: metadata value 'foo' not found"),
+			err:   errors.New("failed assignment (line 0): metadata value 'foo' not found"),
 		},
 		"meta assignment": {
-			mapping: NewExecutor(nil, nil,
-				NewStatement(nil, NewMetaAssignment(metaKey("foo")), query.NewLiteralFunction("exists now")),
+			mapping: NewExecutor("", nil, nil,
+				NewStatement(nil, NewMetaAssignment(metaKey("foo")), query.NewLiteralFunction("", "exists now")),
 			),
 			input: []part{{Content: `{}`}},
 			output: &part{
@@ -100,8 +100,8 @@ func TestAssignments(t *testing.T) {
 			},
 		},
 		"meta deletion": {
-			mapping: NewExecutor(nil, nil,
-				NewStatement(nil, NewMetaAssignment(metaKey("and")), query.NewLiteralFunction(query.Delete(nil))),
+			mapping: NewExecutor("", nil, nil,
+				NewStatement(nil, NewMetaAssignment(metaKey("and")), query.NewLiteralFunction("", query.Delete(nil))),
 			),
 			input: []part{{
 				Content: `{}`,
@@ -118,15 +118,15 @@ func TestAssignments(t *testing.T) {
 			},
 		},
 		"meta set all error wrong type": {
-			mapping: NewExecutor(nil, nil,
-				NewStatement(nil, NewMetaAssignment(nil), query.NewLiteralFunction("foo")),
+			mapping: NewExecutor("", nil, nil,
+				NewStatement(nil, NewMetaAssignment(nil), query.NewLiteralFunction("", "foo")),
 			),
 			input: []part{{Content: `{}`}},
-			err:   errors.New("failed to assign query result at line 0: setting root meta object requires object value, received: string"),
+			err:   errors.New("failed to assign result (line 0): setting root meta object requires object value, received: string"),
 		},
 		"meta set all": {
-			mapping: NewExecutor(nil, nil,
-				NewStatement(nil, NewMetaAssignment(nil), query.NewLiteralFunction(map[string]interface{}{
+			mapping: NewExecutor("", nil, nil,
+				NewStatement(nil, NewMetaAssignment(nil), query.NewLiteralFunction("", map[string]interface{}{
 					"new1": "value1",
 					"new2": "value2",
 				})),
@@ -147,8 +147,8 @@ func TestAssignments(t *testing.T) {
 			},
 		},
 		"meta delete all": {
-			mapping: NewExecutor(nil, nil,
-				NewStatement(nil, NewMetaAssignment(nil), query.NewLiteralFunction(query.Delete(nil))),
+			mapping: NewExecutor("", nil, nil,
+				NewStatement(nil, NewMetaAssignment(nil), query.NewLiteralFunction("", query.Delete(nil))),
 			),
 			input: []part{{
 				Content: `{}`,
@@ -160,22 +160,22 @@ func TestAssignments(t *testing.T) {
 			output: &part{Content: `{}`},
 		},
 		"invalid json message": {
-			mapping: NewExecutor(nil, nil,
-				NewStatement(nil, NewJSONAssignment("bar"), query.NewLiteralFunction("test2")),
+			mapping: NewExecutor("", nil, nil,
+				NewStatement(nil, NewJSONAssignment("bar"), query.NewLiteralFunction("", "test2")),
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("bar")),
-				NewStatement(nil, NewJSONAssignment("zed"), query.NewLiteralFunction(query.Delete(nil))),
+				NewStatement(nil, NewJSONAssignment("zed"), query.NewLiteralFunction("", query.Delete(nil))),
 			),
 			input: []part{{Content: `{@#$ not valid json`}},
-			err:   errors.New("failed to execute mapping query at line 0: unable to reference message as structured (with 'this'): parse as json: invalid character '@' looking for beginning of object key string"),
+			err:   errors.New("failed assignment (line 0): unable to reference message as structured (with 'this'): parse as json: invalid character '@' looking for beginning of object key string"),
 		},
 		"json parse empty message": {
-			mapping: NewExecutor(nil, nil,
-				NewStatement(nil, NewJSONAssignment("bar"), query.NewLiteralFunction("test2")),
+			mapping: NewExecutor("", nil, nil,
+				NewStatement(nil, NewJSONAssignment("bar"), query.NewLiteralFunction("", "test2")),
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("bar")),
-				NewStatement(nil, NewJSONAssignment("zed"), query.NewLiteralFunction(query.Delete(nil))),
+				NewStatement(nil, NewJSONAssignment("zed"), query.NewLiteralFunction("", query.Delete(nil))),
 			),
 			input: []part{{Content: ``}},
-			err:   errors.New("failed to execute mapping query at line 0: unable to reference message as structured (with 'this'): message is empty"),
+			err:   errors.New("failed assignment (line 0): unable to reference message as structured (with 'this'): message is empty"),
 		},
 	}
 
@@ -242,9 +242,9 @@ func TestTargets(t *testing.T) {
 		assignmentTargets []TargetPath
 	}{
 		{
-			mapping: NewExecutor(nil, nil,
+			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("first")),
-				NewStatement(nil, NewMetaAssignment(metaKey("bar")), query.NewLiteralFunction("second")),
+				NewStatement(nil, NewMetaAssignment(metaKey("bar")), query.NewLiteralFunction("", "second")),
 				NewStatement(nil, NewVarAssignment("baz"), function("meta", "third")),
 			),
 			queryTargets: []query.TargetPath{
@@ -258,9 +258,9 @@ func TestTargets(t *testing.T) {
 			},
 		},
 		{
-			mapping: NewExecutor(nil, nil,
+			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment(), query.NewFieldFunction("first")),
-				NewStatement(nil, NewMetaAssignment(nil), query.NewLiteralFunction("second")),
+				NewStatement(nil, NewMetaAssignment(nil), query.NewLiteralFunction("", "second")),
 				NewStatement(nil, NewVarAssignment("baz"), function("meta", "third")),
 			),
 			queryTargets: []query.TargetPath{
@@ -307,19 +307,19 @@ func TestExec(t *testing.T) {
 		err          string
 	}{
 		"cant set meta": {
-			mapping: NewExecutor(nil, nil,
-				NewStatement(nil, NewMetaAssignment(metaKey("foo")), query.NewLiteralFunction("bar")),
+			mapping: NewExecutor("", nil, nil,
+				NewStatement(nil, NewMetaAssignment(metaKey("foo")), query.NewLiteralFunction("", "bar")),
 			),
-			err: "failed to assign mapping result at line 0: unable to assign metadata in the current context",
+			err: "failed to assign result (line 0): unable to assign metadata in the current context",
 		},
 		"cant use json": {
-			mapping: NewExecutor(nil, nil,
+			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment("foo"), function("json", "bar")),
 			),
-			err: "failed to execute mapping assignment at line 0: target message part does not exist",
+			err: "failed assignment (line 0): target message part does not exist",
 		},
 		"simple root get and set": {
-			mapping: NewExecutor(nil, nil,
+			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment(), query.NewFieldFunction("")),
 			),
 			input:        "foobar",
@@ -327,7 +327,7 @@ func TestExec(t *testing.T) {
 			outputString: "foobar",
 		},
 		"nested get and set": {
-			mapping: NewExecutor(nil, nil,
+			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("bar")),
 			),
 			input:        map[string]interface{}{"bar": "baz"},
@@ -335,15 +335,15 @@ func TestExec(t *testing.T) {
 			outputString: `{"foo":"baz"}`,
 		},
 		"failed get": {
-			mapping: NewExecutor(nil, nil,
+			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment("foo"), function("json", "bar.baz")),
 			),
 			input:        map[string]interface{}{"nope": "baz"},
-			err:          "failed to execute mapping assignment at line 0: target message part does not exist",
+			err:          "failed assignment (line 0): target message part does not exist",
 			outputString: "",
 		},
 		"null get and set": {
-			mapping: NewExecutor(nil, nil,
+			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("does.not.exist")),
 			),
 			input:        `{"message":"hello world"}`,
@@ -351,7 +351,7 @@ func TestExec(t *testing.T) {
 			outputString: `{"foo":null}`,
 		},
 		"null get and set root": {
-			mapping: NewExecutor(nil, nil,
+			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment(), query.NewFieldFunction("does.not.exist")),
 			),
 			input:        `{"message":"hello world"}`,
@@ -359,20 +359,20 @@ func TestExec(t *testing.T) {
 			outputString: `null`,
 		},
 		"colliding set at root": {
-			mapping: NewExecutor(nil, nil,
-				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("hello world")),
+			mapping: NewExecutor("", nil, nil,
+				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("", "hello world")),
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("bar")),
 			),
 			input: map[string]interface{}{"bar": "baz"},
-			err:   "failed to assign mapping result at line 0: unable to set target path foo as the value of the root was a non-object type (string)",
+			err:   "failed to assign result (line 0): unable to set target path foo as the value of the root was a non-object type (string)",
 		},
 		"colliding set at path": {
-			mapping: NewExecutor(nil, nil,
-				NewStatement(nil, NewJSONAssignment("foo"), query.NewLiteralFunction("hello world")),
+			mapping: NewExecutor("", nil, nil,
+				NewStatement(nil, NewJSONAssignment("foo"), query.NewLiteralFunction("", "hello world")),
 				NewStatement(nil, NewJSONAssignment("foo", "bar"), query.NewFieldFunction("bar")),
 			),
 			input: map[string]interface{}{"bar": "baz"},
-			err:   "failed to assign mapping result at line 0: unable to set target path foo.bar as the value of foo was a non-object type (string)",
+			err:   "failed to assign result (line 0): unable to set target path foo.bar as the value of foo was a non-object type (string)",
 		},
 	}
 
@@ -420,40 +420,40 @@ func TestQueries(t *testing.T) {
 		err     error
 	}{
 		"simple json query": {
-			mapping: NewExecutor(nil, nil,
+			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment(), query.NewFieldFunction("bar")),
 			),
 			input:  []part{{Content: `{"bar":true}`}},
 			output: true,
 		},
 		"simple json query 2": {
-			mapping: NewExecutor(nil, nil,
+			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment(), query.NewFieldFunction("bar")),
 			),
 			input:  []part{{Content: `{"bar":false}`}},
 			output: false,
 		},
 		"simple json query bad type": {
-			mapping: NewExecutor(nil, nil,
+			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment(), query.NewFieldFunction("bar")),
 			),
 			input: []part{{Content: `{"bar":{"is":"an object"}}`}},
-			err:   errors.New("expected bool value, found object"),
+			err:   errors.New("expected bool value, got object from mapping"),
 		},
 		"var assignment": {
-			mapping: NewExecutor(nil, nil,
-				NewStatement(nil, NewVarAssignment("foo"), query.NewLiteralFunction(true)),
+			mapping: NewExecutor("", nil, nil,
+				NewStatement(nil, NewVarAssignment("foo"), query.NewLiteralFunction("", true)),
 				NewStatement(nil, NewJSONAssignment(), initFunc("var", "foo")),
 			),
 			input:  []part{{Content: `not valid json`}},
 			output: true,
 		},
 		"meta query error": {
-			mapping: NewExecutor(nil, nil,
+			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment("foo"), initFunc("meta", "foo")),
 			),
 			input: []part{{Content: `{}`}},
-			err:   errors.New("failed to execute mapping query at line 0: metadata value 'foo' not found"),
+			err:   errors.New("failed assignment (line 0): metadata value 'foo' not found"),
 		},
 	}
 
