@@ -14,6 +14,8 @@ You can also execute Bloblang mappings on the command-line with the `blobl` subc
 $ cat data.jsonl | benthos blobl 'foo.(bar | baz).buz'
 ```
 
+This document outlines the core features of the Bloblang language, but if you're totally new to Bloblang then it's worth following [the walkthrough first][blobl.walkthrough].
+
 ## Assignment
 
 A Bloblang mapping expresses how to create a new document by extracting data from an existing input document. Assignments consist of a [dot path][field_paths] argument on the left-hand side describing a field to be created within the new document, and a right-hand side query describing what the content of the new field should be.
@@ -368,7 +370,12 @@ However, the `catch` method only acts on errors, sometimes it's also useful to s
 root.foo = this.bar.index(5).or("default")
 ```
 
+## Unit Testing
+
+It's possible to execute unit tests for your Bloblang mappings using the standard Benthos unit test capabilities outlined [in this document][configuration.unit_testing].
+
 [field_paths]: /docs/configuration/field_paths
+[blobl.walkthrough]: /docs/guides/bloblang/walkthrough
 [blobl.variables]: #variables
 [blobl.proc]: /docs/components/processors/bloblang
 [blobl.interp]: /docs/configuration/interpolation#bloblang-queries
@@ -380,3 +387,4 @@ root.foo = this.bar.index(5).or("default")
 [blobl.methods.catch]: /docs/guides/bloblang/methods#catch
 [blobl.methods.or]: /docs/guides/bloblang/methods#or
 [plugin-api]: https://pkg.go.dev/github.com/Jeffail/benthos/v3/public/bloblang
+[configuration.unit_testing]: /docs/configuration/unit_testing

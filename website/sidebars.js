@@ -91,6 +91,7 @@ module.exports = {
           label: 'Bloblang',
           items: [
             'guides/bloblang/about',
+            'guides/bloblang/walkthrough',
             'guides/bloblang/functions',
             'guides/bloblang/methods',
             'guides/bloblang/advanced',
