@@ -5,12 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-### Added
-
-- Vastly improved Bloblang mapping errors.
+## 3.43.1 - 2021-04-05
 
 ### Fixed
 
+- Vastly improved Bloblang mapping errors.
+- The `azure_blob_storage` input will now gracefully terminate if the client credentials become invalid.
 - Prevented the experimental `gcp_cloud_storage` input from closing early during large file consumption.
 
 ## 3.43.0 - 2021-03-31
