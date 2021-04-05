@@ -58,7 +58,7 @@ func integrationTestDoubleAdd() testDefinition {
 			})
 
 			require.NoError(t, cache.Add("addkey", []byte("first")))
-			time.Sleep(time.Second * 5)
+			time.Sleep(time.Second * 10)
 			assert.EqualError(t, cache.Add("addkey", []byte("second")), "key already exists")
 
 			res, err := cache.Get("addkey")
