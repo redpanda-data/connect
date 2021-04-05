@@ -121,6 +121,7 @@ You should see (amongst some logs):
 
 How exciting! I don't know about you but I'm going to need to lie down for a while. Now that you are a Benthos expert might I suggest you peruse these sections to see if anything tickles your fancy?
 
+- [Bloblang Walkthrough][bloblang.walkthrough]
 - [Inputs][inputs]
 - [Processors][processors]
 - [Outputs][outputs]
@@ -140,3 +141,4 @@ How exciting! I don't know about you but I'm going to need to lie down for a whi
 [configuration]: /docs/configuration/about
 [monitoring]: /docs/guides/monitoring
 [cookbooks]: /cookbooks
+[bloblang.walkthrough]: /docs/guides/bloblang/walkthrough

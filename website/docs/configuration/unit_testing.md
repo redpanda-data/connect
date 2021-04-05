@@ -107,7 +107,7 @@ tests:
         - json_equals: {"Cities": "Bellevue, Olympia, Seattle"}
 ```
 
-And execute this test the same way we execute other Benthos tests (`benthos test ./dir/foo_test.yaml`, `benthos test ./dir/...`, etc).
+And execute this test the same way we execute other Benthos tests (`benthos test ./dir/cities_test.yaml`, `benthos test ./dir/...`, etc).
 
 ### Fragmented Tests
 

@@ -207,28 +207,31 @@ metrics:
 So that's the basics covered. Next, we're going to target the Github releases API which gives a slightly more complex payload that looks something like this:
 
 ```json
-{
-  "assets":[
-    {"name":"benthos-lambda_X.XX.X_linux_amd64.zip","download_count":543534545},
-    {"name":"benthos_X.XX.X_darwin_amd64.tar.gz","download_count":43242342},
-    {"name":"benthos_X.XX.X_freebsd_amd64.tar.gz","download_count":534565656},
-    {"name":"benthos_X.XX.X_linux_amd64.tar.gz","download_count":743282474324}
-  ]
-}
-```
-
-Where we have an object representing each release asset, of which we want to emit a separate download gauge. In order to do this we're going to use a [`bloblang` processor][processors.bloblang] to remap the payload from Github into an array of objects of the following form:
-
-```json
 [
-  {"source":"github","dist":"lambda_linux_amd64","download_count":543534545},
-  {"source":"github","dist":"darwin_amd64","download_count":43242342},
-  {"source":"github","dist":"freebsd_amd64","download_count":534565656},
-  {"source":"github","dist":"linux_amd64","download_count":743282474324}
+  {
+    "tag_name": "X.XX.X",
+    "assets":[
+      {"name":"benthos-lambda_X.XX.X_linux_amd64.zip","download_count":543534545},
+      {"name":"benthos_X.XX.X_darwin_amd64.tar.gz","download_count":43242342},
+      {"name":"benthos_X.XX.X_freebsd_amd64.tar.gz","download_count":534565656},
+      {"name":"benthos_X.XX.X_linux_amd64.tar.gz","download_count":743282474324}
+    ]
+  }
 ]
 ```
 
-Then we can use an [`unarchive` processor][processors.unarchive] with the format `json_array` to expand this array into N individual messages, one for each asset. Finally, we will follow up with a [`metric` processor][processors.metric] that dynamically sets labels following the fields `source` and `dist` so that we have a separate metrics series for each asset type.
+It's an array of objects, one for each tagged release, with a field `assets` which is an array of objects representing each release asset, of which we want to emit a separate download gauge. In order to do this we're going to use a [`bloblang` processor][processors.bloblang] to remap the payload from Github into an array of objects of the following form:
+
+```json
+[
+  {"source":"github","dist":"lambda_linux_amd64","download_count":543534545,"version":"X.XX.X"},
+  {"source":"github","dist":"darwin_amd64","download_count":43242342,"version":"X.XX.X"},
+  {"source":"github","dist":"freebsd_amd64","download_count":534565656,"version":"X.XX.X"},
+  {"source":"github","dist":"linux_amd64","download_count":743282474324,"version":"X.XX.X"}
+]
+```
+
+Then we can use an [`unarchive` processor][processors.unarchive] with the format `json_array` to expand this array into N individual messages, one for each asset. Finally, we will follow up with a [`metric` processor][processors.metric] that dynamically sets labels following the fields `source`, `dist` and `version` so that we have a separate metrics series for each asset type for each tagged version.
 
 A simple pipeline of these steps would look like this (please forgive the regexp):
 
@@ -244,15 +247,16 @@ input:
 pipeline:
   processors:
     - http:
-        url: https://api.github.com/repos/Jeffail/benthos/releases/latest
+        url: https://api.github.com/repos/Jeffail/benthos/releases
         verb: GET
 
     - bloblang: |
-        root = this.assets.map_each({
-          "source":"github",
-          "dist": this.name.re_replace("^benthos-?((lambda_)|_)[0-9\\.]+_([^\\.]+).*", "$2$3"),
-          "download_count": this.download_count
-        }).filter(this.dist != "checksums")
+        root = this.map_each(release -> release.assets.map_each(asset -> {
+          "source":         "github",
+          "dist":           asset.name.re_replace("^benthos-?((lambda_)|_)[0-9\\.]+(-rc[0-9]+)?_([^\\.]+).*", "$2$4"),
+          "download_count": asset.download_count,
+          "version":        release.tag_name.trim("v"),
+        }).filter(asset -> asset.dist != "checksums")).flatten()
 
     - unarchive:
         format: json_array
@@ -309,6 +313,7 @@ processor_resources:
               root.source = "docker"
               root.dist = "docker"
               root.download_count = this.pull_count
+              root.version = "all"
           - resource: metric_gauge
 
   - label: github
@@ -317,14 +322,15 @@ processor_resources:
       processors:
         - try:
           - http:
-              url: https://api.github.com/repos/Jeffail/benthos/releases/latest
+              url: https://api.github.com/repos/Jeffail/benthos/releases
               verb: GET
           - bloblang: |
-              root = this.assets.map_each({
-                "source":"github",
-                "dist": this.name.re_replace("^benthos-?((lambda_)|_)[0-9\\.]+_([^\\.]+).*", "$2$3"),
-                "download_count": this.download_count
-              }).filter(this.dist != "checksums")
+              root = this.map_each(release -> release.assets.map_each(asset -> {
+                "source":         "github",
+                "dist":           asset.name.re_replace("^benthos-?((lambda_)|_)[0-9\\.]+(-rc[0-9]+)?_([^\\.]+).*", "$2$4"),
+                "download_count": asset.download_count,
+                "version":        release.tag_name.trim("v"),
+              }).filter(asset -> asset.dist != "checksums")).flatten()
           - unarchive:
               format: json_array
           - resource: metric_gauge
@@ -342,6 +348,7 @@ processor_resources:
               root.source = "homebrew"
               root.dist = "homebrew"
               root.download_count = this.analytics.install.30d.benthos
+              root.version = "all"
           - resource: metric_gauge
 
   - label: metric_gauge
@@ -351,6 +358,7 @@ processor_resources:
       labels:
         dist: ${! json("dist") }
         source: ${! json("source") }
+        version: ${! json("version") }
       value: ${! json("download_count") }
 
 metrics:
