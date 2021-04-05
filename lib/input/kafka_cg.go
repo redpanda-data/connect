@@ -64,7 +64,7 @@ func (k *kafkaReader) ConsumeClaim(sess sarama.ConsumerGroupSession, claim saram
 		select {
 		case <-nextTimedBatchChan:
 			nextTimedBatchChan = nil
-			if !flushBatch(sess.Context(), k.msgChan, batchPolicy.Flush(), latestOffset+1) {
+			if !flushBatch(sess.Context(), k.msgChan, batchPolicy.Flush(), latestOffset) {
 				return nil
 			}
 		case data, open := <-claim.Messages():
@@ -77,7 +77,7 @@ func (k *kafkaReader) ConsumeClaim(sess sarama.ConsumerGroupSession, claim saram
 
 			if batchPolicy.Add(part) {
 				nextTimedBatchChan = nil
-				if !flushBatch(sess.Context(), k.msgChan, batchPolicy.Flush(), latestOffset+1) {
+				if !flushBatch(sess.Context(), k.msgChan, batchPolicy.Flush(), latestOffset) {
 					return nil
 				}
 			}

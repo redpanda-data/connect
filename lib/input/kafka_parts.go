@@ -64,7 +64,7 @@ partMsgLoop:
 		select {
 		case <-nextTimedBatchChan:
 			nextTimedBatchChan = nil
-			if !flushBatch(ctx, k.msgChan, batchPolicy.Flush(), latestOffset+1) {
+			if !flushBatch(ctx, k.msgChan, batchPolicy.Flush(), latestOffset) {
 				break partMsgLoop
 			}
 		case data, open := <-consumer.Messages():
@@ -78,7 +78,7 @@ partMsgLoop:
 
 			if batchPolicy.Add(part) {
 				nextTimedBatchChan = nil
-				if !flushBatch(ctx, k.msgChan, batchPolicy.Flush(), latestOffset+1) {
+				if !flushBatch(ctx, k.msgChan, batchPolicy.Flush(), latestOffset) {
 					break partMsgLoop
 				}
 			}

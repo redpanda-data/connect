@@ -18,7 +18,7 @@ type awsKinesisRecordBatcher struct {
 	shardID  string
 
 	batchPolicy  *batch.Policy
-	checkpointer *checkpoint.Capped
+	checkpointer *checkpoint.Type
 
 	flushedMessage types.Message
 
@@ -41,7 +41,7 @@ func (k *kinesisReader) newAWSKinesisRecordBatcher(streamID, shardID, sequence s
 		streamID:        streamID,
 		shardID:         shardID,
 		batchPolicy:     batchPolicy,
-		checkpointer:    checkpoint.NewCapped(k.conf.CheckpointLimit),
+		checkpointer:    checkpoint.New(int64(k.conf.CheckpointLimit)),
 		ackedSequence:   sequence,
 		indexToSequence: map[int]string{},
 	}, nil
@@ -81,14 +81,13 @@ func (a *awsKinesisRecordBatcher) FlushMessage(ctx context.Context) (asyncMessag
 		}
 	}
 
-	if err := a.checkpointer.Track(ctx, a.batchedIndex); err != nil {
+	resolve, err := a.checkpointer.Track(ctx, a.batchedIndex, 1)
+	if err != nil {
 		if err == types.ErrTimeout {
 			err = nil
 		}
 		return asyncMessage{}, err
 	}
-
-	index := a.batchedIndex
 
 	a.ackedMut.Lock()
 	a.indexToSequence[a.batchedIndex] = a.batchedSequence
@@ -98,10 +97,11 @@ func (a *awsKinesisRecordBatcher) FlushMessage(ctx context.Context) (asyncMessag
 	aMsg := asyncMessage{
 		msg: a.flushedMessage,
 		ackFn: func(ctx context.Context, res types.Response) error {
-			topIndex, err := a.checkpointer.Resolve(index)
+			topIndexI := resolve()
 
 			a.ackedMut.Lock()
-			if err == nil {
+			if topIndexI != nil {
+				topIndex := topIndexI.(int)
 				if seq, exists := a.indexToSequence[topIndex]; exists {
 					a.ackedSequence = seq
 					for k := range a.indexToSequence {
