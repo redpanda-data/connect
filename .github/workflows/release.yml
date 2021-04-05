@@ -89,12 +89,10 @@ jobs:
       uses: crazy-max/ghaction-docker-meta@v2
       with:
         images: jeffail/benthos
-        flavor: |
-          suffix=-cgo
         tags: |
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=semver,pattern={{major}}
+          type=semver,suffix=-cgo,pattern={{version}}
+          type=semver,suffix=-cgo,pattern={{major}}.{{minor}}
+          type=semver,suffix=-cgo,pattern={{major}}
 
     - name: Build and push CGO
       uses: docker/build-push-action@v2
