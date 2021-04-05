@@ -52,6 +52,7 @@ func TestThrottleReset(t *testing.T) {
 }
 
 func TestThrottleLinear(t *testing.T) {
+	t.Skip("Tests are unpredictable on slow machines")
 	t.Parallel()
 
 	throt := New(
@@ -82,6 +83,7 @@ func TestThrottleLinear(t *testing.T) {
 }
 
 func TestThrottleExponent(t *testing.T) {
+	t.Skip("Tests are unpredictable on slow machines")
 	t.Parallel()
 
 	base := time.Millisecond * 50
