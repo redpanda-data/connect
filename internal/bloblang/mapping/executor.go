@@ -134,7 +134,6 @@ func (e *Executor) QueryPart(index int, msg Message) (bool, error) {
 			continue
 		}
 		if err = stmt.assignment.Apply(res, AssignmentContext{
-			Maps:  e.maps,
 			Vars:  vars,
 			Value: &newValue,
 		}); err != nil {
@@ -230,7 +229,6 @@ func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (t
 			continue
 		}
 		if err = stmt.assignment.Apply(res, AssignmentContext{
-			Maps:  e.maps,
 			Vars:  vars,
 			Meta:  newMeta,
 			Value: &newObj,
@@ -307,7 +305,6 @@ func (e *Executor) Exec(ctx query.FunctionContext) (interface{}, error) {
 			continue
 		}
 		if err = stmt.assignment.Apply(res, AssignmentContext{
-			Maps: e.maps,
 			Vars: ctx.Vars,
 			// Meta: meta, Prevented for now due to .from(int)
 			Value: &newObj,

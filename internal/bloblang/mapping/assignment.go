@@ -15,7 +15,6 @@ import (
 // AssignmentContext contains references to all potential assignment
 // destinations of a given mapping.
 type AssignmentContext struct {
-	Maps  map[string]query.Function
 	Vars  map[string]interface{}
 	Meta  types.Metadata
 	Value *interface{}

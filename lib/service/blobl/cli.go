@@ -140,7 +140,6 @@ func executeMapping(exec *mapping.Executor, rawInput, prettyOutput bool, input [
 		Vars:     vars,
 		MsgBatch: msg,
 	}.WithValueFunc(lazyValue), mapping.AssignmentContext{
-		Maps:  exec.Maps(),
 		Vars:  vars,
 		Meta:  meta,
 		Value: &result,

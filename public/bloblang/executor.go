@@ -25,7 +25,7 @@ func (e *Executor) Query(v interface{}) (interface{}, error) {
 	msg.Append(part)
 
 	return e.exec.Exec(query.FunctionContext{
-		Maps:     map[string]query.Function{},
+		Maps:     e.exec.Maps(),
 		Vars:     map[string]interface{}{},
 		Index:    0,
 		MsgBatch: msg,
