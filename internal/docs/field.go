@@ -544,8 +544,7 @@ func (f FieldSpecs) SanitiseNode(node *yaml.Node, conf SanitiseConfig) error {
 			if err := field.SanitiseNode(nextNode, conf); err != nil {
 				return err
 			}
-			newNodes = append(newNodes, node.Content[i])
-			newNodes = append(newNodes, nextNode)
+			newNodes = append(newNodes, node.Content[i], nextNode)
 			break
 		}
 	}

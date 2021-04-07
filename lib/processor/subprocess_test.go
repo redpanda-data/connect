@@ -269,8 +269,7 @@ func main() {
 			[]byte(`BAZ`),
 		}
 		if extra {
-			exp = append(exp, []byte(``))
-			exp = append(exp, []byte("|{O\n\r\nO}|"))
+			exp = append(exp, []byte(``), []byte("|{O\n\r\nO}|"))
 		}
 
 		msgIn := message.New([][]byte{

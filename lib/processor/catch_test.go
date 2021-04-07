@@ -161,8 +161,7 @@ func TestCatchMultiProcs(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Type = TypeCatch
-	conf.Catch = append(conf.Catch, filterConf)
-	conf.Catch = append(conf.Catch, encodeConf)
+	conf.Catch = append(conf.Catch, filterConf, encodeConf)
 
 	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {

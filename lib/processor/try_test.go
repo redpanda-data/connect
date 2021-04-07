@@ -131,8 +131,7 @@ func TestTryMultiProcs(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Type = TypeTry
-	conf.Try = append(conf.Try, filterConf)
-	conf.Try = append(conf.Try, encodeConf)
+	conf.Try = append(conf.Try, filterConf, encodeConf)
 
 	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -172,8 +171,7 @@ func TestTryFailJSON(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Type = TypeTry
-	conf.Try = append(conf.Try, jmespathConf)
-	conf.Try = append(conf.Try, encodeConf)
+	conf.Try = append(conf.Try, jmespathConf, encodeConf)
 
 	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {

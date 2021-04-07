@@ -247,8 +247,7 @@ func (l *Log) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 
 		args := make([]interface{}, 0, len(vObj)*2)
 		for _, k := range keys {
-			args = append(args, k)
-			args = append(args, vObj[k])
+			args = append(args, k, vObj[k])
 		}
 		targetLog = l.loggerWith.With(args...)
 	}

@@ -131,8 +131,7 @@ func TestForEachMultiProcs(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Type = "for_each"
-	conf.ForEach = append(conf.ForEach, filterConf)
-	conf.ForEach = append(conf.ForEach, encodeConf)
+	conf.ForEach = append(conf.ForEach, filterConf, encodeConf)
 
 	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -318,8 +317,7 @@ func TestProcessBatchMultiProcs(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Type = "process_batch"
-	conf.ProcessBatch = append(conf.ProcessBatch, filterConf)
-	conf.ProcessBatch = append(conf.ProcessBatch, encodeConf)
+	conf.ProcessBatch = append(conf.ProcessBatch, filterConf, encodeConf)
 
 	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {

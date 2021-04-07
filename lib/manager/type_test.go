@@ -95,8 +95,7 @@ func TestManagerCacheList(t *testing.T) {
 	cacheBar.Label = "bar"
 
 	conf := manager.NewResourceConfig()
-	conf.ResourceCaches = append(conf.ResourceCaches, cacheFoo)
-	conf.ResourceCaches = append(conf.ResourceCaches, cacheBar)
+	conf.ResourceCaches = append(conf.ResourceCaches, cacheFoo, cacheBar)
 
 	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -119,8 +118,7 @@ func TestManagerCacheListErrors(t *testing.T) {
 	cBar.Label = "foo"
 
 	conf := manager.NewResourceConfig()
-	conf.ResourceCaches = append(conf.ResourceCaches, cFoo)
-	conf.ResourceCaches = append(conf.ResourceCaches, cBar)
+	conf.ResourceCaches = append(conf.ResourceCaches, cFoo, cBar)
 
 	_, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	require.EqualError(t, err, "cache resource label 'foo' collides with a previously defined resource")
@@ -175,8 +173,7 @@ func TestManagerRateLimitList(t *testing.T) {
 	cBar.Label = "bar"
 
 	conf := manager.NewResourceConfig()
-	conf.ResourceRateLimits = append(conf.ResourceRateLimits, cFoo)
-	conf.ResourceRateLimits = append(conf.ResourceRateLimits, cBar)
+	conf.ResourceRateLimits = append(conf.ResourceRateLimits, cFoo, cBar)
 
 	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -199,8 +196,7 @@ func TestManagerRateLimitListErrors(t *testing.T) {
 	cBar.Label = "foo"
 
 	conf := manager.NewResourceConfig()
-	conf.ResourceRateLimits = append(conf.ResourceRateLimits, cFoo)
-	conf.ResourceRateLimits = append(conf.ResourceRateLimits, cBar)
+	conf.ResourceRateLimits = append(conf.ResourceRateLimits, cFoo, cBar)
 
 	_, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	require.EqualError(t, err, "rate limit resource label 'foo' collides with a previously defined resource")
@@ -276,8 +272,7 @@ func TestManagerProcessorList(t *testing.T) {
 	cBar.Label = "bar"
 
 	conf := manager.NewResourceConfig()
-	conf.ResourceProcessors = append(conf.ResourceProcessors, cFoo)
-	conf.ResourceProcessors = append(conf.ResourceProcessors, cBar)
+	conf.ResourceProcessors = append(conf.ResourceProcessors, cFoo, cBar)
 
 	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -300,8 +295,7 @@ func TestManagerProcessorListErrors(t *testing.T) {
 	cBar.Label = "foo"
 
 	conf := manager.NewResourceConfig()
-	conf.ResourceProcessors = append(conf.ResourceProcessors, cFoo)
-	conf.ResourceProcessors = append(conf.ResourceProcessors, cBar)
+	conf.ResourceProcessors = append(conf.ResourceProcessors, cFoo, cBar)
 
 	_, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	require.EqualError(t, err, "processor resource label 'foo' collides with a previously defined resource")
@@ -324,8 +318,7 @@ func TestManagerInputList(t *testing.T) {
 	cBar.Label = "bar"
 
 	conf := manager.NewResourceConfig()
-	conf.ResourceInputs = append(conf.ResourceInputs, cFoo)
-	conf.ResourceInputs = append(conf.ResourceInputs, cBar)
+	conf.ResourceInputs = append(conf.ResourceInputs, cFoo, cBar)
 
 	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -348,8 +341,7 @@ func TestManagerInputListErrors(t *testing.T) {
 	cBar.Label = "foo"
 
 	conf := manager.NewResourceConfig()
-	conf.ResourceInputs = append(conf.ResourceInputs, cFoo)
-	conf.ResourceInputs = append(conf.ResourceInputs, cBar)
+	conf.ResourceInputs = append(conf.ResourceInputs, cFoo, cBar)
 
 	_, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	require.EqualError(t, err, "input resource label 'foo' collides with a previously defined resource")
@@ -372,8 +364,7 @@ func TestManagerOutputList(t *testing.T) {
 	cBar.Label = "bar"
 
 	conf := manager.NewResourceConfig()
-	conf.ResourceOutputs = append(conf.ResourceOutputs, cFoo)
-	conf.ResourceOutputs = append(conf.ResourceOutputs, cBar)
+	conf.ResourceOutputs = append(conf.ResourceOutputs, cFoo, cBar)
 
 	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -396,8 +387,7 @@ func TestManagerOutputListErrors(t *testing.T) {
 	cBar.Label = "foo"
 
 	conf := manager.NewResourceConfig()
-	conf.ResourceOutputs = append(conf.ResourceOutputs, cFoo)
-	conf.ResourceOutputs = append(conf.ResourceOutputs, cBar)
+	conf.ResourceOutputs = append(conf.ResourceOutputs, cFoo, cBar)
 
 	_, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	require.EqualError(t, err, "output resource label 'foo' collides with a previously defined resource")

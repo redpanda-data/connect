@@ -97,8 +97,7 @@ func (a *AMQP1) ConnectWithContext(ctx context.Context) error {
 		return err
 	}
 	if a.conf.TLS.Enabled {
-		opts = append(opts, amqp.ConnTLS(true))
-		opts = append(opts, amqp.ConnTLSConfig(a.tlsConf))
+		opts = append(opts, amqp.ConnTLS(true), amqp.ConnTLSConfig(a.tlsConf))
 	}
 
 	// Create client
