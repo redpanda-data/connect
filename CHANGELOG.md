@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - The `http_server` input now provides a metadata field `http_server_request_path`.
 
+### Fixed
+
+- Glob patterns for various components no longer resolve to bad paths in the absence of matches.
+
 ## 3.43.1 - 2021-04-05
 
 ### Fixed
