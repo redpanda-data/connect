@@ -12,7 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	// TODO: V4 Remove this.
-	_ "github.com/Jeffail/benthos/v3/public/components/all"
+	_ "github.com/Jeffail/benthos/v3/public/components/legacy"
 )
 
 var handler *serverless.Handler

@@ -20,7 +20,7 @@ import (
 
 	// TODO: V4 Remove this as it's a temporary work around to ensure current
 	// plugin users automatically import all components.
-	_ "github.com/Jeffail/benthos/v3/public/components/all"
+	_ "github.com/Jeffail/benthos/v3/public/components/legacy"
 )
 
 //------------------------------------------------------------------------------
