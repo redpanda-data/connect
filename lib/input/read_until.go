@@ -15,6 +15,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/cenkalti/backoff/v4"
 	"github.com/google/go-cmp/cmp"
 	"gopkg.in/yaml.v3"
 )
@@ -258,12 +259,23 @@ func (r *ReadUntil) loop() {
 	}()
 	mRunning.Incr(1)
 
+	// Prevents busy loop when an input never yields messages.
+	restartBackoff := backoff.NewExponentialBackOff()
+	restartBackoff.InitialInterval = time.Millisecond
+	restartBackoff.MaxInterval = time.Millisecond * 100
+	restartBackoff.MaxElapsedTime = 0
+
 	var open bool
 
 runLoop:
 	for atomic.LoadInt32(&r.running) == 1 {
 		if r.wrapped == nil {
 			if r.conf.Restart {
+				select {
+				case <-time.After(restartBackoff.NextBackOff()):
+				case <-r.closeChan:
+					return
+				}
 				var err error
 				if r.wrapped, err = New(
 					*r.conf.Input, r.wrapperMgr, r.wrapperLog, r.wrapperStats,
@@ -286,6 +298,7 @@ runLoop:
 				r.wrapped = nil
 				continue runLoop
 			}
+			restartBackoff.Reset()
 		case <-r.closeChan:
 			return
 		}
