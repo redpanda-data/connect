@@ -27,11 +27,11 @@ const (
 
 // AMQP1Config contains configuration for the AMQP1 input type.
 type AMQP1Config struct {
-	URL           string      `json:"url" yaml:"url"`
-	SourceAddress string      `json:"source_address" yaml:"source_address"`
-	RenewLock     bool        `json:"renew_lock" yaml:"renew_lock"`
-	TLS           btls.Config `json:"tls" yaml:"tls"`
-	SASL          sasl.Config `json:"sasl" yaml:"sasl"`
+	URL            string      `json:"url" yaml:"url"`
+	SourceAddress  string      `json:"source_address" yaml:"source_address"`
+	AzureRenewLock bool        `json:"azure_renew_lock" yaml:"azure_renew_lock"`
+	TLS            btls.Config `json:"tls" yaml:"tls"`
+	SASL           sasl.Config `json:"sasl" yaml:"sasl"`
 }
 
 // NewAMQP1Config creates a new AMQP1Config with default values.
@@ -129,22 +129,18 @@ func (a *AMQP1) ConnectWithContext(ctx context.Context) error {
 		return err
 	}
 
-	a.client = client
-	a.session = session
-	a.receiver = receiver
-
-	if a.conf.RenewLock {
+	if a.conf.AzureRenewLock {
 		a.lockRenewAddressPrefix = randomString(15)
 		managementAddress := a.conf.SourceAddress + "/$management"
 
-		a.renewLockSender, err = a.session.NewSender(amqp.LinkSourceAddress(a.lockRenewAddressPrefix+lockRenewRequestSuffix), amqp.LinkTargetAddress(managementAddress))
+		renewLockSender, err := a.session.NewSender(amqp.LinkSourceAddress(a.lockRenewAddressPrefix+lockRenewRequestSuffix), amqp.LinkTargetAddress(managementAddress))
 		if err != nil {
 			receiver.Close(context.Background())
 			session.Close(context.Background())
 			client.Close()
 			return err
 		}
-		a.renewLockReceiver, err = a.session.NewReceiver(amqp.LinkSourceAddress(managementAddress), amqp.LinkTargetAddress(a.lockRenewAddressPrefix+lockRenewResponseSuffix))
+		renewLockReceiver, err := a.session.NewReceiver(amqp.LinkSourceAddress(managementAddress), amqp.LinkTargetAddress(a.lockRenewAddressPrefix+lockRenewResponseSuffix))
 		if err != nil {
 			a.renewLockSender.Close(context.Background())
 			receiver.Close(context.Background())
@@ -152,7 +148,14 @@ func (a *AMQP1) ConnectWithContext(ctx context.Context) error {
 			client.Close()
 			return err
 		}
+		a.renewLockSender = renewLockSender
+		a.renewLockReceiver = renewLockReceiver
 	}
+
+	a.client = client
+	a.session = session
+	a.receiver = receiver
+
 	a.log.Infof("Receiving AMQP 1.0 messages from source: %v\n", a.conf.SourceAddress)
 	return nil
 }
@@ -178,13 +181,15 @@ func (a *AMQP1) disconnect(ctx context.Context) error {
 		return nil
 	}
 
-	if a.conf.RenewLock {
+	if a.conf.AzureRenewLock {
 		if err := a.renewLockReceiver.Close(ctx); err != nil {
 			a.log.Errorf("Failed to cleanly close renew lock receiver: %v\n", err)
 		}
 		if err := a.renewLockSender.Close(ctx); err != nil {
 			a.log.Errorf("Failed to cleanly close renew lock sender: %v\n", err)
 		}
+		a.renewLockReceiver = nil
+		a.renewLockSender = nil
 	}
 
 	if err := a.receiver.Close(ctx); err != nil {
@@ -247,13 +252,14 @@ func (a *AMQP1) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn,
 	msg.Append(part)
 
 	var done chan struct{}
-	if a.conf.RenewLock {
+	if a.conf.AzureRenewLock {
 		done = a.startRenewJob(amqpMsg)
 	}
 
 	return msg, func(ctx context.Context, res types.Response) error {
 		if done != nil {
 			close(done)
+			done = nil
 		}
 
 		if res.Error() != nil {
@@ -319,14 +325,8 @@ func uuidFromLockTokenBytes(bytes []byte) (*amqp.UUID, error) {
 
 func (a *AMQP1) renewWithContext(ctx context.Context, msg *amqp.Message) (time.Time, error) {
 	a.m.RLock()
-	var r *amqp.Receiver
-	var s *amqp.Sender
-	if a.renewLockReceiver != nil {
-		r = a.renewLockReceiver
-	}
-	if a.renewLockSender != nil {
-		s = a.renewLockSender
-	}
+	r := a.renewLockReceiver
+	s := a.renewLockSender
 	a.m.RUnlock()
 
 	if r == nil || s == nil {

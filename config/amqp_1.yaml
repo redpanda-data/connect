@@ -10,7 +10,7 @@ input:
   amqp_1:
     url: ""
     source_address: ""
-    renew_lock: false
+    azure_renew_lock: false
     tls:
       enabled: false
       skip_cert_verify: false

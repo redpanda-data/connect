@@ -49,7 +49,7 @@ func testAMQP1Connected(url string, sourceAddress string, t *testing.T) {
 	conf := NewAMQP1Config()
 	conf.URL = url
 	conf.SourceAddress = sourceAddress
-	conf.RenewLock = true
+	conf.AzureRenewLock = true
 
 	m, err := NewAMQP1(conf, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -133,7 +133,7 @@ func testAMQP1Disconnected(url string, sourceAddress string, t *testing.T) {
 	conf := NewAMQP1Config()
 	conf.URL = url
 	conf.SourceAddress = sourceAddress
-	conf.RenewLock = true
+	conf.AzureRenewLock = true
 
 	m, err := NewAMQP1(conf, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
