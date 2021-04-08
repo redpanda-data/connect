@@ -1,0 +1,40 @@
+tests:
+  - name: Consistent objects
+    target_mapping: './csv_formatter.blobl'
+    input_batch:
+      - content: |
+            [
+                {
+                    "foo": "hello world",
+                    "baz": 110,
+                    "bar": "bar value",
+                    "buz": false
+                },
+                {
+                    "foo": "hello world 2",
+                    "bar": "bar value 2",
+                    "baz": 220,
+                    "buz": true
+                },
+                {
+                    "foo": "hello world 3",
+                    "bar": "bar value 3",
+                    "baz": 330,
+                    "buz": true
+                }
+            ]
+    output_batches:
+      -
+        - content_equals: |-
+            bar,baz,buz,foo
+            bar value,110,false,hello world
+            bar value 2,220,true,hello world 2
+            bar value 3,330,true,hello world 3
+
+  - name: Empty
+    target_mapping: './csv_formatter.blobl'
+    input_batch:
+      - content: '[]'
+    output_batches:
+      -
+        - bloblang: 'error() == "failed assignment (line 1): expected object value, got null from field `this.0`"'

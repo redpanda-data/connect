@@ -1031,13 +1031,24 @@ root.last_byte = this.name.bytes().index(-1)
 
 ### `keys`
 
-Returns the keys of an object as an array. The order of the resulting array will be random.
+Returns the keys of an object as an array.
 
 ```coffee
 root.foo_keys = this.foo.keys()
 
 # In:  {"foo":{"bar":1,"baz":2}}
 # Out: {"foo_keys":["bar","baz"]}
+```
+
+### `key_values`
+
+Returns the key/value pairs of an object as an array, where each element is an object with a `key` field and a `value` field. The order of the resulting array will be random.
+
+```coffee
+root.foo_key_values = this.foo.key_values().sort_by(pair -> pair.key)
+
+# In:  {"foo":{"bar":1,"baz":2}}
+# Out: {"foo_key_values":[{"key":"bar","value":1},{"key":"baz","value":2}]}
 ```
 
 ### `length`
@@ -1115,7 +1126,7 @@ root = this.foo.merge(this.bar)
 
 ### `sort`
 
-Attempts to sort the values of an array in increasing order. The type of all values must match in order for the ordering to be accurate. Supports string and number values.
+Attempts to sort the values of an array in increasing order. The type of all values must match in order for the ordering to succeed. Supports string and number values.
 
 ```coffee
 root.sorted = this.foo.sort()
@@ -1131,6 +1142,17 @@ root.sorted = this.foo.sort(item -> item.left.v < item.right.v)
 
 # In:  {"foo":[{"id":"foo","v":"bbb"},{"id":"bar","v":"ccc"},{"id":"baz","v":"aaa"}]}
 # Out: {"sorted":[{"id":"baz","v":"aaa"},{"id":"foo","v":"bbb"},{"id":"bar","v":"ccc"}]}
+```
+
+### `sort_by`
+
+Attempts to sort the elements of an array, in increasing order, by a value emitted by an argument query applied to each element. The type of all values must match in order for the ordering to succeed. Supports string and number values.
+
+```coffee
+root.sorted = this.foo.sort_by(ele -> ele.id)
+
+# In:  {"foo":[{"id":"bbb","message":"bar"},{"id":"aaa","message":"foo"},{"id":"ccc","message":"baz"}]}
+# Out: {"sorted":[{"id":"aaa","message":"foo"},{"id":"bbb","message":"bar"},{"id":"ccc","message":"baz"}]}
 ```
 
 ### `slice`

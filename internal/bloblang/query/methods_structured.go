@@ -651,7 +651,7 @@ var _ = registerSimpleMethod(
 var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"keys",
-		"Returns the keys of an object as an array. The order of the resulting array will be random.",
+		"Returns the keys of an object as an array.",
 	).InCategory(
 		MethodCategoryObjectAndArray, "",
 		NewExampleSpec("",
@@ -671,6 +671,38 @@ var _ = registerSimpleMethod(
 					return keys[i].(string) < keys[j].(string)
 				})
 				return keys, nil
+			}
+			return nil, NewTypeError(v, ValueObject)
+		}, nil
+	},
+	false,
+	ExpectNArgs(0),
+)
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"key_values",
+		"Returns the key/value pairs of an object as an array, where each element is an object with a `key` field and a `value` field. The order of the resulting array will be random.",
+	).InCategory(
+		MethodCategoryObjectAndArray, "",
+		NewExampleSpec("",
+			`root.foo_key_values = this.foo.key_values().sort_by(pair -> pair.key)`,
+
+			`{"foo":{"bar":1,"baz":2}}`,
+			`{"foo_key_values":[{"key":"bar","value":1},{"key":"baz","value":2}]}`,
+		),
+	),
+	func(args ...interface{}) (simpleMethod, error) {
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			if m, ok := v.(map[string]interface{}); ok {
+				keyValues := make([]interface{}, 0, len(m))
+				for k, v := range m {
+					keyValues = append(keyValues, map[string]interface{}{
+						"key":   k,
+						"value": v,
+					})
+				}
+				return keyValues, nil
 			}
 			return nil, NewTypeError(v, ValueObject)
 		}, nil
@@ -983,7 +1015,7 @@ var _ = registerMethod(
 		"sort", "",
 	).InCategory(
 		MethodCategoryObjectAndArray,
-		"Attempts to sort the values of an array in increasing order. The type of all values must match in order for the ordering to be accurate. Supports string and number values.",
+		"Attempts to sort the values of an array in increasing order. The type of all values must match in order for the ordering to succeed. Supports string and number values.",
 		NewExampleSpec("",
 			`root.sorted = this.foo.sort()`,
 			`{"foo":["bbb","ccc","aaa"]}`,
@@ -1075,6 +1107,90 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 		}
 		return nil, NewTypeError(v, ValueArray)
 	}, targets), nil
+}
+
+var _ = registerMethod(
+	NewMethodSpec(
+		"sort_by", "",
+	).InCategory(
+		MethodCategoryObjectAndArray,
+		"Attempts to sort the elements of an array, in increasing order, by a value emitted by an argument query applied to each element. The type of all values must match in order for the ordering to succeed. Supports string and number values.",
+		NewExampleSpec("",
+			`root.sorted = this.foo.sort_by(ele -> ele.id)`,
+			`{"foo":[{"id":"bbb","message":"bar"},{"id":"aaa","message":"foo"},{"id":"ccc","message":"baz"}]}`,
+			`{"sorted":[{"id":"aaa","message":"foo"},{"id":"bbb","message":"bar"},{"id":"ccc","message":"baz"}]}`,
+		),
+	),
+	false, sortByMethod,
+	ExpectNArgs(1),
+)
+
+func sortByMethod(target Function, args ...interface{}) (Function, error) {
+	mapFn, ok := args[0].(Function)
+	if !ok {
+		return nil, fmt.Errorf("expected query argument, received %T", args[0])
+	}
+
+	compareFn := func(ctx FunctionContext, values []interface{}, i, j int) (bool, error) {
+		var leftValue, rightValue interface{}
+		var err error
+
+		if leftValue, err = mapFn.Exec(ctx.WithValue(values[i])); err != nil {
+			return false, err
+		}
+		if rightValue, err = mapFn.Exec(ctx.WithValue(values[j])); err != nil {
+			return false, err
+		}
+
+		switch leftValue.(type) {
+		case float64, int, int64, uint64, json.Number:
+			var lhs, rhs float64
+			var err error
+			if lhs, err = IGetNumber(leftValue); err == nil {
+				rhs, err = IGetNumber(rightValue)
+			}
+			if err != nil {
+				return false, fmt.Errorf("element %v: %w", j, err)
+			}
+			return lhs < rhs, nil
+		case string, []byte:
+			var lhs, rhs string
+			var err error
+			if lhs, err = IGetString(leftValue); err == nil {
+				rhs, err = IGetString(rightValue)
+			}
+			if err != nil {
+				return false, fmt.Errorf("element %v: %w", j, err)
+			}
+			return lhs < rhs, nil
+		}
+		return false, fmt.Errorf("element %v: %w", i, NewTypeError(leftValue, ValueNumber, ValueString))
+	}
+
+	return ClosureFunction("method sort_by", func(ctx FunctionContext) (interface{}, error) {
+		v, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if m, ok := v.([]interface{}); ok {
+			values := make([]interface{}, 0, len(m))
+			values = append(values, m...)
+
+			sort.Slice(values, func(i, j int) bool {
+				if err == nil {
+					var b bool
+					b, err = compareFn(ctx, values, i, j)
+					return b
+				}
+				return false
+			})
+			if err != nil {
+				return nil, err
+			}
+			return values, nil
+		}
+		return nil, NewTypeError(v, ValueArray)
+	}, aggregateTargetPaths(target, mapFn)), nil
 }
 
 //------------------------------------------------------------------------------

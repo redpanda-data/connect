@@ -1,0 +1,7 @@
+let header_row = this.0.keys().sort().join(",")
+
+root = $header_row + "\n" + this.map_each(element -> element.key_values().
+  sort_by(item -> item.key).
+  map_each(item -> item.value.string()).
+  join(",")
+).join("\n")

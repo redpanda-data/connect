@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - The `http_server` input now provides a metadata field `http_server_request_path`.
+- New methods `sort_by` and `key_values` added to Bloblang.
 
 ### Fixed
 
