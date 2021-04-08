@@ -72,24 +72,8 @@ func NewCase() Case {
 		Environment:      map[string]string{},
 		TargetProcessors: "/pipeline/processors",
 		TargetMapping:    "",
-		InputBatch: []InputPart{
-			{
-				Content: "A sample document",
-				Metadata: map[string]string{
-					"example_key": "some value",
-				},
-			},
-		},
-		OutputBatches: [][]ConditionsMap{
-			{
-				ConditionsMap{
-					"content_equals": ContentEqualsCondition("A SAMPLE DOCUMENT"),
-					"metadata_equals": MetadataEqualsCondition{
-						"example_key": "some other value now",
-					},
-				},
-			},
-		},
+		InputBatch:       []InputPart{},
+		OutputBatches:    [][]ConditionsMap{},
 	}
 }
 

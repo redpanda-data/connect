@@ -1,0 +1,25 @@
+pipeline:
+  processors:
+    - bloblang: 'root = if content().contains("delete me") { deleted() }'
+
+tests:
+  - name: delete one of one message
+    input_batch:
+      - content: "hello world delete me please"
+
+  - name: delete all messages
+    input_batch:
+      - content: "hello world delete me please"
+      - content: "hello world 2 delete me please"
+      - content: "hello world 3 delete me please"
+      - content: "hello world 4 delete me please"
+
+  - name: delete some messages
+    input_batch:
+      - content: "hello world delete me please"
+      - content: "hello world 2"
+      - content: "hello world 3 delete me please"
+      - content: "hello world 4"
+    output_batches:
+      - - content_equals: "hello world 2"
+        - content_equals: "hello world 4"

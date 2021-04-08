@@ -17,9 +17,28 @@ type Definition struct {
 
 // ExampleDefinition returns a Definition containing an example case.
 func ExampleDefinition() Definition {
+	c := NewCase()
+	c.InputBatch = []InputPart{
+		{
+			Content: "A sample document",
+			Metadata: map[string]string{
+				"example_key": "some value",
+			},
+		},
+	}
+	c.OutputBatches = [][]ConditionsMap{
+		{
+			ConditionsMap{
+				"content_equals": ContentEqualsCondition("A SAMPLE DOCUMENT"),
+				"metadata_equals": MetadataEqualsCondition{
+					"example_key": "some other value now",
+				},
+			},
+		},
+	}
 	return Definition{
 		Parallel: true,
-		Cases:    []Case{NewCase()},
+		Cases:    []Case{c},
 	}
 }
 

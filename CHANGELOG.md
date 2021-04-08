@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 
 - Glob patterns for various components no longer resolve to bad paths in the absence of matches.
 - Fixed an issue where acknowledgements from the `azure_queue_storage` input would timeout prematurely, resulting in duplicated message delivery.
+- Unit test definitions no longer have implicit test cases when omitted.
 
 ## 3.43.1 - 2021-04-05
 
