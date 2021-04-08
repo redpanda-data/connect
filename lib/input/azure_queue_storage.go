@@ -80,7 +80,7 @@ func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg types.Mess
 			msg.Append(part)
 			dqm[i] = queueMsg
 		}
-		return msg, func(rctx context.Context, res types.Response) error {
+		return msg, func(ctx context.Context, res types.Response) error {
 			for i := int32(0); i < n; i++ {
 				msgIDURL := messageURL.NewMessageIDURL(dqm[i].ID)
 				_, err = msgIDURL.Delete(ctx, dqm[i].PopReceipt)
