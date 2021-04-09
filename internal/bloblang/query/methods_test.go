@@ -300,7 +300,7 @@ func TestMethods(t *testing.T) {
 				jsonFn(`[3,22,{"foo":"bar"},7,null]`),
 				method("sort"),
 			),
-			err: "element 2: expected number or string value, got object",
+			err: "sort element 2: expected number or string value, got object",
 		},
 		"check sort strings custom": {
 			input: methods(

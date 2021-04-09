@@ -1036,27 +1036,27 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 	compareFn := func(ctx FunctionContext, values []interface{}, i, j int) (bool, error) {
 		switch values[i].(type) {
 		case float64, int, int64, uint64, json.Number:
-			var lhs, rhs float64
-			var err error
-			if lhs, err = IGetNumber(values[i]); err == nil {
-				rhs, err = IGetNumber(values[j])
-			}
+			lhs, err := IGetNumber(values[i])
 			if err != nil {
-				return false, fmt.Errorf("element %v: %w", j, err)
+				return false, fmt.Errorf("sort element %v: %w", i, err)
+			}
+			rhs, err := IGetNumber(values[j])
+			if err != nil {
+				return false, fmt.Errorf("sort element %v: %w", j, err)
 			}
 			return lhs < rhs, nil
 		case string, []byte:
-			var lhs, rhs string
-			var err error
-			if lhs, err = IGetString(values[i]); err == nil {
-				rhs, err = IGetString(values[j])
-			}
+			lhs, err := IGetString(values[i])
 			if err != nil {
-				return false, fmt.Errorf("element %v: %w", j, err)
+				return false, fmt.Errorf("sort element %v: %w", i, err)
+			}
+			rhs, err := IGetString(values[j])
+			if err != nil {
+				return false, fmt.Errorf("sort element %v: %w", j, err)
 			}
 			return lhs < rhs, nil
 		}
-		return false, fmt.Errorf("element %v: %w", i, NewTypeError(values[i], ValueNumber, ValueString))
+		return false, fmt.Errorf("sort element %v: %w", i, NewTypeError(values[i], ValueNumber, ValueString))
 	}
 	var mapFn Function
 	if len(args) > 0 {
@@ -1073,7 +1073,10 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 			if err != nil {
 				return false, err
 			}
-			b, _ := v.(bool)
+			b, ok := v.(bool)
+			if !ok {
+				return false, NewTypeErrorFrom("sort argument", v, ValueBool)
+			}
 			return b, nil
 		}
 	}
@@ -1105,7 +1108,7 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 			}
 			return values, nil
 		}
-		return nil, NewTypeError(v, ValueArray)
+		return nil, NewTypeErrorFrom(target.Annotation(), v, ValueArray)
 	}, targets), nil
 }
 
@@ -1144,27 +1147,27 @@ func sortByMethod(target Function, args ...interface{}) (Function, error) {
 
 		switch leftValue.(type) {
 		case float64, int, int64, uint64, json.Number:
-			var lhs, rhs float64
-			var err error
-			if lhs, err = IGetNumber(leftValue); err == nil {
-				rhs, err = IGetNumber(rightValue)
-			}
+			lhs, err := IGetNumber(leftValue)
 			if err != nil {
-				return false, fmt.Errorf("element %v: %w", j, err)
+				return false, fmt.Errorf("sort_by element %v: %w", i, ErrFrom(err, mapFn))
+			}
+			rhs, err := IGetNumber(rightValue)
+			if err != nil {
+				return false, fmt.Errorf("sort_by element %v: %w", j, ErrFrom(err, mapFn))
 			}
 			return lhs < rhs, nil
 		case string, []byte:
-			var lhs, rhs string
-			var err error
-			if lhs, err = IGetString(leftValue); err == nil {
-				rhs, err = IGetString(rightValue)
-			}
+			lhs, err := IGetString(leftValue)
 			if err != nil {
-				return false, fmt.Errorf("element %v: %w", j, err)
+				return false, fmt.Errorf("sort_by element %v: %w", i, ErrFrom(err, mapFn))
+			}
+			rhs, err := IGetString(rightValue)
+			if err != nil {
+				return false, fmt.Errorf("sort_by element %v: %w", j, ErrFrom(err, mapFn))
 			}
 			return lhs < rhs, nil
 		}
-		return false, fmt.Errorf("element %v: %w", i, NewTypeError(leftValue, ValueNumber, ValueString))
+		return false, fmt.Errorf("sort_by element %v: %w", i, ErrFrom(NewTypeError(leftValue, ValueNumber, ValueString), mapFn))
 	}
 
 	return ClosureFunction("method sort_by", func(ctx FunctionContext) (interface{}, error) {
@@ -1189,7 +1192,7 @@ func sortByMethod(target Function, args ...interface{}) (Function, error) {
 			}
 			return values, nil
 		}
-		return nil, NewTypeError(v, ValueArray)
+		return nil, NewTypeErrorFrom(target.Annotation(), v, ValueArray)
 	}, aggregateTargetPaths(target, mapFn)), nil
 }
 
