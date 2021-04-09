@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.44.0 - 2021-04-09
+
 ### Added
 
 - The `http_server` input now provides a metadata field `http_server_request_path`.
