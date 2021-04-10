@@ -46,6 +46,7 @@ input:
   amqp_1:
     url: ""
     source_address: ""
+    azure_renew_lock: false
     tls:
       enabled: false
       skip_cert_verify: false
@@ -108,6 +109,14 @@ source_address: queue:/bar
 
 source_address: topic:/baz
 ```
+
+### `azure_renew_lock`
+
+Experimental: Azure service bus specific option to renew lock if processing takes more then configured lock time
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tls`
 

@@ -41,6 +41,7 @@ You can access these metadata fields using
 				"amqps://guest:guest@localhost:5672/",
 			),
 			docs.FieldCommon("source_address", "The source address to consume from.", "/foo", "queue:/bar", "topic:/baz"),
+			docs.FieldAdvanced("azure_renew_lock", "Experimental: Azure service bus specific option to renew lock if processing takes more then configured lock time"),
 			tls.FieldSpec(),
 			sasl.FieldSpec(),
 		},
