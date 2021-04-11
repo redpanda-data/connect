@@ -49,7 +49,7 @@ func cmdDeprecatedLintConfig(lints []string) {
 	os.Exit(0)
 }
 
-func cmdDeprecatedPrintConfig(conf *config.Type, examples string, showAll bool, jsonFormat bool) {
+func cmdDeprecatedPrintConfig(conf *config.Type, examples string, showAll, jsonFormat bool) {
 	var outConf interface{}
 	var err error
 
@@ -353,7 +353,7 @@ config with a websocket input and output and a jmespath processor.`[1:],
 	return nil, false
 }
 
-func deprecatedExecute(configPath string, testSuffix string) {
+func deprecatedExecute(configPath, testSuffix string) {
 	fmt.Fprintln(os.Stderr, "Running with deprecated CLI flags, use --help to see an up to date summary.")
 
 	if len(depFlags.runTests) > 0 {

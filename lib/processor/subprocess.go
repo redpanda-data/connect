@@ -430,7 +430,7 @@ func (s *subprocWrapper) stop() error {
 	return err
 }
 
-func (s *subprocWrapper) Send(prolog []byte, payload []byte, epilog []byte) ([]byte, error) {
+func (s *subprocWrapper) Send(prolog, payload, epilog []byte) ([]byte, error) {
 	s.cmdMut.Lock()
 	stdin := s.cmdStdin
 	outChan := s.stdoutChan

@@ -195,7 +195,7 @@ func newTextUnquoteOperator() textOperator {
 	}
 }
 
-func getTextOperator(opStr string, arg string) (textOperator, error) {
+func getTextOperator(opStr, arg string) (textOperator, error) {
 	switch opStr {
 	case "append":
 		return newTextAppendOperator(), nil

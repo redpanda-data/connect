@@ -105,7 +105,7 @@ type cacheAccessTokenProvider struct {
 	key   string
 }
 
-func newCacheAccessTokenProvider(mgr types.Manager, cache string, key string) (*cacheAccessTokenProvider, error) {
+func newCacheAccessTokenProvider(mgr types.Manager, cache, key string) (*cacheAccessTokenProvider, error) {
 	c, err := mgr.GetCache(cache)
 	if err != nil {
 		return nil, err

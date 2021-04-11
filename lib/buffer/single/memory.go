@@ -71,7 +71,7 @@ func readMessageSize(block []byte, index int) int {
 
 // writeMessageSize writes the size in bytes of a serialised message block
 // starting at index.
-func writeMessageSize(block []byte, index int, size int) {
+func writeMessageSize(block []byte, index, size int) {
 	block[index+0] = byte(size >> 24)
 	block[index+1] = byte(size >> 16)
 	block[index+2] = byte(size >> 8)

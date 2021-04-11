@@ -461,7 +461,7 @@ func getFormatter(format, component string, addTimestamp bool, fields map[string
 }
 
 // write prints a log message with any configured extras prepended.
-func (l *Logger) write(message string, level string, other ...interface{}) {
+func (l *Logger) write(message, level string, other ...interface{}) {
 	l.formatter(l.stream, message, level, other...)
 }
 

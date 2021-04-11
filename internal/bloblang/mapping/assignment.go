@@ -132,7 +132,7 @@ func NewJSONAssignment(path ...string) *JSONAssignment {
 	}
 }
 
-func findTheNonObject(gObj *gabs.Container, allowArray bool, paths ...string) (culprit string, typeStr string) {
+func findTheNonObject(gObj *gabs.Container, allowArray bool, paths ...string) (culprit, typeStr string) {
 	if _, isObj := gObj.Data().(map[string]interface{}); !isObj {
 		return "", string(query.ITypeOf(gObj.Data()))
 	}

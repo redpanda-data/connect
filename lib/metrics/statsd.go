@@ -283,7 +283,7 @@ func (h *Statsd) Close() error {
 //
 // no attempt is made to merge labels and values if slices
 // are not the same length
-func tags(labels []string, values []string) []statsd.Tag {
+func tags(labels, values []string) []statsd.Tag {
 	if len(labels) != len(values) {
 		return nil
 	}

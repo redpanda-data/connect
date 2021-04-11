@@ -89,7 +89,7 @@ type fileWriter struct {
 	handle     codec.Writer
 }
 
-func newFileWriter(pathStr string, codecStr string, log log.Modular, stats metrics.Type) (*fileWriter, error) {
+func newFileWriter(pathStr, codecStr string, log log.Modular, stats metrics.Type) (*fileWriter, error) {
 	codec, codecConf, err := codec.GetWriter(codecStr)
 	if err != nil {
 		return nil, err

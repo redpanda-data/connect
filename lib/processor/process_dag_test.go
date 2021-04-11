@@ -10,7 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
 
-func createProcMapConf(inPath string, outPath string, deps ...string) DepProcessMapConfig {
+func createProcMapConf(inPath, outPath string, deps ...string) DepProcessMapConfig {
 	procConf := NewConfig()
 	procConf.Type = "noop"
 

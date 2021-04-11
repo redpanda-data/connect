@@ -546,7 +546,7 @@ func (b *Branch) overlayResult(payload types.Message, results []types.Part) ([]b
 	return failed, nil
 }
 
-func alignBranchResult(length int, skipped []int, failed []int, result []types.Message) ([]types.Part, error) {
+func alignBranchResult(length int, skipped, failed []int, result []types.Message) ([]types.Part, error) {
 	resMsgParts := []types.Part{}
 	for _, m := range result {
 		m.Iter(func(i int, p types.Part) error {

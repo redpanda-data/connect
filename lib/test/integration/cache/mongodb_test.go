@@ -16,7 +16,7 @@ func generateCollectionName(testID string) string {
 	return regexp.MustCompile("[^a-zA-Z]+").ReplaceAllString(testID, "")
 }
 
-func createCollection(resource *dockertest.Resource, collectionName string, username string, password string) error {
+func createCollection(resource *dockertest.Resource, collectionName, username, password string) error {
 	_, err := resource.Exec([]string{
 		"mongo",
 		"-u", username,

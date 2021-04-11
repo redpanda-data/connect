@@ -25,7 +25,7 @@ var blue = color.New(color.FgBlue).SprintFunc()
 
 // GetPathPair returns the config path and expected accompanying test definition
 // path for a given syntax and a path for either file.
-func GetPathPair(fullPath, testSuffix string) (configPath string, definitionPath string) {
+func GetPathPair(fullPath, testSuffix string) (configPath, definitionPath string) {
 	path, file := filepath.Split(fullPath)
 	ext := filepath.Ext(file)
 	filename := strings.TrimSuffix(file, ext)

@@ -483,7 +483,7 @@ func NewAWK(
 
 //------------------------------------------------------------------------------
 
-func getTime(dateStr string, format string) (time.Time, error) {
+func getTime(dateStr, format string) (time.Time, error) {
 	if len(dateStr) == 0 {
 		return time.Now(), nil
 	}

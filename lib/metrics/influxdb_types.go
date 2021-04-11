@@ -56,7 +56,7 @@ func (i influxDBTimer) Timing(delta int64) error {
 
 // encodeInfluxDBName accepts a measurement name and a map of tag values and
 // returns influx line protocol-formatted string.
-func encodeInfluxDBName(name string, tagNames []string, tagValues []string) string {
+func encodeInfluxDBName(name string, tagNames, tagValues []string) string {
 	b := &strings.Builder{}
 	b.WriteString(escape.String(name))
 
@@ -102,7 +102,7 @@ func decodeInfluxDBName(n string) (string, map[string]string) {
 	}
 }
 
-func splitUnescaped(name string, separator string) []string {
+func splitUnescaped(name, separator string) []string {
 	parts := strings.Split(name, separator)
 	out := make([]string, len(parts))
 	writeIdx := 0

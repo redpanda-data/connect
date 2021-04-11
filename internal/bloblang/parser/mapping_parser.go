@@ -18,7 +18,7 @@ import (
 //
 // The filepath is optional and used for relative file imports and error
 // messages.
-func ParseMapping(filepath string, expr string, pCtx Context) (*mapping.Executor, *Error) {
+func ParseMapping(filepath, expr string, pCtx Context) (*mapping.Executor, *Error) {
 	in := []rune(expr)
 	dir := ""
 	if len(filepath) > 0 {

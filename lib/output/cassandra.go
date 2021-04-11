@@ -412,7 +412,7 @@ func (d *decorator) Attempt(q gocql.RetryableQuery) bool {
 	return true
 }
 
-func getExponentialTime(min time.Duration, max time.Duration, attempts int) time.Duration {
+func getExponentialTime(min, max time.Duration, attempts int) time.Duration {
 	minFloat := float64(min)
 	napDuration := minFloat * math.Pow(2, float64(attempts-1))
 
