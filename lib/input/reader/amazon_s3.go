@@ -513,6 +513,7 @@ func (a *AmazonS3) ReadWithContext(ctx context.Context) (types.Message, AsyncAck
 		} else {
 			if len(a.conf.SQSURL) == 0 {
 				a.targetKeysMut.Lock()
+				// nolint:gocritic // Ignore appendAssign: append result not assigned to the same slice
 				a.targetKeys = append(a.readKeys, obj)
 				a.targetKeysMut.Unlock()
 			} else {
