@@ -173,7 +173,7 @@ type ContentJSONEqualsCondition string
 // Check this condition against a message part.
 func (c ContentJSONEqualsCondition) Check(p types.Part) error {
 	jdopts := jsondiff.DefaultConsoleOptions()
-	diff, explanation := jsondiff.Compare(p.Get(), ([]byte)(c), &jdopts)
+	diff, explanation := jsondiff.Compare(p.Get(), []byte(c), &jdopts)
 	if diff != jsondiff.FullMatch {
 		return fmt.Errorf("JSON content mismatch\n%v", explanation)
 	}
@@ -190,7 +190,7 @@ type ContentJSONContainsCondition string
 // Check this condition against a message part.
 func (c ContentJSONContainsCondition) Check(p types.Part) error {
 	jdopts := jsondiff.DefaultConsoleOptions()
-	diff, explanation := jsondiff.Compare(p.Get(), ([]byte)(c), &jdopts)
+	diff, explanation := jsondiff.Compare(p.Get(), []byte(c), &jdopts)
 	if diff != jsondiff.FullMatch && diff != jsondiff.SupersetMatch {
 		return fmt.Errorf("JSON superset mismatch\n%v", explanation)
 	}
