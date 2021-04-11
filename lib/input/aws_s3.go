@@ -188,7 +188,7 @@ type s3ObjectTargetReader interface {
 func deleteS3ObjectAckFn(
 	s3Client *s3.S3,
 	bucket, key string,
-	delete bool,
+	del bool,
 	prev codec.ReaderAckFn,
 ) codec.ReaderAckFn {
 	return func(ctx context.Context, err error) error {
@@ -197,7 +197,7 @@ func deleteS3ObjectAckFn(
 				return aerr
 			}
 		}
-		if !delete || err != nil {
+		if !del || err != nil {
 			return nil
 		}
 		_, aerr := s3Client.DeleteObjectWithContext(ctx, &s3.DeleteObjectInput{

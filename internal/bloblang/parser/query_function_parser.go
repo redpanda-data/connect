@@ -10,7 +10,7 @@ import (
 //------------------------------------------------------------------------------
 
 func functionArgsParser(pCtx Context) Func {
-	open, comma, close := Char('('), Char(','), Char(')')
+	begin, comma, end := Char('('), Char(','), Char(')')
 	whitespace := DiscardAll(
 		OneOf(
 			SpacesAndTabs(),
@@ -20,10 +20,10 @@ func functionArgsParser(pCtx Context) Func {
 
 	return func(input []rune) Result {
 		return DelimitedPattern(
-			Expect(Sequence(open, whitespace), "function arguments"),
+			Expect(Sequence(begin, whitespace), "function arguments"),
 			MustBe(Expect(queryParser(pCtx), "function argument")),
 			MustBe(Expect(Sequence(Discard(SpacesAndTabs()), comma, whitespace), "comma")),
-			MustBe(Expect(Sequence(whitespace, close), "closing bracket")),
+			MustBe(Expect(Sequence(whitespace, end), "closing bracket")),
 			true,
 		)(input)
 	}

@@ -108,9 +108,9 @@ func cloneGeneric(root interface{}) (interface{}, error) {
 		// Oops, this means we have 'dirty' types within the JSON object. Our
 		// only way to fallback is to marshal/unmarshal the structure, gross!
 		if b, err := json.Marshal(root); err == nil {
-			var copy interface{}
-			if err = json.Unmarshal(b, &copy); err == nil {
-				return copy, nil
+			var rootCopy interface{}
+			if err = json.Unmarshal(b, &rootCopy); err == nil {
+				return rootCopy, nil
 			}
 		}
 		return nil, fmt.Errorf("unrecognised type: %T", t)

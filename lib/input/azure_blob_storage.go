@@ -43,7 +43,7 @@ func newAzureObjectTarget(key string, ackFn codec.ReaderAckFn) *azureObjectTarge
 func deleteAzureObjectAckFn(
 	container *storage.Container,
 	key string,
-	delete bool,
+	del bool,
 	prev codec.ReaderAckFn,
 ) codec.ReaderAckFn {
 	return func(ctx context.Context, err error) error {
@@ -52,7 +52,7 @@ func deleteAzureObjectAckFn(
 				return aerr
 			}
 		}
-		if !delete || err != nil {
+		if !del || err != nil {
 			return nil
 		}
 		blobReference := container.GetBlobReference(key)

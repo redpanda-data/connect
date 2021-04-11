@@ -23,10 +23,10 @@ type Capped struct {
 }
 
 // NewCapped returns a new capped checkpointer.
-func NewCapped(cap int64) *Capped {
+func NewCapped(capacity int64) *Capped {
 	return &Capped{
 		t:    New(),
-		cap:  cap,
+		cap:  capacity,
 		cond: sync.NewCond(&sync.Mutex{}),
 	}
 }
