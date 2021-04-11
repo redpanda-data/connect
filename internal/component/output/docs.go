@@ -16,12 +16,12 @@ func Description(async, batches bool, content string) string {
 	if !async && !batches {
 		return content
 	}
-	content = content + "\n\n## Performance"
+	content += "\n\n## Performance"
 	if async {
-		content = content + "\n" + docsAsync
+		content += "\n" + docsAsync
 	}
 	if batches {
-		content = content + "\n" + docsBatches
+		content += "\n" + docsBatches
 	}
 	return content
 }

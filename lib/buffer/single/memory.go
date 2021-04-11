@@ -160,7 +160,7 @@ func (m *Memory) NextMessage() (types.Message, error) {
 		msgSize = readMessageSize(m.block, index)
 	}
 
-	index = index + 4
+	index += 4
 	if index+int(msgSize) > m.config.Limit {
 		return nil, types.ErrBlockCorrupted
 	}

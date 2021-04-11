@@ -304,18 +304,18 @@ func foldNumberArray(children []*gabs.Container) (float64, error) {
 	for _, child := range children {
 		switch t := child.Data().(type) {
 		case int:
-			b = b + float64(t)
+			b += float64(t)
 		case int64:
-			b = b + float64(t)
+			b += float64(t)
 		case float64:
-			b = b + float64(t)
+			b += float64(t)
 		case json.Number:
 			f, err := t.Float64()
 			if err != nil {
 				i, _ := t.Int64()
 				f = float64(i)
 			}
-			b = b + f
+			b += f
 		default:
 			return 0, fmt.Errorf("mismatched types found in array, expected number, found: %T", t)
 		}

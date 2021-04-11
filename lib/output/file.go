@@ -131,10 +131,10 @@ func (w *fileWriter) WriteWithContext(ctx context.Context, msg types.Message) er
 
 		flag := os.O_CREATE | os.O_RDWR
 		if w.codecConf.Append {
-			flag = flag | os.O_APPEND
+			flag |= os.O_APPEND
 		}
 		if w.codecConf.Truncate {
-			flag = flag | os.O_TRUNC
+			flag |= os.O_TRUNC
 		}
 
 		if err := os.MkdirAll(filepath.Dir(path), os.FileMode(0777)); err != nil {

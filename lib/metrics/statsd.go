@@ -153,7 +153,7 @@ func NewStatsd(config Config, opts ...func(Type)) (Type, error) {
 
 	prefix := config.Statsd.Prefix
 	if len(prefix) > 0 && prefix[len(prefix)-1] != '.' {
-		prefix = prefix + "."
+		prefix += "."
 	}
 
 	statsdOpts := []statsd.Option{

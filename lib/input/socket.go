@@ -105,7 +105,7 @@ func newSocketClient(conf SocketConfig, logger log.Modular) (*socketClient, erro
 		conf.Codec = "delim:" + conf.Delim
 	}
 	if conf.Multipart && !strings.HasSuffix(conf.Codec, "/multipart") {
-		conf.Codec = conf.Codec + "/multipart"
+		conf.Codec += "/multipart"
 	}
 
 	codecConf := codec.NewReaderConfig()

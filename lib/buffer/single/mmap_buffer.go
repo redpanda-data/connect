@@ -264,7 +264,7 @@ func (f *MmapBuffer) NextMessage() (types.Message, error) {
 			}(f.readIndex)
 		}
 
-		f.readIndex = f.readIndex + 1
+		f.readIndex += 1
 		f.readFrom = 0
 
 		block = f.cache.Get(f.readIndex)
@@ -284,7 +284,7 @@ func (f *MmapBuffer) NextMessage() (types.Message, error) {
 		msgSize = readMessageSize(block, index)
 	}
 
-	index = index + 4
+	index += 4
 	if index+int(msgSize) > len(block) {
 		return nil, types.ErrBlockCorrupted
 	}
@@ -348,7 +348,7 @@ func (f *MmapBuffer) PushMessage(msg types.Message) (int, error) {
 		}
 
 		// Set counters
-		f.writeIndex = f.writeIndex + 1
+		f.writeIndex += 1
 		f.writtenTo = 0
 
 		block = f.cache.Get(f.writeIndex)

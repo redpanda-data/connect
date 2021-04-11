@@ -1248,7 +1248,7 @@ func sliceMethod(args ...interface{}) (simpleMethod, error) {
 		endV = l
 		if end != nil {
 			if *end < 0 {
-				endV = endV + *end
+				endV += *end
 			} else {
 				endV = *end
 			}

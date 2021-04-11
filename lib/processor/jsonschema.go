@@ -194,13 +194,13 @@ func (s *JSONSchema) ProcessMessage(msg types.Message) ([]types.Message, types.R
 			var errStr string
 			for i, desc := range result.Errors() {
 				if i > 0 {
-					errStr = errStr + "\n"
+					errStr += "\n"
 				}
 				description := strings.ToLower(desc.Description())
 				if property := desc.Details()["property"]; property != nil {
 					description = property.(string) + strings.TrimPrefix(description, strings.ToLower(property.(string)))
 				}
-				errStr = errStr + desc.Field() + " " + description
+				errStr += desc.Field() + " " + description
 			}
 			return errors.New(errStr)
 		}

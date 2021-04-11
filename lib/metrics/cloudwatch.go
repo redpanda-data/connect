@@ -181,7 +181,7 @@ func (c *cloudWatchStat) addValue(v int64) {
 		}
 		c.root.datumses[c.id] = existing
 	} else {
-		existing.Value = existing.Value + v
+		existing.Value += v
 	}
 	c.root.datumLock.Unlock()
 }

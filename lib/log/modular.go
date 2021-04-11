@@ -435,7 +435,7 @@ func logfmtFormatter(addTimestamp bool, fields map[string]interface{}) logFormat
 func deprecatedFormatter(component string, addTimestamp bool) logFormatter {
 	return func(w io.Writer, message string, level string, other ...interface{}) {
 		if !strings.HasSuffix(message, "\n") {
-			message = message + "\n"
+			message += "\n"
 		}
 		timestampStr := ""
 		if addTimestamp {

@@ -110,9 +110,9 @@ func splitUnescaped(name string, separator string) []string {
 		part := parts[i]
 		// detect escaped
 		for strings.HasSuffix(part, `\`) {
-			part = part + separator
+			part += separator
 			if i+1 < len(parts) {
-				part = part + parts[i+1]
+				part += parts[i+1]
 				i++
 			}
 		}

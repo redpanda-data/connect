@@ -73,7 +73,7 @@ func lintMDSnippets(path string) (pathLints []pathLint) {
 
 	nextSnippet := bytes.Index(rawBytes, startTag)
 	for nextSnippet != -1 {
-		nextSnippet = nextSnippet + len(startTag)
+		nextSnippet += len(startTag)
 
 		snippetLine := bytes.Count(rawBytes[:nextSnippet], []byte("\n")) + 1
 
@@ -116,7 +116,7 @@ func lintMDSnippets(path string) (pathLints []pathLint) {
 		}
 
 		if nextSnippet = bytes.Index(rawBytes[endOfSnippet:], []byte("```yaml")); nextSnippet != -1 {
-			nextSnippet = nextSnippet + endOfSnippet
+			nextSnippet += endOfSnippet
 		}
 	}
 	return

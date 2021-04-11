@@ -42,7 +42,7 @@ func pathMappingDocs(allowLabels, forPrometheus bool) docs.FieldSpec {
 		examples = append(examples, `let matches = this.re_find_all_submatch("resource_processor_([a-zA-Z]+)_(.*)")
 meta processor = $matches.0.1 | deleted()
 root = $matches.0.2 | deleted()`)
-		summary = summary + " BETA FEATURE: Labels can also be created for the metric path by mapping meta fields."
+		summary += " BETA FEATURE: Labels can also be created for the metric path by mapping meta fields."
 	}
 	return docs.FieldCommon("path_mapping", summary, examples...).Linter(docs.LintBloblangMapping)
 }

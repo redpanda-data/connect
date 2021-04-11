@@ -169,10 +169,10 @@ func (s *sftpWriter) WriteWithContext(ctx context.Context, msg types.Message) er
 
 		flag := os.O_CREATE | os.O_RDWR
 		if s.codecConf.Append {
-			flag = flag | os.O_APPEND
+			flag |= os.O_APPEND
 		}
 		if s.codecConf.Truncate {
-			flag = flag | os.O_TRUNC
+			flag |= os.O_TRUNC
 		}
 
 		if err := s.client.MkdirAll(filepath.Dir(path)); err != nil {
