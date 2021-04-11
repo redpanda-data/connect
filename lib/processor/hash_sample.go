@@ -119,7 +119,7 @@ func (s *HashSample) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		}
 
 		// Attempt to add part to hash.
-		if _, err := hash.Write(msg.Get(index).Get()); nil != err {
+		if _, err := hash.Write(msg.Get(index).Get()); err != nil {
 			s.mErr.Incr(1)
 			s.log.Debugf("Cannot hash message part for sampling: %v\n", err)
 			return nil, response.NewAck()

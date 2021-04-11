@@ -74,13 +74,13 @@ func TestHashSample(t *testing.T) {
 			msgIn := message.New([][]byte{tc.input})
 			msgs, _ := proc.ProcessMessage(msgIn)
 
-			if nil != tc.expected && len(msgs) == 0 {
+			if tc.expected != nil && len(msgs) == 0 {
 				t.Error("Message told not to propagate even if it was expected to propagate")
 			}
-			if nil == tc.expected && len(msgs) != 0 {
+			if tc.expected == nil && len(msgs) != 0 {
 				t.Error("Message told to propagate even if it was not expected to propagate")
 			}
-			if nil != tc.expected && len(msgs) > 0 {
+			if tc.expected != nil && len(msgs) > 0 {
 				if !reflect.DeepEqual(message.GetAllBytes(msgs[0])[0], tc.expected) {
 					t.Errorf("Unexpected sampling: EXPECTED: %v, ACTUAL: %v", tc.expected, message.GetAllBytes(msgs[0])[0])
 				}

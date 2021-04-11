@@ -122,7 +122,7 @@ func main() {
 		if err != nil {
 			return false
 		}
-		return "FOO\nBAR\nBAZ\n" == string(resBytes)
+		return string(resBytes) == "FOO\nBAR\nBAZ\n"
 	}, time.Second, time.Millisecond*100)
 }
 
@@ -181,7 +181,7 @@ func main() {
 		if err != nil {
 			return false
 		}
-		return "BAR\n" == string(resBytes)
+		return string(resBytes) == "BAR\n"
 	}, time.Second, time.Millisecond*100)
 
 	assert.Eventually(t, func() bool {
@@ -191,7 +191,7 @@ func main() {
 		if err != nil {
 			return false
 		}
-		return "BAZ\n" == string(resBytes)
+		return string(resBytes) == "BAZ\n"
 	}, time.Second, time.Millisecond*100)
 
 	o.CloseAsync()

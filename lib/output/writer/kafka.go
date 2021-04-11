@@ -398,7 +398,7 @@ func (k *Kafka) WriteWithContext(ctx context.Context, msg types.Message) error {
 func (k *Kafka) CloseAsync() {
 	go func() {
 		k.connMut.Lock()
-		if nil != k.producer {
+		if k.producer != nil {
 			k.producer.Close()
 			k.producer = nil
 		}

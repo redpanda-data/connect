@@ -136,7 +136,7 @@ func (s *ScaleProto) ConnectWithContext(ctx context.Context) error {
 	}()
 
 	socket, err = getSocketFromType(s.conf.SocketType)
-	if nil != err {
+	if err != nil {
 		return err
 	}
 
@@ -160,13 +160,13 @@ func (s *ScaleProto) ConnectWithContext(ctx context.Context) error {
 	// TODO: This is only used for request/response sockets, and is invalid with
 	// other socket types.
 	// err = socket.SetOption(mangos.OptionSendDeadline, s.pollTimeout)
-	// if nil != err {
+	// if err != nil {
 	// 	return err
 	// }
 
 	// Set timeout to prevent endless lock.
 	err = socket.SetOption(mangos.OptionRecvDeadline, s.repTimeout)
-	if nil != err {
+	if err != nil {
 		return err
 	}
 
