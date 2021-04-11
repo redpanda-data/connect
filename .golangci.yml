@@ -1,18 +1,59 @@
 run:
-  build-tags:
-    # Extracted with `grep -rho '\+build.*' --include \*.go . | tr -d '!' | cut -d' ' -f2 | sort | uniq`
-    # Can't enable ZMQ4 because golangci-lint gets confused due to CGo deps
-    # - ZMQ4
-    # If we enable these, then files starting with `+build !windows` and
-    # `+build !wasm` will not be scanned
-    # - wasm
-    # - windows
   timeout: 30s
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  # fix: true
+
+linters-settings:
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - hugeParam # Micro-optimisations
+      - rangeValCopy # Micro-optimisations
+      - ifElseChain # Mostly false positives
+      - ptrToRefParam # False positives?
+      - importShadow # Probably not worth the hassle...
+      # TODO
+      - sloppyReassign
+      - singleCaseSwitch
+      - regexpMust
+      - commentFormatting
+      - captLocal
+      - elseif
+      - commentedOutCode
+      - emptyFallthrough
+      - typeAssertChain
+      - initClause
+      - unslice
+      - appendCombine
+      - emptyStringTest
+      - assignOp
+      - octalLiteral
+      - builtinShadow
+      - unlabelStmt
+      - wrapperFunc
+      - paramTypeCombine
+      - unlambda
+      - yodaStyleExpr
+      - unnamedResult
+      - exitAfterDefer
+      - valSwap
+      - typeUnparen
+      - appendAssign
+      - deprecatedComment
+      - nestingReduce
 
 linters:
   disable-all: true
   enable:
-    # Default linters reported by golangci-lint help linters` in v1.35.2
+    # Default linters reported by golangci-lint help linters` in v1.39.0
     # - deadcode
     # - errcheck
     - gosimple
@@ -26,4 +67,5 @@ linters:
     # Extra linters:
     - gofmt
     - goimports
+    - gocritic
     # - bodyclose
