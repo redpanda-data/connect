@@ -60,7 +60,7 @@ type NATSStream struct {
 
 // NewNATSStream creates a new NATS Stream output type.
 func NewNATSStream(conf NATSStreamConfig, log log.Modular, stats metrics.Type) (*NATSStream, error) {
-	if len(conf.ClientID) == 0 {
+	if conf.ClientID == "" {
 		rgen := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 		// Generate random client id if one wasn't supplied.

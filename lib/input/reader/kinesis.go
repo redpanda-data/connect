@@ -106,7 +106,7 @@ func NewKinesis(
 }
 
 func (k *Kinesis) getIter() error {
-	if len(k.sequenceCommit) == 0 && len(k.conf.DynamoDBTable) > 0 {
+	if k.sequenceCommit == "" && k.conf.DynamoDBTable != "" {
 		resp, err := k.dynamo.GetItemWithContext(
 			aws.BackgroundContext(),
 			&dynamodb.GetItemInput{
@@ -137,7 +137,7 @@ func (k *Kinesis) getIter() error {
 		}
 	}
 
-	if len(k.sharditer) == 0 && len(k.sequence) > 0 {
+	if k.sharditer == "" && len(k.sequence) > 0 {
 		getShardIter := kinesis.GetShardIteratorInput{
 			ShardId:                &k.conf.Shard,
 			StreamName:             &k.conf.Stream,
@@ -163,7 +163,7 @@ func (k *Kinesis) getIter() error {
 		}
 	}
 
-	if len(k.sharditer) == 0 {
+	if k.sharditer == "" {
 		// Otherwise start from somewhere
 		iterType := kinesis.ShardIteratorTypeTrimHorizon
 		if !k.conf.StartFromOldest {
@@ -194,7 +194,7 @@ func (k *Kinesis) getIter() error {
 		}
 	}
 
-	if len(k.sharditer) == 0 {
+	if k.sharditer == "" {
 		return errors.New("failed to obtain shard iterator")
 	}
 	return nil
@@ -243,7 +243,7 @@ func (k *Kinesis) ReadNextWithContext(ctx context.Context) (types.Message, error
 	if k.session == nil {
 		return nil, types.ErrNotConnected
 	}
-	if len(k.sharditer) == 0 {
+	if k.sharditer == "" {
 		if err := k.getIter(); err != nil {
 			return nil, fmt.Errorf("failed to obtain iterator: %v", err)
 		}
@@ -305,7 +305,7 @@ func (k *Kinesis) commit() error {
 	if k.session == nil {
 		return nil
 	}
-	if len(k.conf.DynamoDBTable) > 0 {
+	if k.conf.DynamoDBTable != "" {
 		if _, err := k.dynamo.PutItemWithContext(
 			aws.BackgroundContext(),
 			&dynamodb.PutItemInput{

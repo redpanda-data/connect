@@ -61,7 +61,7 @@ func metadataFunction(msg Message, index int, arg string) []byte {
 		}
 		arg = arg[:argIndex]
 	}
-	if len(arg) == 0 {
+	if arg == "" {
 		return []byte("")
 	}
 	meta := msg.Get(part).Metadata()
@@ -137,13 +137,13 @@ var (
 			return []byte(tStr)
 		},
 		"timestamp": func(_ Message, _ int, arg string) []byte {
-			if len(arg) == 0 {
+			if arg == "" {
 				arg = "Mon Jan 2 15:04:05 -0700 MST 2006"
 			}
 			return []byte(time.Now().Format(arg))
 		},
 		"timestamp_utc": func(_ Message, _ int, arg string) []byte {
-			if len(arg) == 0 {
+			if arg == "" {
 				arg = "Mon Jan 2 15:04:05 -0700 MST 2006"
 			}
 			return []byte(time.Now().In(time.UTC).Format(arg))

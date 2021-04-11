@@ -339,7 +339,7 @@ func parseDeprecatedFunction(input []rune) Result {
 			break
 		}
 	}
-	if len(targetFunc) == 0 {
+	if targetFunc == "" {
 		targetFunc = string(input)
 	}
 

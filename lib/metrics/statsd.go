@@ -182,7 +182,7 @@ func NewStatsd(config Config, opts ...func(Type)) (Type, error) {
 
 // GetCounter returns a stat counter object for a path.
 func (h *Statsd) GetCounter(path string) StatCounter {
-	if path = h.pathMapping.mapPathNoTags(path); len(path) == 0 {
+	if path = h.pathMapping.mapPathNoTags(path); path == "" {
 		return DudStat{}
 	}
 	return &StatsdStat{
@@ -193,7 +193,7 @@ func (h *Statsd) GetCounter(path string) StatCounter {
 
 // GetCounterVec returns a stat counter object for a path with the labels
 func (h *Statsd) GetCounterVec(path string, n []string) StatCounterVec {
-	if path = h.pathMapping.mapPathNoTags(path); len(path) == 0 {
+	if path = h.pathMapping.mapPathNoTags(path); path == "" {
 		return fakeCounterVec(func([]string) StatCounter {
 			return DudStat{}
 		})
@@ -211,7 +211,7 @@ func (h *Statsd) GetCounterVec(path string, n []string) StatCounterVec {
 
 // GetTimer returns a stat timer object for a path.
 func (h *Statsd) GetTimer(path string) StatTimer {
-	if path = h.pathMapping.mapPathNoTags(path); len(path) == 0 {
+	if path = h.pathMapping.mapPathNoTags(path); path == "" {
 		return DudStat{}
 	}
 	return &StatsdStat{
@@ -222,7 +222,7 @@ func (h *Statsd) GetTimer(path string) StatTimer {
 
 // GetTimerVec returns a stat timer object for a path with the labels
 func (h *Statsd) GetTimerVec(path string, n []string) StatTimerVec {
-	if path = h.pathMapping.mapPathNoTags(path); len(path) == 0 {
+	if path = h.pathMapping.mapPathNoTags(path); path == "" {
 		return fakeTimerVec(func([]string) StatTimer {
 			return DudStat{}
 		})
@@ -240,7 +240,7 @@ func (h *Statsd) GetTimerVec(path string, n []string) StatTimerVec {
 
 // GetGauge returns a stat gauge object for a path.
 func (h *Statsd) GetGauge(path string) StatGauge {
-	if path = h.pathMapping.mapPathNoTags(path); len(path) == 0 {
+	if path = h.pathMapping.mapPathNoTags(path); path == "" {
 		return DudStat{}
 	}
 	return &StatsdStat{
@@ -251,7 +251,7 @@ func (h *Statsd) GetGauge(path string) StatGauge {
 
 // GetGaugeVec returns a stat timer object for a path with the labels
 func (h *Statsd) GetGaugeVec(path string, n []string) StatGaugeVec {
-	if path = h.pathMapping.mapPathNoTags(path); len(path) == 0 {
+	if path = h.pathMapping.mapPathNoTags(path); path == "" {
 		return fakeGaugeVec(func([]string) StatGauge {
 			return DudStat{}
 		})

@@ -48,7 +48,7 @@ root = $matches.0.2 | deleted()`)
 }
 
 func newPathMapping(mapping string, logger log.Modular) (*pathMapping, error) {
-	if len(mapping) == 0 {
+	if mapping == "" {
 		return &pathMapping{m: nil, logger: logger}, nil
 	}
 	m, err := bloblang.NewMapping("", mapping)

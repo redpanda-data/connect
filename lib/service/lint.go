@@ -177,7 +177,7 @@ func lintCliCommand() *cli.Command {
 						if j%threads != threadID {
 							continue
 						}
-						if len(target) == 0 {
+						if target == "" {
 							continue
 						}
 						var lints []pathLint

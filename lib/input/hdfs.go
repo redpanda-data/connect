@@ -45,7 +45,7 @@ You can access these metadata fields using
 
 // NewHDFS creates a new Files input type.
 func NewHDFS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	if len(conf.HDFS.Directory) == 0 {
+	if conf.HDFS.Directory == "" {
 		return nil, errors.New("invalid directory (cannot be empty)")
 	}
 	return NewAsyncReader(

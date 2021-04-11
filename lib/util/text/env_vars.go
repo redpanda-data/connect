@@ -39,7 +39,7 @@ func ReplaceEnvVariables(inBytes []byte) []byte {
 				defaultVal := content[colonIndex+1 : len(content)-1]
 
 				value = os.Getenv(string(targetVar))
-				if len(value) == 0 {
+				if value == "" {
 					value = string(defaultVal)
 				}
 			}

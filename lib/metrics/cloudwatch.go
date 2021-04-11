@@ -338,7 +338,7 @@ func (c *CloudWatch) toCMName(dotSepName string) (outPath string, labelNames, la
 // GetCounter returns a stat counter object for a path.
 func (c *CloudWatch) GetCounter(path string) StatCounter {
 	name, labels, values := c.toCMName(path)
-	if len(name) == 0 {
+	if name == "" {
 		return DudStat{}
 	}
 	if len(labels) == 0 {
@@ -362,7 +362,7 @@ func (c *CloudWatch) GetCounter(path string) StatCounter {
 // GetCounterVec returns a stat counter object for a path with the labels
 func (c *CloudWatch) GetCounterVec(path string, n []string) StatCounterVec {
 	name, labels, values := c.toCMName(path)
-	if len(name) == 0 {
+	if name == "" {
 		return fakeCounterVec(func([]string) StatCounter {
 			return DudStat{}
 		})
@@ -395,7 +395,7 @@ func (c *CloudWatch) GetCounterVec(path string, n []string) StatCounterVec {
 // GetTimer returns a stat timer object for a path.
 func (c *CloudWatch) GetTimer(path string) StatTimer {
 	name, labels, values := c.toCMName(path)
-	if len(name) == 0 {
+	if name == "" {
 		return DudStat{}
 	}
 	if len(labels) == 0 {
@@ -419,7 +419,7 @@ func (c *CloudWatch) GetTimer(path string) StatTimer {
 // GetTimerVec returns a stat timer object for a path with the labels
 func (c *CloudWatch) GetTimerVec(path string, n []string) StatTimerVec {
 	name, labels, values := c.toCMName(path)
-	if len(name) == 0 {
+	if name == "" {
 		return fakeTimerVec(func([]string) StatTimer {
 			return DudStat{}
 		})
@@ -452,7 +452,7 @@ func (c *CloudWatch) GetTimerVec(path string, n []string) StatTimerVec {
 // GetGauge returns a stat gauge object for a path.
 func (c *CloudWatch) GetGauge(path string) StatGauge {
 	name, labels, values := c.toCMName(path)
-	if len(name) == 0 {
+	if name == "" {
 		return DudStat{}
 	}
 	if len(labels) == 0 {
@@ -476,7 +476,7 @@ func (c *CloudWatch) GetGauge(path string) StatGauge {
 // GetGaugeVec returns a stat timer object for a path with the labels
 func (c *CloudWatch) GetGaugeVec(path string, n []string) StatGaugeVec {
 	name, labels, values := c.toCMName(path)
-	if len(name) == 0 {
+	if name == "" {
 		return fakeGaugeVec(func([]string) StatGauge {
 			return DudStat{}
 		})

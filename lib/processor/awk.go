@@ -484,10 +484,10 @@ func NewAWK(
 //------------------------------------------------------------------------------
 
 func getTime(dateStr, format string) (time.Time, error) {
-	if len(dateStr) == 0 {
+	if dateStr == "" {
 		return time.Now(), nil
 	}
-	if len(format) == 0 {
+	if format == "" {
 		var err error
 		var parsed time.Time
 		for _, layout := range []string{

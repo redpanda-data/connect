@@ -258,7 +258,7 @@ func (d *Dynamic) HandleCRUD(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	id := mux.Vars(r)["id"]
-	if len(id) == 0 {
+	if id == "" {
 		http.Error(w, "Var `id` must be set", http.StatusBadRequest)
 		return
 	}

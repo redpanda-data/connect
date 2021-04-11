@@ -199,7 +199,7 @@ func (s *Stdout) constructMetrics(co map[string]*gabs.Container, metrics map[str
 
 // GetCounter returns a stat counter object for a path.
 func (s *Stdout) GetCounter(path string) StatCounter {
-	if path = s.pathMapping.mapPathNoTags(path); len(path) == 0 {
+	if path = s.pathMapping.mapPathNoTags(path); path == "" {
 		return DudStat{}
 	}
 	return s.local.GetCounter(path)
@@ -210,7 +210,7 @@ func (s *Stdout) GetCounter(path string) StatCounter {
 func (s *Stdout) GetCounterVec(path string, n []string) StatCounterVec {
 	path = s.pathMapping.mapPathNoTags(path)
 	return fakeCounterVec(func([]string) StatCounter {
-		if len(path) == 0 {
+		if path == "" {
 			return DudStat{}
 		}
 		return s.local.GetCounter(path)
@@ -219,7 +219,7 @@ func (s *Stdout) GetCounterVec(path string, n []string) StatCounterVec {
 
 // GetTimer returns a stat timer object for a path.
 func (s *Stdout) GetTimer(path string) StatTimer {
-	if path = s.pathMapping.mapPathNoTags(path); len(path) == 0 {
+	if path = s.pathMapping.mapPathNoTags(path); path == "" {
 		return DudStat{}
 	}
 	return s.local.GetTimer(path)
@@ -230,7 +230,7 @@ func (s *Stdout) GetTimer(path string) StatTimer {
 func (s *Stdout) GetTimerVec(path string, n []string) StatTimerVec {
 	path = s.pathMapping.mapPathNoTags(path)
 	return fakeTimerVec(func([]string) StatTimer {
-		if len(path) == 0 {
+		if path == "" {
 			return DudStat{}
 		}
 		return s.local.GetTimer(path)
@@ -239,7 +239,7 @@ func (s *Stdout) GetTimerVec(path string, n []string) StatTimerVec {
 
 // GetGauge returns a stat gauge object for a path.
 func (s *Stdout) GetGauge(path string) StatGauge {
-	if path = s.pathMapping.mapPathNoTags(path); len(path) == 0 {
+	if path = s.pathMapping.mapPathNoTags(path); path == "" {
 		return DudStat{}
 	}
 	return s.local.GetGauge(path)
@@ -250,7 +250,7 @@ func (s *Stdout) GetGauge(path string) StatGauge {
 func (s *Stdout) GetGaugeVec(path string, n []string) StatGaugeVec {
 	path = s.pathMapping.mapPathNoTags(path)
 	return fakeGaugeVec(func([]string) StatGauge {
-		if len(path) == 0 {
+		if path == "" {
 			return DudStat{}
 		}
 		return s.local.GetGauge(path)

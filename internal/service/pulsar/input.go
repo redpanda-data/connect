@@ -76,13 +76,13 @@ type pulsarReader struct {
 }
 
 func newPulsarReader(conf input.PulsarConfig, log log.Modular, stats metrics.Type) (*pulsarReader, error) {
-	if len(conf.URL) == 0 {
+	if conf.URL == "" {
 		return nil, errors.New("field url must not be empty")
 	}
 	if len(conf.Topics) == 0 {
 		return nil, errors.New("field topics must not be empty")
 	}
-	if len(conf.SubscriptionName) == 0 {
+	if conf.SubscriptionName == "" {
 		return nil, errors.New("field subscription_name must not be empty")
 	}
 	p := pulsarReader{

@@ -174,7 +174,7 @@ func AddExamples(conf *Type, examples ...string) {
 	var inputType, bufferType, conditionType, outputType string
 	var processorTypes []string
 	for _, e := range examples {
-		if _, exists := input.Constructors[e]; exists && len(inputType) == 0 {
+		if _, exists := input.Constructors[e]; exists && inputType == "" {
 			inputType = e
 		}
 		if _, exists := buffer.Constructors[e]; exists {

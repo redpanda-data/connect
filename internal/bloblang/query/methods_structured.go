@@ -981,7 +981,7 @@ var _ = registerSimpleMethod(
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			switch t := v.(type) {
 			case string:
-				if len(t) == 0 {
+				if t == "" {
 					return nil, errors.New("string value is empty")
 				}
 			case []interface{}:

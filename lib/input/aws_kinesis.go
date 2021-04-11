@@ -249,7 +249,7 @@ func (k *kinesisReader) getIter(streamID, shardID, sequence string) (string, err
 	if res.ShardIterator != nil {
 		iter = *res.ShardIterator
 	}
-	if len(iter) == 0 {
+	if iter == "" {
 		// If we failed to obtain from a sequence we start from beginning
 		iterType = kinesis.ShardIteratorTypeTrimHorizon
 
@@ -266,7 +266,7 @@ func (k *kinesisReader) getIter(streamID, shardID, sequence string) (string, err
 			iter = *res.ShardIterator
 		}
 	}
-	if len(iter) == 0 {
+	if iter == "" {
 		return "", errors.New("failed to obtain shard iterator")
 	}
 	return iter, nil
@@ -419,7 +419,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 				// iterator whenever it errors out. Therefore, regardless of the
 				// outcome of the call if iter is now empty we have definitely
 				// reached the end of the shard.
-				if len(iter) == 0 {
+				if iter == "" {
 					state = awsKinesisConsumerFinished
 				}
 			} else if nextPullChan == unblockedChan {

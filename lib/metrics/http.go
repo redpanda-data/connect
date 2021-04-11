@@ -134,7 +134,7 @@ func (h *HTTP) HandlerFunc() http.HandlerFunc {
 
 // GetCounter returns a stat counter object for a path.
 func (h *HTTP) GetCounter(path string) StatCounter {
-	if path = h.getPath(path); len(path) == 0 {
+	if path = h.getPath(path); path == "" {
 		return DudStat{}
 	}
 	return h.local.GetCounter(path)
@@ -143,7 +143,7 @@ func (h *HTTP) GetCounter(path string) StatCounter {
 // GetCounterVec returns a stat counter object for a path with the labels
 // discarded.
 func (h *HTTP) GetCounterVec(path string, n []string) StatCounterVec {
-	if path = h.getPath(path); len(path) == 0 {
+	if path = h.getPath(path); path == "" {
 		return fakeCounterVec(func([]string) StatCounter {
 			return DudStat{}
 		})
@@ -155,7 +155,7 @@ func (h *HTTP) GetCounterVec(path string, n []string) StatCounterVec {
 
 // GetTimer returns a stat timer object for a path.
 func (h *HTTP) GetTimer(path string) StatTimer {
-	if path = h.getPath(path); len(path) == 0 {
+	if path = h.getPath(path); path == "" {
 		return DudStat{}
 	}
 	return h.local.GetTimer(path)
@@ -164,7 +164,7 @@ func (h *HTTP) GetTimer(path string) StatTimer {
 // GetTimerVec returns a stat timer object for a path with the labels
 // discarded.
 func (h *HTTP) GetTimerVec(path string, n []string) StatTimerVec {
-	if path = h.getPath(path); len(path) == 0 {
+	if path = h.getPath(path); path == "" {
 		return fakeTimerVec(func([]string) StatTimer {
 			return DudStat{}
 		})
@@ -176,7 +176,7 @@ func (h *HTTP) GetTimerVec(path string, n []string) StatTimerVec {
 
 // GetGauge returns a stat gauge object for a path.
 func (h *HTTP) GetGauge(path string) StatGauge {
-	if path = h.getPath(path); len(path) == 0 {
+	if path = h.getPath(path); path == "" {
 		return DudStat{}
 	}
 	return h.local.GetGauge(path)
@@ -185,7 +185,7 @@ func (h *HTTP) GetGauge(path string) StatGauge {
 // GetGaugeVec returns a stat timer object for a path with the labels
 // discarded.
 func (h *HTTP) GetGaugeVec(path string, n []string) StatGaugeVec {
-	if path = h.getPath(path); len(path) == 0 {
+	if path = h.getPath(path); path == "" {
 		return fakeGaugeVec(func([]string) StatGauge {
 			return DudStat{}
 		})

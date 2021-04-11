@@ -220,7 +220,7 @@ func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error
 	}
 	if strings.HasPrefix(codec, "delim:") {
 		by := strings.TrimPrefix(codec, "delim:")
-		if len(by) == 0 {
+		if by == "" {
 			return nil, false, errors.New("custom delimiter codec requires a non-empty delimiter")
 		}
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {

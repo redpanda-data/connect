@@ -112,7 +112,7 @@ output:
 			),
 			docs.FieldDeprecated("dsn").OmitWhen(func(v, _ interface{}) (string, bool) {
 				s, ok := v.(string)
-				return "field dsn is deprecated in favour of data_source_name", ok && len(s) == 0
+				return "field dsn is deprecated in favour of data_source_name", ok && s == ""
 			}),
 			docs.FieldCommon(
 				"query", "The query to run against the database.",

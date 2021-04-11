@@ -61,7 +61,7 @@ func GetWriter(codec string) (WriterConstructor, WriterConfig, error) {
 	}
 	if strings.HasPrefix(codec, "delim:") {
 		by := strings.TrimPrefix(codec, "delim:")
-		if len(by) == 0 {
+		if by == "" {
 			return nil, WriterConfig{}, errors.New("custom delimiter codec requires a non-empty delimiter")
 		}
 		return func(w io.WriteCloser) (Writer, error) {

@@ -181,7 +181,7 @@ func getInferenceCandidateFromList(t Type, defaultType string, l []string) (stri
 		}
 	}
 
-	if len(inferred) == 0 {
+	if inferred == "" {
 		sort.Strings(candidates)
 		return "", ComponentSpec{}, fmt.Errorf("unable to infer %v type, candidates were: %v", string(t), candidates)
 	}
@@ -317,7 +317,7 @@ func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 			keys = append(keys, node.Content[i].Value)
 		}
 	}
-	if len(name) == 0 {
+	if name == "" {
 		if len(node.Content) == 0 {
 			return nil
 		}
@@ -396,7 +396,7 @@ func LintNode(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 			keys = append(keys, node.Content[i].Value)
 		}
 	}
-	if len(name) == 0 {
+	if name == "" {
 		if len(node.Content) == 0 {
 			return nil
 		}

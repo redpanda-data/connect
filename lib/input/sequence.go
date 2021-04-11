@@ -208,7 +208,7 @@ func (s SequenceShardedJoinConfig) validate() (*messageJoiner, error) {
 	default:
 		return nil, fmt.Errorf("join type '%v' was not recognized", s.Type)
 	}
-	if len(s.IDPath) == 0 {
+	if s.IDPath == "" {
 		return nil, errors.New("the id path must not be empty")
 	}
 	if s.Iterations <= 0 {
@@ -315,7 +315,7 @@ func (m *messageJoiner) Add(msg types.Message, lastInSequence bool, fn func(msg 
 
 		gIncoming := gabs.Wrap(incomingObj)
 		id, _ := gIncoming.Path(m.idPath).Data().(string)
-		if len(id) == 0 {
+		if id == "" {
 			// TODO: Propagate errors?
 			return nil
 		}

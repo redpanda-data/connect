@@ -218,7 +218,7 @@ func TestAssignments(t *testing.T) {
 			msg := message.New(nil)
 			for _, p := range test.input {
 				part := message.NewPart([]byte(p.Content))
-				if len(p.Content) == 0 {
+				if p.Content == "" {
 					part = message.NewPart(nil)
 				}
 				for k, v := range p.Meta {

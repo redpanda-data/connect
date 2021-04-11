@@ -38,7 +38,7 @@ func init() {
 			// If we're not pulling events directly from an SQS queue then
 			// there's no concept of propagating nacks upstream, therefore wrap
 			// our reader within a preserver in order to retry indefinitely.
-			if len(conf.AWSS3.SQS.URL) == 0 {
+			if conf.AWSS3.SQS.URL == "" {
 				r = reader.NewAsyncPreserver(r)
 			}
 			return NewAsyncReader(TypeAWSS3, false, r, log, stats)
@@ -403,7 +403,7 @@ func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]s3ObjectTarget, er
 		if len(buckets) > i {
 			bucket = buckets[i]
 		}
-		if len(bucket) == 0 {
+		if bucket == "" {
 			return nil, errors.New("required bucket was not found in SQS message")
 		}
 		objects = append(objects, s3ObjectTarget{
@@ -575,10 +575,10 @@ func newAmazonS3(
 	log log.Modular,
 	stats metrics.Type,
 ) (*awsS3, error) {
-	if len(conf.Bucket) == 0 && len(conf.SQS.URL) == 0 {
+	if conf.Bucket == "" && conf.SQS.URL == "" {
 		return nil, errors.New("either a bucket or an sqs.url must be specified")
 	}
-	if len(conf.Prefix) > 0 && len(conf.SQS.URL) > 0 {
+	if conf.Prefix != "" && conf.SQS.URL != "" {
 		return nil, errors.New("cannot specify both a prefix and sqs.url")
 	}
 	s := &awsS3{
@@ -621,7 +621,7 @@ func (a *awsS3) ConnectWithContext(ctx context.Context) error {
 
 	a.session = sess
 	a.s3 = s3.New(sess)
-	if len(a.conf.SQS.URL) != 0 {
+	if a.conf.SQS.URL != "" {
 		sqsSess := sess.Copy()
 		if len(a.conf.SQS.Endpoint) > 0 {
 			sqsSess.Config.Endpoint = &a.conf.SQS.Endpoint
@@ -636,7 +636,7 @@ func (a *awsS3) ConnectWithContext(ctx context.Context) error {
 		return err
 	}
 
-	if len(a.conf.SQS.URL) == 0 {
+	if a.conf.SQS.URL == "" {
 		a.log.Infof("Downloading S3 objects from bucket: %s\n", a.conf.Bucket)
 	} else {
 		a.log.Infof("Downloading S3 objects found in messages from SQS: %s\n", a.conf.SQS.URL)

@@ -506,7 +506,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 
 		if plen := responseMsg.Len(); plen == 1 {
 			payload := responseMsg.Get(0).Get()
-			if len(w.Header().Get("Content-Type")) == 0 {
+			if w.Header().Get("Content-Type") == "" {
 				w.Header().Set("Content-Type", http.DetectContentType(payload))
 			}
 			w.WriteHeader(statusCode)

@@ -210,7 +210,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	id := mux.Vars(r)["id"]
-	if len(id) == 0 {
+	if id == "" {
 		http.Error(w, "Var `id` must be set", http.StatusBadRequest)
 		return
 	}
@@ -351,7 +351,7 @@ func (m *Type) HandleStreamStats(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	id := mux.Vars(r)["id"]
-	if len(id) == 0 {
+	if id == "" {
 		http.Error(w, "Var `id` must be set", http.StatusBadRequest)
 		return
 	}

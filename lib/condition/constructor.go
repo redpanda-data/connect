@@ -169,7 +169,7 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 				inferredType = tc
 			}
 		}
-		if len(inferredType) == 0 {
+		if inferredType == "" {
 			return fmt.Errorf("line %v: unable to infer type, candidates were: %v", value.Line, typeCandidates)
 		}
 		aliased.Type = inferredType

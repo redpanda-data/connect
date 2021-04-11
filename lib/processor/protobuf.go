@@ -232,7 +232,7 @@ func strToProtobufOperator(opStr, message string, importPaths []string) (protobu
 }
 
 func loadDescriptor(message string, importPaths []string) (*desc.MessageDescriptor, error) {
-	if len(message) == 0 {
+	if message == "" {
 		return nil, errors.New("message field must not be empty")
 	}
 

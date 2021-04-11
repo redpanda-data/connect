@@ -337,7 +337,7 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 		Status:      string(c.Status),
 		Version:     c.Version,
 	}
-	if len(ctx.Status) == 0 {
+	if ctx.Status == "" {
 		ctx.Status = string(StatusStable)
 	}
 
@@ -449,7 +449,7 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 			Version:          v.Version,
 		}
 
-		if len(fieldCtx.Description) == 0 {
+		if fieldCtx.Description == "" {
 			fieldCtx.Description = "Sorry! This field is missing documentation."
 		}
 

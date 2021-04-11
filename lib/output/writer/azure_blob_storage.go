@@ -41,7 +41,7 @@ func NewAzureBlobStorage(
 	log log.Modular,
 	stats metrics.Type,
 ) (*AzureBlobStorage, error) {
-	if len(conf.StorageAccount) == 0 && len(conf.StorageConnectionString) == 0 {
+	if conf.StorageAccount == "" && conf.StorageConnectionString == "" {
 		return nil, errors.New("invalid azure storage account credentials")
 	}
 	var client storage.Client
