@@ -212,6 +212,107 @@ func TestExpressions(t *testing.T) {
 				{content: `not json`},
 			},
 		},
+		"meta function": {
+			expression: NewExpression(
+				NewQueryResolver(func() query.Function {
+					fn, err := query.InitFunction("meta", "foo")
+					require.NoError(t, err)
+					return fn
+				}()),
+			),
+			output: `from foo`,
+			messages: []easyMsg{
+				{content: `hello world`, meta: map[string]string{
+					"foo": "from foo",
+					"bar": "from bar",
+				}},
+			},
+		},
+		"metadata function": {
+			expression: NewExpression(
+				NewQueryResolver(func() query.Function {
+					fn, err := query.InitFunction("metadata", "foo")
+					require.NoError(t, err)
+					return fn
+				}()),
+			),
+			output: `from foo`,
+			messages: []easyMsg{
+				{content: `hello world`, meta: map[string]string{
+					"foo": "from foo",
+					"bar": "from bar",
+				}},
+			},
+		},
+		"metadata function not exist": {
+			expression: NewExpression(
+				NewQueryResolver(func() query.Function {
+					fn, err := query.InitFunction("metadata", "foo")
+					require.NoError(t, err)
+					return fn
+				}()),
+			),
+			output: ``,
+			messages: []easyMsg{
+				{content: `hello world`, meta: map[string]string{
+					"bar": "from bar",
+				}},
+			},
+		},
+		"all meta function": {
+			expression: NewExpression(
+				NewQueryResolver(func() query.Function {
+					fn, err := query.InitFunction("meta")
+					require.NoError(t, err)
+					return fn
+				}()),
+			),
+			output: `{"bar":"from bar","foo":"from foo"}`,
+			messages: []easyMsg{
+				{content: `hello world`, meta: map[string]string{
+					"foo": "from foo",
+					"bar": "from bar",
+				}},
+			},
+		},
+		"all metadata function": {
+			expression: NewExpression(
+				NewQueryResolver(func() query.Function {
+					fn, err := query.InitFunction("metadata")
+					require.NoError(t, err)
+					return fn
+				}()),
+			),
+			output: `{"bar":"from bar","foo":"from foo"}`,
+			messages: []easyMsg{
+				{content: `hello world`, meta: map[string]string{
+					"foo": "from foo",
+					"bar": "from bar",
+				}},
+			},
+		},
+		"meta_from function": {
+			expression: NewExpression(
+				NewQueryResolver(func() query.Function {
+					fn, err := query.InitFunction("meta", "bar")
+					require.NoError(t, err)
+					fn, err = query.InitMethod("from", fn, int64(1))
+					require.NoError(t, err)
+					return fn
+				}()),
+			),
+			output: `from bar from 1`,
+			messages: []easyMsg{
+				{content: `first`, meta: map[string]string{
+					"foo": "from foo from 0",
+					"bar": "from bar from 0",
+				}},
+				{content: `second`, meta: map[string]string{
+					"foo": "from foo from 1",
+					"bar": "from bar from 1",
+				}},
+			},
+		},
 	}
 
 	for name, test := range tests {

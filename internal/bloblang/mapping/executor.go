@@ -213,6 +213,7 @@ func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (t
 			Vars:     vars,
 			Index:    index,
 			MsgBatch: reference,
+			NewMeta:  newMeta,
 		}.WithValueFunc(lazyValue))
 		if err != nil {
 			var line int

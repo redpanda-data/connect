@@ -159,6 +159,39 @@ func TestAssignments(t *testing.T) {
 			}},
 			output: &part{Content: `{}`},
 		},
+		"source_metadata assignment": {
+			mapping: NewExecutor("", nil, nil,
+				NewStatement(nil, NewMetaAssignment(metaKey("foo")), query.NewLiteralFunction("", "new value")),
+				NewStatement(nil, NewMetaAssignment(metaKey("bar")), initFunc("source_metadata", "foo")),
+			),
+			input: []part{{
+				Content: `{}`,
+				Meta: map[string]string{
+					"foo": "old value",
+				},
+			}},
+			output: &part{
+				Content: `{}`,
+				Meta: map[string]string{
+					"foo": "new value",
+					"bar": "old value",
+				},
+			},
+		},
+		"metadata assignment": {
+			mapping: NewExecutor("", nil, nil,
+				NewStatement(nil, NewMetaAssignment(metaKey("foo")), query.NewLiteralFunction("", "exists now")),
+				NewStatement(nil, NewMetaAssignment(metaKey("bar")), initFunc("metadata", "foo")),
+			),
+			input: []part{{Content: `{}`}},
+			output: &part{
+				Content: `{}`,
+				Meta: map[string]string{
+					"foo": "exists now",
+					"bar": "exists now",
+				},
+			},
+		},
 		"invalid json message": {
 			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment("bar"), query.NewLiteralFunction("", "test2")),

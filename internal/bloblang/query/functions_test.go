@@ -93,6 +93,38 @@ func TestFunctions(t *testing.T) {
 			vars:  map[string]interface{}{},
 			err:   `metadata value 'foo' not found`,
 		},
+		"check metadata function object": {
+			input:  mustFunc("metadata", "foo"),
+			output: "foobar",
+			messages: []easyMsg{
+				{content: "", meta: map[string]string{
+					"foo": "foobar",
+				}},
+			},
+		},
+		"check metadata function error": {
+			input:  mustFunc("metadata", "foo"),
+			output: "",
+			messages: []easyMsg{
+				{content: "", meta: map[string]string{}},
+			},
+		},
+		"check source_metadata function object": {
+			input:  mustFunc("metadata", "foo"),
+			output: "foobar",
+			messages: []easyMsg{
+				{content: "", meta: map[string]string{
+					"foo": "foobar",
+				}},
+			},
+		},
+		"check source_metadata function error": {
+			input:  mustFunc("metadata", "foo"),
+			output: "",
+			messages: []easyMsg{
+				{content: "", meta: map[string]string{}},
+			},
+		},
 	}
 
 	for name, test := range tests {
@@ -117,6 +149,7 @@ func TestFunctions(t *testing.T) {
 					Maps:     map[string]Function{},
 					Index:    test.index,
 					MsgBatch: msg,
+					NewMeta:  msg.Get(test.index).Metadata(),
 				})
 				if len(test.err) > 0 {
 					require.EqualError(t, err, test.err)

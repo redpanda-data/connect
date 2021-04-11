@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Experimental `azure_renew_lock` field added to the `amqp_1` input.
+- New (BETA) `metadata` and `source_metadata` functions.
 
 ## 3.44.0 - 2021-04-09
 

@@ -177,7 +177,7 @@ root.doc = json()
 
 ### `meta`
 
-Returns the value of a metadata key from the input message. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. If you wish to store the results of queries to be reused within the same mapping then instead [use variables](/docs/guides/bloblang/about#variables).
+Returns the value of a metadata key from the input message. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`metadata` function](#metadata). This function supports extracting metadata from other messages of a batch with the `from` method.
 
 ```coffee
 root.topic = meta("kafka_topic")
@@ -189,11 +189,43 @@ The parameter is optional and if omitted the entire metadata contents are return
 root.all_metadata = meta()
 ```
 
+### `metadata`
+
+BETA: This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+
+Returns the value of a metadata key, or an empty string if the metadata key is not found. Changes made to metadata during the mapping will be reflected by this function.
+
+```coffee
+root.topic = metadata("kafka_topic")
+```
+
+The parameter is optional and if omitted the entire metadata contents are returned as a JSON object.
+
+```coffee
+root.all_metadata = metadata()
+```
+
+### `source_metadata`
+
+BETA: This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+
+Returns the value of a metadata key from the original input message, or an empty string if the key is not found. This function does NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`metadata` function](#metadata). This function supports extracting metadata from other messages of a batch with the `from` method.
+
+```coffee
+root.topic = source_metadata("kafka_topic")
+```
+
+The parameter is optional and if omitted the entire metadata contents are returned as a JSON object.
+
+```coffee
+root.all_metadata = source_metadata()
+```
+
 ## Environment
 
 ### `env`
 
-Returns the value of an environment variable.
+Returns the value of an environment variable, or an empty string if the environment variable does not exist.
 
 ```coffee
 root.thing.key = env("key")

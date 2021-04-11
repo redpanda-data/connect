@@ -263,7 +263,7 @@ root.bar = deleted()`,
 var _ = RegisterFunction(
 	NewFunctionSpec(
 		FunctionCategoryEnvironment, "env",
-		"Returns the value of an environment variable.",
+		"Returns the value of an environment variable, or an empty string if the environment variable does not exist.",
 		NewExampleSpec("",
 			`root.thing.key = env("key")`,
 		),
@@ -447,7 +447,7 @@ func jsonFunction(args ...interface{}) (Function, error) {
 var _ = RegisterFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "meta",
-		"Returns the value of a metadata key from the input message. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. If you wish to store the results of queries to be reused within the same mapping then instead [use variables](/docs/guides/bloblang/about#variables).",
+		"Returns the value of a metadata key from the input message. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`metadata` function](#metadata). This function supports extracting metadata from other messages of a batch with the `from` method.",
 		NewExampleSpec("",
 			`root.topic = meta("kafka_topic")`,
 		),
@@ -456,48 +456,152 @@ var _ = RegisterFunction(
 			`root.all_metadata = meta()`,
 		),
 	),
-	true, metadataFunction,
-	ExpectOneOrZeroArgs(),
-	ExpectStringArg(0),
-)
-
-func metadataFunction(args ...interface{}) (Function, error) {
-	if len(args) > 0 {
-		field := args[0].(string)
-		return ClosureFunction("meta field "+field, func(ctx FunctionContext) (interface{}, error) {
-			v := ctx.MsgBatch.Get(ctx.Index).Metadata().Get(field)
-			if len(v) == 0 {
-				return nil, &ErrRecoverable{
-					Recovered: "",
-					Err:       fmt.Errorf("metadata value '%v' not found", field),
+	true,
+	func(args ...interface{}) (Function, error) {
+		if len(args) > 0 {
+			field := args[0].(string)
+			return ClosureFunction("meta field "+field, func(ctx FunctionContext) (interface{}, error) {
+				v := ctx.MsgBatch.Get(ctx.Index).Metadata().Get(field)
+				if len(v) == 0 {
+					return nil, &ErrRecoverable{
+						Recovered: "",
+						Err:       fmt.Errorf("metadata value '%v' not found", field),
+					}
 				}
-			}
-			return v, nil
+				return v, nil
+			}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
+				paths := []TargetPath{
+					NewTargetPath(TargetMetadata, field),
+				}
+				ctx = ctx.WithValues(paths)
+				return ctx, paths
+			}), nil
+		}
+		return ClosureFunction("meta object", func(ctx FunctionContext) (interface{}, error) {
+			kvs := map[string]interface{}{}
+			ctx.MsgBatch.Get(ctx.Index).Metadata().Iter(func(k, v string) error {
+				if len(v) > 0 {
+					kvs[k] = v
+				}
+				return nil
+			})
+			return kvs, nil
 		}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
 			paths := []TargetPath{
-				NewTargetPath(TargetMetadata, field),
+				NewTargetPath(TargetMetadata),
 			}
 			ctx = ctx.WithValues(paths)
 			return ctx, paths
 		}), nil
-	}
-	return ClosureFunction("metadata object", func(ctx FunctionContext) (interface{}, error) {
-		kvs := map[string]interface{}{}
-		ctx.MsgBatch.Get(ctx.Index).Metadata().Iter(func(k, v string) error {
-			if len(v) > 0 {
-				kvs[k] = v
-			}
-			return nil
-		})
-		return kvs, nil
-	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
-		paths := []TargetPath{
-			NewTargetPath(TargetMetadata),
+	},
+	ExpectOneOrZeroArgs(),
+	ExpectStringArg(0),
+)
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterFunction(
+	NewFunctionSpec(
+		FunctionCategoryMessage, "metadata",
+		"Returns the value of a metadata key, or an empty string if the metadata key is not found. Changes made to metadata during the mapping will be reflected by this function.",
+		NewExampleSpec("",
+			`root.topic = metadata("kafka_topic")`,
+		),
+		NewExampleSpec(
+			"The parameter is optional and if omitted the entire metadata contents are returned as a JSON object.",
+			`root.all_metadata = metadata()`,
+		),
+	).Beta(),
+	true,
+	func(args ...interface{}) (Function, error) {
+		if len(args) > 0 {
+			field := args[0].(string)
+			return ClosureFunction("metadata field "+field, func(ctx FunctionContext) (interface{}, error) {
+				if ctx.NewMeta == nil {
+					return nil, errors.New("metadata cannot be queried in this context")
+				}
+				return ctx.NewMeta.Get(field), nil
+			}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
+				paths := []TargetPath{
+					NewTargetPath(TargetMetadata, field),
+				}
+				ctx = ctx.WithValues(paths)
+				return ctx, paths
+			}), nil
 		}
-		ctx = ctx.WithValues(paths)
-		return ctx, paths
-	}), nil
-}
+		return ClosureFunction("metadata object", func(ctx FunctionContext) (interface{}, error) {
+			if ctx.NewMeta == nil {
+				return nil, errors.New("metadata cannot be queried in this context")
+			}
+			kvs := map[string]interface{}{}
+			ctx.NewMeta.Iter(func(k, v string) error {
+				if len(v) > 0 {
+					kvs[k] = v
+				}
+				return nil
+			})
+			return kvs, nil
+		}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
+			paths := []TargetPath{
+				NewTargetPath(TargetMetadata),
+			}
+			ctx = ctx.WithValues(paths)
+			return ctx, paths
+		}), nil
+	},
+	ExpectOneOrZeroArgs(),
+	ExpectStringArg(0),
+)
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterFunction(
+	NewFunctionSpec(
+		FunctionCategoryMessage, "source_metadata",
+		"Returns the value of a metadata key from the original input message, or an empty string if the key is not found. This function does NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`metadata` function](#metadata). This function supports extracting metadata from other messages of a batch with the `from` method.",
+		NewExampleSpec("",
+			`root.topic = source_metadata("kafka_topic")`,
+		),
+		NewExampleSpec(
+			"The parameter is optional and if omitted the entire metadata contents are returned as a JSON object.",
+			`root.all_metadata = source_metadata()`,
+		),
+	).Beta(),
+	true,
+	func(args ...interface{}) (Function, error) {
+		if len(args) > 0 {
+			field := args[0].(string)
+			return ClosureFunction("source_metadata field "+field, func(ctx FunctionContext) (interface{}, error) {
+				v := ctx.MsgBatch.Get(ctx.Index).Metadata().Get(field)
+				return v, nil
+			}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
+				paths := []TargetPath{
+					NewTargetPath(TargetMetadata, field),
+				}
+				ctx = ctx.WithValues(paths)
+				return ctx, paths
+			}), nil
+		}
+		return ClosureFunction("source_metadata object", func(ctx FunctionContext) (interface{}, error) {
+			kvs := map[string]interface{}{}
+			ctx.MsgBatch.Get(ctx.Index).Metadata().Iter(func(k, v string) error {
+				if len(v) > 0 {
+					kvs[k] = v
+				}
+				return nil
+			})
+			return kvs, nil
+		}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
+			paths := []TargetPath{
+				NewTargetPath(TargetMetadata),
+			}
+			ctx = ctx.WithValues(paths)
+			return ctx, paths
+		}), nil
+	},
+	ExpectOneOrZeroArgs(),
+	ExpectStringArg(0),
+)
 
 //------------------------------------------------------------------------------
 

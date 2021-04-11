@@ -153,7 +153,7 @@ func catchMethod(fn Function, args ...interface{}) (Function, error) {
 var _ = registerMethod(
 	NewMethodSpec(
 		"from",
-		"Execute a query from the context of another message in the batch. This allows you to mutate events based on the contents of other messages.",
+		"Modifies a target query such that certain functions are executed from the perspective of another message in the batch. This allows you to mutate events based on the contents of other messages. Functions that support this behaviour are `content`, `json` and `source_metadata`.",
 		NewExampleSpec("For example, the following map extracts the contents of the JSON field `foo` specifically from message index `1` of a batch, effectively overriding the field `foo` for all messages of a batch to that of message 1:",
 			`root = this
 root.foo = json("foo").from(1)`,
@@ -194,7 +194,7 @@ func (f *fromMethod) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetP
 var _ = registerMethod(
 	NewMethodSpec(
 		"from_all",
-		"Execute a query for all messages of the batch, and return an array of all results.",
+		"Modifies a target query such that certain functions are executed from the perspective of each message in the batch, and returns the set of results as an array. Functions that support this behaviour are `content`, `json` and `source_metadata`.",
 		NewExampleSpec("",
 			`root = this
 root.foo_summed = json("foo").from_all().sum()`,

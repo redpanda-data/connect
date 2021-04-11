@@ -58,6 +58,9 @@ type FunctionContext struct {
 	MsgBatch MessageBatch
 	Legacy   bool
 
+	// Reference new message being mapped
+	NewMeta types.Metadata
+
 	valueFn      func() *interface{}
 	defaultValue *defaultContextValue
 	namedValue   *namedContextValue
