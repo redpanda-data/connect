@@ -208,7 +208,7 @@ func (a *AMQP) disconnect() error {
 // Determine the type of the value and set the metadata.
 func setMetadata(p types.Part, k string, v interface{}) {
 	var metaValue string
-	var metaKey = strings.Replace(k, "-", "_", -1)
+	var metaKey = strings.ReplaceAll(k, "-", "_")
 
 	switch v := v.(type) {
 	case bool:

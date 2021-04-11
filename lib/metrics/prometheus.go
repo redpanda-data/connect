@@ -190,9 +190,9 @@ func (p *Prometheus) HandlerFunc() http.HandlerFunc {
 //------------------------------------------------------------------------------
 
 func (p *Prometheus) toPromName(dotSepName string) (string, []string, []string) {
-	dotSepName = strings.Replace(dotSepName, "_", "__", -1)
-	dotSepName = strings.Replace(dotSepName, "-", "__", -1)
-	return p.pathMapping.mapPathWithTags(strings.Replace(dotSepName, ".", "_", -1))
+	dotSepName = strings.ReplaceAll(dotSepName, "_", "__")
+	dotSepName = strings.ReplaceAll(dotSepName, "-", "__")
+	return p.pathMapping.mapPathWithTags(strings.ReplaceAll(dotSepName, ".", "_"))
 }
 
 // GetCounter returns a stat counter object for a path.

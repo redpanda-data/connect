@@ -43,7 +43,7 @@ func LoadStreamConfigsFromDirectory(replaceEnvVars bool, dir string) (map[string
 			return werr
 		}
 		id = strings.Trim(id, string(filepath.Separator))
-		id = strings.Replace(id, string(filepath.Separator), "_", -1)
+		id = strings.ReplaceAll(id, string(filepath.Separator), "_")
 
 		if strings.HasSuffix(info.Name(), ".yaml") {
 			id = strings.TrimSuffix(id, ".yaml")

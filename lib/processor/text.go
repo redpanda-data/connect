@@ -154,7 +154,7 @@ func newTextRegexpExpandOperator(arg string) (textOperator, error) {
 func newTextReplaceOperator(arg string) textOperator {
 	replaceArg := []byte(arg)
 	return func(body []byte, value []byte) ([]byte, error) {
-		return bytes.Replace(body, replaceArg, value, -1), nil
+		return bytes.ReplaceAll(body, replaceArg, value), nil
 	}
 }
 
