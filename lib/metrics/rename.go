@@ -195,9 +195,9 @@ func NewRename(config Config, opts ...func(Type)) (Type, error) {
 
 // renamePath checks whether or not a given path is in the allowed set of
 // paths for the Rename metrics stat.
-func (r *Rename) renamePath(path string) (string, map[string]string) {
+func (r *Rename) renamePath(path string) (outPath string, labels map[string]string) {
 	renamed := false
-	labels := map[string]string{}
+	labels = make(map[string]string)
 	for _, rr := range r.byRegexp {
 		newPath := rr.expression.ReplaceAllString(path, rr.value)
 		if newPath != path {
@@ -225,13 +225,13 @@ func (r *Rename) renamePath(path string) (string, map[string]string) {
 
 //------------------------------------------------------------------------------
 
-func labelsFromMap(labels map[string]string) ([]string, []string) {
-	names := make([]string, 0, len(labels))
+func labelsFromMap(labels map[string]string) (names, values []string) {
+	names = make([]string, 0, len(labels))
 	for k := range labels {
 		names = append(names, k)
 	}
 	sort.Strings(names)
-	values := make([]string, 0, len(names))
+	values = make([]string, 0, len(names))
 	for _, k := range names {
 		values = append(values, labels[k])
 	}

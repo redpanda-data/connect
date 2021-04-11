@@ -331,7 +331,7 @@ func newCloudWatch(config CloudWatchConfig, opts ...func(Type)) (Type, error) {
 
 //------------------------------------------------------------------------------
 
-func (c *CloudWatch) toCMName(dotSepName string) (string, []string, []string) {
+func (c *CloudWatch) toCMName(dotSepName string) (outPath string, labelNames, labelValues []string) {
 	return c.pathMapping.mapPathWithTags(dotSepName)
 }
 

@@ -66,11 +66,11 @@ func (m *pathMapping) mapPathNoTags(path string) string {
 	return path
 }
 
-func (m *pathMapping) mapPathWithTags(path string) (string, []string, []string) {
+func (m *pathMapping) mapPathWithTags(path string) (outPath string, labelNames, labelValues []string) {
 	return m.mapPath(path, true)
 }
 
-func (m *pathMapping) mapPath(path string, allowLabels bool) (string, []string, []string) {
+func (m *pathMapping) mapPath(path string, allowLabels bool) (outPath string, labelNames, labelValues []string) {
 	if m == nil || m.m == nil {
 		return path, nil, nil
 	}
@@ -94,7 +94,6 @@ func (m *pathMapping) mapPath(path string, allowLabels bool) (string, []string, 
 		return path, nil, nil
 	}
 
-	var labelNames, labelValues []string
 	meta.Iter(func(k, v string) error {
 		labelNames = append(labelNames, k)
 		return nil

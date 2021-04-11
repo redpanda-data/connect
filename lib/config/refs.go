@@ -30,13 +30,12 @@ func ReadWithJSONPointers(path string, replaceEnvs bool) ([]byte, error) {
 // structure.
 //
 // If any non-fatal errors occur lints are returned along with the result.
-func ReadWithJSONPointersLinted(path string, replaceEnvs bool) ([]byte, []string, error) {
-	configBytes, err := ioutil.ReadFile(path)
+func ReadWithJSONPointersLinted(path string, replaceEnvs bool) (configBytes []byte, lints []string, err error) {
+	configBytes, err = ioutil.ReadFile(path)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var lints []string
 	if !utf8.Valid(configBytes) {
 		lints = append(lints, "Detected invalid utf-8 encoding in config, this may result in interpolation functions not working as expected")
 	}

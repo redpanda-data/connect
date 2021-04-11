@@ -428,6 +428,7 @@ type checkpointTester struct {
 	resolvers    map[int64]func() interface{}
 }
 
+// nolint:gocritic // Ignore unnamedResult false positive
 func newCheckpointTester(t *testing.T, cap int64, timeout time.Duration) (*checkpointTester, func()) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 

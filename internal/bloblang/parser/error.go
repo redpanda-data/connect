@@ -9,8 +9,8 @@ import (
 
 // LineAndColOf returns the line and column position of a tailing clip from an
 // input.
-func LineAndColOf(input, clip []rune) (int, int) {
-	line, char := 0, len(input)-len(clip)
+func LineAndColOf(input, clip []rune) (line, col int) {
+	char := len(input) - len(clip)
 
 	lines := strings.Split(string(input), "\n")
 	for ; line < len(lines); line++ {

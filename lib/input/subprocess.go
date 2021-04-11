@@ -62,12 +62,12 @@ type subprocScanner interface {
 	Scan() bool
 }
 
-func linesSubprocCodec(conf SubprocessConfig, stdout, stderr io.Reader) (subprocScanner, subprocScanner) {
-	outScanner := bufio.NewScanner(stdout)
-	errScanner := bufio.NewScanner(stderr)
+func linesSubprocCodec(conf SubprocessConfig, stdout, stderr io.Reader) (outScanner, errScanner subprocScanner) {
+	outScanner = bufio.NewScanner(stdout)
+	errScanner = bufio.NewScanner(stderr)
 	if conf.MaxBuffer != bufio.MaxScanTokenSize {
-		outScanner.Buffer([]byte{}, conf.MaxBuffer)
-		errScanner.Buffer([]byte{}, conf.MaxBuffer)
+		outScanner.(*bufio.Scanner).Buffer([]byte{}, conf.MaxBuffer)
+		errScanner.(*bufio.Scanner).Buffer([]byte{}, conf.MaxBuffer)
 	}
 	return outScanner, errScanner
 }

@@ -482,6 +482,7 @@ func sendResponse(ctx context.Context, t *testing.T, resChan chan<- types.Respon
 	}
 }
 
+// nolint:gocritic // Ignore unnamedResult false positive
 func receiveMessageNoRes(ctx context.Context, t *testing.T, tranChan <-chan types.Transaction) (types.Part, chan<- types.Response) {
 	t.Helper()
 

@@ -82,14 +82,14 @@ func encodeInfluxDBName(name string, tagNames, tagValues []string) string {
 
 // decodeInfluxDBName accepts an ILP-formatted string (measurementName,tag=value) and
 // returns the measurement name along with a map of tags and their values.
-func decodeInfluxDBName(n string) (string, map[string]string) {
+func decodeInfluxDBName(n string) (outName string, tags map[string]string) {
 	nameSplit := splitUnescaped(n, tagEncodingSeparator)
 	if len(nameSplit) == 0 {
 		return "", nil
 	} else if len(nameSplit) == 1 {
 		return escape.UnescapeString(nameSplit[0]), nil
 	} else {
-		var tags = make(map[string]string, len(nameSplit)-1)
+		tags = make(map[string]string, len(nameSplit)-1)
 		for _, v := range nameSplit[1:] {
 			tagSplit := splitUnescaped(v, "=")
 			if len(tagSplit) == 2 {
