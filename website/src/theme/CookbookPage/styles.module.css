@@ -48,4 +48,5 @@
 
 .cookbookContainer {
   --ifm-container-width: 800px;
+  --ifm-container-width-xl: 1000px;
 }

@@ -2,6 +2,9 @@
   "name": "benthos",
   "version": "0.0.0",
   "private": true,
+  "engines": {
+    "node": ">=12.13.0"
+  },
   "scripts": {
     "start": "docusaurus start",
     "build": "docusaurus build",

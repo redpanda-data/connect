@@ -32,6 +32,7 @@
 
 .cookbookItemsContainer {
   --ifm-container-width: 800px;
+  --ifm-container-width-xl: 800px;
 }
 
 .cookbookSearch {

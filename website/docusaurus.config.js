@@ -24,11 +24,11 @@ module.exports = {
   },
   themeConfig: {
     prism: {
-      theme: require('prism-react-renderer/themes/github'),
+      theme: require('prism-react-renderer/themes/vsLight'),
       darkTheme: require('./src/plugins/prism_themes/monokai'),
     },
     colorMode: {
-      defaultMode: 'light',
+      defaultMode: 'dark',
     },
     image: 'img/og_img.png',
     metadatas: [{name: 'twitter:card', content: 'summary'}],
