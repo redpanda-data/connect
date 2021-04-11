@@ -3,6 +3,7 @@ package writer
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -114,7 +115,7 @@ func (h *HDFS) Write(msg types.Message) error {
 		path := h.path.String(i, msg)
 		filePath := filepath.Join(h.conf.Directory, path)
 
-		err := h.client.MkdirAll(h.conf.Directory, 0644)
+		err := h.client.MkdirAll(h.conf.Directory, os.ModeDir|0644)
 		if err != nil {
 			return err
 		}
