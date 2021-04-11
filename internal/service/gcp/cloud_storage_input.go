@@ -329,11 +329,10 @@ func (g *gcpCloudStorageInput) ReadWithContext(ctx context.Context) (msg types.M
 	var parts []types.Part
 	var scnAckFn codec.ReaderAckFn
 
-scanLoop:
 	for {
 		if parts, scnAckFn, err = object.scanner.Next(ctx); err == nil {
 			object.extracted++
-			break scanLoop
+			break
 		}
 		g.object = nil
 		if err != io.EOF {

@@ -275,7 +275,6 @@ func depHasPrefix(wanted, provided []string) bool {
 func getBranchDeps(id string, wanted [][]string, branches map[string]workflowBranch) []string {
 	dependencies := []string{}
 
-eLoop:
 	for k, b := range branches {
 		if k == id {
 			continue
@@ -284,7 +283,7 @@ eLoop:
 			for _, tn := range wanted {
 				if depHasPrefix(tn, tp) {
 					dependencies = append(dependencies, k)
-					continue eLoop
+					break
 				}
 			}
 		}

@@ -238,7 +238,6 @@ func (r *Retry) loop() {
 				}
 			}()
 
-		retryLoop:
 			for atomic.LoadInt32(&r.running) == 1 {
 				var res types.Response
 				select {
@@ -263,7 +262,7 @@ func (r *Retry) loop() {
 					if nextBackoff == backoff.Stop {
 						mEndOfRetries.Incr(1)
 						resOut = response.NewNoack()
-						break retryLoop
+						break
 					}
 					select {
 					case <-time.After(nextBackoff):
@@ -280,7 +279,7 @@ func (r *Retry) loop() {
 					mSuccess.Incr(1)
 					mPartsSuccess.Incr(int64(ts.Payload.Len()))
 					resOut = response.NewAck()
-					break retryLoop
+					break
 				}
 			}
 

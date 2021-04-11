@@ -515,7 +515,6 @@ func (k *kinesisReader) runBalancedShards() {
 	}()
 
 	for {
-	streamsLoop:
 		for _, streamID := range k.balancedStreams {
 			shardsRes, err := k.svc.ListShardsWithContext(k.ctx, &kinesis.ListShardsInput{
 				StreamName: aws.String(streamID),
@@ -530,7 +529,7 @@ func (k *kinesisReader) runBalancedShards() {
 					return
 				}
 				k.log.Errorf("Failed to obtain stream '%v' shards or claims: %v\n", streamID, err)
-				continue streamsLoop
+				continue
 			}
 
 			totalShards := len(shardsRes.Shards)
@@ -571,7 +570,7 @@ func (k *kinesisReader) runBalancedShards() {
 
 				// If there are unclaimed shards then let's not resort to
 				// thievery just yet.
-				continue streamsLoop
+				continue
 			}
 
 			// There were no unclaimed shards, let's look for a shard to steal.
@@ -618,7 +617,7 @@ func (k *kinesisReader) runBalancedShards() {
 					} else {
 						// If we successfully stole the shard then that's enough
 						// for now.
-						continue streamsLoop
+						break
 					}
 				}
 			}

@@ -308,11 +308,10 @@ func (a *azureBlobStorage) ReadWithContext(ctx context.Context) (msg types.Messa
 	var parts []types.Part
 	var scnAckFn codec.ReaderAckFn
 
-scanLoop:
 	for {
 		if parts, scnAckFn, err = object.scanner.Next(ctx); err == nil {
 			object.extracted++
-			break scanLoop
+			break
 		}
 		a.object = nil
 		if err != io.EOF {

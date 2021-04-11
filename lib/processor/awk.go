@@ -490,7 +490,6 @@ func getTime(dateStr string, format string) (time.Time, error) {
 	if len(format) == 0 {
 		var err error
 		var parsed time.Time
-	layoutIter:
 		for _, layout := range []string{
 			time.RubyDate,
 			time.RFC1123Z,
@@ -506,7 +505,7 @@ func getTime(dateStr string, format string) (time.Time, error) {
 			"2006-01-02",
 		} {
 			if parsed, err = time.Parse(layout, dateStr); err == nil {
-				break layoutIter
+				break
 			}
 		}
 		if err != nil {

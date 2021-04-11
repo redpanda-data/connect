@@ -289,7 +289,6 @@ func (s *Switch) ProcessMessage(msg types.Message) (msgs []types.Message, res ty
 		testMsg := message.New(nil)
 		testMsg.Append(remaining...)
 
-	remainingParts:
 		for j, p := range remaining {
 			test := switchCase.check == nil
 			if !test {
@@ -298,7 +297,7 @@ func (s *Switch) ProcessMessage(msg types.Message) (msgs []types.Message, res ty
 					s.log.Errorf("Failed to test case %v: %v\n", i, err)
 					FlagErr(p, err)
 					result = append(result, p)
-					continue remainingParts
+					continue
 				}
 			}
 			if test {

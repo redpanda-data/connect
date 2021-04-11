@@ -438,7 +438,6 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 
 	var pendingObjects []*s3ObjectTarget
 
-messageLoop:
 	for _, sqsMsg := range output.Messages {
 		sqsMsg := sqsMsg
 
@@ -452,19 +451,19 @@ messageLoop:
 		if sqsMsg.Body == nil {
 			addDudFn(sqsMsg)
 			s.log.Errorln("Received empty SQS message")
-			continue messageLoop
+			continue
 		}
 
 		objects, err := s.parseObjectPaths(sqsMsg.Body)
 		if err != nil {
 			addDudFn(sqsMsg)
 			s.log.Errorf("SQS extract key error: %v\n", err)
-			continue messageLoop
+			continue
 		}
 		if len(objects) == 0 {
 			addDudFn(sqsMsg)
 			s.log.Debugln("Extracted zero target keys from SQS message")
-			continue messageLoop
+			continue
 		}
 
 		pendingAcks := int32(len(objects))
@@ -741,11 +740,10 @@ func (a *awsS3) ReadWithContext(ctx context.Context) (msg types.Message, ackFn r
 	var parts []types.Part
 	var scnAckFn codec.ReaderAckFn
 
-scanLoop:
 	for {
 		if parts, scnAckFn, err = object.scanner.Next(ctx); err == nil {
 			object.extracted++
-			break scanLoop
+			break
 		}
 		a.object = nil
 		if err != io.EOF {
