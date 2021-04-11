@@ -100,7 +100,7 @@ func NewKafkaBalanced(conf Config, mgr types.Manager, log log.Modular, stats met
 	return NewAsyncReader("kafka_balanced", true, preserved, log, stats)
 }
 
-// DEPRECATED: This is a hack for until the batch processor is removed.
+// Deprecated: This is a hack for until the batch processor is removed.
 // TODO: V4 Remove this.
 func newKafkaBalancedHasBatchProcessor(
 	hasBatchProc bool,
