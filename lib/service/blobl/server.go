@@ -399,7 +399,7 @@ func runServer(c *cli.Context) error {
 	if !c.Bool("no-open") {
 		u, err := url.Parse("http://localhost:" + port)
 		if err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("failed to parse URL: %w", err)
 		}
 		openBrowserAt(u.String())
 	}
@@ -421,7 +421,7 @@ func runServer(c *cli.Context) error {
 	}()
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatal(err)
+		return fmt.Errorf("failed to listen and serve: %w", err)
 	}
 	return nil
 }
