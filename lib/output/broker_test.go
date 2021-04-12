@@ -23,8 +23,8 @@ func TestFanOutBroker(t *testing.T) {
 
 	outOne, outTwo := NewConfig(), NewConfig()
 	outOne.Type, outTwo.Type = TypeFiles, TypeFiles
-	outOne.Files.Path = filepath.Join(dir, "one", "foo-${!count(\"1s\")}.txt")
-	outTwo.Files.Path = filepath.Join(dir, "two", "bar-${!count(\"2s\")}.txt")
+	outOne.Files.Path = filepath.Join(dir, "one", `foo-${!count("1s")}.txt`)
+	outTwo.Files.Path = filepath.Join(dir, "two", `bar-${!count("2s")}.txt`)
 
 	procOne, procTwo := processor.NewConfig(), processor.NewConfig()
 	procOne.Type, procTwo.Type = processor.TypeText, processor.TypeText
@@ -114,8 +114,8 @@ func TestRoundRobinBroker(t *testing.T) {
 
 	outOne, outTwo := NewConfig(), NewConfig()
 	outOne.Type, outTwo.Type = TypeFiles, TypeFiles
-	outOne.Files.Path = filepath.Join(dir, "one", "foo-${!count(\"rrfoo\")}.txt")
-	outTwo.Files.Path = filepath.Join(dir, "two", "bar-${!count(\"rrbar\")}.txt")
+	outOne.Files.Path = filepath.Join(dir, "one", `foo-${!count("rrfoo")}.txt`)
+	outTwo.Files.Path = filepath.Join(dir, "two", `bar-${!count("rrbar")}.txt`)
 
 	procOne, procTwo := processor.NewConfig(), processor.NewConfig()
 	procOne.Type, procTwo.Type = processor.TypeText, processor.TypeText
@@ -201,8 +201,8 @@ func TestGreedyBroker(t *testing.T) {
 
 	outOne, outTwo := NewConfig(), NewConfig()
 	outOne.Type, outTwo.Type = TypeFiles, TypeFiles
-	outOne.Files.Path = filepath.Join(dir, "one", "foo-${!count(\"gfoo\")}.txt")
-	outTwo.Files.Path = filepath.Join(dir, "two", "bar-${!count(\"gbar\")}.txt")
+	outOne.Files.Path = filepath.Join(dir, "one", `foo-${!count("gfoo")}.txt`)
+	outTwo.Files.Path = filepath.Join(dir, "two", `bar-${!count("gbar")}.txt`)
 
 	procOne, procTwo := processor.NewConfig(), processor.NewConfig()
 	procOne.Type, procTwo.Type = processor.TypeText, processor.TypeText
@@ -299,7 +299,7 @@ func TestTryBroker(t *testing.T) {
 	outOne.HTTPClient.URL = "http://localhost:11111111/badurl"
 	outOne.HTTPClient.NumRetries = 1
 	outOne.HTTPClient.Retry = "1ms"
-	outTwo.Files.Path = filepath.Join(dir, "two", "bar-${!count(\"tfoo\")}-${!count(\"tbar\")}.txt")
+	outTwo.Files.Path = filepath.Join(dir, "two", `bar-${!count("tfoo")}-${!count("tbar")}.txt`)
 	outThree.File.Path = "/dev/null"
 
 	procOne, procTwo, procThree := processor.NewConfig(), processor.NewConfig(), processor.NewConfig()

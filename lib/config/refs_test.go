@@ -23,8 +23,8 @@ func TestConfigRefs(t *testing.T) {
 	}()
 
 	rootPath := filepath.Join(tmpDir, "root.yaml")
-	secondPath := filepath.Join(tmpDir, "./nest/second.yaml")
-	thirdPath := filepath.Join(tmpDir, "./third.yaml")
+	secondPath := filepath.Join(tmpDir, "nest", "second.yaml")
+	thirdPath := filepath.Join(tmpDir, "third.yaml")
 
 	if err = os.Mkdir(filepath.Join(tmpDir, "nest"), 0777); err != nil {
 		t.Fatal(err)
@@ -77,8 +77,8 @@ func TestConfigRefsRootExpansion(t *testing.T) {
 	}()
 
 	rootPath := filepath.Join(tmpDir, "root.yaml")
-	secondPath := filepath.Join(tmpDir, "./nest/second.yaml")
-	thirdPath := filepath.Join(tmpDir, "./third.yaml")
+	secondPath := filepath.Join(tmpDir, "nest", "second.yaml")
+	thirdPath := filepath.Join(tmpDir, "third.yaml")
 
 	if err = os.Mkdir(filepath.Join(tmpDir, "nest"), 0777); err != nil {
 		t.Fatal(err)
@@ -300,8 +300,8 @@ func TestRecursiveRefs(t *testing.T) {
 		}
 	}()
 
-	fooPath := filepath.Join(tmpDir, "./foo.yaml")
-	barPath := filepath.Join(tmpDir, "./foo.yaml")
+	fooPath := filepath.Join(tmpDir, "foo.yaml")
+	barPath := filepath.Join(tmpDir, "foo.yaml")
 
 	fooFile := []byte(`{"a":{"$ref":"./bar.yaml"}}`)
 	barFile := []byte(`{"b":{"$ref":"./foo.yaml"}}`)

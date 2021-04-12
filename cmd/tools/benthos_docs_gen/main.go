@@ -204,13 +204,13 @@ func doBloblang(dir string) {
 		panic(fmt.Sprintf("Failed to generate docs for bloblang functions: %v", err))
 	}
 
-	create("bloblang functions", filepath.Join(dir, "../guides/bloblang/functions.md"), mdSpec)
+	create("bloblang functions", filepath.Join(dir, "..", "guides", "bloblang", "functions.md"), mdSpec)
 
 	if mdSpec, err = docs.BloblangMethodsMarkdown(); err != nil {
 		panic(fmt.Sprintf("Failed to generate docs for bloblang methods: %v", err))
 	}
 
-	create("bloblang methods", filepath.Join(dir, "../guides/bloblang/methods.md"), mdSpec)
+	create("bloblang methods", filepath.Join(dir, "..", "guides", "bloblang", "methods.md"), mdSpec)
 }
 
 //------------------------------------------------------------------------------
