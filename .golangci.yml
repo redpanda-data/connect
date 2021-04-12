@@ -22,32 +22,18 @@ linters-settings:
       - importShadow # Probably not worth the hassle...
       # TODO
       - sloppyReassign
-      - singleCaseSwitch
-      - regexpMust
-      - commentFormatting
-      - captLocal
       - elseif
-      - commentedOutCode
-      - emptyFallthrough
-      - typeAssertChain
-      - initClause
-      - unslice
       - appendCombine
       - emptyStringTest
       - assignOp
-      - octalLiteral
       - builtinShadow
       - unlabelStmt
       - wrapperFunc
       - paramTypeCombine
-      - unlambda
       - yodaStyleExpr
       - unnamedResult
-      - exitAfterDefer
-      - valSwap
       - typeUnparen
       - appendAssign
-      - deprecatedComment
       - nestingReduce
 
 linters:
