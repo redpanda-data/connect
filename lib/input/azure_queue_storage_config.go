@@ -52,7 +52,7 @@ Only one authentication method is required, ` + "`storage_connection_string`" + 
 				"queue_name", "The name of the target Storage queue.",
 			),
 			docs.FieldAdvanced("dequeue_visibility_timeout", "The timeout duration until a dequeued message gets visible again, 30s by default"),
-			docs.FieldAdvanced("max_inflight", "The maximum number of unprocessed messages to fetch at a given time."),
+			docs.FieldAdvanced("max_in_flight", "The maximum number of unprocessed messages to fetch at a given time."),
 		},
 		Categories: []Category{
 			CategoryServices,
@@ -72,7 +72,7 @@ type AzureQueueStorageConfig struct {
 	StorageConnectionString  string `json:"storage_connection_string" yaml:"storage_connection_string"`
 	QueueName                string `json:"queue_name" yaml:"queue_name"`
 	DequeueVisibilityTimeout string `json:"dequeue_visibility_timeout" yaml:"dequeue_visibility_timeout"`
-	MaxInFlight              int32  `json:"max_inflight" yaml:"max_inflight"`
+	MaxInFlight              int32  `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
 // NewAzureQueueStorageConfig creates a new AzureQueueStorageConfig with default

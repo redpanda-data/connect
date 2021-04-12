@@ -15,7 +15,7 @@ input:
     storage_connection_string: ""
     queue_name: ""
     dequeue_visibility_timeout: 30s
-    max_inflight: 10
+    max_in_flight: 10
 buffer:
   none: {}
 pipeline:

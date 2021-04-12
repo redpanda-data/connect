@@ -55,7 +55,7 @@ input:
     storage_connection_string: ""
     queue_name: ""
     dequeue_visibility_timeout: 30s
-    max_inflight: 10
+    max_in_flight: 10
 ```
 
 </TabItem>
@@ -122,7 +122,7 @@ The timeout duration until a dequeued message gets visible again, 30s by default
 Type: `string`  
 Default: `"30s"`  
 
-### `max_inflight`
+### `max_in_flight`
 
 The maximum number of unprocessed messages to fetch at a given time.
 
