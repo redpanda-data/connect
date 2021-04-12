@@ -14,6 +14,8 @@ input:
     storage_sas_token: ""
     storage_connection_string: ""
     queue_name: ""
+    dequeue_visibility_timeout: 30s
+    max_inflight: 10
 buffer:
   none: {}
 pipeline:

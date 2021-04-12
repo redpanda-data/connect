@@ -21,8 +21,16 @@ Dequeue objects from an Azure Storage Queue.
 
 Introduced in version 3.42.0.
 
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yaml
-# Config fields, showing default values
+# Common config fields, showing default values
 input:
   label: ""
   azure_queue_storage:
@@ -32,6 +40,26 @@ input:
     storage_connection_string: ""
     queue_name: ""
 ```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+# All config fields, showing default values
+input:
+  label: ""
+  azure_queue_storage:
+    storage_account: ""
+    storage_access_key: ""
+    storage_sas_token: ""
+    storage_connection_string: ""
+    queue_name: ""
+    dequeue_visibility_timeout: 30s
+    max_inflight: 10
+```
+
+</TabItem>
+</Tabs>
 
 Dequeue objects from an Azure Storage Queue.
 
@@ -85,5 +113,21 @@ The name of the target Storage queue.
 
 Type: `string`  
 Default: `""`  
+
+### `dequeue_visibility_timeout`
+
+The timeout duration until a dequeued message gets visible again, 30s by default
+
+
+Type: `string`  
+Default: `"30s"`  
+
+### `max_inflight`
+
+The maximum number of unprocessed messages to fetch at a given time.
+
+
+Type: `number`  
+Default: `10`  
 
 

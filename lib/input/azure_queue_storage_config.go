@@ -51,6 +51,8 @@ Only one authentication method is required, ` + "`storage_connection_string`" + 
 			docs.FieldCommon(
 				"queue_name", "The name of the target Storage queue.",
 			),
+			docs.FieldAdvanced("dequeue_visibility_timeout", "The timeout duration until a dequeued message gets visible again, 30s by default"),
+			docs.FieldAdvanced("max_inflight", "The maximum number of unprocessed messages to fetch at a given time."),
 		},
 		Categories: []Category{
 			CategoryServices,
@@ -64,15 +66,20 @@ Only one authentication method is required, ` + "`storage_connection_string`" + 
 // AzureQueueStorageConfig contains configuration fields for the AzureQueueStorage
 // input type.
 type AzureQueueStorageConfig struct {
-	StorageAccount          string `json:"storage_account" yaml:"storage_account"`
-	StorageAccessKey        string `json:"storage_access_key" yaml:"storage_access_key"`
-	StorageSASToken         string `json:"storage_sas_token" yaml:"storage_sas_token"`
-	StorageConnectionString string `json:"storage_connection_string" yaml:"storage_connection_string"`
-	QueueName               string `json:"queue_name" yaml:"queue_name"`
+	StorageAccount           string `json:"storage_account" yaml:"storage_account"`
+	StorageAccessKey         string `json:"storage_access_key" yaml:"storage_access_key"`
+	StorageSASToken          string `json:"storage_sas_token" yaml:"storage_sas_token"`
+	StorageConnectionString  string `json:"storage_connection_string" yaml:"storage_connection_string"`
+	QueueName                string `json:"queue_name" yaml:"queue_name"`
+	DequeueVisibilityTimeout string `json:"dequeue_visibility_timeout" yaml:"dequeue_visibility_timeout"`
+	MaxInFlight              int32  `json:"max_inflight" yaml:"max_inflight"`
 }
 
 // NewAzureQueueStorageConfig creates a new AzureQueueStorageConfig with default
 // values.
 func NewAzureQueueStorageConfig() AzureQueueStorageConfig {
-	return AzureQueueStorageConfig{}
+	return AzureQueueStorageConfig{
+		DequeueVisibilityTimeout: "30s",
+		MaxInFlight:              10,
+	}
 }
