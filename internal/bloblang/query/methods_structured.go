@@ -511,20 +511,14 @@ var _ = registerSimpleMethod(
 				tally = IClone(foldTallyStart)
 			}
 
-			tmpObj := map[string]interface{}{
-				"tally": struct{}{},
-				"value": struct{}{},
-			}
-
 			for _, v := range resArray {
-				tmpObj["tally"] = tally
-				tmpObj["value"] = v
-
-				newV, mapErr := foldFn.Exec(ctx.WithValue(tmpObj))
+				newV, mapErr := foldFn.Exec(ctx.WithValue(map[string]interface{}{
+					"tally": tally,
+					"value": v,
+				}))
 				if mapErr != nil {
 					return nil, mapErr
 				}
-
 				tally = newV
 			}
 			return tally, nil
