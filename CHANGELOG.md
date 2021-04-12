@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Experimental `azure_renew_lock` field added to the `amqp_1` input.
 - New (BETA) `metadata` and `source_metadata` functions.
+- Fields `max_in_flight` and `dequeue_visibility_timeout` added to the `azure_queue_storage` input.
 
 ## 3.44.0 - 2021-04-09
 
