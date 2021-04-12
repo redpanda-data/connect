@@ -21,7 +21,8 @@ import (
 type azureQueueStorage struct {
 	conf AzureQueueStorageConfig
 
-	queueURL *azqueue.QueueURL
+	queueURL                 *azqueue.QueueURL
+	dequeueVisibilityTimeout time.Duration
 
 	log   log.Modular
 	stats metrics.Type
@@ -34,12 +35,21 @@ func newAzureQueueStorage(conf AzureQueueStorageConfig, log log.Modular, stats m
 		return nil, err
 	}
 	queueURL := serviceURL.NewQueueURL(conf.QueueName)
+
 	a := &azureQueueStorage{
 		conf:     conf,
 		log:      log,
 		stats:    stats,
 		queueURL: &queueURL,
 	}
+
+	if len(conf.DequeueVisibilityTimeout) > 0 {
+		var err error
+		if a.dequeueVisibilityTimeout, err = time.ParseDuration(conf.DequeueVisibilityTimeout); err != nil {
+			return nil, fmt.Errorf("unable to parse dequeue visibility timeout duration string: %w", err)
+		}
+	}
+
 	return a, nil
 }
 
@@ -48,11 +58,10 @@ func (a *azureQueueStorage) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-// ReadWithContext attempts to read a new message from the target Azure Storage Queue
-// Storage container.
+// ReadWithContext attempts to read a new message from the target Azure Storage Queue Storage container.
 func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg types.Message, ackFn reader.AsyncAckFn, err error) {
 	messageURL := a.queueURL.NewMessagesURL()
-	dequeue, err := messageURL.Dequeue(ctx, 1, 30*time.Second)
+	dequeue, err := messageURL.Dequeue(ctx, a.conf.MaxInFlight, a.dequeueVisibilityTimeout)
 	if err != nil {
 		if cerr, ok := err.(azqueue.StorageError); ok {
 			if cerr.ServiceCode() == azqueue.ServiceCodeQueueNotFound {
