@@ -280,15 +280,17 @@ func (k *Kinesis) ReadNextWithContext(ctx context.Context) (types.Message, error
 
 	msg := message.New(nil)
 	for _, rec := range res.Records {
-		if rec.Data != nil {
-			part := message.NewPart(rec.Data)
-			part.Metadata().Set("kinesis_shard", k.conf.Shard)
-			part.Metadata().Set("kinesis_stream", k.conf.Stream)
+		if rec.Data == nil {
+			continue
+		}
 
-			msg.Append(part)
-			if rec.SequenceNumber != nil {
-				k.sequence = *rec.SequenceNumber
-			}
+		part := message.NewPart(rec.Data)
+		part.Metadata().Set("kinesis_shard", k.conf.Shard)
+		part.Metadata().Set("kinesis_stream", k.conf.Stream)
+
+		msg.Append(part)
+		if rec.SequenceNumber != nil {
+			k.sequence = *rec.SequenceNumber
 		}
 	}
 

@@ -533,18 +533,20 @@ func (f FieldSpecs) SanitiseNode(node *yaml.Node, conf SanitiseConfig) error {
 			continue
 		}
 		for i := 0; i < len(node.Content)-1; i += 2 {
-			if node.Content[i].Value == field.Name {
-				nextNode := node.Content[i+1]
-				if _, omit := field.shouldOmitNode(nextNode, node); omit {
-					break
-				}
-				if err := field.SanitiseNode(nextNode, conf); err != nil {
-					return err
-				}
-				newNodes = append(newNodes, node.Content[i])
-				newNodes = append(newNodes, nextNode)
+			if node.Content[i].Value != field.Name {
+				continue
+			}
+
+			nextNode := node.Content[i+1]
+			if _, omit := field.shouldOmitNode(nextNode, node); omit {
 				break
 			}
+			if err := field.SanitiseNode(nextNode, conf); err != nil {
+				return err
+			}
+			newNodes = append(newNodes, node.Content[i])
+			newNodes = append(newNodes, nextNode)
+			break
 		}
 	}
 	node.Content = newNodes
