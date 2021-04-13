@@ -64,6 +64,9 @@ type FunctionContext struct {
 	valueFn      func() *interface{}
 	defaultValue *defaultContextValue
 	namedValue   *namedContextValue
+
+	// Used to track how many maps we've entered.
+	stackCount int
 }
 
 type defaultContextValue struct {
@@ -75,6 +78,13 @@ type namedContextValue struct {
 	name  string
 	value interface{}
 	next  *namedContextValue
+}
+
+// IncrStackCount increases the count stored in the function context of how many
+// maps we've entered and returns the current count.
+func (ctx FunctionContext) IncrStackCount() (FunctionContext, int) {
+	ctx.stackCount++
+	return ctx, ctx.stackCount
 }
 
 // NamedValue returns the value of a named context if it exists.

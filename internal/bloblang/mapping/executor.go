@@ -289,12 +289,23 @@ func (e *Executor) AssignmentTargets() []TargetPath {
 	return paths
 }
 
+const maxMapStacks = 10000
+
 // Exec this function with a context struct.
 func (e *Executor) Exec(ctx query.FunctionContext) (interface{}, error) {
+	ctx, stackCount := ctx.IncrStackCount()
+	if stackCount > maxMapStacks {
+		return nil, fmt.Errorf("entering %v exceeded maximum allowed stacks of %v, this could be due to unbounded recursion", e.annotation, maxMapStacks)
+	}
+
 	var newObj interface{} = query.Nothing(nil)
 	for _, stmt := range e.statements {
 		res, err := stmt.query.Exec(ctx)
 		if err != nil {
+			// TODO: Do this betterly
+			if strings.HasPrefix(err.Error(), "failed assignment") {
+				return nil, err
+			}
 			var line int
 			if len(e.input) > 0 && len(stmt.input) > 0 {
 				line, _ = LineAndColOf(e.input, stmt.input)
