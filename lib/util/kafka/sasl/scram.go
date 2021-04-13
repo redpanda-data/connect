@@ -3,7 +3,6 @@ package sasl
 import (
 	"crypto/sha256"
 	"crypto/sha512"
-	"hash"
 
 	"github.com/xdg/scram"
 )
@@ -11,10 +10,10 @@ import (
 //------------------------------------------------------------------------------
 
 // SHA256 generates the SHA256 hash
-var SHA256 scram.HashGeneratorFcn = func() hash.Hash { return sha256.New() }
+var SHA256 scram.HashGeneratorFcn = sha256.New
 
 // SHA512 generates the SHA512 hash
-var SHA512 scram.HashGeneratorFcn = func() hash.Hash { return sha512.New() }
+var SHA512 scram.HashGeneratorFcn = sha512.New
 
 // XDGSCRAMClient represents struct to XDG Scram client to initialize conversation
 type XDGSCRAMClient struct {

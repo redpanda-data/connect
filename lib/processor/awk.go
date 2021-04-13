@@ -450,9 +450,7 @@ func NewAWK(
 		switch level {
 		default:
 			fallthrough
-		case "":
-			fallthrough
-		case "INFO":
+		case "", "INFO":
 			log.Infoln(value)
 		case "TRACE":
 			log.Traceln(value)

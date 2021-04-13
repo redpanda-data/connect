@@ -57,8 +57,7 @@ type subprocCodec func(io.Writer, []byte) error
 
 func codecFromStr(codec string) (subprocCodec, error) {
 	// TODO: Flesh this out with more options based on s.conf.Codec.
-	switch codec {
-	case "lines":
+	if codec == "lines" {
 		return linesCodec, nil
 	}
 	return nil, fmt.Errorf("codec not recognised: %v", codec)

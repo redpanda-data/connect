@@ -315,9 +315,7 @@ func uuidFromLockTokenBytes(bytes []byte) (*amqp.UUID, error) {
 	}
 
 	var swapIndex = func(indexOne, indexTwo int, array *[16]byte) {
-		v1 := array[indexOne]
-		array[indexOne] = array[indexTwo]
-		array[indexTwo] = v1
+		array[indexOne], array[indexTwo] = array[indexTwo], array[indexOne]
 	}
 
 	// Get lock token from the deliveryTag

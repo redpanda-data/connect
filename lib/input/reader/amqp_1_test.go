@@ -113,7 +113,7 @@ func testAMQP1Connected(url string, sourceAddress string, t *testing.T) {
 			assert.Equal(t, "plain/text", actM.Get(0).Metadata().Get("amqp_content_type"))
 			assert.Equal(t, "utf-8", actM.Get(0).Metadata().Get("amqp_content_encoding"))
 
-			time.Sleep(6 * time.Second) //simulate long processing before ack so message lock expires and lock renewal is requires
+			time.Sleep(6 * time.Second) // Simulate long processing before ack so message lock expires and lock renewal is requires
 
 			assert.NoError(t, ackFn(ctx, response.NewAck()))
 		}()

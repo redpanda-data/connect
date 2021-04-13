@@ -230,7 +230,7 @@ func setMetadata(p types.Part, k string, v interface{}) {
 	case string:
 		metaValue = v
 	case []byte:
-		metaValue = string(v[:])
+		metaValue = string(v)
 	case time.Time:
 		metaValue = v.Format(time.RFC3339)
 	case amqp.Decimal:

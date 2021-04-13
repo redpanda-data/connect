@@ -112,90 +112,82 @@ func contentFunction(msg Message, index int, arg string) []byte {
 
 //------------------------------------------------------------------------------
 
-var functionRegex *regexp.Regexp
-var escapedFunctionRegex *regexp.Regexp
+var (
+	functionRegex        *regexp.Regexp = regexp.MustCompile(`\${![a-z0-9_]+(:[^}]+)?}`)
+	escapedFunctionRegex *regexp.Regexp = regexp.MustCompile(`\${({![a-z0-9_]+(:[^}]+)?})}`)
 
-func init() {
-	var err error
-	if functionRegex, err = regexp.Compile(`\${![a-z0-9_]+(:[^}]+)?}`); err != nil {
-		panic(err)
-	}
-	if escapedFunctionRegex, err = regexp.Compile(`\${({![a-z0-9_]+(:[^}]+)?})}`); err != nil {
-		panic(err)
-	}
-}
+	counters    = map[string]uint64{}
+	countersMux = &sync.Mutex{}
 
-var counters = map[string]uint64{}
-var countersMux = &sync.Mutex{}
-
-var functionVars = map[string]func(msg Message, index int, arg string) []byte{
-	"timestamp_unix_nano": func(_ Message, _ int, arg string) []byte {
-		return []byte(strconv.FormatInt(time.Now().UnixNano(), 10))
-	},
-	"timestamp_unix": func(_ Message, _ int, arg string) []byte {
-		tNow := time.Now()
-		precision, _ := strconv.ParseInt(arg, 10, 64)
-		tStr := strconv.FormatInt(tNow.Unix(), 10)
-		if precision > 0 {
-			nanoStr := strconv.FormatInt(int64(tNow.Nanosecond()), 10)
-			if lNano := int64(len(nanoStr)); precision >= lNano {
-				precision = lNano - 1
+	functionVars = map[string]func(msg Message, index int, arg string) []byte{
+		"timestamp_unix_nano": func(_ Message, _ int, arg string) []byte {
+			return []byte(strconv.FormatInt(time.Now().UnixNano(), 10))
+		},
+		"timestamp_unix": func(_ Message, _ int, arg string) []byte {
+			tNow := time.Now()
+			precision, _ := strconv.ParseInt(arg, 10, 64)
+			tStr := strconv.FormatInt(tNow.Unix(), 10)
+			if precision > 0 {
+				nanoStr := strconv.FormatInt(int64(tNow.Nanosecond()), 10)
+				if lNano := int64(len(nanoStr)); precision >= lNano {
+					precision = lNano - 1
+				}
+				tStr = tStr + "." + nanoStr[:precision]
 			}
-			tStr = tStr + "." + nanoStr[:precision]
-		}
-		return []byte(tStr)
-	},
-	"timestamp": func(_ Message, _ int, arg string) []byte {
-		if len(arg) == 0 {
-			arg = "Mon Jan 2 15:04:05 -0700 MST 2006"
-		}
-		return []byte(time.Now().Format(arg))
-	},
-	"timestamp_utc": func(_ Message, _ int, arg string) []byte {
-		if len(arg) == 0 {
-			arg = "Mon Jan 2 15:04:05 -0700 MST 2006"
-		}
-		return []byte(time.Now().In(time.UTC).Format(arg))
-	},
-	"hostname": func(_ Message, _ int, arg string) []byte {
-		hn, _ := os.Hostname()
-		return []byte(hn)
-	},
-	"echo": func(_ Message, _ int, arg string) []byte {
-		return []byte(arg)
-	},
-	"count": func(_ Message, _ int, arg string) []byte {
-		countersMux.Lock()
-		defer countersMux.Unlock()
+			return []byte(tStr)
+		},
+		"timestamp": func(_ Message, _ int, arg string) []byte {
+			if len(arg) == 0 {
+				arg = "Mon Jan 2 15:04:05 -0700 MST 2006"
+			}
+			return []byte(time.Now().Format(arg))
+		},
+		"timestamp_utc": func(_ Message, _ int, arg string) []byte {
+			if len(arg) == 0 {
+				arg = "Mon Jan 2 15:04:05 -0700 MST 2006"
+			}
+			return []byte(time.Now().In(time.UTC).Format(arg))
+		},
+		"hostname": func(_ Message, _ int, arg string) []byte {
+			hn, _ := os.Hostname()
+			return []byte(hn)
+		},
+		"echo": func(_ Message, _ int, arg string) []byte {
+			return []byte(arg)
+		},
+		"count": func(_ Message, _ int, arg string) []byte {
+			countersMux.Lock()
+			defer countersMux.Unlock()
 
-		var count uint64
-		var exists bool
+			var count uint64
+			var exists bool
 
-		if count, exists = counters[arg]; exists {
-			count++
-		} else {
-			count = 1
-		}
-		counters[arg] = count
+			if count, exists = counters[arg]; exists {
+				count++
+			} else {
+				count = 1
+			}
+			counters[arg] = count
 
-		return []byte(strconv.FormatUint(count, 10))
-	},
-	"error":                errorFunction,
-	"content":              contentFunction,
-	"json_field":           jsonFieldFunction,
-	"metadata":             metadataFunction,
-	"metadata_json_object": metadataMapFunction,
-	"batch_size": func(m Message, _ int, _ string) []byte {
-		return strconv.AppendInt(nil, int64(m.Len()), 10)
-	},
-	"uuid_v4": func(_ Message, _ int, _ string) []byte {
-		u4, err := uuid.NewV4()
-		if err != nil {
-			panic(err)
-		}
-		return []byte(u4.String())
-	},
-}
+			return []byte(strconv.FormatUint(count, 10))
+		},
+		"error":                errorFunction,
+		"content":              contentFunction,
+		"json_field":           jsonFieldFunction,
+		"metadata":             metadataFunction,
+		"metadata_json_object": metadataMapFunction,
+		"batch_size": func(m Message, _ int, _ string) []byte {
+			return strconv.AppendInt(nil, int64(m.Len()), 10)
+		},
+		"uuid_v4": func(_ Message, _ int, _ string) []byte {
+			u4, err := uuid.NewV4()
+			if err != nil {
+				panic(err)
+			}
+			return []byte(u4.String())
+		},
+	}
+)
 
 // ContainsFunctionVariables returns true if inBytes contains function variable
 // replace patterns.

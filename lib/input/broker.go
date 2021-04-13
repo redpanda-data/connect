@@ -221,7 +221,7 @@ func NewBroker(
 	return newBrokerHasBatchProcessor(false, conf, mgr, log, stats, pipelines...)
 }
 
-// DEPRECATED: This is a hack for until the batch processor is removed.
+// Deprecated: This is a hack for until the batch processor is removed.
 // TODO: V4 Remove this.
 func newBrokerHasBatchProcessor(
 	hasBatchProc bool,

@@ -153,7 +153,7 @@ func TestHTTPBasic(t *testing.T) {
 		}
 	}
 
-	//Test requests without content-type
+	// Test requests without content-type
 	client := &http.Client{}
 
 	for i := 0; i < nTestLoops; i++ {

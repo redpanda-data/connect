@@ -67,10 +67,7 @@ func reservedFieldsByType(t Type) map[string]FieldSpec {
 		"type":   FieldCommon("type", "").HasType(FieldString),
 		"plugin": FieldCommon("plugin", "").HasType(FieldObject),
 	}
-	switch t {
-	case TypeInput:
-		fallthrough
-	case TypeOutput:
+	if t == TypeInput || t == TypeOutput {
 		m["processors"] = FieldCommon("processors", "").Array().HasType(FieldProcessor).OmitWhen(func(field, _ interface{}) (string, bool) {
 			if arr, ok := field.([]interface{}); ok && len(arr) == 0 {
 				return "field processors is empty and can be removed", true

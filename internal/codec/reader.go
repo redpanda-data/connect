@@ -180,8 +180,7 @@ codecLoop:
 }
 
 func ioReader(codec string, conf ReaderConfig) (ioReaderConstructor, bool) {
-	switch codec {
-	case "gzip":
+	if codec == "gzip" {
 		return func(_ string, r io.ReadCloser) (io.ReadCloser, error) {
 			g, err := gzip.NewReader(r)
 			if err != nil {
@@ -195,8 +194,7 @@ func ioReader(codec string, conf ReaderConfig) (ioReaderConstructor, bool) {
 }
 
 func readerReader(codec string, conf ReaderConfig) (readerReaderConstructor, bool) {
-	switch codec {
-	case "multipart":
+	if codec == "multipart" {
 		return func(_ string, r Reader) (Reader, error) {
 			return newMultipartReader(r)
 		}, true
