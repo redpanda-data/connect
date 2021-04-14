@@ -107,6 +107,9 @@ input:
 	// In some modes include testing input level batching
 	suiteExt := append(suite, integrationTestReceiveBatchCount(10))
 
+	// Only for checkpointed tests
+	suiteSingleCheckpointedStream := append(suite, integrationTestCheckpointCapture())
+
 	t.Run("balanced", func(t *testing.T) {
 		t.Parallel()
 		suite.Run(
@@ -178,7 +181,7 @@ input:
 			testOptVarThree("false"),
 		)
 
-		t.Run("checkpointed", func(t *testing.T) {
+		t.Run("range of partitions", func(t *testing.T) {
 			t.Parallel()
 			suite.Run(
 				t, template,
@@ -189,6 +192,22 @@ input:
 				testOptPort(kafkaPortStr),
 				testOptSleepAfterInput(time.Second*3),
 				testOptVarOne(":0-3"),
+				testOptVarTwo("1"),
+				testOptVarThree("false"),
+			)
+		})
+
+		t.Run("checkpointed", func(t *testing.T) {
+			t.Parallel()
+			suiteSingleCheckpointedStream.Run(
+				t, template,
+				testOptPreTest(func(t *testing.T, env *testEnvironment) {
+					env.configVars.var4 = "group" + env.configVars.id
+					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 1))
+				}),
+				testOptPort(kafkaPortStr),
+				testOptSleepAfterInput(time.Second*3),
+				testOptVarOne(":0"),
 				testOptVarTwo("1000"),
 				testOptVarThree("false"),
 			)

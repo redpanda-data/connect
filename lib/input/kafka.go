@@ -317,12 +317,13 @@ func newKafkaReader(
 //------------------------------------------------------------------------------
 
 func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(context.Context, chan<- asyncMessage, types.Message, int64) bool {
-	cp := checkpoint.NewCapped(k.conf.CheckpointLimit)
+	cp := checkpoint.NewCapped(int64(k.conf.CheckpointLimit))
 	return func(ctx context.Context, c chan<- asyncMessage, msg types.Message, offset int64) bool {
 		if msg == nil {
 			return true
 		}
-		if err := cp.Track(ctx, int(offset)); err != nil {
+		resolveFn, err := cp.Track(ctx, offset, int64(msg.Len()))
+		if err != nil {
 			if err != types.ErrTimeout {
 				k.log.Errorf("Failed to checkpoint offset: %v\n", err)
 			}
@@ -332,14 +333,14 @@ func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(cont
 		case c <- asyncMessage{
 			msg: msg,
 			ackFn: func(ctx context.Context, res types.Response) error {
-				maxOffset, err := cp.Resolve(int(offset))
-				if err != nil {
-					return err
+				maxOffset := resolveFn()
+				if maxOffset == nil {
+					return nil
 				}
 				k.cMut.Lock()
 				if k.session != nil {
 					k.log.Debugf("Marking offset for topic '%v' partition '%v'.\n", topic, partition)
-					k.session.MarkOffset(topic, partition, int64(maxOffset), "")
+					k.session.MarkOffset(topic, partition, maxOffset.(int64), "")
 				} else {
 					k.log.Debugf("Unable to mark offset for topic '%v' partition '%v'.\n", topic, partition)
 				}

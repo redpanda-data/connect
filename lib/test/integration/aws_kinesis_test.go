@@ -128,4 +128,19 @@ input:
 			testOptVarTwo("10"),
 		)
 	})
+
+	t.Run("single shard", func(t *testing.T) {
+		integrationTests(
+			integrationTestCheckpointCapture(),
+		).Run(
+			t, template,
+			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+				require.NoError(t, createKinesisShards(env.ctx, resource.GetPort("4566/tcp"), env.configVars.id, 1))
+			}),
+			testOptPort(resource.GetPort("4566/tcp")),
+			testOptAllowDupes(),
+			testOptVarOne(":0"),
+			testOptVarTwo("10"),
+		)
+	})
 })

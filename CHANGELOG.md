@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - New (BETA) `metadata` and `source_metadata` functions.
 - Fields `max_in_flight` and `dequeue_visibility_timeout` added to the `azure_queue_storage` input.
 
+### Fixed
+
+- The `checkpoint_limit` field for the `kafka` input now works according to explicit messages in flight rather than the actual offset. This means it now works as expected with compacted topics.
+
 ## 3.44.0 - 2021-04-09
 
 ### Added

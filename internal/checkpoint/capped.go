@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/checkpoint"
 )
 
 // Capped receives an ordered feed of integer based offsets being tracked, and
@@ -18,24 +17,22 @@ import (
 //
 // This component is safe to use concurrently across goroutines.
 type Capped struct {
-	t     *checkpoint.Type
-	cap   int
-	first int
-	cond  *sync.Cond
+	t    *Type
+	cap  int64
+	cond *sync.Cond
 }
 
 // NewCapped returns a new capped checkpointer.
-func NewCapped(cap int) *Capped {
+func NewCapped(cap int64) *Capped {
 	return &Capped{
-		t:     checkpoint.New(0),
-		cap:   cap,
-		first: -1,
-		cond:  sync.NewCond(&sync.Mutex{}),
+		t:    New(),
+		cap:  cap,
+		cond: sync.NewCond(&sync.Mutex{}),
 	}
 }
 
 // Highest returns the current highest checkpoint.
-func (c *Capped) Highest() int {
+func (c *Capped) Highest() interface{} {
 	c.cond.L.Lock()
 	defer c.cond.L.Unlock()
 	return c.t.Highest()
@@ -45,7 +42,7 @@ func (c *Capped) Highest() int {
 // marked as resolved. While it is cached no higher valued offset will ever be
 // committed. If the provided value is lower than an already provided value an
 // error is returned.
-func (c *Capped) Track(ctx context.Context, i int) error {
+func (c *Capped) Track(ctx context.Context, payload interface{}, batchSize int64) (func() interface{}, error) {
 	c.cond.L.Lock()
 	defer c.cond.L.Unlock()
 
@@ -59,32 +56,25 @@ func (c *Capped) Track(ctx context.Context, i int) error {
 		c.cond.L.Unlock()
 	}()
 
-	if c.first < 0 {
-		c.first = i
-	}
-
-	for (i-c.first > c.cap) && (c.t.Pending() > 0) && ((i - c.t.Highest()) > c.cap) {
+	pending := c.t.Pending()
+	for pending > 0 && pending+batchSize > c.cap {
 		c.cond.Wait()
 		select {
 		case <-ctx.Done():
-			return types.ErrTimeout
+			return nil, types.ErrTimeout
 		default:
 		}
+		pending = c.t.Pending()
 	}
 
-	return c.t.Track(i)
-}
+	resolveFn := c.t.Track(payload, batchSize)
 
-// Resolve a tracked offset by allowing it to be committed. The highest possible
-// offset to be committed is returned, or an error if the provided offset was
-// not recognised.
-func (c *Capped) Resolve(offset int) (int, error) {
-	c.cond.L.Lock()
-	defer c.cond.L.Unlock()
+	return func() interface{} {
+		c.cond.L.Lock()
+		defer c.cond.L.Unlock()
 
-	n, err := c.t.Resolve(offset)
-	if err == nil {
+		highest := resolveFn()
 		c.cond.Broadcast()
-	}
-	return n, err
+		return highest
+	}, nil
 }

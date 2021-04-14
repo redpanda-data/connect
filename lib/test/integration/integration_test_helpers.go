@@ -464,6 +464,27 @@ func receiveMessage(
 ) types.Part {
 	t.Helper()
 
+	b, resChan := receiveMessageNoRes(ctx, t, tranChan)
+	sendResponse(ctx, t, resChan, err)
+	return b
+}
+
+func sendResponse(ctx context.Context, t *testing.T, resChan chan<- types.Response, err error) {
+	var res types.Response = response.NewAck()
+	if err != nil {
+		res = response.NewError(err)
+	}
+
+	select {
+	case resChan <- res:
+	case <-ctx.Done():
+		t.Fatal("timed out on response")
+	}
+}
+
+func receiveMessageNoRes(ctx context.Context, t *testing.T, tranChan <-chan types.Transaction) (types.Part, chan<- types.Response) {
+	t.Helper()
+
 	var tran types.Transaction
 	var open bool
 	select {
@@ -475,20 +496,7 @@ func receiveMessage(
 	require.True(t, open)
 	require.Equal(t, tran.Payload.Len(), 1)
 
-	var res types.Response = response.NewAck()
-	if err != nil {
-		res = response.NewError(err)
-	}
-
-	b := tran.Payload.Get(0)
-
-	select {
-	case tran.ResponseChan <- res:
-	case <-ctx.Done():
-		t.Fatal("timed out on response")
-	}
-
-	return b
+	return tran.Payload.Get(0), tran.ResponseChan
 }
 
 func messageMatch(t *testing.T, p types.Part, content string, metadata ...string) {

@@ -16,6 +16,9 @@ var ErrResolvedOffsetNotTracked = errors.New("resolved offset was not tracked")
 // unordered feed of integer based offsets that are resolved, and is able to
 // return the highest offset currently able to be committed such that an
 // unresolved offset is never committed.
+//
+// WARNING: DEPRECATED
+// TODO: V4 Remove this
 type Type struct {
 	base          int
 	maxResolved   int

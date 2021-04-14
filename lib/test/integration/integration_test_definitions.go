@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -401,6 +402,75 @@ func integrationTestStreamIsolated(n int) testDefinition {
 			for len(set) > 0 {
 				messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
 			}
+		},
+	)
+}
+
+func integrationTestCheckpointCapture() testDefinition {
+	return namedTest(
+		"respects checkpointed offsets",
+		func(t *testing.T, env *testEnvironment) {
+			t.Parallel()
+
+			tranChan := make(chan types.Transaction)
+			input, output := initConnectors(t, tranChan, env)
+			t.Cleanup(func() {
+				closeConnectors(t, nil, output)
+			})
+
+			go func() {
+				require.NoError(t, sendMessage(env.ctx, t, tranChan, "A"))
+				require.NoError(t, sendMessage(env.ctx, t, tranChan, "B"))
+				require.NoError(t, sendMessage(env.ctx, t, tranChan, "C"))
+				require.NoError(t, sendMessage(env.ctx, t, tranChan, "D"))
+				require.NoError(t, sendMessage(env.ctx, t, tranChan, "E"))
+			}()
+
+			var msg types.Part
+			responseChans := make([]chan<- types.Response, 5)
+
+			msg, responseChans[0] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
+			assert.Equal(t, "A", string(msg.Get()))
+			sendResponse(env.ctx, t, responseChans[0], nil)
+
+			msg, responseChans[1] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
+			assert.Equal(t, "B", string(msg.Get()))
+			sendResponse(env.ctx, t, responseChans[1], nil)
+
+			msg, responseChans[2] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
+			assert.Equal(t, "C", string(msg.Get()))
+
+			msg, responseChans[3] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
+			assert.Equal(t, "D", string(msg.Get()))
+			sendResponse(env.ctx, t, responseChans[3], nil)
+
+			msg, responseChans[4] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
+			assert.Equal(t, "E", string(msg.Get()))
+
+			sendResponse(env.ctx, t, responseChans[2], errors.New("rejecting just cus"))
+			sendResponse(env.ctx, t, responseChans[4], errors.New("rejecting just cus"))
+
+			closeConnectors(t, input, nil)
+
+			select {
+			case <-time.After(time.Second):
+			case <-env.ctx.Done():
+				t.Fatal(env.ctx.Err())
+			}
+
+			input = initInput(t, env)
+			t.Cleanup(func() {
+				closeConnectors(t, input, nil)
+			})
+
+			msg = receiveMessage(env.ctx, t, input.TransactionChan(), nil)
+			assert.Equal(t, "C", string(msg.Get()))
+
+			msg = receiveMessage(env.ctx, t, input.TransactionChan(), nil)
+			assert.Equal(t, "D", string(msg.Get()))
+
+			msg = receiveMessage(env.ctx, t, input.TransactionChan(), nil)
+			assert.Equal(t, "E", string(msg.Get()))
 		},
 	)
 }
