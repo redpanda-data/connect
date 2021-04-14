@@ -18,6 +18,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/aws/aws-sdk-go/service/kinesis/kinesisiface"
 	"github.com/cenkalti/backoff/v4"
@@ -395,7 +396,18 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 				if pending, iter, err = k.getRecords(streamID, shardID, iter); err != nil {
 					if !awsErrIsTimeout(err) {
 						nextPullChan = time.After(boff.NextBackOff())
-						k.log.Errorf("Failed to pull Kinesis records: %v\n", err)
+
+						if aerr, ok := err.(awserr.Error); ok && aerr.Code() == kinesis.ErrCodeExpiredIteratorException {
+							k.log.Warnln("Shard iterator expired, attempting to refresh")
+							newIter, err := k.getIter(streamID, shardID, recordBatcher.GetSequence())
+							if err != nil {
+								k.log.Errorf("Failed to refresh shard iterator: %v", err)
+							} else {
+								iter = newIter
+							}
+						} else {
+							k.log.Errorf("Failed to pull Kinesis records: %v\n", err)
+						}
 					}
 				} else if len(pending) == 0 {
 					nextPullChan = time.After(boff.NextBackOff())

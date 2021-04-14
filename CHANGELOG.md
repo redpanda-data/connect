@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `checkpoint_limit` field for the `kafka` input now works according to explicit messages in flight rather than the actual offset. This means it now works as expected with compacted topics.
+- The `aws_kinesis` input should now automatically recover when the shard iterator has expired.
 
 ## 3.44.0 - 2021-04-09
 
