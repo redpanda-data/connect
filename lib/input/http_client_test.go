@@ -78,12 +78,6 @@ func TestHTTPClientGET(t *testing.T) {
 	}
 
 	h.CloseAsync()
-	select {
-	case <-h.TransactionChan():
-	case <-time.After(time.Second):
-		t.Errorf("Action timed out")
-	}
-
 	if err := h.WaitForClose(time.Second); err != nil {
 		t.Error(err)
 	}
@@ -280,13 +274,6 @@ func TestHTTPClientPOST(t *testing.T) {
 	}
 
 	h.CloseAsync()
-
-	select {
-	case <-h.TransactionChan():
-	case <-time.After(time.Second):
-		t.Errorf("Action timed out")
-	}
-
 	if err := h.WaitForClose(time.Second); err != nil {
 		t.Error(err)
 	}
@@ -369,12 +356,6 @@ func TestHTTPClientGETMultipart(t *testing.T) {
 		t.Errorf("Action timed out")
 	}
 	h.CloseAsync()
-
-	select {
-	case <-h.TransactionChan():
-	case <-time.After(time.Second):
-		t.Errorf("Action timed out")
-	}
 
 	if err := h.WaitForClose(time.Second); err != nil {
 		t.Error(err)
