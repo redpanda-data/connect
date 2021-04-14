@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/api"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/condition"
@@ -58,6 +59,30 @@ type SanitisedConfig struct {
 	Tracer             interface{} `json:"tracer" yaml:"tracer"`
 	SystemCloseTimeout interface{} `json:"shutdown_timeout" yaml:"shutdown_timeout"`
 	Tests              interface{} `json:"tests,omitempty" yaml:"tests,omitempty"`
+}
+
+// SanitisedV2Config describes custom options for how a config is sanitised
+// using the V2 API.
+type SanitisedV2Config struct {
+	RemoveTypeField        bool
+	RemoveDeprecatedFields bool
+}
+
+// SanitisedV2 returns a sanitised version of the config as a yaml.Node.
+func (c Type) SanitisedV2(conf SanitisedV2Config) (yaml.Node, error) {
+	var node yaml.Node
+	if err := node.Encode(c); err != nil {
+		return node, err
+	}
+
+	if err := Spec().SanitiseNode(&node, docs.SanitiseConfig{
+		RemoveTypeField:  conf.RemoveTypeField,
+		RemoveDeprecated: conf.RemoveDeprecatedFields,
+	}); err != nil {
+		return node, err
+	}
+
+	return node, nil
 }
 
 // Sanitised is deprecated and will be removed in V4.
