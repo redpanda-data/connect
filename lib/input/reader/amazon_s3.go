@@ -409,7 +409,6 @@ func (a *AmazonS3) readSQSEvents() error {
 		return err
 	}
 
-messageLoop:
 	for _, sqsMsg := range output.Messages {
 		msgHandle := &sqs.DeleteMessageBatchRequestEntry{
 			Id:            sqsMsg.MessageId,
@@ -419,14 +418,14 @@ messageLoop:
 		if sqsMsg.Body == nil {
 			addDudFn(sqsMsg)
 			a.log.Errorln("Received empty SQS message")
-			continue messageLoop
+			continue
 		}
 
 		items, err := a.parseItemPaths(sqsMsg.Body)
 		if err != nil {
 			addDudFn(sqsMsg)
 			a.log.Errorf("SQS error: %v\n", err)
-			continue messageLoop
+			continue
 		}
 
 		for _, item := range items {

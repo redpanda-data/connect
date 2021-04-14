@@ -31,7 +31,7 @@ func loadFile(dir, path, testSuffix string, confs map[string]stream.Config) ([]s
 		return nil, nil
 	}
 
-	id = strings.Replace(id, string(filepath.Separator), "_", -1)
+	id = strings.ReplaceAll(id, string(filepath.Separator), "_")
 
 	if _, exists := confs[id]; exists {
 		return nil, fmt.Errorf("stream id (%v) collision from file: %v", id, path)

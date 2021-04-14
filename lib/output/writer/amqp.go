@@ -234,14 +234,14 @@ func (a *AMQP) Write(msg types.Message) error {
 	}
 
 	return IterateBatchedSend(msg, func(i int, p types.Part) error {
-		bindingKey := strings.Replace(a.key.String(i, msg), "/", ".", -1)
-		msgType := strings.Replace(a.msgType.String(i, msg), "/", ".", -1)
+		bindingKey := strings.ReplaceAll(a.key.String(i, msg), "/", ".")
+		msgType := strings.ReplaceAll(a.msgType.String(i, msg), "/", ".")
 		contentType := a.contentType.String(i, msg)
 		contentEncoding := a.contentEncoding.String(i, msg)
 
 		headers := amqp.Table{}
 		a.metaFilter.Iter(p.Metadata(), func(k, v string) error {
-			headers[strings.Replace(k, "_", "-", -1)] = v
+			headers[strings.ReplaceAll(k, "_", "-")] = v
 			return nil
 		})
 

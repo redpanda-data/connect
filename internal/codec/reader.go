@@ -136,7 +136,6 @@ func chainedReader(codec string, conf ReaderConfig) (ReaderConstructor, error) {
 	var ioCtor ioReaderConstructor
 	var partCtor ReaderConstructor
 
-codecLoop:
 	for i, codec := range codecs {
 		if tmpIOCtor, ok := ioReader(codec, conf); ok {
 			if partCtor != nil {
@@ -147,7 +146,7 @@ codecLoop:
 			} else {
 				ioCtor = tmpIOCtor
 			}
-			continue codecLoop
+			continue
 		}
 		tmpPartCtor, ok, err := partReader(codec, conf)
 		if err != nil {
@@ -162,7 +161,7 @@ codecLoop:
 				ioCtor = nil
 			}
 			partCtor = tmpPartCtor
-			continue codecLoop
+			continue
 		}
 		tmpReaderCtor, ok := readerReader(codec, conf)
 		if !ok {

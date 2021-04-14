@@ -338,15 +338,17 @@ func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 
 	nameFound := false
 	for i := 0; i < len(node.Content)-1; i += 2 {
-		if node.Content[i].Value == name {
-			nameFound = true
-			if err := cSpec.Config.SanitiseNode(node.Content[i+1], conf); err != nil {
-				return err
-			}
-			newNodes = append(newNodes, node.Content[i])
-			newNodes = append(newNodes, node.Content[i+1])
-			break
+		if node.Content[i].Value != name {
+			continue
 		}
+
+		nameFound = true
+		if err := cSpec.Config.SanitiseNode(node.Content[i+1], conf); err != nil {
+			return err
+		}
+		newNodes = append(newNodes, node.Content[i])
+		newNodes = append(newNodes, node.Content[i+1])
+		break
 	}
 
 	// If the type field was omitted but we didn't see a config under the name

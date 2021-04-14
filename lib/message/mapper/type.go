@@ -426,15 +426,18 @@ partLoop:
 
 		// Check all mandatory map targets before proceeding.
 		for _, k := range t.resTargets {
-			if v := t.resMap[k]; len(v) > 0 && sourceObj.Path(v).Data() == nil {
-				t.mResErr.Incr(1)
-				t.mResErrMap.Incr(1)
-				t.log.Debugf("Failed to find map target '%v' in response part '%v'.\n", v, i)
-
-				// Skip parts that fail mapping.
-				failed = append(failed, i)
-				continue partLoop
+			v := t.resMap[k]
+			if v == "" || sourceObj.Path(v).Data() != nil {
+				continue
 			}
+
+			t.mResErr.Incr(1)
+			t.mResErrMap.Incr(1)
+			t.log.Debugf("Failed to find map target '%v' in response part '%v'.\n", v, i)
+
+			// Skip parts that fail mapping.
+			failed = append(failed, i)
+			continue partLoop
 		}
 
 		var destObj *gabs.Container

@@ -419,8 +419,8 @@ func quotedPathLiteralSegmentParser() Func {
 		rawSegment, _ := res.Payload.(string)
 
 		// Convert into a JSON pointer style path string.
-		rawSegment = strings.Replace(rawSegment, "~", "~0", -1)
-		rawSegment = strings.Replace(rawSegment, ".", "~1", -1)
+		rawSegment = strings.ReplaceAll(rawSegment, "~", "~0")
+		rawSegment = strings.ReplaceAll(rawSegment, ".", "~1")
 
 		return Success(rawSegment, res.Remaining)
 	}

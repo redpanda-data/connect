@@ -16,8 +16,8 @@ import (
 func SliceToDotPath(path ...string) string {
 	escapes := make([]string, len(path))
 	for i, s := range path {
-		s = strings.Replace(s, "~", "~0", -1)
-		s = strings.Replace(s, ".", "~1", -1)
+		s = strings.ReplaceAll(s, "~", "~0")
+		s = strings.ReplaceAll(s, ".", "~1")
 		escapes[i] = s
 	}
 	return strings.Join(escapes, ".")

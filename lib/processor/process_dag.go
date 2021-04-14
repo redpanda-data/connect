@@ -305,7 +305,6 @@ func getProcessMapDeps(id string, wanted []string, procs map[string]*ProcessMap)
 	dependencies := []string{}
 	targetsNeeded := wanted
 
-eLoop:
 	for k, v := range procs {
 		if k == id {
 			continue
@@ -314,7 +313,7 @@ eLoop:
 			for _, tn := range targetsNeeded {
 				if strings.HasPrefix(tn, tp) {
 					dependencies = append(dependencies, k)
-					continue eLoop
+					break
 				}
 			}
 		}

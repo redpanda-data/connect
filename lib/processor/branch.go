@@ -518,10 +518,9 @@ func (b *Branch) overlayResult(payload types.Message, results []types.Part) ([]b
 			return nil
 		})
 
-	partLoop:
 		for i, result := range results {
 			if result == nil {
-				continue partLoop
+				continue
 			}
 
 			newPart, err := b.resultMap.MapOnto(payload.Get(i), i, resultMsg)
@@ -530,7 +529,7 @@ func (b *Branch) overlayResult(payload types.Message, results []types.Part) ([]b
 				b.log.Debugf("Failed to map result '%v': %v\n", i, err)
 
 				failed = append(failed, newBranchMapError(i, fmt.Errorf("result map: %w", err)))
-				continue partLoop
+				continue
 			}
 
 			// TODO: Allow filtering here?

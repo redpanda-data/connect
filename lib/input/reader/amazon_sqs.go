@@ -165,7 +165,6 @@ func (a *AmazonSQS) ReadWithContext(ctx context.Context) (types.Message, AsyncAc
 					QueueUrl: aws.String(a.conf.URL),
 				}
 
-			delHandleLoop:
 				for k, v := range pendingHandles {
 					input.Entries = append(input.Entries, &sqs.DeleteMessageBatchRequestEntry{
 						Id:            aws.String(k),
@@ -173,7 +172,7 @@ func (a *AmazonSQS) ReadWithContext(ctx context.Context) (types.Message, AsyncAc
 					})
 					delete(pendingHandles, k)
 					if len(input.Entries) == 10 {
-						break delHandleLoop
+						break
 					}
 				}
 
@@ -192,7 +191,6 @@ func (a *AmazonSQS) ReadWithContext(ctx context.Context) (types.Message, AsyncAc
 					QueueUrl: aws.String(a.conf.URL),
 				}
 
-			visHandleLoop:
 				for k, v := range pendingHandles {
 					input.Entries = append(input.Entries, &sqs.ChangeMessageVisibilityBatchRequestEntry{
 						Id:                aws.String(k),
@@ -201,7 +199,7 @@ func (a *AmazonSQS) ReadWithContext(ctx context.Context) (types.Message, AsyncAc
 					})
 					delete(pendingHandles, k)
 					if len(input.Entries) == 10 {
-						break visHandleLoop
+						break
 					}
 				}
 
@@ -279,7 +277,6 @@ func (a *AmazonSQS) Acknowledge(err error) error {
 				QueueUrl: aws.String(a.conf.URL),
 			}
 
-		delHandleLoop:
 			for k, v := range a.pendingHandles {
 				input.Entries = append(input.Entries, &sqs.DeleteMessageBatchRequestEntry{
 					Id:            aws.String(k),
@@ -287,7 +284,7 @@ func (a *AmazonSQS) Acknowledge(err error) error {
 				})
 				delete(a.pendingHandles, k)
 				if len(input.Entries) == 10 {
-					break delHandleLoop
+					break
 				}
 			}
 
@@ -305,7 +302,6 @@ func (a *AmazonSQS) Acknowledge(err error) error {
 				QueueUrl: aws.String(a.conf.URL),
 			}
 
-		visHandleLoop:
 			for k, v := range a.pendingHandles {
 				input.Entries = append(input.Entries, &sqs.ChangeMessageVisibilityBatchRequestEntry{
 					Id:                aws.String(k),
@@ -314,7 +310,7 @@ func (a *AmazonSQS) Acknowledge(err error) error {
 				})
 				delete(a.pendingHandles, k)
 				if len(input.Entries) == 10 {
-					break visHandleLoop
+					break
 				}
 			}
 
