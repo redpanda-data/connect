@@ -453,7 +453,7 @@ func integrationTestCheckpointCapture() testDefinition {
 			closeConnectors(t, input, nil)
 
 			select {
-			case <-time.After(time.Second):
+			case <-time.After(time.Second * 5):
 			case <-env.ctx.Done():
 				t.Fatal(env.ctx.Err())
 			}

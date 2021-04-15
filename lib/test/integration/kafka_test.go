@@ -387,6 +387,9 @@ input:
 	// In some tests include testing input level batching
 	suiteExt := append(suite, integrationTestReceiveBatchCount(10))
 
+	// Only for checkpointed tests
+	suiteSingleCheckpointedStream := append(suiteExt, integrationTestCheckpointCapture())
+
 	t.Run("balanced", func(t *testing.T) {
 		t.Parallel()
 		suiteExt.Run(
@@ -398,7 +401,7 @@ input:
 
 		t.Run("checkpointed", func(t *testing.T) {
 			t.Parallel()
-			suiteExt.Run(
+			suiteSingleCheckpointedStream.Run(
 				t, template,
 				testOptVarOne(""),
 				testOptVarTwo("1000"),
@@ -454,8 +457,11 @@ input:
 
 		t.Run("checkpointed", func(t *testing.T) {
 			t.Parallel()
-			suiteExt.Run(
+			suiteSingleCheckpointedStream.Run(
 				t, template,
+				testOptPreTest(func(t *testing.T, env *testEnvironment) {
+					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 1))
+				}),
 				testOptVarOne(":0"),
 				testOptVarTwo("1000"),
 				testOptVarThree("false"),
