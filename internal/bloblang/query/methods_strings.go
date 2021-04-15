@@ -1148,6 +1148,62 @@ var _ = registerSimpleMethod(
 
 var _ = registerSimpleMethod(
 	NewMethodSpec(
+		"format_timestamp_unix", "",
+	).InCategory(
+		MethodCategoryTime,
+		"Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.",
+		NewExampleSpec("",
+			`root.something_at = (this.created_at + 300).format_timestamp()`,
+			// `{"created_at":"2009-11-10T23:00:00Z"}`,
+			// `{"something_at":1257894000}`,
+		),
+	).Beta(),
+	func(args ...interface{}) (simpleMethod, error) {
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			target, err := IGetTimestamp(v)
+			if err != nil {
+				return nil, err
+			}
+
+			return target.Unix(), nil
+		}, nil
+	},
+	true,
+	ExpectNArgs(0),
+)
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"format_timestamp_unix_nano", "",
+	).InCategory(
+		MethodCategoryTime,
+		"Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.",
+		NewExampleSpec("",
+			`root.something_at = (this.created_at + 300).format_timestamp()`,
+			// `{"created_at":"2009-11-10T23:00:00Z"}`,
+			// `{"something_at":1257894000000000000}`,
+		),
+	).Beta(),
+	func(args ...interface{}) (simpleMethod, error) {
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			target, err := IGetTimestamp(v)
+			if err != nil {
+				return nil, err
+			}
+
+			return target.UnixNano(), nil
+		}, nil
+	},
+	true,
+	ExpectNArgs(0),
+)
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
 		"quote", "",
 	).InCategory(
 		MethodCategoryStrings,
