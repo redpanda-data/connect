@@ -615,26 +615,6 @@ root.new_value = this.value.re_replace("ADD ([0-9]+)","+($1)")
 
 ## Timestamp Manipulation
 
-### `parse_timestamp_unix`
-
-Attempts to parse a string as a timestamp, following ISO 8601 format by default, and returns the unix epoch.
-
-```coffee
-root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix()
-
-# In:  {"doc":{"timestamp":"2020-08-14T11:45:26.371Z"}}
-# Out: {"doc":{"timestamp":1597405526}}
-```
-
-An optional string argument can be used in order to specify the expected format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
-
-```coffee
-root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix("2006-Jan-02")
-
-# In:  {"doc":{"timestamp":"2020-Aug-14"}}
-# Out: {"doc":{"timestamp":1597363200}}
-```
-
 ### `parse_timestamp`
 
 BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
@@ -692,20 +672,26 @@ root.something_at = this.created_at.format_timestamp("2006-Jan-02 15:04:05.99999
 
 BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 
-Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.
+Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format. The [`parse_timestamp`](#parse_timestamp) method can be used in order to parse different timestamp formats.
 
 ```coffee
-root.something_at = (this.created_at + 300).format_timestamp()
+root.created_at_unix = this.created_at.format_timestamp_unix()
+
+# In:  {"created_at":"2009-11-10T23:00:00Z"}
+# Out: {"created_at_unix":1257894000}
 ```
 
 ### `format_timestamp_unix_nano`
 
 BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 
-Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.
+Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format. The [`parse_timestamp`](#parse_timestamp) method can be used in order to parse different timestamp formats.
 
 ```coffee
-root.something_at = (this.created_at + 300).format_timestamp()
+root.created_at_unix = this.created_at.format_timestamp_unix_nano()
+
+# In:  {"created_at":"2009-11-10T23:00:00Z"}
+# Out: {"created_at_unix":1257894000000000000}
 ```
 
 ## Type Coercion
@@ -1365,6 +1351,28 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")
 
 # In:  {"value":"hello world"}
 # Out: {"h1":"2aae6c35c94fcfb415dbe95f408b9ce91ee846ed","h2":"d87e5f068fa08fe90bb95bc7c8344cb809179d76"}
+```
+
+## Deprecated
+
+### `parse_timestamp_unix`
+
+Attempts to parse a string as a timestamp, following ISO 8601 format by default, and returns the unix epoch.
+
+```coffee
+root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix()
+
+# In:  {"doc":{"timestamp":"2020-08-14T11:45:26.371Z"}}
+# Out: {"doc":{"timestamp":1597405526}}
+```
+
+An optional string argument can be used in order to specify the expected format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
+
+```coffee
+root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix("2006-Jan-02")
+
+# In:  {"doc":{"timestamp":"2020-Aug-14"}}
+# Out: {"doc":{"timestamp":1597363200}}
 ```
 
 [field_paths]: /docs/configuration/field_paths

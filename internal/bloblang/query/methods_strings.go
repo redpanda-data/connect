@@ -993,7 +993,7 @@ var _ = registerSimpleMethod(
 //------------------------------------------------------------------------------
 
 var _ = registerSimpleMethod(
-	NewMethodSpec(
+	NewDeprecatedMethodSpec(
 		"parse_timestamp_unix", "",
 	).InCategory(
 		MethodCategoryTime,
@@ -1151,11 +1151,11 @@ var _ = registerSimpleMethod(
 		"format_timestamp_unix", "",
 	).InCategory(
 		MethodCategoryTime,
-		"Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.",
+		"Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format. The [`parse_timestamp`](#parse_timestamp) method can be used in order to parse different timestamp formats.",
 		NewExampleSpec("",
-			`root.something_at = (this.created_at + 300).format_timestamp()`,
-			// `{"created_at":"2009-11-10T23:00:00Z"}`,
-			// `{"something_at":1257894000}`,
+			`root.created_at_unix = this.created_at.format_timestamp_unix()`,
+			`{"created_at":"2009-11-10T23:00:00Z"}`,
+			`{"created_at_unix":1257894000}`,
 		),
 	).Beta(),
 	func(args ...interface{}) (simpleMethod, error) {
@@ -1179,11 +1179,11 @@ var _ = registerSimpleMethod(
 		"format_timestamp_unix_nano", "",
 	).InCategory(
 		MethodCategoryTime,
-		"Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.",
+		"Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format. The [`parse_timestamp`](#parse_timestamp) method can be used in order to parse different timestamp formats.",
 		NewExampleSpec("",
-			`root.something_at = (this.created_at + 300).format_timestamp()`,
-			// `{"created_at":"2009-11-10T23:00:00Z"}`,
-			// `{"something_at":1257894000000000000}`,
+			`root.created_at_unix = this.created_at.format_timestamp_unix_nano()`,
+			`{"created_at":"2009-11-10T23:00:00Z"}`,
+			`{"created_at_unix":1257894000000000000}`,
 		),
 	).Beta(),
 	func(args ...interface{}) (simpleMethod, error) {
