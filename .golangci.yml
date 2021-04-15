@@ -21,13 +21,8 @@ linters-settings:
       - ptrToRefParam # False positives?
       - importShadow # Probably not worth the hassle...
       # TODO
-      - sloppyReassign
-      - elseif
-      - appendCombine
       - emptyStringTest
-      - assignOp
       - builtinShadow
-      - paramTypeCombine
       - yodaStyleExpr
       - unnamedResult
       - typeUnparen
