@@ -12,6 +12,7 @@ import (
 	batchInternal "github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -39,6 +40,7 @@ type DynamoDBConfig struct {
 	MaxInFlight    int               `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config `json:",inline" yaml:",inline"`
 	Batching       batch.PolicyConfig `json:"batching" yaml:"batching"`
+	DeleteMapping  string             `json:"delete_mapping" yaml:"delete_mapping"`
 }
 
 // NewDynamoDBConfig creates a DynamoDBConfig populated with default values.
@@ -60,6 +62,7 @@ func NewDynamoDBConfig() DynamoDBConfig {
 		MaxInFlight:    1,
 		Config:         rConf,
 		Batching:       batch.NewPolicyConfig(),
+		DeleteMapping:  "",
 	}
 }
 
@@ -80,6 +83,7 @@ type DynamoDB struct {
 	ttl            time.Duration
 	strColumns     map[string]field.Expression
 	jsonMapColumns map[string]string
+	del            *mapping.Executor
 }
 
 // NewDynamoDB creates a new Amazon SQS writer.Type.
@@ -117,6 +121,11 @@ func NewDynamoDB(
 			return nil, fmt.Errorf("failed to parse TTL: %v", err)
 		}
 		db.ttl = ttl
+	}
+	if conf.DeleteMapping != "" {
+		if db.del, err = bloblang.NewMapping("", conf.DeleteMapping); err != nil {
+			return nil, fmt.Errorf("failed to parse delete mapping: %v", err)
+		}
 	}
 	if db.backoffCtor, err = conf.Config.GetCtor(); err != nil {
 		return nil, err
@@ -273,11 +282,25 @@ func (d *DynamoDB) WriteWithContext(ctx context.Context, msg types.Message) erro
 				}
 			}
 		}
-		writeReqs = append(writeReqs, &dynamodb.WriteRequest{
-			PutRequest: &dynamodb.PutRequest{
+		var isDel bool
+		var err error
+		req := &dynamodb.WriteRequest{}
+		if d.del != nil {
+			isDel, err = d.del.QueryPart(i, msg)
+			if err != nil {
+				d.log.Errorf("Failed to query delete mapping: %v", err)
+			}
+		}
+		if isDel {
+			req.DeleteRequest = &dynamodb.DeleteRequest{
+				Key: items,
+			}
+		} else {
+			req.PutRequest = &dynamodb.PutRequest{
 				Item: items,
-			},
-		})
+			}
+		}
+		writeReqs = append(writeReqs, req)
 		return nil
 	})
 
@@ -295,11 +318,23 @@ func (d *DynamoDB) WriteWithContext(ctx context.Context, msg types.Message) erro
 				if req == nil {
 					continue
 				}
-				if _, iErr := d.client.PutItem(&dynamodb.PutItemInput{
-					TableName: d.table,
-					Item:      req.PutRequest.Item,
-				}); iErr != nil {
-					d.log.Errorf("Put error: %v\n", iErr)
+				var iErr error
+				var method string
+				if req.PutRequest != nil {
+					method = "Put"
+					_, iErr = d.client.PutItem(&dynamodb.PutItemInput{
+						TableName: d.table,
+						Item:      req.PutRequest.Item,
+					})
+				} else {
+					method = "Delete"
+					_, iErr = d.client.DeleteItem(&dynamodb.DeleteItemInput{
+						TableName: d.table,
+						Key:       req.DeleteRequest.Key,
+					})
+				}
+				if iErr != nil {
+					d.log.Errorf("%s error: %v\n", method, iErr)
 					wait := boff.NextBackOff()
 					if wait == backoff.Stop {
 						break individualRequestsLoop

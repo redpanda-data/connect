@@ -87,6 +87,11 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldAdvanced("ttl", "An optional TTL to set for items, calculated from the moment the message is sent."),
 			docs.FieldAdvanced("ttl_key", "The column key to place the TTL value within."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldAdvanced(
+				"delete_mapping",
+				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should be treated as delete request.",
+				`meta().exists("delete")`,
+			).HasDefault("").Linter(docs.LintBloblangMapping),
 			batch.FieldSpec(),
 		}.Merge(session.FieldSpecs()).Merge(retries.FieldSpecs()),
 		Categories: []Category{
@@ -172,6 +177,11 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldAdvanced("ttl", "An optional TTL to set for items, calculated from the moment the message is sent."),
 			docs.FieldAdvanced("ttl_key", "The column key to place the TTL value within."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldAdvanced(
+				"delete_mapping",
+				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should be treated as delete request.",
+				`meta().exists("delete")`,
+			).HasDefault("").Linter(docs.LintBloblangMapping),
 			batch.FieldSpec(),
 		}.Merge(session.FieldSpecs()).Merge(retries.FieldSpecs()),
 		Categories: []Category{

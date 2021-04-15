@@ -17,12 +17,17 @@ import (
 
 type mockDynamoDB struct {
 	dynamodbiface.DynamoDBAPI
-	fn      func(*dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error)
+	delfn   func(*dynamodb.DeleteItemInput) (*dynamodb.DeleteItemOutput, error)
+	putfn   func(*dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error)
 	batchFn func(*dynamodb.BatchWriteItemInput) (*dynamodb.BatchWriteItemOutput, error)
 }
 
+func (m *mockDynamoDB) DeleteItem(input *dynamodb.DeleteItemInput) (*dynamodb.DeleteItemOutput, error) {
+	return m.delfn(input)
+}
+
 func (m *mockDynamoDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
-	return m.fn(input)
+	return m.putfn(input)
 }
 
 func (m *mockDynamoDB) BatchWriteItem(input *dynamodb.BatchWriteItemInput) (*dynamodb.BatchWriteItemOutput, error) {
@@ -31,11 +36,11 @@ func (m *mockDynamoDB) BatchWriteItem(input *dynamodb.BatchWriteItemInput) (*dyn
 
 func TestDynamoDBHappy(t *testing.T) {
 	conf := NewDynamoDBConfig()
-	conf.StringColumns = map[string]string{
-		"id":      `${!json("id")}`,
-		"content": `${!json("content")}`,
+	conf.JSONMapColumns = map[string]string{
+		"": ".",
 	}
 	conf.Table = "FooTable"
+	conf.DeleteMapping = `!this.exists("content")`
 
 	db, err := NewDynamoDB(conf, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -43,7 +48,11 @@ func TestDynamoDBHappy(t *testing.T) {
 	var request map[string][]*dynamodb.WriteRequest
 
 	db.client = &mockDynamoDB{
-		fn: func(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
+		delfn: func(input *dynamodb.DeleteItemInput) (*dynamodb.DeleteItemOutput, error) {
+			t.Error("not expected")
+			return nil, errors.New("not implemented")
+		},
+		putfn: func(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
 			t.Error("not expected")
 			return nil, errors.New("not implemented")
 		},
@@ -56,6 +65,7 @@ func TestDynamoDBHappy(t *testing.T) {
 	require.NoError(t, db.Write(message.New([][]byte{
 		[]byte(`{"id":"foo","content":"foo stuff"}`),
 		[]byte(`{"id":"bar","content":"bar stuff"}`),
+		[]byte(`{"id":"baz"}`),
 	})))
 
 	expected := map[string][]*dynamodb.WriteRequest{
@@ -84,6 +94,15 @@ func TestDynamoDBHappy(t *testing.T) {
 					},
 				},
 			},
+			&dynamodb.WriteRequest{
+				DeleteRequest: &dynamodb.DeleteRequest{
+					Key: map[string]*dynamodb.AttributeValue{
+						"id": {
+							S: aws.String("baz"),
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -94,22 +113,27 @@ func TestDynamoDBSadToGood(t *testing.T) {
 	t.Parallel()
 
 	conf := NewDynamoDBConfig()
-	conf.StringColumns = map[string]string{
-		"id":      `${!json("id")}`,
-		"content": `${!json("content")}`,
+	conf.JSONMapColumns = map[string]string{
+		"": ".",
 	}
 	conf.Backoff.MaxElapsedTime = "100ms"
 	conf.Table = "FooTable"
+	conf.DeleteMapping = `!this.exists("content")`
 
 	db, err := NewDynamoDB(conf, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	var batchRequest []*dynamodb.WriteRequest
-	var requests []*dynamodb.PutItemInput
+	var putRequests []*dynamodb.PutItemInput
+	var delRequests []*dynamodb.DeleteItemInput
 
 	db.client = &mockDynamoDB{
-		fn: func(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
-			requests = append(requests, input)
+		delfn: func(input *dynamodb.DeleteItemInput) (*dynamodb.DeleteItemOutput, error) {
+			delRequests = append(delRequests, input)
+			return nil, nil
+		},
+		putfn: func(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
+			putRequests = append(putRequests, input)
 			return nil, nil
 		},
 		batchFn: func(input *dynamodb.BatchWriteItemInput) (*dynamodb.BatchWriteItemOutput, error) {
@@ -131,7 +155,7 @@ func TestDynamoDBSadToGood(t *testing.T) {
 	require.NoError(t, db.Write(message.New([][]byte{
 		[]byte(`{"id":"foo","content":"foo stuff"}`),
 		[]byte(`{"id":"bar","content":"bar stuff"}`),
-		[]byte(`{"id":"baz","content":"baz stuff"}`),
+		[]byte(`{"id":"baz"}`),
 	})))
 
 	batchExpected := []*dynamodb.WriteRequest{
@@ -152,10 +176,9 @@ func TestDynamoDBSadToGood(t *testing.T) {
 			},
 		},
 		{
-			PutRequest: &dynamodb.PutRequest{
-				Item: map[string]*dynamodb.AttributeValue{
-					"id":      {S: aws.String("baz")},
-					"content": {S: aws.String("baz stuff")},
+			DeleteRequest: &dynamodb.DeleteRequest{
+				Key: map[string]*dynamodb.AttributeValue{
+					"id": {S: aws.String("baz")},
 				},
 			},
 		},
@@ -163,7 +186,7 @@ func TestDynamoDBSadToGood(t *testing.T) {
 
 	assert.Equal(t, batchExpected, batchRequest)
 
-	expected := []*dynamodb.PutItemInput{
+	putExpected := []*dynamodb.PutItemInput{
 		{
 			TableName: aws.String("FooTable"),
 			Item: map[string]*dynamodb.AttributeValue{
@@ -178,27 +201,31 @@ func TestDynamoDBSadToGood(t *testing.T) {
 				"content": {S: aws.String("bar stuff")},
 			},
 		},
+	}
+
+	assert.Equal(t, putExpected, putRequests)
+
+	delExpected := []*dynamodb.DeleteItemInput{
 		{
 			TableName: aws.String("FooTable"),
-			Item: map[string]*dynamodb.AttributeValue{
-				"id":      {S: aws.String("baz")},
-				"content": {S: aws.String("baz stuff")},
+			Key: map[string]*dynamodb.AttributeValue{
+				"id": {S: aws.String("baz")},
 			},
 		},
 	}
 
-	assert.Equal(t, expected, requests)
+	assert.Equal(t, delExpected, delRequests)
 }
 
 func TestDynamoDBSadToGoodBatch(t *testing.T) {
 	t.Parallel()
 
 	conf := NewDynamoDBConfig()
-	conf.StringColumns = map[string]string{
-		"id":      `${!json("id")}`,
-		"content": `${!json("content")}`,
+	conf.JSONMapColumns = map[string]string{
+		"": ".",
 	}
 	conf.Table = "FooTable"
+	conf.DeleteMapping = `!this.exists("content")`
 
 	db, err := NewDynamoDB(conf, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -206,7 +233,11 @@ func TestDynamoDBSadToGoodBatch(t *testing.T) {
 	var requests [][]*dynamodb.WriteRequest
 
 	db.client = &mockDynamoDB{
-		fn: func(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
+		delfn: func(input *dynamodb.DeleteItemInput) (*dynamodb.DeleteItemOutput, error) {
+			t.Error("not expected")
+			return nil, errors.New("not implemented")
+		},
+		putfn: func(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
 			t.Error("not expected")
 			return nil, errors.New("not implemented")
 		},
@@ -220,6 +251,13 @@ func TestDynamoDBSadToGoodBatch(t *testing.T) {
 									Item: map[string]*dynamodb.AttributeValue{
 										"id":      {S: aws.String("bar")},
 										"content": {S: aws.String("bar stuff")},
+									},
+								},
+							},
+							{
+								DeleteRequest: &dynamodb.DeleteRequest{
+									Key: map[string]*dynamodb.AttributeValue{
+										"id": {S: aws.String("bar")},
 									},
 								},
 							},
@@ -243,7 +281,7 @@ func TestDynamoDBSadToGoodBatch(t *testing.T) {
 	require.NoError(t, db.Write(message.New([][]byte{
 		[]byte(`{"id":"foo","content":"foo stuff"}`),
 		[]byte(`{"id":"bar","content":"bar stuff"}`),
-		[]byte(`{"id":"baz","content":"baz stuff"}`),
+		[]byte(`{"id":"baz"}`),
 	})))
 
 	expected := [][]*dynamodb.WriteRequest{
@@ -265,10 +303,9 @@ func TestDynamoDBSadToGoodBatch(t *testing.T) {
 				},
 			},
 			{
-				PutRequest: &dynamodb.PutRequest{
-					Item: map[string]*dynamodb.AttributeValue{
-						"id":      {S: aws.String("baz")},
-						"content": {S: aws.String("baz stuff")},
+				DeleteRequest: &dynamodb.DeleteRequest{
+					Key: map[string]*dynamodb.AttributeValue{
+						"id": {S: aws.String("baz")},
 					},
 				},
 			},
@@ -282,6 +319,13 @@ func TestDynamoDBSadToGoodBatch(t *testing.T) {
 					},
 				},
 			},
+			{
+				DeleteRequest: &dynamodb.DeleteRequest{
+					Key: map[string]*dynamodb.AttributeValue{
+						"id": {S: aws.String("bar")},
+					},
+				},
+			},
 		},
 	}
 
@@ -292,24 +336,29 @@ func TestDynamoDBSad(t *testing.T) {
 	t.Parallel()
 
 	conf := NewDynamoDBConfig()
-	conf.StringColumns = map[string]string{
-		"id":      `${!json("id")}`,
-		"content": `${!json("content")}`,
+	conf.JSONMapColumns = map[string]string{
+		"": ".",
 	}
 	conf.Table = "FooTable"
+	conf.DeleteMapping = `!this.exists("content")`
 
 	db, err := NewDynamoDB(conf, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	var batchRequest []*dynamodb.WriteRequest
-	var requests []*dynamodb.PutItemInput
+	var putRequests []*dynamodb.PutItemInput
+	var delRequests []*dynamodb.DeleteItemInput
 
 	barErr := errors.New("dont like bar")
 
 	db.client = &mockDynamoDB{
-		fn: func(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
-			if len(requests) < 3 {
-				requests = append(requests, input)
+		delfn: func(input *dynamodb.DeleteItemInput) (*dynamodb.DeleteItemOutput, error) {
+			delRequests = append(delRequests, input)
+			return nil, nil
+		},
+		putfn: func(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
+			if len(putRequests) < 2 {
+				putRequests = append(putRequests, input)
 			}
 			if *input.Item["id"].S == "bar" {
 				return nil, barErr
@@ -335,7 +384,7 @@ func TestDynamoDBSad(t *testing.T) {
 	msg := message.New([][]byte{
 		[]byte(`{"id":"foo","content":"foo stuff"}`),
 		[]byte(`{"id":"bar","content":"bar stuff"}`),
-		[]byte(`{"id":"baz","content":"baz stuff"}`),
+		[]byte(`{"id":"baz"}`),
 	})
 
 	expErr := batch.NewError(msg, errors.New("woop"))
@@ -360,10 +409,9 @@ func TestDynamoDBSad(t *testing.T) {
 			},
 		},
 		{
-			PutRequest: &dynamodb.PutRequest{
-				Item: map[string]*dynamodb.AttributeValue{
-					"id":      {S: aws.String("baz")},
-					"content": {S: aws.String("baz stuff")},
+			DeleteRequest: &dynamodb.DeleteRequest{
+				Key: map[string]*dynamodb.AttributeValue{
+					"id": {S: aws.String("baz")},
 				},
 			},
 		},
@@ -371,7 +419,7 @@ func TestDynamoDBSad(t *testing.T) {
 
 	assert.Equal(t, batchExpected, batchRequest)
 
-	expected := []*dynamodb.PutItemInput{
+	putExpected := []*dynamodb.PutItemInput{
 		{
 			TableName: aws.String("FooTable"),
 			Item: map[string]*dynamodb.AttributeValue{
@@ -386,27 +434,31 @@ func TestDynamoDBSad(t *testing.T) {
 				"content": {S: aws.String("bar stuff")},
 			},
 		},
+	}
+
+	assert.Equal(t, putExpected, putRequests)
+
+	delExpected := []*dynamodb.DeleteItemInput{
 		{
 			TableName: aws.String("FooTable"),
-			Item: map[string]*dynamodb.AttributeValue{
-				"id":      {S: aws.String("baz")},
-				"content": {S: aws.String("baz stuff")},
+			Key: map[string]*dynamodb.AttributeValue{
+				"id": {S: aws.String("baz")},
 			},
 		},
 	}
 
-	assert.Equal(t, expected, requests)
+	assert.Equal(t, delExpected, delRequests)
 }
 
 func TestDynamoDBSadBatch(t *testing.T) {
 	t.Parallel()
 
 	conf := NewDynamoDBConfig()
-	conf.StringColumns = map[string]string{
-		"id":      `${!json("id")}`,
-		"content": `${!json("content")}`,
+	conf.JSONMapColumns = map[string]string{
+		"": ".",
 	}
 	conf.Table = "FooTable"
+	conf.DeleteMapping = `!this.exists("content")`
 
 	db, err := NewDynamoDB(conf, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -414,7 +466,11 @@ func TestDynamoDBSadBatch(t *testing.T) {
 	var requests [][]*dynamodb.WriteRequest
 
 	db.client = &mockDynamoDB{
-		fn: func(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
+		delfn: func(input *dynamodb.DeleteItemInput) (*dynamodb.DeleteItemOutput, error) {
+			t.Error("not expected")
+			return nil, errors.New("not implemented")
+		},
+		putfn: func(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
 			t.Error("not expected")
 			return nil, errors.New("not implemented")
 		},
@@ -449,7 +505,7 @@ func TestDynamoDBSadBatch(t *testing.T) {
 	msg := message.New([][]byte{
 		[]byte(`{"id":"foo","content":"foo stuff"}`),
 		[]byte(`{"id":"bar","content":"bar stuff"}`),
-		[]byte(`{"id":"baz","content":"baz stuff"}`),
+		[]byte(`{"id":"baz"}`),
 	})
 
 	expErr := batch.NewError(msg, errors.New("failed to set 1 items"))
@@ -475,10 +531,9 @@ func TestDynamoDBSadBatch(t *testing.T) {
 				},
 			},
 			{
-				PutRequest: &dynamodb.PutRequest{
-					Item: map[string]*dynamodb.AttributeValue{
-						"id":      {S: aws.String("baz")},
-						"content": {S: aws.String("baz stuff")},
+				DeleteRequest: &dynamodb.DeleteRequest{
+					Key: map[string]*dynamodb.AttributeValue{
+						"id": {S: aws.String("baz")},
 					},
 				},
 			},

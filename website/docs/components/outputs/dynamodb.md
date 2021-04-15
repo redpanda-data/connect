@@ -60,6 +60,7 @@ output:
     ttl: ""
     ttl_key: ""
     max_in_flight: 1
+    delete_mapping: ""
     batching:
       count: 0
       byte_size: 0
@@ -214,6 +215,20 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 Type: `number`  
 Default: `1`  
+
+### `delete_mapping`
+
+A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should be treated as delete request.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+delete_mapping: meta().exists("delete")
+```
 
 ### `batching`
 
