@@ -688,6 +688,26 @@ root.something_at = this.created_at.format_timestamp("2006-Jan-02 15:04:05.99999
 # Out: {"something_at":"2020-Aug-14 11:50:26.371"}
 ```
 
+### `format_timestamp_unix`
+
+BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+
+Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.
+
+```coffee
+root.something_at = (this.created_at + 300).format_timestamp()
+```
+
+### `format_timestamp_unix_nano`
+
+BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+
+Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.
+
+```coffee
+root.something_at = (this.created_at + 300).format_timestamp()
+```
+
 ## Type Coercion
 
 ### `not_null`

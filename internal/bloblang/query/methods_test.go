@@ -1860,6 +1860,20 @@ func TestMethods(t *testing.T) {
 			),
 			output: "2020-Aug-14 11:45:26",
 		},
+		"check format_timestamp_unix": {
+			input: methods(
+				literalFn("2009-11-10T23:00:00Z"),
+				method("format_timestamp_unix"),
+			),
+			output: int64(1257894000),
+		},
+		"check format_timestamp_unix_nano": {
+			input: methods(
+				literalFn("2009-11-10T23:00:00Z"),
+				method("format_timestamp_unix_nano"),
+			),
+			output: int64(1257894000000000000),
+		},
 		"check floor": {
 			input:  methods(literalFn(5.8), method("floor")),
 			output: int64(5),
