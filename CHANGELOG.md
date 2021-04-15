@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.44.1 - 2021-04-15
+
+### Fixed
+
+- Fixed an issue where the `kafka` input with partition balancing wasn't committing offsets. 
+
 ## 3.44.0 - 2021-04-09
 
 ### Added
