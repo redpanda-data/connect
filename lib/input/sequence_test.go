@@ -448,7 +448,7 @@ func TestSequenceSad(t *testing.T) {
 			case <-time.After(time.Second * 5):
 				t.Fatalf("failed to ack after: %v", str)
 			}
-		case <-time.After(time.Second * 5):
+		case <-time.After(time.Second * 30):
 			t.Fatalf("Failed to consume message %v", i)
 		}
 	}
