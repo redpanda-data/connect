@@ -264,7 +264,7 @@ func (f *MmapBuffer) NextMessage() (types.Message, error) {
 			}(f.readIndex)
 		}
 
-		f.readIndex += 1
+		f.readIndex++
 		f.readFrom = 0
 
 		block = f.cache.Get(f.readIndex)
@@ -348,7 +348,7 @@ func (f *MmapBuffer) PushMessage(msg types.Message) (int, error) {
 		}
 
 		// Set counters
-		f.writeIndex += 1
+		f.writeIndex++
 		f.writtenTo = 0
 
 		block = f.cache.Get(f.writeIndex)

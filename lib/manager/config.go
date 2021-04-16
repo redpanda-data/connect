@@ -13,6 +13,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/config"
 )
 
+// ResourceConfig contains fields for specifying resource components at the root
+// of a Benthos config.
 type ResourceConfig struct {
 	// Called manager for backwards compatibility.
 	Manager            Config             `json:"resources,omitempty" yaml:"resources,omitempty"`
@@ -23,6 +25,7 @@ type ResourceConfig struct {
 	ResourceRateLimits []ratelimit.Config `json:"rate_limit_resources,omitempty" yaml:"rate_limit_resources,omitempty"`
 }
 
+// NewResourceConfig creates a ResourceConfig with default values.
 func NewResourceConfig() ResourceConfig {
 	return ResourceConfig{
 		Manager:            NewConfig(),

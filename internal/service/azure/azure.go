@@ -19,7 +19,7 @@ const (
 	devAccountKey       = "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw=="
 )
 
-// GetQueueServiceURL
+// GetQueueServiceURL creates an Azure Queue URL from storage fields.
 func GetQueueServiceURL(storageAccount, storageAccessKey, storageConnectionString string) (*azqueue.ServiceURL, error) {
 	if len(storageAccount) == 0 && len(storageConnectionString) == 0 {
 		return nil, errors.New("invalid azure storage account credentials")

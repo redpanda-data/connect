@@ -184,9 +184,8 @@ func (j *JSONAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 					"unable to set target path %v as the value of %v was a non-object type (%v)",
 					query.SliceToDotPath(j.path...), culprit, typeStr,
 				)
-			} else {
-				return fmt.Errorf("unable to set target path %v: %w", query.SliceToDotPath(j.path...), err)
 			}
+			return fmt.Errorf("unable to set target path %v: %w", query.SliceToDotPath(j.path...), err)
 		}
 	}
 	*ctx.Value = gObj.Data()

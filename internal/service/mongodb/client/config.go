@@ -18,6 +18,7 @@ type Config struct {
 	Password   string `json:"password" yaml:"password"`
 }
 
+// WriteConcern describes a write concern for MongoDB.
 type WriteConcern struct {
 	W        string `json:"w" yaml:"w"`
 	J        bool   `json:"j" yaml:"j"`

@@ -2,7 +2,7 @@
 
 [![godoc for Jeffail/benthos][godoc-badge]][godoc-url]
 [![goreportcard for Jeffail/benthos][goreport-badge]][goreport-url]
-[![Build Status][drone-badge]][drone-url]
+[![Build Status][actions-badge]][actions-url]
 
 Benthos is a high performance and resilient stream processor, able to connect various [sources][inputs] and [sinks][outputs] in a range of brokering patterns and perform [hydration, enrichments, transformations and filters][processors] on payloads.
 
@@ -202,8 +202,8 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come a
 [godoc-url]: https://pkg.go.dev/github.com/Jeffail/benthos/v3/public
 [goreport-badge]: https://goreportcard.com/badge/github.com/Jeffail/benthos
 [goreport-url]: https://goreportcard.com/report/Jeffail/benthos
-[drone-badge]: https://cloud.drone.io/api/badges/Jeffail/benthos/status.svg
-[drone-url]: https://cloud.drone.io/Jeffail/benthos
+[actions-badge]: https://github.com/Jeffail/benthos/actions/workflows/test.yml/badge.svg
+[actions-url]: https://github.com/Jeffail/benthos/actions/workflows/test.yml
 
 [community]: https://www.benthos.dev/community
 

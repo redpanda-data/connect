@@ -250,7 +250,7 @@ func TestRandomInt(t *testing.T) {
 		res, err := e.Exec(FunctionContext{})
 		require.NoError(t, err)
 		require.IsType(t, int64(0), res)
-		tallies[res.(int64)] += 1
+		tallies[res.(int64)]++
 	}
 
 	// Can't prove it ain't random, but I can kick up a fuss if something

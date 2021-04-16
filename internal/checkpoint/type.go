@@ -70,6 +70,7 @@ func (t *Type) Track(payload interface{}, batchSize int64) func() interface{} {
 	}
 }
 
+// Pending returns the gap between the earliest and latests unresolved messages.
 func (t *Type) Pending() int64 {
 	if t.latest == nil {
 		return 0
@@ -77,6 +78,7 @@ func (t *Type) Pending() int64 {
 	return t.latest.position - t.positionOffset
 }
 
+// Highest returns the payload of the highest resolved checkpoint.
 func (t *Type) Highest() interface{} {
 	return t.checkpoint
 }

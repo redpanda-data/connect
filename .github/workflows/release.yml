@@ -89,6 +89,9 @@ jobs:
       uses: crazy-max/ghaction-docker-meta@v2
       with:
         images: jeffail/benthos
+        flavor: |
+          latest=auto
+          suffix=-cgo
         tags: |
           type=semver,suffix=-cgo,pattern={{version}}
           type=semver,suffix=-cgo,pattern={{major}}.{{minor}}
