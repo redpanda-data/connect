@@ -1,6 +1,14 @@
 name: Test
 
-on: [ push, pull_request ]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: '30 * * * *' # Every 30 mins
 
 jobs:
   cross-build:
