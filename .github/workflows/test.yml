@@ -2,11 +2,9 @@ name: Test
 
 on:
   push:
-    branches:
-      - main
+    branches: [ $default-branch ]
   pull_request:
-    branches:
-      - main
+    branches: [ $default-branch ]
   schedule:
     - cron: '30 * * * *' # Every 30 mins
 
