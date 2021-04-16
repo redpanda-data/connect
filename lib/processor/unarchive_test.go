@@ -120,10 +120,8 @@ func TestUnarchiveZip(t *testing.T) {
 		expNames = append(expNames, name)
 		if fw, err := zw.Create(name); err != nil {
 			t.Fatal(err)
-		} else {
-			if _, err := fw.Write(input[i]); err != nil {
-				t.Fatal(err)
-			}
+		} else if _, err := fw.Write(input[i]); err != nil {
+			t.Fatal(err)
 		}
 	}
 

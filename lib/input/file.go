@@ -102,7 +102,7 @@ func NewFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type
 		conf.File.Codec = "delim:" + conf.File.Delim
 	}
 	if conf.File.Multipart && !strings.HasSuffix(conf.File.Codec, "/multipart") {
-		conf.File.Codec = conf.File.Codec + "/multipart"
+		conf.File.Codec += "/multipart"
 	}
 	rdr, err := newFileConsumer(conf.File, log)
 	if err != nil {

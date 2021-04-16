@@ -138,7 +138,7 @@ func newHTTPClient(conf HTTPClientConfig, mgr types.Manager, log log.Modular, st
 			conf.Stream.Codec = "delim:" + conf.Stream.Delim
 		}
 		if conf.Stream.Multipart && !strings.HasSuffix(conf.Stream.Codec, "/multipart") {
-			conf.Stream.Codec = conf.Stream.Codec + "/multipart"
+			conf.Stream.Codec += "/multipart"
 		}
 		codecConf := codec.NewReaderConfig()
 		codecConf.MaxScanTokenSize = conf.Stream.MaxBuffer

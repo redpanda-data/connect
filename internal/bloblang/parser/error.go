@@ -78,18 +78,18 @@ func (e *Error) errorMsg(includeGot bool) string {
 		}
 		if includeGot {
 			if len(inputSnippet) > 0 {
-				msg = msg + fmt.Sprintf(": %v", inputSnippet)
+				msg += fmt.Sprintf(": %v", inputSnippet)
 			}
 		}
 		return msg
 	}
 
 	if len(msg) > 0 {
-		msg = msg + ": "
+		msg += ": "
 	}
 
 	if len(e.Expected) == 1 {
-		msg = msg + fmt.Sprintf("expected %v", e.Expected[0])
+		msg += fmt.Sprintf("expected %v", e.Expected[0])
 	} else {
 		dedupeMap := make(map[string]struct{}, len(e.Expected))
 		expected := make([]string, 0, len(e.Expected))
@@ -113,14 +113,14 @@ func (e *Error) errorMsg(includeGot bool) string {
 			}
 			buf.WriteString(exp)
 		}
-		msg = msg + buf.String()
+		msg += buf.String()
 	}
 
 	if includeGot {
 		if len(inputSnippet) > 0 {
-			msg = msg + fmt.Sprintf(", got: %v", inputSnippet)
+			msg += fmt.Sprintf(", got: %v", inputSnippet)
 		} else {
-			msg = msg + ", but reached end of input"
+			msg += ", but reached end of input"
 		}
 	}
 	return msg

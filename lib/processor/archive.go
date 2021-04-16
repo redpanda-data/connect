@@ -136,10 +136,10 @@ func tarArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
 		if err != nil {
 			return err
 		}
-		if err = tw.WriteHeader(hdr); err != nil {
+		if err := tw.WriteHeader(hdr); err != nil {
 			return err
 		}
-		if _, err = tw.Write(part.Get()); err != nil {
+		if _, err := tw.Write(part.Get()); err != nil {
 			return err
 		}
 		return nil

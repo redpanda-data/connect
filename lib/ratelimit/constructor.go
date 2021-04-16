@@ -109,7 +109,7 @@ func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
 			outputMap["plugin"] = spec.confSanitiser(conf.Plugin)
 		}
 	}
-	if err = docs.SanitiseComponentConfig(
+	if err := docs.SanitiseComponentConfig(
 		docs.TypeRateLimit,
 		(map[string]interface{})(outputMap),
 		docs.ShouldDropDeprecated(removeDeprecated),

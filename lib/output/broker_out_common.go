@@ -98,7 +98,7 @@ func parseOutputConfsWithDefaults(outConfs []interface{}) ([]Config, error) {
 			if err != nil {
 				return nil, err
 			}
-			if err = yaml.Unmarshal(rawBytes, &conf); err != nil {
+			if err := yaml.Unmarshal(rawBytes, &conf); err != nil {
 				return nil, err
 			}
 			outputConfs = append(outputConfs, conf)

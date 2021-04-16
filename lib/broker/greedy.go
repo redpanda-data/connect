@@ -62,7 +62,7 @@ func (g *Greedy) WaitForClose(timeout time.Duration) error {
 		if err := out.WaitForClose(remaining); err != nil {
 			return err
 		}
-		remaining = remaining - time.Since(tStarted)
+		remaining -= time.Since(tStarted)
 		if remaining <= 0 {
 			return types.ErrTimeout
 		}

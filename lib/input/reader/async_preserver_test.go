@@ -217,10 +217,8 @@ func TestAsyncPreserverErrorProp(t *testing.T) {
 	}
 	if _, aFn, actErr := pres.ReadWithContext(ctx); actErr != nil {
 		t.Fatal(actErr)
-	} else {
-		if actErr = aFn(ctx, response.NewAck()); expErr != actErr {
-			t.Errorf("Wrong error returned: %v != %v", actErr, expErr)
-		}
+	} else if actErr = aFn(ctx, response.NewAck()); expErr != actErr {
+		t.Errorf("Wrong error returned: %v != %v", actErr, expErr)
 	}
 }
 

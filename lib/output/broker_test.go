@@ -39,8 +39,7 @@ func TestFanOutBroker(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = TypeBroker
 	conf.Broker.Pattern = "fan_out"
-	conf.Broker.Outputs = append(conf.Broker.Outputs, outOne)
-	conf.Broker.Outputs = append(conf.Broker.Outputs, outTwo)
+	conf.Broker.Outputs = append(conf.Broker.Outputs, outOne, outTwo)
 
 	s, err := New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -130,8 +129,7 @@ func TestRoundRobinBroker(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = TypeBroker
 	conf.Broker.Pattern = "round_robin"
-	conf.Broker.Outputs = append(conf.Broker.Outputs, outOne)
-	conf.Broker.Outputs = append(conf.Broker.Outputs, outTwo)
+	conf.Broker.Outputs = append(conf.Broker.Outputs, outOne, outTwo)
 
 	s, err := New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -225,8 +223,7 @@ func TestGreedyBroker(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = TypeBroker
 	conf.Broker.Pattern = "greedy"
-	conf.Broker.Outputs = append(conf.Broker.Outputs, outOne)
-	conf.Broker.Outputs = append(conf.Broker.Outputs, outTwo)
+	conf.Broker.Outputs = append(conf.Broker.Outputs, outOne, outTwo)
 
 	s, err := New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -318,9 +315,7 @@ func TestTryBroker(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = TypeBroker
 	conf.Broker.Pattern = "try"
-	conf.Broker.Outputs = append(conf.Broker.Outputs, outOne)
-	conf.Broker.Outputs = append(conf.Broker.Outputs, outTwo)
-	conf.Broker.Outputs = append(conf.Broker.Outputs, outThree)
+	conf.Broker.Outputs = append(conf.Broker.Outputs, outOne, outTwo, outThree)
 
 	s, err := New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {

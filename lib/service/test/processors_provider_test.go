@@ -24,10 +24,10 @@ func initTestFiles(files map[string]string) (string, error) {
 
 	for k, v := range files {
 		fp := filepath.Join(testDir, k)
-		if err = os.MkdirAll(filepath.Dir(fp), 0777); err != nil {
+		if err := os.MkdirAll(filepath.Dir(fp), 0777); err != nil {
 			return "", err
 		}
-		if err = ioutil.WriteFile(fp, []byte(v), 0777); err != nil {
+		if err := ioutil.WriteFile(fp, []byte(v), 0777); err != nil {
 			return "", err
 		}
 	}

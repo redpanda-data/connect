@@ -462,11 +462,9 @@ func (k *Kafka) commit() error {
 		}
 		if newCoord, err := k.client.Coordinator(k.conf.ConsumerGroup); err != nil {
 			k.log.Errorf("Failed to acquire new coordinator: %v\n", err)
-		} else {
-			if k.coordinator.ID() != newCoord.ID() {
-				k.coordinator.Close()
-				k.coordinator = newCoord
-			}
+		} else if k.coordinator.ID() != newCoord.ID() {
+			k.coordinator.Close()
+			k.coordinator = newCoord
 		}
 	} else {
 		k.offsetCommitted = k.offsetCommit

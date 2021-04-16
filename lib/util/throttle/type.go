@@ -105,7 +105,7 @@ func (t *Type) Retry() bool {
 func (t *Type) ExponentialRetry() bool {
 	if atomic.LoadInt64(&t.consecutiveRetries) > t.unthrottledRetries {
 		if throtPrd := atomic.LoadInt64(&t.throttlePeriod); throtPrd < t.maxExponentialPeriod {
-			throtPrd = throtPrd * 2
+			throtPrd *= 2
 			if throtPrd > t.maxExponentialPeriod {
 				throtPrd = t.maxExponentialPeriod
 			}

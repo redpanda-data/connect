@@ -374,9 +374,9 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 			if len(v.Children) > 0 {
 				newPath := path + v.Name
 				if newV.IsArray {
-					newPath = newPath + "[]"
+					newPath += "[]"
 				} else if newV.IsMap {
-					newPath = newPath + ".<name>"
+					newPath += ".<name>"
 				}
 				walkFields(newPath+".", v.Children)
 			}

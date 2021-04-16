@@ -16,8 +16,7 @@ func FieldSpecs() docs.FieldSpecs {
 		}).HasType("object").IsInterpolated().Map(),
 	}
 	httpSpecs = append(httpSpecs, auth.FieldSpecsExpanded()...)
-	httpSpecs = append(httpSpecs, tls.FieldSpec())
-	httpSpecs = append(httpSpecs,
+	httpSpecs = append(httpSpecs, tls.FieldSpec(),
 		docs.FieldAdvanced("copy_response_headers", "Sets whether to copy the headers from the response to the resulting payload.").HasType("bool"),
 		docs.FieldCommon("rate_limit", "An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by.").HasType("string"),
 		docs.FieldCommon("timeout", "A static timeout to apply to requests.").HasType("string"),

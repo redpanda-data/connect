@@ -112,7 +112,7 @@ func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
 	}
 
 	hashMap := map[string]interface{}{}
-	if err = yaml.Unmarshal(cBytes, &hashMap); err != nil {
+	if err := yaml.Unmarshal(cBytes, &hashMap); err != nil {
 		return nil, err
 	}
 
@@ -435,7 +435,7 @@ func logfmtFormatter(addTimestamp bool, fields map[string]interface{}) logFormat
 func deprecatedFormatter(component string, addTimestamp bool) logFormatter {
 	return func(w io.Writer, message string, level string, other ...interface{}) {
 		if !strings.HasSuffix(message, "\n") {
-			message = message + "\n"
+			message += "\n"
 		}
 		timestampStr := ""
 		if addTimestamp {
@@ -461,7 +461,7 @@ func getFormatter(format, component string, addTimestamp bool, fields map[string
 }
 
 // write prints a log message with any configured extras prepended.
-func (l *Logger) write(message string, level string, other ...interface{}) {
+func (l *Logger) write(message, level string, other ...interface{}) {
 	l.formatter(l.stream, message, level, other...)
 }
 

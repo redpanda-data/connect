@@ -89,7 +89,7 @@ type fileWriter struct {
 	handle     codec.Writer
 }
 
-func newFileWriter(pathStr string, codecStr string, log log.Modular, stats metrics.Type) (*fileWriter, error) {
+func newFileWriter(pathStr, codecStr string, log log.Modular, stats metrics.Type) (*fileWriter, error) {
 	codec, codecConf, err := codec.GetWriter(codecStr)
 	if err != nil {
 		return nil, err
@@ -131,10 +131,10 @@ func (w *fileWriter) WriteWithContext(ctx context.Context, msg types.Message) er
 
 		flag := os.O_CREATE | os.O_RDWR
 		if w.codecConf.Append {
-			flag = flag | os.O_APPEND
+			flag |= os.O_APPEND
 		}
 		if w.codecConf.Truncate {
-			flag = flag | os.O_TRUNC
+			flag |= os.O_TRUNC
 		}
 
 		if err := os.MkdirAll(filepath.Dir(path), os.FileMode(0777)); err != nil {

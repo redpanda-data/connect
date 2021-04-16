@@ -110,7 +110,7 @@ func NewSocketServer(conf Config, mgr types.Manager, log log.Modular, stats metr
 		sconf.Codec = "delim:" + sconf.Delim
 	}
 	if sconf.Multipart && !strings.HasSuffix(sconf.Codec, "/multipart") {
-		sconf.Codec = sconf.Codec + "/multipart"
+		sconf.Codec += "/multipart"
 	}
 
 	codecConf := codec.NewReaderConfig()

@@ -234,10 +234,8 @@ func testElasticParallelWrites(urls []string, client *elastic.Client, t *testing
 			rawBytes, err := get.Source.MarshalJSON()
 			if err != nil {
 				t.Error(err)
-			} else {
-				if act := string(rawBytes); act != exp {
-					t.Errorf("Wrong result: %v != %v", act, exp)
-				}
+			} else if act := string(rawBytes); act != exp {
+				t.Errorf("Wrong result: %v != %v", act, exp)
 			}
 		}
 	}
@@ -332,10 +330,8 @@ func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
 		sourceBytes, err = get.Source.MarshalJSON()
 		if err != nil {
 			t.Error(err)
-		} else {
-			if exp, act := string(testMsgs[i][0]), string(sourceBytes); exp != act {
-				t.Errorf("wrong user field returned: %v != %v", act, exp)
-			}
+		} else if exp, act := string(testMsgs[i][0]), string(sourceBytes); exp != act {
+			t.Errorf("wrong user field returned: %v != %v", act, exp)
 		}
 	}
 }
@@ -398,10 +394,8 @@ func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *tes
 		sourceBytes, err = get.Source.MarshalJSON()
 		if err != nil {
 			t.Error(err)
-		} else {
-			if exp, act := string(testMsgs[i][0]), string(sourceBytes); exp != act {
-				t.Errorf("wrong user field returned: %v != %v", act, exp)
-			}
+		} else if exp, act := string(testMsgs[i][0]), string(sourceBytes); exp != act {
+			t.Errorf("wrong user field returned: %v != %v", act, exp)
 		}
 	}
 }
@@ -464,10 +458,8 @@ func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
 		sourceBytes, err = get.Source.MarshalJSON()
 		if err != nil {
 			t.Error(err)
-		} else {
-			if exp, act := string(testMsg[i]), string(sourceBytes); exp != act {
-				t.Errorf("wrong user field returned: %v != %v", act, exp)
-			}
+		} else if exp, act := string(testMsg[i]), string(sourceBytes); exp != act {
+			t.Errorf("wrong user field returned: %v != %v", act, exp)
 		}
 	}
 }

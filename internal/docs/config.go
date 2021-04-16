@@ -217,8 +217,7 @@ func sanitiseConditionConfigNode(node *yaml.Node) error {
 	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == "type" {
 			name = node.Content[i+1].Value
-			newNodes = append(newNodes, node.Content[i])
-			newNodes = append(newNodes, node.Content[i+1])
+			newNodes = append(newNodes, node.Content[i], node.Content[i+1])
 			break
 		}
 	}
@@ -229,8 +228,7 @@ func sanitiseConditionConfigNode(node *yaml.Node) error {
 
 	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == name {
-			newNodes = append(newNodes, node.Content[i])
-			newNodes = append(newNodes, node.Content[i+1])
+			newNodes = append(newNodes, node.Content[i], node.Content[i+1])
 			break
 		}
 	}
@@ -303,8 +301,7 @@ func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == "label" {
 			if _, omit := labelField.shouldOmitNode(node.Content[i+1], node); !omit {
-				newNodes = append(newNodes, node.Content[i])
-				newNodes = append(newNodes, node.Content[i+1])
+				newNodes = append(newNodes, node.Content[i], node.Content[i+1])
 			}
 			break
 		}
@@ -313,8 +310,7 @@ func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 		if node.Content[i].Value == "type" {
 			name = node.Content[i+1].Value
 			if !conf.RemoveTypeField {
-				newNodes = append(newNodes, node.Content[i])
-				newNodes = append(newNodes, node.Content[i+1])
+				newNodes = append(newNodes, node.Content[i], node.Content[i+1])
 			}
 			break
 		} else {
@@ -346,8 +342,7 @@ func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 		if err := cSpec.Config.SanitiseNode(node.Content[i+1], conf); err != nil {
 			return err
 		}
-		newNodes = append(newNodes, node.Content[i])
-		newNodes = append(newNodes, node.Content[i+1])
+		newNodes = append(newNodes, node.Content[i], node.Content[i+1])
 		break
 	}
 
@@ -356,8 +351,7 @@ func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 	if !nameFound && conf.RemoveTypeField {
 		for i := 0; i < len(node.Content)-1; i += 2 {
 			if node.Content[i].Value == "type" {
-				newNodes = append(newNodes, node.Content[i])
-				newNodes = append(newNodes, node.Content[i+1])
+				newNodes = append(newNodes, node.Content[i], node.Content[i+1])
 				break
 			}
 		}
@@ -375,8 +369,7 @@ func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 			if err := spec.SanitiseNode(node.Content[i+1], conf); err != nil {
 				return err
 			}
-			newNodes = append(newNodes, node.Content[i])
-			newNodes = append(newNodes, node.Content[i+1])
+			newNodes = append(newNodes, node.Content[i], node.Content[i+1])
 		}
 	}
 

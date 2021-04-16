@@ -43,7 +43,7 @@ func TestAMQP1Integration(t *testing.T) {
 	})
 }
 
-func testAMQP1Connected(url string, sourceAddress string, t *testing.T) {
+func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 	ctx := context.Background()
 
 	conf := NewAMQP1Config()
@@ -127,7 +127,7 @@ func testAMQP1Connected(url string, sourceAddress string, t *testing.T) {
 
 }
 
-func testAMQP1Disconnected(url string, sourceAddress string, t *testing.T) {
+func testAMQP1Disconnected(url, sourceAddress string, t *testing.T) {
 	ctx := context.Background()
 
 	conf := NewAMQP1Config()

@@ -67,7 +67,7 @@ func TestProcessorIntegration(t *testing.T) {
 			}
 		}
 
-		if err = mongoClient.Connect(context.Background()); err != nil {
+		if err := mongoClient.Connect(context.Background()); err != nil {
 			return err
 		}
 
@@ -451,7 +451,7 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 	assert.True(t, match(expected, string(resMsgs[0].Get(0).Get())))
 }
 
-func createCollection(resource *dockertest.Resource, collectionName string, username string, password string) error {
+func createCollection(resource *dockertest.Resource, collectionName, username, password string) error {
 	_, err := resource.Exec([]string{
 		"mongo",
 		"-u", username,
@@ -485,7 +485,7 @@ func wildCardToRegexp(pattern string) string {
 	return result.String()
 }
 
-func match(pattern string, value string) bool {
+func match(pattern, value string) bool {
 	result, _ := regexp.MatchString(wildCardToRegexp(pattern), value)
 	return result
 }

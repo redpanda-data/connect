@@ -52,10 +52,8 @@ func CliCommand(testSuffix string) *cli.Command {
 				if runAll(c.Args().Slice(), testSuffix, true, logger, c.StringSlice("resources")) {
 					os.Exit(0)
 				}
-			} else {
-				if runAll(c.Args().Slice(), testSuffix, true, log.Noop(), c.StringSlice("resources")) {
-					os.Exit(0)
-				}
+			} else if runAll(c.Args().Slice(), testSuffix, true, log.Noop(), c.StringSlice("resources")) {
+				os.Exit(0)
 			}
 			os.Exit(1)
 			return nil

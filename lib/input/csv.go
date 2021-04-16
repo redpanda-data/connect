@@ -331,7 +331,7 @@ func (r *csvReader) ReadWithContext(ctx context.Context) (types.Message, reader.
 			structured = obj
 		}
 
-		if err = part.SetJSON(structured); err != nil {
+		if err := part.SetJSON(structured); err != nil {
 			return nil, nil, err
 		}
 		msg.Append(part)

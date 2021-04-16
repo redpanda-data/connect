@@ -69,7 +69,7 @@ func NewMatchFunction(contextFn Function, cases ...MatchCase) Function {
 // NewIfFunction creates a logical if expression from a query which should
 // return a boolean value. If the returned boolean is true then the ifFn is
 // executed and returned, otherwise elseFn is executed and returned.
-func NewIfFunction(queryFn Function, ifFn Function, elseFn Function) Function {
+func NewIfFunction(queryFn, ifFn, elseFn Function) Function {
 	return ClosureFunction("if expression", func(ctx FunctionContext) (interface{}, error) {
 		queryVal, err := queryFn.Exec(ctx)
 		if err != nil {

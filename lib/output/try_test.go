@@ -44,9 +44,7 @@ func TestTryOutputBasic(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Type = TypeTry
-	conf.Try = append(conf.Try, outOne)
-	conf.Try = append(conf.Try, outTwo)
-	conf.Try = append(conf.Try, outThree)
+	conf.Try = append(conf.Try, outOne, outTwo, outThree)
 
 	s, err := New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {

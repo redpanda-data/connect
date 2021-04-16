@@ -198,7 +198,7 @@ func addGrokPatternsFromPath(path string, patterns map[string]string) error {
 	if s, err := os.Stat(path); err != nil {
 		return err
 	} else if s.IsDir() {
-		path = path + "/*"
+		path += "/*"
 	}
 
 	files, err := filepath.Globs([]string{path})

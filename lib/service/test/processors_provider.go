@@ -149,7 +149,7 @@ func setEnvironment(vars map[string]string) func() {
 	}
 }
 
-func resolveProcessorsPointer(targetFile string, jsonPtr string) (filePath, procPath string, err error) {
+func resolveProcessorsPointer(targetFile, jsonPtr string) (filePath, procPath string, err error) {
 	var u *url.URL
 	if u, err = url.Parse(jsonPtr); err != nil {
 		return

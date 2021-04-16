@@ -181,7 +181,7 @@ func (c *cloudWatchStat) addValue(v int64) {
 		}
 		c.root.datumses[c.id] = existing
 	} else {
-		existing.Value = existing.Value + v
+		existing.Value += v
 	}
 	c.root.datumLock.Unlock()
 }
@@ -521,7 +521,7 @@ func (c *CloudWatch) loop() {
 	}
 }
 
-func valuesMapToSlices(m map[int64]int64) (values []*float64, counts []*float64) {
+func valuesMapToSlices(m map[int64]int64) (values, counts []*float64) {
 	ceiling := maxCloudWatchValues
 	lM := len(m)
 
