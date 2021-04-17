@@ -97,7 +97,7 @@ cache_resources:
 	suite := integrationTests(
 		integrationTestOpenClose(),
 		integrationTestMissingKey(),
-		integrationTestDoubleAdd(),
+		// integrationTestDoubleAdd(),
 		integrationTestDelete(),
 		integrationTestGetAndSet(50),
 	)
