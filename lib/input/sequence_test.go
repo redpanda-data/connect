@@ -69,10 +69,10 @@ consumeLoop:
 			act = append(act, string(tran.Payload.Get(0).Get()))
 			select {
 			case tran.ResponseChan <- response.NewAck():
-			case <-time.After(time.Second):
+			case <-time.After(time.Minute):
 				t.Fatalf("failed to ack after: %v", act)
 			}
-		case <-time.After(time.Second):
+		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message after: %v", act)
 		}
 	}
@@ -141,10 +141,10 @@ consumeLoop:
 			act = append(act, string(tran.Payload.Get(0).Get()))
 			select {
 			case tran.ResponseChan <- response.NewAck():
-			case <-time.After(time.Second):
+			case <-time.After(time.Minute):
 				t.Fatalf("failed to ack after: %v", act)
 			}
-		case <-time.After(time.Second):
+		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message after: %v", act)
 		}
 	}
@@ -267,10 +267,10 @@ func TestSequenceJoinsMergeStrategies(t *testing.T) {
 					act = append(act, string(tran.Payload.Get(0).Get()))
 					select {
 					case tran.ResponseChan <- response.NewAck():
-					case <-time.After(time.Second):
+					case <-time.After(time.Minute):
 						t.Fatalf("failed to ack after: %v", act)
 					}
-				case <-time.After(time.Second):
+				case <-time.After(time.Minute):
 					t.Fatalf("Failed to consume message after: %v", act)
 				}
 			}
@@ -356,10 +356,10 @@ consumeLoop:
 			act = append(act, string(tran.Payload.Get(0).Get()))
 			select {
 			case tran.ResponseChan <- response.NewAck():
-			case <-time.After(time.Second):
+			case <-time.After(time.Minute):
 				t.Fatalf("failed to ack after: %v", act)
 			}
-		case <-time.After(time.Second):
+		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message after: %v", act)
 		}
 	}
@@ -413,10 +413,10 @@ func TestSequenceSad(t *testing.T) {
 			assert.Equal(t, str, string(tran.Payload.Get(0).Get()))
 			select {
 			case tran.ResponseChan <- response.NewAck():
-			case <-time.After(time.Second):
+			case <-time.After(time.Minute):
 				t.Fatalf("failed to ack after: %v", str)
 			}
-		case <-time.After(time.Second):
+		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message %v", i)
 		}
 	}
