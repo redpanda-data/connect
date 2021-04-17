@@ -1,0 +1,36 @@
+name: Integration Test
+
+on:
+  push:
+  schedule:
+    - cron: '0 1 * * *' # run at 1 AM UTC
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.16.x
+
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+          ~/Library/Caches/go-build
+          %LocalAppData%\go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Deps
+      run: make deps && git diff-index --quiet HEAD || { >&2 echo "Stale go.{mod,sum} detected. This can be fixed with 'make deps'."; exit 1; }
+
+    - name: Integration Test
+      run: go test -run "^Test.*Integration$" -timeout 30m ./...

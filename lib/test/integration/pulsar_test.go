@@ -19,6 +19,10 @@ var _ = registerIntegrationTest("pulsar", func(t *testing.T) {
 	require.NoError(t, err)
 
 	pool.MaxWait = time.Second * 30
+	if dline, exists := t.Deadline(); exists {
+		pool.MaxWait = time.Until(dline) / 2
+	}
+
 	resource, err := pool.Run("apachepulsar/pulsar-standalone", "latest", nil)
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -37,12 +41,11 @@ var _ = registerIntegrationTest("pulsar", func(t *testing.T) {
 		prod, err := client.CreateProducer(pulsar.ProducerOptions{
 			Topic: "benthos-connection-test",
 		})
-		client.Close()
-		if err != nil {
-			return err
+		if err == nil {
+			prod.Close()
 		}
-		prod.Close()
-		return nil
+		client.Close()
+		return err
 	}))
 
 	template := `

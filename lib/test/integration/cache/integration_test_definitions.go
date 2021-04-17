@@ -1,10 +1,12 @@
 package cache
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -58,8 +60,10 @@ func integrationTestDoubleAdd() testDefinition {
 			})
 
 			require.NoError(t, cache.Add("addkey", []byte("first")))
-			time.Sleep(time.Second * 10)
-			assert.EqualError(t, cache.Add("addkey", []byte("second")), "key already exists")
+
+			assert.Eventually(t, func() bool {
+				return errors.Is(cache.Add("addkey", []byte("second")), types.ErrKeyAlreadyExists)
+			}, time.Minute, time.Second)
 
 			res, err := cache.Get("addkey")
 			require.NoError(t, err)
