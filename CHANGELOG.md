@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Experimental `azure_renew_lock` field added to the `amqp_1` input.
-- New (BETA) `metadata` and `source_metadata` functions.
+- New (BETA) `root_meta` function.
 - Fields `max_in_flight` and `dequeue_visibility_timeout` added to the `azure_queue_storage` input.
 - New (BETA) Bloblang methods `format_timestamp_unix` and `format_timestamp_unix_nano`.
 

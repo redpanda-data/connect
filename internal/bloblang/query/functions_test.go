@@ -94,35 +94,21 @@ func TestFunctions(t *testing.T) {
 			err:   `metadata value 'foo' not found`,
 		},
 		"check metadata function object": {
-			input:  mustFunc("metadata", "foo"),
+			input:  mustFunc("meta", "foo"),
 			output: "foobar",
 			messages: []easyMsg{
 				{content: "", meta: map[string]string{
 					"foo": "foobar",
 				}},
-			},
-		},
-		"check metadata function error": {
-			input:  mustFunc("metadata", "foo"),
-			output: "",
-			messages: []easyMsg{
-				{content: "", meta: map[string]string{}},
 			},
 		},
 		"check source_metadata function object": {
-			input:  mustFunc("metadata", "foo"),
+			input:  mustFunc("meta", "foo"),
 			output: "foobar",
 			messages: []easyMsg{
 				{content: "", meta: map[string]string{
 					"foo": "foobar",
 				}},
-			},
-		},
-		"check source_metadata function error": {
-			input:  mustFunc("metadata", "foo"),
-			output: "",
-			messages: []easyMsg{
-				{content: "", meta: map[string]string{}},
 			},
 		},
 	}

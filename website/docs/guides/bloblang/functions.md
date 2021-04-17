@@ -177,48 +177,44 @@ root.doc = json()
 
 ### `meta`
 
-Returns the value of a metadata key from the input message. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`metadata` function](#metadata). This function supports extracting metadata from other messages of a batch with the `from` method.
+Returns the value of a metadata key from the input message. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`root_meta` function](#root_meta). This function supports extracting metadata from other messages of a batch with the `from` method.
 
 ```coffee
 root.topic = meta("kafka_topic")
 ```
 
-The parameter is optional and if omitted the entire metadata contents are returned as a JSON object.
+If the target key does not exist an error is thrown, allowing you to use coalesce or catch methods to fallback to other queries.
+
+```coffee
+root.topic = meta("nope") | meta("also nope") | "default"
+```
+
+The parameter is optional and if omitted the entire metadata contents are returned as an object.
 
 ```coffee
 root.all_metadata = meta()
 ```
 
-### `metadata`
+### `root_meta`
 
 BETA: This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 
-Returns the value of a metadata key, or an empty string if the metadata key is not found. Changes made to metadata during the mapping will be reflected by this function.
+Returns the value of a metadata key from the new message being created. Changes made to metadata during a mapping will be reflected by this function.
 
 ```coffee
-root.topic = metadata("kafka_topic")
+root.topic = root_meta("kafka_topic")
 ```
 
-The parameter is optional and if omitted the entire metadata contents are returned as a JSON object.
+If the target key does not exist an error is thrown, allowing you to use coalesce or catch methods to fallback to other queries.
 
 ```coffee
-root.all_metadata = metadata()
+root.topic = root_meta("nope") | root_meta("also nope") | "default"
 ```
 
-### `source_metadata`
-
-BETA: This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
-Returns the value of a metadata key from the original input message, or an empty string if the key is not found. This function does NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`metadata` function](#metadata). This function supports extracting metadata from other messages of a batch with the `from` method.
+The parameter is optional and if omitted the entire metadata contents are returned as an object.
 
 ```coffee
-root.topic = source_metadata("kafka_topic")
-```
-
-The parameter is optional and if omitted the entire metadata contents are returned as a JSON object.
-
-```coffee
-root.all_metadata = source_metadata()
+root.all_metadata = root_meta()
 ```
 
 ## Environment

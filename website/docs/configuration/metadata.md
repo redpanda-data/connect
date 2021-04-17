@@ -73,7 +73,7 @@ For example, if we were sending messages to kafka using a metadata key `target_t
 output:
   kafka:
     addresses: [ TODO ]
-    topic: ${! meta("target_topic")
+    topic: ${! meta("target_topic") }
     metadata:
       exclude_prefixes:
         - target_topic
@@ -92,8 +92,8 @@ pipeline:
           "bar",
           "baz",
         ]
-        meta = meta().map_each_key(if !$allowed_meta.contains(this) {
-          "_" + this
+        meta = meta().map_each_key(key -> if !$allowed_meta.contains(key) {
+          "_" + key
         })
 
 output:

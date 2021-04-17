@@ -231,7 +231,7 @@ func TestExpressions(t *testing.T) {
 		"metadata function": {
 			expression: NewExpression(
 				NewQueryResolver(func() query.Function {
-					fn, err := query.InitFunction("metadata", "foo")
+					fn, err := query.InitFunction("meta", "foo")
 					require.NoError(t, err)
 					return fn
 				}()),
@@ -247,7 +247,7 @@ func TestExpressions(t *testing.T) {
 		"metadata function not exist": {
 			expression: NewExpression(
 				NewQueryResolver(func() query.Function {
-					fn, err := query.InitFunction("metadata", "foo")
+					fn, err := query.InitFunction("meta", "foo")
 					require.NoError(t, err)
 					return fn
 				}()),
@@ -278,7 +278,7 @@ func TestExpressions(t *testing.T) {
 		"all metadata function": {
 			expression: NewExpression(
 				NewQueryResolver(func() query.Function {
-					fn, err := query.InitFunction("metadata")
+					fn, err := query.InitFunction("meta")
 					require.NoError(t, err)
 					return fn
 				}()),

@@ -159,10 +159,10 @@ func TestAssignments(t *testing.T) {
 			}},
 			output: &part{Content: `{}`},
 		},
-		"source_metadata assignment": {
+		"metadata assignment": {
 			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewMetaAssignment(metaKey("foo")), query.NewLiteralFunction("", "new value")),
-				NewStatement(nil, NewMetaAssignment(metaKey("bar")), initFunc("source_metadata", "foo")),
+				NewStatement(nil, NewMetaAssignment(metaKey("bar")), initFunc("meta", "foo")),
 			),
 			input: []part{{
 				Content: `{}`,
@@ -178,10 +178,10 @@ func TestAssignments(t *testing.T) {
 				},
 			},
 		},
-		"metadata assignment": {
+		"root_metadata assignment": {
 			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewMetaAssignment(metaKey("foo")), query.NewLiteralFunction("", "exists now")),
-				NewStatement(nil, NewMetaAssignment(metaKey("bar")), initFunc("metadata", "foo")),
+				NewStatement(nil, NewMetaAssignment(metaKey("bar")), initFunc("root_meta", "foo")),
 			),
 			input: []part{{Content: `{}`}},
 			output: &part{
