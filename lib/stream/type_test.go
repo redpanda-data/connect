@@ -86,7 +86,7 @@ func TestTypeCloseGracefully(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = strm.stopGracefully(time.Second); err != nil {
+	if err = strm.stopGracefully(time.Second * 5); err != nil {
 		t.Error(err)
 	}
 
@@ -114,7 +114,7 @@ func TestTypeCloseOrdered(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = strm.stopOrdered(time.Second); err != nil {
+	if err = strm.stopOrdered(time.Second * 5); err != nil {
 		t.Error(err)
 	}
 
