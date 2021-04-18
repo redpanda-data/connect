@@ -130,6 +130,7 @@ func TestSignallerAtLeisureCtx(t *testing.T) {
 
 	// Cancelled from at immediate signal
 	inCtx, inDone = context.WithCancel(context.Background())
+	s = NewSignaller()
 	ctx, done = s.CloseAtLeisureCtx(inCtx)
 	assertOpen(t, ctx.Done())
 	s.CloseNow()
