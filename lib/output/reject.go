@@ -24,7 +24,7 @@ func init() {
 			}
 			return NewAsyncWriter(TypeReject, 1, f, log, stats)
 		}),
-		Status: docs.StatusBeta,
+		Status: docs.StatusStable,
 		Summary: `
 Rejects all messages, treating them as though the output destination failed to publish them.`,
 		Description: `

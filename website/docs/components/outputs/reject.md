@@ -1,7 +1,7 @@
 ---
 title: reject
 type: output
-status: beta
+status: stable
 categories: ["Utility"]
 ---
 
@@ -15,7 +15,6 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 
 Rejects all messages, treating them as though the output destination failed to publish them.
 

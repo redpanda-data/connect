@@ -24,7 +24,7 @@ import (
 func init() {
 	Constructors[TypeCSVFile] = TypeSpec{
 		constructor: fromSimpleConstructor(NewCSVFile),
-		Status:      docs.StatusBeta,
+		Status:      docs.StatusStable,
 		Summary:     "Reads one or more CSV files as structured records following the format described in RFC 4180.",
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(

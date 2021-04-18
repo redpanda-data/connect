@@ -1,7 +1,7 @@
 ---
 title: jq
 type: processor
-status: beta
+status: stable
 categories: ["Mapping"]
 ---
 
@@ -15,7 +15,6 @@ categories: ["Mapping"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 
 Transforms and filters messages using jq queries.
 

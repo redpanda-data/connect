@@ -22,7 +22,7 @@ func init() {
 		Categories: []Category{
 			CategoryComposition,
 		},
-		Status: docs.StatusBeta,
+		Status: docs.StatusStable,
 		Summary: `
 Executes a topology of ` + "[`branch` processors][processors.branch]" + `,
 performing them in parallel where possible.`,

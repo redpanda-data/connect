@@ -57,7 +57,7 @@ root.bar.id = this.user.id`,
 
 func init() {
 	Constructors[TypeBranch] = TypeSpec{
-		Status:      docs.StatusBeta,
+		Status:      docs.StatusStable,
 		constructor: NewBranch,
 		Categories: []Category{
 			CategoryComposition,

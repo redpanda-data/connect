@@ -18,7 +18,7 @@ func init() {
 	Constructors[TypeRistretto] = TypeSpec{
 		constructor:       NewRistretto,
 		SupportsPerKeyTTL: true,
-		Status:            docs.StatusBeta,
+		Status:            docs.StatusStable,
 		Summary: `
 Stores key/value pairs in a map held in the memory-bound
 [Ristretto cache](https://github.com/dgraph-io/ristretto).`,

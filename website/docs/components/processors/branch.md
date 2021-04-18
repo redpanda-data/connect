@@ -1,7 +1,7 @@
 ---
 title: branch
 type: processor
-status: beta
+status: stable
 categories: ["Composition"]
 ---
 
@@ -15,7 +15,6 @@ categories: ["Composition"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 
 The `branch` processor allows you to create a new request message via
 a [Bloblang mapping](/docs/guides/bloblang/about), execute a list of processors

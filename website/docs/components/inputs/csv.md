@@ -1,7 +1,7 @@
 ---
 title: csv
 type: input
-status: beta
+status: stable
 categories: ["Local"]
 ---
 
@@ -15,7 +15,6 @@ categories: ["Local"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 Reads one or more CSV files as structured records following the format described in RFC 4180.
 
 
