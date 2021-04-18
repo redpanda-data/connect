@@ -193,6 +193,7 @@ type HTTPServer struct {
 	conf  Config
 	stats metrics.Type
 	log   log.Modular
+	mgr   types.Manager
 
 	ratelimit types.RateLimit
 
@@ -267,6 +268,7 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		conf:            conf,
 		stats:           stats,
 		log:             log,
+		mgr:             mgr,
 		mux:             mux,
 		ratelimit:       ratelimit,
 		server:          server,
@@ -332,7 +334,7 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 
 //------------------------------------------------------------------------------
 
-func extractMessageFromRequest(r *http.Request) (types.Message, error) {
+func (h *HTTPServer) extractMessageFromRequest(r *http.Request) (types.Message, error) {
 	msg := message.New(nil)
 
 	contentType := r.Header.Get("Content-Type")
@@ -421,7 +423,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	msg, err := extractMessageFromRequest(r)
+	msg, err := h.extractMessageFromRequest(r)
 	if err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		h.log.Warnf("Request read failed: %v\n", err)

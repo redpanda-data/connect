@@ -1,6 +1,8 @@
 package output
 
 import (
+	"fmt"
+
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -48,6 +50,7 @@ However, this also means that manual intervention will eventually be required in
 			docs.FieldCommon("compression", "The compression algorithm to use.").HasOptions("none", "snappy", "lz4", "gzip"),
 			docs.FieldCommon("static_headers", "An optional map of static headers that should be added to messages in addition to metadata.", map[string]string{"first-static-header": "value-1", "second-static-header": "value-2"}).Map(),
 			docs.FieldCommon("metadata", "Specify criteria for which metadata values are sent with messages as headers.").WithChildren(output.MetadataFields()...),
+			output.InjectTracingSpanMappingDocs,
 			docs.FieldCommon("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 			docs.FieldAdvanced("ack_replicas", "Ensure that messages have been copied across all replicas before acknowledging receipt."),
 			docs.FieldAdvanced("max_msg_bytes", "The maximum size in bytes of messages sent to the target topic."),
@@ -70,19 +73,23 @@ func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Typ
 	if err != nil {
 		return nil, err
 	}
-	var w Type
-	if conf.Kafka.MaxInFlight == 1 {
-		w, err = NewWriter(
-			TypeKafka, k, log, stats,
-		)
-	} else {
-		w, err = NewAsyncWriter(
-			TypeKafka, conf.Kafka.MaxInFlight, k, log, stats,
-		)
-	}
+	w, err := NewAsyncWriter(
+		TypeKafka, conf.Kafka.MaxInFlight, k, log, stats,
+	)
 	if err != nil {
 		return nil, err
 	}
+
+	if conf.Kafka.InjectTracingMap != "" {
+		aw, ok := w.(*AsyncWriter)
+		if !ok {
+			return nil, fmt.Errorf("unable to set an inject_tracing_map due to wrong type: %T", w)
+		}
+		if err = aw.SetInjectTracingMap(conf.Kafka.InjectTracingMap); err != nil {
+			return nil, fmt.Errorf("failed to initialize inject tracing map: %v", err)
+		}
+	}
+
 	return NewBatcherFromConfig(conf.Kafka.Batching, w, mgr, log, stats)
 }
 

@@ -28,24 +28,25 @@ import (
 
 // KafkaConfig contains configuration fields for the Kafka output type.
 type KafkaConfig struct {
-	Addresses      []string    `json:"addresses" yaml:"addresses"`
-	ClientID       string      `json:"client_id" yaml:"client_id"`
-	Key            string      `json:"key" yaml:"key"`
-	Partitioner    string      `json:"partitioner" yaml:"partitioner"`
-	Topic          string      `json:"topic" yaml:"topic"`
-	Compression    string      `json:"compression" yaml:"compression"`
-	MaxMsgBytes    int         `json:"max_msg_bytes" yaml:"max_msg_bytes"`
-	Timeout        string      `json:"timeout" yaml:"timeout"`
-	AckReplicas    bool        `json:"ack_replicas" yaml:"ack_replicas"`
-	TargetVersion  string      `json:"target_version" yaml:"target_version"`
-	TLS            btls.Config `json:"tls" yaml:"tls"`
-	SASL           sasl.Config `json:"sasl" yaml:"sasl"`
-	MaxInFlight    int         `json:"max_in_flight" yaml:"max_in_flight"`
-	retries.Config `json:",inline" yaml:",inline"`
-	RetryAsBatch   bool               `json:"retry_as_batch" yaml:"retry_as_batch"`
-	Batching       batch.PolicyConfig `json:"batching" yaml:"batching"`
-	StaticHeaders  map[string]string  `json:"static_headers" yaml:"static_headers"`
-	Metadata       output.Metadata    `json:"metadata" yaml:"metadata"`
+	Addresses        []string    `json:"addresses" yaml:"addresses"`
+	ClientID         string      `json:"client_id" yaml:"client_id"`
+	Key              string      `json:"key" yaml:"key"`
+	Partitioner      string      `json:"partitioner" yaml:"partitioner"`
+	Topic            string      `json:"topic" yaml:"topic"`
+	Compression      string      `json:"compression" yaml:"compression"`
+	MaxMsgBytes      int         `json:"max_msg_bytes" yaml:"max_msg_bytes"`
+	Timeout          string      `json:"timeout" yaml:"timeout"`
+	AckReplicas      bool        `json:"ack_replicas" yaml:"ack_replicas"`
+	TargetVersion    string      `json:"target_version" yaml:"target_version"`
+	TLS              btls.Config `json:"tls" yaml:"tls"`
+	SASL             sasl.Config `json:"sasl" yaml:"sasl"`
+	MaxInFlight      int         `json:"max_in_flight" yaml:"max_in_flight"`
+	retries.Config   `json:",inline" yaml:",inline"`
+	RetryAsBatch     bool               `json:"retry_as_batch" yaml:"retry_as_batch"`
+	Batching         batch.PolicyConfig `json:"batching" yaml:"batching"`
+	StaticHeaders    map[string]string  `json:"static_headers" yaml:"static_headers"`
+	Metadata         output.Metadata    `json:"metadata" yaml:"metadata"`
+	InjectTracingMap string             `json:"inject_tracing_map" yaml:"inject_tracing_map"`
 
 	// TODO: V4 remove this.
 	RoundRobinPartitions bool `json:"round_robin_partitions" yaml:"round_robin_partitions"`

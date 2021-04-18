@@ -12,7 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/service/mongodb/client"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/bloblang"
-	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
@@ -57,7 +56,7 @@ func init() {
 	bundle.AllProcessors.Add(func(c processor.Config, nm bundle.NewManagement) (processor.Type, error) {
 		return NewProcessor(c, nm, nm.Logger(), nm.Metrics())
 	}, docs.ComponentSpec{
-		Name:    cache.TypeMongoDB,
+		Name:    processor.TypeMongoDB,
 		Type:    docs.TypeProcessor,
 		Status:  docs.StatusExperimental,
 		Version: "3.43.0",

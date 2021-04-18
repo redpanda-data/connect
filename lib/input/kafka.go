@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/checkpoint"
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -79,6 +80,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 			).AtVersion("3.33.0"),
 			docs.FieldAdvanced("commit_period", "The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown."),
 			docs.FieldAdvanced("max_processing_period", "A maximum estimate for the time taken to process a message, this is used for tuning consumer group synchronization."),
+			input.ExtractTracingSpanMappingDocs,
 			docs.FieldAdvanced("group", "Tuning parameters for consumer group synchronization.").WithChildren(
 				docs.FieldAdvanced("session_timeout", "A period after which a consumer of the group is kicked after no heartbeats."),
 				docs.FieldAdvanced("heartbeat_interval", "A period in which heartbeats should be sent out."),
@@ -114,9 +116,15 @@ You can access these metadata fields using [function interpolation](/docs/config
 // NewKafka creates a new Kafka input type.
 func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	if !conf.Kafka.IsDeprecated() || len(conf.Kafka.Topics) > 0 {
-		rdr, err := newKafkaReader(conf.Kafka, mgr, log, stats)
-		if err != nil {
+		var rdr reader.Async
+		var err error
+		if rdr, err = newKafkaReader(conf.Kafka, mgr, log, stats); err != nil {
 			return nil, err
+		}
+		if conf.Kafka.ExtractTracingMap != "" {
+			if rdr, err = input.NewSpanReader(TypeKafka, conf.Kafka.ExtractTracingMap, rdr, mgr, log); err != nil {
+				return nil, err
+			}
 		}
 		return NewAsyncReader(TypeKafka, false, reader.NewAsyncPreserver(rdr), log, stats)
 	}

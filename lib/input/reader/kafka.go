@@ -31,17 +31,19 @@ type KafkaConfig struct {
 	Group               KafkaBalancedGroupConfig `json:"group" yaml:"group"`
 	CommitPeriod        string                   `json:"commit_period" yaml:"commit_period"`
 	CheckpointLimit     int                      `json:"checkpoint_limit" yaml:"checkpoint_limit"`
+	ExtractTracingMap   string                   `json:"extract_tracing_map" yaml:"extract_tracing_map"`
 	MaxProcessingPeriod string                   `json:"max_processing_period" yaml:"max_processing_period"`
 	FetchBufferCap      int                      `json:"fetch_buffer_cap" yaml:"fetch_buffer_cap"`
-	Topic               string                   `json:"topic" yaml:"topic"`
-	Partition           int32                    `json:"partition" yaml:"partition"`
 	StartFromOldest     bool                     `json:"start_from_oldest" yaml:"start_from_oldest"`
 	TargetVersion       string                   `json:"target_version" yaml:"target_version"`
+	TLS                 btls.Config              `json:"tls" yaml:"tls"`
+	SASL                sasl.Config              `json:"sasl" yaml:"sasl"`
+	Batching            batch.PolicyConfig       `json:"batching" yaml:"batching"`
+
 	// TODO: V4 Remove this.
-	MaxBatchCount int                `json:"max_batch_count" yaml:"max_batch_count"`
-	TLS           btls.Config        `json:"tls" yaml:"tls"`
-	SASL          sasl.Config        `json:"sasl" yaml:"sasl"`
-	Batching      batch.PolicyConfig `json:"batching" yaml:"batching"`
+	Topic         string `json:"topic" yaml:"topic"`
+	Partition     int32  `json:"partition" yaml:"partition"`
+	MaxBatchCount int    `json:"max_batch_count" yaml:"max_batch_count"`
 
 	deprecated bool
 }

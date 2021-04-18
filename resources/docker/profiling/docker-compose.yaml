@@ -48,7 +48,6 @@ services:
       - "traefik.http.routers.whoami.middlewares=secured"
       - "traefik.http.middlewares.secured.basicauth.users=foo:$$2y$$05$$zwyVyaTBE.hdSl8Xs./bJuv3nrlIgiFCsHNDvnWy4C3GRnR4L5cl6"
 
-
   grafana:
     image: grafana/grafana
     depends_on:

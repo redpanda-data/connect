@@ -68,6 +68,7 @@ input:
     checkpoint_limit: 1
     commit_period: 1s
     max_processing_period: 100ms
+    extract_tracing_map: ""
     group:
       session_timeout: 10s
       heartbeat_interval: 3s
@@ -375,6 +376,23 @@ A maximum estimate for the time taken to process a message, this is used for tun
 
 Type: `string`  
 Default: `"100ms"`  
+
+### `extract_tracing_map`
+
+EXPERIMENTAL: A [Bloblang mapping](/docs/guides/bloblang/about) that attempts to extract an object containing tracing propagation information, which will then be used as the root tracing span for the message. The specification of the extracted fields must match the format used by the service wide tracer.
+
+
+Type: `string`  
+Default: `""`  
+Requires version 3.45.0 or newer  
+
+```yaml
+# Examples
+
+extract_tracing_map: root = meta()
+
+extract_tracing_map: root = this.meta.span
+```
 
 ### `group`
 

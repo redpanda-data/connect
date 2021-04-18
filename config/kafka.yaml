@@ -30,6 +30,7 @@ input:
     checkpoint_limit: 1
     commit_period: 1s
     max_processing_period: 100ms
+    extract_tracing_map: ""
     group:
       session_timeout: 10s
       heartbeat_interval: 3s
@@ -72,6 +73,7 @@ output:
     static_headers: {}
     metadata:
       exclude_prefixes: []
+    inject_tracing_map: ""
     max_in_flight: 1
     ack_replicas: false
     max_msg_bytes: 1000000

@@ -135,16 +135,21 @@ func IterateWithChildSpans(operationName string, msg types.Message, iter func(in
 func InitSpans(operationName string, msg types.Message) {
 	tracedParts := make([]types.Part, msg.Len())
 	msg.Iter(func(i int, p types.Part) error {
-		if GetSpan(p) != nil {
-			tracedParts[i] = p
-			return nil
-		}
-		span := opentracing.StartSpan(operationName)
-		ctx := opentracing.ContextWithSpan(message.GetContext(p), span)
-		tracedParts[i] = message.WithContext(ctx, p)
+		tracedParts[i] = InitSpan(operationName, p)
 		return nil
 	})
 	msg.SetAll(tracedParts)
+}
+
+// InitSpan sets up an OpenTracing span on a message part if one does not
+// already exist.
+func InitSpan(operationName string, part types.Part) types.Part {
+	if GetSpan(part) != nil {
+		return part
+	}
+	span := opentracing.StartSpan(operationName)
+	ctx := opentracing.ContextWithSpan(message.GetContext(part), span)
+	return message.WithContext(ctx, part)
 }
 
 // InitSpansFromParent sets up OpenTracing spans as children of a parent span on
@@ -152,16 +157,21 @@ func InitSpans(operationName string, msg types.Message) {
 func InitSpansFromParent(operationName string, parent opentracing.SpanContext, msg types.Message) {
 	tracedParts := make([]types.Part, msg.Len())
 	msg.Iter(func(i int, p types.Part) error {
-		if GetSpan(p) != nil {
-			tracedParts[i] = p
-			return nil
-		}
-		span := opentracing.StartSpan(operationName, opentracing.ChildOf(parent))
-		ctx := opentracing.ContextWithSpan(message.GetContext(p), span)
-		tracedParts[i] = message.WithContext(ctx, p)
+		tracedParts[i] = InitSpanFromParent(operationName, parent, p)
 		return nil
 	})
 	msg.SetAll(tracedParts)
+}
+
+// InitSpanFromParent sets up an OpenTracing span as children of a parent
+// span on a message part if one does not already exist.
+func InitSpanFromParent(operationName string, parent opentracing.SpanContext, part types.Part) types.Part {
+	if GetSpan(part) != nil {
+		return part
+	}
+	span := opentracing.StartSpan(operationName, opentracing.ChildOf(parent))
+	ctx := opentracing.ContextWithSpan(message.GetContext(part), span)
+	return message.WithContext(ctx, part)
 }
 
 // FinishSpans calls Finish on all message parts containing a span.

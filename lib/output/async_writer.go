@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -15,6 +17,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/cenkalti/backoff/v4"
+	"github.com/opentracing/opentracing-go"
 )
 
 // AsyncSink is a type that writes Benthos messages to a third party sink. If
@@ -41,6 +44,8 @@ type AsyncWriter struct {
 	typeStr     string
 	maxInflight int
 	writer      AsyncSink
+
+	injectTracingMap *mapping.Executor
 
 	log   log.Modular
 	stats metrics.Type
@@ -70,6 +75,14 @@ func NewAsyncWriter(
 	return aWriter, nil
 }
 
+// SetInjectTracingMap sets a mapping to be used for injecting tracing events
+// into messages.
+func (w *AsyncWriter) SetInjectTracingMap(mapping string) error {
+	var err error
+	w.injectTracingMap, err = bloblang.NewMapping("", mapping)
+	return err
+}
+
 //------------------------------------------------------------------------------
 
 func (w *AsyncWriter) latencyMeasuringWrite(msg types.Message) (latencyNs int64, err error) {
@@ -79,6 +92,49 @@ func (w *AsyncWriter) latencyMeasuringWrite(msg types.Message) (latencyNs int64,
 	err = w.writer.WriteWithContext(ctx, msg)
 	latencyNs = time.Since(t0).Nanoseconds()
 	return latencyNs, err
+}
+
+func (w *AsyncWriter) injectSpans(msg types.Message, spans []opentracing.Span) types.Message {
+	if w.injectTracingMap == nil || msg.Len() > len(spans) {
+		return msg
+	}
+
+	parts := make([]types.Part, msg.Len())
+
+	for i := 0; i < msg.Len(); i++ {
+		parts[i] = msg.Get(i).Copy()
+
+		spanMap := opentracing.TextMapCarrier{}
+
+		err := opentracing.GlobalTracer().Inject(spans[i].Context(), opentracing.TextMap, spanMap)
+		if err != nil {
+			w.log.Warnf("Failed to inject span: %v", err)
+			continue
+		}
+
+		spanMapGeneric := make(map[string]interface{}, len(spanMap))
+		for k, v := range spanMap {
+			spanMapGeneric[k] = v
+		}
+
+		spanPart := message.NewPart(nil)
+		if err = spanPart.SetJSON(spanMapGeneric); err != nil {
+			w.log.Warnf("Failed to inject span: %v", err)
+			continue
+		}
+
+		spanMsg := message.New(nil)
+		spanMsg.Append(spanPart)
+
+		if parts[i], err = w.injectTracingMap.MapOnto(parts[i], i, spanMsg); err != nil {
+			w.log.Warnf("Failed to inject span: %v", err)
+			parts[i] = msg.Get(i)
+		}
+	}
+
+	newMsg := message.New(nil)
+	newMsg.SetAll(parts)
+	return newMsg
 }
 
 // loop is an internal loop that brokers incoming messages to output pipe.
@@ -188,6 +244,8 @@ func (w *AsyncWriter) loop() {
 
 			w.log.Tracef("Attempting to write %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
 			spans := tracing.CreateChildSpans("output_"+w.typeStr, ts.Payload)
+			ts.Payload = w.injectSpans(ts.Payload, spans)
+
 			latency, err := w.latencyMeasuringWrite(ts.Payload)
 
 			// If our writer says it is not connected.

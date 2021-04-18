@@ -79,6 +79,7 @@ output:
     static_headers: {}
     metadata:
       exclude_prefixes: []
+    inject_tracing_map: ""
     max_in_flight: 1
     ack_replicas: false
     max_msg_bytes: 1000000
@@ -386,6 +387,22 @@ Provide a list of explicit metadata key prefixes to be excluded when adding meta
 
 Type: `array`  
 Default: `[]`  
+
+### `inject_tracing_map`
+
+EXPERIMENTAL: A [Bloblang mapping](/docs/guides/bloblang/about) used to inject an object containing tracing propagation information into outbound messages. The specification of the injected fields will match the format used by the service wide tracer.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+inject_tracing_map: meta = meta().merge(this)
+
+inject_tracing_map: root.meta.span = this
+```
 
 ### `max_in_flight`
 

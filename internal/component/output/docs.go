@@ -1,5 +1,7 @@
 package output
 
+import "github.com/Jeffail/benthos/v3/internal/docs"
+
 var docsAsync = `
 This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
@@ -25,3 +27,12 @@ func Description(async, batches bool, content string) string {
 	}
 	return content
 }
+
+// InjectTracingSpanMappingDocs returns a field spec describing an inject
+// tracing span mapping.
+var InjectTracingSpanMappingDocs = docs.FieldAdvanced(
+	"inject_tracing_map",
+	"EXPERIMENTAL: A [Bloblang mapping](/docs/guides/bloblang/about) used to inject an object containing tracing propagation information into outbound messages. The specification of the injected fields will match the format used by the service wide tracer.",
+	`meta = meta().merge(this)`,
+	`root.meta.span = this`,
+).Linter(docs.LintBloblangMapping)

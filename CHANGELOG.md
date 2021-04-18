@@ -8,9 +8,11 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Experimental `azure_renew_lock` field added to the `amqp_1` input.
-- New (BETA) `root_meta` function.
+- New beta `root_meta` function.
 - Fields `max_in_flight` and `dequeue_visibility_timeout` added to the `azure_queue_storage` input.
-- New (BETA) Bloblang methods `format_timestamp_unix` and `format_timestamp_unix_nano`.
+- New beta Bloblang methods `format_timestamp_unix` and `format_timestamp_unix_nano`.
+- Experimental `extract_tracing_map` field added to the `kafka` input.
+- Experimental `inject_tracing_map` field added to the `kafka` output.
 
 ### Fixed
 
@@ -391,7 +393,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New function `range` added to Bloblang.
-- New (BETA) `jq` processor.
+- New beta `jq` processor.
 - New driver `clickhouse` added to the `sql` processor.
 
 ### Changed
@@ -434,8 +436,8 @@ All notable changes to this project will be documented in this file.
 - Improved parser error messages with the `blobl` subcommand.
 - Added flag `file` to the `blobl` subcommand.
 - New Bloblang method `parse_timestamp_unix`.
-- New (BETA) `protobuf` processor.
-- New (BETA) `branch` processor.
+- New beta `protobuf` processor.
+- New beta `branch` processor.
 - Batching fields added to `s3` output.
 
 ### Changed
@@ -477,9 +479,9 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Path segments in Bloblang mapping targets can now be quote-escaped.
-- New (BETA) `sequence` input, for sequentially chaining inputs.
-- New (BETA) `csv` input for consuming CSV files.
-- New (BETA) Azure `table_storage` output.
+- New beta `sequence` input, for sequentially chaining inputs.
+- New beta `csv` input for consuming CSV files.
+- New beta Azure `table_storage` output.
 - New `parse_csv` Bloblang method.
 - New `throw` Bloblang function.
 - The `slice` Bloblang method now supports negative low and high arguments.
@@ -508,8 +510,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- New (BETA) `bloblang` input for generating documents.
-- New (BETA) Azure `blob_storage` output.
+- New beta `bloblang` input for generating documents.
+- New beta Azure `blob_storage` output.
 - Field `sync_response.status` added to `http_server` input. 
 - New Bloblang `errored` function.
 
@@ -613,8 +615,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New HMAC algorithms added to `hash` processor.
-- New (BETA) `bloblang` processor.
-- New (BETA) `bloblang` condition.
+- New beta `bloblang` processor.
+- New beta `bloblang` condition.
 
 ### Fixed
 
