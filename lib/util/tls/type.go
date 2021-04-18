@@ -75,7 +75,7 @@ func (c *Config) Get() (*tls.Config, error) {
 
 	for _, conf := range c.ClientCertificates {
 		cert, err := conf.Load()
-		if nil != err {
+		if err != nil {
 			return nil, err
 		}
 		clientCerts = append(clientCerts, cert)

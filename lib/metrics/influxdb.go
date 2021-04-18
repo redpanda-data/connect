@@ -175,7 +175,7 @@ func NewInfluxDB(config Config, opts ...func(Type)) (Type, error) {
 	return i, nil
 }
 
-func (i *InfluxDB) toCMName(dotSepName string) (string, []string, []string) {
+func (i *InfluxDB) toCMName(dotSepName string) (outPath string, labelNames, labelValues []string) {
 	return i.pathMapping.mapPathWithTags(dotSepName)
 }
 

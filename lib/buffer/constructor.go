@@ -98,7 +98,7 @@ func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
 	}
 	if err := docs.SanitiseComponentConfig(
 		docs.TypeBuffer,
-		(map[string]interface{})(outputMap),
+		map[string]interface{}(outputMap),
 		docs.ShouldDropDeprecated(removeDeprecated),
 	); err != nil {
 		return nil, err

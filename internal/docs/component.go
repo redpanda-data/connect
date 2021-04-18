@@ -290,9 +290,8 @@ func createOrderedConfig(t Type, rawExample interface{}, filter FieldFilter) (*y
 	return &newNode, nil
 }
 
-func genExampleConfigs(t Type, nest bool, fullConfigExample interface{}) (string, string, error) {
+func genExampleConfigs(t Type, nest bool, fullConfigExample interface{}) (commonConfigStr, advConfigStr string, err error) {
 	var advConfig, commonConfig interface{}
-	var err error
 	if advConfig, err = createOrderedConfig(t, fullConfigExample, func(f FieldSpec) bool {
 		return !f.Deprecated
 	}); err != nil {

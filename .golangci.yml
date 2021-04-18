@@ -22,10 +22,6 @@ linters-settings:
       - importShadow # Probably not worth the hassle...
       # TODO
       - emptyStringTest
-      - builtinShadow
-      - yodaStyleExpr
-      - unnamedResult
-      - typeUnparen
 
 linters:
   disable-all: true

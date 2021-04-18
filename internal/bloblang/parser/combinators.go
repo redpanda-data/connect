@@ -206,7 +206,7 @@ func Null() Func {
 
 // Array parses an array literal.
 func Array() Func {
-	open, comma, close := Char('['), Char(','), Char(']')
+	begin, comma, end := Char('['), Char(','), Char(']')
 	whitespace := DiscardAll(
 		OneOf(
 			NewlineAllowComment(),
@@ -216,7 +216,7 @@ func Array() Func {
 	return func(input []rune) Result {
 		return DelimitedPattern(
 			Expect(Sequence(
-				open,
+				begin,
 				whitespace,
 			), "array"),
 			LiteralValue(),
@@ -227,7 +227,7 @@ func Array() Func {
 			),
 			Sequence(
 				whitespace,
-				close,
+				end,
 			),
 			true,
 		)(input)
@@ -236,7 +236,7 @@ func Array() Func {
 
 // Object parses an object literal.
 func Object() Func {
-	open, comma, close := Char('{'), Char(','), Char('}')
+	begin, comma, end := Char('{'), Char(','), Char('}')
 	whitespace := DiscardAll(
 		OneOf(
 			NewlineAllowComment(),
@@ -247,7 +247,7 @@ func Object() Func {
 	return func(input []rune) Result {
 		res := DelimitedPattern(
 			Expect(Sequence(
-				open,
+				begin,
 				whitespace,
 			), "object"),
 			Sequence(
@@ -264,7 +264,7 @@ func Object() Func {
 			),
 			Sequence(
 				whitespace,
-				close,
+				end,
 			),
 			true,
 		)(input)

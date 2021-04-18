@@ -104,7 +104,7 @@ func newGCPCloudStorageObjectTarget(key string, ackFn codec.ReaderAckFn) *gcpClo
 func deleteGCPCloudStorageObjectAckFn(
 	bucket *storage.BucketHandle,
 	key string,
-	delete bool,
+	del bool,
 	prev codec.ReaderAckFn,
 ) codec.ReaderAckFn {
 	return func(ctx context.Context, err error) error {
@@ -113,7 +113,7 @@ func deleteGCPCloudStorageObjectAckFn(
 				return aerr
 			}
 		}
-		if !delete || err != nil {
+		if !del || err != nil {
 			return nil
 		}
 

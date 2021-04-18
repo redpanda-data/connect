@@ -97,7 +97,7 @@ func (oauth OAuthConfig) computeHMAC(
 	key string,
 ) (string, error) {
 	h := hmac.New(sha1.New, []byte(key))
-	if _, err := h.Write([]byte(message)); nil != err {
+	if _, err := h.Write([]byte(message)); err != nil {
 		return "", err
 	}
 	return base64.StdEncoding.EncodeToString(h.Sum(nil)), nil

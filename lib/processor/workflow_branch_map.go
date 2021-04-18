@@ -41,7 +41,7 @@ type workflowBranchMap struct {
 // map of resources, and a func to unlock the resources that were locked. If
 // any error occurs in locked each branch (the resource is missing, or the DAG
 // is malformed) then an error is returned instead.
-func (w *workflowBranchMap) Lock() ([][]string, map[string]workflowBranch, func(), error) {
+func (w *workflowBranchMap) Lock() (dag [][]string, branches map[string]workflowBranch, unlockFn func(), err error) {
 	// Only allow one processing thread to mutate the cached DAG at a time, but
 	// once they're resolved allow any number of threads to keep a reference to
 	// the branch resources.
@@ -49,7 +49,7 @@ func (w *workflowBranchMap) Lock() ([][]string, map[string]workflowBranch, func(
 	defer w.m.Unlock()
 
 	var unlocks []func()
-	unlockFn := func() {
+	unlockFn = func() {
 		for _, u := range unlocks {
 			u()
 		}

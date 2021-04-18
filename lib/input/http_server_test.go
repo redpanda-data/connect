@@ -668,11 +668,10 @@ func TestHTTPSyncResponseHeaders(t *testing.T) {
 	wg.Wait()
 }
 
-func createMultipart(payloads []string, contentType string) (string, []byte, error) {
+func createMultipart(payloads []string, contentType string) (hdr string, bodyBytes []byte, err error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	var err error
 	for i := 0; i < len(payloads) && err == nil; i++ {
 		var part io.Writer
 		if part, err = writer.CreatePart(textproto.MIMEHeader{

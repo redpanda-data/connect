@@ -37,12 +37,12 @@ func NewSyncBatcher(
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct batch policy: %v", err)
 	}
-	ctx, close := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 	return &SyncBatcher{
 		batcher: policy,
 		r:       r,
 		ctx:     ctx,
-		close:   close,
+		close:   cancel,
 	}, nil
 }
 

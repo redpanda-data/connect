@@ -5,7 +5,7 @@ import (
 )
 
 func dynamicArrayParser(pCtx Context) Func {
-	open, comma, close := Char('['), Char(','), Char(']')
+	begin, comma, end := Char('['), Char(','), Char(']')
 	whitespace := DiscardAll(
 		OneOf(
 			NewlineAllowComment(),
@@ -15,7 +15,7 @@ func dynamicArrayParser(pCtx Context) Func {
 	return func(input []rune) Result {
 		res := DelimitedPattern(
 			Expect(Sequence(
-				open,
+				begin,
 				whitespace,
 			), "array"),
 			Expect(queryParser(pCtx), "object"),
@@ -26,7 +26,7 @@ func dynamicArrayParser(pCtx Context) Func {
 			),
 			Sequence(
 				whitespace,
-				close,
+				end,
 			),
 			true,
 		)(input)
@@ -40,7 +40,7 @@ func dynamicArrayParser(pCtx Context) Func {
 }
 
 func dynamicObjectParser(pCtx Context) Func {
-	open, comma, close := Char('{'), Char(','), Char('}')
+	begin, comma, end := Char('{'), Char(','), Char('}')
 	whitespace := DiscardAll(
 		OneOf(
 			NewlineAllowComment(),
@@ -51,7 +51,7 @@ func dynamicObjectParser(pCtx Context) Func {
 	return func(input []rune) Result {
 		res := DelimitedPattern(
 			Expect(Sequence(
-				open,
+				begin,
 				whitespace,
 			), "object"),
 			Sequence(
@@ -71,7 +71,7 @@ func dynamicObjectParser(pCtx Context) Func {
 			),
 			Sequence(
 				whitespace,
-				close,
+				end,
 			),
 			true,
 		)(input)

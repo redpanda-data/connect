@@ -22,10 +22,10 @@ type Memory struct {
 }
 
 // NewMemory creates a memory based parallel buffer.
-func NewMemory(cap int) *Memory {
+func NewMemory(capacity int) *Memory {
 	return &Memory{
 		bytes: 0,
-		cap:   cap,
+		cap:   capacity,
 		cond:  sync.NewCond(&sync.Mutex{}),
 	}
 }

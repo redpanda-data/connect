@@ -232,7 +232,7 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		for _, index := range d.conf.Dedupe.Parts {
 			// Attempt to add whole part to hash.
 			if partBytes := msg.Get(index).Get(); partBytes != nil {
-				if _, err := hasher.Write(msg.Get(index).Get()); nil != err {
+				if _, err := hasher.Write(msg.Get(index).Get()); err != nil {
 					d.mErrHash.Incr(1)
 					d.mErr.Incr(1)
 					d.mDropped.Incr(1)

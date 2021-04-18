@@ -80,7 +80,7 @@ func NewNanomsg(conf NanomsgConfig, log log.Modular, stats metrics.Type) (*Nanom
 	}
 
 	socket, err := getSocketFromType(conf.SocketType)
-	if nil != err {
+	if err != nil {
 		return nil, err
 	}
 	socket.Close()
@@ -115,7 +115,7 @@ func (s *Nanomsg) Connect() error {
 	}
 
 	socket, err := getSocketFromType(s.conf.SocketType)
-	if nil != err {
+	if err != nil {
 		return err
 	}
 
@@ -123,7 +123,7 @@ func (s *Nanomsg) Connect() error {
 	if s.conf.SocketType == "PUSH" {
 		if err := socket.SetOption(
 			mangos.OptionSendDeadline, s.timeout,
-		); nil != err {
+		); err != nil {
 			return err
 		}
 	}

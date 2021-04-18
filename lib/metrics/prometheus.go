@@ -189,7 +189,7 @@ func (p *Prometheus) HandlerFunc() http.HandlerFunc {
 
 //------------------------------------------------------------------------------
 
-func (p *Prometheus) toPromName(dotSepName string) (string, []string, []string) {
+func (p *Prometheus) toPromName(dotSepName string) (outPath string, labelNames, labelValues []string) {
 	dotSepName = strings.ReplaceAll(dotSepName, "_", "__")
 	dotSepName = strings.ReplaceAll(dotSepName, "-", "__")
 	return p.pathMapping.mapPathWithTags(strings.ReplaceAll(dotSepName, ".", "_"))
