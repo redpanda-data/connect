@@ -180,7 +180,7 @@ func (s *socketClient) ReadWithContext(ctx context.Context) (types.Message, read
 
 	// We simply bounce rejected messages in a loop downstream so there's no
 	// benefit to aggregating acks.
-	codecAckFn(context.Background(), nil)
+	_ = codecAckFn(context.Background(), nil)
 
 	msg := message.New(nil)
 	msg.Append(parts...)

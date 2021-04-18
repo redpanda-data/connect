@@ -253,7 +253,7 @@ func TestMemoryClose(t *testing.T) {
 			if expected, actual := "hello world", string(m.Get(0).Get()); expected != actual {
 				t.Errorf("Wrong message contents, %v != %v", expected, actual)
 			}
-			ackFunc(true)
+			_, _ = ackFunc(true)
 			/*
 				// TODO: Fix up batched shutdown
 				if _, err := ackFunc(true); err != nil {

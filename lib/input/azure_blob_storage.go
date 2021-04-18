@@ -229,18 +229,18 @@ func (a *azureBlobStorage) getObjectTarget(ctx context.Context) (*azurePendingOb
 	blobReference := a.container.GetBlobReference(target.key)
 	exists, err := blobReference.Exists()
 	if err != nil {
-		target.ackFn(ctx, err)
+		_ = target.ackFn(ctx, err)
 		return nil, fmt.Errorf("failed to get blob reference: %w", err)
 	}
 
 	if !exists {
-		target.ackFn(ctx, err)
+		_ = target.ackFn(ctx, err)
 		return nil, errors.New("blob does not exist")
 	}
 
 	obj, err := blobReference.Get(nil)
 	if err != nil {
-		target.ackFn(ctx, err)
+		_ = target.ackFn(ctx, err)
 		return nil, err
 	}
 
@@ -249,7 +249,7 @@ func (a *azureBlobStorage) getObjectTarget(ctx context.Context) (*azurePendingOb
 		obj:    blobReference,
 	}
 	if object.scanner, err = a.objectScannerCtor(target.key, obj, target.ackFn); err != nil {
-		target.ackFn(ctx, err)
+		_ = target.ackFn(ctx, err)
 		return nil, err
 	}
 

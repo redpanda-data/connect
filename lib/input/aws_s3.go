@@ -697,7 +697,7 @@ func (a *awsS3) getObjectTarget(ctx context.Context) (*s3PendingObject, error) {
 		Key:    aws.String(target.key),
 	})
 	if err != nil {
-		target.ackFn(ctx, err)
+		_ = target.ackFn(ctx, err)
 		return nil, err
 	}
 
@@ -706,7 +706,7 @@ func (a *awsS3) getObjectTarget(ctx context.Context) (*s3PendingObject, error) {
 		obj:    obj,
 	}
 	if object.scanner, err = a.objectScannerCtor(target.key, obj.Body, target.ackFn); err != nil {
-		target.ackFn(ctx, err)
+		_ = target.ackFn(ctx, err)
 		return nil, err
 	}
 

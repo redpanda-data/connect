@@ -131,7 +131,8 @@ func integrationTestSendBatch(n int) testDefinition {
 				set[payload] = nil
 				payloads = append(payloads, payload)
 			}
-			sendBatch(env.ctx, t, tranChan, payloads)
+			err := sendBatch(env.ctx, t, tranChan, payloads)
+			assert.NoError(t, err)
 
 			for len(set) > 0 {
 				messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)

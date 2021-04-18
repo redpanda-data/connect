@@ -398,13 +398,15 @@ func (m *Metric) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		}
 		return []types.Message{msg}, nil
 	}
-	iterateParts(m.parts, msg, func(index int, p types.Part) error {
+	if err := iterateParts(m.parts, msg, func(index int, p types.Part) error {
 		value := m.value.String(index, msg)
 		if err := m.handler(value, index, msg); err != nil {
 			m.log.Errorf("Handler error: %v\n", err)
 		}
 		return nil
-	})
+	}); err != nil {
+		m.log.Errorf("Failed to iterate parts: %v\n", err)
+	}
 	return []types.Message{msg}, nil
 }
 

@@ -300,7 +300,7 @@ func (a *allBytesReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, e
 	a.consumed = true
 	b, err := ioutil.ReadAll(a.i)
 	if err != nil {
-		a.ack(ctx, err)
+		_ = a.ack(ctx, err)
 		return nil, nil, err
 	}
 	p := message.NewPart(b)
@@ -309,7 +309,7 @@ func (a *allBytesReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, e
 
 func (a *allBytesReader) Close(ctx context.Context) error {
 	if !a.consumed {
-		a.ack(ctx, errors.New("service shutting down"))
+		_ = a.ack(ctx, errors.New("service shutting down"))
 	}
 	return a.i.Close()
 }
@@ -370,7 +370,7 @@ func (a *linesReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, erro
 		err = io.EOF
 		a.finished = true
 	} else {
-		a.sourceAck(ctx, err)
+		_ = a.sourceAck(ctx, err)
 	}
 	return nil, nil, err
 }
@@ -380,10 +380,10 @@ func (a *linesReader) Close(ctx context.Context) error {
 	defer a.mut.Unlock()
 
 	if !a.finished {
-		a.sourceAck(ctx, errors.New("service shutting down"))
+		_ = a.sourceAck(ctx, errors.New("service shutting down"))
 	}
 	if a.pending == 0 {
-		a.sourceAck(ctx, nil)
+		_ = a.sourceAck(ctx, nil)
 	}
 	return a.r.Close()
 }
@@ -447,7 +447,7 @@ func (a *csvReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error)
 		if err == io.EOF {
 			a.finished = true
 		} else {
-			a.sourceAck(ctx, err)
+			_ = a.sourceAck(ctx, err)
 		}
 		return nil, nil, err
 	}
@@ -470,10 +470,10 @@ func (a *csvReader) Close(ctx context.Context) error {
 	defer a.mut.Unlock()
 
 	if !a.finished {
-		a.sourceAck(ctx, errors.New("service shutting down"))
+		_ = a.sourceAck(ctx, errors.New("service shutting down"))
 	}
 	if a.pending == 0 {
-		a.sourceAck(ctx, nil)
+		_ = a.sourceAck(ctx, nil)
 	}
 	return a.r.Close()
 }
@@ -557,7 +557,7 @@ func (a *customDelimReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn
 		err = io.EOF
 		a.finished = true
 	} else {
-		a.sourceAck(ctx, err)
+		_ = a.sourceAck(ctx, err)
 	}
 	return nil, nil, err
 }
@@ -567,10 +567,10 @@ func (a *customDelimReader) Close(ctx context.Context) error {
 	defer a.mut.Unlock()
 
 	if !a.finished {
-		a.sourceAck(ctx, errors.New("service shutting down"))
+		_ = a.sourceAck(ctx, errors.New("service shutting down"))
 	}
 	if a.pending == 0 {
-		a.sourceAck(ctx, nil)
+		_ = a.sourceAck(ctx, nil)
 	}
 	return a.r.Close()
 }
@@ -626,7 +626,7 @@ func (a *chunkerReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, er
 		if err == io.EOF {
 			a.finished = true
 		} else {
-			a.sourceAck(ctx, err)
+			_ = a.sourceAck(ctx, err)
 			return nil, nil, err
 		}
 	}
@@ -647,10 +647,10 @@ func (a *chunkerReader) Close(ctx context.Context) error {
 	defer a.mut.Unlock()
 
 	if !a.finished {
-		a.sourceAck(ctx, errors.New("service shutting down"))
+		_ = a.sourceAck(ctx, errors.New("service shutting down"))
 	}
 	if a.pending == 0 {
-		a.sourceAck(ctx, nil)
+		_ = a.sourceAck(ctx, nil)
 	}
 	return a.r.Close()
 }
@@ -699,7 +699,7 @@ func (a *tarReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error)
 	if err == nil {
 		fileBuf := bytes.Buffer{}
 		if _, err = fileBuf.ReadFrom(a.buf); err != nil {
-			a.sourceAck(ctx, err)
+			_ = a.sourceAck(ctx, err)
 			return nil, nil, err
 		}
 		a.pending++
@@ -709,7 +709,7 @@ func (a *tarReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error)
 	if err == io.EOF {
 		a.finished = true
 	} else {
-		a.sourceAck(ctx, err)
+		_ = a.sourceAck(ctx, err)
 	}
 	return nil, nil, err
 }
@@ -719,10 +719,10 @@ func (a *tarReader) Close(ctx context.Context) error {
 	defer a.mut.Unlock()
 
 	if !a.finished {
-		a.sourceAck(ctx, errors.New("service shutting down"))
+		_ = a.sourceAck(ctx, errors.New("service shutting down"))
 	}
 	if a.pending == 0 {
-		a.sourceAck(ctx, nil)
+		_ = a.sourceAck(ctx, nil)
 	}
 	return a.r.Close()
 }
@@ -755,7 +755,7 @@ func (m *multipartReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, 
 
 	ackFn := func(ctx context.Context, err error) error {
 		for _, fn := range acks {
-			fn(ctx, err)
+			_ = fn(ctx, err)
 		}
 		return nil
 	}
@@ -769,7 +769,7 @@ func (m *multipartReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, 
 			return nil, nil, err
 		}
 		if isEmpty(newParts) {
-			ack(ctx, nil)
+			_ = ack(ctx, nil)
 			if len(parts) > 0 {
 				// Empty message signals batch end.
 				return parts, ackFn, nil

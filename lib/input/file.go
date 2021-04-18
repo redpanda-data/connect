@@ -218,7 +218,7 @@ func (f *fileConsumer) ReadWithContext(ctx context.Context) (types.Message, read
 		}
 	}
 	if msg.Len() == 0 {
-		codecAckFn(ctx, nil)
+		_ = codecAckFn(ctx, nil)
 		return nil, nil, types.ErrTimeout
 	}
 

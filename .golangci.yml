@@ -7,6 +7,8 @@ issues:
   # fix: true
 
 linters-settings:
+  errcheck:
+    exclude: .errcheck.txt
   gocritic:
     enabled-tags:
       - diagnostic
@@ -28,7 +30,7 @@ linters:
   enable:
     # Default linters reported by golangci-lint help linters` in v1.39.0
     # - deadcode
-    # - errcheck
+    - errcheck
     - gosimple
     - govet
     - ineffassign

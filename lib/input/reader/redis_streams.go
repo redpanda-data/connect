@@ -375,7 +375,7 @@ func (r *RedisStreams) Read() (types.Message, error) {
 func (r *RedisStreams) Acknowledge(err error) error {
 	res := response.NewError(err)
 	for _, p := range r.deprecatedAckFns {
-		p(context.Background(), res)
+		_ = p(context.Background(), res)
 	}
 	r.deprecatedAckFns = nil
 	return nil

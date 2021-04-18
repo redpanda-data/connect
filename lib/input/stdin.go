@@ -128,7 +128,7 @@ func (s *stdinConsumer) ReadWithContext(ctx context.Context) (types.Message, rea
 		}
 		return nil, nil, err
 	}
-	codecAckFn(ctx, nil)
+	_ = codecAckFn(ctx, nil)
 
 	msg := message.New(nil)
 	msg.Append(parts...)

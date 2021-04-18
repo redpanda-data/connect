@@ -455,7 +455,7 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	go sendMsg(exp2)
 
 	// Fail previous message, expecting it to be resent.
-	aFn(ctx, response.NewError(errors.New("failed")))
+	_ = aFn(ctx, response.NewError(errors.New("failed")))
 	msg, aFn, err = pres.ReadWithContext(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -475,8 +475,8 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	}
 
 	// Fail both messages, expecting them to be resent.
-	aFn(ctx, response.NewError(errors.New("failed again")))
-	aFn2(ctx, response.NewError(errors.New("failed again")))
+	_ = aFn(ctx, response.NewError(errors.New("failed again")))
+	_ = aFn2(ctx, response.NewError(errors.New("failed again")))
 
 	// Read both messages.
 	msg, aFn, err = pres.ReadWithContext(ctx)
@@ -500,8 +500,8 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	go sendAck()
 
 	// Ack all messages.
-	aFn(ctx, response.NewAck())
-	aFn2(ctx, response.NewAck())
+	_ = aFn(ctx, response.NewAck())
+	_ = aFn2(ctx, response.NewAck())
 
 	msg, _, err = pres.ReadWithContext(ctx)
 	if err != nil {
@@ -560,7 +560,7 @@ func TestAsyncPreserverBufferBatchedAcks(t *testing.T) {
 
 	// Fail all messages, expecting them to be resent.
 	for _, aFn := range ackFns {
-		aFn(ctx, response.NewError(errors.New("failed again")))
+		_ = aFn(ctx, response.NewError(errors.New("failed again")))
 	}
 	ackFns = []AsyncAckFn{}
 
@@ -578,7 +578,7 @@ func TestAsyncPreserverBufferBatchedAcks(t *testing.T) {
 	// Ack all messages.
 	go func() {
 		for _, aFn := range ackFns {
-			aFn(ctx, response.NewAck())
+			_ = aFn(ctx, response.NewAck())
 		}
 	}()
 

@@ -44,7 +44,7 @@ func ComplementGenericConfig(target, complement interface{}) error {
 			if tv, exists := t[k]; !exists {
 				t[k] = v
 			} else {
-				ComplementGenericConfig(tv, v)
+				_ = ComplementGenericConfig(tv, v)
 			}
 		}
 	case map[interface{}]interface{}:
@@ -56,7 +56,7 @@ func ComplementGenericConfig(target, complement interface{}) error {
 			if tv, exists := t[k]; !exists {
 				t[k] = v
 			} else {
-				ComplementGenericConfig(tv, v)
+				_ = ComplementGenericConfig(tv, v)
 			}
 		}
 	}
