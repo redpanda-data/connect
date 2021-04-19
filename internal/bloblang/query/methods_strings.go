@@ -1469,7 +1469,7 @@ var _ = registerSimpleMethod(
 		}
 		groups := re.SubexpNames()
 		for i, k := range groups {
-			if len(k) == 0 {
+			if k == "" {
 				groups[i] = fmt.Sprintf("%v", i)
 			}
 		}
@@ -1525,7 +1525,7 @@ var _ = registerSimpleMethod(
 		}
 		groups := re.SubexpNames()
 		for i, k := range groups {
-			if len(k) == 0 {
+			if k == "" {
 				groups[i] = fmt.Sprintf("%v", i)
 			}
 		}
@@ -1785,12 +1785,12 @@ root.description = this.description.trim()`,
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			switch t := v.(type) {
 			case string:
-				if len(cutset) == 0 {
+				if cutset == "" {
 					return strings.TrimSpace(t), nil
 				}
 				return strings.Trim(t, cutset), nil
 			case []byte:
-				if len(cutset) == 0 {
+				if cutset == "" {
 					return bytes.TrimSpace(t), nil
 				}
 				return bytes.Trim(t, cutset), nil

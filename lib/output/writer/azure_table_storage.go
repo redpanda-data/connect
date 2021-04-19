@@ -47,11 +47,11 @@ func NewAzureTableStorage(
 			return nil, fmt.Errorf("failed to parse timeout period string: %v", err)
 		}
 	}
-	if len(conf.StorageAccount) == 0 && len(conf.StorageConnectionString) == 0 {
+	if conf.StorageAccount == "" && conf.StorageConnectionString == "" {
 		return nil, errors.New("invalid azure storage account credentials")
 	}
 	var client storage.Client
-	if len(conf.StorageConnectionString) > 0 {
+	if conf.StorageConnectionString != "" {
 		if strings.Contains(conf.StorageConnectionString, "UseDevelopmentStorage=true;") {
 			client, err = storage.NewEmulatorClient()
 		} else {

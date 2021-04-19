@@ -119,7 +119,7 @@ func NewAmazonS3(
 		log.Warnf("It looks like a deprecated SQS Body path is configured: 'Records.s3.object.key', you might not receive S3 items unless you update to the new syntax 'Records.*.s3.object.key'")
 	}
 
-	if len(conf.Bucket) == 0 {
+	if conf.Bucket == "" {
 		return nil, errors.New("a bucket must be specified (even with an SQS bucket path configured)")
 	}
 
@@ -176,7 +176,7 @@ func (a *AmazonS3) ConnectWithContext(ctx context.Context) error {
 	sThree := s3.New(sess)
 	dler := s3manager.NewDownloader(sess)
 
-	if len(a.conf.SQSURL) == 0 {
+	if a.conf.SQSURL == "" {
 		listInput := &s3.ListObjectsInput{
 			Bucket: aws.String(a.conf.Bucket),
 		}
@@ -510,7 +510,7 @@ func (a *AmazonS3) ReadWithContext(ctx context.Context) (types.Message, AsyncAck
 		if res.Error() == nil {
 			a.deleteObjects([]objKey{obj})
 		} else {
-			if len(a.conf.SQSURL) == 0 {
+			if a.conf.SQSURL == "" {
 				a.targetKeysMut.Lock()
 				// nolint:gocritic // Ignore appendAssign: append result not assigned to the same slice
 				a.targetKeys = append(a.readKeys, obj)

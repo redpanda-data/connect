@@ -64,7 +64,7 @@ func NewTCPConfig() TCPConfig {
 func NewTCP(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	log.Warnln("The tcp input is deprecated, please use socket instead.")
 	delim := conf.TCP.Delim
-	if len(delim) == 0 {
+	if delim == "" {
 		delim = "\n"
 	}
 	var conn net.Conn

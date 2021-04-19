@@ -166,7 +166,7 @@ func resolveProcessorsPointer(targetFile, jsonPtr string) (filePath, procPath st
 		procPath = u.Path
 		filePath = targetFile
 	}
-	if len(procPath) == 0 {
+	if procPath == "" {
 		err = fmt.Errorf("failed to target processors '%v': reference URI must contain a path or fragment", jsonPtr)
 	}
 	return
@@ -184,7 +184,7 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 	if err != nil {
 		return confs, err
 	}
-	if len(targetPath) == 0 {
+	if targetPath == "" {
 		targetPath = p.targetPath
 	}
 

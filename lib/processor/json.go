@@ -571,7 +571,7 @@ func newSplitOperator(path []string) jsonOperator {
 				return nil, err
 			}
 		}
-		if len(valueParsed) == 0 {
+		if valueParsed == "" {
 			return nil, errors.New("value field must be a non-empty string")
 		}
 
@@ -679,7 +679,7 @@ func NewJSON(
 	}
 
 	splitPath := gabs.DotPathToSlice(conf.JSON.Path)
-	if len(conf.JSON.Path) == 0 || conf.JSON.Path == "." {
+	if conf.JSON.Path == "" || conf.JSON.Path == "." {
 		splitPath = []string{}
 	}
 

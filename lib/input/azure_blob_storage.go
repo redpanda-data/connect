@@ -164,7 +164,7 @@ type azureBlobStorage struct {
 
 // newAzureBlobStorage creates a new Azure Blob Storage input type.
 func newAzureBlobStorage(conf AzureBlobStorageConfig, log log.Modular, stats metrics.Type) (*azureBlobStorage, error) {
-	if len(conf.StorageAccount) == 0 && len(conf.StorageConnectionString) == 0 {
+	if conf.StorageAccount == "" && conf.StorageConnectionString == "" {
 		return nil, errors.New("invalid azure storage account credentials")
 	}
 

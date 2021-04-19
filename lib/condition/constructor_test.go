@@ -10,7 +10,7 @@ import (
 )
 
 func TestConstructorDescription(t *testing.T) {
-	if len(Descriptions()) == 0 {
+	if Descriptions() == "" {
 		t.Error("package descriptions were empty")
 	}
 }

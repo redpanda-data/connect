@@ -69,8 +69,8 @@ func (e *Error) errorMsg(includeGot bool) string {
 	}
 
 	if len(e.Expected) == 0 {
-		if len(msg) == 0 {
-			if len(inputSnippet) == 0 {
+		if msg == "" {
+			if inputSnippet == "" {
 				msg = "encountered unexpected end of input"
 			} else {
 				msg = "encountered unexpected input"

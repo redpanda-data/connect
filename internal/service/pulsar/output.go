@@ -65,10 +65,10 @@ type pulsarWriter struct {
 }
 
 func newPulsarWriter(conf output.PulsarConfig, log log.Modular, stats metrics.Type) (*pulsarWriter, error) {
-	if len(conf.URL) == 0 {
+	if conf.URL == "" {
 		return nil, errors.New("field url must not be empty")
 	}
-	if len(conf.Topic) == 0 {
+	if conf.Topic == "" {
 		return nil, errors.New("field topic must not be empty")
 	}
 	p := pulsarWriter{

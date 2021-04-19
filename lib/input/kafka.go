@@ -311,7 +311,7 @@ func newKafkaReader(
 			return nil, fmt.Errorf("failed to parse max processing period string: %v", err)
 		}
 	}
-	if len(conf.ConsumerGroup) == 0 && len(k.balancedTopics) > 0 {
+	if conf.ConsumerGroup == "" && len(k.balancedTopics) > 0 {
 		return nil, errors.New("a consumer group must be specified when consuming balanced topics")
 	}
 

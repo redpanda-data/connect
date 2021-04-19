@@ -252,7 +252,7 @@ func (i integrationTestList) Run(t *testing.T, configTemplate string, opts ...te
 	wg.Wait()
 
 	for j, test := range i {
-		if len(envs[j].configVars.port) == 0 {
+		if envs[j].configVars.port == "" {
 			p, err := getFreePort()
 			if err != nil {
 				t.Fatal(err)

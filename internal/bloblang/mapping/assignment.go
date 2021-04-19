@@ -174,7 +174,7 @@ func (j *JSONAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 		if _, err := gObj.Set(value, j.path...); err != nil {
 			if errors.Is(err, gabs.ErrPathCollision) {
 				culprit, typeStr := findTheNonObject(gObj, false, j.path...)
-				if len(culprit) == 0 {
+				if culprit == "" {
 					return fmt.Errorf(
 						"unable to set target path %v as the value of the root was a non-object type (%v)",
 						query.SliceToDotPath(j.path...), typeStr,

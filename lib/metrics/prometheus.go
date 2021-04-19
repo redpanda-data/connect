@@ -198,7 +198,7 @@ func (p *Prometheus) toPromName(dotSepName string) (outPath string, labelNames, 
 // GetCounter returns a stat counter object for a path.
 func (p *Prometheus) GetCounter(path string) StatCounter {
 	stat, labels, values := p.toPromName(path)
-	if len(stat) == 0 {
+	if stat == "" {
 		return DudStat{}
 	}
 
@@ -225,7 +225,7 @@ func (p *Prometheus) GetCounter(path string) StatCounter {
 // GetTimer returns a stat timer object for a path.
 func (p *Prometheus) GetTimer(path string) StatTimer {
 	stat, labels, values := p.toPromName(path)
-	if len(stat) == 0 {
+	if stat == "" {
 		return DudStat{}
 	}
 
@@ -253,7 +253,7 @@ func (p *Prometheus) GetTimer(path string) StatTimer {
 // GetGauge returns a stat gauge object for a path.
 func (p *Prometheus) GetGauge(path string) StatGauge {
 	stat, labels, values := p.toPromName(path)
-	if len(stat) == 0 {
+	if stat == "" {
 		return DudStat{}
 	}
 
@@ -282,7 +282,7 @@ func (p *Prometheus) GetGauge(path string) StatGauge {
 // path.
 func (p *Prometheus) GetCounterVec(path string, labelNames []string) StatCounterVec {
 	stat, labels, values := p.toPromName(path)
-	if len(stat) == 0 {
+	if stat == "" {
 		return fakeCounterVec(func([]string) StatCounter {
 			return DudStat{}
 		})
@@ -325,7 +325,7 @@ func (p *Prometheus) GetCounterVec(path string, labelNames []string) StatCounter
 // path.
 func (p *Prometheus) GetTimerVec(path string, labelNames []string) StatTimerVec {
 	stat, labels, values := p.toPromName(path)
-	if len(stat) == 0 {
+	if stat == "" {
 		return fakeTimerVec(func([]string) StatTimer {
 			return DudStat{}
 		})
@@ -369,7 +369,7 @@ func (p *Prometheus) GetTimerVec(path string, labelNames []string) StatTimerVec 
 // path.
 func (p *Prometheus) GetGaugeVec(path string, labelNames []string) StatGaugeVec {
 	stat, labels, values := p.toPromName(path)
-	if len(stat) == 0 {
+	if stat == "" {
 		return fakeGaugeVec(func([]string) StatGauge {
 			return DudStat{}
 		})

@@ -18,7 +18,7 @@ func LintBloblangMapping(ctx LintContext, line, col int, v interface{}) []Lint {
 	if !ok {
 		return []Lint{NewLintWarning(line, fmt.Sprintf("expected string value, got %T", v))}
 	}
-	if len(str) == 0 {
+	if str == "" {
 		return nil
 	}
 	_, err := bloblang.NewMapping("", str)
@@ -41,7 +41,7 @@ func LintBloblangField(ctx LintContext, line, col int, v interface{}) []Lint {
 	if !ok {
 		return []Lint{NewLintWarning(line, fmt.Sprintf("expected string value, got %T", v))}
 	}
-	if len(str) == 0 {
+	if str == "" {
 		return nil
 	}
 	_, err := bloblang.NewField(str)

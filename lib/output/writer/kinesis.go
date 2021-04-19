@@ -92,7 +92,7 @@ func NewKinesis(
 	log log.Modular,
 	stats metrics.Type,
 ) (*Kinesis, error) {
-	if len(conf.PartitionKey) == 0 {
+	if conf.PartitionKey == "" {
 		return nil, errors.New("partition key must not be empty")
 	}
 

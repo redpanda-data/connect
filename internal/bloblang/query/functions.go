@@ -466,7 +466,7 @@ var _ = RegisterFunction(
 			field := args[0].(string)
 			return ClosureFunction("meta field "+field, func(ctx FunctionContext) (interface{}, error) {
 				v := ctx.MsgBatch.Get(ctx.Index).Metadata().Get(field)
-				if len(v) == 0 {
+				if v == "" {
 					return nil, &ErrRecoverable{
 						Recovered: "",
 						Err:       fmt.Errorf("metadata value '%v' not found", field),

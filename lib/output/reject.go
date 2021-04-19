@@ -73,7 +73,7 @@ type rejectWriter struct {
 }
 
 func newRejectWriter(errorString string) (*rejectWriter, error) {
-	if len(errorString) == 0 {
+	if errorString == "" {
 		return nil, errors.New("an error message must be provided in order to provide context for the rejection")
 	}
 	errExpr, err := bloblang.NewField(errorString)

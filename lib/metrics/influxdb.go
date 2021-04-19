@@ -339,7 +339,7 @@ func (i *InfluxDB) getAllMetrics() map[string]map[string]interface{} {
 // GetCounter returns a stat counter object for a path.
 func (i *InfluxDB) GetCounter(path string) StatCounter {
 	name, labels, values := i.toCMName(path)
-	if len(name) == 0 {
+	if name == "" {
 		return DudStat{}
 	}
 	encodedName := encodeInfluxDBName(name, labels, values)
@@ -353,7 +353,7 @@ func (i *InfluxDB) GetCounter(path string) StatCounter {
 // GetCounterVec returns a stat counter object for a path with the labels
 func (i *InfluxDB) GetCounterVec(path string, n []string) StatCounterVec {
 	name, labels, values := i.toCMName(path)
-	if len(name) == 0 {
+	if name == "" {
 		return fakeCounterVec(func([]string) StatCounter {
 			return DudStat{}
 		})
@@ -375,7 +375,7 @@ func (i *InfluxDB) GetCounterVec(path string, n []string) StatCounterVec {
 // GetTimer returns a stat timer object for a path.
 func (i *InfluxDB) GetTimer(path string) StatTimer {
 	name, labels, values := i.toCMName(path)
-	if len(name) == 0 {
+	if name == "" {
 		return DudStat{}
 	}
 	encodedName := encodeInfluxDBName(name, labels, values)
@@ -389,7 +389,7 @@ func (i *InfluxDB) GetTimer(path string) StatTimer {
 // GetTimerVec returns a stat timer object for a path with the labels
 func (i *InfluxDB) GetTimerVec(path string, n []string) StatTimerVec {
 	name, labels, values := i.toCMName(path)
-	if len(name) == 0 {
+	if name == "" {
 		return fakeTimerVec(func([]string) StatTimer {
 			return DudStat{}
 		})
@@ -411,7 +411,7 @@ func (i *InfluxDB) GetTimerVec(path string, n []string) StatTimerVec {
 // GetGauge returns a stat gauge object for a path.
 func (i *InfluxDB) GetGauge(path string) StatGauge {
 	name, labels, values := i.toCMName(path)
-	if len(name) == 0 {
+	if name == "" {
 		return DudStat{}
 	}
 	encodedName := encodeInfluxDBName(name, labels, values)
@@ -426,7 +426,7 @@ func (i *InfluxDB) GetGauge(path string) StatGauge {
 // GetGaugeVec returns a stat timer object for a path with the labels
 func (i *InfluxDB) GetGaugeVec(path string, n []string) StatGaugeVec {
 	name, labels, values := i.toCMName(path)
-	if len(name) == 0 {
+	if name == "" {
 		return fakeGaugeVec(func([]string) StatGauge {
 			return DudStat{}
 		})

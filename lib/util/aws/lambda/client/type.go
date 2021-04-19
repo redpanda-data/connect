@@ -78,7 +78,7 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		}
 	}
 
-	if len(conf.Function) == 0 {
+	if conf.Function == "" {
 		return nil, errors.New("lambda function must not be empty")
 	}
 

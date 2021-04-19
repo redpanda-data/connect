@@ -69,7 +69,7 @@ func deprecatedMetadataFunction(arg string) deprecatedFunction {
 			}
 			arg = arg[:argIndex]
 		}
-		if len(arg) == 0 {
+		if arg == "" {
 			return []byte("")
 		}
 		meta := msg.Get(part).Metadata()
@@ -172,7 +172,7 @@ var deprecatedFunctions = map[string]func(arg string) deprecatedFunction{
 		}
 	},
 	"timestamp": func(arg string) deprecatedFunction {
-		if len(arg) == 0 {
+		if arg == "" {
 			arg = "Mon Jan 2 15:04:05 -0700 MST 2006"
 		}
 		return func(_ int, _ MessageBatch, _ bool) []byte {
@@ -180,7 +180,7 @@ var deprecatedFunctions = map[string]func(arg string) deprecatedFunction{
 		}
 	},
 	"timestamp_utc": func(arg string) deprecatedFunction {
-		if len(arg) == 0 {
+		if arg == "" {
 			arg = "Mon Jan 2 15:04:05 -0700 MST 2006"
 		}
 		return func(_ int, _ MessageBatch, _ bool) []byte {

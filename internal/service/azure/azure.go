@@ -21,12 +21,12 @@ const (
 
 // GetQueueServiceURL creates an Azure Queue URL from storage fields.
 func GetQueueServiceURL(storageAccount, storageAccessKey, storageConnectionString string) (*azqueue.ServiceURL, error) {
-	if len(storageAccount) == 0 && len(storageConnectionString) == 0 {
+	if storageAccount == "" && storageConnectionString == "" {
 		return nil, errors.New("invalid azure storage account credentials")
 	}
 	var endpointExp = azQueueEndpointExp
 	var err error
-	if len(storageConnectionString) > 0 {
+	if storageConnectionString != "" {
 		if strings.Contains(storageConnectionString, "UseDevelopmentStorage=true;") {
 			storageAccount = devAccountName
 			storageAccessKey = devAccountKey
@@ -44,11 +44,11 @@ func GetQueueServiceURL(storageAccount, storageAccessKey, storageConnectionStrin
 			}
 		}
 	}
-	if len(storageAccount) == 0 {
+	if storageAccount == "" {
 		return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
 	}
 	var credential azqueue.Credential
-	if len(storageAccessKey) > 0 {
+	if storageAccessKey != "" {
 		credential, _ = azqueue.NewSharedKeyCredential(storageAccount, storageAccessKey)
 	} else {
 		credential = azqueue.NewAnonymousCredential()

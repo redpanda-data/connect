@@ -98,8 +98,8 @@ func New(
 		Handler: handler,
 	}
 
-	if len(conf.CertFile) > 0 || len(conf.KeyFile) > 0 {
-		if len(conf.CertFile) == 0 || len(conf.KeyFile) == 0 {
+	if conf.CertFile != "" || conf.KeyFile != "" {
+		if conf.CertFile == "" || conf.KeyFile == "" {
 			return nil, errors.New("both cert_file and key_file must be specified, or neither")
 		}
 	}

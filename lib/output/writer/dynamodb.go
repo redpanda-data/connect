@@ -260,7 +260,7 @@ func (d *DynamoDB) WriteWithContext(ctx context.Context, msg types.Message) erro
 			} else {
 				for k, v := range d.jsonMapColumns {
 					if attr, err := jsonToMap(v, jRoot); err == nil {
-						if len(k) == 0 {
+						if k == "" {
 							for ak, av := range attr.M {
 								items[ak] = av
 							}

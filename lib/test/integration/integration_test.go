@@ -12,7 +12,7 @@ import (
 // Placing this in its own function allows us to only execute under the
 // integration build tag, but the tests themselves are always built.
 func TestIntegration(t *testing.T) {
-	if m := flag.Lookup("test.run").Value.String(); m == "" || len(regexp.MustCompile(strings.Split(m, "/")[0]).FindString(t.Name())) == 0 {
+	if m := flag.Lookup("test.run").Value.String(); m == "" || regexp.MustCompile(strings.Split(m, "/")[0]).FindString(t.Name()) == "" {
 		t.Skip("Skipping as execution was not requested explicitly using go test -run ^TestIntegration$")
 	}
 

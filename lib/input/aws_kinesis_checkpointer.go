@@ -216,7 +216,7 @@ func (k *awsKinesisCheckpointer) AllClaims(ctx context.Context, streamID string)
 			if s, ok := i["ShardID"]; ok && s.S != nil {
 				claim.ShardID = *s.S
 			}
-			if len(claim.ShardID) == 0 {
+			if claim.ShardID == "" {
 				scanErr = errors.New("failed to extract shard id from claim")
 				return false
 			}
@@ -395,7 +395,7 @@ func (k *awsKinesisCheckpointer) Checkpoint(ctx context.Context, streamID, shard
 // This call is entirely optional, but the benefit is a reduction in duplicated
 // messages during a rebalance of shards.
 func (k *awsKinesisCheckpointer) Yield(ctx context.Context, streamID, shardID, sequenceNumber string) error {
-	if len(sequenceNumber) == 0 {
+	if sequenceNumber == "" {
 		// Nothing to present to the thief
 		return nil
 	}

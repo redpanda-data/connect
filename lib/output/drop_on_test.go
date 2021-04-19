@@ -199,7 +199,7 @@ func TestDropOnBackpressureWithErrors(t *testing.T) {
 			t.Fatal("timed out")
 		}
 
-		if len(expErr) == 0 {
+		if expErr == "" {
 			assert.NoError(t, res.Error())
 		} else {
 			assert.EqualError(t, res.Error(), expErr)
@@ -292,7 +292,7 @@ func TestDropOnDisconnectBackpressureNoErrors(t *testing.T) {
 			t.Fatal("timed out")
 		}
 
-		if len(expErr) == 0 {
+		if expErr == "" {
 			assert.NoError(t, res.Error())
 		} else {
 			assert.EqualError(t, res.Error(), expErr)

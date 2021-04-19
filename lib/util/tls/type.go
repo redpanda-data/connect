@@ -92,18 +92,18 @@ func (c *Config) Get() (*tls.Config, error) {
 // config or the raw certs as strings.
 func (c *ClientCertConfig) Load() (tls.Certificate, error) {
 	if c.CertFile != "" || c.KeyFile != "" {
-		if len(c.CertFile) == 0 {
+		if c.CertFile == "" {
 			return tls.Certificate{}, errors.New("missing cert_file field in client certificate config")
 		}
-		if len(c.KeyFile) == 0 {
+		if c.KeyFile == "" {
 			return tls.Certificate{}, errors.New("missing key_file field in client certificate config")
 		}
 		return tls.LoadX509KeyPair(c.CertFile, c.KeyFile)
 	}
-	if len(c.Cert) == 0 {
+	if c.Cert == "" {
 		return tls.Certificate{}, errors.New("missing cert field in client certificate config")
 	}
-	if len(c.Key) == 0 {
+	if c.Key == "" {
 		return tls.Certificate{}, errors.New("missing key field in client certificate config")
 	}
 	return tls.X509KeyPair([]byte(c.Cert), []byte(c.Key))

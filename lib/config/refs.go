@@ -153,7 +153,7 @@ func expandRefVal(path string, level int, root, v interface{}) (interface{}, err
 	if u.Scheme != "" && u.Scheme != "file" {
 		return nil, fmt.Errorf("config '%v' contained non-path $ref value '%v'", path, v)
 	}
-	if len(u.Path) == 0 && len(u.Fragment) == 0 {
+	if u.Path == "" && u.Fragment == "" {
 		return nil, fmt.Errorf("failed to resolve $ref value '%v' in config '%v': reference URI must contain at least a path or fragment", s, path)
 	}
 

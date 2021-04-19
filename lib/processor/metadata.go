@@ -78,7 +78,7 @@ func newMetadataDeleteAllOperator() metadataOperator {
 func newMetadataDeleteOperator() metadataOperator {
 	return func(m types.Metadata, key, value string) error {
 		target := value
-		if len(target) == 0 && len(key) > 0 {
+		if target == "" && len(key) > 0 {
 			target = key
 		}
 		m.Delete(target)
@@ -89,7 +89,7 @@ func newMetadataDeleteOperator() metadataOperator {
 func newMetadataDeletePrefixOperator() metadataOperator {
 	return func(m types.Metadata, key, value string) error {
 		prefix := value
-		if len(prefix) == 0 && len(key) > 0 {
+		if prefix == "" && len(key) > 0 {
 			prefix = key
 		}
 		m.Iter(func(k, _ string) error {

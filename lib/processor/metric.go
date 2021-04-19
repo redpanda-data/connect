@@ -251,7 +251,7 @@ func NewMetric(
 		m.deprecated = true
 		name = conf.Metric.Path
 	}
-	if len(name) == 0 {
+	if name == "" {
 		return nil, errors.New("metric name must not be empty")
 	}
 	if !m.deprecated {

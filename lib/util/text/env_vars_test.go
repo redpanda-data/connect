@@ -33,7 +33,7 @@ func TestEnvVarDetection(t *testing.T) {
 }
 
 func TestEnvSwapping(t *testing.T) {
-	if len(os.Getenv("BENTHOS_TEST_FOO")) != 0 {
+	if os.Getenv("BENTHOS_TEST_FOO") != "" {
 		os.Setenv("BENTHOS_TEST_FOO", "")
 	}
 

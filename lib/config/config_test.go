@@ -77,7 +77,7 @@ func CheckTagsOfType(v reflect.Type, checkedTypes map[string]struct{}, t *testin
 				continue
 			}
 
-			if len(yTag) == 0 {
+			if yTag == "" {
 				t.Errorf("Empty field '%v' tag in type %v", field.Name, tPath)
 			}
 
