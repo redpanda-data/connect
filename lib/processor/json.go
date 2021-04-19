@@ -268,8 +268,10 @@ func newExplodeOperator(path []string) (jsonOperator, error) {
 
 func foldStringArray(children []*gabs.Container, value json.RawMessage) (string, error) {
 	var delim string
-	if value != nil {
-		json.Unmarshal(value, &delim)
+	if value != nil && len(value) > 0 {
+		if err := json.Unmarshal(value, &delim); err != nil {
+			return "", fmt.Errorf("failed to unmarshal json: %w", err)
+		}
 	}
 	var b strings.Builder
 	for i, child := range children {

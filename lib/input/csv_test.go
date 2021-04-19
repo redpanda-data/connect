@@ -296,7 +296,7 @@ func TestCSVReadersTwoFiles(t *testing.T) {
 		}
 		require.NoError(t, err, i)
 		assert.Equal(t, exp, string(resMsg.Get(0).Get()), i)
-		ackFn(context.Background(), response.NewAck())
+		_ = ackFn(context.Background(), response.NewAck())
 	}
 
 	_, _, err = f.ReadWithContext(context.Background())

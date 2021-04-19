@@ -95,7 +95,7 @@ func (f *MmapCache) openTracker() error {
 	var err error
 
 	// Attempt to create the directory tree, ignore errors.
-	os.MkdirAll(f.config.Path, 0755)
+	_ = os.MkdirAll(f.config.Path, 0755)
 
 	fPath := path.Join(f.config.Path, "tracker")
 

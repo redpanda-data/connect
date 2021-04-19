@@ -260,13 +260,13 @@ func (g *gcpCloudStorageInput) getObjectTarget(ctx context.Context) (*gcpCloudSt
 
 	objAttributes, err := objReference.Attrs(ctx)
 	if err != nil {
-		target.ackFn(ctx, err)
+		_ = target.ackFn(ctx, err)
 		return nil, err
 	}
 
 	objReader, err := objReference.NewReader(context.Background())
 	if err != nil {
-		target.ackFn(ctx, err)
+		_ = target.ackFn(ctx, err)
 		return nil, err
 	}
 
@@ -275,7 +275,7 @@ func (g *gcpCloudStorageInput) getObjectTarget(ctx context.Context) (*gcpCloudSt
 		obj:    objAttributes,
 	}
 	if object.scanner, err = g.objectScannerCtor(target.key, objReader, target.ackFn); err != nil {
-		target.ackFn(ctx, err)
+		_ = target.ackFn(ctx, err)
 		return nil, err
 	}
 

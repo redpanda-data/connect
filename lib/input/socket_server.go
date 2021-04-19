@@ -304,7 +304,7 @@ acceptLoop:
 
 				// We simply bounce rejected messages in a loop downstream so
 				// there's no benefit to aggregating acks.
-				ackFn(t.ctx, nil)
+				_ = ackFn(t.ctx, nil)
 
 				msg := message.New(nil)
 				msg.Append(parts...)
@@ -362,7 +362,7 @@ func (t *SocketServer) udpLoop() {
 
 		// We simply bounce rejected messages in a loop downstream so
 		// there's no benefit to aggregating acks.
-		ackFn(t.ctx, nil)
+		_ = ackFn(t.ctx, nil)
 
 		msg := message.New(nil)
 		msg.Append(parts...)

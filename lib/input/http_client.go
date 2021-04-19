@@ -245,11 +245,11 @@ func (h *HTTPClient) readStreamed(ctx context.Context) (types.Message, reader.As
 	msg.Append(parts...)
 
 	if msg.Len() == 1 && msg.Get(0).IsEmpty() && h.conf.DropEmptyBodies {
-		codecAckFn(ctx, nil)
+		_ = codecAckFn(ctx, nil)
 		return nil, nil, types.ErrTimeout
 	}
 	if msg.Len() == 0 {
-		codecAckFn(ctx, nil)
+		_ = codecAckFn(ctx, nil)
 		return nil, nil, types.ErrTimeout
 	}
 

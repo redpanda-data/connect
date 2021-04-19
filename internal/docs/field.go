@@ -246,7 +246,7 @@ func (f FieldSpec) sanitise(s interface{}, filter FieldFilter) {
 				}
 			}
 		} else {
-			SanitiseComponentConfig(coreType, s, filter)
+			_ = SanitiseComponentConfig(coreType, s, filter)
 		}
 	} else if len(f.Children) > 0 {
 		if f.IsArray {
