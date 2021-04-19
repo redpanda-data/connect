@@ -20,8 +20,6 @@ linters-settings:
       - ifElseChain # Mostly false positives
       - ptrToRefParam # False positives?
       - importShadow # Probably not worth the hassle...
-      # TODO
-      - emptyStringTest
 
 linters:
   disable-all: true
