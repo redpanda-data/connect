@@ -131,6 +131,16 @@ func readConfig(path string, resourcesPaths []string) (lints []string) {
 		for _, l := range rLints {
 			lints = append(lints, fmt.Sprintf("resource file %v: %v", rPath, l))
 		}
+
+		rLints, err = config.Lint(resourceBytes, config.Type{})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Resource configuration file read error: %v\n", err)
+			os.Exit(1)
+		}
+		for _, l := range rLints {
+			lints = append(lints, fmt.Sprintf("resource file %v: %v", rPath, l))
+		}
+
 		extraMgrWrapper := manager.NewResourceConfig()
 		if err = yaml.Unmarshal(resourceBytes, &extraMgrWrapper); err != nil {
 			fmt.Fprintf(os.Stderr, "Resource configuration file read error: %v\n", err)
