@@ -69,6 +69,7 @@ output:
       client_key: ""
       client_secret: ""
       token_url: ""
+      scopes: []
     basic_auth:
       enabled: false
       username: ""
@@ -270,6 +271,14 @@ The URL of the token provider.
 
 Type: `string`  
 Default: `""`  
+
+### `oauth2.scopes`
+
+Scope specifies optional requested permissions.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `basic_auth`
 
