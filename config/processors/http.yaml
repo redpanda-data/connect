@@ -35,6 +35,7 @@ pipeline:
           client_key: ""
           client_secret: ""
           token_url: ""
+          scopes: []
         basic_auth:
           enabled: false
           username: ""
