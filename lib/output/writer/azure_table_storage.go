@@ -114,7 +114,6 @@ func (a *AzureTableStorage) WriteWithContext(wctx context.Context, msg types.Mes
 		partitionKey := a.partitionKey.String(i, msg)
 		entity.PartitionKey = a.partitionKey.String(i, msg)
 		entity.RowKey = a.rowKey.String(i, msg)
-		entity.TimeStamp = time.Now()
 
 		jsonMap := make(map[string]interface{})
 		if len(a.properties) == 0 {
