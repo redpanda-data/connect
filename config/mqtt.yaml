@@ -18,6 +18,11 @@ input:
     clean_session: true
     user: ""
     password: ""
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      root_cas_file: ""
+      client_certs: []
 buffer:
   none: {}
 pipeline:
@@ -28,11 +33,16 @@ output:
   mqtt:
     urls:
       - tcp://localhost:1883
-    qos: 1
     topic: benthos_topic
     client_id: benthos_output
+    qos: 1
     user: ""
     password: ""
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      root_cas_file: ""
+      client_certs: []
     max_in_flight: 1
 logger:
   level: INFO

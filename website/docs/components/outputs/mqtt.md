@@ -33,9 +33,9 @@ output:
   mqtt:
     urls:
       - tcp://localhost:1883
-    qos: 1
     topic: benthos_topic
     client_id: benthos_output
+    qos: 1
     max_in_flight: 1
 ```
 
@@ -49,11 +49,16 @@ output:
   mqtt:
     urls:
       - tcp://localhost:1883
-    qos: 1
     topic: benthos_topic
     client_id: benthos_output
+    qos: 1
     user: ""
     password: ""
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      root_cas_file: ""
+      client_certs: []
     max_in_flight: 1
 ```
 
@@ -87,15 +92,6 @@ urls:
   - tcp://localhost:1883
 ```
 
-### `qos`
-
-The QoS value to set for each message.
-
-
-Type: `number`  
-Default: `1`  
-Options: `0`, `1`, `2`.
-
 ### `topic`
 
 The topic to publish messages to.
@@ -112,6 +108,15 @@ An identifier for the client.
 Type: `string`  
 Default: `"benthos_output"`  
 
+### `qos`
+
+The QoS value to set for each message.
+
+
+Type: `number`  
+Default: `1`  
+Options: `0`, `1`, `2`.
+
 ### `user`
 
 A username to connect with.
@@ -123,6 +128,94 @@ Default: `""`
 ### `password`
 
 A password to connect with.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls`
+
+Custom TLS settings can be used to override system defaults.
+
+
+Type: `object`  
+
+### `tls.enabled`
+
+Whether custom TLS settings are enabled.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `tls.skip_cert_verify`
+
+Whether to skip server side certificate verification.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `tls.root_cas_file`
+
+An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+root_cas_file: ./root_cas.pem
+```
+
+### `tls.client_certs`
+
+A list of client certificates to use. For each certificate either the fields `cert` and `key`, or `cert_file` and `key_file` should be specified, but not both.
+
+
+Type: `array`  
+
+```yaml
+# Examples
+
+client_certs:
+  - cert: foo
+    key: bar
+
+client_certs:
+  - cert_file: ./example.pem
+    key_file: ./example.key
+```
+
+### `tls.client_certs[].cert`
+
+A plain text certificate to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].key`
+
+A plain text certificate key to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].cert_file`
+
+The path to a certificate to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].key_file`
+
+The path of a certificate key to use.
 
 
 Type: `string`  

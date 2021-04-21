@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
@@ -19,13 +20,14 @@ import (
 
 // MQTTConfig contains configuration fields for the MQTT output type.
 type MQTTConfig struct {
-	URLs        []string `json:"urls" yaml:"urls"`
-	QoS         uint8    `json:"qos" yaml:"qos"`
-	Topic       string   `json:"topic" yaml:"topic"`
-	ClientID    string   `json:"client_id" yaml:"client_id"`
-	User        string   `json:"user" yaml:"user"`
-	Password    string   `json:"password" yaml:"password"`
-	MaxInFlight int      `json:"max_in_flight" yaml:"max_in_flight"`
+	URLs        []string   `json:"urls" yaml:"urls"`
+	QoS         uint8      `json:"qos" yaml:"qos"`
+	Topic       string     `json:"topic" yaml:"topic"`
+	ClientID    string     `json:"client_id" yaml:"client_id"`
+	User        string     `json:"user" yaml:"user"`
+	Password    string     `json:"password" yaml:"password"`
+	MaxInFlight int        `json:"max_in_flight" yaml:"max_in_flight"`
+	TLS         tls.Config `json:"tls" yaml:"tls"`
 }
 
 // NewMQTTConfig creates a new MQTTConfig with default values.
@@ -38,6 +40,7 @@ func NewMQTTConfig() MQTTConfig {
 		User:        "",
 		Password:    "",
 		MaxInFlight: 1,
+		TLS:         tls.NewConfig(),
 	}
 }
 
@@ -112,6 +115,14 @@ func (m *MQTT) Connect() error {
 
 	for _, u := range m.urls {
 		conf = conf.AddBroker(u)
+	}
+
+	if m.conf.TLS.Enabled {
+		tlsConf, err := m.conf.TLS.Get()
+		if err != nil {
+			return err
+		}
+		conf.SetTLSConfig(tlsConf)
 	}
 
 	if m.conf.User != "" {
