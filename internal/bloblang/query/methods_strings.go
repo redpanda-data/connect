@@ -1802,3 +1802,76 @@ root.description = this.description.trim()`,
 	ExpectOneOrZeroArgs(),
 	ExpectStringArg(0),
 )
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"index_of", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Returns the starting index of the given substring in the string, -1 if the string doesn't contain the substring",
+		NewExampleSpec("",
+			`root.index = this.thing.index_of("bar")`,
+			`{"thing":"foobar"}`,
+			`{"index":3}`,
+		),
+	),
+	func(args ...interface{}) (simpleMethod, error) {
+			return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			substring := args[0].(string)
+
+			switch t := v.(type) {
+			case string:
+				return strings.Index(t, substring), nil
+			case []byte:
+				return strings.Index(string(t), substring), nil
+			}
+
+			return nil, NewTypeError(v, ValueString)
+		}, nil
+	},
+	false,
+	ExpectNArgs(1),
+)
+
+//------------------------------------------------------------------------------
+
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"reverse", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Returns the string in reverse order",
+		NewExampleSpec("",
+			`root.reversed = this.thing.reverse()`,
+			`{"thing":"backwards"}`,
+			`{"reversed":"sdrawkcab"}`,
+		),
+	),
+	func(args ...interface{}) (simpleMethod, error) {
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			switch t := v.(type) {
+			case string:
+				runes := []rune(t)
+				for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+					runes[i], runes[j] = runes[j], runes[i]
+				}
+				return string(runes), nil
+			case []byte:
+				result := make([]byte, len(t))
+				for i, j := 0, len(t)-1; i < j; i, j = i+1, j-1 {
+					result[i], result[j] = t[j], t[i]
+				}
+				return result, nil
+			}
+
+			return nil, NewTypeError(v, ValueString)
+		}, nil
+	},
+	false,
+	ExpectNArgs(0),
+)
+
+//------------------------------------------------------------------------------
