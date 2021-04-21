@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - New beta Bloblang methods `format_timestamp_unix` and `format_timestamp_unix_nano`.
 - Experimental `extract_tracing_map` field added to the `kafka` input.
 - Experimental `inject_tracing_map` field added to the `kafka` output.
+- Field `oauth2.scopes` added to HTTP components.
 
 ### Fixed
 

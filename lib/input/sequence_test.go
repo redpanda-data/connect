@@ -445,10 +445,10 @@ func TestSequenceSad(t *testing.T) {
 			assert.Equal(t, str, string(tran.Payload.Get(0).Get()))
 			select {
 			case tran.ResponseChan <- response.NewAck():
-			case <-time.After(time.Second * 5):
+			case <-time.After(time.Minute):
 				t.Fatalf("failed to ack after: %v", str)
 			}
-		case <-time.After(time.Second * 30):
+		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message %v", i)
 		}
 	}

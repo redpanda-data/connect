@@ -249,7 +249,7 @@ Default: `""`
 
 ### `oauth2.scopes`
 
-Scope specifies optional requested permissions.
+A list of optional requested permissions.
 
 
 Type: `array`  
