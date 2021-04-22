@@ -125,7 +125,7 @@ func readConfig(path string, resourcesPaths []string) (lints []string) {
 	for _, rPath := range resourcesPaths {
 		resourceBytes, rLints, err := config.ReadWithJSONPointersLinted(rPath, true)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Resource configuration file read error: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Resource configuration file read error '%v': %v\n", rPath, err)
 			os.Exit(1)
 		}
 		for _, l := range rLints {
@@ -134,7 +134,7 @@ func readConfig(path string, resourcesPaths []string) (lints []string) {
 
 		rLints, err = config.Lint(resourceBytes, config.Type{})
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Resource configuration file read error: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Resource configuration file read error '%v': %v\n", rPath, err)
 			os.Exit(1)
 		}
 		for _, l := range rLints {
