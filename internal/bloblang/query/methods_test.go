@@ -1928,7 +1928,7 @@ func TestMethods(t *testing.T) {
 			messages: []easyMsg{
 				{content: `foobar`},
 			},
-			output: 3,
+			output: int64(3),
 		},
 		"check index of no match": {
 			input: methods(
@@ -1938,7 +1938,7 @@ func TestMethods(t *testing.T) {
 			messages: []easyMsg{
 				{content: `foofoo`},
 			},
-			output: -1,
+			output: int64(-1),
 		},
 		"check reverse": {
 			input: methods(

@@ -382,6 +382,7 @@ func TestSequenceSad(t *testing.T) {
 
 	files := map[string]string{
 		"f1": "foo\nbar\nbaz",
+		"f4": "buz\nbev\nbif\n",
 	}
 
 	writeFiles(t, tmpDir, files)
@@ -431,9 +432,7 @@ func TestSequenceSad(t *testing.T) {
 		"buz", "bev", "bif",
 	}
 
-	writeFiles(t, tmpDir, map[string]string{
-		"f2": "buz\nbev\nbif\n",
-	})
+	require.NoError(t, os.Rename(filepath.Join(tmpDir, "f4"), filepath.Join(tmpDir, "f2")))
 
 	for i, str := range exp {
 		select {
