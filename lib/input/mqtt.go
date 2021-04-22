@@ -6,6 +6,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
 //------------------------------------------------------------------------------
@@ -38,6 +39,7 @@ You can access these metadata fields using
 			docs.FieldAdvanced("clean_session", "Set whether the connection is non-persistent."),
 			docs.FieldAdvanced("user", "A username to assume for the connection."),
 			docs.FieldAdvanced("password", "A password to provide for the connection."),
+			tls.FieldSpec(),
 			docs.FieldDeprecated("stale_connection_timeout"),
 		},
 		Categories: []Category{

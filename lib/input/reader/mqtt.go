@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
@@ -19,14 +20,15 @@ import (
 
 // MQTTConfig contains configuration fields for the MQTT input type.
 type MQTTConfig struct {
-	URLs                   []string `json:"urls" yaml:"urls"`
-	QoS                    uint8    `json:"qos" yaml:"qos"`
-	Topics                 []string `json:"topics" yaml:"topics"`
-	ClientID               string   `json:"client_id" yaml:"client_id"`
-	CleanSession           bool     `json:"clean_session" yaml:"clean_session"`
-	User                   string   `json:"user" yaml:"user"`
-	Password               string   `json:"password" yaml:"password"`
-	StaleConnectionTimeout string   `json:"stale_connection_timeout" yaml:"stale_connection_timeout"`
+	URLs                   []string   `json:"urls" yaml:"urls"`
+	QoS                    uint8      `json:"qos" yaml:"qos"`
+	Topics                 []string   `json:"topics" yaml:"topics"`
+	ClientID               string     `json:"client_id" yaml:"client_id"`
+	CleanSession           bool       `json:"clean_session" yaml:"clean_session"`
+	User                   string     `json:"user" yaml:"user"`
+	Password               string     `json:"password" yaml:"password"`
+	StaleConnectionTimeout string     `json:"stale_connection_timeout" yaml:"stale_connection_timeout"`
+	TLS                    tls.Config `json:"tls" yaml:"tls"`
 }
 
 // NewMQTTConfig creates a new MQTTConfig with default values.
@@ -40,6 +42,7 @@ func NewMQTTConfig() MQTTConfig {
 		User:                   "",
 		Password:               "",
 		StaleConnectionTimeout: "",
+		TLS:                    tls.NewConfig(),
 	}
 }
 
@@ -151,6 +154,14 @@ func (m *MQTT) ConnectWithContext(ctx context.Context) error {
 				}
 			}
 		})
+
+	if m.conf.TLS.Enabled {
+		tlsConf, err := m.conf.TLS.Get()
+		if err != nil {
+			return err
+		}
+		conf.SetTLSConfig(tlsConf)
+	}
 
 	if m.conf.User != "" {
 		conf.SetUsername(m.conf.User)

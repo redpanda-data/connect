@@ -6,6 +6,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
 //------------------------------------------------------------------------------
@@ -22,11 +23,12 @@ messages these interpolations are performed per message part.`,
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"tcp://localhost:1883"}).Array(),
-			docs.FieldCommon("qos", "The QoS value to set for each message.").HasOptions("0", "1", "2"),
 			docs.FieldCommon("topic", "The topic to publish messages to."),
 			docs.FieldCommon("client_id", "An identifier for the client."),
+			docs.FieldCommon("qos", "The QoS value to set for each message.").HasOptions("0", "1", "2"),
 			docs.FieldAdvanced("user", "A username to connect with."),
 			docs.FieldAdvanced("password", "A password to connect with."),
+			tls.FieldSpec(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		},
 		Categories: []Category{
