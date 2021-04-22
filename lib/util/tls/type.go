@@ -40,19 +40,21 @@ type ClientCertConfig struct {
 
 // Config contains configuration params for TLS.
 type Config struct {
-	Enabled            bool               `json:"enabled" yaml:"enabled"`
-	RootCAsFile        string             `json:"root_cas_file" yaml:"root_cas_file"`
-	InsecureSkipVerify bool               `json:"skip_cert_verify" yaml:"skip_cert_verify"`
-	ClientCertificates []ClientCertConfig `json:"client_certs" yaml:"client_certs"`
+	Enabled             bool               `json:"enabled" yaml:"enabled"`
+	RootCAsFile         string             `json:"root_cas_file" yaml:"root_cas_file"`
+	InsecureSkipVerify  bool               `json:"skip_cert_verify" yaml:"skip_cert_verify"`
+	ClientCertificates  []ClientCertConfig `json:"client_certs" yaml:"client_certs"`
+	EnableRenegotiation bool               `json:"enable_renegotiation" yaml:"enable_renegotiation"`
 }
 
 // NewConfig creates a new Config with default values.
 func NewConfig() Config {
 	return Config{
-		Enabled:            false,
-		RootCAsFile:        "",
-		InsecureSkipVerify: false,
-		ClientCertificates: []ClientCertConfig{},
+		Enabled:             false,
+		RootCAsFile:         "",
+		InsecureSkipVerify:  false,
+		ClientCertificates:  []ClientCertConfig{},
+		EnableRenegotiation: false,
 	}
 }
 
@@ -81,10 +83,16 @@ func (c *Config) Get() (*tls.Config, error) {
 		clientCerts = append(clientCerts, cert)
 	}
 
+	renegotiate := tls.RenegotiateNever
+	if c.EnableRenegotiation {
+		renegotiate = tls.RenegotiateFreelyAsClient
+	}
+
 	return &tls.Config{
 		InsecureSkipVerify: c.InsecureSkipVerify,
 		RootCAs:            rootCAs,
 		Certificates:       clientCerts,
+		Renegotiation:      renegotiate,
 	}, nil
 }
 

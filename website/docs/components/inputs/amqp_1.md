@@ -50,6 +50,7 @@ input:
     tls:
       enabled: false
       skip_cert_verify: false
+      enable_renegotiation: false
       root_cas_file: ""
       client_certs: []
     sasl:
@@ -136,6 +137,14 @@ Default: `false`
 ### `tls.skip_cert_verify`
 
 Whether to skip server side certificate verification.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `tls.enable_renegotiation`
+
+Whether to allow the remote server to repeatedly request renegotiation. Enable this option if you're seeing the error message `local error: tls: no renegotiation`.
 
 
 Type: `bool`  

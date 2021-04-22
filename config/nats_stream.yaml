@@ -23,6 +23,7 @@ input:
     tls:
       enabled: false
       skip_cert_verify: false
+      enable_renegotiation: false
       root_cas_file: ""
       client_certs: []
 buffer:
@@ -42,6 +43,7 @@ output:
     tls:
       enabled: false
       skip_cert_verify: false
+      enable_renegotiation: false
       root_cas_file: ""
       client_certs: []
 logger:

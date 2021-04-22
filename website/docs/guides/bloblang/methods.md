@@ -147,6 +147,24 @@ root.escaped = this.value.escape_html()
 # Out: {"escaped":"foo &amp; bar"}
 ```
 
+### `index_of`
+
+Returns the starting index of the argument substring in a string target, or `-1` if the target doesn't contain the argument.
+
+```coffee
+root.index = this.thing.index_of("bar")
+
+# In:  {"thing":"foobar"}
+# Out: {"index":3}
+```
+
+```coffee
+root.index = content().index_of("meow")
+
+# In:  the cat meowed, the dog woofed
+# Out: {"index":8}
+```
+
 ### `unescape_html`
 
 Unescapes a string so that entities like `&lt;` become `<`. It unescapes a larger range of entities than `escape_html` escapes. For example, `&aacute;` unescapes to `á`, as does `&#225;` and `&xE1;`.
@@ -262,6 +280,24 @@ root.foo = this.foo.lowercase()
 # Out: {"foo":"hello world"}
 ```
 
+### `reverse`
+
+Returns the target string in reverse order.
+
+```coffee
+root.reversed = this.thing.reverse()
+
+# In:  {"thing":"backwards"}
+# Out: {"reversed":"sdrawkcab"}
+```
+
+```coffee
+root = content().reverse()
+
+# In:  {"thing":"backwards"}
+# Out: }"sdrawkcab":"gniht"{
+```
+
 ### `quote`
 
 Quotes a target string using escape sequences (`	`, `
@@ -354,28 +390,6 @@ root.description = this.description.trim()
 
 # In:  {"description":"  something happened and its amazing! ","title":"!!!watch out!?"}
 # Out: {"description":"something happened and its amazing!","title":"watch out"}
-```
-
-### `index_of`
-
-Returns the starting index of the given substring in the string, -1 if the string doesn't contain the substring
-
-```coffee
-root.index = this.thing.index_of("bar")
-
-# In:  {"thing":"foobar"}
-# Out: {"index":3}
-```
-
-### `reverse`
-
-Returns the string in reverse order
-
-```coffee
-root.reversed = this.thing.reverse()
-
-# In:  {"thing":"backwards"}
-# Out: {"reversed":"sdrawkcab"}
 ```
 
 ### `contains`

@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - Experimental `inject_tracing_map` field added to the `kafka` output.
 - Field `oauth2.scopes` added to HTTP components.
 - The `mqtt` input and output now support TLS.
+- Field `enable_renegotiation` added to `tls` configurations.
 
 ### Fixed
 
