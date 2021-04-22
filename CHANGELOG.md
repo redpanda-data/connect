@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - Field `oauth2.scopes` added to HTTP components.
 - The `mqtt` input and output now support TLS.
 - Field `enable_renegotiation` added to `tls` configurations.
+- Bloblang `if` expressions now support an arbitrary number of `else if` blocks.
 
 ### Fixed
 

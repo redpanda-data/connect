@@ -128,7 +128,7 @@ func ifExpressionParser(pCtx Context) Func {
 	)
 
 	return func(input []rune) Result {
-		res := Sequence(
+		ifParser := Sequence(
 			Term("if"),
 			SpacesAndTabs(),
 			MustBe(queryParser(pCtx)),
@@ -138,19 +138,33 @@ func ifExpressionParser(pCtx Context) Func {
 			MustBe(queryParser(pCtx)),
 			optionalWhitespace,
 			MustBe(Char('}')),
-			Optional(
-				Sequence(
-					optionalWhitespace,
-					Term("else"),
-					optionalWhitespace,
-					MustBe(Char('{')),
-					optionalWhitespace,
-					MustBe(queryParser(pCtx)),
-					optionalWhitespace,
-					MustBe(Char('}')),
-				),
-			),
-		)(input)
+		)
+
+		elseIfParser := Optional(Sequence(
+			optionalWhitespace,
+			Term("else if"),
+			SpacesAndTabs(),
+			MustBe(queryParser(pCtx)),
+			optionalWhitespace,
+			MustBe(Char('{')),
+			optionalWhitespace,
+			MustBe(queryParser(pCtx)),
+			optionalWhitespace,
+			MustBe(Char('}')),
+		))
+
+		elseParser := Optional(Sequence(
+			optionalWhitespace,
+			Term("else"),
+			optionalWhitespace,
+			MustBe(Char('{')),
+			optionalWhitespace,
+			MustBe(queryParser(pCtx)),
+			optionalWhitespace,
+			MustBe(Char('}')),
+		))
+
+		res := ifParser(input)
 		if res.Err != nil {
 			return res
 		}
@@ -159,13 +173,33 @@ func ifExpressionParser(pCtx Context) Func {
 		queryFn := seqSlice[2].(query.Function)
 		ifFn := seqSlice[6].(query.Function)
 
-		var elseFn query.Function
-		elseSlice, _ := seqSlice[9].([]interface{})
-		if len(elseSlice) > 0 {
-			elseFn, _ = elseSlice[5].(query.Function)
+		var elseIfs []query.ElseIf
+		for {
+			res = elseIfParser(res.Remaining)
+			if res.Err != nil {
+				return res
+			}
+			if res.Payload == nil {
+				break
+			}
+			seqSlice = res.Payload.([]interface{})
+			elseIfs = append(elseIfs, query.ElseIf{
+				QueryFn: seqSlice[3].(query.Function),
+				MapFn:   seqSlice[7].(query.Function),
+			})
 		}
 
-		res.Payload = query.NewIfFunction(queryFn, ifFn, elseFn)
+		var elseFn query.Function
+
+		res = elseParser(res.Remaining)
+		if res.Err != nil {
+			return res
+		}
+		if res.Payload != nil {
+			elseFn, _ = res.Payload.([]interface{})[5].(query.Function)
+		}
+
+		res.Payload = query.NewIfFunction(queryFn, ifFn, elseIfs, elseFn)
 		return res
 	}
 }

@@ -201,20 +201,25 @@ root.sorted_foo = if this.foo.type() == "array" { this.foo.sort() }
 # Out: {"foo":["foo","bar"],"sorted_foo":["bar","foo"]}
 ```
 
-And add an `else` for alternative maps:
+And add as many `if else` queries as you like, followed by an optional final fallback `else`:
 
 ```coffee
-root.foo = if this.exists("foo") {
-  this.foo
+root.sound = if this.type == "cat" {
+  this.cat.meow
+} else if this.type == "dog" {
+  this.dog.woof.uppercase()
 } else {
-  "default"
+  "sweet sweet silence"
 }
 
-# In:  {"foo":"foobar"}
-# Out: {"foo":"foobar"}
+# In:  {"type":"cat","cat":{"meow":"meeeeooooow!"}}
+# Out: {"sound":"meeeeooooow!"}
 
-# In:  {}
-# Out: {"foo":"default"}
+# In:  {"type":"dog","dog":{"woof":"guurrrr woof woof!"}}
+# Out: {"sound":"GUURRRR WOOF WOOF!"}
+
+# In:  {"type":"caterpillar","caterpillar":{"name":"oleg"}}
+# Out: {"sound":"sweet sweet silence"}
 ```
 
 ## Pattern Matching

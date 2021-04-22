@@ -66,10 +66,16 @@ func NewMatchFunction(contextFn Function, cases ...MatchCase) Function {
 	})
 }
 
+// ElseIf represents an else-if block in an if expression.
+type ElseIf struct {
+	QueryFn Function
+	MapFn   Function
+}
+
 // NewIfFunction creates a logical if expression from a query which should
 // return a boolean value. If the returned boolean is true then the ifFn is
 // executed and returned, otherwise elseFn is executed and returned.
-func NewIfFunction(queryFn, ifFn, elseFn Function) Function {
+func NewIfFunction(queryFn, ifFn Function, elseIfs []ElseIf, elseFn Function) Function {
 	return ClosureFunction("if expression", func(ctx FunctionContext) (interface{}, error) {
 		queryVal, err := queryFn.Exec(ctx)
 		if err != nil {
@@ -78,6 +84,17 @@ func NewIfFunction(queryFn, ifFn, elseFn Function) Function {
 		if queryRes, _ := queryVal.(bool); queryRes {
 			return ifFn.Exec(ctx)
 		}
+
+		for i, eFn := range elseIfs {
+			queryVal, err = eFn.QueryFn.Exec(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to check if condition %v: %w", i+1, err)
+			}
+			if queryRes, _ := queryVal.(bool); queryRes {
+				return eFn.MapFn.Exec(ctx)
+			}
+		}
+
 		if elseFn != nil {
 			return elseFn.Exec(ctx)
 		}

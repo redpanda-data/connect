@@ -42,6 +42,7 @@ func TestExpressions(t *testing.T) {
 				)),
 				NewLiteralFunction("", "foo"),
 				nil,
+				nil,
 			),
 			output: Nothing(nil),
 		},
@@ -57,9 +58,28 @@ func TestExpressions(t *testing.T) {
 					},
 				)),
 				NewLiteralFunction("", "foo"),
+				nil,
 				NewLiteralFunction("", "bar"),
 			),
 			output: "bar",
+		},
+		"if else if": {
+			input: NewIfFunction(
+				NewLiteralFunction("", false),
+				NewLiteralFunction("", "foo"),
+				[]ElseIf{
+					{
+						QueryFn: NewLiteralFunction("", false),
+						MapFn:   NewLiteralFunction("", "bar"),
+					},
+					{
+						QueryFn: NewLiteralFunction("", true),
+						MapFn:   NewLiteralFunction("", "baz"),
+					},
+				},
+				NewLiteralFunction("", "buz"),
+			),
+			output: "baz",
 		},
 		"if true": {
 			input: NewIfFunction(
@@ -73,6 +93,7 @@ func TestExpressions(t *testing.T) {
 					},
 				)),
 				NewLiteralFunction("", "foo"),
+				nil,
 				NewLiteralFunction("", Nothing(nil)),
 			),
 			output: "foo",
@@ -81,6 +102,7 @@ func TestExpressions(t *testing.T) {
 			input: NewIfFunction(
 				NewVarFunction("doesnt exist"),
 				NewLiteralFunction("", "foo"),
+				nil,
 				NewLiteralFunction("", "bar"),
 			),
 			err: errors.New("failed to check if condition: variables were undefined"),
@@ -307,6 +329,7 @@ func TestExpressionTargets(t *testing.T) {
 			input: NewIfFunction(
 				mustFunc(InitFunction("json", "foo.bar")),
 				NewLiteralFunction("", "foo"),
+				nil,
 				mustFunc(InitFunction("var", "baz")),
 			),
 			output: []TargetPath{

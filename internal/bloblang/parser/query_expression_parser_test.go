@@ -204,6 +204,43 @@ func TestExpressionsParser(t *testing.T) {
 			input:  `if "foo" == "foo" { "foo" } else { "bar" }`,
 			output: `foo`,
 		},
+		"if statement with else ifs": {
+			input: `if json("type") == "foo" {
+  "was foo"
+} else if json("type") == "bar" {
+  "was bar"
+} else if json("type") == "baz" {
+  "was baz"
+} else {
+  "was none"
+}`,
+			output: `was foo`,
+			messages: []easyMsg{
+				{content: `{"type":"foo"}`},
+			},
+		},
+		"if statement with else ifs 2": {
+			input:  `if json("type") == "foo"{"was foo"} else if json("type") == "bar"{"was bar"} else if json("type") == "baz"{"was baz"}else{"was none"}`,
+			output: `was baz`,
+			messages: []easyMsg{
+				{content: `{"type":"baz"}`},
+			},
+		},
+		"if statement with else ifs 3": {
+			input: `if json("type") == "foo" {
+  "was foo"
+} else if json("type") == "bar" {
+  "was bar"
+} else if json("type") == "baz" {
+  "was baz"
+} else {
+  "was none"
+}`,
+			output: `was none`,
+			messages: []easyMsg{
+				{content: `{"type":"none of them"}`},
+			},
+		},
 	}
 
 	for name, test := range tests {
