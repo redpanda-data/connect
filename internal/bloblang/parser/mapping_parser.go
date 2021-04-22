@@ -150,11 +150,23 @@ func singleRootMapping(pCtx Context) Func {
 		}
 
 		fn := res.Payload.(query.Function)
+		assignmentRunes := input[:len(input)-len(res.Remaining)]
 
 		// Remove all tailing whitespace and ensure no remaining input.
 		res = allWhitespace(res.Remaining)
 		if len(res.Remaining) > 0 {
-			return Fail(NewError(res.Remaining, "end of input"), input)
+			tmpRes := allWhitespace(assignmentRunes)
+			assignmentRunes = tmpRes.Remaining
+
+			var assignmentStr string
+			if len(assignmentRunes) > 12 {
+				assignmentStr = string(assignmentRunes[:12]) + "..."
+			} else {
+				assignmentStr = string(assignmentRunes)
+			}
+
+			expStr := fmt.Sprintf("the mapping to end here as the beginning is shorthand for `root = %v`, but this shorthand form cannot be followed with more assignments", assignmentStr)
+			return Fail(NewError(res.Remaining, expStr), input)
 		}
 
 		stmt := mapping.NewStatement(input, mapping.NewJSONAssignment(), fn)

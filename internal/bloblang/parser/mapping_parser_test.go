@@ -78,7 +78,12 @@ foo = bar bar = baz
 		},
 		"bad char": {
 			mapping: `!foo = bar`,
-			err:     `line 1 char 6: expected end of input`,
+			err:     "line 1 char 6: expected the mapping to end here as the beginning is shorthand for `root = !foo`, but this shorthand form cannot be followed with more assignments",
+		},
+		"bad inline query": {
+			mapping: `content().uppercase().lowercase()
+meta foo = "bar"`,
+			err: "line 2 char 1: expected the mapping to end here as the beginning is shorthand for `root = content().up...`, but this shorthand form cannot be followed with more assignments",
 		},
 		"bad char 2": {
 			mapping: `let foo = bar
