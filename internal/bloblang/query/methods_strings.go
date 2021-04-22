@@ -1818,14 +1818,14 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(args ...interface{}) (simpleMethod, error) {
-			return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			substring := args[0].(string)
 
 			switch t := v.(type) {
 			case string:
 				return strings.Index(t, substring), nil
 			case []byte:
-				return strings.Index(string(t), substring), nil
+				return bytes.Index(t, []byte(substring)), nil
 			}
 
 			return nil, NewTypeError(v, ValueString)
@@ -1836,7 +1836,6 @@ var _ = registerSimpleMethod(
 )
 
 //------------------------------------------------------------------------------
-
 
 var _ = registerSimpleMethod(
 	NewMethodSpec(
