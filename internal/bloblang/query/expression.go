@@ -76,6 +76,13 @@ type ElseIf struct {
 // return a boolean value. If the returned boolean is true then the ifFn is
 // executed and returned, otherwise elseFn is executed and returned.
 func NewIfFunction(queryFn, ifFn Function, elseIfs []ElseIf, elseFn Function) Function {
+	allFns := []Function{
+		queryFn, ifFn, elseFn,
+	}
+	for _, eIf := range elseIfs {
+		allFns = append(allFns, eIf.QueryFn, eIf.MapFn)
+	}
+
 	return ClosureFunction("if expression", func(ctx FunctionContext) (interface{}, error) {
 		queryVal, err := queryFn.Exec(ctx)
 		if err != nil {
@@ -99,7 +106,7 @@ func NewIfFunction(queryFn, ifFn Function, elseIfs []ElseIf, elseFn Function) Fu
 			return elseFn.Exec(ctx)
 		}
 		return Nothing(nil), nil
-	}, aggregateTargetPaths(queryFn, ifFn, elseFn))
+	}, aggregateTargetPaths(allFns...))
 }
 
 // NewNamedContextFunction wraps a function and ensures that when the function

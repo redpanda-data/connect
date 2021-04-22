@@ -337,6 +337,30 @@ func TestExpressionTargets(t *testing.T) {
 				NewTargetPath(TargetVariable, "baz"),
 			},
 		},
+		"if else if query path": {
+			input: NewIfFunction(
+				mustFunc(InitFunction("json", "foo.bar")),
+				NewLiteralFunction("", "foo"),
+				[]ElseIf{
+					{
+						QueryFn: mustFunc(InitFunction("json", "foo.baz")),
+						MapFn:   NewLiteralFunction("", "bar"),
+					},
+					{
+						QueryFn: mustFunc(InitFunction("meta", "buz")),
+						MapFn:   mustFunc(InitFunction("meta", "quz")),
+					},
+				},
+				mustFunc(InitFunction("var", "baz")),
+			),
+			output: []TargetPath{
+				NewTargetPath(TargetValue, "foo", "bar"),
+				NewTargetPath(TargetVariable, "baz"),
+				NewTargetPath(TargetValue, "foo", "baz"),
+				NewTargetPath(TargetMetadata, "buz"),
+				NewTargetPath(TargetMetadata, "quz"),
+			},
+		},
 		"match empty context": {
 			input: NewMatchFunction(
 				nil,
