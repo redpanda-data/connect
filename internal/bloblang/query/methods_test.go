@@ -1920,6 +1920,36 @@ func TestMethods(t *testing.T) {
 			})),
 			output: []byte("ITAhello!ITA BOLDworld!BOLD"),
 		},
+		"check index of": {
+			input: methods(
+				function(`content`),
+				method("index_of", "bar"),
+			),
+			messages: []easyMsg{
+				{content: `foobar`},
+			},
+			output: 3,
+		},
+		"check index of no match": {
+			input: methods(
+				function(`content`),
+				method("index_of", "bar"),
+			),
+			messages: []easyMsg{
+				{content: `foofoo`},
+			},
+			output: -1,
+		},
+		"check reverse": {
+			input: methods(
+				function(`content`),
+				method("reverse"),
+			),
+			messages: []easyMsg{
+				{content: `foobar`},
+			},
+			output: []byte("raboof"),
+		},
 	}
 
 	for name, test := range tests {

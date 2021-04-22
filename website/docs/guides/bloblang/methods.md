@@ -356,6 +356,28 @@ root.description = this.description.trim()
 # Out: {"description":"something happened and its amazing!","title":"watch out"}
 ```
 
+### `index_of`
+
+Returns the starting index of the given substring in the string, -1 if the string doesn't contain the substring
+
+```coffee
+root.index = this.thing.index_of("bar")
+
+# In:  {"thing":"foobar"}
+# Out: {"index":3}
+```
+
+### `reverse`
+
+Returns the string in reverse order
+
+```coffee
+root.reversed = this.thing.reverse()
+
+# In:  {"thing":"backwards"}
+# Out: {"reversed":"sdrawkcab"}
+```
+
 ### `contains`
 
 Checks whether a string contains a substring and returns a boolean result.
