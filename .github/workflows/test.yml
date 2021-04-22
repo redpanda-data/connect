@@ -63,12 +63,6 @@ jobs:
       run: make deps && git diff-index --quiet HEAD || { >&2 echo "Stale go.{mod,sum} detected. This can be fixed with 'make deps'."; exit 1; }
 
     - name: Lint
-      uses: golangci/golangci-lint-action@v2
-      with:
-        version: latest
-        args: --timeout 10m cmd/... lib/... internal/... public/...
-
-    - name: Golint
       run: |
         go install golang.org/x/lint/golint
         golint -set_exit_status cmd/... lib/... internal/... public/...
@@ -78,3 +72,16 @@ jobs:
 
     - name: Test
       run: make test
+
+  golangci-lint:
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Lint
+      uses: golangci/golangci-lint-action@v2
+      with:
+        version: latest
+        args: --timeout 10m cmd/... lib/... internal/... public/...
