@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.45.0 - 2021-04-23
+
 ### Added
 
 - Experimental `azure_renew_lock` field added to the `amqp_1` input.
