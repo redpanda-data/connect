@@ -121,6 +121,7 @@ The timeout duration until a dequeued message gets visible again, 30s by default
 
 Type: `string`  
 Default: `"30s"`  
+Requires version 3.45.0 or newer  
 
 ### `max_in_flight`
 

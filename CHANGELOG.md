@@ -11,7 +11,8 @@ All notable changes to this project will be documented in this file.
 
 - Experimental `azure_renew_lock` field added to the `amqp_1` input.
 - New beta `root_meta` function.
-- Fields `max_in_flight` and `dequeue_visibility_timeout` added to the `azure_queue_storage` input.
+- Field `dequeue_visibility_timeout` added to the `azure_queue_storage` input.
+- Field `max_in_flight` added to the `azure_queue_storage` output.
 - New beta Bloblang methods `format_timestamp_unix` and `format_timestamp_unix_nano`.
 - New Bloblang methods `reverse` and `index_of`.
 - Experimental `extract_tracing_map` field added to the `kafka` input.

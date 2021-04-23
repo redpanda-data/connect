@@ -35,4 +35,4 @@ var InjectTracingSpanMappingDocs = docs.FieldAdvanced(
 	"EXPERIMENTAL: A [Bloblang mapping](/docs/guides/bloblang/about) used to inject an object containing tracing propagation information into outbound messages. The specification of the injected fields will match the format used by the service wide tracer.",
 	`meta = meta().merge(this)`,
 	`root.meta.span = this`,
-).Linter(docs.LintBloblangMapping)
+).AtVersion("3.45.0").Linter(docs.LintBloblangMapping)

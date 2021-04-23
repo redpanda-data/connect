@@ -28,7 +28,7 @@ messages these interpolations are performed per message part.`,
 			docs.FieldCommon("qos", "The QoS value to set for each message.").HasOptions("0", "1", "2"),
 			docs.FieldAdvanced("user", "A username to connect with."),
 			docs.FieldAdvanced("password", "A password to connect with."),
-			tls.FieldSpec(),
+			tls.FieldSpec().AtVersion("3.45.0"),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		},
 		Categories: []Category{

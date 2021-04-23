@@ -39,7 +39,7 @@ You can access these metadata fields using
 			docs.FieldAdvanced("clean_session", "Set whether the connection is non-persistent."),
 			docs.FieldAdvanced("user", "A username to assume for the connection."),
 			docs.FieldAdvanced("password", "A password to provide for the connection."),
-			tls.FieldSpec(),
+			tls.FieldSpec().AtVersion("3.45.0"),
 			docs.FieldDeprecated("stale_connection_timeout"),
 		},
 		Categories: []Category{

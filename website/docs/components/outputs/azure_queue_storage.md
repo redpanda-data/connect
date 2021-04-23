@@ -146,6 +146,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 Type: `number`  
 Default: `1`  
+Requires version 3.45.0 or newer  
 
 ### `batching`
 

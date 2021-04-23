@@ -51,7 +51,9 @@ Only one authentication method is required, ` + "`storage_connection_string`" + 
 			docs.FieldCommon(
 				"queue_name", "The name of the target Storage queue.",
 			),
-			docs.FieldAdvanced("dequeue_visibility_timeout", "The timeout duration until a dequeued message gets visible again, 30s by default"),
+			docs.FieldAdvanced(
+				"dequeue_visibility_timeout", "The timeout duration until a dequeued message gets visible again, 30s by default",
+			).AtVersion("3.45.0"),
 			docs.FieldAdvanced("max_in_flight", "The maximum number of unprocessed messages to fetch at a given time."),
 		},
 		Categories: []Category{

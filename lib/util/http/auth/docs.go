@@ -34,7 +34,7 @@ func oAuth2FieldSpec() docs.FieldSpec {
 		docs.FieldCommon("client_key", "A value used to identify the client to the token provider."),
 		docs.FieldCommon("client_secret", "A secret used to establish ownership of the client key."),
 		docs.FieldCommon("token_url", "The URL of the token provider."),
-		docs.FieldAdvanced("scopes", "A list of optional requested permissions.").Array(),
+		docs.FieldAdvanced("scopes", "A list of optional requested permissions.").Array().AtVersion("3.45.0"),
 	)
 }
 
