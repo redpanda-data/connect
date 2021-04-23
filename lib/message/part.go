@@ -3,6 +3,8 @@ package message
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 
 	"github.com/Jeffail/benthos/v3/lib/message/metadata"
@@ -110,14 +112,27 @@ func (p *Part) JSON() (interface{}, error) {
 	if p.data == nil {
 		return nil, ErrMessagePartNotExist
 	}
+
 	dec := json.NewDecoder(bytes.NewReader(p.data))
 	if useNumber {
 		dec.UseNumber()
 	}
-	if err := dec.Decode(&p.jsonCache); err != nil {
+
+	err := dec.Decode(&p.jsonCache)
+	if err != nil {
 		return nil, err
 	}
-	return p.jsonCache, nil
+
+	var dummy json.RawMessage
+	if err = dec.Decode(&dummy); err == io.EOF {
+		return p.jsonCache, nil
+	}
+
+	p.jsonCache = nil
+	if err = dec.Decode(&dummy); err == nil || err == io.EOF {
+		err = errors.New("message contains multiple valid documents")
+	}
+	return nil, err
 }
 
 // Set the value of the message part.

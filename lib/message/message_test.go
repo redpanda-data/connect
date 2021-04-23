@@ -6,6 +6,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/message/metadata"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMessageSerialization(t *testing.T) {
@@ -70,6 +71,46 @@ func TestMessageInvalidBytesFormat(t *testing.T) {
 	for _, c := range cases {
 		if _, err := FromBytes(c); err == nil {
 			t.Errorf("Received nil error from invalid byte sequence: %s", c)
+		}
+	}
+}
+
+func TestMessageIncompleteJSON(t *testing.T) {
+	tests := []struct {
+		message string
+		err     string
+	}{
+		{message: "{}"},
+		{
+			message: "{} not foo",
+			err:     "invalid character 'o' in literal null (expecting 'u')",
+		},
+		{
+			message: "{} {}",
+			err:     "message contains multiple valid documents",
+		},
+		{message: `["foo"]  `},
+		{message: `   ["foo"]  `},
+		{message: `   ["foo"]
+		
+		`},
+		{
+			message: `   ["foo"] 
+		
+		
+		
+		{}`,
+			err: "message contains multiple valid documents",
+		},
+	}
+
+	for _, test := range tests {
+		msg := New([][]byte{[]byte(test.message)})
+		_, err := msg.Get(0).JSON()
+		if test.err == "" {
+			assert.NoError(t, err)
+		} else {
+			assert.EqualError(t, err, test.err)
 		}
 	}
 }
