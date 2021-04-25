@@ -10,6 +10,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTypeConstruction(t *testing.T) {
@@ -19,25 +21,13 @@ func TestTypeConstruction(t *testing.T) {
 	conf.Output.Type = output.TypeNanomsg
 
 	strm, err := New(conf) // nanomsg => nanomsg
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if strm.logger == nil {
-		t.Error("nil logger")
-	}
+	assert.NotNil(t, strm.logger)
+	assert.NotNil(t, strm.stats)
+	assert.NotNil(t, strm.manager)
 
-	if strm.stats == nil {
-		t.Error("nil stats")
-	}
-
-	if strm.manager == nil {
-		t.Error("nil manager")
-	}
-
-	if err = strm.Stop(time.Second * 10); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, strm.Stop(time.Minute))
 
 	newStats := metrics.DudType{
 		ID: 1,
@@ -48,21 +38,11 @@ func TestTypeConstruction(t *testing.T) {
 	}
 
 	strm, err = New(conf, OptSetLogger(newLogger), OptSetStats(newStats), OptSetManager(newMgr))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if strm.logger != newLogger {
-		t.Error("wrong logger")
-	}
-
-	if strm.stats != newStats {
-		t.Error("wrong stats")
-	}
-
-	if strm.manager != newMgr {
-		t.Error("wrong manager")
-	}
+	assert.Equal(t, newLogger, strm.logger)
+	assert.Equal(t, newStats, strm.stats)
+	assert.Equal(t, newMgr, strm.manager)
 }
 
 func TestTypeCloseGracefully(t *testing.T) {
@@ -71,37 +51,22 @@ func TestTypeCloseGracefully(t *testing.T) {
 	conf.Output.Type = output.TypeHTTPServer
 
 	strm, err := New(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = strm.stopGracefully(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
+	assert.NoError(t, strm.stopGracefully(time.Minute))
 
 	conf.Buffer.Type = "memory"
 
 	strm, err = New(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = strm.stopGracefully(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
+	assert.NoError(t, strm.stopGracefully(time.Minute))
 
 	conf.Pipeline.Processors = []processor.Config{
 		processor.NewConfig(),
 	}
 
 	strm, err = New(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = strm.stopGracefully(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
+	assert.NoError(t, strm.stopGracefully(time.Minute))
 }
 
 func TestTypeCloseOrdered(t *testing.T) {
@@ -110,37 +75,22 @@ func TestTypeCloseOrdered(t *testing.T) {
 	conf.Output.Type = output.TypeNanomsg
 
 	strm, err := New(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = strm.stopOrdered(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
+	assert.NoError(t, strm.stopOrdered(time.Minute))
 
 	conf.Buffer.Type = "memory"
 
 	strm, err = New(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = strm.stopOrdered(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
+	assert.NoError(t, strm.stopOrdered(time.Minute))
 
 	conf.Pipeline.Processors = []processor.Config{
 		processor.NewConfig(),
 	}
 
 	strm, err = New(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = strm.stopOrdered(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
+	assert.NoError(t, strm.stopOrdered(time.Minute))
 }
 
 func TestTypeCloseUnordered(t *testing.T) {
@@ -149,35 +99,20 @@ func TestTypeCloseUnordered(t *testing.T) {
 	conf.Output.Type = input.TypeNanomsg
 
 	strm, err := New(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = strm.stopUnordered(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
+	assert.NoError(t, strm.stopUnordered(time.Minute))
 
 	conf.Buffer.Type = "memory"
 
 	strm, err = New(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = strm.stopUnordered(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
+	assert.NoError(t, strm.stopUnordered(time.Minute))
 
 	conf.Pipeline.Processors = []processor.Config{
 		processor.NewConfig(),
 	}
 
 	strm, err = New(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = strm.stopUnordered(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
+	assert.NoError(t, strm.stopUnordered(time.Minute))
 }
