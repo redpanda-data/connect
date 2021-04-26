@@ -90,9 +90,6 @@ test: $(APPS)
 	@go test $(GO_FLAGS) -timeout 3m -race ./...
 	@$(PATHINSTBIN)/benthos test ./config/test/...
 
-test-wasm-build:
-	@GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o $(DEST_DIR)/wasm_test ./cmd/benthos
-
 test-integration:
 	@go test $(GO_FLAGS) -run "^Test.*Integration$$" -timeout 3m ./...
 

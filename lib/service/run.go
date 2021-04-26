@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
@@ -65,8 +66,19 @@ func OptAddStringFlag(name, usage string, aliases []string, value string, destin
 
 //------------------------------------------------------------------------------
 
-func cmdVersion(version, dateBuild string) {
-	fmt.Printf("Version: %v\nDate: %v\n", Version, DateBuilt)
+func cmdVersion() {
+	version, dateBuilt := Version, DateBuilt
+	if version == "" {
+		info, ok := debug.ReadBuildInfo()
+		if ok {
+			for _, mod := range info.Deps {
+				if mod.Path == "github.com/Jeffail/benthos/v3" {
+					version = mod.Version
+				}
+			}
+		}
+	}
+	fmt.Printf("Version: %v\nDate: %v\n", version, dateBuilt)
 	os.Exit(0)
 }
 
@@ -205,7 +217,7 @@ func Run() {
 		Flags: flags,
 		Action: func(c *cli.Context) error {
 			if c.Bool("version") {
-				cmdVersion(Version, DateBuilt)
+				cmdVersion()
 			}
 			if c.Args().Len() > 0 {
 				fmt.Fprintf(os.Stderr, "Unrecognised command: %v\n", c.Args().First())
@@ -377,7 +389,7 @@ func Run() {
 
 		flags.Parse(os.Args[1:])
 		if *showVersion {
-			cmdVersion(Version, DateBuilt)
+			cmdVersion()
 		}
 
 		deprecatedExecute(*configPath, testSuffix)
