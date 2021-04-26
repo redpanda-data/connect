@@ -3,6 +3,7 @@ package output
 import (
 	"fmt"
 
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/broker"
@@ -107,6 +108,8 @@ func NewTry(
 	}
 	outputs := make([]types.Output, len(outputConfs))
 
+	maxInFlight := 1
+
 	var err error
 	for i, oConf := range outputConfs {
 		oMgr, oLog, oStats := interop.LabelChild(fmt.Sprintf("try.%v", i), mgr, log, stats)
@@ -114,13 +117,20 @@ func NewTry(
 		if outputs[i], err = New(oConf, oMgr, oLog, oStats); err != nil {
 			return nil, fmt.Errorf("failed to create output '%v' type '%v': %v", i, oConf.Type, err)
 		}
+		if mif, ok := output.GetMaxInFlight(outputs[i]); ok && mif > maxInFlight {
+			maxInFlight = mif
+		}
+	}
+
+	if maxInFlight <= 1 {
+		maxInFlight = 50
 	}
 
 	var t *broker.Try
 	if t, err = broker.NewTry(outputs, stats); err != nil {
 		return nil, err
 	}
-	t.WithMaxInFlight(50)
+	t.WithMaxInFlight(maxInFlight)
 	t.WithOutputMetricsPrefix("try.outputs")
 	return WrapWithPipelines(t, pipelines...)
 }

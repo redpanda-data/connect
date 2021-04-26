@@ -3,6 +3,7 @@ package output
 import (
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -51,6 +52,13 @@ func WrapWithPipelines(out Type, pipeConstructors ...types.PipelineConstructorFu
 // producer.
 func (i *WithPipeline) Consume(tsChan <-chan types.Transaction) error {
 	return i.pipe.Consume(tsChan)
+}
+
+// MaxInFlight returns the maximum number of in flight messages permitted by the
+// output. This value can be used to determine a sensible value for parent
+// outputs, but should not be relied upon as part of dispatcher logic.
+func (i *WithPipeline) MaxInFlight() (int, bool) {
+	return output.GetMaxInFlight(i.out)
 }
 
 // Connected returns a boolean indicating whether this output is currently

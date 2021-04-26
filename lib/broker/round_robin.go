@@ -4,6 +4,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -69,6 +70,19 @@ func (o *RoundRobin) Connected() bool {
 		}
 	}
 	return true
+}
+
+// MaxInFlight returns the maximum number of in flight messages permitted by the
+// output. This value can be used to determine a sensible value for parent
+// outputs, but should not be relied upon as part of dispatcher logic.
+func (o *RoundRobin) MaxInFlight() (m int, ok bool) {
+	for _, out := range o.outputs {
+		if mif, exists := output.GetMaxInFlight(out); exists && mif > m {
+			m = mif
+			ok = true
+		}
+	}
+	return
 }
 
 //------------------------------------------------------------------------------

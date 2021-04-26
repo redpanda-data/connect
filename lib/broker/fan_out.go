@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -54,6 +55,9 @@ func NewFanOut(
 		if err := o.outputs[i].Consume(o.outputTsChans[i]); err != nil {
 			return nil, err
 		}
+		if mif, ok := output.GetMaxInFlight(o.outputs[i]); ok && mif > o.maxInFlight {
+			o.maxInFlight = mif
+		}
 	}
 	return o, nil
 }
@@ -90,6 +94,13 @@ func (o *FanOut) Connected() bool {
 		}
 	}
 	return true
+}
+
+// MaxInFlight returns the maximum number of in flight messages permitted by the
+// output. This value can be used to determine a sensible value for parent
+// outputs, but should not be relied upon as part of dispatcher logic.
+func (o *FanOut) MaxInFlight() (int, bool) {
+	return o.maxInFlight, true
 }
 
 //------------------------------------------------------------------------------

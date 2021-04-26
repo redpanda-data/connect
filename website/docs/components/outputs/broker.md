@@ -33,7 +33,6 @@ output:
   label: ""
   broker:
     pattern: fan_out
-    max_in_flight: 1
     outputs: []
     batching:
       count: 0
@@ -105,7 +104,7 @@ Options: `fan_out`, `fan_out_sequential`, `round_robin`, `greedy`.
 
 ### `max_in_flight`
 
-The maximum number of messages to dispatch at any given time. Only relevant for `fan_out`, `fan_out_sequential` brokers.
+The maximum number of parallel message batches to have in flight at any given time. Note that if a child output has a higher `max_in_flight` then the switch output will automatically match it, therefore this value is the minimum `max_in_flight` to set in cases where the child values can't be inferred (such as when using resource outputs as children). Only relevant for `fan_out`, `fan_out_sequential` brokers.
 
 
 Type: `number`  

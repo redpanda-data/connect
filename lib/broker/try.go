@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -53,6 +54,9 @@ func NewTry(outputs []types.Output, stats metrics.Type) (*Try, error) {
 		if err := t.outputs[i].Consume(t.outputTsChans[i]); err != nil {
 			return nil, err
 		}
+		if mif, ok := output.GetMaxInFlight(t.outputs[i]); ok && mif > t.maxInFlight {
+			t.maxInFlight = mif
+		}
 	}
 	return t, nil
 }
@@ -96,6 +100,13 @@ func (t *Try) Connected() bool {
 		}
 	}
 	return true
+}
+
+// MaxInFlight returns the maximum number of in flight messages permitted by the
+// output. This value can be used to determine a sensible value for parent
+// outputs, but should not be relied upon as part of dispatcher logic.
+func (t *Try) MaxInFlight() (int, bool) {
+	return t.maxInFlight, true
 }
 
 //------------------------------------------------------------------------------

@@ -402,6 +402,13 @@ func (d *DynamicFanOut) Connected() bool {
 	return true
 }
 
+// MaxInFlight returns the maximum number of in flight messages permitted by the
+// output. This value can be used to determine a sensible value for parent
+// outputs, but should not be relied upon as part of dispatcher logic.
+func (d *DynamicFanOut) MaxInFlight() (int, bool) {
+	return d.maxInFlight, true
+}
+
 // CloseAsync shuts down the DynamicFanOut broker and stops processing requests.
 func (d *DynamicFanOut) CloseAsync() {
 	d.close()

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -156,6 +157,10 @@ func (n *notBatchedOutput) Consume(ts <-chan types.Transaction) error {
 	n.inChan = ts
 	go n.loop()
 	return nil
+}
+
+func (n *notBatchedOutput) MaxInFlight() (int, bool) {
+	return output.GetMaxInFlight(n.out)
 }
 
 func (n *notBatchedOutput) Connected() bool {

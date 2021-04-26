@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/transaction"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -185,6 +186,13 @@ func (m *Batcher) loop() {
 // connected to its target.
 func (m *Batcher) Connected() bool {
 	return m.child.Connected()
+}
+
+// MaxInFlight returns the maximum number of in flight messages permitted by the
+// output. This value can be used to determine a sensible value for parent
+// outputs, but should not be relied upon as part of dispatcher logic.
+func (m *Batcher) MaxInFlight() (int, bool) {
+	return output.GetMaxInFlight(m.child)
 }
 
 // Consume assigns a messages channel for the output to read.

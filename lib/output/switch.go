@@ -9,6 +9,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/condition"
@@ -60,9 +61,8 @@ This field determines whether an error should be reported if no condition is met
 If set to true, an error is propagated back to the input level. The default
 behavior is false, which will drop the message.`,
 			),
-			docs.FieldCommon(
-				"max_in_flight", `
-The maximum number of parallel message batches to have in flight at any given time.`,
+			docs.FieldAdvanced(
+				"max_in_flight", "The maximum number of parallel message batches to have in flight at any given time. Note that if a child output has a higher `max_in_flight` then the switch output will automatically match it, therefore this value is the minimum `max_in_flight` to set in cases where the child values can't be inferred (such as when using resource outputs as children).",
 			),
 			docs.FieldCommon(
 				"cases",
@@ -310,6 +310,9 @@ func NewSwitch(
 
 	o.outputTsChans = make([]chan types.Transaction, len(o.outputs))
 	for i := range o.outputTsChans {
+		if mif, ok := output.GetMaxInFlight(o.outputs[i]); ok && mif > o.maxInFlight {
+			o.maxInFlight = mif
+		}
 		o.outputTsChans[i] = make(chan types.Transaction)
 		if err := o.outputs[i].Consume(o.outputTsChans[i]); err != nil {
 			return nil, err
@@ -334,6 +337,13 @@ func (o *Switch) Consume(transactions <-chan types.Transaction) error {
 		go o.loop()
 	}
 	return nil
+}
+
+// MaxInFlight returns the maximum number of in flight messages permitted by the
+// output. This value can be used to determine a sensible value for parent
+// outputs, but should not be relied upon as part of dispatcher logic.
+func (o *Switch) MaxInFlight() (int, bool) {
+	return o.maxInFlight, true
 }
 
 // Connected returns a boolean indicating whether this output is currently
