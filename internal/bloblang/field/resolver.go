@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
+	"github.com/Jeffail/benthos/v3/lib/message"
 )
 
 //------------------------------------------------------------------------------
@@ -47,6 +48,9 @@ func NewQueryResolver(fn query.Function) *QueryResolver {
 
 // ResolveString returns a string.
 func (q QueryResolver) ResolveString(index int, msg Message, escaped, legacy bool) string {
+	if msg == nil {
+		msg = message.New(nil)
+	}
 	return query.ExecToString(q.fn, query.FunctionContext{
 		Index:    index,
 		MsgBatch: msg,
@@ -62,6 +66,9 @@ func (q QueryResolver) ResolveString(index int, msg Message, escaped, legacy boo
 
 // ResolveBytes returns a byte slice.
 func (q QueryResolver) ResolveBytes(index int, msg Message, escaped, legacy bool) []byte {
+	if msg == nil {
+		msg = message.New(nil)
+	}
 	bs := query.ExecToBytes(q.fn, query.FunctionContext{
 		Index:    index,
 		MsgBatch: msg,

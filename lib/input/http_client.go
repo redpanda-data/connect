@@ -149,7 +149,7 @@ func newHTTPClient(conf HTTPClientConfig, mgr types.Manager, log log.Modular, st
 		}
 	}
 
-	var payload types.Message
+	var payload types.Message = message.New(nil)
 	if len(conf.Payload) > 0 {
 		payload = message.New([][]byte{[]byte(conf.Payload)})
 	}

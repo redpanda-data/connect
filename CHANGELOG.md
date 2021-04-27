@@ -5,8 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.45.1 - 2021-04-27
+
 ### Fixed
 
+- Fixed a regression where the `http_client` input with an empty `payload` would crash with a `url` containing interpolation functions.
 - Broker output types (`broker`, `try`, `switch`) now automatically match the highest `max_in_flight` of their children. The field `max_in_flight` can still be manually set in order to enforce a minimum value for when inference isn't possible, such as with dynamic output resources.
 
 ## 3.45.0 - 2021-04-23
