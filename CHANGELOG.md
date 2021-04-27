@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- The `create` subcommand now supports a `--small`/`-s` flag that reduces the output down to only core components and common fields.
+
 ## 3.45.1 - 2021-04-27
 
 ### Fixed
