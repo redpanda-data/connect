@@ -40,7 +40,7 @@ func (e *Environment) Parse(blobl string) (*Executor, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Executor{exec}, nil
+	return newExecutor(exec), nil
 }
 
 // RegisterMethod adds a new Bloblang method to the environment. All method
@@ -117,7 +117,7 @@ func Parse(blobl string) (*Executor, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Executor{exec}, nil
+	return newExecutor(exec), nil
 }
 
 // RegisterMethod adds a new Bloblang method to the global enviromment. All
