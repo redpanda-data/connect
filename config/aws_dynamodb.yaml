@@ -25,6 +25,7 @@ output:
     ttl: ""
     ttl_key: ""
     max_in_flight: 1
+    partiql: ""
     batching:
       count: 0
       byte_size: 0

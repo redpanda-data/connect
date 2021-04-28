@@ -87,6 +87,12 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldAdvanced("ttl", "An optional TTL to set for items, calculated from the moment the message is sent."),
 			docs.FieldAdvanced("ttl_key", "The column key to place the TTL value within."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldCommon(
+				"partiql",
+				"A [Bloblang mapping](/docs/guides/bloblang/about/) that should return a valid [PartiQL statement](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ql-reference.statements.html). If this field is defined, it supercedes `table`, `string_columns`, `json_map_columns`, and `ttl`.",
+				`
+"""INSERT INTO "my-table" VALUE {'id': '%s', 'stuff': '%s'}""".format(id, content().string())`,
+			).HasDefault("").Linter(docs.LintBloblangMapping),
 			batch.FieldSpec(),
 		}.Merge(session.FieldSpecs()).Merge(retries.FieldSpecs()),
 		Categories: []Category{
@@ -172,6 +178,12 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldAdvanced("ttl", "An optional TTL to set for items, calculated from the moment the message is sent."),
 			docs.FieldAdvanced("ttl_key", "The column key to place the TTL value within."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldCommon(
+				"partiql",
+				"A [Bloblang mapping](/docs/guides/bloblang/about/) that should return a valid [PartiQL statement](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ql-reference.statements.html). If this field is defined, it supercedes `table`, `string_columns`, `json_map_columns`, and `ttl`.",
+				`
+"""INSERT INTO "my-table" VALUE {'id': '%s', 'stuff': '%s'}""".format(id, content().string())`,
+			).HasDefault("").Linter(docs.LintBloblangMapping),
 			batch.FieldSpec(),
 		}.Merge(session.FieldSpecs()).Merge(retries.FieldSpecs()),
 		Categories: []Category{

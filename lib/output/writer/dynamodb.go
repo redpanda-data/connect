@@ -12,6 +12,7 @@ import (
 	batchInternal "github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -39,6 +40,7 @@ type DynamoDBConfig struct {
 	MaxInFlight    int               `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config `json:",inline" yaml:",inline"`
 	Batching       batch.PolicyConfig `json:"batching" yaml:"batching"`
+	Partiql        string             `json:"partiql" yaml:"partiql"`
 }
 
 // NewDynamoDBConfig creates a DynamoDBConfig populated with default values.
@@ -60,6 +62,7 @@ func NewDynamoDBConfig() DynamoDBConfig {
 		MaxInFlight:    1,
 		Config:         rConf,
 		Batching:       batch.NewPolicyConfig(),
+		Partiql:        "",
 	}
 }
 
@@ -80,6 +83,7 @@ type DynamoDB struct {
 	ttl            time.Duration
 	strColumns     map[string]field.Expression
 	jsonMapColumns map[string]string
+	partiql        *mapping.Executor
 }
 
 // NewDynamoDB creates a new Amazon SQS writer.Type.
@@ -96,7 +100,7 @@ func NewDynamoDB(
 		strColumns:     map[string]field.Expression{},
 		jsonMapColumns: map[string]string{},
 	}
-	if len(conf.StringColumns) == 0 && len(conf.JSONMapColumns) == 0 {
+	if conf.Partiql == "" && len(conf.StringColumns) == 0 && len(conf.JSONMapColumns) == 0 {
 		return nil, errors.New("you must provide at least one column")
 	}
 	var err error
@@ -117,6 +121,11 @@ func NewDynamoDB(
 			return nil, fmt.Errorf("failed to parse TTL: %v", err)
 		}
 		db.ttl = ttl
+	}
+	if conf.Partiql != "" {
+		if db.partiql, err = bloblang.NewMapping("", conf.Partiql); err != nil {
+			return nil, fmt.Errorf("failed to parse partiql mapping: %v", err)
+		}
 	}
 	if db.backoffCtor, err = conf.Config.GetCtor(); err != nil {
 		return nil, err
@@ -147,17 +156,21 @@ func (d *DynamoDB) ConnectWithContext(ctx context.Context) error {
 	}
 
 	client := dynamodb.New(sess)
-	out, err := client.DescribeTable(&dynamodb.DescribeTableInput{
-		TableName: d.table,
-	})
-	if err != nil {
-		return err
-	} else if out == nil || out.Table == nil || out.Table.TableStatus == nil || *out.Table.TableStatus != dynamodb.TableStatusActive {
-		return fmt.Errorf("dynamodb table '%s' must be active", d.conf.Table)
+	if d.partiql != nil {
+		d.log.Infof("Sending messages to DynamoDB via PartiQL")
+	} else {
+		out, err := client.DescribeTable(&dynamodb.DescribeTableInput{
+			TableName: d.table,
+		})
+		if err != nil {
+			return err
+		} else if out == nil || out.Table == nil || out.Table.TableStatus == nil || *out.Table.TableStatus != dynamodb.TableStatusActive {
+			return fmt.Errorf("dynamodb table '%s' must be active", d.conf.Table)
+		}
+		d.log.Infof("Sending messages to DynamoDB table: %v\n", d.conf.Table)
 	}
 
 	d.client = client
-	d.log.Infof("Sending messages to DynamoDB table: %v\n", d.conf.Table)
 	return nil
 }
 
@@ -231,6 +244,9 @@ func (d *DynamoDB) Write(msg types.Message) error {
 func (d *DynamoDB) WriteWithContext(ctx context.Context, msg types.Message) error {
 	if d.client == nil {
 		return types.ErrNotConnected
+	}
+	if d.partiql != nil {
+		return d.writePartiqlWithContext(ctx, msg)
 	}
 
 	boff := d.boffPool.Get().(backoff.BackOff)
@@ -388,3 +404,129 @@ func (d *DynamoDB) WaitForClose(time.Duration) error {
 }
 
 //------------------------------------------------------------------------------
+
+func (d *DynamoDB) writePartiqlWithContext(ctx context.Context, msg types.Message) error {
+	if d.client == nil {
+		return types.ErrNotConnected
+	}
+
+	boff := d.boffPool.Get().(backoff.BackOff)
+	defer func() {
+		boff.Reset()
+		d.boffPool.Put(boff)
+	}()
+
+	stmts := []*dynamodb.BatchStatementRequest{}
+	if err := msg.Iter(func(i int, p types.Part) error {
+		stmt, err := d.partiql.MapPart(i, msg)
+		if err != nil {
+			return fmt.Errorf("error evaluating partiql mapping: %v", err)
+		}
+		stmts = append(stmts, &dynamodb.BatchStatementRequest{
+			Statement: aws.String(string(stmt.Get())),
+		})
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	batchResult, err := d.client.BatchExecuteStatementWithContext(ctx, &dynamodb.BatchExecuteStatementInput{
+		Statements: stmts,
+	})
+	if err != nil {
+		// None of the messages were successful, attempt to send individually
+	individualRequestsLoop:
+		for err != nil {
+			batchErr := batchInternal.NewError(msg, err)
+			for i, req := range stmts {
+				if req == nil {
+					continue
+				}
+				if _, iErr := d.client.ExecuteStatementWithContext(ctx, &dynamodb.ExecuteStatementInput{
+					Statement: stmts[i].Statement,
+				}); iErr != nil {
+					d.log.Errorf("ExecuteStatement error: %v\n", iErr)
+					wait := boff.NextBackOff()
+					if wait == backoff.Stop {
+						break individualRequestsLoop
+					}
+					select {
+					case <-time.After(wait):
+					case <-ctx.Done():
+						break individualRequestsLoop
+					}
+					batchErr.Failed(i, iErr)
+				} else {
+					stmts[i] = nil
+				}
+			}
+			if batchErr.IndexedErrors() == 0 {
+				err = nil
+			} else {
+				err = batchErr
+			}
+		}
+		return err
+	}
+
+	unproc := failedPartiqlStatements(stmts, batchResult)
+unprocessedLoop:
+	for len(unproc) > 0 {
+		wait := boff.NextBackOff()
+		if wait == backoff.Stop {
+			break unprocessedLoop
+		}
+
+		select {
+		case <-time.After(wait):
+		case <-ctx.Done():
+			break unprocessedLoop
+		}
+		if batchResult, err = d.client.BatchExecuteStatementWithContext(ctx, &dynamodb.BatchExecuteStatementInput{
+			Statements: unproc,
+		}); err != nil {
+			d.log.Errorf("BatchExecuteStatement multi error: %v\n", err)
+		} else if unproc = failedPartiqlStatements(unproc, batchResult); len(unproc) > 0 {
+			err = fmt.Errorf("failed to process %v statements", len(unproc))
+		} else {
+			unproc = nil
+		}
+	}
+
+	if len(unproc) > 0 {
+		if err == nil {
+			err = errors.New("ran out of request retries")
+		}
+
+		// Sad, we have unprocessed messages, we need to map the requests back
+		// to the origin message index. The DynamoDB API doesn't make this easy.
+		batchErr := batchInternal.NewError(msg, err)
+
+	requestsLoop:
+		for _, req := range unproc {
+			for i, src := range stmts {
+				if *req.Statement == *src.Statement {
+					batchErr.Failed(i, fmt.Errorf("failed to process statement: %s", *req.Statement))
+					continue requestsLoop
+				}
+			}
+			// If we're unable to map a single request to the origin message
+			// then we return a general error.
+			return err
+		}
+
+		err = batchErr
+	}
+
+	return err
+}
+
+func failedPartiqlStatements(stmts []*dynamodb.BatchStatementRequest, batchResult *dynamodb.BatchExecuteStatementOutput) []*dynamodb.BatchStatementRequest {
+	failed := []*dynamodb.BatchStatementRequest{}
+	for i, resp := range batchResult.Responses {
+		if resp.Error != nil {
+			failed = append(failed, stmts[i])
+		}
+	}
+	return failed
+}

@@ -38,6 +38,7 @@ output:
     string_columns: {}
     json_map_columns: {}
     max_in_flight: 1
+    partiql: ""
     batching:
       count: 0
       byte_size: 0
@@ -60,6 +61,7 @@ output:
     ttl: ""
     ttl_key: ""
     max_in_flight: 1
+    partiql: ""
     batching:
       count: 0
       byte_size: 0
@@ -214,6 +216,21 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 Type: `number`  
 Default: `1`  
+
+### `partiql`
+
+A [Bloblang mapping](/docs/guides/bloblang/about/) that should return a valid [PartiQL statement](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ql-reference.statements.html). If this field is defined, it supercedes `table`, `string_columns`, `json_map_columns`, and `ttl`.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+partiql: |2-
+  """INSERT INTO "my-table" VALUE {'id': '%s', 'stuff': '%s'}""".format(id, content().string())
+```
 
 ### `batching`
 

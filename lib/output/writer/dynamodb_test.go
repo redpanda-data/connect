@@ -1,6 +1,7 @@
 package writer
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -17,8 +18,10 @@ import (
 
 type mockDynamoDB struct {
 	dynamodbiface.DynamoDBAPI
-	fn      func(*dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error)
-	batchFn func(*dynamodb.BatchWriteItemInput) (*dynamodb.BatchWriteItemOutput, error)
+	fn       func(*dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error)
+	pfn      func(context.Context, *dynamodb.ExecuteStatementInput) (*dynamodb.ExecuteStatementOutput, error)
+	batchFn  func(*dynamodb.BatchWriteItemInput) (*dynamodb.BatchWriteItemOutput, error)
+	pbatchFn func(context.Context, *dynamodb.BatchExecuteStatementInput) (*dynamodb.BatchExecuteStatementOutput, error)
 }
 
 func (m *mockDynamoDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
