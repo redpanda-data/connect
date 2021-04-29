@@ -66,6 +66,15 @@ allowing you to transfer data across accounts. You can find out more
 		Async:   true,
 		Batches: true,
 		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon(
+				"query",
+				"A [PartiQL query](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ql-reference.statements.html). If this field is defined, it supercedes `table`, `string_columns`, `json_map_columns`, and `ttl`.",
+				`INSERT INTO "my-table" VALUE {'id': '${!json("id")}', 'stuff': '${!json("content")}'}`,
+			).IsInterpolated().HasDefault(""),
+			docs.FieldCommon(
+				"args",
+				"A list of [parameters](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ql-reference.multiplestatements.batching.html#ql-reference.multiplestatements.batching.parameters) for the query to be resolved for each message. Each argument is expressed as a [Bloblang mapping](/docs/guides/bloblang/about/) that should return a valid DynamoDB attribute value",
+			).IsInterpolated().Array(),
 			docs.FieldCommon("table", "The table to store messages in."),
 			docs.FieldCommon("string_columns", "A map of column keys to string values to store.",
 				map[string]string{
@@ -87,17 +96,29 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldAdvanced("ttl", "An optional TTL to set for items, calculated from the moment the message is sent."),
 			docs.FieldAdvanced("ttl_key", "The column key to place the TTL value within."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-			docs.FieldCommon(
-				"partiql",
-				"A [Bloblang mapping](/docs/guides/bloblang/about/) that should return a valid [PartiQL statement](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ql-reference.statements.html). If this field is defined, it supercedes `table`, `string_columns`, `json_map_columns`, and `ttl`.",
-				`
-"""INSERT INTO "my-table" VALUE {'id': '%s', 'stuff': '%s'}""".format(id, content().string())`,
-			).HasDefault("").Linter(docs.LintBloblangMapping),
 			batch.FieldSpec(),
 		}.Merge(session.FieldSpecs()).Merge(retries.FieldSpecs()),
 		Categories: []Category{
 			CategoryServices,
 			CategoryAWS,
+		},
+		Examples: []docs.AnnotatedExample{
+			{
+				Title: "Table Insert",
+				Summary: `
+The following example inserts items into the table FooTable with fields foo,
+bar, and baz populated with values extracted from the message:`,
+				Config: `
+output:
+  aws_dynamodb:
+    region: us-east-1
+    query: INSERT INTO FooTable VALUE {'foo':'?','bar':'?','baz':'?'}
+    args:
+      - S = document.foo
+      - S = document.bar
+      - S = meta("kafka_topic")
+`,
+			},
 		},
 	}
 
@@ -157,6 +178,15 @@ allowing you to transfer data across accounts. You can find out more
 		Async:   true,
 		Batches: true,
 		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon(
+				"query",
+				"A [PartiQL query](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ql-reference.statements.html). If this field is defined, it supercedes `table`, `string_columns`, `json_map_columns`, and `ttl`.",
+				`INSERT INTO "my-table" VALUE {'id': '${!json("id")}', 'stuff': '${!json("content")}'}`,
+			).IsInterpolated().HasDefault(""),
+			docs.FieldCommon(
+				"args",
+				"A list of arguments for the query to be resolved for each message.",
+			).IsInterpolated().Array(),
 			docs.FieldCommon("table", "The table to store messages in."),
 			docs.FieldCommon("string_columns", "A map of column keys to string values to store.",
 				map[string]string{
@@ -178,17 +208,29 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldAdvanced("ttl", "An optional TTL to set for items, calculated from the moment the message is sent."),
 			docs.FieldAdvanced("ttl_key", "The column key to place the TTL value within."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-			docs.FieldCommon(
-				"partiql",
-				"A [Bloblang mapping](/docs/guides/bloblang/about/) that should return a valid [PartiQL statement](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ql-reference.statements.html). If this field is defined, it supercedes `table`, `string_columns`, `json_map_columns`, and `ttl`.",
-				`
-"""INSERT INTO "my-table" VALUE {'id': '%s', 'stuff': '%s'}""".format(id, content().string())`,
-			).HasDefault("").Linter(docs.LintBloblangMapping),
 			batch.FieldSpec(),
 		}.Merge(session.FieldSpecs()).Merge(retries.FieldSpecs()),
 		Categories: []Category{
 			CategoryServices,
 			CategoryAWS,
+		},
+		Examples: []docs.AnnotatedExample{
+			{
+				Title: "Table Insert",
+				Summary: `
+The following example inserts items into the table FooTable with fields foo,
+bar, and baz populated with values extracted from the message:`,
+				Config: `
+output:
+  aws_dynamodb:
+    region: us-east-1
+    query: INSERT INTO FooTable VALUE {'foo':'?','bar':'?','baz':'?'}
+    args:
+      - S = document.foo
+      - S = document.bar
+      - S = meta("kafka_topic")
+`,
+			},
 		},
 	}
 }

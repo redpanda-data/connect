@@ -19,13 +19,14 @@ pipeline:
 output:
   label: ""
   aws_dynamodb:
+    query: ""
+    args: []
     table: ""
     string_columns: {}
     json_map_columns: {}
     ttl: ""
     ttl_key: ""
     max_in_flight: 1
-    partiql: ""
     batching:
       count: 0
       byte_size: 0

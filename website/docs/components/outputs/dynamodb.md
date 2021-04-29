@@ -34,11 +34,12 @@ Inserts items into a DynamoDB table.
 output:
   label: ""
   dynamodb:
+    query: ""
+    args: []
     table: ""
     string_columns: {}
     json_map_columns: {}
     max_in_flight: 1
-    partiql: ""
     batching:
       count: 0
       byte_size: 0
@@ -55,13 +56,14 @@ output:
 output:
   label: ""
   dynamodb:
+    query: ""
+    args: []
     table: ""
     string_columns: {}
     json_map_columns: {}
     ttl: ""
     ttl_key: ""
     max_in_flight: 1
-    partiql: ""
     batching:
       count: 0
       byte_size: 0
@@ -145,7 +147,57 @@ This output benefits from sending messages as a batch for improved performance.
 Batches can be formed at both the input and output level. You can find out more
 [in this doc](/docs/configuration/batching).
 
+## Examples
+
+<Tabs defaultValue="Table Insert" values={[
+{ label: 'Table Insert', value: 'Table Insert', },
+]}>
+
+<TabItem value="Table Insert">
+
+
+The following example inserts items into the table FooTable with fields foo,
+bar, and baz populated with values extracted from the message:
+
+```yaml
+output:
+  aws_dynamodb:
+    region: us-east-1
+    query: INSERT INTO FooTable VALUE {'foo':'?','bar':'?','baz':'?'}
+    args:
+      - S = document.foo
+      - S = document.bar
+      - S = meta("kafka_topic")
+```
+
+</TabItem>
+</Tabs>
+
 ## Fields
+
+### `query`
+
+A [PartiQL query](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ql-reference.statements.html). If this field is defined, it supercedes `table`, `string_columns`, `json_map_columns`, and `ttl`.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+query: 'INSERT INTO "my-table" VALUE {''id'': ''${!json("id")}'', ''stuff'': ''${!json("content")}''}'
+```
+
+### `args`
+
+A list of arguments for the query to be resolved for each message.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `table`
 
@@ -216,21 +268,6 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 Type: `number`  
 Default: `1`  
-
-### `partiql`
-
-A [Bloblang mapping](/docs/guides/bloblang/about/) that should return a valid [PartiQL statement](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ql-reference.statements.html). If this field is defined, it supercedes `table`, `string_columns`, `json_map_columns`, and `ttl`.
-
-
-Type: `string`  
-Default: `""`  
-
-```yaml
-# Examples
-
-partiql: |2-
-  """INSERT INTO "my-table" VALUE {'id': '%s', 'stuff': '%s'}""".format(id, content().string())
-```
 
 ### `batching`
 

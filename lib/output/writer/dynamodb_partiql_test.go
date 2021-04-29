@@ -3,7 +3,6 @@ package writer
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
@@ -27,7 +26,11 @@ func (m *mockDynamoDB) ExecuteStatementWithContext(ctx context.Context, input *d
 
 func TestDynamoDBPartiqlHappy(t *testing.T) {
 	conf := NewDynamoDBConfig()
-	conf.Partiql = `"""INSERT INTO "FooTable" VALUE { 'id': '%s', 'content': '%s' }""".format(json("id"), json("content"))`
+	conf.Query = `INSERT INTO "FooTable" VALUE {'id':'?','content':'?'}`
+	conf.Args = []string{
+		`S = json("id")`,
+		`S = json("content")`,
+	}
 
 	db, err := NewDynamoDB(conf, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -51,8 +54,20 @@ func TestDynamoDBPartiqlHappy(t *testing.T) {
 	})))
 
 	expected := []*dynamodb.BatchStatementRequest{
-		{Statement: aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'foo', 'content': 'foo stuff' }")},
-		{Statement: aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'bar', 'content': 'bar stuff' }")},
+		{
+			Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+			Parameters: []*dynamodb.AttributeValue{
+				{S: aws.String("foo")},
+				{S: aws.String("foo stuff")},
+			},
+		},
+		{
+			Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+			Parameters: []*dynamodb.AttributeValue{
+				{S: aws.String("bar")},
+				{S: aws.String("bar stuff")},
+			},
+		},
 	}
 
 	assert.Equal(t, expected, request)
@@ -62,17 +77,21 @@ func TestDynamoDBPartiqlSadToGood(t *testing.T) {
 	t.Parallel()
 
 	conf := NewDynamoDBConfig()
-	conf.Partiql = `"""INSERT INTO "FooTable" VALUE { 'id': '%s', 'content': '%s' }""".format(json("id"), json("content"))`
+	conf.Query = `INSERT INTO "FooTable" VALUE {'id':'?','content':'?'}`
+	conf.Args = []string{
+		`S = json("id")`,
+		`S = json("content")`,
+	}
 
 	db, err := NewDynamoDB(conf, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	var batchRequest []*dynamodb.BatchStatementRequest
-	var requests []*string
+	var requests []*dynamodb.ExecuteStatementInput
 
 	db.client = &mockDynamoDB{
 		pfn: func(_ context.Context, input *dynamodb.ExecuteStatementInput) (*dynamodb.ExecuteStatementOutput, error) {
-			requests = append(requests, input.Statement)
+			requests = append(requests, input)
 			return nil, nil
 		},
 		pbatchFn: func(_ context.Context, input *dynamodb.BatchExecuteStatementInput) (*dynamodb.BatchExecuteStatementOutput, error) {
@@ -92,17 +111,53 @@ func TestDynamoDBPartiqlSadToGood(t *testing.T) {
 	})))
 
 	batchExpected := []*dynamodb.BatchStatementRequest{
-		{Statement: aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'foo', 'content': 'foo stuff' }")},
-		{Statement: aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'bar', 'content': 'bar stuff' }")},
-		{Statement: aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'baz', 'content': 'baz stuff' }")},
+		{
+			Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+			Parameters: []*dynamodb.AttributeValue{
+				{S: aws.String("foo")},
+				{S: aws.String("foo stuff")},
+			},
+		},
+		{
+			Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+			Parameters: []*dynamodb.AttributeValue{
+				{S: aws.String("bar")},
+				{S: aws.String("bar stuff")},
+			},
+		},
+		{
+			Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+			Parameters: []*dynamodb.AttributeValue{
+				{S: aws.String("baz")},
+				{S: aws.String("baz stuff")},
+			},
+		},
 	}
 
 	assert.Equal(t, batchExpected, batchRequest)
 
-	expected := []*string{
-		aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'foo', 'content': 'foo stuff' }"),
-		aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'bar', 'content': 'bar stuff' }"),
-		aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'baz', 'content': 'baz stuff' }"),
+	expected := []*dynamodb.ExecuteStatementInput{
+		{
+			Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+			Parameters: []*dynamodb.AttributeValue{
+				{S: aws.String("foo")},
+				{S: aws.String("foo stuff")},
+			},
+		},
+		{
+			Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+			Parameters: []*dynamodb.AttributeValue{
+				{S: aws.String("bar")},
+				{S: aws.String("bar stuff")},
+			},
+		},
+		{
+			Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+			Parameters: []*dynamodb.AttributeValue{
+				{S: aws.String("baz")},
+				{S: aws.String("baz stuff")},
+			},
+		},
 	}
 
 	assert.Equal(t, expected, requests)
@@ -112,7 +167,11 @@ func TestDynamoDBPartiqlSadToGoodBatch(t *testing.T) {
 	t.Parallel()
 
 	conf := NewDynamoDBConfig()
-	conf.Partiql = `"""INSERT INTO "FooTable" VALUE { 'id': '%s', 'content': '%s' }""".format(json("id"), json("content"))`
+	conf.Query = `INSERT INTO "FooTable" VALUE {'id':'?','content':'?'}`
+	conf.Args = []string{
+		`S = json("id")`,
+		`S = json("content")`,
+	}
 
 	db, err := NewDynamoDB(conf, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -131,7 +190,7 @@ func TestDynamoDBPartiqlSadToGoodBatch(t *testing.T) {
 				}
 				for i, stmt := range input.Statements {
 					res := &dynamodb.BatchStatementResponse{}
-					if strings.Contains(*stmt.Statement, "bar") {
+					if *stmt.Parameters[0].S == "bar" {
 						res.Error = &dynamodb.BatchStatementError{}
 					}
 					output.Responses[i] = res
@@ -154,12 +213,36 @@ func TestDynamoDBPartiqlSadToGoodBatch(t *testing.T) {
 
 	expected := [][]*dynamodb.BatchStatementRequest{
 		{
-			{Statement: aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'foo', 'content': 'foo stuff' }")},
-			{Statement: aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'bar', 'content': 'bar stuff' }")},
-			{Statement: aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'baz', 'content': 'baz stuff' }")},
+			{
+				Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+				Parameters: []*dynamodb.AttributeValue{
+					{S: aws.String("foo")},
+					{S: aws.String("foo stuff")},
+				},
+			},
+			{
+				Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+				Parameters: []*dynamodb.AttributeValue{
+					{S: aws.String("bar")},
+					{S: aws.String("bar stuff")},
+				},
+			},
+			{
+				Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+				Parameters: []*dynamodb.AttributeValue{
+					{S: aws.String("baz")},
+					{S: aws.String("baz stuff")},
+				},
+			},
 		},
 		{
-			{Statement: aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'bar', 'content': 'bar stuff' }")},
+			{
+				Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+				Parameters: []*dynamodb.AttributeValue{
+					{S: aws.String("bar")},
+					{S: aws.String("bar stuff")},
+				},
+			},
 		},
 	}
 
@@ -170,22 +253,26 @@ func TestDynamoDBPartiqlSad(t *testing.T) {
 	t.Parallel()
 
 	conf := NewDynamoDBConfig()
-	conf.Partiql = `"""INSERT INTO "FooTable" VALUE { 'id': '%s', 'content': '%s' }""".format(json("id"), json("content"))`
+	conf.Query = `INSERT INTO "FooTable" VALUE {'id':'?','content':'?'}`
+	conf.Args = []string{
+		`S = json("id")`,
+		`S = json("content")`,
+	}
 
 	db, err := NewDynamoDB(conf, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	var batchRequest []*dynamodb.BatchStatementRequest
-	var requests []*string
+	var requests []*dynamodb.ExecuteStatementInput
 
 	barErr := errors.New("dont like bar")
 
 	db.client = &mockDynamoDB{
 		pfn: func(_ context.Context, input *dynamodb.ExecuteStatementInput) (*dynamodb.ExecuteStatementOutput, error) {
 			if len(requests) < 3 {
-				requests = append(requests, input.Statement)
+				requests = append(requests, input)
 			}
-			if strings.Contains(*input.Statement, "bar") {
+			if *input.Parameters[0].S == "bar" {
 				return nil, barErr
 			}
 			return nil, nil
@@ -211,17 +298,53 @@ func TestDynamoDBPartiqlSad(t *testing.T) {
 	require.Equal(t, expErr, db.Write(msg))
 
 	batchExpected := []*dynamodb.BatchStatementRequest{
-		{Statement: aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'foo', 'content': 'foo stuff' }")},
-		{Statement: aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'bar', 'content': 'bar stuff' }")},
-		{Statement: aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'baz', 'content': 'baz stuff' }")},
+		{
+			Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+			Parameters: []*dynamodb.AttributeValue{
+				{S: aws.String("foo")},
+				{S: aws.String("foo stuff")},
+			},
+		},
+		{
+			Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+			Parameters: []*dynamodb.AttributeValue{
+				{S: aws.String("bar")},
+				{S: aws.String("bar stuff")},
+			},
+		},
+		{
+			Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+			Parameters: []*dynamodb.AttributeValue{
+				{S: aws.String("baz")},
+				{S: aws.String("baz stuff")},
+			},
+		},
 	}
 
 	assert.Equal(t, batchExpected, batchRequest)
 
-	expected := []*string{
-		aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'foo', 'content': 'foo stuff' }"),
-		aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'bar', 'content': 'bar stuff' }"),
-		aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'baz', 'content': 'baz stuff' }"),
+	expected := []*dynamodb.ExecuteStatementInput{
+		{
+			Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+			Parameters: []*dynamodb.AttributeValue{
+				{S: aws.String("foo")},
+				{S: aws.String("foo stuff")},
+			},
+		},
+		{
+			Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+			Parameters: []*dynamodb.AttributeValue{
+				{S: aws.String("bar")},
+				{S: aws.String("bar stuff")},
+			},
+		},
+		{
+			Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+			Parameters: []*dynamodb.AttributeValue{
+				{S: aws.String("baz")},
+				{S: aws.String("baz stuff")},
+			},
+		},
 	}
 
 	assert.Equal(t, expected, requests)
@@ -231,7 +354,11 @@ func TestDynamoDBPartiqlSadBatch(t *testing.T) {
 	t.Parallel()
 
 	conf := NewDynamoDBConfig()
-	conf.Partiql = `"""INSERT INTO "FooTable" VALUE { 'id': '%s', 'content': '%s' }""".format(json("id"), json("content"))`
+	conf.Query = `INSERT INTO "FooTable" VALUE {'id':'?','content':'?'}`
+	conf.Args = []string{
+		`S = json("id")`,
+		`S = json("content")`,
+	}
 
 	db, err := NewDynamoDB(conf, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -249,7 +376,7 @@ func TestDynamoDBPartiqlSadBatch(t *testing.T) {
 			}
 			for i, stmt := range input.Statements {
 				res := &dynamodb.BatchStatementResponse{}
-				if strings.Contains(*stmt.Statement, "bar") {
+				if *stmt.Parameters[0].S == "bar" {
 					res.Error = &dynamodb.BatchStatementError{}
 				}
 				output.Responses[i] = res
@@ -270,17 +397,41 @@ func TestDynamoDBPartiqlSadBatch(t *testing.T) {
 	})
 
 	expErr := batch.NewError(msg, errors.New("failed to process 1 statements"))
-	expErr.Failed(1, errors.New("failed to process statement: INSERT INTO \"FooTable\" VALUE { 'id': 'bar', 'content': 'bar stuff' }"))
+	expErr.Failed(1, errors.New("failed to process statement: INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"))
 	require.Equal(t, expErr, db.Write(msg))
 
 	expected := [][]*dynamodb.BatchStatementRequest{
 		{
-			{Statement: aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'foo', 'content': 'foo stuff' }")},
-			{Statement: aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'bar', 'content': 'bar stuff' }")},
-			{Statement: aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'baz', 'content': 'baz stuff' }")},
+			{
+				Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+				Parameters: []*dynamodb.AttributeValue{
+					{S: aws.String("foo")},
+					{S: aws.String("foo stuff")},
+				},
+			},
+			{
+				Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+				Parameters: []*dynamodb.AttributeValue{
+					{S: aws.String("bar")},
+					{S: aws.String("bar stuff")},
+				},
+			},
+			{
+				Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+				Parameters: []*dynamodb.AttributeValue{
+					{S: aws.String("baz")},
+					{S: aws.String("baz stuff")},
+				},
+			},
 		},
 		{
-			{Statement: aws.String("INSERT INTO \"FooTable\" VALUE { 'id': 'bar', 'content': 'bar stuff' }")},
+			{
+				Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
+				Parameters: []*dynamodb.AttributeValue{
+					{S: aws.String("bar")},
+					{S: aws.String("bar stuff")},
+				},
+			},
 		},
 	}
 

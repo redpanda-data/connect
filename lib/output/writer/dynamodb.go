@@ -40,7 +40,8 @@ type DynamoDBConfig struct {
 	MaxInFlight    int               `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config `json:",inline" yaml:",inline"`
 	Batching       batch.PolicyConfig `json:"batching" yaml:"batching"`
-	Partiql        string             `json:"partiql" yaml:"partiql"`
+	Query          string             `json:"query" yaml:"query"`
+	Args           []string           `json:"args" yaml:"args"`
 }
 
 // NewDynamoDBConfig creates a DynamoDBConfig populated with default values.
@@ -62,7 +63,7 @@ func NewDynamoDBConfig() DynamoDBConfig {
 		MaxInFlight:    1,
 		Config:         rConf,
 		Batching:       batch.NewPolicyConfig(),
-		Partiql:        "",
+		Query:          "",
 	}
 }
 
@@ -83,7 +84,8 @@ type DynamoDB struct {
 	ttl            time.Duration
 	strColumns     map[string]field.Expression
 	jsonMapColumns map[string]string
-	partiql        *mapping.Executor
+	query          field.Expression
+	args           []*mapping.Executor
 }
 
 // NewDynamoDB creates a new Amazon SQS writer.Type.
@@ -100,7 +102,7 @@ func NewDynamoDB(
 		strColumns:     map[string]field.Expression{},
 		jsonMapColumns: map[string]string{},
 	}
-	if conf.Partiql == "" && len(conf.StringColumns) == 0 && len(conf.JSONMapColumns) == 0 {
+	if conf.Query == "" && len(conf.StringColumns) == 0 && len(conf.JSONMapColumns) == 0 {
 		return nil, errors.New("you must provide at least one column")
 	}
 	var err error
@@ -122,9 +124,19 @@ func NewDynamoDB(
 		}
 		db.ttl = ttl
 	}
-	if conf.Partiql != "" {
-		if db.partiql, err = bloblang.NewMapping("", conf.Partiql); err != nil {
-			return nil, fmt.Errorf("failed to parse partiql mapping: %v", err)
+	if conf.Query != "" {
+		if db.query, err = bloblang.NewField(conf.Query); err != nil {
+			return nil, fmt.Errorf("failed to parse query mapping: %v", err)
+		}
+		if len(conf.Args) > 0 {
+			db.args = make([]*mapping.Executor, len(conf.Args))
+			for i, argmap := range conf.Args {
+				arg, err := bloblang.NewMapping("", argmap)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse arg mapping at index %d: %v", i, err)
+				}
+				db.args[i] = arg
+			}
 		}
 	}
 	if db.backoffCtor, err = conf.Config.GetCtor(); err != nil {
@@ -156,7 +168,7 @@ func (d *DynamoDB) ConnectWithContext(ctx context.Context) error {
 	}
 
 	client := dynamodb.New(sess)
-	if d.partiql != nil {
+	if d.query != nil {
 		d.log.Infof("Sending messages to DynamoDB via PartiQL")
 	} else {
 		out, err := client.DescribeTable(&dynamodb.DescribeTableInput{
@@ -245,15 +257,16 @@ func (d *DynamoDB) WriteWithContext(ctx context.Context, msg types.Message) erro
 	if d.client == nil {
 		return types.ErrNotConnected
 	}
-	if d.partiql != nil {
-		return d.writePartiqlWithContext(ctx, msg)
-	}
 
 	boff := d.boffPool.Get().(backoff.BackOff)
 	defer func() {
 		boff.Reset()
 		d.boffPool.Put(boff)
 	}()
+
+	if d.query != nil {
+		return d.writePartiqlWithContext(ctx, msg, boff)
+	}
 
 	writeReqs := []*dynamodb.WriteRequest{}
 	msg.Iter(func(i int, p types.Part) error {
@@ -405,26 +418,23 @@ func (d *DynamoDB) WaitForClose(time.Duration) error {
 
 //------------------------------------------------------------------------------
 
-func (d *DynamoDB) writePartiqlWithContext(ctx context.Context, msg types.Message) error {
-	if d.client == nil {
-		return types.ErrNotConnected
-	}
-
-	boff := d.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		d.boffPool.Put(boff)
-	}()
-
+func (d *DynamoDB) writePartiqlWithContext(ctx context.Context, msg types.Message, boff backoff.BackOff) error {
 	stmts := []*dynamodb.BatchStatementRequest{}
 	if err := msg.Iter(func(i int, p types.Part) error {
-		stmt, err := d.partiql.MapPart(i, msg)
-		if err != nil {
-			return fmt.Errorf("error evaluating partiql mapping: %v", err)
+		req := &dynamodb.BatchStatementRequest{}
+		req.Statement = aws.String(d.query.String(i, msg))
+		for j, arg := range d.args {
+			arg, err := arg.MapPart(i, msg)
+			if err != nil {
+				return fmt.Errorf("error evaluating arg mapping at index %d: %v", j, err)
+			}
+			var param dynamodb.AttributeValue
+			if err := json.Unmarshal(arg.Get(), &param); err != nil {
+				return fmt.Errorf("invalid arg found at index %d: %v", j, err)
+			}
+			req.Parameters = append(req.Parameters, &param)
 		}
-		stmts = append(stmts, &dynamodb.BatchStatementRequest{
-			Statement: aws.String(string(stmt.Get())),
-		})
+		stmts = append(stmts, req)
 		return nil
 	}); err != nil {
 		return err
@@ -443,7 +453,8 @@ func (d *DynamoDB) writePartiqlWithContext(ctx context.Context, msg types.Messag
 					continue
 				}
 				if _, iErr := d.client.ExecuteStatementWithContext(ctx, &dynamodb.ExecuteStatementInput{
-					Statement: stmts[i].Statement,
+					Statement:  req.Statement,
+					Parameters: req.Parameters,
 				}); iErr != nil {
 					d.log.Errorf("ExecuteStatement error: %v\n", iErr)
 					wait := boff.NextBackOff()
@@ -505,7 +516,7 @@ unprocessedLoop:
 	requestsLoop:
 		for _, req := range unproc {
 			for i, src := range stmts {
-				if *req.Statement == *src.Statement {
+				if cmp.Equal(req, src) {
 					batchErr.Failed(i, fmt.Errorf("failed to process statement: %s", *req.Statement))
 					continue requestsLoop
 				}
