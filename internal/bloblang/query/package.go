@@ -59,7 +59,7 @@ type FunctionContext struct {
 	Legacy   bool
 
 	// Reference new message being mapped
-	NewMeta types.Metadata
+	NewMsg types.Part
 
 	valueFn      func() *interface{}
 	defaultValue *defaultContextValue

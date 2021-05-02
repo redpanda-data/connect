@@ -64,6 +64,7 @@ type Executor struct {
 	annotation string
 	input      []rune
 	maps       map[string]query.Function
+	vars       map[string]interface{}
 	statements []Statement
 }
 
@@ -72,7 +73,7 @@ type Executor struct {
 // is an optional slice pointing to the parsed expression that created the
 // executor.
 func NewExecutor(annotation string, input []rune, maps map[string]query.Function, statements ...Statement) *Executor {
-	return &Executor{annotation, input, maps, statements}
+	return &Executor{annotation, input, maps, map[string]interface{}{}, statements}
 }
 
 // Annotation returns a string annotation that describes the mapping executor.
@@ -91,60 +92,14 @@ func (e *Executor) Maps() map[string]query.Function {
 // at the root, this is not the case, or if any stage of the mapping fails to
 // execute, an error is returned.
 func (e *Executor) QueryPart(index int, msg Message) (bool, error) {
-	var valuePtr *interface{}
-	var parseErr error
-
-	lazyValue := func() *interface{} {
-		if valuePtr == nil && parseErr == nil {
-			if jObj, err := msg.Get(index).JSON(); err == nil {
-				valuePtr = &jObj
-			} else {
-				if errors.Is(err, message.ErrMessagePartNotExist) {
-					parseErr = errors.New("message is empty")
-				} else {
-					parseErr = fmt.Errorf("parse as json: %w", err)
-				}
-			}
-		}
-		return valuePtr
+	newPart, err := e.MapPart(index, msg)
+	if err != nil {
+		return false, err
 	}
-
-	var newValue interface{} = query.Nothing(nil)
-	vars := map[string]interface{}{}
-
-	for _, stmt := range e.statements {
-		res, err := stmt.query.Exec(query.FunctionContext{
-			Maps:     e.maps,
-			Vars:     vars,
-			Index:    index,
-			MsgBatch: msg,
-		}.WithValueFunc(lazyValue))
-		if err != nil {
-			var line int
-			if len(e.input) > 0 && len(stmt.input) > 0 {
-				line, _ = LineAndColOf(e.input, stmt.input)
-			}
-			if parseErr != nil && errors.Is(err, query.ErrNoContext) {
-				err = fmt.Errorf("unable to reference message as structured (with `this`): %w", parseErr)
-			}
-			return false, fmt.Errorf("failed assignment (line %v): %w", line, err)
-		}
-		if _, isNothing := res.(query.Nothing); isNothing {
-			// Skip assignment entirely
-			continue
-		}
-		if err = stmt.assignment.Apply(res, AssignmentContext{
-			Vars:  vars,
-			Value: &newValue,
-		}); err != nil {
-			var line int
-			if len(e.input) > 0 && len(stmt.input) > 0 {
-				line, _ = LineAndColOf(e.input, stmt.input)
-			}
-			return false, fmt.Errorf("failed to assign result (line %v): %w", line, err)
-		}
+	newValue, err := newPart.JSON()
+	if err != nil {
+		return false, err
 	}
-
 	if b, ok := newValue.(bool); ok {
 		return b, nil
 	}
@@ -169,9 +124,6 @@ func (e *Executor) MapOnto(part types.Part, index int, msg Message) (types.Part,
 	return e.mapPart(part, index, msg)
 }
 
-// MapInto an existing message. If append is set to true then mappings are
-// appended to the existing message, otherwise the newly mapped object will
-// begin empty.
 func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (types.Part, error) {
 	var valuePtr *interface{}
 	var parseErr error
@@ -192,28 +144,27 @@ func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (t
 	}
 
 	var newPart types.Part
-	var newObj interface{} = query.Nothing(nil)
-	var newMeta types.Metadata
+	var newValue interface{} = query.Nothing(nil)
 
 	if appendTo == nil {
 		newPart = reference.Get(index).Copy()
 	} else {
 		newPart = appendTo
 		if appendObj, err := appendTo.JSON(); err == nil {
-			newObj = appendObj
+			newValue = appendObj
 		}
 	}
-	newMeta = newPart.Metadata()
-
-	vars := map[string]interface{}{}
+	for k := range e.vars {
+		delete(e.vars, k)
+	}
 
 	for _, stmt := range e.statements {
 		res, err := stmt.query.Exec(query.FunctionContext{
 			Maps:     e.maps,
-			Vars:     vars,
+			Vars:     e.vars,
 			Index:    index,
 			MsgBatch: reference,
-			NewMeta:  newMeta,
+			NewMsg:   newPart,
 		}.WithValueFunc(lazyValue))
 		if err != nil {
 			var line int
@@ -230,9 +181,9 @@ func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (t
 			continue
 		}
 		if err = stmt.assignment.Apply(res, AssignmentContext{
-			Vars:  vars,
-			Meta:  newMeta,
-			Value: &newObj,
+			Vars:  e.vars,
+			Meta:  newPart.Metadata(),
+			Value: &newValue,
 		}); err != nil {
 			var line int
 			if len(e.input) > 0 && len(stmt.input) > 0 {
@@ -242,20 +193,20 @@ func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (t
 		}
 	}
 
-	switch newObj.(type) {
+	switch newValue.(type) {
 	case query.Delete:
 		// Return nil (filter the message part)
 		return nil, nil
 	case query.Nothing:
 		// Do not change the original contents
 	default:
-		switch t := newObj.(type) {
+		switch t := newValue.(type) {
 		case string:
 			newPart.Set([]byte(t))
 		case []byte:
 			newPart.Set(t)
 		default:
-			if err := newPart.SetJSON(newObj); err != nil {
+			if err := newPart.SetJSON(newValue); err != nil {
 				return nil, fmt.Errorf("failed to set result of mapping: %w", err)
 			}
 		}

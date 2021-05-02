@@ -525,10 +525,10 @@ var _ = RegisterFunction(
 		if len(args) > 0 {
 			field := args[0].(string)
 			return ClosureFunction("root_meta field "+field, func(ctx FunctionContext) (interface{}, error) {
-				if ctx.NewMeta == nil {
+				if ctx.NewMsg == nil {
 					return nil, errors.New("root metadata cannot be queried in this context")
 				}
-				v := ctx.NewMeta.Get(field)
+				v := ctx.NewMsg.Metadata().Get(field)
 				if v == "" {
 					return nil, fmt.Errorf("metadata value '%v' not found", field)
 				}
@@ -542,11 +542,11 @@ var _ = RegisterFunction(
 			}), nil
 		}
 		return ClosureFunction("root_meta object", func(ctx FunctionContext) (interface{}, error) {
-			if ctx.NewMeta == nil {
+			if ctx.NewMsg == nil {
 				return nil, errors.New("root metadata cannot be queried in this context")
 			}
 			kvs := map[string]interface{}{}
-			ctx.NewMeta.Iter(func(k, v string) error {
+			ctx.NewMsg.Metadata().Iter(func(k, v string) error {
 				if len(v) > 0 {
 					kvs[k] = v
 				}

@@ -31,6 +31,21 @@ func TestExecutorQuery(t *testing.T) {
 root = $foo`,
 			output: "foo value",
 		},
+		{
+			name:    "not mapped",
+			mapping: `root = if false { "not this" }`,
+			input: map[string]interface{}{
+				"hello": "world",
+			},
+			output: map[string]interface{}{
+				"hello": "world",
+			},
+		},
+		{
+			name:        "delete root for some reason",
+			mapping:     `root = deleted()`,
+			errContains: "root was deleted",
+		},
 	}
 
 	for _, test := range tests {
@@ -102,6 +117,21 @@ root = $foo`,
 				"baz": "started with this",
 			},
 		},
+		{
+			name:    "not mapped",
+			mapping: `root = if false { "not this" }`,
+			overlay: map[string]interface{}{
+				"hello": "world",
+			},
+			output: map[string]interface{}{
+				"hello": "world",
+			},
+		},
+		{
+			name:        "delete root for some reason",
+			mapping:     `root = deleted()`,
+			errContains: "root was deleted",
+		},
 	}
 
 	for _, test := range tests {
@@ -115,6 +145,7 @@ root = $foo`,
 				require.NoError(t, err)
 				assert.Equal(t, test.output, res)
 			} else {
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.errContains)
 			}
 		})

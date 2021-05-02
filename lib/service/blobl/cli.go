@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/fatih/color"
 	"github.com/urfave/cli/v2"
@@ -105,8 +106,20 @@ func CliCommand() *cli.Command {
 	}
 }
 
-func executeMapping(exec *mapping.Executor, rawInput, prettyOutput bool, input []byte) (string, error) {
-	msg := message.New([][]byte{[]byte(input)})
+type execCache struct {
+	msg  types.Message
+	vars map[string]interface{}
+}
+
+func newExecCache() *execCache {
+	return &execCache{
+		msg:  message.New([][]byte{[]byte(nil)}),
+		vars: map[string]interface{}{},
+	}
+}
+
+func (e *execCache) executeMapping(exec *mapping.Executor, rawInput, prettyOutput bool, input []byte) (string, error) {
+	e.msg.Get(0).Set(input)
 
 	var valuePtr *interface{}
 	var parseErr error
@@ -117,7 +130,7 @@ func executeMapping(exec *mapping.Executor, rawInput, prettyOutput bool, input [
 				var value interface{} = input
 				valuePtr = &value
 			} else {
-				if jObj, err := msg.Get(0).JSON(); err == nil {
+				if jObj, err := e.msg.Get(0).JSON(); err == nil {
 					valuePtr = &jObj
 				} else {
 					if errors.Is(err, message.ErrMessagePartNotExist) {
@@ -131,17 +144,18 @@ func executeMapping(exec *mapping.Executor, rawInput, prettyOutput bool, input [
 		return valuePtr
 	}
 
-	vars := map[string]interface{}{}
-	meta := msg.Get(0).Metadata().Copy()
+	for k := range e.vars {
+		delete(e.vars, k)
+	}
 
 	var result interface{} = query.Nothing(nil)
 	err := exec.ExecOnto(query.FunctionContext{
 		Maps:     exec.Maps(),
-		Vars:     vars,
-		MsgBatch: msg,
+		Vars:     e.vars,
+		MsgBatch: e.msg,
 	}.WithValueFunc(lazyValue), mapping.AssignmentContext{
-		Vars:  vars,
-		Meta:  meta,
+		Vars:  e.vars,
+		Meta:  e.msg.Get(0).Metadata(),
 		Value: &result,
 	})
 	if err != nil {
@@ -193,6 +207,8 @@ func run(c *cli.Context) error {
 	pretty := c.Bool("pretty")
 	file := c.String("file")
 	m := c.Args().First()
+
+	execCache := newExecCache()
 
 	if len(file) > 0 {
 		if len(m) > 0 {
@@ -251,7 +267,7 @@ func run(c *cli.Context) error {
 					return
 				}
 
-				resultStr, err := executeMapping(exec, raw, pretty, input)
+				resultStr, err := execCache.executeMapping(exec, raw, pretty, input)
 				if err != nil {
 					fmt.Fprintln(os.Stderr, red(fmt.Sprintf("failed to execute map: %v", err)))
 					continue

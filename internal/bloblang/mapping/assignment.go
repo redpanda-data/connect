@@ -160,6 +160,7 @@ func (j *JSONAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 	}
 	if len(j.path) == 0 {
 		*ctx.Value = value
+		return nil
 	}
 	if _, isNothing := (*ctx.Value).(query.Nothing); isNothing || *ctx.Value == nil {
 		*ctx.Value = map[string]interface{}{}

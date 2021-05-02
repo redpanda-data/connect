@@ -135,7 +135,7 @@ func TestFunctions(t *testing.T) {
 					Maps:     map[string]Function{},
 					Index:    test.index,
 					MsgBatch: msg,
-					NewMeta:  msg.Get(test.index).Metadata(),
+					NewMsg:   msg.Get(test.index),
 				})
 				if len(test.err) > 0 {
 					require.EqualError(t, err, test.err)
