@@ -25,6 +25,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,6 +38,14 @@ type apiRegMutWrapper struct {
 }
 
 func (a apiRegMutWrapper) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
+	a.mut.HandleFunc(path, h)
+}
+
+type apiRegGorillaMutWrapper struct {
+	mut *mux.Router
+}
+
+func (a apiRegGorillaMutWrapper) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
 	a.mut.HandleFunc(path, h)
 }
 
@@ -202,7 +211,7 @@ func TestHTTPBasic(t *testing.T) {
 	h.CloseAsync()
 }
 
-func TestHTTPtServerMetadata(t *testing.T) {
+func TestHTTPServerMetadata(t *testing.T) {
 	reg := apiRegMutWrapper{mut: &http.ServeMux{}}
 	mgr, err := manager.New(manager.NewConfig(), reg, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -260,6 +269,67 @@ func TestHTTPtServerMetadata(t *testing.T) {
 	assert.Regexp(t, "^Go-http-client/", meta.Get("http_server_user_agent"))
 	// Make sure query params are set in the metadata
 	assert.Contains(t, "bar", meta.Get("foo"))
+}
+
+func TestHTTPtServerPathParameters(t *testing.T) {
+	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
+	mgr, err := manager.New(manager.NewConfig(), reg, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	conf := input.NewConfig()
+	conf.HTTPServer.Path = "/test/{foo}/{bar}"
+
+	server, err := input.NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	defer func() {
+		server.CloseAsync()
+		assert.NoError(t, server.WaitForClose(time.Second))
+	}()
+
+	testServer := httptest.NewServer(reg.mut)
+	defer testServer.Close()
+
+	dummyPath := "/test/foo1/bar1"
+	dummyQuery := url.Values{"mylove": []string{"will go on"}}
+	serverURL, err := url.Parse(testServer.URL)
+	require.NoError(t, err)
+
+	serverURL.Path = dummyPath
+	serverURL.RawQuery = dummyQuery.Encode()
+
+	dummyData := []byte("a bunch of jolly leprechauns await")
+	go func() {
+		resp, cerr := http.Post(serverURL.String(), "text/plain", bytes.NewReader(dummyData))
+		require.NoError(t, cerr)
+		defer resp.Body.Close()
+	}()
+
+	readNextMsg := func() (types.Message, error) {
+		var tran types.Transaction
+		select {
+		case tran = <-server.TransactionChan():
+			select {
+			case tran.ResponseChan <- response.NewAck():
+			case <-time.After(time.Second):
+				return nil, errors.New("timed out")
+			}
+		case <-time.After(time.Second):
+			return nil, errors.New("timed out")
+		}
+		return tran.Payload, nil
+	}
+
+	msg, err := readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, dummyData, message.GetAllBytes(msg)[0])
+
+	meta := msg.Get(0).Metadata()
+
+	assert.Equal(t, dummyPath, meta.Get("http_server_request_path"))
+	assert.Equal(t, "foo1", meta.Get("foo"))
+	assert.Equal(t, "bar1", meta.Get("bar"))
+	assert.Equal(t, "will go on", meta.Get("mylove"))
 }
 
 func TestHTTPBadRequests(t *testing.T) {

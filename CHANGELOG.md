@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - The `create` subcommand now supports a `--small`/`-s` flag that reduces the output down to only core components and common fields.
 - Go API: Added method `Overlay` to the public Bloblang package.
+- The `http_server` input now adds path parameters (`/{foo}/{bar}`) to the metadata of ingested messages.
 
 ## 3.45.1 - 2021-04-27
 

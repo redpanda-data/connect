@@ -90,7 +90,7 @@ in the value based on the response message contents.
 
 ### Endpoints
 
-The following fields specify endpoints that are registered for sending messages:
+The following fields specify endpoints that are registered for sending messages, and support path parameters of the form `/{foo}`, which are added to ingested messages as metadata:
 
 #### `path` (defaults to `/post`)
 
@@ -123,6 +123,7 @@ This input adds the following metadata fields to each message:
 - http_server_request_path
 - All headers (only first values are taken)
 - All query parameters
+- All path parameters
 - All cookies
 ```
 

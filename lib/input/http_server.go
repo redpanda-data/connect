@@ -29,6 +29,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	httputil "github.com/Jeffail/benthos/v3/lib/util/http"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/opentracing/opentracing-go"
 )
@@ -63,7 +64,7 @@ in the value based on the response message contents.
 
 ### Endpoints
 
-The following fields specify endpoints that are registered for sending messages:
+The following fields specify endpoints that are registered for sending messages, and support path parameters of the form ` + "`/{foo}`" + `, which are added to ingested messages as metadata:
 
 #### ` + "`path` (defaults to `/post`)" + `
 
@@ -96,6 +97,7 @@ This input adds the following metadata fields to each message:
 - http_server_request_path
 - All headers (only first values are taken)
 - All query parameters
+- All path parameters
 - All cookies
 ` + "```" + `
 
@@ -384,6 +386,9 @@ func (h *HTTPServer) extractMessageFromRequest(r *http.Request) (types.Message, 
 			meta.Set(k, v[0])
 		}
 	}
+	for k, v := range mux.Vars(r) {
+		meta.Set(k, v)
+	}
 	for _, c := range r.Cookies() {
 		meta.Set(c.Name, c.Value)
 	}
@@ -615,6 +620,9 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 			if len(v) > 0 {
 				meta.Set(k, v[0])
 			}
+		}
+		for k, v := range mux.Vars(r) {
+			meta.Set(k, v)
 		}
 		for _, c := range r.Cookies() {
 			meta.Set(c.Name, c.Value)
