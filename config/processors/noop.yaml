@@ -21,7 +21,7 @@ pipeline:
 output:
   label: ""
   stdout:
-    delimiter: ""
+    codec: lines
 logger:
   level: INFO
   format: json

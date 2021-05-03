@@ -71,10 +71,10 @@ Default: `"all-bytes"`
 
 | Option | Summary |
 |---|---|
-| `all-bytes` | Write the message to the file in full. If the file already exists the old content is deleted. |
-| `append` | Append messages to the file. |
-| `lines` | Append messages to the file followed by a line break. |
-| `delim:x` | Append messages to the file followed by a custom delimiter. |
+| `all-bytes` | Only applicable to file based outputs. Writes each message to a file in full, if the file already exists the old content is deleted. |
+| `append` | Append each message to the output stream without any delimiter or special encoding. |
+| `lines` | Append each message to the output stream followed by a line break. |
+| `delim:x` | Append each message to the output stream followed by a custom delimiter. |
 
 
 ```yaml

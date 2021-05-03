@@ -16,19 +16,17 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-The stdout output type prints messages to stdout.
+Prints messages to stdout as a continuous stream of data, dividing messages according to the specified codec.
 
 ```yaml
 # Config fields, showing default values
 output:
   label: ""
   stdout:
-    delimiter: ""
+    codec: lines
 ```
 
-Each message written is followed by a delimiter (defaults to '\n' if left empty)
-and when sending multipart messages (message batches) the last message ends with
-double delimiters. E.g. the messages "foo", "bar" and "baz" would be written as:
+When writing multipart (batched) messages using the `lines` codec the last message ends with double delimiters. E.g. the messages "foo", "bar" and "baz" would be written as:
 
 ```
 foo\n
@@ -46,12 +44,31 @@ baz\n\n
 
 ## Fields
 
-### `delimiter`
+### `codec`
 
-A custom delimiter to separate messages with. If left empty defaults to a line break.
+The way in which the bytes of messages should be written out into the output data stream. It's possible to write lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.
 
 
 Type: `string`  
-Default: `""`  
+Default: `"lines"`  
+Requires version 3.46.0 or newer  
+
+| Option | Summary |
+|---|---|
+| `all-bytes` | Only applicable to file based outputs. Writes each message to a file in full, if the file already exists the old content is deleted. |
+| `append` | Append each message to the output stream without any delimiter or special encoding. |
+| `lines` | Append each message to the output stream followed by a line break. |
+| `delim:x` | Append each message to the output stream followed by a custom delimiter. |
+
+
+```yaml
+# Examples
+
+codec: lines
+
+codec: "delim:\t"
+
+codec: delim:foobar
+```
 
 

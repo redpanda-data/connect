@@ -1,11 +1,16 @@
 package output
 
 import (
+	"context"
 	"os"
+	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -15,11 +20,9 @@ func init() {
 	Constructors[TypeSTDOUT] = TypeSpec{
 		constructor: fromSimpleConstructor(NewSTDOUT),
 		Summary: `
-The stdout output type prints messages to stdout.`,
+Prints messages to stdout as a continuous stream of data, dividing messages according to the specified codec.`,
 		Description: `
-Each message written is followed by a delimiter (defaults to '\n' if left empty)
-and when sending multipart messages (message batches) the last message ends with
-double delimiters. E.g. the messages "foo", "bar" and "baz" would be written as:
+When writing multipart (batched) messages using the ` + "`lines`" + ` codec the last message ends with double delimiters. E.g. the messages "foo", "bar" and "baz" would be written as:
 
 ` + "```" + `
 foo\n
@@ -35,7 +38,8 @@ bar\n
 baz\n\n
 ` + "```" + ``,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("delimiter", "A custom delimiter to separate messages with. If left empty defaults to a line break."),
+			codec.WriterDocs.AtVersion("3.46.0"),
+			docs.FieldDeprecated("delimiter"),
 		},
 		Categories: []Category{
 			CategoryLocal,
@@ -47,12 +51,14 @@ baz\n\n
 
 // STDOUTConfig contains configuration fields for the stdout based output type.
 type STDOUTConfig struct {
+	Codec string `json:"codec" yaml:"codec"`
 	Delim string `json:"delimiter" yaml:"delimiter"`
 }
 
 // NewSTDOUTConfig creates a new STDOUTConfig with default values.
 func NewSTDOUTConfig() STDOUTConfig {
 	return STDOUTConfig{
+		Codec: "lines",
 		Delim: "",
 	}
 }
@@ -61,7 +67,67 @@ func NewSTDOUTConfig() STDOUTConfig {
 
 // NewSTDOUT creates a new STDOUT output type.
 func NewSTDOUT(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	return NewLineWriter(os.Stdout, false, []byte(conf.STDOUT.Delim), "stdout", log, stats)
+	if len(conf.STDOUT.Delim) > 0 {
+		conf.STDOUT.Codec = "delim:" + conf.STDOUT.Delim
+	}
+	f, err := newStdoutWriter(conf.STDOUT.Codec, log, stats)
+	if err != nil {
+		return nil, err
+	}
+	w, err := NewAsyncWriter(TypeSTDOUT, 1, f, log, stats)
+	if err != nil {
+		return nil, err
+	}
+	if aw, ok := w.(*AsyncWriter); ok {
+		aw.SetNoCancel()
+	}
+	return w, nil
 }
 
-//------------------------------------------------------------------------------
+type stdoutWriter struct {
+	handle  codec.Writer
+	shutSig *shutdown.Signaller
+}
+
+func newStdoutWriter(codecStr string, log log.Modular, stats metrics.Type) (*stdoutWriter, error) {
+	codec, _, err := codec.GetWriter(codecStr)
+	if err != nil {
+		return nil, err
+	}
+
+	handle, err := codec(os.Stdout)
+	if err != nil {
+		return nil, err
+	}
+
+	return &stdoutWriter{
+		handle:  handle,
+		shutSig: shutdown.NewSignaller(),
+	}, nil
+}
+
+func (w *stdoutWriter) ConnectWithContext(ctx context.Context) error {
+	return nil
+}
+
+func (w *stdoutWriter) WriteWithContext(ctx context.Context, msg types.Message) error {
+	err := writer.IterateBatchedSend(msg, func(i int, p types.Part) error {
+		return w.handle.Write(ctx, p)
+	})
+	if err != nil {
+		return err
+	}
+	if msg.Len() > 1 {
+		if w.handle != nil {
+			w.handle.EndBatch()
+		}
+	}
+	return nil
+}
+
+func (w *stdoutWriter) CloseAsync() {
+}
+
+func (w *stdoutWriter) WaitForClose(timeout time.Duration) error {
+	return nil
+}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/bloblang"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -71,7 +72,14 @@ func NewFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type
 	if err != nil {
 		return nil, err
 	}
-	return NewAsyncWriter(TypeFile, 1, f, log, stats)
+	w, err := NewAsyncWriter(TypeFile, 1, f, log, stats)
+	if err != nil {
+		return nil, err
+	}
+	if aw, ok := w.(*AsyncWriter); ok {
+		aw.SetNoCancel()
+	}
+	return w, nil
 }
 
 //------------------------------------------------------------------------------
@@ -87,6 +95,8 @@ type fileWriter struct {
 	handleMut  sync.Mutex
 	handlePath string
 	handle     codec.Writer
+
+	shutSig *shutdown.Signaller
 }
 
 func newFileWriter(pathStr, codecStr string, log log.Modular, stats metrics.Type) (*fileWriter, error) {
@@ -104,6 +114,7 @@ func newFileWriter(pathStr, codecStr string, log log.Modular, stats metrics.Type
 		path:      path,
 		log:       log,
 		stats:     stats,
+		shutSig:   shutdown.NewSignaller(),
 	}, nil
 }
 
@@ -187,10 +198,16 @@ func (w *fileWriter) CloseAsync() {
 			w.handle = nil
 		}
 		w.handleMut.Unlock()
+		w.shutSig.ShutdownComplete()
 	}()
 }
 
 // WaitForClose blocks until the File output has closed down.
 func (w *fileWriter) WaitForClose(timeout time.Duration) error {
+	select {
+	case <-w.shutSig.HasClosedChan():
+	case <-time.After(timeout):
+		return types.ErrTimeout
+	}
 	return nil
 }

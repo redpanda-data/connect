@@ -43,6 +43,7 @@ type AsyncWriter struct {
 
 	typeStr     string
 	maxInflight int
+	noCancel    bool
 	writer      AsyncSink
 
 	injectTracingMap *mapping.Executor
@@ -83,12 +84,27 @@ func (w *AsyncWriter) SetInjectTracingMap(mapping string) error {
 	return err
 }
 
+// SetNoCancel configures the async writer so that write calls do not use a
+// context that gets cancelled on shutdown. This is much more efficient as it
+// reduces allocations, goroutines and defers for each write call, but also
+// means the write can block graceful termination. Therefore this setting should
+// be reserved for outputs that are exceptionally fast.
+func (w *AsyncWriter) SetNoCancel() {
+	w.noCancel = true
+}
+
 //------------------------------------------------------------------------------
 
 func (w *AsyncWriter) latencyMeasuringWrite(msg types.Message) (latencyNs int64, err error) {
 	t0 := time.Now()
-	ctx, done := w.shutSig.CloseAtLeisureCtx(context.Background())
-	defer done()
+	var ctx context.Context
+	if w.noCancel {
+		ctx = context.Background()
+	} else {
+		var done func()
+		ctx, done = w.shutSig.CloseAtLeisureCtx(context.Background())
+		defer done()
+	}
 	err = w.writer.WriteWithContext(ctx, msg)
 	latencyNs = time.Since(t0).Nanoseconds()
 	return latencyNs, err

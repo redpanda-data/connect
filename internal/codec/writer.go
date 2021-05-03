@@ -16,10 +16,10 @@ import (
 var WriterDocs = docs.FieldCommon(
 	"codec", "The way in which the bytes of messages should be written out into the output data stream. It's possible to write lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.", "lines", "delim:\t", "delim:foobar",
 ).HasAnnotatedOptions(
-	"all-bytes", "Write the message to the file in full. If the file already exists the old content is deleted.",
-	"append", "Append messages to the file.",
-	"lines", "Append messages to the file followed by a line break.",
-	"delim:x", "Append messages to the file followed by a custom delimiter.",
+	"all-bytes", "Only applicable to file based outputs. Writes each message to a file in full, if the file already exists the old content is deleted.",
+	"append", "Append each message to the output stream without any delimiter or special encoding.",
+	"lines", "Append each message to the output stream followed by a line break.",
+	"delim:x", "Append each message to the output stream followed by a custom delimiter.",
 )
 
 //------------------------------------------------------------------------------
