@@ -62,7 +62,7 @@ func (e *Environment) RegisterMethod(name string, ctor MethodConstructor) error 
 				return fn(v)
 			}, target.QueryTargets), nil
 		},
-		false,
+		true,
 	)
 }
 
@@ -101,7 +101,7 @@ func (e *Environment) RegisterFunction(name string, ctor FunctionConstructor) er
 				return fn()
 			}, nil), nil
 		},
-		false,
+		true,
 	)
 }
 
