@@ -664,6 +664,19 @@ root.doc.timestamp = this.doc.timestamp.parse_timestamp("2006-Jan-02")
 # Out: {"doc":{"timestamp":"2020-08-14T00:00:00Z"}}
 ```
 
+### `parse_timestamp_strptime`
+
+BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+
+Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a string following ISO 8601, which can then be fed into `format_timestamp`. The format consists of zero or more conversion specifiers and ordinary characters (except %). All ordinary characters are copied to the output string without modification. Each conversion specification begins with % character followed by the character that determines the behaviour of the specifier. Please refer to [man 3 strptime](https://linux.die.net/man/3/strptime) for the list of format specifiers.
+
+```coffee
+root.doc.timestamp = this.doc.timestamp.parse_timestamp_strptime("%Y-%b-%d")
+
+# In:  {"doc":{"timestamp":"2020-Aug-14"}}
+# Out: {"doc":{"timestamp":"2020-08-14T00:00:00Z"}}
+```
+
 ### `format_timestamp`
 
 BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
@@ -702,6 +715,34 @@ root.something_at = this.created_at.format_timestamp("2006-Jan-02 15:04:05.99999
 
 # In:  {"created_at":"2020-08-14T11:50:26.371Z"}
 # Out: {"something_at":"2020-Aug-14 11:50:26.371"}
+```
+
+### `format_timestamp_strftime`
+
+BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+
+Attempts to format a timestamp value as a string according to a specified strftime-compatible format, or ISO 8601 by default. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.
+
+```coffee
+root.something_at = (this.created_at + 300).format_timestamp_strftime()
+```
+
+An optional string argument is required to specify the output format of the timestamp. The format consists of zero or more conversion specifiers and ordinary characters (except %). All ordinary characters are copied to the output string without modification. Each conversion specification begins with % character followed by the character that determines the behaviour of the specifier. Please refer to [man 3 strftime](https://linux.die.net/man/3/strftime) for the list of format specifiers.
+
+```coffee
+root.something_at = (this.created_at + 300).format_timestamp_strftime("%Y-%b-%d %H:%M:%S")
+```
+
+A second optional string argument can also be used in order to specify a timezone, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.
+
+```coffee
+root.something_at = this.created_at.format_timestamp_strftime("%Y-%b-%d %H:%M:%S", "UTC")
+
+# In:  {"created_at":1597405526}
+# Out: {"something_at":"2020-Aug-14 11:45:26"}
+
+# In:  {"created_at":"2020-08-14T11:50:26.371Z"}
+# Out: {"something_at":"2020-Aug-14 11:50:26"}
 ```
 
 ### `format_timestamp_unix`

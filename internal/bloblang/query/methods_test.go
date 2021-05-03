@@ -1804,56 +1804,84 @@ func TestMethods(t *testing.T) {
 			),
 			err: "expected array value, got string from string literal (\"foo\")",
 		},
-		"check parse timestamp with format": {
+		"check parse_timestamp with format": {
 			input: methods(
 				literalFn("2020-Aug-14"),
 				method("parse_timestamp", "2006-Jan-02"),
 			),
 			output: "2020-08-14T00:00:00Z",
 		},
-		"check parse timestamp invalid": {
+		"check parse_timestamp invalid": {
 			input: methods(
 				literalFn("not valid timestamp"),
 				method("parse_timestamp", "2006-01-02T15:04:05Z07:00"),
 			),
 			err: `string literal: parsing time "not valid timestamp" as "2006-01-02T15:04:05Z07:00": cannot parse "not valid timestamp" as "2006"`,
 		},
-		"check parse timestamp with invalid format": {
+		"check parse_timestamp with invalid format": {
 			input: methods(
 				literalFn("invalid format"),
 				method("parse_timestamp", "2006-Jan-02"),
 			),
 			err: `string literal: parsing time "invalid format" as "2006-Jan-02": cannot parse "invalid format" as "2006"`,
 		},
-		"check parse timestamp with invalid literal type": {
+		"check parse_timestamp with invalid literal type": {
 			input: methods(
 				literalFn(1),
 				method("parse_timestamp", "2006-Jan-02"),
 			),
 			err: `expected string value, got number from number literal (1)`,
 		},
-		"check format timestamp string default": {
+		"check parse_timestamp_strptime with format": {
+			input: methods(
+				literalFn("2020-Aug-14"),
+				method("parse_timestamp_strptime", "%Y-%b-%d"),
+			),
+			output: "2020-08-14T00:00:00Z",
+		},
+		"check parse_timestamp_strptime invalid": {
+			input: methods(
+				literalFn("not valid timestamp"),
+				method("parse_timestamp_strptime", "%Y-%b-%d"),
+			),
+			err: `string literal: failed to parse "not valid timestamp" with "%Y-%b-%d": cannot parse %Y`,
+		},
+		"check parse_timestamp_strptime with invalid format": {
+			input: methods(
+				literalFn("invalid format"),
+				method("parse_timestamp_strptime", "INVALID_FORMAT"),
+			),
+			err: `string literal: failed to parse "invalid format" with "INVALID_FORMAT": expected 'I'`,
+		},
+		"check parse_timestamp_strptime with invalid literal type": {
+			input: methods(
+				literalFn(1),
+				method("parse_timestamp_strptime", "%Y-%b-%d"),
+			),
+			err: `expected string value, got number from number literal (1)`,
+		},
+		"check format_timestamp string default": {
 			input: methods(
 				literalFn("2020-08-14T11:45:26.371+01:00"),
 				method("format_timestamp", "2006-01-02T15:04:05.999999999Z07:00"),
 			),
 			output: "2020-08-14T11:45:26.371+01:00",
 		},
-		"check format timestamp string": {
+		"check format_timestamp string": {
 			input: methods(
 				literalFn("2020-08-14T11:45:26.371+00:00"),
 				method("format_timestamp", "2006-Jan-02 15:04:05.999999"),
 			),
 			output: "2020-Aug-14 11:45:26.371",
 		},
-		"check format timestamp unix float": {
+		"check format_timestamp unix float": {
 			input: methods(
 				literalFn(float64(1597405526.123456)),
 				method("format_timestamp", "2006-Jan-02 15:04:05.999999", "UTC"),
 			),
 			output: "2020-Aug-14 11:45:26.123456",
 		},
-		"check format timestamp unix": {
+		"check format_timestamp unix": {
 			input: methods(
 				literalFn(int64(1597405526)),
 				method("format_timestamp", "2006-Jan-02 15:04:05", "UTC"),
@@ -1873,6 +1901,34 @@ func TestMethods(t *testing.T) {
 				method("format_timestamp_unix_nano"),
 			),
 			output: int64(1257894000000000000),
+		},
+		"check format_timestamp_strftime string default": {
+			input: methods(
+				literalFn("2020-08-14T11:45:26.371+01:00"),
+				method("format_timestamp_strftime"),
+			),
+			output: "2020-08-14T11:45:26.371000+0100",
+		},
+		"check format_timestamp_strftime string": {
+			input: methods(
+				literalFn("2020-08-14T11:45:26.371+01:00"),
+				method("format_timestamp_strftime", "%Y-%b-%d %H:%M:%S"),
+			),
+			output: "2020-Aug-14 11:45:26",
+		},
+		"check format_timestamp_strftime float": {
+			input: methods(
+				literalFn(float64(1597405526.123456)),
+				method("format_timestamp_strftime", "%Y-%b-%d %H:%M:%S", "UTC"),
+			),
+			output: "2020-Aug-14 11:45:26",
+		},
+		"check format_timestamp_strftime unix": {
+			input: methods(
+				literalFn(int64(1597405526)),
+				method("format_timestamp_strftime", "%Y-%b-%d %H:%M:%S", "UTC"),
+			),
+			output: "2020-Aug-14 11:45:26",
 		},
 		"check floor": {
 			input:  methods(literalFn(5.8), method("floor")),

@@ -27,6 +27,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/xml"
 	"github.com/OneOfOne/xxhash"
+	"github.com/itchyny/timefmt-go"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/tilinna/z85"
 )
@@ -1115,6 +1116,44 @@ var _ = registerSimpleMethod(
 
 var _ = registerSimpleMethod(
 	NewMethodSpec(
+		"parse_timestamp_strptime", "",
+	).InCategory(
+		MethodCategoryTime,
+		"Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a string following ISO 8601, which can then be fed into `format_timestamp`. The format consists of zero or more conversion specifiers and ordinary characters (except %). All ordinary characters are copied to the output string without modification. Each conversion specification begins with % character followed by the character that determines the behaviour of the specifier. Please refer to [man 3 strptime](https://linux.die.net/man/3/strptime) for the list of format specifiers.",
+		NewExampleSpec("",
+			`root.doc.timestamp = this.doc.timestamp.parse_timestamp_strptime("%Y-%b-%d")`,
+			`{"doc":{"timestamp":"2020-Aug-14"}}`,
+			`{"doc":{"timestamp":"2020-08-14T00:00:00Z"}}`,
+		),
+	).Beta(),
+	func(args ...interface{}) (simpleMethod, error) {
+		layout := args[0].(string)
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			var str string
+			switch t := v.(type) {
+			case []byte:
+				str = string(t)
+			case string:
+				str = t
+			default:
+				return nil, NewTypeError(v, ValueString)
+			}
+			ut, err := timefmt.Parse(str, layout)
+			if err != nil {
+				return nil, err
+			}
+			return ut.Format(time.RFC3339Nano), nil
+		}, nil
+	},
+	true,
+	ExpectNArgs(1),
+	ExpectStringArg(0),
+)
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
 		"reverse", "",
 	).InCategory(
 		MethodCategoryStrings,
@@ -1215,6 +1254,65 @@ var _ = registerSimpleMethod(
 				target = target.In(timezone)
 			}
 			return target.Format(layout), nil
+		}, nil
+	},
+	true,
+	ExpectBetweenNAndMArgs(0, 2),
+	ExpectStringArg(0),
+	ExpectStringArg(1),
+)
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"format_timestamp_strftime", "",
+	).InCategory(
+		MethodCategoryTime,
+		"Attempts to format a timestamp value as a string according to a specified strftime-compatible format, or ISO 8601 by default. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.",
+		NewExampleSpec("",
+			`root.something_at = (this.created_at + 300).format_timestamp_strftime()`,
+			// `{"created_at":1597405526}`,
+			// `{"something_at":"2020-08-14T11:50:26.371Z"}`,
+		),
+		NewExampleSpec(
+			"An optional string argument is required to specify the output format of the timestamp. The format consists of zero or more conversion specifiers and ordinary characters (except %). All ordinary characters are copied to the output string without modification. Each conversion specification begins with % character followed by the character that determines the behaviour of the specifier. Please refer to [man 3 strftime](https://linux.die.net/man/3/strftime) for the list of format specifiers.",
+			`root.something_at = (this.created_at + 300).format_timestamp_strftime("%Y-%b-%d %H:%M:%S")`,
+			// `{"created_at":1597405526}`,
+			// `{"something_at":"2020-Aug-14 11:50:26"}`,
+		),
+		NewExampleSpec(
+			"A second optional string argument can also be used in order to specify a timezone, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.",
+			`root.something_at = this.created_at.format_timestamp_strftime("%Y-%b-%d %H:%M:%S", "UTC")`,
+
+			`{"created_at":1597405526}`,
+			`{"something_at":"2020-Aug-14 11:45:26"}`,
+
+			`{"created_at":"2020-08-14T11:50:26.371Z"}`,
+			`{"something_at":"2020-Aug-14 11:50:26"}`,
+		),
+	).Beta(),
+	func(args ...interface{}) (simpleMethod, error) {
+		layout := "%Y-%m-%dT%H:%M:%S.%f%z"
+		if len(args) > 0 {
+			layout = args[0].(string)
+		}
+		var timezone *time.Location
+		if len(args) > 1 {
+			var err error
+			if timezone, err = time.LoadLocation(args[1].(string)); err != nil {
+				return nil, fmt.Errorf("failed to parse timezone location name: %w", err)
+			}
+		}
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			target, err := IGetTimestamp(v)
+			if err != nil {
+				return nil, err
+			}
+			if timezone != nil {
+				target = target.In(timezone)
+			}
+			return timefmt.Format(target, layout), nil
 		}, nil
 	},
 	true,
