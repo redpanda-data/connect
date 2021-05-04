@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Go API: Added method `Overlay` to the public Bloblang package.
 - The `http_server` input now adds path parameters (`/{foo}/{bar}`) to the metadata of ingested messages.
 - The `stdout` output now has a `codec` field.
+- New Bloblang methods `format_timestamp_strftime` and `parse_timestamp_strptime`.
 - New experimental `nats_jetstream` input and output.
 
 ### Fixed
