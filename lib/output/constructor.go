@@ -188,6 +188,7 @@ const (
 	TypeMQTT               = "mqtt"
 	TypeNanomsg            = "nanomsg"
 	TypeNATS               = "nats"
+	TypeNATSJetStream      = "nats_jetstream"
 	TypeNATSStream         = "nats_stream"
 	TypeNSQ                = "nsq"
 	TypePulsar             = "pulsar"
@@ -259,6 +260,7 @@ type Config struct {
 	MQTT               writer.MQTTConfig              `json:"mqtt" yaml:"mqtt"`
 	Nanomsg            writer.NanomsgConfig           `json:"nanomsg" yaml:"nanomsg"`
 	NATS               writer.NATSConfig              `json:"nats" yaml:"nats"`
+	NATSJetStream      NATSJetStreamConfig            `json:"nats_jetstream" yaml:"nats_jetstream"`
 	NATSStream         writer.NATSStreamConfig        `json:"nats_stream" yaml:"nats_stream"`
 	NSQ                writer.NSQConfig               `json:"nsq" yaml:"nsq"`
 	Plugin             interface{}                    `json:"plugin,omitempty" yaml:"plugin,omitempty"`
@@ -331,6 +333,7 @@ func NewConfig() Config {
 		MongoDB:            NewMongoDBConfig(),
 		Nanomsg:            writer.NewNanomsgConfig(),
 		NATS:               writer.NewNATSConfig(),
+		NATSJetStream:      NewNATSJetStreamConfig(),
 		NATSStream:         writer.NewNATSStreamConfig(),
 		NSQ:                writer.NewNSQConfig(),
 		Plugin:             nil,
