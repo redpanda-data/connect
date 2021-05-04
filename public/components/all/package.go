@@ -10,5 +10,6 @@ import (
 	// Import new service packages.
 	_ "github.com/Jeffail/benthos/v3/internal/service/gcp"
 	_ "github.com/Jeffail/benthos/v3/internal/service/mongodb"
+	_ "github.com/Jeffail/benthos/v3/internal/service/nats"
 	_ "github.com/Jeffail/benthos/v3/internal/service/pulsar"
 )
