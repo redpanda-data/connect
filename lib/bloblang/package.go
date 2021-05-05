@@ -1,3 +1,4 @@
+// Package bloblang is DEPRECATED. Please use ./public/bloblang instead.
 package bloblang
 
 import (

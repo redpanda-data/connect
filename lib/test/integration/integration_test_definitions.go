@@ -517,6 +517,79 @@ func integrationTestStreamParallel(n int) testDefinition {
 	)
 }
 
+func integrationTestAtLeastOnceDelivery() testDefinition {
+	return namedTest(
+		"at least once delivery",
+		func(t *testing.T, env *testEnvironment) {
+			t.Parallel()
+
+			tranChan := make(chan types.Transaction)
+			input, output := initConnectors(t, tranChan, env)
+			t.Cleanup(func() {
+				closeConnectors(t, nil, output)
+			})
+
+			expectedMessages := map[string]struct{}{
+				"A": {}, "B": {}, "C": {}, "D": {}, "E": {},
+			}
+			go func() {
+				for k := range expectedMessages {
+					require.NoError(t, sendMessage(env.ctx, t, tranChan, k))
+				}
+			}()
+
+			var msg types.Part
+			badResponseChans := []chan<- types.Response{}
+
+			for i := 0; i < len(expectedMessages); i++ {
+				msg, responseChan := receiveMessageNoRes(env.ctx, t, input.TransactionChan())
+				key := string(msg.Get())
+				assert.Contains(t, expectedMessages, key)
+				delete(expectedMessages, key)
+				if key != "C" && key != "E" {
+					sendResponse(env.ctx, t, responseChan, nil)
+				} else {
+					badResponseChans = append(badResponseChans, responseChan)
+				}
+			}
+
+			for _, rChan := range badResponseChans {
+				sendResponse(env.ctx, t, rChan, errors.New("rejecting just cus"))
+			}
+
+			select {
+			case <-time.After(time.Second * 5):
+			case <-env.ctx.Done():
+				t.Fatal(env.ctx.Err())
+			}
+
+			closeConnectors(t, input, nil)
+
+			select {
+			case <-time.After(time.Second * 5):
+			case <-env.ctx.Done():
+				t.Fatal(env.ctx.Err())
+			}
+
+			input = initInput(t, env)
+			t.Cleanup(func() {
+				closeConnectors(t, input, nil)
+			})
+
+			expectedMessages = map[string]struct{}{
+				"C": {}, "E": {},
+			}
+
+			for i := 0; i < len(expectedMessages); i++ {
+				msg = receiveMessage(env.ctx, t, input.TransactionChan(), nil)
+				key := string(msg.Get())
+				assert.Contains(t, expectedMessages, key)
+				delete(expectedMessages, key)
+			}
+		},
+	)
+}
+
 func integrationTestStreamParallelLossy(n int) testDefinition {
 	return namedTest(
 		"can send and receive data in parallel lossy",

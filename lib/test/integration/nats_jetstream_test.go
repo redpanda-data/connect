@@ -47,13 +47,14 @@ output:
 input:
   nats_jetstream:
     urls: [ nats://localhost:$PORT ]
-    queue: queue-$ID
     subject: subject-$ID
+    durable: durable-$ID
 `
 	suite := integrationTests(
 		integrationTestOpenClose(),
 		// integrationTestMetadata(), TODO
 		integrationTestSendBatch(10),
+		integrationTestAtLeastOnceDelivery(), // TODO: SubscribeSync doesn't seem to honor durable setting
 		integrationTestStreamParallel(1000),
 		integrationTestStreamSequential(1000),
 		integrationTestStreamParallelLossy(1000),
@@ -65,8 +66,10 @@ input:
 			js, err := natsConn.JetStream()
 			require.NoError(t, err)
 
+			streamName := "stream-" + env.configVars.id
+
 			_, err = js.AddStream(&nats.StreamConfig{
-				Name:     "stream-" + env.configVars.id,
+				Name:     streamName,
 				Subjects: []string{"subject-" + env.configVars.id},
 			})
 			require.NoError(t, err)

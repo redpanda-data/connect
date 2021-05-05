@@ -11,7 +11,8 @@ type NATSJetStreamConfig struct {
 	URLs          []string   `json:"urls" yaml:"urls"`
 	Subject       string     `json:"subject" yaml:"subject"`
 	Queue         string     `json:"queue" yaml:"queue"`
-	DurableName   string     `json:"durable_name" yaml:"durable_name"`
+	Durable       string     `json:"durable" yaml:"durable"`
+	Deliver       string     `json:"deliver" yaml:"deliver"`
 	MaxAckPending int        `json:"max_ack_pending" yaml:"max_ack_pending"`
 	TLS           tls.Config `json:"tls" yaml:"tls"`
 }
@@ -22,6 +23,7 @@ func NewNATSJetStreamConfig() NATSJetStreamConfig {
 		URLs:          []string{nats.DefaultURL},
 		Subject:       "",
 		MaxAckPending: 1024,
+		Deliver:       "all",
 		TLS:           tls.NewConfig(),
 	}
 }

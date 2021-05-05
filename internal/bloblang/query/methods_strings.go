@@ -1119,8 +1119,9 @@ var _ = registerSimpleMethod(
 		"parse_timestamp_strptime", "",
 	).InCategory(
 		MethodCategoryTime,
-		"Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a string following ISO 8601, which can then be fed into `format_timestamp`. The format consists of zero or more conversion specifiers and ordinary characters (except %). All ordinary characters are copied to the output string without modification. Each conversion specification begins with % character followed by the character that determines the behaviour of the specifier. Please refer to [man 3 strptime](https://linux.die.net/man/3/strptime) for the list of format specifiers.",
-		NewExampleSpec("",
+		"Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a string following ISO 8601, which can then be fed into `format_timestamp`.",
+		NewExampleSpec(
+			"The format consists of zero or more conversion specifiers and ordinary characters (except `%`). All ordinary characters are copied to the output string without modification. Each conversion specification begins with a `%` character followed by the character that determines the behaviour of the specifier. Please refer to [man 3 strptime](https://linux.die.net/man/3/strptime) for the list of format specifiers.",
 			`root.doc.timestamp = this.doc.timestamp.parse_timestamp_strptime("%Y-%b-%d")`,
 			`{"doc":{"timestamp":"2020-Aug-14"}}`,
 			`{"doc":{"timestamp":"2020-08-14T00:00:00Z"}}`,
@@ -1269,14 +1270,9 @@ var _ = registerSimpleMethod(
 		"format_timestamp_strftime", "",
 	).InCategory(
 		MethodCategoryTime,
-		"Attempts to format a timestamp value as a string according to a specified strftime-compatible format, or ISO 8601 by default. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.",
-		NewExampleSpec("",
-			`root.something_at = (this.created_at + 300).format_timestamp_strftime()`,
-			// `{"created_at":1597405526}`,
-			// `{"something_at":"2020-08-14T11:50:26.371Z"}`,
-		),
+		"Attempts to format a timestamp value as a string according to a specified strftime-compatible format. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.",
 		NewExampleSpec(
-			"An optional string argument is required to specify the output format of the timestamp. The format consists of zero or more conversion specifiers and ordinary characters (except %). All ordinary characters are copied to the output string without modification. Each conversion specification begins with % character followed by the character that determines the behaviour of the specifier. Please refer to [man 3 strftime](https://linux.die.net/man/3/strftime) for the list of format specifiers.",
+			"The format consists of zero or more conversion specifiers and ordinary characters (except `%`). All ordinary characters are copied to the output string without modification. Each conversion specification begins with `%` character followed by the character that determines the behaviour of the specifier. Please refer to [man 3 strftime](https://linux.die.net/man/3/strftime) for the list of format specifiers.",
 			`root.something_at = (this.created_at + 300).format_timestamp_strftime("%Y-%b-%d %H:%M:%S")`,
 			// `{"created_at":1597405526}`,
 			// `{"something_at":"2020-Aug-14 11:50:26"}`,
@@ -1293,10 +1289,7 @@ var _ = registerSimpleMethod(
 		),
 	).Beta(),
 	func(args ...interface{}) (simpleMethod, error) {
-		layout := "%Y-%m-%dT%H:%M:%S.%f%z"
-		if len(args) > 0 {
-			layout = args[0].(string)
-		}
+		layout := args[0].(string)
 		var timezone *time.Location
 		if len(args) > 1 {
 			var err error
@@ -1316,7 +1309,7 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectBetweenNAndMArgs(0, 2),
+	ExpectBetweenNAndMArgs(1, 2),
 	ExpectStringArg(0),
 	ExpectStringArg(1),
 )

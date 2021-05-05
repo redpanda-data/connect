@@ -97,6 +97,7 @@ input:
 		integrationTestStreamSequential(1000),
 		integrationTestStreamParallel(1000),
 		integrationTestStreamParallelLossy(1000),
+		// integrationTestAtLeastOnceDelivery(),
 	)
 	suite.Run(t, template, suiteOpts...)
 	t.Run("with max in flight", func(t *testing.T) {

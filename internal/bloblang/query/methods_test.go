@@ -1902,13 +1902,6 @@ func TestMethods(t *testing.T) {
 			),
 			output: int64(1257894000000000000),
 		},
-		"check format_timestamp_strftime string default": {
-			input: methods(
-				literalFn("2020-08-14T11:45:26.371+01:00"),
-				method("format_timestamp_strftime"),
-			),
-			output: "2020-08-14T11:45:26.371000+0100",
-		},
 		"check format_timestamp_strftime string": {
 			input: methods(
 				literalFn("2020-08-14T11:45:26.371+01:00"),

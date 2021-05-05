@@ -68,6 +68,7 @@ input:
 		integrationTestStreamParallel(1000),
 		integrationTestStreamParallelLossy(1000),
 		integrationTestStreamParallelLossyThroughReconnect(1000),
+		integrationTestAtLeastOnceDelivery(),
 	)
 	suite.Run(
 		t, template,

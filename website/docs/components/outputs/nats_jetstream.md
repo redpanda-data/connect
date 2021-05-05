@@ -86,6 +86,7 @@ urls:
 ### `subject`
 
 A subject to write to.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

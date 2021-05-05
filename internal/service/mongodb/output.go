@@ -9,12 +9,13 @@ import (
 	"time"
 
 	ibatch "github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/service/mongodb/client"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/lib/bloblang"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -137,7 +138,7 @@ func NewWriter(
 		if conf.FilterMap == "" {
 			return nil, errors.New("mongodb filter_map must be specified")
 		}
-		if db.filterMap, err = bloblang.NewMapping(conf.FilterMap); err != nil {
+		if db.filterMap, err = bloblang.NewMapping("", conf.FilterMap); err != nil {
 			return nil, fmt.Errorf("failed to parse filter_map: %v", err)
 		}
 	} else if conf.FilterMap != "" {
@@ -148,7 +149,7 @@ func NewWriter(
 		if conf.DocumentMap == "" {
 			return nil, errors.New("mongodb document_map must be specified")
 		}
-		if db.documentMap, err = bloblang.NewMapping(conf.DocumentMap); err != nil {
+		if db.documentMap, err = bloblang.NewMapping("", conf.DocumentMap); err != nil {
 			return nil, fmt.Errorf("failed to parse document_map: %v", err)
 		}
 	} else if conf.DocumentMap != "" {
@@ -156,7 +157,7 @@ func NewWriter(
 	}
 
 	if hintAllowed && conf.HintMap != "" {
-		if db.hintMap, err = bloblang.NewMapping(conf.HintMap); err != nil {
+		if db.hintMap, err = bloblang.NewMapping("", conf.HintMap); err != nil {
 			return nil, fmt.Errorf("failed to parse hint_map: %v", err)
 		}
 	} else if conf.HintMap != "" {
@@ -178,9 +179,9 @@ type Writer struct {
 
 	wcTimeout time.Duration
 
-	filterMap   bloblang.Mapping
-	documentMap bloblang.Mapping
-	hintMap     bloblang.Mapping
+	filterMap   *mapping.Executor
+	documentMap *mapping.Executor
+	hintMap     *mapping.Executor
 
 	mu         sync.Mutex
 	client     *mongo.Client

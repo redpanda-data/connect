@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -60,7 +61,13 @@ You can access these metadata fields using
 				"subject", "A subject to consume from. Supports wildcards for consuming multiple subjects.",
 				"foo.bar.baz", "foo.*.baz", "foo.bar.*", "foo.>",
 			),
-			docs.FieldCommon("durable_name", "Preserve the state of your consumer under a durable name."),
+			docs.FieldCommon("durable", "Preserve the state of your consumer under a durable name."),
+			docs.FieldCommon(
+				"deliver", "Determines which messages to deliver when consuming without a durable subscriber.",
+			).HasAnnotatedOptions(
+				"all", "Deliver all available messages.",
+				"last", "Deliver starting with the last published messages.",
+			),
 			docs.FieldAdvanced("max_ack_pending", "The maximum number of outstanding acks to be allowed before consuming is halted."),
 			btls.FieldSpec(),
 		),
@@ -87,11 +94,10 @@ type jetStreamReader struct {
 
 func newJetStreamReader(conf input.NATSJetStreamConfig, log log.Modular, stats metrics.Type) (*jetStreamReader, error) {
 	j := jetStreamReader{
-		deliverOpt: nats.DeliverAll(),
-		conf:       conf,
-		stats:      stats,
-		log:        log,
-		shutSig:    shutdown.NewSignaller(),
+		conf:    conf,
+		stats:   stats,
+		log:     log,
+		shutSig: shutdown.NewSignaller(),
 	}
 	j.urls = strings.Join(conf.URLs, ",")
 	var err error
@@ -99,6 +105,14 @@ func newJetStreamReader(conf input.NATSJetStreamConfig, log log.Modular, stats m
 		if j.tlsConf, err = conf.TLS.Get(); err != nil {
 			return nil, err
 		}
+	}
+	switch conf.Deliver {
+	case "all":
+		j.deliverOpt = nats.DeliverAll()
+	case "last":
+		j.deliverOpt = nats.DeliverLast()
+	default:
+		return nil, fmt.Errorf("deliver option %v was not recognised", conf.Deliver)
 	}
 	return &j, nil
 }
@@ -120,7 +134,6 @@ func (j *jetStreamReader) ConnectWithContext(ctx context.Context) error {
 	defer func() {
 		if err != nil {
 			if natsSub != nil {
-				natsSub.Unsubscribe()
 				_ = natsSub.Drain()
 			}
 			if natsConn != nil {
@@ -145,8 +158,8 @@ func (j *jetStreamReader) ConnectWithContext(ctx context.Context) error {
 	options := []nats.SubOpt{
 		nats.ManualAck(),
 	}
-	if j.conf.DurableName != "" {
-		options = append(options, nats.Durable(j.conf.DurableName))
+	if j.conf.Durable != "" {
+		options = append(options, nats.Durable(j.conf.Durable))
 	}
 	options = append(options, j.deliverOpt)
 	if j.conf.MaxAckPending != 0 {
@@ -174,7 +187,6 @@ func (j *jetStreamReader) disconnect() {
 	defer j.connMut.Unlock()
 
 	if j.natsSub != nil {
-		j.natsSub.Unsubscribe()
 		_ = j.natsSub.Drain()
 		j.natsSub = nil
 	}

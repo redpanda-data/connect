@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/bloblang"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -69,7 +70,7 @@ func NewRejectConfig() RejectConfig {
 }
 
 type rejectWriter struct {
-	errExpr bloblang.Field
+	errExpr field.Expression
 }
 
 func newRejectWriter(errorString string) (*rejectWriter, error) {

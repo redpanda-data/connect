@@ -3,10 +3,13 @@ package nats
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
@@ -46,7 +49,7 @@ func init() {
 				[]string{"nats://127.0.0.1:4222"},
 				[]string{"nats://username:password@127.0.0.1:4222"},
 			).Array(),
-			docs.FieldCommon("subject", "A subject to write to."),
+			docs.FieldCommon("subject", "A subject to write to.").IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			btls.FieldSpec(),
 		),
@@ -59,6 +62,8 @@ type jetStreamOutput struct {
 	urls    string
 	conf    output.NATSJetStreamConfig
 	tlsConf *tls.Config
+
+	subjectStr field.Expression
 
 	stats metrics.Type
 	log   log.Modular
@@ -83,6 +88,9 @@ func newJetStreamOutput(conf output.NATSJetStreamConfig, log log.Modular, stats 
 		if j.tlsConf, err = conf.TLS.Get(); err != nil {
 			return nil, err
 		}
+	}
+	if j.subjectStr, err = bloblang.NewField(conf.Subject); err != nil {
+		return nil, fmt.Errorf("subject expression: %w", err)
 	}
 	return &j, nil
 }
@@ -148,7 +156,8 @@ func (j *jetStreamOutput) WriteWithContext(ctx context.Context, msg types.Messag
 	}
 
 	return writer.IterateBatchedSend(msg, func(i int, p types.Part) error {
-		_, err := jCtx.Publish(j.conf.Subject, p.Get())
+		subject := j.subjectStr.String(i, msg)
+		_, err := jCtx.Publish(subject, p.Get())
 		return err
 	})
 }

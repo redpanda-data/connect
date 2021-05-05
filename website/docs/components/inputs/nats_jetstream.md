@@ -38,7 +38,8 @@ input:
       - nats://127.0.0.1:4222
     queue: ""
     subject: ""
-    durable_name: ""
+    durable: ""
+    deliver: all
 ```
 
 </TabItem>
@@ -53,7 +54,8 @@ input:
       - nats://127.0.0.1:4222
     queue: ""
     subject: ""
-    durable_name: ""
+    durable: ""
+    deliver: all
     max_ack_pending: 1024
     tls:
       enabled: false
@@ -125,13 +127,27 @@ subject: foo.bar.*
 subject: foo.>
 ```
 
-### `durable_name`
+### `durable`
 
 Preserve the state of your consumer under a durable name.
 
 
 Type: `string`  
 Default: `""`  
+
+### `deliver`
+
+Determines which messages to deliver when consuming without a durable subscriber.
+
+
+Type: `string`  
+Default: `"all"`  
+
+| Option | Summary |
+|---|---|
+| `all` | Deliver all available messages. |
+| `last` | Deliver starting with the last published messages. |
+
 
 ### `max_ack_pending`
 

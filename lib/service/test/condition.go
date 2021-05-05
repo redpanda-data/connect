@@ -8,7 +8,8 @@ import (
 	"regexp"
 	"sort"
 
-	"github.com/Jeffail/benthos/v3/lib/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/nsf/jsondiff"
@@ -102,7 +103,7 @@ func (c ConditionsMap) CheckAll(part types.Part) (errs []error) {
 //------------------------------------------------------------------------------
 
 type bloblangCondition struct {
-	m bloblang.Mapping
+	m *mapping.Executor
 }
 
 func parseBloblangCondition(n yaml.Node) (*bloblangCondition, error) {
@@ -112,7 +113,7 @@ func parseBloblangCondition(n yaml.Node) (*bloblangCondition, error) {
 		return nil, err
 	}
 
-	m, err := bloblang.NewMapping(expr)
+	m, err := bloblang.NewMapping("", expr)
 	if err != nil {
 		return nil, err
 	}

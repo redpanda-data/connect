@@ -7,11 +7,12 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/service/mongodb/client"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/lib/bloblang"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
@@ -114,9 +115,9 @@ type Processor struct {
 	collection *mongo.Collection
 
 	parts       []int
-	filterMap   bloblang.Mapping
-	documentMap bloblang.Mapping
-	hintMap     bloblang.Mapping
+	filterMap   *mapping.Executor
+	documentMap *mapping.Executor
+	hintMap     *mapping.Executor
 
 	shutSig *shutdown.Signaller
 
@@ -179,7 +180,7 @@ func NewProcessor(
 		if conf.MongoDB.FilterMap == "" {
 			return nil, errors.New("mongodb filter_map must be specified")
 		}
-		if m.filterMap, err = bloblang.NewMapping(conf.MongoDB.FilterMap); err != nil {
+		if m.filterMap, err = bloblang.NewMapping("", conf.MongoDB.FilterMap); err != nil {
 			return nil, fmt.Errorf("failed to parse filter_map: %v", err)
 		}
 	} else if conf.MongoDB.FilterMap != "" {
@@ -190,7 +191,7 @@ func NewProcessor(
 		if conf.MongoDB.DocumentMap == "" {
 			return nil, errors.New("mongodb document_map must be specified")
 		}
-		if m.documentMap, err = bloblang.NewMapping(conf.MongoDB.DocumentMap); err != nil {
+		if m.documentMap, err = bloblang.NewMapping("", conf.MongoDB.DocumentMap); err != nil {
 			return nil, fmt.Errorf("failed to parse document_map: %v", err)
 		}
 	} else if conf.MongoDB.DocumentMap != "" {
@@ -198,7 +199,7 @@ func NewProcessor(
 	}
 
 	if hintAllowed && conf.MongoDB.HintMap != "" {
-		if m.hintMap, err = bloblang.NewMapping(conf.MongoDB.HintMap); err != nil {
+		if m.hintMap, err = bloblang.NewMapping("", conf.MongoDB.HintMap); err != nil {
 			return nil, fmt.Errorf("failed to parse hint_map: %v", err)
 		}
 	} else if conf.MongoDB.HintMap != "" {

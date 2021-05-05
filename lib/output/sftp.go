@@ -8,10 +8,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	sftpSetup "github.com/Jeffail/benthos/v3/internal/service/sftp"
-	"github.com/Jeffail/benthos/v3/lib/bloblang"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
@@ -97,7 +98,7 @@ type sftpWriter struct {
 	log   log.Modular
 	stats metrics.Type
 
-	path      bloblang.Field
+	path      field.Expression
 	codec     codec.WriterConstructor
 	codecConf codec.WriterConfig
 
