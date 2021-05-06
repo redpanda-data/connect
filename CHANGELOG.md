@@ -5,10 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.46.0 - 2021-05-06
+
 ### Added
 
 - The `create` subcommand now supports a `--small`/`-s` flag that reduces the output down to only core components and common fields.
-- Go API: Added method `Overlay` to the public Bloblang package.
+- Go Plugins API: Added method `Overlay` to the public Bloblang package.
 - The `http_server` input now adds path parameters (`/{foo}/{bar}`) to the metadata of ingested messages.
 - The `stdout` output now has a `codec` field.
 - New Bloblang methods `format_timestamp_strftime` and `parse_timestamp_strptime`.
@@ -16,7 +18,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Bloblang method and function plugins now automatically resolve dynamic arguments.
+- Go Plugins API: Bloblang method and function plugins now automatically resolve dynamic arguments.
 
 ## 3.45.1 - 2021-04-27
 
