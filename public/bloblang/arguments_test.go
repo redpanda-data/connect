@@ -41,35 +41,35 @@ func TestArgumentTypes(t *testing.T) {
 			args: []interface{}{
 				"nope", int64(2), 3.0, true, "hello world", "and this",
 			},
-			err: `bad argument 0: expected number value, got string ("nope")`,
+			err: `bad argument 0: expected int value, got string (nope)`,
 		},
 		{
 			name: "bad int64",
 			args: []interface{}{
 				int64(1), "nope", 3.0, true, "hello world", "and this",
 			},
-			err: `bad argument 1: expected number value, got string ("nope")`,
+			err: `bad argument 1: expected int64 value, got string (nope)`,
 		},
 		{
 			name: "bad float64",
 			args: []interface{}{
 				int64(1), int64(2), "nope", true, "hello world", "and this",
 			},
-			err: `bad argument 2: expected number value, got string ("nope")`,
+			err: `bad argument 2: expected float64 value, got string (nope)`,
 		},
 		{
 			name: "bad bool",
 			args: []interface{}{
 				int64(1), int64(2), 3.0, "nope", "hello world", "and this",
 			},
-			err: `bad argument 3: expected bool value, got string ("nope")`,
+			err: `bad argument 3: expected bool value, got string (nope)`,
 		},
 		{
 			name: "bad string",
 			args: []interface{}{
 				int64(1), int64(2), 3.0, true, 30, "and this",
 			},
-			err: "bad argument 4: expected string value, got number (30)",
+			err: "bad argument 4: expected string value, got int (30)",
 		},
 		{
 			name: "good values",

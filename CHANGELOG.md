@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- Go Plugins API: The Bloblang `ArgSpec` now returns a public error type `ArgError`.
+
 ## 3.46.0 - 2021-05-06
 
 ### Added

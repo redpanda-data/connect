@@ -2,6 +2,7 @@ package bloblang
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 )
@@ -19,8 +20,8 @@ func NewArgSpec() *ArgSpec {
 }
 
 // Extract the specified typed arguments from a slice of generic arguments.
-// Returns an error if the type of an argument is mismatched, or if the number
-// of arguments is mismatched.
+// Returns an error if the number of arguments does not match the spec, and
+// returns an *ArgError if the type of an argument is mismatched.
 func (a *ArgSpec) Extract(args []interface{}) error {
 	if len(args) != a.n {
 		return fmt.Errorf("expected %v arguments, received %v", a.n, len(args))
@@ -41,7 +42,7 @@ func (a *ArgSpec) IntVar(i *int) *ArgSpec {
 	a.validators = append(a.validators, func(args []interface{}) error {
 		v, err := query.IGetInt(args[index])
 		if err != nil {
-			return fmt.Errorf("bad argument %v: %w", index, err)
+			return newArgError(index, reflect.Int, args[index])
 		}
 		*i = int(v)
 		return nil
@@ -58,7 +59,7 @@ func (a *ArgSpec) Int64Var(i *int64) *ArgSpec {
 	a.validators = append(a.validators, func(args []interface{}) error {
 		v, err := query.IGetInt(args[index])
 		if err != nil {
-			return fmt.Errorf("bad argument %v: %w", index, err)
+			return newArgError(index, reflect.Int64, args[index])
 		}
 		*i = v
 		return nil
@@ -76,7 +77,7 @@ func (a *ArgSpec) Float64Var(f *float64) *ArgSpec {
 	a.validators = append(a.validators, func(args []interface{}) error {
 		v, err := query.IGetNumber(args[index])
 		if err != nil {
-			return fmt.Errorf("bad argument %v: %w", index, err)
+			return newArgError(index, reflect.Float64, args[index])
 		}
 		*f = v
 		return nil
@@ -93,7 +94,7 @@ func (a *ArgSpec) BoolVar(b *bool) *ArgSpec {
 	a.validators = append(a.validators, func(args []interface{}) error {
 		v, err := query.IGetBool(args[index])
 		if err != nil {
-			return fmt.Errorf("bad argument %v: %w", index, err)
+			return newArgError(index, reflect.Bool, args[index])
 		}
 		*b = v
 		return nil
@@ -111,7 +112,7 @@ func (a *ArgSpec) StringVar(s *string) *ArgSpec {
 	a.validators = append(a.validators, func(args []interface{}) error {
 		v, err := query.IGetString(args[index])
 		if err != nil {
-			return fmt.Errorf("bad argument %v: %w", index, err)
+			return newArgError(index, reflect.String, args[index])
 		}
 		*s = v
 		return nil
@@ -132,4 +133,35 @@ func (a *ArgSpec) AnyVar(i *interface{}) *ArgSpec {
 	})
 
 	return a
+}
+
+//------------------------------------------------------------------------------
+
+// ArgError represents an error encountered when parsing a function or method
+// argument.
+type ArgError struct {
+	// The argument index
+	Index int
+
+	// The expected argument type
+	ExpectedKind reflect.Kind
+
+	// The actual type provided
+	ActualKind reflect.Kind
+
+	// The value of the argument
+	Value interface{}
+}
+
+func (a *ArgError) Error() string {
+	return fmt.Sprintf("bad argument %v: expected %v value, got %v (%v)", a.Index, a.ExpectedKind.String(), a.ActualKind.String(), a.Value)
+}
+
+func newArgError(index int, expected reflect.Kind, actual interface{}) error {
+	return &ArgError{
+		Index:        index,
+		ExpectedKind: expected,
+		ActualKind:   reflect.TypeOf(actual).Kind(),
+		Value:        actual,
+	}
 }
