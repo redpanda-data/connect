@@ -89,7 +89,7 @@ type fileWriter struct {
 	log   log.Modular
 	stats metrics.Type
 
-	path      field.Expression
+	path      *field.Expression
 	codec     codec.WriterConstructor
 	codecConf codec.WriterConfig
 

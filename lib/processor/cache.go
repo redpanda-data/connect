@@ -148,9 +148,9 @@ type Cache struct {
 
 	parts []int
 
-	key   field.Expression
-	value field.Expression
-	ttl   field.Expression
+	key   *field.Expression
+	value *field.Expression
+	ttl   *field.Expression
 
 	cache    types.Cache
 	operator cacheOperator

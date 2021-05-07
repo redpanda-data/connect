@@ -36,7 +36,7 @@ func NewFilesConfig() FilesConfig {
 type Files struct {
 	conf FilesConfig
 
-	path field.Expression
+	path *field.Expression
 
 	log   log.Modular
 	stats metrics.Type

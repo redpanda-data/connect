@@ -26,10 +26,10 @@ import (
 // Azure Blob Storage storage account.
 type AzureBlobStorage struct {
 	conf        AzureBlobStorageConfig
-	container   field.Expression
-	path        field.Expression
-	blobType    field.Expression
-	accessLevel field.Expression
+	container   *field.Expression
+	path        *field.Expression
+	blobType    *field.Expression
+	accessLevel *field.Expression
 	client      storage.BlobStorageClient
 	log         log.Modular
 	stats       metrics.Type

@@ -87,7 +87,7 @@ func parseFieldResolvers(expr string) ([]field.Resolver, *Error) {
 }
 
 // ParseField attempts to parse a field expression.
-func ParseField(expr string) (field.Expression, *Error) {
+func ParseField(expr string) (*field.Expression, *Error) {
 	resolvers, err := parseFieldResolvers(expr)
 	if err != nil {
 		return nil, err

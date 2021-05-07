@@ -99,8 +99,8 @@ type Kafka struct {
 	version   sarama.KafkaVersion
 	conf      KafkaConfig
 
-	key   field.Expression
-	topic field.Expression
+	key   *field.Expression
+	topic *field.Expression
 
 	producer    sarama.SyncProducer
 	compression sarama.CompressionCodec

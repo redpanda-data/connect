@@ -53,7 +53,7 @@ type MQTT struct {
 
 	urls  []string
 	conf  MQTTConfig
-	topic field.Expression
+	topic *field.Expression
 
 	client  mqtt.Client
 	connMut sync.RWMutex

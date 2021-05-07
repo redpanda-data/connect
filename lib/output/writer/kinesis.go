@@ -73,8 +73,8 @@ type Kinesis struct {
 	kinesis kinesisiface.KinesisAPI
 
 	backoffCtor  func() backoff.BackOff
-	hashKey      field.Expression
-	partitionKey field.Expression
+	hashKey      *field.Expression
+	partitionKey *field.Expression
 	streamName   *string
 
 	log   log.Modular

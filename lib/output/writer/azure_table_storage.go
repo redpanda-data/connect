@@ -24,10 +24,10 @@ import (
 // Azure Table Storage table.
 type AzureTableStorage struct {
 	conf         AzureTableStorageConfig
-	tableName    field.Expression
-	partitionKey field.Expression
-	rowKey       field.Expression
-	properties   map[string]field.Expression
+	tableName    *field.Expression
+	partitionKey *field.Expression
+	rowKey       *field.Expression
+	properties   map[string]*field.Expression
 	client       storage.TableServiceClient
 	timeout      time.Duration
 	log          log.Modular
@@ -79,7 +79,7 @@ func NewAzureTableStorage(
 	if a.rowKey, err = bloblang.NewField(conf.RowKey); err != nil {
 		return nil, fmt.Errorf("failed to parse row key expression: %v", err)
 	}
-	a.properties = make(map[string]field.Expression)
+	a.properties = make(map[string]*field.Expression)
 	for property, value := range conf.Properties {
 		if a.properties[property], err = bloblang.NewField(value); err != nil {
 			return nil, fmt.Errorf("failed to parse property expression: %v", err)

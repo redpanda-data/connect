@@ -90,7 +90,7 @@ type GroupByValue struct {
 	log   log.Modular
 	stats metrics.Type
 
-	value field.Expression
+	value *field.Expression
 
 	mCount     metrics.StatCounter
 	mGroups    metrics.StatGauge

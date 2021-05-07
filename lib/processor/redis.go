@@ -103,7 +103,7 @@ type Redis struct {
 	log   log.Modular
 	stats metrics.Type
 
-	key field.Expression
+	key *field.Expression
 
 	operator    redisOperator
 	client      redis.UniversalClient

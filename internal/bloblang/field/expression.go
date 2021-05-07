@@ -7,13 +7,34 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-//------------------------------------------------------------------------------
-
 // Message is an interface type to be given to a function interpolator, it
 // allows the function to resolve fields and metadata from a message.
 type Message interface {
 	Get(p int) types.Part
 	Len() int
+}
+
+//------------------------------------------------------------------------------
+
+// NewExpression creates a field expression from a slice of resolvers.
+func NewExpression(resolvers ...Resolver) *Expression {
+	e := &Expression{
+		resolvers: resolvers,
+	}
+	var staticBuf bytes.Buffer
+	for _, r := range resolvers {
+		if s, is := r.(StaticResolver); is {
+			staticBuf.Write(s.ResolveBytes(0, message.New(nil), false, false))
+		} else {
+			e.dynamicExpressions++
+		}
+	}
+	if e.dynamicExpressions > 0 || staticBuf.Len() == 0 {
+		return e
+	}
+	return &Expression{
+		static: staticBuf.String(),
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -24,68 +45,13 @@ type Message interface {
 //
 // Each function here resolves the expression for a particular message of a
 // batch, this is why an index is expected.
-type Expression interface {
-	// Bytes returns a byte slice representing the expression resolved for a
-	// message
-	// of a batch.
-	Bytes(index int, msg Message) []byte
-
-	// BytesLegacy is DEPRECATED - Instructs deprecated functions to disregard
-	// index information.
-	// TODO V4: Remove this.
-	BytesLegacy(index int, msg Message) []byte
-
-	// BytesEscaped returns a byte slice representing the expression resolved
-	// for a message of a batch with the contents of resolved expressions
-	// escaped.
-	BytesEscaped(index int, msg Message) []byte
-
-	// BytesEscapedLegacy is DEPRECATED - Instructs deprecated functions to
-	// disregard index information.
-	// TODO V4: Remove this.
-	BytesEscapedLegacy(index int, msg Message) []byte
-
-	// String returns a string representing the expression resolved for a
-	// message of a batch.
-	String(index int, msg Message) string
-
-	// StringLegacy is DEPRECATED - Instructs deprecated functions to disregard
-	// index information.
-	// TODO V4: Remove this.
-	StringLegacy(index int, msg Message) string
+type Expression struct {
+	static             string
+	resolvers          []Resolver
+	dynamicExpressions int
 }
 
-//------------------------------------------------------------------------------
-
-// NewExpression creates a field expression from a slice of resolvers.
-func NewExpression(resolvers ...Resolver) Expression {
-	e := &expression{
-		resolvers: resolvers,
-	}
-	var staticBuf bytes.Buffer
-	for _, r := range resolvers {
-		if s, is := r.(StaticResolver); is {
-			staticBuf.Write(s.ResolveBytes(0, message.New(nil), false, false))
-		} else {
-			return e
-		}
-	}
-	if staticBuf.Len() == 0 {
-		return e
-	}
-	return &expression{
-		static: staticBuf.String(),
-	}
-}
-
-//------------------------------------------------------------------------------
-
-type expression struct {
-	static    string
-	resolvers []Resolver
-}
-
-func (e *expression) resolve(index int, msg Message, escaped, legacy bool) []byte {
+func (e *Expression) resolve(index int, msg Message, escaped, legacy bool) []byte {
 	if len(e.resolvers) == 1 {
 		return e.resolvers[0].ResolveBytes(index, msg, escaped, legacy)
 	}
@@ -96,9 +62,15 @@ func (e *expression) resolve(index int, msg Message, escaped, legacy bool) []byt
 	return buf.Bytes()
 }
 
+// NumDynamicExpressions returns the number of dynamic interpolation functions
+// within the expression.
+func (e *Expression) NumDynamicExpressions() int {
+	return e.dynamicExpressions
+}
+
 // Bytes returns a byte slice representing the expression resolved for a message
 // of a batch.
-func (e *expression) Bytes(index int, msg Message) []byte {
+func (e *Expression) Bytes(index int, msg Message) []byte {
 	if len(e.resolvers) == 0 {
 		return []byte(e.static)
 	}
@@ -108,7 +80,7 @@ func (e *expression) Bytes(index int, msg Message) []byte {
 // BytesLegacy is DEPRECATED - Instructs deprecated functions to disregard index
 // information.
 // TODO V4: Remove this.
-func (e *expression) BytesLegacy(index int, msg Message) []byte {
+func (e *Expression) BytesLegacy(index int, msg Message) []byte {
 	if len(e.resolvers) == 0 {
 		return []byte(e.static)
 	}
@@ -117,7 +89,7 @@ func (e *expression) BytesLegacy(index int, msg Message) []byte {
 
 // BytesEscaped returns a byte slice representing the expression resolved for a
 // message of a batch with the contents of resolved expressions escaped.
-func (e *expression) BytesEscaped(index int, msg Message) []byte {
+func (e *Expression) BytesEscaped(index int, msg Message) []byte {
 	if len(e.resolvers) == 0 {
 		return []byte(e.static)
 	}
@@ -127,7 +99,7 @@ func (e *expression) BytesEscaped(index int, msg Message) []byte {
 // BytesEscapedLegacy is DEPRECATED - Instructs deprecated functions to
 // disregard index information.
 // TODO V4: Remove this.
-func (e *expression) BytesEscapedLegacy(index int, msg Message) []byte {
+func (e *Expression) BytesEscapedLegacy(index int, msg Message) []byte {
 	if len(e.resolvers) == 0 {
 		return []byte(e.static)
 	}
@@ -136,7 +108,7 @@ func (e *expression) BytesEscapedLegacy(index int, msg Message) []byte {
 
 // String returns a string representing the expression resolved for a message of
 // a batch.
-func (e *expression) String(index int, msg Message) string {
+func (e *Expression) String(index int, msg Message) string {
 	if len(e.resolvers) == 0 {
 		return e.static
 	}
@@ -146,11 +118,9 @@ func (e *expression) String(index int, msg Message) string {
 // StringLegacy is DEPRECATED - Instructs deprecated functions to disregard
 // index information.
 // TODO V4: Remove this.
-func (e *expression) StringLegacy(index int, msg Message) string {
+func (e *Expression) StringLegacy(index int, msg Message) string {
 	if len(e.resolvers) == 0 {
 		return e.static
 	}
 	return string(e.BytesLegacy(index, msg))
 }
-
-//------------------------------------------------------------------------------

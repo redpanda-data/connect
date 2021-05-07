@@ -121,9 +121,9 @@ output:
 type gcpCloudStorageOutput struct {
 	conf output.GCPCloudStorageConfig
 
-	path            field.Expression
-	contentType     field.Expression
-	contentEncoding field.Expression
+	path            *field.Expression
+	contentType     *field.Expression
+	contentEncoding *field.Expression
 
 	client  *storage.Client
 	connMut sync.RWMutex

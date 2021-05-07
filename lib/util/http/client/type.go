@@ -84,9 +84,9 @@ type Type struct {
 	dropOn    map[int]struct{}
 	successOn map[int]struct{}
 
-	url     field.Expression
-	headers map[string]field.Expression
-	host    field.Expression
+	url     *field.Expression
+	headers map[string]*field.Expression
+	host    *field.Expression
 
 	conf          Config
 	retryThrottle *throttle.Type
@@ -131,7 +131,7 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		backoffOn: map[int]struct{}{},
 		dropOn:    map[int]struct{}{},
 		successOn: map[int]struct{}{},
-		headers:   map[string]field.Expression{},
+		headers:   map[string]*field.Expression{},
 		host:      nil,
 	}
 	h.ctx, h.done = context.WithCancel(context.Background())

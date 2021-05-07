@@ -187,14 +187,14 @@ type cassandraWriter struct {
 	backoffMin time.Duration
 	backoffMax time.Duration
 
-	args          []field.Expression
+	args          []*field.Expression
 	session       *gocql.Session
 	mQueryLatency metrics.StatTimer
 	connLock      sync.RWMutex
 }
 
 func newCassandraWriter(conf CassandraConfig, log log.Modular, stats metrics.Type) (*cassandraWriter, error) {
-	var args []field.Expression
+	var args []*field.Expression
 	for i, v := range conf.Args {
 		expr, err := bloblang.NewField(v)
 		if err != nil {

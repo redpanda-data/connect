@@ -84,7 +84,7 @@ func getNumberOperator(opStr string) (numberOperator, error) {
 type Number struct {
 	parts []int
 
-	interpolatedValue field.Expression
+	interpolatedValue *field.Expression
 	value             float64
 	operator          numberOperator
 

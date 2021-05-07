@@ -73,10 +73,10 @@ func NewAMQPConfig() AMQPConfig {
 
 // AMQP is an output type that serves AMQP messages.
 type AMQP struct {
-	key             field.Expression
-	msgType         field.Expression
-	contentType     field.Expression
-	contentEncoding field.Expression
+	key             *field.Expression
+	msgType         *field.Expression
+	contentType     *field.Expression
+	contentEncoding *field.Expression
 	metaFilter      *output.MetadataFilter
 
 	log   log.Modular

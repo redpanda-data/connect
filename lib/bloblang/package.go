@@ -33,7 +33,7 @@ type Field interface {
 }
 
 type fieldWrap struct {
-	f field.Expression
+	f *field.Expression
 }
 
 func (w *fieldWrap) Bytes(index int, msg Message) []byte {

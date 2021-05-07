@@ -22,8 +22,8 @@ import (
 type AzureQueueStorage struct {
 	conf AzureQueueStorageConfig
 
-	queueName  field.Expression
-	ttl        field.Expression
+	queueName  *field.Expression
+	ttl        *field.Expression
 	serviceURL *azqueue.ServiceURL
 
 	log   log.Modular

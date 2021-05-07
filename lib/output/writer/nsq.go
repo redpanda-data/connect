@@ -46,7 +46,7 @@ func NewNSQConfig() NSQConfig {
 type NSQ struct {
 	log log.Modular
 
-	topicStr field.Expression
+	topicStr *field.Expression
 
 	tlsConf  *tls.Config
 	connMut  sync.RWMutex

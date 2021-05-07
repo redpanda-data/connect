@@ -42,7 +42,7 @@ type RedisPubSub struct {
 	stats metrics.Type
 
 	conf       RedisPubSubConfig
-	channelStr field.Expression
+	channelStr *field.Expression
 
 	client  redis.UniversalClient
 	connMut sync.RWMutex

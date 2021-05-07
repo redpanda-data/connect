@@ -39,8 +39,8 @@ type Cache struct {
 	conf CacheConfig
 	mgr  types.Manager
 
-	key field.Expression
-	ttl field.Expression
+	key *field.Expression
+	ttl *field.Expression
 
 	log   log.Modular
 	stats metrics.Type

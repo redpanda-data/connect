@@ -42,7 +42,7 @@ type RedisList struct {
 
 	conf RedisListConfig
 
-	keyStr field.Expression
+	keyStr *field.Expression
 
 	client  redis.UniversalClient
 	connMut sync.RWMutex

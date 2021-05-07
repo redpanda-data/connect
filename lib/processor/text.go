@@ -238,7 +238,7 @@ func getTextOperator(opStr, arg string) (textOperator, error) {
 // Text is a processor that performs a text based operation on a payload.
 type Text struct {
 	parts    []int
-	value    field.Expression
+	value    *field.Expression
 	operator textOperator
 
 	conf  Config

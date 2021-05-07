@@ -64,7 +64,7 @@ func NewAmazonS3Config() AmazonS3Config {
 
 type s3TagPair struct {
 	key   string
-	value field.Expression
+	value *field.Expression
 }
 
 // AmazonS3 is a benthos writer.Type implementation that writes messages to an
@@ -72,11 +72,11 @@ type s3TagPair struct {
 type AmazonS3 struct {
 	conf AmazonS3Config
 
-	path            field.Expression
+	path            *field.Expression
 	tags            []s3TagPair
-	contentType     field.Expression
-	contentEncoding field.Expression
-	storageClass    field.Expression
+	contentType     *field.Expression
+	contentEncoding *field.Expression
+	storageClass    *field.Expression
 	metaFilter      *output.MetadataFilter
 
 	session  *session.Session

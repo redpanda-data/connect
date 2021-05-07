@@ -154,7 +154,7 @@ type Dedupe struct {
 	log   log.Modular
 	stats metrics.Type
 
-	key field.Expression
+	key *field.Expression
 
 	cache      types.Cache
 	hasherFunc hasherFunc

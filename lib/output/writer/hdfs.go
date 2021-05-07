@@ -47,7 +47,7 @@ func NewHDFSConfig() HDFSConfig {
 type HDFS struct {
 	conf HDFSConfig
 
-	path field.Expression
+	path *field.Expression
 
 	client *hdfs.Client
 

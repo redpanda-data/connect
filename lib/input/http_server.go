@@ -203,8 +203,8 @@ type HTTPServer struct {
 	server  *http.Server
 	timeout time.Duration
 
-	responseStatus  field.Expression
-	responseHeaders map[string]field.Expression
+	responseStatus  *field.Expression
+	responseHeaders map[string]*field.Expression
 
 	handlerWG    sync.WaitGroup
 	transactions chan types.Transaction
@@ -275,7 +275,7 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		ratelimit:       ratelimit,
 		server:          server,
 		timeout:         timeout,
-		responseHeaders: map[string]field.Expression{},
+		responseHeaders: map[string]*field.Expression{},
 		transactions:    make(chan types.Transaction),
 		closeChan:       make(chan struct{}),
 		closedChan:      make(chan struct{}),

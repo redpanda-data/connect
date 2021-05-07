@@ -638,7 +638,7 @@ func getOperator(opStr string, path []string, value json.RawMessage) (jsonOperat
 type JSON struct {
 	parts []int
 
-	value    field.Expression
+	value    *field.Expression
 	operator jsonOperator
 
 	conf  Config

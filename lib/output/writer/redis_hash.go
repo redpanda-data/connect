@@ -50,8 +50,8 @@ type RedisHash struct {
 
 	conf RedisHashConfig
 
-	keyStr field.Expression
-	fields map[string]field.Expression
+	keyStr *field.Expression
+	fields map[string]*field.Expression
 
 	client  redis.UniversalClient
 	connMut sync.RWMutex
@@ -67,7 +67,7 @@ func NewRedisHash(
 		log:    log,
 		stats:  stats,
 		conf:   conf,
-		fields: map[string]field.Expression{},
+		fields: map[string]*field.Expression{},
 	}
 
 	var err error

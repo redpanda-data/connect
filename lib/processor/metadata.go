@@ -121,8 +121,8 @@ func getMetadataOperator(opStr string) (metadataOperator, error) {
 // Metadata is a processor that performs an operation on the Metadata of a
 // message.
 type Metadata struct {
-	value field.Expression
-	key   field.Expression
+	value *field.Expression
+	key   *field.Expression
 
 	operator metadataOperator
 

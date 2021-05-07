@@ -262,7 +262,7 @@ type Archive struct {
 	conf    ArchiveConfig
 	archive archiveFunc
 
-	path field.Expression
+	path *field.Expression
 
 	mCount     metrics.StatCounter
 	mErr       metrics.StatCounter

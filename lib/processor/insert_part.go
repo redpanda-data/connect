@@ -64,7 +64,7 @@ func NewInsertPartConfig() InsertPartConfig {
 // InsertPart is a processor that inserts a new message part at a specific
 // index.
 type InsertPart struct {
-	part field.Expression
+	part *field.Expression
 
 	conf  Config
 	log   log.Modular

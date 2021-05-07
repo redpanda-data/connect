@@ -70,7 +70,7 @@ type Sleep struct {
 	log   log.Modular
 	stats metrics.Type
 
-	durationStr field.Expression
+	durationStr *field.Expression
 
 	mCount     metrics.StatCounter
 	mErr       metrics.StatCounter

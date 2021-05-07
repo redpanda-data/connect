@@ -78,7 +78,7 @@ type DynamoDB struct {
 
 	table          *string
 	ttl            time.Duration
-	strColumns     map[string]field.Expression
+	strColumns     map[string]*field.Expression
 	jsonMapColumns map[string]string
 }
 
@@ -93,7 +93,7 @@ func NewDynamoDB(
 		log:            log,
 		stats:          stats,
 		table:          aws.String(conf.Table),
-		strColumns:     map[string]field.Expression{},
+		strColumns:     map[string]*field.Expression{},
 		jsonMapColumns: map[string]string{},
 	}
 	if len(conf.StringColumns) == 0 && len(conf.JSONMapColumns) == 0 {

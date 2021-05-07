@@ -33,9 +33,7 @@ func TestStaticExpressionOptimization(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.output, func(t *testing.T) {
-			ei := NewExpression(test.input...)
-
-			e := ei.(*expression)
+			e := NewExpression(test.input...)
 			assert.Equal(t, test.output, e.static)
 			assert.Equal(t, 0, len(e.resolvers))
 		})
@@ -49,8 +47,9 @@ func TestExpressions(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		expression Expression
+		expression *Expression
 		output     string
+		numDyn     int
 		messages   []easyMsg
 		index      int
 		escaped    bool
@@ -87,6 +86,7 @@ func TestExpressions(t *testing.T) {
 					return fn
 				}()),
 			),
+			numDyn: 1,
 			output: `this`,
 		},
 		"echo function 2": {
@@ -99,6 +99,7 @@ func TestExpressions(t *testing.T) {
 				}()),
 				StaticResolver(" bar"),
 			),
+			numDyn: 1,
 			output: `foo  bar`,
 		},
 		"json function": {
@@ -109,6 +110,7 @@ func TestExpressions(t *testing.T) {
 					return fn
 				}()),
 			),
+			numDyn: 1,
 			output: `{"foo":"bar"}`,
 			messages: []easyMsg{
 				{content: `{"foo":"bar"}`},
@@ -123,6 +125,7 @@ func TestExpressions(t *testing.T) {
 					return fn
 				}()),
 			),
+			numDyn: 1,
 			output: `bar`,
 			messages: []easyMsg{
 				{content: `{"foo":"bar"}`},
@@ -134,6 +137,7 @@ func TestExpressions(t *testing.T) {
 				require.NoError(t, err)
 				return fn
 			}())),
+			numDyn: 1,
 			output: `bar`,
 			index:  1,
 			messages: []easyMsg{
@@ -147,11 +151,34 @@ func TestExpressions(t *testing.T) {
 				require.NoError(t, err)
 				return fn
 			}())),
+			numDyn:  1,
 			output:  `{\"bar\":\"baz\"}`,
 			index:   0,
 			escaped: true,
 			messages: []easyMsg{
 				{content: `{"foo":{"bar":"baz"}}`},
+			},
+		},
+		"two json functions": {
+			expression: NewExpression(
+				NewQueryResolver(func() query.Function {
+					fn, err := query.InitFunction("json", "foo")
+					require.NoError(t, err)
+					return fn
+				}()),
+				StaticResolver(" and "),
+				NewQueryResolver(func() query.Function {
+					fn, err := query.InitFunction("json", "bar")
+					require.NoError(t, err)
+					return fn
+				}()),
+			),
+			numDyn:  2,
+			output:  `foo value and bar value`,
+			index:   0,
+			escaped: true,
+			messages: []easyMsg{
+				{content: `{"foo":"foo value","bar":"bar value"}`},
 			},
 		},
 		"json_from function": {
@@ -164,6 +191,7 @@ func TestExpressions(t *testing.T) {
 					return fn
 				}()),
 			),
+			numDyn: 1,
 			output: `bar`,
 			messages: []easyMsg{
 				{content: `not json`},
@@ -180,6 +208,7 @@ func TestExpressions(t *testing.T) {
 					return fn
 				}()),
 			),
+			numDyn: 1,
 			output: `null`,
 			messages: []easyMsg{
 				{content: `not json`},
@@ -196,6 +225,7 @@ func TestExpressions(t *testing.T) {
 					return fn
 				}()),
 			),
+			numDyn: 1,
 			output: `bar`,
 			messages: []easyMsg{
 				{content: `not json`},
@@ -206,6 +236,7 @@ func TestExpressions(t *testing.T) {
 			expression: NewExpression(
 				NewQueryResolver(query.NewFieldFunction("foo")),
 			),
+			numDyn: 1,
 			output: `bar`,
 			messages: []easyMsg{
 				{content: `{"foo":"bar"}`},
@@ -220,6 +251,7 @@ func TestExpressions(t *testing.T) {
 					return fn
 				}()),
 			),
+			numDyn: 1,
 			output: `from foo`,
 			messages: []easyMsg{
 				{content: `hello world`, meta: map[string]string{
@@ -236,6 +268,7 @@ func TestExpressions(t *testing.T) {
 					return fn
 				}()),
 			),
+			numDyn: 1,
 			output: `from foo`,
 			messages: []easyMsg{
 				{content: `hello world`, meta: map[string]string{
@@ -252,6 +285,7 @@ func TestExpressions(t *testing.T) {
 					return fn
 				}()),
 			),
+			numDyn: 1,
 			output: ``,
 			messages: []easyMsg{
 				{content: `hello world`, meta: map[string]string{
@@ -267,6 +301,7 @@ func TestExpressions(t *testing.T) {
 					return fn
 				}()),
 			),
+			numDyn: 1,
 			output: `{"bar":"from bar","foo":"from foo"}`,
 			messages: []easyMsg{
 				{content: `hello world`, meta: map[string]string{
@@ -283,6 +318,7 @@ func TestExpressions(t *testing.T) {
 					return fn
 				}()),
 			),
+			numDyn: 1,
 			output: `{"bar":"from bar","foo":"from foo"}`,
 			messages: []easyMsg{
 				{content: `hello world`, meta: map[string]string{
@@ -301,6 +337,7 @@ func TestExpressions(t *testing.T) {
 					return fn
 				}()),
 			),
+			numDyn: 1,
 			output: `from bar from 1`,
 			messages: []easyMsg{
 				{content: `first`, meta: map[string]string{
@@ -338,6 +375,7 @@ func TestExpressions(t *testing.T) {
 				res = test.expression.String(test.index, msg)
 			}
 			assert.Equal(t, test.output, res)
+			assert.Equal(t, test.numDyn, test.expression.NumDynamicExpressions())
 		})
 	}
 }
@@ -349,7 +387,7 @@ func TestLegacyExpressions(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		expression Expression
+		expression *Expression
 		output     string
 		messages   []easyMsg
 		index      int

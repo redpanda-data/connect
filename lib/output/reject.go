@@ -70,7 +70,7 @@ func NewRejectConfig() RejectConfig {
 }
 
 type rejectWriter struct {
-	errExpr field.Expression
+	errExpr *field.Expression
 }
 
 func newRejectWriter(errorString string) (*rejectWriter, error) {

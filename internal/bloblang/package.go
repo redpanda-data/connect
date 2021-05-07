@@ -12,7 +12,7 @@ import (
 //
 // When a parsing error occurs the returned error will be a *parser.Error type,
 // which allows you to gain positional and structured error messages.
-func NewField(expr string) (field.Expression, error) {
+func NewField(expr string) (*field.Expression, error) {
 	e, err := parser.ParseField(expr)
 	if err != nil {
 		return e, err

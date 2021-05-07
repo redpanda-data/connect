@@ -63,7 +63,7 @@ type jetStreamOutput struct {
 	conf    output.NATSJetStreamConfig
 	tlsConf *tls.Config
 
-	subjectStr field.Expression
+	subjectStr *field.Expression
 
 	stats metrics.Type
 	log   log.Modular

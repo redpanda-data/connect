@@ -78,8 +78,8 @@ type AmazonSQS struct {
 
 	backoffCtor func() backoff.BackOff
 
-	groupID    field.Expression
-	dedupeID   field.Expression
+	groupID    *field.Expression
+	dedupeID   *field.Expression
 	metaFilter *output.MetadataFilter
 
 	closer    sync.Once

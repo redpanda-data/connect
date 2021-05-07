@@ -94,7 +94,7 @@ type CheckInterpolation struct {
 	stats metrics.Type
 
 	child Type
-	value field.Expression
+	value *field.Expression
 
 	mCount metrics.StatCounter
 	mTrue  metrics.StatCounter

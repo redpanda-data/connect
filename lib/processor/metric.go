@@ -173,7 +173,7 @@ type Metric struct {
 	log   log.Modular
 	stats metrics.Type
 
-	value  field.Expression
+	value  *field.Expression
 	labels labels
 
 	mCounter metrics.StatCounter
@@ -190,7 +190,7 @@ type Metric struct {
 type labels []label
 type label struct {
 	name  string
-	value field.Expression
+	value *field.Expression
 }
 
 func (l *label) val(index int, msg types.Message) string {

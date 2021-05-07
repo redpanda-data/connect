@@ -179,7 +179,7 @@ type SQL struct {
 	conf     SQLConfig
 	db       *sql.DB
 	dbMux    sync.RWMutex
-	args     []field.Expression
+	args     []*field.Expression
 	resCodec sqlResultCodec
 
 	// TODO: V4 Remove this
@@ -212,7 +212,7 @@ func NewSQL(
 		deprecated = true
 	}
 
-	var args []field.Expression
+	var args []*field.Expression
 	for i, v := range conf.SQL.Args {
 		expr, err := bloblang.NewField(v)
 		if err != nil {

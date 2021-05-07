@@ -128,8 +128,8 @@ type logWith interface {
 type Log struct {
 	logger  log.Modular
 	level   string
-	message field.Expression
-	fields  map[string]field.Expression
+	message *field.Expression
+	fields  map[string]*field.Expression
 	printFn func(logger log.Modular, msg string)
 
 	loggerWith    logWith
@@ -147,7 +147,7 @@ func NewLog(
 	l := &Log{
 		logger:  logger,
 		level:   conf.Log.Level,
-		fields:  map[string]field.Expression{},
+		fields:  map[string]*field.Expression{},
 		message: message,
 	}
 	if len(conf.Log.Fields) > 0 {

@@ -49,7 +49,7 @@ type NATS struct {
 
 	urls       string
 	conf       NATSConfig
-	subjectStr field.Expression
+	subjectStr *field.Expression
 	tlsConf    *tls.Config
 }
 

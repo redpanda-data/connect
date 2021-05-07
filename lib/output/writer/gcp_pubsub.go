@@ -49,7 +49,7 @@ type GCPPubSub struct {
 	publishTimeout time.Duration
 	metaFilter     *output.MetadataFilter
 
-	topicID  field.Expression
+	topicID  *field.Expression
 	topics   map[string]*pubsub.Topic
 	topicMut sync.Mutex
 
