@@ -44,9 +44,9 @@ testing your pipeline configs.`,
 			).Linter(docs.LintBloblangMapping),
 			docs.FieldCommon(
 				"interval",
-				"The time interval at which messages should be generated, expressed either as a duration string or as a cron expression. If set to an empty string messages will be generated as fast as downstream services can process them.",
+				"The time interval at which messages should be generated, expressed either as a duration string or as a cron expression. If set to an empty string messages will be generated as fast as downstream services can process them. Cron expressions can specify a timezone by prefixing the expression with `TZ=<location name>`, where the location name corresponds to a file within the IANA Time Zone database.",
 				"5s", "1m", "1h",
-				"@every 1s", "0,30 */2 * * * *", "30 3-6,20-23 * * *",
+				"@every 1s", "0,30 */2 * * * *", "TZ=Europe/London 30 3-6,20-23 * * *",
 			),
 			docs.FieldCommon("count", "An optional number of messages to generate, if set above 0 the specified number of messages is generated and then the input will shut down."),
 		},
@@ -177,7 +177,7 @@ func newBloblang(conf BloblangConfig) (*Bloblang, error) {
 
 	if len(conf.Interval) > 0 {
 		if duration, err = time.ParseDuration(conf.Interval); err != nil {
-			// interval is not duration so trying to parse as cron expression
+			// interval is not a duration so try to parse as a cron expression
 			var cerr error
 			if schedule, location, cerr = parseCronExpression(conf.Interval); cerr != nil {
 				return nil, fmt.Errorf("failed to parse interval as duration string: %v, or as cron expression: %w", err, cerr)

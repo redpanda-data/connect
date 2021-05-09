@@ -52,7 +52,7 @@ mapping: root = {"test":"message","id":uuid_v4()}
 
 ### `interval`
 
-The time interval at which messages should be generated, expressed either as a duration string or as a cron expression. If set to an empty string messages will be generated as fast as downstream services can process them.
+The time interval at which messages should be generated, expressed either as a duration string or as a cron expression. If set to an empty string messages will be generated as fast as downstream services can process them. Cron expressions can specify a timezone by prefixing the expression with `TZ=<location name>`, where the location name corresponds to a file within the IANA Time Zone database.
 
 
 Type: `string`  
@@ -71,7 +71,7 @@ interval: '@every 1s'
 
 interval: 0,30 */2 * * * *
 
-interval: 30 3-6,20-23 * * *
+interval: TZ=Europe/London 30 3-6,20-23 * * *
 ```
 
 ### `count`
