@@ -361,7 +361,9 @@ func (i *InfluxDB) GetCounterVec(path string, n []string) StatCounterVec {
 	labels = append(labels, n...)
 	return &fCounterVec{
 		f: func(l []string) StatCounter {
-			v := append(values, l...)
+			v := make([]string, 0, len(values)+len(l))
+			v = append(v, values...)
+			v = append(v, l...)
 			encodedName := encodeInfluxDBName(path, labels, v)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Counter {
 				return influxDBCounter{
@@ -397,7 +399,9 @@ func (i *InfluxDB) GetTimerVec(path string, n []string) StatTimerVec {
 	labels = append(labels, n...)
 	return &fTimerVec{
 		f: func(l []string) StatTimer {
-			v := append(values, l...)
+			v := make([]string, 0, len(values)+len(l))
+			v = append(v, values...)
+			v = append(v, l...)
 			encodedName := encodeInfluxDBName(name, labels, v)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Timer {
 				return influxDBTimer{
@@ -434,7 +438,9 @@ func (i *InfluxDB) GetGaugeVec(path string, n []string) StatGaugeVec {
 	labels = append(labels, n...)
 	return &fGaugeVec{
 		f: func(l []string) StatGauge {
-			v := append(values, l...)
+			v := make([]string, 0, len(values)+len(l))
+			v = append(v, values...)
+			v = append(v, l...)
 			encodedName := encodeInfluxDBName(name, labels, v)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Gauge {
 				return influxDBGauge{
