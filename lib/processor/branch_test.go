@@ -104,11 +104,11 @@ func TestBranchBasic(t *testing.T) {
 				),
 				msg(
 					`{"failme":true,"id":1,"name":"second"}`,
-					FailFlagKey, "response failed: result map: failed assignment (line 1): this is a branch error",
+					FailFlagKey, "result mapping failed: failed assignment (line 1): this is a branch error",
 				),
 				msg(
 					`{"failme":true,"id":2,"name":"third"}`,
-					FailFlagKey, "response failed: result map: failed assignment (line 1): this is a branch error",
+					FailFlagKey, "result mapping failed: failed assignment (line 1): this is a branch error",
 				),
 			},
 		},
@@ -135,13 +135,13 @@ func TestBranchBasic(t *testing.T) {
 				msg(
 					`{"id":0,"name":"first"}`,
 					FailFlagKey,
-					"request failed: request map: failed assignment (line 1): i dont like zero",
+					"request mapping failed: failed assignment (line 1): i dont like zero",
 				),
 				msg(`{"id":1,"name":"second","result":"SECOND"}`),
 				msg(
 					`{"id":2,"name":"third"}`,
 					FailFlagKey,
-					"response failed: result map: failed assignment (line 1): i dont like two either",
+					"result mapping failed: failed assignment (line 1): i dont like two either",
 				),
 				msg(`{"id":3,"name":"fourth"}`),
 				msg(`{"id":4,"name":"fifth","result":"FIFTH"}`),
@@ -196,7 +196,7 @@ func TestBranchBasic(t *testing.T) {
 				msg(
 					`{"id":3,"name":"fourth"}`,
 					FailFlagKey,
-					"request failed: request map: failed assignment (line 1): foo",
+					"request mapping failed: failed assignment (line 1): foo",
 				),
 				msg(
 					`{"id":4,"name":"fifth"}`,
@@ -235,7 +235,7 @@ func TestBranchBasic(t *testing.T) {
 				msg(
 					`{"id":3,"name":"fourth"}`,
 					FailFlagKey,
-					"request failed: request map: failed assignment (line 1): foo",
+					"request mapping failed: failed assignment (line 1): foo",
 				),
 				msg(
 					`{"id":4,"name":"fifth"}`,
