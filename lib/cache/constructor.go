@@ -177,17 +177,18 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 	}
 
 	if spec.Status == docs.StatusPlugin {
+		pluginNode, err := docs.GetPluginConfigNode(aliased.Type, value)
+		if err != nil {
+			return fmt.Errorf("line %v: %v", value.Line, err)
+		}
 		if spec, exists := pluginSpecs[aliased.Type]; exists && spec.confConstructor != nil {
-			confBytes, err := yaml.Marshal(aliased.Plugin)
-			if err != nil {
-				return fmt.Errorf("line %v: %v", value.Line, err)
-			}
-
 			conf := spec.confConstructor()
-			if err = yaml.Unmarshal(confBytes, conf); err != nil {
+			if err = pluginNode.Decode(conf); err != nil {
 				return fmt.Errorf("line %v: %v", value.Line, err)
 			}
 			aliased.Plugin = conf
+		} else {
+			aliased.Plugin = &pluginNode
 		}
 	} else {
 		aliased.Plugin = nil

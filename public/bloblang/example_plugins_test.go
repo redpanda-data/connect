@@ -9,8 +9,8 @@ import (
 	"github.com/Jeffail/benthos/v3/public/bloblang"
 )
 
-// ExampleBloblangPlugins demonstrates how to create Bloblang methods and
-// functions and execute them with a Bloblang mapping.
+// This example demonstrates how to create Bloblang methods and functions and
+// execute them with a Bloblang mapping.
 func Example_bloblangPlugins() {
 	if err := bloblang.RegisterMethod("cuddle", func(args ...interface{}) (bloblang.Method, error) {
 		var prefix string
@@ -89,8 +89,8 @@ root.num = add_but_always_slightly_wrong(1.2, 2.6)
 	// Output: {"new_summary":"meowquackwoof","num":3.82,"shuffled":["olaf","jen","pixie","denny","spuz"]}
 }
 
-// ExampleBloblangRestrictedEnvironment demonstrates how to create and use an
-// isolated Bloblang environment with some standard functions removed.
+// This example demonstrates how to create and use an isolated Bloblang
+// environment with some standard functions removed.
 func Example_bloblangRestrictedEnvironment() {
 	env := bloblang.NewEnvironment().WithoutFunctions("env", "file")
 

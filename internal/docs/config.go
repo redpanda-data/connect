@@ -188,6 +188,34 @@ func getInferenceCandidateFromList(t Type, defaultType string, l []string) (stri
 	return inferred, inferredSpec, nil
 }
 
+// GetPluginConfigNode extracts a plugin configuration node from a component
+// config. This exists because there are two styles of plugin config, the old
+// style (within `plugin`):
+//
+// type: foo
+// plugin:
+//   bar: baz
+//
+// And the new style:
+//
+// foo:
+//   bar: baz
+//
+func GetPluginConfigNode(name string, value *yaml.Node) (yaml.Node, error) {
+	for i := 0; i < len(value.Content)-1; i += 2 {
+		if value.Content[i].Value == name {
+			return *value.Content[i+1], nil
+		}
+	}
+	pluginStruct := struct {
+		Plugin yaml.Node `yaml:"plugin"`
+	}{}
+	if err := value.Decode(&pluginStruct); err != nil {
+		return yaml.Node{}, err
+	}
+	return pluginStruct.Plugin, nil
+}
+
 // TODO: V4 Remove this.
 func sanitiseConditionConfig(raw interface{}, removeDeprecated bool) error {
 	// This is a nasty hack until Benthos v4.
@@ -239,6 +267,8 @@ func sanitiseConditionConfigNode(node *yaml.Node) error {
 
 // SanitiseComponentConfig reduces a raw component configuration into only the
 // fields for the component name configured.
+//
+// TODO: V4 Remove this
 func SanitiseComponentConfig(componentType Type, raw interface{}, filter FieldFilter) error {
 	if componentType == "condition" {
 		return sanitiseConditionConfig(raw, false)
@@ -334,6 +364,10 @@ func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 
 	nameFound := false
 	for i := 0; i < len(node.Content)-1; i += 2 {
+		if node.Content[i].Value == "plugin" && cSpec.Status == StatusPlugin {
+			node.Content[i].Value = name
+		}
+
 		if node.Content[i].Value != name {
 			continue
 		}
@@ -413,12 +447,10 @@ func LintNode(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 		return lints
 	}
 
-	lintTarget := name
-	if cSpec.Status == StatusPlugin {
-		lintTarget = "plugin"
-	}
+	nameFound := false
 	for i := 0; i < len(node.Content)-1; i += 2 {
-		if node.Content[i].Value == lintTarget {
+		if node.Content[i].Value == name {
+			nameFound = true
 			lints = append(lints, cSpec.Config.lintNode(ctx, node.Content[i+1])...)
 			break
 		}
@@ -428,6 +460,13 @@ func LintNode(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == name || node.Content[i].Value == "type" {
 			continue
+		}
+		if node.Content[i].Value == "plugin" {
+			if nameFound || cSpec.Status != StatusPlugin {
+				lints = append(lints, NewLintError(node.Content[i].Line, "plugin object is ineffective"))
+			} else {
+				lints = append(lints, cSpec.Config.lintNode(ctx, node.Content[i+1])...)
+			}
 		}
 		spec, exists := reservedFields[node.Content[i].Value]
 		if exists {
