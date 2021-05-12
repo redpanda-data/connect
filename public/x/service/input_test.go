@@ -1,0 +1,109 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/response"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/assert"
+)
+
+type fnInput struct {
+	connect func() error
+	read    func() (*Message, AckFunc, error)
+	closed  bool
+}
+
+func (f *fnInput) Connect(ctx context.Context) error {
+	return f.connect()
+}
+
+func (f *fnInput) Read(ctx context.Context) (*Message, AckFunc, error) {
+	return f.read()
+}
+
+func (f *fnInput) Close(ctx context.Context) error {
+	f.closed = true
+	return nil
+}
+
+func TestInputAirGapShutdown(t *testing.T) {
+	i := &fnInput{}
+	agi := newAirGapReader(i)
+
+	err := agi.WaitForClose(time.Millisecond * 5)
+	assert.EqualError(t, err, "action timed out")
+	assert.False(t, i.closed)
+
+	agi.CloseAsync()
+	err = agi.WaitForClose(time.Millisecond * 5)
+	assert.NoError(t, err)
+	assert.True(t, i.closed)
+}
+
+func TestInputAirGapSad(t *testing.T) {
+	i := &fnInput{
+		connect: func() error {
+			return errors.New("bad connect")
+		},
+		read: func() (*Message, AckFunc, error) {
+			return nil, nil, errors.New("bad read")
+		},
+	}
+	agi := newAirGapReader(i)
+
+	err := agi.ConnectWithContext(context.Background())
+	assert.EqualError(t, err, "bad connect")
+
+	_, _, err = agi.ReadWithContext(context.Background())
+	assert.EqualError(t, err, "bad read")
+
+	i.read = func() (*Message, AckFunc, error) {
+		return nil, nil, ErrNotConnected
+	}
+
+	_, _, err = agi.ReadWithContext(context.Background())
+	assert.Equal(t, types.ErrNotConnected, err)
+
+	i.read = func() (*Message, AckFunc, error) {
+		return nil, nil, ErrEndOfInput
+	}
+
+	_, _, err = agi.ReadWithContext(context.Background())
+	assert.Equal(t, types.ErrTypeClosed, err)
+}
+
+func TestInputAirGapHappy(t *testing.T) {
+	var ackErr error
+	ackFn := func(ctx context.Context, err error) error {
+		ackErr = err
+		return nil
+	}
+	i := &fnInput{
+		connect: func() error {
+			return nil
+		},
+		read: func() (*Message, AckFunc, error) {
+			m := &Message{
+				part: message.NewPart([]byte("hello world")),
+			}
+			return m, ackFn, nil
+		},
+	}
+	agi := newAirGapReader(i)
+
+	err := agi.ConnectWithContext(context.Background())
+	assert.NoError(t, err)
+
+	outMsg, outAckFn, err := agi.ReadWithContext(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, 1, outMsg.Len())
+	assert.Equal(t, "hello world", string(outMsg.Get(0).Get()))
+
+	assert.NoError(t, outAckFn(context.Background(), response.NewError(errors.New("foobar"))))
+	assert.EqualError(t, ackErr, "foobar")
+}

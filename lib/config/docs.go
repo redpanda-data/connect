@@ -5,23 +5,16 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/api"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/stream"
 )
 
 // Spec returns a docs.FieldSpec for an entire Benthos configuration.
 func Spec() docs.FieldSpecs {
 	fields := docs.FieldSpecs{
 		docs.FieldCommon("http", "Configures the service-wide HTTP server.").WithChildren(api.Spec()...),
-		docs.FieldCommon("input", "An input to source messages from.").HasType(docs.FieldInput),
-		docs.FieldCommon("buffer", "An optional buffer to store messages during transit.").HasType(docs.FieldBuffer),
-		docs.FieldCommon("pipeline", "Describes optional processing pipelines used for mutating messages.").WithChildren(
-			docs.FieldCommon("threads", "The number of threads to execute processing pipelines across."),
-			docs.FieldCommon("processors", "A list of processors to apply to messages.").Array().HasType(docs.FieldProcessor),
-		),
-		docs.FieldCommon("output", "An output to sink messages to.").HasType(docs.FieldOutput),
 	}
-
+	fields = append(fields, stream.Spec()...)
 	fields = append(fields, manager.Spec()...)
-
 	fields = append(fields, docs.FieldSpecs{
 		docs.FieldCommon("logger", "Describes how operational logs should be emitted.").WithChildren(log.Spec()...),
 		docs.FieldCommon("metrics", "A mechanism for exporting metrics.").HasType(docs.FieldMetrics),
