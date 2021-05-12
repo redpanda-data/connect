@@ -105,6 +105,10 @@ pipeline:
               key: '${! json("message.document_id") }'
         result_map: 'root.message.document = this'
 
+        # NOTE: If the data stored in the cache is not valid JSON then use
+        # something like this instead:
+        # result_map: 'root.message.document = content().string()'
+
 cache_resources:
   - label: foocache
     memcached:

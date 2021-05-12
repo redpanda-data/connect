@@ -372,7 +372,7 @@ func (b *Branch) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		})
 		// And override with mapping specific errors where appropriate.
 		for _, e := range mapErrs {
-			FlagErr(result.Get(e.index), fmt.Errorf("request failed: %w", e.err))
+			FlagErr(result.Get(e.index), e.err)
 		}
 		msgs := [1]types.Message{result}
 		return msgs[:], nil
@@ -380,7 +380,8 @@ func (b *Branch) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 
 	result := msg.DeepCopy()
 	for _, e := range mapErrs {
-		FlagErr(result.Get(e.index), fmt.Errorf("request failed: %w", e.err))
+		FlagErr(result.Get(e.index), e.err)
+		b.log.Errorf("Branch error: %v", e.err)
 	}
 
 	if mapErrs, err = b.overlayResult(result, resultParts); err != nil {
@@ -392,7 +393,8 @@ func (b *Branch) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		return msgs[:], nil
 	}
 	for _, e := range mapErrs {
-		FlagErr(result.Get(e.index), fmt.Errorf("response failed: %w", e.err))
+		FlagErr(result.Get(e.index), e.err)
+		b.log.Errorf("Branch error: %v", e.err)
 	}
 
 	return []types.Message{result}, nil
@@ -439,7 +441,7 @@ func (b *Branch) createResult(parts []types.Part, referenceMsg types.Message) ([
 
 				// Skip if message part fails mapping.
 				failed = append(failed, i)
-				mapErrs = append(mapErrs, newBranchMapError(i, fmt.Errorf("request map: %w", err)))
+				mapErrs = append(mapErrs, newBranchMapError(i, fmt.Errorf("request mapping failed: %w", err)))
 			} else if newPart == nil {
 				// Skip if the message part is deleted.
 				skipped = append(skipped, i)
@@ -528,7 +530,7 @@ func (b *Branch) overlayResult(payload types.Message, results []types.Part) ([]b
 				b.mErrRes.Incr(1)
 				b.log.Debugf("Failed to map result '%v': %v\n", i, err)
 
-				failed = append(failed, newBranchMapError(i, fmt.Errorf("result map: %w", err)))
+				failed = append(failed, newBranchMapError(i, fmt.Errorf("result mapping failed: %w", err)))
 				continue
 			}
 
