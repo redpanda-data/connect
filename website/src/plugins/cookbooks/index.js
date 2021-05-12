@@ -137,7 +137,7 @@ function pluginContentCookbook(context, opts) {
     configureWebpack(
       _config,
       isServer,
-      {getBabelLoader, getCacheLoader},
+      {getJSLoader},
     ) {
       const {rehypePlugins, remarkPlugins, truncateMarker} = options;
       return {
@@ -152,8 +152,7 @@ function pluginContentCookbook(context, opts) {
               test: /(\.mdx?)$/,
               include: [contentPath],
               use: [
-                getCacheLoader(isServer),
-                getBabelLoader(isServer),
+                getJSLoader({isServer}),
                 {
                   loader: require.resolve('@docusaurus/mdx-loader'),
                   options: {
