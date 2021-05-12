@@ -61,17 +61,13 @@ type FunctionContext struct {
 	// Reference new message being mapped
 	NewMsg types.Part
 
-	valueFn      func() *interface{}
-	defaultValue *defaultContextValue
-	namedValue   *namedContextValue
+	valueFn    func() *interface{}
+	value      *interface{}
+	nextValue  *interface{}
+	namedValue *namedContextValue
 
 	// Used to track how many maps we've entered.
 	stackCount int
-}
-
-type defaultContextValue struct {
-	value interface{}
-	next  *defaultContextValue
 }
 
 type namedContextValue struct {
@@ -114,8 +110,8 @@ func (ctx FunctionContext) WithNamedValue(name string, value interface{}) Functi
 // Value returns a lazily evaluated context value. A context value is not always
 // available and can therefore be nil.
 func (ctx FunctionContext) Value() *interface{} {
-	if ctx.defaultValue != nil {
-		return &ctx.defaultValue.value
+	if ctx.value != nil {
+		return ctx.value
 	}
 	if ctx.valueFn == nil {
 		return nil
@@ -131,11 +127,9 @@ func (ctx FunctionContext) WithValueFunc(fn func() *interface{}) FunctionContext
 
 // WithValue returns a function context with a new value.
 func (ctx FunctionContext) WithValue(value interface{}) FunctionContext {
-	nextCtx := ctx
-	nextCtx.defaultValue = &defaultContextValue{
-		value, ctx.defaultValue,
-	}
-	return nextCtx
+	ctx.nextValue = ctx.value
+	ctx.value = &value
+	return ctx
 }
 
 // PopValue returns the current default value, and a function context with the
@@ -146,12 +140,14 @@ func (ctx FunctionContext) WithValue(value interface{}) FunctionContext {
 func (ctx FunctionContext) PopValue() (*interface{}, FunctionContext) {
 	retValue := ctx.Value()
 
-	nextCtx := ctx
-	if ctx.defaultValue != nil {
-		nextCtx.defaultValue = ctx.defaultValue.next
+	if ctx.nextValue != nil {
+		ctx.value = ctx.nextValue
+		ctx.nextValue = nil
+	} else {
+		ctx.value = nil
 	}
 
-	return retValue, nextCtx
+	return retValue, ctx
 }
 
 //------------------------------------------------------------------------------

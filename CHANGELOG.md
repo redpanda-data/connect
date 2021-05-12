@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- CLI flag `max-token-length` added to the `blobl` subcommand.
+
 ### Changed
 
 - Go Plugins API: The Bloblang `ArgSpec` now returns a public error type `ArgError`.

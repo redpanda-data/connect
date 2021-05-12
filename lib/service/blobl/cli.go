@@ -56,6 +56,11 @@ func CliCommand() *cli.Command {
 				Aliases: []string{"f"},
 				Usage:   "execute a mapping from a file.",
 			},
+			&cli.IntFlag{
+				Name:  "max-token-length",
+				Usage: "Set the buffer size for document lines.",
+				Value: bufio.MaxScanTokenSize,
+			},
 		},
 		Action: run,
 		Subcommands: []*cli.Command{
@@ -238,6 +243,7 @@ func run(c *cli.Context) error {
 		defer close(inputsChan)
 
 		scanner := bufio.NewScanner(os.Stdin)
+		scanner.Buffer(nil, c.Int("max-token-length"))
 		for scanner.Scan() {
 			input := make([]byte, len(scanner.Bytes()))
 			copy(input, scanner.Bytes())
