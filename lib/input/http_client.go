@@ -10,13 +10,13 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/http"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 )
 
 func httpClientSpecs() docs.FieldSpecs {
@@ -33,7 +33,7 @@ func httpClientSpecs() docs.FieldSpecs {
 		docs.FieldDeprecated("delimiter"),
 	}
 
-	specs := append(client.FieldSpecs(),
+	specs := append(http.ClientFieldSpecs(),
 		docs.FieldCommon("payload", "An optional payload to deliver for each request."),
 		docs.FieldAdvanced("drop_empty_bodies", "Whether empty payloads received from the target server should be dropped."),
 		docs.FieldCommon(
@@ -54,10 +54,41 @@ interpolations described [here](/docs/configuration/interpolation#bloblang-queri
 
 ### Streaming
 
-If you enable streaming then Benthos will consume the body of the response as a continuous stream of data, breaking messages out following a chosen codec. This allows you to consume APIs that provide long lived streamed data feeds (such as Twitter).`,
+If you enable streaming then Benthos will consume the body of the response as a continuous stream of data, breaking messages out following a chosen codec. This allows you to consume APIs that provide long lived streamed data feeds (such as Twitter).
+
+### Pagination
+
+In order to support convenient pagination, when a request depends on tokens extracted from the previous message, this input supports interpolation functions in the ` + "`url` and `headers`" + ` fields where data from the previous successfully consumed message (if there was one) can be referenced.`,
 		FieldSpecs: httpClientSpecs(),
 		Categories: []Category{
 			CategoryNetwork,
+		},
+		Examples: []docs.AnnotatedExample{
+			{
+				Title:   "Basic Pagination",
+				Summary: "Interpolation functions within the `url` and `headers` fields can be used to reference the previously consumed message, which allows simple pagination.",
+				Config: `
+input:
+  http_client:
+    url: |
+      https://api.twitter.com/2/tweets/search/recent?query=benthos.dev&start_time=${! (
+        (timestamp_unix()-300).format_timestamp("2006-01-02T15:04:05Z","UTC").escape_url_query()
+      ) }${! ("&since_id="+this.data.index(-1).id.not_null()) | "" }
+    verb: GET
+    rate_limit: twitter_searches
+    oauth2:
+      enabled: true
+      token_url: https://api.twitter.com/oauth2/token
+      client_key: "${TWITTER_KEY}"
+      client_secret: "${TWITTER_SECRET}"
+
+rate_limit_resources:
+  - label: twitter_searches
+    local:
+      count: 1
+      interval: 30s
+`,
+			},
 		},
 	}
 }
@@ -77,19 +108,19 @@ type StreamConfig struct {
 
 // HTTPClientConfig contains configuration for the HTTPClient output type.
 type HTTPClientConfig struct {
-	client.Config   `json:",inline" yaml:",inline"`
-	Payload         string       `json:"payload" yaml:"payload"`
-	DropEmptyBodies bool         `json:"drop_empty_bodies" yaml:"drop_empty_bodies"`
-	Stream          StreamConfig `json:"stream" yaml:"stream"`
+	http.ClientConfig `json:",inline" yaml:",inline"`
+	Payload           string       `json:"payload" yaml:"payload"`
+	DropEmptyBodies   bool         `json:"drop_empty_bodies" yaml:"drop_empty_bodies"`
+	Stream            StreamConfig `json:"stream" yaml:"stream"`
 }
 
 // NewHTTPClientConfig creates a new HTTPClientConfig with default values.
 func NewHTTPClientConfig() HTTPClientConfig {
-	cConf := client.NewConfig()
+	cConf := http.NewClientConfig()
 	cConf.Verb = "GET"
 	cConf.URL = "http://localhost:4195/get"
 	return HTTPClientConfig{
-		Config:          cConf,
+		ClientConfig:    cConf,
 		Payload:         "",
 		DropEmptyBodies: true,
 		Stream: StreamConfig{
@@ -110,8 +141,9 @@ func NewHTTPClientConfig() HTTPClientConfig {
 type HTTPClient struct {
 	conf HTTPClientConfig
 
-	client  *client.Type
-	payload types.Message
+	client       *http.Client
+	payload      types.Message
+	prevResponse types.Message
 
 	codecCtor codec.ReaderConstructor
 
@@ -155,20 +187,21 @@ func newHTTPClient(conf HTTPClientConfig, mgr types.Manager, log log.Modular, st
 	}
 
 	cMgr, cLog, cStats := interop.LabelChild("client", mgr, log, stats)
-	client, err := client.New(
-		conf.Config,
-		client.OptSetManager(cMgr),
-		client.OptSetLogger(cLog),
-		client.OptSetStats(cStats),
+	client, err := http.NewClient(
+		conf.ClientConfig,
+		http.OptSetManager(cMgr),
+		http.OptSetLogger(cLog),
+		http.OptSetStats(cStats),
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	return &HTTPClient{
-		conf:    conf,
-		payload: payload,
-		client:  client,
+		conf:         conf,
+		payload:      payload,
+		prevResponse: message.New(nil),
+		client:       client,
 
 		codecCtor: codecCtor,
 	}, nil
@@ -189,7 +222,7 @@ func (h *HTTPClient) ConnectWithContext(ctx context.Context) (err error) {
 		return nil
 	}
 
-	res, err := h.client.DoWithContext(ctx, h.payload)
+	res, err := h.client.SendToResponse(ctx, h.payload, h.prevResponse)
 	if err != nil {
 		if strings.Contains(err.Error(), "(Client.Timeout exceeded while awaiting headers)") {
 			err = types.ErrTimeout
@@ -259,16 +292,11 @@ func (h *HTTPClient) readStreamed(ctx context.Context) (types.Message, reader.As
 }
 
 func (h *HTTPClient) readNotStreamed(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
-	res, err := h.client.Do(h.payload)
+	msg, err := h.client.Send(ctx, h.payload, h.prevResponse)
 	if err != nil {
 		if strings.Contains(err.Error(), "(Client.Timeout exceeded while awaiting headers)") {
 			err = types.ErrTimeout
 		}
-		return nil, nil, err
-	}
-
-	var msg types.Message
-	if msg, err = h.client.ParseResponse(res); err != nil {
 		return nil, nil, err
 	}
 
@@ -279,14 +307,15 @@ func (h *HTTPClient) readNotStreamed(ctx context.Context) (types.Message, reader
 		return nil, nil, types.ErrTimeout
 	}
 
-	return msg, func(context.Context, types.Response) error {
+	h.prevResponse = msg
+	return msg.Copy(), func(context.Context, types.Response) error {
 		return nil
 	}, nil
 }
 
 // CloseAsync shuts down the HTTPClient input and stops processing requests.
 func (h *HTTPClient) CloseAsync() {
-	h.client.CloseAsync()
+	h.client.Close(context.Background())
 	go func() {
 		h.codecMut.Lock()
 		if h.codec != nil {

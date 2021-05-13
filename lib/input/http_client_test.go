@@ -2,6 +2,7 @@ package input
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
@@ -17,6 +18,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHTTPClientGET(t *testing.T) {
@@ -84,6 +87,58 @@ func TestHTTPClientGET(t *testing.T) {
 
 	if exp, act := uint32(len(inputs)), atomic.LoadUint32(&reqCount); exp != act && exp+1 != act {
 		t.Errorf("Wrong count of HTTP attempts: %v != %v", act, exp)
+	}
+}
+
+func TestHTTPClientPagination(t *testing.T) {
+	var paths []string
+	var pathsLock sync.Mutex
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "hello%v", len(paths))
+		pathsLock.Lock()
+		paths = append(paths, r.URL.Path)
+		pathsLock.Unlock()
+	}))
+	defer ts.Close()
+
+	conf := NewConfig()
+	conf.HTTPClient.URL = ts.URL + "/${!content()}"
+	conf.HTTPClient.Retry = "1ms"
+
+	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	var tr types.Transaction
+	var open bool
+
+	for i := 0; i < 10; i++ {
+		exp := fmt.Sprintf("hello%v", i)
+		select {
+		case tr, open = <-h.TransactionChan():
+			require.True(t, open)
+			require.Equal(t, 1, tr.Payload.Len())
+			assert.Equal(t, exp, string(tr.Payload.Get(0).Get()))
+		case <-time.After(time.Second):
+			t.Fatal("Action timed out")
+		}
+		select {
+		case tr.ResponseChan <- response.NewAck():
+		case <-time.After(time.Second):
+			t.Fatal("Action timed out")
+		}
+	}
+
+	h.CloseAsync()
+	assert.NoError(t, h.WaitForClose(time.Second))
+
+	pathsLock.Lock()
+	defer pathsLock.Unlock()
+	for i, url := range paths {
+		expURL := "/"
+		if i > 0 {
+			expURL = fmt.Sprintf("/hello%v", i-1)
+		}
+		assert.Equal(t, expURL, url)
 	}
 }
 

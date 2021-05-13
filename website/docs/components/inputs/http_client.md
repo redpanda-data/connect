@@ -109,6 +109,45 @@ interpolations described [here](/docs/configuration/interpolation#bloblang-queri
 
 If you enable streaming then Benthos will consume the body of the response as a continuous stream of data, breaking messages out following a chosen codec. This allows you to consume APIs that provide long lived streamed data feeds (such as Twitter).
 
+### Pagination
+
+In order to support convenient pagination, when a request depends on tokens extracted from the previous message, this input supports interpolation functions in the `url` and `headers` fields where data from the previous successfully consumed message (if there was one) can be referenced.
+
+## Examples
+
+<Tabs defaultValue="Basic Pagination" values={[
+{ label: 'Basic Pagination', value: 'Basic Pagination', },
+]}>
+
+<TabItem value="Basic Pagination">
+
+Interpolation functions within the `url` and `headers` fields can be used to reference the previously consumed message, which allows simple pagination.
+
+```yaml
+input:
+  http_client:
+    url: |
+      https://api.twitter.com/2/tweets/search/recent?query=benthos.dev&start_time=${! (
+        (timestamp_unix()-300).format_timestamp("2006-01-02T15:04:05Z","UTC").escape_url_query()
+      ) }${! ("&since_id="+this.data.index(-1).id.not_null()) | "" }
+    verb: GET
+    rate_limit: twitter_searches
+    oauth2:
+      enabled: true
+      token_url: https://api.twitter.com/oauth2/token
+      client_key: "${TWITTER_KEY}"
+      client_secret: "${TWITTER_SECRET}"
+
+rate_limit_resources:
+  - label: twitter_searches
+    local:
+      count: 1
+      interval: 30s
+```
+
+</TabItem>
+</Tabs>
+
 ## Fields
 
 ### `url`

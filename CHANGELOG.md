@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - CLI flag `max-token-length` added to the `blobl` subcommand.
 - Go Plugins API: Plugin components can now be configured seamlessly like native components, meaning the namespace `plugin` is no longer required and configuration fields can be placed within the namespace of the plugin itself. Note that the old style (within `plugin`) is still supported.
+- The `http_client` input fields `url` and `headers` now support interpolation functions that access metadata and contents of the last received message.
 
 ### Fixed
 

@@ -1,6 +1,7 @@
 package throttle
 
 import (
+	"context"
 	"sync/atomic"
 	"time"
 )
@@ -89,12 +90,22 @@ func OptCloseChan(c <-chan struct{}) func(*Type) {
 // block until either the throttle period is over and the retry may be attempted
 // (returning true) or that the close channel has closed (returning false).
 func (t *Type) Retry() bool {
+	return t.RetryWithContext(context.Background())
+}
+
+// RetryWithContext indicates that a retry is about to occur and, if
+// appropriate, will block until either the throttle period is over and the
+// retry may be attempted (returning true) or that the close channel has closed
+// (returning false), or that the context was cancelled (false).
+func (t *Type) RetryWithContext(ctx context.Context) bool {
 	if rets := atomic.AddInt64(&t.consecutiveRetries, 1); rets <= t.unthrottledRetries {
 		return true
 	}
 	select {
 	case <-time.After(time.Duration(atomic.LoadInt64(&t.throttlePeriod))):
 	case <-t.closeChan:
+		return false
+	case <-ctx.Done():
 		return false
 	}
 	return true
@@ -103,6 +114,12 @@ func (t *Type) Retry() bool {
 // ExponentialRetry is the same as Retry except also sets the throttle period to
 // exponentially increase after each consecutive retry.
 func (t *Type) ExponentialRetry() bool {
+	return t.ExponentialRetryWithContext(context.Background())
+}
+
+// ExponentialRetryWithContext is the same as RetryWithContext except also sets
+// the throttle period to exponentially increase after each consecutive retry.
+func (t *Type) ExponentialRetryWithContext(ctx context.Context) bool {
 	if atomic.LoadInt64(&t.consecutiveRetries) > t.unthrottledRetries {
 		if throtPrd := atomic.LoadInt64(&t.throttlePeriod); throtPrd < t.maxExponentialPeriod {
 			throtPrd *= 2
@@ -112,7 +129,7 @@ func (t *Type) ExponentialRetry() bool {
 			atomic.StoreInt64(&t.throttlePeriod, throtPrd)
 		}
 	}
-	return t.Retry()
+	return t.RetryWithContext(ctx)
 }
 
 // Reset clears the count of consecutive retries and resets the exponential
