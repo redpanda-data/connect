@@ -22,57 +22,11 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
+	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
-	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/opentracing/opentracing-go"
 	olog "github.com/opentracing/opentracing-go/log"
 )
-
-// ClientConfig is a configuration struct for an HTTP client.
-type ClientConfig struct {
-	URL                 string            `json:"url" yaml:"url"`
-	Verb                string            `json:"verb" yaml:"verb"`
-	Headers             map[string]string `json:"headers" yaml:"headers"`
-	CopyResponseHeaders bool              `json:"copy_response_headers" yaml:"copy_response_headers"`
-	RateLimit           string            `json:"rate_limit" yaml:"rate_limit"`
-	Timeout             string            `json:"timeout" yaml:"timeout"`
-	Retry               string            `json:"retry_period" yaml:"retry_period"`
-	MaxBackoff          string            `json:"max_retry_backoff" yaml:"max_retry_backoff"`
-	NumRetries          int               `json:"retries" yaml:"retries"`
-	BackoffOn           []int             `json:"backoff_on" yaml:"backoff_on"`
-	DropOn              []int             `json:"drop_on" yaml:"drop_on"`
-	SuccessfulOn        []int             `json:"successful_on" yaml:"successful_on"`
-	TLS                 tls.Config        `json:"tls" yaml:"tls"`
-	ProxyURL            string            `json:"proxy_url" yaml:"proxy_url"`
-	auth.Config         `json:",inline" yaml:",inline"`
-	OAuth2              auth.OAuth2Config `json:"oauth2" yaml:"oauth2"`
-}
-
-// NewClientConfig creates a new Config with default values.
-func NewClientConfig() ClientConfig {
-	return ClientConfig{
-		URL:  "http://localhost:4195/post",
-		Verb: "POST",
-		Headers: map[string]string{
-			"Content-Type": "application/octet-stream",
-		},
-		CopyResponseHeaders: false,
-		RateLimit:           "",
-		Timeout:             "5s",
-		Retry:               "1s",
-		MaxBackoff:          "300s",
-		NumRetries:          3,
-		BackoffOn:           []int{429},
-		DropOn:              []int{},
-		SuccessfulOn:        []int{},
-		TLS:                 tls.NewConfig(),
-		Config:              auth.NewConfig(),
-		OAuth2:              auth.NewOAuth2Config(),
-	}
-}
-
-//------------------------------------------------------------------------------
 
 // Client is a component able to send and receive Benthos messages over HTTP.
 type Client struct {
@@ -86,7 +40,7 @@ type Client struct {
 	headers map[string]*field.Expression
 	host    *field.Expression
 
-	conf          ClientConfig
+	conf          client.Config
 	retryThrottle *throttle.Type
 	rateLimit     types.RateLimit
 
@@ -113,7 +67,7 @@ type Client struct {
 }
 
 // NewClient creates a new http client that sends and receives Benthos messages.
-func NewClient(conf ClientConfig, opts ...func(*Client)) (*Client, error) {
+func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 	urlStr, err := bloblang.NewField(conf.URL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse URL expression: %v", err)

@@ -111,7 +111,7 @@ If you enable streaming then Benthos will consume the body of the response as a 
 
 ### Pagination
 
-In order to support convenient pagination, when a request depends on tokens extracted from the previous message, this input supports interpolation functions in the `url` and `headers` fields where data from the previous successfully consumed message (if there was one) can be referenced.
+This input supports interpolation functions in the `url` and `headers` fields where data from the previous successfully consumed message (if there was one) can be referenced. This can be used in order to support basic levels of pagination. However, in cases where pagination depends on logic it is recommended that you use an [`http` processor](/docs/component/processors/http) instead, often combined with a [`generate` input](/docs/components/inputs/generate) in order to schedule the processor.
 
 ## Examples
 
@@ -126,20 +126,20 @@ Interpolation functions within the `url` and `headers` fields can be used to ref
 ```yaml
 input:
   http_client:
-    url: |
-      https://api.twitter.com/2/tweets/search/recent?query=benthos.dev&start_time=${! (
+    url: >-
+      https://api.example.com/search?query=allmyfoos&start_time=${! (
         (timestamp_unix()-300).format_timestamp("2006-01-02T15:04:05Z","UTC").escape_url_query()
-      ) }${! ("&since_id="+this.data.index(-1).id.not_null()) | "" }
+      ) }${! ("&next_token="+this.meta.next_token.not_null()) | "" }
     verb: GET
-    rate_limit: twitter_searches
+    rate_limit: foo_searches
     oauth2:
       enabled: true
-      token_url: https://api.twitter.com/oauth2/token
-      client_key: "${TWITTER_KEY}"
-      client_secret: "${TWITTER_SECRET}"
+      token_url: https://api.example.com/oauth2/token
+      client_key: "${EXAMPLE_KEY}"
+      client_secret: "${EXAMPLE_SECRET}"
 
 rate_limit_resources:
-  - label: twitter_searches
+  - label: foo_searches
     local:
       count: 1
       interval: 30s

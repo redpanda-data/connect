@@ -17,6 +17,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 )
 
 func httpClientSpecs() docs.FieldSpecs {
@@ -33,7 +34,7 @@ func httpClientSpecs() docs.FieldSpecs {
 		docs.FieldDeprecated("delimiter"),
 	}
 
-	specs := append(http.ClientFieldSpecs(),
+	specs := append(client.FieldSpecs(),
 		docs.FieldCommon("payload", "An optional payload to deliver for each request."),
 		docs.FieldAdvanced("drop_empty_bodies", "Whether empty payloads received from the target server should be dropped."),
 		docs.FieldCommon(
@@ -58,7 +59,7 @@ If you enable streaming then Benthos will consume the body of the response as a 
 
 ### Pagination
 
-In order to support convenient pagination, when a request depends on tokens extracted from the previous message, this input supports interpolation functions in the ` + "`url` and `headers`" + ` fields where data from the previous successfully consumed message (if there was one) can be referenced.`,
+This input supports interpolation functions in the ` + "`url` and `headers`" + ` fields where data from the previous successfully consumed message (if there was one) can be referenced. This can be used in order to support basic levels of pagination. However, in cases where pagination depends on logic it is recommended that you use an ` + "[`http` processor](/docs/component/processors/http) instead, often combined with a [`generate` input](/docs/components/inputs/generate)" + ` in order to schedule the processor.`,
 		FieldSpecs: httpClientSpecs(),
 		Categories: []Category{
 			CategoryNetwork,
@@ -70,20 +71,20 @@ In order to support convenient pagination, when a request depends on tokens extr
 				Config: `
 input:
   http_client:
-    url: |
-      https://api.twitter.com/2/tweets/search/recent?query=benthos.dev&start_time=${! (
+    url: >-
+      https://api.example.com/search?query=allmyfoos&start_time=${! (
         (timestamp_unix()-300).format_timestamp("2006-01-02T15:04:05Z","UTC").escape_url_query()
-      ) }${! ("&since_id="+this.data.index(-1).id.not_null()) | "" }
+      ) }${! ("&next_token="+this.meta.next_token.not_null()) | "" }
     verb: GET
-    rate_limit: twitter_searches
+    rate_limit: foo_searches
     oauth2:
       enabled: true
-      token_url: https://api.twitter.com/oauth2/token
-      client_key: "${TWITTER_KEY}"
-      client_secret: "${TWITTER_SECRET}"
+      token_url: https://api.example.com/oauth2/token
+      client_key: "${EXAMPLE_KEY}"
+      client_secret: "${EXAMPLE_SECRET}"
 
 rate_limit_resources:
-  - label: twitter_searches
+  - label: foo_searches
     local:
       count: 1
       interval: 30s
@@ -108,19 +109,19 @@ type StreamConfig struct {
 
 // HTTPClientConfig contains configuration for the HTTPClient output type.
 type HTTPClientConfig struct {
-	http.ClientConfig `json:",inline" yaml:",inline"`
-	Payload           string       `json:"payload" yaml:"payload"`
-	DropEmptyBodies   bool         `json:"drop_empty_bodies" yaml:"drop_empty_bodies"`
-	Stream            StreamConfig `json:"stream" yaml:"stream"`
+	client.Config   `json:",inline" yaml:",inline"`
+	Payload         string       `json:"payload" yaml:"payload"`
+	DropEmptyBodies bool         `json:"drop_empty_bodies" yaml:"drop_empty_bodies"`
+	Stream          StreamConfig `json:"stream" yaml:"stream"`
 }
 
 // NewHTTPClientConfig creates a new HTTPClientConfig with default values.
 func NewHTTPClientConfig() HTTPClientConfig {
-	cConf := http.NewClientConfig()
+	cConf := client.NewConfig()
 	cConf.Verb = "GET"
 	cConf.URL = "http://localhost:4195/get"
 	return HTTPClientConfig{
-		ClientConfig:    cConf,
+		Config:          cConf,
 		Payload:         "",
 		DropEmptyBodies: true,
 		Stream: StreamConfig{
@@ -188,7 +189,7 @@ func newHTTPClient(conf HTTPClientConfig, mgr types.Manager, log log.Modular, st
 
 	cMgr, cLog, cStats := interop.LabelChild("client", mgr, log, stats)
 	client, err := http.NewClient(
-		conf.ClientConfig,
+		conf.Config,
 		http.OptSetManager(cMgr),
 		http.OptSetLogger(cLog),
 		http.OptSetStats(cStats),
@@ -229,6 +230,18 @@ func (h *HTTPClient) ConnectWithContext(ctx context.Context) (err error) {
 		}
 		return err
 	}
+
+	p := message.NewPart(nil)
+	if h.conf.CopyResponseHeaders {
+		meta := p.Metadata()
+		for k, values := range res.Header {
+			if len(values) > 0 {
+				meta.Set(strings.ToLower(k), values[0])
+			}
+		}
+	}
+	h.prevResponse = message.New(nil)
+	h.prevResponse.Append(p)
 
 	if h.codec, err = h.codecCtor("", res.Body, func(ctx context.Context, err error) error {
 		return nil
