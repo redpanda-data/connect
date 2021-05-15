@@ -128,6 +128,7 @@ Some inputs such as GCP Pub/Sub and AMQP support rejecting messages, in which ca
 ```yaml
 output:
   switch:
+    retry_until_success: false
     cases:
       - check: errored()
         output:

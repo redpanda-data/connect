@@ -31,6 +31,7 @@ The switch output type allows you to route messages to different outputs based o
 output:
   label: ""
   switch:
+    retry_until_success: true
     cases: []
 ```
 

@@ -93,6 +93,65 @@ tests:
 				"line 7: field thisismadeup not recognised",
 			},
 		},
+		{
+			name: "switch output with reject and implicit retry_until_success",
+			conf: `output:
+  switch:
+    cases:
+      - check: errored()
+        output:
+          reject: ${! error() }
+      - output:
+          drop: {}
+`,
+			lints: []string{
+				"line 3: a `switch` output with a `reject` case output must have the field `switch.retry_until_success` set to `false` (defaults to `true`), otherwise the `reject` child output will result in infinite retries",
+			},
+		},
+		{
+			name: "switch output with reject and explicit retry_until_success",
+			conf: `output:
+  switch:
+    retry_until_success: true
+    cases:
+      - output:
+          drop: {}
+      - check: errored()
+        output:
+          reject: ${! error() }
+`,
+			lints: []string{
+				"line 3: a `switch` output with a `reject` case output must have the field `switch.retry_until_success` set to `false` (defaults to `true`), otherwise the `reject` child output will result in infinite retries",
+			},
+		},
+		{
+			name: "switch output with reject and no retry",
+			conf: `output:
+  switch:
+    retry_until_success: false
+    cases:
+      - output:
+          drop: {}
+      - check: errored()
+        output:
+          reject: ${! error() }
+`,
+			lints: nil,
+		},
+		{
+			name: "switch output without reject and retry",
+			conf: `output:
+  switch:
+    retry_until_success: true
+    cases:
+      - output:
+          drop: {}
+      - check: errored()
+        output:
+          drop: {}
+`,
+			lints: nil,
+		},
 	}
 
 	for _, test := range tests {
