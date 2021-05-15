@@ -362,7 +362,7 @@ func (b *Branch) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		return nil
 	})
 
-	resultParts, mapErrs, err := b.createResult(parts, branchMsg)
+	resultParts, mapErrs, err := b.createResult(parts, msg)
 	if err != nil {
 		result := msg.Copy()
 		// Add general error to all messages.
@@ -434,7 +434,8 @@ func (b *Branch) createResult(parts []types.Part, referenceMsg types.Message) ([
 			continue
 		}
 		if b.requestMap != nil {
-			newPart, err := b.requestMap.MapPart(i, referenceMsg)
+			_ = parts[i].Set(nil)
+			newPart, err := b.requestMap.MapOnto(parts[i], i, referenceMsg)
 			if err != nil {
 				b.mErrReq.Incr(1)
 				b.log.Debugf("Failed to map request '%v': %v\n", i, err)

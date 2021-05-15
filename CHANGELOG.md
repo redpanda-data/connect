@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `branch` processor now writes error logs when the request or result map fails.
+- The `branch` processor (and `workflow` by proxy) now allow errors to be mapped into the branch using `error()` in the `request_map`.
 - Added a linting rule that warns against having a `reject` output under a `switch` broker without `retry_until_success` disabled.
 
 ### Changed
