@@ -19,6 +19,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
+	"github.com/Jeffail/gabs/v2"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -45,8 +46,8 @@ func init() {
 The switch output type allows you to route messages to different outputs based on their contents.`,
 		Description: `
 Messages must successfully route to one or more outputs, otherwise this is considered an error and the message is reprocessed. In order to explicitly drop messages that do not match your cases add one final case with a [drop output](/docs/components/outputs/drop).`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldAdvanced(
+		config: docs.FieldComponent().WithChildren(
+			docs.FieldCommon(
 				"retry_until_success", `
 If a selected output fails to send a message this field determines whether it is
 reattempted indefinitely. If set to false the error is instead propagated back
@@ -110,7 +111,24 @@ behavior is false, which will drop the message.`,
 				arr, ok := v.([]interface{})
 				return "field outputs is deprecated in favour of cases", ok && len(arr) == 0
 			}),
-		},
+		).Linter(func(ctx docs.LintContext, line, col int, value interface{}) []docs.Lint {
+			gObj := gabs.Wrap(value)
+			retry, exists := gObj.S("retry_until_success").Data().(bool)
+			// TODO V4: Is retry_until_success going to be false by default now?
+			if exists && !retry {
+				return nil
+			}
+			for _, cObj := range gObj.S("cases").Children() {
+				typeStr, _ := cObj.S("output", "type").Data().(string)
+				isReject := cObj.Exists("output", "reject")
+				if typeStr == "reject" || isReject {
+					return []docs.Lint{
+						docs.NewLintError(line, "a `switch` output with a `reject` case output must have the field `switch.retry_until_success` set to `false` (defaults to `true`), otherwise the `reject` child output will result in infinite retries"),
+					}
+				}
+			}
+			return nil
+		}),
 		Categories: []Category{
 			CategoryUtility,
 		},
