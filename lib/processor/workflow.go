@@ -560,7 +560,7 @@ func (w *Workflow) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 				})
 
 				var mapErrs []branchMapError
-				results[index], mapErrs, errors[index] = children[id].createResult(branchParts, branchMsg)
+				results[index], mapErrs, errors[index] = children[id].createResult(branchParts, propMsg)
 				for _, s := range branchSpans {
 					s.Finish()
 				}
