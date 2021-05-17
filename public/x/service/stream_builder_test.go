@@ -102,6 +102,60 @@ type: local`))
 	}
 }
 
+func TestStreamBuilderSetResourcesYAML(t *testing.T) {
+	b := service.NewStreamBuilder()
+	require.NoError(t, b.AddResourcesYAML(`
+cache_resources:
+  - label: foocache
+    type: memory
+
+rate_limit_resources:
+  - label: foorl
+    type: local
+
+processor_resources:
+  - label: fooproc1
+    type: bloblang
+  - label: fooproc2
+    type: jmespath
+
+input_resources:
+  - label: fooinput
+    type: kafka
+
+output_resources:
+  - label: foooutput
+    type: nats
+`))
+
+	act, err := b.AsYAML()
+	require.NoError(t, err)
+
+	exp := []string{
+		`cache_resources:
+    - label: foocache
+      memory:`,
+		`rate_limit_resources:
+    - label: foorl
+      local:`,
+		`processor_resources:
+    - label: fooproc1
+      bloblang:`,
+		`    - label: fooproc2
+      jmespath:`,
+		`input_resources:
+    - label: fooinput
+      kafka:`,
+		`output_resources:
+    - label: foooutput
+      nats:`,
+	}
+
+	for _, str := range exp {
+		assert.Contains(t, act, str)
+	}
+}
+
 func TestStreamBuilderSetYAMLBrokers(t *testing.T) {
 	b := service.NewStreamBuilder()
 	b.SetThreads(10)
@@ -152,15 +206,15 @@ func TestStreamBuilderYAMLErrors(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unmarshal errors")
 
-	err = b.SetCoreYAML(`not valid ! yaml 34324`)
+	err = b.SetYAML(`not valid ! yaml 34324`)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unmarshal errors")
 
-	err = b.SetCoreYAML(`input: { foo: nope }`)
+	err = b.SetYAML(`input: { foo: nope }`)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unable to infer")
 
-	err = b.SetCoreYAML(`input: { kafka: { not_a_field: nope } }`)
+	err = b.SetYAML(`input: { kafka: { not_a_field: nope } }`)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "field not_a_field not recognised")
 
@@ -184,7 +238,7 @@ func TestStreamBuilderYAMLErrors(t *testing.T) {
 func TestStreamBuilderSetCoreYAML(t *testing.T) {
 	b := service.NewStreamBuilder()
 	b.SetThreads(10)
-	require.NoError(t, b.SetCoreYAML(`
+	require.NoError(t, b.SetYAML(`
 input:
   kafka: {}
 

@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/lib/api"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/config"
@@ -19,12 +20,16 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/stream"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"gopkg.in/yaml.v3"
 )
 
 // StreamBuilder provides methods for building a Benthos stream configuration.
+// When parsing Benthos configs this builder follows the schema and field
+// defaults of a standard Benthos configuration.
+//
+// Benthos streams register HTTP methods
 type StreamBuilder struct {
+	http       api.Config
 	threads    int
 	inputs     []input.Config
 	buffer     buffer.Config
@@ -41,11 +46,11 @@ type StreamBuilder struct {
 // NewStreamBuilder creates a new StreamBuilder.
 func NewStreamBuilder() *StreamBuilder {
 	return &StreamBuilder{
+		http:      api.NewConfig(),
 		buffer:    buffer.NewConfig(),
 		resources: manager.NewResourceConfig(),
 		metrics:   metrics.NewConfig(),
 		logger:    log.NewConfig(),
-		apiMut:    types.NoopMgr(),
 	}
 }
 
@@ -85,7 +90,8 @@ func (w *muxWrapper) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
 }
 
 // SetHTTPMux sets an HTTP multiplexer to be used by stream components when
-// registering endpoints.
+// registering endpoints instead of a new server spawned following the `http`
+// fields of a Benthos config.
 func (s *StreamBuilder) SetHTTPMux(m HTTPMultiplexer) {
 	s.apiMut = &muxWrapper{m}
 }
@@ -219,14 +225,13 @@ func (s *StreamBuilder) AddResourcesYAML(conf string) error {
 
 //------------------------------------------------------------------------------
 
-// SetCoreYAML parses a config snippet containing input, buffer, pipeline and
-// output sections and adds them to the builder. If any inputs, processors or
-// outputs, etc, have previously been added to the builder they will be
-// overridden by this new config, as well as the number of processor threads.
-func (s *StreamBuilder) SetCoreYAML(conf string) error {
+// SetYAML parses a full Benthos config and uses it to configure the builder. If
+// any inputs, processors, outputs, resources, etc, have previously been added
+// to the builder they will be overridden by this new config.
+func (s *StreamBuilder) SetYAML(conf string) error {
 	confBytes := []byte(conf)
 
-	sconf := stream.NewConfig()
+	sconf := config.New()
 	if err := yaml.Unmarshal(confBytes, &sconf); err != nil {
 		return err
 	}
@@ -236,23 +241,24 @@ func (s *StreamBuilder) SetCoreYAML(conf string) error {
 		return err
 	}
 
-	if err := lintsToErr(stream.Spec().LintNode(docs.NewLintContext(), node)); err != nil {
+	if err := lintsToErr(config.Spec().LintNode(docs.NewLintContext(), node)); err != nil {
 		return err
 	}
 
+	s.http = sconf.HTTP
 	s.inputs = []input.Config{sconf.Input}
 	s.buffer = sconf.Buffer
 	s.processors = sconf.Pipeline.Processors
 	s.threads = sconf.Pipeline.Threads
 	s.outputs = []output.Config{sconf.Output}
+	s.resources = sconf.ResourceConfig
+	s.logger = sconf.Logger
+	s.metrics = sconf.Metrics
 	return nil
 }
 
 // SetMetricsYAML parses a metrics YAML configuration and adds it to the builder
 // such that all stream components emit metrics through it.
-//
-// Any metrics type that emits metrics by a scraped HTTP endpoint will use the
-// HTTP mux provided with SetHTTPMux.
 func (s *StreamBuilder) SetMetricsYAML(conf string) error {
 	confBytes := []byte(conf)
 
@@ -290,6 +296,8 @@ func (s *StreamBuilder) SetLoggerYAML(conf string) error {
 	s.logger = lconf
 	return nil
 }
+
+//------------------------------------------------------------------------------
 
 // AsYAML prints a YAML representation of the stream config as it has been
 // currently built.
@@ -336,18 +344,26 @@ func (s *StreamBuilder) Build() (*Stream, error) {
 		return nil, err
 	}
 
+	apiMut := s.apiMut
+	if apiMut == nil {
+		var err error
+		if apiMut, err = api.New("", "", s.http, nil, logger, stats); err != nil {
+			return nil, err
+		}
+	}
+
 	if wHandlerFunc, ok := stats.(metrics.WithHandlerFunc); ok {
-		s.apiMut.RegisterEndpoint(
+		apiMut.RegisterEndpoint(
 			"/stats", "Returns service metrics.",
 			wHandlerFunc.HandlerFunc(),
 		)
-		s.apiMut.RegisterEndpoint(
+		apiMut.RegisterEndpoint(
 			"/metrics", "Returns service metrics.",
 			wHandlerFunc.HandlerFunc(),
 		)
 	}
 
-	mgr, err := manager.NewV2(conf.ResourceConfig, s.apiMut, logger, stats)
+	mgr, err := manager.NewV2(conf.ResourceConfig, apiMut, logger, stats)
 	if err != nil {
 		return nil, err
 	}
@@ -356,6 +372,7 @@ func (s *StreamBuilder) Build() (*Stream, error) {
 }
 
 type builderConfig struct {
+	HTTP                   *api.Config `yaml:"http,omitempty"`
 	stream.Config          `yaml:",inline"`
 	manager.ResourceConfig `yaml:",inline"`
 	Metrics                metrics.Config `yaml:"metrics"`
@@ -365,6 +382,10 @@ type builderConfig struct {
 func (s *StreamBuilder) buildConfig() builderConfig {
 	conf := builderConfig{
 		Config: stream.NewConfig(),
+	}
+
+	if s.apiMut == nil {
+		conf.HTTP = &s.http
 	}
 
 	if len(s.inputs) == 1 {

@@ -30,6 +30,7 @@ func (b *BlueOutput) Close(ctx context.Context) error {
 // an implementation that does not require any configuration parameters, and
 // therefore doesn't defined any within the configuration specification.
 func Example_outputPlugin() {
+	// Register our new output, which doesn't require a config schema.
 	err := service.RegisterOutput(
 		"blue_stdout", service.NewConfigSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, maxInFlight int, err error) {
@@ -39,6 +40,36 @@ func Example_outputPlugin() {
 		panic(err)
 	}
 
-	// And then execute Benthos with:
-	// service.RunCLI()
+	// Use the stream builder API to create a Benthos stream that uses our new
+	// output type.
+	builder := service.NewStreamBuilder()
+
+	// Set the full Benthos configuration of the stream.
+	err = builder.SetYAML(`
+input:
+  generate:
+    count: 1
+    interval: 1ms
+    mapping: 'root = "hello world"'
+
+output:
+  blue_stdout: {}
+`)
+	if err != nil {
+		panic(err)
+	}
+
+	// Build a stream with our configured components.
+	stream, err := builder.Build()
+	if err != nil {
+		panic(err)
+	}
+
+	// And run it, blocking until it gracefully terminates once the generate
+	// input has generated a message and it has flushed through the stream.
+	if err = stream.Run(context.Background()); err != nil {
+		panic(err)
+	}
+
+	// Output: [01;34mhello world[m
 }

@@ -44,11 +44,45 @@ func Example_processorPlugin() {
 		}, nil
 	}
 
+	// Register our new processor, which doesn't require a config schema.
 	err := service.RegisterProcessor("reverse", service.NewConfigSpec(), constructor)
 	if err != nil {
 		panic(err)
 	}
 
-	// And then execute Benthos with:
-	// service.RunCLI()
+	// Build a Benthos stream that uses our new output type.
+	builder := service.NewStreamBuilder()
+
+	// Set the full Benthos configuration of the stream.
+	err = builder.SetYAML(`
+input:
+  generate:
+    count: 1
+    interval: 1ms
+    mapping: 'root = "hello world"'
+
+pipeline:
+  processors:
+    - reverse: {}
+
+output:
+  stdout: {}
+`)
+	if err != nil {
+		panic(err)
+	}
+
+	// Build a stream with our configured components.
+	stream, err := builder.Build()
+	if err != nil {
+		panic(err)
+	}
+
+	// And run it, blocking until it gracefully terminates once the generate
+	// input has generated a message and it has flushed through the stream.
+	if err = stream.Run(context.Background()); err != nil {
+		panic(err)
+	}
+
+	// Output: dlrow olleh
 }
