@@ -100,6 +100,7 @@ func Example_streamBuilderMultipleStreams() {
 	// with the field `http.address`, or we could call `SetHTTPMux` on the
 	// builder in order to explicitly override the configured server.
 	builderOne := service.NewStreamBuilder()
+
 	panicOnErr(builderOne.SetYAML(`
 http:
   enabled: false
@@ -117,12 +118,14 @@ pipeline:
 output:
   stdout: {}
 `))
+
 	streamOne, err := builderOne.Build()
 	if err != nil {
 		panic(err)
 	}
 
 	builderTwo := service.NewStreamBuilder()
+
 	panicOnErr(builderTwo.SetYAML(`
 http:
   enabled: false
@@ -142,6 +145,7 @@ pipeline:
 output:
   stdout: {}
 `))
+
 	streamTwo, err := builderTwo.Build()
 	if err != nil {
 		panic(err)
