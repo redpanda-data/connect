@@ -232,7 +232,7 @@ func cmdService(
 	err = sanitNode.Encode(conf)
 	if err == nil {
 		err = config.Spec().SanitiseNode(&sanitNode, docs.SanitiseConfig{
-			RemoveTypeField: false,
+			RemoveTypeField: true,
 		})
 	}
 	if err != nil {

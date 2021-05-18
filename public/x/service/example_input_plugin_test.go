@@ -20,7 +20,10 @@ func (g *GibberishInput) Read(ctx context.Context) (*service.Message, service.Ac
 	for k := range b {
 		b[k] = byte((rand.Int() % 94) + 32)
 	}
-	return service.NewMessage(b), service.NoopAckFunc, nil
+	return service.NewMessage(b), func(ctx context.Context, err error) error {
+		// We don't care about acks in this particular input, so do nothing
+		return nil
+	}, nil
 }
 
 func (g *GibberishInput) Close(ctx context.Context) error {
@@ -35,11 +38,14 @@ func Example_inputPlugin() {
 		Length int `yaml:"length"`
 	}
 
-	configSpec := service.NewStructConfigSpec(func() interface{} {
+	configSpec, err := service.NewStructConfigSpec(func() interface{} {
 		return &gibberishConfig{
 			Length: 100,
 		}
 	})
+	if err != nil {
+		panic(err)
+	}
 
 	constructor := func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 		gconf := conf.AsStruct().(*gibberishConfig)
@@ -48,7 +54,7 @@ func Example_inputPlugin() {
 		}, nil
 	}
 
-	err := service.RegisterInput("gibberish", configSpec, constructor)
+	err = service.RegisterInput("gibberish", configSpec, constructor)
 	if err != nil {
 		panic(err)
 	}

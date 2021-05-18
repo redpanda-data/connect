@@ -3,6 +3,7 @@ package processor
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,6 +18,8 @@ import (
 type fnProcessor struct {
 	fn     func(context.Context, types.Part) ([]types.Part, error)
 	closed bool
+
+	sync.Mutex
 }
 
 func (p *fnProcessor) Process(ctx context.Context, msg types.Part) ([]types.Part, error) {
@@ -24,7 +27,9 @@ func (p *fnProcessor) Process(ctx context.Context, msg types.Part) ([]types.Part
 }
 
 func (p *fnProcessor) Close(ctx context.Context) error {
+	p.Lock()
 	p.closed = true
+	p.Unlock()
 	return nil
 }
 
@@ -34,12 +39,16 @@ func TestProcessorAirGapShutdown(t *testing.T) {
 
 	err := agrp.WaitForClose(time.Millisecond * 5)
 	assert.EqualError(t, err, "action timed out")
+	rp.Lock()
 	assert.False(t, rp.closed)
+	rp.Unlock()
 
 	agrp.CloseAsync()
 	err = agrp.WaitForClose(time.Millisecond * 5)
 	assert.NoError(t, err)
+	rp.Lock()
 	assert.True(t, rp.closed)
+	rp.Unlock()
 }
 
 func TestProcessorAirGapOneToOne(t *testing.T) {

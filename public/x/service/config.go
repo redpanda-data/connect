@@ -1,6 +1,8 @@
 package service
 
 import (
+	"fmt"
+
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"gopkg.in/yaml.v3"
 )
@@ -9,12 +11,8 @@ import (
 // component. This will be used for validating and linting configuration files
 // and providing a parsed configuration struct to the plugin constructor.
 type ConfigSpec struct {
-	spec       docs.FieldSpec
+	component  docs.ComponentSpec
 	configCtor ConfigStructConstructor
-}
-
-func (c *ConfigSpec) fieldSpec() docs.FieldSpec {
-	return c.spec
 }
 
 func (c *ConfigSpec) configFromNode(node *yaml.Node) (*ParsedConfig, error) {
@@ -37,7 +35,10 @@ func (c *ConfigSpec) configFromNode(node *yaml.Node) (*ParsedConfig, error) {
 // enough.
 func NewConfigSpec() *ConfigSpec {
 	return &ConfigSpec{
-		spec: docs.FieldComponent(),
+		component: docs.ComponentSpec{
+			Status: docs.StatusPlugin,
+			Config: docs.FieldComponent(),
+		},
 	}
 }
 
@@ -57,11 +58,30 @@ type ConfigStructConstructor func() interface{}
 // constructor func. The provided constructor func will be used during parsing
 // in order to validate and return fields for the plugin from a configuration
 // file.
-func NewStructConfigSpec(ctor ConfigStructConstructor) *ConfigSpec {
-	return &ConfigSpec{
-		spec:       docs.FieldComponent(),
-		configCtor: ctor,
+func NewStructConfigSpec(ctor ConfigStructConstructor) (*ConfigSpec, error) {
+	var node yaml.Node
+	if err := node.Encode(ctor()); err != nil {
+		return nil, fmt.Errorf("unable to marshal config struct as yaml: %v", err)
 	}
+
+	confSpec := NewConfigSpec()
+	confSpec.component.Config = confSpec.component.Config.WithChildren(docs.FieldsFromNode(&node)...)
+	confSpec.configCtor = ctor
+
+	return confSpec, nil
+}
+
+// SetSummary adds a short summary to the plugin configuration spec that
+// describes the general purpose of the component.
+func (c *ConfigSpec) SetSummary(summary string) {
+	c.component.Summary = summary
+}
+
+// SetDescription adds a description to the plugin configuration spec that
+// describes in more detail the behaviour of the component and how it should be
+// used.
+func (c *ConfigSpec) SetDescription(description string) {
+	c.component.Description = description
 }
 
 //------------------------------------------------------------------------------

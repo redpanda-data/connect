@@ -612,3 +612,18 @@ func (f FieldSpecs) LintNode(ctx LintContext, node *yaml.Node) []Lint {
 }
 
 //------------------------------------------------------------------------------
+
+// FieldsFromNode walks the children of a YAML node and returns a list of fields
+// extracted from it. This can be used in order to infer a field spec for a
+// parsed component.
+func FieldsFromNode(node *yaml.Node) FieldSpecs {
+	var fields FieldSpecs
+	for i := 0; i < len(node.Content)-1; i += 2 {
+		field := FieldCommon(node.Content[i].Value, "")
+		if len(node.Content[i+1].Content) > 0 {
+			field = field.WithChildren(FieldsFromNode(node.Content[i+1])...)
+		}
+		fields = append(fields, field)
+	}
+	return fields
+}

@@ -29,11 +29,14 @@ func Example_rateLimitPlugin() {
 		MaxDuration string `yaml:"maximum_duration"`
 	}
 
-	configSpec := service.NewStructConfigSpec(func() interface{} {
+	configSpec, err := service.NewStructConfigSpec(func() interface{} {
 		return &randomRLConfig{
 			MaxDuration: "1s",
 		}
 	})
+	if err != nil {
+		panic(err)
+	}
 
 	constructor := func(conf *service.ParsedConfig, mgr *service.Resources) (service.RateLimit, error) {
 		c := conf.AsStruct().(*randomRLConfig)
@@ -44,7 +47,7 @@ func Example_rateLimitPlugin() {
 		return &RandomRateLimit{maxDuration}, nil
 	}
 
-	err := service.RegisterRateLimit("random", configSpec, constructor)
+	err = service.RegisterRateLimit("random", configSpec, constructor)
 	if err != nil {
 		panic(err)
 	}

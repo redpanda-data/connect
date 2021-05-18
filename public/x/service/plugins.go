@@ -23,6 +23,9 @@ type CacheConstructor func(conf *ParsedConfig, mgr *Resources) (Cache, error)
 // the cache itself. The constructor will be called for each instantiation of
 // the component within a config.
 func RegisterCache(name string, spec *ConfigSpec, ctor CacheConstructor) error {
+	componentSpec := spec.component
+	componentSpec.Name = name
+	componentSpec.Type = docs.TypeCache
 	return bundle.AllCaches.Add(func(conf cache.Config, nm bundle.NewManagement) (types.Cache, error) {
 		pluginConf, err := spec.configFromNode(conf.Plugin.(*yaml.Node))
 		if err != nil {
@@ -33,12 +36,7 @@ func RegisterCache(name string, spec *ConfigSpec, ctor CacheConstructor) error {
 			return nil, err
 		}
 		return newAirGapCache(c, nm.Metrics()), nil
-	}, docs.ComponentSpec{
-		Name:   name,
-		Status: docs.StatusPlugin,
-		Type:   docs.TypeCache,
-		Config: spec.fieldSpec(),
-	})
+	}, componentSpec)
 }
 
 // InputConstructor is a func that's provided a configuration type and access to
@@ -51,6 +49,9 @@ type InputConstructor func(conf *ParsedConfig, mgr *Resources) (Input, error)
 // the input itself. The constructor will be called for each instantiation of
 // the component within a config.
 func RegisterInput(name string, spec *ConfigSpec, ctor InputConstructor) error {
+	componentSpec := spec.component
+	componentSpec.Name = name
+	componentSpec.Type = docs.TypeInput
 	return bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (input.Type, error) {
 		pluginConf, err := spec.configFromNode(conf.Plugin.(*yaml.Node))
 		if err != nil {
@@ -62,12 +63,7 @@ func RegisterInput(name string, spec *ConfigSpec, ctor InputConstructor) error {
 		}
 		rdr := newAirGapReader(i)
 		return input.NewAsyncReader(conf.Type, false, rdr, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
-		Name:   name,
-		Status: docs.StatusPlugin,
-		Type:   docs.TypeInput,
-		Config: spec.fieldSpec(),
-	})
+	}), componentSpec)
 }
 
 // OutputConstructor is a func that's provided a configuration type and access
@@ -80,6 +76,9 @@ type OutputConstructor func(conf *ParsedConfig, mgr *Resources) (out Output, max
 // the output itself. The constructor will be called for each instantiation of
 // the component within a config.
 func RegisterOutput(name string, spec *ConfigSpec, ctor OutputConstructor) error {
+	componentSpec := spec.component
+	componentSpec.Name = name
+	componentSpec.Type = docs.TypeOutput
 	return bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(
 		func(conf output.Config, nm bundle.NewManagement) (output.Type, error) {
 			pluginConf, err := spec.configFromNode(conf.Plugin.(*yaml.Node))
@@ -97,12 +96,7 @@ func RegisterOutput(name string, spec *ConfigSpec, ctor OutputConstructor) error
 			}
 			return output.OnlySinglePayloads(o), nil
 		},
-	), docs.ComponentSpec{
-		Name:   name,
-		Status: docs.StatusPlugin,
-		Type:   docs.TypeOutput,
-		Config: spec.fieldSpec(),
-	})
+	), componentSpec)
 }
 
 // BatchPolicy describes the mechanisms by which batching should be performed of
@@ -126,6 +120,9 @@ type BatchOutputConstructor func(conf *ParsedConfig, mgr *Resources) (out BatchO
 // the output itself. The constructor will be called for each instantiation of
 // the component within a config.
 func RegisterBatchOutput(name string, spec *ConfigSpec, ctor BatchOutputConstructor) error {
+	componentSpec := spec.component
+	componentSpec.Name = name
+	componentSpec.Type = docs.TypeOutput
 	return bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(
 		func(conf output.Config, nm bundle.NewManagement) (output.Type, error) {
 			pluginConf, err := spec.configFromNode(conf.Plugin.(*yaml.Node))
@@ -150,12 +147,7 @@ func RegisterBatchOutput(name string, spec *ConfigSpec, ctor BatchOutputConstruc
 			}
 			return output.NewBatcherFromConfig(batchConf, o, nm, nm.Logger(), nm.Metrics())
 		},
-	), docs.ComponentSpec{
-		Name:   name,
-		Status: docs.StatusPlugin,
-		Type:   docs.TypeOutput,
-		Config: spec.fieldSpec(),
-	})
+	), componentSpec)
 }
 
 // ProcessorConstructor is a func that's provided a configuration type and
@@ -171,6 +163,9 @@ type ProcessorConstructor func(conf *ParsedConfig, mgr *Resources) (Processor, e
 // For simple transformations consider implementing a Bloblang plugin method
 // instead.
 func RegisterProcessor(name string, spec *ConfigSpec, ctor ProcessorConstructor) error {
+	componentSpec := spec.component
+	componentSpec.Name = name
+	componentSpec.Type = docs.TypeProcessor
 	return bundle.AllProcessors.Add(func(conf processor.Config, nm bundle.NewManagement) (processor.Type, error) {
 		pluginConf, err := spec.configFromNode(conf.Plugin.(*yaml.Node))
 		if err != nil {
@@ -181,12 +176,7 @@ func RegisterProcessor(name string, spec *ConfigSpec, ctor ProcessorConstructor)
 			return nil, err
 		}
 		return newAirGapProcessor(conf.Type, r, nm.Metrics()), nil
-	}, docs.ComponentSpec{
-		Name:   name,
-		Status: docs.StatusPlugin,
-		Type:   docs.TypeProcessor,
-		Config: spec.fieldSpec(),
-	})
+	}, componentSpec)
 }
 
 // BatchProcessorConstructor is a func that's provided a configuration type and
@@ -199,6 +189,9 @@ type BatchProcessorConstructor func(conf *ParsedConfig, mgr *Resources) (BatchPr
 // constructor for the processor itself. The constructor will be called for each
 // instantiation of the component within a config.
 func RegisterBatchProcessor(name string, spec *ConfigSpec, ctor BatchProcessorConstructor) error {
+	componentSpec := spec.component
+	componentSpec.Name = name
+	componentSpec.Type = docs.TypeProcessor
 	return bundle.AllProcessors.Add(func(conf processor.Config, nm bundle.NewManagement) (processor.Type, error) {
 		pluginConf, err := spec.configFromNode(conf.Plugin.(*yaml.Node))
 		if err != nil {
@@ -209,12 +202,7 @@ func RegisterBatchProcessor(name string, spec *ConfigSpec, ctor BatchProcessorCo
 			return nil, err
 		}
 		return newAirGapBatchProcessor(conf.Type, r, nm.Metrics()), nil
-	}, docs.ComponentSpec{
-		Name:   name,
-		Status: docs.StatusPlugin,
-		Type:   docs.TypeProcessor,
-		Config: spec.fieldSpec(),
-	})
+	}, componentSpec)
 }
 
 // RateLimitConstructor is a func that's provided a configuration type and
@@ -227,6 +215,9 @@ type RateLimitConstructor func(conf *ParsedConfig, mgr *Resources) (RateLimit, e
 // for the rate limit itself. The constructor will be called for each
 // instantiation of the component within a config.
 func RegisterRateLimit(name string, spec *ConfigSpec, ctor RateLimitConstructor) error {
+	componentSpec := spec.component
+	componentSpec.Name = name
+	componentSpec.Type = docs.TypeRateLimit
 	return bundle.AllRateLimits.Add(func(conf ratelimit.Config, nm bundle.NewManagement) (types.RateLimit, error) {
 		pluginConf, err := spec.configFromNode(conf.Plugin.(*yaml.Node))
 		if err != nil {
@@ -237,10 +228,5 @@ func RegisterRateLimit(name string, spec *ConfigSpec, ctor RateLimitConstructor)
 			return nil, err
 		}
 		return newAirGapRateLimit(r), nil
-	}, docs.ComponentSpec{
-		Name:   name,
-		Status: docs.StatusPlugin,
-		Type:   docs.TypeRateLimit,
-		Config: spec.fieldSpec(),
-	})
+	}, componentSpec)
 }

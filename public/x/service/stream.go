@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
@@ -36,6 +37,9 @@ func newStream(conf stream.Config, mgr *manager.Type, stats metrics.Type, logger
 // Run attempts to start the stream pipeline and blocks until either the stream
 // has gracefully come to a stop, or the provided context is cancelled.
 func (s *Stream) Run(ctx context.Context) (err error) {
+	if s.strm != nil {
+		return errors.New("stream has already been run")
+	}
 	if s.strm, err = stream.New(s.conf,
 		stream.OptOnClose(func() {
 			s.shutSig.ShutdownComplete()
@@ -68,6 +72,10 @@ func (s *Stream) Run(ctx context.Context) (err error) {
 // messages on the next start up, but never results in dropped messages as long
 // as the input source supports at-least-once delivery.
 func (s *Stream) StopWithin(timeout time.Duration) error {
+	if s.strm == nil {
+		return errors.New("stream has not been run yet")
+	}
+
 	stopAt := time.Now().Add(timeout)
 	if err := s.strm.Stop(timeout); err != nil {
 		// Still attempt to shut down other resources but do not block.

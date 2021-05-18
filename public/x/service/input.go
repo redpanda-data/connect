@@ -18,14 +18,6 @@ import (
 // same message.
 type AckFunc func(ctx context.Context, err error) error
 
-// NoopAckFunc is a function with an AckFunc signature, but does nothing and
-// always returns nil. It is convenient to return this from an input Read method
-// when there is no formal mechanism (or desire) to acknowledge messages that
-// are sent.
-func NoopAckFunc(context.Context, error) error {
-	return nil
-}
-
 // Input is an interface implemented by Benthos inputs. Calls to Read should
 // block until either a message has been received, the connect is lose, or the
 // provided context is cancelled.

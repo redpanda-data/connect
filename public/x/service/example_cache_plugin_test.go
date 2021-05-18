@@ -59,14 +59,17 @@ func (l *LossyCache) Close(ctx context.Context) error {
 // implementation of the cache (type `LossyCache`) also contains fields that
 // should be parsed within the Benthos config.
 func Example_cachePlugin() {
-	configSpec := service.NewStructConfigSpec(func() interface{} {
+	configSpec, err := service.NewStructConfigSpec(func() interface{} {
 		return &LossyCache{
 			Capacity: 100,
 			items:    map[string][]byte{},
 		}
 	})
+	if err != nil {
+		panic(err)
+	}
 
-	err := service.RegisterCache("lossy", configSpec,
+	err = service.RegisterCache("lossy", configSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 			c := conf.AsStruct().(*LossyCache)
 			c.mDropped = mgr.Metrics().NewCounter("dropped.just.cus")

@@ -25,9 +25,10 @@ func TestCachePluginWithConfig(t *testing.T) {
 		A int `yaml:"a"`
 	}
 
-	configSpec := service.NewStructConfigSpec(func() interface{} {
+	configSpec, err := service.NewStructConfigSpec(func() interface{} {
 		return &testConfig{A: 100}
 	})
+	require.NoError(t, err)
 
 	var initConf *testConfig
 	var initLabel string
@@ -110,9 +111,10 @@ func TestInputPluginWithConfig(t *testing.T) {
 		A int `yaml:"a"`
 	}
 
-	configSpec := service.NewStructConfigSpec(func() interface{} {
+	configSpec, err := service.NewStructConfigSpec(func() interface{} {
 		return &testConfig{A: 100}
 	})
+	require.NoError(t, err)
 
 	var initConf *testConfig
 	var initLabel string
@@ -195,9 +197,10 @@ func TestOutputPluginWithConfig(t *testing.T) {
 		A int `yaml:"a"`
 	}
 
-	configSpec := service.NewStructConfigSpec(func() interface{} {
+	configSpec, err := service.NewStructConfigSpec(func() interface{} {
 		return &testConfig{A: 100}
 	})
+	require.NoError(t, err)
 
 	var initConf *testConfig
 	var initLabel string
@@ -281,9 +284,10 @@ func TestBatchOutputPluginWithConfig(t *testing.T) {
 		Count int `yaml:"count"`
 	}
 
-	configSpec := service.NewStructConfigSpec(func() interface{} {
+	configSpec, err := service.NewStructConfigSpec(func() interface{} {
 		return &testConfig{A: 100, Count: 10}
 	})
+	require.NoError(t, err)
 
 	var initConf *testConfig
 	var initLabel string
@@ -369,9 +373,10 @@ func TestProcessorPluginWithConfig(t *testing.T) {
 		A int `yaml:"a"`
 	}
 
-	configSpec := service.NewStructConfigSpec(func() interface{} {
+	configSpec, err := service.NewStructConfigSpec(func() interface{} {
 		return &testConfig{A: 100}
 	})
+	require.NoError(t, err)
 
 	var initConf *testConfig
 	var initLabel string
@@ -454,9 +459,10 @@ func TestBatchProcessorPluginWithConfig(t *testing.T) {
 		A int `yaml:"a"`
 	}
 
-	configSpec := service.NewStructConfigSpec(func() interface{} {
+	configSpec, err := service.NewStructConfigSpec(func() interface{} {
 		return &testConfig{A: 100}
 	})
+	require.NoError(t, err)
 
 	var initConf *testConfig
 	var initLabel string
@@ -539,9 +545,10 @@ func TestRateLimitPluginWithConfig(t *testing.T) {
 		A int `yaml:"a"`
 	}
 
-	configSpec := service.NewStructConfigSpec(func() interface{} {
+	configSpec, err := service.NewStructConfigSpec(func() interface{} {
 		return &testConfig{A: 100}
 	})
+	require.NoError(t, err)
 
 	var initConf *testConfig
 	var initLabel string

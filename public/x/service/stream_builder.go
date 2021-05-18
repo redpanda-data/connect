@@ -325,9 +325,8 @@ func (s *StreamBuilder) AsYAML() (string, error) {
 
 //------------------------------------------------------------------------------
 
-// Build a stream that will immediately begin running in the background, the
-// returned stream type can be used to check whether it's actively connected and
-// begin shutting it down gracefully.
+// Build a Benthos stream pipeline according to the components specified by this
+// stream builder.
 func (s *StreamBuilder) Build() (*Stream, error) {
 	conf := s.buildConfig()
 
@@ -346,9 +345,15 @@ func (s *StreamBuilder) Build() (*Stream, error) {
 
 	apiMut := s.apiMut
 	if apiMut == nil {
-		var err error
-		if apiMut, err = api.New("", "", s.http, nil, logger, stats); err != nil {
-			return nil, err
+		var sanitNode yaml.Node
+		err := sanitNode.Encode(conf)
+		if err == nil {
+			_ = config.Spec().SanitiseNode(&sanitNode, docs.SanitiseConfig{
+				RemoveTypeField: true,
+			})
+		}
+		if apiMut, err = api.New("", "", s.http, sanitNode, logger, stats); err != nil {
+			return nil, fmt.Errorf("unable to create stream HTTP server due to: %w. Tip: you can disable the server with `http.enabled` set to `false`, or override the configured server with SetHTTPMux", err)
 		}
 	}
 
