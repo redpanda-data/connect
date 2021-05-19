@@ -7,6 +7,22 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ConfigField describes a field within a component configuration, to be added
+// to a ConfigSpec.
+type ConfigField struct {
+	field docs.FieldSpec
+}
+
+// NewConfigField describes a new config field with basic information including
+// a field name and a description.
+func NewConfigField(name, description string) *ConfigField {
+	return &ConfigField{
+		field: docs.FieldCommon(name, description),
+	}
+}
+
+//------------------------------------------------------------------------------
+
 // ConfigSpec describes the configuration specification for a plugin
 // component. This will be used for validating and linting configuration files
 // and providing a parsed configuration struct to the plugin constructor.
@@ -23,10 +39,14 @@ func (c *ConfigSpec) configFromNode(node *yaml.Node) (*ParsedConfig, error) {
 		}
 		return &ParsedConfig{asStruct: conf}, nil
 	}
+
 	var m interface{}
 	if err := node.Decode(&m); err != nil {
 		return nil, err
 	}
+
+	// TODO: When field specs support explicit defaults we can walk them here
+	// and populate the generic representation with those values.
 	return &ParsedConfig{generic: m}, nil
 }
 
@@ -71,17 +91,36 @@ func NewStructConfigSpec(ctor ConfigStructConstructor) (*ConfigSpec, error) {
 	return confSpec, nil
 }
 
-// SetSummary adds a short summary to the plugin configuration spec that
-// describes the general purpose of the component.
-func (c *ConfigSpec) SetSummary(summary string) {
+// Summary adds a short summary to the plugin configuration spec that describes
+// the general purpose of the component.
+func (c *ConfigSpec) Summary(summary string) *ConfigSpec {
 	c.component.Summary = summary
+	return c
 }
 
-// SetDescription adds a description to the plugin configuration spec that
+// Description adds a description to the plugin configuration spec that
 // describes in more detail the behaviour of the component and how it should be
 // used.
-func (c *ConfigSpec) SetDescription(description string) {
+func (c *ConfigSpec) Description(description string) *ConfigSpec {
 	c.component.Description = description
+	return c
+}
+
+// Field sets the specification of a field within the config spec, used for
+// linting and generating documentation for the component.
+//
+// When creating a spec with a struct constructor the fields from that struct
+// will already be inferred. However, setting a field explicitly is sometimes
+// useful for enriching the field documentation with more information.
+func (c *ConfigSpec) Field(f *ConfigField) *ConfigSpec {
+	for i, s := range c.component.Config.Children {
+		if s.Name == f.field.Name {
+			c.component.Config.Children[i] = f.field
+			return c
+		}
+	}
+	c.component.Config.Children = append(c.component.Config.Children, f.field)
+	return c
 }
 
 //------------------------------------------------------------------------------
