@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
@@ -215,6 +216,66 @@ func TestMappings(t *testing.T) {
 			}.WithValue(test.input))
 			require.NoError(t, err)
 			assert.Equal(t, test.output, res)
+		})
+	}
+}
+
+func TestMappingParallelExecution(t *testing.T) {
+	tests := map[string]struct {
+		mapping string
+		input   interface{}
+		output  interface{}
+	}{
+		"basic query using vars": {
+			mapping: `let tmp = this.foo.uppercase()
+			root.first = $tmp
+			let tmp = this.foo.lowercase()
+			root.second = $tmp`,
+			input: map[string]interface{}{
+				"foo": "HELLO world",
+			},
+			output: map[string]interface{}{
+				"first":  "HELLO WORLD",
+				"second": "hello world",
+			},
+		},
+	}
+
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			m, err := NewMapping("", test.mapping)
+			require.NoError(t, err)
+
+			startChan := make(chan struct{})
+
+			var wg sync.WaitGroup
+			for i := 0; i < 10; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					<-startChan
+
+					for j := 0; j < 100; j++ {
+						part := message.NewPart(nil)
+						require.NoError(t, part.SetJSON(test.input))
+
+						msg := message.New(nil)
+						msg.Append(part)
+
+						p, err := m.MapPart(0, msg)
+						require.NoError(t, err)
+
+						res, err := p.JSON()
+						require.NoError(t, err)
+
+						assert.Equal(t, test.output, res)
+					}
+				}()
+			}
+
+			close(startChan)
+			wg.Wait()
 		})
 	}
 }
