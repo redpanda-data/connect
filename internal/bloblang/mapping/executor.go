@@ -64,7 +64,6 @@ type Executor struct {
 	annotation string
 	input      []rune
 	maps       map[string]query.Function
-	vars       map[string]interface{}
 	statements []Statement
 }
 
@@ -73,7 +72,7 @@ type Executor struct {
 // is an optional slice pointing to the parsed expression that created the
 // executor.
 func NewExecutor(annotation string, input []rune, maps map[string]query.Function, statements ...Statement) *Executor {
-	return &Executor{annotation, input, maps, map[string]interface{}{}, statements}
+	return &Executor{annotation, input, maps, statements}
 }
 
 // Annotation returns a string annotation that describes the mapping executor.
@@ -154,14 +153,13 @@ func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (t
 			newValue = appendObj
 		}
 	}
-	for k := range e.vars {
-		delete(e.vars, k)
-	}
+
+	vars := map[string]interface{}{}
 
 	for _, stmt := range e.statements {
 		res, err := stmt.query.Exec(query.FunctionContext{
 			Maps:     e.maps,
-			Vars:     e.vars,
+			Vars:     vars,
 			Index:    index,
 			MsgBatch: reference,
 			NewMsg:   newPart,
@@ -181,7 +179,7 @@ func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (t
 			continue
 		}
 		if err = stmt.assignment.Apply(res, AssignmentContext{
-			Vars:  e.vars,
+			Vars:  vars,
 			Meta:  newPart.Metadata(),
 			Value: &newValue,
 		}); err != nil {
