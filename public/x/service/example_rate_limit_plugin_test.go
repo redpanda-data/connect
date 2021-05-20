@@ -39,7 +39,7 @@ func Example_rateLimitPlugin() {
 	}
 
 	constructor := func(conf *service.ParsedConfig, mgr *service.Resources) (service.RateLimit, error) {
-		c := conf.AsStruct().(*randomRLConfig)
+		c := conf.Root().(*randomRLConfig)
 		maxDuration, err := time.ParseDuration(c.MaxDuration)
 		if err != nil {
 			return nil, fmt.Errorf("invalid max duration: %w", err)

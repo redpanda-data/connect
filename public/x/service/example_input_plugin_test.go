@@ -48,7 +48,7 @@ func Example_inputPlugin() {
 	}
 
 	constructor := func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-		gconf := conf.AsStruct().(*gibberishConfig)
+		gconf := conf.Root().(*gibberishConfig)
 		return &GibberishInput{
 			length: gconf.Length,
 		}, nil

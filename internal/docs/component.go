@@ -391,11 +391,10 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 
 	gConf := gabs.Wrap(fullConfigExample).S(c.Name)
 	for _, v := range flattenedFields {
-		defaultValue := v.Default
-		if defaultValue == nil {
-			defaultValue = gConf.Path(v.Name).Data()
-		}
-		if defaultValue == nil {
+		var defaultValue interface{}
+		if v.Default != nil {
+			defaultValue = *v.Default
+		} else if defaultValue = gConf.Path(v.Name).Data(); defaultValue == nil {
 			return nil, fmt.Errorf("field '%v' not found in config example and no default value was provided in the spec", v.Name)
 		}
 

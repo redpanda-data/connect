@@ -44,7 +44,7 @@ type FieldSpec struct {
 
 	// Default value of the field. If left nil the docs generator will attempt
 	// to infer the default value from an example config.
-	Default interface{}
+	Default *interface{}
 
 	// Type of the field. This is optional and doesn't prevent documentation for
 	// a field.
@@ -108,7 +108,7 @@ func (f FieldSpec) Map() FieldSpec {
 
 // HasDefault returns a new FieldSpec that specifies a default value.
 func (f FieldSpec) HasDefault(v interface{}) FieldSpec {
-	f.Default = v
+	f.Default = &v
 	return f
 }
 

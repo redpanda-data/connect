@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/gabs/v2"
 	"gopkg.in/yaml.v3"
 )
 
@@ -15,10 +16,35 @@ type ConfigField struct {
 
 // NewConfigField describes a new config field with basic information including
 // a field name and a description.
-func NewConfigField(name, description string) *ConfigField {
+func NewConfigField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, description),
+		field: docs.FieldCommon(name, ""),
 	}
+}
+
+// Description adds a description to the field which will be shown when printing
+// documentation for the component config spec.
+func (c *ConfigField) Description(d string) *ConfigField {
+	c.field.Description = d
+	return c
+}
+
+// Default specifies a default value that this field will assume if it is
+// omitted from a provided config. Fields that do not have a default value are
+// considered mandatory, and so parsing a config will fail in their absence.
+func (c *ConfigField) Default(v interface{}) *ConfigField {
+	c.field = c.field.HasDefault(v)
+	return c
+}
+
+// Children specifies that this field is an object and defines its children.
+func (c *ConfigField) Children(fields ...*ConfigField) *ConfigField {
+	children := make([]docs.FieldSpec, len(fields))
+	for i, f := range fields {
+		children[i] = f.field
+	}
+	c.field = c.field.WithChildren(children...)
+	return c
 }
 
 //------------------------------------------------------------------------------
@@ -31,6 +57,71 @@ type ConfigSpec struct {
 	configCtor ConfigStructConstructor
 }
 
+func getDefault(pathName string, field docs.FieldSpec) (interface{}, error) {
+	if field.Default != nil {
+		// TODO: Should be deep copy here?
+		return *field.Default, nil
+	} else if len(field.Children) > 0 {
+		m := map[string]interface{}{}
+		for _, v := range field.Children {
+			var err error
+			if m[v.Name], err = getDefault(pathName+"."+v.Name, v); err != nil {
+				return nil, err
+			}
+		}
+		return m, nil
+	}
+	return nil, fmt.Errorf("field '%v' is required and was not present in the config", pathName)
+}
+
+func (c *ConfigSpec) genericFromFields(node *yaml.Node, fields docs.FieldSpecs) (map[string]interface{}, error) {
+	pendingFieldsMap := map[string]docs.FieldSpec{}
+	for _, f := range fields {
+		pendingFieldsMap[f.Name] = f
+	}
+
+	resultMap := map[string]interface{}{}
+
+	for i := 0; i < len(node.Content)-1; i += 2 {
+		fieldName := node.Content[i].Value
+
+		if f, exists := pendingFieldsMap[fieldName]; exists {
+			delete(pendingFieldsMap, f.Name)
+
+			if len(f.Children) > 0 {
+				var err error
+				if resultMap[fieldName], err = c.genericFromFields(node.Content[i+1], f.Children); err != nil {
+					return nil, fmt.Errorf("field '%v': %w", fieldName, err)
+				}
+			} else {
+				// TODO: Use a type annotation for the field to force proper
+				// parsing. This would avoid rough edges in YAML such as the
+				// Norway problem.
+				var v interface{}
+				if err := node.Content[i+1].Decode(&v); err != nil {
+					return nil, err
+				}
+				resultMap[fieldName] = v
+			}
+		} else {
+			var v interface{}
+			if err := node.Content[i+1].Decode(&v); err != nil {
+				return nil, err
+			}
+			resultMap[fieldName] = v
+		}
+	}
+
+	for k, v := range pendingFieldsMap {
+		var err error
+		if resultMap[k], err = getDefault(k, v); err != nil {
+			return nil, err
+		}
+	}
+
+	return resultMap, nil
+}
+
 func (c *ConfigSpec) configFromNode(node *yaml.Node) (*ParsedConfig, error) {
 	if c.configCtor != nil {
 		conf := c.configCtor()
@@ -40,14 +131,12 @@ func (c *ConfigSpec) configFromNode(node *yaml.Node) (*ParsedConfig, error) {
 		return &ParsedConfig{asStruct: conf}, nil
 	}
 
-	var m interface{}
-	if err := node.Decode(&m); err != nil {
+	fields, err := c.genericFromFields(node, c.component.Config.Children)
+	if err != nil {
 		return nil, err
 	}
 
-	// TODO: When field specs support explicit defaults we can walk them here
-	// and populate the generic representation with those values.
-	return &ParsedConfig{generic: m}, nil
+	return &ParsedConfig{generic: fields}, nil
 }
 
 // NewConfigSpec creates a new empty component configuration spec. If the
@@ -135,12 +224,30 @@ func (c *ConfigSpec) Field(f *ConfigField) *ConfigSpec {
 // access the parsed struct.
 type ParsedConfig struct {
 	asStruct interface{}
-	generic  interface{}
+	generic  map[string]interface{}
 }
 
-// AsStruct returns a struct parsed from a plugin configuration. If the config
-// spec that resulted in this parsed config was not defined using a struct
-// constructor then nil is returned.
-func (p *ParsedConfig) AsStruct() interface{} {
-	return p.asStruct
+// Root returns the root of the parsed config. If the configuration spec was
+// built around a config constructor then the value returned will match the type
+// returned by the constructor, otherwise it will be a generic
+// map[string]interface{} type.
+func (p *ParsedConfig) Root() interface{} {
+	if p.asStruct != nil {
+		return p.asStruct
+	}
+	return p.generic
+}
+
+// Field accesses a field from the parsed config by its name and returns the
+// value if the field is found and a boolean indicating whether it was found.
+// Nested fields can be accessed by specifing the series of field names.
+//
+// This method is not valid when the configuration spec was built around a
+// config constructor.
+func (p *ParsedConfig) Field(path ...string) (interface{}, bool) {
+	gObj := gabs.Wrap(p.generic)
+	if exists := gObj.Exists(path...); !exists {
+		return nil, false
+	}
+	return gObj.S(path...).Data(), true
 }

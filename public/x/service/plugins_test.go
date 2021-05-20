@@ -34,7 +34,7 @@ func TestCachePluginWithConfig(t *testing.T) {
 	var initLabel string
 	require.NoError(t, service.RegisterCache("test_cache_plugin_with_config", configSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
-			initConf = conf.AsStruct().(*testConfig)
+			initConf = conf.Root().(*testConfig)
 			initLabel = mgr.Label()
 			return nil, errors.New("this is a test error")
 		}))
@@ -120,7 +120,7 @@ func TestInputPluginWithConfig(t *testing.T) {
 	var initLabel string
 	require.NoError(t, service.RegisterInput("test_input_plugin_with_config", configSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			initConf = conf.AsStruct().(*testConfig)
+			initConf = conf.Root().(*testConfig)
 			initLabel = mgr.Label()
 			return nil, errors.New("this is a test error")
 		}))
@@ -206,7 +206,7 @@ func TestOutputPluginWithConfig(t *testing.T) {
 	var initLabel string
 	require.NoError(t, service.RegisterOutput("test_output_plugin_with_config", configSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
-			initConf = conf.AsStruct().(*testConfig)
+			initConf = conf.Root().(*testConfig)
 			initLabel = mgr.Label()
 			return nil, 1, errors.New("this is a test error")
 		}))
@@ -293,7 +293,7 @@ func TestBatchOutputPluginWithConfig(t *testing.T) {
 	var initLabel string
 	require.NoError(t, service.RegisterBatchOutput("test_batch_output_plugin_with_config", configSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchOutput, service.BatchPolicy, int, error) {
-			initConf = conf.AsStruct().(*testConfig)
+			initConf = conf.Root().(*testConfig)
 			initLabel = mgr.Label()
 			batchPolicy := service.BatchPolicy{Count: initConf.Count}
 			return nil, batchPolicy, 1, errors.New("this is a test error")
@@ -382,7 +382,7 @@ func TestProcessorPluginWithConfig(t *testing.T) {
 	var initLabel string
 	require.NoError(t, service.RegisterProcessor("test_processor_plugin_with_config", configSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-			initConf = conf.AsStruct().(*testConfig)
+			initConf = conf.Root().(*testConfig)
 			initLabel = mgr.Label()
 			return nil, errors.New("this is a test error")
 		}))
@@ -468,7 +468,7 @@ func TestBatchProcessorPluginWithConfig(t *testing.T) {
 	var initLabel string
 	require.NoError(t, service.RegisterBatchProcessor("test_batch_processor_plugin_with_config", configSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			initConf = conf.AsStruct().(*testConfig)
+			initConf = conf.Root().(*testConfig)
 			initLabel = mgr.Label()
 			return nil, errors.New("this is a test error")
 		}))
@@ -554,7 +554,7 @@ func TestRateLimitPluginWithConfig(t *testing.T) {
 	var initLabel string
 	require.NoError(t, service.RegisterRateLimit("test_rate_limit_plugin_with_config", configSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.RateLimit, error) {
-			initConf = conf.AsStruct().(*testConfig)
+			initConf = conf.Root().(*testConfig)
 			initLabel = mgr.Label()
 			return nil, errors.New("this is a test error")
 		}))

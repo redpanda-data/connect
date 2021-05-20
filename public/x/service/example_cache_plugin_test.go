@@ -71,7 +71,7 @@ func Example_cachePlugin() {
 
 	err = service.RegisterCache("lossy", configSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
-			c := conf.AsStruct().(*LossyCache)
+			c := conf.Root().(*LossyCache)
 			c.mDropped = mgr.Metrics().NewCounter("dropped.just.cus")
 			return c, nil
 		})
