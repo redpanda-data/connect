@@ -27,7 +27,7 @@ func init() {
 		Summary: `
 Consumes data from files on disk, emitting messages according to a chosen codec.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("paths", "A list of paths to consume sequentially. Glob patterns are supported.").Array(),
+			docs.FieldCommon("paths", "A list of paths to consume sequentially. Glob patterns are supported, including super globs (double star).").Array(),
 			codec.ReaderDocs,
 			docs.FieldAdvanced("max_buffer", "The largest token size expected when consuming delimited files."),
 			docs.FieldDeprecated("path"),

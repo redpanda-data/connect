@@ -28,8 +28,8 @@ func init() {
 		Summary:     "Reads one or more CSV files as structured records following the format described in RFC 4180.",
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(
-				"paths", "A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported.",
-				[]string{"/tmp/foo.csv", "/tmp/bar/*.csv"},
+				"paths", "A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported, including super globs (double star).",
+				[]string{"/tmp/foo.csv", "/tmp/bar/*.csv", "/tmp/data/**/*.csv"},
 			).Array(),
 			docs.FieldCommon("parse_header_row", "Whether to reference the first row as a header row. If set to true the output structure for messages will be an object where field keys are determined by the header row."),
 			docs.FieldCommon("delimiter", `The delimiter to use for splitting values in each record, must be a single character.`),

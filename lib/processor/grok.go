@@ -37,7 +37,7 @@ This processor currently uses the [Go RE2](https://golang.org/s/re2syntax) regul
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("expressions", "One or more Grok expressions to attempt against incoming messages. The first expression to match at least one value will be used to form a result.").Array(),
 			docs.FieldCommon("pattern_definitions", "A map of pattern definitions that can be referenced within `patterns`.").Map(),
-			docs.FieldCommon("pattern_paths", "A list of paths to load Grok patterns from. This field supports wildcards.").Array(),
+			docs.FieldCommon("pattern_paths", "A list of paths to load Grok patterns from. This field supports wildcards, including super globs (double star).").Array(),
 			docs.FieldAdvanced("named_captures_only", "Whether to only capture values from named patterns."),
 			docs.FieldAdvanced("use_default_patterns", "Whether to use a [default set of patterns](#default-patterns)."),
 			docs.FieldAdvanced("remove_empty_values", "Whether to remove values that are empty from the resulting structure."),

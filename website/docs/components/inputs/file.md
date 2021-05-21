@@ -67,7 +67,7 @@ You can access these metadata fields using
 
 ### `paths`
 
-A list of paths to consume sequentially. Glob patterns are supported.
+A list of paths to consume sequentially. Glob patterns are supported, including super globs (double star).
 
 
 Type: `array`  

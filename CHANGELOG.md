@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - Go Plugins API: The Bloblang `ArgSpec` now returns a public error type `ArgError`.
+- Components that support glob paths (`file`, `csv`, etc) now also support super globs (double asterisk).
 
 ## 3.46.1 - 2021-05-19
 

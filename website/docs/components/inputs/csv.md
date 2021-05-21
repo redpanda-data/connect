@@ -80,7 +80,7 @@ If, however, the field `parse_header_row` is set to `false` then arrays are prod
 
 ### `paths`
 
-A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported.
+A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported, including super globs (double star).
 
 
 Type: `array`  
@@ -92,6 +92,7 @@ Default: `[]`
 paths:
   - /tmp/foo.csv
   - /tmp/bar/*.csv
+  - /tmp/data/**/*.csv
 ```
 
 ### `parse_header_row`

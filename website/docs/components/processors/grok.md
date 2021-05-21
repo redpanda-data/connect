@@ -116,7 +116,7 @@ Default: `{}`
 
 ### `pattern_paths`
 
-A list of paths to load Grok patterns from. This field supports wildcards.
+A list of paths to load Grok patterns from. This field supports wildcards, including super globs (double star).
 
 
 Type: `array`  
