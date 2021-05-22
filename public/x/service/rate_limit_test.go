@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -28,7 +29,7 @@ func TestRateLimitAirGapShutdown(t *testing.T) {
 	rl := &closableRateLimit{
 		next: time.Second,
 	}
-	agrl := newAirGapRateLimit(rl)
+	agrl := newAirGapRateLimit(rl, metrics.Noop())
 
 	tout, err := agrl.Access()
 	assert.NoError(t, err)

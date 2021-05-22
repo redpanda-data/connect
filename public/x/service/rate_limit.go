@@ -4,7 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
+	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -21,36 +22,8 @@ type RateLimit interface {
 
 //------------------------------------------------------------------------------
 
-// Implements types.RateLimit
-type airGapRateLimit struct {
-	c RateLimit
-
-	sig *shutdown.Signaller
-}
-
-func newAirGapRateLimit(c RateLimit) types.RateLimit {
-	return &airGapRateLimit{c, shutdown.NewSignaller()}
-}
-
-func (a *airGapRateLimit) Access() (time.Duration, error) {
-	return a.c.Access(context.Background())
-}
-
-func (a *airGapRateLimit) CloseAsync() {
-	go func() {
-		if err := a.c.Close(context.Background()); err == nil {
-			a.sig.ShutdownComplete()
-		}
-	}()
-}
-
-func (a *airGapRateLimit) WaitForClose(tout time.Duration) error {
-	select {
-	case <-a.sig.HasClosedChan():
-	case <-time.After(tout):
-		return types.ErrTimeout
-	}
-	return nil
+func newAirGapRateLimit(c RateLimit, stats metrics.Type) types.RateLimit {
+	return ratelimit.NewV2ToV1RateLimit(c, stats)
 }
 
 //------------------------------------------------------------------------------

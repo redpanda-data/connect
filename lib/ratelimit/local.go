@@ -58,6 +58,10 @@ type Local struct {
 
 	size   int
 	period time.Duration
+
+	mChecked metrics.StatCounter
+	mLimited metrics.StatCounter
+	mErr     metrics.StatCounter
 }
 
 // NewLocal creates a local rate limit from a configuration struct. This type is
@@ -80,6 +84,10 @@ func NewLocal(
 		lastRefresh: time.Now(),
 		size:        conf.Local.Count,
 		period:      period,
+
+		mChecked: stats.GetCounter("checked"),
+		mLimited: stats.GetCounter("limited"),
+		mErr:     stats.GetCounter("error"),
 	}, nil
 }
 
@@ -90,6 +98,7 @@ func NewLocal(
 // can be accessed) or a reasonable length of time to wait before requesting
 // again.
 func (r *Local) Access() (time.Duration, error) {
+	r.mChecked.Incr(1)
 	r.mut.Lock()
 	r.bucket--
 
@@ -99,6 +108,7 @@ func (r *Local) Access() (time.Duration, error) {
 
 		if remaining > 0 {
 			r.mut.Unlock()
+			r.mLimited.Incr(1)
 			return remaining, nil
 		}
 		r.bucket = r.size - 1

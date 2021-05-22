@@ -227,6 +227,6 @@ func RegisterRateLimit(name string, spec *ConfigSpec, ctor RateLimitConstructor)
 		if err != nil {
 			return nil, err
 		}
-		return newAirGapRateLimit(r), nil
+		return newAirGapRateLimit(r, nm.Metrics()), nil
 	}, componentSpec)
 }
