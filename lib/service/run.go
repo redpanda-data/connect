@@ -5,7 +5,10 @@ import (
 	"os"
 	"runtime/debug"
 
+	clitemplate "github.com/Jeffail/benthos/v3/internal/cli/template"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/filepath"
+	"github.com/Jeffail/benthos/v3/internal/template"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/service/blobl"
 	"github.com/Jeffail/benthos/v3/lib/service/test"
@@ -114,6 +117,11 @@ func Run() {
 			Aliases: []string{"r"},
 			Usage:   "pull in extra resources from a file, which can be referenced the same as resources defined in the main config, supports glob patterns (requires quotes)",
 		},
+		&cli.StringSliceFlag{
+			Name:    "templates",
+			Aliases: []string{"t"},
+			Usage:   "EXPERIMENTAL: import Benthos templates, supports glob patterns (requires quotes)",
+		},
 		&cli.BoolFlag{
 			Name:  "chilled",
 			Value: false,
@@ -135,6 +143,26 @@ func Run() {
    benthos -c ./config.yaml
    benthos -r "./production/*.yaml" -c ./config.yaml`[4:],
 		Flags: flags,
+		Before: func(c *cli.Context) error {
+			templatesPaths, err := filepath.Globs(c.StringSlice("templates"))
+			if err != nil {
+				fmt.Printf("Failed to resolve template glob pattern: %v\n", err)
+				os.Exit(1)
+			}
+			lints, err := template.InitTemplates(templatesPaths...)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Template file read error: %v\n", err)
+				os.Exit(1)
+			}
+			if !c.Bool("chilled") && len(lints) > 0 {
+				for _, lint := range lints {
+					fmt.Fprintln(os.Stderr, lint)
+				}
+				fmt.Println("Shutting down due to linter errors, to prevent shutdown run Benthos with --chilled")
+				os.Exit(1)
+			}
+			return nil
+		},
 		Action: func(c *cli.Context) error {
 			if c.Bool("version") {
 				cmdVersion()
@@ -243,6 +271,7 @@ func Run() {
 			},
 			createCliCommand(),
 			test.CliCommand(testSuffix),
+			clitemplate.CliCommand(),
 			blobl.CliCommand(),
 		},
 	}

@@ -1,0 +1,97 @@
+name: hydration
+type: processor
+summary: A common hydration pattern.
+description: Hydrates content from structured messages based on an ID field.
+
+fields:
+  - name: cache
+    description: A cache resource to use.
+  - name: id_path
+    description: A dot path pointing to the identifier to use for hydration.
+  - name: content_path
+    description: A dot path pointing to the value to cache and hydrate.
+
+mapping: |
+  map cache_get {
+    root.branch.request_map = """
+      root = if this.%v.type() == "null" {
+        this.%v
+      } else {
+        deleted()
+      }
+    """.format(this.content_path, this.id_path)
+
+    root.branch.processors = [
+      {
+        "cache": {
+          "operator": "get",
+          "resource": this.cache,
+          "key": "${! content() }",
+        }
+      }
+    ]
+
+    root.branch.result_map = "root.%v = content().string()".format(this.content_path)
+  }
+
+  map cache_set {
+    root.branch.request_map = """
+      meta id = this.%v
+      root = this.%v | deleted()
+    """.format(this.id_path, this.content_path)
+
+    root.branch.processors = [
+      {
+        "cache": {
+          "operator": "set",
+          "resource": this.cache,
+          "key": """${! meta("id") }""",
+          "value": "${! content() }",
+        }
+      }
+    ]
+  }
+
+  root.try = [
+    this.apply("cache_set"),
+    this.apply("cache_get"),
+  ]
+
+tests:
+  - name: Basic fields
+
+    config:
+      cache: foocache
+      id_path: article.id
+      content_path: article.content
+
+    expected:
+      try:
+        - branch:
+            request_map: |-2
+              
+                  meta id = this.article.id
+                  root = this.article.content | deleted()
+                
+            processors:
+              - cache:
+                  operator: set
+                  resource: foocache
+                  key: ${! meta("id") }
+                  value: ${! content() }
+
+        - branch:
+            request_map: |-2
+              
+                  root = if this.article.content.type() == "null" {
+                    this.article.id
+                  } else {
+                    deleted()
+                  }
+                
+            processors:
+              - cache:
+                  operator: get
+                  resource: foocache
+                  key: ${! content() }
+            result_map: root.article.content = content().string()

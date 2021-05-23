@@ -19,7 +19,6 @@ import TabItem from '@theme/TabItem';
 
 ```yaml
 input:
-  type: kafka
   kafka:
     addresses: [ TODO ]
     topics: [ foo, bar ]
@@ -27,13 +26,11 @@ input:
 
 pipeline:
   processors:
-  - type: bloblang
-    bloblang: |
+  - bloblang: |
       root.message = this
       root.meta.link_count = this.links.length()
 
 output:
-  type: aws_s3
   aws_s3:
     bucket: TODO
     path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
@@ -48,24 +45,21 @@ http:
   debug_endpoints: false
 
 input:
-  type: kafka
   kafka:
     addresses: [ TODO ]
     topics: [ foo, bar ]
     consumer_group: foogroup
 
 buffer:
-  type: none
+  none: {}
 
 pipeline:
   processors:
-  - type: bloblang
-    bloblang: |
+  - bloblang: |
       root.message = this
       root.meta.link_count = this.links.length()
 
 output:
-  type: aws_s3
   aws_s3:
     bucket: TODO
     path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
@@ -82,10 +76,10 @@ logger:
     '@service': benthos
 
 metrics:
-  type: prometheus
+  prometheus: {}
 
 tracer:
-  type: none
+  none: {}
 
 shutdown_timeout: 20s
 ```
@@ -96,7 +90,7 @@ shutdown_timeout: 20s
 
 Most sections represent a component type, which you can read about in more detail in [this document][components].
 
-These types are hierarchical. For example, an `input` can have a list of child `processor` types attached to it, which in turn can have their own `condition` or even more `processor` children.
+These types are hierarchical. For example, an `input` can have a list of child `processor` types attached to it, which in turn can have their own `processor` children.
 
 This is powerful but can potentially lead to large and cumbersome configuration files. This document outlines tooling provided by Benthos to help with writing and managing these more complex configuration files.
 
@@ -104,36 +98,12 @@ This is powerful but can potentially lead to large and cumbersome configuration 
 
 For guidance on how to write and run unit tests for your configuration files read [this guide][config.testing].
 
-## Concise Configuration
-
-It's often possible to make your configuration files more concise but less explicit by omitting the `type` field in components as well as any fields that are default. For example, the above configuration could be written as:
-
-```yaml
-input:
-  kafka:
-    addresses: [ TODO ]
-    topics: [ foo, bar ]
-    consumer_group: foogroup
-
-pipeline:
-  processors:
-  - bloblang: |
-      root.document = this.without("links")
-      root.link_count = this.links.length()
-
-output:
-  aws_s3:
-    bucket: TODO
-    path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
-```
-
 ## Customising Your Configuration
 
 Sometimes it's useful to write a configuration where certain fields can be defined during deployment. For this purpose Benthos supports [environment variable interpolation][config-interp], allowing you to set fields in your config with environment variables like so:
 
 ```yaml
 input:
-  type: kafka
   kafka:
     addresses:
     - ${KAFKA_BROKER:localhost:9092}
@@ -218,6 +188,12 @@ benthos -r ./production/request.yaml -c ./config.yaml
 
 These flags also support wildcards, which allows you to import an entire directory of resource files like `benthos -r "./staging/*.yaml" -c ./config.yaml`. You can find out more about configuration resources in the [resources document][config.resources].
 
+### Templating
+
+Resources can only be instantiated with a single configuration, which means they aren't suitable for cases where the configuration is required in multiple places but with slightly different parameters, ugh!
+
+But hey, why don't you chill out? Benthos has a (currently experimental) alternative feature called templates, with which it's possible to define a custom configuration schema and a template for building a configuration from that schema. You can read more about templates [in this guide][config.templating].
+
 ## Enabling Discovery
 
 The discoverability of configuration fields is a common headache with any configuration driven application. The classic solution is to provide curated documentation that is often hosted on a dedicated site.
@@ -226,7 +202,6 @@ However, a user often only needs to get their hands on a short, runnable example
 
 ```yaml
 input:
-  type: amqp_0_9
   amqp_0_9:
     url: amqp://guest:guest@localhost:5672/
     consumer_tag: benthos-consumer
@@ -234,7 +209,7 @@ input:
     prefetch_count: 10
     prefetch_size: 0
 output:
-  type: stdout
+  stdout: {}
 ```
 
 In order to make this process easier Benthos is able to generate usable configuration examples for any types, and you can do this from the binary using the `create` subcommand.
@@ -265,16 +240,15 @@ For example, imagine we have a config `foo.yaml`, where we intend to read from A
 
 ```text
 input:
-  type: amqp_0_9
-  amqq_0_9:
-    url: amqp://guest:guest@rabbitmqserver:5672/
+  amqp_0_9:
+    yourl: amqp://guest:guest@rabbitmqserver:5672/
 ```
 
 We can catch this error before attempting to run the config:
 
 ```sh
 $ benthos lint ./foo.yaml
-./foo.yaml: input: Key 'amqq_0_9' found but is ignored
+./foo.yaml: line 3: field yourl not recognised
 ```
 
 For more information read the output from `benthos lint --help`.
@@ -292,6 +266,7 @@ You can check the output of the above command to see if certain sections are mis
 [processors]: /docs/components/processors/about
 [config-interp]: /docs/configuration/interpolation
 [config.testing]: /docs/configuration/unit_testing
+[config.templating]: /docs/configuration/templating
 [config.resources]: /docs/configuration/resources
 [json-references]: https://tools.ietf.org/html/draft-pbryan-zyp-json-ref-03
 [components]: /docs/components/about

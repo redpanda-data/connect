@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 - Go Plugins API: Plugin components can now be configured seamlessly like native components, meaning the namespace `plugin` is no longer required and configuration fields can be placed within the namespace of the plugin itself. Note that the old style (within `plugin`) is still supported.
 - The `http_client` input fields `url` and `headers` now support interpolation functions that access metadata and contents of the last received message.
 - Rate limit resources now emit `checked`, `limited` and `error` metrics.
+- A new experimental plugins API is available for early adopters, and can be found at `./public/x/service`.
+- A new experimental template system is available for early adopters, examples can be found in `./template`.
 
 ### Changed
 

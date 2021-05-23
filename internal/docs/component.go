@@ -358,37 +358,7 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 		ctx.Footnotes = c.Footnotes[1:]
 	}
 
-	flattenedFields := FieldSpecs{}
-	var walkFields func(path string, f FieldSpecs)
-	walkFields = func(path string, f FieldSpecs) {
-		for _, v := range f {
-			if v.Deprecated {
-				continue
-			}
-			newV := v
-			if len(path) > 0 {
-				newV.Name = path + newV.Name
-			}
-			flattenedFields = append(flattenedFields, newV)
-			if len(v.Children) > 0 {
-				newPath := path + v.Name
-				if newV.IsArray {
-					newPath += "[]"
-				} else if newV.IsMap {
-					newPath += ".<name>"
-				}
-				walkFields(newPath+".", v.Children)
-			}
-		}
-	}
-	rootPath := ""
-	if c.Config.IsArray {
-		rootPath = "[]."
-	} else if c.Config.IsMap {
-		rootPath = "<name>."
-	}
-	walkFields(rootPath, c.Config.Children)
-
+	flattenedFields := c.Config.FlattenChildrenForDocs()
 	gConf := gabs.Wrap(fullConfigExample).S(c.Name)
 	for _, v := range flattenedFields {
 		var defaultValue interface{}

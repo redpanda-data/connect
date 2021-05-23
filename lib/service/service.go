@@ -102,23 +102,27 @@ func readConfig(path string, resourcesPaths []string) (lints []string) {
 	}
 
 	if len(path) > 0 {
-		var err error
-		if lints, err = config.Read(path, true, &conf); err != nil {
+		cLints, err := config.Read(path, true, &conf)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 			os.Exit(1)
 		}
+		lints = append(lints, cLints...)
 	} else {
 		// Iterate default config paths
 		for _, path := range defaultPaths {
-			if _, err := os.Stat(path); err == nil {
-				fmt.Fprintf(os.Stderr, "Config file not specified, reading from %v\n", path)
-
-				if lints, err = config.Read(path, true, &conf); err != nil {
-					fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
-					os.Exit(1)
-				}
-				break
+			if _, err := os.Stat(path); err != nil {
+				continue
 			}
+			fmt.Fprintf(os.Stderr, "Config file not specified, reading from %v\n", path)
+
+			cLints, err := config.Read(path, true, &conf)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
+				os.Exit(1)
+			}
+			lints = append(lints, cLints...)
+			break
 		}
 	}
 

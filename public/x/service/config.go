@@ -57,71 +57,6 @@ type ConfigSpec struct {
 	configCtor ConfigStructConstructor
 }
 
-func getDefault(pathName string, field docs.FieldSpec) (interface{}, error) {
-	if field.Default != nil {
-		// TODO: Should be deep copy here?
-		return *field.Default, nil
-	} else if len(field.Children) > 0 {
-		m := map[string]interface{}{}
-		for _, v := range field.Children {
-			var err error
-			if m[v.Name], err = getDefault(pathName+"."+v.Name, v); err != nil {
-				return nil, err
-			}
-		}
-		return m, nil
-	}
-	return nil, fmt.Errorf("field '%v' is required and was not present in the config", pathName)
-}
-
-func (c *ConfigSpec) genericFromFields(node *yaml.Node, fields docs.FieldSpecs) (map[string]interface{}, error) {
-	pendingFieldsMap := map[string]docs.FieldSpec{}
-	for _, f := range fields {
-		pendingFieldsMap[f.Name] = f
-	}
-
-	resultMap := map[string]interface{}{}
-
-	for i := 0; i < len(node.Content)-1; i += 2 {
-		fieldName := node.Content[i].Value
-
-		if f, exists := pendingFieldsMap[fieldName]; exists {
-			delete(pendingFieldsMap, f.Name)
-
-			if len(f.Children) > 0 {
-				var err error
-				if resultMap[fieldName], err = c.genericFromFields(node.Content[i+1], f.Children); err != nil {
-					return nil, fmt.Errorf("field '%v': %w", fieldName, err)
-				}
-			} else {
-				// TODO: Use a type annotation for the field to force proper
-				// parsing. This would avoid rough edges in YAML such as the
-				// Norway problem.
-				var v interface{}
-				if err := node.Content[i+1].Decode(&v); err != nil {
-					return nil, err
-				}
-				resultMap[fieldName] = v
-			}
-		} else {
-			var v interface{}
-			if err := node.Content[i+1].Decode(&v); err != nil {
-				return nil, err
-			}
-			resultMap[fieldName] = v
-		}
-	}
-
-	for k, v := range pendingFieldsMap {
-		var err error
-		if resultMap[k], err = getDefault(k, v); err != nil {
-			return nil, err
-		}
-	}
-
-	return resultMap, nil
-}
-
 func (c *ConfigSpec) configFromNode(node *yaml.Node) (*ParsedConfig, error) {
 	if c.configCtor != nil {
 		conf := c.configCtor()
@@ -131,7 +66,7 @@ func (c *ConfigSpec) configFromNode(node *yaml.Node) (*ParsedConfig, error) {
 		return &ParsedConfig{asStruct: conf}, nil
 	}
 
-	fields, err := c.genericFromFields(node, c.component.Config.Children)
+	fields, err := c.component.Config.Children.NodeToMap(node)
 	if err != nil {
 		return nil, err
 	}

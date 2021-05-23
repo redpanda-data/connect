@@ -10,6 +10,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/template"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/condition"
@@ -77,6 +78,9 @@ func main() {
 
 	// Bloblang stuff
 	doBloblang(docsDir)
+
+	// Template docs
+	doTemplates(docsDir)
 }
 
 func doInputs(docsDir string) {
@@ -211,6 +215,15 @@ func doBloblang(dir string) {
 	}
 
 	create("bloblang methods", filepath.Join(dir, "..", "guides", "bloblang", "methods.md"), mdSpec)
+}
+
+func doTemplates(dir string) {
+	mdSpec, err := template.DocsMarkdown()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to generate docs for templates: %v", err))
+	}
+
+	create("template docs", filepath.Join(dir, "..", "configuration", "templating.md"), mdSpec)
 }
 
 //------------------------------------------------------------------------------

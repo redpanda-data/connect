@@ -198,6 +198,43 @@ func (f FieldSpec) shouldOmitNode(fieldNode, parentNode *yaml.Node) (string, boo
 	return f.omitWhenFn(field, parent)
 }
 
+// FlattenChildrenForDocs converts the children of a field into a flat list,
+// where the names contain hints as to their position in a structured hierarchy.
+// This makes it easier to list the fields in documentation.
+func (f FieldSpec) FlattenChildrenForDocs() FieldSpecs {
+	flattenedFields := FieldSpecs{}
+	var walkFields func(path string, f FieldSpecs)
+	walkFields = func(path string, f FieldSpecs) {
+		for _, v := range f {
+			if v.Deprecated {
+				continue
+			}
+			newV := v
+			if len(path) > 0 {
+				newV.Name = path + newV.Name
+			}
+			flattenedFields = append(flattenedFields, newV)
+			if len(v.Children) > 0 {
+				newPath := path + v.Name
+				if newV.IsArray {
+					newPath += "[]"
+				} else if newV.IsMap {
+					newPath += ".<name>"
+				}
+				walkFields(newPath+".", v.Children)
+			}
+		}
+	}
+	rootPath := ""
+	if f.IsArray {
+		rootPath = "[]."
+	} else if f.IsMap {
+		rootPath = "<name>."
+	}
+	walkFields(rootPath, f.Children)
+	return flattenedFields
+}
+
 // FieldAdvanced returns a field spec for an advanced field.
 func FieldAdvanced(name, description string, examples ...interface{}) FieldSpec {
 	return FieldSpec{
@@ -626,4 +663,72 @@ func FieldsFromNode(node *yaml.Node) FieldSpecs {
 		fields = append(fields, field)
 	}
 	return fields
+}
+
+func getDefault(pathName string, field FieldSpec) (interface{}, error) {
+	if field.Default != nil {
+		// TODO: Should be deep copy here?
+		return *field.Default, nil
+	} else if len(field.Children) > 0 {
+		m := map[string]interface{}{}
+		for _, v := range field.Children {
+			var err error
+			if m[v.Name], err = getDefault(pathName+"."+v.Name, v); err != nil {
+				return nil, err
+			}
+		}
+		return m, nil
+	}
+	return nil, fmt.Errorf("field '%v' is required and was not present in the config", pathName)
+}
+
+// NodeToMap converts a yaml node into a generic map structure by referencing
+// expected fields, adding default values to the map when the node does not
+// contain them.
+func (f FieldSpecs) NodeToMap(node *yaml.Node) (map[string]interface{}, error) {
+	pendingFieldsMap := map[string]FieldSpec{}
+	for _, field := range f {
+		pendingFieldsMap[field.Name] = field
+	}
+
+	resultMap := map[string]interface{}{}
+
+	for i := 0; i < len(node.Content)-1; i += 2 {
+		fieldName := node.Content[i].Value
+
+		if f, exists := pendingFieldsMap[fieldName]; exists {
+			delete(pendingFieldsMap, f.Name)
+
+			if len(f.Children) > 0 {
+				var err error
+				if resultMap[fieldName], err = f.Children.NodeToMap(node.Content[i+1]); err != nil {
+					return nil, fmt.Errorf("field '%v': %w", fieldName, err)
+				}
+			} else {
+				// TODO: Use a type annotation for the field to force proper
+				// parsing. This would avoid rough edges in YAML such as the
+				// Norway problem.
+				var v interface{}
+				if err := node.Content[i+1].Decode(&v); err != nil {
+					return nil, err
+				}
+				resultMap[fieldName] = v
+			}
+		} else {
+			var v interface{}
+			if err := node.Content[i+1].Decode(&v); err != nil {
+				return nil, err
+			}
+			resultMap[fieldName] = v
+		}
+	}
+
+	for k, v := range pendingFieldsMap {
+		var err error
+		if resultMap[k], err = getDefault(k, v); err != nil {
+			return nil, err
+		}
+	}
+
+	return resultMap, nil
 }

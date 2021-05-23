@@ -29,6 +29,7 @@ module.exports = {
         'configuration/field_paths',
         'configuration/processing_pipelines',
         'configuration/unit_testing',
+        'configuration/templating',
         'configuration/dynamic_inputs_and_outputs',
       ],
     },

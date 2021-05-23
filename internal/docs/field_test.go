@@ -58,3 +58,51 @@ c: 21`,
 		})
 	}
 }
+
+func TestFieldsToNode(t *testing.T) {
+	spec := FieldSpecs{
+		FieldCommon("a", ""),
+		FieldCommon("b", "").HasDefault(11),
+		FieldCommon("c", "").WithChildren(
+			FieldCommon("d", "").HasDefault(true),
+			FieldCommon("e", "").HasDefault("evalue"),
+			FieldCommon("f", "").WithChildren(
+				FieldCommon("g", "").HasDefault(12),
+				FieldCommon("h", ""),
+				FieldCommon("i", "").HasDefault(13),
+			),
+		),
+	}
+
+	var node yaml.Node
+	err := yaml.Unmarshal([]byte(`
+a: setavalue
+c:
+  f:
+    g: 22
+    h: sethvalue
+    i: 23.1
+`), &node)
+	require.NoError(t, err)
+
+	if node.Kind == yaml.DocumentNode && node.Content[0].Kind == yaml.MappingNode {
+		node = *node.Content[0]
+	}
+
+	generic, err := spec.NodeToMap(&node)
+	require.NoError(t, err)
+
+	assert.Equal(t, map[string]interface{}{
+		"a": "setavalue",
+		"b": 11,
+		"c": map[string]interface{}{
+			"d": true,
+			"e": "evalue",
+			"f": map[string]interface{}{
+				"g": 22,
+				"h": "sethvalue",
+				"i": 23.1,
+			},
+		},
+	}, generic)
+}
