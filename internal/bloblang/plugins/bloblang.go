@@ -36,10 +36,10 @@ func Register() error {
 				if err != nil {
 					return nil, err
 				}
-				newCtx := ctx.WithValue(v)
-				newCtx.Vars = map[string]interface{}{}
-				newCtx.Maps = exec.Maps()
-				return exec.Exec(newCtx)
+				return exec.Exec(query.FunctionContext{
+					Vars: map[string]interface{}{},
+					Maps: exec.Maps(),
+				}.WithValue(v))
 			}, target.QueryTargets), nil
 		},
 		true,
