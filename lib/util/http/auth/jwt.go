@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sync"
 
 	"github.com/dgrijalva/jwt-go"
 )
@@ -13,22 +14,24 @@ import (
 
 // JWTConfig holds the configuration parameters for an JWT exchange.
 type JWTConfig struct {
-	Enabled       bool          `json:"enabled" yaml:"enabled"`
-	Claims        jwt.MapClaims `json:"claims" yaml:"claims"`
-	SigningMethod string        `json:"signing_method" yaml:"signing_method"`
-	PrivateKey    string        `json:"private_key" yaml:"private_key"`
+	Enabled        bool          `json:"enabled" yaml:"enabled"`
+	Claims         jwt.MapClaims `json:"claims" yaml:"claims"`
+	SigningMethod  string        `json:"signing_method" yaml:"signing_method"`
+	PrivateKeyFile string        `json:"private_key_file" yaml:"private_key_file"`
 
 	// internal private fields
-	rsaKey *rsa.PrivateKey
+	rsaKeyMx *sync.Mutex
+	rsaKey   *rsa.PrivateKey
 }
 
 // NewJWTConfig returns a new JWTConfig with default values.
 func NewJWTConfig() JWTConfig {
 	return JWTConfig{
-		Enabled:       false,
-		Claims:        nil,
-		SigningMethod: "",
-		PrivateKey:    "",
+		Enabled:        false,
+		Claims:         map[string]interface{}{},
+		SigningMethod:  "",
+		PrivateKeyFile: "",
+		rsaKeyMx:       &sync.Mutex{},
 	}
 }
 
@@ -41,17 +44,7 @@ func (j JWTConfig) Sign(req *http.Request) error {
 	}
 
 	// Must parse private key only once
-	if j.rsaKey == nil {
-		privateKey, err := ioutil.ReadFile(j.PrivateKey)
-		if err != nil {
-			return fmt.Errorf("failed to read private key: %v", err)
-		}
-
-		j.rsaKey, err = jwt.ParseRSAPrivateKeyFromPEM(privateKey)
-		if err != nil {
-			return fmt.Errorf("failed to parse private key: %v", err)
-		}
-	}
+	j.parsePrivateKey()
 
 	var bearer *jwt.Token
 	switch j.SigningMethod {
@@ -71,6 +64,29 @@ func (j JWTConfig) Sign(req *http.Request) error {
 	}
 
 	req.Header.Set("Authorization", "Bearer "+ss)
+	return nil
+}
+
+// parsePrivateKey parses only once the RSA private key.
+// Needs mutex locking as Sign might be called by parallel threads.
+func (j JWTConfig) parsePrivateKey() error {
+	j.rsaKeyMx.Lock()
+	defer j.rsaKeyMx.Unlock()
+
+	if j.rsaKey != nil {
+		return nil
+	}
+
+	privateKey, err := ioutil.ReadFile(j.PrivateKeyFile)
+	if err != nil {
+		return fmt.Errorf("failed to read private key: %v", err)
+	}
+
+	j.rsaKey, err = jwt.ParseRSAPrivateKeyFromPEM(privateKey)
+	if err != nil {
+		return fmt.Errorf("failed to parse private key: %v", err)
+	}
+
 	return nil
 }
 
