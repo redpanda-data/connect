@@ -99,6 +99,18 @@ func (f *FunctionSet) OnlyPure() *FunctionSet {
 	return f.Without(excludes...)
 }
 
+// NoMessage creates a clone of the function set that can be mutated in
+// isolation, where all message access functions are removed.
+func (f *FunctionSet) NoMessage() *FunctionSet {
+	var excludes []string
+	for _, v := range f.specs {
+		if v.Category == FunctionCategoryMessage {
+			excludes = append(excludes, v.Name)
+		}
+	}
+	return f.Without(excludes...)
+}
+
 //------------------------------------------------------------------------------
 
 // AllFunctions is a set containing every single function declared by this

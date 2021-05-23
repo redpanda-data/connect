@@ -9,9 +9,14 @@ import (
 // Register adds any native Bloblang methods and functions to the global sets
 // that aren't defined within the query package.
 func Register() error {
+	dynamicBloblangParserContext := parser.Context{
+		Functions: query.AllFunctions.OnlyPure().NoMessage(),
+		Methods:   query.AllMethods,
+	}
+
 	return query.AllMethods.Add(
 		query.NewMethodSpec(
-			"bloblang", "Executes an argument Bloblang mapping on the target. This method can be used in order to execute dynamic mappings. Functions that interact with the environment, such as `file` and `env`, are not enabled for dynamic Bloblang mappings.",
+			"bloblang", "Executes an argument Bloblang mapping on the target. This method can be used in order to execute dynamic mappings. Functions that interact with the environment, such as `file` and `env`, or that access message information directly, such as `content` or `json`, are not enabled for dynamic Bloblang mappings.",
 		).InCategory(
 			query.MethodCategoryParsing, "",
 			query.NewExampleSpec(
@@ -25,10 +30,7 @@ func Register() error {
 		).Beta(),
 		func(target query.Function, args ...interface{}) (query.Function, error) {
 			mappingStr := args[0].(string)
-			exec, err := parser.ParseMapping("", mappingStr, parser.Context{
-				Functions: query.AllFunctions.OnlyPure(),
-				Methods:   query.AllMethods,
-			})
+			exec, err := parser.ParseMapping("", mappingStr, dynamicBloblangParserContext)
 			if err != nil {
 				return nil, err
 			}
