@@ -1346,6 +1346,22 @@ root.doc = this.doc.parse_xml()
 # Out: {"doc":{"root":{"content":"This is some content","title":"This is a title"}}}
 ```
 
+### `bloblang`
+
+BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+
+Executes an argument Bloblang mapping on the target. This method can be used in order to execute dynamic mappings. Functions that interact with the environment, such as `file` and `env`, are not enabled for dynamic Bloblang mappings.
+
+```coffee
+root.body = this.body.bloblang(this.mapping)
+
+# In:  {"body":{"foo":"hello world"},"mapping":"root.foo = this.foo.uppercase()"}
+# Out: {"body":{"foo":"HELLO WORLD"}}
+
+# In:  {"body":{"foo":"hello world 2"},"mapping":"root.foo = this.foo.capitalize()"}
+# Out: {"body":{"foo":"Hello World 2"}}
+```
+
 ## Encoding and Encryption
 
 ### `encode`

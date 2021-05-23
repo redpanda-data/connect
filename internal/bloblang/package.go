@@ -4,8 +4,15 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/plugins"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 )
+
+func init() {
+	if err := plugins.Register(); err != nil {
+		panic(err)
+	}
+}
 
 // NewField attempts to parse and create a dynamic field expression from a
 // string. If the expression is invalid an error is returned.

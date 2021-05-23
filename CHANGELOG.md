@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - Rate limit resources now emit `checked`, `limited` and `error` metrics.
 - A new experimental plugins API is available for early adopters, and can be found at `./public/x/service`.
 - A new experimental template system is available for early adopters, examples can be found in `./template`.
+- New beta Bloblang method `bloblang` for executing dynamic mappings.
 
 ### Changed
 

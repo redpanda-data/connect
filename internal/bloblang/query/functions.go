@@ -267,7 +267,7 @@ var _ = RegisterFunction(
 		NewExampleSpec("",
 			`root.thing.key = env("key")`,
 		),
-	),
+	).MarkImpure(),
 	true, envFunction,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
@@ -317,7 +317,7 @@ var _ = RegisterFunction(
 			`{}`,
 			`{"doc":{"foo":"bar"}}`,
 		),
-	).Beta(),
+	).Beta().MarkImpure(),
 	true, fileFunction,
 	ExpectNArgs(1),
 	ExpectStringArg(0),
@@ -379,7 +379,7 @@ var _ = registerSimpleFunction(
 		NewExampleSpec("",
 			`root.thing.host = hostname()`,
 		),
-	),
+	).MarkImpure(),
 	func(_ FunctionContext) (interface{}, error) {
 		hn, err := os.Hostname()
 		if err != nil {

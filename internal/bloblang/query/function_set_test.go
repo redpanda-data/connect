@@ -23,6 +23,17 @@ func TestFunctionSetWithout(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestFunctionSetOnlyPure(t *testing.T) {
+	setOne := AllFunctions
+	setTwo := setOne.OnlyPure()
+
+	assert.Contains(t, setOne.List(), "env")
+	assert.NotContains(t, setTwo.List(), "env")
+
+	assert.Contains(t, setOne.List(), "file")
+	assert.NotContains(t, setTwo.List(), "file")
+}
+
 func TestFunctionBadName(t *testing.T) {
 	testCases := map[string]string{
 		"!no":         "function name '!no' does not match the required regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/",

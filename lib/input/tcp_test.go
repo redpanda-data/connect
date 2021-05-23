@@ -163,10 +163,10 @@ func TestTCPReconnect(t *testing.T) {
 			msg = tran.Payload.DeepCopy()
 			select {
 			case tran.ResponseChan <- response.NewAck():
-			case <-time.After(time.Second):
+			case <-time.After(time.Second * 5):
 				return nil, errors.New("timed out")
 			}
-		case <-time.After(time.Second):
+		case <-time.After(time.Second * 5):
 			return nil, errors.New("timed out")
 		}
 		return msg, nil

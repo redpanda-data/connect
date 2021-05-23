@@ -66,6 +66,10 @@ type FunctionSpec struct {
 
 	// Examples shows general usage for the function.
 	Examples []ExampleSpec
+
+	// Impure indicates that a function accesses or interacts with the
+	// environment, and is therefore unsafe.
+	Impure bool
 }
 
 // NewFunctionSpec creates a new function spec.
@@ -82,6 +86,13 @@ func NewFunctionSpec(category FunctionCategory, name, description string, exampl
 // Beta flags the function as a beta component.
 func (s FunctionSpec) Beta() FunctionSpec {
 	s.Status = StatusBeta
+	return s
+}
+
+// MarkImpure flags the function as being impure, meaning it access or interacts
+// with the environment.
+func (s FunctionSpec) MarkImpure() FunctionSpec {
+	s.Impure = true
 	return s
 }
 

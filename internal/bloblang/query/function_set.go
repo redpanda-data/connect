@@ -87,6 +87,18 @@ func (f *FunctionSet) Without(functions ...string) *FunctionSet {
 	return &FunctionSet{constructors, specs}
 }
 
+// OnlyPure creates a clone of the function set that can be mutated in
+// isolation, where all impure functions are removed.
+func (f *FunctionSet) OnlyPure() *FunctionSet {
+	var excludes []string
+	for _, v := range f.specs {
+		if v.Impure {
+			excludes = append(excludes, v.Name)
+		}
+	}
+	return f.Without(excludes...)
+}
+
 //------------------------------------------------------------------------------
 
 // AllFunctions is a set containing every single function declared by this
