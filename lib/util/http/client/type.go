@@ -49,6 +49,7 @@ type Config struct {
 	ProxyURL            string            `json:"proxy_url" yaml:"proxy_url"`
 	auth.Config         `json:",inline" yaml:",inline"`
 	OAuth2              auth.OAuth2Config `json:"oauth2" yaml:"oauth2"`
+	JWT                 auth.JWTConfig    `json:"jwt" yaml:"jwt"`
 }
 
 // NewConfig creates a new Config with default values.
@@ -71,6 +72,7 @@ func NewConfig() Config {
 		TLS:                 tls.NewConfig(),
 		Config:              auth.NewConfig(),
 		OAuth2:              auth.NewOAuth2Config(),
+		JWT:                 auth.NewJWTConfig(),
 	}
 }
 
