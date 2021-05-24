@@ -222,6 +222,7 @@ func newStaticTargetReader(
 	conf AWSS3Config,
 	log log.Modular,
 	s3Client *s3.S3,
+	stats metrics.Type,
 ) (*staticTargetReader, error) {
 	listInput := &s3.ListObjectsV2Input{
 		Bucket:  aws.String(conf.Bucket),
@@ -234,6 +235,8 @@ func newStaticTargetReader(
 	if err != nil {
 		return nil, fmt.Errorf("failed to list objects: %v", err)
 	}
+
+	totalBytes := int64(0)
 	staticKeys := staticTargetReader{
 		s3:   s3Client,
 		conf: conf,
@@ -241,10 +244,15 @@ func newStaticTargetReader(
 	for _, obj := range output.Contents {
 		ackFn := deleteS3ObjectAckFn(s3Client, conf.Bucket, *obj.Key, conf.DeleteObjects, nil)
 		staticKeys.pending = append(staticKeys.pending, newS3ObjectTarget(*obj.Key, conf.Bucket, time.Time{}, ackFn))
+		totalBytes += *obj.Size
 	}
 	if len(output.Contents) > 0 {
 		staticKeys.startAfter = output.Contents[len(output.Contents)-1].Key
 	}
+
+	totalBytesGauge := stats.GetGauge("total.bytes")
+	totalBytesGauge.Set(totalBytes)
+
 	return &staticKeys, nil
 }
 
@@ -602,7 +610,7 @@ func (a *awsS3) getTargetReader(ctx context.Context) (s3ObjectTargetReader, erro
 	if a.sqs != nil {
 		return newSQSTargetReader(a.conf, a.log, a.s3, a.sqs), nil
 	}
-	return newStaticTargetReader(ctx, a.conf, a.log, a.s3)
+	return newStaticTargetReader(ctx, a.conf, a.log, a.s3, a.stats)
 }
 
 // ConnectWithContext attempts to establish a connection to the target S3 bucket
