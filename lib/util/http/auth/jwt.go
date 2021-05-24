@@ -43,8 +43,9 @@ func (j JWTConfig) Sign(req *http.Request) error {
 		return nil
 	}
 
-	// Must parse private key only once
-	j.parsePrivateKey()
+	if err := j.parsePrivateKey(); err != nil {
+		return err
+	}
 
 	var bearer *jwt.Token
 	switch j.SigningMethod {
@@ -67,7 +68,7 @@ func (j JWTConfig) Sign(req *http.Request) error {
 	return nil
 }
 
-// parsePrivateKey parses only once the RSA private key.
+// parsePrivateKey parses once the RSA private key.
 // Needs mutex locking as Sign might be called by parallel threads.
 func (j JWTConfig) parsePrivateKey() error {
 	j.rsaKeyMx.Lock()
