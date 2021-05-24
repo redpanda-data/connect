@@ -43,7 +43,7 @@ func jwtFieldSpec() docs.FieldSpec {
 		"Allows you to specify JWT authentication.",
 	).WithChildren(
 		docs.FieldCommon("enabled", "Whether to use JWT authentication in requests."),
-		docs.FieldCommon("private_key", "A file with the PEM encoded via PKCS1 or PKCS8 as private key."),
+		docs.FieldCommon("private_key_file", "A file with the PEM encoded via PKCS1 or PKCS8 as private key."),
 		docs.FieldCommon("signing_method", "A method used to sign the token such as RS256, RS384 or RS512."),
 		docs.FieldAdvanced("claims", "A value used to identify the claims that issued the JWT.").Map(),
 	)
