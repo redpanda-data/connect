@@ -131,7 +131,7 @@ path: ${!count("files")}-${!timestamp_unix_nano()}.txt
 The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 
 ### `batching`
@@ -164,7 +164,7 @@ batching:
 A number of messages at which the batch should be flushed. If `0` disables count based batching.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `batching.byte_size`
@@ -172,7 +172,7 @@ Default: `0`
 An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `batching.period`

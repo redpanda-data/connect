@@ -191,7 +191,7 @@ Default: `"5s"`
 The maximum number of messages to consume from each request.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 
 

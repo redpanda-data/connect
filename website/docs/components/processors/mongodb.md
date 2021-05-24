@@ -235,7 +235,7 @@ Default: `[]`
 The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
 
 
-Type: `number`  
+Type: `int`  
 Default: `3`  
 
 ### `backoff`

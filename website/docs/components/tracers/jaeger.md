@@ -124,7 +124,7 @@ Default: `""`
 A parameter to use for sampling. This field is unused for some sampling types.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 
 ### `tags`

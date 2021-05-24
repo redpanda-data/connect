@@ -215,7 +215,7 @@ Default: `""`
 The total number of iterations (shards), increasing this number will increase the overall time taken to process the data, but reduces the memory used in the process. The real memory usage required is significantly higher than the real size of the data and therefore the number of iterations should be at least an order of magnitude higher than the available memory divided by the overall size of the dataset.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 
 ### `sharded_join.merge_strategy`

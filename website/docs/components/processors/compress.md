@@ -68,7 +68,7 @@ Options: `gzip`, `zlib`, `flate`, `snappy`.
 The level of compression to use. May not be applicable to all algorithms.
 
 
-Type: `number`  
+Type: `int`  
 Default: `-1`  
 
 ### `parts`

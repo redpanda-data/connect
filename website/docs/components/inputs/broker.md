@@ -116,7 +116,7 @@ child nodes processors.
 Whatever is specified within `inputs` will be created this many times.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 
 ### `inputs`
@@ -157,7 +157,7 @@ batching:
 A number of messages at which the batch should be flushed. If `0` disables count based batching.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `batching.byte_size`
@@ -165,7 +165,7 @@ Default: `0`
 An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `batching.period`

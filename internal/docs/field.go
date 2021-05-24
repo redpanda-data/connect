@@ -170,6 +170,36 @@ func (f FieldSpec) Linter(fn LintFunc) FieldSpec {
 	return f
 }
 
+// LintOptions enforces that a field value matches one of the provided options
+// and returns a linting error if that is not the case. This is currently opt-in
+// because some fields express options that are only a subset due to deprecated
+// functionality.
+//
+// TODO: V4 Switch this to opt-out.
+func (f FieldSpec) LintOptions() FieldSpec {
+	f.customLintFn = func(ctx LintContext, line, col int, value interface{}) []Lint {
+		str, ok := value.(string)
+		if !ok {
+			return []Lint{NewLintWarning(line, fmt.Sprintf("expected string value, got %T", value))}
+		}
+		if len(f.Options) > 0 {
+			for _, optStr := range f.Options {
+				if str == optStr {
+					return nil
+				}
+			}
+		} else {
+			for _, optStr := range f.AnnotatedOptions {
+				if str == optStr[0] {
+					return nil
+				}
+			}
+		}
+		return []Lint{NewLintError(line, fmt.Sprintf("value %v is not a valid option for this field", str))}
+	}
+	return f
+}
+
 // Unlinted returns a field spec that will not be lint checked during a config
 // parse.
 func (f FieldSpec) Unlinted() FieldSpec {
@@ -431,7 +461,8 @@ type FieldType string
 // ValueType variants.
 var (
 	FieldString  FieldType = "string"
-	FieldNumber  FieldType = "number"
+	FieldInt     FieldType = "int"
+	FieldFloat   FieldType = "float"
 	FieldBool    FieldType = "bool"
 	FieldObject  FieldType = "object"
 	FieldUnknown FieldType = "unknown"
@@ -486,8 +517,10 @@ func getFieldTypeFromReflect(t reflect.Type) (FieldType, bool) {
 	case "slice":
 		ft, _ := getFieldTypeFromReflect(t.Elem())
 		return ft, true
-	case "float64", "int", "int64":
-		return FieldNumber, false
+	case "int", "int64":
+		return FieldInt, false
+	case "float64":
+		return FieldFloat, false
 	case "string":
 		return FieldString, false
 	case "bool":
@@ -650,21 +683,6 @@ func (f FieldSpecs) LintNode(ctx LintContext, node *yaml.Node) []Lint {
 
 //------------------------------------------------------------------------------
 
-// FieldsFromNode walks the children of a YAML node and returns a list of fields
-// extracted from it. This can be used in order to infer a field spec for a
-// parsed component.
-func FieldsFromNode(node *yaml.Node) FieldSpecs {
-	var fields FieldSpecs
-	for i := 0; i < len(node.Content)-1; i += 2 {
-		field := FieldCommon(node.Content[i].Value, "")
-		if len(node.Content[i+1].Content) > 0 {
-			field = field.WithChildren(FieldsFromNode(node.Content[i+1])...)
-		}
-		fields = append(fields, field)
-	}
-	return fields
-}
-
 func getDefault(pathName string, field FieldSpec) (interface{}, error) {
 	if field.Default != nil {
 		// TODO: Should be deep copy here?
@@ -680,55 +698,4 @@ func getDefault(pathName string, field FieldSpec) (interface{}, error) {
 		return m, nil
 	}
 	return nil, fmt.Errorf("field '%v' is required and was not present in the config", pathName)
-}
-
-// NodeToMap converts a yaml node into a generic map structure by referencing
-// expected fields, adding default values to the map when the node does not
-// contain them.
-func (f FieldSpecs) NodeToMap(node *yaml.Node) (map[string]interface{}, error) {
-	pendingFieldsMap := map[string]FieldSpec{}
-	for _, field := range f {
-		pendingFieldsMap[field.Name] = field
-	}
-
-	resultMap := map[string]interface{}{}
-
-	for i := 0; i < len(node.Content)-1; i += 2 {
-		fieldName := node.Content[i].Value
-
-		if f, exists := pendingFieldsMap[fieldName]; exists {
-			delete(pendingFieldsMap, f.Name)
-
-			if len(f.Children) > 0 {
-				var err error
-				if resultMap[fieldName], err = f.Children.NodeToMap(node.Content[i+1]); err != nil {
-					return nil, fmt.Errorf("field '%v': %w", fieldName, err)
-				}
-			} else {
-				// TODO: Use a type annotation for the field to force proper
-				// parsing. This would avoid rough edges in YAML such as the
-				// Norway problem.
-				var v interface{}
-				if err := node.Content[i+1].Decode(&v); err != nil {
-					return nil, err
-				}
-				resultMap[fieldName] = v
-			}
-		} else {
-			var v interface{}
-			if err := node.Content[i+1].Decode(&v); err != nil {
-				return nil, err
-			}
-			resultMap[fieldName] = v
-		}
-	}
-
-	for k, v := range pendingFieldsMap {
-		var err error
-		if resultMap[k], err = getDefault(k, v); err != nil {
-			return nil, err
-		}
-	}
-
-	return resultMap, nil
 }

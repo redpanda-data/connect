@@ -323,7 +323,7 @@ delay_period: 5m
 The maximum number of SQS messages to consume from each request.
 
 
-Type: `number`  
+Type: `int`  
 Default: `10`  
 
 

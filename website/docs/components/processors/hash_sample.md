@@ -57,7 +57,7 @@ hash_sample:
 The lower percentage of the sample range.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `retain_max`
@@ -65,7 +65,7 @@ Default: `0`
 The upper percentage of the sample range.
 
 
-Type: `number`  
+Type: `int`  
 Default: `10`  
 
 ### `parts`

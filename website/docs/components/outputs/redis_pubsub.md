@@ -237,7 +237,7 @@ Default: `"benthos_chan"`
 The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 
 

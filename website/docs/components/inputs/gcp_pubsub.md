@@ -67,7 +67,7 @@ Default: `""`
 The maximum number of outstanding pending messages to be consumed at a given time.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1000`  
 
 ### `max_outstanding_bytes`
@@ -75,7 +75,7 @@ Default: `1000`
 The maximum number of outstanding pending messages to be consumed measured in bytes.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1000000000`  
 
 

@@ -34,7 +34,7 @@ local:
 The maximum number of requests to allow for a given period of time.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1000`  
 
 ### `interval`

@@ -112,7 +112,7 @@ Default: `"benthos_input"`
 The level of delivery guarantee to enforce.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 Options: `0`, `1`, `2`.
 

@@ -120,7 +120,7 @@ codec: gzip/csv
 The maximum message buffer size. Must exceed the largest message to be consumed.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1000000`  
 
 

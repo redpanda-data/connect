@@ -72,7 +72,7 @@ Default: `false`
 An optional maximum number of loops to execute. Helps protect against accidentally creating infinite loops.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `check`

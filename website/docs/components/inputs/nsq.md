@@ -212,7 +212,7 @@ Default: `"benthos_consumer"`
 The maximum number of pending messages to consume at any given time.
 
 
-Type: `number`  
+Type: `int`  
 Default: `100`  
 
 

@@ -279,7 +279,7 @@ Default: `""`
 The maximum number of retries before abandoning a request.
 
 
-Type: `number`  
+Type: `int`  
 Default: `3`  
 
 ### `retry_period`

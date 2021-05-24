@@ -65,7 +65,7 @@ Default: `false`
 Sorry! This field is missing documentation.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1000000`  
 
 ### `delimiter`

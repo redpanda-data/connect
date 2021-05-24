@@ -46,7 +46,7 @@ find a list of functions [here](/docs/configuration/interpolation#bloblang-queri
 The index within the batch to insert the message at.
 
 
-Type: `number`  
+Type: `int`  
 Default: `-1`  
 
 ### `content`

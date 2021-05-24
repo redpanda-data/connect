@@ -6,10 +6,13 @@ description: Hydrates content from structured messages based on an ID field.
 fields:
   - name: cache
     description: A cache resource to use.
+    type: string
   - name: id_path
     description: A dot path pointing to the identifier to use for hydration.
+    type: string
   - name: content_path
     description: A dot path pointing to the value to cache and hydrate.
+    type: string
 
 mapping: |
   map cache_get {
@@ -57,9 +60,16 @@ mapping: |
     this.apply("cache_get"),
   ]
 
+  # The following is only used for testing config field type coercion
+  let cache_type = this.cache.type()
+  let id_type = this.id_path.type()
+  let content_type = this.content_path.type()
+  root = if $cache_type != "string" || $id_type != "string" || $content_type != "string" {
+    throw("Fields were coerced into incorrect types: cache(%v), id_path(%v), content_path(%v)".format($cache_type, $id_type, $content_type))
+  }
+
 tests:
   - name: Basic fields
-
     config:
       cache: foocache
       id_path: article.id
@@ -95,3 +105,9 @@ tests:
                   resource: foocache
                   key: ${! content() }
             result_map: root.article.content = content().string()
+
+  - name: Type coercion
+    config:
+      cache: 10
+      id_path: false
+      content_path: 20.475

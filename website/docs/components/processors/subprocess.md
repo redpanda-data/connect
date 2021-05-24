@@ -101,7 +101,7 @@ Default: `[]`
 The maximum expected response size.
 
 
-Type: `number`  
+Type: `int`  
 Default: `65536`  
 
 ### `codec_send`

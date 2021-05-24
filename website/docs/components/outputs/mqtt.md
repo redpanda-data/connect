@@ -114,7 +114,7 @@ Default: `"benthos_output"`
 The QoS value to set for each message.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 Options: `0`, `1`, `2`.
 
@@ -237,7 +237,7 @@ Default: `""`
 The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 
 

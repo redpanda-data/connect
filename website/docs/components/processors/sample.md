@@ -33,7 +33,7 @@ sample:
 The percentage of messages to keep.
 
 
-Type: `number`  
+Type: `int`  
 Default: `10`  
 
 ### `seed`
@@ -41,7 +41,7 @@ Default: `10`
 A seed for pseudo-random sampling.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ## Alternatives

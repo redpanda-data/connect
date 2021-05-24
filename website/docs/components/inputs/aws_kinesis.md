@@ -148,7 +148,7 @@ Options: `PROVISIONED`, `PAY_PER_REQUEST`.
 Set the provisioned read capacity when creating the table with a `billing_mode` of `PROVISIONED`.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `dynamodb.write_capacity_units`
@@ -156,7 +156,7 @@ Default: `0`
 Set the provisioned write capacity when creating the table with a `billing_mode` of `PROVISIONED`.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `checkpoint_limit`
@@ -164,7 +164,7 @@ Default: `0`
 The maximum gap between the in flight sequence versus the latest acknowledged sequence at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual shards. Any given sequence will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 
 ### `commit_period`
@@ -300,7 +300,7 @@ batching:
 A number of messages at which the batch should be flushed. If `0` disables count based batching.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `batching.byte_size`
@@ -308,7 +308,7 @@ Default: `0`
 An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `batching.period`

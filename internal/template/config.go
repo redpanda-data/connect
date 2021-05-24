@@ -17,8 +17,9 @@ import (
 type FieldConfig struct {
 	Name        string       `yaml:"name"`
 	Description string       `yaml:"description"`
-	Default     *interface{} `yaml:"default"`
-	// TODO: Add a type field and some other stuff.
+	Type        *string      `yaml:"type,omitempty"`
+	Kind        *string      `yaml:"kind,omitempty"`
+	Default     *interface{} `yaml:"default,omitempty"`
 }
 
 // TestConfig defines a unit test for the template.
@@ -40,34 +41,55 @@ type Config struct {
 }
 
 // FieldSpec creates a documentation field spec from a template field config.
-func (c FieldConfig) FieldSpec() docs.FieldSpec {
+func (c FieldConfig) FieldSpec() (docs.FieldSpec, error) {
 	f := docs.FieldCommon(c.Name, c.Description)
 	if c.Default != nil {
 		f = f.HasDefault(*f.Default)
 	}
-	return f
+	if c.Type == nil {
+		return f, errors.New("missing type field")
+	}
+	f = f.HasType(docs.FieldType(*c.Type))
+	if c.Kind != nil {
+		switch *c.Kind {
+		case "map":
+			f = f.Map()
+		case "list":
+			f = f.Array()
+		case "scalar":
+		default:
+			return f, fmt.Errorf("unrecognised scalar type: %v", *c.Kind)
+		}
+	}
+	return f, nil
 }
 
 // ComponentSpec creates a documentation component spec from a template config.
-func (c Config) ComponentSpec() docs.ComponentSpec {
+func (c Config) ComponentSpec() (docs.ComponentSpec, error) {
 	fields := make([]docs.FieldSpec, len(c.Fields))
 	for i, fieldConf := range c.Fields {
-		fields[i] = fieldConf.FieldSpec()
+		var err error
+		if fields[i], err = fieldConf.FieldSpec(); err != nil {
+			return docs.ComponentSpec{}, fmt.Errorf("field %v: %w", i, err)
+		}
 	}
 	config := docs.FieldComponent().WithChildren(fields...)
 
 	return docs.ComponentSpec{
 		Name:        c.Name,
-		Type:        docs.Type(c.Type), // Validated elsewhere.
+		Type:        docs.Type(c.Type),
 		Status:      docs.StatusPlugin,
 		Summary:     c.Summary,
 		Description: c.Description,
 		Config:      config,
-	}
+	}, nil
 }
 
 func (c Config) compile() (*compiled, error) {
-	spec := c.ComponentSpec()
+	spec, err := c.ComponentSpec()
+	if err != nil {
+		return nil, err
+	}
 	mapping, err := bloblang.NewMapping("", c.Mapping)
 	if err != nil {
 		var perr *parser.Error
@@ -167,6 +189,12 @@ func FieldConfigSpec() docs.FieldSpecs {
 	return docs.FieldSpecs{
 		docs.FieldCommon("name", "The name of the field.").HasType(docs.FieldString),
 		docs.FieldCommon("description", "A description of the field.").HasType(docs.FieldString),
+		docs.FieldCommon("type", "The scalar type of the field.").HasType(docs.FieldString).HasOptions(
+			"string", "int", "float", "bool",
+		).LintOptions(),
+		docs.FieldCommon("kind", "The kind of the field.").HasType(docs.FieldString).HasOptions(
+			"scalar", "map", "list",
+		).HasDefault("scalar").LintOptions(),
 		docs.FieldCommon("default", "An optional default value for the field. If a default value is not specified then a configuration without the field is considered incorrect."),
 	}
 }

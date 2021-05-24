@@ -154,7 +154,7 @@ Default: `"all"`
 The maximum number of outstanding acks to be allowed before consuming is halted.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1024`  
 
 ### `tls`

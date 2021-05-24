@@ -258,7 +258,7 @@ Default: `"body"`
 When greater than zero enforces a rough cap on the length of the target stream.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `max_in_flight`
@@ -266,7 +266,7 @@ Default: `0`
 The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 
 ### `metadata`

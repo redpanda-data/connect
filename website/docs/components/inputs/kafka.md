@@ -367,7 +367,7 @@ Default: `true`
 EXPERIMENTAL: The maximum number of messages of the same topic and partition that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual partitions. Any given offset will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 Requires version 3.33.0 or newer  
 
@@ -440,7 +440,7 @@ Default: `"60s"`
 The maximum number of unprocessed messages to fetch at a given time.
 
 
-Type: `number`  
+Type: `int`  
 Default: `256`  
 
 ### `target_version`
@@ -481,7 +481,7 @@ batching:
 A number of messages at which the batch should be flushed. If `0` disables count based batching.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `batching.byte_size`
@@ -489,7 +489,7 @@ Default: `0`
 An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `batching.period`

@@ -72,7 +72,7 @@ Default: `"5s"`
 The maximum number of messages to dispatch across child outputs at any given time.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 
 

@@ -128,7 +128,7 @@ Default: `""`
 The read capacity of the offset DynamoDB table.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `dynamodb_write_provision`
@@ -136,7 +136,7 @@ Default: `0`
 The write capacity of the offset DynamoDB table.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `start_from_oldest`
@@ -248,7 +248,7 @@ batching:
 A number of messages at which the batch should be flushed. If `0` disables count based batching.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `batching.byte_size`
@@ -256,7 +256,7 @@ Default: `0`
 An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `batching.period`

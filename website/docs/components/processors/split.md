@@ -40,7 +40,7 @@ that are batched. You can find out more about batching [in this doc](/docs/confi
 The target number of messages.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 
 ### `byte_size`
@@ -48,7 +48,7 @@ Default: `1`
 An optional target of total message bytes.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 

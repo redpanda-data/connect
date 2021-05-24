@@ -128,7 +128,7 @@ Requires version 3.45.0 or newer
 The maximum number of unprocessed messages to fetch at a given time.
 
 
-Type: `number`  
+Type: `int`  
 Default: `10`  
 
 

@@ -174,7 +174,7 @@ Default: `true`
 The maximum number of unprocessed messages to fetch at a given time.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1024`  
 
 ### `ack_wait`

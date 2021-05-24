@@ -57,7 +57,7 @@ bounds_check:
 The maximum size of a message to allow (in bytes)
 
 
-Type: `number`  
+Type: `int`  
 Default: `1073741824`  
 
 ### `min_part_size`
@@ -65,7 +65,7 @@ Default: `1073741824`
 The minimum size of a message to allow (in bytes)
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 
 ### `max_parts`
@@ -73,7 +73,7 @@ Default: `1`
 The maximum size of message batches to allow (in message count)
 
 
-Type: `number`  
+Type: `int`  
 Default: `100`  
 
 ### `min_parts`
@@ -81,7 +81,7 @@ Default: `100`
 The minimum size of message batches to allow (in message count)
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 
 

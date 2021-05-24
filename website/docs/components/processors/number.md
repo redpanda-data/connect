@@ -65,7 +65,7 @@ A value used by the operator.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `parts`

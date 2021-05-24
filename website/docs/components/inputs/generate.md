@@ -79,7 +79,7 @@ interval: TZ=Europe/London 30 3-6,20-23 * * *
 An optional number of messages to generate, if set above 0 the specified number of messages is generated and then the input will shut down.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ## Examples

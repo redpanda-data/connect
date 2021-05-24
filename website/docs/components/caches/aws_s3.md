@@ -112,7 +112,7 @@ Default: `"5s"`
 The maximum number of retry attempts to make before abandoning a request.
 
 
-Type: `number`  
+Type: `int`  
 Default: `3`  
 
 ### `region`

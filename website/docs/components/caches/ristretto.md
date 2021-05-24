@@ -79,7 +79,7 @@ ttl: 36h
 The maximum number of retry attempts to make before abandoning a request.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `retry_period`

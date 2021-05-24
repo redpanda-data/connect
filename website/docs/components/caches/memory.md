@@ -77,7 +77,7 @@ TTL is respected as usual.
 The TTL of each item in seconds. After this period an item will be eligible for removal during the next compaction.
 
 
-Type: `number`  
+Type: `int`  
 Default: `300`  
 
 ### `compaction_interval`
@@ -93,7 +93,7 @@ Default: `"60s"`
 A number of logical shards to spread keys across, increasing the shards can have a performance benefit when processing a large number of keys.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 
 ### `init_values`

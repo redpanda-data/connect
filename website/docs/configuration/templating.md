@@ -69,7 +69,7 @@ The configuration fields of the template, fields specified here will be parsed f
 
 
 
-Type: `object`  
+Type: list of `object`  
 
 
 ### `fields[].name`
@@ -89,6 +89,26 @@ A description of the field.
 
 Type: `string`  
 
+
+### `fields[].type`
+
+The scalar type of the field.
+
+
+
+Type: `string`  
+
+Options: `string`, `int`, `float`, `bool`.
+
+### `fields[].kind`
+
+The kind of the field.
+
+
+
+Type: `string`  
+
+Options: `scalar`, `map`, `list`.
 
 ### `fields[].default`
 
@@ -112,7 +132,7 @@ Optional unit test definitions for the template that verify certain configuratio
 
 
 
-Type: `object`  
+Type: list of `object`  
 
 
 ### `tests[].name`

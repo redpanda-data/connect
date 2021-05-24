@@ -420,7 +420,7 @@ inject_tracing_map: root.meta.span = this
 The maximum number of parallel message batches to have in flight at any given time.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 
 ### `ack_replicas`
@@ -436,7 +436,7 @@ Default: `false`
 The maximum size in bytes of messages sent to the target topic.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1000000`  
 
 ### `timeout`
@@ -493,7 +493,7 @@ batching:
 A number of messages at which the batch should be flushed. If `0` disables count based batching.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `batching.byte_size`
@@ -501,7 +501,7 @@ Default: `0`
 An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `batching.period`
@@ -564,7 +564,7 @@ processors:
 The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `backoff`

@@ -200,7 +200,7 @@ Default: `false`
 The maximum number of pending messages to have consumed at a time.
 
 
-Type: `number`  
+Type: `int`  
 Default: `10`  
 
 ### `prefetch_size`
@@ -208,7 +208,7 @@ Default: `10`
 The maximum amount of pending messages measured in bytes to have consumed at a time.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `tls`

@@ -81,7 +81,7 @@ It is possible to batch up messages sent from this buffer using a
 The maximum buffer size (in bytes) to allow before applying backpressure upstream.
 
 
-Type: `number`  
+Type: `int`  
 Default: `524288000`  
 
 ### `batch_policy`
@@ -104,7 +104,7 @@ Default: `false`
 A number of messages at which the batch should be flushed. If `0` disables count based batching.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `batch_policy.byte_size`
@@ -112,7 +112,7 @@ Default: `0`
 An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `batch_policy.period`

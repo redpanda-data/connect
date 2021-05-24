@@ -51,7 +51,7 @@ Default: `"127.0.0.1:0"`
 Sorry! This field is missing documentation.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1000000`  
 
 ### `delimiter`

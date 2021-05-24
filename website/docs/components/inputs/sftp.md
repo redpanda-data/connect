@@ -170,7 +170,7 @@ Default: `false`
 The largest token size expected when consuming delimited files.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1000000`  
 
 ### `watcher`

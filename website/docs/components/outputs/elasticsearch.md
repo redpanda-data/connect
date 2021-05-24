@@ -298,7 +298,7 @@ Default: `""`
 The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 
 ### `max_retries`
@@ -306,7 +306,7 @@ Default: `1`
 The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `backoff`
@@ -401,7 +401,7 @@ batching:
 A number of messages at which the batch should be flushed. If `0` disables count based batching.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `batching.byte_size`
@@ -409,7 +409,7 @@ Default: `0`
 An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `batching.period`

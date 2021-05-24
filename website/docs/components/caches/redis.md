@@ -239,7 +239,7 @@ Default: `"24h"`
 The maximum number of retry attempts to make before abandoning a request.
 
 
-Type: `number`  
+Type: `int`  
 Default: `3`  
 
 ### `retry_period`

@@ -113,7 +113,7 @@ Default: `"benthos_messages"`
 The maximum number of messages to pull at a time.
 
 
-Type: `number`  
+Type: `int`  
 Default: `32`  
 
 ### `tls`

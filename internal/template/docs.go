@@ -45,7 +45,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 {{end}}
 
 {{if gt (len $field.Type) 0}}
-Type: ` + "`{{$field.Type}}`" + `  
+Type: {{if $field.IsArray}}list of {{end}}{{if $field.IsMap}}map of {{end}}` + "`{{$field.Type}}`" + `  
 {{end}}
 {{if gt (len $field.AnnotatedOptions) 0}}
 | Option | Summary |

@@ -116,7 +116,7 @@ Default: `","`
 Optionally process records in batches. This can help to speed up the consumption of exceptionally large CSV files. When the end of the file is reached the remaining records are processed as a (potentially smaller) batch.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1`  
 
 This input is particularly useful when consuming CSV from files too large to

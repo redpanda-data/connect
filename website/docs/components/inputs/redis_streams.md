@@ -250,7 +250,7 @@ Default: `["benthos_stream"]`
 The maximum number of messages to consume from a single request.
 
 
-Type: `number`  
+Type: `int`  
 Default: `10`  
 
 ### `client_id`

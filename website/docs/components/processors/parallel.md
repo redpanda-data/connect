@@ -42,7 +42,7 @@ that are batched. You can find out more about batching [in this doc](/docs/confi
 The maximum number of messages to have processing at a given time.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `processors`

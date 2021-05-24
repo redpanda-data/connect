@@ -244,7 +244,7 @@ Default: `"5s"`
 The maximum number of retry attempts for each message.
 
 
-Type: `number`  
+Type: `int`  
 Default: `3`  
 
 

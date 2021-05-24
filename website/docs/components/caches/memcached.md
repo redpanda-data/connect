@@ -82,7 +82,7 @@ Default: `""`
 A TTL in seconds to set for items, after this period keys will be removed.
 
 
-Type: `number`  
+Type: `int`  
 Default: `300`  
 
 ### `retries`
@@ -90,7 +90,7 @@ Default: `300`
 The maximum number of retry attempts to make before abandoning a request.
 
 
-Type: `number`  
+Type: `int`  
 Default: `3`  
 
 ### `retry_period`

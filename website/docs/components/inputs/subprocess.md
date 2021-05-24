@@ -112,7 +112,7 @@ Default: `false`
 The maximum expected size of an individual message.
 
 
-Type: `number`  
+Type: `int`  
 Default: `65536`  
 
 
