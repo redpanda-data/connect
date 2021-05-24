@@ -3,6 +3,7 @@ package processor
 import (
 	"sort"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -667,6 +668,84 @@ func TestWorkflowsWithResources(t *testing.T) {
 			p.CloseAsync()
 			assert.NoError(t, p.WaitForClose(time.Second))
 		})
+	}
+}
+
+func TestWorkflowsParallel(t *testing.T) {
+	branches := [][4]string{
+		{
+			"0",
+			"root.foo = this.foo.not_null()",
+			"root = this",
+			"root.bar = this.foo.number()",
+		},
+		{
+			"1",
+			"root.bar = this.bar.not_null()",
+			"root = this",
+			"root.baz = this.bar.number() + 5",
+		},
+		{
+			"2",
+			"root.baz = this.baz.not_null()",
+			"root = this",
+			"root.buz = this.baz.number() + 2",
+		},
+	}
+	input := []string{
+		`{}`,
+		`{"foo":"not a number"}`,
+		`{"foo":"5"}`,
+	}
+	output := []string{
+		`{"meta":{"workflow":{"failed":{"0":"request mapping failed: failed assignment (line 1): field ` + "`this.foo`" + `: value is null","1":"request mapping failed: failed assignment (line 1): field ` + "`this.bar`" + `: value is null","2":"request mapping failed: failed assignment (line 1): field ` + "`this.baz`" + `: value is null"}}}}`,
+		`{"foo":"not a number","meta":{"workflow":{"failed":{"0":"result mapping failed: failed assignment (line 1): field ` + "`this.foo`" + `: strconv.ParseFloat: parsing \"not a number\": invalid syntax","1":"request mapping failed: failed assignment (line 1): field ` + "`this.bar`" + `: value is null","2":"request mapping failed: failed assignment (line 1): field ` + "`this.baz`" + `: value is null"}}}}`,
+		`{"bar":5,"baz":10,"buz":12,"foo":"5","meta":{"workflow":{"succeeded":["0","1","2"]}}}`,
+	}
+
+	conf := NewConfig()
+	conf.Workflow.BranchResources = []string{}
+	for _, b := range branches {
+		conf.Workflow.BranchResources = append(conf.Workflow.BranchResources, b[0])
+	}
+
+	for loops := 0; loops < 10; loops++ {
+		mgr := newMockProcProvider(t, quickTestBranches(branches...))
+		p, err := NewWorkflow(conf, mgr, log.Noop(), metrics.Noop())
+		require.NoError(t, err)
+
+		startChan := make(chan struct{})
+		wg := sync.WaitGroup{}
+
+		for i := 0; i < 10; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-startChan
+
+				for j := 0; j < 100; j++ {
+					var parts [][]byte
+					for _, input := range input {
+						parts = append(parts, []byte(input))
+					}
+
+					msgs, res := p.ProcessMessage(message.New(parts))
+					require.Nil(t, res)
+					require.Len(t, msgs, 1)
+					var actual []string
+					for _, b := range message.GetAllBytes(msgs[0]) {
+						actual = append(actual, string(b))
+					}
+					assert.Equal(t, output, actual)
+				}
+			}()
+		}
+
+		close(startChan)
+		wg.Wait()
+
+		p.CloseAsync()
+		assert.NoError(t, p.WaitForClose(time.Second))
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -15,81 +14,76 @@ import (
 )
 
 type workflowBranch interface {
-	targetsUsed() [][]string
-	targetsProvided() [][]string
-	createResult([]types.Part, types.Message) ([]types.Part, []branchMapError, error)
-	overlayResult(types.Message, []types.Part) ([]branchMapError, error)
-	CloseAsync()
-	WaitForClose(time.Duration) error
-
-	// Returns a closure that unlocks the branch resource, and a boolean that is
-	// true if the underlying branch has actually changed since the last lock,
-	// which means the dependency graph ought to be re-calculated.
-	lock() (func(), bool)
+	lock() (*Branch, func())
 }
 
 //------------------------------------------------------------------------------
 
 type workflowBranchMap struct {
-	static   bool
-	dag      [][]string
-	branches map[string]workflowBranch
-	m        sync.Mutex
+	static         bool
+	dag            [][]string
+	staticBranches map[string]*Branch
+
+	dynamicBranches map[string]workflowBranch
+}
+
+func lockAll(dynBranches map[string]workflowBranch) (branches map[string]*Branch, unlockFn func(), err error) {
+	unlocks := make([]func(), 0, len(dynBranches))
+	unlockFn = func() {
+		for _, u := range unlocks {
+			if u != nil {
+				u()
+			}
+		}
+	}
+
+	branches = make(map[string]*Branch, len(dynBranches))
+	for k, v := range dynBranches {
+		var branchUnlock func()
+		branches[k], branchUnlock = v.lock()
+		unlocks = append(unlocks, branchUnlock)
+		if branches[k] == nil {
+			err = fmt.Errorf("missing branch resource: %v", k)
+			unlockFn()
+			return
+		}
+	}
+	return
 }
 
 // Locks all branches contained in the branch map and returns the latest DAG, a
 // map of resources, and a func to unlock the resources that were locked. If
 // any error occurs in locked each branch (the resource is missing, or the DAG
 // is malformed) then an error is returned instead.
-func (w *workflowBranchMap) Lock() (dag [][]string, branches map[string]workflowBranch, unlockFn func(), err error) {
-	// Only allow one processing thread to mutate the cached DAG at a time, but
-	// once they're resolved allow any number of threads to keep a reference to
-	// the branch resources.
-	w.m.Lock()
-	defer w.m.Unlock()
-
-	var unlocks []func()
-	unlockFn = func() {
-		for _, u := range unlocks {
-			u()
-		}
-	}
-	needsRefresh := false
-	for _, b := range w.branches {
-		fn, r := b.lock()
-		if fn != nil {
-			// Try not to allocate unlocks unless there are actual resources to
-			// unlock.
-			if unlocks == nil {
-				unlocks = make([]func(), 0, len(w.branches))
-			}
-			unlocks = append(unlocks, fn)
-		}
-		needsRefresh = needsRefresh || r
-	}
+func (w *workflowBranchMap) Lock() (dag [][]string, branches map[string]*Branch, unlockFn func(), err error) {
 	if w.static {
-		return w.dag, w.branches, unlockFn, nil
+		return w.dag, w.staticBranches, func() {}, nil
 	}
 
-	if len(w.dag) == 0 || needsRefresh {
-		var err error
-		if w.dag, err = resolveDynamicBranchDAG(w.branches); err != nil {
-			unlockFn()
-			return nil, nil, nil, fmt.Errorf("failed to resolve DAG: %w", err)
-		}
+	if branches, unlockFn, err = lockAll(w.dynamicBranches); err != nil {
+		return
 	}
-	return w.dag, w.branches, unlockFn, nil
+	if len(w.dag) > 0 {
+		dag = w.dag
+		return
+	}
+
+	if dag, err = resolveDynamicBranchDAG(branches); err != nil {
+		unlockFn()
+		err = fmt.Errorf("failed to resolve DAG: %w", err)
+	}
+	return
 }
 
 func (w *workflowBranchMap) CloseAsync() {
-	for _, b := range w.branches {
+	for _, b := range w.staticBranches {
 		b.CloseAsync()
 	}
 }
 
 func (w *workflowBranchMap) WaitForClose(timeout time.Duration) error {
 	stopBy := time.Now().Add(timeout)
-	for _, c := range w.branches {
+	for _, c := range w.staticBranches {
 		if err := c.WaitForClose(time.Until(stopBy)); err != nil {
 			return err
 		}
@@ -100,7 +94,7 @@ func (w *workflowBranchMap) WaitForClose(timeout time.Duration) error {
 //------------------------------------------------------------------------------
 
 func newWorkflowBranchMap(conf WorkflowConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*workflowBranchMap, error) {
-	children := map[string]workflowBranch{}
+	dynamicBranches, staticBranches := map[string]workflowBranch{}, map[string]*Branch{}
 	for k, v := range conf.Branches {
 		if len(processDAGStageName.FindString(k)) != len(k) {
 			return nil, fmt.Errorf("workflow branch name '%v' contains invalid characters", k)
@@ -112,7 +106,8 @@ func newWorkflowBranchMap(conf WorkflowConfig, mgr types.Manager, log log.Modula
 			return nil, fmt.Errorf("failed to create branch '%v': %v", k, err)
 		}
 
-		children[k] = &normalBranch{child}
+		dynamicBranches[k] = &normalBranch{child}
+		staticBranches[k] = child
 	}
 
 	// TODO: V4 Remove this
@@ -133,13 +128,13 @@ func newWorkflowBranchMap(conf WorkflowConfig, mgr types.Manager, log log.Modula
 	}
 
 	for _, k := range conf.BranchResources {
-		if _, exists := children[k]; exists {
+		if _, exists := dynamicBranches[k]; exists {
 			return nil, fmt.Errorf("branch resource name '%v' collides with an explicit branch", k)
 		}
 		if err := checkResource(k); err != nil {
 			return nil, err
 		}
-		children[k] = &resourcedBranch{
+		dynamicBranches[k] = &resourcedBranch{
 			name: k,
 			mgr:  pProvider,
 		}
@@ -149,11 +144,11 @@ func newWorkflowBranchMap(conf WorkflowConfig, mgr types.Manager, log log.Modula
 	// branches are resources.
 	for _, tier := range conf.Order {
 		for _, k := range tier {
-			if _, exists := children[k]; !exists {
+			if _, exists := dynamicBranches[k]; !exists {
 				if err := checkResource(k); err != nil {
 					return nil, err
 				}
-				children[k] = &resourcedBranch{
+				dynamicBranches[k] = &resourcedBranch{
 					name: k,
 					mgr:  pProvider,
 				}
@@ -161,24 +156,27 @@ func newWorkflowBranchMap(conf WorkflowConfig, mgr types.Manager, log log.Modula
 		}
 	}
 
+	static := len(dynamicBranches) == len(staticBranches)
+
 	var dag [][]string
 	if len(conf.Order) > 0 {
 		dag = conf.Order
-		if err := verifyStaticBranchDAG(dag, children); err != nil {
+		if err := verifyStaticBranchDAG(dag, dynamicBranches); err != nil {
 			return nil, err
 		}
-	} else if len(conf.BranchResources) == 0 {
+	} else if static {
 		var err error
-		if dag, err = resolveDynamicBranchDAG(children); err != nil {
+		if dag, err = resolveDynamicBranchDAG(staticBranches); err != nil {
 			return nil, err
 		}
 		log.Infof("Automatically resolved workflow DAG: %v\n", dag)
 	}
 
 	return &workflowBranchMap{
-		static:   len(dag) > 0,
-		dag:      dag,
-		branches: children,
+		static:          static,
+		dag:             dag,
+		staticBranches:  staticBranches,
+		dynamicBranches: dynamicBranches,
 	}, nil
 }
 
@@ -187,65 +185,15 @@ func newWorkflowBranchMap(conf WorkflowConfig, mgr types.Manager, log log.Modula
 type resourcedBranch struct {
 	name string
 	mgr  procProvider
-
-	p types.Processor
-}
-
-func (r *resourcedBranch) targetsUsed() [][]string {
-	if r.p == nil {
-		return nil
-	}
-	b, ok := r.p.(*Branch)
-	if !ok {
-		return nil
-	}
-	return b.targetsUsed()
-}
-
-func (r *resourcedBranch) targetsProvided() [][]string {
-	if r.p == nil {
-		return nil
-	}
-	b, ok := r.p.(*Branch)
-	if !ok {
-		return nil
-	}
-	return b.targetsProvided()
-}
-
-func (r *resourcedBranch) createResult(parts []types.Part, referenceMsg types.Message) ([]types.Part, []branchMapError, error) {
-	if r.p == nil {
-		return nil, nil, fmt.Errorf("failed to obtain branch resource '%v'", r.name)
-	}
-	b, ok := r.p.(*Branch)
-	if !ok {
-		return nil, nil, fmt.Errorf("branch resource '%v' found incorrect processor type %T", r.name, r.p)
-	}
-	return b.createResult(parts, referenceMsg)
-}
-
-func (r *resourcedBranch) overlayResult(msg types.Message, parts []types.Part) ([]branchMapError, error) {
-	if r.p == nil {
-		return nil, fmt.Errorf("failed to obtain branch resource '%v'", r.name)
-	}
-	b, ok := r.p.(*Branch)
-	if !ok {
-		return nil, fmt.Errorf("branch resource '%v' found incorrect processor type %T", r.name, r.p)
-	}
-	return b.overlayResult(msg, parts)
 }
 
 // TODO: Expand this once manager supports locking and updates.
-func (r *resourcedBranch) lock() (func(), bool) {
-	prevP := r.p
-	r.p, _ = r.mgr.GetProcessor(r.name)
-	return func() {}, r.p != prevP
-}
-
-// Not needed as the manager handles shut down.
-func (r *resourcedBranch) CloseAsync() {}
-func (r *resourcedBranch) WaitForClose(time.Duration) error {
-	return nil
+func (r *resourcedBranch) lock() (branch *Branch, unlockFn func()) {
+	proc, _ := r.mgr.GetProcessor(r.name)
+	if proc != nil {
+		branch, _ = proc.(*Branch)
+	}
+	return
 }
 
 //------------------------------------------------------------------------------
@@ -254,8 +202,8 @@ type normalBranch struct {
 	*Branch
 }
 
-func (r *normalBranch) lock() (func(), bool) {
-	return nil, false
+func (r *normalBranch) lock() (branch *Branch, unlockFn func()) {
+	return r.Branch, nil
 }
 
 //------------------------------------------------------------------------------
@@ -272,7 +220,7 @@ func depHasPrefix(wanted, provided []string) bool {
 	return true
 }
 
-func getBranchDeps(id string, wanted [][]string, branches map[string]workflowBranch) []string {
+func getBranchDeps(id string, wanted [][]string, branches map[string]*Branch) []string {
 	dependencies := []string{}
 
 	for k, b := range branches {
@@ -320,7 +268,7 @@ func verifyStaticBranchDAG(order [][]string, branches map[string]workflowBranch)
 	return nil
 }
 
-func resolveDynamicBranchDAG(branches map[string]workflowBranch) ([][]string, error) {
+func resolveDynamicBranchDAG(branches map[string]*Branch) ([][]string, error) {
 	if len(branches) == 0 {
 		return [][]string{}, nil
 	}

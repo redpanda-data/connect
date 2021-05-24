@@ -302,6 +302,7 @@ type Workflow struct {
 	mErrOverlay      metrics.StatCounter
 	mErrStages       map[string]metrics.StatCounter
 	mSuccStages      map[string]metrics.StatCounter
+	metricsMut       sync.RWMutex
 }
 
 // NewWorkflow returns a new workflow processor.
@@ -334,7 +335,7 @@ func NewWorkflow(
 	if w.children, err = newWorkflowBranchMap(conf.Workflow, mgr, log, stats); err != nil {
 		return nil, err
 	}
-	for k := range w.children.branches {
+	for k := range w.children.dynamicBranches {
 		w.allStages[k] = struct{}{}
 	}
 
@@ -353,23 +354,35 @@ func NewWorkflow(
 //------------------------------------------------------------------------------
 
 func (w *Workflow) incrStageErr(id string) {
-	if ctr, exists := w.mErrStages[id]; exists {
+	w.metricsMut.RLock()
+	ctr, exists := w.mErrStages[id]
+	w.metricsMut.RUnlock()
+	if exists {
 		ctr.Incr(1)
 		return
 	}
 
-	ctr := w.stats.GetCounter(fmt.Sprintf("%v.error", id))
+	w.metricsMut.Lock()
+	defer w.metricsMut.Unlock()
+
+	ctr = w.stats.GetCounter(fmt.Sprintf("%v.error", id))
 	ctr.Incr(1)
 	w.mErrStages[id] = ctr
 }
 
 func (w *Workflow) incrStageSucc(id string) {
-	if ctr, exists := w.mSuccStages[id]; exists {
+	w.metricsMut.RLock()
+	ctr, exists := w.mSuccStages[id]
+	w.metricsMut.RUnlock()
+	if exists {
 		ctr.Incr(1)
 		return
 	}
 
-	ctr := w.stats.GetCounter(fmt.Sprintf("%v.success", id))
+	w.metricsMut.Lock()
+	defer w.metricsMut.Unlock()
+
+	ctr = w.stats.GetCounter(fmt.Sprintf("%v.success", id))
 	ctr.Incr(1)
 	w.mSuccStages[id] = ctr
 }

@@ -20,6 +20,10 @@ All notable changes to this project will be documented in this file.
 - Go Plugins API: The Bloblang `ArgSpec` now returns a public error type `ArgError`.
 - Components that support glob paths (`file`, `csv`, etc) now also support super globs (double asterisk).
 
+### Fixed
+
+- Fixed a rare panic caused when executing a `workflow` resource processor that references `branch` resources across parallel threads.
+
 ## 3.46.1 - 2021-05-19
 
 ### Fixed
