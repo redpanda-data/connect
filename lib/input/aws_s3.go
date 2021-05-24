@@ -179,7 +179,7 @@ func newS3ObjectTarget(key, bucket string, notificationAt time.Time, ackFn codec
 }
 
 type s3ObjectTargetReader interface {
-	Pop(ctx context.Context) (*s3ObjectTarget, error)
+	Pop(ctx context.Context, stats metrics.Type) (*s3ObjectTarget, error)
 	Close(ctx context.Context) error
 }
 
@@ -256,7 +256,7 @@ func newStaticTargetReader(
 	return &staticKeys, nil
 }
 
-func (s *staticTargetReader) Pop(ctx context.Context) (*s3ObjectTarget, error) {
+func (s *staticTargetReader) Pop(ctx context.Context, stats metrics.Type) (*s3ObjectTarget, error) {
 	if len(s.pending) == 0 && s.startAfter != nil {
 		s.pending = nil
 		listInput := &s3.ListObjectsV2Input{
@@ -271,13 +271,18 @@ func (s *staticTargetReader) Pop(ctx context.Context) (*s3ObjectTarget, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to list objects: %v", err)
 		}
+		totalBytes := int64(0)
 		for _, obj := range output.Contents {
 			ackFn := deleteS3ObjectAckFn(s.s3, s.conf.Bucket, *obj.Key, s.conf.DeleteObjects, nil)
 			s.pending = append(s.pending, newS3ObjectTarget(*obj.Key, s.conf.Bucket, time.Time{}, ackFn))
+			totalBytes += *obj.Size
 		}
 		if len(output.Contents) > 0 {
 			s.startAfter = output.Contents[len(output.Contents)-1].Key
 		}
+
+		totalBytesGauge := stats.GetGauge("total.bytes")
+		totalBytesGauge.Set(totalBytes)
 	}
 	if len(s.pending) == 0 {
 		return nil, io.EOF
@@ -313,7 +318,7 @@ func newSQSTargetReader(
 	return &sqsTargetReader{conf, log, sqs, s3, time.Time{}, nil}
 }
 
-func (s *sqsTargetReader) Pop(ctx context.Context) (*s3ObjectTarget, error) {
+func (s *sqsTargetReader) Pop(ctx context.Context, stats metrics.Type) (*s3ObjectTarget, error) {
 	if len(s.pending) > 0 {
 		t := s.pending[0]
 		s.pending = s.pending[1:]
@@ -684,7 +689,7 @@ func (a *awsS3) getObjectTarget(ctx context.Context) (*s3PendingObject, error) {
 		return a.object, nil
 	}
 
-	target, err := a.keyReader.Pop(ctx)
+	target, err := a.keyReader.Pop(ctx, a.stats)
 	if err != nil {
 		return nil, err
 	}
