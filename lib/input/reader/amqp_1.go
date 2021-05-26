@@ -3,6 +3,7 @@ package reader
 import (
 	"context"
 	"crypto/tls"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -80,9 +81,16 @@ func (c *amqp1Conn) Close(ctx context.Context) {
 
 //------------------------------------------------------------------------------
 
+type amqp1PendingMsg struct {
+	msg              types.Message
+	renewDoneChannel chan struct{}
+}
+
 // AMQP1 is an input type that reads messages via the AMQP 1.0 protocol.
 type AMQP1 struct {
 	tlsConf *tls.Config
+
+	pendingMsgs map[string]*amqp1PendingMsg
 
 	conf  AMQP1Config
 	stats metrics.Type
@@ -95,9 +103,10 @@ type AMQP1 struct {
 // NewAMQP1 creates a new AMQP1 input type.
 func NewAMQP1(conf AMQP1Config, log log.Modular, stats metrics.Type) (*AMQP1, error) {
 	a := AMQP1{
-		conf:  conf,
-		stats: stats,
-		log:   log,
+		conf:        conf,
+		stats:       stats,
+		log:         log,
+		pendingMsgs: map[string]*amqp1PendingMsg{},
 	}
 	if conf.TLS.Enabled {
 		var err error
@@ -183,6 +192,15 @@ func (a *AMQP1) disconnect(ctx context.Context) error {
 	a.m.Lock()
 	defer a.m.Unlock()
 
+	for _, msg := range a.pendingMsgs {
+		_ = msg.msg.Iter(func(_ int, part types.Part) error {
+			part.Metadata().Set("source_msg_lost", "true")
+			return nil
+		})
+		close(msg.renewDoneChannel)
+	}
+	a.pendingMsgs = map[string]*amqp1PendingMsg{}
+
 	if a.conn != nil {
 		a.conn.Close(ctx)
 	}
@@ -231,15 +249,26 @@ func (a *AMQP1) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn,
 
 	msg.Append(part)
 
-	var done chan struct{}
+	var renewDoneChannel chan struct{}
 	if a.conf.AzureRenewLock {
-		done = a.startRenewJob(amqpMsg)
+		renewDoneChannel = a.startRenewJob(amqpMsg)
 	}
 
+	a.m.RLock()
+	a.pendingMsgs[pendingMsgIndex(amqpMsg)] = &amqp1PendingMsg{
+		msg: msg,
+		renewDoneChannel: renewDoneChannel,
+	}
+	a.m.RUnlock()
+
 	return msg, func(ctx context.Context, res types.Response) error {
-		if done != nil {
-			close(done)
-			done = nil
+		msg, ok := a.popPendingMessage(amqpMsg)
+		if !ok {
+			return nil
+		}
+
+		if msg.renewDoneChannel != nil {
+			close(msg.renewDoneChannel)
 		}
 
 		if res.Error() != nil {
@@ -247,6 +276,20 @@ func (a *AMQP1) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn,
 		}
 		return amqpMsg.Accept(ctx)
 	}, nil
+}
+
+func (a *AMQP1) popPendingMessage(amqpMsg *amqp.Message) (*amqp1PendingMsg, bool) {
+	a.m.Lock()
+	defer a.m.Unlock()
+	msg, ok := a.pendingMsgs[pendingMsgIndex(amqpMsg)]
+	if ok {
+		delete(a.pendingMsgs, pendingMsgIndex(amqpMsg))
+	}
+	return msg, ok
+}
+
+func pendingMsgIndex(amqpMsg *amqp.Message) string {
+	return hex.EncodeToString(amqpMsg.DeliveryTag)
 }
 
 // CloseAsync shuts down the AMQP1 input and stops processing requests.
@@ -294,6 +337,9 @@ func (a *AMQP1) startRenewJob(amqpMsg *amqp.Message) chan struct{} {
 			case <-done:
 				return
 			case <-time.After(time.Until(lockedUntil) / 10 * 9):
+				if _, ok := a.pendingMsgs[hex.EncodeToString(amqpMsg.DeliveryTag)]; !ok {
+					return
+				}
 				var err error
 				lockedUntil, err = a.renewWithContext(ctx, amqpMsg)
 				if err != nil {

@@ -218,12 +218,25 @@ func NewPolicy(
 }
 
 //------------------------------------------------------------------------------
+func (p *Policy) Clear() {
+	newParts := make([]types.Part, 0, len(p.parts))
+	for _, part := range p.parts {
+		if part.Metadata().Get("source_msg_lost") != "true" {
+			newParts = append(newParts, part)
+		} else {
+			p.log.Infoln("lost message")
+		}
+	}
+	p.parts = newParts
+}
 
 // Add a new message part to this batch policy. Returns true if this part
 // triggers the conditions of the policy.
 func (p *Policy) Add(part types.Part) bool {
 	p.sizeTally += len(part.Get())
 	p.parts = append(p.parts, part)
+
+	p.Clear()
 
 	if !p.triggered && p.count > 0 && len(p.parts) >= p.count {
 		p.triggered = true
@@ -262,6 +275,7 @@ func (p *Policy) Add(part types.Part) bool {
 // policy is currently empty.
 func (p *Policy) Flush() types.Message {
 	var newMsg types.Message
+	p.Clear()
 
 	resultMsgs := p.FlushAny()
 	if len(resultMsgs) == 1 {
