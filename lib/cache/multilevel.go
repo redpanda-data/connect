@@ -1,10 +1,12 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -85,14 +87,10 @@ func NewMultilevel(conf Config, mgr types.Manager, log log.Modular, stats metric
 	if len(conf.Multilevel) < 2 {
 		return nil, fmt.Errorf("expected at least two cache levels, found %v", len(conf.Multilevel))
 	}
-	missing := []string{}
-	for _, c := range conf.Multilevel {
-		if _, err := mgr.GetCache(c); err != nil {
-			missing = append(missing, c)
+	for _, name := range conf.Multilevel {
+		if err := interop.ProbeCache(context.Background(), mgr, name); err != nil {
+			return nil, err
 		}
-	}
-	if len(missing) > 0 {
-		return nil, fmt.Errorf("caches %v not found", missing)
 	}
 	return &Multilevel{
 		mgr:    mgr,
@@ -108,12 +106,15 @@ func (l *Multilevel) setUpToLevelPassive(i int, key string, value []byte) {
 		if j == i {
 			break
 		}
-		c, err := l.mgr.GetCache(name)
-		if err == nil {
-			err = c.Set(key, value)
-		}
+		var setErr error
+		err := interop.AccessCache(context.Background(), l.mgr, name, func(c types.Cache) {
+			setErr = c.Set(key, value)
+		})
 		if err != nil {
 			l.log.Errorf("Unable to passively set key '%v' for cache '%v': %v\n", key, name, err)
+		}
+		if setErr != nil {
+			l.log.Errorf("Unable to passively set key '%v' for cache '%v': %v\n", key, name, setErr)
 		}
 	}
 }
@@ -122,11 +123,13 @@ func (l *Multilevel) setUpToLevelPassive(i int, key string, value []byte) {
 // if the key does not exist.
 func (l *Multilevel) Get(key string) ([]byte, error) {
 	for i, name := range l.caches {
-		c, err := l.mgr.GetCache(name)
-		if err != nil {
-			return nil, fmt.Errorf("unable to access cache '%v': %v", name, err)
+		var data []byte
+		var err error
+		if cerr := interop.AccessCache(context.Background(), l.mgr, name, func(c types.Cache) {
+			data, err = c.Get(key)
+		}); cerr != nil {
+			return nil, fmt.Errorf("unable to access cache '%v': %v", name, cerr)
 		}
-		data, err := c.Get(key)
 		if err != nil {
 			if err != types.ErrKeyNotFound {
 				return nil, err
@@ -142,18 +145,18 @@ func (l *Multilevel) Get(key string) ([]byte, error) {
 // SetWithTTL attempts to set the value of a key.
 func (l *Multilevel) SetWithTTL(key string, value []byte, ttl *time.Duration) error {
 	for _, name := range l.caches {
-		c, err := l.mgr.GetCache(name)
-		if err != nil {
-			return fmt.Errorf("unable to access cache '%v': %v", name, err)
+		var err error
+		if cerr := interop.AccessCache(context.Background(), l.mgr, name, func(c types.Cache) {
+			if cttl, ok := c.(types.CacheWithTTL); ok {
+				err = cttl.SetWithTTL(key, value, ttl)
+			} else {
+				err = c.Set(key, value)
+			}
+		}); cerr != nil {
+			return fmt.Errorf("unable to access cache '%v': %v", name, cerr)
 		}
-		if cttl, ok := c.(types.CacheWithTTL); ok {
-			if err := cttl.SetWithTTL(key, value, ttl); err != nil {
-				return err
-			}
-		} else {
-			if err := c.Set(key, value); err != nil {
-				return err
-			}
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -168,22 +171,22 @@ func (l *Multilevel) Set(key string, value []byte) error {
 // keys fail.
 func (l *Multilevel) SetMultiWithTTL(items map[string]types.CacheTTLItem) error {
 	for _, name := range l.caches {
-		c, err := l.mgr.GetCache(name)
-		if err != nil {
-			return fmt.Errorf("unable to access cache '%v': %v", name, err)
+		var err error
+		if cerr := interop.AccessCache(context.Background(), l.mgr, name, func(c types.Cache) {
+			if cttl, ok := c.(types.CacheWithTTL); ok {
+				err = cttl.SetMultiWithTTL(items)
+			} else {
+				sitems := make(map[string][]byte, len(items))
+				for k, v := range items {
+					sitems[k] = v.Value
+				}
+				err = c.SetMulti(sitems)
+			}
+		}); cerr != nil {
+			return fmt.Errorf("unable to access cache '%v': %v", name, cerr)
 		}
-		if cttl, ok := c.(types.CacheWithTTL); ok {
-			if err := cttl.SetMultiWithTTL(items); err != nil {
-				return err
-			}
-		} else {
-			sitems := make(map[string][]byte, len(items))
-			for k, v := range items {
-				sitems[k] = v.Value
-			}
-			if err := c.SetMulti(sitems); err != nil {
-				return err
-			}
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -205,11 +208,13 @@ func (l *Multilevel) SetMulti(items map[string][]byte) error {
 // and returns an error if the key already exists.
 func (l *Multilevel) AddWithTTL(key string, value []byte, ttl *time.Duration) error {
 	for i := 0; i < len(l.caches)-1; i++ {
-		c, err := l.mgr.GetCache(l.caches[i])
-		if err != nil {
-			return fmt.Errorf("unable to access cache '%v': %v", l.caches[i], err)
+		var err error
+		if cerr := interop.AccessCache(context.Background(), l.mgr, l.caches[i], func(c types.Cache) {
+			_, err = c.Get(key)
+		}); cerr != nil {
+			return fmt.Errorf("unable to access cache '%v': %v", l.caches[i], cerr)
 		}
-		if _, err = c.Get(key); err != nil {
+		if err != nil {
 			if err != types.ErrKeyNotFound {
 				return err
 			}
@@ -217,33 +222,33 @@ func (l *Multilevel) AddWithTTL(key string, value []byte, ttl *time.Duration) er
 			return types.ErrKeyAlreadyExists
 		}
 	}
-	c, err := l.mgr.GetCache(l.caches[len(l.caches)-1])
-	if err != nil {
-		return fmt.Errorf("unable to access cache '%v': %v", l.caches[len(l.caches)-1], err)
-	}
 
-	if cttl, ok := c.(types.CacheWithTTL); ok {
-		if err := cttl.AddWithTTL(key, value, ttl); err != nil {
-			return err
+	var err error
+	if cerr := interop.AccessCache(context.Background(), l.mgr, l.caches[len(l.caches)-1], func(c types.Cache) {
+		if cttl, ok := c.(types.CacheWithTTL); ok {
+			err = cttl.AddWithTTL(key, value, ttl)
+		} else {
+			err = c.Add(key, value)
 		}
-	} else {
-		if err := c.Add(key, value); err != nil {
-			return err
-		}
+	}); cerr != nil {
+		return fmt.Errorf("unable to access cache '%v': %v", l.caches[len(l.caches)-1], cerr)
+	}
+	if err != nil {
+		return err
 	}
 
 	for i := len(l.caches) - 2; i >= 0; i-- {
-		if c, err = l.mgr.GetCache(l.caches[i]); err != nil {
-			return fmt.Errorf("unable to access cache '%v': %v", l.caches[i], err)
+		if cerr := interop.AccessCache(context.Background(), l.mgr, l.caches[i], func(c types.Cache) {
+			if cttl, ok := c.(types.CacheWithTTL); ok {
+				err = cttl.AddWithTTL(key, value, ttl)
+			} else {
+				err = c.Add(key, value)
+			}
+		}); cerr != nil {
+			return fmt.Errorf("unable to access cache '%v': %v", l.caches[i], cerr)
 		}
-		if cttl, ok := c.(types.CacheWithTTL); ok {
-			if err := cttl.AddWithTTL(key, value, ttl); err != nil {
-				return err
-			}
-		} else {
-			if err := c.Set(key, value); err != nil {
-				return err
-			}
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -258,11 +263,13 @@ func (l *Multilevel) Add(key string, value []byte) error {
 // Delete attempts to remove a key.
 func (l *Multilevel) Delete(key string) error {
 	for _, name := range l.caches {
-		c, err := l.mgr.GetCache(name)
-		if err != nil {
-			return fmt.Errorf("unable to access cache '%v': %v", name, err)
+		var err error
+		if cerr := interop.AccessCache(context.Background(), l.mgr, name, func(c types.Cache) {
+			err = c.Delete(key)
+		}); cerr != nil {
+			return fmt.Errorf("unable to access cache '%v': %v", name, cerr)
 		}
-		if err = c.Delete(key); err != nil && err != types.ErrKeyNotFound {
+		if err != nil && err != types.ErrKeyNotFound {
 			return err
 		}
 	}

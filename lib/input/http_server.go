@@ -20,6 +20,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/metadata"
@@ -192,12 +193,10 @@ func NewHTTPServerConfig() HTTPServerConfig {
 type HTTPServer struct {
 	running int32
 
-	conf  Config
+	conf  HTTPServerConfig
 	stats metrics.Type
 	log   log.Modular
 	mgr   types.Manager
-
-	ratelimit types.RateLimit
 
 	mux     *http.ServeMux
 	server  *http.Server
@@ -249,14 +248,6 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		}
 	}
 
-	var ratelimit types.RateLimit
-	if len(conf.HTTPServer.RateLimit) > 0 {
-		var err error
-		if ratelimit, err = mgr.GetRateLimit(conf.HTTPServer.RateLimit); err != nil {
-			return nil, fmt.Errorf("unable to locate rate_limit resource '%v': %v", conf.HTTPServer.RateLimit, err)
-		}
-	}
-
 	verbs := map[string]struct{}{}
 	for _, v := range conf.HTTPServer.AllowedVerbs {
 		verbs[v] = struct{}{}
@@ -267,12 +258,11 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 
 	h := HTTPServer{
 		running:         1,
-		conf:            conf,
+		conf:            conf.HTTPServer,
 		stats:           stats,
 		log:             log,
 		mgr:             mgr,
 		mux:             mux,
-		ratelimit:       ratelimit,
 		server:          server,
 		timeout:         timeout,
 		responseHeaders: map[string]*field.Expression{},
@@ -299,10 +289,10 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 	}
 
 	var err error
-	if h.responseStatus, err = bloblang.NewField(h.conf.HTTPServer.Response.Status); err != nil {
+	if h.responseStatus, err = bloblang.NewField(h.conf.Response.Status); err != nil {
 		return nil, fmt.Errorf("failed to parse response status expression: %v", err)
 	}
-	for k, v := range h.conf.HTTPServer.Response.Headers {
+	for k, v := range h.conf.Response.Headers {
 		if h.responseHeaders[k], err = bloblang.NewField(v); err != nil {
 			return nil, fmt.Errorf("failed to parse response header '%v' expression: %v", k, err)
 		}
@@ -311,22 +301,28 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 	postHdlr := httputil.GzipHandler(h.postHandler)
 	wsHdlr := httputil.GzipHandler(h.wsHandler)
 	if mux != nil {
-		if len(h.conf.HTTPServer.Path) > 0 {
-			mux.HandleFunc(h.conf.HTTPServer.Path, postHdlr)
+		if len(h.conf.Path) > 0 {
+			mux.HandleFunc(h.conf.Path, postHdlr)
 		}
-		if len(h.conf.HTTPServer.WSPath) > 0 {
-			mux.HandleFunc(h.conf.HTTPServer.WSPath, wsHdlr)
+		if len(h.conf.WSPath) > 0 {
+			mux.HandleFunc(h.conf.WSPath, wsHdlr)
 		}
 	} else {
-		if len(h.conf.HTTPServer.Path) > 0 {
+		if len(h.conf.Path) > 0 {
 			mgr.RegisterEndpoint(
-				h.conf.HTTPServer.Path, "Post a message into Benthos.", postHdlr,
+				h.conf.Path, "Post a message into Benthos.", postHdlr,
 			)
 		}
-		if len(h.conf.HTTPServer.WSPath) > 0 {
+		if len(h.conf.WSPath) > 0 {
 			mgr.RegisterEndpoint(
-				h.conf.HTTPServer.WSPath, "Post messages via websocket into Benthos.", wsHdlr,
+				h.conf.WSPath, "Post messages via websocket into Benthos.", wsHdlr,
 			)
+		}
+	}
+
+	if h.conf.RateLimit != "" {
+		if err := interop.ProbeRateLimit(context.Background(), h.mgr, h.conf.RateLimit); err != nil {
+			return nil, err
 		}
 	}
 
@@ -415,8 +411,17 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.ratelimit != nil {
-		if tUntil, err := h.ratelimit.Access(); err != nil {
+	if h.conf.RateLimit != "" {
+		var tUntil time.Duration
+		var err error
+		if rerr := interop.AccessRateLimit(r.Context(), h.mgr, h.conf.RateLimit, func(rl types.RateLimit) {
+			tUntil, err = rl.Access()
+		}); rerr != nil {
+			http.Error(w, "Server error", http.StatusBadGateway)
+			h.log.Warnf("Failed to access rate limit: %v\n", rerr)
+			return
+		}
+		if err != nil {
 			http.Error(w, "Server error", http.StatusBadGateway)
 			h.log.Warnf("Failed to access rate limit: %v\n", err)
 			return
@@ -442,7 +447,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	h.mCount.Incr(1)
 	h.mPartsRcvd.Incr(int64(msg.Len()))
 	h.mRcvd.Incr(1)
-	h.log.Tracef("Consumed %v messages from POST to '%v'.\n", msg.Len(), h.conf.HTTPServer.Path)
+	h.log.Tracef("Consumed %v messages from POST to '%v'.\n", msg.Len(), h.conf.Path)
 
 	resChan := make(chan types.Response)
 	select {
@@ -576,7 +581,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	resChan := make(chan types.Response)
 	throt := throttle.New(throttle.OptCloseChan(h.closeChan))
 
-	if welMsg := h.conf.HTTPServer.WSWelcomeMessage; len(welMsg) > 0 {
+	if welMsg := h.conf.WSWelcomeMessage; len(welMsg) > 0 {
 		if err = ws.WriteMessage(websocket.BinaryMessage, []byte(welMsg)); err != nil {
 			h.log.Errorf("Failed to send welcome message: %v\n", err)
 		}
@@ -592,12 +597,19 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 			h.mCount.Incr(1)
 		}
 
-		if h.ratelimit != nil {
-			if tUntil, err := h.ratelimit.Access(); err != nil || tUntil > 0 {
+		if h.conf.RateLimit != "" {
+			var tUntil time.Duration
+			if rerr := interop.AccessRateLimit(r.Context(), h.mgr, h.conf.RateLimit, func(rl types.RateLimit) {
+				tUntil, err = rl.Access()
+			}); rerr != nil {
+				h.log.Warnf("Failed to access rate limit: %v\n", rerr)
+				err = rerr
+			}
+			if err != nil || tUntil > 0 {
 				if err != nil {
 					h.log.Warnf("Failed to access rate limit: %v\n", err)
 				}
-				if rlMsg := h.conf.HTTPServer.WSRateLimitMessage; len(rlMsg) > 0 {
+				if rlMsg := h.conf.WSRateLimitMessage; len(rlMsg) > 0 {
 					if err = ws.WriteMessage(websocket.BinaryMessage, []byte(rlMsg)); err != nil {
 						h.log.Errorf("Failed to send rate limit message: %v\n", err)
 					}
@@ -694,20 +706,20 @@ func (h *HTTPServer) loop() {
 
 	if h.server != nil {
 		go func() {
-			if len(h.conf.HTTPServer.KeyFile) > 0 || len(h.conf.HTTPServer.CertFile) > 0 {
+			if len(h.conf.KeyFile) > 0 || len(h.conf.CertFile) > 0 {
 				h.log.Infof(
 					"Receiving HTTPS messages at: https://%s\n",
-					h.conf.HTTPServer.Address+h.conf.HTTPServer.Path,
+					h.conf.Address+h.conf.Path,
 				)
 				if err := h.server.ListenAndServeTLS(
-					h.conf.HTTPServer.CertFile, h.conf.HTTPServer.KeyFile,
+					h.conf.CertFile, h.conf.KeyFile,
 				); err != http.ErrServerClosed {
 					h.log.Errorf("Server error: %v\n", err)
 				}
 			} else {
 				h.log.Infof(
 					"Receiving HTTP messages at: http://%s\n",
-					h.conf.HTTPServer.Address+h.conf.HTTPServer.Path,
+					h.conf.Address+h.conf.Path,
 				)
 				if err := h.server.ListenAndServe(); err != http.ErrServerClosed {
 					h.log.Errorf("Server error: %v\n", err)

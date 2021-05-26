@@ -18,6 +18,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -42,7 +43,6 @@ type Client struct {
 
 	conf          client.Config
 	retryThrottle *throttle.Type
-	rateLimit     types.RateLimit
 
 	log   log.Modular
 	stats metrics.Type
@@ -161,13 +161,6 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 	h.mSucc = h.stats.GetCounter("success")
 	h.mCodes = map[int]metrics.StatCounter{}
 
-	if len(h.conf.RateLimit) > 0 {
-		var err error
-		if h.rateLimit, err = h.mgr.GetRateLimit(h.conf.RateLimit); err != nil {
-			return nil, fmt.Errorf("failed to obtain rate limit resource: %v", err)
-		}
-	}
-
 	var retry, maxBackoff time.Duration
 	if tout := conf.Retry; len(tout) > 0 {
 		var err error
@@ -179,6 +172,12 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 		var err error
 		if maxBackoff, err = time.ParseDuration(tout); err != nil {
 			return nil, fmt.Errorf("failed to parse max backoff duration string: %v", err)
+		}
+	}
+
+	if conf.RateLimit != "" {
+		if err := interop.ProbeRateLimit(context.Background(), h.mgr, conf.RateLimit); err != nil {
+			return nil, err
 		}
 	}
 
@@ -243,21 +242,27 @@ func (h *Client) incrCode(code int) {
 }
 
 func (h *Client) waitForAccess(ctx context.Context) bool {
-	if h.rateLimit == nil {
+	if h.conf.RateLimit == "" {
 		return true
 	}
 	for {
-		period, err := h.rateLimit.Access()
+		var period time.Duration
+		var err error
+		if rerr := interop.AccessRateLimit(ctx, h.mgr, h.conf.RateLimit, func(rl types.RateLimit) {
+			period, err = rl.Access()
+		}); rerr != nil {
+			err = rerr
+		}
 		if err != nil {
 			h.log.Errorf("Rate limit error: %v\n", err)
 			h.mLimitErr.Incr(1)
 			period = time.Second
+		} else if period > 0 {
+			h.mLimited.Incr(1)
+			h.mLimitFor.Incr(period.Nanoseconds() / 1000000)
 		}
+
 		if period > 0 {
-			if err == nil {
-				h.mLimited.Incr(1)
-				h.mLimitFor.Incr(period.Nanoseconds() / 1000000)
-			}
 			select {
 			case <-time.After(period):
 			case <-ctx.Done():

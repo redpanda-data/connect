@@ -1,12 +1,15 @@
 package processor
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -156,8 +159,9 @@ type Cache struct {
 	value *field.Expression
 	ttl   *field.Expression
 
-	cache    types.Cache
-	operator cacheOperator
+	mgr       types.Manager
+	cacheName string
+	operator  cacheOperator
 
 	mCount            metrics.StatCounter
 	mErr              metrics.StatCounter
@@ -170,18 +174,15 @@ type Cache struct {
 func NewCache(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	var c types.Cache
-	var err error
-	if len(conf.Cache.Resource) > 0 {
-		c, err = mgr.GetCache(conf.Cache.Resource)
-	} else {
-		c, err = mgr.GetCache(conf.Cache.Cache)
+	cacheName := conf.Cache.Resource
+	if cacheName == "" {
+		cacheName = conf.Cache.Cache
 	}
-	if err != nil {
-		return nil, err
+	if cacheName == "" {
+		return nil, errors.New("cache name must be specified")
 	}
 
-	op, err := cacheOperatorFromString(conf.Cache.Operator, c)
+	op, err := cacheOperatorFromString(conf.Cache.Operator)
 	if err != nil {
 		return nil, err
 	}
@@ -196,15 +197,13 @@ func NewCache(
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}
 
-	if conf.Cache.TTL != "" {
-		if _, ok := c.(types.CacheWithTTL); !ok {
-			return nil, fmt.Errorf("this cache type does not support per-key ttl")
-		}
-	}
-
 	ttl, err := bloblang.NewField(conf.Cache.TTL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse ttl expression: %v", err)
+	}
+
+	if err := interop.ProbeCache(context.Background(), mgr, cacheName); err != nil {
+		return nil, err
 	}
 
 	return &Cache{
@@ -218,8 +217,9 @@ func NewCache(
 		value: value,
 		ttl:   ttl,
 
-		cache:    c,
-		operator: op,
+		mgr:       mgr,
+		cacheName: cacheName,
+		operator:  op,
 
 		mCount:            stats.GetCounter("count"),
 		mErr:              stats.GetCounter("error"),
@@ -231,10 +231,10 @@ func NewCache(
 
 //------------------------------------------------------------------------------
 
-type cacheOperator func(key string, value []byte, ttl *time.Duration) ([]byte, bool, error)
+type cacheOperator func(cache types.Cache, key string, value []byte, ttl *time.Duration) ([]byte, bool, error)
 
-func newCacheSetOperator(cache types.Cache) cacheOperator {
-	return func(key string, value []byte, ttl *time.Duration) ([]byte, bool, error) {
+func newCacheSetOperator() cacheOperator {
+	return func(cache types.Cache, key string, value []byte, ttl *time.Duration) ([]byte, bool, error) {
 		var err error
 		if cttl, ok := cache.(types.CacheWithTTL); ok {
 			err = cttl.SetWithTTL(key, value, ttl)
@@ -245,8 +245,8 @@ func newCacheSetOperator(cache types.Cache) cacheOperator {
 	}
 }
 
-func newCacheAddOperator(cache types.Cache) cacheOperator {
-	return func(key string, value []byte, ttl *time.Duration) ([]byte, bool, error) {
+func newCacheAddOperator() cacheOperator {
+	return func(cache types.Cache, key string, value []byte, ttl *time.Duration) ([]byte, bool, error) {
 		var err error
 		if cttl, ok := cache.(types.CacheWithTTL); ok {
 			err = cttl.AddWithTTL(key, value, ttl)
@@ -257,30 +257,30 @@ func newCacheAddOperator(cache types.Cache) cacheOperator {
 	}
 }
 
-func newCacheGetOperator(cache types.Cache) cacheOperator {
-	return func(key string, _ []byte, _ *time.Duration) ([]byte, bool, error) {
+func newCacheGetOperator() cacheOperator {
+	return func(cache types.Cache, key string, _ []byte, _ *time.Duration) ([]byte, bool, error) {
 		result, err := cache.Get(key)
 		return result, true, err
 	}
 }
 
-func newCacheDeleteOperator(cache types.Cache) cacheOperator {
-	return func(key string, _ []byte, ttl *time.Duration) ([]byte, bool, error) {
+func newCacheDeleteOperator() cacheOperator {
+	return func(cache types.Cache, key string, _ []byte, ttl *time.Duration) ([]byte, bool, error) {
 		err := cache.Delete(key)
 		return nil, false, err
 	}
 }
 
-func cacheOperatorFromString(operator string, cache types.Cache) (cacheOperator, error) {
+func cacheOperatorFromString(operator string) (cacheOperator, error) {
 	switch operator {
 	case "set":
-		return newCacheSetOperator(cache), nil
+		return newCacheSetOperator(), nil
 	case "add":
-		return newCacheAddOperator(cache), nil
+		return newCacheAddOperator(), nil
 	case "get":
-		return newCacheGetOperator(cache), nil
+		return newCacheGetOperator(), nil
 	case "delete":
-		return newCacheDeleteOperator(cache), nil
+		return newCacheDeleteOperator(), nil
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", operator)
 }
@@ -308,7 +308,14 @@ func (c *Cache) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 			ttl = &td
 		}
 
-		result, useResult, err := c.operator(key, value, ttl)
+		var result []byte
+		var useResult bool
+		var err error
+		if cerr := interop.AccessCache(context.Background(), c.mgr, c.cacheName, func(cache types.Cache) {
+			result, useResult, err = c.operator(cache, key, value, ttl)
+		}); cerr != nil {
+			err = cerr
+		}
 		if err != nil {
 			if err != types.ErrKeyAlreadyExists {
 				c.mErr.Incr(1)

@@ -1,17 +1,15 @@
 package processor
 
 import (
-	"errors"
-	"fmt"
+	"context"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
-
-//------------------------------------------------------------------------------
 
 func init() {
 	Constructors[TypeResource] = TypeSpec{
@@ -54,15 +52,9 @@ You can find out more about resources [in this document.](/docs/configuration/re
 
 //------------------------------------------------------------------------------
 
-type procProvider interface {
-	GetProcessor(name string) (types.Processor, error)
-}
-
-//------------------------------------------------------------------------------
-
 // Resource is a processor that returns the result of a processor resource.
 type Resource struct {
-	mgr  procProvider
+	mgr  types.Manager
 	name string
 	log  log.Modular
 
@@ -75,17 +67,11 @@ type Resource struct {
 func NewResource(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	// TODO: V4 Remove this
-	procProvider, ok := mgr.(procProvider)
-	if !ok {
-		return nil, errors.New("manager does not support processor resources")
-	}
-
-	if _, err := procProvider.GetProcessor(conf.Resource); err != nil {
-		return nil, fmt.Errorf("failed to obtain processor resource '%v': %v", conf.Resource, err)
+	if err := interop.ProbeProcessor(context.Background(), mgr, conf.Resource); err != nil {
+		return nil, err
 	}
 	return &Resource{
-		mgr:  procProvider,
+		mgr:  mgr,
 		name: conf.Resource,
 		log:  log,
 
@@ -99,16 +85,17 @@ func NewResource(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (r *Resource) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	proc, err := r.mgr.GetProcessor(r.name)
+func (r *Resource) ProcessMessage(msg types.Message) (msgs []types.Message, res types.Response) {
 	r.mCount.Incr(1)
-	if err != nil {
+	if err := interop.AccessProcessor(context.Background(), r.mgr, r.name, func(p types.Processor) {
+		msgs, res = p.ProcessMessage(msg)
+	}); err != nil {
 		r.log.Debugf("Failed to obtain processor resource '%v': %v", r.name, err)
 		r.mErrNotFound.Incr(1)
 		r.mErr.Incr(1)
 		return nil, response.NewError(err)
 	}
-	return proc.ProcessMessage(msg)
+	return msgs, res
 }
 
 // CloseAsync shuts down the processor and stops processing requests.
@@ -119,5 +106,3 @@ func (r *Resource) CloseAsync() {
 func (r *Resource) WaitForClose(timeout time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

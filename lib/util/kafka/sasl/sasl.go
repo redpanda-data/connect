@@ -1,9 +1,12 @@
 package sasl
 
 import (
+	"context"
 	"errors"
+	"fmt"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Shopify/sarama"
 )
@@ -101,25 +104,33 @@ func (s Config) Apply(mgr types.Manager, conf *sarama.Config) error {
 
 // cacheAccessTokenProvider fetches SASL OAUTHBEARER access tokens from a cache.
 type cacheAccessTokenProvider struct {
-	cache types.Cache
-	key   string
+	mgr       types.Manager
+	cacheName string
+	key       string
 }
 
 func newCacheAccessTokenProvider(mgr types.Manager, cache, key string) (*cacheAccessTokenProvider, error) {
-	c, err := mgr.GetCache(cache)
-	if err != nil {
+	if err := interop.ProbeCache(context.Background(), mgr, cache); err != nil {
 		return nil, err
 	}
-
-	return &cacheAccessTokenProvider{c, key}, nil
+	return &cacheAccessTokenProvider{
+		mgr:       mgr,
+		cacheName: cache,
+		key:       key,
+	}, nil
 }
 
 func (c *cacheAccessTokenProvider) Token() (*sarama.AccessToken, error) {
-	tok, err := c.cache.Get(c.key)
-	if err != nil {
-		return nil, err
+	var tok []byte
+	var terr error
+	if err := interop.AccessCache(context.Background(), c.mgr, c.cacheName, func(cache types.Cache) {
+		tok, terr = cache.Get(c.key)
+	}); err != nil {
+		return nil, fmt.Errorf("failed to obtain cache resource '%v': %v", c.cacheName, err)
 	}
-
+	if terr != nil {
+		return nil, terr
+	}
 	return &sarama.AccessToken{Token: string(tok)}, nil
 }
 

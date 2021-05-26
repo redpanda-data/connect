@@ -1,10 +1,10 @@
 package input
 
 import (
-	"errors"
-	"fmt"
+	"context"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -65,15 +65,9 @@ You can find out more about resources [in this document.](/docs/configuration/re
 
 //------------------------------------------------------------------------------
 
-type inputProvider interface {
-	GetInput(name string) (types.Input, error)
-}
-
-//------------------------------------------------------------------------------
-
 // Resource is an input that wraps an input resource.
 type Resource struct {
-	mgr          inputProvider
+	mgr          types.Manager
 	name         string
 	log          log.Modular
 	mErrNotFound metrics.StatCounter
@@ -83,17 +77,11 @@ type Resource struct {
 func NewResource(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	// TODO: V4 Remove this
-	inputProvider, ok := mgr.(inputProvider)
-	if !ok {
-		return nil, errors.New("manager does not support input resources")
-	}
-
-	if _, err := inputProvider.GetInput(conf.Resource); err != nil {
-		return nil, fmt.Errorf("failed to obtain input resource '%v': %v", conf.Resource, err)
+	if err := interop.ProbeInput(context.Background(), mgr, conf.Resource); err != nil {
+		return nil, err
 	}
 	return &Resource{
-		mgr:          inputProvider,
+		mgr:          mgr,
 		name:         conf.Resource,
 		log:          log,
 		mErrNotFound: stats.GetCounter("error_not_found"),
@@ -104,26 +92,26 @@ func NewResource(
 
 // TransactionChan returns a transactions channel for consuming messages from
 // this input type.
-func (r *Resource) TransactionChan() <-chan types.Transaction {
-	in, err := r.mgr.GetInput(r.name)
-	if err != nil {
+func (r *Resource) TransactionChan() (tChan <-chan types.Transaction) {
+	if err := interop.AccessInput(context.Background(), r.mgr, r.name, func(i types.Input) {
+		tChan = i.TransactionChan()
+	}); err != nil {
 		r.log.Debugf("Failed to obtain input resource '%v': %v", r.name, err)
 		r.mErrNotFound.Incr(1)
-		return nil
 	}
-	return in.TransactionChan()
+	return
 }
 
 // Connected returns a boolean indicating whether this input is currently
 // connected to its target.
-func (r *Resource) Connected() bool {
-	in, err := r.mgr.GetInput(r.name)
-	if err != nil {
+func (r *Resource) Connected() (isConnected bool) {
+	if err := interop.AccessInput(context.Background(), r.mgr, r.name, func(i types.Input) {
+		isConnected = i.Connected()
+	}); err != nil {
 		r.log.Debugf("Failed to obtain input resource '%v': %v", r.name, err)
 		r.mErrNotFound.Incr(1)
-		return false
 	}
-	return in.Connected()
+	return
 }
 
 // CloseAsync shuts down the processor and stops processing requests.

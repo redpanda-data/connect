@@ -1,11 +1,12 @@
 package processor
 
 import (
-	"fmt"
+	"context"
 	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -49,7 +50,8 @@ func NewRateLimitConfig() RateLimitConfig {
 // RateLimit is a processor that performs an RateLimit request using the message as the
 // request body, and returns the response.
 type RateLimit struct {
-	rl types.RateLimit
+	rlName string
+	mgr    types.Manager
 
 	log log.Modular
 
@@ -67,12 +69,12 @@ type RateLimit struct {
 func NewRateLimit(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	rl, err := mgr.GetRateLimit(conf.RateLimit.Resource)
-	if err != nil {
-		return nil, fmt.Errorf("failed to obtain rate limit resource '%v': %v", conf.RateLimit.Resource, err)
+	if err := interop.ProbeRateLimit(context.Background(), mgr, conf.RateLimit.Resource); err != nil {
+		return nil, err
 	}
 	r := &RateLimit{
-		rl:           rl,
+		rlName:       conf.RateLimit.Resource,
+		mgr:          mgr,
 		log:          log,
 		mCount:       stats.GetCounter("count"),
 		mRateLimited: stats.GetCounter("rate.limited"),
@@ -92,7 +94,13 @@ func (r *RateLimit) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 	r.mCount.Incr(1)
 
 	msg.Iter(func(i int, p types.Part) error {
-		waitFor, err := r.rl.Access()
+		var waitFor time.Duration
+		var err error
+		if rerr := interop.AccessRateLimit(context.Background(), r.mgr, r.rlName, func(rl types.RateLimit) {
+			waitFor, err = rl.Access()
+		}); rerr != nil {
+			err = rerr
+		}
 		for err != nil || waitFor > 0 {
 			if err == types.ErrTypeClosed {
 				return err
@@ -109,7 +117,11 @@ func (r *RateLimit) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 			case <-r.closeChan:
 				return types.ErrTypeClosed
 			}
-			waitFor, err = r.rl.Access()
+			if rerr := interop.AccessRateLimit(context.Background(), r.mgr, r.rlName, func(rl types.RateLimit) {
+				waitFor, err = rl.Access()
+			}); rerr != nil {
+				err = rerr
+			}
 		}
 		return err
 	})
