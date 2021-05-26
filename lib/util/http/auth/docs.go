@@ -38,6 +38,17 @@ func oAuth2FieldSpec() docs.FieldSpec {
 	)
 }
 
+func jwtFieldSpec() docs.FieldSpec {
+	return docs.FieldAdvanced("jwt",
+		"Allows you to specify JWT authentication.",
+	).WithChildren(
+		docs.FieldCommon("enabled", "Whether to use JWT authentication in requests."),
+		docs.FieldCommon("private_key_file", "A file with the PEM encoded via PKCS1 or PKCS8 as private key."),
+		docs.FieldCommon("signing_method", "A method used to sign the token such as RS256, RS384 or RS512."),
+		docs.FieldAdvanced("claims", "A value used to identify the claims that issued the JWT.").Map(),
+	)
+}
+
 // FieldSpecs returns a map of field specs for an auth type.
 func FieldSpecs() docs.FieldSpecs {
 	return docs.FieldSpecs{
@@ -46,12 +57,12 @@ func FieldSpecs() docs.FieldSpecs {
 	}
 }
 
-// FieldSpecsExpanded includes OAuth2 fields that might not be appropriate for
-// all components.
+// FieldSpecsExpanded includes OAuth2 and JWT fields that might not be appropriate for all components.
 func FieldSpecsExpanded() docs.FieldSpecs {
 	return docs.FieldSpecs{
 		oAuthFieldSpec(),
 		oAuth2FieldSpec(),
+		jwtFieldSpec(),
 		BasicAuthFieldSpec(),
 	}
 }

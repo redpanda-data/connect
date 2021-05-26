@@ -27,6 +27,7 @@ require (
 	github.com/colinmarc/hdfs v1.1.3
 	github.com/containerd/continuity v0.0.0-20200928162600-f2cc35102c2a // indirect
 	github.com/dgraph-io/ristretto v0.0.3
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dnaeon/go-vcr v1.1.0 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.3.1
 	github.com/edsrzf/mmap-go v1.0.0
