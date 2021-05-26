@@ -3,6 +3,7 @@ package output
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"testing"
@@ -13,11 +14,12 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type fakeWriter struct {
 	connected bool
-	ts        types.Transaction
+	ts        []types.Transaction
 	tsMut     sync.Mutex
 	err       error
 }
@@ -28,7 +30,7 @@ func (f *fakeWriter) Connected() bool {
 
 func (f *fakeWriter) WriteTransaction(ctx context.Context, ts types.Transaction) error {
 	f.tsMut.Lock()
-	f.ts = ts
+	f.ts = append(f.ts, ts)
 	f.tsMut.Unlock()
 	return f.err
 }
@@ -77,7 +79,7 @@ func (f *fakeProcMgr) UnsetPipe(name string, prod <-chan types.Transaction) {}
 
 //------------------------------------------------------------------------------
 
-func TestResourceProc(t *testing.T) {
+func TestResourceOutput(t *testing.T) {
 	out := &fakeWriter{}
 
 	mgr := &fakeProcMgr{
@@ -91,9 +93,7 @@ func TestResourceProc(t *testing.T) {
 	nConf.Resource = "foo"
 
 	p, err := New(nConf, mgr, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	assert.False(t, p.Connected())
 
@@ -103,29 +103,34 @@ func TestResourceProc(t *testing.T) {
 	tChan := make(chan types.Transaction)
 	assert.NoError(t, p.Consume(tChan))
 
-	select {
-	case tChan <- types.NewTransaction(message.New([][]byte{[]byte("foo")}), nil):
-	case <-time.After(time.Second):
-		t.Error("Timed out")
+	for i := 0; i < 10; i++ {
+		msg := fmt.Sprintf("foo:%v", i)
+		select {
+		case tChan <- types.NewTransaction(message.New([][]byte{[]byte(msg)}), nil):
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
 	}
 
-	var resTs types.Transaction
-	for i := 0; i < 10; i++ {
+	require.Eventually(t, func() bool {
 		out.tsMut.Lock()
-		resTs = out.ts
+		ok := len(out.ts) == 10
 		out.tsMut.Unlock()
-		if resTs.Payload != nil {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
+		return ok
+	}, time.Second*5, time.Millisecond*100)
+
+	out.tsMut.Lock()
+	for i := 0; i < 10; i++ {
+		exp := fmt.Sprintf("foo:%v", i)
+		require.NotNil(t, out.ts[i])
+		require.NotNil(t, out.ts[i].Payload)
+		assert.Equal(t, 1, out.ts[i].Payload.Len())
+		assert.Equal(t, exp, string(out.ts[i].Payload.Get(0).Get()))
 	}
+	out.tsMut.Unlock()
 
 	p.CloseAsync()
 	assert.NoError(t, p.WaitForClose(time.Second))
-
-	_ = assert.NotNil(t, resTs.Payload) &&
-		assert.Equal(t, 1, resTs.Payload.Len()) &&
-		assert.Equal(t, []byte("foo"), resTs.Payload.Get(0).Get())
 }
 
 func TestResourceBadName(t *testing.T) {

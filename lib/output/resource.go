@@ -2,16 +2,13 @@ package output
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
-
-//------------------------------------------------------------------------------
 
 func init() {
 	Constructors[TypeResource] = TypeSpec{
@@ -65,15 +62,9 @@ You can find out more about resources [in this document.](/docs/configuration/re
 
 //------------------------------------------------------------------------------
 
-type outputProvider interface {
-	GetOutput(name string) (types.OutputWriter, error)
-}
-
-//------------------------------------------------------------------------------
-
 // Resource is a processor that returns the result of a output resource.
 type Resource struct {
-	mgr   outputProvider
+	mgr   types.Manager
 	name  string
 	log   log.Modular
 	stats metrics.Type
@@ -90,19 +81,12 @@ type Resource struct {
 func NewResource(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	// TODO: V4 Remove this
-	outputProvider, ok := mgr.(outputProvider)
-	if !ok {
-		return nil, errors.New("manager does not support output resources")
+	if err := interop.ProbeOutput(context.Background(), mgr, conf.Resource); err != nil {
+		return nil, err
 	}
-
-	if _, err := outputProvider.GetOutput(conf.Resource); err != nil {
-		return nil, fmt.Errorf("failed to obtain output resource '%v': %v", conf.Resource, err)
-	}
-
 	ctx, done := context.WithCancel(context.Background())
 	return &Resource{
-		mgr:          outputProvider,
+		mgr:          mgr,
 		name:         conf.Resource,
 		log:          log,
 		stats:        stats,
@@ -135,7 +119,13 @@ func (r *Resource) loop() {
 			}
 		}
 		mCount.Incr(1)
-		out, err := r.mgr.GetOutput(r.name)
+
+		var err error
+		if oerr := interop.AccessOutput(context.Background(), r.mgr, r.name, func(o types.OutputWriter) {
+			err = o.WriteTransaction(r.ctx, *ts)
+		}); oerr != nil {
+			err = oerr
+		}
 		if err != nil {
 			r.log.Debugf("Failed to obtain output resource '%v': %v", r.name, err)
 			r.mErrNotFound.Incr(1)
@@ -145,7 +135,6 @@ func (r *Resource) loop() {
 				return
 			}
 		} else {
-			out.WriteTransaction(r.ctx, *ts)
 			ts = nil
 		}
 	}
@@ -165,14 +154,15 @@ func (r *Resource) Consume(ts <-chan types.Transaction) error {
 
 // Connected returns a boolean indicating whether this output is currently
 // connected to its target.
-func (r *Resource) Connected() bool {
-	out, err := r.mgr.GetOutput(r.name)
-	if err != nil {
+func (r *Resource) Connected() (isConnected bool) {
+	var err error
+	if err = interop.AccessOutput(context.Background(), r.mgr, r.name, func(o types.OutputWriter) {
+		isConnected = o.Connected()
+	}); err != nil {
 		r.log.Debugf("Failed to obtain output resource '%v': %v", r.name, err)
 		r.mErrNotFound.Incr(1)
-		return false
 	}
-	return out.Connected()
+	return
 }
 
 // CloseAsync shuts down the output and stops processing requests.

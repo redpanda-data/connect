@@ -74,6 +74,7 @@ type testEnvironment struct {
 	ctx     context.Context
 	log     log.Modular
 	stats   metrics.Type
+	mgr     types.Manager
 
 	allowDuplicateMessages bool
 
@@ -338,10 +339,12 @@ func initInput(t *testing.T, env *testEnvironment) types.Input {
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	mgr, err := manager.NewV2(s.ResourceConfig, nil, env.log, env.stats)
-	require.NoError(t, err)
+	if env.mgr == nil {
+		env.mgr, err = manager.NewV2(s.ResourceConfig, nil, env.log, env.stats)
+		require.NoError(t, err)
+	}
 
-	input, err := input.New(s.Input, mgr, env.log, env.stats)
+	input, err := input.New(s.Input, env.mgr, env.log, env.stats)
 	require.NoError(t, err)
 
 	if env.sleepAfterInput > 0 {
@@ -365,10 +368,12 @@ func initOutput(t *testing.T, trans <-chan types.Transaction, env *testEnvironme
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	mgr, err := manager.NewV2(s.ResourceConfig, nil, env.log, env.stats)
-	require.NoError(t, err)
+	if env.mgr == nil {
+		env.mgr, err = manager.NewV2(s.ResourceConfig, nil, env.log, env.stats)
+		require.NoError(t, err)
+	}
 
-	output, err := output.New(s.Output, mgr, env.log, env.stats)
+	output, err := output.New(s.Output, env.mgr, env.log, env.stats)
 	require.NoError(t, err)
 
 	require.NoError(t, output.Consume(trans))

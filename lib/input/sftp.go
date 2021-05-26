@@ -10,6 +10,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	sftpSetup "github.com/Jeffail/benthos/v3/internal/service/sftp"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -176,9 +177,8 @@ func newSFTPReader(conf SFTPConfig, mgr types.Manager, log log.Modular, stats me
 			return nil, errors.New("a cache must be specified when watcher mode is enabled")
 		}
 
-		_, err = mgr.GetCache(conf.Watcher.Cache)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get the target cache for watcher mode: %w", err)
+		if err := interop.ProbeCache(context.Background(), mgr, conf.Watcher.Cache); err != nil {
+			return nil, err
 		}
 	}
 
@@ -272,12 +272,13 @@ func (s *sftpReader) ReadWithContext(ctx context.Context) (types.Message, reader
 		}
 		if err != types.ErrTimeout {
 			if s.conf.Watcher.Enabled {
-				cache, err := s.mgr.GetCache(s.conf.Watcher.Cache)
-				if err != nil {
-					return nil, nil, fmt.Errorf("failed to get the cache for sftp watcher mode: %v", err)
+				var setErr error
+				if cerr := interop.AccessCache(ctx, s.mgr, s.conf.Watcher.Cache, func(cache types.Cache) {
+					setErr = cache.Set(s.currentPath, []byte("@"))
+				}); cerr != nil {
+					return nil, nil, fmt.Errorf("failed to get the cache for sftp watcher mode: %v", cerr)
 				}
-				err = cache.Set(s.currentPath, []byte("@"))
-				if err != nil {
+				if setErr != nil {
 					return nil, nil, fmt.Errorf("failed to update path in cache %s: %v", s.currentPath, err)
 				}
 			}
@@ -326,25 +327,27 @@ func (s *sftpReader) WaitForClose(timeout time.Duration) error {
 
 func (s *sftpReader) getFilePaths() ([]string, error) {
 	var filepaths []string
-	var cache types.Cache
-	var err error
-
-	if s.conf.Watcher.Enabled {
-		cache, err = s.mgr.GetCache(s.conf.Watcher.Cache)
-		if err != nil {
-			return nil, fmt.Errorf("error getting cache in getFilePaths: %v", err)
+	if !s.conf.Watcher.Enabled {
+		for _, p := range s.conf.Paths {
+			paths, err := s.client.Glob(p)
+			if err != nil {
+				s.log.Warnf("Failed to scan files from path %v: %v\n", p, err)
+				continue
+			}
+			filepaths = append(filepaths, paths...)
 		}
+		return filepaths, nil
 	}
 
-	for _, p := range s.conf.Paths {
-		paths, err := s.client.Glob(p)
-		if err != nil {
-			s.log.Warnf("Failed to scan files from path %v: %v\n", p, err)
-			continue
-		}
+	if cerr := interop.AccessCache(context.Background(), s.mgr, s.conf.Watcher.Cache, func(cache types.Cache) {
+		for _, p := range s.conf.Paths {
+			paths, err := s.client.Glob(p)
+			if err != nil {
+				s.log.Warnf("Failed to scan files from path %v: %v\n", p, err)
+				continue
+			}
 
-		for _, path := range paths {
-			if s.conf.Watcher.Enabled {
+			for _, path := range paths {
 				info, err := s.client.Stat(path)
 				if err != nil {
 					s.log.Warnf("Failed to stat path %v: %v\n", path, err)
@@ -358,10 +361,10 @@ func (s *sftpReader) getFilePaths() ([]string, error) {
 				} else if err = cache.Set(path, []byte("@")); err != nil { // Reset the TTL for the path
 					s.log.Warnf("Failed to set key in cache for path %v: %v\n", path, err)
 				}
-			} else {
-				filepaths = append(filepaths, path)
 			}
 		}
+	}); cerr != nil {
+		return nil, fmt.Errorf("error getting cache in getFilePaths: %v", cerr)
 	}
 	return filepaths, nil
 }

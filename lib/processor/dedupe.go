@@ -2,6 +2,7 @@ package processor
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"strconv"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -156,7 +158,8 @@ type Dedupe struct {
 
 	key *field.Expression
 
-	cache      types.Cache
+	mgr        types.Manager
+	cacheName  string
 	hasherFunc hasherFunc
 
 	mCount     metrics.StatCounter
@@ -172,11 +175,6 @@ type Dedupe struct {
 func NewDedupe(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	c, err := mgr.GetCache(conf.Dedupe.Cache)
-	if err != nil {
-		return nil, err
-	}
-
 	hFunc, err := strToHasher(conf.Dedupe.HashType)
 	if err != nil {
 		return nil, err
@@ -187,6 +185,10 @@ func NewDedupe(
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
 
+	if err := interop.ProbeCache(context.Background(), mgr, conf.Dedupe.Cache); err != nil {
+		return nil, err
+	}
+
 	return &Dedupe{
 		conf:  conf,
 		log:   log,
@@ -194,7 +196,8 @@ func NewDedupe(
 
 		key: key,
 
-		cache:      c,
+		mgr:        mgr,
+		cacheName:  conf.Dedupe.Cache,
 		hasherFunc: hFunc,
 
 		mCount:     stats.GetCounter("count"),
@@ -249,8 +252,24 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 			d.mDropped.Incr(1)
 			return nil, response.NewAck()
 		}
-	} else if err := d.cache.Add(string(hasher.Bytes()), []byte{'t'}); err != nil {
-		if err != types.ErrKeyAlreadyExists {
+	} else {
+		var err error
+		if cerr := interop.AccessCache(context.Background(), d.mgr, d.cacheName, func(cache types.Cache) {
+			err = cache.Add(string(hasher.Bytes()), []byte{'t'})
+		}); cerr != nil {
+			err = cerr
+		}
+		if err != nil {
+			if err == types.ErrKeyAlreadyExists {
+				for _, s := range spans {
+					s.LogFields(
+						olog.String("event", "dropped"),
+						olog.String("type", "deduplicated"),
+					)
+				}
+				d.mDropped.Incr(1)
+				return nil, response.NewAck()
+			}
 			d.mErrCache.Incr(1)
 			d.mErr.Incr(1)
 			d.log.Errorf("Cache error: %v\n", err)
@@ -264,15 +283,6 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 				d.mDropped.Incr(1)
 				return nil, response.NewAck()
 			}
-		} else {
-			for _, s := range spans {
-				s.LogFields(
-					olog.String("event", "dropped"),
-					olog.String("type", "deduplicated"),
-				)
-			}
-			d.mDropped.Incr(1)
-			return nil, response.NewAck()
 		}
 	}
 

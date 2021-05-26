@@ -250,18 +250,7 @@ func TestWorkflowMissingResources(t *testing.T) {
 	})
 
 	_, err := NewWorkflow(conf, mgr, log.Noop(), metrics.Noop())
-	require.EqualError(t, err, "branch resource not found: foo")
-
-	badConf := NewConfig()
-	badConf.Type = TypeAWK
-
-	mgr = newMockProcProvider(t, map[string]Config{
-		"foo": badConf,
-		"baz": branchConf,
-	})
-
-	_, err = NewWorkflow(conf, mgr, log.Noop(), metrics.Noop())
-	require.EqualError(t, err, "found resource named 'foo' with wrong type, expected a branch processor, found: *processor.AWK")
+	require.EqualError(t, err, "processor resource 'foo' was not found")
 }
 
 func TestWorkflows(t *testing.T) {

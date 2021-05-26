@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -50,8 +51,7 @@ type Type struct {
 	stats metrics.Type
 	mgr   types.Manager
 
-	timeout   time.Duration
-	rateLimit types.RateLimit
+	timeout time.Duration
 
 	mCount    metrics.StatCounter
 	mErr      metrics.StatCounter
@@ -94,16 +94,15 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 	l.mLimitErr = l.stats.GetCounter("rate_limit.error")
 	l.mLatency = l.stats.GetTimer("latency")
 
-	if len(l.conf.RateLimit) > 0 {
-		var err error
-		if l.rateLimit, err = l.mgr.GetRateLimit(l.conf.RateLimit); err != nil {
-			return nil, fmt.Errorf("failed to obtain rate limit resource: %v", err)
-		}
-	}
-
 	sess, err := l.conf.GetSession()
 	if err != nil {
 		return nil, err
+	}
+
+	if conf.RateLimit != "" {
+		if err := interop.ProbeRateLimit(context.Background(), l.mgr, conf.RateLimit); err != nil {
+			return nil, err
+		}
 	}
 
 	l.lambda = lambda.New(sess)
@@ -136,11 +135,17 @@ func OptSetManager(mgr types.Manager) func(*Type) {
 //------------------------------------------------------------------------------
 
 func (l *Type) waitForAccess() bool {
-	if l.rateLimit == nil {
+	if l.conf.RateLimit == "" {
 		return true
 	}
 	for {
-		period, err := l.rateLimit.Access()
+		var period time.Duration
+		var err error
+		if rerr := interop.AccessRateLimit(context.Background(), l.mgr, l.conf.RateLimit, func(rl types.RateLimit) {
+			period, err = rl.Access()
+		}); rerr != nil {
+			err = rerr
+		}
 		if err != nil {
 			l.log.Errorf("Rate limit error: %v\n", err)
 			l.mLimitErr.Incr(1)

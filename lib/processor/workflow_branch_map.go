@@ -1,9 +1,10 @@
 package processor
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -110,33 +111,16 @@ func newWorkflowBranchMap(conf WorkflowConfig, mgr types.Manager, log log.Modula
 		staticBranches[k] = child
 	}
 
-	// TODO: V4 Remove this
-	pProvider, _ := mgr.(procProvider)
-	checkResource := func(key string) error {
-		if pProvider == nil {
-			return errors.New("manager does not support processor resources")
-		}
-		if p, err := pProvider.GetProcessor(key); err != nil {
-			return fmt.Errorf("branch resource not found: %v", key)
-		} else if _, ok := p.(*Branch); p != nil && !ok {
-			return fmt.Errorf(
-				"found resource named '%v' with wrong type, expected a branch processor, found: %T",
-				key, p,
-			)
-		}
-		return nil
-	}
-
 	for _, k := range conf.BranchResources {
 		if _, exists := dynamicBranches[k]; exists {
 			return nil, fmt.Errorf("branch resource name '%v' collides with an explicit branch", k)
 		}
-		if err := checkResource(k); err != nil {
+		if err := interop.ProbeProcessor(context.Background(), mgr, k); err != nil {
 			return nil, err
 		}
 		dynamicBranches[k] = &resourcedBranch{
 			name: k,
-			mgr:  pProvider,
+			mgr:  mgr,
 		}
 	}
 
@@ -145,12 +129,12 @@ func newWorkflowBranchMap(conf WorkflowConfig, mgr types.Manager, log log.Modula
 	for _, tier := range conf.Order {
 		for _, k := range tier {
 			if _, exists := dynamicBranches[k]; !exists {
-				if err := checkResource(k); err != nil {
+				if err := interop.ProbeProcessor(context.Background(), mgr, k); err != nil {
 					return nil, err
 				}
 				dynamicBranches[k] = &resourcedBranch{
 					name: k,
-					mgr:  pProvider,
+					mgr:  mgr,
 				}
 			}
 		}
@@ -184,15 +168,32 @@ func newWorkflowBranchMap(conf WorkflowConfig, mgr types.Manager, log log.Modula
 
 type resourcedBranch struct {
 	name string
-	mgr  procProvider
+	mgr  types.Manager
 }
 
-// TODO: Expand this once manager supports locking and updates.
 func (r *resourcedBranch) lock() (branch *Branch, unlockFn func()) {
-	proc, _ := r.mgr.GetProcessor(r.name)
-	if proc != nil {
-		branch, _ = proc.(*Branch)
+	var openOnce, releaseOnce sync.Once
+	open, release := make(chan struct{}), make(chan struct{})
+	unlockFn = func() {
+		releaseOnce.Do(func() {
+			close(release)
+		})
 	}
+
+	go func() {
+		_ = interop.AccessProcessor(context.Background(), r.mgr, r.name, func(p types.Processor) {
+			branch, _ = p.(*Branch)
+			openOnce.Do(func() {
+				close(open)
+			})
+			<-release
+		})
+		openOnce.Do(func() {
+			close(open)
+		})
+	}()
+
+	<-open
 	return
 }
 
