@@ -135,23 +135,26 @@ func (m *MQTT) ConnectWithContext(ctx context.Context) error {
 			m.log.Errorf("Connection lost due to: %v\n", reason)
 		}).
 		SetOnConnectHandler(func(c mqtt.Client) {
+			topics := make(map[string]byte)
 			for _, topic := range m.conf.Topics {
-				tok := c.Subscribe(topic, byte(m.conf.QoS), func(c mqtt.Client, msg mqtt.Message) {
-					msgMut.Lock()
-					if msgChan != nil {
-						select {
-						case msgChan <- msg:
-						case <-m.interruptChan:
-						}
+				topics[topic] = byte(m.conf.QoS)
+			}
+
+			tok := c.SubscribeMultiple(topics, func(c mqtt.Client, msg mqtt.Message) {
+				msgMut.Lock()
+				if msgChan != nil {
+					select {
+					case msgChan <- msg:
+					case <-m.interruptChan:
 					}
-					msgMut.Unlock()
-				})
-				tok.Wait()
-				if err := tok.Error(); err != nil {
-					m.log.Errorf("Failed to subscribe to topic '%v': %v\n", topic, err)
-					m.log.Errorln("Shutting connection down.")
-					closeMsgChan()
 				}
+				msgMut.Unlock()
+			})
+			tok.Wait()
+			if err := tok.Error(); err != nil {
+				m.log.Errorf("Failed to subscribe to topics '%v': %v\n", m.conf.Topics, err)
+				m.log.Errorln("Shutting connection down.")
+				closeMsgChan()
 			}
 		})
 
