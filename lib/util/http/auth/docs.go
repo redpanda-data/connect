@@ -40,7 +40,7 @@ func oAuth2FieldSpec() docs.FieldSpec {
 
 func jwtFieldSpec() docs.FieldSpec {
 	return docs.FieldAdvanced("jwt",
-		"Allows you to specify JWT authentication.",
+		"BETA: Allows you to specify JWT authentication.",
 	).WithChildren(
 		docs.FieldCommon("enabled", "Whether to use JWT authentication in requests."),
 		docs.FieldCommon("private_key_file", "A file with the PEM encoded via PKCS1 or PKCS8 as private key."),

@@ -65,6 +65,11 @@ http:
     client_secret: ""
     token_url: ""
     scopes: []
+  jwt:
+    enabled: false
+    private_key_file: ""
+    signing_method: ""
+    claims: {}
   basic_auth:
     enabled: false
     username: ""
@@ -315,6 +320,45 @@ A list of optional requested permissions.
 Type: `array`  
 Default: `[]`  
 Requires version 3.45.0 or newer  
+
+### `jwt`
+
+BETA: Allows you to specify JWT authentication.
+
+
+Type: `object`  
+
+### `jwt.enabled`
+
+Whether to use JWT authentication in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `jwt.private_key_file`
+
+A file with the PEM encoded via PKCS1 or PKCS8 as private key.
+
+
+Type: `string`  
+Default: `""`  
+
+### `jwt.signing_method`
+
+A method used to sign the token such as RS256, RS384 or RS512.
+
+
+Type: `string`  
+Default: `""`  
+
+### `jwt.claims`
+
+A value used to identify the claims that issued the JWT.
+
+
+Type: `object`  
+Default: `{}`  
 
 ### `basic_auth`
 

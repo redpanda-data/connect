@@ -26,6 +26,11 @@ input:
       client_secret: ""
       token_url: ""
       scopes: []
+    jwt:
+      enabled: false
+      private_key_file: ""
+      signing_method: ""
+      claims: {}
     basic_auth:
       enabled: false
       username: ""
@@ -79,6 +84,11 @@ output:
       client_secret: ""
       token_url: ""
       scopes: []
+    jwt:
+      enabled: false
+      private_key_file: ""
+      signing_method: ""
+      claims: {}
     basic_auth:
       enabled: false
       username: ""
