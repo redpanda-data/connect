@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - A new experimental plugins API is available for early adopters, and can be found at `./public/x/service`.
 - A new experimental template system is available for early adopters, examples can be found in `./template`.
 - New beta Bloblang method `bloblang` for executing dynamic mappings.
+- All `http` components now support a beta `jwt` authentication mechanism.
 
 ### Changed
 
@@ -23,6 +24,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Fixed a rare panic caused when executing a `workflow` resource processor that references `branch` resources across parallel threads.
+- The `mqtt` input with multiple topics now works with brokers that would previously error on multiple subscriptions.
 
 ## 3.46.1 - 2021-05-19
 

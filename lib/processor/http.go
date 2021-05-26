@@ -11,8 +11,10 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
 	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -151,8 +153,8 @@ type HTTP struct {
 func NewHTTP(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	if !cmp.Equal(conf.HTTP.Client, client.NewConfig()) {
-		if !cmp.Equal(conf.HTTP.Config, client.NewConfig()) {
+	if !cmp.Equal(conf.HTTP.Client, client.NewConfig(), cmpopts.IgnoreUnexported(auth.JWTConfig{})) {
+		if !cmp.Equal(conf.HTTP.Config, client.NewConfig(), cmpopts.IgnoreUnexported(auth.JWTConfig{})) {
 			return nil, fmt.Errorf("detected a mix of both deprecated http.request and standard http config fields")
 		}
 		log.Warnln("Using deprecated http.request fields. All fields under the path http.request should now be written directly within http.")
