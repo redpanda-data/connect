@@ -76,6 +76,7 @@ This input adds the following metadata fields to each message:
 - s3_last_modified (RFC3339)
 - s3_content_type
 - s3_content_encoding
+- s3_total_bytes
 - All user defined metadata
 ` + "```" + `
 
@@ -181,6 +182,7 @@ func newS3ObjectTarget(key, bucket string, notificationAt time.Time, ackFn codec
 type s3ObjectTargetReader interface {
 	Pop(ctx context.Context) (*s3ObjectTarget, error)
 	Close(ctx context.Context) error
+	GetTotalBytes(ctx context.Context) int64
 }
 
 //------------------------------------------------------------------------------
@@ -215,6 +217,7 @@ type staticTargetReader struct {
 	s3         *s3.S3
 	conf       AWSS3Config
 	startAfter *string
+	totalBytes int64
 }
 
 func newStaticTargetReader(
@@ -235,12 +238,14 @@ func newStaticTargetReader(
 		return nil, fmt.Errorf("failed to list objects: %v", err)
 	}
 	staticKeys := staticTargetReader{
-		s3:   s3Client,
-		conf: conf,
+		s3:         s3Client,
+		conf:       conf,
+		totalBytes: 0,
 	}
 	for _, obj := range output.Contents {
 		ackFn := deleteS3ObjectAckFn(s3Client, conf.Bucket, *obj.Key, conf.DeleteObjects, nil)
 		staticKeys.pending = append(staticKeys.pending, newS3ObjectTarget(*obj.Key, conf.Bucket, time.Time{}, ackFn))
+		staticKeys.totalBytes += *obj.Size
 	}
 	if len(output.Contents) > 0 {
 		staticKeys.startAfter = output.Contents[len(output.Contents)-1].Key
@@ -266,6 +271,7 @@ func (s *staticTargetReader) Pop(ctx context.Context) (*s3ObjectTarget, error) {
 		for _, obj := range output.Contents {
 			ackFn := deleteS3ObjectAckFn(s.s3, s.conf.Bucket, *obj.Key, s.conf.DeleteObjects, nil)
 			s.pending = append(s.pending, newS3ObjectTarget(*obj.Key, s.conf.Bucket, time.Time{}, ackFn))
+			s.totalBytes += *obj.Size
 		}
 		if len(output.Contents) > 0 {
 			s.startAfter = output.Contents[len(output.Contents)-1].Key
@@ -281,6 +287,10 @@ func (s *staticTargetReader) Pop(ctx context.Context) (*s3ObjectTarget, error) {
 
 func (s staticTargetReader) Close(context.Context) error {
 	return nil
+}
+
+func (s staticTargetReader) GetTotalBytes(context.Context) int64 {
+	return s.totalBytes
 }
 
 //------------------------------------------------------------------------------
@@ -539,6 +549,10 @@ func (s *sqsTargetReader) ackSQSMessage(ctx context.Context, msg *sqs.Message) e
 	return err
 }
 
+func (s *sqsTargetReader) GetTotalBytes(ctx context.Context) int64 {
+	return 0
+}
+
 //------------------------------------------------------------------------------
 
 // AmazonS3 is a benthos reader.Type implementation that reads messages from an
@@ -644,13 +658,16 @@ func (a *awsS3) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func s3MsgFromParts(p *s3PendingObject, parts []types.Part) types.Message {
+func s3MsgFromParts(p *s3PendingObject, parts []types.Part, totalBytes int64) types.Message {
 	msg := message.New(nil)
 	msg.Append(parts...)
 	msg.Iter(func(_ int, part types.Part) error {
 		meta := part.Metadata()
 		meta.Set("s3_key", p.target.key)
 		meta.Set("s3_bucket", p.target.bucket)
+		if totalBytes > 0 {
+			meta.Set("s3_total_bytes", strconv.FormatInt(totalBytes, 10))
+		}
 		if p.obj.LastModified != nil {
 			meta.Set("s3_last_modified", p.obj.LastModified.Format(time.RFC3339))
 			meta.Set("s3_last_modified_unix", strconv.FormatInt(p.obj.LastModified.Unix(), 10))
@@ -760,7 +777,8 @@ func (a *awsS3) ReadWithContext(ctx context.Context) (msg types.Message, ackFn r
 		}
 	}
 
-	return s3MsgFromParts(object, parts), func(rctx context.Context, res types.Response) error {
+	totalBytes := a.keyReader.GetTotalBytes(ctx)
+	return s3MsgFromParts(object, parts, totalBytes), func(rctx context.Context, res types.Response) error {
 		return scnAckFn(rctx, res.Error())
 	}, nil
 }
