@@ -1,0 +1,34 @@
+name: log_and_drop
+type: processor
+summary: A common lossy error handling pattern.
+description: If a message has failed in a previous processor this one will log the error and the contents of the message and then drop it. This is a common pattern when working with data that isn't considered important.
+
+fields: []
+
+mapping: |
+  root.catch = [
+    {
+      "log": {
+        "level": "ERROR",
+        "fields": {
+          "content": "${! content() }"
+        },
+        "message": "${! error() }"
+      }
+    },
+    {
+      "bloblang": "root = deleted()"
+    }
+  ]
+
+tests:
+  - name: No fields
+    config: {}
+    expected:
+      catch:
+        - log:
+            level: ERROR
+            fields:
+              content: "${! content() }"
+            message: "${! error() }"
+        - bloblang: root = deleted()

@@ -222,6 +222,7 @@ func newLambda(
 	if l.client, err = client.New(
 		conf.Config,
 		client.OptSetLogger(l.log),
+		// TODO: V4 Remove this
 		client.OptSetStats(metrics.Namespaced(l.stats, "client")),
 		client.OptSetManager(mgr),
 	); err != nil {

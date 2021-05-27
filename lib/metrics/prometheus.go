@@ -118,6 +118,7 @@ type Prometheus struct {
 	prefix      string
 
 	pusher *push.Pusher
+	reg    *prometheus.Registry
 
 	counters map[string]*prometheus.CounterVec
 	gauges   map[string]*prometheus.GaugeVec
@@ -134,6 +135,7 @@ func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 		closedChan: make(chan struct{}),
 		config:     config.Prometheus,
 		prefix:     config.Prometheus.Prefix,
+		reg:        prometheus.NewRegistry(),
 		counters:   map[string]*prometheus.CounterVec{},
 		gauges:     map[string]*prometheus.GaugeVec{},
 		timers:     map[string]*prometheus.SummaryVec{},
@@ -143,13 +145,21 @@ func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 		opt(p)
 	}
 
+	// TODO: Maybe disable this with a config flag.
+	if err := p.reg.Register(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{})); err != nil {
+		return nil, err
+	}
+	if err := p.reg.Register(prometheus.NewGoCollector()); err != nil {
+		return nil, err
+	}
+
 	var err error
 	if p.pathMapping, err = newPathMapping(p.config.PathMapping, p.log); err != nil {
 		return nil, fmt.Errorf("failed to init path mapping: %v", err)
 	}
 
 	if len(p.config.PushURL) > 0 {
-		p.pusher = push.New(p.config.PushURL, p.config.PushJobName).Gatherer(prometheus.DefaultGatherer)
+		p.pusher = push.New(p.config.PushURL, p.config.PushJobName).Gatherer(p.reg)
 
 		if len(p.config.PushBasicAuth.Username) > 0 && len(p.config.PushBasicAuth.Password) > 0 {
 			p.pusher = p.pusher.BasicAuth(p.config.PushBasicAuth.Username, p.config.PushBasicAuth.Password)
@@ -183,7 +193,7 @@ func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 // HandlerFunc returns an http.HandlerFunc for scraping metrics.
 func (p *Prometheus) HandlerFunc() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		promhttp.Handler().ServeHTTP(w, r)
+		promhttp.HandlerFor(p.reg, promhttp.HandlerOpts{}).ServeHTTP(w, r)
 	}
 }
 
@@ -212,7 +222,7 @@ func (p *Prometheus) GetCounter(path string) StatCounter {
 			Name:      stat,
 			Help:      "Benthos Counter metric",
 		}, labels)
-		prometheus.MustRegister(ctr)
+		p.reg.MustRegister(ctr)
 		p.counters[stat] = ctr
 	}
 	p.Unlock()
@@ -240,7 +250,7 @@ func (p *Prometheus) GetTimer(path string) StatTimer {
 			Help:       "Benthos Timing metric",
 			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 		}, labels)
-		prometheus.MustRegister(tmr)
+		p.reg.MustRegister(tmr)
 		p.timers[stat] = tmr
 	}
 	p.Unlock()
@@ -267,7 +277,7 @@ func (p *Prometheus) GetGauge(path string) StatGauge {
 			Name:      stat,
 			Help:      "Benthos Gauge metric",
 		}, labels)
-		prometheus.MustRegister(ctr)
+		p.reg.MustRegister(ctr)
 		p.gauges[stat] = ctr
 	}
 	p.Unlock()
@@ -301,7 +311,7 @@ func (p *Prometheus) GetCounterVec(path string, labelNames []string) StatCounter
 			Name:      stat,
 			Help:      "Benthos Counter metric",
 		}, labelNames)
-		prometheus.MustRegister(ctr)
+		p.reg.MustRegister(ctr)
 		p.counters[stat] = ctr
 	}
 	p.Unlock()
@@ -345,7 +355,7 @@ func (p *Prometheus) GetTimerVec(path string, labelNames []string) StatTimerVec 
 			Help:       "Benthos Timing metric",
 			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 		}, labelNames)
-		prometheus.MustRegister(tmr)
+		p.reg.MustRegister(tmr)
 		p.timers[stat] = tmr
 	}
 	p.Unlock()
@@ -388,7 +398,7 @@ func (p *Prometheus) GetGaugeVec(path string, labelNames []string) StatGaugeVec 
 			Name:      stat,
 			Help:      "Benthos Gauge metric",
 		}, labelNames)
-		prometheus.MustRegister(ctr)
+		p.reg.MustRegister(ctr)
 		p.gauges[stat] = ctr
 	}
 	p.Unlock()

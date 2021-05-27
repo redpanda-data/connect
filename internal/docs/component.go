@@ -390,28 +390,13 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 			fieldTypeStr = "object"
 		}
 
-		var examples []string
-		if len(v.Examples) > 0 {
-			nameSplit := strings.Split(v.Name, ".")
-			exampleName := nameSplit[len(nameSplit)-1]
-			for _, example := range v.Examples {
-				exampleBytes, err := config.MarshalYAML(map[string]interface{}{
-					exampleName: example,
-				})
-				if err != nil {
-					return nil, err
-				}
-				examples = append(examples, string(exampleBytes))
-			}
-		}
-
 		fieldCtx := fieldContext{
 			Name:             v.Name,
 			Type:             fieldTypeStr,
 			Description:      v.Description,
 			Default:          defaultValueStr,
 			Advanced:         v.Advanced,
-			Examples:         examples,
+			Examples:         v.ExamplesMarshalled,
 			AnnotatedOptions: v.AnnotatedOptions,
 			Options:          v.Options,
 			Interpolated:     v.Interpolated,

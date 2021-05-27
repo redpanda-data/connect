@@ -56,10 +56,10 @@ Type: {{if $field.IsArray}}list of {{end}}{{if $field.IsMap}}map of {{end}}` + "
 {{if ne $j 0}}, {{end}}` + "`" + `{{$option}}` + "`" + `{{end}}.
 {{end}}
 {{if gt (len $field.Examples) 0 -}}
-` + "```yaml" + `
+` + "```yml" + `
 # Examples
 
-{{range $j, $example := $field.Examples -}}
+{{range $j, $example := $field.ExamplesMarshalled -}}
 {{if ne $j 0}}
 {{end}}{{$example}}{{end -}}
 ` + "```" + `

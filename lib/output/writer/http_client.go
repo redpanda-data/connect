@@ -68,6 +68,7 @@ func NewHTTPClient(
 		client.OptSetCloseChan(h.closeChan),
 		client.OptSetLogger(h.log),
 		client.OptSetManager(mgr),
+		// TODO: V4 Remove this
 		client.OptSetStats(metrics.Namespaced(h.stats, "client")),
 	); err != nil {
 		return nil, err

@@ -8,7 +8,9 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/nsf/jsondiff"
 	"gopkg.in/yaml.v3"
 )
@@ -31,13 +33,14 @@ type TestConfig struct {
 
 // Config describes a Benthos component template.
 type Config struct {
-	Name        string        `yaml:"name"`
-	Type        string        `yaml:"type"`
-	Summary     string        `yaml:"summary"`
-	Description string        `yaml:"description"`
-	Fields      []FieldConfig `yaml:"fields"`
-	Mapping     string        `yaml:"mapping"`
-	Tests       []TestConfig  `yaml:"tests"`
+	Name           string        `yaml:"name"`
+	Type           string        `yaml:"type"`
+	Summary        string        `yaml:"summary"`
+	Description    string        `yaml:"description"`
+	Fields         []FieldConfig `yaml:"fields"`
+	Mapping        string        `yaml:"mapping"`
+	MetricsMapping string        `yaml:"metrics_mapping"`
+	Tests          []TestConfig  `yaml:"tests"`
 }
 
 // FieldSpec creates a documentation field spec from a template field config.
@@ -98,7 +101,13 @@ func (c Config) compile() (*compiled, error) {
 		}
 		return nil, fmt.Errorf("parse mapping: %w", err)
 	}
-	return &compiled{spec, mapping}, nil
+	var metricsMapping *metrics.Mapping
+	if c.MetricsMapping != "" {
+		if metricsMapping, err = metrics.NewMapping(c.MetricsMapping, log.Noop()); err != nil {
+			return nil, fmt.Errorf("parse metrics mapping: %w", err)
+		}
+	}
+	return &compiled{spec, mapping, metricsMapping}, nil
 }
 
 func diffYAMLNodesAsJSON(expNode, actNode *yaml.Node) (string, error) {
@@ -212,6 +221,7 @@ func ConfigSpec() docs.FieldSpecs {
 		docs.FieldCommon(
 			"mapping", "A [Bloblang](/docs/guides/bloblang/about) mapping that translates the fields of the template into a valid Benthos configuration for the target component type.",
 		).Linter(docs.LintBloblangMapping).HasType(docs.FieldString),
+		metrics.MappingFieldSpec(),
 		docs.FieldCommon(
 			"tests", "Optional unit test definitions for the template that verify certain configurations produce valid configs. These tests are executed with the command `benthos template lint`.",
 		).Array().WithChildren(

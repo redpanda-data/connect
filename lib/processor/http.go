@@ -178,6 +178,7 @@ func NewHTTP(
 	if g.client, err = client.New(
 		conf.HTTP.Config,
 		client.OptSetLogger(g.log),
+		// TODO: V4 Remove this
 		client.OptSetStats(metrics.Namespaced(g.stats, "client")),
 		client.OptSetManager(mgr),
 	); err != nil {

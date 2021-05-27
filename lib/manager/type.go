@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	imetrics "github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/cache"
@@ -74,7 +75,7 @@ type Type struct {
 	rateLimitBundle *bundle.RateLimitSet
 
 	logger log.Modular
-	stats  metrics.Type
+	stats  *imetrics.Namespaced
 
 	pipes    map[string]<-chan types.Transaction
 	pipeLock *sync.RWMutex
@@ -113,7 +114,7 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 		rateLimitBundle: bundle.AllRateLimits,
 
 		logger: log,
-		stats:  stats,
+		stats:  imetrics.NewNamespaced(stats),
 
 		pipes:    map[string]<-chan types.Transaction{},
 		pipeLock: &sync.RWMutex{},
@@ -244,7 +245,7 @@ func (t *Type) forStream(id string) *Type {
 	newT.logger = t.logger.WithFields(map[string]string{
 		"stream": id,
 	})
-	newT.stats = metrics.Namespaced(unwrapMetric(t.stats), id)
+	newT.stats = t.stats.WithPrefix(id)
 	return &newT
 }
 
@@ -266,7 +267,7 @@ func (t *Type) forComponent(id string) *Type {
 	if len(newT.stream) > 0 {
 		statsPrefix = newT.stream + "." + statsPrefix
 	}
-	newT.stats = metrics.Namespaced(unwrapMetric(t.stats), statsPrefix)
+	newT.stats = t.stats.WithPrefix(statsPrefix)
 	return &newT
 }
 
@@ -280,11 +281,11 @@ func (t *Type) ForChildComponent(id string) types.Manager {
 func (t *Type) forChildComponent(id string) *Type {
 	newT := *t
 	newT.logger = t.logger.NewModule("." + id)
-	newT.stats = metrics.Namespaced(t.stats, id)
 
 	if len(newT.component) > 0 {
 		id = newT.component + "." + id
 	}
+	newT.stats = t.stats.WithPrefix(id)
 	newT.component = id
 	return &newT
 }
@@ -334,6 +335,14 @@ func (t *Type) UnsetPipe(name string, tran <-chan types.Transaction) {
 }
 
 //------------------------------------------------------------------------------
+
+// WithMetricsMapping returns a manager with the stored metrics exporter wrapped
+// with a mapping.
+func (t *Type) WithMetricsMapping(m *imetrics.Mapping) *Type {
+	newT := *t
+	newT.stats = t.stats.WithMapping(m)
+	return &newT
+}
 
 // Metrics returns an aggregator preset with the current component context.
 func (t *Type) Metrics() metrics.Type {

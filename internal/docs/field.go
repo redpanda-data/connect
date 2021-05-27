@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/Jeffail/benthos/v3/lib/util/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -73,6 +74,9 @@ type FieldSpec struct {
 
 	// Version lists an explicit Benthos release where this fields behaviour was last modified.
 	Version string
+
+	// ExamplesMarshalled is a list of examples marshalled into YAML format.
+	ExamplesMarshalled []string
 
 	omitWhenFn   func(field, parent interface{}) (string, bool)
 	customLintFn LintFunc
@@ -243,6 +247,18 @@ func (f FieldSpec) FlattenChildrenForDocs() FieldSpecs {
 			if len(path) > 0 {
 				newV.Name = path + newV.Name
 			}
+			if len(v.Examples) > 0 {
+				newV.ExamplesMarshalled = make([]string, len(v.Examples))
+				for i, e := range v.Examples {
+					exampleBytes, err := config.MarshalYAML(map[string]interface{}{
+						v.Name: e,
+					})
+					if err == nil {
+						newV.ExamplesMarshalled[i] = string(exampleBytes)
+					}
+				}
+			}
+
 			flattenedFields = append(flattenedFields, newV)
 			if len(v.Children) > 0 {
 				newPath := path + v.Name

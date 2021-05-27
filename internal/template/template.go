@@ -5,9 +5,11 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/input"
+	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
@@ -46,8 +48,9 @@ func InitTemplates(templatesPaths ...string) ([]string, error) {
 
 // Compiled is a template that has been compiled from a config.
 type compiled struct {
-	spec    docs.ComponentSpec
-	mapping *mapping.Executor
+	spec           docs.ComponentSpec
+	mapping        *mapping.Executor
+	metricsMapping *metrics.Mapping
 }
 
 // ExpandToNode attempts to apply the template to a provided YAML node and
@@ -103,6 +106,15 @@ func registerTemplate(tmpl *compiled) error {
 	return fmt.Errorf("unable to register template for component type %v", tmpl.spec.Type)
 }
 
+// WithMetricsMapping attempts to wrap the metrics of a manager with a metrics
+// mapping.
+func WithMetricsMapping(nm bundle.NewManagement, m *metrics.Mapping) bundle.NewManagement {
+	if t, ok := nm.(*manager.Type); ok {
+		return t.WithMetricsMapping(m)
+	}
+	return nm
+}
+
 func registerCacheTemplate(tmpl *compiled, set *bundle.CacheSet) error {
 	return set.Add(func(c cache.Config, nm bundle.NewManagement) (types.Cache, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
@@ -115,7 +127,9 @@ func registerCacheTemplate(tmpl *compiled, set *bundle.CacheSet) error {
 			return nil, err
 		}
 
-		// TODO: Rewrite metrics
+		if tmpl.metricsMapping != nil {
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+		}
 		return nm.NewCache(conf)
 	}, tmpl.spec)
 }
@@ -132,7 +146,9 @@ func registerInputTemplate(tmpl *compiled, set *bundle.InputSet) error {
 			return nil, err
 		}
 
-		// TODO: Rewrite metrics
+		if tmpl.metricsMapping != nil {
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+		}
 		return nm.NewInput(conf, b, pcf...)
 	}, tmpl.spec)
 }
@@ -149,7 +165,9 @@ func registerOutputTemplate(tmpl *compiled, set *bundle.OutputSet) error {
 			return nil, err
 		}
 
-		// TODO: Rewrite metrics
+		if tmpl.metricsMapping != nil {
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+		}
 		return nm.NewOutput(conf, pcf...)
 	}, tmpl.spec)
 }
@@ -166,7 +184,9 @@ func registerProcessorTemplate(tmpl *compiled, set *bundle.ProcessorSet) error {
 			return nil, err
 		}
 
-		// TODO: Rewrite metrics
+		if tmpl.metricsMapping != nil {
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+		}
 		return nm.NewProcessor(conf)
 	}, tmpl.spec)
 }
@@ -183,7 +203,9 @@ func registerRateLimitTemplate(tmpl *compiled, set *bundle.RateLimitSet) error {
 			return nil, err
 		}
 
-		// TODO: Rewrite metrics
+		if tmpl.metricsMapping != nil {
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+		}
 		return nm.NewRateLimit(conf)
 	}, tmpl.spec)
 }

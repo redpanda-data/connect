@@ -126,6 +126,21 @@ A [Bloblang](/docs/guides/bloblang/about) mapping that translates the fields of 
 Type: `string`  
 
 
+### `metrics_mapping`
+
+An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported.
+
+
+
+
+```yml
+# Examples
+
+metrics_mapping: this.replace(".foo.count", ".count")
+
+metrics_mapping: if ![ "count", "error", "latency" ].contains(this) { deleted() }
+```
+
 ### `tests`
 
 Optional unit test definitions for the template that verify certain configurations produce valid configs. These tests are executed with the command `benthos template lint`.
