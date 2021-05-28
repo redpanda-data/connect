@@ -106,6 +106,7 @@ func main() {
 		if err := config.Spec().SanitiseNode(&rawNode, docs.SanitiseConfig{
 			RemoveTypeField:  true,
 			RemoveDeprecated: true,
+			ForExample:       true,
 		}); err != nil {
 			panic(err)
 		}
@@ -136,6 +137,7 @@ func main() {
 		if err := config.Spec().SanitiseNode(&rawNode, docs.SanitiseConfig{
 			RemoveTypeField:  true,
 			RemoveDeprecated: true,
+			ForExample:       true,
 		}); err != nil {
 			panic(err)
 		}
@@ -164,6 +166,7 @@ func main() {
 		if err := config.Spec().SanitiseNode(&rawNode, docs.SanitiseConfig{
 			RemoveTypeField:  true,
 			RemoveDeprecated: true,
+			ForExample:       true,
 		}); err != nil {
 			panic(err)
 		}
@@ -192,6 +195,7 @@ func main() {
 		if err := config.Spec().SanitiseNode(&rawNode, docs.SanitiseConfig{
 			RemoveTypeField:  true,
 			RemoveDeprecated: true,
+			ForExample:       true,
 		}); err != nil {
 			panic(err)
 		}

@@ -153,6 +153,7 @@ func createCliCommand() *cli.Command {
 				err = config.Spec().SanitiseNode(&node, docs.SanitiseConfig{
 					RemoveTypeField:  true,
 					RemoveDeprecated: true,
+					ForExample:       true,
 					Filter:           filter,
 				})
 			}

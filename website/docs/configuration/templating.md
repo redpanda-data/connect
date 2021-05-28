@@ -45,6 +45,16 @@ Type: `string`
 
 Options: `cache`, `input`, `output`, `processor`, `rate_limit`.
 
+### `stability`
+
+The stability of the template describing the likelihood that the configuration spec of the template, or it's behaviour, will change.
+
+
+
+Type: `string`  
+
+Options: `stable`, `beta`, `experimental`.
+
 ### `summary`
 
 A short summary of the component.

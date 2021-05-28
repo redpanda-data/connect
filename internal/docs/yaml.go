@@ -21,6 +21,58 @@ func FieldsFromNode(node *yaml.Node) FieldSpecs {
 	return fields
 }
 
+// ToNode creates a YAML node from a field spec. If a default value has been
+// specified then it is used. Otherwise, a zero value is generated. If recurse
+// is enabled and the field has children then all children will also have values
+// generated.
+func (f FieldSpec) ToNode(recurse bool) (*yaml.Node, error) {
+	var node yaml.Node
+	if f.Default != nil {
+		if err := node.Encode(*f.Default); err != nil {
+			return nil, err
+		}
+		return &node, nil
+	}
+	if f.IsArray {
+		s := []interface{}{}
+		if err := node.Encode(s); err != nil {
+			return nil, err
+		}
+	} else if f.IsMap || len(f.Children) > 0 {
+		if len(f.Children) > 0 && recurse {
+			return f.Children.ToNode()
+		}
+		s := map[string]interface{}{}
+		if err := node.Encode(s); err != nil {
+			return nil, err
+		}
+	} else {
+		switch f.Type {
+		case FieldString:
+			if err := node.Encode(""); err != nil {
+				return nil, err
+			}
+		case FieldInt:
+			if err := node.Encode(0); err != nil {
+				return nil, err
+			}
+		case FieldFloat:
+			if err := node.Encode(0.0); err != nil {
+				return nil, err
+			}
+		case FieldBool:
+			if err := node.Encode(false); err != nil {
+				return nil, err
+			}
+		default:
+			if err := node.Encode(nil); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return &node, nil
+}
+
 // NodeToValue converts a yaml node into a generic value by referencing the
 // expected type.
 func (f FieldSpec) NodeToValue(node *yaml.Node) (interface{}, error) {
@@ -170,6 +222,24 @@ func (f FieldSpec) NodeToValue(node *yaml.Node) (interface{}, error) {
 		return nil, err
 	}
 	return v, nil
+}
+
+// ToNode creates a YAML node from a list of field specs. If a default value has
+// been specified for a given field then it is used. Otherwise, a zero value is
+// generated.
+func (f FieldSpecs) ToNode() (*yaml.Node, error) {
+	children := map[string]*yaml.Node{}
+	for _, spec := range f {
+		var err error
+		if children[spec.Name], err = spec.ToNode(true); err != nil {
+			return nil, err
+		}
+	}
+	var node yaml.Node
+	if err := node.Encode(children); err != nil {
+		return nil, err
+	}
+	return &node, nil
 }
 
 // NodeToMap converts a yaml node into a generic map structure by referencing

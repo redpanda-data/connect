@@ -36,6 +36,7 @@ type TestConfig struct {
 type Config struct {
 	Name           string        `yaml:"name"`
 	Type           string        `yaml:"type"`
+	Stability      string        `yaml:"stability"`
 	Summary        string        `yaml:"summary"`
 	Description    string        `yaml:"description"`
 	Fields         []FieldConfig `yaml:"fields"`
@@ -79,10 +80,16 @@ func (c Config) ComponentSpec() (docs.ComponentSpec, error) {
 	}
 	config := docs.FieldComponent().WithChildren(fields...)
 
+	stability := docs.StatusStable
+	if c.Stability != "" {
+		stability = docs.Status(c.Stability)
+	}
+
 	return docs.ComponentSpec{
 		Name:        c.Name,
 		Type:        docs.Type(c.Type),
-		Status:      docs.StatusPlugin,
+		Status:      stability,
+		Plugin:      true,
 		Summary:     c.Summary,
 		Description: c.Description,
 		Config:      config,
@@ -217,6 +224,9 @@ func ConfigSpec() docs.FieldSpecs {
 		docs.FieldCommon("type", "The type of the component this template will create.").HasOptions(
 			"cache", "input", "output", "processor", "rate_limit",
 		).HasType(docs.FieldString),
+		docs.FieldCommon("stability", "The stability of the template describing the likelihood that the configuration spec of the template, or it's behaviour, will change.").HasOptions(
+			"stable", "beta", "experimental",
+		).HasType(docs.FieldString).HasDefault("stable"),
 		docs.FieldCommon("summary", "A short summary of the component.").HasType(docs.FieldString),
 		docs.FieldCommon("description", "A longer form description of the component and how to use it.").HasType(docs.FieldString),
 		docs.FieldCommon("fields", "The configuration fields of the template, fields specified here will be parsed from a Benthos config and will be accessible from the template mapping.").Array().WithChildren(FieldConfigSpec()...),
