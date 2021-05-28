@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -452,6 +453,53 @@ func TestUnarchiveIndexBounds(t *testing.T) {
 		}
 		if exp, act := result.value, string(message.GetAllBytes(msgs[0])[(result.index+1)%5]); exp == act {
 			t.Errorf("Processor was applied to wrong index %v: %v != %v", (result.index+1)%5, act, exp)
+		}
+	}
+}
+
+func TestUnarchiveCSV(t *testing.T) {
+	conf := NewConfig()
+	conf.Unarchive.Format = "csv"
+
+	exp := []interface{}{
+		map[string]interface{}{"id": "1", "name": "foo", "color": "blue"},
+		map[string]interface{}{"id": "2", "name": "bar", "color": "green"},
+		map[string]interface{}{"id": "3", "name": "baz", "color": "red"},
+	}
+
+	proc, err := NewUnarchive(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New([][]byte{
+		[]byte(strings.Join([]string{
+			`id,name,color`,
+			`1,foo,blue`,
+			`2,bar,green`,
+			`3,baz,red`,
+		}, "\n")),
+	}))
+	if len(msgs) != 1 {
+		t.Error("Unarchive failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+
+	if msgs[0].Len() != len(exp) {
+		t.Error("Unexpected output: wrong number of items")
+		return
+	}
+
+	for i := 0; i < len(exp); i++ {
+		expPart := exp[i]
+		actPart, err := msgs[0].Get(i).JSON()
+		if err != nil {
+			t.Errorf("Unexpected json error: %v", err)
+		}
+
+		if !reflect.DeepEqual(expPart, actPart) {
+			t.Errorf("Unexpected output: %v != %v", actPart, expPart)
 		}
 	}
 }
