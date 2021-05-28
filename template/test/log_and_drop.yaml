@@ -21,6 +21,11 @@ mapping: |
     }
   ]
 
+metrics_mapping: |
+  root = if this.has_suffix("1.dropped") {
+    this.replace("1.dropped", "dropped")
+  } else { deleted() }
+
 tests:
   - name: No fields
     config: {}

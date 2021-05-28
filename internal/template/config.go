@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/fatih/color"
 	"github.com/nsf/jsondiff"
 	"gopkg.in/yaml.v3"
 )
@@ -151,7 +152,7 @@ func (c Config) Test() ([]string, error) {
 			return nil, fmt.Errorf("test '%v': %w", test.Name, err)
 		}
 		for _, lint := range docs.LintNode(docs.NewLintContext(), docs.Type(c.Type), outConf) {
-			failures = append(failures, fmt.Sprintf("test %v: lint error in resulting config: %v", test.Name, lint.What))
+			failures = append(failures, fmt.Sprintf("test '%v': lint error in resulting config: %v", test.Name, lint.What))
 		}
 		if len(test.Expected.Content) > 0 {
 			diff, err := diffYAMLNodesAsJSON(&test.Expected, outConf)
@@ -159,6 +160,7 @@ func (c Config) Test() ([]string, error) {
 				return nil, fmt.Errorf("test '%v': %w", test.Name, err)
 			}
 			if diff != "" {
+				diff = color.New(color.Reset).SprintFunc()(diff)
 				return nil, fmt.Errorf("test '%v': mismatch between expected and actual resulting config: %v", test.Name, diff)
 			}
 		}
