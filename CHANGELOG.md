@@ -21,6 +21,9 @@ All notable changes to this project will be documented in this file.
 
 - Go Plugins API: The Bloblang `ArgSpec` now returns a public error type `ArgError`.
 - Components that support glob paths (`file`, `csv`, etc) now also support super globs (double asterisk).
+- The `aws_kinesis` input is now stable.
+- The `gcp_cloud_storage` input and output are now beta.
+- The `kinesis` input is now deprecated.
 
 ### Fixed
 

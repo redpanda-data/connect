@@ -36,7 +36,7 @@ func init() {
 	}), docs.ComponentSpec{
 		Name:    output.TypeGCPCloudStorage,
 		Type:    docs.TypeOutput,
-		Status:  docs.StatusExperimental,
+		Status:  docs.StatusBeta,
 		Version: "3.43.0",
 		Categories: []string{
 			string(input.CategoryServices),

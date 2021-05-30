@@ -1,7 +1,7 @@
 ---
 title: gcp_cloud_storage
 type: input
-status: experimental
+status: beta
 categories: ["Services","GCP"]
 ---
 
@@ -15,8 +15,7 @@ categories: ["Services","GCP"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-EXPERIMENTAL: This component is experimental and therefore subject to change or removal outside of major version releases.
-
+BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 
 Downloads objects within a Google Cloud Storage bucket, optionally filtered by a prefix.
 
@@ -56,8 +55,6 @@ input:
 
 </TabItem>
 </Tabs>
-
-Downloads objects within a Google Cloud Storage bucket, optionally filtered by a prefix.
 
 ## Downloading Large Files
 

@@ -1,7 +1,7 @@
 ---
 title: aws_kinesis
 type: input
-status: beta
+status: stable
 categories: ["Services","AWS"]
 ---
 
@@ -15,7 +15,6 @@ categories: ["Services","AWS"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 
 Receive messages from one or more Kinesis streams.
 

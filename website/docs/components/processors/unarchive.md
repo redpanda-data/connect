@@ -2,7 +2,7 @@
 title: unarchive
 type: processor
 status: stable
-categories: ["Parsing"]
+categories: ["Parsing","Utility"]
 ---
 
 <!--
