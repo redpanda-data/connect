@@ -1,0 +1,19 @@
+name: plugin_alias
+type: processor
+status: experimental
+summary: This is a test template to check that plugin aliases work.
+
+fields:
+  - name: url
+    description: the url of the thing.
+    type: string
+
+mapping: 'root.schema_registry_decode.url = this.url'
+
+tests:
+  - name: Basic fields
+    config:
+      url: 'http://schemas.example.com'
+    expected:
+      schema_registry_decode:
+        url: 'http://schemas.example.com'

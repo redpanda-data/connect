@@ -36,7 +36,8 @@ type TestConfig struct {
 type Config struct {
 	Name           string        `yaml:"name"`
 	Type           string        `yaml:"type"`
-	Stability      string        `yaml:"stability"`
+	Status         string        `yaml:"status"`
+	Categories     []string      `yaml:"categories"`
 	Summary        string        `yaml:"summary"`
 	Description    string        `yaml:"description"`
 	Fields         []FieldConfig `yaml:"fields"`
@@ -80,16 +81,17 @@ func (c Config) ComponentSpec() (docs.ComponentSpec, error) {
 	}
 	config := docs.FieldComponent().WithChildren(fields...)
 
-	stability := docs.StatusStable
-	if c.Stability != "" {
-		stability = docs.Status(c.Stability)
+	status := docs.StatusStable
+	if c.Status != "" {
+		status = docs.Status(c.Status)
 	}
 
 	return docs.ComponentSpec{
 		Name:        c.Name,
 		Type:        docs.Type(c.Type),
-		Status:      stability,
+		Status:      status,
 		Plugin:      true,
+		Categories:  c.Categories,
 		Summary:     c.Summary,
 		Description: c.Description,
 		Config:      config,
@@ -221,12 +223,21 @@ func FieldConfigSpec() docs.FieldSpecs {
 func ConfigSpec() docs.FieldSpecs {
 	return docs.FieldSpecs{
 		docs.FieldCommon("name", "The name of the component this template will create.").HasType(docs.FieldString),
-		docs.FieldCommon("type", "The type of the component this template will create.").HasOptions(
+		docs.FieldCommon(
+			"type", "The type of the component this template will create.",
+		).HasOptions(
 			"cache", "input", "output", "processor", "rate_limit",
-		).HasType(docs.FieldString),
-		docs.FieldCommon("stability", "The stability of the template describing the likelihood that the configuration spec of the template, or it's behaviour, will change.").HasOptions(
-			"stable", "beta", "experimental",
-		).HasType(docs.FieldString).HasDefault("stable"),
+		).HasType(docs.FieldString).LintOptions(),
+		docs.FieldCommon(
+			"status", "The stability of the template describing the likelihood that the configuration spec of the template, or it's behaviour, will change.",
+		).HasAnnotatedOptions(
+			"stable", "This template is stable and will therefore not change in a breaking way outside of major version releases.",
+			"beta", "This template is beta and will therefore not change in a breaking way unless a major problem is found.",
+			"experimental", "This template is experimental and therefore subject to breaking changes outside of major version releases.",
+		).HasType(docs.FieldString).HasDefault("stable").LintOptions(),
+		docs.FieldCommon(
+			"categories", "An optional list of tags, which are used for arbitrarily grouping components in documentation.",
+		).Array().HasType(docs.FieldString),
 		docs.FieldCommon("summary", "A short summary of the component.").HasType(docs.FieldString),
 		docs.FieldCommon("description", "A longer form description of the component and how to use it.").HasType(docs.FieldString),
 		docs.FieldCommon("fields", "The configuration fields of the template, fields specified here will be parsed from a Benthos config and will be accessible from the template mapping.").Array().WithChildren(FieldConfigSpec()...),

@@ -148,9 +148,18 @@ func NewStructConfigSpec(ctor ConfigStructConstructor) (*ConfigSpec, error) {
 }
 
 // Stable sets a documentation label on the component indicating that its
-// configuration spec is stable. Plugins are considered Experimental by default.
+// configuration spec is stable. Plugins are considered experimental by default.
 func (c *ConfigSpec) Stable() *ConfigSpec {
 	c.component.Status = docs.StatusStable
+	return c
+}
+
+// Beta sets a documentation label on the component indicating that its
+// configuration spec is ready for beta testing, meaning backwards incompatible
+// changes will not be made unless a fundamental problem is found. Plugins are
+// considered experimental by default.
+func (c *ConfigSpec) Beta() *ConfigSpec {
+	c.component.Status = docs.StatusBeta
 	return c
 }
 

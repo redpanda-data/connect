@@ -45,7 +45,7 @@ Type: `string`
 
 Options: `cache`, `input`, `output`, `processor`, `rate_limit`.
 
-### `stability`
+### `status`
 
 The stability of the template describing the likelihood that the configuration spec of the template, or it's behaviour, will change.
 
@@ -53,7 +53,22 @@ The stability of the template describing the likelihood that the configuration s
 
 Type: `string`  
 
-Options: `stable`, `beta`, `experimental`.
+
+| Option | Summary |
+|---|---|
+| `stable` | This template is stable and will therefore not change in a breaking way outside of major version releases. |
+| `beta` | This template is beta and will therefore not change in a breaking way unless a major problem is found. |
+| `experimental` | This template is experimental and therefore subject to breaking changes outside of major version releases. |
+
+
+### `categories`
+
+An optional list of tags, which are used for arbitrarily grouping components in documentation.
+
+
+
+Type: list of `string`  
+
 
 ### `summary`
 

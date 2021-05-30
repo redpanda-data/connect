@@ -1,6 +1,7 @@
 name: hydration
 type: processor
-stability: beta
+status: beta
+categories: [ utility, integration ]
 summary: A common hydration pattern.
 description: Hydrates content from structured messages based on an ID field.
 
