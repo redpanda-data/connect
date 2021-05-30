@@ -154,6 +154,13 @@ func (c *ConfigSpec) Stable() *ConfigSpec {
 	return c
 }
 
+// Categories adds one or more string tags to the component, these are used for
+// arbitrarily grouping components in documentation.
+func (c *ConfigSpec) Categories(categories ...string) *ConfigSpec {
+	c.component.Categories = categories
+	return c
+}
+
 // Summary adds a short summary to the plugin configuration spec that describes
 // the general purpose of the component.
 func (c *ConfigSpec) Summary(summary string) *ConfigSpec {

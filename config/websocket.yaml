@@ -22,6 +22,11 @@ input:
       enabled: false
       username: ""
       password: ""
+    jwt:
+      enabled: false
+      private_key_file: ""
+      signing_method: ""
+      claims: {}
 buffer:
   none: {}
 pipeline:
@@ -42,6 +47,11 @@ output:
       enabled: false
       username: ""
       password: ""
+    jwt:
+      enabled: false
+      private_key_file: ""
+      signing_method: ""
+      claims: {}
 logger:
   level: INFO
   format: json

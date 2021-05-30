@@ -228,17 +228,21 @@ func (f FieldSpec) NodeToValue(node *yaml.Node) (interface{}, error) {
 // been specified for a given field then it is used. Otherwise, a zero value is
 // generated.
 func (f FieldSpecs) ToNode() (*yaml.Node, error) {
-	children := map[string]*yaml.Node{}
+	var node yaml.Node
+	node.Kind = yaml.MappingNode
+
 	for _, spec := range f {
-		var err error
-		if children[spec.Name], err = spec.ToNode(true); err != nil {
+		var keyNode yaml.Node
+		if err := keyNode.Encode(spec.Name); err != nil {
 			return nil, err
 		}
+		valueNode, err := spec.ToNode(true)
+		if err != nil {
+			return nil, err
+		}
+		node.Content = append(node.Content, &keyNode, valueNode)
 	}
-	var node yaml.Node
-	if err := node.Encode(children); err != nil {
-		return nil, err
-	}
+
 	return &node, nil
 }
 

@@ -50,7 +50,6 @@ type Config struct {
 	ProxyURL            string            `json:"proxy_url" yaml:"proxy_url"`
 	auth.Config         `json:",inline" yaml:",inline"`
 	OAuth2              auth.OAuth2Config `json:"oauth2" yaml:"oauth2"`
-	JWT                 auth.JWTConfig    `json:"jwt" yaml:"jwt"`
 }
 
 // NewConfig creates a new Config with default values.
@@ -73,7 +72,6 @@ func NewConfig() Config {
 		TLS:                 tls.NewConfig(),
 		Config:              auth.NewConfig(),
 		OAuth2:              auth.NewOAuth2Config(),
-		JWT:                 auth.NewJWTConfig(),
 	}
 }
 
@@ -151,8 +149,16 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		if err != nil {
 			return nil, err
 		}
-		h.client.Transport = &http.Transport{
-			TLSClientConfig: tlsConf,
+		if tlsConf != nil {
+			if c, ok := http.DefaultTransport.(*http.Transport); ok {
+				cloned := c.Clone()
+				cloned.TLSClientConfig = tlsConf
+				h.client.Transport = cloned
+			} else {
+				h.client.Transport = &http.Transport{
+					TLSClientConfig: tlsConf,
+				}
+			}
 		}
 	}
 

@@ -61,39 +61,48 @@ func NewConfig() Config {
 //------------------------------------------------------------------------------
 
 // Get returns a valid *tls.Config based on the configuration values of Config.
+// If none of the config fields are set then a nil config is returned.
 func (c *Config) Get() (*tls.Config, error) {
-	var rootCAs *x509.CertPool
+	var tlsConf *tls.Config
+
 	if len(c.RootCAsFile) > 0 {
 		caCert, err := ioutil.ReadFile(c.RootCAsFile)
 		if err != nil {
 			return nil, err
 		}
-
-		rootCAs = x509.NewCertPool()
-		rootCAs.AppendCertsFromPEM(caCert)
+		if tlsConf == nil {
+			tlsConf = &tls.Config{}
+		}
+		tlsConf.RootCAs = x509.NewCertPool()
+		tlsConf.RootCAs.AppendCertsFromPEM(caCert)
 	}
-
-	clientCerts := []tls.Certificate{}
 
 	for _, conf := range c.ClientCertificates {
 		cert, err := conf.Load()
 		if err != nil {
 			return nil, err
 		}
-		clientCerts = append(clientCerts, cert)
+		if tlsConf == nil {
+			tlsConf = &tls.Config{}
+		}
+		tlsConf.Certificates = append(tlsConf.Certificates, cert)
 	}
 
-	renegotiate := tls.RenegotiateNever
 	if c.EnableRenegotiation {
-		renegotiate = tls.RenegotiateFreelyAsClient
+		if tlsConf == nil {
+			tlsConf = &tls.Config{}
+		}
+		tlsConf.Renegotiation = tls.RenegotiateFreelyAsClient
 	}
 
-	return &tls.Config{
-		InsecureSkipVerify: c.InsecureSkipVerify,
-		RootCAs:            rootCAs,
-		Certificates:       clientCerts,
-		Renegotiation:      renegotiate,
-	}, nil
+	if c.InsecureSkipVerify {
+		if tlsConf == nil {
+			tlsConf = &tls.Config{}
+		}
+		tlsConf.InsecureSkipVerify = true
+	}
+
+	return tlsConf, nil
 }
 
 // Load returns a TLS certificate, based on either file paths in the

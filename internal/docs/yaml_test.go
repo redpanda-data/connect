@@ -315,10 +315,10 @@ func TestFieldToNode(t *testing.T) {
 			recurse: true,
 			expected: `bar: ""
 baz: baz default
-bev: 0
-bud: []
-bun: false
 buz: 0
+bev: 0
+bun: false
+bud: []
 `,
 		},
 	}
