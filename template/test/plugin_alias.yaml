@@ -7,6 +7,7 @@ fields:
   - name: url
     description: the url of the thing.
     type: string
+    default: http://defaultschemas.example.com
 
 mapping: 'root.schema_registry_decode.url = this.url'
 
@@ -17,3 +18,9 @@ tests:
     expected:
       schema_registry_decode:
         url: 'http://schemas.example.com'
+
+  - name: Use Default
+    config: {}
+    expected:
+      schema_registry_decode:
+        url: 'http://defaultschemas.example.com'

@@ -50,7 +50,7 @@ type Config struct {
 func (c FieldConfig) FieldSpec() (docs.FieldSpec, error) {
 	f := docs.FieldCommon(c.Name, c.Description)
 	if c.Default != nil {
-		f = f.HasDefault(*f.Default)
+		f = f.HasDefault(*c.Default)
 	}
 	if c.Type == nil {
 		return f, errors.New("missing type field")

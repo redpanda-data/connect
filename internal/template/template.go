@@ -21,7 +21,6 @@ import (
 // InitTemplates parses and registers native templates, as well as templates
 // at paths provided, and returns any linting errors that occur.
 func InitTemplates(templatesPaths ...string) ([]string, error) {
-	// TODO: Register any native templates.
 	var lints []string
 	for _, tPath := range templatesPaths {
 		tmplConf, tLints, err := ReadConfig(tPath)
