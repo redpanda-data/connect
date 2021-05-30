@@ -11,9 +11,14 @@ description: |
   Authentication is done using OAuth 2.0 credentials which can be generated within the [Twitter developer portal](https://developer.twitter.com).
 
 fields:
-  - name: search
+  - name: query
     description: A search expression to use.
     type: string
+
+  - name: poll_period
+    description: The length of time (as a duration string) to wait between each search request. This field can be set empty, in which case requests are made at the limit set by the rate limit. This field also supports cron expressions.
+    type: string
+    default: "1m"
 
   - name: cache
     description: A cache resource to use for request pagination.
@@ -23,6 +28,7 @@ fields:
     description: An optional rate limit resource to restrict API requests with.
     type: string
     default: ""
+    advanced: true
 
   - name: api_key
     description: An API key for OAuth 2.0 authentication. It is recommended that you populate this field using [environment variables](/docs/configuration/interpolation).
@@ -33,7 +39,11 @@ fields:
     type: string
 
 mapping: |
-  root.generate.interval = "0 * * * * *"
+  let _ = if this.poll_period == "" && this.rate_limit == "" {
+    throw("either a poll_period, a rate_limit, or both must be specified")
+  }
+
+  root.generate.interval = this.poll_period
   root.generate.mapping = "root = \"\""
   root.processors = [
     {
@@ -55,7 +65,7 @@ mapping: |
   }
   meta tweet_search_url = $url_base + $query_base + $tweet_params
   root = ""
-  """.format(this.search)
+  """.format(this.query)
     },
     {
       "http": {
@@ -90,10 +100,17 @@ mapping: |
     { "split": {} },
   ]
 
+metrics_mapping: |
+  root = match this {
+    "input.processor.3.client.error" => "input.error",
+    "input.processor.7.count" => "input.count",
+    _ => deleted(),
+  }
+
 tests:
   - name: Basic fields
     config:
-      search: benthos.dev
+      query: benthos.dev
       cache: foocache
       rate_limit: foolimit
       api_key: fookey
@@ -101,7 +118,7 @@ tests:
 
     expected:
       generate:
-        interval: '0 * * * * *'
+        interval: '1m'
         mapping: root = ""
       processors:
         - cache:

@@ -23,6 +23,7 @@ type FieldConfig struct {
 	Type        *string      `yaml:"type,omitempty"`
 	Kind        *string      `yaml:"kind,omitempty"`
 	Default     *interface{} `yaml:"default,omitempty"`
+	Advanced    bool         `yaml:"advanced"`
 }
 
 // TestConfig defines a unit test for the template.
@@ -49,6 +50,7 @@ type Config struct {
 // FieldSpec creates a documentation field spec from a template field config.
 func (c FieldConfig) FieldSpec() (docs.FieldSpec, error) {
 	f := docs.FieldCommon(c.Name, c.Description)
+	f.Advanced = c.Advanced
 	if c.Default != nil {
 		f = f.HasDefault(*c.Default)
 	}
@@ -216,6 +218,7 @@ func FieldConfigSpec() docs.FieldSpecs {
 			"scalar", "map", "list",
 		).HasDefault("scalar").LintOptions(),
 		docs.FieldCommon("default", "An optional default value for the field. If a default value is not specified then a configuration without the field is considered incorrect."),
+		docs.FieldCommon("advanced", "Whether this field is considered advanced.").HasType(docs.FieldBool).HasDefault(false),
 	}
 }
 

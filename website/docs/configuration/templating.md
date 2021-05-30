@@ -142,6 +142,15 @@ An optional default value for the field. If a default value is not specified the
 
 
 
+### `fields[].advanced`
+
+Whether this field is considered advanced.
+
+
+
+Type: `bool`  
+
+
 ### `mapping`
 
 A [Bloblang](/docs/guides/bloblang/about) mapping that translates the fields of the template into a valid Benthos configuration for the target component type.
