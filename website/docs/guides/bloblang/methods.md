@@ -651,6 +651,24 @@ root.new_value = this.value.re_replace("ADD ([0-9]+)","+($1)")
 
 ## Timestamp Manipulation
 
+### `parse_duration`
+
+Attempts to parse a string as a duration and returns an integer of nanoseconds. A duration string is a possibly signed sequence of decimal numbers, each with an optional fraction and a unit suffix, such as "300ms", "-1.5h" or "2h45m". Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+
+```coffee
+root.delay_for_ns = this.delay_for.parse_duration()
+
+# In:  {"delay_for":"50us"}
+# Out: {"delay_for_ns":50000}
+```
+
+```coffee
+root.delay_for_s = this.delay_for.parse_duration() / 1000000000
+
+# In:  {"delay_for":"2h"}
+# Out: {"delay_for_s":7200}
+```
+
 ### `parse_timestamp`
 
 BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.

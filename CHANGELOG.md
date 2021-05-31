@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - New beta Bloblang method `bloblang` for executing dynamic mappings.
 - All `http` components now support a beta `jwt` authentication mechanism.
 - New experimental `schema_registry_decode` processor.
+- New Bloblang method `parse_duration` for parsing duration strings into an integer.
 
 ### Changed
 
