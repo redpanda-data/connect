@@ -19,8 +19,26 @@ EXPERIMENTAL: This component is experimental and therefore subject to change or 
 
 Automatically decodes and validates messages with schemas from a Confluent Schema Registry service.
 
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yaml
-# Config fields, showing default values
+# Common config fields, showing default values
+label: ""
+schema_registry_decode:
+  url: ""
+```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+# All config fields, showing default values
 label: ""
 schema_registry_decode:
   url: ""
@@ -30,6 +48,9 @@ schema_registry_decode:
     root_cas_file: ""
     client_certs: []
 ```
+
+</TabItem>
+</Tabs>
 
 Decodes messages automatically from a schema stored within a [Confluent Schema Registry service](https://docs.confluent.io/platform/current/schema-registry/index.html) by extracting a schema ID from the message and obtaining the associated schema from the registry. If a message fails to match against the schema then it will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).
 

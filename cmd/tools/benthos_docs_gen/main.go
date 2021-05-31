@@ -63,6 +63,10 @@ func main() {
 	flag.BoolVar(&verbose, "v", false, "Writes more information to stdout, including configs that aren't updated")
 	flag.Parse()
 
+	if _, err := template.InitTemplates(); err != nil {
+		panic(err)
+	}
+
 	doInputs(docsDir)
 	doBuffers(docsDir)
 	doCaches(docsDir)

@@ -393,6 +393,9 @@ func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 		if err != nil {
 			return err
 		}
+		if err := cSpec.Config.SanitiseNode(bodyNode, conf); err != nil {
+			return err
+		}
 		newNodes = append(newNodes, &keyNode, bodyNode)
 	}
 

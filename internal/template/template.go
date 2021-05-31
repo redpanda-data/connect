@@ -2,6 +2,8 @@ package template
 
 import (
 	"fmt"
+	"io/fs"
+	"sync"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
@@ -15,12 +17,50 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/template"
 	"gopkg.in/yaml.v3"
 )
+
+var initNativeOnce sync.Once
+
+func initNativeTemplates() {
+	if werr := fs.WalkDir(template.NativeTemplates, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		tBytes, err := fs.ReadFile(template.NativeTemplates, path)
+		if err != nil {
+			return err
+		}
+
+		var conf Config
+		if err = yaml.Unmarshal(tBytes, &conf); err != nil {
+			return fmt.Errorf("failed to parse template '%v': %w", path, err)
+		}
+
+		tmpl, err := conf.compile()
+		if err != nil {
+			return fmt.Errorf("failed to compile template %v: %w", path, err)
+		}
+
+		if err := registerTemplate(tmpl); err != nil {
+			return fmt.Errorf("failed to register template %v: %w", path, err)
+		}
+
+		return nil
+	}); werr != nil {
+		panic(werr)
+	}
+}
 
 // InitTemplates parses and registers native templates, as well as templates
 // at paths provided, and returns any linting errors that occur.
 func InitTemplates(templatesPaths ...string) ([]string, error) {
+	initNativeOnce.Do(initNativeTemplates)
+
 	var lints []string
 	for _, tPath := range templatesPaths {
 		tmplConf, tLints, err := ReadConfig(tPath)
