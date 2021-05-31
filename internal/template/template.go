@@ -145,6 +145,9 @@ func registerInputTemplate(tmpl *compiled, set *bundle.InputSet) error {
 			return nil, err
 		}
 
+		// Tempate processors inserted _before_ configured processors.
+		conf.Processors = append(conf.Processors, c.Processors...)
+
 		if tmpl.metricsMapping != nil {
 			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
 		}
@@ -163,6 +166,9 @@ func registerOutputTemplate(tmpl *compiled, set *bundle.OutputSet) error {
 		if err := newNode.Decode(&conf); err != nil {
 			return nil, err
 		}
+
+		// Tempate processors inserted _after_ configured processors.
+		conf.Processors = append(c.Processors, conf.Processors...)
 
 		if tmpl.metricsMapping != nil {
 			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
