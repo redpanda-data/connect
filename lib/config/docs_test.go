@@ -20,7 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func walkSpec(t *testing.T, prefix string, spec docs.FieldSpec, conf interface{}) {
+func walkSpecWithConfig(t *testing.T, prefix string, spec docs.FieldSpec, conf interface{}) {
 	t.Helper()
 
 	if _, isCore := spec.Type.IsCoreComponent(); isCore {
@@ -35,7 +35,7 @@ func walkSpec(t *testing.T, prefix string, spec docs.FieldSpec, conf interface{}
 		for i, ele := range arr {
 			tmpSpec := spec
 			tmpSpec.IsArray = false
-			walkSpec(t, prefix+fmt.Sprintf("[%v]", i), tmpSpec, ele)
+			walkSpecWithConfig(t, prefix+fmt.Sprintf("[%v]", i), tmpSpec, ele)
 		}
 	} else if spec.IsMap {
 		obj, ok := conf.(map[string]interface{})
@@ -45,7 +45,7 @@ func walkSpec(t *testing.T, prefix string, spec docs.FieldSpec, conf interface{}
 		for k, v := range obj {
 			tmpSpec := spec
 			tmpSpec.IsMap = false
-			walkSpec(t, prefix+fmt.Sprintf(".<%v>", k), tmpSpec, v)
+			walkSpecWithConfig(t, prefix+fmt.Sprintf(".<%v>", k), tmpSpec, v)
 		}
 	} else if len(spec.Children) > 0 {
 		obj, ok := conf.(map[string]interface{})
@@ -55,7 +55,7 @@ func walkSpec(t *testing.T, prefix string, spec docs.FieldSpec, conf interface{}
 		for _, child := range spec.Children {
 			c, ok := obj[child.Name]
 			if assert.True(t, ok || child.Deprecated, "%v: field documented but not found in config", prefix+"."+child.Name) {
-				walkSpec(t, prefix+"."+child.Name, child, c)
+				walkSpecWithConfig(t, prefix+"."+child.Name, child, c)
 			}
 			delete(obj, child.Name)
 		}
@@ -78,7 +78,9 @@ func TestDocumentationCoverage(t *testing.T) {
 			conf.Type = v.Name
 			confSanit, err := conf.Sanitised(false)
 			require.NoError(t, err)
-			walkSpec(t, "buffer."+v.Name, v.Config, confSanit.(config.Sanitised)[v.Name])
+			if !v.Plugin {
+				walkSpecWithConfig(t, "buffer."+v.Name, v.Config, confSanit.(config.Sanitised)[v.Name])
+			}
 		}
 	})
 
@@ -88,7 +90,9 @@ func TestDocumentationCoverage(t *testing.T) {
 			conf.Type = v.Name
 			confSanit, err := conf.Sanitised(false)
 			require.NoError(t, err)
-			walkSpec(t, "cache."+v.Name, v.Config, confSanit.(config.Sanitised)[v.Name])
+			if !v.Plugin {
+				walkSpecWithConfig(t, "cache."+v.Name, v.Config, confSanit.(config.Sanitised)[v.Name])
+			}
 		}
 	})
 
@@ -98,7 +102,9 @@ func TestDocumentationCoverage(t *testing.T) {
 			conf.Type = v.Name
 			confSanit, err := conf.Sanitised(false)
 			require.NoError(t, err)
-			walkSpec(t, "input."+v.Name, v.Config, confSanit.(config.Sanitised)[v.Name])
+			if !v.Plugin {
+				walkSpecWithConfig(t, "input."+v.Name, v.Config, confSanit.(config.Sanitised)[v.Name])
+			}
 		}
 	})
 
@@ -108,7 +114,9 @@ func TestDocumentationCoverage(t *testing.T) {
 			conf.Type = v.Name
 			confSanit, err := conf.Sanitised(false)
 			require.NoError(t, err)
-			walkSpec(t, "metrics."+v.Name, v.Config, confSanit.(config.Sanitised)[v.Name])
+			if !v.Plugin {
+				walkSpecWithConfig(t, "metrics."+v.Name, v.Config, confSanit.(config.Sanitised)[v.Name])
+			}
 		}
 	})
 
@@ -118,7 +126,9 @@ func TestDocumentationCoverage(t *testing.T) {
 			conf.Type = v.Name
 			confSanit, err := conf.Sanitised(false)
 			require.NoError(t, err)
-			walkSpec(t, "output."+v.Name, v.Config, confSanit.(config.Sanitised)[v.Name])
+			if !v.Plugin {
+				walkSpecWithConfig(t, "output."+v.Name, v.Config, confSanit.(config.Sanitised)[v.Name])
+			}
 		}
 	})
 
@@ -128,7 +138,9 @@ func TestDocumentationCoverage(t *testing.T) {
 			conf.Type = v.Name
 			confSanit, err := conf.Sanitised(false)
 			require.NoError(t, err)
-			walkSpec(t, "processor."+v.Name, v.Config, confSanit.(config.Sanitised)[v.Name])
+			if !v.Plugin {
+				walkSpecWithConfig(t, "processor."+v.Name, v.Config, confSanit.(config.Sanitised)[v.Name])
+			}
 		}
 	})
 
@@ -138,7 +150,9 @@ func TestDocumentationCoverage(t *testing.T) {
 			conf.Type = v.Name
 			confSanit, err := conf.Sanitised(false)
 			require.NoError(t, err)
-			walkSpec(t, "rate_limit."+v.Name, v.Config, confSanit.(config.Sanitised)[v.Name])
+			if !v.Plugin {
+				walkSpecWithConfig(t, "rate_limit."+v.Name, v.Config, confSanit.(config.Sanitised)[v.Name])
+			}
 		}
 	})
 
@@ -148,7 +162,9 @@ func TestDocumentationCoverage(t *testing.T) {
 			conf.Type = v.Name
 			confSanit, err := conf.Sanitised(false)
 			require.NoError(t, err)
-			walkSpec(t, "tracer."+v.Name, v.Config, confSanit.(config.Sanitised)[v.Name])
+			if !v.Plugin {
+				walkSpecWithConfig(t, "tracer."+v.Name, v.Config, confSanit.(config.Sanitised)[v.Name])
+			}
 		}
 	})
 }

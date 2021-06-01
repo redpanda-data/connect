@@ -14,7 +14,7 @@ import (
 var red = color.New(color.FgRed).SprintFunc()
 var yellow = color.New(color.FgYellow).SprintFunc()
 
-func resolveLintPath(path string) (string, bool) {
+func resolveLintPath(path string) []string {
 	recurse := false
 	if path == "./..." || path == "..." {
 		recurse = true
@@ -24,7 +24,27 @@ func resolveLintPath(path string) (string, bool) {
 		recurse = true
 		path = strings.TrimSuffix(path, "/...")
 	}
-	return path, recurse
+	if recurse {
+		var targets []string
+		if err := filepath.Walk(path, func(path string, info os.FileInfo, werr error) error {
+			if werr != nil {
+				return werr
+			}
+			if info.IsDir() {
+				return nil
+			}
+			if strings.HasSuffix(path, ".yaml") ||
+				strings.HasSuffix(path, ".yml") {
+				targets = append(targets, path)
+			}
+			return nil
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "Filesystem walk error: %v\n", err)
+			os.Exit(1)
+		}
+		return targets
+	}
+	return []string{path}
 }
 
 type pathLint struct {
@@ -38,7 +58,7 @@ func lintFile(path string) (pathLints []pathLint) {
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
 			source: path,
-			err:    err.Error(),
+			err:    red(err.Error()),
 		})
 		return
 	}
@@ -85,27 +105,7 @@ func lintCliCommand() *cli.Command {
 		Action: func(c *cli.Context) error {
 			var targets []string
 			for _, p := range c.Args().Slice() {
-				var recurse bool
-				if p, recurse = resolveLintPath(p); recurse {
-					if err := filepath.Walk(p, func(path string, info os.FileInfo, werr error) error {
-						if werr != nil {
-							return werr
-						}
-						if info.IsDir() {
-							return nil
-						}
-						if strings.HasSuffix(path, ".yaml") ||
-							strings.HasSuffix(path, ".yml") {
-							targets = append(targets, path)
-						}
-						return nil
-					}); err != nil {
-						fmt.Fprintf(os.Stderr, "Filesystem walk error: %v\n", err)
-						os.Exit(1)
-					}
-				} else {
-					targets = append(targets, p)
-				}
+				targets = append(targets, resolveLintPath(p)...)
 			}
 
 			var pathLints []pathLint

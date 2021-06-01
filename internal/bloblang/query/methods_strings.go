@@ -1030,6 +1030,38 @@ var _ = registerSimpleMethod(
 //------------------------------------------------------------------------------
 
 var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"parse_duration", "",
+	).InCategory(
+		MethodCategoryTime,
+		`Attempts to parse a string as a duration and returns an integer of nanoseconds. A duration string is a possibly signed sequence of decimal numbers, each with an optional fraction and a unit suffix, such as "300ms", "-1.5h" or "2h45m". Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".`,
+		NewExampleSpec("",
+			`root.delay_for_ns = this.delay_for.parse_duration()`,
+			`{"delay_for":"50us"}`,
+			`{"delay_for_ns":50000}`,
+		),
+		NewExampleSpec("",
+			`root.delay_for_s = this.delay_for.parse_duration() / 1000000000`,
+			`{"delay_for":"2h"}`,
+			`{"delay_for_s":7200}`,
+		),
+	),
+	func(args ...interface{}) (simpleMethod, error) {
+		return stringMethod(func(s string) (interface{}, error) {
+			d, err := time.ParseDuration(s)
+			if err != nil {
+				return nil, err
+			}
+			return d.Nanoseconds(), nil
+		}), nil
+	},
+	true,
+	ExpectNArgs(0),
+)
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleMethod(
 	NewDeprecatedMethodSpec(
 		"parse_timestamp_unix", "",
 	).InCategory(

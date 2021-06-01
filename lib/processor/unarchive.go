@@ -26,7 +26,7 @@ func init() {
 	Constructors[TypeUnarchive] = TypeSpec{
 		constructor: NewUnarchive,
 		Categories: []Category{
-			CategoryParsing,
+			CategoryParsing, CategoryUtility,
 		},
 		Summary: `
 Unarchives messages according to the selected archive [format](#formats) into

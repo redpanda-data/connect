@@ -9,6 +9,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/template"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/output"
@@ -71,6 +72,10 @@ func main() {
 	flag.BoolVar(&verbose, "v", false, "Writes more information to stdout, including configs that aren't updated")
 	flag.Parse()
 
+	if _, err := template.InitTemplates(); err != nil {
+		panic(err)
+	}
+
 	// Get list of all types (both input and output).
 	typeMap := map[string]struct{}{}
 	for _, info := range bundle.AllInputs.Docs() {
@@ -106,6 +111,7 @@ func main() {
 		if err := config.Spec().SanitiseNode(&rawNode, docs.SanitiseConfig{
 			RemoveTypeField:  true,
 			RemoveDeprecated: true,
+			ForExample:       true,
 		}); err != nil {
 			panic(err)
 		}
@@ -136,6 +142,7 @@ func main() {
 		if err := config.Spec().SanitiseNode(&rawNode, docs.SanitiseConfig{
 			RemoveTypeField:  true,
 			RemoveDeprecated: true,
+			ForExample:       true,
 		}); err != nil {
 			panic(err)
 		}
@@ -164,6 +171,7 @@ func main() {
 		if err := config.Spec().SanitiseNode(&rawNode, docs.SanitiseConfig{
 			RemoveTypeField:  true,
 			RemoveDeprecated: true,
+			ForExample:       true,
 		}); err != nil {
 			panic(err)
 		}
@@ -192,6 +200,7 @@ func main() {
 		if err := config.Spec().SanitiseNode(&rawNode, docs.SanitiseConfig{
 			RemoveTypeField:  true,
 			RemoveDeprecated: true,
+			ForExample:       true,
 		}); err != nil {
 			panic(err)
 		}

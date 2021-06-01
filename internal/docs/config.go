@@ -92,7 +92,8 @@ func refreshOldPlugins() {
 		RegisterDocs(ComponentSpec{
 			Name:   nt[0],
 			Type:   Type(nt[1]),
-			Status: StatusPlugin,
+			Plugin: true,
+			Status: StatusExperimental,
 		})
 	})
 }
@@ -313,6 +314,7 @@ func SanitiseComponentConfig(componentType Type, raw interface{}, filter FieldFi
 type SanitiseConfig struct {
 	RemoveTypeField  bool
 	RemoveDeprecated bool
+	ForExample       bool
 	Filter           FieldFilter
 }
 
@@ -364,7 +366,7 @@ func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 
 	nameFound := false
 	for i := 0; i < len(node.Content)-1; i += 2 {
-		if node.Content[i].Value == "plugin" && cSpec.Status == StatusPlugin {
+		if node.Content[i].Value == "plugin" && cSpec.Plugin {
 			node.Content[i].Value = name
 		}
 
@@ -381,14 +383,20 @@ func SanitiseNode(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 	}
 
 	// If the type field was omitted but we didn't see a config under the name
-	// then we need to add it back in as it cannot be inferred.
+	// then we need to add an empty object.
 	if !nameFound && conf.RemoveTypeField {
-		for i := 0; i < len(node.Content)-1; i += 2 {
-			if node.Content[i].Value == "type" {
-				newNodes = append(newNodes, node.Content[i], node.Content[i+1])
-				break
-			}
+		var keyNode yaml.Node
+		if err := keyNode.Encode(name); err != nil {
+			return err
 		}
+		bodyNode, err := cSpec.Config.ToNode(conf.ForExample)
+		if err != nil {
+			return err
+		}
+		if err := cSpec.Config.SanitiseNode(bodyNode, conf); err != nil {
+			return err
+		}
+		newNodes = append(newNodes, &keyNode, bodyNode)
 	}
 
 	reservedFields := reservedFieldsByType(cType)
@@ -462,7 +470,7 @@ func LintNode(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 			continue
 		}
 		if node.Content[i].Value == "plugin" {
-			if nameFound || cSpec.Status != StatusPlugin {
+			if nameFound || !cSpec.Plugin {
 				lints = append(lints, NewLintError(node.Content[i].Line, "plugin object is ineffective"))
 			} else {
 				lints = append(lints, cSpec.Config.lintNode(ctx, node.Content[i+1])...)

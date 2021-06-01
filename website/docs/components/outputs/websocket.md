@@ -54,6 +54,11 @@ output:
       enabled: false
       username: ""
       password: ""
+    jwt:
+      enabled: false
+      private_key_file: ""
+      signing_method: ""
+      claims: {}
 ```
 
 </TabItem>
@@ -154,5 +159,44 @@ A password to authenticate with.
 
 Type: `string`  
 Default: `""`  
+
+### `jwt`
+
+BETA: Allows you to specify JWT authentication.
+
+
+Type: `object`  
+
+### `jwt.enabled`
+
+Whether to use JWT authentication in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `jwt.private_key_file`
+
+A file with the PEM encoded via PKCS1 or PKCS8 as private key.
+
+
+Type: `string`  
+Default: `""`  
+
+### `jwt.signing_method`
+
+A method used to sign the token such as RS256, RS384 or RS512.
+
+
+Type: `string`  
+Default: `""`  
+
+### `jwt.claims`
+
+A value used to identify the claims that issued the JWT.
+
+
+Type: `object`  
+Default: `{}`  
 
 

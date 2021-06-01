@@ -37,7 +37,7 @@ func init() {
 	}), docs.ComponentSpec{
 		Name:    input.TypeGCPCloudStorage,
 		Type:    docs.TypeInput,
-		Status:  docs.StatusExperimental,
+		Status:  docs.StatusBeta,
 		Version: "3.43.0",
 		Categories: []string{
 			string(input.CategoryServices),
@@ -46,8 +46,6 @@ func init() {
 		Summary: `
 Downloads objects within a Google Cloud Storage bucket, optionally filtered by a prefix.`,
 		Description: `
-Downloads objects within a Google Cloud Storage bucket, optionally filtered by a prefix.
-
 ## Downloading Large Files
 
 When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a ` + "[`codec`](#codec)" + ` can be specified that determines how to break the input into smaller individual messages.

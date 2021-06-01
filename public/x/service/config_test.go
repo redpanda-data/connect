@@ -126,11 +126,11 @@ c:
 
 func TestConfigGeneric(t *testing.T) {
 	spec := NewConfigSpec().
-		Field(NewConfigField("a")).
-		Field(NewConfigField("b").Default(11)).
-		Field(NewConfigField("c").Children(
-			NewConfigField("d").Default(true),
-			NewConfigField("e").Default("evalue"),
+		Field(NewStringField("a")).
+		Field(NewIntField("b").Default(11)).
+		Field(NewObjectField("c",
+			NewBoolField("d").Default(true),
+			NewStringField("e").Default("evalue"),
 		))
 
 	tests := []struct {
@@ -225,17 +225,18 @@ c:
 	}
 }
 
-func TestConfigGenericField(t *testing.T) {
+func TestConfigTypedFields(t *testing.T) {
 	spec := NewConfigSpec().
-		Field(NewConfigField("a")).
-		Field(NewConfigField("b").Default(11)).
-		Field(NewConfigField("c").Children(
-			NewConfigField("d").Default(true),
-			NewConfigField("e").Default("evalue"),
-			NewConfigField("f").Children(
-				NewConfigField("g").Default(12),
-				NewConfigField("h"),
-				NewConfigField("i").Default(13),
+		Field(NewStringField("a")).
+		Field(NewIntField("b").Default(11)).
+		Field(NewObjectField("c",
+			NewBoolField("d").Default(true),
+			NewStringField("e").Default("evalue"),
+			NewObjectField("f",
+				NewIntField("g").Default(12),
+				NewStringField("h"),
+				NewFloatField("i").Default(13.0),
+				NewStringListField("j"),
 			),
 		))
 
@@ -246,38 +247,48 @@ c:
     g: 22
     h: sethvalue
     i: 23.1
+    j:
+      - first in list
+      - second in list
 `))
 	require.NoError(t, err)
 
 	parsedConfig, err := spec.configFromNode(node)
 	require.NoError(t, err)
 
-	v, ok := parsedConfig.Field("a")
-	assert.True(t, ok)
-	assert.Equal(t, "setavalue", v)
+	s, err := parsedConfig.FieldString("a")
+	assert.NoError(t, err)
+	assert.Equal(t, "setavalue", s)
 
-	_, ok = parsedConfig.Field("z")
-	assert.False(t, ok)
+	_, err = parsedConfig.FieldString("z")
+	assert.Error(t, err)
 
-	_, ok = parsedConfig.Field("c", "z")
-	assert.False(t, ok)
+	_, err = parsedConfig.FieldInt("c", "z")
+	assert.Error(t, err)
 
-	_, ok = parsedConfig.Field("c", "d", "z")
-	assert.False(t, ok)
+	_, err = parsedConfig.FieldFloat("c", "d", "z")
+	assert.Error(t, err)
 
-	v, ok = parsedConfig.Field("b")
-	assert.True(t, ok)
-	assert.Equal(t, 11, v)
+	_, err = parsedConfig.FieldBool("c", "z")
+	assert.Error(t, err)
 
-	v, ok = parsedConfig.Field("c", "d")
-	assert.True(t, ok)
-	assert.Equal(t, true, v)
+	i, err := parsedConfig.FieldInt("b")
+	assert.NoError(t, err)
+	assert.Equal(t, 11, i)
 
-	v, ok = parsedConfig.Field("c", "f", "g")
-	assert.True(t, ok)
-	assert.Equal(t, 22, v)
+	b, err := parsedConfig.FieldBool("c", "d")
+	assert.NoError(t, err)
+	assert.Equal(t, true, b)
 
-	v, ok = parsedConfig.Field("c", "f", "i")
-	assert.True(t, ok)
-	assert.Equal(t, 23.1, v)
+	i, err = parsedConfig.FieldInt("c", "f", "g")
+	assert.NoError(t, err)
+	assert.Equal(t, 22, i)
+
+	f, err := parsedConfig.FieldFloat("c", "f", "i")
+	assert.NoError(t, err)
+	assert.Equal(t, 23.1, f)
+
+	ll, err := parsedConfig.FieldStringList("c", "f", "j")
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"first in list", "second in list"}, ll)
 }

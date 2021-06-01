@@ -15,11 +15,18 @@ All notable changes to this project will be documented in this file.
 - A new experimental template system is available for early adopters, examples can be found in `./template`.
 - New beta Bloblang method `bloblang` for executing dynamic mappings.
 - All `http` components now support a beta `jwt` authentication mechanism.
+- New experimental `schema_registry_decode` processor.
+- New Bloblang method `parse_duration` for parsing duration strings into an integer.
+- New experimental `twitter_search` input.
 
 ### Changed
 
 - Go Plugins API: The Bloblang `ArgSpec` now returns a public error type `ArgError`.
 - Components that support glob paths (`file`, `csv`, etc) now also support super globs (double asterisk).
+- The `aws_kinesis` input is now stable.
+- The `gcp_cloud_storage` input and output are now beta.
+- The `kinesis` input is now deprecated.
+- Go Plugins API: the minimum version of Go required is now 1.16.
 
 ### Fixed
 

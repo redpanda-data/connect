@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/fatih/color"
 	"github.com/nsf/jsondiff"
 	"gopkg.in/yaml.v3"
 )
@@ -22,6 +23,7 @@ type FieldConfig struct {
 	Type        *string      `yaml:"type,omitempty"`
 	Kind        *string      `yaml:"kind,omitempty"`
 	Default     *interface{} `yaml:"default,omitempty"`
+	Advanced    bool         `yaml:"advanced"`
 }
 
 // TestConfig defines a unit test for the template.
@@ -35,6 +37,8 @@ type TestConfig struct {
 type Config struct {
 	Name           string        `yaml:"name"`
 	Type           string        `yaml:"type"`
+	Status         string        `yaml:"status"`
+	Categories     []string      `yaml:"categories"`
 	Summary        string        `yaml:"summary"`
 	Description    string        `yaml:"description"`
 	Fields         []FieldConfig `yaml:"fields"`
@@ -46,8 +50,9 @@ type Config struct {
 // FieldSpec creates a documentation field spec from a template field config.
 func (c FieldConfig) FieldSpec() (docs.FieldSpec, error) {
 	f := docs.FieldCommon(c.Name, c.Description)
+	f.Advanced = c.Advanced
 	if c.Default != nil {
-		f = f.HasDefault(*f.Default)
+		f = f.HasDefault(*c.Default)
 	}
 	if c.Type == nil {
 		return f, errors.New("missing type field")
@@ -78,10 +83,17 @@ func (c Config) ComponentSpec() (docs.ComponentSpec, error) {
 	}
 	config := docs.FieldComponent().WithChildren(fields...)
 
+	status := docs.StatusStable
+	if c.Status != "" {
+		status = docs.Status(c.Status)
+	}
+
 	return docs.ComponentSpec{
 		Name:        c.Name,
 		Type:        docs.Type(c.Type),
-		Status:      docs.StatusPlugin,
+		Status:      status,
+		Plugin:      true,
+		Categories:  c.Categories,
 		Summary:     c.Summary,
 		Description: c.Description,
 		Config:      config,
@@ -151,7 +163,7 @@ func (c Config) Test() ([]string, error) {
 			return nil, fmt.Errorf("test '%v': %w", test.Name, err)
 		}
 		for _, lint := range docs.LintNode(docs.NewLintContext(), docs.Type(c.Type), outConf) {
-			failures = append(failures, fmt.Sprintf("test %v: lint error in resulting config: %v", test.Name, lint.What))
+			failures = append(failures, fmt.Sprintf("test '%v': lint error in resulting config: %v", test.Name, lint.What))
 		}
 		if len(test.Expected.Content) > 0 {
 			diff, err := diffYAMLNodesAsJSON(&test.Expected, outConf)
@@ -159,6 +171,7 @@ func (c Config) Test() ([]string, error) {
 				return nil, fmt.Errorf("test '%v': %w", test.Name, err)
 			}
 			if diff != "" {
+				diff = color.New(color.Reset).SprintFunc()(diff)
 				return nil, fmt.Errorf("test '%v': mismatch between expected and actual resulting config: %v", test.Name, diff)
 			}
 		}
@@ -205,6 +218,7 @@ func FieldConfigSpec() docs.FieldSpecs {
 			"scalar", "map", "list",
 		).HasDefault("scalar").LintOptions(),
 		docs.FieldCommon("default", "An optional default value for the field. If a default value is not specified then a configuration without the field is considered incorrect."),
+		docs.FieldCommon("advanced", "Whether this field is considered advanced.").HasType(docs.FieldBool).HasDefault(false),
 	}
 }
 
@@ -212,9 +226,21 @@ func FieldConfigSpec() docs.FieldSpecs {
 func ConfigSpec() docs.FieldSpecs {
 	return docs.FieldSpecs{
 		docs.FieldCommon("name", "The name of the component this template will create.").HasType(docs.FieldString),
-		docs.FieldCommon("type", "The type of the component this template will create.").HasOptions(
+		docs.FieldCommon(
+			"type", "The type of the component this template will create.",
+		).HasOptions(
 			"cache", "input", "output", "processor", "rate_limit",
-		).HasType(docs.FieldString),
+		).HasType(docs.FieldString).LintOptions(),
+		docs.FieldCommon(
+			"status", "The stability of the template describing the likelihood that the configuration spec of the template, or it's behaviour, will change.",
+		).HasAnnotatedOptions(
+			"stable", "This template is stable and will therefore not change in a breaking way outside of major version releases.",
+			"beta", "This template is beta and will therefore not change in a breaking way unless a major problem is found.",
+			"experimental", "This template is experimental and therefore subject to breaking changes outside of major version releases.",
+		).HasType(docs.FieldString).HasDefault("stable").LintOptions(),
+		docs.FieldCommon(
+			"categories", "An optional list of tags, which are used for arbitrarily grouping components in documentation.",
+		).Array().HasType(docs.FieldString),
 		docs.FieldCommon("summary", "A short summary of the component.").HasType(docs.FieldString),
 		docs.FieldCommon("description", "A longer form description of the component and how to use it.").HasType(docs.FieldString),
 		docs.FieldCommon("fields", "The configuration fields of the template, fields specified here will be parsed from a Benthos config and will be accessible from the template mapping.").Array().WithChildren(FieldConfigSpec()...),

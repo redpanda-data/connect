@@ -1,5 +1,6 @@
 name: log_and_drop
 type: processor
+categories: [ Utility ]
 summary: A common lossy error handling pattern.
 description: If a message has failed in a previous processor this one will log the error and the contents of the message and then drop it. This is a common pattern when working with data that isn't considered important.
 
@@ -20,6 +21,11 @@ mapping: |
       "bloblang": "root = deleted()"
     }
   ]
+
+metrics_mapping: |
+  root = if this.has_suffix("1.dropped") {
+    this.replace("1.dropped", "dropped")
+  } else { deleted() }
 
 tests:
   - name: No fields

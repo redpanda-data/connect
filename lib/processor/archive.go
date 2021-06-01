@@ -40,7 +40,7 @@ interpolations on the 'path' field as described
 The resulting archived message adopts the metadata of the _first_ message part
 of the batch.`,
 		Categories: []Category{
-			CategoryParsing,
+			CategoryParsing, CategoryUtility,
 		},
 		UsesBatches: true,
 		FieldSpecs: docs.FieldSpecs{

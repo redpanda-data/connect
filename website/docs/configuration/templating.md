@@ -45,6 +45,31 @@ Type: `string`
 
 Options: `cache`, `input`, `output`, `processor`, `rate_limit`.
 
+### `status`
+
+The stability of the template describing the likelihood that the configuration spec of the template, or it's behaviour, will change.
+
+
+
+Type: `string`  
+
+
+| Option | Summary |
+|---|---|
+| `stable` | This template is stable and will therefore not change in a breaking way outside of major version releases. |
+| `beta` | This template is beta and will therefore not change in a breaking way unless a major problem is found. |
+| `experimental` | This template is experimental and therefore subject to breaking changes outside of major version releases. |
+
+
+### `categories`
+
+An optional list of tags, which are used for arbitrarily grouping components in documentation.
+
+
+
+Type: list of `string`  
+
+
 ### `summary`
 
 A short summary of the component.
@@ -115,6 +140,15 @@ Options: `scalar`, `map`, `list`.
 An optional default value for the field. If a default value is not specified then a configuration without the field is considered incorrect.
 
 
+
+
+### `fields[].advanced`
+
+Whether this field is considered advanced.
+
+
+
+Type: `bool`  
 
 
 ### `mapping`

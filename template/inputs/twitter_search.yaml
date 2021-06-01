@@ -1,0 +1,242 @@
+name: twitter_search
+type: input
+status: experimental
+categories: [ Services ]
+summary: Consumes tweets matching a given search using the Twitter recent search V2 API.
+description: |
+  Continuously polls the [Twitter recent search V2 API](https://developer.twitter.com/en/docs/twitter-api/tweets/search/api-reference/get-tweets-search-recent) for tweets that match a given search query.
+
+  Each tweet received is emitted as a JSON object message, with a field `id` and `text` by default. Extra fields [can be obtained from the search API](https://developer.twitter.com/en/docs/twitter-api/fields) when listed with the `tweet_fields` field.
+
+  In order to paginate requests that are made the ID of the latest received tweet is stored in a [cache resource](/docs/components/caches/about), which is then used by subsequent requests to ensure only tweets after it are consumed. It is recommended that the cache you use is persistent so that Benthos can resume searches at the correct place on a restart.
+
+  Authentication is done using OAuth 2.0 credentials which can be generated within the [Twitter developer portal](https://developer.twitter.com).
+
+fields:
+  - name: query
+    description: A search expression to use.
+    type: string
+
+  - name: tweet_fields
+    description: An optional list of additional fields to obtain for each tweet, by default only the fields `id` and `text` are returned. For more info refer to the [twitter API docs.](https://developer.twitter.com/en/docs/twitter-api/fields)
+    type: string
+    kind: list
+    default: []
+
+  - name: poll_period
+    description: The length of time (as a duration string) to wait between each search request. This field can be set empty, in which case requests are made at the limit set by the rate limit. This field also supports cron expressions.
+    type: string
+    default: "1m"
+
+  - name: backfill_period
+    description: A duration string indicating the maximum age of tweets to acquire when starting a search.
+    type: string
+    default: "5m"
+
+  - name: cache
+    description: A cache resource to use for request pagination.
+    type: string
+
+  - name: rate_limit
+    description: An optional rate limit resource to restrict API requests with.
+    type: string
+    default: ""
+    advanced: true
+
+  - name: api_key
+    description: An API key for OAuth 2.0 authentication. It is recommended that you populate this field using [environment variables](/docs/configuration/interpolation).
+    type: string
+
+  - name: api_secret
+    description: An API secret for OAuth 2.0 authentication. It is recommended that you populate this field using [environment variables](/docs/configuration/interpolation).
+    type: string
+
+mapping: |
+  let _ = if this.poll_period == "" && this.rate_limit == "" {
+    throw("either a poll_period, a rate_limit, or both must be specified")
+  }
+
+  let backfill_seconds = this.backfill_period.parse_duration() / 1000000000
+
+  let query = "?max_results=100&query=" + this.query.escape_url_query()
+
+  let query = if this.tweet_fields.length() > 0 {
+    $query + "&tweet.fields=" + this.tweet_fields.join(",").escape_url_query()
+  }
+
+  let url = "https://api.twitter.com/2/tweets/search/recent" + $query
+
+  root.generate.interval = this.poll_period
+  root.generate.mapping = "root = \"\""
+  root.processors = [
+    {
+      "cache": {
+        "resource": this.cache,
+        "operator": "get",
+        "key": "last_tweet_id",
+      },
+    },
+    { "catch": [] }, # Don't care if the cache is empty
+    {
+      "bloblang": """let pagination_params = if content().length() == 0 {
+    "&start_time="+(timestamp_unix()-%v).format_timestamp("2006-01-02T15:04:05Z","UTC").escape_url_query()
+  } else {
+    "&since_id="+content().string()
+  }
+  meta tweet_search_url = "%v" + $pagination_params
+  root = ""
+  """.format($backfill_seconds, $url)
+    },
+    {
+      "http": {
+        "url": """${! meta("tweet_search_url") }""",
+        "verb": "GET",
+        "rate_limit": this.rate_limit,
+        "oauth2": {
+          "enabled": true,
+          "token_url": "https://api.twitter.com/oauth2/token",
+          "client_key": this.api_key,
+          "client_secret": this.api_secret,
+        },
+      },
+    },
+    {
+      "bloblang": "root = if (this.data | []).length() > 0 { this.data } else { deleted() }",
+    },
+    {
+      "unarchive": {
+        "format": "json_array",
+      },
+    },
+    {
+      "cache": {
+        "parts": [ -1 ],
+        "resource": this.cache,
+        "operator": "set",
+        "key": "last_tweet_id",
+        "value": """${! json("id") }""",
+      },
+    },
+    { "split": {} },
+  ]
+
+metrics_mapping: |
+  root = match this {
+    this.has_suffix("processor.7.count") => this.replace("processor.7.count", "count"),
+    this.has_suffix("processor.3.client.error") => this.replace("processor.3.client.error", "error"),
+    this.contains("processor.3.client.error") => deleted(), # Ignore more specialized client errors
+    this.contains("processor.3.client") => this.replace("processor.3.client", "request"),
+    _ => deleted(),
+  }
+
+tests:
+  - name: Basic fields
+    config:
+      query: benthos.dev
+      cache: foocache
+      rate_limit: foolimit
+      api_key: fookey
+      api_secret: foosecret
+
+    expected:
+      generate:
+        interval: '1m'
+        mapping: root = ""
+      processors:
+        - cache:
+            resource: foocache
+            operator: get
+            key: last_tweet_id
+
+        - catch: []
+
+        - bloblang: |
+            let pagination_params = if content().length() == 0 {
+              "&start_time="+(timestamp_unix()-300).format_timestamp("2006-01-02T15:04:05Z","UTC").escape_url_query()
+            } else {
+              "&since_id="+content().string()
+            }
+            meta tweet_search_url = "https://api.twitter.com/2/tweets/search/recent?max_results=100&query=benthos.dev" + $pagination_params
+            root = ""
+
+        - http:
+            url: ${! meta("tweet_search_url") }
+            verb: GET
+            rate_limit: foolimit
+            oauth2:
+              enabled: true
+              token_url: https://api.twitter.com/oauth2/token
+              client_key: fookey
+              client_secret: foosecret
+
+        - bloblang: root = if (this.data | []).length() > 0 { this.data } else { deleted() }
+
+        - unarchive:
+            format: json_array
+
+        - cache:
+            # Only bother caching the latest tweet ID (last of the batch).
+            parts: [ -1 ]
+            resource: foocache
+            operator: set
+            key: last_tweet_id
+            value: ${! json("id") }
+
+        - split: {}
+
+  - name: With tweet fields set
+    config:
+      query: hello world
+      cache: barcache
+      backfill_period: 600s
+      api_key: barkey
+      api_secret: barsecret
+      tweet_fields:
+        - created_at
+        - public_metrics
+
+    expected:
+      generate:
+        interval: '1m'
+        mapping: root = ""
+      processors:
+        - cache:
+            resource: barcache
+            operator: get
+            key: last_tweet_id
+
+        - catch: []
+
+        - bloblang: |
+            let pagination_params = if content().length() == 0 {
+              "&start_time="+(timestamp_unix()-600).format_timestamp("2006-01-02T15:04:05Z","UTC").escape_url_query()
+            } else {
+              "&since_id="+content().string()
+            }
+            meta tweet_search_url = "https://api.twitter.com/2/tweets/search/recent?max_results=100&query=hello+world&tweet.fields=created_at%2Cpublic_metrics" + $pagination_params
+            root = ""
+
+        - http:
+            url: ${! meta("tweet_search_url") }
+            verb: GET
+            rate_limit: ""
+            oauth2:
+              enabled: true
+              token_url: https://api.twitter.com/oauth2/token
+              client_key: barkey
+              client_secret: barsecret
+
+        - bloblang: root = if (this.data | []).length() > 0 { this.data } else { deleted() }
+
+        - unarchive:
+            format: json_array
+
+        - cache:
+            # Only bother caching the latest tweet ID (last of the batch).
+            parts: [ -1 ]
+            resource: barcache
+            operator: set
+            key: last_tweet_id
+            value: ${! json("id") }
+
+        - split: {}

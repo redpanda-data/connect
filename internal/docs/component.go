@@ -33,7 +33,6 @@ var (
 	StatusBeta         Status = "beta"
 	StatusExperimental Status = "experimental"
 	StatusDeprecated   Status = "deprecated"
-	StatusPlugin       Status = "plugin"
 )
 
 // Type of a component.
@@ -75,6 +74,9 @@ type ComponentSpec struct {
 
 	// The status of the component.
 	Status Status
+
+	// Plugin is true for all plugin components.
+	Plugin bool
 
 	// Summary of the component (in markdown, must be short).
 	Summary string
@@ -283,6 +285,7 @@ func createOrderedConfig(t Type, rawExample interface{}, filter FieldFilter) (*y
 	if err := SanitiseNode(t, &newNode, SanitiseConfig{
 		RemoveTypeField: true,
 		Filter:          filter,
+		ForExample:      true,
 	}); err != nil {
 		return nil, err
 	}
@@ -361,16 +364,16 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 	flattenedFields := c.Config.FlattenChildrenForDocs()
 	gConf := gabs.Wrap(fullConfigExample).S(c.Name)
 	for _, v := range flattenedFields {
-		var defaultValue interface{}
+		var defaultValue *interface{}
 		if v.Default != nil {
-			defaultValue = *v.Default
-		} else if defaultValue = gConf.Path(v.Name).Data(); defaultValue == nil {
-			return nil, fmt.Errorf("field '%v' not found in config example and no default value was provided in the spec", v.Name)
+			defaultValue = v.Default
+		} else if dv := gConf.Path(v.Name).Data(); dv != nil {
+			defaultValue = &dv
 		}
 
-		defaultValueStr := gabs.Wrap(defaultValue).String()
-		if len(v.Children) > 0 {
-			defaultValueStr = ""
+		var defaultValueStr string
+		if len(v.Children) == 0 && defaultValue != nil {
+			defaultValueStr = gabs.Wrap(defaultValue).String()
 		}
 
 		fieldType := v.Type
@@ -378,8 +381,10 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 		if len(fieldType) == 0 {
 			if len(v.Examples) > 0 {
 				fieldType, isArray = getFieldTypeFromInterface(v.Examples[0])
+			} else if defaultValue != nil {
+				fieldType, isArray = getFieldTypeFromInterface(*defaultValue)
 			} else {
-				fieldType, isArray = getFieldTypeFromInterface(defaultValue)
+				return nil, fmt.Errorf("field '%v' not found in config example and no type or default value was provided in the spec", v.Name)
 			}
 		}
 		fieldTypeStr := string(fieldType)

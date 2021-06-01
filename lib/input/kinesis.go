@@ -15,6 +15,7 @@ import (
 func init() {
 	Constructors[TypeKinesis] = TypeSpec{
 		constructor: fromSimpleConstructor(NewKinesis),
+		Status:      docs.StatusDeprecated,
 		Summary: `
 Receive messages from a Kinesis stream.`,
 		Description: `

@@ -45,11 +45,11 @@ func SQLClickhouseIntegration(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	defer func() {
+	t.Cleanup(func() {
 		if err = pool.Purge(resource); err != nil {
 			t.Logf("Failed to clean up docker resource: %v", err)
 		}
-	}()
+	})
 
 	dsn := fmt.Sprintf("tcp://localhost:%v/", resource.GetPort("9000/tcp"))
 	if err = pool.Retry(func() error {
@@ -101,6 +101,8 @@ func testSQLClickhouse(t *testing.T, dsn string) {
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 	assert.Equal(t, parts, message.GetAllBytes(resMsgs[0]))
+	require.Empty(t, GetFail(resMsgs[0].Get(0)))
+	require.Empty(t, GetFail(resMsgs[0].Get(1)))
 
 	conf.SQL.Query = "SELECT * FROM footable WHERE foo = ?;"
 	conf.SQL.Args = []string{
@@ -164,7 +166,7 @@ func SQLPostgresIntegration(t *testing.T) {
 		}
 		if _, dberr = db.Exec(`create table footable (
   foo varchar(50) not null,
-  bar varchar(50) not null,
+  bar integer not null,
   baz varchar(50) not null,
   primary key (foo)
 );`); dberr != nil {
@@ -199,8 +201,8 @@ func testSQLPostgres(t *testing.T, dsn string) {
 	require.NoError(t, err)
 
 	parts := [][]byte{
-		[]byte(`{"foo":"foo1","bar":"bar1","baz":"baz1"}`),
-		[]byte(`{"foo":"foo2","bar":"bar2","baz":"baz2"}`),
+		[]byte(`{"foo":"foo1","bar":11,"baz":"baz1"}`),
+		[]byte(`{"foo":"foo2","bar":12,"baz":"baz2"}`),
 	}
 
 	resMsgs, response := s.ProcessMessage(message.New(parts))
@@ -226,8 +228,8 @@ func testSQLPostgres(t *testing.T, dsn string) {
 	require.Len(t, resMsgs, 1)
 
 	expParts := [][]byte{
-		[]byte(`[{"bar":"bar1","baz":"baz1","foo":"foo1"}]`),
-		[]byte(`[{"bar":"bar2","baz":"baz2","foo":"foo2"}]`),
+		[]byte(`[{"bar":11,"baz":"baz1","foo":"foo1"}]`),
+		[]byte(`[{"bar":12,"baz":"baz2","foo":"foo2"}]`),
 	}
 	assert.Equal(t, expParts, message.GetAllBytes(resMsgs[0]))
 }
@@ -250,8 +252,8 @@ func testSQLPostgresDeprecated(t *testing.T, dsn string) {
 	}
 
 	parts := [][]byte{
-		[]byte(`{"foo":"foo3","bar":"bar3","baz":"baz3"}`),
-		[]byte(`{"foo":"foo4","bar":"bar4","baz":"baz4"}`),
+		[]byte(`{"foo":"foo3","bar":13,"baz":"baz3"}`),
+		[]byte(`{"foo":"foo4","bar":14,"baz":"baz4"}`),
 	}
 
 	resMsgs, response := s.ProcessMessage(message.New(parts))
@@ -289,7 +291,7 @@ func testSQLPostgresDeprecated(t *testing.T, dsn string) {
 		t.Fatalf("Wrong resulting msgs: %v != %v", len(resMsgs), 1)
 	}
 	expParts := [][]byte{
-		[]byte(`[{"bar":"bar4","baz":"baz4","foo":"foo4"}]`),
+		[]byte(`[{"bar":14,"baz":"baz4","foo":"foo4"}]`),
 	}
 	if act, exp := message.GetAllBytes(resMsgs[0]), expParts; !reflect.DeepEqual(exp, act) {
 		t.Fatalf("Wrong result: %s != %s", act, exp)
@@ -335,7 +337,7 @@ func SQLMySQLIntegration(t *testing.T) {
 		}
 		if _, dberr = db.Exec(`create table footable (
   foo varchar(50) not null,
-  bar varchar(50) not null,
+  bar integer not null,
   baz varchar(50) not null,
   primary key (foo)
 );`); dberr != nil {
@@ -370,8 +372,8 @@ func testSQLMySQL(t *testing.T, dsn string) {
 	require.NoError(t, err)
 
 	parts := [][]byte{
-		[]byte(`{"foo":"foo1","bar":"bar1","baz":"baz1"}`),
-		[]byte(`{"foo":"foo2","bar":"bar2","baz":"baz2"}`),
+		[]byte(`{"foo":"foo1","bar":11,"baz":"baz1"}`),
+		[]byte(`{"foo":"foo2","bar":12,"baz":"baz2"}`),
 	}
 
 	resMsgs, response := s.ProcessMessage(message.New(parts))
@@ -397,8 +399,8 @@ func testSQLMySQL(t *testing.T, dsn string) {
 	require.Len(t, resMsgs, 1)
 
 	expParts := [][]byte{
-		[]byte(`[{"bar":"bar1","baz":"baz1","foo":"foo1"}]`),
-		[]byte(`[{"bar":"bar2","baz":"baz2","foo":"foo2"}]`),
+		[]byte(`[{"bar":11,"baz":"baz1","foo":"foo1"}]`),
+		[]byte(`[{"bar":12,"baz":"baz2","foo":"foo2"}]`),
 	}
 	assert.Equal(t, expParts, message.GetAllBytes(resMsgs[0]))
 }
@@ -421,8 +423,8 @@ func testSQLMySQLDeprecated(t *testing.T, dsn string) {
 	}
 
 	parts := [][]byte{
-		[]byte(`{"foo":"foo3","bar":"bar3","baz":"baz3"}`),
-		[]byte(`{"foo":"foo4","bar":"bar4","baz":"baz4"}`),
+		[]byte(`{"foo":"foo3","bar":13,"baz":"baz3"}`),
+		[]byte(`{"foo":"foo4","bar":14,"baz":"baz4"}`),
 	}
 
 	resMsgs, response := s.ProcessMessage(message.New(parts))
@@ -460,7 +462,7 @@ func testSQLMySQLDeprecated(t *testing.T, dsn string) {
 		t.Fatalf("Wrong resulting msgs: %v != %v", len(resMsgs), 1)
 	}
 	expParts := [][]byte{
-		[]byte(`[{"bar":"bar4","baz":"baz4","foo":"foo4"}]`),
+		[]byte(`[{"bar":14,"baz":"baz4","foo":"foo4"}]`),
 	}
 	if act, exp := message.GetAllBytes(resMsgs[0]), expParts; !reflect.DeepEqual(exp, act) {
 		t.Fatalf("Wrong result: %s != %s", act, exp)

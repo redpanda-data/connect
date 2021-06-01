@@ -61,7 +61,8 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 		spec := docs.ComponentSpec{
 			Type:   docs.TypeCache,
 			Name:   k,
-			Status: docs.StatusPlugin,
+			Status: docs.StatusExperimental,
+			Plugin: true,
 			Config: docs.FieldComponent().Unlinted(),
 		}
 		fn(ConstructorFunc(v.constructor), spec)
@@ -176,7 +177,7 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 		return fmt.Errorf("line %v: %w", value.Line, err)
 	}
 
-	if spec.Status == docs.StatusPlugin {
+	if spec.Plugin {
 		pluginNode, err := docs.GetPluginConfigNode(aliased.Type, value)
 		if err != nil {
 			return fmt.Errorf("line %v: %v", value.Line, err)

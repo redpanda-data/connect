@@ -80,7 +80,7 @@ func TestCachePluginWithoutConfig(t *testing.T) {
 		}))
 
 	cacheConfStr := `label: foo
-type: test_cache_plugin_without_config
+test_cache_plugin_without_config: null
 `
 
 	cacheConf := cache.NewConfig()
@@ -166,7 +166,7 @@ func TestInputPluginWithoutConfig(t *testing.T) {
 		}))
 
 	inConfStr := `label: foo
-type: test_input_plugin_without_config
+test_input_plugin_without_config: null
 `
 
 	inConf := input.NewConfig()
@@ -252,7 +252,7 @@ func TestOutputPluginWithoutConfig(t *testing.T) {
 		}))
 
 	inConfStr := `label: foo
-type: test_output_plugin_without_config
+test_output_plugin_without_config: null
 `
 
 	inConf := output.NewConfig()
@@ -342,7 +342,7 @@ func TestBatchOutputPluginWithoutConfig(t *testing.T) {
 		}))
 
 	inConfStr := `label: foo
-type: test_batch_output_plugin_without_config
+test_batch_output_plugin_without_config: null
 `
 
 	inConf := output.NewConfig()
@@ -428,7 +428,7 @@ func TestProcessorPluginWithoutConfig(t *testing.T) {
 		}))
 
 	inConfStr := `label: foo
-type: test_processor_plugin_without_config
+test_processor_plugin_without_config: null
 `
 
 	inConf := processor.NewConfig()
@@ -514,7 +514,7 @@ func TestBatchProcessorPluginWithoutConfig(t *testing.T) {
 		}))
 
 	inConfStr := `label: foo
-type: test_batch_processor_plugin_without_config
+test_batch_processor_plugin_without_config: null
 `
 
 	inConf := processor.NewConfig()
@@ -600,7 +600,7 @@ func TestRateLimitPluginWithoutConfig(t *testing.T) {
 		}))
 
 	inConfStr := `label: foo
-type: test_rate_limit_plugin_without_config
+test_rate_limit_plugin_without_config: null
 `
 
 	inConf := ratelimit.NewConfig()

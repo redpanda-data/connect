@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/gabs/v2"
@@ -14,11 +15,51 @@ type ConfigField struct {
 	field docs.FieldSpec
 }
 
-// NewConfigField describes a new config field with basic information including
-// a field name and a description.
-func NewConfigField(name string) *ConfigField {
+// NewStringField describes a new string type config field.
+func NewStringField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, ""),
+		field: docs.FieldCommon(name, "").HasType(docs.FieldString),
+	}
+}
+
+// NewStringListField describes a new config field consisting of a list of
+// strings.
+func NewStringListField(name string) *ConfigField {
+	return &ConfigField{
+		field: docs.FieldCommon(name, "").Array().HasType(docs.FieldString),
+	}
+}
+
+// NewIntField describes a new int type config field.
+func NewIntField(name string) *ConfigField {
+	return &ConfigField{
+		field: docs.FieldCommon(name, "").HasType(docs.FieldInt),
+	}
+}
+
+// NewFloatField describes a new float type config field.
+func NewFloatField(name string) *ConfigField {
+	return &ConfigField{
+		field: docs.FieldCommon(name, "").HasType(docs.FieldFloat),
+	}
+}
+
+// NewBoolField describes a new bool type config field.
+func NewBoolField(name string) *ConfigField {
+	return &ConfigField{
+		field: docs.FieldCommon(name, "").HasType(docs.FieldBool),
+	}
+}
+
+// NewObjectField describes a new object type config field, consisting of one
+// or more child fields.
+func NewObjectField(name string, fields ...*ConfigField) *ConfigField {
+	children := make([]docs.FieldSpec, len(fields))
+	for i, f := range fields {
+		children[i] = f.field
+	}
+	return &ConfigField{
+		field: docs.FieldCommon(name, "").WithChildren(children...),
 	}
 }
 
@@ -34,16 +75,6 @@ func (c *ConfigField) Description(d string) *ConfigField {
 // considered mandatory, and so parsing a config will fail in their absence.
 func (c *ConfigField) Default(v interface{}) *ConfigField {
 	c.field = c.field.HasDefault(v)
-	return c
-}
-
-// Children specifies that this field is an object and defines its children.
-func (c *ConfigField) Children(fields ...*ConfigField) *ConfigField {
-	children := make([]docs.FieldSpec, len(fields))
-	for i, f := range fields {
-		children[i] = f.field
-	}
-	c.field = c.field.WithChildren(children...)
 	return c
 }
 
@@ -80,7 +111,8 @@ func (c *ConfigSpec) configFromNode(node *yaml.Node) (*ParsedConfig, error) {
 func NewConfigSpec() *ConfigSpec {
 	return &ConfigSpec{
 		component: docs.ComponentSpec{
-			Status: docs.StatusPlugin,
+			Status: docs.StatusExperimental,
+			Plugin: true,
 			Config: docs.FieldComponent(),
 		},
 	}
@@ -113,6 +145,29 @@ func NewStructConfigSpec(ctor ConfigStructConstructor) (*ConfigSpec, error) {
 	confSpec.configCtor = ctor
 
 	return confSpec, nil
+}
+
+// Stable sets a documentation label on the component indicating that its
+// configuration spec is stable. Plugins are considered experimental by default.
+func (c *ConfigSpec) Stable() *ConfigSpec {
+	c.component.Status = docs.StatusStable
+	return c
+}
+
+// Beta sets a documentation label on the component indicating that its
+// configuration spec is ready for beta testing, meaning backwards incompatible
+// changes will not be made unless a fundamental problem is found. Plugins are
+// considered experimental by default.
+func (c *ConfigSpec) Beta() *ConfigSpec {
+	c.component.Status = docs.StatusBeta
+	return c
+}
+
+// Categories adds one or more string tags to the component, these are used for
+// arbitrarily grouping components in documentation.
+func (c *ConfigSpec) Categories(categories ...string) *ConfigSpec {
+	c.component.Categories = categories
+	return c
 }
 
 // Summary adds a short summary to the plugin configuration spec that describes
@@ -179,10 +234,107 @@ func (p *ParsedConfig) Root() interface{} {
 //
 // This method is not valid when the configuration spec was built around a
 // config constructor.
-func (p *ParsedConfig) Field(path ...string) (interface{}, bool) {
+func (p *ParsedConfig) field(path ...string) (interface{}, bool) {
 	gObj := gabs.Wrap(p.generic)
 	if exists := gObj.Exists(path...); !exists {
 		return nil, false
 	}
 	return gObj.S(path...).Data(), true
+}
+
+// FieldString accesses a string field from the parsed config by its name. If
+// the field is not found or is not a string an error is returned.
+//
+// This method is not valid when the configuration spec was built around a
+// config constructor.
+func (p *ParsedConfig) FieldString(path ...string) (string, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return "", fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
+	}
+	str, ok := v.(string)
+	if !ok {
+		return "", fmt.Errorf("expected field '%v' to be a string, got %T", strings.Join(path, "."), v)
+	}
+	return str, nil
+}
+
+// FieldStringList accesses a field that is a list of strings from the parsed
+// config by its name and returns the value. Returns an error if the field is
+// not found, or is not a list of strings.
+//
+// This method is not valid when the configuration spec was built around a
+// config constructor.
+func (p *ParsedConfig) FieldStringList(path ...string) ([]string, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
+	}
+	iList, ok := v.([]interface{})
+	if !ok {
+		if sList, ok := v.([]string); ok {
+			return sList, nil
+		}
+		return nil, fmt.Errorf("expected field '%v' to be a string list, got %T", strings.Join(path, "."), v)
+	}
+	sList := make([]string, len(iList))
+	for i, ev := range iList {
+		if sList[i], ok = ev.(string); !ok {
+			return nil, fmt.Errorf("expected field '%v' to be a string list, found an element of type %T", strings.Join(path, "."), ev)
+		}
+	}
+	return sList, nil
+}
+
+// FieldInt accesses an int field from the parsed config by its name and returns
+// the value. Returns an error if the field is not found or is not an int.
+//
+// This method is not valid when the configuration spec was built around a
+// config constructor.
+func (p *ParsedConfig) FieldInt(path ...string) (int, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return 0, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
+	}
+	i, ok := v.(int)
+	if !ok {
+		return 0, fmt.Errorf("expected field '%v' to be an int, got %T", strings.Join(path, "."), v)
+	}
+	return i, nil
+}
+
+// FieldFloat accesses a float field from the parsed config by its name and
+// returns the value. Returns an error if the field is not found or is not a
+// float.
+//
+// This method is not valid when the configuration spec was built around a
+// config constructor.
+func (p *ParsedConfig) FieldFloat(path ...string) (float64, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return 0, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
+	}
+	f, ok := v.(float64)
+	if !ok {
+		return 0, fmt.Errorf("expected field '%v' to be a float, got %T", strings.Join(path, "."), v)
+	}
+	return f, nil
+}
+
+// FieldBool accesses a bool field from the parsed config by its name and
+// returns the value. Returns an error if the field is not found or is not a
+// bool.
+//
+// This method is not valid when the configuration spec was built around a
+// config constructor.
+func (p *ParsedConfig) FieldBool(path ...string) (bool, error) {
+	v, e := p.field(path...)
+	if !e {
+		return false, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
+	}
+	b, ok := v.(bool)
+	if !ok {
+		return false, fmt.Errorf("expected field '%v' to be a bool, got %T", strings.Join(path, "."), v)
+	}
+	return b, nil
 }

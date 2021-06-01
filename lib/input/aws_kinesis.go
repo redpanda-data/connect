@@ -36,7 +36,7 @@ func init() {
 			}
 			return NewAsyncReader(TypeKinesis, false, reader.NewAsyncPreserver(rdr), log, stats)
 		}),
-		Status:  docs.StatusBeta,
+		Status:  docs.StatusStable,
 		Version: "3.36.0",
 		Summary: `
 Receive messages from one or more Kinesis streams.`,

@@ -1,8 +1,9 @@
-package docs
+package docs_test
 
 import (
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -12,17 +13,17 @@ func TestFieldsFromNode(t *testing.T) {
 	tests := []struct {
 		name   string
 		yaml   string
-		fields FieldSpecs
+		fields docs.FieldSpecs
 	}{
 		{
 			name: "flat object",
 			yaml: `a: foo
 b: bar
 c: 21`,
-			fields: FieldSpecs{
-				FieldCommon("a", ""),
-				FieldCommon("b", ""),
-				FieldCommon("c", ""),
+			fields: docs.FieldSpecs{
+				docs.FieldCommon("a", ""),
+				docs.FieldCommon("b", ""),
+				docs.FieldCommon("c", ""),
 			},
 		},
 		{
@@ -32,13 +33,13 @@ b:
   d: bar
   e: 22
 c: 21`,
-			fields: FieldSpecs{
-				FieldCommon("a", ""),
-				FieldCommon("b", "").WithChildren(
-					FieldCommon("d", ""),
-					FieldCommon("e", ""),
+			fields: docs.FieldSpecs{
+				docs.FieldCommon("a", ""),
+				docs.FieldCommon("b", "").WithChildren(
+					docs.FieldCommon("d", ""),
+					docs.FieldCommon("e", ""),
 				),
-				FieldCommon("c", ""),
+				docs.FieldCommon("c", ""),
 			},
 		},
 	}
@@ -54,22 +55,22 @@ c: 21`,
 				node = *node.Content[0]
 			}
 
-			assert.Equal(t, test.fields, FieldsFromNode(&node))
+			assert.Equal(t, test.fields, docs.FieldsFromNode(&node))
 		})
 	}
 }
 
 func TestFieldsNodeToMap(t *testing.T) {
-	spec := FieldSpecs{
-		FieldCommon("a", ""),
-		FieldCommon("b", "").HasDefault(11),
-		FieldCommon("c", "").WithChildren(
-			FieldCommon("d", "").HasDefault(true),
-			FieldCommon("e", "").HasDefault("evalue"),
-			FieldCommon("f", "").WithChildren(
-				FieldCommon("g", "").HasDefault(12),
-				FieldCommon("h", ""),
-				FieldCommon("i", "").HasDefault(13),
+	spec := docs.FieldSpecs{
+		docs.FieldCommon("a", ""),
+		docs.FieldCommon("b", "").HasDefault(11),
+		docs.FieldCommon("c", "").WithChildren(
+			docs.FieldCommon("d", "").HasDefault(true),
+			docs.FieldCommon("e", "").HasDefault("evalue"),
+			docs.FieldCommon("f", "").WithChildren(
+				docs.FieldCommon("g", "").HasDefault(12),
+				docs.FieldCommon("h", ""),
+				docs.FieldCommon("i", "").HasDefault(13),
 			),
 		),
 	}
@@ -110,19 +111,19 @@ c:
 func TestFieldsNodeToMapTypeCoercion(t *testing.T) {
 	tests := []struct {
 		name   string
-		spec   FieldSpecs
+		spec   docs.FieldSpecs
 		yaml   string
 		result interface{}
 	}{
 		{
 			name: "string fields",
-			spec: FieldSpecs{
-				FieldCommon("a", "").HasType("string"),
-				FieldCommon("b", "").HasType("string"),
-				FieldCommon("c", "").HasType("string"),
-				FieldCommon("d", "").HasType("string"),
-				FieldCommon("e", "").HasType("string").Array(),
-				FieldCommon("f", "").HasType("string").Map(),
+			spec: docs.FieldSpecs{
+				docs.FieldCommon("a", "").HasType("string"),
+				docs.FieldCommon("b", "").HasType("string"),
+				docs.FieldCommon("c", "").HasType("string"),
+				docs.FieldCommon("d", "").HasType("string"),
+				docs.FieldCommon("e", "").HasType("string").Array(),
+				docs.FieldCommon("f", "").HasType("string").Map(),
 			},
 			yaml: `
 a: no
@@ -153,12 +154,12 @@ f:
 		},
 		{
 			name: "bool fields",
-			spec: FieldSpecs{
-				FieldCommon("a", "").HasType("bool"),
-				FieldCommon("b", "").HasType("bool"),
-				FieldCommon("c", "").HasType("bool"),
-				FieldCommon("d", "").HasType("bool").Array(),
-				FieldCommon("e", "").HasType("bool").Map(),
+			spec: docs.FieldSpecs{
+				docs.FieldCommon("a", "").HasType("bool"),
+				docs.FieldCommon("b", "").HasType("bool"),
+				docs.FieldCommon("c", "").HasType("bool"),
+				docs.FieldCommon("d", "").HasType("bool").Array(),
+				docs.FieldCommon("e", "").HasType("bool").Map(),
 			},
 			yaml: `
 a: no
@@ -187,12 +188,12 @@ e:
 		},
 		{
 			name: "int fields",
-			spec: FieldSpecs{
-				FieldCommon("a", "").HasType("int"),
-				FieldCommon("b", "").HasType("int"),
-				FieldCommon("c", "").HasType("int"),
-				FieldCommon("d", "").HasType("int").Array(),
-				FieldCommon("e", "").HasType("int").Map(),
+			spec: docs.FieldSpecs{
+				docs.FieldCommon("a", "").HasType("int"),
+				docs.FieldCommon("b", "").HasType("int"),
+				docs.FieldCommon("c", "").HasType("int"),
+				docs.FieldCommon("d", "").HasType("int").Array(),
+				docs.FieldCommon("e", "").HasType("int").Map(),
 			},
 			yaml: `
 a: 11
@@ -221,12 +222,12 @@ e:
 		},
 		{
 			name: "float fields",
-			spec: FieldSpecs{
-				FieldCommon("a", "").HasType("float"),
-				FieldCommon("b", "").HasType("float"),
-				FieldCommon("c", "").HasType("float"),
-				FieldCommon("d", "").HasType("float").Array(),
-				FieldCommon("e", "").HasType("float").Map(),
+			spec: docs.FieldSpecs{
+				docs.FieldCommon("a", "").HasType("float"),
+				docs.FieldCommon("b", "").HasType("float"),
+				docs.FieldCommon("c", "").HasType("float"),
+				docs.FieldCommon("d", "").HasType("float").Array(),
+				docs.FieldCommon("e", "").HasType("float").Map(),
 			},
 			yaml: `
 a: 11
@@ -269,6 +270,69 @@ e:
 			require.NoError(t, err)
 
 			assert.Equal(t, test.result, generic)
+		})
+	}
+}
+
+func TestFieldToNode(t *testing.T) {
+	tests := []struct {
+		name     string
+		spec     docs.FieldSpec
+		recurse  bool
+		expected string
+	}{
+		{
+			name: "no recurse single node null",
+			spec: docs.FieldCommon("foo", ""),
+			expected: `null
+`,
+		},
+		{
+			name: "no recurse with children",
+			spec: docs.FieldCommon("foo", "").WithChildren(
+				docs.FieldCommon("bar", ""),
+				docs.FieldCommon("baz", ""),
+			),
+			expected: `{}
+`,
+		},
+		{
+			name: "no recurse map",
+			spec: docs.FieldCommon("foo", "").Map(),
+			expected: `{}
+`,
+		},
+		{
+			name: "recurse with children",
+			spec: docs.FieldCommon("foo", "").WithChildren(
+				docs.FieldCommon("bar", "").HasType(docs.FieldString),
+				docs.FieldCommon("baz", "").HasType(docs.FieldString).HasDefault("baz default"),
+				docs.FieldCommon("buz", "").HasType(docs.FieldInt),
+				docs.FieldCommon("bev", "").HasType(docs.FieldFloat),
+				docs.FieldCommon("bun", "").HasType(docs.FieldBool),
+				docs.FieldCommon("bud", "").Array(),
+			),
+			recurse: true,
+			expected: `bar: ""
+baz: baz default
+buz: 0
+bev: 0
+bun: false
+bud: []
+`,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			n, err := test.spec.ToNode(test.recurse)
+			require.NoError(t, err)
+
+			b, err := yaml.Marshal(n)
+			require.NoError(t, err)
+
+			assert.Equal(t, test.expected, string(b))
 		})
 	}
 }

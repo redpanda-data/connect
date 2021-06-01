@@ -100,8 +100,16 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 		if err != nil {
 			return nil, err
 		}
-		h.client.Transport = &http.Transport{
-			TLSClientConfig: tlsConf,
+		if tlsConf != nil {
+			if c, ok := http.DefaultTransport.(*http.Transport); ok {
+				cloned := c.Clone()
+				cloned.TLSClientConfig = tlsConf
+				h.client.Transport = cloned
+			} else {
+				h.client.Transport = &http.Transport{
+					TLSClientConfig: tlsConf,
+				}
+			}
 		}
 	}
 
