@@ -83,7 +83,7 @@ func testSQLClickhouse(t *testing.T, dsn string) {
 	conf.SQL.Driver = "clickhouse"
 	conf.SQL.DataSourceName = dsn
 	conf.SQL.Query = "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
-	conf.SQL.ArgsMapping = `root = [ this.foo, this.bar, this.baz ]`
+	conf.SQL.ArgsMapping = `root = [ this.foo, this.bar.floor(), this.baz ]`
 
 	s, err := NewSQL(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -101,9 +101,7 @@ func testSQLClickhouse(t *testing.T, dsn string) {
 	require.Empty(t, GetFail(resMsgs[0].Get(1)))
 
 	conf.SQL.Query = "SELECT * FROM footable WHERE foo = ?;"
-	conf.SQL.Args = []string{
-		"${! json(\"foo\") }",
-	}
+	conf.SQL.ArgsMapping = `[ this.foo ]`
 	conf.SQL.ResultCodec = "json_array"
 	s, err = NewSQL(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -206,9 +204,7 @@ func testSQLPostgresArgsMapping(t *testing.T, dsn string) {
 	assert.Equal(t, parts, message.GetAllBytes(resMsgs[0]))
 
 	conf.SQL.Query = "SELECT * FROM footable WHERE foo = $1;"
-	conf.SQL.Args = []string{
-		"${! json(\"foo\") }",
-	}
+	conf.SQL.ArgsMapping = `[ this.foo ]`
 	conf.SQL.ResultCodec = "json_array"
 	s, err = NewSQL(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -425,9 +421,7 @@ func testSQLMySQLArgsMapping(t *testing.T, dsn string) {
 	assert.Equal(t, parts, message.GetAllBytes(resMsgs[0]))
 
 	conf.SQL.Query = "SELECT * FROM footable WHERE foo = ?;"
-	conf.SQL.Args = []string{
-		"${! json(\"foo\") }",
-	}
+	conf.SQL.ArgsMapping = `[ this.foo ]`
 	conf.SQL.ResultCodec = "json_array"
 	s, err = NewSQL(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
