@@ -277,7 +277,6 @@ func csvUnarchive(part types.Part) ([]types.Part, error) {
 
 	var newParts []types.Part
 
-
 	var headers []string
 
 	var err error
