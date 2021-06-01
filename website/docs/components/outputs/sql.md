@@ -37,7 +37,7 @@ output:
     driver: mysql
     data_source_name: ""
     query: ""
-    args: []
+    args_mapping: ""
     max_in_flight: 1
     batching:
       count: 0
@@ -57,7 +57,7 @@ output:
     driver: mysql
     data_source_name: ""
     query: ""
-    args: []
+    args_mapping: ""
     max_in_flight: 1
     batching:
       count: 0
@@ -113,10 +113,7 @@ output:
     driver: mysql
     data_source_name: foouser:foopassword@tcp(localhost:3306)/foodb
     query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
-    args:
-      - ${! json("document.foo") }
-      - ${! json("document.bar") }
-      - ${! meta("kafka_topic") }
+    args_mapping: '[ this.document.foo, this.document.bar, meta("kafka_topic") ]'
     batching:
       count: 500
 ```
@@ -134,10 +131,7 @@ output:
     driver: postgres
     data_source_name: postgres://foouser:foopassword@localhost:5432/foodb?sslmode=disable
     query: "INSERT INTO footable (foo, bar, baz) VALUES ($1, $2, $3);"
-    args:
-      - ${! json("document.foo") }
-      - ${! json("document.bar") }
-      - ${! meta("kafka_topic") }
+    args_mapping: '[ this.document.foo, this.document.bar, meta("kafka_topic") ]'
     batching:
       count: 500
 ```
@@ -188,14 +182,22 @@ Default: `""`
 query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);
 ```
 
-### `args`
+### `args_mapping`
 
-A list of arguments for the query to be resolved for each message.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+A [Bloblang mapping](/docs/guides/bloblang/about) that produces the arguments for the query. The mapping must return an array containing the number of arguments in the query.
 
 
-Type: `array`  
-Default: `[]`  
+Type: `string`  
+Default: `""`  
+Requires version 3.47.0 or newer  
+
+```yaml
+# Examples
+
+args_mapping: '[ this.foo, this.bar.not_empty().catch(null), meta("baz") ]'
+
+args_mapping: root = [ uuid_v4() ].merge(this.document.args)
+```
 
 ### `max_in_flight`
 

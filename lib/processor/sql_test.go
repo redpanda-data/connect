@@ -62,7 +62,7 @@ func SQLClickhouseIntegration(t *testing.T) {
 		}
 		if _, dberr = db.Exec(`create table footable (
   foo String,
-  bar String,
+  bar Int64,
   baz String
 ) engine=Memory;`); dberr != nil {
 			return dberr
@@ -83,18 +83,14 @@ func testSQLClickhouse(t *testing.T, dsn string) {
 	conf.SQL.Driver = "clickhouse"
 	conf.SQL.DataSourceName = dsn
 	conf.SQL.Query = "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
-	conf.SQL.Args = []string{
-		"${! json(\"foo\") }",
-		"${! json(\"bar\") }",
-		"${! json(\"baz\") }",
-	}
+	conf.SQL.ArgsMapping = `root = [ this.foo, this.bar, this.baz ]`
 
 	s, err := NewSQL(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	parts := [][]byte{
-		[]byte(`{"foo":"foo1","bar":"bar1","baz":"baz1"}`),
-		[]byte(`{"foo":"foo2","bar":"bar2","baz":"baz2"}`),
+		[]byte(`{"foo":"foo1","bar":11,"baz":"baz1"}`),
+		[]byte(`{"foo":"foo2","bar":12,"baz":"baz2"}`),
 	}
 
 	resMsgs, response := s.ProcessMessage(message.New(parts))
@@ -122,8 +118,8 @@ func testSQLClickhouse(t *testing.T, dsn string) {
 	require.Len(t, resMsgs, 1)
 
 	expParts := [][]byte{
-		[]byte(`[{"bar":"bar1","baz":"baz1","foo":"foo1"}]`),
-		[]byte(`[{"bar":"bar2","baz":"baz2","foo":"foo2"}]`),
+		[]byte(`[{"bar":11,"baz":"baz1","foo":"foo1"}]`),
+		[]byte(`[{"bar":12,"baz":"baz2","foo":"foo2"}]`),
 	}
 	assert.Equal(t, expParts, message.GetAllBytes(resMsgs[0]))
 }
@@ -149,11 +145,11 @@ func SQLPostgresIntegration(t *testing.T) {
 		t.Fatalf("Could not start resource: %s", err)
 	}
 
-	defer func() {
+	t.Cleanup(func() {
 		if err = pool.Purge(resource); err != nil {
 			t.Logf("Failed to clean up docker resource: %v", err)
 		}
-	}()
+	})
 
 	dsn := fmt.Sprintf("postgres://testuser:testpass@localhost:%v/testdb?sslmode=disable", resource.GetPort("5432/tcp"))
 	if err = pool.Retry(func() error {
@@ -177,15 +173,63 @@ func SQLPostgresIntegration(t *testing.T) {
 		t.Fatalf("Could not connect to docker resource: %s", err)
 	}
 
-	t.Run("testSQLPostgres", func(t *testing.T) {
-		testSQLPostgres(t, dsn)
+	t.Run("testSQLPostgresArgsMapping", func(t *testing.T) {
+		testSQLPostgresArgsMapping(t, dsn)
+	})
+	t.Run("testSQLPostgresArgs", func(t *testing.T) {
+		testSQLPostgresArgs(t, dsn)
 	})
 	t.Run("testSQLPostgresDeprecated", func(t *testing.T) {
 		testSQLPostgresDeprecated(t, dsn)
 	})
 }
 
-func testSQLPostgres(t *testing.T, dsn string) {
+func testSQLPostgresArgsMapping(t *testing.T, dsn string) {
+	conf := NewConfig()
+	conf.Type = TypeSQL
+	conf.SQL.Driver = "postgres"
+	conf.SQL.DataSourceName = dsn
+	conf.SQL.Query = "INSERT INTO footable (foo, bar, baz) VALUES ($1, $2, $3);"
+	conf.SQL.ArgsMapping = `[ this.foo, this.bar, this.baz ]`
+
+	s, err := NewSQL(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	parts := [][]byte{
+		[]byte(`{"foo":"foo1","bar":11,"baz":"baz1"}`),
+		[]byte(`{"foo":"foo2","bar":12,"baz":"baz2"}`),
+	}
+
+	resMsgs, response := s.ProcessMessage(message.New(parts))
+	require.Nil(t, response)
+	require.Len(t, resMsgs, 1)
+	assert.Equal(t, parts, message.GetAllBytes(resMsgs[0]))
+
+	conf.SQL.Query = "SELECT * FROM footable WHERE foo = $1;"
+	conf.SQL.Args = []string{
+		"${! json(\"foo\") }",
+	}
+	conf.SQL.ResultCodec = "json_array"
+	s, err = NewSQL(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	parts = [][]byte{
+		[]byte(`{"foo":"foo1"}`),
+		[]byte(`{"foo":"foo2"}`),
+	}
+
+	resMsgs, response = s.ProcessMessage(message.New(parts))
+	require.Nil(t, response)
+	require.Len(t, resMsgs, 1)
+
+	expParts := [][]byte{
+		[]byte(`[{"bar":11,"baz":"baz1","foo":"foo1"}]`),
+		[]byte(`[{"bar":12,"baz":"baz2","foo":"foo2"}]`),
+	}
+	assert.Equal(t, expParts, message.GetAllBytes(resMsgs[0]))
+}
+
+func testSQLPostgresArgs(t *testing.T, dsn string) {
 	conf := NewConfig()
 	conf.Type = TypeSQL
 	conf.SQL.Driver = "postgres"
@@ -320,11 +364,11 @@ func SQLMySQLIntegration(t *testing.T) {
 		t.Fatalf("Could not start resource: %s", err)
 	}
 
-	defer func() {
+	t.Cleanup(func() {
 		if err = pool.Purge(resource); err != nil {
 			t.Logf("Failed to clean up docker resource: %v", err)
 		}
-	}()
+	})
 
 	dsn := fmt.Sprintf("testuser:testpass@tcp(localhost:%v)/testdb", resource.GetPort("3306/tcp"))
 	if err = pool.Retry(func() error {
@@ -348,15 +392,63 @@ func SQLMySQLIntegration(t *testing.T) {
 		t.Fatalf("Could not connect to docker resource: %s", err)
 	}
 
-	t.Run("testSQLMySQL", func(t *testing.T) {
-		testSQLMySQL(t, dsn)
+	t.Run("testSQLMySQLArgsMapping", func(t *testing.T) {
+		testSQLMySQLArgsMapping(t, dsn)
+	})
+	t.Run("testSQLMySQLArgs", func(t *testing.T) {
+		testSQLMySQLArgs(t, dsn)
 	})
 	t.Run("testSQLMySQLDeprecated", func(t *testing.T) {
 		testSQLMySQLDeprecated(t, dsn)
 	})
 }
 
-func testSQLMySQL(t *testing.T, dsn string) {
+func testSQLMySQLArgsMapping(t *testing.T, dsn string) {
+	conf := NewConfig()
+	conf.Type = TypeSQL
+	conf.SQL.Driver = "mysql"
+	conf.SQL.DataSourceName = dsn
+	conf.SQL.Query = "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
+	conf.SQL.ArgsMapping = `[ this.foo, this.bar, this.baz ]`
+
+	s, err := NewSQL(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	parts := [][]byte{
+		[]byte(`{"foo":"foo1","bar":11,"baz":"baz1"}`),
+		[]byte(`{"foo":"foo2","bar":12,"baz":"baz2"}`),
+	}
+
+	resMsgs, response := s.ProcessMessage(message.New(parts))
+	require.Nil(t, response)
+	require.Len(t, resMsgs, 1)
+	assert.Equal(t, parts, message.GetAllBytes(resMsgs[0]))
+
+	conf.SQL.Query = "SELECT * FROM footable WHERE foo = ?;"
+	conf.SQL.Args = []string{
+		"${! json(\"foo\") }",
+	}
+	conf.SQL.ResultCodec = "json_array"
+	s, err = NewSQL(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	parts = [][]byte{
+		[]byte(`{"foo":"foo1"}`),
+		[]byte(`{"foo":"foo2"}`),
+	}
+
+	resMsgs, response = s.ProcessMessage(message.New(parts))
+	require.Nil(t, response)
+	require.Len(t, resMsgs, 1)
+
+	expParts := [][]byte{
+		[]byte(`[{"bar":11,"baz":"baz1","foo":"foo1"}]`),
+		[]byte(`[{"bar":12,"baz":"baz2","foo":"foo2"}]`),
+	}
+	assert.Equal(t, expParts, message.GetAllBytes(resMsgs[0]))
+}
+
+func testSQLMySQLArgs(t *testing.T, dsn string) {
 	conf := NewConfig()
 	conf.Type = TypeSQL
 	conf.SQL.Driver = "mysql"

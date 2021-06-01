@@ -3,12 +3,14 @@ package output
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -71,10 +73,7 @@ output:
     driver: mysql
     data_source_name: foouser:foopassword@tcp(localhost:3306)/foodb
     query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
-    args:
-      - ${! json("document.foo") }
-      - ${! json("document.bar") }
-      - ${! meta("kafka_topic") }
+    args_mapping: '[ this.document.foo, this.document.bar, meta("kafka_topic") ]'
     batching:
       count: 500
 `,
@@ -90,10 +89,7 @@ output:
     driver: postgres
     data_source_name: postgres://foouser:foopassword@localhost:5432/foodb?sslmode=disable
     query: "INSERT INTO footable (foo, bar, baz) VALUES ($1, $2, $3);"
-    args:
-      - ${! json("document.foo") }
-      - ${! json("document.bar") }
-      - ${! meta("kafka_topic") }
+    args_mapping: '[ this.document.foo, this.document.bar, meta("kafka_topic") ]'
     batching:
       count: 500
 `,
@@ -118,10 +114,16 @@ output:
 				"query", "The query to run against the database.",
 				"INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);",
 			),
-			docs.FieldCommon(
+			docs.FieldDeprecated(
 				"args",
 				"A list of arguments for the query to be resolved for each message.",
 			).IsInterpolated().Array(),
+			docs.FieldCommon(
+				"args_mapping",
+				"A [Bloblang mapping](/docs/guides/bloblang/about) that produces the arguments for the query. The mapping must return an array containing the number of arguments in the query.",
+				`[ this.foo, this.bar.not_empty().catch(null), meta("baz") ]`,
+				`root = [ uuid_v4() ].merge(this.document.args)`,
+			).HasType(docs.FieldString).Linter(docs.LintBloblangMapping).AtVersion("3.47.0"),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			batch.FieldSpec(),
 		},
@@ -136,6 +138,7 @@ type SQLConfig struct {
 	DataSourceName string             `json:"data_source_name" yaml:"data_source_name"`
 	Query          string             `json:"query" yaml:"query"`
 	Args           []string           `json:"args" yaml:"args"`
+	ArgsMapping    string             `json:"args_mapping" yaml:"args_mapping"`
 	MaxInFlight    int                `json:"max_in_flight" yaml:"max_in_flight"`
 	Batching       batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
@@ -147,6 +150,7 @@ func NewSQLConfig() SQLConfig {
 		DataSourceName: "",
 		Query:          "",
 		Args:           []string{},
+		ArgsMapping:    "",
 		MaxInFlight:    1,
 		Batching:       batch.NewPolicyConfig(),
 	}
@@ -167,14 +171,19 @@ type sqlWriter struct {
 	log  log.Modular
 	conf SQLConfig
 
-	db    *sql.DB
-	dbMut sync.Mutex
-	args  []*field.Expression
+	db          *sql.DB
+	dbMut       sync.Mutex
+	args        []*field.Expression
+	argsMapping *mapping.Executor
 
 	query *sql.Stmt
 }
 
 func newSQLWriter(conf SQLConfig, log log.Modular) (*sqlWriter, error) {
+	if len(conf.Args) > 0 && conf.ArgsMapping != "" {
+		return nil, errors.New("cannot specify both `args` and an `args_mapping` in the same output")
+	}
+
 	var args []*field.Expression
 	for i, v := range conf.Args {
 		expr, err := bloblang.NewField(v)
@@ -184,10 +193,19 @@ func newSQLWriter(conf SQLConfig, log log.Modular) (*sqlWriter, error) {
 		args = append(args, expr)
 	}
 
+	var argsMapping *mapping.Executor
+	if conf.ArgsMapping != "" {
+		var err error
+		if argsMapping, err = bloblang.NewMapping("", conf.ArgsMapping); err != nil {
+			return nil, fmt.Errorf("failed to parse `args_mapping`: %w", err)
+		}
+	}
+
 	s := &sqlWriter{
-		log:  log,
-		conf: conf,
-		args: args,
+		log:         log,
+		conf:        conf,
+		args:        args,
+		argsMapping: argsMapping,
 	}
 
 	return s, nil
@@ -275,17 +293,49 @@ func (s *sqlWriter) doExecute(argSets [][]interface{}) (errs []error) {
 	return
 }
 
-// WriteWithContext attempts to write a message to the database.
-func (s *sqlWriter) WriteWithContext(ctx context.Context, msg types.Message) error {
-	argSets := make([][]interface{}, msg.Len())
-	msg.Iter(func(index int, p types.Part) error {
+func (s *sqlWriter) getArgs(index int, msg types.Message) ([]interface{}, error) {
+	if len(s.args) > 0 {
 		args := make([]interface{}, len(s.args))
 		for i, v := range s.args {
 			args[i] = v.String(index, msg)
 		}
+		return args, nil
+	}
+
+	if s.argsMapping == nil {
+		return nil, nil
+	}
+
+	pargs, err := s.argsMapping.MapPart(index, msg)
+	if err != nil {
+		return nil, err
+	}
+
+	iargs, err := pargs.JSON()
+	if err != nil {
+		return nil, fmt.Errorf("mapping returned non-structured result: %w", err)
+	}
+
+	args, ok := iargs.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("mapping returned non-array result: %T", iargs)
+	}
+	return args, nil
+}
+
+// WriteWithContext attempts to write a message to the database.
+func (s *sqlWriter) WriteWithContext(ctx context.Context, msg types.Message) error {
+	argSets := make([][]interface{}, msg.Len())
+	if err := msg.Iter(func(index int, p types.Part) error {
+		args, err := s.getArgs(index, msg)
+		if err != nil {
+			return err
+		}
 		argSets[index] = args
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
 
 	errs := s.doExecute(argSets)
 	return writer.IterateBatchedSend(msg, func(i int, _ types.Part) error {

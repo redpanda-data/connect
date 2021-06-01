@@ -27,7 +27,7 @@ sql:
   driver: mysql
   data_source_name: ""
   query: ""
-  args: []
+  args_mapping: ""
   result_codec: none
 ```
 
@@ -68,10 +68,7 @@ pipeline:
         driver: mysql
         data_source_name: foouser:foopassword@tcp(localhost:3306)/foodb
         query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
-        args:
-          - ${! json("document.foo") }
-          - ${! json("document.bar") }
-          - ${! meta("kafka_topic") }
+        args_mapping: '[ document.foo, document.bar, meta("kafka_topic") ]'
 ```
 
 </TabItem>
@@ -94,8 +91,7 @@ pipeline:
               result_codec: json_array
               data_source_name: postgres://foouser:foopass@localhost:5432/testdb?sslmode=disable
               query: "SELECT * FROM footable WHERE user_id = $1;"
-              args:
-                - ${! json("user.id") }
+              args_mapping: '[ this.user.id ]'
         result_map: 'root.foo_rows = this'
 ```
 
@@ -145,14 +141,22 @@ Default: `""`
 query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);
 ```
 
-### `args`
+### `args_mapping`
 
-A list of arguments for the query to be resolved for each message.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+A [Bloblang mapping](/docs/guides/bloblang/about) that produces the arguments for the query. The mapping must return an array containing the number of arguments in the query.
 
 
-Type: `array`  
-Default: `[]`  
+Type: `string`  
+Default: `""`  
+Requires version 3.47.0 or newer  
+
+```yaml
+# Examples
+
+args_mapping: '[ this.foo, this.bar.not_empty().catch(null), meta("baz") ]'
+
+args_mapping: root = [ uuid_v4() ].merge(this.document.args)
+```
 
 ### `result_codec`
 

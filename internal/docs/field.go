@@ -306,10 +306,14 @@ func FieldComponent() FieldSpec {
 }
 
 // FieldDeprecated returns a field spec for a deprecated field.
-func FieldDeprecated(name string) FieldSpec {
+func FieldDeprecated(name string, description ...string) FieldSpec {
+	desc := "DEPRECATED: Do not use."
+	if len(description) > 0 {
+		desc = "DEPRECATED: " + description[0]
+	}
 	return FieldSpec{
 		Name:        name,
-		Description: "DEPRECATED: Do not use.",
+		Description: desc,
 		Deprecated:  true,
 	}
 }

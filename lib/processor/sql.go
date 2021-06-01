@@ -9,6 +9,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -62,10 +63,7 @@ pipeline:
         driver: mysql
         data_source_name: foouser:foopassword@tcp(localhost:3306)/foodb
         query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
-        args:
-          - ${! json("document.foo") }
-          - ${! json("document.bar") }
-          - ${! meta("kafka_topic") }
+        args_mapping: '[ document.foo, document.bar, meta("kafka_topic") ]'
 `,
 			},
 			{
@@ -86,8 +84,7 @@ pipeline:
               result_codec: json_array
               data_source_name: postgres://foouser:foopass@localhost:5432/testdb?sslmode=disable
               query: "SELECT * FROM footable WHERE user_id = $1;"
-              args:
-                - ${! json("user.id") }
+              args_mapping: '[ this.user.id ]'
         result_map: 'root.foo_rows = this'
 `,
 			},
@@ -103,15 +100,21 @@ pipeline:
 				"foouser:foopassword@tcp(localhost:3306)/foodb",
 				"postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable",
 			),
-			docs.FieldDeprecated("dsn"),
+			docs.FieldDeprecated("dsn", ""),
 			docs.FieldCommon(
 				"query", "The query to run against the database.",
 				"INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);",
 			),
-			docs.FieldCommon(
+			docs.FieldDeprecated(
 				"args",
 				"A list of arguments for the query to be resolved for each message.",
 			).IsInterpolated().Array(),
+			docs.FieldCommon(
+				"args_mapping",
+				"A [Bloblang mapping](/docs/guides/bloblang/about) that produces the arguments for the query. The mapping must return an array containing the number of arguments in the query.",
+				`[ this.foo, this.bar.not_empty().catch(null), meta("baz") ]`,
+				`root = [ uuid_v4() ].merge(this.document.args)`,
+			).HasType(docs.FieldString).Linter(docs.LintBloblangMapping).AtVersion("3.47.0"),
 			docs.FieldCommon(
 				"result_codec",
 				"A [codec](#result-codecs) to determine how resulting rows are converted into messages.",
@@ -145,6 +148,7 @@ type SQLConfig struct {
 	DSN            string   `json:"dsn" yaml:"dsn"`
 	Query          string   `json:"query" yaml:"query"`
 	Args           []string `json:"args" yaml:"args"`
+	ArgsMapping    string   `json:"args_mapping" yaml:"args_mapping"`
 	ResultCodec    string   `json:"result_codec" yaml:"result_codec"`
 }
 
@@ -156,6 +160,7 @@ func NewSQLConfig() SQLConfig {
 		DSN:            "",
 		Query:          "",
 		Args:           []string{},
+		ArgsMapping:    "",
 		ResultCodec:    "none",
 	}
 }
@@ -176,11 +181,12 @@ type SQL struct {
 	log   log.Modular
 	stats metrics.Type
 
-	conf     SQLConfig
-	db       *sql.DB
-	dbMux    sync.RWMutex
-	args     []*field.Expression
-	resCodec sqlResultCodec
+	conf        SQLConfig
+	db          *sql.DB
+	dbMux       sync.RWMutex
+	args        []*field.Expression
+	argsMapping *mapping.Executor
+	resCodec    sqlResultCodec
 
 	// TODO: V4 Remove this
 	deprecated         bool
@@ -212,6 +218,21 @@ func NewSQL(
 		deprecated = true
 	}
 
+	if len(conf.SQL.Args) > 0 && conf.SQL.ArgsMapping != "" {
+		return nil, errors.New("cannot specify both `args` and an `args_mapping` in the same processor")
+	}
+
+	var argsMapping *mapping.Executor
+	if conf.SQL.ArgsMapping != "" {
+		if deprecated {
+			return nil, errors.New("the field `args_mapping` cannot be used when running the `sql` processor in deprecated mode (using the `dsn` field), use the `data_source_name` field instead")
+		}
+		var err error
+		if argsMapping, err = bloblang.NewMapping("", conf.SQL.ArgsMapping); err != nil {
+			return nil, fmt.Errorf("failed to parse `args_mapping`: %w", err)
+		}
+	}
+
 	var args []*field.Expression
 	for i, v := range conf.SQL.Args {
 		expr, err := bloblang.NewField(v)
@@ -222,17 +243,18 @@ func NewSQL(
 	}
 
 	s := &SQL{
-		log:        log,
-		stats:      stats,
-		conf:       conf.SQL,
-		args:       args,
-		deprecated: deprecated,
-		closeChan:  make(chan struct{}),
-		closedChan: make(chan struct{}),
-		mCount:     stats.GetCounter("count"),
-		mErr:       stats.GetCounter("error"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
+		log:         log,
+		stats:       stats,
+		conf:        conf.SQL,
+		args:        args,
+		argsMapping: argsMapping,
+		deprecated:  deprecated,
+		closeChan:   make(chan struct{}),
+		closedChan:  make(chan struct{}),
+		mCount:      stats.GetCounter("count"),
+		mErr:        stats.GetCounter("error"),
+		mSent:       stats.GetCounter("sent"),
+		mBatchSent:  stats.GetCounter("batch.sent"),
 	}
 
 	var err error
@@ -362,6 +384,9 @@ func (s *SQL) doExecute(argSets [][]interface{}) (errs []error) {
 	}
 
 	for i, args := range argSets {
+		if len(args) == 0 {
+			continue
+		}
 		if _, serr := stmt.Exec(args...); serr != nil {
 			if len(errs) == 0 {
 				errs = make([]error, len(argSets))
@@ -372,6 +397,36 @@ func (s *SQL) doExecute(argSets [][]interface{}) (errs []error) {
 
 	err = tx.Commit()
 	return
+}
+
+func (s *SQL) getArgs(index int, msg types.Message) ([]interface{}, error) {
+	if len(s.args) > 0 {
+		args := make([]interface{}, len(s.args))
+		for i, v := range s.args {
+			args[i] = v.String(index, msg)
+		}
+		return args, nil
+	}
+
+	if s.argsMapping == nil {
+		return nil, nil
+	}
+
+	pargs, err := s.argsMapping.MapPart(index, msg)
+	if err != nil {
+		return nil, err
+	}
+
+	iargs, err := pargs.JSON()
+	if err != nil {
+		return nil, fmt.Errorf("mapping returned non-structured result: %w", err)
+	}
+
+	args, ok := iargs.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("mapping returned non-array result: %T", iargs)
+	}
+	return args, nil
 }
 
 // ProcessMessage logs an event and returns the message unchanged.
@@ -389,9 +444,12 @@ func (s *SQL) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 	if s.resCodec == nil {
 		argSets := make([][]interface{}, newMsg.Len())
 		newMsg.Iter(func(index int, p types.Part) error {
-			args := make([]interface{}, len(s.args))
-			for i, v := range s.args {
-				args[i] = v.String(index, msg)
+			args, err := s.getArgs(index, msg)
+			if err != nil {
+				s.mErr.Incr(1)
+				s.log.Errorf("Args mapping error: %v\n", err)
+				FlagErr(newMsg.Get(index), err)
+				return nil
 			}
 			argSets[index] = args
 			return nil
@@ -400,15 +458,17 @@ func (s *SQL) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 		for i, err := range s.doExecute(argSets) {
 			if err != nil {
 				s.mErr.Incr(1)
-				s.log.Debugf("SQL error: %v\n", err)
+				s.log.Errorf("SQL error: %v\n", err)
 				FlagErr(newMsg.Get(i), err)
 			}
 		}
 	} else {
 		IteratePartsWithSpan(TypeSQL, nil, newMsg, func(index int, span opentracing.Span, part types.Part) error {
-			args := make([]interface{}, len(s.args))
-			for i, v := range s.args {
-				args[i] = v.String(index, msg)
+			args, err := s.getArgs(index, msg)
+			if err != nil {
+				s.mErr.Incr(1)
+				s.log.Errorf("Args mapping error: %v\n", err)
+				return err
 			}
 			rows, err := s.query.Query(args...)
 			if err == nil {
@@ -421,7 +481,7 @@ func (s *SQL) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			}
 			if err != nil {
 				s.mErr.Incr(1)
-				s.log.Debugf("SQL error: %v\n", err)
+				s.log.Errorf("SQL error: %v\n", err)
 				return err
 			}
 			return nil

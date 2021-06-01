@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - New experimental `schema_registry_decode` processor.
 - New Bloblang method `parse_duration` for parsing duration strings into an integer.
 - New experimental `twitter_search` input.
+- New field `args_mapping` added to the `sql` processor and output for mapping explicitly typed arguments.
 
 ### Changed
 
