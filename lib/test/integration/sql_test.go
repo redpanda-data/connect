@@ -70,9 +70,7 @@ output:
     driver: postgres
     data_source_name: postgres://testuser:testpass@localhost:$PORT/testdb?sslmode=disable
     query: "INSERT INTO testtable (id, content) VALUES ($1, $2);"
-    args:
-      - '$ID-${! json("id") }'
-      - ${! json("content") }
+    args_mapping: '[ "$ID-"+this.id.string(), this.content ]'
 `
 	queryGetFn := func(env *testEnvironment, id string) (string, []string, error) {
 		key := env.configVars.id + "-" + id

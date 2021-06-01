@@ -22,7 +22,7 @@ output:
     driver: mysql
     data_source_name: ""
     query: ""
-    args: []
+    args_mapping: ""
     max_in_flight: 1
     batching:
       count: 0

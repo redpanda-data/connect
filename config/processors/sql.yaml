@@ -21,7 +21,7 @@ pipeline:
         driver: mysql
         data_source_name: ""
         query: ""
-        args: []
+        args_mapping: ""
         result_codec: none
 output:
   label: ""
