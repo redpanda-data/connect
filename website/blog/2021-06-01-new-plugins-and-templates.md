@@ -13,9 +13,9 @@ keywords: [
 tags: [ "v4", "plugins", "templates", "roadmap" ]
 ---
 
-I need help, attention and your sweet loving, and therefore It's time for a development update. Around five months ago I posted a [roadmap for Benthos v4](/blog/2021/01/04/v4-roadmap) that included some utterly unattainable goals that only a super human could achieve.
+I need help, attention and affirmation, and therefore It's time for a development update. Around five months ago I posted a [roadmap for Benthos v4](/blog/2021/01/04/v4-roadmap) that included some utterly unattainable goals that only a super human could achieve.
 
-Now that most of those features are ready to beta test, namely a new plugins API and config templating, I'm looking for people to try them out and give feedback.
+Now that most of those features are ready to test, namely a new plugins API and config templating, I'm looking for people to try them out and give feedback. Please read on if that sounds like fun to you, or also if it doesn't sound fun but you intend to do it anyway.
 
 <!--truncate-->
 
@@ -25,13 +25,102 @@ The new config templates functionality allows you to define parameterised templa
 
 This is going to be super useful in situations where you have commonly used configuration patterns but with small differences that prevent you from using the exact same config as a resource.
 
-TODO EXAMPLE
+The current state of templates is that they'll be included in the next release as an experimental feature, meaning any aspect of this functionality is subject to change outside of major version releases. This includes the config spec of templates, how they work, and so on.
 
-To find out more configuration templates, including how to try them out, check out [the new templates page][configuration.templating].
+Defining a template looks roughly like this:
+
+```yaml
+name: log_message
+type: processor
+summary: Print a log line that shows the contents of a message.
+
+fields:
+  - name: level
+    description: the level to log at.
+    type: string
+    default: INFO
+
+mapping: |
+  root.log.level = this.level
+  root.log.message = "${! content() }"
+  root.log.fields.metadata = "${! meta() }"
+  root.log.fields.error = "${! error() }"
+```
+
+And you're able to import templates such as this with the `-t` flag:
+
+```sh
+benthos -t ./templates/foo.yaml -c ./config.yaml
+```
+
+And using it in a config looks like any other component:
+
+```yaml
+pipeline:
+  processors:
+    - log_message:
+        level: ERROR
+```
+
+To find out more about configuration templates, including how to try them out, check out [the new templates page][configuration.templating]. More importantly, you can give feedback on them [in this Github discussion][templates-feedback-thread].
 
 ## The V2 Go Plugins API
 
-Benthos has had Go plugins for a while now
+Benthos has had Go plugins for a while now and it seems like they're fairly well received. However, they can sometimes be confusing as they expose Benthos internals that aren't necessary to understand as plugin authors.
+
+It was also an issue for me as a maintainer that the current plugin APIs hook directly into Benthos packages that have no business being public. This makes it extra difficult to improve the service without introducing breaking changes.
+
+The new APIs are simpler, more powerful in the ways that matter, and most importantly are air-gapped from Benthos internals so that they can evolve independently in the future. Here's a sneaky look at what a processor plugin looks like:
+
+```go
+type ReverseProcessor struct {
+	logger *service.Logger
+}
+
+func (r *ReverseProcessor) Process(ctx context.Context, m *service.Message) ([]*service.Message, error) {
+	bytesContent, err := m.AsBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	newBytes := make([]byte, len(bytesContent))
+	for i, b := range bytesContent {
+		newBytes[len(newBytes)-i-1] = b
+	}
+
+	if bytes.Equal(newBytes, bytesContent) {
+		r.logger.Infof("Woah! This is like totally a palindrome: %s", bytesContent)
+	}
+
+	m.SetBytes(newBytes)
+	return []*service.Message{m}, nil
+}
+
+func (r *ReverseProcessor) Close(ctx context.Context) error {
+	return nil
+}
+
+func main() {
+	err := service.RegisterProcessor(
+		"reverse", service.NewConfigSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+			return &ReverseProcessor{logger: mgr.Logger()}, nil
+		})
+	if err != nil {
+		panic(err)
+	}
+
+	service.RunCLI()
+}
+```
+
+You can play around with these APIs right now by pulling the latest commit with `go get -u github.com/Jeffail/benthos/v3@master`, and you can find more examples along with the API docs at [pkg.go.dev][plugins.api].
+
+The package will remain in an experimental state under `public/x/service` for a month or so, and once it's "ready" (I'm personally happy with it) then it'll be moved to `public/service` and will be considered stable.
+
+The goal is to allow everyone to migrate to the new APIs whilst still supporting the old ones, and then when Benthos V4 is tagged the old ones will vanish and we're no longer blocked on them.
+
+Similar to the templates there is [a Github discussion open for feedback][plugins-feedback-thread]. Be honest, be brutal.
 
 ## Join the Community
 
@@ -39,5 +128,6 @@ I've been babbling on for months, so if this stuff is news to you then you're cl
 
 [community]: /community
 [configuration.templating]: /docs/configuration/templating
+[plugins.api]: https://pkg.go.dev/github.com/Jeffail/benthos/v3@master/public/x/service
 [plugins-feedback-thread]: https://github.com/Jeffail/benthos/discussions/754
 [templates-feedback-thread]: https://github.com/Jeffail/benthos/discussions/755
