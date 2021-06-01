@@ -1,0 +1,15 @@
+name: log_message
+type: processor
+summary: Print a log line that shows the contents of a message.
+
+fields:
+  - name: level
+    description: The level to log at.
+    type: string
+    default: INFO
+
+mapping: |
+  root.log.level = this.level
+  root.log.message = "${! content() }"
+  root.log.fields.metadata = "${! meta() }"
+  root.log.fields.error = "${! error() }"

@@ -34,27 +34,19 @@ func (g *GibberishInput) Close(ctx context.Context) error {
 // by providing a struct containing the fields to be parsed from within the
 // Benthos configuration.
 func Example_inputPlugin() {
-	type gibberishConfig struct {
-		Length int `yaml:"length"`
-	}
-
-	configSpec, err := service.NewStructConfigSpec(func() interface{} {
-		return &gibberishConfig{
-			Length: 100,
-		}
-	})
-	if err != nil {
-		panic(err)
-	}
+	configSpec := service.NewConfigSpec().
+		Summary("Creates a load of gibberish, putting us all out of work.").
+		Field(service.NewIntField("length").Default(100))
 
 	constructor := func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-		gconf := conf.Root().(*gibberishConfig)
-		return &GibberishInput{
-			length: gconf.Length,
-		}, nil
+		length, err := conf.FieldInt("length")
+		if err != nil {
+			return nil, err
+		}
+		return &GibberishInput{length}, nil
 	}
 
-	err = service.RegisterInput("gibberish", configSpec, constructor)
+	err := service.RegisterInput("gibberish", configSpec, constructor)
 	if err != nil {
 		panic(err)
 	}

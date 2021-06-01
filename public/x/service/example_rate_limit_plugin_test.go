@@ -25,29 +25,22 @@ func (r *RandomRateLimit) Close(ctx context.Context) error {
 // configured by providing a struct containing the fields to be parsed from
 // within the Benthos configuration.
 func Example_rateLimitPlugin() {
-	type randomRLConfig struct {
-		MaxDuration string `yaml:"maximum_duration"`
-	}
-
-	configSpec, err := service.NewStructConfigSpec(func() interface{} {
-		return &randomRLConfig{
-			MaxDuration: "1s",
-		}
-	})
-	if err != nil {
-		panic(err)
-	}
+	configSpec := service.NewConfigSpec().
+		Field(service.NewStringField("maximum_duration").Default("1s"))
 
 	constructor := func(conf *service.ParsedConfig, mgr *service.Resources) (service.RateLimit, error) {
-		c := conf.Root().(*randomRLConfig)
-		maxDuration, err := time.ParseDuration(c.MaxDuration)
+		maxDurStr, err := conf.FieldString("maximum_duration")
+		if err != nil {
+			return nil, err
+		}
+		maxDuration, err := time.ParseDuration(maxDurStr)
 		if err != nil {
 			return nil, fmt.Errorf("invalid max duration: %w", err)
 		}
 		return &RandomRateLimit{maxDuration}, nil
 	}
 
-	err = service.RegisterRateLimit("random", configSpec, constructor)
+	err := service.RegisterRateLimit("random", configSpec, constructor)
 	if err != nil {
 		panic(err)
 	}

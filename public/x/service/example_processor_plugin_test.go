@@ -38,14 +38,12 @@ func (r *ReverseProcessor) Close(ctx context.Context) error {
 // for an implementation that does not require any configuration parameters, and
 // therefore doesn't defined any within the configuration specification.
 func Example_processorPlugin() {
-	constructor := func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-		return &ReverseProcessor{
-			logger: mgr.Logger(),
-		}, nil
-	}
-
 	// Register our new processor, which doesn't require a config schema.
-	err := service.RegisterProcessor("reverse", service.NewConfigSpec(), constructor)
+	err := service.RegisterProcessor(
+		"reverse", service.NewConfigSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+			return &ReverseProcessor{logger: mgr.Logger()}, nil
+		})
 	if err != nil {
 		panic(err)
 	}
