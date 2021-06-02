@@ -3,6 +3,8 @@
 [![godoc for Jeffail/benthos][godoc-badge]][godoc-url]
 [![goreportcard for Jeffail/benthos][goreport-badge]][goreport-url]
 [![Build Status][actions-badge]][actions-url]
+[![Discord invite][discord-badge]][discord-url]
+[![Docs site][website-badge]][website-url]
 
 Benthos is a high performance and resilient stream processor, able to connect various [sources][inputs] and [sinks][outputs] in a range of brokering patterns and perform [hydration, enrichments, transformations and filters][processors] on payloads.
 
@@ -204,6 +206,10 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come a
 [goreport-url]: https://goreportcard.com/report/Jeffail/benthos
 [actions-badge]: https://github.com/Jeffail/benthos/actions/workflows/test.yml/badge.svg
 [actions-url]: https://github.com/Jeffail/benthos/actions/workflows/test.yml
+[discord-badge]: https://img.shields.io/badge/Discord-Come%20and%20chill-blue
+[discord-url]: https://discord.gg/6VaWjz
+[website-badge]: https://img.shields.io/badge/Docs-Learn%20more-ffc7c7
+[website-url]: https://www.benthos.dev
 
 [community]: https://www.benthos.dev/community
 
