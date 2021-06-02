@@ -254,7 +254,7 @@ func (r *Retry) loop() {
 					}
 
 					mError.Incr(1)
-					r.log.Warnf("Failed to send message: %v\n", res.Error())
+
 					if backOff == nil {
 						backOff = r.backoffCtor()
 					}
@@ -265,6 +265,8 @@ func (r *Retry) loop() {
 						r.log.Errorf("Failed to send message: %v\n", res.Error())
 						resOut = response.NewNoack()
 						break
+					} else {
+						r.log.Warnf("Failed to send message: %v\n", res.Error())
 					}
 					select {
 					case <-time.After(nextBackoff):
