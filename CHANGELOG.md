@@ -21,6 +21,7 @@ All notable changes to this project will be documented in this file.
 - New Bloblang method `parse_duration` for parsing duration strings into an integer.
 - New experimental `twitter_search` input.
 - New field `args_mapping` added to the `sql` processor and output for mapping explicitly typed arguments.
+- Added format `csv` to the `unarchive` processor.
 
 ### Changed
 
