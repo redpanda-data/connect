@@ -311,7 +311,7 @@ func csvUnarchive(part types.Part) ([]types.Part, error) {
 
 		newPart := part.Copy()
 
-		if err := newPart.SetJSON(obj); err != nil {
+		if err = newPart.SetJSON(obj); err != nil {
 			err = fmt.Errorf("failed to set json on new part: %v", err)
 			break
 		}
