@@ -4,7 +4,9 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"bytes"
+	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -40,7 +42,7 @@ field is added to each message called ` + "`archive_filename`" + ` with the
 extracted filename.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("format", "The unarchive [format](#formats) to use.").HasOptions(
-				"tar", "zip", "binary", "lines", "json_documents", "json_array", "json_map",
+				"tar", "zip", "binary", "lines", "json_documents", "json_array", "json_map", "csv",
 			),
 			PartsFieldSpec,
 		},
@@ -83,7 +85,12 @@ own message.
 Attempt to parse the message as a JSON map and for each element of the map
 expands its contents into a new message. A metadata field is added to each
 message called ` + "`archive_key`" + ` with the relevant key from the top-level
-map.`,
+map.
+
+### ` + "`csv`" + `
+
+Attempt to parse the message as a csv file (header required) and for each row in 
+the file expands its contents into a json object in a new message.`,
 	}
 }
 
@@ -262,6 +269,63 @@ func jsonMapUnarchive(part types.Part) ([]types.Part, error) {
 	return parts, nil
 }
 
+func csvUnarchive(part types.Part) ([]types.Part, error) {
+	buf := bytes.NewReader(part.Get())
+
+	scanner := csv.NewReader(buf)
+	scanner.ReuseRecord = true
+
+	var newParts []types.Part
+
+	var headers []string
+
+	var err error
+
+	for {
+		var records []string
+		records, err = scanner.Read()
+		if err != nil {
+			break
+		}
+
+		if headers == nil {
+			headers = make([]string, len(records))
+			copy(headers, records)
+			continue
+		}
+
+		if len(records) < len(headers) {
+			err = errors.New("row has too few values")
+			break
+		}
+
+		if len(records) > len(headers) {
+			err = errors.New("row has too many values")
+			break
+		}
+
+		obj := make(map[string]interface{}, len(records))
+		for i, r := range records {
+			obj[headers[i]] = r
+		}
+
+		newPart := part.Copy()
+
+		if err = newPart.SetJSON(obj); err != nil {
+			err = fmt.Errorf("failed to set json on new part: %v", err)
+			break
+		}
+
+		newParts = append(newParts, newPart)
+	}
+
+	if !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("failed to parse message as csv: %v", err)
+	}
+
+	return newParts, nil
+}
+
 func strToUnarchiver(str string) (unarchiveFunc, error) {
 	switch str {
 	case "tar":
@@ -278,6 +342,8 @@ func strToUnarchiver(str string) (unarchiveFunc, error) {
 		return jsonArrayUnarchive, nil
 	case "json_map":
 		return jsonMapUnarchive, nil
+	case "csv":
+		return csvUnarchive, nil
 	}
 	return nil, fmt.Errorf("archive format not recognised: %v", str)
 }

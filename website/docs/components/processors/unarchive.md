@@ -66,7 +66,7 @@ The unarchive [format](#formats) to use.
 
 Type: `string`  
 Default: `"binary"`  
-Options: `tar`, `zip`, `binary`, `lines`, `json_documents`, `json_array`, `json_map`.
+Options: `tar`, `zip`, `binary`, `lines`, `json_documents`, `json_array`, `json_map`, `csv`.
 
 ### `parts`
 
@@ -120,4 +120,9 @@ Attempt to parse the message as a JSON map and for each element of the map
 expands its contents into a new message. A metadata field is added to each
 message called `archive_key` with the relevant key from the top-level
 map.
+
+### `csv`
+
+Attempt to parse the message as a csv file (header required) and for each row in 
+the file expands its contents into a json object in a new message.
 
