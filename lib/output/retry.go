@@ -254,7 +254,7 @@ func (r *Retry) loop() {
 					}
 
 					mError.Incr(1)
-					r.log.Errorf("Failed to send message: %v\n", res.Error())
+					r.log.Warnf("Failed to send message: %v\n", res.Error())
 					if backOff == nil {
 						backOff = r.backoffCtor()
 					}
@@ -262,6 +262,7 @@ func (r *Retry) loop() {
 					nextBackoff := backOff.NextBackOff()
 					if nextBackoff == backoff.Stop {
 						mEndOfRetries.Incr(1)
+						r.log.Errorf("Failed to send message: %v\n", res.Error())
 						resOut = response.NewNoack()
 						break
 					}
