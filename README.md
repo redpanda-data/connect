@@ -207,7 +207,7 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come a
 [actions-badge]: https://github.com/Jeffail/benthos/actions/workflows/test.yml/badge.svg
 [actions-url]: https://github.com/Jeffail/benthos/actions/workflows/test.yml
 [discord-badge]: https://img.shields.io/badge/Discord-Come%20and%20chill-blue
-[discord-url]: https://discord.gg/6VaWjz
+[discord-url]: https://discord.com/invite/6VaWjzP
 [website-badge]: https://img.shields.io/badge/Docs-Learn%20more-ffc7c7
 [website-url]: https://www.benthos.dev
 
