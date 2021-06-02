@@ -28,10 +28,7 @@ the message with the resulting document.`,
 :::note Try out Bloblang
 For better performance and improved capabilities try out native Benthos mapping with the [bloblang processor](/docs/components/processors/bloblang).
 :::
-
-It is possible to create boolean queries with JMESPath, in order to filter
-messages with boolean queries please instead use the
-` + "[`jmespath`](/docs/components/conditions/jmespath)" + ` condition.`,
+`,
 		Examples: []docs.AnnotatedExample{
 			{
 				Title: "Mapping",
