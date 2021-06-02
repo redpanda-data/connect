@@ -13,7 +13,7 @@ keywords: [
 tags: [ "v4", "plugins", "templates", "roadmap" ]
 ---
 
-I need help, attention and affirmation, and therefore It's time for a development update. Around five months ago I posted a [roadmap for Benthos v4](/blog/2021/01/04/v4-roadmap) that included some utterly unattainable goals that only a super human could achieve.
+I need help, attention and affirmation, and therefore it's time for a development update. Around five months ago I posted a [roadmap for Benthos v4](/blog/2021/01/04/v4-roadmap) that included some utterly unattainable goals that only a super human could achieve.
 
 Now that most of those features are ready to test, namely a new plugins API and config templating, I'm looking for people to try them out and give feedback. Please read on if that sounds like fun to you, or also if it doesn't sound fun but you intend to do it anyway.
 
@@ -70,7 +70,7 @@ Benthos has had Go plugins for a while now and they're fairly well received. How
 
 It was also an issue for me as a maintainer that the current plugin APIs hook directly into Benthos packages that have no business being public. This makes it extra difficult to improve the service without introducing breaking changes.
 
-The new APIs are simpler, more powerful (in the ways that matter), add milk after the water, and most importantly are air-gapped from Benthos internals so that they can evolve independently in the future. Here's a sneaky glance of what a processor plugin looks like:
+The new APIs are simpler, more powerful (in the ways that matter), add milk after the water, and most importantly are air-gapped from Benthos internals so that they can evolve independently. Here's a sneaky glance of what a processor plugin looks like:
 
 ```go
 type ReverseProcessor struct {

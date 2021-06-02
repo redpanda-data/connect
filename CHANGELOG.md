@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.47.0 - TBD
+
 ### Added
 
 - CLI flag `max-token-length` added to the `blobl` subcommand.
