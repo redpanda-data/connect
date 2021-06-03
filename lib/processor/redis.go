@@ -75,13 +75,8 @@ pipeline:
 			{
 				Title: "Running Total",
 				Summary: `
-If we have data containing number of friends visited during covid 19, we can
-add a field that contains the total number of friends visited up to and
-including that month. If you're only interested in the total number of visits
-(and don't care about the intermediate values), consider using a [real
-counter](/docs/configuration/windowed_processing#real-counter) instead.
+If we have JSON data containing number of friends visited during covid 19:
 
-The input:
 ` + "```json" + `
 {"name":"ash","month":"feb","year":2019,"friends_visited":10}
 {"name":"ash","month":"apr","year":2019,"friends_visited":-2}
@@ -89,7 +84,8 @@ The input:
 {"name":"bob","month":"apr","year":2019,"friends_visited":1}
 ` + "```" + `
 
-The output:
+We can add a field that contains the running total number of friends visited:
+
 ` + "```json" + `
 {"name":"ash","month":"feb","year":2019,"friends_visited":10,"total":10}
 {"name":"ash","month":"apr","year":2019,"friends_visited":-2,"total":8}
@@ -97,12 +93,7 @@ The output:
 {"name":"bob","month":"apr","year":2019,"friends_visited":1,"total":4}
 ` + "```" + `
 
-:::note
-You probably want to delete the keys before running the same pipeline a second
-time, because otherwise the starting values might be different than the first
-time the pipeline would be run. For example, the starting value for 'bob' would
-be ` + "`4`" + ` the second time this pipeline is run.
-:::
+Using the ` + "`incrby`" + ` operator:
                 `,
 				Config: `
 pipeline:
