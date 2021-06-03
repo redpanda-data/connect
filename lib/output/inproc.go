@@ -72,6 +72,7 @@ func NewInproc(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 		closedChan:      make(chan struct{}),
 		closeChan:       make(chan struct{}),
 	}
+	mgr.SetPipe(i.pipe, i.transactionsOut)
 	return i, nil
 }
 
@@ -98,7 +99,6 @@ func (i *Inproc) loop() {
 	}()
 	mRunning.Incr(1)
 
-	i.mgr.SetPipe(i.pipe, i.transactionsOut)
 	i.log.Infof("Sending inproc messages to ID: %s\n", i.pipe)
 
 	var open bool

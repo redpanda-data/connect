@@ -1,7 +1,6 @@
 package service
 
 import (
-	"github.com/Jeffail/benthos/v3/lib/serverless/lambda"
 	"github.com/Jeffail/benthos/v3/lib/service"
 )
 
@@ -13,10 +12,4 @@ import (
 // is received.
 func RunCLI() {
 	service.Run()
-}
-
-// RunAWSLambda executes Benthos as an AWS Lambda function. Configuration can be
-// stored within the environment variable BENTHOS_CONFIG.
-func RunAWSLambda() {
-	lambda.Run()
 }

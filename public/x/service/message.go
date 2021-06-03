@@ -1,9 +1,16 @@
 package service
 
 import (
+	"context"
+
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
+
+// MessageHandlerFunc is a function signature defining a component that consumes
+// Benthos messages. An error must be returned if the context is cancelled, or
+// if the message could not be delivered or processed.
+type MessageHandlerFunc func(context.Context, *Message) error
 
 // Message represents a single discrete message passing through a Benthos
 // pipeline. It is safe to mutate the message via Set methods, but the

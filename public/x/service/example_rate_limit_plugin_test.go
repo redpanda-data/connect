@@ -26,6 +26,8 @@ func (r *RandomRateLimit) Close(ctx context.Context) error {
 // within the Benthos configuration.
 func Example_rateLimitPlugin() {
 	configSpec := service.NewConfigSpec().
+		Summary("A rate limit that's pretty much just random.").
+		Description("I guess this isn't really that useful, sorry.").
 		Field(service.NewStringField("maximum_duration").Default("1s"))
 
 	constructor := func(conf *service.ParsedConfig, mgr *service.Resources) (service.RateLimit, error) {

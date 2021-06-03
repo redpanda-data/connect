@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
@@ -16,7 +17,9 @@ import (
 // status checks, terminating the stream, and blocking until the stream ends.
 type Stream struct {
 	strm    *stream.Type
+	strmMut sync.Mutex
 	shutSig *shutdown.Signaller
+	onStart func()
 
 	conf   stream.Config
 	mgr    *manager.Type
@@ -24,31 +27,38 @@ type Stream struct {
 	logger log.Modular
 }
 
-func newStream(conf stream.Config, mgr *manager.Type, stats metrics.Type, logger log.Modular) *Stream {
+func newStream(conf stream.Config, mgr *manager.Type, stats metrics.Type, logger log.Modular, onStart func()) *Stream {
 	return &Stream{
 		conf:    conf,
 		mgr:     mgr,
 		stats:   stats,
 		logger:  logger,
 		shutSig: shutdown.NewSignaller(),
+		onStart: onStart,
 	}
 }
 
 // Run attempts to start the stream pipeline and blocks until either the stream
 // has gracefully come to a stop, or the provided context is cancelled.
 func (s *Stream) Run(ctx context.Context) (err error) {
+	s.strmMut.Lock()
 	if s.strm != nil {
-		return errors.New("stream has already been run")
+		err = errors.New("stream has already been run")
+	} else {
+		s.strm, err = stream.New(s.conf,
+			stream.OptOnClose(func() {
+				s.shutSig.ShutdownComplete()
+			}),
+			stream.OptSetManager(s.mgr),
+			stream.OptSetLogger(s.logger),
+			stream.OptSetStats(s.stats))
 	}
-	if s.strm, err = stream.New(s.conf,
-		stream.OptOnClose(func() {
-			s.shutSig.ShutdownComplete()
-		}),
-		stream.OptSetManager(s.mgr),
-		stream.OptSetLogger(s.logger),
-		stream.OptSetStats(s.stats)); err != nil {
+	s.strmMut.Unlock()
+	if err != nil {
 		return
 	}
+
+	go s.onStart()
 	select {
 	case <-s.shutSig.HasClosedChan():
 		for {
@@ -72,14 +82,17 @@ func (s *Stream) Run(ctx context.Context) (err error) {
 // messages on the next start up, but never results in dropped messages as long
 // as the input source supports at-least-once delivery.
 func (s *Stream) StopWithin(timeout time.Duration) error {
-	if s.strm == nil {
+	s.strmMut.Lock()
+	strm := s.strm
+	s.strmMut.Unlock()
+	if strm == nil {
 		return errors.New("stream has not been run yet")
 	}
 
 	stopAt := time.Now().Add(timeout)
-	if err := s.strm.Stop(timeout); err != nil {
+	if err := strm.Stop(timeout); err != nil {
 		// Still attempt to shut down other resources but do not block.
-		defer func() {
+		go func() {
 			s.mgr.CloseAsync()
 			s.stats.Close()
 		}()
@@ -89,7 +102,7 @@ func (s *Stream) StopWithin(timeout time.Duration) error {
 	s.mgr.CloseAsync()
 	if err := s.mgr.WaitForClose(time.Until(stopAt)); err != nil {
 		// Same as above, attempt to shut down other resources but do not block.
-		defer s.stats.Close()
+		go s.stats.Close()
 		return err
 	}
 

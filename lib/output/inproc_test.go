@@ -21,16 +21,16 @@ func TestInproc(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if _, err = mgr.GetPipe("foo"); err != types.ErrPipeNotFound {
+		t.Errorf("Wrong error returned: %v != %v", err, types.ErrPipeNotFound)
+	}
+
 	conf := output.NewConfig()
 	conf.Inproc = "foo"
 
 	var ip output.Type
 	if ip, err = output.NewInproc(conf, mgr, log.Noop(), metrics.Noop()); err != nil {
 		t.Fatal(err)
-	}
-
-	if _, err = mgr.GetPipe("foo"); err != types.ErrPipeNotFound {
-		t.Errorf("Wrong error returned: %v != %v", err, types.ErrPipeNotFound)
 	}
 
 	tinchan := make(chan types.Transaction)

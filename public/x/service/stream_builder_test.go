@@ -1,7 +1,14 @@
 package service_test
 
 import (
+	"context"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/Jeffail/benthos/v3/public/x/service"
 	"github.com/stretchr/testify/assert"
@@ -35,6 +42,114 @@ func TestStreamBuilderDefault(t *testing.T) {
 	for _, str := range exp {
 		assert.Contains(t, act, str)
 	}
+}
+
+func TestStreamBuilderProducerFunc(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "stream_builder_producer_test")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	outFilePath := filepath.Join(tmpDir, "out.txt")
+
+	b := service.NewStreamBuilder()
+	require.NoError(t, b.AddProcessorYAML(`bloblang: 'root = content().uppercase()'`))
+	require.NoError(t, b.AddOutputYAML(fmt.Sprintf(`
+file:
+  codec: lines
+  path: %v`, outFilePath)))
+
+	pushFn, err := b.AddProducerFunc()
+	require.NoError(t, err)
+
+	// Fails on second call.
+	_, err = b.AddProducerFunc()
+	require.Error(t, err)
+
+	// Don't allow input overrides now.
+	err = b.SetYAML(`input: {}`)
+	require.Error(t, err)
+
+	strm, err := b.Build()
+	require.NoError(t, err)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		ctx, done := context.WithTimeout(context.Background(), time.Second*10)
+		defer done()
+
+		require.NoError(t, pushFn(ctx, service.NewMessage([]byte("hello world 1"))))
+		require.NoError(t, pushFn(ctx, service.NewMessage([]byte("hello world 2"))))
+		require.NoError(t, pushFn(ctx, service.NewMessage([]byte("hello world 3"))))
+
+		require.NoError(t, strm.StopWithin(time.Second*5))
+	}()
+
+	require.NoError(t, strm.Run(context.Background()))
+	wg.Wait()
+
+	outBytes, err := ioutil.ReadFile(outFilePath)
+	require.NoError(t, err)
+
+	assert.Equal(t, "HELLO WORLD 1\nHELLO WORLD 2\nHELLO WORLD 3\n", string(outBytes))
+}
+
+func TestStreamBuilderConsumerFunc(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "stream_builder_consumer_test")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	inFilePath := filepath.Join(tmpDir, "in.txt")
+	require.NoError(t, ioutil.WriteFile(inFilePath, []byte(`HELLO WORLD 1
+HELLO WORLD 2
+HELLO WORLD 3`), 0755))
+
+	b := service.NewStreamBuilder()
+	require.NoError(t, b.AddInputYAML(fmt.Sprintf(`
+file:
+  codec: lines
+  paths: [ %v ]`, inFilePath)))
+	require.NoError(t, b.AddProcessorYAML(`bloblang: 'root = content().lowercase()'`))
+
+	outMsgs := map[string]struct{}{}
+	var outMut sync.Mutex
+	handler := func(_ context.Context, m *service.Message) error {
+		outMut.Lock()
+		defer outMut.Unlock()
+
+		b, err := m.AsBytes()
+		assert.NoError(t, err)
+
+		outMsgs[string(b)] = struct{}{}
+		return nil
+	}
+	require.NoError(t, b.AddConsumerFunc(handler))
+
+	// Fails on second call.
+	require.Error(t, b.AddConsumerFunc(handler))
+
+	// Don't allow output overrides now.
+	err = b.SetYAML(`output: {}`)
+	require.Error(t, err)
+
+	strm, err := b.Build()
+	require.NoError(t, err)
+
+	require.NoError(t, strm.Run(context.Background()))
+
+	outMut.Lock()
+	assert.Equal(t, map[string]struct{}{
+		"hello world 1": {},
+		"hello world 2": {},
+		"hello world 3": {},
+	}, outMsgs)
+	outMut.Unlock()
 }
 
 func TestStreamBuilderCustomLogger(t *testing.T) {

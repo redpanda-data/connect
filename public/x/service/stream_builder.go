@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -15,11 +16,15 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/stream"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/gofrs/uuid"
 	"gopkg.in/yaml.v3"
 )
 
@@ -38,6 +43,11 @@ type StreamBuilder struct {
 	resources  manager.ResourceConfig
 	metrics    metrics.Config
 	logger     log.Config
+
+	producerChan chan types.Transaction
+	producerID   string
+	consumerFunc MessageHandlerFunc
+	consumerID   string
 
 	apiMut       manager.APIReg
 	customLogger log.Modular
@@ -98,6 +108,55 @@ func (s *StreamBuilder) SetHTTPMux(m HTTPMultiplexer) {
 
 //------------------------------------------------------------------------------
 
+// AddProducerFunc adds an input to the builder that allows you to write
+// messages directly into the stream with a closure function. If any other input
+// has or will be added to the stream builder they will be automatically
+// composed within a broker when the pipeline is built.
+//
+// The returned MessageHandlerFunc can be called concurrently from any number of
+// goroutines, and each call will block until the message is successfully
+// delivered downstream, was rejected (or otherwise could not be delivered) or
+// the context is cancelled.
+//
+// This method can only be called once per stream builder, and subsequent calls
+// will return an error.
+func (s *StreamBuilder) AddProducerFunc() (MessageHandlerFunc, error) {
+	if s.producerChan != nil {
+		return nil, errors.New("unable to add multiple producer funcs to a stream builder")
+	}
+
+	uuid, err := uuid.NewV4()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate a producer uuid: %w", err)
+	}
+
+	tChan := make(chan types.Transaction)
+	s.producerChan = tChan
+	s.producerID = uuid.String()
+
+	conf := input.NewConfig()
+	conf.Type = input.TypeInproc
+	conf.Inproc = input.InprocConfig(s.producerID)
+	s.inputs = append(s.inputs, conf)
+
+	return func(ctx context.Context, m *Message) error {
+		tmpMsg := message.New(nil)
+		tmpMsg.Append(m.part)
+		resChan := make(chan types.Response)
+		select {
+		case tChan <- types.NewTransaction(tmpMsg, resChan):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		select {
+		case res := <-resChan:
+			return res.Error()
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}, nil
+}
+
 // AddInputYAML parses an input YAML configuration and adds it to the builder.
 // If more than one input configuration is added they will automatically be
 // composed within a broker when the pipeline is built.
@@ -131,6 +190,38 @@ func (s *StreamBuilder) AddProcessorYAML(conf string) error {
 		return err
 	}
 	s.processors = append(s.processors, pconf)
+	return nil
+}
+
+// AddConsumerFunc adds an output to the builder that executes a closure
+// function argument for each message. If more than one output configuration is
+// added they will automatically be composed within a fan out broker when the
+// pipeline is built.
+//
+// The provided MessageHandlerFunc may be called from any number of goroutines,
+// and therefore it is recommended to implement some form of throttling or mutex
+// locking in cases where the call is non-blocking.
+//
+// This method can only be called once per stream builder, and subsequent calls
+// will return an error.
+func (s *StreamBuilder) AddConsumerFunc(fn MessageHandlerFunc) error {
+	if s.consumerFunc != nil {
+		return errors.New("unable to add multiple producer funcs to a stream builder")
+	}
+
+	uuid, err := uuid.NewV4()
+	if err != nil {
+		return fmt.Errorf("failed to generate a consumer uuid: %w", err)
+	}
+
+	s.consumerFunc = fn
+	s.consumerID = uuid.String()
+
+	conf := output.NewConfig()
+	conf.Type = input.TypeInproc
+	conf.Inproc = output.InprocConfig(s.consumerID)
+	s.outputs = append(s.outputs, conf)
+
 	return nil
 }
 
@@ -229,6 +320,13 @@ func (s *StreamBuilder) AddResourcesYAML(conf string) error {
 // any inputs, processors, outputs, resources, etc, have previously been added
 // to the builder they will be overridden by this new config.
 func (s *StreamBuilder) SetYAML(conf string) error {
+	if s.producerChan != nil {
+		return errors.New("attempted to override inputs config after adding a func producer")
+	}
+	if s.consumerFunc != nil {
+		return errors.New("attempted to override outputs config after adding a func consumer")
+	}
+
 	confBytes := []byte(conf)
 
 	sconf := config.New()
@@ -325,6 +423,35 @@ func (s *StreamBuilder) AsYAML() (string, error) {
 
 //------------------------------------------------------------------------------
 
+func (s *StreamBuilder) runConsumerFunc(mgr *manager.Type) error {
+	if s.consumerFunc == nil {
+		return nil
+	}
+	tChan, err := mgr.GetPipe(s.consumerID)
+	if err != nil {
+		return err
+	}
+	go func() {
+		for {
+			tran, open := <-tChan
+			if !open {
+				return
+			}
+			err = tran.Payload.Iter(func(i int, part types.Part) error {
+				return s.consumerFunc(context.Background(), newMessageFromPart(part))
+			})
+			var res types.Response
+			if err != nil {
+				res = response.NewError(err)
+			} else {
+				res = response.NewAck()
+			}
+			tran.ResponseChan <- res
+		}
+	}()
+	return nil
+}
+
 // Build a Benthos stream pipeline according to the components specified by this
 // stream builder.
 func (s *StreamBuilder) Build() (*Stream, error) {
@@ -373,7 +500,15 @@ func (s *StreamBuilder) Build() (*Stream, error) {
 		return nil, err
 	}
 
-	return newStream(conf.Config, mgr, stats, logger), nil
+	if s.producerChan != nil {
+		mgr.SetPipe(s.producerID, s.producerChan)
+	}
+
+	return newStream(conf.Config, mgr, stats, logger, func() {
+		if err := s.runConsumerFunc(mgr); err != nil {
+			logger.Errorf("Failed to run func consumer: %v", err)
+		}
+	}), nil
 }
 
 type builderConfig struct {

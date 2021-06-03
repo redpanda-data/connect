@@ -1,8 +1,11 @@
 package service_test
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/Jeffail/benthos/v3/public/x/service"
 )
@@ -19,7 +22,7 @@ func Example_streamBuilderConfig() {
 	builder := service.NewStreamBuilder()
 
 	// Set the full Benthos configuration of the stream.
-	panicOnErr(builder.SetYAML(`
+	err := builder.SetYAML(`
 input:
   generate:
     count: 1
@@ -32,7 +35,8 @@ pipeline:
 
 output:
   stdout: {}
-`))
+`)
+	panicOnErr(err)
 
 	// Build a stream with our configured components.
 	stream, err := builder.Build()
@@ -40,7 +44,8 @@ output:
 
 	// And run it, blocking until it gracefully terminates once the generate
 	// input has generated a message and it has flushed through the stream.
-	panicOnErr(stream.Run(context.Background()))
+	err = stream.Run(context.Background())
+	panicOnErr(err)
 
 	// Output: HELLO WORLD
 }
@@ -59,14 +64,19 @@ func Example_streamBuilderConfigAddMethods() {
 
 	builder := service.NewStreamBuilder()
 
-	panicOnErr(builder.AddInputYAML(`
+	err := builder.AddInputYAML(`
 generate:
   count: 1
   interval: 1ms
   mapping: 'root = "hello world"'
-`))
-	panicOnErr(builder.AddProcessorYAML(`bloblang: 'root = content().uppercase()'`))
-	panicOnErr(builder.AddOutputYAML(`stdout: {}`))
+`)
+	panicOnErr(err)
+
+	err = builder.AddProcessorYAML(`bloblang: 'root = content().uppercase()'`)
+	panicOnErr(err)
+
+	err = builder.AddOutputYAML(`stdout: {}`)
+	panicOnErr(err)
 
 	// Build a stream with our configured components.
 	stream, err := builder.Build()
@@ -74,9 +84,74 @@ generate:
 
 	// And run it, blocking until it gracefully terminates once the generate
 	// input has generated a message and it has flushed through the stream.
-	panicOnErr(stream.Run(context.Background()))
+	err = stream.Run(context.Background())
+	panicOnErr(err)
 
 	// Output: HELLO WORLD
+}
+
+// This example demonstrates how to use a stream builder to assemble a
+// processing pipeline that you can push messages into and extract via closures.
+func Example_streamBuilderPush() {
+	panicOnErr := func(err error) {
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	builder := service.NewStreamBuilder()
+	err := builder.SetLoggerYAML(`level: NONE`)
+	panicOnErr(err)
+
+	err = builder.AddProcessorYAML(`bloblang: 'root = content().uppercase()'`)
+	panicOnErr(err)
+
+	err = builder.AddProcessorYAML(`bloblang: 'root = "check this out: " + content()'`)
+	panicOnErr(err)
+
+	// Obtain a closure func that allows us to push data into the stream, this
+	// is treated like any other input, which also means it's possible to use
+	// this along with regular configured inputs.
+	sendFn, err := builder.AddProducerFunc()
+	panicOnErr(err)
+
+	// Define a closure func that receives messages as an output of the stream.
+	// It's also possible to use this along with regular configured outputs.
+	var outputBuf bytes.Buffer
+	err = builder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
+		msgBytes, err := m.AsBytes()
+		if err != nil {
+			return err
+		}
+
+		_, err = fmt.Fprintf(&outputBuf, "received: %s\n", msgBytes)
+		return err
+	})
+	panicOnErr(err)
+
+	stream, err := builder.Build()
+	panicOnErr(err)
+
+	go func() {
+		perr := sendFn(context.Background(), service.NewMessage([]byte("hello world")))
+		panicOnErr(perr)
+
+		perr = sendFn(context.Background(), service.NewMessage([]byte("I'm pushing data into the stream")))
+		panicOnErr(perr)
+
+		perr = stream.StopWithin(time.Second)
+		panicOnErr(perr)
+	}()
+
+	// And run it, blocking until it gracefully terminates once the generate
+	// input has generated a message and it has flushed through the stream.
+	err = stream.Run(context.Background())
+	panicOnErr(err)
+
+	fmt.Println(outputBuf.String())
+
+	// Output: received: check this out: HELLO WORLD
+	// received: check this out: I'M PUSHING DATA INTO THE STREAM
 }
 
 // This example demonstrates using the stream builder API to create and run two
@@ -97,7 +172,7 @@ func Example_streamBuilderMultipleStreams() {
 	// builder in order to explicitly override the configured server.
 	builderOne := service.NewStreamBuilder()
 
-	panicOnErr(builderOne.SetYAML(`
+	err := builderOne.SetYAML(`
 http:
   enabled: false
 
@@ -113,14 +188,15 @@ pipeline:
 
 output:
   stdout: {}
-`))
+`)
+	panicOnErr(err)
 
 	streamOne, err := builderOne.Build()
 	panicOnErr(err)
 
 	builderTwo := service.NewStreamBuilder()
 
-	panicOnErr(builderTwo.SetYAML(`
+	err = builderTwo.SetYAML(`
 http:
   enabled: false
 
@@ -138,7 +214,8 @@ pipeline:
 
 output:
   stdout: {}
-`))
+`)
+	panicOnErr(err)
 
 	streamTwo, err := builderTwo.Build()
 	panicOnErr(err)

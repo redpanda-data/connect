@@ -179,7 +179,7 @@ func TestNewMessageMutate(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "not a json doc", string(g0Bytes))
 
-	s, err := g1.AsStructured()
+	s, err := g1.AsStructuredMut()
 	assert.NoError(t, err)
 	assert.Equal(t, map[string]interface{}{
 		"foo": "bar",
