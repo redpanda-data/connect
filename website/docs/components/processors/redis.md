@@ -74,10 +74,17 @@ Returns the cardinality of a set, or `0` if the key does not exist.
 
 Adds a new member to a set. Returns `1` if the member was added.
 
+### `incrby`
+
+Increments the number stored at `key` by the message content. If the
+key does not exist, it is set to `0` before performing the operation.
+Returns the value of `key` after the increment.
+
 ## Examples
 
 <Tabs defaultValue="Querying Cardinality" values={[
 { label: 'Querying Cardinality', value: 'Querying Cardinality', },
+{ label: 'Running Total', value: 'Running Total', },
 ]}>
 
 <TabItem value="Querying Cardinality">
@@ -98,6 +105,55 @@ pipeline:
               operator: scard
               key: ${! meta("set_key") }
         result_map: 'root.cardinality = this'
+```
+
+</TabItem>
+<TabItem value="Running Total">
+
+
+If we have data containing number of friends visited during covid 19, we can
+add a field that contains the total number of friends visited up to and
+including that month. If you're only interested in the total number of visits
+(and don't care about the intermediate values), consider using a [real
+counter](/docs/configuration/windowed_processing#real-counter) instead.
+
+The input:
+```json
+{"name":"ash","month":"feb","year":2019,"friends_visited":10}
+{"name":"ash","month":"apr","year":2019,"friends_visited":-2}
+{"name":"bob","month":"feb","year":2019,"friends_visited":3}
+{"name":"bob","month":"apr","year":2019,"friends_visited":1}
+```
+
+The output:
+```json
+{"name":"ash","month":"feb","year":2019,"friends_visited":10,"total":10}
+{"name":"ash","month":"apr","year":2019,"friends_visited":-2,"total":8}
+{"name":"bob","month":"feb","year":2019,"friends_visited":3,"total":3}
+{"name":"bob","month":"apr","year":2019,"friends_visited":1,"total":4}
+```
+
+:::note
+You probably want to delete the keys before running the same pipeline a second
+time, because otherwise the starting values might be different than the first
+time the pipeline would be run. For example, the starting value for 'bob' would
+be `4` the second time this pipeline is run.
+:::
+                
+
+```yaml
+pipeline:
+  processors:
+    - branch:
+        request_map: |
+            root = this.friends_visited
+            meta name = this.name
+        processors:
+          - redis:
+              url: TODO
+              operator: incrby
+              key: ${! meta("name") }
+        result_map: 'root.total = this'
 ```
 
 </TabItem>
@@ -263,7 +319,7 @@ The [operator](#operators) to apply.
 
 Type: `string`  
 Default: `"scard"`  
-Options: `scard`, `sadd`.
+Options: `scard`, `sadd`, `incrby`.
 
 ### `key`
 
