@@ -32,12 +32,12 @@ Allows you to configure a [batching policy](/docs/configuration/batching).`,
 			docs.FieldCommon(
 				"byte_size",
 				"An amount of bytes at which the batch should be flushed. If `0` disables size based batching.",
-			),
+			).HasDefault(0),
 			docs.FieldCommon(
 				"period",
 				"A period in which an incomplete batch should be flushed regardless of its size.",
 				"1s", "1m", "500ms",
-			),
+			).HasDefault(""),
 			docs.FieldCommon(
 				"check",
 				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should end a batch.",

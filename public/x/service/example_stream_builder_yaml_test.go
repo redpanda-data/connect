@@ -36,9 +36,7 @@ output:
 
 	// Build a stream with our configured components.
 	stream, err := builder.Build()
-	if err != nil {
-		panic(err)
-	}
+	panicOnErr(err)
 
 	// And run it, blocking until it gracefully terminates once the generate
 	// input has generated a message and it has flushed through the stream.
@@ -72,9 +70,7 @@ generate:
 
 	// Build a stream with our configured components.
 	stream, err := builder.Build()
-	if err != nil {
-		panic(err)
-	}
+	panicOnErr(err)
 
 	// And run it, blocking until it gracefully terminates once the generate
 	// input has generated a message and it has flushed through the stream.
@@ -120,9 +116,7 @@ output:
 `))
 
 	streamOne, err := builderOne.Build()
-	if err != nil {
-		panic(err)
-	}
+	panicOnErr(err)
 
 	builderTwo := service.NewStreamBuilder()
 
@@ -147,9 +141,7 @@ output:
 `))
 
 	streamTwo, err := builderTwo.Build()
-	if err != nil {
-		panic(err)
-	}
+	panicOnErr(err)
 
 	var wg sync.WaitGroup
 	wg.Add(2)

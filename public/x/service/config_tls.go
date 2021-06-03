@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// NewTLSField describes a new object type config field that describes TLS
+// NewTLSField defines a new object type config field that describes TLS
 // settings for networked components. It is then possible to extract a
 // *tls.Config from the resulting parsed config with the method FieldTLS.
 func NewTLSField(name string) *ConfigField {
@@ -27,9 +27,9 @@ func NewTLSField(name string) *ConfigField {
 	return &ConfigField{field: tf}
 }
 
-// FieldTLS accesses an object field that was parsed from a config field created
-// using NewTLSField and returns a *tls.Config, or an error if the configuration
-// was invalid.
+// FieldTLS accesses a field from a parsed config that was defined with
+// NewTLSField and returns a *tls.Config, or an error if the configuration was
+// invalid.
 func (p *ParsedConfig) FieldTLS(path ...string) (*tls.Config, error) {
 	v, exists := p.field(path...)
 	if !exists {

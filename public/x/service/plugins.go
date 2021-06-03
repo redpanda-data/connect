@@ -1,6 +1,8 @@
 package service
 
 import (
+	"fmt"
+
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/cache"
@@ -89,6 +91,9 @@ func RegisterOutput(name string, spec *ConfigSpec, ctor OutputConstructor) error
 			if err != nil {
 				return nil, err
 			}
+			if maxInFlight < 1 {
+				return nil, fmt.Errorf("invalid maxInFlight parameter: %v", maxInFlight)
+			}
 			w := newAirGapWriter(op)
 			o, err := output.NewAsyncWriter(conf.Type, maxInFlight, w, nm.Logger(), nm.Metrics())
 			if err != nil {
@@ -132,6 +137,10 @@ func RegisterBatchOutput(name string, spec *ConfigSpec, ctor BatchOutputConstruc
 			op, batchPolicy, maxInFlight, err := ctor(pluginConf, newResourcesFromManager(nm))
 			if err != nil {
 				return nil, err
+			}
+
+			if maxInFlight < 1 {
+				return nil, fmt.Errorf("invalid maxInFlight parameter: %v", maxInFlight)
 			}
 
 			batchConf := batch.NewPolicyConfig()
