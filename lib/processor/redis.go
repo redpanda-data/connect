@@ -38,9 +38,15 @@ Returns the cardinality of a set, or ` + "`0`" + ` if the key does not exist.
 
 ### ` + "`sadd`" + `
 
-Adds a new member to a set. Returns ` + "`1`" + ` if the member was added.`,
+Adds a new member to a set. Returns ` + "`1`" + ` if the member was added.
+
+### ` + "`incrby`" + `
+
+Increments the number stored at ` + "`key`" + ` by the message content. If the
+key does not exist, it is set to ` + "`0`" + ` before performing the operation.
+Returns the value of ` + "`key`" + ` after the increment.`,
 		FieldSpecs: bredis.ConfigDocs().Add(
-			docs.FieldCommon("operator", "The [operator](#operators) to apply.").HasOptions("scard", "sadd"),
+			docs.FieldCommon("operator", "The [operator](#operators) to apply.").HasOptions("scard", "sadd", "incrby"),
 			docs.FieldCommon("key", "A key to use for the target operator.").IsInterpolated(),
 			docs.FieldAdvanced("retries", "The maximum number of retries before abandoning a request."),
 			docs.FieldAdvanced("retry_period", "The time to wait before consecutive retry attempts."),
@@ -64,6 +70,53 @@ pipeline:
               operator: scard
               key: ${! meta("set_key") }
         result_map: 'root.cardinality = this'
+`,
+			},
+			{
+				Title: "Running Total",
+				Summary: `
+If we have data containing number of friends visited during covid 19, we can
+add a field that contains the total number of friends visited up to and
+including that month. If you're only interested in the total number of visits
+(and don't care about the intermediate values), consider using a [real
+counter](/docs/configuration/windowed_processing#real-counter) instead.
+
+The input:
+` + "```json" + `
+{"name":"ash","month":"feb","year":2019,"friends_visited":10}
+{"name":"ash","month":"apr","year":2019,"friends_visited":-2}
+{"name":"bob","month":"feb","year":2019,"friends_visited":3}
+{"name":"bob","month":"apr","year":2019,"friends_visited":1}
+` + "```" + `
+
+The output:
+` + "```json" + `
+{"name":"ash","month":"feb","year":2019,"friends_visited":10,"total":10}
+{"name":"ash","month":"apr","year":2019,"friends_visited":-2,"total":8}
+{"name":"bob","month":"feb","year":2019,"friends_visited":3,"total":3}
+{"name":"bob","month":"apr","year":2019,"friends_visited":1,"total":4}
+` + "```" + `
+
+:::note
+You probably want to delete the keys before running the same pipeline a second
+time, because otherwise the starting values might be different than the first
+time the pipeline would be run. For example, the starting value for 'bob' would
+be ` + "`4`" + ` the second time this pipeline is run.
+:::
+                `,
+				Config: `
+pipeline:
+  processors:
+    - branch:
+        request_map: |
+            root = this.friends_visited
+            meta name = this.name
+        processors:
+          - redis:
+              url: TODO
+              operator: incrby
+              key: ${! meta("name") }
+        result_map: 'root.total = this'
 `,
 			},
 		},
@@ -202,12 +255,36 @@ func newRedisSAddOperator() redisOperator {
 	}
 }
 
+func newRedisIncrByOperator() redisOperator {
+	return func(r *Redis, key string, value []byte) ([]byte, error) {
+		valueInt, err := strconv.Atoi(string(value))
+		if err != nil {
+			return nil, err
+		}
+		res, err := r.client.IncrBy(key, int64(valueInt)).Result()
+
+		for i := 0; i <= r.conf.Redis.Retries && err != nil; i++ {
+			r.log.Errorf("incrby command failed: %v\n", err)
+			<-time.After(r.retryPeriod)
+			r.mRedisRetry.Incr(1)
+			res, err = r.client.IncrBy(key, int64(valueInt)).Result()
+		}
+
+		if err != nil {
+			return nil, err
+		}
+		return strconv.AppendInt(nil, res, 10), nil
+	}
+}
+
 func getRedisOperator(opStr string) (redisOperator, error) {
 	switch opStr {
 	case "sadd":
 		return newRedisSAddOperator(), nil
 	case "scard":
 		return newRedisSCardOperator(), nil
+	case "incrby":
+		return newRedisIncrByOperator(), nil
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }

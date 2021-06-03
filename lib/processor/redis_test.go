@@ -68,6 +68,9 @@ func TestRedisIntegration(t *testing.T) {
 	t.Run("testRedisSCard", func(t *testing.T) {
 		testRedisSCard(t, client, urlStr)
 	})
+	t.Run("testRedisIncrby", func(t *testing.T) {
+		testRedisIncrby(t, client, urlStr)
+	})
 }
 
 func testRedisSAdd(t *testing.T, client *redis.Client, url string) {
@@ -174,4 +177,44 @@ func testRedisSCard(t *testing.T, client *redis.Client, url string) {
 	if act := message.GetAllBytes(resMsgs[0]); !reflect.DeepEqual(exp, act) {
 		t.Fatalf("Wrong result: %s != %s", act, exp)
 	}
+}
+
+func testRedisIncrby(t *testing.T, client *redis.Client, url string) {
+	conf := NewConfig()
+	conf.Type = TypeRedis
+	conf.Redis.URL = url
+	conf.Redis.Operator = "incrby"
+	conf.Redis.Key = "incrby"
+
+	r, err := NewRedis(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msg := message.New([][]byte{
+		[]byte(`2`),
+		[]byte(`1`),
+		[]byte(`5`),
+		[]byte(`-10`),
+		[]byte(`0`),
+	})
+	resMsgs, response := r.ProcessMessage(msg)
+	if response != nil {
+		if response.Error() != nil {
+			t.Fatal(response.Error())
+		}
+		t.Fatal("Expected nil response")
+	}
+
+	exp := [][]byte{
+		[]byte(`2`),
+		[]byte(`3`),
+		[]byte(`8`),
+		[]byte(`-2`),
+		[]byte(`-2`),
+	}
+	if act := message.GetAllBytes(resMsgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Fatalf("Wrong result: %s != %s", act, exp)
+	}
+
 }
