@@ -242,7 +242,7 @@ func newRedisSAddOperator() redisOperator {
 		res, err := r.client.SAdd(key, value).Result()
 
 		for i := 0; i <= r.conf.Redis.Retries && err != nil; i++ {
-			r.log.Errorf("SCard command failed: %v\n", err)
+			r.log.Errorf("SAdd command failed: %v\n", err)
 			<-time.After(r.retryPeriod)
 			r.mRedisRetry.Incr(1)
 			res, err = r.client.SAdd(key, value).Result()
