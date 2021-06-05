@@ -21,7 +21,7 @@ type RoundRobin struct {
 
 	transactions <-chan types.Transaction
 
-	outputTsChans []chan types.Transaction
+	outputTSChans []chan types.Transaction
 	outputs       []types.Output
 
 	closedChan chan struct{}
@@ -38,10 +38,10 @@ func NewRoundRobin(outputs []types.Output, stats metrics.Type) (*RoundRobin, err
 		closedChan:   make(chan struct{}),
 		closeChan:    make(chan struct{}),
 	}
-	o.outputTsChans = make([]chan types.Transaction, len(o.outputs))
-	for i := range o.outputTsChans {
-		o.outputTsChans[i] = make(chan types.Transaction)
-		if err := o.outputs[i].Consume(o.outputTsChans[i]); err != nil {
+	o.outputTSChans = make([]chan types.Transaction, len(o.outputs))
+	for i := range o.outputTSChans {
+		o.outputTSChans[i] = make(chan types.Transaction)
+		if err := o.outputs[i].Consume(o.outputTSChans[i]); err != nil {
 			return nil, err
 		}
 	}
@@ -90,7 +90,7 @@ func (o *RoundRobin) MaxInFlight() (m int, ok bool) {
 // loop is an internal loop that brokers incoming messages to many outputs.
 func (o *RoundRobin) loop() {
 	defer func() {
-		for _, c := range o.outputTsChans {
+		for _, c := range o.outputTSChans {
 			close(c)
 		}
 		close(o.closedChan)
@@ -114,13 +114,13 @@ func (o *RoundRobin) loop() {
 		}
 		mMsgsRcvd.Incr(1)
 		select {
-		case o.outputTsChans[i] <- ts:
+		case o.outputTSChans[i] <- ts:
 		case <-o.closeChan:
 			return
 		}
 
 		i++
-		if i >= len(o.outputTsChans) {
+		if i >= len(o.outputTSChans) {
 			i = 0
 		}
 	}

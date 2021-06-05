@@ -30,9 +30,9 @@ type wrappedOutput struct {
 	ResChan chan<- error
 }
 
-// outputWithTsChan is a struct containing both an output and the transaction
+// outputWithTSChan is a struct containing both an output and the transaction
 // chan it reads from.
-type outputWithTsChan struct {
+type outputWithTSChan struct {
 	tsChan chan types.Transaction
 	output DynamicOutput
 	ctx    context.Context
@@ -56,7 +56,7 @@ type DynamicFanOut struct {
 
 	outputsMut    sync.RWMutex
 	newOutputChan chan wrappedOutput
-	outputs       map[string]outputWithTsChan
+	outputs       map[string]outputWithTSChan
 
 	ctx        context.Context
 	close      func()
@@ -79,7 +79,7 @@ func NewDynamicFanOut(
 		onRemove:      func(l string) {},
 		transactions:  nil,
 		newOutputChan: make(chan wrappedOutput),
-		outputs:       make(map[string]outputWithTsChan, len(outputs)),
+		outputs:       make(map[string]outputWithTSChan, len(outputs)),
 		closedChan:    make(chan struct{}),
 		ctx:           ctx,
 		close:         done,
@@ -176,7 +176,7 @@ func (d *DynamicFanOut) addOutput(ident string, output DynamicOutput) error {
 		return fmt.Errorf("output key '%v' already exists", ident)
 	}
 
-	ow := outputWithTsChan{
+	ow := outputWithTSChan{
 		tsChan: make(chan types.Transaction),
 		output: output,
 	}
@@ -241,7 +241,7 @@ func (d *DynamicFanOut) loop() {
 				}
 			}
 		}
-		d.outputs = map[string]outputWithTsChan{}
+		d.outputs = map[string]outputWithTSChan{}
 		close(d.closedChan)
 	}()
 

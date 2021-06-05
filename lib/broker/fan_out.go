@@ -25,7 +25,7 @@ type FanOut struct {
 	maxInFlight  int
 	transactions <-chan types.Transaction
 
-	outputTsChans []chan types.Transaction
+	outputTSChans []chan types.Transaction
 	outputs       []types.Output
 
 	ctx        context.Context
@@ -49,10 +49,10 @@ func NewFanOut(
 		close:        done,
 	}
 
-	o.outputTsChans = make([]chan types.Transaction, len(o.outputs))
-	for i := range o.outputTsChans {
-		o.outputTsChans[i] = make(chan types.Transaction)
-		if err := o.outputs[i].Consume(o.outputTsChans[i]); err != nil {
+	o.outputTSChans = make([]chan types.Transaction, len(o.outputs))
+	for i := range o.outputTSChans {
+		o.outputTSChans[i] = make(chan types.Transaction)
+		if err := o.outputs[i].Consume(o.outputTSChans[i]); err != nil {
 			return nil, err
 		}
 		if mif, ok := output.GetMaxInFlight(o.outputs[i]); ok && mif > o.maxInFlight {
@@ -116,7 +116,7 @@ func (o *FanOut) loop() {
 
 	defer func() {
 		wg.Wait()
-		for _, c := range o.outputTsChans {
+		for _, c := range o.outputTSChans {
 			close(c)
 		}
 		close(o.closedChan)
@@ -139,7 +139,7 @@ func (o *FanOut) loop() {
 			mMsgsRcvd.Incr(1)
 
 			var owg errgroup.Group
-			for target := range o.outputTsChans {
+			for target := range o.outputTSChans {
 				msgCopy, i := ts.Payload.Copy(), target
 				owg.Go(func() error {
 					throt := throttle.New(throttle.OptCloseChan(o.ctx.Done()))
@@ -148,7 +148,7 @@ func (o *FanOut) loop() {
 					// Try until success or shutdown.
 					for {
 						select {
-						case o.outputTsChans[i] <- types.NewTransaction(msgCopy, resChan):
+						case o.outputTSChans[i] <- types.NewTransaction(msgCopy, resChan):
 						case <-o.ctx.Done():
 							return types.ErrTypeClosed
 						}

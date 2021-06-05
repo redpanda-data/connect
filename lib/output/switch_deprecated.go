@@ -76,7 +76,7 @@ func (o *Switch) loopDeprecated() {
 		wg.Wait()
 		for i, output := range o.outputs {
 			output.CloseAsync()
-			close(o.outputTsChans[i])
+			close(o.outputTSChans[i])
 		}
 		for _, output := range o.outputs {
 			if err := output.WaitForClose(time.Second); err != nil {
@@ -133,7 +133,7 @@ func (o *Switch) loopDeprecated() {
 					// Try until success or shutdown.
 					for {
 						select {
-						case o.outputTsChans[i] <- types.NewTransaction(msgCopy, resChan):
+						case o.outputTSChans[i] <- types.NewTransaction(msgCopy, resChan):
 						case <-o.ctx.Done():
 							return types.ErrTypeClosed
 						}
