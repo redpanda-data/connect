@@ -62,11 +62,6 @@ jobs:
     - name: Deps
       run: make deps && git diff-index --quiet HEAD || { >&2 echo "Stale go.{mod,sum} detected. This can be fixed with 'make deps'."; exit 1; }
 
-    - name: Lint
-      run: |
-        go install golang.org/x/lint/golint
-        golint -set_exit_status cmd/... lib/... internal/... public/...
-
     - name: Docs
       run: make docs && git diff-index --quiet HEAD || { >&2 echo "Stale docs detected. This can be fixed with 'make docs'."; exit 1; }
 
