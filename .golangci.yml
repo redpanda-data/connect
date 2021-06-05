@@ -31,9 +31,11 @@ linters:
     - errcheck
     - gosimple
     - govet
+    - gosimple
     - ineffassign
     - staticcheck
     - structcheck
+    - stylecheck
     - typecheck
     # - unused
     - varcheck

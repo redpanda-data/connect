@@ -24,7 +24,7 @@ type Try struct {
 	maxInFlight  int
 	transactions <-chan types.Transaction
 
-	outputTsChans []chan types.Transaction
+	outputTSChans []chan types.Transaction
 	outputs       []types.Output
 
 	ctx        context.Context
@@ -48,10 +48,10 @@ func NewTry(outputs []types.Output, stats metrics.Type) (*Try, error) {
 	if len(outputs) == 0 {
 		return nil, errors.New("missing outputs")
 	}
-	t.outputTsChans = make([]chan types.Transaction, len(t.outputs))
-	for i := range t.outputTsChans {
-		t.outputTsChans[i] = make(chan types.Transaction)
-		if err := t.outputs[i].Consume(t.outputTsChans[i]); err != nil {
+	t.outputTSChans = make([]chan types.Transaction, len(t.outputs))
+	for i := range t.outputTSChans {
+		t.outputTSChans[i] = make(chan types.Transaction)
+		if err := t.outputs[i].Consume(t.outputTSChans[i]); err != nil {
 			return nil, err
 		}
 		if mif, ok := output.GetMaxInFlight(t.outputs[i]); ok && mif > t.maxInFlight {
@@ -121,7 +121,7 @@ func (t *Try) loop() {
 
 	defer func() {
 		wg.Wait()
-		for _, c := range t.outputTsChans {
+		for _, c := range t.outputTSChans {
 			close(c)
 		}
 		close(t.closedChan)
@@ -149,7 +149,7 @@ func (t *Try) loop() {
 
 			rChan := make(chan types.Response)
 			select {
-			case t.outputTsChans[0] <- types.NewTransaction(tran.Payload, rChan):
+			case t.outputTSChans[0] <- types.NewTransaction(tran.Payload, rChan):
 			case <-t.ctx.Done():
 				return
 			}
@@ -158,7 +158,7 @@ func (t *Try) loop() {
 			var lOpen bool
 
 		triesLoop:
-			for i := 1; i <= len(t.outputTsChans); i++ {
+			for i := 1; i <= len(t.outputTSChans); i++ {
 				select {
 				case res, lOpen = <-rChan:
 					if !lOpen {
@@ -173,9 +173,9 @@ func (t *Try) loop() {
 					return
 				}
 
-				if i < len(t.outputTsChans) {
+				if i < len(t.outputTSChans) {
 					select {
-					case t.outputTsChans[i] <- types.NewTransaction(tran.Payload, rChan):
+					case t.outputTSChans[i] <- types.NewTransaction(tran.Payload, rChan):
 					case <-t.ctx.Done():
 						return
 					}

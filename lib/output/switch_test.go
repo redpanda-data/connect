@@ -29,10 +29,10 @@ func newSwitch(t *testing.T, conf Config, mockOutputs []*MockOutputType) *Switch
 	require.True(t, ok)
 
 	for i := 0; i < len(mockOutputs); i++ {
-		close(rType.outputTsChans[i])
+		close(rType.outputTSChans[i])
 		rType.outputs[i] = mockOutputs[i]
-		rType.outputTsChans[i] = make(chan types.Transaction)
-		mockOutputs[i].Consume(rType.outputTsChans[i])
+		rType.outputTSChans[i] = make(chan types.Transaction)
+		mockOutputs[i].Consume(rType.outputTSChans[i])
 	}
 	return rType
 }

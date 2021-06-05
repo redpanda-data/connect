@@ -245,7 +245,7 @@ type Switch struct {
 
 	retryUntilSuccess bool
 	strictMode        bool
-	outputTsChans     []chan types.Transaction
+	outputTSChans     []chan types.Transaction
 	outputs           []types.Output
 	checks            []*mapping.Executor
 	conditions        []types.Condition
@@ -326,13 +326,13 @@ func NewSwitch(
 		o.continues[i] = cConf.Continue
 	}
 
-	o.outputTsChans = make([]chan types.Transaction, len(o.outputs))
-	for i := range o.outputTsChans {
+	o.outputTSChans = make([]chan types.Transaction, len(o.outputs))
+	for i := range o.outputTSChans {
 		if mif, ok := output.GetMaxInFlight(o.outputs[i]); ok && mif > o.maxInFlight {
 			o.maxInFlight = mif
 		}
-		o.outputTsChans[i] = make(chan types.Transaction)
-		if err := o.outputs[i].Consume(o.outputTsChans[i]); err != nil {
+		o.outputTSChans[i] = make(chan types.Transaction)
+		if err := o.outputs[i].Consume(o.outputTSChans[i]); err != nil {
 			return nil, err
 		}
 	}
@@ -390,7 +390,7 @@ func (o *Switch) loop() {
 		wg.Wait()
 		for i, output := range o.outputs {
 			output.CloseAsync()
-			close(o.outputTsChans[i])
+			close(o.outputTSChans[i])
 		}
 		for _, output := range o.outputs {
 			if err := output.WaitForClose(time.Second); err != nil {
@@ -465,7 +465,7 @@ func (o *Switch) loop() {
 					// Try until success or shutdown.
 					for {
 						select {
-						case o.outputTsChans[i] <- types.NewTransaction(msgCopy, resChan):
+						case o.outputTSChans[i] <- types.NewTransaction(msgCopy, resChan):
 						case <-o.ctx.Done():
 							return types.ErrTypeClosed
 						}
