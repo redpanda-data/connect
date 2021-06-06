@@ -11,7 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-var useNumber bool = true
+var useNumber = true
 
 func init() {
 	if os.Getenv("BENTHOS_USE_NUMBER") == "false" {

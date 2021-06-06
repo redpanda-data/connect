@@ -113,8 +113,8 @@ func contentFunction(msg Message, index int, arg string) []byte {
 //------------------------------------------------------------------------------
 
 var (
-	functionRegex        *regexp.Regexp = regexp.MustCompile(`\${![a-z0-9_]+(:[^}]+)?}`)
-	escapedFunctionRegex *regexp.Regexp = regexp.MustCompile(`\${({![a-z0-9_]+(:[^}]+)?})}`)
+	functionRegex        = regexp.MustCompile(`\${![a-z0-9_]+(:[^}]+)?}`)
+	escapedFunctionRegex = regexp.MustCompile(`\${({![a-z0-9_]+(:[^}]+)?})}`)
 
 	counters    = map[string]uint64{}
 	countersMux = &sync.Mutex{}

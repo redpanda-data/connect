@@ -500,7 +500,7 @@ bar""")`,
 			input:  `this`,
 			output: `null`,
 			value: func() *interface{} {
-				var v interface{} = nil
+				var v interface{}
 				return &v
 			}(),
 		},

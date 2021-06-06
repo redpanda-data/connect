@@ -31,9 +31,9 @@ func GetInferenceCandidates(raw interface{}, ignoreFields ...string) []string {
 		}
 		candidates := make([]string, 0, len(t))
 		for k := range t {
-			if kStr, isStr := k.(string); isStr {
-				if _, exists := ignore[kStr]; !exists {
-					candidates = append(candidates, kStr)
+			if str, isStr := k.(string); isStr {
+				if _, exists := ignore[str]; !exists {
+					candidates = append(candidates, str)
 				}
 			}
 		}

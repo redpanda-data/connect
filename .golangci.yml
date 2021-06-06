@@ -5,6 +5,9 @@ issues:
   max-issues-per-linter: 0
   max-same-issues: 0
   # fix: true
+  include:
+    - EXC0012
+    - EXC0014
 
 linters-settings:
   errcheck:
@@ -43,4 +46,9 @@ linters:
     - gofmt
     - goimports
     - gocritic
+    - revive
     # - bodyclose
+    # - gosec
+    # - misspell
+    # - prealloc
+    # - unconvert

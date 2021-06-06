@@ -57,7 +57,7 @@ func (r Config) Client() (redis.UniversalClient, error) {
 		pass = rurl.Password
 	}
 
-	var tlsConf *tls.Config = nil
+	var tlsConf *tls.Config
 	if r.TLS.Enabled {
 		var err error
 		if tlsConf, err = r.TLS.Get(); err != nil {

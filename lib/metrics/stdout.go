@@ -167,30 +167,30 @@ func (s *Stdout) publishMetrics() {
 // into a single pipeline.processor.1 object.
 func (s *Stdout) constructMetrics(co map[string]*gabs.Container, metrics map[string]int64) {
 	for k, v := range metrics {
-		kParts := strings.Split(k, ".")
+		parts := strings.Split(k, ".")
 		var objKey string
 		var valKey string
 		// walk key parts backwards building up objects of instances of processor/broker/etc
-		for i := len(kParts) - 1; i >= 0; i-- {
-			if _, err := strconv.Atoi(kParts[i]); err == nil {
+		for i := len(parts) - 1; i >= 0; i-- {
+			if _, err := strconv.Atoi(parts[i]); err == nil {
 				// part is a reference to an index of a processor/broker/etc
-				objKey = strings.Join(kParts[:i+1], ".")
-				valKey = strings.Join(kParts[i+1:], ".")
+				objKey = strings.Join(parts[:i+1], ".")
+				valKey = strings.Join(parts[i+1:], ".")
 				break
 			}
 		}
 
 		if objKey == "" {
 			// key is not referencing an 'instance' of a processor/broker/etc
-			objKey = kParts[0]
-			valKey = strings.Join(kParts[0:], ".")
+			objKey = parts[0]
+			valKey = strings.Join(parts[0:], ".")
 		}
 
 		_, exists := co[objKey]
 		if !exists {
 			co[objKey] = gabs.New()
 			co[objKey].SetP(objKey, "metric")
-			co[objKey].SetP(kParts[0], "component")
+			co[objKey].SetP(parts[0], "component")
 
 		}
 		co[objKey].SetP(v, valKey)
