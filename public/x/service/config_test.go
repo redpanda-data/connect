@@ -346,3 +346,31 @@ b: this is ${! json } an invalid interp string
 	res := iConf.String(NewMessage([]byte("hello world")))
 	assert.Equal(t, "foo hello world bar", res)
 }
+
+func TestConfigBloblang(t *testing.T) {
+	spec := NewConfigSpec().
+		Field(NewBloblangField("a")).
+		Field(NewStringField("b"))
+
+	node, err := getYAMLNode([]byte(`
+a: 'root = this.uppercase()'
+b: 'root = this.filter('
+`))
+	require.NoError(t, err)
+
+	parsedConfig, err := spec.configFromNode(node)
+	require.NoError(t, err)
+
+	_, err = parsedConfig.FieldBloblang("b")
+	require.Error(t, err)
+
+	_, err = parsedConfig.FieldBloblang("c")
+	require.Error(t, err)
+
+	exec, err := parsedConfig.FieldBloblang("a")
+	require.NoError(t, err)
+
+	res, err := exec.Query("hello world")
+	require.NoError(t, err)
+	assert.Equal(t, "HELLO WORLD", res)
+}

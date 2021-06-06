@@ -12,14 +12,12 @@ import (
 // Executor stores a parsed Bloblang mapping and provides APIs for executing it.
 type Executor struct {
 	exec              *mapping.Executor
-	emptyVars         map[string]interface{}
 	emptyQueryMessage types.Message
 }
 
 func newExecutor(exec *mapping.Executor) *Executor {
 	return &Executor{
 		exec:              exec,
-		emptyVars:         map[string]interface{}{},
 		emptyQueryMessage: message.New(nil),
 	}
 }
@@ -38,13 +36,9 @@ var ErrRootDeleted = errors.New("root was deleted")
 // ErrRootDeleted is returned, which can be used as a signal to filter rather
 // than fail the mapping.
 func (e *Executor) Query(value interface{}) (interface{}, error) {
-	for k := range e.emptyVars {
-		delete(e.emptyVars, k)
-	}
-
 	res, err := e.exec.Exec(query.FunctionContext{
 		Maps:     e.exec.Maps(),
-		Vars:     e.emptyVars,
+		Vars:     map[string]interface{}{},
 		Index:    0,
 		MsgBatch: e.emptyQueryMessage,
 	}.WithValue(value))
@@ -64,17 +58,15 @@ func (e *Executor) Query(value interface{}) (interface{}, error) {
 // Overlay executes a Bloblang mapping against a value, where assignments are
 // overlayed onto an existing structure.
 func (e *Executor) Overlay(value interface{}, onto *interface{}) error {
-	for k := range e.emptyVars {
-		delete(e.emptyVars, k)
-	}
+	vars := map[string]interface{}{}
 
 	if err := e.exec.ExecOnto(query.FunctionContext{
 		Maps:     e.exec.Maps(),
-		Vars:     e.emptyVars,
+		Vars:     vars,
 		Index:    0,
 		MsgBatch: e.emptyQueryMessage,
 	}.WithValue(value), mapping.AssignmentContext{
-		Vars:  e.emptyVars,
+		Vars:  vars,
 		Value: onto,
 	}); err != nil {
 		return err
