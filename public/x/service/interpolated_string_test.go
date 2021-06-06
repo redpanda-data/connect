@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestInterpolatedField(t *testing.T) {
+func TestInterpolatedString(t *testing.T) {
 	tests := []struct {
 		name     string
 		expr     string
@@ -40,7 +40,7 @@ func TestInterpolatedField(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			i, err := NewInterpolatedField(test.expr)
+			i, err := NewInterpolatedString(test.expr)
 			require.NoError(t, err)
 			assert.Equal(t, test.expected, i.String(test.msg))
 			assert.Equal(t, test.expected, string(i.Bytes(test.msg)))

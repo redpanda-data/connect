@@ -707,6 +707,10 @@ func getDefault(pathName string, field FieldSpec) (interface{}, error) {
 	if field.Default != nil {
 		// TODO: Should be deep copy here?
 		return *field.Default, nil
+	} else if field.IsArray {
+		return []interface{}{}, nil
+	} else if field.IsMap {
+		return map[string]interface{}{}, nil
 	} else if len(field.Children) > 0 {
 		m := map[string]interface{}{}
 		for _, v := range field.Children {

@@ -6,19 +6,19 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-// InterpolatedField resolves a string containing dynamic interpolation
+// InterpolatedString resolves a string containing dynamic interpolation
 // functions for a given message.
-type InterpolatedField struct {
+type InterpolatedString struct {
 	expr *field.Expression
 }
 
-// NewInterpolatedField parses an interpolated string expression.
-func NewInterpolatedField(expr string) (*InterpolatedField, error) {
+// NewInterpolatedString parses an interpolated string expression.
+func NewInterpolatedString(expr string) (*InterpolatedString, error) {
 	e, err := bloblang.NewField(expr)
 	if err != nil {
 		return nil, err
 	}
-	return &InterpolatedField{expr: e}, nil
+	return &InterpolatedString{expr: e}, nil
 }
 
 type fauxOldMessage struct {
@@ -34,11 +34,11 @@ func (f fauxOldMessage) Len() int {
 }
 
 // String resolves the interpolated field for a given message as a string.
-func (i *InterpolatedField) String(m *Message) string {
+func (i *InterpolatedString) String(m *Message) string {
 	return i.expr.String(0, fauxOldMessage{m.part})
 }
 
 // Bytes resolves the interpolated field for a given message as a byte slice.
-func (i *InterpolatedField) Bytes(m *Message) []byte {
+func (i *InterpolatedString) Bytes(m *Message) []byte {
 	return i.expr.Bytes(0, fauxOldMessage{m.part})
 }

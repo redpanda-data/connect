@@ -292,3 +292,57 @@ c:
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"first in list", "second in list"}, ll)
 }
+
+func TestConfigTLS(t *testing.T) {
+	spec := NewConfigSpec().
+		Field(NewTLSField("a")).
+		Field(NewStringField("b"))
+
+	node, err := getYAMLNode([]byte(`
+a:
+  skip_cert_verify: true
+b: and this
+`))
+	require.NoError(t, err)
+
+	parsedConfig, err := spec.configFromNode(node)
+	require.NoError(t, err)
+
+	_, err = parsedConfig.FieldTLS("b")
+	require.Error(t, err)
+
+	_, err = parsedConfig.FieldTLS("c")
+	require.Error(t, err)
+
+	tConf, err := parsedConfig.FieldTLS("a")
+	require.NoError(t, err)
+
+	assert.True(t, tConf.InsecureSkipVerify)
+}
+
+func TestConfigInterpolatedString(t *testing.T) {
+	spec := NewConfigSpec().
+		Field(NewInterpolatedStringField("a")).
+		Field(NewStringField("b"))
+
+	node, err := getYAMLNode([]byte(`
+a: foo ${! content() } bar
+b: this is ${! json } an invalid interp string
+`))
+	require.NoError(t, err)
+
+	parsedConfig, err := spec.configFromNode(node)
+	require.NoError(t, err)
+
+	_, err = parsedConfig.FieldInterpolatedString("b")
+	require.Error(t, err)
+
+	_, err = parsedConfig.FieldInterpolatedString("c")
+	require.Error(t, err)
+
+	iConf, err := parsedConfig.FieldInterpolatedString("a")
+	require.NoError(t, err)
+
+	res := iConf.String(NewMessage([]byte("hello world")))
+	assert.Equal(t, "foo hello world bar", res)
+}

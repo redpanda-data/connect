@@ -254,6 +254,34 @@ e:
 				},
 			},
 		},
+		{
+			name: "recurse array of objects",
+			spec: docs.FieldSpecs{
+				docs.FieldCommon("foo", "").WithChildren(
+					docs.FieldCommon("eles", "").Array().WithChildren(
+						docs.FieldCommon("bar", "").HasType(docs.FieldString).HasDefault("default"),
+					),
+				),
+			},
+			yaml: `
+foo:
+  eles:
+    - bar: bar1
+    - bar: bar2
+`,
+			result: map[string]interface{}{
+				"foo": map[string]interface{}{
+					"eles": []interface{}{
+						map[string]interface{}{
+							"bar": "bar1",
+						},
+						map[string]interface{}{
+							"bar": "bar2",
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {
