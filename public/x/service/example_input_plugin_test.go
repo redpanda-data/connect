@@ -21,7 +21,9 @@ func (g *GibberishInput) Read(ctx context.Context) (*service.Message, service.Ac
 		b[k] = byte((rand.Int() % 94) + 32)
 	}
 	return service.NewMessage(b), func(ctx context.Context, err error) error {
-		// We don't care about acks in this particular input, so do nothing
+		// A nack (when err is non-nil) is handled automatically when we
+		// construct using service.AutoRetryNacks, so we don't need to handle
+		// nacks here.
 		return nil
 	}, nil
 }
@@ -43,7 +45,7 @@ func Example_inputPlugin() {
 		if err != nil {
 			return nil, err
 		}
-		return &GibberishInput{length}, nil
+		return service.AutoRetryNacks(&GibberishInput{length}), nil
 	}
 
 	err := service.RegisterInput("gibberish", configSpec, constructor)

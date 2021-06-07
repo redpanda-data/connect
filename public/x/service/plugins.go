@@ -50,6 +50,10 @@ type InputConstructor func(conf *ParsedConfig, mgr *Resources) (Input, error)
 // description of the configuration for the plugin as well as a constructor for
 // the input itself. The constructor will be called for each instantiation of
 // the component within a config.
+//
+// If your input implementation doesn't have a specific mechanism for dealing
+// with a nack (when the AckFunc provides a non-nil error) then you can instead
+// wrap your input implementation with AutoRetryNacks to get automatic retries.
 func RegisterInput(name string, spec *ConfigSpec, ctor InputConstructor) error {
 	componentSpec := spec.component
 	componentSpec.Name = name

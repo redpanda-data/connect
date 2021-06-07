@@ -16,6 +16,10 @@ import (
 // receives either an acknowledgement (err is nil) or an error that can either
 // be propagated upstream as a nack, or trigger a reattempt at delivering the
 // same message.
+//
+// If your input implementation doesn't have a specific mechanism for dealing
+// with a nack then you can wrap your input implementation with AutoRetryNacks
+// to get automatic retries.
 type AckFunc func(ctx context.Context, err error) error
 
 // Input is an interface implemented by Benthos inputs. Calls to Read should
@@ -35,7 +39,10 @@ type Input interface {
 	// filtered) or nacked (failed to be processed or dispatched to the output).
 	//
 	// The AckFunc will be called for every message at least once, but there are
-	// no guarantees as to when this will occur.
+	// no guarantees as to when this will occur. If your input implementation
+	// doesn't have a specific mechanism for dealing with a nack then you can
+	// wrap your input implementation with AutoRetryNacks to get automatic
+	// retries.
 	//
 	// If this method returns ErrNotConnected then Read will not be called again
 	// until Connect has returned a nil error. If ErrEndOfInput is returned then
