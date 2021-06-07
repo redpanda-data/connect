@@ -60,7 +60,7 @@ type BatchOutput interface {
 	//
 	// If this method returns ErrNotConnected then write will not be called
 	// again until Connect has returned a nil error.
-	WriteBatch(context.Context, []*Message) error
+	WriteBatch(context.Context, MessageBatch) error
 
 	Closer
 }

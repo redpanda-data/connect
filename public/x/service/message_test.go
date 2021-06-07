@@ -4,7 +4,9 @@ import (
 	"errors"
 	"testing"
 
+	ibloblang "github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/public/bloblang"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -216,4 +218,98 @@ func TestNewMessageMutate(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, map[string]string{"foo": "new bar", "bar": "baz"}, seen)
+}
+
+func TestMessageMapping(t *testing.T) {
+	part := NewMessage(nil)
+	part.SetStructured(map[string]interface{}{
+		"content": "hello world",
+	})
+
+	blobl, err := bloblang.Parse("root.new_content = this.content.uppercase()")
+	require.NoError(t, err)
+
+	res, err := part.BloblangQuery(blobl)
+	require.NoError(t, err)
+
+	resI, err := res.AsStructured()
+	require.NoError(t, err)
+	assert.Equal(t, map[string]interface{}{
+		"new_content": "HELLO WORLD",
+	}, resI)
+}
+
+func TestMessageBatchMapping(t *testing.T) {
+	partOne := NewMessage(nil)
+	partOne.SetStructured(map[string]interface{}{
+		"content": "hello world 1",
+	})
+
+	partTwo := NewMessage(nil)
+	partTwo.SetStructured(map[string]interface{}{
+		"content": "hello world 2",
+	})
+
+	blobl, err := bloblang.Parse(`root.new_content = json("content").from_all().join(" - ")`)
+	require.NoError(t, err)
+
+	res, err := MessageBatch{partOne, partTwo}.BloblangQuery(0, blobl)
+	require.NoError(t, err)
+
+	resI, err := res.AsStructured()
+	require.NoError(t, err)
+	assert.Equal(t, map[string]interface{}{
+		"new_content": "hello world 1 - hello world 2",
+	}, resI)
+}
+
+func BenchmarkMessageMappingNew(b *testing.B) {
+	part := NewMessage(nil)
+	part.SetStructured(map[string]interface{}{
+		"content": "hello world",
+	})
+
+	blobl, err := bloblang.Parse("root.new_content = this.content.uppercase()")
+	require.NoError(b, err)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		res, err := part.BloblangQuery(blobl)
+		require.NoError(b, err)
+
+		resI, err := res.AsStructured()
+		require.NoError(b, err)
+		assert.Equal(b, map[string]interface{}{
+			"new_content": "HELLO WORLD",
+		}, resI)
+	}
+}
+
+func BenchmarkMessageMappingOld(b *testing.B) {
+	part := message.NewPart(nil)
+	require.NoError(b, part.SetJSON(map[string]interface{}{
+		"content": "hello world",
+	}))
+
+	msg := message.New(nil)
+	msg.Append(part)
+
+	blobl, err := ibloblang.NewMapping("", "root.new_content = this.content.uppercase()")
+	require.NoError(b, err)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		res, err := blobl.MapPart(0, msg)
+		require.NoError(b, err)
+
+		resI, err := res.JSON()
+		require.NoError(b, err)
+		assert.Equal(b, map[string]interface{}{
+			"new_content": "HELLO WORLD",
+		}, resI)
+	}
 }

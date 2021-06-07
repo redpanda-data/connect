@@ -11,7 +11,7 @@ type ReverseProcessor struct {
 	logger *service.Logger
 }
 
-func (r *ReverseProcessor) Process(ctx context.Context, m *service.Message) ([]*service.Message, error) {
+func (r *ReverseProcessor) Process(ctx context.Context, m *service.Message) (service.MessageBatch, error) {
 	bytesContent, err := m.AsBytes()
 	if err != nil {
 		return nil, err

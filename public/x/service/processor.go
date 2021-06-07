@@ -18,7 +18,7 @@ type Processor interface {
 	// The Message types returned MUST be derived from the provided message, and
 	// CANNOT be custom implementations of Message. In order to copy the
 	// provided message use CopyMessage.
-	Process(context.Context, *Message) ([]*Message, error)
+	Process(context.Context, *Message) (MessageBatch, error)
 
 	Closer
 }
@@ -35,7 +35,7 @@ type BatchProcessor interface {
 	// The Message types returned MUST be derived from the provided messages,
 	// and CANNOT be custom implementations of Message. In order to copy the
 	// provided messages use CopyMessage.
-	ProcessBatch(context.Context, []*Message) ([][]*Message, error)
+	ProcessBatch(context.Context, MessageBatch) ([]MessageBatch, error)
 
 	Closer
 }

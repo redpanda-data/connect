@@ -57,6 +57,10 @@ func (e *Executor) Query(value interface{}) (interface{}, error) {
 
 // Overlay executes a Bloblang mapping against a value, where assignments are
 // overlayed onto an existing structure.
+//
+// If the mapping results in the root of the new document being deleted then
+// ErrRootDeleted is returned, which can be used as a signal to filter rather
+// than fail the mapping.
 func (e *Executor) Overlay(value interface{}, onto *interface{}) error {
 	vars := map[string]interface{}{}
 

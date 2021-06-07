@@ -54,6 +54,7 @@ func TestStreamBuilderProducerFunc(t *testing.T) {
 	outFilePath := filepath.Join(tmpDir, "out.txt")
 
 	b := service.NewStreamBuilder()
+	require.NoError(t, b.SetLoggerYAML("level: NONE"))
 	require.NoError(t, b.AddProcessorYAML(`bloblang: 'root = content().uppercase()'`))
 	require.NoError(t, b.AddOutputYAML(fmt.Sprintf(`
 file:
@@ -111,6 +112,7 @@ HELLO WORLD 2
 HELLO WORLD 3`), 0755))
 
 	b := service.NewStreamBuilder()
+	require.NoError(t, b.SetLoggerYAML("level: NONE"))
 	require.NoError(t, b.AddInputYAML(fmt.Sprintf(`
 file:
   codec: lines

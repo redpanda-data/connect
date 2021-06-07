@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/public/bloblang"
 )
 
 // MessageHandlerFunc is a function signature defining a component that consumes
@@ -19,6 +21,9 @@ type Message struct {
 	part       types.Part
 	partCopied bool
 }
+
+// MessageBatch describes a collection of one or more messages.
+type MessageBatch []*Message
 
 // NewMessage creates a new message with an initial raw bytes content. The
 // initial content can be nil, which is recommended if you intend to set it with
@@ -138,4 +143,55 @@ func (m *Message) MetaDelete(key string) {
 // closure. An error returned by the closure will be returned by this function.
 func (m *Message) MetaWalk(fn func(string, string) error) error {
 	return m.part.Metadata().Iter(fn)
+}
+
+//------------------------------------------------------------------------------
+
+// BloblangQuery executes a parsed Bloblang mapping on a message and returns a
+// message back or an error if the mapping fails. If the mapping results in the
+// root being deleted the returned message will be nil, which indicates it has
+// been filtered.
+func (m *Message) BloblangQuery(blobl *bloblang.Executor) (*Message, error) {
+	uw := bloblang.XExecutorUnwrapper(blobl).(interface {
+		Unwrap() *mapping.Executor
+	}).Unwrap()
+
+	msg := message.New(nil)
+	msg.Append(m.part)
+
+	res, err := uw.MapPart(0, msg)
+	if err != nil {
+		return nil, err
+	}
+	if res != nil {
+		return newMessageFromPart(res), nil
+	}
+	return nil, nil
+}
+
+// BloblangQuery executes a parsed Bloblang mapping on a message batch, from the
+// perspective of a particular message index, and returns a message back or an
+// error if the mapping fails. If the mapping results in the root being deleted
+// the returned message will be nil, which indicates it has been filtered.
+//
+// This method allows mappings to perform windowed aggregations across message
+// batches.
+func (b MessageBatch) BloblangQuery(index int, blobl *bloblang.Executor) (*Message, error) {
+	uw := bloblang.XExecutorUnwrapper(blobl).(interface {
+		Unwrap() *mapping.Executor
+	}).Unwrap()
+
+	msg := message.New(nil)
+	for _, m := range b {
+		msg.Append(m.part)
+	}
+
+	res, err := uw.MapPart(index, msg)
+	if err != nil {
+		return nil, err
+	}
+	if res != nil {
+		return newMessageFromPart(res), nil
+	}
+	return nil, nil
 }

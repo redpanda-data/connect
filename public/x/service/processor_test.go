@@ -14,11 +14,11 @@ import (
 )
 
 type fnProcessor struct {
-	fn     func(context.Context, *Message) ([]*Message, error)
+	fn     func(context.Context, *Message) (MessageBatch, error)
 	closed bool
 }
 
-func (p *fnProcessor) Process(ctx context.Context, msg *Message) ([]*Message, error) {
+func (p *fnProcessor) Process(ctx context.Context, msg *Message) (MessageBatch, error) {
 	return p.fn(ctx, msg)
 }
 
@@ -43,12 +43,12 @@ func TestProcessorAirGapShutdown(t *testing.T) {
 
 func TestProcessorAirGapOneToOne(t *testing.T) {
 	agrp := newAirGapProcessor("foo", &fnProcessor{
-		fn: func(c context.Context, m *Message) ([]*Message, error) {
+		fn: func(c context.Context, m *Message) (MessageBatch, error) {
 			if b, err := m.AsBytes(); err != nil || string(b) != "unchanged" {
 				return nil, errors.New("nope")
 			}
 			m.SetBytes([]byte("changed"))
-			return []*Message{m}, nil
+			return MessageBatch{m}, nil
 		},
 	}, metrics.Noop())
 
@@ -63,7 +63,7 @@ func TestProcessorAirGapOneToOne(t *testing.T) {
 
 func TestProcessorAirGapOneToError(t *testing.T) {
 	agrp := newAirGapProcessor("foo", &fnProcessor{
-		fn: func(c context.Context, m *Message) ([]*Message, error) {
+		fn: func(c context.Context, m *Message) (MessageBatch, error) {
 			_, err := m.AsStructured()
 			return nil, err
 		},
@@ -81,7 +81,7 @@ func TestProcessorAirGapOneToError(t *testing.T) {
 
 func TestProcessorAirGapOneToMany(t *testing.T) {
 	agrp := newAirGapProcessor("foo", &fnProcessor{
-		fn: func(c context.Context, m *Message) ([]*Message, error) {
+		fn: func(c context.Context, m *Message) (MessageBatch, error) {
 			if b, err := m.AsBytes(); err != nil || string(b) != "unchanged" {
 				return nil, errors.New("nope")
 			}
@@ -90,7 +90,7 @@ func TestProcessorAirGapOneToMany(t *testing.T) {
 			m.SetBytes([]byte("changed 1"))
 			second.SetBytes([]byte("changed 2"))
 			third.SetBytes([]byte("changed 3"))
-			return []*Message{m, second, third}, nil
+			return MessageBatch{m, second, third}, nil
 		},
 	}, metrics.Noop())
 
@@ -108,11 +108,11 @@ func TestProcessorAirGapOneToMany(t *testing.T) {
 //------------------------------------------------------------------------------
 
 type fnBatchProcessor struct {
-	fn     func(context.Context, []*Message) ([][]*Message, error)
+	fn     func(context.Context, MessageBatch) ([]MessageBatch, error)
 	closed bool
 }
 
-func (p *fnBatchProcessor) ProcessBatch(ctx context.Context, msg []*Message) ([][]*Message, error) {
+func (p *fnBatchProcessor) ProcessBatch(ctx context.Context, msg MessageBatch) ([]MessageBatch, error) {
 	return p.fn(ctx, msg)
 }
 
@@ -137,12 +137,12 @@ func TestBatchProcessorAirGapShutdown(t *testing.T) {
 
 func TestBatchProcessorAirGapOneToOne(t *testing.T) {
 	agrp := newAirGapBatchProcessor("foo", &fnBatchProcessor{
-		fn: func(c context.Context, msgs []*Message) ([][]*Message, error) {
+		fn: func(c context.Context, msgs MessageBatch) ([]MessageBatch, error) {
 			if b, err := msgs[0].AsBytes(); err != nil || string(b) != "unchanged" {
 				return nil, errors.New("nope")
 			}
 			msgs[0].SetBytes([]byte("changed"))
-			return [][]*Message{{msgs[0]}}, nil
+			return []MessageBatch{{msgs[0]}}, nil
 		},
 	}, metrics.Noop())
 
@@ -157,7 +157,7 @@ func TestBatchProcessorAirGapOneToOne(t *testing.T) {
 
 func TestBatchProcessorAirGapOneToError(t *testing.T) {
 	agrp := newAirGapBatchProcessor("foo", &fnBatchProcessor{
-		fn: func(c context.Context, msgs []*Message) ([][]*Message, error) {
+		fn: func(c context.Context, msgs MessageBatch) ([]MessageBatch, error) {
 			_, err := msgs[0].AsStructured()
 			return nil, err
 		},
@@ -175,7 +175,7 @@ func TestBatchProcessorAirGapOneToError(t *testing.T) {
 
 func TestBatchProcessorAirGapOneToMany(t *testing.T) {
 	agrp := newAirGapBatchProcessor("foo", &fnBatchProcessor{
-		fn: func(c context.Context, msgs []*Message) ([][]*Message, error) {
+		fn: func(c context.Context, msgs MessageBatch) ([]MessageBatch, error) {
 			if b, err := msgs[0].AsBytes(); err != nil || string(b) != "unchanged" {
 				return nil, errors.New("nope")
 			}
@@ -184,7 +184,7 @@ func TestBatchProcessorAirGapOneToMany(t *testing.T) {
 			msgs[0].SetBytes([]byte("changed 1"))
 			second.SetBytes([]byte("changed 2"))
 			third.SetBytes([]byte("changed 3"))
-			return [][]*Message{{msgs[0], second}, {third}}, nil
+			return []MessageBatch{{msgs[0], second}, {third}}, nil
 		},
 	}, metrics.Noop())
 

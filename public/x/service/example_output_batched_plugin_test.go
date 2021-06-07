@@ -14,7 +14,7 @@ func (b *batchOfJSONWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (b *batchOfJSONWriter) WriteBatch(ctx context.Context, msgs []*service.Message) error {
+func (b *batchOfJSONWriter) WriteBatch(ctx context.Context, msgs service.MessageBatch) error {
 	var messageObjs []interface{}
 	for _, msg := range msgs {
 		msgObj, err := msg.AsStructured()

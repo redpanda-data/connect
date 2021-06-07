@@ -107,7 +107,7 @@ func newSchemaRegistryDecoder(urlStr string, tlsConf *tls.Config, logger *servic
 	return s, nil
 }
 
-func (s *schemaRegistryDecoder) Process(ctx context.Context, msg *service.Message) ([]*service.Message, error) {
+func (s *schemaRegistryDecoder) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	b, err := msg.AsBytes()
 	if err != nil {
 		return nil, errors.New("unable to reference message as bytes")
@@ -129,7 +129,7 @@ func (s *schemaRegistryDecoder) Process(ctx context.Context, msg *service.Messag
 		return nil, err
 	}
 
-	return []*service.Message{newMsg}, nil
+	return service.MessageBatch{newMsg}, nil
 }
 
 func (s *schemaRegistryDecoder) Close(ctx context.Context) error {

@@ -96,7 +96,7 @@ func TestOutputAirGapHappy(t *testing.T) {
 
 type fnBatchOutput struct {
 	connect    func() error
-	writeBatch func(msgs []*Message) error
+	writeBatch func(msgs MessageBatch) error
 	closed     bool
 }
 
@@ -104,7 +104,7 @@ func (f *fnBatchOutput) Connect(ctx context.Context) error {
 	return f.connect()
 }
 
-func (f *fnBatchOutput) WriteBatch(ctx context.Context, msgs []*Message) error {
+func (f *fnBatchOutput) WriteBatch(ctx context.Context, msgs MessageBatch) error {
 	return f.writeBatch(msgs)
 }
 
@@ -132,7 +132,7 @@ func TestBatchOutputAirGapSad(t *testing.T) {
 		connect: func() error {
 			return errors.New("bad connect")
 		},
-		writeBatch: func(m []*Message) error {
+		writeBatch: func(m MessageBatch) error {
 			return errors.New("bad read")
 		},
 	}
@@ -144,7 +144,7 @@ func TestBatchOutputAirGapSad(t *testing.T) {
 	err = agi.WriteWithContext(context.Background(), message.New(nil))
 	assert.EqualError(t, err, "bad read")
 
-	o.writeBatch = func(m []*Message) error {
+	o.writeBatch = func(m MessageBatch) error {
 		return ErrNotConnected
 	}
 
@@ -158,7 +158,7 @@ func TestBatchOutputAirGapHappy(t *testing.T) {
 		connect: func() error {
 			return nil
 		},
-		writeBatch: func(m []*Message) error {
+		writeBatch: func(m MessageBatch) error {
 			wroteBytes, _ := m[0].AsBytes()
 			wroteMsg = string(wroteBytes)
 			return nil
