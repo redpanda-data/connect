@@ -64,15 +64,21 @@ func NewConfig() Config {
 // If none of the config fields are set then a nil config is returned.
 func (c *Config) Get() (*tls.Config, error) {
 	var tlsConf *tls.Config
+	initConf := func() {
+		if tlsConf != nil {
+			return
+		}
+		tlsConf = &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
+	}
 
 	if len(c.RootCAsFile) > 0 {
 		caCert, err := ioutil.ReadFile(c.RootCAsFile)
 		if err != nil {
 			return nil, err
 		}
-		if tlsConf == nil {
-			tlsConf = &tls.Config{}
-		}
+		initConf()
 		tlsConf.RootCAs = x509.NewCertPool()
 		tlsConf.RootCAs.AppendCertsFromPEM(caCert)
 	}
@@ -82,23 +88,17 @@ func (c *Config) Get() (*tls.Config, error) {
 		if err != nil {
 			return nil, err
 		}
-		if tlsConf == nil {
-			tlsConf = &tls.Config{}
-		}
+		initConf()
 		tlsConf.Certificates = append(tlsConf.Certificates, cert)
 	}
 
 	if c.EnableRenegotiation {
-		if tlsConf == nil {
-			tlsConf = &tls.Config{}
-		}
+		initConf()
 		tlsConf.Renegotiation = tls.RenegotiateFreelyAsClient
 	}
 
 	if c.InsecureSkipVerify {
-		if tlsConf == nil {
-			tlsConf = &tls.Config{}
-		}
+		initConf()
 		tlsConf.InsecureSkipVerify = true
 	}
 
