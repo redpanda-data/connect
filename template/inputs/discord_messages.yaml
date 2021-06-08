@@ -1,0 +1,148 @@
+name: discord_messages
+type: input
+status: experimental
+categories: [ Services ]
+summary: Consumes messages posted in a Discord channel.
+description: This input works by polling the `/channels/{channel_id}/messages` Discord API endpoint authenticated as a bot using token based authentication. The ID of the newest message consumed is stored in a cache in order to paginate results, ideally this cache should be persisted across restarts in order for the service to resume where it left off.
+
+fields:
+  - name: channel
+    description: A discord channel ID to consume messages from.
+    type: string
+
+  - name: bot_token
+    description: A bot token used for authentication.
+    type: string
+
+  - name: poll_period
+    description: The length of time (as a duration string) to wait between each poll for new messages. This field can be set empty, in which case requests are made at the limit set by the rate limit. This field also supports cron expressions.
+    type: string
+    default: "1m"
+
+  - name: cache
+    description: A cache resource to use for request pagination.
+    type: string
+
+  - name: rate_limit
+    description: An optional rate limit resource to restrict API requests with.
+    type: string
+    default: ""
+    advanced: true
+
+mapping: |
+  let _ = if this.poll_period == "" && this.rate_limit == "" {
+    throw("either a poll_period, a rate_limit, or both must be specified")
+  }
+
+  let url = "https://discord.com/api/channels/%v/messages?limit=100".format(this.channel)
+
+  root.generate.interval = this.poll_period
+  root.generate.mapping = "root = \"\""
+  root.processors = [
+    {
+      "cache": {
+        "resource": this.cache,
+        "operator": "get",
+        "key": "last_message_id",
+      },
+    },
+    { "catch": [] }, # Don't care if the cache is empty
+    {
+      "bloblang": """let pagination_params = if content().length() > 0 {
+    "&after="+content().string()
+  } else {
+    ""
+  }
+  meta discord_messages_url = "%v" + $pagination_params
+  root = ""
+  """.format($url)
+    },
+    {
+      "http": {
+        "url": """${! meta("discord_messages_url") }""",
+        "verb": "GET",
+        "rate_limit": this.rate_limit,
+        "headers": {
+          "Authorization": "Bot " + this.bot_token,
+        },
+      },
+    },
+    {
+      "bloblang": "root = if (this | []).length() == 0 { deleted() } else { this.sort_by(ele -> ele.timestamp.format_timestamp_unix()) }",
+    },
+    {
+      "unarchive": {
+        "format": "json_array",
+      },
+    },
+    {
+      "cache": {
+        "parts": [ -1 ],
+        "resource": this.cache,
+        "operator": "set",
+        "key": "last_message_id",
+        "value": """${! json("id") }""",
+      },
+    },
+    { "split": {} },
+  ]
+
+metrics_mapping: |
+  root = match this {
+    this.has_suffix("processor.7.count") => this.replace("processor.7.count", "count"),
+    this.has_suffix("processor.3.client.error") => this.replace("processor.3.client.error", "error"),
+    this.contains("processor.3.client.error") => deleted(), # Ignore more specialized client errors
+    this.contains("processor.3.client") => this.replace("processor.3.client", "request"),
+    _ => deleted(),
+  }
+
+tests:
+  - name: Basic fields
+    config:
+      channel: 1234
+      cache: foocache
+      rate_limit: foolimit
+      bot_token: foobot
+
+    expected:
+      generate:
+        interval: '1m'
+        mapping: root = ""
+      processors:
+        - cache:
+            resource: foocache
+            operator: get
+            key: last_message_id
+
+        - catch: []
+
+        - bloblang: |
+            let pagination_params = if content().length() > 0 {
+              "&after="+content().string()
+            } else {
+              ""
+            }
+            meta discord_messages_url = "https://discord.com/api/channels/1234/messages?limit=100" + $pagination_params
+            root = ""
+
+        - http:
+            url: ${! meta("discord_messages_url") }
+            verb: GET
+            rate_limit: foolimit
+            headers:
+              Authorization: Bot foobot
+
+        - bloblang: root = if (this | []).length() == 0 { deleted() } else { this.sort_by(ele -> ele.timestamp.format_timestamp_unix()) }
+
+        - unarchive:
+            format: json_array
+
+        - cache:
+            # Only bother caching the latest tweet ID (last of the batch).
+            parts: [ -1 ]
+            resource: foocache
+            operator: set
+            key: last_message_id
+            value: ${! json("id") }
+
+        - split: {}

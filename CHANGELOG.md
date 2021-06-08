@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - New field `args_mapping` added to the `sql` processor and output for mapping explicitly typed arguments.
 - Added format `csv` to the `unarchive` processor.
 - The `redis` processor now supports `incrby` operations.
+- New experimental `discord_messages` input.
 
 ### Changed
 
