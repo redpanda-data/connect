@@ -18,7 +18,7 @@ This document outlines the core features of the Bloblang language, but if you're
 
 ## Assignment
 
-A Bloblang mapping expresses how to create a new document by extracting data from an existing input document. Assignments consist of a [dot path][field_paths] argument on the left-hand side describing a field to be created within the new document, and a right-hand side query describing what the content of the new field should be.
+A Bloblang mapping expresses how to create a new document by extracting data from an existing input document. Assignments consist of a dot separated path segments on the left-hand side describing a field to be created within the new document, and a right-hand side query describing what the content of the new field should be.
 
 The keyword `root` on the left-hand side refers to the root of the new document, the keyword `this` on the right-hand side refers to the current context of the query, which is the read-only input document when querying from the root of a mapping:
 
@@ -44,6 +44,19 @@ root.foo = "added value"
 ```
 
 If the new document `root` is never assigned to or otherwise mutated then the original document remains unchanged.
+
+### Special Characters in Paths
+
+Quotes can be used to describe sections of a field path that contain whitespace, dots or other special characters:
+
+```coffee
+# Use quotes around a path segment in order to include whitespace or dots within
+# the path
+root."foo.bar".baz = this."buz bev".fub
+
+# In:  {"buz bev":{"fub":"hello world"}}
+# Out: {"foo.bar":{"baz":"hello world"}}
+```
 
 ### Non-structured Data
 
@@ -109,19 +122,6 @@ root.new_doc.bar = meta("kafka_topic")
 The [`meta` function][blobl.functions.meta] returns the read-only metadata of the input message, so it will not reflect changes you've made within the same mapping. This is why it's possible to begin a mapping by removing all old metadata `meta = deleted()` and still be able to query the original metadata.
 
 If you wish to set a metadata value and then refer back to it later then first set it [as a variable][blobl.variables].
-
-### Special Characters in Paths
-
-Quotes can be used to describe sections of a field path that contain whitespace, dots or other special characters:
-
-```coffee
-# Use quotes around a path segment in order to include whitespace or dots within
-# the path
-root."foo.bar".baz = this."buz bev".fub
-
-# In:  {"buz bev":{"fub":"hello world"}}
-# Out: {"foo.bar":{"baz":"hello world"}}
-```
 
 ## Coalesce
 
@@ -379,7 +379,6 @@ root.foo = this.bar.index(5).or("default")
 
 It's possible to execute unit tests for your Bloblang mappings using the standard Benthos unit test capabilities outlined [in this document][configuration.unit_testing].
 
-[field_paths]: /docs/configuration/field_paths
 [blobl.walkthrough]: /docs/guides/bloblang/walkthrough
 [blobl.variables]: #variables
 [blobl.proc]: /docs/components/processors/bloblang
