@@ -1,4 +1,4 @@
-name: discord_messages
+name: discord
 type: input
 status: experimental
 categories: [ Services ]
@@ -6,7 +6,7 @@ summary: Consumes messages posted in a Discord channel.
 description: This input works by polling the `/channels/{channel_id}/messages` Discord API endpoint authenticated as a bot using token based authentication. The ID of the newest message consumed is stored in a cache in order to paginate results, ideally this cache should be persisted across restarts in order for the service to resume where it left off.
 
 fields:
-  - name: channel
+  - name: channel_id
     description: A discord channel ID to consume messages from.
     type: string
 
@@ -18,6 +18,11 @@ fields:
     description: The length of time (as a duration string) to wait between each poll for new messages. This field can be set empty, in which case requests are made at the limit set by the rate limit. This field also supports cron expressions.
     type: string
     default: "1m"
+
+  - name: limit
+    description: The maximum number of messages to receive in a single request.
+    type: int
+    default: 100
 
   - name: cache
     description: A cache resource to use for request pagination.
@@ -34,7 +39,11 @@ mapping: |
     throw("either a poll_period, a rate_limit, or both must be specified")
   }
 
-  let url = "https://discord.com/api/channels/%v/messages?limit=100".format(this.channel)
+  let url_mapping = """meta discord_messages_url = "https://discord.com/api/channels/%v/messages?limit=%v" + if content().length() > 0 {
+    "&after="+content().string()
+  } else { "" }
+  root = ""
+  """.format(this.channel_id, this.limit)
 
   root.generate.interval = this.poll_period
   root.generate.mapping = "root = \"\""
@@ -48,14 +57,7 @@ mapping: |
     },
     { "catch": [] }, # Don't care if the cache is empty
     {
-      "bloblang": """let pagination_params = if content().length() > 0 {
-    "&after="+content().string()
-  } else {
-    ""
-  }
-  meta discord_messages_url = "%v" + $pagination_params
-  root = ""
-  """.format($url)
+      "bloblang": $url_mapping,
     },
     {
       "http": {
@@ -99,7 +101,8 @@ metrics_mapping: |
 tests:
   - name: Basic fields
     config:
-      channel: 1234
+      channel_id: 1234
+      limit: 45
       cache: foocache
       rate_limit: foolimit
       bot_token: foobot
@@ -117,12 +120,9 @@ tests:
         - catch: []
 
         - bloblang: |
-            let pagination_params = if content().length() > 0 {
+            meta discord_messages_url = "https://discord.com/api/channels/1234/messages?limit=45" + if content().length() > 0 {
               "&after="+content().string()
-            } else {
-              ""
-            }
-            meta discord_messages_url = "https://discord.com/api/channels/1234/messages?limit=100" + $pagination_params
+            } else { "" }
             root = ""
 
         - http:
