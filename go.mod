@@ -27,7 +27,6 @@ require (
 	github.com/colinmarc/hdfs v1.1.3
 	github.com/containerd/continuity v0.0.0-20200928162600-f2cc35102c2a // indirect
 	github.com/dgraph-io/ristretto v0.0.3
-	github.com/golang-jwt/jwt v3.2.1+incompatible
 	github.com/dnaeon/go-vcr v1.1.0 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.3.1
 	github.com/edsrzf/mmap-go v1.0.0
@@ -36,6 +35,7 @@ require (
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gocql/gocql v0.0.0-20201024154641-5913df4d474e
 	github.com/gofrs/uuid v3.3.0+incompatible
+	github.com/golang-jwt/jwt v3.2.1+incompatible
 	github.com/golang/protobuf v1.4.3
 	github.com/golang/snappy v0.0.3
 	github.com/google/go-cmp v0.5.4
