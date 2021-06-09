@@ -266,6 +266,7 @@ func TestHTTPServerMetadata(t *testing.T) {
 
 	meta := msg.Get(0).Metadata()
 	assert.Equal(t, dummyPath, meta.Get("http_server_request_path"))
+	assert.Equal(t, "POST", meta.Get("http_server_verb"))
 	assert.Regexp(t, "^Go-http-client/", meta.Get("http_server_user_agent"))
 	// Make sure query params are set in the metadata
 	assert.Contains(t, "bar", meta.Get("foo"))
@@ -278,6 +279,7 @@ func TestHTTPtServerPathParameters(t *testing.T) {
 
 	conf := input.NewConfig()
 	conf.HTTPServer.Path = "/test/{foo}/{bar}"
+	conf.HTTPServer.AllowedVerbs = append(conf.HTTPServer.AllowedVerbs, "PUT")
 
 	server, err := input.NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -300,7 +302,10 @@ func TestHTTPtServerPathParameters(t *testing.T) {
 
 	dummyData := []byte("a bunch of jolly leprechauns await")
 	go func() {
-		resp, cerr := http.Post(serverURL.String(), "text/plain", bytes.NewReader(dummyData))
+		req, cerr := http.NewRequest("PUT", serverURL.String(), bytes.NewReader(dummyData))
+		require.NoError(t, cerr)
+		req.Header.Set("Content-Type", "text/plain")
+		resp, cerr := http.DefaultClient.Do(req)
 		require.NoError(t, cerr)
 		defer resp.Body.Close()
 	}()
@@ -327,6 +332,7 @@ func TestHTTPtServerPathParameters(t *testing.T) {
 	meta := msg.Get(0).Metadata()
 
 	assert.Equal(t, dummyPath, meta.Get("http_server_request_path"))
+	assert.Equal(t, "PUT", meta.Get("http_server_verb"))
 	assert.Equal(t, "foo1", meta.Get("foo"))
 	assert.Equal(t, "bar1", meta.Get("bar"))
 	assert.Equal(t, "will go on", meta.Get("mylove"))

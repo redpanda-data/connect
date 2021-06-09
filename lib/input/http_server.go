@@ -96,6 +96,7 @@ This input adds the following metadata fields to each message:
 ` + "``` text" + `
 - http_server_user_agent
 - http_server_request_path
+- http_server_verb
 - All headers (only first values are taken)
 - All query parameters
 - All path parameters
@@ -372,6 +373,7 @@ func (h *HTTPServer) extractMessageFromRequest(r *http.Request) (types.Message, 
 	meta := metadata.New(nil)
 	meta.Set("http_server_user_agent", r.UserAgent())
 	meta.Set("http_server_request_path", r.URL.Path)
+	meta.Set("http_server_verb", r.Method)
 	for k, v := range r.Header {
 		if len(v) > 0 {
 			meta.Set(k, v[0])

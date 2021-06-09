@@ -24,6 +24,7 @@ All notable changes to this project will be documented in this file.
 - Added format `csv` to the `unarchive` processor.
 - The `redis` processor now supports `incrby` operations.
 - New experimental `discord_messages` input.
+- The `http_server` input now adds a metadata field `http_server_verb`.
 
 ### Changed
 
