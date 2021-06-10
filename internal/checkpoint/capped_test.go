@@ -131,13 +131,13 @@ func TestCappedCapHappy(t *testing.T) {
 
 	c.AssertTrackBlocked(201, 1)
 
-	time.Sleep(1 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 
 	c.AssertNotPending(201)
 
 	c.Resolve(101, 101)
 
-	time.Sleep(1 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 
 	c.AssertPending(201)
 
@@ -484,7 +484,7 @@ func (c *checkpointTester) AssertTrackBlocked(offset, batchSize int64) {
 
 	go c.track(offset, batchSize)
 
-	time.Sleep(1 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 
 	c.mu.Lock()
 	_, ok := c.resolvers[offset]
