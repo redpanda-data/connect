@@ -89,7 +89,7 @@ pipeline:
 
 # Drop all articles after they are cached.
 output:
-  type: drop
+  drop: {}
 
 cache_resources:
   - label: hydration_cache
@@ -115,30 +115,35 @@ input:
 
 pipeline:
   processors:
-    # Attempt to obtain parent event from cache.
-    - branch:
-        request_map: 'root.parent_id = this.comment.parent_id'
-        processors:
-          - cache:
-              operator: get
-              resource: hydration_cache
-              key: '${!json("parent_id")}'
-        # And if successful copy it into the field `article`.
-        result_map: 'root.article = this.article'
-    
-    # Reduce comment into only fields we wish to cache.
-    - branch:
-        request_map: |
-          root.comment.id = this.comment.id
-          root.article = this.article
-        processors:
-          # Store reduced comment into our cache.
-          - cache:
-              operator: set
-              resource: hydration_cache
-              key: '${!json("comment.id")}'
-              value: '${!content()}'
-        # No `result_map` since we don't need to map into the original message.
+    # Perform both hydration and caching within a for_each block as this ensures
+    # that a given message of a batch is cached before the next message is
+    # hydrated, ensuring that when a message of the batch has a parent within
+    # the same batch hydration can still work.
+    - for_each:
+      # Attempt to obtain parent event from cache (if the ID exists).
+      - branch:
+          request_map: 'root = this.comment.parent_id | deleted()'
+          processors:
+            - cache:
+                operator: get
+                resource: hydration_cache
+                key: '${!content()}'
+          # And if successful copy it into the field `article`.
+          result_map: 'root.article = this.article'
+      
+      # Reduce comment into only fields we wish to cache.
+      - branch:
+          request_map: |
+            root.comment.id = this.comment.id
+            root.article = this.article
+          processors:
+            # Store reduced comment into our cache.
+            - cache:
+                operator: set
+                resource: hydration_cache
+                key: '${!json("comment.id")}'
+                value: '${!content()}'
+          # No `result_map` since we don't need to map into the original message.
 
 # Send resulting documents to our hydrated topic.
 output:
@@ -163,7 +168,7 @@ There are [many patterns for error handling][error-handling] to choose from in B
 
 Our retry queue is going to be another topic called `comments_retried`. Since most errors are related to time we will delay retry attempts by storing the current timestamp after a failed request as a metadata field.
 
-We will use an input [`broker`][input-broker] so that we can consume both the `comments` and `comments_retry` topics in the same pipeline.
+We will use an input [`broker`][input.broker] so that we can consume both the `comments` and `comments_retry` topics in the same pipeline.
 
 Our config (omitting the caching sections for brevity) now looks like this:
 
@@ -193,6 +198,7 @@ input:
 pipeline:
   processors:
     - try:
+      - for_each:
         # Attempt to obtain parent event from cache.
         - branch:
             {} # Omitted
@@ -201,8 +207,8 @@ pipeline:
         - branch:
             {} # Omitted
 
-        # If we've reached this point then both processors succeeded.
-        - bloblang: 'meta output_topic = "comments_hydrated"'
+      # If we've reached this point then both processors succeeded.
+      - bloblang: 'meta output_topic = "comments_hydrated"'
 
     - catch:
         # If we reach here then a processing stage failed.
@@ -221,7 +227,7 @@ cache_resources:
     redis: {} # Omitted
 ```
 
-With this config we can deploy as many instances of Benthos as we need.
+You can find a full example [in the project repo][full-example], and with this config we can deploy as many instances of Benthos as we need as the partitions will be balanced across the consumers.
 
 [caches]: /docs/components/caches/about
 [inputs]: /docs/components/inputs/about
@@ -229,3 +235,4 @@ With this config we can deploy as many instances of Benthos as we need.
 [outputs]: /docs/components/outputs/about
 [error-handling]: /docs/configuration/error_handling
 [processor.branch]: /docs/components/processors/branch
+[full-example]: https://github.com/Jeffail/benthos/blob/master/config/examples/joining_streams.yaml
