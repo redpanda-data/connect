@@ -32,7 +32,11 @@ import (
 // When parsing Benthos configs this builder follows the schema and field
 // defaults of a standard Benthos configuration.
 //
-// Benthos streams register HTTP methods
+// Benthos streams register HTTP endpoints by default that expose metrics and
+// ready checks. If your intention is to execute multiple streams in the same
+// process then it is recommended that you disable the HTTP server in config, or
+// use `SetHTTPMux` with prefixed multiplexers in order to share it across the
+// streams.
 type StreamBuilder struct {
 	http       api.Config
 	threads    int

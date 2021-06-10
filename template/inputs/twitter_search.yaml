@@ -1,7 +1,7 @@
 name: twitter_search
 type: input
 status: experimental
-categories: [ Services ]
+categories: [ Services, Social ]
 summary: Consumes tweets matching a given search using the Twitter recent search V2 API.
 description: |
   Continuously polls the [Twitter recent search V2 API](https://developer.twitter.com/en/docs/twitter-api/tweets/search/api-reference/get-tweets-search-recent) for tweets that match a given search query.

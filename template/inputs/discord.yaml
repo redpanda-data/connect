@@ -1,7 +1,7 @@
 name: discord
 type: input
 status: experimental
-categories: [ Services ]
+categories: [ Services, Social ]
 summary: Consumes messages posted in a Discord channel.
 description: This input works by polling the `/channels/{channel_id}/messages` Discord API endpoint authenticated as a bot using token based authentication. The ID of the newest message consumed is stored in a cache in order to paginate results, ideally this cache should be persisted across restarts in order for the service to resume where it left off.
 

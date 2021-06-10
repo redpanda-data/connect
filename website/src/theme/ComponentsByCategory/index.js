@@ -25,6 +25,10 @@ let descriptions = {
       description: "Inputs that consume from Google Cloud Platform services.",
     },
     {
+      name: "Social",
+      description: "Inputs that consume from social applications and services.",
+    },
+    {
       name: "Local",
       description: "Inputs that consume from the local machine/filesystem.",
     },
@@ -77,6 +81,10 @@ let descriptions = {
       description: "Outputs that write to Microsoft Azure services.",
     },
     {
+      name: "Social",
+      description: "Outputs that write to social applications and services.",
+    },
+    {
       name: "Local",
       description: "Outputs that write to the local machine/filesystem.",
     },
@@ -98,7 +106,7 @@ function ComponentsByCategory(props) {
   let categoryList = [];
   for (let i = 0; i < summaries.length; i++) {
     categoryList.push(summaries[i].name);
-    categories[summaries[i].name] = {
+    categories[summaries[i].name.toLowerCase()] = {
       summary: summaries[i].description,
       items: [],
     }
@@ -108,14 +116,15 @@ function ComponentsByCategory(props) {
     let cats = types[i].categories;
     if ( Array.isArray(cats) ) {
       for (let j = 0; j < cats.length; j++) {
-        if ( categories[cats[j]] === undefined ) {
-          categoryList.push(cats[j]);
-          categories[cats[j]] = {
+        let catLower = cats[j].toLowerCase();
+        if ( categories[catLower] === undefined ) {
+          categoryList.push(catLower.charAt(0).toUpperCase() + catLower.slice(1));
+          categories[catLower] = {
             summary: "",
             items: [types[i]],
           };
         } else {
-          categories[cats[j]].items.push(types[i]);
+          categories[catLower].items.push(types[i]);
         }
       }
     }
@@ -127,8 +136,8 @@ function ComponentsByCategory(props) {
     ))}>
       {categoryList.map((cat) => (
         <TabItem key={cat.toLowerCase()} value={cat.toLowerCase()}>
-          <p>{categories[cat].summary}</p>
-          {categories[cat].items.map((data) => (
+          <p>{categories[cat.toLowerCase()].summary}</p>
+          {categories[cat.toLowerCase()].items.map((data) => (
             <ComponentCard type={type} component={data} />
           ))}
         </TabItem>

@@ -1,9 +1,10 @@
-// Package service provides a high level API for creating a Benthos service,
-// registering custom plugin components, customizing the availability of native
-// components, and running it.
+// Package service provides a high level API for registering custom plugin
+// components, customizing the availability of native components, and running a
+// typical Benthos service with RunCLI, or dynamic, custom streams with the
+// StreamBuilder API.
 //
-// In order to add custom Bloblang functions and methods with plugins use the
-// bloblang package.
+// In order to add custom Bloblang functions and methods use the
+// ./public/bloblang package.
 //
 // WARNING: THIS PACKAGE IS EXPERIMENTAL, AND THEREFORE SUBJECT TO BREAKING
 // CHANGES OUTSIDE OF MAJOR VERSION RELEASES.

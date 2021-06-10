@@ -1,7 +1,7 @@
 name: discord
 type: output
 status: experimental
-categories: [ Services ]
+categories: [ Services, Social ]
 summary: Writes messages to a Discord channel.
 description: This output POSTs messages to the `/channels/{channel_id}/messages` Discord API endpoint authenticated as a bot using token based authentication. The format of a message must be a JSON object matching the [Discord API message type](https://discord.com/developers/docs/resources/channel#message-object).
 

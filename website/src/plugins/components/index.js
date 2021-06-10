@@ -3,7 +3,7 @@ const fs = require('fs');
 const {parseMarkdownString} = require('@docusaurus/utils');
 
 function components(type) {
-  return all_components(type).filter(c => c.status == "stable" || c.status == "beta")
+  return all_components(type).filter(c => c.status != "deprecated")
 }
 
 function all_components(type) {
@@ -27,22 +27,10 @@ function listPaths(type) {
   let components = all_components(type);
 
   components
-    .filter(c => c.status == "stable" || c.status == "beta")
+    .filter(c => c.status != "deprecated")
     .forEach(function (info) {
       paths.push(`components/${type}/${info.name}`);
     });
-
-  let experimentalPaths = components
-    .filter(c => c.status == "experimental")
-    .map(c => `components/${type}/${c.name}`);
-
-  if ( experimentalPaths.length > 0 ) {
-    paths.push({
-      type: 'category',
-      label: 'Experimental',
-      items: experimentalPaths,
-    });
-  }
 
   let deprecatedPaths = components
     .filter(c => c.status == "deprecated")

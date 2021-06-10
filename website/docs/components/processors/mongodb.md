@@ -15,8 +15,9 @@ categories: ["Integration"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-EXPERIMENTAL: This component is experimental and therefore subject to change or removal outside of major version releases.
-
+:::caution EXPERIMENTAL
+This component is experimental and therefore subject to change or removal outside of major version releases.
+:::
 Performs operations against MongoDB for each message, allowing you to store or retrieve data within message payloads.
 
 Introduced in version 3.43.0.

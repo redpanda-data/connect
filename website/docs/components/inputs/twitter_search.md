@@ -2,7 +2,7 @@
 title: twitter_search
 type: input
 status: experimental
-categories: ["Services"]
+categories: ["Services","Social"]
 ---
 
 <!--
@@ -15,8 +15,9 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-EXPERIMENTAL: This component is experimental and therefore subject to change or removal outside of major version releases.
-
+:::caution EXPERIMENTAL
+This component is experimental and therefore subject to change or removal outside of major version releases.
+:::
 Consumes tweets matching a given search using the Twitter recent search V2 API.
 
 

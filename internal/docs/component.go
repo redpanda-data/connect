@@ -190,11 +190,14 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 {{if eq .Status "beta" -}}
-BETA: This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
+:::caution BETA
+This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
+:::
 {{end -}}
 {{if eq .Status "experimental" -}}
-EXPERIMENTAL: This component is experimental and therefore subject to change or removal outside of major version releases.
-
+:::caution EXPERIMENTAL
+This component is experimental and therefore subject to change or removal outside of major version releases.
+:::
 {{end -}}
 {{if eq .Status "deprecated" -}}
 :::warning DEPRECATED
