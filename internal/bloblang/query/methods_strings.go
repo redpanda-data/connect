@@ -30,6 +30,7 @@ import (
 	"github.com/itchyny/timefmt-go"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/tilinna/z85"
+	"gopkg.in/yaml.v3"
 )
 
 var _ = registerSimpleMethod(
@@ -986,8 +987,6 @@ var _ = registerSimpleMethod(
 	ExpectNArgs(0),
 )
 
-//------------------------------------------------------------------------------
-
 var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"parse_xml", "",
@@ -1021,6 +1020,40 @@ var _ = registerSimpleMethod(
 				return nil, fmt.Errorf("failed to parse value as XML: %w", err)
 			}
 			return xmlObj, nil
+		}, nil
+	},
+	false,
+	ExpectNArgs(0),
+)
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"parse_yaml", "",
+	).InCategory(
+		MethodCategoryParsing,
+		"Attempts to parse a string as a single YAML document and returns the result.",
+		NewExampleSpec("",
+			`root.doc = this.doc.parse_yaml()`,
+			`{"doc":"foo: bar"}`,
+			`{"doc":{"foo":"bar"}}`,
+		),
+	),
+	func(args ...interface{}) (simpleMethod, error) {
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			var yamlBytes []byte
+			switch t := v.(type) {
+			case string:
+				yamlBytes = []byte(t)
+			case []byte:
+				yamlBytes = t
+			default:
+				return nil, NewTypeError(v, ValueString)
+			}
+			var sObj interface{}
+			if err := yaml.Unmarshal(yamlBytes, &sObj); err != nil {
+				return nil, fmt.Errorf("failed to parse value as YAML: %w", err)
+			}
+			return sObj, nil
 		}, nil
 	},
 	false,

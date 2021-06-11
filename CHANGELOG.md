@@ -25,6 +25,7 @@ All notable changes to this project will be documented in this file.
 - The `redis` processor now supports `incrby` operations.
 - New experimental `discord` input and output.
 - The `http_server` input now adds a metadata field `http_server_verb`.
+- New Bloblang method `parse_yaml`.
 
 ### Changed
 

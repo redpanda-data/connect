@@ -1364,6 +1364,17 @@ root.doc = this.doc.parse_xml()
 # Out: {"doc":{"root":{"content":"This is some content","title":"This is a title"}}}
 ```
 
+### `parse_yaml`
+
+Attempts to parse a string as a single YAML document and returns the result.
+
+```coffee
+root.doc = this.doc.parse_yaml()
+
+# In:  {"doc":"foo: bar"}
+# Out: {"doc":{"foo":"bar"}}
+```
+
 ### `bloblang`
 
 BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
