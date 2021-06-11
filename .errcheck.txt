@@ -26,8 +26,8 @@
 (*github.com/Jeffail/benthos/v3/internal/bundle.ProcessorSet).Add
 (*github.com/Jeffail/benthos/v3/internal/bundle.RateLimitSet).Add
 (*github.com/Jeffail/benthos/v3/internal/component/output.MetadataFilter).Iter
-(*github.com/Jeffail/benthos/v3/internal/service/pulsar.pulsarReader).disconnect
-(*github.com/Jeffail/benthos/v3/internal/service/pulsar.pulsarWriter).disconnect
+(*github.com/Jeffail/benthos/v3/internal/impl/pulsar.pulsarReader).disconnect
+(*github.com/Jeffail/benthos/v3/internal/impl/pulsar.pulsarWriter).disconnect
 (*github.com/Jeffail/benthos/v3/internal/transaction.Tracked).Ack
 (*github.com/Jeffail/benthos/v3/lib/api.Type).Shutdown
 (*github.com/Jeffail/benthos/v3/lib/broker.FanIn).WaitForClose

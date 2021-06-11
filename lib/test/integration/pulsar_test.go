@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	bpulsar "github.com/Jeffail/benthos/v3/internal/service/pulsar"
+	bpulsar "github.com/Jeffail/benthos/v3/internal/impl/pulsar"
 	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"

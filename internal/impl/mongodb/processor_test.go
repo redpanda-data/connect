@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/service/mongodb"
-	"github.com/Jeffail/benthos/v3/internal/service/mongodb/client"
+	"github.com/Jeffail/benthos/v3/internal/impl/mongodb"
+	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"

@@ -1,7 +1,7 @@
 package processor
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/service/mongodb/client"
+	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 )
 

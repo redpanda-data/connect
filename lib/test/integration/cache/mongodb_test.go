@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/service/mongodb/client"
+	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

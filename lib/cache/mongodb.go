@@ -1,7 +1,7 @@
 package cache
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/service/mongodb/client"
+	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
 )
 
 // MongoDBConfig is a config struct for a mongo connection.

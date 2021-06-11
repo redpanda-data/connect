@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	sftpSetup "github.com/Jeffail/benthos/v3/internal/service/sftp"
+	sftpSetup "github.com/Jeffail/benthos/v3/internal/impl/sftp"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

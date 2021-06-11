@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-storage-queue-go/azqueue"
-	"github.com/Jeffail/benthos/v3/internal/service/azure"
+	"github.com/Jeffail/benthos/v3/internal/impl/azure"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
