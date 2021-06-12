@@ -1,10 +1,12 @@
 package stream
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
+	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -32,40 +34,22 @@ func NewConfig() Config {
 // fields of no consequence (unused inputs, outputs, processors etc) are
 // excluded.
 func (c Config) Sanitised() (interface{}, error) {
-	inConf, err := input.SanitiseConfig(c.Input)
-	if err != nil {
+	var node yaml.Node
+	if err := node.Encode(c); err != nil {
 		return nil, err
 	}
 
-	var bufConf interface{}
-	bufConf, err = buffer.SanitiseConfig(c.Buffer)
-	if err != nil {
+	if err := Spec().SanitiseNode(&node, docs.SanitiseConfig{
+		RemoveTypeField: true,
+	}); err != nil {
 		return nil, err
 	}
 
-	var pipeConf interface{}
-	pipeConf, err = pipeline.SanitiseConfig(c.Pipeline)
-	if err != nil {
+	var g interface{}
+	if err := node.Decode(&g); err != nil {
 		return nil, err
 	}
-
-	var outConf interface{}
-	outConf, err = output.SanitiseConfig(c.Output)
-	if err != nil {
-		return nil, err
-	}
-
-	return struct {
-		Input    interface{} `json:"input" yaml:"input"`
-		Buffer   interface{} `json:"buffer" yaml:"buffer"`
-		Pipeline interface{} `json:"pipeline" yaml:"pipeline"`
-		Output   interface{} `json:"output" yaml:"output"`
-	}{
-		Input:    inConf,
-		Buffer:   bufConf,
-		Pipeline: pipeConf,
-		Output:   outConf,
-	}, nil
+	return g, nil
 }
 
 //------------------------------------------------------------------------------

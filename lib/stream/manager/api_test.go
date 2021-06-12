@@ -100,7 +100,7 @@ func parseGetBody(t *testing.T, data *bytes.Buffer) getBody {
 	result := getBody{
 		Config: stream.NewConfig(),
 	}
-	if err := json.Unmarshal(data.Bytes(), &result); err != nil {
+	if err := yaml.Unmarshal(data.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
 	return result
@@ -231,7 +231,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	newConf = harmlessConf()
 	newConf.Input.Type = "${__TEST_INPUT_TYPE}"
 
-	request = genRequest("POST", "/streams/fooEnv", newConf)
+	request = genRequest("POST", "/streams/fooEnv?chilled=true", newConf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
@@ -272,7 +272,7 @@ func TestTypeAPIPatch(t *testing.T) {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 
-	request = genRequest("POST", "/streams/foo", conf)
+	request = genRequest("POST", "/streams/foo?chilled=true", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
@@ -323,90 +323,66 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 	r := router(mgr)
 	conf := harmlessConf()
 
-	request := genYAMLRequest("PUT", "/streams/foo", conf)
+	request := genYAMLRequest("PUT", "/streams/foo?chilled=true", conf)
 	response := httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusNotFound, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusNotFound, response.Code)
 
 	request = genYAMLRequest("GET", "/streams/foo", nil)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusNotFound, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusNotFound, response.Code)
+
+	request = genYAMLRequest("POST", "/streams/foo?chilled=true", conf)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusOK, response.Code)
 
 	request = genYAMLRequest("POST", "/streams/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
-
-	request = genYAMLRequest("POST", "/streams/foo", conf)
-	response = httptest.NewRecorder()
-	r.ServeHTTP(response, request)
-	if exp, act := http.StatusBadRequest, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusBadRequest, response.Code)
 
 	request = genYAMLRequest("GET", "/streams/bar", nil)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusNotFound, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusNotFound, response.Code)
 
 	request = genYAMLRequest("GET", "/streams/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusOK, response.Code)
+
 	info := parseGetBody(t, response.Body)
-	if !info.Active {
-		t.Error("Stream not active")
-	} else if act, exp := info.Config, conf; !reflect.DeepEqual(act, exp) {
-		t.Errorf("Unexpected config: %v != %v", act, exp)
-	}
+	require.True(t, info.Active)
+	assert.Equal(t, conf, info.Config)
 
 	newConf := harmlessConf()
 	newConf.Buffer.Type = "memory"
 
-	request = genYAMLRequest("PUT", "/streams/foo", newConf)
+	request = genYAMLRequest("PUT", "/streams/foo?chilled=true", newConf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusOK, response.Code)
 
 	request = genYAMLRequest("GET", "/streams/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusOK, response.Code)
+
 	info = parseGetBody(t, response.Body)
-	if !info.Active {
-		t.Error("Stream not active")
-	} else if act, exp := info.Config, newConf; !reflect.DeepEqual(act, exp) {
-		t.Errorf("Unexpected config: %v != %v", act, exp)
-	}
+	require.True(t, info.Active)
+	assert.Equal(t, newConf, info.Config)
 
 	request = genYAMLRequest("DELETE", "/streams/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusOK, response.Code)
 
 	request = genYAMLRequest("DELETE", "/streams/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusNotFound, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusNotFound, response.Code)
 }
 
 func TestTypeAPIList(t *testing.T) {
@@ -474,11 +450,11 @@ func TestTypeAPISetStreams(t *testing.T) {
 	bar2Conf.Input.HTTPServer.Path = "BAR_TWO"
 	bazConf := harmlessConf()
 	bazConf.Input.HTTPServer.Path = "BAZ_ONE"
-	streamsBody := map[string]stream.Config{
-		"bar":  barConf,
-		"bar2": bar2Conf,
-		"baz":  bazConf,
-	}
+
+	streamsBody := map[string]interface{}{}
+	streamsBody["bar"], _ = barConf.Sanitised()
+	streamsBody["bar2"], _ = bar2Conf.Sanitised()
+	streamsBody["baz"], _ = bazConf.Sanitised()
 
 	request = genRequest("POST", "/streams", streamsBody)
 	response = httptest.NewRecorder()
@@ -554,6 +530,55 @@ func TestTypeAPIStreamsDefaultConf(t *testing.T) {
 	assert.Equal(t, status.Config().Input.Nanomsg.PollTimeout, "5s")
 }
 
+func TestTypeAPIStreamsLinting(t *testing.T) {
+	mgr := manager.New(
+		manager.OptSetLogger(log.Noop()),
+		manager.OptSetStats(metrics.Noop()),
+		manager.OptSetManager(types.DudMgr{}),
+		manager.OptSetAPITimeout(time.Millisecond*100),
+	)
+
+	r := router(mgr)
+
+	body := []byte(`{
+	"foo": {
+		"input": {
+			"nanomsg": {}
+		},
+		"output": {
+			"type":"nanomsg",
+			"file": {}
+		}
+	},
+	"bar": {
+		"input": {
+			"type":"nanomsg",
+			"file": {}
+		},
+		"output": {
+			"nanomsg": {}
+		}
+	}
+}`)
+
+	request, err := http.NewRequest("POST", "/streams", bytes.NewReader(body))
+	require.NoError(t, err)
+
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusBadRequest, response.Code)
+
+	expLints := `{"lint_errors":["stream 'bar': line 14: field file is invalid when the component type is nanomsg (input)","stream 'foo': line 8: field file is invalid when the component type is nanomsg (output)"]}`
+	assert.Equal(t, expLints, response.Body.String())
+
+	request, err = http.NewRequest("POST", "/streams?chilled=true", bytes.NewReader(body))
+	require.NoError(t, err)
+
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusOK, response.Code)
+}
+
 func TestTypeAPIDefaultConf(t *testing.T) {
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
@@ -584,6 +609,44 @@ func TestTypeAPIDefaultConf(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, status.Config().Input.Nanomsg.PollTimeout, "5s")
+}
+
+func TestTypeAPILinting(t *testing.T) {
+	mgr := manager.New(
+		manager.OptSetLogger(log.Noop()),
+		manager.OptSetStats(metrics.Noop()),
+		manager.OptSetManager(types.DudMgr{}),
+		manager.OptSetAPITimeout(time.Millisecond*100),
+	)
+
+	r := router(mgr)
+
+	body := []byte(`{
+	"input": {
+		"type":"nanomsg",
+		"file": {}
+	},
+	"output": {
+		"nanomsg": {}
+	}
+}`)
+
+	request, err := http.NewRequest("POST", "/streams/foo", bytes.NewReader(body))
+	require.NoError(t, err)
+
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusBadRequest, response.Code)
+
+	expLints := `{"lint_errors":["line 4: field file is invalid when the component type is nanomsg (input)"]}`
+	assert.Equal(t, expLints, response.Body.String())
+
+	request, err = http.NewRequest("POST", "/streams/foo?chilled=true", bytes.NewReader(body))
+	require.NoError(t, err)
+
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusOK, response.Code)
 }
 
 func TestTypeAPIGetStats(t *testing.T) {

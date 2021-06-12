@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
-	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
@@ -72,6 +73,16 @@ func (c ConfigSet) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
+func lintStreamConfigNode(node *yaml.Node) (lints []string) {
+	if node.Kind == yaml.DocumentNode && node.Content[0].Kind == yaml.MappingNode {
+		node = node.Content[0]
+	}
+	for _, dLint := range stream.Spec().LintNode(docs.NewLintContext(), node) {
+		lints = append(lints, fmt.Sprintf("line %v: %v", dLint.Line, dLint.What))
+	}
+	return
+}
+
 // HandleStreamsCRUD is an http.HandleFunc for returning maps of active benthos
 // streams by their id, status and uptime or overwriting the entire set of
 // streams.
@@ -122,12 +133,38 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newSet := ConfigSet{}
-
 	var setBytes []byte
 	if setBytes, requestErr = ioutil.ReadAll(r.Body); requestErr != nil {
 		return
 	}
+
+	if r.URL.Query().Get("chilled") != "true" {
+		nodeSet := map[string]yaml.Node{}
+		if requestErr = yaml.Unmarshal(setBytes, &nodeSet); requestErr != nil {
+			return
+		}
+		var lints []string
+		for k, n := range nodeSet {
+			for _, l := range lintStreamConfigNode(&n) {
+				keyLint := fmt.Sprintf("stream '%v': %v", k, l)
+				lints = append(lints, keyLint)
+				m.logger.Debugf("Streams request linting error: %v\n", keyLint)
+			}
+		}
+		if len(lints) > 0 {
+			sort.Strings(lints)
+			errBytes, _ := json.Marshal(struct {
+				LintErrs []string `json:"lint_errors"`
+			}{
+				LintErrs: lints,
+			})
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write(errBytes)
+			return
+		}
+	}
+
+	newSet := ConfigSet{}
 	if requestErr = yaml.Unmarshal(setBytes, &newSet); requestErr != nil {
 		return
 	}
@@ -236,24 +273,25 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	readConfig := func() (confOut stream.Config, err error) {
+	readConfig := func() (confOut stream.Config, lints []string, err error) {
 		var confBytes []byte
 		if confBytes, err = ioutil.ReadAll(r.Body); err != nil {
 			return
 		}
 
-		confOut = stream.NewConfig()
-		err = yaml.Unmarshal(text.ReplaceEnvVariables(confBytes), &confOut)
-		if err == nil {
-			lConfig := config.New()
-			lConfig.Config = confOut
-			if lints, lintErr := config.Lint(confBytes, lConfig); lintErr == nil {
-				for _, lint := range lints {
-					m.logger.Infof("Stream '%v' config: %v\n", id, lint)
-				}
+		if r.URL.Query().Get("chilled") != "true" {
+			var node yaml.Node
+			if requestErr = yaml.Unmarshal(confBytes, &node); requestErr != nil {
+				return
+			}
+			lints = lintStreamConfigNode(&node)
+			for _, l := range lints {
+				m.logger.Infof("Stream '%v' config: %v\n", id, l)
 			}
 		}
 
+		confOut = stream.NewConfig()
+		err = yaml.Unmarshal(text.ReplaceEnvVariables(confBytes), &confOut)
 		return
 	}
 	patchConfig := func(confIn stream.Config) (confOut stream.Config, err error) {
@@ -296,9 +334,20 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var conf stream.Config
+	var lints []string
 	switch r.Method {
 	case "POST":
-		if conf, requestErr = readConfig(); requestErr != nil {
+		if conf, lints, requestErr = readConfig(); requestErr != nil {
+			return
+		}
+		if len(lints) > 0 {
+			errBytes, _ := json.Marshal(struct {
+				LintErrs []string `json:"lint_errors"`
+			}{
+				LintErrs: lints,
+			})
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write(errBytes)
 			return
 		}
 		serverErr = m.Create(id, conf)
@@ -326,7 +375,17 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			w.Write(bodyBytes)
 		}
 	case "PUT":
-		if conf, requestErr = readConfig(); requestErr != nil {
+		if conf, lints, requestErr = readConfig(); requestErr != nil {
+			return
+		}
+		if len(lints) > 0 {
+			errBytes, _ := json.Marshal(struct {
+				LintErrs []string `json:"lint_errors"`
+			}{
+				LintErrs: lints,
+			})
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write(errBytes)
 			return
 		}
 		serverErr = m.Update(id, conf, time.Until(deadline))

@@ -24,20 +24,19 @@ YAML config to the `/streams/foo` endpoint:
 ```bash
 $ curl http://localhost:4195/streams/foo -X POST --data-binary @- <<EOF
 input:
-  type: http_server
+  http_server: {}
 buffer:
-  type: memory
+  memory: {}
 pipeline:
   threads: 4
   processors:
-  - type: bloblang
-    bloblang: |
+  - bloblang: |
       root = {
         "id": this.user.id,
         "content": this.body.content
       }
 output:
-  type: http_server
+  http_server: {}
 EOF
 ```
 
@@ -66,21 +65,16 @@ Good, now let's add another stream `bar` the same way:
 ```bash
 $ curl http://localhost:4195/streams/bar -X POST --data-binary @- <<EOF
 input:
-  type: kafka
   kafka:
     addresses:
     - localhost:9092
     topics:
     - my_topic
-buffer:
-  type: none
 pipeline:
   threads: 1
   processors:
-  - type: bloblang
-    bloblang: 'root = this.uppercase()'
+  - bloblang: 'root = this.uppercase()'
 output:
-  type: elasticsearch
   elasticsearch:
     urls:
     - http://localhost:9200
@@ -116,7 +110,6 @@ $ curl http://localhost:4195/streams/foo | jq '.'
   "uptime_str": "30.123488951s"
   "config": {
     "input": {
-      "type": "http_server",
       "http_server": {
         "address": "",
         "cert_file": "",
@@ -126,7 +119,6 @@ $ curl http://localhost:4195/streams/foo | jq '.'
       }
     },
     "buffer": {
-      "type": "memory",
       "memory": {
         "limit": 10000000
       }
@@ -142,20 +134,17 @@ Next, we might want to update stream `foo` by `PUT`ing a new config to the path
 ```bash
 $ curl http://localhost:4195/streams/foo -X PUT --data-binary @- <<EOF
 input:
-  type: http_server
-buffer:
-  type: none
+  http_server: {}
 pipeline:
   threads: 4
   processors:
-  - type: bloblang
-    bloblang: |
+  - bloblang: |
       root = {
         "id": this.user.id,
         "content": this.body.content
       }
 output:
-  type: http_server
+  http_server: {}
 EOF
 ```
 
@@ -170,7 +159,6 @@ $ curl http://localhost:4195/streams/foo | jq '.'
   "uptime_str": "12.328482951s"
   "config": {
     "input": {
-      "type": "http_server",
       "http_server": {
         "address": "",
         "cert_file": "",
@@ -218,16 +206,15 @@ the list they will be removed.
 $ curl http://localhost:4195/streams -X POST --data-binary @- <<EOF
 bar:
   input:
-    type: http_client
     http_client:
       url: http://localhost:4195/baz/get
   output:
-    type: stdout
+    stdout: {}
 baz:
   input:
-    type: http_server
+    http_server: {}
   output:
-    type: http_server
+    http_server: {}
 EOF
 ```
 
