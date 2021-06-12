@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	bmanager "github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/stream"
 	"github.com/Jeffail/benthos/v3/lib/stream/manager"
@@ -519,6 +520,40 @@ func TestTypeAPISetStreams(t *testing.T) {
 	assert.Equal(t, "BAZ_ONE", conf.Config.Input.HTTPServer.Path)
 }
 
+func TestTypeAPIStreamsDefaultConf(t *testing.T) {
+	mgr := manager.New(
+		manager.OptSetLogger(log.Noop()),
+		manager.OptSetStats(metrics.Noop()),
+		manager.OptSetManager(types.DudMgr{}),
+		manager.OptSetAPITimeout(time.Millisecond*100),
+	)
+
+	r := router(mgr)
+
+	body := []byte(`{
+	"foo": {
+		"input": {
+			"nanomsg": {}
+		},
+		"output": {
+			"nanomsg": {}
+		}
+	}
+}`)
+
+	request, err := http.NewRequest("POST", "/streams", bytes.NewReader(body))
+	require.NoError(t, err)
+
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusOK, response.Code)
+
+	status, err := mgr.Read("foo")
+	require.NoError(t, err)
+
+	assert.Equal(t, status.Config().Input.Nanomsg.PollTimeout, "5s")
+}
+
 func TestTypeAPIDefaultConf(t *testing.T) {
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
@@ -531,68 +566,61 @@ func TestTypeAPIDefaultConf(t *testing.T) {
 
 	body := []byte(`{
 	"input": {
-		"type": "nanomsg"
+		"nanomsg": {}
 	},
 	"output": {
-		"type": "nanomsg"
+		"nanomsg": {}
 	}
 }`)
 
 	request, err := http.NewRequest("POST", "/streams/foo", bytes.NewReader(body))
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
+
 	response := httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusOK, response.Code)
+
+	status, err := mgr.Read("foo")
+	require.NoError(t, err)
+
+	assert.Equal(t, status.Config().Input.Nanomsg.PollTimeout, "5s")
 }
 
 func TestTypeAPIGetStats(t *testing.T) {
-	mgr := manager.New(
+	mgr, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.DudMgr{}, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	smgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(types.DudMgr{}),
+		manager.OptSetManager(mgr),
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
-	r := router(mgr)
+	r := router(smgr)
 
-	if err := mgr.Create("foo", harmlessConf()); err != nil {
-		t.Fatal(err)
-	}
+	err = smgr.Create("foo", harmlessConf())
+	require.NoError(t, err)
 
 	<-time.After(time.Millisecond * 100)
 
 	request := genRequest("GET", "/streams/not_exist/stats", nil)
 	response := httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusNotFound, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusNotFound, response.Code)
 
 	request = genRequest("POST", "/streams/foo/stats", nil)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusBadRequest, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusBadRequest, response.Code)
 
 	request = genRequest("GET", "/streams/foo/stats", nil)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusOK, response.Code)
 
 	stats, err := gabs.ParseJSON(response.Body.Bytes())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if exp, act := float64(1), stats.S("input", "running").Data().(float64); exp != act {
-		t.Errorf("Wrong stat value: %v != %v", act, exp)
-		t.Logf("Metrics: %v", stats)
-	}
+	assert.Equal(t, 1.0, stats.S("input", "running").Data())
 }

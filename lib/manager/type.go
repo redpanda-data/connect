@@ -804,6 +804,17 @@ func (t *Type) WaitForClose(timeout time.Duration) error {
 // DEPRECATED
 // TODO: V4 Remove this
 
+// SwapMetrics attempts to swap the underlying metrics implementation of a
+// manager. This function does nothing if the manager type is not a *Type.
+func SwapMetrics(mgr types.Manager, stats metrics.Type) types.Manager {
+	if t, ok := mgr.(*Type); ok {
+		newMgr := *t
+		newMgr.stats = t.stats.WithStats(stats)
+		return &newMgr
+	}
+	return mgr
+}
+
 // GetInput attempts to find a service wide input by its name.
 func (t *Type) GetInput(name string) (types.Input, error) {
 	if c, exists := t.inputs[name]; exists {

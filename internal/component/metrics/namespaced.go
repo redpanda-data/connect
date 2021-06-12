@@ -23,6 +23,14 @@ func NewNamespaced(child metrics.Type) *Namespaced {
 	}
 }
 
+// WithStats returns a namespaced metrics exporter with a different stats
+// implementation.
+func (n *Namespaced) WithStats(s metrics.Type) *Namespaced {
+	newNs := *n
+	newNs.child = s
+	return &newNs
+}
+
 // WithPrefix returns a namespaced metrics exporter with a new prefix.
 func (n *Namespaced) WithPrefix(str string) *Namespaced {
 	newNs := *n

@@ -41,6 +41,7 @@ All notable changes to this project will be documented in this file.
 - Fixed a rare panic caused when executing a `workflow` resource processor that references `branch` resources across parallel threads.
 - The `mqtt` input with multiple topics now works with brokers that would previously error on multiple subscriptions.
 - Fixed initialisation of components configured as resources that reference other resources, where under certain circumstances the components would fail to obtain a true reference to the target resource. This fix makes it so that resources are accessed only when used, which will also make it possible to introduce dynamic resources in future.
+- The streams mode endpoint `/streams/{id}/stats` should now work again provided the default manager is used.
 
 ## 3.46.1 - 2021-05-19
 

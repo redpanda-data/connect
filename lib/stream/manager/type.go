@@ -10,6 +10,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/stream"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -130,6 +131,7 @@ func New(opts ...func(*Type)) *Type {
 func OptSetStats(stats metrics.Type) func(*Type) {
 	return func(t *Type) {
 		t.stats = stats
+		t.manager = manager.SwapMetrics(t.manager, t.stats)
 	}
 }
 
@@ -145,7 +147,7 @@ func OptSetLogger(log log.Modular) func(*Type) {
 // all child streams.
 func OptSetManager(mgr types.Manager) func(*Type) {
 	return func(t *Type) {
-		t.manager = mgr
+		t.manager = manager.SwapMetrics(mgr, t.stats)
 	}
 }
 
@@ -199,8 +201,10 @@ func (m *Type) Create(id string, conf stream.Config) error {
 	}
 
 	sMgr, sLog, sStats := interop.LabelStream(id, m.manager, m.logger, m.stats)
+
 	strmFlatMetrics := metrics.NewLocal()
 	sStats = metrics.Combine(sStats, strmFlatMetrics)
+	sMgr = manager.SwapMetrics(sMgr, sStats)
 
 	var wrapper *StreamStatus
 	strm, err := stream.New(

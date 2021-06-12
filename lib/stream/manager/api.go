@@ -41,7 +41,7 @@ func (m *Type) registerEndpoints() {
 	)
 	m.manager.RegisterEndpoint(
 		"/streams/{id}/stats",
-		"GET a list of metrics for the stream.",
+		"GET a structured JSON object containing metrics for the stream.",
 		m.HandleStreamStats,
 	)
 	m.manager.RegisterEndpoint(
@@ -49,6 +49,27 @@ func (m *Type) registerEndpoints() {
 		"Returns 200 OK if the inputs and outputs of all running streams are connected, otherwise a 503 is returned. If there are no active streams 200 is returned.",
 		m.HandleStreamReady,
 	)
+}
+
+// ConfigSet is a map of stream configurations mapped by ID, which can be YAML
+// parsed without losing default values inside the stream configs.
+type ConfigSet map[string]stream.Config
+
+// UnmarshalYAML ensures that when parsing configs that are in a map or slice
+// the default values are still applied.
+func (c ConfigSet) UnmarshalYAML(value *yaml.Node) error {
+	tmpSet := map[string]yaml.Node{}
+	if err := value.Decode(&tmpSet); err != nil {
+		return err
+	}
+	for k, v := range tmpSet {
+		conf := stream.NewConfig()
+		if err := v.Decode(&conf); err != nil {
+			return err
+		}
+		c[k] = conf
+	}
+	return nil
 }
 
 // HandleStreamsCRUD is an http.HandleFunc for returning maps of active benthos
