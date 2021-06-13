@@ -139,6 +139,89 @@ func TestInSet(t *testing.T) {
 	}
 }
 
+func TestNotInSet(t *testing.T) {
+	inSet := NotInSet('#', '\n', ' ')
+
+	tests := map[string]struct {
+		input     string
+		result    interface{}
+		remaining string
+		err       *Error
+	}{
+		"empty input": {
+			err: NewError([]rune(""), "not chars(#\n )"),
+		},
+		"only a char": {
+			input:     "#",
+			remaining: "#",
+			err:       NewError([]rune("#"), "not chars(#\n )"),
+		},
+		"some text then set": {
+			input:     "abcabc#foo",
+			remaining: "#foo",
+			result:    "abcabc",
+		},
+		"some text then two from set": {
+			input:     "abcabc#\nfoo",
+			remaining: "#\nfoo",
+			result:    "abcabc",
+		},
+		"only text not in set": {
+			input:     "abcabc",
+			remaining: "",
+			result:    "abcabc",
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			res := inSet([]rune(test.input))
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+		})
+	}
+}
+
+func TestEmptyLine(t *testing.T) {
+	parser := EmptyLine()
+
+	tests := map[string]struct {
+		input     string
+		result    interface{}
+		remaining string
+		err       *Error
+	}{
+		"empty input": {
+			err: NewError([]rune(""), "Empty line"),
+		},
+		"empty line": {
+			input:     "\n",
+			result:    nil,
+			remaining: "\n",
+		},
+		"empty line with extra": {
+			input:     "\n foo",
+			result:    nil,
+			remaining: "\n foo",
+		},
+		"non-empty line": {
+			input:     "foo\n",
+			err:       NewError([]rune("foo\n"), "Empty line"),
+			remaining: "foo\n",
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			res := parser([]rune(test.input))
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+		})
+	}
+}
+
 func TestInRange(t *testing.T) {
 	parser := InRange('a', 'c')
 
