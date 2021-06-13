@@ -26,6 +26,7 @@ All notable changes to this project will be documented in this file.
 - New experimental `discord` input and output.
 - The `http_server` input now adds a metadata field `http_server_verb`.
 - New Bloblang method `parse_yaml`.
+- CLI flag `env-file` added to Benthos for parsing dotenv files.
 
 ### Changed
 

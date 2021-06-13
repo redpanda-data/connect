@@ -25,7 +25,7 @@ func TestParseDotEnv(t *testing.T) {
 		},
 		"bad assignment": {
 			input:     "not a thing",
-			err:       NewError([]rune(" a thing"), "Environment variable assignment"),
+			err:       NewError([]rune("a thing"), "Environment variable assignment"),
 			remaining: "not a thing",
 		},
 		"single line": {
@@ -54,8 +54,29 @@ func TestParseDotEnv(t *testing.T) {
 		},
 		"multiple assignments gibberish at the end": {
 			input:     "FOO=bar\nBAZ=buz\n\nBEV=qux\nand some stuff here",
-			err:       NewError([]rune(" some stuff here"), "Environment variable assignment"),
+			err:       NewError([]rune("some stuff here"), "Environment variable assignment"),
 			remaining: "FOO=bar\nBAZ=buz\n\nBEV=qux\nand some stuff here",
+		},
+		"multiple assignments with spaces": {
+			input: `
+FIRST = foo
+
+SECOND= "bar"
+
+THIRD =b"az
+
+FOURTH   =    buz
+
+FIFTH =  
+
+`,
+			result: map[string]string{
+				"FIRST":  "foo",
+				"SECOND": "bar",
+				"THIRD":  "b\"az",
+				"FOURTH": "buz",
+				"FIFTH":  "",
+			},
 		},
 	}
 

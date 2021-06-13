@@ -5,6 +5,7 @@ import (
 	"os"
 	"runtime/debug"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	clitemplate "github.com/Jeffail/benthos/v3/internal/cli/template"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/filepath"
@@ -102,6 +103,12 @@ func Run() {
 			Usage:   "display version info, then exit",
 		},
 		&cli.StringFlag{
+			Name:    "env-file",
+			Aliases: []string{"e"},
+			Value:   "",
+			Usage:   "import environment variables from a dotenv file",
+		},
+		&cli.StringFlag{
 			Name:  "log.level",
 			Value: "",
 			Usage: "override the configured log level, options are: off, error, warn, info, debug, trace",
@@ -144,6 +151,20 @@ func Run() {
    benthos -r "./production/*.yaml" -c ./config.yaml`[4:],
 		Flags: flags,
 		Before: func(c *cli.Context) error {
+			if dotEnvFile := c.String("env-file"); dotEnvFile != "" {
+				vars, err := parser.ParseDotEnvFile(dotEnvFile)
+				if err != nil {
+					fmt.Printf("Failed to read dotenv file: %v\n", err)
+					os.Exit(1)
+				}
+				for k, v := range vars {
+					if err = os.Setenv(k, v); err != nil {
+						fmt.Printf("Failed to set env var '%v': %v\n", k, err)
+						os.Exit(1)
+					}
+				}
+			}
+
 			templatesPaths, err := filepath.Globs(c.StringSlice("templates"))
 			if err != nil {
 				fmt.Printf("Failed to resolve template glob pattern: %v\n", err)
