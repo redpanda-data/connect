@@ -27,6 +27,7 @@ All notable changes to this project will be documented in this file.
 - The `http_server` input now adds a metadata field `http_server_verb`.
 - New Bloblang method `parse_yaml`.
 - CLI flag `env-file` added to Benthos for parsing dotenv files.
+- New `mssql` SQL driver for the `sql` processor and output.
 
 ### Changed
 

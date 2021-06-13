@@ -44,6 +44,7 @@ The following is a list of supported drivers and their respective DSN formats:
 | `clickhouse` | [`tcp://[netloc][:port][?param1=value1&...&paramN=valueN]`](https://github.com/ClickHouse/clickhouse-go#dsn)
 | `mysql` | `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]` |
 | `postgres` | `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` |
+| `mssql` | `sqlserver://[user[:password]@][netloc][:port][?database=dbname&param1=value1&...]` |
 
 Please note that the `postgres` driver enforces SSL by default, you
 can override this with the parameter `sslmode=disable` if required.
@@ -107,7 +108,7 @@ A database [driver](#drivers) to use.
 
 Type: `string`  
 Default: `"mysql"`  
-Options: `mysql`, `postgres`, `clickhouse`.
+Options: `mysql`, `postgres`, `clickhouse`, `mssql`.
 
 ### `data_source_name`
 
