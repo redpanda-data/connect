@@ -18,6 +18,7 @@ import (
 
 	// SQL Drivers
 	_ "github.com/ClickHouse/clickhouse-go"
+	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -47,6 +48,7 @@ The following is a list of supported drivers and their respective DSN formats:
 ` + "| `clickhouse` | [`tcp://[netloc][:port][?param1=value1&...&paramN=valueN]`](https://github.com/ClickHouse/clickhouse-go#dsn)" + `
 ` + "| `mysql` | `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]` |" + `
 ` + "| `postgres` | `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` |" + `
+` + "| `mssql` | `sqlserver://[user[:password]@][netloc][:port][?database=dbname&param1=value1&...]` |" + `
 
 Please note that the ` + "`postgres`" + ` driver enforces SSL by default, you
 can override this with the parameter ` + "`sslmode=disable`" + ` if required.`,
@@ -93,7 +95,7 @@ pipeline:
 			docs.FieldCommon(
 				"driver",
 				"A database [driver](#drivers) to use.",
-			).HasOptions("mysql", "postgres", "clickhouse"),
+			).HasOptions("mysql", "postgres", "clickhouse", "mssql"),
 			docs.FieldCommon(
 				"data_source_name", "A Data Source Name to identify the target database.",
 				"tcp://host1:9000?username=user&password=qwerty&database=clicks&read_timeout=10&write_timeout=20&alt_hosts=host2:9000,host3:9000",
@@ -260,7 +262,7 @@ func NewSQL(
 	var err error
 	if deprecated {
 		s.log.Warnln("Using deprecated SQL functionality due to use of field 'dsn'. To switch to the new processor use the field 'data_source_name' instead. The new processor is not backwards compatible due to differences in how message batches are processed. For more information check out the docs at https://www.benthos.dev/docs/components/processors/sql.")
-		if conf.SQL.Driver != "mysql" && conf.SQL.Driver != "postgres" {
+		if conf.SQL.Driver != "mysql" && conf.SQL.Driver != "postgres" && conf.SQL.Driver != "mssql" {
 			return nil, fmt.Errorf("driver '%v' is not supported with deprecated SQL features (using field 'dsn')", conf.SQL.Driver)
 		}
 		if s.resCodecDeprecated, err = strToSQLResultCodecDeprecated(conf.SQL.ResultCodec); err != nil {

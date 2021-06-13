@@ -20,6 +20,7 @@ import (
 
 	// SQL Drivers
 	_ "github.com/ClickHouse/clickhouse-go"
+	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -59,6 +60,7 @@ The following is a list of supported drivers and their respective DSN formats:
 ` + "| `clickhouse` | [`tcp://[netloc][:port][?param1=value1&...&paramN=valueN]`](https://github.com/ClickHouse/clickhouse-go#dsn)" + `
 ` + "| `mysql` | `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]` |" + `
 ` + "| `postgres` | `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` |" + `
+` + "| `mssql` | `sqlserver://[user[:password]@][netloc][:port][?database=dbname&param1=value1&...]` |" + `
 
 Please note that the ` + "`postgres`" + ` driver enforces SSL by default, you can override this with the parameter ` + "`sslmode=disable`" + ` if required.`,
 		Examples: []docs.AnnotatedExample{
@@ -99,7 +101,7 @@ output:
 			docs.FieldCommon(
 				"driver",
 				"A database [driver](#drivers) to use.",
-			).HasOptions("mysql", "postgres", "clickhouse"),
+			).HasOptions("mysql", "postgres", "clickhouse", "mssql"),
 			docs.FieldCommon(
 				"data_source_name", "A Data Source Name to identify the target database.",
 				"tcp://host1:9000?username=user&password=qwerty&database=clicks&read_timeout=10&write_timeout=20&alt_hosts=host2:9000,host3:9000",
