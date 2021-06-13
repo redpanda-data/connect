@@ -682,6 +682,10 @@ func customLint(ctx LintContext, spec FieldSpec, node *yaml.Node) []Lint {
 func (f FieldSpecs) LintNode(ctx LintContext, node *yaml.Node) []Lint {
 	var lints []Lint
 
+	if node.Kind == yaml.DocumentNode && node.Content[0].Kind == yaml.MappingNode {
+		node = node.Content[0]
+	}
+
 	specNames := map[string]FieldSpec{}
 	for _, field := range f {
 		specNames[field.Name] = field

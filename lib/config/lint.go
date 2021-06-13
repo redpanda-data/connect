@@ -20,15 +20,8 @@ func Lint(rawBytes []byte, _ Type) ([]string, error) {
 		return nil, err
 	}
 
-	if rawNode.Kind != yaml.DocumentNode {
-		return nil, fmt.Errorf("expected document node kind: %v", rawNode.Kind)
-	}
-	if rawNode.Content[0].Kind != yaml.MappingNode {
-		return nil, fmt.Errorf("expected mapping node child kind: %v", rawNode.Content[0].Kind)
-	}
-
 	var lintStrs []string
-	for _, lint := range Spec().LintNode(docs.NewLintContext(), rawNode.Content[0]) {
+	for _, lint := range Spec().LintNode(docs.NewLintContext(), &rawNode) {
 		if lint.Level == docs.LintError {
 			lintStrs = append(lintStrs, fmt.Sprintf("line %v: %v", lint.Line, lint.What))
 		}

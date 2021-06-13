@@ -74,9 +74,6 @@ func (c ConfigSet) UnmarshalYAML(value *yaml.Node) error {
 }
 
 func lintStreamConfigNode(node *yaml.Node) (lints []string) {
-	if node.Kind == yaml.DocumentNode && node.Content[0].Kind == yaml.MappingNode {
-		node = node.Content[0]
-	}
 	for _, dLint := range stream.Spec().LintNode(docs.NewLintContext(), node) {
 		lints = append(lints, fmt.Sprintf("line %v: %v", dLint.Line, dLint.What))
 	}

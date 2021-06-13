@@ -628,7 +628,10 @@ func TestTypeAPILinting(t *testing.T) {
 	},
 	"output": {
 		"nanomsg": {}
-	}
+	},
+	"cache_resources": [
+		{"label":"not_interested","memory":{}}
+	]
 }`)
 
 	request, err := http.NewRequest("POST", "/streams/foo", bytes.NewReader(body))
@@ -638,7 +641,7 @@ func TestTypeAPILinting(t *testing.T) {
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusBadRequest, response.Code)
 
-	expLints := `{"lint_errors":["line 4: field file is invalid when the component type is nanomsg (input)"]}`
+	expLints := `{"lint_errors":["line 4: field file is invalid when the component type is nanomsg (input)","line 9: field cache_resources not recognised"]}`
 	assert.Equal(t, expLints, response.Body.String())
 
 	request, err = http.NewRequest("POST", "/streams/foo?chilled=true", bytes.NewReader(body))
