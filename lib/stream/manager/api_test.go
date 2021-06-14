@@ -3,17 +3,24 @@ package manager_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/cache"
+	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	bmanager "github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/stream"
 	"github.com/Jeffail/benthos/v3/lib/stream/manager"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -31,6 +38,7 @@ func router(m *manager.Type) *mux.Router {
 	router.HandleFunc("/streams", m.HandleStreamsCRUD)
 	router.HandleFunc("/streams/{id}", m.HandleStreamCRUD)
 	router.HandleFunc("/streams/{id}/stats", m.HandleStreamStats)
+	router.HandleFunc("/resources/{type}/{id}", m.HandleResourceCRUD)
 	return router
 }
 
@@ -652,6 +660,109 @@ func TestTypeAPILinting(t *testing.T) {
 	assert.Equal(t, http.StatusOK, response.Code)
 }
 
+func TestResourceAPILinting(t *testing.T) {
+	tests := []struct {
+		name   string
+		ctype  string
+		config string
+		lints  []string
+	}{
+		{
+			name:  "cache bad",
+			ctype: "cache",
+			config: `memory:
+  ttl: 123
+  nope: nah
+  compaction_interval: 1s`,
+			lints: []string{
+				"line 3: field nope not recognised",
+			},
+		},
+		{
+			name:  "input bad",
+			ctype: "input",
+			config: `http_server:
+  path: /foo/bar
+  nope: nah`,
+			lints: []string{
+				"line 3: field nope not recognised",
+			},
+		},
+		{
+			name:  "output bad",
+			ctype: "output",
+			config: `http_server:
+  path: /foo/bar
+  nope: nah`,
+			lints: []string{
+				"line 3: field nope not recognised",
+			},
+		},
+		{
+			name:  "processor bad",
+			ctype: "processor",
+			config: `split:
+  size: 10
+  nope: nah`,
+			lints: []string{
+				"line 3: field nope not recognised",
+			},
+		},
+		{
+			name:  "rate limit bad",
+			ctype: "rate_limit",
+			config: `local:
+  count: 10
+  nope: nah`,
+			lints: []string{
+				"line 3: field nope not recognised",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			bmgr, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.DudMgr{}, log.Noop(), metrics.Noop())
+			require.NoError(t, err)
+
+			mgr := manager.New(
+				manager.OptSetLogger(log.Noop()),
+				manager.OptSetStats(metrics.Noop()),
+				manager.OptSetManager(bmgr),
+				manager.OptSetAPITimeout(time.Millisecond*100),
+			)
+
+			r := router(mgr)
+
+			url := fmt.Sprintf("/resources/%v/foo", test.ctype)
+			body := []byte(test.config)
+
+			request, err := http.NewRequest("POST", url, bytes.NewReader(body))
+			require.NoError(t, err)
+
+			response := httptest.NewRecorder()
+			r.ServeHTTP(response, request)
+			assert.Equal(t, http.StatusBadRequest, response.Code)
+
+			expLints, err := json.Marshal(struct {
+				LintErrors []string `json:"lint_errors"`
+			}{
+				LintErrors: test.lints,
+			})
+			require.NoError(t, err)
+
+			assert.Equal(t, string(expLints), response.Body.String())
+
+			request, err = http.NewRequest("POST", url+"?chilled=true", bytes.NewReader(body))
+			require.NoError(t, err)
+
+			response = httptest.NewRecorder()
+			r.ServeHTTP(response, request)
+			assert.Equal(t, http.StatusOK, response.Code)
+		})
+	}
+}
+
 func TestTypeAPIGetStats(t *testing.T) {
 	mgr, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.DudMgr{}, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -689,4 +800,101 @@ func TestTypeAPIGetStats(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, 1.0, stats.S("input", "running").Data())
+}
+
+func TestTypeAPISetResources(t *testing.T) {
+	bmgr, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.DudMgr{}, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	tChan := make(chan types.Transaction)
+	bmgr.SetPipe("feed_in", tChan)
+
+	mgr := manager.New(
+		manager.OptSetLogger(log.Noop()),
+		manager.OptSetStats(metrics.Noop()),
+		manager.OptSetManager(bmgr),
+		manager.OptSetAPITimeout(time.Millisecond*100),
+	)
+
+	tmpDir, err := ioutil.TempDir("", "resources")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	dir1 := filepath.Join(tmpDir, "dir1")
+	require.NoError(t, os.MkdirAll(dir1, 0750))
+
+	dir2 := filepath.Join(tmpDir, "dir2")
+	require.NoError(t, os.MkdirAll(dir2, 0750))
+
+	r := router(mgr)
+
+	cacheConf := cache.NewConfig()
+	cacheConf.Type = cache.TypeFile
+	cacheConf.File.Directory = dir1
+
+	request := genYAMLRequest("POST", "/resources/cache/foocache?chilled=true", cacheConf)
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
+
+	streamConf := stream.NewConfig()
+	streamConf.Input.Type = input.TypeInproc
+	streamConf.Input.Inproc = "feed_in"
+	streamConf.Output.Type = output.TypeCache
+	streamConf.Output.Cache.Key = `${! json("id") }`
+	streamConf.Output.Cache.Target = "foocache"
+
+	request = genYAMLRequest("POST", "/streams/foo?chilled=true", streamConf)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
+
+	resChan := make(chan types.Response)
+	select {
+	case tChan <- types.NewTransaction(message.New([][]byte{[]byte(`{"id":"first","content":"hello world"}`)}), resChan):
+	case <-time.After(time.Second * 5):
+		t.Fatal("timed out")
+	}
+	select {
+	case <-resChan:
+	case <-time.After(time.Second * 5):
+		t.Fatal("timed out")
+	}
+
+	cacheConf.File.Directory = dir2
+
+	request = genYAMLRequest("POST", "/resources/cache/foocache?chilled=true", cacheConf)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
+
+	select {
+	case tChan <- types.NewTransaction(message.New([][]byte{[]byte(`{"id":"second","content":"hello world 2"}`)}), resChan):
+	case <-time.After(time.Second * 5):
+		t.Fatal("timed out")
+	}
+	select {
+	case <-resChan:
+	case <-time.After(time.Second * 5):
+		t.Fatal("timed out")
+	}
+
+	files, err := os.ReadDir(dir1)
+	require.NoError(t, err)
+	assert.Len(t, files, 1)
+
+	file1Bytes, err := os.ReadFile(filepath.Join(dir1, "first"))
+	require.NoError(t, err)
+	assert.Equal(t, `{"id":"first","content":"hello world"}`, string(file1Bytes))
+
+	files, err = os.ReadDir(dir2)
+	require.NoError(t, err)
+	assert.Len(t, files, 1)
+
+	file2Bytes, err := os.ReadFile(filepath.Join(dir2, "second"))
+	require.NoError(t, err)
+	assert.Equal(t, `{"id":"second","content":"hello world 2"}`, string(file2Bytes))
 }

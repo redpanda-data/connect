@@ -702,6 +702,8 @@ func (f FieldSpecs) LintNode(ctx LintContext, node *yaml.Node) []Lint {
 		lints = append(lints, lintFromOmit(spec, node, node.Content[i+1])...)
 		lints = append(lints, spec.lintNode(ctx, node.Content[i+1])...)
 	}
+
+	// TODO: Lint missing fields with no default
 	return lints
 }
 

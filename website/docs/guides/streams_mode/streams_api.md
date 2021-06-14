@@ -64,6 +64,22 @@ If you wish for the streams API to proceed with configurations that contain lint
 
 Create a new stream identified by `id` by posting a body containing the stream configuration in either JSON or YAML format. The configuration should be a standard Benthos configuration containing the sections `input`, `buffer`, `pipeline` and `output`.
 
+#### Request Body Example
+
+URL: `/streams/foo`
+
+```yaml
+input:
+  file:
+    paths: [ /tmp/input.ndjson ]
+pipeline:
+  processors:
+    - bloblang: root = content().uppercase()
+output:
+  file:
+    path: /tmp/output.ndjson
+```
+
 #### Response 200
 
 The stream was created successfully.
@@ -144,5 +160,39 @@ Read the metrics of an existing stream as a hierarchical JSON object.
 #### Response 200
 
 The stream was found.
+
+### POST `/resources/{type}/{id}`
+
+Add or modify a resource component configuration of a given `type` identified by a unique `id`. The configuration must be in JSON or YAML format and must only contain configuration fields for the component.
+
+Valid component types are `cache`, `input`, `output`, `processor` and `rate_limit`.
+
+#### Request Body Example
+
+URL: `/resources/cache/foo`
+
+```yaml
+redis:
+  url: http://localhost:6379
+  expiration: 1h
+```
+
+#### Response 200
+
+The resource was created successfully.
+
+#### Response 400
+
+The configuration was invalid, or has linting errors. If linting errors were detected then a JSON response is provided of the form:
+
+```json
+{
+	"linting_errors": [
+		"<a description of the error"
+	]
+}
+```
+
+If you wish for the streams API to proceed with configurations that contain linting errors then you can override this check by setting the URL param `chilled` to `true`, e.g. `/resources/cache/foo?chilled=true`.
 
 [streams-api-walkthrough]: /docs/guides/streams_mode/using_rest_api

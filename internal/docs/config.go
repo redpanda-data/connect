@@ -426,6 +426,10 @@ func LintNode(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 		return nil
 	}
 
+	if node.Kind == yaml.DocumentNode && node.Content[0].Kind == yaml.MappingNode {
+		node = node.Content[0]
+	}
+
 	var lints []Lint
 
 	var name string
