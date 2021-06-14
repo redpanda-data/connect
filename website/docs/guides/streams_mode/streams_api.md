@@ -171,7 +171,7 @@ Valid component types are `cache`, `input`, `output`, `processor` and `rate_limi
 
 URL: `/resources/cache/foo`
 
-```yaml
+```yml
 redis:
   url: http://localhost:6379
   expiration: 1h
