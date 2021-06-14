@@ -1060,6 +1060,33 @@ var _ = registerSimpleMethod(
 	ExpectNArgs(0),
 )
 
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"format_yaml", "",
+	).InCategory(
+		MethodCategoryParsing,
+		"Serializes a target value into a YAML byte array.",
+		NewExampleSpec("",
+			`root = this.doc.format_yaml()`,
+			`{"doc":{"foo":"bar"}}`,
+			`foo: bar
+`,
+		),
+		NewExampleSpec("Use the `.string()` method in order to coerce the result into a string.",
+			`root.doc = this.doc.format_yaml().string()`,
+			`{"doc":{"foo":"bar"}}`,
+			`{"doc":"foo: bar\n"}`,
+		),
+	),
+	func(args ...interface{}) (simpleMethod, error) {
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			return yaml.Marshal(v)
+		}, nil
+	},
+	false,
+	ExpectNArgs(0),
+)
+
 //------------------------------------------------------------------------------
 
 var _ = registerSimpleMethod(

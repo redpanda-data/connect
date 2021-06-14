@@ -25,7 +25,7 @@ All notable changes to this project will be documented in this file.
 - The `redis` processor now supports `incrby` operations.
 - New experimental `discord` input and output.
 - The `http_server` input now adds a metadata field `http_server_verb`.
-- New Bloblang method `parse_yaml`.
+- New Bloblang methods `parse_yaml` and `format_yaml`.
 - CLI flag `env-file` added to Benthos for parsing dotenv files.
 - New `mssql` SQL driver for the `sql` processor and output.
 - New POST endpoint `/resources/{type}/{id}` added to Benthos streams mode for dynamically mutating resource configs.

@@ -1324,6 +1324,27 @@ root = this.without("inner.a","inner.c","d")
 
 ## Parsing
 
+### `format_yaml`
+
+Serializes a target value into a YAML byte array.
+
+```coffee
+root = this.doc.format_yaml()
+
+# In:  {"doc":{"foo":"bar"}}
+# Out: foo: bar
+
+```
+
+Use the `.string()` method in order to coerce the result into a string.
+
+```coffee
+root.doc = this.doc.format_yaml().string()
+
+# In:  {"doc":{"foo":"bar"}}
+# Out: {"doc":"foo: bar\n"}
+```
+
 ### `parse_csv`
 
 Attempts to parse a string into an array of objects by following the CSV format described in RFC 4180. The first line is assumed to be a header row, which determines the keys of values in each object.
