@@ -86,7 +86,7 @@ func parseLiteralWithTails(litParser Func, pCtx Context) Func {
 		var fn query.Function
 		for {
 			if res = delim(res.Remaining); res.Err != nil {
-				var payload interface{} = lit
+				payload := lit
 				if fn != nil {
 					payload = fn
 				}

@@ -130,7 +130,7 @@ func metadataGreaterThanOperator(key string, arg interface{}) (metadataOperator,
 		return nil, fmt.Errorf("failed to parse argument as float64: %v", err)
 	}
 	return func(md types.Metadata) bool {
-		val, verr := strconv.ParseFloat(md.Get(key), 10)
+		val, verr := strconv.ParseFloat(md.Get(key), 64)
 		if verr != nil {
 			return false
 		}
@@ -164,7 +164,7 @@ func metadataLessThanOperator(key string, arg interface{}) (metadataOperator, er
 		return nil, fmt.Errorf("failed to parse argument as float64: %v", err)
 	}
 	return func(md types.Metadata) bool {
-		val, verr := strconv.ParseFloat(md.Get(key), 10)
+		val, verr := strconv.ParseFloat(md.Get(key), 64)
 		if verr != nil {
 			return false
 		}

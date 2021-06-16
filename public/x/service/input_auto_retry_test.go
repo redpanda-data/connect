@@ -54,7 +54,7 @@ func (i *mockInput) Read(ctx context.Context) (*Message, AckFunc, error) {
 	i.ackRcvd = append(i.ackRcvd, errors.New("ack not received"))
 	index := len(i.ackRcvd) - 1
 
-	var nextMsg *Message = NewMessage(nil)
+	nextMsg := NewMessage(nil)
 	if len(i.msgsToSnd) > 0 {
 		nextMsg = i.msgsToSnd[0]
 		i.msgsToSnd = i.msgsToSnd[1:]
