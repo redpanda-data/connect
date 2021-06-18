@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/golang/snappy"
+	"github.com/pierrec/lz4/v4"
 )
 
 func TestDecompressBadAlgo(t *testing.T) {
@@ -197,6 +198,54 @@ func TestDecompressFlate(t *testing.T) {
 	}
 
 	proc, err := NewDecompress(conf, nil, testLog, metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessMessage(message.New(input))
+	if len(msgs) != 1 {
+		t.Error("Decompress failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
+func TestDecompressLZ4(t *testing.T) {
+	conf := NewConfig()
+	conf.Decompress.Algorithm = "lz4"
+
+	input := [][]byte{
+		[]byte("hello world first part"),
+		[]byte("hello world second part"),
+		[]byte("third part"),
+		[]byte("fourth"),
+		[]byte("5"),
+	}
+
+	exp := [][]byte{}
+
+	for i := range input {
+		exp = append(exp, input[i])
+
+		buf := bytes.Buffer{}
+		w := lz4.NewWriter(&buf)
+		if _, err := w.Write(input[i]); err != nil {
+			w.Close()
+			t.Fatalf("Failed to compress input: %s", err)
+		}
+		w.Close()
+
+		input[i] = buf.Bytes()
+	}
+
+	if reflect.DeepEqual(input, exp) {
+		t.Fatal("Input and exp output are the same")
+	}
+
+	proc, err := NewDecompress(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

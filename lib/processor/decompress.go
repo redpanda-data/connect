@@ -17,6 +17,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/golang/snappy"
 	"github.com/opentracing/opentracing-go"
+	"github.com/pierrec/lz4/v4"
 )
 
 //------------------------------------------------------------------------------
@@ -29,9 +30,9 @@ func init() {
 		},
 		Summary: `
 Decompresses messages according to the selected algorithm. Supported
-decompression types are: gzip, zlib, bzip2, flate.`,
+decompression types are: gzip, zlib, bzip2, flate, snappy, lz4.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("algorithm", "The decompression algorithm to use.").HasOptions("gzip", "zlib", "bzip2", "flate", "snappy"),
+			docs.FieldCommon("algorithm", "The decompression algorithm to use.").HasOptions("gzip", "zlib", "bzip2", "flate", "snappy", "lz4"),
 			PartsFieldSpec,
 		},
 	}
@@ -114,6 +115,18 @@ func bzip2Decompress(b []byte) ([]byte, error) {
 	return outBuf.Bytes(), nil
 }
 
+func lz4Decompress(b []byte) ([]byte, error) {
+	buf := bytes.NewBuffer(b)
+	r := lz4.NewReader(buf)
+
+	outBuf := bytes.Buffer{}
+	if _, err := outBuf.ReadFrom(r); err != nil && err != io.EOF {
+		return nil, err
+	}
+
+	return outBuf.Bytes(), nil
+}
+
 func strToDecompressor(str string) (decompressFunc, error) {
 	switch str {
 	case "gzip":
@@ -126,6 +139,8 @@ func strToDecompressor(str string) (decompressFunc, error) {
 		return bzip2Decompress, nil
 	case "snappy":
 		return snappyDecompress, nil
+	case "lz4":
+		return lz4Decompress, nil
 	}
 	return nil, fmt.Errorf("decompression type not recognised: %v", str)
 }

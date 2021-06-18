@@ -66,6 +66,7 @@ require (
 	github.com/ory/dockertest/v3 v3.6.3
 	github.com/patrobinson/gokini v0.1.0
 	github.com/pebbe/zmq4 v1.2.1
+	github.com/pierrec/lz4/v4 v4.1.7
 	github.com/pkg/sftp v1.12.0
 	github.com/prometheus/client_golang v1.8.0
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
