@@ -118,7 +118,9 @@ func lz4Compress(level int, b []byte) ([]byte, error) {
 	w := lz4.NewWriter(buf)
 	if level > 0 {
 		// The default compression level is 0 (lz4.Fast)
-		w.Apply(lz4.CompressionLevelOption(lz4.CompressionLevel(1 << (8 + level))))
+		if err := w.Apply(lz4.CompressionLevelOption(lz4.CompressionLevel(1 << (8 + level)))); err != nil {
+			return nil, err
+		}
 	}
 
 	if _, err := w.Write(b); err != nil {

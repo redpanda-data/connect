@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Algorithm `lz4` added to the `compress` and `decompress` processors.
+
 ## 3.47.0 - 2021-06-16
 
 ### Added
