@@ -62,43 +62,49 @@ type compressFunc func(level int, bytes []byte) ([]byte, error)
 
 func gzipCompress(level int, b []byte) ([]byte, error) {
 	buf := &bytes.Buffer{}
-	zw, err := gzip.NewWriterLevel(buf, level)
+	w, err := gzip.NewWriterLevel(buf, level)
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err = zw.Write(b); err != nil {
+	if _, err = w.Write(b); err != nil {
+		w.Close()
 		return nil, err
 	}
-	zw.Close()
+	// Must flush writer before calling buf.Bytes()
+	w.Close()
 	return buf.Bytes(), nil
 }
 
 func zlibCompress(level int, b []byte) ([]byte, error) {
 	buf := &bytes.Buffer{}
-	zw, err := zlib.NewWriterLevel(buf, level)
+	w, err := zlib.NewWriterLevel(buf, level)
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err = zw.Write(b); err != nil {
+	if _, err = w.Write(b); err != nil {
+		w.Close()
 		return nil, err
 	}
-	zw.Close()
+	// Must flush writer before calling buf.Bytes()
+	w.Close()
 	return buf.Bytes(), nil
 }
 
 func flateCompress(level int, b []byte) ([]byte, error) {
 	buf := &bytes.Buffer{}
-	zw, err := flate.NewWriter(buf, level)
+	w, err := flate.NewWriter(buf, level)
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err = zw.Write(b); err != nil {
+	if _, err = w.Write(b); err != nil {
+		w.Close()
 		return nil, err
 	}
-	zw.Close()
+	// Must flush writer before calling buf.Bytes()
+	w.Close()
 	return buf.Bytes(), nil
 }
 

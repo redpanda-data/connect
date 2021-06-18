@@ -58,17 +58,17 @@ func NewDecompressConfig() DecompressConfig {
 type decompressFunc func(bytes []byte) ([]byte, error)
 
 func gzipDecompress(b []byte) ([]byte, error) {
-	buf := bytes.NewBuffer(b)
-	zr, err := gzip.NewReader(buf)
+	r, err := gzip.NewReader(bytes.NewBuffer(b))
 	if err != nil {
 		return nil, err
 	}
 
 	outBuf := bytes.Buffer{}
-	if _, err = outBuf.ReadFrom(zr); err != nil && err != io.EOF {
+	if _, err = io.Copy(&outBuf, r); err != nil {
+		r.Close()
 		return nil, err
 	}
-	zr.Close()
+	r.Close()
 	return outBuf.Bytes(), nil
 }
 
@@ -77,38 +77,37 @@ func snappyDecompress(b []byte) ([]byte, error) {
 }
 
 func zlibDecompress(b []byte) ([]byte, error) {
-	buf := bytes.NewBuffer(b)
-	zr, err := zlib.NewReader(buf)
+	r, err := zlib.NewReader(bytes.NewBuffer(b))
 	if err != nil {
 		return nil, err
 	}
 
 	outBuf := bytes.Buffer{}
-	if _, err = outBuf.ReadFrom(zr); err != nil && err != io.EOF {
+	if _, err = io.Copy(&outBuf, r); err != nil {
+		r.Close()
 		return nil, err
 	}
-	zr.Close()
+	r.Close()
 	return outBuf.Bytes(), nil
 }
 
 func flateDecompress(b []byte) ([]byte, error) {
-	buf := bytes.NewBuffer(b)
-	zr := flate.NewReader(buf)
+	r := flate.NewReader(bytes.NewBuffer(b))
 
 	outBuf := bytes.Buffer{}
-	if _, err := outBuf.ReadFrom(zr); err != nil && err != io.EOF {
+	if _, err := io.Copy(&outBuf, r); err != nil {
+		r.Close()
 		return nil, err
 	}
-	zr.Close()
+	r.Close()
 	return outBuf.Bytes(), nil
 }
 
 func bzip2Decompress(b []byte) ([]byte, error) {
-	buf := bytes.NewBuffer(b)
-	zr := bzip2.NewReader(buf)
+	r := bzip2.NewReader(bytes.NewBuffer(b))
 
 	outBuf := bytes.Buffer{}
-	if _, err := outBuf.ReadFrom(zr); err != nil && err != io.EOF {
+	if _, err := io.Copy(&outBuf, r); err != nil {
 		return nil, err
 	}
 	return outBuf.Bytes(), nil
