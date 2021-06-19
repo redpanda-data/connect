@@ -8,7 +8,7 @@ import (
 )
 
 // TODO: Put this somewhere else and use the new Go 1.16 file APIs.
-var templateDocsTemplate = `---
+var templateDocsTemplate = docs.FieldsTemplate(false) + `---
 title: Templating
 description: Learn how Benthos templates work.
 ---
@@ -38,40 +38,11 @@ You can see examples of templates, including some that are included as part of t
 
 The schema of a template file is as follows:
 
-{{range $i, $field := .Fields -}}
-### ` + "`{{$field.Name}}`" + `
-
-{{$field.Description}}
-{{if $field.Interpolated -}}
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-{{end}}
-
-{{if gt (len $field.Type) 0}}
-Type: {{if $field.IsArray}}list of {{end}}{{if $field.IsMap}}map of {{end}}` + "`{{$field.Type}}`" + `  
-{{end}}
-{{if gt (len $field.AnnotatedOptions) 0}}
-| Option | Summary |
-|---|---|
-{{range $j, $option := $field.AnnotatedOptions -}}` + "| `" + `{{index $option 0}}` + "` |" + ` {{index $option 1}} |
-{{end}}
-{{else if gt (len $field.Options) 0}}Options: {{range $j, $option := $field.Options -}}
-{{if ne $j 0}}, {{end}}` + "`" + `{{$option}}` + "`" + `{{end}}.
-{{end}}
-{{if gt (len $field.Examples) 0 -}}
-` + "```yml" + `
-# Examples
-
-{{range $j, $example := $field.ExamplesMarshalled -}}
-{{if ne $j 0}}
-{{end}}{{$example}}{{end -}}
-` + "```" + `
-
-{{end -}}
-{{end -}}
+{{template "field_docs" . -}}
 `
 
 type templateContext struct {
-	Fields docs.FieldSpecs
+	Fields []docs.FieldSpecCtx
 }
 
 // DocsMarkdown returns a markdown document for the templates documentation.

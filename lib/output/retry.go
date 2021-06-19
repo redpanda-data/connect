@@ -40,7 +40,7 @@ Rather than retrying the same output you may wish to retry the send using a
 different output target (a dead letter queue). In which case you should instead
 use the ` + "[`try`](/docs/components/outputs/try)" + ` output type.`,
 		FieldSpecs: retries.FieldSpecs().Add(
-			docs.FieldCommon("output", "A child output.").HasType(docs.FieldOutput),
+			docs.FieldCommon("output", "A child output.").HasType(docs.FieldTypeOutput),
 		),
 		Categories: []Category{
 			CategoryUtility,

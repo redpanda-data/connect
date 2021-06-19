@@ -75,7 +75,7 @@ guarantees.`,
 		Categories: []Category{
 			CategoryUtility,
 		},
-		config: docs.FieldComponent().Array().HasType(docs.FieldOutput),
+		config: docs.FieldComponent().Array().HasType(docs.FieldTypeOutput),
 	}
 }
 

@@ -38,7 +38,7 @@ Custom metrics such as these are emitted along with Benthos internal metrics, wh
 			),
 			docs.FieldDeprecated("path"),
 			docs.FieldCommon("name", "The name of the metric to create, this must be unique across all Benthos components otherwise it will overwrite those other metrics."),
-			docs.FieldCommon(
+			docs.FieldString(
 				"labels", "A map of label names and values that can be used to enrich metrics. Labels are not supported by some metric destinations, in which case the metrics series are combined.",
 				map[string]string{
 					"type":  "${! json(\"doc.type\") }",

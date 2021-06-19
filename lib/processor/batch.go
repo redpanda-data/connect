@@ -30,7 +30,7 @@ This processor is scheduled to be removed in Benthos V4`,
 		config: docs.FieldComponent().WithChildren(
 			docs.FieldDeprecated("byte_size"),
 			docs.FieldDeprecated("count"),
-			docs.FieldDeprecated("condition").HasType(docs.FieldCondition),
+			docs.FieldDeprecated("condition").HasType(docs.FieldTypeCondition),
 			docs.FieldDeprecated("period"),
 		),
 	}

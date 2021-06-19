@@ -52,7 +52,7 @@ func init() {
 			docs.FieldCommon("subject", "A subject to write to.").IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			btls.FieldSpec(),
-		),
+		).ChildDefaultAndTypesFromStruct(output.NewNATSJetStreamConfig()),
 	})
 }
 

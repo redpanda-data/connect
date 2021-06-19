@@ -46,7 +46,7 @@ If following a loop execution the number of messages in a batch is reduced to ze
 				`errored()`,
 				`this.urls.unprocessed.length() > 0`,
 			).HasDefault("").Linter(docs.LintBloblangMapping),
-			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v, _ interface{}) (string, bool) {
+			docs.FieldDeprecated("condition").HasType(docs.FieldTypeCondition).OmitWhen(func(v, _ interface{}) (string, bool) {
 				defaultBytes, err := yaml.Marshal(condition.NewConfig())
 				if err != nil {
 					return "", false
@@ -57,7 +57,7 @@ If following a loop execution the number of messages in a batch is reduced to ze
 				}
 				return "field condition is deprecated in favour of check", cmp.Equal(v, iDefault)
 			}),
-			docs.FieldCommon("processors", "A list of child processors to execute on each loop.").Array().HasType(docs.FieldProcessor),
+			docs.FieldCommon("processors", "A list of child processors to execute on each loop.").Array().HasType(docs.FieldTypeProcessor),
 		},
 	}
 }

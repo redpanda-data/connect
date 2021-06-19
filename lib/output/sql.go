@@ -108,10 +108,6 @@ output:
 				"foouser:foopassword@tcp(localhost:3306)/foodb",
 				"postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable",
 			),
-			docs.FieldDeprecated("dsn").OmitWhen(func(v, _ interface{}) (string, bool) {
-				s, ok := v.(string)
-				return "field dsn is deprecated in favour of data_source_name", ok && s == ""
-			}),
 			docs.FieldCommon(
 				"query", "The query to run against the database.",
 				"INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);",
@@ -120,12 +116,12 @@ output:
 				"args",
 				"A list of arguments for the query to be resolved for each message.",
 			).IsInterpolated().Array(),
-			docs.FieldCommon(
+			docs.FieldString(
 				"args_mapping",
 				"A [Bloblang mapping](/docs/guides/bloblang/about) that produces the arguments for the query. The mapping must return an array containing the number of arguments in the query.",
 				`[ this.foo, this.bar.not_empty().catch(null), meta("baz") ]`,
 				`root = [ uuid_v4() ].merge(this.document.args)`,
-			).HasType(docs.FieldString).Linter(docs.LintBloblangMapping).AtVersion("3.47.0"),
+			).Linter(docs.LintBloblangMapping).AtVersion("3.47.0"),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			batch.FieldSpec(),
 		},

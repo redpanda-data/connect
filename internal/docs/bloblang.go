@@ -16,7 +16,7 @@ import (
 func LintBloblangMapping(ctx LintContext, line, col int, v interface{}) []Lint {
 	str, ok := v.(string)
 	if !ok {
-		return []Lint{NewLintWarning(line, fmt.Sprintf("expected string value, got %T", v))}
+		return []Lint{NewLintError(line, fmt.Sprintf("expected string value, got %T", v))}
 	}
 	if str == "" {
 		return nil

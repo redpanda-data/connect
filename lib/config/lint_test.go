@@ -31,13 +31,13 @@ func TestConfigLints(t *testing.T) {
 			lints: []string{"line 3: field kafka is invalid when the component type is stdin (input)"},
 		},
 		{
-			name: "ignore tests section",
+			name: "lint tests section",
 			conf: `input:
   type: stdin
 tests:
   this: can just contain anything
   like_this: ["foo","bar"]`,
-			lints: nil,
+			lints: []string{"line 4: expected array value"},
 		},
 		{
 			name: "broker object type",

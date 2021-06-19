@@ -40,7 +40,7 @@ The field ` + "`max_buffer`" + ` defines the maximum message size able to be rea
 The execution environment of the subprocess is the same as the Benthos instance, including environment variables and the current working directory.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("name", "The command to execute as a subprocess.", "cat", "sed", "awk"),
-			docs.FieldCommon("args", "A list of arguments to provide the command.").Array(),
+			docs.FieldString("args", "A list of arguments to provide the command.").Array(),
 			docs.FieldCommon(
 				"codec", "The way in which messages should be consumed from the subprocess.",
 			).HasOptions("lines"),

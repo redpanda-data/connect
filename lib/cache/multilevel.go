@@ -59,7 +59,7 @@ cache_resources:
 
 Using this config when a target key already exists in our local memory cache we
 won't bother hitting the remote memcached instance.`,
-		config: docs.FieldComponent().Array().HasType(docs.FieldString),
+		config: docs.FieldComponent().Array().HasType(docs.FieldTypeString).HasDefault([]string{}),
 	}
 }
 

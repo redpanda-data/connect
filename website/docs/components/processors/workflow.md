@@ -229,10 +229,10 @@ Default: `"meta.workflow"`
 
 ### `order`
 
-An explicit declaration of branch ordered tiers, which describes the order in which parallel tiers of branches should be executed. Branches should be identified by the name as they are configured in the field `branches`. It's also possible to specify branch processors configured [as a resource](#resources). 
+An explicit declaration of branch ordered tiers, which describes the order in which parallel tiers of branches should be executed. Branches should be identified by the name as they are configured in the field `branches`. It's also possible to specify branch processors configured [as a resource](#resources).
 
 
-Type: `array`  
+Type: `two-dimensional array`  
 Default: `[]`  
 
 ```yaml
@@ -264,6 +264,7 @@ An object of named [`branch` processors](/docs/components/processors/branch) tha
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `branches.<name>.request_map`
 

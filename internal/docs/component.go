@@ -8,7 +8,6 @@ import (
 	"text/template"
 
 	"github.com/Jeffail/benthos/v3/lib/util/config"
-	"github.com/Jeffail/gabs/v2"
 	"gopkg.in/yaml.v3"
 )
 
@@ -100,20 +99,6 @@ type ComponentSpec struct {
 	Version string
 }
 
-type fieldContext struct {
-	Name             string
-	Type             string
-	Description      string
-	Default          string
-	Advanced         bool
-	Deprecated       bool
-	Interpolated     bool
-	Examples         []string
-	AnnotatedOptions [][2]string
-	Options          []string
-	Version          string
-}
-
 type componentContext struct {
 	Name               string
 	Type               string
@@ -122,7 +107,7 @@ type componentContext struct {
 	Description        string
 	Categories         string
 	Examples           []AnnotatedExample
-	Fields             []fieldContext
+	Fields             []FieldSpecCtx
 	Footnotes          string
 	CommonConfig       string
 	AdvancedConfig     string
@@ -130,44 +115,7 @@ type componentContext struct {
 	Version            string
 }
 
-var componentTemplate = `{{define "field_docs" -}}
-## Fields
-
-{{range $i, $field := .Fields -}}
-### ` + "`{{$field.Name}}`" + `
-
-{{$field.Description}}
-{{if $field.Interpolated -}}
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-{{end}}
-
-Type: ` + "`{{$field.Type}}`" + `  
-{{if gt (len $field.Default) 0}}Default: ` + "`{{$field.Default}}`" + `  
-{{end -}}
-{{if gt (len $field.Version) 0}}Requires version {{$field.Version}} or newer  
-{{end -}}
-{{if gt (len $field.AnnotatedOptions) 0}}
-| Option | Summary |
-|---|---|
-{{range $j, $option := $field.AnnotatedOptions -}}` + "| `" + `{{index $option 0}}` + "` |" + ` {{index $option 1}} |
-{{end}}
-{{else if gt (len $field.Options) 0}}Options: {{range $j, $option := $field.Options -}}
-{{if ne $j 0}}, {{end}}` + "`" + `{{$option}}` + "`" + `{{end}}.
-{{end}}
-{{if gt (len $field.Examples) 0 -}}
-` + "```yaml" + `
-# Examples
-
-{{range $j, $example := $field.Examples -}}
-{{if ne $j 0}}
-{{end}}{{$example}}{{end -}}
-` + "```" + `
-
-{{end -}}
-{{end -}}
-{{end -}}
-
----
+var componentTemplate = FieldsTemplate(true) + `---
 title: {{.Name}}
 type: {{.Type}}
 status: {{.Status}}
@@ -243,6 +191,8 @@ Introduced in version {{.Version}}.
 {{.Description}}
 {{end}}
 {{if and (le (len .Fields) 4) (gt (len .Fields) 0) -}}
+## Fields
+
 {{template "field_docs" . -}}
 {{end -}}
 
@@ -271,6 +221,8 @@ Introduced in version {{.Version}}.
 {{end -}}
 
 {{if gt (len .Fields) 4 -}}
+## Fields
+
 {{template "field_docs" . -}}
 {{end -}}
 
@@ -285,7 +237,7 @@ func createOrderedConfig(t Type, rawExample interface{}, filter FieldFilter) (*y
 		return nil, err
 	}
 
-	if err := SanitiseNode(t, &newNode, SanitiseConfig{
+	if err := SanitiseYAML(t, &newNode, SanitiseConfig{
 		RemoveTypeField: true,
 		Filter:          filter,
 		ForExample:      true,
@@ -299,12 +251,12 @@ func createOrderedConfig(t Type, rawExample interface{}, filter FieldFilter) (*y
 func genExampleConfigs(t Type, nest bool, fullConfigExample interface{}) (commonConfigStr, advConfigStr string, err error) {
 	var advConfig, commonConfig interface{}
 	if advConfig, err = createOrderedConfig(t, fullConfigExample, func(f FieldSpec) bool {
-		return !f.Deprecated
+		return !f.IsDeprecated
 	}); err != nil {
 		panic(err)
 	}
 	if commonConfig, err = createOrderedConfig(t, fullConfigExample, func(f FieldSpec) bool {
-		return !f.Advanced && !f.Deprecated
+		return !f.IsAdvanced && !f.IsDeprecated
 	}); err != nil {
 		panic(err)
 	}
@@ -365,61 +317,16 @@ func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]
 	}
 
 	flattenedFields := c.Config.FlattenChildrenForDocs()
-	gConf := gabs.Wrap(fullConfigExample).S(c.Name)
 	for _, v := range flattenedFields {
-		var defaultValue *interface{}
-		if v.Default != nil {
-			defaultValue = v.Default
-		} else if dv := gConf.Path(v.Name).Data(); dv != nil {
-			defaultValue = &dv
+		if v.Spec.Kind == KindMap {
+			v.Spec.Type = "object"
+		} else if v.Spec.Kind == KindArray {
+			v.Spec.Type = "array"
+		} else if v.Spec.Kind == Kind2DArray {
+			v.Spec.Type = "two-dimensional array"
 		}
-
-		var defaultValueStr string
-		if len(v.Children) == 0 && defaultValue != nil {
-			defaultValueStr = gabs.Wrap(defaultValue).String()
-		}
-
-		fieldType := v.Type
-		isArray := v.IsArray
-		if len(fieldType) == 0 {
-			if len(v.Examples) > 0 {
-				fieldType, isArray = getFieldTypeFromInterface(v.Examples[0])
-			} else if defaultValue != nil {
-				fieldType, isArray = getFieldTypeFromInterface(*defaultValue)
-			} else {
-				return nil, fmt.Errorf("field '%v' not found in config example and no type or default value was provided in the spec", v.Name)
-			}
-		}
-		fieldTypeStr := string(fieldType)
-		if isArray {
-			fieldTypeStr = "array"
-		}
-		if v.IsMap {
-			fieldTypeStr = "object"
-		}
-
-		fieldCtx := fieldContext{
-			Name:             v.Name,
-			Type:             fieldTypeStr,
-			Description:      v.Description,
-			Default:          defaultValueStr,
-			Advanced:         v.Advanced,
-			Examples:         v.ExamplesMarshalled,
-			AnnotatedOptions: v.AnnotatedOptions,
-			Options:          v.Options,
-			Interpolated:     v.Interpolated,
-			Version:          v.Version,
-		}
-
-		if fieldCtx.Description == "" {
-			fieldCtx.Description = "Sorry! This field is missing documentation."
-		}
-
-		if fieldCtx.Description[0] == '\n' {
-			fieldCtx.Description = fieldCtx.Description[1:]
-		}
-
-		ctx.Fields = append(ctx.Fields, fieldCtx)
+		v.Spec.Kind = KindScalar
+		ctx.Fields = append(ctx.Fields, v)
 	}
 
 	var buf bytes.Buffer

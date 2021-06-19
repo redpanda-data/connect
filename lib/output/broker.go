@@ -98,7 +98,7 @@ outputs.`,
 				"max_in_flight",
 				"The maximum number of parallel message batches to have in flight at any given time. Note that if a child output has a higher `max_in_flight` then the switch output will automatically match it, therefore this value is the minimum `max_in_flight` to set in cases where the child values can't be inferred (such as when using resource outputs as children). Only relevant for `fan_out`, `fan_out_sequential` brokers.",
 			),
-			docs.FieldCommon("outputs", "A list of child outputs to broker.").Array().HasType(docs.FieldOutput),
+			docs.FieldCommon("outputs", "A list of child outputs to broker.").Array().HasType(docs.FieldTypeOutput),
 			batch.FieldSpec(),
 		},
 		Categories: []Category{

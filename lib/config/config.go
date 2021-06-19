@@ -27,7 +27,7 @@ type Type struct {
 	Metrics                metrics.Config `json:"metrics" yaml:"metrics"`
 	Tracer                 tracer.Config  `json:"tracer" yaml:"tracer"`
 	SystemCloseTimeout     string         `json:"shutdown_timeout" yaml:"shutdown_timeout"`
-	Tests                  interface{}    `json:"tests,omitempty" yaml:"tests,omitempty"`
+	Tests                  []interface{}  `json:"tests,omitempty" yaml:"tests,omitempty"`
 }
 
 // New returns a new configuration with default values.
@@ -75,7 +75,7 @@ func (c Type) SanitisedV2(conf SanitisedV2Config) (yaml.Node, error) {
 		return node, err
 	}
 
-	if err := Spec().SanitiseNode(&node, docs.SanitiseConfig{
+	if err := Spec().SanitiseYAML(&node, docs.SanitiseConfig{
 		RemoveTypeField:  conf.RemoveTypeField,
 		RemoveDeprecated: conf.RemoveDeprecatedFields,
 	}); err != nil {

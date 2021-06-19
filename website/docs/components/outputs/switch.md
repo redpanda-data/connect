@@ -162,6 +162,7 @@ A list of switch cases, outlining outputs that can be routed to.
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples

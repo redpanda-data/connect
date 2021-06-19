@@ -443,6 +443,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples
@@ -533,7 +534,7 @@ Default: `"300s"`
 The maximum number of retry attempts to make.
 
 
-Type: `number`  
+Type: `int`  
 Default: `3`  
 
 ### `backoff_on`

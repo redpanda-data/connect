@@ -83,7 +83,7 @@ output:
 			},
 		},
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon(
+			docs.FieldString(
 				"addresses",
 				"A list of Cassandra nodes to connect to. Multiple comma separated addresses can be specified on a single line.",
 				[]string{"localhost:9042"},
@@ -104,7 +104,7 @@ output:
 				"If enabled the driver will not attempt to get host info from the system.peers table. This can speed up queries but will mean that data_centre, rack and token information will not be available.",
 			),
 			docs.FieldCommon("query", "A query to execute for each message."),
-			docs.FieldCommon(
+			docs.FieldString(
 				"args",
 				"A list of arguments for the query to be resolved for each message.",
 			).IsInterpolated().Array(),

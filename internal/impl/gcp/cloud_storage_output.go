@@ -112,7 +112,7 @@ output:
 			docs.FieldAdvanced("chunk_size", "An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			batch.FieldSpec(),
-		),
+		).ChildDefaultAndTypesFromStruct(output.NewGCPCloudStorageConfig()),
 	})
 }
 

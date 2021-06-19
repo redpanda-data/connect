@@ -9,7 +9,7 @@ func init() {
 		constructor: NewNone,
 		Summary: `
 Do not send opentracing events anywhere.`,
-		config: docs.FieldComponent().Map(),
+		config: docs.FieldComponent().HasType(docs.FieldTypeObject),
 	}
 }
 

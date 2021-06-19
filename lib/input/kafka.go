@@ -57,11 +57,11 @@ The field ` + "`kafka_lag`" + ` is the calculated difference between the high wa
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon(
+			docs.FieldString(
 				"addresses", "A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.",
 				[]string{"localhost:9092"}, []string{"localhost:9041,localhost:9042"}, []string{"localhost:9041", "localhost:9042"},
 			).Array(),
-			docs.FieldCommon(
+			docs.FieldString(
 				"topics",
 				"A list of topics to consume from. Multiple comma separated topics can be listed in a single element. Partitions are automatically distributed across consumers of a topic. Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name, e.g. `foo:0` would consume the partition 0 of the topic foo. This syntax supports ranges, e.g. `foo:0-10` would consume partitions 0 through to 10 inclusive.",
 				[]string{"foo", "bar"},
@@ -90,7 +90,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 			docs.FieldAdvanced("target_version", "The version of the Kafka protocol to use."),
 			func() docs.FieldSpec {
 				b := batch.FieldSpec()
-				b.Advanced = true
+				b.IsAdvanced = true
 				return b
 			}(),
 

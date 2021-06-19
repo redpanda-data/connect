@@ -18,7 +18,7 @@ Drops all messages.`,
 		Categories: []Category{
 			CategoryUtility,
 		},
-		config: docs.FieldComponent().Map(),
+		config: docs.FieldComponent().HasType(docs.FieldTypeObject),
 	}
 }
 

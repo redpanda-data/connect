@@ -28,7 +28,7 @@ type WriteConcern struct {
 // NewConfig returns a Config with default values.
 func NewConfig() Config {
 	return Config{
-		URL:        "mongodb://localhost:27017",
+		URL:        "",
 		Database:   "",
 		Collection: "",
 		Username:   "",

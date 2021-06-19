@@ -77,7 +77,7 @@ func init() {
 					"The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 				batch.FieldSpec(),
 			).Merge(retries.FieldSpecs())...,
-		),
+		).ChildDefaultAndTypesFromStruct(output.NewMongoDBConfig()),
 	})
 }
 

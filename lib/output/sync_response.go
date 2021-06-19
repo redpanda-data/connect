@@ -53,7 +53,7 @@ For more information please read [Synchronous Responses](/docs/guides/sync_respo
 		Categories: []Category{
 			CategoryUtility,
 		},
-		config: docs.FieldComponent().Map(),
+		config: docs.FieldComponent().HasType(docs.FieldTypeObject),
 	}
 }
 

@@ -11,7 +11,7 @@ import (
 // struct.
 func MetadataFields() docs.FieldSpecs {
 	return docs.FieldSpecs{
-		docs.FieldCommon("exclude_prefixes", "Provide a list of explicit metadata key prefixes to be excluded when adding metadata to sent messages.").Array(),
+		docs.FieldString("exclude_prefixes", "Provide a list of explicit metadata key prefixes to be excluded when adding metadata to sent messages.").Array(),
 	}
 }
 

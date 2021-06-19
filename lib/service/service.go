@@ -141,7 +141,7 @@ func readConfig(path string, resourcesPaths []string) (lints []string) {
 			fmt.Fprintf(os.Stderr, "Resource configuration file read error '%v': %v\n", rPath, err)
 			os.Exit(1)
 		}
-		for _, lint := range manager.Spec().LintNode(docs.NewLintContext(), &rawNode) {
+		for _, lint := range manager.Spec().LintYAML(docs.NewLintContext(), &rawNode) {
 			lints = append(lints, fmt.Sprintf("resource file %v: line %v: %v", rPath, lint.Line, lint.What))
 		}
 
@@ -235,7 +235,7 @@ func cmdService(
 	var sanitNode yaml.Node
 	err = sanitNode.Encode(conf)
 	if err == nil {
-		err = config.Spec().SanitiseNode(&sanitNode, docs.SanitiseConfig{
+		err = config.Spec().SanitiseYAML(&sanitNode, docs.SanitiseConfig{
 			RemoveTypeField: true,
 		})
 	}

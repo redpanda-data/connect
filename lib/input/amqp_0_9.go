@@ -75,8 +75,8 @@ then the declaration passively verifies that they match the target fields.`,
 					},
 				},
 			).Array().WithChildren(
-				docs.FieldAdvanced("exchange", "The exchange of the declared binding.").HasDefault(""),
-				docs.FieldAdvanced("key", "The key of the declared binding.").HasDefault(""),
+				docs.FieldString("exchange", "The exchange of the declared binding.").HasDefault(""),
+				docs.FieldString("key", "The key of the declared binding.").HasDefault(""),
 			),
 			docs.FieldCommon("consumer_tag", "A consumer tag."),
 			docs.FieldAdvanced("auto_ack", "Acknowledge messages automatically as they are consumed rather than waiting for acknowledgments from downstream. This can improve throughput and prevent the pipeline from blocking but at the cost of eliminating delivery guarantees."),
@@ -85,7 +85,7 @@ then the declaration passively verifies that they match the target fields.`,
 			tls.FieldSpec(),
 			func() docs.FieldSpec {
 				b := batch.FieldSpec()
-				b.Deprecated = true
+				b.IsDeprecated = true
 				return b
 			}(),
 		},

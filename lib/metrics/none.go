@@ -8,6 +8,6 @@ func init() {
 			return Noop(), nil
 		},
 		Summary: `Disable metrics entirely.`,
-		config:  docs.FieldComponent().Map(),
+		config:  docs.FieldComponent().HasType(docs.FieldTypeObject),
 	}
 }

@@ -33,18 +33,14 @@ The schema of a template file is as follows:
 The name of the component this template will create.
 
 
-
 Type: `string`  
-
 
 ### `type`
 
 The type of the component this template will create.
 
 
-
 Type: `string`  
-
 Options: `cache`, `input`, `output`, `processor`, `rate_limit`.
 
 ### `status`
@@ -52,9 +48,8 @@ Options: `cache`, `input`, `output`, `processor`, `rate_limit`.
 The stability of the template describing the likelihood that the configuration spec of the template, or it's behaviour, will change.
 
 
-
 Type: `string`  
-
+Default: `"stable"`  
 
 | Option | Summary |
 |---|---|
@@ -68,63 +63,53 @@ Type: `string`
 An optional list of tags, which are used for arbitrarily grouping components in documentation.
 
 
-
 Type: list of `string`  
-
+Default: `[]`  
 
 ### `summary`
 
 A short summary of the component.
 
 
-
 Type: `string`  
-
+Default: `""`  
 
 ### `description`
 
 A longer form description of the component and how to use it.
 
 
-
 Type: `string`  
-
+Default: `""`  
 
 ### `fields`
 
 The configuration fields of the template, fields specified here will be parsed from a Benthos config and will be accessible from the template mapping.
 
 
-
 Type: list of `object`  
-
 
 ### `fields[].name`
 
 The name of the field.
 
 
-
 Type: `string`  
-
 
 ### `fields[].description`
 
 A description of the field.
 
 
-
 Type: `string`  
-
+Default: `""`  
 
 ### `fields[].type`
 
 The scalar type of the field.
 
 
-
 Type: `string`  
-
 Options: `string`, `int`, `float`, `bool`.
 
 ### `fields[].kind`
@@ -132,9 +117,8 @@ Options: `string`, `int`, `float`, `bool`.
 The kind of the field.
 
 
-
 Type: `string`  
-
+Default: `"scalar"`  
 Options: `scalar`, `map`, `list`.
 
 ### `fields[].default`
@@ -142,32 +126,30 @@ Options: `scalar`, `map`, `list`.
 An optional default value for the field. If a default value is not specified then a configuration without the field is considered incorrect.
 
 
-
+Type: `unknown`  
 
 ### `fields[].advanced`
 
 Whether this field is considered advanced.
 
 
-
 Type: `bool`  
-
+Default: `false`  
 
 ### `mapping`
 
 A [Bloblang](/docs/guides/bloblang/about) mapping that translates the fields of the template into a valid Benthos configuration for the target component type.
 
 
-
 Type: `string`  
-
 
 ### `metrics_mapping`
 
 An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported.
 
 
-
+Type: `string`  
+Default: `""`  
 
 ```yml
 # Examples
@@ -182,34 +164,27 @@ metrics_mapping: if ![ "count", "error", "latency" ].contains(this) { deleted() 
 Optional unit test definitions for the template that verify certain configurations produce valid configs. These tests are executed with the command `benthos template lint`.
 
 
-
 Type: list of `object`  
-
+Default: `[]`  
 
 ### `tests[].name`
 
 A name to identify the test.
 
 
-
 Type: `string`  
-
 
 ### `tests[].config`
 
 A configuration to run this test with, the config resulting from applying the template with this config will be linted.
 
 
-
 Type: `object`  
-
 
 ### `tests[].expected`
 
 An optional configuration describing the expected result of applying the template, when specified the result will be diffed and any mismatching fields will be reported as a test error.
 
 
-
 Type: `object`  
-
 

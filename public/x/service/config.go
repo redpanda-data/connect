@@ -18,7 +18,7 @@ type ConfigField struct {
 // NewStringField describes a new string type config field.
 func NewStringField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").HasType(docs.FieldString),
+		field: docs.FieldCommon(name, "").HasType(docs.FieldTypeString),
 	}
 }
 
@@ -26,28 +26,28 @@ func NewStringField(name string) *ConfigField {
 // strings.
 func NewStringListField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").Array().HasType(docs.FieldString),
+		field: docs.FieldCommon(name, "").Array().HasType(docs.FieldTypeString),
 	}
 }
 
 // NewIntField describes a new int type config field.
 func NewIntField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").HasType(docs.FieldInt),
+		field: docs.FieldCommon(name, "").HasType(docs.FieldTypeInt),
 	}
 }
 
 // NewFloatField describes a new float type config field.
 func NewFloatField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").HasType(docs.FieldFloat),
+		field: docs.FieldCommon(name, "").HasType(docs.FieldTypeFloat),
 	}
 }
 
 // NewBoolField describes a new bool type config field.
 func NewBoolField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").HasType(docs.FieldBool),
+		field: docs.FieldCommon(name, "").HasType(docs.FieldTypeBool),
 	}
 }
 
@@ -97,7 +97,7 @@ func (c *ConfigSpec) configFromNode(node *yaml.Node) (*ParsedConfig, error) {
 		return &ParsedConfig{asStruct: conf}, nil
 	}
 
-	fields, err := c.component.Config.Children.NodeToMap(node)
+	fields, err := c.component.Config.Children.YAMLToMap(false, node)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +141,7 @@ func NewStructConfigSpec(ctor ConfigStructConstructor) (*ConfigSpec, error) {
 	}
 
 	confSpec := NewConfigSpec()
-	confSpec.component.Config = confSpec.component.Config.WithChildren(docs.FieldsFromNode(&node)...)
+	confSpec.component.Config = confSpec.component.Config.WithChildren(docs.FieldsFromYAML(&node)...)
 	confSpec.configCtor = ctor
 
 	return confSpec, nil

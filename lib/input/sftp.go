@@ -77,7 +77,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 				"credentials",
 				"The credentials to use to log into the server.",
 			).WithChildren(sftpSetup.CredentialsDocs()...),
-			docs.FieldCommon(
+			docs.FieldString(
 				"paths",
 				"A list of paths to consume sequentially. Glob patterns are supported.",
 			).Array(),

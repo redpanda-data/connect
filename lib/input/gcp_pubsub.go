@@ -42,7 +42,7 @@ You can access these metadata fields using
 			docs.FieldCommon("max_outstanding_bytes", "The maximum number of outstanding pending messages to be consumed measured in bytes."),
 			func() docs.FieldSpec {
 				b := batch.FieldSpec()
-				b.Deprecated = true
+				b.IsDeprecated = true
 				return b
 			}(),
 			docs.FieldDeprecated("max_batch_count"),

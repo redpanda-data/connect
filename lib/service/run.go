@@ -219,7 +219,7 @@ func Run() {
 					var node yaml.Node
 					err := node.Encode(conf)
 					if err == nil {
-						err = config.Spec().SanitiseNode(&node, docs.SanitiseConfig{
+						err = config.Spec().SanitiseYAML(&node, docs.SanitiseConfig{
 							RemoveTypeField: true,
 						})
 					}

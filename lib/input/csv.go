@@ -27,7 +27,7 @@ func init() {
 		Status:      docs.StatusStable,
 		Summary:     "Reads one or more CSV files as structured records following the format described in RFC 4180.",
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon(
+			docs.FieldString(
 				"paths", "A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported, including super globs (double star).",
 				[]string{"/tmp/foo.csv", "/tmp/bar/*.csv", "/tmp/data/**/*.csv"},
 			).Array(),

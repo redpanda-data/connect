@@ -35,7 +35,7 @@ Introduced in version 3.43.0.
 output:
   label: ""
   mongodb:
-    url: mongodb://localhost:27017
+    url: ""
     database: ""
     collection: ""
     username: ""
@@ -64,7 +64,7 @@ output:
 output:
   label: ""
   mongodb:
-    url: mongodb://localhost:27017
+    url: ""
     database: ""
     collection: ""
     username: ""
@@ -113,7 +113,7 @@ The URL of the target MongoDB DB.
 
 
 Type: `string`  
-Default: `"mongodb://localhost:27017"`  
+Default: `""`  
 
 ```yaml
 # Examples

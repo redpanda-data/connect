@@ -43,9 +43,9 @@ renamed path into the label values.`,
 			).WithChildren(
 				docs.FieldDeprecated("pattern"),
 				docs.FieldDeprecated("value"),
-				docs.FieldDeprecated("to_label").Map(),
+				docs.FieldDeprecated("to_label").Map().HasType(docs.FieldTypeString),
 			).Array(),
-			docs.FieldCommon("child", "A child metric type, this is where renamed metrics will be routed.").HasType(docs.FieldMetrics),
+			docs.FieldCommon("child", "A child metric type, this is where renamed metrics will be routed.").HasType(docs.FieldTypeMetrics),
 		},
 		Description: `
 Metrics must be matched using dot notation even if the chosen output uses a

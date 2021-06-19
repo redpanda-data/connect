@@ -70,7 +70,7 @@ You can access these metadata fields using
 			),
 			docs.FieldAdvanced("max_ack_pending", "The maximum number of outstanding acks to be allowed before consuming is halted."),
 			btls.FieldSpec(),
-		),
+		).ChildDefaultAndTypesFromStruct(input.NewNATSJetStreamConfig()),
 	})
 }
 

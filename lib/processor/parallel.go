@@ -34,7 +34,7 @@ parallel processing threads.`,
 		UsesBatches: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("cap", "The maximum number of messages to have processing at a given time."),
-			docs.FieldCommon("processors", "A list of child processors to apply.").Array().HasType(docs.FieldProcessor),
+			docs.FieldCommon("processors", "A list of child processors to apply.").Array().HasType(docs.FieldTypeProcessor),
 		},
 	}
 }

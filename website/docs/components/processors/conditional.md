@@ -56,7 +56,6 @@ The [`condition`](/docs/components/conditions/about) to check against messages.
 
 
 Type: `condition`  
-Default: `{"text":{"arg":"","operator":"equals_cs","part":0},"type":"text"}`  
 
 ### `processors`
 

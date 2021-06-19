@@ -43,7 +43,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).`,
 				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should end a batch.",
 				`this.type == "end_of_transaction"`,
 			).HasDefault("").Linter(docs.LintBloblangMapping),
-			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v, _ interface{}) (string, bool) {
+			docs.FieldDeprecated("condition").HasType(docs.FieldTypeCondition).OmitWhen(func(v, _ interface{}) (string, bool) {
 				m, ok := v.(map[string]interface{})
 				if !ok {
 					return "", false
@@ -72,7 +72,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).`,
 						"merge_json": struct{}{},
 					},
 				},
-			).Array().HasType(docs.FieldProcessor),
+			).Array().HasType(docs.FieldTypeProcessor),
 		},
 	}
 }

@@ -42,7 +42,7 @@ You can access these metadata fields using
 		FieldSpecs: docs.FieldSpecs{
 			func() docs.FieldSpec {
 				b := batch.FieldSpec()
-				b.Deprecated = true
+				b.IsDeprecated = true
 				return b
 			}(),
 			docs.FieldCommon(

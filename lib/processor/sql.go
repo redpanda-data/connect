@@ -111,12 +111,12 @@ pipeline:
 				"args",
 				"A list of arguments for the query to be resolved for each message.",
 			).IsInterpolated().Array(),
-			docs.FieldCommon(
+			docs.FieldString(
 				"args_mapping",
 				"A [Bloblang mapping](/docs/guides/bloblang/about) that produces the arguments for the query. The mapping must return an array containing the number of arguments in the query.",
 				`[ this.foo, this.bar.not_empty().catch(null), meta("baz") ]`,
 				`root = [ uuid_v4() ].merge(this.document.args)`,
-			).HasType(docs.FieldString).Linter(docs.LintBloblangMapping).AtVersion("3.47.0"),
+			).Linter(docs.LintBloblangMapping).AtVersion("3.47.0"),
 			docs.FieldCommon(
 				"result_codec",
 				"A [codec](#result-codecs) to determine how resulting rows are converted into messages.",

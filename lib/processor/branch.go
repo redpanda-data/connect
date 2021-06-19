@@ -21,7 +21,7 @@ import (
 //------------------------------------------------------------------------------
 
 var branchFields = docs.FieldSpecs{
-	docs.FieldCommon(
+	docs.FieldString(
 		"request_map",
 		"A [Bloblang mapping](/docs/guides/bloblang/about) that describes how to create a request payload suitable for the child processors of this branch. If left empty then the branch will begin with an exact copy of the origin message (including metadata).",
 		`root = {
@@ -37,8 +37,8 @@ var branchFields = docs.FieldSpecs{
 	docs.FieldCommon(
 		"processors",
 		"A list of processors to apply to mapped requests. When processing message batches the resulting batch must match the size and ordering of the input batch, therefore filtering, grouping should not be performed within these processors.",
-	).Array().HasType(docs.FieldProcessor).HasDefault([]interface{}{}),
-	docs.FieldCommon(
+	).Array().HasType(docs.FieldTypeProcessor).HasDefault([]interface{}{}),
+	docs.FieldString(
 		"result_map",
 		"A [Bloblang mapping](/docs/guides/bloblang/about) that describes how the resulting messages from branched processing should be mapped back into the original payload. If left empty the origin message will remain unchanged (including metadata).",
 		`meta foo_code = meta("code")

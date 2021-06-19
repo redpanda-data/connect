@@ -122,7 +122,9 @@ You can access these metadata fields using
 					"Specify the status code to return with synchronous responses. This is a string value, which allows you to customize it based on resulting payloads and their metadata.",
 					"200", `${! json("status") }`, `${! meta("status") }`,
 				).IsInterpolated(),
-				docs.FieldCommon("headers", "Specify headers to return with synchronous responses.").IsInterpolated().Map(),
+				docs.FieldString("headers", "Specify headers to return with synchronous responses.").IsInterpolated().Map().HasDefault(map[string]string{
+					"Content-Type": "application/octet-stream",
+				}),
 			),
 		},
 		Categories: []Category{

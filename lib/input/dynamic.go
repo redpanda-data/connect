@@ -47,7 +47,7 @@ already exists it will be changed.`,
 			CategoryUtility,
 		},
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("inputs", "A map of inputs to statically create.").Map().HasType(docs.FieldInput),
+			docs.FieldCommon("inputs", "A map of inputs to statically create.").Map().HasType(docs.FieldTypeInput),
 			docs.FieldCommon("prefix", "A path prefix for HTTP endpoints that are registered."),
 			docs.FieldCommon("timeout", "The server side timeout of HTTP requests."),
 		},

@@ -53,14 +53,14 @@ input:
 			},
 		},
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("input", "The child input to consume from.").HasType(docs.FieldInput),
+			docs.FieldCommon("input", "The child input to consume from.").HasType(docs.FieldTypeInput),
 			docs.FieldCommon(
 				"check",
 				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether the input should now be closed.",
 				`this.type == "foo"`,
 				`count("messages") >= 100`,
 			).HasDefault("").Linter(docs.LintBloblangMapping),
-			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(field, _ interface{}) (string, bool) {
+			docs.FieldDeprecated("condition").HasType(docs.FieldTypeCondition).OmitWhen(func(field, _ interface{}) (string, bool) {
 				defaultBytes, err := yaml.Marshal(condition.NewConfig())
 				if err != nil {
 					return "", false

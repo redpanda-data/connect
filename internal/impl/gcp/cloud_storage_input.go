@@ -75,7 +75,7 @@ services. You can find out more [in this document](/docs/guides/gcp).`,
 			docs.FieldCommon("prefix", "An optional path prefix, if set only objects with the prefix are consumed."),
 			codec.ReaderDocs,
 			docs.FieldAdvanced("delete_objects", "Whether to delete downloaded objects from the bucket once they are processed."),
-		),
+		).ChildDefaultAndTypesFromStruct(input.NewGCPCloudStorageConfig()),
 	})
 }
 

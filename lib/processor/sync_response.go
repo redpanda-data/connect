@@ -28,7 +28,7 @@ even when combining input types that might not have support for sync responses.
 An example of an input able to utilise this is the ` + "`http_server`" + `.
 
 For more information please read [Synchronous Responses](/docs/guides/sync_responses).`,
-		config: docs.FieldComponent().Map(),
+		config: docs.FieldComponent().HasType(docs.FieldTypeObject),
 	}
 }
 

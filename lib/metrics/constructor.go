@@ -42,10 +42,13 @@ type ConstructorFunc func(Config, ...func(Type)) (Type, error)
 
 // WalkConstructors iterates each component constructor.
 func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
+	inferred := docs.ComponentFieldsFromConf(NewConfig())
 	for k, v := range Constructors {
 		conf := v.config
 		if len(v.FieldSpecs) > 0 {
-			conf = docs.FieldComponent().WithChildren(v.FieldSpecs...)
+			conf = docs.FieldComponent().WithChildren(v.FieldSpecs.DefaultAndTypeFrom(inferred[k])...)
+		} else {
+			conf.Children = conf.Children.DefaultAndTypeFrom(inferred[k])
 		}
 		spec := docs.ComponentSpec{
 			Type:        docs.TypeMetrics,
@@ -169,7 +172,7 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 		return fmt.Errorf("line %v: %v", value.Line, err)
 	}
 
-	if aliased.Type, _, err = docs.GetInferenceCandidateFromNode(docs.TypeMetrics, aliased.Type, value); err != nil {
+	if aliased.Type, _, err = docs.GetInferenceCandidateFromYAML(docs.TypeMetrics, aliased.Type, value); err != nil {
 		return fmt.Errorf("line %v: %w", value.Line, err)
 	}
 

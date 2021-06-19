@@ -47,7 +47,7 @@ is useful for when it's possible to recover failed messages, or when special
 actions (such as logging/metrics) are required before dropping them.
 
 More information about error handing can be found [here](/docs/configuration/error_handling).`,
-		config: docs.FieldComponent().Array().HasType(docs.FieldProcessor),
+		config: docs.FieldComponent().Array().HasType(docs.FieldTypeProcessor),
 	}
 }
 

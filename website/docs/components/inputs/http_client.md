@@ -116,7 +116,7 @@ If you enable streaming then Benthos will consume the body of the response as a 
 
 ### Pagination
 
-This input supports interpolation functions in the `url` and `headers` fields where data from the previous successfully consumed message (if there was one) can be referenced. This can be used in order to support basic levels of pagination. However, in cases where pagination depends on logic it is recommended that you use an [`http` processor](/docs/component/processors/http) instead, often combined with a [`generate` input](/docs/components/inputs/generate) in order to schedule the processor.
+This input supports interpolation functions in the `url` and `headers` fields where data from the previous successfully consumed message (if there was one) can be referenced. This can be used in order to support basic levels of pagination. However, in cases where pagination depends on logic it is recommended that you use an [`http` processor](/docs/components/processors/http) instead, often combined with a [`generate` input](/docs/components/inputs/generate) in order to schedule the processor.
 
 ## Examples
 
@@ -423,6 +423,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples
@@ -513,7 +514,7 @@ Default: `"300s"`
 The maximum number of retry attempts to make.
 
 
-Type: `number`  
+Type: `int`  
 Default: `3`  
 
 ### `backoff_on`
@@ -626,7 +627,7 @@ codec: csv
 Must be larger than the largest line of the stream.
 
 
-Type: `number`  
+Type: `int`  
 Default: `1000000`  
 
 

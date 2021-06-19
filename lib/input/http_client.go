@@ -26,10 +26,10 @@ func httpClientSpecs() docs.FieldSpecs {
 	codecDocs.Examples = []interface{}{"lines", "delim:\t", "delim:foobar", "csv"}
 
 	streamSpecs := docs.FieldSpecs{
-		docs.FieldCommon("enabled", "Enables streaming mode.").HasType("bool"),
-		docs.FieldCommon("reconnect", "Sets whether to re-establish the connection once it is lost.").HasType("bool"),
+		docs.FieldBool("enabled", "Enables streaming mode."),
+		docs.FieldBool("reconnect", "Sets whether to re-establish the connection once it is lost."),
 		codecDocs,
-		docs.FieldAdvanced("max_buffer", "Must be larger than the largest line of the stream.").HasType("number"),
+		docs.FieldInt("max_buffer", "Must be larger than the largest line of the stream.").Advanced(),
 		docs.FieldDeprecated("multipart"),
 		docs.FieldDeprecated("delimiter"),
 	}
@@ -59,7 +59,7 @@ If you enable streaming then Benthos will consume the body of the response as a 
 
 ### Pagination
 
-This input supports interpolation functions in the ` + "`url` and `headers`" + ` fields where data from the previous successfully consumed message (if there was one) can be referenced. This can be used in order to support basic levels of pagination. However, in cases where pagination depends on logic it is recommended that you use an ` + "[`http` processor](/docs/component/processors/http) instead, often combined with a [`generate` input](/docs/components/inputs/generate)" + ` in order to schedule the processor.`,
+This input supports interpolation functions in the ` + "`url` and `headers`" + ` fields where data from the previous successfully consumed message (if there was one) can be referenced. This can be used in order to support basic levels of pagination. However, in cases where pagination depends on logic it is recommended that you use an ` + "[`http` processor](/docs/components/processors/http) instead, often combined with a [`generate` input](/docs/components/inputs/generate)" + ` in order to schedule the processor.`,
 		FieldSpecs: httpClientSpecs(),
 		Categories: []Category{
 			CategoryNetwork,

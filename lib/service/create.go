@@ -143,14 +143,14 @@ func createCliCommand() *cli.Command {
 				}
 
 				filter = func(spec docs.FieldSpec) bool {
-					return !spec.Advanced
+					return !spec.IsAdvanced
 				}
 			}
 
 			var node yaml.Node
 			err := node.Encode(iconf)
 			if err == nil {
-				err = config.Spec().SanitiseNode(&node, docs.SanitiseConfig{
+				err = config.Spec().SanitiseYAML(&node, docs.SanitiseConfig{
 					RemoveTypeField:  true,
 					RemoveDeprecated: true,
 					ForExample:       true,

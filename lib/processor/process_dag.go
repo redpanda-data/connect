@@ -90,9 +90,14 @@ process_dag:
 With this config the DAG would determine that the children foo and bar can be
 executed in parallel, and once they are both finished we may proceed onto baz.`,
 		config: docs.FieldComponent().Map().WithChildren(
+			docs.FieldDeprecated("dependencies"),
+			docs.FieldDeprecated("conditions"),
+			docs.FieldDeprecated("parts"),
 			docs.FieldDeprecated("premap"),
-			docs.FieldDeprecated("processors").Array().HasType(docs.FieldProcessor),
+			docs.FieldDeprecated("premap_optional"),
+			docs.FieldDeprecated("processors").Array().HasType(docs.FieldTypeProcessor),
 			docs.FieldDeprecated("postmap"),
+			docs.FieldDeprecated("postmap_optional"),
 		),
 	}
 }

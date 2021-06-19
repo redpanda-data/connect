@@ -25,8 +25,8 @@ var processMapFields = docs.FieldSpecs{
 				"bloblang": "document.urls.length() > 0",
 			},
 		},
-	).Array().HasType(docs.FieldCondition),
-	docs.FieldCommon(
+	).Array().HasType(docs.FieldTypeCondition),
+	docs.FieldString(
 		"premap", "A map of source to destination [paths](/docs/configuration/field_paths) used to create a new object from the original. An empty (or dot `.`) path indicates the root of the object. If a map source is not found then the message will not be processed, for optional sources use the field [`premap_optional`](#premap_optional).",
 		map[string]string{
 			".": "field.from.document",
@@ -36,15 +36,15 @@ var processMapFields = docs.FieldSpecs{
 			"bar.baz": "root.extra.baz",
 		},
 	).Map(),
-	docs.FieldCommon("premap_optional", "A map of optional source to destination [paths](/docs/configuration/field_paths) used to create a new object from the original.").Map(),
-	docs.FieldCommon("processors", "A list of processors to apply to mapped payloads.").Array().HasType(docs.FieldProcessor),
-	docs.FieldCommon(
+	docs.FieldString("premap_optional", "A map of optional source to destination [paths](/docs/configuration/field_paths) used to create a new object from the original.").Map(),
+	docs.FieldCommon("processors", "A list of processors to apply to mapped payloads.").Array().HasType(docs.FieldTypeProcessor),
+	docs.FieldString(
 		"postmap", "A map of destination to source [paths](/docs/configuration/field_paths) used to map results from processing back into the original payload. An empty (or dot `.`) path indicates the root of the object. If a source is not found then the mapping is abandoned, for optional sources use the [`postmap_optional`](#postmap_optional) field.",
 		map[string]string{
 			"results.foo": ".",
 		},
 	).Map(),
-	docs.FieldCommon("postmap_optional", "A map of optional destination to source [paths](/docs/configuration/field_paths) used to map results from processing back into the original payload.").Map(),
+	docs.FieldString("postmap_optional", "A map of optional destination to source [paths](/docs/configuration/field_paths) used to map results from processing back into the original payload.").Map(),
 	PartsFieldSpec,
 }
 

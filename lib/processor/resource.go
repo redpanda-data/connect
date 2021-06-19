@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -47,6 +48,7 @@ processor_resources:
 ` + "```" + `
 
 You can find out more about resources [in this document.](/docs/configuration/resources)`,
+		config: docs.FieldComponent().HasType(docs.FieldTypeString).HasDefault(""),
 	}
 }
 

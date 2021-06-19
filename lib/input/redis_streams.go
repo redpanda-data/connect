@@ -25,7 +25,7 @@ as metadata fields.`,
 		FieldSpecs: redis.ConfigDocs().Add(
 			func() docs.FieldSpec {
 				b := batch.FieldSpec()
-				b.Deprecated = true
+				b.IsDeprecated = true
 				return b
 			}(),
 			docs.FieldCommon("body_key", "The field key to extract the raw message from. All other keys will be stored in the message as metadata."),

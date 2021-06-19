@@ -49,6 +49,7 @@ renamed path into the label values.
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yaml
 # Examples

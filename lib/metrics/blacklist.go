@@ -33,7 +33,7 @@ Benthos registers can be found in
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("paths", `A list of path prefixes to exclude. This can be used, for example, to allow none of the child specific metrics paths from an output broker with the path `+"`output.broker`"+`.`).Array(),
 			docs.FieldCommon("patterns", `A list of RE2 regular expressions to exclude. This can be used, for example, to allow none of the latency based metrics with the pattern `+"`.*\\.latency`"+`.`).Array(),
-			docs.FieldCommon("child", "A child metric type, this is where non-blacklisted metrics will be routed.").HasType(docs.FieldMetrics),
+			docs.FieldCommon("child", "A child metric type, this is where non-blacklisted metrics will be routed.").HasType(docs.FieldTypeMetrics),
 		},
 		Footnotes: `
 ## Debugging

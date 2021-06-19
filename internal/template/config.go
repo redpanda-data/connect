@@ -50,7 +50,7 @@ type Config struct {
 // FieldSpec creates a documentation field spec from a template field config.
 func (c FieldConfig) FieldSpec() (docs.FieldSpec, error) {
 	f := docs.FieldCommon(c.Name, c.Description)
-	f.Advanced = c.Advanced
+	f.IsAdvanced = c.Advanced
 	if c.Default != nil {
 		f = f.HasDefault(*c.Default)
 	}
@@ -162,8 +162,8 @@ func (c Config) Test() ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("test '%v': %w", test.Name, err)
 		}
-		for _, lint := range docs.LintNode(docs.NewLintContext(), docs.Type(c.Type), outConf) {
-			failures = append(failures, fmt.Sprintf("test '%v': lint error in resulting config: %v", test.Name, lint.What))
+		for _, lint := range docs.LintYAML(docs.NewLintContext(), docs.Type(c.Type), outConf) {
+			failures = append(failures, fmt.Sprintf("test '%v': lint error in resulting config: line %v: %v", test.Name, lint.Line, lint.What))
 		}
 		if len(test.Expected.Content) > 0 {
 			diff, err := diffYAMLNodesAsJSON(&test.Expected, outConf)
@@ -195,12 +195,11 @@ func ReadConfig(path string) (conf Config, lints []string, err error) {
 		return
 	}
 
-	for _, l := range ConfigSpec().LintNode(docs.NewLintContext(), node.Content[0]) {
+	for _, l := range ConfigSpec().LintYAML(docs.NewLintContext(), &node) {
 		if l.Level == docs.LintError {
 			lints = append(lints, fmt.Sprintf("line %v: %v", l.Line, l.What))
 		}
 	}
-
 	return
 }
 
@@ -209,51 +208,51 @@ func ReadConfig(path string) (conf Config, lints []string, err error) {
 // FieldConfigSpec returns a configuration spec for a field of a template.
 func FieldConfigSpec() docs.FieldSpecs {
 	return docs.FieldSpecs{
-		docs.FieldCommon("name", "The name of the field.").HasType(docs.FieldString),
-		docs.FieldCommon("description", "A description of the field.").HasType(docs.FieldString),
-		docs.FieldCommon("type", "The scalar type of the field.").HasType(docs.FieldString).HasOptions(
+		docs.FieldString("name", "The name of the field."),
+		docs.FieldString("description", "A description of the field.").HasDefault(""),
+		docs.FieldString("type", "The scalar type of the field.").HasOptions(
 			"string", "int", "float", "bool",
 		).LintOptions(),
-		docs.FieldCommon("kind", "The kind of the field.").HasType(docs.FieldString).HasOptions(
+		docs.FieldString("kind", "The kind of the field.").HasOptions(
 			"scalar", "map", "list",
 		).HasDefault("scalar").LintOptions(),
-		docs.FieldCommon("default", "An optional default value for the field. If a default value is not specified then a configuration without the field is considered incorrect."),
-		docs.FieldCommon("advanced", "Whether this field is considered advanced.").HasType(docs.FieldBool).HasDefault(false),
+		docs.FieldCommon("default", "An optional default value for the field. If a default value is not specified then a configuration without the field is considered incorrect.").HasType(docs.FieldTypeUnknown).Optional(),
+		docs.FieldBool("advanced", "Whether this field is considered advanced.").HasDefault(false),
 	}
 }
 
 // ConfigSpec returns a configuration spec for a template.
 func ConfigSpec() docs.FieldSpecs {
 	return docs.FieldSpecs{
-		docs.FieldCommon("name", "The name of the component this template will create.").HasType(docs.FieldString),
-		docs.FieldCommon(
+		docs.FieldString("name", "The name of the component this template will create."),
+		docs.FieldString(
 			"type", "The type of the component this template will create.",
 		).HasOptions(
 			"cache", "input", "output", "processor", "rate_limit",
-		).HasType(docs.FieldString).LintOptions(),
-		docs.FieldCommon(
+		).LintOptions(),
+		docs.FieldString(
 			"status", "The stability of the template describing the likelihood that the configuration spec of the template, or it's behaviour, will change.",
 		).HasAnnotatedOptions(
 			"stable", "This template is stable and will therefore not change in a breaking way outside of major version releases.",
 			"beta", "This template is beta and will therefore not change in a breaking way unless a major problem is found.",
 			"experimental", "This template is experimental and therefore subject to breaking changes outside of major version releases.",
-		).HasType(docs.FieldString).HasDefault("stable").LintOptions(),
-		docs.FieldCommon(
+		).HasDefault("stable").LintOptions(),
+		docs.FieldString(
 			"categories", "An optional list of tags, which are used for arbitrarily grouping components in documentation.",
-		).Array().HasType(docs.FieldString),
-		docs.FieldCommon("summary", "A short summary of the component.").HasType(docs.FieldString),
-		docs.FieldCommon("description", "A longer form description of the component and how to use it.").HasType(docs.FieldString),
+		).Array().HasDefault([]string{}),
+		docs.FieldString("summary", "A short summary of the component.").HasDefault(""),
+		docs.FieldString("description", "A longer form description of the component and how to use it.").HasDefault(""),
 		docs.FieldCommon("fields", "The configuration fields of the template, fields specified here will be parsed from a Benthos config and will be accessible from the template mapping.").Array().WithChildren(FieldConfigSpec()...),
-		docs.FieldCommon(
+		docs.FieldString(
 			"mapping", "A [Bloblang](/docs/guides/bloblang/about) mapping that translates the fields of the template into a valid Benthos configuration for the target component type.",
-		).Linter(docs.LintBloblangMapping).HasType(docs.FieldString),
+		).Linter(docs.LintBloblangMapping),
 		metrics.MappingFieldSpec(),
 		docs.FieldCommon(
 			"tests", "Optional unit test definitions for the template that verify certain configurations produce valid configs. These tests are executed with the command `benthos template lint`.",
 		).Array().WithChildren(
-			docs.FieldCommon("name", "A name to identify the test.").HasType(docs.FieldString),
-			docs.FieldCommon("config", "A configuration to run this test with, the config resulting from applying the template with this config will be linted.").HasType(docs.FieldObject),
-			docs.FieldCommon("expected", "An optional configuration describing the expected result of applying the template, when specified the result will be diffed and any mismatching fields will be reported as a test error.").HasType(docs.FieldObject),
-		),
+			docs.FieldString("name", "A name to identify the test."),
+			docs.FieldCommon("config", "A configuration to run this test with, the config resulting from applying the template with this config will be linted.").HasType(docs.FieldTypeObject),
+			docs.FieldCommon("expected", "An optional configuration describing the expected result of applying the template, when specified the result will be diffed and any mismatching fields will be reported as a test error.").HasType(docs.FieldTypeObject).Optional(),
+		).HasDefault([]interface{}{}),
 	}
 }

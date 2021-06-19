@@ -311,7 +311,7 @@ func (s *StreamBuilder) AddResourcesYAML(conf string) error {
 		return err
 	}
 
-	if err := lintsToErr(manager.Spec().LintNode(docs.NewLintContext(), node)); err != nil {
+	if err := lintsToErr(manager.Spec().LintYAML(docs.NewLintContext(), node)); err != nil {
 		return err
 	}
 
@@ -343,7 +343,7 @@ func (s *StreamBuilder) SetYAML(conf string) error {
 		return err
 	}
 
-	if err := lintsToErr(config.Spec().LintNode(docs.NewLintContext(), node)); err != nil {
+	if err := lintsToErr(config.Spec().LintYAML(docs.NewLintContext(), node)); err != nil {
 		return err
 	}
 
@@ -391,7 +391,7 @@ func (s *StreamBuilder) SetLoggerYAML(conf string) error {
 		return err
 	}
 
-	if err := lintsToErr(log.Spec().LintNode(docs.NewLintContext(), node)); err != nil {
+	if err := lintsToErr(log.Spec().LintYAML(docs.NewLintContext(), node)); err != nil {
 		return err
 	}
 
@@ -411,7 +411,7 @@ func (s *StreamBuilder) AsYAML() (string, error) {
 		return "", err
 	}
 
-	if err := config.Spec().SanitiseNode(&node, docs.SanitiseConfig{
+	if err := config.Spec().SanitiseYAML(&node, docs.SanitiseConfig{
 		RemoveTypeField:  true,
 		RemoveDeprecated: false,
 	}); err != nil {
@@ -479,7 +479,7 @@ func (s *StreamBuilder) Build() (*Stream, error) {
 		var sanitNode yaml.Node
 		err := sanitNode.Encode(conf)
 		if err == nil {
-			_ = config.Spec().SanitiseNode(&sanitNode, docs.SanitiseConfig{
+			_ = config.Spec().SanitiseYAML(&sanitNode, docs.SanitiseConfig{
 				RemoveTypeField: true,
 			})
 		}
@@ -566,11 +566,6 @@ func getYAMLNode(b []byte) (*yaml.Node, error) {
 	if err := yaml.Unmarshal(b, &nconf); err != nil {
 		return nil, err
 	}
-
-	if nconf.Kind == yaml.DocumentNode && nconf.Content[0].Kind == yaml.MappingNode {
-		nconf = *nconf.Content[0]
-	}
-
 	return &nconf, nil
 }
 
@@ -593,5 +588,5 @@ func lintYAMLComponent(b []byte, ctype docs.Type) error {
 	if err != nil {
 		return err
 	}
-	return lintsToErr(docs.LintNode(docs.NewLintContext(), ctype, nconf))
+	return lintsToErr(docs.LintYAML(docs.NewLintContext(), ctype, nconf))
 }

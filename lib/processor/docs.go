@@ -11,7 +11,7 @@ The functionality of this processor depends on being applied across messages
 that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).`
 
 // PartsFieldSpec documents the parts field common to many processor types.
-var PartsFieldSpec = docs.FieldAdvanced(
+var PartsFieldSpec = docs.FieldInt(
 	"parts",
 	`An optional array of message indexes of a batch that the processor should apply to.
 If left empty all messages are processed. This field is only applicable when
@@ -19,6 +19,6 @@ batching messages [at the input level](/docs/configuration/batching).
 
 Indexes can be negative, and if so the part will be selected from the end
 counting backwards starting from -1.`,
-).Array()
+).Array().Advanced()
 
 //------------------------------------------------------------------------------

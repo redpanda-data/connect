@@ -50,7 +50,7 @@ test_cache_plugin_with_config:
 	var cacheNode yaml.Node
 	require.NoError(t, cacheNode.Encode(cacheConf))
 
-	require.NoError(t, docs.SanitiseNode(docs.TypeCache, &cacheNode, docs.SanitiseConfig{
+	require.NoError(t, docs.SanitiseYAML(docs.TypeCache, &cacheNode, docs.SanitiseConfig{
 		RemoveTypeField:  true,
 		RemoveDeprecated: true,
 	}))
@@ -89,7 +89,7 @@ test_cache_plugin_without_config: null
 	var cacheNode yaml.Node
 	require.NoError(t, cacheNode.Encode(cacheConf))
 
-	require.NoError(t, docs.SanitiseNode(docs.TypeCache, &cacheNode, docs.SanitiseConfig{
+	require.NoError(t, docs.SanitiseYAML(docs.TypeCache, &cacheNode, docs.SanitiseConfig{
 		RemoveTypeField:  true,
 		RemoveDeprecated: true,
 	}))
@@ -136,7 +136,7 @@ test_input_plugin_with_config:
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseNode(docs.TypeInput, &outNode, docs.SanitiseConfig{
+	require.NoError(t, docs.SanitiseYAML(docs.TypeInput, &outNode, docs.SanitiseConfig{
 		RemoveTypeField:  true,
 		RemoveDeprecated: true,
 	}))
@@ -175,7 +175,7 @@ test_input_plugin_without_config: null
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseNode(docs.TypeInput, &outNode, docs.SanitiseConfig{
+	require.NoError(t, docs.SanitiseYAML(docs.TypeInput, &outNode, docs.SanitiseConfig{
 		RemoveTypeField:  true,
 		RemoveDeprecated: true,
 	}))
@@ -222,7 +222,7 @@ test_output_plugin_with_config:
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseNode(docs.TypeOutput, &outNode, docs.SanitiseConfig{
+	require.NoError(t, docs.SanitiseYAML(docs.TypeOutput, &outNode, docs.SanitiseConfig{
 		RemoveTypeField:  true,
 		RemoveDeprecated: true,
 	}))
@@ -261,7 +261,7 @@ test_output_plugin_without_config: null
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseNode(docs.TypeOutput, &outNode, docs.SanitiseConfig{
+	require.NoError(t, docs.SanitiseYAML(docs.TypeOutput, &outNode, docs.SanitiseConfig{
 		RemoveTypeField:  true,
 		RemoveDeprecated: true,
 	}))
@@ -311,7 +311,7 @@ test_batch_output_plugin_with_config:
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseNode(docs.TypeOutput, &outNode, docs.SanitiseConfig{
+	require.NoError(t, docs.SanitiseYAML(docs.TypeOutput, &outNode, docs.SanitiseConfig{
 		RemoveTypeField:  true,
 		RemoveDeprecated: true,
 	}))
@@ -351,7 +351,7 @@ test_batch_output_plugin_without_config: null
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseNode(docs.TypeOutput, &outNode, docs.SanitiseConfig{
+	require.NoError(t, docs.SanitiseYAML(docs.TypeOutput, &outNode, docs.SanitiseConfig{
 		RemoveTypeField:  true,
 		RemoveDeprecated: true,
 	}))
@@ -398,7 +398,7 @@ test_processor_plugin_with_config:
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseNode(docs.TypeProcessor, &outNode, docs.SanitiseConfig{
+	require.NoError(t, docs.SanitiseYAML(docs.TypeProcessor, &outNode, docs.SanitiseConfig{
 		RemoveTypeField:  true,
 		RemoveDeprecated: true,
 	}))
@@ -437,7 +437,7 @@ test_processor_plugin_without_config: null
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseNode(docs.TypeProcessor, &outNode, docs.SanitiseConfig{
+	require.NoError(t, docs.SanitiseYAML(docs.TypeProcessor, &outNode, docs.SanitiseConfig{
 		RemoveTypeField:  true,
 		RemoveDeprecated: true,
 	}))
@@ -484,7 +484,7 @@ test_batch_processor_plugin_with_config:
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseNode(docs.TypeProcessor, &outNode, docs.SanitiseConfig{
+	require.NoError(t, docs.SanitiseYAML(docs.TypeProcessor, &outNode, docs.SanitiseConfig{
 		RemoveTypeField:  true,
 		RemoveDeprecated: true,
 	}))
@@ -523,7 +523,7 @@ test_batch_processor_plugin_without_config: null
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseNode(docs.TypeProcessor, &outNode, docs.SanitiseConfig{
+	require.NoError(t, docs.SanitiseYAML(docs.TypeProcessor, &outNode, docs.SanitiseConfig{
 		RemoveTypeField:  true,
 		RemoveDeprecated: true,
 	}))
@@ -570,7 +570,7 @@ test_rate_limit_plugin_with_config:
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseNode(docs.TypeRateLimit, &outNode, docs.SanitiseConfig{
+	require.NoError(t, docs.SanitiseYAML(docs.TypeRateLimit, &outNode, docs.SanitiseConfig{
 		RemoveTypeField:  true,
 		RemoveDeprecated: true,
 	}))
@@ -609,7 +609,7 @@ test_rate_limit_plugin_without_config: null
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseNode(docs.TypeRateLimit, &outNode, docs.SanitiseConfig{
+	require.NoError(t, docs.SanitiseYAML(docs.TypeRateLimit, &outNode, docs.SanitiseConfig{
 		RemoveTypeField:  true,
 		RemoveDeprecated: true,
 	}))

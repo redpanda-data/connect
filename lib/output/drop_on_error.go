@@ -45,7 +45,7 @@ output:
       output:
         type: foo
 ` + "```" + ``,
-		config: docs.FieldComponent().Map(),
+		config: docs.FieldComponent().HasType(docs.FieldTypeObject),
 	}
 }
 

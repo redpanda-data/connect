@@ -86,7 +86,7 @@ field `max_in_flight`.
 A list of hosts to connect to.
 
 
-Type: `string`  
+Type: `array`  
 Default: `["localhost:9000"]`  
 
 ```yaml

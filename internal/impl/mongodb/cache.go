@@ -37,7 +37,7 @@ func init() {
 				docs.FieldCommon("key_field", "The field in the document that is used as the key."),
 				docs.FieldCommon("value_field", "The field in the document that is used as the value."),
 			)...,
-		),
+		).ChildDefaultAndTypesFromStruct(cache.NewMongoDBConfig()),
 	})
 }
 

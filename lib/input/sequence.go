@@ -154,7 +154,7 @@ Each message must be structured (JSON or otherwise processed into a structured f
 					"The chosen strategy to use when a data join would otherwise result in a collision of field values. The strategy `array` means non-array colliding values are placed into an array and colliding arrays are merged. The strategy `replace` replaces old values with new values. The strategy `keep` keeps the old value.",
 				).HasOptions("array", "replace", "keep"),
 			).AtVersion("3.40.0"),
-			docs.FieldCommon("inputs", "An array of inputs to read from sequentially.").Array().HasType(docs.FieldInput),
+			docs.FieldCommon("inputs", "An array of inputs to read from sequentially.").Array().HasType(docs.FieldTypeInput),
 		},
 		Categories: []Category{
 			CategoryUtility,

@@ -26,7 +26,7 @@ func init() {
 
 All functionality of this processor has been superseded by the
 [bloblang](/docs/components/processors/bloblang) processor.`,
-		config: docs.FieldComponent().HasType(docs.FieldCondition),
+		config: docs.FieldComponent().HasType(docs.FieldTypeCondition),
 	}
 }
 

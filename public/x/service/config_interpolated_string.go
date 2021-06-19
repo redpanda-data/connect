@@ -12,7 +12,7 @@ import (
 // possible to extract an *InterpolatedString from the resulting parsed config
 // with the method FieldInterpolatedString.
 func NewInterpolatedStringField(name string) *ConfigField {
-	tf := docs.FieldCommon(name, "").HasType(docs.FieldString).IsInterpolated()
+	tf := docs.FieldCommon(name, "").HasType(docs.FieldTypeString).IsInterpolated()
 	return &ConfigField{field: tf}
 }
 

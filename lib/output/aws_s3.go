@@ -100,7 +100,7 @@ output:
 				`${!meta("kafka_key")}.json`,
 				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
 			).IsInterpolated(),
-			docs.FieldCommon(
+			docs.FieldString(
 				"tags", "Key/value pairs to store with the object as tags.",
 				map[string]string{
 					"Key1":      "Value1",
@@ -215,7 +215,7 @@ output:
 				`${!meta("kafka_key")}.json`,
 				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
 			).IsInterpolated(),
-			docs.FieldCommon(
+			docs.FieldString(
 				"tags", "Key/value pairs to store with the object as tags.",
 				map[string]string{
 					"Key1":      "Value1",

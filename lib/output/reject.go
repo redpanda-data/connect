@@ -56,6 +56,7 @@ output:
 `,
 			},
 		},
+		config: docs.FieldComponent().HasType(docs.FieldTypeString).HasDefault(""),
 	}
 }
 

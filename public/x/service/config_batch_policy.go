@@ -22,7 +22,7 @@ func NewBatchPolicyField(name string) *ConfigField {
 		if f.Name == "count" {
 			f = f.HasDefault(0)
 		}
-		if f.Name != "processors" && !f.Deprecated {
+		if f.Name != "processors" && !f.IsDeprecated {
 			newChildren = append(newChildren, f)
 		}
 	}

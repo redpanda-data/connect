@@ -89,7 +89,7 @@ behavior is false, which will drop the message.`,
 					},
 				},
 			).Array().WithChildren(
-				docs.FieldCommon(
+				docs.FieldString(
 					"check",
 					"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should be routed to the case output. If left empty the case always passes.",
 					`this.type == "foo"`,
@@ -97,16 +97,16 @@ behavior is false, which will drop the message.`,
 				).HasDefault("").Linter(docs.LintBloblangMapping),
 				docs.FieldCommon(
 					"output", "An [output](/docs/components/outputs/about/) for messages that pass the check to be routed to.",
-				).HasDefault(map[string]interface{}{}).HasType(docs.FieldOutput),
+				).HasDefault(map[string]interface{}{}).HasType(docs.FieldTypeOutput),
 				docs.FieldAdvanced(
 					"continue",
 					"Indicates whether, if this case passes for a message, the next case should also be tested.",
-				).HasDefault(false),
+				).HasDefault(false).HasType(docs.FieldTypeBool),
 			),
 			docs.FieldDeprecated("outputs").Array().WithChildren(
-				docs.FieldDeprecated("condition").HasType(docs.FieldCondition),
+				docs.FieldDeprecated("condition").HasType(docs.FieldTypeCondition),
 				docs.FieldDeprecated("fallthrough"),
-				docs.FieldDeprecated("output").HasType(docs.FieldOutput),
+				docs.FieldDeprecated("output").HasType(docs.FieldTypeOutput),
 			).OmitWhen(func(v, _ interface{}) (string, bool) {
 				arr, ok := v.([]interface{})
 				return "field outputs is deprecated in favour of cases", ok && len(arr) == 0

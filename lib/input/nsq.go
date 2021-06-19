@@ -20,7 +20,7 @@ Subscribe to an NSQ instance topic and channel.`,
 		FieldSpecs: docs.FieldSpecs{
 			func() docs.FieldSpec {
 				b := batch.FieldSpec()
-				b.Deprecated = true
+				b.IsDeprecated = true
 				return b
 			}(),
 			docs.FieldCommon("nsqd_tcp_addresses", "A list of nsqd addresses to connect to.").Array(),

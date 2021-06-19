@@ -104,7 +104,7 @@ c:
 			node, err := getYAMLNode(confBytes)
 			require.NoError(t, err)
 
-			assert.Equal(t, test.lints, spec.component.Config.Children.LintNode(docs.NewLintContext(), node))
+			assert.Equal(t, test.lints, spec.component.Config.Children.LintYAML(docs.NewLintContext(), node))
 
 			pConf, err := spec.configFromNode(node)
 			require.NoError(t, err)
@@ -112,7 +112,7 @@ c:
 			var sanitNode yaml.Node
 			require.NoError(t, sanitNode.Encode(pConf.Root()))
 
-			require.NoError(t, spec.component.Config.Children.SanitiseNode(&sanitNode, docs.SanitiseConfig{
+			require.NoError(t, spec.component.Config.Children.SanitiseYAML(&sanitNode, docs.SanitiseConfig{
 				RemoveTypeField:  true,
 				RemoveDeprecated: true,
 			}))
@@ -205,7 +205,7 @@ c:
 			node, err := getYAMLNode(confBytes)
 			require.NoError(t, err)
 
-			assert.Equal(t, test.lints, spec.component.Config.Children.LintNode(docs.NewLintContext(), node))
+			assert.Equal(t, test.lints, spec.component.Config.Children.LintYAML(docs.NewLintContext(), node))
 
 			pConf, err := spec.configFromNode(node)
 			require.NoError(t, err)
@@ -213,7 +213,7 @@ c:
 			var sanitNode yaml.Node
 			require.NoError(t, sanitNode.Encode(pConf.Root()))
 
-			require.NoError(t, spec.component.Config.Children.SanitiseNode(&sanitNode, docs.SanitiseConfig{
+			require.NoError(t, spec.component.Config.Children.SanitiseYAML(&sanitNode, docs.SanitiseConfig{
 				RemoveTypeField:  true,
 				RemoveDeprecated: true,
 			}))

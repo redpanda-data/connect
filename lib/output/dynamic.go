@@ -38,7 +38,7 @@ body of the request should be a YAML configuration for the output, if the output
 already exists it will be changed.`,
 		FieldSpecs: docs.FieldSpecs{
 			// TODO: Update with component type.
-			docs.FieldCommon("outputs", "A map of outputs to statically create.").Map().HasType(docs.FieldOutput),
+			docs.FieldCommon("outputs", "A map of outputs to statically create.").Map().HasType(docs.FieldTypeOutput),
 			docs.FieldCommon("prefix", "A path prefix for HTTP endpoints that are registered."),
 			docs.FieldCommon("timeout", "The server side timeout of HTTP requests."),
 			docs.FieldCommon(

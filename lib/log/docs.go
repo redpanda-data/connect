@@ -5,14 +5,16 @@ import "github.com/Jeffail/benthos/v3/internal/docs"
 // Spec returns a field spec for the logger configuration fields.
 func Spec() docs.FieldSpecs {
 	return docs.FieldSpecs{
-		docs.FieldCommon("level", "Set the minimum severity level for emitting logs.").HasOptions(
+		docs.FieldString("level", "Set the minimum severity level for emitting logs.").HasOptions(
 			"OFF", "FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE", "ALL",
-		),
-		docs.FieldCommon("format", "Set the format of emitted logs.").HasOptions(
+		).HasDefault("INFO"),
+		docs.FieldString("format", "Set the format of emitted logs.").HasOptions(
 			"json", "logfmt", "classic",
-		),
-		docs.FieldCommon("add_timestamp", "Whether to include timestamps in logs."),
-		docs.FieldCommon("static_fields", "A map of key/value pairs to add to each structured log."),
+		).HasDefault("json"),
+		docs.FieldBool("add_timestamp", "Whether to include timestamps in logs.").HasDefault(true),
+		docs.FieldString("static_fields", "A map of key/value pairs to add to each structured log.").Map().HasDefault(map[string]string{
+			"@service": "benthos",
+		}),
 		docs.FieldDeprecated("prefix"),
 		docs.FieldDeprecated("json_format"),
 	}

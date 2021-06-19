@@ -34,7 +34,7 @@ Introduced in version 3.43.0.
 # Common config fields, showing default values
 label: ""
 mongodb:
-  url: mongodb://localhost:27017
+  url: ""
   database: ""
   collection: ""
   username: ""
@@ -56,7 +56,7 @@ mongodb:
 # All config fields, showing default values
 label: ""
 mongodb:
-  url: mongodb://localhost:27017
+  url: ""
   database: ""
   collection: ""
   username: ""
@@ -88,7 +88,7 @@ The URL of the target MongoDB DB.
 
 
 Type: `string`  
-Default: `"mongodb://localhost:27017"`  
+Default: `""`  
 
 ```yaml
 # Examples
@@ -172,16 +172,15 @@ Default: `""`
 A bloblang map representing the records in the mongo db. Used to generate the document for mongodb by mapping the fields in the message to the mongodb fields. The document map is required for the operations insert-one, replace-one and update-one.
 
 
-Type: `array`  
+Type: `string`  
 Default: `""`  
 
 ```yaml
 # Examples
 
-document_map:
-  - |-
-    root.a = this.foo
-    root.b = this.bar
+document_map: |-
+  root.a = this.foo
+  root.b = this.bar
 ```
 
 ### `filter_map`
@@ -189,16 +188,15 @@ document_map:
 A bloblang map representing the filter for the mongo db command. The filter map is required for all operations except insert-one. It is used to find the document(s) for the operation. For example in a delete-one case, the filter map should have the fields required to locate the document to delete.
 
 
-Type: `array`  
+Type: `string`  
 Default: `""`  
 
 ```yaml
 # Examples
 
-filter_map:
-  - |-
-    root.a = this.foo
-    root.b = this.bar
+filter_map: |-
+  root.a = this.foo
+  root.b = this.bar
 ```
 
 ### `hint_map`
@@ -206,16 +204,15 @@ filter_map:
 A bloblang map representing the hint for the mongo db command. This map is optional and is used with all operations except insert-one. It is used to improve performance of finding the documents in the mongodb.
 
 
-Type: `array`  
+Type: `string`  
 Default: `""`  
 
 ```yaml
 # Examples
 
-hint_map:
-  - |-
-    root.a = this.foo
-    root.b = this.bar
+hint_map: |-
+  root.a = this.foo
+  root.b = this.bar
 ```
 
 ### `parts`

@@ -67,7 +67,7 @@ allowing you to transfer data across accounts. You can find out more
 		Batches: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("table", "The table to store messages in."),
-			docs.FieldCommon("string_columns", "A map of column keys to string values to store.",
+			docs.FieldString("string_columns", "A map of column keys to string values to store.",
 				map[string]string{
 					"id":           "${!json(\"id\")}",
 					"title":        "${!json(\"body.title\")}",
@@ -75,7 +75,7 @@ allowing you to transfer data across accounts. You can find out more
 					"full_content": "${!content()}",
 				},
 			).IsInterpolated().Map(),
-			docs.FieldCommon("json_map_columns", "A map of column keys to [field paths](/docs/configuration/field_paths) pointing to value data within messages.",
+			docs.FieldString("json_map_columns", "A map of column keys to [field paths](/docs/configuration/field_paths) pointing to value data within messages.",
 				map[string]string{
 					"user":           "path.to.user",
 					"whole_document": ".",

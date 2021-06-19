@@ -66,14 +66,14 @@ output:
 			},
 		},
 		config: docs.FieldComponent().Array().WithChildren(
-			docs.FieldCommon(
+			docs.FieldString(
 				"check",
 				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message belongs to a given group.",
 				`this.type == "foo"`,
 				`this.contents.urls.contains("https://benthos.dev/")`,
 				`true`,
 			).HasDefault("").Linter(docs.LintBloblangMapping),
-			docs.FieldDeprecated("condition").HasType(docs.FieldCondition).OmitWhen(func(v, _ interface{}) (string, bool) {
+			docs.FieldDeprecated("condition").HasType(docs.FieldTypeCondition).OmitWhen(func(v, _ interface{}) (string, bool) {
 				defaultBytes, err := yaml.Marshal(condition.NewConfig())
 				if err != nil {
 					return "", false
@@ -87,7 +87,7 @@ output:
 			docs.FieldCommon(
 				"processors",
 				"A list of [processors](/docs/components/processors/about/) to execute on the newly formed group.",
-			).HasDefault([]interface{}{}).Array().HasType(docs.FieldProcessor),
+			).HasDefault([]interface{}{}).Array().HasType(docs.FieldTypeProcessor),
 		),
 		UsesBatches: true,
 	}

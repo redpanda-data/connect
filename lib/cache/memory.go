@@ -43,7 +43,7 @@ TTL is respected as usual.`,
 			docs.FieldCommon("ttl", "The TTL of each item in seconds. After this period an item will be eligible for removal during the next compaction."),
 			docs.FieldCommon("compaction_interval", "The period of time to wait before each compaction, at which point expired items are removed."),
 			docs.FieldAdvanced("shards", "A number of logical shards to spread keys across, increasing the shards can have a performance benefit when processing a large number of keys."),
-			docs.FieldCommon(
+			docs.FieldString(
 				"init_values", "A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.",
 				map[string]string{
 					"Nickelback":       "1995",
