@@ -1,13 +1,34 @@
 package service
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
+	"github.com/Jeffail/benthos/v3/lib/processor"
 	"gopkg.in/yaml.v3"
 )
+
+// BatchPolicy describes the mechanisms by which batching should be performed of
+// messages destined for a Batch output. This is returned by constructors of
+// batch outputs.
+type BatchPolicy struct {
+	ByteSize int
+	Count    int
+	Check    string
+	Period   string
+
+	// Only available when using NewBatchPolicyField.
+	procs []processor.Config
+}
+
+func (b BatchPolicy) toInternal() batch.PolicyConfig {
+	batchConf := batch.NewPolicyConfig()
+	batchConf.ByteSize = b.ByteSize
+	batchConf.Count = b.Count
+	batchConf.Check = b.Check
+	batchConf.Period = b.Period
+	batchConf.Processors = b.procs
+	return batchConf
+}
 
 // NewBatchPolicyField defines a new object type config field that describes a
 // batching policy for batched outputs. It is then possible to extract a
@@ -16,13 +37,13 @@ import (
 func NewBatchPolicyField(name string) *ConfigField {
 	bs := batch.FieldSpec()
 	bs.Name = name
-	// Remove the "processors" field (for now) and any deprecated fields.
+	bs.Type = docs.FieldTypeObject
 	var newChildren []docs.FieldSpec
 	for _, f := range bs.Children {
 		if f.Name == "count" {
 			f = f.HasDefault(0)
 		}
-		if f.Name != "processors" && !f.IsDeprecated {
+		if !f.IsDeprecated {
 			newChildren = append(newChildren, f)
 		}
 	}
@@ -33,19 +54,30 @@ func NewBatchPolicyField(name string) *ConfigField {
 // FieldBatchPolicy accesses a field from a parsed config that was defined with
 // NewBatchPolicyField and returns a BatchPolicy, or an error if the
 // configuration was invalid.
-func (p *ParsedConfig) FieldBatchPolicy(path ...string) (BatchPolicy, error) {
-	v, exists := p.field(path...)
+func (p *ParsedConfig) FieldBatchPolicy(path ...string) (conf BatchPolicy, err error) {
+	if conf.Count, err = p.FieldInt(append(path, "count")...); err != nil {
+		return conf, err
+	}
+	if conf.ByteSize, err = p.FieldInt(append(path, "byte_size")...); err != nil {
+		return conf, err
+	}
+	if conf.Check, err = p.FieldString(append(path, "check")...); err != nil {
+		return conf, err
+	}
+	if conf.Period, err = p.FieldString(append(path, "period")...); err != nil {
+		return conf, err
+	}
+
+	procsNode, exists := p.field(append(path, "processors")...)
 	if !exists {
-		return BatchPolicy{}, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
+		return
 	}
 
 	var node yaml.Node
-	if err := node.Encode(v); err != nil {
-		return BatchPolicy{}, err
+	if err = node.Encode(procsNode); err != nil {
+		return
 	}
 
-	var conf BatchPolicy
-	err := node.Decode(&conf)
-
-	return conf, err
+	err = node.Decode(&conf.procs)
+	return
 }

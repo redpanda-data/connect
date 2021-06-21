@@ -143,7 +143,7 @@ type FieldSpec struct {
 	// Version is an explicit version when this field was introduced.
 	Version string
 
-	omitWhenFn   func(field, parent interface{}) (string, bool)
+	omitWhenFn   func(field, parent interface{}) (why string, shouldOmit bool)
 	customLintFn LintFunc
 	skipLint     bool
 }
@@ -249,7 +249,7 @@ func (f FieldSpec) WithChildren(children ...FieldSpec) FieldSpec {
 // OmitWhen specifies a custom func that, when provided a generic config struct,
 // returns a boolean indicating when the field can be safely omitted from a
 // config.
-func (f FieldSpec) OmitWhen(fn func(field, parent interface{}) (string, bool)) FieldSpec {
+func (f FieldSpec) OmitWhen(fn func(field, parent interface{}) (why string, shouldOmit bool)) FieldSpec {
 	f.omitWhenFn = fn
 	return f
 }

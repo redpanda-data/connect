@@ -88,15 +88,15 @@ c: true`,
 
 func TestFieldsNodeToMap(t *testing.T) {
 	spec := docs.FieldSpecs{
-		docs.FieldCommon("a", ""),
-		docs.FieldCommon("b", "").HasDefault(11),
+		docs.FieldString("a", ""),
+		docs.FieldInt("b", "").HasDefault(11),
 		docs.FieldCommon("c", "").WithChildren(
-			docs.FieldCommon("d", "").HasDefault(true),
-			docs.FieldCommon("e", "").HasDefault("evalue"),
+			docs.FieldBool("d", "").HasDefault(true),
+			docs.FieldString("e", "").HasDefault("evalue"),
 			docs.FieldCommon("f", "").WithChildren(
-				docs.FieldCommon("g", "").HasDefault(12),
-				docs.FieldCommon("h", ""),
-				docs.FieldCommon("i", "").HasDefault(13),
+				docs.FieldInt("g", "").HasDefault(12),
+				docs.FieldString("h", ""),
+				docs.FieldFloat("i", "").HasDefault(13.0),
 			),
 		),
 	}
@@ -112,7 +112,7 @@ c:
 `), &node)
 	require.NoError(t, err)
 
-	generic, err := spec.YAMLToMap(false, &node)
+	generic, err := spec.YAMLToMap(&node, docs.ToValueConfig{})
 	require.NoError(t, err)
 
 	assert.Equal(t, map[string]interface{}{
@@ -304,6 +304,205 @@ foo:
 				},
 			},
 		},
+		{
+			name: "recurse map of objects",
+			spec: docs.FieldSpecs{
+				docs.FieldCommon("foo", "").WithChildren(
+					docs.FieldCommon("eles", "").Map().WithChildren(
+						docs.FieldCommon("bar", "").HasType(docs.FieldTypeString).HasDefault("default"),
+					),
+				),
+			},
+			yaml: `
+foo:
+  eles:
+    first:
+      bar: bar1
+    second:
+      bar: bar2
+`,
+			result: map[string]interface{}{
+				"foo": map[string]interface{}{
+					"eles": map[string]interface{}{
+						"first": map[string]interface{}{
+							"bar": "bar1",
+						},
+						"second": map[string]interface{}{
+							"bar": "bar2",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "component field",
+			spec: docs.FieldSpecs{
+				docs.FieldString("a", "").HasDefault("adefault"),
+				docs.FieldCommon("b", "").HasType(docs.FieldTypeProcessor),
+				docs.FieldBool("c", ""),
+			},
+			yaml: `
+b:
+  bloblang: 'root = "hello world"'
+c: true
+`,
+			result: map[string]interface{}{
+				"a": "adefault",
+				"b": yaml.Node{
+					Kind:   yaml.MappingNode,
+					Tag:    "!!map",
+					Line:   3,
+					Column: 3,
+					Content: []*yaml.Node{
+						{
+							Kind:   yaml.ScalarNode,
+							Tag:    "!!str",
+							Value:  "bloblang",
+							Line:   3,
+							Column: 3,
+						},
+						{
+							Kind:   yaml.ScalarNode,
+							Style:  yaml.SingleQuotedStyle,
+							Tag:    "!!str",
+							Value:  `root = "hello world"`,
+							Line:   3,
+							Column: 13,
+						},
+					},
+				},
+				"c": true,
+			},
+		},
+		{
+			name: "component field in array",
+			spec: docs.FieldSpecs{
+				docs.FieldString("a", "").HasDefault("adefault"),
+				docs.FieldCommon("b", "").Array().HasType(docs.FieldTypeProcessor),
+				docs.FieldBool("c", ""),
+			},
+			yaml: `
+b:
+  - bloblang: 'root = "hello world"'
+c: true
+`,
+			result: map[string]interface{}{
+				"a": "adefault",
+				"b": []yaml.Node{
+					{
+						Kind:   yaml.MappingNode,
+						Tag:    "!!map",
+						Line:   3,
+						Column: 5,
+						Content: []*yaml.Node{
+							{
+								Kind:   yaml.ScalarNode,
+								Tag:    "!!str",
+								Value:  "bloblang",
+								Line:   3,
+								Column: 5,
+							},
+							{
+								Kind:   yaml.ScalarNode,
+								Style:  yaml.SingleQuotedStyle,
+								Tag:    "!!str",
+								Value:  `root = "hello world"`,
+								Line:   3,
+								Column: 15,
+							},
+						},
+					},
+				},
+				"c": true,
+			},
+		},
+		{
+			name: "component field in map",
+			spec: docs.FieldSpecs{
+				docs.FieldString("a", "").HasDefault("adefault"),
+				docs.FieldCommon("b", "").Map().HasType(docs.FieldTypeProcessor),
+				docs.FieldBool("c", ""),
+			},
+			yaml: `
+b:
+  foo:
+    bloblang: 'root = "hello world"'
+c: true
+`,
+			result: map[string]interface{}{
+				"a": "adefault",
+				"b": map[string]yaml.Node{
+					"foo": {
+						Kind:   yaml.MappingNode,
+						Tag:    "!!map",
+						Line:   4,
+						Column: 5,
+						Content: []*yaml.Node{
+							{
+								Kind:   yaml.ScalarNode,
+								Tag:    "!!str",
+								Value:  "bloblang",
+								Line:   4,
+								Column: 5,
+							},
+							{
+								Kind:   yaml.ScalarNode,
+								Style:  yaml.SingleQuotedStyle,
+								Tag:    "!!str",
+								Value:  `root = "hello world"`,
+								Line:   4,
+								Column: 15,
+							},
+						},
+					},
+				},
+				"c": true,
+			},
+		},
+		{
+			name: "array of array of string",
+			spec: docs.FieldSpecs{
+				docs.FieldString("foo", "").ArrayOfArrays(),
+			},
+			yaml: `
+foo:
+  -
+    - bar1
+    - bar2
+  -
+    - bar3
+`,
+			result: map[string]interface{}{
+				"foo": []interface{}{
+					[]interface{}{"bar1", "bar2"},
+					[]interface{}{"bar3"},
+				},
+			},
+		},
+		{
+			name: "array of array of int, float and bool",
+			spec: docs.FieldSpecs{
+				docs.FieldInt("foo", "").ArrayOfArrays(),
+				docs.FieldFloat("bar", "").ArrayOfArrays(),
+				docs.FieldBool("baz", "").ArrayOfArrays(),
+			},
+			yaml: `
+foo: [[3,4],[5]]
+bar: [[3.3,4.4],[5.5]]
+baz: [[true,false],[true]]
+`,
+			result: map[string]interface{}{
+				"foo": []interface{}{
+					[]interface{}{3, 4}, []interface{}{5},
+				},
+				"bar": []interface{}{
+					[]interface{}{3.3, 4.4}, []interface{}{5.5},
+				},
+				"baz": []interface{}{
+					[]interface{}{true, false}, []interface{}{true},
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -312,7 +511,7 @@ foo:
 			err := yaml.Unmarshal([]byte(test.yaml), &node)
 			require.NoError(t, err)
 
-			generic, err := test.spec.YAMLToMap(false, &node)
+			generic, err := test.spec.YAMLToMap(&node, docs.ToValueConfig{})
 			require.NoError(t, err)
 
 			assert.Equal(t, test.result, generic)

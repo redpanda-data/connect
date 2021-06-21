@@ -95,7 +95,7 @@ type compiled struct {
 // ExpandToNode attempts to apply the template to a provided YAML node and
 // returns the new expanded configuration.
 func (c *compiled) ExpandToNode(node *yaml.Node) (*yaml.Node, error) {
-	generic, err := c.spec.Config.Children.YAMLToMap(false, node)
+	generic, err := c.spec.Config.Children.YAMLToMap(node, docs.ToValueConfig{})
 	if err != nil {
 		return nil, fmt.Errorf("invalid config for template component: %w", err)
 	}

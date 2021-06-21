@@ -7,7 +7,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
@@ -108,16 +107,6 @@ func RegisterOutput(name string, spec *ConfigSpec, ctor OutputConstructor) error
 	), componentSpec)
 }
 
-// BatchPolicy describes the mechanisms by which batching should be performed of
-// messages destined for a Batch output. This is returned by constructors of
-// batch outputs.
-type BatchPolicy struct {
-	ByteSize int    `yaml:"byte_size"`
-	Count    int    `yaml:"count"`
-	Check    string `yaml:"check"`
-	Period   string `yaml:"period"`
-}
-
 // BatchOutputConstructor is a func that's provided a configuration type and
 // access to a service manager, and must return an instantiation of a writer
 // based on the config, a batching policy, and a maximum number of in-flight
@@ -147,18 +136,12 @@ func RegisterBatchOutput(name string, spec *ConfigSpec, ctor BatchOutputConstruc
 				return nil, fmt.Errorf("invalid maxInFlight parameter: %v", maxInFlight)
 			}
 
-			batchConf := batch.NewPolicyConfig()
-			batchConf.ByteSize = batchPolicy.ByteSize
-			batchConf.Count = batchPolicy.Count
-			batchConf.Check = batchPolicy.Check
-			batchConf.Period = batchPolicy.Period
-
 			w := newAirGapBatchWriter(op)
 			o, err := output.NewAsyncWriter(conf.Type, maxInFlight, w, nm.Logger(), nm.Metrics())
 			if err != nil {
 				return nil, err
 			}
-			return output.NewBatcherFromConfig(batchConf, o, nm, nm.Logger(), nm.Metrics())
+			return output.NewBatcherFromConfig(batchPolicy.toInternal(), o, nm, nm.Logger(), nm.Metrics())
 		},
 	), componentSpec)
 }

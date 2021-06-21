@@ -18,7 +18,7 @@ type ConfigField struct {
 // NewStringField describes a new string type config field.
 func NewStringField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").HasType(docs.FieldTypeString),
+		field: docs.FieldString(name, ""),
 	}
 }
 
@@ -26,28 +26,28 @@ func NewStringField(name string) *ConfigField {
 // strings.
 func NewStringListField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").Array().HasType(docs.FieldTypeString),
+		field: docs.FieldString(name, "").Array(),
 	}
 }
 
 // NewIntField describes a new int type config field.
 func NewIntField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").HasType(docs.FieldTypeInt),
+		field: docs.FieldInt(name, ""),
 	}
 }
 
 // NewFloatField describes a new float type config field.
 func NewFloatField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").HasType(docs.FieldTypeFloat),
+		field: docs.FieldFloat(name, ""),
 	}
 }
 
 // NewBoolField describes a new bool type config field.
 func NewBoolField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").HasType(docs.FieldTypeBool),
+		field: docs.FieldBool(name, ""),
 	}
 }
 
@@ -67,6 +67,13 @@ func NewObjectField(name string, fields ...*ConfigField) *ConfigField {
 // documentation for the component config spec.
 func (c *ConfigField) Description(d string) *ConfigField {
 	c.field.Description = d
+	return c
+}
+
+// Advanced marks a config field as being advanced, and therefore it will not
+// appear in simplified documentation examples.
+func (c *ConfigField) Advanced() *ConfigField {
+	c.field = c.field.Advanced()
 	return c
 }
 
@@ -97,7 +104,7 @@ func (c *ConfigSpec) configFromNode(node *yaml.Node) (*ParsedConfig, error) {
 		return &ParsedConfig{asStruct: conf}, nil
 	}
 
-	fields, err := c.component.Config.Children.YAMLToMap(false, node)
+	fields, err := c.component.Config.Children.YAMLToMap(node, docs.ToValueConfig{})
 	if err != nil {
 		return nil, err
 	}
@@ -128,12 +135,18 @@ func NewConfigSpec() *ConfigSpec {
 //
 // The returned value must be a pointer type in order to be properly
 // unmarshalled during config parsing.
+//
+// Deprecated: This config mechanism exists only as an interim solution for
+// plugin authors migrating from the previous APIs.
 type ConfigStructConstructor func() interface{}
 
 // NewStructConfigSpec creates a new component configuration spec around a
 // constructor func. The provided constructor func will be used during parsing
 // in order to validate and return fields for the plugin from a configuration
 // file.
+//
+// Deprecated: This config mechanism exists only as an interim solution for
+// plugin authors migrating from the previous APIs.
 func NewStructConfigSpec(ctor ConfigStructConstructor) (*ConfigSpec, error) {
 	var node yaml.Node
 	if err := node.Encode(ctor()); err != nil {
@@ -217,15 +230,15 @@ type ParsedConfig struct {
 	generic  map[string]interface{}
 }
 
-// Root returns the root of the parsed config. If the configuration spec was
+// AsStruct returns the root of the parsed config. If the configuration spec was
 // built around a config constructor then the value returned will match the type
 // returned by the constructor, otherwise it will be a generic
 // map[string]interface{} type.
-func (p *ParsedConfig) Root() interface{} {
-	if p.asStruct != nil {
-		return p.asStruct
-	}
-	return p.generic
+//
+// Deprecated: This config mechanism exists only as an interim solution for
+// plugin authors migrating from the previous APIs.
+func (p *ParsedConfig) AsStruct() interface{} {
+	return p.asStruct
 }
 
 // Field accesses a field from the parsed config by its name and returns the
