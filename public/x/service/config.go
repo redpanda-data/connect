@@ -85,6 +85,13 @@ func (c *ConfigField) Default(v interface{}) *ConfigField {
 	return c
 }
 
+// Example adds an example value to the field which will be shown when printing
+// documentation for the component config spec.
+func (c *ConfigField) Example(e interface{}) *ConfigField {
+	c.field.Examples = append(c.field.Examples, e)
+	return c
+}
+
 //------------------------------------------------------------------------------
 
 // ConfigSpec describes the configuration specification for a plugin
@@ -183,6 +190,12 @@ func (c *ConfigSpec) Categories(categories ...string) *ConfigSpec {
 	return c
 }
 
+// Version specifies that this component was introduced in a given version.
+func (c *ConfigSpec) Version(v string) *ConfigSpec {
+	c.component.Version = v
+	return c
+}
+
 // Summary adds a short summary to the plugin configuration spec that describes
 // the general purpose of the component.
 func (c *ConfigSpec) Summary(summary string) *ConfigSpec {
@@ -212,6 +225,18 @@ func (c *ConfigSpec) Field(f *ConfigField) *ConfigSpec {
 		}
 	}
 	c.component.Config.Children = append(c.component.Config.Children, f.field)
+	return c
+}
+
+// Example adds an example to the plugin configuration spec that demonstrates
+// how the component can be used. An example has a title, summary, and a YAML
+// configuration showing a real use case.
+func (c *ConfigSpec) Example(title, summary, config string) *ConfigSpec {
+	c.component.Examples = append(c.component.Examples, docs.AnnotatedExample{
+		Title:   title,
+		Summary: summary,
+		Config:  config,
+	})
 	return c
 }
 

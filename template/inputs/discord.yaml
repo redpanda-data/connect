@@ -25,8 +25,14 @@ fields:
     default: 100
 
   - name: cache
-    description: A cache resource to use for request pagination.
+    description: A cache resource to use for request pagination, the ID of the last message received will be stored in this cache and used for subsequent requests.
     type: string
+
+  - name: cache_key
+    description: The key identifier used when storing the ID of the last message received.
+    type: string
+    default: last_message_id
+    advanced: true
 
   - name: rate_limit
     description: An optional rate limit resource to restrict API requests with.
@@ -52,7 +58,7 @@ mapping: |
       "cache": {
         "resource": this.cache,
         "operator": "get",
-        "key": "last_message_id",
+        "key": this.cache_key,
       },
     },
     { "catch": [] }, # Don't care if the cache is empty
@@ -82,7 +88,7 @@ mapping: |
         "parts": [ -1 ],
         "resource": this.cache,
         "operator": "set",
-        "key": "last_message_id",
+        "key": this.cache_key,
         "value": """${! json("id") }""",
       },
     },

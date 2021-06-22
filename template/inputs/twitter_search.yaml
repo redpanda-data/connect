@@ -37,6 +37,12 @@ fields:
     description: A cache resource to use for request pagination.
     type: string
 
+  - name: cache_key
+    description: The key identifier used when storing the ID of the last tweet received.
+    type: string
+    default: last_tweet_id
+    advanced: true
+
   - name: rate_limit
     description: An optional rate limit resource to restrict API requests with.
     type: string
@@ -73,7 +79,7 @@ mapping: |
       "cache": {
         "resource": this.cache,
         "operator": "get",
-        "key": "last_tweet_id",
+        "key": this.cache_key,
       },
     },
     { "catch": [] }, # Don't care if the cache is empty
@@ -113,7 +119,7 @@ mapping: |
         "parts": [ -1 ],
         "resource": this.cache,
         "operator": "set",
-        "key": "last_tweet_id",
+        "key": this.cache_key,
         "value": """${! json("id") }""",
       },
     },
