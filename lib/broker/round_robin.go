@@ -93,6 +93,7 @@ func (o *RoundRobin) loop() {
 		for _, c := range o.outputTSChans {
 			close(c)
 		}
+		closeAllOutputs(o.outputs)
 		close(o.closedChan)
 	}()
 

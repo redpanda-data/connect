@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Fixed an issue here the `http_client` would prematurely drop connections when configured with `stream.enabled` set to `true`.
+- Prevented closed output brokers from leaving child outputs running when they've failed to establish a connection. 
 
 ## 3.47.0 - 2021-06-16
 

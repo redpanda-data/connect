@@ -124,6 +124,7 @@ func (t *Try) loop() {
 		for _, c := range t.outputTSChans {
 			close(c)
 		}
+		closeAllOutputs(t.outputs)
 		close(t.closedChan)
 	}()
 

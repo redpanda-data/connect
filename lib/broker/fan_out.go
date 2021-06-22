@@ -105,6 +105,19 @@ func (o *FanOut) MaxInFlight() (int, bool) {
 
 //------------------------------------------------------------------------------
 
+func closeAllOutputs(outputs []types.Output) {
+	for _, o := range outputs {
+		o.CloseAsync()
+	}
+	for _, o := range outputs {
+		for {
+			if err := o.WaitForClose(time.Second); err == nil {
+				break
+			}
+		}
+	}
+}
+
 // loop is an internal loop that brokers incoming messages to many outputs.
 func (o *FanOut) loop() {
 	var (
@@ -119,6 +132,7 @@ func (o *FanOut) loop() {
 		for _, c := range o.outputTSChans {
 			close(c)
 		}
+		closeAllOutputs(o.outputs)
 		close(o.closedChan)
 	}()
 
