@@ -223,7 +223,7 @@ func (h *HTTPClient) ConnectWithContext(ctx context.Context) (err error) {
 		return nil
 	}
 
-	res, err := h.client.SendToResponse(ctx, h.payload, h.prevResponse)
+	res, err := h.client.SendToResponse(context.Background(), h.payload, h.prevResponse)
 	if err != nil {
 		if strings.Contains(err.Error(), "(Client.Timeout exceeded while awaiting headers)") {
 			err = types.ErrTimeout
