@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - Algorithm `lz4` added to the `compress` and `decompress` processors.
 
+### Fixed
+
+- Fixed an issue here the `http_client` would prematurely drop connections when configured with `stream.enabled` set to `true`.
+
 ## 3.47.0 - 2021-06-16
 
 ### Added

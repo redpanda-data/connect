@@ -241,6 +241,7 @@ func NewSwitch(
 //------------------------------------------------------------------------------
 
 func reorderFromTags(tags []*imessage.Tag, parts []types.Part) {
+	// TODO: Make this stable sort, and make it less inefficient
 	sort.Slice(parts, func(i, j int) bool {
 		iFound, jFound := false, false
 		for _, t := range tags {

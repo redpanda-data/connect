@@ -135,7 +135,7 @@ result_map: |-
 
 This example strips the request message into an empty body, grabs an HTTP
 payload, and places the result back into the original message at the path
-`repo.status`:
+`image.pull_count`:
 
 ```yaml
 pipeline:
@@ -146,7 +146,10 @@ pipeline:
           - http:
               url: https://hub.docker.com/v2/repositories/jeffail/benthos
               verb: GET
-        result_map: root.repo.status = this
+        result_map: root.image.pull_count = this
+
+# Example input:  {"id":"foo","some":"pre-existing data"}
+# Example output: {"id":"foo","some":"pre-existing data","image":{"pull_count":1234}}
 ```
 
 </TabItem>
@@ -166,6 +169,9 @@ pipeline:
               key: ${! content() }
               operator: get
         result_map: root.document.description = content().string()
+
+# Example input:  {"document":{"id":"foo","content":"hello world"}}
+# Example output: {"document":{"id":"foo","content":"hello world","description":"this is a cool doc"}}
 ```
 
 </TabItem>
@@ -184,6 +190,9 @@ pipeline:
         processors:
           - lambda:
               function: trigger_user_update
+
+# Example input: {"doc":{"id":"foo","body":"hello world"},"user":{"name":"fooey"}}
+# Output matches the input, which is unchanged
 ```
 
 </TabItem>
