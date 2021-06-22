@@ -53,6 +53,7 @@ input:
     poll_period: 1m
     limit: 100
     cache: ""
+    cache_key: last_message_id
     rate_limit: ""
 ```
 
@@ -95,10 +96,18 @@ Default: `100`
 
 ### `cache`
 
-A cache resource to use for request pagination.
+A cache resource to use for request pagination, the ID of the last message received will be stored in this cache and used for subsequent requests.
 
 
 Type: `string`  
+
+### `cache_key`
+
+The key identifier used when storing the ID of the last message received.
+
+
+Type: `string`  
+Default: `"last_message_id"`  
 
 ### `rate_limit`
 

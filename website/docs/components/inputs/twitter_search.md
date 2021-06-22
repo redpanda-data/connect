@@ -55,6 +55,7 @@ input:
     poll_period: 1m
     backfill_period: 5m
     cache: ""
+    cache_key: last_tweet_id
     rate_limit: ""
     api_key: ""
     api_secret: ""
@@ -111,6 +112,14 @@ A cache resource to use for request pagination.
 
 
 Type: `string`  
+
+### `cache_key`
+
+The key identifier used when storing the ID of the last tweet received.
+
+
+Type: `string`  
+Default: `"last_tweet_id"`  
 
 ### `rate_limit`
 
