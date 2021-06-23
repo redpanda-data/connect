@@ -5,6 +5,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/public/bloblang"
 )
@@ -24,6 +25,16 @@ type Message struct {
 
 // MessageBatch describes a collection of one or more messages.
 type MessageBatch []*Message
+
+// Copy creates a new slice of the same messages, which can be modified without
+// changing the contents of the original batch.
+func (b MessageBatch) Copy() MessageBatch {
+	bCopy := make(MessageBatch, len(b))
+	for i, m := range b {
+		bCopy[i] = m.Copy()
+	}
+	return bCopy
+}
 
 // NewMessage creates a new message with an initial raw bytes content. The
 // initial content can be nil, which is recommended if you intend to set it with
@@ -112,6 +123,14 @@ func (m *Message) SetBytes(b []byte) {
 func (m *Message) SetStructured(i interface{}) {
 	m.ensureCopied()
 	m.part.SetJSON(i)
+}
+
+// SetError marks the message as having failed a processing step and adds the
+// error to it as context. Messages marked with errors can be handled using a
+// range of methods outlined in https://www.benthos.dev/docs/configuration/error_handling.
+func (m *Message) SetError(err error) {
+	m.ensureCopied()
+	processor.FlagErr(m.part, err)
 }
 
 // MetaGet attempts to find a metadata key from the message and returns a string

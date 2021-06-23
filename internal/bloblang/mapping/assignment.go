@@ -3,6 +3,7 @@ package mapping
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
@@ -172,7 +173,17 @@ func (j *JSONAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 			_ = gObj.Delete(j.path...)
 		}
 	} else {
-		if _, err := gObj.Set(value, j.path...); err != nil {
+		_, err := gObj.Set(value, j.path...)
+		if err != nil && err.Error() == "unable to append new array index at root of path" {
+			if s, ok := (*ctx.Value).([]interface{}); ok {
+				newPath := make([]string, len(j.path))
+				copy(newPath, j.path)
+				newPath[0] = strconv.Itoa(len(s))
+				gObj = gabs.Wrap(append(s, map[string]interface{}{}))
+				_, err = gObj.Set(value, newPath...)
+			}
+		}
+		if err != nil {
 			if errors.Is(err, gabs.ErrPathCollision) {
 				culprit, typeStr := findTheNonObject(gObj, false, j.path...)
 				if culprit == "" {

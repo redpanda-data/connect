@@ -15,6 +15,11 @@ type Processor interface {
 	// if the message could not be processed. If zero messages are returned and
 	// the error is nil then the message is filtered.
 	//
+	// When an error is returned the input message will continue down the
+	// pipeline but will be marked with the error with *message.SetError, and
+	// metrics and logs will be emitted. The failed message can then be handled
+	// with the patterns outlined in https://www.benthos.dev/docs/configuration/error_handling.
+	//
 	// The Message types returned MUST be derived from the provided message, and
 	// CANNOT be custom implementations of Message. In order to copy the
 	// provided message use CopyMessage.
@@ -31,6 +36,17 @@ type BatchProcessor interface {
 	// Process a batch of messages into one or more resulting batches, or return
 	// an error if the entire batch could not be processed. If zero messages are
 	// returned and the error is nil then all messages are filtered.
+	//
+	// The provided MessageBatch should NOT be modified, in order to return a
+	// mutated batch a copy of the slice should be created instead.
+	//
+	// When an error is returned all of the input messages will continue down
+	// the pipeline but will be marked with the error with *message.SetError,
+	// and metrics and logs will be emitted.
+	//
+	// In order to add errors to individual messages of the batch for downstream
+	// handling use *message.SetError(err) and return it in the resulting batch
+	// with a nil error.
 	//
 	// The Message types returned MUST be derived from the provided messages,
 	// and CANNOT be custom implementations of Message. In order to copy the
