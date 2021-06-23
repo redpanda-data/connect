@@ -201,6 +201,11 @@ func (m *Type) Create(id string, conf stream.Config) error {
 	}
 
 	sMgr, sLog, sStats := interop.LabelStream(id, m.manager, m.logger, m.stats)
+	if u, ok := sStats.(interface {
+		Unwrap() metrics.Type
+	}); ok {
+		sStats = u.Unwrap()
+	}
 
 	strmFlatMetrics := metrics.NewLocal()
 	sStats = metrics.Combine(sStats, strmFlatMetrics)

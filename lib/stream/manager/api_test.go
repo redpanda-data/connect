@@ -799,7 +799,7 @@ func TestTypeAPIGetStats(t *testing.T) {
 	stats, err := gabs.ParseJSON(response.Body.Bytes())
 	require.NoError(t, err)
 
-	assert.Equal(t, 1.0, stats.S("input", "running").Data())
+	assert.Equal(t, 1.0, stats.S("input", "running").Data(), response.Body.String())
 }
 
 func TestTypeAPISetResources(t *testing.T) {

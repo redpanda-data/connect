@@ -285,7 +285,13 @@ func (t *Type) forChildComponent(id string) *Type {
 	if len(newT.component) > 0 {
 		id = newT.component + "." + id
 	}
-	newT.stats = t.stats.WithPrefix(id)
+
+	statsPrefix := id
+	if len(newT.stream) > 0 {
+		statsPrefix = newT.stream + "." + statsPrefix
+	}
+
+	newT.stats = t.stats.WithPrefix(statsPrefix)
 	newT.component = id
 	return &newT
 }

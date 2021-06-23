@@ -577,9 +577,11 @@ func (m *Type) HandleStreamStats(w http.ResponseWriter, r *http.Request) {
 
 			obj := gabs.New()
 			for k, v := range counters {
+				k = strings.TrimPrefix(k, id+".")
 				obj.SetP(v, k)
 			}
 			for k, v := range timings {
+				k = strings.TrimPrefix(k, id+".")
 				obj.SetP(v, k)
 				obj.SetP(time.Duration(v).String(), k+"_readable")
 			}
