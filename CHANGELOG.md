@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Algorithm `lz4` added to the `compress` and `decompress` processors.
+- New experimental `aws_dynamodb_partiql` processor.
 
 ### Fixed
 

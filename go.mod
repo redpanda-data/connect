@@ -18,7 +18,7 @@ require (
 	github.com/armon/go-metrics v0.3.4 // indirect
 	github.com/armon/go-radix v1.0.0
 	github.com/aws/aws-lambda-go v1.20.0
-	github.com/aws/aws-sdk-go v1.35.20
+	github.com/aws/aws-sdk-go v1.38.65
 	github.com/benhoyt/goawk v1.6.1
 	github.com/bradfitz/gomemcache v0.0.0-20190913173617-a41fca850d0b
 	github.com/cenkalti/backoff/v3 v3.2.2 // indirect
@@ -54,6 +54,7 @@ require (
 	github.com/lib/pq v1.8.0
 	github.com/linkedin/goavro/v2 v2.9.8
 	github.com/microcosm-cc/bluemonday v1.0.4
+	github.com/mitchellh/mapstructure v1.4.1
 	github.com/moby/term v0.0.0-20201101162038-25d840ce174a // indirect
 	github.com/nats-io/jwt v1.2.0 // indirect
 	github.com/nats-io/nats-streaming-server v0.19.0 // indirect
