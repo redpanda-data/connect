@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"runtime/debug"
@@ -30,8 +31,6 @@ var (
 	DateBuilt string
 )
 
-//------------------------------------------------------------------------------
-
 // OptSetVersionStamp creates an opt func for setting the version and date built
 // stamps that Benthos returns via --version and the /version endpoint. The
 // traditional way of setting these values is via the build flags:
@@ -59,6 +58,18 @@ func OptAddStringFlag(name, usage string, aliases []string, value string, destin
 			Usage:       usage,
 			Destination: destination,
 		})
+	}
+}
+
+//------------------------------------------------------------------------------
+
+var optContext = context.Background()
+
+// OptUseContext sets a context to be used for cancellation during the run
+// command. This adds one extra mechanism for graceful termination.
+func OptUseContext(ctx context.Context) func() {
+	return func() {
+		optContext = ctx
 	}
 }
 

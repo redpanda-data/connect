@@ -48,5 +48,5 @@ func Example_rateLimitPlugin() {
 	}
 
 	// And then execute Benthos with:
-	// service.RunCLI()
+	// service.RunCLI(context.Background())
 }

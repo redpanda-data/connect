@@ -80,5 +80,5 @@ func Example_cachePlugin() {
 	}
 
 	// And then execute Benthos with:
-	// service.RunCLI()
+	// service.RunCLI(context.Background())
 }

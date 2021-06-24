@@ -388,6 +388,8 @@ func cmdService(
 		logger.Infoln("Pipeline has terminated. Shutting down the service.")
 	case <-httpServerClosedChan:
 		logger.Infoln("HTTP Server has terminated. Shutting down the service.")
+	case <-optContext.Done():
+		logger.Infoln("Run context was cancelled. Shutting down the service.")
 	}
 	return 0
 }

@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Algorithm `lz4` added to the `compress` and `decompress` processors.
 - New experimental `aws_dynamodb_partiql` processor.
+- Go Plugins API: new run opt `OptUseContext` for an extra shutdown mechanism.
 
 ### Fixed
 

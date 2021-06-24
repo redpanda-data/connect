@@ -54,5 +54,5 @@ func Example_inputPlugin() {
 	}
 
 	// And then execute Benthos with:
-	// service.RunCLI()
+	// service.RunCLI(context.Background())
 }
