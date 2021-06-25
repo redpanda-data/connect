@@ -1,9 +1,11 @@
 package processor
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
+	imessage "github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -444,4 +446,36 @@ func BenchmarkSwitchDeprecated1(b *testing.B) {
 		require.Nil(b, res)
 		assert.Equal(b, [][]byte{exp[i%len(exp)]}, message.GetAllBytes(resMsgs[0]))
 	}
+}
+
+func BenchmarkSortCorrect(b *testing.B) {
+	sortedParts := make([]types.Part, b.N)
+	for i := range sortedParts {
+		sortedParts[i] = message.NewPart([]byte(fmt.Sprintf("hello world %040d", i)))
+	}
+
+	group, parts := imessage.NewSortGroupParts(sortedParts)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	reorderFromGroup(group, parts)
+}
+
+func BenchmarkSortReverse(b *testing.B) {
+	sortedParts := make([]types.Part, b.N)
+	for i := range sortedParts {
+		sortedParts[i] = message.NewPart([]byte(fmt.Sprintf("hello world %040d", i)))
+	}
+
+	group, parts := imessage.NewSortGroupParts(sortedParts)
+	unsortedParts := make([]types.Part, b.N)
+	for i := range parts {
+		unsortedParts[i] = parts[len(parts)-i-1]
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	reorderFromGroup(group, unsortedParts)
 }

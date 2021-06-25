@@ -72,16 +72,7 @@ func (p *AsyncPreserver) wrapAckFn(m asyncPreserverResend) (types.Message, Async
 }
 
 func (p *AsyncPreserver) wrapBatchAckFn(m asyncPreserverResend) (types.Message, AsyncAckFn) {
-	tags := make([]*imessage.Tag, m.msg.Len())
-	taggedParts := make([]types.Part, m.msg.Len())
-	m.msg.Iter(func(i int, p types.Part) error {
-		tag := imessage.NewTag(i)
-		tags[i] = tag
-		taggedParts[i] = imessage.WithTag(tag, p)
-		return nil
-	})
-	trackedMsg := message.New(nil)
-	trackedMsg.SetAll(taggedParts)
+	sortGroup, trackedMsg := imessage.NewSortGroup(m.msg)
 
 	return trackedMsg, func(ctx context.Context, res types.Response) error {
 		if res.Error() != nil {
@@ -92,11 +83,9 @@ func (p *AsyncPreserver) wrapBatchAckFn(m asyncPreserverResend) (types.Message, 
 					if e == nil {
 						return true
 					}
-					for tagIndex, tag := range tags {
-						if imessage.HasTag(tag, p) {
-							resendMsg.Append(m.msg.Get(tagIndex))
-							return true
-						}
+					if tagIndex := sortGroup.GetIndex(p); tagIndex >= 0 {
+						resendMsg.Append(m.msg.Get(tagIndex))
+						return true
 					}
 
 					// If we couldn't link the errored part back to an original

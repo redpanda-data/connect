@@ -6,7 +6,6 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
 	imessage "github.com/Jeffail/benthos/v3/internal/message"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -16,7 +15,7 @@ import (
 // reduced.
 type Tracked struct {
 	msg     types.Message
-	tags    []*imessage.Tag
+	group   *imessage.SortGroup
 	resChan chan<- types.Response
 }
 
@@ -26,20 +25,11 @@ type Tracked struct {
 // transactions the tag can be used in order to determine whether the message
 // owned by this transaction succeeded.
 func NewTracked(msg types.Message, resChan chan<- types.Response) *Tracked {
-	tags := make([]*imessage.Tag, msg.Len())
-	taggedParts := make([]types.Part, msg.Len())
-	msg.Iter(func(i int, p types.Part) error {
-		tag := imessage.NewTag(i)
-		tags[i] = tag
-		taggedParts[i] = imessage.WithTag(tag, p)
-		return nil
-	})
-	trackedMsg := message.New(nil)
-	trackedMsg.SetAll(taggedParts)
+	group, trackedMsg := imessage.NewSortGroup(msg)
 	return &Tracked{
 		msg:     trackedMsg,
 		resChan: resChan,
-		tags:    tags,
+		group:   group,
 	}
 }
 
@@ -53,24 +43,22 @@ func (t *Tracked) ResponseChan() chan<- types.Response {
 	return t.resChan
 }
 
-func getResFromTags(tags []*imessage.Tag, walkable batch.WalkableError) types.Response {
-	remainingTags := make(map[*imessage.Tag]struct{}, len(tags))
-	for _, tag := range tags {
-		remainingTags[tag] = struct{}{}
+func (t *Tracked) getResFromGroup(walkable batch.WalkableError) types.Response {
+	remainingIndexes := make(map[int]struct{}, t.msg.Len())
+	for i := 0; i < t.msg.Len(); i++ {
+		remainingIndexes[i] = struct{}{}
 	}
 
 	var res types.Response
 	walkable.WalkParts(func(_ int, p types.Part, err error) bool {
-		for tag := range remainingTags {
-			if imessage.HasTag(tag, p) {
-				if err != nil {
-					res = response.NewError(err)
-					return false
-				}
-				delete(remainingTags, tag)
-				if len(remainingTags) == 0 {
-					return false
-				}
+		if index := t.group.GetIndex(p); index >= 0 {
+			if err != nil {
+				res = response.NewError(err)
+				return false
+			}
+			delete(remainingIndexes, index)
+			if len(remainingIndexes) == 0 {
+				return false
 			}
 		}
 		return true
@@ -79,40 +67,17 @@ func getResFromTags(tags []*imessage.Tag, walkable batch.WalkableError) types.Re
 		return res
 	}
 
-	if len(remainingTags) > 0 {
+	if len(remainingIndexes) > 0 {
 		return response.NewError(errors.Unwrap(walkable))
 	}
 	return response.NewAck()
-}
-
-func getResFromTag(tag *imessage.Tag, walkable batch.WalkableError) types.Response {
-	var res types.Response
-	walkable.WalkParts(func(_ int, p types.Part, err error) bool {
-		if imessage.HasTag(tag, p) {
-			if err != nil {
-				res = response.NewError(err)
-			} else {
-				res = response.NewAck()
-			}
-			return false
-		}
-		return true
-	})
-	if res != nil {
-		return res
-	}
-	return response.NewError(errors.Unwrap(walkable))
 }
 
 func (t *Tracked) resFromError(err error) types.Response {
 	var res types.Response = response.NewAck()
 	if err != nil {
 		if walkable, ok := err.(batch.WalkableError); ok {
-			if len(t.tags) == 1 {
-				res = getResFromTag(t.tags[0], walkable)
-			} else {
-				res = getResFromTags(t.tags, walkable)
-			}
+			res = t.getResFromGroup(walkable)
 		} else {
 			res = response.NewError(err)
 		}

@@ -240,22 +240,20 @@ func NewSwitch(
 
 //------------------------------------------------------------------------------
 
-func reorderFromTags(tags []*imessage.Tag, parts []types.Part) {
-	// TODO: Make this stable sort, and make it less inefficient
-	sort.Slice(parts, func(i, j int) bool {
-		iFound, jFound := false, false
-		for _, t := range tags {
-			if !iFound && imessage.HasTag(t, parts[i]) {
-				iFound = true
-				i = t.Index
-			}
-			if !jFound && imessage.HasTag(t, parts[j]) {
-				jFound = true
-				j = t.Index
-			}
-			if iFound && jFound {
-				break
-			}
+func reorderFromGroup(group *imessage.SortGroup, parts []types.Part) {
+	partToIndex := map[types.Part]int{}
+	for _, p := range parts {
+		if i := group.GetIndex(p); i >= 0 {
+			partToIndex[p] = i
+		}
+	}
+
+	sort.SliceStable(parts, func(i, j int) bool {
+		if index, found := partToIndex[parts[i]]; found {
+			i = index
+		}
+		if index, found := partToIndex[parts[j]]; found {
+			j = index
 		}
 		return i < j
 	})
@@ -267,17 +265,13 @@ func (s *Switch) ProcessMessage(msg types.Message) (msgs []types.Message, res ty
 	s.mCount.Incr(1)
 
 	var result []types.Part
-
-	var tags []*imessage.Tag
 	var remaining []types.Part
 	var carryOver []types.Part
 
-	tags = make([]*imessage.Tag, msg.Len())
-	remaining = make([]types.Part, msg.Len())
-	msg.Iter(func(i int, p types.Part) error {
-		tag := imessage.NewTag(i)
-		tags[i] = tag
-		remaining[i] = imessage.WithTag(tag, p)
+	sortGroup, sortMsg := imessage.NewSortGroup(msg)
+	remaining = make([]types.Part, sortMsg.Len())
+	sortMsg.Iter(func(i int, p types.Part) error {
+		remaining[i] = p
 		return nil
 	})
 
@@ -335,7 +329,7 @@ func (s *Switch) ProcessMessage(msg types.Message) (msgs []types.Message, res ty
 
 	result = append(result, remaining...)
 	if len(result) > 1 {
-		reorderFromTags(tags, result)
+		reorderFromGroup(sortGroup, result)
 	}
 
 	resMsg := message.New(nil)
