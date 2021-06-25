@@ -126,7 +126,7 @@ func (d *dynamoDBPartiQL) ProcessBatch(ctx context.Context, batch service.Messag
 		req := &dynamodb.BatchStatementRequest{}
 		req.Statement = &d.query
 		if d.dynQuery != nil {
-			query := d.dynQuery.String(batch[i])
+			query := batch.InterpolatedString(i, d.dynQuery)
 			req.Statement = &query
 		}
 
