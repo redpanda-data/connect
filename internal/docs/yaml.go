@@ -103,8 +103,12 @@ func FieldFromYAML(name string, node *yaml.Node) FieldSpec {
 // GetInferenceCandidateFromYAML checks a yaml node config structure for a
 // component and returns either the inferred type name or an error if one cannot
 // be inferred.
-func GetInferenceCandidateFromYAML(t Type, defaultType string, node *yaml.Node) (string, ComponentSpec, error) {
+func GetInferenceCandidateFromYAML(docProv Provider, t Type, defaultType string, node *yaml.Node) (string, ComponentSpec, error) {
 	refreshOldPlugins()
+
+	if docProv == nil {
+		docProv = globalProvider
+	}
 
 	node = unwrapDocumentNode(node)
 
@@ -116,7 +120,7 @@ func GetInferenceCandidateFromYAML(t Type, defaultType string, node *yaml.Node) 
 	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == "type" {
 			tStr := node.Content[i+1].Value
-			spec, exists := GetDocs(tStr, t)
+			spec, exists := docProv.GetDocs(tStr, t)
 			if !exists {
 				return "", ComponentSpec{}, fmt.Errorf("%v type '%v' was not recognised", string(t), tStr)
 			}
@@ -125,7 +129,7 @@ func GetInferenceCandidateFromYAML(t Type, defaultType string, node *yaml.Node) 
 		keys = append(keys, node.Content[i].Value)
 	}
 
-	return getInferenceCandidateFromList(t, defaultType, keys)
+	return getInferenceCandidateFromList(docProv, t, defaultType, keys)
 }
 
 // GetPluginConfigYAML extracts a plugin configuration node from a component
@@ -250,12 +254,12 @@ func SanitiseYAML(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 			return nil
 		}
 		var err error
-		if name, _, err = getInferenceCandidateFromList(cType, "", keys); err != nil {
+		if name, _, err = getInferenceCandidateFromList(conf, cType, "", keys); err != nil {
 			return err
 		}
 	}
 
-	cSpec, exists := GetDocs(name, cType)
+	cSpec, exists := conf.GetDocs(name, cType)
 	if !exists {
 		return fmt.Errorf("failed to obtain docs for %v type %v", cType, name)
 	}
@@ -467,13 +471,13 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 			return nil
 		}
 		var err error
-		if name, _, err = getInferenceCandidateFromList(cType, "", keys); err != nil {
+		if name, _, err = getInferenceCandidateFromList(ctx.DocsProvider, cType, "", keys); err != nil {
 			lints = append(lints, NewLintWarning(node.Line, "unable to infer component type"))
 			return lints
 		}
 	}
 
-	cSpec, exists := GetDocs(name, cType)
+	cSpec, exists := ctx.DocsProvider.GetDocs(name, cType)
 	if !exists {
 		lints = append(lints, NewLintWarning(node.Line, fmt.Sprintf("failed to obtain docs for %v type %v", cType, name)))
 		return lints

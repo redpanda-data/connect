@@ -99,7 +99,7 @@ func refreshOldPlugins() {
 
 // GetInferenceCandidate checks a generic config structure for a component and
 // returns either the inferred type name or an error if one cannot be inferred.
-func GetInferenceCandidate(t Type, defaultType string, raw interface{}) (string, ComponentSpec, error) {
+func GetInferenceCandidate(docProvider Provider, t Type, defaultType string, raw interface{}) (string, ComponentSpec, error) {
 	refreshOldPlugins()
 
 	m, ok := raw.(map[string]interface{})
@@ -108,7 +108,7 @@ func GetInferenceCandidate(t Type, defaultType string, raw interface{}) (string,
 	}
 
 	if tStr, ok := m["type"].(string); ok {
-		spec, exists := GetDocs(tStr, t)
+		spec, exists := docProvider.GetDocs(tStr, t)
 		if !exists {
 			return "", ComponentSpec{}, fmt.Errorf("%v type '%v' was not recognised", string(t), tStr)
 		}
@@ -120,10 +120,10 @@ func GetInferenceCandidate(t Type, defaultType string, raw interface{}) (string,
 		keys = append(keys, k)
 	}
 
-	return getInferenceCandidateFromList(t, defaultType, keys)
+	return getInferenceCandidateFromList(docProvider, t, defaultType, keys)
 }
 
-func getInferenceCandidateFromList(t Type, defaultType string, l []string) (string, ComponentSpec, error) {
+func getInferenceCandidateFromList(docProvider Provider, t Type, defaultType string, l []string) (string, ComponentSpec, error) {
 	ignore := reservedFieldsByType(t)
 
 	var candidates []string
@@ -134,7 +134,7 @@ func getInferenceCandidateFromList(t Type, defaultType string, l []string) (stri
 			continue
 		}
 		candidates = append(candidates, k)
-		if spec, exists := GetDocs(k, t); exists {
+		if spec, exists := docProvider.GetDocs(k, t); exists {
 			if len(inferred) > 0 {
 				candidates = []string{inferred, k}
 				sort.Strings(candidates)
@@ -150,7 +150,7 @@ func getInferenceCandidateFromList(t Type, defaultType string, l []string) (stri
 	if len(candidates) == 0 && len(defaultType) > 0 {
 		// A totally empty component config results in the default.
 		// TODO: V4 Disable this
-		if spec, exists := GetDocs(defaultType, t); exists {
+		if spec, exists := docProvider.GetDocs(defaultType, t); exists {
 			return defaultType, spec, nil
 		}
 	}
@@ -191,7 +191,7 @@ func SanitiseComponentConfig(componentType Type, raw interface{}, filter FieldFi
 		return sanitiseConditionConfig(raw, false)
 	}
 
-	name, spec, err := GetInferenceCandidate(componentType, "", raw)
+	name, spec, err := GetInferenceCandidate(globalProvider, componentType, "", raw)
 	if err != nil {
 		return err
 	}
@@ -232,4 +232,14 @@ type SanitiseConfig struct {
 	RemoveDeprecated bool
 	ForExample       bool
 	Filter           FieldFilter
+	DocsProvider     Provider
+}
+
+// GetDocs attempts to obtain documentation for a component implementation from
+// a docs provider in the config, or if omitted uses the global provider.
+func (c SanitiseConfig) GetDocs(name string, ctype Type) (ComponentSpec, bool) {
+	if c.DocsProvider == nil {
+		return GetDocs(name, ctype)
+	}
+	return c.DocsProvider.GetDocs(name, ctype)
 }

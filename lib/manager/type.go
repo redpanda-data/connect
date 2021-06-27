@@ -69,7 +69,6 @@ type Type struct {
 	bufferBundle    *bundle.BufferSet
 	cacheBundle     *bundle.CacheSet
 	inputBundle     *bundle.InputSet
-	metricsBundle   *bundle.MetricsSet
 	outputBundle    *bundle.OutputSet
 	processorBundle *bundle.ProcessorSet
 	rateLimitBundle *bundle.RateLimitSet
@@ -108,7 +107,6 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 		bufferBundle:    bundle.AllBuffers,
 		cacheBundle:     bundle.AllCaches,
 		inputBundle:     bundle.AllInputs,
-		metricsBundle:   bundle.AllMetrics,
 		outputBundle:    bundle.AllOutputs,
 		processorBundle: bundle.AllProcessors,
 		rateLimitBundle: bundle.AllRateLimits,
@@ -358,6 +356,33 @@ func (t *Type) Metrics() metrics.Type {
 // Logger returns a logger preset with the current component context.
 func (t *Type) Logger() log.Modular {
 	return t.logger
+}
+
+//------------------------------------------------------------------------------
+
+// GetDocs returns a documentation spec for an implementation of a component.
+func (t *Type) GetDocs(name string, ctype docs.Type) (docs.ComponentSpec, bool) {
+	var spec docs.ComponentSpec
+	var ok bool
+
+	switch ctype {
+	case docs.TypeBuffer:
+		spec, ok = t.bufferBundle.DocsFor(name)
+	case docs.TypeCache:
+		spec, ok = t.cacheBundle.DocsFor(name)
+	case docs.TypeInput:
+		spec, ok = t.inputBundle.DocsFor(name)
+	case docs.TypeOutput:
+		spec, ok = t.outputBundle.DocsFor(name)
+	case docs.TypeProcessor:
+		spec, ok = t.processorBundle.DocsFor(name)
+	case docs.TypeRateLimit:
+		spec, ok = t.rateLimitBundle.DocsFor(name)
+	default:
+		return docs.GetDocs(name, ctype)
+	}
+
+	return spec, ok
 }
 
 //------------------------------------------------------------------------------

@@ -75,10 +75,3 @@ func (f FieldSpecs) JSONSchema() map[string]interface{} {
 	}
 	return spec
 }
-
-// ComponentJSONSchema returns a JSON schema definition for a given
-// implementation of a component type.
-func ComponentJSONSchema(name string, t Type) interface{} {
-	docs, _ := GetDocs(name, t)
-	return docs.Config.JSONSchema()
-}

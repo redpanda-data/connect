@@ -176,7 +176,7 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 	}
 
 	var spec docs.ComponentSpec
-	if aliased.Type, spec, err = docs.GetInferenceCandidateFromYAML(docs.TypeCache, aliased.Type, value); err != nil {
+	if aliased.Type, spec, err = docs.GetInferenceCandidateFromYAML(nil, docs.TypeCache, aliased.Type, value); err != nil {
 		return fmt.Errorf("line %v: %w", value.Line, err)
 	}
 

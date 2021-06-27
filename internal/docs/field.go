@@ -469,12 +469,16 @@ func (f FieldSpecs) sanitise(s interface{}, filter FieldFilter) {
 type LintContext struct {
 	// A map of label names to the line they were defined at.
 	Labels map[string]int
+
+	// DocsProvider provides documentation for component implementations.
+	DocsProvider Provider
 }
 
 // NewLintContext creates a new linting context.
 func NewLintContext() LintContext {
 	return LintContext{
-		Labels: map[string]int{},
+		Labels:       map[string]int{},
+		DocsProvider: globalProvider,
 	}
 }
 

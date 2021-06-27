@@ -11,12 +11,13 @@ import (
 )
 
 func TestInference(t *testing.T) {
+	docsProv := docs.NewMappedDocsProvider()
 	for _, t := range docs.Types() {
-		docs.RegisterDocs(docs.ComponentSpec{
+		docsProv.RegisterDocs(docs.ComponentSpec{
 			Name: fmt.Sprintf("testfoo%v", string(t)),
 			Type: t,
 		})
-		docs.RegisterDocs(docs.ComponentSpec{
+		docsProv.RegisterDocs(docs.ComponentSpec{
 			Name: fmt.Sprintf("testbar%v", string(t)),
 			Type: t,
 		})
@@ -152,7 +153,7 @@ func TestInference(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		res, spec, err := docs.GetInferenceCandidate(test.inputType, test.inputDefault, test.inputConf)
+		res, spec, err := docs.GetInferenceCandidate(docsProv, test.inputType, test.inputDefault, test.inputConf)
 		if len(test.err) > 0 {
 			assert.EqualError(t, err, test.err, "test: %v", i)
 		} else {
@@ -164,7 +165,7 @@ func TestInference(t *testing.T) {
 
 		var node yaml.Node
 		require.NoError(t, node.Encode(test.inputConf))
-		res, spec, err = docs.GetInferenceCandidateFromYAML(test.inputType, test.inputDefault, &node)
+		res, spec, err = docs.GetInferenceCandidateFromYAML(docsProv, test.inputType, test.inputDefault, &node)
 		if len(test.err) > 0 {
 			assert.Error(t, err)
 		} else {
