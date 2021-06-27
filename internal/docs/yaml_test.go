@@ -348,7 +348,7 @@ c: true
 `,
 			result: map[string]interface{}{
 				"a": "adefault",
-				"b": yaml.Node{
+				"b": &yaml.Node{
 					Kind:   yaml.MappingNode,
 					Tag:    "!!map",
 					Line:   3,
@@ -388,8 +388,8 @@ c: true
 `,
 			result: map[string]interface{}{
 				"a": "adefault",
-				"b": []yaml.Node{
-					{
+				"b": []interface{}{
+					&yaml.Node{
 						Kind:   yaml.MappingNode,
 						Tag:    "!!map",
 						Line:   3,
@@ -431,8 +431,8 @@ c: true
 `,
 			result: map[string]interface{}{
 				"a": "adefault",
-				"b": map[string]yaml.Node{
-					"foo": {
+				"b": map[string]interface{}{
+					"foo": &yaml.Node{
 						Kind:   yaml.MappingNode,
 						Tag:    "!!map",
 						Line:   4,

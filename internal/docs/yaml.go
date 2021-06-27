@@ -2,7 +2,6 @@ package docs
 
 import (
 	"fmt"
-	"reflect"
 
 	"gopkg.in/yaml.v3"
 )
@@ -721,72 +720,6 @@ type ToValueConfig struct {
 	FallbackToInterface bool
 }
 
-func sliceToSliceOfI(v interface{}) interface{} {
-	var is []interface{}
-	switch t := v.(type) {
-	case []string:
-		is = make([]interface{}, len(t))
-		for i, v := range t {
-			is[i] = v
-		}
-	case []int:
-		is = make([]interface{}, len(t))
-		for i, v := range t {
-			is[i] = v
-		}
-	case []float64:
-		is = make([]interface{}, len(t))
-		for i, v := range t {
-			is[i] = v
-		}
-	case []bool:
-		is = make([]interface{}, len(t))
-		for i, v := range t {
-			is[i] = v
-		}
-	default:
-		rootValue := reflect.ValueOf(v)
-		if rootValue.Kind() != reflect.Slice || rootValue.Type().Elem().Kind() != reflect.Slice {
-			// We don't know what this is or what to do with it.
-			return v
-		}
-		is = make([]interface{}, rootValue.Len())
-		for i := 0; i < rootValue.Len(); i++ {
-			is[i] = sliceToSliceOfI(rootValue.Index(i).Interface())
-		}
-	}
-	return is
-}
-
-func mapToMapOfI(v interface{}) interface{} {
-	var im map[string]interface{}
-	switch t := v.(type) {
-	case map[string]string:
-		im = make(map[string]interface{}, len(t))
-		for k, v := range t {
-			im[k] = v
-		}
-	case map[string]int:
-		im = make(map[string]interface{}, len(t))
-		for k, v := range t {
-			im[k] = v
-		}
-	case map[string]float64:
-		im = make(map[string]interface{}, len(t))
-		for k, v := range t {
-			im[k] = v
-		}
-	case map[string]bool:
-		im = make(map[string]interface{}, len(t))
-		for k, v := range t {
-			im[k] = v
-		}
-	default:
-		return v
-	}
-	return im
-}
-
 // YAMLToValue converts a yaml node into a generic value by referencing the
 // expected type.
 func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (interface{}, error) {
@@ -794,128 +727,49 @@ func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (interface{}
 
 	switch f.Kind {
 	case Kind2DArray:
-		switch f.Type {
-		case FieldTypeString:
-			var s [][]string
-			if err := node.Decode(&s); err != nil {
-				return nil, err
-			}
-			return sliceToSliceOfI(s), nil
-		case FieldTypeInt:
-			var ints [][]int
-			if err := node.Decode(&ints); err != nil {
-				return nil, err
-			}
-			return sliceToSliceOfI(ints), nil
-		case FieldTypeFloat:
-			var f [][]float64
-			if err := node.Decode(&f); err != nil {
-				return nil, err
-			}
-			return sliceToSliceOfI(f), nil
-		case FieldTypeBool:
-			var b [][]bool
-			if err := node.Decode(&b); err != nil {
-				return nil, err
-			}
-			return sliceToSliceOfI(b), nil
+		if !conf.Passive && node.Kind != yaml.SequenceNode {
+			return nil, fmt.Errorf("line %v: expected array value, got %v", node.Line, node.Kind)
 		}
+		subSpec := f.Array()
+
+		var s []interface{}
+		for i := 0; i < len(node.Content); i++ {
+			v, err := subSpec.YAMLToValue(node.Content[i], conf)
+			if err != nil {
+				return nil, err
+			}
+			s = append(s, v)
+		}
+		return s, nil
 	case KindArray:
-		switch f.Type {
-		case FieldTypeString:
-			var s []string
-			if err := node.Decode(&s); err != nil {
-				return nil, err
-			}
-			return sliceToSliceOfI(s), nil
-		case FieldTypeInt:
-			var ints []int
-			if err := node.Decode(&ints); err != nil {
-				return nil, err
-			}
-			return sliceToSliceOfI(ints), nil
-		case FieldTypeFloat:
-			var f []float64
-			if err := node.Decode(&f); err != nil {
-				return nil, err
-			}
-			return sliceToSliceOfI(f), nil
-		case FieldTypeBool:
-			var b []bool
-			if err := node.Decode(&b); err != nil {
-				return nil, err
-			}
-			return sliceToSliceOfI(b), nil
-		case FieldTypeObject:
-			var c []yaml.Node
-			if err := node.Decode(&c); err != nil {
-				return nil, err
-			}
-			ci := make([]interface{}, len(c))
-			for i, v := range c {
-				var err error
-				if ci[i], err = f.Children.YAMLToMap(&v, conf); err != nil {
-					return nil, err
-				}
-			}
-			return ci, nil
-		default:
-			if !conf.FallbackToInterface {
-				var b []yaml.Node
-				if err := node.Decode(&b); err != nil {
-					return nil, err
-				}
-				return b, nil
-			}
+		if !conf.Passive && node.Kind != yaml.SequenceNode {
+			return nil, fmt.Errorf("line %v: expected array value, got %v", node.Line, node.Kind)
 		}
+		subSpec := f.Scalar()
+
+		var s []interface{}
+		for i := 0; i < len(node.Content); i++ {
+			v, err := subSpec.YAMLToValue(node.Content[i], conf)
+			if err != nil {
+				return nil, err
+			}
+			s = append(s, v)
+		}
+		return s, nil
 	case KindMap:
-		switch f.Type {
-		case FieldTypeString:
-			var s map[string]string
-			if err := node.Decode(&s); err != nil {
+		if !conf.Passive && node.Kind != yaml.MappingNode {
+			return nil, fmt.Errorf("line %v: expected map value, got %v", node.Line, node.Kind)
+		}
+		subSpec := f.Scalar()
+
+		m := map[string]interface{}{}
+		for i := 0; i < len(node.Content)-1; i += 2 {
+			var err error
+			if m[node.Content[i].Value], err = subSpec.YAMLToValue(node.Content[i+1], conf); err != nil {
 				return nil, err
-			}
-			return mapToMapOfI(s), nil
-		case FieldTypeInt:
-			var ints map[string]int
-			if err := node.Decode(&ints); err != nil {
-				return nil, err
-			}
-			return mapToMapOfI(ints), nil
-		case FieldTypeFloat:
-			var f map[string]float64
-			if err := node.Decode(&f); err != nil {
-				return nil, err
-			}
-			return mapToMapOfI(f), nil
-		case FieldTypeBool:
-			var b map[string]bool
-			if err := node.Decode(&b); err != nil {
-				return nil, err
-			}
-			return mapToMapOfI(b), nil
-		case FieldTypeObject:
-			var c map[string]yaml.Node
-			if err := node.Decode(&c); err != nil {
-				return nil, err
-			}
-			ci := make(map[string]interface{}, len(c))
-			for k, v := range c {
-				var err error
-				if ci[k], err = f.Children.YAMLToMap(&v, conf); err != nil {
-					return nil, err
-				}
-			}
-			return ci, nil
-		default:
-			if !conf.FallbackToInterface {
-				var c map[string]yaml.Node
-				if err := node.Decode(&c); err != nil {
-					return nil, err
-				}
-				return c, nil
 			}
 		}
+		return m, nil
 	}
 	switch f.Type {
 	case FieldTypeString:
@@ -956,7 +810,7 @@ func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (interface{}
 		}
 		return v, nil
 	}
-	return *node, nil
+	return node, nil
 }
 
 // YAMLToMap converts a yaml node into a generic map structure by referencing

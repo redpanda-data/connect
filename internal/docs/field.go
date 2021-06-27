@@ -95,53 +95,53 @@ var (
 // FieldSpec describes a component config field.
 type FieldSpec struct {
 	// Name of the field (as it appears in config).
-	Name string
+	Name string `json:"name"`
 
 	// Type of the field.
 	//
 	// TODO: Make this mandatory
-	Type FieldType
+	Type FieldType `json:"type"`
 
 	// Kind of the field.
-	Kind FieldKind
+	Kind FieldKind `json:"kind"`
 
 	// Description of the field purpose (in markdown).
-	Description string
+	Description string `json:"description"`
 
 	// IsAdvanced is true for optional fields that will not be present in most
 	// configs.
-	IsAdvanced bool
+	IsAdvanced bool `json:"is_advanced"`
 
 	// IsDeprecated is true for fields that are deprecated and only exist
 	// for backwards compatibility reasons.
-	IsDeprecated bool
+	IsDeprecated bool `json:"is_deprecated"`
 
 	// IsOptional is a boolean flag indicating that a field is optional, even
 	// if there is no default. This prevents linting errors when the field
 	// is missing.
-	IsOptional bool
+	IsOptional bool `json:"is_optional"`
 
 	// Default value of the field.
-	Default *interface{}
+	Default *interface{} `json:"default,omitempty"`
 
 	// Interpolation indicates that the field supports interpolation
 	// functions.
-	Interpolated bool
+	Interpolated bool `json:"interpolated"`
 
 	// Examples is a slice of optional example values for a field.
-	Examples []interface{}
+	Examples []interface{} `json:"examples"`
 
 	// AnnotatedOptions for this field. Each option should have a summary.
-	AnnotatedOptions [][2]string
+	AnnotatedOptions [][2]string `json:"annotated_options"`
 
 	// Options for this field.
-	Options []string
+	Options []string `json:"options"`
 
 	// Children fields of this field (it must be an object).
-	Children FieldSpecs
+	Children FieldSpecs `json:"children"`
 
 	// Version is an explicit version when this field was introduced.
-	Version string
+	Version string `json:"version"`
 
 	omitWhenFn   func(field, parent interface{}) (why string, shouldOmit bool)
 	customLintFn LintFunc

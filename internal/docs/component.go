@@ -14,13 +14,13 @@ import (
 // AnnotatedExample is an isolated example for a component.
 type AnnotatedExample struct {
 	// A title for the example.
-	Title string
+	Title string `json:"title"`
 
 	// Summary of the example.
-	Summary string
+	Summary string `json:"summary"`
 
 	// A config snippet to show.
-	Config string
+	Config string `json:"config"`
 }
 
 // Status of a component.
@@ -66,37 +66,37 @@ func Types() []Type {
 // ComponentSpec describes a Benthos component.
 type ComponentSpec struct {
 	// Name of the component
-	Name string
+	Name string `json:"name"`
 
 	// Type of the component (input, output, etc)
-	Type Type
+	Type Type `json:"type"`
 
 	// The status of the component.
-	Status Status
+	Status Status `json:"status"`
 
 	// Plugin is true for all plugin components.
-	Plugin bool
+	Plugin bool `json:"plugin"`
 
 	// Summary of the component (in markdown, must be short).
-	Summary string
+	Summary string `json:"summary"`
 
 	// Description of the component (in markdown).
-	Description string
+	Description string `json:"description"`
 
 	// Categories that describe the purpose of the component.
-	Categories []string
+	Categories []string `json:"categories"`
 
 	// Footnotes of the component (in markdown).
-	Footnotes string
+	Footnotes string `json:"footnotes"`
 
 	// Examples demonstrating use cases for the component.
-	Examples []AnnotatedExample
+	Examples []AnnotatedExample `json:"examples"`
 
 	// A summary of each field in the component configuration.
-	Config FieldSpec
+	Config FieldSpec `json:"config"`
 
 	// Version is the Benthos version this component was introduced.
-	Version string
+	Version string `json:"version"`
 }
 
 type componentContext struct {
