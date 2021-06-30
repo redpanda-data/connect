@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,6 +30,13 @@ import (
 func init() {
 	Constructors[TypeSQL] = TypeSpec{
 		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+			if conf.SQL.Driver == "mssql" {
+				// For MSSQL, if the user part of the connection string is in the
+				// `DOMAIN\username` format, then the backslash character needs
+				// to be URL-encoded.
+				conf.SQL.DataSourceName = strings.ReplaceAll(conf.SQL.DataSourceName, `\`, "%5C")
+			}
+
 			s, err := newSQLWriter(conf.SQL, log)
 			if err != nil {
 				return nil, err

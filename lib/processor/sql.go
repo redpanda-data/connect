@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -242,6 +243,13 @@ func NewSQL(
 			return nil, fmt.Errorf("failed to parse arg %v expression: %v", i, err)
 		}
 		args = append(args, expr)
+	}
+
+	if conf.SQL.Driver == "mssql" {
+		// For MSSQL, if the user part of the connection string is in the
+		// `DOMAIN\username` format, then the backslash character needs to be
+		// URL-encoded.
+		conf.SQL.DataSourceName = strings.ReplaceAll(conf.SQL.DataSourceName, `\`, "%5C")
 	}
 
 	s := &SQL{
