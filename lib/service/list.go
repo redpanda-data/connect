@@ -98,9 +98,10 @@ func listComponents(c *cli.Context) {
 			if _, exists := ofTypes[k]; len(ofTypes) > 0 && !exists {
 				continue
 			}
-			if i++; i > 1 {
+			if i > 0 {
 				fmt.Println("")
 			}
+			i++
 			title := strings.Title(strings.ReplaceAll(k, "-", " "))
 			fmt.Printf("%v:\n", title)
 			for _, t := range flat[k] {
