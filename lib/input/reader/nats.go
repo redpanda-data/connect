@@ -48,6 +48,8 @@ type NATS struct {
 	stats metrics.Type
 	log   log.Modular
 
+	unAckMsgs []*nats.Msg
+
 	cMut sync.Mutex
 
 	natsConn      *nats.Conn
@@ -142,14 +144,7 @@ func (n *NATS) disconnect() {
 	n.natsChan = nil
 }
 
-// Read attempts to read a new message from the NATS subject.
-func (n *NATS) Read() (types.Message, error) {
-	msg, _, err := n.ReadWithContext(context.Background())
-	return msg, err
-}
-
-// ReadWithContext attempts to read a new message from the NATS subject.
-func (n *NATS) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (n *NATS) read(ctx context.Context) (*nats.Msg, error) {
 	n.cMut.Lock()
 	natsChan := n.natsChan
 	n.cMut.Unlock()
@@ -159,22 +154,60 @@ func (n *NATS) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, 
 	select {
 	case msg, open = <-natsChan:
 	case <-ctx.Done():
-		return nil, nil, types.ErrTimeout
+		return nil, types.ErrTimeout
 	case _, open = <-n.interruptChan:
 	}
 	if !open {
+		n.unAckMsgs = nil
 		n.disconnect()
-		return nil, nil, types.ErrNotConnected
+		return nil, types.ErrNotConnected
+	}
+	return msg, nil
+}
+
+// Read attempts to read a new message from the NATS subject.
+func (n *NATS) Read() (types.Message, error) {
+	msg, err := n.read(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	n.unAckMsgs = append(n.unAckMsgs, msg)
+
+	bmsg := message.New([][]byte{msg.Data})
+	bmsg.Get(0).Metadata().Set("nats_subject", msg.Subject)
+
+	return bmsg, nil
+}
+
+// ReadWithContext attempts to read a new message from the NATS subject.
+func (n *NATS) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+	msg, err := n.read(ctx)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	bmsg := message.New([][]byte{msg.Data})
 	bmsg.Get(0).Metadata().Set("nats_subject", msg.Subject)
 
-	return bmsg, noopAsyncAckFn, nil
+	return bmsg, func(ctx context.Context, res types.Response) error {
+		if res.Error() != nil {
+			return msg.Nak()
+		}
+		return msg.Nak()
+	}, nil
 }
 
-// Acknowledge is a noop since NATS messages do not support acknowledgments.
+// Acknowledge confirms whether or not our unacknowledged messages have been
+// successfully propagated or not.
 func (n *NATS) Acknowledge(err error) error {
+	for _, msg := range n.unAckMsgs {
+		if err == nil {
+			msg.Ack()
+		} else {
+			msg.Nak()
+		}
+	}
+	n.unAckMsgs = nil
 	return nil
 }
 
