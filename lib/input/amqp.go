@@ -16,7 +16,7 @@ func init() {
 		constructor: fromSimpleConstructor(NewAMQP),
 		Description: `
 DEPRECATED: This input is deprecated and scheduled for removal in Benthos V4.
-Please use [` + "`amqp_0_9`" + `](amqp_0_9) instead.`,
+Please use [` + "`amqp_0_9`" + `](/docs/components/inputs/amqp_0_9) instead.`,
 		Status: docs.StatusDeprecated,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("url",
