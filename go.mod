@@ -29,7 +29,7 @@ require (
 	github.com/denisenkom/go-mssqldb v0.10.0
 	github.com/dgraph-io/ristretto v0.0.3
 	github.com/dnaeon/go-vcr v1.1.0 // indirect
-	github.com/eclipse/paho.mqtt.golang v1.3.1
+	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/edsrzf/mmap-go v1.0.0
 	github.com/fatih/color v1.10.0
 	github.com/go-redis/redis/v7 v7.4.0
@@ -90,7 +90,7 @@ require (
 	go.mongodb.org/mongo-driver v1.4.4
 	go.nanomsg.org/mangos/v3 v3.1.3
 	golang.org/x/crypto v0.0.0-20210503195802-e9a32991a82e
-	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
+	golang.org/x/net v0.0.0-20210614182718-04defd469f4e
 	golang.org/x/oauth2 v0.0.0-20201208152858-08078c50e5b5
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 	golang.org/x/tools v0.1.0 // indirect
