@@ -122,4 +122,10 @@ func TestBloblangRemaining(t *testing.T) {
 
 	_, _, err = b.ReadWithContext(ctx)
 	assert.EqualError(t, err, "type was closed")
+
+	_, _, err = b.ReadWithContext(ctx)
+	assert.EqualError(t, err, "type was closed")
+
+	_, _, err = b.ReadWithContext(ctx)
+	assert.EqualError(t, err, "type was closed")
 }
