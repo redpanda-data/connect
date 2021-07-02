@@ -131,15 +131,6 @@ type gcpCloudStorageOutput struct {
 
 	log   log.Modular
 	stats metrics.Type
-
-	writers map[string]gcpWriter
-}
-
-type gcpWriter struct {
-	path        string
-	lastUpdated time.Time
-	writer      *storage.Writer
-	isClosed    bool
 }
 
 // newGCPCloudStorageOutput creates a new GCP Cloud Storage bucket writer.Type.
@@ -149,10 +140,9 @@ func newGCPCloudStorageOutput(
 	stats metrics.Type,
 ) (*gcpCloudStorageOutput, error) {
 	g := &gcpCloudStorageOutput{
-		conf:    conf,
-		log:     log,
-		stats:   stats,
-		writers: map[string]gcpWriter{},
+		conf:  conf,
+		log:   log,
+		stats: stats,
 	}
 	var err error
 	if g.path, err = bloblang.NewField(conf.Path); err != nil {
@@ -203,12 +193,22 @@ func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg types.
 		})
 
 		path := g.path.String(i, msg)
-		tempUUID, err := uuid.NewV4()
-		if err != nil {
-			return err
+		_, err := client.Bucket(g.conf.Bucket).Object(path).Attrs(ctx)
+
+		isMerge := false
+		var tempPath string
+		if err == storage.ErrObjectNotExist {
+			tempPath = path
+		} else {
+			isMerge = true
+			tempUUID, err := uuid.NewV4()
+			if err != nil {
+				return err
+			}
+
+			tempPath = fmt.Sprintf("%s.txt", tempUUID.String())
 		}
 
-		tempPath := fmt.Sprintf("%d.txt", i, msg.CreatedAt(), tempUUID.String())
 		w := client.Bucket(g.conf.Bucket).Object(tempPath).NewWriter(ctx)
 
 		w.ChunkSize = g.conf.ChunkSize
@@ -225,9 +225,11 @@ func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg types.
 			return err
 		}
 
-		err = g.appendToFile(path, tempPath, path)
-		if err != nil {
-			return err
+		if isMerge {
+			err = g.appendToFile(path, tempPath, path)
+			if err != nil {
+				return err
+			}
 		}
 
 		return err
@@ -252,12 +254,12 @@ func (g *gcpCloudStorageOutput) WaitForClose(time.Duration) error {
 	return nil
 }
 
-func (g *gcpCloudStorageOutput) appendToFile(object1 string, object2 string, toObject string) error {
+func (g *gcpCloudStorageOutput) appendToFile(source1, source2, dest string) error {
 	client := g.client
 	bucket := client.Bucket(g.conf.Bucket)
-	src1 := bucket.Object(object1)
-	src2 := bucket.Object(object2)
-	dst := bucket.Object(toObject)
+	src1 := bucket.Object(source1)
+	src2 := bucket.Object(source2)
+	dst := bucket.Object(dest)
 
 	ctx := context.Background()
 	_, err := dst.ComposerFrom(src1, src2).Run(ctx)
