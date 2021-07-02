@@ -25,7 +25,8 @@ compaction.`,
 		Description: `
 A compaction only occurs during a write where the time since the last compaction
 is above the compaction interval. It is therefore possible to obtain values of
-keys that have expired between compactions.
+keys that have expired between compactions. If ` + "`compaction_on_read`" + `is
+set, compaction will also happen on read events.
 
 The field ` + "`init_values`" + ` can be used to prepopulate the memory cache
 with any number of key/value pairs which are exempt from TTLs:
@@ -42,6 +43,7 @@ TTL is respected as usual.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("ttl", "The TTL of each item in seconds. After this period an item will be eligible for removal during the next compaction."),
 			docs.FieldCommon("compaction_interval", "The period of time to wait before each compaction, at which point expired items are removed."),
+			docs.FieldAdvanced("compaction_on_read", "Whether compaction should occur on read events."),
 			docs.FieldAdvanced("shards", "A number of logical shards to spread keys across, increasing the shards can have a performance benefit when processing a large number of keys."),
 			docs.FieldString(
 				"init_values", "A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.",
@@ -61,6 +63,7 @@ TTL is respected as usual.`,
 type MemoryConfig struct {
 	TTL                int               `json:"ttl" yaml:"ttl"`
 	CompactionInterval string            `json:"compaction_interval" yaml:"compaction_interval"`
+	CompactionOnRead   bool              `json:"compaction_on_read" yaml:"compaction_on_read"`
 	InitValues         map[string]string `json:"init_values" yaml:"init_values"`
 	Shards             int               `json:"shards" yaml:"shards"`
 }
@@ -70,6 +73,7 @@ func NewMemoryConfig() MemoryConfig {
 	return MemoryConfig{
 		TTL:                300, // 5 Mins
 		CompactionInterval: "60s",
+		CompactionOnRead:   false,
 		InitValues:         map[string]string{},
 		Shards:             1,
 	}
@@ -87,6 +91,7 @@ type shard struct {
 	ttl   time.Duration
 
 	compInterval   time.Duration
+	compOnRead     bool
 	lastCompaction time.Time
 
 	mKeys        metrics.StatGauge
@@ -142,6 +147,7 @@ func NewMemory(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 				ttl:   time.Second * time.Duration(conf.Memory.TTL),
 
 				compInterval:   interval,
+				compOnRead:     conf.Memory.CompactionOnRead,
 				lastCompaction: time.Now(),
 
 				mKeys:        stats.GetGauge("keys"),
@@ -155,6 +161,7 @@ func NewMemory(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 				ttl:   time.Second * time.Duration(conf.Memory.TTL),
 
 				compInterval:   interval,
+				compOnRead:     conf.Memory.CompactionOnRead,
 				lastCompaction: time.Now(),
 
 				mKeys:        stats.GetGauge(fmt.Sprintf("shard.%v.keys", i)),
@@ -193,6 +200,12 @@ func (m *Memory) Get(key string) ([]byte, error) {
 	shard.RUnlock()
 	if !exists {
 		return nil, types.ErrKeyNotFound
+	}
+	if shard.compOnRead {
+		// Simulate compaction by returning ErrKeyNotFound if ttl expired.
+		if !k.ts.IsZero() && time.Since(k.ts) >= shard.ttl {
+			return nil, types.ErrKeyNotFound
+		}
 	}
 	return k.value, nil
 }

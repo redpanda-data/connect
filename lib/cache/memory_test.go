@@ -168,6 +168,37 @@ func TestMemoryCacheInitValues(t *testing.T) {
 	}
 }
 
+func TestMemoryCacheCompactionOnRead(t *testing.T) {
+	testLog := log.Noop()
+
+	conf := NewConfig()
+	conf.Type = "memory"
+	conf.Memory.TTL = 0
+	conf.Memory.CompactionInterval = "1ns"
+	conf.Memory.CompactionOnRead = true
+
+	c, err := New(conf, nil, testLog, metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expErr := types.ErrKeyNotFound
+	if _, act := c.Get("foo"); act != expErr {
+		t.Errorf("Wrong error returned: %v != %v", act, expErr)
+	}
+
+	if err = c.Set("foo", []byte("1")); err != nil {
+		t.Error(err)
+	}
+
+	<-time.After(time.Millisecond * 50)
+
+	// This should trigger compaction.
+	if _, act := c.Get("foo"); act != expErr {
+		t.Errorf("Wrong error returned: %v != %v", act, expErr)
+	}
+}
+
 //------------------------------------------------------------------------------
 
 func BenchmarkMemoryShards1(b *testing.B) {
