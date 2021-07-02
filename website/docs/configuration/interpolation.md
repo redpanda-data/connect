@@ -79,10 +79,10 @@ We have a stream of JSON documents each with a unix timestamp field `doc.receive
 pipeline:
   processors:
   - sleep:
-      duration: '${! 3600 - ( timestamp_unix() - json("doc.created_at") ) }s'
+      duration: '${! 3600 - ( timestamp_unix() - json("doc.created_at").number() ) }s'
 ```
 
-If the calculated result is less than or equal to zero the processor does not sleep at all. If the value of `doc.created_at` is a string Benthos will make a best attempt to parse it as a number.
+If the calculated result is less than or equal to zero the processor does not sleep at all. If the value of `doc.created_at` is a string then our method `.number()` will attempt to parse it into a number.
 
 [env_var_config]: https://github.com/Jeffail/benthos/blob/master/config/env/default.yaml
 [error_handling]: /docs/configuration/error_handling

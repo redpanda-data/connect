@@ -3,6 +3,7 @@ package reader
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
@@ -43,6 +44,7 @@ type AsyncPreserver struct {
 	resendMessages  []asyncPreserverResend
 	resendInterrupt func()
 	msgsMut         sync.Mutex
+	pendingMessages int64
 
 	r Async
 }
@@ -61,7 +63,14 @@ func NewAsyncPreserver(r Async) *AsyncPreserver {
 // unsuccessful returns an error. If the attempt is successful (or not
 // necessary) returns nil.
 func (p *AsyncPreserver) ConnectWithContext(ctx context.Context) error {
-	return p.r.ConnectWithContext(ctx)
+	err := p.r.ConnectWithContext(ctx)
+	// If our source has finished but we still have messages in flight then
+	// we act like we're still open. Read will be called and we can either
+	// return the pending messages or wait for them.
+	if err == types.ErrTypeClosed && atomic.LoadInt64(&p.pendingMessages) > 0 {
+		err = nil
+	}
+	return err
 }
 
 func (p *AsyncPreserver) wrapAckFn(m asyncPreserverResend) (types.Message, AsyncAckFn) {
@@ -105,6 +114,7 @@ func (p *AsyncPreserver) wrapBatchAckFn(m asyncPreserverResend) (types.Message, 
 			p.msgsMut.Unlock()
 			return nil
 		}
+		atomic.AddInt64(&p.pendingMessages, -1)
 		return m.ackFn(ctx, res)
 	}
 }
@@ -118,6 +128,7 @@ func (p *AsyncPreserver) wrapSingleAckFn(m asyncPreserverResend) (types.Message,
 			p.msgsMut.Unlock()
 			return nil
 		}
+		atomic.AddInt64(&p.pendingMessages, -1)
 		return m.ackFn(ctx, res)
 	}
 }
@@ -159,8 +170,27 @@ func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (types.Message, As
 
 	msg, aFn, err := p.r.ReadWithContext(ctx)
 	if err != nil {
+		// If our source has finished but we still have messages in flight then
+		// we block, ideally until the messages are acked.
+		if err == types.ErrTypeClosed && atomic.LoadInt64(&p.pendingMessages) > 0 {
+			// The context is cancelled either when new pending messages are
+			// ready, or when the upstream component cancels. If the former
+			// occurs then we still return the cancelled error and let Read get
+			// called to gobble up the new pending messages.
+			for {
+				select {
+				case <-ctx.Done():
+					return nil, nil, ctx.Err()
+				case <-time.After(time.Millisecond * 10):
+					if atomic.LoadInt64(&p.pendingMessages) <= 0 {
+						return nil, nil, err
+					}
+				}
+			}
+		}
 		return nil, nil, err
 	}
+	atomic.AddInt64(&p.pendingMessages, 1)
 	sendMsg, ackFn := p.wrapAckFn(newResendMsg(msg, aFn))
 	return sendMsg, ackFn, nil
 }

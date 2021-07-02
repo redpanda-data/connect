@@ -129,19 +129,19 @@ type FieldSpec struct {
 	Interpolated bool `json:"interpolated"`
 
 	// Examples is a slice of optional example values for a field.
-	Examples []interface{} `json:"examples"`
+	Examples []interface{} `json:"examples,omitempty"`
 
 	// AnnotatedOptions for this field. Each option should have a summary.
-	AnnotatedOptions [][2]string `json:"annotated_options"`
+	AnnotatedOptions [][2]string `json:"annotated_options,omitempty"`
 
 	// Options for this field.
-	Options []string `json:"options"`
+	Options []string `json:"options,omitempty"`
 
 	// Children fields of this field (it must be an object).
-	Children FieldSpecs `json:"children"`
+	Children FieldSpecs `json:"children,omitempty"`
 
 	// Version is an explicit version when this field was introduced.
-	Version string `json:"version"`
+	Version string `json:"version,omitempty"`
 
 	omitWhenFn   func(field, parent interface{}) (why string, shouldOmit bool)
 	customLintFn LintFunc

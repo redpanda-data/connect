@@ -18,7 +18,7 @@ input:
             # because both topics are consumed independently and these processors
             # only apply to the 'comments_retry' input.
             - sleep:
-                duration: '${! 3600 - ( timestamp_unix() - meta("last_attempted") ) }s'
+                duration: '${! 3600 - ( timestamp_unix() - meta("last_attempted").number() ) }s'
 
 pipeline:
   processors:

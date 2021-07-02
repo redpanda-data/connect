@@ -156,7 +156,8 @@ func NewBloblangConfig() BloblangConfig {
 // input is read from. An interval period must be specified that determines how
 // often a message is generated.
 type Bloblang struct {
-	remaining   int32
+	remaining   int64
+	limited     bool
 	firstIsFree bool
 	exec        *mapping.Executor
 	timer       *time.Ticker
@@ -194,13 +195,11 @@ func newBloblang(conf BloblangConfig) (*Bloblang, error) {
 		}
 		return nil, fmt.Errorf("failed to parse mapping: %v", err)
 	}
-	remaining := int32(conf.Count)
-	if remaining <= 0 {
-		remaining = -1
-	}
+	remaining := int64(conf.Count)
 	return &Bloblang{
 		exec:        exec,
 		remaining:   remaining,
+		limited:     remaining > 0,
 		timer:       timer,
 		schedule:    schedule,
 		location:    location,
@@ -244,8 +243,8 @@ func (b *Bloblang) ConnectWithContext(ctx context.Context) error {
 
 // ReadWithContext a new bloblang generated message.
 func (b *Bloblang) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
-	if atomic.LoadInt32(&b.remaining) >= 0 {
-		if atomic.AddInt32(&b.remaining, -1) < 0 {
+	if b.limited {
+		if remaining := atomic.AddInt64(&b.remaining, -1); remaining < 0 {
 			return nil, nil, types.ErrTypeClosed
 		}
 	}

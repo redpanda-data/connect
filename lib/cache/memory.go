@@ -23,9 +23,12 @@ every time the service restarts. Each item in the cache has a TTL set from the
 moment it was last edited, after which it will be removed during the next
 compaction.`,
 		Description: `
-A compaction only occurs during a write where the time since the last compaction
-is above the compaction interval. It is therefore possible to obtain values of
-keys that have expired between compactions.
+The compaction interval determines how often the cache is cleared of expired
+items, and this process is only triggered on writes to the cache. Access to the
+cache is blocked during this process.
+
+Item expiry can be disabled entirely by either setting the
+` + "`compaction_interval`" + ` to an empty string.
 
 The field ` + "`init_values`" + ` can be used to prepopulate the memory cache
 with any number of key/value pairs which are exempt from TTLs:
@@ -95,6 +98,16 @@ type shard struct {
 	sync.RWMutex
 }
 
+func (s *shard) isExpired(i item) bool {
+	if s.compInterval == 0 {
+		return false
+	}
+	if i.ts.IsZero() {
+		return false
+	}
+	return time.Since(i.ts) >= s.ttl
+}
+
 func (s *shard) compaction() {
 	if s.compInterval == 0 {
 		return
@@ -104,10 +117,7 @@ func (s *shard) compaction() {
 	}
 	s.mCompactions.Incr(1)
 	for k, v := range s.items {
-		if v.ts.IsZero() {
-			continue
-		}
-		if time.Since(v.ts) >= s.ttl {
+		if s.isExpired(v) {
 			delete(s.items, k)
 		}
 	}
@@ -192,6 +202,10 @@ func (m *Memory) Get(key string) ([]byte, error) {
 	k, exists := shard.items[key]
 	shard.RUnlock()
 	if !exists {
+		return nil, types.ErrKeyNotFound
+	}
+	// Simulate compaction by returning ErrKeyNotFound if ttl expired.
+	if shard.isExpired(k) {
 		return nil, types.ErrKeyNotFound
 	}
 	return k.value, nil

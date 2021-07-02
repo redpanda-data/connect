@@ -286,7 +286,7 @@ func Run() {
    components will be shown.
 
    benthos list
-   benthos list inputs output
+   benthos list --format json inputs output
    benthos list rate-limits buffers`[4:],
 				Flags: []cli.Flag{
 					&cli.StringFlag{

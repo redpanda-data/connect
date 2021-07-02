@@ -90,13 +90,13 @@ type ComponentSpec struct {
 	Footnotes string `json:"footnotes"`
 
 	// Examples demonstrating use cases for the component.
-	Examples []AnnotatedExample `json:"examples"`
+	Examples []AnnotatedExample `json:"examples,omitempty"`
 
 	// A summary of each field in the component configuration.
 	Config FieldSpec `json:"config"`
 
 	// Version is the Benthos version this component was introduced.
-	Version string `json:"version"`
+	Version string `json:"version,omitempty"`
 }
 
 type componentContext struct {

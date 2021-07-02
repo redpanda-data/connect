@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -11,136 +10,123 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/condition"
+	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/urfave/cli/v2"
 )
 
-//------------------------------------------------------------------------------
+type fullSchema struct {
+	Config            docs.FieldSpecs      `json:"config,omitempty"`
+	Buffers           []docs.ComponentSpec `json:"buffers,omitempty"`
+	Caches            []docs.ComponentSpec `json:"caches,omitempty"`
+	Inputs            []docs.ComponentSpec `json:"inputs,omitempty"`
+	Outputs           []docs.ComponentSpec `json:"outputs,omitempty"`
+	Processors        []docs.ComponentSpec `json:"processors,omitempty"`
+	RateLimits        []docs.ComponentSpec `json:"rate-limits,omitempty"`
+	Metrics           []docs.ComponentSpec `json:"metrics,omitempty"`
+	Tracers           []docs.ComponentSpec `json:"tracers,omitempty"`
+	conditions        []string
+	bloblangFunctions []string
+	bloblangMethods   []string
+}
 
-func listableStatus(s docs.Status) bool {
-	switch s {
-	case "": // Empty status is the equivalent of stable.
-		return true
-	case docs.StatusStable:
-		return true
-	case docs.StatusBeta:
-		return true
+func (f *fullSchema) flattened() map[string][]string {
+	justNames := func(components []docs.ComponentSpec) []string {
+		names := []string{}
+		for _, c := range components {
+			if c.Status != docs.StatusDeprecated {
+				names = append(names, c.Name)
+			}
+		}
+		return names
 	}
-	return false
+	return map[string][]string{
+		"buffers":            justNames(f.Buffers),
+		"caches":             justNames(f.Caches),
+		"inputs":             justNames(f.Inputs),
+		"outputs":            justNames(f.Outputs),
+		"processors":         justNames(f.Processors),
+		"rate-limits":        justNames(f.RateLimits),
+		"metrics":            justNames(f.Metrics),
+		"tracers":            justNames(f.Tracers),
+		"conditions":         f.conditions,
+		"bloblang-functions": f.bloblangFunctions,
+		"bloblang-methods":   f.bloblangMethods,
+	}
 }
 
 func listComponents(c *cli.Context) {
-	jsonFmt := c.String("format") == "json"
-
-	ofType := c.Args().Slice()
-	whitelist := map[string]struct{}{}
-	for _, k := range ofType {
-		whitelist[k] = struct{}{}
+	ofTypes := map[string]struct{}{}
+	for _, k := range c.Args().Slice() {
+		ofTypes[k] = struct{}{}
 	}
 
-	var buf bytes.Buffer
-	obj := map[string]interface{}{}
-
-	components := []string{}
-	printAll := func(title string) {
-		typeStr := strings.ReplaceAll(strings.ToLower(title), " ", "-")
-		if _, exists := whitelist[typeStr]; len(ofType) > 0 && !exists {
-			components = nil
-			return
-		}
-		sort.Strings(components)
-		if jsonFmt {
-			cCopy := make([]string, len(components))
-			copy(cCopy, components)
-			obj[typeStr] = cCopy
-		} else {
-			if buf.Len() > 0 {
-				fmt.Fprintln(&buf, "")
-			}
-			fmt.Fprintf(&buf, "%v:\n", title)
-			for _, t := range components {
-				fmt.Fprintf(&buf, "  - %v\n", t)
-			}
-		}
-		components = nil
+	schema := fullSchema{
+		Config:            config.Spec(),
+		Buffers:           bundle.AllBuffers.Docs(),
+		Caches:            bundle.AllCaches.Docs(),
+		Inputs:            bundle.AllInputs.Docs(),
+		Outputs:           bundle.AllOutputs.Docs(),
+		Processors:        bundle.AllProcessors.Docs(),
+		RateLimits:        bundle.AllRateLimits.Docs(),
+		Metrics:           bundle.AllMetrics.Docs(),
+		Tracers:           bundle.AllTracers.Docs(),
+		bloblangFunctions: query.ListFunctions(),
+		bloblangMethods:   query.ListMethods(),
 	}
-	defer func() {
-		if jsonFmt {
-			b, err := json.Marshal(obj)
-			if err != nil {
-				panic(err)
-			}
-			fmt.Println(string(b))
-		} else {
-			fmt.Print(buf.String())
-		}
-	}()
-
-	for _, c := range bundle.AllInputs.Docs() {
-		if listableStatus(c.Status) {
-			components = append(components, c.Name)
-		}
-	}
-	printAll("Inputs")
-
-	for _, c := range bundle.AllProcessors.Docs() {
-		if listableStatus(c.Status) {
-			components = append(components, c.Name)
-		}
-	}
-	printAll("Processors")
-
 	for t := range condition.Constructors {
-		components = append(components, t)
+		schema.conditions = append(schema.conditions, t)
 	}
-	printAll("Conditions")
+	sort.Strings(schema.conditions)
 
-	for _, c := range bundle.AllOutputs.Docs() {
-		if listableStatus(c.Status) {
-			components = append(components, c.Name)
+	switch c.String("format") {
+	case "text":
+		flat := schema.flattened()
+		i := 0
+		for _, k := range []string{
+			"inputs",
+			"processors",
+			"conditions",
+			"outputs",
+			"caches",
+			"rate-limits",
+			"buffers",
+			"metrics",
+			"tracers",
+			"bloblang-functions",
+			"bloblang-methods",
+		} {
+			if _, exists := ofTypes[k]; len(ofTypes) > 0 && !exists {
+				continue
+			}
+			if i > 0 {
+				fmt.Println("")
+			}
+			i++
+			title := strings.Title(strings.ReplaceAll(k, "-", " "))
+			fmt.Printf("%v:\n", title)
+			for _, t := range flat[k] {
+				fmt.Printf("  - %v\n", t)
+			}
 		}
-	}
-	printAll("Outputs")
-
-	for _, c := range bundle.AllCaches.Docs() {
-		if listableStatus(c.Status) {
-			components = append(components, c.Name)
+	case "json":
+		flat := schema.flattened()
+		if len(ofTypes) > 0 {
+			for k := range flat {
+				if _, exists := ofTypes[k]; !exists {
+					delete(flat, k)
+				}
+			}
 		}
-	}
-	printAll("Caches")
-
-	for _, c := range bundle.AllRateLimits.Docs() {
-		if listableStatus(c.Status) {
-			components = append(components, c.Name)
+		jsonBytes, err := json.Marshal(flat)
+		if err != nil {
+			panic(err)
 		}
-	}
-	printAll("Rate Limits")
-
-	for _, c := range bundle.AllBuffers.Docs() {
-		if listableStatus(c.Status) {
-			components = append(components, c.Name)
+		fmt.Println(string(jsonBytes))
+	case "json-full":
+		jsonBytes, err := json.Marshal(schema)
+		if err != nil {
+			panic(err)
 		}
+		fmt.Println(string(jsonBytes))
 	}
-	printAll("Buffers")
-
-	for _, c := range bundle.AllMetrics.Docs() {
-		if listableStatus(c.Status) {
-			components = append(components, c.Name)
-		}
-	}
-	printAll("Metrics")
-
-	for _, c := range bundle.AllTracers.Docs() {
-		if listableStatus(c.Status) {
-			components = append(components, c.Name)
-		}
-	}
-	printAll("Tracers")
-
-	components = query.ListFunctions()
-	printAll("Bloblang Functions")
-
-	components = query.ListMethods()
-	printAll("Bloblang Methods")
 }
-
-//------------------------------------------------------------------------------

@@ -53,9 +53,12 @@ memory:
 </TabItem>
 </Tabs>
 
-A compaction only occurs during a write where the time since the last compaction
-is above the compaction interval. It is therefore possible to obtain values of
-keys that have expired between compactions.
+The compaction interval determines how often the cache is cleared of expired
+items, and this process is only triggered on writes to the cache. Access to the
+cache is blocked during this process.
+
+Item expiry can be disabled entirely by either setting the
+`compaction_interval` to an empty string.
 
 The field `init_values` can be used to prepopulate the memory cache
 with any number of key/value pairs which are exempt from TTLs:
