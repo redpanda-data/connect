@@ -39,7 +39,7 @@ var _ = registerIntegrationTest("gcp_cloud_storage", func(t *testing.T) {
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository:   "fsouza/fake-gcs-server",
-		Tag:          "1.21.2",
+		Tag:          "latest",
 		ExposedPorts: []string{"4443/tcp"},
 		Cmd:          []string{"-scheme", "http"},
 	})
@@ -50,7 +50,7 @@ var _ = registerIntegrationTest("gcp_cloud_storage", func(t *testing.T) {
 
 	resource.Expire(900)
 
-	os.Setenv("GCP_CLOUD_STORAGE_EMULATOR_URL", "http://localhost:"+resource.GetPort("4443/tcp"))
+	os.Setenv("GCP_CLOUD_STORAGE_EMULATOR_URL", "http://localhost:"+resource.GetPort("4443/tcp")+"/storage/v1/")
 	t.Cleanup(func() {
 		defer os.Unsetenv("GCP_CLOUD_STORAGE_EMULATOR_URL")
 	})
