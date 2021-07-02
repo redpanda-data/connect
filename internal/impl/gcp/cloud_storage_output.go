@@ -19,6 +19,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/gofrs/uuid"
 )
 
 func init() {
@@ -130,6 +131,15 @@ type gcpCloudStorageOutput struct {
 
 	log   log.Modular
 	stats metrics.Type
+
+	writers map[string]gcpWriter
+}
+
+type gcpWriter struct {
+	path        string
+	lastUpdated time.Time
+	writer      *storage.Writer
+	isClosed    bool
 }
 
 // newGCPCloudStorageOutput creates a new GCP Cloud Storage bucket writer.Type.
@@ -139,9 +149,10 @@ func newGCPCloudStorageOutput(
 	stats metrics.Type,
 ) (*gcpCloudStorageOutput, error) {
 	g := &gcpCloudStorageOutput{
-		conf:  conf,
-		log:   log,
-		stats: stats,
+		conf:    conf,
+		log:     log,
+		stats:   stats,
+		writers: map[string]gcpWriter{},
 	}
 	var err error
 	if g.path, err = bloblang.NewField(conf.Path); err != nil {
@@ -191,17 +202,35 @@ func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg types.
 			return nil
 		})
 
-		w := client.Bucket(g.conf.Bucket).Object(g.path.String(i, msg)).NewWriter(ctx)
-		w.ChunkSize = g.conf.ChunkSize
-		w.ContentType = g.contentType.String(i, msg)
-		w.ContentEncoding = g.contentEncoding.String(i, msg)
-		w.Metadata = metadata
-		_, err := w.Write(p.Get())
+		path := g.path.String(i, msg)
+		tempUUID, err := uuid.NewV4()
 		if err != nil {
 			return err
 		}
 
-		return w.Close()
+		tempPath := fmt.Sprintf("%d.txt", i, msg.CreatedAt(), tempUUID.String())
+		w := client.Bucket(g.conf.Bucket).Object(tempPath).NewWriter(ctx)
+
+		w.ChunkSize = g.conf.ChunkSize
+		w.ContentType = g.contentType.String(i, msg)
+		w.ContentEncoding = g.contentEncoding.String(i, msg)
+		w.Metadata = metadata
+		_, err = w.Write(p.Get())
+		if err != nil {
+			return err
+		}
+
+		err = w.Close()
+		if err != nil {
+			return err
+		}
+
+		err = g.appendToFile(path, tempPath, path)
+		if err != nil {
+			return err
+		}
+
+		return err
 	})
 }
 
@@ -220,5 +249,27 @@ func (g *gcpCloudStorageOutput) CloseAsync() {
 // WaitForClose will block until either the reader is closed or a specified
 // timeout occurs.
 func (g *gcpCloudStorageOutput) WaitForClose(time.Duration) error {
+	return nil
+}
+
+func (g *gcpCloudStorageOutput) appendToFile(object1 string, object2 string, toObject string) error {
+	client := g.client
+	bucket := client.Bucket(g.conf.Bucket)
+	src1 := bucket.Object(object1)
+	src2 := bucket.Object(object2)
+	dst := bucket.Object(toObject)
+
+	ctx := context.Background()
+	_, err := dst.ComposerFrom(src1, src2).Run(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Remove the temporary file used for the merge
+	err = src2.Delete(ctx)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
