@@ -78,52 +78,43 @@ func TestMemoryCache(t *testing.T) {
 }
 
 func TestMemoryCacheCompaction(t *testing.T) {
-	testLog := log.Noop()
-
 	conf := NewConfig()
 	conf.Type = "memory"
 	conf.Memory.TTL = 0
 	conf.Memory.CompactionInterval = "1ns"
 
-	c, err := New(conf, nil, testLog, metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
 
-	expErr := types.ErrKeyNotFound
-	if _, act := c.Get("foo"); act != expErr {
-		t.Errorf("Wrong error returned: %v != %v", act, expErr)
-	}
+	m, ok := c.(*Memory)
+	require.True(t, ok)
 
-	if err = c.Set("foo", []byte("1")); err != nil {
-		t.Error(err)
-	}
+	_, err = c.Get("foo")
+	assert.Equal(t, types.ErrKeyNotFound, err)
 
-	exp := "1"
-	if act, err := c.Get("foo"); err != nil {
-		t.Error(err)
-	} else if string(act) != exp {
-		t.Errorf("Wrong result: %v != %v", string(act), exp)
-	}
+	err = c.Set("foo", []byte("1"))
+	require.NoError(t, err)
+
+	_, exists := m.getShard("foo").items["foo"]
+	assert.True(t, exists, "Item should not yet be removed during compaction")
+
+	_, err = c.Get("foo")
+	assert.Equal(t, types.ErrKeyNotFound, err)
 
 	<-time.After(time.Millisecond * 50)
 
 	// This should trigger compaction.
-	if err = c.Add("bar", []byte("2")); err != nil {
-		t.Error(err)
-	}
+	err = c.Add("bar", []byte("2"))
+	require.NoError(t, err)
 
-	exp = "2"
-	if act, err := c.Get("bar"); err != nil {
-		t.Error(err)
-	} else if string(act) != exp {
-		t.Errorf("Wrong result: %v != %v", string(act), exp)
-	}
+	_, exists = m.getShard("bar").items["bar"]
+	assert.True(t, exists)
 
-	// This key should have been removed from compaction.
-	if _, act := c.Get("foo"); act != expErr {
-		t.Errorf("Wrong error returned: %v != %v", act, expErr)
-	}
+	_, err = c.Get("bar")
+	assert.Equal(t, types.ErrKeyNotFound, err)
+
+	_, exists = m.getShard("foo").items["foo"]
+	assert.False(t, exists, "Item should be removed during compaction")
 }
 
 func TestMemoryCacheInitValues(t *testing.T) {
@@ -175,7 +166,6 @@ func TestMemoryCacheCompactionOnRead(t *testing.T) {
 	conf.Type = "memory"
 	conf.Memory.TTL = 0
 	conf.Memory.CompactionInterval = "1ns"
-	conf.Memory.CompactionOnRead = true
 
 	c, err := New(conf, nil, testLog, metrics.Noop())
 	if err != nil {
