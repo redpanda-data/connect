@@ -39,7 +39,7 @@ var _ = registerIntegrationTest("gcp_cloud_storage", func(t *testing.T) {
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository:   "fsouza/fake-gcs-server",
-		Tag:          "latest",
+		Tag:          "1.21.2",
 		ExposedPorts: []string{"4443/tcp"},
 		Cmd:          []string{"-scheme", "http"},
 	})
