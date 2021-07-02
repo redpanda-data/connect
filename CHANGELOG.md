@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- The `switch` output when `retry_until_success` is set to `false` will now provide granular nacks to pre-batched messages.
+
 ## 3.48.0 - 2021-06-25
 
 ### Added

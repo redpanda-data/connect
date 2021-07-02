@@ -180,10 +180,10 @@ func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (types.Message, As
 			for {
 				select {
 				case <-ctx.Done():
-					return nil, nil, ctx.Err()
+					return nil, nil, types.ErrTimeout
 				case <-time.After(time.Millisecond * 10):
 					if atomic.LoadInt64(&p.pendingMessages) <= 0 {
-						return nil, nil, err
+						return nil, nil, types.ErrTypeClosed
 					}
 				}
 			}
