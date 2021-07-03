@@ -29,16 +29,12 @@ func TestBatcherEarlyTermination(t *testing.T) {
 	policyConf.Count = 10
 	policyConf.Period = "50ms"
 	batcher, err := batch.NewPolicy(policyConf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	out := &mockOutput{}
 
 	b := NewBatcher(batcher, out, log.Noop(), metrics.Noop())
-	if err := b.Consume(tInChan); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, b.Consume(tInChan))
 
 	require.Error(t, b.WaitForClose(time.Millisecond*100))
 

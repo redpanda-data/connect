@@ -1,10 +1,10 @@
 package input
 
 import (
-	"context"
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -23,12 +23,7 @@ type Batcher struct {
 
 	messagesOut chan types.Transaction
 
-	ctx           context.Context
-	closeFn       func()
-	fullyCloseCtx context.Context
-	fullyCloseFn  func()
-
-	closedChan chan struct{}
+	shutSig *shutdown.Signaller
 }
 
 // NewBatcher creates a new Batcher around an input.
@@ -38,21 +33,13 @@ func NewBatcher(
 	log log.Modular,
 	stats metrics.Type,
 ) Type {
-	ctx, cancelFn := context.WithCancel(context.Background())
-	fullyCloseCtx, fullyCancelFn := context.WithCancel(context.Background())
-
 	b := Batcher{
 		stats:       stats,
 		log:         log,
 		child:       child,
 		batcher:     batcher,
 		messagesOut: make(chan types.Transaction),
-
-		ctx:           ctx,
-		closeFn:       cancelFn,
-		fullyCloseCtx: fullyCloseCtx,
-		fullyCloseFn:  fullyCancelFn,
-		closedChan:    make(chan struct{}),
+		shutSig:     shutdown.NewSignaller(),
 	}
 	go b.loop()
 	return &b
@@ -73,7 +60,7 @@ func (m *Batcher) loop() {
 			err = m.batcher.WaitForClose(time.Second)
 		}
 		close(m.messagesOut)
-		close(m.closedChan)
+		m.shutSig.ShutdownComplete()
 	}()
 
 	var nextTimedBatchChan <-chan time.Time
@@ -93,7 +80,7 @@ func (m *Batcher) loop() {
 		resChan := make(chan types.Response)
 		select {
 		case m.messagesOut <- types.NewTransaction(sendMsg, resChan):
-		case <-m.fullyCloseCtx.Done():
+		case <-m.shutSig.CloseNowChan():
 			return
 		}
 
@@ -102,7 +89,7 @@ func (m *Batcher) loop() {
 			defer pendingAcks.Done()
 
 			select {
-			case <-m.fullyCloseCtx.Done():
+			case <-m.shutSig.CloseNowChan():
 				return
 			case res, open := <-rChan:
 				if !open {
@@ -110,7 +97,7 @@ func (m *Batcher) loop() {
 				}
 				for _, c := range aggregatedResChans {
 					select {
-					case <-m.fullyCloseCtx.Done():
+					case <-m.shutSig.CloseNowChan():
 						return
 					case c <- res:
 					}
@@ -146,7 +133,7 @@ func (m *Batcher) loop() {
 				if nextTimedBatchChan != nil {
 					select {
 					case <-nextTimedBatchChan:
-					case <-m.ctx.Done():
+					case <-m.shutSig.CloseAtLeisureChan():
 						return
 					}
 				}
@@ -163,7 +150,7 @@ func (m *Batcher) loop() {
 		case <-nextTimedBatchChan:
 			flushBatch = true
 			nextTimedBatchChan = nil
-		case <-m.ctx.Done():
+		case <-m.shutSig.CloseAtLeisureChan():
 			return
 		}
 
@@ -186,17 +173,17 @@ func (m *Batcher) TransactionChan() <-chan types.Transaction {
 
 // CloseAsync shuts down the Batcher and stops processing messages.
 func (m *Batcher) CloseAsync() {
-	m.closeFn()
+	m.shutSig.CloseAtLeisure()
 }
 
 // WaitForClose blocks until the Batcher output has closed down.
 func (m *Batcher) WaitForClose(timeout time.Duration) error {
 	go func() {
 		<-time.After(timeout - time.Second)
-		m.fullyCloseFn()
+		m.shutSig.CloseNow()
 	}()
 	select {
-	case <-m.closedChan:
+	case <-m.shutSig.HasClosedChan():
 	case <-time.After(timeout):
 		return types.ErrTimeout
 	}
