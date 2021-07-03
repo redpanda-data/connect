@@ -157,7 +157,10 @@ func (m *Batcher) loop() {
 				}
 				fullyCloseCtx, done := m.shutSig.CloseNowCtx(context.Background())
 				for _, t := range upstreamTrans {
-					t.Ack(fullyCloseCtx, res.Error())
+					if err := t.Ack(fullyCloseCtx, res.Error()); err != nil {
+						done()
+						return
+					}
 				}
 				done()
 			}

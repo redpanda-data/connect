@@ -1,10 +1,12 @@
 package input
 
 import (
+	"context"
 	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
+	"github.com/Jeffail/benthos/v3/internal/transaction"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -68,7 +70,7 @@ func (m *Batcher) loop() {
 		nextTimedBatchChan = time.After(tNext)
 	}
 
-	pendingResChans := []chan<- types.Response{}
+	pendingTrans := []*transaction.Tracked{}
 	pendingAcks := sync.WaitGroup{}
 
 	flushBatchFn := func() {
@@ -85,7 +87,7 @@ func (m *Batcher) loop() {
 		}
 
 		pendingAcks.Add(1)
-		go func(rChan <-chan types.Response, aggregatedResChans []chan<- types.Response) {
+		go func(rChan <-chan types.Response, aggregatedTransactions []*transaction.Tracked) {
 			defer pendingAcks.Done()
 
 			select {
@@ -95,16 +97,17 @@ func (m *Batcher) loop() {
 				if !open {
 					return
 				}
-				for _, c := range aggregatedResChans {
-					select {
-					case <-m.shutSig.CloseNowChan():
+				closeNowCtx, done := m.shutSig.CloseNowCtx(context.Background())
+				for _, c := range aggregatedTransactions {
+					if err := c.Ack(closeNowCtx, res.Error()); err != nil {
+						done()
 						return
-					case c <- res:
 					}
 				}
+				done()
 			}
-		}(resChan, pendingResChans)
-		pendingResChans = nil
+		}(resChan, pendingTrans)
+		pendingTrans = nil
 	}
 
 	defer func() {
@@ -140,13 +143,15 @@ func (m *Batcher) loop() {
 				flushBatchFn()
 				return
 			}
-			tran.Payload.Iter(func(i int, p types.Part) error {
+
+			trackedTran := transaction.NewTracked(tran.Payload, tran.ResponseChan)
+			trackedTran.Message().Iter(func(i int, p types.Part) error {
 				if m.batcher.Add(p) {
 					flushBatch = true
 				}
 				return nil
 			})
-			pendingResChans = append(pendingResChans, tran.ResponseChan)
+			pendingTrans = append(pendingTrans, trackedTran)
 		case <-nextTimedBatchChan:
 			flushBatch = true
 			nextTimedBatchChan = nil

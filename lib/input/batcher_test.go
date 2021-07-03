@@ -6,12 +6,14 @@ import (
 	"testing"
 	"time"
 
+	ibatch "github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -148,6 +150,74 @@ func TestBatcherStandard(t *testing.T) {
 	if err := batcher.WaitForClose(time.Second); err != nil {
 		t.Error(err)
 	}
+}
+
+func TestBatcherErrorTracking(t *testing.T) {
+	mock := &mockInput{
+		ts: make(chan types.Transaction),
+	}
+
+	batchConf := batch.NewPolicyConfig()
+	batchConf.Count = 3
+
+	batchPol, err := batch.NewPolicy(batchConf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	batcher := NewBatcher(batchPol, mock, log.Noop(), metrics.Noop())
+
+	testMsgs := []string{}
+	testResChans := []chan types.Response{}
+	for i := 0; i < 3; i++ {
+		testMsgs = append(testMsgs, fmt.Sprintf("test%v", i))
+		testResChans = append(testResChans, make(chan types.Response))
+	}
+
+	resErrs := []error{}
+	doneReadsChan := make(chan struct{})
+	go func() {
+		for i, m := range testMsgs {
+			mock.ts <- types.NewTransaction(message.New([][]byte{[]byte(m)}), testResChans[i])
+		}
+		for _, rChan := range testResChans {
+			resErrs = append(resErrs, (<-rChan).Error())
+		}
+		close(doneReadsChan)
+	}()
+
+	var tran types.Transaction
+	select {
+	case tran = <-batcher.TransactionChan():
+	case <-time.After(time.Second):
+		t.Fatal("timed out")
+	}
+
+	assert.Equal(t, 3, tran.Payload.Len())
+	tran.Payload.Iter(func(i int, part types.Part) error {
+		assert.Equal(t, fmt.Sprintf("test%v", i), string(part.Get()))
+		return nil
+	})
+
+	batchErr := ibatch.NewError(tran.Payload, errors.New("ignore this"))
+	batchErr.Failed(1, errors.New("message specific error"))
+	select {
+	case tran.ResponseChan <- response.NewError(batchErr):
+	case <-time.After(time.Second * 5):
+		t.Fatal("timed out")
+	}
+
+	select {
+	case <-doneReadsChan:
+	case <-time.After(time.Second * 5):
+		t.Fatal("timed out")
+	}
+
+	require.Len(t, resErrs, 3)
+	assert.Nil(t, resErrs[0])
+	assert.EqualError(t, resErrs[1], "message specific error")
+	assert.Nil(t, resErrs[2])
+
+	mock.CloseAsync()
+	require.NoError(t, batcher.WaitForClose(time.Second))
 }
 
 func TestBatcherTiming(t *testing.T) {
