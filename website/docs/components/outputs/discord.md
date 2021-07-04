@@ -55,7 +55,7 @@ output:
 
 This output POSTs messages to the `/channels/{channel_id}/messages` Discord API endpoint authenticated as a bot using token based authentication.
 
-If the format of a message is a JSON object matching the [Discord API message type](https://discord.com/developers/docs/resources/channel#message-object) then it is sent directly, otherwise an object matching the message type is created with the content of the messages added as a string.
+If the format of a message is a JSON object matching the [Discord API message type](https://discord.com/developers/docs/resources/channel#message-object) then it is sent directly, otherwise an object matching the API type is created with the content of the message added as a string.
 
 
 ## Fields
