@@ -28,6 +28,12 @@ mapping: |
   root.http_client.headers.Authorization = "Bot " + this.bot_token
   root.http_client.max_in_flight = 64
   root.http_client.batch_as_multipart = false
+  root.processors = []
+  root.processors."-".bloblang = """
+    root = if (this | {}).exists("content") { this } else {
+      { "content": content().string() }
+    }
+  """
 
 tests:
   - name: Basic fields
@@ -46,3 +52,8 @@ tests:
         rate_limit: foolimit
         batch_as_multipart: false
         max_in_flight: 64
+      processors:
+        - bloblang: |
+            root = if (this | {}).exists("content") { this } else {
+              { "content": content().string() }
+            }

@@ -33,7 +33,7 @@ pipeline:
                   "What does a clock do when it’s hungry? It goes back four seconds.",
                   "A company is making glass coffins. Whether they’re successful remains to be seen.",
                 ]
-                root.content = $jokes.index(timestamp_unix_nano()%$jokes.length())
+                root.content = $jokes.index(timestamp_unix_nano() % $jokes.length())
 
         - check: this.content == "/roast"
           processors:
@@ -43,7 +43,7 @@ pipeline:
                   "Someday you’ll go far <@%v>, and I really hope you stay there.",
                   "I’d give you a nasty look, but you’ve already got one <@%v>.",
                 ]
-                root.content = $roasts.index(timestamp_unix_nano()%$roasts.length()).format(this.author.id)
+                root.content = $roasts.index(timestamp_unix_nano() % $roasts.length()).format(this.author.id)
 
         - processors:
             - bloblang: 'root = deleted()'

@@ -1,0 +1,31 @@
+name: stdin_uppercase
+type: input
+status: experimental
+categories: [ Pointless ]
+summary: Reads messages from stdin but uppercases everything for some reason.
+
+mapping: |
+  root.stdin = {}
+  root.processors = []
+  root.processors."-".bloblang = """
+    root = content().uppercase().string()
+  """
+
+metrics_mapping: |
+  map decrement_processor {
+    let start_index = this.index_of("processor")
+    let prefix = this.slice(0, $start_index)
+    let suffix = this.slice($start_index)
+
+    let index = $suffix.split(".").1.number().floor()
+
+    root = $prefix + if $index == 0 {
+      $suffix.replace("processor.0.", "mapping.")
+    } else {
+      $suffix.re_replace("processor\\.[0-9]+\\.", "processor.%v.".format($index - 1))
+    }
+  }
+
+  root = if this.contains("processor") {
+    this.apply("decrement_processor")
+  }

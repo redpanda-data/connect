@@ -69,7 +69,7 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 
 	var v interface{} = query.Nothing(nil)
 	if err := m.m.ExecOnto(query.FunctionContext{
-		Maps:     map[string]query.Function{},
+		Maps:     m.m.Maps(),
 		Vars:     vars,
 		MsgBatch: msg,
 		NewMsg:   outPart,
