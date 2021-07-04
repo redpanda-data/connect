@@ -36,8 +36,9 @@ deps:
 	@go mod vendor
 
 SOURCE_FILES = $(shell find lib internal public cmd -type f -name "*.go")
+TEMPLATE_FILES = $(shell find template -path template/test -prune -o -type f -name "*.yaml")
 
-$(PATHINSTBIN)/%: $(SOURCE_FILES)
+$(PATHINSTBIN)/%: $(SOURCE_FILES) $(TEMPLATE_FILES)
 	@go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/$*
 
 $(APPS): %: $(PATHINSTBIN)/%
@@ -45,7 +46,7 @@ $(APPS): %: $(PATHINSTBIN)/%
 TOOLS = benthos_config_gen benthos_docs_gen
 tools: $(TOOLS)
 
-$(PATHINSTTOOLS)/%: $(SOURCE_FILES)
+$(PATHINSTTOOLS)/%: $(SOURCE_FILES) $(TEMPLATE_FILES)
 	@go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/tools/$*
 
 $(TOOLS): %: $(PATHINSTTOOLS)/%
@@ -53,7 +54,7 @@ $(TOOLS): %: $(PATHINSTTOOLS)/%
 SERVERLESS = benthos-lambda
 serverless: $(SERVERLESS)
 
-$(PATHINSTSERVERLESS)/%: $(SOURCE_FILES)
+$(PATHINSTSERVERLESS)/%: $(SOURCE_FILES) $(TEMPLATE_FILES)
 	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 		go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/serverless/$*
 	@zip -m -j $@.zip $@
