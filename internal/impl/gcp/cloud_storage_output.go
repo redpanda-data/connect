@@ -3,6 +3,7 @@ package gcp
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -206,7 +207,9 @@ func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg types.
 				return err
 			}
 
-			tempPath = fmt.Sprintf("%s.txt", tempUUID.String())
+			dir := filepath.Dir(path)
+			tempFileName := fmt.Sprintf("%s.tmp", tempUUID.String())
+			tempPath = filepath.Join(dir, tempFileName)
 		}
 
 		w := client.Bucket(g.conf.Bucket).Object(tempPath).NewWriter(ctx)
@@ -270,7 +273,7 @@ func (g *gcpCloudStorageOutput) appendToFile(source1, source2, dest string) erro
 	// Remove the temporary file used for the merge
 	err = src2.Delete(ctx)
 	if err != nil {
-		return err
+		g.log.Errorf("error deleting temp file in gcp: %w", err)
 	}
 
 	return nil
