@@ -36,11 +36,22 @@ func (m *mockLog) With(args ...interface{}) log.Modular {
 }
 
 func (m *mockLog) Fatalf(format string, v ...interface{}) {}
-func (m *mockLog) Errorf(format string, v ...interface{}) {}
-func (m *mockLog) Warnf(format string, v ...interface{})  {}
-func (m *mockLog) Infof(format string, v ...interface{})  {}
-func (m *mockLog) Debugf(format string, v ...interface{}) {}
-func (m *mockLog) Tracef(format string, v ...interface{}) {}
+func (m *mockLog) Errorf(format string, v ...interface{}) {
+	m.errors = append(m.errors, fmt.Sprintf(format, v...))
+}
+func (m *mockLog) Warnf(format string, v ...interface{}) {
+	m.warns = append(m.warns, fmt.Sprintf(format, v...))
+
+}
+func (m *mockLog) Infof(format string, v ...interface{}) {
+	m.infos = append(m.infos, fmt.Sprintf(format, v...))
+}
+func (m *mockLog) Debugf(format string, v ...interface{}) {
+	m.debugs = append(m.debugs, fmt.Sprintf(format, v...))
+}
+func (m *mockLog) Tracef(format string, v ...interface{}) {
+	m.traces = append(m.traces, fmt.Sprintf(format, v...))
+}
 
 func (m *mockLog) Fatalln(message string) {}
 func (m *mockLog) Errorln(message string) {
