@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `switch` output when `retry_until_success` is set to `false` will now provide granular nacks to pre-batched messages.
+- The URL printed in error messages when HTTP client components fail should now show interpolated values as they were interpreted.
 
 ## 3.48.0 - 2021-06-25
 
