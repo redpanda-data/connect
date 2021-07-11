@@ -1,9 +1,11 @@
 package processor
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -12,6 +14,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHTTPClientRetries(t *testing.T) {
@@ -404,4 +408,67 @@ func TestHTTPClientParallelCapped(t *testing.T) {
 	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
+}
+
+func TestHTTPClientFailLogURL(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "notfound") {
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer ts.Close()
+
+	tests := []struct {
+		name      string
+		url       string
+		wantError bool
+	}{
+		{
+			name:      "200 OK",
+			url:       ts.URL,
+			wantError: false,
+		},
+		{
+			name:      "404 Not Found",
+			url:       ts.URL + "/notfound",
+			wantError: true,
+		},
+		{
+			name:      "no such host",
+			url:       "http://test.invalid",
+			wantError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf := NewConfig()
+			conf.HTTP.Config.NumRetries = 0
+			conf.HTTP.Config.URL = tt.url
+
+			logMock := &mockLog{}
+			h, err := NewHTTP(conf, nil, logMock, metrics.Noop())
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			_, res := h.ProcessMessage(message.New([][]byte{[]byte("foo")}))
+			if res != nil {
+				t.Error(res.Error())
+			}
+
+			if !tt.wantError {
+				assert.Empty(t, logMock.errors)
+				return
+			}
+
+			require.Len(t, logMock.errors, 1)
+
+			got := logMock.errors[0]
+			if !strings.HasPrefix(got, fmt.Sprintf("HTTP request failed: %s", tt.url)) {
+				t.Errorf("Expected to find %q in logs: %sq", tt.url, got)
+			}
+		})
+	}
+
 }

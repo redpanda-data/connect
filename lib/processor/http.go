@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -200,12 +201,13 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		resultMsg, err := h.client.Send(msg)
 		if err != nil {
 			var codeStr string
-			if hErr, ok := err.(types.ErrUnexpectedHTTPRes); ok {
+			var hErr types.ErrUnexpectedHTTPRes
+			if ok := errors.As(err, &hErr); ok {
 				codeStr = strconv.Itoa(hErr.Code)
 			}
 			h.mErr.Incr(1)
 			h.mErrHTTP.Incr(1)
-			h.log.Errorf("HTTP request to '%v' failed: %v\n", h.conf.HTTP.URL, err)
+			h.log.Errorf("HTTP request failed: %v\n", err)
 			responseMsg = msg.Copy()
 			responseMsg.Iter(func(i int, p types.Part) error {
 				if len(codeStr) > 0 {
@@ -260,7 +262,8 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 							return nil
 						})
 					} else {
-						if hErr, ok := err.(types.ErrUnexpectedHTTPRes); ok {
+						var hErr types.ErrUnexpectedHTTPRes
+						if ok := errors.As(err, &hErr); ok {
 							results[index].Metadata().Set("http_status_code", strconv.Itoa(hErr.Code))
 						}
 						FlagErr(results[index], err)

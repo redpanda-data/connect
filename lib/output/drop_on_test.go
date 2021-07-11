@@ -1,6 +1,7 @@
 package output
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -65,7 +66,7 @@ func TestDropOnNothing(t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	assert.EqualError(t, res.Error(), "HTTP request returned unexpected response code (403): 403 Forbidden")
+	assert.EqualError(t, res.Error(), fmt.Sprintf("%s: HTTP request returned unexpected response code (403): 403 Forbidden", ts.URL))
 }
 
 func TestDropOnError(t *testing.T) {
