@@ -1,10 +1,12 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -126,11 +128,6 @@ func (s *shard) compaction() {
 
 //------------------------------------------------------------------------------
 
-// Memory is a memory based cache implementation.
-type Memory struct {
-	shards []*shard
-}
-
 // NewMemory creates a new Memory cache type.
 func NewMemory(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (types.Cache, error) {
 	var interval time.Duration
@@ -141,7 +138,7 @@ func NewMemory(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 		}
 	}
 
-	m := &Memory{}
+	m := &memoryV2{}
 	if conf.Memory.Shards <= 0 {
 		return nil, fmt.Errorf("expected >=1 shards, found: %v", conf.Memory.Shards)
 	}
@@ -180,10 +177,85 @@ func NewMemory(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 		}
 	}
 
-	return m, nil
+	return cache.NewV2ToV1Cache(m, stats), nil
+}
+
+type memoryV2 struct {
+	shards []*shard
+}
+
+func (m *memoryV2) getShard(key string) *shard {
+	if len(m.shards) == 1 {
+		return m.shards[0]
+	}
+	h := xxhash.New64()
+	h.WriteString(key)
+	return m.shards[h.Sum64()%uint64(len(m.shards))]
+}
+
+func (m *memoryV2) Get(_ context.Context, key string) ([]byte, error) {
+	shard := m.getShard(key)
+	shard.RLock()
+	k, exists := shard.items[key]
+	shard.RUnlock()
+	if !exists {
+		return nil, types.ErrKeyNotFound
+	}
+	// Simulate compaction by returning ErrKeyNotFound if ttl expired.
+	if shard.isExpired(k) {
+		return nil, types.ErrKeyNotFound
+	}
+	return k.value, nil
+}
+
+func (m *memoryV2) Set(_ context.Context, key string, value []byte, _ *time.Duration) error {
+	shard := m.getShard(key)
+	shard.Lock()
+	shard.compaction()
+	shard.items[key] = item{value: value, ts: time.Now()}
+	shard.mKeys.Set(int64(len(shard.items)))
+	shard.Unlock()
+	return nil
+}
+
+func (m *memoryV2) Add(_ context.Context, key string, value []byte, _ *time.Duration) error {
+	shard := m.getShard(key)
+	shard.Lock()
+	if _, exists := shard.items[key]; exists {
+		shard.Unlock()
+		return types.ErrKeyAlreadyExists
+	}
+	shard.compaction()
+	shard.items[key] = item{value: value, ts: time.Now()}
+	shard.mKeys.Set(int64(len(shard.items)))
+	shard.Unlock()
+	return nil
+}
+
+func (m *memoryV2) Delete(_ context.Context, key string) error {
+	shard := m.getShard(key)
+	shard.Lock()
+	shard.compaction()
+	delete(shard.items, key)
+	shard.mKeys.Set(int64(len(shard.items)))
+	shard.Unlock()
+	return nil
+}
+
+func (m *memoryV2) Close(context.Context) error {
+	return nil
 }
 
 //------------------------------------------------------------------------------
+
+// Memory is a memory based cache implementation.
+//
+// TODO: V4 remove this
+//
+// Deprecated: This implementation is no longer used.
+type Memory struct {
+	shards []*shard
+}
 
 func (m *Memory) getShard(key string) *shard {
 	if len(m.shards) == 1 {
@@ -196,6 +268,8 @@ func (m *Memory) getShard(key string) *shard {
 
 // Get attempts to locate and return a cached value by its key, returns an error
 // if the key does not exist.
+//
+// Deprecated: This implementation is no longer used.
 func (m *Memory) Get(key string) ([]byte, error) {
 	shard := m.getShard(key)
 	shard.RLock()
@@ -212,6 +286,8 @@ func (m *Memory) Get(key string) ([]byte, error) {
 }
 
 // Set attempts to set the value of a key.
+//
+// Deprecated: This implementation is no longer used.
 func (m *Memory) Set(key string, value []byte) error {
 	shard := m.getShard(key)
 	shard.Lock()
@@ -224,6 +300,8 @@ func (m *Memory) Set(key string, value []byte) error {
 
 // SetMulti attempts to set the value of multiple keys, returns an error if any
 // keys fail.
+//
+// Deprecated: This implementation is no longer used.
 func (m *Memory) SetMulti(items map[string][]byte) error {
 	for k, v := range items {
 		if err := m.Set(k, v); err != nil {
@@ -235,6 +313,8 @@ func (m *Memory) SetMulti(items map[string][]byte) error {
 
 // Add attempts to set the value of a key only if the key does not already exist
 // and returns an error if the key already exists.
+//
+// Deprecated: This implementation is no longer used.
 func (m *Memory) Add(key string, value []byte) error {
 	shard := m.getShard(key)
 	shard.Lock()
@@ -250,6 +330,8 @@ func (m *Memory) Add(key string, value []byte) error {
 }
 
 // Delete attempts to remove a key.
+//
+// Deprecated: This implementation is no longer used.
 func (m *Memory) Delete(key string) error {
 	shard := m.getShard(key)
 	shard.Lock()
@@ -261,12 +343,14 @@ func (m *Memory) Delete(key string) error {
 }
 
 // CloseAsync shuts down the cache.
+//
+// Deprecated: This implementation is no longer used.
 func (m *Memory) CloseAsync() {
 }
 
 // WaitForClose blocks until the cache has closed down.
+//
+// Deprecated: This implementation is no longer used.
 func (m *Memory) WaitForClose(timeout time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

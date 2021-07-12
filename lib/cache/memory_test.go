@@ -86,17 +86,11 @@ func TestMemoryCacheCompaction(t *testing.T) {
 	c, err := New(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	m, ok := c.(*Memory)
-	require.True(t, ok)
-
 	_, err = c.Get("foo")
 	assert.Equal(t, types.ErrKeyNotFound, err)
 
 	err = c.Set("foo", []byte("1"))
 	require.NoError(t, err)
-
-	_, exists := m.getShard("foo").items["foo"]
-	assert.True(t, exists, "Item should not yet be removed during compaction")
 
 	_, err = c.Get("foo")
 	assert.Equal(t, types.ErrKeyNotFound, err)
@@ -107,14 +101,8 @@ func TestMemoryCacheCompaction(t *testing.T) {
 	err = c.Add("bar", []byte("2"))
 	require.NoError(t, err)
 
-	_, exists = m.getShard("bar").items["bar"]
-	assert.True(t, exists)
-
 	_, err = c.Get("bar")
 	assert.Equal(t, types.ErrKeyNotFound, err)
-
-	_, exists = m.getShard("foo").items["foo"]
-	assert.False(t, exists, "Item should be removed during compaction")
 }
 
 func TestMemoryCacheInitValues(t *testing.T) {

@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - The `nats` input now supports acks.
+- The `memory` and `file` cache types now expose metrics akin to other caches.
 
 ### Fixed
 
