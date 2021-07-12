@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.49.0 - 2021-07-12
+
 ### Added
 
 - The `nats` input now supports acks.
