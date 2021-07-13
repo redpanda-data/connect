@@ -1,6 +1,5 @@
 ---
 title: Sneak Peek at Bloblang
-date: 2020-04-19T00:00:00+0100
 author: Ashley Jeffs
 author_url: https://github.com/Jeffail
 author_image_url: /img/ash.jpg
