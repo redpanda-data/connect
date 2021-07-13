@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New CLI flag `--set` (`-s`) for overriding arbitrary fields in a config. E.g. `-s input.type=http_server` would override the config setting the input type to `http_server`.
+
 ## 3.49.0 - 2021-07-12
 
 ### Added

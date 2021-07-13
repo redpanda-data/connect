@@ -81,16 +81,6 @@ benthos -c ./config.yaml
 Or, with docker:
 
 ```shell
-# Send HTTP /POST data to Kafka:
-docker run --rm \
-	-e "INPUT_TYPE=http_server" \
-	-e "OUTPUT_TYPE=kafka" \
-	-e "OUTPUT_KAFKA_ADDRESSES=kafka-server:9092" \
-	-e "OUTPUT_KAFKA_TOPIC=benthos_topic" \
-	-p 4195:4195 \
-	jeffail/benthos
-
-# Using your own config file:
 docker run --rm -v /path/to/your/config.yaml:/benthos.yaml jeffail/benthos
 ```
 
@@ -113,10 +103,6 @@ Benthos also [emits opentracing events][tracers] to a tracer of your choice (cur
 ## Configuration
 
 Benthos provides lots of tools for making configuration discovery, debugging and organisation easy. You can [read about them here][config-doc].
-
-### Environment Variables
-
-It is possible to select fields inside a configuration file to be set via [environment variables][config-interp]. The docker image, for example, is built with [a config file][env-config] where _all_ common fields can be set this way.
 
 ## Build
 
@@ -191,7 +177,6 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come a
 [streams-api]: https://www.benthos.dev/docs/guides/streams_mode/streams_api
 [streams-mode]: https://www.benthos.dev/docs/guides/streams_mode/about
 [general-docs]: https://www.benthos.dev/docs/about
-[env-config]: config/env/README.md
 [bloblang-about]: https://www.benthos.dev/docs/guides/bloblang/about
 [config-doc]: https://www.benthos.dev/docs/configuration/about
 [serverless]: https://www.benthos.dev/docs/guides/serverless/about

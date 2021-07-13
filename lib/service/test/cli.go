@@ -45,6 +45,10 @@ func CliCommand(testSuffix string) *cli.Command {
 				}
 				os.Exit(0)
 			}
+			if len(c.StringSlice("set")) > 0 {
+				fmt.Fprintln(os.Stderr, "Cannot override fields with --set (-s) during unit tests")
+				os.Exit(1)
+			}
 			if logLevel := c.String("log"); len(logLevel) > 0 {
 				logConf := log.NewConfig()
 				logConf.LogLevel = logLevel

@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	iconfig "github.com/Jeffail/benthos/v3/internal/config"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/filepath"
 	"github.com/Jeffail/benthos/v3/lib/api"
@@ -93,69 +94,27 @@ func OptOnManagerInit(fn ManagerInitFunc) func() {
 
 //------------------------------------------------------------------------------
 
-func readConfig(path string, resourcesPaths []string) (lints []string) {
-	// A list of default config paths to check for if not explicitly defined
-	defaultPaths := []string{
-		"/benthos.yaml",
-		"/etc/benthos/config.yaml",
-		"/etc/benthos.yaml",
-	}
-
-	if len(path) > 0 {
-		cLints, err := config.Read(path, true, &conf)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
-			os.Exit(1)
-		}
-		lints = append(lints, cLints...)
-	} else {
+func readConfig(path string, resourcesPaths, overrides []string) (lints []string) {
+	if path == "" {
 		// Iterate default config paths
-		for _, path := range defaultPaths {
-			if _, err := os.Stat(path); err != nil {
-				continue
+		for _, dpath := range []string{
+			"/benthos.yaml",
+			"/etc/benthos/config.yaml",
+			"/etc/benthos.yaml",
+		} {
+			if _, err := os.Stat(dpath); err == nil {
+				fmt.Fprintf(os.Stderr, "Config file not specified, reading from %v\n", dpath)
+				path = dpath
+				break
 			}
-			fmt.Fprintf(os.Stderr, "Config file not specified, reading from %v\n", path)
-
-			cLints, err := config.Read(path, true, &conf)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
-				os.Exit(1)
-			}
-			lints = append(lints, cLints...)
-			break
 		}
 	}
 
-	for _, rPath := range resourcesPaths {
-		resourceBytes, rLints, err := config.ReadWithJSONPointersLinted(rPath, true)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Resource configuration file read error '%v': %v\n", rPath, err)
-			os.Exit(1)
-		}
-		for _, l := range rLints {
-			lints = append(lints, fmt.Sprintf("resource file %v: %v", rPath, l))
-		}
-
-		var rawNode yaml.Node
-		if err := yaml.Unmarshal(resourceBytes, &rawNode); err != nil {
-			fmt.Fprintf(os.Stderr, "Resource configuration file read error '%v': %v\n", rPath, err)
-			os.Exit(1)
-		}
-		for _, lint := range manager.Spec().LintYAML(docs.NewLintContext(), &rawNode) {
-			lints = append(lints, fmt.Sprintf("resource file %v: line %v: %v", rPath, lint.Line, lint.What))
-		}
-
-		extraMgrWrapper := manager.NewResourceConfig()
-		if err = yaml.Unmarshal(resourceBytes, &extraMgrWrapper); err != nil {
-			fmt.Fprintf(os.Stderr, "Resource configuration file read error: %v\n", err)
-			os.Exit(1)
-		}
-		if err = conf.ResourceConfig.AddFrom(&extraMgrWrapper); err != nil {
-			fmt.Fprintf(os.Stderr, "Resource configuration file read error: %v\n", err)
-			os.Exit(1)
-		}
+	var err error
+	if lints, err = iconfig.NewReader(path, resourcesPaths, iconfig.OptAddOverrides(overrides...)).Read(&conf); err != nil {
+		fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
+		os.Exit(1)
 	}
-
 	return
 }
 
@@ -164,6 +123,7 @@ func readConfig(path string, resourcesPaths []string) (lints []string) {
 func cmdService(
 	confPath string,
 	resourcesPaths []string,
+	confOverrides []string,
 	overrideLogLevel string,
 	strict bool,
 	streamsMode bool,
@@ -174,7 +134,7 @@ func cmdService(
 		fmt.Printf("Failed to resolve resource glob pattern: %v\n", err)
 		return 1
 	}
-	lints := readConfig(confPath, resourcesPaths)
+	lints := readConfig(confPath, resourcesPaths, confOverrides)
 	if strict && len(lints) > 0 {
 		for _, lint := range lints {
 			fmt.Fprintln(os.Stderr, lint)
