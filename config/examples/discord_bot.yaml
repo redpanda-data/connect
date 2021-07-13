@@ -13,7 +13,7 @@ pipeline:
         - check: this.type == 7
           processors:
             - bloblang: |
-                root.content = "Welcome to the Benthos Blobchat server <@%v>! We'd love to hear your story over in <#853284952261918773>.".format(this.author.id)
+                root = "Welcome to the Benthos Blobchat server <@%v>! We'd love to hear your story over in <#853284952261918773>.".format(this.author.id)
 
         - check: this.content == "/commands"
           processors:
@@ -22,8 +22,9 @@ pipeline:
                   "/commands",
                   "/joke",
                   "/roast",
+                  "/release",
                 ]
-                root.content = "My commands are: " + $commands.join(", ")
+                root = "My commands are: " + $commands.join(", ")
 
         - check: this.content == "/joke"
           processors:
@@ -33,7 +34,7 @@ pipeline:
                   "What does a clock do when it’s hungry? It goes back four seconds.",
                   "A company is making glass coffins. Whether they’re successful remains to be seen.",
                 ]
-                root.content = $jokes.index(timestamp_unix_nano() % $jokes.length())
+                root = $jokes.index(timestamp_unix_nano() % $jokes.length())
 
         - check: this.content == "/roast"
           processors:
@@ -43,15 +44,27 @@ pipeline:
                   "Someday you’ll go far <@%v>, and I really hope you stay there.",
                   "I’d give you a nasty look, but you’ve already got one <@%v>.",
                 ]
-                root.content = $roasts.index(timestamp_unix_nano() % $roasts.length()).format(this.author.id)
+                root = $roasts.index(timestamp_unix_nano() % $roasts.length()).format(this.author.id)
+
+        - check: this.content == "/release"
+          processors:
+            - bloblang: 'root = ""'
+            - try:
+              - http:
+                  parallel: true
+                  url: https://api.github.com/repos/Jeffail/benthos/releases/latest
+                  verb: GET
+              - bloblang: 'root = "The latest release of Benthos is %v: %v".format(this.tag_name, this.html_url)'
 
         - processors:
             - bloblang: 'root = deleted()'
 
     - catch:
       - log:
-          message: "Error: ${! error() }"
-      - bloblang: 'root = deleted()'
+          fields:
+            error: "${! error() }"
+          message: "Failed to process message"
+      - bloblang: 'root = "Sorry, my circuits are all bent from twerking and I must have malfunctioned."'
 
 output:
   discord:
