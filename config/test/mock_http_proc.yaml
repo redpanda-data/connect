@@ -1,0 +1,32 @@
+pipeline:
+  processors:
+    - bloblang: 'root = "simon says: " + content()'
+    - http:
+        url: http://example.com/foobar
+        verb: GET
+    - bloblang: 'root = content().uppercase()'
+
+tests:
+  - name: mocks the http proc
+    mocks:
+      /pipeline/processors/1:
+        bloblang: 'root = content().string() + " this is some mock content"'
+    input_batch:
+      - content: "hello world"
+    output_batches:
+      - - content_equals: "SIMON SAYS: HELLO WORLD THIS IS SOME MOCK CONTENT"
+
+  - name: mocks the http proc and also adds another processor to expose error
+    mocks:
+      /pipeline/processors/1:
+        bloblang: 'root = throw("the processor failed")'
+      /pipeline/processors/-:
+        bloblang: |
+          root.content = content().string()
+          root.error = error()
+    input_batch:
+      - content: "hello world"
+    output_batches:
+      - - json_equals:
+            content: 'SIMON SAYS: HELLO WORLD'
+            error: 'failed assignment (line 1): the processor failed'

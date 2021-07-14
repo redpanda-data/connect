@@ -9,6 +9,7 @@ The Benthos service offers a command `benthos test` for running unit tests on se
 1. [Writing a Test](#writing-a-test)
 2. [Output Conditions](#output-conditions)
 3. [Running Tests](#running-tests)
+4. [Mocking Processors](#mocking-processors)
 
 ## Writing a Test
 
@@ -111,7 +112,7 @@ And execute this test the same way we execute other Benthos tests (`benthos test
 
 ### Fragmented Tests
 
-Sometimes the number of tests you need to define in order to cover a config file is so vast that it's necessary to split them across multiple test definition files. This is possible but Benthos still requires a way to detect the configuration file being targeted by these fragmented test definition files, which we can do by prefixing our `target_processors` field with the path of the target relative to the definition file.
+Sometimes the number of tests you need to define in order to cover a config file is so vast that it's necessary to split them across multiple test definition files. This is possible but Benthos still requires a way to detect the configuration file being targeted by these fragmented test definition files. In order to do this we must prefix our `target_processors` field with the path of the target relative to the definition file.
 
 The syntax of `target_processors` in this case is a full [JSON Pointer][json-pointer] that should look something like `target.yaml#/pipeline/processors`. For example, if we saved our test definition above in an arbitrary location like `./tests/first.yaml` and wanted to target our original `foo.yaml` config file, we could do that with the following:
 
@@ -194,6 +195,37 @@ Checks that both the message and the condition are valid JSON documents, and tha
 Executing tests for a specific config can be done by pointing the subcommand `test` at either the config to be tested or its test definition, e.g. `benthos test ./config.yaml` and `benthos test ./config_benthos_test.yaml` are equivalent.
 
 In order to execute all tests of a directory simply point `test` to that directory, e.g. `benthos test ./foo` will execute all tests found in the directory `foo`. In order to walk a directory tree and execute all tests found you can use the shortcut `./...`, e.g. `benthos test ./...` will execute all tests found in the current directory, any child directories, and so on.
+
+## Mocking Processors
+
+Sometimes you'll want to write tests for a series of processors, where one or more of them are networked (or otherwise stateful). Rather than creating and managing mocked services you can define mock versions of those processors in the test definition. For example, if we have a config with the following processors:
+
+```yaml
+pipeline:
+  processors:
+    - bloblang: 'root = "simon says: " + content()'
+    - http:
+        url: http://example.com/foobar
+        verb: GET
+    - bloblang: 'root = content().uppercase()'
+```
+
+Rather than create a fake service for the `http` processor to interact with we can define a mock in our test definition that replaces it with a `bloblang` processor. Mocks are configured as a map of [JSON pointers][json-pointer] that identify a processor to replace and the config to replace it with:
+
+```yaml
+tests:
+  - name: mocks the http proc
+    target_processors: '/pipeline/processors'
+    mocks:
+      /pipeline/processors/1:
+        bloblang: 'root = content().string() + " this is some mock content"'
+    input_batch:
+      - content: "hello world"
+    output_batches:
+      - - content_equals: "SIMON SAYS: HELLO WORLD THIS IS SOME MOCK CONTENT"
+```
+
+With the above test definition the `http` processor will be swapped out for `bloblang: 'root = content().string() + " this is some mock content"'`. For the purposes of mocking it is recommended that you use a `bloblang` processor that simply mutates the message in a way that you would expect the mocked processor to. 
 
 [json-pointer]: https://tools.ietf.org/html/rfc6901
 [bloblang]: /docs/guides/bloblang/about

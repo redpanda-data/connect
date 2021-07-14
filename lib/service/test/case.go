@@ -49,12 +49,13 @@ func (i *InputPart) UnmarshalYAML(value *yaml.Node) error {
 
 // Case contains a definition of a single Benthos config test case.
 type Case struct {
-	Name             string            `yaml:"name"`
-	Environment      map[string]string `yaml:"environment"`
-	TargetProcessors string            `yaml:"target_processors"`
-	TargetMapping    string            `yaml:"target_mapping"`
-	InputBatch       []InputPart       `yaml:"input_batch"`
-	OutputBatches    [][]ConditionsMap `yaml:"output_batches"`
+	Name             string               `yaml:"name"`
+	Environment      map[string]string    `yaml:"environment"`
+	TargetProcessors string               `yaml:"target_processors"`
+	TargetMapping    string               `yaml:"target_mapping"`
+	Mocks            map[string]yaml.Node `yaml:"mocks"`
+	InputBatch       []InputPart          `yaml:"input_batch"`
+	OutputBatches    [][]ConditionsMap    `yaml:"output_batches"`
 
 	line int
 }
@@ -72,6 +73,7 @@ func NewCase() Case {
 		Environment:      map[string]string{},
 		TargetProcessors: "/pipeline/processors",
 		TargetMapping:    "",
+		Mocks:            map[string]yaml.Node{},
 		InputBatch:       []InputPart{},
 		OutputBatches:    [][]ConditionsMap{},
 	}
@@ -112,12 +114,20 @@ type ProcProvider interface {
 	ProvideBloblang(path string) ([]types.Processor, error)
 }
 
+type mockedProcProvider interface {
+	ProvideMocked(jsonPtr string, environment map[string]string, mocks map[string]yaml.Node) ([]types.Processor, error)
+}
+
 // Execute attempts to execute a test case against a Benthos configuration.
 func (c *Case) Execute(provider ProcProvider) (failures []CaseFailure, err error) {
 	var procSet []types.Processor
 	if c.TargetMapping != "" {
 		if procSet, err = provider.ProvideBloblang(c.TargetMapping); err != nil {
 			return nil, fmt.Errorf("failed to initialise Bloblang mapping '%v': %v", c.TargetMapping, err)
+		}
+	} else if mockedProcProv, ok := provider.(mockedProcProvider); ok {
+		if procSet, err = mockedProcProv.ProvideMocked(c.TargetProcessors, c.Environment, c.Mocks); err != nil {
+			return nil, fmt.Errorf("failed to initialise processors '%v': %v", c.TargetProcessors, err)
 		}
 	} else if procSet, err = provider.Provide(c.TargetProcessors, c.Environment); err != nil {
 		return nil, fmt.Errorf("failed to initialise processors '%v': %v", c.TargetProcessors, err)

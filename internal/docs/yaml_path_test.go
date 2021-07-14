@@ -3,6 +3,7 @@ package docs_test
 import (
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
@@ -64,6 +65,27 @@ input:
 input:
   kafka:
     addresses: [ "foobar" ]
+    topics: [ "baz" ]
+`,
+		},
+		{
+			name: "set mapping value",
+			input: `
+input:
+  kafka:
+    addresses: [ "foo", "bar" ]
+    topics: [ "baz" ]
+`,
+			path:  "/input/dynamic/inputs/foo/type",
+			value: `"foobar"`,
+			output: `
+input:
+  dynamic:
+    inputs:
+      foo:
+        type: "foobar"
+  kafka:
+    addresses: [ "foo", "bar" ]
     topics: [ "baz" ]
 `,
 		},
@@ -168,6 +190,57 @@ input:
 			value:       `"baz"`,
 			errContains: "input.kafka.addresses.0.2: field not recognised",
 		},
+		{
+			name: "set 2D array value abs",
+			input: `
+pipeline:
+  processors:
+    - workflow:
+        order: []
+`,
+			path:  "/pipeline/processors/0/workflow/order",
+			value: `"baz"`,
+			output: `
+pipeline:
+  processors:
+    - workflow:
+        order: [["baz"]]
+`,
+		},
+		{
+			name: "set 2D array value outter index",
+			input: `
+pipeline:
+  processors:
+    - workflow:
+        order: []
+`,
+			path:  "/pipeline/processors/0/workflow/order/-",
+			value: `"baz"`,
+			output: `
+pipeline:
+  processors:
+    - workflow:
+        order: [["baz"]]
+`,
+		},
+		{
+			name: "set 2D array value inner index",
+			input: `
+pipeline:
+  processors:
+    - workflow:
+        order: []
+`,
+			path:  "/pipeline/processors/0/workflow/order/-/-",
+			value: `"baz"`,
+			output: `
+pipeline:
+  processors:
+    - workflow:
+        order: [["baz"]]
+`,
+		},
 	}
 
 	for _, test := range tests {
@@ -191,6 +264,83 @@ input:
 				require.NoError(t, input.Decode(&iinput))
 				require.NoError(t, yaml.Unmarshal([]byte(test.output), &ioutput))
 				assert.Equal(t, ioutput, iinput)
+			}
+		})
+	}
+}
+
+func TestGetYAMLPath(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		path        string
+		output      string
+		errContains string
+	}{
+		{
+			name: "all of input",
+			input: `
+input:
+  kafka:
+    addresses: [ "foo" ]
+`,
+			path: "/input",
+			output: `
+kafka:
+  addresses: [ "foo" ]
+`,
+		},
+		{
+			name: "first address of input",
+			input: `
+input:
+  kafka:
+    addresses: [ "foo" ]
+`,
+			path:   "/input/kafka/addresses/0",
+			output: `"foo"`,
+		},
+		{
+			name: "unknown field",
+			input: `
+input:
+  kafka:
+    addresses: [ "foo" ]
+`,
+			path:        "/input/meow",
+			errContains: "input.meow: key not found in mapping",
+		},
+		{
+			name: "bad index",
+			input: `
+input:
+  kafka:
+    addresses: [ "foo" ]
+`,
+			path:        "/input/kafka/addresses/10",
+			errContains: "input.kafka.addresses.10: target index greater",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var input yaml.Node
+			require.NoError(t, yaml.Unmarshal([]byte(test.input), &input))
+
+			path, err := gabs.JSONPointerToSlice(test.path)
+			require.NoError(t, err)
+
+			output, err := docs.GetYAMLPath(&input, path...)
+			if len(test.errContains) > 0 {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			} else {
+				require.NoError(t, err)
+
+				var expected, actual interface{}
+				require.NoError(t, output.Decode(&actual))
+				require.NoError(t, yaml.Unmarshal([]byte(test.output), &expected))
+				assert.Equal(t, expected, actual)
 			}
 		})
 	}

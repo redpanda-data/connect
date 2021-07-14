@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func getFieldFromMapping(name string, node *yaml.Node) (*yaml.Node, error) {
+func getFieldFromMapping(name string, createMissing bool, node *yaml.Node) (*yaml.Node, error) {
 	node.Kind = yaml.MappingNode
 	var foundNode *yaml.Node
 	for i := 0; i < len(node.Content)-1; i += 2 {
@@ -18,6 +18,9 @@ func getFieldFromMapping(name string, node *yaml.Node) (*yaml.Node, error) {
 		}
 	}
 	if foundNode == nil {
+		if !createMissing {
+			return nil, fmt.Errorf("%v: key not found in mapping", name)
+		}
 		var keyNode yaml.Node
 		if err := keyNode.Encode(name); err != nil {
 			return nil, fmt.Errorf("%v: failed to encode key: %w", name, err)
@@ -30,7 +33,7 @@ func getFieldFromMapping(name string, node *yaml.Node) (*yaml.Node, error) {
 	return foundNode, nil
 }
 
-func getIndexFromSequence(name string, node *yaml.Node) (*yaml.Node, error) {
+func getIndexFromSequence(name string, allowAppend bool, node *yaml.Node) (*yaml.Node, error) {
 	node.Kind = yaml.SequenceNode
 	var foundNode *yaml.Node
 	if name != "-" {
@@ -43,6 +46,9 @@ func getIndexFromSequence(name string, node *yaml.Node) (*yaml.Node, error) {
 		}
 		foundNode = node.Content[index]
 	} else {
+		if !allowAppend {
+			return nil, fmt.Errorf("%v: append directive not allowed", name)
+		}
 		foundNode = &yaml.Node{}
 		node.Content = append(node.Content, foundNode)
 	}
@@ -66,7 +72,7 @@ func (f FieldSpecs) SetYAMLPath(docsProvider Provider, root, value *yaml.Node, p
 		return fmt.Errorf("%v: field not recognised", path[0])
 	}
 
-	foundNode, err := getFieldFromMapping(path[0], root)
+	foundNode, err := getFieldFromMapping(path[0], true, root)
 	if err != nil {
 		return err
 	}
@@ -81,7 +87,7 @@ func setYAMLPathCore(docsProvider Provider, coreType Type, root, value *yaml.Nod
 	if docsProvider == nil {
 		docsProvider = globalProvider
 	}
-	foundNode, err := getFieldFromMapping(path[0], root)
+	foundNode, err := getFieldFromMapping(path[0], true, root)
 	if err != nil {
 		return err
 	}
@@ -117,7 +123,7 @@ func (f FieldSpec) SetYAMLPath(docsProvider Provider, root, value *yaml.Node, pa
 			}}
 			return nil
 		}
-		target, err := getIndexFromSequence(path[0], root)
+		target, err := getIndexFromSequence(path[0], true, root)
 		if err != nil {
 			return err
 		}
@@ -131,7 +137,7 @@ func (f FieldSpec) SetYAMLPath(docsProvider Provider, root, value *yaml.Node, pa
 			root.Content = []*yaml.Node{value}
 			return nil
 		}
-		target, err := getIndexFromSequence(path[0], root)
+		target, err := getIndexFromSequence(path[0], true, root)
 		if err != nil {
 			return err
 		}
@@ -143,7 +149,7 @@ func (f FieldSpec) SetYAMLPath(docsProvider Provider, root, value *yaml.Node, pa
 		if len(path) == 0 {
 			return errors.New("cannot set map directly")
 		}
-		target, err := getFieldFromMapping(path[0], root)
+		target, err := getFieldFromMapping(path[0], true, root)
 		if err != nil {
 			return err
 		}
@@ -166,4 +172,34 @@ func (f FieldSpec) SetYAMLPath(docsProvider Provider, root, value *yaml.Node, pa
 		return f.Children.SetYAMLPath(docsProvider, root, value, path...)
 	}
 	return fmt.Errorf("%v: field not recognised", path[0])
+}
+
+// GetYAMLPath attempts to obtain a specific value within a YAML tree by
+// following a sequence of path identifiers.
+func GetYAMLPath(root *yaml.Node, path ...string) (*yaml.Node, error) {
+	root = unwrapDocumentNode(root)
+
+	if len(path) == 0 {
+		return root, nil
+	}
+
+	if root.Kind == yaml.SequenceNode {
+		newRoot, err := getIndexFromSequence(path[0], false, root)
+		if err != nil {
+			return nil, err
+		}
+		if newRoot, err = GetYAMLPath(newRoot, path[1:]...); err != nil {
+			return nil, fmt.Errorf("%v.%w", path[0], err)
+		}
+		return newRoot, nil
+	}
+
+	newRoot, err := getFieldFromMapping(path[0], false, root)
+	if err != nil {
+		return nil, err
+	}
+	if newRoot, err = GetYAMLPath(newRoot, path[1:]...); err != nil {
+		return nil, fmt.Errorf("%v.%w", path[0], err)
+	}
+	return newRoot, nil
 }

@@ -65,7 +65,7 @@ func (d Definition) execute(filepath string, resourcesPaths []string, logger log
 	if d.Parallel {
 		// Warm the cache of processor configs.
 		for _, c := range d.Cases {
-			if _, err := procsProvider.getConfs(c.TargetProcessors, c.Environment); err != nil {
+			if _, err := procsProvider.getConfs(c.TargetProcessors, c.Environment, c.Mocks); err != nil {
 				return nil, err
 			}
 		}

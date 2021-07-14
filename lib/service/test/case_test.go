@@ -23,6 +23,13 @@ func (m mockProvider) Provide(ptr string, env map[string]string) ([]types.Proces
 	return nil, errors.New("processors not found")
 }
 
+func (m mockProvider) ProvideMocked(ptr string, env map[string]string, mocks map[string]yaml.Node) ([]types.Processor, error) {
+	if procs, ok := m[ptr]; ok {
+		return procs, nil
+	}
+	return nil, errors.New("processors not found")
+}
+
 func (m mockProvider) ProvideBloblang(name string) ([]types.Processor, error) {
 	if procs, ok := m[name]; ok {
 		return procs, nil
