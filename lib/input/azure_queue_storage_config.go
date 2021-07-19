@@ -27,6 +27,7 @@ This input adds the following metadata fields to each message:
 
 ` + "```" + `
 - queue_storage_insertion_time
+- queue_storage_message_lag
 - All user defined queue metadata
 ` + "```" + `
 
