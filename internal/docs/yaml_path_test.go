@@ -9,11 +9,56 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
-
-	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 func TestSetYAMLPath(t *testing.T) {
+	mockProv := docs.NewMappedDocsProvider()
+	mockProv.RegisterDocs(docs.ComponentSpec{
+		Name: "kafka",
+		Type: docs.TypeInput,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("addresses", "").Array(),
+			docs.FieldString("topics", "").Array(),
+		),
+	})
+	mockProv.RegisterDocs(docs.ComponentSpec{
+		Name: "generate",
+		Type: docs.TypeInput,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("mapping", ""),
+		),
+	})
+	mockProv.RegisterDocs(docs.ComponentSpec{
+		Name: "dynamic",
+		Type: docs.TypeInput,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldCommon("inputs", "").HasType(docs.FieldTypeInput).Map(),
+		),
+	})
+	mockProv.RegisterDocs(docs.ComponentSpec{
+		Name: "nats",
+		Type: docs.TypeOutput,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("urls", "").Array(),
+			docs.FieldString("subject", ""),
+			docs.FieldInt("max_in_flight", ""),
+		),
+	})
+	mockProv.RegisterDocs(docs.ComponentSpec{
+		Name: "compress",
+		Type: docs.TypeProcessor,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("algorithm", ""),
+		),
+	})
+	mockProv.RegisterDocs(docs.ComponentSpec{
+		Name: "workflow",
+		Type: docs.TypeProcessor,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("order", "").ArrayOfArrays(),
+		),
+	})
+
 	tests := []struct {
 		name        string
 		input       string
@@ -38,11 +83,11 @@ output:
 `,
 			path: "/input",
 			value: `
-bloblang:
+generate:
   mapping: 'root = {"foo":"bar"}'`,
 			output: `
 input:
-  bloblang:
+  generate:
     mapping: 'root = {"foo":"bar"}'
 output:
   nats:
@@ -253,7 +298,7 @@ pipeline:
 			path, err := gabs.JSONPointerToSlice(test.path)
 			require.NoError(t, err)
 
-			err = config.Spec().SetYAMLPath(nil, &input, &value, path...)
+			err = config.Spec().SetYAMLPath(mockProv, &input, &value, path...)
 			if len(test.errContains) > 0 {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.errContains)
@@ -342,6 +387,201 @@ input:
 				require.NoError(t, yaml.Unmarshal([]byte(test.output), &expected))
 				assert.Equal(t, expected, actual)
 			}
+		})
+	}
+}
+
+func TestYAMLLabelsToPath(t *testing.T) {
+	mockProv := docs.NewMappedDocsProvider()
+	mockProv.RegisterDocs(docs.ComponentSpec{
+		Name: "kafka",
+		Type: docs.TypeInput,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("addresses", "").Array(),
+			docs.FieldString("topics", "").Array(),
+		),
+	})
+	mockProv.RegisterDocs(docs.ComponentSpec{
+		Name: "dynamic",
+		Type: docs.TypeInput,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldCommon("inputs", "").HasType(docs.FieldTypeInput).Map(),
+		),
+	})
+	mockProv.RegisterDocs(docs.ComponentSpec{
+		Name: "nats",
+		Type: docs.TypeOutput,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("urls", "").Array(),
+			docs.FieldString("subject", ""),
+			docs.FieldInt("max_in_flight", ""),
+		),
+	})
+	mockProv.RegisterDocs(docs.ComponentSpec{
+		Name: "compress",
+		Type: docs.TypeProcessor,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("algorithm", ""),
+		),
+	})
+	mockProv.RegisterDocs(docs.ComponentSpec{
+		Name: "for_each",
+		Type: docs.TypeProcessor,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldCommon("things", "").HasType(docs.FieldTypeProcessor).Array(),
+		),
+	})
+	mockProv.RegisterDocs(docs.ComponentSpec{
+		Name: "mega_for_each",
+		Type: docs.TypeProcessor,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldCommon("things", "").HasType(docs.FieldTypeProcessor).ArrayOfArrays(),
+		),
+	})
+	mockProv.RegisterDocs(docs.ComponentSpec{
+		Name: "workflow",
+		Type: docs.TypeProcessor,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldCommon("things", "").HasType(docs.FieldTypeProcessor).Map(),
+		),
+	})
+
+	tests := []struct {
+		name   string
+		input  string
+		output map[string][]string
+	}{
+		{
+			name: "no labels",
+			input: `
+input:
+  kafka:
+    addresses: [ "foo", "bar" ]
+    topics: [ "baz" ]
+
+output:
+  nats:
+    urls: [ nats://127.0.0.1:4222 ]
+    subject: benthos_messages
+    max_in_flight: 1
+`,
+			output: map[string][]string{},
+		},
+		{
+			name: "basic components all with labels",
+			input: `
+input:
+  label: fooinput
+  kafka:
+    addresses: [ "foo", "bar" ]
+    topics: [ "baz" ]
+
+pipeline:
+  processors:
+    - label: fooproc1
+      compress:
+        algorithm: nahm8
+
+output:
+  label: foooutput
+  nats:
+    urls: [ nats://127.0.0.1:4222 ]
+    subject: benthos_messages
+    max_in_flight: 1
+`,
+			output: map[string][]string{
+				"fooinput":  {"input"},
+				"fooproc1":  {"pipeline", "processors", "0"},
+				"foooutput": {"output"},
+			},
+		},
+		{
+			name: "Array of procs",
+			input: `
+pipeline:
+  processors:
+    - label: fooproc1
+      for_each:
+        things:
+        - label: fooproc2
+          compress:
+            algorithm: nahm8
+        - label: fooproc3
+          compress:
+            algorithm: nahm8
+`,
+			output: map[string][]string{
+				"fooproc1": {"pipeline", "processors", "0"},
+				"fooproc2": {"pipeline", "processors", "0", "for_each", "things", "0"},
+				"fooproc3": {"pipeline", "processors", "0", "for_each", "things", "1"},
+			},
+		},
+		{
+			name: "array of array of procs",
+			input: `
+pipeline:
+  processors:
+    - label: fooproc1
+      mega_for_each:
+        things:
+        -
+          - label: fooproc2
+            compress:
+              algorithm: nahm8
+          - label: fooproc3
+            compress:
+              algorithm: nahm8
+        -
+          - label: fooproc4
+            compress:
+              algorithm: nahm8
+`,
+			output: map[string][]string{
+				"fooproc1": {"pipeline", "processors", "0"},
+				"fooproc2": {"pipeline", "processors", "0", "mega_for_each", "things", "0", "0"},
+				"fooproc3": {"pipeline", "processors", "0", "mega_for_each", "things", "0", "1"},
+				"fooproc4": {"pipeline", "processors", "0", "mega_for_each", "things", "1", "0"},
+			},
+		},
+		{
+			name: "map of procs",
+			input: `
+pipeline:
+  processors:
+    - label: fooproc1
+      workflow:
+        things:
+          first:
+            label: fooproc2
+            compress:
+              algorithm: nahm8
+          second:
+            label: fooproc3
+            compress:
+              algorithm: nahm8
+          third:
+            label: fooproc4
+            compress:
+              algorithm: nahm8
+`,
+			output: map[string][]string{
+				"fooproc1": {"pipeline", "processors", "0"},
+				"fooproc2": {"pipeline", "processors", "0", "workflow", "things", "first"},
+				"fooproc3": {"pipeline", "processors", "0", "workflow", "things", "second"},
+				"fooproc4": {"pipeline", "processors", "0", "workflow", "things", "third"},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var input yaml.Node
+			require.NoError(t, yaml.Unmarshal([]byte(test.input), &input))
+
+			paths := map[string][]string{}
+
+			config.Spec().YAMLLabelsToPaths(mockProv, &input, paths, nil)
+			assert.Equal(t, test.output, paths)
 		})
 	}
 }

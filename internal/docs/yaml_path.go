@@ -203,3 +203,75 @@ func GetYAMLPath(root *yaml.Node, path ...string) (*yaml.Node, error) {
 	}
 	return newRoot, nil
 }
+
+//------------------------------------------------------------------------------
+
+// YAMLLabelsToPaths walks a YAML tree using a field spec as a reference point.
+// When a component of the YAML tree has a label field it is added to the
+// provided labelsToPaths map with the path to the component.
+func (f FieldSpecs) YAMLLabelsToPaths(docsProvider Provider, node *yaml.Node, labelsToPaths map[string][]string, path []string) {
+	node = unwrapDocumentNode(node)
+
+	fieldMap := map[string]FieldSpec{}
+	for _, spec := range f {
+		fieldMap[spec.Name] = spec
+	}
+
+	for i := 0; i < len(node.Content)-1; i += 2 {
+		key := node.Content[i].Value
+		if spec, exists := fieldMap[key]; exists {
+			spec.YAMLLabelsToPaths(docsProvider, node.Content[i+1], labelsToPaths, append(path, key))
+		}
+	}
+}
+
+// YAMLLabelsToPaths walks a YAML tree using a field spec as a reference point.
+// When a component of the YAML tree has a label field it is added to the
+// provided labelsToPaths map with the path to the component.
+func (f FieldSpec) YAMLLabelsToPaths(docsProvider Provider, node *yaml.Node, labelsToPaths map[string][]string, path []string) {
+	node = unwrapDocumentNode(node)
+
+	switch f.Kind {
+	case Kind2DArray:
+		nextSpec := f.Array()
+		for i, child := range node.Content {
+			nextSpec.YAMLLabelsToPaths(docsProvider, child, labelsToPaths, append(path, strconv.Itoa(i)))
+		}
+	case KindArray:
+		nextSpec := f.Scalar()
+		for i, child := range node.Content {
+			nextSpec.YAMLLabelsToPaths(docsProvider, child, labelsToPaths, append(path, strconv.Itoa(i)))
+		}
+	case KindMap:
+		nextSpec := f.Scalar()
+		for i, child := range node.Content {
+			nextSpec.YAMLLabelsToPaths(docsProvider, child, labelsToPaths, append(path, strconv.Itoa(i)))
+		}
+		for i := 0; i < len(node.Content)-1; i += 2 {
+			key := node.Content[i].Value
+			nextSpec.YAMLLabelsToPaths(docsProvider, node.Content[i+1], labelsToPaths, append(path, key))
+		}
+	default:
+		if coreType, isCore := f.Type.IsCoreComponent(); isCore {
+			if docsProvider == nil {
+				docsProvider = globalProvider
+			}
+			coreFields := FieldSpecs{}
+			for _, f := range reservedFieldsByType(coreType) {
+				coreFields = append(coreFields, f)
+			}
+			if inferred, cSpec, err := GetInferenceCandidateFromYAML(docsProvider, coreType, "", node); err == nil {
+				conf := cSpec.Config
+				conf.Name = inferred
+				coreFields = append(coreFields, conf)
+			}
+			coreFields.YAMLLabelsToPaths(docsProvider, node, labelsToPaths, path)
+		} else if len(f.Children) > 0 {
+			f.Children.YAMLLabelsToPaths(docsProvider, node, labelsToPaths, path)
+		} else if f.Name == labelField.Name && f.Description == labelField.Description {
+			pathCopy := make([]string, len(path)-1)
+			copy(pathCopy, path[:len(path)-1])
+			labelsToPaths[node.Value] = pathCopy // Add path to the parent node
+		}
+	}
+}

@@ -198,6 +198,8 @@ In order to execute all tests of a directory simply point `test` to that directo
 
 ## Mocking Processors
 
+BETA: This feature is currently in a BETA phase, which means breaking changes could be made if a fundamental issue with the feature is found.
+
 Sometimes you'll want to write tests for a series of processors, where one or more of them are networked (or otherwise stateful). Rather than creating and managing mocked services you can define mock versions of those processors in the test definition. For example, if we have a config with the following processors:
 
 ```yaml
