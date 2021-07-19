@@ -81,7 +81,15 @@ benthos -c ./config.yaml
 Or, with docker:
 
 ```shell
+# Using a config file
 docker run --rm -v /path/to/your/config.yaml:/benthos.yaml jeffail/benthos
+
+# Using a series of -s flags
+docker run --rm -p 4195:4195 jeffail/benthos \
+  -s "input.type=http_server" \
+  -s "output.type=kafka" \
+  -s "output.kafka.addresses=kafka-server:9092" \
+  -s "output.kafka.topic=benthos_topic"
 ```
 
 ## Monitoring
