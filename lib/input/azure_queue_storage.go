@@ -88,6 +88,7 @@ func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg types.Mess
 			part := message.NewPart([]byte(queueMsg.Text))
 			meta := part.Metadata()
 			meta.Set("queue_storage_insertion_time", queueMsg.InsertionTime.Format(time.RFC3339))
+			meta.Set("queue_storage_queue_name", a.conf.QueueName)
 			msgLag := 0
 			if approxMsgCount >= n {
 				msgLag = int(approxMsgCount - n)
