@@ -40,6 +40,7 @@ output:
     bucket: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     content_type: application/octet-stream
+    mode: overwrite
     max_in_flight: 1
     batching:
       count: 0
@@ -59,6 +60,7 @@ output:
     bucket: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     content_type: application/octet-stream
+    mode: overwrite
     content_encoding: ""
     chunk_size: 16777216
     max_in_flight: 1
@@ -174,6 +176,15 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `"application/octet-stream"`  
+
+### `mode`
+
+Write mode for the output, must be one of the following: Append, Overwrite, ErrorIfExists, IgnoreIfExists. The pipeline will throw an error if the mode is ErrorIfExists and the output file already exists. The pipeline will skip writing the message if the mode is IgnoreIfExists and output file already exists.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `"overwrite"`  
 
 ### `content_encoding`
 
