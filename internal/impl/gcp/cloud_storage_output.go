@@ -3,7 +3,7 @@ package gcp
 import (
 	"context"
 	"fmt"
-	"path/filepath"
+	"path"
 	"sync"
 	"time"
 
@@ -110,6 +110,7 @@ output:
 				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
 			).IsInterpolated(),
 			docs.FieldCommon("content_type", "The content type to set for each object.").IsInterpolated(),
+			docs.FieldCommon("mode", "Write mode for the output, must be one of the following: Append, Overwrite, ErrorIfExists, IgnoreIfExists. The pipeline will throw an error if the mode is ErrorIfExists and the output file already exists. The pipeline will skip writing the message if the mode is IgnoreIfExists and output file already exists.").IsInterpolated(),
 			docs.FieldAdvanced("content_encoding", "An optional content encoding to set for each object.").IsInterpolated(),
 			docs.FieldAdvanced("chunk_size", "An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
@@ -193,23 +194,30 @@ func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg types.
 			return nil
 		})
 
-		path := g.path.String(i, msg)
-		_, err := client.Bucket(g.conf.Bucket).Object(path).Attrs(ctx)
+		outputPath := g.path.String(i, msg)
+		_, err := client.Bucket(g.conf.Bucket).Object(outputPath).Attrs(ctx)
 
 		isMerge := false
 		var tempPath string
-		if err == storage.ErrObjectNotExist {
-			tempPath = path
+		if err == storage.ErrObjectNotExist || g.conf.IsOverwriteMode() {
+			tempPath = outputPath
 		} else {
 			isMerge = true
+
+			if g.conf.IsErrorIfExistsMode() {
+				return fmt.Errorf("file at path already exists: %s", outputPath)
+			} else if g.conf.IsIgnoreIfExistsMode() {
+				return nil
+			}
+
 			tempUUID, err := uuid.NewV4()
 			if err != nil {
 				return err
 			}
 
-			dir := filepath.Dir(path)
+			dir := path.Dir(outputPath)
 			tempFileName := fmt.Sprintf("%s.tmp", tempUUID.String())
-			tempPath = filepath.Join(dir, tempFileName)
+			tempPath = path.Join(dir, tempFileName)
 		}
 
 		w := client.Bucket(g.conf.Bucket).Object(tempPath).NewWriter(ctx)
@@ -229,7 +237,7 @@ func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg types.
 		}
 
 		if isMerge {
-			err = g.appendToFile(path, tempPath, path)
+			err = g.appendToFile(outputPath, tempPath, outputPath)
 			if err != nil {
 				return err
 			}
