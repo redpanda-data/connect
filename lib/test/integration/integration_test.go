@@ -21,3 +21,10 @@ func TestIntegration(t *testing.T) {
 		t.Run(k, test)
 	}
 }
+
+func BenchmarkIntegration(b *testing.B) {
+	for k, test := range registeredIntegrationBenchmarks {
+		test := test
+		b.Run(k, test)
+	}
+}

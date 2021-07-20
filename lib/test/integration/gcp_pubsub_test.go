@@ -69,7 +69,7 @@ input:
 		testOptSleepAfterInput(100 * time.Millisecond),
 		testOptSleepAfterOutput(100 * time.Millisecond),
 		testOptTimeout(time.Minute * 5),
-		testOptPreTest(func(t *testing.T, env *testEnvironment) {
+		testOptPreTest(func(t testing.TB, env *testEnvironment) {
 			client, err := pubsub.NewClient(env.ctx, "benthos-test-project")
 			require.NoError(t, err)
 

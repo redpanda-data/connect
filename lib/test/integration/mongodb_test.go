@@ -120,7 +120,7 @@ output:
 		suite.Run(
 			t, template,
 			testOptPort(resource.GetPort("27017/tcp")),
-			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+			testOptPreTest(func(t testing.TB, env *testEnvironment) {
 				cName := generateCollectionName(env.configVars.id)
 				env.configVars.var1 = cName
 				require.NoError(t, createCollection(resource, cName, "mongoadmin", "secret"))

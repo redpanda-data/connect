@@ -77,7 +77,7 @@ output:
 		suite.Run(
 			t, template,
 			testOptPort(resource.GetPort("9042/tcp")),
-			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+			testOptPreTest(func(t testing.TB, env *testEnvironment) {
 				env.configVars.id = strings.ReplaceAll(env.configVars.id, "-", "")
 				require.NoError(t, session.Query(
 					fmt.Sprintf(
@@ -122,7 +122,7 @@ output:
 		suite.Run(
 			t, template,
 			testOptPort(resource.GetPort("9042/tcp")),
-			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+			testOptPreTest(func(t testing.TB, env *testEnvironment) {
 				env.configVars.id = strings.ReplaceAll(env.configVars.id, "-", "")
 				require.NoError(t, session.Query(
 					fmt.Sprintf(

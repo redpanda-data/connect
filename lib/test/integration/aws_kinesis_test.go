@@ -106,7 +106,7 @@ input:
 	t.Run("with static shards", func(t *testing.T) {
 		suite.Run(
 			t, template,
-			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+			testOptPreTest(func(t testing.TB, env *testEnvironment) {
 				streamName := "stream-" + env.configVars.id
 				env.configVars.var1 = fmt.Sprintf(":0,%v:1", streamName)
 				require.NoError(t, createKinesisShards(env.ctx, resource.GetPort("4566/tcp"), env.configVars.id, 2))
@@ -120,7 +120,7 @@ input:
 	t.Run("with balanced shards", func(t *testing.T) {
 		suite.Run(
 			t, template,
-			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+			testOptPreTest(func(t testing.TB, env *testEnvironment) {
 				require.NoError(t, createKinesisShards(env.ctx, resource.GetPort("4566/tcp"), env.configVars.id, 2))
 			}),
 			testOptPort(resource.GetPort("4566/tcp")),
@@ -134,7 +134,7 @@ input:
 			integrationTestCheckpointCapture(),
 		).Run(
 			t, template,
-			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+			testOptPreTest(func(t testing.TB, env *testEnvironment) {
 				require.NoError(t, createKinesisShards(env.ctx, resource.GetPort("4566/tcp"), env.configVars.id, 1))
 			}),
 			testOptPort(resource.GetPort("4566/tcp")),

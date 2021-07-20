@@ -96,7 +96,7 @@ input:
 			integrationTestStreamIsolated(10),
 		).Run(
 			t, template,
-			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+			testOptPreTest(func(t testing.TB, env *testEnvironment) {
 				require.NoError(t, createGCPCloudStorageBucket(env.configVars.var1, env.configVars.id))
 			}),
 			testOptVarOne(dummyBucketPrefix),
