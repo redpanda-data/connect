@@ -41,8 +41,10 @@ type ElasticsearchConfig struct {
 	Sniff          bool                 `json:"sniff" yaml:"sniff"`
 	Healthcheck    bool                 `json:"healthcheck" yaml:"healthcheck"`
 	ID             string               `json:"id" yaml:"id"`
+	Action         string               `json:"action" yaml:"action"`
 	Index          string               `json:"index" yaml:"index"`
 	Pipeline       string               `json:"pipeline" yaml:"pipeline"`
+	RoutingKey     string               `json:"routing_key" yaml:"routing_key"`
 	Type           string               `json:"type" yaml:"type"`
 	Timeout        string               `json:"timeout" yaml:"timeout"`
 	TLS            btls.Config          `json:"tls" yaml:"tls"`
@@ -64,10 +66,12 @@ func NewElasticsearchConfig() ElasticsearchConfig {
 		URLs:        []string{"http://localhost:9200"},
 		Sniff:       true,
 		Healthcheck: true,
+		Action:      "index",
 		ID:          `${!count("elastic_ids")}-${!timestamp_unix()}`,
 		Index:       "benthos_index",
 		Pipeline:    "",
 		Type:        "doc",
+		RoutingKey:  "",
 		Timeout:     "5s",
 		TLS:         btls.NewConfig(),
 		Auth:        auth.NewBasicAuthConfig(),
@@ -97,9 +101,11 @@ type Elasticsearch struct {
 	timeout     time.Duration
 	tlsConf     *tls.Config
 
-	idStr       *field.Expression
-	indexStr    *field.Expression
-	pipelineStr *field.Expression
+	actionStr     *field.Expression
+	idStr         *field.Expression
+	indexStr      *field.Expression
+	pipelineStr   *field.Expression
+	routingKeyStr *field.Expression
 
 	eJSONErr metrics.StatCounter
 
@@ -118,6 +124,9 @@ func NewElasticsearch(conf ElasticsearchConfig, log log.Modular, stats metrics.T
 	}
 
 	var err error
+	if e.actionStr, err = bloblang.NewField(conf.Action); err != nil {
+		return nil, fmt.Errorf("failed to parse action expression: %v", err)
+	}
 	if e.idStr, err = bloblang.NewField(conf.ID); err != nil {
 		return nil, fmt.Errorf("failed to parse id expression: %v", err)
 	}
@@ -126,6 +135,9 @@ func NewElasticsearch(conf ElasticsearchConfig, log log.Modular, stats metrics.T
 	}
 	if e.pipelineStr, err = bloblang.NewField(conf.Pipeline); err != nil {
 		return nil, fmt.Errorf("failed to parse pipeline expression: %v", err)
+	}
+	if e.routingKeyStr, err = bloblang.NewField(conf.RoutingKey); err != nil {
+		return nil, fmt.Errorf("failed to parse routing key expression: %v", err)
 	}
 
 	for _, u := range conf.URLs {
@@ -223,10 +235,12 @@ func shouldRetry(s int) bool {
 }
 
 type pendingBulkIndex struct {
-	Index    string
-	Pipeline string
-	Type     string
-	Doc      interface{}
+	Action     string
+	Index      string
+	Pipeline   string
+	RoutingKey string
+	Type       string
+	Doc        interface{}
 }
 
 // WriteWithContext will attempt to write a message to Elasticsearch, wait for
@@ -270,24 +284,53 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 			return nil
 		}
 		requests[e.idStr.String(i, msg)] = &pendingBulkIndex{
-			Index:    e.indexStr.String(i, msg),
-			Pipeline: e.pipelineStr.String(i, msg),
-			Type:     e.conf.Type,
-			Doc:      jObj,
+			Action:     e.actionStr.String(i, msg),
+			Index:      e.indexStr.String(i, msg),
+			Pipeline:   e.pipelineStr.String(i, msg),
+			RoutingKey: e.routingKeyStr.String(i, msg),
+			Type:       e.conf.Type,
+			Doc:        jObj,
 		}
 		return nil
 	})
 
 	b := e.client.Bulk()
 	for k, v := range requests {
-		b.Add(
-			elastic.NewBulkIndexRequest().
-				Index(v.Index).
-				Pipeline(v.Pipeline).
-				Type(v.Type).
-				Id(k).
-				Doc(v.Doc),
-		)
+		var req elastic.BulkableRequest
+		
+		switch v.Action {
+		case "create":
+			req = (
+				elastic.NewBulkCreateRequest().
+					Index(v.Index).
+					Pipeline(v.Pipeline).
+					RoutingKey(v.RoutingKey).
+					Type(v.Type).
+					Id(k).
+					Doc(v.Doc),
+			)
+		case "delete":
+			req = (
+				elastic.NewBulkDeleteRequest().
+					Index(v.Index).
+					Pipeline(v.Pipeline).
+					RoutingKey(v.RoutingKey).
+					Id(k).
+					Type(v.Type),
+			)
+		default:
+			req = (
+				elastic.NewBulkIndexRequest().
+					Index(v.Index).
+					Pipeline(v.Pipeline).
+					RoutingKey(v.RoutingKey).
+					Type(v.Type).
+					Id(k).
+					Doc(v.Doc),
+			)
+		}
+
+		b.Add(req)
 	}
 
 	for b.NumberOfActions() != 0 {
