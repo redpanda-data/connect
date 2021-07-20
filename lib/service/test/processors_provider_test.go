@@ -429,6 +429,100 @@ pipeline:
 	assert.Equal(t, "starts with first mock first proc second mock second proc", string(msgs[0].Get(0).Get()))
 }
 
+func TestProcessorsProviderMocksFromLabel(t *testing.T) {
+	files := map[string]string{
+		"config1.yaml": `
+pipeline:
+  processors:
+    - label: first_http
+      http:
+        url: http://example.com/foobar
+        verb: POST
+    - bloblang: 'root = content().string() + " first proc"'
+    - label: second_http
+      http:
+        url: http://example.com/barbaz
+        verb: POST
+    - bloblang: 'root = content().string() + " second proc"'
+`,
+	}
+
+	testDir, err := initTestFiles(files)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(testDir)
+	})
+
+	mocks := map[string]yaml.Node{}
+	require.NoError(t, yaml.Unmarshal([]byte(`
+"first_http":
+  bloblang: 'root = content().string() + " first mock"'
+"second_http":
+  bloblang: 'root = content().string() + " second mock"'
+`), &mocks))
+
+	provider := test.NewProcessorsProvider(filepath.Join(testDir, "config1.yaml"))
+	procs, err := provider.ProvideMocked("/pipeline/processors", nil, mocks)
+	require.NoError(t, err)
+
+	require.Len(t, procs, 4)
+
+	msgs, res := processor.ExecuteAll(procs, message.New([][]byte{[]byte("starts with")}))
+	require.Nil(t, res)
+	require.Len(t, msgs, 1)
+	require.Equal(t, 1, msgs[0].Len())
+
+	assert.Equal(t, "starts with first mock first proc second mock second proc", string(msgs[0].Get(0).Get()))
+}
+
+func TestProcessorsProviderMocksMixed(t *testing.T) {
+	files := map[string]string{
+		"config1.yaml": `
+pipeline:
+  processors:
+    - label: first_http
+      http:
+        url: http://example.com/foobar
+        verb: POST
+    - bloblang: 'root = content().string() + " first proc"'
+    - label: second_http
+      http:
+        url: http://example.com/barbaz
+        verb: POST
+    - bloblang: 'root = content().string() + " second proc"'
+`,
+	}
+
+	testDir, err := initTestFiles(files)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(testDir)
+	})
+
+	mocks := map[string]yaml.Node{}
+	require.NoError(t, yaml.Unmarshal([]byte(`
+"first_http":
+  bloblang: 'root = content().string() + " first mock"'
+"/pipeline/processors/2":
+  bloblang: 'root = content().string() + " second mock"'
+`), &mocks))
+
+	provider := test.NewProcessorsProvider(filepath.Join(testDir, "config1.yaml"))
+	procs, err := provider.ProvideMocked("/pipeline/processors", nil, mocks)
+	require.NoError(t, err)
+
+	require.Len(t, procs, 4)
+
+	msgs, res := processor.ExecuteAll(procs, message.New([][]byte{[]byte("starts with")}))
+	require.Nil(t, res)
+	require.Len(t, msgs, 1)
+	require.Equal(t, 1, msgs[0].Len())
+
+	assert.Equal(t, "starts with first mock first proc second mock second proc", string(msgs[0].Get(0).Get()))
+}
+
 func TestProcessorsExtraResources(t *testing.T) {
 	files := map[string]string{
 		"resources1.yaml": `

@@ -1,8 +1,7 @@
 pipeline:
   processors:
     - bloblang: 'root = "simon says: " + content()'
-    - label: get_foobar_api
-      http:
+    - http:
         url: http://example.com/foobar
         verb: GET
     - bloblang: 'root = content().uppercase()'
@@ -10,7 +9,7 @@ pipeline:
 tests:
   - name: mocks the http proc
     mocks:
-      get_foobar_api:
+      /pipeline/processors/1:
         bloblang: 'root = content().string() + " this is some mock content"'
     input_batch:
       - content: "hello world"
@@ -19,7 +18,7 @@ tests:
 
   - name: mocks the http proc and also adds another processor to expose error
     mocks:
-      get_foobar_api:
+      /pipeline/processors/1:
         bloblang: 'root = throw("the processor failed")'
       /pipeline/processors/-:
         bloblang: |

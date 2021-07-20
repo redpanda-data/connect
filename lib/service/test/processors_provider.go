@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
@@ -209,6 +210,11 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 	cleanupEnv := setEnvironment(environment)
 	defer cleanupEnv()
 
+	remainingMocks := map[string]yaml.Node{}
+	for k, v := range mocks {
+		remainingMocks[k] = v
+	}
+
 	configBytes, err := config.ReadWithJSONPointers(targetPath, true)
 	if err != nil {
 		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
@@ -240,13 +246,35 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
 	}
 
-	for k, v := range mocks {
+	// Replace mock components, starting with all absolute paths in JSON pointer
+	// form, then parsing remaining mock targets as label names.
+	confSpec := config.Spec()
+	for k, v := range remainingMocks {
+		if !strings.HasPrefix(k, "/") {
+			continue
+		}
 		mockPathSlice, err := gabs.JSONPointerToSlice(k)
 		if err != nil {
 			return confs, fmt.Errorf("failed to parse mock path '%v': %w", k, err)
 		}
-		if err = config.Spec().SetYAMLPath(nil, root, &v, mockPathSlice...); err != nil {
+		if err = confSpec.SetYAMLPath(nil, root, &v, mockPathSlice...); err != nil {
 			return confs, fmt.Errorf("failed to set mock '%v': %w", k, err)
+		}
+		delete(remainingMocks, k)
+	}
+
+	if len(remainingMocks) > 0 {
+		labelsToPaths := map[string][]string{}
+		confSpec.YAMLLabelsToPaths(nil, root, labelsToPaths, nil)
+		for k, v := range remainingMocks {
+			mockPathSlice, exists := labelsToPaths[k]
+			if !exists {
+				return confs, fmt.Errorf("mock for label '%v' could not be applied as the label was not found in the test target file, it is not currently possible to mock resources imported separate to the test file", k)
+			}
+			if err = confSpec.SetYAMLPath(nil, root, &v, mockPathSlice...); err != nil {
+				return confs, fmt.Errorf("failed to set mock '%v': %w", k, err)
+			}
+			delete(remainingMocks, k)
 		}
 	}
 
