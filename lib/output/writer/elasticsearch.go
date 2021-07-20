@@ -44,7 +44,7 @@ type ElasticsearchConfig struct {
 	Action         string               `json:"action" yaml:"action"`
 	Index          string               `json:"index" yaml:"index"`
 	Pipeline       string               `json:"pipeline" yaml:"pipeline"`
-	RoutingKey     string               `json:"routing_key" yaml:"routing_key"`
+	Routing        string               `json:"routing" yaml:"routing"`
 	Type           string               `json:"type" yaml:"type"`
 	Timeout        string               `json:"timeout" yaml:"timeout"`
 	TLS            btls.Config          `json:"tls" yaml:"tls"`
@@ -71,7 +71,7 @@ func NewElasticsearchConfig() ElasticsearchConfig {
 		Index:       "benthos_index",
 		Pipeline:    "",
 		Type:        "doc",
-		RoutingKey:  "",
+		Routing:     "",
 		Timeout:     "5s",
 		TLS:         btls.NewConfig(),
 		Auth:        auth.NewBasicAuthConfig(),
@@ -101,11 +101,11 @@ type Elasticsearch struct {
 	timeout     time.Duration
 	tlsConf     *tls.Config
 
-	actionStr     *field.Expression
-	idStr         *field.Expression
-	indexStr      *field.Expression
-	pipelineStr   *field.Expression
-	routingKeyStr *field.Expression
+	actionStr   *field.Expression
+	idStr       *field.Expression
+	indexStr    *field.Expression
+	pipelineStr *field.Expression
+	routingStr  *field.Expression
 
 	eJSONErr metrics.StatCounter
 
@@ -136,7 +136,7 @@ func NewElasticsearch(conf ElasticsearchConfig, log log.Modular, stats metrics.T
 	if e.pipelineStr, err = bloblang.NewField(conf.Pipeline); err != nil {
 		return nil, fmt.Errorf("failed to parse pipeline expression: %v", err)
 	}
-	if e.routingKeyStr, err = bloblang.NewField(conf.RoutingKey); err != nil {
+	if e.routingStr, err = bloblang.NewField(conf.Routing); err != nil {
 		return nil, fmt.Errorf("failed to parse routing key expression: %v", err)
 	}
 
@@ -235,12 +235,12 @@ func shouldRetry(s int) bool {
 }
 
 type pendingBulkIndex struct {
-	Action     string
-	Index      string
-	Pipeline   string
-	RoutingKey string
-	Type       string
-	Doc        interface{}
+	Action   string
+	Index    string
+	Pipeline string
+	Routing  string
+	Type     string
+	Doc      interface{}
 }
 
 // WriteWithContext will attempt to write a message to Elasticsearch, wait for
@@ -258,23 +258,6 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 
 	boff := e.backoffCtor()
 
-	if msg.Len() == 1 {
-		index := e.indexStr.String(0, msg)
-		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
-		_, err := e.client.Index().
-			Index(index).
-			Pipeline(e.pipelineStr.String(0, msg)).
-			Type(e.conf.Type).
-			Id(e.idStr.String(0, msg)).
-			BodyString(string(msg.Get(0).Get())).
-			Do(context.Background())
-		if err == nil {
-			// Flush to make sure the document got written.
-			_, err = e.client.Flush().Index(index).Do(context.Background())
-		}
-		return err
-	}
-
 	requests := map[string]*pendingBulkIndex{}
 	msg.Iter(func(i int, part types.Part) error {
 		jObj, ierr := part.JSON()
@@ -284,53 +267,19 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 			return nil
 		}
 		requests[e.idStr.String(i, msg)] = &pendingBulkIndex{
-			Action:     e.actionStr.String(i, msg),
-			Index:      e.indexStr.String(i, msg),
-			Pipeline:   e.pipelineStr.String(i, msg),
-			RoutingKey: e.routingKeyStr.String(i, msg),
-			Type:       e.conf.Type,
-			Doc:        jObj,
+			Action:   e.actionStr.String(i, msg),
+			Index:    e.indexStr.String(i, msg),
+			Pipeline: e.pipelineStr.String(i, msg),
+			Routing:  e.routingStr.String(i, msg),
+			Type:     e.conf.Type,
+			Doc:      jObj,
 		}
 		return nil
 	})
 
 	b := e.client.Bulk()
 	for k, v := range requests {
-		var req elastic.BulkableRequest
-		
-		switch v.Action {
-		case "create":
-			req = (
-				elastic.NewBulkCreateRequest().
-					Index(v.Index).
-					Pipeline(v.Pipeline).
-					RoutingKey(v.RoutingKey).
-					Type(v.Type).
-					Id(k).
-					Doc(v.Doc),
-			)
-		case "delete":
-			req = (
-				elastic.NewBulkDeleteRequest().
-					Index(v.Index).
-					Pipeline(v.Pipeline).
-					RoutingKey(v.RoutingKey).
-					Id(k).
-					Type(v.Type),
-			)
-		default:
-			req = (
-				elastic.NewBulkIndexRequest().
-					Index(v.Index).
-					Pipeline(v.Pipeline).
-					RoutingKey(v.RoutingKey).
-					Type(v.Type).
-					Id(k).
-					Doc(v.Doc),
-			)
-		}
-
-		b.Add(req)
+		b.Add(e.buildBulkableRequest(k, v))
 	}
 
 	for b.NumberOfActions() != 0 {
@@ -353,14 +302,7 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 			e.log.Errorf("Elasticsearch message '%v' failed with code [%s]: %v\n", failed[i].Id, failed[i].Status, failed[i].Error.Reason)
 			id := failed[i].Id
 			req := requests[id]
-			b.Add(
-				elastic.NewBulkIndexRequest().
-					Index(req.Index).
-					Pipeline(req.Pipeline).
-					Type(req.Type).
-					Id(id).
-					Doc(req.Doc),
-			)
+			b.Add(e.buildBulkableRequest(id, req))
 		}
 		if wait == backoff.Stop {
 			return fmt.Errorf("failed to send %v parts from message: %v", len(failed), failed[0].Error.Reason)
@@ -378,6 +320,33 @@ func (e *Elasticsearch) CloseAsync() {
 // WaitForClose blocks until the Elasticsearch writer has closed down.
 func (e *Elasticsearch) WaitForClose(timeout time.Duration) error {
 	return nil
+}
+
+// Build a bulkable request for a given pending bulk index item.
+func (e *Elasticsearch) buildBulkableRequest(id string, p *pendingBulkIndex) elastic.BulkableRequest {
+	switch p.Action {
+	case "update":
+		return elastic.NewBulkUpdateRequest().
+			Index(p.Index).
+			Routing(p.Routing).
+			Type(p.Type).
+			Id(id).
+			Doc(p.Doc)
+	case "delete":
+		return elastic.NewBulkDeleteRequest().
+			Index(p.Index).
+			Routing(p.Routing).
+			Id(id).
+			Type(p.Type)
+	default:
+		return elastic.NewBulkIndexRequest().
+			Index(p.Index).
+			Pipeline(p.Pipeline).
+			Routing(p.Routing).
+			Type(p.Type).
+			Id(id).
+			Doc(p.Doc)
+	}
 }
 
 //------------------------------------------------------------------------------
