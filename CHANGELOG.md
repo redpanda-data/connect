@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- The `redis_streams`, `redis_pubsub` and `redis_list` outputs now all support batching for higher throughput.
+
 ## 3.50.0 - 2021-07-19
 
 ### Added

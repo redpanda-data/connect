@@ -6,9 +6,11 @@ import (
 	"sync"
 	"time"
 
+	ibatch "github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/go-redis/redis/v7"
@@ -19,11 +21,12 @@ import (
 // RedisStreamsConfig contains configuration fields for the RedisStreams output type.
 type RedisStreamsConfig struct {
 	bredis.Config `json:",inline" yaml:",inline"`
-	Stream        string          `json:"stream" yaml:"stream"`
-	BodyKey       string          `json:"body_key" yaml:"body_key"`
-	MaxLenApprox  int64           `json:"max_length" yaml:"max_length"`
-	MaxInFlight   int             `json:"max_in_flight" yaml:"max_in_flight"`
-	Metadata      output.Metadata `json:"metadata" yaml:"metadata"`
+	Stream        string             `json:"stream" yaml:"stream"`
+	BodyKey       string             `json:"body_key" yaml:"body_key"`
+	MaxLenApprox  int64              `json:"max_length" yaml:"max_length"`
+	MaxInFlight   int                `json:"max_in_flight" yaml:"max_in_flight"`
+	Metadata      output.Metadata    `json:"metadata" yaml:"metadata"`
+	Batching      batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewRedisStreamsConfig creates a new RedisStreamsConfig with default values.
@@ -35,6 +38,7 @@ func NewRedisStreamsConfig() RedisStreamsConfig {
 		MaxLenApprox: 0,
 		MaxInFlight:  1,
 		Metadata:     output.NewMetadata(),
+		Batching:     batch.NewPolicyConfig(),
 	}
 }
 
@@ -119,25 +123,60 @@ func (r *RedisStreams) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return IterateBatchedSend(msg, func(i int, p types.Part) error {
+	partToMap := func(p types.Part) map[string]interface{} {
 		values := map[string]interface{}{}
 		r.metaFilter.Iter(p.Metadata(), func(k, v string) error {
 			values[k] = v
 			return nil
 		})
 		values[r.conf.BodyKey] = p.Get()
+		return values
+	}
+
+	if msg.Len() == 1 {
 		if err := client.XAdd(&redis.XAddArgs{
 			ID:           "*",
 			Stream:       r.conf.Stream,
 			MaxLenApprox: r.conf.MaxLenApprox,
-			Values:       values,
+			Values:       partToMap(msg.Get(0)),
 		}).Err(); err != nil {
 			r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
 			return types.ErrNotConnected
 		}
 		return nil
+	}
+
+	pipe := client.Pipeline()
+	msg.Iter(func(i int, p types.Part) error {
+		_ = pipe.XAdd(&redis.XAddArgs{
+			ID:           "*",
+			Stream:       r.conf.Stream,
+			MaxLenApprox: r.conf.MaxLenApprox,
+			Values:       partToMap(p),
+		})
+		return nil
 	})
+	cmders, err := pipe.Exec()
+	if err != nil {
+		r.disconnect()
+		r.log.Errorf("Error from redis: %v\n", err)
+		return types.ErrNotConnected
+	}
+
+	var batchErr *ibatch.Error
+	for i, res := range cmders {
+		if res.Err() != nil {
+			if batchErr == nil {
+				batchErr = ibatch.NewError(msg, res.Err())
+			}
+			batchErr.Failed(i, res.Err())
+		}
+	}
+	if batchErr != nil {
+		return batchErr
+	}
+	return nil
 }
 
 // disconnect safely closes a connection to an RedisStreams server.

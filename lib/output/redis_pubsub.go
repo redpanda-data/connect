@@ -4,6 +4,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/redis"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -20,10 +21,12 @@ guarantee that messages have been received.`,
 		Description: `
 This output will interpolate functions within the channel field, you
 can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`,
-		Async: true,
+		Async:   true,
+		Batches: true,
 		FieldSpecs: redis.ConfigDocs().Add(
 			docs.FieldCommon("channel", "The channel to publish messages to.").IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			batch.FieldSpec(),
 		),
 		Categories: []Category{
 			CategoryServices,
@@ -43,7 +46,7 @@ func NewRedisPubSub(conf Config, mgr types.Manager, log log.Modular, stats metri
 	if err != nil {
 		return nil, err
 	}
-	return OnlySinglePayloads(a), nil
+	return NewBatcherFromConfig(conf.RedisPubSub.Batching, a, mgr, log, stats)
 }
 
 //------------------------------------------------------------------------------

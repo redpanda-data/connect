@@ -6,10 +6,12 @@ import (
 	"sync"
 	"time"
 
+	ibatch "github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/go-redis/redis/v7"
@@ -21,8 +23,9 @@ import (
 // type.
 type RedisPubSubConfig struct {
 	bredis.Config `json:",inline" yaml:",inline"`
-	Channel       string `json:"channel" yaml:"channel"`
-	MaxInFlight   int    `json:"max_in_flight" yaml:"max_in_flight"`
+	Channel       string             `json:"channel" yaml:"channel"`
+	MaxInFlight   int                `json:"max_in_flight" yaml:"max_in_flight"`
+	Batching      batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewRedisPubSubConfig creates a new RedisPubSubConfig with default values.
@@ -31,6 +34,7 @@ func NewRedisPubSubConfig() RedisPubSubConfig {
 		Config:      bredis.NewConfig(),
 		Channel:     "benthos_chan",
 		MaxInFlight: 1,
+		Batching:    batch.NewPolicyConfig(),
 	}
 }
 
@@ -100,11 +104,6 @@ func (r *RedisPubSub) Connect() error {
 // WriteWithContext attempts to write a message by pushing it to a Redis pub/sub
 // topic.
 func (r *RedisPubSub) WriteWithContext(ctx context.Context, msg types.Message) error {
-	return r.Write(msg)
-}
-
-// Write attempts to write a message by pushing it to a Redis pub/sub topic.
-func (r *RedisPubSub) Write(msg types.Message) error {
 	r.connMut.RLock()
 	client := r.client
 	r.connMut.RUnlock()
@@ -113,15 +112,46 @@ func (r *RedisPubSub) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return IterateBatchedSend(msg, func(i int, p types.Part) error {
-		channel := r.channelStr.String(i, msg)
-		if err := client.Publish(channel, p.Get()).Err(); err != nil {
+	if msg.Len() == 1 {
+		channel := r.channelStr.String(0, msg)
+		if err := client.Publish(channel, msg.Get(0).Get()).Err(); err != nil {
 			r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
 			return types.ErrNotConnected
 		}
 		return nil
+	}
+
+	pipe := client.Pipeline()
+	msg.Iter(func(i int, p types.Part) error {
+		_ = pipe.Publish(r.channelStr.String(i, msg), p.Get())
+		return nil
 	})
+	cmders, err := pipe.Exec()
+	if err != nil {
+		r.disconnect()
+		r.log.Errorf("Error from redis: %v\n", err)
+		return types.ErrNotConnected
+	}
+
+	var batchErr *ibatch.Error
+	for i, res := range cmders {
+		if res.Err() != nil {
+			if batchErr == nil {
+				batchErr = ibatch.NewError(msg, res.Err())
+			}
+			batchErr.Failed(i, res.Err())
+		}
+	}
+	if batchErr != nil {
+		return batchErr
+	}
+	return nil
+}
+
+// Write attempts to write a message by pushing it to a Redis pub/sub topic.
+func (r *RedisPubSub) Write(msg types.Message) error {
+	return r.WriteWithContext(context.Background(), msg)
 }
 
 // disconnect safely closes a connection to an RedisPubSub server.

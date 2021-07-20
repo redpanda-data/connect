@@ -40,6 +40,12 @@ output:
       client_certs: []
     channel: benthos_chan
     max_in_flight: 1
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: []
 logger:
   level: INFO
   format: json
