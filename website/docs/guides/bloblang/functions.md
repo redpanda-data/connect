@@ -110,6 +110,12 @@ root.first = random_int()
 root.second = random_int(1)
 ```
 
+It is possible to specify a dynamic seed argument, in which case the argument will only be resolved once during the lifetime of the mapping.
+
+```coffee
+root.first = random_int(timestamp_unix_nano())
+```
+
 ## Message Info
 
 ### `batch_index`

@@ -72,6 +72,7 @@ input:
 			integrationTestMetadata(),
 			integrationTestMetadataFilter(),
 			integrationTestSendBatch(10),
+			integrationTestSendBatches(20, 100, 1),
 			integrationTestStreamSequential(1000),
 			integrationTestStreamParallel(1000),
 			integrationTestStreamParallelLossy(1000),
@@ -115,6 +116,7 @@ input:
 		suite := integrationTests(
 			integrationTestOpenClose(),
 			integrationTestSendBatch(10),
+			integrationTestSendBatches(20, 100, 1),
 			integrationTestStreamSequential(100),
 			integrationTestStreamParallel(100),
 			integrationTestStreamParallelLossy(100),
@@ -157,6 +159,7 @@ input:
 		suite := integrationTests(
 			integrationTestOpenClose(),
 			integrationTestSendBatch(10),
+			integrationTestSendBatches(20, 100, 1),
 			integrationTestStreamSequential(1000),
 			integrationTestStreamParallel(1000),
 			integrationTestStreamParallelLossy(1000),

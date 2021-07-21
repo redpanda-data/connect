@@ -3,6 +3,7 @@ package query
 import (
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -245,4 +246,107 @@ func TestRandomInt(t *testing.T) {
 	for _, v := range tallies {
 		assert.LessOrEqual(t, v, int64(10))
 	}
+
+	// Create a new random_int function with a different seed
+	e, err = InitFunction("random_int", 10)
+	require.NoError(t, err)
+
+	secondTallies := map[int64]int64{}
+
+	for i := 0; i < 100; i++ {
+		res, err := e.Exec(FunctionContext{}.WithValue(i))
+		require.NoError(t, err)
+		require.IsType(t, int64(0), res)
+		secondTallies[res.(int64)]++
+	}
+
+	assert.NotEqual(t, tallies, secondTallies)
+	assert.GreaterOrEqual(t, len(secondTallies), 20)
+	for _, v := range secondTallies {
+		assert.LessOrEqual(t, v, int64(10))
+	}
+}
+
+func TestRandomIntDynamic(t *testing.T) {
+	idFn := NewFieldFunction("")
+
+	e, err := InitFunction("random_int", idFn)
+	require.NoError(t, err)
+
+	tallies := map[int64]int64{}
+
+	for i := 0; i < 100; i++ {
+		res, err := e.Exec(FunctionContext{}.WithValue(i))
+		require.NoError(t, err)
+		require.IsType(t, int64(0), res)
+		tallies[res.(int64)]++
+	}
+
+	// Can't prove it ain't random, but I can kick up a fuss if something
+	// stinks.
+	assert.GreaterOrEqual(t, len(tallies), 20)
+	for _, v := range tallies {
+		assert.LessOrEqual(t, v, int64(10))
+	}
+
+	// Create a new random_int function and feed the same values in
+	e, err = InitFunction("random_int", idFn)
+	require.NoError(t, err)
+
+	secondTallies := map[int64]int64{}
+
+	for i := 0; i < 100; i++ {
+		res, err := e.Exec(FunctionContext{}.WithValue(i))
+		require.NoError(t, err)
+		require.IsType(t, int64(0), res)
+		secondTallies[res.(int64)]++
+	}
+
+	assert.Equal(t, tallies, secondTallies)
+
+	// Create a new random_int function and feed the first value in the same,
+	// but following values are different.
+	e, err = InitFunction("random_int", idFn)
+	require.NoError(t, err)
+
+	thirdTallies := map[int64]int64{}
+
+	for i := 0; i < 100; i++ {
+		input := i
+		if input > 0 {
+			input += 10
+		}
+		res, err := e.Exec(FunctionContext{}.WithValue(input))
+		require.NoError(t, err)
+		require.IsType(t, int64(0), res)
+		thirdTallies[res.(int64)]++
+	}
+
+	assert.Equal(t, tallies, thirdTallies)
+}
+
+func TestRandomIntDynamicParallel(t *testing.T) {
+	tsFn, err := InitFunction("timestamp_unix_nano")
+	require.NoError(t, err)
+
+	e, err := InitFunction("random_int", tsFn)
+	require.NoError(t, err)
+
+	startChan := make(chan struct{})
+	wg := sync.WaitGroup{}
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-startChan
+			for j := 0; j < 100; j++ {
+				res, err := e.Exec(FunctionContext{})
+				require.NoError(t, err)
+				require.IsType(t, int64(0), res)
+			}
+		}()
+	}
+
+	close(startChan)
+	wg.Wait()
 }

@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - The `redis_streams`, `redis_pubsub` and `redis_list` outputs now all support batching for higher throughput.
 
+### Fixed
+
+- The Bloblang function `random_int` now only resolves dynamic arguments once during the lifetime of the mapping. Documentation has been updated in order to clarify the behaviour with dynamic arguments.
+
 ## 3.50.0 - 2021-07-19
 
 ### Added

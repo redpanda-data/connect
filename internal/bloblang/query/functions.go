@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -584,23 +585,50 @@ var _ = RegisterFunction(
 			`root.first = random_int()
 root.second = random_int(1)`,
 		),
+		NewExampleSpec("It is possible to specify a dynamic seed argument, in which case the argument will only be resolved once during the lifetime of the mapping.",
+			`root.first = random_int(timestamp_unix_nano())`,
+		),
 	),
-	true, randomIntFunction,
+	false, randomIntFunction,
 	ExpectOneOrZeroArgs(),
-	ExpectIntArg(1),
 )
 
 func randomIntFunction(args ...interface{}) (Function, error) {
-	seed := int64(0)
+	var seedFn Function
+	var randMut sync.Mutex
+	var r *rand.Rand
 	if len(args) > 0 {
-		var err error
-		if seed, err = IGetInt(args[0]); err != nil {
-			return nil, err
+		var isDyn bool
+		if seedFn, isDyn = args[0].(Function); !isDyn {
+			seed, err := IGetInt(args[0])
+			if err != nil {
+				return nil, err
+			}
+			r = rand.New(rand.NewSource(seed))
 		}
+	} else {
+		r = rand.New(rand.NewSource(0))
 	}
-	r := rand.New(rand.NewSource(seed))
 	return ClosureFunction("function random_int", func(ctx FunctionContext) (interface{}, error) {
-		return int64(r.Int()), nil
+		randMut.Lock()
+		defer randMut.Unlock()
+
+		if r == nil {
+			seedI, err := seedFn.Exec(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to seed random number generator: %v", err)
+			}
+
+			seed, err := IToInt(seedI)
+			if err != nil {
+				return nil, fmt.Errorf("failed to seed random number generator: %v", err)
+			}
+
+			r = rand.New(rand.NewSource(seed))
+		}
+
+		v := int64(r.Int())
+		return v, nil
 	}, nil), nil
 }
 
