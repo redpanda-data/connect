@@ -729,7 +729,7 @@ func integrationTestOutputOnlySendSequential(n int, getFn getMessageFunc) testDe
 			set := map[string]string{}
 			for i := 0; i < n; i++ {
 				id := strconv.Itoa(i)
-				payload := fmt.Sprintf(`{"id":%v,"content":"hello world"}`, id)
+				payload := fmt.Sprintf(`{"content":"hello world","id":%v}`, id)
 				set[id] = payload
 				require.NoError(t, sendMessage(env.ctx, t, tranChan, payload, "id", id))
 			}
@@ -759,7 +759,7 @@ func integrationTestOutputOnlySendBatch(n int, getFn getMessageFunc) testDefinit
 			batch := []string{}
 			for i := 0; i < n; i++ {
 				id := strconv.Itoa(i)
-				payload := fmt.Sprintf(`{"id":%v,"content":"hello world"}`, id)
+				payload := fmt.Sprintf(`{"content":"hello world","id":%v}`, id)
 				set[id] = payload
 				batch = append(batch, payload)
 			}
@@ -786,8 +786,8 @@ func integrationTestOutputOnlyOverride(getFn getMessageFunc) testDefinition {
 				closeConnectors(t, nil, output)
 			})
 
-			first := `{"id":1,"content":"this should be overridden"}`
-			exp := `{"id":1,"content":"hello world"}`
+			first := `{"content":"this should be overridden","id":1}`
+			exp := `{"content":"hello world","id":1}`
 			require.NoError(t, sendMessage(env.ctx, t, tranChan, first))
 			require.NoError(t, sendMessage(env.ctx, t, tranChan, exp))
 

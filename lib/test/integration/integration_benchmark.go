@@ -135,7 +135,7 @@ func integrationBenchWrite(batchSize int) benchDefinition {
 			batch := make([]string, batchSize)
 			for j := 0; j < sends; j++ {
 				for i := 0; i < batchSize; i++ {
-					batch[i] = fmt.Sprintf("hello world %v", j*sends+i)
+					batch[i] = fmt.Sprintf(`{"content":"hello world","id":%v}`, j*sends+i)
 				}
 				assert.NoError(b, sendBatch(env.ctx, b, tranChan, batch))
 			}

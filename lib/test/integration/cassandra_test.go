@@ -68,7 +68,7 @@ output:
 			).Scan(&resID, &resContent); err != nil {
 				return "", nil, err
 			}
-			return fmt.Sprintf(`{"id":%v,"content":"%v"}`, resID, resContent), nil, err
+			return fmt.Sprintf(`{"content":"%v","id":%v}`, resContent, resID), nil, err
 		}
 		suite := integrationTests(
 			integrationTestOutputOnlySendSequential(10, queryGetFn),
@@ -113,7 +113,7 @@ output:
 			if time.Since(createdAt) > time.Hour || time.Since(createdAt) < 0 {
 				return "", nil, fmt.Errorf("received bad created_at: %v", createdAt)
 			}
-			return fmt.Sprintf(`{"id":%v,"content":"%v"}`, resID, resContent), nil, err
+			return fmt.Sprintf(`{"content":"%v","id":%v}`, resContent, resID), nil, err
 		}
 		suite := integrationTests(
 			integrationTestOutputOnlySendSequential(10, queryGetFn),
