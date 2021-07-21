@@ -532,7 +532,8 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 			t.Errorf("wrong user field returned: %v != %v", act, exp)
 		}
 	}
-	
+
+	// Set elastic_action to deleted for some message parts
 	for i := N / 2; i < N; i++ {
 		msg.Get(i).Metadata().Set("elastic_action", "delete")
 	}
@@ -541,7 +542,7 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 		t.Fatal(err)
 	}
 
-	for i := N / 2; i < N; i++ {
+	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("bar-%v", i+1)
 		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
