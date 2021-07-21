@@ -279,7 +279,11 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 
 	b := e.client.Bulk()
 	for k, v := range requests {
-		b.Add(e.buildBulkableRequest(k, v))
+		bulkReq, err := e.buildBulkableRequest(k, v)
+		if err != nil {
+			e.log.Errorln(err.Error())
+		}
+		b.Add(bulkReq)
 	}
 
 	for b.NumberOfActions() != 0 {
@@ -302,7 +306,11 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 			e.log.Errorf("Elasticsearch message '%v' failed with code [%s]: %v\n", failed[i].Id, failed[i].Status, failed[i].Error.Reason)
 			id := failed[i].Id
 			req := requests[id]
-			b.Add(e.buildBulkableRequest(id, req))
+			bulkReq, err := e.buildBulkableRequest(id, req)
+			if err != nil {
+				e.log.Errorln(err.Error())
+			}
+			b.Add(bulkReq)
 		}
 		if wait == backoff.Stop {
 			return fmt.Errorf("failed to send %v parts from message: %v", len(failed), failed[0].Error.Reason)
@@ -323,7 +331,7 @@ func (e *Elasticsearch) WaitForClose(timeout time.Duration) error {
 }
 
 // Build a bulkable request for a given pending bulk index item.
-func (e *Elasticsearch) buildBulkableRequest(id string, p *pendingBulkIndex) elastic.BulkableRequest {
+func (e *Elasticsearch) buildBulkableRequest(id string, p *pendingBulkIndex) (elastic.BulkableRequest, error) {
 	switch p.Action {
 	case "update":
 		return elastic.NewBulkUpdateRequest().
@@ -331,21 +339,23 @@ func (e *Elasticsearch) buildBulkableRequest(id string, p *pendingBulkIndex) ela
 			Routing(p.Routing).
 			Type(p.Type).
 			Id(id).
-			Doc(p.Doc)
+			Doc(p.Doc), nil
 	case "delete":
 		return elastic.NewBulkDeleteRequest().
 			Index(p.Index).
 			Routing(p.Routing).
 			Id(id).
-			Type(p.Type)
-	default:
+			Type(p.Type), nil
+	case "index":
 		return elastic.NewBulkIndexRequest().
 			Index(p.Index).
 			Pipeline(p.Pipeline).
 			Routing(p.Routing).
 			Type(p.Type).
 			Id(id).
-			Doc(p.Doc)
+			Doc(p.Doc), nil
+	default:
+		return nil, fmt.Errorf("elasticsearch action '%s' is not allowed", p.Action)
 	}
 }
 
