@@ -281,7 +281,7 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 	for k, v := range requests {
 		bulkReq, err := e.buildBulkableRequest(k, v)
 		if err != nil {
-			e.log.Errorln(err.Error())
+			return err
 		}
 		b.Add(bulkReq)
 	}
@@ -308,7 +308,7 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 			req := requests[id]
 			bulkReq, err := e.buildBulkableRequest(id, req)
 			if err != nil {
-				e.log.Errorln(err.Error())
+				return err
 			}
 			b.Add(bulkReq)
 		}
