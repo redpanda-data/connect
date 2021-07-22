@@ -553,7 +553,7 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 		if err != nil {
 			t.Fatalf("Failed to get doc '%v': %v", id, err)
 		}
-		partAction := msg.Get(i).Metadata("elastic_action")
+		partAction := msg.Get(i).Metadata().Get("elastic_action")
 		if partAction == "deleted" && get.Found() {
 			t.Errorf("document %v found when it should have been deleted", i)
 		} else if partAction != "deleted" && !get.Found() {
