@@ -14,4 +14,9 @@ import (
 	_ "github.com/Jeffail/benthos/v3/internal/impl/mongodb"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/nats"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/pulsar"
+	"github.com/Jeffail/benthos/v3/internal/template"
 )
+
+func init() {
+	_, _ = template.InitTemplates()
+}

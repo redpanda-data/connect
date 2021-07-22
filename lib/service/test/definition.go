@@ -2,6 +2,7 @@ package test
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"golang.org/x/sync/errgroup"
@@ -56,9 +57,9 @@ func (d Definition) Execute(filepath string) ([]CaseFailure, error) {
 	return d.execute(filepath, nil, log.Noop())
 }
 
-func (d Definition) execute(filepath string, resourcesPaths []string, logger log.Modular) ([]CaseFailure, error) {
+func (d Definition) execute(testFilePath string, resourcesPaths []string, logger log.Modular) ([]CaseFailure, error) {
 	procsProvider := NewProcessorsProvider(
-		filepath,
+		testFilePath,
 		OptAddResourcesPaths(resourcesPaths),
 		OptProcessorsProviderSetLogger(logger),
 	)
@@ -71,11 +72,13 @@ func (d Definition) execute(filepath string, resourcesPaths []string, logger log
 		}
 	}
 
+	dir := filepath.Dir(testFilePath)
+
 	var totalFailures []CaseFailure
 	if !d.Parallel {
 		for i, c := range d.Cases {
 			cleanupEnv := setEnvironment(c.Environment)
-			failures, err := c.Execute(procsProvider)
+			failures, err := c.executeFrom(dir, procsProvider)
 			if err != nil {
 				cleanupEnv()
 				return nil, fmt.Errorf("test case %v failed: %v", i, err)
@@ -91,7 +94,7 @@ func (d Definition) execute(filepath string, resourcesPaths []string, logger log
 			i := i
 			c := c
 			g.Go(func() error {
-				failures, err := c.Execute(procsProvider)
+				failures, err := c.executeFrom(dir, procsProvider)
 				if err != nil {
 					return fmt.Errorf("test case %v failed: %v", i, err)
 				}

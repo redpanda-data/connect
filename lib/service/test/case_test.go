@@ -2,6 +2,9 @@ package test
 
 import (
 	"errors"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -11,6 +14,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/fatih/color"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -203,4 +208,132 @@ output_batches:
 			}
 		})
 	}
+}
+
+func TestFileCaseInputs(t *testing.T) {
+	color.NoColor = true
+
+	provider := mockProvider{}
+	procConf := processor.NewConfig()
+
+	procConf.Type = processor.TypeBloblang
+	procConf.Bloblang = processor.BloblangConfig(`root = "hello world " + content().string()`)
+	proc, err := processor.New(procConf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	provider["/pipeline/processors"] = []types.Processor{proc}
+
+	tmpDir, err := ioutil.TempDir("", "test_file_content")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		_ = os.RemoveAll(tmpDir)
+	})
+
+	uppercasedPath := filepath.Join(tmpDir, "inner", "uppercased.txt")
+	notUppercasedPath := filepath.Join(tmpDir, "not_uppercased.txt")
+
+	require.NoError(t, os.MkdirAll(filepath.Dir(uppercasedPath), 0755))
+	require.NoError(t, os.WriteFile(uppercasedPath, []byte(`FOO BAR BAZ`), 0644))
+	require.NoError(t, os.WriteFile(notUppercasedPath, []byte(`foo bar baz`), 0644))
+
+	c := NewCase()
+	require.NoError(t, yaml.Unmarshal([]byte(`
+name: uppercased
+input_batch:
+  - file_content: ./inner/uppercased.txt
+output_batches:
+-
+  - content_equals: hello world FOO BAR BAZ
+`), &c))
+
+	fails, err := c.executeFrom(tmpDir, provider)
+	require.NoError(t, err)
+
+	assert.Equal(t, []CaseFailure(nil), fails)
+
+	c = NewCase()
+	require.NoError(t, yaml.Unmarshal([]byte(`
+name: not uppercased
+input_batch:
+  - file_content: ./not_uppercased.txt
+output_batches:
+-
+  - content_equals: hello world FOO BAR BAZ
+`), &c))
+
+	fails, err = c.executeFrom(tmpDir, provider)
+	require.NoError(t, err)
+
+	assert.Equal(t, []CaseFailure{
+		{
+			Name:     "not uppercased",
+			TestLine: 2,
+			Reason:   "batch 0 message 0: content_equals: content mismatch\n  expected: hello world FOO BAR BAZ\n  received: hello world foo bar baz",
+		},
+	}, fails)
+}
+
+func TestFileCaseConditions(t *testing.T) {
+	color.NoColor = true
+
+	provider := mockProvider{}
+	procConf := processor.NewConfig()
+
+	procConf.Type = processor.TypeBloblang
+	procConf.Bloblang = processor.BloblangConfig(`root = content().uppercase()`)
+	proc, err := processor.New(procConf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	provider["/pipeline/processors"] = []types.Processor{proc}
+
+	tmpDir, err := ioutil.TempDir("", "test_file_case")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		_ = os.RemoveAll(tmpDir)
+	})
+
+	uppercasedPath := filepath.Join(tmpDir, "inner", "uppercased.txt")
+	notUppercasedPath := filepath.Join(tmpDir, "not_uppercased.txt")
+
+	require.NoError(t, os.MkdirAll(filepath.Dir(uppercasedPath), 0755))
+	require.NoError(t, os.WriteFile(uppercasedPath, []byte(`FOO BAR BAZ`), 0644))
+	require.NoError(t, os.WriteFile(notUppercasedPath, []byte(`foo bar baz`), 0644))
+
+	c := NewCase()
+	require.NoError(t, yaml.Unmarshal([]byte(`
+name: uppercased
+input_batch:
+  - content: foo bar baz
+output_batches:
+-
+  - file_equals: "./inner/uppercased.txt"
+`), &c))
+
+	fails, err := c.executeFrom(tmpDir, provider)
+	require.NoError(t, err)
+
+	assert.Equal(t, []CaseFailure(nil), fails)
+
+	c = NewCase()
+	require.NoError(t, yaml.Unmarshal([]byte(`
+name: not uppercased
+input_batch:
+  - content: foo bar baz
+output_batches:
+-
+  - file_equals: "./not_uppercased.txt"
+`), &c))
+
+	fails, err = c.executeFrom(tmpDir, provider)
+	require.NoError(t, err)
+
+	assert.Equal(t, []CaseFailure{
+		{
+			Name:     "not uppercased",
+			TestLine: 2,
+			Reason:   "batch 0 message 0: file_equals: content mismatch\n  expected: foo bar baz\n  received: FOO BAR BAZ",
+		},
+	}, fails)
 }

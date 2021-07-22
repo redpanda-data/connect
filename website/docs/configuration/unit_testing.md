@@ -132,6 +132,34 @@ tests:
             example_key: example metadata value
 ```
 
+## Input Definitions
+
+### `content`
+
+Sets the raw content of the message.
+
+### `json_content`
+
+```yml
+json_content:
+  foo: foo value
+  bar: [ element1, 10 ]
+```
+
+Sets the raw content of the message to a JSON document matching the structure of the value.
+
+### `file_content`
+
+```yml
+file_content: ./foo/bar.txt
+```
+
+Sets the raw content of the message by reading a file. The path of the file should be relative to the path of the test file.
+
+### `metadata`
+
+A map of key/value pairs that sets the metadata values of the message.
+
 ## Output Conditions
 
 ### `bloblang`
@@ -166,6 +194,14 @@ metadata_equals:
 ```
 
 Checks a map of metadata keys to values against the metadata stored in the message. If there is a value mismatch between a key of the condition versus the message metadata this condition will fail.
+
+### `file_equals`
+
+```yml
+file_equals: ./foo/bar.txt
+```
+
+Checks that the contents of a message matches the contents of a file. The path of the file should be relative to the path of the test file.
 
 ### `json_equals`
 

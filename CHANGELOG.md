@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - The `redis_streams`, `redis_pubsub` and `redis_list` outputs now all support batching for higher throughput.
 - The `amqp_1` input and output now support passing and receiving metadata as annotations.
+- Config unit test definitions can now use files for both the input and expected output.
 
 ### Fixed
 

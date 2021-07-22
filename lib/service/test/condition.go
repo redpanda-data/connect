@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 
@@ -70,6 +72,12 @@ func (c *ConditionsMap) UnmarshalYAML(value *yaml.Node) error {
 				return fmt.Errorf("line %v: %v", v.Line, err)
 			}
 			cond = val
+		case "file_equals":
+			val := FileEqualsCondition("")
+			if err := v.Decode(&val); err != nil {
+				return fmt.Errorf("line %v: %v", v.Line, err)
+			}
+			cond = val
 		case "metadata_equals":
 			val := MetadataEqualsCondition{}
 			if err := v.Decode(&val); err != nil {
@@ -87,13 +95,23 @@ func (c *ConditionsMap) UnmarshalYAML(value *yaml.Node) error {
 // CheckAll checks all conditions against a message part. Conditions are
 // executed in alphabetical order.
 func (c ConditionsMap) CheckAll(part types.Part) (errs []error) {
+	return c.checkAllFrom("", part)
+}
+
+func (c ConditionsMap) checkAllFrom(dir string, part types.Part) (errs []error) {
 	condTypes := []string{}
 	for k := range c {
 		condTypes = append(condTypes, k)
 	}
 	sort.Strings(condTypes)
 	for _, k := range condTypes {
-		if err := c[k].Check(part); err != nil {
+		if relCheck, ok := c[k].(interface {
+			checkFrom(string, types.Part) error
+		}); ok {
+			if err := relCheck.checkFrom(dir, part); err != nil {
+				errs = append(errs, fmt.Errorf("%v: %v", k, err))
+			}
+		} else if err := c[k].Check(part); err != nil {
 			errs = append(errs, fmt.Errorf("%v: %v", k, err))
 		}
 	}
@@ -194,6 +212,31 @@ func (c ContentJSONContainsCondition) Check(p types.Part) error {
 	diff, explanation := jsondiff.Compare(p.Get(), []byte(c), &jdopts)
 	if diff != jsondiff.FullMatch && diff != jsondiff.SupersetMatch {
 		return fmt.Errorf("JSON superset mismatch\n%v", explanation)
+	}
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
+// FileEqualsCondition is a string condition that reads a file at the string
+// path and compares it against the contents of a message.
+type FileEqualsCondition string
+
+// Check this condition against a message part.
+func (c FileEqualsCondition) Check(p types.Part) error {
+	return c.checkFrom("", p)
+}
+
+func (c FileEqualsCondition) checkFrom(dir string, p types.Part) error {
+	relPath := filepath.Join(dir, string(c))
+
+	fileContent, err := os.ReadFile(relPath)
+	if err != nil {
+		return fmt.Errorf("failed to read comparison file: %w", err)
+	}
+
+	if exp, act := string(fileContent), string(p.Get()); exp != act {
+		return fmt.Errorf("content mismatch\n  expected: %v\n  received: %v", blue(exp), red(act))
 	}
 	return nil
 }

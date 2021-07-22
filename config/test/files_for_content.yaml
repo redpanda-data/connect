@@ -1,0 +1,10 @@
+pipeline:
+  processors:
+    - bloblang: 'root = content().uppercase()'
+
+tests:
+  - name: should be uppercased
+    input_batch:
+      - file_content: ./files/input.txt
+    output_batches:
+      - - file_equals: ./files/output.txt

@@ -3,6 +3,9 @@ package test
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -413,6 +416,67 @@ func TestJSONContainsCondition(t *testing.T) {
 			}
 			if exp, act := expected.Error(), actErr.Error(); exp != act {
 				tt.Errorf("Wrong result, expected %v, received %v", exp, act)
+			}
+		})
+	}
+}
+
+func TestFileEqualsCondition(t *testing.T) {
+	color.NoColor = true
+
+	tmpDir, err := ioutil.TempDir("", "test_file_condition")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		_ = os.RemoveAll(tmpDir)
+	})
+
+	uppercasedPath := filepath.Join(tmpDir, "inner", "uppercased.txt")
+	notUppercasedPath := filepath.Join(tmpDir, "not_uppercased.txt")
+
+	require.NoError(t, os.MkdirAll(filepath.Dir(uppercasedPath), 0755))
+	require.NoError(t, os.WriteFile(uppercasedPath, []byte(`FOO BAR BAZ`), 0644))
+	require.NoError(t, os.WriteFile(notUppercasedPath, []byte(`foo bar baz`), 0644))
+
+	type testCase struct {
+		name        string
+		path        string
+		input       string
+		errContains string
+	}
+
+	tests := []testCase{
+		{
+			name:  "positive 1",
+			path:  `./inner/uppercased.txt`,
+			input: `FOO BAR BAZ`,
+		},
+		{
+			name:  "positive 2",
+			path:  `./not_uppercased.txt`,
+			input: `foo bar baz`,
+		},
+		{
+			name:        "negative 1",
+			path:        `./inner/uppercased.txt`,
+			input:       `foo bar baz`,
+			errContains: "content mismatch",
+		},
+		{
+			name:        "negative 2",
+			path:        `./not_uppercased.txt`,
+			input:       `FOO BAR BAZ`,
+			errContains: "content mismatch",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(tt *testing.T) {
+			actErr := FileEqualsCondition(test.path).checkFrom(tmpDir, message.NewPart([]byte(test.input)))
+			if test.errContains == "" {
+				assert.NoError(t, actErr)
+			} else {
+				assert.Contains(t, actErr.Error(), test.errContains)
 			}
 		})
 	}
