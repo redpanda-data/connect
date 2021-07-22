@@ -228,6 +228,15 @@ func (a *AMQP1) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn,
 		setMetadata(part, "amqp_content_encoding", amqpMsg.Properties.ContentEncoding)
 		setMetadata(part, "amqp_creation_time", amqpMsg.Properties.CreationTime)
 	}
+	if amqpMsg.Annotations != nil {
+		for k, v := range amqpMsg.Annotations {
+			keyStr, keyIsStr := k.(string)
+			valStr, valIsStr := v.(string)
+			if keyIsStr && valIsStr {
+				setMetadata(part, keyStr, valStr)
+			}
+		}
+	}
 
 	msg.Append(part)
 
