@@ -39,6 +39,11 @@ output:
     max_in_flight: 1
     metadata:
       exclude_prefixes: []
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
 ```
 
 </TabItem>
@@ -64,6 +69,12 @@ output:
     max_in_flight: 1
     metadata:
       exclude_prefixes: []
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: []
 ```
 
 </TabItem>
@@ -83,6 +94,10 @@ a metadata item and the body then the body takes precedence.
 This output benefits from sending multiple messages in flight in parallel for
 improved performance. You can tune the max number of in flight messages with the
 field `max_in_flight`.
+
+This output benefits from sending messages as a batch for improved performance.
+Batches can be formed at both the input and output level. You can find out more
+[in this doc](/docs/configuration/batching).
 
 ## Fields
 
@@ -284,5 +299,101 @@ Provide a list of explicit metadata key prefixes to be excluded when adding meta
 
 Type: `array`  
 Default: `[]`  
+
+### `batching`
+
+Allows you to configure a [batching policy](/docs/configuration/batching).
+
+
+Type: `object`  
+
+```yaml
+# Examples
+
+batching:
+  byte_size: 5000
+  count: 0
+  period: 1s
+
+batching:
+  count: 10
+  period: 1s
+
+batching:
+  check: this.contains("END BATCH")
+  count: 0
+  period: 1m
+```
+
+### `batching.count`
+
+A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+
+Type: `int`  
+Default: `0`  
+
+### `batching.byte_size`
+
+An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+
+Type: `int`  
+Default: `0`  
+
+### `batching.period`
+
+A period in which an incomplete batch should be flushed regardless of its size.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+period: 1s
+
+period: 1m
+
+period: 500ms
+```
+
+### `batching.check`
+
+A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should end a batch.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+check: this.type == "end_of_transaction"
+```
+
+### `batching.processors`
+
+A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+processors:
+  - archive:
+      format: lines
+
+processors:
+  - archive:
+      format: json_array
+
+processors:
+  - merge_json: {}
+```
 
 

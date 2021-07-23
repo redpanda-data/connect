@@ -43,6 +43,8 @@ output:
       mechanism: none
       user: ""
       password: ""
+    metadata:
+      exclude_prefixes: []
 logger:
   level: INFO
   format: json

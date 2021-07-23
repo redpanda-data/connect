@@ -197,7 +197,7 @@ func (a *v2BatchedToV1Processor) ProcessMessage(msg types.Message) ([]types.Mess
 		}
 	}
 
-	tracing.FinishSpans(msg)
+	tracing.FinishSpans(newMsg)
 
 	if len(outputBatches) == 0 {
 		return nil, response.NewAck()

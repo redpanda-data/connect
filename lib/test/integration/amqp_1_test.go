@@ -39,6 +39,8 @@ output:
     url: amqp://guest:guest@localhost:$PORT/
     target_address: "queue:/$ID"
     max_in_flight: $MAX_IN_FLIGHT
+    metadata:
+      exclude_prefixes: [ $OUTPUT_META_EXCLUDE_PREFIX ]
 
 input:
   amqp_1:
@@ -52,6 +54,8 @@ input:
 		integrationTestStreamParallel(1000),
 		integrationTestStreamParallelLossy(1000),
 		integrationTestStreamParallelLossyThroughReconnect(1000),
+		integrationTestMetadata(),
+		integrationTestMetadataFilter(),
 	)
 	suite.Run(
 		t, template,

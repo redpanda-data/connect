@@ -51,13 +51,13 @@ var labelField = FieldString(
 			NewLintError(line, fmt.Sprintf("Invalid label '%v': %v", l, err)),
 		}
 	}
-	prevLine, exists := ctx.Labels[l]
+	prevLine, exists := ctx.LabelsToLine[l]
 	if exists {
 		return []Lint{
 			NewLintError(line, fmt.Sprintf("Label '%v' collides with a previously defined label at line %v", l, prevLine)),
 		}
 	}
-	ctx.Labels[l] = line
+	ctx.LabelsToLine[l] = line
 	return nil
 })
 

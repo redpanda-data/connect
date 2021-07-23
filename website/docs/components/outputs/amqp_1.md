@@ -37,6 +37,8 @@ output:
     url: ""
     target_address: ""
     max_in_flight: 1
+    metadata:
+      exclude_prefixes: []
 ```
 
 </TabItem>
@@ -60,11 +62,16 @@ output:
       mechanism: none
       user: ""
       password: ""
+    metadata:
+      exclude_prefixes: []
 ```
 
 </TabItem>
 </Tabs>
 
+### Metadata
+
+Message metadata is added to each AMQP message as string annotations. In order to control which metadata keys are added use the `metadata` config field.
 
 ## Performance
 
@@ -262,5 +269,20 @@ Default: `""`
 
 password: ${PASSWORD}
 ```
+
+### `metadata`
+
+Specify criteria for which metadata values are attached to messages as headers.
+
+
+Type: `object`  
+
+### `metadata.exclude_prefixes`
+
+Provide a list of explicit metadata key prefixes to be excluded when adding metadata to sent messages.
+
+
+Type: `array`  
+Default: `[]`  
 
 

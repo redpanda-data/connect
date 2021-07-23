@@ -2,6 +2,8 @@ package test
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/metadata"
@@ -16,6 +18,19 @@ import (
 type InputPart struct {
 	Content  string            `yaml:"content"`
 	Metadata map[string]string `yaml:"metadata"`
+	filePath string
+}
+
+func (i *InputPart) getContent(dir string) (string, error) {
+	if i.filePath == "" {
+		return i.Content, nil
+	}
+	relPath := filepath.Join(dir, i.filePath)
+	rawBytes, err := os.ReadFile(relPath)
+	if err != nil {
+		return "", err
+	}
+	return string(rawBytes), nil
 }
 
 // UnmarshalYAML extracts an InputPart from a YAML node.
@@ -34,6 +49,10 @@ func (i *InputPart) UnmarshalYAML(value *yaml.Node) error {
 			if err := yamlNodeToTestString(&v, &i.Content); err != nil {
 				return fmt.Errorf("line %v: %v", v.Line, err)
 			}
+		case "file_content":
+			if err := v.Decode(&i.filePath); err != nil {
+				return fmt.Errorf("line %v: %v", v.Line, err)
+			}
 		case "metadata":
 			if err := v.Decode(&i.Metadata); err != nil {
 				return fmt.Errorf("line %v: %v", v.Line, err)
@@ -49,12 +68,13 @@ func (i *InputPart) UnmarshalYAML(value *yaml.Node) error {
 
 // Case contains a definition of a single Benthos config test case.
 type Case struct {
-	Name             string            `yaml:"name"`
-	Environment      map[string]string `yaml:"environment"`
-	TargetProcessors string            `yaml:"target_processors"`
-	TargetMapping    string            `yaml:"target_mapping"`
-	InputBatch       []InputPart       `yaml:"input_batch"`
-	OutputBatches    [][]ConditionsMap `yaml:"output_batches"`
+	Name             string               `yaml:"name"`
+	Environment      map[string]string    `yaml:"environment"`
+	TargetProcessors string               `yaml:"target_processors"`
+	TargetMapping    string               `yaml:"target_mapping"`
+	Mocks            map[string]yaml.Node `yaml:"mocks"`
+	InputBatch       []InputPart          `yaml:"input_batch"`
+	OutputBatches    [][]ConditionsMap    `yaml:"output_batches"`
 
 	line int
 }
@@ -72,6 +92,7 @@ func NewCase() Case {
 		Environment:      map[string]string{},
 		TargetProcessors: "/pipeline/processors",
 		TargetMapping:    "",
+		Mocks:            map[string]yaml.Node{},
 		InputBatch:       []InputPart{},
 		OutputBatches:    [][]ConditionsMap{},
 	}
@@ -112,12 +133,24 @@ type ProcProvider interface {
 	ProvideBloblang(path string) ([]types.Processor, error)
 }
 
+type mockedProcProvider interface {
+	ProvideMocked(jsonPtr string, environment map[string]string, mocks map[string]yaml.Node) ([]types.Processor, error)
+}
+
 // Execute attempts to execute a test case against a Benthos configuration.
 func (c *Case) Execute(provider ProcProvider) (failures []CaseFailure, err error) {
+	return c.executeFrom("", provider)
+}
+
+func (c *Case) executeFrom(dir string, provider ProcProvider) (failures []CaseFailure, err error) {
 	var procSet []types.Processor
 	if c.TargetMapping != "" {
 		if procSet, err = provider.ProvideBloblang(c.TargetMapping); err != nil {
 			return nil, fmt.Errorf("failed to initialise Bloblang mapping '%v': %v", c.TargetMapping, err)
+		}
+	} else if mockedProcProv, ok := provider.(mockedProcProvider); ok {
+		if procSet, err = mockedProcProv.ProvideMocked(c.TargetProcessors, c.Environment, c.Mocks); err != nil {
+			return nil, fmt.Errorf("failed to initialise processors '%v': %v", c.TargetProcessors, err)
 		}
 	} else if procSet, err = provider.Provide(c.TargetProcessors, c.Environment); err != nil {
 		return nil, fmt.Errorf("failed to initialise processors '%v': %v", c.TargetProcessors, err)
@@ -133,7 +166,12 @@ func (c *Case) Execute(provider ProcProvider) (failures []CaseFailure, err error
 
 	parts := make([]types.Part, len(c.InputBatch))
 	for i, v := range c.InputBatch {
-		part := message.NewPart([]byte(v.Content))
+		var content string
+		if content, err = v.getContent(dir); err != nil {
+			err = fmt.Errorf("failed to create mock input %v: %w", i, err)
+			return
+		}
+		part := message.NewPart([]byte(content))
 		part.SetMetadata(metadata.New(v.Metadata))
 		parts[i] = part
 	}
@@ -171,7 +209,7 @@ func (c *Case) Execute(provider ProcProvider) (failures []CaseFailure, err error
 				reportFailure(fmt.Sprintf("unexpected message from batch %v: %s", i, part.Get()))
 				return nil
 			}
-			condErrs := expectedBatch[i2].CheckAll(part)
+			condErrs := expectedBatch[i2].checkAllFrom(dir, part)
 			for _, condErr := range condErrs {
 				reportFailure(fmt.Sprintf("batch %v message %v: %v", i, i2, condErr))
 			}

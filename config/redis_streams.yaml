@@ -50,6 +50,12 @@ output:
     max_in_flight: 1
     metadata:
       exclude_prefixes: []
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: []
 logger:
   level: INFO
   format: json

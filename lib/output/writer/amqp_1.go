@@ -3,10 +3,12 @@ package writer
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/Azure/go-amqp"
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -18,11 +20,12 @@ import (
 
 // AMQP1Config contains configuration fields for the AMQP1 output type.
 type AMQP1Config struct {
-	URL           string      `json:"url" yaml:"url"`
-	TargetAddress string      `json:"target_address" yaml:"target_address"`
-	MaxInFlight   int         `json:"max_in_flight" yaml:"max_in_flight"`
-	TLS           btls.Config `json:"tls" yaml:"tls"`
-	SASL          sasl.Config `json:"sasl" yaml:"sasl"`
+	URL           string          `json:"url" yaml:"url"`
+	TargetAddress string          `json:"target_address" yaml:"target_address"`
+	MaxInFlight   int             `json:"max_in_flight" yaml:"max_in_flight"`
+	TLS           btls.Config     `json:"tls" yaml:"tls"`
+	SASL          sasl.Config     `json:"sasl" yaml:"sasl"`
+	Metadata      output.Metadata `json:"metadata" yaml:"metadata"`
 }
 
 // NewAMQP1Config creates a new AMQP1Config with default values.
@@ -33,6 +36,7 @@ func NewAMQP1Config() AMQP1Config {
 		MaxInFlight:   1,
 		TLS:           btls.NewConfig(),
 		SASL:          sasl.NewConfig(),
+		Metadata:      output.NewMetadata(),
 	}
 }
 
@@ -43,6 +47,8 @@ type AMQP1 struct {
 	client  *amqp.Client
 	session *amqp.Session
 	sender  *amqp.Sender
+
+	metaFilter *output.MetadataFilter
 
 	log   log.Modular
 	stats metrics.Type
@@ -65,6 +71,9 @@ func NewAMQP1(conf AMQP1Config, log log.Modular, stats metrics.Type) (*AMQP1, er
 		if a.tlsConf, err = conf.TLS.Get(); err != nil {
 			return nil, err
 		}
+	}
+	if a.metaFilter, err = conf.Metadata.Filter(); err != nil {
+		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
 	return &a, nil
 }
@@ -177,6 +186,13 @@ func (a *AMQP1) WriteWithContext(ctx context.Context, msg types.Message) error {
 
 	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		m := amqp.NewMessage(p.Get())
+		a.metaFilter.Iter(p.Metadata(), func(k, v string) error {
+			if m.Annotations == nil {
+				m.Annotations = amqp.Annotations{}
+			}
+			m.Annotations[k] = v
+			return nil
+		})
 		err := s.Send(ctx, m)
 		if err != nil {
 			if err == amqp.ErrTimeout {

@@ -1,6 +1,5 @@
 ﻿---
 title: "Compiling Benthos to Web Assembly"
-date: "2019-05-27T12:00:01Z"
 author: "Ashley Jeffs"
 author_url: https://github.com/Jeffail
 author_image_url: /img/ash.jpg

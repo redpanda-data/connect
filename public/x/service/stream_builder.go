@@ -569,18 +569,37 @@ func getYAMLNode(b []byte) (*yaml.Node, error) {
 	return &nconf, nil
 }
 
-func lintsToErr(lints []docs.Lint) error {
-	if len(lints) > 0 {
-		var lintsCollapsed bytes.Buffer
-		for i, l := range lints {
-			if i > 0 {
-				lintsCollapsed.WriteString("\n")
-			}
-			fmt.Fprintf(&lintsCollapsed, "line %v: %v", l.Line, l.What)
+// Lint represents a configuration file linting error.
+type Lint struct {
+	Line int
+	What string
+}
+
+// LintError is an error type that represents one or more configuration file
+// linting errors that were encountered.
+type LintError []Lint
+
+// Error returns an error string.
+func (e LintError) Error() string {
+	var lintsCollapsed bytes.Buffer
+	for i, l := range e {
+		if i > 0 {
+			lintsCollapsed.WriteString("\n")
 		}
-		return fmt.Errorf("lint errors: %v", lintsCollapsed.String())
+		fmt.Fprintf(&lintsCollapsed, "line %v: %v", l.Line, l.What)
 	}
-	return nil
+	return fmt.Sprintf("lint errors: %v", lintsCollapsed.String())
+}
+
+func lintsToErr(lints []docs.Lint) error {
+	if len(lints) == 0 {
+		return nil
+	}
+	var e LintError
+	for _, l := range lints {
+		e = append(e, Lint{Line: l.Line, What: l.What})
+	}
+	return e
 }
 
 func lintYAMLComponent(b []byte, ctype docs.Type) error {

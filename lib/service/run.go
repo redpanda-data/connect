@@ -124,6 +124,11 @@ func Run() {
 			Value: "",
 			Usage: "override the configured log level, options are: off, error, warn, info, debug, trace",
 		},
+		&cli.StringSliceFlag{
+			Name:    "set",
+			Aliases: []string{"s"},
+			Usage:   "set a field (identified by a dot path) in the main configuration file, e.g. `\"metrics.type=prometheus\"`",
+		},
 		&cli.StringFlag{
 			Name:    "config",
 			Aliases: []string{"c"},
@@ -207,6 +212,7 @@ func Run() {
 			os.Exit(cmdService(
 				c.String("config"),
 				c.StringSlice("resources"),
+				c.StringSlice("set"),
 				c.String("log.level"),
 				!c.Bool("chilled"),
 				false,
@@ -225,7 +231,7 @@ func Run() {
 
    benthos -c ./config.yaml echo | less`[4:],
 				Action: func(c *cli.Context) error {
-					readConfig(c.String("config"), c.StringSlice("resources"))
+					readConfig(c.String("config"), c.StringSlice("resources"), c.StringSlice("set"))
 
 					var node yaml.Node
 					err := node.Encode(conf)
@@ -270,6 +276,7 @@ func Run() {
 					os.Exit(cmdService(
 						c.String("config"),
 						c.StringSlice("resources"),
+						c.StringSlice("set"),
 						c.String("log.level"),
 						!c.Bool("chilled"),
 						true,
@@ -333,7 +340,7 @@ func Run() {
 		}
 
 		deprecatedExecute(*configPath, testSuffix)
-		os.Exit(cmdService(*configPath, nil, "", false, false, nil))
+		os.Exit(cmdService(*configPath, nil, nil, "", false, false, nil))
 		return nil
 	}
 

@@ -142,12 +142,6 @@ func (n *NATS) disconnect() {
 	n.natsChan = nil
 }
 
-// Read attempts to read a new message from the NATS subject.
-func (n *NATS) Read() (types.Message, error) {
-	msg, _, err := n.ReadWithContext(context.Background())
-	return msg, err
-}
-
 // ReadWithContext attempts to read a new message from the NATS subject.
 func (n *NATS) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
 	n.cMut.Lock()
@@ -170,10 +164,26 @@ func (n *NATS) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, 
 	bmsg := message.New([][]byte{msg.Data})
 	bmsg.Get(0).Metadata().Set("nats_subject", msg.Subject)
 
-	return bmsg, noopAsyncAckFn, nil
+	return bmsg, func(ctx context.Context, res types.Response) error {
+		if res.Error() != nil {
+			return msg.Nak()
+		}
+		return msg.Ack()
+	}, nil
 }
 
-// Acknowledge is a noop since NATS messages do not support acknowledgments.
+// Read attempts to read a new message from the NATS subject.
+//
+// Deprecated: Use ReadWithContext instead.
+func (n *NATS) Read() (types.Message, error) {
+	m, _, err := n.ReadWithContext(context.Background())
+	return m, err
+}
+
+// Acknowledge confirms whether or not our unacknowledged messages have been
+// successfully propagated or not.
+//
+// Deprecated: Use ReadWithContext instead.
 func (n *NATS) Acknowledge(err error) error {
 	return nil
 }

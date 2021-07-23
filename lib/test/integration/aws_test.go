@@ -170,7 +170,7 @@ input:
 			integrationTestStreamParallelLossyThroughReconnect(10),
 		).Run(
 			t, template,
-			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+			testOptPreTest(func(t testing.TB, env *testEnvironment) {
 				require.NoError(t, createBucketQueue(servicePort, servicePort, env.configVars.id))
 			}),
 			testOptPort(servicePort),
@@ -222,7 +222,7 @@ input:
 			integrationTestStreamParallelLossyThroughReconnect(20),
 		).Run(
 			t, template,
-			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+			testOptPreTest(func(t testing.TB, env *testEnvironment) {
 				if env.configVars.outputBatchCount == 0 {
 					env.configVars.outputBatchCount = 1
 				}
@@ -266,7 +266,7 @@ input:
 			integrationTestStreamIsolated(10),
 		).Run(
 			t, template,
-			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+			testOptPreTest(func(t testing.TB, env *testEnvironment) {
 				require.NoError(t, createBucketQueue(servicePort, "", env.configVars.id))
 			}),
 			testOptPort(servicePort),
@@ -308,7 +308,7 @@ input:
 			integrationTestStreamParallelLossyThroughReconnect(50),
 		).Run(
 			t, template,
-			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+			testOptPreTest(func(t testing.TB, env *testEnvironment) {
 				require.NoError(t, createBucketQueue("", servicePort, env.configVars.id))
 			}),
 			testOptPort(servicePort),

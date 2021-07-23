@@ -62,7 +62,7 @@ input:
 	)
 	suite.Run(
 		t, template,
-		testOptPreTest(func(t *testing.T, env *testEnvironment) {
+		testOptPreTest(func(t testing.TB, env *testEnvironment) {
 			js, err := natsConn.JetStream()
 			require.NoError(t, err)
 

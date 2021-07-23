@@ -204,7 +204,7 @@ func TestAsyncPreserverNackThenClose(t *testing.T) {
 	}()
 
 	_, _, err = pres.ReadWithContext(ctx)
-	assert.Equal(t, context.Canceled, err)
+	assert.Equal(t, types.ErrTimeout, err)
 
 	_, ackFn2, err := pres.ReadWithContext(ctx)
 	assert.NoError(t, err)

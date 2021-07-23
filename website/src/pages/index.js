@@ -302,6 +302,7 @@ function Home() {
                 <a href="https://www.meltwater.com/" className={styles.sponsorLink}><img className={styles.meltwaterImg} src="/img/sponsors/mw_logo.png" /></a>
                 <a href="https://www.humansecurity.com" className={styles.sponsorLink}><img className={styles.humanImg} src="/img/sponsors/HUMAN_logo.png" /></a>
                 <a href="https://www.infosum.com/" className={styles.sponsorLink}><img className={styles.infosumImg} src="/img/sponsors/infosum_logo.png" /></a>
+                <a href="https://community.com/" className={styles.sponsorLink}><img className={styles.communityImg} src="/img/sponsors/community.svg" /></a>
               </div>
               <div className={classnames('col col--6', styles.loveSectionPlea)}>
                 <div>

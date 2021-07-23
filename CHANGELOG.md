@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- The `redis_streams`, `redis_pubsub` and `redis_list` outputs now all support batching for higher throughput.
+- The `amqp_1` input and output now support passing and receiving metadata as annotations.
+- Config unit test definitions can now use files for both the input and expected output.
+
+### Fixed
+
+- The Bloblang function `random_int` now only resolves dynamic arguments once during the lifetime of the mapping. Documentation has been updated in order to clarify the behaviour with dynamic arguments.
+
+## 3.50.0 - 2021-07-19
+
+### Added
+
+- New CLI flag `--set` (`-s`) for overriding arbitrary fields in a config. E.g. `-s input.type=http_server` would override the config setting the input type to `http_server`.
+- Unit test definitions now support mocking components.
+
+## 3.49.0 - 2021-07-12
+
+### Added
+
+- The `nats` input now supports acks.
+- The `memory` and `file` cache types now expose metrics akin to other caches.
+
+### Fixed
+
+- The `switch` output when `retry_until_success` is set to `false` will now provide granular nacks to pre-batched messages.
+- The URL printed in error messages when HTTP client components fail should now show interpolated values as they were interpreted.
+- Go Plugins API V2: Batched processors should now show in tracing, and no longer complain about spans being closed more than once.
+
 ## 3.48.0 - 2021-06-25
 
 ### Added

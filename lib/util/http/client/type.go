@@ -569,6 +569,12 @@ func (h *Type) DoWithContext(ctx context.Context, msg types.Message) (res *http.
 		logErr(err)
 		return nil, err
 	}
+	// Make sure we log the actual request URL
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("%s: %w", req.URL, err)
+		}
+	}()
 
 	startedAt := time.Now()
 

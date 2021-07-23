@@ -68,7 +68,7 @@ type testEnvironment struct {
 	configTemplate string
 	configVars     testConfigVars
 
-	preTest func(*testing.T, *testEnvironment)
+	preTest func(testing.TB, *testEnvironment)
 
 	timeout time.Duration
 	ctx     context.Context
@@ -97,7 +97,7 @@ func getFreePort() (int, error) {
 	return listener.Addr().(*net.TCPAddr).Port, nil
 }
 
-func newTestEnvironment(t *testing.T, confTemplate string) testEnvironment {
+func newTestEnvironment(t testing.TB, confTemplate string) testEnvironment {
 	t.Helper()
 
 	u4, err := uuid.NewV4()
@@ -206,7 +206,7 @@ func testOptSleepAfterOutput(t time.Duration) testOptFunc {
 	}
 }
 
-func testOptPreTest(fn func(*testing.T, *testEnvironment)) testOptFunc {
+func testOptPreTest(fn func(testing.TB, *testEnvironment)) testOptFunc {
 	return func(env *testEnvironment) {
 		env.preTest = fn
 	}
@@ -314,7 +314,7 @@ func namedTest(name string, test testDefinition) testDefinition {
 //------------------------------------------------------------------------------
 
 func initConnectors(
-	t *testing.T,
+	t testing.TB,
 	trans <-chan types.Transaction,
 	env *testEnvironment,
 ) (types.Input, types.Output) {
@@ -325,7 +325,7 @@ func initConnectors(
 	return in, out
 }
 
-func initInput(t *testing.T, env *testEnvironment) types.Input {
+func initInput(t testing.TB, env *testEnvironment) types.Input {
 	t.Helper()
 
 	confBytes := []byte(env.RenderConfig())
@@ -354,7 +354,7 @@ func initInput(t *testing.T, env *testEnvironment) types.Input {
 	return input
 }
 
-func initOutput(t *testing.T, trans <-chan types.Transaction, env *testEnvironment) types.Output {
+func initOutput(t testing.TB, trans <-chan types.Transaction, env *testEnvironment) types.Output {
 	t.Helper()
 
 	confBytes := []byte(env.RenderConfig())
@@ -386,7 +386,7 @@ func initOutput(t *testing.T, trans <-chan types.Transaction, env *testEnvironme
 	return output
 }
 
-func closeConnectors(t *testing.T, input types.Input, output types.Output) {
+func closeConnectors(t testing.TB, input types.Input, output types.Output) {
 	if output != nil {
 		output.CloseAsync()
 		require.NoError(t, output.WaitForClose(time.Second*10))
@@ -399,7 +399,7 @@ func closeConnectors(t *testing.T, input types.Input, output types.Output) {
 
 func sendMessage(
 	ctx context.Context,
-	t *testing.T,
+	t testing.TB,
 	tranChan chan types.Transaction,
 	content string,
 	metadata ...string,
@@ -432,7 +432,7 @@ func sendMessage(
 
 func sendBatch(
 	ctx context.Context,
-	t *testing.T,
+	t testing.TB,
 	tranChan chan types.Transaction,
 	content []string,
 ) error {
@@ -463,7 +463,7 @@ func sendBatch(
 
 func receiveMessage(
 	ctx context.Context,
-	t *testing.T,
+	t testing.TB,
 	tranChan <-chan types.Transaction,
 	err error,
 ) types.Part {
@@ -474,7 +474,7 @@ func receiveMessage(
 	return b
 }
 
-func sendResponse(ctx context.Context, t *testing.T, resChan chan<- types.Response, err error) {
+func sendResponse(ctx context.Context, t testing.TB, resChan chan<- types.Response, err error) {
 	var res types.Response = response.NewAck()
 	if err != nil {
 		res = response.NewError(err)
@@ -488,7 +488,7 @@ func sendResponse(ctx context.Context, t *testing.T, resChan chan<- types.Respon
 }
 
 // nolint:gocritic // Ignore unnamedResult false positive
-func receiveMessageNoRes(ctx context.Context, t *testing.T, tranChan <-chan types.Transaction) (types.Part, chan<- types.Response) {
+func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan types.Transaction) (types.Part, chan<- types.Response) {
 	t.Helper()
 
 	var tran types.Transaction
@@ -505,7 +505,7 @@ func receiveMessageNoRes(ctx context.Context, t *testing.T, tranChan <-chan type
 	return tran.Payload.Get(0), tran.ResponseChan
 }
 
-func messageMatch(t *testing.T, p types.Part, content string, metadata ...string) {
+func messageMatch(t testing.TB, p types.Part, content string, metadata ...string) {
 	t.Helper()
 
 	assert.Equal(t, content, string(p.Get()))
@@ -521,7 +521,7 @@ func messageMatch(t *testing.T, p types.Part, content string, metadata ...string
 	}
 }
 
-func messageInSet(t *testing.T, pop, allowDupes bool, p types.Part, set map[string][]string) {
+func messageInSet(t testing.TB, pop, allowDupes bool, p types.Part, set map[string][]string) {
 	t.Helper()
 
 	metadata, exists := set[string(p.Get())]

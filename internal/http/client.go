@@ -487,6 +487,12 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Messa
 		logErr(err)
 		return nil, err
 	}
+	// Make sure we log the actual request URL
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("%s: %w", req.URL, err)
+		}
+	}()
 
 	startedAt := time.Now()
 

@@ -114,7 +114,7 @@ input:
 		t.Parallel()
 		suite.Run(
 			t, template,
-			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+			testOptPreTest(func(t testing.TB, env *testEnvironment) {
 				env.configVars.var4 = "group" + env.configVars.id
 				require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
 			}),
@@ -127,7 +127,7 @@ input:
 			t.Parallel()
 			suiteExt.Run(
 				t, template,
-				testOptPreTest(func(t *testing.T, env *testEnvironment) {
+				testOptPreTest(func(t testing.TB, env *testEnvironment) {
 					env.configVars.var4 = "group" + env.configVars.id
 				}),
 				testOptPort(kafkaPortStr),
@@ -140,7 +140,7 @@ input:
 			t.Parallel()
 			suite.Run(
 				t, template,
-				testOptPreTest(func(t *testing.T, env *testEnvironment) {
+				testOptPreTest(func(t testing.TB, env *testEnvironment) {
 					env.configVars.var4 = "group" + env.configVars.id
 					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
 				}),
@@ -154,7 +154,7 @@ input:
 			t.Parallel()
 			suite.Run(
 				t, template,
-				testOptPreTest(func(t *testing.T, env *testEnvironment) {
+				testOptPreTest(func(t testing.TB, env *testEnvironment) {
 					env.configVars.var4 = "group" + env.configVars.id
 					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
 				}),
@@ -169,7 +169,7 @@ input:
 		t.Parallel()
 		suite.Run(
 			t, template,
-			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+			testOptPreTest(func(t testing.TB, env *testEnvironment) {
 				env.configVars.var4 = "group" + env.configVars.id
 				topicName := "topic-" + env.configVars.id
 				env.configVars.var1 = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
@@ -185,7 +185,7 @@ input:
 			t.Parallel()
 			suite.Run(
 				t, template,
-				testOptPreTest(func(t *testing.T, env *testEnvironment) {
+				testOptPreTest(func(t testing.TB, env *testEnvironment) {
 					env.configVars.var4 = "group" + env.configVars.id
 					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
 				}),
@@ -201,7 +201,7 @@ input:
 			t.Parallel()
 			suiteSingleCheckpointedStream.Run(
 				t, template,
-				testOptPreTest(func(t *testing.T, env *testEnvironment) {
+				testOptPreTest(func(t testing.TB, env *testEnvironment) {
 					env.configVars.var4 = "group" + env.configVars.id
 					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 1))
 				}),
@@ -218,7 +218,7 @@ input:
 		t.Parallel()
 		suite.Run(
 			t, template,
-			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+			testOptPreTest(func(t testing.TB, env *testEnvironment) {
 				require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
 			}),
 			testOptPort(kafkaPortStr),
@@ -423,7 +423,7 @@ input:
 			t.Parallel()
 			suite.Run(
 				t, template,
-				testOptPreTest(func(t *testing.T, env *testEnvironment) {
+				testOptPreTest(func(t testing.TB, env *testEnvironment) {
 					require.NoError(t, createKafkaTopic(address, env.configVars.id, 4))
 				}),
 				testOptVarOne(""),
@@ -435,7 +435,7 @@ input:
 				t.Parallel()
 				suite.Run(
 					t, template,
-					testOptPreTest(func(t *testing.T, env *testEnvironment) {
+					testOptPreTest(func(t testing.TB, env *testEnvironment) {
 						require.NoError(t, createKafkaTopic(address, env.configVars.id, 4))
 					}),
 					testOptVarOne(""),
@@ -459,7 +459,7 @@ input:
 			t.Parallel()
 			suiteSingleCheckpointedStream.Run(
 				t, template,
-				testOptPreTest(func(t *testing.T, env *testEnvironment) {
+				testOptPreTest(func(t testing.TB, env *testEnvironment) {
 					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 1))
 				}),
 				testOptVarOne(":0"),
@@ -472,7 +472,7 @@ input:
 			t.Parallel()
 			suite.Run(
 				t, template,
-				testOptPreTest(func(t *testing.T, env *testEnvironment) {
+				testOptPreTest(func(t testing.TB, env *testEnvironment) {
 					topicName := "topic-" + env.configVars.id
 					env.configVars.var1 = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
 					require.NoError(t, createKafkaTopic(address, env.configVars.id, 4))
@@ -486,7 +486,7 @@ input:
 				t.Parallel()
 				suite.Run(
 					t, template,
-					testOptPreTest(func(t *testing.T, env *testEnvironment) {
+					testOptPreTest(func(t testing.TB, env *testEnvironment) {
 						topicName := "topic-" + env.configVars.id
 						env.configVars.var1 = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
 						require.NoError(t, createKafkaTopic(address, env.configVars.id, 4))

@@ -5,6 +5,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/redis"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -27,13 +28,15 @@ Redis stream entries are key/value pairs, as such it is necessary to specify the
 key to be set to the body of the message. All metadata fields of the message
 will also be set as key/value pairs, if there is a key collision between
 a metadata item and the body then the body takes precedence.`,
-		Async: true,
+		Async:   true,
+		Batches: true,
 		FieldSpecs: redis.ConfigDocs().Add(
 			docs.FieldCommon("stream", "The stream to add messages to."),
 			docs.FieldCommon("body_key", "A key to set the raw body of the message to."),
 			docs.FieldCommon("max_length", "When greater than zero enforces a rough cap on the length of the target stream."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldCommon("metadata", "Specify criteria for which metadata values are included in the message body.").WithChildren(output.MetadataFields()...),
+			batch.FieldSpec(),
 		),
 		Categories: []Category{
 			CategoryServices,
@@ -53,7 +56,7 @@ func NewRedisStreams(conf Config, mgr types.Manager, log log.Modular, stats metr
 	if err != nil {
 		return nil, err
 	}
-	return OnlySinglePayloads(a), nil
+	return NewBatcherFromConfig(conf.RedisStreams.Batching, a, mgr, log, stats)
 }
 
 //------------------------------------------------------------------------------

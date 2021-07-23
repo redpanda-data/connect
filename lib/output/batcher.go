@@ -3,19 +3,17 @@ package output
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/transaction"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
-
-//------------------------------------------------------------------------------
 
 // Batcher wraps an output with a batching policy.
 type Batcher struct {
@@ -28,14 +26,7 @@ type Batcher struct {
 	messagesIn  <-chan types.Transaction
 	messagesOut chan types.Transaction
 
-	running int32
-
-	ctx           context.Context
-	closeFn       func()
-	fullyCloseCtx context.Context
-	fullyCloseFn  func()
-
-	closedChan chan struct{}
+	shutSig *shutdown.Signaller
 }
 
 // NewBatcherFromConfig creates a new output preceded by a batching mechanism
@@ -66,21 +57,13 @@ func NewBatcher(
 	log log.Modular,
 	stats metrics.Type,
 ) Type {
-	ctx, cancelFn := context.WithCancel(context.Background())
-	fullyCloseCtx, fullyCancelFn := context.WithCancel(context.Background())
-
 	m := Batcher{
-		stats:         stats,
-		log:           log,
-		child:         child,
-		batcher:       batcher,
-		messagesOut:   make(chan types.Transaction),
-		running:       1,
-		ctx:           ctx,
-		closeFn:       cancelFn,
-		fullyCloseCtx: fullyCloseCtx,
-		fullyCloseFn:  fullyCancelFn,
-		closedChan:    make(chan struct{}),
+		stats:       stats,
+		log:         log,
+		child:       child,
+		batcher:     batcher,
+		messagesOut: make(chan types.Transaction),
+		shutSig:     shutdown.NewSignaller(),
 	}
 	return &m
 }
@@ -101,7 +84,7 @@ func (m *Batcher) loop() {
 			m.log.Warnf("Waiting for batch policy to close, blocked by: %v\n", err)
 			err = m.batcher.WaitForClose(time.Second)
 		}
-		close(m.closedChan)
+		m.shutSig.ShutdownComplete()
 	}()
 
 	var nextTimedBatchChan <-chan time.Time
@@ -110,7 +93,7 @@ func (m *Batcher) loop() {
 	}
 
 	var pendingTrans []*transaction.Tracked
-	for atomic.LoadInt32(&m.running) == 1 {
+	for !m.shutSig.ShouldCloseAtLeisure() {
 		if nextTimedBatchChan == nil {
 			if tNext := m.batcher.UntilNext(); tNext >= 0 {
 				nextTimedBatchChan = time.After(tNext)
@@ -122,13 +105,13 @@ func (m *Batcher) loop() {
 		case tran, open := <-m.messagesIn:
 			if !open {
 				// Final flush of remaining documents.
-				atomic.StoreInt32(&m.running, 0)
+				m.shutSig.CloseAtLeisure()
 				flushBatch = true
 				// If we're waiting for a timed batch then we will respect it.
 				if nextTimedBatchChan != nil {
 					select {
 					case <-nextTimedBatchChan:
-					case <-m.ctx.Done():
+					case <-m.shutSig.CloseNowChan():
 					}
 				}
 			} else {
@@ -144,8 +127,7 @@ func (m *Batcher) loop() {
 		case <-nextTimedBatchChan:
 			flushBatch = true
 			nextTimedBatchChan = nil
-		case <-m.ctx.Done():
-			atomic.StoreInt32(&m.running, 0)
+		case <-m.shutSig.CloseAtLeisureChan():
 			flushBatch = true
 		}
 
@@ -161,21 +143,26 @@ func (m *Batcher) loop() {
 		resChan := make(chan types.Response)
 		select {
 		case m.messagesOut <- types.NewTransaction(sendMsg, resChan):
-		case <-m.fullyCloseCtx.Done():
+		case <-m.shutSig.CloseNowChan():
 			return
 		}
 
 		go func(rChan chan types.Response, upstreamTrans []*transaction.Tracked) {
 			select {
-			case <-m.fullyCloseCtx.Done():
+			case <-m.shutSig.CloseNowChan():
 				return
 			case res, open := <-rChan:
 				if !open {
 					return
 				}
+				fullyCloseCtx, done := m.shutSig.CloseNowCtx(context.Background())
 				for _, t := range upstreamTrans {
-					t.Ack(m.fullyCloseCtx, res.Error())
+					if err := t.Ack(fullyCloseCtx, res.Error()); err != nil {
+						done()
+						return
+					}
 				}
+				done()
 			}
 		}(resChan, pendingTrans)
 		pendingTrans = nil
@@ -210,24 +197,21 @@ func (m *Batcher) Consume(msgs <-chan types.Transaction) error {
 
 // CloseAsync shuts down the Batcher and stops processing messages.
 func (m *Batcher) CloseAsync() {
-	atomic.StoreInt32(&m.running, 0)
-	m.closeFn()
+	m.shutSig.CloseAtLeisure()
 }
 
 // WaitForClose blocks until the Batcher output has closed down.
 func (m *Batcher) WaitForClose(timeout time.Duration) error {
-	if atomic.LoadInt32(&m.running) == 0 {
-		go func() {
+	go func() {
+		if m.shutSig.ShouldCloseAtLeisure() {
 			<-time.After(timeout - time.Second)
-			m.fullyCloseFn()
-		}()
-	}
+			m.shutSig.CloseNow()
+		}
+	}()
 	select {
-	case <-m.closedChan:
+	case <-m.shutSig.HasClosedChan():
 	case <-time.After(timeout):
 		return types.ErrTimeout
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

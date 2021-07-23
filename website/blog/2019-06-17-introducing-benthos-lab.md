@@ -1,6 +1,5 @@
 ﻿---
 title: Introducing Benthos Lab
-date: "2019-06-17T00:00:00+0100"
 author: "Ashley Jeffs"
 author_url: https://github.com/Jeffail
 author_image_url: /img/ash.jpg
