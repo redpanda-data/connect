@@ -81,23 +81,23 @@ var _ = registerIntegrationTest("gcp_cloud_storage", func(t *testing.T) {
 	t.Run("gcs_overwrite", func(t *testing.T) {
 		template := `
 output:
- gcp_cloud_storage:
-   bucket: $VAR1-$ID
-   path: $VAR2/${!count("$ID")}.txt
-   max_in_flight: 1
-   mode: Overwrite
+  gcp_cloud_storage:
+    bucket: $VAR1-$ID
+    path: $VAR2/${!count("$ID")}.txt
+    max_in_flight: 1
+    mode: Overwrite
 
 input:
- gcp_cloud_storage:
-   bucket: $VAR1-$ID
-   prefix: $VAR2
+  gcp_cloud_storage:
+    bucket: $VAR1-$ID
+    prefix: $VAR2
 `
 		integrationTests(
 			integrationTestOpenCloseIsolated(),
 			integrationTestStreamIsolated(10),
 		).Run(
 			t, template,
-			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+			testOptPreTest(func(t testing.TB, env *testEnvironment) {
 				require.NoError(t, createGCPCloudStorageBucket(env.configVars.var1, env.configVars.id))
 			}),
 			testOptVarOne(dummyBucketPrefix),
@@ -120,6 +120,7 @@ input:
     prefix: $VAR2/test.txt
 `
 		integrationTests(
+			integrationTestOpenCloseIsolated(),
 			integrationTestStreamIsolatedAppend(10),
 		).Run(
 			t, template,

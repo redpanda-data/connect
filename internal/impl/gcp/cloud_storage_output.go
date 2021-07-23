@@ -237,7 +237,7 @@ func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg types.
 		}
 
 		if isMerge {
-			err = g.appendToFile(tempPath, outputPath)
+			err = g.appendToFile(ctx, tempPath, outputPath)
 			if err != nil {
 				return err
 			}
@@ -265,13 +265,12 @@ func (g *gcpCloudStorageOutput) WaitForClose(time.Duration) error {
 	return nil
 }
 
-func (g *gcpCloudStorageOutput) appendToFile(source, dest string) error {
+func (g *gcpCloudStorageOutput) appendToFile(ctx context.Context, source, dest string) error {
 	client := g.client
 	bucket := client.Bucket(g.conf.Bucket)
 	src := bucket.Object(source)
 	dst := bucket.Object(dest)
 
-	ctx := context.Background()
 	_, err := dst.ComposerFrom(dst, src).Run(ctx)
 	if err != nil {
 		return err
