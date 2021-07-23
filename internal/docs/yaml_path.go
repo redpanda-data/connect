@@ -97,7 +97,7 @@ func setYAMLPathCore(docsProvider Provider, coreType Type, root, value *yaml.Nod
 		}
 		return nil
 	}
-	cSpec, exists := docsProvider.GetDocs(path[0], coreType)
+	cSpec, exists := GetDocs(docsProvider, path[0], coreType)
 	if !exists {
 		return fmt.Errorf("%v: field not recognised", path[0])
 	}

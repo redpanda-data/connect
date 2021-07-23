@@ -86,6 +86,7 @@ func reservedFieldsByType(t Type) map[string]FieldSpec {
 	return m
 }
 
+// TODO: V4 remove this as it's not needed.
 func refreshOldPlugins() {
 	plugins.FlushNameTypes(func(nt [2]string) {
 		RegisterDocs(ComponentSpec{
@@ -100,15 +101,13 @@ func refreshOldPlugins() {
 // GetInferenceCandidate checks a generic config structure for a component and
 // returns either the inferred type name or an error if one cannot be inferred.
 func GetInferenceCandidate(docProvider Provider, t Type, defaultType string, raw interface{}) (string, ComponentSpec, error) {
-	refreshOldPlugins()
-
 	m, ok := raw.(map[string]interface{})
 	if !ok {
 		return "", ComponentSpec{}, fmt.Errorf("invalid config value %T, expected object", raw)
 	}
 
 	if tStr, ok := m["type"].(string); ok {
-		spec, exists := docProvider.GetDocs(tStr, t)
+		spec, exists := GetDocs(docProvider, tStr, t)
 		if !exists {
 			return "", ComponentSpec{}, fmt.Errorf("%v type '%v' was not recognised", string(t), tStr)
 		}
@@ -134,7 +133,7 @@ func getInferenceCandidateFromList(docProvider Provider, t Type, defaultType str
 			continue
 		}
 		candidates = append(candidates, k)
-		if spec, exists := docProvider.GetDocs(k, t); exists {
+		if spec, exists := GetDocs(docProvider, k, t); exists {
 			if len(inferred) > 0 {
 				candidates = []string{inferred, k}
 				sort.Strings(candidates)
@@ -150,7 +149,7 @@ func getInferenceCandidateFromList(docProvider Provider, t Type, defaultType str
 	if len(candidates) == 0 && len(defaultType) > 0 {
 		// A totally empty component config results in the default.
 		// TODO: V4 Disable this
-		if spec, exists := docProvider.GetDocs(defaultType, t); exists {
+		if spec, exists := GetDocs(docProvider, defaultType, t); exists {
 			return defaultType, spec, nil
 		}
 	}
@@ -238,8 +237,5 @@ type SanitiseConfig struct {
 // GetDocs attempts to obtain documentation for a component implementation from
 // a docs provider in the config, or if omitted uses the global provider.
 func (c SanitiseConfig) GetDocs(name string, ctype Type) (ComponentSpec, bool) {
-	if c.DocsProvider == nil {
-		return GetDocs(name, ctype)
-	}
-	return c.DocsProvider.GetDocs(name, ctype)
+	return GetDocs(c.DocsProvider, name, ctype)
 }

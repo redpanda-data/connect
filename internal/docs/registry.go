@@ -38,8 +38,12 @@ func RegisterDocs(spec ComponentSpec) {
 
 // GetDocs attempts to locate a documentation spec for a component identified by
 // a unique name and type combination.
-func GetDocs(name string, ctype Type) (ComponentSpec, bool) {
-	return globalProvider.GetDocs(name, ctype)
+func GetDocs(prov Provider, name string, ctype Type) (ComponentSpec, bool) {
+	refreshOldPlugins()
+	if prov == nil {
+		prov = globalProvider
+	}
+	return prov.GetDocs(name, ctype)
 }
 
 //------------------------------------------------------------------------------
