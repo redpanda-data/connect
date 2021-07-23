@@ -110,7 +110,9 @@ output:
 				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
 			).IsInterpolated(),
 			docs.FieldCommon("content_type", "The content type to set for each object.").IsInterpolated(),
-			docs.FieldCommon("mode", "Write mode for the output, must be one of the following: Append, Overwrite, ErrorIfExists, Ignore. The pipeline will throw an error if the mode is ErrorIfExists and the output file already exists. The pipeline will skip writing the message if the mode is Ignore and output file already exists.").IsInterpolated(),
+			docs.FieldCommon("mode", `Write mode for the output. The default value is  `+"`Overwrite`"+`. The pipeline will throw an error if the mode is ErrorIfExists and the output file already exists. The pipeline will skip writing the message if the mode is Ignore and output file already exists.`).HasOptions(
+				"Overwrite", "Append", "ErrorIfExists", "Ignore",
+			),
 			docs.FieldAdvanced("content_encoding", "An optional content encoding to set for each object.").IsInterpolated(),
 			docs.FieldAdvanced("chunk_size", "An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),

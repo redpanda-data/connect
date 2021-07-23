@@ -113,15 +113,15 @@ output:
     path: $VAR2/test.txt
     max_in_flight: 1
     mode: Append
-
 input:
   gcp_cloud_storage:
     bucket: $VAR1-$ID
     prefix: $VAR2/test.txt
+    codec: chunker:14
 `
 		integrationTests(
 			integrationTestOpenCloseIsolated(),
-			integrationTestStreamIsolatedAppend(10),
+			integrationTestStreamIsolated(10),
 		).Run(
 			t, template,
 			testOptPreTest(func(t testing.TB, env *testEnvironment) {
