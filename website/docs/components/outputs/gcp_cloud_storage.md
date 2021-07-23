@@ -179,7 +179,7 @@ Default: `"application/octet-stream"`
 
 ### `mode`
 
-Write mode for the output, must be one of the following: Append, Overwrite, ErrorIfExists, IgnoreIfExists. The pipeline will throw an error if the mode is ErrorIfExists and the output file already exists. The pipeline will skip writing the message if the mode is IgnoreIfExists and output file already exists.
+Write mode for the output, must be one of the following: Append, Overwrite, ErrorIfExists, Ignore. The pipeline will throw an error if the mode is ErrorIfExists and the output file already exists. The pipeline will skip writing the message if the mode is Ignore and output file already exists.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 

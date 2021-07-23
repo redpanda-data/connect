@@ -407,6 +407,37 @@ func integrationTestStreamIsolated(n int) testDefinition {
 	)
 }
 
+func integrationTestStreamIsolatedAppend(n int) testDefinition {
+	return namedTest(
+		"can send and receive append data isolated",
+		func(t *testing.T, env *testEnvironment) {
+			t.Parallel()
+
+			tranChan := make(chan types.Transaction)
+			output := initOutput(t, tranChan, env)
+			t.Cleanup(func() {
+				closeConnectors(t, nil, output)
+			})
+
+			allData := ""
+
+			for i := 0; i < n; i++ {
+				payload := fmt.Sprintf("hello world: %v", i)
+				allData += payload
+				require.NoError(t, sendMessage(env.ctx, t, tranChan, payload))
+			}
+
+			input := initInput(t, env)
+			t.Cleanup(func() {
+				closeConnectors(t, input, nil)
+			})
+
+			part := receiveMessage(env.ctx, t, input.TransactionChan(), nil)
+			assert.Equal(t, []byte(allData), part.Get())
+		},
+	)
+}
+
 func integrationTestCheckpointCapture() testDefinition {
 	return namedTest(
 		"respects checkpointed offsets",
