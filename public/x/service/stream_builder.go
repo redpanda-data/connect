@@ -55,6 +55,8 @@ type StreamBuilder struct {
 
 	apiMut       manager.APIReg
 	customLogger log.Modular
+
+	env *Environment
 }
 
 // NewStreamBuilder creates a new StreamBuilder.
@@ -65,6 +67,7 @@ func NewStreamBuilder() *StreamBuilder {
 		resources: manager.NewResourceConfig(),
 		metrics:   metrics.NewConfig(),
 		logger:    log.NewConfig(),
+		env:       globalEnvironment,
 	}
 }
 
@@ -172,7 +175,7 @@ func (s *StreamBuilder) AddInputYAML(conf string) error {
 		return err
 	}
 
-	if err := lintYAMLComponent(confBytes, docs.TypeInput); err != nil {
+	if err := s.lintYAMLComponent(confBytes, docs.TypeInput); err != nil {
 		return err
 	}
 	s.inputs = append(s.inputs, iconf)
@@ -190,7 +193,7 @@ func (s *StreamBuilder) AddProcessorYAML(conf string) error {
 		return err
 	}
 
-	if err := lintYAMLComponent(confBytes, docs.TypeProcessor); err != nil {
+	if err := s.lintYAMLComponent(confBytes, docs.TypeProcessor); err != nil {
 		return err
 	}
 	s.processors = append(s.processors, pconf)
@@ -240,7 +243,7 @@ func (s *StreamBuilder) AddOutputYAML(conf string) error {
 		return err
 	}
 
-	if err := lintYAMLComponent(confBytes, docs.TypeOutput); err != nil {
+	if err := s.lintYAMLComponent(confBytes, docs.TypeOutput); err != nil {
 		return err
 	}
 	s.outputs = append(s.outputs, oconf)
@@ -265,7 +268,7 @@ func (s *StreamBuilder) AddCacheYAML(conf string) error {
 		}
 	}
 
-	if err := lintYAMLComponent(confBytes, docs.TypeCache); err != nil {
+	if err := s.lintYAMLComponent(confBytes, docs.TypeCache); err != nil {
 		return err
 	}
 	s.resources.ResourceCaches = append(s.resources.ResourceCaches, cconf)
@@ -290,7 +293,7 @@ func (s *StreamBuilder) AddRateLimitYAML(conf string) error {
 		}
 	}
 
-	if err := lintYAMLComponent(confBytes, docs.TypeRateLimit); err != nil {
+	if err := s.lintYAMLComponent(confBytes, docs.TypeRateLimit); err != nil {
 		return err
 	}
 	s.resources.ResourceRateLimits = append(s.resources.ResourceRateLimits, rconf)
@@ -311,7 +314,9 @@ func (s *StreamBuilder) AddResourcesYAML(conf string) error {
 		return err
 	}
 
-	if err := lintsToErr(manager.Spec().LintYAML(docs.NewLintContext(), node)); err != nil {
+	ctx := docs.NewLintContext()
+	ctx.DocsProvider = s.env.internal
+	if err := lintsToErr(manager.Spec().LintYAML(ctx, node)); err != nil {
 		return err
 	}
 
@@ -343,7 +348,9 @@ func (s *StreamBuilder) SetYAML(conf string) error {
 		return err
 	}
 
-	if err := lintsToErr(config.Spec().LintYAML(docs.NewLintContext(), node)); err != nil {
+	ctx := docs.NewLintContext()
+	ctx.DocsProvider = s.env.internal
+	if err := lintsToErr(config.Spec().LintYAML(ctx, node)); err != nil {
 		return err
 	}
 
@@ -369,7 +376,7 @@ func (s *StreamBuilder) SetMetricsYAML(conf string) error {
 		return err
 	}
 
-	if err := lintYAMLComponent(confBytes, docs.TypeMetrics); err != nil {
+	if err := s.lintYAMLComponent(confBytes, docs.TypeMetrics); err != nil {
 		return err
 	}
 	s.metrics = mconf
@@ -391,7 +398,9 @@ func (s *StreamBuilder) SetLoggerYAML(conf string) error {
 		return err
 	}
 
-	if err := lintsToErr(log.Spec().LintYAML(docs.NewLintContext(), node)); err != nil {
+	ctx := docs.NewLintContext()
+	ctx.DocsProvider = s.env.internal
+	if err := lintsToErr(log.Spec().LintYAML(ctx, node)); err != nil {
 		return err
 	}
 
@@ -414,6 +423,7 @@ func (s *StreamBuilder) AsYAML() (string, error) {
 	if err := config.Spec().SanitiseYAML(&node, docs.SanitiseConfig{
 		RemoveTypeField:  true,
 		RemoveDeprecated: false,
+		DocsProvider:     s.env.internal,
 	}); err != nil {
 		return "", err
 	}
@@ -481,6 +491,7 @@ func (s *StreamBuilder) Build() (*Stream, error) {
 		if err == nil {
 			_ = config.Spec().SanitiseYAML(&sanitNode, docs.SanitiseConfig{
 				RemoveTypeField: true,
+				DocsProvider:    s.env.internal,
 			})
 		}
 		if apiMut, err = api.New("", "", s.http, sanitNode, logger, stats); err != nil {
@@ -499,7 +510,7 @@ func (s *StreamBuilder) Build() (*Stream, error) {
 		)
 	}
 
-	mgr, err := manager.NewV2(conf.ResourceConfig, apiMut, logger, stats)
+	mgr, err := manager.NewV2(conf.ResourceConfig, apiMut, logger, stats, manager.OptSetEnvironment(s.env.internal))
 	if err != nil {
 		return nil, err
 	}
@@ -602,10 +613,12 @@ func lintsToErr(lints []docs.Lint) error {
 	return e
 }
 
-func lintYAMLComponent(b []byte, ctype docs.Type) error {
+func (s *StreamBuilder) lintYAMLComponent(b []byte, ctype docs.Type) error {
 	nconf, err := getYAMLNode(b)
 	if err != nil {
 		return err
 	}
-	return lintsToErr(docs.LintYAML(docs.NewLintContext(), ctype, nconf))
+	ctx := docs.NewLintContext()
+	ctx.DocsProvider = s.env.internal
+	return lintsToErr(docs.LintYAML(ctx, ctype, nconf))
 }

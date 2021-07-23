@@ -20,30 +20,22 @@ import (
 )
 
 func TestInitialization(t *testing.T) {
-	mgr, err := New(NewConfig(), nil, log.Noop(), metrics.Noop())
-	require.NoError(t, err)
+	env := bundle.NewEnvironment()
 
-	mgr.bufferBundle = &bundle.BufferSet{}
-	mgr.cacheBundle = &bundle.CacheSet{}
-	mgr.inputBundle = &bundle.InputSet{}
-	mgr.outputBundle = &bundle.OutputSet{}
-	mgr.processorBundle = &bundle.ProcessorSet{}
-	mgr.rateLimitBundle = &bundle.RateLimitSet{}
-
-	mgr.bufferBundle.Add(func(c buffer.Config, mgr bundle.NewManagement) (buffer.Type, error) {
+	env.Buffers.Add(func(c buffer.Config, mgr bundle.NewManagement) (buffer.Type, error) {
 		return nil, errors.New("not this buffer")
 	}, docs.ComponentSpec{
 		Name: "testbuffer",
 	})
 
-	mgr.cacheBundle.Add(func(c cache.Config, mgr bundle.NewManagement) (types.Cache, error) {
+	env.Caches.Add(func(c cache.Config, mgr bundle.NewManagement) (types.Cache, error) {
 		return nil, errors.New("not this cache")
 	}, docs.ComponentSpec{
 		Name: "testcache",
 	})
 
 	lenInputProcs := 0
-	mgr.inputBundle.Add(func(b bool, c input.Config, mgr bundle.NewManagement, p ...types.PipelineConstructorFunc) (input.Type, error) {
+	env.Inputs.Add(func(b bool, c input.Config, mgr bundle.NewManagement, p ...types.PipelineConstructorFunc) (input.Type, error) {
 		lenInputProcs = len(p)
 		return nil, errors.New("not this input")
 	}, docs.ComponentSpec{
@@ -51,24 +43,27 @@ func TestInitialization(t *testing.T) {
 	})
 
 	lenOutputProcs := 0
-	mgr.outputBundle.Add(func(c output.Config, mgr bundle.NewManagement, p ...types.PipelineConstructorFunc) (output.Type, error) {
+	env.Outputs.Add(func(c output.Config, mgr bundle.NewManagement, p ...types.PipelineConstructorFunc) (output.Type, error) {
 		lenOutputProcs = len(p)
 		return nil, errors.New("not this output")
 	}, docs.ComponentSpec{
 		Name: "testoutput",
 	})
 
-	mgr.processorBundle.Add(func(c processor.Config, mgr bundle.NewManagement) (processor.Type, error) {
+	env.Processors.Add(func(c processor.Config, mgr bundle.NewManagement) (processor.Type, error) {
 		return nil, errors.New("not this processor")
 	}, docs.ComponentSpec{
 		Name: "testprocessor",
 	})
 
-	mgr.rateLimitBundle.Add(func(c ratelimit.Config, mgr bundle.NewManagement) (types.RateLimit, error) {
+	env.RateLimits.Add(func(c ratelimit.Config, mgr bundle.NewManagement) (types.RateLimit, error) {
 		return nil, errors.New("not this rate limit")
 	}, docs.ComponentSpec{
 		Name: "testratelimit",
 	})
+
+	mgr, err := NewV2(NewResourceConfig(), nil, log.Noop(), metrics.Noop(), OptSetEnvironment(env))
+	require.NoError(t, err)
 
 	bConf := buffer.NewConfig()
 	bConf.Type = "testbuffer"

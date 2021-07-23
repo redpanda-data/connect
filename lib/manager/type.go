@@ -66,12 +66,7 @@ type Type struct {
 	resourceLock *sync.RWMutex
 
 	// Collections of component constructors
-	bufferBundle    *bundle.BufferSet
-	cacheBundle     *bundle.CacheSet
-	inputBundle     *bundle.InputSet
-	outputBundle    *bundle.OutputSet
-	processorBundle *bundle.ProcessorSet
-	rateLimitBundle *bundle.RateLimitSet
+	env *bundle.Environment
 
 	logger log.Modular
 	stats  *imetrics.Namespaced
@@ -89,9 +84,20 @@ func New(conf Config, apiReg APIReg, log log.Modular, stats metrics.Type) (*Type
 	return NewV2(ResourceConfig{Manager: conf}, apiReg, log, stats)
 }
 
+// OptFunc is an opt setting for a manager type.
+type OptFunc func(*Type)
+
+// OptSetEnvironment determines the environment from which the manager
+// initializes components and resources. This option is for internal use only.
+func OptSetEnvironment(e *bundle.Environment) OptFunc {
+	return func(t *Type) {
+		t.env = e
+	}
+}
+
 // NewV2 returns an instance of manager.Type, which can be shared amongst
 // components and logical threads of a Benthos service.
-func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Type) (*Type, error) {
+func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Type, opts ...OptFunc) (*Type, error) {
 	t := &Type{
 		apiReg: apiReg,
 
@@ -103,13 +109,8 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 		plugins:      map[string]interface{}{},
 		resourceLock: &sync.RWMutex{},
 
-		// All bundles default to everything that was imported.
-		bufferBundle:    bundle.AllBuffers,
-		cacheBundle:     bundle.AllCaches,
-		inputBundle:     bundle.AllInputs,
-		outputBundle:    bundle.AllOutputs,
-		processorBundle: bundle.AllProcessors,
-		rateLimitBundle: bundle.AllRateLimits,
+		// Environment defaults to global (everything that was imported).
+		env: bundle.GlobalEnvironment,
 
 		logger: log,
 		stats:  imetrics.NewNamespaced(stats),
@@ -118,6 +119,10 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 		pipeLock: &sync.RWMutex{},
 
 		conditions: map[string]types.Condition{},
+	}
+
+	for _, opt := range opts {
+		opt(t)
 	}
 
 	conf, err := conf.collapsed()
@@ -362,27 +367,7 @@ func (t *Type) Logger() log.Modular {
 
 // GetDocs returns a documentation spec for an implementation of a component.
 func (t *Type) GetDocs(name string, ctype docs.Type) (docs.ComponentSpec, bool) {
-	var spec docs.ComponentSpec
-	var ok bool
-
-	switch ctype {
-	case docs.TypeBuffer:
-		spec, ok = t.bufferBundle.DocsFor(name)
-	case docs.TypeCache:
-		spec, ok = t.cacheBundle.DocsFor(name)
-	case docs.TypeInput:
-		spec, ok = t.inputBundle.DocsFor(name)
-	case docs.TypeOutput:
-		spec, ok = t.outputBundle.DocsFor(name)
-	case docs.TypeProcessor:
-		spec, ok = t.processorBundle.DocsFor(name)
-	case docs.TypeRateLimit:
-		spec, ok = t.rateLimitBundle.DocsFor(name)
-	default:
-		return docs.GetDocs(name, ctype)
-	}
-
-	return spec, ok
+	return t.env.GetDocs(name, ctype)
 }
 
 //------------------------------------------------------------------------------
@@ -405,7 +390,7 @@ func closeWithContext(ctx context.Context, c types.Closable) error {
 
 // NewBuffer attempts to create a new buffer component from a config.
 func (t *Type) NewBuffer(conf buffer.Config) (buffer.Type, error) {
-	return t.bufferBundle.Init(conf, t)
+	return t.env.Buffers.Init(conf, t)
 }
 
 //------------------------------------------------------------------------------
@@ -440,7 +425,7 @@ func (t *Type) NewCache(conf cache.Config) (types.Cache, error) {
 		}
 		mgr = t.forComponent(conf.Label)
 	}
-	return t.cacheBundle.Init(conf, mgr)
+	return t.env.Caches.Init(conf, mgr)
 }
 
 // StoreCache attempts to store a new cache resource. If an existing resource
@@ -506,7 +491,7 @@ func (t *Type) NewInput(conf input.Config, hasBatchProc bool, pipelines ...types
 		}
 		mgr = t.forComponent(conf.Label)
 	}
-	return t.inputBundle.Init(hasBatchProc, conf, mgr, pipelines...)
+	return t.env.Inputs.Init(hasBatchProc, conf, mgr, pipelines...)
 }
 
 // StoreInput attempts to store a new input resource. If an existing resource
@@ -575,7 +560,7 @@ func (t *Type) NewProcessor(conf processor.Config) (types.Processor, error) {
 		}
 		mgr = t.forComponent(conf.Label)
 	}
-	return t.processorBundle.Init(conf, mgr)
+	return t.env.Processors.Init(conf, mgr)
 }
 
 // StoreProcessor attempts to store a new processor resource. If an existing
@@ -643,7 +628,7 @@ func (t *Type) NewOutput(conf output.Config, pipelines ...types.PipelineConstruc
 		}
 		mgr = t.forComponent(conf.Label)
 	}
-	return t.outputBundle.Init(conf, mgr, pipelines...)
+	return t.env.Outputs.Init(conf, mgr, pipelines...)
 }
 
 // StoreOutput attempts to store a new output resource. If an existing resource
@@ -715,7 +700,7 @@ func (t *Type) NewRateLimit(conf ratelimit.Config) (types.RateLimit, error) {
 		}
 		mgr = t.forComponent(conf.Label)
 	}
-	return t.rateLimitBundle.Init(conf, mgr)
+	return t.env.RateLimits.Init(conf, mgr)
 }
 
 // StoreRateLimit attempts to store a new rate limit resource. If an existing

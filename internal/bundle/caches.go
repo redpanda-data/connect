@@ -1,7 +1,6 @@
 package bundle
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -34,9 +33,6 @@ type CacheSet struct {
 func (s *CacheSet) Add(constructor CacheConstructor, spec docs.ComponentSpec) error {
 	if s.specs == nil {
 		s.specs = map[string]cacheSpec{}
-	}
-	if _, exists := s.specs[spec.Name]; exists {
-		return fmt.Errorf("conflicting cache name: %v", spec.Name)
 	}
 	s.specs[spec.Name] = cacheSpec{
 		constructor: constructor,

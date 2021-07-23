@@ -110,7 +110,7 @@ output:
 				return "", nil, err
 			}
 
-			return fmt.Sprintf(`{"id":%v,"content":%v}`, id, value.String()), nil, err
+			return fmt.Sprintf(`{"content":%v,"id":%v}`, value.String(), id), nil, err
 		}
 
 		suite := integrationTests(

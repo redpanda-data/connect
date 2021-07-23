@@ -332,7 +332,7 @@ func TestFieldDeprecatedFunctionExpressions(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, err := ParseField(test.input)
+			e, err := ParseField(GlobalContext(), test.input)
 			require.Nil(t, err)
 			var res string
 			if test.escaped {
@@ -364,7 +364,7 @@ func TestFieldCountersFunction(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		e, err := ParseField(test[0])
+		e, err := ParseField(GlobalContext(), test[0])
 		require.Nil(t, err)
 		res := e.String(0, message.New(nil))
 		assert.Equal(t, test[1], res)
@@ -375,7 +375,7 @@ func TestFieldUUIDV4Function(t *testing.T) {
 	results := map[string]struct{}{}
 
 	for i := 0; i < 100; i++ {
-		e, err := ParseField("${!uuid_v4}")
+		e, err := ParseField(GlobalContext(), "${!uuid_v4}")
 		require.Nil(t, err)
 		res := e.String(0, message.New(nil))
 		if _, exists := results[res]; exists {
@@ -388,7 +388,7 @@ func TestFieldUUIDV4Function(t *testing.T) {
 func TestFieldTimestamps(t *testing.T) {
 	now := time.Now()
 
-	e, perr := ParseField("${!timestamp_unix_nano}")
+	e, perr := ParseField(GlobalContext(), "${!timestamp_unix_nano}")
 	require.Nil(t, perr)
 
 	tStamp := e.String(0, message.New(nil))
@@ -404,7 +404,7 @@ func TestFieldTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, perr = ParseField("${!timestamp_unix}")
+	e, perr = ParseField(GlobalContext(), "${!timestamp_unix}")
 	require.Nil(t, perr)
 
 	tStamp = e.String(0, message.New(nil))
@@ -420,7 +420,7 @@ func TestFieldTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, perr = ParseField("${!timestamp_unix:10}")
+	e, perr = ParseField(GlobalContext(), "${!timestamp_unix:10}")
 	require.Nil(t, perr)
 
 	tStamp = e.String(0, message.New(nil))
@@ -437,7 +437,7 @@ func TestFieldTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, perr = ParseField("${!timestamp}")
+	e, perr = ParseField(GlobalContext(), "${!timestamp}")
 	require.Nil(t, perr)
 
 	tStamp = e.String(0, message.New(nil))
@@ -452,7 +452,7 @@ func TestFieldTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, perr = ParseField("${!timestamp_utc}")
+	e, perr = ParseField(GlobalContext(), "${!timestamp_utc}")
 	require.Nil(t, perr)
 
 	tStamp = e.String(0, message.New(nil))
@@ -470,7 +470,7 @@ func TestFieldTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, perr = ParseField("${!timestamp_utc:2006-01-02T15:04:05.000Z}")
+	e, perr = ParseField(GlobalContext(), "${!timestamp_utc:2006-01-02T15:04:05.000Z}")
 	require.Nil(t, perr)
 
 	tStamp = e.String(0, message.New(nil))

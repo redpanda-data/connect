@@ -21,7 +21,7 @@ func MappingFieldSpec() docs.FieldSpec {
 		`if ![ "count", "error", "latency" ].contains(this) { deleted() }`,
 	}
 	summary := "An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported."
-	return docs.FieldString("metrics_mapping", summary, examples...).Linter(docs.LintBloblangMapping).HasDefault("")
+	return docs.FieldBloblang("metrics_mapping", summary, examples...).HasDefault("")
 }
 
 // Mapping is a compiled Bloblang mapping used to rewrite metrics.

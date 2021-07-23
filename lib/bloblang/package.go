@@ -5,7 +5,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -50,7 +49,7 @@ func (w *fieldWrap) String(index int, msg Message) string {
 // When a parsing error occurs the returned error will be a *parser.Error type,
 // which allows you to gain positional and structured error messages.
 func NewField(expr string) (Field, error) {
-	e, err := parser.ParseField(expr)
+	e, err := parser.ParseField(parser.GlobalContext(), expr)
 	if err != nil {
 		return nil, err
 	}
@@ -98,10 +97,7 @@ func (w *mappingWrap) MapPart(index int, msg Message) (types.Part, error) {
 // When a parsing error occurs the returned error may be a *parser.Error type,
 // which allows you to gain positional and structured error messages.
 func NewMapping(expr string) (Mapping, error) {
-	e, err := parser.ParseMapping("", expr, parser.Context{
-		Functions: query.AllFunctions,
-		Methods:   query.AllMethods,
-	})
+	e, err := parser.ParseMapping(parser.GlobalContext(), "", expr)
 	if err != nil {
 		return nil, err
 	}

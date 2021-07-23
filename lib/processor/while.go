@@ -40,12 +40,12 @@ If following a loop execution the number of messages in a batch is reduced to ze
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("at_least_once", "Whether to always run the child processors at least one time."),
 			docs.FieldAdvanced("max_loops", "An optional maximum number of loops to execute. Helps protect against accidentally creating infinite loops."),
-			docs.FieldCommon(
+			docs.FieldBloblang(
 				"check",
 				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether the while loop should execute again.",
 				`errored()`,
 				`this.urls.unprocessed.length() > 0`,
-			).HasDefault("").Linter(docs.LintBloblangMapping),
+			).HasDefault(""),
 			docs.FieldDeprecated("condition").HasType(docs.FieldTypeCondition).OmitWhen(func(v, _ interface{}) (string, bool) {
 				defaultBytes, err := yaml.Marshal(condition.NewConfig())
 				if err != nil {

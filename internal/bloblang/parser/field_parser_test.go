@@ -20,7 +20,7 @@ func TestFieldStaticExpressionOptimization(t *testing.T) {
 
 	for k, v := range tests {
 		t.Run(k, func(t *testing.T) {
-			rs, err := parseFieldResolvers(k)
+			rs, err := parseFieldResolvers(GlobalContext(), k)
 			require.Nil(t, err)
 
 			e := field.NewExpression(rs...)
@@ -73,7 +73,7 @@ func TestFieldExpressionParserErrors(t *testing.T) {
 		test := test
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			_, err := ParseField(test.input)
+			_, err := ParseField(GlobalContext(), test.input)
 			require.NotNil(t, err)
 			require.Equal(t, test.err, err.ErrorAtChar([]rune(test.input)))
 		})
@@ -234,7 +234,7 @@ func TestFieldExpressions(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, err := ParseField(test.input)
+			e, err := ParseField(GlobalContext(), test.input)
 			require.Nil(t, err)
 
 			var res string

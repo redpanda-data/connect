@@ -1,7 +1,6 @@
 package bundle
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -36,9 +35,6 @@ type ProcessorSet struct {
 func (s *ProcessorSet) Add(constructor ProcessorConstructor, spec docs.ComponentSpec) error {
 	if s.specs == nil {
 		s.specs = map[string]processorSpec{}
-	}
-	if _, exists := s.specs[spec.Name]; exists {
-		return fmt.Errorf("conflicting processor name: %v", spec.Name)
 	}
 	s.specs[spec.Name] = processorSpec{
 		constructor: constructor,

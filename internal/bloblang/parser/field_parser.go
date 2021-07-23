@@ -19,33 +19,35 @@ func intoStaticResolver(p Func) Func {
 	}
 }
 
-func aFunction(input []rune) Result {
-	if len(input) < 3 || input[0] != '$' || input[1] != '{' || input[2] != '!' {
-		return Fail(NewError(input, "${!"), input)
-	}
-	i := 3
-	for ; i < len(input); i++ {
-		if input[i] == '}' {
-			res := ParseDeprecatedQuery(input[3:i])
-			if res.Err == nil {
-				if len(res.Remaining) > 0 {
-					pos := len(input[3:i]) - len(res.Remaining)
-					return Fail(NewFatalError(input[3+pos:], errors.New("required"), "end of expression"), input)
-				}
-				res.Remaining = input[i+1:]
-				res.Payload = field.NewQueryResolver(res.Payload.(query.Function))
-			} else {
-				pos := len(input[3:i]) - len(res.Err.Input)
-				if !res.Err.IsFatal() {
-					res.Err.Err = errors.New("required")
-				}
-				res.Err.Input = input[3+pos:]
-				res.Remaining = input
-			}
-			return res
+func aFunction(pCtx Context) Func {
+	return func(input []rune) Result {
+		if len(input) < 3 || input[0] != '$' || input[1] != '{' || input[2] != '!' {
+			return Fail(NewError(input, "${!"), input)
 		}
+		i := 3
+		for ; i < len(input); i++ {
+			if input[i] == '}' {
+				res := ParseDeprecatedQuery(pCtx)(input[3:i])
+				if res.Err == nil {
+					if len(res.Remaining) > 0 {
+						pos := len(input[3:i]) - len(res.Remaining)
+						return Fail(NewFatalError(input[3+pos:], errors.New("required"), "end of expression"), input)
+					}
+					res.Remaining = input[i+1:]
+					res.Payload = field.NewQueryResolver(res.Payload.(query.Function))
+				} else {
+					pos := len(input[3:i]) - len(res.Err.Input)
+					if !res.Err.IsFatal() {
+						res.Err.Err = errors.New("required")
+					}
+					res.Err.Input = input[3+pos:]
+					res.Remaining = input
+				}
+				return res
+			}
+		}
+		return Success(field.StaticResolver(string(input)), nil)
 	}
-	return Success(field.StaticResolver(string(input)), nil)
 }
 
 func escapedBlock(input []rune) Result {
@@ -63,12 +65,12 @@ func escapedBlock(input []rune) Result {
 
 //------------------------------------------------------------------------------
 
-func parseFieldResolvers(expr string) ([]field.Resolver, *Error) {
+func parseFieldResolvers(pCtx Context, expr string) ([]field.Resolver, *Error) {
 	var resolvers []field.Resolver
 
 	p := OneOf(
 		escapedBlock,
-		aFunction,
+		aFunction(pCtx),
 		intoStaticResolver(Char('$')),
 		intoStaticResolver(NotChar('$')),
 	)
@@ -87,8 +89,8 @@ func parseFieldResolvers(expr string) ([]field.Resolver, *Error) {
 }
 
 // ParseField attempts to parse a field expression.
-func ParseField(expr string) (*field.Expression, *Error) {
-	resolvers, err := parseFieldResolvers(expr)
+func ParseField(pCtx Context, expr string) (*field.Expression, *Error) {
+	resolvers, err := parseFieldResolvers(pCtx, expr)
 	if err != nil {
 		return nil, err
 	}

@@ -5,7 +5,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/plugins"
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 )
 
 func init() {
@@ -20,7 +19,7 @@ func init() {
 // When a parsing error occurs the returned error will be a *parser.Error type,
 // which allows you to gain positional and structured error messages.
 func NewField(expr string) (*field.Expression, error) {
-	e, err := parser.ParseField(expr)
+	e, err := parser.ParseField(parser.GlobalContext(), expr)
 	if err != nil {
 		return e, err
 	}
@@ -34,10 +33,7 @@ func NewField(expr string) (*field.Expression, error) {
 // When a parsing error occurs the returned error may be a *parser.Error type,
 // which allows you to gain positional and structured error messages.
 func NewMapping(path, expr string) (*mapping.Executor, error) {
-	e, err := parser.ParseMapping(path, expr, parser.Context{
-		Functions: query.AllFunctions,
-		Methods:   query.AllMethods,
-	})
+	e, err := parser.ParseMapping(parser.GlobalContext(), path, expr)
 	if err != nil {
 		return nil, err
 	}

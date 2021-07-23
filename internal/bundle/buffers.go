@@ -1,7 +1,6 @@
 package bundle
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -34,9 +33,6 @@ type BufferSet struct {
 func (s *BufferSet) Add(constructor BufferConstructor, spec docs.ComponentSpec) error {
 	if s.specs == nil {
 		s.specs = map[string]bufferSpec{}
-	}
-	if _, exists := s.specs[spec.Name]; exists {
-		return fmt.Errorf("conflicting buffer name: %v", spec.Name)
 	}
 	s.specs[spec.Name] = bufferSpec{
 		constructor: constructor,

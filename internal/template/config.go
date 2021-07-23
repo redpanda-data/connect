@@ -243,9 +243,9 @@ func ConfigSpec() docs.FieldSpecs {
 		docs.FieldString("summary", "A short summary of the component.").HasDefault(""),
 		docs.FieldString("description", "A longer form description of the component and how to use it.").HasDefault(""),
 		docs.FieldCommon("fields", "The configuration fields of the template, fields specified here will be parsed from a Benthos config and will be accessible from the template mapping.").Array().WithChildren(FieldConfigSpec()...),
-		docs.FieldString(
+		docs.FieldBloblang(
 			"mapping", "A [Bloblang](/docs/guides/bloblang/about) mapping that translates the fields of the template into a valid Benthos configuration for the target component type.",
-		).Linter(docs.LintBloblangMapping),
+		),
 		metrics.MappingFieldSpec(),
 		docs.FieldCommon(
 			"tests", "Optional unit test definitions for the template that verify certain configurations produce valid configs. These tests are executed with the command `benthos template lint`.",

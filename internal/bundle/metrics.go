@@ -1,7 +1,6 @@
 package bundle
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -34,9 +33,6 @@ type MetricsSet struct {
 func (s *MetricsSet) Add(constructor MetricConstructor, spec docs.ComponentSpec) error {
 	if s.specs == nil {
 		s.specs = map[string]metricsSpec{}
-	}
-	if _, exists := s.specs[spec.Name]; exists {
-		return fmt.Errorf("conflicting metrics name: %v", spec.Name)
 	}
 	s.specs[spec.Name] = metricsSpec{
 		constructor: constructor,

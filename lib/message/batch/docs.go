@@ -39,11 +39,11 @@ Allows you to configure a [batching policy](/docs/configuration/batching).`,
 				"A period in which an incomplete batch should be flushed regardless of its size.",
 				"1s", "1m", "500ms",
 			).HasDefault(""),
-			docs.FieldString(
+			docs.FieldBloblang(
 				"check",
 				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should end a batch.",
 				`this.type == "end_of_transaction"`,
-			).HasDefault("").Linter(docs.LintBloblangMapping),
+			).HasDefault(""),
 			docs.FieldDeprecated("condition").HasType(docs.FieldTypeCondition).OmitWhen(func(v, _ interface{}) (string, bool) {
 				m, ok := v.(map[string]interface{})
 				if !ok {

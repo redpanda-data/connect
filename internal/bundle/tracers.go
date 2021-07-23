@@ -1,7 +1,6 @@
 package bundle
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -33,9 +32,6 @@ type TracerSet struct {
 func (s *TracerSet) Add(constructor TracerConstructor, spec docs.ComponentSpec) error {
 	if s.specs == nil {
 		s.specs = map[string]tracerSpec{}
-	}
-	if _, exists := s.specs[spec.Name]; exists {
-		return fmt.Errorf("conflicting tracer name: %v", spec.Name)
 	}
 	s.specs[spec.Name] = tracerSpec{
 		constructor: constructor,

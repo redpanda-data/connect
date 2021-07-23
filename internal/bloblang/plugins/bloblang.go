@@ -30,7 +30,7 @@ func Register() error {
 		).Beta(),
 		func(target query.Function, args ...interface{}) (query.Function, error) {
 			mappingStr := args[0].(string)
-			exec, err := parser.ParseMapping("", mappingStr, dynamicBloblangParserContext)
+			exec, err := parser.ParseMapping(dynamicBloblangParserContext, "", mappingStr)
 			if err != nil {
 				return nil, err
 			}

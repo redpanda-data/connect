@@ -15,11 +15,11 @@ import (
 )
 
 // ExtractTracingSpanMappingDocs returns a docs spec for a mapping field.
-var ExtractTracingSpanMappingDocs = docs.FieldAdvanced(
+var ExtractTracingSpanMappingDocs = docs.FieldBloblang(
 	"extract_tracing_map", "EXPERIMENTAL: A [Bloblang mapping](/docs/guides/bloblang/about) that attempts to extract an object containing tracing propagation information, which will then be used as the root tracing span for the message. The specification of the extracted fields must match the format used by the service wide tracer.",
 	`root = meta()`,
 	`root = this.meta.span`,
-).AtVersion("3.45.0").Linter(docs.LintBloblangMapping)
+).AtVersion("3.45.0").Advanced()
 
 // SpanReader wraps an async reader with a mechanism for extracting tracing
 // spans from the consumed message using a Bloblang mapping.

@@ -50,9 +50,6 @@ func (s *OutputSet) Add(constructor OutputConstructor, spec docs.ComponentSpec) 
 	if s.specs == nil {
 		s.specs = map[string]outputSpec{}
 	}
-	if _, exists := s.specs[spec.Name]; exists {
-		return fmt.Errorf("conflicting output name: %v", spec.Name)
-	}
 	s.specs[spec.Name] = outputSpec{
 		constructor: constructor,
 		spec:        spec,

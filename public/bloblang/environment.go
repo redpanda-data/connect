@@ -33,10 +33,10 @@ func NewEnvironment() *Environment {
 // Parse a Bloblang mapping using the Environment to determine the features
 // (functions and methods) available to the mapping.
 func (e *Environment) Parse(blobl string) (*Executor, error) {
-	exec, err := parser.ParseMapping("", blobl, parser.Context{
-		Functions: e.functions,
-		Methods:   e.methods,
-	})
+	pCtx := parser.GlobalContext()
+	pCtx.Functions = e.functions
+	pCtx.Methods = e.methods
+	exec, err := parser.ParseMapping(pCtx, "", blobl)
 	if err != nil {
 		return nil, err
 	}
@@ -110,10 +110,7 @@ func (e *Environment) RegisterFunction(name string, ctor FunctionConstructor) er
 // Parse a Bloblang mapping allowing the use of the globally accessible range of
 // features (functions and methods).
 func Parse(blobl string) (*Executor, error) {
-	exec, err := parser.ParseMapping("", blobl, parser.Context{
-		Functions: query.AllFunctions,
-		Methods:   query.AllMethods,
-	})
+	exec, err := parser.ParseMapping(parser.GlobalContext(), "", blobl)
 	if err != nil {
 		return nil, err
 	}

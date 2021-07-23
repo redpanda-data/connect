@@ -429,7 +429,8 @@ func lintYAMLFromOmit(parentSpec FieldSpecs, lintTargetSpec FieldSpec, parent, n
 }
 
 func customLintFromYAML(ctx LintContext, spec FieldSpec, node *yaml.Node) []Lint {
-	if spec.customLintFn == nil {
+	lintFn := spec.GetLintFunc()
+	if lintFn == nil {
 		return nil
 	}
 	fieldValue, err := spec.YAMLToValue(node, ToValueConfig{
@@ -441,7 +442,7 @@ func customLintFromYAML(ctx LintContext, spec FieldSpec, node *yaml.Node) []Lint
 		// that we'll capture this type error elsewhere.
 		return []Lint{}
 	}
-	lints := spec.customLintFn(ctx, node.Line, node.Column, fieldValue)
+	lints := lintFn(ctx, node.Line, node.Column, fieldValue)
 	return lints
 }
 

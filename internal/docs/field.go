@@ -128,6 +128,9 @@ type FieldSpec struct {
 	// functions.
 	Interpolated bool `json:"interpolated"`
 
+	// Bloblang indicates that a string field is a Bloblang mapping.
+	Bloblang bool `json:"bloblang"`
+
 	// Examples is a slice of optional example values for a field.
 	Examples []interface{} `json:"examples,omitempty"`
 
@@ -151,6 +154,13 @@ type FieldSpec struct {
 // IsInterpolated indicates that the field supports interpolation functions.
 func (f FieldSpec) IsInterpolated() FieldSpec {
 	f.Interpolated = true
+	f.customLintFn = LintBloblangField
+	return f
+}
+
+// IsBloblang indicates that the field is a Bloblang mapping.
+func (f FieldSpec) IsBloblang() FieldSpec {
+	f.Bloblang = true
 	f.customLintFn = LintBloblangField
 	return f
 }
@@ -299,6 +309,21 @@ func (f FieldSpec) Unlinted() FieldSpec {
 	return f
 }
 
+// GetLintFunc returns a lint func for the field if one is applicable, otherwise
+// nil is returned.
+func (f FieldSpec) GetLintFunc() LintFunc {
+	if f.customLintFn != nil {
+		return f.customLintFn
+	}
+	if f.Interpolated {
+		return LintBloblangField
+	}
+	if f.Bloblang {
+		return LintBloblangMapping
+	}
+	return nil
+}
+
 func (f FieldSpec) shouldOmit(field, parent interface{}) (string, bool) {
 	if f.omitWhenFn == nil {
 		return "", false
@@ -309,6 +334,18 @@ func (f FieldSpec) shouldOmit(field, parent interface{}) (string, bool) {
 // FieldString returns a field spec for a common string typed field.
 func FieldString(name, description string, examples ...interface{}) FieldSpec {
 	return FieldCommon(name, description, examples...).HasType(FieldTypeString)
+}
+
+// FieldInterpolatedString returns a field spec for a string typed field
+// supporting dynamic interpolated functions.
+func FieldInterpolatedString(name, description string, examples ...interface{}) FieldSpec {
+	return FieldCommon(name, description, examples...).HasType(FieldTypeString).IsInterpolated()
+}
+
+// FieldBloblang returns a field spec for a string typed field containing a
+// Bloblang mapping.
+func FieldBloblang(name, description string, examples ...interface{}) FieldSpec {
+	return FieldCommon(name, description, examples...).HasType(FieldTypeString).IsBloblang()
 }
 
 // FieldInt returns a field spec for a common int typed field.

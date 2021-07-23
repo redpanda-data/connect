@@ -124,12 +124,12 @@ output:
 				"args",
 				"A list of arguments for the query to be resolved for each message.",
 			).IsInterpolated().Array(),
-			docs.FieldString(
+			docs.FieldBloblang(
 				"args_mapping",
 				"A [Bloblang mapping](/docs/guides/bloblang/about) that produces the arguments for the query. The mapping must return an array containing the number of arguments in the query.",
 				`[ this.foo, this.bar.not_empty().catch(null), meta("baz") ]`,
 				`root = [ uuid_v4() ].merge(this.document.args)`,
-			).Linter(docs.LintBloblangMapping).AtVersion("3.47.0"),
+			).AtVersion("3.47.0"),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			batch.FieldSpec(),
 		},

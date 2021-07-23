@@ -30,9 +30,9 @@ func Description(async, batches bool, content string) string {
 
 // InjectTracingSpanMappingDocs returns a field spec describing an inject
 // tracing span mapping.
-var InjectTracingSpanMappingDocs = docs.FieldAdvanced(
+var InjectTracingSpanMappingDocs = docs.FieldBloblang(
 	"inject_tracing_map",
 	"EXPERIMENTAL: A [Bloblang mapping](/docs/guides/bloblang/about) used to inject an object containing tracing propagation information into outbound messages. The specification of the injected fields will match the format used by the service wide tracer.",
 	`meta = meta().merge(this)`,
 	`root.meta.span = this`,
-).AtVersion("3.45.0").Linter(docs.LintBloblangMapping)
+).AtVersion("3.45.0").Advanced()

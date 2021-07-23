@@ -27,7 +27,7 @@ func init() {
 			CategoryMapping,
 			CategoryParsing,
 		},
-		config: docs.FieldComponent().HasType(docs.FieldTypeString).Linter(docs.LintBloblangMapping).HasDefault(""),
+		config: docs.FieldComponent().HasType(docs.FieldTypeString).IsBloblang().HasDefault(""),
 		Summary: `
 Executes a [Bloblang](/docs/guides/bloblang/about) mapping on messages.`,
 		Description: `

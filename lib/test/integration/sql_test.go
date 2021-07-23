@@ -82,7 +82,7 @@ output:
 
 		var content string
 		err := row.Scan(&content)
-		return fmt.Sprintf(`{"id":%v,"content":"%v"}`, id, content), nil, err
+		return fmt.Sprintf(`{"content":"%v","id":%v}`, content, id), nil, err
 	}
 	suite := integrationTests(
 		integrationTestOutputOnlySendSequential(10, queryGetFn),

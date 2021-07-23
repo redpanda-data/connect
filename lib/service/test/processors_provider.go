@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -100,10 +99,7 @@ func (p *ProcessorsProvider) ProvideBloblang(path string) ([]types.Processor, er
 		return nil, err
 	}
 
-	exec, mapErr := parser.ParseMapping(path, string(mappingBytes), parser.Context{
-		Functions: query.AllFunctions,
-		Methods:   query.AllMethods,
-	})
+	exec, mapErr := parser.ParseMapping(parser.GlobalContext(), path, string(mappingBytes))
 	if mapErr != nil {
 		return nil, mapErr
 	}

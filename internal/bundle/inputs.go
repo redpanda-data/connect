@@ -49,9 +49,6 @@ func (s *InputSet) Add(constructor InputConstructor, spec docs.ComponentSpec) er
 	if s.specs == nil {
 		s.specs = map[string]inputSpec{}
 	}
-	if _, exists := s.specs[spec.Name]; exists {
-		return fmt.Errorf("conflicting input name: %v", spec.Name)
-	}
 	s.specs[spec.Name] = inputSpec{
 		constructor: constructor,
 		spec:        spec,

@@ -39,7 +39,7 @@ pipeline:
           duration: ${! meta("sleep_for") }
 ` + "```" + ``,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("duration", "The duration of time to sleep for each execution.").Linter(docs.LintBloblangField),
+			docs.FieldInterpolatedString("duration", "The duration of time to sleep for each execution."),
 		},
 	}
 }

@@ -12,7 +12,7 @@ import (
 // string. It is then possible to extract a *bloblang.Executor from the
 // resulting parsed config with the method FieldBloblang.
 func NewBloblangField(name string) *ConfigField {
-	tf := docs.FieldCommon(name, "").HasType(docs.FieldTypeString).Linter(docs.LintBloblangMapping)
+	tf := docs.FieldBloblang(name, "")
 	return &ConfigField{field: tf}
 }
 

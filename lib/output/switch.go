@@ -91,12 +91,12 @@ behavior is false, which will drop the message.`,
 					},
 				},
 			).Array().WithChildren(
-				docs.FieldString(
+				docs.FieldBloblang(
 					"check",
 					"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should be routed to the case output. If left empty the case always passes.",
 					`this.type == "foo"`,
 					`this.contents.urls.contains("https://benthos.dev/")`,
-				).HasDefault("").Linter(docs.LintBloblangMapping),
+				).HasDefault(""),
 				docs.FieldCommon(
 					"output", "An [output](/docs/components/outputs/about/) for messages that pass the check to be routed to.",
 				).HasDefault(map[string]interface{}{}).HasType(docs.FieldTypeOutput),

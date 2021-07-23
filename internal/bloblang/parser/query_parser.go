@@ -22,6 +22,15 @@ type Context struct {
 	namedContext *namedContext
 }
 
+// GlobalContext returns a parser context with globally defined functions and
+// methods.
+func GlobalContext() Context {
+	return Context{
+		Functions: query.AllFunctions,
+		Methods:   query.AllMethods,
+	}
+}
+
 type namedContext struct {
 	name string
 	next *namedContext
@@ -83,36 +92,38 @@ func queryParser(pCtx Context) func(input []rune) Result {
 // parser does not include field literals.
 //
 // TODO: V4 Remove this
-func ParseDeprecatedQuery(input []rune) Result {
+func ParseDeprecatedQuery(pCtx Context) Func {
+	return func(input []rune) Result {
+		rootParser := OneOf(
+			matchExpressionParser(pCtx),
+			ifExpressionParser(pCtx),
+			parseWithTails(bracketsExpressionParser(pCtx), pCtx),
+			parseWithTails(literalValueParser(pCtx), pCtx),
+			parseWithTails(functionParser(pCtx), pCtx),
+			parseDeprecatedFunction,
+		)
+
+		res := SpacesAndTabs()(input)
+
+		res = arithmeticParser(rootParser)(res.Remaining)
+		if res.Err != nil {
+			return Fail(res.Err, input)
+		}
+
+		result := res.Payload
+		res = SpacesAndTabs()(res.Remaining)
+		return Success(result, res.Remaining)
+	}
+}
+
+func tryParseQuery(expr string, deprecated bool) (query.Function, *Error) {
 	pCtx := Context{
 		Functions: query.AllFunctions,
 		Methods:   query.AllMethods,
 	}
-	rootParser := OneOf(
-		matchExpressionParser(pCtx),
-		ifExpressionParser(pCtx),
-		parseWithTails(bracketsExpressionParser(pCtx), pCtx),
-		parseWithTails(literalValueParser(pCtx), pCtx),
-		parseWithTails(functionParser(pCtx), pCtx),
-		parseDeprecatedFunction,
-	)
-
-	res := SpacesAndTabs()(input)
-
-	res = arithmeticParser(rootParser)(res.Remaining)
-	if res.Err != nil {
-		return Fail(res.Err, input)
-	}
-
-	result := res.Payload
-	res = SpacesAndTabs()(res.Remaining)
-	return Success(result, res.Remaining)
-}
-
-func tryParseQuery(expr string, deprecated bool) (query.Function, *Error) {
 	var res Result
 	if deprecated {
-		res = ParseDeprecatedQuery([]rune(expr))
+		res = ParseDeprecatedQuery(pCtx)([]rune(expr))
 	} else {
 		res = queryParser(Context{
 			Functions: query.AllFunctions,

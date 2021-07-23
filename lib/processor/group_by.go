@@ -66,13 +66,13 @@ output:
 			},
 		},
 		config: docs.FieldComponent().Array().WithChildren(
-			docs.FieldString(
+			docs.FieldBloblang(
 				"check",
 				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message belongs to a given group.",
 				`this.type == "foo"`,
 				`this.contents.urls.contains("https://benthos.dev/")`,
 				`true`,
-			).HasDefault("").Linter(docs.LintBloblangMapping),
+			).HasDefault(""),
 			docs.FieldDeprecated("condition").HasType(docs.FieldTypeCondition).OmitWhen(func(v, _ interface{}) (string, bool) {
 				defaultBytes, err := yaml.Marshal(condition.NewConfig())
 				if err != nil {

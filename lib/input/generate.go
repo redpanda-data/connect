@@ -37,11 +37,11 @@ Generates messages at a given interval using a [Bloblang](/docs/guides/bloblang/
 mapping executed without a context. This allows you to generate messages for
 testing your pipeline configs.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon(
+			docs.FieldBloblang(
 				"mapping", "A [bloblang](/docs/guides/bloblang/about) mapping to use for generating messages.",
 				`root = "hello world"`,
 				`root = {"test":"message","id":uuid_v4()}`,
-			).Linter(docs.LintBloblangMapping),
+			),
 			docs.FieldCommon(
 				"interval",
 				"The time interval at which messages should be generated, expressed either as a duration string or as a cron expression. If set to an empty string messages will be generated as fast as downstream services can process them. Cron expressions can specify a timezone by prefixing the expression with `TZ=<location name>`, where the location name corresponds to a file within the IANA Time Zone database.",
@@ -114,11 +114,11 @@ testing your pipeline configs.`,
 This input has been ` + "[renamed to `generate`](/docs/components/inputs/generate)" + `.
 `,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon(
+			docs.FieldBloblang(
 				"mapping", "A [bloblang](/docs/guides/bloblang/about) mapping to use for generating messages.",
 				`root = "hello world"`,
 				`root = {"test":"message","id":uuid_v4()}`,
-			).Linter(docs.LintBloblangMapping),
+			),
 			docs.FieldCommon(
 				"interval",
 				"The time interval at which messages should be generated, expressed either as a duration string or as a cron expression. If set to an empty string messages will be generated as fast as downstream services can process them.",

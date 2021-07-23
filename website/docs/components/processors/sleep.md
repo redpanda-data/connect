@@ -44,6 +44,7 @@ pipeline:
 ### `duration`
 
 The duration of time to sleep for each execution.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

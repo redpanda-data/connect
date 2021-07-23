@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -164,10 +163,7 @@ foo = bar.apply("foo")`, goodMapFile),
 	for name, test := range tests {
 		test := test
 		t.Run(name, func(t *testing.T) {
-			exec, err := ParseMapping("", test.mapping, Context{
-				Functions: query.AllFunctions,
-				Methods:   query.AllMethods,
-			})
+			exec, err := ParseMapping(GlobalContext(), "", test.mapping)
 			require.NotNil(t, err)
 			assert.Equal(t, test.err, err.ErrorAtPosition([]rune(test.mapping)))
 			assert.Nil(t, exec)
@@ -495,10 +491,7 @@ root = this.apply("foo")`, goodMapFile),
 				test.output.Meta = map[string]string{}
 			}
 
-			exec, perr := ParseMapping("", test.mapping, Context{
-				Functions: query.AllFunctions,
-				Methods:   query.AllMethods,
-			})
+			exec, perr := ParseMapping(GlobalContext(), "", test.mapping)
 			require.Nil(t, perr)
 
 			resPart, err := exec.MapPart(test.index, msg)
