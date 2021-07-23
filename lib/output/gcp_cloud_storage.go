@@ -1,17 +1,22 @@
 package output
 
 import (
-	"strings"
-
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"google.golang.org/api/googleapi"
 )
 
 const (
-	overwriteMode     = "overwrite"
-	appendMode        = "append"
-	errorIfExistsMode = "errorifexists"
-	ignoreMode        = "ignoreifexists"
+	// GCPCloudStorageErrorIfExistsMode - ErrorIfExists
+	GCPCloudStorageErrorIfExistsMode = "ErrorIfExists"
+
+	// GCPCloudStorageAppendMode - Append
+	GCPCloudStorageAppendMode = "Append"
+
+	// GCPCloudStorageIgnoreMode - Ignore
+	GCPCloudStorageIgnoreMode = "Ignore"
+
+	// GCPCloudStorageOverwriteMode - Overwrite
+	GCPCloudStorageOverwriteMode = "Overwrite"
 )
 
 // GCPCloudStorageConfig contains configuration fields for the GCP Cloud Storage
@@ -39,24 +44,4 @@ func NewGCPCloudStorageConfig() GCPCloudStorageConfig {
 		Batching:        batch.NewPolicyConfig(),
 		Mode:            "overwrite",
 	}
-}
-
-// IsOverwriteMode returns true if mode is overwrite
-func (g GCPCloudStorageConfig) IsOverwriteMode() bool {
-	return strings.EqualFold(g.Mode, overwriteMode)
-}
-
-// IsAppendMode returns true if mode is append
-func (g GCPCloudStorageConfig) IsAppendMode() bool {
-	return strings.EqualFold(g.Mode, appendMode)
-}
-
-// IsErrorIfExistsMode returns true if mode is error if exists
-func (g GCPCloudStorageConfig) IsErrorIfExistsMode() bool {
-	return strings.EqualFold(g.Mode, errorIfExistsMode)
-}
-
-// IsIgnoreIfExistsMode returns true if mode is ignore if exists
-func (g GCPCloudStorageConfig) IsIgnoreIfExistsMode() bool {
-	return strings.EqualFold(g.Mode, ignoreMode)
 }

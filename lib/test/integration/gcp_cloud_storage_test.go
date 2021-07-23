@@ -39,7 +39,7 @@ var _ = registerIntegrationTest("gcp_cloud_storage", func(t *testing.T) {
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository:   "fsouza/fake-gcs-server",
-		Tag:          "1.21.2",
+		Tag:          "latest",
 		ExposedPorts: []string{"4443/tcp"},
 		Cmd:          []string{"-scheme", "http"},
 	})
@@ -50,7 +50,7 @@ var _ = registerIntegrationTest("gcp_cloud_storage", func(t *testing.T) {
 
 	resource.Expire(900)
 
-	os.Setenv("GCP_CLOUD_STORAGE_EMULATOR_URL", "http://localhost:"+resource.GetPort("4443/tcp")+"/storage/v1/")
+	os.Setenv("GCP_CLOUD_STORAGE_EMULATOR_URL", "http://localhost:"+resource.GetPort("4443/tcp"))
 	t.Cleanup(func() {
 		defer os.Unsetenv("GCP_CLOUD_STORAGE_EMULATOR_URL")
 	})
@@ -78,22 +78,49 @@ var _ = registerIntegrationTest("gcp_cloud_storage", func(t *testing.T) {
 
 	dummyBucketPrefix := "jotunheim"
 	dummyPathPrefix := "kvenn"
-	t.Run("gcs", func(t *testing.T) {
+	t.Run("gcs_overwrite", func(t *testing.T) {
 		template := `
 output:
-  gcp_cloud_storage:
-    bucket: $VAR1-$ID
-    path: $VAR2/${!count("$ID")}.txt
-    max_in_flight: 1
+ gcp_cloud_storage:
+   bucket: $VAR1-$ID
+   path: $VAR2/${!count("$ID")}.txt
+   max_in_flight: 1
+   mode: Overwrite
 
 input:
-  gcp_cloud_storage:
-    bucket: $VAR1-$ID
-    prefix: $VAR2
+ gcp_cloud_storage:
+   bucket: $VAR1-$ID
+   prefix: $VAR2
 `
 		integrationTests(
 			integrationTestOpenCloseIsolated(),
 			integrationTestStreamIsolated(10),
+		).Run(
+			t, template,
+			testOptPreTest(func(t *testing.T, env *testEnvironment) {
+				require.NoError(t, createGCPCloudStorageBucket(env.configVars.var1, env.configVars.id))
+			}),
+			testOptVarOne(dummyBucketPrefix),
+			testOptVarTwo(dummyPathPrefix),
+		)
+	})
+
+	t.Run("gcs_append", func(t *testing.T) {
+		template := `
+output:
+  gcp_cloud_storage:
+    bucket: $VAR1-$ID
+    path: $VAR2/test.txt
+    max_in_flight: 1
+    mode: Append
+
+input:
+  gcp_cloud_storage:
+    bucket: $VAR1-$ID
+    prefix: $VAR2/test.txt
+`
+		integrationTests(
+			integrationTestStreamIsolatedAppend(10),
 		).Run(
 			t, template,
 			testOptPreTest(func(t *testing.T, env *testEnvironment) {
