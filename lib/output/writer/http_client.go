@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/http"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
@@ -40,7 +41,7 @@ func NewHTTPClientConfig() HTTPClientConfig {
 // HTTPClient is an output type that sends messages as HTTP requests to a target
 // server endpoint.
 type HTTPClient struct {
-	client *client.Type
+	client *http.Client
 
 	stats metrics.Type
 	log   log.Modular
@@ -63,13 +64,12 @@ func NewHTTPClient(
 		closeChan: make(chan struct{}),
 	}
 	var err error
-	if h.client, err = client.New(
+	if h.client, err = http.NewClient(
 		conf.Config,
-		client.OptSetCloseChan(h.closeChan),
-		client.OptSetLogger(h.log),
-		client.OptSetManager(mgr),
+		http.OptSetLogger(h.log),
+		http.OptSetManager(mgr),
 		// TODO: V4 Remove this
-		client.OptSetStats(metrics.Namespaced(h.stats, "client")),
+		http.OptSetStats(metrics.Namespaced(h.stats, "client")),
 	); err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func (h *HTTPClient) Write(msg types.Message) error {
 // WriteWithContext attempts to send a message to an HTTP server, this attempt
 // may include retries, and if all retries fail an error is returned.
 func (h *HTTPClient) WriteWithContext(ctx context.Context, msg types.Message) error {
-	resultMsg, err := h.client.Send(msg)
+	resultMsg, err := h.client.Send(ctx, msg, msg)
 	if err == nil && h.conf.PropagateResponse {
 		msgCopy := msg.Copy()
 		parts := make([]types.Part, resultMsg.Len())
@@ -126,7 +126,7 @@ func (h *HTTPClient) WriteWithContext(ctx context.Context, msg types.Message) er
 // CloseAsync shuts down the HTTPClient output and stops processing messages.
 func (h *HTTPClient) CloseAsync() {
 	close(h.closeChan)
-	h.client.CloseAsync()
+	go h.client.Close(context.Background())
 }
 
 // WaitForClose blocks until the HTTPClient output has closed down.

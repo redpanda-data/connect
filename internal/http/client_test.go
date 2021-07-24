@@ -105,6 +105,31 @@ func TestHTTPClientSendBasic(t *testing.T) {
 	}
 }
 
+func TestHTTPClientBadContentType(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := ioutil.ReadAll(r.Body)
+		require.NoError(t, err)
+
+		_, err = w.Write(bytes.ToUpper(b))
+		require.NoError(t, err)
+	}))
+	t.Cleanup(ts.Close)
+
+	conf := client.NewConfig()
+	conf.URL = ts.URL + "/testpost"
+
+	h, err := NewClient(conf)
+	require.NoError(t, err)
+
+	testMsg := message.New([][]byte{[]byte("hello world")})
+
+	res, err := h.Send(context.Background(), testMsg, testMsg)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, res.Len())
+	assert.Equal(t, "HELLO WORLD", string(res.Get(0).Get()))
+}
+
 func TestHTTPClientDropOn(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)

@@ -1,12 +1,14 @@
 package processor
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/http"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -134,7 +136,7 @@ func NewHTTPConfig() HTTPConfig {
 // HTTP is a processor that performs an HTTP request using the message as the
 // request body, and returns the response.
 type HTTP struct {
-	client *client.Type
+	client *http.Client
 
 	parallel bool
 	max      int
@@ -176,12 +178,12 @@ func NewHTTP(
 		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 	var err error
-	if g.client, err = client.New(
+	if g.client, err = http.NewClient(
 		conf.HTTP.Config,
-		client.OptSetLogger(g.log),
+		http.OptSetLogger(g.log),
 		// TODO: V4 Remove this
-		client.OptSetStats(metrics.Namespaced(g.stats, "client")),
-		client.OptSetManager(mgr),
+		http.OptSetStats(metrics.Namespaced(g.stats, "client")),
+		http.OptSetManager(mgr),
 	); err != nil {
 		return nil, err
 	}
@@ -198,7 +200,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 	if !h.parallel || msg.Len() == 1 {
 		// Easy, just do a single request.
-		resultMsg, err := h.client.Send(msg)
+		resultMsg, err := h.client.Send(context.Background(), msg, msg)
 		if err != nil {
 			var codeStr string
 			var hErr types.ErrUnexpectedHTTPRes
@@ -251,7 +253,8 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		for i := 0; i < max; i++ {
 			go func() {
 				for index := range reqChan {
-					result, err := h.client.Send(message.Lock(msg, index))
+					tmpMsg := message.Lock(msg, index)
+					result, err := h.client.Send(context.Background(), tmpMsg, tmpMsg)
 					if err == nil && result.Len() != 1 {
 						err = fmt.Errorf("unexpected response size: %v", result.Len())
 					}
@@ -305,7 +308,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 // CloseAsync shuts down the processor and stops processing requests.
 func (h *HTTP) CloseAsync() {
-	h.client.CloseAsync()
+	go h.client.Close(context.Background())
 }
 
 // WaitForClose blocks until the processor has closed down.

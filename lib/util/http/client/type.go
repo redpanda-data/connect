@@ -78,6 +78,9 @@ func NewConfig() Config {
 //------------------------------------------------------------------------------
 
 // Type is an output type that pushes messages to Type.
+//
+// Deprecated: This component is no longer used by Benthos, instead look at
+// ./internal/http.
 type Type struct {
 	client *http.Client
 
@@ -116,6 +119,9 @@ type Type struct {
 }
 
 // New creates a new Type.
+//
+// Deprecated: This component is no longer used by Benthos, instead look at
+// ./internal/http.
 func New(conf Config, opts ...func(*Type)) (*Type, error) {
 	urlStr, err := bloblang.NewField(conf.URL)
 	if err != nil {
@@ -252,6 +258,9 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 
 // OptSetCloseChan sets a channel that when closed will interrupt any blocking
 // calls within the client.
+//
+// Deprecated: This component is no longer used by Benthos, instead look at
+// ./internal/http.
 func OptSetCloseChan(c <-chan struct{}) func(*Type) {
 	return func(t *Type) {
 		t.closeChan = c
@@ -259,6 +268,9 @@ func OptSetCloseChan(c <-chan struct{}) func(*Type) {
 }
 
 // OptSetLogger sets the logger to use.
+//
+// Deprecated: This component is no longer used by Benthos, instead look at
+// ./internal/http.
 func OptSetLogger(log log.Modular) func(*Type) {
 	return func(t *Type) {
 		t.log = log
@@ -266,6 +278,9 @@ func OptSetLogger(log log.Modular) func(*Type) {
 }
 
 // OptSetStats sets the metrics aggregator to use.
+//
+// Deprecated: This component is no longer used by Benthos, instead look at
+// ./internal/http.
 func OptSetStats(stats metrics.Type) func(*Type) {
 	return func(t *Type) {
 		t.stats = stats
@@ -292,6 +307,9 @@ func OptSetHTTPTransport(transport *http.Transport) func(*Type) {
 
 // OptSetRoundTripper sets the *client.Transport to use for HTTP requests.
 // NOTE: This setting will override any configured TLS options.
+//
+// Deprecated: This component is no longer used by Benthos, instead look at
+// ./internal/http.
 func OptSetRoundTripper(rt http.RoundTripper) func(*Type) {
 	return func(t *Type) {
 		t.client.Transport = rt
@@ -352,6 +370,9 @@ func (h *Type) waitForAccess() bool {
 }
 
 // CreateRequest creates an HTTP request out of a single message.
+//
+// Deprecated: This component is no longer used by Benthos, instead look at
+// ./internal/http.
 func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 	url := h.url.String(0, msg)
 
@@ -416,6 +437,9 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 }
 
 // ParseResponse attempts to parse an HTTP response into a 2D slice of bytes.
+//
+// Deprecated: This component is no longer used by Benthos, instead look at
+// ./internal/http.
 func (h *Type) ParseResponse(res *http.Response) (resMsg types.Message, err error) {
 	resMsg = message.New(nil)
 
@@ -513,6 +537,9 @@ const (
 // checkStatus compares a returned status code against configured logic
 // determining whether the send succeeded, and if not what the retry strategy
 // should be.
+//
+// Deprecated: This component is no longer used by Benthos, instead look at
+// ./internal/http.
 func (h *Type) checkStatus(code int) (succeeded bool, retStrat retryStrategy) {
 	if _, exists := h.dropOn[code]; exists {
 		return false, noRetry
@@ -532,11 +559,17 @@ func (h *Type) checkStatus(code int) (succeeded bool, retStrat retryStrategy) {
 // Do attempts to create and perform an HTTP request from a message payload.
 // This attempt may include retries, and if all retries fail an error is
 // returned.
+//
+// Deprecated: This component is no longer used by Benthos, instead look at
+// ./internal/http.
 func (h *Type) Do(msg types.Message) (*http.Response, error) {
 	return h.DoWithContext(context.Background(), msg)
 }
 
 // DoWithContext is the context aware version of Do
+//
+// Deprecated: This component is no longer used by Benthos, instead look at
+// ./internal/http.
 func (h *Type) DoWithContext(ctx context.Context, msg types.Message) (res *http.Response, err error) {
 	h.mCount.Incr(1)
 
@@ -663,11 +696,17 @@ func (h *Type) DoWithContext(ctx context.Context, msg types.Message) (res *http.
 // back into a message, meaning mulitpart content handling is done for you.
 //
 // If the response body is empty the message returned is nil.
+//
+// Deprecated: This component is no longer used by Benthos, instead look at
+// ./internal/http.
 func (h *Type) Send(msg types.Message) (types.Message, error) {
 	return h.SendWithContext(context.Background(), msg)
 }
 
 // SendWithContext is the context aware version of Send
+//
+// Deprecated: This component is no longer used by Benthos, instead look at
+// ./internal/http.
 func (h *Type) SendWithContext(ctx context.Context, msg types.Message) (types.Message, error) {
 	res, err := h.DoWithContext(ctx, msg)
 	if err != nil {
@@ -677,6 +716,9 @@ func (h *Type) SendWithContext(ctx context.Context, msg types.Message) (types.Me
 }
 
 // CloseAsync closes the HTTP client and all managed resources.
+//
+// Deprecated: This component is no longer used by Benthos, instead look at
+// ./internal/http.
 func (h *Type) CloseAsync() {
 	h.done()
 }

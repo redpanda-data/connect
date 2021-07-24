@@ -13,9 +13,13 @@ import (
 
 // HTTPClient is a reader that continuously polls an HTTP endpoint, providing an
 // optional payload each time.
+//
+// Deprecated: This component is no longer used by Benthos, instead look at
+// ./lib/input/http_client.go.
 type HTTPClient struct {
 	payload types.Message
-	client  *client.Type
+	// nolint:staticcheck // Ignore nested deprecated component
+	client *client.Type
 
 	dropEmptyBodies bool
 }
@@ -32,6 +36,9 @@ func HTTPClientOptSetDropEmpty(dropEmpty bool) HTTPClientOptFunc {
 }
 
 // NewHTTPClient creates a new HTTPClient reader type.
+//
+// Deprecated: This component is no longer used by Benthos, instead look at
+// ./lib/input/http_client.go.
 func NewHTTPClient(payload types.Message, httpClient *client.Type, opts ...HTTPClientOptFunc) (*HTTPClient, error) {
 	h := &HTTPClient{
 		payload:         payload,
@@ -62,6 +69,7 @@ func (h *HTTPClient) ConnectWithContext(ctx context.Context) (err error) {
 
 // ReadWithContext a new HTTPClient message.
 func (h *HTTPClient) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+	// nolint:staticcheck // Ignore nested deprecated component
 	res, err := h.client.Do(h.payload)
 	if err != nil {
 		if strings.Contains(err.Error(), "(Client.Timeout exceeded while awaiting headers)") {
@@ -71,6 +79,7 @@ func (h *HTTPClient) ReadWithContext(ctx context.Context) (types.Message, AsyncA
 	}
 
 	var msg types.Message
+	// nolint:staticcheck // Ignore nested deprecated component
 	if msg, err = h.client.ParseResponse(res); err != nil {
 		return nil, nil, err
 	}
@@ -87,6 +96,7 @@ func (h *HTTPClient) ReadWithContext(ctx context.Context) (types.Message, AsyncA
 
 // CloseAsync shuts down the HTTPClient input and stops processing requests.
 func (h *HTTPClient) CloseAsync() {
+	// nolint:staticcheck // Ignore nested deprecated component
 	h.client.CloseAsync()
 }
 

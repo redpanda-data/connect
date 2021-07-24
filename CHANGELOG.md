@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 
 - The Bloblang function `random_int` now only resolves dynamic arguments once during the lifetime of the mapping. Documentation has been updated in order to clarify the behaviour with dynamic arguments.
 - Fixed an issue where plugins registered would return `failed to obtain docs for X type Y` linting errors.
+- HTTP client components are now more permissive regarding invalid Content-Type headers. 
 
 ## 3.50.0 - 2021-07-19
 
