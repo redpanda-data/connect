@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -238,6 +239,47 @@ func (c *ConfigSpec) Example(title, summary, config string) *ConfigSpec {
 		Config:  config,
 	})
 	return c
+}
+
+// EncodeJSON attempts to parse a JSON object as a byte slice and uses it to
+// populate the configuration spec. The schema of this method is undocumented
+// and is not intended for general use.
+//
+// EXPERIMENTAL: This method is not intended for general use and could have its
+// signature and/or behaviour changed outside of major version bumps.
+func (c *ConfigSpec) EncodeJSON(v []byte) error {
+	return json.Unmarshal(v, &c.component)
+}
+
+//------------------------------------------------------------------------------
+
+// ConfigView is a struct returned by a Benthos service environment when walking
+// the list of registered components and provides access to information about
+// the component.
+type ConfigView struct {
+	component docs.ComponentSpec
+}
+
+// Summary returns a documentation summary of the component, often formatted as
+// markdown.
+func (c *ConfigView) Summary() string {
+	return c.component.Summary
+}
+
+// Description returns a documentation description of the component, often
+// formatted as markdown.
+func (c *ConfigView) Description() string {
+	return c.component.Description
+}
+
+// FormatJSON returns a byte slice of the component configuration formatted as a
+// JSON object. The schema of this method is undocumented and is not intended
+// for general use.
+//
+// EXPERIMENTAL: This method is not intended for general use and could have its
+// signature and/or behaviour changed outside of major version bumps.
+func (c *ConfigView) FormatJSON() ([]byte, error) {
+	return json.Marshal(c.component)
 }
 
 //------------------------------------------------------------------------------

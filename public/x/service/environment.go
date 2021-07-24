@@ -60,6 +60,16 @@ func (e *Environment) RegisterCache(name string, spec *ConfigSpec, ctor CacheCon
 	}, componentSpec)
 }
 
+// WalkCaches executes a provided function argument for every cache component
+// that has been registered to the environment.
+func (e *Environment) WalkCaches(fn func(name string, config *ConfigView)) {
+	for _, v := range e.internal.Caches.Docs() {
+		fn(v.Name, &ConfigView{
+			component: v,
+		})
+	}
+}
+
 // RegisterInput attempts to register a new input plugin by providing a
 // description of the configuration for the plugin as well as a constructor for
 // the input itself. The constructor will be called for each instantiation of
@@ -84,6 +94,16 @@ func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputCon
 		rdr := newAirGapReader(i)
 		return input.NewAsyncReader(conf.Type, false, rdr, nm.Logger(), nm.Metrics())
 	}), componentSpec)
+}
+
+// WalkInputs executes a provided function argument for every input component
+// that has been registered to the environment.
+func (e *Environment) WalkInputs(fn func(name string, config *ConfigView)) {
+	for _, v := range e.internal.Inputs.Docs() {
+		fn(v.Name, &ConfigView{
+			component: v,
+		})
+	}
 }
 
 // RegisterOutput attempts to register a new output plugin by providing a
@@ -150,6 +170,16 @@ func (e *Environment) RegisterBatchOutput(name string, spec *ConfigSpec, ctor Ba
 	), componentSpec)
 }
 
+// WalkOutputs executes a provided function argument for every output component
+// that has been registered to the environment.
+func (e *Environment) WalkOutputs(fn func(name string, config *ConfigView)) {
+	for _, v := range e.internal.Outputs.Docs() {
+		fn(v.Name, &ConfigView{
+			component: v,
+		})
+	}
+}
+
 // RegisterProcessor attempts to register a new processor plugin by providing
 // a description of the configuration for the processor and a constructor for
 // the processor itself. The constructor will be called for each instantiation
@@ -195,6 +225,16 @@ func (e *Environment) RegisterBatchProcessor(name string, spec *ConfigSpec, ctor
 	}, componentSpec)
 }
 
+// WalkProcessors executes a provided function argument for every processor
+// component that has been registered to the environment.
+func (e *Environment) WalkProcessors(fn func(name string, config *ConfigView)) {
+	for _, v := range e.internal.Processors.Docs() {
+		fn(v.Name, &ConfigView{
+			component: v,
+		})
+	}
+}
+
 // RegisterRateLimit attempts to register a new rate limit plugin by providing
 // a description of the configuration for the plugin as well as a constructor
 // for the rate limit itself. The constructor will be called for each
@@ -214,4 +254,14 @@ func (e *Environment) RegisterRateLimit(name string, spec *ConfigSpec, ctor Rate
 		}
 		return newAirGapRateLimit(r, nm.Metrics()), nil
 	}, componentSpec)
+}
+
+// WalkRateLimits executes a provided function argument for every rate limit
+// component that has been registered to the environment.
+func (e *Environment) WalkRateLimits(fn func(name string, config *ConfigView)) {
+	for _, v := range e.internal.RateLimits.Docs() {
+		fn(v.Name, &ConfigView{
+			component: v,
+		})
+	}
 }
