@@ -63,7 +63,7 @@ func (a *azureQueueStorage) ConnectWithContext(ctx context.Context) error {
 func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg types.Message, ackFn reader.AsyncAckFn, err error) {
 	messageURL := a.queueURL.NewMessagesURL()
 	var approxMsgCount int32
-	if a.conf.TrackLag {
+	if a.conf.TrackProperties {
 		if props, err := a.queueURL.GetProperties(ctx); err == nil {
 			approxMsgCount = props.ApproximateMessagesCount()
 		}
@@ -91,7 +91,7 @@ func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg types.Mess
 			meta := part.Metadata()
 			meta.Set("queue_storage_insertion_time", queueMsg.InsertionTime.Format(time.RFC3339))
 			meta.Set("queue_storage_queue_name", a.conf.QueueName)
-			if a.conf.TrackLag {
+			if a.conf.TrackProperties {
 				msgLag := 0
 				if approxMsgCount >= n {
 					msgLag = int(approxMsgCount - n)

@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - The `redis_streams`, `redis_pubsub` and `redis_list` outputs now all support batching for higher throughput.
 - The `amqp_1` input and output now support passing and receiving metadata as annotations.
 - Config unit test definitions can now use files for both the input and expected output.
+- Field `track_properties` added to the `azure_queue_storage` input for enriching messages with properties such as the message backlog.
 
 ### Fixed
 

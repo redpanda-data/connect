@@ -58,7 +58,7 @@ input:
     queue_name: ""
     dequeue_visibility_timeout: 30s
     max_in_flight: 10
-    track_lag: false
+    track_properties: false
 ```
 
 </TabItem>
@@ -71,7 +71,7 @@ This input adds the following metadata fields to each message:
 ```
 - queue_storage_insertion_time
 - queue_storage_queue_name
-- queue_storage_message_lag (if 'track_lag'' set to true)
+- queue_storage_message_lag (if 'track_properties' set to true)
 - All user defined queue metadata
 ```
 
@@ -136,9 +136,9 @@ The maximum number of unprocessed messages to fetch at a given time.
 Type: `int`  
 Default: `10`  
 
-### `track_lag`
+### `track_properties`
 
-If set to `true` the queue message lag is calculated and returned in metadata field with key `queue_storage_message_lag`.
+If set to `true` the queue is polled on each read request for information such as the queue message lag. These properties are added to consumed messages as metadata, but will also have a negative performance impact.
 
 
 Type: `bool`  
