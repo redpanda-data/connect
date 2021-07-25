@@ -21,7 +21,7 @@ func LintBloblangMapping(ctx LintContext, line, col int, v interface{}) []Lint {
 	if str == "" {
 		return nil
 	}
-	_, err := bloblang.NewMapping("", str)
+	_, err := bloblang.NewMappingWithContext(ctx.BloblangContext, "", str)
 	if err == nil {
 		return nil
 	}
@@ -44,7 +44,7 @@ func LintBloblangField(ctx LintContext, line, col int, v interface{}) []Lint {
 	if str == "" {
 		return nil
 	}
-	_, err := bloblang.NewField(str)
+	_, err := bloblang.NewFieldWithContext(ctx.BloblangContext, str)
 	if err == nil {
 		return nil
 	}

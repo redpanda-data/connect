@@ -71,6 +71,13 @@ func NewStreamBuilder() *StreamBuilder {
 	}
 }
 
+func (s *StreamBuilder) getLintContext() docs.LintContext {
+	ctx := docs.NewLintContext()
+	ctx.DocsProvider = s.env.internal
+	ctx.BloblangContext = s.env.getBloblangParserContext()
+	return ctx
+}
+
 //------------------------------------------------------------------------------
 
 // SetThreads configures the number of pipeline processor threads should be
@@ -314,9 +321,7 @@ func (s *StreamBuilder) AddResourcesYAML(conf string) error {
 		return err
 	}
 
-	ctx := docs.NewLintContext()
-	ctx.DocsProvider = s.env.internal
-	if err := lintsToErr(manager.Spec().LintYAML(ctx, node)); err != nil {
+	if err := lintsToErr(manager.Spec().LintYAML(s.getLintContext(), node)); err != nil {
 		return err
 	}
 
@@ -348,9 +353,7 @@ func (s *StreamBuilder) SetYAML(conf string) error {
 		return err
 	}
 
-	ctx := docs.NewLintContext()
-	ctx.DocsProvider = s.env.internal
-	if err := lintsToErr(config.Spec().LintYAML(ctx, node)); err != nil {
+	if err := lintsToErr(config.Spec().LintYAML(s.getLintContext(), node)); err != nil {
 		return err
 	}
 
@@ -398,9 +401,7 @@ func (s *StreamBuilder) SetLoggerYAML(conf string) error {
 		return err
 	}
 
-	ctx := docs.NewLintContext()
-	ctx.DocsProvider = s.env.internal
-	if err := lintsToErr(log.Spec().LintYAML(ctx, node)); err != nil {
+	if err := lintsToErr(log.Spec().LintYAML(s.getLintContext(), node)); err != nil {
 		return err
 	}
 
@@ -618,7 +619,5 @@ func (s *StreamBuilder) lintYAMLComponent(b []byte, ctype docs.Type) error {
 	if err != nil {
 		return err
 	}
-	ctx := docs.NewLintContext()
-	ctx.DocsProvider = s.env.internal
-	return lintsToErr(docs.LintYAML(ctx, ctype, nconf))
+	return lintsToErr(docs.LintYAML(s.getLintContext(), ctype, nconf))
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/gabs/v2"
 	"gopkg.in/yaml.v3"
@@ -103,13 +104,13 @@ type ConfigSpec struct {
 	configCtor ConfigStructConstructor
 }
 
-func (c *ConfigSpec) configFromNode(node *yaml.Node) (*ParsedConfig, error) {
+func (c *ConfigSpec) configFromNode(env *Environment, mgr bundle.NewManagement, node *yaml.Node) (*ParsedConfig, error) {
 	if c.configCtor != nil {
 		conf := c.configCtor()
 		if err := node.Decode(conf); err != nil {
 			return nil, err
 		}
-		return &ParsedConfig{asStruct: conf}, nil
+		return &ParsedConfig{env: env, mgr: mgr, asStruct: conf}, nil
 	}
 
 	fields, err := c.component.Config.Children.YAMLToMap(node, docs.ToValueConfig{})
@@ -117,7 +118,7 @@ func (c *ConfigSpec) configFromNode(node *yaml.Node) (*ParsedConfig, error) {
 		return nil, err
 	}
 
-	return &ParsedConfig{generic: fields}, nil
+	return &ParsedConfig{env: env, mgr: mgr, generic: fields}, nil
 }
 
 // NewConfigSpec creates a new empty component configuration spec. If the
@@ -293,6 +294,8 @@ func (c *ConfigView) FormatJSON() ([]byte, error) {
 // a struct constructor then the method AsStruct should be used in order to
 // access the parsed struct.
 type ParsedConfig struct {
+	env      *Environment
+	mgr      bundle.NewManagement
 	asStruct interface{}
 	generic  map[string]interface{}
 }

@@ -34,8 +34,10 @@ func NewEnvironment() *Environment {
 // (functions and methods) available to the mapping.
 func (e *Environment) Parse(blobl string) (*Executor, error) {
 	pCtx := parser.GlobalContext()
-	pCtx.Functions = e.functions
-	pCtx.Methods = e.methods
+	if e != nil {
+		pCtx.Functions = e.functions
+		pCtx.Methods = e.methods
+	}
 	exec, err := parser.ParseMapping(pCtx, "", blobl)
 	if err != nil {
 		return nil, err

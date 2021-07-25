@@ -106,7 +106,7 @@ c:
 
 			assert.Equal(t, test.lints, spec.component.Config.Children.LintYAML(docs.NewLintContext(), node))
 
-			pConf, err := spec.configFromNode(node)
+			pConf, err := spec.configFromNode(NewEnvironment(), nil, node)
 			require.NoError(t, err)
 
 			var sanitNode yaml.Node
@@ -207,7 +207,7 @@ c:
 
 			assert.Equal(t, test.lints, spec.component.Config.Children.LintYAML(docs.NewLintContext(), node))
 
-			pConf, err := spec.configFromNode(node)
+			pConf, err := spec.configFromNode(NewEnvironment(), nil, node)
 			require.NoError(t, err)
 
 			var sanitNode yaml.Node
@@ -253,7 +253,7 @@ c:
 `))
 	require.NoError(t, err)
 
-	parsedConfig, err := spec.configFromNode(node)
+	parsedConfig, err := spec.configFromNode(NewEnvironment(), nil, node)
 	require.NoError(t, err)
 
 	s, err := parsedConfig.FieldString("a")
@@ -306,7 +306,7 @@ a:
 `))
 	require.NoError(t, err)
 
-	parsedConfig, err := spec.configFromNode(node)
+	parsedConfig, err := spec.configFromNode(NewEnvironment(), nil, node)
 	require.NoError(t, err)
 
 	_, err = parsedConfig.FieldTLS("b")
@@ -334,7 +334,7 @@ b: and this
 `))
 	require.NoError(t, err)
 
-	parsedConfig, err := spec.configFromNode(node)
+	parsedConfig, err := spec.configFromNode(NewEnvironment(), nil, node)
 	require.NoError(t, err)
 
 	_, err = parsedConfig.FieldTLS("b")
@@ -360,7 +360,7 @@ b: this is ${! json } an invalid interp string
 `))
 	require.NoError(t, err)
 
-	parsedConfig, err := spec.configFromNode(node)
+	parsedConfig, err := spec.configFromNode(NewEnvironment(), nil, node)
 	require.NoError(t, err)
 
 	_, err = parsedConfig.FieldInterpolatedString("b")
@@ -387,7 +387,7 @@ b: 'root = this.filter('
 `))
 	require.NoError(t, err)
 
-	parsedConfig, err := spec.configFromNode(node)
+	parsedConfig, err := spec.configFromNode(NewEnvironment(), nil, node)
 	require.NoError(t, err)
 
 	_, err = parsedConfig.FieldBloblang("b")

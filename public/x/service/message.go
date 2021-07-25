@@ -171,7 +171,7 @@ func (m *Message) MetaWalk(fn func(string, string) error) error {
 // root being deleted the returned message will be nil, which indicates it has
 // been filtered.
 func (m *Message) BloblangQuery(blobl *bloblang.Executor) (*Message, error) {
-	uw := bloblang.XExecutorUnwrapper(blobl).(interface {
+	uw := blobl.XUnwrapper().(interface {
 		Unwrap() *mapping.Executor
 	}).Unwrap()
 
@@ -196,7 +196,7 @@ func (m *Message) BloblangQuery(blobl *bloblang.Executor) (*Message, error) {
 // This method allows mappings to perform windowed aggregations across message
 // batches.
 func (b MessageBatch) BloblangQuery(index int, blobl *bloblang.Executor) (*Message, error) {
-	uw := bloblang.XExecutorUnwrapper(blobl).(interface {
+	uw := blobl.XUnwrapper().(interface {
 		Unwrap() *mapping.Executor
 	}).Unwrap()
 
