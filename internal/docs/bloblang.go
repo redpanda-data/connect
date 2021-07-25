@@ -27,7 +27,7 @@ func LintBloblangMapping(ctx LintContext, line, col int, v interface{}) []Lint {
 	}
 	if mErr, ok := err.(*parser.Error); ok {
 		bline, bcol := parser.LineAndColOf([]rune(str), mErr.Input)
-		lint := NewLintError(line+bline, mErr.ErrorAtPositionStructured("", []rune(str)))
+		lint := NewLintError(line+bline-1, mErr.ErrorAtPositionStructured("", []rune(str)))
 		lint.Column = col + bcol
 		return []Lint{lint}
 	}
@@ -50,7 +50,7 @@ func LintBloblangField(ctx LintContext, line, col int, v interface{}) []Lint {
 	}
 	if mErr, ok := err.(*parser.Error); ok {
 		bline, bcol := parser.LineAndColOf([]rune(str), mErr.Input)
-		lint := NewLintError(line+bline, mErr.ErrorAtPositionStructured("", []rune(str)))
+		lint := NewLintError(line+bline-1, mErr.ErrorAtPositionStructured("", []rune(str)))
 		lint.Column = col + bcol
 		return []Lint{lint}
 	}

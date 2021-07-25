@@ -39,6 +39,16 @@ func (e *Environment) Clone() *Environment {
 	}
 }
 
+// WalkBuffers executes a provided function argument for every buffer component
+// that has been registered to the environment.
+func (e *Environment) WalkBuffers(fn func(name string, config *ConfigView)) {
+	for _, v := range e.internal.Buffers.Docs() {
+		fn(v.Name, &ConfigView{
+			component: v,
+		})
+	}
+}
+
 // RegisterCache attempts to register a new cache plugin by providing a
 // description of the configuration for the plugin as well as a constructor for
 // the cache itself. The constructor will be called for each instantiation of

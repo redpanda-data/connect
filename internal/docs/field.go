@@ -161,7 +161,7 @@ func (f FieldSpec) IsInterpolated() FieldSpec {
 // IsBloblang indicates that the field is a Bloblang mapping.
 func (f FieldSpec) IsBloblang() FieldSpec {
 	f.Bloblang = true
-	f.customLintFn = LintBloblangField
+	f.customLintFn = LintBloblangMapping
 	return f
 }
 

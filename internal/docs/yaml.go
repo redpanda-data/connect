@@ -440,7 +440,12 @@ func customLintFromYAML(ctx LintContext, spec FieldSpec, node *yaml.Node) []Lint
 		// that we'll capture this type error elsewhere.
 		return []Lint{}
 	}
-	lints := lintFn(ctx, node.Line, node.Column, fieldValue)
+	line := node.Line
+	if node.Style == yaml.LiteralStyle {
+		line++
+	}
+
+	lints := lintFn(ctx, line, node.Column, fieldValue)
 	return lints
 }
 
