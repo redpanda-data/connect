@@ -16,6 +16,7 @@ input:
     queue_name: ""
     dequeue_visibility_timeout: 30s
     max_in_flight: 10
+    track_lag: false
 buffer:
   none: {}
 pipeline:

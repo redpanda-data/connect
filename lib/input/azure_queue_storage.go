@@ -5,6 +5,7 @@ package input
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/Azure/azure-storage-queue-go/azqueue"
@@ -61,6 +62,12 @@ func (a *azureQueueStorage) ConnectWithContext(ctx context.Context) error {
 // ReadWithContext attempts to read a new message from the target Azure Storage Queue Storage container.
 func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg types.Message, ackFn reader.AsyncAckFn, err error) {
 	messageURL := a.queueURL.NewMessagesURL()
+	var approxMsgCount int32
+	if a.conf.TrackLag {
+		if props, err := a.queueURL.GetProperties(ctx); err == nil {
+			approxMsgCount = props.ApproximateMessagesCount()
+		}
+	}
 	dequeue, err := messageURL.Dequeue(ctx, a.conf.MaxInFlight, a.dequeueVisibilityTimeout)
 	if err != nil {
 		if cerr, ok := err.(azqueue.StorageError); ok {
@@ -83,6 +90,14 @@ func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg types.Mess
 			part := message.NewPart([]byte(queueMsg.Text))
 			meta := part.Metadata()
 			meta.Set("queue_storage_insertion_time", queueMsg.InsertionTime.Format(time.RFC3339))
+			meta.Set("queue_storage_queue_name", a.conf.QueueName)
+			if a.conf.TrackLag {
+				msgLag := 0
+				if approxMsgCount >= n {
+					msgLag = int(approxMsgCount - n)
+				}
+				meta.Set("queue_storage_message_lag", strconv.Itoa(msgLag))
+			}
 			for k, v := range metadata {
 				meta.Set(k, v)
 			}

@@ -27,6 +27,8 @@ This input adds the following metadata fields to each message:
 
 ` + "```" + `
 - queue_storage_insertion_time
+- queue_storage_queue_name
+- queue_storage_message_lag (if 'track_lag'' set to true)
 - All user defined queue metadata
 ` + "```" + `
 
@@ -55,6 +57,7 @@ Only one authentication method is required, ` + "`storage_connection_string`" + 
 				"dequeue_visibility_timeout", "The timeout duration until a dequeued message gets visible again, 30s by default",
 			).AtVersion("3.45.0"),
 			docs.FieldAdvanced("max_in_flight", "The maximum number of unprocessed messages to fetch at a given time."),
+			docs.FieldAdvanced("track_lag", "If set to `true` the queue message lag is calculated and returned in metadata field with key `queue_storage_message_lag`."),
 		},
 		Categories: []Category{
 			CategoryServices,
@@ -75,6 +78,7 @@ type AzureQueueStorageConfig struct {
 	QueueName                string `json:"queue_name" yaml:"queue_name"`
 	DequeueVisibilityTimeout string `json:"dequeue_visibility_timeout" yaml:"dequeue_visibility_timeout"`
 	MaxInFlight              int32  `json:"max_in_flight" yaml:"max_in_flight"`
+	TrackLag                 bool   `json:"track_lag" yaml:"track_lag"`
 }
 
 // NewAzureQueueStorageConfig creates a new AzureQueueStorageConfig with default
@@ -83,5 +87,6 @@ func NewAzureQueueStorageConfig() AzureQueueStorageConfig {
 	return AzureQueueStorageConfig{
 		DequeueVisibilityTimeout: "30s",
 		MaxInFlight:              10,
+		TrackLag:                 false,
 	}
 }
