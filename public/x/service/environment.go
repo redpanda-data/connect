@@ -39,6 +39,8 @@ func (e *Environment) Clone() *Environment {
 	}
 }
 
+//------------------------------------------------------------------------------
+
 // WalkBuffers executes a provided function argument for every buffer component
 // that has been registered to the environment.
 func (e *Environment) WalkBuffers(fn func(name string, config *ConfigView)) {
@@ -274,4 +276,15 @@ func (e *Environment) WalkRateLimits(fn func(name string, config *ConfigView)) {
 			component: v,
 		})
 	}
+}
+
+//------------------------------------------------------------------------------
+
+// NewStreamBuilder creates a new StreamBuilder upon the defined environment,
+// only components known to this environment will be available to the stream
+// builder.
+func (e *Environment) NewStreamBuilder() *StreamBuilder {
+	sb := NewStreamBuilder()
+	sb.env = e
+	return sb
 }

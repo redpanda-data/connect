@@ -62,4 +62,23 @@ func TestEnvironmentAdjustments(t *testing.T) {
 	assert.NotContains(t, walkForSummaries(envTwo.WalkOutputs), "one_output")
 	assert.NotContains(t, walkForSummaries(envTwo.WalkProcessors), "one_processor")
 	assert.NotContains(t, walkForSummaries(envTwo.WalkRateLimits), "one_rate_limit")
+
+	testConfig := `
+input:
+  one_input: {}
+pipeline:
+  processors:
+    - one_processor: {}
+output:
+  one_output: {}
+cache_resources:
+  - label: foocache
+    one_cache: {}
+rate_limit_resources:
+  - label: foorl
+    one_rate_limit: {}
+`
+
+	assert.NoError(t, envOne.NewStreamBuilder().SetYAML(testConfig))
+	assert.Error(t, envTwo.NewStreamBuilder().SetYAML(testConfig))
 }
