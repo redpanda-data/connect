@@ -20,36 +20,36 @@ func TestEnvironmentAdjustments(t *testing.T) {
 	envOne := service.NewEnvironment()
 	envTwo := envOne.Clone()
 
-	envOne.RegisterCache(
+	assert.NoError(t, envOne.RegisterCache(
 		"one_cache", service.NewConfigSpec().Summary("cache one"),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 			return nil, errors.New("cache one err")
 		},
-	)
-	envOne.RegisterInput(
+	))
+	assert.NoError(t, envOne.RegisterInput(
 		"one_input", service.NewConfigSpec().Summary("input one"),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			return nil, errors.New("input one err")
 		},
-	)
-	envOne.RegisterOutput(
+	))
+	assert.NoError(t, envOne.RegisterOutput(
 		"one_output", service.NewConfigSpec().Summary("output one"),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
 			return nil, 0, errors.New("output one err")
 		},
-	)
-	envOne.RegisterProcessor(
+	))
+	assert.NoError(t, envOne.RegisterProcessor(
 		"one_processor", service.NewConfigSpec().Summary("processor one"),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 			return nil, errors.New("processor one err")
 		},
-	)
-	envOne.RegisterRateLimit(
+	))
+	assert.NoError(t, envOne.RegisterRateLimit(
 		"one_rate_limit", service.NewConfigSpec().Summary("rate limit one"),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.RateLimit, error) {
 			return nil, errors.New("rate limit one err")
 		},
-	)
+	))
 
 	assert.Equal(t, "cache one", walkForSummaries(envOne.WalkCaches)["one_cache"])
 	assert.Equal(t, "input one", walkForSummaries(envOne.WalkInputs)["one_input"])
