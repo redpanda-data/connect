@@ -40,7 +40,7 @@ output:
     bucket: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     content_type: application/octet-stream
-    mode: overwrite
+    mode: Overwrite
     max_in_flight: 1
     batching:
       count: 0
@@ -60,7 +60,7 @@ output:
     bucket: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     content_type: application/octet-stream
-    mode: overwrite
+    mode: Overwrite
     content_encoding: ""
     chunk_size: 16777216
     max_in_flight: 1
@@ -183,7 +183,7 @@ Write mode for the output. The default value is  `Overwrite`. The pipeline will 
 
 
 Type: `string`  
-Default: `"overwrite"`  
+Default: `"Overwrite"`  
 Options: `Overwrite`, `Append`, `ErrorIfExists`, `Ignore`.
 
 ### `content_encoding`

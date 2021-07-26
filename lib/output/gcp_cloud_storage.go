@@ -42,6 +42,6 @@ func NewGCPCloudStorageConfig() GCPCloudStorageConfig {
 		ChunkSize:       googleapi.DefaultUploadChunkSize,
 		MaxInFlight:     1,
 		Batching:        batch.NewPolicyConfig(),
-		Mode:            "overwrite",
+		Mode:            GCPCloudStorageOverwriteMode,
 	}
 }
