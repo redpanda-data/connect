@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 
-	"github.com/Jeffail/benthos/v3/public/x/service"
+	"github.com/Jeffail/benthos/v3/public/service"
 )
 
 type ReverseProcessor struct {

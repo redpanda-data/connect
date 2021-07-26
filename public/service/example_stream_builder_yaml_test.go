@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/public/x/service"
+	"github.com/Jeffail/benthos/v3/public/service"
 )
 
 // This example demonstrates how to use a stream builder to parse and execute a

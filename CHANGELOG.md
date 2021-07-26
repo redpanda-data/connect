@@ -11,12 +11,13 @@ All notable changes to this project will be documented in this file.
 - The `amqp_1` input and output now support passing and receiving metadata as annotations.
 - Config unit test definitions can now use files for both the input and expected output.
 - Field `track_properties` added to the `azure_queue_storage` input for enriching messages with properties such as the message backlog.
+- Go API: The new plugin APIs, available at `./public/service`, are considered stable.
 
 ### Fixed
 
 - The Bloblang function `random_int` now only resolves dynamic arguments once during the lifetime of the mapping. Documentation has been updated in order to clarify the behaviour with dynamic arguments.
 - Fixed an issue where plugins registered would return `failed to obtain docs for X type Y` linting errors.
-- HTTP client components are now more permissive regarding invalid Content-Type headers. 
+- HTTP client components are now more permissive regarding invalid Content-Type headers.
 
 ## 3.50.0 - 2021-07-19
 

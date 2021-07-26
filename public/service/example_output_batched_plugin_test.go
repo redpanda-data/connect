@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/public/x/service"
+	"github.com/Jeffail/benthos/v3/public/service"
 )
 
 type batchOfJSONWriter struct{}

@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/public/x/service"
+	"github.com/Jeffail/benthos/v3/public/service"
 )
 
 type RandomRateLimit struct {

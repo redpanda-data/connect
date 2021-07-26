@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/public/bloblang"
-	"github.com/Jeffail/benthos/v3/public/x/service"
+	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/mitchellh/mapstructure"

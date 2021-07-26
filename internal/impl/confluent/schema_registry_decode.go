@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/public/x/service"
+	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/linkedin/goavro/v2"
 )
 

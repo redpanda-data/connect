@@ -18,7 +18,9 @@ import (
 
 // Environment is a collection of Benthos component plugins that can be used in
 // order to build and run streaming pipelines with access to different sets of
-// plugins. This is useful for sandboxing, testing, etc.
+// plugins. This can be useful for sandboxing, testing, etc, but most plugin
+// authors do not need to create an Environment and can simply use the global
+// environment.
 type Environment struct {
 	internal    *bundle.Environment
 	bloblangEnv *bloblang.Environment
