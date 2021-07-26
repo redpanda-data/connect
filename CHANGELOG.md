@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.51.0 - 2021-07-26
+
 ### Added
 
 - The `redis_streams`, `redis_pubsub` and `redis_list` outputs now all support batching for higher throughput.
@@ -12,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Config unit test definitions can now use files for both the input and expected output.
 - Field `track_properties` added to the `azure_queue_storage` input for enriching messages with properties such as the message backlog.
 - Go API: The new plugin APIs, available at `./public/service`, are considered stable.
+- The streams mode API now uses the setting `http.read_timeout` for timing out stream CRUD endpoints.
 
 ### Fixed
 

@@ -222,10 +222,17 @@ func cmdService(
 	var dataStream stoppableStreams
 	dataStreamClosedChan := make(chan struct{})
 
+	strmAPITimeout := 5 * time.Second
+	if cTout := conf.HTTP.ReadTimeout; cTout != "" {
+		if tmpTout, _ := time.ParseDuration(cTout); tmpTout > 0 {
+			strmAPITimeout = tmpTout
+		}
+	}
+
 	// Create data streams.
 	if streamsMode {
 		streamMgr := strmmgr.New(
-			strmmgr.OptSetAPITimeout(time.Second*5),
+			strmmgr.OptSetAPITimeout(strmAPITimeout),
 			strmmgr.OptSetLogger(logger),
 			strmmgr.OptSetManager(manager),
 			strmmgr.OptSetStats(stats),
