@@ -14,7 +14,7 @@ require (
 	github.com/Jeffail/grok v1.1.0
 	github.com/OneOfOne/xxhash v1.2.8
 	github.com/Shopify/sarama v1.28.0
-	github.com/apache/pulsar-client-go v0.4.0
+	github.com/apache/pulsar-client-go v0.6.0
 	github.com/armon/go-metrics v0.3.4 // indirect
 	github.com/armon/go-radix v1.0.0
 	github.com/aws/aws-lambda-go v1.20.0
@@ -97,5 +97,8 @@ require (
 	google.golang.org/api v0.36.0
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 )
+
+// This stinks, and is due to https://github.com/99designs/keyring/issues/64
+replace github.com/keybase/go-keychain => github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4
 
 go 1.16

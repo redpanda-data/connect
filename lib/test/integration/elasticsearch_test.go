@@ -33,6 +33,8 @@ var elasticIndex = `{
 }`
 
 var _ = registerIntegrationTest("elasticsearch", func(t *testing.T) {
+	t.Skip("This uses a ton of memory so we don't run it by default")
+
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
