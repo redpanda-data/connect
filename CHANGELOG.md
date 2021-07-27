@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Prevented the `http_server` input from blocking graceful pipeline termination indefinitely.
+
 ## 3.51.0 - 2021-07-26
 
 ### Added

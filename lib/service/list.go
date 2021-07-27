@@ -25,8 +25,8 @@ type fullSchema struct {
 	Metrics           []docs.ComponentSpec `json:"metrics,omitempty"`
 	Tracers           []docs.ComponentSpec `json:"tracers,omitempty"`
 	conditions        []string
-	bloblangFunctions []string
-	bloblangMethods   []string
+	BloblangFunctions []string `json:"bloblang-functions,omitempty"`
+	BloblangMethods   []string `json:"bloblang-methods,omitempty"`
 }
 
 func (f *fullSchema) flattened() map[string][]string {
@@ -49,8 +49,8 @@ func (f *fullSchema) flattened() map[string][]string {
 		"metrics":            justNames(f.Metrics),
 		"tracers":            justNames(f.Tracers),
 		"conditions":         f.conditions,
-		"bloblang-functions": f.bloblangFunctions,
-		"bloblang-methods":   f.bloblangMethods,
+		"bloblang-functions": f.BloblangFunctions,
+		"bloblang-methods":   f.BloblangMethods,
 	}
 }
 
@@ -70,8 +70,8 @@ func listComponents(c *cli.Context) {
 		RateLimits:        bundle.AllRateLimits.Docs(),
 		Metrics:           bundle.AllMetrics.Docs(),
 		Tracers:           bundle.AllTracers.Docs(),
-		bloblangFunctions: query.ListFunctions(),
-		bloblangMethods:   query.ListMethods(),
+		BloblangFunctions: query.ListFunctions(),
+		BloblangMethods:   query.ListMethods(),
 	}
 	for t := range condition.Constructors {
 		schema.conditions = append(schema.conditions, t)
