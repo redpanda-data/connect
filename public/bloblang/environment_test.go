@@ -42,3 +42,23 @@ func TestEnvironment(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "bar", v)
 }
+
+func TestEmptyEnvironment(t *testing.T) {
+	env := NewEmptyEnvironment()
+
+	env.RegisterMethod("foo", func(_ ...interface{}) (Method, error) {
+		return StringMethod(func(s string) (interface{}, error) {
+			return "foo:" + s, nil
+		}), nil
+	})
+
+	_, err := env.Parse(`root = now()`)
+	assert.EqualError(t, err, "unrecognised function 'now': now()")
+
+	exe, err := env.Parse(`root = "hello world".foo()`)
+	require.NoError(t, err)
+
+	v, err := exe.Query(nil)
+	require.NoError(t, err)
+	assert.Equal(t, "foo:hello world", v)
+}

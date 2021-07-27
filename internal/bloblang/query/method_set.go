@@ -12,6 +12,14 @@ type MethodSet struct {
 	specs        []MethodSpec
 }
 
+// NewMethodSet creates a method set without any methods in it.
+func NewMethodSet() *MethodSet {
+	return &MethodSet{
+		constructors: map[string]MethodCtor{},
+		specs:        []MethodSpec{},
+	}
+}
+
 // Add a new method to this set by providing a spec (name and documentation),
 // a constructor to be called for each instantiation of the method, and
 // information regarding the arguments of the method.
@@ -87,10 +95,7 @@ func (m *MethodSet) Without(methods ...string) *MethodSet {
 
 // AllMethods is a set containing every single method declared by this package,
 // and any globally declared plugin methods.
-var AllMethods = &MethodSet{
-	constructors: map[string]MethodCtor{},
-	specs:        []MethodSpec{},
-}
+var AllMethods = NewMethodSet()
 
 // InitMethod attempts to initialise a method by its name, target function and
 // arguments.

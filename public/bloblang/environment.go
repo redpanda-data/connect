@@ -30,6 +30,15 @@ func NewEnvironment() *Environment {
 	}
 }
 
+// NewEmptyEnvironment creates a fresh Bloblang environment starting completely
+// empty, where no functions or methods are initially available.
+func NewEmptyEnvironment() *Environment {
+	return &Environment{
+		functions: query.NewFunctionSet(),
+		methods:   query.NewMethodSet(),
+	}
+}
+
 // Parse a Bloblang mapping using the Environment to determine the features
 // (functions and methods) available to the mapping.
 func (e *Environment) Parse(blobl string) (*Executor, error) {

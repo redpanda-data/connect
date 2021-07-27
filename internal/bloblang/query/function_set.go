@@ -13,6 +13,14 @@ type FunctionSet struct {
 	specs        []FunctionSpec
 }
 
+// NewFunctionSet creates a function set without any functions in it.
+func NewFunctionSet() *FunctionSet {
+	return &FunctionSet{
+		constructors: map[string]FunctionCtor{},
+		specs:        []FunctionSpec{},
+	}
+}
+
 var nameRegexpRaw = `^[a-z0-9]+(_[a-z0-9]+)*$`
 var nameRegexp = regexp.MustCompile(nameRegexpRaw)
 
@@ -115,10 +123,7 @@ func (f *FunctionSet) NoMessage() *FunctionSet {
 
 // AllFunctions is a set containing every single function declared by this
 // package, and any globally declared plugin methods.
-var AllFunctions = &FunctionSet{
-	constructors: map[string]FunctionCtor{},
-	specs:        []FunctionSpec{},
-}
+var AllFunctions = NewFunctionSet()
 
 // RegisterFunction to be accessible from Bloblang queries. Returns an empty
 // struct in order to allow inline calls.
