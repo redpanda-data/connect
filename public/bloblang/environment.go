@@ -41,6 +41,10 @@ func NewEmptyEnvironment() *Environment {
 
 // Parse a Bloblang mapping using the Environment to determine the features
 // (functions and methods) available to the mapping.
+//
+// When a parsing error occurs the error will be the type *ParseError, which
+// gives access to the line and column where the error occurred, as well as a
+// method for creating a well formatted error message.
 func (e *Environment) Parse(blobl string) (*Executor, error) {
 	pCtx := parser.GlobalContext()
 	if e != nil {
@@ -49,7 +53,7 @@ func (e *Environment) Parse(blobl string) (*Executor, error) {
 	}
 	exec, err := parser.ParseMapping(pCtx, "", blobl)
 	if err != nil {
-		return nil, err
+		return nil, internalToPublicParserError([]rune(blobl), err)
 	}
 	return newExecutor(exec), nil
 }
@@ -120,10 +124,14 @@ func (e *Environment) RegisterFunction(name string, ctor FunctionConstructor) er
 
 // Parse a Bloblang mapping allowing the use of the globally accessible range of
 // features (functions and methods).
+//
+// When a parsing error occurs the error will be the type *ParseError, which
+// gives access to the line and column where the error occurred, as well as a
+// method for creating a well formatted error message.
 func Parse(blobl string) (*Executor, error) {
 	exec, err := parser.ParseMapping(parser.GlobalContext(), "", blobl)
 	if err != nil {
-		return nil, err
+		return nil, internalToPublicParserError([]rune(blobl), err)
 	}
 	return newExecutor(exec), nil
 }
