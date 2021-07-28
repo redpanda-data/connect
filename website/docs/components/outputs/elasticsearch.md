@@ -156,6 +156,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `"index"`  
+Options: `index`, `update`, `delete`.
 
 ### `pipeline`
 

@@ -259,12 +259,12 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 	boff := e.backoffCtor()
 
 	requests := map[string]*pendingBulkIndex{}
-	msg.Iter(func(i int, part types.Part) error {
+	if err := msg.Iter(func(i int, part types.Part) error {
 		jObj, ierr := part.JSON()
 		if ierr != nil {
 			e.eJSONErr.Incr(1)
 			e.log.Errorf("Failed to marshal message into JSON document: %v\n", ierr)
-			return nil
+			return fmt.Errorf("failed to marshal message into JSON document: %w", ierr)
 		}
 		requests[e.idStr.String(i, msg)] = &pendingBulkIndex{
 			Action:   e.actionStr.String(i, msg),
@@ -275,7 +275,9 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 			Doc:      jObj,
 		}
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
 
 	b := e.client.Bulk()
 	for k, v := range requests {
@@ -299,11 +301,15 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 
 		wait := boff.NextBackOff()
 		for i := 0; i < len(failed); i++ {
-			if !shouldRetry(failed[i].Status) {
-				e.log.Errorf("Elasticsearch message '%v' rejected with code [%s]: %v\n", failed[i].Id, failed[i].Status, failed[i].Error.Reason)
-				return fmt.Errorf("failed to send %v parts from message: %v", len(failed), failed[0].Error.Reason)
+			reason := "no reason given"
+			if fErr := failed[i].Error; fErr != nil {
+				reason = fErr.Reason
 			}
-			e.log.Errorf("Elasticsearch message '%v' failed with code [%s]: %v\n", failed[i].Id, failed[i].Status, failed[i].Error.Reason)
+			if !shouldRetry(failed[i].Status) {
+				e.log.Errorf("Elasticsearch message '%v' rejected with code [%v]: %v\n", failed[i].Id, failed[i].Status, reason)
+				return fmt.Errorf("failed to send %v parts from message: [%v]: %v", len(failed), failed[i].Status, reason)
+			}
+			e.log.Errorf("Elasticsearch message '%v' failed with code [%v]: %v\n", failed[i].Id, failed[i].Status, reason)
 			id := failed[i].Id
 			req := requests[id]
 			bulkReq, err := e.buildBulkableRequest(id, req)
@@ -313,7 +319,11 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 			b.Add(bulkReq)
 		}
 		if wait == backoff.Stop {
-			return fmt.Errorf("failed to send %v parts from message: %v", len(failed), failed[0].Error.Reason)
+			reason := "no reason given"
+			if fErr := failed[0].Error; fErr != nil {
+				reason = fErr.Reason
+			}
+			return fmt.Errorf("failed to send %v parts from message: %v", len(failed), reason)
 		}
 		time.Sleep(wait)
 	}

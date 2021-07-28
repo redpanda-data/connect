@@ -146,13 +146,13 @@ func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
 		}
 	}()
 
-	if err = m.Write(message.New([][]byte{[]byte(`{"user":"1","message":"hello world"}`)})); err != nil {
+	if err = m.Write(message.New([][]byte{[]byte(`{"message":"hello world","user":"1"}`)})); err != nil {
 		t.Error(err)
 	}
 
 	if err = m.Write(message.New([][]byte{
-		[]byte(`{"user":"2","message":"hello world"}`),
-		[]byte(`{"user":"3","message":"hello world"}`),
+		[]byte(`{"message":"hello world","user":"2"}`),
+		[]byte(`{"message":"hello world","user":"3"}`),
 	})); err != nil {
 		t.Error(err)
 	}
@@ -162,7 +162,6 @@ func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
 		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
 			Index("does_not_exist").
-			Type("_doc").
 			Id(id).
 			Do(context.Background())
 		if err != nil {
@@ -307,7 +306,7 @@ func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
 	testMsgs := [][][]byte{}
 	for i := 0; i < N; i++ {
 		testMsgs = append(testMsgs, [][]byte{
-			[]byte(fmt.Sprintf(`{"user":"%v","message":"hello world"}`, i)),
+			[]byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)),
 		})
 	}
 	for i := 0; i < N; i++ {
@@ -369,7 +368,7 @@ func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *tes
 	testMsgs := [][][]byte{}
 	for i := 0; i < N; i++ {
 		testMsgs = append(testMsgs, [][]byte{
-			[]byte(fmt.Sprintf(`{"user":"%v","message":"hello world"}`, i)),
+			[]byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)),
 		})
 	}
 	for i := 0; i < N; i++ {
@@ -433,7 +432,7 @@ func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
 	testMsg := [][]byte{}
 	for i := 0; i < N; i++ {
 		testMsg = append(testMsg,
-			[]byte(fmt.Sprintf(`{"user":"%v","message":"hello world"}`, i)),
+			[]byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)),
 		)
 	}
 	msg := message.New(testMsg)
@@ -471,7 +470,7 @@ func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
 func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T) {
 	conf := NewElasticsearchConfig()
 	conf.Index = "${!meta(\"index\")}"
-	conf.ID = "bar-${!count(\"bar\")}"
+	conf.ID = "bar-${!count(\"elasticBatchDeleteMessages\")}"
 	conf.Action = "${!meta(\"elastic_action\")}"
 	conf.URLs = urls
 	conf.Sniff = false
@@ -498,7 +497,7 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 	testMsg := [][]byte{}
 	for i := 0; i < N; i++ {
 		testMsg = append(testMsg,
-			[]byte(fmt.Sprintf(`{"user":"%v","message":"hello world"}`, i)),
+			[]byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)),
 		)
 	}
 	msg := message.New(testMsg)
@@ -554,9 +553,9 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 			t.Fatalf("Failed to get doc '%v': %v", id, err)
 		}
 		partAction := msg.Get(i).Metadata().Get("elastic_action")
-		if partAction == "deleted" && get.Found() {
+		if partAction == "deleted" && get.Found {
 			t.Errorf("document %v found when it should have been deleted", i)
-		} else if partAction != "deleted" && !get.Found() {
+		} else if partAction != "deleted" && !get.Found {
 			t.Errorf("document %v was not found", i)
 		}
 	}

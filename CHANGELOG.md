@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- The `elasticsearch` output now supports delete, update and index operations.
+
 ### Fixed
 
 - Prevented the `http_server` input from blocking graceful pipeline termination indefinitely.
