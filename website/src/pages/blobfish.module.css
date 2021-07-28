@@ -1,7 +1,16 @@
 .emoji {
   height: 64px;
+  width: 64px;
+  max-width: unset;
 }
 
 .headerImg {
   height: 180px;
+}
+
+.emojiContainer {
+  display: flex;
+  justify-content: space-around;
+  flex-wrap: wrap;
+  width: 100%;
 }

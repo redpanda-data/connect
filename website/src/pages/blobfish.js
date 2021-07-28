@@ -5,6 +5,26 @@ import Layout from '@theme/Layout';
 import classnames from 'classnames';
 import styles from './blobfish.module.css';
 
+const emojis = [
+  "blob.png",
+  "blobok.png",
+  "blobyes.png",
+  "blobno.png",
+  "blobcool.png",
+  "blobkiss.png",
+  "blobthinking.png",
+  "blobpalm.png",
+  "blobwave.png",
+  "blobheart.png",
+  "blobcrying.png",
+  "blobcrylaugh.png",
+  "blobnaughty.png",
+  "blobbot.png",
+  "blobemo.png",
+  "blobbounce.gif",
+  "blobtrance.gif",
+];
+
 function Blobfish() {
   return (
     <Layout title="Blobfish" description="The offical Benthos mascot">
@@ -46,67 +66,12 @@ Variations of the mascot such as the <a href="/img/Blobpirate.svg">dapper captai
                 <p>Use these with great care.</p>
               </div>
             </div>
-            <div className="row margin-bottom--lg">
-              <div className="col text--center">
-                <a href="/img/emojis/blob.png">
-                  <img className={styles.emoji} src="/img/emojis/blob.png"/>
+            <div className={classnames("margin-bottom--lg", styles.emojiContainer)}>
+              {emojis.map((emoji, idx) => (
+                <a key={idx} href={`/img/emojis/${emoji}`}>
+                  <img className={styles.emoji} src={`/img/emojis/${emoji}`}/>
                 </a>
-              </div>
-              <div className="col text--center">
-                <a href="/img/emojis/blobok.png">
-                  <img className={styles.emoji} src="/img/emojis/blobok.png"/>
-                </a>
-              </div>
-              <div className="col text--center">
-                <a href="/img/emojis/blobyes.png">
-                  <img className={styles.emoji} src="/img/emojis/blobyes.png"/>
-                </a>
-              </div>
-              <div className="col text--center">
-                <a href="/img/emojis/blobno.png">
-                  <img className={styles.emoji} src="/img/emojis/blobno.png"/>
-                </a>
-              </div>
-              <div className="col text--center">
-                <a href="/img/emojis/blobcool.png">
-                  <img className={styles.emoji} src="/img/emojis/blobcool.png"/>
-                </a>
-              </div>
-              <div className="col text--center">
-                <a href="/img/emojis/blobkiss.png">
-                  <img className={styles.emoji} src="/img/emojis/blobkiss.png"/>
-                </a>
-              </div>
-              <div className="col text--center">
-                <a href="/img/emojis/blobthinking.png">
-                  <img className={styles.emoji} src="/img/emojis/blobthinking.png"/>
-                </a>
-              </div>
-              <div className="col text--center">
-                <a href="/img/emojis/blobpalm.png">
-                  <img className={styles.emoji} src="/img/emojis/blobpalm.png"/>
-                </a>
-              </div>
-              <div className="col text--center">
-                <a href="/img/emojis/blobheart.png">
-                  <img className={styles.emoji} src="/img/emojis/blobheart.png"/>
-                </a>
-              </div>
-              <div className="col text--center">
-                <a href="/img/emojis/blobcrying.png">
-                  <img className={styles.emoji} src="/img/emojis/blobcrying.png"/>
-                </a>
-              </div>
-              <div className="col text--center">
-                <a href="/img/emojis/blobbounce.gif">
-                  <img className={styles.emoji} src="/img/emojis/blobbounce.gif"/>
-                </a>
-              </div>
-              <div className="col text--center">
-                <a href="/img/emojis/blobtrance.gif">
-                  <img className={styles.emoji} src="/img/emojis/blobtrance.gif"/>
-                </a>
-              </div>
+              ))}
             </div>
           </div>
         </section>
