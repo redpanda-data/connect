@@ -115,6 +115,10 @@ func TestElasticIntegration(t *testing.T) {
 	t.Run("TestElasticBatch", func(te *testing.T) {
 		testElasticBatch(urls, client, te)
 	})
+
+	t.Run("TestElasticBatchDelete", func(te *testing.T) {
+		testElasticBatchDelete(urls, client, te)
+	})
 }
 
 func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
@@ -460,6 +464,100 @@ func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
 			t.Error(err)
 		} else if exp, act := string(testMsg[i]), string(sourceBytes); exp != act {
 			t.Errorf("wrong user field returned: %v != %v", act, exp)
+		}
+	}
+}
+
+func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T) {
+	conf := NewElasticsearchConfig()
+	conf.Index = "${!meta(\"index\")}"
+	conf.ID = "bar-${!count(\"bar\")}"
+	conf.Action = "${!meta(\"elastic_action\")}"
+	conf.URLs = urls
+	conf.Sniff = false
+	conf.Type = "_doc"
+
+	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = m.Connect(); err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		m.CloseAsync()
+		if cErr := m.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+	}()
+
+	N := 10
+
+	testMsg := [][]byte{}
+	for i := 0; i < N; i++ {
+		testMsg = append(testMsg,
+			[]byte(fmt.Sprintf(`{"user":"%v","message":"hello world"}`, i)),
+		)
+	}
+	msg := message.New(testMsg)
+	for i := 0; i < N; i++ {
+		msg.Get(i).Metadata().Set("index", "test_conn_index")
+		msg.Get(i).Metadata().Set("elastic_action", "index")
+	}
+	if err = m.Write(msg); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < N; i++ {
+		id := fmt.Sprintf("bar-%v", i+1)
+		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
+		get, err := client.Get().
+			Index("test_conn_index").
+			Type("_doc").
+			Id(id).
+			Do(context.Background())
+		if err != nil {
+			t.Fatalf("Failed to get doc '%v': %v", id, err)
+		}
+		if !get.Found {
+			t.Errorf("document %v not found", i)
+		}
+
+		var sourceBytes []byte
+		sourceBytes, err = get.Source.MarshalJSON()
+		if err != nil {
+			t.Error(err)
+		} else if exp, act := string(testMsg[i]), string(sourceBytes); exp != act {
+			t.Errorf("wrong user field returned: %v != %v", act, exp)
+		}
+	}
+
+	// Set elastic_action to deleted for some message parts
+	for i := N / 2; i < N; i++ {
+		msg.Get(i).Metadata().Set("elastic_action", "delete")
+	}
+
+	if err = m.Write(msg); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < N; i++ {
+		id := fmt.Sprintf("bar-%v", i+1)
+		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
+		get, err := client.Get().
+			Index("test_conn_index").
+			Type("_doc").
+			Id(id).
+			Do(context.Background())
+		if err != nil {
+			t.Fatalf("Failed to get doc '%v': %v", id, err)
+		}
+		partAction := msg.Get(i).Metadata().Get("elastic_action")
+		if partAction == "deleted" && get.Found() {
+			t.Errorf("document %v found when it should have been deleted", i)
+		} else if partAction != "deleted" && !get.Found() {
+			t.Errorf("document %v was not found", i)
 		}
 	}
 }

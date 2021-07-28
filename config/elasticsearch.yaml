@@ -22,9 +22,11 @@ output:
     urls:
       - http://localhost:9200
     index: benthos_index
+    action: index
     pipeline: ""
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
     type: doc
+    routing: ""
     sniff: true
     healthcheck: true
     timeout: 5s

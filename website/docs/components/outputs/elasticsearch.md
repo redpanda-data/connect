@@ -56,9 +56,11 @@ output:
     urls:
       - http://localhost:9200
     index: benthos_index
+    action: index
     pipeline: ""
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
     type: doc
+    routing: ""
     sniff: true
     healthcheck: true
     timeout: 5s
@@ -146,6 +148,15 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `"benthos_index"`  
 
+### `action`
+
+The action to take on the document.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `"index"`  
+
 ### `pipeline`
 
 An optional pipeline id to preprocess incoming documents.
@@ -171,6 +182,15 @@ The document type.
 
 Type: `string`  
 Default: `"doc"`  
+
+### `routing`
+
+The routing key to use for the document.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
 
 ### `sniff`
 
