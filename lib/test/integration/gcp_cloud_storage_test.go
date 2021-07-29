@@ -85,7 +85,7 @@ output:
     bucket: $VAR1-$ID
     path: $VAR2/${!count("$ID")}.txt
     max_in_flight: 1
-    mode: Overwrite
+    collision_mode: overwrite
 
 input:
   gcp_cloud_storage:
@@ -112,7 +112,7 @@ output:
     bucket: $VAR1-$ID
     path: $VAR2/test.txt
     max_in_flight: 1
-    mode: Append
+    collision_mode: append
 input:
   gcp_cloud_storage:
     bucket: $VAR1-$ID

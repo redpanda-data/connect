@@ -40,7 +40,7 @@ output:
     bucket: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     content_type: application/octet-stream
-    mode: Overwrite
+    collision_mode: overwrite
     max_in_flight: 1
     batching:
       count: 0
@@ -60,7 +60,7 @@ output:
     bucket: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     content_type: application/octet-stream
-    mode: Overwrite
+    collision_mode: overwrite
     content_encoding: ""
     chunk_size: 16777216
     max_in_flight: 1
@@ -177,14 +177,14 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `"application/octet-stream"`  
 
-### `mode`
+### `collision_mode`
 
-Write mode for the output. The default value is  `Overwrite`. The pipeline will throw an error if the mode is ErrorIfExists and the output file already exists. The pipeline will skip writing the message if the mode is Ignore and output file already exists.
+Write mode for the output. The default value is  `overwrite`. The pipeline will throw an error if the mode is`error-if-exists` and the output file already exists. The pipeline will skip writing the message if the mode is `ignore` and output file already exists.
 
 
 Type: `string`  
-Default: `"Overwrite"`  
-Options: `Overwrite`, `Append`, `ErrorIfExists`, `Ignore`.
+Default: `"overwrite"`  
+Options: `overwrite`, `append`, `error-if-exists`, `ignore`.
 
 ### `content_encoding`
 

@@ -110,8 +110,8 @@ output:
 				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
 			).IsInterpolated(),
 			docs.FieldCommon("content_type", "The content type to set for each object.").IsInterpolated(),
-			docs.FieldCommon("mode", `Write mode for the output. The default value is  `+"`Overwrite`"+`. The pipeline will throw an error if the mode is ErrorIfExists and the output file already exists. The pipeline will skip writing the message if the mode is Ignore and output file already exists.`).HasOptions(
-				"Overwrite", "Append", "ErrorIfExists", "Ignore",
+			docs.FieldCommon("collision_mode", `Write mode for the output. The default value is  `+"`overwrite`"+`. The pipeline will throw an error if the mode is`+"`error-if-exists`"+` and the output file already exists. The pipeline will skip writing the message if the mode is `+"`ignore`"+` and output file already exists.`).HasOptions(
+				"overwrite", "append", "error-if-exists", "ignore",
 			),
 			docs.FieldAdvanced("content_encoding", "An optional content encoding to set for each object.").IsInterpolated(),
 			docs.FieldAdvanced("chunk_size", "An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled."),
@@ -201,14 +201,14 @@ func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg types.
 
 		isMerge := false
 		var tempPath string
-		if err == storage.ErrObjectNotExist || g.conf.Mode == output.GCPCloudStorageOverwriteMode {
+		if err == storage.ErrObjectNotExist || g.conf.CollisionMode == output.GCPCloudStorageOverwriteCollisionMode {
 			tempPath = outputPath
 		} else {
 			isMerge = true
 
-			if g.conf.Mode == output.GCPCloudStorageErrorIfExistsMode {
+			if g.conf.CollisionMode == output.GCPCloudStorageErrorIfExistsCollisionMode {
 				return fmt.Errorf("file at path already exists: %s", outputPath)
-			} else if g.conf.Mode == output.GCPCloudStorageIgnoreMode {
+			} else if g.conf.CollisionMode == output.GCPCloudStorageIgnoreCollisionMode {
 				return nil
 			}
 
