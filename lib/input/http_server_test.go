@@ -277,8 +277,9 @@ func TestHTTPServerLifecycle(t *testing.T) {
 	dummyData := []byte("a bunch of jolly leprechauns await")
 	go func() {
 		resp, cerr := http.Post(testURL, "text/plain", bytes.NewReader(dummyData))
-		require.NoError(t, cerr)
-		defer resp.Body.Close()
+		if assert.NoError(t, cerr) {
+			resp.Body.Close()
+		}
 	}()
 
 	msg, err := readNextMsg(server)
@@ -297,8 +298,9 @@ func TestHTTPServerLifecycle(t *testing.T) {
 
 	go func() {
 		resp, cerr := http.Post(testURL, "text/plain", bytes.NewReader(dummyData))
-		require.NoError(t, cerr)
-		defer resp.Body.Close()
+		if assert.NoError(t, cerr) {
+			resp.Body.Close()
+		}
 	}()
 
 	msg, err = readNextMsg(serverTwo)
