@@ -100,10 +100,6 @@ a.contents__link > code {
   color: var(--ifm-code-color);
 }
 
-html[data-theme="dark"] .admonition h5 {
-  color: var(--ifm-background-color);
-}
-
 .menu--responsive > button {
   background-color: var(--ifm-color-primary);
   border-color: var(--ifm-color-primary);

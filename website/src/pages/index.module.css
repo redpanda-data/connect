@@ -30,8 +30,7 @@
 }
 
 .featureImage {
-  height: 150px;
-  width: 250px;
+  height: 180px;
 }
 
 .heroImg {
@@ -72,21 +71,21 @@
 }
 
 .meltwaterImg {
-  max-height: 30px;
+  height: 60px;
   padding: 10px;
 }
 
 .humanImg {
-  max-height: 40px;
-  padding: 0 10px;
+  height: 60px;
+  padding: 5px 10px;
 }
 
 .infosumImg {
-  max-height: 40px;
+  height: 70px;
   padding: 10px;
 }
 
 .communityImg {
-  max-height: 40px;
+  height: 70px;
   padding: 10px;
 }

@@ -203,7 +203,7 @@ function Feature({imageUrl, title, description}) {
         </div>
       )}
       <h3>{title}</h3>
-      <p>{description}</p>
+      {description}
     </div>
   );
 }
@@ -252,7 +252,7 @@ function Home() {
                   return {label:props.label, value:props.label};
                 })}>
                   {installs.map((props, idx) => (
-                    <TabItem value={props.label}>
+                    <TabItem key={idx} value={props.label}>
                       <CodeSnippet snippet={props.snippet} lang="bash"></CodeSnippet>
                     </TabItem>
                   ))}
@@ -266,9 +266,9 @@ function Home() {
                       return {label:props.label, value:props.label};
                     })}>
                       {snippets.map((props, idx) => (
-                        <TabItem value={props.label}>
+                        <TabItem key={idx} value={props.label}>
                           <>
-                          <Snippet key={idx} {...props} />
+                          <Snippet {...props} />
                           <Link
                             className={classnames('button button--outline button--secondary')}
                             to={props.further}>
