@@ -70,7 +70,7 @@ func (a Noack) SkipAck() bool {
 	return false
 }
 
-// NewNoack returns an Ack response type.
+// NewNoack returns a Nack response type.
 func NewNoack() Noack {
 	return Noack{}
 }

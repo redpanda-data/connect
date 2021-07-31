@@ -17,6 +17,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 //------------------------------------------------------------------------------
@@ -26,16 +28,19 @@ type mockAsyncReader struct {
 	ackRcvd   []error
 	ackMut    sync.Mutex
 
-	connChan chan error
-	readChan chan error
-	ackChan  chan error
+	connChan       chan error
+	readChan       chan error
+	ackChan        chan error
+	closeAsyncChan chan struct{}
+	closeAsyncOnce sync.Once
 }
 
 func newMockAsyncReader() *mockAsyncReader {
 	return &mockAsyncReader{
-		connChan: make(chan error),
-		readChan: make(chan error),
-		ackChan:  make(chan error),
+		connChan:       make(chan error),
+		readChan:       make(chan error),
+		ackChan:        make(chan error),
+		closeAsyncChan: make(chan struct{}),
 	}
 }
 
@@ -46,6 +51,7 @@ func (r *mockAsyncReader) ConnectWithContext(ctx context.Context) error {
 	}
 	return cerr
 }
+
 func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
 	select {
 	case <-ctx.Done():
@@ -76,10 +82,21 @@ func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (types.Message, r
 		r.ackMut.Lock()
 		r.ackRcvd[i] = res.Error()
 		r.ackMut.Unlock()
-		return <-r.ackChan
+		select {
+		case err := <-r.ackChan:
+			return err
+		case <-ctx.Done():
+		}
+		return nil
 	}, nil
 }
-func (r *mockAsyncReader) CloseAsync() {}
+
+func (r *mockAsyncReader) CloseAsync() {
+	r.closeAsyncOnce.Do(func() {
+		close(r.closeAsyncChan)
+	})
+}
+
 func (r *mockAsyncReader) WaitForClose(time.Duration) error {
 	return nil
 }
@@ -491,6 +508,72 @@ func TestAsyncReaderHappyPath(t *testing.T) {
 	if err = r.WaitForClose(time.Second); err != nil {
 		pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
 		t.Fatal(err)
+	}
+
+	if readerImpl.ackRcvd[0] != nil {
+		t.Error(readerImpl.ackRcvd[0])
+	}
+}
+
+func TestAsyncReaderCloseWithPendingAcks(t *testing.T) {
+	exp := [][]byte{[]byte("hello world")}
+
+	readerImpl := newMockAsyncReader()
+	readerImpl.msgsToSnd = []types.Message{message.New(exp)}
+
+	r, err := NewAsyncReader("foo", true, readerImpl, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	select {
+	case readerImpl.connChan <- nil:
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+
+	go func() {
+		select {
+		case readerImpl.readChan <- nil:
+		case <-time.After(time.Second):
+		}
+	}()
+
+	var ts types.Transaction
+	var open bool
+
+	select {
+	case ts, open = <-r.TransactionChan():
+		require.True(t, open)
+		assert.Equal(t, message.GetAllBytes(ts.Payload), exp)
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+
+	select {
+	case ts.ResponseChan <- response.NewAck():
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+
+	// Blocking the reader ack for now
+	r.CloseAsync()
+
+	select {
+	case <-readerImpl.closeAsyncChan:
+		t.Fatal("reader closed early")
+	// case <-time.After(time.Millisecond * 100):
+	case <-time.After(time.Second):
+	}
+
+	select {
+	case readerImpl.ackChan <- nil:
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+
+	select {
+	case <-readerImpl.closeAsyncChan:
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
 	}
 
 	if readerImpl.ackRcvd[0] != nil {
