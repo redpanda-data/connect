@@ -71,6 +71,20 @@ func (m *Message) ensureCopied() {
 	}
 }
 
+// Context returns a context associated with the message, or a background
+// context in the absence of one.
+func (m *Message) Context() context.Context {
+	return message.GetContext(m.part)
+}
+
+// WithContext returns a new message with a provided context associated with it.
+func (m *Message) WithContext(ctx context.Context) *Message {
+	return &Message{
+		part:       message.WithContext(ctx, m.part),
+		partCopied: m.partCopied,
+	}
+}
+
 // AsBytes returns the underlying byte array contents of a message or, if the
 // contents are a structured type, attempts to marshal the contents as a JSON
 // document and returns either the byte array result or an error.
