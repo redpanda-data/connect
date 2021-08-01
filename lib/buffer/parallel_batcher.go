@@ -4,6 +4,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -53,15 +54,11 @@ func NewParallelBatcher(
 func (m *ParallelBatcher) outputLoop() {
 	defer func() {
 		m.child.CloseAsync()
-		err := m.child.WaitForClose(time.Second)
-		for err != nil {
-			err = m.child.WaitForClose(time.Second)
-		}
+		_ = m.child.WaitForClose(shutdown.MaximumShutdownWait())
+
 		m.batcher.CloseAsync()
-		err = m.batcher.WaitForClose(time.Second)
-		for err != nil {
-			err = m.batcher.WaitForClose(time.Second)
-		}
+		_ = m.batcher.WaitForClose(shutdown.MaximumShutdownWait())
+
 		close(m.messagesOut)
 		close(m.closedChan)
 	}()

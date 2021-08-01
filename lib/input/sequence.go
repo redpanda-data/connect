@@ -9,6 +9,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -541,9 +542,7 @@ func (r *Sequence) loop() {
 		shardJoinWG.Wait()
 		if t, _ := r.getTarget(); t != nil {
 			t.CloseAsync()
-			err := t.WaitForClose(time.Second)
-			for ; err != nil; err = t.WaitForClose(time.Second) {
-			}
+			_ = t.WaitForClose(shutdown.MaximumShutdownWait())
 		}
 		close(r.transactions)
 		close(r.closedChan)

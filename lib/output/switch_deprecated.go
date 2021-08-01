@@ -3,8 +3,8 @@ package output
 import (
 	"encoding/json"
 	"sync"
-	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -79,11 +79,7 @@ func (o *Switch) loopDeprecated() {
 			close(o.outputTSChans[i])
 		}
 		for _, output := range o.outputs {
-			if err := output.WaitForClose(time.Second); err != nil {
-				for err != nil {
-					err = output.WaitForClose(time.Second)
-				}
-			}
+			_ = output.WaitForClose(shutdown.MaximumShutdownWait())
 		}
 		close(o.closedChan)
 	}()

@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -248,9 +249,7 @@ func (r *ReadUntil) loop() {
 	defer func() {
 		if r.wrapped != nil {
 			r.wrapped.CloseAsync()
-			err := r.wrapped.WaitForClose(time.Second)
-			for ; err != nil; err = r.wrapped.WaitForClose(time.Second) {
-			}
+			_ = r.wrapped.WaitForClose(shutdown.MaximumShutdownWait())
 		}
 		mRunning.Decr(1)
 

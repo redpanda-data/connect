@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/output"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -73,7 +74,7 @@ func (i *WithPipeline) Connected() bool {
 func (i *WithPipeline) CloseAsync() {
 	i.pipe.CloseAsync()
 	go func() {
-		i.pipe.WaitForClose(time.Second)
+		_ = i.pipe.WaitForClose(shutdown.MaximumShutdownWait())
 		i.out.CloseAsync()
 	}()
 }

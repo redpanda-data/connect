@@ -23,7 +23,7 @@ type mockNBWriter struct {
 	written     []string
 	errorOn     []string
 	closeCalled bool
-	closeErr    error
+	closeChan   chan error
 	mut         sync.Mutex
 }
 
@@ -55,7 +55,10 @@ func (m *mockNBWriter) CloseAsync() {
 }
 
 func (m *mockNBWriter) WaitForClose(time.Duration) error {
-	return m.closeErr
+	if m.closeChan == nil {
+		return nil
+	}
+	return <-m.closeChan
 }
 
 func TestNotBatchedSingleMessages(t *testing.T) {
@@ -105,7 +108,7 @@ func TestShutdown(t *testing.T) {
 		return msg
 	}
 
-	w := &mockNBWriter{t: t, closeErr: errors.New("test err")}
+	w := &mockNBWriter{t: t, closeChan: make(chan error)}
 	out, err := NewAsyncWriter("foo", 1, w, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
@@ -129,6 +132,14 @@ func TestShutdown(t *testing.T) {
 
 	nbOut.CloseAsync()
 	assert.EqualError(t, nbOut.WaitForClose(time.Millisecond*100), "action timed out")
+
+	select {
+	case w.closeChan <- errors.New("custom err"):
+	case <-time.After(time.Second):
+		t.Error("timed out")
+	}
+
+	assert.NoError(t, nbOut.WaitForClose(time.Millisecond*100))
 	assert.Equal(t, []string{"foo"}, w.written)
 	w.mut.Lock()
 	assert.True(t, w.closeCalled)

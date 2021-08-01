@@ -10,6 +10,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -176,9 +177,7 @@ func (r *Retry) loop() {
 		wg.Wait()
 		close(r.transactionsOut)
 		r.wrapped.CloseAsync()
-		err := r.wrapped.WaitForClose(time.Second)
-		for ; err != nil; err = r.wrapped.WaitForClose(time.Second) {
-		}
+		_ = r.wrapped.WaitForClose(shutdown.MaximumShutdownWait())
 		mRunning.Decr(1)
 		close(r.closedChan)
 	}()

@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	imessage "github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -529,11 +530,7 @@ func (o *Switch) loop() {
 			close(o.outputTSChans[i])
 		}
 		for _, output := range o.outputs {
-			if err := output.WaitForClose(time.Second); err != nil {
-				for err != nil {
-					err = output.WaitForClose(time.Second)
-				}
-			}
+			_ = output.WaitForClose(shutdown.MaximumShutdownWait())
 		}
 		close(o.closedChan)
 	}()

@@ -74,16 +74,11 @@ func (m *Batcher) loop() {
 	defer func() {
 		close(m.messagesOut)
 		m.child.CloseAsync()
-		err := m.child.WaitForClose(time.Second)
-		for err != nil {
-			err = m.child.WaitForClose(time.Second)
-		}
+		_ = m.child.WaitForClose(shutdown.MaximumShutdownWait())
+
 		m.batcher.CloseAsync()
-		err = m.batcher.WaitForClose(time.Second)
-		for err != nil {
-			m.log.Warnf("Waiting for batch policy to close, blocked by: %v\n", err)
-			err = m.batcher.WaitForClose(time.Second)
-		}
+		_ = m.batcher.WaitForClose(shutdown.MaximumShutdownWait())
+
 		m.shutSig.ShutdownComplete()
 	}()
 
@@ -202,12 +197,6 @@ func (m *Batcher) CloseAsync() {
 
 // WaitForClose blocks until the Batcher output has closed down.
 func (m *Batcher) WaitForClose(timeout time.Duration) error {
-	go func() {
-		if m.shutSig.ShouldCloseAtLeisure() {
-			<-time.After(timeout - time.Second)
-			m.shutSig.CloseNow()
-		}
-	}()
 	select {
 	case <-m.shutSig.HasClosedChan():
 	case <-time.After(timeout):

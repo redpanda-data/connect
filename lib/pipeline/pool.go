@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -77,10 +78,7 @@ func (p *Pool) loop() {
 		// Wait for all workers to be closed before closing our response and
 		// messages channels as the workers may still have access to them.
 		for _, worker := range p.workers {
-			err := worker.WaitForClose(time.Second)
-			for err != nil {
-				err = worker.WaitForClose(time.Second)
-			}
+			_ = worker.WaitForClose(shutdown.MaximumShutdownWait())
 		}
 
 		close(p.messagesOut)

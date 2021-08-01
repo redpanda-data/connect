@@ -9,6 +9,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -164,9 +165,7 @@ func (d *DropOnError) loop() {
 	defer func() {
 		close(d.transactionsOut)
 		d.wrapped.CloseAsync()
-		err := d.wrapped.WaitForClose(time.Second)
-		for ; err != nil; err = d.wrapped.WaitForClose(time.Second) {
-		}
+		_ = d.wrapped.WaitForClose(shutdown.MaximumShutdownWait())
 		close(d.closedChan)
 	}()
 

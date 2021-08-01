@@ -7,6 +7,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -104,9 +105,7 @@ func (n *notBatchedOutput) breakMessageOut(msg types.Message) error {
 func (n *notBatchedOutput) loop() {
 	defer func() {
 		n.out.CloseAsync()
-		err := n.out.WaitForClose(time.Second)
-		for ; err != nil; err = n.out.WaitForClose(time.Second) {
-		}
+		_ = n.out.WaitForClose(shutdown.MaximumShutdownWait())
 		close(n.closedChan)
 	}()
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
@@ -82,10 +83,8 @@ func (w *Writer) loop() {
 	)
 
 	defer func() {
-		err := w.writer.WaitForClose(time.Second)
-		for ; err != nil; err = w.writer.WaitForClose(time.Second) {
-			w.log.Warnf("Waiting for output to close, blocked by: %v\n", err)
-		}
+		_ = w.writer.WaitForClose(shutdown.MaximumShutdownWait())
+
 		atomic.StoreInt32(&w.isConnected, 0)
 		close(w.closedChan)
 	}()

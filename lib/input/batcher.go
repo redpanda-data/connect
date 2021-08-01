@@ -52,15 +52,11 @@ func NewBatcher(
 func (m *Batcher) loop() {
 	defer func() {
 		m.child.CloseAsync()
-		err := m.child.WaitForClose(time.Second)
-		for err == types.ErrTimeout {
-			err = m.child.WaitForClose(time.Second)
-		}
+		_ = m.child.WaitForClose(shutdown.MaximumShutdownWait())
+
 		m.batcher.CloseAsync()
-		err = m.batcher.WaitForClose(time.Second)
-		for err == types.ErrTimeout {
-			err = m.batcher.WaitForClose(time.Second)
-		}
+		_ = m.batcher.WaitForClose(shutdown.MaximumShutdownWait())
+
 		close(m.messagesOut)
 		m.shutSig.ShutdownComplete()
 	}()
