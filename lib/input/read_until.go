@@ -11,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -249,7 +248,11 @@ func (r *ReadUntil) loop() {
 	defer func() {
 		if r.wrapped != nil {
 			r.wrapped.CloseAsync()
-			_ = r.wrapped.WaitForClose(shutdown.MaximumShutdownWait())
+
+			// TODO: This triggers a tier 2 shutdown in the child.
+			err := r.wrapped.WaitForClose(time.Second)
+			for ; err != nil; err = r.wrapped.WaitForClose(time.Second) {
+			}
 		}
 		mRunning.Decr(1)
 
