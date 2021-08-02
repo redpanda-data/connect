@@ -5,9 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.52.0 - 2021-08-02
+
 ### Added
 
 - The `elasticsearch` output now supports delete, update and index operations.
+- Go API: Added ability to create and register `BatchInput` plugins.
 
 ### Fixed
 

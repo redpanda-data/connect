@@ -30,6 +30,24 @@ func RegisterInput(name string, spec *ConfigSpec, ctor InputConstructor) error {
 	return globalEnvironment.RegisterInput(name, spec, ctor)
 }
 
+// BatchInputConstructor is a func that's provided a configuration type and
+// access to a service manager, and must return an instantiation of a batched
+// reader based on the config, or an error.
+type BatchInputConstructor func(conf *ParsedConfig, mgr *Resources) (BatchInput, error)
+
+// RegisterBatchInput attempts to register a new batched input plugin by
+// providing a description of the configuration for the plugin as well as a
+// constructor for the input itself. The constructor will be called for each
+// instantiation of the component within a config.
+//
+// If your input implementation doesn't have a specific mechanism for dealing
+// with a nack (when the AckFunc provides a non-nil error) then you can instead
+// wrap your input implementation with AutoRetryNacksBatched to get automatic
+// retries.
+func RegisterBatchInput(name string, spec *ConfigSpec, ctor BatchInputConstructor) error {
+	return globalEnvironment.RegisterBatchInput(name, spec, ctor)
+}
+
 // OutputConstructor is a func that's provided a configuration type and access
 // to a service manager, and must return an instantiation of a writer based on
 // the config and a maximum number of in-flight messages to allow, or an error.
@@ -53,6 +71,14 @@ type BatchOutputConstructor func(conf *ParsedConfig, mgr *Resources) (out BatchO
 // description of the configuration for the plugin as well as a constructor for
 // the output itself. The constructor will be called for each instantiation of
 // the component within a config.
+//
+// The constructor of a batch output is able to return a batch policy to be
+// applied before calls to write are made, creating batches from the stream of
+// messages. However, batches can also be created by upstream components
+// (inputs, buffers, etc).
+//
+// If a batch has been formed upstream it is possible that its size may exceed
+// the policy specified in your constructor.
 func RegisterBatchOutput(name string, spec *ConfigSpec, ctor BatchOutputConstructor) error {
 	return globalEnvironment.RegisterBatchOutput(name, spec, ctor)
 }
@@ -76,6 +102,10 @@ func RegisterProcessor(name string, spec *ConfigSpec, ctor ProcessorConstructor)
 // BatchProcessorConstructor is a func that's provided a configuration type and
 // access to a service manager and must return an instantiation of a processor
 // based on the config, or an error.
+//
+// Message batches must be created by upstream components (inputs, buffers, etc)
+// otherwise this processor will simply receive batches containing single
+// messages.
 type BatchProcessorConstructor func(conf *ParsedConfig, mgr *Resources) (BatchProcessor, error)
 
 // RegisterBatchProcessor attempts to register a new processor plugin by

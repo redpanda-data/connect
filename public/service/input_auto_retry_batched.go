@@ -15,8 +15,8 @@ import (
 //
 // When messages fail to be delivered they will be reattempted with back off
 // until success or the stream is stopped.
-func AutoRetryNacks(i Input) Input {
-	return &autoRetryInput{
+func AutoRetryNacksBatched(i BatchInput) BatchInput {
+	return &autoRetryInputBatched{
 		child:           i,
 		resendInterrupt: func() {},
 	}
@@ -24,35 +24,35 @@ func AutoRetryNacks(i Input) Input {
 
 //------------------------------------------------------------------------------
 
-type messageRetry struct {
+type messageRetryBatched struct {
 	boff     backoff.BackOff
 	attempts int
-	msg      *Message
+	msg      MessageBatch
 	ackFn    AckFunc
 }
 
-func newMessageRetry(msg *Message, ackFn AckFunc) messageRetry {
+func newMessageRetryBatched(msg MessageBatch, ackFn AckFunc) messageRetryBatched {
 	boff := backoff.NewExponentialBackOff()
 	boff.InitialInterval = time.Millisecond
 	boff.MaxInterval = time.Second
 	boff.Multiplier = 1.1
 	boff.MaxElapsedTime = 0
-	return messageRetry{boff, 0, msg, ackFn}
+	return messageRetryBatched{boff, 0, msg, ackFn}
 }
 
-type autoRetryInput struct {
-	resendMessages  []messageRetry
+type autoRetryInputBatched struct {
+	resendMessages  []messageRetryBatched
 	resendInterrupt func()
 	msgsMut         sync.Mutex
 
-	child Input
+	child BatchInput
 }
 
-func (i *autoRetryInput) Connect(ctx context.Context) error {
+func (i *autoRetryInputBatched) Connect(ctx context.Context) error {
 	return i.child.Connect(ctx)
 }
 
-func (i *autoRetryInput) wrapAckFunc(m messageRetry) (*Message, AckFunc) {
+func (i *autoRetryInputBatched) wrapAckFunc(m messageRetryBatched) (MessageBatch, AckFunc) {
 	return m.msg, func(ctx context.Context, err error) error {
 		if err != nil {
 			i.msgsMut.Lock()
@@ -65,7 +65,7 @@ func (i *autoRetryInput) wrapAckFunc(m messageRetry) (*Message, AckFunc) {
 	}
 }
 
-func (i *autoRetryInput) Read(ctx context.Context) (*Message, AckFunc, error) {
+func (i *autoRetryInputBatched) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, error) {
 	var cancel func()
 	ctx, cancel = context.WithCancel(ctx)
 	defer cancel()
@@ -99,14 +99,14 @@ func (i *autoRetryInput) Read(ctx context.Context) (*Message, AckFunc, error) {
 	i.resendInterrupt = cancel
 	i.msgsMut.Unlock()
 
-	msg, aFn, err := i.child.Read(ctx)
+	msg, aFn, err := i.child.ReadBatch(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	sendMsg, ackFn := i.wrapAckFunc(newMessageRetry(msg, aFn))
+	sendMsg, ackFn := i.wrapAckFunc(newMessageRetryBatched(msg, aFn))
 	return sendMsg, ackFn, nil
 }
 
-func (i *autoRetryInput) Close(ctx context.Context) error {
+func (i *autoRetryInputBatched) Close(ctx context.Context) error {
 	return i.child.Close(ctx)
 }

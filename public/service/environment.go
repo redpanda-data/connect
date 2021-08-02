@@ -149,6 +149,33 @@ func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputCon
 	}), componentSpec)
 }
 
+// RegisterBatchInput attempts to register a new batched input plugin by
+// providing a description of the configuration for the plugin as well as a
+// constructor for the input itself. The constructor will be called for each
+// instantiation of the component within a config.
+//
+// If your input implementation doesn't have a specific mechanism for dealing
+// with a nack (when the AckFunc provides a non-nil error) then you can instead
+// wrap your input implementation with AutoRetryNacksBatched to get automatic
+// retries.
+func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor BatchInputConstructor) error {
+	componentSpec := spec.component
+	componentSpec.Name = name
+	componentSpec.Type = docs.TypeInput
+	return e.internal.Inputs.Add(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (input.Type, error) {
+		pluginConf, err := spec.configFromNode(e, nm, conf.Plugin.(*yaml.Node))
+		if err != nil {
+			return nil, err
+		}
+		i, err := ctor(pluginConf, newResourcesFromManager(nm))
+		if err != nil {
+			return nil, err
+		}
+		rdr := newAirGapBatchReader(i)
+		return input.NewAsyncReader(conf.Type, false, rdr, nm.Logger(), nm.Metrics())
+	}), componentSpec)
+}
+
 // WalkInputs executes a provided function argument for every input component
 // that has been registered to the environment.
 func (e *Environment) WalkInputs(fn func(name string, config *ConfigView)) {
@@ -194,6 +221,14 @@ func (e *Environment) RegisterOutput(name string, spec *ConfigSpec, ctor OutputC
 // description of the configuration for the plugin as well as a constructor for
 // the output itself. The constructor will be called for each instantiation of
 // the component within a config.
+//
+// The constructor of a batch output is able to return a batch policy to be
+// applied before calls to write are made, creating batches from the stream of
+// messages. However, batches can also be created by upstream components
+// (inputs, buffers, etc).
+//
+// If a batch has been formed upstream it is possible that its size may exceed
+// the policy specified in your constructor.
 func (e *Environment) RegisterBatchOutput(name string, spec *ConfigSpec, ctor BatchOutputConstructor) error {
 	componentSpec := spec.component
 	componentSpec.Name = name
@@ -261,6 +296,10 @@ func (e *Environment) RegisterProcessor(name string, spec *ConfigSpec, ctor Proc
 // providing a description of the configuration for the processor and a
 // constructor for the processor itself. The constructor will be called for each
 // instantiation of the component within a config.
+//
+// Message batches must be created by upstream components (inputs, buffers, etc)
+// otherwise this processor will simply receive batches containing single
+// messages.
 func (e *Environment) RegisterBatchProcessor(name string, spec *ConfigSpec, ctor BatchProcessorConstructor) error {
 	componentSpec := spec.component
 	componentSpec.Name = name

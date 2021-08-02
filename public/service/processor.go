@@ -32,6 +32,10 @@ type Processor interface {
 
 // BatchProcessor is a Benthos processor implementation that works against
 // batches of messages, which allows windowed processing.
+//
+// Message batches must be created by upstream components (inputs, buffers, etc)
+// otherwise this processor will simply receive batches containing single
+// messages.
 type BatchProcessor interface {
 	// Process a batch of messages into one or more resulting batches, or return
 	// an error if the entire batch could not be processed. If zero messages are
