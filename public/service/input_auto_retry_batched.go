@@ -8,9 +8,9 @@ import (
 	"github.com/cenkalti/backoff/v4"
 )
 
-// AutoRetryNacks wraps an input implementation with a component that
-// automatically reattempts messages that fail downstream. This is useful for
-// inputs that do not support nacks, and therefore don't have an answer for
+// AutoRetryNacksBatched wraps a batched input implementation with a component
+// that automatically reattempts messages that fail downstream. This is useful
+// for inputs that do not support nacks, and therefore don't have an answer for
 // when an ack func is called with an error.
 //
 // When messages fail to be delivered they will be reattempted with back off
