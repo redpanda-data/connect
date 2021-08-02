@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Prevented the `http_server` input from blocking graceful pipeline termination indefinitely.
+- Removed annoying nil error log from HTTP client components when parsing responses.
 
 ## 3.51.0 - 2021-07-26
 
