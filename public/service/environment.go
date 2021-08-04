@@ -5,7 +5,9 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/output"
@@ -81,6 +83,31 @@ func (e *Environment) getBloblangParserContext() parser.Context {
 }
 
 //------------------------------------------------------------------------------
+
+// RegisterBatchBuffer attempts to register a new buffer plugin by providing a
+// description of the configuration for the buffer and a constructor for the
+// buffer processor. The constructor will be called for each instantiation of
+// the component within a config.
+//
+// Consumed message batches must be created by upstream components (inputs, etc)
+// otherwise this buffer will simply receive batches containing single
+// messages.
+func (e *Environment) RegisterBatchBuffer(name string, spec *ConfigSpec, ctor BatchBufferConstructor) error {
+	componentSpec := spec.component
+	componentSpec.Name = name
+	componentSpec.Type = docs.TypeBuffer
+	return e.internal.Buffers.Add(func(conf buffer.Config, nm bundle.NewManagement) (buffer.Type, error) {
+		pluginConf, err := spec.configFromNode(e, nm, conf.Plugin.(*yaml.Node))
+		if err != nil {
+			return nil, err
+		}
+		b, err := ctor(pluginConf, newResourcesFromManager(nm))
+		if err != nil {
+			return nil, err
+		}
+		return ibuffer.NewStream(conf.Type, newAirGapBatchBuffer(b), nm.Logger(), nm.Metrics()), nil
+	}, componentSpec)
+}
 
 // WalkBuffers executes a provided function argument for every buffer component
 // that has been registered to the environment.

@@ -1,5 +1,25 @@
 package service
 
+// BatchBufferConstructor is a func that's provided a configuration type and
+// access to a service manager and must return an instantiation of a buffer
+// based on the config, or an error.
+//
+// Consumed message batches must be created by upstream components (inputs, etc)
+// otherwise this buffer will simply receive batches containing single messages.
+type BatchBufferConstructor func(conf *ParsedConfig, mgr *Resources) (BatchBuffer, error)
+
+// RegisterBatchBuffer attempts to register a new buffer plugin by providing a
+// description of the configuration for the buffer and a constructor for the
+// buffer processor. The constructor will be called for each instantiation of
+// the component within a config.
+//
+// Consumed message batches must be created by upstream components (inputs, etc)
+// otherwise this buffer will simply receive batches containing single
+// messages.
+func RegisterBatchBuffer(name string, spec *ConfigSpec, ctor BatchBufferConstructor) error {
+	return globalEnvironment.RegisterBatchBuffer(name, spec, ctor)
+}
+
 // CacheConstructor is a func that's provided a configuration type and access to
 // a service manager and must return an instantiation of a cache based on the
 // config, or an error.

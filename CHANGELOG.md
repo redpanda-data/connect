@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Go API: Added ability to create and register `BatchBuffer` plugins.
+
 ## 3.52.0 - 2021-08-02
 
 ### Added
