@@ -127,7 +127,7 @@ make
 Benthos uses [golangci-lint][golangci-lint] for linting, which you can install with:
 
 ```shell
-curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.41.1
+curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
 ```
 
 And then run it with `make lint`.
