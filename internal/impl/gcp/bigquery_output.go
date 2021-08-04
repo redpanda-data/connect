@@ -60,9 +60,9 @@ func init() {
 
 type genericRecord map[string]bigquery.Value
 
-func (rec genericRecord) Save() (map[string]bigquery.Value, string, error) {
+func (rec genericRecord) Save() (values map[string]bigquery.Value, insertID string, err error) {
 	// TODO maybe let user decides if it will specify insertID or not?
-	insertID := uuid.New().String()
+	insertID = uuid.New().String()
 	return rec, insertID, nil
 }
 
@@ -110,9 +110,9 @@ func (g *gcpBigQueryOutput) ConnectWithContext(ctx context.Context) error {
 	if err != nil {
 		if hasStatusCode(err, http.StatusNotFound) {
 			return fmt.Errorf("dataset %v does not exists", g.conf.DatasetID)
-		} else {
-			return fmt.Errorf("error checking dataset existance: %w", err)
 		}
+
+		return fmt.Errorf("error checking dataset existance: %w", err)
 	}
 
 	g.table = dataset.Table(g.conf.TableID)
@@ -121,9 +121,9 @@ func (g *gcpBigQueryOutput) ConnectWithContext(ctx context.Context) error {
 	if err != nil {
 		if hasStatusCode(err, http.StatusNotFound) {
 			return fmt.Errorf("table %v does not exists", g.conf.TableID)
-		} else {
-			return fmt.Errorf("error checking table existance: %w", err)
 		}
+
+		return fmt.Errorf("error checking table existance: %w", err)
 	}
 
 	g.log.Infof("Inserting message parts as objects to GCP BigQuery: %v:%v:%v\n", g.conf.ProjectID, g.conf.DatasetID, g.conf.TableID)
