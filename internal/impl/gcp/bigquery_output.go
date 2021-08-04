@@ -45,8 +45,23 @@ func init() {
 			string(input.CategoryServices),
 			string(input.CategoryGCP),
 		},
-		Summary:     `TODO`,
-		Description: ioutput.Description(true, true, `TODO`),
+		Summary: `
+Sends message parts as new rows to a Google Cloud BigQuery table. Currently json is the only supported format.
+Each object is stored in the dataset and table specified with the ` + "`dataset`" + ` and ` + "`table`" + ` fields.`,
+		Description: ioutput.Description(true, true, `
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to GCP
+services. You can find out more [in this document](/docs/guides/gcp).
+
+### Dataset and Table
+
+Currently this plugin cannot create a new Dataset nor a new Table, where both need
+to exist for this output to be used.
+
+### Format
+
+Currently JSON is the only supported format by this output.`),
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldCommon("project", "The project ID of the dataset to insert data to."),
 			docs.FieldCommon("dataset", "BigQuery Dataset Id. Do not include project id in this field."),
@@ -56,14 +71,6 @@ func init() {
 			batch.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(output.NewGCPBigQueryConfig()),
 	})
-}
-
-type genericRecord map[string]bigquery.Value
-
-func (rec genericRecord) Save() (values map[string]bigquery.Value, insertID string, err error) {
-	// TODO maybe let user decides if it will specify insertID or not?
-	insertID = uuid.New().String()
-	return rec, insertID, nil
 }
 
 // gcpBigQueryOutput is a benthos writer.Type implementation that writes
@@ -138,6 +145,18 @@ func hasStatusCode(err error, code int) bool {
 	return false
 }
 
+// genericRecord is the type used to store data without a well defined struct.
+// It extends the bigquery.ValueSaver interface.
+type genericRecord map[string]bigquery.Value
+
+// Save needs to be implemented to be able to store data into BigQuery without providing a schema.
+func (rec genericRecord) Save() (values map[string]bigquery.Value, insertID string, err error) {
+	insertID = uuid.New().String()
+	return rec, insertID, nil
+}
+
+var _ bigquery.ValueSaver = &genericRecord{}
+
 // WriteWithContext attempts to write message contents to a target GCP BigQuery as files.
 func (g *gcpBigQueryOutput) WriteWithContext(ctx context.Context, msg types.Message) error {
 	g.connMut.RLock()
@@ -148,15 +167,10 @@ func (g *gcpBigQueryOutput) WriteWithContext(ctx context.Context, msg types.Mess
 		return types.ErrNotConnected
 	}
 
-	// TODO Maybe think about interpolated fields to dataset and table and checking dataset/table existance in the insertion?
-
-	// TODO maybe use bigquery load? https://cloud.google.com/bigquery/docs/batch-loading-data#loading_data_from_local_files
 	var data []*genericRecord
 	err := writer.IterateBatchedSend(msg, func(i int, p types.Part) error {
-		// TODO json is the only supported, but we could support CSV, Avro, Parquet, etc
 		var messageData genericRecord
 
-		// TODO maybe use same approach of document mapping used in other output plugins?
 		err := json.Unmarshal(p.Get(), &messageData)
 
 		if err != nil {
