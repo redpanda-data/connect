@@ -180,6 +180,7 @@ const (
 	TypeFile               = "file"
 	TypeFiles              = "files"
 	TypeGCPCloudStorage    = "gcp_cloud_storage"
+	TypeGCPBigQuery        = "gcp_bigquery"
 	TypeGCPPubSub          = "gcp_pubsub"
 	TypeHDFS               = "hdfs"
 	TypeHTTPClient         = "http_client"
@@ -251,6 +252,7 @@ type Config struct {
 	Elasticsearch      writer.ElasticsearchConfig     `json:"elasticsearch" yaml:"elasticsearch"`
 	File               FileConfig                     `json:"file" yaml:"file"`
 	Files              writer.FilesConfig             `json:"files" yaml:"files"`
+	GCPBigQuery        GCPBigQueryConfig              `json:"gcp_bigquery" yaml:"gcp_bigquery"`
 	GCPCloudStorage    GCPCloudStorageConfig          `json:"gcp_cloud_storage" yaml:"gcp_cloud_storage"`
 	GCPPubSub          writer.GCPPubSubConfig         `json:"gcp_pubsub" yaml:"gcp_pubsub"`
 	HDFS               writer.HDFSConfig              `json:"hdfs" yaml:"hdfs"`
@@ -325,6 +327,7 @@ func NewConfig() Config {
 		File:               NewFileConfig(),
 		Files:              writer.NewFilesConfig(),
 		GCPCloudStorage:    NewGCPCloudStorageConfig(),
+		GCPBigQuery:        NewGCPBigQueryConfig(),
 		GCPPubSub:          writer.NewGCPPubSubConfig(),
 		HDFS:               writer.NewHDFSConfig(),
 		HTTPClient:         writer.NewHTTPClientConfig(),
