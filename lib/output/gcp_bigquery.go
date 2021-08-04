@@ -10,6 +10,7 @@ type GCPBigQueryConfig struct {
 	ProjectID   string             `json:"project" yaml:"project"`
 	DatasetID   string             `json:"dataset" yaml:"dataset"`
 	TableID     string             `json:"table" yaml:"table"`
+	Format      string             `json:"format" yaml:"format"`
 	MaxInFlight int                `json:"max_in_flight" yaml:"max_in_flight"`
 	Batching    batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
@@ -20,6 +21,7 @@ func NewGCPBigQueryConfig() GCPBigQueryConfig {
 		ProjectID:   "",
 		DatasetID:   "",
 		TableID:     "",
+		Format:      "json",
 		MaxInFlight: 1,
 		Batching:    batch.NewPolicyConfig(),
 	}
