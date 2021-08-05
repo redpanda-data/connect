@@ -114,7 +114,7 @@ If this field is not provided, the first message in the output batch will be use
 				HasOptions("true", "false"),
 			docs.FieldAdvanced("max_bad_records", "The maximum number of bad records that will be ignored when reading data.").
 				HasDefault(0),
-			docs.FieldAdvanced("auto_detect", "Indicates if we should automatically infer the options and schema for CSV and JSON sources. If the table doesn't exists and this field is set to false the output may not be able to insert data and will throw insertion error.").
+			docs.FieldAdvanced("auto_detect", "Indicates if we should automatically infer the options and schema for CSV and JSON sources. If the table doesn't exists and this field is set to false the output may not be able to insert data and will throw insertion error. Be careful using this field since it delegates to the GCP BigQuery service the schema detection and values like \"no\" may be treated as booleans for the CSV format. You should probably create the table manually and leave this unset.").
 				HasDefault(false).
 				HasOptions("true", "false"),
 			docs.FieldCommon("csv", "Configurations used in the CSV format.").Optional().WithChildren(
@@ -176,9 +176,9 @@ func newGCPBigQueryOutput(
 	g.fieldDelimiterBytes = []byte(conf.CSVOptions.FieldDelimiter)
 
 	if conf.CSVOptions.Header != nil && len(conf.CSVOptions.Header) != 0 {
-		header := strings.Join(conf.CSVOptions.Header, conf.CSVOptions.FieldDelimiter)
+		header := fmt.Sprint("\"", strings.Join(conf.CSVOptions.Header, fmt.Sprint("\"", conf.CSVOptions.FieldDelimiter, "\"")), "\"")
 
-		g.csvHeaderBytes = []byte(fmt.Sprint(header, "\n"))
+		g.csvHeaderBytes = []byte(header)
 	}
 
 	if conf.CSVOptions.Encoding == string(bigquery.UTF_8) {
