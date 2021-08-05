@@ -118,7 +118,8 @@ If this field is not provided, the first message in the output batch will be use
 				HasDefault(false).
 				HasOptions("true", "false"),
 			docs.FieldCommon("csv", "Configurations used in the CSV format.").Optional().WithChildren(
-				docs.FieldCommon("header", "A list of values to use as header for each batch of messages. If not specified the first line of each message will be used as header. You should not enable batching if this field is not specified.").Array().Optional(),
+				docs.FieldCommon("header", "A list of values to use as header for each batch of messages. If not specified the first line of each message will be used as header. You should not enable batching if this field is not specified.").
+					Array().HasType(docs.FieldTypeString).Optional(),
 				docs.FieldCommon("field_delimiter", "The separator for fields in a CSV file, used when reading or exporting data.").
 					HasDefault(","),
 				docs.FieldAdvanced("allow_jagged_rows", "Causes missing trailing optional columns to be tolerated when reading CSV data. Missing values are treated as nulls.").
