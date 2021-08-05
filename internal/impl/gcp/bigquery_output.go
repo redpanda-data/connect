@@ -1,11 +1,12 @@
 package gcp
 
 import (
+	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,7 +22,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/google/uuid"
+	"golang.org/x/text/encoding/charmap"
 	"google.golang.org/api/googleapi"
 )
 
@@ -61,13 +62,77 @@ to exist for this output to be used.
 
 ### Format
 
-Currently JSON is the only supported format by this output.`),
+Currently this plugins supports only CSV and JSON formats.
+
+Each message may contains multiple single-line elements separated by a \n.
+
+For example a single message containing
+`+"```json"+`
+{"key" : "1"}
+{"key" : "2"}
+`+"```"+`
+
+and multiples messages containing
+`+"```json"+`
+{"key" : "1"}
+`+"```"+`
+
+`+"```json"+`
+{"key" : "2"}
+`+"```"+`
+
+Will both result in two rows inside the BigQuery. The same is valid for the CSV format.
+
+Example of invalid message:
+`+"```json"+`
+{
+	"key" : "2"
+}
+`+"```"+`
+
+#### CSV
+
+For the CSV format the field `+"`csv.header`"+` makes benthos add the header as the first line in each batch using the `+"`csv.field_delimiter`"+` as delimiter to send data to Google Cloud BigQuery.
+If this field is not provided, the first message in the output batch will be used as header.
+`),
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldCommon("project", "The project ID of the dataset to insert data to."),
 			docs.FieldCommon("dataset", "BigQuery Dataset Id. Do not include project id in this field."),
 			docs.FieldCommon("table", "The table to insert messages to."),
-			docs.FieldCommon("format", "The format of each incoming message.").HasOptions("json").HasDefault("json"),
+			docs.FieldCommon("format", "The format of each incoming message.").
+				HasDefault(string(bigquery.JSON)).
+				HasOptions(string(bigquery.JSON), string(bigquery.CSV)),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldAdvanced("write_disposition", "Specifies how existing data in a destination table is treated.").
+				HasDefault(string(bigquery.WriteAppend)).
+				HasOptions(string(bigquery.WriteAppend), string(bigquery.WriteEmpty), string(bigquery.WriteTruncate)),
+			docs.FieldAdvanced("create_disposition", "Specifies the circumstances under which destination table will be created. If CREATE_IF_NEEDED is used the GCP BigQuery will create the table if it does not already exist and tables are created atomically on successful completion of a job. The CREATE_NEVER option ensures the table must already exist and will not be automatically created.").
+				HasDefault(string(bigquery.CreateIfNeeded)).
+				HasOptions(string(bigquery.CreateIfNeeded), string(bigquery.CreateNever)),
+			docs.FieldAdvanced("ignore_unknown_values", "Causes values not matching the schema to be tolerated. Unknown values are ignored. For CSV this ignores extra values at the end of a line. For JSON this ignores named values that do not match any column name. If this field is set to false (the default value), records containing unknown values are treated as bad records. The max_bad_records field can be used to customize how bad records are handled.").
+				HasDefault(false).
+				HasOptions("true", "false"),
+			docs.FieldAdvanced("max_bad_records", "The maximum number of bad records that will be ignored when reading data.").
+				HasDefault(0),
+			docs.FieldAdvanced("auto_detect", "Indicates if we should automatically infer the options and schema for CSV and JSON sources. If the table doesn't exists and this field is set to false the output may not be able to insert data and will throw insertion error.").
+				HasDefault(false).
+				HasOptions("true", "false"),
+			docs.FieldCommon("csv", "Configurations used in the CSV format.").Optional().WithChildren(
+				docs.FieldCommon("header", "A list of values to use as header for each batch of messages. If not specified the first line of each message will be used as header. You should not enable batching if this field is not specified.").Array().Optional(),
+				docs.FieldCommon("field_delimiter", "The separator for fields in a CSV file, used when reading or exporting data.").
+					HasDefault(","),
+				docs.FieldAdvanced("allow_jagged_rows", "Causes missing trailing optional columns to be tolerated when reading CSV data. Missing values are treated as nulls.").
+					HasDefault(false).
+					HasOptions("true", "false"),
+				docs.FieldAdvanced("allow_quoted_newlines", "Sets whether quoted data sections containing newlines are allowed when reading CSV data.").
+					HasDefault(false).
+					HasOptions("true", "false"),
+				docs.FieldAdvanced("encoding", "Encoding is the character encoding of data to be read.").
+					HasDefault(string(bigquery.UTF_8)).
+					HasOptions(string(bigquery.UTF_8), string(bigquery.ISO_8859_1)),
+				docs.FieldAdvanced("skip_leading_rows", "The number of rows at the top of a CSV file that BigQuery will skip when reading data. The default value is 1 since Benthos will add the specified header in the first line of each batch sent to BigQuery.").
+					HasDefault(1),
+			),
 			batch.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(output.NewGCPBigQueryConfig()),
 	})
@@ -82,6 +147,10 @@ type gcpBigQueryOutput struct {
 	table   *bigquery.Table
 	connMut sync.RWMutex
 
+	fieldDelimiterBytes []byte
+	csvHeaderBytes      []byte
+	newLineBytes        []byte
+
 	log   log.Modular
 	stats metrics.Type
 }
@@ -92,11 +161,55 @@ func newGCPBigQueryOutput(
 	log log.Modular,
 	stats metrics.Type,
 ) (*gcpBigQueryOutput, error) {
-	return &gcpBigQueryOutput{
+	g := &gcpBigQueryOutput{
 		conf:  conf,
 		log:   log,
 		stats: stats,
-	}, nil
+	}
+
+	g.newLineBytes = []byte("\n")
+
+	if conf.Format != string(bigquery.CSV) {
+		return g, nil
+	}
+
+	g.fieldDelimiterBytes = []byte(conf.CSVOptions.FieldDelimiter)
+
+	if conf.CSVOptions.Header != nil && len(conf.CSVOptions.Header) != 0 {
+		header := strings.Join(conf.CSVOptions.Header, conf.CSVOptions.FieldDelimiter)
+
+		g.csvHeaderBytes = []byte(fmt.Sprint(header, "\n"))
+	}
+
+	if conf.CSVOptions.Encoding == string(bigquery.UTF_8) {
+		return g, nil
+	}
+
+	var err error
+
+	g.fieldDelimiterBytes, err = charmap.ISO8859_1.NewEncoder().Bytes(g.fieldDelimiterBytes)
+
+	if err != nil {
+		return nil, fmt.Errorf("error parsing csv.field_delimiter field: %w", err)
+	}
+
+	g.newLineBytes, err = charmap.ISO8859_1.NewEncoder().Bytes([]byte("\n"))
+
+	if err != nil {
+		return nil, fmt.Errorf("error creating newline bytes: %w", err)
+	}
+
+	if g.csvHeaderBytes == nil {
+		return g, nil
+	}
+
+	g.csvHeaderBytes, err = charmap.ISO8859_1.NewEncoder().Bytes(g.fieldDelimiterBytes)
+
+	if err != nil {
+		return nil, fmt.Errorf("error parsing csv.header field: %w", err)
+	}
+
+	return g, nil
 }
 
 // ConnectWithContext attempts to establish a connection to the target Google
@@ -122,15 +235,17 @@ func (g *gcpBigQueryOutput) ConnectWithContext(ctx context.Context) error {
 		return fmt.Errorf("error checking dataset existance: %w", err)
 	}
 
-	g.table = dataset.Table(g.conf.TableID)
+	if g.conf.CreateDisposition == string(bigquery.CreateNever) {
+		g.table = dataset.Table(g.conf.TableID)
 
-	_, err = g.table.Metadata(ctx)
-	if err != nil {
-		if hasStatusCode(err, http.StatusNotFound) {
-			return fmt.Errorf("table %v does not exists", g.conf.TableID)
+		_, err = g.table.Metadata(ctx)
+		if err != nil {
+			if hasStatusCode(err, http.StatusNotFound) {
+				return fmt.Errorf("table %v does not exists", g.conf.TableID)
+			}
+
+			return fmt.Errorf("error checking table existance: %w", err)
 		}
-
-		return fmt.Errorf("error checking table existance: %w", err)
 	}
 
 	g.log.Infof("Inserting message parts as objects to GCP BigQuery: %v:%v:%v\n", g.conf.ProjectID, g.conf.DatasetID, g.conf.TableID)
@@ -145,18 +260,6 @@ func hasStatusCode(err error, code int) bool {
 	return false
 }
 
-// genericRecord is the type used to store data without a well defined struct.
-// It extends the bigquery.ValueSaver interface.
-type genericRecord map[string]bigquery.Value
-
-// Save needs to be implemented to be able to store data into BigQuery without providing a schema.
-func (rec genericRecord) Save() (values map[string]bigquery.Value, insertID string, err error) {
-	insertID = uuid.New().String()
-	return rec, insertID, nil
-}
-
-var _ bigquery.ValueSaver = &genericRecord{}
-
 // WriteWithContext attempts to write message contents to a target GCP BigQuery as files.
 func (g *gcpBigQueryOutput) WriteWithContext(ctx context.Context, msg types.Message) error {
 	g.connMut.RLock()
@@ -167,17 +270,20 @@ func (g *gcpBigQueryOutput) WriteWithContext(ctx context.Context, msg types.Mess
 		return types.ErrNotConnected
 	}
 
-	var data []*genericRecord
+	var data []byte
+
+	if g.csvHeaderBytes != nil {
+		data = g.csvHeaderBytes
+	}
+
 	err := writer.IterateBatchedSend(msg, func(i int, p types.Part) error {
-		var messageData genericRecord
+		if data == nil {
+			data = p.Get()
 
-		err := json.Unmarshal(p.Get(), &messageData)
-
-		if err != nil {
-			return err
+			return nil
 		}
 
-		data = append(data, &messageData)
+		data = bytes.Join([][]byte{data, p.Get()}, g.newLineBytes)
 
 		return nil
 	})
@@ -189,9 +295,45 @@ func (g *gcpBigQueryOutput) WriteWithContext(ctx context.Context, msg types.Mess
 		}
 	}
 
-	inserter := client.DatasetInProject(g.conf.ProjectID, g.conf.DatasetID).Table(g.conf.TableID).Inserter()
+	job, err := g.createTableLoader(&data).Run(ctx)
 
-	return inserter.Put(ctx, data)
+	if err != nil {
+		return err
+	}
+
+	status, err := job.Wait(ctx)
+	if err == nil {
+		err = status.Err()
+	}
+
+	if err != nil {
+		return fmt.Errorf("error inserting data in bigquery: %w", err)
+	}
+
+	return nil
+}
+
+func (g *gcpBigQueryOutput) createTableLoader(data *[]byte) *bigquery.Loader {
+	table := g.client.DatasetInProject(g.conf.ProjectID, g.conf.DatasetID).Table(g.conf.TableID)
+
+	source := bigquery.NewReaderSource(bytes.NewReader(*data))
+	source.SourceFormat = bigquery.DataFormat(g.conf.Format)
+	source.AutoDetect = g.conf.AutoDetect
+	source.IgnoreUnknownValues = g.conf.IgnoreUnknownValues
+	source.MaxBadRecords = g.conf.MaxBadRecords
+
+	source.FieldDelimiter = g.conf.CSVOptions.FieldDelimiter
+	source.AllowJaggedRows = g.conf.CSVOptions.AllowJaggedRows
+	source.AllowQuotedNewlines = g.conf.CSVOptions.AllowQuotedNewlines
+	source.Encoding = bigquery.Encoding(g.conf.CSVOptions.Encoding)
+	source.SkipLeadingRows = g.conf.CSVOptions.SkipLeadingRows
+
+	loader := table.LoaderFrom(source)
+
+	loader.CreateDisposition = bigquery.TableCreateDisposition(g.conf.CreateDisposition)
+	loader.WriteDisposition = bigquery.TableWriteDisposition(g.conf.WriteDisposition)
+
+	return loader
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.
