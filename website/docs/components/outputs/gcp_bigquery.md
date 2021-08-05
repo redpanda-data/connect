@@ -22,7 +22,7 @@ This component is experimental and therefore subject to change or removal outsid
 Sends message parts as new rows to a Google Cloud BigQuery table. Currently json is the only supported format.
 Each object is stored in the dataset and table specified with the `dataset` and `table` fields.
 
-Introduced in version 3.43.0.
+Introduced in version 3.52.0.
 
 
 <Tabs defaultValue="common" values={[
@@ -101,6 +101,9 @@ to exist for this output to be used.
 ### Format
 
 Currently this plugins supports only CSV and JSON formats.
+Learn more about how GCP BigQuery deals with these formats here:
+- [`JSON`](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-json)
+- [`CSV`](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-csv)
 
 Each message may contains multiple single-line elements separated by a \n.
 

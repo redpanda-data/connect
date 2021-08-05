@@ -62,7 +62,10 @@ to exist for this output to be used.
 
 ### Format
 
-Currently this plugins supports only CSV and JSON formats.
+Currently this plugins supports only CSV and NEWLINE_DELIMITED_JSON formats.
+Learn more about how to use GCP BigQuery with it here:
+- `+"[`NEWLINE_DELIMITED_JSON`](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-json)"+`
+- `+"[`CSV`](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-csv)"+`
 
 Each message may contains multiple single-line elements separated by a \n.
 
@@ -188,13 +191,13 @@ func newGCPBigQueryOutput(
 
 	var err error
 
-	g.fieldDelimiterBytes, err = charmap.ISO8859_1.NewEncoder().Bytes(g.fieldDelimiterBytes)
+	g.fieldDelimiterBytes, err = convertToIso(g.fieldDelimiterBytes)
 
 	if err != nil {
 		return nil, fmt.Errorf("error parsing csv.field_delimiter field: %w", err)
 	}
 
-	g.newLineBytes, err = charmap.ISO8859_1.NewEncoder().Bytes([]byte("\n"))
+	g.newLineBytes, err = convertToIso([]byte("\n"))
 
 	if err != nil {
 		return nil, fmt.Errorf("error creating newline bytes: %w", err)
@@ -204,13 +207,18 @@ func newGCPBigQueryOutput(
 		return g, nil
 	}
 
-	g.csvHeaderBytes, err = charmap.ISO8859_1.NewEncoder().Bytes(g.fieldDelimiterBytes)
+	g.csvHeaderBytes, err = convertToIso(g.csvHeaderBytes)
 
 	if err != nil {
 		return nil, fmt.Errorf("error parsing csv.header field: %w", err)
 	}
 
 	return g, nil
+}
+
+// convertToIso converts a utf-8 byte encoding to iso-8859-1 byte encoding
+func convertToIso(value []byte) (result []byte, err error) {
+	return charmap.ISO8859_1.NewEncoder().Bytes(value)
 }
 
 // ConnectWithContext attempts to establish a connection to the target Google
@@ -323,11 +331,13 @@ func (g *gcpBigQueryOutput) createTableLoader(data *[]byte) *bigquery.Loader {
 	source.IgnoreUnknownValues = g.conf.IgnoreUnknownValues
 	source.MaxBadRecords = g.conf.MaxBadRecords
 
-	source.FieldDelimiter = g.conf.CSVOptions.FieldDelimiter
-	source.AllowJaggedRows = g.conf.CSVOptions.AllowJaggedRows
-	source.AllowQuotedNewlines = g.conf.CSVOptions.AllowQuotedNewlines
-	source.Encoding = bigquery.Encoding(g.conf.CSVOptions.Encoding)
-	source.SkipLeadingRows = g.conf.CSVOptions.SkipLeadingRows
+	if g.conf.Format == string(bigquery.CSV) {
+		source.FieldDelimiter = g.conf.CSVOptions.FieldDelimiter
+		source.AllowJaggedRows = g.conf.CSVOptions.AllowJaggedRows
+		source.AllowQuotedNewlines = g.conf.CSVOptions.AllowQuotedNewlines
+		source.Encoding = bigquery.Encoding(g.conf.CSVOptions.Encoding)
+		source.SkipLeadingRows = g.conf.CSVOptions.SkipLeadingRows
+	}
 
 	loader := table.LoaderFrom(source)
 
