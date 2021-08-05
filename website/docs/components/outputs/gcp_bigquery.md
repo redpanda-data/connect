@@ -100,9 +100,9 @@ to exist for this output to be used.
 
 ### Format
 
-Currently this plugins supports only CSV and JSON formats.
-Learn more about how GCP BigQuery deals with these formats here:
-- [`JSON`](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-json)
+Currently this plugins supports only CSV and NEWLINE_DELIMITED_JSON formats.
+Learn more about how to use GCP BigQuery with it here:
+- [`NEWLINE_DELIMITED_JSON`](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-json)
 - [`CSV`](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-csv)
 
 Each message may contains multiple single-line elements separated by a \n.
