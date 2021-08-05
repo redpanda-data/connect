@@ -41,7 +41,7 @@ func init() {
 		Name:    output.TypeGCPBigQuery,
 		Type:    docs.TypeOutput,
 		Status:  docs.StatusExperimental,
-		Version: "3.43.0",
+		Version: "3.52.0",
 		Categories: []string{
 			string(input.CategoryServices),
 			string(input.CategoryGCP),
