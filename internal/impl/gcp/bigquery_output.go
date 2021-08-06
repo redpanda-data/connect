@@ -50,20 +50,20 @@ func init() {
 Sends message parts as new rows to a Google Cloud BigQuery table. Currently json is the only supported format.
 Each object is stored in the dataset and table specified with the ` + "`dataset`" + ` and ` + "`table`" + ` fields.`,
 		Description: ioutput.Description(true, true, `
-### Credentials
+## Credentials
 
 By default Benthos will use a shared credentials file when connecting to GCP
 services. You can find out more [in this document](/docs/guides/gcp).
 
-### Dataset and Table
+## Dataset and Table
 
 Currently this plugin cannot create a new Dataset nor a new Table, where both need
 to exist for this output to be used.
 
-### Format
+## Format
 
 Currently this plugins supports only CSV and NEWLINE_DELIMITED_JSON formats.
-Learn more about how to use GCP BigQuery with it here:
+Learn more about how to use GCP BigQuery with them here:
 - `+"[`NEWLINE_DELIMITED_JSON`](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-json)"+`
 - `+"[`CSV`](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-csv)"+`
 
@@ -93,11 +93,14 @@ Example of invalid message:
 }
 `+"```"+`
 
-#### CSV
+### CSV
 
 For the CSV format the field `+"`csv.header`"+` makes benthos add the header as the first line in each batch using the `+"`csv.field_delimiter`"+` as delimiter to send data to Google Cloud BigQuery.
 If this field is not provided, the first message in the output batch will be used as header.
-`),
+
+## Batching
+
+If batching is enabled each message will be joined with the `+"`\\n`"+` before sending the batch to GCP BigQuery service.`),
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldCommon("project", "The project ID of the dataset to insert data to."),
 			docs.FieldCommon("dataset", "BigQuery Dataset Id. Do not include project id in this field."),
@@ -117,7 +120,7 @@ If this field is not provided, the first message in the output batch will be use
 				HasOptions("true", "false"),
 			docs.FieldAdvanced("max_bad_records", "The maximum number of bad records that will be ignored when reading data.").
 				HasDefault(0),
-			docs.FieldAdvanced("auto_detect", "Indicates if we should automatically infer the options and schema for CSV and JSON sources. If the table doesn't exists and this field is set to false the output may not be able to insert data and will throw insertion error. Be careful using this field since it delegates to the GCP BigQuery service the schema detection and values like \"no\" may be treated as booleans for the CSV format. You should probably create the table manually and leave this unset.").
+			docs.FieldAdvanced("auto_detect", "Indicates if we should automatically infer the options and schema for CSV and JSON sources. If the table doesn't exists and this field is set to false the output may not be able to insert data and will throw insertion error. Be careful using this field since it delegates to the GCP BigQuery service the schema detection and values like `\"no\"` may be treated as booleans for the CSV format. You should probably create the table manually and leave this unset for the `CSV` format until this plugin has support to configure the desired schema.").
 				HasDefault(false).
 				HasOptions("true", "false"),
 			docs.FieldCommon("csv", "Configurations used in the CSV format.").Optional().WithChildren(
@@ -146,6 +149,8 @@ If this field is not provided, the first message in the output batch will be use
 // messages to a GCP BigQuery dataset.
 type gcpBigQueryOutput struct {
 	conf output.GCPBigQueryConfig
+
+	clientConf BigQueryClientConfig
 
 	client  *bigquery.Client
 	table   *bigquery.Table
@@ -228,7 +233,7 @@ func (g *gcpBigQueryOutput) ConnectWithContext(ctx context.Context) error {
 	defer g.connMut.Unlock()
 
 	var err error
-	g.client, err = NewBigQueryClient(ctx, g.conf.ProjectID)
+	g.client, err = NewBigQueryClient(ctx, g.conf.ProjectID, g.clientConf)
 	if err != nil {
 		return fmt.Errorf("error creating big query client: %w", err)
 	}
@@ -238,22 +243,22 @@ func (g *gcpBigQueryOutput) ConnectWithContext(ctx context.Context) error {
 	_, err = dataset.Metadata(ctx)
 	if err != nil {
 		if hasStatusCode(err, http.StatusNotFound) {
-			return fmt.Errorf("dataset %v does not exists", g.conf.DatasetID)
+			return fmt.Errorf("dataset does not exists: %v", g.conf.DatasetID)
 		}
 
-		return fmt.Errorf("error checking dataset existance: %w", err)
+		return fmt.Errorf("error checking dataset existence: %w", err)
 	}
 
 	if g.conf.CreateDisposition == string(bigquery.CreateNever) {
 		g.table = dataset.Table(g.conf.TableID)
 
-		_, err = g.table.Metadata(ctx)
+		_, err := g.table.Metadata(ctx)
 		if err != nil {
 			if hasStatusCode(err, http.StatusNotFound) {
-				return fmt.Errorf("table %v does not exists", g.conf.TableID)
+				return fmt.Errorf("table does not exists: %v", g.conf.TableID)
 			}
 
-			return fmt.Errorf("error checking table existance: %w", err)
+			return fmt.Errorf("error checking table existence: %w", err)
 		}
 	}
 

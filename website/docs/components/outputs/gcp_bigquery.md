@@ -88,20 +88,20 @@ output:
 </TabItem>
 </Tabs>
 
-### Credentials
+## Credentials
 
 By default Benthos will use a shared credentials file when connecting to GCP
 services. You can find out more [in this document](/docs/guides/gcp).
 
-### Dataset and Table
+## Dataset and Table
 
 Currently this plugin cannot create a new Dataset nor a new Table, where both need
 to exist for this output to be used.
 
-### Format
+## Format
 
 Currently this plugins supports only CSV and NEWLINE_DELIMITED_JSON formats.
-Learn more about how to use GCP BigQuery with it here:
+Learn more about how to use GCP BigQuery with them here:
 - [`NEWLINE_DELIMITED_JSON`](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-json)
 - [`CSV`](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-csv)
 
@@ -131,11 +131,14 @@ Example of invalid message:
 }
 ```
 
-#### CSV
+### CSV
 
 For the CSV format the field `csv.header` makes benthos add the header as the first line in each batch using the `csv.field_delimiter` as delimiter to send data to Google Cloud BigQuery.
 If this field is not provided, the first message in the output batch will be used as header.
 
+## Batching
+
+If batching is enabled each message will be joined with the `\n` before sending the batch to GCP BigQuery service.
 
 ## Performance
 
@@ -227,7 +230,7 @@ Default: `0`
 
 ### `auto_detect`
 
-Indicates if we should automatically infer the options and schema for CSV and JSON sources. If the table doesn't exists and this field is set to false the output may not be able to insert data and will throw insertion error. Be careful using this field since it delegates to the GCP BigQuery service the schema detection and values like "no" may be treated as booleans for the CSV format. You should probably create the table manually and leave this unset.
+Indicates if we should automatically infer the options and schema for CSV and JSON sources. If the table doesn't exists and this field is set to false the output may not be able to insert data and will throw insertion error. Be careful using this field since it delegates to the GCP BigQuery service the schema detection and values like `"no"` may be treated as booleans for the CSV format. You should probably create the table manually and leave this unset for the `CSV` format until this plugin has support to configure the desired schema.
 
 
 Type: `bool`  
