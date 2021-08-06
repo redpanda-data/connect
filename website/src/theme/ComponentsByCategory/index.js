@@ -25,6 +25,10 @@ let descriptions = {
       description: "Inputs that consume from Google Cloud Platform services.",
     },
     {
+      name: "Azure",
+      description: "Inputs that consume from Microsoft Azure services.",
+    },
+    {
       name: "Social",
       description: "Inputs that consume from social applications and services.",
     },
@@ -35,6 +39,16 @@ let descriptions = {
     {
       name: "Utility",
       description: "Inputs that provide utility by generating data or combining/wrapping other inputs.",
+    },
+  ],
+  buffers: [
+    {
+      name: "Windowing",
+      description: "Buffers that provide message windowing capabilities.",
+    },
+    {
+      name: "Utility",
+      description: "Buffers that are intended for niche but general use.",
     },
   ],
   processors: [

@@ -369,6 +369,24 @@ func (s *StreamBuilder) SetYAML(conf string) error {
 	return nil
 }
 
+// SetBufferYAML parses a buffer YAML configuration and sets it to the builder
+// to be placed between the input and the pipeline (processors) sections. This
+// config will replace any prior configured buffer.
+func (s *StreamBuilder) SetBufferYAML(conf string) error {
+	confBytes := []byte(conf)
+
+	bconf := buffer.NewConfig()
+	if err := yaml.Unmarshal(confBytes, &bconf); err != nil {
+		return err
+	}
+
+	if err := s.lintYAMLComponent(confBytes, docs.TypeBuffer); err != nil {
+		return err
+	}
+	s.buffer = bconf
+	return nil
+}
+
 // SetMetricsYAML parses a metrics YAML configuration and adds it to the builder
 // such that all stream components emit metrics through it.
 func (s *StreamBuilder) SetMetricsYAML(conf string) error {

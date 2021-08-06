@@ -31,8 +31,8 @@ type BatchBuffer interface {
 
 	// Read a batch of messages from the buffer. This call should block until
 	// either a batch is ready to consume, the provided context is cancelled or
-	// EndOfInput has been called which indicates that messages are no longer
-	// being consumed.
+	// EndOfInput has been called which indicates that the buffer is no longer
+	// being populated with new messages.
 	//
 	// The returned acknowledge function will be called when a consumed message
 	// batch has been processed and sent downstream. It is up to the buffer

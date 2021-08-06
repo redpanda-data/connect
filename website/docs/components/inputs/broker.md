@@ -31,7 +31,6 @@ Allows you to combine multiple inputs into a single stream of data, where each i
 input:
   label: ""
   broker:
-    copies: 1
     inputs: []
     batching:
       count: 0
