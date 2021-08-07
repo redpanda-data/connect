@@ -16,6 +16,7 @@ input:
       enabled: false
       skip_cert_verify: false
       enable_renegotiation: false
+      root_cas: ""
       root_cas_file: ""
       client_certs: []
     body_key: body
@@ -42,6 +43,7 @@ output:
       enabled: false
       skip_cert_verify: false
       enable_renegotiation: false
+      root_cas: ""
       root_cas_file: ""
       client_certs: []
     stream: benthos_stream
