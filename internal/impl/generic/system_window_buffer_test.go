@@ -2,6 +2,7 @@ package generic
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -125,64 +126,64 @@ func TestSystemCurrentWindowCalc(t *testing.T) {
 		{
 			now:       `2006-01-02T15:04:05.123456789Z`,
 			size:      time.Hour,
-			prevStart: `2006-01-02T14:00:00Z`,
-			prevEnd:   `2006-01-02T14:59:59.999999999Z`,
-			start:     `2006-01-02T15:00:00Z`,
-			end:       `2006-01-02T15:59:59.999999999Z`,
+			prevStart: `2006-01-02T14:00:00.000000001Z`,
+			prevEnd:   `2006-01-02T15:00:00Z`,
+			start:     `2006-01-02T15:00:00.000000001Z`,
+			end:       `2006-01-02T16:00:00Z`,
 		},
 		{
 			now:       `2006-01-02T15:34:05.123456789Z`,
 			size:      time.Hour,
-			prevStart: `2006-01-02T14:00:00Z`,
-			prevEnd:   `2006-01-02T14:59:59.999999999Z`,
-			start:     `2006-01-02T15:00:00Z`,
-			end:       `2006-01-02T15:59:59.999999999Z`,
+			prevStart: `2006-01-02T14:00:00.000000001Z`,
+			prevEnd:   `2006-01-02T15:00:00Z`,
+			start:     `2006-01-02T15:00:00.000000001Z`,
+			end:       `2006-01-02T16:00:00Z`,
 		},
 		{
 			now:       `2006-01-02T00:04:05.123456789Z`,
 			size:      time.Hour,
-			prevStart: `2006-01-01T23:00:00Z`,
-			prevEnd:   `2006-01-01T23:59:59.999999999Z`,
-			start:     `2006-01-02T00:00:00Z`,
-			end:       `2006-01-02T00:59:59.999999999Z`,
+			prevStart: `2006-01-01T23:00:00.000000001Z`,
+			prevEnd:   `2006-01-02T00:00:00Z`,
+			start:     `2006-01-02T00:00:00.000000001Z`,
+			end:       `2006-01-02T01:00:00Z`,
 		},
 		{
 			now:       `2006-01-02T15:04:05.123456789Z`,
 			size:      time.Hour,
 			slide:     time.Minute * 10,
-			prevStart: `2006-01-02T14:50:00Z`,
-			prevEnd:   `2006-01-02T15:49:59.999999999Z`,
-			start:     `2006-01-02T15:00:00Z`,
-			end:       `2006-01-02T15:59:59.999999999Z`,
+			prevStart: `2006-01-02T14:50:00.000000001Z`,
+			prevEnd:   `2006-01-02T15:50:00Z`,
+			start:     `2006-01-02T15:00:00.000000001Z`,
+			end:       `2006-01-02T16:00:00Z`,
 		},
 		{
 			now:       `2006-01-02T15:04:05.123456789Z`,
 			size:      time.Hour,
 			offset:    time.Minute * 30,
-			prevStart: `2006-01-02T13:30:00Z`,
-			prevEnd:   `2006-01-02T14:29:59.999999999Z`,
-			start:     `2006-01-02T14:30:00Z`,
-			end:       `2006-01-02T15:29:59.999999999Z`,
+			prevStart: `2006-01-02T13:30:00.000000001Z`,
+			prevEnd:   `2006-01-02T14:30:00Z`,
+			start:     `2006-01-02T14:30:00.000000001Z`,
+			end:       `2006-01-02T15:30:00Z`,
 		},
 		{
 			now:       `2006-01-02T15:04:05.123456789Z`,
 			size:      time.Hour,
 			slide:     time.Minute * 10,
 			offset:    time.Minute * 30,
-			prevStart: `2006-01-02T14:20:00Z`,
-			prevEnd:   `2006-01-02T15:19:59.999999999Z`,
-			start:     `2006-01-02T14:30:00Z`,
-			end:       `2006-01-02T15:29:59.999999999Z`,
+			prevStart: `2006-01-02T14:20:00.000000001Z`,
+			prevEnd:   `2006-01-02T15:20:00Z`,
+			start:     `2006-01-02T14:30:00.000000001Z`,
+			end:       `2006-01-02T15:30:00Z`,
 		},
 		{
 			now:       `2006-01-02T15:09:59.123456789Z`,
 			size:      time.Hour,
 			slide:     time.Minute * 10,
 			offset:    time.Minute * 30,
-			prevStart: `2006-01-02T14:20:00Z`,
-			prevEnd:   `2006-01-02T15:19:59.999999999Z`,
-			start:     `2006-01-02T14:30:00Z`,
-			end:       `2006-01-02T15:29:59.999999999Z`,
+			prevStart: `2006-01-02T14:20:00.000000001Z`,
+			prevEnd:   `2006-01-02T15:20:00Z`,
+			start:     `2006-01-02T14:30:00.000000001Z`,
+			end:       `2006-01-02T15:30:00Z`,
 		},
 	}
 
@@ -205,6 +206,10 @@ func TestSystemCurrentWindowCalc(t *testing.T) {
 	}
 }
 
+func noopAck(context.Context, error) error {
+	return nil
+}
+
 func TestSystemWindowWritePurge(t *testing.T) {
 	mapping, err := bloblang.Parse(`root = this.ts`)
 	require.NoError(t, err)
@@ -220,7 +225,7 @@ func TestSystemWindowWritePurge(t *testing.T) {
 		service.NewMessage([]byte(`{"id":"2","ts":8.5}`)),
 		service.NewMessage([]byte(`{"id":"3","ts":9.5}`)),
 		service.NewMessage([]byte(`{"id":"4","ts":10.5}`)),
-	})
+	}, noopAck)
 	require.NoError(t, err)
 	assert.Len(t, w.pending, 4)
 
@@ -229,7 +234,7 @@ func TestSystemWindowWritePurge(t *testing.T) {
 		service.NewMessage([]byte(`{"id":"6","ts":10.7}`)),
 		service.NewMessage([]byte(`{"id":"7","ts":10.8}`)),
 		service.NewMessage([]byte(`{"id":"8","ts":10.9}`)),
-	})
+	}, noopAck)
 	require.NoError(t, err)
 	assert.Len(t, w.pending, 6)
 }
@@ -249,7 +254,7 @@ func TestSystemWindowCreation(t *testing.T) {
 		service.NewMessage([]byte(`{"id":"2","ts":8.5}`)),
 		service.NewMessage([]byte(`{"id":"3","ts":9.5}`)),
 		service.NewMessage([]byte(`{"id":"4","ts":10.5}`)),
-	})
+	}, noopAck)
 	require.NoError(t, err)
 	assert.Len(t, w.pending, 4)
 
@@ -262,7 +267,7 @@ func TestSystemWindowCreation(t *testing.T) {
 	assert.Equal(t, `{"id":"3","ts":9.5}`, string(msgBytes))
 
 	assert.Len(t, w.pending, 1)
-	assert.Equal(t, "1970-01-01T00:00:09.999999999Z", w.latestFlushedWindowEnd.Format(time.RFC3339Nano))
+	assert.Equal(t, "1970-01-01T00:00:10Z", w.latestFlushedWindowEnd.Format(time.RFC3339Nano))
 
 	currentTS = time.Unix(10, 999999100).UTC()
 
@@ -275,33 +280,166 @@ func TestSystemWindowCreation(t *testing.T) {
 	assert.Equal(t, `{"id":"4","ts":10.5}`, string(msgBytes))
 
 	assert.Len(t, w.pending, 0)
-	assert.Equal(t, "1970-01-01T00:00:10.999999999Z", w.latestFlushedWindowEnd.Format(time.RFC3339Nano))
+	assert.Equal(t, "1970-01-01T00:00:11Z", w.latestFlushedWindowEnd.Format(time.RFC3339Nano))
 
 	currentTS = time.Unix(11, 999999100).UTC()
 
-	resBatch, _, err = w.ReadBatch(context.Background())
-	require.NoError(t, err)
+	smallWaitCtx, done := context.WithTimeout(context.Background(), time.Millisecond*50)
+	resBatch, _, err = w.ReadBatch(smallWaitCtx)
+	done()
+	require.Error(t, err)
 	assert.Len(t, resBatch, 0)
-	assert.Equal(t, "1970-01-01T00:00:11.999999999Z", w.latestFlushedWindowEnd.Format(time.RFC3339Nano))
+	assert.Equal(t, "1970-01-01T00:00:12Z", w.latestFlushedWindowEnd.Format(time.RFC3339Nano))
 
 	err = w.WriteBatch(context.Background(), service.MessageBatch{
-		service.NewMessage([]byte(`{"id":"5","ts":8}`)),
+		service.NewMessage([]byte(`{"id":"5","ts":8.1}`)),
 		service.NewMessage([]byte(`{"id":"6","ts":9.999999999}`)),
 		service.NewMessage([]byte(`{"id":"7","ts":10}`)),
 		service.NewMessage([]byte(`{"id":"8","ts":11.999999999}`)),
-		service.NewMessage([]byte(`{"id":"9","ts":12}`)),
+		service.NewMessage([]byte(`{"id":"9","ts":12.1}`)),
 		service.NewMessage([]byte(`{"id":"10","ts":13}`)),
-	})
+	}, noopAck)
 	require.NoError(t, err)
 	require.Len(t, w.pending, 2)
 
 	msgBytes, err = w.pending[0].m.AsBytes()
 	require.NoError(t, err)
-	assert.Equal(t, `{"id":"9","ts":12}`, string(msgBytes))
+	assert.Equal(t, `{"id":"9","ts":12.1}`, string(msgBytes))
 
 	msgBytes, err = w.pending[1].m.AsBytes()
 	require.NoError(t, err)
 	assert.Equal(t, `{"id":"10","ts":13}`, string(msgBytes))
+}
+
+func TestSystemWindowAckOneToMany(t *testing.T) {
+	mapping, err := bloblang.Parse(`root = this.ts`)
+	require.NoError(t, err)
+
+	currentTS := time.Unix(10, 0).UTC()
+	w, err := newSystemWindowBuffer(mapping, func() time.Time {
+		return currentTS
+	}, time.Second, 0, 0, 0, nil)
+	require.NoError(t, err)
+
+	var ackCalled int
+	var ackErr error
+
+	require.NoError(t, w.WriteBatch(context.Background(), service.MessageBatch{
+		service.NewMessage([]byte(`{"id":"1","ts":9.5}`)),
+		service.NewMessage([]byte(`{"id":"2","ts":10.5}`)),
+		service.NewMessage([]byte(`{"id":"3","ts":11.5}`)),
+	}, func(ctx context.Context, err error) error {
+		ackCalled++
+		if err != nil {
+			ackErr = err
+		}
+		return nil
+	}))
+
+	ackFuncs := []service.AckFunc{}
+
+	resBatch, aFn, err := w.ReadBatch(context.Background())
+	require.NoError(t, err)
+	require.Len(t, resBatch, 1)
+	msgBytes, err := resBatch[0].AsBytes()
+	require.NoError(t, err)
+	assert.Equal(t, `{"id":"1","ts":9.5}`, string(msgBytes))
+	ackFuncs = append(ackFuncs, aFn)
+
+	currentTS = time.Unix(11, 0).UTC()
+
+	resBatch, aFn, err = w.ReadBatch(context.Background())
+	require.NoError(t, err)
+	require.Len(t, resBatch, 1)
+	msgBytes, err = resBatch[0].AsBytes()
+	require.NoError(t, err)
+	assert.Equal(t, `{"id":"2","ts":10.5}`, string(msgBytes))
+	ackFuncs = append(ackFuncs, aFn)
+
+	currentTS = time.Unix(12, 0).UTC()
+
+	resBatch, aFn, err = w.ReadBatch(context.Background())
+	require.NoError(t, err)
+	require.Len(t, resBatch, 1)
+	msgBytes, err = resBatch[0].AsBytes()
+	require.NoError(t, err)
+	assert.Equal(t, `{"id":"3","ts":11.5}`, string(msgBytes))
+	ackFuncs = append(ackFuncs, aFn)
+
+	require.Len(t, ackFuncs, 3)
+	assert.Equal(t, 0, ackCalled)
+	assert.NoError(t, ackErr)
+
+	require.NoError(t, ackFuncs[0](context.Background(), nil))
+	assert.Equal(t, 0, ackCalled)
+	assert.NoError(t, ackErr)
+
+	require.NoError(t, ackFuncs[1](context.Background(), errors.New("custom error")))
+	assert.Equal(t, 0, ackCalled)
+	assert.NoError(t, ackErr)
+
+	require.NoError(t, ackFuncs[2](context.Background(), nil))
+	assert.Equal(t, 1, ackCalled)
+	assert.EqualError(t, ackErr, "custom error")
+}
+
+func TestSystemWindowAckManyToOne(t *testing.T) {
+	mapping, err := bloblang.Parse(`root = this.ts`)
+	require.NoError(t, err)
+
+	currentTS := time.Unix(10, 0).UTC()
+	w, err := newSystemWindowBuffer(mapping, func() time.Time {
+		return currentTS
+	}, time.Second, 0, 0, 0, nil)
+	require.NoError(t, err)
+
+	ackCalls := map[int]error{}
+
+	require.NoError(t, w.WriteBatch(context.Background(), service.MessageBatch{
+		service.NewMessage([]byte(`{"id":"1","ts":9.5}`)),
+	}, func(ctx context.Context, err error) error {
+		ackCalls[0] = err
+		return nil
+	}))
+
+	require.NoError(t, w.WriteBatch(context.Background(), service.MessageBatch{
+		service.NewMessage([]byte(`{"id":"2","ts":9.6}`)),
+	}, func(ctx context.Context, err error) error {
+		ackCalls[1] = err
+		return nil
+	}))
+
+	require.NoError(t, w.WriteBatch(context.Background(), service.MessageBatch{
+		service.NewMessage([]byte(`{"id":"3","ts":9.7}`)),
+	}, func(ctx context.Context, err error) error {
+		ackCalls[2] = err
+		return nil
+	}))
+
+	resBatch, aFn, err := w.ReadBatch(context.Background())
+	require.NoError(t, err)
+	require.Len(t, resBatch, 3)
+
+	msgBytes, err := resBatch[0].AsBytes()
+	require.NoError(t, err)
+	assert.Equal(t, `{"id":"1","ts":9.5}`, string(msgBytes))
+
+	msgBytes, err = resBatch[1].AsBytes()
+	require.NoError(t, err)
+	assert.Equal(t, `{"id":"2","ts":9.6}`, string(msgBytes))
+
+	msgBytes, err = resBatch[2].AsBytes()
+	require.NoError(t, err)
+	assert.Equal(t, `{"id":"3","ts":9.7}`, string(msgBytes))
+
+	assert.Empty(t, ackCalls)
+	require.NoError(t, aFn(context.Background(), errors.New("custom error")))
+
+	assert.Equal(t, map[int]error{
+		0: errors.New("custom error"),
+		1: errors.New("custom error"),
+		2: errors.New("custom error"),
+	}, ackCalls)
 }
 
 func TestSystemWindowParallelReadAndWrites(t *testing.T) {
@@ -325,6 +463,8 @@ func TestSystemWindowParallelReadAndWrites(t *testing.T) {
 			msg := fmt.Sprintf(`{"id":"%v","ts":10.5}`, i)
 			writeErr := w.WriteBatch(context.Background(), service.MessageBatch{
 				service.NewMessage([]byte(msg)),
+			}, func(ctx context.Context, err error) error {
+				return nil
 			})
 			require.NoError(t, writeErr)
 		}

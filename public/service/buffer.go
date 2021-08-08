@@ -24,10 +24,20 @@ import (
 // Benthos pipeline. Therefore, if you aren't absolutely sure that a component
 // you wish to build should be a buffer type then it likely shouldn't be.
 type BatchBuffer interface {
-	// Write a batch of messages to the buffer. If a nil error is returned the
-	// upstream components will acknowledge receipt of the message, therefore
-	// decoupling the input from the buffer and components downstream.
-	WriteBatch(context.Context, MessageBatch) error
+	// Write a batch of messages to the buffer, the batch is accompanied with an
+	// acknowledge function. A non-nil error should be returned if it is not
+	// possible to store the given message batch in the buffer.
+	//
+	// If a nil error is returned the buffer assumes responsibility for calling
+	// the acknowledge function at least once during the lifetime of the
+	// message.
+	//
+	// This could be at the point where the message is written to the buffer,
+	// which weakens delivery guarantees but can be useful for decoupling the
+	// input from downstream components. Alternatively, this could be when the
+	// associated batch has been read from the buffer and acknowledged
+	// downstream, which preserves delivery guarantees.
+	WriteBatch(context.Context, MessageBatch, AckFunc) error
 
 	// Read a batch of messages from the buffer. This call should block until
 	// either a batch is ready to consume, the provided context is cancelled or
@@ -71,7 +81,7 @@ func newAirGapBatchBuffer(b BatchBuffer) buffer.ReaderWriter {
 	return &airGapBatchBuffer{b, shutdown.NewSignaller()}
 }
 
-func (a *airGapBatchBuffer) Write(ctx context.Context, msg types.Message) error {
+func (a *airGapBatchBuffer) Write(ctx context.Context, msg types.Message, aFn buffer.AckFunc) error {
 	parts := make([]*Message, msg.Len())
 	_ = msg.Iter(func(i int, part types.Part) error {
 		// Copy because we ack the message after returning, therefore we lose
@@ -79,7 +89,7 @@ func (a *airGapBatchBuffer) Write(ctx context.Context, msg types.Message) error 
 		parts[i] = newMessageFromPart(part).Copy()
 		return nil
 	})
-	return a.b.WriteBatch(ctx, parts)
+	return a.b.WriteBatch(ctx, parts, AckFunc(aFn))
 }
 
 func (a *airGapBatchBuffer) Read(ctx context.Context) (types.Message, buffer.AckFunc, error) {

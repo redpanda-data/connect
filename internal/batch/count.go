@@ -36,7 +36,7 @@ func MessageCollapsedCount(m types.Message) int {
 
 // WithCollapsedCount returns a message part with a context indicating that this
 // message is the result of collapsing a number of messages. This allows
-// downstream components to know
+// downstream components to know how many total messages were combined.
 func WithCollapsedCount(p types.Part, count int) types.Part {
 	// Start with the previous length which could also be >1.
 	ctx := message.GetContext(p)

@@ -42,9 +42,12 @@ func (m *memoryBuffer) Read(ctx context.Context) (types.Message, AckFunc, error)
 	}
 }
 
-func (m *memoryBuffer) Write(ctx context.Context, msg types.Message) error {
+func (m *memoryBuffer) Write(ctx context.Context, msg types.Message, aFn AckFunc) error {
 	select {
 	case m.messages <- msg:
+		if err := aFn(context.Background(), nil); err != nil {
+			return err
+		}
 	case <-ctx.Done():
 		return ctx.Err()
 	}

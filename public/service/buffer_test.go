@@ -29,13 +29,13 @@ func newMemoryBuffer(n int) *memoryBuffer {
 	}
 }
 
-func (m *memoryBuffer) WriteBatch(ctx context.Context, batch MessageBatch) error {
+func (m *memoryBuffer) WriteBatch(ctx context.Context, batch MessageBatch, aFn AckFunc) error {
 	select {
 	case m.messages <- batch:
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	return nil
+	return aFn(context.Background(), nil)
 }
 
 func yoloIgnoreNacks(context.Context, error) error {

@@ -231,8 +231,8 @@ func (r *readErrorBuffer) Read(ctx context.Context) (types.Message, AckFunc, err
 	}, nil
 }
 
-func (r *readErrorBuffer) Write(ctx context.Context, msg types.Message) error {
-	return nil
+func (r *readErrorBuffer) Write(ctx context.Context, msg types.Message, aFn AckFunc) error {
+	return aFn(context.Background(), nil)
 }
 
 func (r *readErrorBuffer) EndOfInput() {

@@ -31,11 +31,13 @@ buffer:
     allowed_lateness: ""
 ```
 
-A window is a grouping of messages that fit within a discrete measure of time. Messages are allocated to a window either by the processing time (the time at which they're ingested) or by the event time, and this is controlled via the [`timestamp_mapping` field](#timestamp_mapping)`.
+A window is a grouping of messages that fit within a discrete measure of time following the system clock. Messages are allocated to a window either by the processing time (the time at which they're ingested) or by the event time, and this is controlled via the [`timestamp_mapping` field](#timestamp_mapping).
 
 In tumbling mode (default) the beginning of a window immediately follows the end of a prior window. When the buffer is initialized the first window to be created and populated is aligned against the zeroth minute of the zeroth hour of the day by default, and may therefore be open for a shorter period than the specified size.
 
-A window is flushed only once the system clock surpasses its scheduled end. If an [`allowed_lateness`](#allowed_lateness) is specified then the window will not be flushed until the scheduled end plus that length of time. When the service is shut down any partial windows will be dropped.
+A window is flushed only once the system clock surpasses its scheduled end. If an [`allowed_lateness`](#allowed_lateness) is specified then the window will not be flushed until the scheduled end plus that length of time.
+
+When a message is added to a window it has a metadata field `window_end_timestamp` added to it containing the timestamp of the end of the window as an RFC3339 string.
 
 ## Sliding Windows
 
@@ -49,8 +51,72 @@ If messages could potentially arrive with event timestamps in the future (accord
 
 ## Delivery Guarantees
 
-Using a buffer weakens the delivery guarantees of the pipeline by decoupling the acknowledgement of inputs from components downstream of the buffer. Therefore, in the event of server crashes or other rare faults there is no guarantee that messages are not lost when using this buffer. If you instead require strict delivery guarantees for your data consider instead using an [input broker with a batching policy](/docs/components/inputs/broker), with the `batching.period` field set to the window period.
+This buffer honours the transaction model within Benthos in order to ensure that messages are not acknowledged until they are either intentionally dropped or successfully delivered to outputs. However, since messages belonging to an expired window are intentionally dropped there are circumstances where not all messages entering the system will be delivered.
 
+When this buffer is configured with a slide duration it is possible for messages to belong to multiple windows, and therefore be delivered multiple times. In this case the first time the message is delivered it will be acked (or nacked) and subsequent deliveries of the same message will be a "best attempt".
+
+During graceful termination if the current window is partially populated with messages they will be nacked such that they are re-consumed the next time the service starts.
+
+
+## Examples
+
+<Tabs defaultValue="Counting Passengers at Traffic" values={[
+{ label: 'Counting Passengers at Traffic', value: 'Counting Passengers at Traffic', },
+]}>
+
+<TabItem value="Counting Passengers at Traffic">
+
+Given a stream of messages relating to cars passing through various traffic lights of the form:
+
+```json
+{
+  "traffic_light": "cbf2eafc-806e-4067-9211-97be7e42cee3",
+  "created_at": "2021-08-07T09:49:35Z",
+  "registration_plate": "AB1C DEF",
+  "passengers": 3
+}
+```
+
+We can use a window buffer in order to create periodic messages summarising the traffic for a period of time of this form:
+
+```json
+{
+  "traffic_light": "cbf2eafc-806e-4067-9211-97be7e42cee3",
+  "created_at": "2021-08-07T10:00:00Z",
+  "total_cars": 15,
+  "passengers": 43
+}
+```
+
+With the following config:
+
+```yaml
+buffer:
+  system_window:
+    timestamp_mapping: root = this.created_at
+    size: 1h
+
+pipeline:
+  processors:
+    # Group messages of the window into batches of common traffic light IDs
+    - group_by_value:
+        value: '${! json("traffic_light") }'
+
+    # Reduce each batch to a single message by deleting indexes > 0, and
+    # aggregate the car and passenger counts.
+    - bloblang: |
+        root = if batch_index() == 0 {
+          {
+            "traffic_light": this.traffic_light,
+            "created_at": meta("window_end_timestamp"),
+            "total_cars": batch_size(),
+            "passengers": json("passengers").from_all().sum(),
+          }
+        } else { deleted() }
+```
+
+</TabItem>
+</Tabs>
 
 ## Fields
 

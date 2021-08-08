@@ -2,10 +2,12 @@ package generic
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/public/bloblang"
 	"github.com/Jeffail/benthos/v3/public/service"
@@ -17,15 +19,17 @@ func tumblingWindowBufferConfig() *service.ConfigSpec {
 		Categories("Windowing").
 		Summary("Chops a stream of messages into tumbling or sliding windows of fixed temporal size, following the system clock.").
 		Description(`
-A window is a grouping of messages that fit within a discrete measure of time. Messages are allocated to a window either by the processing time (the time at which they're ingested) or by the event time, and this is controlled via the ` + "[`timestamp_mapping` field](#timestamp_mapping)`" + `.
+A window is a grouping of messages that fit within a discrete measure of time following the system clock. Messages are allocated to a window either by the processing time (the time at which they're ingested) or by the event time, and this is controlled via the `+"[`timestamp_mapping` field](#timestamp_mapping)"+`.
 
 In tumbling mode (default) the beginning of a window immediately follows the end of a prior window. When the buffer is initialized the first window to be created and populated is aligned against the zeroth minute of the zeroth hour of the day by default, and may therefore be open for a shorter period than the specified size.
 
-A window is flushed only once the system clock surpasses its scheduled end. If an ` + "[`allowed_lateness`](#allowed_lateness)" + ` is specified then the window will not be flushed until the scheduled end plus that length of time. When the service is shut down any partial windows will be dropped.
+A window is flushed only once the system clock surpasses its scheduled end. If an `+"[`allowed_lateness`](#allowed_lateness)"+` is specified then the window will not be flushed until the scheduled end plus that length of time.
+
+When a message is added to a window it has a metadata field `+"`window_end_timestamp`"+` added to it containing the timestamp of the end of the window as an RFC3339 string.
 
 ## Sliding Windows
 
-Sliding windows begin from an offset of the prior windows' beginning rather than its end, and therefore messages may belong to multiple windows. In order to produce sliding windows specify a ` + "[`slide` duration](#slide)" + `.
+Sliding windows begin from an offset of the prior windows' beginning rather than its end, and therefore messages may belong to multiple windows. In order to produce sliding windows specify a `+"[`slide` duration](#slide)"+`.
 
 ## Back Pressure
 
@@ -35,13 +39,17 @@ If messages could potentially arrive with event timestamps in the future (accord
 
 ## Delivery Guarantees
 
-Using a buffer weakens the delivery guarantees of the pipeline by decoupling the acknowledgement of inputs from components downstream of the buffer. Therefore, in the event of server crashes or other rare faults there is no guarantee that messages are not lost when using this buffer. If you instead require strict delivery guarantees for your data consider instead using an [input broker with a batching policy](/docs/components/inputs/broker), with the ` + "`batching.period`" + ` field set to the window period.
+This buffer honours the transaction model within Benthos in order to ensure that messages are not acknowledged until they are either intentionally dropped or successfully delivered to outputs. However, since messages belonging to an expired window are intentionally dropped there are circumstances where not all messages entering the system will be delivered.
+
+When this buffer is configured with a slide duration it is possible for messages to belong to multiple windows, and therefore be delivered multiple times. In this case the first time the message is delivered it will be acked (or nacked) and subsequent deliveries of the same message will be a "best attempt".
+
+During graceful termination if the current window is partially populated with messages they will be nacked such that they are re-consumed the next time the service starts.
 `).
 		Field(service.NewBloblangField("timestamp_mapping").
 			Description(`
-A [Bloblang mapping](/docs/guides/bloblang/about) applied to each message during ingestion that provides the timestamp to use for allocating it a window. By default the function ` + "`now()`" + ` is used in order to generate a fresh timestamp at the time of ingestion (the processing time), whereas this mapping can instead extract a timestamp from the message itself (the event time).
+A [Bloblang mapping](/docs/guides/bloblang/about) applied to each message during ingestion that provides the timestamp to use for allocating it a window. By default the function `+"`now()`"+` is used in order to generate a fresh timestamp at the time of ingestion (the processing time), whereas this mapping can instead extract a timestamp from the message itself (the event time).
 
-The timestamp value assigned to ` + "`root`" + ` must either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format. If the mapping fails or provides an invalid result the message will be dropped (with logging to describe the problem).
+The timestamp value assigned to `+"`root`"+` must either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format. If the mapping fails or provides an invalid result the message will be dropped (with logging to describe the problem).
 `).
 			Default("root = now()").
 			Example("root = this.created_at").Example(`root = meta("kafka_timestamp_unix").number()`)).
@@ -59,7 +67,56 @@ The timestamp value assigned to ` + "`root`" + ` must either be a numerical unix
 		Field(service.NewStringField("allowed_lateness").
 			Description("An optional duration string describing the length of time to wait after a window has ended before flushing it, allowing late arrivals to be included. Since this windowing buffer uses the system clock an allowed lateness can improve the matching of messages when using event time.").
 			Default("").
-			Example("10s").Example("1m"))
+			Example("10s").Example("1m")).
+		Example("Counting Passengers at Traffic", `Given a stream of messages relating to cars passing through various traffic lights of the form:
+
+`+"```json"+`
+{
+  "traffic_light": "cbf2eafc-806e-4067-9211-97be7e42cee3",
+  "created_at": "2021-08-07T09:49:35Z",
+  "registration_plate": "AB1C DEF",
+  "passengers": 3
+}
+`+"```"+`
+
+We can use a window buffer in order to create periodic messages summarising the traffic for a period of time of this form:
+
+`+"```json"+`
+{
+  "traffic_light": "cbf2eafc-806e-4067-9211-97be7e42cee3",
+  "created_at": "2021-08-07T10:00:00Z",
+  "total_cars": 15,
+  "passengers": 43
+}
+`+"```"+`
+
+With the following config:`,
+			`
+buffer:
+  system_window:
+    timestamp_mapping: root = this.created_at
+    size: 1h
+
+pipeline:
+  processors:
+    # Group messages of the window into batches of common traffic light IDs
+    - group_by_value:
+        value: '${! json("traffic_light") }'
+
+    # Reduce each batch to a single message by deleting indexes > 0, and
+    # aggregate the car and passenger counts.
+    - bloblang: |
+        root = if batch_index() == 0 {
+          {
+            "traffic_light": this.traffic_light,
+            "created_at": meta("window_end_timestamp"),
+            "total_cars": batch_size(),
+            "passengers": json("passengers").from_all().sum(),
+          }
+        } else { deleted() }
+`,
+		)
+
 }
 
 func getDuration(conf *service.ParsedConfig, required bool, name string) (time.Duration, error) {
@@ -123,8 +180,9 @@ func init() {
 //------------------------------------------------------------------------------
 
 type tsMessage struct {
-	ts time.Time
-	m  *service.Message
+	ts    time.Time
+	m     *service.Message
+	ackFn service.AckFunc
 }
 
 type utcNowProvider func() time.Time
@@ -141,6 +199,8 @@ type systemWindowBuffer struct {
 	pending                []*tsMessage
 	pendingMut             sync.Mutex
 
+	closedTimerChan <-chan time.Time
+
 	endOfInputChan      chan struct{}
 	closeEndOfInputOnce sync.Once
 }
@@ -151,7 +211,7 @@ func newSystemWindowBuffer(
 	size, slide, offset, allowedLateness time.Duration,
 	logger *service.Logger,
 ) (*systemWindowBuffer, error) {
-	return &systemWindowBuffer{
+	w := &systemWindowBuffer{
 		tsMapping:       tsMapping,
 		clock:           clock,
 		size:            size,
@@ -161,7 +221,12 @@ func newSystemWindowBuffer(
 		logger:          logger,
 		oldestTS:        clock(),
 		endOfInputChan:  make(chan struct{}),
-	}, nil
+	}
+
+	tmpTimerChan := make(chan time.Time)
+	close(tmpTimerChan)
+	w.closedTimerChan = tmpTimerChan
+	return w, nil
 }
 
 func (w *systemWindowBuffer) currentSystemWindow() (prevStart, prevEnd, start, end time.Time) {
@@ -183,8 +248,12 @@ func (w *systemWindowBuffer) currentSystemWindow() (prevStart, prevEnd, start, e
 		start = start.Add(-w.size)
 	}
 
-	// Window end is minus one nanosecond so that our windows do not overlap
-	end = start.Add(w.size - 1)
+	// The end is the start plus the window size
+	end = start.Add(w.size)
+
+	// Add a single nanosecond to the window start so that it doesn't overlap
+	// with the previous
+	start = start.Add(1)
 
 	// Calculate the previous window as well
 	prevOffset := w.size
@@ -196,7 +265,7 @@ func (w *systemWindowBuffer) currentSystemWindow() (prevStart, prevEnd, start, e
 	return
 }
 
-func (w *systemWindowBuffer) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
+func (w *systemWindowBuffer) WriteBatch(ctx context.Context, msgBatch service.MessageBatch, aFn service.AckFunc) error {
 	w.pendingMut.Lock()
 	defer w.pendingMut.Unlock()
 
@@ -208,6 +277,9 @@ func (w *systemWindowBuffer) WriteBatch(ctx context.Context, batch service.Messa
 		newPending := make([]*tsMessage, 0, len(w.pending))
 		for _, pending := range w.pending {
 			if pending.ts.Before(prevStart) {
+				// Reject messages too old to fit into a window by acknowledging
+				// them.
+				_ = pending.ackFn(ctx, nil)
 				continue
 			}
 			newPending = append(newPending, pending)
@@ -218,39 +290,48 @@ func (w *systemWindowBuffer) WriteBatch(ctx context.Context, batch service.Messa
 		w.pending = newPending
 	}
 
+	messageAdded := false
+	aggregatedAck := batch.NewCombinedAcker(batch.AckFunc(aFn))
+
 	// And now add new messages.
-	for _, msg := range batch {
+	for _, msg := range msgBatch {
 		tsValueMsg, err := msg.BloblangQuery(w.tsMapping)
 		if err != nil {
 			w.logger.Errorf("Timestamp mapping failed for message: %w", err)
-			continue
+			return fmt.Errorf("timestamp mapping failed: %w", err)
 		}
 		tsValue, err := tsValueMsg.AsStructured()
 		if err != nil {
 			w.logger.Errorf("Timestamp mapping failed for message: unable to parse result as structured value: %w", err)
-			continue
+			return fmt.Errorf("unable to parse result of timestamp mapping as structured value: %w", err)
 		}
 		ts, err := query.IGetTimestamp(tsValue)
 		if err != nil {
 			w.logger.Errorf("Timestamp mapping failed for message: %w", err)
-			continue
+			return fmt.Errorf("unable to parse result of timestamp mapping as timestamp: %w", err)
 		}
 		// Don't add messages older than our current window start.
 		if !ts.After(w.latestFlushedWindowEnd) {
 			continue
 		}
+		messageAdded = true
 		w.pending = append(w.pending, &tsMessage{
-			ts: ts, m: msg,
+			ts: ts, m: msg, ackFn: service.AckFunc(aggregatedAck.Derive()),
 		})
 		if ts.Before(w.oldestTS) {
 			w.oldestTS = ts
 		}
 	}
 
+	if !messageAdded {
+		// If none of the messages have fit into a window we reject them by
+		// acknowledging the batch.
+		_ = aFn(ctx, nil)
+	}
 	return nil
 }
 
-func (w *systemWindowBuffer) flushWindow(start, end time.Time) (service.MessageBatch, error) {
+func (w *systemWindowBuffer) flushWindow(ctx context.Context, start, end time.Time) (service.MessageBatch, service.AckFunc, error) {
 	w.pendingMut.Lock()
 	defer w.pendingMut.Unlock()
 
@@ -261,17 +342,28 @@ func (w *systemWindowBuffer) flushWindow(start, end time.Time) (service.MessageB
 	}
 
 	var flushBatch service.MessageBatch
+	var flushAcks []service.AckFunc
+
 	newPending := make([]*tsMessage, 0, len(w.pending))
 	newOldest := w.clock()
 	for _, pending := range w.pending {
-		if !pending.ts.Before(start) && !pending.ts.After(end) {
-			flushBatch = append(flushBatch, pending.m) // TODO: Need copy here?
+		flush := !pending.ts.Before(start) && !pending.ts.After(end)
+		preserve := !pending.ts.Before(nextStart)
+
+		if flush {
+			tmpMsg := pending.m.Copy()
+			tmpMsg.MetaSet("window_end_timestamp", end.Format(time.RFC3339Nano))
+			flushBatch = append(flushBatch, tmpMsg)
+			flushAcks = append(flushAcks, pending.ackFn)
 		}
-		if !pending.ts.Before(nextStart) {
+		if preserve {
 			if pending.ts.Before(newOldest) {
 				newOldest = pending.ts
 			}
 			newPending = append(newPending, pending)
+		}
+		if !flush && !preserve {
+			_ = pending.ackFn(ctx, nil)
 		}
 	}
 
@@ -279,12 +371,15 @@ func (w *systemWindowBuffer) flushWindow(start, end time.Time) (service.MessageB
 	w.latestFlushedWindowEnd = end
 	w.oldestTS = newOldest
 
-	return flushBatch, nil
+	return flushBatch, func(ctx context.Context, err error) error {
+		for _, aFn := range flushAcks {
+			_ = aFn(ctx, err)
+		}
+		return nil
+	}, nil
 }
 
-func noopAck(context.Context, error) error {
-	return nil
-}
+var errWindowClosed = errors.New("message rejected as window did not complete")
 
 func (w *systemWindowBuffer) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	prevStart, prevEnd, nextStart, nextEnd := w.currentSystemWindow()
@@ -297,23 +392,40 @@ func (w *systemWindowBuffer) ReadBatch(ctx context.Context) (service.MessageBatc
 	// given time. If this assumption changes we would need to lock around this
 	// also.
 	if w.latestFlushedWindowEnd.Before(prevStart) {
-		if batch, err := w.flushWindow(prevStart, prevEnd); len(batch) > 0 || err != nil {
-			return batch, noopAck, err
+		if msgBatch, aFn, err := w.flushWindow(ctx, prevStart, prevEnd); len(msgBatch) > 0 || err != nil {
+			return msgBatch, aFn, err
 		}
 	}
 
-	if waitFor := time.Until(nextEnd) + w.allowedLateness; waitFor > 0 {
+	for {
+		nextEndChan := w.closedTimerChan
+		if waitFor := nextEnd.Sub(w.clock()) + w.allowedLateness; waitFor > 0 {
+			nextEndChan = time.After(waitFor)
+		}
+
 		select {
-		case <-time.After(waitFor):
+		case <-nextEndChan:
 		case <-ctx.Done():
 			return nil, nil, ctx.Err()
 		case <-w.endOfInputChan:
+			// Nack all pending messages so that we re-consume them on the next
+			// start up. TODO: Eventually allow users to customize this as they
+			// may wish to flush partial windows instead.
+			w.pendingMut.Lock()
+			for _, pending := range w.pending {
+				_ = pending.ackFn(ctx, errWindowClosed)
+			}
+			w.pending = nil
+			w.pendingMut.Unlock()
 			return nil, nil, service.ErrEndOfBuffer
 		}
-	}
+		if msgBatch, aFn, err := w.flushWindow(ctx, nextStart, nextEnd); len(msgBatch) > 0 || err != nil {
+			return msgBatch, aFn, err
+		}
 
-	batch, err := w.flushWindow(nextStart, nextEnd)
-	return batch, noopAck, err
+		// Window did not contain any messages, so move onto next.
+		_, _, nextStart, nextEnd = w.currentSystemWindow()
+	}
 }
 
 func (w *systemWindowBuffer) EndOfInput() {

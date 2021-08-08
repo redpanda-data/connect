@@ -70,7 +70,12 @@ amount. Since this calculation is only an estimate, and the real size of
 messages in RAM is always higher, it is recommended to set the limit
 significantly below the amount of RAM available.
 
-### Batching
+## Delivery Guarantees
+
+This buffer intentionally weakens the delivery guarantees of the pipeline and
+therefore should never be used in places where data loss is unacceptable.
+
+## Batching
 
 It is possible to batch up messages sent from this buffer using a
 [batch policy](/docs/configuration/batching#batch-policy).
