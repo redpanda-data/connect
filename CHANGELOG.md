@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Go API: Added ability to create and register `BatchBuffer` plugins.
 - New `system_window` buffer for processing message windows (sliding or tumbling) following the system clock.
+- Field `root_cas` added to all TLS configuration blocks.
 
 ## 3.52.0 - 2021-08-02
 
