@@ -61,7 +61,7 @@ The timestamp value assigned to `+"`root`"+` must either be a numerical unix tim
 			Default("").
 			Example("30s").Example("10m")).
 		Field(service.NewStringField("offset").
-			Description("An optional duration string to offset the beginning of each window by, otherwise they are aligned to the zeroth minute and zeroth hour on the UTC clock.").
+			Description("An optional duration string to offset the beginning of each window by, otherwise they are aligned to the zeroth minute and zeroth hour on the UTC clock. The offset cannot be a larger or equal measure to the window size or the slide.").
 			Default("").
 			Example("-6h").Example("30m")).
 		Field(service.NewStringField("allowed_lateness").
@@ -156,6 +156,9 @@ func init() {
 			if offset >= size {
 				return nil, fmt.Errorf("invalid offset '%v' must be lower than the size '%v'", offset, size)
 			}
+			if slide > 0 && offset >= slide {
+				return nil, fmt.Errorf("invalid offset '%v' must be lower than the slide '%v'", offset, slide)
+			}
 			allowedLateness, err := getDuration(conf, false, "allowed_lateness")
 			if err != nil {
 				return nil, err
@@ -216,8 +219,8 @@ func newSystemWindowBuffer(
 		clock:           clock,
 		size:            size,
 		slide:           slide,
-		offset:          offset,
 		allowedLateness: allowedLateness,
+		offset:          offset,
 		logger:          logger,
 		oldestTS:        clock(),
 		endOfInputChan:  make(chan struct{}),
@@ -229,39 +232,65 @@ func newSystemWindowBuffer(
 	return w, nil
 }
 
-func (w *systemWindowBuffer) currentSystemWindow() (prevStart, prevEnd, start, end time.Time) {
+func (w *systemWindowBuffer) nextSystemWindow() (prevStart, prevEnd, start, end time.Time) {
 	now := w.clock()
 
-	startEpoch := w.size
+	windowEpoch := w.size
 	if w.slide > 0 {
-		startEpoch = w.slide
+		windowEpoch = w.slide
 	}
 
-	start = w.clock().Round(startEpoch)
-	if start.After(now) {
-		// We were rounded up, so set us back
-		start = start.Add(-startEpoch)
+	// The start is now, rounded by our window epoch to the UTC clock, and with
+	// our offset (plus one to avoid overlapping with the previous window)
+	// added.
+	//
+	// If the result is after now then we rounded upwards, so we roll it back by
+	// the window epoch.
+	if start = w.clock().Round(windowEpoch).Add(1 + w.offset); start.After(now) {
+		start = start.Add(-windowEpoch)
 	}
 
-	// Add offset and roll back if we're beyond now
-	if start = start.Add(w.offset); start.After(now) {
-		start = start.Add(-w.size)
+	// The result is the start of the newest active window. In the case of
+	// sliding windows this is not the "next" window to be flushed, so we need
+	// to roll back further.
+	if w.slide > 0 {
+		start = start.Add(w.slide - w.size)
 	}
 
-	// The end is the start plus the window size
-	end = start.Add(w.size)
-
-	// Add a single nanosecond to the window start so that it doesn't overlap
-	// with the previous
-	start = start.Add(1)
+	// The end is our start plus the window size (minus the nanosecond added to
+	// the start).
+	end = start.Add(w.size - 1)
 
 	// Calculate the previous window as well
-	prevOffset := w.size
-	if w.slide > 0 {
-		prevOffset = w.slide
+	prevStart, prevEnd = start.Add(-windowEpoch), end.Add(-windowEpoch)
+	return
+}
+
+func (w *systemWindowBuffer) getTimestamp(i int, batch service.MessageBatch) (ts time.Time, err error) {
+	var tsValueMsg *service.Message
+	if tsValueMsg, err = batch.BloblangQuery(i, w.tsMapping); err != nil {
+		w.logger.Errorf("Timestamp mapping failed for message: %v", err)
+		err = fmt.Errorf("timestamp mapping failed: %w", err)
+		return
 	}
 
-	prevStart, prevEnd = start.Add(-prevOffset), end.Add(-prevOffset)
+	var tsValue interface{}
+	if tsValue, err = tsValueMsg.AsStructured(); err != nil {
+		if tsBytes, _ := tsValueMsg.AsBytes(); len(tsBytes) > 0 {
+			tsValue = string(tsBytes)
+			err = nil
+		}
+	}
+	if err != nil {
+		w.logger.Errorf("Timestamp mapping failed for message: unable to parse result as structured value: %v", err)
+		err = fmt.Errorf("unable to parse result of timestamp mapping as structured value: %w", err)
+		return
+	}
+
+	if ts, err = query.IGetTimestamp(tsValue); err != nil {
+		w.logger.Errorf("Timestamp mapping failed for message: %v", err)
+		err = fmt.Errorf("unable to parse result of timestamp mapping as timestamp: %w", err)
+	}
 	return
 }
 
@@ -271,7 +300,7 @@ func (w *systemWindowBuffer) WriteBatch(ctx context.Context, msgBatch service.Me
 
 	// If our output is blocked and therefore we haven't flushed more than the
 	// last two windows we purge messages that wouldn't fit within them.
-	prevStart, _, _, _ := w.currentSystemWindow()
+	prevStart, _, _, _ := w.nextSystemWindow()
 	if w.latestFlushedWindowEnd.Before(prevStart) && w.oldestTS.Before(prevStart) {
 		newOldestTS := w.clock()
 		newPending := make([]*tsMessage, 0, len(w.pending))
@@ -294,26 +323,17 @@ func (w *systemWindowBuffer) WriteBatch(ctx context.Context, msgBatch service.Me
 	aggregatedAck := batch.NewCombinedAcker(batch.AckFunc(aFn))
 
 	// And now add new messages.
-	for _, msg := range msgBatch {
-		tsValueMsg, err := msg.BloblangQuery(w.tsMapping)
+	for i, msg := range msgBatch {
+		ts, err := w.getTimestamp(i, msgBatch)
 		if err != nil {
-			w.logger.Errorf("Timestamp mapping failed for message: %w", err)
-			return fmt.Errorf("timestamp mapping failed: %w", err)
+			return err
 		}
-		tsValue, err := tsValueMsg.AsStructured()
-		if err != nil {
-			w.logger.Errorf("Timestamp mapping failed for message: unable to parse result as structured value: %w", err)
-			return fmt.Errorf("unable to parse result of timestamp mapping as structured value: %w", err)
-		}
-		ts, err := query.IGetTimestamp(tsValue)
-		if err != nil {
-			w.logger.Errorf("Timestamp mapping failed for message: %w", err)
-			return fmt.Errorf("unable to parse result of timestamp mapping as timestamp: %w", err)
-		}
+
 		// Don't add messages older than our current window start.
 		if !ts.After(w.latestFlushedWindowEnd) {
 			continue
 		}
+
 		messageAdded = true
 		w.pending = append(w.pending, &tsMessage{
 			ts: ts, m: msg, ackFn: service.AckFunc(aggregatedAck.Derive()),
@@ -382,7 +402,7 @@ func (w *systemWindowBuffer) flushWindow(ctx context.Context, start, end time.Ti
 var errWindowClosed = errors.New("message rejected as window did not complete")
 
 func (w *systemWindowBuffer) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
-	prevStart, prevEnd, nextStart, nextEnd := w.currentSystemWindow()
+	prevStart, prevEnd, nextStart, nextEnd := w.nextSystemWindow()
 
 	// We haven't been read since the previous window ended, so create that one
 	// instead in an attempt to back fill.
@@ -424,7 +444,7 @@ func (w *systemWindowBuffer) ReadBatch(ctx context.Context) (service.MessageBatc
 		}
 
 		// Window did not contain any messages, so move onto next.
-		_, _, nextStart, nextEnd = w.currentSystemWindow()
+		_, _, nextStart, nextEnd = w.nextSystemWindow()
 	}
 }
 

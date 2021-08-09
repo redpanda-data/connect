@@ -64,8 +64,17 @@ system_window:
 			config: `
 system_window:
   size: 60m
-  slide: 10m
   offset: 60m
+  allowed_lateness: 2m
+`,
+			buildErrContains: "invalid offset",
+		},
+		{
+			config: `
+system_window:
+  size: 60m
+  slide: 10m
+  offset: 10m
   allowed_lateness: 2m
 `,
 			buildErrContains: "invalid offset",
@@ -124,66 +133,82 @@ func TestSystemCurrentWindowCalc(t *testing.T) {
 		prevStart, prevEnd, start, end string
 	}{
 		{
-			now:       `2006-01-02T15:04:05.123456789Z`,
+			now:       `2006-01-02T15:00:00Z`,
 			size:      time.Hour,
-			prevStart: `2006-01-02T14:00:00.000000001Z`,
-			prevEnd:   `2006-01-02T15:00:00Z`,
+			start:     `2006-01-02T14:00:00.000000001Z`,
+			end:       `2006-01-02T15:00:00Z`,
+			prevStart: `2006-01-02T13:00:00.000000001Z`,
+			prevEnd:   `2006-01-02T14:00:00Z`,
+		},
+		{
+			now:       `2006-01-02T15:00:00.000000001Z`,
+			size:      time.Hour,
 			start:     `2006-01-02T15:00:00.000000001Z`,
 			end:       `2006-01-02T16:00:00Z`,
+			prevStart: `2006-01-02T14:00:00.000000001Z`,
+			prevEnd:   `2006-01-02T15:00:00Z`,
+		},
+		{
+			now:       `2006-01-02T15:04:05.123456789Z`,
+			size:      time.Hour,
+			start:     `2006-01-02T15:00:00.000000001Z`,
+			end:       `2006-01-02T16:00:00Z`,
+			prevStart: `2006-01-02T14:00:00.000000001Z`,
+			prevEnd:   `2006-01-02T15:00:00Z`,
 		},
 		{
 			now:       `2006-01-02T15:34:05.123456789Z`,
 			size:      time.Hour,
-			prevStart: `2006-01-02T14:00:00.000000001Z`,
-			prevEnd:   `2006-01-02T15:00:00Z`,
 			start:     `2006-01-02T15:00:00.000000001Z`,
 			end:       `2006-01-02T16:00:00Z`,
+			prevStart: `2006-01-02T14:00:00.000000001Z`,
+			prevEnd:   `2006-01-02T15:00:00Z`,
 		},
 		{
 			now:       `2006-01-02T00:04:05.123456789Z`,
 			size:      time.Hour,
-			prevStart: `2006-01-01T23:00:00.000000001Z`,
-			prevEnd:   `2006-01-02T00:00:00Z`,
 			start:     `2006-01-02T00:00:00.000000001Z`,
 			end:       `2006-01-02T01:00:00Z`,
+			prevStart: `2006-01-01T23:00:00.000000001Z`,
+			prevEnd:   `2006-01-02T00:00:00Z`,
 		},
 		{
 			now:       `2006-01-02T15:04:05.123456789Z`,
 			size:      time.Hour,
 			slide:     time.Minute * 10,
-			prevStart: `2006-01-02T14:50:00.000000001Z`,
-			prevEnd:   `2006-01-02T15:50:00Z`,
-			start:     `2006-01-02T15:00:00.000000001Z`,
-			end:       `2006-01-02T16:00:00Z`,
+			start:     `2006-01-02T14:10:00.000000001Z`,
+			end:       `2006-01-02T15:10:00Z`,
+			prevStart: `2006-01-02T14:00:00.000000001Z`,
+			prevEnd:   `2006-01-02T15:00:00Z`,
 		},
 		{
 			now:       `2006-01-02T15:04:05.123456789Z`,
 			size:      time.Hour,
 			offset:    time.Minute * 30,
+			start:     `2006-01-02T14:30:00.000000001Z`,
+			end:       `2006-01-02T15:30:00Z`,
 			prevStart: `2006-01-02T13:30:00.000000001Z`,
 			prevEnd:   `2006-01-02T14:30:00Z`,
-			start:     `2006-01-02T14:30:00.000000001Z`,
-			end:       `2006-01-02T15:30:00Z`,
 		},
 		{
 			now:       `2006-01-02T15:04:05.123456789Z`,
 			size:      time.Hour,
 			slide:     time.Minute * 10,
-			offset:    time.Minute * 30,
-			prevStart: `2006-01-02T14:20:00.000000001Z`,
-			prevEnd:   `2006-01-02T15:20:00Z`,
-			start:     `2006-01-02T14:30:00.000000001Z`,
-			end:       `2006-01-02T15:30:00Z`,
+			offset:    time.Minute * 5,
+			start:     `2006-01-02T14:05:00.000000001Z`,
+			end:       `2006-01-02T15:05:00Z`,
+			prevStart: `2006-01-02T13:55:00.000000001Z`,
+			prevEnd:   `2006-01-02T14:55:00Z`,
 		},
 		{
 			now:       `2006-01-02T15:09:59.123456789Z`,
 			size:      time.Hour,
 			slide:     time.Minute * 10,
-			offset:    time.Minute * 30,
-			prevStart: `2006-01-02T14:20:00.000000001Z`,
-			prevEnd:   `2006-01-02T15:20:00Z`,
-			start:     `2006-01-02T14:30:00.000000001Z`,
-			end:       `2006-01-02T15:30:00Z`,
+			offset:    time.Minute * 5,
+			start:     `2006-01-02T14:15:00.000000001Z`,
+			end:       `2006-01-02T15:15:00Z`,
+			prevStart: `2006-01-02T14:05:00.000000001Z`,
+			prevEnd:   `2006-01-02T15:05:00Z`,
 		},
 	}
 
@@ -196,12 +221,12 @@ func TestSystemCurrentWindowCalc(t *testing.T) {
 			}, test.size, test.slide, test.offset, 0, nil)
 			require.NoError(t, err)
 
-			prevStart, prevEnd, start, end := w.currentSystemWindow()
+			prevStart, prevEnd, start, end := w.nextSystemWindow()
 
-			assert.Equal(t, test.prevStart, prevStart.Format(time.RFC3339Nano), "prevStart")
-			assert.Equal(t, test.prevEnd, prevEnd.Format(time.RFC3339Nano), "prevEnd")
 			assert.Equal(t, test.start, start.Format(time.RFC3339Nano), "start")
 			assert.Equal(t, test.end, end.Format(time.RFC3339Nano), "end")
+			assert.Equal(t, test.prevStart, prevStart.Format(time.RFC3339Nano), "prevStart")
+			assert.Equal(t, test.prevEnd, prevEnd.Format(time.RFC3339Nano), "prevEnd")
 		})
 	}
 }
@@ -214,7 +239,7 @@ func TestSystemWindowWritePurge(t *testing.T) {
 	mapping, err := bloblang.Parse(`root = this.ts`)
 	require.NoError(t, err)
 
-	currentTS := time.Unix(10, 0).UTC()
+	currentTS := time.Unix(10, 1).UTC()
 	w, err := newSystemWindowBuffer(mapping, func() time.Time {
 		return currentTS
 	}, time.Second, 0, 0, 0, nil)
@@ -243,7 +268,7 @@ func TestSystemWindowCreation(t *testing.T) {
 	mapping, err := bloblang.Parse(`root = this.ts`)
 	require.NoError(t, err)
 
-	currentTS := time.Unix(10, 0).UTC()
+	currentTS := time.Unix(10, 1).UTC()
 	w, err := newSystemWindowBuffer(mapping, func() time.Time {
 		return currentTS
 	}, time.Second, 0, 0, 0, nil)
@@ -311,11 +336,96 @@ func TestSystemWindowCreation(t *testing.T) {
 	assert.Equal(t, `{"id":"10","ts":13}`, string(msgBytes))
 }
 
-func TestSystemWindowAckOneToMany(t *testing.T) {
+func TestSystemWindowCreationSliding(t *testing.T) {
 	mapping, err := bloblang.Parse(`root = this.ts`)
 	require.NoError(t, err)
 
 	currentTS := time.Unix(10, 0).UTC()
+	w, err := newSystemWindowBuffer(mapping, func() time.Time {
+		return currentTS
+	}, time.Second, time.Millisecond*500, 0, 0, nil)
+	require.NoError(t, err)
+	w.latestFlushedWindowEnd = time.Unix(9, 500_000_000)
+
+	err = w.WriteBatch(context.Background(), service.MessageBatch{
+		service.NewMessage([]byte(`{"id":"1","ts":9.85}`)),
+		service.NewMessage([]byte(`{"id":"2","ts":9.9}`)),
+		service.NewMessage([]byte(`{"id":"3","ts":10.15}`)),
+		service.NewMessage([]byte(`{"id":"4","ts":10.3}`)),
+		service.NewMessage([]byte(`{"id":"5","ts":10.5}`)),
+		service.NewMessage([]byte(`{"id":"6","ts":10.7}`)),
+		service.NewMessage([]byte(`{"id":"7","ts":10.9}`)),
+		service.NewMessage([]byte(`{"id":"8","ts":11.1}`)),
+		service.NewMessage([]byte(`{"id":"9","ts":11.35}`)),
+		service.NewMessage([]byte(`{"id":"10","ts":11.52}`)),
+		service.NewMessage([]byte(`{"id":"11","ts":11.8}`)),
+	}, noopAck)
+	require.NoError(t, err)
+	assert.Len(t, w.pending, 11)
+
+	assertBatchIndex := func(i int, batch service.MessageBatch, exp string) {
+		t.Helper()
+		require.True(t, len(batch) > i)
+		msgBytes, err := batch[i].AsBytes()
+		require.NoError(t, err)
+		assert.Equal(t, exp, string(msgBytes))
+	}
+
+	resBatch, _, err := w.ReadBatch(context.Background())
+	require.NoError(t, err)
+
+	assert.Len(t, resBatch, 2)
+	assertBatchIndex(0, resBatch, `{"id":"1","ts":9.85}`)
+	assertBatchIndex(1, resBatch, `{"id":"2","ts":9.9}`)
+
+	currentTS = time.Unix(10, 500000000).UTC()
+	resBatch, _, err = w.ReadBatch(context.Background())
+	require.NoError(t, err)
+
+	assert.Len(t, resBatch, 5)
+	assertBatchIndex(0, resBatch, `{"id":"1","ts":9.85}`)
+	assertBatchIndex(1, resBatch, `{"id":"2","ts":9.9}`)
+	assertBatchIndex(2, resBatch, `{"id":"3","ts":10.15}`)
+	assertBatchIndex(3, resBatch, `{"id":"4","ts":10.3}`)
+	assertBatchIndex(4, resBatch, `{"id":"5","ts":10.5}`)
+
+	currentTS = time.Unix(11, 0).UTC()
+	resBatch, _, err = w.ReadBatch(context.Background())
+	require.NoError(t, err)
+
+	assert.Len(t, resBatch, 5)
+	assertBatchIndex(0, resBatch, `{"id":"3","ts":10.15}`)
+	assertBatchIndex(1, resBatch, `{"id":"4","ts":10.3}`)
+	assertBatchIndex(2, resBatch, `{"id":"5","ts":10.5}`)
+	assertBatchIndex(3, resBatch, `{"id":"6","ts":10.7}`)
+	assertBatchIndex(4, resBatch, `{"id":"7","ts":10.9}`)
+
+	currentTS = time.Unix(11, 500_000_000).UTC()
+	resBatch, _, err = w.ReadBatch(context.Background())
+	require.NoError(t, err)
+
+	assert.Len(t, resBatch, 4)
+	assertBatchIndex(0, resBatch, `{"id":"6","ts":10.7}`)
+	assertBatchIndex(1, resBatch, `{"id":"7","ts":10.9}`)
+	assertBatchIndex(2, resBatch, `{"id":"8","ts":11.1}`)
+	assertBatchIndex(3, resBatch, `{"id":"9","ts":11.35}`)
+
+	currentTS = time.Unix(12, 0).UTC()
+	resBatch, _, err = w.ReadBatch(context.Background())
+	require.NoError(t, err)
+
+	assert.Len(t, resBatch, 4)
+	assertBatchIndex(0, resBatch, `{"id":"8","ts":11.1}`)
+	assertBatchIndex(1, resBatch, `{"id":"9","ts":11.35}`)
+	assertBatchIndex(2, resBatch, `{"id":"10","ts":11.52}`)
+	assertBatchIndex(3, resBatch, `{"id":"11","ts":11.8}`)
+}
+
+func TestSystemWindowAckOneToMany(t *testing.T) {
+	mapping, err := bloblang.Parse(`root = this.ts`)
+	require.NoError(t, err)
+
+	currentTS := time.Unix(10, 1).UTC()
 	w, err := newSystemWindowBuffer(mapping, func() time.Time {
 		return currentTS
 	}, time.Second, 0, 0, 0, nil)
@@ -387,7 +497,7 @@ func TestSystemWindowAckManyToOne(t *testing.T) {
 	mapping, err := bloblang.Parse(`root = this.ts`)
 	require.NoError(t, err)
 
-	currentTS := time.Unix(10, 0).UTC()
+	currentTS := time.Unix(10, 1).UTC()
 	w, err := newSystemWindowBuffer(mapping, func() time.Time {
 		return currentTS
 	}, time.Second, 0, 0, 0, nil)

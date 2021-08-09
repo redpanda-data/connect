@@ -171,7 +171,7 @@ slide: 10m
 
 ### `offset`
 
-An optional duration string to offset the beginning of each window by, otherwise they are aligned to the zeroth minute and zeroth hour on the UTC clock.
+An optional duration string to offset the beginning of each window by, otherwise they are aligned to the zeroth minute and zeroth hour on the UTC clock. The offset cannot be a larger or equal measure to the window size or the slide.
 
 
 Type: `string`  
