@@ -20,6 +20,10 @@ func FieldSpec() docs.FieldSpec {
 		).AtVersion("3.45.0").HasType(docs.FieldTypeBool).HasDefault(false),
 
 		docs.FieldString(
+			"root_cas", "An optional root certificate authority to use. This is a string, representing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.", "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+		).HasDefault(""),
+
+		docs.FieldString(
 			"root_cas_file", "An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.", "./root_cas.pem",
 		).HasDefault(""),
 
