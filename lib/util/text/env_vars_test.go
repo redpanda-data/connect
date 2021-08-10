@@ -38,6 +38,7 @@ func TestEnvSwapping(t *testing.T) {
 	}
 
 	os.Setenv("BENTHOS.TEST.FOO", "testfoo")
+	os.Setenv("BENTHOS.TEST.BAR", "test\nbar")
 
 	tests := map[string]string{
 		"foo ${BENTHOS_TEST_FOO:bar} baz":                    "foo bar baz",
@@ -58,6 +59,7 @@ func TestEnvSwapping(t *testing.T) {
 		"foo ${BENTHOS_TEST_FOO:${!count:foo}-${!timestamp_unix_nano}.tar.gz} baz": "foo ${!count:foo}-${!timestamp_unix_nano}.tar.gz baz",
 		"foo ${{BENTHOS_TEST_FOO:bar}} baz":                                        "foo ${BENTHOS_TEST_FOO:bar} baz",
 		"foo ${{BENTHOS_TEST_FOO}} baz":                                            "foo ${BENTHOS_TEST_FOO} baz",
+		"foo ${BENTHOS.TEST.BAR} baz":                                              "foo test\\nbar baz",
 	}
 
 	for in, exp := range tests {

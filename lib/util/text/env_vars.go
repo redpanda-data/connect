@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"regexp"
+	"strings"
 )
 
 //------------------------------------------------------------------------------
@@ -43,6 +44,9 @@ func ReplaceEnvVariables(inBytes []byte) []byte {
 					value = string(defaultVal)
 				}
 			}
+			// Escape newlines, otherwise there's no way that they would work
+			// within a config.
+			value = strings.ReplaceAll(value, "\n", "\\n")
 		}
 		return []byte(value)
 	})
