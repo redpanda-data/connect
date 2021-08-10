@@ -91,7 +91,7 @@ Batches can be formed at both the input and output level. You can find out more
 
 ### `url`
 
-The URL of the target Redis server. Database is optional and is supplied as the URL path. `tcp` scheme is the same as `redis`
+The URL of the target Redis server. Database is optional and is supplied as the URL path. The scheme `tcp` is equivalent to `redis`.
 
 
 Type: `string`  
@@ -105,6 +105,8 @@ url: :6397
 url: localhost:6397
 
 url: redis://localhost:6379
+
+url: redis://:foopassword@redisplace:6379
 
 url: redis://localhost:6379/1
 
@@ -146,6 +148,10 @@ master: mymaster
 ### `tls`
 
 Custom TLS settings can be used to override system defaults.
+
+### Troubleshooting
+
+Some cloud hosted instances of Redis (such as Azure Cache) might need some hand holding in order to establish stable connections. Unfortunately, it is often the case that TLS issues will manifest as generic error messages such as "i/o timeout". If you're using TLS and are seeing connectivity problems consider setting `enable_renegotiation` to `true`, and ensuring that the server supports at least TLS version 1.2.
 
 
 Type: `object`  
