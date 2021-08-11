@@ -197,7 +197,10 @@ func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg types.
 		})
 
 		outputPath := g.path.String(i, msg)
-		_, err := client.Bucket(g.conf.Bucket).Object(outputPath).Attrs(ctx)
+		var err error
+		if g.conf.CollisionMode != output.GCPCloudStorageOverwriteCollisionMode {
+			_, err = client.Bucket(g.conf.Bucket).Object(outputPath).Attrs(ctx)
+		}
 
 		isMerge := false
 		var tempPath string
