@@ -33,6 +33,8 @@ output:
     credentials:
       username: ""
       password: ""
+      private_key_file: ""
+      private_key_pass: ""
     max_in_flight: 1
 ```
 
@@ -106,6 +108,22 @@ Default: `""`
 ### `credentials.password`
 
 The password for the username to connect to the SFTP server.
+
+
+Type: `string`  
+Default: `""`  
+
+### `credentials.private_key_file`
+
+The private key for the username to connect to the SFTP server.
+
+
+Type: `string`  
+Default: `""`  
+
+### `credentials.private_key_pass`
+
+Optional passphrase for private key.
 
 
 Type: `string`  
