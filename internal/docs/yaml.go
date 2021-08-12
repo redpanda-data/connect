@@ -387,6 +387,11 @@ func (f FieldSpec) SanitiseYAML(node *yaml.Node, conf SanitiseConfig) error {
 func (f FieldSpecs) SanitiseYAML(node *yaml.Node, conf SanitiseConfig) error {
 	node = unwrapDocumentNode(node)
 
+	nodeKeys := map[string]*yaml.Node{}
+	for i := 0; i < len(node.Content)-1; i += 2 {
+		nodeKeys[node.Content[i].Value] = node.Content[i+1]
+	}
+
 	// Following the order of our field specs, extract each field.
 	newNodes := []*yaml.Node{}
 	for _, field := range f {
@@ -396,21 +401,18 @@ func (f FieldSpecs) SanitiseYAML(node *yaml.Node, conf SanitiseConfig) error {
 		if conf.Filter.shouldDrop(field) {
 			continue
 		}
-		for i := 0; i < len(node.Content)-1; i += 2 {
-			if node.Content[i].Value != field.Name {
-				continue
-			}
-
-			nextNode := node.Content[i+1]
-			if _, omit := field.shouldOmitYAML(f, nextNode, node); omit {
-				break
-			}
-			if err := field.SanitiseYAML(nextNode, conf); err != nil {
-				return err
-			}
-			newNodes = append(newNodes, node.Content[i], nextNode)
-			break
+		value, exists := nodeKeys[field.Name]
+		if !exists {
+			continue
 		}
+		if err := field.SanitiseYAML(value, conf); err != nil {
+			return err
+		}
+		var keyNode yaml.Node
+		if err := keyNode.Encode(field.Name); err != nil {
+			return err
+		}
+		newNodes = append(newNodes, &keyNode, value)
 	}
 	node.Content = newNodes
 	return nil

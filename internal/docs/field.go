@@ -183,6 +183,9 @@ func (f FieldSpec) Optional() FieldSpec {
 // Advanced marks this field as being advanced, and therefore not commonly used.
 func (f FieldSpec) Advanced() FieldSpec {
 	f.IsAdvanced = true
+	for i, v := range f.Children {
+		f.Children[i] = v.Advanced()
+	}
 	return f
 }
 
@@ -253,6 +256,11 @@ func (f FieldSpec) HasOptions(options ...string) FieldSpec {
 func (f FieldSpec) WithChildren(children ...FieldSpec) FieldSpec {
 	if len(f.Type) == 0 {
 		f.Type = FieldTypeObject
+	}
+	if f.IsAdvanced {
+		for i, v := range children {
+			children[i] = v.Advanced()
+		}
 	}
 	f.Children = append(f.Children, children...)
 	return f
