@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
+	"github.com/matoous/go-nanoid/v2"
 )
 
 //------------------------------------------------------------------------------
@@ -764,6 +765,26 @@ var _ = registerSimpleFunction(
 			panic(err)
 		}
 		return u4.String(), nil
+	},
+)
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleFunction(
+	NewFunctionSpec(
+		FunctionCategoryGeneral, "nanoid",
+		"Generates a new nanoid each time it is invoked and prints a string representation.",
+		NewExampleSpec("", `root.id = nanoid()`),
+		NewExampleSpec("It is possible to specify a custom alphabet and length.",
+			`root.id = nanoid("abcde", 54)`,
+		),
+	),
+	func(_ FunctionContext) (interface{}, error) {
+		nid, err := gonanoid.New()
+		if err != nil {
+			panic(err)
+		}
+		return nid, nil
 	},
 )
 
