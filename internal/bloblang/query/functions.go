@@ -781,8 +781,8 @@ var _ = RegisterFunction(
 	),
 	true,
 	nanoidFunction,
-	ExpectIntArg(1),
 	ExpectStringArg(0),
+	ExpectIntArg(1),
 )
 
 func nanoidFunction(args ...interface{}) (Function, error) {
