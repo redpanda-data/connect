@@ -770,7 +770,7 @@ var _ = registerSimpleFunction(
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleFunction(
+var _ = RegisterFunction(
 	NewFunctionSpec(
 		FunctionCategoryGeneral, "nanoid",
 		"Generates a new nanoid each time it is invoked and prints a string representation.",
@@ -779,14 +779,19 @@ var _ = registerSimpleFunction(
 			`root.id = nanoid("abcde", 54)`,
 		),
 	),
-	func(_ FunctionContext) (interface{}, error) {
-		nid, err := gonanoid.New()
-		if err != nil {
-			panic(err)
-		}
-		return nid, nil
-	},
+	true,
+	nanoidFunction,
+	ExpectIntArg(1),
+	ExpectStringArg(0),
 )
+
+func nanoidFunction(args ...interface{}) (Function, error) {
+	nid, err := gonanoid.New(args...)
+	if err != nil {
+		panic(err)
+	}
+	return nid, nil
+}
 
 //------------------------------------------------------------------------------
 
