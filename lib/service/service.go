@@ -288,10 +288,6 @@ func cmdService(
 	// Start HTTP server.
 	httpServerClosedChan := make(chan struct{})
 	go func() {
-		logger.Infof(
-			"Listening for HTTP requests at: %v\n",
-			"http://"+conf.HTTP.Address,
-		)
 		httpErr := httpServer.ListenAndServe()
 		if httpErr != nil && httpErr != http.ErrServerClosed {
 			logger.Errorf("HTTP Server error: %v\n", httpErr)

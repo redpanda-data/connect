@@ -405,6 +405,9 @@ func (f FieldSpecs) SanitiseYAML(node *yaml.Node, conf SanitiseConfig) error {
 		if !exists {
 			continue
 		}
+		if _, omit := field.shouldOmitYAML(f, value, node); omit {
+			continue
+		}
 		if err := field.SanitiseYAML(value, conf); err != nil {
 			return err
 		}
