@@ -775,22 +775,28 @@ var _ = RegisterFunction(
 		FunctionCategoryGeneral, "nanoid",
 		"Generates a new nanoid each time it is invoked and prints a string representation.",
 		NewExampleSpec("", `root.id = nanoid()`),
-		NewExampleSpec("It is possible to specify a custom alphabet and length.",
-			`root.id = nanoid("abcde", 54)`,
-		),
+		NewExampleSpec("It is possible to specify a length.", `root.id = nanoid(54)`),
+		NewExampleSpec("It is possible to specify a length and custom alphabet.", `root.id = nanoid(54, "abcde")`),
 	),
 	true,
 	nanoidFunction,
-	ExpectStringArg(0),
-	ExpectIntArg(1),
+	ExpectBetweenNAndMArgs(0, 2),
+	ExpectIntArg(0),
+	ExpectStringArg(1),
 )
 
 func nanoidFunction(args ...interface{}) (Function, error) {
-	nid, err := gonanoid.New(args...)
-	if err != nil {
-		panic(err)
-	}
-	return nid, nil
+	return ClosureFunction("function nanoid", func(ctx FunctionContext) (interface{}, error) {
+		switch len(args) {
+		case 0:
+			return gonanoid.New()
+		case 1:
+			return gonanoid.New(args[0].(int))
+		case 2:
+			return gonanoid.Generate(args[1].(string), args[0].(int))
+		}
+		return nil, errors.New("nanoid cannot take more than two arguments")
+	}, nil), nil
 }
 
 //------------------------------------------------------------------------------

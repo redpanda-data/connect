@@ -221,13 +221,22 @@ func TestNanoidFunction(t *testing.T) {
 	assert.NotEmpty(t, res)
 }
 
-func TestNanoidFunctionArgs(t *testing.T) {
-	e, err := InitFunction("nanoid", "abcde", 54)
+func TestNanoidFunctionLength(t *testing.T) {
+	e, err := InitFunction("nanoid", 54)
 	require.Nil(t, err)
 
 	res, err := e.Exec(FunctionContext{})
 	require.NoError(t, err)
 	assert.Len(t, res, 54)
+}
+
+func TestNanoidFunctionAlphabet(t *testing.T) {
+	e, err := InitFunction("nanoid", 1, "a")
+	require.Nil(t, err)
+
+	res, err := e.Exec(FunctionContext{})
+	require.NoError(t, err)
+	assert.Equal(t, "a", res)
 }
 
 func TestEnvFunction(t *testing.T) {
