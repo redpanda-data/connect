@@ -781,6 +781,8 @@ var _ = RegisterFunction(
 	true,
 	nanoidFunction,
 	ExpectBetweenNAndMArgs(0, 2),
+	ExpectIntArg(0),
+	ExpectStringArg(1),
 )
 
 func nanoidFunction(args ...interface{}) (Function, error) {
@@ -789,9 +791,9 @@ func nanoidFunction(args ...interface{}) (Function, error) {
 		case 0:
 			return gonanoid.New()
 		case 1:
-			return gonanoid.New(args[0].(int))
+			return gonanoid.New(int(args[0].(int64)))
 		case 2:
-			return gonanoid.Generate(args[1].(string), args[0].(int))
+			return gonanoid.Generate(args[1].(string), int(args[0].(int64)))
 		}
 		return nil, errors.New("nanoid cannot take more than two arguments")
 	}, nil), nil

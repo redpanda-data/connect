@@ -222,7 +222,7 @@ func TestNanoidFunction(t *testing.T) {
 }
 
 func TestNanoidFunctionLength(t *testing.T) {
-	e, err := InitFunction("nanoid", 54)
+	e, err := InitFunction("nanoid", int64(54))
 	require.Nil(t, err)
 
 	res, err := e.Exec(FunctionContext{})
@@ -231,7 +231,7 @@ func TestNanoidFunctionLength(t *testing.T) {
 }
 
 func TestNanoidFunctionAlphabet(t *testing.T) {
-	e, err := InitFunction("nanoid", 1, "a")
+	e, err := InitFunction("nanoid", int64(1), "a")
 	require.Nil(t, err)
 
 	res, err := e.Exec(FunctionContext{})
