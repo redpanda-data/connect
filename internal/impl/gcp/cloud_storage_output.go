@@ -3,6 +3,7 @@ package gcp
 import (
 	"context"
 	"fmt"
+	"path"
 	"sync"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/gofrs/uuid"
 )
 
 func init() {
@@ -108,6 +110,9 @@ output:
 				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
 			).IsInterpolated(),
 			docs.FieldCommon("content_type", "The content type to set for each object.").IsInterpolated(),
+			docs.FieldCommon("collision_mode", `Write mode for the output. The default value is  `+"`overwrite`"+`. The pipeline will throw an error if the mode is`+"`error-if-exists`"+` and the output file already exists. The pipeline will skip writing the message if the mode is `+"`ignore`"+` and output file already exists.`).HasOptions(
+				"overwrite", "append", "error-if-exists", "ignore",
+			),
 			docs.FieldAdvanced("content_encoding", "An optional content encoding to set for each object.").IsInterpolated(),
 			docs.FieldAdvanced("chunk_size", "An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
@@ -191,17 +196,59 @@ func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg types.
 			return nil
 		})
 
-		w := client.Bucket(g.conf.Bucket).Object(g.path.String(i, msg)).NewWriter(ctx)
+		outputPath := g.path.String(i, msg)
+		var err error
+		if g.conf.CollisionMode != output.GCPCloudStorageOverwriteCollisionMode {
+			_, err = client.Bucket(g.conf.Bucket).Object(outputPath).Attrs(ctx)
+		}
+
+		isMerge := false
+		var tempPath string
+		if err == storage.ErrObjectNotExist || g.conf.CollisionMode == output.GCPCloudStorageOverwriteCollisionMode {
+			tempPath = outputPath
+		} else {
+			isMerge = true
+
+			if g.conf.CollisionMode == output.GCPCloudStorageErrorIfExistsCollisionMode {
+				return fmt.Errorf("file at path already exists: %s", outputPath)
+			} else if g.conf.CollisionMode == output.GCPCloudStorageIgnoreCollisionMode {
+				return nil
+			}
+
+			tempUUID, err := uuid.NewV4()
+			if err != nil {
+				return err
+			}
+
+			dir := path.Dir(outputPath)
+			tempFileName := fmt.Sprintf("%s.tmp", tempUUID.String())
+			tempPath = path.Join(dir, tempFileName)
+		}
+
+		w := client.Bucket(g.conf.Bucket).Object(tempPath).NewWriter(ctx)
+
 		w.ChunkSize = g.conf.ChunkSize
 		w.ContentType = g.contentType.String(i, msg)
 		w.ContentEncoding = g.contentEncoding.String(i, msg)
 		w.Metadata = metadata
-		_, err := w.Write(p.Get())
+		_, err = w.Write(p.Get())
 		if err != nil {
 			return err
 		}
 
-		return w.Close()
+		err = w.Close()
+		if err != nil {
+			return err
+		}
+
+		if isMerge {
+			err = g.appendToFile(ctx, tempPath, outputPath)
+			if err != nil {
+				return err
+			}
+		}
+
+		return err
 	})
 }
 
@@ -220,5 +267,25 @@ func (g *gcpCloudStorageOutput) CloseAsync() {
 // WaitForClose will block until either the reader is closed or a specified
 // timeout occurs.
 func (g *gcpCloudStorageOutput) WaitForClose(time.Duration) error {
+	return nil
+}
+
+func (g *gcpCloudStorageOutput) appendToFile(ctx context.Context, source, dest string) error {
+	client := g.client
+	bucket := client.Bucket(g.conf.Bucket)
+	src := bucket.Object(source)
+	dst := bucket.Object(dest)
+
+	_, err := dst.ComposerFrom(dst, src).Run(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Remove the temporary file used for the merge
+	err = src.Delete(ctx)
+	if err != nil {
+		g.log.Errorf("error deleting temp file in gcp: %w", err)
+	}
+
 	return nil
 }
