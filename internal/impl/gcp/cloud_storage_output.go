@@ -240,12 +240,12 @@ func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg types.
 			return err
 		}
 
-		if err = w.Close(); err != nil {
+		if err := w.Close(); err != nil {
 			return err
 		}
 
 		if isMerge {
-			if err = g.appendToFile(ctx, tempPath, outputPath); err != nil {
+			if err := g.appendToFile(ctx, tempPath, outputPath); err != nil {
 				return err
 			}
 		}
