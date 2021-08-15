@@ -125,7 +125,7 @@ func TestPartCopyDirtyJSON(t *testing.T) {
 	if exp, act := dirtyObj, p2JSON; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong marshalled json: %v != %v", act, exp)
 	}
-	if exp, act := string(bytesExp), string(p2.Get()); exp != act {
+	if exp, act := bytesExp, string(p2.Get()); exp != act {
 		t.Errorf("Wrong marshalled json: %v != %v", act, exp)
 	}
 
@@ -136,7 +136,7 @@ func TestPartCopyDirtyJSON(t *testing.T) {
 	if exp, act := genExp, p3JSON; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong marshalled json: %v != %v", act, exp)
 	}
-	if exp, act := string(bytesExp), string(p3.Get()); exp != act {
+	if exp, act := bytesExp, string(p3.Get()); exp != act {
 		t.Errorf("Wrong marshalled json: %v != %v", act, exp)
 	}
 }

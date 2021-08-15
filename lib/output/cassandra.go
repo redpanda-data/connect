@@ -309,7 +309,7 @@ func (s stringValue) MarshalCQL(info gocql.TypeInfo) ([]byte, error) {
 			if t.IsZero() {
 				return []byte{}, nil
 			}
-			x := int64(t.UTC().Unix()*1e3) + int64(t.UTC().Nanosecond()/1e6)
+			x := t.UTC().Unix()*1e3 + int64(t.UTC().Nanosecond()/1e6)
 			return formatCassandraInt64(x), nil
 		}
 		x, err := strconv.ParseInt(string(s), 10, 64)
@@ -419,7 +419,7 @@ func getExponentialTime(min, max time.Duration, attempts int) time.Duration {
 	// Add some jitter
 	napDuration += rand.Float64()*minFloat - (minFloat / 2)
 	if napDuration > float64(max) {
-		return time.Duration(max)
+		return max
 	}
 	return time.Duration(napDuration)
 }

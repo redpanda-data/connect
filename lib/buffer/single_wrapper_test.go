@@ -36,7 +36,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	for ; i < total; i++ {
 		msgBytes := make([][]byte, 1)
 		msgBytes[0] = make([]byte, int(incr))
-		msgBytes[0][0] = byte(i)
+		msgBytes[0][0] = i
 
 		select {
 		// Send to buffer
@@ -61,7 +61,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 		var outTr types.Transaction
 		select {
 		case outTr = <-b.TransactionChan():
-			if actual := uint8(outTr.Payload.Get(0).Get()[0]); actual != i {
+			if actual := outTr.Payload.Get(0).Get()[0]; actual != i {
 				t.Errorf("Wrong order receipt of unbuffered message receive: %v != %v", actual, i)
 			}
 		case <-time.After(time.Second):
@@ -81,7 +81,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	for i = 0; i < total; i++ {
 		msgBytes := make([][]byte, 1)
 		msgBytes[0] = make([]byte, int(incr))
-		msgBytes[0][0] = byte(i)
+		msgBytes[0][0] = i
 
 		select {
 		case tChan <- types.NewTransaction(message.New(msgBytes), resChan):
@@ -128,7 +128,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	// Extract last message
 	select {
 	case outTr = <-b.TransactionChan():
-		if actual := uint8(outTr.Payload.Get(0).Get()[0]); actual != 0 {
+		if actual := outTr.Payload.Get(0).Get()[0]; actual != 0 {
 			t.Errorf("Wrong order receipt of buffered message receive: %v != %v", actual, 0)
 		}
 		outTr.ResponseChan <- response.NewAck()
@@ -151,7 +151,7 @@ func TestBasicMemoryBuffer(t *testing.T) {
 	for i = 1; i < total; i++ {
 		select {
 		case outTr = <-b.TransactionChan():
-			if actual := uint8(outTr.Payload.Get(0).Get()[0]); actual != i {
+			if actual := outTr.Payload.Get(0).Get()[0]; actual != i {
 				t.Errorf("Wrong order receipt of buffered message: %v != %v", actual, i)
 			}
 		case <-time.After(time.Second):
@@ -209,7 +209,7 @@ func TestBufferClosing(t *testing.T) {
 	for i = 0; i < total; i++ {
 		msgBytes := make([][]byte, 1)
 		msgBytes[0] = make([]byte, int(incr))
-		msgBytes[0][0] = byte(i)
+		msgBytes[0][0] = i
 
 		select {
 		case tChan <- types.NewTransaction(message.New(msgBytes), resChan):
@@ -235,7 +235,7 @@ func TestBufferClosing(t *testing.T) {
 	for i = 0; i < total; i++ {
 		select {
 		case val := <-b.TransactionChan():
-			if actual := uint8(val.Payload.Get(0).Get()[0]); actual != i {
+			if actual := val.Payload.Get(0).Get()[0]; actual != i {
 				t.Errorf("Wrong order receipt of buffered message receive: %v != %v", actual, i)
 			}
 			val.ResponseChan <- response.NewAck()

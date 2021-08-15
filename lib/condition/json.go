@@ -86,7 +86,7 @@ func toFloat64(v interface{}) (float64, bool) {
 	case int64:
 		argF = float64(t)
 	case float64:
-		argF = float64(t)
+		argF = t
 	case json.Number:
 		var err error
 		if argF, err = t.Float64(); err != nil {

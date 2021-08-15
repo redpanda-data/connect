@@ -29,16 +29,14 @@ linters-settings:
 linters:
   disable-all: true
   enable:
-    # Default linters reported by golangci-lint help linters` in v1.39.0
+    # Default linters reported by golangci-lint help linters` in v1.41.1
     # - deadcode
     - errcheck
     - gosimple
     - govet
-    - gosimple
     - ineffassign
     - staticcheck
     - structcheck
-    - stylecheck
     - typecheck
     # - unused
     - varcheck
@@ -47,8 +45,9 @@ linters:
     - goimports
     - gocritic
     - revive
+    - stylecheck
+    - unconvert
     # - bodyclose
     # - gosec
     # - misspell
     # - prealloc
-    # - unconvert

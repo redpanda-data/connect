@@ -160,7 +160,7 @@ func extractID(b []byte) (id int, remaining []byte, err error) {
 		return
 	}
 	if b[0] != 0 {
-		err = fmt.Errorf("serialization format version number %v not supported", uint8(b[0]))
+		err = fmt.Errorf("serialization format version number %v not supported", b[0])
 		return
 	}
 	id = int(binary.BigEndian.Uint32(b[1:5]))
