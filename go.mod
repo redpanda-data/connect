@@ -53,6 +53,7 @@ require (
 	github.com/klauspost/compress v1.11.12 // indirect
 	github.com/lib/pq v1.8.0
 	github.com/linkedin/goavro/v2 v2.9.8
+	github.com/matoous/go-nanoid/v2 v2.0.0
 	github.com/microcosm-cc/bluemonday v1.0.4
 	github.com/mitchellh/mapstructure v1.4.1
 	github.com/moby/term v0.0.0-20201101162038-25d840ce174a // indirect

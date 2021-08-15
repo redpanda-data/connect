@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
+	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
 //------------------------------------------------------------------------------
@@ -766,6 +767,37 @@ var _ = registerSimpleFunction(
 		return u4.String(), nil
 	},
 )
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterFunction(
+	NewFunctionSpec(
+		FunctionCategoryGeneral, "nanoid",
+		"Generates a new nanoid each time it is invoked and prints a string representation.",
+		NewExampleSpec("", `root.id = nanoid()`),
+		NewExampleSpec("It is possible to specify a length.", `root.id = nanoid(54)`),
+		NewExampleSpec("It is possible to specify a length and custom alphabet.", `root.id = nanoid(54, "abcde")`),
+	),
+	true,
+	nanoidFunction,
+	ExpectBetweenNAndMArgs(0, 2),
+	ExpectIntArg(0),
+	ExpectStringArg(1),
+)
+
+func nanoidFunction(args ...interface{}) (Function, error) {
+	return ClosureFunction("function nanoid", func(ctx FunctionContext) (interface{}, error) {
+		switch len(args) {
+		case 0:
+			return gonanoid.New()
+		case 1:
+			return gonanoid.New(int(args[0].(int64)))
+		case 2:
+			return gonanoid.Generate(args[1].(string), int(args[0].(int64)))
+		}
+		return nil, errors.New("nanoid cannot take more than two arguments")
+	}, nil), nil
+}
 
 //------------------------------------------------------------------------------
 
