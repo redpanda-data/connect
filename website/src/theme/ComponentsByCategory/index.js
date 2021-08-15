@@ -151,8 +151,8 @@ function ComponentsByCategory(props) {
       {categoryList.map((cat) => (
         <TabItem key={cat.toLowerCase()} value={cat.toLowerCase()}>
           <p>{categories[cat.toLowerCase()].summary}</p>
-          {categories[cat.toLowerCase()].items.map((data) => (
-            <ComponentCard type={type} component={data} />
+          {categories[cat.toLowerCase()].items.map((data, idx) => (
+            <ComponentCard key={idx} type={type} component={data} />
           ))}
         </TabItem>
       ))}

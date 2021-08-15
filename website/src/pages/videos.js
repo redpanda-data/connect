@@ -32,7 +32,7 @@ function Videos() {
             <ReactPlayer
               className={classnames('col col--8 col--offset-2')}
               url='https://www.youtube-nocookie.com/embed/videoseries?list=PL9hWaP-BQh2rvNuM29bTLlL0hYk6cqyT5'
-              controls='true'
+              controls={true}
             />
           </div>
           <div className="row margin-bottom--lg">
@@ -43,7 +43,7 @@ function Videos() {
             <ReactPlayer
               className={classnames('col col--8 col--offset-2')}
               url='https://www.youtube-nocookie.com/embed/videoseries?list=PL9hWaP-BQh2ovI1iwEKxzNFF8dVAZgHCA'
-              controls='true'
+              controls={true}
             />
           </div>
         </div>

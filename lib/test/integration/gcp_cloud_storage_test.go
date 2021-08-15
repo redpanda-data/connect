@@ -78,6 +78,7 @@ var _ = registerIntegrationTest("gcp_cloud_storage", func(t *testing.T) {
 
 	dummyBucketPrefix := "jotunheim"
 	dummyPathPrefix := "kvenn"
+
 	t.Run("gcs_overwrite", func(t *testing.T) {
 		template := `
 output:

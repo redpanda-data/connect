@@ -109,13 +109,13 @@ Generates a new nanoid each time it is invoked and prints a string representatio
 root.id = nanoid()
 ```
 
-It is possible to specify a length.
+It is possible to specify an optional length parameter.
 
 ```coffee
 root.id = nanoid(54)
 ```
 
-It is possible to specify a length and custom alphabet.
+It is also possible to specify an optional custom alphabet after the length parameter.
 
 ```coffee
 root.id = nanoid(54, "abcde")

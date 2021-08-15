@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 - New `system_window` buffer for processing message windows (sliding or tumbling) following the system clock.
 - Field `root_cas` added to all TLS configuration blocks.
 - The `sftp` input and output now support key based authentication.
+- New Bloblang function `nanoid`.
+- The `gcp_cloud_storage` output now supports custom collision behaviour with the field `collision_mode`.
 
 ## 3.52.0 - 2021-08-02
 

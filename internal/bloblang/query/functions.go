@@ -775,8 +775,8 @@ var _ = RegisterFunction(
 		FunctionCategoryGeneral, "nanoid",
 		"Generates a new nanoid each time it is invoked and prints a string representation.",
 		NewExampleSpec("", `root.id = nanoid()`),
-		NewExampleSpec("It is possible to specify a length.", `root.id = nanoid(54)`),
-		NewExampleSpec("It is possible to specify a length and custom alphabet.", `root.id = nanoid(54, "abcde")`),
+		NewExampleSpec("It is possible to specify an optional length parameter.", `root.id = nanoid(54)`),
+		NewExampleSpec("It is also possible to specify an optional custom alphabet after the length parameter.", `root.id = nanoid(54, "abcde")`),
 	),
 	true,
 	nanoidFunction,
@@ -786,16 +786,23 @@ var _ = RegisterFunction(
 )
 
 func nanoidFunction(args ...interface{}) (Function, error) {
+	var lenArg int
+	if len(args) > 0 {
+		lenArg = int(args[0].(int64))
+	}
+	var alphabetArg string
+	if len(args) > 1 {
+		alphabetArg = args[1].(string)
+	}
 	return ClosureFunction("function nanoid", func(ctx FunctionContext) (interface{}, error) {
 		switch len(args) {
-		case 0:
-			return gonanoid.New()
 		case 1:
-			return gonanoid.New(int(args[0].(int64)))
+			return gonanoid.New(int(lenArg))
 		case 2:
-			return gonanoid.Generate(args[1].(string), int(args[0].(int64)))
+			return gonanoid.Generate(alphabetArg, int(lenArg))
+		default:
+			return gonanoid.New()
 		}
-		return nil, errors.New("nanoid cannot take more than two arguments")
 	}, nil), nil
 }
 

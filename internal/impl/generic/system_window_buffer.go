@@ -16,6 +16,7 @@ import (
 func tumblingWindowBufferConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		// Stable(). TODO
+		Version("3.53.0").
 		Categories("Windowing").
 		Summary("Chops a stream of messages into tumbling or sliding windows of fixed temporal size, following the system clock.").
 		Description(`
@@ -110,7 +111,7 @@ pipeline:
           {
             "traffic_light": this.traffic_light,
             "created_at": meta("window_end_timestamp"),
-            "total_cars": batch_size(),
+            "total_cars": json("registration_plate").from_all().unique().length(),
             "passengers": json("passengers").from_all().sum(),
           }
         } else { deleted() }

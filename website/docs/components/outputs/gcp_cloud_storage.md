@@ -179,12 +179,20 @@ Default: `"application/octet-stream"`
 
 ### `collision_mode`
 
-Write mode for the output. The default value is  `overwrite`. The pipeline will throw an error if the mode is`error-if-exists` and the output file already exists. The pipeline will skip writing the message if the mode is `ignore` and output file already exists.
+Determines how file path collisions should be dealt with.
 
 
 Type: `string`  
 Default: `"overwrite"`  
-Options: `overwrite`, `append`, `error-if-exists`, `ignore`.
+Requires version 3.53.0 or newer  
+
+| Option | Summary |
+|---|---|
+| `overwrite` | Replace the existing file with the new one. |
+| `append` | Append the message bytes to the original file. |
+| `error-if-exists` | Return an error, this is the equivalent of a nack. |
+| `ignore` | Do not modify the original file, the new data will be dropped. |
+
 
 ### `content_encoding`
 

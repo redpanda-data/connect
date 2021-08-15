@@ -20,6 +20,8 @@ This component is experimental and therefore subject to change or removal outsid
 :::
 Chops a stream of messages into tumbling or sliding windows of fixed temporal size, following the system clock.
 
+Introduced in version 3.53.0.
+
 ```yaml
 # Config fields, showing default values
 buffer:
@@ -109,7 +111,7 @@ pipeline:
           {
             "traffic_light": this.traffic_light,
             "created_at": meta("window_end_timestamp"),
-            "total_cars": batch_size(),
+            "total_cars": json("registration_plate").from_all().unique().length(),
             "passengers": json("passengers").from_all().sum(),
           }
         } else { deleted() }

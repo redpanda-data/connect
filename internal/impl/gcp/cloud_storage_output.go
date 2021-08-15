@@ -110,9 +110,14 @@ output:
 				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
 			).IsInterpolated(),
 			docs.FieldCommon("content_type", "The content type to set for each object.").IsInterpolated(),
-			docs.FieldCommon("collision_mode", `Write mode for the output. The default value is  `+"`overwrite`"+`. The pipeline will throw an error if the mode is`+"`error-if-exists`"+` and the output file already exists. The pipeline will skip writing the message if the mode is `+"`ignore`"+` and output file already exists.`).HasOptions(
-				"overwrite", "append", "error-if-exists", "ignore",
-			),
+			docs.FieldCommon("collision_mode", `Determines how file path collisions should be dealt with.`).
+				HasDefault(`overwrite`).
+				HasAnnotatedOptions(
+					"overwrite", "Replace the existing file with the new one.",
+					"append", "Append the message bytes to the original file.",
+					"error-if-exists", "Return an error, this is the equivalent of a nack.",
+					"ignore", "Do not modify the original file, the new data will be dropped.",
+				).AtVersion("3.53.0"),
 			docs.FieldAdvanced("content_encoding", "An optional content encoding to set for each object.").IsInterpolated(),
 			docs.FieldAdvanced("chunk_size", "An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
@@ -231,19 +236,16 @@ func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg types.
 		w.ContentType = g.contentType.String(i, msg)
 		w.ContentEncoding = g.contentEncoding.String(i, msg)
 		w.Metadata = metadata
-		_, err = w.Write(p.Get())
-		if err != nil {
+		if _, err = w.Write(p.Get()); err != nil {
 			return err
 		}
 
-		err = w.Close()
-		if err != nil {
+		if err = w.Close(); err != nil {
 			return err
 		}
 
 		if isMerge {
-			err = g.appendToFile(ctx, tempPath, outputPath)
-			if err != nil {
+			if err = g.appendToFile(ctx, tempPath, outputPath); err != nil {
 				return err
 			}
 		}
@@ -276,15 +278,13 @@ func (g *gcpCloudStorageOutput) appendToFile(ctx context.Context, source, dest s
 	src := bucket.Object(source)
 	dst := bucket.Object(dest)
 
-	_, err := dst.ComposerFrom(dst, src).Run(ctx)
-	if err != nil {
+	if _, err := dst.ComposerFrom(dst, src).Run(ctx); err != nil {
 		return err
 	}
 
 	// Remove the temporary file used for the merge
-	err = src.Delete(ctx)
-	if err != nil {
-		g.log.Errorf("error deleting temp file in gcp: %w", err)
+	if err := src.Delete(ctx); err != nil {
+		g.log.Errorf("Failed to delete temporary file used for merging: %v", err)
 	}
 
 	return nil
