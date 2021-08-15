@@ -797,9 +797,9 @@ func nanoidFunction(args ...interface{}) (Function, error) {
 	return ClosureFunction("function nanoid", func(ctx FunctionContext) (interface{}, error) {
 		switch len(args) {
 		case 1:
-			return gonanoid.New(int(lenArg))
+			return gonanoid.New(lenArg)
 		case 2:
-			return gonanoid.Generate(alphabetArg, int(lenArg))
+			return gonanoid.Generate(alphabetArg, lenArg)
 		default:
 			return gonanoid.New()
 		}

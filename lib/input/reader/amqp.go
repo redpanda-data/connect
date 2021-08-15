@@ -212,7 +212,7 @@ func setMetadata(p types.Part, k string, v interface{}) {
 
 	switch v := v.(type) {
 	case bool:
-		metaValue = strconv.FormatBool(bool(v))
+		metaValue = strconv.FormatBool(v)
 	case float32:
 		metaValue = strconv.FormatFloat(float64(v), 'f', -1, 32)
 	case float64:

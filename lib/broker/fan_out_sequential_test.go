@@ -139,7 +139,7 @@ func TestFanOutSequentialAtLeastOnce(t *testing.T) {
 		return
 	}
 	select {
-	case ts1 = <-mockOne.TChan:
+	case <-mockOne.TChan:
 		t.Error("Received duplicate message to mockOne")
 	case ts2 = <-mockTwo.TChan:
 	case <-resChan:
@@ -210,7 +210,7 @@ func TestFanOutSequentialBlock(t *testing.T) {
 	}
 	select {
 	case ts1 = <-mockOne.TChan:
-	case ts2 = <-mockTwo.TChan:
+	case <-mockTwo.TChan:
 		t.Error("Received premature message to mockTwo")
 	case <-resChan:
 		t.Error("Received premature response from broker")

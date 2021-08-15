@@ -58,7 +58,7 @@ func GetDeprecatedPlugin(name string) (ConstructorFunc, bool) {
 	if !ok {
 		return nil, false
 	}
-	return ConstructorFunc(spec.constructor), true
+	return spec.constructor, true
 }
 
 // RegisterPlugin registers a plugin by a unique name so that it can be

@@ -163,7 +163,7 @@ func (m *MQTT) Write(msg types.Message) error {
 	}
 
 	return IterateBatchedSend(msg, func(i int, p types.Part) error {
-		mtok := client.Publish(m.topic.String(i, msg), byte(m.conf.QoS), false, p.Get())
+		mtok := client.Publish(m.topic.String(i, msg), m.conf.QoS, false, p.Get())
 		mtok.Wait()
 		sendErr := mtok.Error()
 		if sendErr == mqtt.ErrNotConnected {

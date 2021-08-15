@@ -29,6 +29,6 @@ func internalToPublicParserError(input []rune, p *parser.Error) *ParseError {
 		input: input,
 		iErr:  p,
 	}
-	pErr.Line, pErr.Column = parser.LineAndColOf([]rune(input), p.Input)
+	pErr.Line, pErr.Column = parser.LineAndColOf(input, p.Input)
 	return pErr
 }

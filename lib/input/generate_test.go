@@ -68,7 +68,7 @@ func TestBloblangCron(t *testing.T) {
 	assert.Equal(t, "hello world", string(m.Get(0).Get()))
 
 	// Second takes another 1s and therefore times out.
-	m, _, err = b.ReadWithContext(ctx)
+	_, _, err = b.ReadWithContext(ctx)
 	assert.EqualError(t, err, "action timed out")
 
 	b.CloseAsync()

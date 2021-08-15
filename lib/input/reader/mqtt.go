@@ -137,7 +137,7 @@ func (m *MQTT) ConnectWithContext(ctx context.Context) error {
 		SetOnConnectHandler(func(c mqtt.Client) {
 			topics := make(map[string]byte)
 			for _, topic := range m.conf.Topics {
-				topics[topic] = byte(m.conf.QoS)
+				topics[topic] = m.conf.QoS
 			}
 
 			tok := c.SubscribeMultiple(topics, func(c mqtt.Client, msg mqtt.Message) {
@@ -247,13 +247,13 @@ func (m *MQTT) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, 
 			return nil, nil, types.ErrNotConnected
 		}
 
-		message := message.New([][]byte{[]byte(msg.Payload())})
+		message := message.New([][]byte{msg.Payload()})
 
 		meta := message.Get(0).Metadata()
-		meta.Set("mqtt_duplicate", strconv.FormatBool(bool(msg.Duplicate())))
+		meta.Set("mqtt_duplicate", strconv.FormatBool(msg.Duplicate()))
 		meta.Set("mqtt_qos", strconv.Itoa(int(msg.Qos())))
-		meta.Set("mqtt_retained", strconv.FormatBool(bool(msg.Retained())))
-		meta.Set("mqtt_topic", string(msg.Topic()))
+		meta.Set("mqtt_retained", strconv.FormatBool(msg.Retained()))
+		meta.Set("mqtt_topic", msg.Topic())
 		meta.Set("mqtt_message_id", strconv.Itoa(int(msg.MessageID())))
 
 		return message, func(ctx context.Context, res types.Response) error {
