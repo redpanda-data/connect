@@ -273,6 +273,11 @@ func (c *ConfigView) Description() string {
 	return c.component.Description
 }
 
+// IsDeprecated returns true if the component is marked as deprecated.
+func (c *ConfigView) IsDeprecated() bool {
+	return c.component.Status == docs.StatusDeprecated
+}
+
 // FormatJSON returns a byte slice of the component configuration formatted as a
 // JSON object. The schema of this method is undocumented and is not intended
 // for general use.
