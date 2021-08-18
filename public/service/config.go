@@ -220,6 +220,7 @@ func (c *ConfigSpec) Description(description string) *ConfigSpec {
 // will already be inferred. However, setting a field explicitly is sometimes
 // useful for enriching the field documentation with more information.
 func (c *ConfigSpec) Field(f *ConfigField) *ConfigSpec {
+	c.component.Config.Type = docs.FieldTypeObject
 	for i, s := range c.component.Config.Children {
 		if s.Name == f.field.Name {
 			c.component.Config.Children[i] = f.field
