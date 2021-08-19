@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -40,6 +41,7 @@ type AMQPConfig struct {
 	ContentType     string                    `json:"content_type" yaml:"content_type"`
 	ContentEncoding string                    `json:"content_encoding" yaml:"content_encoding"`
 	Metadata        output.Metadata           `json:"metadata" yaml:"metadata"`
+	Priority        string                    `json:"priority" yaml:"priority"`
 	Persistent      bool                      `json:"persistent" yaml:"persistent"`
 	Mandatory       bool                      `json:"mandatory" yaml:"mandatory"`
 	Immediate       bool                      `json:"immediate" yaml:"immediate"`
@@ -62,6 +64,7 @@ func NewAMQPConfig() AMQPConfig {
 		ContentType:     "application/octet-stream",
 		ContentEncoding: "",
 		Metadata:        output.NewMetadata(),
+		Priority:        "",
 		Persistent:      false,
 		Mandatory:       false,
 		Immediate:       false,
@@ -77,6 +80,7 @@ type AMQP struct {
 	msgType         *field.Expression
 	contentType     *field.Expression
 	contentEncoding *field.Expression
+	priority        *field.Expression
 	metaFilter      *output.MetadataFilter
 
 	log   log.Modular
@@ -118,6 +122,9 @@ func NewAMQP(conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error
 	}
 	if a.contentEncoding, err = bloblang.NewField(conf.ContentEncoding); err != nil {
 		return nil, fmt.Errorf("failed to parse content_encoding property expression: %v", err)
+	}
+	if a.priority, err = bloblang.NewField(conf.Priority); err != nil {
+		return nil, fmt.Errorf("failed to parse priority property expression: %w", err)
 	}
 	if conf.Persistent {
 		a.deliveryMode = amqp.Persistent
@@ -239,6 +246,18 @@ func (a *AMQP) Write(msg types.Message) error {
 		contentType := a.contentType.String(i, msg)
 		contentEncoding := a.contentEncoding.String(i, msg)
 
+		var priority uint8
+		if priorityString := a.priority.String(i, msg); priorityString != "" {
+			priorityInt, err := strconv.Atoi(priorityString)
+			if err != nil {
+				return fmt.Errorf("failed to parse valid integer from priority expression: %w", err)
+			}
+			if priorityInt > 9 || priorityInt < 0 {
+				return fmt.Errorf("invalid priority parsed from expression, must be <= 9 and >= 0, got %v", priorityInt)
+			}
+			priority = uint8(priorityInt)
+		}
+
 		headers := amqp.Table{}
 		a.metaFilter.Iter(p.Metadata(), func(k, v string) error {
 			headers[strings.ReplaceAll(k, "_", "-")] = v
@@ -256,7 +275,7 @@ func (a *AMQP) Write(msg types.Message) error {
 				ContentEncoding: contentEncoding,
 				Body:            p.Get(),
 				DeliveryMode:    a.deliveryMode, // 1=non-persistent, 2=persistent
-				Priority:        0,              // 0-9
+				Priority:        priority,       // 0-9
 				Type:            msgType,
 				// a bunch of application/implementation-specific fields
 			},

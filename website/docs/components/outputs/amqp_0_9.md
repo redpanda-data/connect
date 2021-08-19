@@ -61,6 +61,7 @@ output:
     content_encoding: ""
     metadata:
       exclude_prefixes: []
+    priority: ""
     max_in_flight: 1
     persistent: false
     mandatory: false
@@ -203,6 +204,25 @@ Provide a list of explicit metadata key prefixes to be excluded when adding meta
 
 Type: `array`  
 Default: `[]`  
+
+### `priority`
+
+Set the priority of each message with a dynamic interpolated expression.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+priority: "0"
+
+priority: ${! meta("amqp_priority") }
+
+priority: ${! json("doc.priority") }
+```
 
 ### `max_in_flight`
 

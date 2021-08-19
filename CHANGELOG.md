@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - The `sftp` input and output now support key based authentication.
 - New Bloblang function `nanoid`.
 - The `gcp_cloud_storage` output now supports custom collision behaviour with the field `collision_mode`.
+- Field `priority` added to the `amqp_0_9` output.
 
 ### Fixed
 

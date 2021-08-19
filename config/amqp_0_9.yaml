@@ -46,6 +46,7 @@ output:
     content_encoding: ""
     metadata:
       exclude_prefixes: []
+    priority: ""
     max_in_flight: 1
     persistent: false
     mandatory: false
