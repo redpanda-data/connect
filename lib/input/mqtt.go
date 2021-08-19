@@ -6,6 +6,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/mqtt_util"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
@@ -37,8 +38,10 @@ You can access these metadata fields using
 			docs.FieldCommon("client_id", "An identifier for the client connection."),
 			docs.FieldAdvanced("qos", "The level of delivery guarantee to enforce.").HasOptions("0", "1", "2"),
 			docs.FieldAdvanced("clean_session", "Set whether the connection is non-persistent."),
+			mqtt_util.WillFieldSpec(),
 			docs.FieldAdvanced("user", "A username to assume for the connection."),
 			docs.FieldAdvanced("password", "A password to provide for the connection."),
+			docs.FieldAdvanced("keepalive", "Max seconds of inactivity before a keepalive message is sent."),
 			tls.FieldSpec().AtVersion("3.45.0"),
 			docs.FieldDeprecated("stale_connection_timeout"),
 		},

@@ -16,8 +16,14 @@ input:
     client_id: benthos_input
     qos: 1
     clean_session: true
+    will:
+      qos: 0
+      retained: false
+      topic: ""
+      payload: ""
     user: ""
     password: ""
+    keepalive: 30
     tls:
       enabled: false
       skip_cert_verify: false
