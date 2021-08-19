@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - The `gcp_cloud_storage` output now supports custom collision behaviour with the field `collision_mode`.
 - Field `priority` added to the `amqp_0_9` output.
 - Operator `keys` added to the `redis` processor.
+- The `http_client` input when configured in stream mode now allows message body interpolation functions within the URL and header parameters.
 
 ### Fixed
 

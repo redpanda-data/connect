@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -105,8 +106,21 @@ func testRedisKeys(t *testing.T, client *redis.Client, url string) {
 	require.Len(t, resMsgs, 1)
 	require.Equal(t, 1, resMsgs[0].Len())
 
-	exp := `["fooa","foob","fooc"]`
-	assert.Equal(t, exp, string(resMsgs[0].Get(0).Get()))
+	exp := []string{"fooa", "foob", "fooc"}
+
+	actI, err := resMsgs[0].Get(0).JSON()
+	require.NoError(t, err)
+
+	actS, ok := actI.([]interface{})
+	require.True(t, ok)
+
+	actStrs := make([]string, 0, len(actS))
+	for _, v := range actS {
+		actStrs = append(actStrs, v.(string))
+	}
+	sort.Strings(actStrs)
+
+	assert.Equal(t, exp, actStrs)
 }
 
 func testRedisSAdd(t *testing.T, client *redis.Client, url string) {
