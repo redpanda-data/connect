@@ -67,6 +67,10 @@ redis:
 
 ## Operators
 
+### `keys`
+
+Returns an array of strings containing all the keys that match the pattern specified by the `key` field.
+
 ### `scard`
 
 Returns the cardinality of a set, or `0` if the key does not exist.
@@ -335,7 +339,7 @@ The [operator](#operators) to apply.
 
 Type: `string`  
 Default: `"scard"`  
-Options: `scard`, `sadd`, `incrby`.
+Options: `scard`, `sadd`, `incrby`, `keys`.
 
 ### `key`
 
