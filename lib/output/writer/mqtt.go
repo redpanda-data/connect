@@ -22,6 +22,7 @@ import (
 type MQTTConfig struct {
 	URLs        []string   `json:"urls" yaml:"urls"`
 	QoS         uint8      `json:"qos" yaml:"qos"`
+	Retained    bool       `json:"retained" yaml:"retained"`
 	Topic       string     `json:"topic" yaml:"topic"`
 	ClientID    string     `json:"client_id" yaml:"client_id"`
 	User        string     `json:"user" yaml:"user"`
@@ -163,7 +164,7 @@ func (m *MQTT) Write(msg types.Message) error {
 	}
 
 	return IterateBatchedSend(msg, func(i int, p types.Part) error {
-		mtok := client.Publish(m.topic.String(i, msg), m.conf.QoS, false, p.Get())
+		mtok := client.Publish(m.topic.String(i, msg), m.conf.QoS, m.conf.Retained, p.Get())
 		mtok.Wait()
 		sendErr := mtok.Error()
 		if sendErr == mqtt.ErrNotConnected {
