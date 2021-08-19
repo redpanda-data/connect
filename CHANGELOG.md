@@ -14,6 +14,10 @@ All notable changes to this project will be documented in this file.
 - New Bloblang function `nanoid`.
 - The `gcp_cloud_storage` output now supports custom collision behaviour with the field `collision_mode`.
 
+### Fixed
+
+- Fixed a panic that would occur when executing a pipeline where processor or input resources reference rate limits.
+
 ## 3.52.0 - 2021-08-02
 
 ### Added
