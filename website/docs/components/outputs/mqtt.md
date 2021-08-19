@@ -149,6 +149,7 @@ Set QoS for last will message.
 
 Type: `int`  
 Default: `0`  
+Options: `0`, `1`, `2`.
 
 ### `will.retained`
 

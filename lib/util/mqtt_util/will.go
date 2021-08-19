@@ -36,7 +36,7 @@ func WillFieldSpec() docs.FieldSpec {
 	return docs.FieldAdvanced(
 		"will", "Set last will message in case of Benthos failure",
 	).WithChildren(
-		docs.FieldCommon("qos", "Set QoS for last will message."),
+		docs.FieldCommon("qos", "Set QoS for last will message.").HasOptions("0", "1", "2"),
 		docs.FieldCommon("retained", "Set retained for last will message."),
 		docs.FieldCommon("topic", "Set topic for last will message."),
 		docs.FieldCommon("payload", "Set payload for last will message."),
