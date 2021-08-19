@@ -36,6 +36,7 @@ output:
     topic: benthos_topic
     client_id: benthos_output
     qos: 1
+    retained: false
     max_in_flight: 1
 ```
 
@@ -52,8 +53,15 @@ output:
     topic: benthos_topic
     client_id: benthos_output
     qos: 1
+    retained: false
+    will:
+      qos: 0
+      retained: false
+      topic: ""
+      payload: ""
     user: ""
     password: ""
+    keepalive: 30
     tls:
       enabled: false
       skip_cert_verify: false
@@ -119,6 +127,53 @@ Type: `int`
 Default: `1`  
 Options: `0`, `1`, `2`.
 
+### `retained`
+
+Set message as retained on the topic.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `will`
+
+Set last will message in case of Benthos failure
+
+
+Type: `object`  
+
+### `will.qos`
+
+Set QoS for last will message.
+
+
+Type: `int`  
+Default: `0`  
+
+### `will.retained`
+
+Set retained for last will message.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `will.topic`
+
+Set topic for last will message.
+
+
+Type: `string`  
+Default: `""`  
+
+### `will.payload`
+
+Set payload for last will message.
+
+
+Type: `string`  
+Default: `""`  
+
 ### `user`
 
 A username to connect with.
@@ -134,6 +189,14 @@ A password to connect with.
 
 Type: `string`  
 Default: `""`  
+
+### `keepalive`
+
+Max seconds of inactivity before a keepalive message is sent.
+
+
+Type: `int`  
+Default: `30`  
 
 ### `tls`
 
