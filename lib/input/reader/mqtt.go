@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/mqttconf"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/mqtt_util"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
@@ -21,17 +21,17 @@ import (
 
 // MQTTConfig contains configuration fields for the MQTT input type.
 type MQTTConfig struct {
-	URLs                   []string       `json:"urls" yaml:"urls"`
-	QoS                    uint8          `json:"qos" yaml:"qos"`
-	Topics                 []string       `json:"topics" yaml:"topics"`
-	ClientID               string         `json:"client_id" yaml:"client_id"`
-	Will                   mqtt_util.Will `json:"will" yaml:"will"`
-	CleanSession           bool           `json:"clean_session" yaml:"clean_session"`
-	User                   string         `json:"user" yaml:"user"`
-	Password               string         `json:"password" yaml:"password"`
-	StaleConnectionTimeout string         `json:"stale_connection_timeout" yaml:"stale_connection_timeout"`
-	KeepAlive              int64          `json:"keepalive" yaml:"keepalive"`
-	TLS                    tls.Config     `json:"tls" yaml:"tls"`
+	URLs                   []string      `json:"urls" yaml:"urls"`
+	QoS                    uint8         `json:"qos" yaml:"qos"`
+	Topics                 []string      `json:"topics" yaml:"topics"`
+	ClientID               string        `json:"client_id" yaml:"client_id"`
+	Will                   mqttconf.Will `json:"will" yaml:"will"`
+	CleanSession           bool          `json:"clean_session" yaml:"clean_session"`
+	User                   string        `json:"user" yaml:"user"`
+	Password               string        `json:"password" yaml:"password"`
+	StaleConnectionTimeout string        `json:"stale_connection_timeout" yaml:"stale_connection_timeout"`
+	KeepAlive              int64         `json:"keepalive" yaml:"keepalive"`
+	TLS                    tls.Config    `json:"tls" yaml:"tls"`
 }
 
 // NewMQTTConfig creates a new MQTTConfig with default values.
@@ -41,7 +41,7 @@ func NewMQTTConfig() MQTTConfig {
 		QoS:                    1,
 		Topics:                 []string{"benthos_topic"},
 		ClientID:               "benthos_input",
-		Will:                   mqtt_util.EmptyWill(),
+		Will:                   mqttconf.EmptyWill(),
 		CleanSession:           true,
 		User:                   "",
 		Password:               "",

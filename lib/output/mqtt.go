@@ -2,11 +2,11 @@ package output
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	mqttconf "github.com/Jeffail/benthos/v3/internal/mqttconf"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/mqtt_util"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
@@ -28,7 +28,7 @@ messages these interpolations are performed per message part.`,
 			docs.FieldCommon("client_id", "An identifier for the client."),
 			docs.FieldCommon("qos", "The QoS value to set for each message.").HasOptions("0", "1", "2"),
 			docs.FieldBool("retained", "Set message as retained on the topic."),
-			mqtt_util.WillFieldSpec(),
+			mqttconf.WillFieldSpec(),
 			docs.FieldAdvanced("user", "A username to connect with."),
 			docs.FieldAdvanced("password", "A password to connect with."),
 			docs.FieldAdvanced("keepalive", "Max seconds of inactivity before a keepalive message is sent."),

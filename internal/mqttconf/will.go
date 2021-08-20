@@ -1,4 +1,4 @@
-package mqtt_util
+package mqttconf
 
 import (
 	"errors"
@@ -6,8 +6,8 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 )
 
-// Configuration for the last will message that the broker emits, should
-// benthos exit abnormally.
+// Will holds configuration for the last will message that the broker emits,
+// should benthos exit abnormally.
 type Will struct {
 	QoS      uint8  `json:"qos" yaml:"qos"`
 	Retained bool   `json:"retained" yaml:"retained"`
@@ -15,7 +15,7 @@ type Will struct {
 	Payload  string `json:"payload" yaml:"payload"`
 }
 
-// Return an empty will, meaning last will message should not be registered.
+// EmptyWill returns an empty will, meaning last will message should not be registered.
 func EmptyWill() Will {
 	return Will{}
 }
@@ -31,7 +31,7 @@ func (w *Will) Validate() error {
 	return nil
 }
 
-// FieldSpec for a last will message registration.
+// WillFieldSpec defines a last will message registration.
 func WillFieldSpec() docs.FieldSpec {
 	return docs.FieldAdvanced(
 		"will", "Set last will message in case of Benthos failure",

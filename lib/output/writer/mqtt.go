@@ -9,10 +9,10 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/mqttconf"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/mqtt_util"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
@@ -21,17 +21,17 @@ import (
 
 // MQTTConfig contains configuration fields for the MQTT output type.
 type MQTTConfig struct {
-	URLs        []string       `json:"urls" yaml:"urls"`
-	QoS         uint8          `json:"qos" yaml:"qos"`
-	Retained    bool           `json:"retained" yaml:"retained"`
-	Topic       string         `json:"topic" yaml:"topic"`
-	ClientID    string         `json:"client_id" yaml:"client_id"`
-	Will        mqtt_util.Will `json:"will" yaml:"will"`
-	User        string         `json:"user" yaml:"user"`
-	Password    string         `json:"password" yaml:"password"`
-	KeepAlive   int64          `json:"keepalive" yaml:"keepalive"`
-	MaxInFlight int            `json:"max_in_flight" yaml:"max_in_flight"`
-	TLS         tls.Config     `json:"tls" yaml:"tls"`
+	URLs        []string      `json:"urls" yaml:"urls"`
+	QoS         uint8         `json:"qos" yaml:"qos"`
+	Retained    bool          `json:"retained" yaml:"retained"`
+	Topic       string        `json:"topic" yaml:"topic"`
+	ClientID    string        `json:"client_id" yaml:"client_id"`
+	Will        mqttconf.Will `json:"will" yaml:"will"`
+	User        string        `json:"user" yaml:"user"`
+	Password    string        `json:"password" yaml:"password"`
+	KeepAlive   int64         `json:"keepalive" yaml:"keepalive"`
+	MaxInFlight int           `json:"max_in_flight" yaml:"max_in_flight"`
+	TLS         tls.Config    `json:"tls" yaml:"tls"`
 }
 
 // NewMQTTConfig creates a new MQTTConfig with default values.
@@ -41,7 +41,7 @@ func NewMQTTConfig() MQTTConfig {
 		QoS:         1,
 		Topic:       "benthos_topic",
 		ClientID:    "benthos_output",
-		Will:        mqtt_util.EmptyWill(),
+		Will:        mqttconf.EmptyWill(),
 		User:        "",
 		Password:    "",
 		MaxInFlight: 1,
