@@ -97,6 +97,7 @@ output:
         token: ""
         role: ""
         role_external_id: ""
+    compression: false
 ```
 
 </TabItem>
@@ -576,3 +577,10 @@ Type: `string`
 Default: `""`  
 
 
+### `compression`
+
+Enables or disables gzip compression on the request side.
+
+
+Type: `bool`  
+Default: `false`  

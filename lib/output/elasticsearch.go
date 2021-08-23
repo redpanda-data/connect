@@ -54,6 +54,7 @@ false for connections to succeed.`,
 					docs.FieldCommon("enabled", "Whether to connect to Amazon Elastic Service."),
 				}.Merge(sess.FieldSpecs())...,
 			),
+			docs.FieldAdvanced("compression", "Whether to enable gzip compression on the request side"),
 		),
 		Categories: []Category{
 			CategoryServices,

@@ -50,6 +50,7 @@ type ElasticsearchConfig struct {
 	TLS            btls.Config          `json:"tls" yaml:"tls"`
 	Auth           auth.BasicAuthConfig `json:"basic_auth" yaml:"basic_auth"`
 	AWS            OptionalAWSConfig    `json:"aws" yaml:"aws"`
+	Compression    bool                 `json:"compression" yaml:"compression"`
 	MaxInFlight    int                  `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config `json:",inline" yaml:",inline"`
 	Batching       batch.PolicyConfig `json:"batching" yaml:"batching"`
@@ -79,6 +80,7 @@ func NewElasticsearchConfig() ElasticsearchConfig {
 			Enabled: false,
 			Config:  sess.NewConfig(),
 		},
+		Compression: false,
 		MaxInFlight: 1,
 		Config:      rConf,
 		Batching:    batch.NewPolicyConfig(),
@@ -215,6 +217,10 @@ func (e *Elasticsearch) Connect() error {
 		}
 		signingClient := aws.NewV4SigningClient(tsess.Config.Credentials, e.conf.AWS.Region)
 		opts = append(opts, elastic.SetHttpClient(signingClient))
+	}
+
+	if e.conf.Compression {
+		opts = append(opts, elastic.SetGzip(true))
 	}
 
 	client, err := elastic.NewClient(opts...)
