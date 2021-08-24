@@ -31,8 +31,6 @@ archives:
       - README.md
       - CHANGELOG.md
       - LICENSE
-      - config/*
-      - config/**/*
   - id: benthos-lambda
     builds: [ benthos-lambda ]
     format: zip

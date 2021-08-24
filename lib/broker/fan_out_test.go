@@ -206,7 +206,7 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 		return
 	}
 	select {
-	case ts1 = <-mockOne.TChan:
+	case <-mockOne.TChan:
 		t.Error("Received duplicate message to mockOne")
 	case ts2 = <-mockTwo.TChan:
 	case <-resChan:

@@ -180,6 +180,7 @@ type: memory`))
 type: local`))
 	require.NoError(t, b.SetMetricsYAML(`type: prometheus`))
 	require.NoError(t, b.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, b.SetBufferYAML(`type: memory`))
 
 	act, err := b.AsYAML()
 	require.NoError(t, err)
@@ -189,7 +190,8 @@ type: local`))
     label: ""
     kafka:`,
 		`buffer:
-    none: {}`,
+    memory:
+        limit`,
 		`pipeline:
     threads: 10
     processors:`,
@@ -325,7 +327,7 @@ func TestStreamBuilderYAMLErrors(t *testing.T) {
 
 	err = b.SetYAML(`not valid ! yaml 34324`)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unmarshal errors")
+	assert.Contains(t, err.Error(), "expected object value")
 
 	err = b.SetYAML(`input: { foo: nope }`)
 	require.Error(t, err)
@@ -350,6 +352,136 @@ func TestStreamBuilderYAMLErrors(t *testing.T) {
 	err = b.AddRateLimitYAML(`{ label: "", local: {} }`)
 	require.Error(t, err)
 	assert.EqualError(t, err, "a label must be specified for rate limit resources")
+}
+
+func TestStreamBuilderSetFields(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		args        []interface{}
+		output      string
+		errContains string
+	}{
+		{
+			name:  "odd number of args",
+			input: `{}`,
+			args: []interface{}{
+				"just a field",
+			},
+			errContains: "odd number of pathValues",
+		},
+		{
+			name:  "a path isnt a string",
+			input: `{}`,
+			args: []interface{}{
+				10, "hello world",
+			},
+			errContains: "should be a string",
+		},
+		{
+			name: "unknown field error",
+			input: `
+input:
+  kafka:
+    topics: [ foo, bar ]
+`,
+			args: []interface{}{
+				"input.kafka.unknown_field", "baz",
+			},
+			errContains: "field not recognised",
+		},
+		{
+			name: "create lint error",
+			input: `
+input:
+  kafka:
+    topics: [ foo, bar ]
+`,
+			args: []interface{}{
+				"input.label", "foo",
+				"output.label", "foo",
+			},
+			errContains: "collides with a previously",
+		},
+		{
+			name: "set kafka input topics",
+			input: `
+input:
+  kafka:
+    topics: [ foo, bar ]
+`,
+			args: []interface{}{
+				"input.kafka.topics.1", "baz",
+			},
+			output: `
+input:
+  kafka:
+    topics: [ foo, baz ]
+`,
+		},
+		{
+			name: "append kafka input topics",
+			input: `
+input:
+  kafka:
+    topics: [ foo, bar ]
+`,
+			args: []interface{}{
+				"input.kafka.topics.-", "baz",
+				"input.kafka.topics.-", "buz",
+				"input.kafka.topics.-", "bev",
+			},
+			output: `
+input:
+  kafka:
+    topics: [ foo, bar, baz, buz, bev ]
+`,
+		},
+		{
+			name: "add a processor",
+			input: `
+input:
+  kafka:
+    topics: [ foo, bar ]
+`,
+			args: []interface{}{
+				"pipeline.processors.-.bloblang", `root = "meow"`,
+			},
+			output: `
+input:
+  kafka:
+    topics: [ foo, bar ]
+pipeline:
+  processors:
+    - bloblang: 'root = "meow"'
+`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			b := service.NewStreamBuilder()
+			require.NoError(t, b.SetYAML(test.input))
+			err := b.SetFields(test.args...)
+			if test.errContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			} else {
+				require.NoError(t, err)
+
+				b2 := service.NewStreamBuilder()
+				require.NoError(t, b2.SetYAML(test.output))
+
+				bAsYAML, err := b.AsYAML()
+				require.NoError(t, err)
+
+				b2AsYAML, err := b2.AsYAML()
+				require.NoError(t, err)
+
+				assert.YAMLEq(t, b2AsYAML, bAsYAML)
+			}
+		})
+	}
 }
 
 func TestStreamBuilderSetCoreYAML(t *testing.T) {

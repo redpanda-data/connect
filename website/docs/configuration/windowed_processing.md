@@ -1,171 +1,115 @@
 ---
 title: Windowed Processing
+description: Learn how to process periodic windows of messages with Benthos
 ---
 
-There are many ways of performing windowed or aggregated message processing with the wide range of [connectors and processors][processors] Benthos offers, but this usually relies on aggregating messages in transit with a cache or database.
+A window is a batch of messages made with respect to time, with which we are able to perform processing that can analyse or aggregate the messages of the window. This is useful in stream processing as the dataset is never "complete", and therefore in order to perform analysis against a collection of messages we must do so by creating a continuous feed of windows (collections), where our analysis is made against each window. 
 
-Instead, this document outlines the simplest way of performing tumbling window processing in Benthos, which is to use input level [batching][batching]. There are plans to eventually offer other windowing mechanisms such as hopping or sliding and these will behave similarly.
+For example, given a stream of messages relating to cars passing through various traffic lights:
 
-## Creating Batches
+```json
+{
+  "traffic_light": "cbf2eafc-806e-4067-9211-97be7e42cee3",
+  "created_at": "2021-08-07T09:49:35Z",
+  "registration_plate": "AB1C DEF",
+  "passengers": 3
+}
+```
 
-Firstly, we will need to create batches of messages _before_ our processing stages. This batch mechanism is what creates our window of messages, which we can later process as a group.
+Windowing allows us to produce a stream of messages representing the total traffic for each light every hour:
 
-Some [inputs][inputs] natively support batching, otherwise we can wrap them within a [broker][input-broker]:
+```json
+{
+  "traffic_light": "cbf2eafc-806e-4067-9211-97be7e42cee3",
+  "created_at": "2021-08-07T10:00:00Z",
+  "unique_cars": 15,
+  "passengers": 43
+}
+```
+
+## Creating Windows
+
+The first step in processing windows is producing the windows themselves, this can be done by configuring a window producing buffer after your input:
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-<Tabs defaultValue="kafka" values={[
-  { label: 'Kafka', value: 'kafka', },
-  { label: 'NATS (Broker)', value: 'nats', },
+<Tabs defaultValue="system" values={[
+  { label: 'System Clock', value: 'system', },
 ]}>
-<TabItem value="kafka">
+<TabItem value="system">
+
+A [`system_window` buffer][buffers.system_window] creates windows by following the system clock of the running machine. Windows will be created and emitted at predictable times, but this also means windows for historic data will not be emitted and therefore prevents backfills of traffic data:
 
 ```yaml
 input:
   kafka:
     addresses: [ TODO ]
-    topics: [ foo, bar ]
-    consumer_group: foogroup
-    batching:
-      count: 50
-      period: 30s
+    topics: [ traffic_data ]
+    consumer_group: traffic_consumer
+    checkpoint_limit: 1000
+
+buffer:
+  system_window:
+    timestamp_mapping: root = this.created_at
+    size: 1h
+    allowed_lateness: 3m
 ```
 
-</TabItem>
-<TabItem value="nats">
-
-```yaml
-input:
-  broker:
-    inputs:
-    - nats:
-        urls:
-        - nats://TODO
-        queue: benthos_queue
-        subject: foosubject
-    batching:
-      count: 50
-      period: 30s
-```
+For more information about this buffer refer to [the `system_window` buffer docs][buffers.system_window].
 
 </TabItem>
 </Tabs>
 
-> NOTE: Batching here doesn't mean we _have_ to output messages as a batch. After processing we can break this batch out and even re-batch with different settings if we want.
-
-When a [batching policy][batching-policy] is defined at the input level it means inputs will consume messages and aggregate them until the batch is complete, at which point it is flushed downstream to your processors and subsequently your outputs.
-
-Tune the batch parameters to suit the size (or time interval, etc) of window you require.
-
 ## Grouping
 
-Once our messages are batched we have one large but general window of messages. Depending on our use case we may wish to divide them into groups based on their contents. For that purpose we have two processor options: [`group_by`][group-by-proc] and [`group_by_value`][group-by-value-proc].
+With a window buffer chosen our stream of messages will be emitted periodically as batches of all messages that fit within each window. Since we want to analyse the window separately for each traffic light we need to expand this single batch out into one for each traffic light identifier within the window. For that purpose we have two processor options: [`group_by`][processors.group_by] and [`group_by_value`][processors.group_by_value].
 
-For example, we can break our window out into groups based on the messages Kafka key:
+In our case we want to group by the value of the field `traffic_light` of each message, which we can do with the following:
 
 ```yaml
 pipeline:
   processors:
-  - group_by_value:
-      value: ${! meta("kafka_key") }
+    - group_by_value:
+        value: ${! json("traffic_light") }
 ```
 
 ## Aggregating
 
-The main purpose of windowing messages is so they can be aggregated into a single message that summarises the window. For this purpose we have lots of options within Benthos, but for this guide we'll cover a select few, where each example uses [Bloblang][bloblang].
-
-### Flat Counter
-
-The easiest aggregation to perform is simply counting how many messages were within the window. This is easy to do with the [`bloblang` processor][processors.bloblang] using the [`batch_size` function][bloblang.functions.batch_size]:
+Once our window has been grouped the next step is to calculate the aggregated passenger and unique cars counts. For this purpose the Benthos [mapping language Bloblang][bloblang.about] comes in handy as the method [`from_all`][bloblang.methods.from_all] executes the target function against the entire batch and returns an array of the values, allowing us to mutate the result with chained methods such as [`sum`][bloblang.methods.sum]:
 
 ```yaml
 pipeline:
   processors:
-  # TODO: Paste group processor here if you want it.
+    - group_by_value:
+        value: ${! json("traffic_light") }
 
-  # Set the value of doc.count to the batch size.
-  - bloblang: |
-      root = this
-      doc.count = batch_size()
+    - bloblang: |
+        let is_first_message = batch_index() == 0
 
-      # Drop all documents except the first.
-      root = match {
-        batch_index() > 0 => deleted()
-      }
+        root.traffic_light = this.traffic_light
+        root.created_at = meta("window_end_timestamp")
+        root.total_cars = if $is_first_message {
+          json("registration_plate").from_all().unique().length()
+        }
+        root.passengers = if $is_first_message {
+          json("passengers").from_all().sum()
+        }
+
+        # Only keep the first batch message containing the aggregated results.
+        root = if ! $is_first_message {
+          deleted()
+        }
 ```
 
-### Real Counter
+[Bloblang][bloblang.about] is very powerful, and by using [`from`][bloblang.methods.from] and [`from_all`][bloblang.methods.from_all] it's possible to perform a wide range of batch-wide processing. If you fancy a challenge try updating the above mapping to only count passengers from the first journey of each registration plate in the window (hint: the [`fold` method][bloblang.methods.fold] might come in handy).
 
-If you have a group of structured documents containing numeric values that you wish to count then that's also pretty easy with Bloblang. For brevity we're going to assume our messages are JSON documents of the format:
-
-```json
-{"doc":{"count":5,"contents":"foobar"}}
-```
-
-And that we only wish to preserve the first message of the batch. We can do this by extracting the `doc.count` value of each document into an array with the method [`from_all`][bloblang.methods.from_all] and adding them with the method [`sum`][bloblang.methods.sum]:
-
-```yaml
-pipeline:
-  processors:
-  # TODO: Paste group processor here if you want it.
-
-  - bloblang: |
-      root = this
-      doc.count = json("doc.count").from_all().sum()
-
-      # Drop all documents except the first.
-      root = match {
-        batch_index() > 0 => deleted()
-      }
-```
-
-This results in a document containing our aggregated count, along with the rest of the first document of the batch:
-
-```json
-{
-  "doc": {
-    "count": 243,
-    "contents": "foobar"
-  }
-}
-```
-
-### Custom Folding
-
-Bloblang also has a method [`fold`][bloblang.methods.fold] which allows you to write custom folding logic for your values. Here's an example where we implement a max function for our counts:
-
-```yaml
-pipeline:
-  processors:
-  # TODO: Paste group processor here if you want it.
-
-  - bloblang: |
-      root = this
-      doc.max = json("doc.count").from_all().fold(0, match {
-        tally < value => value
-        _ => tally
-      })
-
-      # Drop all documents except the first.
-      root = match {
-        batch_index() > 0 => deleted()
-      }
-```
-
-[Bloblang][bloblang] is very powerful, and by using [`from`][bloblang.methods.from] and [`from_all`][bloblang.methods.from_all] it's possible to perform a wide range of batch-wide processing.
-
-[batching]: /docs/configuration/batching
-[batching-policy]: /docs/configuration/batching#batch-policy
-[processors]: /docs/components/processors/about
-[bloblang]: /docs/guides/bloblang/about
-[bloblang.functions.batch_size]: /docs/guides/bloblang/functions#batch_size
+[buffers.system_window]: /docs/components/buffers/system_window
+[processors.group_by]: /docs/components/processors/group_by
+[processors.group_by_value]: /docs/components/processors/group_by_value
+[bloblang.about]: /docs/guides/bloblang/about
 [bloblang.methods.from_all]: /docs/guides/bloblang/methods#from_all
-[bloblang.methods.from]: /docs/guides/bloblang/methods#from
 [bloblang.methods.sum]: /docs/guides/bloblang/methods#sum
+[bloblang.methods.unique]: /docs/guides/bloblang/methods#unique
+[bloblang.methods.from]: /docs/guides/bloblang/methods#from
 [bloblang.methods.fold]: /docs/guides/bloblang/methods#fold
-[processors.bloblang]: /docs/components/processors/bloblang
-[group-by-proc]: /docs/components/processors/group_by
-[group-by-value-proc]: /docs/components/processors/group_by_value
-[inputs]: /docs/components/inputs/about
-[input-broker]: /docs/components/inputs/broker

@@ -40,6 +40,7 @@ output:
     bucket: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     content_type: application/octet-stream
+    collision_mode: overwrite
     max_in_flight: 1
     batching:
       count: 0
@@ -59,6 +60,7 @@ output:
     bucket: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     content_type: application/octet-stream
+    collision_mode: overwrite
     content_encoding: ""
     chunk_size: 16777216
     max_in_flight: 1
@@ -174,6 +176,23 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `"application/octet-stream"`  
+
+### `collision_mode`
+
+Determines how file path collisions should be dealt with.
+
+
+Type: `string`  
+Default: `"overwrite"`  
+Requires version 3.53.0 or newer  
+
+| Option | Summary |
+|---|---|
+| `overwrite` | Replace the existing file with the new one. |
+| `append` | Append the message bytes to the original file. |
+| `error-if-exists` | Return an error, this is the equivalent of a nack. |
+| `ignore` | Do not modify the original file, the new data will be dropped. |
+
 
 ### `content_encoding`
 

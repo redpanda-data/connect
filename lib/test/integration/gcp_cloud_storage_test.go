@@ -39,7 +39,7 @@ var _ = registerIntegrationTest("gcp_cloud_storage", func(t *testing.T) {
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository:   "fsouza/fake-gcs-server",
-		Tag:          "1.21.2",
+		Tag:          "latest",
 		ExposedPorts: []string{"4443/tcp"},
 		Cmd:          []string{"-scheme", "http"},
 	})
@@ -78,18 +78,47 @@ var _ = registerIntegrationTest("gcp_cloud_storage", func(t *testing.T) {
 
 	dummyBucketPrefix := "jotunheim"
 	dummyPathPrefix := "kvenn"
-	t.Run("gcs", func(t *testing.T) {
+
+	t.Run("gcs_overwrite", func(t *testing.T) {
 		template := `
 output:
   gcp_cloud_storage:
     bucket: $VAR1-$ID
     path: $VAR2/${!count("$ID")}.txt
     max_in_flight: 1
+    collision_mode: overwrite
 
 input:
   gcp_cloud_storage:
     bucket: $VAR1-$ID
     prefix: $VAR2
+`
+		integrationTests(
+			integrationTestOpenCloseIsolated(),
+			integrationTestStreamIsolated(10),
+		).Run(
+			t, template,
+			testOptPreTest(func(t testing.TB, env *testEnvironment) {
+				require.NoError(t, createGCPCloudStorageBucket(env.configVars.var1, env.configVars.id))
+			}),
+			testOptVarOne(dummyBucketPrefix),
+			testOptVarTwo(dummyPathPrefix),
+		)
+	})
+
+	t.Run("gcs_append", func(t *testing.T) {
+		template := `
+output:
+  gcp_cloud_storage:
+    bucket: $VAR1-$ID
+    path: $VAR2/test.txt
+    max_in_flight: 1
+    collision_mode: append
+input:
+  gcp_cloud_storage:
+    bucket: $VAR1-$ID
+    prefix: $VAR2/test.txt
+    codec: chunker:14
 `
 		integrationTests(
 			integrationTestOpenCloseIsolated(),

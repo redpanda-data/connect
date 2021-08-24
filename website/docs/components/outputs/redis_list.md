@@ -57,6 +57,7 @@ output:
       enabled: false
       skip_cert_verify: false
       enable_renegotiation: false
+      root_cas: ""
       root_cas_file: ""
       client_certs: []
     key: benthos_list
@@ -90,7 +91,7 @@ Batches can be formed at both the input and output level. You can find out more
 
 ### `url`
 
-The URL of the target Redis server. Database is optional and is supplied as the URL path. `tcp` scheme is the same as `redis`
+The URL of the target Redis server. Database is optional and is supplied as the URL path. The scheme `tcp` is equivalent to `redis`.
 
 
 Type: `string`  
@@ -104,6 +105,8 @@ url: :6397
 url: localhost:6397
 
 url: redis://localhost:6379
+
+url: redis://:foopassword@redisplace:6379
 
 url: redis://localhost:6379/1
 
@@ -146,6 +149,10 @@ master: mymaster
 
 Custom TLS settings can be used to override system defaults.
 
+### Troubleshooting
+
+Some cloud hosted instances of Redis (such as Azure Cache) might need some hand holding in order to establish stable connections. Unfortunately, it is often the case that TLS issues will manifest as generic error messages such as "i/o timeout". If you're using TLS and are seeing connectivity problems consider setting `enable_renegotiation` to `true`, and ensuring that the server supports at least TLS version 1.2.
+
 
 Type: `object`  
 
@@ -173,6 +180,23 @@ Whether to allow the remote server to repeatedly request renegotiation. Enable t
 Type: `bool`  
 Default: `false`  
 Requires version 3.45.0 or newer  
+
+### `tls.root_cas`
+
+An optional root certificate authority to use. This is a string, representing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+root_cas: |-
+  -----BEGIN CERTIFICATE-----
+  ...
+  -----END CERTIFICATE-----
+```
 
 ### `tls.root_cas_file`
 

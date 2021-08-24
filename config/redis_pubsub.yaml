@@ -16,6 +16,7 @@ input:
       enabled: false
       skip_cert_verify: false
       enable_renegotiation: false
+      root_cas: ""
       root_cas_file: ""
       client_certs: []
     channels:
@@ -36,6 +37,7 @@ output:
       enabled: false
       skip_cert_verify: false
       enable_renegotiation: false
+      root_cas: ""
       root_cas_file: ""
       client_certs: []
     channel: benthos_chan

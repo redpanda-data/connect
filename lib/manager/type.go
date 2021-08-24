@@ -160,8 +160,8 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 		t.plugins[k] = nil
 	}
 
-	for k, conf := range conf.Manager.Inputs {
-		if err := t.StoreInput(context.Background(), k, conf); err != nil {
+	for k, conf := range conf.Manager.RateLimits {
+		if err := t.StoreRateLimit(context.Background(), k, conf); err != nil {
 			return nil, err
 		}
 	}
@@ -193,8 +193,8 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 		}
 	}
 
-	for k, conf := range conf.Manager.RateLimits {
-		if err := t.StoreRateLimit(context.Background(), k, conf); err != nil {
+	for k, conf := range conf.Manager.Inputs {
+		if err := t.StoreInput(context.Background(), k, conf); err != nil {
 			return nil, err
 		}
 	}
@@ -408,7 +408,7 @@ func (t *Type) AccessCache(ctx context.Context, name string, fn func(types.Cache
 	t.resourceLock.RLock()
 	defer t.resourceLock.RUnlock()
 	c, ok := t.caches[name]
-	if !ok {
+	if !ok || c == nil {
 		return ErrResourceNotFound(name)
 	}
 	fn(c)
@@ -472,7 +472,7 @@ func (t *Type) AccessInput(ctx context.Context, name string, fn func(types.Input
 	t.resourceLock.RLock()
 	defer t.resourceLock.RUnlock()
 	i, ok := t.inputs[name]
-	if !ok {
+	if !ok || i == nil {
 		return ErrResourceNotFound(name)
 	}
 	fn(i)
@@ -543,7 +543,7 @@ func (t *Type) AccessProcessor(ctx context.Context, name string, fn func(types.P
 	t.resourceLock.RLock()
 	defer t.resourceLock.RUnlock()
 	p, ok := t.processors[name]
-	if !ok {
+	if !ok || p == nil {
 		return ErrResourceNotFound(name)
 	}
 	fn(p)
@@ -611,7 +611,7 @@ func (t *Type) AccessOutput(ctx context.Context, name string, fn func(types.Outp
 	t.resourceLock.RLock()
 	defer t.resourceLock.RUnlock()
 	o, ok := t.outputs[name]
-	if !ok {
+	if !ok || o == nil {
 		return ErrResourceNotFound(name)
 	}
 	fn(o)
@@ -683,7 +683,7 @@ func (t *Type) AccessRateLimit(ctx context.Context, name string, fn func(types.R
 	t.resourceLock.RLock()
 	defer t.resourceLock.RUnlock()
 	r, ok := t.rateLimits[name]
-	if !ok {
+	if !ok || r == nil {
 		return ErrResourceNotFound(name)
 	}
 	fn(r)

@@ -310,7 +310,7 @@ func foldNumberArray(children []*gabs.Container) (float64, error) {
 		case int64:
 			b += float64(t)
 		case float64:
-			b += float64(t)
+			b += t
 		case json.Number:
 			f, err := t.Float64()
 			if err != nil {

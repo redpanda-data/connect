@@ -20,13 +20,15 @@ func newMemoryBuffer(n int) *memoryBuffer {
 	}
 }
 
-func (m *memoryBuffer) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
+func (m *memoryBuffer) WriteBatch(ctx context.Context, batch service.MessageBatch, aFn service.AckFunc) error {
 	select {
 	case m.messages <- batch:
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	return nil
+	// We weaken delivery guarantees here by acknowledging receipt of our batch
+	// immediately.
+	return aFn(ctx, nil)
 }
 
 func yoloIgnoreNacks(context.Context, error) error {

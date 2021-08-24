@@ -77,6 +77,7 @@ type Type struct {
 	handlers    map[string]http.HandlerFunc
 	handlersMut sync.RWMutex
 
+	log    log.Modular
 	mux    *mux.Router
 	server *http.Server
 }
@@ -116,6 +117,7 @@ func New(
 		handlers:  map[string]http.HandlerFunc{},
 		mux:       handler,
 		server:    server,
+		log:       log,
 	}
 	t.ctx, t.cancel = context.WithCancel(context.Background())
 
@@ -270,6 +272,10 @@ func (t *Type) ListenAndServe() error {
 		<-t.ctx.Done()
 		return nil
 	}
+	t.log.Infof(
+		"Listening for HTTP requests at: %v\n",
+		"http://"+t.conf.Address,
+	)
 	if t.server.TLSConfig != nil {
 		return t.server.ListenAndServeTLS("", "")
 	}

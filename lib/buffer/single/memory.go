@@ -123,7 +123,7 @@ func (m *Memory) ShiftMessage() (int, error) {
 	}
 
 	// Set new read from position to next message start.
-	m.readFrom = m.readFrom + int(msgSize) + 4
+	m.readFrom = m.readFrom + msgSize + 4
 
 	return m.backlog(), nil
 }
@@ -161,11 +161,11 @@ func (m *Memory) NextMessage() (types.Message, error) {
 	}
 
 	index += 4
-	if index+int(msgSize) > m.config.Limit {
+	if index+msgSize > m.config.Limit {
 		return nil, types.ErrBlockCorrupted
 	}
 
-	return message.FromBytes(m.block[index : index+int(msgSize)])
+	return message.FromBytes(m.block[index : index+msgSize])
 }
 
 // PushMessage pushes a new message onto the block, returns the backlog count.

@@ -627,9 +627,9 @@ func TestSwitchBatchGroup(t *testing.T) {
 	}
 
 	select {
-	case ts = <-mockOutputs[0].TChan:
+	case <-mockOutputs[0].TChan:
 		t.Error("did not expect message route to 0")
-	case ts = <-mockOutputs[2].TChan:
+	case <-mockOutputs[2].TChan:
 		t.Error("did not expect message route to 2")
 	case res := <-resChan:
 		if res.Error() != nil {
@@ -896,7 +896,7 @@ func TestSwitchAtLeastOnce(t *testing.T) {
 		return
 	}
 	select {
-	case ts1 = <-mockOne.TChan:
+	case <-mockOne.TChan:
 		t.Error("Received duplicate message to mockOne")
 	case ts2 = <-mockTwo.TChan:
 	case <-resChan:

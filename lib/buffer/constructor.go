@@ -45,6 +45,7 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 		spec := docs.ComponentSpec{
 			Type:        docs.TypeBuffer,
 			Name:        k,
+			Categories:  []string{"Utility"},
 			Summary:     v.Summary,
 			Description: v.Description,
 			Footnotes:   v.Footnotes,

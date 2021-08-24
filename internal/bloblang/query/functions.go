@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
+	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
 //------------------------------------------------------------------------------
@@ -766,6 +767,44 @@ var _ = registerSimpleFunction(
 		return u4.String(), nil
 	},
 )
+
+//------------------------------------------------------------------------------
+
+var _ = RegisterFunction(
+	NewFunctionSpec(
+		FunctionCategoryGeneral, "nanoid",
+		"Generates a new nanoid each time it is invoked and prints a string representation.",
+		NewExampleSpec("", `root.id = nanoid()`),
+		NewExampleSpec("It is possible to specify an optional length parameter.", `root.id = nanoid(54)`),
+		NewExampleSpec("It is also possible to specify an optional custom alphabet after the length parameter.", `root.id = nanoid(54, "abcde")`),
+	),
+	true,
+	nanoidFunction,
+	ExpectBetweenNAndMArgs(0, 2),
+	ExpectIntArg(0),
+	ExpectStringArg(1),
+)
+
+func nanoidFunction(args ...interface{}) (Function, error) {
+	var lenArg int
+	if len(args) > 0 {
+		lenArg = int(args[0].(int64))
+	}
+	var alphabetArg string
+	if len(args) > 1 {
+		alphabetArg = args[1].(string)
+	}
+	return ClosureFunction("function nanoid", func(ctx FunctionContext) (interface{}, error) {
+		switch len(args) {
+		case 1:
+			return gonanoid.New(lenArg)
+		case 2:
+			return gonanoid.Generate(alphabetArg, lenArg)
+		default:
+			return gonanoid.New()
+		}
+	}, nil), nil
+}
 
 //------------------------------------------------------------------------------
 

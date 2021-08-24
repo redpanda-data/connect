@@ -219,7 +219,7 @@ func ISanitize(i interface{}) interface{} {
 		return []byte(t)
 	case json.Number:
 		if i, err := t.Int64(); err == nil {
-			return int64(i)
+			return i
 		}
 		if f, err := t.Float64(); err == nil {
 			return f
@@ -313,7 +313,7 @@ func IToNumber(v interface{}) (float64, error) {
 }
 
 const maxUint = ^uint64(0)
-const maxInt = uint64(maxUint >> 1)
+const maxInt = maxUint >> 1
 
 // IToInt takes a boxed value and attempts to extract a number (int64) from it
 // or parse one.

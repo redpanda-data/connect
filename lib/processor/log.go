@@ -91,7 +91,7 @@ pipeline:
 root.id = this.id
 root.age = this.user.age.number()
 root.kafka_topic = meta("kafka_topic")`,
-			).AtVersion("3.40.0"),
+			).AtVersion("3.40.0").IsBloblang(),
 			docs.FieldCommon("message", "The message to print.").IsInterpolated(),
 		},
 	}

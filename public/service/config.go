@@ -220,6 +220,7 @@ func (c *ConfigSpec) Description(description string) *ConfigSpec {
 // will already be inferred. However, setting a field explicitly is sometimes
 // useful for enriching the field documentation with more information.
 func (c *ConfigSpec) Field(f *ConfigField) *ConfigSpec {
+	c.component.Config.Type = docs.FieldTypeObject
 	for i, s := range c.component.Config.Children {
 		if s.Name == f.field.Name {
 			c.component.Config.Children[i] = f.field
@@ -273,6 +274,11 @@ func (c *ConfigView) Description() string {
 	return c.component.Description
 }
 
+// IsDeprecated returns true if the component is marked as deprecated.
+func (c *ConfigView) IsDeprecated() bool {
+	return c.component.Status == docs.StatusDeprecated
+}
+
 // FormatJSON returns a byte slice of the component configuration formatted as a
 // JSON object. The schema of this method is undocumented and is not intended
 // for general use.
@@ -294,10 +300,11 @@ func (c *ConfigView) FormatJSON() ([]byte, error) {
 // a struct constructor then the method AsStruct should be used in order to
 // access the parsed struct.
 type ParsedConfig struct {
-	env      *Environment
-	mgr      bundle.NewManagement
-	asStruct interface{}
-	generic  map[string]interface{}
+	hiddenPath []string
+	env        *Environment
+	mgr        bundle.NewManagement
+	asStruct   interface{}
+	generic    map[string]interface{}
 }
 
 // AsStruct returns the root of the parsed config. If the configuration spec was
@@ -311,6 +318,15 @@ func (p *ParsedConfig) AsStruct() interface{} {
 	return p.asStruct
 }
 
+// Namespace returns a version of the parsed config at a given field namespace.
+// This is useful for extracting multiple fields under the same grouping.
+func (p *ParsedConfig) Namespace(path ...string) *ParsedConfig {
+	tmpConfig := *p
+	tmpConfig.hiddenPath = append([]string{}, p.hiddenPath...)
+	tmpConfig.hiddenPath = append(tmpConfig.hiddenPath, path...)
+	return &tmpConfig
+}
+
 // Field accesses a field from the parsed config by its name and returns the
 // value if the field is found and a boolean indicating whether it was found.
 // Nested fields can be accessed by specifing the series of field names.
@@ -318,11 +334,18 @@ func (p *ParsedConfig) AsStruct() interface{} {
 // This method is not valid when the configuration spec was built around a
 // config constructor.
 func (p *ParsedConfig) field(path ...string) (interface{}, bool) {
-	gObj := gabs.Wrap(p.generic)
+	gObj := gabs.Wrap(p.generic).S(p.hiddenPath...)
 	if exists := gObj.Exists(path...); !exists {
 		return nil, false
 	}
 	return gObj.S(path...).Data(), true
+}
+
+func (p *ParsedConfig) fullDotPath(path ...string) string {
+	var fullPath []string
+	fullPath = append(fullPath, p.hiddenPath...)
+	fullPath = append(fullPath, path...)
+	return strings.Join(fullPath, ".")
 }
 
 // FieldString accesses a string field from the parsed config by its name. If
@@ -333,11 +356,11 @@ func (p *ParsedConfig) field(path ...string) (interface{}, bool) {
 func (p *ParsedConfig) FieldString(path ...string) (string, error) {
 	v, exists := p.field(path...)
 	if !exists {
-		return "", fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
+		return "", fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
 	str, ok := v.(string)
 	if !ok {
-		return "", fmt.Errorf("expected field '%v' to be a string, got %T", strings.Join(path, "."), v)
+		return "", fmt.Errorf("expected field '%v' to be a string, got %T", p.fullDotPath(path...), v)
 	}
 	return str, nil
 }
@@ -351,19 +374,19 @@ func (p *ParsedConfig) FieldString(path ...string) (string, error) {
 func (p *ParsedConfig) FieldStringList(path ...string) ([]string, error) {
 	v, exists := p.field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
 	iList, ok := v.([]interface{})
 	if !ok {
 		if sList, ok := v.([]string); ok {
 			return sList, nil
 		}
-		return nil, fmt.Errorf("expected field '%v' to be a string list, got %T", strings.Join(path, "."), v)
+		return nil, fmt.Errorf("expected field '%v' to be a string list, got %T", p.fullDotPath(path...), v)
 	}
 	sList := make([]string, len(iList))
 	for i, ev := range iList {
 		if sList[i], ok = ev.(string); !ok {
-			return nil, fmt.Errorf("expected field '%v' to be a string list, found an element of type %T", strings.Join(path, "."), ev)
+			return nil, fmt.Errorf("expected field '%v' to be a string list, found an element of type %T", p.fullDotPath(path...), ev)
 		}
 	}
 	return sList, nil
@@ -377,11 +400,11 @@ func (p *ParsedConfig) FieldStringList(path ...string) ([]string, error) {
 func (p *ParsedConfig) FieldInt(path ...string) (int, error) {
 	v, exists := p.field(path...)
 	if !exists {
-		return 0, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
+		return 0, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
 	i, ok := v.(int)
 	if !ok {
-		return 0, fmt.Errorf("expected field '%v' to be an int, got %T", strings.Join(path, "."), v)
+		return 0, fmt.Errorf("expected field '%v' to be an int, got %T", p.fullDotPath(path...), v)
 	}
 	return i, nil
 }
@@ -395,11 +418,11 @@ func (p *ParsedConfig) FieldInt(path ...string) (int, error) {
 func (p *ParsedConfig) FieldFloat(path ...string) (float64, error) {
 	v, exists := p.field(path...)
 	if !exists {
-		return 0, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
+		return 0, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
 	f, ok := v.(float64)
 	if !ok {
-		return 0, fmt.Errorf("expected field '%v' to be a float, got %T", strings.Join(path, "."), v)
+		return 0, fmt.Errorf("expected field '%v' to be a float, got %T", p.fullDotPath(path...), v)
 	}
 	return f, nil
 }
@@ -413,11 +436,11 @@ func (p *ParsedConfig) FieldFloat(path ...string) (float64, error) {
 func (p *ParsedConfig) FieldBool(path ...string) (bool, error) {
 	v, e := p.field(path...)
 	if !e {
-		return false, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
+		return false, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
 	b, ok := v.(bool)
 	if !ok {
-		return false, fmt.Errorf("expected field '%v' to be a bool, got %T", strings.Join(path, "."), v)
+		return false, fmt.Errorf("expected field '%v' to be a bool, got %T", p.fullDotPath(path...), v)
 	}
 	return b, nil
 }

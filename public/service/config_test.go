@@ -291,6 +291,23 @@ c:
 	ll, err := parsedConfig.FieldStringList("c", "f", "j")
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"first in list", "second in list"}, ll)
+
+	// Testing namespaces
+	nsC := parsedConfig.Namespace("c")
+	nsFOne := nsC.Namespace("f")
+	nsFTwo := parsedConfig.Namespace("c", "f")
+
+	b, err = nsC.FieldBool("d")
+	assert.NoError(t, err)
+	assert.Equal(t, true, b)
+
+	i, err = nsFOne.FieldInt("g")
+	assert.NoError(t, err)
+	assert.Equal(t, 22, i)
+
+	f, err = nsFTwo.FieldFloat("i")
+	assert.NoError(t, err)
+	assert.Equal(t, 23.1, f)
 }
 
 func TestConfigBatching(t *testing.T) {

@@ -5,6 +5,20 @@ import (
 	"google.golang.org/api/googleapi"
 )
 
+const (
+	// GCPCloudStorageErrorIfExistsCollisionMode - error-if-exists
+	GCPCloudStorageErrorIfExistsCollisionMode = "error-if-exists"
+
+	// GCPCloudStorageAppendCollisionMode - append
+	GCPCloudStorageAppendCollisionMode = "append"
+
+	// GCPCloudStorageIgnoreCollisionMode - ignore
+	GCPCloudStorageIgnoreCollisionMode = "ignore"
+
+	// GCPCloudStorageOverwriteCollisionMode - overwrite
+	GCPCloudStorageOverwriteCollisionMode = "overwrite"
+)
+
 // GCPCloudStorageConfig contains configuration fields for the GCP Cloud Storage
 // output type.
 type GCPCloudStorageConfig struct {
@@ -15,6 +29,7 @@ type GCPCloudStorageConfig struct {
 	ChunkSize       int                `json:"chunk_size" yaml:"chunk_size"`
 	MaxInFlight     int                `json:"max_in_flight" yaml:"max_in_flight"`
 	Batching        batch.PolicyConfig `json:"batching" yaml:"batching"`
+	CollisionMode   string             `json:"collision_mode" yaml:"collision_mode"`
 }
 
 // NewGCPCloudStorageConfig creates a new Config with default values.
@@ -27,5 +42,6 @@ func NewGCPCloudStorageConfig() GCPCloudStorageConfig {
 		ChunkSize:       googleapi.DefaultUploadChunkSize,
 		MaxInFlight:     1,
 		Batching:        batch.NewPolicyConfig(),
+		CollisionMode:   GCPCloudStorageOverwriteCollisionMode,
 	}
 }

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -145,6 +146,17 @@ func (m *Message) SetStructured(i interface{}) {
 func (m *Message) SetError(err error) {
 	m.ensureCopied()
 	processor.FlagErr(m.part, err)
+}
+
+// GetError returns an error associated with a message, or nil if there isn't
+// one. Messages marked with errors can be handled using a range of methods
+// outlined in https://www.benthos.dev/docs/configuration/error_handling.
+func (m *Message) GetError() error {
+	failStr := processor.GetFail(m.part)
+	if failStr == "" {
+		return nil
+	}
+	return errors.New(failStr)
 }
 
 // MetaGet attempts to find a metadata key from the message and returns a string

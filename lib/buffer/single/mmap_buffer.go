@@ -209,7 +209,7 @@ func (f *MmapBuffer) ShiftMessage() (int, error) {
 
 	if !f.closed && f.cache.IsCached(f.readIndex) {
 		msgSize := readMessageSize(f.cache.Get(f.readIndex), f.readFrom)
-		f.readFrom = f.readFrom + int(msgSize) + 4
+		f.readFrom = f.readFrom + msgSize + 4
 	}
 	return f.backlog(), nil
 }
@@ -285,11 +285,11 @@ func (f *MmapBuffer) NextMessage() (types.Message, error) {
 	}
 
 	index += 4
-	if index+int(msgSize) > len(block) {
+	if index+msgSize > len(block) {
 		return nil, types.ErrBlockCorrupted
 	}
 
-	return message.FromBytes(block[index : index+int(msgSize)])
+	return message.FromBytes(block[index : index+msgSize])
 }
 
 // PushMessage pushes a new message, returns the backlog count.

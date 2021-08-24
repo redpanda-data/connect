@@ -212,6 +212,33 @@ func TestFunctionTargets(t *testing.T) {
 	}
 }
 
+func TestNanoidFunction(t *testing.T) {
+	e, err := InitFunction("nanoid")
+	require.Nil(t, err)
+
+	res, err := e.Exec(FunctionContext{})
+	require.NoError(t, err)
+	assert.NotEmpty(t, res)
+}
+
+func TestNanoidFunctionLength(t *testing.T) {
+	e, err := InitFunction("nanoid", int64(54))
+	require.Nil(t, err)
+
+	res, err := e.Exec(FunctionContext{})
+	require.NoError(t, err)
+	assert.Len(t, res, 54)
+}
+
+func TestNanoidFunctionAlphabet(t *testing.T) {
+	e, err := InitFunction("nanoid", int64(1), "a")
+	require.Nil(t, err)
+
+	res, err := e.Exec(FunctionContext{})
+	require.NoError(t, err)
+	assert.Equal(t, "a", res)
+}
+
 func TestEnvFunction(t *testing.T) {
 	key := "BENTHOS_TEST_BLOBLANG_FUNCTION"
 	os.Setenv(key, "foobar")

@@ -31,7 +31,7 @@ type ReaderWriter interface {
 	Read(context.Context) (types.Message, AckFunc, error)
 
 	// Write a new message batch to the stack.
-	Write(context.Context, types.Message) error
+	Write(context.Context, types.Message, AckFunc) error
 
 	// EndOfInput indicates to the buffer that the input has ended and that once
 	// the buffer is depleted it should return types.ErrTypeClosed from Read in
@@ -83,18 +83,26 @@ func NewStream(typeStr string, buffer ReaderWriter, log log.Modular, stats metri
 
 // inputLoop is an internal loop that brokers incoming messages to the buffer.
 func (m *Stream) inputLoop() {
+	var ackGroup sync.WaitGroup
+
 	defer func() {
 		m.buffer.EndOfInput()
+		ackGroup.Wait()
 		m.closedWG.Done()
 	}()
 
 	var (
-		mWriteCount = m.stats.GetCounter("write.count")
-		mWriteErr   = m.stats.GetCounter("write.error")
+		mWriteCount    = m.stats.GetCounter("write.count")
+		mWriteErr      = m.stats.GetCounter("write.error")
+		mReceived      = m.stats.GetCounter("received")
+		mReceivedBatch = m.stats.GetCounter("batch.received")
 	)
 
-	closeAtLeisureCtx, done := m.shutSig.CloseAtLeisureCtx(context.Background())
-	defer done()
+	closeAtLeisureCtx, doneLeisure := m.shutSig.CloseAtLeisureCtx(context.Background())
+	defer doneLeisure()
+
+	closeNowCtx, doneNow := m.shutSig.CloseNowCtx(context.Background())
+	defer doneNow()
 
 	for {
 		var tr types.Transaction
@@ -104,39 +112,55 @@ func (m *Stream) inputLoop() {
 			if !open {
 				return
 			}
+			mReceived.Incr(int64(tr.Payload.Len()))
+			mReceivedBatch.Incr(1)
 		case <-m.shutSig.CloseAtLeisureChan():
 			return
 		}
 
-		err := m.buffer.Write(closeAtLeisureCtx, tracing.WithSiblingSpans(m.typeStr, tr.Payload))
+		ackGroup.Add(1)
+		var ackOnce sync.Once
+		ackFunc := func(ctx context.Context, ackErr error) (err error) {
+			ackOnce.Do(func() {
+				select {
+				case tr.ResponseChan <- response.NewError(ackErr):
+				case <-ctx.Done():
+					err = ctx.Err()
+				case <-m.shutSig.CloseNowChan():
+					err = types.ErrTypeClosed
+				}
+				ackGroup.Done()
+			})
+			return
+		}
+
+		err := m.buffer.Write(closeAtLeisureCtx, tracing.WithSiblingSpans(m.typeStr, tr.Payload), ackFunc)
 		if err == nil {
 			mWriteCount.Incr(1)
 		} else {
 			mWriteErr.Incr(1)
-		}
-		select {
-		case tr.ResponseChan <- response.NewError(err):
-		case <-m.shutSig.CloseNowChan():
-			return
+			_ = ackFunc(closeNowCtx, err)
 		}
 	}
 }
 
 // outputLoop is an internal loop brokers buffer messages to output pipe.
 func (m *Stream) outputLoop() {
+	var ackGroup sync.WaitGroup
+
 	defer func() {
+		ackGroup.Wait()
 		_ = m.buffer.Close(context.Background())
 		close(m.messagesOut)
 		m.closedWG.Done()
 	}()
 
 	var (
-		mReadCount   = m.stats.GetCounter("read.count")
-		mReadErr     = m.stats.GetCounter("read.error")
-		mSendSuccess = m.stats.GetCounter("send.success")
-		mSendErr     = m.stats.GetCounter("send.error")
-		mAckErr      = m.stats.GetCounter("ack.error")
-		mLatency     = m.stats.GetTimer("latency")
+		mReadCount = m.stats.GetCounter("read.count")
+		mReadErr   = m.stats.GetCounter("read.error")
+		mSent      = m.stats.GetCounter("sent")
+		mSentBatch = m.stats.GetCounter("batch.sent")
+		mAckErr    = m.stats.GetCounter("ack.error")
 	)
 
 	closeNowCtx, done := m.shutSig.CloseNowCtx(context.Background())
@@ -171,27 +195,28 @@ func (m *Stream) outputLoop() {
 			return
 		}
 
-		select {
-		case res, open := <-resChan:
-			if !open {
+		mSent.Incr(int64(msg.Len()))
+		mSentBatch.Incr(1)
+		ackGroup.Add(1)
+
+		go func() {
+			defer ackGroup.Done()
+			select {
+			case res, open := <-resChan:
+				if !open {
+					return
+				}
+				tracing.FinishSpans(msg)
+				if ackErr := ackFunc(closeNowCtx, res.Error()); ackErr != nil {
+					mAckErr.Incr(1)
+					if ackErr != types.ErrTypeClosed {
+						m.log.Errorf("Failed to ack buffer message: %v\n", ackErr)
+					}
+				}
+			case <-m.shutSig.CloseNowChan():
 				return
 			}
-			tracing.FinishSpans(msg)
-			if res.Error() != nil {
-				mSendSuccess.Incr(1)
-				mLatency.Timing(time.Since(msg.CreatedAt()).Nanoseconds())
-			} else {
-				mSendErr.Incr(1)
-			}
-			if ackErr := ackFunc(closeNowCtx, res.Error()); ackErr != nil {
-				mAckErr.Incr(1)
-				if ackErr != types.ErrTypeClosed {
-					m.log.Errorf("Failed to ack buffer message: %v\n", ackErr)
-				}
-			}
-		case <-m.shutSig.CloseNowChan():
-			return
-		}
+		}()
 	}
 }
 

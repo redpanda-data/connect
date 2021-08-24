@@ -2,6 +2,7 @@ package sftp
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -15,13 +16,17 @@ func CredentialsDocs() docs.FieldSpecs {
 	return docs.FieldSpecs{
 		docs.FieldCommon("username", "The username to connect to the SFTP server."),
 		docs.FieldCommon("password", "The password for the username to connect to the SFTP server."),
+		docs.FieldCommon("private_key_file", "The private key for the username to connect to the SFTP server."),
+		docs.FieldCommon("private_key_pass", "Optional passphrase for private key."),
 	}
 }
 
 // Credentials contains the credentials for connecting to the SFTP server
 type Credentials struct {
-	Username string `json:"username" yaml:"username"`
-	Password string `json:"password" yaml:"password"`
+	Username       string `json:"username" yaml:"username"`
+	Password       string `json:"password" yaml:"password"`
+	PrivateKeyFile string `json:"private_key_file" yaml:"private_key_file"`
+	PrivateKeyPass string `json:"private_key_pass" yaml:"private_key_pass"`
 }
 
 // GetClient establishes a fresh sftp client from a set of credentials and an
@@ -45,11 +50,37 @@ func (c Credentials) GetClient(address string) (*sftp.Client, error) {
 	}
 
 	config := &ssh.ClientConfig{
-		User: c.Username,
-		Auth: []ssh.AuthMethod{
-			ssh.Password(c.Password),
-		},
+		User:            c.Username,
+		Auth:            []ssh.AuthMethod{},
 		HostKeyCallback: certCheck.CheckHostKey,
+	}
+
+	// set password auth when provided
+	if c.Password != "" {
+		// append to config.Auth
+		config.Auth = append(config.Auth, ssh.Password(c.Password))
+	}
+
+	// set private key auth when provided
+	if c.PrivateKeyFile != "" {
+		// read private key file
+		var privateKey []byte
+		privateKey, err = ioutil.ReadFile(c.PrivateKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read private key: %v", err)
+		}
+		// check if passphrase is provided and parse private key
+		var signer ssh.Signer
+		if c.PrivateKeyPass == "" {
+			signer, err = ssh.ParsePrivateKey(privateKey)
+		} else {
+			signer, err = ssh.ParsePrivateKeyWithPassphrase(privateKey, []byte(c.PrivateKeyPass))
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse private key: %v", err)
+		}
+		// append to config.Auth
+		config.Auth = append(config.Auth, ssh.PublicKeys(signer))
 	}
 
 	conn, err := ssh.Dial("tcp", address, config)

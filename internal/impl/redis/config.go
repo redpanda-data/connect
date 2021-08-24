@@ -92,17 +92,24 @@ func (r Config) Client() (redis.UniversalClient, error) {
 
 // ConfigDocs returns a documentation field spec for fields within a Config.
 func ConfigDocs() docs.FieldSpecs {
+	tlsSpec := btls.FieldSpec()
+	tlsSpec.Description = tlsSpec.Description + `
+
+### Troubleshooting
+
+Some cloud hosted instances of Redis (such as Azure Cache) might need some hand holding in order to establish stable connections. Unfortunately, it is often the case that TLS issues will manifest as generic error messages such as "i/o timeout". If you're using TLS and are seeing connectivity problems consider setting ` + "`enable_renegotiation` to `true`" + `, and ensuring that the server supports at least TLS version 1.2.`
 	return docs.FieldSpecs{
 		docs.FieldCommon(
-			"url", "The URL of the target Redis server. Database is optional and is supplied as the URL path. `tcp` scheme is the same as `redis`",
+			"url", "The URL of the target Redis server. Database is optional and is supplied as the URL path. The scheme `tcp` is equivalent to `redis`.",
 			":6397",
 			"localhost:6397",
 			"redis://localhost:6379",
+			"redis://:foopassword@redisplace:6379",
 			"redis://localhost:6379/1",
 			"redis://localhost:6379/1,redis://localhost:6380/1",
 		),
 		docs.FieldAdvanced("kind", "Specifies a simple, cluster-aware, or failover-aware redis client.", "simple", "cluster", "failover"),
 		docs.FieldAdvanced("master", "Name of the redis master when `kind` is `failover`", "mymaster"),
-		btls.FieldSpec(),
+		tlsSpec,
 	}
 }

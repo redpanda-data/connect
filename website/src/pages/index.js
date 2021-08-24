@@ -12,7 +12,9 @@ import TabItem from '@theme/TabItem';
 const installs = [
   {
     label: 'Curl',
-    snippet: `# Install
+    lang: 'bash',
+    copyBit: `curl -Lsf https://sh.benthos.dev | bash`,
+    config: `# Install
 curl -Lsf https://sh.benthos.dev | bash
 
 # Make a config
@@ -23,7 +25,9 @@ benthos -c ./config.yaml`
   },
   {
     label: 'Homebrew',
-    snippet: `# Install
+    lang: 'bash',
+    copyBit: `brew install benthos`,
+    config: `# Install
 brew install benthos
 
 # Make a config
@@ -34,7 +38,9 @@ benthos -c ./config.yaml`
   },
   {
     label: 'Docker',
-    snippet: `# Pull
+    lang: 'bash',
+    copyBit: `docker pull jeffail/benthos`,
+    config: `# Pull
 docker pull jeffail/benthos
 
 # Make a config
@@ -92,6 +98,40 @@ output:
             max_in_flight: 20`,
   },
   {
+    label: 'Windowing',
+    further: '/docs/configuration/windowed_processing',
+    config: `input:
+  nats_jetstream:
+    urls: [ nats://TODO:4222 ]
+    queue: myqueue
+    subject: traffic.light.events
+    deliver: all
+
+buffer:
+  system_window:
+    timestamp_mapping: root = this.created_at
+    size: 1h
+
+pipeline:
+  processors:
+    - group_by_value:
+        value: '\${! json("traffic_light_id") }'
+    - bloblang: |
+        root = if batch_index() == 0 {
+          {
+            "traffic_light_id": this.traffic_light_id,
+            "created_at": meta("window_end_timestamp"),
+            "total_cars": json("registration_plate").from_all().unique().length(),
+            "passengers": json("passengers").from_all().sum(),
+          }
+        } else { deleted() }
+
+output:
+  pulsar:
+    url: pulsar://TODO:6650
+    topic: traffic_windows`,
+  },
+  {
     label: 'Enrichments',
     further: '/cookbooks/enrichments',
     config: `input:
@@ -124,12 +164,6 @@ output:
             algorithm: gzip`,
   },
 ];
-
-function Snippet({label, config}) {
-  return (
-    <CodeSnippet className={styles.configSnippet} snippet={config}></CodeSnippet>
-  );
-}
 
 const features = [
   {
@@ -253,7 +287,7 @@ function Home() {
                 })}>
                   {installs.map((props, idx) => (
                     <TabItem key={idx} value={props.label}>
-                      <CodeSnippet snippet={props.snippet} lang="bash"></CodeSnippet>
+                      <CodeSnippet {...props}></CodeSnippet>
                     </TabItem>
                   ))}
                 </Tabs>
@@ -267,14 +301,7 @@ function Home() {
                     })}>
                       {snippets.map((props, idx) => (
                         <TabItem key={idx} value={props.label}>
-                          <>
-                          <Snippet {...props} />
-                          <Link
-                            className={classnames('button button--outline button--secondary')}
-                            to={props.further}>
-                            Read more
-                          </Link>
-                          </>
+                          <CodeSnippet className={styles.configSnippet} {...props}></CodeSnippet>
                         </TabItem>
                       ))}
                     </Tabs>

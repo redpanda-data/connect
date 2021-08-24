@@ -11,6 +11,7 @@ import (
 	_ "github.com/Jeffail/benthos/v3/internal/impl/aws"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/confluent"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/gcp"
+	_ "github.com/Jeffail/benthos/v3/internal/impl/generic"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/mongodb"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/nats"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/pulsar"

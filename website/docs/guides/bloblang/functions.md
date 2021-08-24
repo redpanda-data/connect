@@ -101,6 +101,26 @@ Generates a new RFC-4122 UUID each time it is invoked and prints a string repres
 root.id = uuid_v4()
 ```
 
+### `nanoid`
+
+Generates a new nanoid each time it is invoked and prints a string representation.
+
+```coffee
+root.id = nanoid()
+```
+
+It is possible to specify an optional length parameter.
+
+```coffee
+root.id = nanoid(54)
+```
+
+It is also possible to specify an optional custom alphabet after the length parameter.
+
+```coffee
+root.id = nanoid(54, "abcde")
+```
+
 ### `random_int`
 
 Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.

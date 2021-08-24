@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/go-redis/redis/v7"
 	"github.com/ory/dockertest/v3"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRedisIntegration(t *testing.T) {
@@ -62,6 +65,9 @@ func TestRedisIntegration(t *testing.T) {
 
 	defer client.Close()
 
+	t.Run("testRedisKeys", func(t *testing.T) {
+		testRedisKeys(t, client, urlStr)
+	})
 	t.Run("testRedisSAdd", func(t *testing.T) {
 		testRedisSAdd(t, client, urlStr)
 	})
@@ -71,6 +77,50 @@ func TestRedisIntegration(t *testing.T) {
 	t.Run("testRedisIncrby", func(t *testing.T) {
 		testRedisIncrby(t, client, urlStr)
 	})
+}
+
+func testRedisKeys(t *testing.T, client *redis.Client, url string) {
+	conf := NewConfig()
+	conf.Type = TypeRedis
+	conf.Redis.URL = url
+	conf.Redis.Operator = "keys"
+	conf.Redis.Key = "foo*"
+
+	r, err := NewRedis(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	for _, key := range []string{
+		"bar1", "bar2", "fooa", "foob", "baz1", "fooc",
+	} {
+		_, err := client.Set(key, "hello world", 0).Result()
+		require.NoError(t, err)
+	}
+
+	msg := message.New([][]byte{[]byte(`ignore me please`)})
+
+	resMsgs, response := r.ProcessMessage(msg)
+	if !assert.Nil(t, response) {
+		require.NoError(t, response.Error())
+	}
+
+	require.Len(t, resMsgs, 1)
+	require.Equal(t, 1, resMsgs[0].Len())
+
+	exp := []string{"fooa", "foob", "fooc"}
+
+	actI, err := resMsgs[0].Get(0).JSON()
+	require.NoError(t, err)
+
+	actS, ok := actI.([]interface{})
+	require.True(t, ok)
+
+	actStrs := make([]string, 0, len(actS))
+	for _, v := range actS {
+		actStrs = append(actStrs, v.(string))
+	}
+	sort.Strings(actStrs)
+
+	assert.Equal(t, exp, actStrs)
 }
 
 func testRedisSAdd(t *testing.T, client *redis.Client, url string) {

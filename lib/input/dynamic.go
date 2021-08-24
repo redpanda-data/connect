@@ -138,12 +138,12 @@ func NewDynamic(
 		}
 		iMgr, iLog, iStats := interop.LabelChild(fmt.Sprintf("dynamic.inputs.%v", id), mgr, log, stats)
 		iStats = metrics.Combine(stats, iStats)
-		newInput, err := New(Config(newConf), iMgr, iLog, iStats, pipelines...)
+		newInput, err := New(newConf, iMgr, iLog, iStats, pipelines...)
 		if err != nil {
 			return err
 		}
 		inputConfigsMut.Lock()
-		inputConfigs[id] = Config(newConf)
+		inputConfigs[id] = newConf
 		inputConfigsMut.Unlock()
 		if err = fanIn.SetInput(id, newInput, timeout); err != nil {
 			log.Errorf("Failed to set input '%v': %v", id, err)

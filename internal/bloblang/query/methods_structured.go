@@ -1435,7 +1435,7 @@ func uniqueMethod(args ...interface{}) (simpleMethod, error) {
 			case uint64:
 				unique = checkNum(float64(t))
 			case float64:
-				unique = checkNum(float64(t))
+				unique = checkNum(t)
 			default:
 				return nil, fmt.Errorf("index %v: %w", i, NewTypeError(check, ValueString, ValueNumber))
 			}

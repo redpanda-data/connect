@@ -60,6 +60,7 @@ output:
     content_encoding: ""
     metadata:
       exclude_prefixes: []
+    priority: ""
     max_in_flight: 1
     persistent: false
     mandatory: false
@@ -68,6 +69,7 @@ output:
       enabled: false
       skip_cert_verify: false
       enable_renegotiation: false
+      root_cas: ""
       root_cas_file: ""
       client_certs: []
 ```
@@ -187,6 +189,25 @@ Provide a list of explicit metadata key prefixes to be excluded when adding meta
 Type: `array`  
 Default: `[]`  
 
+### `priority`
+
+Set the priority of each message with a dynamic interpolated expression.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+priority: "0"
+
+priority: ${! meta("amqp_priority") }
+
+priority: ${! json("doc.priority") }
+```
+
 ### `max_in_flight`
 
 The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
@@ -250,6 +271,23 @@ Whether to allow the remote server to repeatedly request renegotiation. Enable t
 Type: `bool`  
 Default: `false`  
 Requires version 3.45.0 or newer  
+
+### `tls.root_cas`
+
+An optional root certificate authority to use. This is a string, representing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+root_cas: |-
+  -----BEGIN CERTIFICATE-----
+  ...
+  -----END CERTIFICATE-----
+```
 
 ### `tls.root_cas_file`
 

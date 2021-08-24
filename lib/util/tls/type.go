@@ -41,6 +41,7 @@ type ClientCertConfig struct {
 // Config contains configuration params for TLS.
 type Config struct {
 	Enabled             bool               `json:"enabled" yaml:"enabled"`
+	RootCAs             string             `json:"root_cas" yaml:"root_cas"`
 	RootCAsFile         string             `json:"root_cas_file" yaml:"root_cas_file"`
 	InsecureSkipVerify  bool               `json:"skip_cert_verify" yaml:"skip_cert_verify"`
 	ClientCertificates  []ClientCertConfig `json:"client_certs" yaml:"client_certs"`
@@ -51,6 +52,7 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		Enabled:             false,
+		RootCAs:             "",
 		RootCAsFile:         "",
 		InsecureSkipVerify:  false,
 		ClientCertificates:  []ClientCertConfig{},
@@ -73,6 +75,10 @@ func (c *Config) Get() (*tls.Config, error) {
 		}
 	}
 
+	if len(c.RootCAs) > 0 && len(c.RootCAsFile) > 0 {
+		return nil, errors.New("only one field between root_cas and root_cas_file can be specified")
+	}
+
 	if len(c.RootCAsFile) > 0 {
 		caCert, err := ioutil.ReadFile(c.RootCAsFile)
 		if err != nil {
@@ -81,6 +87,12 @@ func (c *Config) Get() (*tls.Config, error) {
 		initConf()
 		tlsConf.RootCAs = x509.NewCertPool()
 		tlsConf.RootCAs.AppendCertsFromPEM(caCert)
+	}
+
+	if len(c.RootCAs) > 0 {
+		initConf()
+		tlsConf.RootCAs = x509.NewCertPool()
+		tlsConf.RootCAs.AppendCertsFromPEM([]byte(c.RootCAs))
 	}
 
 	for _, conf := range c.ClientCertificates {

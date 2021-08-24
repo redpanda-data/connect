@@ -134,7 +134,7 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 			}
 		}
 		spec.Description = output.Description(v.Async, v.Batches, spec.Description)
-		fn(ConstructorFunc(v.constructor), spec)
+		fn(v.constructor, spec)
 	}
 	for k, v := range pluginSpecs {
 		spec := docs.ComponentSpec{
@@ -144,7 +144,7 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 			Plugin: true,
 			Config: docs.FieldComponent().Unlinted(),
 		}
-		fn(ConstructorFunc(v.constructor), spec)
+		fn(v.constructor, spec)
 	}
 }
 

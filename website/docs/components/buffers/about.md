@@ -3,30 +3,17 @@ title: Buffers
 sidebar_label: About
 ---
 
-Benthos uses a transaction based model for guaranteeing delivery of messages without the need for a buffer. This ensures that messages are never acknowledged from a source until the message has left the target sink.
+Benthos uses a transaction model internally for guaranteeing delivery of messages, this means that a message from an input is not acknowledged (or its offset committed, etc) until that message has been processed and either intentionally deleted or successfully delivered to all outputs. This transaction model makes Benthos safe to deploy in scenarios where data loss is unacceptable. However, sometimes it's useful to customize the way in which messages are delivered, and this is where buffers come in.
 
-However, sometimes the transaction model is undesired, in which case there are a range of buffer options available which decouple input sources from the rest of the Benthos pipeline.
+A buffer is an optional component type that comes immediately after the input layer and can be used as a way of decoupling the transaction model from components downstream such as the processing layer and outputs. This is considered an advanced component as most users will likely not benefit from a buffer, but they enable you to do things like group messages using window algorithms or intentionally weaken the delivery guarantees of the pipeline depending on the buffer you choose.
 
-Buffers can therefore solve a number of typical streaming problems but come at the cost of weakening the delivery guarantees of your pipeline. Common problems that might warrant use of a buffer are:
+Since buffers are able to modify (or disable) the transaction model within Benthos it is important that when you choose a buffer you read its documentation to understand the implication it will have on delivery guarantees.
 
-- Input sources can periodically spike beyond the capacity of your output sinks.
-- Your input source needs occasional protection against back pressure from your sink, e.g. during restarts. Keep in mind that all buffers have an eventual limit.
+import ComponentsByCategory from '@theme/ComponentsByCategory';
 
-If you believe that a problem you have would be solved by a buffer the next step is to choose an implementation based on the throughput and delivery guarantees you need. In order to help here are some simplified tables outlining the different options and their qualities:
+## Categories
 
-#### Performance
-
-| Type      | Throughput | Consumers | Capacity |
-| --------- | ---------- | --------- | -------- |
-| Memory    | Highest    | Parallel  | RAM      |
-
-#### Delivery Guarantees
-
-| Event     | Shutdown  | Crash     | Disk Corruption |
-| --------- | --------- | --------- | --------------- |
-| Memory    | Flushed\* | Lost      | Lost            |
-
-\* Makes a best attempt at flushing the remaining messages before closing gracefully.
+<ComponentsByCategory type="buffers"></ComponentsByCategory>
 
 import ComponentSelect from '@theme/ComponentSelect';
 
