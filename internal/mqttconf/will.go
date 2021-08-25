@@ -9,6 +9,7 @@ import (
 // Will holds configuration for the last will message that the broker emits,
 // should benthos exit abnormally.
 type Will struct {
+	Enabled  bool   `json:"enabled" yaml:"enabled"`
 	QoS      uint8  `json:"qos" yaml:"qos"`
 	Retained bool   `json:"retained" yaml:"retained"`
 	Topic    string `json:"topic" yaml:"topic"`
@@ -22,12 +23,12 @@ func EmptyWill() Will {
 
 // Validate the Will configuration and return nil or error accordingly.
 func (w *Will) Validate() error {
-	if w.Topic == "" {
-		if w.Payload != "" || w.QoS > 0 || w.Retained {
-			return errors.New("include topic to register a last will")
-		}
+	if !w.Enabled {
+		return nil
 	}
-
+	if w.Topic == "" {
+		return errors.New("include topic to register a last will")
+	}
 	return nil
 }
 
@@ -36,6 +37,7 @@ func WillFieldSpec() docs.FieldSpec {
 	return docs.FieldAdvanced(
 		"will", "Set last will message in case of Benthos failure",
 	).WithChildren(
+		docs.FieldCommon("enabled", "Whether to enable last will messages."),
 		docs.FieldCommon("qos", "Set QoS for last will message.").HasOptions("0", "1", "2"),
 		docs.FieldCommon("retained", "Set retained for last will message."),
 		docs.FieldCommon("topic", "Set topic for last will message."),

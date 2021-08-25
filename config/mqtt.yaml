@@ -17,6 +17,7 @@ input:
     qos: 1
     clean_session: true
     will:
+      enabled: false
       qos: 0
       retained: false
       topic: ""
@@ -46,6 +47,7 @@ output:
     qos: 1
     retained: false
     will:
+      enabled: false
       qos: 0
       retained: false
       topic: ""

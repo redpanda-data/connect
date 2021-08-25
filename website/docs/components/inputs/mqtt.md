@@ -54,6 +54,7 @@ input:
     qos: 1
     clean_session: true
     will:
+      enabled: false
       qos: 0
       retained: false
       topic: ""
@@ -137,6 +138,14 @@ Set last will message in case of Benthos failure
 
 
 Type: `object`  
+
+### `will.enabled`
+
+Whether to enable last will messages.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `will.qos`
 

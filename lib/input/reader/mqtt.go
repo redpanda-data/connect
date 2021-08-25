@@ -82,7 +82,6 @@ func NewMQTT(
 		log:           log,
 	}
 
-	var err error
 	if len(conf.StaleConnectionTimeout) > 0 {
 		var err error
 		if m.staleConnectionTimeout, err = time.ParseDuration(conf.StaleConnectionTimeout); err != nil {
@@ -90,8 +89,7 @@ func NewMQTT(
 		}
 	}
 
-	err = m.conf.Will.Validate()
-	if err != nil {
+	if err := m.conf.Will.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -170,7 +168,7 @@ func (m *MQTT) ConnectWithContext(ctx context.Context) error {
 			}
 		})
 
-	if m.conf.Will.Topic != "" {
+	if m.conf.Will.Enabled {
 		conf = conf.SetWill(m.conf.Will.Topic, m.conf.Will.Payload, m.conf.Will.QoS, m.conf.Will.Retained)
 	}
 

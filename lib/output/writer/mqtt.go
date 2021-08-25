@@ -82,8 +82,7 @@ func NewMQTT(
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
 
-	err = m.conf.Will.Validate()
-	if err != nil {
+	if err := m.conf.Will.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -129,7 +128,7 @@ func (m *MQTT) Connect() error {
 		conf = conf.AddBroker(u)
 	}
 
-	if m.conf.Will.Topic != "" {
+	if m.conf.Will.Enabled {
 		conf = conf.SetWill(m.conf.Will.Topic, m.conf.Will.Payload, m.conf.Will.QoS, m.conf.Will.Retained)
 	}
 
