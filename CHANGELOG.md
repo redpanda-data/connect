@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- The bloblang method `contains` now correctly compares numerical values in arrays and objects.
+
 ## 3.53.0 - 2021-08-19
 
 ### Added

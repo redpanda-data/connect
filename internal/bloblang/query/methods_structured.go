@@ -190,13 +190,20 @@ var _ = registerSimpleMethod(
 		"contains", "",
 	).InCategory(
 		MethodCategoryObjectAndArray,
-		"Checks whether an array contains an element matching the argument, or an object contains a value matching the argument, and returns a boolean result.",
+		"Checks whether an array contains an element matching the argument, or an object contains a value matching the argument, and returns a boolean result. Numerical comparisons are made irrespective of the representation type (float versus integer).",
 		NewExampleSpec("",
 			`root.has_foo = this.thing.contains("foo")`,
 			`{"thing":["this","foo","that"]}`,
 			`{"has_foo":true}`,
 			`{"thing":["this","bar","that"]}`,
 			`{"has_foo":false}`,
+		),
+		NewExampleSpec("",
+			`root.has_bar = this.thing.contains(20)`,
+			`{"thing":[10.3,20.0,"huh",3]}`,
+			`{"has_bar":true}`,
+			`{"thing":[2,3,40,67]}`,
+			`{"has_bar":false}`,
 		),
 	).InCategory(
 		MethodCategoryStrings,
@@ -211,6 +218,17 @@ var _ = registerSimpleMethod(
 	),
 	func(args ...interface{}) (simpleMethod, error) {
 		compareRight := args[0]
+		compareFn := func(compareLeft interface{}) bool {
+			return compareRight == compareLeft
+		}
+		if compareRightNum, err := IGetNumber(args[0]); err == nil {
+			compareFn = func(compareLeft interface{}) bool {
+				if leftAsNum, err := IGetNumber(compareLeft); err == nil {
+					return leftAsNum == compareRightNum
+				}
+				return false
+			}
+		}
 		sub := IToString(args[0])
 		bsub := IToBytes(args[0])
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
@@ -221,13 +239,13 @@ var _ = registerSimpleMethod(
 				return bytes.Contains(t, bsub), nil
 			case []interface{}:
 				for _, compareLeft := range t {
-					if compareRight == compareLeft {
+					if compareFn(compareLeft) {
 						return true, nil
 					}
 				}
 			case map[string]interface{}:
 				for _, compareLeft := range t {
-					if compareRight == compareLeft {
+					if compareFn(compareLeft) {
 						return true, nil
 					}
 				}
