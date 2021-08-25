@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/mqttconf"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -20,15 +21,17 @@ import (
 
 // MQTTConfig contains configuration fields for the MQTT input type.
 type MQTTConfig struct {
-	URLs                   []string   `json:"urls" yaml:"urls"`
-	QoS                    uint8      `json:"qos" yaml:"qos"`
-	Topics                 []string   `json:"topics" yaml:"topics"`
-	ClientID               string     `json:"client_id" yaml:"client_id"`
-	CleanSession           bool       `json:"clean_session" yaml:"clean_session"`
-	User                   string     `json:"user" yaml:"user"`
-	Password               string     `json:"password" yaml:"password"`
-	StaleConnectionTimeout string     `json:"stale_connection_timeout" yaml:"stale_connection_timeout"`
-	TLS                    tls.Config `json:"tls" yaml:"tls"`
+	URLs                   []string      `json:"urls" yaml:"urls"`
+	QoS                    uint8         `json:"qos" yaml:"qos"`
+	Topics                 []string      `json:"topics" yaml:"topics"`
+	ClientID               string        `json:"client_id" yaml:"client_id"`
+	Will                   mqttconf.Will `json:"will" yaml:"will"`
+	CleanSession           bool          `json:"clean_session" yaml:"clean_session"`
+	User                   string        `json:"user" yaml:"user"`
+	Password               string        `json:"password" yaml:"password"`
+	StaleConnectionTimeout string        `json:"stale_connection_timeout" yaml:"stale_connection_timeout"`
+	KeepAlive              int64         `json:"keepalive" yaml:"keepalive"`
+	TLS                    tls.Config    `json:"tls" yaml:"tls"`
 }
 
 // NewMQTTConfig creates a new MQTTConfig with default values.
@@ -38,10 +41,12 @@ func NewMQTTConfig() MQTTConfig {
 		QoS:                    1,
 		Topics:                 []string{"benthos_topic"},
 		ClientID:               "benthos_input",
+		Will:                   mqttconf.EmptyWill(),
 		CleanSession:           true,
 		User:                   "",
 		Password:               "",
 		StaleConnectionTimeout: "",
+		KeepAlive:              30,
 		TLS:                    tls.NewConfig(),
 	}
 }
@@ -77,11 +82,17 @@ func NewMQTT(
 		log:           log,
 	}
 
+	var err error
 	if len(conf.StaleConnectionTimeout) > 0 {
 		var err error
 		if m.staleConnectionTimeout, err = time.ParseDuration(conf.StaleConnectionTimeout); err != nil {
 			return nil, fmt.Errorf("unable to parse stale connection timeout duration string: %w", err)
 		}
+	}
+
+	err = m.conf.Will.Validate()
+	if err != nil {
+		return nil, err
 	}
 
 	for _, u := range conf.URLs {
@@ -129,6 +140,7 @@ func (m *MQTT) ConnectWithContext(ctx context.Context) error {
 		SetAutoReconnect(false).
 		SetClientID(m.conf.ClientID).
 		SetCleanSession(m.conf.CleanSession).
+		SetKeepAlive(time.Duration(m.conf.KeepAlive)).
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
 			client.Disconnect(0)
 			closeMsgChan()
@@ -157,6 +169,10 @@ func (m *MQTT) ConnectWithContext(ctx context.Context) error {
 				closeMsgChan()
 			}
 		})
+
+	if m.conf.Will.Topic != "" {
+		conf = conf.SetWill(m.conf.Will.Topic, m.conf.Will.Payload, m.conf.Will.QoS, m.conf.Will.Retained)
+	}
 
 	if m.conf.TLS.Enabled {
 		tlsConf, err := m.conf.TLS.Get()
