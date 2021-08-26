@@ -65,6 +65,7 @@ input:
     limit: 10
     client_id: benthos_consumer
     consumer_group: benthos_group
+    create_streams: false
     start_from_oldest: true
     commit_period: 1s
     timeout: 1s
@@ -293,6 +294,14 @@ An identifier for the consumer group of the stream.
 
 Type: `string`  
 Default: `"benthos_group"`  
+
+### `create_streams`
+
+Create subscribed streams if they do not exist (MKSTREAM option).
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `start_from_oldest`
 
