@@ -85,6 +85,7 @@ require (
 	github.com/uber/jaeger-client-go v2.25.0+incompatible
 	github.com/uber/jaeger-lib v2.4.0+incompatible // indirect
 	github.com/urfave/cli/v2 v2.3.0
+	github.com/vmihailenco/msgpack/v5 v5.3.4
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0

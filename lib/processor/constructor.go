@@ -168,6 +168,7 @@ const (
 	TypeMetadata     = "metadata"
 	TypeMetric       = "metric"
 	TypeMongoDB      = "mongodb"
+	TypeMsgPack      = "msgpack"
 	TypeNoop         = "noop"
 	TypeNumber       = "number"
 	TypeParallel     = "parallel"
@@ -239,6 +240,7 @@ type Config struct {
 	Metadata     MetadataConfig     `json:"metadata" yaml:"metadata"`
 	Metric       MetricConfig       `json:"metric" yaml:"metric"`
 	MongoDB      MongoDBConfig      `json:"mongodb" yaml:"mongodb"`
+	MsgPack      MsgPackConfig      `json:"msgpack" yaml:"msgpack"`
 	Noop         NoopConfig         `json:"noop" yaml:"noop"`
 	Number       NumberConfig       `json:"number" yaml:"number"`
 	Plugin       interface{}        `json:"plugin,omitempty" yaml:"plugin,omitempty"`
@@ -310,6 +312,7 @@ func NewConfig() Config {
 		Metadata:     NewMetadataConfig(),
 		Metric:       NewMetricConfig(),
 		MongoDB:      NewMongoDBConfig(),
+		MsgPack:      NewMsgPackConfig(),
 		Noop:         NewNoopConfig(),
 		Number:       NewNumberConfig(),
 		Plugin:       nil,
