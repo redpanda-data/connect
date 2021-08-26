@@ -16,6 +16,11 @@ import (
 // if the message could not be delivered or processed.
 type MessageHandlerFunc func(context.Context, *Message) error
 
+// MessageBatchHandlerFunc is a function signature defining a component that
+// consumes Benthos message batches. An error must be returned if the context is
+// cancelled, or if the messages could not be delivered or processed.
+type MessageBatchHandlerFunc func(context.Context, MessageBatch) error
+
 // Message represents a single discrete message passing through a Benthos
 // pipeline. It is safe to mutate the message via Set methods, but the
 // underlying byte data should not be edited directly.

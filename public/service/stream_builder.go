@@ -133,7 +133,7 @@ func (s *StreamBuilder) SetHTTPMux(m HTTPMultiplexer) {
 // delivered downstream, was rejected (or otherwise could not be delivered) or
 // the context is cancelled.
 //
-// This method can only be called once per stream builder, and subsequent calls
+// Only one producer func can be added to a stream builder, and subsequent calls
 // will return an error.
 func (s *StreamBuilder) AddProducerFunc() (MessageHandlerFunc, error) {
 	if s.producerChan != nil {
@@ -157,6 +157,57 @@ func (s *StreamBuilder) AddProducerFunc() (MessageHandlerFunc, error) {
 	return func(ctx context.Context, m *Message) error {
 		tmpMsg := message.New(nil)
 		tmpMsg.Append(m.part)
+		resChan := make(chan types.Response)
+		select {
+		case tChan <- types.NewTransaction(tmpMsg, resChan):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		select {
+		case res := <-resChan:
+			return res.Error()
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}, nil
+}
+
+// AddBatchProducerFunc adds an input to the builder that allows you to write
+// message batches directly into the stream with a closure function. If any
+// other input has or will be added to the stream builder they will be
+// automatically composed within a broker when the pipeline is built.
+//
+// The returned MessageBatchHandlerFunc can be called concurrently from any
+// number of goroutines, and each call will block until all messages within the
+// batch are successfully delivered downstream, were rejected (or otherwise
+// could not be delivered) or the context is cancelled.
+//
+// Only one producer func can be added to a stream builder, and subsequent calls
+// will return an error.
+func (s *StreamBuilder) AddBatchProducerFunc() (MessageBatchHandlerFunc, error) {
+	if s.producerChan != nil {
+		return nil, errors.New("unable to add multiple producer funcs to a stream builder")
+	}
+
+	uuid, err := uuid.NewV4()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate a producer uuid: %w", err)
+	}
+
+	tChan := make(chan types.Transaction)
+	s.producerChan = tChan
+	s.producerID = uuid.String()
+
+	conf := input.NewConfig()
+	conf.Type = input.TypeInproc
+	conf.Inproc = input.InprocConfig(s.producerID)
+	s.inputs = append(s.inputs, conf)
+
+	return func(ctx context.Context, b MessageBatch) error {
+		tmpMsg := message.New(nil)
+		for _, m := range b {
+			tmpMsg.Append(m.part)
+		}
 		resChan := make(chan types.Response)
 		select {
 		case tChan <- types.NewTransaction(tmpMsg, resChan):
@@ -225,8 +276,8 @@ func (s *StreamBuilder) AddProcessorYAML(conf string) error {
 // and therefore it is recommended to implement some form of throttling or mutex
 // locking in cases where the call is non-blocking.
 //
-// This method can only be called once per stream builder, and subsequent calls
-// will return an error.
+// Only one consumer can be added to a stream builder, and subsequent calls will
+// return an error.
 func (s *StreamBuilder) AddConsumerFunc(fn MessageHandlerFunc) error {
 	if s.consumerFunc != nil {
 		return errors.New("unable to add multiple producer funcs to a stream builder")

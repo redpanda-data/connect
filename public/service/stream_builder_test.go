@@ -99,6 +99,70 @@ file:
 	assert.Equal(t, "HELLO WORLD 1\nHELLO WORLD 2\nHELLO WORLD 3\n", string(outBytes))
 }
 
+func TestStreamBuilderBatchProducerFunc(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "stream_builder_batch_producer_test")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	outFilePath := filepath.Join(tmpDir, "out.txt")
+
+	b := service.NewStreamBuilder()
+	require.NoError(t, b.SetLoggerYAML("level: NONE"))
+	require.NoError(t, b.AddProcessorYAML(`bloblang: 'root = content().uppercase()'`))
+	require.NoError(t, b.AddOutputYAML(fmt.Sprintf(`
+file:
+  codec: lines
+  path: %v`, outFilePath)))
+
+	pushFn, err := b.AddBatchProducerFunc()
+	require.NoError(t, err)
+
+	// Fails on second call.
+	_, err = b.AddProducerFunc()
+	require.Error(t, err)
+
+	// Don't allow input overrides now.
+	err = b.SetYAML(`input: {}`)
+	require.Error(t, err)
+
+	strm, err := b.Build()
+	require.NoError(t, err)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		ctx, done := context.WithTimeout(context.Background(), time.Second*10)
+		defer done()
+
+		require.NoError(t, pushFn(ctx, service.MessageBatch{
+			service.NewMessage([]byte("hello world 1")),
+			service.NewMessage([]byte("hello world 2")),
+		}))
+		require.NoError(t, pushFn(ctx, service.MessageBatch{
+			service.NewMessage([]byte("hello world 3")),
+			service.NewMessage([]byte("hello world 4")),
+		}))
+		require.NoError(t, pushFn(ctx, service.MessageBatch{
+			service.NewMessage([]byte("hello world 5")),
+			service.NewMessage([]byte("hello world 6")),
+		}))
+
+		require.NoError(t, strm.StopWithin(time.Second*5))
+	}()
+
+	require.NoError(t, strm.Run(context.Background()))
+	wg.Wait()
+
+	outBytes, err := ioutil.ReadFile(outFilePath)
+	require.NoError(t, err)
+
+	assert.Equal(t, "HELLO WORLD 1\nHELLO WORLD 2\n\nHELLO WORLD 3\nHELLO WORLD 4\n\nHELLO WORLD 5\nHELLO WORLD 6\n\n", string(outBytes))
+}
+
 func TestStreamBuilderConsumerFunc(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "stream_builder_consumer_test")
 	require.NoError(t, err)

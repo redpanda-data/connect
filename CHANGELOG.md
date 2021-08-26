@@ -3,11 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased'
+## Unreleased
 
 ### Added
 
 - The `mqtt` input and output now support sending a last will, configuring a keep alive timeout, and setting retained out output messages.
+- Go API: New stream builder `AddBatchProducerFunc` method.
 
 ### Fixed
 
