@@ -154,8 +154,6 @@ docker run --rm \
 	benthos -c /config.yaml
 ```
 
-There are a [few examples here][compose-examples] that show you some ways of setting up Benthos containers using `docker-compose`.
-
 ### ZMQ4 Support
 
 Benthos supports ZMQ4 for both data input and output. To add this you need to install libzmq4 and use the compile time flag when building Benthos:
@@ -181,7 +179,6 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come a
 [tracers]: https://www.benthos.dev/docs/components/tracers/about
 [metrics-config]: config/metrics
 [config-interp]: https://www.benthos.dev/docs/configuration/interpolation
-[compose-examples]: resources/docker/compose_examples
 [streams-api]: https://www.benthos.dev/docs/guides/streams_mode/streams_api
 [streams-mode]: https://www.benthos.dev/docs/guides/streams_mode/about
 [general-docs]: https://www.benthos.dev/docs/about
