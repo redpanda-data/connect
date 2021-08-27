@@ -346,8 +346,7 @@ func (k *Kafka) WriteWithContext(ctx context.Context, msg types.Message) error {
 	userDefinedHeaders := k.buildUserDefinedHeaders(k.staticHeaders)
 	msgs := []*sarama.ProducerMessage{}
 
-	var err error
-	err = msg.Iter(func(i int, p types.Part) error {
+	err := msg.Iter(func(i int, p types.Part) error {
 		key := k.key.Bytes(i, msg)
 		nextMsg := &sarama.ProducerMessage{
 			Topic:    k.topic.String(i, msg),
