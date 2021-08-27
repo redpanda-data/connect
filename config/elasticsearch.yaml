@@ -64,6 +64,7 @@ output:
         token: ""
         role: ""
         role_external_id: ""
+    compression: false
 logger:
   level: INFO
   format: json

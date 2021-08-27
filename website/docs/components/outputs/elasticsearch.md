@@ -594,11 +594,12 @@ An external ID to provide when assuming a role.
 Type: `string`  
 Default: `""`  
 
-
 ### `compression`
 
-Enables or disables gzip compression on the request side.
+Whether to enable gzip compression on the request side
 
 
 Type: `bool`  
 Default: `false`  
+
+
