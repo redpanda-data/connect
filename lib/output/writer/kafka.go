@@ -129,7 +129,7 @@ func NewKafka(conf KafkaConfig, mgr types.Manager, log log.Modular, stats metric
 		log.Warnln("The field 'round_robin_partitions' is deprecated, please use the 'partitioner' field (set to 'round_robin') instead.")
 	}
 
-	if len(conf.Partition) == 0 && conf.Partitioner == "manual" {
+	if conf.Partition == "" && conf.Partitioner == "manual" {
 		return nil, fmt.Errorf("partition field required for 'manual' partitioner")
 	} else if len(conf.Partition) > 0 && conf.Partitioner != "manual" {
 		return nil, fmt.Errorf("partition field can only be specified for 'manual' partitioner")
