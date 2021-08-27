@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -215,6 +216,71 @@ file:
 		"hello world 2": {},
 		"hello world 3": {},
 	}, outMsgs)
+	outMut.Unlock()
+}
+
+func TestStreamBuilderBatchConsumerFunc(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "stream_builder_batch_consumer_test")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	inFilePath := filepath.Join(tmpDir, "in.txt")
+	require.NoError(t, ioutil.WriteFile(inFilePath, []byte(`HELLO WORLD 1
+HELLO WORLD 2
+
+HELLO WORLD 3
+HELLO WORLD 4
+
+HELLO WORLD 5
+HELLO WORLD 6
+`), 0755))
+
+	b := service.NewStreamBuilder()
+	require.NoError(t, b.SetLoggerYAML("level: NONE"))
+	require.NoError(t, b.AddInputYAML(fmt.Sprintf(`
+file:
+  codec: lines/multipart
+  paths: [ %v ]`, inFilePath)))
+	require.NoError(t, b.AddProcessorYAML(`bloblang: 'root = content().lowercase()'`))
+
+	outBatches := map[string]struct{}{}
+	var outMut sync.Mutex
+	handler := func(_ context.Context, mb service.MessageBatch) error {
+		outMut.Lock()
+		defer outMut.Unlock()
+
+		outMsgs := []string{}
+		for _, m := range mb {
+			b, err := m.AsBytes()
+			assert.NoError(t, err)
+			outMsgs = append(outMsgs, string(b))
+		}
+
+		outBatches[strings.Join(outMsgs, ",")] = struct{}{}
+		return nil
+	}
+	require.NoError(t, b.AddBatchConsumerFunc(handler))
+
+	// Fails on second call.
+	require.Error(t, b.AddBatchConsumerFunc(handler))
+
+	// Don't allow output overrides now.
+	err = b.SetYAML(`output: {}`)
+	require.Error(t, err)
+
+	strm, err := b.Build()
+	require.NoError(t, err)
+
+	require.NoError(t, strm.Run(context.Background()))
+
+	outMut.Lock()
+	assert.Equal(t, map[string]struct{}{
+		"hello world 1,hello world 2": {},
+		"hello world 3,hello world 4": {},
+		"hello world 5,hello world 6": {},
+	}, outBatches)
 	outMut.Unlock()
 }
 

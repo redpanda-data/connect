@@ -51,7 +51,7 @@ type StreamBuilder struct {
 
 	producerChan chan types.Transaction
 	producerID   string
-	consumerFunc MessageHandlerFunc
+	consumerFunc MessageBatchHandlerFunc
 	consumerID   string
 
 	apiMut       manager.APIReg
@@ -279,6 +279,49 @@ func (s *StreamBuilder) AddProcessorYAML(conf string) error {
 // Only one consumer can be added to a stream builder, and subsequent calls will
 // return an error.
 func (s *StreamBuilder) AddConsumerFunc(fn MessageHandlerFunc) error {
+	if s.consumerFunc != nil {
+		return errors.New("unable to add multiple producer funcs to a stream builder")
+	}
+
+	uuid, err := uuid.NewV4()
+	if err != nil {
+		return fmt.Errorf("failed to generate a consumer uuid: %w", err)
+	}
+
+	s.consumerFunc = func(c context.Context, mb MessageBatch) error {
+		for _, m := range mb {
+			if err := fn(c, m); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	s.consumerID = uuid.String()
+
+	conf := output.NewConfig()
+	conf.Type = output.TypeInproc
+	conf.Inproc = output.InprocConfig(s.consumerID)
+	s.outputs = append(s.outputs, conf)
+
+	return nil
+}
+
+// AddBatchConsumerFunc adds an output to the builder that executes a closure
+// function argument for each message batch. If more than one output
+// configuration is added they will automatically be composed within a fan out
+// broker when the pipeline is built.
+//
+// The provided MessageBatchHandlerFunc may be called from any number of
+// goroutines, and therefore it is recommended to implement some form of
+// throttling or mutex locking in cases where the call is non-blocking.
+//
+// Only one consumer can be added to a stream builder, and subsequent calls will
+// return an error.
+//
+// Message batches must be created by upstream components (inputs, buffers, etc)
+// otherwise message batches received by this consumer will have a single
+// message contents.
+func (s *StreamBuilder) AddBatchConsumerFunc(fn MessageBatchHandlerFunc) error {
 	if s.consumerFunc != nil {
 		return errors.New("unable to add multiple producer funcs to a stream builder")
 	}
@@ -603,9 +646,12 @@ func (s *StreamBuilder) runConsumerFunc(mgr *manager.Type) error {
 			if !open {
 				return
 			}
-			err = tran.Payload.Iter(func(i int, part types.Part) error {
-				return s.consumerFunc(context.Background(), newMessageFromPart(part))
+			batch := make(MessageBatch, tran.Payload.Len())
+			_ = tran.Payload.Iter(func(i int, part types.Part) error {
+				batch[i] = newMessageFromPart(part)
+				return nil
 			})
+			err := s.consumerFunc(context.Background(), batch)
 			var res types.Response
 			if err != nil {
 				res = response.NewError(err)
