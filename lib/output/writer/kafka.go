@@ -364,17 +364,20 @@ func (k *Kafka) WriteWithContext(ctx context.Context, msg types.Message) error {
 		// field when not using a manual partitioner, we should only set it when
 		// we explicitly want that.
 		if k.conf.Partitioner == "manual" {
-			if partitionString := k.partition.String(i, msg); partitionString != "" {
-				partitionInt, err := strconv.Atoi(partitionString)
-				if err != nil {
-					return fmt.Errorf("failed to parse valid integer from partition expression: %w", err)
-				}
-				if partitionInt < 0 {
-					return fmt.Errorf("invalid partition parsed from expression, must be >= 0, got %v", partitionInt)
-				}
-				// samara requires a 32-bit integer for the partition field
-				nextMsg.Partition = int32(partitionInt)
+			partitionString := k.partition.String(i, msg)
+			if partitionString == "" {
+				return fmt.Errorf("partition expression failed to produce a value")
 			}
+
+			partitionInt, err := strconv.Atoi(partitionString)
+			if err != nil {
+				return fmt.Errorf("failed to parse valid integer from partition expression: %w", err)
+			}
+			if partitionInt < 0 {
+				return fmt.Errorf("invalid partition parsed from expression, must be >= 0, got %v", partitionInt)
+			}
+			// samara requires a 32-bit integer for the partition field
+			nextMsg.Partition = int32(partitionInt)
 		}
 		msgs = append(msgs, nextMsg)
 		return nil
