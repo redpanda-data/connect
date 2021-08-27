@@ -16,8 +16,15 @@ input:
     client_id: benthos_input
     qos: 1
     clean_session: true
+    will:
+      enabled: false
+      qos: 0
+      retained: false
+      topic: ""
+      payload: ""
     user: ""
     password: ""
+    keepalive: 30
     tls:
       enabled: false
       skip_cert_verify: false
@@ -38,8 +45,16 @@ output:
     topic: benthos_topic
     client_id: benthos_output
     qos: 1
+    retained: false
+    will:
+      enabled: false
+      qos: 0
+      retained: false
+      topic: ""
+      payload: ""
     user: ""
     password: ""
+    keepalive: 30
     tls:
       enabled: false
       skip_cert_verify: false
