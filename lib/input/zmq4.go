@@ -1,3 +1,4 @@
+//go:build ZMQ4
 // +build ZMQ4
 
 package input
