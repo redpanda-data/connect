@@ -73,6 +73,7 @@ output:
     client_id: benthos_kafka_output
     key: ""
     partitioner: fnv1a_hash
+    partition: ""
     compression: none
     static_headers: {}
     metadata:

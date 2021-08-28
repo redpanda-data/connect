@@ -228,6 +228,46 @@ input:
 			testOptVarThree("false"),
 		)
 	})
+
+	templateManualPartitioner := `
+output:
+  kafka:
+    addresses: [ localhost:$PORT ]
+    topic: topic-$ID
+    max_in_flight: $MAX_IN_FLIGHT
+    retry_as_batch: $VAR3
+    metadata:
+      exclude_prefixes: [ $OUTPUT_META_EXCLUDE_PREFIX ]
+    batching:
+      count: $OUTPUT_BATCH_COUNT
+    partitioner: manual
+    partition: '${! random_int() % 4 }'
+
+input:
+  kafka:
+    addresses: [ localhost:$PORT ]
+    topics: [ topic-$ID$VAR1 ]
+    consumer_group: "$VAR4"
+    checkpoint_limit: $VAR2
+    start_from_oldest: true
+    batching:
+      count: $INPUT_BATCH_COUNT
+`
+
+	t.Run("manual_partitioner", func(t *testing.T) {
+		t.Parallel()
+		suite.Run(
+			t, templateManualPartitioner,
+			testOptPreTest(func(t testing.TB, env *testEnvironment) {
+				env.configVars.var4 = "group" + env.configVars.id
+				require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, env.configVars.id, 4))
+			}),
+			testOptPort(kafkaPortStr),
+			testOptVarTwo("1"),
+			testOptVarThree("false"),
+		)
+	})
+
 })
 
 func createKafkaTopic(address, id string, partitions int32) error {
