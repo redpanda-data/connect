@@ -47,7 +47,7 @@ However, this also means that manual intervention will eventually be required in
 			docs.FieldCommon("client_id", "An identifier for the client connection."),
 			docs.FieldCommon("key", "The key to publish messages with.").IsInterpolated(),
 			docs.FieldCommon("partitioner", "The partitioning algorithm to use.").HasOptions("fnv1a_hash", "murmur2_hash", "random", "round_robin", "manual"),
-			docs.FieldCommon("partition", "The manually-specified partition to publish messages to.  Must be able to parse as a 32-bit integer.").IsInterpolated(),
+			docs.FieldAdvanced("partition", "The manually-specified partition to publish messages to, relevant only when the field `partitioner` is set to `manual`. Must be able to parse as a 32-bit integer.").IsInterpolated(),
 			docs.FieldCommon("compression", "The compression algorithm to use.").HasOptions("none", "snappy", "lz4", "gzip"),
 			docs.FieldString("static_headers", "An optional map of static headers that should be added to messages in addition to metadata.", map[string]string{"first-static-header": "value-1", "second-static-header": "value-2"}).Map(),
 			docs.FieldCommon("metadata", "Specify criteria for which metadata values are sent with messages as headers.").WithChildren(output.MetadataFields()...),

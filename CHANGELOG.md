@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 
 - The `mqtt` input and output now support sending a last will, configuring a keep alive timeout, and setting retained out output messages.
 - Go API: New stream builder `AddBatchProducerFunc` and `AddBatchConsumerFunc` methods.
+- Field `gzip_compression` added to the `elasticsearch` output.
+- The `redis_streams` input now supports creating the stream with the `MKSTREAM` command (enabled by default).
+- The `kafka` output now supports manual partition allocation using interpolation functions in the field `partition`.
 
 ### Fixed
 

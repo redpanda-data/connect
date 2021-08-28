@@ -596,7 +596,7 @@ Default: `""`
 
 ### `gzip_compression`
 
-Whether to enable gzip compression on the request side
+Enable gzip compression on the request side.
 
 
 Type: `bool`  

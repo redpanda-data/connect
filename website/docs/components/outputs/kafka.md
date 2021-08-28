@@ -37,7 +37,6 @@ output:
     client_id: benthos_kafka_output
     key: ""
     partitioner: fnv1a_hash
-    partition: ""
     compression: none
     static_headers: {}
     metadata:
@@ -381,7 +380,7 @@ Options: `fnv1a_hash`, `murmur2_hash`, `random`, `round_robin`, `manual`.
 
 ### `partition`
 
-The manually-specified partition to publish messages to.  Must be able to parse as a 32-bit integer.
+The manually-specified partition to publish messages to, relevant only when the field `partitioner` is set to `manual`. Must be able to parse as a 32-bit integer.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
