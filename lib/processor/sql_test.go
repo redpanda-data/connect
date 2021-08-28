@@ -566,7 +566,7 @@ func SQLMSSQLIntegration(t *testing.T) {
 
 	testPassword := "ins4n3lyStrongP4ssword"
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:   "microsoft/mssql-server-linux",
+		Repository:   "mcr.microsoft.com/mssql/server",
 		ExposedPorts: []string{"1433/tcp"},
 		Env: []string{
 			"ACCEPT_EULA=Y",
