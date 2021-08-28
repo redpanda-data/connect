@@ -98,7 +98,7 @@ output:
         token: ""
         role: ""
         role_external_id: ""
-    compression: false
+    gzip_compression: false
 ```
 
 </TabItem>
@@ -594,7 +594,7 @@ An external ID to provide when assuming a role.
 Type: `string`  
 Default: `""`  
 
-### `compression`
+### `gzip_compression`
 
 Whether to enable gzip compression on the request side
 

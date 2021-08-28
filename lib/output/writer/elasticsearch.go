@@ -37,23 +37,23 @@ type OptionalAWSConfig struct {
 // ElasticsearchConfig contains configuration fields for the Elasticsearch
 // output type.
 type ElasticsearchConfig struct {
-	URLs           []string             `json:"urls" yaml:"urls"`
-	Sniff          bool                 `json:"sniff" yaml:"sniff"`
-	Healthcheck    bool                 `json:"healthcheck" yaml:"healthcheck"`
-	ID             string               `json:"id" yaml:"id"`
-	Action         string               `json:"action" yaml:"action"`
-	Index          string               `json:"index" yaml:"index"`
-	Pipeline       string               `json:"pipeline" yaml:"pipeline"`
-	Routing        string               `json:"routing" yaml:"routing"`
-	Type           string               `json:"type" yaml:"type"`
-	Timeout        string               `json:"timeout" yaml:"timeout"`
-	TLS            btls.Config          `json:"tls" yaml:"tls"`
-	Auth           auth.BasicAuthConfig `json:"basic_auth" yaml:"basic_auth"`
-	AWS            OptionalAWSConfig    `json:"aws" yaml:"aws"`
-	Compression    bool                 `json:"compression" yaml:"compression"`
-	MaxInFlight    int                  `json:"max_in_flight" yaml:"max_in_flight"`
-	retries.Config `json:",inline" yaml:",inline"`
-	Batching       batch.PolicyConfig `json:"batching" yaml:"batching"`
+	URLs            []string             `json:"urls" yaml:"urls"`
+	Sniff           bool                 `json:"sniff" yaml:"sniff"`
+	Healthcheck     bool                 `json:"healthcheck" yaml:"healthcheck"`
+	ID              string               `json:"id" yaml:"id"`
+	Action          string               `json:"action" yaml:"action"`
+	Index           string               `json:"index" yaml:"index"`
+	Pipeline        string               `json:"pipeline" yaml:"pipeline"`
+	Routing         string               `json:"routing" yaml:"routing"`
+	Type            string               `json:"type" yaml:"type"`
+	Timeout         string               `json:"timeout" yaml:"timeout"`
+	TLS             btls.Config          `json:"tls" yaml:"tls"`
+	Auth            auth.BasicAuthConfig `json:"basic_auth" yaml:"basic_auth"`
+	AWS             OptionalAWSConfig    `json:"aws" yaml:"aws"`
+	GzipCompression bool                 `json:"gzip_compression" yaml:"gzip_compression"`
+	MaxInFlight     int                  `json:"max_in_flight" yaml:"max_in_flight"`
+	retries.Config  `json:",inline" yaml:",inline"`
+	Batching        batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewElasticsearchConfig creates a new ElasticsearchConfig with default values.
@@ -80,10 +80,10 @@ func NewElasticsearchConfig() ElasticsearchConfig {
 			Enabled: false,
 			Config:  sess.NewConfig(),
 		},
-		Compression: false,
-		MaxInFlight: 1,
-		Config:      rConf,
-		Batching:    batch.NewPolicyConfig(),
+		GzipCompression: false,
+		MaxInFlight:     1,
+		Config:          rConf,
+		Batching:        batch.NewPolicyConfig(),
 	}
 }
 
@@ -219,7 +219,7 @@ func (e *Elasticsearch) Connect() error {
 		opts = append(opts, elastic.SetHttpClient(signingClient))
 	}
 
-	if e.conf.Compression {
+	if e.conf.GzipCompression {
 		opts = append(opts, elastic.SetGzip(true))
 	}
 
