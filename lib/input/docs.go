@@ -54,6 +54,7 @@ input:
     url: tcp://localhost:6379
     streams:
       - benthos_stream
+	create_streams: false
     body_key: body
     consumer_group: benthos_group
 

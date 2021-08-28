@@ -25,6 +25,7 @@ type RedisStreamsConfig struct {
 	bredis.Config   `json:",inline" yaml:",inline"`
 	BodyKey         string   `json:"body_key" yaml:"body_key"`
 	Streams         []string `json:"streams" yaml:"streams"`
+	CreateStreams   bool     `json:"create_streams" yaml:"create_streams"`
 	ConsumerGroup   string   `json:"consumer_group" yaml:"consumer_group"`
 	ClientID        string   `json:"client_id" yaml:"client_id"`
 	Limit           int64    `json:"limit" yaml:"limit"`
@@ -42,6 +43,7 @@ func NewRedisStreamsConfig() RedisStreamsConfig {
 		Config:          bredis.NewConfig(),
 		BodyKey:         "body",
 		Streams:         []string{"benthos_stream"},
+		CreateStreams:   true,
 		ConsumerGroup:   "benthos_group",
 		ClientID:        "benthos_consumer",
 		Limit:           10,
@@ -219,10 +221,14 @@ func (r *RedisStreams) ConnectWithContext(ctx context.Context) error {
 		if r.conf.StartFromOldest {
 			offset = "0"
 		}
-		if err := client.XGroupCreate(s, r.conf.ConsumerGroup, offset).Err(); err != nil {
-			if err.Error() != "BUSYGROUP Consumer Group name already exists" {
-				return fmt.Errorf("failed to create group %v for stream %v: %v", s, r.conf.ConsumerGroup, err)
-			}
+		var err error
+		if r.conf.CreateStreams {
+			err = client.XGroupCreateMkStream(s, r.conf.ConsumerGroup, offset).Err()
+		} else {
+			err = client.XGroupCreate(s, r.conf.ConsumerGroup, offset).Err()
+		}
+		if err != nil && err.Error() != "BUSYGROUP Consumer Group name already exists" {
+			return fmt.Errorf("failed to create group %v for stream %v: %v", r.conf.ConsumerGroup, s, err)
 		}
 	}
 
