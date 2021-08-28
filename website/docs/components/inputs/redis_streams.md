@@ -65,7 +65,7 @@ input:
     limit: 10
     client_id: benthos_consumer
     consumer_group: benthos_group
-    create_streams: false
+    create_streams: true
     start_from_oldest: true
     commit_period: 1s
     timeout: 1s
@@ -301,7 +301,7 @@ Create subscribed streams if they do not exist (MKSTREAM option).
 
 
 Type: `bool`  
-Default: `false`  
+Default: `true`  
 
 ### `start_from_oldest`
 
