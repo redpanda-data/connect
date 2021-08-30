@@ -1,8 +1,8 @@
 package processor
 
 import (
+	cmp "github.com/google/go-cmp/cmp"
 	"github.com/vmihailenco/msgpack/v5"
-	r "reflect"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -31,7 +31,7 @@ func TestMsgPackBasic(t *testing.T) {
 				"trueKey":  true,
 				"falseKey": false,
 				"nullKey":  nil,
-				"intKey":   123,
+				"intKey":   int8(123),
 				"floatKey": 45.6,
 				"array":    []string{"bar"},
 				"nested": map[string]interface{}{
@@ -84,10 +84,10 @@ func TestMsgPackBasic(t *testing.T) {
 			} else {
 				act = actBytes
 			}
-			if !r.DeepEqual(act, test.expectedOutput) {
+			if diff := cmp.Diff(act, test.expectedOutput); diff != "" {
 				//sliceOfBytes := r.SliceOf(r.TypeOf(byte('A')))
 				//tt.Errorf("Unexpected output:\n  expected %+q\n  actual   %+q", exp[0], act[0])
-				tt.Errorf("Unexpected output:\n  expected %s\n  actual   %s", test.expectedOutput, act)
+				tt.Errorf("Unexpected output (-want +got):\n%s", diff)
 			}
 			msgs[0].Iter(func(i int, part types.Part) error {
 				if fail := part.Metadata().Get(FailFlagKey); len(fail) > 0 {

@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/vmihailenco/msgpack/v5"
+	"math"
+	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -62,10 +65,6 @@ func NewMsgPackConfig() MsgPackConfig {
 //------------------------------------------------------------------------------
 
 type MsgPackOperator func(part types.Part) error
-
-func (i *json.Number) EncodeMsgpack(enc *msgpack.Encoder) error {
-	return enc.Encode(i)
-}
 
 func strToMsgPackOperator(opStr string) (MsgPackOperator, error) {
 	switch opStr {
@@ -141,6 +140,42 @@ func NewMsgPack(
 		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 	var err error
+
+	msgpack.Register(json.Number("0"),
+		func(enc *msgpack.Encoder, value reflect.Value) error {
+			strValue := value.String()
+			if intValue, err := strconv.Atoi(strValue); err == nil {
+				if intValue >= math.MinInt8 && intValue <= math.MaxInt8 {
+					if err := enc.EncodeInt8(int8(intValue)); err != nil {
+						return err
+					}
+				} else if intValue >= math.MinInt16 && intValue <= math.MaxInt16 {
+					if err := enc.EncodeInt16(int16(intValue)); err != nil {
+						return err
+					}
+				} else if intValue >= math.MinInt32 && intValue <= math.MaxInt32 {
+					if err := enc.EncodeInt32(int32(intValue)); err != nil {
+						return err
+					}
+				} else {
+					if err := enc.EncodeInt(int64(intValue)); err != nil {
+						return err
+					}
+				}
+			} else if floatValue, err := strconv.ParseFloat(strValue, 64); err == nil {
+				err := enc.EncodeFloat64(floatValue)
+				if err != nil {
+					return err
+				}
+			} else {
+				return fmt.Errorf("unable to parse %s neither as int nor as float", strValue)
+			}
+			return nil
+		},
+		func(dec *msgpack.Decoder, value reflect.Value) error {
+			return nil
+		},
+	)
 
 	if a.operator, err = strToMsgPackOperator(conf.MsgPack.Operator); err != nil {
 		return nil, err
