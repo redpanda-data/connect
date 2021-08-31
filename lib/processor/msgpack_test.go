@@ -33,23 +33,23 @@ func TestMsgPackBasic(t *testing.T) {
 				"nullKey":  nil,
 				"intKey":   int8(123),
 				"floatKey": 45.6,
-				"array":    []string{"bar"},
+				"array": []interface{}{
+					"bar",
+				},
 				"nested": map[string]interface{}{
 					"key": "baz",
 				},
 			},
 			parseMsgPackOutput: true,
 		},
-		/*{
+		{
 			name:     "msgpack to json basic",
 			operator: "to_json",
-			input: []string{
-				"\x88\xa6intKey\xa3123\xa8floatKey\xa445.6\xa5array\x91\xa3bar\xa6nested\x81\xa3key\xa3baz\xa3key\xa3foo\xa7trueKeyèfalseKey§nullKey\xc0",
-			},
-			output: []string{
+			input:    "\x88\xa6intKey\xa3123\xa8floatKey\xa445.6\xa5array\x91\xa3bar\xa6nested\x81\xa3key\xa3baz\xa3key\xa3foo\xa7trueKeyèfalseKey§nullKey\xc0",
+			expectedOutput: []string{
 				`{"key":"foo","trueKey":true,"falseKey":false,"nullKey":null,"intKey":123,"floatKey":45.6,"array":["bar"],"nested":{"key":"baz"}}`,
 			},
-		},*/
+		},
 	}
 
 	for _, test := range tests {
