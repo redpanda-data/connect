@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/vmihailenco/msgpack/v5"
@@ -71,14 +70,10 @@ func strToMsgPackOperator(opStr string) (MsgPackOperator, error) {
 	case "to_json":
 		return func(part types.Part) error {
 			var jObj interface{}
-			decoder := msgpack.GetDecoder()
-			decoder.Reset(bytes.NewReader(part.Get()))
-			err := decoder.Decode(&jObj)
-			msgpack.PutDecoder(decoder)
-			if err != nil {
+			if err := msgpack.Unmarshal(part.Get(), &jObj); err != nil {
 				return fmt.Errorf("failed to convert MsgPack document to JSON: %v", err)
 			}
-			if err = part.SetJSON(jObj); err != nil {
+			if err := part.SetJSON(jObj); err != nil {
 				return fmt.Errorf("failed to set JSON: %v", err)
 			}
 			return nil
@@ -89,18 +84,11 @@ func strToMsgPackOperator(opStr string) (MsgPackOperator, error) {
 			if err != nil {
 				return fmt.Errorf("failed to parse message as JSON: %v", err)
 			}
-			enc := msgpack.GetEncoder()
-			enc.UseCompactFloats(true)
-			enc.UseCompactInts(true)
-
-			var buffer bytes.Buffer
-			enc.Reset(&buffer)
-			err = enc.Encode(&jObj)
-			msgpack.PutEncoder(enc)
+			bytes, err := msgpack.Marshal(jObj)
 			if err != nil {
 				return fmt.Errorf("failed to convert JSON to MsgPack: %v", err)
 			}
-			part.Set(buffer.Bytes())
+			part.Set(bytes)
 			return nil
 		}, nil
 	}
