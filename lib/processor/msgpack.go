@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/vmihailenco/msgpack/v5"
-	"math"
 	"reflect"
 	"strconv"
 	"time"
@@ -132,27 +131,16 @@ func NewMsgPack(
 	msgpack.Register(json.Number("0"),
 		func(enc *msgpack.Encoder, value reflect.Value) error {
 			strValue := value.String()
-			if intValue, err := strconv.Atoi(strValue); err == nil {
-				if intValue >= math.MinInt8 && intValue <= math.MaxInt8 {
-					if err := enc.EncodeInt8(int8(intValue)); err != nil {
-						return err
-					}
-				} else if intValue >= math.MinInt16 && intValue <= math.MaxInt16 {
-					if err := enc.EncodeInt16(int16(intValue)); err != nil {
-						return err
-					}
-				} else if intValue >= math.MinInt32 && intValue <= math.MaxInt32 {
-					if err := enc.EncodeInt32(int32(intValue)); err != nil {
-						return err
-					}
-				} else {
-					if err := enc.EncodeInt(int64(intValue)); err != nil {
-						return err
-					}
+			if intValue, err := strconv.ParseInt(strValue, 10, 64); err == nil {
+				if err := enc.EncodeInt(intValue); err != nil {
+					return err
+				}
+			} else if uintValue, err := strconv.ParseUint(strValue, 10, 64); err == nil {
+				if err := enc.EncodeUint(uintValue); err != nil {
+					return err
 				}
 			} else if floatValue, err := strconv.ParseFloat(strValue, 64); err == nil {
-				err := enc.EncodeFloat64(floatValue)
-				if err != nil {
+				if err := enc.EncodeFloat64(floatValue); err != nil {
 					return err
 				}
 			} else {

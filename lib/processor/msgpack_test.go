@@ -22,7 +22,7 @@ func TestMsgPackToJson(t *testing.T) {
 
 	tests := []testCase{
 		{
-			name:        "msgpack to json basic",
+			name:        "basic",
 			base64Input: "iKNrZXmjZm9vp3RydWVLZXnDqGZhbHNlS2V5wqdudWxsS2V5wKZpbnRLZXnQe6hmbG9hdEtlectARszMzMzMzaVhcnJheZGjYmFypm5lc3RlZIGja2V5o2Jheg==",
 			expectedOutput: map[string]interface{}{
 				"key":      "foo",
@@ -71,15 +71,7 @@ func TestMsgPackToJson(t *testing.T) {
 			if err != nil {
 				tt.Fatal(err)
 			}
-			if diff := cmp.Diff(act, test.expectedOutput); diff != "" {
-				tt.Errorf("Unexpected output (-want +got):\n%s", diff)
-			}
-			msgs[0].Iter(func(i int, part types.Part) error {
-				if fail := part.Metadata().Get(FailFlagKey); len(fail) > 0 {
-					tt.Error(fail)
-				}
-				return nil
-			})
+			validateResult(tt, act, test.expectedOutput, msgs)
 		})
 	}
 }
@@ -94,7 +86,7 @@ func TestMsgPackFromJson(t *testing.T) {
 
 	tests := []testCase{
 		{
-			name:  "json to msgpack basic",
+			name:  "basic",
 			input: `{"key":"foo","trueKey":true,"falseKey":false,"nullKey":null,"intKey":123,"floatKey":45.6,"array":["bar"],"nested":{"key":"baz"}}`,
 			expectedOutput: map[string]interface{}{
 				"key":      "foo",
@@ -109,6 +101,20 @@ func TestMsgPackFromJson(t *testing.T) {
 				"nested": map[string]interface{}{
 					"key": "baz",
 				},
+			},
+		},
+		{
+			name:  "various ints",
+			input: `{"int8": 13, "uint8": 254, "int16": -257, "uint16" : 65534, "int32" : -70123, "uint32" : 2147483648, "int64" : -9223372036854775808, "uint64": 18446744073709551615}`,
+			expectedOutput: map[string]interface{}{
+				"int8":   int8(13),
+				"uint8":  uint8(254),
+				"int16":  int16(-257),
+				"uint16": uint16(65534),
+				"int32":  int32(-70123),
+				"uint32": uint32(2147483648),
+				"int64":  int64(-9223372036854775808),
+				"uint64": uint64(18446744073709551615),
 			},
 		},
 	}
@@ -137,15 +143,19 @@ func TestMsgPackFromJson(t *testing.T) {
 			if err := msgpack.Unmarshal(message.GetAllBytes(msgs[0])[0], &act); err != nil {
 				tt.Fatalf("Unable to parse MessagePack out of result: %v", err)
 			}
-			if diff := cmp.Diff(act, test.expectedOutput); diff != "" {
-				tt.Errorf("Unexpected output (-want +got):\n%s", diff)
-			}
-			msgs[0].Iter(func(i int, part types.Part) error {
-				if fail := part.Metadata().Get(FailFlagKey); len(fail) > 0 {
-					tt.Error(fail)
-				}
-				return nil
-			})
+			validateResult(tt, act, test.expectedOutput, msgs)
 		})
 	}
+}
+
+func validateResult(tt *testing.T, actual interface{}, expected interface{}, msgs []types.Message) {
+	if diff := cmp.Diff(actual, expected); diff != "" {
+		tt.Errorf("Unexpected output (-want +got):\n%s", diff)
+	}
+	msgs[0].Iter(func(i int, part types.Part) error {
+		if fail := part.Metadata().Get(FailFlagKey); len(fail) > 0 {
+			tt.Error(fail)
+		}
+		return nil
+	})
 }
