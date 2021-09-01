@@ -12,6 +12,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -108,6 +109,9 @@ output:
 				"args",
 				"A list of arguments for the query to be resolved for each message.",
 			).IsInterpolated().Array(),
+			docs.FieldCommon(
+				"args_mapping",
+				"A [Bloblang mapping](/docs/guides/bloblang/about) that can be used to provide arguments to Cassandra queries."),
 			docs.FieldAdvanced(
 				"consistency",
 				"The consistency level to use.",
@@ -145,6 +149,7 @@ type CassandraConfig struct {
 	DisableInitialHostLookup bool                  `json:"disable_initial_host_lookup" yaml:"disable_initial_host_lookup"`
 	Query                    string                `json:"query" yaml:"query"`
 	Args                     []string              `json:"args" yaml:"args"`
+	ArgsMapping              string                `json:"args_mapping" yaml:"args_mapping"`
 	Consistency              string                `json:"consistency" yaml:"consistency"`
 	// TODO: V4 Remove this and replace with explicit values.
 	retries.Config `json:",inline" yaml:",inline"`
@@ -171,6 +176,7 @@ func NewCassandraConfig() CassandraConfig {
 		DisableInitialHostLookup: false,
 		Query:                    "",
 		Args:                     []string{},
+		ArgsMapping:              "",
 		Consistency:              gocql.Quorum.String(),
 		Config:                   rConf,
 		MaxInFlight:              1,
@@ -188,12 +194,18 @@ type cassandraWriter struct {
 	backoffMax time.Duration
 
 	args          []*field.Expression
+	argsMapping   *mapping.Executor
 	session       *gocql.Session
 	mQueryLatency metrics.StatTimer
 	connLock      sync.RWMutex
 }
 
 func newCassandraWriter(conf CassandraConfig, log log.Modular, stats metrics.Type) (*cassandraWriter, error) {
+	// Allow only args or args_mapping for now.
+	if len(conf.Args) > 0 && conf.ArgsMapping != "" {
+		return nil, fmt.Errorf("can only specify one of [args, args_mapping]")
+	}
+
 	var args []*field.Expression
 	for i, v := range conf.Args {
 		expr, err := bloblang.NewField(v)
@@ -210,6 +222,7 @@ func newCassandraWriter(conf CassandraConfig, log log.Modular, stats metrics.Typ
 		args:          args,
 		mQueryLatency: stats.GetTimer("query.latency"),
 	}
+
 	var err error
 	if conf.TLS.Enabled {
 		if c.tlsConf, err = conf.TLS.Get(); err != nil {
@@ -221,6 +234,9 @@ func newCassandraWriter(conf CassandraConfig, log log.Modular, stats metrics.Typ
 	}
 	if c.backoffMax, err = time.ParseDuration(c.conf.Config.Backoff.MaxInterval); err != nil {
 		return nil, fmt.Errorf("parsing backoff max interval: %w", err)
+	}
+	if c.argsMapping, err = bloblang.NewMapping("", conf.ArgsMapping); err != nil {
+		return nil, fmt.Errorf("failed to parse args_mapping: %v", err)
 	}
 	return &c, nil
 }
@@ -348,17 +364,49 @@ func (s stringValue) MarshalCQL(info gocql.TypeInfo) ([]byte, error) {
 func (c *cassandraWriter) writeRow(session *gocql.Session, msg types.Message) error {
 	t0 := time.Now()
 
-	values := make([]interface{}, 0, len(c.args))
-	for _, arg := range c.args {
-		values = append(values, stringValue(arg.String(0, msg)))
+	var values []interface{}
+
+	if len(c.args) > 0 {
+		values = make([]interface{}, 0, len(c.args))
+		for _, arg := range c.args {
+			values = append(values, stringValue(arg.String(0, msg)))
+		}
+	} else {
+		args, err := c.parseArgs(msg, 0)
+		if err != nil {
+			return fmt.Errorf("parsing args_mapping: %w", err)
+		}
+		values = append(values, args...)
+
+		fmt.Println("* * * * * *", values)
 	}
-	err := session.Query(c.conf.Query, values...).Exec()
-	if err != nil {
+
+	if err := session.Query(c.conf.Query, values...).Exec(); err != nil {
 		return err
 	}
 
 	c.mQueryLatency.Timing(time.Since(t0).Nanoseconds())
 	return nil
+}
+
+func (c *cassandraWriter) parseArgs(msg mapping.Message, index int) ([]interface{}, error) {
+	part, err := c.argsMapping.MapPart(index, msg)
+	if err != nil {
+		return nil, fmt.Errorf("executing bloblang mapping: %w", err)
+	}
+
+	jraw, err := part.JSON()
+	if err != nil {
+		return nil, fmt.Errorf("parsing bloblang mapping result as json: %w", err)
+	}
+
+	fmt.Printf("* * * * * %T", jraw)
+	j, ok := jraw.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("expected bloblang mapping result to be []interface{} but was %T", jraw)
+	}
+
+	return j, nil
 }
 
 func (c *cassandraWriter) writeBatch(session *gocql.Session, msg types.Message) error {
