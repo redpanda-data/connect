@@ -774,7 +774,9 @@ func TestTimestamps(t *testing.T) {
 
 	now = time.Now()
 	e, perr = tryParseQuery("timestamp_unix()", false)
-	require.Nil(t, perr)
+	if !assert.Nil(t, perr) {
+		require.NoError(t, perr.Err)
+	}
 
 	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.New(nil)})
 
@@ -789,8 +791,10 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, perr = tryParseQuery("timestamp_unix(10)", false)
-	require.Nil(t, perr)
+	e, perr = tryParseQuery("timestamp_unix()", false)
+	if !assert.Nil(t, perr) {
+		require.NoError(t, perr.Err)
+	}
 
 	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.New(nil)})
 

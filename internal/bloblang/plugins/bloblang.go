@@ -27,12 +27,15 @@ func Register() error {
 				`{"body":{"foo":"hello world 2"},"mapping":"root.foo = this.foo.capitalize()"}`,
 				`{"body":{"foo":"Hello World 2"}}`,
 			),
-		).Beta(),
-		func(target query.Function, args ...interface{}) (query.Function, error) {
-			mappingStr := args[0].(string)
-			exec, err := parser.ParseMapping(dynamicBloblangParserContext, "", mappingStr)
+		).Beta().Param(query.ParamString("mapping", "The mapping to execute.")),
+		func(target query.Function, args *query.ParsedParams) (query.Function, error) {
+			mappingStr, err := args.FieldString("mapping")
 			if err != nil {
 				return nil, err
+			}
+			exec, parserErr := parser.ParseMapping(dynamicBloblangParserContext, "", mappingStr)
+			if parserErr != nil {
+				return nil, parserErr
 			}
 			return query.ClosureFunction("method bloblang", func(ctx query.FunctionContext) (interface{}, error) {
 				v, err := target.Exec(ctx)
@@ -46,8 +49,5 @@ func Register() error {
 				}.WithValue(v))
 			}, target.QueryTargets), nil
 		},
-		true,
-		query.ExpectNArgs(1),
-		query.ExpectStringArg(0),
 	)
 }

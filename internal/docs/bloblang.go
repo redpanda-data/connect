@@ -89,8 +89,19 @@ BETA: This function is mostly stable but breaking changes could still be made ou
 
 {{end -}}
 {{.Description}}
+{{if gt (len .Params.Definitions) 0}}
+#### Parameters
+
+{{range $i, $param := .Params.Definitions -}}
+` + "`{{$param.Name}}`" + ` ({{if $param.IsOptional}}optional {{end}}{{$param.ValueType}}) {{$param.Description}}{{if $param.DefaultValue}} Has default ` + "`{{$param.DefaultValue}}`." + `{{end}}  
+{{end -}}
+{{end -}}
+{{if gt (len .Examples) 0}}
+#### Examples
+
 {{range $i, $example := .Examples}}
 {{template "function_example" $example -}}
+{{end -}}
 {{end -}}
 
 {{end -}}
@@ -202,8 +213,19 @@ BETA: This method is mostly stable but breaking changes could still be made outs
 
 {{end -}}
 {{.Description}}
+{{if gt (len .Params.Definitions) 0}}
+#### Parameters
+
+{{range $i, $param := .Params.Definitions -}}
+` + "`{{$param.Name}}`" + ` ({{if $param.IsOptional}}optional {{end}}{{$param.ValueType}}) {{$param.Description}}{{if $param.DefaultValue}} Has default ` + "`{{$param.DefaultValue}}`." + `{{end}}  
+{{end -}}
+{{end -}}
+{{if gt (len .Examples) 0}}
+#### Examples
+
 {{range $i, $example := .Examples}}
 {{template "method_example" $example -}}
+{{end -}}
 {{end -}}
 
 {{end -}}

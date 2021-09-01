@@ -43,11 +43,23 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"bad args 7": {
 			input: `json(5)`,
-			err:   `line 1 char 1: expected string argument, received int64`,
+			err:   `line 1 char 1: field path: wrong argument type, expected string, got number`,
 		},
 		"bad args 8": {
 			input: `json(false)`,
-			err:   `line 1 char 1: expected string argument, received bool`,
+			err:   `line 1 char 1: field path: wrong argument type, expected string, got bool`,
+		},
+		"unfinished named arg first": {
+			input: `foo.parse_timestamp(format: "meow", tz:)`,
+			err:   `line 1 char 40: required: expected argument value`,
+		},
+		"unfinished named arg first with comma": {
+			input: `foo.parse_timestamp(format: "meow", tz:,)`,
+			err:   `line 1 char 40: required: expected argument value`,
+		},
+		"cannot mix args types": {
+			input: `foo.format_timestamp("foo", tz: "bar")`,
+			err:   `line 1 char 5: cannot mix named and nameless arguments`,
 		},
 		"bad operators": {
 			input: `json("foo") + `,

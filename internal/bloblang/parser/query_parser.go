@@ -6,12 +6,14 @@ import (
 
 // FunctionSet provides constructors to the functions available in this query.
 type FunctionSet interface {
-	Init(string, ...interface{}) (query.Function, error)
+	Params(name string) (query.Params, error)
+	Init(name string, args *query.ParsedParams) (query.Function, error)
 }
 
 // MethodSet provides constructors to the methods available in this query.
 type MethodSet interface {
-	Init(string, query.Function, ...interface{}) (query.Function, error)
+	Params(name string) (query.Params, error)
+	Init(name string, target query.Function, args *query.ParsedParams) (query.Function, error)
 }
 
 // Context contains context used throughout a Bloblang parser for
@@ -57,14 +59,14 @@ func (pCtx Context) HasNamedContext(name string) bool {
 
 // InitFunction attempts to initialise a function from the available
 // constructors of the parser context.
-func (pCtx Context) InitFunction(name string, args ...interface{}) (query.Function, error) {
-	return pCtx.Functions.Init(name, args...)
+func (pCtx Context) InitFunction(name string, args *query.ParsedParams) (query.Function, error) {
+	return pCtx.Functions.Init(name, args)
 }
 
 // InitMethod attempts to initialise a method from the available constructors of
 // the parser context.
-func (pCtx Context) InitMethod(name string, target query.Function, args ...interface{}) (query.Function, error) {
-	return pCtx.Methods.Init(name, target, args...)
+func (pCtx Context) InitMethod(name string, target query.Function, args *query.ParsedParams) (query.Function, error) {
+	return pCtx.Methods.Init(name, target, args)
 }
 
 func queryParser(pCtx Context) func(input []rune) Result {

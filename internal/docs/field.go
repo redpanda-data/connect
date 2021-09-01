@@ -2,7 +2,6 @@ package docs
 
 import (
 	"fmt"
-	"reflect"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 )
@@ -56,29 +55,6 @@ func (t FieldType) IsCoreComponent() (Type, bool) {
 		return TypeMetrics, true
 	}
 	return "", false
-}
-
-func getFieldTypeFromInterface(v interface{}) (FieldType, bool) {
-	return getFieldTypeFromReflect(reflect.TypeOf(v))
-}
-
-func getFieldTypeFromReflect(t reflect.Type) (FieldType, bool) {
-	switch t.Kind().String() {
-	case "map":
-		return FieldTypeObject, false
-	case "slice":
-		ft, _ := getFieldTypeFromReflect(t.Elem())
-		return ft, true
-	case "int", "int64":
-		return FieldTypeInt, false
-	case "float64":
-		return FieldTypeFloat, false
-	case "string":
-		return FieldTypeString, false
-	case "bool":
-		return FieldTypeBool, false
-	}
-	return FieldTypeUnknown, false
 }
 
 // FieldKind represents a field kind.

@@ -64,11 +64,14 @@ type FunctionSpec struct {
 	// Description of the functions purpose (in markdown).
 	Description string
 
+	// Params defines the expected arguments of the function.
+	Params Params
+
 	// Examples shows general usage for the function.
 	Examples []ExampleSpec
 
-	// Impure indicates that a function accesses or interacts with the
-	// environment, and is therefore unsafe.
+	// Impure indicates that a function accesses or interacts with the outter
+	// environment, and is therefore unsafe to execute in shared environments.
 	Impure bool
 }
 
@@ -80,6 +83,7 @@ func NewFunctionSpec(category FunctionCategory, name, description string, exampl
 		Name:        name,
 		Description: description,
 		Examples:    examples,
+		Params:      NewParams(),
 	}
 }
 
@@ -96,6 +100,12 @@ func (s FunctionSpec) MarkImpure() FunctionSpec {
 	return s
 }
 
+// Param adds a parameter to the function.
+func (s FunctionSpec) Param(def ParamDefinition) FunctionSpec {
+	s.Params = s.Params.Add(def)
+	return s
+}
+
 // NewDeprecatedFunctionSpec creates a new function spec that is deprecated.
 func NewDeprecatedFunctionSpec(name, description string, examples ...ExampleSpec) FunctionSpec {
 	return FunctionSpec{
@@ -104,6 +114,7 @@ func NewDeprecatedFunctionSpec(name, description string, examples ...ExampleSpec
 		Name:        name,
 		Description: description,
 		Examples:    examples,
+		Params:      NewParams(),
 	}
 }
 
@@ -112,6 +123,7 @@ func NewHiddenFunctionSpec(name string) FunctionSpec {
 	return FunctionSpec{
 		Status: StatusHidden,
 		Name:   name,
+		Params: NewParams(),
 	}
 }
 
@@ -153,6 +165,9 @@ type MethodSpec struct {
 	// Description of the method purpose (in markdown).
 	Description string
 
+	// Params defines the expected arguments of the method.
+	Params Params
+
 	// Examples shows general usage for the method.
 	Examples []ExampleSpec
 
@@ -167,6 +182,7 @@ func NewMethodSpec(name, description string, examples ...ExampleSpec) MethodSpec
 		Status:      StatusStable,
 		Description: description,
 		Examples:    examples,
+		Params:      NewParams(),
 	}
 }
 
@@ -178,6 +194,7 @@ func NewDeprecatedMethodSpec(name, description string, examples ...ExampleSpec) 
 		Name:     name,
 		Status:   StatusDeprecated,
 		Examples: examples,
+		Params:   NewParams(),
 	}
 }
 
@@ -186,12 +203,25 @@ func NewHiddenMethodSpec(name string) MethodSpec {
 	return MethodSpec{
 		Name:   name,
 		Status: StatusHidden,
+		Params: NewParams(),
 	}
 }
 
 // Beta flags the function as a beta component.
 func (m MethodSpec) Beta() MethodSpec {
 	m.Status = StatusBeta
+	return m
+}
+
+// Param adds a parameter to the function.
+func (m MethodSpec) Param(def ParamDefinition) MethodSpec {
+	m.Params = m.Params.Add(def)
+	return m
+}
+
+// VariadicParams configures the method spec to allow variadic parameters.
+func (m MethodSpec) VariadicParams() MethodSpec {
+	m.Params = VariadicParams()
 	return m
 }
 

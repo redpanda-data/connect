@@ -10,17 +10,53 @@ import (
 func TestEnvironment(t *testing.T) {
 	env1, env2 := NewEnvironment(), NewEnvironment()
 
-	env1.RegisterMethod("foo", func(_ ...interface{}) (Method, error) {
+	require.NoError(t, env1.RegisterMethod("foo", func(_ ...interface{}) (Method, error) {
 		return StringMethod(func(s string) (interface{}, error) {
 			return "foo:" + s, nil
 		}), nil
-	})
+	}))
 
-	env2.RegisterFunction("bar", func(_ ...interface{}) (Function, error) {
+	require.NoError(t, env2.RegisterFunction("bar", func(_ ...interface{}) (Function, error) {
 		return func() (interface{}, error) {
 			return "bar", nil
 		}, nil
-	})
+	}))
+
+	_, err := env1.Parse(`root = bar()`)
+	assert.EqualError(t, err, "unrecognised function 'bar': bar()")
+
+	exe, err := env1.Parse(`root = "bar".foo()`)
+	require.NoError(t, err)
+
+	v, err := exe.Query(nil)
+	require.NoError(t, err)
+	assert.Equal(t, "foo:bar", v)
+
+	_, err = env2.Parse(`root = "bar".foo()`)
+	assert.EqualError(t, err, "unrecognised method 'foo': foo()")
+
+	exe, err = env2.Parse(`root = bar()`)
+	require.NoError(t, err)
+
+	v, err = exe.Query(nil)
+	require.NoError(t, err)
+	assert.Equal(t, "bar", v)
+}
+
+func TestEnvironmentV2(t *testing.T) {
+	env1, env2 := NewEnvironment(), NewEnvironment()
+
+	require.NoError(t, env1.RegisterMethodV2(NewParamsSpec("foo", ""), func(_ *ParsedParams) (Method, error) {
+		return StringMethod(func(s string) (interface{}, error) {
+			return "foo:" + s, nil
+		}), nil
+	}))
+
+	require.NoError(t, env2.RegisterFunctionV2(NewParamsSpec("bar", ""), func(_ *ParsedParams) (Function, error) {
+		return func() (interface{}, error) {
+			return "bar", nil
+		}, nil
+	}))
 
 	_, err := env1.Parse(`root = bar()`)
 	assert.EqualError(t, err, "unrecognised function 'bar': bar()")

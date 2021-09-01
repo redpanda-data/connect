@@ -13,13 +13,13 @@ func TestFunctionSetWithout(t *testing.T) {
 	assert.Contains(t, setOne.List(), "uuid_v4")
 	assert.NotContains(t, setTwo.List(), "uuid_v4")
 
-	_, err := setOne.Init("uuid_v4")
+	_, err := setOne.Init("uuid_v4", nil)
 	assert.NoError(t, err)
 
-	_, err = setTwo.Init("uuid_v4")
+	_, err = setTwo.Init("uuid_v4", nil)
 	assert.EqualError(t, err, "unrecognised function 'uuid_v4'")
 
-	_, err = setTwo.Init("timestamp_unix")
+	_, err = setTwo.Init("timestamp_unix", nil)
 	assert.NoError(t, err)
 }
 
@@ -53,7 +53,7 @@ func TestFunctionBadName(t *testing.T) {
 	for k, v := range testCases {
 		t.Run(k, func(t *testing.T) {
 			setOne := AllFunctions.Without()
-			err := setOne.Add(NewFunctionSpec(FunctionCategoryGeneral, k, ""), nil, false)
+			err := setOne.Add(NewFunctionSpec(FunctionCategoryGeneral, k, ""), nil)
 			if len(v) > 0 {
 				assert.EqualError(t, err, v)
 			} else {

@@ -6,8 +6,6 @@ import (
 	"math"
 )
 
-//------------------------------------------------------------------------------
-
 var _ = registerSimpleMethod(
 	NewMethodSpec("abs", "Returns the absolute value of a number.").InCategory(
 		MethodCategoryNumbers, "",
@@ -19,7 +17,7 @@ var _ = registerSimpleMethod(
 			`{"new_value":5.9}`,
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
 			var v float64
 			if f != nil {
@@ -32,8 +30,6 @@ var _ = registerSimpleMethod(
 			return math.Abs(v), nil
 		}), nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 var _ = registerSimpleMethod(
@@ -47,7 +43,7 @@ var _ = registerSimpleMethod(
 			`{"new_value":-5}`,
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
 			if f != nil {
 				return int64(math.Ceil(*f)), nil
@@ -58,8 +54,6 @@ var _ = registerSimpleMethod(
 			return *ui, nil
 		}), nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 var _ = registerSimpleMethod(
@@ -74,7 +68,7 @@ var _ = registerSimpleMethod(
 			`{"new_value":5}`,
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
 			if f != nil {
 				return int64(math.Floor(*f)), nil
@@ -85,8 +79,6 @@ var _ = registerSimpleMethod(
 			return *ui, nil
 		}), nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 var _ = registerSimpleMethod(
@@ -100,7 +92,7 @@ var _ = registerSimpleMethod(
 			`{"new_value":1}`,
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
 			var v float64
 			if f != nil {
@@ -113,8 +105,6 @@ var _ = registerSimpleMethod(
 			return math.Log(v), nil
 		}), nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 var _ = registerSimpleMethod(
@@ -128,7 +118,7 @@ var _ = registerSimpleMethod(
 			`{"new_value":3}`,
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
 			var v float64
 			if f != nil {
@@ -141,8 +131,6 @@ var _ = registerSimpleMethod(
 			return math.Log10(v), nil
 		}), nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 var _ = registerSimpleMethod(
@@ -164,7 +152,7 @@ var _ = registerSimpleMethod(
 			`{"new_value":7}`,
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			arr, ok := v.([]interface{})
 			if !ok {
@@ -186,8 +174,6 @@ var _ = registerSimpleMethod(
 			return max, nil
 		}, nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 var _ = registerSimpleMethod(
@@ -209,7 +195,7 @@ var _ = registerSimpleMethod(
 			`{"new_value":10}`,
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			arr, ok := v.([]interface{})
 			if !ok {
@@ -231,8 +217,6 @@ var _ = registerSimpleMethod(
 			return max, nil
 		}, nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 var _ = registerSimpleMethod(
@@ -249,7 +233,7 @@ var _ = registerSimpleMethod(
 			`{"new_value":6}`,
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
 			if f != nil {
 				return int64(math.Round(*f)), nil
@@ -260,6 +244,4 @@ var _ = registerSimpleMethod(
 			return *ui, nil
 		}), nil
 	},
-	false,
-	ExpectNArgs(0),
 )

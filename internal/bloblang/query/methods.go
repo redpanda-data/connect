@@ -11,7 +11,7 @@ import (
 var _ = registerMethod(
 	NewMethodSpec(
 		"apply",
-		"Apply a declared map on a value.",
+		"Apply a declared mapping to a target value.",
 		NewExampleSpec("",
 			`map thing {
   root.inner = this.first
@@ -32,14 +32,15 @@ root.foo = null.apply("create_foo")`,
 			`{"id":"1234"}`,
 			`{"foo":{"name":"a foo","purpose":"to be a foo"},"id":"1234"}`,
 		),
-	),
-	true, applyMethod,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+	).Param(ParamString("mapping", "The mapping to apply.")),
+	applyMethod,
 )
 
-func applyMethod(target Function, args ...interface{}) (Function, error) {
-	targetMap := args[0].(string)
+func applyMethod(target Function, args *ParsedParams) (Function, error) {
+	targetMap, err := args.FieldString("mapping")
+	if err != nil {
+		return nil, err
+	}
 
 	return ClosureFunction("map "+targetMap, func(ctx FunctionContext) (interface{}, error) {
 		res, err := target.Exec(ctx)
@@ -75,7 +76,7 @@ func applyMethod(target Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = registerMethod(
+var _ = registerOldParamsMethod(
 	NewMethodSpec("bool", "").InCategory(
 		MethodCategoryCoercion,
 		"Attempt to parse a value into a boolean. An optional argument can be provided, in which case if the value cannot be parsed the argument will be returned instead. If the value is a number then any non-zero value will resolve to `true`, if the value is a string then any of the following values are considered valid: `1, t, T, TRUE, true, True, 0, f, F, FALSE`.",
@@ -85,8 +86,8 @@ root.bar = this.thing.bool(true)`,
 		),
 	),
 	true, boolMethod,
-	ExpectOneOrZeroArgs(),
-	ExpectBoolArg(0),
+	oldParamsExpectOneOrZeroArgs(),
+	oldParamsExpectBoolArg(0),
 )
 
 func boolMethod(target Function, args ...interface{}) (Function, error) {
@@ -115,7 +116,7 @@ func boolMethod(target Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = registerMethod(
+var _ = registerOldParamsMethod(
 	NewMethodSpec(
 		"catch",
 		"If the result of a target query fails (due to incorrect types, failed parsing, etc) the argument is returned instead.",
@@ -131,7 +132,7 @@ var _ = registerMethod(
 		),
 	),
 	false, catchMethod,
-	ExpectNArgs(1),
+	oldParamsExpectNArgs(1),
 )
 
 func catchMethod(fn Function, args ...interface{}) (Function, error) {
@@ -150,7 +151,7 @@ func catchMethod(fn Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = registerMethod(
+var _ = registerOldParamsMethod(
 	NewMethodSpec(
 		"from",
 		"Modifies a target query such that certain functions are executed from the perspective of another message in the batch. This allows you to mutate events based on the contents of other messages. Functions that support this behaviour are `content`, `json` and `meta`.",
@@ -166,8 +167,8 @@ root.foo = json("foo").from(1)`,
 			target: target,
 		}, nil
 	},
-	ExpectNArgs(1),
-	ExpectIntArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectIntArg(0),
 )
 
 type fromMethod struct {
@@ -191,7 +192,7 @@ func (f *fromMethod) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetP
 
 //------------------------------------------------------------------------------
 
-var _ = registerMethod(
+var _ = registerOldParamsMethod(
 	NewMethodSpec(
 		"from_all",
 		"Modifies a target query such that certain functions are executed from the perspective of each message in the batch, and returns the set of results as an array. Functions that support this behaviour are `content`, `json` and `meta`.",
@@ -201,7 +202,7 @@ root.foo_summed = json("foo").from_all().sum()`,
 		),
 	),
 	false, fromAllMethod,
-	ExpectNArgs(0),
+	oldParamsExpectNArgs(0),
 )
 
 func fromAllMethod(target Function, _ ...interface{}) (Function, error) {
@@ -233,7 +234,7 @@ func fromAllMethod(target Function, _ ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = registerMethod(
+var _ = registerOldParamsMethod(
 	NewMethodSpec(
 		"get",
 		"Extract a field value, identified via a [dot path][field_paths], from an object.",
@@ -248,8 +249,8 @@ var _ = registerMethod(
 		),
 	),
 	true, getMethodCtor,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectStringArg(0),
 )
 
 type getMethod struct {
@@ -309,10 +310,10 @@ func getMethodCtor(target Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = registerMethod(
+var _ = registerOldParamsMethod(
 	NewHiddenMethodSpec("map"), false, mapMethod,
-	ExpectNArgs(1),
-	ExpectFunctionArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectFunctionArg(0),
 )
 
 // NewMapMethod attempts to create a map method.
@@ -342,9 +343,9 @@ func mapMethod(target Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = registerMethod(
+var _ = registerOldParamsMethod(
 	NewHiddenMethodSpec("not"), false, notMethodCtor,
-	ExpectNArgs(0),
+	oldParamsExpectNArgs(0),
 )
 
 type notMethod struct {
@@ -384,7 +385,7 @@ func notMethodCtor(target Function, _ ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"not_null", "",
 	).InCategory(
@@ -407,12 +408,12 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	false,
-	ExpectNArgs(0),
+	oldParamsExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerMethod(
+var _ = registerOldParamsMethod(
 	NewMethodSpec(
 		"number", "",
 	).InCategory(
@@ -424,8 +425,8 @@ root.bar = this.thing.number(5) * 10`,
 		),
 	),
 	true, numberCoerceMethod,
-	ExpectOneOrZeroArgs(),
-	ExpectFloatArg(0),
+	oldParamsExpectOneOrZeroArgs(),
+	oldParamsExpectFloatArg(0),
 )
 
 func numberCoerceMethod(target Function, args ...interface{}) (Function, error) {
@@ -454,13 +455,13 @@ func numberCoerceMethod(target Function, args ...interface{}) (Function, error) 
 
 //------------------------------------------------------------------------------
 
-var _ = registerMethod(
+var _ = registerOldParamsMethod(
 	NewMethodSpec(
 		"or", "If the result of the target query fails or resolves to `null`, returns the argument instead. This is an explicit method alternative to the coalesce pipe operator `|`.",
 		NewExampleSpec("", `root.doc.id = this.thing.id.or(uuid_v4())`),
 	),
 	false, orMethod,
-	ExpectNArgs(1),
+	oldParamsExpectNArgs(1),
 )
 
 func orMethod(fn Function, args ...interface{}) (Function, error) {
@@ -479,7 +480,7 @@ func orMethod(fn Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"type", "",
 	).InCategory(
@@ -498,5 +499,5 @@ root.foo_type = this.foo.type()`,
 		}, nil
 	},
 	false,
-	ExpectNArgs(0),
+	oldParamsExpectNArgs(0),
 )

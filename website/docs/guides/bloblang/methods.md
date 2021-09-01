@@ -32,7 +32,14 @@ root.has_good_taste = ["pikachu","mewtwo","magmar"].contains(this.user.fav_pokem
 
 ### `apply`
 
-Apply a declared map on a value.
+Apply a declared mapping to a target value.
+
+#### Parameters
+
+`mapping` (string) The mapping to apply.  
+
+#### Examples
+
 
 ```coffee
 map thing {
@@ -62,6 +69,9 @@ root.foo = null.apply("create_foo")
 
 If the result of a target query fails (due to incorrect types, failed parsing, etc) the argument is returned instead.
 
+#### Examples
+
+
 ```coffee
 root.doc.id = this.thing.id.string().catch(uuid_v4())
 ```
@@ -78,37 +88,12 @@ root = this.catch(deleted())
 # Out: <Message deleted>
 ```
 
-### `from`
-
-Modifies a target query such that certain functions are executed from the perspective of another message in the batch. This allows you to mutate events based on the contents of other messages. Functions that support this behaviour are `content`, `json` and `meta`.
-
-For example, the following map extracts the contents of the JSON field `foo` specifically from message index `1` of a batch, effectively overriding the field `foo` for all messages of a batch to that of message 1:
-
-```coffee
-root = this
-root.foo = json("foo").from(1)
-```
-
-### `from_all`
-
-Modifies a target query such that certain functions are executed from the perspective of each message in the batch, and returns the set of results as an array. Functions that support this behaviour are `content`, `json` and `meta`.
-
-```coffee
-root = this
-root.foo_summed = json("foo").from_all().sum()
-```
-
-### `or`
-
-If the result of the target query fails or resolves to `null`, returns the argument instead. This is an explicit method alternative to the coalesce pipe operator `|`.
-
-```coffee
-root.doc.id = this.thing.id.or(uuid_v4())
-```
-
 ### `exists`
 
 Checks that a field, identified via a [dot path][field_paths], exists in an object.
+
+#### Examples
+
 
 ```coffee
 root.result = this.foo.exists("bar.baz")
@@ -123,11 +108,51 @@ root.result = this.foo.exists("bar.baz")
 # Out: {"result":false}
 ```
 
+### `from`
+
+Modifies a target query such that certain functions are executed from the perspective of another message in the batch. This allows you to mutate events based on the contents of other messages. Functions that support this behaviour are `content`, `json` and `meta`.
+
+#### Examples
+
+
+For example, the following map extracts the contents of the JSON field `foo` specifically from message index `1` of a batch, effectively overriding the field `foo` for all messages of a batch to that of message 1:
+
+```coffee
+root = this
+root.foo = json("foo").from(1)
+```
+
+### `from_all`
+
+Modifies a target query such that certain functions are executed from the perspective of each message in the batch, and returns the set of results as an array. Functions that support this behaviour are `content`, `json` and `meta`.
+
+#### Examples
+
+
+```coffee
+root = this
+root.foo_summed = json("foo").from_all().sum()
+```
+
+### `or`
+
+If the result of the target query fails or resolves to `null`, returns the argument instead. This is an explicit method alternative to the coalesce pipe operator `|`.
+
+#### Examples
+
+
+```coffee
+root.doc.id = this.thing.id.or(uuid_v4())
+```
+
 ## String Manipulation
 
 ### `capitalize`
 
 Takes a string value and returns a copy with all Unicode letters that begin words mapped to their Unicode title case.
+
+#### Examples
+
 
 ```coffee
 root.title = this.title.capitalize()
@@ -136,9 +161,29 @@ root.title = this.title.capitalize()
 # Out: {"title":"The Foo Bar"}
 ```
 
+### `contains`
+
+Checks whether a string contains a substring and returns a boolean result.
+
+#### Examples
+
+
+```coffee
+root.has_foo = this.thing.contains("foo")
+
+# In:  {"thing":"this foo that"}
+# Out: {"has_foo":true}
+
+# In:  {"thing":"this bar that"}
+# Out: {"has_foo":false}
+```
+
 ### `escape_html`
 
 Escapes a string so that special characters like `<` to become `&lt;`. It escapes only five such characters: `<`, `>`, `&`, `'` and `"` so that it can be safely placed within an HTML entity.
+
+#### Examples
+
 
 ```coffee
 root.escaped = this.value.escape_html()
@@ -147,38 +192,12 @@ root.escaped = this.value.escape_html()
 # Out: {"escaped":"foo &amp; bar"}
 ```
 
-### `index_of`
-
-Returns the starting index of the argument substring in a string target, or `-1` if the target doesn't contain the argument.
-
-```coffee
-root.index = this.thing.index_of("bar")
-
-# In:  {"thing":"foobar"}
-# Out: {"index":3}
-```
-
-```coffee
-root.index = content().index_of("meow")
-
-# In:  the cat meowed, the dog woofed
-# Out: {"index":8}
-```
-
-### `unescape_html`
-
-Unescapes a string so that entities like `&lt;` become `<`. It unescapes a larger range of entities than `escape_html` escapes. For example, `&aacute;` unescapes to `á`, as does `&#225;` and `&xE1;`.
-
-```coffee
-root.unescaped = this.value.unescape_html()
-
-# In:  {"value":"foo &amp; bar"}
-# Out: {"unescaped":"foo & bar"}
-```
-
 ### `escape_url_query`
 
 Escapes a string so that it can be safely placed within a URL query.
+
+#### Examples
+
 
 ```coffee
 root.escaped = this.value.escape_url_query()
@@ -187,20 +206,12 @@ root.escaped = this.value.escape_url_query()
 # Out: {"escaped":"foo+%26+bar"}
 ```
 
-### `unescape_url_query`
-
-Expands escape sequences from a URL query string.
-
-```coffee
-root.unescaped = this.value.unescape_url_query()
-
-# In:  {"value":"foo+%26+bar"}
-# Out: {"unescaped":"foo & bar"}
-```
-
 ### `filepath_join`
 
 Joins an array of path elements into a single file path. The separator depends on the operating system of the machine.
+
+#### Examples
+
 
 ```coffee
 root.path = this.path_elements.filepath_join()
@@ -212,6 +223,9 @@ root.path = this.path_elements.filepath_join()
 ### `filepath_split`
 
 Splits a file path immediately following the final Separator, separating it into a directory and file name component returned as a two element array of strings. If there is no Separator in the path, the first element will be empty and the second will contain the path. The separator depends on the operating system of the machine.
+
+#### Examples
+
 
 ```coffee
 root.path_sep = this.path.filepath_split()
@@ -227,6 +241,9 @@ root.path_sep = this.path.filepath_split()
 
 Use a value string as a format specifier in order to produce a new string, using any number of provided arguments.
 
+#### Examples
+
+
 ```coffee
 root.foo = "%s(%v): %v".format(this.name, this.age, this.fingers)
 
@@ -237,6 +254,9 @@ root.foo = "%s(%v): %v".format(this.name, this.age, this.fingers)
 ### `has_prefix`
 
 Checks whether a string has a prefix argument and returns a bool.
+
+#### Examples
+
 
 ```coffee
 root.t1 = this.v1.has_prefix("foo")
@@ -250,6 +270,9 @@ root.t2 = this.v2.has_prefix("foo")
 
 Checks whether a string has a suffix argument and returns a bool.
 
+#### Examples
+
+
 ```coffee
 root.t1 = this.v1.has_suffix("foo")
 root.t2 = this.v2.has_suffix("foo")
@@ -258,20 +281,47 @@ root.t2 = this.v2.has_suffix("foo")
 # Out: {"t1":false,"t2":true}
 ```
 
-### `uppercase`
+### `index_of`
 
-Convert a string value into uppercase.
+Returns the starting index of the argument substring in a string target, or `-1` if the target doesn't contain the argument.
+
+#### Examples
+
 
 ```coffee
-root.foo = this.foo.uppercase()
+root.index = this.thing.index_of("bar")
+
+# In:  {"thing":"foobar"}
+# Out: {"index":3}
+```
+
+```coffee
+root.index = content().index_of("meow")
+
+# In:  the cat meowed, the dog woofed
+# Out: {"index":8}
+```
+
+### `length`
+
+Returns the length of a string.
+
+#### Examples
+
+
+```coffee
+root.foo_len = this.foo.length()
 
 # In:  {"foo":"hello world"}
-# Out: {"foo":"HELLO WORLD"}
+# Out: {"foo_len":11}
 ```
 
 ### `lowercase`
 
 Convert a string value into lowercase.
+
+#### Examples
+
 
 ```coffee
 root.foo = this.foo.lowercase()
@@ -280,9 +330,59 @@ root.foo = this.foo.lowercase()
 # Out: {"foo":"hello world"}
 ```
 
+### `quote`
+
+Quotes a target string using escape sequences (`\t`, `\n`, `\xFF`, `\u0100`) for control characters and non-printable characters.
+
+#### Examples
+
+
+```coffee
+root.quoted = this.thing.quote()
+
+# In:  {"thing":"foo\nbar"}
+# Out: {"quoted":"\"foo\\nbar\""}
+```
+
+### `replace`
+
+Replaces all occurrences of the first argument in a target string with the second argument.
+
+#### Examples
+
+
+```coffee
+root.new_value = this.value.replace("foo","dog")
+
+# In:  {"value":"The foo ate my homework"}
+# Out: {"new_value":"The dog ate my homework"}
+```
+
+### `replace_many`
+
+For each pair of strings in an argument array, replaces all occurrences of the first item of the pair with the second. This is a more compact way of chaining a series of `replace` methods.
+
+#### Examples
+
+
+```coffee
+root.new_value = this.value.replace_many([
+  "<b>", "&lt;b&gt;",
+  "</b>", "&lt;/b&gt;",
+  "<i>", "&lt;i&gt;",
+  "</i>", "&lt;/i&gt;",
+])
+
+# In:  {"value":"<i>Hello</i> <b>World</b>"}
+# Out: {"new_value":"&lt;i&gt;Hello&lt;/i&gt; &lt;b&gt;World&lt;/b&gt;"}
+```
+
 ### `reverse`
 
 Returns the target string in reverse order.
+
+#### Examples
+
 
 ```coffee
 root.reversed = this.thing.reverse()
@@ -298,60 +398,37 @@ root = content().reverse()
 # Out: }"sdrawkcab":"gniht"{
 ```
 
-### `quote`
+### `slice`
 
-Quotes a target string using escape sequences (`	`, `
-`, `�`, `Ā`) for control characters and non-printable characters.
+Extract a slice from a string by specifying two indices, a low and high bound, which selects a half-open range that includes the first character, but excludes the last one. If the second index is omitted then it defaults to the length of the input sequence.
+
+#### Examples
+
 
 ```coffee
-root.quoted = this.thing.quote()
+root.beginning = this.value.slice(0, 2)
+root.end = this.value.slice(4)
 
-# In:  {"thing":"foo\nbar"}
-# Out: {"quoted":"\"foo\\nbar\""}
+# In:  {"value":"foo bar"}
+# Out: {"beginning":"fo","end":"bar"}
 ```
 
-### `unquote`
-
-Unquotes a target string, expanding any escape sequences (`	`, `
-`, `�`, `Ā`) for control characters and non-printable characters.
+A negative low index can be used, indicating an offset from the end of the sequence. If the low index is greater than the length of the sequence then an empty result is returned.
 
 ```coffee
-root.unquoted = this.thing.unquote()
+root.last_chunk = this.value.slice(-4)
+root.the_rest = this.value.slice(0, -4)
 
-# In:  {"thing":"\"foo\\nbar\""}
-# Out: {"unquoted":"foo\nbar"}
-```
-
-### `replace`
-
-Replaces all occurrences of the first argument in a target string with the second argument.
-
-```coffee
-root.new_value = this.value.replace("foo","dog")
-
-# In:  {"value":"The foo ate my homework"}
-# Out: {"new_value":"The dog ate my homework"}
-```
-
-### `replace_many`
-
-For each pair of strings in an argument array, replaces all occurrences of the first item of the pair with the second. This is a more compact way of chaining a series of `replace` methods.
-
-```coffee
-root.new_value = this.value.replace_many([
-  "<b>", "&lt;b&gt;",
-  "</b>", "&lt;/b&gt;",
-  "<i>", "&lt;i&gt;",
-  "</i>", "&lt;/i&gt;",
-])
-
-# In:  {"value":"<i>Hello</i> <b>World</b>"}
-# Out: {"new_value":"&lt;i&gt;Hello&lt;/i&gt; &lt;b&gt;World&lt;/b&gt;"}
+# In:  {"value":"foo bar"}
+# Out: {"last_chunk":" bar","the_rest":"foo"}
 ```
 
 ### `split`
 
 Split a string value into an array of strings by splitting it on a string separator.
+
+#### Examples
+
 
 ```coffee
 root.new_value = this.value.split(",")
@@ -363,6 +440,9 @@ root.new_value = this.value.split(",")
 ### `strip_html`
 
 Attempts to remove all HTML tags from a target string.
+
+#### Examples
+
 
 ```coffee
 root.stripped = this.value.strip_html()
@@ -384,6 +464,9 @@ root.stripped = this.value.strip_html(["article"])
 
 Remove all leading and trailing characters from a string that are contained within an argument cutset. If no arguments are provided then whitespace is removed.
 
+#### Examples
+
+
 ```coffee
 root.title = this.title.trim("!?")
 root.description = this.description.trim()
@@ -392,51 +475,60 @@ root.description = this.description.trim()
 # Out: {"description":"something happened and its amazing!","title":"watch out"}
 ```
 
-### `contains`
+### `unescape_html`
 
-Checks whether a string contains a substring and returns a boolean result.
+Unescapes a string so that entities like `&lt;` become `<`. It unescapes a larger range of entities than `escape_html` escapes. For example, `&aacute;` unescapes to `á`, as does `&#225;` and `&xE1;`.
+
+#### Examples
+
 
 ```coffee
-root.has_foo = this.thing.contains("foo")
+root.unescaped = this.value.unescape_html()
 
-# In:  {"thing":"this foo that"}
-# Out: {"has_foo":true}
-
-# In:  {"thing":"this bar that"}
-# Out: {"has_foo":false}
+# In:  {"value":"foo &amp; bar"}
+# Out: {"unescaped":"foo & bar"}
 ```
 
-### `length`
+### `unescape_url_query`
 
-Returns the length of a string.
+Expands escape sequences from a URL query string.
+
+#### Examples
+
 
 ```coffee
-root.foo_len = this.foo.length()
+root.unescaped = this.value.unescape_url_query()
+
+# In:  {"value":"foo+%26+bar"}
+# Out: {"unescaped":"foo & bar"}
+```
+
+### `unquote`
+
+Unquotes a target string, expanding any escape sequences (`\t`, `\n`, `\xFF`, `\u0100`) for control characters and non-printable characters.
+
+#### Examples
+
+
+```coffee
+root.unquoted = this.thing.unquote()
+
+# In:  {"thing":"\"foo\\nbar\""}
+# Out: {"unquoted":"foo\nbar"}
+```
+
+### `uppercase`
+
+Convert a string value into uppercase.
+
+#### Examples
+
+
+```coffee
+root.foo = this.foo.uppercase()
 
 # In:  {"foo":"hello world"}
-# Out: {"foo_len":11}
-```
-
-### `slice`
-
-Extract a slice from a string by specifying two indices, a low and high bound, which selects a half-open range that includes the first character, but excludes the last one. If the second index is omitted then it defaults to the length of the input sequence.
-
-```coffee
-root.beginning = this.value.slice(0, 2)
-root.end = this.value.slice(4)
-
-# In:  {"value":"foo bar"}
-# Out: {"beginning":"fo","end":"bar"}
-```
-
-A negative low index can be used, indicating an offset from the end of the sequence. If the low index is greater than the length of the sequence then an empty result is returned.
-
-```coffee
-root.last_chunk = this.value.slice(-4)
-root.the_rest = this.value.slice(0, -4)
-
-# In:  {"value":"foo bar"}
-# Out: {"last_chunk":" bar","the_rest":"foo"}
+# Out: {"foo":"HELLO WORLD"}
 ```
 
 ## Regular Expressions
@@ -445,6 +537,9 @@ root.the_rest = this.value.slice(0, -4)
 
 Returns an array containing all successive matches of a regular expression in a string.
 
+#### Examples
+
+
 ```coffee
 root.matches = this.value.re_find_all("a.")
 
@@ -452,38 +547,12 @@ root.matches = this.value.re_find_all("a.")
 # Out: {"matches":["ar","an","al"]}
 ```
 
-### `re_find_all_submatch`
-
-Returns an array of arrays containing all successive matches of the regular expression in a string and the matches, if any, of its subexpressions.
-
-```coffee
-root.matches = this.value.re_find_all_submatch("a(x*)b")
-
-# In:  {"value":"-axxb-ab-"}
-# Out: {"matches":[["axxb","xx"],["ab",""]]}
-```
-
-### `re_find_object`
-
-Returns an object containing the first match of the regular expression and the matches of its subexpressions. The key of each match value is the name of the group when specified, otherwise it is the index of the matching group, starting with the expression as a whole at 0.
-
-```coffee
-root.matches = this.value.re_find_object("a(?P<foo>x*)b")
-
-# In:  {"value":"-axxb-ab-"}
-# Out: {"matches":{"0":"axxb","foo":"xx"}}
-```
-
-```coffee
-root.matches = this.value.re_find_object("(?P<key>\\w+):\\s+(?P<value>\\w+)")
-
-# In:  {"value":"option1: value1"}
-# Out: {"matches":{"0":"option1: value1","key":"option1","value":"value1"}}
-```
-
 ### `re_find_all_object`
 
 Returns an array of objects containing all matches of the regular expression and the matches of its subexpressions. The key of each match value is the name of the group when specified, otherwise it is the index of the matching group, starting with the expression as a whole at 0.
+
+#### Examples
+
 
 ```coffee
 root.matches = this.value.re_find_all_object("a(?P<foo>x*)b")
@@ -499,9 +568,47 @@ root.matches = this.value.re_find_all_object("(?m)(?P<key>\\w+):\\s+(?P<value>\\
 # Out: {"matches":[{"0":"option1: value1","key":"option1","value":"value1"},{"0":"option2: value2","key":"option2","value":"value2"},{"0":"option3: value3","key":"option3","value":"value3"}]}
 ```
 
+### `re_find_all_submatch`
+
+Returns an array of arrays containing all successive matches of the regular expression in a string and the matches, if any, of its subexpressions.
+
+#### Examples
+
+
+```coffee
+root.matches = this.value.re_find_all_submatch("a(x*)b")
+
+# In:  {"value":"-axxb-ab-"}
+# Out: {"matches":[["axxb","xx"],["ab",""]]}
+```
+
+### `re_find_object`
+
+Returns an object containing the first match of the regular expression and the matches of its subexpressions. The key of each match value is the name of the group when specified, otherwise it is the index of the matching group, starting with the expression as a whole at 0.
+
+#### Examples
+
+
+```coffee
+root.matches = this.value.re_find_object("a(?P<foo>x*)b")
+
+# In:  {"value":"-axxb-ab-"}
+# Out: {"matches":{"0":"axxb","foo":"xx"}}
+```
+
+```coffee
+root.matches = this.value.re_find_object("(?P<key>\\w+):\\s+(?P<value>\\w+)")
+
+# In:  {"value":"option1: value1"}
+# Out: {"matches":{"0":"option1: value1","key":"option1","value":"value1"}}
+```
+
 ### `re_match`
 
 Checks whether a regular expression matches against any part of a string and returns a boolean.
+
+#### Examples
+
 
 ```coffee
 root.matches = this.value.re_match("[0-9]")
@@ -517,6 +624,9 @@ root.matches = this.value.re_match("[0-9]")
 
 Replaces all occurrences of the argument regular expression in a string with a value. Inside the value $ signs are interpreted as submatch expansions, e.g. `$1` represents the text of the first submatch.
 
+#### Examples
+
+
 ```coffee
 root.new_value = this.value.re_replace("ADD ([0-9]+)","+($1)")
 
@@ -529,6 +639,9 @@ root.new_value = this.value.re_replace("ADD ([0-9]+)","+($1)")
 ### `abs`
 
 Returns the absolute value of a number.
+
+#### Examples
+
 
 ```coffee
 root.new_value = this.value.abs()
@@ -544,6 +657,9 @@ root.new_value = this.value.abs()
 
 Returns the least integer value greater than or equal to a number.
 
+#### Examples
+
+
 ```coffee
 root.new_value = this.value.ceil()
 
@@ -558,6 +674,9 @@ root.new_value = this.value.ceil()
 
 Returns the greatest integer value less than or equal to the target number.
 
+#### Examples
+
+
 ```coffee
 root.new_value = this.value.floor()
 
@@ -568,6 +687,9 @@ root.new_value = this.value.floor()
 ### `log`
 
 Returns the natural logarithm of a number.
+
+#### Examples
+
 
 ```coffee
 root.new_value = this.value.log().round()
@@ -583,6 +705,9 @@ root.new_value = this.value.log().round()
 
 Returns the decimal logarithm of a number.
 
+#### Examples
+
+
 ```coffee
 root.new_value = this.value.log10()
 
@@ -596,6 +721,9 @@ root.new_value = this.value.log10()
 ### `max`
 
 Returns the largest numerical value found within an array. All values must be numerical and the array must not be empty, otherwise an error is returned.
+
+#### Examples
+
 
 ```coffee
 root.biggest = this.values.max()
@@ -618,6 +746,9 @@ root.new_value = [0,this.value].max()
 
 Returns the smallest numerical value found within an array. All values must be numerical and the array must not be empty, otherwise an error is returned.
 
+#### Examples
+
+
 ```coffee
 root.smallest = this.values.min()
 
@@ -639,6 +770,9 @@ root.new_value = [10,this.value].min()
 
 Rounds numbers to the nearest integer, rounding half away from zero.
 
+#### Examples
+
+
 ```coffee
 root.new_value = this.value.round()
 
@@ -651,57 +785,19 @@ root.new_value = this.value.round()
 
 ## Timestamp Manipulation
 
-### `parse_duration`
-
-Attempts to parse a string as a duration and returns an integer of nanoseconds. A duration string is a possibly signed sequence of decimal numbers, each with an optional fraction and a unit suffix, such as "300ms", "-1.5h" or "2h45m". Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
-
-```coffee
-root.delay_for_ns = this.delay_for.parse_duration()
-
-# In:  {"delay_for":"50us"}
-# Out: {"delay_for_ns":50000}
-```
-
-```coffee
-root.delay_for_s = this.delay_for.parse_duration() / 1000000000
-
-# In:  {"delay_for":"2h"}
-# Out: {"delay_for_s":7200}
-```
-
-### `parse_timestamp`
-
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
-Attempts to parse a string as a timestamp following a specified format and outputs a string following ISO 8601, which can then be fed into `format_timestamp`. The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
-
-```coffee
-root.doc.timestamp = this.doc.timestamp.parse_timestamp("2006-Jan-02")
-
-# In:  {"doc":{"timestamp":"2020-Aug-14"}}
-# Out: {"doc":{"timestamp":"2020-08-14T00:00:00Z"}}
-```
-
-### `parse_timestamp_strptime`
-
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
-Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a string following ISO 8601, which can then be fed into `format_timestamp`.
-
-The format consists of zero or more conversion specifiers and ordinary characters (except `%`). All ordinary characters are copied to the output string without modification. Each conversion specification begins with a `%` character followed by the character that determines the behaviour of the specifier. Please refer to [man 3 strptime](https://linux.die.net/man/3/strptime) for the list of format specifiers.
-
-```coffee
-root.doc.timestamp = this.doc.timestamp.parse_timestamp_strptime("%Y-%b-%d")
-
-# In:  {"doc":{"timestamp":"2020-Aug-14"}}
-# Out: {"doc":{"timestamp":"2020-08-14T00:00:00Z"}}
-```
-
 ### `format_timestamp`
 
 BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 
 Attempts to format a timestamp value as a string according to a specified format, or ISO 8601 by default. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.
+
+#### Parameters
+
+`format` (string) The output format to use. Has default `2006-01-02T15:04:05.999999999Z07:00`.  
+`tz` (optional string) An optional timezone to use, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.  
+
+#### Examples
+
 
 ```coffee
 root.something_at = (this.created_at + 300).format_timestamp()
@@ -716,7 +812,7 @@ root.something_at = (this.created_at + 300).format_timestamp("2006-Jan-02 15:04:
 A second optional string argument can also be used in order to specify a timezone, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.
 
 ```coffee
-root.something_at = this.created_at.format_timestamp("2006-Jan-02 15:04:05", "UTC")
+root.something_at = this.created_at.format_timestamp(format: "2006-Jan-02 15:04:05", tz: "UTC")
 
 # In:  {"created_at":1597405526}
 # Out: {"something_at":"2020-Aug-14 11:45:26"}
@@ -743,6 +839,9 @@ BETA: This method is mostly stable but breaking changes could still be made outs
 
 Attempts to format a timestamp value as a string according to a specified strftime-compatible format. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.
 
+#### Examples
+
+
 The format consists of zero or more conversion specifiers and ordinary characters (except `%`). All ordinary characters are copied to the output string without modification. Each conversion specification begins with `%` character followed by the character that determines the behaviour of the specifier. Please refer to [man 3 strftime](https://linux.die.net/man/3/strftime) for the list of format specifiers.
 
 ```coffee
@@ -767,6 +866,9 @@ BETA: This method is mostly stable but breaking changes could still be made outs
 
 Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format. The [`parse_timestamp`](#parse_timestamp) method can be used in order to parse different timestamp formats.
 
+#### Examples
+
+
 ```coffee
 root.created_at_unix = this.created_at.format_timestamp_unix()
 
@@ -780,6 +882,9 @@ BETA: This method is mostly stable but breaking changes could still be made outs
 
 Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format. The [`parse_timestamp`](#parse_timestamp) method can be used in order to parse different timestamp formats.
 
+#### Examples
+
+
 ```coffee
 root.created_at_unix = this.created_at.format_timestamp_unix_nano()
 
@@ -787,25 +892,81 @@ root.created_at_unix = this.created_at.format_timestamp_unix_nano()
 # Out: {"created_at_unix":1257894000000000000}
 ```
 
-## Type Coercion
+### `parse_duration`
 
-### `not_null`
+Attempts to parse a string as a duration and returns an integer of nanoseconds. A duration string is a possibly signed sequence of decimal numbers, each with an optional fraction and a unit suffix, such as "300ms", "-1.5h" or "2h45m". Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 
-Ensures that the given value is not `null`, and if so returns it, otherwise an error is returned.
+#### Examples
+
 
 ```coffee
-root.a = this.a.not_null()
+root.delay_for_ns = this.delay_for.parse_duration()
 
-# In:  {"a":"foobar","b":"barbaz"}
-# Out: {"a":"foobar"}
+# In:  {"delay_for":"50us"}
+# Out: {"delay_for_ns":50000}
+```
 
-# In:  {"b":"barbaz"}
-# Out: Error("failed assignment (line 1): field `this.a`: value is null")
+```coffee
+root.delay_for_s = this.delay_for.parse_duration() / 1000000000
+
+# In:  {"delay_for":"2h"}
+# Out: {"delay_for_s":7200}
+```
+
+### `parse_timestamp`
+
+BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+
+Attempts to parse a string as a timestamp following a specified format and outputs a string following ISO 8601, which can then be fed into `format_timestamp`. The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
+
+#### Examples
+
+
+```coffee
+root.doc.timestamp = this.doc.timestamp.parse_timestamp("2006-Jan-02")
+
+# In:  {"doc":{"timestamp":"2020-Aug-14"}}
+# Out: {"doc":{"timestamp":"2020-08-14T00:00:00Z"}}
+```
+
+### `parse_timestamp_strptime`
+
+BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+
+Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a string following ISO 8601, which can then be fed into `format_timestamp`.
+
+#### Examples
+
+
+The format consists of zero or more conversion specifiers and ordinary characters (except `%`). All ordinary characters are copied to the output string without modification. Each conversion specification begins with a `%` character followed by the character that determines the behaviour of the specifier. Please refer to [man 3 strptime](https://linux.die.net/man/3/strptime) for the list of format specifiers.
+
+```coffee
+root.doc.timestamp = this.doc.timestamp.parse_timestamp_strptime("%Y-%b-%d")
+
+# In:  {"doc":{"timestamp":"2020-Aug-14"}}
+# Out: {"doc":{"timestamp":"2020-08-14T00:00:00Z"}}
+```
+
+## Type Coercion
+
+### `bool`
+
+Attempt to parse a value into a boolean. An optional argument can be provided, in which case if the value cannot be parsed the argument will be returned instead. If the value is a number then any non-zero value will resolve to `true`, if the value is a string then any of the following values are considered valid: `1, t, T, TRUE, true, True, 0, f, F, FALSE`.
+
+#### Examples
+
+
+```coffee
+root.foo = this.thing.bool()
+root.bar = this.thing.bool(true)
 ```
 
 ### `bytes`
 
 Marshal a value into a byte array. If the value is already a byte array it is unchanged.
+
+#### Examples
+
 
 ```coffee
 root.first_byte = this.name.bytes().index(0)
@@ -814,57 +975,12 @@ root.first_byte = this.name.bytes().index(0)
 # Out: {"first_byte":102}
 ```
 
-### `string`
-
-Marshal a value into a string. If the value is already a string it is unchanged.
-
-```coffee
-root.nested_json = this.string()
-
-# In:  {"foo":"bar"}
-# Out: {"nested_json":"{\"foo\":\"bar\"}"}
-```
-
-```coffee
-root.id = this.id.string()
-
-# In:  {"id":228930314431312345}
-# Out: {"id":"228930314431312345"}
-```
-
-### `bool`
-
-Attempt to parse a value into a boolean. An optional argument can be provided, in which case if the value cannot be parsed the argument will be returned instead. If the value is a number then any non-zero value will resolve to `true`, if the value is a string then any of the following values are considered valid: `1, t, T, TRUE, true, True, 0, f, F, FALSE`.
-
-```coffee
-root.foo = this.thing.bool()
-root.bar = this.thing.bool(true)
-```
-
-### `number`
-
-Attempt to parse a value into a number. An optional argument can be provided, in which case if the value cannot be parsed into a number the argument will be returned instead.
-
-```coffee
-root.foo = this.thing.number() + 10
-root.bar = this.thing.number(5) * 10
-```
-
-### `type`
-
-Returns the type of a value as a string, providing one of the following values: `string`, `bytes`, `number`, `bool`, `array`, `object` or `null`.
-
-```coffee
-root.bar_type = this.bar.type()
-root.foo_type = this.foo.type()
-
-# In:  {"bar":10,"foo":"is a string"}
-# Out: {"bar_type":"number","foo_type":"string"}
-```
-
 ### `not_empty`
 
 Ensures that the given string, array or object value is not empty, and if so returns it, otherwise an error is returned.
+
+#### Examples
+
 
 ```coffee
 root.a = this.a.not_empty()
@@ -888,25 +1004,135 @@ root.a = this.a.not_empty()
 # Out: Error("failed assignment (line 1): field `this.a`: object value is empty")
 ```
 
-## Object & Array Manipulation
+### `not_null`
 
-### `get`
+Ensures that the given value is not `null`, and if so returns it, otherwise an error is returned.
 
-Extract a field value, identified via a [dot path][field_paths], from an object.
+#### Examples
+
 
 ```coffee
-root.result = this.foo.get(this.target)
+root.a = this.a.not_null()
 
-# In:  {"foo":{"bar":"from bar","baz":"from baz"},"target":"bar"}
-# Out: {"result":"from bar"}
+# In:  {"a":"foobar","b":"barbaz"}
+# Out: {"a":"foobar"}
 
-# In:  {"foo":{"bar":"from bar","baz":"from baz"},"target":"baz"}
-# Out: {"result":"from baz"}
+# In:  {"b":"barbaz"}
+# Out: Error("failed assignment (line 1): field `this.a`: value is null")
+```
+
+### `number`
+
+Attempt to parse a value into a number. An optional argument can be provided, in which case if the value cannot be parsed into a number the argument will be returned instead.
+
+#### Examples
+
+
+```coffee
+root.foo = this.thing.number() + 10
+root.bar = this.thing.number(5) * 10
+```
+
+### `string`
+
+Marshal a value into a string. If the value is already a string it is unchanged.
+
+#### Examples
+
+
+```coffee
+root.nested_json = this.string()
+
+# In:  {"foo":"bar"}
+# Out: {"nested_json":"{\"foo\":\"bar\"}"}
+```
+
+```coffee
+root.id = this.id.string()
+
+# In:  {"id":228930314431312345}
+# Out: {"id":"228930314431312345"}
+```
+
+### `type`
+
+Returns the type of a value as a string, providing one of the following values: `string`, `bytes`, `number`, `bool`, `array`, `object` or `null`.
+
+#### Examples
+
+
+```coffee
+root.bar_type = this.bar.type()
+root.foo_type = this.foo.type()
+
+# In:  {"bar":10,"foo":"is a string"}
+# Out: {"bar_type":"number","foo_type":"string"}
+```
+
+## Object & Array Manipulation
+
+### `all`
+
+Checks each element of an array against a query and returns true if all elements passed. An error occurs if the target is not an array, or if any element results in the provided query returning a non-boolean result. Returns false if the target array is empty.
+
+#### Parameters
+
+`test` (query expression) A test query to apply to each element.  
+
+#### Examples
+
+
+```coffee
+root.all_over_21 = this.patrons.all(patron -> patron.age >= 21)
+
+# In:  {"patrons":[{"id":"1","age":18},{"id":"2","age":23}]}
+# Out: {"all_over_21":false}
+
+# In:  {"patrons":[{"id":"1","age":45},{"id":"2","age":23}]}
+# Out: {"all_over_21":true}
+```
+
+### `any`
+
+Checks the elements of an array against a query and returns true if any element passes. An error occurs if the target is not an array, or if an element results in the provided query returning a non-boolean result. Returns false if the target array is empty.
+
+#### Parameters
+
+`test` (query expression) A test query to apply to each element.  
+
+#### Examples
+
+
+```coffee
+root.any_over_21 = this.patrons.any(patron -> patron.age >= 21)
+
+# In:  {"patrons":[{"id":"1","age":18},{"id":"2","age":23}]}
+# Out: {"any_over_21":true}
+
+# In:  {"patrons":[{"id":"1","age":10},{"id":"2","age":12}]}
+# Out: {"any_over_21":false}
+```
+
+### `append`
+
+Returns an array with new elements appended to the end.
+
+#### Examples
+
+
+```coffee
+root.foo = this.foo.append("and", "this")
+
+# In:  {"foo":["bar","baz"]}
+# Out: {"foo":["bar","baz","and","this"]}
 ```
 
 ### `collapse`
 
 Collapse an array or object into an object of key/value pairs for each field, where the key is the full path of the structured field in dot path notation. Empty arrays an objects are ignored by default.
+
+#### Examples
+
 
 ```coffee
 root.result = this.collapse()
@@ -924,89 +1150,12 @@ root.result = this.collapse(true)
 # Out: {"result":{"foo.0.bar":"1","foo.1.bar":{},"foo.2.bar":"2","foo.3.bar":[]}}
 ```
 
-### `json_schema`
-
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
-Checks a [JSON schema](https://json-schema.org/) against a value and returns the value if it matches or throws and error if it does not.
-
-```coffee
-root = this.json_schema("""{
-  "type":"object",
-  "properties":{
-    "foo":{
-      "type":"string"
-    }
-  }
-}""")
-
-# In:  {"foo":"bar"}
-# Out: {"foo":"bar"}
-
-# In:  {"foo":5}
-# Out: Error("failed assignment (line 1): field `this`: foo invalid type. expected: string, given: integer")
-```
-
-In order to load a schema from a file use the `file` function.
-
-```coffee
-root = this.json_schema(file(var("BENTHOS_TEST_BLOBLANG_SCHEMA_FILE")))
-```
-
-### `join`
-
-Join an array of strings with an optional delimiter into a single string.
-
-```coffee
-root.joined_words = this.words.join()
-root.joined_numbers = this.numbers.map_each(this.string()).join(",")
-
-# In:  {"words":["hello","world"],"numbers":[3,8,11]}
-# Out: {"joined_numbers":"3,8,11","joined_words":"helloworld"}
-```
-
-### `all`
-
-Checks each element of an array against a query and returns true if all elements passed. An error occurs if the target is not an array, or if any element results in the provided query returning a non-boolean result. Returns false if the target array is empty.
-
-```coffee
-root.all_over_21 = this.patrons.all(patron -> patron.age >= 21)
-
-# In:  {"patrons":[{"id":"1","age":18},{"id":"2","age":23}]}
-# Out: {"all_over_21":false}
-
-# In:  {"patrons":[{"id":"1","age":45},{"id":"2","age":23}]}
-# Out: {"all_over_21":true}
-```
-
-### `any`
-
-Checks the elements of an array against a query and returns true if any element passes. An error occurs if the target is not an array, or if an element results in the provided query returning a non-boolean result. Returns false if the target array is empty.
-
-```coffee
-root.any_over_21 = this.patrons.any(patron -> patron.age >= 21)
-
-# In:  {"patrons":[{"id":"1","age":18},{"id":"2","age":23}]}
-# Out: {"any_over_21":true}
-
-# In:  {"patrons":[{"id":"1","age":10},{"id":"2","age":12}]}
-# Out: {"any_over_21":false}
-```
-
-### `append`
-
-Returns an array with new elements appended to the end.
-
-```coffee
-root.foo = this.foo.append("and", "this")
-
-# In:  {"foo":["bar","baz"]}
-# Out: {"foo":["bar","baz","and","this"]}
-```
-
 ### `contains`
 
 Checks whether an array contains an element matching the argument, or an object contains a value matching the argument, and returns a boolean result. Numerical comparisons are made irrespective of the representation type (float versus integer).
+
+#### Examples
+
 
 ```coffee
 root.has_foo = this.thing.contains("foo")
@@ -1032,6 +1181,9 @@ root.has_bar = this.thing.contains(20)
 
 Converts an array into a new array of objects, where each object has a field index containing the `index` of the element and a field `value` containing the original value of the element.
 
+#### Examples
+
+
 ```coffee
 root.foo = this.foo.enumerated()
 
@@ -1043,7 +1195,10 @@ root.foo = this.foo.enumerated()
 
 Explodes an array or object at a [field path][field_paths].
 
-#### On arrays
+#### Examples
+
+
+##### On arrays
 
 Exploding arrays results in an array containing elements matching the original document, where the target field of each element is an element of the exploded array:
 
@@ -1054,7 +1209,7 @@ root = this.explode("value")
 # Out: [{"id":1,"value":"foo"},{"id":1,"value":"bar"},{"id":1,"value":"baz"}]
 ```
 
-#### On objects
+##### On objects
 
 Exploding objects results in an object where the keys match the target object, and the values match the original document but with the target field replaced by the exploded value:
 
@@ -1069,6 +1224,9 @@ root = this.explode("value")
 
 Executes a mapping query argument for each element of an array or key/value pair of an object. If the query returns `false` the item is removed from the resulting array or object. The item will also be removed if the query returns any non-boolean value.
 
+#### Examples
+
+
 ```coffee
 root.new_nums = this.nums.filter(num -> num > 10)
 
@@ -1076,7 +1234,7 @@ root.new_nums = this.nums.filter(num -> num > 10)
 # Out: {"new_nums":[11,17]}
 ```
 
-#### On objects
+##### On objects
 
 When filtering objects the mapping query argument is provided a context with a field `key` containing the value key, and a field `value` containing the value.
 
@@ -1091,6 +1249,9 @@ root.new_dict = this.dict.filter(item -> item.value.contains("foo"))
 
 Iterates an array and any element that is itself an array is removed and has its elements inserted directly in the resulting array.
 
+#### Examples
+
+
 ```coffee
 root.result = this.flatten()
 
@@ -1103,6 +1264,9 @@ root.result = this.flatten()
 Takes two arguments: an initial value, and a mapping query. For each element of an array the mapping context is an object with two fields `tally` and `value`, where `tally` contains the current accumulated value and `value` is the value of the current element. The mapping must return the result of adding the value to the tally.
 
 The first argument is the value that `tally` will have on the first call.
+
+#### Examples
+
 
 ```coffee
 root.sum = this.foo.fold(0, item -> item.tally + item.value)
@@ -1118,9 +1282,29 @@ root.result = this.foo.fold("", item -> "%v%v".format(item.tally, item.value))
 # Out: {"result":"hello world"}
 ```
 
+### `get`
+
+Extract a field value, identified via a [dot path][field_paths], from an object.
+
+#### Examples
+
+
+```coffee
+root.result = this.foo.get(this.target)
+
+# In:  {"foo":{"bar":"from bar","baz":"from baz"},"target":"bar"}
+# Out: {"result":"from bar"}
+
+# In:  {"foo":{"bar":"from bar","baz":"from baz"},"target":"baz"}
+# Out: {"result":"from baz"}
+```
+
 ### `index`
 
 Extract an element from an array by an index. The index can be negative, and if so the element will be selected from the end counting backwards starting from -1. E.g. an index of -1 returns the last element, an index of -2 returns the element before the last, and so on.
+
+#### Examples
+
 
 ```coffee
 root.last_name = this.names.index(-1)
@@ -1138,20 +1322,59 @@ root.last_byte = this.name.bytes().index(-1)
 # Out: {"last_byte":110}
 ```
 
-### `keys`
+### `join`
 
-Returns the keys of an object as an array.
+Join an array of strings with an optional delimiter into a single string.
+
+#### Examples
+
 
 ```coffee
-root.foo_keys = this.foo.keys()
+root.joined_words = this.words.join()
+root.joined_numbers = this.numbers.map_each(this.string()).join(",")
 
-# In:  {"foo":{"bar":1,"baz":2}}
-# Out: {"foo_keys":["bar","baz"]}
+# In:  {"words":["hello","world"],"numbers":[3,8,11]}
+# Out: {"joined_numbers":"3,8,11","joined_words":"helloworld"}
+```
+
+### `json_schema`
+
+BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+
+Checks a [JSON schema](https://json-schema.org/) against a value and returns the value if it matches or throws and error if it does not.
+
+#### Examples
+
+
+```coffee
+root = this.json_schema("""{
+  "type":"object",
+  "properties":{
+    "foo":{
+      "type":"string"
+    }
+  }
+}""")
+
+# In:  {"foo":"bar"}
+# Out: {"foo":"bar"}
+
+# In:  {"foo":5}
+# Out: Error("failed assignment (line 1): field `this`: foo invalid type. expected: string, given: integer")
+```
+
+In order to load a schema from a file use the `file` function.
+
+```coffee
+root = this.json_schema(file(var("BENTHOS_TEST_BLOBLANG_SCHEMA_FILE")))
 ```
 
 ### `key_values`
 
 Returns the key/value pairs of an object as an array, where each element is an object with a `key` field and a `value` field. The order of the resulting array will be random.
+
+#### Examples
+
 
 ```coffee
 root.foo_key_values = this.foo.key_values().sort_by(pair -> pair.key)
@@ -1160,9 +1383,26 @@ root.foo_key_values = this.foo.key_values().sort_by(pair -> pair.key)
 # Out: {"foo_key_values":[{"key":"bar","value":1},{"key":"baz","value":2}]}
 ```
 
+### `keys`
+
+Returns the keys of an object as an array.
+
+#### Examples
+
+
+```coffee
+root.foo_keys = this.foo.keys()
+
+# In:  {"foo":{"bar":1,"baz":2}}
+# Out: {"foo_keys":["bar","baz"]}
+```
+
 ### `length`
 
 Returns the length of an array or object (number of keys).
+
+#### Examples
+
 
 ```coffee
 root.foo_len = this.foo.length()
@@ -1178,7 +1418,10 @@ root.foo_len = this.foo.length()
 
 
 
-#### On arrays
+#### Examples
+
+
+##### On arrays
 
 Apply a mapping to each element of an array and replace the element with the result. Within the argument mapping the context is the value of the element being mapped.
 
@@ -1193,7 +1436,7 @@ root.new_nums = this.nums.map_each(num -> if num < 10 {
 # Out: {"new_nums":[1,7]}
 ```
 
-#### On objects
+##### On objects
 
 Apply a mapping to each value of an object and replace the value with the result. Within the argument mapping the context is an object with a field `key` containing the value key, and a field `value`.
 
@@ -1207,6 +1450,9 @@ root.new_dict = this.dict.map_each(item -> item.value.uppercase())
 ### `map_each_key`
 
 Apply a mapping to each key of an object, and replace the key with the result, which must be a string.
+
+#### Examples
+
 
 ```coffee
 root.new_dict = this.dict.map_each_key(key -> key.uppercase())
@@ -1226,6 +1472,9 @@ root = this.map_each_key(key -> if key.contains("kafka") { "_" + key })
 
 Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the result will be an array containing both values, where values that are already arrays will be expanded into the resulting array.
 
+#### Examples
+
+
 ```coffee
 root = this.foo.merge(this.bar)
 
@@ -1233,9 +1482,37 @@ root = this.foo.merge(this.bar)
 # Out: {"first_name":"fooer","likes":["bars","foos"],"second_name":"barer"}
 ```
 
+### `slice`
+
+Extract a slice from an array by specifying two indices, a low and high bound, which selects a half-open range that includes the first element, but excludes the last one. If the second index is omitted then it defaults to the length of the input sequence.
+
+#### Examples
+
+
+```coffee
+root.beginning = this.value.slice(0, 2)
+root.end = this.value.slice(4)
+
+# In:  {"value":["foo","bar","baz","buz","bev"]}
+# Out: {"beginning":["foo","bar"],"end":["bev"]}
+```
+
+A negative low index can be used, indicating an offset from the end of the sequence. If the low index is greater than the length of the sequence then an empty result is returned.
+
+```coffee
+root.last_chunk = this.value.slice(-2)
+root.the_rest = this.value.slice(0, -2)
+
+# In:  {"value":["foo","bar","baz","buz","bev"]}
+# Out: {"last_chunk":["buz","bev"],"the_rest":["foo","bar","baz"]}
+```
+
 ### `sort`
 
 Attempts to sort the values of an array in increasing order. The type of all values must match in order for the ordering to succeed. Supports string and number values.
+
+#### Examples
+
 
 ```coffee
 root.sorted = this.foo.sort()
@@ -1257,6 +1534,9 @@ root.sorted = this.foo.sort(item -> item.left.v < item.right.v)
 
 Attempts to sort the elements of an array, in increasing order, by a value emitted by an argument query applied to each element. The type of all values must match in order for the ordering to succeed. Supports string and number values.
 
+#### Examples
+
+
 ```coffee
 root.sorted = this.foo.sort_by(ele -> ele.id)
 
@@ -1264,31 +1544,12 @@ root.sorted = this.foo.sort_by(ele -> ele.id)
 # Out: {"sorted":[{"id":"aaa","message":"foo"},{"id":"bbb","message":"bar"},{"id":"ccc","message":"baz"}]}
 ```
 
-### `slice`
-
-Extract a slice from an array by specifying two indices, a low and high bound, which selects a half-open range that includes the first element, but excludes the last one. If the second index is omitted then it defaults to the length of the input sequence.
-
-```coffee
-root.beginning = this.value.slice(0, 2)
-root.end = this.value.slice(4)
-
-# In:  {"value":["foo","bar","baz","buz","bev"]}
-# Out: {"beginning":["foo","bar"],"end":["bev"]}
-```
-
-A negative low index can be used, indicating an offset from the end of the sequence. If the low index is greater than the length of the sequence then an empty result is returned.
-
-```coffee
-root.last_chunk = this.value.slice(-2)
-root.the_rest = this.value.slice(0, -2)
-
-# In:  {"value":["foo","bar","baz","buz","bev"]}
-# Out: {"last_chunk":["buz","bev"],"the_rest":["foo","bar","baz"]}
-```
-
 ### `sum`
 
 Sum the numerical values of an array.
+
+#### Examples
+
 
 ```coffee
 root.sum = this.foo.sum()
@@ -1301,6 +1562,9 @@ root.sum = this.foo.sum()
 
 Attempts to remove duplicate values from an array. The array may contain a combination of different value types, but numbers and strings are checked separately (`"5"` is a different element to `5`).
 
+#### Examples
+
+
 ```coffee
 root.uniques = this.foo.unique()
 
@@ -1311,6 +1575,9 @@ root.uniques = this.foo.unique()
 ### `values`
 
 Returns the values of an object as an array. The order of the resulting array will be random.
+
+#### Examples
+
 
 ```coffee
 root.foo_vals = this.foo.values().sort()
@@ -1325,6 +1592,9 @@ Returns an object where one or more [field path][field_paths] arguments are remo
 
 If a key within a nested path does not exist or is not an object then it is not removed.
 
+#### Examples
+
+
 ```coffee
 root = this.without("inner.a","inner.c","d")
 
@@ -1334,9 +1604,35 @@ root = this.without("inner.a","inner.c","d")
 
 ## Parsing
 
+### `bloblang`
+
+BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+
+Executes an argument Bloblang mapping on the target. This method can be used in order to execute dynamic mappings. Functions that interact with the environment, such as `file` and `env`, or that access message information directly, such as `content` or `json`, are not enabled for dynamic Bloblang mappings.
+
+#### Parameters
+
+`mapping` (string) The mapping to execute.  
+
+#### Examples
+
+
+```coffee
+root.body = this.body.bloblang(this.mapping)
+
+# In:  {"body":{"foo":"hello world"},"mapping":"root.foo = this.foo.uppercase()"}
+# Out: {"body":{"foo":"HELLO WORLD"}}
+
+# In:  {"body":{"foo":"hello world 2"},"mapping":"root.foo = this.foo.capitalize()"}
+# Out: {"body":{"foo":"Hello World 2"}}
+```
+
 ### `format_yaml`
 
 Serializes a target value into a YAML byte array.
+
+#### Examples
+
 
 ```coffee
 root = this.doc.format_yaml()
@@ -1359,6 +1655,9 @@ root.doc = this.doc.format_yaml().string()
 
 Attempts to parse a string into an array of objects by following the CSV format described in RFC 4180. The first line is assumed to be a header row, which determines the keys of values in each object.
 
+#### Examples
+
+
 ```coffee
 root.orders = this.orders.parse_csv()
 
@@ -1369,6 +1668,9 @@ root.orders = this.orders.parse_csv()
 ### `parse_json`
 
 Attempts to parse a string as a JSON document and returns the result.
+
+#### Examples
+
 
 ```coffee
 root.doc = this.doc.parse_json()
@@ -1388,6 +1690,9 @@ Attempts to parse a string as an XML document and returns a structured result, w
 - XML comments, directives, and process instructions are ignored.
 - When elements are repeated the resulting JSON value is an array.
 
+#### Examples
+
+
 ```coffee
 root.doc = this.doc.parse_xml()
 
@@ -1399,6 +1704,9 @@ root.doc = this.doc.parse_xml()
 
 Attempts to parse a string as a single YAML document and returns the result.
 
+#### Examples
+
+
 ```coffee
 root.doc = this.doc.parse_yaml()
 
@@ -1406,47 +1714,20 @@ root.doc = this.doc.parse_yaml()
 # Out: {"doc":{"foo":"bar"}}
 ```
 
-### `bloblang`
-
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
-Executes an argument Bloblang mapping on the target. This method can be used in order to execute dynamic mappings. Functions that interact with the environment, such as `file` and `env`, or that access message information directly, such as `content` or `json`, are not enabled for dynamic Bloblang mappings.
-
-```coffee
-root.body = this.body.bloblang(this.mapping)
-
-# In:  {"body":{"foo":"hello world"},"mapping":"root.foo = this.foo.uppercase()"}
-# Out: {"body":{"foo":"HELLO WORLD"}}
-
-# In:  {"body":{"foo":"hello world 2"},"mapping":"root.foo = this.foo.capitalize()"}
-# Out: {"body":{"foo":"Hello World 2"}}
-```
-
 ## Encoding and Encryption
-
-### `encode`
-
-Encodes a string or byte array target according to a chosen scheme and returns a string result. Available schemes are: `base64`, `base64url`, `hex`, `ascii85`.
-
-```coffee
-root.encoded = this.value.encode("hex")
-
-# In:  {"value":"hello world"}
-# Out: {"encoded":"68656c6c6f20776f726c64"}
-```
-
-```coffee
-root.encoded = content().encode("ascii85")
-
-# In:  this is totally unstructured data
-# Out: {"encoded":"FD,B0+DGm>FDl80Ci\"A>F`)8BEckl6F`M&(+Cno&@/"}
-```
 
 ### `decode`
 
 Decodes an encoded string target according to a chosen scheme and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.
 
 Available schemes are: `base64`, `base64url`, `hex`, `ascii85`.
+
+#### Parameters
+
+`scheme` (string) The decoding scheme to use.  
+
+#### Examples
+
 
 ```coffee
 root.decoded = this.value.decode("hex").string()
@@ -1462,22 +1743,18 @@ root = this.encoded.decode("ascii85")
 # Out: this is totally unstructured data
 ```
 
-### `encrypt_aes`
-
-Encrypts a string or byte array target according to a chosen AES encryption method and returns a string result. The algorithms require a key and an initialization vector / nonce. Available schemes are: `ctr`, `ofb`, `cbc`.
-
-```coffee
-let key = "2b7e151628aed2a6abf7158809cf4f3c".decode("hex")
-let vector = "f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff".decode("hex")
-root.encrypted = this.value.encrypt_aes("ctr", $key, $vector).encode("hex")
-
-# In:  {"value":"hello world!"}
-# Out: {"encrypted":"84e9b31ff7400bdf80be7254"}
-```
-
 ### `decrypt_aes`
 
 Decrypts an encrypted string or byte array target according to a chosen AES encryption method and returns the result as a byte array. The algorithms require a key and an initialization vector / nonce. Available schemes are: `ctr`, `ofb`, `cbc`.
+
+#### Parameters
+
+`scheme` (string) The scheme to use for decryption, one of `ctr`, `ofb`, `cbc`.  
+`key` (string) A key to decrypt with.  
+`iv` (string) An initialization vector / nonce.  
+
+#### Examples
+
 
 ```coffee
 let key = "2b7e151628aed2a6abf7158809cf4f3c".decode("hex")
@@ -1488,6 +1765,53 @@ root.decrypted = this.value.decode("hex").decrypt_aes("ctr", $key, $vector).stri
 # Out: {"decrypted":"hello world!"}
 ```
 
+### `encode`
+
+Encodes a string or byte array target according to a chosen scheme and returns a string result. Available schemes are: `base64`, `base64url`, `hex`, `ascii85`.
+
+#### Parameters
+
+`scheme` (string) The encoding scheme to use.  
+
+#### Examples
+
+
+```coffee
+root.encoded = this.value.encode("hex")
+
+# In:  {"value":"hello world"}
+# Out: {"encoded":"68656c6c6f20776f726c64"}
+```
+
+```coffee
+root.encoded = content().encode("ascii85")
+
+# In:  this is totally unstructured data
+# Out: {"encoded":"FD,B0+DGm>FDl80Ci\"A>F`)8BEckl6F`M&(+Cno&@/"}
+```
+
+### `encrypt_aes`
+
+Encrypts a string or byte array target according to a chosen AES encryption method and returns a string result. The algorithms require a key and an initialization vector / nonce. Available schemes are: `ctr`, `ofb`, `cbc`.
+
+#### Parameters
+
+`scheme` (string) The scheme to use for encryption, one of `ctr`, `ofb`, `cbc`.  
+`key` (string) A key to encrypt with.  
+`iv` (string) An initialization vector / nonce.  
+
+#### Examples
+
+
+```coffee
+let key = "2b7e151628aed2a6abf7158809cf4f3c".decode("hex")
+let vector = "f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff".decode("hex")
+root.encrypted = this.value.encrypt_aes("ctr", $key, $vector).encode("hex")
+
+# In:  {"value":"hello world!"}
+# Out: {"encrypted":"84e9b31ff7400bdf80be7254"}
+```
+
 ### `hash`
 
 Hashes a string or byte array according to a chosen algorithm and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.
@@ -1495,6 +1819,9 @@ Hashes a string or byte array according to a chosen algorithm and returns the re
 Available algorithms are: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `md5`, `sha1`, `sha256`, `sha512`, `xxhash64`.
 
 The following algorithms require a key, which is specified as a second argument: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`.
+
+#### Examples
+
 
 ```coffee
 root.h1 = this.value.hash("sha1").encode("hex")
@@ -1509,6 +1836,9 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")
 ### `parse_timestamp_unix`
 
 Attempts to parse a string as a timestamp, following ISO 8601 format by default, and returns the unix epoch.
+
+#### Examples
+
 
 ```coffee
 root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix()

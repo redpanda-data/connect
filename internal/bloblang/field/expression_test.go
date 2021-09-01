@@ -105,7 +105,7 @@ func TestExpressions(t *testing.T) {
 		"json function": {
 			expression: NewExpression(
 				NewQueryResolver(func() query.Function {
-					fn, err := query.InitFunction("json")
+					fn, err := query.InitFunctionHelper("json")
 					require.NoError(t, err)
 					return fn
 				}()),
@@ -120,7 +120,7 @@ func TestExpressions(t *testing.T) {
 		"json function 2": {
 			expression: NewExpression(
 				NewQueryResolver(func() query.Function {
-					fn, err := query.InitFunction("json", "foo")
+					fn, err := query.InitFunctionHelper("json", "foo")
 					require.NoError(t, err)
 					return fn
 				}()),
@@ -133,7 +133,7 @@ func TestExpressions(t *testing.T) {
 		},
 		"json function 3": {
 			expression: NewExpression(NewQueryResolver(func() query.Function {
-				fn, err := query.InitFunction("json", "foo")
+				fn, err := query.InitFunctionHelper("json", "foo")
 				require.NoError(t, err)
 				return fn
 			}())),
@@ -147,7 +147,7 @@ func TestExpressions(t *testing.T) {
 		},
 		"json function 4": {
 			expression: NewExpression(NewQueryResolver(func() query.Function {
-				fn, err := query.InitFunction("json", "foo")
+				fn, err := query.InitFunctionHelper("json", "foo")
 				require.NoError(t, err)
 				return fn
 			}())),
@@ -162,13 +162,13 @@ func TestExpressions(t *testing.T) {
 		"two json functions": {
 			expression: NewExpression(
 				NewQueryResolver(func() query.Function {
-					fn, err := query.InitFunction("json", "foo")
+					fn, err := query.InitFunctionHelper("json", "foo")
 					require.NoError(t, err)
 					return fn
 				}()),
 				StaticResolver(" and "),
 				NewQueryResolver(func() query.Function {
-					fn, err := query.InitFunction("json", "bar")
+					fn, err := query.InitFunctionHelper("json", "bar")
 					require.NoError(t, err)
 					return fn
 				}()),
@@ -184,9 +184,9 @@ func TestExpressions(t *testing.T) {
 		"json_from function": {
 			expression: NewExpression(
 				NewQueryResolver(func() query.Function {
-					fn, err := query.InitFunction("json", "foo")
+					fn, err := query.InitFunctionHelper("json", "foo")
 					require.NoError(t, err)
-					fn, err = query.InitMethod("from", fn, int64(1))
+					fn, err = query.InitMethodHelper("from", fn, int64(1))
 					require.NoError(t, err)
 					return fn
 				}()),
@@ -201,9 +201,9 @@ func TestExpressions(t *testing.T) {
 		"json_from function 2": {
 			expression: NewExpression(
 				NewQueryResolver(func() query.Function {
-					fn, err := query.InitFunction("json", "foo")
+					fn, err := query.InitFunctionHelper("json", "foo")
 					require.NoError(t, err)
-					fn, err = query.InitMethod("from", fn, int64(0))
+					fn, err = query.InitMethodHelper("from", fn, int64(0))
 					require.NoError(t, err)
 					return fn
 				}()),
@@ -218,9 +218,9 @@ func TestExpressions(t *testing.T) {
 		"json_from function 3": {
 			expression: NewExpression(
 				NewQueryResolver(func() query.Function {
-					fn, err := query.InitFunction("json", "foo")
+					fn, err := query.InitFunctionHelper("json", "foo")
 					require.NoError(t, err)
-					fn, err = query.InitMethod("from", fn, int64(-1))
+					fn, err = query.InitMethodHelper("from", fn, int64(-1))
 					require.NoError(t, err)
 					return fn
 				}()),
@@ -246,7 +246,7 @@ func TestExpressions(t *testing.T) {
 		"meta function": {
 			expression: NewExpression(
 				NewQueryResolver(func() query.Function {
-					fn, err := query.InitFunction("meta", "foo")
+					fn, err := query.InitFunctionHelper("meta", "foo")
 					require.NoError(t, err)
 					return fn
 				}()),
@@ -263,7 +263,7 @@ func TestExpressions(t *testing.T) {
 		"metadata function": {
 			expression: NewExpression(
 				NewQueryResolver(func() query.Function {
-					fn, err := query.InitFunction("meta", "foo")
+					fn, err := query.InitFunctionHelper("meta", "foo")
 					require.NoError(t, err)
 					return fn
 				}()),
@@ -280,7 +280,7 @@ func TestExpressions(t *testing.T) {
 		"metadata function not exist": {
 			expression: NewExpression(
 				NewQueryResolver(func() query.Function {
-					fn, err := query.InitFunction("meta", "foo")
+					fn, err := query.InitFunctionHelper("meta", "foo")
 					require.NoError(t, err)
 					return fn
 				}()),
@@ -296,7 +296,7 @@ func TestExpressions(t *testing.T) {
 		"all meta function": {
 			expression: NewExpression(
 				NewQueryResolver(func() query.Function {
-					fn, err := query.InitFunction("meta")
+					fn, err := query.InitFunctionHelper("meta")
 					require.NoError(t, err)
 					return fn
 				}()),
@@ -313,7 +313,7 @@ func TestExpressions(t *testing.T) {
 		"all metadata function": {
 			expression: NewExpression(
 				NewQueryResolver(func() query.Function {
-					fn, err := query.InitFunction("meta")
+					fn, err := query.InitFunctionHelper("meta")
 					require.NoError(t, err)
 					return fn
 				}()),
@@ -330,9 +330,9 @@ func TestExpressions(t *testing.T) {
 		"meta_from function": {
 			expression: NewExpression(
 				NewQueryResolver(func() query.Function {
-					fn, err := query.InitFunction("meta", "bar")
+					fn, err := query.InitFunctionHelper("meta", "bar")
 					require.NoError(t, err)
-					fn, err = query.InitMethod("from", fn, int64(1))
+					fn, err = query.InitMethodHelper("from", fn, int64(1))
 					require.NoError(t, err)
 					return fn
 				}()),
