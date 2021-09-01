@@ -32,6 +32,10 @@ result.`,
 		Description: `
 ## Operators
 
+### ` + "`keys`" + `
+
+Returns an array of strings containing all the keys that match the pattern specified by the ` + "`key` field" + `.
+
 ### ` + "`scard`" + `
 
 Returns the cardinality of a set, or ` + "`0`" + ` if the key does not exist.
@@ -46,7 +50,7 @@ Increments the number stored at ` + "`key`" + ` by the message content. If the
 key does not exist, it is set to ` + "`0`" + ` before performing the operation.
 Returns the value of ` + "`key`" + ` after the increment.`,
 		FieldSpecs: bredis.ConfigDocs().Add(
-			docs.FieldCommon("operator", "The [operator](#operators) to apply.").HasOptions("scard", "sadd", "incrby"),
+			docs.FieldCommon("operator", "The [operator](#operators) to apply.").HasOptions("scard", "sadd", "incrby", "keys"),
 			docs.FieldCommon("key", "A key to use for the target operator.").IsInterpolated(),
 			docs.FieldAdvanced("retries", "The maximum number of retries before abandoning a request."),
 			docs.FieldAdvanced("retry_period", "The time to wait before consecutive retry attempts."),
@@ -208,10 +212,32 @@ func NewRedis(
 
 //------------------------------------------------------------------------------
 
-type redisOperator func(r *Redis, key string, value []byte) ([]byte, error)
+type redisOperator func(r *Redis, key string, part types.Part) error
+
+func newRedisKeysOperator() redisOperator {
+	return func(r *Redis, key string, part types.Part) error {
+		res, err := r.client.Keys(key).Result()
+
+		for i := 0; i <= r.conf.Redis.Retries && err != nil; i++ {
+			r.log.Errorf("Keys command failed: %v\n", err)
+			<-time.After(r.retryPeriod)
+			r.mRedisRetry.Incr(1)
+			res, err = r.client.Keys(key).Result()
+		}
+		if err != nil {
+			return err
+		}
+
+		iRes := make([]interface{}, 0, len(res))
+		for _, v := range res {
+			iRes = append(iRes, v)
+		}
+		return part.SetJSON(iRes)
+	}
+}
 
 func newRedisSCardOperator() redisOperator {
-	return func(r *Redis, key string, value []byte) ([]byte, error) {
+	return func(r *Redis, key string, part types.Part) error {
 		res, err := r.client.SCard(key).Result()
 
 		for i := 0; i <= r.conf.Redis.Retries && err != nil; i++ {
@@ -220,37 +246,39 @@ func newRedisSCardOperator() redisOperator {
 			r.mRedisRetry.Incr(1)
 			res, err = r.client.SCard(key).Result()
 		}
-
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return strconv.AppendInt(nil, res, 10), nil
+
+		part.Set(strconv.AppendInt(nil, res, 10))
+		return nil
 	}
 }
 
 func newRedisSAddOperator() redisOperator {
-	return func(r *Redis, key string, value []byte) ([]byte, error) {
-		res, err := r.client.SAdd(key, value).Result()
+	return func(r *Redis, key string, part types.Part) error {
+		res, err := r.client.SAdd(key, part.Get()).Result()
 
 		for i := 0; i <= r.conf.Redis.Retries && err != nil; i++ {
 			r.log.Errorf("SAdd command failed: %v\n", err)
 			<-time.After(r.retryPeriod)
 			r.mRedisRetry.Incr(1)
-			res, err = r.client.SAdd(key, value).Result()
+			res, err = r.client.SAdd(key, part.Get()).Result()
+		}
+		if err != nil {
+			return err
 		}
 
-		if err != nil {
-			return nil, err
-		}
-		return strconv.AppendInt(nil, res, 10), nil
+		part.Set(strconv.AppendInt(nil, res, 10))
+		return nil
 	}
 }
 
 func newRedisIncrByOperator() redisOperator {
-	return func(r *Redis, key string, value []byte) ([]byte, error) {
-		valueInt, err := strconv.Atoi(string(value))
+	return func(r *Redis, key string, part types.Part) error {
+		valueInt, err := strconv.Atoi(string(part.Get()))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		res, err := r.client.IncrBy(key, int64(valueInt)).Result()
 
@@ -260,16 +288,19 @@ func newRedisIncrByOperator() redisOperator {
 			r.mRedisRetry.Incr(1)
 			res, err = r.client.IncrBy(key, int64(valueInt)).Result()
 		}
-
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return strconv.AppendInt(nil, res, 10), nil
+
+		part.Set(strconv.AppendInt(nil, res, 10))
+		return nil
 	}
 }
 
 func getRedisOperator(opStr string) (redisOperator, error) {
 	switch opStr {
+	case "keys":
+		return newRedisKeysOperator(), nil
 	case "sadd":
 		return newRedisSAddOperator(), nil
 	case "scard":
@@ -288,13 +319,11 @@ func (r *Redis) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 
 	proc := func(index int, span opentracing.Span, part types.Part) error {
 		key := r.key.String(index, newMsg)
-		res, err := r.operator(r, key, part.Get())
-		if err != nil {
+		if err := r.operator(r, key, part); err != nil {
 			r.mErr.Incr(1)
 			r.log.Debugf("Operator failed for key '%s': %v\n", key, err)
 			return err
 		}
-		part.Set(res)
 		return nil
 	}
 

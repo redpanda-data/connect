@@ -116,11 +116,15 @@ func (f FieldSpec) SetYAMLPath(docsProvider Provider, root, value *yaml.Node, pa
 	switch f.Kind {
 	case Kind2DArray:
 		if len(path) == 0 {
-			root.Kind = yaml.SequenceNode
-			root.Content = []*yaml.Node{{
-				Kind:    yaml.SequenceNode,
-				Content: []*yaml.Node{value},
-			}}
+			if value.Kind == yaml.SequenceNode {
+				*root = *value
+			} else {
+				root.Kind = yaml.SequenceNode
+				root.Content = []*yaml.Node{{
+					Kind:    yaml.SequenceNode,
+					Content: []*yaml.Node{value},
+				}}
+			}
 			return nil
 		}
 		target, err := getIndexFromSequence(path[0], true, root)
@@ -133,8 +137,12 @@ func (f FieldSpec) SetYAMLPath(docsProvider Provider, root, value *yaml.Node, pa
 		return nil
 	case KindArray:
 		if len(path) == 0 {
-			root.Kind = yaml.SequenceNode
-			root.Content = []*yaml.Node{value}
+			if value.Kind == yaml.SequenceNode {
+				*root = *value
+			} else {
+				root.Kind = yaml.SequenceNode
+				root.Content = []*yaml.Node{value}
+			}
 			return nil
 		}
 		target, err := getIndexFromSequence(path[0], true, root)

@@ -1343,6 +1343,22 @@ func TestMethods(t *testing.T) {
 			messages: []easyMsg{{content: `["nope","bar"]`}},
 			output:   false,
 		},
+		"check contains array nums": {
+			input: methods(
+				function("json"),
+				method("contains", int64(10)),
+			),
+			messages: []easyMsg{{content: `["nope",10.0,3]`}},
+			output:   true,
+		},
+		"check contains array nums 2": {
+			input: methods(
+				function("json"),
+				method("contains", int64(10)),
+			),
+			messages: []easyMsg{{content: `["nope",3]`}},
+			output:   false,
+		},
 		"check contains map": {
 			input: methods(
 				function("json"),

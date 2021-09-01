@@ -232,12 +232,10 @@ func (h *HTTPClient) ConnectWithContext(ctx context.Context) (err error) {
 	}
 
 	p := message.NewPart(nil)
-	if h.conf.CopyResponseHeaders {
-		meta := p.Metadata()
-		for k, values := range res.Header {
-			if len(values) > 0 {
-				meta.Set(strings.ToLower(k), values[0])
-			}
+	meta := p.Metadata()
+	for k, values := range res.Header {
+		if len(values) > 0 {
+			meta.Set(strings.ToLower(k), values[0])
 		}
 	}
 	h.prevResponse = message.New(nil)
@@ -298,6 +296,16 @@ func (h *HTTPClient) readStreamed(ctx context.Context) (types.Message, reader.As
 		_ = codecAckFn(ctx, nil)
 		return nil, nil, types.ErrTimeout
 	}
+
+	meta := h.prevResponse.Get(0).Metadata()
+	resParts := make([]types.Part, 0, msg.Len())
+	msg.Iter(func(i int, p types.Part) error {
+		part := message.NewPart(p.Get())
+		part.SetMetadata(meta)
+		resParts = append(resParts, part)
+		return nil
+	})
+	h.prevResponse.SetAll(resParts)
 
 	return msg, func(rctx context.Context, res types.Response) error {
 		return codecAckFn(rctx, res.Error())

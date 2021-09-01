@@ -1,7 +1,9 @@
 package manager
 
 import (
+	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
@@ -114,4 +116,61 @@ func TestInitialization(t *testing.T) {
 
 	_, err = ratelimit.New(rConf, mgr, log.Noop(), metrics.Noop())
 	assert.EqualError(t, err, "not this rate limit")
+}
+
+func TestInitializationOrdering(t *testing.T) {
+	env := bundle.NewEnvironment()
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	env.Inputs.Add(func(b bool, c input.Config, mgr bundle.NewManagement, p ...types.PipelineConstructorFunc) (input.Type, error) {
+		go func() {
+			defer wg.Done()
+			err := mgr.AccessRateLimit(context.Background(), "testratelimit", func(rl types.RateLimit) {})
+			_ = assert.Error(t, err) && assert.Contains(t, err.Error(), "unable to locate")
+		}()
+		return nil, nil
+	}, docs.ComponentSpec{
+		Name: "testinput",
+	})
+
+	env.Processors.Add(func(c processor.Config, mgr bundle.NewManagement) (processor.Type, error) {
+		go func() {
+			defer wg.Done()
+			err := mgr.AccessRateLimit(context.Background(), "fooratelimit", func(rl types.RateLimit) {})
+			_ = assert.Error(t, err) && assert.Contains(t, err.Error(), "unable to locate")
+		}()
+		return nil, nil
+	}, docs.ComponentSpec{
+		Name: "testprocessor",
+	})
+
+	env.RateLimits.Add(func(c ratelimit.Config, mgr bundle.NewManagement) (types.RateLimit, error) {
+		return nil, nil
+	}, docs.ComponentSpec{
+		Name: "testratelimit",
+	})
+
+	inConf := input.NewConfig()
+	inConf.Label = "fooinput"
+	inConf.Type = "testinput"
+
+	procConf := processor.NewConfig()
+	procConf.Label = "fooproc"
+	procConf.Type = "testprocessor"
+
+	rlConf := ratelimit.NewConfig()
+	rlConf.Label = "fooratelimit"
+	rlConf.Type = "testratelimit"
+
+	resConf := NewResourceConfig()
+	resConf.ResourceInputs = append(resConf.ResourceInputs, inConf)
+	resConf.ResourceProcessors = append(resConf.ResourceProcessors, procConf)
+	resConf.ResourceRateLimits = append(resConf.ResourceRateLimits, rlConf)
+
+	_, err := NewV2(resConf, nil, log.Noop(), metrics.Noop(), OptSetEnvironment(env))
+	require.NoError(t, err)
+
+	wg.Wait()
 }

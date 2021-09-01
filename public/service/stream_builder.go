@@ -24,6 +24,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/stream"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
 	"gopkg.in/yaml.v3"
 )
@@ -50,7 +51,7 @@ type StreamBuilder struct {
 
 	producerChan chan types.Transaction
 	producerID   string
-	consumerFunc MessageHandlerFunc
+	consumerFunc MessageBatchHandlerFunc
 	consumerID   string
 
 	apiMut       manager.APIReg
@@ -132,7 +133,7 @@ func (s *StreamBuilder) SetHTTPMux(m HTTPMultiplexer) {
 // delivered downstream, was rejected (or otherwise could not be delivered) or
 // the context is cancelled.
 //
-// This method can only be called once per stream builder, and subsequent calls
+// Only one producer func can be added to a stream builder, and subsequent calls
 // will return an error.
 func (s *StreamBuilder) AddProducerFunc() (MessageHandlerFunc, error) {
 	if s.producerChan != nil {
@@ -171,20 +172,75 @@ func (s *StreamBuilder) AddProducerFunc() (MessageHandlerFunc, error) {
 	}, nil
 }
 
+// AddBatchProducerFunc adds an input to the builder that allows you to write
+// message batches directly into the stream with a closure function. If any
+// other input has or will be added to the stream builder they will be
+// automatically composed within a broker when the pipeline is built.
+//
+// The returned MessageBatchHandlerFunc can be called concurrently from any
+// number of goroutines, and each call will block until all messages within the
+// batch are successfully delivered downstream, were rejected (or otherwise
+// could not be delivered) or the context is cancelled.
+//
+// Only one producer func can be added to a stream builder, and subsequent calls
+// will return an error.
+func (s *StreamBuilder) AddBatchProducerFunc() (MessageBatchHandlerFunc, error) {
+	if s.producerChan != nil {
+		return nil, errors.New("unable to add multiple producer funcs to a stream builder")
+	}
+
+	uuid, err := uuid.NewV4()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate a producer uuid: %w", err)
+	}
+
+	tChan := make(chan types.Transaction)
+	s.producerChan = tChan
+	s.producerID = uuid.String()
+
+	conf := input.NewConfig()
+	conf.Type = input.TypeInproc
+	conf.Inproc = input.InprocConfig(s.producerID)
+	s.inputs = append(s.inputs, conf)
+
+	return func(ctx context.Context, b MessageBatch) error {
+		tmpMsg := message.New(nil)
+		for _, m := range b {
+			tmpMsg.Append(m.part)
+		}
+		resChan := make(chan types.Response)
+		select {
+		case tChan <- types.NewTransaction(tmpMsg, resChan):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		select {
+		case res := <-resChan:
+			return res.Error()
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}, nil
+}
+
 // AddInputYAML parses an input YAML configuration and adds it to the builder.
 // If more than one input configuration is added they will automatically be
 // composed within a broker when the pipeline is built.
 func (s *StreamBuilder) AddInputYAML(conf string) error {
-	confBytes := []byte(conf)
+	nconf, err := getYAMLNode([]byte(conf))
+	if err != nil {
+		return err
+	}
+
+	if err := s.lintYAMLComponent(nconf, docs.TypeInput); err != nil {
+		return err
+	}
 
 	iconf := input.NewConfig()
-	if err := yaml.Unmarshal(confBytes, &iconf); err != nil {
+	if err := nconf.Decode(&iconf); err != nil {
 		return err
 	}
 
-	if err := s.lintYAMLComponent(confBytes, docs.TypeInput); err != nil {
-		return err
-	}
 	s.inputs = append(s.inputs, iconf)
 	return nil
 }
@@ -193,16 +249,20 @@ func (s *StreamBuilder) AddInputYAML(conf string) error {
 // builder to be executed within the pipeline.processors section, after all
 // prior added processor configs.
 func (s *StreamBuilder) AddProcessorYAML(conf string) error {
-	confBytes := []byte(conf)
+	nconf, err := getYAMLNode([]byte(conf))
+	if err != nil {
+		return err
+	}
+
+	if err := s.lintYAMLComponent(nconf, docs.TypeProcessor); err != nil {
+		return err
+	}
 
 	pconf := processor.NewConfig()
-	if err := yaml.Unmarshal(confBytes, &pconf); err != nil {
+	if err := nconf.Decode(&pconf); err != nil {
 		return err
 	}
 
-	if err := s.lintYAMLComponent(confBytes, docs.TypeProcessor); err != nil {
-		return err
-	}
 	s.processors = append(s.processors, pconf)
 	return nil
 }
@@ -216,9 +276,52 @@ func (s *StreamBuilder) AddProcessorYAML(conf string) error {
 // and therefore it is recommended to implement some form of throttling or mutex
 // locking in cases where the call is non-blocking.
 //
-// This method can only be called once per stream builder, and subsequent calls
-// will return an error.
+// Only one consumer can be added to a stream builder, and subsequent calls will
+// return an error.
 func (s *StreamBuilder) AddConsumerFunc(fn MessageHandlerFunc) error {
+	if s.consumerFunc != nil {
+		return errors.New("unable to add multiple producer funcs to a stream builder")
+	}
+
+	uuid, err := uuid.NewV4()
+	if err != nil {
+		return fmt.Errorf("failed to generate a consumer uuid: %w", err)
+	}
+
+	s.consumerFunc = func(c context.Context, mb MessageBatch) error {
+		for _, m := range mb {
+			if err := fn(c, m); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	s.consumerID = uuid.String()
+
+	conf := output.NewConfig()
+	conf.Type = output.TypeInproc
+	conf.Inproc = output.InprocConfig(s.consumerID)
+	s.outputs = append(s.outputs, conf)
+
+	return nil
+}
+
+// AddBatchConsumerFunc adds an output to the builder that executes a closure
+// function argument for each message batch. If more than one output
+// configuration is added they will automatically be composed within a fan out
+// broker when the pipeline is built.
+//
+// The provided MessageBatchHandlerFunc may be called from any number of
+// goroutines, and therefore it is recommended to implement some form of
+// throttling or mutex locking in cases where the call is non-blocking.
+//
+// Only one consumer can be added to a stream builder, and subsequent calls will
+// return an error.
+//
+// Message batches must be created by upstream components (inputs, buffers, etc)
+// otherwise message batches received by this consumer will have a single
+// message contents.
+func (s *StreamBuilder) AddBatchConsumerFunc(fn MessageBatchHandlerFunc) error {
 	if s.consumerFunc != nil {
 		return errors.New("unable to add multiple producer funcs to a stream builder")
 	}
@@ -232,7 +335,7 @@ func (s *StreamBuilder) AddConsumerFunc(fn MessageHandlerFunc) error {
 	s.consumerID = uuid.String()
 
 	conf := output.NewConfig()
-	conf.Type = input.TypeInproc
+	conf.Type = output.TypeInproc
 	conf.Inproc = output.InprocConfig(s.consumerID)
 	s.outputs = append(s.outputs, conf)
 
@@ -243,16 +346,20 @@ func (s *StreamBuilder) AddConsumerFunc(fn MessageHandlerFunc) error {
 // If more than one output configuration is added they will automatically be
 // composed within a fan out broker when the pipeline is built.
 func (s *StreamBuilder) AddOutputYAML(conf string) error {
-	confBytes := []byte(conf)
+	nconf, err := getYAMLNode([]byte(conf))
+	if err != nil {
+		return err
+	}
+
+	if err := s.lintYAMLComponent(nconf, docs.TypeOutput); err != nil {
+		return err
+	}
 
 	oconf := output.NewConfig()
-	if err := yaml.Unmarshal(confBytes, &oconf); err != nil {
+	if err := nconf.Decode(&oconf); err != nil {
 		return err
 	}
 
-	if err := s.lintYAMLComponent(confBytes, docs.TypeOutput); err != nil {
-		return err
-	}
 	s.outputs = append(s.outputs, oconf)
 	return nil
 }
@@ -260,10 +367,17 @@ func (s *StreamBuilder) AddOutputYAML(conf string) error {
 // AddCacheYAML parses a cache YAML configuration and adds it to the builder as
 // a resource.
 func (s *StreamBuilder) AddCacheYAML(conf string) error {
-	confBytes := []byte(conf)
+	nconf, err := getYAMLNode([]byte(conf))
+	if err != nil {
+		return err
+	}
+
+	if err := s.lintYAMLComponent(nconf, docs.TypeCache); err != nil {
+		return err
+	}
 
 	cconf := cache.NewConfig()
-	if err := yaml.Unmarshal(confBytes, &cconf); err != nil {
+	if err := nconf.Decode(&cconf); err != nil {
 		return err
 	}
 	if cconf.Label == "" {
@@ -275,9 +389,6 @@ func (s *StreamBuilder) AddCacheYAML(conf string) error {
 		}
 	}
 
-	if err := s.lintYAMLComponent(confBytes, docs.TypeCache); err != nil {
-		return err
-	}
 	s.resources.ResourceCaches = append(s.resources.ResourceCaches, cconf)
 	return nil
 }
@@ -285,10 +396,17 @@ func (s *StreamBuilder) AddCacheYAML(conf string) error {
 // AddRateLimitYAML parses a rate limit YAML configuration and adds it to the
 // builder as a resource.
 func (s *StreamBuilder) AddRateLimitYAML(conf string) error {
-	confBytes := []byte(conf)
+	nconf, err := getYAMLNode([]byte(conf))
+	if err != nil {
+		return err
+	}
+
+	if err := s.lintYAMLComponent(nconf, docs.TypeRateLimit); err != nil {
+		return err
+	}
 
 	rconf := ratelimit.NewConfig()
-	if err := yaml.Unmarshal(confBytes, &rconf); err != nil {
+	if err := nconf.Decode(&rconf); err != nil {
 		return err
 	}
 	if rconf.Label == "" {
@@ -300,28 +418,23 @@ func (s *StreamBuilder) AddRateLimitYAML(conf string) error {
 		}
 	}
 
-	if err := s.lintYAMLComponent(confBytes, docs.TypeRateLimit); err != nil {
-		return err
-	}
 	s.resources.ResourceRateLimits = append(s.resources.ResourceRateLimits, rconf)
 	return nil
 }
 
 // AddResourcesYAML parses resource configurations and adds them to the config.
 func (s *StreamBuilder) AddResourcesYAML(conf string) error {
-	confBytes := []byte(conf)
-
-	rconf := manager.NewResourceConfig()
-	if err := yaml.Unmarshal(confBytes, &rconf); err != nil {
-		return err
-	}
-
-	node, err := getYAMLNode(confBytes)
+	node, err := getYAMLNode([]byte(conf))
 	if err != nil {
 		return err
 	}
 
 	if err := lintsToErr(manager.Spec().LintYAML(s.getLintContext(), node)); err != nil {
+		return err
+	}
+
+	rconf := manager.NewResourceConfig()
+	if err := node.Decode(&rconf); err != nil {
 		return err
 	}
 
@@ -341,14 +454,7 @@ func (s *StreamBuilder) SetYAML(conf string) error {
 		return errors.New("attempted to override outputs config after adding a func consumer")
 	}
 
-	confBytes := []byte(conf)
-
-	sconf := config.New()
-	if err := yaml.Unmarshal(confBytes, &sconf); err != nil {
-		return err
-	}
-
-	node, err := getYAMLNode(confBytes)
+	node, err := getYAMLNode([]byte(conf))
 	if err != nil {
 		return err
 	}
@@ -357,6 +463,71 @@ func (s *StreamBuilder) SetYAML(conf string) error {
 		return err
 	}
 
+	sconf := config.New()
+	if err := node.Decode(&sconf); err != nil {
+		return err
+	}
+
+	s.setFromConfig(sconf)
+	return nil
+}
+
+// SetFields modifies the config by setting one or more fields identified by a
+// dot path to a value. The argument must be a variadic list of pairs, where the
+// first element is a string containing the target field dot path, and the
+// second element is a typed value to set the field to.
+func (s *StreamBuilder) SetFields(pathValues ...interface{}) error {
+	if s.producerChan != nil {
+		return errors.New("attempted to override config after adding a func producer")
+	}
+	if s.consumerFunc != nil {
+		return errors.New("attempted to override config after adding a func consumer")
+	}
+	if len(pathValues)%2 != 0 {
+		return errors.New("invalid odd number of pathValues provided")
+	}
+
+	var rootNode yaml.Node
+	if err := rootNode.Encode(s.buildConfig()); err != nil {
+		return err
+	}
+
+	if err := config.Spec().SanitiseYAML(&rootNode, docs.SanitiseConfig{
+		RemoveTypeField:  true,
+		RemoveDeprecated: false,
+		DocsProvider:     s.env.internal,
+	}); err != nil {
+		return err
+	}
+
+	for i := 0; i < len(pathValues)-1; i += 2 {
+		var valueNode yaml.Node
+		if err := valueNode.Encode(pathValues[i+1]); err != nil {
+			return err
+		}
+		pathString, ok := pathValues[i].(string)
+		if !ok {
+			return fmt.Errorf("variadic pair element %v should be a string, got a %T", i, pathValues[i])
+		}
+		if err := config.Spec().SetYAMLPath(s.env.internal, &rootNode, &valueNode, gabs.DotPathToSlice(pathString)...); err != nil {
+			return err
+		}
+	}
+
+	if err := lintsToErr(config.Spec().LintYAML(s.getLintContext(), &rootNode)); err != nil {
+		return err
+	}
+
+	sconf := config.New()
+	if err := rootNode.Decode(&sconf); err != nil {
+		return err
+	}
+
+	s.setFromConfig(sconf)
+	return nil
+}
+
+func (s *StreamBuilder) setFromConfig(sconf config.Type) {
 	s.http = sconf.HTTP
 	s.inputs = []input.Config{sconf.Input}
 	s.buffer = sconf.Buffer
@@ -366,23 +537,26 @@ func (s *StreamBuilder) SetYAML(conf string) error {
 	s.resources = sconf.ResourceConfig
 	s.logger = sconf.Logger
 	s.metrics = sconf.Metrics
-	return nil
 }
 
 // SetBufferYAML parses a buffer YAML configuration and sets it to the builder
 // to be placed between the input and the pipeline (processors) sections. This
 // config will replace any prior configured buffer.
 func (s *StreamBuilder) SetBufferYAML(conf string) error {
-	confBytes := []byte(conf)
+	nconf, err := getYAMLNode([]byte(conf))
+	if err != nil {
+		return err
+	}
+
+	if err := s.lintYAMLComponent(nconf, docs.TypeBuffer); err != nil {
+		return err
+	}
 
 	bconf := buffer.NewConfig()
-	if err := yaml.Unmarshal(confBytes, &bconf); err != nil {
+	if err := nconf.Decode(&bconf); err != nil {
 		return err
 	}
 
-	if err := s.lintYAMLComponent(confBytes, docs.TypeBuffer); err != nil {
-		return err
-	}
 	s.buffer = bconf
 	return nil
 }
@@ -390,16 +564,20 @@ func (s *StreamBuilder) SetBufferYAML(conf string) error {
 // SetMetricsYAML parses a metrics YAML configuration and adds it to the builder
 // such that all stream components emit metrics through it.
 func (s *StreamBuilder) SetMetricsYAML(conf string) error {
-	confBytes := []byte(conf)
+	nconf, err := getYAMLNode([]byte(conf))
+	if err != nil {
+		return err
+	}
+
+	if err := s.lintYAMLComponent(nconf, docs.TypeMetrics); err != nil {
+		return err
+	}
 
 	mconf := metrics.NewConfig()
-	if err := yaml.Unmarshal(confBytes, &mconf); err != nil {
+	if err := nconf.Decode(&mconf); err != nil {
 		return err
 	}
 
-	if err := s.lintYAMLComponent(confBytes, docs.TypeMetrics); err != nil {
-		return err
-	}
 	s.metrics = mconf
 	return nil
 }
@@ -407,19 +585,17 @@ func (s *StreamBuilder) SetMetricsYAML(conf string) error {
 // SetLoggerYAML parses a logger YAML configuration and adds it to the builder
 // such that all stream components emit logs through it.
 func (s *StreamBuilder) SetLoggerYAML(conf string) error {
-	confBytes := []byte(conf)
-
-	lconf := log.NewConfig()
-	if err := yaml.Unmarshal(confBytes, &lconf); err != nil {
-		return err
-	}
-
-	node, err := getYAMLNode(confBytes)
+	node, err := getYAMLNode([]byte(conf))
 	if err != nil {
 		return err
 	}
 
 	if err := lintsToErr(log.Spec().LintYAML(s.getLintContext(), node)); err != nil {
+		return err
+	}
+
+	lconf := log.NewConfig()
+	if err := node.Decode(&lconf); err != nil {
 		return err
 	}
 
@@ -470,9 +646,12 @@ func (s *StreamBuilder) runConsumerFunc(mgr *manager.Type) error {
 			if !open {
 				return
 			}
-			err = tran.Payload.Iter(func(i int, part types.Part) error {
-				return s.consumerFunc(context.Background(), newMessageFromPart(part))
+			batch := make(MessageBatch, tran.Payload.Len())
+			_ = tran.Payload.Iter(func(i int, part types.Part) error {
+				batch[i] = newMessageFromPart(part)
+				return nil
 			})
+			err := s.consumerFunc(context.Background(), batch)
 			var res types.Response
 			if err != nil {
 				res = response.NewError(err)
@@ -596,6 +775,9 @@ func getYAMLNode(b []byte) (*yaml.Node, error) {
 	if err := yaml.Unmarshal(b, &nconf); err != nil {
 		return nil, err
 	}
+	if nconf.Kind == yaml.DocumentNode && len(nconf.Content) > 0 {
+		return nconf.Content[0], nil
+	}
 	return &nconf, nil
 }
 
@@ -632,10 +814,6 @@ func lintsToErr(lints []docs.Lint) error {
 	return e
 }
 
-func (s *StreamBuilder) lintYAMLComponent(b []byte, ctype docs.Type) error {
-	nconf, err := getYAMLNode(b)
-	if err != nil {
-		return err
-	}
-	return lintsToErr(docs.LintYAML(s.getLintContext(), ctype, nconf))
+func (s *StreamBuilder) lintYAMLComponent(node *yaml.Node, ctype docs.Type) error {
+	return lintsToErr(docs.LintYAML(s.getLintContext(), ctype, node))
 }

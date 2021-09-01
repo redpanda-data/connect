@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -99,6 +100,70 @@ file:
 	assert.Equal(t, "HELLO WORLD 1\nHELLO WORLD 2\nHELLO WORLD 3\n", string(outBytes))
 }
 
+func TestStreamBuilderBatchProducerFunc(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "stream_builder_batch_producer_test")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	outFilePath := filepath.Join(tmpDir, "out.txt")
+
+	b := service.NewStreamBuilder()
+	require.NoError(t, b.SetLoggerYAML("level: NONE"))
+	require.NoError(t, b.AddProcessorYAML(`bloblang: 'root = content().uppercase()'`))
+	require.NoError(t, b.AddOutputYAML(fmt.Sprintf(`
+file:
+  codec: lines
+  path: %v`, outFilePath)))
+
+	pushFn, err := b.AddBatchProducerFunc()
+	require.NoError(t, err)
+
+	// Fails on second call.
+	_, err = b.AddProducerFunc()
+	require.Error(t, err)
+
+	// Don't allow input overrides now.
+	err = b.SetYAML(`input: {}`)
+	require.Error(t, err)
+
+	strm, err := b.Build()
+	require.NoError(t, err)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		ctx, done := context.WithTimeout(context.Background(), time.Second*10)
+		defer done()
+
+		require.NoError(t, pushFn(ctx, service.MessageBatch{
+			service.NewMessage([]byte("hello world 1")),
+			service.NewMessage([]byte("hello world 2")),
+		}))
+		require.NoError(t, pushFn(ctx, service.MessageBatch{
+			service.NewMessage([]byte("hello world 3")),
+			service.NewMessage([]byte("hello world 4")),
+		}))
+		require.NoError(t, pushFn(ctx, service.MessageBatch{
+			service.NewMessage([]byte("hello world 5")),
+			service.NewMessage([]byte("hello world 6")),
+		}))
+
+		require.NoError(t, strm.StopWithin(time.Second*5))
+	}()
+
+	require.NoError(t, strm.Run(context.Background()))
+	wg.Wait()
+
+	outBytes, err := ioutil.ReadFile(outFilePath)
+	require.NoError(t, err)
+
+	assert.Equal(t, "HELLO WORLD 1\nHELLO WORLD 2\n\nHELLO WORLD 3\nHELLO WORLD 4\n\nHELLO WORLD 5\nHELLO WORLD 6\n\n", string(outBytes))
+}
+
 func TestStreamBuilderConsumerFunc(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "stream_builder_consumer_test")
 	require.NoError(t, err)
@@ -154,6 +219,71 @@ file:
 	outMut.Unlock()
 }
 
+func TestStreamBuilderBatchConsumerFunc(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "stream_builder_batch_consumer_test")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	inFilePath := filepath.Join(tmpDir, "in.txt")
+	require.NoError(t, ioutil.WriteFile(inFilePath, []byte(`HELLO WORLD 1
+HELLO WORLD 2
+
+HELLO WORLD 3
+HELLO WORLD 4
+
+HELLO WORLD 5
+HELLO WORLD 6
+`), 0755))
+
+	b := service.NewStreamBuilder()
+	require.NoError(t, b.SetLoggerYAML("level: NONE"))
+	require.NoError(t, b.AddInputYAML(fmt.Sprintf(`
+file:
+  codec: lines/multipart
+  paths: [ %v ]`, inFilePath)))
+	require.NoError(t, b.AddProcessorYAML(`bloblang: 'root = content().lowercase()'`))
+
+	outBatches := map[string]struct{}{}
+	var outMut sync.Mutex
+	handler := func(_ context.Context, mb service.MessageBatch) error {
+		outMut.Lock()
+		defer outMut.Unlock()
+
+		outMsgs := []string{}
+		for _, m := range mb {
+			b, err := m.AsBytes()
+			assert.NoError(t, err)
+			outMsgs = append(outMsgs, string(b))
+		}
+
+		outBatches[strings.Join(outMsgs, ",")] = struct{}{}
+		return nil
+	}
+	require.NoError(t, b.AddBatchConsumerFunc(handler))
+
+	// Fails on second call.
+	require.Error(t, b.AddBatchConsumerFunc(handler))
+
+	// Don't allow output overrides now.
+	err = b.SetYAML(`output: {}`)
+	require.Error(t, err)
+
+	strm, err := b.Build()
+	require.NoError(t, err)
+
+	require.NoError(t, strm.Run(context.Background()))
+
+	outMut.Lock()
+	assert.Equal(t, map[string]struct{}{
+		"hello world 1,hello world 2": {},
+		"hello world 3,hello world 4": {},
+		"hello world 5,hello world 6": {},
+	}, outBatches)
+	outMut.Unlock()
+}
+
 func TestStreamBuilderCustomLogger(t *testing.T) {
 	b := service.NewStreamBuilder()
 	b.SetPrintLogger(nil)
@@ -180,6 +310,7 @@ type: memory`))
 type: local`))
 	require.NoError(t, b.SetMetricsYAML(`type: prometheus`))
 	require.NoError(t, b.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, b.SetBufferYAML(`type: memory`))
 
 	act, err := b.AsYAML()
 	require.NoError(t, err)
@@ -189,7 +320,8 @@ type: local`))
     label: ""
     kafka:`,
 		`buffer:
-    none: {}`,
+    memory:
+        limit`,
 		`pipeline:
     threads: 10
     processors:`,
@@ -325,7 +457,7 @@ func TestStreamBuilderYAMLErrors(t *testing.T) {
 
 	err = b.SetYAML(`not valid ! yaml 34324`)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unmarshal errors")
+	assert.Contains(t, err.Error(), "expected object value")
 
 	err = b.SetYAML(`input: { foo: nope }`)
 	require.Error(t, err)
@@ -350,6 +482,136 @@ func TestStreamBuilderYAMLErrors(t *testing.T) {
 	err = b.AddRateLimitYAML(`{ label: "", local: {} }`)
 	require.Error(t, err)
 	assert.EqualError(t, err, "a label must be specified for rate limit resources")
+}
+
+func TestStreamBuilderSetFields(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		args        []interface{}
+		output      string
+		errContains string
+	}{
+		{
+			name:  "odd number of args",
+			input: `{}`,
+			args: []interface{}{
+				"just a field",
+			},
+			errContains: "odd number of pathValues",
+		},
+		{
+			name:  "a path isnt a string",
+			input: `{}`,
+			args: []interface{}{
+				10, "hello world",
+			},
+			errContains: "should be a string",
+		},
+		{
+			name: "unknown field error",
+			input: `
+input:
+  kafka:
+    topics: [ foo, bar ]
+`,
+			args: []interface{}{
+				"input.kafka.unknown_field", "baz",
+			},
+			errContains: "field not recognised",
+		},
+		{
+			name: "create lint error",
+			input: `
+input:
+  kafka:
+    topics: [ foo, bar ]
+`,
+			args: []interface{}{
+				"input.label", "foo",
+				"output.label", "foo",
+			},
+			errContains: "collides with a previously",
+		},
+		{
+			name: "set kafka input topics",
+			input: `
+input:
+  kafka:
+    topics: [ foo, bar ]
+`,
+			args: []interface{}{
+				"input.kafka.topics.1", "baz",
+			},
+			output: `
+input:
+  kafka:
+    topics: [ foo, baz ]
+`,
+		},
+		{
+			name: "append kafka input topics",
+			input: `
+input:
+  kafka:
+    topics: [ foo, bar ]
+`,
+			args: []interface{}{
+				"input.kafka.topics.-", "baz",
+				"input.kafka.topics.-", "buz",
+				"input.kafka.topics.-", "bev",
+			},
+			output: `
+input:
+  kafka:
+    topics: [ foo, bar, baz, buz, bev ]
+`,
+		},
+		{
+			name: "add a processor",
+			input: `
+input:
+  kafka:
+    topics: [ foo, bar ]
+`,
+			args: []interface{}{
+				"pipeline.processors.-.bloblang", `root = "meow"`,
+			},
+			output: `
+input:
+  kafka:
+    topics: [ foo, bar ]
+pipeline:
+  processors:
+    - bloblang: 'root = "meow"'
+`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			b := service.NewStreamBuilder()
+			require.NoError(t, b.SetYAML(test.input))
+			err := b.SetFields(test.args...)
+			if test.errContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			} else {
+				require.NoError(t, err)
+
+				b2 := service.NewStreamBuilder()
+				require.NoError(t, b2.SetYAML(test.output))
+
+				bAsYAML, err := b.AsYAML()
+				require.NoError(t, err)
+
+				b2AsYAML, err := b2.AsYAML()
+				require.NoError(t, err)
+
+				assert.YAMLEq(t, b2AsYAML, bAsYAML)
+			}
+		})
+	}
 }
 
 func TestStreamBuilderSetCoreYAML(t *testing.T) {

@@ -7,12 +7,33 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- The `mqtt` input and output now support sending a last will, configuring a keep alive timeout, and setting retained out output messages.
+- Go API: New stream builder `AddBatchProducerFunc` and `AddBatchConsumerFunc` methods.
+- Field `gzip_compression` added to the `elasticsearch` output.
+- The `redis_streams` input now supports creating the stream with the `MKSTREAM` command (enabled by default).
+- The `kafka` output now supports manual partition allocation using interpolation functions in the field `partition`.
+
+### Fixed
+
+- The bloblang method `contains` now correctly compares numerical values in arrays and objects.
+
+## 3.53.0 - 2021-08-19
+
+### Added
+
 - Go API: Added ability to create and register `BatchBuffer` plugins.
 - New `system_window` buffer for processing message windows (sliding or tumbling) following the system clock.
 - Field `root_cas` added to all TLS configuration blocks.
 - The `sftp` input and output now support key based authentication.
 - New Bloblang function `nanoid`.
 - The `gcp_cloud_storage` output now supports custom collision behaviour with the field `collision_mode`.
+- Field `priority` added to the `amqp_0_9` output.
+- Operator `keys` added to the `redis` processor.
+- The `http_client` input when configured in stream mode now allows message body interpolation functions within the URL and header parameters.
+
+### Fixed
+
+- Fixed a panic that would occur when executing a pipeline where processor or input resources reference rate limits.
 
 ## 3.52.0 - 2021-08-02
 

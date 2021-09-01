@@ -1006,7 +1006,7 @@ root.foo = this.foo.append("and", "this")
 
 ### `contains`
 
-Checks whether an array contains an element matching the argument, or an object contains a value matching the argument, and returns a boolean result.
+Checks whether an array contains an element matching the argument, or an object contains a value matching the argument, and returns a boolean result. Numerical comparisons are made irrespective of the representation type (float versus integer).
 
 ```coffee
 root.has_foo = this.thing.contains("foo")
@@ -1016,6 +1016,16 @@ root.has_foo = this.thing.contains("foo")
 
 # In:  {"thing":["this","bar","that"]}
 # Out: {"has_foo":false}
+```
+
+```coffee
+root.has_bar = this.thing.contains(20)
+
+# In:  {"thing":[10.3,20.0,"huh",3]}
+# Out: {"has_bar":true}
+
+# In:  {"thing":[2,3,40,67]}
+# Out: {"has_bar":false}
 ```
 
 ### `enumerated`

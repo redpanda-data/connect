@@ -9,6 +9,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/mqttconf"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -20,14 +21,17 @@ import (
 
 // MQTTConfig contains configuration fields for the MQTT output type.
 type MQTTConfig struct {
-	URLs        []string   `json:"urls" yaml:"urls"`
-	QoS         uint8      `json:"qos" yaml:"qos"`
-	Topic       string     `json:"topic" yaml:"topic"`
-	ClientID    string     `json:"client_id" yaml:"client_id"`
-	User        string     `json:"user" yaml:"user"`
-	Password    string     `json:"password" yaml:"password"`
-	MaxInFlight int        `json:"max_in_flight" yaml:"max_in_flight"`
-	TLS         tls.Config `json:"tls" yaml:"tls"`
+	URLs        []string      `json:"urls" yaml:"urls"`
+	QoS         uint8         `json:"qos" yaml:"qos"`
+	Retained    bool          `json:"retained" yaml:"retained"`
+	Topic       string        `json:"topic" yaml:"topic"`
+	ClientID    string        `json:"client_id" yaml:"client_id"`
+	Will        mqttconf.Will `json:"will" yaml:"will"`
+	User        string        `json:"user" yaml:"user"`
+	Password    string        `json:"password" yaml:"password"`
+	KeepAlive   int64         `json:"keepalive" yaml:"keepalive"`
+	MaxInFlight int           `json:"max_in_flight" yaml:"max_in_flight"`
+	TLS         tls.Config    `json:"tls" yaml:"tls"`
 }
 
 // NewMQTTConfig creates a new MQTTConfig with default values.
@@ -37,9 +41,11 @@ func NewMQTTConfig() MQTTConfig {
 		QoS:         1,
 		Topic:       "benthos_topic",
 		ClientID:    "benthos_output",
+		Will:        mqttconf.EmptyWill(),
 		User:        "",
 		Password:    "",
 		MaxInFlight: 1,
+		KeepAlive:   30,
 		TLS:         tls.NewConfig(),
 	}
 }
@@ -74,6 +80,10 @@ func NewMQTT(
 	var err error
 	if m.topic, err = bloblang.NewField(conf.Topic); err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
+	}
+
+	if err := m.conf.Will.Validate(); err != nil {
+		return nil, err
 	}
 
 	for _, u := range conf.URLs {
@@ -111,10 +121,15 @@ func (m *MQTT) Connect() error {
 		}).
 		SetConnectTimeout(time.Second).
 		SetWriteTimeout(time.Second).
+		SetKeepAlive(time.Duration(m.conf.KeepAlive)).
 		SetClientID(m.conf.ClientID)
 
 	for _, u := range m.urls {
 		conf = conf.AddBroker(u)
+	}
+
+	if m.conf.Will.Enabled {
+		conf = conf.SetWill(m.conf.Will.Topic, m.conf.Will.Payload, m.conf.Will.QoS, m.conf.Will.Retained)
 	}
 
 	if m.conf.TLS.Enabled {
@@ -163,7 +178,7 @@ func (m *MQTT) Write(msg types.Message) error {
 	}
 
 	return IterateBatchedSend(msg, func(i int, p types.Part) error {
-		mtok := client.Publish(m.topic.String(i, msg), m.conf.QoS, false, p.Get())
+		mtok := client.Publish(m.topic.String(i, msg), m.conf.QoS, m.conf.Retained, p.Get())
 		mtok.Wait()
 		sendErr := mtok.Error()
 		if sendErr == mqtt.ErrNotConnected {

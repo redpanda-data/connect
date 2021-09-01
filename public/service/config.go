@@ -220,6 +220,7 @@ func (c *ConfigSpec) Description(description string) *ConfigSpec {
 // will already be inferred. However, setting a field explicitly is sometimes
 // useful for enriching the field documentation with more information.
 func (c *ConfigSpec) Field(f *ConfigField) *ConfigSpec {
+	c.component.Config.Type = docs.FieldTypeObject
 	for i, s := range c.component.Config.Children {
 		if s.Name == f.field.Name {
 			c.component.Config.Children[i] = f.field
@@ -271,6 +272,11 @@ func (c *ConfigView) Summary() string {
 // formatted as markdown.
 func (c *ConfigView) Description() string {
 	return c.component.Description
+}
+
+// IsDeprecated returns true if the component is marked as deprecated.
+func (c *ConfigView) IsDeprecated() bool {
+	return c.component.Status == docs.StatusDeprecated
 }
 
 // FormatJSON returns a byte slice of the component configuration formatted as a
