@@ -36,6 +36,7 @@ output:
     addresses: []
     query: ""
     args: []
+    args_mapping: ""
     max_in_flight: 1
     batching:
       count: 0
@@ -67,6 +68,7 @@ output:
     disable_initial_host_lookup: false
     query: ""
     args: []
+    args_mapping: ""
     consistency: QUORUM
     max_retries: 3
     backoff:
@@ -337,6 +339,29 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `array`  
 Default: `[]`  
+
+### `args_mapping`
+
+A [Bloblang mapping](/docs/guides/bloblang/about) that can be used to provide arguments to Cassandra queries.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+args_mapping: |
+  output:
+  	cassandra:
+  		addresses: ["localhost:9042"]
+  		query: INSERT INTO SOME_KEYSPACE.SOME_TABLE (id, first_name, last_name) VALUES (now(), ?, ?)
+  		args_mapping: |
+  			root = [
+  				this.firstName,
+  				this.lastName,
+  			]
+```
 
 ### `consistency`
 

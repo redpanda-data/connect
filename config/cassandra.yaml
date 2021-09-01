@@ -34,6 +34,7 @@ output:
     disable_initial_host_lookup: false
     query: ""
     args: []
+    args_mapping: ""
     consistency: QUORUM
     max_retries: 3
     backoff:
