@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.54.0 - 2021-09-01
+
 ### Added
 
 - The `mqtt` input and output now support sending a last will, configuring a keep alive timeout, and setting retained out output messages.
