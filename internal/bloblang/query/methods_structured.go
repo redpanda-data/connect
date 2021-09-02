@@ -12,8 +12,6 @@ import (
 	jsonschema "github.com/xeipuuv/gojsonschema"
 )
 
-//------------------------------------------------------------------------------
-
 var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"all",
@@ -28,11 +26,11 @@ var _ = registerSimpleMethod(
 			`{"patrons":[{"id":"1","age":45},{"id":"2","age":23}]}`,
 			`{"all_over_21":true}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
-		queryFn, ok := args[0].(Function)
-		if !ok {
-			return nil, fmt.Errorf("expected query argument, received %T", args[0])
+	).Param(ParamQuery("test", "A test query to apply to each element.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		queryFn, err := args.FieldQuery("test")
+		if err != nil {
+			return nil, err
 		}
 		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
 			arr, ok := res.([]interface{})
@@ -58,9 +56,6 @@ var _ = registerSimpleMethod(
 			return true, nil
 		}, nil
 	},
-	false,
-	ExpectNArgs(1),
-	ExpectFunctionArg(0),
 )
 
 var _ = registerSimpleMethod(
@@ -77,11 +72,11 @@ var _ = registerSimpleMethod(
 			`{"patrons":[{"id":"1","age":10},{"id":"2","age":12}]}`,
 			`{"any_over_21":false}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
-		queryFn, ok := args[0].(Function)
-		if !ok {
-			return nil, fmt.Errorf("expected query argument, received %T", args[0])
+	).Param(ParamQuery("test", "A test query to apply to each element.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		queryFn, err := args.FieldQuery("test")
+		if err != nil {
+			return nil, err
 		}
 		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
 			arr, ok := res.([]interface{})
@@ -110,9 +105,6 @@ var _ = registerSimpleMethod(
 			return false, nil
 		}, nil
 	},
-	false,
-	ExpectNArgs(1),
-	ExpectFunctionArg(0),
 )
 
 //------------------------------------------------------------------------------
@@ -129,25 +121,24 @@ var _ = registerSimpleMethod(
 			`{"foo":["bar","baz"]}`,
 			`{"foo":["bar","baz","and","this"]}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
+	).VariadicParams(),
+	func(args *ParsedParams) (simpleMethod, error) {
+		argsList := args.Raw()
 		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
 			arr, ok := res.([]interface{})
 			if !ok {
 				return nil, NewTypeError(res, ValueArray)
 			}
-			copied := make([]interface{}, 0, len(arr)+len(args))
+			copied := make([]interface{}, 0, len(arr)+len(argsList))
 			copied = append(copied, arr...)
-			return append(copied, args...), nil
+			return append(copied, argsList...), nil
 		}, nil
 	},
-	true,
-	ExpectAtLeastOneArg(),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"collapse", "",
 	).InCategory(
@@ -179,13 +170,13 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectOneOrZeroArgs(),
-	ExpectBoolArg(0),
+	oldParamsExpectOneOrZeroArgs(),
+	oldParamsExpectBoolArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"contains", "",
 	).InCategory(
@@ -256,7 +247,7 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectNArgs(1),
+	oldParamsExpectNArgs(1),
 )
 
 //------------------------------------------------------------------------------
@@ -273,7 +264,7 @@ var _ = registerSimpleMethod(
 			`{"foo":[{"index":0,"value":"bar"},{"index":1,"value":"baz"}]}`,
 		),
 	),
-	func(args ...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			arr, ok := v.([]interface{})
 			if !ok {
@@ -289,13 +280,11 @@ var _ = registerSimpleMethod(
 			return enumerated, nil
 		}, nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"exists",
 		"Checks that a field, identified via a [dot path][field_paths], exists in an object.",
@@ -317,26 +306,26 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"explode", "",
 	).InCategory(
 		MethodCategoryObjectAndArray,
 		"Explodes an array or object at a [field path][field_paths].",
-		NewExampleSpec(`#### On arrays
+		NewExampleSpec(`##### On arrays
 
 Exploding arrays results in an array containing elements matching the original document, where the target field of each element is an element of the exploded array:`,
 			`root = this.explode("value")`,
 			`{"id":1,"value":["foo","bar","baz"]}`,
 			`[{"id":1,"value":"foo"},{"id":1,"value":"bar"},{"id":1,"value":"baz"}]`,
 		),
-		NewExampleSpec(`#### On objects
+		NewExampleSpec(`##### On objects
 
 Exploding objects results in an object where the keys match the target object, and the values match the original document but with the target field replaced by the exploded value:`,
 			`root = this.explode("value")`,
@@ -373,13 +362,13 @@ Exploding objects results in an object where the keys match the target object, a
 		}, nil
 	},
 	true,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"filter", "",
 	).InCategory(
@@ -390,7 +379,7 @@ var _ = registerSimpleMethod(
 			`{"nums":[3,11,4,17]}`,
 			`{"new_nums":[11,17]}`,
 		),
-		NewExampleSpec(`#### On objects
+		NewExampleSpec(`##### On objects
 
 When filtering objects the mapping query argument is provided a context with a field `+"`key`"+` containing the value key, and a field `+"`value`"+` containing the value.`,
 			`root.new_dict = this.dict.filter(item -> item.value.contains("foo"))`,
@@ -441,8 +430,8 @@ When filtering objects the mapping query argument is provided a context with a f
 		}, nil
 	},
 	false,
-	ExpectNArgs(1),
-	ExpectFunctionArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectFunctionArg(0),
 )
 
 //------------------------------------------------------------------------------
@@ -459,7 +448,7 @@ var _ = registerSimpleMethod(
 			`{"result":["foo","bar","baz","buz"]}`,
 		),
 	),
-	func(args ...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			array, isArray := v.([]interface{})
 			if !isArray {
@@ -477,13 +466,11 @@ var _ = registerSimpleMethod(
 			return result, nil
 		}, nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"fold",
 		"Takes two arguments: an initial value, and a mapping query. For each element of an array the mapping context is an object with two fields `tally` and `value`, where `tally` contains the current accumulated value and `value` is the value of the current element. The mapping must return the result of adding the value to the tally.\n\nThe first argument is the value that `tally` will have on the first call.",
@@ -543,13 +530,13 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	false,
-	ExpectNArgs(2),
-	ExpectFunctionArg(1),
+	oldParamsExpectNArgs(2),
+	oldParamsExpectFunctionArg(1),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"index",
 		"Extract an element from an array by an index. The index can be negative, and if so the element will be selected from the end counting backwards starting from -1. E.g. an index of -1 returns the last element, an index of -2 returns the element before the last, and so on.",
@@ -594,13 +581,13 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectNArgs(1),
-	ExpectIntArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectIntArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"json_schema",
 		"Checks a [JSON schema](https://json-schema.org/) against a value and returns the value if it matches or throws and error if it does not.",
@@ -654,8 +641,8 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
@@ -672,7 +659,7 @@ var _ = registerSimpleMethod(
 			`{"foo_keys":["bar","baz"]}`,
 		),
 	),
-	func(args ...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			if m, ok := v.(map[string]interface{}); ok {
 				keys := make([]interface{}, 0, len(m))
@@ -687,8 +674,6 @@ var _ = registerSimpleMethod(
 			return nil, NewTypeError(v, ValueObject)
 		}, nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 var _ = registerSimpleMethod(
@@ -704,7 +689,7 @@ var _ = registerSimpleMethod(
 			`{"foo_key_values":[{"key":"bar","value":1},{"key":"baz","value":2}]}`,
 		),
 	),
-	func(args ...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			if m, ok := v.(map[string]interface{}); ok {
 				keyValues := make([]interface{}, 0, len(m))
@@ -719,8 +704,6 @@ var _ = registerSimpleMethod(
 			return nil, NewTypeError(v, ValueObject)
 		}, nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
@@ -745,7 +728,7 @@ var _ = registerSimpleMethod(
 			`{"foo_len":2}`,
 		),
 	),
-	func(args ...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			var length int64
 			switch t := v.(type) {
@@ -763,18 +746,16 @@ var _ = registerSimpleMethod(
 			return length, nil
 		}, nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"map_each", "",
 	).InCategory(
 		MethodCategoryObjectAndArray, "",
-		NewExampleSpec(`#### On arrays
+		NewExampleSpec(`##### On arrays
 
 Apply a mapping to each element of an array and replace the element with the result. Within the argument mapping the context is the value of the element being mapped.`,
 			`root.new_nums = this.nums.map_each(num -> if num < 10 {
@@ -785,7 +766,7 @@ Apply a mapping to each element of an array and replace the element with the res
 			`{"nums":[3,11,4,17]}`,
 			`{"new_nums":[1,7]}`,
 		),
-		NewExampleSpec(`#### On objects
+		NewExampleSpec(`##### On objects
 
 Apply a mapping to each value of an object and replace the value with the result. Within the argument mapping the context is an object with a field `+"`key`"+` containing the value key, and a field `+"`value`"+`.`,
 			`root.new_dict = this.dict.map_each(item -> item.value.uppercase())`,
@@ -848,13 +829,13 @@ Apply a mapping to each value of an object and replace the value with the result
 		}, nil
 	},
 	false,
-	ExpectNArgs(1),
-	ExpectFunctionArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectFunctionArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"map_each_key", "",
 	).InCategory(
@@ -904,13 +885,13 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	false,
-	ExpectNArgs(1),
-	ExpectFunctionArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectFunctionArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerMethod(
+var _ = registerOldParamsMethod(
 	NewMethodSpec(
 		"merge", "Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the result will be an array containing both values, where values that are already arrays will be expanded into the resulting array.",
 	).InCategory(
@@ -922,7 +903,7 @@ var _ = registerMethod(
 		),
 	),
 	false, mergeMethod,
-	ExpectNArgs(1),
+	oldParamsExpectNArgs(1),
 )
 
 func mergeMethod(target Function, args ...interface{}) (Function, error) {
@@ -995,7 +976,7 @@ var _ = registerSimpleMethod(
 			`Error("failed assignment (line 1): field `+"`this.a`"+`: object value is empty")`,
 		),
 	),
-	func(args ...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			switch t := v.(type) {
 			case string:
@@ -1016,13 +997,11 @@ var _ = registerSimpleMethod(
 			return v, nil
 		}, nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerMethod(
+var _ = registerOldParamsMethod(
 	NewMethodSpec(
 		"sort", "",
 	).InCategory(
@@ -1040,8 +1019,8 @@ var _ = registerMethod(
 		),
 	),
 	false, sortMethod,
-	ExpectOneOrZeroArgs(),
-	ExpectFunctionArg(0),
+	oldParamsExpectOneOrZeroArgs(),
+	oldParamsExpectFunctionArg(0),
 )
 
 func sortMethod(target Function, args ...interface{}) (Function, error) {
@@ -1124,7 +1103,7 @@ func sortMethod(target Function, args ...interface{}) (Function, error) {
 	}, targets), nil
 }
 
-var _ = registerMethod(
+var _ = registerOldParamsMethod(
 	NewMethodSpec(
 		"sort_by", "",
 	).InCategory(
@@ -1137,7 +1116,7 @@ var _ = registerMethod(
 		),
 	),
 	false, sortByMethod,
-	ExpectNArgs(1),
+	oldParamsExpectNArgs(1),
 )
 
 func sortByMethod(target Function, args ...interface{}) (Function, error) {
@@ -1210,7 +1189,7 @@ func sortByMethod(target Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"slice", "",
 	).InCategory(
@@ -1247,9 +1226,9 @@ root.the_rest = this.value.slice(0, -2)`,
 	),
 	sliceMethod,
 	true,
-	ExpectAtLeastOneArg(),
-	ExpectIntArg(0),
-	ExpectIntArg(1),
+	oldParamsExpectAtLeastOneArg(),
+	oldParamsExpectIntArg(0),
+	oldParamsExpectIntArg(1),
 )
 
 func sliceMethod(args ...interface{}) (simpleMethod, error) {
@@ -1328,11 +1307,10 @@ var _ = registerMethod(
 			`{"sum":15}`,
 		),
 	),
-	false, sumMethod,
-	ExpectNArgs(0),
+	sumMethod,
 )
 
-func sumMethod(target Function, _ ...interface{}) (Function, error) {
+func sumMethod(target Function, _ *ParsedParams) (Function, error) {
 	return ClosureFunction("method sum", func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
@@ -1362,7 +1340,7 @@ func sumMethod(target Function, _ ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"unique", "",
 	).InCategory(
@@ -1376,8 +1354,8 @@ var _ = registerSimpleMethod(
 	),
 	uniqueMethod,
 	false,
-	ExpectOneOrZeroArgs(),
-	ExpectFunctionArg(0),
+	oldParamsExpectOneOrZeroArgs(),
+	oldParamsExpectFunctionArg(0),
 )
 
 func uniqueMethod(args ...interface{}) (simpleMethod, error) {
@@ -1479,7 +1457,7 @@ var _ = registerSimpleMethod(
 			`{"foo_vals":[1,2]}`,
 		),
 	),
-	func(args ...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			if m, ok := v.(map[string]interface{}); ok {
 				values := make([]interface{}, 0, len(m))
@@ -1491,13 +1469,11 @@ var _ = registerSimpleMethod(
 			return nil, NewTypeError(v, ValueObject)
 		}, nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"without", "",
 	).InCategory(
@@ -1525,8 +1501,8 @@ If a key within a nested path does not exist or is not an object then it is not 
 		}, nil
 	},
 	true,
-	ExpectAtLeastOneArg(),
-	ExpectAllStringArgs(),
+	oldParamsExpectAtLeastOneArg(),
+	oldParamsExpectAllStringArgs(),
 )
 
 func mapWithout(m map[string]interface{}, paths [][]string) map[string]interface{} {
@@ -1558,5 +1534,3 @@ func mapWithout(m map[string]interface{}, paths [][]string) map[string]interface
 	}
 	return newMap
 }
-
-//------------------------------------------------------------------------------

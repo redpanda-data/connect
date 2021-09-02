@@ -41,14 +41,6 @@ func aggregateTargetPaths(fns ...Function) func(ctx TargetsContext) (TargetsCont
 	}
 }
 
-func methodTargetPaths(target, method Function) func(ctx TargetsContext) (TargetsContext, []TargetPath) {
-	return func(ctx TargetsContext) (TargetsContext, []TargetPath) {
-		methodCtx, targets := target.QueryTargets(ctx)
-		returnCtx, methodTargets := method.QueryTargets(methodCtx)
-		return returnCtx, append(targets, methodTargets...)
-	}
-}
-
 // TargetsContext describes the current Bloblang execution environment from the
 // perspective of a particular query function in a way that allows it to
 // determine which values it is targetting and the origins of those values.

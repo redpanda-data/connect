@@ -129,7 +129,7 @@ func TestArithmetic(t *testing.T) {
 	}
 	function := func(name string, args ...interface{}) Function {
 		t.Helper()
-		fn, err := InitFunction(name, args...)
+		fn, err := InitFunctionHelper(name, args...)
 		require.NoError(t, err)
 		return fn
 	}
@@ -633,7 +633,7 @@ func TestArithmeticTargets(t *testing.T) {
 	}
 	function := func(name string, args ...interface{}) Function {
 		t.Helper()
-		fn, err := InitFunction(name, args...)
+		fn, err := InitFunctionHelper(name, args...)
 		require.NoError(t, err)
 		return fn
 	}

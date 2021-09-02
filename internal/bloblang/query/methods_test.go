@@ -34,7 +34,7 @@ func TestMethods(t *testing.T) {
 	}
 	function := func(name string, args ...interface{}) Function {
 		t.Helper()
-		fn, err := InitFunction(name, args...)
+		fn, err := InitFunctionHelper(name, args...)
 		require.NoError(t, err)
 		return fn
 	}
@@ -59,7 +59,7 @@ func TestMethods(t *testing.T) {
 		t.Helper()
 		for _, m := range methods {
 			var err error
-			fn, err = InitMethod(m.name, fn, m.args...)
+			fn, err = InitMethodHelper(m.name, fn, m.args...)
 			require.NoError(t, err)
 		}
 		return fn
@@ -2062,13 +2062,13 @@ func TestMethods(t *testing.T) {
 func TestMethodTargets(t *testing.T) {
 	function := func(name string, args ...interface{}) Function {
 		t.Helper()
-		fn, err := InitFunction(name, args...)
+		fn, err := InitFunctionHelper(name, args...)
 		require.NoError(t, err)
 		return fn
 	}
 	method := func(fn Function, name string, args ...interface{}) Function {
 		t.Helper()
-		fn, err := InitMethod(name, fn, args...)
+		fn, err := InitMethodHelper(name, fn, args...)
 		require.NoError(t, err)
 		return fn
 	}
@@ -2130,7 +2130,7 @@ func TestMethodNoArgsTargets(t *testing.T) {
 	for k := range AllMethods.constructors {
 		// Only tests methods that do not need arguments, we need manual checks
 		// for other methods.
-		m, err := InitMethod(k, fn)
+		m, err := InitMethodHelper(k, fn)
 		if err != nil {
 			continue
 		}

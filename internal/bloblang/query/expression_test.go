@@ -327,10 +327,10 @@ func TestExpressionTargets(t *testing.T) {
 		},
 		"if query path": {
 			input: NewIfFunction(
-				mustFunc(InitFunction("json", "foo.bar")),
+				mustFunc(InitFunctionHelper("json", "foo.bar")),
 				NewLiteralFunction("", "foo"),
 				nil,
-				mustFunc(InitFunction("var", "baz")),
+				mustFunc(InitFunctionHelper("var", "baz")),
 			),
 			output: []TargetPath{
 				NewTargetPath(TargetValue, "foo", "bar"),
@@ -339,19 +339,19 @@ func TestExpressionTargets(t *testing.T) {
 		},
 		"if else if query path": {
 			input: NewIfFunction(
-				mustFunc(InitFunction("json", "foo.bar")),
+				mustFunc(InitFunctionHelper("json", "foo.bar")),
 				NewLiteralFunction("", "foo"),
 				[]ElseIf{
 					{
-						QueryFn: mustFunc(InitFunction("json", "foo.baz")),
+						QueryFn: mustFunc(InitFunctionHelper("json", "foo.baz")),
 						MapFn:   NewLiteralFunction("", "bar"),
 					},
 					{
-						QueryFn: mustFunc(InitFunction("meta", "buz")),
-						MapFn:   mustFunc(InitFunction("meta", "quz")),
+						QueryFn: mustFunc(InitFunctionHelper("meta", "buz")),
+						MapFn:   mustFunc(InitFunctionHelper("meta", "quz")),
 					},
 				},
-				mustFunc(InitFunction("var", "baz")),
+				mustFunc(InitFunctionHelper("var", "baz")),
 			),
 			output: []TargetPath{
 				NewTargetPath(TargetValue, "foo", "bar"),
@@ -382,9 +382,9 @@ func TestExpressionTargets(t *testing.T) {
 		},
 		"match meta context": {
 			input: NewMatchFunction(
-				mustFunc(InitFunction("meta", "foo")),
+				mustFunc(InitFunctionHelper("meta", "foo")),
 				NewMatchCase(
-					mustFunc(InitFunction("meta", "bar")),
+					mustFunc(InitFunctionHelper("meta", "bar")),
 					NewFieldFunction("baz"),
 				),
 				NewMatchCase(
@@ -403,7 +403,7 @@ func TestExpressionTargets(t *testing.T) {
 			input: NewMatchFunction(
 				NewFieldFunction("foo.bar"),
 				NewMatchCase(
-					mustFunc(InitFunction("meta", "bar")),
+					mustFunc(InitFunctionHelper("meta", "bar")),
 					NewFieldFunction("baz.buz"),
 				),
 				NewMatchCase(

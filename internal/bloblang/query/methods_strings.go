@@ -45,13 +45,11 @@ var _ = registerSimpleMethod(
 			`{"first_byte":102}`,
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			return IToBytes(v), nil
 		}, nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
@@ -68,7 +66,7 @@ var _ = registerSimpleMethod(
 			`{"title":"The Foo Bar"}`,
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			switch t := v.(type) {
 			case string:
@@ -79,8 +77,6 @@ var _ = registerSimpleMethod(
 			return nil, NewTypeError(v, ValueString)
 		}, nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
@@ -105,10 +101,15 @@ var _ = registerSimpleMethod(
 			`this is totally unstructured data`,
 			"{\"encoded\":\"FD,B0+DGm>FDl80Ci\\\"A>F`)8BEckl6F`M&(+Cno&@/\"}",
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
+	).Param(ParamString("scheme", "The encoding scheme to use.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		schemeStr, err := args.FieldString("scheme")
+		if err != nil {
+			return nil, err
+		}
+
 		var schemeFn func([]byte) (string, error)
-		switch args[0].(string) {
+		switch schemeStr {
 		case "base64":
 			schemeFn = func(b []byte) (string, error) {
 				var buf bytes.Buffer
@@ -157,8 +158,9 @@ var _ = registerSimpleMethod(
 				return string(enc), nil
 			}
 		default:
-			return nil, fmt.Errorf("unrecognized encoding type: %v", args[0])
+			return nil, fmt.Errorf("unrecognized encoding type: %v", schemeStr)
 		}
+
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			var res string
 			var err error
@@ -173,9 +175,6 @@ var _ = registerSimpleMethod(
 			return res, err
 		}, nil
 	},
-	true,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
@@ -200,10 +199,15 @@ var _ = registerSimpleMethod(
 			"{\"encoded\":\"FD,B0+DGm>FDl80Ci\\\"A>F`)8BEckl6F`M&(+Cno&@/\"}",
 			`this is totally unstructured data`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
+	).Param(ParamString("scheme", "The decoding scheme to use.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		schemeStr, err := args.FieldString("scheme")
+		if err != nil {
+			return nil, err
+		}
+
 		var schemeFn func([]byte) ([]byte, error)
-		switch args[0].(string) {
+		switch schemeStr {
 		case "base64":
 			schemeFn = func(b []byte) ([]byte, error) {
 				e := base64.NewDecoder(base64.StdEncoding, bytes.NewReader(b))
@@ -235,8 +239,9 @@ var _ = registerSimpleMethod(
 				return dec, nil
 			}
 		default:
-			return nil, fmt.Errorf("unrecognized encoding type: %v", args[0])
+			return nil, fmt.Errorf("unrecognized encoding type: %v", schemeStr)
 		}
+
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			var res []byte
 			var err error
@@ -251,9 +256,6 @@ var _ = registerSimpleMethod(
 			return res, err
 		}, nil
 	},
-	true,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
@@ -271,10 +273,26 @@ root.encrypted = this.value.encrypt_aes("ctr", $key, $vector).encode("hex")`,
 			`{"value":"hello world!"}`,
 			`{"encrypted":"84e9b31ff7400bdf80be7254"}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
-		key := []byte(args[1].(string))
-		iv := []byte(args[2].(string))
+	).
+		Param(ParamString("scheme", "The scheme to use for encryption, one of `ctr`, `ofb`, `cbc`.")).
+		Param(ParamString("key", "A key to encrypt with.")).
+		Param(ParamString("iv", "An initialization vector / nonce.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		schemeStr, err := args.FieldString("scheme")
+		if err != nil {
+			return nil, err
+		}
+		keyStr, err := args.FieldString("key")
+		if err != nil {
+			return nil, err
+		}
+		ivStr, err := args.FieldString("iv")
+		if err != nil {
+			return nil, err
+		}
+
+		key := []byte(keyStr)
+		iv := []byte(ivStr)
 
 		block, err := aes.NewCipher(key)
 		if err != nil {
@@ -282,7 +300,7 @@ root.encrypted = this.value.encrypt_aes("ctr", $key, $vector).encode("hex")`,
 		}
 
 		var schemeFn func([]byte) (string, error)
-		switch args[0].(string) {
+		switch schemeStr {
 		case "ctr":
 			schemeFn = func(b []byte) (string, error) {
 				ciphertext := make([]byte, len(b))
@@ -309,7 +327,7 @@ root.encrypted = this.value.encrypt_aes("ctr", $key, $vector).encode("hex")`,
 				return string(ciphertext), nil
 			}
 		default:
-			return nil, fmt.Errorf("unrecognized encryption type: %v", args[0])
+			return nil, fmt.Errorf("unrecognized encryption type: %v", schemeStr)
 		}
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			var res string
@@ -325,9 +343,6 @@ root.encrypted = this.value.encrypt_aes("ctr", $key, $vector).encode("hex")`,
 			return res, err
 		}, nil
 	},
-	true,
-	ExpectNArgs(3),
-	ExpectAllStringArgs(),
 )
 
 //------------------------------------------------------------------------------
@@ -345,17 +360,34 @@ root.decrypted = this.value.decode("hex").decrypt_aes("ctr", $key, $vector).stri
 			`{"value":"84e9b31ff7400bdf80be7254"}`,
 			`{"decrypted":"hello world!"}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
-		key := []byte(args[1].(string))
-		iv := []byte(args[2].(string))
+	).
+		Param(ParamString("scheme", "The scheme to use for decryption, one of `ctr`, `ofb`, `cbc`.")).
+		Param(ParamString("key", "A key to decrypt with.")).
+		Param(ParamString("iv", "An initialization vector / nonce.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		schemeStr, err := args.FieldString("scheme")
+		if err != nil {
+			return nil, err
+		}
+		keyStr, err := args.FieldString("key")
+		if err != nil {
+			return nil, err
+		}
+		ivStr, err := args.FieldString("iv")
+		if err != nil {
+			return nil, err
+		}
+
+		key := []byte(keyStr)
+		iv := []byte(ivStr)
 
 		block, err := aes.NewCipher(key)
 		if err != nil {
 			return nil, err
 		}
+
 		var schemeFn func([]byte) ([]byte, error)
-		switch args[0].(string) {
+		switch schemeStr {
 		case "ctr":
 			schemeFn = func(b []byte) ([]byte, error) {
 				plaintext := make([]byte, len(b))
@@ -380,7 +412,7 @@ root.decrypted = this.value.decode("hex").decrypt_aes("ctr", $key, $vector).stri
 				return b, nil
 			}
 		default:
-			return nil, fmt.Errorf("unrecognized decryption type: %v", args[0])
+			return nil, fmt.Errorf("unrecognized decryption type: %v", schemeStr)
 		}
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			var res []byte
@@ -396,9 +428,6 @@ root.decrypted = this.value.decode("hex").decrypt_aes("ctr", $key, $vector).stri
 			return res, err
 		}, nil
 	},
-	true,
-	ExpectNArgs(3),
-	ExpectAllStringArgs(),
 )
 
 //------------------------------------------------------------------------------
@@ -415,18 +444,16 @@ var _ = registerSimpleMethod(
 			`{"escaped":"foo &amp; bar"}`,
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return stringMethod(func(s string) (interface{}, error) {
 			return html.EscapeString(s), nil
 		}), nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"index_of", "",
 	).InCategory(
@@ -456,8 +483,8 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
@@ -474,13 +501,11 @@ var _ = registerSimpleMethod(
 			`{"unescaped":"foo & bar"}`,
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return stringMethod(func(s string) (interface{}, error) {
 			return html.UnescapeString(s), nil
 		}), nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
@@ -497,13 +522,11 @@ var _ = registerSimpleMethod(
 			`{"escaped":"foo+%26+bar"}`,
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return stringMethod(func(s string) (interface{}, error) {
 			return url.QueryEscape(s), nil
 		}), nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
@@ -520,13 +543,11 @@ var _ = registerSimpleMethod(
 			`{"unescaped":"foo & bar"}`,
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return stringMethod(func(s string) (interface{}, error) {
 			return url.QueryUnescape(s)
 		}), nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
@@ -543,7 +564,7 @@ var _ = registerSimpleMethod(
 			strings.ReplaceAll(`{"path":"/foo/bar.txt"}`, "/", string(filepath.Separator)),
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			arr, ok := v.([]interface{})
 			if !ok {
@@ -560,8 +581,6 @@ var _ = registerSimpleMethod(
 			return filepath.Join(strs...), nil
 		}, nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 var _ = registerSimpleMethod(
@@ -578,19 +597,17 @@ var _ = registerSimpleMethod(
 			`{"path_sep":["","baz.txt"]}`,
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return stringMethod(func(s string) (interface{}, error) {
 			dir, file := filepath.Split(s)
 			return []interface{}{dir, file}, nil
 		}), nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"format", "",
 	).InCategory(
@@ -612,7 +629,7 @@ var _ = registerSimpleMethod(
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"has_prefix", "",
 	).InCategory(
@@ -639,13 +656,13 @@ root.t2 = this.v2.has_prefix("foo")`,
 		}, nil
 	},
 	true,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"has_suffix", "",
 	).InCategory(
@@ -672,13 +689,13 @@ root.t2 = this.v2.has_suffix("foo")`,
 		}, nil
 	},
 	true,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"hash", "",
 	).InCategory(
@@ -778,14 +795,14 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")`,
 		}, nil
 	},
 	true,
-	ExpectAtLeastOneArg(),
-	ExpectStringArg(0),
-	ExpectStringArg(1),
+	oldParamsExpectAtLeastOneArg(),
+	oldParamsExpectStringArg(0),
+	oldParamsExpectStringArg(1),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"join", "",
 	).InCategory(
@@ -827,8 +844,8 @@ root.joined_numbers = this.numbers.map_each(this.string()).join(",")`,
 		}, nil
 	},
 	true,
-	ExpectOneOrZeroArgs(),
-	ExpectStringArg(0),
+	oldParamsExpectOneOrZeroArgs(),
+	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
@@ -845,7 +862,7 @@ var _ = registerSimpleMethod(
 			`{"foo":"HELLO WORLD"}`,
 		),
 	),
-	func(args ...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			switch t := v.(type) {
 			case string:
@@ -857,8 +874,6 @@ var _ = registerSimpleMethod(
 			}
 		}, nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
@@ -875,7 +890,7 @@ var _ = registerSimpleMethod(
 			`{"foo":"hello world"}`,
 		),
 	),
-	func(args ...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			switch t := v.(type) {
 			case string:
@@ -887,8 +902,6 @@ var _ = registerSimpleMethod(
 			}
 		}, nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
@@ -906,11 +919,9 @@ var _ = registerSimpleMethod(
 		),
 	),
 	parseCSVMethod,
-	false,
-	ExpectNArgs(0),
 )
 
-func parseCSVMethod(args ...interface{}) (simpleMethod, error) {
+func parseCSVMethod(*ParsedParams) (simpleMethod, error) {
 	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 		var csvBytes []byte
 		switch t := v.(type) {
@@ -965,7 +976,7 @@ var _ = registerSimpleMethod(
 			`{"doc":{"foo":"bar"}}`,
 		),
 	),
-	func(args ...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			var jsonBytes []byte
 			switch t := v.(type) {
@@ -983,8 +994,6 @@ var _ = registerSimpleMethod(
 			return jObj, nil
 		}, nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 var _ = registerSimpleMethod(
@@ -1004,7 +1013,7 @@ var _ = registerSimpleMethod(
 			`{"doc":{"root":{"content":"This is some content","title":"This is a title"}}}`,
 		),
 	).Beta(),
-	func(args ...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			var xmlBytes []byte
 			switch t := v.(type) {
@@ -1022,8 +1031,6 @@ var _ = registerSimpleMethod(
 			return xmlObj, nil
 		}, nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 var _ = registerSimpleMethod(
@@ -1038,7 +1045,7 @@ var _ = registerSimpleMethod(
 			`{"doc":{"foo":"bar"}}`,
 		),
 	),
-	func(args ...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			var yamlBytes []byte
 			switch t := v.(type) {
@@ -1056,8 +1063,6 @@ var _ = registerSimpleMethod(
 			return sObj, nil
 		}, nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 var _ = registerSimpleMethod(
@@ -1078,13 +1083,11 @@ var _ = registerSimpleMethod(
 			`{"doc":"foo: bar\n"}`,
 		),
 	),
-	func(args ...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			return yaml.Marshal(v)
 		}, nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
@@ -1106,7 +1109,7 @@ var _ = registerSimpleMethod(
 			`{"delay_for_s":7200}`,
 		),
 	),
-	func(args ...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return stringMethod(func(s string) (interface{}, error) {
 			d, err := time.ParseDuration(s)
 			if err != nil {
@@ -1115,13 +1118,11 @@ var _ = registerSimpleMethod(
 			return d.Nanoseconds(), nil
 		}), nil
 	},
-	true,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewDeprecatedMethodSpec(
 		"parse_timestamp_unix", "",
 	).InCategory(
@@ -1162,13 +1163,13 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectOneOrZeroArgs(),
-	ExpectStringArg(0),
+	oldParamsExpectOneOrZeroArgs(),
+	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"parse_timestamp", "",
 	).InCategory(
@@ -1200,13 +1201,13 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"parse_timestamp_strptime", "",
 	).InCategory(
@@ -1239,8 +1240,8 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
@@ -1262,7 +1263,7 @@ var _ = registerSimpleMethod(
 			`}"sdrawkcab":"gniht"{`,
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			switch t := v.(type) {
 			case string:
@@ -1282,8 +1283,6 @@ var _ = registerSimpleMethod(
 			return nil, NewTypeError(v, ValueString)
 		}, nil
 	},
-	true,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
@@ -1307,7 +1306,7 @@ var _ = registerSimpleMethod(
 		),
 		NewExampleSpec(
 			"A second optional string argument can also be used in order to specify a timezone, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.",
-			`root.something_at = this.created_at.format_timestamp("2006-Jan-02 15:04:05", "UTC")`,
+			`root.something_at = this.created_at.format_timestamp(format: "2006-Jan-02 15:04:05", tz: "UTC")`,
 
 			`{"created_at":1597405526}`,
 			`{"something_at":"2020-Aug-14 11:45:26"}`,
@@ -1325,16 +1324,21 @@ var _ = registerSimpleMethod(
 			`{"created_at":"2020-08-14T11:50:26.371Z"}`,
 			`{"something_at":"2020-Aug-14 11:50:26.371"}`,
 		),
-	).Beta(),
-	func(args ...interface{}) (simpleMethod, error) {
-		layout := time.RFC3339Nano
-		if len(args) > 0 {
-			layout = args[0].(string)
+	).Beta().
+		Param(ParamString("format", "The output format to use.").Default(time.RFC3339Nano)).
+		Param(ParamString("tz", "An optional timezone to use, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.").Optional()),
+	func(args *ParsedParams) (simpleMethod, error) {
+		layout, err := args.FieldString("format")
+		if err != nil {
+			return nil, err
 		}
 		var timezone *time.Location
-		if len(args) > 1 {
-			var err error
-			if timezone, err = time.LoadLocation(args[1].(string)); err != nil {
+		tzOpt, err := args.FieldOptionalString("tz")
+		if err != nil {
+			return nil, err
+		}
+		if tzOpt != nil {
+			if timezone, err = time.LoadLocation(*tzOpt); err != nil {
 				return nil, fmt.Errorf("failed to parse timezone location name: %w", err)
 			}
 		}
@@ -1349,15 +1353,11 @@ var _ = registerSimpleMethod(
 			return target.Format(layout), nil
 		}, nil
 	},
-	true,
-	ExpectBetweenNAndMArgs(0, 2),
-	ExpectStringArg(0),
-	ExpectStringArg(1),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"format_timestamp_strftime", "",
 	).InCategory(
@@ -1401,9 +1401,9 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectBetweenNAndMArgs(1, 2),
-	ExpectStringArg(0),
-	ExpectStringArg(1),
+	oldParamsExpectBetweenNAndMArgs(1, 2),
+	oldParamsExpectStringArg(0),
+	oldParamsExpectStringArg(1),
 )
 
 //------------------------------------------------------------------------------
@@ -1420,7 +1420,7 @@ var _ = registerSimpleMethod(
 			`{"created_at_unix":1257894000}`,
 		),
 	).Beta(),
-	func(args ...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			target, err := IGetTimestamp(v)
 			if err != nil {
@@ -1430,8 +1430,6 @@ var _ = registerSimpleMethod(
 			return target.Unix(), nil
 		}, nil
 	},
-	true,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
@@ -1448,7 +1446,7 @@ var _ = registerSimpleMethod(
 			`{"created_at_unix":1257894000000000000}`,
 		),
 	).Beta(),
-	func(args ...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			target, err := IGetTimestamp(v)
 			if err != nil {
@@ -1458,8 +1456,6 @@ var _ = registerSimpleMethod(
 			return target.UnixNano(), nil
 		}, nil
 	},
-	true,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
@@ -1469,20 +1465,18 @@ var _ = registerSimpleMethod(
 		"quote", "",
 	).InCategory(
 		MethodCategoryStrings,
-		"Quotes a target string using escape sequences (`\t`, `\n`, `\xFF`, `\u0100`) for control characters and non-printable characters.",
+		"Quotes a target string using escape sequences (`\\t`, `\\n`, `\\xFF`, `\\u0100`) for control characters and non-printable characters.",
 		NewExampleSpec("",
 			`root.quoted = this.thing.quote()`,
 			`{"thing":"foo\nbar"}`,
 			`{"quoted":"\"foo\\nbar\""}`,
 		),
 	),
-	func(args ...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return stringMethod(func(s string) (interface{}, error) {
 			return strconv.Quote(s), nil
 		}), nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
@@ -1492,25 +1486,23 @@ var _ = registerSimpleMethod(
 		"unquote", "",
 	).InCategory(
 		MethodCategoryStrings,
-		"Unquotes a target string, expanding any escape sequences (`\t`, `\n`, `\xFF`, `\u0100`) for control characters and non-printable characters.",
+		"Unquotes a target string, expanding any escape sequences (`\\t`, `\\n`, `\\xFF`, `\\u0100`) for control characters and non-printable characters.",
 		NewExampleSpec("",
 			`root.unquoted = this.thing.unquote()`,
 			`{"thing":"\"foo\\nbar\""}`,
 			`{"unquoted":"foo\nbar"}`,
 		),
 	),
-	func(args ...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return stringMethod(func(s string) (interface{}, error) {
 			return strconv.Unquote(s)
 		}), nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"replace", "",
 	).InCategory(
@@ -1538,14 +1530,14 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectNArgs(2),
-	ExpectStringArg(0),
-	ExpectStringArg(1),
+	oldParamsExpectNArgs(2),
+	oldParamsExpectStringArg(0),
+	oldParamsExpectStringArg(1),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"replace_many", "",
 	).InCategory(
@@ -1604,12 +1596,12 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectNArgs(1),
+	oldParamsExpectNArgs(1),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"re_find_all", "",
 	).InCategory(
@@ -1648,13 +1640,13 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"re_find_all_submatch", "",
 	).InCategory(
@@ -1701,13 +1693,13 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"re_find_object", "",
 	).InCategory(
@@ -1757,13 +1749,13 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"re_find_all_object", "",
 	).InCategory(
@@ -1823,13 +1815,13 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"re_match", "",
 	).InCategory(
@@ -1862,13 +1854,13 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"re_replace", "",
 	).InCategory(
@@ -1901,14 +1893,14 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectNArgs(2),
-	ExpectStringArg(0),
-	ExpectStringArg(1),
+	oldParamsExpectNArgs(2),
+	oldParamsExpectStringArg(0),
+	oldParamsExpectStringArg(1),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"split", "",
 	).InCategory(
@@ -1944,8 +1936,8 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+	oldParamsExpectNArgs(1),
+	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
@@ -1967,18 +1959,16 @@ var _ = registerSimpleMethod(
 			`{"id":"228930314431312345"}`,
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			return IToString(v), nil
 		}, nil
 	},
-	false,
-	ExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"strip_html", "",
 	).InCategory(
@@ -2021,12 +2011,12 @@ var _ = registerSimpleMethod(
 		}, nil
 	},
 	true,
-	ExpectOneOrZeroArgs(),
+	oldParamsExpectOneOrZeroArgs(),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleMethod(
+var _ = registerOldParamsSimpleMethod(
 	NewMethodSpec(
 		"trim", "",
 	).InCategory(
@@ -2061,6 +2051,6 @@ root.description = this.description.trim()`,
 		}, nil
 	},
 	true,
-	ExpectOneOrZeroArgs(),
-	ExpectStringArg(0),
+	oldParamsExpectOneOrZeroArgs(),
+	oldParamsExpectStringArg(0),
 )

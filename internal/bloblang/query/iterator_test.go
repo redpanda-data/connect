@@ -37,7 +37,7 @@ func TestIteratorMethods(t *testing.T) {
 		t.Helper()
 		for _, m := range methods {
 			var err error
-			fn, err = InitMethod(m.name, fn, m.args...)
+			fn, err = InitMethodHelper(m.name, fn, m.args...)
 			require.NoError(t, err)
 		}
 		return fn
@@ -186,7 +186,7 @@ func benchFilterNoIter(b *testing.B, n, m int) {
 	var fn Function = NewLiteralFunction("", startingArray)
 	filter := filterFunction()
 	for i := 0; i < m; i++ {
-		fn, err = InitMethod("filter", fn, filter)
+		fn, err = InitMethodHelper("filter", fn, filter)
 		require.NoError(b, err)
 	}
 
