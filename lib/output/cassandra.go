@@ -52,7 +52,7 @@ When populating timestamp columns the value must either be a string in ISO 8601 
 			{
 				Title:   "Basic Inserts",
 				Summary: "If we were to create a table with some basic columns with `CREATE TABLE foo.bar (id int primary key, content text, created_at timestamp);`, and were processing JSON documents of the form `{\"id\":\"342354354\",\"content\":\"hello world\",\"timestamp\":1605219406}`, we could populate our table with the following config:",
-				Config: `		
+				Config: `
 output:
   cassandra:
     addresses:
@@ -69,7 +69,7 @@ output:
 			{
 				Title:   "Basic Inserts with bloblang mapping",
 				Summary: "If we were to create a table with some basic columns with `CREATE TABLE foo.bar (id int primary key, content text, created_at timestamp);`, and were processing JSON documents of the form `{\"id\":\"342354354\",\"content\":\"hello world\",\"timestamp\":1605219406}`, we could populate our table with the following config:",
-				Config: `		
+				Config: `
 output:
   cassandra:
     addresses:
