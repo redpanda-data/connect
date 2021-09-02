@@ -112,7 +112,7 @@ Batches can be formed at both the input and output level. You can find out more
 
 If we were to create a table with some basic columns with `CREATE TABLE foo.bar (id int primary key, content text, created_at timestamp);`, and were processing JSON documents of the form `{"id":"342354354","content":"hello world","timestamp":1605219406}`, we could populate our table with the following config:
 
-```yaml		
+```yaml
 output:
   cassandra:
     addresses:
@@ -131,7 +131,7 @@ output:
 
 If we were to create a table with some basic columns with `CREATE TABLE foo.bar (id int primary key, content text, created_at timestamp);`, and were processing JSON documents of the form `{"id":"342354354","content":"hello world","timestamp":1605219406}`, we could populate our table with the following config:
 
-```yaml		
+```yaml
 output:
   cassandra:
     addresses:
