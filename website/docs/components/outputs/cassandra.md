@@ -133,18 +133,18 @@ If we were to create a table with some basic columns with `CREATE TABLE foo.bar 
 
 ```yaml		
 output:
-	cassandra:
-		addresses:
-			- localhost:9042
-		query: 'INSERT INTO foo.bar (id, content, created_at) VALUES (?, ?, ?)'
-		args_mapping: |
-			root = [
-				this.id,
-				this.content,
-				this.timestamp.format_timestamp(),
-			]
-		batching:
-			count: 500
+  cassandra:
+    addresses:
+      - localhost:9042
+    query: 'INSERT INTO foo.bar (id, content, created_at) VALUES (?, ?, ?)'
+    args_mapping: |
+      root = [
+        this.id,
+        this.content,
+        this.timestamp.format_timestamp()
+      ]
+    batching:
+      count: 500
 ```
 
 </TabItem>

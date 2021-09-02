@@ -71,18 +71,18 @@ output:
 				Summary: "If we were to create a table with some basic columns with `CREATE TABLE foo.bar (id int primary key, content text, created_at timestamp);`, and were processing JSON documents of the form `{\"id\":\"342354354\",\"content\":\"hello world\",\"timestamp\":1605219406}`, we could populate our table with the following config:",
 				Config: `		
 output:
-	cassandra:
-		addresses:
-			- localhost:9042
-		query: 'INSERT INTO foo.bar (id, content, created_at) VALUES (?, ?, ?)'
-		args_mapping: |
-			root = [
-				this.id,
-				this.content,
-				this.timestamp.format_timestamp(),
-			]
-		batching:
-			count: 500
+  cassandra:
+    addresses:
+      - localhost:9042
+    query: 'INSERT INTO foo.bar (id, content, created_at) VALUES (?, ?, ?)'
+    args_mapping: |
+      root = [
+        this.id,
+        this.content,
+        this.timestamp.format_timestamp()
+      ]
+    batching:
+      count: 500
 `},
 			{
 				Title:   "Insert JSON Documents",
