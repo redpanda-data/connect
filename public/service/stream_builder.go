@@ -75,7 +75,7 @@ func NewStreamBuilder() *StreamBuilder {
 func (s *StreamBuilder) getLintContext() docs.LintContext {
 	ctx := docs.NewLintContext()
 	ctx.DocsProvider = s.env.internal
-	ctx.BloblangContext = s.env.getBloblangParserContext()
+	ctx.BloblangEnv = s.env.getBloblangParserEnv()
 	return ctx
 }
 
@@ -708,7 +708,11 @@ func (s *StreamBuilder) Build() (*Stream, error) {
 		)
 	}
 
-	mgr, err := manager.NewV2(conf.ResourceConfig, apiMut, logger, stats, manager.OptSetEnvironment(s.env.internal))
+	mgr, err := manager.NewV2(
+		conf.ResourceConfig, apiMut, logger, stats,
+		manager.OptSetEnvironment(s.env.internal),
+		manager.OptSetBloblangEnvironment(s.env.getBloblangParserEnv()),
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -30,10 +30,9 @@ func (p *ParsedConfig) FieldBloblang(path ...string) (*bloblang.Executor, error)
 		return nil, fmt.Errorf("expected field '%v' to be a string, got %T", strings.Join(path, "."), v)
 	}
 
-	exec, err := p.env.bloblangEnv.Parse(str)
+	exec, err := bloblang.XWrapEnvironment(p.mgr.BloblEnvironment()).Parse(str)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse bloblang mapping '%v': %v", strings.Join(path, "."), err)
 	}
-
 	return exec, nil
 }

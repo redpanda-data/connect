@@ -106,7 +106,7 @@ c:
 
 			assert.Equal(t, test.lints, spec.component.Config.Children.LintYAML(docs.NewLintContext(), node))
 
-			pConf, err := spec.configFromNode(NewEnvironment(), nil, node)
+			pConf, err := spec.configFromNode(nil, node)
 			require.NoError(t, err)
 
 			var sanitNode yaml.Node
@@ -207,7 +207,7 @@ c:
 
 			assert.Equal(t, test.lints, spec.component.Config.Children.LintYAML(docs.NewLintContext(), node))
 
-			pConf, err := spec.configFromNode(NewEnvironment(), nil, node)
+			pConf, err := spec.configFromNode(nil, node)
 			require.NoError(t, err)
 
 			var sanitNode yaml.Node
@@ -240,7 +240,7 @@ func TestConfigTypedFields(t *testing.T) {
 			),
 		))
 
-	node, err := getYAMLNode([]byte(`
+	parsedConfig, err := spec.ParseYAML(`
 a: setavalue
 c:
   f:
@@ -250,10 +250,7 @@ c:
     j:
       - first in list
       - second in list
-`))
-	require.NoError(t, err)
-
-	parsedConfig, err := spec.configFromNode(NewEnvironment(), nil, node)
+`, nil)
 	require.NoError(t, err)
 
 	s, err := parsedConfig.FieldString("a")
@@ -314,16 +311,13 @@ func TestConfigBatching(t *testing.T) {
 	spec := NewConfigSpec().
 		Field(NewBatchPolicyField("a"))
 
-	node, err := getYAMLNode([]byte(`
+	parsedConfig, err := spec.ParseYAML(`
 a:
   count: 20
   period: 5s
   processors:
     - bloblang: 'root = content().uppercase()'
-`))
-	require.NoError(t, err)
-
-	parsedConfig, err := spec.configFromNode(NewEnvironment(), nil, node)
+`, nil)
 	require.NoError(t, err)
 
 	_, err = parsedConfig.FieldTLS("b")
@@ -344,14 +338,11 @@ func TestConfigTLS(t *testing.T) {
 		Field(NewTLSField("a")).
 		Field(NewStringField("b"))
 
-	node, err := getYAMLNode([]byte(`
+	parsedConfig, err := spec.ParseYAML(`
 a:
   skip_cert_verify: true
 b: and this
-`))
-	require.NoError(t, err)
-
-	parsedConfig, err := spec.configFromNode(NewEnvironment(), nil, node)
+`, nil)
 	require.NoError(t, err)
 
 	_, err = parsedConfig.FieldTLS("b")
@@ -371,13 +362,10 @@ func TestConfigInterpolatedString(t *testing.T) {
 		Field(NewInterpolatedStringField("a")).
 		Field(NewStringField("b"))
 
-	node, err := getYAMLNode([]byte(`
+	parsedConfig, err := spec.ParseYAML(`
 a: foo ${! content() } bar
 b: this is ${! json } an invalid interp string
-`))
-	require.NoError(t, err)
-
-	parsedConfig, err := spec.configFromNode(NewEnvironment(), nil, node)
+`, nil)
 	require.NoError(t, err)
 
 	_, err = parsedConfig.FieldInterpolatedString("b")
@@ -398,13 +386,10 @@ func TestConfigBloblang(t *testing.T) {
 		Field(NewBloblangField("a")).
 		Field(NewStringField("b"))
 
-	node, err := getYAMLNode([]byte(`
+	parsedConfig, err := spec.ParseYAML(`
 a: 'root = this.uppercase()'
 b: 'root = this.filter('
-`))
-	require.NoError(t, err)
-
-	parsedConfig, err := spec.configFromNode(NewEnvironment(), nil, node)
+`, nil)
 	require.NoError(t, err)
 
 	_, err = parsedConfig.FieldBloblang("b")

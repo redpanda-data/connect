@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	imetrics "github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -66,7 +67,8 @@ type Type struct {
 	resourceLock *sync.RWMutex
 
 	// Collections of component constructors
-	env *bundle.Environment
+	env      *bundle.Environment
+	bloblEnv *bloblang.Environment
 
 	logger log.Modular
 	stats  *imetrics.Namespaced
@@ -95,6 +97,14 @@ func OptSetEnvironment(e *bundle.Environment) OptFunc {
 	}
 }
 
+// OptSetBloblangEnvironment determines the environment from which the manager
+// parses bloblang functions and methods. This option is for internal use only.
+func OptSetBloblangEnvironment(env *bloblang.Environment) OptFunc {
+	return func(t *Type) {
+		t.bloblEnv = env
+	}
+}
+
 // NewV2 returns an instance of manager.Type, which can be shared amongst
 // components and logical threads of a Benthos service.
 func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Type, opts ...OptFunc) (*Type, error) {
@@ -110,7 +120,8 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 		resourceLock: &sync.RWMutex{},
 
 		// Environment defaults to global (everything that was imported).
-		env: bundle.GlobalEnvironment,
+		env:      bundle.GlobalEnvironment,
+		bloblEnv: bloblang.GlobalEnvironment(),
 
 		logger: log,
 		stats:  imetrics.NewNamespaced(stats),
@@ -225,16 +236,6 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 }
 
 //------------------------------------------------------------------------------
-
-func unwrapMetric(t metrics.Type) metrics.Type {
-	u, ok := t.(interface {
-		Unwrap() metrics.Type
-	})
-	if ok {
-		t = u.Unwrap()
-	}
-	return t
-}
 
 // ForStream returns a variant of this manager to be used by a particular stream
 // identifer, where APIs registered will be namespaced by that id.
@@ -361,6 +362,18 @@ func (t *Type) Metrics() metrics.Type {
 // Logger returns a logger preset with the current component context.
 func (t *Type) Logger() log.Modular {
 	return t.logger
+}
+
+// Environment returns a bundle environment used by the manager. This is for
+// internal use only.
+func (t *Type) Environment() *bundle.Environment {
+	return t.env
+}
+
+// BloblEnvironment returns a Bloblang environment used by the manager. This is
+// for internal use only.
+func (t *Type) BloblEnvironment() *bloblang.Environment {
+	return t.bloblEnv
 }
 
 //------------------------------------------------------------------------------

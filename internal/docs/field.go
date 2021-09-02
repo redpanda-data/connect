@@ -3,7 +3,7 @@ package docs
 import (
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 )
 
 // FieldType represents a field type.
@@ -497,15 +497,15 @@ type LintContext struct {
 	DocsProvider Provider
 
 	// Provides an isolated context for Bloblang parsing.
-	BloblangContext parser.Context
+	BloblangEnv *bloblang.Environment
 }
 
 // NewLintContext creates a new linting context.
 func NewLintContext() LintContext {
 	return LintContext{
-		LabelsToLine:    map[string]int{},
-		DocsProvider:    globalProvider,
-		BloblangContext: parser.GlobalContext(),
+		LabelsToLine: map[string]int{},
+		DocsProvider: globalProvider,
+		BloblangEnv:  bloblang.GlobalEnvironment(),
 	}
 }
 

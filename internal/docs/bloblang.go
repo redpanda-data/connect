@@ -6,7 +6,6 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 )
@@ -21,7 +20,7 @@ func LintBloblangMapping(ctx LintContext, line, col int, v interface{}) []Lint {
 	if str == "" {
 		return nil
 	}
-	_, err := bloblang.NewMappingWithContext(ctx.BloblangContext, "", str)
+	_, err := ctx.BloblangEnv.NewMapping("", str)
 	if err == nil {
 		return nil
 	}
@@ -44,7 +43,7 @@ func LintBloblangField(ctx LintContext, line, col int, v interface{}) []Lint {
 	if str == "" {
 		return nil
 	}
-	_, err := bloblang.NewFieldWithContext(ctx.BloblangContext, str)
+	_, err := ctx.BloblangEnv.NewField(str)
 	if err == nil {
 		return nil
 	}
