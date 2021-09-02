@@ -8,13 +8,13 @@ Stream processing is stupid and boring, and so it's important to re-purpose tool
 
 import ReactPlayer from 'react-player/youtube';
 
-<div class='container margin-vert--lg'>
-  <div class='row row--no-gutters'>
+<div className='container margin-vert--lg'>
+  <div className='row row--no-gutters'>
     <ReactPlayer
-        class='col'
+        className='col'
         height='300px'
         url='https://www.youtube.com/embed/nX5-s1-Vrjc'
-        controls='true'
+        controls={true}
     />
   </div>
 </div>
