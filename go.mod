@@ -1,10 +1,11 @@
 module github.com/Jeffail/benthos/v3
 
 require (
-	cloud.google.com/go v0.88.0 // indirect
+	cloud.google.com/go v0.94.1 // indirect
 	cloud.google.com/go/bigquery v1.8.0
+	cloud.google.com/go/kms v0.1.0 // indirect
 	cloud.google.com/go/pubsub v1.9.1
-	cloud.google.com/go/storage v1.10.0
+	cloud.google.com/go/storage v1.16.1
 	github.com/Azure/azure-sdk-for-go v48.0.0+incompatible
 	github.com/Azure/azure-storage-queue-go v0.0.0-20191125232315-636801874cdd
 	github.com/Azure/go-amqp v0.13.1
@@ -39,6 +40,7 @@ require (
 	github.com/gocql/gocql v0.0.0-20201024154641-5913df4d474e
 	github.com/gofrs/uuid v3.3.0+incompatible
 	github.com/golang-jwt/jwt v3.2.1+incompatible
+	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.3
 	github.com/google/go-cmp v0.5.6
@@ -93,12 +95,12 @@ require (
 	go.mongodb.org/mongo-driver v1.4.4
 	go.nanomsg.org/mangos/v3 v3.1.3
 	golang.org/x/crypto v0.0.0-20210503195802-e9a32991a82e
-	golang.org/x/net v0.0.0-20210614182718-04defd469f4e
-	golang.org/x/oauth2 v0.0.0-20210628180205-a41e5a781914
+	golang.org/x/net v0.0.0-20210902165921-8d991716f632
+	golang.org/x/oauth2 v0.0.0-20210819190943-2bc19b11175f
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/text v0.3.6
-	google.golang.org/api v0.51.0
-	google.golang.org/genproto v0.0.0-20210726200206-e7812ac95cc0 // indirect
+	golang.org/x/sys v0.0.0-20210902050250-f475640dd07b // indirect
+	golang.org/x/text v0.3.7
+	google.golang.org/api v0.56.0
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 )
 

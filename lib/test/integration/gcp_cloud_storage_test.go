@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/impl/gcp"
+	"cloud.google.com/go/storage"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,7 +17,7 @@ func createGCPCloudStorageBucket(var1, id string) error {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
 
-	client, err := gcp.NewStorageClient(ctx)
+	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -41,7 +41,7 @@ var _ = registerIntegrationTest("gcp_cloud_storage", func(t *testing.T) {
 		Repository:   "fsouza/fake-gcs-server",
 		Tag:          "latest",
 		ExposedPorts: []string{"4443/tcp"},
-		Cmd:          []string{"-scheme", "http"},
+		Cmd:          []string{"-scheme", "http", "-public-host", "localhost"},
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -50,9 +50,9 @@ var _ = registerIntegrationTest("gcp_cloud_storage", func(t *testing.T) {
 
 	resource.Expire(900)
 
-	os.Setenv("GCP_CLOUD_STORAGE_EMULATOR_URL", "http://localhost:"+resource.GetPort("4443/tcp"))
+	os.Setenv("STORAGE_EMULATOR_HOST", "localhost:"+resource.GetPort("4443/tcp"))
 	t.Cleanup(func() {
-		defer os.Unsetenv("GCP_CLOUD_STORAGE_EMULATOR_URL")
+		defer os.Unsetenv("STORAGE_EMULATOR_HOST")
 	})
 
 	// Wait for fake-gcs-server to properly start up
@@ -60,7 +60,7 @@ var _ = registerIntegrationTest("gcp_cloud_storage", func(t *testing.T) {
 		ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancelFunc()
 
-		client, eerr := gcp.NewStorageClient(ctx)
+		client, eerr := storage.NewClient(ctx)
 
 		if eerr != nil {
 			return eerr
