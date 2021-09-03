@@ -92,15 +92,15 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"bad method args 3": {
 			input: `json("foo").from()`,
-			err:   `line 1 char 13: expected 1 arguments, received: 0`,
+			err:   `line 1 char 13: missing parameter: index`,
 		},
 		"bad method args 4": {
 			input: `json("foo").from("nah")`,
-			err:   `line 1 char 13: expected int argument, received string`,
+			err:   `line 1 char 13: field index: expected number value, got string ("nah")`,
 		},
 		"bad map args": {
 			input: `json("foo").map()`,
-			err:   `line 1 char 13: expected 1 arguments, received: 0`,
+			err:   `line 1 char 13: missing parameter: query`,
 		},
 		"gibberish": {
 			input: `json("foo").(=)`,

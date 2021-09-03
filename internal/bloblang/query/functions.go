@@ -140,6 +140,11 @@ func (l *Literal) Close(ctx context.Context) error {
 	return nil
 }
 
+// String returns a string representation of the literal function.
+func (l *Literal) String() string {
+	return fmt.Sprintf("%v", l.Value)
+}
+
 // NewLiteralFunction creates a query function that returns a static, literal
 // value.
 func NewLiteralFunction(annotation string, v interface{}) *Literal {
@@ -591,7 +596,7 @@ var _ = registerFunction(
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsFunction(
+var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryGeneral, "random_int",
 		"Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.",
@@ -602,27 +607,24 @@ root.second = random_int(1)`,
 		NewExampleSpec("It is possible to specify a dynamic seed argument, in which case the argument will only be resolved once during the lifetime of the mapping.",
 			`root.first = random_int(timestamp_unix_nano())`,
 		),
-	),
-	false, randomIntFunction,
-	oldParamsExpectOneOrZeroArgs(),
+	).
+		Param(ParamQuery(
+			"seed",
+			"A seed to use, if a query is provided it will only be resolved once during the lifetime of the mapping.",
+			true,
+		).Default(NewLiteralFunction("", 0))),
+	randomIntFunction,
 )
 
-func randomIntFunction(args ...interface{}) (Function, error) {
-	var seedFn Function
+func randomIntFunction(args *ParsedParams) (Function, error) {
+	seedFn, err := args.FieldQuery("seed")
+	if err != nil {
+		return nil, err
+	}
+
 	var randMut sync.Mutex
 	var r *rand.Rand
-	if len(args) > 0 {
-		var isDyn bool
-		if seedFn, isDyn = args[0].(Function); !isDyn {
-			seed, err := IGetInt(args[0])
-			if err != nil {
-				return nil, err
-			}
-			r = rand.New(rand.NewSource(seed))
-		}
-	} else {
-		r = rand.New(rand.NewSource(0))
-	}
+
 	return ClosureFunction("function random_int", func(ctx FunctionContext) (interface{}, error) {
 		randMut.Lock()
 		defer randMut.Unlock()
@@ -666,46 +668,42 @@ var _ = registerFunction(
 	},
 )
 
-var _ = registerOldParamsFunction(
+var _ = registerFunction(
 	NewDeprecatedFunctionSpec(
 		"timestamp",
 		"Returns the current time in a custom format specified by the argument. The format is defined by showing how the reference time, defined to be `Mon Jan 2 15:04:05 -0700 MST 2006` would be displayed if it were the value.\n\nA fractional second is represented by adding a period and zeros to the end of the seconds section of layout string, as in `15:04:05.000` to format a time stamp with millisecond precision. This has been deprecated in favour of the new `now` function.",
 		NewExampleSpec("",
 			`root.received_at = timestamp("15:04:05")`,
 		),
-	),
-	true, func(args ...interface{}) (Function, error) {
-		format := "Mon Jan 2 15:04:05 -0700 MST 2006"
-		if len(args) > 0 {
-			format = args[0].(string)
+	).Param(ParamString("format", "The format to print as.").Default("Mon Jan 2 15:04:05 -0700 MST 2006")),
+	func(args *ParsedParams) (Function, error) {
+		format, err := args.FieldString("format")
+		if err != nil {
+			return nil, err
 		}
 		return ClosureFunction("function timestamp", func(_ FunctionContext) (interface{}, error) {
 			return time.Now().Format(format), nil
 		}, nil), nil
 	},
-	oldParamsExpectOneOrZeroArgs(),
-	oldParamsExpectStringArg(0),
 )
 
-var _ = registerOldParamsFunction(
+var _ = registerFunction(
 	NewDeprecatedFunctionSpec(
 		"timestamp_utc",
 		"The equivalent of `timestamp` except the time is printed as UTC instead of the local timezone. This has been deprecated in favour of the new `now` function.",
 		NewExampleSpec("",
 			`root.received_at = timestamp_utc("15:04:05")`,
 		),
-	),
-	true, func(args ...interface{}) (Function, error) {
-		format := "Mon Jan 2 15:04:05 -0700 MST 2006"
-		if len(args) > 0 {
-			format = args[0].(string)
+	).Param(ParamString("format", "The format to print as.").Default("Mon Jan 2 15:04:05 -0700 MST 2006")),
+	func(args *ParsedParams) (Function, error) {
+		format, err := args.FieldString("format")
+		if err != nil {
+			return nil, err
 		}
 		return ClosureFunction("function timestamp_utc", func(_ FunctionContext) (interface{}, error) {
 			return time.Now().In(time.UTC).Format(format), nil
 		}, nil), nil
 	},
-	oldParamsExpectOneOrZeroArgs(),
-	oldParamsExpectStringArg(0),
 )
 
 var _ = registerSimpleFunction(

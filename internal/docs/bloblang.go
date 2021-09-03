@@ -65,7 +65,18 @@ type functionsContext struct {
 	Categories []functionCategory
 }
 
-var bloblangFunctionsTemplate = `{{define "function_example" -}}
+var bloblangParamsTemplate = `{{define "parameters" -}}
+{{if gt (len .Definitions) 0}}
+#### Parameters
+
+{{range $i, $param := .Definitions -}}
+` + "**`{{$param.Name}}`**" + ` &lt;{{if $param.IsOptional}}(optional) {{end}}{{$param.ValueType}}{{if $param.DefaultValue}}, default ` + "`{{$param.PrettyDefault}}`" + `{{end}}&gt; {{$param.Description}}  
+{{end -}}
+{{end -}}
+{{end -}}
+`
+
+var bloblangFunctionsTemplate = bloblangParamsTemplate + `{{define "function_example" -}}
 {{if gt (len .Summary) 0 -}}
 {{.Summary}}
 
@@ -88,13 +99,7 @@ BETA: This function is mostly stable but breaking changes could still be made ou
 
 {{end -}}
 {{.Description}}
-{{if gt (len .Params.Definitions) 0}}
-#### Parameters
-
-{{range $i, $param := .Params.Definitions -}}
-` + "`{{$param.Name}}`" + ` ({{if $param.IsOptional}}optional {{end}}{{$param.ValueType}}) {{$param.Description}}{{if $param.DefaultValue}} Has default ` + "`{{$param.DefaultValue}}`." + `{{end}}  
-{{end -}}
-{{end -}}
+{{template "parameters" .Params -}}
 {{if gt (len .Examples) 0}}
 #### Examples
 
@@ -189,7 +194,7 @@ type methodsContext struct {
 	General    []query.MethodSpec
 }
 
-var bloblangMethodsTemplate = `{{define "method_example" -}}
+var bloblangMethodsTemplate = bloblangParamsTemplate + `{{define "method_example" -}}
 {{if gt (len .Summary) 0 -}}
 {{.Summary}}
 
@@ -212,13 +217,7 @@ BETA: This method is mostly stable but breaking changes could still be made outs
 
 {{end -}}
 {{.Description}}
-{{if gt (len .Params.Definitions) 0}}
-#### Parameters
-
-{{range $i, $param := .Params.Definitions -}}
-` + "`{{$param.Name}}`" + ` ({{if $param.IsOptional}}optional {{end}}{{$param.ValueType}}) {{$param.Description}}{{if $param.DefaultValue}} Has default ` + "`{{$param.DefaultValue}}`." + `{{end}}  
-{{end -}}
-{{end -}}
+{{template "parameters" .Params -}}
 {{if gt (len .Examples) 0}}
 #### Examples
 

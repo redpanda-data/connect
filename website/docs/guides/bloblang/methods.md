@@ -36,7 +36,7 @@ Apply a declared mapping to a target value.
 
 #### Parameters
 
-`mapping` (string) The mapping to apply.  
+**`mapping`** &lt;string&gt; The mapping to apply.  
 
 #### Examples
 
@@ -69,6 +69,10 @@ root.foo = null.apply("create_foo")
 
 If the result of a target query fails (due to incorrect types, failed parsing, etc) the argument is returned instead.
 
+#### Parameters
+
+**`fallback`** &lt;query expression&gt; A value to yield, or query to execute, if the target query fails.  
+
 #### Examples
 
 
@@ -92,6 +96,10 @@ root = this.catch(deleted())
 
 Checks that a field, identified via a [dot path][field_paths], exists in an object.
 
+#### Parameters
+
+**`path`** &lt;string&gt; A [dot path][field_paths] to a field.  
+
 #### Examples
 
 
@@ -111,6 +119,10 @@ root.result = this.foo.exists("bar.baz")
 ### `from`
 
 Modifies a target query such that certain functions are executed from the perspective of another message in the batch. This allows you to mutate events based on the contents of other messages. Functions that support this behaviour are `content`, `json` and `meta`.
+
+#### Parameters
+
+**`index`** &lt;integer&gt; The message index to use as a perspective.  
 
 #### Examples
 
@@ -138,6 +150,10 @@ root.foo_summed = json("foo").from_all().sum()
 
 If the result of the target query fails or resolves to `null`, returns the argument instead. This is an explicit method alternative to the coalesce pipe operator `|`.
 
+#### Parameters
+
+**`fallback`** &lt;query expression&gt; A value to yield, or query to execute, if the target query fails or resolves to `null`.  
+
 #### Examples
 
 
@@ -164,6 +180,10 @@ root.title = this.title.capitalize()
 ### `contains`
 
 Checks whether a string contains a substring and returns a boolean result.
+
+#### Parameters
+
+**`value`** &lt;unknown&gt; A value to test against elements of the target.  
 
 #### Examples
 
@@ -255,6 +275,10 @@ root.foo = "%s(%v): %v".format(this.name, this.age, this.fingers)
 
 Checks whether a string has a prefix argument and returns a bool.
 
+#### Parameters
+
+**`prefix`** &lt;string&gt; The prefix string to test.  
+
 #### Examples
 
 
@@ -270,6 +294,10 @@ root.t2 = this.v2.has_prefix("foo")
 
 Checks whether a string has a suffix argument and returns a bool.
 
+#### Parameters
+
+**`suffix`** &lt;string&gt; The suffix string to test.  
+
 #### Examples
 
 
@@ -284,6 +312,10 @@ root.t2 = this.v2.has_suffix("foo")
 ### `index_of`
 
 Returns the starting index of the argument substring in a string target, or `-1` if the target doesn't contain the argument.
+
+#### Parameters
+
+**`search`** &lt;string&gt; A string to search for.  
 
 #### Examples
 
@@ -348,6 +380,11 @@ root.quoted = this.thing.quote()
 
 Replaces all occurrences of the first argument in a target string with the second argument.
 
+#### Parameters
+
+**`old`** &lt;string&gt; A string to match against.  
+**`new`** &lt;string&gt; A string to replace with.  
+
 #### Examples
 
 
@@ -361,6 +398,10 @@ root.new_value = this.value.replace("foo","dog")
 ### `replace_many`
 
 For each pair of strings in an argument array, replaces all occurrences of the first item of the pair with the second. This is a more compact way of chaining a series of `replace` methods.
+
+#### Parameters
+
+**`values`** &lt;array&gt; An array of values, each even value will be replaced with the following odd value.  
 
 #### Examples
 
@@ -402,6 +443,11 @@ root = content().reverse()
 
 Extract a slice from a string by specifying two indices, a low and high bound, which selects a half-open range that includes the first character, but excludes the last one. If the second index is omitted then it defaults to the length of the input sequence.
 
+#### Parameters
+
+**`low`** &lt;integer&gt; The low bound, which is the first element of the selection, or if negative selects from the end.  
+**`high`** &lt;(optional) integer&gt; An optional high bound.  
+
 #### Examples
 
 
@@ -427,6 +473,10 @@ root.the_rest = this.value.slice(0, -4)
 
 Split a string value into an array of strings by splitting it on a string separator.
 
+#### Parameters
+
+**`delimiter`** &lt;string&gt; The delimiter to split with.  
+
 #### Examples
 
 
@@ -440,6 +490,10 @@ root.new_value = this.value.split(",")
 ### `strip_html`
 
 Attempts to remove all HTML tags from a target string.
+
+#### Parameters
+
+**`preserve`** &lt;(optional) array&gt; An optional array of element types to preserve in the output.  
 
 #### Examples
 
@@ -463,6 +517,10 @@ root.stripped = this.value.strip_html(["article"])
 ### `trim`
 
 Remove all leading and trailing characters from a string that are contained within an argument cutset. If no arguments are provided then whitespace is removed.
+
+#### Parameters
+
+**`cutset`** &lt;(optional) string&gt; An optional string of characters to trim from the target value.  
 
 #### Examples
 
@@ -537,6 +595,10 @@ root.foo = this.foo.uppercase()
 
 Returns an array containing all successive matches of a regular expression in a string.
 
+#### Parameters
+
+**`pattern`** &lt;string&gt; The pattern to match against.  
+
 #### Examples
 
 
@@ -550,6 +612,10 @@ root.matches = this.value.re_find_all("a.")
 ### `re_find_all_object`
 
 Returns an array of objects containing all matches of the regular expression and the matches of its subexpressions. The key of each match value is the name of the group when specified, otherwise it is the index of the matching group, starting with the expression as a whole at 0.
+
+#### Parameters
+
+**`pattern`** &lt;string&gt; The pattern to match against.  
 
 #### Examples
 
@@ -572,6 +638,10 @@ root.matches = this.value.re_find_all_object("(?m)(?P<key>\\w+):\\s+(?P<value>\\
 
 Returns an array of arrays containing all successive matches of the regular expression in a string and the matches, if any, of its subexpressions.
 
+#### Parameters
+
+**`pattern`** &lt;string&gt; The pattern to match against.  
+
 #### Examples
 
 
@@ -585,6 +655,10 @@ root.matches = this.value.re_find_all_submatch("a(x*)b")
 ### `re_find_object`
 
 Returns an object containing the first match of the regular expression and the matches of its subexpressions. The key of each match value is the name of the group when specified, otherwise it is the index of the matching group, starting with the expression as a whole at 0.
+
+#### Parameters
+
+**`pattern`** &lt;string&gt; The pattern to match against.  
 
 #### Examples
 
@@ -607,6 +681,10 @@ root.matches = this.value.re_find_object("(?P<key>\\w+):\\s+(?P<value>\\w+)")
 
 Checks whether a regular expression matches against any part of a string and returns a boolean.
 
+#### Parameters
+
+**`pattern`** &lt;string&gt; The pattern to match against.  
+
 #### Examples
 
 
@@ -623,6 +701,11 @@ root.matches = this.value.re_match("[0-9]")
 ### `re_replace`
 
 Replaces all occurrences of the argument regular expression in a string with a value. Inside the value $ signs are interpreted as submatch expansions, e.g. `$1` represents the text of the first submatch.
+
+#### Parameters
+
+**`pattern`** &lt;string&gt; The pattern to match against.  
+**`value`** &lt;string&gt; The value to replace with.  
 
 #### Examples
 
@@ -793,8 +876,8 @@ Attempts to format a timestamp value as a string according to a specified format
 
 #### Parameters
 
-`format` (string) The output format to use. Has default `2006-01-02T15:04:05.999999999Z07:00`.  
-`tz` (optional string) An optional timezone to use, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.  
+**`format`** &lt;string, default `"2006-01-02T15:04:05.999999999Z07:00"`&gt; The output format to use.  
+**`tz`** &lt;(optional) string&gt; An optional timezone to use, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.  
 
 #### Examples
 
@@ -838,6 +921,11 @@ root.something_at = this.created_at.format_timestamp("2006-Jan-02 15:04:05.99999
 BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 
 Attempts to format a timestamp value as a string according to a specified strftime-compatible format. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.
+
+#### Parameters
+
+**`format`** &lt;string&gt; The output format to use.  
+**`tz`** &lt;(optional) string&gt; An optional timezone to use, otherwise the timezone of the input string is used.  
 
 #### Examples
 
@@ -919,6 +1007,10 @@ BETA: This method is mostly stable but breaking changes could still be made outs
 
 Attempts to parse a string as a timestamp following a specified format and outputs a string following ISO 8601, which can then be fed into `format_timestamp`. The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
 
+#### Parameters
+
+**`format`** &lt;string&gt; The format of the target string.  
+
 #### Examples
 
 
@@ -934,6 +1026,10 @@ root.doc.timestamp = this.doc.timestamp.parse_timestamp("2006-Jan-02")
 BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 
 Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a string following ISO 8601, which can then be fed into `format_timestamp`.
+
+#### Parameters
+
+**`format`** &lt;string&gt; The format of the target string.  
 
 #### Examples
 
@@ -952,6 +1048,10 @@ root.doc.timestamp = this.doc.timestamp.parse_timestamp_strptime("%Y-%b-%d")
 ### `bool`
 
 Attempt to parse a value into a boolean. An optional argument can be provided, in which case if the value cannot be parsed the argument will be returned instead. If the value is a number then any non-zero value will resolve to `true`, if the value is a string then any of the following values are considered valid: `1, t, T, TRUE, true, True, 0, f, F, FALSE`.
+
+#### Parameters
+
+**`default`** &lt;(optional) bool&gt; An optional value to yield if the target cannot be parsed as a boolean.  
 
 #### Examples
 
@@ -1025,6 +1125,10 @@ root.a = this.a.not_null()
 
 Attempt to parse a value into a number. An optional argument can be provided, in which case if the value cannot be parsed into a number the argument will be returned instead.
 
+#### Parameters
+
+**`default`** &lt;(optional) float&gt; An optional value to yield if the target cannot be parsed as a number.  
+
 #### Examples
 
 
@@ -1077,7 +1181,7 @@ Checks each element of an array against a query and returns true if all elements
 
 #### Parameters
 
-`test` (query expression) A test query to apply to each element.  
+**`test`** &lt;query expression&gt; A test query to apply to each element.  
 
 #### Examples
 
@@ -1098,7 +1202,7 @@ Checks the elements of an array against a query and returns true if any element 
 
 #### Parameters
 
-`test` (query expression) A test query to apply to each element.  
+**`test`** &lt;query expression&gt; A test query to apply to each element.  
 
 #### Examples
 
@@ -1131,6 +1235,10 @@ root.foo = this.foo.append("and", "this")
 
 Collapse an array or object into an object of key/value pairs for each field, where the key is the full path of the structured field in dot path notation. Empty arrays an objects are ignored by default.
 
+#### Parameters
+
+**`include_empty`** &lt;bool, default `false`&gt; Whether to include empty objects and arrays in the resulting object.  
+
 #### Examples
 
 
@@ -1144,7 +1252,7 @@ root.result = this.collapse()
 An optional boolean parameter can be set to true in order to include empty objects and arrays.
 
 ```coffee
-root.result = this.collapse(true)
+root.result = this.collapse(include_empty: true)
 
 # In:  {"foo":[{"bar":"1"},{"bar":{}},{"bar":"2"},{"bar":[]}]}
 # Out: {"result":{"foo.0.bar":"1","foo.1.bar":{},"foo.2.bar":"2","foo.3.bar":[]}}
@@ -1153,6 +1261,10 @@ root.result = this.collapse(true)
 ### `contains`
 
 Checks whether an array contains an element matching the argument, or an object contains a value matching the argument, and returns a boolean result. Numerical comparisons are made irrespective of the representation type (float versus integer).
+
+#### Parameters
+
+**`value`** &lt;unknown&gt; A value to test against elements of the target.  
 
 #### Examples
 
@@ -1195,6 +1307,10 @@ root.foo = this.foo.enumerated()
 
 Explodes an array or object at a [field path][field_paths].
 
+#### Parameters
+
+**`path`** &lt;string&gt; A [dot path][field_paths] to a field to explode.  
+
 #### Examples
 
 
@@ -1223,6 +1339,10 @@ root = this.explode("value")
 ### `filter`
 
 Executes a mapping query argument for each element of an array or key/value pair of an object. If the query returns `false` the item is removed from the resulting array or object. The item will also be removed if the query returns any non-boolean value.
+
+#### Parameters
+
+**`check`** &lt;query expression&gt; A query to apply to each element, if this query resolves to any value other than a boolean `true` the element will be removed from the result.  
 
 #### Examples
 
@@ -1265,6 +1385,11 @@ Takes two arguments: an initial value, and a mapping query. For each element of 
 
 The first argument is the value that `tally` will have on the first call.
 
+#### Parameters
+
+**`initial`** &lt;unknown&gt; The initial value to start the fold with. For example, an empty object `{}`, a zero count `0`, or an empty string `""`.  
+**`query`** &lt;query expression&gt; A query to apply for each element. The query is provided an object with two fields; `tally` containing the current tally, and `value` containing the value of the current element. The query should result in a new tally to be passed to the next element query.  
+
 #### Examples
 
 
@@ -1286,6 +1411,10 @@ root.result = this.foo.fold("", item -> "%v%v".format(item.tally, item.value))
 
 Extract a field value, identified via a [dot path][field_paths], from an object.
 
+#### Parameters
+
+**`path`** &lt;string&gt; A [dot path][field_paths] identifying a field to obtain.  
+
 #### Examples
 
 
@@ -1302,6 +1431,10 @@ root.result = this.foo.get(this.target)
 ### `index`
 
 Extract an element from an array by an index. The index can be negative, and if so the element will be selected from the end counting backwards starting from -1. E.g. an index of -1 returns the last element, an index of -2 returns the element before the last, and so on.
+
+#### Parameters
+
+**`index`** &lt;integer&gt; The index to obtain from an array.  
 
 #### Examples
 
@@ -1326,6 +1459,10 @@ root.last_byte = this.name.bytes().index(-1)
 
 Join an array of strings with an optional delimiter into a single string.
 
+#### Parameters
+
+**`delimiter`** &lt;(optional) string&gt; An optional delimiter to add between each string.  
+
 #### Examples
 
 
@@ -1342,6 +1479,10 @@ root.joined_numbers = this.numbers.map_each(this.string()).join(",")
 BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 
 Checks a [JSON schema](https://json-schema.org/) against a value and returns the value if it matches or throws and error if it does not.
+
+#### Parameters
+
+**`schema`** &lt;string&gt; The schema to check values against.  
 
 #### Examples
 
@@ -1418,6 +1559,10 @@ root.foo_len = this.foo.length()
 
 
 
+#### Parameters
+
+**`query`** &lt;query expression&gt; A query that will be used to map each element.  
+
 #### Examples
 
 
@@ -1451,6 +1596,10 @@ root.new_dict = this.dict.map_each(item -> item.value.uppercase())
 
 Apply a mapping to each key of an object, and replace the key with the result, which must be a string.
 
+#### Parameters
+
+**`query`** &lt;query expression&gt; A query that will be used to map each key.  
+
 #### Examples
 
 
@@ -1472,6 +1621,10 @@ root = this.map_each_key(key -> if key.contains("kafka") { "_" + key })
 
 Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the result will be an array containing both values, where values that are already arrays will be expanded into the resulting array.
 
+#### Parameters
+
+**`with`** &lt;unknown&gt; A value to merge the target value with.  
+
 #### Examples
 
 
@@ -1485,6 +1638,11 @@ root = this.foo.merge(this.bar)
 ### `slice`
 
 Extract a slice from an array by specifying two indices, a low and high bound, which selects a half-open range that includes the first element, but excludes the last one. If the second index is omitted then it defaults to the length of the input sequence.
+
+#### Parameters
+
+**`low`** &lt;integer&gt; The low bound, which is the first element of the selection, or if negative selects from the end.  
+**`high`** &lt;(optional) integer&gt; An optional high bound.  
 
 #### Examples
 
@@ -1511,6 +1669,10 @@ root.the_rest = this.value.slice(0, -2)
 
 Attempts to sort the values of an array in increasing order. The type of all values must match in order for the ordering to succeed. Supports string and number values.
 
+#### Parameters
+
+**`compare`** &lt;(optional) query expression&gt; An optional query that should explicitly compare elements `left` and `right` and provide a boolean result.  
+
 #### Examples
 
 
@@ -1533,6 +1695,10 @@ root.sorted = this.foo.sort(item -> item.left.v < item.right.v)
 ### `sort_by`
 
 Attempts to sort the elements of an array, in increasing order, by a value emitted by an argument query applied to each element. The type of all values must match in order for the ordering to succeed. Supports string and number values.
+
+#### Parameters
+
+**`query`** &lt;query expression&gt; A query to apply to each element that yields a value used for sorting.  
 
 #### Examples
 
@@ -1561,6 +1727,10 @@ root.sum = this.foo.sum()
 ### `unique`
 
 Attempts to remove duplicate values from an array. The array may contain a combination of different value types, but numbers and strings are checked separately (`"5"` is a different element to `5`).
+
+#### Parameters
+
+**`emit`** &lt;(optional) query expression&gt; An optional query that can be used in order to yield a value for each element to determine uniqueness.  
 
 #### Examples
 
@@ -1612,7 +1782,7 @@ Executes an argument Bloblang mapping on the target. This method can be used in 
 
 #### Parameters
 
-`mapping` (string) The mapping to execute.  
+**`mapping`** &lt;string&gt; The mapping to execute.  
 
 #### Examples
 
@@ -1724,7 +1894,7 @@ Available schemes are: `base64`, `base64url`, `hex`, `ascii85`.
 
 #### Parameters
 
-`scheme` (string) The decoding scheme to use.  
+**`scheme`** &lt;string&gt; The decoding scheme to use.  
 
 #### Examples
 
@@ -1749,9 +1919,9 @@ Decrypts an encrypted string or byte array target according to a chosen AES encr
 
 #### Parameters
 
-`scheme` (string) The scheme to use for decryption, one of `ctr`, `ofb`, `cbc`.  
-`key` (string) A key to decrypt with.  
-`iv` (string) An initialization vector / nonce.  
+**`scheme`** &lt;string&gt; The scheme to use for decryption, one of `ctr`, `ofb`, `cbc`.  
+**`key`** &lt;string&gt; A key to decrypt with.  
+**`iv`** &lt;string&gt; An initialization vector / nonce.  
 
 #### Examples
 
@@ -1771,7 +1941,7 @@ Encodes a string or byte array target according to a chosen scheme and returns a
 
 #### Parameters
 
-`scheme` (string) The encoding scheme to use.  
+**`scheme`** &lt;string&gt; The encoding scheme to use.  
 
 #### Examples
 
@@ -1796,9 +1966,9 @@ Encrypts a string or byte array target according to a chosen AES encryption meth
 
 #### Parameters
 
-`scheme` (string) The scheme to use for encryption, one of `ctr`, `ofb`, `cbc`.  
-`key` (string) A key to encrypt with.  
-`iv` (string) An initialization vector / nonce.  
+**`scheme`** &lt;string&gt; The scheme to use for encryption, one of `ctr`, `ofb`, `cbc`.  
+**`key`** &lt;string&gt; A key to encrypt with.  
+**`iv`** &lt;string&gt; An initialization vector / nonce.  
 
 #### Examples
 
@@ -1820,6 +1990,11 @@ Available algorithms are: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `md5`, `sha
 
 The following algorithms require a key, which is specified as a second argument: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`.
 
+#### Parameters
+
+**`algorithm`** &lt;string&gt; The hasing algorithm to use.  
+**`key`** &lt;(optional) string&gt; An optional key to use.  
+
 #### Examples
 
 
@@ -1836,6 +2011,10 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")
 ### `parse_timestamp_unix`
 
 Attempts to parse a string as a timestamp, following ISO 8601 format by default, and returns the unix epoch.
+
+#### Parameters
+
+**`format`** &lt;string, default `"2006-01-02T15:04:05.999999999Z07:00"`&gt; An optional format to use.  
 
 #### Examples
 

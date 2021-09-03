@@ -1,6 +1,7 @@
 package query
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -13,6 +14,8 @@ type ParamDefinition struct {
 	Name        string
 	Description string
 	ValueType   ValueType
+
+	castScalarsToLiteral bool
 
 	// IsOptional is implicit when there's a DefaultValue. However, there are
 	// times when a parameter is used to change behaviour without having a
@@ -76,11 +79,14 @@ func ParamObject(name, description string) ParamDefinition {
 	}
 }
 
-// ParamQuery creates a new query typed parameter.
-func ParamQuery(name, description string) ParamDefinition {
+// ParamQuery creates a new query typed parameter. The field wrapScalars
+// determines whether non-query arguments are allowed, in which case they will
+// be converted into literal functions.
+func ParamQuery(name, description string, wrapScalars bool) ParamDefinition {
 	return ParamDefinition{
 		Name: name, Description: description,
-		ValueType: ValueQuery,
+		ValueType:            ValueQuery,
+		castScalarsToLiteral: wrapScalars,
 	}
 }
 
@@ -103,6 +109,19 @@ func (d ParamDefinition) Optional() ParamDefinition {
 func (d ParamDefinition) Default(v interface{}) ParamDefinition {
 	d.DefaultValue = &v
 	return d
+}
+
+// PrettyDefault returns a marshalled version of the parameters default value,
+// or an empty string if there isn't one.
+func (d ParamDefinition) PrettyDefault() string {
+	if d.DefaultValue == nil {
+		return ""
+	}
+	b, err := json.Marshal(*d.DefaultValue)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 func (d ParamDefinition) parseArgValue(v interface{}) (interface{}, error) {
@@ -131,6 +150,9 @@ func (d ParamDefinition) parseArgValue(v interface{}) (interface{}, error) {
 	case ValueQuery:
 		if _, isDyn := v.(Function); isDyn {
 			return v, nil
+		}
+		if d.castScalarsToLiteral {
+			return NewLiteralFunction("", v), nil
 		}
 	case ValueUnknown:
 		return v, nil
@@ -480,13 +502,45 @@ func (p *ParsedParams) Field(n string) (interface{}, error) {
 	return p.values[index], nil
 }
 
+// FieldArray returns an array value with a given name.
+func (p *ParsedParams) FieldArray(n string) ([]interface{}, error) {
+	v, err := p.Field(n)
+	if err != nil {
+		return nil, err
+	}
+	a, ok := v.([]interface{})
+	if !ok {
+		return nil, NewTypeError(v, ValueArray)
+	}
+	return a, nil
+}
+
+// FieldOptionalArray returns an optional array value with a given name.
+func (p *ParsedParams) FieldOptionalArray(n string) (*[]interface{}, error) {
+	v, err := p.Field(n)
+	if err != nil {
+		return nil, err
+	}
+	if v == nil {
+		return nil, nil
+	}
+	a, ok := v.([]interface{})
+	if !ok {
+		return nil, NewTypeError(v, ValueArray)
+	}
+	return &a, nil
+}
+
 // FieldString returns a string argument value with a given name.
 func (p *ParsedParams) FieldString(n string) (string, error) {
 	v, err := p.Field(n)
 	if err != nil {
 		return "", err
 	}
-	str, _ := v.(string)
+	str, ok := v.(string)
+	if !ok {
+		return "", NewTypeError(v, ValueString)
+	}
 	return str, nil
 }
 
@@ -500,7 +554,10 @@ func (p *ParsedParams) FieldOptionalString(n string) (*string, error) {
 	if v == nil {
 		return nil, nil
 	}
-	str, _ := v.(string)
+	str, ok := v.(string)
+	if !ok {
+		return nil, NewTypeError(v, ValueString)
+	}
 	return &str, nil
 }
 
@@ -510,7 +567,10 @@ func (p *ParsedParams) FieldInt64(n string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	i, _ := v.(int64)
+	i, ok := v.(int64)
+	if !ok {
+		return 0, NewTypeError(v, ValueInt)
+	}
 	return i, nil
 }
 
@@ -524,7 +584,10 @@ func (p *ParsedParams) FieldOptionalInt64(n string) (*int64, error) {
 	if v == nil {
 		return nil, nil
 	}
-	i, _ := v.(int64)
+	i, ok := v.(int64)
+	if !ok {
+		return nil, NewTypeError(v, ValueInt)
+	}
 	return &i, nil
 }
 
@@ -534,7 +597,10 @@ func (p *ParsedParams) FieldFloat(n string) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	f, _ := v.(float64)
+	f, ok := v.(float64)
+	if !ok {
+		return 0, NewTypeError(v, ValueFloat)
+	}
 	return f, nil
 }
 
@@ -548,7 +614,10 @@ func (p *ParsedParams) FieldOptionalFloat(n string) (*float64, error) {
 	if v == nil {
 		return nil, nil
 	}
-	f, _ := v.(float64)
+	f, ok := v.(float64)
+	if !ok {
+		return nil, NewTypeError(v, ValueFloat)
+	}
 	return &f, nil
 }
 
@@ -558,7 +627,10 @@ func (p *ParsedParams) FieldBool(n string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	b, _ := v.(bool)
+	b, ok := v.(bool)
+	if !ok {
+		return false, NewTypeError(v, ValueBool)
+	}
 	return b, nil
 }
 
@@ -572,7 +644,10 @@ func (p *ParsedParams) FieldOptionalBool(n string) (*bool, error) {
 	if v == nil {
 		return nil, nil
 	}
-	b, _ := v.(bool)
+	b, ok := v.(bool)
+	if !ok {
+		return nil, NewTypeError(v, ValueBool)
+	}
 	return &b, nil
 }
 
@@ -582,7 +657,10 @@ func (p *ParsedParams) FieldQuery(n string) (Function, error) {
 	if err != nil {
 		return nil, err
 	}
-	f, _ := v.(Function)
+	f, ok := v.(Function)
+	if !ok {
+		return nil, NewTypeError(v, ValueQuery)
+	}
 	return f, nil
 }
 
@@ -596,6 +674,9 @@ func (p *ParsedParams) FieldOptionalQuery(n string) (Function, error) {
 	if v == nil {
 		return nil, nil
 	}
-	f, _ := v.(Function)
+	f, ok := v.(Function)
+	if !ok {
+		return nil, NewTypeError(v, ValueQuery)
+	}
 	return f, nil
 }

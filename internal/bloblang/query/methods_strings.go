@@ -453,7 +453,7 @@ var _ = registerSimpleMethod(
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"index_of", "",
 	).InCategory(
@@ -469,9 +469,12 @@ var _ = registerOldParamsSimpleMethod(
 			`the cat meowed, the dog woofed`,
 			`{"index":8}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
-		substring := args[0].(string)
+	).Param(ParamString("search", "A string to search for.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		substring, err := args.FieldString("search")
+		if err != nil {
+			return nil, err
+		}
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			switch t := v.(type) {
 			case string:
@@ -482,9 +485,6 @@ var _ = registerOldParamsSimpleMethod(
 			return nil, NewTypeError(v, ValueString)
 		}, nil
 	},
-	true,
-	oldParamsExpectNArgs(1),
-	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
@@ -607,7 +607,7 @@ var _ = registerSimpleMethod(
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"format", "",
 	).InCategory(
@@ -618,18 +618,17 @@ var _ = registerOldParamsSimpleMethod(
 			`{"name":"lance","age":37,"fingers":13}`,
 			`{"foo":"lance(37): 13"}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
+	).VariadicParams(),
+	func(args *ParsedParams) (simpleMethod, error) {
 		return stringMethod(func(s string) (interface{}, error) {
-			return fmt.Sprintf(s, args...), nil
+			return fmt.Sprintf(s, args.Raw()...), nil
 		}), nil
 	},
-	true,
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"has_prefix", "",
 	).InCategory(
@@ -641,9 +640,12 @@ root.t2 = this.v2.has_prefix("foo")`,
 			`{"v1":"foobar","v2":"barfoo"}`,
 			`{"t1":true,"t2":false}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
-		prefix := args[0].(string)
+	).Param(ParamString("prefix", "The prefix string to test.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		prefix, err := args.FieldString("prefix")
+		if err != nil {
+			return nil, err
+		}
 		prefixB := []byte(prefix)
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			switch t := v.(type) {
@@ -655,14 +657,11 @@ root.t2 = this.v2.has_prefix("foo")`,
 			return nil, NewTypeError(v, ValueString)
 		}, nil
 	},
-	true,
-	oldParamsExpectNArgs(1),
-	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"has_suffix", "",
 	).InCategory(
@@ -674,28 +673,28 @@ root.t2 = this.v2.has_suffix("foo")`,
 			`{"v1":"foobar","v2":"barfoo"}`,
 			`{"t1":false,"t2":true}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
-		prefix := args[0].(string)
-		prefixB := []byte(prefix)
+	).Param(ParamString("suffix", "The suffix string to test.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		suffix, err := args.FieldString("suffix")
+		if err != nil {
+			return nil, err
+		}
+		suffixB := []byte(suffix)
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			switch t := v.(type) {
 			case string:
-				return strings.HasSuffix(t, prefix), nil
+				return strings.HasSuffix(t, suffix), nil
 			case []byte:
-				return bytes.HasSuffix(t, prefixB), nil
+				return bytes.HasSuffix(t, suffixB), nil
 			}
 			return nil, NewTypeError(v, ValueString)
 		}, nil
 	},
-	true,
-	oldParamsExpectNArgs(1),
-	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"hash", "",
 	).InCategory(
@@ -712,17 +711,27 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")`,
 			`{"value":"hello world"}`,
 			`{"h1":"2aae6c35c94fcfb415dbe95f408b9ce91ee846ed","h2":"d87e5f068fa08fe90bb95bc7c8344cb809179d76"}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
+	).
+		Param(ParamString("algorithm", "The hasing algorithm to use.")).
+		Param(ParamString("key", "An optional key to use.").Optional()),
+	func(args *ParsedParams) (simpleMethod, error) {
+		algorithmStr, err := args.FieldString("algorithm")
+		if err != nil {
+			return nil, err
+		}
 		var key []byte
-		if len(args) > 1 {
-			key = []byte(args[1].(string))
+		keyParam, err := args.FieldOptionalString("key")
+		if err != nil {
+			return nil, err
+		}
+		if keyParam != nil {
+			key = []byte(*keyParam)
 		}
 		var hashFn func([]byte) ([]byte, error)
-		switch args[0].(string) {
+		switch algorithmStr {
 		case "hmac_sha1", "hmac-sha1":
 			if len(key) == 0 {
-				return nil, fmt.Errorf("hash algorithm %v requires a key argument", args[0].(string))
+				return nil, fmt.Errorf("hash algorithm %v requires a key argument", algorithmStr)
 			}
 			hashFn = func(b []byte) ([]byte, error) {
 				hasher := hmac.New(sha1.New, key)
@@ -731,7 +740,7 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")`,
 			}
 		case "hmac_sha256", "hmac-sha256":
 			if len(key) == 0 {
-				return nil, fmt.Errorf("hash algorithm %v requires a key argument", args[0].(string))
+				return nil, fmt.Errorf("hash algorithm %v requires a key argument", algorithmStr)
 			}
 			hashFn = func(b []byte) ([]byte, error) {
 				hasher := hmac.New(sha256.New, key)
@@ -740,7 +749,7 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")`,
 			}
 		case "hmac_sha512", "hmac-sha512":
 			if len(key) == 0 {
-				return nil, fmt.Errorf("hash algorithm %v requires a key argument", args[0].(string))
+				return nil, fmt.Errorf("hash algorithm %v requires a key argument", algorithmStr)
 			}
 			hashFn = func(b []byte) ([]byte, error) {
 				hasher := hmac.New(sha512.New, key)
@@ -778,7 +787,7 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")`,
 				return []byte(strconv.FormatUint(h.Sum64(), 10)), nil
 			}
 		default:
-			return nil, fmt.Errorf("unrecognized hash type: %v", args[0])
+			return nil, fmt.Errorf("unrecognized hash type: %v", algorithmStr)
 		}
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			var res []byte
@@ -794,15 +803,11 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")`,
 			return res, err
 		}, nil
 	},
-	true,
-	oldParamsExpectAtLeastOneArg(),
-	oldParamsExpectStringArg(0),
-	oldParamsExpectStringArg(1),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"join", "",
 	).InCategory(
@@ -814,11 +819,15 @@ root.joined_numbers = this.numbers.map_each(this.string()).join(",")`,
 			`{"words":["hello","world"],"numbers":[3,8,11]}`,
 			`{"joined_numbers":"3,8,11","joined_words":"helloworld"}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
-		var delim string
-		if len(args) > 0 {
-			delim = args[0].(string)
+	).Param(ParamString("delimiter", "An optional delimiter to add between each string.").Optional()),
+	func(args *ParsedParams) (simpleMethod, error) {
+		delimArg, err := args.FieldOptionalString("delimiter")
+		if err != nil {
+			return nil, err
+		}
+		delim := ""
+		if delimArg != nil {
+			delim = *delimArg
 		}
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			slice, ok := v.([]interface{})
@@ -843,9 +852,6 @@ root.joined_numbers = this.numbers.map_each(this.string()).join(",")`,
 			return buf.String(), nil
 		}, nil
 	},
-	true,
-	oldParamsExpectOneOrZeroArgs(),
-	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
@@ -1122,7 +1128,7 @@ var _ = registerSimpleMethod(
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewDeprecatedMethodSpec(
 		"parse_timestamp_unix", "",
 	).InCategory(
@@ -1139,11 +1145,11 @@ var _ = registerOldParamsSimpleMethod(
 			`{"doc":{"timestamp":"2020-Aug-14"}}`,
 			`{"doc":{"timestamp":1597363200}}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
-		layout := time.RFC3339Nano
-		if len(args) > 0 {
-			layout = args[0].(string)
+	).Param(ParamString("format", "An optional format to use.").Default(time.RFC3339Nano)),
+	func(args *ParsedParams) (simpleMethod, error) {
+		layout, err := args.FieldString("format")
+		if err != nil {
+			return nil, err
 		}
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			var str string
@@ -1162,14 +1168,11 @@ var _ = registerOldParamsSimpleMethod(
 			return ut.Unix(), nil
 		}, nil
 	},
-	true,
-	oldParamsExpectOneOrZeroArgs(),
-	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"parse_timestamp", "",
 	).InCategory(
@@ -1180,9 +1183,12 @@ var _ = registerOldParamsSimpleMethod(
 			`{"doc":{"timestamp":"2020-Aug-14"}}`,
 			`{"doc":{"timestamp":"2020-08-14T00:00:00Z"}}`,
 		),
-	).Beta(),
-	func(args ...interface{}) (simpleMethod, error) {
-		layout := args[0].(string)
+	).Beta().Param(ParamString("format", "The format of the target string.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		layout, err := args.FieldString("format")
+		if err != nil {
+			return nil, err
+		}
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			var str string
 			switch t := v.(type) {
@@ -1200,14 +1206,11 @@ var _ = registerOldParamsSimpleMethod(
 			return ut.Format(time.RFC3339Nano), nil
 		}, nil
 	},
-	true,
-	oldParamsExpectNArgs(1),
-	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"parse_timestamp_strptime", "",
 	).InCategory(
@@ -1219,9 +1222,12 @@ var _ = registerOldParamsSimpleMethod(
 			`{"doc":{"timestamp":"2020-Aug-14"}}`,
 			`{"doc":{"timestamp":"2020-08-14T00:00:00Z"}}`,
 		),
-	).Beta(),
-	func(args ...interface{}) (simpleMethod, error) {
-		layout := args[0].(string)
+	).Beta().Param(ParamString("format", "The format of the target string.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		layout, err := args.FieldString("format")
+		if err != nil {
+			return nil, err
+		}
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			var str string
 			switch t := v.(type) {
@@ -1239,9 +1245,6 @@ var _ = registerOldParamsSimpleMethod(
 			return ut.Format(time.RFC3339Nano), nil
 		}, nil
 	},
-	true,
-	oldParamsExpectNArgs(1),
-	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
@@ -1357,7 +1360,7 @@ var _ = registerSimpleMethod(
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"format_timestamp_strftime", "",
 	).InCategory(
@@ -1379,13 +1382,21 @@ var _ = registerOldParamsSimpleMethod(
 			`{"created_at":"2020-08-14T11:50:26.371Z"}`,
 			`{"something_at":"2020-Aug-14 11:50:26"}`,
 		),
-	).Beta(),
-	func(args ...interface{}) (simpleMethod, error) {
-		layout := args[0].(string)
+	).Beta().
+		Param(ParamString("format", "The output format to use.")).
+		Param(ParamString("tz", "An optional timezone to use, otherwise the timezone of the input string is used.").Optional()),
+	func(args *ParsedParams) (simpleMethod, error) {
+		layout, err := args.FieldString("format")
+		if err != nil {
+			return nil, err
+		}
 		var timezone *time.Location
-		if len(args) > 1 {
-			var err error
-			if timezone, err = time.LoadLocation(args[1].(string)); err != nil {
+		tzOpt, err := args.FieldOptionalString("tz")
+		if err != nil {
+			return nil, err
+		}
+		if tzOpt != nil {
+			if timezone, err = time.LoadLocation(*tzOpt); err != nil {
 				return nil, fmt.Errorf("failed to parse timezone location name: %w", err)
 			}
 		}
@@ -1400,10 +1411,6 @@ var _ = registerOldParamsSimpleMethod(
 			return timefmt.Format(target, layout), nil
 		}, nil
 	},
-	true,
-	oldParamsExpectBetweenNAndMArgs(1, 2),
-	oldParamsExpectStringArg(0),
-	oldParamsExpectStringArg(1),
 )
 
 //------------------------------------------------------------------------------
@@ -1502,7 +1509,7 @@ var _ = registerSimpleMethod(
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"replace", "",
 	).InCategory(
@@ -1513,31 +1520,34 @@ var _ = registerOldParamsSimpleMethod(
 			`{"value":"The foo ate my homework"}`,
 			`{"new_value":"The dog ate my homework"}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
-		match := args[0].(string)
-		matchB := []byte(match)
-		with := args[1].(string)
-		withB := []byte(with)
+	).
+		Param(ParamString("old", "A string to match against.")).
+		Param(ParamString("new", "A string to replace with.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		old, err := args.FieldString("old")
+		if err != nil {
+			return nil, err
+		}
+		new, err := args.FieldString("new")
+		if err != nil {
+			return nil, err
+		}
+		oldB, newB := []byte(old), []byte(new)
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			switch t := v.(type) {
 			case string:
-				return strings.ReplaceAll(t, match, with), nil
+				return strings.ReplaceAll(t, old, new), nil
 			case []byte:
-				return bytes.ReplaceAll(t, matchB, withB), nil
+				return bytes.ReplaceAll(t, oldB, newB), nil
 			}
 			return nil, NewTypeError(v, ValueString)
 		}, nil
 	},
-	true,
-	oldParamsExpectNArgs(2),
-	oldParamsExpectStringArg(0),
-	oldParamsExpectStringArg(1),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"replace_many", "",
 	).InCategory(
@@ -1553,11 +1563,11 @@ var _ = registerOldParamsSimpleMethod(
 			`{"value":"<i>Hello</i> <b>World</b>"}`,
 			`{"new_value":"&lt;i&gt;Hello&lt;/i&gt; &lt;b&gt;World&lt;/b&gt;"}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
-		items, ok := args[0].([]interface{})
-		if !ok {
-			return nil, NewTypeError(args[0], ValueArray)
+	).Param(ParamArray("values", "An array of values, each even value will be replaced with the following odd value.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		items, err := args.FieldArray("values")
+		if err != nil {
+			return nil, err
 		}
 		if len(items)%2 != 0 {
 			return nil, fmt.Errorf("invalid arg, replacements should be in pairs and must therefore be even: %v", items)
@@ -1595,13 +1605,11 @@ var _ = registerOldParamsSimpleMethod(
 			return nil, NewTypeError(v, ValueString)
 		}, nil
 	},
-	true,
-	oldParamsExpectNArgs(1),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"re_find_all", "",
 	).InCategory(
@@ -1612,9 +1620,13 @@ var _ = registerOldParamsSimpleMethod(
 			`{"value":"paranormal"}`,
 			`{"matches":["ar","an","al"]}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
-		re, err := regexp.Compile(args[0].(string))
+	).Param(ParamString("pattern", "The pattern to match against.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		reStr, err := args.FieldString("pattern")
+		if err != nil {
+			return nil, err
+		}
+		re, err := regexp.Compile(reStr)
 		if err != nil {
 			return nil, err
 		}
@@ -1639,14 +1651,11 @@ var _ = registerOldParamsSimpleMethod(
 			return result, nil
 		}, nil
 	},
-	true,
-	oldParamsExpectNArgs(1),
-	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"re_find_all_submatch", "",
 	).InCategory(
@@ -1657,9 +1666,13 @@ var _ = registerOldParamsSimpleMethod(
 			`{"value":"-axxb-ab-"}`,
 			`{"matches":[["axxb","xx"],["ab",""]]}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
-		re, err := regexp.Compile(args[0].(string))
+	).Param(ParamString("pattern", "The pattern to match against.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		reStr, err := args.FieldString("pattern")
+		if err != nil {
+			return nil, err
+		}
+		re, err := regexp.Compile(reStr)
 		if err != nil {
 			return nil, err
 		}
@@ -1692,14 +1705,11 @@ var _ = registerOldParamsSimpleMethod(
 			return result, nil
 		}, nil
 	},
-	true,
-	oldParamsExpectNArgs(1),
-	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"re_find_object", "",
 	).InCategory(
@@ -1715,9 +1725,13 @@ var _ = registerOldParamsSimpleMethod(
 			`{"value":"option1: value1"}`,
 			`{"matches":{"0":"option1: value1","key":"option1","value":"value1"}}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
-		re, err := regexp.Compile(args[0].(string))
+	).Param(ParamString("pattern", "The pattern to match against.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		reStr, err := args.FieldString("pattern")
+		if err != nil {
+			return nil, err
+		}
+		re, err := regexp.Compile(reStr)
 		if err != nil {
 			return nil, err
 		}
@@ -1748,14 +1762,11 @@ var _ = registerOldParamsSimpleMethod(
 			return result, nil
 		}, nil
 	},
-	true,
-	oldParamsExpectNArgs(1),
-	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"re_find_all_object", "",
 	).InCategory(
@@ -1771,9 +1782,13 @@ var _ = registerOldParamsSimpleMethod(
 			`{"value":"option1: value1\noption2: value2\noption3: value3"}`,
 			`{"matches":[{"0":"option1: value1","key":"option1","value":"value1"},{"0":"option2: value2","key":"option2","value":"value2"},{"0":"option3: value3","key":"option3","value":"value3"}]}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
-		re, err := regexp.Compile(args[0].(string))
+	).Param(ParamString("pattern", "The pattern to match against.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		reStr, err := args.FieldString("pattern")
+		if err != nil {
+			return nil, err
+		}
+		re, err := regexp.Compile(reStr)
 		if err != nil {
 			return nil, err
 		}
@@ -1814,14 +1829,11 @@ var _ = registerOldParamsSimpleMethod(
 			return result, nil
 		}, nil
 	},
-	true,
-	oldParamsExpectNArgs(1),
-	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"re_match", "",
 	).InCategory(
@@ -1834,9 +1846,13 @@ var _ = registerOldParamsSimpleMethod(
 			`{"value":"there are ten puppies"}`,
 			`{"matches":false}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
-		re, err := regexp.Compile(args[0].(string))
+	).Param(ParamString("pattern", "The pattern to match against.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		reStr, err := args.FieldString("pattern")
+		if err != nil {
+			return nil, err
+		}
+		re, err := regexp.Compile(reStr)
 		if err != nil {
 			return nil, err
 		}
@@ -1853,14 +1869,11 @@ var _ = registerOldParamsSimpleMethod(
 			return result, nil
 		}, nil
 	},
-	true,
-	oldParamsExpectNArgs(1),
-	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"re_replace", "",
 	).InCategory(
@@ -1871,13 +1884,22 @@ var _ = registerOldParamsSimpleMethod(
 			`{"value":"foo ADD 70"}`,
 			`{"new_value":"foo +(70)"}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
-		re, err := regexp.Compile(args[0].(string))
+	).
+		Param(ParamString("pattern", "The pattern to match against.")).
+		Param(ParamString("value", "The value to replace with.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		reStr, err := args.FieldString("pattern")
 		if err != nil {
 			return nil, err
 		}
-		with := args[1].(string)
+		re, err := regexp.Compile(reStr)
+		if err != nil {
+			return nil, err
+		}
+		with, err := args.FieldString("value")
+		if err != nil {
+			return nil, err
+		}
 		withBytes := []byte(with)
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			var result string
@@ -1892,15 +1914,11 @@ var _ = registerOldParamsSimpleMethod(
 			return result, nil
 		}, nil
 	},
-	true,
-	oldParamsExpectNArgs(2),
-	oldParamsExpectStringArg(0),
-	oldParamsExpectStringArg(1),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"split", "",
 	).InCategory(
@@ -1911,9 +1929,12 @@ var _ = registerOldParamsSimpleMethod(
 			`{"value":"foo,bar,baz"}`,
 			`{"new_value":["foo","bar","baz"]}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
-		delim := args[0].(string)
+	).Param(ParamString("delimiter", "The delimiter to split with.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		delim, err := args.FieldString("delimiter")
+		if err != nil {
+			return nil, err
+		}
 		delimB := []byte(delim)
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			switch t := v.(type) {
@@ -1935,9 +1956,6 @@ var _ = registerOldParamsSimpleMethod(
 			return nil, NewTypeError(v, ValueString)
 		}, nil
 	},
-	true,
-	oldParamsExpectNArgs(1),
-	oldParamsExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
@@ -1968,7 +1986,7 @@ var _ = registerSimpleMethod(
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"strip_html", "",
 	).InCategory(
@@ -1984,16 +2002,17 @@ var _ = registerOldParamsSimpleMethod(
 			`{"value":"<article><p>the plain <strong>old text</strong></p></article>"}`,
 			`{"stripped":"<article>the plain old text</article>"}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
+	).Param(ParamArray("preserve", "An optional array of element types to preserve in the output.").Optional()),
+	func(args *ParsedParams) (simpleMethod, error) {
 		p := bluemonday.NewPolicy()
-		if len(args) > 0 {
-			tags, ok := args[0].([]interface{})
-			if !ok {
-				return nil, NewTypeError(args[0], ValueArray)
-			}
-			tagStrs := make([]string, len(tags))
-			for i, ele := range tags {
+		tags, err := args.FieldOptionalArray("preserve")
+		if err != nil {
+			return nil, err
+		}
+		if tags != nil {
+			tagStrs := make([]string, len(*tags))
+			for i, ele := range *tags {
+				var ok bool
 				if tagStrs[i], ok = ele.(string); !ok {
 					return nil, fmt.Errorf("invalid arg at index %v: %w", i, NewTypeError(ele, ValueString))
 				}
@@ -2010,13 +2029,11 @@ var _ = registerOldParamsSimpleMethod(
 			return nil, NewTypeError(v, ValueString)
 		}, nil
 	},
-	true,
-	oldParamsExpectOneOrZeroArgs(),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"trim", "",
 	).InCategory(
@@ -2028,29 +2045,26 @@ root.description = this.description.trim()`,
 			`{"description":"  something happened and its amazing! ","title":"!!!watch out!?"}`,
 			`{"description":"something happened and its amazing!","title":"watch out"}`,
 		),
-	),
-	func(args ...interface{}) (simpleMethod, error) {
-		var cutset string
-		if len(args) > 0 {
-			cutset = args[0].(string)
+	).Param(ParamString("cutset", "An optional string of characters to trim from the target value.").Optional()),
+	func(args *ParsedParams) (simpleMethod, error) {
+		cutset, err := args.FieldOptionalString("cutset")
+		if err != nil {
+			return nil, err
 		}
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			switch t := v.(type) {
 			case string:
-				if cutset == "" {
+				if cutset == nil {
 					return strings.TrimSpace(t), nil
 				}
-				return strings.Trim(t, cutset), nil
+				return strings.Trim(t, *cutset), nil
 			case []byte:
-				if cutset == "" {
+				if cutset == nil {
 					return bytes.TrimSpace(t), nil
 				}
-				return bytes.Trim(t, cutset), nil
+				return bytes.Trim(t, *cutset), nil
 			}
 			return nil, NewTypeError(v, ValueString)
 		}, nil
 	},
-	true,
-	oldParamsExpectOneOrZeroArgs(),
-	oldParamsExpectStringArg(0),
 )
