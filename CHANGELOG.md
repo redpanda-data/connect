@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.54.1 - 2021-09-03
+
+### Fixed
+
+- Upgraded dependencies, preventing a crash on start up caused by MacOS builds made with Go 1.17.
+
 ## 3.54.0 - 2021-09-01
 
 ### Added
