@@ -1,18 +1,28 @@
 package query
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+func listMethods(m *MethodSet) []string {
+	methodNames := make([]string, 0, len(m.constructors))
+	for k := range m.constructors {
+		methodNames = append(methodNames, k)
+	}
+	sort.Strings(methodNames)
+	return methodNames
+}
+
 func TestMethodSetWithout(t *testing.T) {
 	setOne := AllMethods
 	setTwo := setOne.Without("explode")
 
-	assert.Contains(t, setOne.List(), "explode")
-	assert.NotContains(t, setTwo.List(), "explode")
+	assert.Contains(t, listMethods(setOne), "explode")
+	assert.NotContains(t, listMethods(setTwo), "explode")
 
 	explodeParamSpec, _ := setOne.Params("explode")
 	explodeParams, err := explodeParamSpec.PopulateNameless("foo.bar")

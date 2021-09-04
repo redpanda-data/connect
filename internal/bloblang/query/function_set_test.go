@@ -1,17 +1,27 @@
 package query
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
+func listFunctions(f *FunctionSet) []string {
+	functionNames := make([]string, 0, len(f.constructors))
+	for k := range f.constructors {
+		functionNames = append(functionNames, k)
+	}
+	sort.Strings(functionNames)
+	return functionNames
+}
+
 func TestFunctionSetWithout(t *testing.T) {
 	setOne := AllFunctions
 	setTwo := setOne.Without("uuid_v4")
 
-	assert.Contains(t, setOne.List(), "uuid_v4")
-	assert.NotContains(t, setTwo.List(), "uuid_v4")
+	assert.Contains(t, listFunctions(setOne), "uuid_v4")
+	assert.NotContains(t, listFunctions(setTwo), "uuid_v4")
 
 	_, err := setOne.Init("uuid_v4", nil)
 	assert.NoError(t, err)
@@ -27,11 +37,11 @@ func TestFunctionSetOnlyPure(t *testing.T) {
 	setOne := AllFunctions
 	setTwo := setOne.OnlyPure()
 
-	assert.Contains(t, setOne.List(), "env")
-	assert.NotContains(t, setTwo.List(), "env")
+	assert.Contains(t, listFunctions(setOne), "env")
+	assert.NotContains(t, listFunctions(setTwo), "env")
 
-	assert.Contains(t, setOne.List(), "file")
-	assert.NotContains(t, setTwo.List(), "file")
+	assert.Contains(t, listFunctions(setOne), "file")
+	assert.NotContains(t, listFunctions(setTwo), "file")
 }
 
 func TestFunctionBadName(t *testing.T) {

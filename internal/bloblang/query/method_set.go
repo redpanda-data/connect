@@ -50,21 +50,11 @@ func (m *MethodSet) Docs() []MethodSpec {
 	return specSlice
 }
 
-// List returns a slice of method names in alphabetical order.
-func (m *MethodSet) List() []string {
-	methodNames := make([]string, 0, len(m.constructors))
-	for k := range m.constructors {
-		methodNames = append(methodNames, k)
-	}
-	sort.Strings(methodNames)
-	return methodNames
-}
-
 // Params attempts to obtain an argument specification for a given method type.
 func (m *MethodSet) Params(name string) (Params, error) {
 	spec, exists := m.specs[name]
 	if !exists {
-		return OldStyleParams(), badMethodErr(name)
+		return VariadicParams(), badMethodErr(name)
 	}
 	return spec.Params, nil
 }
@@ -130,11 +120,6 @@ func InitMethodHelper(name string, target Function, args ...interface{}) (Functi
 		return nil, err
 	}
 	return AllMethods.Init(name, target, parsedArgs)
-}
-
-// ListMethods returns a slice of method names, sorted alphabetically.
-func ListMethods() []string {
-	return AllMethods.List()
 }
 
 // MethodDocs returns a slice of specs, one for each method.

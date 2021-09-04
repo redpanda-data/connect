@@ -25,14 +25,6 @@ func TestParamsValidation(t *testing.T) {
 				Add(ParamObject("seventh", "")),
 		},
 		{
-			name: "old style with fields",
-			params: OldStyleParams().
-				Add(ParamString("first", "")).
-				Add(ParamInt64("second", "").Default(5)).
-				Add(ParamBool("third", "").Default(true)),
-			errContains: "cannot add named parameters to an old style",
-		},
-		{
 			name: "variadic with fields",
 			params: VariadicParams().
 				Add(ParamString("first", "")).
@@ -198,16 +190,6 @@ func TestParamsNameless(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Default(5)).
 				Add(ParamBool("third", "")),
-			input: []interface{}{
-				"foo", NewLiteralFunction("testing", int64(7)), false,
-			},
-			output: []interface{}{
-				"foo", int64(7), false,
-			},
-		},
-		{
-			name:   "old style args expanded",
-			params: OldStyleParams(),
 			input: []interface{}{
 				"foo", NewLiteralFunction("testing", int64(7)), false,
 			},
@@ -388,20 +370,6 @@ func TestParamsNamed(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestOldStyleParams(t *testing.T) {
-	p := Params{oldStyle: true}
-
-	exp := []interface{}{
-		"foo", 20, 34.5, true,
-	}
-	res, err := p.processNameless(exp)
-	require.NoError(t, err)
-	assert.Equal(t, exp, res)
-
-	_, err = p.processNamed(nil)
-	require.Error(t, err)
 }
 
 func TestDynamicArgs(t *testing.T) {

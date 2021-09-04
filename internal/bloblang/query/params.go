@@ -11,17 +11,17 @@ import (
 
 // ParamDefinition describes a single parameter for a function or method.
 type ParamDefinition struct {
-	Name        string
-	Description string
-	ValueType   ValueType
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	ValueType   ValueType `json:"type"`
 
 	castScalarsToLiteral bool
 
 	// IsOptional is implicit when there's a DefaultValue. However, there are
 	// times when a parameter is used to change behaviour without having a
 	// default.
-	IsOptional   bool
-	DefaultValue *interface{}
+	IsOptional   bool         `json:"is_optional"`
+	DefaultValue *interface{} `json:"default,omitempty"`
 }
 
 func (d ParamDefinition) validate() error {
@@ -164,9 +164,8 @@ func (d ParamDefinition) parseArgValue(v interface{}) (interface{}, error) {
 
 // Params defines the expected arguments of a function or method.
 type Params struct {
-	oldStyle    bool
-	variadic    bool
-	Definitions []ParamDefinition
+	Variadic    bool              `json:"variadic"`
+	Definitions []ParamDefinition `json:"named,omitempty"`
 
 	// Used by parsed param frames, we instantiate this here so that it's
 	// allocated only once at parse time rather than execution time.
@@ -184,18 +183,7 @@ func NewParams() Params {
 // nameless arguments are considered valid.
 func VariadicParams() Params {
 	return Params{
-		variadic:    true,
-		nameToIndex: map[string]int{},
-	}
-}
-
-// OldStyleParams returns a parameters spec that simply passes through arguments
-// for the old style constructors to chomp on.
-//
-// TODO: Eventually phase this out.
-func OldStyleParams() Params {
-	return Params{
-		oldStyle:    true,
+		Variadic:    true,
 		nameToIndex: map[string]int{},
 	}
 }
@@ -240,10 +228,7 @@ func (p Params) PopulateNamed(args map[string]interface{}) (*ParsedParams, error
 }
 
 func (p Params) validate() error {
-	if p.oldStyle && len(p.Definitions) > 0 {
-		return errors.New("cannot add named parameters to an old style constructor")
-	}
-	if p.variadic && len(p.Definitions) > 0 {
+	if p.Variadic && len(p.Definitions) > 0 {
 		return errors.New("cannot add named parameters to a variadic parameter definition")
 	}
 
@@ -267,10 +252,7 @@ type dynamicArgIndex struct {
 }
 
 func (p Params) gatherDynamicArgs(args []interface{}) (dynArgs []dynamicArgIndex) {
-	if p.oldStyle {
-		return nil
-	}
-	if p.variadic {
+	if p.Variadic {
 		for i, arg := range args {
 			if fn, isFn := arg.(Function); isFn {
 				dynArgs = append(dynArgs, dynamicArgIndex{index: i, fn: fn})
@@ -300,7 +282,7 @@ func expandLiteralArgs(args []interface{}) {
 // processNameless attempts to validate a list of unnamed arguments, and
 // populates elements with default values if they are omitted.
 func (p Params) processNameless(args []interface{}) ([]interface{}, error) {
-	if p.oldStyle || p.variadic {
+	if p.Variadic {
 		expandLiteralArgs(args)
 		return args, nil
 	}
@@ -358,7 +340,7 @@ func (p Params) processNameless(args []interface{}) ([]interface{}, error) {
 // processNamed attempts to validate a map of named arguments, and populates
 // elements with default values if they are omitted.
 func (p Params) processNamed(args map[string]interface{}) ([]interface{}, error) {
-	if p.oldStyle || p.variadic {
+	if p.Variadic {
 		return nil, errors.New("named arguments are not supported")
 	}
 

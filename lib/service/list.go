@@ -25,8 +25,8 @@ type fullSchema struct {
 	Metrics           []docs.ComponentSpec `json:"metrics,omitempty"`
 	Tracers           []docs.ComponentSpec `json:"tracers,omitempty"`
 	conditions        []string
-	BloblangFunctions []string `json:"bloblang-functions,omitempty"`
-	BloblangMethods   []string `json:"bloblang-methods,omitempty"`
+	BloblangFunctions []query.FunctionSpec `json:"bloblang-functions,omitempty"`
+	BloblangMethods   []query.MethodSpec   `json:"bloblang-methods,omitempty"`
 }
 
 func (f *fullSchema) flattened() map[string][]string {
@@ -34,6 +34,24 @@ func (f *fullSchema) flattened() map[string][]string {
 		names := []string{}
 		for _, c := range components {
 			if c.Status != docs.StatusDeprecated {
+				names = append(names, c.Name)
+			}
+		}
+		return names
+	}
+	justNamesBloblFuncs := func(fns []query.FunctionSpec) []string {
+		names := []string{}
+		for _, c := range fns {
+			if c.Status != query.StatusDeprecated {
+				names = append(names, c.Name)
+			}
+		}
+		return names
+	}
+	justNamesBloblMethods := func(fns []query.MethodSpec) []string {
+		names := []string{}
+		for _, c := range fns {
+			if c.Status != query.StatusDeprecated {
 				names = append(names, c.Name)
 			}
 		}
@@ -49,8 +67,8 @@ func (f *fullSchema) flattened() map[string][]string {
 		"metrics":            justNames(f.Metrics),
 		"tracers":            justNames(f.Tracers),
 		"conditions":         f.conditions,
-		"bloblang-functions": f.BloblangFunctions,
-		"bloblang-methods":   f.BloblangMethods,
+		"bloblang-functions": justNamesBloblFuncs(f.BloblangFunctions),
+		"bloblang-methods":   justNamesBloblMethods(f.BloblangMethods),
 	}
 }
 
@@ -70,8 +88,8 @@ func listComponents(c *cli.Context) {
 		RateLimits:        bundle.AllRateLimits.Docs(),
 		Metrics:           bundle.AllMetrics.Docs(),
 		Tracers:           bundle.AllTracers.Docs(),
-		BloblangFunctions: query.ListFunctions(),
-		BloblangMethods:   query.ListMethods(),
+		BloblangFunctions: query.FunctionDocs(),
+		BloblangMethods:   query.MethodDocs(),
 	}
 	for t := range condition.Constructors {
 		schema.conditions = append(schema.conditions, t)

@@ -54,21 +54,11 @@ func (f *FunctionSet) Docs() []FunctionSpec {
 	return specSlice
 }
 
-// List returns a slice of function names in alphabetical order.
-func (f *FunctionSet) List() []string {
-	functionNames := make([]string, 0, len(f.constructors))
-	for k := range f.constructors {
-		functionNames = append(functionNames, k)
-	}
-	sort.Strings(functionNames)
-	return functionNames
-}
-
 // Params attempts to obtain an argument specification for a given function.
 func (f *FunctionSet) Params(name string) (Params, error) {
 	spec, exists := f.specs[name]
 	if !exists {
-		return OldStyleParams(), badFunctionErr(name)
+		return VariadicParams(), badFunctionErr(name)
 	}
 	return spec.Params, nil
 }
@@ -172,11 +162,6 @@ func InitFunctionHelper(name string, args ...interface{}) (Function, error) {
 // FunctionDocs returns a slice of specs, one for each function.
 func FunctionDocs() []FunctionSpec {
 	return AllFunctions.Docs()
-}
-
-// ListFunctions returns a slice of function names, sorted alphabetically.
-func ListFunctions() []string {
-	return AllFunctions.List()
 }
 
 //------------------------------------------------------------------------------

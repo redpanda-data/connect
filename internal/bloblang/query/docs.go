@@ -3,9 +3,9 @@ package query
 // ExampleSpec provides a mapping example and some input/output results to
 // display.
 type ExampleSpec struct {
-	Mapping string
-	Summary string
-	Results [][2]string
+	Mapping string      `json:"mapping"`
+	Summary string      `json:"summary"`
+	Results [][2]string `json:"results"`
 }
 
 // NewExampleSpec creates a new example spec.
@@ -53,26 +53,26 @@ var (
 // FunctionSpec describes a Bloblang function.
 type FunctionSpec struct {
 	// The release status of the function.
-	Status Status
+	Status Status `json:"status"`
 
 	// A category to place the function within.
-	Category FunctionCategory
+	Category FunctionCategory `json:"category"`
 
 	// Name of the function (as it appears in config).
-	Name string
+	Name string `json:"name"`
 
 	// Description of the functions purpose (in markdown).
-	Description string
+	Description string `json:"description"`
 
 	// Params defines the expected arguments of the function.
-	Params Params
+	Params Params `json:"params"`
 
 	// Examples shows general usage for the function.
-	Examples []ExampleSpec
+	Examples []ExampleSpec `json:"examples,omitempty"`
 
 	// Impure indicates that a function accesses or interacts with the outter
 	// environment, and is therefore unsafe to execute in shared environments.
-	Impure bool
+	Impure bool `json:"impure"`
 }
 
 // NewFunctionSpec creates a new function spec.
@@ -157,22 +157,22 @@ type MethodCatSpec struct {
 // MethodSpec describes a Bloblang method.
 type MethodSpec struct {
 	// The release status of the function.
-	Status Status
+	Status Status `json:"status"`
 
 	// Name of the method (as it appears in config).
-	Name string
+	Name string `json:"name"`
 
 	// Description of the method purpose (in markdown).
-	Description string
+	Description string `json:"description"`
 
 	// Params defines the expected arguments of the method.
-	Params Params
+	Params Params `json:"params"`
 
 	// Examples shows general usage for the method.
-	Examples []ExampleSpec
+	Examples []ExampleSpec `json:"examples,omitempty"`
 
 	// Categories that this method fits within.
-	Categories []MethodCatSpec
+	Categories []MethodCatSpec `json:"categories"`
 }
 
 // NewMethodSpec creates a new method spec.
