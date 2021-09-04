@@ -85,15 +85,18 @@ func (e *Environment) RegisterMethod(name string, ctor MethodConstructor) error 
 
 // RegisterMethodV2 adds a new Bloblang method to the environment using a
 // provided ParamsSpec to define the name of the method and its parameters.
-func (e *Environment) RegisterMethodV2(spec ParamsSpec, ctor MethodConstructorV2) error {
-	iSpec := query.NewMethodSpec(spec.name, spec.description).InCategory(query.MethodCategoryPlugin, "")
+//
+// Plugin names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
+// (snake case).
+func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor MethodConstructorV2) error {
+	iSpec := query.NewMethodSpec(name, spec.description).InCategory(query.MethodCategoryPlugin, "")
 	iSpec.Params = spec.params
 	return e.env.RegisterMethod(iSpec, func(target query.Function, args *query.ParsedParams) (query.Function, error) {
 		fn, err := ctor(&ParsedParams{par: args})
 		if err != nil {
 			return nil, err
 		}
-		return query.ClosureFunction("method "+spec.name, func(ctx query.FunctionContext) (interface{}, error) {
+		return query.ClosureFunction("method "+name, func(ctx query.FunctionContext) (interface{}, error) {
 			v, err := target.Exec(ctx)
 			if err != nil {
 				return nil, err
@@ -122,15 +125,18 @@ func (e *Environment) RegisterFunction(name string, ctor FunctionConstructor) er
 
 // RegisterFunctionV2 adds a new Bloblang function to the environment using a
 // provided ParamsSpec to define the name of the function and its parameters.
-func (e *Environment) RegisterFunctionV2(spec ParamsSpec, ctor FunctionConstructorV2) error {
-	iSpec := query.NewFunctionSpec(query.FunctionCategoryPlugin, spec.name, spec.description)
+//
+// Plugin names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
+// (snake case).
+func (e *Environment) RegisterFunctionV2(name string, spec *PluginSpec, ctor FunctionConstructorV2) error {
+	iSpec := query.NewFunctionSpec(query.FunctionCategoryPlugin, name, spec.description)
 	iSpec.Params = spec.params
 	return e.env.RegisterFunction(iSpec, func(args *query.ParsedParams) (query.Function, error) {
 		fn, err := ctor(&ParsedParams{par: args})
 		if err != nil {
 			return nil, err
 		}
-		return query.ClosureFunction("function "+spec.name, func(ctx query.FunctionContext) (interface{}, error) {
+		return query.ClosureFunction("function "+name, func(ctx query.FunctionContext) (interface{}, error) {
 			return fn()
 		}, nil), nil
 	})
@@ -177,9 +183,11 @@ func RegisterMethod(name string, ctor MethodConstructor) error {
 	return GlobalEnvironment().RegisterMethod(name, ctor)
 }
 
-// RegisterMethodV2 adds a new Bloblang method to the global environment.
-func RegisterMethodV2(spec ParamsSpec, ctor MethodConstructorV2) error {
-	return GlobalEnvironment().RegisterMethodV2(spec, ctor)
+// RegisterMethodV2 adds a new Bloblang method to the global environment. All
+// method names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
+// (snake case).
+func RegisterMethodV2(name string, spec *PluginSpec, ctor MethodConstructorV2) error {
+	return GlobalEnvironment().RegisterMethodV2(name, spec, ctor)
 }
 
 // RegisterFunction adds a new Bloblang function to the global environment. All
@@ -190,6 +198,8 @@ func RegisterFunction(name string, ctor FunctionConstructor) error {
 }
 
 // RegisterFunctionV2 adds a new Bloblang function to the global environment.
-func RegisterFunctionV2(spec ParamsSpec, ctor FunctionConstructorV2) error {
-	return GlobalEnvironment().RegisterFunctionV2(spec, ctor)
+// All function names must match the regular expression
+// /^[a-z0-9]+(_[a-z0-9]+)*$/ (snake case).
+func RegisterFunctionV2(name string, spec *PluginSpec, ctor FunctionConstructorV2) error {
+	return GlobalEnvironment().RegisterFunctionV2(name, spec, ctor)
 }
