@@ -279,11 +279,18 @@ root.doc.received_at = now()
 root.doc.host = hostname()
 ```
 
-You can find a full list of functions in [this doc][blobl.functions].
+Functions support both named and nameless style arguments:
+
+```coffee
+root.values_one = range(start: 0, stop: this.max, step: 2)
+root.values_two = range(0, this.max, 2)
+```
+
+You can find a full list of functions and their parameters in [the functions page][blobl.functions].
 
 ## Methods
 
-Methods provide most of the power in Bloblang as they allow you to augment query values and can be added to any expression:
+Methods are similar to functions but enact upon a target value, these provide most of the power in Bloblang as they allow you to augment query values and can be added to any expression (including other methods):
 
 ```coffee
 root.doc.id = this.thing.id.string().catch(uuid_v4())
@@ -295,7 +302,14 @@ root.doc.reduced_nums = this.thing.nums.map_each(num -> if num < 10 {
 root.has_good_taste = ["pikachu","mewtwo","magmar"].contains(this.user.fav_pokemon)
 ```
 
-You can find a full list of methods in [this doc][blobl.methods].
+Methods also support both named and nameless style arguments:
+
+```coffee
+root.foo_one = this.(bar | baz).trim().replace(old: "dog", new: "cat")
+root.foo_two = this.(bar | baz).trim().replace("dog", "cat")
+```
+
+You can find a full list of methods and their parameters in [the methods page][blobl.methods].
 
 ## Maps
 

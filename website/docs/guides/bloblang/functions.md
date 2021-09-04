@@ -23,6 +23,13 @@ root.doc.received_at = now()
 root.doc.host = hostname()
 ```
 
+Functions support both named and nameless style arguments:
+
+```coffee
+root.values_one = range(start: 0, stop: this.max, step: 2)
+root.values_two = range(0, this.max, 2)
+```
+
 ## General
 
 ### `count`

@@ -135,6 +135,13 @@ root.doc.received_at = now()
 root.doc.host = hostname()
 ` + "```" + `
 
+Functions support both named and nameless style arguments:
+
+` + "```coffee" + `
+root.values_one = range(start: 0, stop: this.max, step: 2)
+root.values_two = range(0, this.max, 2)
+` + "```" + `
+
 {{range $i, $cat := .Categories -}}
 ## {{$cat.Name}}
 
@@ -256,6 +263,13 @@ root.doc.reduced_nums = this.thing.nums.map_each(num -> if num < 10 {
   num - 10
 })
 root.has_good_taste = ["pikachu","mewtwo","magmar"].contains(this.user.fav_pokemon)
+` + "```" + `
+
+Methods support both named and nameless style arguments:
+
+` + "```coffee" + `
+root.foo_one = this.(bar | baz).trim().replace(old: "dog", new: "cat")
+root.foo_two = this.(bar | baz).trim().replace("dog", "cat")
 ` + "```" + `
 
 {{if gt (len .General) 0 -}}

@@ -28,6 +28,13 @@ root.doc.reduced_nums = this.thing.nums.map_each(num -> if num < 10 {
 root.has_good_taste = ["pikachu","mewtwo","magmar"].contains(this.user.fav_pokemon)
 ```
 
+Methods support both named and nameless style arguments:
+
+```coffee
+root.foo_one = this.(bar | baz).trim().replace(old: "dog", new: "cat")
+root.foo_two = this.(bar | baz).trim().replace("dog", "cat")
+```
+
 ## General
 
 ### `apply`
