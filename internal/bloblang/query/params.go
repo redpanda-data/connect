@@ -380,16 +380,25 @@ func (p Params) processNamed(args map[string]interface{}) ([]interface{}, error)
 			return nil, fmt.Errorf("field %v: %w", param.Name, err)
 		}
 	}
+
 	if len(args) > 0 {
 		var unexpected []string
 		for k := range args {
 			unexpected = append(unexpected, k)
 		}
 		sort.Strings(unexpected)
-		if len(unexpected) == 1 {
-			return nil, fmt.Errorf("unknown parameter %v", unexpected[0])
+
+		optionsStr := ""
+		if len(missingParams) == 1 {
+			optionsStr = fmt.Sprintf(", did you mean %v?", missingParams[0])
+		} else if len(missingParams) > 1 {
+			optionsStr = fmt.Sprintf(", expected %v", strings.Join(missingParams, ", "))
 		}
-		return nil, fmt.Errorf("unknown parameters %v", strings.Join(unexpected, ", "))
+
+		if len(unexpected) == 1 {
+			return nil, fmt.Errorf("unknown parameter %v%v", unexpected[0], optionsStr)
+		}
+		return nil, fmt.Errorf("unknown parameters %v%v", strings.Join(unexpected, ", "), optionsStr)
 	}
 
 	if len(missingParams) == 1 {

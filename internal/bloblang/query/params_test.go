@@ -301,6 +301,26 @@ func TestParamsNamed(t *testing.T) {
 			errContains: "unknown parameter fourth",
 		},
 		{
+			name: "typo arg missing field",
+			params: NewParams().
+				Add(ParamString("first", "")).
+				Add(ParamInt64("second", "")).
+				Add(ParamBool("third", "").Default(true)),
+			input: map[string]interface{}{
+				"first": "foo", "seconde": 10, "third": false},
+			errContains: "unknown parameter seconde, did you mean second?",
+		},
+		{
+			name: "typo arg missing fields",
+			params: NewParams().
+				Add(ParamString("first", "")).
+				Add(ParamInt64("second", "")).
+				Add(ParamBool("third", "")),
+			input: map[string]interface{}{
+				"first": "foo", "seconde": 10, "thirde": false},
+			errContains: "unknown parameters seconde, thirde, expected second, third",
+		},
+		{
 			name: "bad type args",
 			params: NewParams().
 				Add(ParamString("first", "")).
