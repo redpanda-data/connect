@@ -174,7 +174,7 @@ func (g *gcpCloudStorageOutput) ConnectWithContext(ctx context.Context) error {
 	defer g.connMut.Unlock()
 
 	var err error
-	g.client, err = NewStorageClient(ctx)
+	g.client, err = storage.NewClient(ctx)
 	if err != nil {
 		return err
 	}
