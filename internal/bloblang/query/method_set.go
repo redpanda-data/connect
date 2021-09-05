@@ -1,6 +1,7 @@
 package query
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 )
@@ -8,6 +9,7 @@ import (
 // MethodSet contains an explicit set of methods to be available in a Bloblang
 // query.
 type MethodSet struct {
+	disableCtors bool
 	constructors map[string]MethodCtor
 	specs        map[string]MethodSpec
 }
@@ -66,6 +68,9 @@ func (m *MethodSet) Init(name string, target Function, args *ParsedParams) (Func
 	if !exists {
 		return nil, badMethodErr(name)
 	}
+	if m.disableCtors {
+		return disabledMethod(name), nil
+	}
 	return wrapMethodCtorWithDynamicArgs(name, target, args, ctor)
 }
 
@@ -90,7 +95,20 @@ func (m *MethodSet) Without(methods ...string) *MethodSet {
 			specs[v.Name] = v
 		}
 	}
-	return &MethodSet{constructors, specs}
+	return &MethodSet{m.disableCtors, constructors, specs}
+}
+
+// Deactivated returns a version of the method set where constructors are
+// disabled, allowing mappings to be parsed and validated but not executed.
+//
+// The underlying register of methods is shared with the target set, and
+// therefore methods added to this set will also be added to the still activated
+// set. Use the Without method (with empty args if applicable) in order to
+// create a deep copy of the set that is independent of the source.
+func (m *MethodSet) Deactivated() *MethodSet {
+	newSet := *m
+	newSet.disableCtors = true
+	return &newSet
 }
 
 //------------------------------------------------------------------------------
@@ -128,6 +146,12 @@ func MethodDocs() []MethodSpec {
 }
 
 //------------------------------------------------------------------------------
+
+func disabledMethod(name string) Function {
+	return ClosureFunction("method "+name, func(ctx FunctionContext) (interface{}, error) {
+		return nil, errors.New("this method has been disabled")
+	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) { return ctx, nil })
+}
 
 func wrapMethodCtorWithDynamicArgs(name string, target Function, args *ParsedParams, fn MethodCtor) (Function, error) {
 	fns := args.dynamic()

@@ -86,6 +86,22 @@ func (e *Environment) NewMapping(path, blobl string) (*mapping.Executor, error) 
 	return exec, nil
 }
 
+// Deactivated returns a version of the environment where constructors are
+// disabled for all functions and methods, allowing mappings to be parsed and
+// validated but not executed.
+//
+// The underlying register of functions and methods is shared with the target
+// environment, and therefore functions/methods registered to this set will also
+// be added to the still activated environment. Use the Without methods (with
+// empty args if applicable) in order to create a deep copy of the environment
+// that is independent of the source.
+func (e *Environment) Deactivated() *Environment {
+	return &Environment{
+		functions: e.functions.Deactivated(),
+		methods:   e.methods.Deactivated(),
+	}
+}
+
 // RegisterMethod adds a new Bloblang method to the environment.
 func (e *Environment) RegisterMethod(spec query.MethodSpec, ctor query.MethodCtor) error {
 	return e.methods.Add(spec, ctor)

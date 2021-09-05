@@ -1,6 +1,7 @@
 package query
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -9,6 +10,7 @@ import (
 // FunctionSet contains an explicit set of functions to be available in a
 // Bloblang query.
 type FunctionSet struct {
+	disableCtors bool
 	constructors map[string]FunctionCtor
 	specs        map[string]FunctionSpec
 }
@@ -70,6 +72,9 @@ func (f *FunctionSet) Init(name string, args *ParsedParams) (Function, error) {
 	if !exists {
 		return nil, badFunctionErr(name)
 	}
+	if f.disableCtors {
+		return disabledFunction(name), nil
+	}
 	return wrapCtorWithDynamicArgs(name, args, ctor)
 }
 
@@ -94,7 +99,7 @@ func (f *FunctionSet) Without(functions ...string) *FunctionSet {
 			specs[v.Name] = v
 		}
 	}
-	return &FunctionSet{constructors, specs}
+	return &FunctionSet{f.disableCtors, constructors, specs}
 }
 
 // OnlyPure creates a clone of the function set that can be mutated in
@@ -119,6 +124,19 @@ func (f *FunctionSet) NoMessage() *FunctionSet {
 		}
 	}
 	return f.Without(excludes...)
+}
+
+// Deactivated returns a version of the function set where constructors are
+// disabled, allowing mappings to be parsed and validated but not executed.
+//
+// The underlying register of functions is shared with the target set, and
+// therefore functions added to this set will also be added to the still
+// activated set. Use the Without method (with empty args if applicable) in
+// order to create a deep copy of the set that is independent of the source.
+func (f *FunctionSet) Deactivated() *FunctionSet {
+	newSet := *f
+	newSet.disableCtors = true
+	return &newSet
 }
 
 //------------------------------------------------------------------------------
@@ -165,6 +183,12 @@ func FunctionDocs() []FunctionSpec {
 }
 
 //------------------------------------------------------------------------------
+
+func disabledFunction(name string) Function {
+	return ClosureFunction("function "+name, func(ctx FunctionContext) (interface{}, error) {
+		return nil, errors.New("this function has been disabled")
+	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) { return ctx, nil })
+}
 
 func wrapCtorWithDynamicArgs(name string, args *ParsedParams, fn FunctionCtor) (Function, error) {
 	fns := args.dynamic()

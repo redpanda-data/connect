@@ -1,6 +1,8 @@
 package bloblang
 
 import (
+	"encoding/json"
+
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 )
 
@@ -105,6 +107,25 @@ func (p *PluginSpec) Description(str string) *PluginSpec {
 func (p *PluginSpec) Param(def ParamDefinition) *PluginSpec {
 	p.params = p.params.Add(def.def)
 	return p
+}
+
+// EncodeJSON attempts to parse a JSON object as a byte slice and uses it to
+// populate the configuration spec. The schema of this method is undocumented
+// and is not intended for general use.
+//
+// EXPERIMENTAL: This method is not intended for general use and could have its
+// signature and/or behaviour changed outside of major version bumps.
+func (p *PluginSpec) EncodeJSON(v []byte) error {
+	def := struct {
+		Description string       `json:"description"`
+		Params      query.Params `json:"params"`
+	}{}
+	if err := json.Unmarshal(v, &def); err != nil {
+		return err
+	}
+	p.description = def.Description
+	p.params = def.Params
+	return nil
 }
 
 //------------------------------------------------------------------------------

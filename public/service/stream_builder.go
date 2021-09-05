@@ -75,7 +75,7 @@ func NewStreamBuilder() *StreamBuilder {
 func (s *StreamBuilder) getLintContext() docs.LintContext {
 	ctx := docs.NewLintContext()
 	ctx.DocsProvider = s.env.internal
-	ctx.BloblangEnv = s.env.getBloblangParserEnv()
+	ctx.BloblangEnv = s.env.getBloblangParserEnv().Deactivated()
 	return ctx
 }
 

@@ -505,7 +505,7 @@ func NewLintContext() LintContext {
 	return LintContext{
 		LabelsToLine: map[string]int{},
 		DocsProvider: globalProvider,
-		BloblangEnv:  bloblang.GlobalEnvironment(),
+		BloblangEnv:  bloblang.GlobalEnvironment().Deactivated(),
 	}
 }
 
