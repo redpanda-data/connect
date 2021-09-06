@@ -68,6 +68,9 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
+    auth:
+      nkey_file: ""
+      user_credentials_file: ""
 ```
 
 </TabItem>
@@ -300,5 +303,40 @@ The path of a certificate key to use.
 
 Type: `string`  
 Default: `""`  
+
+### `auth`
+
+Optional configuration of NATS authentication parameters. More information can be found [in this document](/docs/guides/nats).
+
+
+Type: `object`  
+
+### `auth.nkey_file`
+
+An optional file containing a NKey seed.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+nkey_file: ./seed.nk
+```
+
+### `auth.user_credentials_file`
+
+An optional file containing user credentials which consist of an user JWT and corresponding NKey seed.
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+user_credentials_file: ./user.creds
+```
 
 

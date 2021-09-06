@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -52,6 +53,7 @@ func init() {
 			docs.FieldCommon("subject", "A subject to write to.").IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			btls.FieldSpec(),
+			auth.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(output.NewNATSJetStreamConfig()),
 	})
 }
@@ -119,6 +121,7 @@ func (j *jetStreamOutput) ConnectWithContext(ctx context.Context) error {
 	if j.tlsConf != nil {
 		opts = append(opts, nats.Secure(j.tlsConf))
 	}
+	opts = append(opts, auth.GetOptions(j.conf.Auth)...)
 	if natsConn, err = nats.Connect(j.urls, opts...); err != nil {
 		return err
 	}

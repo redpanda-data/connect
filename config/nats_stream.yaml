@@ -27,6 +27,9 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
+    auth:
+      nkey_file: ""
+      user_credentials_file: ""
 buffer:
   none: {}
 pipeline:
@@ -48,6 +51,9 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
+    auth:
+      nkey_file: ""
+      user_credentials_file: ""
 logger:
   level: INFO
   format: json
