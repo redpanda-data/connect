@@ -36,6 +36,7 @@ output:
     addresses: []
     query: ""
     args: []
+    args_mapping: ""
     max_in_flight: 1
     batching:
       count: 0
@@ -67,6 +68,7 @@ output:
     disable_initial_host_lookup: false
     query: ""
     args: []
+    args_mapping: ""
     consistency: QUORUM
     max_retries: 3
     backoff:
@@ -84,7 +86,7 @@ output:
 </TabItem>
 </Tabs>
 
-Query arguments are set using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the `args` field.
+Query arguments can be set using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the `args` field or by creating a bloblang array for the fields using the `args_mapping` field.
 
 When populating timestamp columns the value must either be a string in ISO 8601 format (2006-01-02T15:04:05Z07:00), or an integer representing unix time in seconds.
 
@@ -102,6 +104,7 @@ Batches can be formed at both the input and output level. You can find out more
 
 <Tabs defaultValue="Basic Inserts" values={[
 { label: 'Basic Inserts', value: 'Basic Inserts', },
+{ label: 'Basic Inserts with bloblang mapping', value: 'Basic Inserts with bloblang mapping', },
 { label: 'Insert JSON Documents', value: 'Insert JSON Documents', },
 ]}>
 
@@ -119,6 +122,27 @@ output:
       - ${! json("id") }
       - ${! json("content") }
       - ${! json("timestamp").format_timestamp() }
+    batching:
+      count: 500
+```
+
+</TabItem>
+<TabItem value="Basic Inserts with bloblang mapping">
+
+If we were to create a table with some basic columns with `CREATE TABLE foo.bar (id int primary key, content text, created_at timestamp);`, and were processing JSON documents of the form `{"id":"342354354","content":"hello world","timestamp":1605219406}`, we could populate our table with the following config:
+
+```yaml
+output:
+  cassandra:
+    addresses:
+      - localhost:9042
+    query: 'INSERT INTO foo.bar (id, content, created_at) VALUES (?, ?, ?)'
+    args_mapping: |
+      root = [
+        this.id,
+        this.content,
+        this.timestamp.format_timestamp()
+      ]
     batching:
       count: 500
 ```
@@ -337,6 +361,14 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `array`  
 Default: `[]`  
+
+### `args_mapping`
+
+A [Bloblang mapping](/docs/guides/bloblang/about) that can be used to provide arguments to Cassandra queries.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `consistency`
 
