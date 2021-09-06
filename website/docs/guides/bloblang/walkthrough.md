@@ -103,10 +103,10 @@ root.foo.bar = this.message.uppercase().replace("WORLD", "EARTH")
 root.foo."buz me".baz = "I like mapping"
 ```
 
-As you can see this method required some arguments, which are often literal values but can also be queries themselves, for example try out the following mapping:
+As you can see this method required some arguments. Methods support both nameless (like above) and named arguments, which are often literal values but can also be queries themselves. For example try out the following mapping using both named style and a dynamic argument:
 
 ```coffee
-root.foo.bar = this.message.uppercase().replace("WORLD", this.message.capitalize())
+root.foo.bar = this.message.uppercase().replace(old: "WORLD", new: this.message.capitalize())
 root.foo."buz me".baz = "I like mapping"
 ```
 

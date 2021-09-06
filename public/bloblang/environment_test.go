@@ -46,13 +46,13 @@ func TestEnvironment(t *testing.T) {
 func TestEnvironmentV2(t *testing.T) {
 	env1, env2 := NewEnvironment(), NewEnvironment()
 
-	require.NoError(t, env1.RegisterMethodV2(NewParamsSpec("foo", ""), func(_ *ParsedParams) (Method, error) {
+	require.NoError(t, env1.RegisterMethodV2("foo", NewPluginSpec(), func(_ *ParsedParams) (Method, error) {
 		return StringMethod(func(s string) (interface{}, error) {
 			return "foo:" + s, nil
 		}), nil
 	}))
 
-	require.NoError(t, env2.RegisterFunctionV2(NewParamsSpec("bar", ""), func(_ *ParsedParams) (Function, error) {
+	require.NoError(t, env2.RegisterFunctionV2("bar", NewPluginSpec(), func(_ *ParsedParams) (Function, error) {
 		return func() (interface{}, error) {
 			return "bar", nil
 		}, nil

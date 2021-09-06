@@ -8,10 +8,10 @@ import (
 )
 
 func TestParsedParamsNameless(t *testing.T) {
-	params := NewParamsSpec("", "").
-		Add(ParamString("first", "")).
-		Add(ParamInt64("second", "").Default(5)).
-		Add(ParamBool("third", ""))
+	params := NewPluginSpec().
+		Param(NewStringParam("first")).
+		Param(NewInt64Param("second").Default(5)).
+		Param(NewBoolParam("third"))
 
 	parsedInternal, err := params.params.PopulateNameless("foo", 9, true)
 	require.NoError(t, err)
@@ -22,27 +22,27 @@ func TestParsedParamsNameless(t *testing.T) {
 
 	parsed := &ParsedParams{par: parsedInternal}
 
-	v, err := parsed.Field("first")
+	v, err := parsed.Get("first")
 	require.NoError(t, err)
 	assert.Equal(t, "foo", v)
 
-	v, err = parsed.Field("second")
+	v, err = parsed.Get("second")
 	require.NoError(t, err)
 	assert.Equal(t, int64(9), v)
 
-	v, err = parsed.Field("third")
+	v, err = parsed.Get("third")
 	require.NoError(t, err)
 	assert.Equal(t, true, v)
 
-	_, err = parsed.Field("fourth")
+	_, err = parsed.Get("fourth")
 	require.Error(t, err)
 }
 
 func TestParsedParamsNamed(t *testing.T) {
-	params := NewParamsSpec("", "").
-		Add(ParamString("first", "")).
-		Add(ParamInt64("second", "").Default(5)).
-		Add(ParamBool("third", ""))
+	params := NewPluginSpec().
+		Param(NewStringParam("first")).
+		Param(NewInt64Param("second").Default(5)).
+		Param(NewBoolParam("third"))
 
 	parsedInternal, err := params.params.PopulateNamed(map[string]interface{}{
 		"first":  "foo",
@@ -57,79 +57,79 @@ func TestParsedParamsNamed(t *testing.T) {
 
 	parsed := &ParsedParams{par: parsedInternal}
 
-	v, err := parsed.Field("first")
+	v, err := parsed.Get("first")
 	require.NoError(t, err)
 	assert.Equal(t, "foo", v)
 
-	v, err = parsed.Field("second")
+	v, err = parsed.Get("second")
 	require.NoError(t, err)
 	assert.Equal(t, int64(9), v)
 
-	v, err = parsed.Field("third")
+	v, err = parsed.Get("third")
 	require.NoError(t, err)
 	assert.Equal(t, true, v)
 
-	_, err = parsed.Field("fourth")
+	_, err = parsed.Get("fourth")
 	require.Error(t, err)
 }
 
 func TestParsedParams(t *testing.T) {
-	params := NewParamsSpec("", "").
-		Add(ParamString("first", "").Optional()).
-		Add(ParamInt64("second", "").Optional()).
-		Add(ParamFloat64("third", "").Optional()).
-		Add(ParamBool("fourth", "").Optional())
+	params := NewPluginSpec().
+		Param(NewStringParam("first").Optional()).
+		Param(NewInt64Param("second").Optional()).
+		Param(NewFloat64Param("third").Optional()).
+		Param(NewBoolParam("fourth").Optional())
 
 	parsedInternal, err := params.params.PopulateNameless("one", 2, 3.0, true)
 	require.NoError(t, err)
 
 	parsed := &ParsedParams{par: parsedInternal}
 
-	s, err := parsed.FieldString("first")
+	s, err := parsed.GetString("first")
 	require.NoError(t, err)
 	assert.Equal(t, "one", s)
 
-	i, err := parsed.FieldInt64("second")
+	i, err := parsed.GetInt64("second")
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), i)
 
-	f, err := parsed.FieldFloat64("third")
+	f, err := parsed.GetFloat64("third")
 	require.NoError(t, err)
 	assert.Equal(t, 3.0, f)
 
-	b, err := parsed.FieldBool("fourth")
+	b, err := parsed.GetBool("fourth")
 	require.NoError(t, err)
 	assert.Equal(t, true, b)
 }
 
 func TestParsedParamsOptional(t *testing.T) {
-	params := NewParamsSpec("", "").
-		Add(ParamString("first", "").Optional()).
-		Add(ParamInt64("second", "").Optional()).
-		Add(ParamFloat64("third", "").Optional()).
-		Add(ParamBool("fourth", "").Optional())
+	params := NewPluginSpec().
+		Param(NewStringParam("first").Optional()).
+		Param(NewInt64Param("second").Optional()).
+		Param(NewFloat64Param("third").Optional()).
+		Param(NewBoolParam("fourth").Optional())
 
 	parsedInternal, err := params.params.PopulateNameless("one", 2, 3.0, true)
 	require.NoError(t, err)
 
 	parsed := &ParsedParams{par: parsedInternal}
 
-	s, err := parsed.FieldOptionalString("first")
+	s, err := parsed.GetOptionalString("first")
 	require.NoError(t, err)
 	require.NotNil(t, s)
 	assert.Equal(t, "one", *s)
 
-	i, err := parsed.FieldOptionalInt64("second")
+	i, err := parsed.GetOptionalInt64("second")
 	require.NoError(t, err)
 	require.NotNil(t, i)
 	assert.Equal(t, int64(2), *i)
 
-	f, err := parsed.FieldOptionalFloat64("third")
+	f, err := parsed.GetOptionalFloat64("third")
 	require.NoError(t, err)
 	require.NotNil(t, f)
 	assert.Equal(t, 3.0, *f)
 
-	b, err := parsed.FieldOptionalBool("fourth")
+	b, err := parsed.GetOptionalBool("fourth")
 	require.NoError(t, err)
 	require.NotNil(t, b)
 	assert.Equal(t, true, *b)
@@ -140,19 +140,19 @@ func TestParsedParamsOptional(t *testing.T) {
 
 	parsed = &ParsedParams{par: parsedInternal}
 
-	s, err = parsed.FieldOptionalString("first")
+	s, err = parsed.GetOptionalString("first")
 	require.NoError(t, err)
 	assert.Nil(t, s)
 
-	i, err = parsed.FieldOptionalInt64("second")
+	i, err = parsed.GetOptionalInt64("second")
 	require.NoError(t, err)
 	assert.Nil(t, i)
 
-	f, err = parsed.FieldOptionalFloat64("third")
+	f, err = parsed.GetOptionalFloat64("third")
 	require.NoError(t, err)
 	assert.Nil(t, f)
 
-	b, err = parsed.FieldOptionalBool("fourth")
+	b, err = parsed.GetOptionalBool("fourth")
 	require.NoError(t, err)
 	assert.Nil(t, b)
 }

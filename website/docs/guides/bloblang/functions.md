@@ -23,6 +23,13 @@ root.doc.received_at = now()
 root.doc.host = hostname()
 ```
 
+Functions support both named and nameless style arguments:
+
+```coffee
+root.values_one = range(start: 0, stop: this.max, step: 2)
+root.values_two = range(0, this.max, 2)
+```
+
 ## General
 
 ### `count`
@@ -31,7 +38,7 @@ The `count` function is a counter starting at 1 which increments after each time
 
 #### Parameters
 
-`name` (string) An identifier for the counter.  
+**`name`** &lt;string&gt; An identifier for the counter.  
 
 #### Examples
 
@@ -77,8 +84,8 @@ Generates a new nanoid each time it is invoked and prints a string representatio
 
 #### Parameters
 
-`length` (optional integer) An optional length.  
-`alphabet` (optional string) An optional custom alphabet to use for generating IDs. When specified the field `length` must also be present.  
+**`length`** &lt;(optional) integer&gt; An optional length.  
+**`alphabet`** &lt;(optional) string&gt; An optional custom alphabet to use for generating IDs. When specified the field `length` must also be present.  
 
 #### Examples
 
@@ -103,6 +110,10 @@ root.id = nanoid(54, "abcde")
 
 Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.
 
+#### Parameters
+
+**`seed`** &lt;query expression, default `{"Value":0}`&gt; A seed to use, if a query is provided it will only be resolved once during the lifetime of the mapping.  
+
 #### Examples
 
 
@@ -123,9 +134,9 @@ The `range` function creates an array of integers following a range between a st
 
 #### Parameters
 
-`start` (integer) The start value.  
-`stop` (integer) The stop value.  
-`step` (integer) The step value. Has default `1`.  
+**`start`** &lt;integer&gt; The start value.  
+**`stop`** &lt;integer&gt; The stop value.  
+**`step`** &lt;integer, default `1`&gt; The step value.  
 
 #### Examples
 
@@ -145,7 +156,7 @@ Throws an error similar to a regular mapping error. This is useful for abandonin
 
 #### Parameters
 
-`why` (string) A string explanation for why an error was thrown, this will be added to the resulting error message.  
+**`why`** &lt;string&gt; A string explanation for why an error was thrown, this will be added to the resulting error message.  
 
 #### Examples
 
@@ -242,7 +253,7 @@ Returns the value of a field within a JSON message located by a [dot path][field
 
 #### Parameters
 
-`path` (string) An optional [dot path][field_paths] identifying a field to obtain. Has default ``.  
+**`path`** &lt;string, default `""`&gt; An optional [dot path][field_paths] identifying a field to obtain.  
 
 #### Examples
 
@@ -269,7 +280,7 @@ Returns the value of a metadata key from the input message. Since values are ext
 
 #### Parameters
 
-`key` (string) An optional key of a metadata value to obtain. Has default ``.  
+**`key`** &lt;string, default `""`&gt; An optional key of a metadata value to obtain.  
 
 #### Examples
 
@@ -298,7 +309,7 @@ Returns the value of a metadata key from the new message being created. Changes 
 
 #### Parameters
 
-`key` (string) An optional key of a metadata value to obtain. Has default ``.  
+**`key`** &lt;string, default `""`&gt; An optional key of a metadata value to obtain.  
 
 #### Examples
 
@@ -327,7 +338,7 @@ Returns the value of an environment variable, or an empty string if the environm
 
 #### Parameters
 
-`name` (string) The name of an environment variable.  
+**`name`** &lt;string&gt; The name of an environment variable.  
 
 #### Examples
 
@@ -344,7 +355,7 @@ Reads a file and returns its contents. Relative paths are resolved from the dire
 
 #### Parameters
 
-`path` (string) The path of the target file.  
+**`path`** &lt;string&gt; The path of the target file.  
 
 #### Examples
 
@@ -412,6 +423,10 @@ Returns the current time in a custom format specified by the argument. The forma
 
 A fractional second is represented by adding a period and zeros to the end of the seconds section of layout string, as in `15:04:05.000` to format a time stamp with millisecond precision. This has been deprecated in favour of the new `now` function.
 
+#### Parameters
+
+**`format`** &lt;string, default `"Mon Jan 2 15:04:05 -0700 MST 2006"`&gt; The format to print as.  
+
 #### Examples
 
 
@@ -422,6 +437,10 @@ root.received_at = timestamp("15:04:05")
 ### `timestamp_utc`
 
 The equivalent of `timestamp` except the time is printed as UTC instead of the local timezone. This has been deprecated in favour of the new `now` function.
+
+#### Parameters
+
+**`format`** &lt;string, default `"Mon Jan 2 15:04:05 -0700 MST 2006"`&gt; The format to print as.  
 
 #### Examples
 

@@ -20,17 +20,9 @@ func TestParamsValidation(t *testing.T) {
 				Add(ParamInt64("second", "").Default(5)).
 				Add(ParamBool("third", "")).
 				Add(ParamFloat("fourth", "")).
-				Add(ParamQuery("fifth", "")).
+				Add(ParamQuery("fifth", "", false)).
 				Add(ParamArray("sixth", "")).
 				Add(ParamObject("seventh", "")),
-		},
-		{
-			name: "old style with fields",
-			params: OldStyleParams().
-				Add(ParamString("first", "")).
-				Add(ParamInt64("second", "").Default(5)).
-				Add(ParamBool("third", "").Default(true)),
-			errContains: "cannot add named parameters to an old style",
 		},
 		{
 			name: "variadic with fields",
@@ -90,7 +82,7 @@ func TestParamsNameless(t *testing.T) {
 				Add(ParamInt64("second", "").Default(5)).
 				Add(ParamBool("third", "")).
 				Add(ParamFloat("fourth", "")).
-				Add(ParamQuery("fifth", "")).
+				Add(ParamQuery("fifth", "", false)).
 				Add(ParamArray("sixth", "")).
 				Add(ParamObject("seventh", "")),
 			input: []interface{}{
@@ -159,6 +151,27 @@ func TestParamsNameless(t *testing.T) {
 			errContains: "field second: expected number",
 		},
 		{
+			name: "bad query type",
+			params: NewParams().
+				Add(ParamQuery("first", "", false)),
+			input:       []interface{}{"foo"},
+			errContains: "field first: wrong argument type, expected query expression",
+		},
+		{
+			name: "recast scalar type",
+			params: NewParams().
+				Add(ParamQuery("first", "", true)),
+			input:  []interface{}{"foo"},
+			output: []interface{}{NewLiteralFunction("", "foo")},
+		},
+		{
+			name: "dont recast query type",
+			params: NewParams().
+				Add(ParamQuery("first", "", true)),
+			input:  []interface{}{NewFieldFunction("foo")},
+			output: []interface{}{NewFieldFunction("foo")},
+		},
+		{
 			name: "function args unchanged",
 			params: NewParams().
 				Add(ParamString("first", "")).
@@ -177,16 +190,6 @@ func TestParamsNameless(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Default(5)).
 				Add(ParamBool("third", "")),
-			input: []interface{}{
-				"foo", NewLiteralFunction("testing", int64(7)), false,
-			},
-			output: []interface{}{
-				"foo", int64(7), false,
-			},
-		},
-		{
-			name:   "old style args expanded",
-			params: OldStyleParams(),
 			input: []interface{}{
 				"foo", NewLiteralFunction("testing", int64(7)), false,
 			},
@@ -235,7 +238,7 @@ func TestParamsNamed(t *testing.T) {
 				Add(ParamInt64("second", "").Default(5)).
 				Add(ParamBool("third", "")).
 				Add(ParamFloat("fourth", "")).
-				Add(ParamQuery("fifth", "")).
+				Add(ParamQuery("fifth", "", false)).
 				Add(ParamArray("sixth", "")).
 				Add(ParamObject("seventh", "")),
 			input: map[string]interface{}{
@@ -298,6 +301,26 @@ func TestParamsNamed(t *testing.T) {
 			errContains: "unknown parameter fourth",
 		},
 		{
+			name: "typo arg missing field",
+			params: NewParams().
+				Add(ParamString("first", "")).
+				Add(ParamInt64("second", "")).
+				Add(ParamBool("third", "").Default(true)),
+			input: map[string]interface{}{
+				"first": "foo", "seconde": 10, "third": false},
+			errContains: "unknown parameter seconde, did you mean second?",
+		},
+		{
+			name: "typo arg missing fields",
+			params: NewParams().
+				Add(ParamString("first", "")).
+				Add(ParamInt64("second", "")).
+				Add(ParamBool("third", "")),
+			input: map[string]interface{}{
+				"first": "foo", "seconde": 10, "thirde": false},
+			errContains: "unknown parameters seconde, thirde, expected second, third",
+		},
+		{
 			name: "bad type args",
 			params: NewParams().
 				Add(ParamString("first", "")).
@@ -305,6 +328,27 @@ func TestParamsNamed(t *testing.T) {
 				Add(ParamBool("third", "").Default(true)),
 			input:       map[string]interface{}{"first": "foo", "second": true, "third": 10},
 			errContains: "field second: expected number",
+		},
+		{
+			name: "bad query type",
+			params: NewParams().
+				Add(ParamQuery("first", "", false)),
+			input:       map[string]interface{}{"first": "foo"},
+			errContains: "field first: wrong argument type, expected query expression",
+		},
+		{
+			name: "recast scalar type",
+			params: NewParams().
+				Add(ParamQuery("first", "", true)),
+			input:  map[string]interface{}{"first": "foo"},
+			output: []interface{}{NewLiteralFunction("", "foo")},
+		},
+		{
+			name: "dont recast query type",
+			params: NewParams().
+				Add(ParamQuery("first", "", true)),
+			input:  map[string]interface{}{"first": NewFieldFunction("foo")},
+			output: []interface{}{NewFieldFunction("foo")},
 		},
 		{
 			name: "function args unchanged",
@@ -348,24 +392,10 @@ func TestParamsNamed(t *testing.T) {
 	}
 }
 
-func TestOldStyleParams(t *testing.T) {
-	p := Params{oldStyle: true}
-
-	exp := []interface{}{
-		"foo", 20, 34.5, true,
-	}
-	res, err := p.processNameless(exp)
-	require.NoError(t, err)
-	assert.Equal(t, exp, res)
-
-	_, err = p.processNamed(nil)
-	require.Error(t, err)
-}
-
 func TestDynamicArgs(t *testing.T) {
 	p := NewParams().
 		Add(ParamString("foo", "")).
-		Add(ParamQuery("bar", "")).
+		Add(ParamQuery("bar", "", false)).
 		Add(ParamString("baz", ""))
 
 	exp := []dynamicArgIndex(nil)
@@ -609,7 +639,7 @@ func TestParsedParams(t *testing.T) {
 		Add(ParamInt64("second", "").Optional()).
 		Add(ParamFloat("third", "").Optional()).
 		Add(ParamBool("fourth", "").Optional()).
-		Add(ParamQuery("fifth", "").Optional())
+		Add(ParamQuery("fifth", "", false).Optional())
 
 	parsed, err := params.PopulateNameless("one", 2, 3.0, true, NewFieldFunction("doc.foo"))
 	require.NoError(t, err)
@@ -641,7 +671,7 @@ func TestParsedParamsOptional(t *testing.T) {
 		Add(ParamInt64("second", "").Optional()).
 		Add(ParamFloat("third", "").Optional()).
 		Add(ParamBool("fourth", "").Optional()).
-		Add(ParamQuery("fifth", "").Optional())
+		Add(ParamQuery("fifth", "", false).Optional())
 
 	parsed, err := params.PopulateNameless("one", 2, 3.0, true, NewFieldFunction("doc.foo"))
 	require.NoError(t, err)

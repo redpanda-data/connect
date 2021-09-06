@@ -12,17 +12,18 @@ import (
 // execute them with a Bloblang mapping using the new V2 methods, which adds
 // support to our functions and methods for optional named parameters.
 func Example_bloblangPluginsNamedArgs() {
-	cuddleSpec := bloblang.NewParamsSpec("hug_string", "Wraps a string with a prefix and suffix.").
-		Add(bloblang.ParamString("prefix", "The prefix to insert.")).
-		Add(bloblang.ParamString("suffix", "The suffix to append."))
+	hugStringSpec := bloblang.NewPluginSpec().
+		Description("Wraps a string with a prefix and suffix.").
+		Param(bloblang.NewStringParam("prefix").Description("The prefix to insert.")).
+		Param(bloblang.NewStringParam("suffix").Description("The suffix to append."))
 
-	if err := bloblang.RegisterMethodV2(cuddleSpec, func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-		prefix, err := args.FieldString("prefix")
+	if err := bloblang.RegisterMethodV2("hug_string", hugStringSpec, func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		prefix, err := args.GetString("prefix")
 		if err != nil {
 			return nil, err
 		}
 
-		suffix, err := args.FieldString("suffix")
+		suffix, err := args.GetString("suffix")
 		if err != nil {
 			return nil, err
 		}
@@ -34,11 +35,10 @@ func Example_bloblangPluginsNamedArgs() {
 		panic(err)
 	}
 
-	reverseSpec := bloblang.NewParamsSpec(
-		"sometimes_reverse",
-		"Reverses the order of an array target, but sometimes it randomly doesn't. Whoops.",
-	)
-	if err := bloblang.RegisterMethodV2(reverseSpec, func(*bloblang.ParsedParams) (bloblang.Method, error) {
+	reverseSpec := bloblang.NewPluginSpec().
+		Description("Reverses the order of an array target, but sometimes it randomly doesn't. Whoops.")
+
+	if err := bloblang.RegisterMethodV2("sometimes_reverse", reverseSpec, func(*bloblang.ParsedParams) (bloblang.Method, error) {
 		rand := rand.New(rand.NewSource(0))
 		return bloblang.ArrayMethod(func(in []interface{}) (interface{}, error) {
 			if rand.Int()%3 == 0 {
@@ -56,27 +56,28 @@ func Example_bloblangPluginsNamedArgs() {
 		panic(err)
 	}
 
-	multiplyWrongSpec := bloblang.NewParamsSpec(
-		"multiply_but_always_slightly_wrong",
-		"Multiplies two numbers together but gets it slightly wrong. Whoops.",
-	).
-		Add(bloblang.ParamFloat64("left", "The first of two numbers to multiply.")).
-		Add(bloblang.ParamFloat64("right", "The second of two numbers to multiply."))
-	if err := bloblang.RegisterFunctionV2(multiplyWrongSpec, func(args *bloblang.ParsedParams) (bloblang.Function, error) {
-		left, err := args.FieldFloat64("left")
-		if err != nil {
-			return nil, err
-		}
+	multiplyWrongSpec := bloblang.NewPluginSpec().
+		Description("Multiplies two numbers together but gets it slightly wrong. Whoops.").
+		Param(bloblang.NewFloat64Param("left").Description("The first of two numbers to multiply.")).
+		Param(bloblang.NewFloat64Param("right").Description("The second of two numbers to multiply."))
 
-		right, err := args.FieldFloat64("right")
-		if err != nil {
-			return nil, err
-		}
+	if err := bloblang.RegisterFunctionV2(
+		"multiply_but_always_slightly_wrong", multiplyWrongSpec,
+		func(args *bloblang.ParsedParams) (bloblang.Function, error) {
+			left, err := args.GetFloat64("left")
+			if err != nil {
+				return nil, err
+			}
 
-		return func() (interface{}, error) {
-			return left*right + 0.02, nil
-		}, nil
-	}); err != nil {
+			right, err := args.GetFloat64("right")
+			if err != nil {
+				return nil, err
+			}
+
+			return func() (interface{}, error) {
+				return left*right + 0.02, nil
+			}, nil
+		}); err != nil {
 		panic(err)
 	}
 

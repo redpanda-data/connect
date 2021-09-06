@@ -1,6 +1,7 @@
 package bloblang
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 )
@@ -8,8 +9,17 @@ import (
 // Environment provides an isolated Bloblang environment where the available
 // features, functions and methods can be modified.
 type Environment struct {
-	functions *query.FunctionSet
-	methods   *query.MethodSet
+	env *bloblang.Environment
+}
+
+// GlobalEnvironment returns the global default environment. Modifying this
+// environment will impact all Bloblang parses that aren't initialized with an
+// isolated environment, as well as any new environments initialized after the
+// changes.
+func GlobalEnvironment() *Environment {
+	return &Environment{
+		env: bloblang.GlobalEnvironment(),
+	}
 }
 
 // NewEnvironment creates a fresh Bloblang environment, starting with the full
@@ -24,18 +34,14 @@ type Environment struct {
 // could be used in certain situations without removing those functions globally
 // for all mappings.
 func NewEnvironment() *Environment {
-	return &Environment{
-		functions: query.AllFunctions.Without(),
-		methods:   query.AllMethods.Without(),
-	}
+	return GlobalEnvironment().WithoutFunctions().WithoutMethods()
 }
 
 // NewEmptyEnvironment creates a fresh Bloblang environment starting completely
 // empty, where no functions or methods are initially available.
 func NewEmptyEnvironment() *Environment {
 	return &Environment{
-		functions: query.NewFunctionSet(),
-		methods:   query.NewMethodSet(),
+		env: bloblang.NewEmptyEnvironment(),
 	}
 }
 
@@ -46,14 +52,12 @@ func NewEmptyEnvironment() *Environment {
 // gives access to the line and column where the error occurred, as well as a
 // method for creating a well formatted error message.
 func (e *Environment) Parse(blobl string) (*Executor, error) {
-	pCtx := parser.GlobalContext()
-	if e != nil {
-		pCtx.Functions = e.functions
-		pCtx.Methods = e.methods
-	}
-	exec, err := parser.ParseMapping(pCtx, "", blobl)
+	exec, err := e.env.NewMapping("", blobl)
 	if err != nil {
-		return nil, internalToPublicParserError([]rune(blobl), err)
+		if pErr, ok := err.(*parser.Error); ok {
+			return nil, internalToPublicParserError([]rune(blobl), pErr)
+		}
+		return nil, err
 	}
 	return newExecutor(exec), nil
 }
@@ -64,7 +68,7 @@ func (e *Environment) Parse(blobl string) (*Executor, error) {
 func (e *Environment) RegisterMethod(name string, ctor MethodConstructor) error {
 	spec := query.NewMethodSpec(name, "").InCategory(query.MethodCategoryPlugin, "")
 	spec.Params = query.VariadicParams()
-	return e.methods.Add(spec, func(target query.Function, args *query.ParsedParams) (query.Function, error) {
+	return e.env.RegisterMethod(spec, func(target query.Function, args *query.ParsedParams) (query.Function, error) {
 		fn, err := ctor(args.Raw()...)
 		if err != nil {
 			return nil, err
@@ -81,15 +85,18 @@ func (e *Environment) RegisterMethod(name string, ctor MethodConstructor) error 
 
 // RegisterMethodV2 adds a new Bloblang method to the environment using a
 // provided ParamsSpec to define the name of the method and its parameters.
-func (e *Environment) RegisterMethodV2(spec ParamsSpec, ctor MethodConstructorV2) error {
-	iSpec := query.NewMethodSpec(spec.name, spec.description).InCategory(query.MethodCategoryPlugin, "")
+//
+// Plugin names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
+// (snake case).
+func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor MethodConstructorV2) error {
+	iSpec := query.NewMethodSpec(name, spec.description).InCategory(query.MethodCategoryPlugin, "")
 	iSpec.Params = spec.params
-	return e.methods.Add(iSpec, func(target query.Function, args *query.ParsedParams) (query.Function, error) {
+	return e.env.RegisterMethod(iSpec, func(target query.Function, args *query.ParsedParams) (query.Function, error) {
 		fn, err := ctor(&ParsedParams{par: args})
 		if err != nil {
 			return nil, err
 		}
-		return query.ClosureFunction("method "+spec.name, func(ctx query.FunctionContext) (interface{}, error) {
+		return query.ClosureFunction("method "+name, func(ctx query.FunctionContext) (interface{}, error) {
 			v, err := target.Exec(ctx)
 			if err != nil {
 				return nil, err
@@ -99,33 +106,13 @@ func (e *Environment) RegisterMethodV2(spec ParamsSpec, ctor MethodConstructorV2
 	})
 }
 
-// WithoutMethods returns a copy of the environment but with a variadic list of
-// method names removed. Instantiation of these removed methods within a mapping
-// will cause errors at parse time.
-func (e *Environment) WithoutMethods(names ...string) *Environment {
-	return &Environment{
-		functions: e.functions,
-		methods:   e.methods.Without(names...),
-	}
-}
-
-// WithoutFunctions returns a copy of the environment but with a variadic list
-// of function names removed. Instantiation of these removed functions within a
-// mapping will cause errors at parse time.
-func (e *Environment) WithoutFunctions(names ...string) *Environment {
-	return &Environment{
-		functions: e.functions.Without(names...),
-		methods:   e.methods,
-	}
-}
-
 // RegisterFunction adds a new Bloblang function to the environment. All
 // function names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
 // (snake case).
 func (e *Environment) RegisterFunction(name string, ctor FunctionConstructor) error {
 	spec := query.NewFunctionSpec(query.FunctionCategoryPlugin, name, "")
 	spec.Params = query.VariadicParams()
-	return e.functions.Add(spec, func(args *query.ParsedParams) (query.Function, error) {
+	return e.env.RegisterFunction(spec, func(args *query.ParsedParams) (query.Function, error) {
 		fn, err := ctor(args.Raw()...)
 		if err != nil {
 			return nil, err
@@ -138,28 +125,42 @@ func (e *Environment) RegisterFunction(name string, ctor FunctionConstructor) er
 
 // RegisterFunctionV2 adds a new Bloblang function to the environment using a
 // provided ParamsSpec to define the name of the function and its parameters.
-func (e *Environment) RegisterFunctionV2(spec ParamsSpec, ctor FunctionConstructorV2) error {
-	iSpec := query.NewFunctionSpec(query.FunctionCategoryPlugin, spec.name, spec.description)
+//
+// Plugin names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
+// (snake case).
+func (e *Environment) RegisterFunctionV2(name string, spec *PluginSpec, ctor FunctionConstructorV2) error {
+	iSpec := query.NewFunctionSpec(query.FunctionCategoryPlugin, name, spec.description)
 	iSpec.Params = spec.params
-	return e.functions.Add(iSpec, func(args *query.ParsedParams) (query.Function, error) {
+	return e.env.RegisterFunction(iSpec, func(args *query.ParsedParams) (query.Function, error) {
 		fn, err := ctor(&ParsedParams{par: args})
 		if err != nil {
 			return nil, err
 		}
-		return query.ClosureFunction("function "+spec.name, func(ctx query.FunctionContext) (interface{}, error) {
+		return query.ClosureFunction("function "+name, func(ctx query.FunctionContext) (interface{}, error) {
 			return fn()
 		}, nil), nil
 	})
 }
 
-//------------------------------------------------------------------------------
-
-func globalEnvironment() *Environment {
+// WithoutMethods returns a copy of the environment but with a variadic list of
+// method names removed. Instantiation of these removed methods within a mapping
+// will cause errors at parse time.
+func (e *Environment) WithoutMethods(names ...string) *Environment {
 	return &Environment{
-		functions: query.AllFunctions,
-		methods:   query.AllMethods,
+		env: e.env.WithoutMethods(names...),
 	}
 }
+
+// WithoutFunctions returns a copy of the environment but with a variadic list
+// of function names removed. Instantiation of these removed functions within a
+// mapping will cause errors at parse time.
+func (e *Environment) WithoutFunctions(names ...string) *Environment {
+	return &Environment{
+		env: e.env.WithoutFunctions(names...),
+	}
+}
+
+//------------------------------------------------------------------------------
 
 // Parse a Bloblang mapping allowing the use of the globally accessible range of
 // features (functions and methods).
@@ -179,22 +180,26 @@ func Parse(blobl string) (*Executor, error) {
 // method names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
 // (snake case).
 func RegisterMethod(name string, ctor MethodConstructor) error {
-	return globalEnvironment().RegisterMethod(name, ctor)
+	return GlobalEnvironment().RegisterMethod(name, ctor)
 }
 
-// RegisterMethodV2 adds a new Bloblang method to the global environment.
-func RegisterMethodV2(spec ParamsSpec, ctor MethodConstructorV2) error {
-	return globalEnvironment().RegisterMethodV2(spec, ctor)
+// RegisterMethodV2 adds a new Bloblang method to the global environment. All
+// method names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
+// (snake case).
+func RegisterMethodV2(name string, spec *PluginSpec, ctor MethodConstructorV2) error {
+	return GlobalEnvironment().RegisterMethodV2(name, spec, ctor)
 }
 
 // RegisterFunction adds a new Bloblang function to the global environment. All
 // function names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
 // (snake case).
 func RegisterFunction(name string, ctor FunctionConstructor) error {
-	return globalEnvironment().RegisterFunction(name, ctor)
+	return GlobalEnvironment().RegisterFunction(name, ctor)
 }
 
 // RegisterFunctionV2 adds a new Bloblang function to the global environment.
-func RegisterFunctionV2(spec ParamsSpec, ctor FunctionConstructorV2) error {
-	return globalEnvironment().RegisterFunctionV2(spec, ctor)
+// All function names must match the regular expression
+// /^[a-z0-9]+(_[a-z0-9]+)*$/ (snake case).
+func RegisterFunctionV2(name string, spec *PluginSpec, ctor FunctionConstructorV2) error {
+	return GlobalEnvironment().RegisterFunctionV2(name, spec, ctor)
 }

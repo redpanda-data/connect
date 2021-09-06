@@ -76,7 +76,7 @@ func applyMethod(target Function, args *ParsedParams) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsMethod(
+var _ = registerMethod(
 	NewMethodSpec("bool", "").InCategory(
 		MethodCategoryCoercion,
 		"Attempt to parse a value into a boolean. An optional argument can be provided, in which case if the value cannot be parsed the argument will be returned instead. If the value is a number then any non-zero value will resolve to `true`, if the value is a string then any of the following values are considered valid: `1, t, T, TRUE, true, True, 0, f, F, FALSE`.",
@@ -84,29 +84,27 @@ var _ = registerOldParamsMethod(
 			`root.foo = this.thing.bool()
 root.bar = this.thing.bool(true)`,
 		),
-	),
-	true, boolMethod,
-	oldParamsExpectOneOrZeroArgs(),
-	oldParamsExpectBoolArg(0),
+	).Param(ParamBool("default", "An optional value to yield if the target cannot be parsed as a boolean.").Optional()),
+	boolMethod,
 )
 
-func boolMethod(target Function, args ...interface{}) (Function, error) {
-	defaultBool := false
-	if len(args) > 0 {
-		defaultBool = args[0].(bool)
+func boolMethod(target Function, args *ParsedParams) (Function, error) {
+	defaultBool, err := args.FieldOptionalBool("default")
+	if err != nil {
+		return nil, err
 	}
 	return ClosureFunction("method bool", func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
-			if len(args) > 0 {
-				return defaultBool, nil
+			if defaultBool != nil {
+				return *defaultBool, nil
 			}
 			return nil, err
 		}
 		f, err := IToBool(v)
 		if err != nil {
-			if len(args) > 0 {
-				return defaultBool, nil
+			if defaultBool != nil {
+				return *defaultBool, nil
 			}
 			return nil, ErrFrom(err, target)
 		}
@@ -116,7 +114,7 @@ func boolMethod(target Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsMethod(
+var _ = registerMethod(
 	NewMethodSpec(
 		"catch",
 		"If the result of a target query fails (due to incorrect types, failed parsing, etc) the argument is returned instead.",
@@ -130,15 +128,14 @@ var _ = registerOldParamsMethod(
 			`not structured data`,
 			`<Message deleted>`,
 		),
-	),
-	false, catchMethod,
-	oldParamsExpectNArgs(1),
+	).Param(ParamQuery("fallback", "A value to yield, or query to execute, if the target query fails.", true)),
+	catchMethod,
 )
 
-func catchMethod(fn Function, args ...interface{}) (Function, error) {
-	catchFn, isFn := args[0].(Function)
-	if !isFn {
-		catchFn = NewLiteralFunction("", args[0])
+func catchMethod(fn Function, args *ParsedParams) (Function, error) {
+	catchFn, err := args.FieldQuery("fallback")
+	if err != nil {
+		return nil, err
 	}
 	return ClosureFunction("method catch", func(ctx FunctionContext) (interface{}, error) {
 		res, err := fn.Exec(ctx)
@@ -151,7 +148,7 @@ func catchMethod(fn Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsMethod(
+var _ = registerMethod(
 	NewMethodSpec(
 		"from",
 		"Modifies a target query such that certain functions are executed from the perspective of another message in the batch. This allows you to mutate events based on the contents of other messages. Functions that support this behaviour are `content`, `json` and `meta`.",
@@ -159,16 +156,17 @@ var _ = registerOldParamsMethod(
 			`root = this
 root.foo = json("foo").from(1)`,
 		),
-	),
-	false, func(target Function, args ...interface{}) (Function, error) {
-		i64 := args[0].(int64)
+	).Param(ParamInt64("index", "The message index to use as a perspective.")),
+	func(target Function, args *ParsedParams) (Function, error) {
+		i64, err := args.FieldInt64("index")
+		if err != nil {
+			return nil, err
+		}
 		return &fromMethod{
 			index:  int(i64),
 			target: target,
 		}, nil
 	},
-	oldParamsExpectNArgs(1),
-	oldParamsExpectIntArg(0),
 )
 
 type fromMethod struct {
@@ -192,7 +190,7 @@ func (f *fromMethod) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetP
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsMethod(
+var _ = registerMethod(
 	NewMethodSpec(
 		"from_all",
 		"Modifies a target query such that certain functions are executed from the perspective of each message in the batch, and returns the set of results as an array. Functions that support this behaviour are `content`, `json` and `meta`.",
@@ -201,11 +199,10 @@ var _ = registerOldParamsMethod(
 root.foo_summed = json("foo").from_all().sum()`,
 		),
 	),
-	false, fromAllMethod,
-	oldParamsExpectNArgs(0),
+	fromAllMethod,
 )
 
-func fromAllMethod(target Function, _ ...interface{}) (Function, error) {
+func fromAllMethod(target Function, _ *ParsedParams) (Function, error) {
 	return ClosureFunction("method from_all", func(ctx FunctionContext) (interface{}, error) {
 		values := make([]interface{}, ctx.MsgBatch.Len())
 		var err error
@@ -234,7 +231,7 @@ func fromAllMethod(target Function, _ ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsMethod(
+var _ = registerMethod(
 	NewMethodSpec(
 		"get",
 		"Extract a field value, identified via a [dot path][field_paths], from an object.",
@@ -247,10 +244,8 @@ var _ = registerOldParamsMethod(
 			`{"foo":{"bar":"from bar","baz":"from baz"},"target":"baz"}`,
 			`{"result":"from baz"}`,
 		),
-	),
-	true, getMethodCtor,
-	oldParamsExpectNArgs(1),
-	oldParamsExpectStringArg(0),
+	).Param(ParamString("path", "A [dot path][field_paths] identifying a field to obtain.")),
+	getMethodCtor,
 )
 
 type getMethod struct {
@@ -285,12 +280,8 @@ func (g *getMethod) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetPa
 }
 
 // NewGetMethod creates a new get method.
-func NewGetMethod(target Function, path string) (Function, error) {
-	return getMethodCtor(target, path)
-}
-
-func getMethodCtor(target Function, args ...interface{}) (Function, error) {
-	path := gabs.DotPathToSlice(args[0].(string))
+func NewGetMethod(target Function, pathStr string) (Function, error) {
+	path := gabs.DotPathToSlice(pathStr)
 	switch t := target.(type) {
 	case *getMethod:
 		newPath := append([]string{}, t.path...)
@@ -308,24 +299,24 @@ func getMethodCtor(target Function, args ...interface{}) (Function, error) {
 	}, nil
 }
 
+func getMethodCtor(target Function, args *ParsedParams) (Function, error) {
+	pathStr, err := args.FieldString("path")
+	if err != nil {
+		return nil, err
+	}
+	return NewGetMethod(target, pathStr)
+}
+
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsMethod(
-	NewHiddenMethodSpec("map"), false, mapMethod,
-	oldParamsExpectNArgs(1),
-	oldParamsExpectFunctionArg(0),
+var _ = registerMethod(
+	NewHiddenMethodSpec("map").
+		Param(ParamQuery("query", "A query to execute on the target.", false)),
+	mapMethod,
 )
 
 // NewMapMethod attempts to create a map method.
-func NewMapMethod(target, mapArg Function) (Function, error) {
-	return mapMethod(target, mapArg)
-}
-
-func mapMethod(target Function, args ...interface{}) (Function, error) {
-	mapFn, ok := args[0].(Function)
-	if !ok {
-		return nil, fmt.Errorf("expected query argument, received %T", args[0])
-	}
+func NewMapMethod(target, mapFn Function) (Function, error) {
 	return ClosureFunction(mapFn.Annotation(), func(ctx FunctionContext) (interface{}, error) {
 		res, err := target.Exec(ctx)
 		if err != nil {
@@ -341,12 +332,17 @@ func mapMethod(target Function, args ...interface{}) (Function, error) {
 	}), nil
 }
 
+func mapMethod(target Function, args *ParsedParams) (Function, error) {
+	mapFn, err := args.FieldQuery("query")
+	if err != nil {
+		return nil, err
+	}
+	return NewMapMethod(target, mapFn)
+}
+
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsMethod(
-	NewHiddenMethodSpec("not"), false, notMethodCtor,
-	oldParamsExpectNArgs(0),
-)
+var _ = registerMethod(NewHiddenMethodSpec("not"), notMethodCtor)
 
 type notMethod struct {
 	fn Function
@@ -379,13 +375,13 @@ func (n *notMethod) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetPa
 	return n.fn.QueryTargets(ctx)
 }
 
-func notMethodCtor(target Function, _ ...interface{}) (Function, error) {
+func notMethodCtor(target Function, _ *ParsedParams) (Function, error) {
 	return &notMethod{fn: target}, nil
 }
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"not_null", "",
 	).InCategory(
@@ -399,7 +395,7 @@ var _ = registerOldParamsSimpleMethod(
 			`Error("failed assignment (line 1): field `+"`this.a`"+`: value is null")`,
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			if v == nil {
 				return nil, errors.New("value is null")
@@ -407,13 +403,11 @@ var _ = registerOldParamsSimpleMethod(
 			return v, nil
 		}, nil
 	},
-	false,
-	oldParamsExpectNArgs(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsMethod(
+var _ = registerMethod(
 	NewMethodSpec(
 		"number", "",
 	).InCategory(
@@ -423,29 +417,27 @@ var _ = registerOldParamsMethod(
 			`root.foo = this.thing.number() + 10
 root.bar = this.thing.number(5) * 10`,
 		),
-	),
-	true, numberCoerceMethod,
-	oldParamsExpectOneOrZeroArgs(),
-	oldParamsExpectFloatArg(0),
+	).Param(ParamFloat("default", "An optional value to yield if the target cannot be parsed as a number.").Optional()),
+	numberCoerceMethod,
 )
 
-func numberCoerceMethod(target Function, args ...interface{}) (Function, error) {
-	defaultNum := 0.0
-	if len(args) > 0 {
-		defaultNum = args[0].(float64)
+func numberCoerceMethod(target Function, args *ParsedParams) (Function, error) {
+	defaultNum, err := args.FieldOptionalFloat("default")
+	if err != nil {
+		return nil, err
 	}
 	return ClosureFunction("method number", func(ctx FunctionContext) (interface{}, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
-			if len(args) > 0 {
-				return defaultNum, nil
+			if defaultNum != nil {
+				return *defaultNum, nil
 			}
 			return nil, err
 		}
 		f, err := IToNumber(v)
 		if err != nil {
-			if len(args) > 0 {
-				return defaultNum, nil
+			if defaultNum != nil {
+				return *defaultNum, nil
 			}
 			return nil, ErrFrom(err, target)
 		}
@@ -455,19 +447,18 @@ func numberCoerceMethod(target Function, args ...interface{}) (Function, error) 
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsMethod(
+var _ = registerMethod(
 	NewMethodSpec(
 		"or", "If the result of the target query fails or resolves to `null`, returns the argument instead. This is an explicit method alternative to the coalesce pipe operator `|`.",
 		NewExampleSpec("", `root.doc.id = this.thing.id.or(uuid_v4())`),
-	),
-	false, orMethod,
-	oldParamsExpectNArgs(1),
+	).Param(ParamQuery("fallback", "A value to yield, or query to execute, if the target query fails or resolves to `null`.", true)),
+	orMethod,
 )
 
-func orMethod(fn Function, args ...interface{}) (Function, error) {
-	orFn, isFn := args[0].(Function)
-	if !isFn {
-		orFn = NewLiteralFunction("", args[0])
+func orMethod(fn Function, args *ParsedParams) (Function, error) {
+	orFn, err := args.FieldQuery("fallback")
+	if err != nil {
+		return nil, err
 	}
 	return ClosureFunction("method or", func(ctx FunctionContext) (interface{}, error) {
 		res, err := fn.Exec(ctx)
@@ -480,7 +471,7 @@ func orMethod(fn Function, args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = registerOldParamsSimpleMethod(
+var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"type", "",
 	).InCategory(
@@ -493,11 +484,9 @@ root.foo_type = this.foo.type()`,
 			`{"bar_type":"number","foo_type":"string"}`,
 		),
 	),
-	func(...interface{}) (simpleMethod, error) {
+	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			return string(ITypeOf(v)), nil
 		}, nil
 	},
-	false,
-	oldParamsExpectNArgs(0),
 )

@@ -3,7 +3,7 @@ package service
 import (
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
+	ibloblang "github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -29,7 +29,8 @@ type Environment struct {
 }
 
 var globalEnvironment = &Environment{
-	internal: bundle.GlobalEnvironment,
+	internal:    bundle.GlobalEnvironment,
+	bloblangEnv: bloblang.GlobalEnvironment(),
 }
 
 // NewEnvironment creates a new environment that inherits all globally defined
@@ -43,7 +44,7 @@ func NewEnvironment() *Environment {
 func (e *Environment) Clone() *Environment {
 	return &Environment{
 		internal:    e.internal.Clone(),
-		bloblangEnv: e.bloblangEnv,
+		bloblangEnv: e.bloblangEnv.WithoutFunctions().WithoutMethods(),
 	}
 }
 
@@ -70,16 +71,13 @@ func (e *Environment) NewStreamBuilder() *StreamBuilder {
 
 //------------------------------------------------------------------------------
 
-func (e *Environment) getBloblangParserContext() parser.Context {
-	if e.bloblangEnv == nil {
-		return parser.GlobalContext()
-	}
+func (e *Environment) getBloblangParserEnv() *ibloblang.Environment {
 	if unwrapper, ok := e.bloblangEnv.XUnwrapper().(interface {
-		Unwrap() parser.Context
+		Unwrap() *ibloblang.Environment
 	}); ok {
 		return unwrapper.Unwrap()
 	}
-	return parser.GlobalContext()
+	return ibloblang.GlobalEnvironment()
 }
 
 //------------------------------------------------------------------------------
@@ -97,7 +95,7 @@ func (e *Environment) RegisterBatchBuffer(name string, spec *ConfigSpec, ctor Ba
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeBuffer
 	return e.internal.Buffers.Add(func(conf buffer.Config, nm bundle.NewManagement) (buffer.Type, error) {
-		pluginConf, err := spec.configFromNode(e, nm, conf.Plugin.(*yaml.Node))
+		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
 		}
@@ -128,7 +126,7 @@ func (e *Environment) RegisterCache(name string, spec *ConfigSpec, ctor CacheCon
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeCache
 	return e.internal.Caches.Add(func(conf cache.Config, nm bundle.NewManagement) (types.Cache, error) {
-		pluginConf, err := spec.configFromNode(e, nm, conf.Plugin.(*yaml.Node))
+		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
 		}
@@ -163,7 +161,7 @@ func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputCon
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
 	return e.internal.Inputs.Add(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (input.Type, error) {
-		pluginConf, err := spec.configFromNode(e, nm, conf.Plugin.(*yaml.Node))
+		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
 		}
@@ -190,7 +188,7 @@ func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor Bat
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
 	return e.internal.Inputs.Add(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (input.Type, error) {
-		pluginConf, err := spec.configFromNode(e, nm, conf.Plugin.(*yaml.Node))
+		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
 		}
@@ -223,7 +221,7 @@ func (e *Environment) RegisterOutput(name string, spec *ConfigSpec, ctor OutputC
 	componentSpec.Type = docs.TypeOutput
 	return e.internal.Outputs.Add(bundle.OutputConstructorFromSimple(
 		func(conf output.Config, nm bundle.NewManagement) (output.Type, error) {
-			pluginConf, err := spec.configFromNode(e, nm, conf.Plugin.(*yaml.Node))
+			pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
 			if err != nil {
 				return nil, err
 			}
@@ -262,7 +260,7 @@ func (e *Environment) RegisterBatchOutput(name string, spec *ConfigSpec, ctor Ba
 	componentSpec.Type = docs.TypeOutput
 	return e.internal.Outputs.Add(bundle.OutputConstructorFromSimple(
 		func(conf output.Config, nm bundle.NewManagement) (output.Type, error) {
-			pluginConf, err := spec.configFromNode(e, nm, conf.Plugin.(*yaml.Node))
+			pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
 			if err != nil {
 				return nil, err
 			}
@@ -307,7 +305,7 @@ func (e *Environment) RegisterProcessor(name string, spec *ConfigSpec, ctor Proc
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeProcessor
 	return e.internal.Processors.Add(func(conf processor.Config, nm bundle.NewManagement) (processor.Type, error) {
-		pluginConf, err := spec.configFromNode(e, nm, conf.Plugin.(*yaml.Node))
+		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
 		}
@@ -332,7 +330,7 @@ func (e *Environment) RegisterBatchProcessor(name string, spec *ConfigSpec, ctor
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeProcessor
 	return e.internal.Processors.Add(func(conf processor.Config, nm bundle.NewManagement) (processor.Type, error) {
-		pluginConf, err := spec.configFromNode(e, nm, conf.Plugin.(*yaml.Node))
+		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
 		}
@@ -363,7 +361,7 @@ func (e *Environment) RegisterRateLimit(name string, spec *ConfigSpec, ctor Rate
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeRateLimit
 	return e.internal.RateLimits.Add(func(conf ratelimit.Config, nm bundle.NewManagement) (types.RateLimit, error) {
-		pluginConf, err := spec.configFromNode(e, nm, conf.Plugin.(*yaml.Node))
+		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
 		}

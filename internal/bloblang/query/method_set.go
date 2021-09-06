@@ -1,6 +1,7 @@
 package query
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 )
@@ -8,6 +9,7 @@ import (
 // MethodSet contains an explicit set of methods to be available in a Bloblang
 // query.
 type MethodSet struct {
+	disableCtors bool
 	constructors map[string]MethodCtor
 	specs        map[string]MethodSpec
 }
@@ -50,21 +52,11 @@ func (m *MethodSet) Docs() []MethodSpec {
 	return specSlice
 }
 
-// List returns a slice of method names in alphabetical order.
-func (m *MethodSet) List() []string {
-	methodNames := make([]string, 0, len(m.constructors))
-	for k := range m.constructors {
-		methodNames = append(methodNames, k)
-	}
-	sort.Strings(methodNames)
-	return methodNames
-}
-
 // Params attempts to obtain an argument specification for a given method type.
 func (m *MethodSet) Params(name string) (Params, error) {
 	spec, exists := m.specs[name]
 	if !exists {
-		return OldStyleParams(), badMethodErr(name)
+		return VariadicParams(), badMethodErr(name)
 	}
 	return spec.Params, nil
 }
@@ -75,6 +67,9 @@ func (m *MethodSet) Init(name string, target Function, args *ParsedParams) (Func
 	ctor, exists := m.constructors[name]
 	if !exists {
 		return nil, badMethodErr(name)
+	}
+	if m.disableCtors {
+		return disabledMethod(name), nil
 	}
 	return wrapMethodCtorWithDynamicArgs(name, target, args, ctor)
 }
@@ -100,7 +95,20 @@ func (m *MethodSet) Without(methods ...string) *MethodSet {
 			specs[v.Name] = v
 		}
 	}
-	return &MethodSet{constructors, specs}
+	return &MethodSet{m.disableCtors, constructors, specs}
+}
+
+// Deactivated returns a version of the method set where constructors are
+// disabled, allowing mappings to be parsed and validated but not executed.
+//
+// The underlying register of methods is shared with the target set, and
+// therefore methods added to this set will also be added to the still activated
+// set. Use the Without method (with empty args if applicable) in order to
+// create a deep copy of the set that is independent of the source.
+func (m *MethodSet) Deactivated() *MethodSet {
+	newSet := *m
+	newSet.disableCtors = true
+	return &newSet
 }
 
 //------------------------------------------------------------------------------
@@ -132,17 +140,18 @@ func InitMethodHelper(name string, target Function, args ...interface{}) (Functi
 	return AllMethods.Init(name, target, parsedArgs)
 }
 
-// ListMethods returns a slice of method names, sorted alphabetically.
-func ListMethods() []string {
-	return AllMethods.List()
-}
-
 // MethodDocs returns a slice of specs, one for each method.
 func MethodDocs() []MethodSpec {
 	return AllMethods.Docs()
 }
 
 //------------------------------------------------------------------------------
+
+func disabledMethod(name string) Function {
+	return ClosureFunction("method "+name, func(ctx FunctionContext) (interface{}, error) {
+		return nil, errors.New("this method has been disabled")
+	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) { return ctx, nil })
+}
 
 func wrapMethodCtorWithDynamicArgs(name string, target Function, args *ParsedParams, fn MethodCtor) (Function, error) {
 	fns := args.dynamic()

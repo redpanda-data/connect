@@ -7,6 +7,9 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/gabs/v2"
 	"gopkg.in/yaml.v3"
 )
@@ -112,13 +115,13 @@ type ConfigSpec struct {
 	configCtor ConfigStructConstructor
 }
 
-func (c *ConfigSpec) configFromNode(env *Environment, mgr bundle.NewManagement, node *yaml.Node) (*ParsedConfig, error) {
+func (c *ConfigSpec) configFromNode(mgr bundle.NewManagement, node *yaml.Node) (*ParsedConfig, error) {
 	if c.configCtor != nil {
 		conf := c.configCtor()
 		if err := node.Decode(conf); err != nil {
 			return nil, err
 		}
-		return &ParsedConfig{env: env, mgr: mgr, asStruct: conf}, nil
+		return &ParsedConfig{mgr: mgr, asStruct: conf}, nil
 	}
 
 	fields, err := c.component.Config.Children.YAMLToMap(node, docs.ToValueConfig{})
@@ -126,7 +129,39 @@ func (c *ConfigSpec) configFromNode(env *Environment, mgr bundle.NewManagement, 
 		return nil, err
 	}
 
-	return &ParsedConfig{env: env, mgr: mgr, generic: fields}, nil
+	return &ParsedConfig{mgr: mgr, generic: fields}, nil
+}
+
+// ParseYAML attempts to parse a YAML document as the defined configuration spec
+// and returns a parsed config view. The provided environment determines which
+// child components and Bloblang functions can be created by the fields of the
+// spec, you can leave the environment nil to use the global environment.
+//
+// This method is intended for testing purposes and is not required for normal
+// use of plugin components, as parsing is managed by other components.
+func (c *ConfigSpec) ParseYAML(yamlStr string, env *Environment) (*ParsedConfig, error) {
+	if env == nil {
+		env = globalEnvironment
+	}
+
+	var nconf yaml.Node
+	if err := yaml.Unmarshal([]byte(yamlStr), &nconf); err != nil {
+		return nil, err
+	}
+	if nconf.Kind == yaml.DocumentNode && len(nconf.Content) > 0 {
+		nconf = *nconf.Content[0]
+	}
+
+	mgr, err := manager.NewV2(
+		manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop(),
+		manager.OptSetEnvironment(env.internal),
+		manager.OptSetBloblangEnvironment(env.getBloblangParserEnv()),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to instantiate resources: %w", err)
+	}
+
+	return c.configFromNode(mgr, &nconf)
 }
 
 // NewConfigSpec creates a new empty component configuration spec. If the
@@ -309,7 +344,6 @@ func (c *ConfigView) FormatJSON() ([]byte, error) {
 // access the parsed struct.
 type ParsedConfig struct {
 	hiddenPath []string
-	env        *Environment
 	mgr        bundle.NewManagement
 	asStruct   interface{}
 	generic    map[string]interface{}
