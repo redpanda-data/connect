@@ -18,7 +18,7 @@ var _ = registerIntegrationTest("cassandra", func(t *testing.T) {
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
+	pool.MaxWait = time.Second * 60
 	resource, err := pool.Run("cassandra", "latest", nil)
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -57,8 +57,7 @@ output:
     addresses:
       - localhost:$PORT
     query: 'INSERT INTO testspace.table$ID JSON ?'
-    args:
-      - ${! content() }
+    args_mapping: 'root = [ this ]'
 `
 		queryGetFn := func(env *testEnvironment, id string) (string, []string, error) {
 			var resID int
@@ -77,6 +76,8 @@ output:
 		suite.Run(
 			t, template,
 			testOptPort(resource.GetPort("9042/tcp")),
+			testOptSleepAfterInput(time.Second*10),
+			testOptSleepAfterOutput(time.Second*10),
 			testOptPreTest(func(t testing.TB, env *testEnvironment) {
 				env.configVars.id = strings.ReplaceAll(env.configVars.id, "-", "")
 				require.NoError(t, session.Query(
@@ -90,6 +91,51 @@ output:
 	})
 
 	t.Run("with values", func(t *testing.T) {
+		template := `
+output:
+  cassandra:
+    addresses:
+      - localhost:$PORT
+    query: 'INSERT INTO testspace.table$ID (id, content, created_at) VALUES (?, ?, ?)'
+    args_mapping: |
+      root = [ this.id, this.content, now() ]
+`
+		queryGetFn := func(env *testEnvironment, id string) (string, []string, error) {
+			var resID int
+			var resContent string
+			var createdAt time.Time
+			if err := session.Query(
+				fmt.Sprintf("select id, content, created_at from testspace.table%v where id = ?;", env.configVars.id), id,
+			).Scan(&resID, &resContent, &createdAt); err != nil {
+				return "", nil, err
+			}
+			if time.Since(createdAt) > time.Hour || time.Since(createdAt) < 0 {
+				return "", nil, fmt.Errorf("received bad created_at: %v", createdAt)
+			}
+			return fmt.Sprintf(`{"content":"%v","id":%v}`, resContent, resID), nil, err
+		}
+		suite := integrationTests(
+			integrationTestOutputOnlySendSequential(10, queryGetFn),
+			integrationTestOutputOnlySendBatch(10, queryGetFn),
+		)
+		suite.Run(
+			t, template,
+			testOptPort(resource.GetPort("9042/tcp")),
+			testOptSleepAfterInput(time.Second*10),
+			testOptSleepAfterOutput(time.Second*10),
+			testOptPreTest(func(t testing.TB, env *testEnvironment) {
+				env.configVars.id = strings.ReplaceAll(env.configVars.id, "-", "")
+				require.NoError(t, session.Query(
+					fmt.Sprintf(
+						"CREATE TABLE testspace.table%v (id int primary key, content text, created_at timestamp);",
+						env.configVars.id,
+					),
+				).Exec())
+			}),
+		)
+	})
+
+	t.Run("with old style values", func(t *testing.T) {
 		template := `
 output:
   cassandra:
@@ -122,6 +168,8 @@ output:
 		suite.Run(
 			t, template,
 			testOptPort(resource.GetPort("9042/tcp")),
+			testOptSleepAfterInput(time.Second*10),
+			testOptSleepAfterOutput(time.Second*10),
 			testOptPreTest(func(t testing.TB, env *testEnvironment) {
 				env.configVars.id = strings.ReplaceAll(env.configVars.id, "-", "")
 				require.NoError(t, session.Query(

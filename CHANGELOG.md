@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - New experimental `gcp_bigquery` output.
 - Go API: It's now possible to parse a config spec directly with `ParseYAML`.
 - Bloblang methods and functions now support named parameters.
+- Field `args_mapping` added to the `cassandra` output.
 
 ## 3.54.0 - 2021-09-01
 

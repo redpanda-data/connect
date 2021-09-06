@@ -35,7 +35,6 @@ output:
   cassandra:
     addresses: []
     query: ""
-    args: []
     args_mapping: ""
     max_in_flight: 1
     batching:
@@ -67,7 +66,6 @@ output:
       password: ""
     disable_initial_host_lookup: false
     query: ""
-    args: []
     args_mapping: ""
     consistency: QUORUM
     max_retries: 3
@@ -104,7 +102,6 @@ Batches can be formed at both the input and output level. You can find out more
 
 <Tabs defaultValue="Basic Inserts" values={[
 { label: 'Basic Inserts', value: 'Basic Inserts', },
-{ label: 'Basic Inserts with bloblang mapping', value: 'Basic Inserts with bloblang mapping', },
 { label: 'Insert JSON Documents', value: 'Insert JSON Documents', },
 ]}>
 
@@ -118,30 +115,11 @@ output:
     addresses:
       - localhost:9042
     query: 'INSERT INTO foo.bar (id, content, created_at) VALUES (?, ?, ?)'
-    args:
-      - ${! json("id") }
-      - ${! json("content") }
-      - ${! json("timestamp").format_timestamp() }
-    batching:
-      count: 500
-```
-
-</TabItem>
-<TabItem value="Basic Inserts with bloblang mapping">
-
-If we were to create a table with some basic columns with `CREATE TABLE foo.bar (id int primary key, content text, created_at timestamp);`, and were processing JSON documents of the form `{"id":"342354354","content":"hello world","timestamp":1605219406}`, we could populate our table with the following config:
-
-```yaml
-output:
-  cassandra:
-    addresses:
-      - localhost:9042
-    query: 'INSERT INTO foo.bar (id, content, created_at) VALUES (?, ?, ?)'
     args_mapping: |
       root = [
         this.id,
         this.content,
-        this.timestamp.format_timestamp()
+        this.timestamp
       ]
     batching:
       count: 500
@@ -158,8 +136,7 @@ output:
     addresses:
       - localhost:9042
     query: 'INSERT INTO foospace.footable JSON ?'
-    args:
-      - ${! content() }
+    args_mapping: 'root = [ this ]'
     batching:
       count: 500
 ```
@@ -353,22 +330,14 @@ A query to execute for each message.
 Type: `string`  
 Default: `""`  
 
-### `args`
-
-A list of arguments for the query to be resolved for each message.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-
-
-Type: `array`  
-Default: `[]`  
-
 ### `args_mapping`
 
-A [Bloblang mapping](/docs/guides/bloblang/about) that can be used to provide arguments to Cassandra queries.
+A [Bloblang mapping](/docs/guides/bloblang/about) that can be used to provide arguments to Cassandra queries. The result of the query must be an array containing a matching number of elements to the query arguments.
 
 
 Type: `string`  
 Default: `""`  
+Requires version 3.55.0 or newer  
 
 ### `consistency`
 
