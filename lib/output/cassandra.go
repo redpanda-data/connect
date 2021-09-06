@@ -12,6 +12,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -213,6 +214,9 @@ type cassandraWriter struct {
 	session       *gocql.Session
 	mQueryLatency metrics.StatTimer
 	connLock      sync.RWMutex
+
+	args        []*field.Expression
+	argsMapping *mapping.Executor
 }
 
 func newCassandraWriter(conf CassandraConfig, log log.Modular, stats metrics.Type) (*cassandraWriter, error) {
@@ -239,6 +243,21 @@ func newCassandraWriter(conf CassandraConfig, log log.Modular, stats metrics.Typ
 	}
 	if c.backoffMax, err = time.ParseDuration(c.conf.Config.Backoff.MaxInterval); err != nil {
 		return nil, fmt.Errorf("parsing backoff max interval: %w", err)
+	}
+
+	// Parse the bloblang args or args_mapping fields, as they could be expensive to parse during runtime.
+	if len(c.conf.Args) > 0 {
+		for i, v := range c.conf.Args {
+			expr, err := bloblang.NewField(v)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse arg %v expression: %v", i, err)
+			}
+			c.args = append(c.args, expr)
+		}
+	} else {
+		if c.argsMapping, err = bloblang.NewMapping("", c.conf.ArgsMapping); err != nil {
+			return nil, fmt.Errorf("parsing args_mapping: %w", err)
+		}
 	}
 
 	return &c, nil
@@ -345,30 +364,15 @@ func (c *cassandraWriter) writeBatch(session *gocql.Session, msg types.Message) 
 func (c *cassandraWriter) parseArgs(msg types.Message, index int) ([]interface{}, error) {
 	// If we've been given the "args" field, extract values from there.
 	if len(c.conf.Args) > 0 {
-		var args []*field.Expression
-		for i, v := range c.conf.Args {
-			expr, err := bloblang.NewField(v)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse arg %v expression: %v", i, err)
-			}
-			args = append(args, expr)
-		}
-
-		values := make([]interface{}, 0, len(args))
-		for _, arg := range args {
+		values := make([]interface{}, 0, len(c.args))
+		for _, arg := range c.args {
 			values = append(values, stringValue(arg.String(0, msg)))
 		}
-
 		return values, nil
 	}
 
-	argsMapping, err := bloblang.NewMapping("", c.conf.ArgsMapping)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse args_mapping: %v", err)
-	}
-
 	// We've got an "args_mapping" field, extract values from there.
-	part, err := argsMapping.MapPart(index, msg)
+	part, err := c.argsMapping.MapPart(index, msg)
 	if err != nil {
 		return nil, fmt.Errorf("executing bloblang mapping: %w", err)
 	}
