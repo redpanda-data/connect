@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Go API: It's now possible to parse a config spec directly with `ParseYAML`.
 - Bloblang methods and functions now support named parameters.
 - Field `args_mapping` added to the `cassandra` output.
+- For NATS, NATS Streaming and Jetstream components the config now supports specifying either `nkey_file` or `user_credentials_file` to configure authentication.
 
 ## 3.54.0 - 2021-09-01
 
