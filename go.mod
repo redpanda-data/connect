@@ -72,6 +72,7 @@ require (
 	github.com/pebbe/zmq4 v1.2.1
 	github.com/pierrec/lz4/v4 v4.1.7
 	github.com/pkg/sftp v1.12.0
+        github.com/oschwald/geoip2-golang v1.5.0
 	github.com/prometheus/client_golang v1.8.0
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
 	github.com/quipo/statsd v0.0.0-20180118161217-3d6a5565f314
