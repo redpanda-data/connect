@@ -96,22 +96,24 @@ output:
   cassandra:
     addresses:
       - localhost:$PORT
-    query: 'INSERT INTO testspace.table$ID (id, content, created_at) VALUES (?, ?, ?)'
+    query: 'INSERT INTO testspace.table$ID (id, content, created_at, meows) VALUES (?, ?, ?, ?)'
     args_mapping: |
-      root = [ this.id, this.content, now() ]
+      root = [ this.id, this.content, now(), [ "first meow", "second meow" ] ]
 `
 		queryGetFn := func(env *testEnvironment, id string) (string, []string, error) {
 			var resID int
 			var resContent string
 			var createdAt time.Time
+			var meows []string
 			if err := session.Query(
-				fmt.Sprintf("select id, content, created_at from testspace.table%v where id = ?;", env.configVars.id), id,
-			).Scan(&resID, &resContent, &createdAt); err != nil {
+				fmt.Sprintf("select id, content, created_at, meows from testspace.table%v where id = ?;", env.configVars.id), id,
+			).Scan(&resID, &resContent, &createdAt, &meows); err != nil {
 				return "", nil, err
 			}
 			if time.Since(createdAt) > time.Hour || time.Since(createdAt) < 0 {
 				return "", nil, fmt.Errorf("received bad created_at: %v", createdAt)
 			}
+			assert.Equal(t, []string{"first meow", "second meow"}, meows)
 			return fmt.Sprintf(`{"content":"%v","id":%v}`, resContent, resID), nil, err
 		}
 		suite := integrationTests(
@@ -127,7 +129,7 @@ output:
 				env.configVars.id = strings.ReplaceAll(env.configVars.id, "-", "")
 				require.NoError(t, session.Query(
 					fmt.Sprintf(
-						"CREATE TABLE testspace.table%v (id int primary key, content text, created_at timestamp);",
+						"CREATE TABLE testspace.table%v (id int primary key, content text, created_at timestamp, meows list<text>);",
 						env.configVars.id,
 					),
 				).Exec())

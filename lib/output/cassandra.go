@@ -3,6 +3,7 @@ package output
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
@@ -527,38 +528,22 @@ func (g genericValue) MarshalCQL(info gocql.TypeInfo) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		if t.IsZero() {
-			return []byte{}, nil
-		}
-		x := t.UTC().Unix()*1e3 + int64(t.UTC().Nanosecond()/1e6)
-		return formatCassandraInt64(x), nil
-	case gocql.TypeTime:
-		x, err := query.IGetInt(g.v)
-		if err != nil {
-			return nil, err
-		}
-		return formatCassandraInt64(x), nil
-	case gocql.TypeBoolean:
-		b, err := query.IGetBool(g.v)
-		if err != nil {
-			return nil, err
-		}
-		if b {
-			return []byte{1}, nil
-		}
-		return []byte{0}, nil
-	case gocql.TypeFloat:
+		return gocql.Marshal(info, t)
+	case gocql.TypeFloat, gocql.TypeDouble:
 		f, err := query.IGetNumber(g.v)
 		if err != nil {
 			return nil, err
 		}
-		return formatCassandraInt32(int32(math.Float32bits(float32(f)))), nil
-	case gocql.TypeDouble:
-		f, err := query.IGetNumber(g.v)
-		if err != nil {
-			return nil, err
-		}
-		return formatCassandraInt64(int64(math.Float64bits(f))), nil
+		return gocql.Marshal(info, f)
+	case gocql.TypeVarchar:
+		return gocql.Marshal(info, query.IToString(g.v))
 	}
-	return gocql.Marshal(info, query.IToString(g.v))
+	if _, isJSONNum := g.v.(json.Number); isJSONNum {
+		i, err := query.IGetInt(g.v)
+		if err != nil {
+			return nil, err
+		}
+		return gocql.Marshal(info, i)
+	}
+	return gocql.Marshal(info, g.v)
 }
