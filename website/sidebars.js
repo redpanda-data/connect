@@ -103,6 +103,7 @@ module.exports = {
         'guides/sync_responses',
         'guides/aws',
         'guides/gcp',
+        'guides/nats',
         {
           type: 'category',
           label: 'Serverless',
