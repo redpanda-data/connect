@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.55.0 - 2021-09-08
+
 ### Added
 
 - New experimental `gcp_bigquery` output.

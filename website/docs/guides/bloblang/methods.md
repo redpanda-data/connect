@@ -284,7 +284,7 @@ Checks whether a string has a prefix argument and returns a bool.
 
 #### Parameters
 
-**`prefix`** &lt;string&gt; The prefix string to test.  
+**`value`** &lt;string&gt; The string to test.  
 
 #### Examples
 
@@ -303,7 +303,7 @@ Checks whether a string has a suffix argument and returns a bool.
 
 #### Parameters
 
-**`suffix`** &lt;string&gt; The suffix string to test.  
+**`value`** &lt;string&gt; The string to test.  
 
 #### Examples
 
@@ -322,7 +322,7 @@ Returns the starting index of the argument substring in a string target, or `-1`
 
 #### Parameters
 
-**`search`** &lt;string&gt; A string to search for.  
+**`value`** &lt;string&gt; A string to search for.  
 
 #### Examples
 
@@ -1349,7 +1349,7 @@ Executes a mapping query argument for each element of an array or key/value pair
 
 #### Parameters
 
-**`check`** &lt;query expression&gt; A query to apply to each element, if this query resolves to any value other than a boolean `true` the element will be removed from the result.  
+**`test`** &lt;query expression&gt; A query to apply to each element, if this query resolves to any value other than a boolean `true` the element will be removed from the result.  
 
 #### Examples
 

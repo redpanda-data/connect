@@ -469,9 +469,9 @@ var _ = registerSimpleMethod(
 			`the cat meowed, the dog woofed`,
 			`{"index":8}`,
 		),
-	).Param(ParamString("search", "A string to search for.")),
+	).Param(ParamString("value", "A string to search for.")),
 	func(args *ParsedParams) (simpleMethod, error) {
-		substring, err := args.FieldString("search")
+		substring, err := args.FieldString("value")
 		if err != nil {
 			return nil, err
 		}
@@ -640,9 +640,9 @@ root.t2 = this.v2.has_prefix("foo")`,
 			`{"v1":"foobar","v2":"barfoo"}`,
 			`{"t1":true,"t2":false}`,
 		),
-	).Param(ParamString("prefix", "The prefix string to test.")),
+	).Param(ParamString("value", "The string to test.")),
 	func(args *ParsedParams) (simpleMethod, error) {
-		prefix, err := args.FieldString("prefix")
+		prefix, err := args.FieldString("value")
 		if err != nil {
 			return nil, err
 		}
@@ -673,9 +673,9 @@ root.t2 = this.v2.has_suffix("foo")`,
 			`{"v1":"foobar","v2":"barfoo"}`,
 			`{"t1":false,"t2":true}`,
 		),
-	).Param(ParamString("suffix", "The suffix string to test.")),
+	).Param(ParamString("value", "The string to test.")),
 	func(args *ParsedParams) (simpleMethod, error) {
-		suffix, err := args.FieldString("suffix")
+		suffix, err := args.FieldString("value")
 		if err != nil {
 			return nil, err
 		}

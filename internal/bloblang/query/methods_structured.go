@@ -384,9 +384,9 @@ When filtering objects the mapping query argument is provided a context with a f
 			`{"dict":{"first":"hello foo","second":"world","third":"this foo is great"}}`,
 			`{"new_dict":{"first":"hello foo","third":"this foo is great"}}`,
 		),
-	).Param(ParamQuery("check", "A query to apply to each element, if this query resolves to any value other than a boolean `true` the element will be removed from the result.", false)),
+	).Param(ParamQuery("test", "A query to apply to each element, if this query resolves to any value other than a boolean `true` the element will be removed from the result.", false)),
 	func(args *ParsedParams) (simpleMethod, error) {
-		mapFn, err := args.FieldQuery("check")
+		mapFn, err := args.FieldQuery("test")
 		if err != nil {
 			return nil, err
 		}
