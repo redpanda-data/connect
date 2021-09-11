@@ -41,6 +41,7 @@ output:
     cache_control: ""
     content_disposition: ""
     content_language: ""
+    website_redirect_location: ""
     metadata:
       exclude_prefixes: []
     max_in_flight: 1
@@ -68,6 +69,7 @@ output:
     cache_control: ""
     content_disposition: ""
     content_language: ""
+    website_redirect_location: ""
     metadata:
       exclude_prefixes: []
     storage_class: STANDARD
@@ -257,6 +259,15 @@ Default: `""`
 ### `content_language`
 
 The content language to set for each object.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `website_redirect_location`
+
+The website redirect location to set for each object.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 

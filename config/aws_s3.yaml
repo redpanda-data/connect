@@ -47,6 +47,7 @@ output:
     cache_control: ""
     content_disposition: ""
     content_language: ""
+    website_redirect_location: ""
     metadata:
       exclude_prefixes: []
     storage_class: STANDARD

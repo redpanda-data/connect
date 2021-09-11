@@ -112,6 +112,7 @@ output:
 			docs.FieldCommon("cache_control", "The cache control to set for each object.").IsInterpolated(),
 			docs.FieldCommon("content_disposition", "The content disposition to set for each object.").IsInterpolated(),
 			docs.FieldCommon("content_language", "The content language to set for each object.").IsInterpolated(),
+			docs.FieldCommon("website_redirect_location", "The website redirect location to set for each object.").IsInterpolated(),
 			docs.FieldCommon("metadata", "Specify criteria for which metadata values are attached to objects as headers.").WithChildren(output.MetadataFields()...),
 			docs.FieldAdvanced("storage_class", "The storage class to set for each object.").HasOptions(
 				"STANDARD", "REDUCED_REDUNDANCY", "GLACIER", "STANDARD_IA", "ONEZONE_IA", "INTELLIGENT_TIERING", "DEEP_ARCHIVE",
@@ -230,6 +231,7 @@ output:
 			docs.FieldCommon("cache_control", "The cache control to set for each object.").IsInterpolated(),
 			docs.FieldCommon("content_disposition", "The content disposition to set for each object.").IsInterpolated(),
 			docs.FieldCommon("content_language", "The content language to set for each object.").IsInterpolated(),
+			docs.FieldCommon("website_redirect_location", "The website redirect location to set for each object.").IsInterpolated(),
 			docs.FieldCommon("metadata", "Specify criteria for which metadata values are attached to objects as headers.").WithChildren(output.MetadataFields()...),
 			docs.FieldAdvanced("storage_class", "The storage class to set for each object.").HasOptions(
 				"STANDARD", "REDUCED_REDUNDANCY", "GLACIER", "STANDARD_IA", "ONEZONE_IA", "INTELLIGENT_TIERING", "DEEP_ARCHIVE",
