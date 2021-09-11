@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- The `test` subcommand now expands resource glob patterns (`benthos -r "./foo/*.yaml" test ./...`).
+
 ## 3.55.0 - 2021-09-08
 
 ### Added
