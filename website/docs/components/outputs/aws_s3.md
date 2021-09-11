@@ -38,6 +38,9 @@ output:
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     tags: {}
     content_type: application/octet-stream
+    cache_control: ""
+    content_disposition: ""
+    content_language: ""
     metadata:
       exclude_prefixes: []
     max_in_flight: 1
@@ -62,6 +65,9 @@ output:
     tags: {}
     content_type: application/octet-stream
     content_encoding: ""
+    cache_control: ""
+    content_disposition: ""
+    content_language: ""
     metadata:
       exclude_prefixes: []
     storage_class: STANDARD
@@ -224,6 +230,33 @@ Default: `"application/octet-stream"`
 ### `content_encoding`
 
 An optional content encoding to set for each object.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `cache_control`
+
+The cache control to set for each object.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `content_disposition`
+
+The content disposition to set for each object.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `content_language`
+
+The content language to set for each object.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 

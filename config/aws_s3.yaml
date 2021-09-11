@@ -44,6 +44,9 @@ output:
     tags: {}
     content_type: application/octet-stream
     content_encoding: ""
+    cache_control: ""
+    content_disposition: ""
+    content_language: ""
     metadata:
       exclude_prefixes: []
     storage_class: STANDARD
