@@ -109,6 +109,9 @@ output:
 			).IsInterpolated().Map(),
 			docs.FieldCommon("content_type", "The content type to set for each object.").IsInterpolated(),
 			docs.FieldAdvanced("content_encoding", "An optional content encoding to set for each object.").IsInterpolated(),
+			docs.FieldCommon("cache_control", "The cache control to set for each object.").IsInterpolated(),
+			docs.FieldCommon("content_disposition", "The content disposition to set for each object.").IsInterpolated(),
+			docs.FieldCommon("content_language", "The content language to set for each object.").IsInterpolated(),
 			docs.FieldCommon("metadata", "Specify criteria for which metadata values are attached to objects as headers.").WithChildren(output.MetadataFields()...),
 			docs.FieldAdvanced("storage_class", "The storage class to set for each object.").HasOptions(
 				"STANDARD", "REDUCED_REDUNDANCY", "GLACIER", "STANDARD_IA", "ONEZONE_IA", "INTELLIGENT_TIERING", "DEEP_ARCHIVE",

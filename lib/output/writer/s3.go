@@ -33,6 +33,9 @@ type AmazonS3Config struct {
 	Tags               map[string]string  `json:"tags" yaml:"tags"`
 	ContentType        string             `json:"content_type" yaml:"content_type"`
 	ContentEncoding    string             `json:"content_encoding" yaml:"content_encoding"`
+	CacheControl       string             `json:"cache_control" yaml:"cache_control"`
+	ContentDisposition string             `json:"content_disposition" yaml:"content_disposition"`
+	ContentLanguage    string             `json:"content_language" yaml:"content_language"`
 	Metadata           output.Metadata    `json:"metadata" yaml:"metadata"`
 	StorageClass       string             `json:"storage_class" yaml:"storage_class"`
 	Timeout            string             `json:"timeout" yaml:"timeout"`
@@ -51,6 +54,9 @@ func NewAmazonS3Config() AmazonS3Config {
 		Tags:               map[string]string{},
 		ContentType:        "application/octet-stream",
 		ContentEncoding:    "",
+		CacheControl:       "",
+		ContentDisposition: "",
+		ContentLanguage:    "",
 		Metadata:           output.NewMetadata(),
 		StorageClass:       "STANDARD",
 		Timeout:            "5s",
@@ -72,12 +78,15 @@ type s3TagPair struct {
 type AmazonS3 struct {
 	conf AmazonS3Config
 
-	path            *field.Expression
-	tags            []s3TagPair
-	contentType     *field.Expression
-	contentEncoding *field.Expression
-	storageClass    *field.Expression
-	metaFilter      *output.MetadataFilter
+	path               *field.Expression
+	tags               []s3TagPair
+	contentType        *field.Expression
+	contentEncoding    *field.Expression
+	cacheControl       *field.Expression
+	contentDisposition *field.Expression
+	contentLanguage    *field.Expression
+	storageClass       *field.Expression
+	metaFilter         *output.MetadataFilter
 
 	session  *session.Session
 	uploader *s3manager.Uploader
@@ -116,6 +125,16 @@ func NewAmazonS3(
 	if a.contentEncoding, err = bloblang.NewField(conf.ContentEncoding); err != nil {
 		return nil, fmt.Errorf("failed to parse content encoding expression: %v", err)
 	}
+	if a.cacheControl, err = bloblang.NewField(conf.CacheControl); err != nil {
+		return nil, fmt.Errorf("failed to parse cache control expression: %v", err)
+	}
+	if a.contentDisposition, err = bloblang.NewField(conf.ContentDisposition); err != nil {
+		return nil, fmt.Errorf("failed to parse content disposition expression: %v", err)
+	}
+	if a.contentLanguage, err = bloblang.NewField(conf.ContentLanguage); err != nil {
+		return nil, fmt.Errorf("failed to parse content language expression: %v", err)
+	}
+
 	if a.metaFilter, err = conf.Metadata.Filter(); err != nil {
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
@@ -195,15 +214,30 @@ func (a *AmazonS3) WriteWithContext(wctx context.Context, msg types.Message) err
 		if ce := a.contentEncoding.String(i, msg); len(ce) > 0 {
 			contentEncoding = aws.String(ce)
 		}
+		var cacheControl *string
+		if ce := a.cacheControl.String(i, msg); len(ce) > 0 {
+			cacheControl = aws.String(ce)
+		}
+		var contentDisposition *string
+		if ce := a.contentDisposition.String(i, msg); len(ce) > 0 {
+			contentDisposition = aws.String(ce)
+		}
+		var contentLanguage *string
+		if ce := a.contentLanguage.String(i, msg); len(ce) > 0 {
+			contentLanguage = aws.String(ce)
+		}
 
 		uploadInput := &s3manager.UploadInput{
-			Bucket:          &a.conf.Bucket,
-			Key:             aws.String(a.path.String(i, msg)),
-			Body:            bytes.NewReader(p.Get()),
-			ContentType:     aws.String(a.contentType.String(i, msg)),
-			ContentEncoding: contentEncoding,
-			StorageClass:    aws.String(a.storageClass.String(i, msg)),
-			Metadata:        metadata,
+			Bucket:             &a.conf.Bucket,
+			Key:                aws.String(a.path.String(i, msg)),
+			Body:               bytes.NewReader(p.Get()),
+			ContentType:        aws.String(a.contentType.String(i, msg)),
+			ContentEncoding:    contentEncoding,
+			CacheControl:       cacheControl,
+			ContentDisposition: contentDisposition,
+			ContentLanguage:    contentLanguage,
+			StorageClass:       aws.String(a.storageClass.String(i, msg)),
+			Metadata:           metadata,
 		}
 
 		// Prepare tags, escaping keys and values to ensure they're valid query string parameters.
