@@ -346,10 +346,10 @@ func compareOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
 				}
 				rhs, err := IGetString(right)
 				if err != nil {
-					if op == ArithmeticNeq {
-						return true, nil
+					if genericOpFn == nil {
+						return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
 					}
-					return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
+					return genericOpFn(lhs, restrictForComparison(right)), nil
 				}
 				return strOpFn(lhs, rhs), nil
 			case float64:
@@ -358,10 +358,10 @@ func compareOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
 				}
 				rhs, err := IGetNumber(right)
 				if err != nil {
-					if op == ArithmeticNeq {
-						return true, nil
+					if genericOpFn == nil {
+						return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
 					}
-					return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
+					return genericOpFn(lhs, restrictForComparison(right)), nil
 				}
 				return numOpFn(lhs, rhs), nil
 			case bool:
@@ -370,10 +370,10 @@ func compareOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
 				}
 				rhs, err := IGetBool(right)
 				if err != nil {
-					if op == ArithmeticNeq {
-						return true, nil
+					if genericOpFn == nil {
+						return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
 					}
-					return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
+					return genericOpFn(lhs, restrictForComparison(right)), nil
 				}
 				return boolOpFn(lhs, rhs), nil
 			default:

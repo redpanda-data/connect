@@ -95,6 +95,7 @@ module.exports = {
             'guides/bloblang/walkthrough',
             'guides/bloblang/functions',
             'guides/bloblang/methods',
+            'guides/bloblang/arithmetic',
             'guides/bloblang/advanced',
           ],
         },

@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `test` subcommand now expands resource glob patterns (`benthos -r "./foo/*.yaml" test ./...`).
+- The Bloblang equality operator now returns `false` when comparing non-null values with `null` rather than a mismatched types error.
 
 ## 3.55.0 - 2021-09-08
 

@@ -173,7 +173,7 @@ root = this.some.value # And now this is a comment
 
 ## Boolean Logic and Arithmetic
 
-Bloblang supports a range of boolean operators `!`, `>`, `>=`, `==`, `<`, `<=`, `&&`, `||` and arithmetic operators `+`, `-`, `*`, `/`, `%`:
+Bloblang supports a range of boolean operators `!`, `>`, `>=`, `==`, `<`, `<=`, `&&`, `||` and mathematical operators `+`, `-`, `*`, `/`, `%`:
 
 ```coffee
 root.is_big = this.number > 100
@@ -185,6 +185,8 @@ root.multiplied = this.number * 7
 # In:  {"number":150}
 # Out: {"is_big":true,"multiplied":1050}
 ```
+
+For more information about these operators and how they work check out [the arithmetic page][blobl.arithmetic].
 
 ## Conditional Mapping
 
@@ -393,6 +395,7 @@ root.foo = this.bar.index(5).or("default")
 
 It's possible to execute unit tests for your Bloblang mappings using the standard Benthos unit test capabilities outlined [in this document][configuration.unit_testing].
 
+[blobl.arithmetic]: /docs/guides/bloblang/arithmetic
 [blobl.walkthrough]: /docs/guides/bloblang/walkthrough
 [blobl.variables]: #variables
 [blobl.proc]: /docs/components/processors/bloblang
