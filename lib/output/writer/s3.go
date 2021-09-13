@@ -26,37 +26,45 @@ import (
 
 // AmazonS3Config contains configuration fields for the AmazonS3 output type.
 type AmazonS3Config struct {
-	sess.Config        `json:",inline" yaml:",inline"`
-	Bucket             string             `json:"bucket" yaml:"bucket"`
-	ForcePathStyleURLs bool               `json:"force_path_style_urls" yaml:"force_path_style_urls"`
-	Path               string             `json:"path" yaml:"path"`
-	Tags               map[string]string  `json:"tags" yaml:"tags"`
-	ContentType        string             `json:"content_type" yaml:"content_type"`
-	ContentEncoding    string             `json:"content_encoding" yaml:"content_encoding"`
-	Metadata           output.Metadata    `json:"metadata" yaml:"metadata"`
-	StorageClass       string             `json:"storage_class" yaml:"storage_class"`
-	Timeout            string             `json:"timeout" yaml:"timeout"`
-	KMSKeyID           string             `json:"kms_key_id" yaml:"kms_key_id"`
-	MaxInFlight        int                `json:"max_in_flight" yaml:"max_in_flight"`
-	Batching           batch.PolicyConfig `json:"batching" yaml:"batching"`
+	sess.Config             `json:",inline" yaml:",inline"`
+	Bucket                  string             `json:"bucket" yaml:"bucket"`
+	ForcePathStyleURLs      bool               `json:"force_path_style_urls" yaml:"force_path_style_urls"`
+	Path                    string             `json:"path" yaml:"path"`
+	Tags                    map[string]string  `json:"tags" yaml:"tags"`
+	ContentType             string             `json:"content_type" yaml:"content_type"`
+	ContentEncoding         string             `json:"content_encoding" yaml:"content_encoding"`
+	CacheControl            string             `json:"cache_control" yaml:"cache_control"`
+	ContentDisposition      string             `json:"content_disposition" yaml:"content_disposition"`
+	ContentLanguage         string             `json:"content_language" yaml:"content_language"`
+	WebsiteRedirectLocation string             `json:"website_redirect_location" yaml:"website_redirect_location"`
+	Metadata                output.Metadata    `json:"metadata" yaml:"metadata"`
+	StorageClass            string             `json:"storage_class" yaml:"storage_class"`
+	Timeout                 string             `json:"timeout" yaml:"timeout"`
+	KMSKeyID                string             `json:"kms_key_id" yaml:"kms_key_id"`
+	MaxInFlight             int                `json:"max_in_flight" yaml:"max_in_flight"`
+	Batching                batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewAmazonS3Config creates a new Config with default values.
 func NewAmazonS3Config() AmazonS3Config {
 	return AmazonS3Config{
-		Config:             sess.NewConfig(),
-		Bucket:             "",
-		ForcePathStyleURLs: false,
-		Path:               `${!count("files")}-${!timestamp_unix_nano()}.txt`,
-		Tags:               map[string]string{},
-		ContentType:        "application/octet-stream",
-		ContentEncoding:    "",
-		Metadata:           output.NewMetadata(),
-		StorageClass:       "STANDARD",
-		Timeout:            "5s",
-		KMSKeyID:           "",
-		MaxInFlight:        1,
-		Batching:           batch.NewPolicyConfig(),
+		Config:                  sess.NewConfig(),
+		Bucket:                  "",
+		ForcePathStyleURLs:      false,
+		Path:                    `${!count("files")}-${!timestamp_unix_nano()}.txt`,
+		Tags:                    map[string]string{},
+		ContentType:             "application/octet-stream",
+		ContentEncoding:         "",
+		CacheControl:            "",
+		ContentDisposition:      "",
+		ContentLanguage:         "",
+		WebsiteRedirectLocation: "",
+		Metadata:                output.NewMetadata(),
+		StorageClass:            "STANDARD",
+		Timeout:                 "5s",
+		KMSKeyID:                "",
+		MaxInFlight:             1,
+		Batching:                batch.NewPolicyConfig(),
 	}
 }
 
@@ -72,12 +80,16 @@ type s3TagPair struct {
 type AmazonS3 struct {
 	conf AmazonS3Config
 
-	path            *field.Expression
-	tags            []s3TagPair
-	contentType     *field.Expression
-	contentEncoding *field.Expression
-	storageClass    *field.Expression
-	metaFilter      *output.MetadataFilter
+	path                    *field.Expression
+	tags                    []s3TagPair
+	contentType             *field.Expression
+	contentEncoding         *field.Expression
+	cacheControl            *field.Expression
+	contentDisposition      *field.Expression
+	contentLanguage         *field.Expression
+	websiteRedirectLocation *field.Expression
+	storageClass            *field.Expression
+	metaFilter              *output.MetadataFilter
 
 	session  *session.Session
 	uploader *s3manager.Uploader
@@ -116,6 +128,19 @@ func NewAmazonS3(
 	if a.contentEncoding, err = bloblang.NewField(conf.ContentEncoding); err != nil {
 		return nil, fmt.Errorf("failed to parse content encoding expression: %v", err)
 	}
+	if a.cacheControl, err = bloblang.NewField(conf.CacheControl); err != nil {
+		return nil, fmt.Errorf("failed to parse cache control expression: %v", err)
+	}
+	if a.contentDisposition, err = bloblang.NewField(conf.ContentDisposition); err != nil {
+		return nil, fmt.Errorf("failed to parse content disposition expression: %v", err)
+	}
+	if a.contentLanguage, err = bloblang.NewField(conf.ContentLanguage); err != nil {
+		return nil, fmt.Errorf("failed to parse content language expression: %v", err)
+	}
+	if a.websiteRedirectLocation, err = bloblang.NewField(conf.WebsiteRedirectLocation); err != nil {
+		return nil, fmt.Errorf("failed to parse website redirect location expression: %v", err)
+	}
+
 	if a.metaFilter, err = conf.Metadata.Filter(); err != nil {
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
@@ -195,15 +220,35 @@ func (a *AmazonS3) WriteWithContext(wctx context.Context, msg types.Message) err
 		if ce := a.contentEncoding.String(i, msg); len(ce) > 0 {
 			contentEncoding = aws.String(ce)
 		}
+		var cacheControl *string
+		if ce := a.cacheControl.String(i, msg); len(ce) > 0 {
+			cacheControl = aws.String(ce)
+		}
+		var contentDisposition *string
+		if ce := a.contentDisposition.String(i, msg); len(ce) > 0 {
+			contentDisposition = aws.String(ce)
+		}
+		var contentLanguage *string
+		if ce := a.contentLanguage.String(i, msg); len(ce) > 0 {
+			contentLanguage = aws.String(ce)
+		}
+		var websiteRedirectLocation *string
+		if ce := a.websiteRedirectLocation.String(i, msg); len(ce) > 0 {
+			websiteRedirectLocation = aws.String(ce)
+		}
 
 		uploadInput := &s3manager.UploadInput{
-			Bucket:          &a.conf.Bucket,
-			Key:             aws.String(a.path.String(i, msg)),
-			Body:            bytes.NewReader(p.Get()),
-			ContentType:     aws.String(a.contentType.String(i, msg)),
-			ContentEncoding: contentEncoding,
-			StorageClass:    aws.String(a.storageClass.String(i, msg)),
-			Metadata:        metadata,
+			Bucket:                  &a.conf.Bucket,
+			Key:                     aws.String(a.path.String(i, msg)),
+			Body:                    bytes.NewReader(p.Get()),
+			ContentType:             aws.String(a.contentType.String(i, msg)),
+			ContentEncoding:         contentEncoding,
+			CacheControl:            cacheControl,
+			ContentDisposition:      contentDisposition,
+			ContentLanguage:         contentLanguage,
+			WebsiteRedirectLocation: websiteRedirectLocation,
+			StorageClass:            aws.String(a.storageClass.String(i, msg)),
+			Metadata:                metadata,
 		}
 
 		// Prepare tags, escaping keys and values to ensure they're valid query string parameters.
