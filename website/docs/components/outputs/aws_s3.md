@@ -38,10 +38,6 @@ output:
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     tags: {}
     content_type: application/octet-stream
-    cache_control: ""
-    content_disposition: ""
-    content_language: ""
-    website_redirect_location: ""
     metadata:
       exclude_prefixes: []
     max_in_flight: 1

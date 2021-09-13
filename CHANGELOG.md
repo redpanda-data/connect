@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Fields `cache_control`, `content_disposition`, `content_language` and `website_redirect_location` added to the `aws_s3` output.
+
 ### Fixed
 
 - The `test` subcommand now expands resource glob patterns (`benthos -r "./foo/*.yaml" test ./...`).
