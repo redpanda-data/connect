@@ -27,6 +27,8 @@ const redirects = [
   ["/workflows", "/docs/configuration/workflows", false],
   ["/streams", "/docs/guides/streams_mode/about", false],
   ["/docs/configuration/workflows", "/docs/components/processors/workflow", false],
+  ["/docs/guides/aws", "/docs/guides/cloud/aws", false],
+  ["/docs/guides/gcp", "/docs/guides/cloud/gcp", false],
 ];
 
 module.exports = function() {

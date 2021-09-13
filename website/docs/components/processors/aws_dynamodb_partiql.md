@@ -136,7 +136,7 @@ Default: `""`
 
 ### `credentials`
 
-Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/cloud/aws).
 
 
 Type: `object`  

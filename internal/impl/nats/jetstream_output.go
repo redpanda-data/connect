@@ -35,11 +35,12 @@ func init() {
 		}
 		return output.OnlySinglePayloads(o), nil
 	}), docs.ComponentSpec{
-		Name:    output.TypeNATSJetStream,
-		Type:    docs.TypeOutput,
-		Status:  docs.StatusExperimental,
-		Version: "3.46.0",
-		Summary: `Write messages to a NATS JetStream subject.`,
+		Name:        output.TypeNATSJetStream,
+		Type:        docs.TypeOutput,
+		Status:      docs.StatusExperimental,
+		Version:     "3.46.0",
+		Summary:     `Write messages to a NATS JetStream subject.`,
+		Description: auth.Description(),
 		Categories: []string{
 			string(output.CategoryServices),
 		},

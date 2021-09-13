@@ -91,7 +91,7 @@ can read about these patterns [here](/docs/configuration/error_handling).
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/aws).
+[in this document](/docs/guides/cloud/aws).
 
 ## Examples
 
@@ -161,7 +161,7 @@ Default: `""`
 
 ### `credentials`
 
-Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/cloud/aws).
 
 
 Type: `object`  

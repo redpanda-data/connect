@@ -39,7 +39,9 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
+[function interpolation](/docs/configuration/interpolation#metadata).
+
+` + auth.Description(),
 		FieldSpecs: docs.FieldSpecs{
 			func() docs.FieldSpec {
 				b := batch.FieldSpec()

@@ -102,9 +102,14 @@ module.exports = {
         'guides/monitoring',
         'guides/performance_tuning',
         'guides/sync_responses',
-        'guides/aws',
-        'guides/gcp',
-        'guides/nats',
+        {
+          type: 'category',
+          label: 'Cloud Credentials',
+          items: [
+            'guides/cloud/aws',
+            'guides/cloud/gcp',
+          ],
+        },
         {
           type: 'category',
           label: 'Serverless',

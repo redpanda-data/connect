@@ -81,7 +81,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 ### Credentials
 
 By default Benthos will use a shared credentials file when connecting to GCP
-services. You can find out more [in this document](/docs/guides/gcp).
+services. You can find out more [in this document](/docs/guides/cloud/gcp).
 
 ## Fields
 

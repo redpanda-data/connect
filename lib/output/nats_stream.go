@@ -17,7 +17,8 @@ func init() {
 		constructor: fromSimpleConstructor(NewNATSStream),
 		Summary: `
 Publish to a NATS Stream subject.`,
-		Async: true,
+		Description: auth.Description(),
+		Async:       true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(
 				"urls",
