@@ -15,6 +15,7 @@ http:
   debug_endpoints: false
   cert_file: ""
   key_file: ""
+  enable_cors: false
 ```
 
 The field `enabled` can be set to `false` in order to disable the server.
@@ -36,6 +37,10 @@ The following endpoints will be generally available when the HTTP server is enab
 - `/ready` can be used as a readiness probe as it serves a 200 only when both the input and output are connected, otherwise a 503 is returned.
 - `/metrics`, `/stats` both provide metrics when the metrics type is either [`http_server`][metrics.http_server] or [`prometheus`][metrics.prometheus].
 - `/endpoints` provides a JSON object containing a list of available endpoints, including those registered by configured components.
+
+## CORS
+
+In order to serve Cross-Origin Resource Sharing headers, which instruct browsers to allow CORS requests, set the field `enable_cors` to `true`.
 
 ## Debug Endpoints
 

@@ -101,7 +101,7 @@ clean:
 	rm -rf $(PATHINSTDOCKER)
 
 docs: $(APPS) $(TOOLS)
-	@$(PATHINSTTOOLS)/benthos_config_gen $(DOCS_FLAGS)
+#	@$(PATHINSTTOOLS)/benthos_config_gen $(DOCS_FLAGS)
 	@$(PATHINSTTOOLS)/benthos_docs_gen $(DOCS_FLAGS)
 	@$(PATHINSTBIN)/benthos lint ./config/... \
 		$(WEBSITE_DIR)/cookbooks/*.md \
