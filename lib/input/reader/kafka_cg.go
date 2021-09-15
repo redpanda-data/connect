@@ -294,6 +294,7 @@ func (k *KafkaCG) ConnectWithContext(ctx context.Context) error {
 
 	config := sarama.NewConfig()
 	config.ClientID = k.conf.ClientID
+	config.RackID = k.conf.RackID
 	config.Net.DialTimeout = time.Second
 	config.Version = k.version
 	config.Consumer.Return.Errors = true

@@ -45,6 +45,7 @@ However, this also means that manual intervention will eventually be required in
 			sasl.FieldSpec(),
 			docs.FieldCommon("topic", "The topic to publish messages to.").IsInterpolated(),
 			docs.FieldCommon("client_id", "An identifier for the client connection."),
+			docs.FieldAdvanced("rack_id", "A rack identifier for this client."),
 			docs.FieldCommon("key", "The key to publish messages with.").IsInterpolated(),
 			docs.FieldCommon("partitioner", "The partitioning algorithm to use.").HasOptions("fnv1a_hash", "murmur2_hash", "random", "round_robin", "manual"),
 			docs.FieldAdvanced("partition", "The manually-specified partition to publish messages to, relevant only when the field `partitioner` is set to `manual`. Must be able to parse as a 32-bit integer.").IsInterpolated(),

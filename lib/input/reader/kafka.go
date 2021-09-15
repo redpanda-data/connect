@@ -27,6 +27,7 @@ type KafkaConfig struct {
 	Addresses           []string                 `json:"addresses" yaml:"addresses"`
 	Topics              []string                 `json:"topics" yaml:"topics"`
 	ClientID            string                   `json:"client_id" yaml:"client_id"`
+	RackID              string                   `json:"rack_id" yaml:"rack_id"`
 	ConsumerGroup       string                   `json:"consumer_group" yaml:"consumer_group"`
 	Group               KafkaBalancedGroupConfig `json:"group" yaml:"group"`
 	CommitPeriod        string                   `json:"commit_period" yaml:"commit_period"`
@@ -60,6 +61,7 @@ func NewKafkaConfig() KafkaConfig {
 		Addresses:           []string{"localhost:9092"},
 		Topics:              []string{},
 		ClientID:            "benthos_kafka_input",
+		RackID:              "",
 		ConsumerGroup:       "benthos_consumer_group",
 		Group:               NewKafkaBalancedGroupConfig(),
 		CommitPeriod:        "1s",
