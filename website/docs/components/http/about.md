@@ -15,7 +15,9 @@ http:
   debug_endpoints: false
   cert_file: ""
   key_file: ""
-  enable_cors: false
+  cors:
+    enabled: false
+    allowed_origins: []
 ```
 
 The field `enabled` can be set to `false` in order to disable the server.

@@ -21,6 +21,12 @@ import (
 
 //------------------------------------------------------------------------------
 
+// CORS contains configuration for allowing CORS headers.
+type CORS struct {
+	Enabled        bool     `json:"enabled" yaml:"enabled"`
+	AllowedOrigins []string `json:"allowed_origins" yaml:"allowed_origins"`
+}
+
 // Config contains the configuration fields for the Benthos API.
 type Config struct {
 	Address        string `json:"address" yaml:"address"`
@@ -30,7 +36,7 @@ type Config struct {
 	DebugEndpoints bool   `json:"debug_endpoints" yaml:"debug_endpoints"`
 	CertFile       string `json:"cert_file" yaml:"cert_file"`
 	KeyFile        string `json:"key_file" yaml:"key_file"`
-	EnableCORS     bool   `json:"enable_cors" yaml:"enable_cors"`
+	CORS           CORS   `json:"cors" yaml:"cors"`
 }
 
 // NewConfig creates a new API config with default values.
@@ -43,7 +49,10 @@ func NewConfig() Config {
 		DebugEndpoints: false,
 		CertFile:       "",
 		KeyFile:        "",
-		EnableCORS:     false,
+		CORS: CORS{
+			Enabled:        false,
+			AllowedOrigins: []string{},
+		},
 	}
 }
 
@@ -98,8 +107,12 @@ func New(
 	gMux := mux.NewRouter()
 
 	var handler http.Handler = gMux
-	if conf.EnableCORS {
+	if conf.CORS.Enabled {
+		if len(conf.CORS.AllowedOrigins) == 0 {
+			return nil, errors.New("must specify at least one allowed origin")
+		}
 		handler = handlers.CORS(
+			handlers.AllowedOrigins(conf.CORS.AllowedOrigins),
 			handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "DELETE"}),
 		)(gMux)
 	}

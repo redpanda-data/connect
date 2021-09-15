@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Fields `cache_control`, `content_disposition`, `content_language` and `website_redirect_location` added to the `aws_s3` output.
-- Field `enable_cors` added to the server wide `http` config.
+- Field `cors.enabled` and `cors.allowed_origins` added to the server wide `http` config.
 
 ### Fixed
 
