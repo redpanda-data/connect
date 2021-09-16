@@ -74,6 +74,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 			sasl.FieldSpec(),
 			docs.FieldCommon("consumer_group", "An identifier for the consumer group of the connection. This field can be explicitly made empty in order to disable stored offsets for the consumed topic partitions."),
 			docs.FieldCommon("client_id", "An identifier for the client connection."),
+			docs.FieldAdvanced("rack_id", "A rack identifier for this client."),
 			docs.FieldAdvanced("start_from_oldest", "If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset."),
 			docs.FieldCommon(
 				"checkpoint_limit", "EXPERIMENTAL: The maximum number of messages of the same topic and partition that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual partitions. Any given offset will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.",
@@ -462,6 +463,7 @@ func (k *kafkaReader) ConnectWithContext(ctx context.Context) error {
 
 	config := sarama.NewConfig()
 	config.ClientID = k.conf.ClientID
+	config.RackID = k.conf.RackID
 	config.Net.DialTimeout = time.Second
 	config.Version = k.version
 	config.Consumer.Return.Errors = true

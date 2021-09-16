@@ -31,6 +31,7 @@ import (
 type KafkaConfig struct {
 	Addresses        []string    `json:"addresses" yaml:"addresses"`
 	ClientID         string      `json:"client_id" yaml:"client_id"`
+	RackID           string      `json:"rack_id" yaml:"rack_id"`
 	Key              string      `json:"key" yaml:"key"`
 	Partitioner      string      `json:"partitioner" yaml:"partitioner"`
 	Partition        string      `json:"partition" yaml:"partition"`
@@ -64,6 +65,7 @@ func NewKafkaConfig() KafkaConfig {
 	return KafkaConfig{
 		Addresses:            []string{"localhost:9092"},
 		ClientID:             "benthos_kafka_output",
+		RackID:               "",
 		Key:                  "",
 		RoundRobinPartitions: false,
 		Partitioner:          "fnv1a_hash",
@@ -292,6 +294,7 @@ func (k *Kafka) Connect() error {
 
 	config := sarama.NewConfig()
 	config.ClientID = k.conf.ClientID
+	config.RackID = k.conf.RackID
 
 	config.Version = k.version
 

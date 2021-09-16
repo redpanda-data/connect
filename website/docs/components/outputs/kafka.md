@@ -75,6 +75,7 @@ output:
       token_key: ""
     topic: benthos_stream
     client_id: benthos_kafka_output
+    rack_id: ""
     key: ""
     partitioner: fnv1a_hash
     partition: ""
@@ -359,6 +360,14 @@ An identifier for the client connection.
 
 Type: `string`  
 Default: `"benthos_kafka_output"`  
+
+### `rack_id`
+
+A rack identifier for this client.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `key`
 

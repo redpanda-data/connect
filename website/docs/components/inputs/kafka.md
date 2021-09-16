@@ -66,6 +66,7 @@ input:
       token_key: ""
     consumer_group: benthos_consumer_group
     client_id: benthos_kafka_input
+    rack_id: ""
     start_from_oldest: true
     checkpoint_limit: 1
     commit_period: 1s
@@ -372,6 +373,14 @@ An identifier for the client connection.
 
 Type: `string`  
 Default: `"benthos_kafka_input"`  
+
+### `rack_id`
+
+A rack identifier for this client.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `start_from_oldest`
 

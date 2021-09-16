@@ -44,6 +44,7 @@ func NewKafkaBalancedGroupConfig() KafkaBalancedGroupConfig {
 type KafkaBalancedConfig struct {
 	Addresses           []string                 `json:"addresses" yaml:"addresses"`
 	ClientID            string                   `json:"client_id" yaml:"client_id"`
+	RackID              string                   `json:"rack_id" yaml:"rack_id"`
 	ConsumerGroup       string                   `json:"consumer_group" yaml:"consumer_group"`
 	Group               KafkaBalancedGroupConfig `json:"group" yaml:"group"`
 	CommitPeriod        string                   `json:"commit_period" yaml:"commit_period"`
@@ -65,6 +66,7 @@ func NewKafkaBalancedConfig() KafkaBalancedConfig {
 	return KafkaBalancedConfig{
 		Addresses:           []string{"localhost:9092"},
 		ClientID:            "benthos_kafka_input",
+		RackID:              "",
 		ConsumerGroup:       "benthos_consumer_group",
 		Group:               NewKafkaBalancedGroupConfig(),
 		CommitPeriod:        "1s",
@@ -274,6 +276,7 @@ func (k *KafkaBalanced) Connect() error {
 
 	config := sarama.NewConfig()
 	config.ClientID = k.conf.ClientID
+	config.RackID = k.conf.RackID
 	config.Net.DialTimeout = time.Second
 	config.Version = k.version
 	config.Consumer.Return.Errors = true
