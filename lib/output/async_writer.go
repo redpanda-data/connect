@@ -80,7 +80,7 @@ func NewAsyncWriter(
 // into messages.
 func (w *AsyncWriter) SetInjectTracingMap(mapping string) error {
 	var err error
-	w.injectTracingMap, err = bloblang.NewMapping("", mapping)
+	w.injectTracingMap, err = bloblang.NewMapping(mapping)
 	return err
 }
 

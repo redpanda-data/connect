@@ -131,7 +131,7 @@ func parseBloblangCondition(n yaml.Node) (*bloblangCondition, error) {
 		return nil, err
 	}
 
-	m, err := bloblang.NewMapping("", expr)
+	m, err := bloblang.NewMapping(expr)
 	if err != nil {
 		return nil, err
 	}

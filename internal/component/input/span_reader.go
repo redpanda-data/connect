@@ -36,7 +36,7 @@ type SpanReader struct {
 // NewSpanReader wraps an async reader with a mechanism for extracting tracing
 // spans from the consumed message using a Bloblang mapping.
 func NewSpanReader(inputName, mapping string, rdr reader.Async, mgr types.Manager, logger log.Modular) (reader.Async, error) {
-	exe, err := bloblang.NewMapping("", mapping)
+	exe, err := bloblang.NewMapping(mapping)
 	if err != nil {
 		return nil, err
 	}

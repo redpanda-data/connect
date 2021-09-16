@@ -105,7 +105,7 @@ func (c Config) compile() (*compiled, error) {
 	if err != nil {
 		return nil, err
 	}
-	mapping, err := bloblang.NewMapping("", c.Mapping)
+	mapping, err := bloblang.NewMapping(c.Mapping)
 	if err != nil {
 		var perr *parser.Error
 		if errors.As(err, &perr) {

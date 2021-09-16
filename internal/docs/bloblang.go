@@ -20,7 +20,7 @@ func LintBloblangMapping(ctx LintContext, line, col int, v interface{}) []Lint {
 	if str == "" {
 		return nil
 	}
-	_, err := ctx.BloblangEnv.NewMapping("", str)
+	_, err := ctx.BloblangEnv.NewMapping(str)
 	if err == nil {
 		return nil
 	}

@@ -173,6 +173,10 @@ type MethodSpec struct {
 
 	// Categories that this method fits within.
 	Categories []MethodCatSpec `json:"categories"`
+
+	// Impure indicates that a method accesses or interacts with the outter
+	// environment, and is therefore unsafe to execute in shared environments.
+	Impure bool `json:"impure"`
 }
 
 // NewMethodSpec creates a new method spec.
@@ -210,6 +214,13 @@ func NewHiddenMethodSpec(name string) MethodSpec {
 // Beta flags the function as a beta component.
 func (m MethodSpec) Beta() MethodSpec {
 	m.Status = StatusBeta
+	return m
+}
+
+// MarkImpure flags the method as being impure, meaning it access or interacts
+// with the environment.
+func (m MethodSpec) MarkImpure() MethodSpec {
+	m.Impure = true
 	return m
 }
 

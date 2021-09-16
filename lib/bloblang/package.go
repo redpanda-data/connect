@@ -97,7 +97,7 @@ func (w *mappingWrap) MapPart(index int, msg Message) (types.Part, error) {
 // When a parsing error occurs the returned error may be a *parser.Error type,
 // which allows you to gain positional and structured error messages.
 func NewMapping(expr string) (Mapping, error) {
-	e, err := parser.ParseMapping(parser.GlobalContext(), "", expr)
+	e, err := parser.ParseMapping(parser.GlobalContext(), expr)
 	if err != nil {
 		return nil, err
 	}

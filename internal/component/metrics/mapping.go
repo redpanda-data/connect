@@ -35,7 +35,7 @@ func NewMapping(mapping string, logger log.Modular) (*Mapping, error) {
 	if mapping == "" {
 		return &Mapping{m: nil, logger: logger}, nil
 	}
-	m, err := bloblang.NewMapping("", mapping)
+	m, err := bloblang.NewMapping(mapping)
 	if err != nil {
 		if perr, ok := err.(*parser.Error); ok {
 			return nil, fmt.Errorf("%v", perr.ErrorAtPosition([]rune(mapping)))

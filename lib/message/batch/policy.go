@@ -178,7 +178,7 @@ func NewPolicy(
 	}
 	var check *mapping.Executor
 	if len(conf.Check) > 0 {
-		if check, err = bloblang.NewMapping("", conf.Check); err != nil {
+		if check, err = bloblang.NewMapping(conf.Check); err != nil {
 			return nil, fmt.Errorf("failed to parse check: %v", err)
 		}
 	}

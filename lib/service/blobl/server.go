@@ -361,7 +361,7 @@ func runServer(c *cli.Context) error {
 			w.Write(resBytes)
 		}()
 
-		exec, err := bloblang.NewMapping("", req.Mapping)
+		exec, err := bloblang.NewMapping(req.Mapping)
 		if err != nil {
 			if perr, ok := err.(*parser.Error); ok {
 				res.ParseError = fmt.Sprintf("failed to parse mapping: %v\n", perr.ErrorAtPositionStructured("", []rune(req.Mapping)))

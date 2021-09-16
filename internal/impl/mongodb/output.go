@@ -138,7 +138,7 @@ func NewWriter(
 		if conf.FilterMap == "" {
 			return nil, errors.New("mongodb filter_map must be specified")
 		}
-		if db.filterMap, err = bloblang.NewMapping("", conf.FilterMap); err != nil {
+		if db.filterMap, err = bloblang.NewMapping(conf.FilterMap); err != nil {
 			return nil, fmt.Errorf("failed to parse filter_map: %v", err)
 		}
 	} else if conf.FilterMap != "" {
@@ -149,7 +149,7 @@ func NewWriter(
 		if conf.DocumentMap == "" {
 			return nil, errors.New("mongodb document_map must be specified")
 		}
-		if db.documentMap, err = bloblang.NewMapping("", conf.DocumentMap); err != nil {
+		if db.documentMap, err = bloblang.NewMapping(conf.DocumentMap); err != nil {
 			return nil, fmt.Errorf("failed to parse document_map: %v", err)
 		}
 	} else if conf.DocumentMap != "" {
@@ -157,7 +157,7 @@ func NewWriter(
 	}
 
 	if hintAllowed && conf.HintMap != "" {
-		if db.hintMap, err = bloblang.NewMapping("", conf.HintMap); err != nil {
+		if db.hintMap, err = bloblang.NewMapping(conf.HintMap); err != nil {
 			return nil, fmt.Errorf("failed to parse hint_map: %v", err)
 		}
 	} else if conf.HintMap != "" {
