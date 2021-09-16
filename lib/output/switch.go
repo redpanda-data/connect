@@ -328,7 +328,7 @@ func NewSwitch(
 			return nil, fmt.Errorf("failed to create case '%v' output type '%v': %v", i, cConf.Output.Type, err)
 		}
 		if len(cConf.Check) > 0 {
-			if o.checks[i], err = bloblang.NewMapping("", cConf.Check); err != nil {
+			if o.checks[i], err = bloblang.NewMapping(cConf.Check); err != nil {
 				return nil, fmt.Errorf("failed to parse case '%v' check mapping: %v", i, err)
 			}
 		}

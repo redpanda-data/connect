@@ -163,7 +163,7 @@ func NewGroupBy(
 		}
 
 		if len(gConf.Check) > 0 {
-			if groups[i].Check, err = bloblang.NewMapping("", gConf.Check); err != nil {
+			if groups[i].Check, err = bloblang.NewMapping(gConf.Check); err != nil {
 				return nil, fmt.Errorf("failed to parse check for group '%v': %v", i, err)
 			}
 		}

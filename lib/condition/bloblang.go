@@ -64,7 +64,7 @@ type Bloblang struct {
 func NewBloblang(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	fn, err := bloblang.NewMapping("", string(conf.Bloblang))
+	fn, err := bloblang.NewMapping(string(conf.Bloblang))
 	if err != nil {
 		if perr, ok := err.(*parser.Error); ok {
 			return nil, fmt.Errorf("%v", perr.ErrorAtPosition([]rune(conf.Bloblang)))

@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Fields `cache_control`, `content_disposition`, `content_language` and `website_redirect_location` added to the `aws_s3` output.
 - Field `cors.enabled` and `cors.allowed_origins` added to the server wide `http` config.
+- Allow mapping imports in Bloblang environments to be disabled.
 
 ### Fixed
 

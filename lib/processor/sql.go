@@ -231,7 +231,7 @@ func NewSQL(
 			return nil, errors.New("the field `args_mapping` cannot be used when running the `sql` processor in deprecated mode (using the `dsn` field), use the `data_source_name` field instead")
 		}
 		var err error
-		if argsMapping, err = bloblang.NewMapping("", conf.SQL.ArgsMapping); err != nil {
+		if argsMapping, err = bloblang.NewMapping(conf.SQL.ArgsMapping); err != nil {
 			return nil, fmt.Errorf("failed to parse `args_mapping`: %w", err)
 		}
 	}

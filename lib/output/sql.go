@@ -202,7 +202,7 @@ func newSQLWriter(conf SQLConfig, log log.Modular) (*sqlWriter, error) {
 	var argsMapping *mapping.Executor
 	if conf.ArgsMapping != "" {
 		var err error
-		if argsMapping, err = bloblang.NewMapping("", conf.ArgsMapping); err != nil {
+		if argsMapping, err = bloblang.NewMapping(conf.ArgsMapping); err != nil {
 			return nil, fmt.Errorf("failed to parse `args_mapping`: %w", err)
 		}
 	}

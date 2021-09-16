@@ -162,7 +162,7 @@ func NewLog(
 		if l.loggerWith, ok = logger.(logWith); !ok {
 			return nil, errors.New("the provided logger does not support structured fields required for `fields_mapping`")
 		}
-		if l.fieldsMapping, err = bloblang.NewMapping("", conf.Log.FieldsMapping); err != nil {
+		if l.fieldsMapping, err = bloblang.NewMapping(conf.Log.FieldsMapping); err != nil {
 			return nil, fmt.Errorf("failed to parse fields mapping: %w", err)
 		}
 	}

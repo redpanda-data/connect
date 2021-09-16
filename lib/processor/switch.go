@@ -205,7 +205,7 @@ func NewSwitch(
 		var procs []types.Processor
 
 		if len(caseConf.Check) > 0 {
-			if check, err = bloblang.NewMapping("", caseConf.Check); err != nil {
+			if check, err = bloblang.NewMapping(caseConf.Check); err != nil {
 				return nil, fmt.Errorf("failed to parse case %v check: %w", i, err)
 			}
 		}

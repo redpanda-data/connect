@@ -121,7 +121,7 @@ func NewWhile(
 		}
 	}
 	if len(conf.While.Check) > 0 {
-		if check, err = bloblang.NewMapping("", conf.While.Check); err != nil {
+		if check, err = bloblang.NewMapping(conf.While.Check); err != nil {
 			return nil, fmt.Errorf("failed to parse check query: %w", err)
 		}
 	}

@@ -193,7 +193,7 @@ func NewReadUntil(
 
 	var check *mapping.Executor
 	if len(conf.ReadUntil.Check) > 0 {
-		if check, err = bloblang.NewMapping("", conf.ReadUntil.Check); err != nil {
+		if check, err = bloblang.NewMapping(conf.ReadUntil.Check); err != nil {
 			return nil, fmt.Errorf("failed to parse check query: %w", err)
 		}
 	}

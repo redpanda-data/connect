@@ -98,6 +98,18 @@ func (m *MethodSet) Without(methods ...string) *MethodSet {
 	return &MethodSet{m.disableCtors, constructors, specs}
 }
 
+// OnlyPure creates a clone of the methods set that can be mutated in isolation,
+// where all impure methods are removed.
+func (m *MethodSet) OnlyPure() *MethodSet {
+	var excludes []string
+	for _, v := range m.specs {
+		if v.Impure {
+			excludes = append(excludes, v.Name)
+		}
+	}
+	return m.Without(excludes...)
+}
+
 // Deactivated returns a version of the method set where constructors are
 // disabled, allowing mappings to be parsed and validated but not executed.
 //

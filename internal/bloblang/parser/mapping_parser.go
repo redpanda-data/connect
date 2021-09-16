@@ -3,9 +3,6 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"path"
-	"path/filepath"
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
@@ -18,14 +15,10 @@ import (
 //
 // The filepath is optional and used for relative file imports and error
 // messages.
-func ParseMapping(pCtx Context, filepath, expr string) (*mapping.Executor, *Error) {
+func ParseMapping(pCtx Context, expr string) (*mapping.Executor, *Error) {
 	in := []rune(expr)
-	dir := ""
-	if len(filepath) > 0 {
-		dir = path.Dir(filepath)
-	}
 
-	resDirectImport := singleRootImport(dir, pCtx)(in)
+	resDirectImport := singleRootImport(pCtx)(in)
 	if resDirectImport.Err != nil && resDirectImport.Err.IsFatal() {
 		return nil, resDirectImport.Err
 	}
@@ -33,7 +26,7 @@ func ParseMapping(pCtx Context, filepath, expr string) (*mapping.Executor, *Erro
 		return resDirectImport.Payload.(*mapping.Executor), nil
 	}
 
-	resExe := parseExecutor(dir, pCtx)(in)
+	resExe := parseExecutor(pCtx)(in)
 	if resExe.Err != nil && resExe.Err.IsFatal() {
 		return nil, resExe.Err
 	}
@@ -48,7 +41,7 @@ func ParseMapping(pCtx Context, filepath, expr string) (*mapping.Executor, *Erro
 
 //------------------------------------------------------------------------------'
 
-func parseExecutor(baseDir string, pCtx Context) Func {
+func parseExecutor(pCtx Context) Func {
 	newline := NewlineAllowComment()
 	whitespace := SpacesAndTabs()
 	allWhitespace := DiscardAll(OneOf(whitespace, newline))
@@ -58,7 +51,7 @@ func parseExecutor(baseDir string, pCtx Context) Func {
 		statements := []mapping.Statement{}
 
 		statement := OneOf(
-			importParser(baseDir, maps, pCtx),
+			importParser(maps, pCtx),
 			mapParser(maps, pCtx),
 			letStatementParser(pCtx),
 			metaStatementParser(false, pCtx),
@@ -102,7 +95,7 @@ func parseExecutor(baseDir string, pCtx Context) Func {
 	}
 }
 
-func singleRootImport(baseDir string, pCtx Context) Func {
+func singleRootImport(pCtx Context) Func {
 	whitespace := SpacesAndTabs()
 	allWhitespace := DiscardAll(OneOf(whitespace, Newline()))
 
@@ -121,17 +114,15 @@ func singleRootImport(baseDir string, pCtx Context) Func {
 		}
 
 		fpath := res.Payload.([]interface{})[3].(string)
-		if !filepath.IsAbs(fpath) {
-			fpath = path.Join(baseDir, fpath)
-		}
-
-		contents, err := ioutil.ReadFile(fpath)
+		contents, err := pCtx.importer.Import(fpath)
 		if err != nil {
 			return Fail(NewFatalError(input, fmt.Errorf("failed to read import: %w", err)), input)
 		}
 
+		nextCtx := pCtx.WithImporterRelativeToFile(fpath)
+
 		importContent := []rune(string(contents))
-		execRes := parseExecutor(path.Dir(fpath), pCtx)(importContent)
+		execRes := parseExecutor(nextCtx)(importContent)
 		if execRes.Err != nil {
 			return Fail(NewFatalError(input, NewImportError(fpath, importContent, execRes.Err)), input)
 		}
@@ -189,7 +180,7 @@ func varNameParser() Func {
 	)
 }
 
-func importParser(baseDir string, maps map[string]query.Function, pCtx Context) Func {
+func importParser(maps map[string]query.Function, pCtx Context) Func {
 	p := Sequence(
 		Term("import"),
 		SpacesAndTabs(),
@@ -208,16 +199,15 @@ func importParser(baseDir string, maps map[string]query.Function, pCtx Context) 
 		}
 
 		fpath := res.Payload.([]interface{})[2].(string)
-		if !filepath.IsAbs(fpath) {
-			fpath = path.Join(baseDir, fpath)
-		}
-		contents, err := ioutil.ReadFile(fpath)
+		contents, err := pCtx.importer.Import(fpath)
 		if err != nil {
 			return Fail(NewFatalError(input, fmt.Errorf("failed to read import: %w", err)), input)
 		}
 
+		nextCtx := pCtx.WithImporterRelativeToFile(fpath)
+
 		importContent := []rune(string(contents))
-		execRes := parseExecutor(path.Dir(fpath), pCtx)(importContent)
+		execRes := parseExecutor(nextCtx)(importContent)
 		if execRes.Err != nil {
 			return Fail(NewFatalError(input, NewImportError(fpath, importContent, execRes.Err)), input)
 		}

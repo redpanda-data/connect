@@ -27,6 +27,6 @@ func NewField(expr string) (*field.Expression, error) {
 //
 // When a parsing error occurs the returned error may be a *parser.Error type,
 // which allows you to gain positional and structured error messages.
-func NewMapping(path, expr string) (*mapping.Executor, error) {
-	return GlobalEnvironment().NewMapping(path, expr)
+func NewMapping(expr string) (*mapping.Executor, error) {
+	return GlobalEnvironment().NewMapping(expr)
 }

@@ -11,12 +11,12 @@ import (
 func Register() error {
 	dynamicBloblangParserContext := parser.Context{
 		Functions: query.AllFunctions.OnlyPure().NoMessage(),
-		Methods:   query.AllMethods,
-	}
+		Methods:   query.AllMethods.OnlyPure(),
+	}.DisabledImports()
 
 	return query.AllMethods.Add(
 		query.NewMethodSpec(
-			"bloblang", "Executes an argument Bloblang mapping on the target. This method can be used in order to execute dynamic mappings. Functions that interact with the environment, such as `file` and `env`, or that access message information directly, such as `content` or `json`, are not enabled for dynamic Bloblang mappings.",
+			"bloblang", "Executes an argument Bloblang mapping on the target. This method can be used in order to execute dynamic mappings. Imports and functions that interact with the environment, such as `file` and `env`, or that access message information directly, such as `content` or `json`, are not enabled for dynamic Bloblang mappings.",
 		).InCategory(
 			query.MethodCategoryParsing, "",
 			query.NewExampleSpec(
@@ -33,7 +33,7 @@ func Register() error {
 			if err != nil {
 				return nil, err
 			}
-			exec, parserErr := parser.ParseMapping(dynamicBloblangParserContext, "", mappingStr)
+			exec, parserErr := parser.ParseMapping(dynamicBloblangParserContext, mappingStr)
 			if parserErr != nil {
 				return nil, parserErr
 			}

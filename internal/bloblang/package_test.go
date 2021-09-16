@@ -85,7 +85,7 @@ func TestMappings(t *testing.T) {
 	for name, test := range tests {
 		test := test
 		t.Run(name, func(t *testing.T) {
-			m, err := NewMapping("", test.mapping)
+			m, err := NewMapping(test.mapping)
 			require.NoError(t, err)
 
 			assert.Equal(t, test.assignmentTargets, m.AssignmentTargets())
@@ -129,7 +129,7 @@ func TestMappingParallelExecution(t *testing.T) {
 	for name, test := range tests {
 		test := test
 		t.Run(name, func(t *testing.T) {
-			m, err := NewMapping("", test.mapping)
+			m, err := NewMapping(test.mapping)
 			require.NoError(t, err)
 
 			startChan := make(chan struct{})

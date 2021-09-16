@@ -10,8 +10,7 @@ import (
 // Environment provides an isolated Bloblang environment where the available
 // features, functions and methods can be modified.
 type Environment struct {
-	functions *query.FunctionSet
-	methods   *query.MethodSet
+	pCtx parser.Context
 }
 
 // GlobalEnvironment returns the global default environment. Modifying this
@@ -20,8 +19,7 @@ type Environment struct {
 // changes.
 func GlobalEnvironment() *Environment {
 	return &Environment{
-		functions: query.AllFunctions,
-		methods:   query.AllMethods,
+		pCtx: parser.GlobalContext(),
 	}
 }
 
@@ -44,8 +42,7 @@ func NewEnvironment() *Environment {
 // empty, where no functions or methods are initially available.
 func NewEmptyEnvironment() *Environment {
 	return &Environment{
-		functions: query.NewFunctionSet(),
-		methods:   query.NewMethodSet(),
+		pCtx: parser.EmptyContext(),
 	}
 }
 
@@ -55,12 +52,7 @@ func NewEmptyEnvironment() *Environment {
 // When a parsing error occurs the returned error will be a *parser.Error type,
 // which allows you to gain positional and structured error messages.
 func (e *Environment) NewField(expr string) (*field.Expression, error) {
-	pCtx := parser.GlobalContext()
-	if e != nil {
-		pCtx.Functions = e.functions
-		pCtx.Methods = e.methods
-	}
-	f, err := parser.ParseField(pCtx, expr)
+	f, err := parser.ParseField(e.pCtx, expr)
 	if err != nil {
 		return nil, err
 	}
@@ -73,13 +65,8 @@ func (e *Environment) NewField(expr string) (*field.Expression, error) {
 // When a parsing error occurs the error will be the type *parser.Error, which
 // gives access to the line and column where the error occurred, as well as a
 // method for creating a well formatted error message.
-func (e *Environment) NewMapping(path, blobl string) (*mapping.Executor, error) {
-	pCtx := parser.GlobalContext()
-	if e != nil {
-		pCtx.Functions = e.functions
-		pCtx.Methods = e.methods
-	}
-	exec, err := parser.ParseMapping(pCtx, path, blobl)
+func (e *Environment) NewMapping(blobl string) (*mapping.Executor, error) {
+	exec, err := parser.ParseMapping(e.pCtx, blobl)
 	if err != nil {
 		return nil, err
 	}
@@ -97,28 +84,57 @@ func (e *Environment) NewMapping(path, blobl string) (*mapping.Executor, error) 
 // that is independent of the source.
 func (e *Environment) Deactivated() *Environment {
 	return &Environment{
-		functions: e.functions.Deactivated(),
-		methods:   e.methods.Deactivated(),
+		pCtx: e.pCtx.Deactivated(),
 	}
 }
 
 // RegisterMethod adds a new Bloblang method to the environment.
 func (e *Environment) RegisterMethod(spec query.MethodSpec, ctor query.MethodCtor) error {
-	return e.methods.Add(spec, ctor)
+	return e.pCtx.Methods.Add(spec, ctor)
 }
 
 // RegisterFunction adds a new Bloblang function to the environment.
 func (e *Environment) RegisterFunction(spec query.FunctionSpec, ctor query.FunctionCtor) error {
-	return e.functions.Add(spec, ctor)
+	return e.pCtx.Functions.Add(spec, ctor)
+}
+
+// WithImporter returns a new environment where Bloblang imports are performed
+// from a new importer.
+func (e *Environment) WithImporter(importer parser.Importer) *Environment {
+	nextCtx := e.pCtx.WithImporter(importer)
+	return &Environment{
+		pCtx: nextCtx,
+	}
+}
+
+// WithImporterRelativeToFile returns a new environment where any relative
+// imports will be made from the directory of the provided file path. The
+// provided path can itself be relative (to the current importer directory) or
+// absolute.
+func (e *Environment) WithImporterRelativeToFile(filePath string) *Environment {
+	nextCtx := e.pCtx.WithImporterRelativeToFile(filePath)
+	return &Environment{
+		pCtx: nextCtx,
+	}
+}
+
+// WithDisabledImports returns a version of the environment where imports within
+// mappings are disabled entirely. This prevents mappings from accessing files
+// from the host disk.
+func (e *Environment) WithDisabledImports() *Environment {
+	return &Environment{
+		pCtx: e.pCtx.DisabledImports(),
+	}
 }
 
 // WithoutMethods returns a copy of the environment but with a variadic list of
 // method names removed. Instantiation of these removed methods within a mapping
 // will cause errors at parse time.
 func (e *Environment) WithoutMethods(names ...string) *Environment {
+	nextCtx := e.pCtx
+	nextCtx.Methods = e.pCtx.Methods.Without(names...)
 	return &Environment{
-		functions: e.functions,
-		methods:   e.methods.Without(names...),
+		pCtx: nextCtx,
 	}
 }
 
@@ -126,8 +142,9 @@ func (e *Environment) WithoutMethods(names ...string) *Environment {
 // of function names removed. Instantiation of these removed functions within a
 // mapping will cause errors at parse time.
 func (e *Environment) WithoutFunctions(names ...string) *Environment {
+	nextCtx := e.pCtx
+	nextCtx.Functions = e.pCtx.Functions.Without(names...)
 	return &Environment{
-		functions: e.functions.Without(names...),
-		methods:   e.methods,
+		pCtx: nextCtx,
 	}
 }

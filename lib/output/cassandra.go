@@ -249,7 +249,7 @@ func (c *cassandraWriter) parseArgs() error {
 
 	if c.conf.ArgsMapping != "" {
 		var err error
-		if c.argsMapping, err = bloblang.NewMapping("", c.conf.ArgsMapping); err != nil {
+		if c.argsMapping, err = bloblang.NewMapping(c.conf.ArgsMapping); err != nil {
 			return fmt.Errorf("parsing args_mapping: %w", err)
 		}
 	}

@@ -35,7 +35,7 @@ func TestFunctionExamples(t *testing.T) {
 		t.Run(spec.Name, func(t *testing.T) {
 			t.Parallel()
 			for i, e := range spec.Examples {
-				m, err := bloblang.NewMapping("", e.Mapping)
+				m, err := bloblang.NewMapping(e.Mapping)
 				require.NoError(t, err)
 
 				for j, io := range e.Results {
@@ -83,7 +83,7 @@ func TestMethodExamples(t *testing.T) {
 		t.Run(spec.Name, func(t *testing.T) {
 			t.Parallel()
 			for i, e := range spec.Examples {
-				m, err := bloblang.NewMapping("", e.Mapping)
+				m, err := bloblang.NewMapping(e.Mapping)
 				require.NoError(t, err)
 
 				for j, io := range e.Results {
@@ -104,7 +104,7 @@ func TestMethodExamples(t *testing.T) {
 			}
 			for _, target := range spec.Categories {
 				for i, e := range target.Examples {
-					m, err := bloblang.NewMapping("", e.Mapping)
+					m, err := bloblang.NewMapping(e.Mapping)
 					require.NoError(t, err)
 
 					for j, io := range e.Results {
@@ -159,7 +159,7 @@ func TestMappings(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			m, err := bloblang.NewMapping("", test.mapping)
+			m, err := bloblang.NewMapping(test.mapping)
 			require.NoError(t, err)
 
 			for i, io := range test.inputOutputs {

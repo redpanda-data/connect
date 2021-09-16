@@ -1785,7 +1785,7 @@ root = this.without("inner.a","inner.c","d")
 
 BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 
-Executes an argument Bloblang mapping on the target. This method can be used in order to execute dynamic mappings. Functions that interact with the environment, such as `file` and `env`, or that access message information directly, such as `content` or `json`, are not enabled for dynamic Bloblang mappings.
+Executes an argument Bloblang mapping on the target. This method can be used in order to execute dynamic mappings. Imports and functions that interact with the environment, such as `file` and `env`, or that access message information directly, such as `content` or `json`, are not enabled for dynamic Bloblang mappings.
 
 #### Parameters
 

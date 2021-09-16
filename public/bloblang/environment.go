@@ -52,7 +52,7 @@ func NewEmptyEnvironment() *Environment {
 // gives access to the line and column where the error occurred, as well as a
 // method for creating a well formatted error message.
 func (e *Environment) Parse(blobl string) (*Executor, error) {
-	exec, err := e.env.NewMapping("", blobl)
+	exec, err := e.env.NewMapping(blobl)
 	if err != nil {
 		if pErr, ok := err.(*parser.Error); ok {
 			return nil, internalToPublicParserError([]rune(blobl), pErr)
@@ -160,6 +160,14 @@ func (e *Environment) WithoutFunctions(names ...string) *Environment {
 	}
 }
 
+// WithDisabledImports returns a copy of the environment where imports within
+// mappings are disabled.
+func (e *Environment) WithDisabledImports() *Environment {
+	return &Environment{
+		env: e.env.Deactivated(),
+	}
+}
+
 //------------------------------------------------------------------------------
 
 // Parse a Bloblang mapping allowing the use of the globally accessible range of
@@ -169,7 +177,7 @@ func (e *Environment) WithoutFunctions(names ...string) *Environment {
 // gives access to the line and column where the error occurred, as well as a
 // method for creating a well formatted error message.
 func Parse(blobl string) (*Executor, error) {
-	exec, err := parser.ParseMapping(parser.GlobalContext(), "", blobl)
+	exec, err := parser.ParseMapping(parser.GlobalContext(), blobl)
 	if err != nil {
 		return nil, internalToPublicParserError([]rune(blobl), err)
 	}

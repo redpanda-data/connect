@@ -180,7 +180,7 @@ func NewProcessor(
 		if conf.MongoDB.FilterMap == "" {
 			return nil, errors.New("mongodb filter_map must be specified")
 		}
-		if m.filterMap, err = bloblang.NewMapping("", conf.MongoDB.FilterMap); err != nil {
+		if m.filterMap, err = bloblang.NewMapping(conf.MongoDB.FilterMap); err != nil {
 			return nil, fmt.Errorf("failed to parse filter_map: %v", err)
 		}
 	} else if conf.MongoDB.FilterMap != "" {
@@ -191,7 +191,7 @@ func NewProcessor(
 		if conf.MongoDB.DocumentMap == "" {
 			return nil, errors.New("mongodb document_map must be specified")
 		}
-		if m.documentMap, err = bloblang.NewMapping("", conf.MongoDB.DocumentMap); err != nil {
+		if m.documentMap, err = bloblang.NewMapping(conf.MongoDB.DocumentMap); err != nil {
 			return nil, fmt.Errorf("failed to parse document_map: %v", err)
 		}
 	} else if conf.MongoDB.DocumentMap != "" {
@@ -199,7 +199,7 @@ func NewProcessor(
 	}
 
 	if hintAllowed && conf.MongoDB.HintMap != "" {
-		if m.hintMap, err = bloblang.NewMapping("", conf.MongoDB.HintMap); err != nil {
+		if m.hintMap, err = bloblang.NewMapping(conf.MongoDB.HintMap); err != nil {
 			return nil, fmt.Errorf("failed to parse hint_map: %v", err)
 		}
 	} else if conf.MongoDB.HintMap != "" {
