@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -328,7 +327,7 @@ func NewSwitch(
 			return nil, fmt.Errorf("failed to create case '%v' output type '%v': %v", i, cConf.Output.Type, err)
 		}
 		if len(cConf.Check) > 0 {
-			if o.checks[i], err = bloblang.NewMapping(cConf.Check); err != nil {
+			if o.checks[i], err = interop.NewBloblangMapping(mgr, cConf.Check); err != nil {
 				return nil, fmt.Errorf("failed to parse case '%v' check mapping: %v", i, err)
 			}
 		}

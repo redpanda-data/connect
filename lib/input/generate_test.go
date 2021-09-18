@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,7 +19,7 @@ func TestBloblangInterval(t *testing.T) {
 	conf.Mapping = `root = "hello world"`
 	conf.Interval = "50ms"
 
-	b, err := newBloblang(conf)
+	b, err := newBloblang(types.NoopMgr(), conf)
 	require.NoError(t, err)
 
 	err = b.ConnectWithContext(ctx)
@@ -53,7 +54,7 @@ func TestBloblangCron(t *testing.T) {
 	conf.Mapping = `root = "hello world"`
 	conf.Interval = "@every 1s"
 
-	b, err := newBloblang(conf)
+	b, err := newBloblang(types.NoopMgr(), conf)
 	require.NoError(t, err)
 	assert.NotNil(t, b.schedule)
 	assert.NotNil(t, b.location)
@@ -84,7 +85,7 @@ func TestBloblangMapping(t *testing.T) {
 	}`
 	conf.Interval = "1ms"
 
-	b, err := newBloblang(conf)
+	b, err := newBloblang(types.NoopMgr(), conf)
 	require.NoError(t, err)
 
 	err = b.ConnectWithContext(ctx)
@@ -107,7 +108,7 @@ func TestBloblangRemaining(t *testing.T) {
 	conf.Interval = "1ms"
 	conf.Count = 10
 
-	b, err := newBloblang(conf)
+	b, err := newBloblang(types.NoopMgr(), conf)
 	require.NoError(t, err)
 
 	err = b.ConnectWithContext(ctx)

@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/Azure/azure-storage-queue-go/azqueue"
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/impl/azure"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -31,8 +31,20 @@ type AzureQueueStorage struct {
 }
 
 // NewAzureQueueStorage creates a new Azure Queue Storage writer type.
+//
+// Deprecated: use the V2 API instead.
 func NewAzureQueueStorage(
 	conf AzureQueueStorageConfig,
+	log log.Modular,
+	stats metrics.Type,
+) (*AzureQueueStorage, error) {
+	return NewAzureQueueStorageV2(conf, types.NoopMgr(), log, stats)
+}
+
+// NewAzureQueueStorageV2 creates a new Azure Queue Storage writer type.
+func NewAzureQueueStorageV2(
+	conf AzureQueueStorageConfig,
+	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*AzureQueueStorage, error) {
@@ -47,11 +59,11 @@ func NewAzureQueueStorage(
 		serviceURL: serviceURL,
 	}
 
-	if s.ttl, err = bloblang.NewField(conf.TTL); err != nil {
+	if s.ttl, err = interop.NewBloblangField(mgr, conf.TTL); err != nil {
 		return nil, fmt.Errorf("failed to parse ttl expression: %v", err)
 	}
 
-	if s.queueName, err = bloblang.NewField(conf.QueueName); err != nil {
+	if s.queueName, err = interop.NewBloblangField(mgr, conf.QueueName); err != nil {
 		return nil, fmt.Errorf("failed to parse table name expression: %v", err)
 	}
 

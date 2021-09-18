@@ -50,12 +50,6 @@ func (e *Environment) Clone() *Environment {
 
 // UseBloblangEnvironment configures the service environment to restrict
 // components constructed with it to a specific Bloblang environment.
-//
-// Experimental: Using custom Bloblang environments throughout a Benthos service
-// is still a work in progress. Currently only linting and your plugin
-// Interpolation and Bloblang fields are parsed through the environment, but
-// native components such as the standard `bloblang` processor will continue to
-// use the global environment during construction.
 func (e *Environment) UseBloblangEnvironment(bEnv *bloblang.Environment) {
 	e.bloblangEnv = bEnv
 }

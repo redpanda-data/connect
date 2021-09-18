@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -657,7 +657,7 @@ type JSON struct {
 func NewJSON(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	value, err := bloblang.NewField(string(conf.JSON.Value))
+	value, err := interop.NewBloblangField(mgr, string(conf.JSON.Value))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}

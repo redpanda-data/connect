@@ -8,9 +8,9 @@ import (
 
 	"cloud.google.com/go/pubsub"
 	"github.com/Jeffail/benthos/v3/internal/batch"
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -58,8 +58,20 @@ type GCPPubSub struct {
 }
 
 // NewGCPPubSub creates a new GCP Cloud Pub/Sub writer.Type.
+//
+// Deprecated: use the V2 API instead.
 func NewGCPPubSub(
 	conf GCPPubSubConfig,
+	log log.Modular,
+	stats metrics.Type,
+) (*GCPPubSub, error) {
+	return NewGCPPubSubV2(conf, types.NoopMgr(), log, stats)
+}
+
+// NewGCPPubSubV2 creates a new GCP Cloud Pub/Sub writer.Type.
+func NewGCPPubSubV2(
+	conf GCPPubSubConfig,
+	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*GCPPubSub, error) {
@@ -67,7 +79,7 @@ func NewGCPPubSub(
 	if err != nil {
 		return nil, err
 	}
-	topic, err := bloblang.NewField(conf.TopicID)
+	topic, err := interop.NewBloblangField(mgr, conf.TopicID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}

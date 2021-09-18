@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -100,8 +100,20 @@ type AmazonS3 struct {
 }
 
 // NewAmazonS3 creates a new Amazon S3 bucket writer.Type.
+//
+// Deprecated: use the V2 API instead.
 func NewAmazonS3(
 	conf AmazonS3Config,
+	log log.Modular,
+	stats metrics.Type,
+) (*AmazonS3, error) {
+	return NewAmazonS3V2(conf, types.NoopMgr(), log, stats)
+}
+
+// NewAmazonS3V2 creates a new Amazon S3 bucket writer.Type.
+func NewAmazonS3V2(
+	conf AmazonS3Config,
+	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*AmazonS3, error) {
@@ -119,38 +131,38 @@ func NewAmazonS3(
 		timeout: timeout,
 	}
 	var err error
-	if a.path, err = bloblang.NewField(conf.Path); err != nil {
+	if a.path, err = interop.NewBloblangField(mgr, conf.Path); err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}
-	if a.contentType, err = bloblang.NewField(conf.ContentType); err != nil {
+	if a.contentType, err = interop.NewBloblangField(mgr, conf.ContentType); err != nil {
 		return nil, fmt.Errorf("failed to parse content type expression: %v", err)
 	}
-	if a.contentEncoding, err = bloblang.NewField(conf.ContentEncoding); err != nil {
+	if a.contentEncoding, err = interop.NewBloblangField(mgr, conf.ContentEncoding); err != nil {
 		return nil, fmt.Errorf("failed to parse content encoding expression: %v", err)
 	}
-	if a.cacheControl, err = bloblang.NewField(conf.CacheControl); err != nil {
+	if a.cacheControl, err = interop.NewBloblangField(mgr, conf.CacheControl); err != nil {
 		return nil, fmt.Errorf("failed to parse cache control expression: %v", err)
 	}
-	if a.contentDisposition, err = bloblang.NewField(conf.ContentDisposition); err != nil {
+	if a.contentDisposition, err = interop.NewBloblangField(mgr, conf.ContentDisposition); err != nil {
 		return nil, fmt.Errorf("failed to parse content disposition expression: %v", err)
 	}
-	if a.contentLanguage, err = bloblang.NewField(conf.ContentLanguage); err != nil {
+	if a.contentLanguage, err = interop.NewBloblangField(mgr, conf.ContentLanguage); err != nil {
 		return nil, fmt.Errorf("failed to parse content language expression: %v", err)
 	}
-	if a.websiteRedirectLocation, err = bloblang.NewField(conf.WebsiteRedirectLocation); err != nil {
+	if a.websiteRedirectLocation, err = interop.NewBloblangField(mgr, conf.WebsiteRedirectLocation); err != nil {
 		return nil, fmt.Errorf("failed to parse website redirect location expression: %v", err)
 	}
 
 	if a.metaFilter, err = conf.Metadata.Filter(); err != nil {
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
-	if a.storageClass, err = bloblang.NewField(conf.StorageClass); err != nil {
+	if a.storageClass, err = interop.NewBloblangField(mgr, conf.StorageClass); err != nil {
 		return nil, fmt.Errorf("failed to parse storage class expression: %v", err)
 	}
 
 	a.tags = make([]s3TagPair, 0, len(conf.Tags))
 	for k, v := range conf.Tags {
-		vExpr, err := bloblang.NewField(v)
+		vExpr, err := interop.NewBloblangField(mgr, v)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse tag expression for key '%v': %v", k, err)
 		}

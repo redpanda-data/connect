@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
@@ -278,7 +278,7 @@ type Archive struct {
 func NewArchive(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	path, err := bloblang.NewField(conf.Archive.Path)
+	path, err := interop.NewBloblangField(mgr, conf.Archive.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}

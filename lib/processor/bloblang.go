@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
@@ -152,7 +152,7 @@ type Bloblang struct {
 func NewBloblang(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	exec, err := bloblang.NewMapping(string(conf.Bloblang))
+	exec, err := interop.NewBloblangMapping(mgr, string(conf.Bloblang))
 	if err != nil {
 		if perr, ok := err.(*parser.Error); ok {
 			return nil, fmt.Errorf("%v", perr.ErrorAtPosition([]rune(conf.Bloblang)))

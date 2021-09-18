@@ -45,7 +45,7 @@ messages these interpolations are performed per message part.`,
 
 // NewMQTT creates a new MQTT output type.
 func NewMQTT(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	w, err := writer.NewMQTT(conf.MQTT, log, stats)
+	w, err := writer.NewMQTTV2(conf.MQTT, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

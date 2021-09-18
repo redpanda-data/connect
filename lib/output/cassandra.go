@@ -11,11 +11,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -30,7 +30,7 @@ import (
 func init() {
 	Constructors[TypeCassandra] = TypeSpec{
 		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-			c, err := newCassandraWriter(conf.Cassandra, log, stats)
+			c, err := newCassandraWriter(conf.Cassandra, mgr, log, stats)
 			if err != nil {
 				return nil, err
 			}
@@ -204,7 +204,7 @@ type cassandraWriter struct {
 	argsMapping *mapping.Executor
 }
 
-func newCassandraWriter(conf CassandraConfig, log log.Modular, stats metrics.Type) (*cassandraWriter, error) {
+func newCassandraWriter(conf CassandraConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*cassandraWriter, error) {
 	c := cassandraWriter{
 		log:           log,
 		stats:         stats,
@@ -224,14 +224,14 @@ func newCassandraWriter(conf CassandraConfig, log log.Modular, stats metrics.Typ
 	if c.backoffMax, err = time.ParseDuration(c.conf.Config.Backoff.MaxInterval); err != nil {
 		return nil, fmt.Errorf("parsing backoff max interval: %w", err)
 	}
-	if err = c.parseArgs(); err != nil {
+	if err = c.parseArgs(mgr); err != nil {
 		return nil, fmt.Errorf("parsing args: %w", err)
 	}
 
 	return &c, nil
 }
 
-func (c *cassandraWriter) parseArgs() error {
+func (c *cassandraWriter) parseArgs(mgr types.Manager) error {
 	// Allow only args or args_mapping for now.
 	if len(c.conf.Args) > 0 && c.conf.ArgsMapping != "" {
 		return fmt.Errorf("can only specify one of [args, args_mapping]")
@@ -239,7 +239,7 @@ func (c *cassandraWriter) parseArgs() error {
 
 	if len(c.conf.Args) > 0 {
 		for i, v := range c.conf.Args {
-			expr, err := bloblang.NewField(v)
+			expr, err := interop.NewBloblangField(mgr, v)
 			if err != nil {
 				return fmt.Errorf("failed to parse arg %v expression: %v", i, err)
 			}
@@ -249,7 +249,7 @@ func (c *cassandraWriter) parseArgs() error {
 
 	if c.conf.ArgsMapping != "" {
 		var err error
-		if c.argsMapping, err = bloblang.NewMapping(c.conf.ArgsMapping); err != nil {
+		if c.argsMapping, err = interop.NewBloblangMapping(mgr, c.conf.ArgsMapping); err != nil {
 			return fmt.Errorf("parsing args_mapping: %w", err)
 		}
 	}

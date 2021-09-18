@@ -43,7 +43,7 @@ can find a list of functions [here](/docs/configuration/interpolation#bloblang-q
 
 // NewNATS creates a new NATS output type.
 func NewNATS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	w, err := writer.NewNATS(conf.NATS, log, stats)
+	w, err := writer.NewNATSV2(conf.NATS, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

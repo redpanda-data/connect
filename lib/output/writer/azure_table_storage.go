@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -36,8 +36,20 @@ type AzureTableStorage struct {
 }
 
 // NewAzureTableStorage creates a new Azure Table Storage writer Type.
+//
+// Deprecated: use the V2 API instead.
 func NewAzureTableStorage(
 	conf AzureTableStorageConfig,
+	log log.Modular,
+	stats metrics.Type,
+) (*AzureTableStorage, error) {
+	return NewAzureTableStorageV2(conf, types.NoopMgr(), log, stats)
+}
+
+// NewAzureTableStorageV2 creates a new Azure Table Storage writer Type.
+func NewAzureTableStorageV2(
+	conf AzureTableStorageConfig,
+	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*AzureTableStorage, error) {
@@ -71,18 +83,18 @@ func NewAzureTableStorage(
 		timeout: timeout,
 		client:  client.GetTableService(),
 	}
-	if a.tableName, err = bloblang.NewField(conf.TableName); err != nil {
+	if a.tableName, err = interop.NewBloblangField(mgr, conf.TableName); err != nil {
 		return nil, fmt.Errorf("failed to parse table name expression: %v", err)
 	}
-	if a.partitionKey, err = bloblang.NewField(conf.PartitionKey); err != nil {
+	if a.partitionKey, err = interop.NewBloblangField(mgr, conf.PartitionKey); err != nil {
 		return nil, fmt.Errorf("failed to parse partition key expression: %v", err)
 	}
-	if a.rowKey, err = bloblang.NewField(conf.RowKey); err != nil {
+	if a.rowKey, err = interop.NewBloblangField(mgr, conf.RowKey); err != nil {
 		return nil, fmt.Errorf("failed to parse row key expression: %v", err)
 	}
 	a.properties = make(map[string]*field.Expression)
 	for property, value := range conf.Properties {
-		if a.properties[property], err = bloblang.NewField(value); err != nil {
+		if a.properties[property], err = interop.NewBloblangField(mgr, value); err != nil {
 			return nil, fmt.Errorf("failed to parse property expression: %v", err)
 		}
 	}

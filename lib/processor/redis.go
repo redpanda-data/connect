@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -181,7 +181,7 @@ func NewRedis(
 		return nil, err
 	}
 
-	key, err := bloblang.NewField(conf.Redis.Key)
+	key, err := interop.NewBloblangField(mgr, conf.Redis.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}

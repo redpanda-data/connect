@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -79,7 +79,7 @@ type InsertPart struct {
 func NewInsertPart(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	part, err := bloblang.NewField(conf.InsertPart.Content)
+	part, err := interop.NewBloblangField(mgr, conf.InsertPart.Content)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse content expression: %v", err)
 	}

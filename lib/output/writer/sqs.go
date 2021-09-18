@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -90,8 +90,20 @@ type AmazonSQS struct {
 }
 
 // NewAmazonSQS creates a new Amazon SQS writer.Type.
+//
+// Deprecated: use the V2 API instead.
 func NewAmazonSQS(
 	conf AmazonSQSConfig,
+	log log.Modular,
+	stats metrics.Type,
+) (*AmazonSQS, error) {
+	return NewAmazonSQSV2(conf, types.NoopMgr(), log, stats)
+}
+
+// NewAmazonSQSV2 creates a new Amazon SQS writer.Type.
+func NewAmazonSQSV2(
+	conf AmazonSQSConfig,
+	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*AmazonSQS, error) {
@@ -104,12 +116,12 @@ func NewAmazonSQS(
 
 	var err error
 	if id := conf.MessageGroupID; len(id) > 0 {
-		if s.groupID, err = bloblang.NewField(id); err != nil {
+		if s.groupID, err = interop.NewBloblangField(mgr, id); err != nil {
 			return nil, fmt.Errorf("failed to parse group ID expression: %v", err)
 		}
 	}
 	if id := conf.MessageDeduplicationID; len(id) > 0 {
-		if s.dedupeID, err = bloblang.NewField(id); err != nil {
+		if s.dedupeID, err = interop.NewBloblangField(mgr, id); err != nil {
 			return nil, fmt.Errorf("failed to parse dedupe ID expression: %v", err)
 		}
 	}

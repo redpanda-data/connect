@@ -109,7 +109,7 @@ func NewAmazonSQS(conf Config, mgr types.Manager, log log.Modular, stats metrics
 }
 
 func newAmazonSQS(name string, conf writer.AmazonSQSConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	s, err := writer.NewAmazonSQS(conf, log, stats)
+	s, err := writer.NewAmazonSQSV2(conf, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

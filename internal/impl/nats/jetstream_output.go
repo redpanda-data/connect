@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -25,7 +24,7 @@ import (
 
 func init() {
 	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (output.Type, error) {
-		w, err := newJetStreamOutput(c.NATSJetStream, nm.Logger(), nm.Metrics())
+		w, err := newJetStreamOutput(c.NATSJetStream, nm)
 		if err != nil {
 			return nil, err
 		}
@@ -78,11 +77,11 @@ type jetStreamOutput struct {
 	shutSig *shutdown.Signaller
 }
 
-func newJetStreamOutput(conf output.NATSJetStreamConfig, log log.Modular, stats metrics.Type) (*jetStreamOutput, error) {
+func newJetStreamOutput(conf output.NATSJetStreamConfig, mgr bundle.NewManagement) (*jetStreamOutput, error) {
 	j := jetStreamOutput{
 		conf:    conf,
-		stats:   stats,
-		log:     log,
+		stats:   mgr.Metrics(),
+		log:     mgr.Logger(),
 		shutSig: shutdown.NewSignaller(),
 	}
 	j.urls = strings.Join(conf.URLs, ",")
@@ -92,7 +91,8 @@ func newJetStreamOutput(conf output.NATSJetStreamConfig, log log.Modular, stats 
 			return nil, err
 		}
 	}
-	if j.subjectStr, err = bloblang.NewField(conf.Subject); err != nil {
+
+	if j.subjectStr, err = mgr.BloblEnvironment().NewField(conf.Subject); err != nil {
 		return nil, fmt.Errorf("subject expression: %w", err)
 	}
 	return &j, nil

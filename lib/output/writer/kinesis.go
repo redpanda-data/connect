@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -87,8 +87,20 @@ type Kinesis struct {
 }
 
 // NewKinesis creates a new Amazon Kinesis writer.Type.
+//
+// Deprecated: use the V2 API instead.
 func NewKinesis(
 	conf KinesisConfig,
+	log log.Modular,
+	stats metrics.Type,
+) (*Kinesis, error) {
+	return NewKinesisV2(conf, types.NoopMgr(), log, stats)
+}
+
+// NewKinesisV2 creates a new Amazon Kinesis writer.Type.
+func NewKinesisV2(
+	conf KinesisConfig,
+	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*Kinesis, error) {
@@ -105,10 +117,10 @@ func NewKinesis(
 		streamName:      aws.String(conf.Stream),
 	}
 	var err error
-	if k.hashKey, err = bloblang.NewField(conf.HashKey); err != nil {
+	if k.hashKey, err = interop.NewBloblangField(mgr, conf.HashKey); err != nil {
 		return nil, fmt.Errorf("failed to parse hash key expression: %v", err)
 	}
-	if k.partitionKey, err = bloblang.NewField(conf.PartitionKey); err != nil {
+	if k.partitionKey, err = interop.NewBloblangField(mgr, conf.PartitionKey); err != nil {
 		return nil, fmt.Errorf("failed to parse partition key expression: %v", err)
 	}
 	if k.backoffCtor, err = conf.Config.GetCtor(); err != nil {

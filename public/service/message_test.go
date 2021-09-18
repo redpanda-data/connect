@@ -296,7 +296,7 @@ func BenchmarkMessageMappingOld(b *testing.B) {
 	msg := message.New(nil)
 	msg.Append(part)
 
-	blobl, err := ibloblang.NewMapping("root.new_content = this.content.uppercase()")
+	blobl, err := ibloblang.GlobalEnvironment().NewMapping("root.new_content = this.content.uppercase()")
 	require.NoError(b, err)
 
 	b.ResetTimer()

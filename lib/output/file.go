@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -69,7 +69,7 @@ func NewFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type
 	if len(conf.File.Delim) > 0 {
 		conf.File.Codec = "delim:" + conf.File.Delim
 	}
-	f, err := newFileWriter(conf.File.Path, conf.File.Codec, log, stats)
+	f, err := newFileWriter(conf.File.Path, conf.File.Codec, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}
@@ -100,12 +100,12 @@ type fileWriter struct {
 	shutSig *shutdown.Signaller
 }
 
-func newFileWriter(pathStr, codecStr string, log log.Modular, stats metrics.Type) (*fileWriter, error) {
+func newFileWriter(pathStr, codecStr string, mgr types.Manager, log log.Modular, stats metrics.Type) (*fileWriter, error) {
 	codec, codecConf, err := codec.GetWriter(codecStr)
 	if err != nil {
 		return nil, err
 	}
-	path, err := bloblang.NewField(pathStr)
+	path, err := interop.NewBloblangField(mgr, pathStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %w", err)
 	}

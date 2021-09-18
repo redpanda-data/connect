@@ -67,7 +67,7 @@ The fields 'key' and 'type' can be dynamically set using function interpolations
 
 // NewAMQP09 creates a new AMQP output type.
 func NewAMQP09(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	a, err := writer.NewAMQP(conf.AMQP09, log, stats)
+	a, err := writer.NewAMQPV2(mgr, conf.AMQP09, log, stats)
 	if err != nil {
 		return nil, err
 	}

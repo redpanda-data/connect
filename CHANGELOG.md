@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Field `cors.enabled` and `cors.allowed_origins` added to the server wide `http` config.
 - For Kafka components the config now supports the `rack_id` field which may contain a rack identifier for the Kafka client.
 - Allow mapping imports in Bloblang environments to be disabled.
+- Go API: Isolated Bloblang environments are now honored by all components.
 
 ### Fixed
 

@@ -262,7 +262,7 @@ func NewAmazonS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.
 }
 
 func newAmazonS3(name string, conf writer.AmazonS3Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	sthree, err := writer.NewAmazonS3(conf, log, stats)
+	sthree, err := writer.NewAmazonS3V2(conf, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

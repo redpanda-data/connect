@@ -7,9 +7,9 @@ import (
 	"time"
 
 	ibatch "github.com/Jeffail/benthos/v3/internal/batch"
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -53,8 +53,20 @@ type RedisPubSub struct {
 }
 
 // NewRedisPubSub creates a new RedisPubSub output type.
+//
+// Deprecated: use the V2 API instead.
 func NewRedisPubSub(
 	conf RedisPubSubConfig,
+	log log.Modular,
+	stats metrics.Type,
+) (*RedisPubSub, error) {
+	return NewRedisPubSubV2(conf, types.NoopMgr(), log, stats)
+}
+
+// NewRedisPubSubV2 creates a new RedisPubSub output type.
+func NewRedisPubSubV2(
+	conf RedisPubSubConfig,
+	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*RedisPubSub, error) {
@@ -64,7 +76,7 @@ func NewRedisPubSub(
 		conf:  conf,
 	}
 	var err error
-	if r.channelStr, err = bloblang.NewField(conf.Channel); err != nil {
+	if r.channelStr, err = interop.NewBloblangField(mgr, conf.Channel); err != nil {
 		return nil, fmt.Errorf("failed to parse channel expression: %v", err)
 	}
 	if _, err = conf.Config.Client(); err != nil {

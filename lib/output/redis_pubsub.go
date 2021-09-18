@@ -38,7 +38,7 @@ can find a list of functions [here](/docs/configuration/interpolation#bloblang-q
 
 // NewRedisPubSub creates a new RedisPubSub output type.
 func NewRedisPubSub(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	w, err := writer.NewRedisPubSub(conf.RedisPubSub, log, stats)
+	w, err := writer.NewRedisPubSubV2(conf.RedisPubSub, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

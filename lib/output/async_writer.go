@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -48,6 +48,7 @@ type AsyncWriter struct {
 
 	injectTracingMap *mapping.Executor
 
+	mgr   types.Manager
 	log   log.Modular
 	stats metrics.Type
 
@@ -57,6 +58,7 @@ type AsyncWriter struct {
 }
 
 // NewAsyncWriter creates a new AsyncWriter output type.
+// Deprecated
 func NewAsyncWriter(
 	typeStr string,
 	maxInflight int,
@@ -64,10 +66,22 @@ func NewAsyncWriter(
 	log log.Modular,
 	stats metrics.Type,
 ) (Type, error) {
+	return newAsyncWriter(typeStr, maxInflight, w, types.NoopMgr(), log, stats)
+}
+
+func newAsyncWriter(
+	typeStr string,
+	maxInflight int,
+	w AsyncSink,
+	mgr types.Manager,
+	log log.Modular,
+	stats metrics.Type,
+) (Type, error) {
 	aWriter := &AsyncWriter{
 		typeStr:      typeStr,
 		maxInflight:  maxInflight,
 		writer:       w,
+		mgr:          mgr,
 		log:          log,
 		stats:        stats,
 		transactions: nil,
@@ -80,7 +94,7 @@ func NewAsyncWriter(
 // into messages.
 func (w *AsyncWriter) SetInjectTracingMap(mapping string) error {
 	var err error
-	w.injectTracingMap, err = bloblang.NewMapping(mapping)
+	w.injectTracingMap, err = interop.NewBloblangMapping(w.mgr, mapping)
 	return err
 }
 

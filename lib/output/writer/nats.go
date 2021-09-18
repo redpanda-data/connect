@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -57,13 +57,20 @@ type NATS struct {
 }
 
 // NewNATS creates a new NATS output type.
+//
+// Deprecated: use the V2 API instead.
 func NewNATS(conf NATSConfig, log log.Modular, stats metrics.Type) (*NATS, error) {
+	return NewNATSV2(conf, types.NoopMgr(), log, stats)
+}
+
+// NewNATSV2 creates a new NATS output type.
+func NewNATSV2(conf NATSConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*NATS, error) {
 	n := NATS{
 		log:  log,
 		conf: conf,
 	}
 	var err error
-	if n.subjectStr, err = bloblang.NewField(conf.Subject); err != nil {
+	if n.subjectStr, err = interop.NewBloblangField(mgr, conf.Subject); err != nil {
 		return nil, fmt.Errorf("failed to parse subject expression: %v", err)
 	}
 	n.urls = strings.Join(conf.URLs, ",")

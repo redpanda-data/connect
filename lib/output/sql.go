@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -37,7 +37,7 @@ func init() {
 				conf.SQL.DataSourceName = strings.ReplaceAll(conf.SQL.DataSourceName, `\`, "%5C")
 			}
 
-			s, err := newSQLWriter(conf.SQL, log)
+			s, err := newSQLWriter(conf.SQL, mgr, log)
 			if err != nil {
 				return nil, err
 			}
@@ -185,14 +185,14 @@ type sqlWriter struct {
 	query *sql.Stmt
 }
 
-func newSQLWriter(conf SQLConfig, log log.Modular) (*sqlWriter, error) {
+func newSQLWriter(conf SQLConfig, mgr types.Manager, log log.Modular) (*sqlWriter, error) {
 	if len(conf.Args) > 0 && conf.ArgsMapping != "" {
 		return nil, errors.New("cannot specify both `args` and an `args_mapping` in the same output")
 	}
 
 	var args []*field.Expression
 	for i, v := range conf.Args {
-		expr, err := bloblang.NewField(v)
+		expr, err := interop.NewBloblangField(mgr, v)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse arg %v expression: %v", i, err)
 		}
@@ -202,7 +202,7 @@ func newSQLWriter(conf SQLConfig, log log.Modular) (*sqlWriter, error) {
 	var argsMapping *mapping.Executor
 	if conf.ArgsMapping != "" {
 		var err error
-		if argsMapping, err = bloblang.NewMapping(conf.ArgsMapping); err != nil {
+		if argsMapping, err = interop.NewBloblangMapping(mgr, conf.ArgsMapping); err != nil {
 			return nil, fmt.Errorf("failed to parse `args_mapping`: %w", err)
 		}
 	}

@@ -47,7 +47,7 @@ In order to set the ` + "`queue_name`" + ` you can use function interpolations d
 
 // NewAzureQueueStorage creates a new AzureQueueStorage output type.
 func NewAzureQueueStorage(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	s, err := writer.NewAzureQueueStorage(conf.AzureQueueStorage, log, stats)
+	s, err := writer.NewAzureQueueStorageV2(conf.AzureQueueStorage, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -231,14 +231,14 @@ func NewSQL(
 			return nil, errors.New("the field `args_mapping` cannot be used when running the `sql` processor in deprecated mode (using the `dsn` field), use the `data_source_name` field instead")
 		}
 		var err error
-		if argsMapping, err = bloblang.NewMapping(conf.SQL.ArgsMapping); err != nil {
+		if argsMapping, err = interop.NewBloblangMapping(mgr, conf.SQL.ArgsMapping); err != nil {
 			return nil, fmt.Errorf("failed to parse `args_mapping`: %w", err)
 		}
 	}
 
 	var args []*field.Expression
 	for i, v := range conf.SQL.Args {
-		expr, err := bloblang.NewField(v)
+		expr, err := interop.NewBloblangField(mgr, v)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse arg %v expression: %v", i, err)
 		}

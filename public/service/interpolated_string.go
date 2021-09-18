@@ -14,7 +14,7 @@ type InterpolatedString struct {
 
 // NewInterpolatedString parses an interpolated string expression.
 func NewInterpolatedString(expr string) (*InterpolatedString, error) {
-	e, err := bloblang.NewField(expr)
+	e, err := bloblang.GlobalEnvironment().NewField(expr)
 	if err != nil {
 		return nil, err
 	}

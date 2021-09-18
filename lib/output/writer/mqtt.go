@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/mqttconf"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -66,8 +66,20 @@ type MQTT struct {
 }
 
 // NewMQTT creates a new MQTT output type.
+//
+// Deprecated: use the V2 API instead.
 func NewMQTT(
 	conf MQTTConfig,
+	log log.Modular,
+	stats metrics.Type,
+) (*MQTT, error) {
+	return NewMQTTV2(conf, types.NoopMgr(), log, stats)
+}
+
+// NewMQTTV2 creates a new MQTT output type.
+func NewMQTTV2(
+	conf MQTTConfig,
+	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*MQTT, error) {
@@ -78,7 +90,7 @@ func NewMQTT(
 	}
 
 	var err error
-	if m.topic, err = bloblang.NewField(conf.Topic); err != nil {
+	if m.topic, err = interop.NewBloblangField(mgr, conf.Topic); err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
 

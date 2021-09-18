@@ -96,7 +96,7 @@ func NewKinesis(conf Config, mgr types.Manager, log log.Modular, stats metrics.T
 }
 
 func newKinesis(name string, conf writer.KinesisConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	kin, err := writer.NewKinesis(conf, log, stats)
+	kin, err := writer.NewKinesisV2(conf, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

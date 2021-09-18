@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -100,7 +100,14 @@ type AMQP struct {
 }
 
 // NewAMQP creates a new AMQP writer type.
+//
+// Deprecated: use the V2 API instead.
 func NewAMQP(conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error) {
+	return NewAMQPV2(types.NoopMgr(), conf, log, stats)
+}
+
+// NewAMQPV2 creates a new AMQP writer type.
+func NewAMQPV2(mgr types.Manager, conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error) {
 	a := AMQP{
 		log:          log,
 		stats:        stats,
@@ -111,19 +118,19 @@ func NewAMQP(conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error
 	if a.metaFilter, err = conf.Metadata.Filter(); err != nil {
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
-	if a.key, err = bloblang.NewField(conf.BindingKey); err != nil {
+	if a.key, err = interop.NewBloblangField(mgr, conf.BindingKey); err != nil {
 		return nil, fmt.Errorf("failed to parse binding key expression: %v", err)
 	}
-	if a.msgType, err = bloblang.NewField(conf.Type); err != nil {
+	if a.msgType, err = interop.NewBloblangField(mgr, conf.Type); err != nil {
 		return nil, fmt.Errorf("failed to parse type property expression: %v", err)
 	}
-	if a.contentType, err = bloblang.NewField(conf.ContentType); err != nil {
+	if a.contentType, err = interop.NewBloblangField(mgr, conf.ContentType); err != nil {
 		return nil, fmt.Errorf("failed to parse content_type property expression: %v", err)
 	}
-	if a.contentEncoding, err = bloblang.NewField(conf.ContentEncoding); err != nil {
+	if a.contentEncoding, err = interop.NewBloblangField(mgr, conf.ContentEncoding); err != nil {
 		return nil, fmt.Errorf("failed to parse content_encoding property expression: %v", err)
 	}
-	if a.priority, err = bloblang.NewField(conf.Priority); err != nil {
+	if a.priority, err = interop.NewBloblangField(mgr, conf.Priority); err != nil {
 		return nil, fmt.Errorf("failed to parse priority property expression: %w", err)
 	}
 	if conf.Persistent {

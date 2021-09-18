@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -56,12 +56,24 @@ type HDFS struct {
 }
 
 // NewHDFS creates a new HDFS writer.Type.
+//
+// Deprecated: use the V2 API instead.
 func NewHDFS(
 	conf HDFSConfig,
 	log log.Modular,
 	stats metrics.Type,
 ) (*HDFS, error) {
-	path, err := bloblang.NewField(conf.Path)
+	return NewHDFSV2(conf, types.NoopMgr(), log, stats)
+}
+
+// NewHDFSV2 creates a new HDFS writer.Type.
+func NewHDFSV2(
+	conf HDFSConfig,
+	mgr types.Manager,
+	log log.Modular,
+	stats metrics.Type,
+) (*HDFS, error) {
+	path, err := interop.NewBloblangField(mgr, conf.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}

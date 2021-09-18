@@ -9,7 +9,6 @@ import (
 	"time"
 
 	ibatch "github.com/Jeffail/benthos/v3/internal/batch"
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
@@ -84,8 +83,8 @@ func init() {
 //------------------------------------------------------------------------------
 
 // NewOutput creates a new MongoDB output type.
-func NewOutput(conf output.MongoDBConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Type, error) {
-	m, err := NewWriter(conf, log, stats)
+func NewOutput(conf output.MongoDBConfig, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Type, error) {
+	m, err := NewWriter(mgr, conf, log, stats)
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +97,7 @@ func NewOutput(conf output.MongoDBConfig, mgr types.Manager, log log.Modular, st
 
 // NewWriter creates a new MongoDB writer.Type.
 func NewWriter(
+	mgr bundle.NewManagement,
 	conf output.MongoDBConfig,
 	log log.Modular,
 	stats metrics.Type,
@@ -132,13 +132,15 @@ func NewWriter(
 	filterNeeded = filterMapOps[conf.Operation]
 	hintAllowed = hintAllowedOps[conf.Operation]
 
+	bEnv := mgr.BloblEnvironment()
+
 	var err error
 
 	if filterNeeded {
 		if conf.FilterMap == "" {
 			return nil, errors.New("mongodb filter_map must be specified")
 		}
-		if db.filterMap, err = bloblang.NewMapping(conf.FilterMap); err != nil {
+		if db.filterMap, err = bEnv.NewMapping(conf.FilterMap); err != nil {
 			return nil, fmt.Errorf("failed to parse filter_map: %v", err)
 		}
 	} else if conf.FilterMap != "" {
@@ -149,7 +151,7 @@ func NewWriter(
 		if conf.DocumentMap == "" {
 			return nil, errors.New("mongodb document_map must be specified")
 		}
-		if db.documentMap, err = bloblang.NewMapping(conf.DocumentMap); err != nil {
+		if db.documentMap, err = bEnv.NewMapping(conf.DocumentMap); err != nil {
 			return nil, fmt.Errorf("failed to parse document_map: %v", err)
 		}
 	} else if conf.DocumentMap != "" {
@@ -157,7 +159,7 @@ func NewWriter(
 	}
 
 	if hintAllowed && conf.HintMap != "" {
-		if db.hintMap, err = bloblang.NewMapping(conf.HintMap); err != nil {
+		if db.hintMap, err = bEnv.NewMapping(conf.HintMap); err != nil {
 			return nil, fmt.Errorf("failed to parse hint_map: %v", err)
 		}
 	} else if conf.HintMap != "" {

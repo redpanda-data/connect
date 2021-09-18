@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
@@ -25,7 +24,7 @@ import (
 
 func init() {
 	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (output.Type, error) {
-		g, err := newGCPCloudStorageOutput(c.GCPCloudStorage, nm.Logger(), nm.Metrics())
+		g, err := newGCPCloudStorageOutput(nm, c.GCPCloudStorage, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err
 		}
@@ -144,6 +143,7 @@ type gcpCloudStorageOutput struct {
 
 // newGCPCloudStorageOutput creates a new GCP Cloud Storage bucket writer.Type.
 func newGCPCloudStorageOutput(
+	mgr bundle.NewManagement,
 	conf output.GCPCloudStorageConfig,
 	log log.Modular,
 	stats metrics.Type,
@@ -153,14 +153,17 @@ func newGCPCloudStorageOutput(
 		log:   log,
 		stats: stats,
 	}
+
+	bEnv := mgr.BloblEnvironment()
+
 	var err error
-	if g.path, err = bloblang.NewField(conf.Path); err != nil {
+	if g.path, err = bEnv.NewField(conf.Path); err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}
-	if g.contentType, err = bloblang.NewField(conf.ContentType); err != nil {
+	if g.contentType, err = bEnv.NewField(conf.ContentType); err != nil {
 		return nil, fmt.Errorf("failed to parse content type expression: %v", err)
 	}
-	if g.contentEncoding, err = bloblang.NewField(conf.ContentEncoding); err != nil {
+	if g.contentEncoding, err = bEnv.NewField(conf.ContentEncoding); err != nil {
 		return nil, fmt.Errorf("failed to parse content encoding expression: %v", err)
 	}
 

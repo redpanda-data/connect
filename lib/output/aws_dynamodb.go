@@ -194,7 +194,7 @@ func NewDynamoDB(conf Config, mgr types.Manager, log log.Modular, stats metrics.
 }
 
 func newDynamoDB(name string, conf writer.DynamoDBConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	dyn, err := writer.NewDynamoDB(conf, log, stats)
+	dyn, err := writer.NewDynamoDBV2(conf, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

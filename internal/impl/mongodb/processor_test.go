@@ -11,9 +11,11 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb"
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
+	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -121,7 +123,10 @@ func testMongoDBProcessorInsert(port string, t *testing.T) {
 
 	conf.MongoDB = mongoConfig
 
-	m, err := mongodb.NewProcessor(conf, nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	m, err := mongodb.NewProcessor(conf, mgr, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	parts := [][]byte{
@@ -196,8 +201,11 @@ func testMongoDBProcessorDeleteOne(port string, t *testing.T) {
 	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_delete", "b": "bar_delete"})
 	assert.NoError(t, err)
 
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	conf.MongoDB = mongoConfig
-	m, err := mongodb.NewProcessor(conf, nil, log.Noop(), metrics.Noop())
+	m, err := mongodb.NewProcessor(conf, mgr, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	parts := [][]byte{
@@ -255,8 +263,11 @@ func testMongoDBProcessorDeleteMany(port string, t *testing.T) {
 	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_delete_many", "b": "bar_delete_many", "c": "c2"})
 	assert.NoError(t, err)
 
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	conf.MongoDB = mongoConfig
-	m, err := mongodb.NewProcessor(conf, nil, log.Noop(), metrics.Noop())
+	m, err := mongodb.NewProcessor(conf, mgr, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	parts := [][]byte{
@@ -312,8 +323,11 @@ func testMongoDBProcessorReplaceOne(port string, t *testing.T) {
 	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_replace", "b": "bar_old", "c": "c1"})
 	assert.NoError(t, err)
 
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	conf.MongoDB = mongoConfig
-	m, err := mongodb.NewProcessor(conf, nil, log.Noop(), metrics.Noop())
+	m, err := mongodb.NewProcessor(conf, mgr, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	parts := [][]byte{
@@ -374,8 +388,11 @@ func testMongoDBProcessorUpdateOne(port string, t *testing.T) {
 	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_update", "b": "bar_update_old", "c": "c1"})
 	assert.NoError(t, err)
 
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	conf.MongoDB = mongoConfig
-	m, err := mongodb.NewProcessor(conf, nil, log.Noop(), metrics.Noop())
+	m, err := mongodb.NewProcessor(conf, mgr, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	parts := [][]byte{
@@ -435,8 +452,11 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_find", "b": "bar_find", "c": "c1"})
 	assert.NoError(t, err)
 
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	conf.MongoDB = mongoConfig
-	m, err := mongodb.NewProcessor(conf, nil, log.Noop(), metrics.Noop())
+	m, err := mongodb.NewProcessor(conf, mgr, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	parts := [][]byte{

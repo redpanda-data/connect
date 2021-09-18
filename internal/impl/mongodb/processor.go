@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -130,7 +129,7 @@ type Processor struct {
 
 // NewProcessor returns a MongoDB processor.
 func NewProcessor(
-	conf processor.Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf processor.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type,
 ) (types.Processor, error) {
 	m := &Processor{
 		conf:  conf.MongoDB,
@@ -174,13 +173,14 @@ func NewProcessor(
 	filterNeeded = filterMapOps[conf.MongoDB.Operation]
 	hintAllowed = hintAllowedOps[conf.MongoDB.Operation]
 
+	bEnv := mgr.BloblEnvironment()
 	var err error
 
 	if filterNeeded {
 		if conf.MongoDB.FilterMap == "" {
 			return nil, errors.New("mongodb filter_map must be specified")
 		}
-		if m.filterMap, err = bloblang.NewMapping(conf.MongoDB.FilterMap); err != nil {
+		if m.filterMap, err = bEnv.NewMapping(conf.MongoDB.FilterMap); err != nil {
 			return nil, fmt.Errorf("failed to parse filter_map: %v", err)
 		}
 	} else if conf.MongoDB.FilterMap != "" {
@@ -191,7 +191,7 @@ func NewProcessor(
 		if conf.MongoDB.DocumentMap == "" {
 			return nil, errors.New("mongodb document_map must be specified")
 		}
-		if m.documentMap, err = bloblang.NewMapping(conf.MongoDB.DocumentMap); err != nil {
+		if m.documentMap, err = bEnv.NewMapping(conf.MongoDB.DocumentMap); err != nil {
 			return nil, fmt.Errorf("failed to parse document_map: %v", err)
 		}
 	} else if conf.MongoDB.DocumentMap != "" {
@@ -199,7 +199,7 @@ func NewProcessor(
 	}
 
 	if hintAllowed && conf.MongoDB.HintMap != "" {
-		if m.hintMap, err = bloblang.NewMapping(conf.MongoDB.HintMap); err != nil {
+		if m.hintMap, err = bEnv.NewMapping(conf.MongoDB.HintMap); err != nil {
 			return nil, fmt.Errorf("failed to parse hint_map: %v", err)
 		}
 	} else if conf.MongoDB.HintMap != "" {
