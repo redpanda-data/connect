@@ -102,7 +102,7 @@ Benthos serves two HTTP endpoints for health checks:
 
 ### Metrics
 
-Benthos [exposes lots of metrics][metrics] either to Statsd, Prometheus or for debugging purposes an HTTP endpoint that returns a JSON formatted object. The target can be specified [via config][metrics-config].
+Benthos [exposes lots of metrics][metrics] either to Statsd, Prometheus or for debugging purposes an HTTP endpoint that returns a JSON formatted object.
 
 ### Tracing
 
@@ -177,7 +177,6 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come a
 [outputs]: https://www.benthos.dev/docs/components/outputs/about
 [metrics]: https://www.benthos.dev/docs/components/metrics/about
 [tracers]: https://www.benthos.dev/docs/components/tracers/about
-[metrics-config]: config/metrics
 [config-interp]: https://www.benthos.dev/docs/configuration/interpolation
 [streams-api]: https://www.benthos.dev/docs/guides/streams_mode/streams_api
 [streams-mode]: https://www.benthos.dev/docs/guides/streams_mode/about
