@@ -89,11 +89,11 @@ rate_limit_resources:
 
 func TestEnvironmentBloblangIsolation(t *testing.T) {
 	bEnv := bloblang.NewEnvironment().WithoutFunctions("now")
-	bEnv.RegisterFunctionV2("meow", bloblang.NewPluginSpec(), func(args *bloblang.ParsedParams) (bloblang.Function, error) {
+	require.NoError(t, bEnv.RegisterFunctionV2("meow", bloblang.NewPluginSpec(), func(args *bloblang.ParsedParams) (bloblang.Function, error) {
 		return func() (interface{}, error) {
 			return "meow", nil
 		}, nil
-	})
+	}))
 
 	envOne := service.NewEnvironment()
 	envOne.UseBloblangEnvironment(bEnv)
