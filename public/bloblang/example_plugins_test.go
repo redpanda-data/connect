@@ -9,9 +9,58 @@ import (
 	"github.com/Jeffail/benthos/v3/public/bloblang"
 )
 
-// This example demonstrates how to create Bloblang methods and functions and
-// execute them with a Bloblang mapping.
-func Example_bloblangPlugins() {
+// This example demonstrates how to create a Bloblang function with the simpler
+// V1 API and execute them with a Bloblang mapping. Note that functions
+// registered this way will NOT support named parameters, for named parameters
+// use the V2 register API.
+func Example_bloblangFunctionPluginV1() {
+	if err := bloblang.RegisterFunction("add_but_always_slightly_wrong", func(args ...interface{}) (bloblang.Function, error) {
+		var left, right float64
+
+		if err := bloblang.NewArgSpec().
+			Float64Var(&left).
+			Float64Var(&right).
+			Extract(args); err != nil {
+			return nil, err
+		}
+
+		return func() (interface{}, error) {
+			return left + right + 0.02, nil
+		}, nil
+	}); err != nil {
+		panic(err)
+	}
+
+	mapping := `
+root.num = add_but_always_slightly_wrong(this.a, this.b)
+`
+
+	exe, err := bloblang.Parse(mapping)
+	if err != nil {
+		panic(err)
+	}
+
+	res, err := exe.Query(map[string]interface{}{
+		"a": 1.2, "b": 2.6,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	jsonBytes, err := json.Marshal(res)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(string(jsonBytes))
+	// Output: {"num":3.82}
+}
+
+// This example demonstrates how to create Bloblang methods with the simpler API
+// and execute them with a Bloblang mapping. Note that methods registered this
+// way will NOT support named parameters, for named parameters use the V2
+// register API.
+func Example_bloblangMethodPluginV1() {
 	if err := bloblang.RegisterMethod("cuddle", func(args ...interface{}) (bloblang.Method, error) {
 		var prefix string
 		var suffix string
@@ -44,27 +93,9 @@ func Example_bloblangPlugins() {
 		panic(err)
 	}
 
-	if err := bloblang.RegisterFunction("add_but_always_slightly_wrong", func(args ...interface{}) (bloblang.Function, error) {
-		var left, right float64
-
-		if err := bloblang.NewArgSpec().
-			Float64Var(&left).
-			Float64Var(&right).
-			Extract(args); err != nil {
-			return nil, err
-		}
-
-		return func() (interface{}, error) {
-			return left + right + 0.02, nil
-		}, nil
-	}); err != nil {
-		panic(err)
-	}
-
 	mapping := `
 root.new_summary = this.summary.cuddle("meow", "woof")
 root.shuffled = this.names.shuffle()
-root.num = add_but_always_slightly_wrong(1.2, 2.6)
 `
 
 	exe, err := bloblang.Parse(mapping)
@@ -86,7 +117,7 @@ root.num = add_but_always_slightly_wrong(1.2, 2.6)
 	}
 
 	fmt.Println(string(jsonBytes))
-	// Output: {"new_summary":"meowquackwoof","num":3.82,"shuffled":["olaf","jen","pixie","denny","spuz"]}
+	// Output: {"new_summary":"meowquackwoof","shuffled":["olaf","jen","pixie","denny","spuz"]}
 }
 
 // This example demonstrates how to create and use an isolated Bloblang

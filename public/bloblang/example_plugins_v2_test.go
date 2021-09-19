@@ -11,7 +11,65 @@ import (
 // This example demonstrates how to create Bloblang methods and functions and
 // execute them with a Bloblang mapping using the new V2 methods, which adds
 // support to our functions and methods for optional named parameters.
-func Example_bloblangPluginsNamedArgs() {
+func Example_bloblangFunctionPluginV2() {
+	multiplyWrongSpec := bloblang.NewPluginSpec().
+		Description("Multiplies two numbers together but gets it slightly wrong. Whoops.").
+		Param(bloblang.NewFloat64Param("left").Description("The first of two numbers to multiply.")).
+		Param(bloblang.NewFloat64Param("right").Description("The second of two numbers to multiply."))
+
+	if err := bloblang.RegisterFunctionV2(
+		"multiply_but_always_slightly_wrong", multiplyWrongSpec,
+		func(args *bloblang.ParsedParams) (bloblang.Function, error) {
+			left, err := args.GetFloat64("left")
+			if err != nil {
+				return nil, err
+			}
+
+			right, err := args.GetFloat64("right")
+			if err != nil {
+				return nil, err
+			}
+
+			return func() (interface{}, error) {
+				return left*right + 0.02, nil
+			}, nil
+		}); err != nil {
+		panic(err)
+	}
+
+	// Our function now optionally supports named parameters, when a function is
+	// instantiated with unamed parameters they must follow the order in which
+	// the parameters are registered.
+	mapping := `
+root.num_ab = multiply_but_always_slightly_wrong(left: this.a, right: this.b)
+root.num_cd = multiply_but_always_slightly_wrong(this.c, this.d)
+`
+
+	exe, err := bloblang.Parse(mapping)
+	if err != nil {
+		panic(err)
+	}
+
+	res, err := exe.Query(map[string]interface{}{
+		"a": 1.2, "b": 2.6, "c": 5.3, "d": 8.2,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	jsonBytes, err := json.Marshal(res)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(string(jsonBytes))
+	// Output: {"num_ab":3.14,"num_cd":43.48}
+}
+
+// This example demonstrates how to create Bloblang methods and functions and
+// execute them with a Bloblang mapping using the new V2 methods, which adds
+// support to our functions and methods for optional named parameters.
+func Example_bloblangMethodPluginV2() {
 	hugStringSpec := bloblang.NewPluginSpec().
 		Description("Wraps a string with a prefix and suffix.").
 		Param(bloblang.NewStringParam("prefix").Description("The prefix to insert.")).
@@ -56,36 +114,12 @@ func Example_bloblangPluginsNamedArgs() {
 		panic(err)
 	}
 
-	multiplyWrongSpec := bloblang.NewPluginSpec().
-		Description("Multiplies two numbers together but gets it slightly wrong. Whoops.").
-		Param(bloblang.NewFloat64Param("left").Description("The first of two numbers to multiply.")).
-		Param(bloblang.NewFloat64Param("right").Description("The second of two numbers to multiply."))
-
-	if err := bloblang.RegisterFunctionV2(
-		"multiply_but_always_slightly_wrong", multiplyWrongSpec,
-		func(args *bloblang.ParsedParams) (bloblang.Function, error) {
-			left, err := args.GetFloat64("left")
-			if err != nil {
-				return nil, err
-			}
-
-			right, err := args.GetFloat64("right")
-			if err != nil {
-				return nil, err
-			}
-
-			return func() (interface{}, error) {
-				return left*right + 0.02, nil
-			}, nil
-		}); err != nil {
-		panic(err)
-	}
-
-	// Our methods and functions now optionally support named parameters:
+	// Our methods now optionally support named parameters, when a method is
+	// instantiated with unamed parameters they must follow the order in which
+	// the parameters are registered.
 	mapping := `
 root.new_summary = this.summary.hug_string(prefix: "meow", suffix: "woof")
 root.reversed = this.names.sometimes_reverse()
-root.num = multiply_but_always_slightly_wrong(1.2, 2.6)
 `
 
 	exe, err := bloblang.Parse(mapping)
@@ -107,5 +141,5 @@ root.num = multiply_but_always_slightly_wrong(1.2, 2.6)
 	}
 
 	fmt.Println(string(jsonBytes))
-	// Output: {"new_summary":"meowquackwoof","num":3.14,"reversed":["spuz","jen","olaf","pixie","denny"]}
+	// Output: {"new_summary":"meowquackwoof","reversed":["spuz","jen","olaf","pixie","denny"]}
 }
