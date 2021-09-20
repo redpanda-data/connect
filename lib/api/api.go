@@ -113,7 +113,7 @@ func New(
 		}
 		handler = handlers.CORS(
 			handlers.AllowedOrigins(conf.CORS.AllowedOrigins),
-			handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "DELETE"}),
+			handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"}),
 		)(gMux)
 	}
 

@@ -164,7 +164,7 @@ func (e *Environment) WithoutFunctions(names ...string) *Environment {
 // mappings are disabled.
 func (e *Environment) WithDisabledImports() *Environment {
 	return &Environment{
-		env: e.env.Deactivated(),
+		env: e.env.WithDisabledImports(),
 	}
 }
 

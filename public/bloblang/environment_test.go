@@ -98,3 +98,11 @@ func TestEmptyEnvironment(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "foo:hello world", v)
 }
+
+func TestEnvironmentDisabledImports(t *testing.T) {
+	env := NewEmptyEnvironment().WithDisabledImports()
+
+	_, err := env.Parse(`from "/tmp/foo.blobl"`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "imports are disabled in this context")
+}
