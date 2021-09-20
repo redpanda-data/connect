@@ -65,6 +65,7 @@ pipeline:
 			}
 			var dynQuery *service.InterpolatedString
 			if allowDynQuery {
+				mgr.Logger().Warn("using unsafe_dynamic_query leaves you vulnerable to SQL injection attacks")
 				if dynQuery, err = service.NewInterpolatedString(query); err != nil {
 					return nil, fmt.Errorf("failed to parse query: %v", err)
 				}
