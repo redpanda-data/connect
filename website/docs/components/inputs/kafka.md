@@ -34,6 +34,7 @@ input:
     addresses:
       - localhost:9092
     topics: []
+    target_version: 1.0.0
     consumer_group: benthos_consumer_group
     client_id: benthos_kafka_input
     checkpoint_limit: 1
@@ -50,6 +51,7 @@ input:
     addresses:
       - localhost:9092
     topics: []
+    target_version: 1.0.0
     tls:
       enabled: false
       skip_cert_verify: false
@@ -77,7 +79,6 @@ input:
       heartbeat_interval: 3s
       rebalance_timeout: 60s
     fetch_buffer_cap: 256
-    target_version: 1.0.0
     batching:
       count: 0
       byte_size: 0
@@ -167,6 +168,14 @@ topics:
 topics:
   - foo:0-5
 ```
+
+### `target_version`
+
+The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers.
+
+
+Type: `string`  
+Default: `"1.0.0"`  
 
 ### `tls`
 
@@ -470,14 +479,6 @@ The maximum number of unprocessed messages to fetch at a given time.
 
 Type: `int`  
 Default: `256`  
-
-### `target_version`
-
-The version of the Kafka protocol to use.
-
-
-Type: `string`  
-Default: `"1.0.0"`  
 
 ### `batching`
 

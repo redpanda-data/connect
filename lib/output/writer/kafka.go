@@ -211,6 +211,8 @@ func strToCompressionCodec(str string) (sarama.CompressionCodec, error) {
 		return sarama.CompressionLZ4, nil
 	case "gzip":
 		return sarama.CompressionGZIP, nil
+	case "zstd":
+		return sarama.CompressionZSTD, nil
 	}
 	return sarama.CompressionNone, fmt.Errorf("compression codec not recognised: %v", str)
 }

@@ -70,6 +70,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 				[]string{"foo:0,bar:1,bar:3"},
 				[]string{"foo:0-5"},
 			).AtVersion("3.33.0").Array(),
+			docs.FieldString("target_version", "The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers."),
 			btls.FieldSpec(),
 			sasl.FieldSpec(),
 			docs.FieldCommon("consumer_group", "An identifier for the consumer group of the connection. This field can be explicitly made empty in order to disable stored offsets for the consumed topic partitions."),
@@ -88,7 +89,6 @@ You can access these metadata fields using [function interpolation](/docs/config
 				docs.FieldAdvanced("rebalance_timeout", "A period after which rebalancing is abandoned if unresolved."),
 			),
 			docs.FieldAdvanced("fetch_buffer_cap", "The maximum number of unprocessed messages to fetch at a given time."),
-			docs.FieldAdvanced("target_version", "The version of the Kafka protocol to use."),
 			func() docs.FieldSpec {
 				b := batch.FieldSpec()
 				b.IsAdvanced = true
