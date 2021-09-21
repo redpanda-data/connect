@@ -7,7 +7,6 @@ import {MDXProvider} from '@mdx-js/react';
 import TOC from '@theme/TOC';
 
 import classnames from 'classnames';
-import readingTime from 'reading-time';
 import styles from './styles.module.css';
 
 function CookbookPage(props) {
@@ -15,7 +14,6 @@ function CookbookPage(props) {
   const {frontMatter, metadata} = CookbookContents;
   const {title} = frontMatter;
   const {keywords} = metadata;
-  const readingStats = readingTime(CookbookContents.toString());
 
   return (
     <Layout title={metadata.title} description={metadata.description} keywords={keywords}>
@@ -26,7 +24,6 @@ function CookbookPage(props) {
               <header className={classnames(styles.header, 'margin-top--xl')}>
                 <h1 className={styles.cookbookTitle}>{title}</h1>
                 <p className={styles.cookbookDescription}>{metadata.description}</p>
-                <p className={styles.cookbookTimeToRead}>{readingStats.text}</p>
               </header>
               <div className="container container--narrow container--bleed margin-vert--xl">
                 <section className="markdown">

@@ -44,7 +44,6 @@ module.exports = {
         {to: 'blog', label: 'Blog', position: 'left'},
         {to: 'videos', label: 'Videos', position: 'left'},
         {to: 'community', label: 'Community', position: 'right'},
-        {to: 'https://lab.benthos.dev', label: 'Lab', position: 'right'},
         {
           href: 'https://github.com/Jeffail/benthos/releases/latest',
           position: 'right',
