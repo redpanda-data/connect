@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - For Kafka components the config now supports the `rack_id` field which may contain a rack identifier for the Kafka client.
 - Allow mapping imports in Bloblang environments to be disabled.
 - Go API: Isolated Bloblang environments are now honored by all components.
+- Go API: The stream builder now evaluates environment variable interpolations.
 - Field `unsafe_dynamic_query` added to the `sql` processor.
 
 ### Fixed
