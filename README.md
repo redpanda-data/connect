@@ -48,7 +48,7 @@ If you want to dive fully into Benthos then don't waste your time in this dump, 
 
 For guidance on how to configure more advanced stream processing concepts such as stream joins, enrichment workflows, etc, check out the [cookbooks section.][cookbooks]
 
-For guidance on building your own custom plugins check out [this example repo.][plugin-repo]
+For guidance on building your own custom plugins in Go check out [the public APIs.][godoc-url]
 
 ## Install
 
@@ -134,7 +134,7 @@ And then run it with `make lint`.
 
 ### Plugins
 
-It's pretty easy to write your own custom plugins for Benthos, take a look at [this repo][plugin-repo] for examples and build instructions.
+It's pretty easy to write your own custom plugins for Benthos in Go, for information check out [the API docs][godoc-url], and for inspiration there's an [example repo][plugin-repo] demonstrating a variety of plugin implementations.
 
 ### Docker Builds
 

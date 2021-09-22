@@ -264,7 +264,7 @@ Default: `""`
 
 ### `auth`
 
-Optional configuration of NATS authentication parameters. More information can be found [in this document](/docs/guides/nats).
+Optional configuration of NATS authentication parameters.
 
 
 Type: `object`  
