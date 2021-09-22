@@ -2,6 +2,8 @@
 // components and executing either a standard Benthos CLI, or programmatically
 // building isolated pipelines with a StreamBuilder API.
 //
+// For a video guide on Benthos plugins check out: https://youtu.be/uH6mKw-Ly0g
+//
 // In order to add custom Bloblang functions and methods use the
 // ./public/bloblang package.
 package service
