@@ -39,7 +39,7 @@ func NewNanomsg(conf Config, mgr types.Manager, log log.Modular, stats metrics.T
 	if err != nil {
 		return nil, err
 	}
-	return NewAsyncReader(TypeNanomsg, true, reader.NewAsyncPreserver(s), log, stats)
+	return NewAsyncReader(TypeNanomsg, true, reader.NewAsyncPreserver(s), log, stats, nil)
 }
 
 //------------------------------------------------------------------------------

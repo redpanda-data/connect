@@ -36,6 +36,15 @@ type AsyncReader struct {
 	shutSig      *shutdown.Signaller
 }
 
+// DefaultAsyncReaderBackoff creates a new preconfigured backoff.ExponentialBackOff.
+func DefaultAsyncReaderBackoff() *backoff.ExponentialBackOff {
+	boff := backoff.NewExponentialBackOff()
+	boff.InitialInterval = time.Millisecond * 100
+	boff.MaxInterval = time.Second
+	boff.MaxElapsedTime = 0
+	return boff
+}
+
 // NewAsyncReader creates a new AsyncReader input type.
 func NewAsyncReader(
 	typeStr string,
@@ -43,11 +52,12 @@ func NewAsyncReader(
 	r reader.Async,
 	log log.Modular,
 	stats metrics.Type,
+	boff *backoff.ExponentialBackOff,
 ) (Type, error) {
-	boff := backoff.NewExponentialBackOff()
-	boff.InitialInterval = time.Millisecond * 100
-	boff.MaxInterval = time.Second
-	boff.MaxElapsedTime = 0
+	if boff == nil {
+		boff = DefaultAsyncReaderBackoff()
+	}
+	boff.Reset()
 
 	rdr := &AsyncReader{
 		connBackoff:   boff,

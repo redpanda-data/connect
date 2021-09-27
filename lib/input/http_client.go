@@ -158,7 +158,7 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 	if err != nil {
 		return nil, err
 	}
-	return NewAsyncReader(TypeHTTPClient, true, reader.NewAsyncPreserver(rdr), log, stats)
+	return NewAsyncReader(TypeHTTPClient, true, reader.NewAsyncPreserver(rdr), log, stats, nil)
 }
 
 func newHTTPClient(conf HTTPClientConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*HTTPClient, error) {

@@ -15,6 +15,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/public/bloblang"
+	"github.com/cenkalti/backoff/v4"
 	"gopkg.in/yaml.v3"
 )
 
@@ -150,7 +151,7 @@ func (e *Environment) WalkCaches(fn func(name string, config *ConfigView)) {
 // If your input implementation doesn't have a specific mechanism for dealing
 // with a nack (when the AckFunc provides a non-nil error) then you can instead
 // wrap your input implementation with AutoRetryNacks to get automatic retries.
-func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputConstructor) error {
+func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputConstructor, boff *backoff.ExponentialBackOff) error {
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
@@ -164,7 +165,7 @@ func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputCon
 			return nil, err
 		}
 		rdr := newAirGapReader(i)
-		return input.NewAsyncReader(conf.Type, false, rdr, nm.Logger(), nm.Metrics())
+		return input.NewAsyncReader(conf.Type, false, rdr, nm.Logger(), nm.Metrics(), boff)
 	}), componentSpec)
 }
 
@@ -177,7 +178,7 @@ func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputCon
 // with a nack (when the AckFunc provides a non-nil error) then you can instead
 // wrap your input implementation with AutoRetryNacksBatched to get automatic
 // retries.
-func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor BatchInputConstructor) error {
+func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor BatchInputConstructor, boff *backoff.ExponentialBackOff) error {
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
@@ -191,7 +192,7 @@ func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor Bat
 			return nil, err
 		}
 		rdr := newAirGapBatchReader(i)
-		return input.NewAsyncReader(conf.Type, false, rdr, nm.Logger(), nm.Metrics())
+		return input.NewAsyncReader(conf.Type, false, rdr, nm.Logger(), nm.Metrics(), boff)
 	}), componentSpec)
 }
 

@@ -125,7 +125,7 @@ func NewAmazonS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.
 		reader.NewAsyncBundleUnacks(
 			reader.NewAsyncPreserver(r),
 		),
-		log, stats,
+		log, stats, nil,
 	)
 }
 

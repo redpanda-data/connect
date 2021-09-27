@@ -72,7 +72,7 @@ func NewSTDIN(conf Config, mgr types.Manager, log log.Modular, stats metrics.Typ
 	return NewAsyncReader(
 		TypeSTDIN, true,
 		reader.NewAsyncCutOff(reader.NewAsyncPreserver(rdr)),
-		log, stats,
+		log, stats, nil,
 	)
 }
 

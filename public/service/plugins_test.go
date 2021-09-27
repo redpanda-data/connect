@@ -123,7 +123,7 @@ func TestInputPluginWithConfig(t *testing.T) {
 			initConf = conf.AsStruct().(*testConfig)
 			initLabel = mgr.Label()
 			return nil, errors.New("this is a test error")
-		}))
+		}, nil))
 
 	inConfStr := `label: foo
 test_input_plugin_with_config:
@@ -163,7 +163,7 @@ func TestInputPluginWithoutConfig(t *testing.T) {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			initLabel = mgr.Label()
 			return nil, errors.New("this is a test error")
-		}))
+		}, nil))
 
 	inConfStr := `label: foo
 test_input_plugin_without_config: null

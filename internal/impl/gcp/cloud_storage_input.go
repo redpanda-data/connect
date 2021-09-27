@@ -32,7 +32,7 @@ func init() {
 		return input.NewAsyncReader(
 			input.TypeGCPCloudStorage, true,
 			reader.NewAsyncBundleUnacks(reader.NewAsyncPreserver(r)),
-			nm.Logger(), nm.Metrics(),
+			nm.Logger(), nm.Metrics(), nil,
 		)
 	}), docs.ComponentSpec{
 		Name:    input.TypeGCPCloudStorage,

@@ -54,7 +54,7 @@ func NewHDFS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type
 		reader.NewAsyncPreserver(
 			reader.NewHDFS(conf.HDFS, log, stats),
 		),
-		log, stats,
+		log, stats, nil,
 	)
 }
 

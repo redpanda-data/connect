@@ -48,7 +48,7 @@ func Example_inputPlugin() {
 		return service.AutoRetryNacks(&GibberishInput{length}), nil
 	}
 
-	err := service.RegisterInput("gibberish", configSpec, constructor)
+	err := service.RegisterInput("gibberish", configSpec, constructor, nil)
 	if err != nil {
 		panic(err)
 	}

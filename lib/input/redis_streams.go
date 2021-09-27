@@ -57,7 +57,7 @@ func NewRedisStreams(conf Config, mgr types.Manager, log log.Modular, stats metr
 		return nil, err
 	}
 	c = reader.NewAsyncBundleUnacks(reader.NewAsyncPreserver(c))
-	return NewAsyncReader(TypeRedisStreams, true, c, log, stats)
+	return NewAsyncReader(TypeRedisStreams, true, c, log, stats, nil)
 }
 
 //------------------------------------------------------------------------------

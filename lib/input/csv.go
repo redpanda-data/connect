@@ -137,7 +137,7 @@ func NewCSVFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.T
 		return nil, err
 	}
 
-	return NewAsyncReader(TypeFile, true, reader.NewAsyncPreserver(rdr), log, stats)
+	return NewAsyncReader(TypeFile, true, reader.NewAsyncPreserver(rdr), log, stats, nil)
 }
 
 //------------------------------------------------------------------------------

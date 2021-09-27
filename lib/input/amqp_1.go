@@ -59,7 +59,7 @@ func NewAMQP1(conf Config, mgr types.Manager, log log.Modular, stats metrics.Typ
 		return nil, err
 	}
 	a = reader.NewAsyncBundleUnacks(a)
-	return NewAsyncReader(TypeAMQP1, true, a, log, stats)
+	return NewAsyncReader(TypeAMQP1, true, a, log, stats, nil)
 }
 
 //------------------------------------------------------------------------------

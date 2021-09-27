@@ -65,7 +65,7 @@ func NewAmazonSQS(conf Config, mgr types.Manager, log log.Modular, stats metrics
 	if err != nil {
 		return nil, err
 	}
-	return NewAsyncReader(TypeSQS, true, reader.NewAsyncBundleUnacks(s), log, stats)
+	return NewAsyncReader(TypeSQS, true, reader.NewAsyncBundleUnacks(s), log, stats, nil)
 }
 
 //------------------------------------------------------------------------------

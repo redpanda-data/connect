@@ -41,7 +41,7 @@ func init() {
 			if conf.AWSS3.SQS.URL == "" {
 				r = reader.NewAsyncPreserver(r)
 			}
-			return NewAsyncReader(TypeAWSS3, false, r, log, stats)
+			return NewAsyncReader(TypeAWSS3, false, r, log, stats, nil)
 		}),
 		Status: docs.StatusStable,
 		Summary: `

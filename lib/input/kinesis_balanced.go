@@ -73,7 +73,7 @@ func NewKinesisBalanced(conf Config, mgr types.Manager, log log.Modular, stats m
 		return nil, err
 	}
 	k = reader.NewAsyncBundleUnacks(reader.NewAsyncPreserver(k))
-	return NewAsyncReader(TypeKinesisBalanced, true, k, log, stats)
+	return NewAsyncReader(TypeKinesisBalanced, true, k, log, stats, nil)
 }
 
 //------------------------------------------------------------------------------
