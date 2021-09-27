@@ -151,10 +151,11 @@ func (e *Environment) WalkCaches(fn func(name string, config *ConfigView)) {
 // If your input implementation doesn't have a specific mechanism for dealing
 // with a nack (when the AckFunc provides a non-nil error) then you can instead
 // wrap your input implementation with AutoRetryNacks to get automatic retries.
-func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputConstructor, boff *backoff.ExponentialBackOff) error {
+func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputConstructor, opts ...InputPluginOption) error {
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
+	cfg := newInputPluginConfig(opts...)
 	return e.internal.Inputs.Add(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (input.Type, error) {
 		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
 		if err != nil {
@@ -165,7 +166,7 @@ func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputCon
 			return nil, err
 		}
 		rdr := newAirGapReader(i)
-		return input.NewAsyncReader(conf.Type, false, rdr, nm.Logger(), nm.Metrics(), boff)
+		return input.NewAsyncReader(conf.Type, false, rdr, nm.Logger(), nm.Metrics(), input.WithBackoff(cfg.boff))
 	}), componentSpec)
 }
 
@@ -178,10 +179,11 @@ func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputCon
 // with a nack (when the AckFunc provides a non-nil error) then you can instead
 // wrap your input implementation with AutoRetryNacksBatched to get automatic
 // retries.
-func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor BatchInputConstructor, boff *backoff.ExponentialBackOff) error {
+func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor BatchInputConstructor, opts ...InputPluginOption) error {
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
+	cfg := newInputPluginConfig(opts...)
 	return e.internal.Inputs.Add(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (input.Type, error) {
 		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
 		if err != nil {
@@ -192,8 +194,41 @@ func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor Bat
 			return nil, err
 		}
 		rdr := newAirGapBatchReader(i)
-		return input.NewAsyncReader(conf.Type, false, rdr, nm.Logger(), nm.Metrics(), boff)
+		return input.NewAsyncReader(conf.Type, false, rdr, nm.Logger(), nm.Metrics(), input.WithBackoff(cfg.boff))
 	}), componentSpec)
+}
+
+type inputPluginConfig struct {
+	boff backoff.BackOff
+}
+
+func newInputPluginConfig(opts ...InputPluginOption) *inputPluginConfig {
+	cfg := &inputPluginConfig{}
+	for _, opt := range opts {
+		opt.apply(cfg)
+	}
+	return cfg
+}
+
+// InputPluginOption type.
+type InputPluginOption interface {
+	apply(*inputPluginConfig)
+}
+
+type inputPluginOptionWithBackoff struct {
+	v backoff.BackOff
+}
+
+// interface compliance check.
+var _ InputPluginOption = (*inputPluginOptionWithBackoff)(nil)
+
+func (o *inputPluginOptionWithBackoff) apply(cfg *inputPluginConfig) {
+	cfg.boff = o.v
+}
+
+// WithBackoff set custom backoff to InputPlugin.
+func WithBackoff(boff backoff.BackOff) InputPluginOption {
+	return &inputPluginOptionWithBackoff{boff}
 }
 
 // WalkInputs executes a provided function argument for every input component

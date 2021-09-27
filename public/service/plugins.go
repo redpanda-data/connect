@@ -1,7 +1,5 @@
 package service
 
-import "github.com/cenkalti/backoff/v4"
-
 // BatchBufferConstructor is a func that's provided a configuration type and
 // access to a service manager and must return an instantiation of a buffer
 // based on the config, or an error.
@@ -48,8 +46,8 @@ type InputConstructor func(conf *ParsedConfig, mgr *Resources) (Input, error)
 // If your input implementation doesn't have a specific mechanism for dealing
 // with a nack (when the AckFunc provides a non-nil error) then you can instead
 // wrap your input implementation with AutoRetryNacks to get automatic retries.
-func RegisterInput(name string, spec *ConfigSpec, ctor InputConstructor, boff *backoff.ExponentialBackOff) error {
-	return globalEnvironment.RegisterInput(name, spec, ctor, boff)
+func RegisterInput(name string, spec *ConfigSpec, ctor InputConstructor, opts ...InputPluginOption) error {
+	return globalEnvironment.RegisterInput(name, spec, ctor, opts...)
 }
 
 // BatchInputConstructor is a func that's provided a configuration type and
@@ -66,8 +64,8 @@ type BatchInputConstructor func(conf *ParsedConfig, mgr *Resources) (BatchInput,
 // with a nack (when the AckFunc provides a non-nil error) then you can instead
 // wrap your input implementation with AutoRetryNacksBatched to get automatic
 // retries.
-func RegisterBatchInput(name string, spec *ConfigSpec, ctor BatchInputConstructor, boff *backoff.ExponentialBackOff) error {
-	return globalEnvironment.RegisterBatchInput(name, spec, ctor, boff)
+func RegisterBatchInput(name string, spec *ConfigSpec, ctor BatchInputConstructor, opts ...InputPluginOption) error {
+	return globalEnvironment.RegisterBatchInput(name, spec, ctor, opts...)
 }
 
 // OutputConstructor is a func that's provided a configuration type and access

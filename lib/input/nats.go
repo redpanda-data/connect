@@ -57,7 +57,7 @@ func NewNATS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type
 	if err != nil {
 		return nil, err
 	}
-	return NewAsyncReader(TypeNATS, true, reader.NewAsyncPreserver(n), log, stats, nil)
+	return NewAsyncReader(TypeNATS, true, reader.NewAsyncPreserver(n), log, stats)
 }
 
 //------------------------------------------------------------------------------

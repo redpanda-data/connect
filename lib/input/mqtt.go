@@ -63,7 +63,7 @@ func NewMQTT(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type
 		TypeMQTT,
 		true,
 		reader.NewAsyncPreserver(m),
-		log, stats, nil,
+		log, stats,
 	)
 }
 

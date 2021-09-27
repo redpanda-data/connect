@@ -127,7 +127,7 @@ func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Typ
 				return nil, err
 			}
 		}
-		return NewAsyncReader(TypeKafka, false, reader.NewAsyncPreserver(rdr), log, stats, nil)
+		return NewAsyncReader(TypeKafka, false, reader.NewAsyncPreserver(rdr), log, stats)
 	}
 
 	// TODO: V4 Remove this.

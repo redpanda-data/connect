@@ -27,7 +27,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return NewAsyncReader(TypeSubprocess, true, b, log, stats, nil)
+			return NewAsyncReader(TypeSubprocess, true, b, log, stats)
 		}),
 		Status: docs.StatusBeta,
 		Summary: `

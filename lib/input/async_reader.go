@@ -37,7 +37,7 @@ type AsyncReader struct {
 }
 
 // DefaultAsyncReaderBackoff creates a new preconfigured backoff.ExponentialBackOff.
-func DefaultAsyncReaderBackoff() *backoff.ExponentialBackOff {
+func DefaultAsyncReaderBackoff() backoff.BackOff {
 	boff := backoff.NewExponentialBackOff()
 	boff.InitialInterval = time.Millisecond * 100
 	boff.MaxInterval = time.Second
@@ -52,15 +52,16 @@ func NewAsyncReader(
 	r reader.Async,
 	log log.Modular,
 	stats metrics.Type,
-	boff *backoff.ExponentialBackOff,
+	opts ...AsyncReaderOption,
 ) (Type, error) {
-	if boff == nil {
-		boff = DefaultAsyncReaderBackoff()
+	cfg := newAsyncReaderConfig(opts...)
+	if cfg.boff == nil {
+		cfg.boff = DefaultAsyncReaderBackoff()
 	}
-	boff.Reset()
+	cfg.boff.Reset()
 
 	rdr := &AsyncReader{
-		connBackoff:   boff,
+		connBackoff:   cfg.boff,
 		allowSkipAcks: allowSkipAcks,
 		typeStr:       typeStr,
 		reader:        r,
@@ -253,3 +254,36 @@ func (r *AsyncReader) WaitForClose(timeout time.Duration) error {
 }
 
 //------------------------------------------------------------------------------
+
+type asyncReaderConfig struct {
+	boff backoff.BackOff
+}
+
+func newAsyncReaderConfig(opts ...AsyncReaderOption) *asyncReaderConfig {
+	cfg := &asyncReaderConfig{}
+	for _, opt := range opts {
+		opt.apply(cfg)
+	}
+	return cfg
+}
+
+// AsyncReaderOption type.
+type AsyncReaderOption interface {
+	apply(*asyncReaderConfig)
+}
+
+type asyncReaderOptionWithBackoff struct {
+	v backoff.BackOff
+}
+
+// interface compliance check.
+var _ AsyncReaderOption = (*asyncReaderOptionWithBackoff)(nil)
+
+func (o *asyncReaderOptionWithBackoff) apply(cfg *asyncReaderConfig) {
+	cfg.boff = o.v
+}
+
+// WithBackoff set custom backoff to AsyncReader.
+func WithBackoff(boff backoff.BackOff) AsyncReaderOption {
+	return &asyncReaderOptionWithBackoff{boff}
+}

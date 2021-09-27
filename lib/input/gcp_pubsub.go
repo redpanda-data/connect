@@ -68,7 +68,7 @@ func NewGCPPubSub(conf Config, mgr types.Manager, log log.Modular, stats metrics
 		return nil, err
 	}
 	c = reader.NewAsyncBundleUnacks(c)
-	return NewAsyncReader(TypeGCPPubSub, true, c, log, stats, nil)
+	return NewAsyncReader(TypeGCPPubSub, true, c, log, stats)
 }
 
 //------------------------------------------------------------------------------

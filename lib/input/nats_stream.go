@@ -85,7 +85,7 @@ func NewNATSStream(conf Config, mgr types.Manager, log log.Modular, stats metric
 	if c, err = reader.NewAsyncBatcher(conf.NATSStream.Batching, c, mgr, log, stats); err != nil {
 		return nil, err
 	}
-	return NewAsyncReader(TypeNATSStream, true, c, log, stats, nil)
+	return NewAsyncReader(TypeNATSStream, true, c, log, stats)
 }
 
 //------------------------------------------------------------------------------

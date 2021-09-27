@@ -95,7 +95,7 @@ func NewTCP(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type)
 		TypeTCP,
 		true,
 		reader.NewAsyncPreserver(rdr),
-		log, stats, nil,
+		log, stats,
 	)
 }
 

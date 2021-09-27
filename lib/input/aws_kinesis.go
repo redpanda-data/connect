@@ -34,7 +34,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return NewAsyncReader(TypeKinesis, false, reader.NewAsyncPreserver(rdr), log, stats, nil)
+			return NewAsyncReader(TypeKinesis, false, reader.NewAsyncPreserver(rdr), log, stats)
 		}),
 		Status:  docs.StatusStable,
 		Version: "3.36.0",

@@ -28,7 +28,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return NewAsyncReader(TypeGenerate, false, reader.NewAsyncPreserver(b), log, stats, nil)
+			return NewAsyncReader(TypeGenerate, false, reader.NewAsyncPreserver(b), log, stats)
 		}),
 		Version: "3.40.0",
 		Status:  docs.StatusStable,
@@ -101,7 +101,7 @@ input:
 			if err != nil {
 				return nil, err
 			}
-			return NewAsyncReader(TypeBloblang, true, b, log, stats, nil)
+			return NewAsyncReader(TypeBloblang, true, b, log, stats)
 		}),
 		Status: docs.StatusDeprecated,
 		Summary: `

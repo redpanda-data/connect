@@ -119,7 +119,7 @@ func (r asyncReaderCantConnect) WaitForClose(time.Duration) error {
 func TestAsyncReaderCantConnect(t *testing.T) {
 	r, err := NewAsyncReader(
 		"foo", true, asyncReaderCantConnect{},
-		log.Noop(), metrics.Noop(), nil,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -156,7 +156,7 @@ func TestAsyncReaderCantRead(t *testing.T) {
 
 	r, err := NewAsyncReader(
 		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(), nil,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -181,7 +181,7 @@ func TestAsyncReaderTypeClosedOnConn(t *testing.T) {
 
 	r, err := NewAsyncReader(
 		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(), nil,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -205,7 +205,7 @@ func TestAsyncReaderTypeClosedOnReconn(t *testing.T) {
 
 	r, err := NewAsyncReader(
 		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(), nil,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -237,7 +237,7 @@ func TestAsyncReaderTypeClosedOnReread(t *testing.T) {
 
 	r, err := NewAsyncReader(
 		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(), nil,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -274,7 +274,7 @@ func TestAsyncReaderCanReconnect(t *testing.T) {
 
 	r, err := NewAsyncReader(
 		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(), nil,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -342,7 +342,7 @@ func TestAsyncReaderFailsReconnect(t *testing.T) {
 
 	r, err := NewAsyncReader(
 		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(), nil,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -413,7 +413,7 @@ func TestAsyncReaderCloseDuringReconnect(t *testing.T) {
 
 	r, err := NewAsyncReader(
 		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(), nil,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -456,7 +456,7 @@ func TestAsyncReaderHappyPath(t *testing.T) {
 
 	r, err := NewAsyncReader(
 		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(), nil,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -521,7 +521,7 @@ func TestAsyncReaderCloseWithPendingAcks(t *testing.T) {
 	readerImpl := newMockAsyncReader()
 	readerImpl.msgsToSnd = []types.Message{message.New(exp)}
 
-	r, err := NewAsyncReader("foo", true, readerImpl, log.Noop(), metrics.Noop(), nil)
+	r, err := NewAsyncReader("foo", true, readerImpl, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	select {
@@ -590,7 +590,7 @@ func TestAsyncReaderSadPath(t *testing.T) {
 
 	r, err := NewAsyncReader(
 		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(), nil,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -665,7 +665,7 @@ func TestAsyncReaderParallel(t *testing.T) {
 
 	r, err := NewAsyncReader(
 		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(), nil,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -753,7 +753,7 @@ func TestAsyncReaderSkipAcksAMO(t *testing.T) {
 
 	r, err := NewAsyncReader(
 		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(), nil,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)
@@ -823,7 +823,7 @@ func TestAsyncReaderSkipAcksALO(t *testing.T) {
 
 	r, err := NewAsyncReader(
 		"foo", false, readerImpl,
-		log.Noop(), metrics.Noop(), nil,
+		log.Noop(), metrics.Noop(),
 	)
 	if err != nil {
 		t.Error(err)

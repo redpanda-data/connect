@@ -52,7 +52,7 @@ func init() {
 				TypeSFTP,
 				true,
 				reader.NewAsyncPreserver(r),
-				log, stats, nil,
+				log, stats,
 			)
 		}),
 		Status:  docs.StatusExperimental,

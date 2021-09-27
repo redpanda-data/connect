@@ -79,7 +79,7 @@ func NewSocket(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 	// we can get the same results by making sure that the async readers forward
 	// CloseAsync all the way through. We would need it to be configurable as it
 	// wouldn't be appropriate for inputs that have real acks.
-	return NewAsyncReader(TypeSocket, true, reader.NewAsyncCutOff(reader.NewAsyncPreserver(rdr)), log, stats, nil)
+	return NewAsyncReader(TypeSocket, true, reader.NewAsyncCutOff(reader.NewAsyncPreserver(rdr)), log, stats)
 }
 
 //------------------------------------------------------------------------------

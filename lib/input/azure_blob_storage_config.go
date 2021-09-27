@@ -22,7 +22,7 @@ func init() {
 				reader.NewAsyncBundleUnacks(
 					reader.NewAsyncPreserver(r),
 				),
-				log, stats, nil,
+				log, stats,
 			)
 		}),
 		Status:  docs.StatusBeta,

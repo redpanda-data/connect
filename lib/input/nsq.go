@@ -50,7 +50,7 @@ func NewNSQ(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type)
 		return nil, err
 	}
 	n = reader.NewAsyncBundleUnacks(n)
-	return NewAsyncReader(TypeNSQ, true, n, log, stats, nil)
+	return NewAsyncReader(TypeNSQ, true, n, log, stats)
 }
 
 //------------------------------------------------------------------------------

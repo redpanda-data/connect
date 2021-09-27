@@ -46,7 +46,7 @@ func NewRedisPubSub(conf Config, mgr types.Manager, log log.Modular, stats metri
 	if err != nil {
 		return nil, err
 	}
-	return NewAsyncReader(TypeRedisPubSub, true, reader.NewAsyncPreserver(r), log, stats, nil)
+	return NewAsyncReader(TypeRedisPubSub, true, reader.NewAsyncPreserver(r), log, stats)
 }
 
 //------------------------------------------------------------------------------

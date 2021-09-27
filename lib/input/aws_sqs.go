@@ -31,7 +31,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return NewAsyncReader(TypeAWSSQS, false, r, log, stats, nil)
+			return NewAsyncReader(TypeAWSSQS, false, r, log, stats)
 		}),
 		Summary: `
 Consume messages from an AWS SQS URL.`,

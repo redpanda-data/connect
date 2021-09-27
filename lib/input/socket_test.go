@@ -926,7 +926,7 @@ func BenchmarkTCPSocketWithCutOff(b *testing.B) {
 	sRdr, err := newSocketClient(conf.Socket, log.Noop())
 	require.NoError(b, err)
 
-	rdr, err := NewAsyncReader(TypeSocket, true, reader.NewAsyncCutOff(reader.NewAsyncPreserver(sRdr)), log.Noop(), metrics.Noop(), nil)
+	rdr, err := NewAsyncReader(TypeSocket, true, reader.NewAsyncCutOff(reader.NewAsyncPreserver(sRdr)), log.Noop(), metrics.Noop())
 	require.NoError(b, err)
 
 	defer func() {
@@ -996,7 +996,7 @@ func BenchmarkTCPSocketNoCutOff(b *testing.B) {
 	sRdr, err := newSocketClient(conf.Socket, log.Noop())
 	require.NoError(b, err)
 
-	rdr, err := NewAsyncReader(TypeSocket, true, reader.NewAsyncPreserver(sRdr), log.Noop(), metrics.Noop(), nil)
+	rdr, err := NewAsyncReader(TypeSocket, true, reader.NewAsyncPreserver(sRdr), log.Noop(), metrics.Noop())
 	require.NoError(b, err)
 
 	defer func() {

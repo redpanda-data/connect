@@ -14,7 +14,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return NewAsyncReader(TypeAzureQueueStorage, false, r, log, stats, nil)
+			return NewAsyncReader(TypeAzureQueueStorage, false, r, log, stats)
 		}),
 		Status:  docs.StatusBeta,
 		Version: "3.42.0",

@@ -38,7 +38,7 @@ func NewWebsocket(conf Config, mgr types.Manager, log log.Modular, stats metrics
 	if err != nil {
 		return nil, err
 	}
-	return NewAsyncReader("websocket", true, reader.NewAsyncPreserver(ws), log, stats, nil)
+	return NewAsyncReader("websocket", true, reader.NewAsyncPreserver(ws), log, stats)
 }
 
 //------------------------------------------------------------------------------

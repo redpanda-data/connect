@@ -108,7 +108,7 @@ func NewFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type
 	if err != nil {
 		return nil, err
 	}
-	return NewAsyncReader(TypeFile, true, reader.NewAsyncPreserver(rdr), log, stats, nil)
+	return NewAsyncReader(TypeFile, true, reader.NewAsyncPreserver(rdr), log, stats)
 }
 
 //------------------------------------------------------------------------------

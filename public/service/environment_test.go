@@ -34,7 +34,7 @@ func TestEnvironmentAdjustments(t *testing.T) {
 		"one_input", service.NewConfigSpec().Summary("input one"),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			return nil, errors.New("input one err")
-		}, nil,
+		},
 	))
 	assert.NoError(t, envOne.RegisterOutput(
 		"one_output", service.NewConfigSpec().Summary("output one"),

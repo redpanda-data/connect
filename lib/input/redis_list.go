@@ -34,7 +34,7 @@ func NewRedisList(conf Config, mgr types.Manager, log log.Modular, stats metrics
 	if err != nil {
 		return nil, err
 	}
-	return NewAsyncReader(TypeRedisList, true, reader.NewAsyncPreserver(r), log, stats, nil)
+	return NewAsyncReader(TypeRedisList, true, reader.NewAsyncPreserver(r), log, stats)
 }
 
 //------------------------------------------------------------------------------
