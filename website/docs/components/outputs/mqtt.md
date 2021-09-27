@@ -39,6 +39,7 @@ output:
     connect_timeout: 30s
     write_timeout: 3s
     retained: false
+    retained_interpolated: ""
     max_in_flight: 1
 ```
 
@@ -59,6 +60,7 @@ output:
     connect_timeout: 30s
     write_timeout: 3s
     retained: false
+    retained_interpolated: ""
     will:
       enabled: false
       qos: 0
@@ -187,6 +189,15 @@ Set message as retained on the topic.
 
 Type: `bool`  
 Default: `false`  
+
+### `retained_interpolated`
+
+Override retained value with an interpolable value
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
 
 ### `will`
 
