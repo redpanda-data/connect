@@ -25,7 +25,7 @@ func init() {
 		if a, err = newPulsarReader(c.Pulsar, nm.Logger(), nm.Metrics()); err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader(input.TypePulsar, false, a, nm.Logger(), nm.Metrics(), nil)
+		return input.NewAsyncReader(input.TypePulsar, false, a, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    input.TypePulsar,
 		Type:    docs.TypeInput,

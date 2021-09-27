@@ -29,7 +29,7 @@ func init() {
 		if a, err = newJetStreamReader(c.NATSJetStream, nm.Logger(), nm.Metrics()); err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader(input.TypeNATSStream, false, a, nm.Logger(), nm.Metrics(), nil)
+		return input.NewAsyncReader(input.TypeNATSStream, false, a, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    input.TypeNATSJetStream,
 		Type:    docs.TypeInput,
