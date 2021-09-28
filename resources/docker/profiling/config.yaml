@@ -1,10 +1,10 @@
 http:
-  address: 0.0.0.0:4195
+  address: :4195
   debug_endpoints: true
 
 input:
   bloblang:
-    interval: "1us"
+    interval: "1ms"
     mapping: |
       root = {
         "locations": [
@@ -15,8 +15,15 @@ input:
         ]
       }
 
+buffer:
+  memory:
+    limit: 524288000
+    batch_policy:
+      enabled: true
+      count: 10
+
 pipeline:
-  threads: 20
+  threads: 2
   processors:
     - resource: with_bloblang
     # - resource: with_jq
@@ -45,10 +52,8 @@ resources:
 metrics:
   prometheus:
     prefix: benthos
-    push_interval: 1s
-    push_job_name: benthos_push
-    push_url: "http://localhost:9091"
+    path_mapping: ""
 
-# tracer:
-#   jaeger:
-#     agent_address: 'localhost:6831'
+tracer:
+  jaeger:
+    agent_address: 'jaeger:6831'

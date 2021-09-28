@@ -1,17 +1,8 @@
 global:
   scrape_interval:     15s
   evaluation_interval: 15s
-  external_labels:
-    monitor: 'benthos-benchmark'
 
 scrape_configs:
-  - job_name: 'prometheus'
-    scrape_interval: 5s
+  - job_name: 'benthos'
     static_configs:
-      - targets: ['localhost:9090']
-
-  - job_name: 'push_gateway'
-    scrape_interval: 5s
-    honor_labels: true
-    static_configs:
-      - targets: ['pushgateway:9091']
+      - targets: ['benthos:4195']
