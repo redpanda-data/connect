@@ -8,6 +8,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/public/service"
+
+	// Import all standard Benthos components
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 // This example demonstrates how to use a stream builder to parse and execute a

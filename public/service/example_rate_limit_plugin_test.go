@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/public/service"
+
+	// Import all standard Benthos components
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 type RandomRateLimit struct {
