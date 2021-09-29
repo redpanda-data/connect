@@ -8,6 +8,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/impl/pulsar/auth"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
@@ -57,6 +58,7 @@ You can access these metadata fields using
 			),
 			docs.FieldString("topics", "A list of topics to subscribe to.").Array(),
 			docs.FieldCommon("subscription_name", "Specify the subscription name for this consumer."),
+			auth.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(input.NewPulsarConfig()),
 	})
 }
@@ -111,11 +113,27 @@ func (p *pulsarReader) ConnectWithContext(ctx context.Context) error {
 		err      error
 	)
 
-	if client, err = pulsar.NewClient(pulsar.ClientOptions{
+	opts := pulsar.ClientOptions{
 		Logger:            NoopLogger(),
 		ConnectionTimeout: time.Second * 3,
 		URL:               p.conf.URL,
-	}); err != nil {
+	}
+
+	// prefer oauth2 over token
+	if p.conf.Auth.OAuth2.Enabled {
+		a := p.conf.Auth.OAuth2
+		opts.Authentication = pulsar.NewAuthenticationOAuth2(map[string]string{
+			"type":       "client_credentials",
+			"issuerUrl":  a.IssuerURL,
+			"audience":   a.Audience,
+			"privateKey": a.PrivateKey,
+			"clientId":   a.ClientID,
+		})
+	} else if p.conf.Auth.Token.Enabled {
+		opts.Authentication = pulsar.NewAuthenticationToken(p.conf.Auth.Token.Token)
+	}
+
+	if client, err = pulsar.NewClient(opts); err != nil {
 		return err
 	}
 
