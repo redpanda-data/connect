@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/public/bloblang"
-	"github.com/cenkalti/backoff/v4"
 	"gopkg.in/yaml.v3"
 )
 
@@ -152,21 +151,32 @@ func (e *Environment) WalkCaches(fn func(name string, config *ConfigView)) {
 // with a nack (when the AckFunc provides a non-nil error) then you can instead
 // wrap your input implementation with AutoRetryNacks to get automatic retries.
 func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputConstructor, opts ...InputPluginOption) error {
+	cfg := newInputPluginConfig(opts...)
+	if cfg.boff != "" {
+		spec.Field(NewBackoffField(cfg.boff))
+	}
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
-	cfg := newInputPluginConfig(opts...)
 	return e.internal.Inputs.Add(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (input.Type, error) {
 		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
+		}
+		var opts []input.AsyncReaderOption
+		if cfg.boff != "" {
+			boff, err := pluginConf.FieldBackoff(cfg.boff)
+			if err != nil {
+				return nil, err
+			}
+			opts = append(opts, input.WithBackoff(boff))
 		}
 		i, err := ctor(pluginConf, newResourcesFromManager(nm))
 		if err != nil {
 			return nil, err
 		}
 		rdr := newAirGapReader(i)
-		return input.NewAsyncReader(conf.Type, false, rdr, nm.Logger(), nm.Metrics(), input.WithBackoff(cfg.boff))
+		return input.NewAsyncReader(conf.Type, false, rdr, nm.Logger(), nm.Metrics(), opts...)
 	}), componentSpec)
 }
 
@@ -180,26 +190,37 @@ func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputCon
 // wrap your input implementation with AutoRetryNacksBatched to get automatic
 // retries.
 func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor BatchInputConstructor, opts ...InputPluginOption) error {
+	cfg := newInputPluginConfig(opts...)
+	if cfg.boff != "" {
+		spec.Field(NewBackoffField(cfg.boff))
+	}
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
-	cfg := newInputPluginConfig(opts...)
 	return e.internal.Inputs.Add(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (input.Type, error) {
 		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
+		}
+		var opts []input.AsyncReaderOption
+		if cfg.boff != "" {
+			boff, err := pluginConf.FieldBackoff(cfg.boff)
+			if err != nil {
+				return nil, err
+			}
+			opts = append(opts, input.WithBackoff(boff))
 		}
 		i, err := ctor(pluginConf, newResourcesFromManager(nm))
 		if err != nil {
 			return nil, err
 		}
 		rdr := newAirGapBatchReader(i)
-		return input.NewAsyncReader(conf.Type, false, rdr, nm.Logger(), nm.Metrics(), input.WithBackoff(cfg.boff))
+		return input.NewAsyncReader(conf.Type, false, rdr, nm.Logger(), nm.Metrics(), opts...)
 	}), componentSpec)
 }
 
 type inputPluginConfig struct {
-	boff backoff.BackOff
+	boff string
 }
 
 func newInputPluginConfig(opts ...InputPluginOption) *inputPluginConfig {
@@ -215,20 +236,20 @@ type InputPluginOption interface {
 	apply(*inputPluginConfig)
 }
 
-type inputPluginOptionWithBackoff struct {
-	v backoff.BackOff
+type inputPluginOptionWithBackoffConfig struct {
+	v string
 }
 
 // interface compliance check.
-var _ InputPluginOption = (*inputPluginOptionWithBackoff)(nil)
+var _ InputPluginOption = (*inputPluginOptionWithBackoffConfig)(nil)
 
-func (o *inputPluginOptionWithBackoff) apply(cfg *inputPluginConfig) {
+func (o *inputPluginOptionWithBackoffConfig) apply(cfg *inputPluginConfig) {
 	cfg.boff = o.v
 }
 
-// WithBackoff set custom backoff to InputPlugin.
-func WithBackoff(boff backoff.BackOff) InputPluginOption {
-	return &inputPluginOptionWithBackoff{boff}
+// WithBackoffConfig set custom backoff options name to InputPlugin.
+func WithBackoffConfig(boff string) InputPluginOption {
+	return &inputPluginOptionWithBackoffConfig{boff}
 }
 
 // WalkInputs executes a provided function argument for every input component

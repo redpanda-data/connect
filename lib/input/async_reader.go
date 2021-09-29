@@ -42,6 +42,8 @@ func DefaultAsyncReaderBackoff() backoff.BackOff {
 	boff.InitialInterval = time.Millisecond * 100
 	boff.MaxInterval = time.Second
 	boff.MaxElapsedTime = 0
+	boff.Multiplier = 1.5
+	boff.RandomizationFactor = 0.5
 	return boff
 }
 
