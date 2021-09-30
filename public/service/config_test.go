@@ -237,6 +237,9 @@ func TestConfigTypedFields(t *testing.T) {
 				NewStringField("h"),
 				NewFloatField("i").Default(13.0),
 				NewStringListField("j"),
+				NewStringMapField("k"),
+				NewIntListField("l"),
+				NewIntMapField("m"),
 			),
 		))
 
@@ -250,6 +253,15 @@ c:
     j:
       - first in list
       - second in list
+    k:
+      first: one
+      second: two
+    l:
+      - 11
+      - 12
+    m:
+      first: 21
+      second: 22
 `, nil)
 	require.NoError(t, err)
 
@@ -288,6 +300,18 @@ c:
 	ll, err := parsedConfig.FieldStringList("c", "f", "j")
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"first in list", "second in list"}, ll)
+
+	sm, err := parsedConfig.FieldStringMap("c", "f", "k")
+	assert.NoError(t, err)
+	assert.Equal(t, map[string]string{"first": "one", "second": "two"}, sm)
+
+	il, err := parsedConfig.FieldIntList("c", "f", "l")
+	assert.NoError(t, err)
+	assert.Equal(t, []int{11, 12}, il)
+
+	im, err := parsedConfig.FieldIntMap("c", "f", "m")
+	assert.NoError(t, err)
+	assert.Equal(t, map[string]int{"first": 21, "second": 22}, im)
 
 	// Testing namespaces
 	nsC := parsedConfig.Namespace("c")
