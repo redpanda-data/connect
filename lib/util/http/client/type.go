@@ -622,7 +622,7 @@ func (h *Type) DoWithContext(ctx context.Context, msg types.Message) (res *http.
 			if retryStrat == noRetry {
 				numRetries = 0
 			}
-			err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
+			err = UnexpectedErr(res)
 			if res.Body != nil {
 				res.Body.Close()
 			}
@@ -664,7 +664,7 @@ func (h *Type) DoWithContext(ctx context.Context, msg types.Message) (res *http.
 				if retryStrat == noRetry {
 					j = 0
 				}
-				err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
+				err = UnexpectedErr(res)
 				if res.Body != nil {
 					res.Body.Close()
 				}
@@ -686,6 +686,15 @@ func (h *Type) DoWithContext(ctx context.Context, msg types.Message) (res *http.
 	h.mSucc.Incr(1)
 	h.retryThrottle.Reset()
 	return res, nil
+}
+
+// UnexpectedErr get error body
+func UnexpectedErr(res *http.Response) error {
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	return types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status, Body: body}
 }
 
 // Send attempts to send a message to an HTTP server, this attempt may include

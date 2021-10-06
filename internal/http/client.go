@@ -510,7 +510,7 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Messa
 			if retryStrat == noRetry {
 				numRetries = 0
 			}
-			err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
+			err = UnexpectedErr(res)
 			if res.Body != nil {
 				res.Body.Close()
 			}
@@ -543,7 +543,7 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Messa
 				if retryStrat == noRetry {
 					j = 0
 				}
-				err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
+				err = UnexpectedErr(res)
 				if res.Body != nil {
 					res.Body.Close()
 				}
@@ -562,6 +562,15 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Messa
 	h.mSucc.Incr(1)
 	h.retryThrottle.Reset()
 	return res, nil
+}
+
+// UnexpectedErr get error body
+func UnexpectedErr(res *http.Response) error {
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	return types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status, Body: body}
 }
 
 // Send creates an HTTP request from the client config, a provided message to be
