@@ -5,8 +5,13 @@ RUN useradd -u 10001 benthos
 WORKDIR /go/src/github.com/Jeffail/benthos/
 COPY . /go/src/github.com/Jeffail/benthos/
 
-ENV GO111MODULE on
-RUN CGO_ENABLED=0 GOOS=linux GOFLAGS=-mod=vendor make
+ENV CGO_ENABLED=0
+ENV GOOS=linux
+ENV GOFLAGS=-mod=vendor
+
+# Tag timetzdata required for busybox base image:
+# https://github.com/Jeffail/benthos/issues/897
+RUN make TAGS="timetzdata"
 
 FROM busybox AS package
 
