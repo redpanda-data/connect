@@ -46,6 +46,7 @@ output:
     qos: 1
     topic: topic-$ID
     client_id: client-output-$ID
+    dynamic_client_id_suffix: "$VAR1"
     max_in_flight: $MAX_IN_FLIGHT
 
 input:
@@ -53,6 +54,7 @@ input:
     urls: [ tcp://localhost:$PORT ]
     topics: [ topic-$ID ]
     client_id: client-input-$ID
+    dynamic_client_id_suffix: "$VAR1"
     clean_session: false
 `
 	suite := integrationTests(
@@ -76,6 +78,17 @@ input:
 			testOptSleepAfterOutput(100*time.Millisecond),
 			testOptPort(resource.GetPort("1883/tcp")),
 			testOptMaxInFlight(10),
+		)
+	})
+	t.Run("with generated suffix", func(t *testing.T) {
+		t.Parallel()
+		suite.Run(
+			t, template,
+			testOptSleepAfterInput(100*time.Millisecond),
+			testOptSleepAfterOutput(100*time.Millisecond),
+			testOptPort(resource.GetPort("1883/tcp")),
+			testOptMaxInFlight(10),
+			testOptVarOne("nanoid"),
 		)
 	})
 })

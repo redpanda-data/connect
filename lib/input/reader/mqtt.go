@@ -15,6 +15,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
 //------------------------------------------------------------------------------
@@ -25,6 +26,7 @@ type MQTTConfig struct {
 	QoS                    uint8         `json:"qos" yaml:"qos"`
 	Topics                 []string      `json:"topics" yaml:"topics"`
 	ClientID               string        `json:"client_id" yaml:"client_id"`
+	DynamicClientIDSuffix  string        `json:"dynamic_client_id_suffix" yaml:"dynamic_client_id_suffix"`
 	Will                   mqttconf.Will `json:"will" yaml:"will"`
 	CleanSession           bool          `json:"clean_session" yaml:"clean_session"`
 	User                   string        `json:"user" yaml:"user"`
@@ -87,6 +89,18 @@ func NewMQTT(
 		if m.staleConnectionTimeout, err = time.ParseDuration(conf.StaleConnectionTimeout); err != nil {
 			return nil, fmt.Errorf("unable to parse stale connection timeout duration string: %w", err)
 		}
+	}
+
+	switch m.conf.DynamicClientIDSuffix {
+	case "nanoid":
+		nid, err := gonanoid.New()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate nanoid: %w", err)
+		}
+		m.conf.ClientID += nid
+	case "":
+	default:
+		return nil, fmt.Errorf("unknown dynamic_client_id_suffix: %v", m.conf.DynamicClientIDSuffix)
 	}
 
 	if err := m.conf.Will.Validate(); err != nil {

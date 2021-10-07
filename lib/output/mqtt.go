@@ -25,7 +25,10 @@ messages these interpolations are performed per message part.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"tcp://localhost:1883"}).Array(),
 			docs.FieldCommon("topic", "The topic to publish messages to."),
-			docs.FieldCommon("client_id", "An identifier for the client."),
+			docs.FieldCommon("client_id", "An identifier for the client connection."),
+			docs.FieldString("dynamic_client_id_suffix", "Append a dynamically generated suffix to the specified `client_id` on each run of the pipeline. This can be useful when clustering Benthos producers.").Optional().Advanced().HasAnnotatedOptions(
+				"nanoid", "append a nanoid of length 21 characters",
+			),
 			docs.FieldCommon("qos", "The QoS value to set for each message.").HasOptions("0", "1", "2"),
 			docs.FieldBool("retained", "Set message as retained on the topic."),
 			mqttconf.WillFieldSpec(),

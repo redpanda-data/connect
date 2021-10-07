@@ -15,23 +15,25 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
 //------------------------------------------------------------------------------
 
 // MQTTConfig contains configuration fields for the MQTT output type.
 type MQTTConfig struct {
-	URLs        []string      `json:"urls" yaml:"urls"`
-	QoS         uint8         `json:"qos" yaml:"qos"`
-	Retained    bool          `json:"retained" yaml:"retained"`
-	Topic       string        `json:"topic" yaml:"topic"`
-	ClientID    string        `json:"client_id" yaml:"client_id"`
-	Will        mqttconf.Will `json:"will" yaml:"will"`
-	User        string        `json:"user" yaml:"user"`
-	Password    string        `json:"password" yaml:"password"`
-	KeepAlive   int64         `json:"keepalive" yaml:"keepalive"`
-	MaxInFlight int           `json:"max_in_flight" yaml:"max_in_flight"`
-	TLS         tls.Config    `json:"tls" yaml:"tls"`
+	URLs                  []string      `json:"urls" yaml:"urls"`
+	QoS                   uint8         `json:"qos" yaml:"qos"`
+	Retained              bool          `json:"retained" yaml:"retained"`
+	Topic                 string        `json:"topic" yaml:"topic"`
+	ClientID              string        `json:"client_id" yaml:"client_id"`
+	DynamicClientIDSuffix string        `json:"dynamic_client_id_suffix" yaml:"dynamic_client_id_suffix"`
+	Will                  mqttconf.Will `json:"will" yaml:"will"`
+	User                  string        `json:"user" yaml:"user"`
+	Password              string        `json:"password" yaml:"password"`
+	KeepAlive             int64         `json:"keepalive" yaml:"keepalive"`
+	MaxInFlight           int           `json:"max_in_flight" yaml:"max_in_flight"`
+	TLS                   tls.Config    `json:"tls" yaml:"tls"`
 }
 
 // NewMQTTConfig creates a new MQTTConfig with default values.
@@ -92,6 +94,18 @@ func NewMQTTV2(
 	var err error
 	if m.topic, err = interop.NewBloblangField(mgr, conf.Topic); err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
+	}
+
+	switch m.conf.DynamicClientIDSuffix {
+	case "nanoid":
+		nid, err := gonanoid.New()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate nanoid: %w", err)
+		}
+		m.conf.ClientID += nid
+	case "":
+	default:
+		return nil, fmt.Errorf("unknown dynamic_client_id_suffix: %v", m.conf.DynamicClientIDSuffix)
 	}
 
 	if err := m.conf.Will.Validate(); err != nil {

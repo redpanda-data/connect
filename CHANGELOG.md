@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Go API: New config field types `StringMap`, `IntList`, and `IntMap`.
 - The `http_client` input, output and processor now include the response body in request error logs for more context.
+- Field `dynamic_client_id_suffix` added to the `mqtt` input and output.
 
 ## 3.56.0 - 2021-09-22
 
