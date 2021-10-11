@@ -13,7 +13,7 @@ keywords: [
 tags: [ "v4", "plugins" ]
 ---
 
-The [new plugin APIs](https://pkg.go.dev/github.com/Jeffail/benthos/v3/public/service) are ready to use, are being used, and [here's a video of them in action](https://youtu.be/88DSzCFV4Ng).
+The [new plugin APIs](https://pkg.go.dev/github.com/Jeffail/benthos/v3/public/service) are ready to use, are being used, and [here's a video of them in action](https://youtu.be/uH6mKw-Ly0g).
 
 import ReactPlayer from 'react-player/youtube';
 
@@ -22,7 +22,7 @@ import ReactPlayer from 'react-player/youtube';
     <ReactPlayer
         className='col'
         height='300px'
-        url='https://www.youtube.com/embed/88DSzCFV4Ng'
+        url='https://www.youtube.com/embed/uH6mKw-Ly0g'
         controls={true}
     />
   </div>
