@@ -10,6 +10,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestMetricsNil(t *testing.T) {
+	var m *Metrics
+
+	m.NewCounter("foo").Incr(1)
+	m.NewGauge("bar").Set(10)
+	m.NewTimer("baz").Timing(10)
+}
+
 func TestMetricsNoLabels(t *testing.T) {
 	conf := metrics.NewConfig()
 	conf.Prometheus.Prefix = ""

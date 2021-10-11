@@ -134,6 +134,6 @@ I've been babbling on for months so if this stuff is news to you then you're cle
 
 [community]: /community
 [configuration.templating]: /docs/configuration/templating
-[plugins.api]: https://pkg.go.dev/github.com/Jeffail/benthos/v3@master/public/x/service
+[plugins.api]: https://pkg.go.dev/github.com/Jeffail/benthos/v3/public/service
 [templates-feedback-thread]: https://github.com/Jeffail/benthos/discussions/785
 [plugins-feedback-thread]: https://github.com/Jeffail/benthos/discussions/754
