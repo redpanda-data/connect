@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - The `http_client` input, output and processor now include the response body in request error logs for more context.
 - Field `dynamic_client_id_suffix` added to the `mqtt` input and output.
 
+### Fixed
+
+- Corrected an issue where the `sftp` input could consume duplicate documents before shutting down when ran in batch mode.
+
 ## 3.56.0 - 2021-09-22
 
 ### Added

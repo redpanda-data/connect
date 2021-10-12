@@ -46,7 +46,8 @@ type AsyncPreserver struct {
 	msgsMut         sync.Mutex
 	pendingMessages int64
 
-	r Async
+	inputClosed int32
+	r           Async
 }
 
 // NewAsyncPreserver returns a new AsyncPreserver wrapper around a reader.Async.
@@ -68,6 +69,7 @@ func (p *AsyncPreserver) ConnectWithContext(ctx context.Context) error {
 	// we act like we're still open. Read will be called and we can either
 	// return the pending messages or wait for them.
 	if err == types.ErrTypeClosed && atomic.LoadInt64(&p.pendingMessages) > 0 {
+		atomic.StoreInt32(&p.inputClosed, 1)
 		err = nil
 	}
 	return err
@@ -168,7 +170,16 @@ func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (types.Message, As
 	p.resendInterrupt = cancel
 	p.msgsMut.Unlock()
 
-	msg, aFn, err := p.r.ReadWithContext(ctx)
+	var (
+		msg types.Message
+		aFn AsyncAckFn
+		err error
+	)
+	if atomic.LoadInt32(&p.inputClosed) > 0 {
+		err = types.ErrTypeClosed
+	} else {
+		msg, aFn, err = p.r.ReadWithContext(ctx)
+	}
 	if err != nil {
 		// If our source has finished but we still have messages in flight then
 		// we block, ideally until the messages are acked.
