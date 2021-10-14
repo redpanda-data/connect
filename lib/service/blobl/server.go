@@ -102,7 +102,7 @@ const bloblangEditorPage = `<!DOCTYPE html>
   </body>
   <script>
     function execute() {
-        const request = new Request(window.location.href + 'execute', {
+        const request = new Request('execute', {
             method: 'POST',
             body: JSON.stringify({
                 mapping: getMapping(),
