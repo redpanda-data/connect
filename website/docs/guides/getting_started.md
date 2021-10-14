@@ -17,6 +17,14 @@ curl -Lsf https://sh.benthos.dev | bash
 
 Or you can grab an archive containing Benthos from the [releases page][releases].
 
+Or install a specific version with the installer script:
+
+```sh
+curl -Lsf https://sh.benthos.dev | bash -s -- <VERSION>
+Example:
+curl -Lsf https://sh.benthos.dev | bash -s -- 3.56.0
+```
+
 ### Docker
 
 If you have docker installed you can pull the latest official Benthos image with:
