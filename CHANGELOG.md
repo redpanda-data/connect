@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.57.0 - 2021-10-14
+
 ### Added
 
 - Go API: New config field types `StringMap`, `IntList`, and `IntMap`.
