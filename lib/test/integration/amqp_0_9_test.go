@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/ory/dockertest/v3"
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
