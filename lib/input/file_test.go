@@ -1,8 +1,11 @@
 package input
 
 import (
+	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -142,5 +145,81 @@ func TestFileMultiPartDeprecated(t *testing.T) {
 		require.False(t, open)
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for channel close")
+	}
+}
+
+func TestFileDirectory(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "benthos_file_input_test")
+	require.NoError(t, err)
+
+	tmpInnerDir, err := ioutil.TempDir(tmpDir, "benthos_inner")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	tmpFile, err := ioutil.TempFile(tmpDir, "f1*.txt")
+	require.NoError(t, err)
+
+	_, err = tmpFile.Write([]byte("foo"))
+	require.NoError(t, err)
+
+	err = tmpFile.Close()
+	require.NoError(t, err)
+
+	tmpFileTwo, err := ioutil.TempFile(tmpInnerDir, "f2*.txt")
+	require.NoError(t, err)
+
+	_, err = tmpFileTwo.Write([]byte("bar"))
+	require.NoError(t, err)
+
+	err = tmpFileTwo.Close()
+	require.NoError(t, err)
+
+	exp := map[string]struct{}{
+		"foo": {},
+		"bar": {},
+	}
+	act := map[string]struct{}{}
+
+	conf := NewFileConfig()
+	conf.Paths = []string{
+		fmt.Sprintf("%v/*.txt", tmpDir),
+		fmt.Sprintf("%v/**/*.txt", tmpDir),
+	}
+	conf.Codec = "all-bytes"
+
+	f, err := newFileConsumer(conf, log.Noop())
+	require.NoError(t, err)
+
+	err = f.ConnectWithContext(context.Background())
+	require.NoError(t, err)
+
+	msg, aFn, err := f.ReadWithContext(context.Background())
+	require.NoError(t, err)
+
+	resStr := string(msg.Get(0).Get())
+	if _, exists := act[resStr]; exists {
+		t.Errorf("Received duplicate message: %v", resStr)
+	}
+	act[resStr] = struct{}{}
+	require.NoError(t, aFn(context.Background(), response.NewAck()))
+
+	msg, aFn, err = f.ReadWithContext(context.Background())
+	require.NoError(t, err)
+
+	resStr = string(msg.Get(0).Get())
+	if _, exists := act[resStr]; exists {
+		t.Errorf("Received duplicate message: %v", resStr)
+	}
+	act[resStr] = struct{}{}
+	require.NoError(t, aFn(context.Background(), response.NewAck()))
+
+	_, _, err = f.ReadWithContext(context.Background())
+	assert.Equal(t, types.ErrTypeClosed, err)
+
+	if !reflect.DeepEqual(exp, act) {
+		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }

@@ -147,25 +147,29 @@ func newFileConsumer(conf FileConfig, log log.Modular) (*fileConsumer, error) {
 	}, nil
 }
 
-// ConnectWithContext attempts to establish a connection to the target S3 bucket
-// and any relevant queues used to traverse the objects (SQS, etc).
+// ConnectWithContext does nothing as we don't have a concept of a connection
+// with this input.
 func (f *fileConsumer) ConnectWithContext(ctx context.Context) error {
+	return nil
+}
+
+func (f *fileConsumer) getReader(ctx context.Context) (codec.Reader, string, error) {
 	f.scannerMut.Lock()
 	defer f.scannerMut.Unlock()
 
 	if f.scanner != nil {
-		return nil
+		return f.scanner, f.currentPath, nil
 	}
 
 	if len(f.paths) == 0 {
-		return types.ErrTypeClosed
+		return nil, "", types.ErrTypeClosed
 	}
 
 	nextPath := f.paths[0]
 
 	file, err := os.Open(nextPath)
 	if err != nil {
-		return err
+		return nil, "", err
 	}
 
 	if f.scanner, err = f.scannerCtor(nextPath, file, func(ctx context.Context, err error) error {
@@ -175,56 +179,56 @@ func (f *fileConsumer) ConnectWithContext(ctx context.Context) error {
 		return nil
 	}); err != nil {
 		file.Close()
-		return err
+		return nil, "", err
 	}
 
 	f.currentPath = nextPath
 	f.paths = f.paths[1:]
 
 	f.log.Infof("Consuming from file '%v'\n", nextPath)
-	return nil
+	return f.scanner, f.currentPath, nil
 }
 
 // ReadWithContext attempts to read a new message from the target S3 bucket.
 func (f *fileConsumer) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
-	f.scannerMut.Lock()
-	defer f.scannerMut.Unlock()
-
-	if f.scanner == nil {
-		return nil, nil, types.ErrNotConnected
-	}
-
-	parts, codecAckFn, err := f.scanner.Next(ctx)
-	if err != nil {
-		if errors.Is(err, context.Canceled) ||
-			errors.Is(err, context.DeadlineExceeded) {
-			err = types.ErrTimeout
+	for {
+		scanner, currentPath, err := f.getReader(ctx)
+		if err != nil {
+			return nil, nil, err
 		}
-		if err != types.ErrTimeout {
-			f.scanner.Close(ctx)
-			f.scanner = nil
+
+		parts, codecAckFn, err := scanner.Next(ctx)
+		if err != nil {
+			if errors.Is(err, context.Canceled) ||
+				errors.Is(err, context.DeadlineExceeded) {
+				err = types.ErrTimeout
+			}
+			if err != types.ErrTimeout {
+				f.scanner.Close(ctx)
+				f.scanner = nil
+			}
+			if errors.Is(err, io.EOF) {
+				continue
+			}
+			return nil, nil, err
 		}
-		if errors.Is(err, io.EOF) {
+
+		msg := message.New(nil)
+		for _, part := range parts {
+			if len(part.Get()) > 0 {
+				part.Metadata().Set("path", currentPath)
+				msg.Append(part)
+			}
+		}
+		if msg.Len() == 0 {
+			_ = codecAckFn(ctx, nil)
 			return nil, nil, types.ErrTimeout
 		}
-		return nil, nil, err
-	}
 
-	msg := message.New(nil)
-	for _, part := range parts {
-		if len(part.Get()) > 0 {
-			part.Metadata().Set("path", f.currentPath)
-			msg.Append(part)
-		}
+		return msg, func(rctx context.Context, res types.Response) error {
+			return codecAckFn(rctx, res.Error())
+		}, nil
 	}
-	if msg.Len() == 0 {
-		_ = codecAckFn(ctx, nil)
-		return nil, nil, types.ErrTimeout
-	}
-
-	return msg, func(rctx context.Context, res types.Response) error {
-		return codecAckFn(rctx, res.Error())
-	}, nil
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.

@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Removed a performance bottleneck when consuming a large quantity of small files with the `file` input.
+
 ## 3.57.0 - 2021-10-14
 
 ### Added
