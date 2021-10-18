@@ -78,13 +78,13 @@ require (
 	github.com/prometheus/client_golang v1.8.0
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
 	github.com/quipo/statsd v0.0.0-20180118161217-3d6a5565f314
+	github.com/rabbitmq/amqp091-go v1.1.1-0.20211014165712-60a96d570ece
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.7.0 // indirect
 	github.com/smira/go-statsd v1.3.1
 	github.com/spf13/cast v1.3.1
-	github.com/streadway/amqp v1.0.0
 	github.com/stretchr/testify v1.7.0
 	github.com/tilinna/z85 v1.0.0
 	github.com/uber/jaeger-client-go v2.25.0+incompatible
