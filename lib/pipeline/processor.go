@@ -149,8 +149,8 @@ func (p *Processor) dispatchMessages(msgs []types.Message, ogResChan chan<- type
 
 	for _, msg := range msgs {
 		go func(m types.Message) {
-			defer wg.Done()
 			sendMsg(m)
+			wg.Done()
 		}(msg)
 	}
 
