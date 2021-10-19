@@ -225,6 +225,7 @@ func (b *Bloblang) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	}
 
 	newMsg := message.New(nil)
+	defer newMsg.Close()
 	newMsg.SetAll(newParts)
 
 	b.mBatchSent.Incr(1)
