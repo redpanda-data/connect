@@ -3,6 +3,7 @@ package reader
 import (
 	"crypto/tls"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,7 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 //------------------------------------------------------------------------------
@@ -112,10 +113,22 @@ func (a *AMQP) Connect() (err error) {
 	var amqpChan *amqp.Channel
 	var consumerChan <-chan amqp.Delivery
 
+	u, err := url.Parse(a.conf.URL)
+	if err != nil {
+		return fmt.Errorf("invalid amqp URL: %v", err)
+	}
+
 	if a.conf.TLS.Enabled {
-		conn, err = amqp.DialTLS(a.conf.URL, a.tlsConf)
-		if err != nil {
-			return fmt.Errorf("AMQP Connect: %s", err)
+		if u.User != nil {
+			conn, err = amqp.DialTLS(a.conf.URL, a.tlsConf)
+			if err != nil {
+				return fmt.Errorf("AMQP Connect: %s", err)
+			}
+		} else {
+			conn, err = amqp.DialTLS_ExternalAuth(a.conf.URL, a.tlsConf)
+			if err != nil {
+				return fmt.Errorf("AMQP Connect: %s", err)
+			}
 		}
 	} else {
 		conn, err = amqp.Dial(a.conf.URL)

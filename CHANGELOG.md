@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- `amqp_0_9` components now support TLS EXTERNAL auth.
+
 ### Fixed
 
 - Removed a performance bottleneck when consuming a large quantity of small files with the `file` input.
