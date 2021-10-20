@@ -59,6 +59,7 @@ You can access these metadata fields using
 		FieldSpecs: append(docs.FieldSpecs{
 			docs.FieldCommon("url", "The SQS URL to consume from."),
 			docs.FieldAdvanced("delete_message", "Whether to delete the consumed message once it is acked. Disabling allows you to handle the deletion using a different mechanism."),
+			docs.FieldAdvanced("reset_visibility", "Whether to set the visibility timeout of the consumed message to zero once it is nacked. Disabling honors the preset visibility timeout specified for the queue."),
 		}, sess.FieldSpecs()...),
 		Categories: []Category{
 			CategoryServices,
