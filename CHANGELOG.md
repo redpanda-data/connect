@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - `amqp_0_9` components now support TLS EXTERNAL auth.
+- New experimental `schema_registry_encode` processor.
 
 ### Fixed
 
