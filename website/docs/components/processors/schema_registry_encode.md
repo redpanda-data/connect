@@ -20,6 +20,8 @@ This component is experimental and therefore subject to change or removal outsid
 :::
 Automatically encodes and validates messages with schemas from a Confluent Schema Registry service.
 
+Introduced in version 3.58.0.
+
 
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },

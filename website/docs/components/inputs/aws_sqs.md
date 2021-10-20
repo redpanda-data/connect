@@ -106,6 +106,7 @@ Whether to set the visibility timeout of the consumed message to zero once it is
 
 Type: `bool`  
 Default: `true`  
+Requires version 3.58.0 or newer  
 
 ### `region`
 

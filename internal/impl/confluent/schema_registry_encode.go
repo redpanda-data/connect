@@ -34,7 +34,8 @@ Currently only Avro schemas are supported.`).
 		Field(service.NewInterpolatedStringField("subject").Description("The schema subject to derive schemas from.").
 			Example("foo").
 			Example(`${! meta("kafka_topic") }`)).
-		Field(service.NewTLSField("tls"))
+		Field(service.NewTLSField("tls")).
+		Version("3.58.0")
 }
 
 func init() {
