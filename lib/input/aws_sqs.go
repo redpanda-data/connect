@@ -71,17 +71,19 @@ You can access these metadata fields using
 
 // AWSSQSConfig contains configuration values for the input type.
 type AWSSQSConfig struct {
-	sess.Config   `json:",inline" yaml:",inline"`
-	URL           string `json:"url" yaml:"url"`
-	DeleteMessage bool   `json:"delete_message" yaml:"delete_message"`
+	sess.Config     `json:",inline" yaml:",inline"`
+	URL             string `json:"url" yaml:"url"`
+	DeleteMessage   bool   `json:"delete_message" yaml:"delete_message"`
+	ResetVisibility bool   `json:"reset_visibility" yaml:"reset_visibility"`
 }
 
 // NewAWSSQSConfig creates a new Config with default values.
 func NewAWSSQSConfig() AWSSQSConfig {
 	return AWSSQSConfig{
-		Config:        sess.NewConfig(),
-		URL:           "",
-		DeleteMessage: true,
+		Config:          sess.NewConfig(),
+		URL:             "",
+		DeleteMessage:   true,
+		ResetVisibility: true,
 	}
 }
 
@@ -405,6 +407,9 @@ func (a *awsSQS) ReadWithContext(ctx context.Context) (types.Message, reader.Asy
 			return nil
 		}
 
+		if !a.conf.ResetVisibility {
+			return nil
+		}
 		select {
 		case <-rctx.Done():
 			return rctx.Err()
