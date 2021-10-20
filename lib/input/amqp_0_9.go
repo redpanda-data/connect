@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
+	"github.com/Jeffail/gabs/v2"
 )
 
 //------------------------------------------------------------------------------
@@ -53,11 +54,15 @@ You can access these metadata fields using
 			CategoryServices,
 		},
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("url",
-				"A URL to connect to.",
-				"amqp://localhost:5672/",
+			docs.FieldCommon("urls",
+				"A list of URLs to connect to.",
+				"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/,amqp://127.0.0.3:5672/",
 				"amqps://guest:guest@localhost:5672/",
 			),
+			docs.FieldDeprecated("url").OmitWhen(func(field, parent interface{}) (string, bool) {
+				return "field url is deprecated and should be omitted when urls is used",
+					len(gabs.Wrap(parent).S("urls").Children()) > 0
+			}),
 			docs.FieldCommon("queue", "An AMQP queue to consume from."),
 			docs.FieldAdvanced("queue_declare", `
 Allows you to passively declare the target queue. If the queue already exists
