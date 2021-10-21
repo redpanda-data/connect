@@ -124,12 +124,12 @@ func (a *AMQP09) ConnectWithContext(ctx context.Context) (err error) {
 	var consumerChan <-chan amqp.Delivery
 
 	if a.conf.URL != "" {
-		if conn, err = a.retryDial([]string{a.conf.URL}, 0); err != nil {
+		if conn, err = a.reDial([]string{a.conf.URL}, 0); err != nil {
 			return err
 		}
 	} else {
 		amqpURLs := strings.Split(a.conf.URLs, ",")
-		if conn, err = a.retryDial(amqpURLs, 0); err != nil {
+		if conn, err = a.reDial(amqpURLs, 0); err != nil {
 			return err
 		}
 	}
@@ -295,20 +295,20 @@ func (a *AMQP09) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-// retryDial retries connection to amqp recursively if one or more URLs fail
-func (a *AMQP09) retryDial(urls []string, idx int) (conn *amqp.Connection, err error) {
+// reDial connection to amqp recursively if one or more URLs fail
+func (a *AMQP09) reDial(urls []string, idx int) (conn *amqp.Connection, err error) {
 	amqpURL := urls[idx]
 	conn, err = a.dial(amqpURL)
 	if err != nil {
 		if errors.Is(err, errConnect) && len(urls) > 1 && idx <= len(urls) {
-			return a.retryDial(urls, idx+1)
+			return a.reDial(urls, idx+1)
 		}
 		return nil, err
 	}
 	return conn, nil
 }
 
-// dial attempts to connect to amqp URL and return connection otherwise returns error
+// dial attempts to connect to amqp URL
 func (a *AMQP09) dial(amqpURL string) (conn *amqp.Connection, err error) {
 	u, err := url.Parse(amqpURL)
 	if err != nil {
