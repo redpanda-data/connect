@@ -55,10 +55,11 @@ You can access these metadata fields using
 		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("urls",
-				"A list of URLs to connect to.",
-				"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/,amqp://127.0.0.3:5672/",
-				"amqps://guest:guest@localhost:5672/",
-			),
+				"A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.",
+				[]string{"amqp://127.0.0.1:5672/"},
+				[]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"},
+				[]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"},
+			).Array(),
 			docs.FieldDeprecated("url").OmitWhen(func(field, parent interface{}) (string, bool) {
 				return "field url is deprecated and should be omitted when urls is used",
 					len(gabs.Wrap(parent).S("urls").Children()) > 0
