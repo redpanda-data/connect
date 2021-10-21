@@ -41,7 +41,7 @@ type AMQP09BindingConfig struct {
 // AMQP09Config contains configuration for the AMQP09 input type.
 type AMQP09Config struct {
 	URL             string                   `json:"url" yaml:"url"`
-	URLs            string                   `json:"urls" yaml:"urls"`
+	URLs            []string                 `json:"urls" yaml:"urls"`
 	Queue           string                   `json:"queue" yaml:"queue"`
 	QueueDeclare    AMQP09QueueDeclareConfig `json:"queue_declare" yaml:"queue_declare"`
 	BindingsDeclare []AMQP09BindingConfig    `json:"bindings_declare" yaml:"bindings_declare"`
@@ -59,7 +59,7 @@ type AMQP09Config struct {
 func NewAMQP09Config() AMQP09Config {
 	return AMQP09Config{
 		URL:   "amqp://guest:guest@localhost:5672/",
-		URLs:  "amqp://guest:guest@localhost:5672/,",
+		URLs:  []string{"amqp://guest:guest@localhost:5672/"},
 		Queue: "benthos-queue",
 		QueueDeclare: AMQP09QueueDeclareConfig{
 			Enabled: false,
@@ -99,6 +99,15 @@ func NewAMQP09(conf AMQP09Config, log log.Modular, stats metrics.Type) (*AMQP09,
 		stats: stats,
 		log:   log,
 	}
+
+	for _, url := range conf.URLs {
+		for _, splitURL := range strings.Split(url, ",") {
+			if trimmed := strings.TrimSpace(splitURL); len(trimmed) > 0 {
+				a.conf.URLs = append(a.conf.URLs, trimmed)
+			}
+		}
+	}
+
 	if conf.TLS.Enabled {
 		var err error
 		if a.tlsConf, err = conf.TLS.Get(); err != nil {
@@ -123,13 +132,12 @@ func (a *AMQP09) ConnectWithContext(ctx context.Context) (err error) {
 	var amqpChan *amqp.Channel
 	var consumerChan <-chan amqp.Delivery
 
-	if a.conf.URL != "" {
-		if conn, err = a.reDial([]string{a.conf.URL}, 0); err != nil {
+	if len(a.conf.URLs) >= 1 {
+		if conn, err = a.reDial(a.conf.URLs, 0); err != nil {
 			return err
 		}
-	} else {
-		amqpURLs := strings.Split(a.conf.URLs, ",")
-		if conn, err = a.reDial(amqpURLs, 0); err != nil {
+	} else { // for backwards compatibility with `url`
+		if conn, err = a.reDial([]string{a.conf.URL}, 0); err != nil {
 			return err
 		}
 	}
