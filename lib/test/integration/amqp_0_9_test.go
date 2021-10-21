@@ -50,7 +50,8 @@ output:
 
 input:
   amqp_0_9:
-    url: amqp://guest:guest@localhost:$PORT/
+    urls: 
+      - amqp://guest:guest@localhost:$PORT/
     auto_ack: $VAR1
     queue: queue-$ID
     queue_declare:

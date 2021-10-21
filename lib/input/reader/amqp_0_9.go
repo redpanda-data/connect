@@ -58,8 +58,7 @@ type AMQP09Config struct {
 // NewAMQP09Config creates a new AMQP09Config with default values.
 func NewAMQP09Config() AMQP09Config {
 	return AMQP09Config{
-		URL:   "amqp://guest:guest@localhost:5672/",
-		URLs:  []string{"amqp://guest:guest@localhost:5672/"},
+		URLs:  []string{},
 		Queue: "benthos-queue",
 		QueueDeclare: AMQP09QueueDeclareConfig{
 			Enabled: false,
@@ -133,11 +132,11 @@ func (a *AMQP09) ConnectWithContext(ctx context.Context) (err error) {
 	var consumerChan <-chan amqp.Delivery
 
 	if len(a.conf.URLs) >= 1 {
-		if conn, err = a.reDial(a.conf.URLs, 0); err != nil {
+		if conn, err = a.reDial(a.conf.URLs); err != nil {
 			return err
 		}
 	} else { // for backwards compatibility with `url`
-		if conn, err = a.reDial([]string{a.conf.URL}, 0); err != nil {
+		if conn, err = a.dial(a.conf.URL); err != nil {
 			return err
 		}
 	}
@@ -304,16 +303,18 @@ func (a *AMQP09) WaitForClose(timeout time.Duration) error {
 }
 
 // reDial connection to amqp recursively if one or more URLs fail
-func (a *AMQP09) reDial(urls []string, idx int) (conn *amqp.Connection, err error) {
-	amqpURL := urls[idx]
-	conn, err = a.dial(amqpURL)
-	if err != nil {
-		if errors.Is(err, errConnect) && len(urls) > 1 && idx <= len(urls) {
-			return a.reDial(urls, idx+1)
+func (a *AMQP09) reDial(urls []string) (conn *amqp.Connection, err error) {
+	for _, amqpURL := range urls {
+		conn, err = a.dial(amqpURL)
+		if err != nil {
+			if errors.Is(err, errConnect) {
+				continue
+			}
+			break
 		}
-		return nil, err
+		return conn, nil
 	}
-	return conn, nil
+	return nil, err
 }
 
 // dial attempts to connect to amqp URL
