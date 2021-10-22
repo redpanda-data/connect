@@ -1,7 +1,7 @@
 package single
 
 import (
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -11,7 +11,7 @@ import (
 func TestMmapCacheTracker(t *testing.T) {
 	t.Skip("DEPRECATED")
 
-	dir, err := ioutil.TempDir("", "benthos_test_")
+	dir, err := os.MkdirTemp("", "benthos_test_")
 	if err != nil {
 		t.Error(err)
 		return
@@ -101,7 +101,7 @@ func TestMmapCacheTracker(t *testing.T) {
 func TestMmapCacheIndexes(t *testing.T) {
 	t.Skip("DEPRECATED")
 
-	dir, err := ioutil.TempDir("", "benthos_test_")
+	dir, err := os.MkdirTemp("", "benthos_test_")
 	if err != nil {
 		t.Error(err)
 		return
@@ -201,7 +201,7 @@ func TestMmapCacheIndexes(t *testing.T) {
 func TestMmapCacheRaces(t *testing.T) {
 	t.Skip("DEPRECATED")
 
-	dir, err := ioutil.TempDir("", "benthos_test_")
+	dir, err := os.MkdirTemp("", "benthos_test_")
 	if err != nil {
 		t.Error(err)
 		return

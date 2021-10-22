@@ -2,7 +2,6 @@ package input
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -21,14 +20,14 @@ func writeFiles(t *testing.T, dir string, nameToContent map[string]string) {
 	t.Helper()
 
 	for k, v := range nameToContent {
-		require.NoError(t, ioutil.WriteFile(filepath.Join(dir, k), []byte(v), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, k), []byte(v), 0600))
 	}
 }
 
 func TestSequenceHappy(t *testing.T) {
 	t.Parallel()
 
-	tmpDir, err := ioutil.TempDir("", "benthos_sequence_input_test")
+	tmpDir, err := os.MkdirTemp("", "benthos_sequence_input_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() { os.RemoveAll(tmpDir) })
@@ -86,7 +85,7 @@ consumeLoop:
 func TestSequenceJoins(t *testing.T) {
 	t.Parallel()
 
-	tmpDir, err := ioutil.TempDir("", "benthos_sequence_joins_test")
+	tmpDir, err := os.MkdirTemp("", "benthos_sequence_joins_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() { os.RemoveAll(tmpDir) })
@@ -218,7 +217,7 @@ func TestSequenceJoinsMergeStrategies(t *testing.T) {
 	for _, test := range testCases {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			tmpDir, err := ioutil.TempDir("", "benthos_sequence_joins_test")
+			tmpDir, err := os.MkdirTemp("", "benthos_sequence_joins_test")
 			require.NoError(t, err)
 
 			t.Cleanup(func() { os.RemoveAll(tmpDir) })
@@ -289,7 +288,7 @@ func TestSequenceJoinsBig(t *testing.T) {
 	t.Skip()
 	t.Parallel()
 
-	tmpDir, err := ioutil.TempDir("", "benthos_sequence_joins_big_test")
+	tmpDir, err := os.MkdirTemp("", "benthos_sequence_joins_big_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() { os.RemoveAll(tmpDir) })
@@ -375,7 +374,7 @@ consumeLoop:
 func TestSequenceSad(t *testing.T) {
 	t.Parallel()
 
-	tmpDir, err := ioutil.TempDir("", "benthos_sequence_input_test")
+	tmpDir, err := os.MkdirTemp("", "benthos_sequence_input_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() { os.RemoveAll(tmpDir) })

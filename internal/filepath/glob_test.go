@@ -1,7 +1,6 @@
 package filepath
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -20,7 +19,7 @@ func TestGlobPatterns(t *testing.T) {
 		`src/cats/meows/c.js.tmp`,
 	}
 
-	tmpDir, err := ioutil.TempDir("", "test_glob_patterns")
+	tmpDir, err := os.MkdirTemp("", "test_glob_patterns")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -33,7 +32,7 @@ func TestGlobPatterns(t *testing.T) {
 			require.NoError(t, os.MkdirAll(tmpPath, 0755))
 		} else {
 			require.NoError(t, os.MkdirAll(filepath.Dir(tmpPath), 0755))
-			require.NoError(t, ioutil.WriteFile(tmpPath, []byte("keep me"), 0755))
+			require.NoError(t, os.WriteFile(tmpPath, []byte("keep me"), 0755))
 		}
 	}
 

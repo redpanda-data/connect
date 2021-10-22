@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -250,7 +249,7 @@ func newFileSync(inputFile, mappingFile string, writeBack bool) *fileSync {
 	}
 
 	if inputFile != "" {
-		inputBytes, err := ioutil.ReadFile(inputFile)
+		inputBytes, err := os.ReadFile(inputFile)
 		if err != nil {
 			if !writeBack || !errors.Is(err, os.ErrNotExist) {
 				log.Fatal(err)
@@ -261,7 +260,7 @@ func newFileSync(inputFile, mappingFile string, writeBack bool) *fileSync {
 	}
 
 	if mappingFile != "" {
-		mappingBytes, err := ioutil.ReadFile(mappingFile)
+		mappingBytes, err := os.ReadFile(mappingFile)
 		if err != nil {
 			if !writeBack || !errors.Is(err, os.ErrNotExist) {
 				log.Fatal(err)
@@ -303,12 +302,12 @@ func (f *fileSync) write() {
 	}
 
 	if f.inputFile != "" {
-		if err := ioutil.WriteFile(f.inputFile, []byte(f.inputString), 0644); err != nil {
+		if err := os.WriteFile(f.inputFile, []byte(f.inputString), 0644); err != nil {
 			log.Printf("Failed to write input file: %v\n", err)
 		}
 	}
 	if f.mappingFile != "" {
-		if err := ioutil.WriteFile(f.mappingFile, []byte(f.mappingString), 0644); err != nil {
+		if err := os.WriteFile(f.mappingFile, []byte(f.mappingString), 0644); err != nil {
 			log.Printf("Failed to write mapping file: %v\n", err)
 		}
 	}

@@ -3,7 +3,6 @@ package service
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -60,7 +59,7 @@ func lintFile(path string) (pathLints []pathLint) {
 }
 
 func lintMDSnippets(path string) (pathLints []pathLint) {
-	rawBytes, err := ioutil.ReadFile(path)
+	rawBytes, err := os.ReadFile(path)
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
 			source: path,

@@ -2,7 +2,6 @@ package manager
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -14,7 +13,7 @@ import (
 )
 
 func TestFromDirectory(t *testing.T) {
-	testDir, err := ioutil.TempDir("", "streams_test")
+	testDir, err := os.MkdirTemp("", "streams_test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,10 +47,10 @@ func TestFromDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = ioutil.WriteFile(fooPath, fooBytes, 0666); err != nil {
+	if err = os.WriteFile(fooPath, fooBytes, 0666); err != nil {
 		t.Fatal(err)
 	}
-	if err = ioutil.WriteFile(barPath, barBytes, 0666); err != nil {
+	if err = os.WriteFile(barPath, barBytes, 0666); err != nil {
 		t.Fatal(err)
 	}
 

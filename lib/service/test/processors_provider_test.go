@@ -2,7 +2,6 @@ package test_test
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,7 +17,7 @@ import (
 )
 
 func initTestFiles(files map[string]string) (string, error) {
-	testDir, err := ioutil.TempDir("", "benthos_config_test_test")
+	testDir, err := os.MkdirTemp("", "benthos_config_test_test")
 	if err != nil {
 		return "", err
 	}
@@ -28,7 +27,7 @@ func initTestFiles(files map[string]string) (string, error) {
 		if err := os.MkdirAll(filepath.Dir(fp), 0777); err != nil {
 			return "", err
 		}
-		if err := ioutil.WriteFile(fp, []byte(v), 0777); err != nil {
+		if err := os.WriteFile(fp, []byte(v), 0777); err != nil {
 			return "", err
 		}
 	}

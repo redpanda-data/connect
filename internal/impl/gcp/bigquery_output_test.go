@@ -2,7 +2,7 @@ package gcp
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -414,7 +414,7 @@ func TestGCPBigQueryOutputWriteOk(t *testing.T) {
 			// job execution called with job.Run()
 			if r.URL.Path == "/upload/bigquery/v2/projects/project_meow/jobs" {
 				var err error
-				body, err = ioutil.ReadAll(r.Body)
+				body, err = io.ReadAll(r.Body)
 				if err != nil {
 					w.WriteHeader(http.StatusInternalServerError)
 					return

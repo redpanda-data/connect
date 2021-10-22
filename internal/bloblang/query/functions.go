@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"sync"
@@ -336,7 +335,7 @@ func fileFunction(args *ParsedParams) (Function, error) {
 	if err != nil {
 		return nil, err
 	}
-	pathBytes, err := ioutil.ReadFile(path)
+	pathBytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}

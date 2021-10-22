@@ -3,7 +3,6 @@ package writer
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -66,7 +65,7 @@ func TestHTTPClientBasic(t *testing.T) {
 			resultChan <- msg
 		}()
 
-		b, err := ioutil.ReadAll(r.Body)
+		b, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Error(err)
 			return
@@ -117,7 +116,7 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 	nTestLoops := 1000
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, err := ioutil.ReadAll(r.Body)
+		b, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Error(err)
 			return
@@ -164,7 +163,7 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 	nTestLoops := 1000
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, err := ioutil.ReadAll(r.Body)
+		b, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Error(err)
 			return
@@ -235,7 +234,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 					t.Error(err)
 					return
 				}
-				msgBytes, err := ioutil.ReadAll(p)
+				msgBytes, err := io.ReadAll(p)
 				if err != nil {
 					t.Error(err)
 					return
@@ -243,7 +242,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 				msg.Append(message.NewPart(msgBytes))
 			}
 		} else {
-			b, err := ioutil.ReadAll(r.Body)
+			b, err := io.ReadAll(r.Body)
 			if err != nil {
 				t.Error(err)
 				return

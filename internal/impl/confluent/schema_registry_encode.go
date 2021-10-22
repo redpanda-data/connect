@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"sync"
@@ -269,7 +269,7 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 			continue
 		}
 
-		resBytes, err = ioutil.ReadAll(res.Body)
+		resBytes, err = io.ReadAll(res.Body)
 		res.Body.Close()
 		if err != nil {
 			s.logger.Errorf("failed to read response for schema subject '%v': %v", subject, err)

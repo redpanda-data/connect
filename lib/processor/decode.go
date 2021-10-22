@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -58,17 +58,17 @@ type decodeFunc func(bytes []byte) ([]byte, error)
 
 func base64Decode(b []byte) ([]byte, error) {
 	e := base64.NewDecoder(base64.StdEncoding, bytes.NewReader(b))
-	return ioutil.ReadAll(e)
+	return io.ReadAll(e)
 }
 
 func hexDecode(b []byte) ([]byte, error) {
 	e := hex.NewDecoder(bytes.NewReader(b))
-	return ioutil.ReadAll(e)
+	return io.ReadAll(e)
 }
 
 func ascii85Decode(b []byte) ([]byte, error) {
 	e := ascii85.NewDecoder(bytes.NewReader(b))
-	return ioutil.ReadAll(e)
+	return io.ReadAll(e)
 }
 
 func z85Decode(b []byte) ([]byte, error) {

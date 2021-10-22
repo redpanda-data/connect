@@ -2,7 +2,6 @@ package cache
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -57,7 +56,7 @@ type fileV2 struct {
 }
 
 func (f *fileV2) Get(_ context.Context, key string) ([]byte, error) {
-	b, err := ioutil.ReadFile(filepath.Join(f.dir, key))
+	b, err := os.ReadFile(filepath.Join(f.dir, key))
 	if os.IsNotExist(err) {
 		return nil, types.ErrKeyNotFound
 	}
@@ -65,7 +64,7 @@ func (f *fileV2) Get(_ context.Context, key string) ([]byte, error) {
 }
 
 func (f *fileV2) Set(_ context.Context, key string, value []byte, _ *time.Duration) error {
-	return ioutil.WriteFile(filepath.Join(f.dir, key), value, 0644)
+	return os.WriteFile(filepath.Join(f.dir, key), value, 0644)
 }
 
 func (f *fileV2) Add(_ context.Context, key string, value []byte, _ *time.Duration) error {
@@ -107,7 +106,7 @@ type File struct {
 //
 // Deprecated: This implementation is no longer used.
 func (f *File) Get(key string) ([]byte, error) {
-	b, err := ioutil.ReadFile(filepath.Join(f.dir, key))
+	b, err := os.ReadFile(filepath.Join(f.dir, key))
 	if os.IsNotExist(err) {
 		return nil, types.ErrKeyNotFound
 	}
@@ -118,7 +117,7 @@ func (f *File) Get(key string) ([]byte, error) {
 //
 // Deprecated: This implementation is no longer used.
 func (f *File) Set(key string, value []byte) error {
-	return ioutil.WriteFile(filepath.Join(f.dir, key), value, 0644)
+	return os.WriteFile(filepath.Join(f.dir, key), value, 0644)
 }
 
 // SetMulti attempts to set the value of multiple keys, returns an error if any

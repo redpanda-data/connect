@@ -2,7 +2,6 @@ package output
 
 import (
 	"io"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -34,7 +33,7 @@ func TestHTTPClientMultipartEnabled(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			msgBytes, err := ioutil.ReadAll(p)
+			msgBytes, err := io.ReadAll(p)
 			require.NoError(t, err)
 
 			resultChan <- string(msgBytes)
@@ -90,7 +89,7 @@ func TestHTTPClientMultipartEnabled(t *testing.T) {
 func TestHTTPClientMultipartDisabled(t *testing.T) {
 	resultChan := make(chan string, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resBytes, err := ioutil.ReadAll(r.Body)
+		resBytes, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
 		resultChan <- string(resBytes)
 	}))

@@ -2,7 +2,6 @@ package output
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -19,7 +18,7 @@ import (
 func testProgram(t *testing.T, program string) string {
 	t.Helper()
 
-	dir, err := ioutil.TempDir("", "benthos_subprocess_output_test")
+	dir, err := os.MkdirTemp("", "benthos_subprocess_output_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -27,7 +26,7 @@ func testProgram(t *testing.T, program string) string {
 	})
 
 	pathStr := path.Join(dir, "main.go")
-	require.NoError(t, ioutil.WriteFile(pathStr, []byte(program), 0666))
+	require.NoError(t, os.WriteFile(pathStr, []byte(program), 0666))
 
 	return pathStr
 }
@@ -60,7 +59,7 @@ func TestSubprocessBasic(t *testing.T) {
 
 	t.Parallel()
 
-	dir, err := ioutil.TempDir("", "benthos_subprocess_output_happy")
+	dir, err := os.MkdirTemp("", "benthos_subprocess_output_happy")
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		os.RemoveAll(dir)
@@ -74,7 +73,6 @@ import (
 	"os"
 	"strings"
 	"bytes"
-	"io/ioutil"
 )
 
 func main() {
@@ -91,7 +89,7 @@ func main() {
 		panic(err)
 	}
 
-	if err := ioutil.WriteFile(target, buf.Bytes(), 0644); err != nil {
+	if err := os.WriteFile(target, buf.Bytes(), 0644); err != nil {
 		panic(err)
 	}
 }
@@ -118,7 +116,7 @@ func main() {
 	require.NoError(t, o.WaitForClose(time.Second))
 
 	assert.Eventually(t, func() bool {
-		resBytes, err := ioutil.ReadFile(path.Join(dir, "output.txt"))
+		resBytes, err := os.ReadFile(path.Join(dir, "output.txt"))
 		if err != nil {
 			return false
 		}
@@ -131,7 +129,7 @@ func TestSubprocessEarlyExit(t *testing.T) {
 
 	t.Parallel()
 
-	dir, err := ioutil.TempDir("", "benthos_subprocess_output_early_exit")
+	dir, err := os.MkdirTemp("", "benthos_subprocess_output_early_exit")
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		os.RemoveAll(dir)
@@ -177,7 +175,7 @@ func main() {
 	assert.Eventually(t, func() bool {
 		sendMsg(t, "bar", tranChan)
 
-		resBytes, err := ioutil.ReadFile(path.Join(dir, "bar.txt"))
+		resBytes, err := os.ReadFile(path.Join(dir, "bar.txt"))
 		if err != nil {
 			return false
 		}
@@ -187,7 +185,7 @@ func main() {
 	assert.Eventually(t, func() bool {
 		sendMsg(t, "baz", tranChan)
 
-		resBytes, err := ioutil.ReadFile(path.Join(dir, "baz.txt"))
+		resBytes, err := os.ReadFile(path.Join(dir, "baz.txt"))
 		if err != nil {
 			return false
 		}
@@ -197,15 +195,15 @@ func main() {
 	o.CloseAsync()
 	require.NoError(t, o.WaitForClose(time.Second))
 
-	resBytes, err := ioutil.ReadFile(path.Join(dir, "foo.txt"))
+	resBytes, err := os.ReadFile(path.Join(dir, "foo.txt"))
 	require.NoError(t, err)
 	assert.Equal(t, "FOO\n", string(resBytes))
 
-	resBytes, err = ioutil.ReadFile(path.Join(dir, "bar.txt"))
+	resBytes, err = os.ReadFile(path.Join(dir, "bar.txt"))
 	require.NoError(t, err)
 	assert.Equal(t, "BAR\n", string(resBytes))
 
-	resBytes, err = ioutil.ReadFile(path.Join(dir, "baz.txt"))
+	resBytes, err = os.ReadFile(path.Join(dir, "baz.txt"))
 	require.NoError(t, err)
 	assert.Equal(t, "BAZ\n", string(resBytes))
 }

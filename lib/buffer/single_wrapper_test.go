@@ -1,7 +1,6 @@
 package buffer
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -310,7 +309,7 @@ func BenchmarkSingleMem(b *testing.B) {
 }
 
 func BenchmarkSingleMmap(b *testing.B) {
-	dir, err := ioutil.TempDir("", "benthos_mmap_test")
+	dir, err := os.MkdirTemp("", "benthos_mmap_test")
 	if err != nil {
 		b.Fatal(err)
 	}

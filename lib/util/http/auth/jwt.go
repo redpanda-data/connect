@@ -3,8 +3,8 @@ package auth
 import (
 	"crypto/rsa"
 	"fmt"
-	"io/ioutil"
 	"net/http"
+	"os"
 	"sync"
 
 	"github.com/golang-jwt/jwt"
@@ -80,7 +80,7 @@ func (j JWTConfig) parsePrivateKey() error {
 		return nil
 	}
 
-	privateKey, err := ioutil.ReadFile(j.PrivateKeyFile)
+	privateKey, err := os.ReadFile(j.PrivateKeyFile)
 	if err != nil {
 		return fmt.Errorf("failed to read private key: %v", err)
 	}

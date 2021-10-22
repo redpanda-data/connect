@@ -2,7 +2,6 @@ package parser
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,7 +12,7 @@ import (
 )
 
 func TestMappingErrors(t *testing.T) {
-	dir, err := ioutil.TempDir("", "benthos_mapping_errors")
+	dir, err := os.MkdirTemp("", "benthos_mapping_errors")
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		os.RemoveAll(dir)
@@ -23,9 +22,9 @@ func TestMappingErrors(t *testing.T) {
 	noMapsFile := filepath.Join(dir, "no_maps.blobl")
 	goodMapFile := filepath.Join(dir, "good_map.blobl")
 
-	require.NoError(t, ioutil.WriteFile(badMapFile, []byte(`not a map bruh`), 0777))
-	require.NoError(t, ioutil.WriteFile(noMapsFile, []byte(`foo = "this is valid but has no maps"`), 0777))
-	require.NoError(t, ioutil.WriteFile(goodMapFile, []byte(`map foo { foo = "this is valid" }`), 0777))
+	require.NoError(t, os.WriteFile(badMapFile, []byte(`not a map bruh`), 0777))
+	require.NoError(t, os.WriteFile(noMapsFile, []byte(`foo = "this is valid but has no maps"`), 0777))
+	require.NoError(t, os.WriteFile(goodMapFile, []byte(`map foo { foo = "this is valid" }`), 0777))
 
 	tests := map[string]struct {
 		mapping     string
@@ -172,20 +171,20 @@ foo = bar.apply("foo")`, goodMapFile),
 }
 
 func TestMappings(t *testing.T) {
-	dir, err := ioutil.TempDir("", "benthos_mapping")
+	dir, err := os.MkdirTemp("", "benthos_mapping")
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		os.RemoveAll(dir)
 	})
 
 	goodMapFile := filepath.Join(dir, "foo_map.blobl")
-	require.NoError(t, ioutil.WriteFile(goodMapFile, []byte(`map foo {
+	require.NoError(t, os.WriteFile(goodMapFile, []byte(`map foo {
   foo = "this is valid"
   nested = this
 }`), 0777))
 
 	directMapFile := filepath.Join(dir, "direct_map.blobl")
-	require.NoError(t, ioutil.WriteFile(directMapFile, []byte(`root.nested = this`), 0777))
+	require.NoError(t, os.WriteFile(directMapFile, []byte(`root.nested = this`), 0777))
 
 	type part struct {
 		Content string

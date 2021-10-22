@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sync"
 
@@ -220,7 +219,7 @@ func run(c *cli.Context) error {
 			fmt.Fprintln(os.Stderr, red("invalid flags, unable to execute both a file mapping and an inline mapping"))
 			os.Exit(1)
 		}
-		mappingBytes, err := ioutil.ReadFile(file)
+		mappingBytes, err := os.ReadFile(file)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, red("failed to read mapping file: %v\n"), err)
 			os.Exit(1)

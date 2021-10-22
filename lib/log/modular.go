@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"sort"
 	"strconv"
 	"strings"
@@ -248,7 +247,7 @@ func NewV2(stream io.Writer, config Config) (Modular, error) {
 // Noop creates and returns a new logger object that writes nothing.
 func Noop() Modular {
 	return &Logger{
-		stream:       ioutil.Discard,
+		stream:       io.Discard,
 		prefix:       "benthos",
 		fields:       map[string]interface{}{},
 		level:        LogOff,

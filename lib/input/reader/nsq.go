@@ -3,7 +3,7 @@ package reader
 import (
 	"context"
 	"crypto/tls"
-	"io/ioutil"
+	"io"
 	llog "log"
 	"strings"
 	"sync"
@@ -141,7 +141,7 @@ func (n *NSQ) ConnectWithContext(ctx context.Context) (err error) {
 		return
 	}
 
-	consumer.SetLogger(llog.New(ioutil.Discard, "", llog.Flags()), nsq.LogLevelError)
+	consumer.SetLogger(llog.New(io.Discard, "", llog.Flags()), nsq.LogLevelError)
 	consumer.AddHandler(n)
 
 	if err = consumer.ConnectToNSQDs(n.addresses); err != nil {
