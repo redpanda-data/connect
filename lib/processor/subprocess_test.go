@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"io/ioutil"
 	"os"
 	"path"
 	"reflect"
@@ -171,7 +170,7 @@ func TestSubprocessWithErrors(t *testing.T) {
 func testProgram(t *testing.T, program string) string {
 	t.Helper()
 
-	dir, err := ioutil.TempDir("", "benthos_subprocessor_test")
+	dir, err := os.MkdirTemp("", "benthos_subprocessor_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -179,7 +178,7 @@ func testProgram(t *testing.T, program string) string {
 	})
 
 	pathStr := path.Join(dir, "main.go")
-	require.NoError(t, ioutil.WriteFile(pathStr, []byte(program), 0666))
+	require.NoError(t, os.WriteFile(pathStr, []byte(program), 0666))
 
 	return pathStr
 }

@@ -3,7 +3,6 @@ package test
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -424,7 +423,7 @@ func TestJSONContainsCondition(t *testing.T) {
 func TestFileEqualsCondition(t *testing.T) {
 	color.NoColor = true
 
-	tmpDir, err := ioutil.TempDir("", "test_file_condition")
+	tmpDir, err := os.MkdirTemp("", "test_file_condition")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {

@@ -2,7 +2,6 @@ package reader
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"path"
 	"reflect"
@@ -15,18 +14,18 @@ import (
 //------------------------------------------------------------------------------
 
 func TestFilesDirectory(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "benthos_file_input_test")
+	tmpDir, err := os.MkdirTemp("", "benthos_file_input_test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var tmpInnerDir string
-	if tmpInnerDir, err = ioutil.TempDir(tmpDir, "benthos_inner"); err != nil {
+	if tmpInnerDir, err = os.MkdirTemp(tmpDir, "benthos_inner"); err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmpDir)
 
 	var tmpFile *os.File
-	if tmpFile, err = ioutil.TempFile(tmpDir, "f1"); err != nil {
+	if tmpFile, err = os.CreateTemp(tmpDir, "f1"); err != nil {
 		t.Fatal(err)
 	}
 	defer os.Remove(tmpFile.Name())
@@ -37,7 +36,7 @@ func TestFilesDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if tmpFile, err = ioutil.TempFile(tmpInnerDir, "f2"); err != nil {
+	if tmpFile, err = os.CreateTemp(tmpInnerDir, "f2"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = tmpFile.Write([]byte("bar")); err != nil {
@@ -94,7 +93,7 @@ func TestFilesDirectory(t *testing.T) {
 }
 
 func TestFilesFile(t *testing.T) {
-	tmpFile, err := ioutil.TempFile("", "f1")
+	tmpFile, err := os.CreateTemp("", "f1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,14 +155,14 @@ func TestFilesBadPath(t *testing.T) {
 }
 
 func TestFilesDirectoryDelete(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "benthos_file_input_delete_test")
+	tmpDir, err := os.MkdirTemp("", "benthos_file_input_delete_test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmpDir)
 
 	var tmpFile *os.File
-	if tmpFile, err = ioutil.TempFile(tmpDir, "f1"); err != nil {
+	if tmpFile, err = os.CreateTemp(tmpDir, "f1"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = tmpFile.Write([]byte("foo")); err != nil {

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 	"path/filepath"
 
@@ -30,7 +30,7 @@ import (
 var verbose bool
 
 func create(t, path string, resBytes []byte) {
-	if existing, err := ioutil.ReadFile(path); err == nil {
+	if existing, err := os.ReadFile(path); err == nil {
 		if bytes.Equal(existing, resBytes) {
 			if verbose {
 				fmt.Printf("Skipping '%v' at: %v\n", t, path)
@@ -38,7 +38,7 @@ func create(t, path string, resBytes []byte) {
 			return
 		}
 	}
-	if err := ioutil.WriteFile(path, resBytes, 0644); err != nil {
+	if err := os.WriteFile(path, resBytes, 0644); err != nil {
 		panic(err)
 	}
 	fmt.Printf("Documentation for '%v' has changed, updating: %v\n", t, path)

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -816,7 +815,7 @@ func TestTypeAPISetResources(t *testing.T) {
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
-	tmpDir, err := ioutil.TempDir("", "resources")
+	tmpDir, err := os.MkdirTemp("", "resources")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {

@@ -2,7 +2,6 @@ package input
 
 import (
 	"errors"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -40,7 +39,7 @@ func TestReadUntilInput(t *testing.T) {
 bar
 baz`)
 
-	tmpfile, err := ioutil.TempFile("", "benthos_read_until_test")
+	tmpfile, err := os.CreateTemp("", "benthos_read_until_test")
 	if err != nil {
 		t.Fatal(err)
 	}

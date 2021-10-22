@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -74,19 +73,19 @@ func TestCSVReaderHappy(t *testing.T) {
 }
 
 func TestCSVGPaths(t *testing.T) {
-	dir, err := ioutil.TempDir("", "csv_glob_test")
+	dir, err := os.MkdirTemp("", "csv_glob_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
 		os.RemoveAll(dir)
 	})
 
-	require.NoError(t, ioutil.WriteFile(filepath.Join(dir, "a.csv"), []byte(`header1,header2,header3
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.csv"), []byte(`header1,header2,header3
 foo1,bar1,baz1
 foo2,bar2,baz2
 foo3,bar3,baz3
 `), 0777))
-	require.NoError(t, ioutil.WriteFile(filepath.Join(dir, "b.csv"), []byte(`header4,header5,header6
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.csv"), []byte(`header4,header5,header6
 foo4,bar4,baz4
 foo5,bar5,baz5
 foo6,bar6,baz6
@@ -120,19 +119,19 @@ foo6,bar6,baz6
 }
 
 func TestCSVGlobPaths(t *testing.T) {
-	dir, err := ioutil.TempDir("", "csv_glob_test")
+	dir, err := os.MkdirTemp("", "csv_glob_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
 		os.RemoveAll(dir)
 	})
 
-	require.NoError(t, ioutil.WriteFile(filepath.Join(dir, "a.csv"), []byte(`header1,header2,header3
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.csv"), []byte(`header1,header2,header3
 foo1,bar1,baz1
 foo2,bar2,baz2
 foo3,bar3,baz3
 `), 0777))
-	require.NoError(t, ioutil.WriteFile(filepath.Join(dir, "b.csv"), []byte(`header4,header5,header6
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.csv"), []byte(`header4,header5,header6
 foo4,bar4,baz4
 foo5,bar5,baz5
 foo6,bar6,baz6

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"regexp"
 	"sync"
 	"time"
@@ -852,7 +852,7 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			return err
 		}
 
-		if errMsg, err := ioutil.ReadAll(&errBuf); err != nil {
+		if errMsg, err := io.ReadAll(&errBuf); err != nil {
 			a.log.Errorf("Read err error: %v\n", err)
 		} else if len(errMsg) > 0 {
 			a.mErr.Incr(1)
@@ -860,7 +860,7 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			return errors.New(string(errMsg))
 		}
 
-		resMsg, err := ioutil.ReadAll(&outBuf)
+		resMsg, err := io.ReadAll(&outBuf)
 		if err != nil {
 			a.mErr.Incr(1)
 			a.log.Errorf("Read output error: %v\n", err)

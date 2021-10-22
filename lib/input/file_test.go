@@ -3,7 +3,6 @@ package input
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"strconv"
@@ -19,7 +18,7 @@ import (
 )
 
 func TestFileSinglePartDeprecated(t *testing.T) {
-	tmpfile, err := ioutil.TempFile("", "benthos_file_test")
+	tmpfile, err := os.CreateTemp("", "benthos_file_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -76,7 +75,7 @@ func TestFileSinglePartDeprecated(t *testing.T) {
 }
 
 func TestFileMultiPartDeprecated(t *testing.T) {
-	tmpfile, err := ioutil.TempFile("", "benthos_file_test")
+	tmpfile, err := os.CreateTemp("", "benthos_file_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -149,17 +148,17 @@ func TestFileMultiPartDeprecated(t *testing.T) {
 }
 
 func TestFileDirectory(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "benthos_file_input_test")
+	tmpDir, err := os.MkdirTemp("", "benthos_file_input_test")
 	require.NoError(t, err)
 
-	tmpInnerDir, err := ioutil.TempDir(tmpDir, "benthos_inner")
+	tmpInnerDir, err := os.MkdirTemp(tmpDir, "benthos_inner")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
 		os.RemoveAll(tmpDir)
 	})
 
-	tmpFile, err := ioutil.TempFile(tmpDir, "f1*.txt")
+	tmpFile, err := os.CreateTemp(tmpDir, "f1*.txt")
 	require.NoError(t, err)
 
 	_, err = tmpFile.Write([]byte("foo"))
@@ -168,7 +167,7 @@ func TestFileDirectory(t *testing.T) {
 	err = tmpFile.Close()
 	require.NoError(t, err)
 
-	tmpFileTwo, err := ioutil.TempFile(tmpInnerDir, "f2*.txt")
+	tmpFileTwo, err := os.CreateTemp(tmpInnerDir, "f2*.txt")
 	require.NoError(t, err)
 
 	_, err = tmpFileTwo.Write([]byte("bar"))

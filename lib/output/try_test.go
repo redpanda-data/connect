@@ -1,7 +1,6 @@
 package output
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,7 +14,7 @@ import (
 )
 
 func TestTryOutputBasic(t *testing.T) {
-	dir, err := ioutil.TempDir("", "benthos_try_output_tests")
+	dir, err := os.MkdirTemp("", "benthos_try_output_tests")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +93,7 @@ func TestTryOutputBasic(t *testing.T) {
 
 	for k, exp := range expFiles {
 		k = filepath.Join(dir, k)
-		fileBytes, err := ioutil.ReadFile(k)
+		fileBytes, err := os.ReadFile(k)
 		if err != nil {
 			t.Errorf("Expected file '%v' could not be read: %v", k, err)
 			continue

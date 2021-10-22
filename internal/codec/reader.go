@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -298,7 +297,7 @@ func (a *allBytesReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, e
 		return nil, nil, io.EOF
 	}
 	a.consumed = true
-	b, err := ioutil.ReadAll(a.i)
+	b, err := io.ReadAll(a.i)
 	if err != nil {
 		_ = a.ack(ctx, err)
 		return nil, nil, err

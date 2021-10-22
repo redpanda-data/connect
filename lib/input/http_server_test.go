@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net"
@@ -92,7 +91,7 @@ func TestHTTPBasic(t *testing.T) {
 			} else if res.StatusCode != 200 {
 				t.Errorf("Wrong error code returned: %v", res.StatusCode)
 			}
-			resBytes, err := ioutil.ReadAll(res.Body)
+			resBytes, err := io.ReadAll(res.Body)
 			if err != nil {
 				t.Error(err)
 			}
@@ -186,7 +185,7 @@ func TestHTTPBasic(t *testing.T) {
 			} else if res.StatusCode != 200 {
 				t.Errorf("Wrong error code returned: %v", res.StatusCode)
 			}
-			resBytes, err := ioutil.ReadAll(res.Body)
+			resBytes, err := io.ReadAll(res.Body)
 			if err != nil {
 				t.Error(err)
 			}
@@ -807,7 +806,7 @@ func TestHTTPSyncResponseHeaders(t *testing.T) {
 		} else if res.StatusCode != 200 {
 			t.Errorf("Wrong error code returned: %v", res.StatusCode)
 		}
-		resBytes, err := ioutil.ReadAll(res.Body)
+		resBytes, err := io.ReadAll(res.Body)
 		if err != nil {
 			t.Error(err)
 		}
@@ -1015,7 +1014,7 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 		} else if res.StatusCode != 200 {
 			t.Errorf("Wrong error code returned: %v", res.StatusCode)
 		}
-		resBytes, err := ioutil.ReadAll(res.Body)
+		resBytes, err := io.ReadAll(res.Body)
 		if err != nil {
 			t.Error(err)
 		}
@@ -1039,7 +1038,7 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 		} else if res.StatusCode != 400 {
 			t.Errorf("Wrong error code returned: %v", res.StatusCode)
 		}
-		resBytes, err = ioutil.ReadAll(res.Body)
+		resBytes, err = io.ReadAll(res.Body)
 		if err != nil {
 			t.Error(err)
 		}

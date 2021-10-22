@@ -2,8 +2,8 @@ package sftp
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
+	"os"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/pkg/sftp"
@@ -65,7 +65,7 @@ func (c Credentials) GetClient(address string) (*sftp.Client, error) {
 	if c.PrivateKeyFile != "" {
 		// read private key file
 		var privateKey []byte
-		privateKey, err = ioutil.ReadFile(c.PrivateKeyFile)
+		privateKey, err = os.ReadFile(c.PrivateKeyFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read private key: %v", err)
 		}

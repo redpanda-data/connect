@@ -2,7 +2,6 @@ package condition
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -34,7 +33,7 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 		}
 	}`
 
-	tmpSchemaFile, err := ioutil.TempFile("", "benthos_jsonschema_test")
+	tmpSchemaFile, err := os.CreateTemp("", "benthos_jsonschema_test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +197,7 @@ func TestJSONSchemaInvalidSchema(t *testing.T) {
 		"type": "any"
 	}`
 
-	tmpSchemaFile, err := ioutil.TempFile("", "benthos_jsonschema_invalid_schema_test")
+	tmpSchemaFile, err := os.CreateTemp("", "benthos_jsonschema_invalid_schema_test")
 	if err != nil {
 		t.Fatal(err)
 	}

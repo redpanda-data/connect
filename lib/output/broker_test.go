@@ -1,7 +1,6 @@
 package output
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,7 +14,7 @@ import (
 )
 
 func TestFanOutBroker(t *testing.T) {
-	dir, err := ioutil.TempDir("", "benthos_fan_out_broker_tests")
+	dir, err := os.MkdirTemp("", "benthos_fan_out_broker_tests")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +90,7 @@ func TestFanOutBroker(t *testing.T) {
 
 	for k, exp := range expFiles {
 		k = filepath.Join(dir, k)
-		fileBytes, err := ioutil.ReadFile(k)
+		fileBytes, err := os.ReadFile(k)
 		if err != nil {
 			t.Errorf("Expected file '%v' could not be read: %v", k, err)
 			continue
@@ -103,7 +102,7 @@ func TestFanOutBroker(t *testing.T) {
 }
 
 func TestRoundRobinBroker(t *testing.T) {
-	dir, err := ioutil.TempDir("", "benthos_round_robin_broker_tests")
+	dir, err := os.MkdirTemp("", "benthos_round_robin_broker_tests")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +178,7 @@ func TestRoundRobinBroker(t *testing.T) {
 
 	for k, exp := range expFiles {
 		k = filepath.Join(dir, k)
-		fileBytes, err := ioutil.ReadFile(k)
+		fileBytes, err := os.ReadFile(k)
 		if err != nil {
 			t.Errorf("Expected file '%v' could not be read: %v", k, err)
 			continue
@@ -191,7 +190,7 @@ func TestRoundRobinBroker(t *testing.T) {
 }
 
 func TestGreedyBroker(t *testing.T) {
-	dir, err := ioutil.TempDir("", "benthos_broker_greedy_tests")
+	dir, err := os.MkdirTemp("", "benthos_broker_greedy_tests")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,7 +272,7 @@ func TestGreedyBroker(t *testing.T) {
 
 	for k, exp := range expFiles {
 		k = filepath.Join(dir, k)
-		fileBytes, err := ioutil.ReadFile(k)
+		fileBytes, err := os.ReadFile(k)
 		if err != nil {
 			t.Errorf("Expected file '%v' could not be read: %v", k, err)
 			continue
@@ -285,7 +284,7 @@ func TestGreedyBroker(t *testing.T) {
 }
 
 func TestTryBroker(t *testing.T) {
-	dir, err := ioutil.TempDir("", "benthos_try_broker_tests")
+	dir, err := os.MkdirTemp("", "benthos_try_broker_tests")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,7 +364,7 @@ func TestTryBroker(t *testing.T) {
 
 	for k, exp := range expFiles {
 		k = filepath.Join(dir, k)
-		fileBytes, err := ioutil.ReadFile(k)
+		fileBytes, err := os.ReadFile(k)
 		if err != nil {
 			t.Errorf("Expected file '%v' could not be read: %v", k, err)
 			continue

@@ -2,7 +2,6 @@ package processor
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"strconv"
@@ -181,7 +180,7 @@ func TestAvroSchemaPath(t *testing.T) {
 	]
 }`
 
-	tmpSchemaFile, err := ioutil.TempFile("", "benthos_avro_test")
+	tmpSchemaFile, err := os.CreateTemp("", "benthos_avro_test")
 	if err != nil {
 		t.Fatal(err)
 	}

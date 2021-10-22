@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -75,7 +74,7 @@ func TestHTTPClientSendBasic(t *testing.T) {
 			resultChan <- msg
 		}()
 
-		b, err := ioutil.ReadAll(r.Body)
+		b, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
 
 		msg.Append(message.NewPart(b))
@@ -107,7 +106,7 @@ func TestHTTPClientSendBasic(t *testing.T) {
 
 func TestHTTPClientBadContentType(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, err := ioutil.ReadAll(r.Body)
+		b, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
 
 		_, err = w.Write(bytes.ToUpper(b))
@@ -189,7 +188,7 @@ func TestHTTPClientSendInterpolate(t *testing.T) {
 			resultChan <- msg
 		}()
 
-		b, err := ioutil.ReadAll(r.Body)
+		b, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
 
 		msg.Append(message.NewPart(b))
@@ -244,13 +243,13 @@ func TestHTTPClientSendMultipart(t *testing.T) {
 				}
 				require.NoError(t, err)
 
-				msgBytes, err := ioutil.ReadAll(p)
+				msgBytes, err := io.ReadAll(p)
 				require.NoError(t, err)
 
 				msg.Append(message.NewPart(msgBytes))
 			}
 		} else {
-			b, err := ioutil.ReadAll(r.Body)
+			b, err := io.ReadAll(r.Body)
 			require.NoError(t, err)
 
 			msg.Append(message.NewPart(b))
