@@ -14,6 +14,67 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestSchemaRegistryEncoderConfigParse(t *testing.T) {
+	configTests := []struct {
+		name        string
+		config      string
+		errContains string
+	}{
+		{
+			name: "bad url",
+			config: `
+url: huh#%#@$u*not////::example.com
+subject: foo
+`,
+			errContains: `failed to parse url`,
+		},
+		{
+			name: "bad subject",
+			config: `
+url: http://example.com
+subject: ${! bad interpolation }
+`,
+			errContains: `failed to parse interpolated field`,
+		},
+		{
+			name: "use default period",
+			config: `
+url: http://example.com
+subject: foo
+`,
+		},
+		{
+			name: "bad period",
+			config: `
+url: http://example.com
+subject: foo
+refresh_period: not a duration
+`,
+			errContains: "invalid duration",
+		},
+	}
+
+	spec := schemaRegistryEncoderConfig()
+	env := service.NewEnvironment()
+	for _, test := range configTests {
+		t.Run(test.name, func(t *testing.T) {
+			conf, err := spec.ParseYAML(test.config, env)
+			require.NoError(t, err)
+
+			e, err := newSchemaRegistryEncoderFromConfig(conf, nil)
+			if err == nil {
+				_ = e.Close(context.Background())
+			}
+			if test.errContains == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			}
+		})
+	}
+}
+
 func TestSchemaRegistryEncode(t *testing.T) {
 	fooFirst, err := json.Marshal(struct {
 		Schema string `json:"schema"`
@@ -34,7 +95,7 @@ func TestSchemaRegistryEncode(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, nil, subj, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, nil, subj, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -93,7 +154,7 @@ func TestSchemaRegistryEncodeClearExpired(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, nil, subj, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, nil, subj, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 	require.NoError(t, encoder.Close(context.Background()))
 
@@ -154,7 +215,7 @@ func TestSchemaRegistryEncodeRefresh(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, nil, subj, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, nil, subj, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 	require.NoError(t, encoder.Close(context.Background()))
 

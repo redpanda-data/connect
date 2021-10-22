@@ -14,6 +14,42 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestSchemaRegistryDecoderConfigParse(t *testing.T) {
+	configTests := []struct {
+		name        string
+		config      string
+		errContains string
+	}{
+		{
+			name: "bad url",
+			config: `
+url: huh#%#@$u*not////::example.com
+`,
+			errContains: `failed to parse url`,
+		},
+	}
+
+	spec := schemaRegistryDecoderConfig()
+	env := service.NewEnvironment()
+	for _, test := range configTests {
+		t.Run(test.name, func(t *testing.T) {
+			conf, err := spec.ParseYAML(test.config, env)
+			require.NoError(t, err)
+
+			e, err := newSchemaRegistryDecoderFromConfig(conf, nil)
+			if err == nil {
+				_ = e.Close(context.Background())
+			}
+			if test.errContains == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			}
+		})
+	}
+}
+
 func runSchemaRegistryServer(t *testing.T, fn func(path string) ([]byte, error)) string {
 	t.Helper()
 
