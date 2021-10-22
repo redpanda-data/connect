@@ -11,9 +11,28 @@ Woops! You fell for the marketing hype. Let's try and get through this together.
 
 The easiest way to install Benthos is with this handy script:
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs defaultValue="latest" values={[
+  { label: 'Latest stable version', value: 'latest', },
+  { label: 'Specific version', value: 'version', },
+]}>
+<TabItem value="latest">
+
 ```sh
 curl -Lsf https://sh.benthos.dev | bash
 ```
+
+</TabItem>
+<TabItem value="version">
+
+```sh
+curl -Lsf https://sh.benthos.dev | bash -s -- 3.56.0
+```
+
+</TabItem>
+</Tabs>
 
 Or you can grab an archive containing Benthos from the [releases page][releases].
 

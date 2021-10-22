@@ -39,7 +39,7 @@ For information on how to set up credentials check out
 
 // NewGCPPubSub creates a new GCPPubSub output type.
 func NewGCPPubSub(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	a, err := writer.NewGCPPubSub(conf.GCPPubSub, log, stats)
+	a, err := writer.NewGCPPubSubV2(conf.GCPPubSub, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

@@ -7,7 +7,8 @@ import (
 )
 
 // Logger allows plugin authors to write custom logs from components that are
-// exported the same way as native Benthos logs.
+// exported the same way as native Benthos logs. It's safe to pass around a nil
+// pointer for testing components.
 type Logger struct {
 	m log.Modular
 }
@@ -24,12 +25,28 @@ func (l *Logger) Debugf(template string, args ...interface{}) {
 	l.m.Debugf(template, args...)
 }
 
+// Debug logs a debug message.
+func (l *Logger) Debug(message string) {
+	if l == nil {
+		return
+	}
+	l.m.Debugln(message)
+}
+
 // Infof logs an info message using fmt.Sprintf when args are specified.
 func (l *Logger) Infof(template string, args ...interface{}) {
 	if l == nil {
 		return
 	}
 	l.m.Infof(template, args...)
+}
+
+// Info logs an info message.
+func (l *Logger) Info(message string) {
+	if l == nil {
+		return
+	}
+	l.m.Infoln(message)
 }
 
 // Warnf logs a warning message using fmt.Sprintf when args are specified.
@@ -40,12 +57,28 @@ func (l *Logger) Warnf(template string, args ...interface{}) {
 	l.m.Warnf(template, args...)
 }
 
+// Warn logs a warning message.
+func (l *Logger) Warn(message string) {
+	if l == nil {
+		return
+	}
+	l.m.Warnln(message)
+}
+
 // Errorf logs an error message using fmt.Sprintf when args are specified.
 func (l *Logger) Errorf(template string, args ...interface{}) {
 	if l == nil {
 		return
 	}
 	l.m.Errorf(template, args...)
+}
+
+// Error logs an error message.
+func (l *Logger) Error(message string) {
+	if l == nil {
+		return
+	}
+	l.m.Errorln(message)
 }
 
 // With adds a variadic set of fields to a logger. Each field must consist

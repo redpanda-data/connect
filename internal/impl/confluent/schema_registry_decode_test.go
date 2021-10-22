@@ -34,11 +34,7 @@ func runSchemaRegistryServer(t *testing.T, fn func(path string) ([]byte, error))
 	return ts.URL
 }
 
-func TestSchemaRegistryDecode(t *testing.T) {
-	payload3, err := json.Marshal(struct {
-		Schema string `json:"schema"`
-	}{
-		Schema: `{
+const testSchema = `{
 	"namespace": "foo.namespace.com",
 	"type":	"record",
 	"name": "identity",
@@ -54,7 +50,13 @@ func TestSchemaRegistryDecode(t *testing.T) {
 			]
 		}],"default":null}
 	]
-}`,
+}`
+
+func TestSchemaRegistryDecode(t *testing.T) {
+	payload3, err := json.Marshal(struct {
+		Schema string `json:"schema"`
+	}{
+		Schema: testSchema,
 	})
 	require.NoError(t, err)
 

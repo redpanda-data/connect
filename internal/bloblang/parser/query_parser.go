@@ -4,69 +4,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 )
 
-// FunctionSet provides constructors to the functions available in this query.
-type FunctionSet interface {
-	Init(string, ...interface{}) (query.Function, error)
-}
-
-// MethodSet provides constructors to the methods available in this query.
-type MethodSet interface {
-	Init(string, query.Function, ...interface{}) (query.Function, error)
-}
-
-// Context contains context used throughout a Bloblang parser for
-// accessing function and method constructors.
-type Context struct {
-	Functions    FunctionSet
-	Methods      MethodSet
-	namedContext *namedContext
-}
-
-// GlobalContext returns a parser context with globally defined functions and
-// methods.
-func GlobalContext() Context {
-	return Context{
-		Functions: query.AllFunctions,
-		Methods:   query.AllMethods,
-	}
-}
-
-type namedContext struct {
-	name string
-	next *namedContext
-}
-
-// WithNamedContext returns a Context with a named execution context.
-func (pCtx Context) WithNamedContext(name string) Context {
-	next := pCtx.namedContext
-	pCtx.namedContext = &namedContext{name, next}
-	return pCtx
-}
-
-// HasNamedContext returns true if a given name exists as a named context.
-func (pCtx Context) HasNamedContext(name string) bool {
-	tmp := pCtx.namedContext
-	for tmp != nil {
-		if tmp.name == name {
-			return true
-		}
-		tmp = tmp.next
-	}
-	return false
-}
-
-// InitFunction attempts to initialise a function from the available
-// constructors of the parser context.
-func (pCtx Context) InitFunction(name string, args ...interface{}) (query.Function, error) {
-	return pCtx.Functions.Init(name, args...)
-}
-
-// InitMethod attempts to initialise a method from the available constructors of
-// the parser context.
-func (pCtx Context) InitMethod(name string, target query.Function, args ...interface{}) (query.Function, error) {
-	return pCtx.Methods.Init(name, target, args...)
-}
-
 func queryParser(pCtx Context) func(input []rune) Result {
 	rootParser := parseWithTails(Expect(
 		OneOf(
@@ -135,5 +72,3 @@ func tryParseQuery(expr string, deprecated bool) (query.Function, *Error) {
 	}
 	return res.Payload.(query.Function), nil
 }
-
-//------------------------------------------------------------------------------

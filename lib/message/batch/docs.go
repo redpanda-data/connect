@@ -73,7 +73,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).`,
 						"merge_json": struct{}{},
 					},
 				},
-			).Array().HasType(docs.FieldTypeProcessor),
+			).Array().HasType(docs.FieldTypeProcessor).Optional(),
 		},
 	}
 }

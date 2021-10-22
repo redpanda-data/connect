@@ -48,6 +48,7 @@ var _ = registerIntegrationTest("aws_kinesis", func(t *testing.T) {
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository:   "localstack/localstack",
+		Tag:          "0.12.12", // Looks like we're bitten by https://github.com/localstack/localstack/issues/4522
 		ExposedPorts: []string{"4566/tcp"},
 		Env:          []string{"SERVICES=dynamodb,kinesis"},
 	})

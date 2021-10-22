@@ -43,7 +43,7 @@ configuration field.
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/aws).`,
+[in this document](/docs/guides/cloud/aws).`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("table", "The table to store items in."),
 			docs.FieldCommon("hash_key", "The key of the table column to store item keys within."),
@@ -78,7 +78,7 @@ configuration field.
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/aws).`,
+[in this document](/docs/guides/cloud/aws).`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("table", "The table to store items in."),
 			docs.FieldCommon("hash_key", "The key of the table column to store item keys within."),

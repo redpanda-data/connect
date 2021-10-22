@@ -19,14 +19,14 @@ func TestFunctions(t *testing.T) {
 
 	mustFunc := func(name string, args ...interface{}) Function {
 		t.Helper()
-		fn, err := InitFunction(name, args...)
+		fn, err := InitFunctionHelper(name, args...)
 		require.NoError(t, err)
 		return fn
 	}
 
 	mustMethod := func(fn Function, name string, args ...interface{}) Function {
 		t.Helper()
-		fn, err := InitMethod(name, fn, args...)
+		fn, err := InitMethodHelper(name, fn, args...)
 		require.NoError(t, err)
 		return fn
 	}
@@ -161,7 +161,7 @@ func TestFunctions(t *testing.T) {
 func TestFunctionTargets(t *testing.T) {
 	function := func(name string, args ...interface{}) Function {
 		t.Helper()
-		fn, err := InitFunction(name, args...)
+		fn, err := InitFunctionHelper(name, args...)
 		require.NoError(t, err)
 		return fn
 	}
@@ -213,7 +213,7 @@ func TestFunctionTargets(t *testing.T) {
 }
 
 func TestNanoidFunction(t *testing.T) {
-	e, err := InitFunction("nanoid")
+	e, err := InitFunctionHelper("nanoid")
 	require.Nil(t, err)
 
 	res, err := e.Exec(FunctionContext{})
@@ -222,7 +222,7 @@ func TestNanoidFunction(t *testing.T) {
 }
 
 func TestNanoidFunctionLength(t *testing.T) {
-	e, err := InitFunction("nanoid", int64(54))
+	e, err := InitFunctionHelper("nanoid", int64(54))
 	require.Nil(t, err)
 
 	res, err := e.Exec(FunctionContext{})
@@ -231,7 +231,7 @@ func TestNanoidFunctionLength(t *testing.T) {
 }
 
 func TestNanoidFunctionAlphabet(t *testing.T) {
-	e, err := InitFunction("nanoid", int64(1), "a")
+	e, err := InitFunctionHelper("nanoid", int64(1), "a")
 	require.Nil(t, err)
 
 	res, err := e.Exec(FunctionContext{})
@@ -246,7 +246,7 @@ func TestEnvFunction(t *testing.T) {
 		os.Unsetenv(key)
 	})
 
-	e, err := InitFunction("env", key)
+	e, err := InitFunctionHelper("env", key)
 	require.Nil(t, err)
 
 	res, err := e.Exec(FunctionContext{})
@@ -255,7 +255,7 @@ func TestEnvFunction(t *testing.T) {
 }
 
 func TestRandomInt(t *testing.T) {
-	e, err := InitFunction("random_int")
+	e, err := InitFunctionHelper("random_int")
 	require.Nil(t, err)
 
 	tallies := map[int64]int64{}
@@ -275,7 +275,7 @@ func TestRandomInt(t *testing.T) {
 	}
 
 	// Create a new random_int function with a different seed
-	e, err = InitFunction("random_int", 10)
+	e, err = InitFunctionHelper("random_int", 10)
 	require.NoError(t, err)
 
 	secondTallies := map[int64]int64{}
@@ -297,7 +297,7 @@ func TestRandomInt(t *testing.T) {
 func TestRandomIntDynamic(t *testing.T) {
 	idFn := NewFieldFunction("")
 
-	e, err := InitFunction("random_int", idFn)
+	e, err := InitFunctionHelper("random_int", idFn)
 	require.NoError(t, err)
 
 	tallies := map[int64]int64{}
@@ -317,7 +317,7 @@ func TestRandomIntDynamic(t *testing.T) {
 	}
 
 	// Create a new random_int function and feed the same values in
-	e, err = InitFunction("random_int", idFn)
+	e, err = InitFunctionHelper("random_int", idFn)
 	require.NoError(t, err)
 
 	secondTallies := map[int64]int64{}
@@ -333,7 +333,7 @@ func TestRandomIntDynamic(t *testing.T) {
 
 	// Create a new random_int function and feed the first value in the same,
 	// but following values are different.
-	e, err = InitFunction("random_int", idFn)
+	e, err = InitFunctionHelper("random_int", idFn)
 	require.NoError(t, err)
 
 	thirdTallies := map[int64]int64{}
@@ -353,10 +353,10 @@ func TestRandomIntDynamic(t *testing.T) {
 }
 
 func TestRandomIntDynamicParallel(t *testing.T) {
-	tsFn, err := InitFunction("timestamp_unix_nano")
+	tsFn, err := InitFunctionHelper("timestamp_unix_nano")
 	require.NoError(t, err)
 
-	e, err := InitFunction("random_int", tsFn)
+	e, err := InitFunctionHelper("random_int", tsFn)
 	require.NoError(t, err)
 
 	startChan := make(chan struct{})

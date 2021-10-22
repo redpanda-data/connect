@@ -35,7 +35,7 @@ func sessionFields() []*service.ConfigField {
 			service.NewStringField("role_external_id").
 				Description("An external ID to provide when assuming a role.").
 				Default("").Advanced()).
-			Description("Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws)."),
+			Description("Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/cloud/aws)."),
 	}
 }
 

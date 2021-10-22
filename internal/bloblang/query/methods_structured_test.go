@@ -53,7 +53,7 @@ func TestMethodImmutability(t *testing.T) {
 			targetClone := IClone(test.target)
 			argsClone := IClone(test.args).([]interface{})
 
-			fn, err := InitMethod(test.method, NewLiteralFunction("", targetClone), argsClone...)
+			fn, err := InitMethodHelper(test.method, NewLiteralFunction("", targetClone), argsClone...)
 			require.NoError(t, err)
 
 			res, err := fn.Exec(FunctionContext{

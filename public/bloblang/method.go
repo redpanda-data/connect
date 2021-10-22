@@ -26,6 +26,16 @@ type Method func(v interface{}) (interface{}, error)
 // use an ArgSpec.
 type MethodConstructor func(args ...interface{}) (Method, error)
 
+// MethodConstructorV2 defines a constructor for a Bloblang method where
+// parameters are parsed using a ParamsSpec provided when registering the
+// method.
+//
+// When a method is parsed from a mapping with static arguments the constructor
+// will be called only once at parse time. When a method is parsed with dynamic
+// arguments, such as a value derived from the mapping input, the constructor
+// will be called on each invocation of the mapping with the derived arguments.
+type MethodConstructorV2 func(args *ParsedParams) (Method, error)
+
 //------------------------------------------------------------------------------
 
 // StringMethod creates a general method signature from a string method by

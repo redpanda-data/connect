@@ -1,6 +1,7 @@
 package query
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -9,15 +10,16 @@ import (
 // FunctionSet contains an explicit set of functions to be available in a
 // Bloblang query.
 type FunctionSet struct {
+	disableCtors bool
 	constructors map[string]FunctionCtor
-	specs        []FunctionSpec
+	specs        map[string]FunctionSpec
 }
 
 // NewFunctionSet creates a function set without any functions in it.
 func NewFunctionSet() *FunctionSet {
 	return &FunctionSet{
 		constructors: map[string]FunctionCtor{},
-		specs:        []FunctionSpec{},
+		specs:        map[string]FunctionSpec{},
 	}
 }
 
@@ -27,48 +29,53 @@ var nameRegexp = regexp.MustCompile(nameRegexpRaw)
 // Add a new function to this set by providing a spec (name and documentation),
 // a constructor to be called for each instantiation of the function, and
 // information regarding the arguments of the function.
-func (f *FunctionSet) Add(spec FunctionSpec, ctor FunctionCtor, autoResolveFunctionArgs bool, checks ...ArgCheckFn) error {
+func (f *FunctionSet) Add(spec FunctionSpec, ctor FunctionCtor) error {
 	if !nameRegexp.MatchString(spec.Name) {
 		return fmt.Errorf("function name '%v' does not match the required regular expression /%v/", spec.Name, nameRegexpRaw)
-	}
-	if len(checks) > 0 {
-		ctor = checkArgs(ctor, checks...)
-	}
-	if autoResolveFunctionArgs {
-		ctor = functionWithAutoResolvedFunctionArgs("function "+spec.Name, ctor)
 	}
 	if _, exists := f.constructors[spec.Name]; exists {
 		return fmt.Errorf("conflicting function name: %v", spec.Name)
 	}
+	if err := spec.Params.validate(); err != nil {
+		return err
+	}
 	f.constructors[spec.Name] = ctor
-	f.specs = append(f.specs, spec)
+	f.specs[spec.Name] = spec
 	return nil
 }
 
 // Docs returns a slice of function specs, which document each function.
 func (f *FunctionSet) Docs() []FunctionSpec {
-	return f.specs
+	specSlice := make([]FunctionSpec, 0, len(f.specs))
+	for _, v := range f.specs {
+		specSlice = append(specSlice, v)
+	}
+	sort.Slice(specSlice, func(i, j int) bool {
+		return specSlice[i].Name < specSlice[j].Name
+	})
+	return specSlice
 }
 
-// List returns a slice of function names in alphabetical order.
-func (f *FunctionSet) List() []string {
-	functionNames := make([]string, 0, len(f.constructors))
-	for k := range f.constructors {
-		functionNames = append(functionNames, k)
+// Params attempts to obtain an argument specification for a given function.
+func (f *FunctionSet) Params(name string) (Params, error) {
+	spec, exists := f.specs[name]
+	if !exists {
+		return VariadicParams(), badFunctionErr(name)
 	}
-	sort.Strings(functionNames)
-	return functionNames
+	return spec.Params, nil
 }
 
 // Init attempts to initialize a function of the set by name and zero or more
 // arguments.
-func (f *FunctionSet) Init(name string, args ...interface{}) (Function, error) {
+func (f *FunctionSet) Init(name string, args *ParsedParams) (Function, error) {
 	ctor, exists := f.constructors[name]
 	if !exists {
 		return nil, badFunctionErr(name)
 	}
-	expandLiteralArgs(args)
-	return ctor(args...)
+	if f.disableCtors {
+		return disabledFunction(name), nil
+	}
+	return wrapCtorWithDynamicArgs(name, args, ctor)
 }
 
 // Without creates a clone of the function set that can be mutated in isolation,
@@ -86,13 +93,13 @@ func (f *FunctionSet) Without(functions ...string) *FunctionSet {
 		}
 	}
 
-	specs := make([]FunctionSpec, 0, len(f.specs))
+	specs := map[string]FunctionSpec{}
 	for _, v := range f.specs {
 		if _, exists := excludeMap[v.Name]; !exists {
-			specs = append(specs, v)
+			specs[v.Name] = v
 		}
 	}
-	return &FunctionSet{constructors, specs}
+	return &FunctionSet{f.disableCtors, constructors, specs}
 }
 
 // OnlyPure creates a clone of the function set that can be mutated in
@@ -119,33 +126,55 @@ func (f *FunctionSet) NoMessage() *FunctionSet {
 	return f.Without(excludes...)
 }
 
+// Deactivated returns a version of the function set where constructors are
+// disabled, allowing mappings to be parsed and validated but not executed.
+//
+// The underlying register of functions is shared with the target set, and
+// therefore functions added to this set will also be added to the still
+// activated set. Use the Without method (with empty args if applicable) in
+// order to create a deep copy of the set that is independent of the source.
+func (f *FunctionSet) Deactivated() *FunctionSet {
+	newSet := *f
+	newSet.disableCtors = true
+	return &newSet
+}
+
 //------------------------------------------------------------------------------
 
 // AllFunctions is a set containing every single function declared by this
 // package, and any globally declared plugin methods.
 var AllFunctions = NewFunctionSet()
 
-// RegisterFunction to be accessible from Bloblang queries. Returns an empty
-// struct in order to allow inline calls.
-func RegisterFunction(spec FunctionSpec, autoResolveFunctionArgs bool, ctor FunctionCtor, checks ...ArgCheckFn) struct{} {
-	if err := AllFunctions.Add(spec, ctor, autoResolveFunctionArgs, checks...); err != nil {
+func registerFunction(spec FunctionSpec, ctor FunctionCtor) struct{} {
+	if err := AllFunctions.Add(spec, func(args *ParsedParams) (Function, error) {
+		return ctor(args)
+	}); err != nil {
 		panic(err)
 	}
 	return struct{}{}
 }
 
 func registerSimpleFunction(spec FunctionSpec, fn func(ctx FunctionContext) (interface{}, error)) struct{} {
-	if err := AllFunctions.Add(spec, func(...interface{}) (Function, error) {
+	if err := AllFunctions.Add(spec, func(*ParsedParams) (Function, error) {
 		return ClosureFunction("function "+spec.Name, fn, nil), nil
-	}, false); err != nil {
+	}); err != nil {
 		panic(err)
 	}
 	return struct{}{}
 }
 
-// InitFunction attempts to initialise a function by its name and arguments.
-func InitFunction(name string, args ...interface{}) (Function, error) {
-	return AllFunctions.Init(name, args...)
+// InitFunctionHelper attempts to initialise a function by its name and a list
+// of arguments, this is convenient for writing tests.
+func InitFunctionHelper(name string, args ...interface{}) (Function, error) {
+	spec, ok := AllFunctions.specs[name]
+	if !ok {
+		return nil, badFunctionErr(name)
+	}
+	parsedArgs, err := spec.Params.PopulateNameless(args...)
+	if err != nil {
+		return nil, err
+	}
+	return AllFunctions.Init(name, parsedArgs)
 }
 
 // FunctionDocs returns a slice of specs, one for each function.
@@ -153,7 +182,28 @@ func FunctionDocs() []FunctionSpec {
 	return AllFunctions.Docs()
 }
 
-// ListFunctions returns a slice of function names, sorted alphabetically.
-func ListFunctions() []string {
-	return AllFunctions.List()
+//------------------------------------------------------------------------------
+
+func disabledFunction(name string) Function {
+	return ClosureFunction("function "+name, func(ctx FunctionContext) (interface{}, error) {
+		return nil, errors.New("this function has been disabled")
+	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) { return ctx, nil })
+}
+
+func wrapCtorWithDynamicArgs(name string, args *ParsedParams, fn FunctionCtor) (Function, error) {
+	fns := args.dynamic()
+	if len(fns) == 0 {
+		return fn(args)
+	}
+	return ClosureFunction("function "+name, func(ctx FunctionContext) (interface{}, error) {
+		newArgs, err := args.ResolveDynamic(ctx)
+		if err != nil {
+			return nil, err
+		}
+		dynFunc, err := fn(newArgs)
+		if err != nil {
+			return nil, err
+		}
+		return dynFunc.Exec(ctx)
+	}, aggregateTargetPaths(fns...)), nil
 }

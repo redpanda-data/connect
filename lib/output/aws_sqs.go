@@ -36,7 +36,7 @@ resolved individually for each message of a batch.
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/aws).`,
+[in this document](/docs/guides/cloud/aws).`,
 		Async:   true,
 		Batches: true,
 		FieldSpecs: docs.FieldSpecs{
@@ -78,7 +78,7 @@ resolved individually for each message of a batch.
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/aws).`,
+[in this document](/docs/guides/cloud/aws).`,
 		Async:   true,
 		Batches: true,
 		FieldSpecs: docs.FieldSpecs{
@@ -109,7 +109,7 @@ func NewAmazonSQS(conf Config, mgr types.Manager, log log.Modular, stats metrics
 }
 
 func newAmazonSQS(name string, conf writer.AmazonSQSConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	s, err := writer.NewAmazonSQS(conf, log, stats)
+	s, err := writer.NewAmazonSQSV2(conf, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

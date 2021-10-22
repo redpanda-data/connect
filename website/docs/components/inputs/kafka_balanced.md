@@ -75,6 +75,7 @@ input:
     topics:
       - benthos_stream
     client_id: benthos_kafka_input
+    rack_id: ""
     consumer_group: benthos_consumer_group
     start_from_oldest: true
     commit_period: 1s
@@ -362,6 +363,14 @@ An identifier for the client connection.
 
 Type: `string`  
 Default: `"benthos_kafka_input"`  
+
+### `rack_id`
+
+A rack identifier for this client.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `consumer_group`
 

@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -163,7 +162,7 @@ func NewGroupBy(
 		}
 
 		if len(gConf.Check) > 0 {
-			if groups[i].Check, err = bloblang.NewMapping("", gConf.Check); err != nil {
+			if groups[i].Check, err = interop.NewBloblangMapping(mgr, gConf.Check); err != nil {
 				return nil, fmt.Errorf("failed to parse check for group '%v': %v", i, err)
 			}
 		}

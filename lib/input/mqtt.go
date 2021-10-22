@@ -36,6 +36,9 @@ You can access these metadata fields using
 			docs.FieldCommon("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").Array(),
 			docs.FieldCommon("topics", "A list of topics to consume from.").Array(),
 			docs.FieldCommon("client_id", "An identifier for the client connection."),
+			docs.FieldString("dynamic_client_id_suffix", "Append a dynamically generated suffix to the specified `client_id` on each run of the pipeline. This can be useful when clustering Benthos producers.").Optional().Advanced().HasAnnotatedOptions(
+				"nanoid", "append a nanoid of length 21 characters",
+			),
 			docs.FieldAdvanced("qos", "The level of delivery guarantee to enforce.").HasOptions("0", "1", "2"),
 			docs.FieldAdvanced("clean_session", "Set whether the connection is non-persistent."),
 			mqttconf.WillFieldSpec(),

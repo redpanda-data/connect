@@ -14,11 +14,18 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
+
+// CORS contains configuration for allowing CORS headers.
+type CORS struct {
+	Enabled        bool     `json:"enabled" yaml:"enabled"`
+	AllowedOrigins []string `json:"allowed_origins" yaml:"allowed_origins"`
+}
 
 // Config contains the configuration fields for the Benthos API.
 type Config struct {
@@ -29,6 +36,7 @@ type Config struct {
 	DebugEndpoints bool   `json:"debug_endpoints" yaml:"debug_endpoints"`
 	CertFile       string `json:"cert_file" yaml:"cert_file"`
 	KeyFile        string `json:"key_file" yaml:"key_file"`
+	CORS           CORS   `json:"cors" yaml:"cors"`
 }
 
 // NewConfig creates a new API config with default values.
@@ -41,6 +49,10 @@ func NewConfig() Config {
 		DebugEndpoints: false,
 		CertFile:       "",
 		KeyFile:        "",
+		CORS: CORS{
+			Enabled:        false,
+			AllowedOrigins: []string{},
+		},
 	}
 }
 
@@ -92,7 +104,18 @@ func New(
 	stats metrics.Type,
 	opts ...OptFunc,
 ) (*Type, error) {
-	handler := mux.NewRouter()
+	gMux := mux.NewRouter()
+
+	var handler http.Handler = gMux
+	if conf.CORS.Enabled {
+		if len(conf.CORS.AllowedOrigins) == 0 {
+			return nil, errors.New("must specify at least one allowed origin")
+		}
+		handler = handlers.CORS(
+			handlers.AllowedOrigins(conf.CORS.AllowedOrigins),
+			handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"}),
+		)(gMux)
+	}
 
 	server := &http.Server{
 		Addr:    conf.Address,
@@ -115,7 +138,7 @@ func New(
 		conf:      conf,
 		endpoints: map[string]string{},
 		handlers:  map[string]http.HandlerFunc{},
-		mux:       handler,
+		mux:       gMux,
 		server:    server,
 		log:       log,
 	}
@@ -244,7 +267,7 @@ func New(
 
 // RegisterEndpoint registers a http.HandlerFunc under a path with a
 // description that will be displayed under the /endpoints path.
-func (t *Type) RegisterEndpoint(path, desc string, handler http.HandlerFunc) {
+func (t *Type) RegisterEndpoint(path, desc string, handlerFunc http.HandlerFunc) {
 	t.endpointsMut.Lock()
 	defer t.endpointsMut.Unlock()
 
@@ -263,7 +286,7 @@ func (t *Type) RegisterEndpoint(path, desc string, handler http.HandlerFunc) {
 		t.mux.HandleFunc(path, wrapHandler)
 		t.mux.HandleFunc(t.conf.RootPath+path, wrapHandler)
 	}
-	t.handlers[path] = handler
+	t.handlers[path] = handlerFunc
 }
 
 // ListenAndServe launches the API and blocks until the server closes or fails.

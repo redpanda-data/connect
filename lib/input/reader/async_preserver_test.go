@@ -296,6 +296,187 @@ func TestAsyncPreserverCloseThenAck(t *testing.T) {
 	wg.Wait()
 }
 
+func TestAsyncPreserverCloseThenNackThenAck(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+	defer cancel()
+
+	readerImpl := newMockAsyncReader()
+	readerImpl.msgsToSnd = []types.Message{
+		message.New([][]byte{[]byte("hello world")}),
+	}
+	pres := NewAsyncPreserver(readerImpl)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		select {
+		case readerImpl.connChan <- nil:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+
+		select {
+		case readerImpl.readChan <- nil:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+
+		select {
+		case readerImpl.readChan <- types.ErrTypeClosed:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+
+		select {
+		case readerImpl.readChan <- types.ErrTypeClosed:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+
+		select {
+		case readerImpl.ackChan <- nil:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+
+		select {
+		case readerImpl.closeAsyncChan <- struct{}{}:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+
+		select {
+		case readerImpl.waitForCloseChan <- nil:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+	}()
+
+	err := pres.ConnectWithContext(ctx)
+	assert.NoError(t, err)
+
+	_, ackFn1, err := pres.ReadWithContext(ctx)
+	assert.NoError(t, err)
+
+	go func() {
+		time.Sleep(time.Millisecond * 100)
+		assert.NoError(t, ackFn1(ctx, response.NewError(errors.New("huh"))))
+	}()
+
+	_, _, err = pres.ReadWithContext(ctx)
+	assert.Equal(t, types.ErrTimeout, err)
+
+	_, ackFn2, err := pres.ReadWithContext(ctx)
+	require.NoError(t, err)
+
+	go func() {
+		time.Sleep(time.Millisecond * 100)
+		assert.NoError(t, ackFn2(ctx, response.NewAck()))
+	}()
+
+	_, _, err = pres.ReadWithContext(ctx)
+	assert.Equal(t, types.ErrTypeClosed, err)
+
+	pres.CloseAsync()
+	err = pres.WaitForClose(time.Second)
+	assert.NoError(t, err)
+
+	wg.Wait()
+}
+
+func TestAsyncPreserverCloseViaConnectThenAck(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+	defer cancel()
+
+	readerImpl := newMockAsyncReader()
+	readerImpl.msgsToSnd = []types.Message{
+		message.New([][]byte{[]byte("hello world")}),
+	}
+	pres := NewAsyncPreserver(readerImpl)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		select {
+		case readerImpl.connChan <- nil:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+
+		select {
+		case readerImpl.readChan <- nil:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+
+		select {
+		case readerImpl.readChan <- types.ErrNotConnected:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+
+		select {
+		case readerImpl.connChan <- types.ErrTypeClosed:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+
+		select {
+		case readerImpl.ackChan <- nil:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+
+		select {
+		case readerImpl.closeAsyncChan <- struct{}{}:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+
+		select {
+		case readerImpl.waitForCloseChan <- nil:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+	}()
+
+	err := pres.ConnectWithContext(ctx)
+	assert.NoError(t, err)
+
+	_, ackFn1, err := pres.ReadWithContext(ctx)
+	assert.NoError(t, err)
+
+	_, _, err = pres.ReadWithContext(ctx)
+	assert.Equal(t, types.ErrNotConnected, err)
+
+	err = pres.ConnectWithContext(ctx)
+	assert.NoError(t, err)
+
+	go func() {
+		time.Sleep(time.Millisecond * 100)
+		assert.NoError(t, ackFn1(ctx, response.NewAck()))
+	}()
+
+	_, _, err = pres.ReadWithContext(ctx)
+	assert.Equal(t, types.ErrTypeClosed, err)
+
+	pres.CloseAsync()
+	err = pres.WaitForClose(time.Second)
+	assert.NoError(t, err)
+
+	wg.Wait()
+}
+
 func TestAsyncPreserverHappy(t *testing.T) {
 	t.Parallel()
 

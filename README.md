@@ -48,7 +48,7 @@ If you want to dive fully into Benthos then don't waste your time in this dump, 
 
 For guidance on how to configure more advanced stream processing concepts such as stream joins, enrichment workflows, etc, check out the [cookbooks section.][cookbooks]
 
-For guidance on building your own custom plugins check out [this example repo.][plugin-repo]
+For guidance on building your own custom plugins in Go check out [the public APIs.][godoc-url]
 
 ## Install
 
@@ -102,7 +102,7 @@ Benthos serves two HTTP endpoints for health checks:
 
 ### Metrics
 
-Benthos [exposes lots of metrics][metrics] either to Statsd, Prometheus or for debugging purposes an HTTP endpoint that returns a JSON formatted object. The target can be specified [via config][metrics-config].
+Benthos [exposes lots of metrics][metrics] either to Statsd, Prometheus or for debugging purposes an HTTP endpoint that returns a JSON formatted object.
 
 ### Tracing
 
@@ -134,7 +134,7 @@ And then run it with `make lint`.
 
 ### Plugins
 
-It's pretty easy to write your own custom plugins for Benthos, take a look at [this repo][plugin-repo] for examples and build instructions.
+It's pretty easy to write your own custom plugins for Benthos in Go, for information check out [the API docs][godoc-url], and for inspiration there's an [example repo][plugin-repo] demonstrating a variety of plugin implementations.
 
 ### Docker Builds
 
@@ -177,7 +177,6 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come a
 [outputs]: https://www.benthos.dev/docs/components/outputs/about
 [metrics]: https://www.benthos.dev/docs/components/metrics/about
 [tracers]: https://www.benthos.dev/docs/components/tracers/about
-[metrics-config]: config/metrics
 [config-interp]: https://www.benthos.dev/docs/configuration/interpolation
 [streams-api]: https://www.benthos.dev/docs/guides/streams_mode/streams_api
 [streams-mode]: https://www.benthos.dev/docs/guides/streams_mode/about

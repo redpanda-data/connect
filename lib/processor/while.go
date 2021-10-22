@@ -6,7 +6,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -121,7 +120,7 @@ func NewWhile(
 		}
 	}
 	if len(conf.While.Check) > 0 {
-		if check, err = bloblang.NewMapping("", conf.While.Check); err != nil {
+		if check, err = interop.NewBloblangMapping(mgr, conf.While.Check); err != nil {
 			return nil, fmt.Errorf("failed to parse check query: %w", err)
 		}
 	}

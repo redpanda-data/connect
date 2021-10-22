@@ -164,6 +164,48 @@ file:
 	assert.Equal(t, "HELLO WORLD 1\nHELLO WORLD 2\n\nHELLO WORLD 3\nHELLO WORLD 4\n\nHELLO WORLD 5\nHELLO WORLD 6\n\n", string(outBytes))
 }
 
+func TestStreamBuilderEnvVarInterpolation(t *testing.T) {
+	os.Setenv("BENTHOS_TEST_ONE", "foo")
+	os.Setenv("BENTHOS_TEST_TWO", "bar")
+
+	b := service.NewStreamBuilder()
+	require.NoError(t, b.AddInputYAML(`
+kafka:
+  topics: [ ${BENTHOS_TEST_ONE} ]
+`))
+
+	require.NoError(t, b.SetLoggerYAML(`level: ${BENTHOS_TEST_TWO}`))
+
+	act, err := b.AsYAML()
+	require.NoError(t, err)
+
+	exp := []string{
+		` topics:
+            - foo`,
+		`level: bar`,
+	}
+
+	for _, str := range exp {
+		assert.Contains(t, act, str)
+	}
+
+	b = service.NewStreamBuilder()
+	require.NoError(t, b.SetYAML(`
+input:
+  kafka:
+    topics: [ ${BENTHOS_TEST_ONE} ]
+logger:
+  level: ${BENTHOS_TEST_TWO}
+`))
+
+	act, err = b.AsYAML()
+	require.NoError(t, err)
+
+	for _, str := range exp {
+		assert.Contains(t, act, str)
+	}
+}
+
 func TestStreamBuilderConsumerFunc(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "stream_builder_consumer_test")
 	require.NoError(t, err)

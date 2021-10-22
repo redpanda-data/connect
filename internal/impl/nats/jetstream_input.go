@@ -10,6 +10,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
@@ -45,7 +46,9 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
+[function interpolation](/docs/configuration/interpolation#metadata).
+
+` + auth.Description(),
 		Categories: []string{
 			string(input.CategoryServices),
 		},
@@ -70,6 +73,7 @@ You can access these metadata fields using
 			),
 			docs.FieldAdvanced("max_ack_pending", "The maximum number of outstanding acks to be allowed before consuming is halted."),
 			btls.FieldSpec(),
+			auth.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(input.NewNATSJetStreamConfig()),
 	})
 }
@@ -146,6 +150,7 @@ func (j *jetStreamReader) ConnectWithContext(ctx context.Context) error {
 	if j.tlsConf != nil {
 		opts = append(opts, nats.Secure(j.tlsConf))
 	}
+	opts = append(opts, auth.GetOptions(j.conf.Auth)...)
 	if natsConn, err = nats.Connect(j.urls, opts...); err != nil {
 		return err
 	}

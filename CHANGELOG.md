@@ -7,6 +7,57 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- `amqp_0_9` components now support TLS EXTERNAL auth.
+- New experimental `schema_registry_encode` processor.
+
+### Fixed
+
+- Removed a performance bottleneck when consuming a large quantity of small files with the `file` input.
+
+## 3.57.0 - 2021-10-14
+
+### Added
+
+- Go API: New config field types `StringMap`, `IntList`, and `IntMap`.
+- The `http_client` input, output and processor now include the response body in request error logs for more context.
+- Field `dynamic_client_id_suffix` added to the `mqtt` input and output.
+
+### Fixed
+
+- Corrected an issue where the `sftp` input could consume duplicate documents before shutting down when ran in batch mode.
+
+## 3.56.0 - 2021-09-22
+
+### Added
+
+- Fields `cache_control`, `content_disposition`, `content_language` and `website_redirect_location` added to the `aws_s3` output.
+- Field `cors.enabled` and `cors.allowed_origins` added to the server wide `http` config.
+- For Kafka components the config now supports the `rack_id` field which may contain a rack identifier for the Kafka client.
+- Allow mapping imports in Bloblang environments to be disabled.
+- Go API: Isolated Bloblang environments are now honored by all components.
+- Go API: The stream builder now evaluates environment variable interpolations.
+- Field `unsafe_dynamic_query` added to the `sql` processor.
+- The `kafka` output now supports `zstd` compression.
+
+### Fixed
+
+- The `test` subcommand now expands resource glob patterns (`benthos -r "./foo/*.yaml" test ./...`).
+- The Bloblang equality operator now returns `false` when comparing non-null values with `null` rather than a mismatched types error.
+
+## 3.55.0 - 2021-09-08
+
+### Added
+
+- New experimental `gcp_bigquery` output.
+- Go API: It's now possible to parse a config spec directly with `ParseYAML`.
+- Bloblang methods and functions now support named parameters.
+- Field `args_mapping` added to the `cassandra` output.
+- For NATS, NATS Streaming and Jetstream components the config now supports specifying either `nkey_file` or `user_credentials_file` to configure authentication.
+
+## 3.54.0 - 2021-09-01
+
+### Added
+
 - The `mqtt` input and output now support sending a last will, configuring a keep alive timeout, and setting retained out output messages.
 - Go API: New stream builder `AddBatchProducerFunc` and `AddBatchConsumerFunc` methods.
 - Field `gzip_compression` added to the `elasticsearch` output.

@@ -35,7 +35,7 @@ output:
   cassandra:
     addresses: []
     query: ""
-    args: []
+    args_mapping: ""
     max_in_flight: 1
     batching:
       count: 0
@@ -66,7 +66,7 @@ output:
       password: ""
     disable_initial_host_lookup: false
     query: ""
-    args: []
+    args_mapping: ""
     consistency: QUORUM
     max_retries: 3
     backoff:
@@ -84,7 +84,7 @@ output:
 </TabItem>
 </Tabs>
 
-Query arguments are set using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the `args` field.
+Query arguments can be set using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the `args` field or by creating a bloblang array for the fields using the `args_mapping` field.
 
 When populating timestamp columns the value must either be a string in ISO 8601 format (2006-01-02T15:04:05Z07:00), or an integer representing unix time in seconds.
 
@@ -115,10 +115,12 @@ output:
     addresses:
       - localhost:9042
     query: 'INSERT INTO foo.bar (id, content, created_at) VALUES (?, ?, ?)'
-    args:
-      - ${! json("id") }
-      - ${! json("content") }
-      - ${! json("timestamp").format_timestamp() }
+    args_mapping: |
+      root = [
+        this.id,
+        this.content,
+        this.timestamp
+      ]
     batching:
       count: 500
 ```
@@ -134,8 +136,7 @@ output:
     addresses:
       - localhost:9042
     query: 'INSERT INTO foospace.footable JSON ?'
-    args:
-      - ${! content() }
+    args_mapping: 'root = [ this ]'
     batching:
       count: 500
 ```
@@ -329,14 +330,14 @@ A query to execute for each message.
 Type: `string`  
 Default: `""`  
 
-### `args`
+### `args_mapping`
 
-A list of arguments for the query to be resolved for each message.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+A [Bloblang mapping](/docs/guides/bloblang/about) that can be used to provide arguments to Cassandra queries. The result of the query must be an array containing a matching number of elements to the query arguments.
 
 
-Type: `array`  
-Default: `[]`  
+Type: `string`  
+Default: `""`  
+Requires version 3.55.0 or newer  
 
 ### `consistency`
 

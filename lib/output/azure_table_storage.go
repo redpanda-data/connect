@@ -143,7 +143,7 @@ properties:
 
 // NewAzureTableStorage creates a new NewAzureTableStorage output type.
 func NewAzureTableStorage(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	tableStorage, err := writer.NewAzureTableStorage(conf.AzureTableStorage, log, stats)
+	tableStorage, err := writer.NewAzureTableStorageV2(conf.AzureTableStorage, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +157,7 @@ func NewAzureTableStorage(conf Config, mgr types.Manager, log log.Modular, stats
 }
 
 func newDeprecatedTableStorage(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	tableStorage, err := writer.NewAzureTableStorage(conf.TableStorage, log, stats)
+	tableStorage, err := writer.NewAzureTableStorageV2(conf.TableStorage, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

@@ -20,8 +20,16 @@ Runs an SQL prepared query against a target database for each message and, for
 queries that return rows, replaces it with the result according to a
 [codec](#result-codecs).
 
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yaml
-# Config fields, showing default values
+# Common config fields, showing default values
 label: ""
 sql:
   driver: mysql
@@ -30,6 +38,24 @@ sql:
   args_mapping: ""
   result_codec: none
 ```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+# All config fields, showing default values
+label: ""
+sql:
+  driver: mysql
+  data_source_name: ""
+  query: ""
+  unsafe_dynamic_query: false
+  args_mapping: ""
+  result_codec: none
+```
+
+</TabItem>
+</Tabs>
 
 If a query contains arguments they can be set as an array of strings supporting
 [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in
@@ -141,6 +167,14 @@ Default: `""`
 
 query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);
 ```
+
+### `unsafe_dynamic_query`
+
+Whether to enable dynamic queries that support interpolation functions. WARNING: This feature opens up the possibility of SQL injection attacks and is considered unsafe.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `args_mapping`
 

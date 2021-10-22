@@ -66,7 +66,7 @@ func TestDropOnNothing(t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	assert.EqualError(t, res.Error(), fmt.Sprintf("%s: HTTP request returned unexpected response code (403): 403 Forbidden", ts.URL))
+	assert.EqualError(t, res.Error(), fmt.Sprintf("%s: HTTP request returned unexpected response code (403): 403 Forbidden, Error: test error", ts.URL))
 }
 
 func TestDropOnError(t *testing.T) {

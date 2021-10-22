@@ -24,6 +24,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/stream"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
 	"gopkg.in/yaml.v3"
@@ -31,7 +32,8 @@ import (
 
 // StreamBuilder provides methods for building a Benthos stream configuration.
 // When parsing Benthos configs this builder follows the schema and field
-// defaults of a standard Benthos configuration.
+// defaults of a standard Benthos configuration. Environment variable
+// interpolations are also parsed and resolved the same as regular configs.
 //
 // Benthos streams register HTTP endpoints by default that expose metrics and
 // ready checks. If your intention is to execute multiple streams in the same
@@ -75,7 +77,7 @@ func NewStreamBuilder() *StreamBuilder {
 func (s *StreamBuilder) getLintContext() docs.LintContext {
 	ctx := docs.NewLintContext()
 	ctx.DocsProvider = s.env.internal
-	ctx.BloblangContext = s.env.getBloblangParserContext()
+	ctx.BloblangEnv = s.env.getBloblangParserEnv().Deactivated()
 	return ctx
 }
 
@@ -708,7 +710,11 @@ func (s *StreamBuilder) Build() (*Stream, error) {
 		)
 	}
 
-	mgr, err := manager.NewV2(conf.ResourceConfig, apiMut, logger, stats, manager.OptSetEnvironment(s.env.internal))
+	mgr, err := manager.NewV2(
+		conf.ResourceConfig, apiMut, logger, stats,
+		manager.OptSetEnvironment(s.env.internal),
+		manager.OptSetBloblangEnvironment(s.env.getBloblangParserEnv()),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -771,6 +777,7 @@ func (s *StreamBuilder) buildConfig() builderConfig {
 //------------------------------------------------------------------------------
 
 func getYAMLNode(b []byte) (*yaml.Node, error) {
+	b = text.ReplaceEnvVariables(b)
 	var nconf yaml.Node
 	if err := yaml.Unmarshal(b, &nconf); err != nil {
 		return nil, err

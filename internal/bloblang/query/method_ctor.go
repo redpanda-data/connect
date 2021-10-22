@@ -6,100 +6,31 @@ import (
 )
 
 // MethodCtor constructs a new method from a target function and input args.
-type MethodCtor func(target Function, args ...interface{}) (Function, error)
+type MethodCtor func(target Function, args *ParsedParams) (Function, error)
 
-func methodWithDynamicArgs(annotation string, args []interface{}, target Function, ctor MethodCtor) Function {
-	fns := []Function{target}
-	for _, dArg := range args {
-		if fArg, isDyn := dArg.(Function); isDyn {
-			fns = append(fns, fArg)
-		}
-	}
-	return ClosureFunction(annotation, func(ctx FunctionContext) (interface{}, error) {
-		dynArgs := make([]interface{}, 0, len(args))
-		for i, dArg := range args {
-			if fArg, isDyn := dArg.(Function); isDyn {
-				res, err := fArg.Exec(ctx)
-				if err != nil {
-					return nil, fmt.Errorf("failed to extract input arg %v: %w", i, err)
-				}
-				dynArgs = append(dynArgs, res)
-			} else {
-				dynArgs = append(dynArgs, dArg)
-			}
-		}
-		dynFunc, err := ctor(target, dynArgs...)
+type simpleMethodConstructor func(args *ParsedParams) (simpleMethod, error)
+
+func registerSimpleMethod(spec MethodSpec, ctor simpleMethodConstructor) struct{} {
+	return registerMethod(spec, func(target Function, args *ParsedParams) (Function, error) {
+		fn, err := ctor(args)
 		if err != nil {
 			return nil, err
 		}
-		return dynFunc.Exec(ctx)
-	}, aggregateTargetPaths(fns...))
-}
-
-func methodWithAutoResolvedFunctionArgs(annotation string, fn MethodCtor) MethodCtor {
-	return func(target Function, args ...interface{}) (Function, error) {
-		for i, arg := range args {
-			switch t := arg.(type) {
-			case *Literal:
-				args[i] = t.Value
-			case Function:
-				return methodWithDynamicArgs(annotation, args, target, fn), nil
-			}
-		}
-		return fn(target, args...)
-	}
-}
-
-func checkMethodArgs(fn MethodCtor, checks ...ArgCheckFn) MethodCtor {
-	return func(target Function, args ...interface{}) (Function, error) {
-		for _, check := range checks {
-			if err := check(args); err != nil {
-				return nil, err
-			}
-		}
-		return fn(target, args...)
-	}
-}
-
-//------------------------------------------------------------------------------
-
-func registerMethod(spec MethodSpec, autoResolveFunctionArgs bool, ctor MethodCtor, checks ...ArgCheckFn) struct{} {
-	if err := AllMethods.Add(spec, ctor, autoResolveFunctionArgs, checks...); err != nil {
-		panic(err)
-	}
-	return struct{}{}
-}
-
-type simpleMethod func(v interface{}, ctx FunctionContext) (interface{}, error)
-
-type simpleMethodConstructor func(args ...interface{}) (simpleMethod, error)
-
-func registerSimpleMethod(spec MethodSpec, ctor simpleMethodConstructor, autoResolveFunctionArgs bool, checks ...ArgCheckFn) struct{} {
-	if err := AllMethods.Add(spec,
-		func(target Function, args ...interface{}) (Function, error) {
-			fn, err := ctor(args...)
+		return ClosureFunction("method "+spec.Name, func(ctx FunctionContext) (interface{}, error) {
+			v, err := target.Exec(ctx)
 			if err != nil {
 				return nil, err
 			}
-			return ClosureFunction("method "+spec.Name, func(ctx FunctionContext) (interface{}, error) {
-				v, err := target.Exec(ctx)
-				if err != nil {
-					return nil, err
-				}
-				res, err := fn(v, ctx)
-				if err != nil {
-					return nil, ErrFrom(err, target)
-				}
-				return res, nil
-			}, target.QueryTargets), nil
-		},
-		autoResolveFunctionArgs,
-		checks...,
-	); err != nil {
-		panic(err)
-	}
-	return struct{}{}
+			res, err := fn(v, ctx)
+			if err != nil {
+				return nil, ErrFrom(err, target)
+			}
+			return res, nil
+		}, target.QueryTargets), nil
+	})
 }
+
+type simpleMethod func(v interface{}, ctx FunctionContext) (interface{}, error)
 
 func stringMethod(fn func(v string) (interface{}, error)) simpleMethod {
 	return func(v interface{}, ctx FunctionContext) (interface{}, error) {

@@ -102,7 +102,7 @@ const bloblangEditorPage = `<!DOCTYPE html>
   </body>
   <script>
     function execute() {
-        const request = new Request(window.location.href + 'execute', {
+        const request = new Request('execute', {
             method: 'POST',
             body: JSON.stringify({
                 mapping: getMapping(),
@@ -361,7 +361,7 @@ func runServer(c *cli.Context) error {
 			w.Write(resBytes)
 		}()
 
-		exec, err := bloblang.NewMapping("", req.Mapping)
+		exec, err := bloblang.GlobalEnvironment().NewMapping(req.Mapping)
 		if err != nil {
 			if perr, ok := err.(*parser.Error); ok {
 				res.ParseError = fmt.Sprintf("failed to parse mapping: %v\n", perr.ErrorAtPositionStructured("", []rune(req.Mapping)))

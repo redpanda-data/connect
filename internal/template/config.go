@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/fatih/color"
 	"github.com/nsf/jsondiff"
 	"gopkg.in/yaml.v3"
@@ -105,7 +106,7 @@ func (c Config) compile() (*compiled, error) {
 	if err != nil {
 		return nil, err
 	}
-	mapping, err := bloblang.NewMapping("", c.Mapping)
+	mapping, err := bloblang.GlobalEnvironment().NewMapping(c.Mapping)
 	if err != nil {
 		var perr *parser.Error
 		if errors.As(err, &perr) {
@@ -115,7 +116,7 @@ func (c Config) compile() (*compiled, error) {
 	}
 	var metricsMapping *metrics.Mapping
 	if c.MetricsMapping != "" {
-		if metricsMapping, err = metrics.NewMapping(c.MetricsMapping, log.Noop()); err != nil {
+		if metricsMapping, err = metrics.NewMapping(types.NoopMgr(), c.MetricsMapping, log.Noop()); err != nil {
 			return nil, fmt.Errorf("parse metrics mapping: %w", err)
 		}
 	}

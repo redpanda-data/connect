@@ -66,7 +66,7 @@ false for connections to succeed.`,
 
 // NewElasticsearch creates a new Elasticsearch output type.
 func NewElasticsearch(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	elasticWriter, err := writer.NewElasticsearch(conf.Elasticsearch, log, stats)
+	elasticWriter, err := writer.NewElasticsearchV2(conf.Elasticsearch, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

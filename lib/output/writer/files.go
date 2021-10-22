@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -43,12 +43,24 @@ type Files struct {
 }
 
 // NewFiles creates a new file based writer.Type.
+//
+// Deprecated: use the V2 API instead.
 func NewFiles(
 	conf FilesConfig,
 	log log.Modular,
 	stats metrics.Type,
 ) (*Files, error) {
-	path, err := bloblang.NewField(conf.Path)
+	return NewFilesV2(conf, types.NoopMgr(), log, stats)
+}
+
+// NewFilesV2 creates a new file based writer.Type.
+func NewFilesV2(
+	conf FilesConfig,
+	mgr types.Manager,
+	log log.Modular,
+	stats metrics.Type,
+) (*Files, error) {
+	path, err := interop.NewBloblangField(mgr, conf.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}

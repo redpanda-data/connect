@@ -7,10 +7,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -24,7 +24,7 @@ import (
 func init() {
 	Constructors[TypeGenerate] = TypeSpec{
 		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-			b, err := newBloblang(conf.Generate)
+			b, err := newBloblang(mgr, conf.Generate)
 			if err != nil {
 				return nil, err
 			}
@@ -97,7 +97,7 @@ input:
 
 	Constructors[TypeBloblang] = TypeSpec{
 		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-			b, err := newBloblang(conf.Bloblang)
+			b, err := newBloblang(mgr, conf.Bloblang)
 			if err != nil {
 				return nil, err
 			}
@@ -166,7 +166,7 @@ type Bloblang struct {
 }
 
 // newBloblang creates a new bloblang input reader type.
-func newBloblang(conf BloblangConfig) (*Bloblang, error) {
+func newBloblang(mgr types.Manager, conf BloblangConfig) (*Bloblang, error) {
 	var (
 		duration    time.Duration
 		timer       *time.Ticker
@@ -188,7 +188,7 @@ func newBloblang(conf BloblangConfig) (*Bloblang, error) {
 		}
 		timer = time.NewTicker(duration)
 	}
-	exec, err := bloblang.NewMapping("", conf.Mapping)
+	exec, err := interop.NewBloblangMapping(mgr, conf.Mapping)
 	if err != nil {
 		if perr, ok := err.(*parser.Error); ok {
 			return nil, fmt.Errorf("failed to parse mapping: %v", perr.ErrorAtPosition([]rune(conf.Mapping)))

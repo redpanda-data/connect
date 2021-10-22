@@ -8,9 +8,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -26,6 +27,7 @@ type NATSConfig struct {
 	Subject     string      `json:"subject" yaml:"subject"`
 	MaxInFlight int         `json:"max_in_flight" yaml:"max_in_flight"`
 	TLS         btls.Config `json:"tls" yaml:"tls"`
+	Auth        auth.Config `json:"auth" yaml:"auth"`
 }
 
 // NewNATSConfig creates a new NATSConfig with default values.
@@ -35,6 +37,7 @@ func NewNATSConfig() NATSConfig {
 		Subject:     "benthos_messages",
 		MaxInFlight: 1,
 		TLS:         btls.NewConfig(),
+		Auth:        auth.New(),
 	}
 }
 
@@ -54,13 +57,20 @@ type NATS struct {
 }
 
 // NewNATS creates a new NATS output type.
+//
+// Deprecated: use the V2 API instead.
 func NewNATS(conf NATSConfig, log log.Modular, stats metrics.Type) (*NATS, error) {
+	return NewNATSV2(conf, types.NoopMgr(), log, stats)
+}
+
+// NewNATSV2 creates a new NATS output type.
+func NewNATSV2(conf NATSConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*NATS, error) {
 	n := NATS{
 		log:  log,
 		conf: conf,
 	}
 	var err error
-	if n.subjectStr, err = bloblang.NewField(conf.Subject); err != nil {
+	if n.subjectStr, err = interop.NewBloblangField(mgr, conf.Subject); err != nil {
 		return nil, fmt.Errorf("failed to parse subject expression: %v", err)
 	}
 	n.urls = strings.Join(conf.URLs, ",")
@@ -96,6 +106,8 @@ func (n *NATS) Connect() error {
 	if n.tlsConf != nil {
 		opts = append(opts, nats.Secure(n.tlsConf))
 	}
+
+	opts = append(opts, auth.GetOptions(n.conf.Auth)...)
 
 	if n.natsConn, err = nats.Connect(n.urls, opts...); err != nil {
 		return err

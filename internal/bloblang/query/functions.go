@@ -16,8 +16,6 @@ import (
 	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
-//------------------------------------------------------------------------------
-
 type fieldFunction struct {
 	namedContext string
 	path         []string
@@ -142,6 +140,11 @@ func (l *Literal) Close(ctx context.Context) error {
 	return nil
 }
 
+// String returns a string representation of the literal function.
+func (l *Literal) String() string {
+	return fmt.Sprintf("%v", l.Value)
+}
+
 // NewLiteralFunction creates a query function that returns a static, literal
 // value.
 func NewLiteralFunction(annotation string, v interface{}) *Literal {
@@ -197,7 +200,7 @@ var _ = registerSimpleFunction(
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
+var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryGeneral, "count",
 		"The `count` function is a counter starting at 1 which increments after each time it is called. Count takes an argument which is an identifier for the counter, allowing you to specify multiple unique counters in your configuration.",
@@ -209,16 +212,16 @@ root.id = count("bloblang_function_example")`,
 			`{"message":"bar"}`,
 			`{"id":2,"message":"bar"}`,
 		),
-	),
-	true, countFunction,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+	).Param(ParamString("name", "An identifier for the counter.")),
+	countFunction,
 )
 
-func countFunction(args ...interface{}) (Function, error) {
+func countFunction(args *ParsedParams) (Function, error) {
+	name, err := args.FieldString("name")
+	if err != nil {
+		return nil, err
+	}
 	return ClosureFunction("function count", func(ctx FunctionContext) (interface{}, error) {
-		name := args[0].(string)
-
 		countersMux.Lock()
 		defer countersMux.Unlock()
 
@@ -238,7 +241,7 @@ func countFunction(args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
+var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryGeneral, "deleted",
 		"A function that returns a result indicating that the mapping target should be deleted.",
@@ -255,28 +258,32 @@ root.bar = deleted()`,
 			`{"new_nums":[1,7]}`,
 		),
 	),
-	false, func(...interface{}) (Function, error) {
+	func(*ParsedParams) (Function, error) {
 		return NewLiteralFunction("delete", Delete(nil)), nil
 	},
 )
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
+var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryEnvironment, "env",
 		"Returns the value of an environment variable, or an empty string if the environment variable does not exist.",
 		NewExampleSpec("",
 			`root.thing.key = env("key")`,
 		),
-	).MarkImpure(),
-	true, envFunction,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+	).
+		MarkImpure().
+		Param(ParamString("name", "The name of an environment variable.")),
+	envFunction,
 )
 
-func envFunction(args ...interface{}) (Function, error) {
-	key := os.Getenv(args[0].(string))
+func envFunction(args *ParsedParams) (Function, error) {
+	name, err := args.FieldString("name")
+	if err != nil {
+		return nil, err
+	}
+	key := os.Getenv(name)
 	return NewLiteralFunction("env "+key, key), nil
 }
 
@@ -310,7 +317,7 @@ var _ = registerSimpleFunction(
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
+var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryEnvironment, "file",
 		"Reads a file and returns its contents. Relative paths are resolved from the directory of the process executing the mapping.",
@@ -319,15 +326,17 @@ var _ = RegisterFunction(
 			`{}`,
 			`{"doc":{"foo":"bar"}}`,
 		),
-	).Beta().MarkImpure(),
-	true, fileFunction,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+	).Beta().MarkImpure().
+		Param(ParamString("path", "The path of the target file.")),
+	fileFunction,
 )
 
-func fileFunction(args ...interface{}) (Function, error) {
-	path := args[0].(string)
-	pathBytes, err := ioutil.ReadFile(args[0].(string))
+func fileFunction(args *ParsedParams) (Function, error) {
+	path, err := args.FieldString("path")
+	if err != nil {
+		return nil, err
+	}
+	pathBytes, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -336,29 +345,36 @@ func fileFunction(args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
+var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryGeneral, "range",
 		"The `range` function creates an array of integers following a range between a start, stop and optional step integer argument. If the step argument is omitted then it defaults to 1. A negative step can be provided as long as stop < start.",
 		NewExampleSpec("",
 			`root.a = range(0, 10)
-root.b = range(0, this.max, 2)
+root.b = range(start: 0, stop: this.max, step: 2) # Using named params
 root.c = range(0, -this.max, -2)`,
 			`{"max":10}`,
 			`{"a":[0,1,2,3,4,5,6,7,8,9],"b":[0,2,4,6,8],"c":[0,-2,-4,-6,-8]}`,
 		),
-	),
-	true, rangeFunction,
-	ExpectBetweenNAndMArgs(2, 3),
-	ExpectIntArg(0),
-	ExpectIntArg(1),
-	ExpectIntArg(2),
+	).
+		Param(ParamInt64("start", "The start value.")).
+		Param(ParamInt64("stop", "The stop value.")).
+		Param(ParamInt64("step", "The step value.").Default(1)),
+	rangeFunction,
 )
 
-func rangeFunction(args ...interface{}) (Function, error) {
-	start, stop, step := args[0].(int64), args[1].(int64), int64(1)
-	if len(args) > 2 {
-		step = args[2].(int64)
+func rangeFunction(args *ParsedParams) (Function, error) {
+	start, err := args.FieldInt64("start")
+	if err != nil {
+		return nil, err
+	}
+	stop, err := args.FieldInt64("stop")
+	if err != nil {
+		return nil, err
+	}
+	step, err := args.FieldInt64("step")
+	if err != nil {
+		return nil, err
 	}
 	if step < 0 && stop > start {
 		return nil, fmt.Errorf("with negative step arg stop (%v) must be <= to start (%v)", stop, start)
@@ -396,7 +412,7 @@ var _ = registerSimpleFunction(
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
+var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "json",
 		"Returns the value of a field within a JSON message located by a [dot path][field_paths] argument. This function always targets the entire source JSON document regardless of the mapping context.",
@@ -411,16 +427,18 @@ var _ = RegisterFunction(
 			`{"foo":{"bar":"hello world"}}`,
 			`{"doc":{"foo":{"bar":"hello world"}}}`,
 		),
-	),
-	true, jsonFunction,
-	ExpectOneOrZeroArgs(),
-	ExpectStringArg(0),
+	).Param(ParamString("path", "An optional [dot path][field_paths] identifying a field to obtain.").Default("")),
+	jsonFunction,
 )
 
-func jsonFunction(args ...interface{}) (Function, error) {
+func jsonFunction(args *ParsedParams) (Function, error) {
+	path, err := args.FieldString("path")
+	if err != nil {
+		return nil, err
+	}
 	var argPath []string
-	if len(args) > 0 {
-		argPath = gabs.DotPathToSlice(args[0].(string))
+	if len(path) > 0 {
+		argPath = gabs.DotPathToSlice(path)
 	}
 	return ClosureFunction("json path `"+SliceToDotPath(argPath...)+"`", func(ctx FunctionContext) (interface{}, error) {
 		jPart, err := ctx.MsgBatch.Get(ctx.Index).JSON()
@@ -446,7 +464,7 @@ func jsonFunction(args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
+var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "meta",
 		"Returns the value of a metadata key from the input message. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`root_meta` function](#root_meta). This function supports extracting metadata from other messages of a batch with the `from` method.",
@@ -461,23 +479,25 @@ var _ = RegisterFunction(
 			"The parameter is optional and if omitted the entire metadata contents are returned as an object.",
 			`root.all_metadata = meta()`,
 		),
-	),
-	true,
-	func(args ...interface{}) (Function, error) {
-		if len(args) > 0 {
-			field := args[0].(string)
-			return ClosureFunction("meta field "+field, func(ctx FunctionContext) (interface{}, error) {
-				v := ctx.MsgBatch.Get(ctx.Index).Metadata().Get(field)
+	).Param(ParamString("key", "An optional key of a metadata value to obtain.").Default("")),
+	func(args *ParsedParams) (Function, error) {
+		key, err := args.FieldString("key")
+		if err != nil {
+			return nil, err
+		}
+		if len(key) > 0 {
+			return ClosureFunction("meta field "+key, func(ctx FunctionContext) (interface{}, error) {
+				v := ctx.MsgBatch.Get(ctx.Index).Metadata().Get(key)
 				if v == "" {
 					return nil, &ErrRecoverable{
 						Recovered: "",
-						Err:       fmt.Errorf("metadata value '%v' not found", field),
+						Err:       fmt.Errorf("metadata value '%v' not found", key),
 					}
 				}
 				return v, nil
 			}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
 				paths := []TargetPath{
-					NewTargetPath(TargetMetadata, field),
+					NewTargetPath(TargetMetadata, key),
 				}
 				ctx = ctx.WithValues(paths)
 				return ctx, paths
@@ -500,13 +520,11 @@ var _ = RegisterFunction(
 			return ctx, paths
 		}), nil
 	},
-	ExpectOneOrZeroArgs(),
-	ExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
+var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "root_meta",
 		"Returns the value of a metadata key from the new message being created. Changes made to metadata during a mapping will be reflected by this function.",
@@ -521,23 +539,25 @@ var _ = RegisterFunction(
 			"The parameter is optional and if omitted the entire metadata contents are returned as an object.",
 			`root.all_metadata = root_meta()`,
 		),
-	).Beta(),
-	true,
-	func(args ...interface{}) (Function, error) {
-		if len(args) > 0 {
-			field := args[0].(string)
-			return ClosureFunction("root_meta field "+field, func(ctx FunctionContext) (interface{}, error) {
+	).Beta().Param(ParamString("key", "An optional key of a metadata value to obtain.").Default("")),
+	func(args *ParsedParams) (Function, error) {
+		key, err := args.FieldString("key")
+		if err != nil {
+			return nil, err
+		}
+		if len(key) > 0 {
+			return ClosureFunction("root_meta field "+key, func(ctx FunctionContext) (interface{}, error) {
 				if ctx.NewMsg == nil {
 					return nil, errors.New("root metadata cannot be queried in this context")
 				}
-				v := ctx.NewMsg.Metadata().Get(field)
+				v := ctx.NewMsg.Metadata().Get(key)
 				if v == "" {
-					return nil, fmt.Errorf("metadata value '%v' not found", field)
+					return nil, fmt.Errorf("metadata value '%v' not found", key)
 				}
 				return v, nil
 			}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
 				paths := []TargetPath{
-					NewTargetPath(TargetMetadata, field),
+					NewTargetPath(TargetMetadata, key),
 				}
 				ctx = ctx.WithValues(paths)
 				return ctx, paths
@@ -563,22 +583,20 @@ var _ = RegisterFunction(
 			return ctx, paths
 		}), nil
 	},
-	ExpectOneOrZeroArgs(),
-	ExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
+var _ = registerFunction(
 	NewHiddenFunctionSpec("nothing"),
-	false, func(...interface{}) (Function, error) {
+	func(*ParsedParams) (Function, error) {
 		return NewLiteralFunction("nothing", Nothing(nil)), nil
 	},
 )
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
+var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryGeneral, "random_int",
 		"Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.",
@@ -589,27 +607,24 @@ root.second = random_int(1)`,
 		NewExampleSpec("It is possible to specify a dynamic seed argument, in which case the argument will only be resolved once during the lifetime of the mapping.",
 			`root.first = random_int(timestamp_unix_nano())`,
 		),
-	),
-	false, randomIntFunction,
-	ExpectOneOrZeroArgs(),
+	).
+		Param(ParamQuery(
+			"seed",
+			"A seed to use, if a query is provided it will only be resolved once during the lifetime of the mapping.",
+			true,
+		).Default(NewLiteralFunction("", 0))),
+	randomIntFunction,
 )
 
-func randomIntFunction(args ...interface{}) (Function, error) {
-	var seedFn Function
+func randomIntFunction(args *ParsedParams) (Function, error) {
+	seedFn, err := args.FieldQuery("seed")
+	if err != nil {
+		return nil, err
+	}
+
 	var randMut sync.Mutex
 	var r *rand.Rand
-	if len(args) > 0 {
-		var isDyn bool
-		if seedFn, isDyn = args[0].(Function); !isDyn {
-			seed, err := IGetInt(args[0])
-			if err != nil {
-				return nil, err
-			}
-			r = rand.New(rand.NewSource(seed))
-		}
-	} else {
-		r = rand.New(rand.NewSource(0))
-	}
+
 	return ClosureFunction("function random_int", func(ctx FunctionContext) (interface{}, error) {
 		randMut.Lock()
 		defer randMut.Unlock()
@@ -635,7 +650,7 @@ func randomIntFunction(args ...interface{}) (Function, error) {
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
+var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryEnvironment, "now",
 		"Returns the current timestamp as a string in ISO 8601 format with the local timezone. Use the method `format_timestamp` in order to change the format and timezone.",
@@ -646,54 +661,49 @@ var _ = RegisterFunction(
 			`root.received_at = now().format_timestamp("Mon Jan 2 15:04:05 -0700 MST 2006", "UTC")`,
 		),
 	),
-	true, func(args ...interface{}) (Function, error) {
+	func(args *ParsedParams) (Function, error) {
 		return ClosureFunction("function now", func(_ FunctionContext) (interface{}, error) {
 			return time.Now().Format(time.RFC3339Nano), nil
 		}, nil), nil
 	},
-	ExpectNArgs(0),
 )
 
-var _ = RegisterFunction(
+var _ = registerFunction(
 	NewDeprecatedFunctionSpec(
 		"timestamp",
 		"Returns the current time in a custom format specified by the argument. The format is defined by showing how the reference time, defined to be `Mon Jan 2 15:04:05 -0700 MST 2006` would be displayed if it were the value.\n\nA fractional second is represented by adding a period and zeros to the end of the seconds section of layout string, as in `15:04:05.000` to format a time stamp with millisecond precision. This has been deprecated in favour of the new `now` function.",
 		NewExampleSpec("",
 			`root.received_at = timestamp("15:04:05")`,
 		),
-	),
-	true, func(args ...interface{}) (Function, error) {
-		format := "Mon Jan 2 15:04:05 -0700 MST 2006"
-		if len(args) > 0 {
-			format = args[0].(string)
+	).Param(ParamString("format", "The format to print as.").Default("Mon Jan 2 15:04:05 -0700 MST 2006")),
+	func(args *ParsedParams) (Function, error) {
+		format, err := args.FieldString("format")
+		if err != nil {
+			return nil, err
 		}
 		return ClosureFunction("function timestamp", func(_ FunctionContext) (interface{}, error) {
 			return time.Now().Format(format), nil
 		}, nil), nil
 	},
-	ExpectOneOrZeroArgs(),
-	ExpectStringArg(0),
 )
 
-var _ = RegisterFunction(
+var _ = registerFunction(
 	NewDeprecatedFunctionSpec(
 		"timestamp_utc",
 		"The equivalent of `timestamp` except the time is printed as UTC instead of the local timezone. This has been deprecated in favour of the new `now` function.",
 		NewExampleSpec("",
 			`root.received_at = timestamp_utc("15:04:05")`,
 		),
-	),
-	true, func(args ...interface{}) (Function, error) {
-		format := "Mon Jan 2 15:04:05 -0700 MST 2006"
-		if len(args) > 0 {
-			format = args[0].(string)
+	).Param(ParamString("format", "The format to print as.").Default("Mon Jan 2 15:04:05 -0700 MST 2006")),
+	func(args *ParsedParams) (Function, error) {
+		format, err := args.FieldString("format")
+		if err != nil {
+			return nil, err
 		}
 		return ClosureFunction("function timestamp_utc", func(_ FunctionContext) (interface{}, error) {
 			return time.Now().In(time.UTC).Format(format), nil
 		}, nil), nil
 	},
-	ExpectOneOrZeroArgs(),
-	ExpectStringArg(0),
 )
 
 var _ = registerSimpleFunction(
@@ -724,7 +734,7 @@ var _ = registerSimpleFunction(
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
+var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryGeneral, "throw",
 		"Throws an error similar to a regular mapping error. This is useful for abandoning a mapping entirely given certain conditions.",
@@ -740,15 +750,16 @@ root.doc.contents = (this.body.content | this.thing.body)`,
 			`{"nothing":"matches"}`,
 			`Error("failed assignment (line 1): unknown type")`,
 		),
-	),
-	true, func(args ...interface{}) (Function, error) {
-		msg := args[0].(string)
+	).Param(ParamString("why", "A string explanation for why an error was thrown, this will be added to the resulting error message.")),
+	func(args *ParsedParams) (Function, error) {
+		msg, err := args.FieldString("why")
+		if err != nil {
+			return nil, err
+		}
 		return ClosureFunction("function throw", func(_ FunctionContext) (interface{}, error) {
 			return nil, errors.New(msg)
 		}, nil), nil
 	},
-	ExpectNArgs(1),
-	ExpectStringArg(0),
 )
 
 //------------------------------------------------------------------------------
@@ -770,58 +781,58 @@ var _ = registerSimpleFunction(
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
+var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryGeneral, "nanoid",
 		"Generates a new nanoid each time it is invoked and prints a string representation.",
 		NewExampleSpec("", `root.id = nanoid()`),
 		NewExampleSpec("It is possible to specify an optional length parameter.", `root.id = nanoid(54)`),
 		NewExampleSpec("It is also possible to specify an optional custom alphabet after the length parameter.", `root.id = nanoid(54, "abcde")`),
-	),
-	true,
+	).
+		Param(ParamInt64("length", "An optional length.").Optional()).
+		Param(ParamString("alphabet", "An optional custom alphabet to use for generating IDs. When specified the field `length` must also be present.").Optional()),
 	nanoidFunction,
-	ExpectBetweenNAndMArgs(0, 2),
-	ExpectIntArg(0),
-	ExpectStringArg(1),
 )
 
-func nanoidFunction(args ...interface{}) (Function, error) {
-	var lenArg int
-	if len(args) > 0 {
-		lenArg = int(args[0].(int64))
+func nanoidFunction(args *ParsedParams) (Function, error) {
+	lenArg, err := args.FieldOptionalInt64("length")
+	if err != nil {
+		return nil, err
 	}
-	var alphabetArg string
-	if len(args) > 1 {
-		alphabetArg = args[1].(string)
+	alphabetArg, err := args.FieldOptionalString("alphabet")
+	if err != nil {
+		return nil, err
+	}
+	if alphabetArg != nil && lenArg == nil {
+		return nil, errors.New("field length must be specified when an alphabet is specified")
 	}
 	return ClosureFunction("function nanoid", func(ctx FunctionContext) (interface{}, error) {
-		switch len(args) {
-		case 1:
-			return gonanoid.New(lenArg)
-		case 2:
-			return gonanoid.Generate(alphabetArg, lenArg)
-		default:
-			return gonanoid.New()
+		if alphabetArg != nil {
+			return gonanoid.Generate(*alphabetArg, int(*lenArg))
 		}
+		if lenArg != nil {
+			return gonanoid.New(int(*lenArg))
+		}
+		return gonanoid.New()
 	}, nil), nil
 }
 
 //------------------------------------------------------------------------------
 
-var _ = RegisterFunction(
-	NewHiddenFunctionSpec("var"), true, varFunction,
-	ExpectNArgs(1),
-	ExpectStringArg(0),
+var _ = registerFunction(
+	NewHiddenFunctionSpec("var").Param(ParamString("name", "The name of the target variable.")),
+	func(args *ParsedParams) (Function, error) {
+		name, err := args.FieldString("name")
+		if err != nil {
+			return nil, err
+
+		}
+		return NewVarFunction(name), nil
+	},
 )
 
 // NewVarFunction creates a new variable function.
-func NewVarFunction(path string) Function {
-	fn, _ := varFunction(path)
-	return fn
-}
-
-func varFunction(args ...interface{}) (Function, error) {
-	name := args[0].(string)
+func NewVarFunction(name string) Function {
 	return ClosureFunction("variable "+name, func(ctx FunctionContext) (interface{}, error) {
 		if ctx.Vars == nil {
 			return nil, &ErrRecoverable{
@@ -842,7 +853,5 @@ func varFunction(args ...interface{}) (Function, error) {
 		}
 		ctx = ctx.WithValues(paths)
 		return ctx, paths
-	}), nil
+	})
 }
-
-//------------------------------------------------------------------------------

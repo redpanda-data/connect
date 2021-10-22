@@ -115,6 +115,159 @@ func TestArithmeticNumberDegradation(t *testing.T) {
 	}
 }
 
+func TestArithmeticComparisons(t *testing.T) {
+	testCases := []struct {
+		name        string
+		left        interface{}
+		right       interface{}
+		op          ArithmeticOperator
+		result      interface{}
+		errContains string
+	}{
+		{
+			name:   "right null equal to int",
+			left:   int64(12),
+			right:  nil,
+			op:     ArithmeticEq,
+			result: false,
+		},
+		{
+			name:   "right null not equal to int",
+			left:   int64(12),
+			right:  nil,
+			op:     ArithmeticNeq,
+			result: true,
+		},
+		{
+			name:   "left null equal to int",
+			left:   nil,
+			right:  int64(10),
+			op:     ArithmeticEq,
+			result: false,
+		},
+		{
+			name:   "left null not equal to int",
+			left:   nil,
+			right:  int64(12),
+			op:     ArithmeticNeq,
+			result: true,
+		},
+		{
+			name:   "null equal to null",
+			left:   nil,
+			right:  nil,
+			op:     ArithmeticEq,
+			result: true,
+		},
+		{
+			name:   "right null equal to string",
+			left:   "foo",
+			right:  nil,
+			op:     ArithmeticEq,
+			result: false,
+		},
+		{
+			name:   "right null not equal to string",
+			left:   "foo",
+			right:  nil,
+			op:     ArithmeticNeq,
+			result: true,
+		},
+		{
+			name:   "left null equal to string",
+			left:   nil,
+			right:  "foo",
+			op:     ArithmeticEq,
+			result: false,
+		},
+		{
+			name:   "left null not equal to string",
+			left:   nil,
+			right:  "foo",
+			op:     ArithmeticNeq,
+			result: true,
+		},
+		{
+			name:   "right null equal to bool",
+			left:   true,
+			right:  nil,
+			op:     ArithmeticEq,
+			result: false,
+		},
+		{
+			name:   "right null not equal to bool",
+			left:   true,
+			right:  nil,
+			op:     ArithmeticNeq,
+			result: true,
+		},
+		{
+			name:   "left null equal to bool",
+			left:   nil,
+			right:  true,
+			op:     ArithmeticEq,
+			result: false,
+		},
+		{
+			name:   "left null not equal to bool",
+			left:   nil,
+			right:  true,
+			op:     ArithmeticNeq,
+			result: true,
+		},
+		{
+			name:   "false equal true",
+			left:   false,
+			right:  true,
+			op:     ArithmeticEq,
+			result: false,
+		},
+		{
+			name:   "false equal false",
+			left:   false,
+			right:  false,
+			op:     ArithmeticEq,
+			result: true,
+		},
+		{
+			name:   "false not equal true",
+			left:   false,
+			right:  true,
+			op:     ArithmeticNeq,
+			result: true,
+		},
+		{
+			name:   "false not equal false",
+			left:   false,
+			right:  false,
+			op:     ArithmeticNeq,
+			result: false,
+		},
+	}
+
+	for _, test := range testCases {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			fn, err := NewArithmeticExpression(
+				[]Function{
+					NewLiteralFunction("left", test.left),
+					NewLiteralFunction("right", test.right),
+				},
+				[]ArithmeticOperator{test.op},
+			)
+			require.NoError(t, err)
+
+			res, err := fn.Exec(FunctionContext{})
+			if len(test.errContains) > 0 {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, test.result, res)
+			}
+		})
+	}
+}
 func TestArithmetic(t *testing.T) {
 	type easyMsg struct {
 		content string
@@ -129,7 +282,7 @@ func TestArithmetic(t *testing.T) {
 	}
 	function := func(name string, args ...interface{}) Function {
 		t.Helper()
-		fn, err := InitFunction(name, args...)
+		fn, err := InitFunctionHelper(name, args...)
 		require.NoError(t, err)
 		return fn
 	}
@@ -633,7 +786,7 @@ func TestArithmeticTargets(t *testing.T) {
 	}
 	function := func(name string, args ...interface{}) Function {
 		t.Helper()
-		fn, err := InitFunction(name, args...)
+		fn, err := InitFunctionHelper(name, args...)
 		require.NoError(t, err)
 		return fn
 	}

@@ -10,8 +10,8 @@ import (
 	"time"
 
 	batchInternal "github.com/Jeffail/benthos/v3/internal/batch"
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -83,8 +83,20 @@ type DynamoDB struct {
 }
 
 // NewDynamoDB creates a new Amazon SQS writer.Type.
+//
+// Deprecated: use the V2 API instead.
 func NewDynamoDB(
 	conf DynamoDBConfig,
+	log log.Modular,
+	stats metrics.Type,
+) (*DynamoDB, error) {
+	return NewDynamoDBV2(conf, types.NoopMgr(), log, stats)
+}
+
+// NewDynamoDBV2 creates a new Amazon SQS writer.Type.
+func NewDynamoDBV2(
+	conf DynamoDBConfig,
+	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*DynamoDB, error) {
@@ -101,7 +113,7 @@ func NewDynamoDB(
 	}
 	var err error
 	for k, v := range conf.StringColumns {
-		if db.strColumns[k], err = bloblang.NewField(v); err != nil {
+		if db.strColumns[k], err = interop.NewBloblangField(mgr, v); err != nil {
 			return nil, fmt.Errorf("failed to parse column '%v' expression: %v", k, err)
 		}
 	}

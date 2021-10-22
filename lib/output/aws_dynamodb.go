@@ -62,7 +62,7 @@ found within a document the column will not be populated.
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/aws).`,
+[in this document](/docs/guides/cloud/aws).`,
 		Async:   true,
 		Batches: true,
 		FieldSpecs: docs.FieldSpecs{
@@ -147,7 +147,7 @@ found within a document the column will not be populated.
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/aws).`,
+[in this document](/docs/guides/cloud/aws).`,
 		Async:   true,
 		Batches: true,
 		FieldSpecs: docs.FieldSpecs{
@@ -194,7 +194,7 @@ func NewDynamoDB(conf Config, mgr types.Manager, log log.Modular, stats metrics.
 }
 
 func newDynamoDB(name string, conf writer.DynamoDBConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	dyn, err := writer.NewDynamoDB(conf, log, stats)
+	dyn, err := writer.NewDynamoDBV2(conf, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

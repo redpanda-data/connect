@@ -52,6 +52,7 @@ output:
       - tcp://localhost:1883
     topic: benthos_topic
     client_id: benthos_output
+    dynamic_client_id_suffix: ""
     qos: 1
     retained: false
     will:
@@ -113,11 +114,24 @@ Default: `"benthos_topic"`
 
 ### `client_id`
 
-An identifier for the client.
+An identifier for the client connection.
 
 
 Type: `string`  
 Default: `"benthos_output"`  
+
+### `dynamic_client_id_suffix`
+
+Append a dynamically generated suffix to the specified `client_id` on each run of the pipeline. This can be useful when clustering Benthos producers.
+
+
+Type: `string`  
+Default: `""`  
+
+| Option | Summary |
+|---|---|
+| `nanoid` | append a nanoid of length 21 characters |
+
 
 ### `qos`
 

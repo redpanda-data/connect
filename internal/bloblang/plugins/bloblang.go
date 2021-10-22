@@ -11,12 +11,12 @@ import (
 func Register() error {
 	dynamicBloblangParserContext := parser.Context{
 		Functions: query.AllFunctions.OnlyPure().NoMessage(),
-		Methods:   query.AllMethods,
-	}
+		Methods:   query.AllMethods.OnlyPure(),
+	}.DisabledImports()
 
 	return query.AllMethods.Add(
 		query.NewMethodSpec(
-			"bloblang", "Executes an argument Bloblang mapping on the target. This method can be used in order to execute dynamic mappings. Functions that interact with the environment, such as `file` and `env`, or that access message information directly, such as `content` or `json`, are not enabled for dynamic Bloblang mappings.",
+			"bloblang", "Executes an argument Bloblang mapping on the target. This method can be used in order to execute dynamic mappings. Imports and functions that interact with the environment, such as `file` and `env`, or that access message information directly, such as `content` or `json`, are not enabled for dynamic Bloblang mappings.",
 		).InCategory(
 			query.MethodCategoryParsing, "",
 			query.NewExampleSpec(
@@ -27,12 +27,15 @@ func Register() error {
 				`{"body":{"foo":"hello world 2"},"mapping":"root.foo = this.foo.capitalize()"}`,
 				`{"body":{"foo":"Hello World 2"}}`,
 			),
-		).Beta(),
-		func(target query.Function, args ...interface{}) (query.Function, error) {
-			mappingStr := args[0].(string)
-			exec, err := parser.ParseMapping(dynamicBloblangParserContext, "", mappingStr)
+		).Beta().Param(query.ParamString("mapping", "The mapping to execute.")),
+		func(target query.Function, args *query.ParsedParams) (query.Function, error) {
+			mappingStr, err := args.FieldString("mapping")
 			if err != nil {
 				return nil, err
+			}
+			exec, parserErr := parser.ParseMapping(dynamicBloblangParserContext, mappingStr)
+			if parserErr != nil {
+				return nil, parserErr
 			}
 			return query.ClosureFunction("method bloblang", func(ctx query.FunctionContext) (interface{}, error) {
 				v, err := target.Exec(ctx)
@@ -46,8 +49,5 @@ func Register() error {
 				}.WithValue(v))
 			}, target.QueryTargets), nil
 		},
-		true,
-		query.ExpectNArgs(1),
-		query.ExpectStringArg(0),
 	)
 }

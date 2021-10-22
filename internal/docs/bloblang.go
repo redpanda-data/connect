@@ -6,7 +6,6 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 )
@@ -21,7 +20,7 @@ func LintBloblangMapping(ctx LintContext, line, col int, v interface{}) []Lint {
 	if str == "" {
 		return nil
 	}
-	_, err := bloblang.NewMappingWithContext(ctx.BloblangContext, "", str)
+	_, err := ctx.BloblangEnv.NewMapping(str)
 	if err == nil {
 		return nil
 	}
@@ -44,7 +43,7 @@ func LintBloblangField(ctx LintContext, line, col int, v interface{}) []Lint {
 	if str == "" {
 		return nil
 	}
-	_, err := bloblang.NewFieldWithContext(ctx.BloblangContext, str)
+	_, err := ctx.BloblangEnv.NewField(str)
 	if err == nil {
 		return nil
 	}
@@ -66,7 +65,18 @@ type functionsContext struct {
 	Categories []functionCategory
 }
 
-var bloblangFunctionsTemplate = `{{define "function_example" -}}
+var bloblangParamsTemplate = `{{define "parameters" -}}
+{{if gt (len .Definitions) 0}}
+#### Parameters
+
+{{range $i, $param := .Definitions -}}
+` + "**`{{$param.Name}}`**" + ` &lt;{{if $param.IsOptional}}(optional) {{end}}{{$param.ValueType}}{{if $param.DefaultValue}}, default ` + "`{{$param.PrettyDefault}}`" + `{{end}}&gt; {{$param.Description}}  
+{{end -}}
+{{end -}}
+{{end -}}
+`
+
+var bloblangFunctionsTemplate = bloblangParamsTemplate + `{{define "function_example" -}}
 {{if gt (len .Summary) 0 -}}
 {{.Summary}}
 
@@ -89,8 +99,13 @@ BETA: This function is mostly stable but breaking changes could still be made ou
 
 {{end -}}
 {{.Description}}
+{{template "parameters" .Params -}}
+{{if gt (len .Examples) 0}}
+#### Examples
+
 {{range $i, $example := .Examples}}
 {{template "function_example" $example -}}
+{{end -}}
 {{end -}}
 
 {{end -}}
@@ -118,6 +133,13 @@ Functions can be placed anywhere and allow you to extract information from your 
 root.doc.id = uuid_v4()
 root.doc.received_at = now()
 root.doc.host = hostname()
+` + "```" + `
+
+Functions support both named and nameless style arguments:
+
+` + "```coffee" + `
+root.values_one = range(start: 0, stop: this.max, step: 2)
+root.values_two = range(0, this.max, 2)
 ` + "```" + `
 
 {{range $i, $cat := .Categories -}}
@@ -179,7 +201,7 @@ type methodsContext struct {
 	General    []query.MethodSpec
 }
 
-var bloblangMethodsTemplate = `{{define "method_example" -}}
+var bloblangMethodsTemplate = bloblangParamsTemplate + `{{define "method_example" -}}
 {{if gt (len .Summary) 0 -}}
 {{.Summary}}
 
@@ -202,8 +224,13 @@ BETA: This method is mostly stable but breaking changes could still be made outs
 
 {{end -}}
 {{.Description}}
+{{template "parameters" .Params -}}
+{{if gt (len .Examples) 0}}
+#### Examples
+
 {{range $i, $example := .Examples}}
 {{template "method_example" $example -}}
+{{end -}}
 {{end -}}
 
 {{end -}}
@@ -236,6 +263,13 @@ root.doc.reduced_nums = this.thing.nums.map_each(num -> if num < 10 {
   num - 10
 })
 root.has_good_taste = ["pikachu","mewtwo","magmar"].contains(this.user.fav_pokemon)
+` + "```" + `
+
+Methods support both named and nameless style arguments:
+
+` + "```coffee" + `
+root.foo_one = this.(bar | baz).trim().replace(old: "dog", new: "cat")
+root.foo_two = this.(bar | baz).trim().replace("dog", "cat")
 ` + "```" + `
 
 {{if gt (len .General) 0 -}}

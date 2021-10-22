@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // MappingFieldSpec is a field spec that describes a Bloblang mapping for
@@ -31,11 +32,11 @@ type Mapping struct {
 }
 
 // NewMapping parses a Bloblang mapping and returns a metrics mapping.
-func NewMapping(mapping string, logger log.Modular) (*Mapping, error) {
+func NewMapping(mgr types.Manager, mapping string, logger log.Modular) (*Mapping, error) {
 	if mapping == "" {
 		return &Mapping{m: nil, logger: logger}, nil
 	}
-	m, err := bloblang.NewMapping("", mapping)
+	m, err := interop.NewBloblangMapping(mgr, mapping)
 	if err != nil {
 		if perr, ok := err.(*parser.Error); ok {
 			return nil, fmt.Errorf("%v", perr.ErrorAtPosition([]rune(mapping)))

@@ -49,7 +49,7 @@ output:
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/aws).
+[in this document](/docs/guides/cloud/aws).
 
 ### Batching
 
@@ -109,6 +109,10 @@ output:
 			).IsInterpolated().Map(),
 			docs.FieldCommon("content_type", "The content type to set for each object.").IsInterpolated(),
 			docs.FieldAdvanced("content_encoding", "An optional content encoding to set for each object.").IsInterpolated(),
+			docs.FieldString("cache_control", "The cache control to set for each object.").Advanced().IsInterpolated(),
+			docs.FieldString("content_disposition", "The content disposition to set for each object.").Advanced().IsInterpolated(),
+			docs.FieldString("content_language", "The content language to set for each object.").Advanced().IsInterpolated(),
+			docs.FieldString("website_redirect_location", "The website redirect location to set for each object.").Advanced().IsInterpolated(),
 			docs.FieldCommon("metadata", "Specify criteria for which metadata values are attached to objects as headers.").WithChildren(output.MetadataFields()...),
 			docs.FieldAdvanced("storage_class", "The storage class to set for each object.").HasOptions(
 				"STANDARD", "REDUCED_REDUNDANCY", "GLACIER", "STANDARD_IA", "ONEZONE_IA", "INTELLIGENT_TIERING", "DEEP_ARCHIVE",
@@ -164,7 +168,7 @@ output:
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/aws).
+[in this document](/docs/guides/cloud/aws).
 
 ### Batching
 
@@ -224,6 +228,10 @@ output:
 			).IsInterpolated().Map(),
 			docs.FieldCommon("content_type", "The content type to set for each object.").IsInterpolated(),
 			docs.FieldAdvanced("content_encoding", "An optional content encoding to set for each object.").IsInterpolated(),
+			docs.FieldString("cache_control", "The cache control to set for each object.").Advanced().IsInterpolated(),
+			docs.FieldString("content_disposition", "The content disposition to set for each object.").Advanced().IsInterpolated(),
+			docs.FieldString("content_language", "The content language to set for each object.").Advanced().IsInterpolated(),
+			docs.FieldString("website_redirect_location", "The website redirect location to set for each object.").Advanced().IsInterpolated(),
 			docs.FieldCommon("metadata", "Specify criteria for which metadata values are attached to objects as headers.").WithChildren(output.MetadataFields()...),
 			docs.FieldAdvanced("storage_class", "The storage class to set for each object.").HasOptions(
 				"STANDARD", "REDUCED_REDUNDANCY", "GLACIER", "STANDARD_IA", "ONEZONE_IA", "INTELLIGENT_TIERING", "DEEP_ARCHIVE",
@@ -254,7 +262,7 @@ func NewAmazonS3(conf Config, mgr types.Manager, log log.Modular, stats metrics.
 }
 
 func newAmazonS3(name string, conf writer.AmazonS3Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	sthree, err := writer.NewAmazonS3(conf, log, stats)
+	sthree, err := writer.NewAmazonS3V2(conf, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

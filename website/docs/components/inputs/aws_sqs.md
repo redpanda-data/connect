@@ -45,6 +45,7 @@ input:
   aws_sqs:
     url: ""
     delete_message: true
+    reset_visibility: true
     region: eu-west-1
     endpoint: ""
     credentials:
@@ -64,7 +65,7 @@ input:
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/aws).
+[in this document](/docs/guides/cloud/aws).
 
 ### Metadata
 
@@ -98,6 +99,15 @@ Whether to delete the consumed message once it is acked. Disabling allows you to
 Type: `bool`  
 Default: `true`  
 
+### `reset_visibility`
+
+Whether to set the visibility timeout of the consumed message to zero once it is nacked. Disabling honors the preset visibility timeout specified for the queue.
+
+
+Type: `bool`  
+Default: `true`  
+Requires version 3.58.0 or newer  
+
 ### `region`
 
 The AWS region to target.
@@ -116,7 +126,7 @@ Default: `""`
 
 ### `credentials`
 
-Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/cloud/aws).
 
 
 Type: `object`  

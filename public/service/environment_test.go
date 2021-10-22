@@ -1,11 +1,15 @@
 package service_test
 
 import (
+	"context"
 	"errors"
 	"testing"
+	"time"
 
+	"github.com/Jeffail/benthos/v3/public/bloblang"
 	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func walkForSummaries(fn func(func(name string, config *service.ConfigView))) map[string]string {
@@ -81,4 +85,58 @@ rate_limit_resources:
 
 	assert.NoError(t, envOne.NewStreamBuilder().SetYAML(testConfig))
 	assert.Error(t, envTwo.NewStreamBuilder().SetYAML(testConfig))
+}
+
+func TestEnvironmentBloblangIsolation(t *testing.T) {
+	bEnv := bloblang.NewEnvironment().WithoutFunctions("now")
+	require.NoError(t, bEnv.RegisterFunctionV2("meow", bloblang.NewPluginSpec(), func(args *bloblang.ParsedParams) (bloblang.Function, error) {
+		return func() (interface{}, error) {
+			return "meow", nil
+		}, nil
+	}))
+
+	envOne := service.NewEnvironment()
+	envOne.UseBloblangEnvironment(bEnv)
+
+	badConfig := `
+pipeline:
+  processors:
+    - bloblang: 'root = now()'
+`
+
+	goodConfig := `
+pipeline:
+  processors:
+    - bloblang: 'root = meow()'
+`
+
+	assert.Error(t, envOne.NewStreamBuilder().SetYAML(badConfig))
+
+	strmBuilder := envOne.NewStreamBuilder()
+	require.NoError(t, strmBuilder.SetYAML(goodConfig))
+
+	var received []string
+	require.NoError(t, strmBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
+		b, err := m.AsBytes()
+		if err != nil {
+			return err
+		}
+		received = append(received, string(b))
+		return nil
+	}))
+
+	pFn, err := strmBuilder.AddProducerFunc()
+	require.NoError(t, err)
+
+	strm, err := strmBuilder.Build()
+	require.NoError(t, err)
+
+	go func() {
+		require.NoError(t, strm.Run(context.Background()))
+	}()
+
+	require.NoError(t, pFn(context.Background(), service.NewMessage([]byte("hello world"))))
+
+	require.NoError(t, strm.StopWithin(time.Second))
+	assert.Equal(t, []string{"meow"}, received)
 }

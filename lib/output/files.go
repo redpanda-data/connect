@@ -36,7 +36,7 @@ interpolations as described [here](/docs/configuration/interpolation#bloblang-qu
 
 // NewFiles creates a new Files output type.
 func NewFiles(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	f, err := writer.NewFiles(conf.Files, log, stats)
+	f, err := writer.NewFilesV2(conf.Files, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

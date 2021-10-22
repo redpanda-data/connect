@@ -38,7 +38,7 @@ batched messages these interpolations are performed per message part.`,
 
 // NewNSQ creates a new NSQ output type.
 func NewNSQ(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	w, err := writer.NewNSQ(conf.NSQ, log, stats)
+	w, err := writer.NewNSQV2(conf.NSQ, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

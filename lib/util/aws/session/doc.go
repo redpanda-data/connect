@@ -7,7 +7,7 @@ func FieldSpecs() docs.FieldSpecs {
 	return docs.FieldSpecs{
 		docs.FieldCommon("region", "The AWS region to target."),
 		docs.FieldAdvanced("endpoint", "Allows you to specify a custom endpoint for the AWS API."),
-		docs.FieldAdvanced("credentials", "Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).").WithChildren(
+		docs.FieldAdvanced("credentials", "Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/cloud/aws).").WithChildren(
 			docs.FieldAdvanced("profile", "A profile from `~/.aws/credentials` to use."),
 			docs.FieldAdvanced("id", "The ID of credentials to use."),
 			docs.FieldAdvanced("secret", "The secret for the credentials being used."),

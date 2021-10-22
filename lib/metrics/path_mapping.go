@@ -51,7 +51,7 @@ func newPathMapping(mapping string, logger log.Modular) (*pathMapping, error) {
 	if mapping == "" {
 		return &pathMapping{m: nil, logger: logger}, nil
 	}
-	m, err := bloblang.NewMapping("", mapping)
+	m, err := bloblang.GlobalEnvironment().NewMapping(mapping)
 	if err != nil {
 		if perr, ok := err.(*parser.Error); ok {
 			return nil, fmt.Errorf("%v", perr.ErrorAtPosition([]rune(mapping)))

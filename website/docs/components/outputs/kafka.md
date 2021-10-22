@@ -35,6 +35,7 @@ output:
       - localhost:9092
     topic: benthos_stream
     client_id: benthos_kafka_output
+    target_version: 1.0.0
     key: ""
     partitioner: fnv1a_hash
     compression: none
@@ -75,6 +76,8 @@ output:
       token_key: ""
     topic: benthos_stream
     client_id: benthos_kafka_output
+    target_version: 1.0.0
+    rack_id: ""
     key: ""
     partitioner: fnv1a_hash
     partition: ""
@@ -87,7 +90,6 @@ output:
     ack_replicas: false
     max_msg_bytes: 1000000
     timeout: 5s
-    target_version: 1.0.0
     retry_as_batch: false
     batching:
       count: 0
@@ -360,6 +362,22 @@ An identifier for the client connection.
 Type: `string`  
 Default: `"benthos_kafka_output"`  
 
+### `target_version`
+
+The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers.
+
+
+Type: `string`  
+Default: `"1.0.0"`  
+
+### `rack_id`
+
+A rack identifier for this client.
+
+
+Type: `string`  
+Default: `""`  
+
 ### `key`
 
 The key to publish messages with.
@@ -394,7 +412,7 @@ The compression algorithm to use.
 
 Type: `string`  
 Default: `"none"`  
-Options: `none`, `snappy`, `lz4`, `gzip`.
+Options: `none`, `snappy`, `lz4`, `gzip`, `zstd`.
 
 ### `static_headers`
 
@@ -475,14 +493,6 @@ The maximum period of time to wait for message sends before abandoning the reque
 
 Type: `string`  
 Default: `"5s"`  
-
-### `target_version`
-
-The version of the Kafka protocol to use.
-
-
-Type: `string`  
-Default: `"1.0.0"`  
 
 ### `retry_as_batch`
 

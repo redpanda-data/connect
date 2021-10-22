@@ -62,6 +62,10 @@ output:
     tags: {}
     content_type: application/octet-stream
     content_encoding: ""
+    cache_control: ""
+    content_disposition: ""
+    content_language: ""
+    website_redirect_location: ""
     metadata:
       exclude_prefixes: []
     storage_class: STANDARD
@@ -117,7 +121,7 @@ output:
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/aws).
+[in this document](/docs/guides/cloud/aws).
 
 ### Batching
 
@@ -224,6 +228,42 @@ Default: `"application/octet-stream"`
 ### `content_encoding`
 
 An optional content encoding to set for each object.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `cache_control`
+
+The cache control to set for each object.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `content_disposition`
+
+The content disposition to set for each object.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `content_language`
+
+The content language to set for each object.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `website_redirect_location`
+
+The website redirect location to set for each object.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
@@ -401,7 +441,7 @@ Default: `""`
 
 ### `credentials`
 
-Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/aws).
+Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/cloud/aws).
 
 
 Type: `object`  

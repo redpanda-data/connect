@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Jeffail/benthos/v3/internal/filepath"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/urfave/cli/v2"
 )
@@ -49,14 +50,20 @@ func CliCommand(testSuffix string) *cli.Command {
 				fmt.Fprintln(os.Stderr, "Cannot override fields with --set (-s) during unit tests")
 				os.Exit(1)
 			}
+			resourcesPaths := c.StringSlice("resources")
+			var err error
+			if resourcesPaths, err = filepath.Globs(resourcesPaths); err != nil {
+				fmt.Printf("Failed to resolve resource glob pattern: %v\n", err)
+				os.Exit(1)
+			}
 			if logLevel := c.String("log"); len(logLevel) > 0 {
 				logConf := log.NewConfig()
 				logConf.LogLevel = logLevel
 				logger := log.New(os.Stdout, logConf)
-				if runAll(c.Args().Slice(), testSuffix, true, logger, c.StringSlice("resources")) {
+				if runAll(c.Args().Slice(), testSuffix, true, logger, resourcesPaths) {
 					os.Exit(0)
 				}
-			} else if runAll(c.Args().Slice(), testSuffix, true, log.Noop(), c.StringSlice("resources")) {
+			} else if runAll(c.Args().Slice(), testSuffix, true, log.Noop(), resourcesPaths) {
 				os.Exit(0)
 			}
 			os.Exit(1)

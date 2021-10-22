@@ -210,6 +210,7 @@ func (s *sftpReader) ConnectWithContext(ctx context.Context) error {
 		if s.client, err = s.conf.Credentials.GetClient(s.conf.Address); err != nil {
 			return err
 		}
+		s.log.Debugln("Finding more paths")
 		s.paths, err = s.getFilePaths()
 		if err != nil {
 			return err
@@ -220,6 +221,7 @@ func (s *sftpReader) ConnectWithContext(ctx context.Context) error {
 		if !s.conf.Watcher.Enabled {
 			s.client.Close()
 			s.client = nil
+			s.log.Debugln("Paths exhausted, closing input")
 			return types.ErrTypeClosed
 		}
 		select {

@@ -7,31 +7,33 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/mqttconf"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
 //------------------------------------------------------------------------------
 
 // MQTTConfig contains configuration fields for the MQTT output type.
 type MQTTConfig struct {
-	URLs        []string      `json:"urls" yaml:"urls"`
-	QoS         uint8         `json:"qos" yaml:"qos"`
-	Retained    bool          `json:"retained" yaml:"retained"`
-	Topic       string        `json:"topic" yaml:"topic"`
-	ClientID    string        `json:"client_id" yaml:"client_id"`
-	Will        mqttconf.Will `json:"will" yaml:"will"`
-	User        string        `json:"user" yaml:"user"`
-	Password    string        `json:"password" yaml:"password"`
-	KeepAlive   int64         `json:"keepalive" yaml:"keepalive"`
-	MaxInFlight int           `json:"max_in_flight" yaml:"max_in_flight"`
-	TLS         tls.Config    `json:"tls" yaml:"tls"`
+	URLs                  []string      `json:"urls" yaml:"urls"`
+	QoS                   uint8         `json:"qos" yaml:"qos"`
+	Retained              bool          `json:"retained" yaml:"retained"`
+	Topic                 string        `json:"topic" yaml:"topic"`
+	ClientID              string        `json:"client_id" yaml:"client_id"`
+	DynamicClientIDSuffix string        `json:"dynamic_client_id_suffix" yaml:"dynamic_client_id_suffix"`
+	Will                  mqttconf.Will `json:"will" yaml:"will"`
+	User                  string        `json:"user" yaml:"user"`
+	Password              string        `json:"password" yaml:"password"`
+	KeepAlive             int64         `json:"keepalive" yaml:"keepalive"`
+	MaxInFlight           int           `json:"max_in_flight" yaml:"max_in_flight"`
+	TLS                   tls.Config    `json:"tls" yaml:"tls"`
 }
 
 // NewMQTTConfig creates a new MQTTConfig with default values.
@@ -66,8 +68,20 @@ type MQTT struct {
 }
 
 // NewMQTT creates a new MQTT output type.
+//
+// Deprecated: use the V2 API instead.
 func NewMQTT(
 	conf MQTTConfig,
+	log log.Modular,
+	stats metrics.Type,
+) (*MQTT, error) {
+	return NewMQTTV2(conf, types.NoopMgr(), log, stats)
+}
+
+// NewMQTTV2 creates a new MQTT output type.
+func NewMQTTV2(
+	conf MQTTConfig,
+	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*MQTT, error) {
@@ -78,8 +92,20 @@ func NewMQTT(
 	}
 
 	var err error
-	if m.topic, err = bloblang.NewField(conf.Topic); err != nil {
+	if m.topic, err = interop.NewBloblangField(mgr, conf.Topic); err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
+	}
+
+	switch m.conf.DynamicClientIDSuffix {
+	case "nanoid":
+		nid, err := gonanoid.New()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate nanoid: %w", err)
+		}
+		m.conf.ClientID += nid
+	case "":
+	default:
+		return nil, fmt.Errorf("unknown dynamic_client_id_suffix: %v", m.conf.DynamicClientIDSuffix)
 	}
 
 	if err := m.conf.Will.Validate(); err != nil {

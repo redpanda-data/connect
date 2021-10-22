@@ -10,6 +10,7 @@ package bundle
 import (
 	"context"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/input"
@@ -33,6 +34,8 @@ type NewManagement interface {
 
 	Metrics() metrics.Type
 	Logger() log.Modular
+	Environment() *Environment
+	BloblEnvironment() *bloblang.Environment
 
 	NewBuffer(conf buffer.Config) (buffer.Type, error)
 	NewCache(conf cache.Config) (types.Cache, error)

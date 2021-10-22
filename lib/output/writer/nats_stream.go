@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/nats-io/nats.go"
 
@@ -29,6 +30,7 @@ type NATSStreamConfig struct {
 	Subject     string      `json:"subject" yaml:"subject"`
 	MaxInFlight int         `json:"max_in_flight" yaml:"max_in_flight"`
 	TLS         btls.Config `json:"tls" yaml:"tls"`
+	Auth        auth.Config `json:"auth" yaml:"auth"`
 }
 
 // NewNATSStreamConfig creates a new NATSStreamConfig with default values.
@@ -40,6 +42,7 @@ func NewNATSStreamConfig() NATSStreamConfig {
 		Subject:     "benthos_messages",
 		MaxInFlight: 1,
 		TLS:         btls.NewConfig(),
+		Auth:        auth.New(),
 	}
 }
 
@@ -104,6 +107,8 @@ func (n *NATSStream) Connect() error {
 	if n.tlsConf != nil {
 		opts = append(opts, nats.Secure(n.tlsConf))
 	}
+
+	opts = append(opts, auth.GetOptions(n.conf.Auth)...)
 
 	natsConn, err := nats.Connect(n.urls, opts...)
 	if err != nil {

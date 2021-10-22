@@ -15,6 +15,10 @@ func Spec() docs.FieldSpecs {
 		).HasDefault(false),
 		docs.FieldString("cert_file", "An optional certificate file for enabling TLS.").Advanced().HasDefault(""),
 		docs.FieldString("key_file", "An optional key file for enabling TLS.").Advanced().HasDefault(""),
+		docs.FieldAdvanced("cors", "Adds Cross-Origin Resource Sharing headers.").WithChildren(
+			docs.FieldBool("enabled", "Whether to allow CORS requests.").HasDefault(false),
+			docs.FieldString("allowed_origins", "An explicit list of origins that are allowed for CORS requests.").Array().HasDefault([]string{}),
+		),
 		docs.FieldDeprecated("read_timeout"),
 	}
 }

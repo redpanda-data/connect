@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -19,7 +19,7 @@ import (
 func init() {
 	Constructors[TypeReject] = TypeSpec{
 		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-			f, err := newRejectWriter(string(conf.Reject))
+			f, err := newRejectWriter(mgr, string(conf.Reject))
 			if err != nil {
 				return nil, err
 			}
@@ -74,11 +74,11 @@ type rejectWriter struct {
 	errExpr *field.Expression
 }
 
-func newRejectWriter(errorString string) (*rejectWriter, error) {
+func newRejectWriter(mgr types.Manager, errorString string) (*rejectWriter, error) {
 	if errorString == "" {
 		return nil, errors.New("an error message must be provided in order to provide context for the rejection")
 	}
-	errExpr, err := bloblang.NewField(errorString)
+	errExpr, err := interop.NewBloblangField(mgr, errorString)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse error expression: %w", err)
 	}

@@ -2,6 +2,7 @@ package input
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -26,7 +27,9 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
+[function interpolation](/docs/configuration/interpolation#metadata).
+
+` + auth.Description(),
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(
 				"urls",
@@ -38,6 +41,7 @@ You can access these metadata fields using
 			docs.FieldCommon("subject", "A subject to consume from."),
 			docs.FieldAdvanced("prefetch_count", "The maximum number of messages to pull at a time."),
 			tls.FieldSpec(),
+			auth.FieldSpec(),
 		},
 		Categories: []Category{
 			CategoryServices,

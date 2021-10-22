@@ -2,6 +2,7 @@ package input
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -38,7 +39,9 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
+[function interpolation](/docs/configuration/interpolation#metadata).
+
+` + auth.Description(),
 		FieldSpecs: docs.FieldSpecs{
 			func() docs.FieldSpec {
 				b := batch.FieldSpec()
@@ -61,6 +64,7 @@ You can access these metadata fields using
 			docs.FieldAdvanced("max_inflight", "The maximum number of unprocessed messages to fetch at a given time."),
 			docs.FieldAdvanced("ack_wait", "An optional duration to specify at which a message that is yet to be acked will be automatically retried."),
 			tls.FieldSpec(),
+			auth.FieldSpec(),
 		},
 		Categories: []Category{
 			CategoryServices,

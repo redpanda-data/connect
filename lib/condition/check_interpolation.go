@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -114,7 +114,7 @@ func NewCheckInterpolation(
 		return nil, err
 	}
 
-	value, err := bloblang.NewField(conf.CheckInterpolation.Value)
+	value, err := interop.NewBloblangField(mgr, conf.CheckInterpolation.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse interpolation value: %v", err)
 	}

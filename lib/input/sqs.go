@@ -27,7 +27,7 @@ This input is being replaced with the shiny new ` + "[`aws_sqs` input](/docs/com
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/aws).
+[in this document](/docs/guides/cloud/aws).
 
 ### Metadata
 

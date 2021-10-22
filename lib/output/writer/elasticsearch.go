@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -115,7 +115,14 @@ type Elasticsearch struct {
 }
 
 // NewElasticsearch creates a new Elasticsearch writer type.
+//
+// Deprecated: use the V2 API instead.
 func NewElasticsearch(conf ElasticsearchConfig, log log.Modular, stats metrics.Type) (*Elasticsearch, error) {
+	return NewElasticsearchV2(conf, types.NoopMgr(), log, stats)
+}
+
+// NewElasticsearchV2 creates a new Elasticsearch writer type.
+func NewElasticsearchV2(conf ElasticsearchConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*Elasticsearch, error) {
 	e := Elasticsearch{
 		log:         log,
 		stats:       stats,
@@ -126,19 +133,19 @@ func NewElasticsearch(conf ElasticsearchConfig, log log.Modular, stats metrics.T
 	}
 
 	var err error
-	if e.actionStr, err = bloblang.NewField(conf.Action); err != nil {
+	if e.actionStr, err = interop.NewBloblangField(mgr, conf.Action); err != nil {
 		return nil, fmt.Errorf("failed to parse action expression: %v", err)
 	}
-	if e.idStr, err = bloblang.NewField(conf.ID); err != nil {
+	if e.idStr, err = interop.NewBloblangField(mgr, conf.ID); err != nil {
 		return nil, fmt.Errorf("failed to parse id expression: %v", err)
 	}
-	if e.indexStr, err = bloblang.NewField(conf.Index); err != nil {
+	if e.indexStr, err = interop.NewBloblangField(mgr, conf.Index); err != nil {
 		return nil, fmt.Errorf("failed to parse index expression: %v", err)
 	}
-	if e.pipelineStr, err = bloblang.NewField(conf.Pipeline); err != nil {
+	if e.pipelineStr, err = interop.NewBloblangField(mgr, conf.Pipeline); err != nil {
 		return nil, fmt.Errorf("failed to parse pipeline expression: %v", err)
 	}
-	if e.routingStr, err = bloblang.NewField(conf.Routing); err != nil {
+	if e.routingStr, err = interop.NewBloblangField(mgr, conf.Routing); err != nil {
 		return nil, fmt.Errorf("failed to parse routing key expression: %v", err)
 	}
 

@@ -10,9 +10,9 @@ import (
 	"time"
 
 	batchInternal "github.com/Jeffail/benthos/v3/internal/batch"
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -31,6 +31,7 @@ import (
 type KafkaConfig struct {
 	Addresses        []string    `json:"addresses" yaml:"addresses"`
 	ClientID         string      `json:"client_id" yaml:"client_id"`
+	RackID           string      `json:"rack_id" yaml:"rack_id"`
 	Key              string      `json:"key" yaml:"key"`
 	Partitioner      string      `json:"partitioner" yaml:"partitioner"`
 	Partition        string      `json:"partition" yaml:"partition"`
@@ -64,6 +65,7 @@ func NewKafkaConfig() KafkaConfig {
 	return KafkaConfig{
 		Addresses:            []string{"localhost:9092"},
 		ClientID:             "benthos_kafka_output",
+		RackID:               "",
 		Key:                  "",
 		RoundRobinPartitions: false,
 		Partitioner:          "fnv1a_hash",
@@ -155,13 +157,13 @@ func NewKafka(conf KafkaConfig, mgr types.Manager, log log.Modular, stats metric
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
 
-	if k.key, err = bloblang.NewField(conf.Key); err != nil {
+	if k.key, err = interop.NewBloblangField(mgr, conf.Key); err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
-	if k.topic, err = bloblang.NewField(conf.Topic); err != nil {
+	if k.topic, err = interop.NewBloblangField(mgr, conf.Topic); err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
-	if k.partition, err = bloblang.NewField(conf.Partition); err != nil {
+	if k.partition, err = interop.NewBloblangField(mgr, conf.Partition); err != nil {
 		return nil, fmt.Errorf("failed to parse parition expression: %v", err)
 	}
 	if k.backoffCtor, err = conf.Config.GetCtor(); err != nil {
@@ -209,6 +211,8 @@ func strToCompressionCodec(str string) (sarama.CompressionCodec, error) {
 		return sarama.CompressionLZ4, nil
 	case "gzip":
 		return sarama.CompressionGZIP, nil
+	case "zstd":
+		return sarama.CompressionZSTD, nil
 	}
 	return sarama.CompressionNone, fmt.Errorf("compression codec not recognised: %v", str)
 }
@@ -292,6 +296,7 @@ func (k *Kafka) Connect() error {
 
 	config := sarama.NewConfig()
 	config.ClientID = k.conf.ClientID
+	config.RackID = k.conf.RackID
 
 	config.Version = k.version
 

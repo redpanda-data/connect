@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 )
 
@@ -31,8 +30,7 @@ func (p *ParsedConfig) FieldInterpolatedString(path ...string) (*InterpolatedStr
 		return nil, fmt.Errorf("expected field '%v' to be a string, got %T", strings.Join(path, "."), v)
 	}
 
-	pCtx := p.env.getBloblangParserContext()
-	e, err := bloblang.NewFieldWithContext(pCtx, str)
+	e, err := p.mgr.BloblEnvironment().NewField(str)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse interpolated field '%v': %v", strings.Join(path, "."), err)
 	}

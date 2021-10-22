@@ -77,7 +77,7 @@ There are two ways of using resources for feature toggling, the first is to defi
 ```yaml
 pipeline:
   processors:
-    - resource: ${ FEATURE_REQUEST }
+    - resource: ${FEATURE_REQUEST}
 
 processor_resources:
   - label: get_foo

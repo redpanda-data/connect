@@ -228,7 +228,8 @@ func run(c *cli.Context) error {
 		m = string(mappingBytes)
 	}
 
-	exec, err := bloblang.NewMapping(file, m)
+	bEnv := bloblang.NewEnvironment().WithImporterRelativeToFile(file)
+	exec, err := bEnv.NewMapping(m)
 	if err != nil {
 		if perr, ok := err.(*parser.Error); ok {
 			fmt.Fprintf(os.Stderr, "%v %v\n", red("failed to parse mapping:"), perr.ErrorAtPositionStructured("", []rune(m)))

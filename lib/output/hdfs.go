@@ -42,7 +42,7 @@ described [here](/docs/configuration/interpolation#bloblang-queries).`,
 
 // NewHDFS creates a new HDFS output type.
 func NewHDFS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	h, err := writer.NewHDFS(conf.HDFS, log, stats)
+	h, err := writer.NewHDFSV2(conf.HDFS, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

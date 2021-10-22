@@ -3,7 +3,7 @@ const {components} = require('./src/plugins/components');
 
 module.exports = {
   title: 'Benthos',
-  tagline: 'The stream processor for mundane tasks',
+  tagline: 'Fancy stream processing made operationally mundane',
   url: 'https://www.benthos.dev',
   baseUrl: '/',
   favicon: 'img/favicon.ico',
@@ -44,7 +44,6 @@ module.exports = {
         {to: 'blog', label: 'Blog', position: 'left'},
         {to: 'videos', label: 'Videos', position: 'left'},
         {to: 'community', label: 'Community', position: 'right'},
-        {to: 'https://lab.benthos.dev', label: 'Lab', position: 'right'},
         {
           href: 'https://github.com/Jeffail/benthos/releases/latest',
           position: 'right',

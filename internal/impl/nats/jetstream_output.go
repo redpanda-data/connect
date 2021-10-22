@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -24,7 +24,7 @@ import (
 
 func init() {
 	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (output.Type, error) {
-		w, err := newJetStreamOutput(c.NATSJetStream, nm.Logger(), nm.Metrics())
+		w, err := newJetStreamOutput(c.NATSJetStream, nm)
 		if err != nil {
 			return nil, err
 		}
@@ -34,11 +34,12 @@ func init() {
 		}
 		return output.OnlySinglePayloads(o), nil
 	}), docs.ComponentSpec{
-		Name:    output.TypeNATSJetStream,
-		Type:    docs.TypeOutput,
-		Status:  docs.StatusExperimental,
-		Version: "3.46.0",
-		Summary: `Write messages to a NATS JetStream subject.`,
+		Name:        output.TypeNATSJetStream,
+		Type:        docs.TypeOutput,
+		Status:      docs.StatusExperimental,
+		Version:     "3.46.0",
+		Summary:     `Write messages to a NATS JetStream subject.`,
+		Description: auth.Description(),
 		Categories: []string{
 			string(output.CategoryServices),
 		},
@@ -52,6 +53,7 @@ func init() {
 			docs.FieldCommon("subject", "A subject to write to.").IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			btls.FieldSpec(),
+			auth.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(output.NewNATSJetStreamConfig()),
 	})
 }
@@ -75,11 +77,11 @@ type jetStreamOutput struct {
 	shutSig *shutdown.Signaller
 }
 
-func newJetStreamOutput(conf output.NATSJetStreamConfig, log log.Modular, stats metrics.Type) (*jetStreamOutput, error) {
+func newJetStreamOutput(conf output.NATSJetStreamConfig, mgr bundle.NewManagement) (*jetStreamOutput, error) {
 	j := jetStreamOutput{
 		conf:    conf,
-		stats:   stats,
-		log:     log,
+		stats:   mgr.Metrics(),
+		log:     mgr.Logger(),
 		shutSig: shutdown.NewSignaller(),
 	}
 	j.urls = strings.Join(conf.URLs, ",")
@@ -89,7 +91,8 @@ func newJetStreamOutput(conf output.NATSJetStreamConfig, log log.Modular, stats 
 			return nil, err
 		}
 	}
-	if j.subjectStr, err = bloblang.NewField(conf.Subject); err != nil {
+
+	if j.subjectStr, err = mgr.BloblEnvironment().NewField(conf.Subject); err != nil {
 		return nil, fmt.Errorf("subject expression: %w", err)
 	}
 	return &j, nil
@@ -119,6 +122,7 @@ func (j *jetStreamOutput) ConnectWithContext(ctx context.Context) error {
 	if j.tlsConf != nil {
 		opts = append(opts, nats.Secure(j.tlsConf))
 	}
+	opts = append(opts, auth.GetOptions(j.conf.Auth)...)
 	if natsConn, err = nats.Connect(j.urls, opts...); err != nil {
 		return err
 	}

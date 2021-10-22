@@ -111,9 +111,20 @@ install_benthos()
 	echo "Downloading Benthos for ${benthos_os}/${benthos_arch}${benthos_arm}..."
 	benthos_file="benthos_${benthos_os}_${benthos_arch}${benthos_arm}${benthos_dl_ext}"
 
-	benthos_latest_tag=$(curl -s https://api.github.com/repos/Jeffail/benthos/releases/latest | grep 'tag_name' | cut -d\" -f4)
-	benthos_latest_version=$(echo ${benthos_latest_tag} | cut -c2-)
-	benthos_url="https://github.com/Jeffail/benthos/releases/download/${benthos_latest_tag}/benthos_${benthos_latest_version}_${benthos_os}_${benthos_arch}${benthos_arm}.tar.gz"
+	if [[ "$#" -eq 0 ]]; then
+		# get latest release
+		benthos_tag=$(curl -s https://api.github.com/repos/Jeffail/benthos/releases/latest | grep 'tag_name' | cut -d\" -f4)
+		benthos_version=$(echo ${benthos_tag} | cut -c2-)
+	elif [[ "$#" -gt 1 ]]; then
+		echo "Too many arguments."
+		exit 1
+	elif [ -n $1  ]; then
+		# try to get passed version
+		benthos_tag="v$1"
+		benthos_version=$1
+	fi
+
+	benthos_url="https://github.com/Jeffail/benthos/releases/download/${benthos_tag}/benthos_${benthos_version}_${benthos_os}_${benthos_arch}${benthos_arm}.tar.gz"
 
 	dl="/tmp/$benthos_file"
 	rm -rf -- "$dl"
@@ -138,4 +149,4 @@ install_benthos()
 	return 0
 }
 
-install_benthos
+install_benthos $@

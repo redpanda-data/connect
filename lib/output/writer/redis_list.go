@@ -7,9 +7,9 @@ import (
 	"time"
 
 	ibatch "github.com/Jeffail/benthos/v3/internal/batch"
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -53,8 +53,20 @@ type RedisList struct {
 }
 
 // NewRedisList creates a new RedisList output type.
+//
+// Deprecated: use the V2 API instead.
 func NewRedisList(
 	conf RedisListConfig,
+	log log.Modular,
+	stats metrics.Type,
+) (*RedisList, error) {
+	return NewRedisListV2(conf, types.NoopMgr(), log, stats)
+}
+
+// NewRedisListV2 creates a new RedisList output type.
+func NewRedisListV2(
+	conf RedisListConfig,
+	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*RedisList, error) {
@@ -65,7 +77,7 @@ func NewRedisList(
 	}
 
 	var err error
-	if r.keyStr, err = bloblang.NewField(conf.Key); err != nil {
+	if r.keyStr, err = interop.NewBloblangField(mgr, conf.Key); err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
 	if _, err := conf.Config.Client(); err != nil {

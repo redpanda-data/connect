@@ -2,6 +2,7 @@ package output
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
@@ -18,7 +19,9 @@ func init() {
 Publish to an NATS subject.`,
 		Description: `
 This output will interpolate functions within the subject field, you
-can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`,
+can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
+
+` + auth.Description(),
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(
@@ -30,6 +33,7 @@ can find a list of functions [here](/docs/configuration/interpolation#bloblang-q
 			docs.FieldCommon("subject", "The subject to publish to.").IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			tls.FieldSpec(),
+			auth.FieldSpec(),
 		},
 		Categories: []Category{
 			CategoryServices,
@@ -39,7 +43,7 @@ can find a list of functions [here](/docs/configuration/interpolation#bloblang-q
 
 // NewNATS creates a new NATS output type.
 func NewNATS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	w, err := writer.NewNATS(conf.NATS, log, stats)
+	w, err := writer.NewNATSV2(conf.NATS, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

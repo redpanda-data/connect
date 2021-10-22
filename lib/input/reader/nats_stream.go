@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/nats-io/nats.go"
 
@@ -36,6 +37,7 @@ type NATSStreamConfig struct {
 	MaxInflight     int         `json:"max_inflight" yaml:"max_inflight"`
 	AckWait         string      `json:"ack_wait" yaml:"ack_wait"`
 	TLS             btls.Config `json:"tls" yaml:"tls"`
+	Auth            auth.Config `json:"auth" yaml:"auth"`
 
 	// TODO: V4 remove this.
 	Batching batch.PolicyConfig `json:"batching" yaml:"batching"`
@@ -56,6 +58,7 @@ func NewNATSStreamConfig() NATSStreamConfig {
 		AckWait:         "30s",
 		Batching:        batch.NewPolicyConfig(),
 		TLS:             btls.NewConfig(),
+		Auth:            auth.New(),
 	}
 }
 
@@ -159,6 +162,8 @@ func (n *NATSStream) ConnectWithContext(ctx context.Context) error {
 	if n.tlsConf != nil {
 		opts = append(opts, nats.Secure(n.tlsConf))
 	}
+
+	opts = append(opts, auth.GetOptions(n.conf.Auth)...)
 
 	natsConn, err := nats.Connect(n.urls, opts...)
 	if err != nil {

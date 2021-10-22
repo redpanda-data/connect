@@ -6,7 +6,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -284,12 +283,12 @@ func newBranch(
 
 	var err error
 	if len(conf.RequestMap) > 0 {
-		if b.requestMap, err = bloblang.NewMapping("", conf.RequestMap); err != nil {
+		if b.requestMap, err = interop.NewBloblangMapping(mgr, conf.RequestMap); err != nil {
 			return nil, fmt.Errorf("failed to parse request mapping: %w", err)
 		}
 	}
 	if len(conf.ResultMap) > 0 {
-		if b.resultMap, err = bloblang.NewMapping("", conf.ResultMap); err != nil {
+		if b.resultMap, err = interop.NewBloblangMapping(mgr, conf.ResultMap); err != nil {
 			return nil, fmt.Errorf("failed to parse result mapping: %w", err)
 		}
 	}

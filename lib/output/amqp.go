@@ -54,7 +54,7 @@ Please use [` + "`amqp_0_9`" + `](/docs/components/outputs/amqp_0_9) instead.`,
 // TODO: V4 Remove this.
 func NewAMQP(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	log.Warnln("The amqp input is deprecated, please use amqp_0_9 instead.")
-	a, err := writer.NewAMQP(conf.AMQP, log, stats)
+	a, err := writer.NewAMQPV2(mgr, conf.AMQP, log, stats)
 	if err != nil {
 		return nil, err
 	}

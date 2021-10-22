@@ -89,17 +89,18 @@ func (p *ProcessorsProvider) ProvideMocked(jsonPtr string, environment map[strin
 
 // ProvideBloblang attempts to parse a Bloblang mapping and returns a processor
 // slice that executes it.
-func (p *ProcessorsProvider) ProvideBloblang(path string) ([]types.Processor, error) {
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(filepath.Dir(p.targetPath), path)
+func (p *ProcessorsProvider) ProvideBloblang(pathStr string) ([]types.Processor, error) {
+	if !filepath.IsAbs(pathStr) {
+		pathStr = filepath.Join(filepath.Dir(p.targetPath), pathStr)
 	}
 
-	mappingBytes, err := ioutil.ReadFile(path)
+	mappingBytes, err := ioutil.ReadFile(pathStr)
 	if err != nil {
 		return nil, err
 	}
 
-	exec, mapErr := parser.ParseMapping(parser.GlobalContext(), path, string(mappingBytes))
+	pCtx := parser.GlobalContext().WithImporterRelativeToFile(pathStr)
+	exec, mapErr := parser.ParseMapping(pCtx, string(mappingBytes))
 	if mapErr != nil {
 		return nil, mapErr
 	}

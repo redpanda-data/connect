@@ -367,21 +367,22 @@ func SQLMySQLIntegration(t *testing.T) {
 		}
 	})
 
+	var db *sql.DB
+	t.Cleanup(func() {
+		if db != nil {
+			db.Close()
+		}
+	})
+
 	dsn := fmt.Sprintf("testuser:testpass@tcp(localhost:%v)/testdb", resource.GetPort("3306/tcp"))
 	if err = pool.Retry(func() error {
-		db, dberr := sql.Open("mysql", dsn)
-		if dberr != nil {
+		var dberr error
+		if db, dberr = sql.Open("mysql", dsn); dberr != nil {
 			return dberr
 		}
-		if dberr = db.Ping(); err != nil {
-			return dberr
-		}
-		if _, dberr = db.Exec(`create table footable (
-  foo varchar(50) not null,
-  bar integer not null,
-  baz varchar(50) not null,
-  primary key (foo)
-);`); dberr != nil {
+		if dberr = db.Ping(); dberr != nil {
+			db.Close()
+			db = nil
 			return dberr
 		}
 		return nil
@@ -390,17 +391,28 @@ func SQLMySQLIntegration(t *testing.T) {
 	}
 
 	t.Run("testSQLMySQLArgsMapping", func(t *testing.T) {
-		testSQLMySQLArgsMapping(t, dsn)
+		testSQLMySQLArgsMapping(t, db, dsn)
+	})
+	t.Run("testSQLMySQLDynamicQueries", func(t *testing.T) {
+		testSQLMySQLDynamicQueries(t, db, dsn)
 	})
 	t.Run("testSQLMySQLArgs", func(t *testing.T) {
-		testSQLMySQLArgs(t, dsn)
+		testSQLMySQLArgs(t, db, dsn)
 	})
 	t.Run("testSQLMySQLDeprecated", func(t *testing.T) {
-		testSQLMySQLDeprecated(t, dsn)
+		testSQLMySQLDeprecated(t, db, dsn)
 	})
 }
 
-func testSQLMySQLArgsMapping(t *testing.T, dsn string) {
+func testSQLMySQLArgsMapping(t *testing.T, db *sql.DB, dsn string) {
+	_, err := db.Exec(`create table footable (
+  foo varchar(50) not null,
+  bar integer not null,
+  baz varchar(50) not null,
+  primary key (foo)
+);`)
+	require.NoError(t, err)
+
 	conf := NewConfig()
 	conf.Type = TypeSQL
 	conf.SQL.Driver = "mysql"
@@ -443,12 +455,73 @@ func testSQLMySQLArgsMapping(t *testing.T, dsn string) {
 	assert.Equal(t, expParts, message.GetAllBytes(resMsgs[0]))
 }
 
-func testSQLMySQLArgs(t *testing.T, dsn string) {
+func testSQLMySQLDynamicQueries(t *testing.T, db *sql.DB, dsn string) {
+	_, err := db.Exec(`create table bartable (
+  foo varchar(50) not null,
+  bar integer not null,
+  baz varchar(50) not null,
+  primary key (foo)
+);`)
+	require.NoError(t, err)
+
 	conf := NewConfig()
 	conf.Type = TypeSQL
 	conf.SQL.Driver = "mysql"
 	conf.SQL.DataSourceName = dsn
-	conf.SQL.Query = "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
+	conf.SQL.Query = `${! json("query") }`
+	conf.SQL.UnsafeDynamicQuery = true
+	conf.SQL.ArgsMapping = `[ this.foo, this.bar, this.baz ]`
+
+	s, err := NewSQL(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	parts := [][]byte{
+		[]byte(`{"query":"INSERT INTO bartable (foo, bar, baz) VALUES (?, ?, ?);","foo":"foo1","bar":11,"baz":"baz1"}`),
+		[]byte(`{"query":"INSERT INTO bartable (foo, bar, baz) VALUES (?, ?, ?);","foo":"foo2","bar":12,"baz":"baz2"}`),
+	}
+
+	resMsgs, response := s.ProcessMessage(message.New(parts))
+	require.Nil(t, response)
+	require.Len(t, resMsgs, 1)
+	assert.Equal(t, parts, message.GetAllBytes(resMsgs[0]))
+
+	conf.SQL.Query = `${! json("query") }`
+	conf.SQL.ArgsMapping = `[ this.foo ]`
+	conf.SQL.UnsafeDynamicQuery = true
+	conf.SQL.ResultCodec = "json_array"
+	s, err = NewSQL(conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	parts = [][]byte{
+		[]byte(`{"query":"SELECT * FROM bartable WHERE foo = ?;","foo":"foo1"}`),
+		[]byte(`{"query":"SELECT * FROM bartable WHERE foo = ?;","foo":"foo2"}`),
+	}
+
+	resMsgs, response = s.ProcessMessage(message.New(parts))
+	require.Nil(t, response)
+	require.Len(t, resMsgs, 1)
+
+	expParts := [][]byte{
+		[]byte(`[{"bar":11,"baz":"baz1","foo":"foo1"}]`),
+		[]byte(`[{"bar":12,"baz":"baz2","foo":"foo2"}]`),
+	}
+	assert.Equal(t, expParts, message.GetAllBytes(resMsgs[0]))
+}
+
+func testSQLMySQLArgs(t *testing.T, db *sql.DB, dsn string) {
+	_, err := db.Exec(`create table baztable (
+  foo varchar(50) not null,
+  bar integer not null,
+  baz varchar(50) not null,
+  primary key (foo)
+);`)
+	require.NoError(t, err)
+
+	conf := NewConfig()
+	conf.Type = TypeSQL
+	conf.SQL.Driver = "mysql"
+	conf.SQL.DataSourceName = dsn
+	conf.SQL.Query = "INSERT INTO baztable (foo, bar, baz) VALUES (?, ?, ?);"
 	conf.SQL.Args = []string{
 		"${! json(\"foo\") }",
 		"${! json(\"bar\") }",
@@ -468,7 +541,7 @@ func testSQLMySQLArgs(t *testing.T, dsn string) {
 	require.Len(t, resMsgs, 1)
 	assert.Equal(t, parts, message.GetAllBytes(resMsgs[0]))
 
-	conf.SQL.Query = "SELECT * FROM footable WHERE foo = ?;"
+	conf.SQL.Query = "SELECT * FROM baztable WHERE foo = ?;"
 	conf.SQL.Args = []string{
 		"${! json(\"foo\") }",
 	}
@@ -492,12 +565,20 @@ func testSQLMySQLArgs(t *testing.T, dsn string) {
 	assert.Equal(t, expParts, message.GetAllBytes(resMsgs[0]))
 }
 
-func testSQLMySQLDeprecated(t *testing.T, dsn string) {
+func testSQLMySQLDeprecated(t *testing.T, db *sql.DB, dsn string) {
+	_, err := db.Exec(`create table buztable (
+  foo varchar(50) not null,
+  bar integer not null,
+  baz varchar(50) not null,
+  primary key (foo)
+);`)
+	require.NoError(t, err)
+
 	conf := NewConfig()
 	conf.Type = TypeSQL
 	conf.SQL.Driver = "mysql"
 	conf.SQL.DSN = dsn
-	conf.SQL.Query = "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
+	conf.SQL.Query = "INSERT INTO buztable (foo, bar, baz) VALUES (?, ?, ?);"
 	conf.SQL.Args = []string{
 		"${! json(\"foo\").from(1) }",
 		"${! json(\"bar\").from(1) }",
@@ -528,7 +609,7 @@ func testSQLMySQLDeprecated(t *testing.T, dsn string) {
 		t.Fatalf("Wrong result: %s != %s", act, exp)
 	}
 
-	conf.SQL.Query = "SELECT * FROM footable WHERE foo = ?;"
+	conf.SQL.Query = "SELECT * FROM buztable WHERE foo = ?;"
 	conf.SQL.Args = []string{
 		"${! json(\"foo\").from(1) }",
 	}

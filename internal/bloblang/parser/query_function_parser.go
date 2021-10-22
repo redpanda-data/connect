@@ -2,12 +2,11 @@ package parser
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 )
-
-//------------------------------------------------------------------------------
 
 func functionArgsParser(pCtx Context) Func {
 	begin, comma, end := Char('('), Char(','), Char(')')
@@ -21,11 +20,44 @@ func functionArgsParser(pCtx Context) Func {
 	return func(input []rune) Result {
 		return DelimitedPattern(
 			Expect(Sequence(begin, whitespace), "function arguments"),
-			MustBe(Expect(queryParser(pCtx), "function argument")),
+			MustBe(Expect(
+				OneOf(
+					namedArgParser(pCtx),
+					queryParser(pCtx),
+				), "function argument"),
+			),
 			MustBe(Expect(Sequence(Discard(SpacesAndTabs()), comma, whitespace), "comma")),
 			MustBe(Expect(Sequence(whitespace, end), "closing bracket")),
 			true,
 		)(input)
+	}
+}
+
+type namedArg struct {
+	name  string
+	value interface{}
+}
+
+func namedArgParser(pCtx Context) Func {
+	colon := Char(':')
+	whitespace := DiscardAll(SpacesAndTabs())
+
+	pattern := Sequence(
+		SnakeCase(),
+		colon,
+		whitespace,
+		MustBe(Expect(queryParser(pCtx), "argument value")),
+	)
+
+	return func(input []rune) Result {
+		res := pattern(input)
+		if res.Err != nil {
+			return res
+		}
+
+		resSlice := res.Payload.([]interface{})
+		res.Payload = namedArg{name: resSlice[0].(string), value: resSlice[3]}
+		return res
 	}
 }
 
@@ -62,44 +94,6 @@ func parseFunctionTail(fn query.Function, pCtx Context) Func {
 			}
 		}
 		return res
-	}
-}
-
-func parseLiteralWithTails(litParser Func, pCtx Context) Func {
-	delim := Sequence(
-		Char('.'),
-		Discard(
-			Sequence(
-				NewlineAllowComment(),
-				SpacesAndTabs(),
-			),
-		),
-	)
-
-	return func(input []rune) Result {
-		res := litParser(input)
-		if res.Err != nil {
-			return res
-		}
-
-		lit := res.Payload
-		var fn query.Function
-		for {
-			if res = delim(res.Remaining); res.Err != nil {
-				payload := lit
-				if fn != nil {
-					payload = fn
-				}
-				return Success(payload, res.Remaining)
-			}
-			if fn == nil {
-				fn = query.NewLiteralFunction("", lit)
-			}
-			if res = MustBe(parseFunctionTail(fn, pCtx))(res.Remaining); res.Err != nil {
-				return Fail(res.Err, input)
-			}
-			fn = res.Payload.(query.Function)
-		}
 	}
 }
 
@@ -271,6 +265,43 @@ func fieldLiteralRootParser(pCtx Context) Func {
 	}
 }
 
+func extractArgsParserResult(paramsDef query.Params, args []interface{}) (*query.ParsedParams, error) {
+	var namelessArgs []interface{}
+	var namedArgs map[string]interface{}
+
+	for _, arg := range args {
+		namedArg, isNamed := arg.(namedArg)
+		if isNamed {
+			if namedArgs == nil {
+				namedArgs = map[string]interface{}{}
+			}
+			if _, exists := namedArgs[namedArg.name]; exists {
+				return nil, fmt.Errorf("duplicate named arg: %v", namedArg.name)
+			}
+			namedArgs[namedArg.name] = namedArg.value
+		} else {
+			namelessArgs = append(namelessArgs, arg)
+		}
+	}
+
+	if len(namelessArgs) > 0 && len(namedArgs) > 0 {
+		return nil, errors.New("cannot mix named and nameless arguments")
+	}
+
+	var parsedParams *query.ParsedParams
+	var err error
+	if len(namedArgs) > 0 {
+		parsedParams, err = paramsDef.PopulateNamed(namedArgs)
+	} else {
+		parsedParams, err = paramsDef.PopulateNameless(namelessArgs...)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return parsedParams, nil
+}
+
 func methodParser(fn query.Function, pCtx Context) Func {
 	p := Sequence(
 		Expect(
@@ -289,9 +320,17 @@ func methodParser(fn query.Function, pCtx Context) Func {
 		seqSlice := res.Payload.([]interface{})
 
 		targetMethod := seqSlice[0].(string)
-		args := seqSlice[1].([]interface{})
+		params, err := pCtx.Methods.Params(targetMethod)
+		if err != nil {
+			return Fail(NewFatalError(input, err), input)
+		}
 
-		method, err := pCtx.InitMethod(targetMethod, fn, args...)
+		parsedParams, err := extractArgsParserResult(params, seqSlice[1].([]interface{}))
+		if err != nil {
+			return Fail(NewFatalError(input, err), input)
+		}
+
+		method, err := pCtx.InitMethod(targetMethod, fn, parsedParams)
 		if err != nil {
 			return Fail(NewFatalError(input, err), input)
 		}
@@ -317,9 +356,17 @@ func functionParser(pCtx Context) Func {
 		seqSlice := res.Payload.([]interface{})
 
 		targetFunc := seqSlice[0].(string)
-		args := seqSlice[1].([]interface{})
+		params, err := pCtx.Functions.Params(targetFunc)
+		if err != nil {
+			return Fail(NewFatalError(input, err), input)
+		}
 
-		fn, err := pCtx.InitFunction(targetFunc, args...)
+		parsedParams, err := extractArgsParserResult(params, seqSlice[1].([]interface{}))
+		if err != nil {
+			return Fail(NewFatalError(input, err), input)
+		}
+
+		fn, err := pCtx.InitFunction(targetFunc, parsedParams)
 		if err != nil {
 			return Fail(NewFatalError(input, err), input)
 		}
@@ -349,5 +396,3 @@ func parseDeprecatedFunction(input []rune) Result {
 	}
 	return Success(fn, nil)
 }
-
-//------------------------------------------------------------------------------

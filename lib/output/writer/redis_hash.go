@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -58,8 +58,20 @@ type RedisHash struct {
 }
 
 // NewRedisHash creates a new RedisHash output type.
+//
+// Deprecated: use the V2 API instead.
 func NewRedisHash(
 	conf RedisHashConfig,
+	log log.Modular,
+	stats metrics.Type,
+) (*RedisHash, error) {
+	return NewRedisHashV2(conf, types.NoopMgr(), log, stats)
+}
+
+// NewRedisHashV2 creates a new RedisHash output type.
+func NewRedisHashV2(
+	conf RedisHashConfig,
+	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*RedisHash, error) {
@@ -71,12 +83,12 @@ func NewRedisHash(
 	}
 
 	var err error
-	if r.keyStr, err = bloblang.NewField(conf.Key); err != nil {
+	if r.keyStr, err = interop.NewBloblangField(mgr, conf.Key); err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
 
 	for k, v := range conf.Fields {
-		if r.fields[k], err = bloblang.NewField(v); err != nil {
+		if r.fields[k], err = interop.NewBloblangField(mgr, v); err != nil {
 			return nil, fmt.Errorf("failed to parse field '%v' expression: %v", k, err)
 		}
 	}

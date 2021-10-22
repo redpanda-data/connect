@@ -23,11 +23,25 @@ root.doc.received_at = now()
 root.doc.host = hostname()
 ```
 
+Functions support both named and nameless style arguments:
+
+```coffee
+root.values_one = range(start: 0, stop: this.max, step: 2)
+root.values_two = range(0, this.max, 2)
+```
+
 ## General
 
 ### `count`
 
 The `count` function is a counter starting at 1 which increments after each time it is called. Count takes an argument which is an identifier for the counter, allowing you to specify multiple unique counters in your configuration.
+
+#### Parameters
+
+**`name`** &lt;string&gt; An identifier for the counter.  
+
+#### Examples
+
 
 ```coffee
 root = this
@@ -43,6 +57,9 @@ root.id = count("bloblang_function_example")
 ### `deleted`
 
 A function that returns a result indicating that the mapping target should be deleted.
+
+#### Examples
+
 
 ```coffee
 root = this
@@ -61,49 +78,17 @@ root.new_nums = this.nums.map_each(num -> if num < 10 { deleted() } else { num -
 # Out: {"new_nums":[1,7]}
 ```
 
-### `range`
-
-The `range` function creates an array of integers following a range between a start, stop and optional step integer argument. If the step argument is omitted then it defaults to 1. A negative step can be provided as long as stop < start.
-
-```coffee
-root.a = range(0, 10)
-root.b = range(0, this.max, 2)
-root.c = range(0, -this.max, -2)
-
-# In:  {"max":10}
-# Out: {"a":[0,1,2,3,4,5,6,7,8,9],"b":[0,2,4,6,8],"c":[0,-2,-4,-6,-8]}
-```
-
-### `throw`
-
-Throws an error similar to a regular mapping error. This is useful for abandoning a mapping entirely given certain conditions.
-
-```coffee
-root.doc.type = match {
-  this.exists("header.id") => "foo"
-  this.exists("body.data") => "bar"
-  _ => throw("unknown type")
-}
-root.doc.contents = (this.body.content | this.thing.body)
-
-# In:  {"header":{"id":"first"},"thing":{"body":"hello world"}}
-# Out: {"doc":{"contents":"hello world","type":"foo"}}
-
-# In:  {"nothing":"matches"}
-# Out: Error("failed assignment (line 1): unknown type")
-```
-
-### `uuid_v4`
-
-Generates a new RFC-4122 UUID each time it is invoked and prints a string representation.
-
-```coffee
-root.id = uuid_v4()
-```
-
 ### `nanoid`
 
 Generates a new nanoid each time it is invoked and prints a string representation.
+
+#### Parameters
+
+**`length`** &lt;(optional) integer&gt; An optional length.  
+**`alphabet`** &lt;(optional) string&gt; An optional custom alphabet to use for generating IDs. When specified the field `length` must also be present.  
+
+#### Examples
+
 
 ```coffee
 root.id = nanoid()
@@ -125,6 +110,13 @@ root.id = nanoid(54, "abcde")
 
 Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.
 
+#### Parameters
+
+**`seed`** &lt;query expression, default `{"Value":0}`&gt; A seed to use, if a query is provided it will only be resolved once during the lifetime of the mapping.  
+
+#### Examples
+
+
 ```coffee
 root.first = random_int()
 root.second = random_int(1)
@@ -136,11 +128,73 @@ It is possible to specify a dynamic seed argument, in which case the argument wi
 root.first = random_int(timestamp_unix_nano())
 ```
 
+### `range`
+
+The `range` function creates an array of integers following a range between a start, stop and optional step integer argument. If the step argument is omitted then it defaults to 1. A negative step can be provided as long as stop < start.
+
+#### Parameters
+
+**`start`** &lt;integer&gt; The start value.  
+**`stop`** &lt;integer&gt; The stop value.  
+**`step`** &lt;integer, default `1`&gt; The step value.  
+
+#### Examples
+
+
+```coffee
+root.a = range(0, 10)
+root.b = range(start: 0, stop: this.max, step: 2) # Using named params
+root.c = range(0, -this.max, -2)
+
+# In:  {"max":10}
+# Out: {"a":[0,1,2,3,4,5,6,7,8,9],"b":[0,2,4,6,8],"c":[0,-2,-4,-6,-8]}
+```
+
+### `throw`
+
+Throws an error similar to a regular mapping error. This is useful for abandoning a mapping entirely given certain conditions.
+
+#### Parameters
+
+**`why`** &lt;string&gt; A string explanation for why an error was thrown, this will be added to the resulting error message.  
+
+#### Examples
+
+
+```coffee
+root.doc.type = match {
+  this.exists("header.id") => "foo"
+  this.exists("body.data") => "bar"
+  _ => throw("unknown type")
+}
+root.doc.contents = (this.body.content | this.thing.body)
+
+# In:  {"header":{"id":"first"},"thing":{"body":"hello world"}}
+# Out: {"doc":{"contents":"hello world","type":"foo"}}
+
+# In:  {"nothing":"matches"}
+# Out: Error("failed assignment (line 1): unknown type")
+```
+
+### `uuid_v4`
+
+Generates a new RFC-4122 UUID each time it is invoked and prints a string representation.
+
+#### Examples
+
+
+```coffee
+root.id = uuid_v4()
+```
+
 ## Message Info
 
 ### `batch_index`
 
 Returns the index of the mapped message within a batch. This is useful for applying maps only on certain messages of a batch.
+
+#### Examples
+
 
 ```coffee
 root = if batch_index() > 0 { deleted() }
@@ -150,6 +204,9 @@ root = if batch_index() > 0 { deleted() }
 
 Returns the size of the message batch.
 
+#### Examples
+
+
 ```coffee
 root.foo = batch_size()
 ```
@@ -157,6 +214,9 @@ root.foo = batch_size()
 ### `content`
 
 Returns the full raw contents of the mapping target message as a byte array. When mapping to a JSON field the value should be encoded using the method [`encode`][methods.encode], or cast to a string directly using the method [`string`][methods.string], otherwise it will be base64 encoded by default.
+
+#### Examples
+
 
 ```coffee
 root.doc = content().string()
@@ -169,6 +229,9 @@ root.doc = content().string()
 
 If an error has occurred during the processing of a message this function returns the reported cause of the error. For more information about error handling patterns read [here][error_handling].
 
+#### Examples
+
+
 ```coffee
 root.doc.error = error()
 ```
@@ -177,6 +240,9 @@ root.doc.error = error()
 
 Returns a boolean value indicating whether an error has occurred during the processing of a message. For more information about error handling patterns read [here][error_handling].
 
+#### Examples
+
+
 ```coffee
 root.doc.status = if errored() { 400 } else { 200 }
 ```
@@ -184,6 +250,13 @@ root.doc.status = if errored() { 400 } else { 200 }
 ### `json`
 
 Returns the value of a field within a JSON message located by a [dot path][field_paths] argument. This function always targets the entire source JSON document regardless of the mapping context.
+
+#### Parameters
+
+**`path`** &lt;string, default `""`&gt; An optional [dot path][field_paths] identifying a field to obtain.  
+
+#### Examples
+
 
 ```coffee
 root.mapped = json("foo.bar")
@@ -204,6 +277,13 @@ root.doc = json()
 ### `meta`
 
 Returns the value of a metadata key from the input message. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`root_meta` function](#root_meta). This function supports extracting metadata from other messages of a batch with the `from` method.
+
+#### Parameters
+
+**`key`** &lt;string, default `""`&gt; An optional key of a metadata value to obtain.  
+
+#### Examples
+
 
 ```coffee
 root.topic = meta("kafka_topic")
@@ -227,6 +307,13 @@ BETA: This function is mostly stable but breaking changes could still be made ou
 
 Returns the value of a metadata key from the new message being created. Changes made to metadata during a mapping will be reflected by this function.
 
+#### Parameters
+
+**`key`** &lt;string, default `""`&gt; An optional key of a metadata value to obtain.  
+
+#### Examples
+
+
 ```coffee
 root.topic = root_meta("kafka_topic")
 ```
@@ -249,6 +336,13 @@ root.all_metadata = root_meta()
 
 Returns the value of an environment variable, or an empty string if the environment variable does not exist.
 
+#### Parameters
+
+**`name`** &lt;string&gt; The name of an environment variable.  
+
+#### Examples
+
+
 ```coffee
 root.thing.key = env("key")
 ```
@@ -258,6 +352,13 @@ root.thing.key = env("key")
 BETA: This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 
 Reads a file and returns its contents. Relative paths are resolved from the directory of the process executing the mapping.
+
+#### Parameters
+
+**`path`** &lt;string&gt; The path of the target file.  
+
+#### Examples
+
 
 ```coffee
 root.doc = file(env("BENTHOS_TEST_BLOBLANG_FILE")).parse_json()
@@ -270,6 +371,9 @@ root.doc = file(env("BENTHOS_TEST_BLOBLANG_FILE")).parse_json()
 
 Returns a string matching the hostname of the machine running Benthos.
 
+#### Examples
+
+
 ```coffee
 root.thing.host = hostname()
 ```
@@ -277,6 +381,9 @@ root.thing.host = hostname()
 ### `now`
 
 Returns the current timestamp as a string in ISO 8601 format with the local timezone. Use the method `format_timestamp` in order to change the format and timezone.
+
+#### Examples
+
 
 ```coffee
 root.received_at = now()
@@ -290,6 +397,9 @@ root.received_at = now().format_timestamp("Mon Jan 2 15:04:05 -0700 MST 2006", "
 
 Returns the current unix timestamp in seconds.
 
+#### Examples
+
+
 ```coffee
 root.received_at = timestamp_unix()
 ```
@@ -297,6 +407,9 @@ root.received_at = timestamp_unix()
 ### `timestamp_unix_nano`
 
 Returns the current unix timestamp in nanoseconds.
+
+#### Examples
+
 
 ```coffee
 root.received_at = timestamp_unix_nano()
@@ -310,6 +423,13 @@ Returns the current time in a custom format specified by the argument. The forma
 
 A fractional second is represented by adding a period and zeros to the end of the seconds section of layout string, as in `15:04:05.000` to format a time stamp with millisecond precision. This has been deprecated in favour of the new `now` function.
 
+#### Parameters
+
+**`format`** &lt;string, default `"Mon Jan 2 15:04:05 -0700 MST 2006"`&gt; The format to print as.  
+
+#### Examples
+
+
 ```coffee
 root.received_at = timestamp("15:04:05")
 ```
@@ -317,6 +437,13 @@ root.received_at = timestamp("15:04:05")
 ### `timestamp_utc`
 
 The equivalent of `timestamp` except the time is printed as UTC instead of the local timezone. This has been deprecated in favour of the new `now` function.
+
+#### Parameters
+
+**`format`** &lt;string, default `"Mon Jan 2 15:04:05 -0700 MST 2006"`&gt; The format to print as.  
+
+#### Examples
+
 
 ```coffee
 root.received_at = timestamp_utc("15:04:05")

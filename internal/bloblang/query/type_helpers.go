@@ -39,7 +39,12 @@ var (
 	ValueNull    ValueType = "null"
 	ValueDelete  ValueType = "delete"
 	ValueNothing ValueType = "nothing"
+	ValueQuery   ValueType = "query expression"
 	ValueUnknown ValueType = "unknown"
+
+	// Specialised and not generally known over ValueNumber.
+	ValueInt   ValueType = "integer"
+	ValueFloat ValueType = "float"
 )
 
 // ITypeOf returns the type of a boxed value as a discrete ValueType. If the
@@ -64,6 +69,9 @@ func ITypeOf(i interface{}) ValueType {
 		return ValueNothing
 	case nil:
 		return ValueNull
+	}
+	if _, isDyn := i.(Function); isDyn {
+		return ValueQuery
 	}
 	return ValueUnknown
 }

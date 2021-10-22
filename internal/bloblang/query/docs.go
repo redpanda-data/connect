@@ -3,9 +3,9 @@ package query
 // ExampleSpec provides a mapping example and some input/output results to
 // display.
 type ExampleSpec struct {
-	Mapping string
-	Summary string
-	Results [][2]string
+	Mapping string      `json:"mapping"`
+	Summary string      `json:"summary"`
+	Results [][2]string `json:"results"`
 }
 
 // NewExampleSpec creates a new example spec.
@@ -53,23 +53,26 @@ var (
 // FunctionSpec describes a Bloblang function.
 type FunctionSpec struct {
 	// The release status of the function.
-	Status Status
+	Status Status `json:"status"`
 
 	// A category to place the function within.
-	Category FunctionCategory
+	Category FunctionCategory `json:"category"`
 
 	// Name of the function (as it appears in config).
-	Name string
+	Name string `json:"name"`
 
 	// Description of the functions purpose (in markdown).
-	Description string
+	Description string `json:"description"`
+
+	// Params defines the expected arguments of the function.
+	Params Params `json:"params"`
 
 	// Examples shows general usage for the function.
-	Examples []ExampleSpec
+	Examples []ExampleSpec `json:"examples,omitempty"`
 
-	// Impure indicates that a function accesses or interacts with the
-	// environment, and is therefore unsafe.
-	Impure bool
+	// Impure indicates that a function accesses or interacts with the outter
+	// environment, and is therefore unsafe to execute in shared environments.
+	Impure bool `json:"impure"`
 }
 
 // NewFunctionSpec creates a new function spec.
@@ -80,6 +83,7 @@ func NewFunctionSpec(category FunctionCategory, name, description string, exampl
 		Name:        name,
 		Description: description,
 		Examples:    examples,
+		Params:      NewParams(),
 	}
 }
 
@@ -96,6 +100,12 @@ func (s FunctionSpec) MarkImpure() FunctionSpec {
 	return s
 }
 
+// Param adds a parameter to the function.
+func (s FunctionSpec) Param(def ParamDefinition) FunctionSpec {
+	s.Params = s.Params.Add(def)
+	return s
+}
+
 // NewDeprecatedFunctionSpec creates a new function spec that is deprecated.
 func NewDeprecatedFunctionSpec(name, description string, examples ...ExampleSpec) FunctionSpec {
 	return FunctionSpec{
@@ -104,6 +114,7 @@ func NewDeprecatedFunctionSpec(name, description string, examples ...ExampleSpec
 		Name:        name,
 		Description: description,
 		Examples:    examples,
+		Params:      NewParams(),
 	}
 }
 
@@ -112,6 +123,7 @@ func NewHiddenFunctionSpec(name string) FunctionSpec {
 	return FunctionSpec{
 		Status: StatusHidden,
 		Name:   name,
+		Params: NewParams(),
 	}
 }
 
@@ -145,19 +157,26 @@ type MethodCatSpec struct {
 // MethodSpec describes a Bloblang method.
 type MethodSpec struct {
 	// The release status of the function.
-	Status Status
+	Status Status `json:"status"`
 
 	// Name of the method (as it appears in config).
-	Name string
+	Name string `json:"name"`
 
 	// Description of the method purpose (in markdown).
-	Description string
+	Description string `json:"description"`
+
+	// Params defines the expected arguments of the method.
+	Params Params `json:"params"`
 
 	// Examples shows general usage for the method.
-	Examples []ExampleSpec
+	Examples []ExampleSpec `json:"examples,omitempty"`
 
 	// Categories that this method fits within.
-	Categories []MethodCatSpec
+	Categories []MethodCatSpec `json:"categories"`
+
+	// Impure indicates that a method accesses or interacts with the outter
+	// environment, and is therefore unsafe to execute in shared environments.
+	Impure bool `json:"impure"`
 }
 
 // NewMethodSpec creates a new method spec.
@@ -167,6 +186,7 @@ func NewMethodSpec(name, description string, examples ...ExampleSpec) MethodSpec
 		Status:      StatusStable,
 		Description: description,
 		Examples:    examples,
+		Params:      NewParams(),
 	}
 }
 
@@ -178,6 +198,7 @@ func NewDeprecatedMethodSpec(name, description string, examples ...ExampleSpec) 
 		Name:     name,
 		Status:   StatusDeprecated,
 		Examples: examples,
+		Params:   NewParams(),
 	}
 }
 
@@ -186,12 +207,32 @@ func NewHiddenMethodSpec(name string) MethodSpec {
 	return MethodSpec{
 		Name:   name,
 		Status: StatusHidden,
+		Params: NewParams(),
 	}
 }
 
 // Beta flags the function as a beta component.
 func (m MethodSpec) Beta() MethodSpec {
 	m.Status = StatusBeta
+	return m
+}
+
+// MarkImpure flags the method as being impure, meaning it access or interacts
+// with the environment.
+func (m MethodSpec) MarkImpure() MethodSpec {
+	m.Impure = true
+	return m
+}
+
+// Param adds a parameter to the function.
+func (m MethodSpec) Param(def ParamDefinition) MethodSpec {
+	m.Params = m.Params.Add(def)
+	return m
+}
+
+// VariadicParams configures the method spec to allow variadic parameters.
+func (m MethodSpec) VariadicParams() MethodSpec {
+	m.Params = VariadicParams()
 	return m
 }
 

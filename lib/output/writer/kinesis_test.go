@@ -59,8 +59,8 @@ func TestKinesisWriteSinglePartMessage(t *testing.T) {
 		log: log.Noop(),
 	}
 
-	k.partitionKey, _ = bloblang.NewField("${!json(\"id\")}")
-	k.hashKey, _ = bloblang.NewField("")
+	k.partitionKey, _ = bloblang.GlobalEnvironment().NewField("${!json(\"id\")}")
+	k.hashKey, _ = bloblang.GlobalEnvironment().NewField("")
 
 	msg := message.New(nil)
 	part := message.NewPart([]byte(`{"foo":"bar","id":123}`))
@@ -102,8 +102,8 @@ func TestKinesisWriteMultiPartMessage(t *testing.T) {
 		log: log.Noop(),
 	}
 
-	k.partitionKey, _ = bloblang.NewField("${!json(\"id\")}")
-	k.hashKey, _ = bloblang.NewField("")
+	k.partitionKey, _ = bloblang.GlobalEnvironment().NewField("${!json(\"id\")}")
+	k.hashKey, _ = bloblang.GlobalEnvironment().NewField("")
 
 	msg := message.New(nil)
 	for _, p := range parts {
@@ -135,8 +135,8 @@ func TestKinesisWriteChunk(t *testing.T) {
 		log: log.Noop(),
 	}
 
-	k.partitionKey, _ = bloblang.NewField("${!json(\"id\")}")
-	k.hashKey, _ = bloblang.NewField("")
+	k.partitionKey, _ = bloblang.GlobalEnvironment().NewField("${!json(\"id\")}")
+	k.hashKey, _ = bloblang.GlobalEnvironment().NewField("")
 
 	msg := message.New(nil)
 	for i := 0; i < n; i++ {
@@ -200,8 +200,8 @@ func TestKinesisWriteChunkWithThrottling(t *testing.T) {
 		log:              log.Noop(),
 	}
 
-	k.partitionKey, _ = bloblang.NewField("${!json(\"id\")}")
-	k.hashKey, _ = bloblang.NewField("")
+	k.partitionKey, _ = bloblang.GlobalEnvironment().NewField("${!json(\"id\")}")
+	k.hashKey, _ = bloblang.GlobalEnvironment().NewField("")
 
 	msg := message.New(nil)
 	for i := 0; i < n; i++ {
@@ -245,8 +245,8 @@ func TestKinesisWriteError(t *testing.T) {
 		log: log.Noop(),
 	}
 
-	k.partitionKey, _ = bloblang.NewField("${!json(\"id\")}")
-	k.hashKey, _ = bloblang.NewField("")
+	k.partitionKey, _ = bloblang.GlobalEnvironment().NewField("${!json(\"id\")}")
+	k.hashKey, _ = bloblang.GlobalEnvironment().NewField("")
 
 	msg := message.New(nil)
 	msg.Append(message.NewPart([]byte(`{"foo":"bar"}`)))
@@ -295,8 +295,8 @@ func TestKinesisWriteMessageThrottling(t *testing.T) {
 		log:              log.Noop(),
 	}
 
-	k.partitionKey, _ = bloblang.NewField("${!json(\"id\")}")
-	k.hashKey, _ = bloblang.NewField("")
+	k.partitionKey, _ = bloblang.GlobalEnvironment().NewField("${!json(\"id\")}")
+	k.hashKey, _ = bloblang.GlobalEnvironment().NewField("")
 
 	msg := message.New(nil)
 	msg.Append(message.NewPart([]byte(`{"foo":"bar","id":123}`)))
@@ -344,8 +344,8 @@ func TestKinesisWriteBackoffMaxRetriesExceeded(t *testing.T) {
 		log:              log.Noop(),
 	}
 
-	k.partitionKey, _ = bloblang.NewField("${!json(\"id\")}")
-	k.hashKey, _ = bloblang.NewField("")
+	k.partitionKey, _ = bloblang.GlobalEnvironment().NewField("${!json(\"id\")}")
+	k.hashKey, _ = bloblang.GlobalEnvironment().NewField("")
 
 	msg := message.New(nil)
 	msg.Append(message.NewPart([]byte(`{"foo":"bar","id":123}`)))

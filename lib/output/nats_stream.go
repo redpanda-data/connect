@@ -2,6 +2,7 @@ package output
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
@@ -16,7 +17,8 @@ func init() {
 		constructor: fromSimpleConstructor(NewNATSStream),
 		Summary: `
 Publish to a NATS Stream subject.`,
-		Async: true,
+		Description: auth.Description(),
+		Async:       true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(
 				"urls",
@@ -29,6 +31,7 @@ Publish to a NATS Stream subject.`,
 			docs.FieldCommon("client_id", "The client ID to connect with."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			tls.FieldSpec(),
+			auth.FieldSpec(),
 		},
 		Categories: []Category{
 			CategoryServices,

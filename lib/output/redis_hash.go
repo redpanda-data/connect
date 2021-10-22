@@ -70,7 +70,7 @@ Where latter stages will overwrite matching field names of a former stage.`,
 
 // NewRedisHash creates a new RedisHash output type.
 func NewRedisHash(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	rhash, err := writer.NewRedisHash(conf.RedisHash, log, stats)
+	rhash, err := writer.NewRedisHashV2(conf.RedisHash, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}

@@ -7,6 +7,9 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/gabs/v2"
 	"gopkg.in/yaml.v3"
 )
@@ -24,6 +27,14 @@ func NewStringField(name string) *ConfigField {
 	}
 }
 
+// NewStringEnumField describes a new string type config field that can have one
+// of a discrete list of values.
+func NewStringEnumField(name string, options ...string) *ConfigField {
+	return &ConfigField{
+		field: docs.FieldString(name, "").HasOptions(options...).LintOptions(),
+	}
+}
+
 // NewStringListField describes a new config field consisting of a list of
 // strings.
 func NewStringListField(name string) *ConfigField {
@@ -32,10 +43,34 @@ func NewStringListField(name string) *ConfigField {
 	}
 }
 
+// NewStringMapField describes a new config field consisting of an object of
+// arbitrary keys with string values.
+func NewStringMapField(name string) *ConfigField {
+	return &ConfigField{
+		field: docs.FieldString(name, "").Map(),
+	}
+}
+
 // NewIntField describes a new int type config field.
 func NewIntField(name string) *ConfigField {
 	return &ConfigField{
 		field: docs.FieldInt(name, ""),
+	}
+}
+
+// NewIntListField describes a new config field consisting of a list of
+// integers.
+func NewIntListField(name string) *ConfigField {
+	return &ConfigField{
+		field: docs.FieldInt(name, "").Array(),
+	}
+}
+
+// NewIntMapField describes a new config field consisting of an object of
+// arbitrary keys with integer values.
+func NewIntMapField(name string) *ConfigField {
+	return &ConfigField{
+		field: docs.FieldInt(name, "").Map(),
 	}
 }
 
@@ -104,13 +139,13 @@ type ConfigSpec struct {
 	configCtor ConfigStructConstructor
 }
 
-func (c *ConfigSpec) configFromNode(env *Environment, mgr bundle.NewManagement, node *yaml.Node) (*ParsedConfig, error) {
+func (c *ConfigSpec) configFromNode(mgr bundle.NewManagement, node *yaml.Node) (*ParsedConfig, error) {
 	if c.configCtor != nil {
 		conf := c.configCtor()
 		if err := node.Decode(conf); err != nil {
 			return nil, err
 		}
-		return &ParsedConfig{env: env, mgr: mgr, asStruct: conf}, nil
+		return &ParsedConfig{mgr: mgr, asStruct: conf}, nil
 	}
 
 	fields, err := c.component.Config.Children.YAMLToMap(node, docs.ToValueConfig{})
@@ -118,7 +153,39 @@ func (c *ConfigSpec) configFromNode(env *Environment, mgr bundle.NewManagement, 
 		return nil, err
 	}
 
-	return &ParsedConfig{env: env, mgr: mgr, generic: fields}, nil
+	return &ParsedConfig{mgr: mgr, generic: fields}, nil
+}
+
+// ParseYAML attempts to parse a YAML document as the defined configuration spec
+// and returns a parsed config view. The provided environment determines which
+// child components and Bloblang functions can be created by the fields of the
+// spec, you can leave the environment nil to use the global environment.
+//
+// This method is intended for testing purposes and is not required for normal
+// use of plugin components, as parsing is managed by other components.
+func (c *ConfigSpec) ParseYAML(yamlStr string, env *Environment) (*ParsedConfig, error) {
+	if env == nil {
+		env = globalEnvironment
+	}
+
+	var nconf yaml.Node
+	if err := yaml.Unmarshal([]byte(yamlStr), &nconf); err != nil {
+		return nil, err
+	}
+	if nconf.Kind == yaml.DocumentNode && len(nconf.Content) > 0 {
+		nconf = *nconf.Content[0]
+	}
+
+	mgr, err := manager.NewV2(
+		manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop(),
+		manager.OptSetEnvironment(env.internal),
+		manager.OptSetBloblangEnvironment(env.getBloblangParserEnv()),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to instantiate resources: %w", err)
+	}
+
+	return c.configFromNode(mgr, &nconf)
 }
 
 // NewConfigSpec creates a new empty component configuration spec. If the
@@ -301,7 +368,6 @@ func (c *ConfigView) FormatJSON() ([]byte, error) {
 // access the parsed struct.
 type ParsedConfig struct {
 	hiddenPath []string
-	env        *Environment
 	mgr        bundle.NewManagement
 	asStruct   interface{}
 	generic    map[string]interface{}
@@ -392,6 +458,33 @@ func (p *ParsedConfig) FieldStringList(path ...string) ([]string, error) {
 	return sList, nil
 }
 
+// FieldStringMap accesses a field that is an object of arbitrary keys and
+// string values from the parsed config by its name and returns the value.
+// Returns an error if the field is not found, or is not an object of strings.
+//
+// This method is not valid when the configuration spec was built around a
+// config constructor.
+func (p *ParsedConfig) FieldStringMap(path ...string) (map[string]string, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+	}
+	iMap, ok := v.(map[string]interface{})
+	if !ok {
+		if sMap, ok := v.(map[string]string); ok {
+			return sMap, nil
+		}
+		return nil, fmt.Errorf("expected field '%v' to be a string map, got %T", p.fullDotPath(path...), v)
+	}
+	sMap := make(map[string]string, len(iMap))
+	for k, ev := range iMap {
+		if sMap[k], ok = ev.(string); !ok {
+			return nil, fmt.Errorf("expected field '%v' to be a string map, found an element of type %T", p.fullDotPath(path...), ev)
+		}
+	}
+	return sMap, nil
+}
+
 // FieldInt accesses an int field from the parsed config by its name and returns
 // the value. Returns an error if the field is not found or is not an int.
 //
@@ -407,6 +500,60 @@ func (p *ParsedConfig) FieldInt(path ...string) (int, error) {
 		return 0, fmt.Errorf("expected field '%v' to be an int, got %T", p.fullDotPath(path...), v)
 	}
 	return i, nil
+}
+
+// FieldIntList accesses a field that is a list of integers from the parsed
+// config by its name and returns the value. Returns an error if the field is
+// not found, or is not a list of integers.
+//
+// This method is not valid when the configuration spec was built around a
+// config constructor.
+func (p *ParsedConfig) FieldIntList(path ...string) ([]int, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+	}
+	iList, ok := v.([]interface{})
+	if !ok {
+		if sList, ok := v.([]int); ok {
+			return sList, nil
+		}
+		return nil, fmt.Errorf("expected field '%v' to be an integer list, got %T", p.fullDotPath(path...), v)
+	}
+	sList := make([]int, len(iList))
+	for i, ev := range iList {
+		if sList[i], ok = ev.(int); !ok {
+			return nil, fmt.Errorf("expected field '%v' to be an integer list, found an element of type %T", p.fullDotPath(path...), ev)
+		}
+	}
+	return sList, nil
+}
+
+// FieldIntMap accesses a field that is an object of arbitrary keys and
+// integer values from the parsed config by its name and returns the value.
+// Returns an error if the field is not found, or is not an object of integers.
+//
+// This method is not valid when the configuration spec was built around a
+// config constructor.
+func (p *ParsedConfig) FieldIntMap(path ...string) (map[string]int, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+	}
+	iMap, ok := v.(map[string]interface{})
+	if !ok {
+		if sMap, ok := v.(map[string]int); ok {
+			return sMap, nil
+		}
+		return nil, fmt.Errorf("expected field '%v' to be an integer map, got %T", p.fullDotPath(path...), v)
+	}
+	sMap := make(map[string]int, len(iMap))
+	for k, ev := range iMap {
+		if sMap[k], ok = ev.(int); !ok {
+			return nil, fmt.Errorf("expected field '%v' to be an integer map, found an element of type %T", p.fullDotPath(path...), ev)
+		}
+	}
+	return sMap, nil
 }
 
 // FieldFloat accesses a float field from the parsed config by its name and

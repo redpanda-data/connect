@@ -43,11 +43,23 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"bad args 7": {
 			input: `json(5)`,
-			err:   `line 1 char 1: expected string argument, received int64`,
+			err:   `line 1 char 1: field path: wrong argument type, expected string, got number`,
 		},
 		"bad args 8": {
 			input: `json(false)`,
-			err:   `line 1 char 1: expected string argument, received bool`,
+			err:   `line 1 char 1: field path: wrong argument type, expected string, got bool`,
+		},
+		"unfinished named arg first": {
+			input: `foo.parse_timestamp(format: "meow", tz:)`,
+			err:   `line 1 char 40: required: expected argument value`,
+		},
+		"unfinished named arg first with comma": {
+			input: `foo.parse_timestamp(format: "meow", tz:,)`,
+			err:   `line 1 char 40: required: expected argument value`,
+		},
+		"cannot mix args types": {
+			input: `foo.format_timestamp("foo", tz: "bar")`,
+			err:   `line 1 char 5: cannot mix named and nameless arguments`,
 		},
 		"bad operators": {
 			input: `json("foo") + `,
@@ -80,15 +92,15 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"bad method args 3": {
 			input: `json("foo").from()`,
-			err:   `line 1 char 13: expected 1 arguments, received: 0`,
+			err:   `line 1 char 13: missing parameter: index`,
 		},
 		"bad method args 4": {
 			input: `json("foo").from("nah")`,
-			err:   `line 1 char 13: expected int argument, received string`,
+			err:   `line 1 char 13: field index: expected number value, got string ("nah")`,
 		},
 		"bad map args": {
 			input: `json("foo").map()`,
-			err:   `line 1 char 13: expected 1 arguments, received: 0`,
+			err:   `line 1 char 13: missing parameter: query`,
 		},
 		"gibberish": {
 			input: `json("foo").(=)`,

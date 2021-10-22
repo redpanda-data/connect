@@ -7,7 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -193,7 +192,7 @@ func NewReadUntil(
 
 	var check *mapping.Executor
 	if len(conf.ReadUntil.Check) > 0 {
-		if check, err = bloblang.NewMapping("", conf.ReadUntil.Check); err != nil {
+		if check, err = interop.NewBloblangMapping(mgr, conf.ReadUntil.Check); err != nil {
 			return nil, fmt.Errorf("failed to parse check query: %w", err)
 		}
 	}

@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/tracing"
@@ -36,7 +36,7 @@ type SpanReader struct {
 // NewSpanReader wraps an async reader with a mechanism for extracting tracing
 // spans from the consumed message using a Bloblang mapping.
 func NewSpanReader(inputName, mapping string, rdr reader.Async, mgr types.Manager, logger log.Modular) (reader.Async, error) {
-	exe, err := bloblang.NewMapping("", mapping)
+	exe, err := interop.NewBloblangMapping(mgr, mapping)
 	if err != nil {
 		return nil, err
 	}

@@ -95,14 +95,21 @@ module.exports = {
             'guides/bloblang/walkthrough',
             'guides/bloblang/functions',
             'guides/bloblang/methods',
+            'guides/bloblang/arithmetic',
             'guides/bloblang/advanced',
           ],
         },
         'guides/monitoring',
         'guides/performance_tuning',
         'guides/sync_responses',
-        'guides/aws',
-        'guides/gcp',
+        {
+          type: 'category',
+          label: 'Cloud Credentials',
+          items: [
+            'guides/cloud/aws',
+            'guides/cloud/gcp',
+          ],
+        },
         {
           type: 'category',
           label: 'Serverless',

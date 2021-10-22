@@ -16,7 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -68,13 +67,7 @@ type Client struct {
 
 // NewClient creates a new http client that sends and receives Benthos messages.
 func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
-	urlStr, err := bloblang.NewField(conf.URL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse URL expression: %v", err)
-	}
-
 	h := Client{
-		url:       urlStr,
 		conf:      conf,
 		log:       log.Noop(),
 		stats:     metrics.Noop(),
@@ -141,20 +134,25 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 		h.successOn[c] = struct{}{}
 	}
 
+	for _, opt := range opts {
+		opt(&h)
+	}
+
+	var err error
+	if h.url, err = interop.NewBloblangField(h.mgr, conf.URL); err != nil {
+		return nil, fmt.Errorf("failed to parse URL expression: %v", err)
+	}
+
 	for k, v := range conf.Headers {
 		if strings.EqualFold(k, "host") {
-			if h.host, err = bloblang.NewField(v); err != nil {
+			if h.host, err = interop.NewBloblangField(h.mgr, v); err != nil {
 				return nil, fmt.Errorf("failed to parse header 'host' expression: %v", err)
 			}
 		} else {
-			if h.headers[k], err = bloblang.NewField(v); err != nil {
+			if h.headers[k], err = interop.NewBloblangField(h.mgr, v); err != nil {
 				return nil, fmt.Errorf("failed to parse header '%v' expression: %v", k, err)
 			}
 		}
-	}
-
-	for _, opt := range opts {
-		opt(&h)
 	}
 
 	h.mCount = h.stats.GetCounter("count")
@@ -512,7 +510,7 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Messa
 			if retryStrat == noRetry {
 				numRetries = 0
 			}
-			err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
+			err = UnexpectedErr(res)
 			if res.Body != nil {
 				res.Body.Close()
 			}
@@ -545,7 +543,7 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Messa
 				if retryStrat == noRetry {
 					j = 0
 				}
-				err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
+				err = UnexpectedErr(res)
 				if res.Body != nil {
 					res.Body.Close()
 				}
@@ -564,6 +562,15 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Messa
 	h.mSucc.Incr(1)
 	h.retryThrottle.Reset()
 	return res, nil
+}
+
+// UnexpectedErr get error body
+func UnexpectedErr(res *http.Response) error {
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	return types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status, Body: body}
 }
 
 // Send creates an HTTP request from the client config, a provided message to be

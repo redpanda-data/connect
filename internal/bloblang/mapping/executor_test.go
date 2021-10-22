@@ -23,7 +23,7 @@ func TestAssignments(t *testing.T) {
 
 	initFunc := func(name string, args ...interface{}) query.Function {
 		t.Helper()
-		fn, err := query.InitFunction(name, args...)
+		fn, err := query.InitFunctionHelper(name, args...)
 		require.NoError(t, err)
 		return fn
 	}
@@ -280,7 +280,7 @@ func TestAssignments(t *testing.T) {
 func TestTargets(t *testing.T) {
 	function := func(name string, args ...interface{}) query.Function {
 		t.Helper()
-		fn, err := query.InitFunction(name, args...)
+		fn, err := query.InitFunctionHelper(name, args...)
 		require.NoError(t, err)
 		return fn
 	}
@@ -347,7 +347,7 @@ func TestExec(t *testing.T) {
 
 	function := func(name string, args ...interface{}) query.Function {
 		t.Helper()
-		fn, err := query.InitFunction(name, args...)
+		fn, err := query.InitFunctionHelper(name, args...)
 		require.NoError(t, err)
 		return fn
 	}
@@ -460,7 +460,7 @@ func TestQueries(t *testing.T) {
 
 	initFunc := func(name string, args ...interface{}) query.Function {
 		t.Helper()
-		fn, err := query.InitFunction(name, args...)
+		fn, err := query.InitFunctionHelper(name, args...)
 		require.NoError(t, err)
 		return fn
 	}

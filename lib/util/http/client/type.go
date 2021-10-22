@@ -16,7 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -123,13 +122,7 @@ type Type struct {
 // Deprecated: This component is no longer used by Benthos, instead look at
 // ./internal/http.
 func New(conf Config, opts ...func(*Type)) (*Type, error) {
-	urlStr, err := bloblang.NewField(conf.URL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse URL expression: %v", err)
-	}
-
 	h := Type{
-		url:       urlStr,
 		conf:      conf,
 		log:       log.Noop(),
 		stats:     metrics.Noop(),
@@ -196,20 +189,25 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		h.successOn[c] = struct{}{}
 	}
 
+	for _, opt := range opts {
+		opt(&h)
+	}
+
+	var err error
+	if h.url, err = interop.NewBloblangField(h.mgr, conf.URL); err != nil {
+		return nil, fmt.Errorf("failed to parse URL expression: %v", err)
+	}
+
 	for k, v := range conf.Headers {
 		if strings.EqualFold(k, "host") {
-			if h.host, err = bloblang.NewField(v); err != nil {
+			if h.host, err = interop.NewBloblangField(h.mgr, v); err != nil {
 				return nil, fmt.Errorf("failed to parse header 'host' expression: %v", err)
 			}
 		} else {
-			if h.headers[k], err = bloblang.NewField(v); err != nil {
+			if h.headers[k], err = interop.NewBloblangField(h.mgr, v); err != nil {
 				return nil, fmt.Errorf("failed to parse header '%v' expression: %v", k, err)
 			}
 		}
-	}
-
-	for _, opt := range opts {
-		opt(&h)
 	}
 
 	h.mCount = h.stats.GetCounter("count")
@@ -624,7 +622,7 @@ func (h *Type) DoWithContext(ctx context.Context, msg types.Message) (res *http.
 			if retryStrat == noRetry {
 				numRetries = 0
 			}
-			err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
+			err = UnexpectedErr(res)
 			if res.Body != nil {
 				res.Body.Close()
 			}
@@ -666,7 +664,7 @@ func (h *Type) DoWithContext(ctx context.Context, msg types.Message) (res *http.
 				if retryStrat == noRetry {
 					j = 0
 				}
-				err = types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status}
+				err = UnexpectedErr(res)
 				if res.Body != nil {
 					res.Body.Close()
 				}
@@ -688,6 +686,15 @@ func (h *Type) DoWithContext(ctx context.Context, msg types.Message) (res *http.
 	h.mSucc.Incr(1)
 	h.retryThrottle.Reset()
 	return res, nil
+}
+
+// UnexpectedErr get error body
+func UnexpectedErr(res *http.Response) error {
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	return types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status, Body: body}
 }
 
 // Send attempts to send a message to an HTTP server, this attempt may include
