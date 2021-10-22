@@ -3,8 +3,10 @@ package reader
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,6 +18,8 @@ import (
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
+
+var errConnect = errors.New("AMQP 0.9 Connect")
 
 //------------------------------------------------------------------------------
 
@@ -37,6 +41,7 @@ type AMQP09BindingConfig struct {
 // AMQP09Config contains configuration for the AMQP09 input type.
 type AMQP09Config struct {
 	URL             string                   `json:"url" yaml:"url"`
+	URLs            []string                 `json:"urls" yaml:"urls"`
 	Queue           string                   `json:"queue" yaml:"queue"`
 	QueueDeclare    AMQP09QueueDeclareConfig `json:"queue_declare" yaml:"queue_declare"`
 	BindingsDeclare []AMQP09BindingConfig    `json:"bindings_declare" yaml:"bindings_declare"`
@@ -53,7 +58,7 @@ type AMQP09Config struct {
 // NewAMQP09Config creates a new AMQP09Config with default values.
 func NewAMQP09Config() AMQP09Config {
 	return AMQP09Config{
-		URL:   "amqp://guest:guest@localhost:5672/",
+		URLs:  []string{"amqp://guest:guest@localhost:5672/"},
 		Queue: "benthos-queue",
 		QueueDeclare: AMQP09QueueDeclareConfig{
 			Enabled: false,
@@ -93,6 +98,19 @@ func NewAMQP09(conf AMQP09Config, log log.Modular, stats metrics.Type) (*AMQP09,
 		stats: stats,
 		log:   log,
 	}
+
+	if conf.URL != "" {
+		a.conf.URLs = []string{}
+	} else {
+		for _, u := range conf.URLs {
+			for _, splitURL := range strings.Split(u, ",") {
+				if trimmed := strings.TrimSpace(splitURL); len(trimmed) > 0 {
+					a.conf.URLs = append(a.conf.URLs, trimmed)
+				}
+			}
+		}
+	}
+
 	if conf.TLS.Enabled {
 		var err error
 		if a.tlsConf, err = conf.TLS.Get(); err != nil {
@@ -117,27 +135,13 @@ func (a *AMQP09) ConnectWithContext(ctx context.Context) (err error) {
 	var amqpChan *amqp.Channel
 	var consumerChan <-chan amqp.Delivery
 
-	u, err := url.Parse(a.conf.URL)
-	if err != nil {
-		return fmt.Errorf("invalid amqp URL: %v", err)
-	}
-
-	if a.conf.TLS.Enabled {
-		if u.User != nil {
-			conn, err = amqp.DialTLS(a.conf.URL, a.tlsConf)
-			if err != nil {
-				return fmt.Errorf("AMQP 0.9 Connect: %s", err)
-			}
-		} else {
-			conn, err = amqp.DialTLS_ExternalAuth(a.conf.URL, a.tlsConf)
-			if err != nil {
-				return fmt.Errorf("AMQP 0.9 Connect: %s", err)
-			}
+	if len(a.conf.URLs) >= 1 {
+		if conn, err = a.reDial(a.conf.URLs); err != nil {
+			return err
 		}
-	} else {
-		conn, err = amqp.Dial(a.conf.URL)
-		if err != nil {
-			return fmt.Errorf("AMQP 0.9 Connect: %s", err)
+	} else { // for backwards compatibility with `url`
+		if conn, err = a.dial(a.conf.URL); err != nil {
+			return err
 		}
 	}
 
@@ -300,6 +304,50 @@ func (a *AMQP09) CloseAsync() {
 // WaitForClose blocks until the AMQP09 input has closed down.
 func (a *AMQP09) WaitForClose(timeout time.Duration) error {
 	return nil
+}
+
+// reDial connection to amqp with one or more fallback URLs
+func (a *AMQP09) reDial(urls []string) (conn *amqp.Connection, err error) {
+	for _, u := range urls {
+		conn, err = a.dial(u)
+		if err != nil {
+			if errors.Is(err, errConnect) {
+				continue
+			}
+			break
+		}
+		return conn, nil
+	}
+	return nil, err
+}
+
+// dial attempts to connect to amqp URL
+func (a *AMQP09) dial(amqpURL string) (conn *amqp.Connection, err error) {
+	u, err := url.Parse(amqpURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid amqp URL: %v", err)
+	}
+
+	if a.conf.TLS.Enabled {
+		if u.User != nil {
+			conn, err = amqp.DialTLS(amqpURL, a.tlsConf)
+			if err != nil {
+				return nil, fmt.Errorf("%w: %s", errConnect, err)
+			}
+		} else {
+			conn, err = amqp.DialTLS_ExternalAuth(amqpURL, a.tlsConf)
+			if err != nil {
+				return nil, fmt.Errorf("%w: %s", errConnect, err)
+			}
+		}
+	} else {
+		conn, err = amqp.Dial(amqpURL)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %s", errConnect, err)
+		}
+	}
+
+	return conn, nil
 }
 
 //------------------------------------------------------------------------------

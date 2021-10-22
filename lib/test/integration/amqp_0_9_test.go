@@ -50,6 +50,34 @@ output:
 
 input:
   amqp_0_9:
+    urls: 
+      - amqp://guest:guest@localhost:5672/
+      - amqp://guest:guest@localhost:$PORT/ # fallback URL
+    auto_ack: $VAR1
+    queue: queue-$ID
+    queue_declare:
+      durable: true
+      enabled: true
+    bindings_declare:
+      - exchange: exchange-$ID
+        key: benthos-key
+`
+	backwardsCompatibilityTemplate := `
+output:
+  amqp_0_9:
+    url: amqp://guest:guest@localhost:$PORT/
+    max_in_flight: $MAX_IN_FLIGHT
+    exchange: exchange-$ID
+    key: benthos-key
+    exchange_declare:
+      enabled: true
+      type: direct
+      durable: true
+    metadata:
+      exclude_prefixes: [ $OUTPUT_META_EXCLUDE_PREFIX ]
+
+input:
+  amqp_0_9:
     url: amqp://guest:guest@localhost:$PORT/
     auto_ack: $VAR1
     queue: queue-$ID
@@ -72,6 +100,13 @@ input:
 	)
 	suite.Run(
 		t, template,
+		testOptSleepAfterInput(500*time.Millisecond),
+		testOptSleepAfterOutput(500*time.Millisecond),
+		testOptPort(resource.GetPort("5672/tcp")),
+		testOptVarOne("false"),
+	)
+	suite.Run(
+		t, backwardsCompatibilityTemplate,
 		testOptSleepAfterInput(500*time.Millisecond),
 		testOptSleepAfterOutput(500*time.Millisecond),
 		testOptPort(resource.GetPort("5672/tcp")),
