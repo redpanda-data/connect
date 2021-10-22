@@ -58,7 +58,7 @@ type AMQP09Config struct {
 // NewAMQP09Config creates a new AMQP09Config with default values.
 func NewAMQP09Config() AMQP09Config {
 	return AMQP09Config{
-		URLs:  []string{},
+		URLs:  []string{"amqp://guest:guest@localhost:5672/"},
 		Queue: "benthos-queue",
 		QueueDeclare: AMQP09QueueDeclareConfig{
 			Enabled: false,
@@ -99,10 +99,14 @@ func NewAMQP09(conf AMQP09Config, log log.Modular, stats metrics.Type) (*AMQP09,
 		log:   log,
 	}
 
-	for _, url := range conf.URLs {
-		for _, splitURL := range strings.Split(url, ",") {
-			if trimmed := strings.TrimSpace(splitURL); len(trimmed) > 0 {
-				a.conf.URLs = append(a.conf.URLs, trimmed)
+	if conf.URL != "" {
+		a.conf.URLs = []string{}
+	} else {
+		for _, u := range conf.URLs {
+			for _, splitURL := range strings.Split(u, ",") {
+				if trimmed := strings.TrimSpace(splitURL); len(trimmed) > 0 {
+					a.conf.URLs = append(a.conf.URLs, trimmed)
+				}
 			}
 		}
 	}
@@ -302,10 +306,10 @@ func (a *AMQP09) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-// reDial connection to amqp recursively if one or more URLs fail
+// reDial connection to amqp with one or more fallback URLs
 func (a *AMQP09) reDial(urls []string) (conn *amqp.Connection, err error) {
-	for _, amqpURL := range urls {
-		conn, err = a.dial(amqpURL)
+	for _, u := range urls {
+		conn, err = a.dial(u)
 		if err != nil {
 			if errors.Is(err, errConnect) {
 				continue
