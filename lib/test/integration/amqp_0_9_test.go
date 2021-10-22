@@ -51,7 +51,8 @@ output:
 input:
   amqp_0_9:
     urls: 
-      - amqp://guest:guest@localhost:$PORT/
+      - amqp://guest:guest@localhost:5672/
+      - amqp://guest:guest@localhost:$PORT/ # fallback URL
     auto_ack: $VAR1
     queue: queue-$ID
     queue_declare:
