@@ -37,7 +37,10 @@ var _ = registerIntegrationTest("amqp_0_9", func(t *testing.T) {
 	template := `
 output:
   amqp_0_9:
-    url: amqp://guest:guest@localhost:$PORT/
+    urls:
+      - amqp://guest:guest@localhost:1234/
+      - amqp://guest:guest@localhost:$PORT/ # fallback URL
+      - amqp://guest:guest@localhost:4567/
     max_in_flight: $MAX_IN_FLIGHT
     exchange: exchange-$ID
     key: benthos-key
@@ -50,9 +53,10 @@ output:
 
 input:
   amqp_0_9:
-    urls: 
-      - amqp://guest:guest@localhost:5672/
+    urls:
+      - amqp://guest:guest@localhost:1234/
       - amqp://guest:guest@localhost:$PORT/ # fallback URL
+      - amqp://guest:guest@localhost:4567/
     auto_ack: $VAR1
     queue: queue-$ID
     queue_declare:
@@ -62,6 +66,25 @@ input:
       - exchange: exchange-$ID
         key: benthos-key
 `
+
+	suite := integrationTests(
+		integrationTestOpenClose(),
+		integrationTestMetadata(),
+		integrationTestMetadataFilter(),
+		integrationTestSendBatch(10),
+		integrationTestStreamSequential(1000),
+		integrationTestStreamParallel(1000),
+		integrationTestStreamParallelLossy(1000),
+		integrationTestStreamParallelLossyThroughReconnect(1000),
+	)
+	suite.Run(
+		t, template,
+		testOptSleepAfterInput(500*time.Millisecond),
+		testOptSleepAfterOutput(500*time.Millisecond),
+		testOptPort(resource.GetPort("5672/tcp")),
+		testOptVarOne("false"),
+	)
+
 	backwardsCompatibilityTemplate := `
 output:
   amqp_0_9:
@@ -88,23 +111,7 @@ input:
       - exchange: exchange-$ID
         key: benthos-key
 `
-	suite := integrationTests(
-		integrationTestOpenClose(),
-		integrationTestMetadata(),
-		integrationTestMetadataFilter(),
-		integrationTestSendBatch(10),
-		integrationTestStreamSequential(1000),
-		integrationTestStreamParallel(1000),
-		integrationTestStreamParallelLossy(1000),
-		integrationTestStreamParallelLossyThroughReconnect(1000),
-	)
-	suite.Run(
-		t, template,
-		testOptSleepAfterInput(500*time.Millisecond),
-		testOptSleepAfterOutput(500*time.Millisecond),
-		testOptPort(resource.GetPort("5672/tcp")),
-		testOptVarOne("false"),
-	)
+
 	suite.Run(
 		t, backwardsCompatibilityTemplate,
 		testOptSleepAfterInput(500*time.Millisecond),
@@ -112,31 +119,4 @@ input:
 		testOptPort(resource.GetPort("5672/tcp")),
 		testOptVarOne("false"),
 	)
-	t.Run("with max in flight", func(t *testing.T) {
-		t.Parallel()
-		suite.Run(
-			t, template,
-			testOptSleepAfterInput(500*time.Millisecond),
-			testOptSleepAfterOutput(500*time.Millisecond),
-			testOptPort(resource.GetPort("5672/tcp")),
-			testOptVarOne("false"),
-			testOptMaxInFlight(10),
-		)
-	})
-	t.Run("with auto ack", func(t *testing.T) {
-		t.Parallel()
-		integrationTests(
-			integrationTestOpenClose(),
-			integrationTestMetadata(),
-			integrationTestSendBatch(10),
-			integrationTestStreamSequential(100),
-			integrationTestStreamParallel(100),
-		).Run(
-			t, template,
-			testOptVarOne("true"),
-			testOptSleepAfterInput(100*time.Millisecond),
-			testOptSleepAfterOutput(100*time.Millisecond),
-			testOptPort(resource.GetPort("5672/tcp")),
-		)
-	})
 })

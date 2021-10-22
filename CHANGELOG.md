@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - `amqp_0_9` components now support TLS EXTERNAL auth.
+- Field `urls` added to the `amqp_0_9` input and output.
 - New experimental `schema_registry_encode` processor.
 - Field `write_timeout` added to the `mqtt` output, and field `connect_timeout` added to both the input and output.
 

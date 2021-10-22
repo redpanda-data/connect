@@ -3,6 +3,7 @@ package writer
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -20,6 +21,10 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
+const defaultDeprecatedAMQP09URL = "amqp://guest:guest@localhost:5672/"
+
+var errAMQP09Connect = errors.New("AMQP 0.9 Connect")
+
 //------------------------------------------------------------------------------
 
 // AMQPExchangeDeclareConfig contains fields indicating whether the target AMQP
@@ -34,6 +39,7 @@ type AMQPExchangeDeclareConfig struct {
 // AMQPConfig contains configuration fields for the AMQP output type.
 type AMQPConfig struct {
 	URL             string                    `json:"url" yaml:"url"`
+	URLs            []string                  `json:"urls" yaml:"urls"`
 	MaxInFlight     int                       `json:"max_in_flight" yaml:"max_in_flight"`
 	Exchange        string                    `json:"exchange" yaml:"exchange"`
 	ExchangeDeclare AMQPExchangeDeclareConfig `json:"exchange_declare" yaml:"exchange_declare"`
@@ -52,7 +58,8 @@ type AMQPConfig struct {
 // NewAMQPConfig creates a new AMQPConfig with default values.
 func NewAMQPConfig() AMQPConfig {
 	return AMQPConfig{
-		URL:         "amqp://guest:guest@localhost:5672/",
+		URL:         defaultDeprecatedAMQP09URL,
+		URLs:        []string{},
 		MaxInFlight: 1,
 		Exchange:    "benthos-exchange",
 		ExchangeDeclare: AMQPExchangeDeclareConfig{
@@ -88,6 +95,7 @@ type AMQP struct {
 	stats metrics.Type
 
 	conf    AMQPConfig
+	urls    []string
 	tlsConf *tls.Config
 
 	conn        *amqp.Connection
@@ -137,6 +145,23 @@ func NewAMQPV2(mgr types.Manager, conf AMQPConfig, log log.Modular, stats metric
 	if conf.Persistent {
 		a.deliveryMode = amqp.Persistent
 	}
+
+	if conf.URL != defaultDeprecatedAMQP09URL && len(conf.URLs) > 0 {
+		return nil, errors.New("cannot mix both the field `url` and `urls`")
+	}
+
+	if len(conf.URLs) == 0 {
+		a.urls = append(a.urls, conf.URL)
+	}
+
+	for _, u := range conf.URLs {
+		for _, splitURL := range strings.Split(u, ",") {
+			if trimmed := strings.TrimSpace(splitURL); len(trimmed) > 0 {
+				a.urls = append(a.urls, trimmed)
+			}
+		}
+	}
+
 	if conf.TLS.Enabled {
 		if a.tlsConf, err = conf.TLS.Get(); err != nil {
 			return nil, err
@@ -157,31 +182,9 @@ func (a *AMQP) Connect() error {
 	a.connLock.Lock()
 	defer a.connLock.Unlock()
 
-	var conn *amqp.Connection
-	var err error
-
-	u, err := url.Parse(a.conf.URL)
+	conn, err := a.reDial(a.urls)
 	if err != nil {
-		return fmt.Errorf("invalid amqp URL: %v", err)
-	}
-
-	if a.conf.TLS.Enabled {
-		if u.User != nil {
-			conn, err = amqp.DialTLS(a.conf.URL, a.tlsConf)
-			if err != nil {
-				return fmt.Errorf("amqp failed to connect: %v", err)
-			}
-		} else {
-			conn, err = amqp.DialTLS_ExternalAuth(a.conf.URL, a.tlsConf)
-			if err != nil {
-				return fmt.Errorf("amqp failed to connect: %v", err)
-			}
-		}
-	} else {
-		conn, err = amqp.Dial(a.conf.URL)
-		if err != nil {
-			return fmt.Errorf("amqp failed to connect: %v", err)
-		}
+		return err
 	}
 
 	var amqpChan *amqp.Channel
@@ -336,3 +339,47 @@ func (a *AMQP) WaitForClose(timeout time.Duration) error {
 }
 
 //------------------------------------------------------------------------------
+
+// reDial connection to amqp with one or more fallback URLs
+func (a *AMQP) reDial(urls []string) (conn *amqp.Connection, err error) {
+	for _, u := range urls {
+		conn, err = a.dial(u)
+		if err != nil {
+			if errors.Is(err, errAMQP09Connect) {
+				continue
+			}
+			break
+		}
+		return conn, nil
+	}
+	return nil, err
+}
+
+// dial attempts to connect to amqp URL
+func (a *AMQP) dial(amqpURL string) (conn *amqp.Connection, err error) {
+	u, err := url.Parse(amqpURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid AMQP URL: %w", err)
+	}
+
+	if a.conf.TLS.Enabled {
+		if u.User != nil {
+			conn, err = amqp.DialTLS(amqpURL, a.tlsConf)
+			if err != nil {
+				return nil, fmt.Errorf("%w: %s", errAMQP09Connect, err)
+			}
+		} else {
+			conn, err = amqp.DialTLS_ExternalAuth(amqpURL, a.tlsConf)
+			if err != nil {
+				return nil, fmt.Errorf("%w: %s", errAMQP09Connect, err)
+			}
+		}
+	} else {
+		conn, err = amqp.Dial(amqpURL)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %s", errAMQP09Connect, err)
+		}
+	}
+
+	return conn, nil
+}

@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
+	"github.com/Jeffail/gabs/v2"
 )
 
 //------------------------------------------------------------------------------
@@ -32,11 +33,16 @@ The fields 'key' and 'type' can be dynamically set using function interpolations
 [here](/docs/configuration/interpolation#bloblang-queries).`,
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("url",
-				"A URL to connect to.",
-				"amqp://localhost:5672/",
-				"amqps://guest:guest@localhost:5672/",
-			),
+			docs.FieldString("urls",
+				"A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.",
+				[]string{"amqp://guest:guest@127.0.0.1:5672/"},
+				[]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"},
+				[]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"},
+			).Array().AtVersion("3.58.0"),
+			docs.FieldDeprecated("url").OmitWhen(func(field, parent interface{}) (string, bool) {
+				return "field url is deprecated and should be omitted when urls is used",
+					len(gabs.Wrap(parent).S("urls").Children()) > 0
+			}),
 			docs.FieldCommon("exchange", "An AMQP exchange to publish to."),
 			docs.FieldAdvanced("exchange_declare", "Optionally declare the target exchange (passive).").WithChildren(
 				docs.FieldCommon("enabled", "Whether to declare the exchange."),
