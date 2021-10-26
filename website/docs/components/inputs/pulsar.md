@@ -124,11 +124,11 @@ Default: `""`
 
 ### `subscription_type`
 
-Specify the subscription type for this consumer. Default: shared.
+Specify the subscription type for this consumer.
 
 
 Type: `string`  
-Default: `""`  
+Default: `"shared"`  
 Options: `shared`, `key_shared`, `failover`, `exclusive`.
 
 ### `auth`

@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	defaultSubscriptionType = pulsar.Shared
+	defaultSubscriptionType = "shared"
 )
 
 func init() {
@@ -69,7 +69,9 @@ You can access these metadata fields using
 			),
 			docs.FieldString("topics", "A list of topics to subscribe to.").Array(),
 			docs.FieldCommon("subscription_name", "Specify the subscription name for this consumer."),
-			docs.FieldCommon("subscription_type", "Specify the subscription type for this consumer. Default: shared.").HasOptions("shared", "key_shared", "failover", "exclusive"),
+			docs.FieldCommon("subscription_type", "Specify the subscription type for this consumer.").
+				HasOptions("shared", "key_shared", "failover", "exclusive").
+				HasDefault(defaultSubscriptionType),
 			auth.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(input.NewPulsarConfig()),
 	})
@@ -99,8 +101,10 @@ func newPulsarReader(conf input.PulsarConfig, log log.Modular, stats metrics.Typ
 	if conf.SubscriptionName == "" {
 		return nil, errors.New("field subscription_name must not be empty")
 	}
-	_, err := parseSubscriptionType(conf.SubscriptionType)
-	if conf.SubscriptionType != "" && err != nil { // allow emtpy subscription_type to support existing configurations
+	if conf.SubscriptionType == "" {
+		conf.SubscriptionType = defaultSubscriptionType // set default subscription type if empty
+	}
+	if _, err := parseSubscriptionType(conf.SubscriptionType); err != nil {
 		return nil, fmt.Errorf("field subscription_type is invalid: %v", err)
 	}
 	if err := conf.Auth.Validate(); err != nil {
@@ -117,6 +121,7 @@ func newPulsarReader(conf input.PulsarConfig, log log.Modular, stats metrics.Typ
 }
 
 func parseSubscriptionType(subType string) (pulsar.SubscriptionType, error) {
+	// Pulsar docs: https://pulsar.apache.org/docs/en/2.8.0/concepts-messaging/#subscriptions
 	switch subType {
 	case "shared":
 		return pulsar.Shared, nil
@@ -144,6 +149,7 @@ func (p *pulsarReader) ConnectWithContext(ctx context.Context) error {
 	var (
 		client   pulsar.Client
 		consumer pulsar.Consumer
+		subType  pulsar.SubscriptionType
 		err      error
 	)
 
@@ -155,6 +161,7 @@ func (p *pulsarReader) ConnectWithContext(ctx context.Context) error {
 
 	if p.conf.Auth.OAuth2.Enabled {
 		a := p.conf.Auth.OAuth2
+		// Pulsar docs: https://pulsar.apache.org/docs/en/2.8.0/security-oauth2/#authentication-types
 		opts.Authentication = pulsar.NewAuthenticationOAuth2(map[string]string{
 			"type":       "client_credentials",
 			"issuerUrl":  a.IssuerURL,
@@ -169,11 +176,8 @@ func (p *pulsarReader) ConnectWithContext(ctx context.Context) error {
 		return err
 	}
 
-	subType := defaultSubscriptionType
-	if p.conf.SubscriptionType != "" {
-		if subType, err = parseSubscriptionType(p.conf.SubscriptionType); err != nil {
-			return err
-		}
+	if subType, err = parseSubscriptionType(p.conf.SubscriptionType); err != nil {
+		return err
 	}
 
 	if consumer, err = client.Subscribe(pulsar.ConsumerOptions{

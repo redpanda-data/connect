@@ -87,7 +87,7 @@ func newPulsarWriter(conf output.PulsarConfig, mgr types.Manager, log log.Modula
 	if key, err = interop.NewBloblangField(mgr, conf.Key); err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
-	if orderingKey, err = interop.NewBloblangField(mgr, conf.Key); err != nil {
+	if orderingKey, err = interop.NewBloblangField(mgr, conf.OrderingKey); err != nil {
 		return nil, fmt.Errorf("failed to parse ordering_key expression: %v", err)
 	}
 

@@ -5,7 +5,7 @@ import (
 	plog "github.com/apache/pulsar-client-go/pulsar/log"
 )
 
-// Default logger.
+// DefaultLogger returns a logger that wraps Benthos Modular logger.
 func DefaultLogger(l log.Modular) plog.Logger {
 	return defaultLogger{
 		backend: l,

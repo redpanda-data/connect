@@ -2,7 +2,7 @@ package auth
 
 import "github.com/Jeffail/benthos/v3/internal/docs"
 
-// FieldSpec returns documentation authentication specs for NATS components
+// FieldSpec returns documentation authentication specs for Pulsar components
 func FieldSpec() docs.FieldSpec {
 	return docs.FieldAdvanced("auth", "Optional configuration of Pulsar authentication methods.").WithChildren(
 		docs.FieldAdvanced("oauth2", "Parameters for Pulsar OAuth2 authentication.").WithChildren(
