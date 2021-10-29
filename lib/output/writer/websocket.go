@@ -1,6 +1,7 @@
 package writer
 
 import (
+	"crypto/tls"
 	"net/http"
 	"net/url"
 	"sync"
@@ -10,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
+	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/gorilla/websocket"
 )
 
@@ -19,6 +21,7 @@ import (
 type WebsocketConfig struct {
 	URL         string `json:"url" yaml:"url"`
 	auth.Config `json:",inline" yaml:",inline"`
+	TLS         btls.Config `json:"tls" yaml:"tls"`
 }
 
 // NewWebsocketConfig creates a new WebsocketConfig with default values.
@@ -26,6 +29,7 @@ func NewWebsocketConfig() WebsocketConfig {
 	return WebsocketConfig{
 		URL:    "ws://localhost:4195/post/ws",
 		Config: auth.NewConfig(),
+		TLS:    btls.NewConfig(),
 	}
 }
 
@@ -38,8 +42,9 @@ type Websocket struct {
 
 	lock *sync.Mutex
 
-	conf   WebsocketConfig
-	client *websocket.Conn
+	conf    WebsocketConfig
+	client  *websocket.Conn
+	tlsConf *tls.Config
 }
 
 // NewWebsocket creates a new Websocket output type.
@@ -53,6 +58,12 @@ func NewWebsocket(
 		stats: stats,
 		lock:  &sync.Mutex{},
 		conf:  conf,
+	}
+	if conf.TLS.Enabled {
+		var err error
+		if ws.tlsConf, err = conf.TLS.Get(); err != nil {
+			return nil, err
+		}
 	}
 	return ws, nil
 }
@@ -92,7 +103,15 @@ func (w *Websocket) Connect() error {
 	}
 
 	var client *websocket.Conn
-	if client, _, err = websocket.DefaultDialer.Dial(w.conf.URL, headers); err != nil {
+	if w.conf.TLS.Enabled {
+		dialer := websocket.Dialer{
+			TLSClientConfig: w.tlsConf,
+		}
+		if client, _, err = dialer.Dial(w.conf.URL, headers); err != nil {
+			return err
+
+		}
+	} else if client, _, err = websocket.DefaultDialer.Dial(w.conf.URL, headers); err != nil {
 		return err
 	}
 

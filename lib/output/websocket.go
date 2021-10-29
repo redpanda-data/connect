@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
+	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
 //------------------------------------------------------------------------------
@@ -18,6 +19,7 @@ func init() {
 Sends messages to an HTTP server via a websocket connection.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("url", "The URL to connect to."),
+			btls.FieldSpec(),
 		}.Merge(auth.FieldSpecs()),
 		Categories: []Category{
 			CategoryNetwork,

@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
+	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
 //------------------------------------------------------------------------------
@@ -23,6 +24,7 @@ first established.`,
 		FieldSpecs: append(docs.FieldSpecs{
 			docs.FieldCommon("url", "The URL to connect to.", "ws://localhost:4195/get/ws").HasType("string"),
 			docs.FieldAdvanced("open_message", "An optional message to send to the server upon connection."),
+			btls.FieldSpec(),
 		}, auth.FieldSpecs()...),
 		Categories: []Category{
 			CategoryNetwork,
