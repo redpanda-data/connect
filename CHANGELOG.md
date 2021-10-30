@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Field `urls` added to the `amqp_0_9` input and output.
 - New experimental `schema_registry_encode` processor.
 - Field `write_timeout` added to the `mqtt` output, and field `connect_timeout` added to both the input and output.
+- New Bloblang method `parse_duration_iso8601` for parsing ISO-8601 duration strings into an integer.
 
 ### Fixed
 
@@ -739,7 +740,7 @@ All notable changes to this project will be documented in this file.
 
 - New beta `bloblang` input for generating documents.
 - New beta Azure `blob_storage` output.
-- Field `sync_response.status` added to `http_server` input. 
+- Field `sync_response.status` added to `http_server` input.
 - New Bloblang `errored` function.
 
 ### Fixed
