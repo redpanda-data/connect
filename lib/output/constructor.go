@@ -177,6 +177,7 @@ const (
 	TypeDynamic            = "dynamic"
 	TypeDynamoDB           = "dynamodb"
 	TypeElasticsearch      = "elasticsearch"
+	TypeFallback           = "fallback"
 	TypeFile               = "file"
 	TypeFiles              = "files"
 	TypeGCPCloudStorage    = "gcp_cloud_storage"
@@ -249,6 +250,7 @@ type Config struct {
 	Dynamic            DynamicConfig                  `json:"dynamic" yaml:"dynamic"`
 	DynamoDB           writer.DynamoDBConfig          `json:"dynamodb" yaml:"dynamodb"`
 	Elasticsearch      writer.ElasticsearchConfig     `json:"elasticsearch" yaml:"elasticsearch"`
+	Fallback           TryConfig                      `json:"fallback" yaml:"fallback"`
 	File               FileConfig                     `json:"file" yaml:"file"`
 	Files              writer.FilesConfig             `json:"files" yaml:"files"`
 	GCPCloudStorage    GCPCloudStorageConfig          `json:"gcp_cloud_storage" yaml:"gcp_cloud_storage"`
@@ -322,6 +324,7 @@ func NewConfig() Config {
 		Dynamic:            NewDynamicConfig(),
 		DynamoDB:           writer.NewDynamoDBConfig(),
 		Elasticsearch:      writer.NewElasticsearchConfig(),
+		Fallback:           NewTryConfig(),
 		File:               NewFileConfig(),
 		Files:              writer.NewFilesConfig(),
 		GCPCloudStorage:    NewGCPCloudStorageConfig(),

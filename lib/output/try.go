@@ -17,6 +17,7 @@ import (
 func init() {
 	Constructors[TypeTry] = TypeSpec{
 		constructor: NewTry,
+		Status:      docs.StatusDeprecated,
 		Summary: `
 Attempts to send each message to a child output, starting from the first output
 on the list. If an output attempt fails then the next output in the list is
@@ -50,7 +51,7 @@ output:
 
 When an output within a try sequence uses batching, like so:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 output:
   try:
   - dynamodb:
