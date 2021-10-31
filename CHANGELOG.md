@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Field `urls` added to the `amqp_0_9` input and output.
 - New experimental `schema_registry_encode` processor.
 - Field `write_timeout` added to the `mqtt` output, and field `connect_timeout` added to both the input and output.
+- The `websocket` input and output now support custom `tls` configuration. 
 
 ### Fixed
 
