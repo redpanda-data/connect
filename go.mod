@@ -64,7 +64,7 @@ require (
 	github.com/moby/term v0.0.0-20201101162038-25d840ce174a // indirect
 	github.com/nats-io/jwt v1.2.0 // indirect
 	github.com/nats-io/nats-streaming-server v0.19.0 // indirect
-	github.com/nats-io/nats.go v1.11.0
+	github.com/nats-io/nats.go v1.12.3
 	github.com/nats-io/stan.go v0.7.0
 	github.com/nsf/jsondiff v0.0.0-20200515183724-f29ed568f4ce
 	github.com/nsqio/go-nsq v1.0.8
@@ -95,7 +95,7 @@ require (
 	github.com/xeipuuv/gojsonschema v1.2.0
 	go.mongodb.org/mongo-driver v1.4.4
 	go.nanomsg.org/mangos/v3 v3.1.3
-	golang.org/x/crypto v0.0.0-20210503195802-e9a32991a82e
+	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
 	golang.org/x/net v0.0.0-20210902165921-8d991716f632
 	golang.org/x/oauth2 v0.0.0-20210819190943-2bc19b11175f
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c

@@ -23,11 +23,12 @@ import (
 
 // NATSConfig contains configuration fields for the NATS output type.
 type NATSConfig struct {
-	URLs        []string    `json:"urls" yaml:"urls"`
-	Subject     string      `json:"subject" yaml:"subject"`
-	MaxInFlight int         `json:"max_in_flight" yaml:"max_in_flight"`
-	TLS         btls.Config `json:"tls" yaml:"tls"`
-	Auth        auth.Config `json:"auth" yaml:"auth"`
+	URLs        []string          `json:"urls" yaml:"urls"`
+	Subject     string            `json:"subject" yaml:"subject"`
+	Headers     map[string]string `json:"headers" yaml:"headers"`
+	MaxInFlight int               `json:"max_in_flight" yaml:"max_in_flight"`
+	TLS         btls.Config       `json:"tls" yaml:"tls"`
+	Auth        auth.Config       `json:"auth" yaml:"auth"`
 }
 
 // NewNATSConfig creates a new NATSConfig with default values.
@@ -52,6 +53,7 @@ type NATS struct {
 
 	urls       string
 	conf       NATSConfig
+	headers    map[string]*field.Expression
 	subjectStr *field.Expression
 	tlsConf    *tls.Config
 }
@@ -66,12 +68,18 @@ func NewNATS(conf NATSConfig, log log.Modular, stats metrics.Type) (*NATS, error
 // NewNATSV2 creates a new NATS output type.
 func NewNATSV2(conf NATSConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*NATS, error) {
 	n := NATS{
-		log:  log,
-		conf: conf,
+		log:     log,
+		conf:    conf,
+		headers: make(map[string]*field.Expression),
 	}
 	var err error
 	if n.subjectStr, err = interop.NewBloblangField(mgr, conf.Subject); err != nil {
 		return nil, fmt.Errorf("failed to parse subject expression: %v", err)
+	}
+	for k, v := range conf.Headers {
+		if n.headers[k], err = interop.NewBloblangField(mgr, v); err != nil {
+			return nil, fmt.Errorf("failed to parse header '%s' expresion: %v", k, err)
+		}
 	}
 	n.urls = strings.Join(conf.URLs, ",")
 
@@ -137,7 +145,16 @@ func (n *NATS) Write(msg types.Message) error {
 	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		subject := n.subjectStr.String(i, msg)
 		n.log.Debugf("Writing NATS message to topic %s", subject)
-		err := conn.Publish(subject, p.Get())
+		// fill message data
+		nMsg := nats.NewMsg(subject)
+		nMsg.Data = p.Get()
+		if conn.HeadersSupported() {
+			// fill bloblang headers
+			for k, v := range n.headers {
+				nMsg.Header.Add(k, v.String(i, msg))
+			}
+		}
+		err := conn.PublishMsg(nMsg)
 		if err == nats.ErrConnectionClosed {
 			conn.Close()
 			n.connMut.Lock()

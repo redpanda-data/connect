@@ -31,6 +31,12 @@ can find a list of functions [here](/docs/configuration/interpolation#bloblang-q
 				[]string{"nats://username:password@127.0.0.1:4222"},
 			).Array(),
 			docs.FieldCommon("subject", "The subject to publish to.").IsInterpolated(),
+			docs.FieldString("headers", "message headers to include",
+				map[string]string{
+					"Content-Type": "application/json",
+					"Timestamp":    `${!meta("Timestamp")}`,
+				},
+			).IsInterpolated().Map(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			tls.FieldSpec(),
 			auth.FieldSpec(),
