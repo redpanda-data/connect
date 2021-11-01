@@ -2,7 +2,7 @@ package integration
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -46,12 +46,12 @@ func (t AzuriteTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Details here: https://github.com/Azure/Azurite/issues/663
 	if strings.Contains(reqURL, "comp=list") &&
 		strings.Contains(reqURL, "restype=container") {
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return resp, fmt.Errorf("failed to read response body: %w", err)
 		}
 		newBody := strings.ReplaceAll(string(bodyBytes), "<Snapshot/>", "")
-		resp.Body = ioutil.NopCloser(strings.NewReader(newBody))
+		resp.Body = io.NopCloser(strings.NewReader(newBody))
 		resp.ContentLength = int64(len(newBody))
 	}
 

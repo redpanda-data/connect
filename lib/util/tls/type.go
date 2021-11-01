@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"io/ioutil"
+	"os"
 )
 
 //------------------------------------------------------------------------------
@@ -80,7 +80,7 @@ func (c *Config) Get() (*tls.Config, error) {
 	}
 
 	if len(c.RootCAsFile) > 0 {
-		caCert, err := ioutil.ReadFile(c.RootCAsFile)
+		caCert, err := os.ReadFile(c.RootCAsFile)
 		if err != nil {
 			return nil, err
 		}

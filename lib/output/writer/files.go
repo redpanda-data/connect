@@ -3,7 +3,6 @@ package writer
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -98,7 +97,7 @@ func (f *Files) Write(msg types.Message) error {
 			return err
 		}
 
-		return ioutil.WriteFile(path, p.Get(), os.FileMode(0666))
+		return os.WriteFile(path, p.Get(), os.FileMode(0666))
 	})
 }
 

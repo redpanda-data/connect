@@ -3,7 +3,6 @@ package service_test
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,7 +45,7 @@ func TestStreamBuilderDefault(t *testing.T) {
 }
 
 func TestStreamBuilderProducerFunc(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "stream_builder_producer_test")
+	tmpDir, err := os.MkdirTemp("", "stream_builder_producer_test")
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		os.RemoveAll(tmpDir)
@@ -94,14 +93,14 @@ file:
 	require.NoError(t, strm.Run(context.Background()))
 	wg.Wait()
 
-	outBytes, err := ioutil.ReadFile(outFilePath)
+	outBytes, err := os.ReadFile(outFilePath)
 	require.NoError(t, err)
 
 	assert.Equal(t, "HELLO WORLD 1\nHELLO WORLD 2\nHELLO WORLD 3\n", string(outBytes))
 }
 
 func TestStreamBuilderBatchProducerFunc(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "stream_builder_batch_producer_test")
+	tmpDir, err := os.MkdirTemp("", "stream_builder_batch_producer_test")
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		os.RemoveAll(tmpDir)
@@ -158,7 +157,7 @@ file:
 	require.NoError(t, strm.Run(context.Background()))
 	wg.Wait()
 
-	outBytes, err := ioutil.ReadFile(outFilePath)
+	outBytes, err := os.ReadFile(outFilePath)
 	require.NoError(t, err)
 
 	assert.Equal(t, "HELLO WORLD 1\nHELLO WORLD 2\n\nHELLO WORLD 3\nHELLO WORLD 4\n\nHELLO WORLD 5\nHELLO WORLD 6\n\n", string(outBytes))
@@ -207,14 +206,14 @@ logger:
 }
 
 func TestStreamBuilderConsumerFunc(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "stream_builder_consumer_test")
+	tmpDir, err := os.MkdirTemp("", "stream_builder_consumer_test")
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		os.RemoveAll(tmpDir)
 	})
 
 	inFilePath := filepath.Join(tmpDir, "in.txt")
-	require.NoError(t, ioutil.WriteFile(inFilePath, []byte(`HELLO WORLD 1
+	require.NoError(t, os.WriteFile(inFilePath, []byte(`HELLO WORLD 1
 HELLO WORLD 2
 HELLO WORLD 3`), 0755))
 
@@ -262,14 +261,14 @@ file:
 }
 
 func TestStreamBuilderBatchConsumerFunc(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "stream_builder_batch_consumer_test")
+	tmpDir, err := os.MkdirTemp("", "stream_builder_batch_consumer_test")
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		os.RemoveAll(tmpDir)
 	})
 
 	inFilePath := filepath.Join(tmpDir, "in.txt")
-	require.NoError(t, ioutil.WriteFile(inFilePath, []byte(`HELLO WORLD 1
+	require.NoError(t, os.WriteFile(inFilePath, []byte(`HELLO WORLD 1
 HELLO WORLD 2
 
 HELLO WORLD 3

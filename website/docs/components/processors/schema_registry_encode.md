@@ -36,6 +36,7 @@ label: ""
 schema_registry_encode:
   url: ""
   subject: ""
+  refresh_period: 10m
 ```
 
 </TabItem>
@@ -47,6 +48,7 @@ label: ""
 schema_registry_encode:
   url: ""
   subject: ""
+  refresh_period: 10m
   tls:
     skip_cert_verify: false
     enable_renegotiation: false
@@ -87,6 +89,22 @@ Type: `string`
 subject: foo
 
 subject: ${! meta("kafka_topic") }
+```
+
+### `refresh_period`
+
+The period after which a schema is refreshed for each subject, this is done by polling the schema registry service.
+
+
+Type: `string`  
+Default: `"10m"`  
+
+```yaml
+# Examples
+
+refresh_period: 60s
+
+refresh_period: 1h
 ```
 
 ### `tls`

@@ -31,6 +31,8 @@ type MQTTConfig struct {
 	Will                  mqttconf.Will `json:"will" yaml:"will"`
 	User                  string        `json:"user" yaml:"user"`
 	Password              string        `json:"password" yaml:"password"`
+	ConnectTimeout        string        `json:"connect_timeout" yaml:"connect_timeout"`
+	WriteTimeout          string        `json:"write_timeout" yaml:"write_timeout"`
 	KeepAlive             int64         `json:"keepalive" yaml:"keepalive"`
 	MaxInFlight           int           `json:"max_in_flight" yaml:"max_in_flight"`
 	TLS                   tls.Config    `json:"tls" yaml:"tls"`
@@ -39,16 +41,18 @@ type MQTTConfig struct {
 // NewMQTTConfig creates a new MQTTConfig with default values.
 func NewMQTTConfig() MQTTConfig {
 	return MQTTConfig{
-		URLs:        []string{"tcp://localhost:1883"},
-		QoS:         1,
-		Topic:       "benthos_topic",
-		ClientID:    "benthos_output",
-		Will:        mqttconf.EmptyWill(),
-		User:        "",
-		Password:    "",
-		MaxInFlight: 1,
-		KeepAlive:   30,
-		TLS:         tls.NewConfig(),
+		URLs:           []string{"tcp://localhost:1883"},
+		QoS:            1,
+		Topic:          "benthos_topic",
+		ClientID:       "benthos_output",
+		Will:           mqttconf.EmptyWill(),
+		User:           "",
+		Password:       "",
+		ConnectTimeout: "30s",
+		WriteTimeout:   "3s",
+		MaxInFlight:    1,
+		KeepAlive:      30,
+		TLS:            tls.NewConfig(),
 	}
 }
 
@@ -58,6 +62,9 @@ func NewMQTTConfig() MQTTConfig {
 type MQTT struct {
 	log   log.Modular
 	stats metrics.Type
+
+	connectTimeout time.Duration
+	writeTimeout   time.Duration
 
 	urls  []string
 	conf  MQTTConfig
@@ -92,6 +99,13 @@ func NewMQTTV2(
 	}
 
 	var err error
+	if m.connectTimeout, err = time.ParseDuration(conf.ConnectTimeout); err != nil {
+		return nil, fmt.Errorf("unable to parse connect timeout duration string: %w", err)
+	}
+	if m.writeTimeout, err = time.ParseDuration(conf.WriteTimeout); err != nil {
+		return nil, fmt.Errorf("unable to parse write timeout duration string: %w", err)
+	}
+
 	if m.topic, err = interop.NewBloblangField(mgr, conf.Topic); err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
@@ -145,8 +159,8 @@ func (m *MQTT) Connect() error {
 			client.Disconnect(0)
 			m.log.Errorf("Connection lost due to: %v\n", reason)
 		}).
-		SetConnectTimeout(time.Second).
-		SetWriteTimeout(time.Second).
+		SetConnectTimeout(m.connectTimeout).
+		SetWriteTimeout(m.writeTimeout).
 		SetKeepAlive(time.Duration(m.conf.KeepAlive)).
 		SetClientID(m.conf.ClientID)
 

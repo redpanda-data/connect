@@ -1,7 +1,6 @@
 package input
 
 import (
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -18,7 +17,7 @@ import (
 func testProgram(t *testing.T, program string) string {
 	t.Helper()
 
-	dir, err := ioutil.TempDir("", "benthos_subprocess_input_test")
+	dir, err := os.MkdirTemp("", "benthos_subprocess_input_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -26,7 +25,7 @@ func testProgram(t *testing.T, program string) string {
 	})
 
 	pathStr := path.Join(dir, "main.go")
-	require.NoError(t, ioutil.WriteFile(pathStr, []byte(program), 0666))
+	require.NoError(t, os.WriteFile(pathStr, []byte(program), 0666))
 
 	return pathStr
 }

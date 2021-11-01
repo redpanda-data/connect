@@ -2,11 +2,10 @@ package processor
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
+	"net/http"
 	"strings"
 	"time"
-
-	"net/http"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -187,7 +186,7 @@ func loadSchema(schemaPath string) (string, error) {
 
 	defer response.Body.Close()
 
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 
 	if err != nil {
 		return "", err

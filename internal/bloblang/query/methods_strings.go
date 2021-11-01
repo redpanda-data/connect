@@ -17,7 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
-	"io/ioutil"
+	"io"
 	"net/url"
 	"path/filepath"
 	"regexp"
@@ -211,22 +211,22 @@ var _ = registerSimpleMethod(
 		case "base64":
 			schemeFn = func(b []byte) ([]byte, error) {
 				e := base64.NewDecoder(base64.StdEncoding, bytes.NewReader(b))
-				return ioutil.ReadAll(e)
+				return io.ReadAll(e)
 			}
 		case "base64url":
 			schemeFn = func(b []byte) ([]byte, error) {
 				e := base64.NewDecoder(base64.URLEncoding, bytes.NewReader(b))
-				return ioutil.ReadAll(e)
+				return io.ReadAll(e)
 			}
 		case "hex":
 			schemeFn = func(b []byte) ([]byte, error) {
 				e := hex.NewDecoder(bytes.NewReader(b))
-				return ioutil.ReadAll(e)
+				return io.ReadAll(e)
 			}
 		case "ascii85":
 			schemeFn = func(b []byte) ([]byte, error) {
 				e := ascii85.NewDecoder(bytes.NewReader(b))
-				return ioutil.ReadAll(e)
+				return io.ReadAll(e)
 			}
 		case "z85":
 			schemeFn = func(b []byte) ([]byte, error) {

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -246,7 +246,7 @@ func (s *S3) Get(key string) ([]byte, error) {
 
 	var bytes []byte
 	if err == nil {
-		bytes, err = ioutil.ReadAll(obj.Body)
+		bytes, err = io.ReadAll(obj.Body)
 		obj.Body.Close()
 	}
 	return bytes, err

@@ -36,6 +36,8 @@ output:
     topic: benthos_topic
     client_id: benthos_output
     qos: 1
+    connect_timeout: 30s
+    write_timeout: 3s
     retained: false
     max_in_flight: 1
 ```
@@ -54,6 +56,8 @@ output:
     client_id: benthos_output
     dynamic_client_id_suffix: ""
     qos: 1
+    connect_timeout: 30s
+    write_timeout: 3s
     retained: false
     will:
       enabled: false
@@ -141,6 +145,40 @@ The QoS value to set for each message.
 Type: `int`  
 Default: `1`  
 Options: `0`, `1`, `2`.
+
+### `connect_timeout`
+
+The maximum amount of time to wait in order to establish a connection before the attempt is abandoned.
+
+
+Type: `string`  
+Default: `"30s"`  
+Requires version 3.58.0 or newer  
+
+```yaml
+# Examples
+
+connect_timeout: 1s
+
+connect_timeout: 500ms
+```
+
+### `write_timeout`
+
+The maximum amount of time to wait to write data before the attempt is abandoned.
+
+
+Type: `string`  
+Default: `"3s"`  
+Requires version 3.58.0 or newer  
+
+```yaml
+# Examples
+
+write_timeout: 1s
+
+write_timeout: 500ms
+```
 
 ### `retained`
 

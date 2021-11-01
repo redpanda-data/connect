@@ -2,7 +2,6 @@ package test
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -94,7 +93,7 @@ func (p *ProcessorsProvider) ProvideBloblang(pathStr string) ([]types.Processor,
 		pathStr = filepath.Join(filepath.Dir(p.targetPath), pathStr)
 	}
 
-	mappingBytes, err := ioutil.ReadFile(pathStr)
+	mappingBytes, err := os.ReadFile(pathStr)
 	if err != nil {
 		return nil, err
 	}

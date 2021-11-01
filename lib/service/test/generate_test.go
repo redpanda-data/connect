@@ -1,7 +1,6 @@
 package test_test
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -57,7 +56,7 @@ tests:
 		t.Errorf("Expected not exist error, got %v", err)
 	}
 
-	actBytes, err := ioutil.ReadFile(filepath.Join(testDir, "foo_benthos_test.yaml"))
+	actBytes, err := os.ReadFile(filepath.Join(testDir, "foo_benthos_test.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +65,7 @@ tests:
 		t.Errorf("Definition does not match default: %v != %v", act, exp)
 	}
 
-	if actBytes, err = ioutil.ReadFile(filepath.Join(testDir, "bar_benthos_test.yaml")); err != nil {
+	if actBytes, err = os.ReadFile(filepath.Join(testDir, "bar_benthos_test.yaml")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -101,7 +100,7 @@ pipeline:
 		t.Fatal(err)
 	}
 
-	actBytes, err := ioutil.ReadFile(filepath.Join(testDir, "foo_benthos_test.yaml"))
+	actBytes, err := os.ReadFile(filepath.Join(testDir, "foo_benthos_test.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,7 +1,6 @@
 package stream
 
 import (
-	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -34,7 +33,7 @@ func (p CustomProcessor) WaitForClose(timeout time.Duration) error {
 // ExampleYAMLConfig demonstrates running a Benthos stream with a configuration
 // parsed from a YAML file and a custom processor.
 func Example_yamlConfig() {
-	confBytes, err := ioutil.ReadFile("./foo.yaml")
+	confBytes, err := os.ReadFile("./foo.yaml")
 	if err != nil {
 		panic(err)
 	}

@@ -2,7 +2,6 @@ package input
 
 import (
 	"errors"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -21,7 +20,7 @@ import (
 )
 
 func TestSocketServerBasic(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "benthos_socket_test")
+	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -93,7 +92,7 @@ func TestSocketServerBasic(t *testing.T) {
 }
 
 func TestSocketServerRetries(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "benthos_socket_test")
+	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -180,7 +179,7 @@ func TestSocketServerRetries(t *testing.T) {
 }
 
 func TestSocketServerWriteToClosed(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "benthos_socket_test")
+	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -212,7 +211,7 @@ func TestSocketServerWriteToClosed(t *testing.T) {
 }
 
 func TestSocketServerReconnect(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "benthos_socket_test")
+	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -292,7 +291,7 @@ func TestSocketServerReconnect(t *testing.T) {
 }
 
 func TestSocketServerMultipart(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "benthos_socket_test")
+	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -364,7 +363,7 @@ func TestSocketServerMultipart(t *testing.T) {
 }
 
 func TestSocketServerMultipartCustomDelim(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "benthos_socket_test")
+	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -437,7 +436,7 @@ func TestSocketServerMultipartCustomDelim(t *testing.T) {
 }
 
 func TestSocketServerMultipartShutdown(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "benthos_socket_test")
+	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {

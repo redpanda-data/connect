@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
@@ -183,7 +183,7 @@ func (c Config) Test() ([]string, error) {
 // ReadConfig attempts to read a template configuration file.
 func ReadConfig(path string) (conf Config, lints []string, err error) {
 	var templateBytes []byte
-	if templateBytes, err = ioutil.ReadFile(path); err != nil {
+	if templateBytes, err = os.ReadFile(path); err != nil {
 		return
 	}
 

@@ -31,7 +31,7 @@ This component is deprecated and will be removed in the next major version relea
 output:
   label: ""
   amqp:
-    url: amqp://guest:guest@localhost:5672/
+    urls: []
     exchange: benthos-exchange
     key: benthos-key
     type: ""
@@ -48,7 +48,7 @@ output:
 output:
   label: ""
   amqp:
-    url: amqp://guest:guest@localhost:5672/
+    urls: []
     exchange: benthos-exchange
     exchange_declare:
       enabled: false
@@ -82,20 +82,27 @@ Please use [`amqp_0_9`](/docs/components/outputs/amqp_0_9) instead.
 
 ## Fields
 
-### `url`
+### `urls`
 
-A URL to connect to.
+A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.
 
 
-Type: `string`  
-Default: `"amqp://guest:guest@localhost:5672/"`  
+Type: `array`  
+Default: `[]`  
+Requires version 3.58.0 or newer  
 
 ```yaml
 # Examples
 
-url: amqp://localhost:5672/
+urls:
+  - amqp://guest:guest@127.0.0.1:5672/
 
-url: amqps://guest:guest@localhost:5672/
+urls:
+  - amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/
+
+urls:
+  - amqp://127.0.0.1:5672/
+  - amqp://127.0.0.2:5672/
 ```
 
 ### `exchange`

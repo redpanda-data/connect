@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -207,7 +207,7 @@ func (d *Dynamic) handleGETInput(w http.ResponseWriter, r *http.Request) error {
 func (d *Dynamic) handlePOSTInput(w http.ResponseWriter, r *http.Request) error {
 	id := mux.Vars(r)["id"]
 
-	reqBytes, err := ioutil.ReadAll(r.Body)
+	reqBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		return err
 	}

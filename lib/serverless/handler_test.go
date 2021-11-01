@@ -2,7 +2,7 @@ package serverless
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -24,7 +24,7 @@ func TestHandlerAsync(t *testing.T) {
 		resMut.Lock()
 		defer resMut.Unlock()
 
-		resBytes, err := ioutil.ReadAll(r.Body)
+		resBytes, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -157,7 +157,7 @@ func TestHandlerCombined(t *testing.T) {
 		resMut.Lock()
 		defer resMut.Unlock()
 
-		resBytes, err := ioutil.ReadAll(r.Body)
+		resBytes, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Fatal(err)
 		}

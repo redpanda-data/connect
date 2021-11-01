@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"sync"
@@ -36,15 +36,7 @@ func init() {
 	err := service.RegisterProcessor(
 		"schema_registry_decode", schemaRegistryDecoderConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-			urlStr, err := conf.FieldString("url")
-			if err != nil {
-				return nil, err
-			}
-			tlsConf, err := conf.FieldTLS("tls")
-			if err != nil {
-				return nil, err
-			}
-			return newSchemaRegistryDecoder(urlStr, tlsConf, mgr.Logger())
+			return newSchemaRegistryDecoderFromConfig(conf, mgr.Logger())
 		})
 
 	if err != nil {
@@ -64,6 +56,18 @@ type schemaRegistryDecoder struct {
 	shutSig    *shutdown.Signaller
 
 	logger *service.Logger
+}
+
+func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*schemaRegistryDecoder, error) {
+	urlStr, err := conf.FieldString("url")
+	if err != nil {
+		return nil, err
+	}
+	tlsConf, err := conf.FieldTLS("tls")
+	if err != nil {
+		return nil, err
+	}
+	return newSchemaRegistryDecoder(urlStr, tlsConf, logger)
 }
 
 func newSchemaRegistryDecoder(urlStr string, tlsConf *tls.Config, logger *service.Logger) (*schemaRegistryDecoder, error) {
@@ -255,7 +259,7 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 			continue
 		}
 
-		resBytes, err = ioutil.ReadAll(res.Body)
+		resBytes, err = io.ReadAll(res.Body)
 		res.Body.Close()
 		if err != nil {
 			s.logger.Errorf("failed to read response for schema '%v': %v", id, err)

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -353,14 +352,14 @@ func (h *HTTPServer) extractMessageFromRequest(r *http.Request) (types.Message, 
 				return nil, err
 			}
 			var msgBytes []byte
-			if msgBytes, err = ioutil.ReadAll(p); err != nil {
+			if msgBytes, err = io.ReadAll(p); err != nil {
 				return nil, err
 			}
 			msg.Append(message.NewPart(msgBytes))
 		}
 	} else {
 		var msgBytes []byte
-		if msgBytes, err = ioutil.ReadAll(r.Body); err != nil {
+		if msgBytes, err = io.ReadAll(r.Body); err != nil {
 			return nil, err
 		}
 		msg.Append(message.NewPart(msgBytes))

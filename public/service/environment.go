@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/public/bloblang"
-	"gopkg.in/yaml.v3"
 )
 
 // Environment is a collection of Benthos component plugins that can be used in
@@ -89,7 +88,7 @@ func (e *Environment) RegisterBatchBuffer(name string, spec *ConfigSpec, ctor Ba
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeBuffer
 	return e.internal.Buffers.Add(func(conf buffer.Config, nm bundle.NewManagement) (buffer.Type, error) {
-		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
 		}
@@ -120,7 +119,7 @@ func (e *Environment) RegisterCache(name string, spec *ConfigSpec, ctor CacheCon
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeCache
 	return e.internal.Caches.Add(func(conf cache.Config, nm bundle.NewManagement) (types.Cache, error) {
-		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
 		}
@@ -155,7 +154,7 @@ func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputCon
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
 	return e.internal.Inputs.Add(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (input.Type, error) {
-		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
 		}
@@ -182,7 +181,7 @@ func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor Bat
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
 	return e.internal.Inputs.Add(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (input.Type, error) {
-		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
 		}
@@ -215,7 +214,7 @@ func (e *Environment) RegisterOutput(name string, spec *ConfigSpec, ctor OutputC
 	componentSpec.Type = docs.TypeOutput
 	return e.internal.Outputs.Add(bundle.OutputConstructorFromSimple(
 		func(conf output.Config, nm bundle.NewManagement) (output.Type, error) {
-			pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
+			pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 			if err != nil {
 				return nil, err
 			}
@@ -254,7 +253,7 @@ func (e *Environment) RegisterBatchOutput(name string, spec *ConfigSpec, ctor Ba
 	componentSpec.Type = docs.TypeOutput
 	return e.internal.Outputs.Add(bundle.OutputConstructorFromSimple(
 		func(conf output.Config, nm bundle.NewManagement) (output.Type, error) {
-			pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
+			pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 			if err != nil {
 				return nil, err
 			}
@@ -299,7 +298,7 @@ func (e *Environment) RegisterProcessor(name string, spec *ConfigSpec, ctor Proc
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeProcessor
 	return e.internal.Processors.Add(func(conf processor.Config, nm bundle.NewManagement) (processor.Type, error) {
-		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
 		}
@@ -324,7 +323,7 @@ func (e *Environment) RegisterBatchProcessor(name string, spec *ConfigSpec, ctor
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeProcessor
 	return e.internal.Processors.Add(func(conf processor.Config, nm bundle.NewManagement) (processor.Type, error) {
-		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
 		}
@@ -355,7 +354,7 @@ func (e *Environment) RegisterRateLimit(name string, spec *ConfigSpec, ctor Rate
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeRateLimit
 	return e.internal.RateLimits.Add(func(conf ratelimit.Config, nm bundle.NewManagement) (types.RateLimit, error) {
-		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
 		}

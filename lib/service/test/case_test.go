@@ -2,7 +2,6 @@ package test
 
 import (
 	"errors"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -223,7 +222,7 @@ func TestFileCaseInputs(t *testing.T) {
 
 	provider["/pipeline/processors"] = []types.Processor{proc}
 
-	tmpDir, err := ioutil.TempDir("", "test_file_content")
+	tmpDir, err := os.MkdirTemp("", "test_file_content")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -287,7 +286,7 @@ func TestFileCaseConditions(t *testing.T) {
 
 	provider["/pipeline/processors"] = []types.Processor{proc}
 
-	tmpDir, err := ioutil.TempDir("", "test_file_case")
+	tmpDir, err := os.MkdirTemp("", "test_file_case")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {

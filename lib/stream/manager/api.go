@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -25,7 +25,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gorilla/mux"
-	yaml "gopkg.in/yaml.v3"
+	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -141,7 +141,7 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var setBytes []byte
-	if setBytes, requestErr = ioutil.ReadAll(r.Body); requestErr != nil {
+	if setBytes, requestErr = io.ReadAll(r.Body); requestErr != nil {
 		return
 	}
 
@@ -282,7 +282,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 
 	readConfig := func() (confOut stream.Config, lints []string, err error) {
 		var confBytes []byte
-		if confBytes, err = ioutil.ReadAll(r.Body); err != nil {
+		if confBytes, err = io.ReadAll(r.Body); err != nil {
 			return
 		}
 		confBytes = text.ReplaceEnvVariables(confBytes)
@@ -304,7 +304,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 	}
 	patchConfig := func(confIn stream.Config) (confOut stream.Config, err error) {
 		var patchBytes []byte
-		if patchBytes, err = ioutil.ReadAll(r.Body); err != nil {
+		if patchBytes, err = io.ReadAll(r.Body); err != nil {
 			return
 		}
 
@@ -512,7 +512,7 @@ func (m *Type) HandleResourceCRUD(w http.ResponseWriter, r *http.Request) {
 	var lints []string
 	{
 		var confBytes []byte
-		if confBytes, requestErr = ioutil.ReadAll(r.Body); requestErr != nil {
+		if confBytes, requestErr = io.ReadAll(r.Body); requestErr != nil {
 			return
 		}
 		confBytes = text.ReplaceEnvVariables(confBytes)

@@ -3,8 +3,8 @@ package config
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -31,7 +31,7 @@ func ReadWithJSONPointers(path string, replaceEnvs bool) ([]byte, error) {
 //
 // If any non-fatal errors occur lints are returned along with the result.
 func ReadWithJSONPointersLinted(path string, replaceEnvs bool) (configBytes []byte, lints []string, err error) {
-	configBytes, err = ioutil.ReadFile(path)
+	configBytes, err = os.ReadFile(path)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -164,7 +164,7 @@ func expandRefVal(path string, level int, root, v interface{}) (interface{}, err
 			rPath = filepath.Join(filepath.Dir(path), rPath)
 		}
 
-		configBytes, err := ioutil.ReadFile(rPath)
+		configBytes, err := os.ReadFile(rPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read relative $ref path '%v' in config '%v': %v", rPath, path, err)
 		}

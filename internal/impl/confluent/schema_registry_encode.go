@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"sync"
@@ -34,6 +34,11 @@ Currently only Avro schemas are supported.`).
 		Field(service.NewInterpolatedStringField("subject").Description("The schema subject to derive schemas from.").
 			Example("foo").
 			Example(`${! meta("kafka_topic") }`)).
+		Field(service.NewStringField("refresh_period").
+			Description("The period after which a schema is refreshed for each subject, this is done by polling the schema registry service.").
+			Default("10m").
+			Example("60s").
+			Example("1h")).
 		Field(service.NewTLSField("tls")).
 		Version("3.58.0")
 }
@@ -42,19 +47,7 @@ func init() {
 	err := service.RegisterProcessor(
 		"schema_registry_encode", schemaRegistryEncoderConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-			urlStr, err := conf.FieldString("url")
-			if err != nil {
-				return nil, err
-			}
-			subject, err := conf.FieldInterpolatedString("subject")
-			if err != nil {
-				return nil, err
-			}
-			tlsConf, err := conf.FieldTLS("tls")
-			if err != nil {
-				return nil, err
-			}
-			return newSchemaRegistryEncoder(urlStr, tlsConf, subject, mgr.Logger())
+			return newSchemaRegistryEncoderFromConfig(conf, mgr.Logger())
 		})
 
 	if err != nil {
@@ -65,8 +58,9 @@ func init() {
 //------------------------------------------------------------------------------
 
 type schemaRegistryEncoder struct {
-	client  *http.Client
-	subject *service.InterpolatedString
+	client             *http.Client
+	subject            *service.InterpolatedString
+	schemaRefreshAfter time.Duration
 
 	schemaServerURL *url.URL
 
@@ -79,19 +73,54 @@ type schemaRegistryEncoder struct {
 	nowFn  func() time.Time
 }
 
-func newSchemaRegistryEncoder(urlStr string, tlsConf *tls.Config, subject *service.InterpolatedString, logger *service.Logger) (*schemaRegistryEncoder, error) {
+func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*schemaRegistryEncoder, error) {
+	urlStr, err := conf.FieldString("url")
+	if err != nil {
+		return nil, err
+	}
+	subject, err := conf.FieldInterpolatedString("subject")
+	if err != nil {
+		return nil, err
+	}
+	refreshPeriodStr, err := conf.FieldString("refresh_period")
+	if err != nil {
+		return nil, err
+	}
+	refreshPeriod, err := time.ParseDuration(refreshPeriodStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse refresh period: %v", err)
+	}
+	refreshTicker := refreshPeriod / 10
+	if refreshTicker < time.Second {
+		refreshTicker = time.Second
+	}
+	tlsConf, err := conf.FieldTLS("tls")
+	if err != nil {
+		return nil, err
+	}
+	return newSchemaRegistryEncoder(urlStr, tlsConf, subject, refreshPeriod, refreshTicker, logger)
+}
+
+func newSchemaRegistryEncoder(
+	urlStr string,
+	tlsConf *tls.Config,
+	subject *service.InterpolatedString,
+	schemaRefreshAfter, schemaRefreshTicker time.Duration,
+	logger *service.Logger,
+) (*schemaRegistryEncoder, error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse url: %w", err)
 	}
 
 	s := &schemaRegistryEncoder{
-		schemaServerURL: u,
-		subject:         subject,
-		schemas:         map[string]*cachedSchemaEncoder{},
-		shutSig:         shutdown.NewSignaller(),
-		logger:          logger,
-		nowFn:           time.Now,
+		schemaServerURL:    u,
+		subject:            subject,
+		schemaRefreshAfter: schemaRefreshAfter,
+		schemas:            map[string]*cachedSchemaEncoder{},
+		shutSig:            shutdown.NewSignaller(),
+		logger:             logger,
+		nowFn:              time.Now,
 	}
 
 	s.client = http.DefaultClient
@@ -111,7 +140,7 @@ func newSchemaRegistryEncoder(urlStr string, tlsConf *tls.Config, subject *servi
 	go func() {
 		for {
 			select {
-			case <-time.After(schemaCacheRefreshPeriod):
+			case <-time.After(schemaRefreshTicker):
 				s.refreshEncoders()
 			case <-s.shutSig.CloseAtLeisureChan():
 				return
@@ -178,17 +207,12 @@ func insertID(id int, content []byte) ([]byte, error) {
 	return newBytes, nil
 }
 
-const (
-	schemaRefreshAfter       = time.Minute * 10
-	schemaCacheRefreshPeriod = time.Minute
-)
-
 func (s *schemaRegistryEncoder) refreshEncoders() {
 	// First pass in read only mode to gather purge candidates and refresh
 	// candidates
 	s.cacheMut.RLock()
 	purgeTargetTime := s.nowFn().Add(-schemaStaleAfter).Unix()
-	updateTargetTime := s.nowFn().Add(-schemaRefreshAfter).Unix()
+	updateTargetTime := s.nowFn().Add(-s.schemaRefreshAfter).Unix()
 	var purgeTargets, refreshTargets []string
 	for k, v := range s.schemas {
 		if atomic.LoadInt64(&v.lastUsedUnixSeconds) < purgeTargetTime {
@@ -269,7 +293,7 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 			continue
 		}
 
-		resBytes, err = ioutil.ReadAll(res.Body)
+		resBytes, err = io.ReadAll(res.Body)
 		res.Body.Close()
 		if err != nil {
 			s.logger.Errorf("failed to read response for schema subject '%v': %v", subject, err)
