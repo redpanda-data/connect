@@ -5,13 +5,20 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New Bloblang method `parse_duration_iso8601` for parsing ISO-8601 duration strings into an integer.
+
+## 3.58.0 - 2021-11-02
+
 ### Added
 
 - `amqp_0_9` components now support TLS EXTERNAL auth.
 - Field `urls` added to the `amqp_0_9` input and output.
 - New experimental `schema_registry_encode` processor.
 - Field `write_timeout` added to the `mqtt` output, and field `connect_timeout` added to both the input and output.
-- New Bloblang method `parse_duration_iso8601` for parsing ISO-8601 duration strings into an integer.
+- The `websocket` input and output now support custom `tls` configuration.
+- New output broker type `fallback` added as a drop-in replacement for the now deprecated `try` broker.
 
 ### Fixed
 

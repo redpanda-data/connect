@@ -1,7 +1,7 @@
 ---
 title: try
 type: output
-status: stable
+status: deprecated
 categories: ["Utility"]
 ---
 
@@ -15,6 +15,9 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
 
 Attempts to send each message to a child output, starting from the first output
 on the list. If an output attempt fails then the next output in the list is
@@ -26,6 +29,10 @@ output:
   label: ""
   try: []
 ```
+
+## Alternatives
+
+This output has been renamed to the (hopefully more appropriate) [`fallback` output](/docs/components/outputs/fallback).
 
 This pattern is useful for triggering events in the case where certain output
 targets have broken. For example, if you had an output type `http_client`
@@ -55,7 +62,7 @@ output:
 
 When an output within a try sequence uses batching, like so:
 
-``` yaml
+```yaml
 output:
   try:
   - dynamodb:

@@ -35,7 +35,7 @@ When strict ordering is required for messages written to topic partitions it is 
 
 You must also ensure that failed batches are never rerouted back to the same output. This can be done by setting the field ` + "`max_retries` to `0` and `backoff.max_elapsed_time`" + ` to empty, which will apply back pressure indefinitely until the batch is sent successfully.
 
-However, this also means that manual intervention will eventually be required in cases where the batch cannot be sent due to configuration problems such as an incorrect ` + "`max_msg_bytes`" + ` estimate. A less strict but automated alternative would be to route failed batches to a dead letter queue using a ` + "[`try` broker](/docs/components/outputs/try)" + `, but this would allow subsequent batches to be delivered in the meantime whilst those failed batches are dealt with.`,
+However, this also means that manual intervention will eventually be required in cases where the batch cannot be sent due to configuration problems such as an incorrect ` + "`max_msg_bytes`" + ` estimate. A less strict but automated alternative would be to route failed batches to a dead letter queue using a ` + "[`fallback` broker](/docs/components/outputs/fallback)" + `, but this would allow subsequent batches to be delivered in the meantime whilst those failed batches are dealt with.`,
 		Async:   true,
 		Batches: true,
 		FieldSpecs: append(docs.FieldSpecs{

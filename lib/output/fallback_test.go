@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTryOutputBasic(t *testing.T) {
-	dir, err := os.MkdirTemp("", "benthos_try_output_tests")
+func TestFallbackOutputBasic(t *testing.T) {
+	dir, err := os.MkdirTemp("", "benthos_fallback_output_tests")
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = os.RemoveAll(dir)
@@ -26,25 +26,25 @@ func TestTryOutputBasic(t *testing.T) {
 	outOne.HTTPClient.URL = "http://localhost:11111111/badurl"
 	outOne.HTTPClient.NumRetries = 1
 	outOne.HTTPClient.Retry = "1ms"
-	outTwo.Files.Path = filepath.Join(dir, "two", `bar-${!count("tofoo")}-${!count("tobar")}.txt`)
+	outTwo.Files.Path = filepath.Join(dir, "two", `bar-${!count("fallbacktofoo")}-${!count("fallbacktobar")}.txt`)
 	outThree.File.Path = "/dev/null"
 
 	procOne, procTwo, procThree := processor.NewConfig(), processor.NewConfig(), processor.NewConfig()
 	procOne.Type, procTwo.Type, procThree.Type = processor.TypeText, processor.TypeText, processor.TypeText
 	procOne.Text.Operator = "prepend"
-	procOne.Text.Value = "this-should-never-appear ${!count(\"tofoo\")}"
+	procOne.Text.Value = "this-should-never-appear ${!count(\"fallbacktofoo\")}"
 	procTwo.Text.Operator = "prepend"
 	procTwo.Text.Value = "two-"
 	procThree.Text.Operator = "prepend"
-	procThree.Text.Value = "this-should-never-appear ${!count(\"tobar\")}"
+	procThree.Text.Value = "this-should-never-appear ${!count(\"fallbacktobar\")}"
 
 	outOne.Processors = append(outOne.Processors, procOne)
 	outTwo.Processors = append(outTwo.Processors, procTwo)
 	outThree.Processors = append(outThree.Processors, procThree)
 
 	conf := NewConfig()
-	conf.Type = TypeTry
-	conf.Try = append(conf.Try, outOne, outTwo, outThree)
+	conf.Type = TypeFallback
+	conf.Fallback = append(conf.Fallback, outOne, outTwo, outThree)
 
 	s, err := New(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
