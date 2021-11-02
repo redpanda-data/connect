@@ -3,10 +3,11 @@ package processor
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/vmihailenco/msgpack/v5"
 	"reflect"
 	"strconv"
 	"time"
+
+	"github.com/vmihailenco/msgpack/v5"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"

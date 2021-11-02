@@ -2,9 +2,10 @@ package processor
 
 import (
 	b64 "encoding/base64"
+	"testing"
+
 	cmp "github.com/google/go-cmp/cmp"
 	"github.com/vmihailenco/msgpack/v5"
-	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -148,7 +149,7 @@ func TestMsgPackFromJson(t *testing.T) {
 	}
 }
 
-func validateResult(tt *testing.T, actual interface{}, expected interface{}, msgs []types.Message) {
+func validateResult(tt *testing.T, actual, expected interface{}, msgs []types.Message) {
 	if diff := cmp.Diff(actual, expected); diff != "" {
 		tt.Errorf("Unexpected output (-want +got):\n%s", diff)
 	}
