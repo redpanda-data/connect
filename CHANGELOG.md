@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- New Bloblang method `parse_duration_iso8601` for parsing ISO-8601 duration strings into an integer.
+
 ## 3.58.0 - 2021-11-02
 
 ### Added
@@ -743,7 +747,7 @@ All notable changes to this project will be documented in this file.
 
 - New beta `bloblang` input for generating documents.
 - New beta Azure `blob_storage` output.
-- Field `sync_response.status` added to `http_server` input. 
+- Field `sync_response.status` added to `http_server` input.
 - New Bloblang `errored` function.
 
 ### Fixed
