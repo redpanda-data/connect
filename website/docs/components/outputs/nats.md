@@ -133,7 +133,7 @@ Default: `"benthos_messages"`
 
 ### `headers`
 
-message headers to include
+Explicit message headers to add to messages.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 

@@ -31,7 +31,7 @@ can find a list of functions [here](/docs/configuration/interpolation#bloblang-q
 				[]string{"nats://username:password@127.0.0.1:4222"},
 			).Array(),
 			docs.FieldCommon("subject", "The subject to publish to.").IsInterpolated(),
-			docs.FieldString("headers", "message headers to include",
+			docs.FieldString("headers", "Explicit message headers to add to messages.",
 				map[string]string{
 					"Content-Type": "application/json",
 					"Timestamp":    `${!meta("Timestamp")}`,

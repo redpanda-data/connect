@@ -8,6 +8,12 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New Bloblang method `parse_duration_iso8601` for parsing ISO-8601 duration strings into an integer.
+- The `nats` input now supports metadata from headers when supported.
+- Field `headers` added to the `nats` output.
+
+### Fixed
+
+- Fixed an issue where the `azure_table_storage` output would attempt to send >100 size batches (and fail)
 
 ## 3.58.0 - 2021-11-02
 
