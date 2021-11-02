@@ -62,9 +62,9 @@ func NewMsgPackConfig() MsgPackConfig {
 
 //------------------------------------------------------------------------------
 
-type MsgPackOperator func(part types.Part) error
+type msgPackOperator func(part types.Part) error
 
-func strToMsgPackOperator(opStr string) (MsgPackOperator, error) {
+func strToMsgPackOperator(opStr string) (msgPackOperator, error) {
 	switch opStr {
 	case "to_json":
 		return func(part types.Part) error {
@@ -99,7 +99,7 @@ func strToMsgPackOperator(opStr string) (MsgPackOperator, error) {
 // MsgPack is a processor that performs an operation on an MsgPack payload.
 type MsgPack struct {
 	parts    []int
-	operator MsgPackOperator
+	operator msgPackOperator
 
 	conf  Config
 	log   log.Modular
