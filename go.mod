@@ -3,7 +3,7 @@ module github.com/Jeffail/benthos/v3
 require (
 	cloud.google.com/go/bigquery v1.8.0
 	cloud.google.com/go/pubsub v1.17.1
-	cloud.google.com/go/storage v1.16.1
+	cloud.google.com/go/storage v1.18.2
 	github.com/Azure/azure-sdk-for-go v48.0.0+incompatible
 	github.com/Azure/azure-storage-queue-go v0.0.0-20191125232315-636801874cdd
 	github.com/Azure/go-amqp v0.13.1
