@@ -17,6 +17,7 @@ import (
 func init() {
 	Constructors[TypeFallback] = TypeSpec{
 		constructor: newFallback,
+		Version:     "3.58.0",
 		Summary: `
 Attempts to send each message to a child output, starting from the first output on the list. If an output attempt fails then the next output in the list is attempted, and so on.`,
 		Description: `
