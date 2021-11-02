@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.58.0 - 2021-11-02
+
 ### Added
 
 - `amqp_0_9` components now support TLS EXTERNAL auth.
