@@ -151,6 +151,7 @@ func (n *NATS) disconnect() {
 func (n *NATS) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
 	n.cMut.Lock()
 	natsChan := n.natsChan
+	natsConn := n.natsConn
 	n.cMut.Unlock()
 
 	var msg *nats.Msg
@@ -167,7 +168,15 @@ func (n *NATS) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, 
 	}
 
 	bmsg := message.New([][]byte{msg.Data})
-	bmsg.Get(0).Metadata().Set("nats_subject", msg.Subject)
+	meta := bmsg.Get(0).Metadata()
+	meta.Set("nats_subject", msg.Subject)
+	// process message headers if server supports the feature
+	if natsConn.HeadersSupported() {
+		for key := range msg.Header {
+			value := msg.Header.Get(key)
+			meta.Set(key, value)
+		}
+	}
 
 	return bmsg, func(ctx context.Context, res types.Response) error {
 		if res.Error() != nil {
