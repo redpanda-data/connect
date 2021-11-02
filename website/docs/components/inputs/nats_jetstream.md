@@ -119,7 +119,6 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["nats://127.0.0.1:4222"]`  
 
 ```yaml
 # Examples
@@ -133,11 +132,10 @@ urls:
 
 ### `queue`
 
-The queue group to consume as.
+An optional queue group to consume as.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `subject`
 
@@ -145,7 +143,6 @@ A subject to consume from. Supports wildcards for consuming multiple subjects.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yaml
 # Examples
@@ -165,7 +162,6 @@ Preserve the state of your consumer under a durable name.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `deliver`
 
@@ -258,7 +254,6 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yaml
 # Examples
@@ -317,7 +312,6 @@ An optional file containing a NKey seed.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yaml
 # Examples
@@ -331,7 +325,6 @@ An optional file containing user credentials which consist of an user JWT and co
 
 
 Type: `string`  
-Default: `""`  
 
 ```yaml
 # Examples

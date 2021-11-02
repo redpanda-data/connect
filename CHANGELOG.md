@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - New Bloblang method `parse_duration_iso8601` for parsing ISO-8601 duration strings into an integer.
 - The `nats` input now supports metadata from headers when supported.
 - Field `headers` added to the `nats` output.
+- Go API: Optional field definitions added for config specs.
 
 ### Fixed
 

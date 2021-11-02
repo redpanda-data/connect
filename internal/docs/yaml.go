@@ -860,7 +860,7 @@ func (f FieldSpecs) YAMLToMap(node *yaml.Node, conf ToValueConfig) (map[string]i
 	for k, v := range pendingFieldsMap {
 		defValue, err := getDefault(k, v)
 		if err != nil {
-			if !conf.Passive {
+			if !v.IsOptional && !conf.Passive {
 				return nil, err
 			}
 			continue

@@ -135,10 +135,7 @@ func (a *AzureTableStorage) WriteWithContext(wctx context.Context, msg types.Mes
 	}); err != nil {
 		return err
 	}
-	if err := a.writeBatches(writeReqs); err != nil {
-		return err
-	}
-	return nil
+	return a.writeBatches(writeReqs)
 }
 
 func (a *AzureTableStorage) getProperties(i int, p types.Part, msg types.Message) map[string]interface{} {

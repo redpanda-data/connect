@@ -6,37 +6,21 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bundle"
-	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/input/reader"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
-	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
+	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/nats-io/nats.go"
 )
 
-func init() {
-	bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c input.Config, nm bundle.NewManagement) (input.Type, error) {
-		var a reader.Async
-		var err error
-		if a, err = newJetStreamReader(c.NATSJetStream, nm.Logger(), nm.Metrics()); err != nil {
-			return nil, err
-		}
-		return input.NewAsyncReader(input.TypeNATSStream, false, a, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
-		Name:    input.TypeNATSJetStream,
-		Type:    docs.TypeInput,
-		Status:  docs.StatusExperimental,
-		Version: "3.46.0",
-		Summary: `Reads messages from NATS JetStream subjects.`,
-		Description: `
+func natsJetStreamInputConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		// Stable(). TODO
+		Categories("Services").
+		Version("3.46.0").
+		Summary("Reads messages from NATS JetStream subjects.").
+		Description(`
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -48,46 +32,59 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).
 
-` + auth.Description(),
-		Categories: []string{
-			string(input.CategoryServices),
-		},
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldCommon(
-				"urls",
-				"A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.",
-				[]string{"nats://127.0.0.1:4222"},
-				[]string{"nats://username:password@127.0.0.1:4222"},
-			).Array(),
-			docs.FieldCommon("queue", "The queue group to consume as."),
-			docs.FieldCommon(
-				"subject", "A subject to consume from. Supports wildcards for consuming multiple subjects.",
-				"foo.bar.baz", "foo.*.baz", "foo.bar.*", "foo.>",
-			),
-			docs.FieldCommon("durable", "Preserve the state of your consumer under a durable name."),
-			docs.FieldCommon(
-				"deliver", "Determines which messages to deliver when consuming without a durable subscriber.",
-			).HasAnnotatedOptions(
-				"all", "Deliver all available messages.",
-				"last", "Deliver starting with the last published messages.",
-			),
-			docs.FieldAdvanced("max_ack_pending", "The maximum number of outstanding acks to be allowed before consuming is halted."),
-			btls.FieldSpec(),
-			auth.FieldSpec(),
-		).ChildDefaultAndTypesFromStruct(input.NewNATSJetStreamConfig()),
-	})
+` + auth.Description()).
+		Field(service.NewStringListField("urls").
+			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
+			Example([]string{"nats://127.0.0.1:4222"}).
+			Example([]string{"nats://username:password@127.0.0.1:4222"})).
+		Field(service.NewStringField("queue").
+			Description("An optional queue group to consume as.").
+			Optional()).
+		Field(service.NewStringField("subject").
+			Description("A subject to consume from. Supports wildcards for consuming multiple subjects.").
+			Example("foo.bar.baz").Example("foo.*.baz").Example("foo.bar.*").Example("foo.>")).
+		Field(service.NewStringField("durable").
+			Description("Preserve the state of your consumer under a durable name.").
+			Optional()).
+		Field(service.NewStringAnnotatedEnumField("deliver", map[string]string{
+			"all":  "Deliver all available messages.",
+			"last": "Deliver starting with the last published messages.",
+		}).
+			Description("Determines which messages to deliver when consuming without a durable subscriber.").
+			Default("all")).
+		Field(service.NewIntField("max_ack_pending").
+			Description("The maximum number of outstanding acks to be allowed before consuming is halted.").
+			Advanced().
+			Default(1024)).
+		Field(service.NewTLSToggledField("tls")).
+		Field(service.NewInternalField(auth.FieldSpec()))
+}
+
+func init() {
+	err := service.RegisterInput(
+		input.TypeNATSJetStream, natsJetStreamInputConfig(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+			return newJetStreamReaderFromConfig(conf, mgr.Logger())
+		})
+
+	if err != nil {
+		panic(err)
+	}
 }
 
 //------------------------------------------------------------------------------
 
 type jetStreamReader struct {
-	urls       string
-	conf       input.NATSJetStreamConfig
-	deliverOpt nats.SubOpt
-	tlsConf    *tls.Config
+	urls          string
+	deliverOpt    nats.SubOpt
+	subject       string
+	queue         string
+	durable       string
+	maxAckPending int
+	authConf      auth.Config
+	tlsConf       *tls.Config
 
-	stats metrics.Type
-	log   log.Modular
+	log *service.Logger
 
 	connMut  sync.Mutex
 	natsConn *nats.Conn
@@ -96,34 +93,67 @@ type jetStreamReader struct {
 	shutSig *shutdown.Signaller
 }
 
-func newJetStreamReader(conf input.NATSJetStreamConfig, log log.Modular, stats metrics.Type) (*jetStreamReader, error) {
+func newJetStreamReaderFromConfig(conf *service.ParsedConfig, log *service.Logger) (*jetStreamReader, error) {
 	j := jetStreamReader{
-		conf:    conf,
-		stats:   stats,
 		log:     log,
 		shutSig: shutdown.NewSignaller(),
 	}
-	j.urls = strings.Join(conf.URLs, ",")
-	var err error
-	if conf.TLS.Enabled {
-		if j.tlsConf, err = conf.TLS.Get(); err != nil {
-			return nil, err
-		}
+
+	urlList, err := conf.FieldStringList("urls")
+	if err != nil {
+		return nil, err
 	}
-	switch conf.Deliver {
+	j.urls = strings.Join(urlList, ",")
+
+	deliver, err := conf.FieldString("deliver")
+	if err != nil {
+		return nil, err
+	}
+	switch deliver {
 	case "all":
 		j.deliverOpt = nats.DeliverAll()
 	case "last":
 		j.deliverOpt = nats.DeliverLast()
 	default:
-		return nil, fmt.Errorf("deliver option %v was not recognised", conf.Deliver)
+		return nil, fmt.Errorf("deliver option %v was not recognised", deliver)
 	}
+
+	if j.subject, err = conf.FieldString("subject"); err != nil {
+		return nil, err
+	}
+	if conf.Contains("queue") {
+		if j.queue, err = conf.FieldString("queue"); err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains("durable") {
+		if j.durable, err = conf.FieldString("durable"); err != nil {
+			return nil, err
+		}
+	}
+
+	if j.maxAckPending, err = conf.FieldInt("max_ack_pending"); err != nil {
+		return nil, err
+	}
+
+	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
+	if err != nil {
+		return nil, err
+	}
+	if tlsEnabled {
+		j.tlsConf = tlsConf
+	}
+
+	if j.authConf, err = AuthFromParsedConfig(conf); err != nil {
+		return nil, err
+	}
+
 	return &j, nil
 }
 
 //------------------------------------------------------------------------------
 
-func (j *jetStreamReader) ConnectWithContext(ctx context.Context) error {
+func (j *jetStreamReader) Connect(ctx context.Context) error {
 	j.connMut.Lock()
 	defer j.connMut.Unlock()
 
@@ -150,7 +180,7 @@ func (j *jetStreamReader) ConnectWithContext(ctx context.Context) error {
 	if j.tlsConf != nil {
 		opts = append(opts, nats.Secure(j.tlsConf))
 	}
-	opts = append(opts, auth.GetOptions(j.conf.Auth)...)
+	opts = append(opts, auth.GetOptions(j.authConf)...)
 	if natsConn, err = nats.Connect(j.urls, opts...); err != nil {
 		return err
 	}
@@ -163,24 +193,24 @@ func (j *jetStreamReader) ConnectWithContext(ctx context.Context) error {
 	options := []nats.SubOpt{
 		nats.ManualAck(),
 	}
-	if j.conf.Durable != "" {
-		options = append(options, nats.Durable(j.conf.Durable))
+	if j.durable != "" {
+		options = append(options, nats.Durable(j.durable))
 	}
 	options = append(options, j.deliverOpt)
-	if j.conf.MaxAckPending != 0 {
-		options = append(options, nats.MaxAckPending(j.conf.MaxAckPending))
+	if j.maxAckPending != 0 {
+		options = append(options, nats.MaxAckPending(j.maxAckPending))
 	}
 
-	if j.conf.Queue == "" {
-		natsSub, err = jCtx.SubscribeSync(j.conf.Subject, options...)
+	if j.queue == "" {
+		natsSub, err = jCtx.SubscribeSync(j.subject, options...)
 	} else {
-		natsSub, err = jCtx.QueueSubscribeSync(j.conf.Subject, j.conf.Queue, options...)
+		natsSub, err = jCtx.QueueSubscribeSync(j.subject, j.queue, options...)
 	}
 	if err != nil {
 		return err
 	}
 
-	j.log.Infof("Receiving NATS messages from JetStream subject: %v\n", j.conf.Subject)
+	j.log.Infof("Receiving NATS messages from JetStream subject: %v", j.subject)
 
 	j.natsConn = natsConn
 	j.natsSub = natsSub
@@ -201,12 +231,12 @@ func (j *jetStreamReader) disconnect() {
 	}
 }
 
-func (j *jetStreamReader) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (j *jetStreamReader) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
 	j.connMut.Lock()
 	natsSub := j.natsSub
 	j.connMut.Unlock()
 	if natsSub == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, service.ErrNotConnected
 	}
 
 	nmsg, err := natsSub.NextMsgWithContext(ctx)
@@ -215,29 +245,26 @@ func (j *jetStreamReader) ReadWithContext(ctx context.Context) (types.Message, r
 		return nil, nil, err
 	}
 
-	msg := message.New([][]byte{nmsg.Data})
-	msg.Get(0).Metadata().Set("nats_subject", nmsg.Subject)
+	msg := service.NewMessage(nmsg.Data)
+	msg.MetaSet("nats_subject", nmsg.Subject)
 
-	return msg, func(ctx context.Context, res types.Response) error {
-		if res.Error() == nil {
+	return msg, func(ctx context.Context, res error) error {
+		if res == nil {
 			return nmsg.Ack()
 		}
 		return nmsg.Nak()
 	}, nil
 }
 
-func (j *jetStreamReader) CloseAsync() {
+func (j *jetStreamReader) Close(ctx context.Context) error {
 	go func() {
 		j.disconnect()
 		j.shutSig.ShutdownComplete()
 	}()
-}
-
-func (j *jetStreamReader) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-j.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return types.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

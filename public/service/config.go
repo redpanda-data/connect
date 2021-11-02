@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
@@ -32,6 +33,26 @@ func NewStringField(name string) *ConfigField {
 func NewStringEnumField(name string, options ...string) *ConfigField {
 	return &ConfigField{
 		field: docs.FieldString(name, "").HasOptions(options...).LintOptions(),
+	}
+}
+
+// NewStringAnnotatedEnumField describes a new string type config field that can
+// have one of a discrete list of values, where each value must be accompanied
+// by a description that annotates its behaviour in the documentation.
+func NewStringAnnotatedEnumField(name string, options map[string]string) *ConfigField {
+	optionKeys := make([]string, 0, len(options))
+	for key := range options {
+		optionKeys = append(optionKeys, key)
+	}
+	sort.Strings(optionKeys)
+
+	flatOptions := make([]string, 0, len(options)*2)
+	for _, o := range optionKeys {
+		flatOptions = append(flatOptions, o, options[o])
+	}
+
+	return &ConfigField{
+		field: docs.FieldString(name, "").HasAnnotatedOptions(flatOptions...).LintOptions(),
 	}
 }
 
@@ -100,6 +121,14 @@ func NewObjectField(name string, fields ...*ConfigField) *ConfigField {
 	}
 }
 
+// NewInternalField returns a ConfigField derived from an internal package field
+// spec. This function is for internal use only.
+func NewInternalField(ifield docs.FieldSpec) *ConfigField {
+	return &ConfigField{
+		field: ifield,
+	}
+}
+
 // Description adds a description to the field which will be shown when printing
 // documentation for the component config spec.
 func (c *ConfigField) Description(d string) *ConfigField {
@@ -119,6 +148,14 @@ func (c *ConfigField) Advanced() *ConfigField {
 // considered mandatory, and so parsing a config will fail in their absence.
 func (c *ConfigField) Default(v interface{}) *ConfigField {
 	c.field = c.field.HasDefault(v)
+	return c
+}
+
+// Optional specifies that a field is optional even when a default value has not
+// been specified. When a field is marked as optional you can test its presence
+// within a parsed config with the method Contains.
+func (c *ConfigField) Optional() *ConfigField {
+	c.field = c.field.Optional()
 	return c
 }
 
@@ -412,6 +449,13 @@ func (p *ParsedConfig) fullDotPath(path ...string) string {
 	fullPath = append(fullPath, p.hiddenPath...)
 	fullPath = append(fullPath, path...)
 	return strings.Join(fullPath, ".")
+}
+
+// Contains checks whether the parsed config contains a given field identified
+// by its name.
+func (p *ParsedConfig) Contains(path ...string) bool {
+	gObj := gabs.Wrap(p.generic).S(p.hiddenPath...)
+	return gObj.Exists(path...)
 }
 
 // FieldString accesses a string field from the parsed config by its name. If

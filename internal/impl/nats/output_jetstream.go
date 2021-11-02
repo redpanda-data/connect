@@ -3,72 +3,66 @@ package nats
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"strings"
 	"sync"
-	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
-	"github.com/Jeffail/benthos/v3/internal/bundle"
-	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/output/writer"
-	"github.com/Jeffail/benthos/v3/lib/types"
-	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
+	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/nats-io/nats.go"
 )
 
+func natsJetStreamOutputConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		// Stable(). TODO
+		Categories("Services").
+		Version("3.46.0").
+		Summary("Write messages to a NATS JetStream subject.").
+		Description(auth.Description()).
+		Field(service.NewStringListField("urls").
+			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
+			Example([]string{"nats://127.0.0.1:4222"}).
+			Example([]string{"nats://username:password@127.0.0.1:4222"})).
+		Field(service.NewInterpolatedStringField("subject").
+			Description("A subject to write to.").
+			Example("foo.bar.baz").
+			Example(`${! meta("kafka_topic") }`).
+			Example(`foo.${! json("meta.type") }`)).
+		Field(service.NewIntField("max_in_flight").
+			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
+			Default(1024)).
+		Field(service.NewTLSToggledField("tls")).
+		Field(service.NewInternalField(auth.FieldSpec()))
+}
+
 func init() {
-	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (output.Type, error) {
-		w, err := newJetStreamOutput(c.NATSJetStream, nm)
-		if err != nil {
-			return nil, err
-		}
-		o, err := output.NewAsyncWriter(output.TypeNATSJetStream, c.NATSJetStream.MaxInFlight, w, nm.Logger(), nm.Metrics())
-		if err != nil {
-			return nil, err
-		}
-		return output.OnlySinglePayloads(o), nil
-	}), docs.ComponentSpec{
-		Name:        output.TypeNATSJetStream,
-		Type:        docs.TypeOutput,
-		Status:      docs.StatusExperimental,
-		Version:     "3.46.0",
-		Summary:     `Write messages to a NATS JetStream subject.`,
-		Description: auth.Description(),
-		Categories: []string{
-			string(output.CategoryServices),
-		},
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldCommon(
-				"urls",
-				"A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.",
-				[]string{"nats://127.0.0.1:4222"},
-				[]string{"nats://username:password@127.0.0.1:4222"},
-			).Array(),
-			docs.FieldCommon("subject", "A subject to write to.").IsInterpolated(),
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-			btls.FieldSpec(),
-			auth.FieldSpec(),
-		).ChildDefaultAndTypesFromStruct(output.NewNATSJetStreamConfig()),
-	})
+	err := service.RegisterOutput(
+		output.TypeNATSJetStream, natsJetStreamOutputConfig(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
+			maxInFlight, err := conf.FieldInt("max_in_flight")
+			if err != nil {
+				return nil, 0, err
+			}
+			w, err := newJetStreamWriterFromConfig(conf, mgr.Logger())
+			return w, maxInFlight, err
+		})
+
+	if err != nil {
+		panic(err)
+	}
 }
 
 //------------------------------------------------------------------------------
 
 type jetStreamOutput struct {
-	urls    string
-	conf    output.NATSJetStreamConfig
-	tlsConf *tls.Config
+	urls       string
+	conf       output.NATSJetStreamConfig
+	subjectStr *service.InterpolatedString
+	authConf   auth.Config
+	tlsConf    *tls.Config
 
-	subjectStr *field.Expression
-
-	stats metrics.Type
-	log   log.Modular
+	log *service.Logger
 
 	connMut  sync.Mutex
 	natsConn *nats.Conn
@@ -77,30 +71,39 @@ type jetStreamOutput struct {
 	shutSig *shutdown.Signaller
 }
 
-func newJetStreamOutput(conf output.NATSJetStreamConfig, mgr bundle.NewManagement) (*jetStreamOutput, error) {
+func newJetStreamWriterFromConfig(conf *service.ParsedConfig, log *service.Logger) (*jetStreamOutput, error) {
 	j := jetStreamOutput{
-		conf:    conf,
-		stats:   mgr.Metrics(),
-		log:     mgr.Logger(),
+		log:     log,
 		shutSig: shutdown.NewSignaller(),
 	}
-	j.urls = strings.Join(conf.URLs, ",")
-	var err error
-	if conf.TLS.Enabled {
-		if j.tlsConf, err = conf.TLS.Get(); err != nil {
-			return nil, err
-		}
+
+	urlList, err := conf.FieldStringList("urls")
+	if err != nil {
+		return nil, err
+	}
+	j.urls = strings.Join(urlList, ",")
+
+	if j.subjectStr, err = conf.FieldInterpolatedString("subject"); err != nil {
+		return nil, err
 	}
 
-	if j.subjectStr, err = mgr.BloblEnvironment().NewField(conf.Subject); err != nil {
-		return nil, fmt.Errorf("subject expression: %w", err)
+	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
+	if err != nil {
+		return nil, err
+	}
+	if tlsEnabled {
+		j.tlsConf = tlsConf
+	}
+
+	if j.authConf, err = AuthFromParsedConfig(conf); err != nil {
+		return nil, err
 	}
 	return &j, nil
 }
 
 //------------------------------------------------------------------------------
 
-func (j *jetStreamOutput) ConnectWithContext(ctx context.Context) error {
+func (j *jetStreamOutput) Connect(ctx context.Context) error {
 	j.connMut.Lock()
 	defer j.connMut.Unlock()
 
@@ -122,7 +125,7 @@ func (j *jetStreamOutput) ConnectWithContext(ctx context.Context) error {
 	if j.tlsConf != nil {
 		opts = append(opts, nats.Secure(j.tlsConf))
 	}
-	opts = append(opts, auth.GetOptions(j.conf.Auth)...)
+	opts = append(opts, auth.GetOptions(j.authConf)...)
 	if natsConn, err = nats.Connect(j.urls, opts...); err != nil {
 		return err
 	}
@@ -131,7 +134,7 @@ func (j *jetStreamOutput) ConnectWithContext(ctx context.Context) error {
 		return err
 	}
 
-	j.log.Infof("Sending NATS messages to JetStream subject: %v\n", j.conf.Subject)
+	j.log.Infof("Sending NATS messages to JetStream subject: %v", j.conf.Subject)
 
 	j.natsConn = natsConn
 	j.jCtx = jCtx
@@ -151,33 +154,33 @@ func (j *jetStreamOutput) disconnect() {
 
 //------------------------------------------------------------------------------
 
-func (j *jetStreamOutput) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (j *jetStreamOutput) Write(ctx context.Context, msg *service.Message) error {
 	j.connMut.Lock()
 	jCtx := j.jCtx
 	j.connMut.Unlock()
 	if jCtx == nil {
-		return types.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
-	return writer.IterateBatchedSend(msg, func(i int, p types.Part) error {
-		subject := j.subjectStr.String(i, msg)
-		_, err := jCtx.Publish(subject, p.Get())
+	subject := j.subjectStr.String(msg)
+	msgBytes, err := msg.AsBytes()
+	if err != nil {
 		return err
-	})
+	}
+
+	_, err = jCtx.Publish(subject, msgBytes)
+	return err
 }
 
-func (j *jetStreamOutput) CloseAsync() {
+func (j *jetStreamOutput) Close(ctx context.Context) error {
 	go func() {
 		j.disconnect()
 		j.shutSig.ShutdownComplete()
 	}()
-}
-
-func (j *jetStreamOutput) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-j.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return types.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

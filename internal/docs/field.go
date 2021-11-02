@@ -150,7 +150,7 @@ func (f FieldSpec) HasType(t FieldType) FieldSpec {
 }
 
 // Optional marks this field as being optional, and therefore its absence in a
-// config is not considered an error if when a default is not provided.
+// config is not considered an error even when a default value is not provided.
 func (f FieldSpec) Optional() FieldSpec {
 	f.IsOptional = true
 	return f
@@ -315,6 +315,11 @@ func (f FieldSpec) shouldOmit(field, parent interface{}) (string, bool) {
 		return "", false
 	}
 	return f.omitWhenFn(field, parent)
+}
+
+// FieldObject returns a field spec for an object typed field.
+func FieldObject(name, description string, examples ...interface{}) FieldSpec {
+	return FieldCommon(name, description, examples...).HasType(FieldTypeObject)
 }
 
 // FieldString returns a field spec for a common string typed field.
@@ -554,8 +559,10 @@ func getDefault(pathName string, field FieldSpec) (interface{}, error) {
 	} else if len(field.Children) > 0 {
 		m := map[string]interface{}{}
 		for _, v := range field.Children {
-			var err error
-			if m[v.Name], err = getDefault(pathName+"."+v.Name, v); err != nil {
+			defV, err := getDefault(pathName+"."+v.Name, v)
+			if err == nil {
+				m[v.Name] = defV
+			} else if !v.IsOptional {
 				return nil, err
 			}
 		}
