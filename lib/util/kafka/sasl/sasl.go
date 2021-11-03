@@ -38,7 +38,7 @@ func FieldSpec() docs.FieldSpec {
 	return docs.FieldAdvanced("sasl", "Enables SASL authentication.").WithChildren(
 		docs.FieldDeprecated("enabled"),
 		docs.FieldCommon("mechanism", "The SASL authentication mechanism, if left empty SASL authentication is not used. Warning: SCRAM based methods within Benthos have not received a security audit.").HasAnnotatedOptions(
-			sarama.SASLTypePlaintext, "Plain text authentication.",
+			sarama.SASLTypePlaintext, "Plain text authentication. NOTE: When using plain text auth it is extremely likely that you'll also need to [enable TLS](#tlsenabled).",
 			sarama.SASLTypeOAuth, "OAuth Bearer based authentication.",
 			sarama.SASLTypeSCRAMSHA256, "Authentication using the SCRAM-SHA-256 mechanism.",
 			sarama.SASLTypeSCRAMSHA512, "Authentication using the SCRAM-SHA-512 mechanism.",
