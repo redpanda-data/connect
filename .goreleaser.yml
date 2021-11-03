@@ -22,6 +22,13 @@ builds:
     env:
       - CGO_ENABLED=0
     goos: [ linux ]
+    goarch: [ amd64 ]
+  - id: benthos-lambda-al2
+    main: cmd/serverless/benthos-lambda/main.go
+    binary: bootstrap
+    env:
+      - CGO_ENABLED=0
+    goos: [ linux ]
     goarch: [ amd64, arm64 ]
 archives:
   - id: benthos
@@ -33,6 +40,10 @@ archives:
       - LICENSE
   - id: benthos-lambda
     builds: [ benthos-lambda ]
+    format: zip
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  - id: benthos-lambda-al2
+    builds: [ benthos-lambda-al2 ]
     format: zip
     name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 dist: target/dist
