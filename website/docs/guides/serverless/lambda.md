@@ -4,7 +4,10 @@ description: Deploying Benthos as an AWS Lambda function
 ---
 
 The `benthos-lambda` distribution is a version of Benthos specifically tailored
-for deployment as an AWS Lambda function.
+for deployment as an AWS Lambda function on the `go1.x` runtime,
+which runs Amazon Linux on the `x86_64` architecture.
+The `benthos-lambda-al2` distribution supports the `provided.al2` runtime,
+which runs Amazon Linux 2 on either the `x86_64` or `arm64` architecture.
 
 It uses the same configuration format as a regular Benthos instance, except it
 is read from the environment variable `BENTHOS_CONFIG` (YAML format). Also, the
