@@ -46,8 +46,7 @@ If the query fails to execute then the message will remain unchanged and the err
 
 
 Here we query a database for columns of footable that share a `user_id`
-with the message `user.id`. The `result_codec` is set to
-`json_array` and a [`branch` processor](/docs/components/processors/branch)
+with the message `user.id`. A [`branch` processor](/docs/components/processors/branch)
 is used in order to insert the resulting array into the original message at the
 path `foo_rows`:
 
@@ -61,7 +60,7 @@ pipeline:
               dsn: postgres://foouser:foopass@localhost:5432/testdb?sslmode=disable
               table: footable
               columns: [ '*' ]
-              where: user_id = $1
+              where: user_id = ?
               args_mapping: '[ this.user.id ]'
         result_map: 'root.foo_rows = this'
 ```
@@ -113,7 +112,6 @@ dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable
 ### `table`
 
 The table to query.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
@@ -122,8 +120,6 @@ Type: `string`
 # Examples
 
 table: foo
-
-table: ${! meta("kafka_topic") }
 ```
 
 ### `columns`
@@ -147,7 +143,7 @@ columns:
 
 ### `where`
 
-An optional where clause to add. Placeholder arguments are populated with the `args_mapping` field, and the placeholder syntax must match the driver (MySQL uses `?`, PostgreSQL uses `$1`, and so on).
+An optional where clause to add. Placeholder arguments are populated with the `args_mapping` field. Placeholders should always be question marks, and will automatically be converted to dollar syntax when the postgres driver is used.
 
 
 Type: `string`  
@@ -157,7 +153,7 @@ Type: `string`
 
 where: meow = ? and woof = ?
 
-where: user_id = $1
+where: user_id = ?
 ```
 
 ### `args_mapping`
