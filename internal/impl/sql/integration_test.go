@@ -67,7 +67,7 @@ func clickhouseIntegration(t *testing.T) {
 			db = nil
 			return err
 		}
-		if err = createTable("footable"); err != nil {
+		if err := createTable("footable"); err != nil {
 			return err
 		}
 		return nil
@@ -126,7 +126,7 @@ func postgresIntegration(t *testing.T) {
 			db = nil
 			return err
 		}
-		if err = createTable("footable"); err != nil {
+		if err := createTable("footable"); err != nil {
 			return err
 		}
 		return nil
@@ -185,7 +185,7 @@ func mySQLIntegration(t *testing.T) {
 			db = nil
 			return err
 		}
-		if err = createTable("footable"); err != nil {
+		if err := createTable("footable"); err != nil {
 			return err
 		}
 		return nil
@@ -246,7 +246,7 @@ func msSQLIntegration(t *testing.T) {
 			db = nil
 			return err
 		}
-		if err = createTable("footable"); err != nil {
+		if err := createTable("footable"); err != nil {
 			return err
 		}
 		return nil

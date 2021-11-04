@@ -81,8 +81,6 @@ type sqlQueryProcessor struct {
 	builder squirrel.SelectBuilder
 	dbMut   sync.Mutex
 
-	table       string
-	columns     []string
 	where       string
 	argsMapping *bloblang.Executor
 

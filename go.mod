@@ -13,7 +13,7 @@ require (
 	github.com/HdrHistogram/hdrhistogram-go v1.1.0 // indirect
 	github.com/Jeffail/gabs/v2 v2.6.1
 	github.com/Jeffail/grok v1.1.0
-	github.com/Masterminds/squirrel v1.5.1 // indirect
+	github.com/Masterminds/squirrel v1.5.1
 	github.com/OneOfOne/xxhash v1.2.8
 	github.com/Shopify/sarama v1.28.0
 	github.com/apache/pulsar-client-go v0.6.0
