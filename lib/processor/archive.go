@@ -334,7 +334,7 @@ func (d *Archive) createHeaderFunc(msg types.Message) func(int, types.Part) os.F
 		return fakeInfo{
 			name: d.path.String(index, msg),
 			size: int64(len(body.Get())),
-			mode: 0666,
+			mode: 0o666,
 		}
 	}
 }

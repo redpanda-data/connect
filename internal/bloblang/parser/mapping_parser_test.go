@@ -22,9 +22,9 @@ func TestMappingErrors(t *testing.T) {
 	noMapsFile := filepath.Join(dir, "no_maps.blobl")
 	goodMapFile := filepath.Join(dir, "good_map.blobl")
 
-	require.NoError(t, os.WriteFile(badMapFile, []byte(`not a map bruh`), 0777))
-	require.NoError(t, os.WriteFile(noMapsFile, []byte(`foo = "this is valid but has no maps"`), 0777))
-	require.NoError(t, os.WriteFile(goodMapFile, []byte(`map foo { foo = "this is valid" }`), 0777))
+	require.NoError(t, os.WriteFile(badMapFile, []byte(`not a map bruh`), 0o777))
+	require.NoError(t, os.WriteFile(noMapsFile, []byte(`foo = "this is valid but has no maps"`), 0o777))
+	require.NoError(t, os.WriteFile(goodMapFile, []byte(`map foo { foo = "this is valid" }`), 0o777))
 
 	tests := map[string]struct {
 		mapping     string
@@ -181,10 +181,10 @@ func TestMappings(t *testing.T) {
 	require.NoError(t, os.WriteFile(goodMapFile, []byte(`map foo {
   foo = "this is valid"
   nested = this
-}`), 0777))
+}`), 0o777))
 
 	directMapFile := filepath.Join(dir, "direct_map.blobl")
-	require.NoError(t, os.WriteFile(directMapFile, []byte(`root.nested = this`), 0777))
+	require.NoError(t, os.WriteFile(directMapFile, []byte(`root.nested = this`), 0o777))
 
 	type part struct {
 		Content string

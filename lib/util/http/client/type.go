@@ -375,7 +375,7 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 	url := h.url.String(0, msg)
 
 	if msg == nil || msg.Len() == 0 {
-		if req, err = http.NewRequest(h.conf.Verb, url, nil); err == nil {
+		if req, err = http.NewRequest(h.conf.Verb, url, http.NoBody); err == nil {
 			for k, v := range h.headers {
 				req.Header.Add(k, v.String(0, msg))
 			}

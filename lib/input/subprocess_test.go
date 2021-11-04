@@ -25,7 +25,7 @@ func testProgram(t *testing.T, program string) string {
 	})
 
 	pathStr := path.Join(dir, "main.go")
-	require.NoError(t, os.WriteFile(pathStr, []byte(program), 0666))
+	require.NoError(t, os.WriteFile(pathStr, []byte(program), 0o666))
 
 	return pathStr
 }

@@ -20,7 +20,7 @@ func writeFiles(t *testing.T, dir string, nameToContent map[string]string) {
 	t.Helper()
 
 	for k, v := range nameToContent {
-		require.NoError(t, os.WriteFile(filepath.Join(dir, k), []byte(v), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, k), []byte(v), 0o600))
 	}
 }
 

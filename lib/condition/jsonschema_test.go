@@ -40,7 +40,7 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 	defer os.Remove(tmpSchemaFile.Name())
 
 	// write schema definition to tmpfile
-	if _, err := tmpSchemaFile.Write([]byte(schema)); err != nil {
+	if _, err := tmpSchemaFile.WriteString(schema); err != nil {
 		t.Fatal(err)
 	}
 
@@ -204,7 +204,7 @@ func TestJSONSchemaInvalidSchema(t *testing.T) {
 	defer os.Remove(tmpSchemaFile.Name())
 
 	// write schema definition to tmpfile
-	if _, err := tmpSchemaFile.Write([]byte(schema)); err != nil {
+	if _, err := tmpSchemaFile.WriteString(schema); err != nil {
 		t.Fatal(err)
 	}
 

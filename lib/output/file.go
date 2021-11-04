@@ -149,11 +149,11 @@ func (w *fileWriter) WriteWithContext(ctx context.Context, msg types.Message) er
 			flag |= os.O_TRUNC
 		}
 
-		if err := os.MkdirAll(filepath.Dir(path), os.FileMode(0777)); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), os.FileMode(0o777)); err != nil {
 			return err
 		}
 
-		file, err := os.OpenFile(path, flag, os.FileMode(0666))
+		file, err := os.OpenFile(path, flag, os.FileMode(0o666))
 		if err != nil {
 			return err
 		}

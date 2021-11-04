@@ -823,10 +823,10 @@ func TestTypeAPISetResources(t *testing.T) {
 	})
 
 	dir1 := filepath.Join(tmpDir, "dir1")
-	require.NoError(t, os.MkdirAll(dir1, 0750))
+	require.NoError(t, os.MkdirAll(dir1, 0o750))
 
 	dir2 := filepath.Join(tmpDir, "dir2")
-	require.NoError(t, os.MkdirAll(dir2, 0750))
+	require.NoError(t, os.MkdirAll(dir2, 0o750))
 
 	r := router(mgr)
 

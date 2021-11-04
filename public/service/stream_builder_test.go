@@ -215,7 +215,7 @@ func TestStreamBuilderConsumerFunc(t *testing.T) {
 	inFilePath := filepath.Join(tmpDir, "in.txt")
 	require.NoError(t, os.WriteFile(inFilePath, []byte(`HELLO WORLD 1
 HELLO WORLD 2
-HELLO WORLD 3`), 0755))
+HELLO WORLD 3`), 0o755))
 
 	b := service.NewStreamBuilder()
 	require.NoError(t, b.SetLoggerYAML("level: NONE"))
@@ -276,7 +276,7 @@ HELLO WORLD 4
 
 HELLO WORLD 5
 HELLO WORLD 6
-`), 0755))
+`), 0o755))
 
 	b := service.NewStreamBuilder()
 	require.NoError(t, b.SetLoggerYAML("level: NONE"))

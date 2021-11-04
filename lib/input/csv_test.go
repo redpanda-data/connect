@@ -84,12 +84,12 @@ func TestCSVGPaths(t *testing.T) {
 foo1,bar1,baz1
 foo2,bar2,baz2
 foo3,bar3,baz3
-`), 0777))
+`), 0o777))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.csv"), []byte(`header4,header5,header6
 foo4,bar4,baz4
 foo5,bar5,baz5
 foo6,bar6,baz6
-`), 0777))
+`), 0o777))
 
 	conf := NewConfig()
 	conf.Type = TypeCSVFile
@@ -130,12 +130,12 @@ func TestCSVGlobPaths(t *testing.T) {
 foo1,bar1,baz1
 foo2,bar2,baz2
 foo3,bar3,baz3
-`), 0777))
+`), 0o777))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.csv"), []byte(`header4,header5,header6
 foo4,bar4,baz4
 foo5,bar5,baz5
 foo6,bar6,baz6
-`), 0777))
+`), 0o777))
 
 	conf := NewConfig()
 	conf.Type = TypeCSVFile

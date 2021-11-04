@@ -366,7 +366,7 @@ func TestTarReader(t *testing.T) {
 	for i := range input {
 		hdr := &tar.Header{
 			Name: fmt.Sprintf("testfile%v", i),
-			Mode: 0600,
+			Mode: 0o600,
 			Size: int64(len(input[i])),
 		}
 
@@ -396,7 +396,7 @@ func TestTarGzipReader(t *testing.T) {
 	for i := range input {
 		hdr := &tar.Header{
 			Name: fmt.Sprintf("testfile%v", i),
-			Mode: 0600,
+			Mode: 0o600,
 			Size: int64(len(input[i])),
 		}
 
@@ -429,7 +429,7 @@ func TestTarGzipReaderOld(t *testing.T) {
 	for i := range input {
 		hdr := &tar.Header{
 			Name: fmt.Sprintf("testfile%v", i),
-			Mode: 0600,
+			Mode: 0o600,
 			Size: int64(len(input[i])),
 		}
 

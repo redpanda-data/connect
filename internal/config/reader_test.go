@@ -86,7 +86,7 @@ input:
   kafka:
     addresses: [ foobar.com, barbaz.com ]
     topics: [ meow1, meow2 ]
-`), 0644))
+`), 0o644))
 
 	conf := config.New()
 	rdr := iconfig.NewReader(fullPath, nil, iconfig.OptAddOverrides(
@@ -125,7 +125,7 @@ input:
   kafka:
     addresses: [ foobar.com, barbaz.com ]
     topics: [ meow1, meow2 ]
-`), 0644))
+`), 0o644))
 
 	resourceOnePath := filepath.Join(dir, "res1.yaml")
 	require.NoError(t, os.WriteFile(resourceOnePath, []byte(`
@@ -133,7 +133,7 @@ cache_resources:
   - label: foo
     memory:
       ttl: 12
-`), 0644))
+`), 0o644))
 
 	resourceTwoPath := filepath.Join(dir, "res2.yaml")
 	require.NoError(t, os.WriteFile(resourceTwoPath, []byte(`
@@ -141,7 +141,7 @@ cache_resources:
   - label: bar
     memory:
       ttl: 13
-`), 0644))
+`), 0o644))
 
 	conf := config.New()
 	rdr := iconfig.NewReader(fullPath, []string{resourceOnePath, resourceTwoPath})
@@ -180,7 +180,7 @@ input:
   kafka:
     addresses: [ foobar.com, barbaz.com ]
     topics: [ meow1, meow2 ]
-`), 0644))
+`), 0o644))
 
 	resourceOnePath := filepath.Join(dir, "res1.yaml")
 	require.NoError(t, os.WriteFile(resourceOnePath, []byte(`
@@ -189,7 +189,7 @@ cache_resources:
     memory:
       meow2: or this
       ttl: 12
-`), 0644))
+`), 0o644))
 
 	resourceTwoPath := filepath.Join(dir, "res2.yaml")
 	require.NoError(t, os.WriteFile(resourceTwoPath, []byte(`
@@ -198,7 +198,7 @@ cache_resources:
     memory:
       meow3: or also this
       ttl: 13
-`), 0644))
+`), 0o644))
 
 	conf := config.New()
 	rdr := iconfig.NewReader(fullPath, []string{resourceOnePath, resourceTwoPath})
@@ -240,7 +240,7 @@ input:
   plugin:
     addresses: [ foobar.com, barbaz.com ]
     topics: [ meow1, meow2 ]
-`), 0644))
+`), 0o644))
 
 	input.RegisterPlugin("custom_plugin_for_config_old_plugins_test", func() interface{} {
 		v := struct{}{}

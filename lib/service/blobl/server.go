@@ -302,12 +302,12 @@ func (f *fileSync) write() {
 	}
 
 	if f.inputFile != "" {
-		if err := os.WriteFile(f.inputFile, []byte(f.inputString), 0644); err != nil {
+		if err := os.WriteFile(f.inputFile, []byte(f.inputString), 0o644); err != nil {
 			log.Printf("Failed to write input file: %v\n", err)
 		}
 	}
 	if f.mappingFile != "" {
-		if err := os.WriteFile(f.mappingFile, []byte(f.mappingString), 0644); err != nil {
+		if err := os.WriteFile(f.mappingFile, []byte(f.mappingString), 0o644); err != nil {
 			log.Printf("Failed to write mapping file: %v\n", err)
 		}
 	}

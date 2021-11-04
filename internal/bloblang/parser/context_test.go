@@ -19,7 +19,7 @@ func TestContextImportIsolation(t *testing.T) {
 	content := `map foo { root = this }`
 	fileName := "foo.blobl"
 	fullPath := filepath.Join(tmpDir, fileName)
-	require.NoError(t, os.WriteFile(fullPath, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(fullPath, []byte(content), 0o644))
 
 	for _, srcCtx := range []Context{GlobalContext(), EmptyContext()} {
 		relCtx := srcCtx.WithImporterRelativeToFile(fullPath)
@@ -66,8 +66,8 @@ func TestContextImportRelativity(t *testing.T) {
 		osPath := filepath.FromSlash(path)
 		dirPath := filepath.Dir(osPath)
 
-		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, dirPath), 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, osPath), []byte(content), 0644))
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, dirPath), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, osPath), []byte(content), 0o644))
 	}
 
 	for _, srcCtx := range []Context{GlobalContext(), EmptyContext()} {

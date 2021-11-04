@@ -20,7 +20,7 @@ func TestFromDirectory(t *testing.T) {
 	defer os.RemoveAll(testDir)
 
 	barDir := filepath.Join(testDir, "bar")
-	if err = os.Mkdir(barDir, 0777); err != nil {
+	if err = os.Mkdir(barDir, 0o777); err != nil {
 		t.Fatal(err)
 	}
 
@@ -47,10 +47,10 @@ func TestFromDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = os.WriteFile(fooPath, fooBytes, 0666); err != nil {
+	if err = os.WriteFile(fooPath, fooBytes, 0o666); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(barPath, barBytes, 0666); err != nil {
+	if err = os.WriteFile(barPath, barBytes, 0o666); err != nil {
 		t.Fatal(err)
 	}
 

@@ -64,11 +64,11 @@ func (f *fileV2) Get(_ context.Context, key string) ([]byte, error) {
 }
 
 func (f *fileV2) Set(_ context.Context, key string, value []byte, _ *time.Duration) error {
-	return os.WriteFile(filepath.Join(f.dir, key), value, 0644)
+	return os.WriteFile(filepath.Join(f.dir, key), value, 0o644)
 }
 
 func (f *fileV2) Add(_ context.Context, key string, value []byte, _ *time.Duration) error {
-	file, err := os.OpenFile(filepath.Join(f.dir, key), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0644)
+	file, err := os.OpenFile(filepath.Join(f.dir, key), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		if os.IsExist(err) {
 			return types.ErrKeyAlreadyExists
@@ -117,7 +117,7 @@ func (f *File) Get(key string) ([]byte, error) {
 //
 // Deprecated: This implementation is no longer used.
 func (f *File) Set(key string, value []byte) error {
-	return os.WriteFile(filepath.Join(f.dir, key), value, 0644)
+	return os.WriteFile(filepath.Join(f.dir, key), value, 0o644)
 }
 
 // SetMulti attempts to set the value of multiple keys, returns an error if any
@@ -138,7 +138,7 @@ func (f *File) SetMulti(items map[string][]byte) error {
 //
 // Deprecated: This implementation is no longer used.
 func (f *File) Add(key string, value []byte) error {
-	file, err := os.OpenFile(filepath.Join(f.dir, key), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0644)
+	file, err := os.OpenFile(filepath.Join(f.dir, key), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		if os.IsExist(err) {
 			return types.ErrKeyAlreadyExists

@@ -32,9 +32,9 @@ func TestFileSinglePartDeprecated(t *testing.T) {
 	}
 
 	for _, msg := range messages {
-		tmpfile.WriteString(msg)
-		tmpfile.WriteString("\n")
-		tmpfile.WriteString("\n") // Try some empty messages
+		_, _ = tmpfile.WriteString(msg)
+		_, _ = tmpfile.WriteString("\n")
+		_, _ = tmpfile.WriteString("\n") // Try some empty messages
 	}
 
 	conf := NewConfig()
@@ -102,10 +102,10 @@ func TestFileMultiPartDeprecated(t *testing.T) {
 
 	for _, msg := range messages {
 		for _, part := range msg {
-			tmpfile.WriteString(part)
-			tmpfile.WriteString("\n")
+			_, _ = tmpfile.WriteString(part)
+			_, _ = tmpfile.WriteString("\n")
 		}
-		tmpfile.WriteString("\n")
+		_, _ = tmpfile.WriteString("\n")
 	}
 
 	conf := NewConfig()

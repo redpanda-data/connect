@@ -25,7 +25,7 @@ func TestConfigRefs(t *testing.T) {
 	secondPath := filepath.Join(tmpDir, "nest", "second.yaml")
 	thirdPath := filepath.Join(tmpDir, "third.yaml")
 
-	if err = os.Mkdir(filepath.Join(tmpDir, "nest"), 0777); err != nil {
+	if err = os.Mkdir(filepath.Join(tmpDir, "nest"), 0o777); err != nil {
 		t.Fatal(err)
 	}
 
@@ -33,13 +33,13 @@ func TestConfigRefs(t *testing.T) {
 	secondFile := []byte(`["foo",{"$ref":"../third.yaml"},"bar"]`)
 	thirdFile := []byte(`{"c":[9,8,7]}`)
 
-	if err = os.WriteFile(rootPath, rootFile, 0777); err != nil {
+	if err = os.WriteFile(rootPath, rootFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(secondPath, secondFile, 0777); err != nil {
+	if err = os.WriteFile(secondPath, secondFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(thirdPath, thirdFile, 0777); err != nil {
+	if err = os.WriteFile(thirdPath, thirdFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
 
@@ -79,7 +79,7 @@ func TestConfigRefsRootExpansion(t *testing.T) {
 	secondPath := filepath.Join(tmpDir, "nest", "second.yaml")
 	thirdPath := filepath.Join(tmpDir, "third.yaml")
 
-	if err = os.Mkdir(filepath.Join(tmpDir, "nest"), 0777); err != nil {
+	if err = os.Mkdir(filepath.Join(tmpDir, "nest"), 0o777); err != nil {
 		t.Fatal(err)
 	}
 
@@ -87,13 +87,13 @@ func TestConfigRefsRootExpansion(t *testing.T) {
 	secondFile := []byte(`{"$ref":"../third.yaml"}`)
 	thirdFile := []byte(`{"c":[9,8,7]}`)
 
-	if err = os.WriteFile(rootPath, rootFile, 0777); err != nil {
+	if err = os.WriteFile(rootPath, rootFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(secondPath, secondFile, 0777); err != nil {
+	if err = os.WriteFile(secondPath, secondFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(thirdPath, thirdFile, 0777); err != nil {
+	if err = os.WriteFile(thirdPath, thirdFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
 
@@ -269,7 +269,7 @@ func TestLocalRefs(t *testing.T) {
 	rootPath := filepath.Join(tmpDir, "root.yaml")
 	rootFile := []byte(`{"a":{"bar":"baz"},"b":{"$ref":"#/a/bar"},"c":{"$ref":"#/b"}}`)
 
-	if err = os.WriteFile(rootPath, rootFile, 0777); err != nil {
+	if err = os.WriteFile(rootPath, rootFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
 
@@ -305,10 +305,10 @@ func TestRecursiveRefs(t *testing.T) {
 	fooFile := []byte(`{"a":{"$ref":"./bar.yaml"}}`)
 	barFile := []byte(`{"b":{"$ref":"./foo.yaml"}}`)
 
-	if err = os.WriteFile(fooPath, fooFile, 0777); err != nil {
+	if err = os.WriteFile(fooPath, fooFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(barPath, barFile, 0777); err != nil {
+	if err = os.WriteFile(barPath, barFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
 
@@ -332,7 +332,7 @@ func TestConfigNoRefs(t *testing.T) {
 	rootPath := filepath.Join(tmpDir, "root.yaml")
 	rootFile := []byte(`{"foo":{ "bar":"baz"}}`)
 
-	if err = os.WriteFile(rootPath, rootFile, 0777); err != nil {
+	if err = os.WriteFile(rootPath, rootFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
 

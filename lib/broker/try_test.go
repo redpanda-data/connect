@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"sync"
@@ -68,7 +69,7 @@ func TestTryHappyPath(t *testing.T) {
 			var ts types.Transaction
 			select {
 			case ts = <-mockOutputs[0].TChan:
-				if string(ts.Payload.Get(0).Get()) != string(content[0]) {
+				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
 					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
 				}
 			case <-mockOutputs[1].TChan:
@@ -145,7 +146,7 @@ func TestTryHappyishPath(t *testing.T) {
 			var ts types.Transaction
 			select {
 			case ts = <-mockOutputs[0].TChan:
-				if string(ts.Payload.Get(0).Get()) != string(content[0]) {
+				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
 					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
 				}
 			case <-mockOutputs[1].TChan:
@@ -168,7 +169,7 @@ func TestTryHappyishPath(t *testing.T) {
 
 			select {
 			case ts = <-mockOutputs[1].TChan:
-				if string(ts.Payload.Get(0).Get()) != string(content[0]) {
+				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
 					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
 				}
 			case <-mockOutputs[0].TChan:
@@ -244,7 +245,7 @@ func TestTryAllFail(t *testing.T) {
 				var ts types.Transaction
 				select {
 				case ts = <-mockOutputs[j%3].TChan:
-					if string(ts.Payload.Get(0).Get()) != string(content[0]) {
+					if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
 						t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
 					}
 				case <-mockOutputs[(j+1)%3].TChan:

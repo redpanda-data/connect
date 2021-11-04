@@ -26,7 +26,7 @@ func testProgram(t *testing.T, program string) string {
 	})
 
 	pathStr := path.Join(dir, "main.go")
-	require.NoError(t, os.WriteFile(pathStr, []byte(program), 0666))
+	require.NoError(t, os.WriteFile(pathStr, []byte(program), 0o666))
 
 	return pathStr
 }
@@ -89,7 +89,7 @@ func main() {
 		panic(err)
 	}
 
-	if err := os.WriteFile(target, buf.Bytes(), 0644); err != nil {
+	if err := os.WriteFile(target, buf.Bytes(), 0o644); err != nil {
 		panic(err)
 	}
 }
@@ -147,7 +147,7 @@ import (
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	if scanner.Scan() {
-		f, err := os.OpenFile("%v/"+scanner.Text()+".txt", os.O_RDWR|os.O_CREATE, 0644)
+		f, err := os.OpenFile("%v/"+scanner.Text()+".txt", os.O_RDWR|os.O_CREATE, 0o644)
 		if err != nil {
 			panic(err)
 		}

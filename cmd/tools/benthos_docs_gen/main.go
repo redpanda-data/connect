@@ -38,7 +38,7 @@ func create(t, path string, resBytes []byte) {
 			return
 		}
 	}
-	if err := os.WriteFile(path, resBytes, 0644); err != nil {
+	if err := os.WriteFile(path, resBytes, 0o644); err != nil {
 		panic(err)
 	}
 	fmt.Printf("Documentation for '%v' has changed, updating: %v\n", t, path)

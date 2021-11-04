@@ -29,7 +29,7 @@ func TestFilesDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Remove(tmpFile.Name())
-	if _, err = tmpFile.Write([]byte("foo")); err != nil {
+	if _, err = tmpFile.WriteString("foo"); err != nil {
 		t.Fatal(err)
 	}
 	if err = tmpFile.Close(); err != nil {
@@ -39,7 +39,7 @@ func TestFilesDirectory(t *testing.T) {
 	if tmpFile, err = os.CreateTemp(tmpInnerDir, "f2"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = tmpFile.Write([]byte("bar")); err != nil {
+	if _, err = tmpFile.WriteString("bar"); err != nil {
 		t.Fatal(err)
 	}
 	if err = tmpFile.Close(); err != nil {
@@ -98,7 +98,7 @@ func TestFilesFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Remove(tmpFile.Name())
-	if _, err = tmpFile.Write([]byte("foo")); err != nil {
+	if _, err = tmpFile.WriteString("foo"); err != nil {
 		t.Fatal(err)
 	}
 	if err = tmpFile.Close(); err != nil {
@@ -165,7 +165,7 @@ func TestFilesDirectoryDelete(t *testing.T) {
 	if tmpFile, err = os.CreateTemp(tmpDir, "f1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = tmpFile.Write([]byte("foo")); err != nil {
+	if _, err = tmpFile.WriteString("foo"); err != nil {
 		t.Fatal(err)
 	}
 	if err = tmpFile.Close(); err != nil {

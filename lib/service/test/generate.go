@@ -47,7 +47,7 @@ func generateDefinitions(targetPath, testSuffix string, recurse bool) error {
 		} else {
 			return fmt.Errorf("test definition file '%v' already exists", definitionPath)
 		}
-		if err = os.WriteFile(definitionPath, defaultDefBytes, 0666); err != nil {
+		if err = os.WriteFile(definitionPath, defaultDefBytes, 0o666); err != nil {
 			return fmt.Errorf("failed to write test definition '%v': %v", definitionPath, err)
 		}
 	}
@@ -83,7 +83,7 @@ func generateDefinitions(targetPath, testSuffix string, recurse bool) error {
 			return nil
 		}
 
-		if err = os.WriteFile(definitionPath, defaultDefBytes, 0666); err != nil {
+		if err = os.WriteFile(definitionPath, defaultDefBytes, 0o666); err != nil {
 			return fmt.Errorf("failed to write test definition '%v': %v", definitionPath, err)
 		}
 		return nil

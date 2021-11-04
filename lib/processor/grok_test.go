@@ -135,7 +135,7 @@ func TestGrokFileImports(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpDir, "foos"), []byte(`
 FOOFLAT %{WORD:first} %{WORD:second} %{WORD:third}
 FOONESTED %{INT:nested.first:int} %{WORD:nested.second} %{WORD:nested.third}
-`), 0777)
+`), 0o777)
 	require.NoError(t, err)
 
 	conf := NewConfig()
