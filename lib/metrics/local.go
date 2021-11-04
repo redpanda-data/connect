@@ -70,7 +70,7 @@ type Local struct {
 	flatCounters map[string]*LocalStat
 	flatTimings  map[string]*LocalStat
 
-	sync.Mutex
+	mut sync.Mutex
 }
 
 // NewLocal creates and returns a new Local aggregator.
@@ -97,7 +97,7 @@ func (l *Local) FlushCounters() map[string]int64 {
 // getCounters internal method that returns a copy of the counter maps before
 // optionally reseting the counter as determined by the reset value passed in
 func (l *Local) getCounters(reset bool) map[string]int64 {
-	l.Lock()
+	l.mut.Lock()
 	localFlatCounters := make(map[string]int64, len(l.flatCounters))
 	for k := range l.flatCounters {
 		localFlatCounters[k] = atomic.LoadInt64(l.flatCounters[k].Value)
@@ -105,14 +105,14 @@ func (l *Local) getCounters(reset bool) map[string]int64 {
 			atomic.StoreInt64(l.flatCounters[k].Value, 0)
 		}
 	}
-	l.Unlock()
+	l.mut.Unlock()
 	return localFlatCounters
 }
 
 // GetCountersWithLabels returns a map of metric paths to counters including
 // labels and values.
 func (l *Local) GetCountersWithLabels() map[string]LocalStat {
-	l.Lock()
+	l.mut.Lock()
 	localFlatCounters := make(map[string]LocalStat, len(l.flatCounters))
 	for k := range l.flatCounters {
 		o := l.flatCounters[k]
@@ -124,7 +124,7 @@ func (l *Local) GetCountersWithLabels() map[string]LocalStat {
 		})
 		localFlatCounters[k] = ls
 	}
-	l.Unlock()
+	l.mut.Unlock()
 	return localFlatCounters
 }
 
@@ -142,7 +142,7 @@ func (l *Local) FlushTimings() map[string]int64 {
 // FlushTimings returns a map of the current state of the metrics paths to
 // counters and then resets the counters to 0
 func (l *Local) getTimings(reset bool) map[string]int64 {
-	l.Lock()
+	l.mut.Lock()
 	localFlatTimings := make(map[string]int64, len(l.flatTimings))
 	for k := range l.flatTimings {
 		localFlatTimings[k] = atomic.LoadInt64(l.flatTimings[k].Value)
@@ -150,14 +150,14 @@ func (l *Local) getTimings(reset bool) map[string]int64 {
 			atomic.StoreInt64(l.flatTimings[k].Value, 0)
 		}
 	}
-	l.Unlock()
+	l.mut.Unlock()
 	return localFlatTimings
 }
 
 // GetTimingsWithLabels returns a map of metric paths to timers, including
 // labels and values.
 func (l *Local) GetTimingsWithLabels() map[string]LocalStat {
-	l.Lock()
+	l.mut.Lock()
 	localFlatTimings := make(map[string]LocalStat, len(l.flatTimings))
 	for k := range l.flatTimings {
 		o := l.flatTimings[k]
@@ -169,7 +169,7 @@ func (l *Local) GetTimingsWithLabels() map[string]LocalStat {
 		})
 		localFlatTimings[k] = ls
 	}
-	l.Unlock()
+	l.mut.Unlock()
 	return localFlatTimings
 }
 
@@ -177,39 +177,39 @@ func (l *Local) GetTimingsWithLabels() map[string]LocalStat {
 
 // GetCounter returns a stat counter object for a path.
 func (l *Local) GetCounter(path string) StatCounter {
-	l.Lock()
+	l.mut.Lock()
 	st, exists := l.flatCounters[path]
 	if !exists {
 		st = newLocalStat(0)
 		l.flatCounters[path] = st
 	}
-	l.Unlock()
+	l.mut.Unlock()
 
 	return st
 }
 
 // GetTimer returns a stat timer object for a path.
 func (l *Local) GetTimer(path string) StatTimer {
-	l.Lock()
+	l.mut.Lock()
 	st, exists := l.flatTimings[path]
 	if !exists {
 		st = newLocalStat(0)
 		l.flatTimings[path] = st
 	}
-	l.Unlock()
+	l.mut.Unlock()
 
 	return st
 }
 
 // GetGauge returns a stat gauge object for a path.
 func (l *Local) GetGauge(path string) StatGauge {
-	l.Lock()
+	l.mut.Lock()
 	st, exists := l.flatCounters[path]
 	if !exists {
 		st = newLocalStat(0)
 		l.flatCounters[path] = st
 	}
-	l.Unlock()
+	l.mut.Unlock()
 
 	return st
 }

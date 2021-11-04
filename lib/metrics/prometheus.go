@@ -125,7 +125,7 @@ type Prometheus struct {
 	gauges   map[string]*prometheus.GaugeVec
 	timers   map[string]*prometheus.SummaryVec
 
-	sync.Mutex
+	mut sync.Mutex
 }
 
 // NewPrometheus creates and returns a new Prometheus object.
@@ -215,7 +215,7 @@ func (p *Prometheus) GetCounter(path string) StatCounter {
 
 	var ctr *prometheus.CounterVec
 
-	p.Lock()
+	p.mut.Lock()
 	var exists bool
 	if ctr, exists = p.counters[stat]; !exists {
 		ctr = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -226,7 +226,7 @@ func (p *Prometheus) GetCounter(path string) StatCounter {
 		p.reg.MustRegister(ctr)
 		p.counters[stat] = ctr
 	}
-	p.Unlock()
+	p.mut.Unlock()
 
 	return &PromCounter{
 		ctr: ctr.WithLabelValues(values...),
@@ -242,7 +242,7 @@ func (p *Prometheus) GetTimer(path string) StatTimer {
 
 	var tmr *prometheus.SummaryVec
 
-	p.Lock()
+	p.mut.Lock()
 	var exists bool
 	if tmr, exists = p.timers[stat]; !exists {
 		tmr = prometheus.NewSummaryVec(prometheus.SummaryOpts{
@@ -254,7 +254,7 @@ func (p *Prometheus) GetTimer(path string) StatTimer {
 		p.reg.MustRegister(tmr)
 		p.timers[stat] = tmr
 	}
-	p.Unlock()
+	p.mut.Unlock()
 
 	return &PromTiming{
 		sum: tmr.WithLabelValues(values...),
@@ -270,7 +270,7 @@ func (p *Prometheus) GetGauge(path string) StatGauge {
 
 	var ctr *prometheus.GaugeVec
 
-	p.Lock()
+	p.mut.Lock()
 	var exists bool
 	if ctr, exists = p.gauges[stat]; !exists {
 		ctr = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -281,7 +281,7 @@ func (p *Prometheus) GetGauge(path string) StatGauge {
 		p.reg.MustRegister(ctr)
 		p.gauges[stat] = ctr
 	}
-	p.Unlock()
+	p.mut.Unlock()
 
 	return &PromGauge{
 		ctr: ctr.WithLabelValues(values...),
@@ -304,7 +304,7 @@ func (p *Prometheus) GetCounterVec(path string, labelNames []string) StatCounter
 
 	var ctr *prometheus.CounterVec
 
-	p.Lock()
+	p.mut.Lock()
 	var exists bool
 	if ctr, exists = p.counters[stat]; !exists {
 		ctr = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -315,7 +315,7 @@ func (p *Prometheus) GetCounterVec(path string, labelNames []string) StatCounter
 		p.reg.MustRegister(ctr)
 		p.counters[stat] = ctr
 	}
-	p.Unlock()
+	p.mut.Unlock()
 
 	if len(labels) > 0 {
 		return fakeCounterVec(func(vs []string) StatCounter {
@@ -347,7 +347,7 @@ func (p *Prometheus) GetTimerVec(path string, labelNames []string) StatTimerVec 
 
 	var tmr *prometheus.SummaryVec
 
-	p.Lock()
+	p.mut.Lock()
 	var exists bool
 	if tmr, exists = p.timers[stat]; !exists {
 		tmr = prometheus.NewSummaryVec(prometheus.SummaryOpts{
@@ -359,7 +359,7 @@ func (p *Prometheus) GetTimerVec(path string, labelNames []string) StatTimerVec 
 		p.reg.MustRegister(tmr)
 		p.timers[stat] = tmr
 	}
-	p.Unlock()
+	p.mut.Unlock()
 
 	if len(labels) > 0 {
 		return fakeTimerVec(func(vs []string) StatTimer {
@@ -391,7 +391,7 @@ func (p *Prometheus) GetGaugeVec(path string, labelNames []string) StatGaugeVec 
 
 	var ctr *prometheus.GaugeVec
 
-	p.Lock()
+	p.mut.Lock()
 	var exists bool
 	if ctr, exists = p.gauges[stat]; !exists {
 		ctr = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -402,7 +402,7 @@ func (p *Prometheus) GetGaugeVec(path string, labelNames []string) StatGaugeVec 
 		p.reg.MustRegister(ctr)
 		p.gauges[stat] = ctr
 	}
-	p.Unlock()
+	p.mut.Unlock()
 
 	if len(labels) > 0 {
 		return fakeGaugeVec(func(vs []string) StatGauge {

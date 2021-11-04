@@ -260,7 +260,7 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 	tmpURL := *s.schemaServerURL
 	tmpURL.Path = fmt.Sprintf("/subjects/%s/versions/latest", subject)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", tmpURL.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", tmpURL.String(), http.NoBody)
 	if err != nil {
 		return nil, 0, err
 	}

@@ -20,7 +20,7 @@ func TestFunctionExamples(t *testing.T) {
 		os.Remove(tmpJSONFile.Name())
 	})
 
-	_, err = tmpJSONFile.Write([]byte(`{"foo":"bar"}`))
+	_, err = tmpJSONFile.WriteString(`{"foo":"bar"}`)
 	require.NoError(t, err)
 
 	key := "BENTHOS_TEST_BLOBLANG_FILE"
@@ -61,14 +61,14 @@ func TestMethodExamples(t *testing.T) {
 		os.Remove(tmpJSONFile.Name())
 	})
 
-	_, err = tmpJSONFile.Write([]byte(`
+	_, err = tmpJSONFile.WriteString(`
   "type":"object",
   "properties":{
     "foo":{
       "type":"string"
     }
   }
-}`))
+}`)
 	require.NoError(t, err)
 
 	key := "BENTHOS_TEST_BLOBLANG_SCHEMA_FILE"

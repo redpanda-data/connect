@@ -226,7 +226,7 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf(s.surl, id), nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf(s.surl, id), http.NoBody)
 	if err != nil {
 		return nil, err
 	}

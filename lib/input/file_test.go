@@ -32,9 +32,9 @@ func TestFileSinglePartDeprecated(t *testing.T) {
 	}
 
 	for _, msg := range messages {
-		tmpfile.Write([]byte(msg))
-		tmpfile.Write([]byte("\n"))
-		tmpfile.Write([]byte("\n")) // Try some empty messages
+		tmpfile.WriteString(msg)
+		tmpfile.WriteString("\n")
+		tmpfile.WriteString("\n") // Try some empty messages
 	}
 
 	conf := NewConfig()
@@ -102,10 +102,10 @@ func TestFileMultiPartDeprecated(t *testing.T) {
 
 	for _, msg := range messages {
 		for _, part := range msg {
-			tmpfile.Write([]byte(part))
-			tmpfile.Write([]byte("\n"))
+			tmpfile.WriteString(part)
+			tmpfile.WriteString("\n")
 		}
-		tmpfile.Write([]byte("\n"))
+		tmpfile.WriteString("\n")
 	}
 
 	conf := NewConfig()
@@ -161,7 +161,7 @@ func TestFileDirectory(t *testing.T) {
 	tmpFile, err := os.CreateTemp(tmpDir, "f1*.txt")
 	require.NoError(t, err)
 
-	_, err = tmpFile.Write([]byte("foo"))
+	_, err = tmpFile.WriteString("foo")
 	require.NoError(t, err)
 
 	err = tmpFile.Close()
@@ -170,7 +170,7 @@ func TestFileDirectory(t *testing.T) {
 	tmpFileTwo, err := os.CreateTemp(tmpInnerDir, "f2*.txt")
 	require.NoError(t, err)
 
-	_, err = tmpFileTwo.Write([]byte("bar"))
+	_, err = tmpFileTwo.WriteString("bar")
 	require.NoError(t, err)
 
 	err = tmpFileTwo.Close()

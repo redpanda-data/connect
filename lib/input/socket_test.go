@@ -942,7 +942,7 @@ func BenchmarkTCPSocketWithCutOff(b *testing.B) {
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 60))
 		for i := 0; i < b.N; i++ {
-			_, cerr := conn.Write([]byte(fmt.Sprintf("hello world this is message %v\n", i)))
+			_, cerr := fmt.Fprintf(conn, "hello world this is message %v\n", i)
 			assert.NoError(b, cerr)
 		}
 		wg.Done()
@@ -1012,7 +1012,7 @@ func BenchmarkTCPSocketNoCutOff(b *testing.B) {
 	go func() {
 		conn.SetWriteDeadline(time.Now().Add(time.Second * 60))
 		for i := 0; i < b.N; i++ {
-			_, cerr := conn.Write([]byte(fmt.Sprintf("hello world this is message %v\n", i)))
+			_, cerr := fmt.Fprintf(conn, "hello world this is message %v\n", i)
 			assert.NoError(b, cerr)
 		}
 		wg.Done()

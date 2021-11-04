@@ -1,6 +1,7 @@
 package output
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"sync"
@@ -71,7 +72,7 @@ func TestSwitchNoConditions(t *testing.T) {
 			var ts types.Transaction
 			select {
 			case ts = <-mockOutputs[j].TChan:
-				if string(ts.Payload.Get(0).Get()) != string(content[0]) {
+				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
 					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
 				}
 				resChanSlice = append(resChanSlice, ts.ResponseChan)
@@ -137,7 +138,7 @@ func TestSwitchNoRetries(t *testing.T) {
 			var ts types.Transaction
 			select {
 			case ts = <-mockOutputs[j].TChan:
-				if string(ts.Payload.Get(0).Get()) != string(content[0]) {
+				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
 					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
 				}
 				resChanSlice = append(resChanSlice, ts.ResponseChan)
@@ -415,7 +416,7 @@ func TestSwitchWithConditions(t *testing.T) {
 		} else if i%2 == 0 {
 			foo = "baz"
 		}
-		content := [][]byte{[]byte(fmt.Sprintf("{\"foo\":\"%s\"}", foo))}
+		content := [][]byte{[]byte(fmt.Sprintf("{\"foo\":%q}", foo))}
 		select {
 		case readChan <- types.NewTransaction(message.New(content), resChan):
 		case <-time.After(time.Second):
@@ -813,7 +814,7 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 		if i%2 == 0 {
 			foo = "baz"
 		}
-		content := [][]byte{[]byte(fmt.Sprintf("{\"foo\":\"%s\"}", foo))}
+		content := [][]byte{[]byte(fmt.Sprintf("{\"foo\":%q}", foo))}
 		select {
 		case readChan <- types.NewTransaction(message.New(content), resChan):
 		case <-time.After(time.Second):

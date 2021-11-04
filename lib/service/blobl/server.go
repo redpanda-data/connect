@@ -390,6 +390,7 @@ func runServer(c *cli.Context) error {
 		})
 		if err != nil {
 			http.Error(w, "Template error", http.StatusBadGateway)
+			return
 		}
 	})
 

@@ -612,7 +612,7 @@ var _ = registerSimpleMethod(
 				var errStr string
 				for i, desc := range result.Errors() {
 					if i > 0 {
-						errStr = errStr + "\n"
+						errStr += "\n"
 					}
 					description := strings.ToLower(desc.Description())
 					if property := desc.Details()["property"]; property != nil {

@@ -183,7 +183,7 @@ func New(
 	}
 
 	handleVersion := func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(fmt.Sprintf("{\"version\":\"%v\", \"built\":\"%v\"}", version, dateBuilt)))
+		fmt.Fprintf(w, "{\"version\":\"%v\", \"built\":\"%v\"}", version, dateBuilt)
 	}
 
 	handleEndpoints := func(w http.ResponseWriter, r *http.Request) {

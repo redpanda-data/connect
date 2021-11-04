@@ -102,10 +102,12 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 		if serverErr != nil {
 			m.logger.Errorf("Streams CRUD Error: %v\n", serverErr)
 			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadGateway)
+			return
 		}
 		if requestErr != nil {
 			m.logger.Debugf("Streams request CRUD Error: %v\n", requestErr)
 			http.Error(w, fmt.Sprintf("Error: %v", requestErr), http.StatusBadRequest)
+			return
 		}
 	}()
 
@@ -267,10 +269,12 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 		if serverErr != nil {
 			m.logger.Errorf("Streams CRUD Error: %v\n", serverErr)
 			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadGateway)
+			return
 		}
 		if requestErr != nil {
 			m.logger.Debugf("Streams request CRUD Error: %v\n", requestErr)
 			http.Error(w, fmt.Sprintf("Error: %v", requestErr), http.StatusBadRequest)
+			return
 		}
 	}()
 
@@ -414,10 +418,12 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 	if serverErr == ErrStreamDoesNotExist {
 		serverErr = nil
 		http.Error(w, "Stream not found", http.StatusNotFound)
+		return
 	}
 	if serverErr == ErrStreamExists {
 		serverErr = nil
 		http.Error(w, "Stream already exists", http.StatusBadRequest)
+		return
 	}
 }
 
@@ -432,10 +438,12 @@ func (m *Type) HandleResourceCRUD(w http.ResponseWriter, r *http.Request) {
 		if serverErr != nil {
 			m.logger.Errorf("Resource CRUD Error: %v\n", serverErr)
 			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadGateway)
+			return
 		}
 		if requestErr != nil {
 			m.logger.Debugf("Resource request CRUD Error: %v\n", requestErr)
 			http.Error(w, fmt.Sprintf("Error: %v", requestErr), http.StatusBadRequest)
+			return
 		}
 	}()
 
@@ -554,10 +562,12 @@ func (m *Type) HandleStreamStats(w http.ResponseWriter, r *http.Request) {
 		if serverErr != nil {
 			m.logger.Errorf("Stream stats Error: %v\n", serverErr)
 			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadGateway)
+			return
 		}
 		if requestErr != nil {
 			m.logger.Debugf("Stream request stats Error: %v\n", requestErr)
 			http.Error(w, fmt.Sprintf("Error: %v", requestErr), http.StatusBadRequest)
+			return
 		}
 	}()
 
@@ -585,7 +595,7 @@ func (m *Type) HandleStreamStats(w http.ResponseWriter, r *http.Request) {
 				obj.SetP(v, k)
 				obj.SetP(time.Duration(v).String(), k+"_readable")
 			}
-			obj.SetP(fmt.Sprintf("%v", uptime), "uptime")
+			obj.SetP(uptime, "uptime")
 			w.Header().Set("Content-Type", "application/json")
 			w.Write(obj.Bytes())
 		}
@@ -595,6 +605,7 @@ func (m *Type) HandleStreamStats(w http.ResponseWriter, r *http.Request) {
 	if serverErr == ErrStreamDoesNotExist {
 		serverErr = nil
 		http.Error(w, "Stream not found", http.StatusNotFound)
+		return
 	}
 }
 
@@ -617,7 +628,7 @@ func (m *Type) HandleStreamReady(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusServiceUnavailable)
-	w.Write([]byte(fmt.Sprintf("streams %v are not connected\n", strings.Join(notReady, ", "))))
+	fmt.Fprintf(w, "streams %v are not connected\n", strings.Join(notReady, ", "))
 }
 
 //------------------------------------------------------------------------------

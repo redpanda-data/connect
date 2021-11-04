@@ -152,6 +152,7 @@ func (d *Dynamic) HandleList(w http.ResponseWriter, r *http.Request) {
 		}
 		if httpErr != nil {
 			http.Error(w, "Internal server error", http.StatusBadGateway)
+			return
 		}
 	}()
 
@@ -254,6 +255,7 @@ func (d *Dynamic) HandleCRUD(w http.ResponseWriter, r *http.Request) {
 		}
 		if httpErr != nil {
 			http.Error(w, fmt.Sprintf("Error: %v", httpErr), http.StatusBadGateway)
+			return
 		}
 	}()
 

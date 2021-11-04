@@ -323,7 +323,7 @@ func TestSequenceJoinsBig(t *testing.T) {
 
 	exp, act := []string{}, []string{}
 
-	_, err = csvFile.Write([]byte("id,bar\n"))
+	_, err = csvFile.WriteString("id,bar\n")
 	require.NoError(t, err)
 	for i := 0; i < totalRows; i++ {
 		exp = append(exp, fmt.Sprintf(`{"bar":["bar%v","baz%v"],"foo":"foo%v","id":"%v"}`, i, i, i, i))
