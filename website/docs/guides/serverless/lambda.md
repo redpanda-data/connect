@@ -115,6 +115,8 @@ output:
 
 ## Upload to AWS
 
+### go1.x on x86_64
+
 Grab an archive labelled `benthos-lambda` from the [releases page][releases]
 page and then create your function:
 
@@ -131,6 +133,23 @@ aws lambda create-function \
 
 There is also an example [SAM template][sam-template] and
 [Terraform resource][tf-example] in the repo to copy from.
+
+### provided.al2 on amd64
+
+Grab an archive labelled `benthos-lambda-al2` from the [releases page][releases]
+page and then create your function (AWS CLI v2 only):
+
+```sh
+LAMBDA_ENV=`cat yourconfig.yaml | jq -csR {Variables:{BENTHOS_CONFIG:.}}`
+aws lambda create-function \
+  --runtime provided.al2 \
+  --architectures arm64 \
+  --handler not.used.for.provided.al2.runtime \
+  --role benthos-example-role \
+  --zip-file fileb://benthos-lambda.zip \
+  --environment "$LAMBDA_ENV" \
+  --function-name benthos-example
+```
 
 ## Invoke
 
