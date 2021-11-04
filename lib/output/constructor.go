@@ -154,6 +154,8 @@ var Constructors = map[string]TypeSpec{}
 //------------------------------------------------------------------------------
 
 // String constants representing each output type.
+// Deprecated: Do not add new components here. Instead, use the public plugin
+// APIs. Examples can be found in: ./internal/impl
 const (
 	TypeAMQP               = "amqp"
 	TypeAMQP09             = "amqp_0_9"
@@ -225,6 +227,8 @@ const (
 //------------------------------------------------------------------------------
 
 // Config is the all encompassing configuration struct for all output types.
+// Deprecated: Do not add new components here. Instead, use the public plugin
+// APIs. Examples can be found in: ./internal/impl
 type Config struct {
 	Label              string                         `json:"label" yaml:"label"`
 	Type               string                         `json:"type" yaml:"type"`
@@ -298,6 +302,8 @@ type Config struct {
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
+// Deprecated: Do not add new components here. Instead, use the public plugin
+// APIs. Examples can be found in: ./internal/impl
 func NewConfig() Config {
 	return Config{
 		Label:              "",

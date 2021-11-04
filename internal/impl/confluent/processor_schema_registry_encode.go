@@ -44,9 +44,9 @@ Currently only Avro schemas are supported.`).
 }
 
 func init() {
-	err := service.RegisterProcessor(
+	err := service.RegisterBatchProcessor(
 		"schema_registry_encode", schemaRegistryEncoderConfig(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			return newSchemaRegistryEncoderFromConfig(conf, mgr.Logger())
 		})
 
@@ -150,28 +150,33 @@ func newSchemaRegistryEncoder(
 	return s, nil
 }
 
-func (s *schemaRegistryEncoder) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	encoder, id, err := s.getEncoder(s.subject.String(msg))
-	if err != nil {
-		return nil, err
-	}
+func (s *schemaRegistryEncoder) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+	for i, msg := range batch {
+		encoder, id, err := s.getEncoder(batch.InterpolatedString(i, s.subject))
+		if err != nil {
+			msg.SetError(err)
+			continue
+		}
 
-	newMsg := msg.Copy()
-	if err := encoder(newMsg); err != nil {
-		return nil, err
-	}
+		if err := encoder(msg); err != nil {
+			msg.SetError(err)
+			continue
+		}
 
-	rawBytes, err := newMsg.AsBytes()
-	if err != nil {
-		return nil, errors.New("unable to reference encoded message as bytes")
-	}
+		rawBytes, err := msg.AsBytes()
+		if err != nil {
+			msg.SetError(errors.New("unable to reference encoded message as bytes"))
+			continue
+		}
 
-	if rawBytes, err = insertID(id, rawBytes); err != nil {
-		return nil, err
+		if rawBytes, err = insertID(id, rawBytes); err != nil {
+			msg.SetError(err)
+			continue
+		}
+		msg.SetBytes(rawBytes)
 	}
-	newMsg.SetBytes(rawBytes)
-
-	return service.MessageBatch{newMsg}, nil
+	return []service.MessageBatch{batch}, nil
 }
 
 func (s *schemaRegistryEncoder) Close(ctx context.Context) error {

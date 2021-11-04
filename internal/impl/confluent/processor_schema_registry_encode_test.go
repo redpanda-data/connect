@@ -124,19 +124,25 @@ func TestSchemaRegistryEncode(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			outMsgs, err := encoder.Process(context.Background(), service.NewMessage([]byte(test.input)))
+			outBatches, err := encoder.ProcessBatch(
+				context.Background(),
+				service.MessageBatch{service.NewMessage([]byte(test.input))},
+			)
+			require.NoError(t, err)
+			require.Len(t, outBatches, 1)
+			require.Len(t, outBatches[0], 1)
+
+			err = outBatches[0][0].GetError()
 			if test.errContains != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.errContains)
 			} else {
 				require.NoError(t, err)
-				require.Len(t, outMsgs, 1)
 
-				b, err := outMsgs[0].AsBytes()
+				b, err := outBatches[0][0].AsBytes()
 				require.NoError(t, err)
 				assert.Equal(t, test.output, string(b))
 			}
-
 		})
 	}
 

@@ -71,6 +71,8 @@ const (
 //------------------------------------------------------------------------------
 
 // Config is the all encompassing configuration struct for all buffer types.
+// Deprecated: Do not add new components here. Instead, use the public plugin
+// APIs. Examples can be found in: ./internal/impl
 type Config struct {
 	Type   string       `json:"type" yaml:"type"`
 	Memory MemoryConfig `json:"memory" yaml:"memory"`

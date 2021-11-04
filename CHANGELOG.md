@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - The `nats` input now supports metadata from headers when supported.
 - Field `headers` added to the `nats` output.
 - Go API: Optional field definitions added for config specs.
+- New (experimental) `sql_query` processor, which will supersede the existing `sql` processor for queries.
 
 ### Fixed
 
