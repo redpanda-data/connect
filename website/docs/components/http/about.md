@@ -34,7 +34,9 @@ If the certificate is signed by a certificate authority, the `cert_file` should 
 
 The following endpoints will be generally available when the HTTP server is enabled:
 
-- `/version` provides version info.
+- `/version` provides version info.  
+    - can be set via build flags:
+        - `go build -ldflags "-X github.com/Jeffail/benthos/v3/lib/service.Version=$(VERSION) -X github.com/Jeffail/benthos/v3/lib/service.DateBuilt=$(DATE)" ...`
 - `/ping` can be used as a liveness probe as it always returns a 200.
 - `/ready` can be used as a readiness probe as it serves a 200 only when both the input and output are connected, otherwise a 503 is returned.
 - `/metrics`, `/stats` both provide metrics when the metrics type is either [`http_server`][metrics.http_server] or [`prometheus`][metrics.prometheus].
