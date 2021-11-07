@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/public/service"
-	gonanoid "github.com/matoous/go-nanoid"
+	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
