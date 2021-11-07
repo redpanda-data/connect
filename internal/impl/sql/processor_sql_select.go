@@ -12,11 +12,11 @@ import (
 	"github.com/Masterminds/squirrel"
 )
 
-func sqlQueryProcessorConfig() *service.ConfigSpec {
+func sqlSelectProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		// Stable(). TODO
 		Categories("Integration").
-		Summary("Runs an SQL query against a database and returns the result as a two-dimensional JSON array of rows of column values.").
+		Summary("Runs an SQL select query against a database and returns the result as an array of objects, one for each row returned, containing a key for each column queried and its value.").
 		Description(`
 If the query fails to execute then the message will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).`).
 		Field(driverField).
@@ -38,6 +38,14 @@ If the query fails to execute then the message will remain unchanged and the err
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
 			Example(`root = [ meta("user.id") ]`).
 			Optional()).
+		Field(service.NewStringField("prefix").
+			Description("An optional prefix to prepend to the query (before SELECT).").
+			Optional().
+			Advanced()).
+		Field(service.NewStringField("suffix").
+			Description("An optional suffix to append to the select query.").
+			Optional().
+			Advanced()).
 		Version("3.59.0").
 		Example("Table Query (PostgreSQL)",
 			`
@@ -50,7 +58,7 @@ pipeline:
   processors:
     - branch:
         processors:
-          - sql_query:
+          - sql_select:
               driver: postgres
               dsn: postgres://foouser:foopass@localhost:5432/testdb?sslmode=disable
               table: footable
@@ -64,9 +72,9 @@ pipeline:
 
 func init() {
 	err := service.RegisterBatchProcessor(
-		"sql_query", sqlQueryProcessorConfig(),
+		"sql_select", sqlSelectProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			return newSQLQueryProcessorFromConfig(conf, mgr.Logger())
+			return newSQLSelectProcessorFromConfig(conf, mgr.Logger())
 		})
 
 	if err != nil {
@@ -76,10 +84,10 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-type sqlQueryProcessor struct {
+type sqlSelectProcessor struct {
 	db      *sql.DB
 	builder squirrel.SelectBuilder
-	dbMut   sync.Mutex
+	dbMut   sync.RWMutex
 
 	where       string
 	argsMapping *bloblang.Executor
@@ -88,8 +96,8 @@ type sqlQueryProcessor struct {
 	shutSig *shutdown.Signaller
 }
 
-func newSQLQueryProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlQueryProcessor, error) {
-	s := &sqlQueryProcessor{
+func newSQLSelectProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlSelectProcessor, error) {
+	s := &sqlSelectProcessor{
 		logger:  logger,
 		shutSig: shutdown.NewSignaller(),
 	}
@@ -126,13 +134,29 @@ func newSQLQueryProcessorFromConfig(conf *service.ParsedConfig, logger *service.
 		}
 	}
 
-	if s.db, err = sql.Open(driverStr, dsnStr); err != nil {
-		return nil, err
-	}
-
 	s.builder = squirrel.Select(columns...).From(tableStr)
 	if driverStr == "postgres" {
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
+	}
+
+	if conf.Contains("prefix") {
+		prefixStr, err := conf.FieldString("prefix")
+		if err != nil {
+			return nil, err
+		}
+		s.builder = s.builder.Prefix(prefixStr)
+	}
+
+	if conf.Contains("suffix") {
+		suffixStr, err := conf.FieldString("suffix")
+		if err != nil {
+			return nil, err
+		}
+		s.builder = s.builder.Suffix(suffixStr)
+	}
+
+	if s.db, err = sql.Open(driverStr, dsnStr); err != nil {
+		return nil, err
 	}
 
 	go func() {
@@ -147,9 +171,9 @@ func newSQLQueryProcessorFromConfig(conf *service.ParsedConfig, logger *service.
 	return s, nil
 }
 
-func (s *sqlQueryProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	s.dbMut.Lock()
-	defer s.dbMut.Unlock()
+func (s *sqlSelectProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	s.dbMut.RLock()
+	defer s.dbMut.RUnlock()
 
 	batch = batch.Copy()
 	for i, msg := range batch {
@@ -185,14 +209,16 @@ func (s *sqlQueryProcessor) ProcessBatch(ctx context.Context, batch service.Mess
 			continue
 		}
 
-		if err = sqlResultJSONArrayCodec(rows, msg); err != nil {
+		if jArray, err := sqlRowsToArray(rows); err != nil {
 			msg.SetError(err)
+		} else {
+			msg.SetStructured(jArray)
 		}
 	}
 	return []service.MessageBatch{batch}, nil
 }
 
-func (s *sqlQueryProcessor) Close(ctx context.Context) error {
+func (s *sqlSelectProcessor) Close(ctx context.Context) error {
 	s.shutSig.CloseNow()
 	select {
 	case <-s.shutSig.HasClosedChan():
