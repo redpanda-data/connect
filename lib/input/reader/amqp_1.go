@@ -254,9 +254,11 @@ func (a *AMQP1) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn,
 		// TODO: These methods were moved in v0.16.0, but nacking seems broken
 		// (integration tests fail)
 		if res.Error() != nil {
+			// nolint: gocritic
 			// return conn.receiver.ModifyMessage(ctx, amqpMsg, true, false, amqpMsg.Annotations)
 			return amqpMsg.Modify(ctx, true, false, amqpMsg.Annotations)
 		}
+		// nolint: gocritic
 		// return conn.receiver.AcceptMessage(ctx, amqpMsg)
 		return amqpMsg.Accept(ctx)
 	}, nil

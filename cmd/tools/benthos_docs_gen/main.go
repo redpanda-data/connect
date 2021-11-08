@@ -27,14 +27,9 @@ import (
 
 //------------------------------------------------------------------------------
 
-var verbose bool
-
 func create(t, path string, resBytes []byte) {
 	if existing, err := os.ReadFile(path); err == nil {
 		if bytes.Equal(existing, resBytes) {
-			if verbose {
-				fmt.Printf("Skipping '%v' at: %v\n", t, path)
-			}
 			return
 		}
 	}
@@ -60,7 +55,6 @@ func render(dir string, embed bool, confSanit interface{}, spec docs.ComponentSp
 func main() {
 	docsDir := "./website/docs/components"
 	flag.StringVar(&docsDir, "dir", docsDir, "The directory to write docs to")
-	flag.BoolVar(&verbose, "v", false, "Writes more information to stdout, including configs that aren't updated")
 	flag.Parse()
 
 	if _, err := template.InitTemplates(); err != nil {
