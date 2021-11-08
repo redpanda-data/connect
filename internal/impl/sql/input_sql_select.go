@@ -37,11 +37,11 @@ func sqlSelectInputConfig() *service.ConfigSpec {
 			Example(`root = [ "article", now().format_timestamp("2006-01-02") ]`).
 			Optional()).
 		Field(service.NewStringField("prefix").
-			Description("An optional prefix to prepend to the insert query (before INSERT).").
+			Description("An optional prefix to prepend to the select query (before SELECT).").
 			Optional().
 			Advanced()).
 		Field(service.NewStringField("suffix").
-			Description("An optional suffix to append to the insert query.").
+			Description("An optional suffix to append to the select query.").
 			Optional().
 			Advanced()).
 		Version("3.59.0").
@@ -196,7 +196,7 @@ func (s *sqlSelectInput) Connect(ctx context.Context) (err error) {
 		queryBuilder = queryBuilder.Where(s.where, args...)
 	}
 	var rows *sql.Rows
-	if rows, err = queryBuilder.RunWith(db).QueryContext(ctx); err != nil {
+	if rows, err = queryBuilder.RunWith(db).Query(); err != nil {
 		return
 	}
 
@@ -234,9 +234,13 @@ func (s *sqlSelectInput) Read(ctx context.Context) (*service.Message, service.Ac
 	}
 
 	if !s.rows.Next() {
+		err := s.rows.Err()
+		if err == nil {
+			err = service.ErrEndOfInput
+		}
 		_ = s.rows.Close()
 		s.rows = nil
-		return nil, nil, s.rows.Err()
+		return nil, nil, err
 	}
 
 	obj, err := sqlRowToMap(s.rows)

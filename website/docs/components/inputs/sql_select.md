@@ -197,14 +197,14 @@ args_mapping: root = [ "article", now().format_timestamp("2006-01-02") ]
 
 ### `prefix`
 
-An optional prefix to prepend to the insert query (before INSERT).
+An optional prefix to prepend to the select query (before SELECT).
 
 
 Type: `string`  
 
 ### `suffix`
 
-An optional suffix to append to the insert query.
+An optional suffix to append to the select query.
 
 
 Type: `string`  

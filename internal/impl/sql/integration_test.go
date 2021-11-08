@@ -158,10 +158,99 @@ var testBatchProcessorParallel = testProcessors("parallel", func(t *testing.T, i
 	wg.Wait()
 })
 
+func testBatchInputOutputBatch(t *testing.T, driver, dsn, table string) {
+	t.Run("batch_input_output", func(t *testing.T) {
+		confReplacer := strings.NewReplacer(
+			"$driver", driver,
+			"$dsn", dsn,
+			"$table", table,
+		)
+
+		outputConf := confReplacer.Replace(`
+sql_insert:
+  driver: $driver
+  dsn: $dsn
+  table: $table
+  columns: [ foo, bar, baz ]
+  args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
+`)
+
+		inputConf := confReplacer.Replace(`
+sql_select:
+  driver: $driver
+  dsn: $dsn
+  table: $table
+  columns: [ "*" ]
+  suffix: ' ORDER BY bar ASC'
+processors:
+  # For some reason MySQL driver doesn't resolve to integer by default.
+  - bloblang: |
+      root = this
+      root.bar = this.bar.number()
+`)
+
+		streamInBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamInBuilder.SetLoggerYAML(`level: OFF`))
+		require.NoError(t, streamInBuilder.AddOutputYAML(outputConf))
+
+		inFn, err := streamInBuilder.AddBatchProducerFunc()
+		require.NoError(t, err)
+
+		streamIn, err := streamInBuilder.Build()
+		require.NoError(t, err)
+
+		go func() {
+			assert.NoError(t, streamIn.Run(context.Background()))
+		}()
+
+		streamOutBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
+		require.NoError(t, streamOutBuilder.AddInputYAML(inputConf))
+
+		var outBatches []string
+		require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+			msgBytes, err := mb[0].AsBytes()
+			require.NoError(t, err)
+			outBatches = append(outBatches, string(msgBytes))
+			return nil
+		}))
+
+		streamOut, err := streamOutBuilder.Build()
+		require.NoError(t, err)
+
+		var insertBatch service.MessageBatch
+		for i := 0; i < 10; i++ {
+			insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
+	"foo": "doc-%v",
+	"bar": %v,
+	"baz": "and this"
+}`, i, i))))
+		}
+		require.NoError(t, inFn(context.Background(), insertBatch))
+		require.NoError(t, streamIn.StopWithin(time.Second))
+
+		require.NoError(t, streamOut.Run(context.Background()))
+
+		assert.Equal(t, []string{
+			"{\"bar\":0,\"baz\":\"and this\",\"foo\":\"doc-0\"}",
+			"{\"bar\":1,\"baz\":\"and this\",\"foo\":\"doc-1\"}",
+			"{\"bar\":2,\"baz\":\"and this\",\"foo\":\"doc-2\"}",
+			"{\"bar\":3,\"baz\":\"and this\",\"foo\":\"doc-3\"}",
+			"{\"bar\":4,\"baz\":\"and this\",\"foo\":\"doc-4\"}",
+			"{\"bar\":5,\"baz\":\"and this\",\"foo\":\"doc-5\"}",
+			"{\"bar\":6,\"baz\":\"and this\",\"foo\":\"doc-6\"}",
+			"{\"bar\":7,\"baz\":\"and this\",\"foo\":\"doc-7\"}",
+			"{\"bar\":8,\"baz\":\"and this\",\"foo\":\"doc-8\"}",
+			"{\"bar\":9,\"baz\":\"and this\",\"foo\":\"doc-9\"}",
+		}, outBatches)
+	})
+}
+
 func testSuite(t *testing.T, driver, dsn string, createTableFn func(string) error) {
 	for _, fn := range []testFn{
 		testBatchProcessorBasic,
 		testBatchProcessorParallel,
+		testBatchInputOutputBatch,
 	} {
 		tableName, err := gonanoid.Generate("abcdefghijklmnopqrstuvwxyz", 40)
 		require.NoError(t, err)
