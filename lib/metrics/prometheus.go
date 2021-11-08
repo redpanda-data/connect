@@ -13,6 +13,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/client_golang/prometheus/push"
 )
@@ -147,10 +148,10 @@ func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 	}
 
 	// TODO: Maybe disable this with a config flag.
-	if err := p.reg.Register(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{})); err != nil {
+	if err := p.reg.Register(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{})); err != nil {
 		return nil, err
 	}
-	if err := p.reg.Register(prometheus.NewGoCollector()); err != nil {
+	if err := p.reg.Register(collectors.NewGoCollector()); err != nil {
 		return nil, err
 	}
 

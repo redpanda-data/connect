@@ -695,7 +695,7 @@ func TestTextBadEnumArg(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = "text"
 	conf.Text.Operator = "enum"
-	conf.Text.Arg = []int{1, 2}
+	conf.Text.Arg = struct{}{}
 
 	_, err := NewText(conf, nil, log.Noop(), metrics.Noop())
 	if err == nil {
