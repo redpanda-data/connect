@@ -34,7 +34,11 @@ output:
   label: ""
   aws_sns:
     topic_arn: ""
+    message_group_id: ""
+    message_deduplication_id: ""
     max_in_flight: 1
+    metadata:
+      exclude_prefixes: []
     region: eu-west-1
 ```
 
@@ -47,7 +51,11 @@ output:
   label: ""
   aws_sns:
     topic_arn: ""
+    message_group_id: ""
+    message_deduplication_id: ""
     max_in_flight: 1
+    metadata:
+      exclude_prefixes: []
     timeout: 5s
     region: eu-west-1
     endpoint: ""
@@ -86,6 +94,24 @@ The topic to publish to.
 Type: `string`  
 Default: `""`  
 
+### `message_group_id`
+
+An optional group ID to set for messages.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `message_deduplication_id`
+
+An optional deduplication ID to set for messages.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
 ### `max_in_flight`
 
 The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
@@ -93,6 +119,21 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 Type: `int`  
 Default: `1`  
+
+### `metadata`
+
+Specify criteria for which metadata values are sent as headers.
+
+
+Type: `object`  
+
+### `metadata.exclude_prefixes`
+
+Provide a list of explicit metadata key prefixes to be excluded when adding metadata to sent messages.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `timeout`
 
