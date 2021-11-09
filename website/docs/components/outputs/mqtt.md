@@ -39,7 +39,6 @@ output:
     connect_timeout: 30s
     write_timeout: 3s
     retained: false
-    retained_interpolated: ""
     max_in_flight: 1
 ```
 
@@ -192,7 +191,7 @@ Default: `false`
 
 ### `retained_interpolated`
 
-Override retained value with an interpolable value
+Override the value of `retained` with an interpolable value, this allows it to be dynamically set based on message contents. The value must resolve to either `true` or `false`.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 

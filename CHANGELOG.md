@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - New (experimental) `sql_select` input.
 - New (experimental) `sql_select` and `sql_insert` processors, which will supersede the existing `sql` processor.
 - New (experimental) `sql_insert` output, which will supersede the existing `sql` output.
+- Field `retained_interpolated` added to the `mqtt` output.
 
 ### Fixed
 
