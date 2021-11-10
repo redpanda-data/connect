@@ -17,10 +17,11 @@ import (
 	"syscall"
 	"time"
 
-	_ "embed"
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/urfave/cli/v2"
+
+	_ "embed"
 )
 
 //go:embed resources/bloglang_editor_page.html
