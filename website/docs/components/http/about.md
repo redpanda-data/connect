@@ -42,11 +42,11 @@ The following endpoints will be generally available when the HTTP server is enab
 
 ## CORS
 
-In order to serve Cross-Origin Resource Sharing headers, which instruct browsers to allow CORS requests, set the field `enable_cors` to `true`.
+In order to serve Cross-Origin Resource Sharing headers, which instruct browsers to allow CORS requests, set the subfield `cors.enabled` to `true`.
 
 ### allowed_origins
 
-A list of allowed origins to connect from. The literal value `*` can be specified as a wildcard. Note `enable_cors` must be set to `true` for this list to take effect.
+A list of allowed origins to connect from. The literal value `*` can be specified as a wildcard. Note `cors.enabled` must be set to `true` for this list to take effect.
 
 ## Debug Endpoints
 
