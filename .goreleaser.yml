@@ -45,7 +45,7 @@ archives:
   - id: benthos-lambda-al2
     builds: [ benthos-lambda-al2 ]
     format: zip
-    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "benthos-lambda-al2_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 dist: target/dist
 release:
   github:
