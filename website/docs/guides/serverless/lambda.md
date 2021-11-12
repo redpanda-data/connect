@@ -136,7 +136,7 @@ There is also an example [SAM template][sam-template] and
 
 ### provided.al2 on amd64
 
-Grab an archive labelled `benthos-lambda-al2` from the [releases page][releases]
+Grab an archive labelled `benthos-lambda-al2` for `arm64` from the [releases page][releases]
 page and then create your function (AWS CLI v2 only):
 
 ```sh
@@ -153,6 +153,8 @@ aws lambda create-function \
 
 There is also an example [SAM template][sam-template-al2] and
 [Terraform resource][tf-example-al2] in the repo to copy from.
+
+Note that you can also run `benthos-lambda-al2` on x86_64, just use the `amd64` zip instead.
 
 ## Invoke
 
