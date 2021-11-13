@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-### Added
+## 3.59.0 - TBD
+
+### Added
 
 - New Bloblang method `parse_duration_iso8601` for parsing ISO-8601 duration strings into an integer.
 - The `nats` input now supports metadata from headers when supported.
@@ -15,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - New (experimental) `sql_select` and `sql_insert` processors, which will supersede the existing `sql` processor.
 - New (experimental) `sql_insert` output, which will supersede the existing `sql` output.
 - Field `retained_interpolated` added to the `mqtt` output.
+- Bloblang now allows optional carriage returns before line feeds at line endings.
 
 ### Fixed
 

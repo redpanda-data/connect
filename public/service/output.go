@@ -22,6 +22,10 @@ type Output interface {
 	// called first when a writer is instantiated, and will be continuously
 	// called with back off until a nil error is returned.
 	//
+	// The provided context remains open only for the duration of the connecting
+	// phase, and should not be used to establish the lifetime of the connection
+	// itself.
+	//
 	// Once Connect returns a nil error the write method will be called until
 	// either ErrNotConnected is returned, or the writer is closed.
 	Connect(context.Context) error

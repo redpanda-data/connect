@@ -1450,6 +1450,15 @@ root.result = this.foo.fold("", item -> "%v%v".format(item.tally, item.value))
 # Out: {"result":"hello world"}
 ```
 
+You can use fold to merge an array of objects together:
+
+```coffee
+root.smoothie = this.fruits.fold({}, item -> item.tally.merge(item.value))
+
+# In:  {"fruits":[{"apple":5},{"banana":3},{"orange":8}]}
+# Out: {"smoothie":{"apple":5,"banana":3,"orange":8}}
+```
+
 ### `get`
 
 Extract a field value, identified via a [dot path][field_paths], from an object.

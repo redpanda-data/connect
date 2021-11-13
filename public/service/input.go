@@ -30,6 +30,10 @@ type Input interface {
 	// called first when a reader is instantiated, and will be continuously
 	// called with back off until a nil error is returned.
 	//
+	// The provided context remains open only for the duration of the connecting
+	// phase, and should not be used to establish the lifetime of the connection
+	// itself.
+	//
 	// Once Connect returns a nil error the Read method will be called until
 	// either ErrNotConnected is returned, or the reader is closed.
 	Connect(context.Context) error
@@ -64,6 +68,10 @@ type BatchInput interface {
 	// Establish a connection to the upstream service. Connect will always be
 	// called first when a reader is instantiated, and will be continuously
 	// called with back off until a nil error is returned.
+	//
+	// The provided context remains open only for the duration of the connecting
+	// phase, and should not be used to establish the lifetime of the connection
+	// itself.
 	//
 	// Once Connect returns a nil error the Read method will be called until
 	// either ErrNotConnected is returned, or the reader is closed.

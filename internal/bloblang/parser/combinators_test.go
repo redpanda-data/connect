@@ -1643,11 +1643,21 @@ func TestNewline(t *testing.T) {
 		"only a carriage return": {
 			input:     "\r",
 			remaining: "\r",
-			err:       NewError([]rune("\r"), "line break"),
+			err:       NewError([]rune(""), "line break"),
+		},
+		"carriage return line feed": {
+			input:     "\r\n",
+			result:    "\r\n",
+			remaining: "",
 		},
 		"a line feed plus": {
 			input:     "\n foo",
 			result:    "\n",
+			remaining: " foo",
+		},
+		"crlf plus": {
+			input:     "\r\n foo",
+			result:    "\r\n",
 			remaining: " foo",
 		},
 		"lots not in the set": {
