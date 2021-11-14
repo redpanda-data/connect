@@ -4,7 +4,10 @@ description: Deploying Benthos as an AWS Lambda function
 ---
 
 The `benthos-lambda` distribution is a version of Benthos specifically tailored
-for deployment as an AWS Lambda function.
+for deployment as an AWS Lambda function on the `go1.x` runtime,
+which runs Amazon Linux on the `x86_64` architecture.
+The `benthos-lambda-al2` distribution supports the `provided.al2` runtime,
+which runs Amazon Linux 2 on either the `x86_64` or `arm64` architecture.
 
 It uses the same configuration format as a regular Benthos instance, except it
 is read from the environment variable `BENTHOS_CONFIG` (YAML format). Also, the
@@ -112,6 +115,8 @@ output:
 
 ## Upload to AWS
 
+### go1.x on x86_64
+
 Grab an archive labelled `benthos-lambda` from the [releases page][releases]
 page and then create your function:
 
@@ -128,6 +133,28 @@ aws lambda create-function \
 
 There is also an example [SAM template][sam-template] and
 [Terraform resource][tf-example] in the repo to copy from.
+
+### provided.al2 on amd64
+
+Grab an archive labelled `benthos-lambda-al2` for `arm64` from the [releases page][releases]
+page and then create your function (AWS CLI v2 only):
+
+```sh
+LAMBDA_ENV=`cat yourconfig.yaml | jq -csR {Variables:{BENTHOS_CONFIG:.}}`
+aws lambda create-function \
+  --runtime provided.al2 \
+  --architectures arm64 \
+  --handler not.used.for.provided.al2.runtime \
+  --role benthos-example-role \
+  --zip-file fileb://benthos-lambda.zip \
+  --environment "$LAMBDA_ENV" \
+  --function-name benthos-example
+```
+
+There is also an example [SAM template][sam-template-al2] and
+[Terraform resource][tf-example-al2] in the repo to copy from.
+
+Note that you can also run `benthos-lambda-al2` on x86_64, just use the `amd64` zip instead.
 
 ## Invoke
 
@@ -150,5 +177,7 @@ zip benthos-lambda.zip benthos-lambda
 [releases]: https://github.com/Jeffail/benthos/releases
 [sam-template]: https://github.com/Jeffail/benthos/tree/master/resources/serverless/lambda/benthos-lambda-sam.yaml
 [tf-example]: https://github.com/Jeffail/benthos/tree/master/resources/serverless/lambda/benthos-lambda.tf
+[sam-template-al2]: https://github.com/Jeffail/benthos/tree/master/resources/serverless/lambda/benthos-lambda-al2-sam.yaml
+[tf-example-al2]: https://github.com/Jeffail/benthos/tree/master/resources/serverless/lambda/benthos-lambda-al2.tf
 [output-broker]: /docs/components/outputs/broker
 [output.reject]: /docs/components/outputs/reject
