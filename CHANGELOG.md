@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - New (experimental) `sql_insert` output, which will supersede the existing `sql` output.
 - Field `retained_interpolated` added to the `mqtt` output.
 - Bloblang now allows optional carriage returns before line feeds at line endings.
+- New CLI flag `-w`/`-watcher` added for automatically detecting and applying configuration file changes.
 
 ### Fixed
 

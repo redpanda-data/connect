@@ -49,6 +49,7 @@ require (
 	github.com/fatih/color v1.13.0
 	github.com/felixge/httpsnoop v1.0.2 // indirect
 	github.com/form3tech-oss/jwt-go v3.2.5+incompatible // indirect
+	github.com/fsnotify/fsnotify v1.5.1
 	github.com/go-redis/redis/v7 v7.4.1
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/go-stack/stack v1.8.1 // indirect

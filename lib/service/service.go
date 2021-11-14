@@ -3,18 +3,19 @@ package service
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
 	"runtime/pprof"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	iconfig "github.com/Jeffail/benthos/v3/internal/config"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/filepath"
 	"github.com/Jeffail/benthos/v3/lib/api"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -70,7 +71,7 @@ func OptWithAPITLS(c *tls.Config) func() {
 	}
 }
 
-type stoppableStreams interface {
+type stoppable interface {
 	Stop(timeout time.Duration) error
 }
 
@@ -80,6 +81,7 @@ type stoppableStreams interface {
 // plugins. If a non-nil error is returned the service will terminate.
 type ManagerInitFunc func(manager types.Manager, logger log.Modular, stats metrics.Type) error
 
+// TODO: V4 remove this
 var onManagerInit ManagerInitFunc = func(manager types.Manager, logger log.Modular, stats metrics.Type) error {
 	return nil
 }
@@ -94,7 +96,7 @@ func OptOnManagerInit(fn ManagerInitFunc) func() {
 
 //------------------------------------------------------------------------------
 
-func readConfig(path string, resourcesPaths, overrides []string) (lints []string) {
+func readConfig(path string, streamsMode bool, resourcesPaths, streamsPaths, overrides []string) *iconfig.Reader {
 	if path == "" {
 		// Iterate default config paths
 		for _, dpath := range []string{
@@ -109,32 +111,199 @@ func readConfig(path string, resourcesPaths, overrides []string) (lints []string
 			}
 		}
 	}
-
-	var err error
-	if lints, err = iconfig.NewReader(path, resourcesPaths, iconfig.OptAddOverrides(overrides...)).Read(&conf); err != nil {
-		fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
-		os.Exit(1)
+	opts := []iconfig.OptFunc{
+		iconfig.OptAddOverrides(overrides...),
+		iconfig.OptTestSuffix(testSuffix),
 	}
-	return
+	if streamsMode {
+		opts = append(opts, iconfig.OptSetStreamPaths(streamsPaths...))
+	}
+	return iconfig.NewReader(path, resourcesPaths, opts...)
 }
 
 //------------------------------------------------------------------------------
+
+func initStreamsMode(
+	strict, watching bool,
+	confReader *iconfig.Reader,
+	strmAPITimeout time.Duration,
+	manager *manager.Type,
+	logger log.Modular,
+	stats metrics.Type,
+) stoppable {
+	lintlog := logger.NewModule(".linter")
+
+	streamMgr := strmmgr.New(
+		strmmgr.OptSetAPITimeout(strmAPITimeout),
+		strmmgr.OptSetLogger(logger),
+		strmmgr.OptSetManager(manager),
+		strmmgr.OptSetStats(stats),
+	)
+
+	streamConfs := map[string]stream.Config{}
+	lints, err := confReader.ReadStreams(streamConfs)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Stream configuration file read error: %v\n", err)
+		os.Exit(1)
+	}
+	if strict && len(lints) > 0 {
+		for _, lint := range lints {
+			fmt.Fprintln(os.Stderr, lint)
+		}
+		fmt.Println("Shutting down due to stream linter errors, to prevent shutdown run Benthos with --chilled")
+		os.Exit(1)
+	}
+	for _, lint := range lints {
+		lintlog.Infoln(lint)
+	}
+
+	for id, conf := range streamConfs {
+		if err := streamMgr.Create(id, conf); err != nil {
+			logger.Errorf("Failed to create stream (%v): %v\n", id, err)
+			os.Exit(1)
+		}
+	}
+	logger.Infoln("Launching benthos in streams mode, use CTRL+C to close.")
+
+	if err := confReader.SubscribeStreamChanges(func(id string, newStreamConf stream.Config) bool {
+		if err = streamMgr.Update(id, newStreamConf, time.Second*30); err != nil && errors.Is(err, strmmgr.ErrStreamDoesNotExist) {
+			err = streamMgr.Create(id, newStreamConf)
+		}
+		if err != nil {
+			logger.Errorf("Failed to update stream %v: %v", id, err)
+			return false
+		}
+		logger.Infof("Updated stream %v config from file.", id)
+		return true
+	}); err != nil {
+		logger.Errorf("Failed to create stream config watcher: %v", err)
+		os.Exit(1)
+	}
+
+	if watching {
+		if err := confReader.BeginFileWatching(manager, strict); err != nil {
+			logger.Errorf("Failed to create stream config watcher: %v", err)
+			os.Exit(1)
+		}
+	}
+	return streamMgr
+}
+
+type swappableStopper struct {
+	stopped bool
+	current stoppable
+	mut     sync.Mutex
+}
+
+func (s *swappableStopper) Stop(timeout time.Duration) error {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+
+	if s.stopped {
+		return nil
+	}
+
+	s.stopped = true
+	return s.current.Stop(timeout)
+}
+
+func (s *swappableStopper) Replace(fn func() (stoppable, error)) error {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+
+	if s.stopped {
+		// If the outter stream has been stopped then do not create a new one.
+		return nil
+	}
+
+	if err := s.current.Stop(time.Second * 30); err != nil {
+		return fmt.Errorf("failed to stop active stream: %w", err)
+	}
+
+	newStoppable, err := fn()
+	if err != nil {
+		return fmt.Errorf("failed to init updated stream: %w", err)
+	}
+
+	s.current = newStoppable
+	return nil
+}
+
+func initNormalMode(
+	strict, watching bool,
+	confReader *iconfig.Reader,
+	manager *manager.Type,
+	logger log.Modular,
+	stats metrics.Type,
+) (newStream stoppable, stoppedChan chan struct{}) {
+	stoppedChan = make(chan struct{})
+
+	streamInit := func() (stoppable, error) {
+		return stream.New(
+			conf.Config,
+			stream.OptSetLogger(logger),
+			stream.OptSetStats(stats),
+			stream.OptSetManager(manager),
+			stream.OptOnClose(func() {
+				if !watching {
+					close(stoppedChan)
+				}
+			}),
+		)
+	}
+
+	var stoppableStream swappableStopper
+
+	var err error
+	if stoppableStream.current, err = streamInit(); err != nil {
+		logger.Errorf("Service closing due to: %v\n", err)
+		os.Exit(1)
+	}
+	logger.Infoln("Launching a benthos instance, use CTRL+C to close.")
+
+	if err := confReader.SubscribeConfigChanges(func(newStreamConf stream.Config) bool {
+		if err := stoppableStream.Replace(func() (stoppable, error) {
+			conf.Config = newStreamConf
+			return streamInit()
+		}); err != nil {
+			logger.Errorf("Failed to update stream: %v", err)
+			return false
+		}
+
+		logger.Infoln("Updated stream config from file.")
+		return true
+	}); err != nil {
+		logger.Errorf("Failed to create config file watcher: %v", err)
+		os.Exit(1)
+	}
+
+	if watching {
+		if err := confReader.BeginFileWatching(manager, strict); err != nil {
+			logger.Errorf("Failed to create config file watcher: %v", err)
+			os.Exit(1)
+		}
+	}
+
+	newStream = &stoppableStream
+	return
+}
 
 func cmdService(
 	confPath string,
 	resourcesPaths []string,
 	confOverrides []string,
 	overrideLogLevel string,
-	strict bool,
+	strict, watching bool,
 	streamsMode bool,
-	streamsConfigs []string,
+	streamsPaths []string,
 ) int {
-	var err error
-	if resourcesPaths, err = filepath.Globs(resourcesPaths); err != nil {
-		fmt.Printf("Failed to resolve resource glob pattern: %v\n", err)
-		return 1
+	confReader := readConfig(confPath, streamsMode, resourcesPaths, streamsPaths, confOverrides)
+
+	lints, err := confReader.Read(&conf)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
+		os.Exit(1)
 	}
-	lints := readConfig(confPath, resourcesPaths, confOverrides)
 	if strict && len(lints) > 0 {
 		for _, lint := range lints {
 			fmt.Fprintln(os.Stderr, lint)
@@ -162,11 +331,9 @@ func cmdService(
 		return 1
 	}
 
-	if len(lints) > 0 {
-		lintlog := logger.NewModule(".linter")
-		for _, lint := range lints {
-			lintlog.Infoln(lint)
-		}
+	lintlog := logger.NewModule(".linter")
+	for _, lint := range lints {
+		lintlog.Infoln(lint)
 	}
 
 	// Create our metrics type.
@@ -219,8 +386,8 @@ func cmdService(
 		return 1
 	}
 
-	var dataStream stoppableStreams
-	dataStreamClosedChan := make(chan struct{})
+	var stoppableStream stoppable
+	var dataStreamClosedChan chan struct{}
 
 	strmAPITimeout := 5 * time.Second
 	if cTout := conf.HTTP.ReadTimeout; cTout != "" {
@@ -231,58 +398,9 @@ func cmdService(
 
 	// Create data streams.
 	if streamsMode {
-		streamMgr := strmmgr.New(
-			strmmgr.OptSetAPITimeout(strmAPITimeout),
-			strmmgr.OptSetLogger(logger),
-			strmmgr.OptSetManager(manager),
-			strmmgr.OptSetStats(stats),
-		)
-		streamConfs := map[string]stream.Config{}
-		var streamLints []string
-		for _, path := range streamsConfigs {
-			lints, err := strmmgr.LoadStreamConfigsFromPath(path, testSuffix, streamConfs)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to load stream configs: %v\n", err)
-				return 1
-			}
-			streamLints = append(streamLints, lints...)
-		}
-
-		if strict && len(streamLints) > 0 {
-			for _, lint := range streamLints {
-				fmt.Fprintln(os.Stderr, lint)
-			}
-			fmt.Println("Shutting down due to linter errors, to prevent shutdown run Benthos with --chilled")
-			return 1
-		} else if len(streamLints) > 0 {
-			lintlog := logger.NewModule(".linter")
-			for _, lint := range streamLints {
-				lintlog.Infoln(lint)
-			}
-		}
-
-		dataStream = streamMgr
-		for id, conf := range streamConfs {
-			if err = streamMgr.Create(id, conf); err != nil {
-				logger.Errorf("Failed to create stream (%v): %v\n", id, err)
-				return 1
-			}
-		}
-		logger.Infoln("Launching benthos in streams mode, use CTRL+C to close.")
+		stoppableStream = initStreamsMode(strict, watching, confReader, strmAPITimeout, manager, logger, stats)
 	} else {
-		if dataStream, err = stream.New(
-			conf.Config,
-			stream.OptSetLogger(logger),
-			stream.OptSetStats(stats),
-			stream.OptSetManager(manager),
-			stream.OptOnClose(func() {
-				close(dataStreamClosedChan)
-			}),
-		); err != nil {
-			logger.Errorf("Service closing due to: %v\n", err)
-			return 1
-		}
-		logger.Infoln("Launching a benthos instance, use CTRL+C to close.")
+		stoppableStream, dataStreamClosedChan = initNormalMode(strict, watching, confReader, manager, logger, stats)
 	}
 
 	// Start HTTP server.
@@ -325,8 +443,13 @@ func cmdService(
 			os.Exit(1)
 		}()
 
+		if err := confReader.Close(context.Background()); err != nil {
+			logger.Warnf("Failed to cleanly shut down file watcher: %v", err)
+			os.Exit(1)
+		}
+
 		timesOut := time.Now().Add(exitTimeout)
-		if err := dataStream.Stop(exitTimeout); err != nil {
+		if err := stoppableStream.Stop(exitTimeout); err != nil {
 			os.Exit(1)
 		}
 		manager.CloseAsync()

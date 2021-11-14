@@ -194,6 +194,22 @@ Resources can only be instantiated with a single configuration, which means they
 
 But hey, why don't you chill out? Benthos has a (currently experimental) alternative feature called templates, with which it's possible to define a custom configuration schema and a template for building a configuration from that schema. You can read more about templates [in this guide][config.templating].
 
+## Reloading
+
+It's possible to have a running instance of Benthos reload configurations, including resource files imported with `-r`/`--resources`, automatically when the files are updated without needing to manually restart the service. This is done by specifying the `-w`/`--watcher` flag when running Benthos in normal mode or in streams mode:
+
+```sh
+# Normal mode
+benthos -w -r ./production/request.yaml -c ./config.yaml
+```
+
+```sh
+# Streams mode
+benthos -w -r ./production/request.yaml streams ./stream_configs/*.yaml
+```
+
+If a file update results in configuration parsing or linting errors then the change is ignored (with logs informing you of the problem) and the previous configuration will continue to be run (until the issues are fixed).
+
 ## Enabling Discovery
 
 The discoverability of configuration fields is a common headache with any configuration driven application. The classic solution is to provide curated documentation that is often hosted on a dedicated site.

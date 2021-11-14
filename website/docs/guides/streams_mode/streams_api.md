@@ -4,7 +4,7 @@ title: Streams API
 
 When Benthos is run in `streams` mode it will open up an HTTP REST API for creating and managing independent streams of data instead of creating a single stream.
 
-Each stream has its own input, buffer, pipeline and output sections which contains an isolated stream of data with its own lifetime.
+Each stream has its own input, buffer, pipeline and output sections which contains an isolated stream of data with its own lifetime. A stream config cannot include [resources][resources], and instead these should be created and modified using the `/resources/{type}/{id}` endpoint.
 
 A walkthrough on using this API [can be found here][streams-api-walkthrough].
 
@@ -196,3 +196,4 @@ The configuration was invalid, or has linting errors. If linting errors were det
 If you wish for the streams API to proceed with configurations that contain linting errors then you can override this check by setting the URL param `chilled` to `true`, e.g. `/resources/cache/foo?chilled=true`.
 
 [streams-api-walkthrough]: /docs/guides/streams_mode/using_rest_api
+[resources]: /docs/configuration/resources

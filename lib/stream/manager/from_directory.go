@@ -15,7 +15,7 @@ import (
 // LoadStreamConfigsFromDirectory reads a map of stream ids to configurations
 // by walking a directory of .json and .yaml files.
 //
-// Deprecated: Use LoadStreamConfigsFromPath instead.
+// Deprecated: The streams builder is using ./internal/config now.
 func LoadStreamConfigsFromDirectory(replaceEnvVars bool, dir string) (map[string]stream.Config, error) {
 	streamMap := map[string]stream.Config{}
 

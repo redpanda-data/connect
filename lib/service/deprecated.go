@@ -365,13 +365,18 @@ func deprecatedExecute(configPath, testSuffix string) {
 	}
 
 	if depFlags.lintConfig {
-		lints := readConfig(configPath, nil, nil)
+		confReader := readConfig(configPath, false, nil, nil, nil)
+		lints, err := confReader.Read(&conf)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
+			os.Exit(1)
+		}
 		cmdDeprecatedLintConfig(lints)
 	}
 
 	// If the user wants the configuration to be printed we do so and then exit.
 	if depFlags.showConfigJSON || depFlags.showConfigYAML {
-		readConfig(configPath, nil, nil)
+		readConfig(configPath, false, nil, nil, nil)
 		cmdDeprecatedPrintConfig(&conf, depFlags.examples, depFlags.showAll, depFlags.showConfigJSON)
 	}
 
@@ -405,6 +410,6 @@ func deprecatedExecute(configPath, testSuffix string) {
 		if len(depFlags.streamsDir) > 0 {
 			dirs = append(dirs, depFlags.streamsDir)
 		}
-		os.Exit(cmdService(configPath, nil, nil, "", depFlags.strictConfig, depFlags.streamsMode, dirs))
+		os.Exit(cmdService(configPath, nil, nil, "", depFlags.strictConfig, false, depFlags.streamsMode, dirs))
 	}
 }

@@ -150,6 +150,12 @@ func Run() {
 			Value: false,
 			Usage: "continue to execute a config containing linter errors",
 		},
+		&cli.BoolFlag{
+			Name:    "watcher",
+			Aliases: []string{"w"},
+			Value:   false,
+			Usage:   "EXPERIMENTAL: watch config files for changes and automatically apply them",
+		},
 	}
 	if len(customFlags) > 0 {
 		flags = append(flags, customFlags...)
@@ -215,6 +221,7 @@ func Run() {
 				c.StringSlice("set"),
 				c.String("log.level"),
 				!c.Bool("chilled"),
+				c.Bool("watcher"),
 				false,
 				nil,
 			))
@@ -231,8 +238,11 @@ func Run() {
 
    benthos -c ./config.yaml echo | less`[4:],
 				Action: func(c *cli.Context) error {
-					readConfig(c.String("config"), c.StringSlice("resources"), c.StringSlice("set"))
-
+					confReader := readConfig(c.String("config"), false, c.StringSlice("resources"), nil, c.StringSlice("set"))
+					if _, err := confReader.Read(&conf); err != nil {
+						fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
+						os.Exit(1)
+					}
 					var node yaml.Node
 					err := node.Encode(conf)
 					if err == nil {
@@ -262,9 +272,10 @@ func Run() {
    single process and can be created, updated and removed via REST HTTP
    endpoints.
 
-   benthos streams ./path/to/stream/configs ./and/some/more
-   benthos -c ./root_config.yaml streams ./path/to/stream/configs
+   benthos streams
    benthos -c ./root_config.yaml streams
+   benthos streams ./path/to/stream/configs ./and/some/more
+   benthos -c ./root_config.yaml streams ./streams/*.yaml
 
    In streams mode the stream fields of a root target config (input, buffer,
    pipeline, output) will be ignored. Other fields will be shared across all
@@ -279,6 +290,7 @@ func Run() {
 						c.StringSlice("set"),
 						c.String("log.level"),
 						!c.Bool("chilled"),
+						c.Bool("watcher"),
 						true,
 						c.Args().Slice(),
 					))
@@ -340,7 +352,7 @@ func Run() {
 		}
 
 		deprecatedExecute(*configPath, testSuffix)
-		os.Exit(cmdService(*configPath, nil, nil, "", false, false, nil))
+		os.Exit(cmdService(*configPath, nil, nil, "", false, false, false, nil))
 		return nil
 	}
 

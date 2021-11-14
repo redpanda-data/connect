@@ -2,11 +2,18 @@
 title: Streams Via Config Files
 ---
 
-When running Benthos in `streams` mode it's possible to create streams with
-their own static configurations, simply list files and directories:
+When running Benthos in `streams` mode it's possible to create streams with their own static configurations, simply list one or more files after the `streams` subcommand:
 
 ```sh
-benthos streams ./foo.yaml ./configs
+benthos streams ./foo.yaml ./configs/*.yaml
+```
+
+## Resources
+
+A stream configuration should only include the base stream component fields (`input`, `buffer`, `pipeline`, `output`), and therefore should NOT include any [resources][resources]. Instead, define resources separately and import them using the `-r`/`--resources` flag:
+
+```sh
+benthos -r "./resources/prod/*.yaml" streams ./stream_configs/*.yaml
 ```
 
 ## Walkthrough
@@ -18,35 +25,29 @@ $ mkdir ./streams
 
 $ cat > ./streams/foo.yaml <<EOF
 input:
-  type: http_server
+  http_server: {}
 buffer:
   type: memory
 pipeline:
   threads: 4
   processors:
-  - type: bloblang
-    bloblang: 'root = {"id": this.user.id, "content": this.body.content}'
+    - bloblang: 'root = {"id": this.user.id, "content": this.body.content}'
 output:
-  type: http_server
+  http_server: {}
 EOF
 
 $ cat > ./streams/bar.yaml <<EOF
 input:
-  type: kafka
   kafka:
     addresses:
-    - localhost:9092
+      - localhost:9092
     topics:
-    - my_topic
-buffer:
-  type: none
+      - my_topic
 pipeline:
   threads: 1
   processors:
-  - type: bloblang
-    bloblang: 'root = this.uppercase()'
+    - bloblang: 'root = this.uppercase()'
 output:
-  type: elasticsearch
   elasticsearch:
     urls:
     - http://localhost:9200
@@ -56,7 +57,7 @@ EOF
 Run Benthos in streams mode, pointing to our directory of streams:
 
 ``` bash
-$ benthos streams ./streams
+$ benthos streams ./streams/*.yaml
 ```
 
 On a separate terminal you can query the set of streams loaded:
@@ -87,7 +88,6 @@ $ curl http://localhost:4195/streams/foo | jq '.'
   "uptime_str": "1m9.334717193s",
   "config": {
     "input": {
-      "type": "http_server",
       "http_server": {
         "address": "",
         "cert_file": "",
@@ -97,7 +97,6 @@ $ curl http://localhost:4195/streams/foo | jq '.'
       }
     },
     "buffer": {
-      "type": "memory",
       "memory": {
         "limit": 10000000
       }
@@ -105,14 +104,12 @@ $ curl http://localhost:4195/streams/foo | jq '.'
     "pipeline": {
       "processors": [
         {
-          "type": "bloblang",
           "bloblang": "root = {\"id\": this.user.id, \"content\": this.body.content}",
         }
       ],
       "threads": 4
     },
     "output": {
-      "type": "http_server",
       "http_server": {
         "address": "",
         "cert_file": "",
@@ -132,8 +129,8 @@ You can then send data to the stream via it's namespaced URL:
 $ curl http://localhost:4195/foo/post -d '{"user":{"id":"foo"},"body":{"content":"bar"}}'
 ```
 
-There are other endpoints [in the REST API][rest-api] for creating, updating and
-deleting streams.
+There are other endpoints [in the REST API][rest-api] for creating, updating and deleting streams.
 
 [rest-api]: /docs/guides/streams_mode/using_rest_api
 [interpolation]: /docs/configuration/interpolation
+[resources]: /docs/configuration/resources
