@@ -203,16 +203,22 @@ func (r *Reader) BeginFileWatching(mgr bundle.NewManagement, strict bool) error 
 		defer ticker.Stop()
 
 		collapsedChanges := map[string]time.Time{}
+		lostNames := map[string]struct{}{}
 		for {
 			select {
 			case event, ok := <-watcher.Events:
 				if !ok {
 					return
 				}
-				if event.Op&fsnotify.Write != fsnotify.Write {
-					continue
+				switch {
+				case event.Op&fsnotify.Write == fsnotify.Write:
+					collapsedChanges[filepath.Clean(event.Name)] = time.Now()
+
+				case event.Op&fsnotify.Remove == fsnotify.Remove ||
+					event.Op&fsnotify.Rename == fsnotify.Rename:
+					_ = watcher.Remove(event.Name)
+					lostNames[filepath.Clean(event.Name)] = struct{}{}
 				}
-				collapsedChanges[filepath.Clean(event.Name)] = time.Now()
 			case <-ticker.C:
 				for nameClean, changed := range collapsedChanges {
 					if time.Since(changed) < changeDelayPeriod {
@@ -230,6 +236,12 @@ func (r *Reader) BeginFileWatching(mgr bundle.NewManagement, strict bool) error 
 						delete(collapsedChanges, nameClean)
 					} else {
 						collapsedChanges[nameClean] = time.Now()
+					}
+				}
+				for lostName := range lostNames {
+					if err := watcher.Add(lostName); err == nil {
+						collapsedChanges[lostName] = time.Now()
+						delete(lostNames, lostName)
 					}
 				}
 			case err, ok := <-watcher.Errors:
@@ -354,7 +366,7 @@ func (r *Reader) reactMainUpdate(mgr bundle.NewManagement, strict bool) bool {
 		return true
 	}
 
-	mgr.Logger().Infoln("Stream config updated, attempting to update stream.")
+	mgr.Logger().Infoln("Main config updated, attempting to update pipeline.")
 
 	conf := config.New()
 	lints, err := r.readMain(&conf)
@@ -370,10 +382,15 @@ func (r *Reader) reactMainUpdate(mgr bundle.NewManagement, strict bool) bool {
 		lintlog.Infoln(lint)
 	}
 	if strict && len(lints) > 0 {
-		mgr.Logger().Errorln("Rejecting updated stream config due to linter errors, to allow linting errors run Benthos with --chilled")
+		mgr.Logger().Errorln("Rejecting updated main config due to linter errors, to allow linting errors run Benthos with --chilled")
 
 		// Rejecting from linters means we do not want to try again.
 		return true
+	}
+
+	// Update any resources within the file.
+	if newInfo := resInfoFromConfig(&conf.ResourceConfig); !newInfo.applyChanges(mgr) {
+		return false
 	}
 
 	return r.mainUpdateFn(conf.Config)

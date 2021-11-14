@@ -270,7 +270,7 @@ func initNormalMode(
 			return false
 		}
 
-		logger.Infoln("Updated stream config from file.")
+		logger.Infoln("Updated main config from file.")
 		return true
 	}); err != nil {
 		logger.Errorf("Failed to create config file watcher: %v", err)

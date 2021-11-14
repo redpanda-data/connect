@@ -167,7 +167,15 @@ func (r *Reader) reactResourceUpdate(mgr bundle.NewManagement, strict bool, path
 	// resources where the config hasn't changed.
 
 	newInfo := resInfoFromConfig(&newResConf)
+	if !newInfo.applyChanges(mgr) {
+		return false
+	}
 
+	r.resourceFileInfo[path] = newInfo
+	return true
+}
+
+func (i *resourceFileInfo) applyChanges(mgr bundle.NewManagement) bool {
 	// Kind of arbitrary, but I feel better about having some sort of timeout.
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -175,35 +183,35 @@ func (r *Reader) reactResourceUpdate(mgr bundle.NewManagement, strict bool, path
 	// WARNING: The order here is actually kind of important, we want to start
 	// with components that could be dependencies of other components. This is
 	// a "best attempt", so not all edge cases need to be accounted for.
-	for k, v := range newInfo.rateLimits {
+	for k, v := range i.rateLimits {
 		if err := mgr.StoreRateLimit(ctx, k, *v); err != nil {
 			mgr.Logger().Errorf("Failed to update resource %v: %v", k, err)
 			return false
 		}
 		mgr.Logger().Infof("Updated resource %v config from file.", k)
 	}
-	for k, v := range newInfo.caches {
+	for k, v := range i.caches {
 		if err := mgr.StoreCache(ctx, k, *v); err != nil {
 			mgr.Logger().Errorf("Failed to update resource %v: %v", k, err)
 			return false
 		}
 		mgr.Logger().Infof("Updated resource %v config from file.", k)
 	}
-	for k, v := range newInfo.processors {
+	for k, v := range i.processors {
 		if err := mgr.StoreProcessor(ctx, k, *v); err != nil {
 			mgr.Logger().Errorf("Failed to update resource %v: %v", k, err)
 			return false
 		}
 		mgr.Logger().Infof("Updated resource %v config from file.", k)
 	}
-	for k, v := range newInfo.inputs {
+	for k, v := range i.inputs {
 		if err := mgr.StoreInput(ctx, k, *v); err != nil {
 			mgr.Logger().Errorf("Failed to update resource %v: %v", k, err)
 			return false
 		}
 		mgr.Logger().Infof("Updated resource %v config from file.", k)
 	}
-	for k, v := range newInfo.outputs {
+	for k, v := range i.outputs {
 		if err := mgr.StoreOutput(ctx, k, *v); err != nil {
 			mgr.Logger().Errorf("Failed to update resource %v: %v", k, err)
 			return false
@@ -211,6 +219,5 @@ func (r *Reader) reactResourceUpdate(mgr bundle.NewManagement, strict bool, path
 		mgr.Logger().Infof("Updated resource %v config from file.", k)
 	}
 
-	r.resourceFileInfo[path] = newInfo
 	return true
 }
