@@ -14,6 +14,7 @@ type MongoDBConfig struct {
 	Operation   string         `json:"operation" yaml:"operation"`
 	FilterMap   string         `json:"filter_map" yaml:"filter_map"`
 	DocumentMap string         `json:"document_map" yaml:"document_map"`
+	Upsert      bool           `json:"upsert" yaml:"upsert"`
 	HintMap     string         `json:"hint_map" yaml:"hint_map"`
 	RetryConfig retries.Config `json:",inline" yaml:",inline"`
 }

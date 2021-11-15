@@ -72,6 +72,11 @@ func init() {
 					mapExamples()...,
 				),
 				docs.FieldCommon(
+					"upsert",
+					"The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches,"+
+						"the document is updated or replaced accordingly, otherwise it is created.",
+				).HasDefault(false).HasType(docs.FieldTypeBool),
+				docs.FieldCommon(
 					"max_in_flight",
 					"The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 				batch.FieldSpec(),
@@ -122,7 +127,7 @@ func NewWriter(
 	}
 
 	var filterNeeded, documentNeeded bool
-	var hintAllowed bool
+	var hintAllowed, upsertAllowed bool
 
 	if _, ok := documentMapOps[conf.Operation]; !ok {
 		return nil, fmt.Errorf("mongodb operation '%s' unknown: must be insert-one, delete-one, delete-many, replace-one, or update-one", conf.Operation)
@@ -131,6 +136,7 @@ func NewWriter(
 	documentNeeded = documentMapOps[conf.Operation]
 	filterNeeded = filterMapOps[conf.Operation]
 	hintAllowed = hintAllowedOps[conf.Operation]
+	upsertAllowed = upsertAllowedOps[conf.Operation]
 
 	bEnv := mgr.BloblEnvironment()
 
@@ -164,6 +170,10 @@ func NewWriter(
 		}
 	} else if conf.HintMap != "" {
 		return nil, fmt.Errorf("mongodb hint_map not allowed for '%s' operation", conf.Operation)
+	}
+
+	if !upsertAllowed {
+		return nil, fmt.Errorf("mongodb upsert not allowed for '%s' operation", conf.Operation)
 	}
 
 	if db.wcTimeout, err = time.ParseDuration(conf.WriteConcern.WTimeout); err != nil {
@@ -255,10 +265,11 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error 
 	err := writer.IterateBatchedSend(msg, func(i int, _ types.Part) error {
 		var err error
 		var filterVal, documentVal types.Part
-		var filterValWanted, documentValWanted bool
+		var upsertVal, filterValWanted, documentValWanted bool
 
 		filterValWanted = filterMapOps[m.conf.Operation]
 		documentValWanted = documentMapOps[m.conf.Operation]
+		upsertVal = m.conf.Upsert
 
 		if filterValWanted {
 			if filterVal, err = m.filterMap.MapPart(i, msg); err != nil {
@@ -305,7 +316,7 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error 
 		}
 
 		var writeModel mongo.WriteModel
-		upsertFalse := false
+
 		switch m.conf.Operation {
 		case "insert-one":
 			writeModel = &mongo.InsertOneModel{
@@ -323,14 +334,14 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error 
 			}
 		case "replace-one":
 			writeModel = &mongo.ReplaceOneModel{
-				Upsert:      &upsertFalse,
+				Upsert:      &upsertVal,
 				Filter:      filterJSON,
 				Replacement: docJSON,
 				Hint:        hintJSON,
 			}
 		case "update-one":
 			writeModel = &mongo.UpdateOneModel{
-				Upsert: &upsertFalse,
+				Upsert: &upsertVal,
 				Filter: filterJSON,
 				Update: docJSON,
 				Hint:   hintJSON,

@@ -18,6 +18,7 @@ type MongoDBConfig struct {
 	HintMap     string `json:"hint_map" yaml:"hint_map"`
 
 	// DeleteEmptyValue bool `json:"delete_empty_value" yaml:"delete_empty_value"`
+	Upsert      bool               `json:"upsert" yaml:"upsert"`
 	MaxInFlight int                `json:"max_in_flight" yaml:"max_in_flight"`
 	RetryConfig retries.Config     `json:",inline" yaml:",inline"`
 	Batching    batch.PolicyConfig `json:"batching" yaml:"batching"`

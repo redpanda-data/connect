@@ -50,6 +50,15 @@ var hintAllowedOps = map[string]bool{
 	"find-one":    true,
 }
 
+var upsertAllowedOps = map[string]bool{
+	"insert-one":  false,
+	"delete-one":  false,
+	"delete-many": false,
+	"replace-one": true,
+	"update-one":  true,
+	"find-one":    false,
+}
+
 //------------------------------------------------------------------------------
 
 func init() {
@@ -95,6 +104,11 @@ func init() {
 						"except insert-one. It is used to improve performance of finding the documents in the mongodb.",
 					mapExamples()...,
 				),
+				docs.FieldCommon(
+					"upsert",
+					"The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches,"+
+						"the document is updated or replaced accordingly, otherwise it is created.",
+				).HasDefault(false).HasType(docs.FieldTypeBool),
 				processor.PartsFieldSpec,
 			).Merge(retries.FieldSpecs())...,
 		).ChildDefaultAndTypesFromStruct(processor.NewMongoDBConfig()),
@@ -164,6 +178,7 @@ func NewProcessor(
 
 	var filterNeeded, documentNeeded bool
 	var hintAllowed bool
+	var upsertAllowed bool
 
 	if _, ok := documentMapOps[conf.MongoDB.Operation]; !ok {
 		return nil, fmt.Errorf("mongodb operation '%s' unknown: must be insert-one, delete-one, delete-many, replace-one, update-one or find-one", conf.MongoDB.Operation)
@@ -172,6 +187,7 @@ func NewProcessor(
 	documentNeeded = documentMapOps[conf.MongoDB.Operation]
 	filterNeeded = filterMapOps[conf.MongoDB.Operation]
 	hintAllowed = hintAllowedOps[conf.MongoDB.Operation]
+	upsertAllowed = upsertAllowedOps[conf.MongoDB.Operation]
 
 	bEnv := mgr.BloblEnvironment()
 	var err error
@@ -204,6 +220,10 @@ func NewProcessor(
 		}
 	} else if conf.MongoDB.HintMap != "" {
 		return nil, fmt.Errorf("mongodb hint_map not allowed for '%s' operation", conf.MongoDB.Operation)
+	}
+
+	if !upsertAllowed {
+		return nil, fmt.Errorf("mongodb upsert not allowed for '%s' operation", conf.MongoDB.Operation)
 	}
 
 	if m.client, err = conf.MongoDB.MongoDB.Client(); err != nil {
@@ -256,10 +276,11 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 	processor.IteratePartsWithSpan("mongodb", m.parts, newMsg, func(i int, s opentracing.Span, p types.Part) error {
 		var err error
 		var filterVal, documentVal types.Part
-		var filterValWanted, documentValWanted bool
+		var upsertVal, filterValWanted, documentValWanted bool
 
 		filterValWanted = filterMapOps[m.conf.Operation]
 		documentValWanted = documentMapOps[m.conf.Operation]
+		upsertVal = m.conf.Upsert
 
 		if filterValWanted {
 			if filterVal, err = m.filterMap.MapPart(i, msg); err != nil {
@@ -308,7 +329,7 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 		}
 
 		var writeModel mongo.WriteModel
-		upsertFalse := false
+
 		switch m.conf.Operation {
 		case "insert-one":
 			writeModel = &mongo.InsertOneModel{
@@ -326,14 +347,14 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 			}
 		case "replace-one":
 			writeModel = &mongo.ReplaceOneModel{
-				Upsert:      &upsertFalse,
+				Upsert:      &upsertVal,
 				Filter:      filterJSON,
 				Replacement: docJSON,
 				Hint:        hintJSON,
 			}
 		case "update-one":
 			writeModel = &mongo.UpdateOneModel{
-				Upsert: &upsertFalse,
+				Upsert: &upsertVal,
 				Filter: filterJSON,
 				Update: docJSON,
 				Hint:   hintJSON,
