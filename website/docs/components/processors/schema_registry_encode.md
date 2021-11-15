@@ -49,6 +49,7 @@ schema_registry_encode:
   url: ""
   subject: ""
   refresh_period: 10m
+  avro_raw_json: false
   tls:
     skip_cert_verify: false
     enable_renegotiation: false
@@ -65,6 +66,21 @@ Encodes messages automatically from schemas obtains from a [Confluent Schema Reg
 If a message fails to encode under the schema then it will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).
 
 Currently only Avro schemas are supported.
+
+### Avro JSON Format
+
+By default this processor expects documents formatted as [Avro JSON](https://avro.apache.org/docs/current/spec.html#json_encoding) when encoding Avro schemas. In this format the value of a union is encoded in JSON as follows:
+
+- if its type is `null`, then it is encoded as a JSON `null`;
+- otherwise it is encoded as a JSON object with one name/value pair whose name is the type's name and whose value is the recursively encoded value. For Avro's named types (record, fixed or enum) the user-specified name is used, for other types the type name is used.
+
+For example, the union schema `["null","string","Foo"]`, where `Foo` is a record name, would encode:
+
+- `null` as `null`;
+- the string `"a"` as `{"string": "a"}`; and
+- a `Foo` instance as `{"Foo": {...}}`, where `{...}` indicates the JSON encoding of a `Foo` instance.
+
+However, it is possible to instead consume documents in raw JSON format (that match the schema) by setting the field [`avro_raw_json`](#avro_raw_json) to `true`.
 
 ## Fields
 
@@ -106,6 +122,14 @@ refresh_period: 60s
 
 refresh_period: 1h
 ```
+
+### `avro_raw_json`
+
+Whether messages encoded in Avro format should be parsed as raw JSON documents rather than [Avro JSON](https://avro.apache.org/docs/current/spec.html#json_encoding).
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tls`
 

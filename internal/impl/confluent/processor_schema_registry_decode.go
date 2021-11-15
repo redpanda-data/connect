@@ -27,7 +27,23 @@ func schemaRegistryDecoderConfig() *service.ConfigSpec {
 		Description(`
 Decodes messages automatically from a schema stored within a [Confluent Schema Registry service](https://docs.confluent.io/platform/current/schema-registry/index.html) by extracting a schema ID from the message and obtaining the associated schema from the registry. If a message fails to match against the schema then it will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).
 
-Currently only Avro schemas are supported.`).
+Currently only Avro schemas are supported.
+
+### Avro JSON Format
+
+This processor creates documents formatted as [Avro JSON](https://avro.apache.org/docs/current/spec.html#json_encoding) when decoding Avro schemas. In this format the value of a union is encoded in JSON as follows:
+
+- if its type is ` + "`null`, then it is encoded as a JSON `null`" + `;
+- otherwise it is encoded as a JSON object with one name/value pair whose name is the type's name and whose value is the recursively encoded value. For Avro's named types (record, fixed or enum) the user-specified name is used, for other types the type name is used.
+
+For example, the union schema ` + "`[\"null\",\"string\",\"Foo\"]`, where `Foo`" + ` is a record name, would encode:
+
+- ` + "`null` as `null`" + `;
+- the string ` + "`\"a\"` as `{\"string\": \"a\"}`" + `; and
+- a ` + "`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`" + ` instance.`).
+		// Field(service.NewBoolField("avro_raw_json").
+		// 	Description("Whether Avro messages should be decoded into raw JSON documents rather than [Avro JSON](https://avro.apache.org/docs/current/spec.html#json_encoding). Avro JSON contains namespaced objects for any typed or non-nil union values, e.g. a union `[\"null\",\"string\"]` field with a string value would be represented as `{\"string\":\"foo\"}`.").
+		// 	Advanced().Default(false)).
 		Field(service.NewStringField("url").Description("The base URL of the schema registry service.")).
 		Field(service.NewTLSField("tls"))
 }
@@ -47,8 +63,9 @@ func init() {
 //------------------------------------------------------------------------------
 
 type schemaRegistryDecoder struct {
-	surl   string
-	client *http.Client
+	surl        string
+	client      *http.Client
+	avroRawJSON bool
 
 	schemas    map[int]*cachedSchemaDecoder
 	cacheMut   sync.RWMutex
@@ -67,10 +84,10 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, logger *serv
 	if err != nil {
 		return nil, err
 	}
-	return newSchemaRegistryDecoder(urlStr, tlsConf, logger)
+	return newSchemaRegistryDecoder(urlStr, tlsConf, false, logger)
 }
 
-func newSchemaRegistryDecoder(urlStr string, tlsConf *tls.Config, logger *service.Logger) (*schemaRegistryDecoder, error) {
+func newSchemaRegistryDecoder(urlStr string, tlsConf *tls.Config, avroRawJSON bool, logger *service.Logger) (*schemaRegistryDecoder, error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse url: %w", err)
@@ -78,10 +95,11 @@ func newSchemaRegistryDecoder(urlStr string, tlsConf *tls.Config, logger *servic
 	u.Path = "/schemas/ids/"
 
 	s := &schemaRegistryDecoder{
-		surl:    u.String() + "%v",
-		schemas: map[int]*cachedSchemaDecoder{},
-		shutSig: shutdown.NewSignaller(),
-		logger:  logger,
+		surl:        u.String() + "%v",
+		avroRawJSON: avroRawJSON,
+		schemas:     map[int]*cachedSchemaDecoder{},
+		shutSig:     shutdown.NewSignaller(),
+		logger:      logger,
 	}
 
 	s.client = http.DefaultClient
@@ -281,7 +299,7 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 	}
 
 	var codec *goavro.Codec
-	if codec, err = goavro.NewCodec(resPayload.Schema); err != nil {
+	if codec, err = goavro.NewCodecForStandardJSON(resPayload.Schema); err != nil {
 		s.logger.Errorf("failed to parse response for schema '%v': %v", id, err)
 		return nil, err
 	}
@@ -291,11 +309,23 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 		if err != nil {
 			return err
 		}
+
 		native, _, err := codec.NativeFromBinary(b)
 		if err != nil {
 			return err
 		}
-		m.SetStructured(native)
+
+		if s.avroRawJSON {
+			// TODO: This still encodes with Avro JSON format, needs
+			// investigation as to whether this is possible.
+			jb, err := codec.TextualFromNative(nil, native)
+			if err != nil {
+				return err
+			}
+			m.SetBytes(jb)
+		} else {
+			m.SetStructured(native)
+		}
 		return nil
 	}
 

@@ -72,7 +72,7 @@ func runSchemaRegistryServer(t *testing.T, fn func(path string) ([]byte, error))
 
 const testSchema = `{
 	"namespace": "foo.namespace.com",
-	"type":	"record",
+	"type": "record",
 	"name": "identity",
 	"fields": [
 		{ "name": "Name", "type": "string"},
@@ -84,11 +84,12 @@ const testSchema = `{
 				{ "name": "City", "type": "string" },
 				{ "name": "State", "type": "string" }
 			]
-		}],"default":null}
+		}],"default":null},
+		{"name": "MaybeHobby", "type": ["null","string"] }
 	]
 }`
 
-func TestSchemaRegistryDecode(t *testing.T) {
+func TestSchemaRegistryDecodeAvro(t *testing.T) {
 	payload3, err := json.Marshal(struct {
 		Schema string `json:"schema"`
 	}{
@@ -109,7 +110,7 @@ func TestSchemaRegistryDecode(t *testing.T) {
 		return nil, nil
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, nil, nil)
+	decoder, err := newSchemaRegistryDecoder(urlStr, nil, false, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -120,13 +121,13 @@ func TestSchemaRegistryDecode(t *testing.T) {
 	}{
 		{
 			name:   "successful message",
-			input:  "\x00\x00\x00\x00\x03\x06foo\x02\x06foo\x06bar",
-			output: `{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"Name":"foo"}`,
+			input:  "\x00\x00\x00\x00\x03\x06foo\x02\x06foo\x06bar\x02\x0edancing",
+			output: `{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"MaybeHobby":{"string":"dancing"},"Name":"foo"}`,
 		},
 		{
-			name:   "successful message using cached schema",
-			input:  "\x00\x00\x00\x00\x03\x06foo\x02\x06foo\x06bar",
-			output: `{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"Name":"foo"}`,
+			name:   "successful message with null hobby",
+			input:  "\x00\x00\x00\x00\x03\x06foo\x02\x06foo\x06bar\x00",
+			output: `{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"MaybeHobby":null,"Name":"foo"}`,
 		},
 		{
 			name:        "non-empty magic byte",
@@ -175,7 +176,7 @@ func TestSchemaRegistryDecodeClearExpired(t *testing.T) {
 		return nil, fmt.Errorf("nope")
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, nil, nil)
+	decoder, err := newSchemaRegistryDecoder(urlStr, nil, false, nil)
 	require.NoError(t, err)
 	require.NoError(t, decoder.Close(context.Background()))
 

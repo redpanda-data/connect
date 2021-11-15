@@ -75,7 +75,7 @@ refresh_period: not a duration
 	}
 }
 
-func TestSchemaRegistryEncode(t *testing.T) {
+func TestSchemaRegistryEncodeAvroRawJSON(t *testing.T) {
 	fooFirst, err := json.Marshal(struct {
 		Schema string `json:"schema"`
 		ID     int    `json:"id"`
@@ -95,7 +95,7 @@ func TestSchemaRegistryEncode(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, nil, subj, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, nil, subj, true, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -106,13 +106,90 @@ func TestSchemaRegistryEncode(t *testing.T) {
 	}{
 		{
 			name:   "successful message",
-			input:  `{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"Name":"foo"}`,
-			output: "\x00\x00\x00\x00\x03\x06foo\x02\x06foo\x06bar",
+			input:  `{"Address":{"City":"foo","State":"bar"},"Name":"foo","MaybeHobby":"dancing"}`,
+			output: "\x00\x00\x00\x00\x03\x06foo\x02\x06foo\x06bar\x02\x0edancing",
 		},
 		{
-			name:   "successful message using cached schema",
-			input:  `{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"Name":"foo"}`,
-			output: "\x00\x00\x00\x00\x03\x06foo\x02\x06foo\x06bar",
+			name:   "successful message null hobby",
+			input:  `{"Address":{"City":"foo","State":"bar"},"Name":"foo","MaybeHobby":null}`,
+			output: "\x00\x00\x00\x00\x03\x06foo\x02\x06foo\x06bar\x00",
+		},
+		{
+			name:        "message doesnt match schema",
+			input:       `{"Address":{"City":"foo","State":30},"Name":"foo","MaybeHobby":null}`,
+			errContains: "could not decode any json data in input",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			outBatches, err := encoder.ProcessBatch(
+				context.Background(),
+				service.MessageBatch{service.NewMessage([]byte(test.input))},
+			)
+			require.NoError(t, err)
+			require.Len(t, outBatches, 1)
+			require.Len(t, outBatches[0], 1)
+
+			err = outBatches[0][0].GetError()
+			if test.errContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			} else {
+				require.NoError(t, err)
+
+				b, err := outBatches[0][0].AsBytes()
+				require.NoError(t, err)
+				assert.Equal(t, test.output, string(b))
+			}
+		})
+	}
+
+	require.NoError(t, encoder.Close(context.Background()))
+	encoder.cacheMut.Lock()
+	assert.Len(t, encoder.schemas, 0)
+	encoder.cacheMut.Unlock()
+}
+
+func TestSchemaRegistryEncodeAvro(t *testing.T) {
+	fooFirst, err := json.Marshal(struct {
+		Schema string `json:"schema"`
+		ID     int    `json:"id"`
+	}{
+		Schema: testSchema,
+		ID:     3,
+	})
+	require.NoError(t, err)
+
+	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
+		if path == "/subjects/foo/versions/latest" {
+			return fooFirst, nil
+		}
+		return nil, errors.New("nope")
+	})
+
+	subj, err := service.NewInterpolatedString("foo")
+	require.NoError(t, err)
+
+	encoder, err := newSchemaRegistryEncoder(urlStr, nil, subj, false, time.Minute*10, time.Minute, nil)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		input       string
+		output      string
+		errContains string
+	}{
+		{
+			name:   "successful message",
+			input:  `{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"Name":"foo","MaybeHobby":{"string":"dancing"}}`,
+			output: "\x00\x00\x00\x00\x03\x06foo\x02\x06foo\x06bar\x02\x0edancing",
+		},
+		{
+			name:   "successful message null hobby",
+			input:  `{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"Name":"foo","MaybeHobby":null}`,
+			output: "\x00\x00\x00\x00\x03\x06foo\x02\x06foo\x06bar\x00",
 		},
 		{
 			name:        "message doesnt match schema",
@@ -160,7 +237,7 @@ func TestSchemaRegistryEncodeClearExpired(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, nil, subj, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, nil, subj, false, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 	require.NoError(t, encoder.Close(context.Background()))
 
@@ -221,7 +298,7 @@ func TestSchemaRegistryEncodeRefresh(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, nil, subj, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, nil, subj, false, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 	require.NoError(t, encoder.Close(context.Background()))
 
