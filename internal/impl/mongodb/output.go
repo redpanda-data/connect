@@ -172,7 +172,7 @@ func NewWriter(
 		return nil, fmt.Errorf("mongodb hint_map not allowed for '%s' operation", conf.Operation)
 	}
 
-	if !upsertAllowed {
+	if upsertAllowed && conf.Upsert != false {
 		return nil, fmt.Errorf("mongodb upsert not allowed for '%s' operation", conf.Operation)
 	}
 

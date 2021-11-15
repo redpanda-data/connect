@@ -222,7 +222,7 @@ func NewProcessor(
 		return nil, fmt.Errorf("mongodb hint_map not allowed for '%s' operation", conf.MongoDB.Operation)
 	}
 
-	if !upsertAllowed {
+	if !upsertAllowed && conf.MongoDB.Upsert != false {
 		return nil, fmt.Errorf("mongodb upsert not allowed for '%s' operation", conf.MongoDB.Operation)
 	}
 
