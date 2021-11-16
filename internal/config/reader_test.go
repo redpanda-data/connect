@@ -1,258 +1,138 @@
-package config_test
+package config
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
-	iconfig "github.com/Jeffail/benthos/v3/internal/config"
-	"github.com/Jeffail/benthos/v3/lib/config"
-	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/stream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
-func TestSetOverridesOnNothing(t *testing.T) {
-	conf := config.New()
-	rdr := iconfig.NewReader("", nil, iconfig.OptAddOverrides(
-		"input.type=kafka",
-		"input.kafka.addresses=foobarbaz.com",
-		"output.type=amqp_0_9",
-	))
-
-	lints, err := rdr.Read(&conf)
-	require.NoError(t, err)
-	assert.Empty(t, lints)
-
-	assert.Equal(t, "kafka", conf.Input.Type)
-	assert.Equal(t, "foobarbaz.com", conf.Input.Kafka.Addresses[0])
-	assert.Equal(t, "amqp_0_9", conf.Output.Type)
+func newDummyReader(confFilePath string) *Reader {
+	rdr := NewReader(confFilePath, nil)
+	rdr.changeDelayPeriod = 1 * time.Millisecond
+	rdr.changeFlushPeriod = 1 * time.Millisecond
+	return rdr
 }
 
-func TestSetOverrideErrors(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		err   string
-	}{
-		{
-			name:  "no value",
-			input: "input.type=",
-			err:   "invalid set expression 'input.type='",
-		},
-		{
-			name:  "no equals",
-			input: "input.type",
-			err:   "invalid set expression 'input.type'",
-		},
-		{
-			name:  "completely empty",
-			input: "",
-			err:   "invalid set expression ''",
-		},
-		{
-			name:  "cant set that",
-			input: "input=meow",
-			err:   "yaml: unmarshal errors",
-		},
+func TestReaderFileWatching(t *testing.T) {
+	dummyConfig := []byte(`
+input:
+  kafka: {}
+output:
+  aws_s3: {}
+`)
+
+	confDir, err := os.MkdirTemp("", "test")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(confDir)
+	})
+
+	// Create an empty config file in the config folder
+	confFilePath := filepath.Join(confDir, "main.yaml")
+	require.NoError(t, os.WriteFile(confFilePath, []byte{}, 0o644))
+
+	rdr := newDummyReader(confFilePath)
+
+	changeChan := make(chan struct{})
+	var updatedConf stream.Config
+	require.NoError(t, rdr.SubscribeConfigChanges(func(conf stream.Config) bool {
+		updatedConf = conf
+		close(changeChan)
+		return true
+	}))
+
+	// Watch for configuration changes
+	testMgr, err := manager.NewV2(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
+
+	// Overwrite original config
+	require.NoError(t, os.WriteFile(confFilePath, dummyConfig, 0o644))
+
+	// Wait for the config watcher to reload the config
+	select {
+	case <-changeChan:
+	case <-time.After(100 * time.Millisecond):
+		require.FailNow(t, "Expected a config change to be triggered")
 	}
 
-	for _, test := range tests {
-		conf := config.New()
-		rdr := iconfig.NewReader("", nil, iconfig.OptAddOverrides(test.input))
+	assert.Equal(t, "kafka", updatedConf.Input.Type)
+	assert.Equal(t, "aws_s3", updatedConf.Output.Type)
+}
 
-		_, err := rdr.Read(&conf)
-		assert.Contains(t, err.Error(), test.err)
+func TestReaderFileWatchingSymlinkReplace(t *testing.T) {
+	dummyConfig := []byte(`
+input:
+  kafka: {}
+output:
+  aws_s3: {}
+`)
+
+	rootDir, err := os.MkdirTemp("", "test")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(rootDir)
+	})
+
+	// Create a config folder
+	confDir := filepath.Join(rootDir, "config")
+	require.NoError(t, os.Mkdir(confDir, 0o755))
+
+	// Create a symlink to the config folder
+	confDirSymlink := filepath.Join(rootDir, "symlink")
+	require.NoError(t, os.Symlink(confDir, confDirSymlink))
+
+	// Create an empty config file in the config folder through the symlink
+	confFilePath := filepath.Join(confDirSymlink, "main.yaml")
+	require.NoError(t, os.WriteFile(confFilePath, []byte{}, 0o644))
+
+	rdr := newDummyReader(confFilePath)
+
+	changeChan := make(chan struct{})
+	var updatedConf stream.Config
+	require.NoError(t, rdr.SubscribeConfigChanges(func(conf stream.Config) bool {
+		updatedConf = conf
+		close(changeChan)
+		return true
+	}))
+
+	// Watch for configuration changes
+	testMgr, err := manager.NewV2(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
+
+	// Create a new config folder and place in it a new copy of the config file
+	newConfDir := filepath.Join(rootDir, "config_new")
+	require.NoError(t, os.Mkdir(newConfDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(newConfDir, "main.yaml"), dummyConfig, 0o644))
+
+	// Create a symlink to the new config folder
+	newConfDirSymlink := filepath.Join(rootDir, "symlink_new")
+	require.NoError(t, os.Symlink(newConfDir, newConfDirSymlink))
+
+	// Overwrite the original symlink with the new symlink
+	require.NoError(t, os.Rename(newConfDirSymlink, confDirSymlink))
+
+	// Remove the original config folder to trigger a config refresh
+	require.NoError(t, os.RemoveAll(confDir))
+
+	// Wait for the config watcher to reload the config
+	select {
+	case <-changeChan:
+	case <-time.After(100 * time.Millisecond):
+		require.FailNow(t, "Expected a config change to be triggered")
 	}
-}
 
-func TestSetOverridesOfFile(t *testing.T) {
-	dir, err := os.MkdirTemp("", "test_set_overrides_of_file")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
-
-	fullPath := filepath.Join(dir, "main.yaml")
-	require.NoError(t, os.WriteFile(fullPath, []byte(`
-input:
-  kafka:
-    addresses: [ foobar.com, barbaz.com ]
-    topics: [ meow1, meow2 ]
-`), 0o644))
-
-	conf := config.New()
-	rdr := iconfig.NewReader(fullPath, nil, iconfig.OptAddOverrides(
-		"input.kafka.addresses.0=nope1.com",
-		"input.kafka.addresses.1=nope2.com",
-		"input.kafka.topics=justthis",
-		"output.type=kafka",
-		"output.kafka.addresses=nope3.com",
-		"output.kafka.topic=foobar",
-	))
-
-	lints, err := rdr.Read(&conf)
-	require.NoError(t, err)
-	assert.Empty(t, lints)
-
-	assert.Equal(t, "kafka", conf.Input.Type)
-	assert.Equal(t, []string{"nope1.com", "nope2.com"}, conf.Input.Kafka.Addresses)
-	assert.Equal(t, []string{"justthis"}, conf.Input.Kafka.Topics)
-
-	assert.Equal(t, "kafka", conf.Output.Type)
-	assert.Equal(t, []string{"nope3.com"}, conf.Output.Kafka.Addresses)
-	assert.Equal(t, "foobar", conf.Output.Kafka.Topic)
-}
-
-func TestResources(t *testing.T) {
-	dir, err := os.MkdirTemp("", "test_resources")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
-
-	fullPath := filepath.Join(dir, "main.yaml")
-	require.NoError(t, os.WriteFile(fullPath, []byte(`
-input:
-  kafka:
-    addresses: [ foobar.com, barbaz.com ]
-    topics: [ meow1, meow2 ]
-`), 0o644))
-
-	resourceOnePath := filepath.Join(dir, "res1.yaml")
-	require.NoError(t, os.WriteFile(resourceOnePath, []byte(`
-cache_resources:
-  - label: foo
-    memory:
-      ttl: 12
-`), 0o644))
-
-	resourceTwoPath := filepath.Join(dir, "res2.yaml")
-	require.NoError(t, os.WriteFile(resourceTwoPath, []byte(`
-cache_resources:
-  - label: bar
-    memory:
-      ttl: 13
-`), 0o644))
-
-	conf := config.New()
-	rdr := iconfig.NewReader(fullPath, []string{resourceOnePath, resourceTwoPath})
-
-	lints, err := rdr.Read(&conf)
-	require.NoError(t, err)
-	assert.Empty(t, lints)
-
-	assert.Equal(t, "kafka", conf.Input.Type)
-	assert.Equal(t, []string{"foobar.com", "barbaz.com"}, conf.Input.Kafka.Addresses)
-	assert.Equal(t, []string{"meow1", "meow2"}, conf.Input.Kafka.Topics)
-
-	require.Len(t, conf.ResourceCaches, 2)
-
-	assert.Equal(t, "foo", conf.ResourceCaches[0].Label)
-	assert.Equal(t, "memory", conf.ResourceCaches[0].Type)
-	assert.Equal(t, 12, conf.ResourceCaches[0].Memory.TTL)
-
-	assert.Equal(t, "bar", conf.ResourceCaches[1].Label)
-	assert.Equal(t, "memory", conf.ResourceCaches[1].Type)
-	assert.Equal(t, 13, conf.ResourceCaches[1].Memory.TTL)
-}
-
-func TestLints(t *testing.T) {
-	dir, err := os.MkdirTemp("", "test_resources")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
-
-	fullPath := filepath.Join(dir, "main.yaml")
-	require.NoError(t, os.WriteFile(fullPath, []byte(`
-input:
-  meow1: not this
-  kafka:
-    addresses: [ foobar.com, barbaz.com ]
-    topics: [ meow1, meow2 ]
-`), 0o644))
-
-	resourceOnePath := filepath.Join(dir, "res1.yaml")
-	require.NoError(t, os.WriteFile(resourceOnePath, []byte(`
-cache_resources:
-  - label: foo
-    memory:
-      meow2: or this
-      ttl: 12
-`), 0o644))
-
-	resourceTwoPath := filepath.Join(dir, "res2.yaml")
-	require.NoError(t, os.WriteFile(resourceTwoPath, []byte(`
-cache_resources:
-  - label: bar
-    memory:
-      meow3: or also this
-      ttl: 13
-`), 0o644))
-
-	conf := config.New()
-	rdr := iconfig.NewReader(fullPath, []string{resourceOnePath, resourceTwoPath})
-
-	lints, err := rdr.Read(&conf)
-	require.NoError(t, err)
-	require.Len(t, lints, 3)
-	assert.Contains(t, lints[0], "/main.yaml: line 3: field meow1 ")
-	assert.Contains(t, lints[1], "/res1.yaml: line 5: field meow2 ")
-	assert.Contains(t, lints[2], "/res2.yaml: line 5: field meow3 ")
-
-	assert.Equal(t, "kafka", conf.Input.Type)
-	assert.Equal(t, []string{"foobar.com", "barbaz.com"}, conf.Input.Kafka.Addresses)
-	assert.Equal(t, []string{"meow1", "meow2"}, conf.Input.Kafka.Topics)
-
-	require.Len(t, conf.ResourceCaches, 2)
-
-	assert.Equal(t, "foo", conf.ResourceCaches[0].Label)
-	assert.Equal(t, "memory", conf.ResourceCaches[0].Type)
-	assert.Equal(t, 12, conf.ResourceCaches[0].Memory.TTL)
-
-	assert.Equal(t, "bar", conf.ResourceCaches[1].Label)
-	assert.Equal(t, "memory", conf.ResourceCaches[1].Type)
-	assert.Equal(t, 13, conf.ResourceCaches[1].Memory.TTL)
-}
-
-func TestLintsOfOldPlugins(t *testing.T) {
-	dir, err := os.MkdirTemp("", "test_resources")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
-
-	fullPath := filepath.Join(dir, "main.yaml")
-	require.NoError(t, os.WriteFile(fullPath, []byte(`
-input:
-  type: custom_plugin_for_config_old_plugins_test
-  plugin:
-    addresses: [ foobar.com, barbaz.com ]
-    topics: [ meow1, meow2 ]
-`), 0o644))
-
-	input.RegisterPlugin("custom_plugin_for_config_old_plugins_test", func() interface{} {
-		v := struct{}{}
-		return &v
-	}, func(config interface{}, manager types.Manager, logger log.Modular, metrics metrics.Type) (types.Input, error) {
-		return nil, errors.New("nope")
-	})
-
-	conf := config.New()
-	rdr := iconfig.NewReader(fullPath, nil)
-
-	lints, err := rdr.Read(&conf)
-	require.NoError(t, err)
-	require.Len(t, lints, 0)
+	assert.Equal(t, "kafka", updatedConf.Input.Type)
+	assert.Equal(t, "aws_s3", updatedConf.Output.Type)
 }

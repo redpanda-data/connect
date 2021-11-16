@@ -19,6 +19,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	defaultChangeFlushPeriod = 50 * time.Millisecond
+	defaultChangeDelayPeriod = time.Second
+)
+
 type configFileInfo struct {
 	updatedAt time.Time
 }
@@ -60,16 +65,21 @@ type Reader struct {
 	mainUpdateFn   MainUpdateFunc
 	streamUpdateFn StreamUpdateFunc
 	watcher        *fsnotify.Watcher
+
+	changeFlushPeriod time.Duration
+	changeDelayPeriod time.Duration
 }
 
 // NewReader creates a new config reader.
 func NewReader(mainPath string, resourcePaths []string, opts ...OptFunc) *Reader {
 	r := &Reader{
-		testSuffix:       "_benthos_test",
-		mainPath:         mainPath,
-		resourcePaths:    resourcePaths,
-		streamFileInfo:   map[string]streamFileInfo{},
-		resourceFileInfo: map[string]resourceFileInfo{},
+		testSuffix:        "_benthos_test",
+		mainPath:          mainPath,
+		resourcePaths:     resourcePaths,
+		streamFileInfo:    map[string]streamFileInfo{},
+		resourceFileInfo:  map[string]resourceFileInfo{},
+		changeFlushPeriod: defaultChangeFlushPeriod,
+		changeDelayPeriod: defaultChangeDelayPeriod,
 	}
 	for _, opt := range opts {
 		opt(r)
@@ -170,11 +180,6 @@ func (r *Reader) SubscribeStreamChanges(fn StreamUpdateFunc) error {
 	return nil
 }
 
-const (
-	changeFlushPeriod = 50 * time.Millisecond
-	changeDelayPeriod = time.Second
-)
-
 // BeginFileWatching creates a goroutine that watches all active configuration
 // files for changes. If a resource is changed then it is swapped out
 // automatically through the provided manager. If a main config or stream config
@@ -199,7 +204,7 @@ func (r *Reader) BeginFileWatching(mgr bundle.NewManagement, strict bool) error 
 	r.watcher = watcher
 
 	go func() {
-		ticker := time.NewTicker(changeFlushPeriod)
+		ticker := time.NewTicker(r.changeFlushPeriod)
 		defer ticker.Stop()
 
 		collapsedChanges := map[string]time.Time{}
@@ -221,7 +226,7 @@ func (r *Reader) BeginFileWatching(mgr bundle.NewManagement, strict bool) error 
 				}
 			case <-ticker.C:
 				for nameClean, changed := range collapsedChanges {
-					if time.Since(changed) < changeDelayPeriod {
+					if time.Since(changed) < r.changeDelayPeriod {
 						continue
 					}
 					var succeeded bool
