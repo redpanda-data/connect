@@ -89,7 +89,19 @@ func (e *Environment) RegisterMethod(name string, ctor MethodConstructor) error 
 // Plugin names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
 // (snake case).
 func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor MethodConstructorV2) error {
-	iSpec := query.NewMethodSpec(name, spec.description).InCategory(query.MethodCategoryPlugin, "")
+	category := query.MethodCategory(spec.category)
+	if category == "" {
+		category = query.MethodCategoryPlugin
+	}
+	var examples []query.ExampleSpec
+	for _, e := range spec.examples {
+		var res []string
+		for _, inputOutput := range e.inputOutputs {
+			res = append(res, inputOutput[0], inputOutput[1])
+		}
+		examples = append(examples, query.NewExampleSpec(e.summary, e.mapping, res...))
+	}
+	iSpec := query.NewMethodSpec(name, spec.description).InCategory(category, "", examples...)
 	iSpec.Params = spec.params
 	return e.env.RegisterMethod(iSpec, func(target query.Function, args *query.ParsedParams) (query.Function, error) {
 		fn, err := ctor(&ParsedParams{par: args})
@@ -129,7 +141,19 @@ func (e *Environment) RegisterFunction(name string, ctor FunctionConstructor) er
 // Plugin names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
 // (snake case).
 func (e *Environment) RegisterFunctionV2(name string, spec *PluginSpec, ctor FunctionConstructorV2) error {
-	iSpec := query.NewFunctionSpec(query.FunctionCategoryPlugin, name, spec.description)
+	category := query.FunctionCategory(spec.category)
+	if category == "" {
+		category = query.FunctionCategoryPlugin
+	}
+	var examples []query.ExampleSpec
+	for _, e := range spec.examples {
+		var res []string
+		for _, inputOutput := range e.inputOutputs {
+			res = append(res, inputOutput[0], inputOutput[1])
+		}
+		examples = append(examples, query.NewExampleSpec(e.summary, e.mapping, res...))
+	}
+	iSpec := query.NewFunctionSpec(category, name, spec.description, examples...)
 	iSpec.Params = spec.params
 	return e.env.RegisterFunction(iSpec, func(args *query.ParsedParams) (query.Function, error) {
 		fn, err := ctor(&ParsedParams{par: args})

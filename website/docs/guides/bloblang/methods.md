@@ -1849,6 +1849,27 @@ root.body = this.body.bloblang(this.mapping)
 # Out: {"body":{"foo":"Hello World 2"}}
 ```
 
+### `format_msgpack`
+
+Formats data as a [MessagePack](https://msgpack.org/) message in bytes format.
+
+#### Examples
+
+
+```coffee
+root = this.format_msgpack().encode("hex")
+
+# In:  {"foo":"bar"}
+# Out: 81a3666f6fa3626172
+```
+
+```coffee
+root.encoded = this.format_msgpack().encode("base64")
+
+# In:  {"foo":"bar"}
+# Out: {"encoded":"gaNmb2+jYmFy"}
+```
+
 ### `format_yaml`
 
 Serializes a target value into a YAML byte array.
@@ -1899,6 +1920,27 @@ root.doc = this.doc.parse_json()
 
 # In:  {"doc":"{\"foo\":\"bar\"}"}
 # Out: {"doc":{"foo":"bar"}}
+```
+
+### `parse_msgpack`
+
+Parses a [MessagePack](https://msgpack.org/) message into a structured document.
+
+#### Examples
+
+
+```coffee
+root = content().decode("hex").parse_msgpack()
+
+# In:  81a3666f6fa3626172
+# Out: {"foo":"bar"}
+```
+
+```coffee
+root = this.encoded.decode("base64").parse_msgpack()
+
+# In:  {"encoded":"gaNmb2+jYmFy"}
+# Out: {"foo":"bar"}
 ```
 
 ### `parse_xml`

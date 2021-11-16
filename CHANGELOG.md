@@ -21,6 +21,7 @@ All notable changes to this project will be documented in this file.
 - New CLI flag `-w`/`-watcher` added for automatically detecting and applying configuration file changes.
 - Field `avro_raw_json` added to the `schema_registry_encode` processor.
 - New (experimental) `msgpack` processor.
+- New `parse_msgpack` and `format_msgpack` Bloblang methods.
 
 ### Fixed
 
