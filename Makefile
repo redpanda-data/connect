@@ -33,7 +33,6 @@ install: $(APPS)
 
 deps:
 	@go mod tidy
-	@go mod vendor
 
 SOURCE_FILES = $(shell find lib internal public cmd -type f -name "*.go")
 TEMPLATE_FILES = $(shell find template -path template/test -prune -o -type f -name "*.yaml")
@@ -70,11 +69,11 @@ docker-rc-tags:
 docker-cgo-tags:
 	@echo "latest-cgo,$(VER_CUT)-cgo,$(VER_MAJOR).$(VER_MINOR)-cgo,$(VER_MAJOR)-cgo" > .tags
 
-docker: deps
+docker:
 	@docker build -f ./resources/docker/Dockerfile . -t jeffail/benthos:$(VER_CUT)
 	@docker tag jeffail/benthos:$(VER_CUT) jeffail/benthos:latest
 
-docker-cgo: deps
+docker-cgo:
 	@docker build -f ./resources/docker/Dockerfile.cgo . -t jeffail/benthos:$(VER_CUT)-cgo
 	@docker tag jeffail/benthos:$(VER_CUT)-cgo jeffail/benthos:latest-cgo
 
