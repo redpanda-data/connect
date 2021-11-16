@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - Bloblang now allows optional carriage returns before line feeds at line endings.
 - New CLI flag `-w`/`-watcher` added for automatically detecting and applying configuration file changes.
 - Field `avro_raw_json` added to the `schema_registry_encode` processor.
+- New (experimental) `msgpack` processor.
 
 ### Fixed
 
