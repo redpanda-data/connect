@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -47,8 +48,8 @@ This input adds the following metadata fields to each message:
 - pulsar_message_id
 - pulsar_key
 - pulsar_ordering_key
-- pulsar_event_time
-- pulsar_publish_time
+- pulsar_event_time_unix
+- pulsar_publish_time_unix
 - pulsar_topic
 - pulsar_producer_name
 - pulsar_redelivery_count
@@ -251,8 +252,8 @@ func (p *pulsarReader) ReadWithContext(ctx context.Context) (types.Message, read
 
 	part.Metadata().Set("pulsar_message_id", string(pulMsg.ID().Serialize()))
 	part.Metadata().Set("pulsar_topic", pulMsg.Topic())
-	part.Metadata().Set("pulsar_publish_time", pulMsg.PublishTime().UTC().String())
-	part.Metadata().Set("pulsar_redelivery_count", fmt.Sprintf("%d", pulMsg.RedeliveryCount()))
+	part.Metadata().Set("pulsar_publish_time_unix", strconv.FormatInt(pulMsg.PublishTime().Unix(), 10))
+	part.Metadata().Set("pulsar_redelivery_count", strconv.FormatInt(int64(pulMsg.RedeliveryCount()), 10))
 	if key := pulMsg.Key(); len(key) > 0 {
 		part.Metadata().Set("pulsar_key", key)
 	}
@@ -260,7 +261,7 @@ func (p *pulsarReader) ReadWithContext(ctx context.Context) (types.Message, read
 		part.Metadata().Set("pulsar_ordering_key", orderingKey)
 	}
 	if !pulMsg.EventTime().IsZero() {
-		part.Metadata().Set("pulsar_event_time", pulMsg.EventTime().UTC().String())
+		part.Metadata().Set("pulsar_event_time_unix", strconv.FormatInt(pulMsg.EventTime().Unix(), 10))
 	}
 	if producerName := pulMsg.ProducerName(); producerName != "" {
 		part.Metadata().Set("pulsar_producer_name", producerName)

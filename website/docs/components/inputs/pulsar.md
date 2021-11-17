@@ -75,8 +75,8 @@ This input adds the following metadata fields to each message:
 - pulsar_message_id
 - pulsar_key
 - pulsar_ordering_key
-- pulsar_event_time
-- pulsar_publish_time
+- pulsar_event_time_unix
+- pulsar_publish_time_unix
 - pulsar_topic
 - pulsar_producer_name
 - pulsar_redelivery_count

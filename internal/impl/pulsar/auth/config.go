@@ -1,6 +1,8 @@
 package auth
 
-import "fmt"
+import (
+	"errors"
+)
 
 // Config contains configuration params for Pulsar authentication.
 type Config struct {
@@ -51,7 +53,7 @@ func NewToken() TokenConfig {
 // Validate checks whether Config is valid.
 func (c *Config) Validate() error {
 	if c.OAuth2.Enabled && c.Token.Enabled {
-		return fmt.Errorf("only one auth method can be enabled at once")
+		return errors.New("only one auth method can be enabled at once")
 	}
 	if c.OAuth2.Enabled {
 		return c.OAuth2.Validate()
@@ -65,13 +67,13 @@ func (c *Config) Validate() error {
 // Validate checks whether OAuth2Config is valid.
 func (c *OAuth2Config) Validate() error {
 	if c.Audience == "" {
-		return fmt.Errorf("oauth2 audience is empty")
+		return errors.New("oauth2 audience is empty")
 	}
 	if c.IssuerURL == "" {
-		return fmt.Errorf("oauth2 issuer URL is empty")
+		return errors.New("oauth2 issuer URL is empty")
 	}
 	if c.PrivateKeyFile == "" {
-		return fmt.Errorf("oauth2 private key file is empty")
+		return errors.New("oauth2 private key file is empty")
 	}
 	return nil
 }
@@ -79,7 +81,7 @@ func (c *OAuth2Config) Validate() error {
 // Validate checks whether TokenConfig is valid.
 func (c *TokenConfig) Validate() error {
 	if c.Token == "" {
-		return fmt.Errorf("token is empty")
+		return errors.New("token is empty")
 	}
 	return nil
 }
