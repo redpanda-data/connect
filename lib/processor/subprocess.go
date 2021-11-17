@@ -380,7 +380,11 @@ func (s *subprocWrapper) start() error {
 			scanner.Buffer(nil, s.maxBuf)
 		}
 		for scanner.Scan() {
-			stdoutChan <- scanner.Bytes()
+			data := scanner.Bytes()
+			dataCopy := make([]byte, len(data))
+			copy(dataCopy, data)
+
+			stdoutChan <- dataCopy
 		}
 		if err := scanner.Err(); err != nil {
 			s.logger.Errorf("Failed to read subprocess output: %v\n", err)
@@ -402,7 +406,11 @@ func (s *subprocWrapper) start() error {
 			scanner.Buffer(nil, s.maxBuf)
 		}
 		for scanner.Scan() {
-			stderrChan <- scanner.Bytes()
+			data := scanner.Bytes()
+			dataCopy := make([]byte, len(data))
+			copy(dataCopy, data)
+
+			stderrChan <- dataCopy
 		}
 		if err := scanner.Err(); err != nil {
 			s.logger.Errorf("Failed to read subprocess error output: %v\n", err)

@@ -25,7 +25,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Fixed an issue where the `azure_table_storage` output would attempt to send >100 size batches (and fail)
+- Fixed an issue where the `azure_table_storage` output would attempt to send >100 size batches (and fail).
+- Fixed an issue in the `subprocess` input where saturated stdout streams could become corrupted.
 
 ## 3.58.0 - 2021-11-02
 
