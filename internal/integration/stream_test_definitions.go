@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -11,14 +12,18 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func integrationTestOpenClose() testDefinition {
-	return namedTest(
+// StreamTestOpenClose ensures that both the input and output can be started and
+// stopped within a reasonable length of time. A single message is sent to check
+// the connection.
+func StreamTestOpenClose() StreamTestDefinition {
+	return namedStreamTest(
 		"can open and close",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *streamTestEnvironment) {
 			t.Parallel()
 
 			tranChan := make(chan types.Transaction)
@@ -33,11 +38,14 @@ func integrationTestOpenClose() testDefinition {
 	)
 }
 
-// The input is created after the output has written data.
-func integrationTestOpenCloseIsolated() testDefinition {
-	return namedTest(
+// StreamTestOpenCloseIsolated ensures that both the input and output can be
+// started and stopped within a reasonable length of time. A single message is
+// sent to check the connection but the input is only started after the message
+// is sent.
+func StreamTestOpenCloseIsolated() StreamTestDefinition {
+	return namedStreamTest(
 		"can open and close isolated",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *streamTestEnvironment) {
 			t.Parallel()
 
 			tranChan := make(chan types.Transaction)
@@ -56,10 +64,12 @@ func integrationTestOpenCloseIsolated() testDefinition {
 	)
 }
 
-func integrationTestMetadata() testDefinition {
-	return namedTest(
+// StreamTestMetadata ensures that we are able to send and receive metadata
+// values.
+func StreamTestMetadata() StreamTestDefinition {
+	return namedStreamTest(
 		"can send and receive metadata",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *streamTestEnvironment) {
 			t.Parallel()
 
 			tranChan := make(chan types.Transaction)
@@ -84,13 +94,17 @@ func integrationTestMetadata() testDefinition {
 	)
 }
 
-func integrationTestMetadataFilter() testDefinition {
-	return namedTest(
+// StreamTestMetadataFilter ensures that we are able to send and receive
+// metadata values, and that they are filtered. The provided config template
+// should inject the variable $OUTPUT_META_EXCLUDE_PREFIX into the output
+// metadata filter field.
+func StreamTestMetadataFilter() StreamTestDefinition {
+	return namedStreamTest(
 		"can send and receive metadata filtered",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *streamTestEnvironment) {
 			t.Parallel()
 
-			env.configVars.outputMetaExcludePrefix = "f"
+			env.configVars.OutputMetaExcludePrefix = "f"
 
 			tranChan := make(chan types.Transaction)
 			input, output := initConnectors(t, tranChan, env)
@@ -112,10 +126,11 @@ func integrationTestMetadataFilter() testDefinition {
 	)
 }
 
-func integrationTestSendBatch(n int) testDefinition {
-	return namedTest(
+// StreamTestSendBatch ensures we can send a batch of a given size.
+func StreamTestSendBatch(n int) StreamTestDefinition {
+	return namedStreamTest(
 		"can send a message batch",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *streamTestEnvironment) {
 			t.Parallel()
 
 			tranChan := make(chan types.Transaction)
@@ -141,10 +156,11 @@ func integrationTestSendBatch(n int) testDefinition {
 	)
 }
 
-func integrationTestSendBatches(batchSize, batches, parallelism int) testDefinition {
-	return namedTest(
+// StreamTestSendBatches ensures that we can send N batches of M parallelism.
+func StreamTestSendBatches(batchSize, batches, parallelism int) StreamTestDefinition {
+	return namedStreamTest(
 		"can send many message batches",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *streamTestEnvironment) {
 			t.Parallel()
 
 			require.Greater(t, parallelism, 0)
@@ -203,13 +219,15 @@ func integrationTestSendBatches(batchSize, batches, parallelism int) testDefinit
 	)
 }
 
-func integrationTestSendBatchCount(n int) testDefinition {
-	return namedTest(
+// StreamTestSendBatchCount ensures we can send batches using a configured batch
+// count.
+func StreamTestSendBatchCount(n int) StreamTestDefinition {
+	return namedStreamTest(
 		"can send messages with an output batch count",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *streamTestEnvironment) {
 			t.Parallel()
 
-			env.configVars.outputBatchCount = n
+			env.configVars.OutputBatchCount = n
 
 			tranChan := make(chan types.Transaction)
 			input, output := initConnectors(t, tranChan, env)
@@ -250,14 +268,15 @@ func integrationTestSendBatchCount(n int) testDefinition {
 	)
 }
 
-// The input is created after the output has written data.
-func integrationTestSendBatchCountIsolated(n int) testDefinition {
-	return namedTest(
+// StreamTestSendBatchCountIsolated checks batches can be sent and then
+// received. The input is created after the output has written data.
+func StreamTestSendBatchCountIsolated(n int) StreamTestDefinition {
+	return namedStreamTest(
 		"can send messages with an output batch count isolated",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *streamTestEnvironment) {
 			t.Parallel()
 
-			env.configVars.outputBatchCount = n
+			env.configVars.OutputBatchCount = n
 
 			tranChan := make(chan types.Transaction)
 			output := initOutput(t, tranChan, env)
@@ -303,13 +322,15 @@ func integrationTestSendBatchCountIsolated(n int) testDefinition {
 	)
 }
 
-func integrationTestReceiveBatchCount(n int) testDefinition {
-	return namedTest(
+// StreamTestReceiveBatchCount tests that batches can be consumed with an input
+// configured batch count.
+func StreamTestReceiveBatchCount(n int) StreamTestDefinition {
+	return namedStreamTest(
 		"can send messages with an input batch count",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *streamTestEnvironment) {
 			t.Parallel()
 
-			env.configVars.inputBatchCount = n
+			env.configVars.InputBatchCount = n
 
 			tranChan := make(chan types.Transaction)
 			input, output := initConnectors(t, tranChan, env)
@@ -347,10 +368,12 @@ func integrationTestReceiveBatchCount(n int) testDefinition {
 	)
 }
 
-func integrationTestStreamSequential(n int) testDefinition {
-	return namedTest(
+// StreamTestStreamSequential tests that data can be sent and received, where
+// data is sent sequentially.
+func StreamTestStreamSequential(n int) StreamTestDefinition {
+	return namedStreamTest(
 		"can send and receive data sequentially",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *streamTestEnvironment) {
 			t.Parallel()
 
 			tranChan := make(chan types.Transaction)
@@ -374,11 +397,12 @@ func integrationTestStreamSequential(n int) testDefinition {
 	)
 }
 
-// The input is created after the output has written data.
-func integrationTestStreamIsolated(n int) testDefinition {
-	return namedTest(
+// StreamTestStreamIsolated tests that data can be sent and received, where data
+// is sent sequentially. The input is created after the output has written data.
+func StreamTestStreamIsolated(n int) StreamTestDefinition {
+	return namedStreamTest(
 		"can send and receive data isolated",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *streamTestEnvironment) {
 			t.Parallel()
 
 			tranChan := make(chan types.Transaction)
@@ -407,10 +431,12 @@ func integrationTestStreamIsolated(n int) testDefinition {
 	)
 }
 
-func integrationTestCheckpointCapture() testDefinition {
-	return namedTest(
+// StreamTestCheckpointCapture ensures that data received out of order doesn't
+// result in wrongly acknowledged messages.
+func StreamTestCheckpointCapture() StreamTestDefinition {
+	return namedStreamTest(
 		"respects checkpointed offsets",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *streamTestEnvironment) {
 			t.Parallel()
 
 			tranChan := make(chan types.Transaction)
@@ -476,10 +502,11 @@ func integrationTestCheckpointCapture() testDefinition {
 	)
 }
 
-func integrationTestStreamParallel(n int) testDefinition {
-	return namedTest(
+// StreamTestStreamParallel tests data transfer with parallel senders.
+func StreamTestStreamParallel(n int) StreamTestDefinition {
+	return namedStreamTest(
 		"can send and receive data in parallel",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *streamTestEnvironment) {
 			t.Parallel()
 
 			tranChan := make(chan types.Transaction, n)
@@ -517,10 +544,12 @@ func integrationTestStreamParallel(n int) testDefinition {
 	)
 }
 
-func integrationTestAtLeastOnceDelivery() testDefinition {
-	return namedTest(
+// StreamTestAtLeastOnceDelivery ensures data is delivered through nacks and
+// restarts.
+func StreamTestAtLeastOnceDelivery() StreamTestDefinition {
+	return namedStreamTest(
 		"at least once delivery",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *streamTestEnvironment) {
 			t.Parallel()
 
 			tranChan := make(chan types.Transaction)
@@ -590,10 +619,12 @@ func integrationTestAtLeastOnceDelivery() testDefinition {
 	)
 }
 
-func integrationTestStreamParallelLossy(n int) testDefinition {
-	return namedTest(
+// StreamTestStreamParallelLossy ensures that data is delivered through parallel
+// nacks.
+func StreamTestStreamParallelLossy(n int) StreamTestDefinition {
+	return namedStreamTest(
 		"can send and receive data in parallel lossy",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *streamTestEnvironment) {
 			t.Parallel()
 
 			tranChan := make(chan types.Transaction)
@@ -646,10 +677,12 @@ func integrationTestStreamParallelLossy(n int) testDefinition {
 	)
 }
 
-func integrationTestStreamParallelLossyThroughReconnect(n int) testDefinition {
-	return namedTest(
+// StreamTestStreamParallelLossyThroughReconnect ensures data is delivered
+// through nacks and restarts.
+func StreamTestStreamParallelLossyThroughReconnect(n int) StreamTestDefinition {
+	return namedStreamTest(
 		"can send and receive data in parallel lossy through reconnect",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *streamTestEnvironment) {
 			t.Parallel()
 
 			tranChan := make(chan types.Transaction)
@@ -709,15 +742,16 @@ func integrationTestStreamParallelLossyThroughReconnect(n int) testDefinition {
 	)
 }
 
-// With a given identifier, extract the message from the target output
-// destination. This is normally used for testing cache or DB based outputs that
-// don't have a stream consumer available.
-type getMessageFunc func(*testEnvironment, string) (string, []string, error)
+// GetMessageFunc is a closure used to extract message contents from an output
+// directly and can be used to test outputs without the need for an input in the
+// config template.
+type GetMessageFunc func(ctx context.Context, testID, messageID string) (string, []string, error)
 
-func integrationTestOutputOnlySendSequential(n int, getFn getMessageFunc) testDefinition {
-	return namedTest(
+// StreamTestOutputOnlySendSequential tests a config template without an input.
+func StreamTestOutputOnlySendSequential(n int, getFn GetMessageFunc) StreamTestDefinition {
+	return namedStreamTest(
 		"can send to output",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *streamTestEnvironment) {
 			t.Parallel()
 
 			tranChan := make(chan types.Transaction)
@@ -735,7 +769,7 @@ func integrationTestOutputOnlySendSequential(n int, getFn getMessageFunc) testDe
 			}
 
 			for k, exp := range set {
-				act, _, err := getFn(env, k)
+				act, _, err := getFn(env.ctx, env.configVars.ID, k)
 				require.NoError(t, err)
 				assert.Equal(t, exp, act)
 			}
@@ -743,10 +777,11 @@ func integrationTestOutputOnlySendSequential(n int, getFn getMessageFunc) testDe
 	)
 }
 
-func integrationTestOutputOnlySendBatch(n int, getFn getMessageFunc) testDefinition {
-	return namedTest(
+// StreamTestOutputOnlySendBatch tests a config template without an input.
+func StreamTestOutputOnlySendBatch(n int, getFn GetMessageFunc) StreamTestDefinition {
+	return namedStreamTest(
 		"can send to output as batch",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *streamTestEnvironment) {
 			t.Parallel()
 
 			tranChan := make(chan types.Transaction)
@@ -766,7 +801,7 @@ func integrationTestOutputOnlySendBatch(n int, getFn getMessageFunc) testDefinit
 			require.NoError(t, sendBatch(env.ctx, t, tranChan, batch))
 
 			for k, exp := range set {
-				act, _, err := getFn(env, k)
+				act, _, err := getFn(env.ctx, env.configVars.ID, k)
 				require.NoError(t, err)
 				assert.Equal(t, exp, act)
 			}
@@ -774,10 +809,12 @@ func integrationTestOutputOnlySendBatch(n int, getFn getMessageFunc) testDefinit
 	)
 }
 
-func integrationTestOutputOnlyOverride(getFn getMessageFunc) testDefinition {
-	return namedTest(
+// StreamTestOutputOnlyOverride tests a config template without an input where
+// duplicate IDs are sent (where we expect updates).
+func StreamTestOutputOnlyOverride(getFn GetMessageFunc) StreamTestDefinition {
+	return namedStreamTest(
 		"can send to output and override value",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *streamTestEnvironment) {
 			t.Parallel()
 
 			tranChan := make(chan types.Transaction)
@@ -791,7 +828,7 @@ func integrationTestOutputOnlyOverride(getFn getMessageFunc) testDefinition {
 			require.NoError(t, sendMessage(env.ctx, t, tranChan, first))
 			require.NoError(t, sendMessage(env.ctx, t, tranChan, exp))
 
-			act, _, err := getFn(env, "1")
+			act, _, err := getFn(env.ctx, env.configVars.ID, "1")
 			require.NoError(t, err)
 			assert.Equal(t, exp, act)
 		},

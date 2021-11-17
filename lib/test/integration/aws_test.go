@@ -1,10 +1,12 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -159,22 +161,22 @@ input:
       secret: xxxxx
       token: xxxxx
 `
-		integrationTests(
-			integrationTestOpenClose(),
-			// integrationTestMetadata(), Does dumb stuff with rewriting keys.
-			// integrationTestSendBatch(10),
-			integrationTestSendBatchCount(10),
-			integrationTestStreamSequential(10),
-			// integrationTestStreamParallel(10),
-			// integrationTestStreamParallelLossy(10),
-			integrationTestStreamParallelLossyThroughReconnect(10),
+		integration.StreamTests(
+			integration.StreamTestOpenClose(),
+			// integration.StreamTestMetadata(), Does dumb stuff with rewriting keys.
+			// integration.StreamTestSendBatch(10),
+			integration.StreamTestSendBatchCount(10),
+			integration.StreamTestStreamSequential(10),
+			// integration.StreamTestStreamParallel(10),
+			// integration.StreamTestStreamParallelLossy(10),
+			integration.StreamTestStreamParallelLossyThroughReconnect(10),
 		).Run(
 			t, template,
-			testOptPreTest(func(t testing.TB, env *testEnvironment) {
-				require.NoError(t, createBucketQueue(servicePort, servicePort, env.configVars.id))
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				require.NoError(t, createBucketQueue(servicePort, servicePort, testID))
 			}),
-			testOptPort(servicePort),
-			testOptAllowDupes(),
+			integration.StreamTestOptPort(servicePort),
+			integration.StreamTestOptAllowDupes(),
 		)
 	})
 
@@ -215,21 +217,21 @@ input:
       secret: xxxxx
       token: xxxxx
 `
-		integrationTests(
-			integrationTestOpenClose(),
-			integrationTestStreamSequential(20),
-			integrationTestSendBatchCount(10),
-			integrationTestStreamParallelLossyThroughReconnect(20),
+		integration.StreamTests(
+			integration.StreamTestOpenClose(),
+			integration.StreamTestStreamSequential(20),
+			integration.StreamTestSendBatchCount(10),
+			integration.StreamTestStreamParallelLossyThroughReconnect(20),
 		).Run(
 			t, template,
-			testOptPreTest(func(t testing.TB, env *testEnvironment) {
-				if env.configVars.outputBatchCount == 0 {
-					env.configVars.outputBatchCount = 1
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				if vars.OutputBatchCount == 0 {
+					vars.OutputBatchCount = 1
 				}
-				require.NoError(t, createBucketQueue(servicePort, servicePort, env.configVars.id))
+				require.NoError(t, createBucketQueue(servicePort, servicePort, testID))
 			}),
-			testOptPort(servicePort),
-			testOptAllowDupes(),
+			integration.StreamTestOptPort(servicePort),
+			integration.StreamTestOptAllowDupes(),
 		)
 	})
 
@@ -261,16 +263,16 @@ input:
       secret: xxxxx
       token: xxxxx
 `
-		integrationTests(
-			integrationTestOpenCloseIsolated(),
-			integrationTestStreamIsolated(10),
+		integration.StreamTests(
+			integration.StreamTestOpenCloseIsolated(),
+			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			testOptPreTest(func(t testing.TB, env *testEnvironment) {
-				require.NoError(t, createBucketQueue(servicePort, "", env.configVars.id))
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				require.NoError(t, createBucketQueue(servicePort, "", testID))
 			}),
-			testOptPort(servicePort),
-			testOptVarOne("false"),
+			integration.StreamTestOptPort(servicePort),
+			integration.StreamTestOptVarOne("false"),
 		)
 	})
 
@@ -299,19 +301,19 @@ input:
       secret: xxxxx
       token: xxxxx
 `
-		integrationTests(
-			integrationTestOpenClose(),
-			integrationTestSendBatch(10),
-			integrationTestStreamSequential(50),
-			integrationTestStreamParallel(50),
-			integrationTestStreamParallelLossy(50),
-			integrationTestStreamParallelLossyThroughReconnect(50),
+		integration.StreamTests(
+			integration.StreamTestOpenClose(),
+			integration.StreamTestSendBatch(10),
+			integration.StreamTestStreamSequential(50),
+			integration.StreamTestStreamParallel(50),
+			integration.StreamTestStreamParallelLossy(50),
+			integration.StreamTestStreamParallelLossyThroughReconnect(50),
 		).Run(
 			t, template,
-			testOptPreTest(func(t testing.TB, env *testEnvironment) {
-				require.NoError(t, createBucketQueue("", servicePort, env.configVars.id))
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				require.NoError(t, createBucketQueue("", servicePort, testID))
 			}),
-			testOptPort(servicePort),
+			integration.StreamTestOptPort(servicePort),
 		)
 	})
 })

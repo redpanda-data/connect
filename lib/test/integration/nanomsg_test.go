@@ -3,6 +3,8 @@ package integration
 import (
 	"testing"
 	"time"
+
+	"github.com/Jeffail/benthos/v3/internal/integration"
 )
 
 var _ = registerIntegrationTest("nanomsg", func(t *testing.T) {
@@ -26,38 +28,38 @@ input:
     socket_type: $VAR2
     sub_filters: [ $VAR3 ]
 `
-	suite := integrationTests(
-		integrationTestOpenClose(),
-		integrationTestSendBatch(10),
-		integrationTestStreamParallel(100),
+	suite := integration.StreamTests(
+		integration.StreamTestOpenClose(),
+		integration.StreamTestSendBatch(10),
+		integration.StreamTestStreamParallel(100),
 	)
 	suite.Run(
 		t, template,
-		testOptSleepAfterInput(500*time.Millisecond),
-		testOptSleepAfterOutput(500*time.Millisecond),
-		testOptVarOne("PUSH"),
-		testOptVarTwo("PULL"),
+		integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
+		integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
+		integration.StreamTestOptVarOne("PUSH"),
+		integration.StreamTestOptVarTwo("PULL"),
 	)
 	t.Run("with max in flight", func(t *testing.T) {
 		t.Parallel()
 		suite.Run(
 			t, template,
-			testOptSleepAfterInput(500*time.Millisecond),
-			testOptSleepAfterOutput(500*time.Millisecond),
-			testOptVarOne("PUSH"),
-			testOptVarTwo("PULL"),
-			testOptMaxInFlight(10),
+			integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
+			integration.StreamTestOptVarOne("PUSH"),
+			integration.StreamTestOptVarTwo("PULL"),
+			integration.StreamTestOptMaxInFlight(10),
 		)
 	})
 	t.Run("with pub sub", func(t *testing.T) {
 		t.Parallel()
 		suite.Run(
 			t, template,
-			testOptSleepAfterInput(500*time.Millisecond),
-			testOptSleepAfterOutput(500*time.Millisecond),
-			testOptVarOne("PUB"),
-			testOptVarTwo("SUB"),
-			testOptVarThree(`""`),
+			integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
+			integration.StreamTestOptVarOne("PUB"),
+			integration.StreamTestOptVarTwo("SUB"),
+			integration.StreamTestOptVarThree(`""`),
 		)
 	})
 })

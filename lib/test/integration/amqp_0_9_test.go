@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/ory/dockertest/v3"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/stretchr/testify/assert"
@@ -67,22 +68,22 @@ input:
         key: benthos-key
 `
 
-	suite := integrationTests(
-		integrationTestOpenClose(),
-		integrationTestMetadata(),
-		integrationTestMetadataFilter(),
-		integrationTestSendBatch(10),
-		integrationTestStreamSequential(1000),
-		integrationTestStreamParallel(1000),
-		integrationTestStreamParallelLossy(1000),
-		integrationTestStreamParallelLossyThroughReconnect(1000),
+	suite := integration.StreamTests(
+		integration.StreamTestOpenClose(),
+		integration.StreamTestMetadata(),
+		integration.StreamTestMetadataFilter(),
+		integration.StreamTestSendBatch(10),
+		integration.StreamTestStreamSequential(1000),
+		integration.StreamTestStreamParallel(1000),
+		integration.StreamTestStreamParallelLossy(1000),
+		integration.StreamTestStreamParallelLossyThroughReconnect(1000),
 	)
 	suite.Run(
 		t, template,
-		testOptSleepAfterInput(500*time.Millisecond),
-		testOptSleepAfterOutput(500*time.Millisecond),
-		testOptPort(resource.GetPort("5672/tcp")),
-		testOptVarOne("false"),
+		integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
+		integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
+		integration.StreamTestOptPort(resource.GetPort("5672/tcp")),
+		integration.StreamTestOptVarOne("false"),
 	)
 
 	backwardsCompatibilityTemplate := `
@@ -114,9 +115,9 @@ input:
 
 	suite.Run(
 		t, backwardsCompatibilityTemplate,
-		testOptSleepAfterInput(500*time.Millisecond),
-		testOptSleepAfterOutput(500*time.Millisecond),
-		testOptPort(resource.GetPort("5672/tcp")),
-		testOptVarOne("false"),
+		integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
+		integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
+		integration.StreamTestOptPort(resource.GetPort("5672/tcp")),
+		integration.StreamTestOptVarOne("false"),
 	)
 })

@@ -1,4 +1,4 @@
-package integration
+package gcp_test
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,7 +27,8 @@ func createGCPCloudStorageBucket(var1, id string) error {
 	return client.Bucket(var1+"-"+id).Create(ctx, "", nil)
 }
 
-var _ = registerIntegrationTest("gcp_cloud_storage", func(t *testing.T) {
+func TestIntegrationGCP(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -93,16 +95,16 @@ input:
     bucket: $VAR1-$ID
     prefix: $VAR2
 `
-		integrationTests(
-			integrationTestOpenCloseIsolated(),
-			integrationTestStreamIsolated(10),
+		integration.StreamTests(
+			integration.StreamTestOpenCloseIsolated(),
+			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			testOptPreTest(func(t testing.TB, env *testEnvironment) {
-				require.NoError(t, createGCPCloudStorageBucket(env.configVars.var1, env.configVars.id))
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				require.NoError(t, createGCPCloudStorageBucket(vars.Var1, testID))
 			}),
-			testOptVarOne(dummyBucketPrefix),
-			testOptVarTwo(dummyPathPrefix),
+			integration.StreamTestOptVarOne(dummyBucketPrefix),
+			integration.StreamTestOptVarTwo(dummyPathPrefix),
 		)
 	})
 
@@ -120,16 +122,16 @@ input:
     prefix: $VAR2/test.txt
     codec: chunker:14
 `
-		integrationTests(
-			integrationTestOpenCloseIsolated(),
-			integrationTestStreamIsolated(10),
+		integration.StreamTests(
+			integration.StreamTestOpenCloseIsolated(),
+			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			testOptPreTest(func(t testing.TB, env *testEnvironment) {
-				require.NoError(t, createGCPCloudStorageBucket(env.configVars.var1, env.configVars.id))
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				require.NoError(t, createGCPCloudStorageBucket(vars.Var1, testID))
 			}),
-			testOptVarOne(dummyBucketPrefix),
-			testOptVarTwo(dummyPathPrefix),
+			integration.StreamTestOptVarOne(dummyBucketPrefix),
+			integration.StreamTestOptVarTwo(dummyPathPrefix),
 		)
 	})
-})
+}

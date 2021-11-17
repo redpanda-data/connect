@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/olivere/elastic/v7"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
@@ -84,17 +85,17 @@ output:
     type: doc
     sniff: false
 `
-	queryGetFn := func(env *testEnvironment, id string) (string, []string, error) {
+	queryGetFn := func(ctx context.Context, testID, messageID string) (string, []string, error) {
 		res, err := client.Get().
-			Index(env.configVars.id).
-			Id(id).
-			Do(env.ctx)
+			Index(testID).
+			Id(messageID).
+			Do(ctx)
 		if err != nil {
 			return "", nil, err
 		}
 
 		if !res.Found {
-			return "", nil, fmt.Errorf("document %v not found", id)
+			return "", nil, fmt.Errorf("document %v not found", messageID)
 		}
 
 		resBytes, err := res.Source.MarshalJSON()
@@ -104,13 +105,13 @@ output:
 		return string(resBytes), nil, nil
 	}
 
-	suite := integrationTests(
-		integrationTestOutputOnlySendSequential(10, queryGetFn),
-		integrationTestOutputOnlySendBatch(10, queryGetFn),
+	suite := integration.StreamTests(
+		integration.StreamTestOutputOnlySendSequential(10, queryGetFn),
+		integration.StreamTestOutputOnlySendBatch(10, queryGetFn),
 	)
 	suite.Run(
 		t, template,
-		testOptPort(resource.GetPort("9200/tcp")),
+		integration.StreamTestOptPort(resource.GetPort("9200/tcp")),
 	)
 })
 
@@ -162,13 +163,13 @@ output:
     type: doc
     sniff: false
 `
-	suite := integrationBenchs(
-		integrationBenchWrite(20),
-		integrationBenchWrite(10),
-		integrationBenchWrite(1),
+	suite := integration.StreamBenchs(
+		integration.StreamBenchWrite(20),
+		integration.StreamBenchWrite(10),
+		integration.StreamBenchWrite(1),
 	)
 	suite.Run(
 		b, template,
-		testOptPort(resource.GetPort("9200/tcp")),
+		integration.StreamTestOptPort(resource.GetPort("9200/tcp")),
 	)
 })

@@ -1,17 +1,20 @@
-package integration
+package nats_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/nats-io/nats.go"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-var _ = registerIntegrationTest("nats_jetstream", func(t *testing.T) {
+func TestIntegrationNats(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -50,32 +53,32 @@ input:
     subject: subject-$ID
     durable: durable-$ID
 `
-	suite := integrationTests(
-		integrationTestOpenClose(),
-		// integrationTestMetadata(), TODO
-		integrationTestSendBatch(10),
-		integrationTestAtLeastOnceDelivery(), // TODO: SubscribeSync doesn't seem to honor durable setting
-		integrationTestStreamParallel(1000),
-		integrationTestStreamSequential(1000),
-		integrationTestStreamParallelLossy(1000),
-		integrationTestStreamParallelLossyThroughReconnect(1000),
+	suite := integration.StreamTests(
+		integration.StreamTestOpenClose(),
+		// integration.StreamTestMetadata(), TODO
+		integration.StreamTestSendBatch(10),
+		integration.StreamTestAtLeastOnceDelivery(), // TODO: SubscribeSync doesn't seem to honor durable setting
+		integration.StreamTestStreamParallel(1000),
+		integration.StreamTestStreamSequential(1000),
+		integration.StreamTestStreamParallelLossy(1000),
+		integration.StreamTestStreamParallelLossyThroughReconnect(1000),
 	)
 	suite.Run(
 		t, template,
-		testOptPreTest(func(t testing.TB, env *testEnvironment) {
+		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
 			js, err := natsConn.JetStream()
 			require.NoError(t, err)
 
-			streamName := "stream-" + env.configVars.id
+			streamName := "stream-" + testID
 
 			_, err = js.AddStream(&nats.StreamConfig{
 				Name:     streamName,
-				Subjects: []string{"subject-" + env.configVars.id},
+				Subjects: []string{"subject-" + testID},
 			})
 			require.NoError(t, err)
 		}),
-		testOptSleepAfterInput(100*time.Millisecond),
-		testOptSleepAfterOutput(100*time.Millisecond),
-		testOptPort(resource.GetPort("4222/tcp")),
+		integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+		integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+		integration.StreamTestOptPort(resource.GetPort("4222/tcp")),
 	)
-})
+}

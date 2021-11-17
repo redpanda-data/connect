@@ -1,11 +1,13 @@
 package integration
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -72,10 +74,10 @@ output:
     query: "INSERT INTO testtable (id, content) VALUES ($1, $2);"
     args_mapping: '[ "$ID-"+this.id.string(), this.content ]'
 `
-	queryGetFn := func(env *testEnvironment, id string) (string, []string, error) {
-		key := env.configVars.id + "-" + id
+	queryGetFn := func(ctx context.Context, testID string, id string) (string, []string, error) {
+		key := testID + "-" + id
 
-		row := db.QueryRowContext(env.ctx, "SELECT content FROM testtable WHERE id = $1;", key)
+		row := db.QueryRowContext(ctx, "SELECT content FROM testtable WHERE id = $1;", key)
 		if row.Err() != nil {
 			return "", nil, row.Err()
 		}
@@ -84,12 +86,12 @@ output:
 		err := row.Scan(&content)
 		return fmt.Sprintf(`{"content":"%v","id":%v}`, content, id), nil, err
 	}
-	suite := integrationTests(
-		integrationTestOutputOnlySendSequential(10, queryGetFn),
-		integrationTestOutputOnlySendBatch(10, queryGetFn),
+	suite := integration.StreamTests(
+		integration.StreamTestOutputOnlySendSequential(10, queryGetFn),
+		integration.StreamTestOutputOnlySendBatch(10, queryGetFn),
 	)
 	suite.Run(
 		t, template,
-		testOptPort(resource.GetPort("5432/tcp")),
+		integration.StreamTestOptPort(resource.GetPort("5432/tcp")),
 	)
 })

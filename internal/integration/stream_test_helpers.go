@@ -3,9 +3,11 @@ package integration
 import (
 	"bytes"
 	"context"
+	"flag"
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,16 +23,29 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
+
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
 
-type testConfigVars struct {
+// CheckSkip marks a test to be skipped unless the integration test has been
+// specifically requested using the -run flag.
+func CheckSkip(t *testing.T) {
+	if m := flag.Lookup("test.run").Value.String(); m == "" || regexp.MustCompile(strings.Split(m, "/")[0]).FindString(t.Name()) == "" {
+		t.Skip("Skipping as execution was not requested explicitly using go test -run ^TestIntegration$")
+	}
+}
+
+// StreamTestConfigVars defines variables that will be accessed by test
+// definitions when generating components through the config template. The main
+// value is the id, which is generated for each test for isolation, and the port
+// which is injected into the config template.
+type StreamTestConfigVars struct {
 	// A unique identifier for separating this test configuration from others.
 	// Usually used to access a different topic, consumer group, directory, etc.
-	id string
+	ID string
 
 	// A port to use in connector URLs. Allowing tests to override this
 	// potentially enables tests that check for faulty connections by bridging.
@@ -46,29 +61,34 @@ type testConfigVars struct {
 	portFour string
 
 	// Used by batching testers to check the input honours batching fields.
-	inputBatchCount int
+	InputBatchCount int
 
 	// Used by batching testers to check the output honours batching fields.
-	outputBatchCount int
+	OutputBatchCount int
 
 	// Used by metadata filter tests to check that filters work.
-	outputMetaExcludePrefix string
+	OutputMetaExcludePrefix string
 
 	// Used by testers to check the max in flight option of outputs.
-	maxInFlight int
+	MaxInFlight int
 
 	// Generic variables.
-	var1 string
-	var2 string
-	var3 string
-	var4 string
+	Var1 string
+	Var2 string
+	Var3 string
+	Var4 string
 }
 
-type testEnvironment struct {
-	configTemplate string
-	configVars     testConfigVars
+// StreamPreTestFn is an optional closure to be called before tests are run,
+// this is an opportunity to mutate test config variables and mess with the
+// environment.
+type StreamPreTestFn func(t testing.TB, ctx context.Context, testID string, vars *StreamTestConfigVars)
 
-	preTest func(testing.TB, *testEnvironment)
+type streamTestEnvironment struct {
+	configTemplate string
+	configVars     StreamTestConfigVars
+
+	preTest StreamPreTestFn
 
 	timeout time.Duration
 	ctx     context.Context
@@ -97,17 +117,17 @@ func getFreePort() (int, error) {
 	return listener.Addr().(*net.TCPAddr).Port, nil
 }
 
-func newTestEnvironment(t testing.TB, confTemplate string) testEnvironment {
+func newStreamTestEnvironment(t testing.TB, confTemplate string) streamTestEnvironment {
 	t.Helper()
 
 	u4, err := uuid.NewV4()
 	require.NoError(t, err)
 
-	return testEnvironment{
+	return streamTestEnvironment{
 		configTemplate: confTemplate,
-		configVars: testConfigVars{
-			id:          u4.String(),
-			maxInFlight: 1,
+		configVars: StreamTestConfigVars{
+			ID:          u4.String(),
+			MaxInFlight: 1,
 		},
 		timeout: time.Second * 90,
 		ctx:     context.Background(),
@@ -116,118 +136,153 @@ func newTestEnvironment(t testing.TB, confTemplate string) testEnvironment {
 	}
 }
 
-func (e testEnvironment) RenderConfig() string {
+func (e streamTestEnvironment) RenderConfig() string {
 	return strings.NewReplacer(
-		"$ID", e.configVars.id,
+		"$ID", e.configVars.ID,
 		"$PORT_TWO", e.configVars.portTwo,
 		"$PORT_THREE", e.configVars.portThree,
 		"$PORT_FOUR", e.configVars.portFour,
 		"$PORT", e.configVars.port,
-		"$VAR1", e.configVars.var1,
-		"$VAR2", e.configVars.var2,
-		"$VAR3", e.configVars.var3,
-		"$VAR4", e.configVars.var4,
-		"$INPUT_BATCH_COUNT", strconv.Itoa(e.configVars.inputBatchCount),
-		"$OUTPUT_BATCH_COUNT", strconv.Itoa(e.configVars.outputBatchCount),
-		"$OUTPUT_META_EXCLUDE_PREFIX", e.configVars.outputMetaExcludePrefix,
-		"$MAX_IN_FLIGHT", strconv.Itoa(e.configVars.maxInFlight),
+		"$VAR1", e.configVars.Var1,
+		"$VAR2", e.configVars.Var2,
+		"$VAR3", e.configVars.Var3,
+		"$VAR4", e.configVars.Var4,
+		"$INPUT_BATCH_COUNT", strconv.Itoa(e.configVars.InputBatchCount),
+		"$OUTPUT_BATCH_COUNT", strconv.Itoa(e.configVars.OutputBatchCount),
+		"$OUTPUT_META_EXCLUDE_PREFIX", e.configVars.OutputMetaExcludePrefix,
+		"$MAX_IN_FLIGHT", strconv.Itoa(e.configVars.MaxInFlight),
 	).Replace(e.configTemplate)
 }
 
 //------------------------------------------------------------------------------
 
-type testOptFunc func(*testEnvironment)
+// StreamTestOptFunc is an opt func for customizing the behaviour of stream
+// tests, these are useful for things that are integration environment specific,
+// such as the port of the service being interacted with.
+type StreamTestOptFunc func(*streamTestEnvironment)
 
-func testOptTimeout(timeout time.Duration) testOptFunc {
-	return func(env *testEnvironment) {
+// StreamTestOptTimeout describes an optional timeout spanning the entirety of
+// the test suite.
+func StreamTestOptTimeout(timeout time.Duration) StreamTestOptFunc {
+	return func(env *streamTestEnvironment) {
 		env.timeout = timeout
 	}
 }
 
-func testOptAllowDupes() testOptFunc {
-	return func(env *testEnvironment) {
+// StreamTestOptAllowDupes specifies across all stream tests that in this
+// environment we can expect duplicates and these are not considered errors.
+func StreamTestOptAllowDupes() StreamTestOptFunc {
+	return func(env *streamTestEnvironment) {
 		env.allowDuplicateMessages = true
 	}
 }
 
-func testOptMaxInFlight(n int) testOptFunc {
-	return func(env *testEnvironment) {
-		env.configVars.maxInFlight = n
+// StreamTestOptMaxInFlight configures a maximum inflight (to be injected into
+// the config template) for all tests.
+func StreamTestOptMaxInFlight(n int) StreamTestOptFunc {
+	return func(env *streamTestEnvironment) {
+		env.configVars.MaxInFlight = n
 	}
 }
 
-func testOptLogging(level string) testOptFunc {
-	return func(env *testEnvironment) {
+// StreamTestOptLogging allows components to log with the given log level. This
+// is useful for diagnosing issues.
+func StreamTestOptLogging(level string) StreamTestOptFunc {
+	return func(env *streamTestEnvironment) {
 		logConf := log.NewConfig()
 		logConf.LogLevel = level
 		env.log = log.New(os.Stdout, logConf)
 	}
 }
 
-func testOptPort(port string) testOptFunc {
-	return func(env *testEnvironment) {
+// StreamTestOptPort defines the port of the integration service.
+func StreamTestOptPort(port string) StreamTestOptFunc {
+	return func(env *streamTestEnvironment) {
 		env.configVars.port = port
 	}
 }
 
-func testOptPortTwo(portTwo string) testOptFunc {
-	return func(env *testEnvironment) {
+// StreamTestOptPortTwo defines a secondary port of the integration service.
+func StreamTestOptPortTwo(portTwo string) StreamTestOptFunc {
+	return func(env *streamTestEnvironment) {
 		env.configVars.portTwo = portTwo
 	}
 }
 
-func testOptVarOne(v string) testOptFunc {
-	return func(env *testEnvironment) {
-		env.configVars.var1 = v
+// StreamTestOptVarOne sets an arbitrary variable for the test that can be
+// injected into templated configs.
+func StreamTestOptVarOne(v string) StreamTestOptFunc {
+	return func(env *streamTestEnvironment) {
+		env.configVars.Var1 = v
 	}
 }
 
-func testOptVarTwo(v string) testOptFunc {
-	return func(env *testEnvironment) {
-		env.configVars.var2 = v
+// StreamTestOptVarTwo sets a second arbitrary variable for the test that can be
+// injected into templated configs.
+func StreamTestOptVarTwo(v string) StreamTestOptFunc {
+	return func(env *streamTestEnvironment) {
+		env.configVars.Var2 = v
 	}
 }
 
-func testOptVarThree(v string) testOptFunc {
-	return func(env *testEnvironment) {
-		env.configVars.var3 = v
+// StreamTestOptVarThree sets a third arbitrary variable for the test that can
+// be injected into templated configs.
+func StreamTestOptVarThree(v string) StreamTestOptFunc {
+	return func(env *streamTestEnvironment) {
+		env.configVars.Var3 = v
 	}
 }
 
-func testOptSleepAfterInput(t time.Duration) testOptFunc {
-	return func(env *testEnvironment) {
+// StreamTestOptSleepAfterInput adds a sleep to tests after the input has been
+// created.
+func StreamTestOptSleepAfterInput(t time.Duration) StreamTestOptFunc {
+	return func(env *streamTestEnvironment) {
 		env.sleepAfterInput = t
 	}
 }
 
-func testOptSleepAfterOutput(t time.Duration) testOptFunc {
-	return func(env *testEnvironment) {
+// StreamTestOptSleepAfterOutput adds a sleep to tests after the output has been
+// created.
+func StreamTestOptSleepAfterOutput(t time.Duration) StreamTestOptFunc {
+	return func(env *streamTestEnvironment) {
 		env.sleepAfterOutput = t
 	}
 }
 
-func testOptPreTest(fn func(testing.TB, *testEnvironment)) testOptFunc {
-	return func(env *testEnvironment) {
+// StreamTestOptPreTest adds a closure to be executed before each test.
+func StreamTestOptPreTest(fn StreamPreTestFn) StreamTestOptFunc {
+	return func(env *streamTestEnvironment) {
 		env.preTest = fn
 	}
 }
 
 //------------------------------------------------------------------------------
 
-type testDefinition func(*testing.T, *testEnvironment)
+type streamTestDefinitionFn func(*testing.T, *streamTestEnvironment)
 
-type integrationTestList []testDefinition
+// StreamTestDefinition encompasses a unit test to be executed against an
+// integration environment. These tests are generic and can be run against any
+// configuration containing an input and an output that are connected.
+type StreamTestDefinition struct {
+	fn func(*testing.T, *streamTestEnvironment)
+}
 
-func integrationTests(tests ...testDefinition) integrationTestList {
+// StreamTestList is a list of stream definitions that can be run with a single
+// template and function args.
+type StreamTestList []StreamTestDefinition
+
+// StreamTests creates a list of tests from variadic arguments.
+func StreamTests(tests ...StreamTestDefinition) StreamTestList {
 	return tests
 }
 
-func (i integrationTestList) Run(t *testing.T, configTemplate string, opts ...testOptFunc) {
-	envs := make([]testEnvironment, len(i))
+// Run all the tests against a config template. Tests are run in parallel.
+func (i StreamTestList) Run(t *testing.T, configTemplate string, opts ...StreamTestOptFunc) {
+	envs := make([]streamTestEnvironment, len(i))
 
 	wg := sync.WaitGroup{}
 	for j := range i {
-		envs[j] = newTestEnvironment(t, configTemplate)
+		envs[j] = newStreamTestEnvironment(t, configTemplate)
 		for _, opt := range opts {
 			opt(&envs[j])
 		}
@@ -246,7 +301,7 @@ func (i integrationTestList) Run(t *testing.T, configTemplate string, opts ...te
 			env := &envs[j]
 			go func() {
 				defer wg.Done()
-				env.preTest(t, env)
+				env.preTest(t, env.ctx, env.configVars.ID, &env.configVars)
 			}()
 		}
 	}
@@ -260,13 +315,15 @@ func (i integrationTestList) Run(t *testing.T, configTemplate string, opts ...te
 			}
 			envs[j].configVars.port = strconv.Itoa(p)
 		}
-		test(t, &envs[j])
+		test.fn(t, &envs[j])
 	}
 }
 
-func (i integrationTestList) RunSequentially(t *testing.T, configTemplate string, opts ...testOptFunc) {
+// RunSequentially executes all the tests against a config template
+// sequentially.
+func (i StreamTestList) RunSequentially(t *testing.T, configTemplate string, opts ...StreamTestOptFunc) {
 	for _, test := range i {
-		env := newTestEnvironment(t, configTemplate)
+		env := newStreamTestEnvironment(t, configTemplate)
 		for _, opt := range opts {
 			opt(&env)
 		}
@@ -281,33 +338,68 @@ func (i integrationTestList) RunSequentially(t *testing.T, configTemplate string
 		t.Cleanup(done)
 
 		if env.preTest != nil {
-			env.preTest(t, &env)
+			env.preTest(t, env.ctx, env.configVars.ID, &env.configVars)
 		}
 		t.Run("seq", func(t *testing.T) {
-			test(t, &env)
+			test.fn(t, &env)
 		})
 	}
-}
-
-var registeredIntegrationTests = map[string]func(*testing.T){}
-
-// register an integration test that should only execute under the `integration`
-// build tag. Returns an empty struct so that it can be called at a file root.
-func registerIntegrationTest(name string, fn func(*testing.T)) struct{} {
-	if _, exists := registeredIntegrationTests[name]; exists {
-		panic(fmt.Sprintf("integration test double registered: %v", name))
-	}
-	registeredIntegrationTests[name] = fn
-	return struct{}{}
 }
 
 //------------------------------------------------------------------------------
 
-func namedTest(name string, test testDefinition) testDefinition {
-	return func(t *testing.T, env *testEnvironment) {
-		t.Run(name, func(t *testing.T) {
-			test(t, env)
-		})
+func namedStreamTest(name string, test streamTestDefinitionFn) StreamTestDefinition {
+	return StreamTestDefinition{
+		fn: func(t *testing.T, env *streamTestEnvironment) {
+			t.Run(name, func(t *testing.T) {
+				test(t, env)
+			})
+		},
+	}
+}
+
+//------------------------------------------------------------------------------
+
+type streamBenchDefinitionFn func(*testing.B, *streamTestEnvironment)
+
+// StreamBenchDefinition encompasses a benchmark to be executed against an
+// integration environment. These tests are generic and can be run against any
+// configuration containing an input and an output that are connected.
+type StreamBenchDefinition struct {
+	fn streamBenchDefinitionFn
+}
+
+// StreamBenchList is a list of stream benchmark definitions that can be run
+// with a single template and function args.
+type StreamBenchList []StreamBenchDefinition
+
+// StreamBenchs creates a list of benchmarks from variadic arguments.
+func StreamBenchs(tests ...StreamBenchDefinition) StreamBenchList {
+	return tests
+}
+
+// Run the benchmarks against a config template.
+func (i StreamBenchList) Run(b *testing.B, configTemplate string, opts ...StreamTestOptFunc) {
+	for _, bench := range i {
+		env := newStreamTestEnvironment(b, configTemplate)
+		for _, opt := range opts {
+			opt(&env)
+		}
+
+		if env.preTest != nil {
+			env.preTest(b, env.ctx, env.configVars.ID, &env.configVars)
+		}
+		bench.fn(b, &env)
+	}
+}
+
+func namedBench(name string, test streamBenchDefinitionFn) StreamBenchDefinition {
+	return StreamBenchDefinition{
+		fn: func(b *testing.B, env *streamTestEnvironment) {
+			b.Run(name, func(b *testing.B) {
+				test(b, env)
+			})
+		},
 	}
 }
 
@@ -316,7 +408,7 @@ func namedTest(name string, test testDefinition) testDefinition {
 func initConnectors(
 	t testing.TB,
 	trans <-chan types.Transaction,
-	env *testEnvironment,
+	env *streamTestEnvironment,
 ) (types.Input, types.Output) {
 	t.Helper()
 
@@ -325,7 +417,7 @@ func initConnectors(
 	return in, out
 }
 
-func initInput(t testing.TB, env *testEnvironment) types.Input {
+func initInput(t testing.TB, env *streamTestEnvironment) types.Input {
 	t.Helper()
 
 	confBytes := []byte(env.RenderConfig())
@@ -354,7 +446,7 @@ func initInput(t testing.TB, env *testEnvironment) types.Input {
 	return input
 }
 
-func initOutput(t testing.TB, trans <-chan types.Transaction, env *testEnvironment) types.Output {
+func initOutput(t testing.TB, trans <-chan types.Transaction, env *streamTestEnvironment) types.Output {
 	t.Helper()
 
 	confBytes := []byte(env.RenderConfig())

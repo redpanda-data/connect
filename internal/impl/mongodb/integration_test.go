@@ -1,4 +1,4 @@
-package integration
+package mongodb_test
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,19 +21,8 @@ func generateCollectionName(testID string) string {
 	return regexp.MustCompile("[^a-zA-Z]+").ReplaceAllString(testID, "")
 }
 
-func createCollection(resource *dockertest.Resource, collectionName, username, password string) error {
-	_, err := resource.Exec([]string{
-		"mongo",
-		"-u", username,
-		"-p", password,
-		"--authenticationDatabase", "admin",
-		"--eval", "db.createCollection(\"" + collectionName + "\")",
-		"TestDB",
-	}, dockertest.ExecOptions{})
-	return err
-}
-
-var _ = registerIntegrationTest("mongodb", func(t *testing.T) {
+func TestIntegrationMongoDB(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -91,10 +81,10 @@ output:
       w: 1
       w_timeout: 1s
 `
-		queryGetFn := func(en *testEnvironment, id string) (string, []string, error) {
+		queryGetFn := func(ctx context.Context, testID, messageID string) (string, []string, error) {
 			db := mongoClient.Database("TestDB")
-			collection := db.Collection(generateCollectionName(en.configVars.id))
-			idInt, err := strconv.Atoi(id)
+			collection := db.Collection(generateCollectionName(testID))
+			idInt, err := strconv.Atoi(messageID)
 			if err != nil {
 				return "", nil, err
 			}
@@ -110,21 +100,21 @@ output:
 				return "", nil, err
 			}
 
-			return fmt.Sprintf(`{"content":%v,"id":%v}`, value.String(), id), nil, err
+			return fmt.Sprintf(`{"content":%v,"id":%v}`, value.String(), messageID), nil, err
 		}
 
-		suite := integrationTests(
-			integrationTestOutputOnlySendSequential(10, queryGetFn),
-			integrationTestOutputOnlySendBatch(10, queryGetFn),
+		suite := integration.StreamTests(
+			integration.StreamTestOutputOnlySendSequential(10, queryGetFn),
+			integration.StreamTestOutputOnlySendBatch(10, queryGetFn),
 		)
 		suite.Run(
 			t, template,
-			testOptPort(resource.GetPort("27017/tcp")),
-			testOptPreTest(func(t testing.TB, env *testEnvironment) {
-				cName := generateCollectionName(env.configVars.id)
-				env.configVars.var1 = cName
+			integration.StreamTestOptPort(resource.GetPort("27017/tcp")),
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				cName := generateCollectionName(testID)
+				vars.Var1 = cName
 				require.NoError(t, createCollection(resource, cName, "mongoadmin", "secret"))
 			}),
 		)
 	})
-})
+}

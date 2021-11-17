@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -129,13 +130,13 @@ input:
     prefix: $VAR2
     storage_connection_string: "UseDevelopmentStorage=true;"
 `
-		integrationTests(
-			integrationTestOpenCloseIsolated(),
-			integrationTestStreamIsolated(10),
+		integration.StreamTests(
+			integration.StreamTestOpenCloseIsolated(),
+			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			testOptVarOne(dummyContainer),
-			testOptVarTwo(dummyPrefix),
+			integration.StreamTestOptVarOne(dummyContainer),
+			integration.StreamTestOptVarTwo(dummyPrefix),
 		)
 	})
 
@@ -157,12 +158,12 @@ input:
 	//     prefix: $VAR2/data.txt
 	//     storage_connection_string: "UseDevelopmentStorage=true;"
 	// `
-	// 		integrationTests(
-	// 			integrationTestOpenCloseIsolated(),
+	// 		integration.StreamTests(
+	// 			integration.StreamTestOpenCloseIsolated(),
 	// 		).Run(
 	// 			t, template,
-	// 			testOptVarOne(dummyContainer),
-	// 			testOptVarTwo(dummyPrefix),
+	// 			integration.StreamTestOptVarOne(dummyContainer),
+	// 			integration.StreamTestOptVarTwo(dummyPrefix),
 	// 		)
 	// 	})
 
@@ -180,12 +181,12 @@ input:
    queue_name: $VAR1$ID
    storage_connection_string: "UseDevelopmentStorage=true;"
 `
-		integrationTests(
-			integrationTestOpenCloseIsolated(),
-			integrationTestStreamIsolated(10),
+		integration.StreamTests(
+			integration.StreamTestOpenCloseIsolated(),
+			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			testOptVarOne(dummyQueue),
+			integration.StreamTestOptVarOne(dummyQueue),
 		)
 	})
 })

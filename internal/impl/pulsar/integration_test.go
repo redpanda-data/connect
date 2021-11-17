@@ -1,4 +1,4 @@
-package integration
+package pulsar_test
 
 import (
 	"fmt"
@@ -6,13 +6,15 @@ import (
 	"time"
 
 	bpulsar "github.com/Jeffail/benthos/v3/internal/impl/pulsar"
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-var _ = registerIntegrationTest("pulsar", func(t *testing.T) {
+func TestIntegrationPulsar(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -61,29 +63,29 @@ input:
     topics: [ "topic-$ID" ]
     subscription_name: "sub-$ID"
 `
-	suite := integrationTests(
-		integrationTestOpenClose(),
-		integrationTestSendBatch(10),
-		integrationTestStreamSequential(1000),
-		integrationTestStreamParallel(1000),
-		integrationTestStreamParallelLossy(1000),
-		integrationTestStreamParallelLossyThroughReconnect(1000),
-		integrationTestAtLeastOnceDelivery(),
+	suite := integration.StreamTests(
+		integration.StreamTestOpenClose(),
+		integration.StreamTestSendBatch(10),
+		integration.StreamTestStreamSequential(1000),
+		integration.StreamTestStreamParallel(1000),
+		integration.StreamTestStreamParallelLossy(1000),
+		integration.StreamTestStreamParallelLossyThroughReconnect(1000),
+		integration.StreamTestAtLeastOnceDelivery(),
 	)
 	suite.Run(
 		t, template,
-		testOptSleepAfterInput(500*time.Millisecond),
-		testOptSleepAfterOutput(500*time.Millisecond),
-		testOptPort(resource.GetPort("6650/tcp")),
+		integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
+		integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
+		integration.StreamTestOptPort(resource.GetPort("6650/tcp")),
 	)
 	t.Run("with max in flight", func(t *testing.T) {
 		t.Parallel()
 		suite.Run(
 			t, template,
-			testOptSleepAfterInput(500*time.Millisecond),
-			testOptSleepAfterOutput(500*time.Millisecond),
-			testOptPort(resource.GetPort("6650/tcp")),
-			testOptMaxInFlight(10),
+			integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
+			integration.StreamTestOptPort(resource.GetPort("6650/tcp")),
+			integration.StreamTestOptMaxInFlight(10),
 		)
 	})
-})
+}

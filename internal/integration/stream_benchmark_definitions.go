@@ -10,54 +10,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type benchDefinition func(*testing.B, *testEnvironment)
-
-type integrationBenchList []benchDefinition
-
-func integrationBenchs(tests ...benchDefinition) integrationBenchList {
-	return tests
-}
-
-func (i integrationBenchList) Run(b *testing.B, configTemplate string, opts ...testOptFunc) {
-	for _, bench := range i {
-		env := newTestEnvironment(b, configTemplate)
-		for _, opt := range opts {
-			opt(&env)
-		}
-
-		if env.preTest != nil {
-			env.preTest(b, &env)
-		}
-		bench(b, &env)
-	}
-}
-
-var registeredIntegrationBenchmarks = map[string]func(*testing.B){}
-
-// register an integration test that should only execute under the `integration`
-// build tag. Returns an empty struct so that it can be called at a file root.
-func registerIntegrationBench(name string, fn func(*testing.B)) struct{} {
-	if _, exists := registeredIntegrationBenchmarks[name]; exists {
-		panic(fmt.Sprintf("integration benchmark double registered: %v", name))
-	}
-	registeredIntegrationBenchmarks[name] = fn
-	return struct{}{}
-}
-
-func namedBench(name string, test benchDefinition) benchDefinition {
-	return func(b *testing.B, env *testEnvironment) {
-		b.Run(name, func(b *testing.B) {
-			test(b, env)
-		})
-	}
-}
-
-//------------------------------------------------------------------------------
-
-func integrationBenchSend(batchSize, parallelism int) benchDefinition {
+// StreamBenchSend benchmarks the speed at which messages are sent over the
+// templated output and then subsequently received from the input with a given
+// batch size and parallelism.
+func StreamBenchSend(batchSize, parallelism int) StreamBenchDefinition {
 	return namedBench(
 		fmt.Sprintf("send message batches %v with parallelism %v", batchSize, parallelism),
-		func(b *testing.B, env *testEnvironment) {
+		func(b *testing.B, env *streamTestEnvironment) {
 			require.Greater(b, parallelism, 0)
 
 			tranChan := make(chan types.Transaction)
@@ -118,10 +77,12 @@ func integrationBenchSend(batchSize, parallelism int) benchDefinition {
 	)
 }
 
-func integrationBenchWrite(batchSize int) benchDefinition {
+// StreamBenchWrite benchmarks the speed at which messages can be written to the
+// output, with no attempt made to consume the written data.
+func StreamBenchWrite(batchSize int) StreamBenchDefinition {
 	return namedBench(
 		fmt.Sprintf("write message batches %v without reading", batchSize),
-		func(b *testing.B, env *testEnvironment) {
+		func(b *testing.B, env *streamTestEnvironment) {
 			tranChan := make(chan types.Transaction)
 			output := initOutput(b, tranChan, env)
 			b.Cleanup(func() {
