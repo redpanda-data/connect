@@ -56,7 +56,7 @@ However, it is possible to instead consume documents in raw JSON format (that ma
 			Example("1h")).
 		Field(service.NewBoolField("avro_raw_json").
 			Description("Whether messages encoded in Avro format should be parsed as raw JSON documents rather than [Avro JSON](https://avro.apache.org/docs/current/spec.html#json_encoding).").
-			Advanced().Default(false)).
+			Advanced().Default(false).Version("3.59.0")).
 		Field(service.NewTLSField("tls")).
 		Version("3.58.0")
 }

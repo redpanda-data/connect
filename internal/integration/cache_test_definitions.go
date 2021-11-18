@@ -1,4 +1,4 @@
-package cache
+package integration
 
 import (
 	"errors"
@@ -11,10 +11,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func integrationTestOpenClose() testDefinition {
-	return namedTest(
+// CacheTestOpenClose checks that the cache can be started, an item added, and
+// then stopped.
+func CacheTestOpenClose() CacheTestDefinition {
+	return namedCacheTest(
 		"can open and close",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *cacheTestEnvironment) {
 			t.Parallel()
 
 			cache := initCache(t, env)
@@ -31,10 +33,11 @@ func integrationTestOpenClose() testDefinition {
 	)
 }
 
-func integrationTestMissingKey() testDefinition {
-	return namedTest(
+// CacheTestMissingKey checks that we get an error on missing key.
+func CacheTestMissingKey() CacheTestDefinition {
+	return namedCacheTest(
 		"return consistent error on missing key",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *cacheTestEnvironment) {
 			t.Parallel()
 
 			cache := initCache(t, env)
@@ -48,10 +51,11 @@ func integrationTestMissingKey() testDefinition {
 	)
 }
 
-func integrationTestDoubleAdd() testDefinition {
-	return namedTest(
+// CacheTestDoubleAdd ensures that a double add returns an error.
+func CacheTestDoubleAdd() CacheTestDefinition {
+	return namedCacheTest(
 		"add with duplicate key fails",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *cacheTestEnvironment) {
 			t.Parallel()
 
 			cache := initCache(t, env)
@@ -72,10 +76,11 @@ func integrationTestDoubleAdd() testDefinition {
 	)
 }
 
-func integrationTestDelete() testDefinition {
-	return namedTest(
+// CacheTestDelete checks that deletes work.
+func CacheTestDelete() CacheTestDefinition {
+	return namedCacheTest(
 		"can set and delete keys",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *cacheTestEnvironment) {
 			t.Parallel()
 
 			cache := initCache(t, env)
@@ -97,10 +102,11 @@ func integrationTestDelete() testDefinition {
 	)
 }
 
-func integrationTestGetAndSet(n int) testDefinition {
-	return namedTest(
+// CacheTestGetAndSet checks that we can set and then get n items.
+func CacheTestGetAndSet(n int) CacheTestDefinition {
+	return namedCacheTest(
 		"can get and set",
-		func(t *testing.T, env *testEnvironment) {
+		func(t *testing.T, env *cacheTestEnvironment) {
 			t.Parallel()
 
 			cache := initCache(t, env)

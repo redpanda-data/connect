@@ -35,7 +35,7 @@ var _ = registerIntegrationTest("kafka_redpanda", func(t *testing.T) {
 	kafkaPortStr := strconv.Itoa(kafkaPort)
 
 	options := &dockertest.RunOptions{
-		Repository:   "vectorized/redpanda",
+		Repository:   "docker.vectorized.io/vectorized/redpanda",
 		Tag:          "latest",
 		Hostname:     "redpanda",
 		ExposedPorts: []string{"9092"},

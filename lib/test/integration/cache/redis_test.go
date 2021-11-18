@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -48,15 +49,15 @@ cache_resources:
       url: tcp://localhost:$PORT/1
       prefix: $ID
 `
-	suite := integrationTests(
-		integrationTestOpenClose(),
-		integrationTestMissingKey(),
-		integrationTestDoubleAdd(),
-		integrationTestDelete(),
-		integrationTestGetAndSet(50),
+	suite := integration.CacheTests(
+		integration.CacheTestOpenClose(),
+		integration.CacheTestMissingKey(),
+		integration.CacheTestDoubleAdd(),
+		integration.CacheTestDelete(),
+		integration.CacheTestGetAndSet(50),
 	)
 	suite.Run(
 		t, template,
-		testOptPort(resource.GetPort("6379/tcp")),
+		integration.CacheTestOptPort(resource.GetPort("6379/tcp")),
 	)
 })

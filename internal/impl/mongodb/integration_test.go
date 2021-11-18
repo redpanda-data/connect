@@ -64,8 +64,7 @@ func TestIntegrationMongoDB(t *testing.T) {
 		return mongoClient.Connect(context.Background())
 	}))
 
-	t.Run("with JSON", func(t *testing.T) {
-		template := `
+	template := `
 output:
   mongodb:
     url: mongodb://localhost:$PORT
@@ -81,28 +80,29 @@ output:
       w: 1
       w_timeout: 1s
 `
-		queryGetFn := func(ctx context.Context, testID, messageID string) (string, []string, error) {
-			db := mongoClient.Database("TestDB")
-			collection := db.Collection(generateCollectionName(testID))
-			idInt, err := strconv.Atoi(messageID)
-			if err != nil {
-				return "", nil, err
-			}
-
-			filter := bson.M{"id": idInt}
-			document, err := collection.FindOne(context.Background(), filter).DecodeBytes()
-			if err != nil {
-				return "", nil, err
-			}
-
-			value, err := document.LookupErr("content")
-			if err != nil {
-				return "", nil, err
-			}
-
-			return fmt.Sprintf(`{"content":%v,"id":%v}`, value.String(), messageID), nil, err
+	queryGetFn := func(ctx context.Context, testID, messageID string) (string, []string, error) {
+		db := mongoClient.Database("TestDB")
+		collection := db.Collection(generateCollectionName(testID))
+		idInt, err := strconv.Atoi(messageID)
+		if err != nil {
+			return "", nil, err
 		}
 
+		filter := bson.M{"id": idInt}
+		document, err := collection.FindOne(context.Background(), filter).DecodeBytes()
+		if err != nil {
+			return "", nil, err
+		}
+
+		value, err := document.LookupErr("content")
+		if err != nil {
+			return "", nil, err
+		}
+
+		return fmt.Sprintf(`{"content":%v,"id":%v}`, value.String(), messageID), nil, err
+	}
+
+	t.Run("streams", func(t *testing.T) {
 		suite := integration.StreamTests(
 			integration.StreamTestOutputOnlySendSequential(10, queryGetFn),
 			integration.StreamTestOutputOnlySendBatch(10, queryGetFn),
@@ -111,6 +111,37 @@ output:
 			t, template,
 			integration.StreamTestOptPort(resource.GetPort("27017/tcp")),
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				cName := generateCollectionName(testID)
+				vars.Var1 = cName
+				require.NoError(t, createCollection(resource, cName, "mongoadmin", "secret"))
+			}),
+		)
+	})
+
+	t.Run("cache", func(t *testing.T) {
+		cacheTemplate := `
+cache_resources:
+  - label: testcache
+    mongodb:
+      url: mongodb://localhost:$PORT
+      database: TestDB
+      collection: $VAR1
+      key_field: key
+      value_field: value
+      username: mongoadmin
+      password: secret
+`
+		cacheSuite := integration.CacheTests(
+			integration.CacheTestOpenClose(),
+			integration.CacheTestMissingKey(),
+			// integration.CacheTestDoubleAdd(),
+			integration.CacheTestDelete(),
+			integration.CacheTestGetAndSet(50),
+		)
+		cacheSuite.Run(
+			t, cacheTemplate,
+			integration.CacheTestOptPort(resource.GetPort("27017/tcp")),
+			integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.CacheTestConfigVars) {
 				cName := generateCollectionName(testID)
 				vars.Var1 = cName
 				require.NoError(t, createCollection(resource, cName, "mongoadmin", "secret"))

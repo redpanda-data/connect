@@ -130,6 +130,7 @@ Whether messages encoded in Avro format should be parsed as raw JSON documents r
 
 Type: `bool`  
 Default: `false`  
+Requires version 3.59.0 or newer  
 
 ### `tls`
 

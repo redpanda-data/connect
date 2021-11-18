@@ -166,6 +166,13 @@ func (c *ConfigField) Example(e interface{}) *ConfigField {
 	return c
 }
 
+// Version specifies the specific version at which this field was added to the
+// component.
+func (c *ConfigField) Version(v string) *ConfigField {
+	c.field = c.field.AtVersion(v)
+	return c
+}
+
 //------------------------------------------------------------------------------
 
 // ConfigSpec describes the configuration specification for a plugin

@@ -1,4 +1,4 @@
-package gcp_test
+package gcp
 
 import (
 	"context"

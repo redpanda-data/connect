@@ -1,11 +1,10 @@
-package pulsar_test
+package pulsar
 
 import (
 	"fmt"
 	"testing"
 	"time"
 
-	bpulsar "github.com/Jeffail/benthos/v3/internal/impl/pulsar"
 	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/ory/dockertest/v3"
@@ -35,7 +34,7 @@ func TestIntegrationPulsar(t *testing.T) {
 	require.NoError(t, pool.Retry(func() error {
 		client, err := pulsar.NewClient(pulsar.ClientOptions{
 			URL:    fmt.Sprintf("pulsar://localhost:%v/", resource.GetPort("6650/tcp")),
-			Logger: bpulsar.NoopLogger(),
+			Logger: NoopLogger(),
 		})
 		if err != nil {
 			return err

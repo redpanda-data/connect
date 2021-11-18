@@ -197,6 +197,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `""`  
+Requires version 3.59.0 or newer  
 
 ### `will`
 

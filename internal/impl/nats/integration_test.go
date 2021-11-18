@@ -1,4 +1,4 @@
-package nats_test
+package nats
 
 import (
 	"context"
