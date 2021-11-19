@@ -88,6 +88,20 @@ func (e *Environment) Deactivated() *Environment {
 	}
 }
 
+// OnlyPure removes any methods and functions that have been registered but are
+// marked as impure. Impure in this context means the method/function is able to
+// mutate global state or access machine state (read environment variables,
+// files, etc). Note that methods/functions that access the machine clock are
+// not marked as pure, so timestamp functions will still work.
+func (e *Environment) OnlyPure() *Environment {
+	newCtx := e.pCtx
+	newCtx.Functions = newCtx.Functions.OnlyPure()
+	newCtx.Methods = newCtx.Methods.OnlyPure()
+	return &Environment{
+		pCtx: newCtx,
+	}
+}
+
 // RegisterMethod adds a new Bloblang method to the environment.
 func (e *Environment) RegisterMethod(spec query.MethodSpec, ctor query.MethodCtor) error {
 	return e.pCtx.Methods.Add(spec, ctor)
@@ -124,6 +138,15 @@ func (e *Environment) WithImporterRelativeToFile(filePath string) *Environment {
 func (e *Environment) WithDisabledImports() *Environment {
 	return &Environment{
 		pCtx: e.pCtx.DisabledImports(),
+	}
+}
+
+// WithCustomImporter returns a version of the environment where file imports
+// are done exclusively through a provided closure function, which takes an
+// import path (relative or absolute).
+func (e *Environment) WithCustomImporter(fn func(name string) ([]byte, error)) *Environment {
+	return &Environment{
+		pCtx: e.pCtx.CustomImporter(fn),
 	}
 }
 

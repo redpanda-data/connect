@@ -1,7 +1,9 @@
 package parser
 
 import (
+	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 
@@ -102,6 +104,67 @@ func TestContextImportRelativity(t *testing.T) {
 
 		// baz.blobl
 		content, err = srcCtx.importer.Import(filepath.Join(tmpDir, "mappings", "first", "second", "baz.blobl"))
+		require.NoError(t, err)
+		assert.Equal(t, `map baz { root.baz = this.baz }`, string(content))
+
+		content, err = relCtxOne.importer.Import("./first/second/baz.blobl")
+		require.NoError(t, err)
+		assert.Equal(t, `map baz { root.baz = this.baz }`, string(content))
+
+		content, err = relCtxTwo.importer.Import("second/baz.blobl")
+		require.NoError(t, err)
+		assert.Equal(t, `map baz { root.baz = this.baz }`, string(content))
+	}
+}
+
+func TestContextCustomImports(t *testing.T) {
+	mappings := map[string]string{
+		"mappings/foo.blobl":              `map foo { root.foo = this.foo }`,
+		"mappings/first/bar.blobl":        `map bar { root.bar = this.bar }`,
+		"mappings/first/second/baz.blobl": `map baz { root.baz = this.baz }`,
+	}
+
+	importer := func(name string) ([]byte, error) {
+		name = path.Clean(name)
+		s, ok := mappings[name]
+		if !ok {
+			return nil, fmt.Errorf("mapping %v not found", name)
+		}
+		return []byte(s), nil
+	}
+
+	for _, srcCtx := range []Context{GlobalContext().CustomImporter(importer), EmptyContext().CustomImporter(importer)} {
+		relCtxOne := srcCtx.WithImporterRelativeToFile(path.Join("mappings", "foo.blobl"))
+		relCtxTwo := relCtxOne.WithImporterRelativeToFile(path.Join("first", "bar.blobl"))
+
+		// foo.blobl
+		content, err := srcCtx.importer.Import(path.Join("mappings", "foo.blobl"))
+		require.NoError(t, err)
+		assert.Equal(t, `map foo { root.foo = this.foo }`, string(content))
+
+		content, err = relCtxOne.importer.Import("foo.blobl")
+		require.NoError(t, err)
+		assert.Equal(t, `map foo { root.foo = this.foo }`, string(content))
+
+		content, err = relCtxTwo.importer.Import("../foo.blobl")
+		require.NoError(t, err)
+		assert.Equal(t, `map foo { root.foo = this.foo }`, string(content))
+
+		// bar.blobl
+		content, err = srcCtx.importer.Import(path.Join("mappings", "first", "bar.blobl"))
+		require.NoError(t, err)
+		assert.Equal(t, `map bar { root.bar = this.bar }`, string(content))
+
+		content, err = relCtxOne.importer.Import("./first/bar.blobl")
+		require.NoError(t, err)
+		assert.Equal(t, `map bar { root.bar = this.bar }`, string(content))
+
+		content, err = relCtxTwo.importer.Import("bar.blobl")
+		require.NoError(t, err)
+		assert.Equal(t, `map bar { root.bar = this.bar }`, string(content))
+
+		// baz.blobl
+		content, err = srcCtx.importer.Import(path.Join("mappings", "first", "second", "baz.blobl"))
 		require.NoError(t, err)
 		assert.Equal(t, `map baz { root.baz = this.baz }`, string(content))
 

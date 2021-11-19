@@ -211,7 +211,7 @@ root.id = count("bloblang_function_example")`,
 			`{"message":"bar"}`,
 			`{"id":2,"message":"bar"}`,
 		),
-	).Param(ParamString("name", "An identifier for the counter.")),
+	).Param(ParamString("name", "An identifier for the counter.")).MarkImpure(),
 	countFunction,
 )
 

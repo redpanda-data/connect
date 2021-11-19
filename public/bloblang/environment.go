@@ -192,6 +192,14 @@ func (e *Environment) WithDisabledImports() *Environment {
 	}
 }
 
+// WithCustomImporter returns a copy of the environment where imports from
+// mappings are done via a provided closure function.
+func (e *Environment) WithCustomImporter(fn func(name string) ([]byte, error)) *Environment {
+	return &Environment{
+		env: e.env.WithCustomImporter(fn),
+	}
+}
+
 //------------------------------------------------------------------------------
 
 // Parse a Bloblang mapping allowing the use of the globally accessible range of

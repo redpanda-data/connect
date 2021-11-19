@@ -101,6 +101,15 @@ func (pCtx Context) Deactivated() Context {
 	return nextCtx
 }
 
+// CustomImporter returns a version of the parser context where file imports are
+// done exclusively through a provided closure function, which takes an import
+// path (relative or absolute).
+func (pCtx Context) CustomImporter(fn func(name string) ([]byte, error)) Context {
+	nextCtx := pCtx
+	nextCtx.importer = newCustomImporter(fn)
+	return nextCtx
+}
+
 // DisabledImports returns a version of the parser context where file imports
 // are entirely disabled. Any import statement within parsed mappings will
 // return parse errors explaining that file imports are disabled.
@@ -167,6 +176,46 @@ func (i *osImporter) RelativeToFile(filePath string) Importer {
 	newI.relativePath = pathStr
 	return &newI
 }
+
+//------------------------------------------------------------------------------
+
+type customImporter struct {
+	relativePath string
+	readFn       func(name string) ([]byte, error)
+}
+
+func newCustomImporter(readFn func(name string) ([]byte, error)) Importer {
+	return &customImporter{
+		relativePath: ".",
+		readFn:       readFn,
+	}
+}
+
+func (i *customImporter) Import(pathStr string) ([]byte, error) {
+	if !filepath.IsAbs(pathStr) {
+		pathStr = filepath.Join(i.relativePath, pathStr)
+	}
+
+	return i.readFn(pathStr)
+}
+
+func (i *customImporter) RelativeToFile(filePath string) Importer {
+	dir := filepath.Dir(filePath)
+	if dir == "" || dir == "." {
+		return i
+	}
+
+	pathStr := filepath.Dir(filePath)
+	if !filepath.IsAbs(pathStr) && i.relativePath != "" {
+		pathStr = filepath.Join(i.relativePath, pathStr)
+	}
+
+	newI := *i
+	newI.relativePath = pathStr
+	return &newI
+}
+
+//------------------------------------------------------------------------------
 
 type disabledImporter struct{}
 
