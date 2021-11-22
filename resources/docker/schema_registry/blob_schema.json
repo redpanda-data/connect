@@ -1,0 +1,10 @@
+{
+  "type": "record",
+  "name": "BenthosExample",
+  "fields": [
+    { "name": "ID", "type": "string" },
+    { "name": "Name", "type": "string" },
+    { "name": "Gooeyness", "type": "double", "default": 0 },
+    { "name": "Bouncing", "type": "boolean", "default": true }
+  ]
+}
