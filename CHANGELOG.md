@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## 3.59.0 - TBD
+## 3.59.0 - 2021-11-22
 
 ### Added
 
