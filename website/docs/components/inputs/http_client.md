@@ -86,6 +86,9 @@ input:
       root_cas_file: ""
       client_certs: []
     copy_response_headers: false
+    metadata_filter:
+      include_prefixes: []
+      include_patterns: []
     rate_limit: ""
     timeout: 5s
     retry_period: 1s
@@ -494,6 +497,29 @@ Sets whether to copy the headers from the response to the resulting payload.
 
 Type: `bool`  
 Default: `false`  
+
+### `metadata_filter`
+
+Specify criteria for which metadata values are sent with messages as headers. Has effect only when `copy_response_headers` is set.
+
+
+Type: `object`  
+
+### `metadata_filter.include_prefixes`
+
+Provide a list of explicit metadata key prefixes to be included when adding metadata to sent messages.
+
+
+Type: `array`  
+Default: `[]`  
+
+### `metadata_filter.include_patterns`
+
+Provide a list of explicit metadata key regexp patterns to be included when adding metadata to sent messages.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `rate_limit`
 

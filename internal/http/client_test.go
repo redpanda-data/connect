@@ -323,6 +323,8 @@ func TestHTTPClientReceiveHeaders(t *testing.T) {
 		testStr := fmt.Sprintf("test%v", j)
 		j++
 		w.Header().Set("foo-bar", "baz-0")
+		w.Header().Set("bar-baz", "foo-0")
+		w.Header().Set("baz-foo", "bar-0")
 		w.WriteHeader(http.StatusCreated)
 		w.Write([]byte(testStr + "PART-A"))
 	}))
@@ -331,6 +333,8 @@ func TestHTTPClientReceiveHeaders(t *testing.T) {
 	conf := client.NewConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.CopyResponseHeaders = true
+	conf.MetadataFilter.IncludePrefixes = []string{"foo"}
+	conf.MetadataFilter.IncludePatterns = []string{"r-b"}
 
 	h, err := NewClient(conf)
 	require.NoError(t, err)
@@ -343,6 +347,8 @@ func TestHTTPClientReceiveHeaders(t *testing.T) {
 		assert.Equal(t, 1, resMsg.Len())
 		assert.Equal(t, testStr+"PART-A", string(resMsg.Get(0).Get()))
 		assert.Equal(t, "baz-0", resMsg.Get(0).Metadata().Get("foo-bar"))
+		assert.Equal(t, "foo-0", resMsg.Get(0).Metadata().Get("bar-baz"))
+		assert.Equal(t, "", resMsg.Get(0).Metadata().Get("baz-foo"))
 		assert.Equal(t, "201", resMsg.Get(0).Metadata().Get("http_status_code"))
 	}
 }

@@ -64,6 +64,9 @@ input:
       status: "200"
       headers:
         Content-Type: application/octet-stream
+      metadata_filter:
+        include_prefixes: []
+        include_patterns: []
 ```
 
 </TabItem>
@@ -248,5 +251,28 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `object`  
 Default: `{"Content-Type":"application/octet-stream"}`  
+
+### `sync_response.metadata_filter`
+
+Specify criteria for which metadata values are sent with messages as headers.
+
+
+Type: `object`  
+
+### `sync_response.metadata_filter.include_prefixes`
+
+Provide a list of explicit metadata key prefixes to be included when adding metadata to sent messages.
+
+
+Type: `array`  
+Default: `[]`  
+
+### `sync_response.metadata_filter.include_patterns`
+
+Provide a list of explicit metadata key regexp patterns to be included when adding metadata to sent messages.
+
+
+Type: `array`  
+Default: `[]`  
 
 

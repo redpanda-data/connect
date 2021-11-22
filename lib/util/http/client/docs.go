@@ -2,6 +2,7 @@ package client
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/message/metadata/filter"
 	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 )
@@ -20,6 +21,7 @@ func FieldSpecs() docs.FieldSpecs {
 	httpSpecs = append(httpSpecs, auth.FieldSpecsExpanded()...)
 	httpSpecs = append(httpSpecs, tls.FieldSpec(),
 		docs.FieldBool("copy_response_headers", "Sets whether to copy the headers from the response to the resulting payload.").Advanced(),
+		docs.FieldAdvanced("metadata_filter", "Specify criteria for which metadata values are sent with messages as headers. Has effect only when `copy_response_headers` is set.").WithChildren(filter.DocsFields()...),
 		docs.FieldString("rate_limit", "An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by."),
 		docs.FieldString("timeout", "A static timeout to apply to requests."),
 		docs.FieldString("retry_period", "The base period to wait between failed requests.").Advanced(),

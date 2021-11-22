@@ -18,6 +18,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/message/metadata/filter"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -36,6 +37,7 @@ type Config struct {
 	Verb                string            `json:"verb" yaml:"verb"`
 	Headers             map[string]string `json:"headers" yaml:"headers"`
 	CopyResponseHeaders bool              `json:"copy_response_headers" yaml:"copy_response_headers"`
+	MetadataFilter      filter.Config     `json:"metadata_filter" yaml:"metadata_filter"`
 	RateLimit           string            `json:"rate_limit" yaml:"rate_limit"`
 	Timeout             string            `json:"timeout" yaml:"timeout"`
 	Retry               string            `json:"retry_period" yaml:"retry_period"`
@@ -59,6 +61,7 @@ func NewConfig() Config {
 			"Content-Type": "application/octet-stream",
 		},
 		CopyResponseHeaders: false,
+		MetadataFilter:      filter.NewConfig(),
 		RateLimit:           "",
 		Timeout:             "5s",
 		Retry:               "1s",

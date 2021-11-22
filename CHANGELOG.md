@@ -19,6 +19,8 @@ All notable changes to this project will be documented in this file.
 - The `pulsar` input now enriches messages with more metadata.
 - Fields `message_group_id`, `message_deduplication_id`, and `metadata` added to the `aws_sns` output.
 - Field `upsert` added to the `mongodb` processor and output.
+- Fields `metadata_filter.include_prefixes` and `metadata_filter.include_patterns` added to the `http_client` input and output and to the `http` processor
+- Fields `sync_response.metadata_filter.include_prefixes` and `sync_response.metadata_filter.include_patterns` added to the `http_server` input.
 
 ### Fixed
 

@@ -18,6 +18,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/message/metadata/filter"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -35,9 +36,10 @@ type Client struct {
 	dropOn    map[int]struct{}
 	successOn map[int]struct{}
 
-	url     *field.Expression
-	headers map[string]*field.Expression
-	host    *field.Expression
+	url        *field.Expression
+	headers    map[string]*field.Expression
+	host       *field.Expression
+	metaFilter *filter.Filter
 
 	conf          client.Config
 	retryThrottle *throttle.Type
@@ -152,6 +154,13 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 				return nil, fmt.Errorf("failed to parse header '%v' expression: %v", k, err)
 			}
 		}
+	}
+
+	if h.metaFilter, err = h.conf.MetadataFilter.New(); err != nil {
+		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
+	}
+	if !h.conf.CopyResponseHeaders && h.metaFilter.IsSet() {
+		h.log.Warnln("Metadata include_prefixes / include_patterns are ignored when copy_response_headers isn't set.")
 	}
 
 	h.mCount = h.stats.GetCounter("count")
@@ -380,8 +389,9 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 				if h.conf.CopyResponseHeaders {
 					meta := resMsg.Get(index).Metadata()
 					for k, values := range p.Header {
-						if len(values) > 0 {
-							meta.Set(strings.ToLower(k), values[0])
+						normalisedHeader := strings.ToLower(k)
+						if len(values) > 0 && (!h.metaFilter.IsSet() || h.metaFilter.Match(normalisedHeader)) {
+							meta.Set(normalisedHeader, values[0])
 						}
 					}
 				}
@@ -402,8 +412,9 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 			if h.conf.CopyResponseHeaders {
 				meta := resMsg.Get(0).Metadata()
 				for k, values := range res.Header {
-					if len(values) > 0 {
-						meta.Set(strings.ToLower(k), values[0])
+					normalisedHeader := strings.ToLower(k)
+					if len(values) > 0 && (!h.metaFilter.IsSet() || h.metaFilter.Match(normalisedHeader)) {
+						meta.Set(normalisedHeader, values[0])
 					}
 				}
 			}
