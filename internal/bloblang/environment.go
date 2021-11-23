@@ -171,3 +171,19 @@ func (e *Environment) WithoutFunctions(names ...string) *Environment {
 		pCtx: nextCtx,
 	}
 }
+
+// WalkFunctions executes a provided function argument for every function that
+// has been registered to the environment.
+func (e *Environment) WalkFunctions(fn func(name string, spec query.FunctionSpec)) {
+	for _, f := range e.pCtx.Functions.Docs() {
+		fn(f.Name, f)
+	}
+}
+
+// WalkMethods executes a provided function argument for every method that has
+// been registered to the environment.
+func (e *Environment) WalkMethods(fn func(name string, spec query.MethodSpec)) {
+	for _, m := range e.pCtx.Methods.Docs() {
+		fn(m.Name, m)
+	}
+}

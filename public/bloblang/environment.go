@@ -243,3 +243,21 @@ func RegisterFunction(name string, ctor FunctionConstructor) error {
 func RegisterFunctionV2(name string, spec *PluginSpec, ctor FunctionConstructorV2) error {
 	return GlobalEnvironment().RegisterFunctionV2(name, spec, ctor)
 }
+
+// WalkFunctions executes a provided function argument for every function that
+// has been registered to the environment.
+func (e *Environment) WalkFunctions(fn func(name string, spec *FunctionView)) {
+	e.env.WalkFunctions(func(name string, spec query.FunctionSpec) {
+		v := &FunctionView{spec: spec}
+		fn(name, v)
+	})
+}
+
+// WalkMethods executes a provided function argument for every method that has
+// been registered to the environment.
+func (e *Environment) WalkMethods(fn func(name string, spec *MethodView)) {
+	e.env.WalkMethods(func(name string, spec query.MethodSpec) {
+		v := &MethodView{spec: spec}
+		fn(name, v)
+	})
+}
