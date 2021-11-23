@@ -17,7 +17,7 @@ func sqlSelectInputConfig() *service.ConfigSpec {
 		// Stable(). TODO
 		Categories("Integration").
 		Summary("Executes a select query and creates a message for each row received.").
-		Description(`Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/inputs/sequence) to execute).`).
+		Description(`Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`).
 		Field(driverField).
 		Field(dsnField).
 		Field(service.NewStringField("table").

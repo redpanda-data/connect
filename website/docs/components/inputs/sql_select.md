@@ -64,7 +64,7 @@ input:
 </TabItem>
 </Tabs>
 
-Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/inputs/sequence) to execute).
+Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).
 
 ## Examples
 
