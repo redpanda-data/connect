@@ -63,9 +63,10 @@ func init() {
 //------------------------------------------------------------------------------
 
 type schemaRegistryDecoder struct {
-	surl        string
 	client      *http.Client
 	avroRawJSON bool
+
+	schemaRegistryBaseURL *url.URL
 
 	schemas    map[int]*cachedSchemaDecoder
 	cacheMut   sync.RWMutex
@@ -92,14 +93,13 @@ func newSchemaRegistryDecoder(urlStr string, tlsConf *tls.Config, avroRawJSON bo
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse url: %w", err)
 	}
-	u.Path = "/schemas/ids/"
 
 	s := &schemaRegistryDecoder{
-		surl:        u.String() + "%v",
-		avroRawJSON: avroRawJSON,
-		schemas:     map[int]*cachedSchemaDecoder{},
-		shutSig:     shutdown.NewSignaller(),
-		logger:      logger,
+		avroRawJSON:           avroRawJSON,
+		schemaRegistryBaseURL: u,
+		schemas:               map[int]*cachedSchemaDecoder{},
+		shutSig:               shutdown.NewSignaller(),
+		logger:                logger,
 	}
 
 	s.client = http.DefaultClient
@@ -244,7 +244,10 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf(s.surl, id), http.NoBody)
+	reqURL := *s.schemaRegistryBaseURL
+	reqURL.Path = fmt.Sprintf("%s/schemas/ids/%v", reqURL.Path, id)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL.String(), http.NoBody)
 	if err != nil {
 		return nil, err
 	}

@@ -81,7 +81,7 @@ type schemaRegistryEncoder struct {
 	avroRawJSON        bool
 	schemaRefreshAfter time.Duration
 
-	schemaServerURL *url.URL
+	schemaRegistryBaseURL *url.URL
 
 	schemas    map[string]*cachedSchemaEncoder
 	cacheMut   sync.RWMutex
@@ -138,14 +138,14 @@ func newSchemaRegistryEncoder(
 	}
 
 	s := &schemaRegistryEncoder{
-		schemaServerURL:    u,
-		subject:            subject,
-		avroRawJSON:        avroRawJSON,
-		schemaRefreshAfter: schemaRefreshAfter,
-		schemas:            map[string]*cachedSchemaEncoder{},
-		shutSig:            shutdown.NewSignaller(),
-		logger:             logger,
-		nowFn:              time.Now,
+		schemaRegistryBaseURL: u,
+		subject:               subject,
+		avroRawJSON:           avroRawJSON,
+		schemaRefreshAfter:    schemaRefreshAfter,
+		schemas:               map[string]*cachedSchemaEncoder{},
+		shutSig:               shutdown.NewSignaller(),
+		logger:                logger,
+		nowFn:                 time.Now,
 	}
 
 	s.client = http.DefaultClient
@@ -287,10 +287,10 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
-	tmpURL := *s.schemaServerURL
-	tmpURL.Path = fmt.Sprintf("/subjects/%s/versions/latest", subject)
+	reqURL := *s.schemaRegistryBaseURL
+	reqURL.Path = fmt.Sprintf("%s/subjects/%s/versions/latest", reqURL.Path, subject)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", tmpURL.String(), http.NoBody)
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL.String(), http.NoBody)
 	if err != nil {
 		return nil, 0, err
 	}
