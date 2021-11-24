@@ -107,6 +107,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `""`  
+Requires version 3.60.0 or newer  
 
 ### `message_deduplication_id`
 
@@ -116,6 +117,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `""`  
+Requires version 3.60.0 or newer  
 
 ### `max_in_flight`
 
@@ -131,6 +133,7 @@ Specify criteria for which metadata values are sent as headers.
 
 
 Type: `object`  
+Requires version 3.60.0 or newer  
 
 ### `metadata.exclude_prefixes`
 

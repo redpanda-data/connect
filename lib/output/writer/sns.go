@@ -69,7 +69,12 @@ type SNS struct {
 }
 
 // NewSNS creates a new Amazon SNS writer.Type.
-func NewSNS(conf SNSConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*SNS, error) {
+func NewSNS(conf SNSConfig, log log.Modular, stats metrics.Type) (*SNS, error) {
+	return NewSNSV2(conf, types.NoopMgr(), log, stats)
+}
+
+// NewSNSV2 creates a new AWS SNS writer.
+func NewSNSV2(conf SNSConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*SNS, error) {
 	s := &SNS{
 		conf:  conf,
 		log:   log,
