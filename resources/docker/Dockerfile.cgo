@@ -1,15 +1,20 @@
 FROM golang:1.17 AS build
 
+ENV GOOS=linux
+
 WORKDIR /go/src/github.com/Jeffail/benthos/
-COPY . /go/src/github.com/Jeffail/benthos/
+# Update dependencies: On unchanged dependencies, cached layer will be reused
+COPY go.* /go/src/github.com/Jeffail/benthos/
+RUN go mod download
 
 RUN apt-get update && apt-get install -y --no-install-recommends libzmq3-dev
 
-ENV GOOS=linux
-ENV GOFLAGS=-mod=vendor
+# Build
+COPY . /go/src/github.com/Jeffail/benthos/
 
 RUN make TAGS=ZMQ4
 
+# Pack
 FROM debian:stretch
 
 LABEL maintainer="Ashley Jeffs <ash@jeffail.uk>"
@@ -24,4 +29,6 @@ COPY ./config/env/default.yaml /benthos.yaml
 
 EXPOSE 4195
 
-ENTRYPOINT ["./benthos", "-c", "/benthos.yaml"]
+ENTRYPOINT ["./benthos"]
+
+CMD ["-c", "/benthos.yaml"]
