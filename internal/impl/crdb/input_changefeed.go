@@ -4,11 +4,13 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/public/service"
+	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
@@ -43,6 +45,8 @@ type crdbChangefeedInput struct {
 	pgPool     *pgxpool.Pool
 	rootCA     string
 	statement  string
+
+	rows pgx.Rows
 
 	tables []string
 	optins []string
@@ -81,11 +85,6 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, logger *servic
 			}
 		}
 
-		// Connect to the pool
-		if c.pgPool, err = pgxpool.ConnectConfig(c.ctx, c.pgConfig); err != nil {
-			return nil, err
-		}
-
 		// Setup the query
 		tables, err := conf.FieldStringList("tables")
 		if err != nil {
@@ -104,7 +103,6 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, logger *servic
 
 		c.statement = fmt.Sprintf("EXPERIMENTAL CHANGEFEED FOR %s%s", strings.Join(tables, ", "), changeFeedOptions)
 		logger.Debug("Creating changefeed: " + c.statement)
-		// rows, err := c.pgPool.Query(l.ctx, changeFeedCommand)
 	}
 
 	return c, nil
@@ -126,14 +124,60 @@ func init() {
 	}
 }
 
-func (c *crdbChangefeedInput) Connect(ctx context.Context) error {
-
+func (c *crdbChangefeedInput) Connect(ctx context.Context) (err error) {
+	// Connect to the pool
+	if c.pgPool, err = pgxpool.ConnectConfig(c.ctx, c.pgConfig); err != nil {
+		return err
+	}
+	c.rows, err = c.pgPool.Query(c.ctx, c.statement)
+	return
 }
 
 func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
 
+	if c.pgPool == nil && c.rows == nil {
+		return nil, nil, service.ErrNotConnected
+	}
+
+	if c.rows == nil {
+		return nil, nil, service.ErrEndOfInput
+	}
+
+	// for c.rows.Next() would keep processing the rows
+	if c.rows.Next() {
+		values, err := c.rows.Values()
+		if err != nil {
+			// TODO: Any errors need capturing here to signal a lost connection?
+			return nil, nil, err
+		}
+		// Construct the new JSON
+		var jsonBytes []byte
+		jsonBytes, err = json.Marshal(map[string]string{
+			"table":       values[0].(string),
+			"primary_key": string(values[1].([]byte)), // Stringified JSON (Array)
+			"row":         string(values[2].([]byte)), // Stringified JSON (Object)
+		})
+		if err != nil {
+			c.logger.Error("Failed to marshal JSON")
+			return nil, nil, err
+		}
+		msg := service.NewMessage(jsonBytes)
+		return msg, func(ctx context.Context, err error) error {
+			// No acking in core changefeeds
+			return nil
+		}, nil
+	}
+	// This query will block and wait for more changes so if we reach this point then the query should have died
+	c.logger.Debug("no more rows!")
+	return nil, nil, service.ErrEndOfInput
 }
 
 func (c *crdbChangefeedInput) Close(ctx context.Context) error {
-
+	c.cancelFunc()
+	select {
+	case <-c.shutSig.HasClosedChan():
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return nil
 }
