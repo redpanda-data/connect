@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 - Fields `message_group_id`, `message_deduplication_id`, and `metadata` added to the `aws_sns` output.
 - Field `upsert` added to the `mongodb` processor and output.
 
+### Fixed
+
+- The `schema_registry_encode` and `schema_registry_decode` processors now honour path prefixes included in the `url` field.
+
 ## 3.59.0 - 2021-11-22
 
 ### Added
