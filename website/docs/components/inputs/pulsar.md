@@ -137,6 +137,7 @@ Optional configuration of Pulsar authentication methods.
 
 
 Type: `object`  
+Requires version 3.60.0 or newer  
 
 ### `auth.oauth2`
 

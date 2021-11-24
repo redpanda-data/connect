@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- The `pulsar` input and output now support `oauth2` and `token` authentication mechanisms.
+- The `pulsar` input now enriches messages with more metadata.
+
 ## 3.59.0 - 2021-11-22
 
 ### Added

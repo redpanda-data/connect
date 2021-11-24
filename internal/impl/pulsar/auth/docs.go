@@ -15,5 +15,5 @@ func FieldSpec() docs.FieldSpec {
 			docs.FieldBool("enabled", "Whether Token Auth is enabled.", true),
 			docs.FieldString("token", "Actual base64 encoded token."),
 		),
-	)
+	).AtVersion("3.60.0")
 }
