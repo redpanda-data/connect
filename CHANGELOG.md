@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - The `pulsar` input and output now support `oauth2` and `token` authentication mechanisms.
 - The `pulsar` input now enriches messages with more metadata.
 - Fields `message_group_id`, `message_deduplication_id`, and `metadata` added to the `aws_sns` output.
+- Field `upsert` added to the `mongodb` processor and output.
 
 ## 3.59.0 - 2021-11-22
 

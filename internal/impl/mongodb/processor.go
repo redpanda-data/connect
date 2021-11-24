@@ -108,7 +108,7 @@ func init() {
 					"upsert",
 					"The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches,"+
 						"the document is updated or replaced accordingly, otherwise it is created.",
-				).HasDefault(false).HasType(docs.FieldTypeBool),
+				).HasDefault(false).HasType(docs.FieldTypeBool).AtVersion("3.60.0"),
 				processor.PartsFieldSpec,
 			).Merge(retries.FieldSpecs())...,
 		).ChildDefaultAndTypesFromStruct(processor.NewMongoDBConfig()),
@@ -222,7 +222,7 @@ func NewProcessor(
 		return nil, fmt.Errorf("mongodb hint_map not allowed for '%s' operation", conf.MongoDB.Operation)
 	}
 
-	if !upsertAllowed && conf.MongoDB.Upsert != false {
+	if !upsertAllowed && conf.MongoDB.Upsert {
 		return nil, fmt.Errorf("mongodb upsert not allowed for '%s' operation", conf.MongoDB.Operation)
 	}
 

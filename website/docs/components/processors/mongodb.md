@@ -47,6 +47,7 @@ mongodb:
   document_map: ""
   filter_map: ""
   hint_map: ""
+  upsert: false
 ```
 
 </TabItem>
@@ -218,10 +219,12 @@ hint_map: |-
 
 ### `upsert`
 
-The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches, the document is updated or replaced accordingly, otherwise it is created.
+The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches,the document is updated or replaced accordingly, otherwise it is created.
+
 
 Type: `bool`  
-Default: `false` 
+Default: `false`  
+Requires version 3.60.0 or newer  
 
 ### `parts`
 
