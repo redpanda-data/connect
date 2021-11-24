@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -27,7 +28,10 @@ allowing you to transfer data across accounts. You can find out more
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("topic_arn", "The topic to publish to."),
+			docs.FieldCommon("message_group_id", "An optional group ID to set for messages.").IsInterpolated(),
+			docs.FieldCommon("message_deduplication_id", "An optional deduplication ID to set for messages.").IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldCommon("metadata", "Specify criteria for which metadata values are sent as headers.").WithChildren(output.MetadataFields()...),
 			docs.FieldAdvanced("timeout", "The maximum period to wait on an upload before abandoning it and reattempting."),
 		}.Merge(session.FieldSpecs()),
 		Categories: []Category{
@@ -55,7 +59,10 @@ allowing you to transfer data across accounts. You can find out more
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("topic_arn", "The topic to publish to."),
+			docs.FieldCommon("message_group_id", "An optional group ID to set for messages.").IsInterpolated(),
+			docs.FieldCommon("message_deduplication_id", "An optional deduplication ID to set for messages.").IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldCommon("metadata", "Specify criteria for which metadata values are sent as headers.").WithChildren(output.MetadataFields()...),
 			docs.FieldAdvanced("timeout", "The maximum period to wait on an upload before abandoning it and reattempting."),
 		}.Merge(session.FieldSpecs()),
 		Categories: []Category{
@@ -78,7 +85,7 @@ func NewAmazonSNS(conf Config, mgr types.Manager, log log.Modular, stats metrics
 }
 
 func newAmazonSNS(name string, conf writer.SNSConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	s, err := writer.NewSNS(conf, log, stats)
+	s, err := writer.NewSNS(conf, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}
