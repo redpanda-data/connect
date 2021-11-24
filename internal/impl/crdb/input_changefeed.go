@@ -174,6 +174,7 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 
 func (c *crdbChangefeedInput) Close(ctx context.Context) error {
 	c.cancelFunc()
+	c.shutSig.CloseNow()
 	select {
 	case <-c.shutSig.HasClosedChan():
 	case <-ctx.Done():
