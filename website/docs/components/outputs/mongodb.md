@@ -77,6 +77,7 @@ output:
     document_map: ""
     filter_map: ""
     hint_map: ""
+    upsert: false
     max_in_flight: 1
     batching:
       count: 0
@@ -247,6 +248,13 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 Type: `int`  
 Default: `1`  
+
+### `upsert`
+
+The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches, the document is updated or replaced accordingly, otherwise it is created.
+
+Type: `bool`  
+Default: `false`  
 
 ### `batching`
 

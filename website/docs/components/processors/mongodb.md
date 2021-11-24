@@ -69,6 +69,7 @@ mongodb:
   document_map: ""
   filter_map: ""
   hint_map: ""
+  upsert: false
   parts: []
   max_retries: 3
   backoff:
@@ -214,6 +215,13 @@ hint_map: |-
   root.a = this.foo
   root.b = this.bar
 ```
+
+### `upsert`
+
+The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches, the document is updated or replaced accordingly, otherwise it is created.
+
+Type: `bool`  
+Default: `false` 
 
 ### `parts`
 
