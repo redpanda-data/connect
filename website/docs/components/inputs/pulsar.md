@@ -22,23 +22,64 @@ Reads messages from an Apache Pulsar server.
 
 Introduced in version 3.43.0.
 
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yaml
-# Config fields, showing default values
+# Common config fields, showing default values
 input:
   label: ""
   pulsar:
     url: ""
     topics: []
     subscription_name: ""
+    subscription_type: ""
 ```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+# All config fields, showing default values
+input:
+  label: ""
+  pulsar:
+    url: ""
+    topics: []
+    subscription_name: ""
+    subscription_type: ""
+    auth:
+      oauth2:
+        enabled: false
+        audience: ""
+        issuer_url: ""
+        private_key_file: ""
+      token:
+        enabled: false
+        token: ""
+```
+
+</TabItem>
+</Tabs>
 
 ### Metadata
 
 This input adds the following metadata fields to each message:
 
 ```text
+- pulsar_message_id
 - pulsar_key
+- pulsar_ordering_key
+- pulsar_event_time_unix
+- pulsar_publish_time_unix
 - pulsar_topic
+- pulsar_producer_name
+- pulsar_redelivery_count
 - All properties of the message
 ```
 
@@ -76,6 +117,96 @@ Default: `[]`
 ### `subscription_name`
 
 Specify the subscription name for this consumer.
+
+
+Type: `string`  
+Default: `""`  
+
+### `subscription_type`
+
+Specify the subscription type for this consumer.
+
+
+Type: `string`  
+Default: `"shared"`  
+Options: `shared`, `key_shared`, `failover`, `exclusive`.
+
+### `auth`
+
+Optional configuration of Pulsar authentication methods.
+
+
+Type: `object`  
+
+### `auth.oauth2`
+
+Parameters for Pulsar OAuth2 authentication.
+
+
+Type: `object`  
+
+### `auth.oauth2.enabled`
+
+Whether OAuth2 is enabled.
+
+
+Type: `bool`  
+Default: `false`  
+
+```yaml
+# Examples
+
+enabled: true
+```
+
+### `auth.oauth2.audience`
+
+OAuth2 audience.
+
+
+Type: `string`  
+Default: `""`  
+
+### `auth.oauth2.issuer_url`
+
+OAuth2 issuer URL.
+
+
+Type: `string`  
+Default: `""`  
+
+### `auth.oauth2.private_key_file`
+
+File containing the private key.
+
+
+Type: `string`  
+Default: `""`  
+
+### `auth.token`
+
+Parameters for Pulsar Token authentication.
+
+
+Type: `object`  
+
+### `auth.token.enabled`
+
+Whether Token Auth is enabled.
+
+
+Type: `bool`  
+Default: `false`  
+
+```yaml
+# Examples
+
+enabled: true
+```
+
+### `auth.token.token`
+
+Actual base64 encoded token.
 
 
 Type: `string`  
