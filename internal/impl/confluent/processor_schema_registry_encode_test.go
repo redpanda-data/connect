@@ -16,9 +16,10 @@ import (
 
 func TestSchemaRegistryEncoderConfigParse(t *testing.T) {
 	configTests := []struct {
-		name        string
-		config      string
-		errContains string
+		name            string
+		config          string
+		errContains     string
+		expectedBaseURL string
 	}{
 		{
 			name: "bad url",
@@ -42,6 +43,7 @@ subject: ${! bad interpolation }
 url: http://example.com
 subject: foo
 `,
+			expectedBaseURL: "http://example.com",
 		},
 		{
 			name: "bad period",
@@ -51,6 +53,14 @@ subject: foo
 refresh_period: not a duration
 `,
 			errContains: "invalid duration",
+		},
+		{
+			name: "url with base path",
+			config: `
+url: http://example.com/v1
+subject: foo
+`,
+			expectedBaseURL: "http://example.com/v1",
 		},
 	}
 
@@ -62,6 +72,11 @@ refresh_period: not a duration
 			require.NoError(t, err)
 
 			e, err := newSchemaRegistryEncoderFromConfig(conf, nil)
+
+			if e != nil {
+				assert.Equal(t, test.expectedBaseURL, e.schemaRegistryBaseURL.String())
+			}
+
 			if err == nil {
 				_ = e.Close(context.Background())
 			}

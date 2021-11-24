@@ -16,9 +16,10 @@ import (
 
 func TestSchemaRegistryDecoderConfigParse(t *testing.T) {
 	configTests := []struct {
-		name        string
-		config      string
-		errContains string
+		name            string
+		config          string
+		errContains     string
+		expectedBaseURL string
 	}{
 		{
 			name: "bad url",
@@ -26,6 +27,13 @@ func TestSchemaRegistryDecoderConfigParse(t *testing.T) {
 url: huh#%#@$u*not////::example.com
 `,
 			errContains: `failed to parse url`,
+		},
+		{
+			name: "url with base path",
+			config: `
+url: http://example.com/v1
+`,
+			expectedBaseURL: "http://example.com/v1",
 		},
 	}
 
@@ -37,6 +45,11 @@ url: huh#%#@$u*not////::example.com
 			require.NoError(t, err)
 
 			e, err := newSchemaRegistryDecoderFromConfig(conf, nil)
+
+			if e != nil {
+				assert.Equal(t, test.expectedBaseURL, e.schemaRegistryBaseURL.String())
+			}
+
 			if err == nil {
 				_ = e.Close(context.Background())
 			}
