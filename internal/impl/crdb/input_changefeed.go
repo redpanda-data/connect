@@ -157,6 +157,7 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 			"primary_key": string(values[1].([]byte)), // Stringified JSON (Array)
 			"row":         string(values[2].([]byte)), // Stringified JSON (Object)
 		})
+		// TODO: Store the current time for the CURSOR offset to cache
 		if err != nil {
 			c.logger.Error("Failed to marshal JSON")
 			return nil, nil, err
