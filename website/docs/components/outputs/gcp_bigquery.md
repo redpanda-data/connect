@@ -135,10 +135,11 @@ Batches can be formed at both the input and output level. You can find out more
 
 ### `project`
 
-The project ID of the dataset to insert data to.
+The project ID of the dataset to insert data to. If not set, it will be inferred from the credentials or read from the GOOGLE_CLOUD_PROJECT environment variable.
 
 
 Type: `string`  
+Default: `""`  
 
 ### `dataset`
 

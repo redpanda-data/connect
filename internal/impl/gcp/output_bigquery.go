@@ -66,6 +66,9 @@ func gcpBigQueryOutputConfigFromParsed(conf *service.ParsedConfig) (gconf gcpBig
 	if gconf.ProjectID, err = conf.FieldString("project"); err != nil {
 		return
 	}
+	if gconf.ProjectID == "" {
+		gconf.ProjectID = bigquery.DetectProjectID
+	}
 	if gconf.DatasetID, err = conf.FieldString("dataset"); err != nil {
 		return
 	}
@@ -146,7 +149,7 @@ The same is true for the CSV format.
 ### CSV
 
 For the CSV format when the field `+"`csv.header`"+` is specified a header row will be inserted as the first line of each message batch. If this field is not provided then the first message of each message batch must include a header line.`)).
-		Field(service.NewStringField("project").Description("The project ID of the dataset to insert data to.")).
+		Field(service.NewStringField("project").Description("The project ID of the dataset to insert data to. If not set, it will be inferred from the credentials or read from the GOOGLE_CLOUD_PROJECT environment variable.").Default("")).
 		Field(service.NewStringField("dataset").Description("The BigQuery Dataset ID.")).
 		Field(service.NewStringField("table").Description("The table to insert messages to.")).
 		Field(service.NewStringEnumField("format", string(bigquery.JSON), string(bigquery.CSV)).
@@ -304,10 +307,10 @@ func (g *gcpBigQueryOutput) Connect(ctx context.Context) (err error) {
 		}
 	}()
 
-	dataset := client.DatasetInProject(g.conf.ProjectID, g.conf.DatasetID)
+	dataset := client.DatasetInProject(client.Project(), g.conf.DatasetID)
 	if _, err = dataset.Metadata(ctx); err != nil {
 		if hasStatusCode(err, http.StatusNotFound) {
-			err = fmt.Errorf("dataset does not exists: %v", g.conf.DatasetID)
+			err = fmt.Errorf("dataset does not exist: %v", g.conf.DatasetID)
 		} else {
 			err = fmt.Errorf("error checking dataset existence: %w", err)
 		}
@@ -318,7 +321,7 @@ func (g *gcpBigQueryOutput) Connect(ctx context.Context) (err error) {
 		table := dataset.Table(g.conf.TableID)
 		if _, err = table.Metadata(ctx); err != nil {
 			if hasStatusCode(err, http.StatusNotFound) {
-				err = fmt.Errorf("table does not exists: %v", g.conf.TableID)
+				err = fmt.Errorf("table does not exist: %v", g.conf.TableID)
 			} else {
 				err = fmt.Errorf("error checking table existence: %w", err)
 			}
@@ -327,7 +330,7 @@ func (g *gcpBigQueryOutput) Connect(ctx context.Context) (err error) {
 	}
 
 	g.client = client
-	g.log.Infof("Inserting messages as objects to GCP BigQuery: %v:%v:%v\n", g.conf.ProjectID, g.conf.DatasetID, g.conf.TableID)
+	g.log.Infof("Inserting messages as objects to GCP BigQuery: %v:%v:%v\n", client.Project(), g.conf.DatasetID, g.conf.TableID)
 	return nil
 }
 
@@ -380,7 +383,7 @@ func (g *gcpBigQueryOutput) WriteBatch(ctx context.Context, batch service.Messag
 }
 
 func (g *gcpBigQueryOutput) createTableLoader(data *[]byte) *bigquery.Loader {
-	table := g.client.DatasetInProject(g.conf.ProjectID, g.conf.DatasetID).Table(g.conf.TableID)
+	table := g.client.DatasetInProject(g.client.Project(), g.conf.DatasetID).Table(g.conf.TableID)
 
 	source := bigquery.NewReaderSource(bytes.NewReader(*data))
 	source.SourceFormat = bigquery.DataFormat(g.conf.Format)
