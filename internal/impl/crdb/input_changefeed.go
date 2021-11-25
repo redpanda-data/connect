@@ -67,18 +67,22 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, logger *servic
 	fmt.Println("## MAKING CRDB")
 
 	var err error
-	if c.dsn, err = conf.FieldString("dsn"); err != nil {
-		if err != nil {
-			return nil, err
-		}
-		c.pgConfig, err = pgxpool.ParseConfig(c.dsn)
-		if err != nil {
-			return nil, err
-		}
+	c.dsn, err = conf.FieldString("dsn")
+	fmt.Println("DSN", c.dsn)
+	if err != nil {
+		return nil, err
+	}
+	c.pgConfig, err = pgxpool.ParseConfig(c.dsn)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println("CONFIG", c.pgConfig)
 
-		// Setup the cert if given
-		certPool := x509.NewCertPool()
-		if c.rootCA, err = conf.FieldString("root_ca"); err != nil {
+	// Setup the cert if given
+	if c.rootCA, err = conf.FieldString("root_ca"); err != nil {
+		fmt.Println("ROOT CA", c.rootCA)
+		if c.rootCA != "" {
+			certPool := x509.NewCertPool()
 			rootCert, err := x509.ParseCertificate([]byte(c.rootCA))
 			if err != nil {
 				return nil, err
@@ -88,26 +92,26 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, logger *servic
 				RootCAs: certPool,
 			}
 		}
-
-		// Setup the query
-		tables, err := conf.FieldStringList("tables")
-		if err != nil {
-			return nil, err
-		}
-
-		options, err := conf.FieldStringList("options")
-		if err != nil {
-			return nil, err
-		}
-
-		changeFeedOptions := ""
-		if len(options) > 0 {
-			changeFeedOptions = fmt.Sprintf(" WITH %s", strings.Join(options, ", "))
-		}
-
-		c.statement = fmt.Sprintf("EXPERIMENTAL CHANGEFEED FOR %s%s", strings.Join(tables, ", "), changeFeedOptions)
-		logger.Debug("Creating changefeed: " + c.statement)
 	}
+
+	// Setup the query
+	tables, err := conf.FieldStringList("tables")
+	if err != nil {
+		return nil, err
+	}
+
+	options, err := conf.FieldStringList("options")
+	if err != nil {
+		return nil, err
+	}
+
+	changeFeedOptions := ""
+	if len(options) > 0 {
+		changeFeedOptions = fmt.Sprintf(" WITH %s", strings.Join(options, ", "))
+	}
+
+	c.statement = fmt.Sprintf("EXPERIMENTAL CHANGEFEED FOR %s%s", strings.Join(tables, ", "), changeFeedOptions)
+	logger.Debug("Creating changefeed: " + c.statement)
 
 	fmt.Println("## FINISHING INIT")
 
@@ -120,9 +124,11 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			i, err := newCRDBChangefeedInputFromConfig(conf, mgr.Logger())
 			if err != nil {
+				fmt.Println("ERRRERE")
 				return nil, err
 			}
-			return service.AutoRetryNacks(i), nil
+			// return service.AutoRetryNacks(i), nil
+			return i, nil
 		})
 
 	fmt.Println("## REGISTERED INPUT")
@@ -133,9 +139,11 @@ func init() {
 }
 
 func (c *crdbChangefeedInput) Connect(ctx context.Context) (err error) {
-	fmt.Println("## CONNECTING")
+	fmt.Println("## CONNECTING to", c.pgConfig.ConnString())
 	// Connect to the pool
-	if c.pgPool, err = pgxpool.ConnectConfig(c.ctx, c.pgConfig); err != nil {
+	c.pgPool, err = pgxpool.ConnectConfig(c.ctx, c.pgConfig)
+	fmt.Println("Eeee")
+	if err != nil {
 		fmt.Println("## ERR")
 		fmt.Println(err)
 		return err
