@@ -175,6 +175,13 @@ func TestGCPBigQueryOutputConvertToIsoError(t *testing.T) {
 }
 
 func TestGCPBigQueryOutputCreateTableLoaderOk(t *testing.T) {
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(`{"id" : "dataset_meow"}`))
+		}),
+	)
+	defer server.Close()
+
 	// Setting non-default values
 	outputConfig := gcpBigQueryConfFromYAML(t, `
 project: project_meow
@@ -195,6 +202,11 @@ csv:
 `)
 
 	output, err := newGCPBigQueryOutput(outputConfig, nil)
+	require.NoError(t, err)
+
+	output.clientURL = gcpBQClientURL(server.URL)
+	err = output.Connect(context.Background())
+	defer output.Close(context.Background())
 	require.NoError(t, err)
 
 	var data = []byte("1,2,3")
@@ -246,7 +258,7 @@ table: table_meow
 	err = output.Connect(context.Background())
 	defer output.Close(context.Background())
 
-	require.EqualError(t, err, "dataset does not exists: dataset_meow")
+	require.EqualError(t, err, "dataset does not exist: dataset_meow")
 }
 
 func TestGCPBigQueryOutputDatasetDoNotExistsUnknownError(t *testing.T) {
@@ -305,7 +317,7 @@ create_disposition: CREATE_NEVER
 	err = output.Connect(context.Background())
 	defer output.Close(context.Background())
 
-	require.EqualError(t, err, "table does not exists: table_meow")
+	require.EqualError(t, err, "table does not exist: table_meow")
 }
 
 func TestGCPBigQueryOutputTableDoNotExistsUnknownError(t *testing.T) {
