@@ -64,9 +64,13 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, logger *servic
 		cancelFunc: cancelFunc,
 	}
 
+	fmt.Println("## MAKING CRDB")
+
 	var err error
 	if c.dsn, err = conf.FieldString("dsn"); err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
 		c.pgConfig, err = pgxpool.ParseConfig(c.dsn)
 		if err != nil {
 			return nil, err
@@ -105,6 +109,8 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, logger *servic
 		logger.Debug("Creating changefeed: " + c.statement)
 	}
 
+	fmt.Println("## FINISHING INIT")
+
 	return c, nil
 }
 
@@ -119,22 +125,33 @@ func init() {
 			return service.AutoRetryNacks(i), nil
 		})
 
+	fmt.Println("## REGISTERED INPUT")
+
 	if err != nil {
 		panic(err)
 	}
 }
 
 func (c *crdbChangefeedInput) Connect(ctx context.Context) (err error) {
+	fmt.Println("## CONNECTING")
 	// Connect to the pool
 	if c.pgPool, err = pgxpool.ConnectConfig(c.ctx, c.pgConfig); err != nil {
+		fmt.Println("## ERR")
+		fmt.Println(err)
 		return err
 	}
+	fmt.Println("## Querying", c.statement)
 	c.rows, err = c.pgPool.Query(c.ctx, c.statement)
-	return
+	if err != nil {
+		fmt.Println("## ERR2")
+		fmt.Println(err)
+	}
+	fmt.Println("## CONNECTED")
+	return err
 }
 
 func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
-
+	fmt.Println("## READING")
 	if c.pgPool == nil && c.rows == nil {
 		return nil, nil, service.ErrNotConnected
 	}
@@ -162,6 +179,7 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 			c.logger.Error("Failed to marshal JSON")
 			return nil, nil, err
 		}
+		fmt.Println("## SENDING NEW MESSAGE")
 		msg := service.NewMessage(jsonBytes)
 		return msg, func(ctx context.Context, err error) error {
 			// No acking in core changefeeds
@@ -170,16 +188,21 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 	}
 	// This query will block and wait for more changes so if we reach this point then the query should have died
 	c.logger.Debug("no more rows!")
+	fmt.Println("## NO MORE ROWS")
 	return nil, nil, service.ErrEndOfInput
 }
 
 func (c *crdbChangefeedInput) Close(ctx context.Context) error {
+	fmt.Println("## CLOSING")
 	c.cancelFunc()
+	fmt.Println("## CANCELLED CONTEXT")
 	c.shutSig.CloseNow()
+	fmt.Println("## SHUTDOWN")
 	select {
 	case <-c.shutSig.HasClosedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+	fmt.Println("## EXITING")
 	return nil
 }
