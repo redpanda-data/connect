@@ -12,10 +12,10 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/opentracing/opentracing-go"
 
 	// SQL Drivers
 	_ "github.com/ClickHouse/clickhouse-go"
@@ -498,7 +498,7 @@ func (s *SQL) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			}
 		}
 	} else {
-		IteratePartsWithSpan(TypeSQL, nil, newMsg, func(index int, span opentracing.Span, part types.Part) error {
+		IteratePartsWithSpanV2(TypeSQL, nil, newMsg, func(index int, span *tracing.Span, part types.Part) error {
 			args, err := s.getArgs(index, msg)
 			if err != nil {
 				s.mErr.Incr(1)

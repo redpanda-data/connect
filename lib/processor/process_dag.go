@@ -10,11 +10,10 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/opentracing/opentracing-go"
 	"github.com/quipo/dependencysolver"
 )
 
@@ -258,7 +257,7 @@ func (p *ProcessDAG) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		wg.Add(len(layer))
 		for i, eid := range layer {
 			go func(id string, index int) {
-				var resSpans []opentracing.Span
+				var resSpans []*tracing.Span
 				results[index], resSpans = tracing.WithChildSpans(id, propMsg.Copy())
 				errors[index] = p.children[id].CreateResult(results[index])
 				for _, s := range resSpans {

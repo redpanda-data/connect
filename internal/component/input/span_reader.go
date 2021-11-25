@@ -7,11 +7,10 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/opentracing/opentracing-go"
 )
 
 // ExtractTracingSpanMappingDocs returns a docs spec for a mapping field.
@@ -78,20 +77,9 @@ func (s *SpanReader) ReadWithContext(ctx context.Context) (types.Message, reader
 		return m, afn, nil
 	}
 
-	textMap := make(opentracing.TextMapCarrier, len(spanMap))
-	for k, v := range spanMap {
-		if vStr, ok := v.(string); ok {
-			textMap[k] = vStr
-		}
-	}
-
-	parent, err := opentracing.GlobalTracer().Extract(opentracing.TextMap, textMap)
-	if err != nil {
+	if err := tracing.InitSpansFromParentTextMap("input_"+s.inputName, spanMap, m); err != nil {
 		s.log.Errorf("Extraction of parent tracing span failed: %v", err)
-		return m, afn, nil
 	}
-
-	tracing.InitSpansFromParent("input_"+s.inputName, parent, m)
 	return m, afn, nil
 }
 

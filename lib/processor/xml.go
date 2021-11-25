@@ -5,11 +5,11 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/internal/xml"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/opentracing/opentracing-go"
 )
 
 func init() {
@@ -136,7 +136,7 @@ func (p *XML) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 	p.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int, span opentracing.Span, part types.Part) error {
+	proc := func(index int, span *tracing.Span, part types.Part) error {
 		root, err := xml.ToMap(part.Get())
 		if err != nil {
 			p.mErr.Incr(1)
@@ -151,7 +151,7 @@ func (p *XML) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 		return nil
 	}
 
-	IteratePartsWithSpan(TypeXML, p.parts, newMsg, proc)
+	IteratePartsWithSpanV2(TypeXML, p.parts, newMsg, proc)
 
 	p.mBatchSent.Incr(1)
 	p.mSent.Incr(int64(newMsg.Len()))

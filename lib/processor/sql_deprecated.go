@@ -4,10 +4,9 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	olog "github.com/opentracing/opentracing-go/log"
 
 	// SQL Drivers
 	_ "github.com/go-sql-driver/mysql"
@@ -108,9 +107,9 @@ func (s *SQL) processMessageDeprecated(msg types.Message) ([]types.Message, type
 	if err != nil {
 		result.Iter(func(i int, p types.Part) error {
 			FlagErr(p, err)
-			spans[i].LogFields(
-				olog.String("event", "error"),
-				olog.String("type", err.Error()),
+			spans[i].LogKV(
+				"event", "error",
+				"type", err.Error(),
 			)
 			return nil
 		})

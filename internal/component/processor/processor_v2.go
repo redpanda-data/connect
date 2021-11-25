@@ -5,14 +5,12 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/opentracing/opentracing-go"
-	olog "github.com/opentracing/opentracing-go/log"
 )
 
 // V2 is a simpler interface to implement than types.Processor.
@@ -75,15 +73,7 @@ func (a *v2ToV1Processor) ProcessMessage(msg types.Message) ([]types.Message, ty
 	newParts := make([]types.Part, 0, msg.Len())
 
 	msg.Iter(func(i int, part types.Part) error {
-		span := tracing.GetSpan(part)
-		if span == nil {
-			span = opentracing.StartSpan(a.typeStr)
-		} else {
-			span = opentracing.StartSpan(
-				a.typeStr,
-				opentracing.ChildOf(span.Context()),
-			)
-		}
+		span := tracing.CreateChildSpan(a.typeStr, part)
 
 		nextParts, err := a.p.Process(context.Background(), part)
 		if err != nil {
@@ -91,9 +81,9 @@ func (a *v2ToV1Processor) ProcessMessage(msg types.Message) ([]types.Message, ty
 			a.mErr.Incr(1)
 			processor.FlagErr(newPart, err)
 			span.SetTag("error", true)
-			span.LogFields(
-				olog.String("event", "error"),
-				olog.String("type", err.Error()),
+			span.LogKV(
+				"event", "error",
+				"type", err.Error(),
 			)
 			nextParts = append(nextParts, newPart)
 		}
@@ -181,9 +171,9 @@ func (a *v2BatchedToV1Processor) ProcessMessage(msg types.Message) ([]types.Mess
 		}
 		for _, s := range spans {
 			s.SetTag("error", true)
-			s.LogFields(
-				olog.String("event", "error"),
-				olog.String("type", err.Error()),
+			s.LogKV(
+				"event", "error",
+				"type", err.Error(),
 			)
 		}
 		newMsg.SetAll(parts)

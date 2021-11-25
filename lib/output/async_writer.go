@@ -10,14 +10,13 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/cenkalti/backoff/v4"
-	"github.com/opentracing/opentracing-go"
 )
 
 // AsyncSink is a type that writes Benthos messages to a third party sink. If
@@ -124,7 +123,7 @@ func (w *AsyncWriter) latencyMeasuringWrite(msg types.Message) (latencyNs int64,
 	return latencyNs, err
 }
 
-func (w *AsyncWriter) injectSpans(msg types.Message, spans []opentracing.Span) types.Message {
+func (w *AsyncWriter) injectSpans(msg types.Message, spans []*tracing.Span) types.Message {
 	if w.injectTracingMap == nil || msg.Len() > len(spans) {
 		return msg
 	}
@@ -134,17 +133,10 @@ func (w *AsyncWriter) injectSpans(msg types.Message, spans []opentracing.Span) t
 	for i := 0; i < msg.Len(); i++ {
 		parts[i] = msg.Get(i).Copy()
 
-		spanMap := opentracing.TextMapCarrier{}
-
-		err := opentracing.GlobalTracer().Inject(spans[i].Context(), opentracing.TextMap, spanMap)
+		spanMapGeneric, err := spans[i].TextMap()
 		if err != nil {
 			w.log.Warnf("Failed to inject span: %v", err)
 			continue
-		}
-
-		spanMapGeneric := make(map[string]interface{}, len(spanMap))
-		for k, v := range spanMap {
-			spanMapGeneric[k] = v
 		}
 
 		spanPart := message.NewPart(nil)

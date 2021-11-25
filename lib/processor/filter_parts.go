@@ -5,14 +5,13 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
@@ -112,9 +111,9 @@ func (c *FilterParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 			newMsg.Append(msg.Get(i).Copy())
 			spans[i].SetTag("result", true)
 		} else {
-			spans[i].LogFields(
-				olog.String("event", "dropped"),
-				olog.String("type", "filtered"),
+			spans[i].LogKV(
+				"event", "dropped",
+				"type", "filtered",
 			)
 			spans[i].SetTag("result", false)
 			c.mDropped.Incr(1)

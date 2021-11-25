@@ -6,12 +6,11 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	olog "github.com/opentracing/opentracing-go/log"
 )
 
 type switchCaseDeprecated struct {
@@ -86,9 +85,9 @@ func (s *switchDeprecated) ProcessMessage(msg types.Message) (msgs []types.Messa
 		}
 		procs = append(procs, switchCase.processors...)
 		for _, s := range spans {
-			s.LogFields(
-				olog.String("event", "case_match"),
-				olog.String("value", strconv.Itoa(i)),
+			s.LogKV(
+				"event", "case_match",
+				"value", strconv.Itoa(i),
 			)
 		}
 		if fellthrough = switchCase.fallThrough; !fellthrough {

@@ -5,13 +5,13 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/itchyny/gojq"
-	"github.com/opentracing/opentracing-go"
 )
 
 func init() {
@@ -201,7 +201,7 @@ func (j *JQ) ProcessMessage(msg types.Message) ([]types.Message, types.Response)
 	j.mCount.Incr(1)
 
 	newMsg := msg.Copy()
-	iteratePartsFilterableWithSpan(TypeJQ, nil, newMsg, func(index int, span opentracing.Span, part types.Part) (bool, error) {
+	iteratePartsFilterableWithSpan(TypeJQ, nil, newMsg, func(index int, span *tracing.Span, part types.Part) (bool, error) {
 		in, err := j.getPartValue(part, j.conf.Raw)
 		if err != nil {
 			j.mErr.Incr(1)

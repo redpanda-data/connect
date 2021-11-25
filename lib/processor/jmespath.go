@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	jmespath "github.com/jmespath/go-jmespath"
-	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -175,7 +175,7 @@ func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	p.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int, span opentracing.Span, part types.Part) error {
+	proc := func(index int, span *tracing.Span, part types.Part) error {
 		jsonPart, err := part.JSON()
 		if err != nil {
 			p.mErrJSONP.Incr(1)
@@ -204,7 +204,7 @@ func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 		return nil
 	}
 
-	IteratePartsWithSpan(TypeJMESPath, p.parts, newMsg, proc)
+	IteratePartsWithSpanV2(TypeJMESPath, p.parts, newMsg, proc)
 
 	msgs := [1]types.Message{newMsg}
 

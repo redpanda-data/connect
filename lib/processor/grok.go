@@ -10,12 +10,12 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/filepath"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/Jeffail/grok"
-	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -234,7 +234,7 @@ func (g *Grok) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	g.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int, span opentracing.Span, part types.Part) error {
+	proc := func(index int, span *tracing.Span, part types.Part) error {
 		body := part.Get()
 
 		var values map[string]interface{}
@@ -271,7 +271,7 @@ func (g *Grok) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		return nil
 	}
 
-	IteratePartsWithSpan(TypeGrok, g.parts, newMsg, proc)
+	IteratePartsWithSpanV2(TypeGrok, g.parts, newMsg, proc)
 
 	msgs := [1]types.Message{newMsg}
 

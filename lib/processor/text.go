@@ -11,11 +11,11 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/microcosm-cc/bluemonday"
-	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -288,7 +288,7 @@ func (t *Text) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	t.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int, span opentracing.Span, part types.Part) error {
+	proc := func(index int, span *tracing.Span, part types.Part) error {
 		valueBytes := t.value.BytesLegacy(index, msg)
 		data := part.Get()
 		var err error
@@ -301,7 +301,7 @@ func (t *Text) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		return nil
 	}
 
-	IteratePartsWithSpan(TypeText, t.parts, newMsg, proc)
+	IteratePartsWithSpanV2(TypeText, t.parts, newMsg, proc)
 
 	msgs := [1]types.Message{newMsg}
 

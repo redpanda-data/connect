@@ -12,12 +12,12 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
-	"github.com/opentracing/opentracing-go"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
@@ -273,7 +273,7 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 	newMsg := msg.Copy()
 
 	var writeModels []mongo.WriteModel
-	processor.IteratePartsWithSpan("mongodb", m.parts, newMsg, func(i int, s opentracing.Span, p types.Part) error {
+	processor.IteratePartsWithSpanV2("mongodb", m.parts, newMsg, func(i int, s *tracing.Span, p types.Part) error {
 		var err error
 		var filterVal, documentVal types.Part
 		var upsertVal, filterValWanted, documentValWanted bool

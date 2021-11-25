@@ -18,7 +18,7 @@ func init() {
 	Constructors[TypeJaeger] = TypeSpec{
 		constructor: NewJaeger,
 		Summary: `
-Send spans to a [Jaeger](https://www.jaegertracing.io/) agent.`,
+Send tracing events to a [Jaeger](https://www.jaegertracing.io/) agent or collector.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("agent_address", "The address of a Jaeger agent to send tracing events to.", "jaeger-agent:6831"),
 			docs.FieldCommon("collector_url", "The URL of a Jaeger collector to send tracing events to. If set, this will override `agent_address`.",

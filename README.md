@@ -106,7 +106,7 @@ Benthos [exposes lots of metrics][metrics] either to Statsd, Prometheus or for d
 
 ### Tracing
 
-Benthos also [emits opentracing events][tracers] to a tracer of your choice (currently only [Jaeger][jaeger] is supported) which can be used to visualise the processors within a pipeline.
+Benthos also [emits tracing events][tracers] to a tracer of your choice (currently only [Jaeger][jaeger] is supported) which can be used to visualise the processors within a pipeline.
 
 ## Configuration
 

@@ -18,14 +18,13 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
-	"github.com/opentracing/opentracing-go"
-	olog "github.com/opentracing/opentracing-go/log"
 )
 
 // Client is a component able to send and receive Benthos messages over HTTP.
@@ -453,13 +452,9 @@ func (h *Client) checkStatus(code int) (succeeded bool, retStrat retryStrategy) 
 func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Message) (res *http.Response, err error) {
 	h.mCount.Incr(1)
 
-	var spans []opentracing.Span
+	var spans []*tracing.Span
 	if sendMsg != nil {
-		spans = make([]opentracing.Span, sendMsg.Len())
-		sendMsg.Iter(func(i int, p types.Part) error {
-			spans[i], _ = opentracing.StartSpanFromContext(message.GetContext(p), "http_request")
-			return nil
-		})
+		spans = tracing.CreateChildSpans("http_request", sendMsg)
 		defer func() {
 			for _, s := range spans {
 				s.Finish()
@@ -470,9 +465,9 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Messa
 		h.mErrRes.Incr(1)
 		h.mErr.Incr(1)
 		for _, s := range spans {
-			s.LogFields(
-				olog.String("event", "error"),
-				olog.String("type", e.Error()),
+			s.LogKV(
+				"event", "error",
+				"type", e.Error(),
 			)
 		}
 	}

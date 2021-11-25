@@ -16,10 +16,10 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -98,7 +98,7 @@ type Subprocess struct {
 
 	conf     SubprocessConfig
 	subproc  *subprocWrapper
-	procFunc func(index int, span opentracing.Span, part types.Part) error
+	procFunc func(index int, span *tracing.Span, part types.Part) error
 	mut      sync.Mutex
 
 	mCount     metrics.StatCounter
@@ -138,10 +138,10 @@ func newSubprocess(
 
 //------------------------------------------------------------------------------
 
-func (e *Subprocess) getSendSubprocessorFunc(codec string) (func(index int, span opentracing.Span, part types.Part) error, error) {
+func (e *Subprocess) getSendSubprocessorFunc(codec string) (func(index int, span *tracing.Span, part types.Part) error, error) {
 	switch codec {
 	case "length_prefixed_uint32_be":
-		return func(_ int, _ opentracing.Span, part types.Part) error {
+		return func(_ int, _ *tracing.Span, part types.Part) error {
 			const prefixBytes int = 4
 
 			lenBuf := make([]byte, prefixBytes)
@@ -160,7 +160,7 @@ func (e *Subprocess) getSendSubprocessorFunc(codec string) (func(index int, span
 			return nil
 		}, nil
 	case "netstring":
-		return func(_ int, _ opentracing.Span, part types.Part) error {
+		return func(_ int, _ *tracing.Span, part types.Part) error {
 			lenBuf := make([]byte, 0)
 			m := part.Get()
 			lenBuf = append(strconv.AppendUint(lenBuf, uint64(len(m)), 10), ':')
@@ -176,7 +176,7 @@ func (e *Subprocess) getSendSubprocessorFunc(codec string) (func(index int, span
 			return nil
 		}, nil
 	case "lines":
-		return func(_ int, _ opentracing.Span, part types.Part) error {
+		return func(_ int, _ *tracing.Span, part types.Part) error {
 			results := [][]byte{}
 			splitMsg := bytes.Split(part.Get(), newLineBytes)
 			for j, p := range splitMsg {
@@ -504,7 +504,7 @@ func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 	result := msg.Copy()
 
-	IteratePartsWithSpan(TypeSubprocess, e.conf.Parts, result, e.procFunc)
+	IteratePartsWithSpanV2(TypeSubprocess, e.conf.Parts, result, e.procFunc)
 
 	e.mSent.Incr(int64(result.Len()))
 	e.mBatchSent.Incr(1)

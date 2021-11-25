@@ -19,18 +19,17 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/metadata"
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	httputil "github.com/Jeffail/benthos/v3/lib/util/http"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
-	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -387,14 +386,14 @@ func (h *HTTPServer) extractMessageFromRequest(r *http.Request) (types.Message, 
 	}
 	message.SetAllMetadata(msg, meta)
 
-	// Try to either extract parent span from headers, or create a new one.
-	carrier := opentracing.HTTPHeadersCarrier(r.Header)
-	if clientSpanContext, serr := opentracing.GlobalTracer().Extract(opentracing.HTTPHeaders, carrier); serr == nil {
-		tracing.InitSpansFromParent("input_http_server_post", clientSpanContext, msg)
-	} else {
-		tracing.InitSpans("input_http_server_post", msg)
+	textMapGeneric := map[string]interface{}{}
+	for k, vals := range r.Header {
+		for _, v := range vals {
+			textMapGeneric[k] = v
+		}
 	}
 
+	_ = tracing.InitSpansFromParentTextMap("input_http_server_post", textMapGeneric, msg)
 	return msg, nil
 }
 

@@ -18,6 +18,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -25,8 +26,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
-	"github.com/opentracing/opentracing-go"
-	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
@@ -571,13 +570,9 @@ func (h *Type) Do(msg types.Message) (*http.Response, error) {
 func (h *Type) DoWithContext(ctx context.Context, msg types.Message) (res *http.Response, err error) {
 	h.mCount.Incr(1)
 
-	var spans []opentracing.Span
+	var spans []*tracing.Span
 	if msg != nil {
-		spans = make([]opentracing.Span, msg.Len())
-		msg.Iter(func(i int, p types.Part) error {
-			spans[i], _ = opentracing.StartSpanFromContext(message.GetContext(p), "http_request")
-			return nil
-		})
+		spans = tracing.CreateChildSpans("http_request", msg)
 		defer func() {
 			for _, s := range spans {
 				s.Finish()
@@ -586,9 +581,9 @@ func (h *Type) DoWithContext(ctx context.Context, msg types.Message) (res *http.
 	}
 	logErr := func(e error) {
 		for _, s := range spans {
-			s.LogFields(
-				olog.String("event", "error"),
-				olog.String("type", e.Error()),
+			s.LogKV(
+				"event", "error",
+				"type", e.Error(),
 			)
 		}
 	}

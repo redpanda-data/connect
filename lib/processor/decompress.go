@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/golang/snappy"
-	"github.com/opentracing/opentracing-go"
 	"github.com/pierrec/lz4/v4"
 )
 
@@ -190,7 +190,7 @@ func (d *Decompress) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	d.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(i int, span opentracing.Span, part types.Part) error {
+	proc := func(i int, span *tracing.Span, part types.Part) error {
 		newBytes, err := d.decomp(part.Get())
 		if err != nil {
 			d.mErr.Incr(1)
@@ -205,7 +205,7 @@ func (d *Decompress) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		return nil, response.NewAck()
 	}
 
-	IteratePartsWithSpan(TypeDecompress, d.conf.Parts, newMsg, proc)
+	IteratePartsWithSpanV2(TypeDecompress, d.conf.Parts, newMsg, proc)
 
 	d.mBatchSent.Incr(1)
 	d.mSent.Incr(int64(newMsg.Len()))

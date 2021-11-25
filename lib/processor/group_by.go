@@ -9,15 +9,14 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/google/go-cmp/cmp"
-	olog "github.com/opentracing/opentracing-go/log"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -225,9 +224,9 @@ func (g *GroupBy) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 			if group.Condition != nil {
 				if group.Condition.Check(message.Lock(msg, i)) {
 					groupStr := strconv.Itoa(j)
-					spans[i].LogFields(
-						olog.String("event", "grouped"),
-						olog.String("type", groupStr),
+					spans[i].LogKV(
+						"event", "grouped",
+						"type", groupStr,
 					)
 					spans[i].SetTag("group", groupStr)
 					groups[j].Append(p.Copy())
@@ -242,9 +241,9 @@ func (g *GroupBy) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 				}
 				if res {
 					groupStr := strconv.Itoa(j)
-					spans[i].LogFields(
-						olog.String("event", "grouped"),
-						olog.String("type", groupStr),
+					spans[i].LogKV(
+						"event", "grouped",
+						"type", groupStr,
 					)
 					spans[i].SetTag("group", groupStr)
 					groups[j].Append(p.Copy())
@@ -254,9 +253,9 @@ func (g *GroupBy) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 			}
 		}
 
-		spans[i].LogFields(
-			olog.String("event", "grouped"),
-			olog.String("type", "default"),
+		spans[i].LogKV(
+			"event", "grouped",
+			"type", "default",
 		)
 		spans[i].SetTag("group", "default")
 		groupless.Append(p.Copy())
