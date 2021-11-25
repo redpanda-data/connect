@@ -250,9 +250,14 @@ func (a *Kinesis) WriteWithContext(ctx context.Context, msg types.Message) error
 			for i, entry := range output.Records {
 				if entry.ErrorCode != nil {
 					failed = append(failed, input.Records[i])
-					if *entry.ErrorCode != kinesis.ErrCodeProvisionedThroughputExceededException && *entry.ErrorCode != kinesis.ErrCodeKMSThrottlingException {
+					switch *entry.ErrorCode {
+					case kinesis.ErrCodeProvisionedThroughputExceededException:
+						a.log.Errorf("Kinesis record write request rate too high, either the frequency or the size of the data exceeds your available throughput.")
+					case kinesis.ErrCodeKMSThrottlingException:
+						a.log.Errorf("Kinesis record write request throttling exception, the send traffic exceeds your request quota.")
+					default:
 						err = fmt.Errorf("record failed with code [%s] %s: %+v", *entry.ErrorCode, *entry.ErrorMessage, input.Records[i])
-						a.log.Errorf("kinesis record error: %v\n", err)
+						a.log.Errorf("kinesis record write error: %v\n", err)
 						return err
 					}
 				}
