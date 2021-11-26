@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `schema_registry_encode` and `schema_registry_decode` processors now honour path prefixes included in the `url` field.
+- The `mqtt` input and output `keepalive` field is now interpreted as seconds, previously it was being erroneously interpreted as nanoseconds.
 
 ## 3.59.0 - 2021-11-22
 
