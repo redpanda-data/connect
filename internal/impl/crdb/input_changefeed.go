@@ -14,10 +14,18 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
+var (
+	sampleString = `{
+	"primary_key": "[\"1a7ff641-3e3b-47ee-94fe-a0cadb56cd8f\", 2]", // stringifed JSON array
+	"row": "{\"after\": {\"k\": \"1a7ff641-3e3b-47ee-94fe-a0cadb56cd8f\", \"v\": 2}, \"updated\": \"1637953249519902405.0000000000\"}", // stringified JSON object
+	"table": "strm_2"
+}`
+)
+
 func crdbChangefeedInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Integration").
-		Summary("Listens to a CockroachDB Core Changefeed and creates a message for each row received").
+		Summary(fmt.Sprintf("Listens to a CockroachDB Core Changefeed and creates a message for each row received. Each message is a json object looking like: \n```json\n%s\n```", sampleString)).
 		Description("Will continue to listen to the Changefeed until shutdown. If provided, will maintain the previous `timestamp` so that in the event of a restart the chanfeed will resume from where it last processed. This is at-least-once processing, as there is a chance that a timestamp is not successfully stored after being emitted and therefore a row may be sent again on restart.\n\nNote: You must have `SET CLUSTER SETTING kv.rangefeed.enabled = true;` on your CRDB cluster").
 		Field(service.NewStringField("dsn").
 			Description(`A Data Source Name to identify the target database.`).

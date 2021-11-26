@@ -18,7 +18,14 @@ import TabItem from '@theme/TabItem';
 :::caution EXPERIMENTAL
 This component is experimental and therefore subject to change or removal outside of major version releases.
 :::
-Listens to a CockroachDB Core Changefeed and creates a message for each row received
+Listens to a CockroachDB Core Changefeed and creates a message for each row received. Each message is a json object looking like: 
+```json
+{
+	"primary_key": "[\"1a7ff641-3e3b-47ee-94fe-a0cadb56cd8f\", 2]", // stringifed JSON array
+	"row": "{\"after\": {\"k\": \"1a7ff641-3e3b-47ee-94fe-a0cadb56cd8f\", \"v\": 2}, \"updated\": \"1637953249519902405.0000000000\"}", // stringified JSON object
+	"table": "strm_2"
+}
+```
 
 ```yaml
 # Config fields, showing default values
