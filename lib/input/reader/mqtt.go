@@ -159,7 +159,7 @@ func (m *MQTT) ConnectWithContext(ctx context.Context) error {
 		SetClientID(m.conf.ClientID).
 		SetCleanSession(m.conf.CleanSession).
 		SetConnectTimeout(m.connectTimeout).
-		SetKeepAlive(time.Duration(m.conf.KeepAlive)).
+		SetKeepAlive(time.Duration(m.conf.KeepAlive) * time.Second).
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
 			client.Disconnect(0)
 			closeMsgChan()

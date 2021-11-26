@@ -170,7 +170,7 @@ func (m *MQTT) Connect() error {
 		}).
 		SetConnectTimeout(m.connectTimeout).
 		SetWriteTimeout(m.writeTimeout).
-		SetKeepAlive(time.Duration(m.conf.KeepAlive)).
+		SetKeepAlive(time.Duration(m.conf.KeepAlive) * time.Second).
 		SetClientID(m.conf.ClientID)
 
 	for _, u := range m.urls {
