@@ -142,25 +142,51 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 		return nil, nil, service.ErrNotConnected
 	}
 
-	var err error
+	rowChan := make(chan *service.Message)
+	readyChan := make(chan struct{})
+	errChan := make(chan error)
+
 	if c.rows == nil {
-		c.logger.Debug(fmt.Sprintf("Running query %s", c.statement))
-		c.rows, err = c.pgPool.Query(c.ctx, c.statement)
-		if err != nil {
-			c.logger.Error("Error querying")
+		// Put this in a goroutine because .Query() will block until there is a row available to read
+		go func() {
+			var err error
+			c.logger.Debug(fmt.Sprintf("Running query '%s'", c.statement))
+			c.rows, err = c.pgPool.Query(c.ctx, c.statement)
+			if err != nil {
+				c.logger.Error("Error querying")
+				errChan <- err
+			}
+			// Check if the context was cancelled
+			select {
+			case <-c.ctx.Done():
+				c.logger.Debug("Context was cancelled before query go a first row")
+				c.rows.Close() // Need to close here, c.rows is nil in Close()
+				c.logger.Debug("Closed rows")
+			default:
+				// We found a row and can keep going
+				readyChan <- struct{}{}
+			}
+		}()
+
+		c.logger.Debug("Waiting for first row to be available")
+		select {
+		case <-readyChan:
+			// We	got the first line, go read it
+			break
+		case err := <-errChan:
 			return nil, nil, err
+		case <-ctx.Done():
+			c.logger.Debug("Read context cancelled before first row, ending")
+			return nil, nil, service.ErrEndOfInput
 		}
 	}
 
-	rowChan := make(chan *service.Message)
-	errChan := make(chan error)
-
+	// Put this in a goroutine because .Read() will block until there is a row available to read
 	go func() {
-		// for c.rows.Next() would keep processing the rows
+		c.logger.Debug("Checking for available rows")
 		if c.rows.Next() {
 			values, err := c.rows.Values()
 			if err != nil {
-				// TODO: Any errors need capturing here to signal a lost connection?
 				c.logger.Error("Error reading row values!")
 				errChan <- err
 			}
@@ -191,11 +217,12 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 		return nil, nil, err
 	case <-ctx.Done():
 		c.logger.Debug("Read context cancelled, ending")
-		return nil, nil, nil
+		return nil, nil, service.ErrEndOfInput
 	}
 }
 
 func (c *crdbChangefeedInput) Close(ctx context.Context) error {
+	c.logger.Debug("Got close signal")
 	c.cancelFunc()
 	c.pgPool.Close()
 	c.shutSig.ShutdownComplete()
