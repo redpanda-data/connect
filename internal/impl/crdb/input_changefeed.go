@@ -64,11 +64,8 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, logger *servic
 		cancelFunc: cancelFunc,
 	}
 
-	fmt.Println("## MAKING CRDB")
-
 	var err error
 	c.dsn, err = conf.FieldString("dsn")
-	fmt.Println("DSN", c.dsn)
 	if err != nil {
 		return nil, err
 	}
@@ -76,11 +73,9 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, logger *servic
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("CONFIG", c.pgConfig)
 
 	// Setup the cert if given
 	if c.rootCA, err = conf.FieldString("root_ca"); err != nil {
-		fmt.Println("ROOT CA", c.rootCA)
 		if c.rootCA != "" {
 			certPool := x509.NewCertPool()
 			rootCert, err := x509.ParseCertificate([]byte(c.rootCA))
@@ -113,8 +108,6 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, logger *servic
 	c.statement = fmt.Sprintf("EXPERIMENTAL CHANGEFEED FOR %s%s", strings.Join(tables, ", "), changeFeedOptions)
 	logger.Debug("Creating changefeed: " + c.statement)
 
-	fmt.Println("## FINISHING INIT")
-
 	return c, nil
 }
 
@@ -124,14 +117,11 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			i, err := newCRDBChangefeedInputFromConfig(conf, mgr.Logger())
 			if err != nil {
-				fmt.Println("ERRRERE")
 				return nil, err
 			}
 			// return service.AutoRetryNacks(i), nil
 			return i, nil
 		})
-
-	fmt.Println("## REGISTERED INPUT")
 
 	if err != nil {
 		panic(err)
@@ -139,19 +129,15 @@ func init() {
 }
 
 func (c *crdbChangefeedInput) Connect(ctx context.Context) (err error) {
-	fmt.Println("## CONNECTING to", c.pgConfig.ConnString())
 	// Connect to the pool
 	c.pgPool, err = pgxpool.ConnectConfig(c.ctx, c.pgConfig)
 	if err != nil {
-		fmt.Println("## ERR")
-		fmt.Println(err)
 		return err
 	}
 	return err
 }
 
 func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
-	fmt.Println("## READING")
 	if c.pgPool == nil && c.rows == nil {
 		return nil, nil, service.ErrNotConnected
 	}
@@ -190,7 +176,6 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 				c.logger.Error("Failed to marshal JSON")
 				errChan <- err
 			}
-			fmt.Println("## SENDING NEW MESSAGE")
 			msg := service.NewMessage(jsonBytes)
 			rowChan <- msg
 		}
@@ -211,18 +196,13 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 }
 
 func (c *crdbChangefeedInput) Close(ctx context.Context) error {
-	fmt.Println("## CLOSING")
 	c.cancelFunc()
-	fmt.Println("## CANCELLED CONTEXT")
 	c.pgPool.Close()
-	fmt.Println("## CLOSED POOL")
 	c.shutSig.ShutdownComplete()
-	fmt.Println("## SHUTDOWN")
 	select {
 	case <-c.shutSig.HasClosedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	fmt.Println("## EXITING")
 	return nil
 }
